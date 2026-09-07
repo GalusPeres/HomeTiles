@@ -2,4 +2,4 @@
 //   1. Increase FW_VERSION below only when the current state is ready to release.
 //   2. git commit  ->  git tag vX.Y.Z  ->  atomically push main and the tag
 // Important: Only a tag push starts the build, and the tag must match FW_VERSION exactly.
-#define FW_VERSION "v0.6.9"
+#define FW_VERSION "v0.6.10"

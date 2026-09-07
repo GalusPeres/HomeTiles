@@ -345,6 +345,7 @@ boolean PubSubClient::readByte(uint8_t * result, uint16_t * index){
 }
 
 uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {
+    const uint32_t packetStartedMs = millis();
     const auto abortPacket = [this](int state) -> uint32_t {
         this->_state = state;
         this->_client->stop();
@@ -359,6 +360,9 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {
     uint8_t digit = 0;
     uint32_t skip = 0;
     uint32_t start = 0;
+    uint8_t qos_bits = MQTTQOS0;
+    uint32_t packetIdOffset = 0;
+    uint16_t packetId = 0;
 
     do {
         if (len == 5) {
@@ -372,32 +376,69 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {
     } while ((digit & 128) != 0);
     *lengthLength = len-1;
 
-    if (!this->stream && !hometiles_mqtt::packetFitsBuffer(
-            len, length, this->bufferSize)) {
-        return abortPacket(MQTT_MALFORMED_PACKET);
-    }
-
     if (isPublish) {
         // Read in topic length to calculate bytes to skip over for Stream writing
         if (length < 2U) return abortPacket(MQTT_MALFORMED_PACKET);
         if(!readByte(this->buffer, &len)) return abortPacket(MQTT_CONNECTION_TIMEOUT);
         if(!readByte(this->buffer, &len)) return abortPacket(MQTT_CONNECTION_TIMEOUT);
         skip = (this->buffer[*lengthLength+1]<<8)+this->buffer[*lengthLength+2];
-        const uint8_t qos_bits = this->buffer[0] & hometiles_mqtt::kQosMask;
+        qos_bits = this->buffer[0] & hometiles_mqtt::kQosMask;
         if (!hometiles_mqtt::publishRemainingLengthIsValid(
                 length, skip, qos_bits)) {
             return abortPacket(MQTT_MALFORMED_PACKET);
         }
+        packetIdOffset = 2U + skip;
         start = 2;
         if (qos_bits == MQTTQOS1) {
             // skip message id
             skip += 2;
         }
     }
+    const uint32_t packetBytes = 1U + *lengthLength + length;
+    bool fits = hometiles_mqtt::packetFitsBuffer(
+        1U + *lengthLength, length, this->bufferSize);
+    if (!fits && !this->stream) {
+        if (!isPublish) return abortPacket(MQTT_MALFORMED_PACKET);
+        // A valid retained config/state may arrive outside a requested large
+        // response window. Grow in bounded steps and preserve the header.
+        if (packetBytes <= hometiles_mqtt::kMaxInboundPacketBytes) {
+            const uint32_t rounded = (packetBytes + 4095U) & ~4095U;
+            const uint16_t capacity = static_cast<uint16_t>(
+                rounded > hometiles_mqtt::kMaxInboundPacketBytes
+                    ? hometiles_mqtt::kMaxInboundPacketBytes : rounded);
+            if (setBufferSize(capacity)) {
+                receiveBufferSize = capacity;
+                fits = true;
+            }
+        }
+        if (!fits) {
+            ++droppedPublishCount;
+            if (droppedPublishCount == 1 || droppedPublishCount % 10U == 0) {
+                Serial.printf("[MQTT] Inbound PUBLISH exceeds available capacity: "
+                              "packet=%lu, buffer=%u, limit=%lu, count=%lu\n",
+                              static_cast<unsigned long>(packetBytes), bufferSize,
+                              static_cast<unsigned long>(hometiles_mqtt::kMaxInboundPacketBytes),
+                              static_cast<unsigned long>(droppedPublishCount));
+            }
+            // Drain ordinary oversize packets without a reconnect loop. A hard
+            // discard bound and total deadline still reject unbounded input.
+            if (packetBytes > hometiles_mqtt::kMaxDiscardPacketBytes) {
+                return abortPacket(MQTT_PACKET_TOO_LARGE);
+            }
+        }
+    }
     uint32_t idx = len;
 
     for (uint32_t i = start;i<length;i++) {
+        if (static_cast<uint32_t>(millis() - packetStartedMs) >=
+            static_cast<uint32_t>(this->socketTimeout) * 1000U) {
+            return abortPacket(MQTT_CONNECTION_TIMEOUT);
+        }
         if(!readByte(&digit)) return abortPacket(MQTT_CONNECTION_TIMEOUT);
+        if (isPublish && qos_bits == MQTTQOS1) {
+            if (i == packetIdOffset) packetId = static_cast<uint16_t>(digit) << 8;
+            else if (i == packetIdOffset + 1U) packetId |= digit;
+        }
         if (this->stream) {
             if (isPublish && idx-*lengthLength-2>skip) {
                 this->stream->write(digit);
@@ -424,8 +465,17 @@ uint32_t PubSubClient::readPacket(uint8_t* lengthLength) {
         }
     }
 
-    if (!this->stream && idx > this->bufferSize) {
-        len = 0; // This will cause the packet to be ignored.
+    if (!this->stream && !fits) {
+        // The complete packet was consumed. Acknowledge QoS 1 even when it
+        // cannot be delivered, so the broker does not keep resending it.
+        if (qos_bits == MQTTQOS1) {
+            uint8_t ack[] = {MQTTPUBACK, 2, static_cast<uint8_t>(packetId >> 8),
+                             static_cast<uint8_t>(packetId)};
+            _client->write(ack, sizeof(ack));
+            lastOutActivity = millis();
+        }
+        lastInActivity = millis();
+        return 0;
     }
     return len;
 }

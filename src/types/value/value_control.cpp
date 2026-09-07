@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
+#include <lvgl_private.h>
 #include <esp_system.h>
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -189,8 +190,10 @@ int editable_control_height(const String& kind) {
   const int date_height = popup_layout::scale(72) + lv_font_get_line_height(popup_layout::font20());
   const int clock_height = lv_font_get_line_height(popup_layout::font40()) +
                            lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(24);
+  const int value_height = std::max<int>(popup_layout::scale(80),
+      lv_font_get_line_height(popup_layout::headerTitleFont()) + popup_layout::scale(54));
   return kind == "datetime" ? date_height + clock_height + popup_layout::scale(8) :
-         kind == "date" ? date_height : clock_height;
+         kind == "date" ? date_height : kind == "time" ? clock_height : value_height;
 }
 
 struct EditableControl {
@@ -210,9 +213,68 @@ struct EditableControl {
   uint32_t command_ms = 0, generation = 0, edit_ms = 0;
   bool active = false, syncing = false, editing = false, dragging = false, online = false,
        draft_valid = false, repeated = false, submit_scheduled = false;
+  lv_display_t* dropdown_display = nullptr;
+  uint32_t dropdown_open_ms = 0, dropdown_frame_ms = 0, dropdown_frames = 0,
+           dropdown_max_ms = 0;
+  uint64_t dropdown_total_ms = 0;
 };
 namespace {
 EditableControl* active_control = nullptr;
+void dropdown_render_event(lv_event_t* event) {
+  auto* c = static_cast<EditableControl*>(lv_event_get_user_data(event));
+  if (!c || !c->dropdown_display || !lv_dropdown_is_open(c->dropdown)) return;
+  const auto code = lv_event_get_code(event);
+  if (code == LV_EVENT_REFR_START) c->dropdown_frame_ms = millis();
+  else if (code == LV_EVENT_REFR_READY) {
+    const uint32_t elapsed = millis() - c->dropdown_frame_ms;
+    c->dropdown_total_ms += elapsed;
+    c->dropdown_max_ms = std::max(c->dropdown_max_ms, elapsed);
+    if (++c->dropdown_frames == 1) {
+      Serial.printf("[ValueDropdown] Open: options=%u, first_frame=%lums\n",
+                    static_cast<unsigned>(c->value.options.size()),
+                    static_cast<unsigned long>(millis() - c->dropdown_open_ms));
+    }
+  }
+}
+void finish_dropdown_timing(EditableControl* c) {
+  if (!c || !c->dropdown_display) return;
+  lv_display_remove_event_cb_with_user_data(c->dropdown_display, dropdown_render_event, c);
+  c->dropdown_display = nullptr;
+  if (c->dropdown_frames) {
+    Serial.printf("[ValueDropdown] Render: frames=%lu, avg=%lums, max=%lums\n",
+                  static_cast<unsigned long>(c->dropdown_frames),
+                  static_cast<unsigned long>(c->dropdown_total_ms / c->dropdown_frames),
+                  static_cast<unsigned long>(c->dropdown_max_ms));
+  }
+}
+void dropdown_cover_check(lv_event_t* event) {
+  auto* list = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
+  const lv_area_t* refresh_area = lv_event_get_cover_area(event);
+  if (!list || !refresh_area ||
+      lv_obj_get_style_bg_opa(list, LV_PART_MAIN) != LV_OPA_COVER ||
+      lv_obj_get_style_opa(list, LV_PART_MAIN) != LV_OPA_COVER ||
+      lv_obj_get_style_bg_grad_dir(list, LV_PART_MAIN) != LV_GRAD_DIR_NONE ||
+      lv_obj_get_style_bg_grad(list, LV_PART_MAIN) != nullptr) return;
+  // LVGL marks every corner-clipped object as MASKED, even for a refresh strip
+  // fully inside its opaque background. Report that interior accurately so
+  // a scrolled list does not redraw the covered history graph on every frame.
+  // Corner strips retain LVGL's masked result and the existing rounded clip.
+  lv_area_t area;
+  lv_obj_get_coords(list, &area);
+  const int32_t radius = std::min<int32_t>(lv_obj_get_style_radius(list, LV_PART_MAIN),
+                                          std::min(lv_area_get_width(&area), lv_area_get_height(&area)) / 2);
+  const bool contained = refresh_area->x1 >= area.x1 && refresh_area->x2 <= area.x2 &&
+                         refresh_area->y1 >= area.y1 && refresh_area->y2 <= area.y2;
+  const bool inside_straight_edges =
+      (refresh_area->y1 > area.y1 + radius && refresh_area->y2 < area.y2 - radius) ||
+      (refresh_area->x1 > area.x1 + radius && refresh_area->x2 < area.x2 - radius);
+  if (contained && inside_straight_edges) {
+    // The public setter only accepts more pessimistic results. This uniform
+    // opaque list owns the cover result for the proven interior rectangle.
+    auto* info = static_cast<lv_cover_check_info_t*>(lv_event_get_param(event));
+    info->res = LV_COVER_RES_COVER;
+  }
+}
 void visible(lv_obj_t* obj, bool show) {
   if (!obj) return;
   if (show) lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
@@ -360,13 +422,21 @@ void step_draft(EditableControl* c, lv_obj_t* target) {
   }
 }
 void style_open_options(EditableControl* c) {
+  finish_dropdown_timing(c);
+  c->dropdown_open_ms = millis();
+  c->dropdown_frames = c->dropdown_max_ms = 0;
+  c->dropdown_total_ms = 0;
+  c->dropdown_display = lv_obj_get_display(c->dropdown);
+  // Aggregate only while this list is open; no per-frame logs or history.
+  lv_display_add_event_cb(c->dropdown_display, dropdown_render_event, LV_EVENT_REFR_START, c);
+  lv_display_add_event_cb(c->dropdown_display, dropdown_render_event, LV_EVENT_REFR_READY, c);
   lv_obj_t* list = lv_dropdown_get_list(c->dropdown);
   // LVGL reapplies its theme when opening a list, just as in Settings.
   ui_control_style::valueDropdownList(list);
   // The Settings list already owns font, spacing and positioning. Only bound
   // its height to the popup body; do not synchronously relayout on opening.
   const int available = popup_layout::kNavY - 2 * popup_layout::kCardPad -
-                        popup_layout::kValueY - editable_control_height("select") - popup_layout::scale(12);
+                        lv_obj_get_y(c->row) - editable_control_height("select") - popup_layout::scale(12);
   lv_obj_set_style_max_height(list, available, 0);
 }
 void input_event(lv_event_t* event) {
@@ -375,7 +445,7 @@ void input_event(lv_event_t* event) {
   const auto code = lv_event_get_code(event);
   auto* target = static_cast<lv_obj_t*>(lv_event_get_target(event));
   if (target == c->dropdown && code == LV_EVENT_READY) { style_open_options(c); return; }
-  if (target == c->dropdown && code == LV_EVENT_CANCEL) { c->generation = 0; return; }
+  if (target == c->dropdown && code == LV_EVENT_CANCEL) { finish_dropdown_timing(c); c->generation = 0; return; }
   if (!c->value.writable || !networkManager.isMqttConnected()) return;
   if (code == LV_EVENT_PRESSED) c->submit_scheduled = false;
   if (target == c->number_roller) {
@@ -596,8 +666,13 @@ void layout_controls(EditableControl* c) {
   }
   lv_obj_set_size(c->apply, apply_width, popup_layout::scale(64));
   lv_obj_align(c->apply, LV_ALIGN_RIGHT_MID, date ? 0 : -(width - clock_x - clock_width - gap - apply_width), date ? 0 : (field_height - popup_layout::scale(64)) / 2);
-  lv_obj_align(c->status, LV_ALIGN_BOTTOM_LEFT, 0,
-               lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(4));
+  // Status shares the first section's heading row. Reserve no empty row and
+  // never move the controls or history when a delayed command is pending.
+  const int status_height = lv_font_get_line_height(popup_layout::font20());
+  const int heading_offset = (lv_font_get_line_height(popup_layout::font24()) - status_height) / 2;
+  lv_obj_align(c->status, LV_ALIGN_BOTTOM_RIGHT, 0,
+      status_height + popup_layout::scale(8) + heading_offset +
+      (number || select ? 0 : popup_layout::scale(8)));
 }
 }
 
@@ -674,10 +749,13 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card) {
   lv_obj_set_style_text_font(apply_label, popup_layout::font20(), 0); lv_obj_center(apply_label);
   c->dropdown = lv_dropdown_create(row); lv_obj_set_width(c->dropdown, LV_PCT(100));
   ui_control_style::valueDropdown(c->dropdown); lv_obj_center(c->dropdown);
-  c->status = lv_label_create(row); lv_obj_set_width(c->status, LV_PCT(100));
+  lv_obj_add_event_cb(lv_dropdown_get_list(c->dropdown), dropdown_cover_check,
+                      LV_EVENT_COVER_CHECK, nullptr);
+  c->status = lv_label_create(row); lv_obj_set_width(c->status, LV_PCT(58));
   lv_label_set_long_mode(c->status, LV_LABEL_LONG_DOT);
   lv_obj_set_style_text_font(c->status, popup_layout::font20(), 0);
   lv_obj_set_style_text_color(c->status, lv_color_white(), 0);
+  lv_obj_set_style_text_align(c->status, LV_TEXT_ALIGN_RIGHT, 0);
   for (auto* obj : {c->slider, c->apply, c->dropdown}) lv_obj_add_event_cb(obj, input_event, LV_EVENT_ALL, c);
   visible(row, false); return c;
 }
@@ -771,6 +849,10 @@ void editable_control_refresh(EditableControl* c) {
 void editable_control_close(EditableControl* c) {
   if (!c) return;
   finish_editing(c); lv_dropdown_close(c->dropdown); c->command_id = "";
+  finish_dropdown_timing(c);
+  // LVGL places the expanded list on the screen. Keep the hidden list with
+  // its owning dropdown when the reusable popup is parked or screens change.
+  if (auto* list = lv_dropdown_get_list(c->dropdown)) lv_obj_set_parent(list, c->dropdown);
   c->dragging = false; c->active = false; visible(c->row, false); visible(c->status, false);
   lv_roller_set_selected(c->number_roller, lv_roller_get_selected(c->number_roller), LV_ANIM_OFF);
   for (const auto& field : c->fields) if (field.roller)

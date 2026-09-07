@@ -35,6 +35,7 @@ static void parseEnergySection(const String& body,
                                String& names,
                                String& icons);
 static int findMatchingJsonObjectEnd(const String& body, int object_start);
+static int findMatchingJsonArrayEnd(const String& body, int array_start);
 static bool extractStringField(const String& object, const char* key, String& out);
 static String lookupKeyValue(const String& text, const String& key);
 static void upsertKeyValueMap(String& text, const String& key, const String& value);
@@ -516,6 +517,26 @@ static int findMatchingJsonObjectEnd(const String& body, int object_start) {
     }
   }
 
+  return -1;
+}
+
+static int findMatchingJsonArrayEnd(const String& body, int array_start) {
+  if (array_start < 0 || array_start >= body.length() || body.charAt(array_start) != '[') return -1;
+  int depth = 0;
+  bool in_string = false;
+  bool escaped = false;
+  for (int i = array_start; i < body.length(); ++i) {
+    const char c = body.charAt(i);
+    if (in_string) {
+      if (escaped) escaped = false;
+      else if (c == '\\') escaped = true;
+      else if (c == '"') in_string = false;
+      continue;
+    }
+    if (c == '"') in_string = true;
+    else if (c == '[') ++depth;
+    else if (c == ']' && --depth == 0) return i;
+  }
   return -1;
 }
 
@@ -1305,13 +1326,13 @@ static void parseEntityNameSection(const String& body, const char* key, String& 
   int meta_idx = body.indexOf(pattern);
   if (meta_idx < 0) return;
   int array_start = body.indexOf('[', meta_idx);
-  int array_end = body.indexOf(']', array_start);
+  int array_end = findMatchingJsonArrayEnd(body, array_start);
   if (array_start < 0 || array_end < array_start) return;
 
   String segment = body.substring(array_start + 1, array_end);
   int obj_start = segment.indexOf('{');
   while (obj_start >= 0) {
-    int obj_end = segment.indexOf('}', obj_start);
+    int obj_end = findMatchingJsonObjectEnd(segment, obj_start);
     if (obj_end < 0) break;
     String object = segment.substring(obj_start, obj_end + 1);
     String entity;
@@ -1332,14 +1353,16 @@ static void parseEntityIconSection(const String& body, const char* key, String& 
     return;
   }
   int array_start = body.indexOf('[', meta_idx);
-  int array_end = body.indexOf(']', array_start);
+  // View states contain stable IDs such as [t:13]. Delimiters inside JSON
+  // strings must not discard this entity or the entities following it.
+  int array_end = findMatchingJsonArrayEnd(body, array_start);
   if (array_start < 0 || array_end < array_start) {
     return;
   }
   String segment = body.substring(array_start + 1, array_end);
   int obj_start = segment.indexOf('{');
   while (obj_start >= 0) {
-    int obj_end = segment.indexOf('}', obj_start);
+    int obj_end = findMatchingJsonObjectEnd(segment, obj_start);
     if (obj_end < 0) break;
     String object = segment.substring(obj_start, obj_end + 1);
     String entity;

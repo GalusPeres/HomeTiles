@@ -599,7 +599,13 @@ void HomeTilesNetworkManager::init() {
     mqtt_client.setClient(net_client);
     mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
     setMqttBufferSize(mqttNormalBufferSize(), "init");
-    mqtt_client.setCallback(mqttCallback);
+    mqtt_client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
+      // Receive growth happens inside readPacket, before the queue validates
+      // callback bounds. Publish its actual capacity before copying the data.
+      mqtt_buffer_size = mqtt_client.getBufferSize();
+      mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
+      mqttCallback(topic, payload, length);
+    });
   } else {
     Serial.println("MQTT: No configuration available - skipping connection");
   }
@@ -1014,7 +1020,11 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
       const DeviceConfig& cfg = configManager.getConfig();
       mqtt_client.setClient(net_client);
       mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
-      mqtt_client.setCallback(mqttCallback);
+      mqtt_client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
+        mqtt_buffer_size = mqtt_client.getBufferSize();
+        mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
+        mqttCallback(topic, payload, length);
+      });
       mqtt_retry_at = 0;  // Connect immediately on the next iteration.
       mqtt_connect_failures = 0;  // Fresh transport, fresh backoff.
       Serial.println("[MQTT] Reconfigure: new settings applied");
@@ -1114,6 +1124,8 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
   drainOutboundQueues(startup_storm ? kMqttOutboundDrainStorm
                                     : kMqttOutboundDrainNormal);
   mqtt_client.loop();
+  mqtt_buffer_size = mqtt_client.getBufferSize();
+  mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
   if (!mqtt_client.connected()) {
     Serial.printf("[MQTT] Connection lost in loop, state=%d\n",
                   mqtt_client.state());
@@ -1458,7 +1470,10 @@ void HomeTilesNetworkManager::deferMqttReconnect(uint32_t hold_ms) {
 
 // ========== MQTT status ==========
 uint16_t HomeTilesNetworkManager::mqttNormalBufferSize() const {
-  return mqtt_media_buffer_needed ? kMqttBufferMedia : kMqttBufferNormal;
+  const uint16_t configured = mqtt_media_buffer_needed ? kMqttBufferMedia : kMqttBufferNormal;
+  // Avoid reallocating for every repeated retained state larger than the base
+  // buffer. The vendored parser caps this high-water mark at 65,535 bytes.
+  return mqtt_receive_buffer_floor > configured ? mqtt_receive_buffer_floor : configured;
 }
 
 bool HomeTilesNetworkManager::setMqttBufferSize(uint16_t size, const char* reason) {

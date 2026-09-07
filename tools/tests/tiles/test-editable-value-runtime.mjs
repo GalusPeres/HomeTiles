@@ -18,7 +18,7 @@ const out=path.join(root,'build/tests/editable-runtime');fs.mkdirSync(out,{recur
 let geometry=read('src/ui/popups/popup_layout.h');
 geometry=geometry.slice(geometry.indexOf('namespace popup_layout {'),geometry.indexOf('// Standard popup close button.'));
 for(const f of cppFunctionDefinitions(geometry).reverse()) if(f.name.startsWith('font')||['headerTitleFont','applyIconScale'].includes(f.name)) geometry=geometry.slice(0,f.start)+geometry.slice(f.end);
-geometry+='inline const int* font20(){static const int height=scale(20);return &height;}\ninline const int* font40(){static const int height=scale(40);return &height;}\n}';
+geometry+='inline const int* headerTitleFont(){static const int height=scale(24);return &height;}\ninline const int* font20(){static const int height=scale(20);return &height;}\ninline const int* font40(){static const int height=scale(40);return &height;}\n}';
 const valueStruct=header.match(/struct EditableValue \{[\s\S]*?\n};/)[0];
 const source=`
 #include <algorithm>
@@ -57,16 +57,21 @@ ${valueStruct}
 ${['finite_json','editable_entity_matches','parse_editable_value','editable_display_value'].map(n=>fn(control,n)).join('\n')}
 ${geometry}
 struct Obj {int y=0,w=0,h=0;unsigned flags=0;};using lv_obj_t=Obj;
+struct lv_display_t;
 constexpr unsigned LV_OBJ_FLAG_HIDDEN=1,LV_OBJ_FLAG_SCROLLABLE=2,LV_OBJ_FLAG_OVERFLOW_VISIBLE=4;
 constexpr int LV_ANIM_OFF=0,LV_DIR_VER=1,LV_SCROLLBAR_MODE_AUTO=1,LV_SCROLLBAR_MODE_OFF=0,LV_ALIGN_TOP_MID=0;
 int LV_PCT(int n){return n;}
 void lv_obj_set_height(Obj*o,int h){o->h=h;}void lv_obj_set_y(Obj*o,int y){o->y=y;}
+long lv_obj_get_y(Obj*o){return o->y;}long lv_obj_get_height(Obj*o){return o->h;}
+bool lv_obj_has_flag(Obj*o,unsigned f){return (o->flags&f)!=0;}
 void lv_obj_set_size(Obj*o,int w,int h){o->w=w;o->h=h;}
 void lv_obj_align(Obj*o,int,int,int y){o->y=y;}void lv_obj_center(Obj*o){o->y=0;}
 void lv_obj_scroll_to_y(Obj*,int,int){} void lv_obj_set_scroll_dir(Obj*,int){}
 void lv_obj_set_scrollbar_mode(Obj*,int){} void lv_obj_move_foreground(Obj*){}
 void lv_obj_update_layout(Obj*){} void lv_obj_add_flag(Obj*o,unsigned f){o->flags|=f;}
-void lv_obj_remove_flag(Obj*o,unsigned f){o->flags&=~f;} int lv_font_get_line_height(const int*h){return *h;}
+// ESP32's int32_t is long, unlike the host's int32_t. Match the firmware
+// signature here so mixed-type template arguments fail before a full build.
+void lv_obj_remove_flag(Obj*o,unsigned f){o->flags&=~f;} long lv_font_get_line_height(const int*h){return *h;}
 constexpr int kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8;
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kContentLiftY=6,kBinaryTimelineHeight=22,kBinaryActivityRowHeight=42,kTimeAxisHeight=20;
@@ -78,6 +83,7 @@ constexpr int kContentLiftY=0,kBinaryTimelineHeight=30,kBinaryActivityRowHeight=
 constexpr int kBinaryVisibleActivityRows = SCREEN_HEIGHT <= 600 ? 4 : 5;
 struct SensorPopupContext {
  bool editable=false,state_history_mode=true;String editable_kind;
+ Obj *title_label=nullptr,*icon_label=nullptr,*control_row=nullptr;
  Obj *body_box,*chart_wrap,*binary_body,*binary_activity_title,*binary_activity_date,*binary_activity_viewport,*binary_activity_status,*binary_history_title,*binary_timeline,*binary_history_status;
  Obj* binary_time_labels[8];
  Obj* chart=nullptr; Obj* y_min_label=nullptr; Obj* y_min_line=nullptr; Obj* time_lines[8]={}; Obj* time_labels[8]={}; int chart_height=kChartHeight;
@@ -85,6 +91,7 @@ struct SensorPopupContext {
 ${fn(control,'editable_control_height')}
 ${fn(popup,'resize_editable_chart')}
 void update_binary_time_axis(SensorPopupContext*){}
+${fn(popup,'editable_control_top')}
 ${fn(popup,'layout_editable_history')}
 ${control.match(/struct EditableControl \{[\s\S]*?\n};/)[0]}
 struct Network {bool online=true;int count=0;String payload;bool isMqttConnected(){return online;}
@@ -143,7 +150,7 @@ int main(){
    }else{
     assert(!(ctx.body_box->flags&LV_OBJ_FLAG_SCROLLABLE));
     assert(ctx.binary_activity_viewport->y+ctx.binary_activity_viewport->h<=ctx.body_box->h);
-    if(ctx.editable_kind!="select"){assert(ctx.binary_activity_title->y==0);assert(ctx.binary_timeline->flags&LV_OBJ_FLAG_HIDDEN);}
+    if(ctx.editable_kind!="select"){assert(ctx.binary_activity_title->y==popup_layout::scale(8));assert(ctx.binary_timeline->flags&LV_OBJ_FLAG_HIDDEN);}
    }
   }
   ctx.editable=false;ctx.state_history_mode=false;layout_editable_history(&ctx);

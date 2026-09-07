@@ -26,6 +26,7 @@ const iconChar = name => String.fromCodePoint(parseInt(mdi.match(new RegExp('\\{
 const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(icon);'));
 const cpp = `
 #include <lvgl.h>
+#include <lvgl_private.h>
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -67,6 +68,7 @@ ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'disable_pressed_button_an
 ${read('src/types/climate/layout.h').replace(/^#include.*$/gm,'').replace('#pragma once','')}
 uint32_t value_generation=1, ticks=100;
 uint32_t millis(){return ticks;}
+struct Logger {template<class... T> void printf(const char*,T...) {}} Serial;
 String request_id(){static int id=0;return std::to_string(++id);}
 #ifdef _WIN32
 struct tm* localtime_r(const time_t* now,struct tm* result){return localtime_s(result,now)==0?result:nullptr;}
@@ -90,7 +92,7 @@ enum class SensorHistoryRange {Day24,Day7};
 constexpr int kBinaryVisibleActivityRows = SCREEN_HEIGHT <= 600 ? 4 : 5;
 struct SensorPopupContext {
  bool editable=true,state_history_mode=true,binary_icon_override=false;String editable_kind,entity_id,editable_history_id;SensorHistoryRange editable_requested_range=SensorHistoryRange::Day24;
- lv_obj_t *card=nullptr,*title_label=nullptr,*icon_label=nullptr,*range_day_btn=nullptr,*range_week_btn=nullptr;int chart_height=kChartHeight;SensorHistoryRange history_range=SensorHistoryRange::Day24;
+ lv_obj_t *overlay=nullptr,*card=nullptr,*title_label=nullptr,*icon_label=nullptr,*control_row=nullptr,*range_day_btn=nullptr,*range_week_btn=nullptr;int chart_height=kChartHeight;SensorHistoryRange history_range=SensorHistoryRange::Day24;
  lv_obj_t *body_box,*chart_wrap,*chart,*binary_body,*binary_activity_title,*binary_activity_date,*binary_activity_viewport,*binary_activity_status,*binary_history_title,*binary_timeline,*binary_history_status,*y_min_label,*y_max_label,*y_min_line,*y_max_line;
  lv_obj_t *binary_time_labels[8],*time_lines[8],*time_labels[8];lv_chart_series_t* series;
 };
@@ -100,22 +102,28 @@ ${fn(popup,'set_label_style')}
 void build_chart(SensorPopupContext* ctx){auto* body_box=ctx->body_box;${chartBuild}}
 ${fn(popup,'resize_editable_chart')}
 void update_binary_time_axis(SensorPopupContext*);
+${fn(popup,'editable_control_top')}
 ${fn(popup,'layout_editable_history')}
 int history_requests=0,history_clears=0,header_aligns=0;
 void request_history_for_context(SensorPopupContext*ctx){++history_requests;ctx->editable_history_id=std::to_string(history_requests);}
 void clear_binary_history(SensorPopupContext*){++history_clears;}
 ${fn(popup,'style_range_button')}
 ${fn(popup,'update_range_buttons')}
-void align_header_row(lv_obj_t*,lv_obj_t*,lv_obj_t*){++header_aligns;}
+${fn(popup,'align_header_row')}
 ${fn(popup,'on_range_click')}
 ${fn(popup,'accept_editable_history_range')}
 ${fn(popup,'refresh_editable_popup_icon')}
 
+int explicit_layouts=0;
+void counted_layout(lv_obj_t* obj){++explicit_layouts;lv_obj_update_layout(obj);}
+#define lv_obj_update_layout counted_layout
 ${fn(popup,'measure_label_text_width')}
 int calc_time_axis(const SensorPopupContext*,String* labels,float* fracs,int){for(int i=0;i<4;++i){labels[i]=i==0?"12 AM":i==1?"6 AM":i==2?"12 PM":"6 PM";fracs[i]=i/3.0f;}return 4;}
 int calc_day7_boundary_axis(float*,int){return 0;}
 ${fn(popup,'update_binary_time_axis')}
 ${fn(popup,'update_y_axis_layout')}
+#undef lv_obj_update_layout
+${fn(popup,'set_sensor_popup_visible')}
 lv_obj_t* box(lv_obj_t* parent){auto* o=lv_obj_create(parent);lv_obj_remove_style_all(o);lv_obj_set_width(o,LV_PCT(100));lv_obj_remove_flag(o,LV_OBJ_FLAG_SCROLLABLE);return o;}
 lv_obj_t* text(lv_obj_t* parent,const char* value){auto* o=lv_label_create(parent);lv_label_set_text(o,value);set_label_style(o,lv_color_white(),popup_layout::font20());return o;}
 void settle(EditableControl* c){ticks+=601;editable_control_refresh(c);editable_control_refresh(c);}
@@ -142,11 +150,11 @@ int main(int argc,char**argv){
  lv_theme_default_init(display,lv_color_hex(0x26A69A),lv_color_hex(0xC14444),false,&ui_font_20);
  lv_obj_set_style_bg_color(lv_screen_active(),lv_color_black(),0);
  auto* card=lv_obj_create(lv_screen_active());lv_obj_set_size(card,popup_layout::kCardWidth,popup_layout::kCardHeight);lv_obj_center(card);lv_obj_set_style_bg_color(card,lv_color_hex(0x2A2A2A),0);lv_obj_set_style_radius(card,popup_layout::kCardRadius,0);lv_obj_set_style_border_width(card,0,0);lv_obj_set_style_pad_all(card,popup_layout::kCardPad,0);lv_obj_remove_flag(card,LV_OBJ_FLAG_SCROLLABLE);
- auto* title=text(card,"L10s Ultra Volume");lv_obj_set_style_text_font(title,popup_layout::headerTitleFont(),0);lv_obj_set_pos(title,popup_layout::kHeaderTitleX,popup_layout::scale(22));
+ auto* title=text(card,"L10s Ultra Volume");lv_obj_set_style_text_font(title,popup_layout::headerTitleFont(),0);lv_obj_set_width(title,LV_PCT(38));
  auto* close=popup_layout::createCloseButton(card,[](lv_event_t*){},nullptr);
- auto* header_icon=text(card,getMdiChar("clock-end").c_str());lv_obj_set_style_text_font(header_icon,FONT_MDI_ICONS,0);lv_obj_set_pos(header_icon,popup_layout::kHeaderIconX,popup_layout::scale(16));
- auto* row=box(card);lv_obj_set_pos(row,0,popup_layout::kValueY-kContentLiftY);lv_obj_add_flag(row,LV_OBJ_FLAG_OVERFLOW_VISIBLE);auto* c=editable_control_create(row,card);
- SensorPopupContext ctx;ctx.body_box=box(card);ctx.binary_body=box(ctx.body_box);
+ auto* header_icon=text(card,getMdiChar("clock-end").c_str());lv_obj_set_style_text_font(header_icon,FONT_MDI_ICONS,0);popup_layout::applyIconScale(header_icon);align_header_row(card,title,header_icon);
+ auto* row=box(card);lv_obj_set_pos(row,0,popup_layout::kValueY);lv_obj_add_flag(row,LV_OBJ_FLAG_OVERFLOW_VISIBLE);auto* c=editable_control_create(row,card);
+ SensorPopupContext ctx;ctx.card=card;ctx.title_label=title;ctx.icon_label=header_icon;ctx.control_row=row;ctx.body_box=box(card);ctx.binary_body=box(ctx.body_box);
  ctx.binary_history_title=text(ctx.binary_body,"History");ctx.binary_timeline=box(ctx.binary_body);lv_obj_set_size(ctx.binary_timeline,LV_PCT(100),kBinaryTimelineHeight);lv_obj_set_y(ctx.binary_timeline,popup_layout::scale(42));lv_obj_set_style_bg_color(ctx.binary_timeline,lv_color_hex(0x4C74D9),0);lv_obj_set_style_bg_opa(ctx.binary_timeline,LV_OPA_COVER,0);
  ctx.binary_activity_title=text(ctx.binary_body,"Activity");ctx.binary_activity_date=text(ctx.binary_body,"Today · 09/06/2026");ctx.binary_activity_status=text(ctx.binary_body,"");ctx.binary_history_status=text(ctx.binary_body,"");ctx.binary_activity_viewport=box(ctx.binary_body);
  for(int i=0;i<5;++i){auto* entry=text(ctx.binary_activity_viewport,i==0?"100 %                       8:01:00 PM":"80 %                         7:59:32 PM");lv_obj_set_y(entry,i*kBinaryActivityRowHeight+popup_layout::scale(8));}
@@ -159,11 +167,32 @@ int main(int argc,char**argv){
   const char* state=strcmp(kind,"number")==0?"100":strcmp(kind,"select")==0?"Home":strcmp(kind,"time")==0?"17:00:00":strcmp(kind,"date")==0?"2024-02-29":"2024-02-29 17:00:00";
   load(c,kind,state,strcmp(kind,"number")==0?number:strcmp(kind,"select")==0?",\\"options_complete\\":true,\\"options\\":[\\"Home\\",\\"Home / Lighting / Desk\\",\\"Home / Weather\\",\\"Home / Energy\\",\\"Home / Camera\\",\\"Home / Living room\\",\\"Home / Upstairs\\",\\"Home / Downstairs\\",\\"Home / Garage\\",\\"Home / Bedroom\\",\\"Home / Garden\\"]":"");
   ctx.editable_kind=kind;layout_editable_history(&ctx);
+  for(const char* caption:{"View","Heating schedule\\nEnd time","Heating\\nSchedule\\nSecond floor\\nEnd time"}){
+   lv_label_set_text(title,caption);align_header_row(card,title,header_icon);layout_editable_history(&ctx);lv_obj_update_layout(card);
+   for(bool pressed:{false,true}){
+    if(pressed)lv_obj_add_state(close,LV_STATE_PRESSED);else lv_obj_remove_state(close,LV_STATE_PRESSED);
+    lv_tick_inc(300);lv_timer_handler();lv_obj_update_layout(card);
+    lv_area_t controls,close_area;lv_obj_get_coords(row,&controls);lv_obj_get_coords(close,&close_area);
+    assert(controls.y1>close_area.y2+popup_layout::kCloseButtonClickArea&&"Editable controls must remain below the complete close-button touch area");
+    for(auto* label:{title,header_icon}){lv_area_t header;lv_obj_get_coords(label,&header);assert(controls.y1-header.y2>=popup_layout::scale(6)&&"The header must retain breathing room above every editable control kind");}
+   }
+  }
+  lv_obj_remove_state(close,LV_STATE_PRESSED);lv_label_set_text(title,strcmp(kind,"select")==0?"View":strcmp(kind,"number")==0?"L10s Ultra Volume":"Heating schedule\\nEnd time");align_header_row(card,title,header_icon);layout_editable_history(&ctx);
   for(int i=4;i<8;++i)assert(lv_obj_has_flag(ctx.binary_time_labels[i],LV_OBJ_FLAG_HIDDEN)&&"Unused axis labels must stay hidden");update_y_axis_layout(&ctx);lv_obj_update_layout(card);
   assert(!lv_obj_has_flag(ctx.body_box,LV_OBJ_FLAG_SCROLLABLE));
   lv_area_t body,view,control_area;lv_obj_get_coords(ctx.body_box,&body);lv_obj_get_coords(ctx.binary_activity_viewport,&view);lv_obj_get_coords(row,&control_area);
   assert(view.y2<=body.y2&&view.y2-view.y1+1>=kBinaryActivityRowHeight);assert(body.y1>control_area.y2);
-  status_text(c,8);lv_obj_update_layout(card);lv_area_t status_area;lv_obj_get_coords(c->status,&status_area);assert(status_area.y1>control_area.y2&&status_area.y2<body.y1);visible(c->status,false);
+  if(strcmp(kind,"number")==0||strcmp(kind,"select")==0)
+    assert(body.y1-control_area.y2<=popup_layout::scale(12)&&"History must directly follow the shared control band without an empty status row");
+  const bool temporal=strcmp(kind,"number")!=0&&strcmp(kind,"select")!=0;
+  auto* heading=temporal?ctx.binary_activity_title:ctx.binary_history_title;
+  lv_obj_set_style_text_font(heading,popup_layout::font24(),0);
+  for(unsigned status:{7,8,9}){
+    status_text(c,status);lv_obj_update_layout(card);lv_area_t status_area,heading_area;lv_obj_get_coords(c->status,&status_area);lv_obj_get_coords(heading,&heading_area);
+    assert(status_area.y1>control_area.y2&&status_area.x1>heading_area.x2);
+    assert(abs(status_area.y1+status_area.y2-heading_area.y1-heading_area.y2)<=2&&"Command status must share the heading baseline without reserving a blank row");
+    assert(lv_obj_get_y(ctx.body_box)==body.y1-lv_obj_get_y(card)-popup_layout::kCardPad);
+  }visible(c->status,false);
 
   if(strcmp(kind,"number")==0){assert(lv_obj_get_width(c->slider)==(popup_layout::kCardWidth>=760?popup_layout::scale(410):popup_layout::scale(330)));lv_area_t track;lv_obj_get_coords(c->slider,&track);assert(abs((track.x1+track.x2)/2-SCREEN_WIDTH/2)<=1);lv_area_t value_area,row_area;lv_obj_get_coords(c->number_box,&value_area);lv_obj_get_coords(c->row,&row_area);
    assert(lv_obj_get_style_text_font(c->field,LV_PART_MAIN)==popup_layout::headerTitleFont());
@@ -181,7 +210,7 @@ int main(int argc,char**argv){
     auto* control_widget=strcmp(kind,"time")==0?c->clock_box:strcmp(kind,"select")==0?c->dropdown:c->number_box;
     control_bounds((String(argv[1])+"-"+kind+".bounds").c_str(),control_widget);
     if(strcmp(kind,"select")==0||strcmp(kind,"time")==0){lv_area_t area;lv_obj_get_coords(control_widget,&area);auto pixel=rendered_pixel(pixels,(area.y1+popup_layout::scale(12))*SCREEN_WIDTH+area.x1+popup_layout::scale(24));int r=(pixel>>16)&255,g=(pixel>>8)&255,b=pixel&255;assert(abs(r-g)<=2&&abs(g-b)<=2&&"The rendered RGB565 surface must be neutral");}}
-  if(strcmp(kind,"select")==0){for(int cycle=0;cycle<3;++cycle){lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);auto* list=lv_dropdown_get_list(c->dropdown);assert(lv_obj_get_style_text_font(list,LV_PART_MAIN)==popup_layout::headerTitleFont());assert(lv_obj_get_style_clip_corner(list,LV_PART_MAIN));auto selected=lv_obj_get_style_bg_color(list,LV_PART_SELECTED);assert(selected.red==selected.green&&selected.green==selected.blue);lv_area_t a;lv_obj_get_coords(list,&a);assert(a.x1>=0&&a.x2<SCREEN_WIDTH);if(argc>1&&cycle==0){lv_obj_invalidate(lv_screen_active());lv_tick_inc(200);lv_timer_handler();lv_refr_now(display);image((String(argv[1])+"-options.bmp").c_str(),pixels);}lv_dropdown_close(c->dropdown);}}
+  if(strcmp(kind,"select")==0){for(int cycle=0;cycle<3;++cycle){lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);auto* list=lv_dropdown_get_list(c->dropdown);assert(lv_obj_get_style_text_font(list,LV_PART_MAIN)==popup_layout::headerTitleFont());assert(lv_obj_get_style_clip_corner(list,LV_PART_MAIN));auto selected=lv_obj_get_style_bg_color(list,LV_PART_SELECTED);assert(selected.red==0x26&&selected.green==0xa6&&selected.blue==0x9a);lv_area_t a;lv_obj_get_coords(list,&a);assert(a.x1>=0&&a.x2<SCREEN_WIDTH);if(argc>1&&cycle==0){lv_obj_invalidate(lv_screen_active());lv_tick_inc(200);lv_timer_handler();lv_refr_now(display);image((String(argv[1])+"-options.bmp").c_str(),pixels);}lv_dropdown_close(c->dropdown);}}
  }
  if(argc>1){lv_refr_now(display);for(auto* icon:{header_icon,lv_obj_get_child(close,0)}){lv_area_t area;lv_obj_get_coords(icon,&area);int bright=0;for(int y=area.y1;y<=area.y2;++y)for(int x=area.x1;x<=area.x2;++x){auto pixel=rendered_pixel(pixels,y*SCREEN_WIDTH+x);if((pixel&255)>200&&((pixel>>8)&255)>200&&((pixel>>16)&255)>200)++bright;}assert(bright>10);}}
  // Exercise delayed metadata while the existing popup remains open.
@@ -208,7 +237,7 @@ int main(int argc,char**argv){
  assert(lv_obj_get_style_bg_opa(ctx.range_day_btn,LV_PART_MAIN)==LV_OPA_COVER&&lv_obj_get_style_bg_opa(ctx.range_week_btn,LV_PART_MAIN)==LV_OPA_TRANSP);
  reply["request_id"]=ctx.editable_history_id.c_str();reply["hours"]=24;assert(accept_editable_history_range(&ctx,reply)&&ctx.history_range==SensorHistoryRange::Day24);
  for(auto*button:{ctx.range_day_btn,ctx.range_week_btn})lv_obj_delete(button);
- assert(editable_control_height("number")==editable_control_height("select")&&editable_control_height("select")==editable_control_height("time"));
+ assert(editable_control_height("number")==editable_control_height("select"));assert(editable_control_height("time")>editable_control_height("select"));
  assert(networkManager.commands.empty());
  // Remote state must not rebuild or scroll an open native options list.
  String select_extra=",\\\"options_complete\\\":true,\\\"options\\\":[";
@@ -273,6 +302,11 @@ int main(int argc,char**argv){
  load(c,"number","20.5",",\\"min\\":16,\\"max\\":30,\\"step\\":0.5,\\"mode\\":\\"auto\\",\\"unit\\":\\"°C\\"");
  assert(!c->number_roller_enabled&&lv_obj_has_flag(c->slider,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_width(c->up)==lv_obj_get_width(c->number_box)/2);assert(lv_obj_get_style_text_font(lv_obj_get_child(c->up,0),LV_PART_MAIN)==popup_layout::font24());assert(!lv_obj_has_flag(c->up,LV_OBJ_FLAG_HIDDEN)&&!lv_obj_has_flag(c->down,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_style_bg_opa(c->number_box,LV_PART_MAIN)==LV_OPA_COVER);assert(lv_obj_get_style_border_width(c->number_box,LV_PART_MAIN)==0);assert(lv_obj_get_style_radius(c->number_box,LV_PART_MAIN)==climate_layout::kControlRadius);
  ctx.editable_kind="number";layout_editable_history(&ctx);update_y_axis_layout(&ctx);
+ lv_label_set_text(title,"Wolf Fhs280 T Min\\nEinstellen");align_header_row(card,title,header_icon);lv_obj_update_layout(card);
+ lv_area_t temperature_area,history_area;lv_obj_get_coords(c->number_box,&temperature_area);lv_obj_get_coords(ctx.binary_history_title,&history_area);
+ const int temperature_gap=history_area.y1-temperature_area.y2-1;
+ assert(temperature_gap>=popup_layout::scale(8)&&temperature_gap<=popup_layout::scale(24)&&"The temperature pill must not leave a large gap above History");
+ std::cout<<"Temperature spacing "<<SCREEN_WIDTH<<"x"<<SCREEN_HEIGHT<<": gap="<<temperature_gap<<", history_y="<<history_area.y1<<", activity_y="<<lv_obj_get_y(ctx.body_box)+lv_obj_get_y(ctx.binary_activity_title)<<"\\n";
  if(argc>1){lv_obj_invalidate(lv_screen_active());lv_tick_inc(200);lv_timer_handler();lv_refr_now(display);image((String(argv[1])+"-temperature.bmp").c_str(),pixels);control_bounds((String(argv[1])+"-temperature.bounds").c_str(),c->number_box);
    for(auto* button:{c->up,c->down}){lv_area_t icon;lv_obj_get_coords(lv_obj_get_child(button,0),&icon);int bright=0;for(int y=icon.y1;y<=icon.y2;++y)for(int x=icon.x1;x<=icon.x2;++x){auto pixel=rendered_pixel(pixels,y*SCREEN_WIDTH+x);if((pixel&255)>200&&((pixel>>8)&255)>200&&((pixel>>16)&255)>200)++bright;}assert(bright>0);}
  }
@@ -321,19 +355,143 @@ int main(int argc,char**argv){
  networkManager.online=false;editable_control_refresh(c);assert(!c->editing&&lv_obj_has_state(c->fields[3].roller,LV_STATE_DISABLED));const auto offline=networkManager.commands.size();lv_obj_send_event(c->fields[3].roller,LV_EVENT_PRESSED,nullptr);lv_roller_set_selected(c->fields[3].roller,2,LV_ANIM_OFF);lv_obj_send_event(c->fields[3].roller,LV_EVENT_VALUE_CHANGED,nullptr);assert(networkManager.commands.size()==offline);networkManager.online=true;editable_control_refresh(c);assert(networkManager.commands.size()==offline);
  for(int i=0;i<20;++i){editable_control_close(c);load(c,"select","unknown",",\\"options_complete\\":true,\\"options\\":[\\"First\\",\\"Second\\"]");assert(c->option_offset==1);lv_dropdown_open(c->dropdown);editable_control_close(c);assert(!lv_dropdown_is_open(c->dropdown));}
  haBridgeConfig.payload="";++value_generation;editable_control_open(c,"missing.entity");assert(!c->value.writable&&c->command_id.empty());
+ // Exercise actual axis measurement without per-label screen layout passes.
+ explicit_layouts=0;update_y_axis_layout(&ctx);assert(explicit_layouts==0);
+ explicit_layouts=0;update_binary_time_axis(&ctx);assert(explicit_layouts<=1);
+ auto* measured=ctx.y_max_label;lv_obj_set_width(measured,LV_SIZE_CONTENT);lv_obj_update_layout(measured);
+ assert(measure_label_text_width(measured)==lv_obj_get_width(measured));
+
+ // Press feedback must end on release, even while the native list stays open.
+ load(c,"select","Home",",\\\"options_complete\\\":true,\\\"options\\\":[\\\"Home\\\",\\\"Office\\\"]");
+ assert(c->value.writable&&c->value.options.size()==2);
+ ctx.editable_kind="select";layout_editable_history(&ctx);lv_obj_update_layout(card);
+ lv_area_t feedback_area;lv_obj_get_coords(c->dropdown,&feedback_area);
+ const int feedback_pixel=((feedback_area.y1+feedback_area.y2)/2)*SCREEN_WIDTH+feedback_area.x1+popup_layout::scale(4);
+ auto feedback_frame=[&](const char* name){
+  lv_tick_inc(300);lv_timer_handler();lv_refr_now(display);
+  if(argc>1)image((String(argv[1])+"-select-"+name+".bmp").c_str(),pixels);
+  return rendered_pixel(pixels,feedback_pixel);
+ };
+ const uint32_t resting_background=feedback_frame("normal");
+ pointer=lv_indev_create();lv_indev_set_type(pointer,LV_INDEV_TYPE_POINTER);lv_indev_set_user_data(pointer,&touch);
+ lv_indev_set_read_cb(pointer,[](lv_indev_t* input,lv_indev_data_t* data){auto* t=static_cast<Touch*>(lv_indev_get_user_data(input));data->point=t->point;data->state=t->state;});
+ touch.state=LV_INDEV_STATE_RELEASED;lv_indev_read(pointer);
+ // The dropdown's upper-right touch target must not hit the header close area.
+ touch.point={feedback_area.x2-popup_layout::scale(12),feedback_area.y1+popup_layout::scale(6)};
+ touch.state=LV_INDEV_STATE_PRESSED;lv_indev_read(pointer);
+ assert(lv_obj_has_state(c->dropdown,LV_STATE_PRESSED));
+ assert(!lv_obj_has_state(close,LV_STATE_PRESSED));
+ const auto pressed_background=feedback_frame("pressed");
+  for(int shift:{0,8,16}){const int base=(resting_background>>shift)&255,pressed=(pressed_background>>shift)&255;assert(base<30&&pressed>base&&pressed-base<=10&&"Press feedback must be subtle on a dark Settings surface");}
+  const auto border=lv_obj_get_style_border_color(c->dropdown,LV_PART_MAIN);assert(border.red==0x55&&border.green==0x55&&border.blue==0x55&&"Press feedback must preserve the Settings gray border");
+ touch.state=LV_INDEV_STATE_RELEASED;lv_indev_read(pointer);
+ assert(lv_dropdown_is_open(c->dropdown)&&lv_obj_has_state(c->dropdown,LV_STATE_CHECKED));
+ assert(feedback_frame("open")==resting_background&&"An expanded dropdown must not retain press feedback");
+ auto* feedback_list=lv_dropdown_get_list(c->dropdown);lv_area_t feedback_list_area;lv_obj_get_coords(feedback_list,&feedback_list_area);
+ const int selected_pixel=(feedback_list_area.y1+lv_obj_get_style_pad_top(feedback_list,LV_PART_MAIN)+lv_font_get_line_height(popup_layout::headerTitleFont())/2)*SCREEN_WIDTH+feedback_list_area.x2-popup_layout::scale(24);
+ const uint32_t selected_color=rendered_pixel(pixels,selected_pixel);
+ const int selected_r=(selected_color>>16)&255,selected_g=(selected_color>>8)&255,selected_b=selected_color&255;
+ assert(abs(selected_r-0x26)<=7&&abs(selected_g-0xa6)<=3&&abs(selected_b-0x9a)<=7&&"The list must use the Settings turquoise selection");
+ JsonDocument unavailable;deserializeJson(unavailable,haBridgeConfig.payload);
+ unavailable["state"]="unavailable";unavailable["available"]=false;unavailable["writable"]=false;
+ ArduinoJson::serializeJson(unavailable,static_cast<std::string&>(haBridgeConfig.payload));
+ ++value_generation;editable_control_refresh(c);
+ assert(!lv_dropdown_is_open(c->dropdown)&&lv_obj_has_state(c->dropdown,LV_STATE_DISABLED));
+ assert(feedback_frame("unavailable")==resting_background&&"The disabled theme must not bleach the dropdown background");
+ const auto disabled_commands=networkManager.commands.size();
+ touch.state=LV_INDEV_STATE_PRESSED;lv_indev_read(pointer);feedback_frame("disabled-pressed");
+ touch.state=LV_INDEV_STATE_RELEASED;lv_indev_read(pointer);
+ assert(!lv_dropdown_is_open(c->dropdown)&&networkManager.commands.size()==disabled_commands);
+ for(auto state:{LV_STATE_CHECKED,LV_STATE_PRESSED,static_cast<lv_state_t>(LV_STATE_CHECKED|LV_STATE_PRESSED)}){
+  lv_obj_add_state(c->dropdown,state);
+  assert(feedback_frame("disabled-combined")==resting_background);
+  lv_obj_remove_state(c->dropdown,state);
+ }
+ load(c,"select","Home",",\\\"options_complete\\\":true,\\\"options\\\":[\\\"Home\\\",\\\"Office\\\"]");
+ assert(feedback_frame("recovered")==resting_background&&!lv_obj_has_state(c->dropdown,LV_STATE_DISABLED));
+ lv_indev_delete(pointer);
+ std::cout<<"Dropdown press feedback: native release, unavailable, combined disabled states and recovery passed\\n";
+
+ // Use the actual popup visibility path with partial rendering, as on the
+ // device. An opaque dropdown must not redraw covered grid tiles.
+ ctx.overlay=box(lv_layer_top());lv_obj_set_size(ctx.overlay,LV_PCT(100),LV_PCT(100));ctx.card=card;
+ lv_obj_set_parent(card,ctx.overlay);lv_obj_center(card);set_sensor_popup_visible(&ctx,true);
+ String many_options=",\\"options_complete\\":true,\\"options\\":[";
+ for(int i=0;i<64;++i){if(i)many_options+=",";many_options+="\\"Home / Lighting / Office / Desk "+std::to_string(i)+" [t:"+std::to_string(i)+"]\\"";}many_options+="]";
+ load(c,"select","Home / Lighting / Office / Desk 0 [t:0]",many_options.c_str());
+ ctx.editable_kind="select";layout_editable_history(&ctx);lv_obj_update_layout(card);
+ lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);
+ for(auto state:{LV_STATE_CHECKED,static_cast<lv_state_t>(LV_STATE_CHECKED|LV_STATE_PRESSED)}){
+  lv_obj_add_state(c->dropdown,state);lv_tick_inc(300);lv_timer_handler();auto color=lv_obj_get_style_bg_color(c->dropdown,LV_PART_MAIN);
+  const uint8_t expected=(state&LV_STATE_PRESSED)?0x23:0x1b;
+  assert(color.red==expected&&color.green==expected&&color.blue==expected);
+  auto arrow=lv_obj_get_style_text_color(c->dropdown,LV_PART_INDICATOR);assert(arrow.red==255&&arrow.green==255&&arrow.blue==255);
+  lv_obj_remove_state(c->dropdown,LV_STATE_PRESSED);
+ }
+ auto* list=lv_dropdown_get_list(c->dropdown);assert(lv_obj_get_parent(list)==lv_screen_active());
+ lv_area_t list_area;lv_obj_get_coords(list,&list_area);
+ lv_area_t dropdown_area,card_area;lv_obj_get_coords(c->dropdown,&dropdown_area);lv_obj_get_coords(card,&card_area);
+ assert(list_area.y1>dropdown_area.y2&&"The open list must stay below the control and header");
+ assert(list_area.y2<card_area.y1+popup_layout::kNavY-popup_layout::kCardPad&&"The open list must stop above the range buttons after header clearance changes");
+ auto* covered=lv_obj_create(lv_screen_active());lv_obj_set_size(covered,80,40);
+ lv_obj_set_pos(covered,list_area.x1+20,list_area.y1+20);int covered_draws=0;
+ lv_obj_add_event_cb(covered,[](lv_event_t* e){++*static_cast<int*>(lv_event_get_user_data(e));},LV_EVENT_DRAW_MAIN,&covered_draws);
+ lv_obj_move_to_index(covered,0);
+ int history_draws=0;lv_obj_add_event_cb(ctx.binary_timeline,[](lv_event_t* e){++*static_cast<int*>(lv_event_get_user_data(e));},LV_EVENT_DRAW_MAIN,&history_draws);
+ std::vector<uint16_t> composed(SCREEN_WIDTH*SCREEN_HEIGHT);
+ lv_display_set_user_data(display,&composed);
+ lv_display_set_flush_cb(display,[](lv_display_t* d,const lv_area_t* area,uint8_t* data){
+  auto& image=*static_cast<std::vector<uint16_t>*>(lv_display_get_user_data(d));auto* source=reinterpret_cast<uint16_t*>(data);
+  const int width=lv_area_get_width(area);for(int y=area->y1;y<=area->y2;++y)
+    std::copy(source+(y-area->y1)*width,source+(y-area->y1+1)*width,image.begin()+y*SCREEN_WIDTH+area->x1);
+  lv_display_flush_ready(d);
+ });
+ lv_display_set_buffers(display,pixels.data(),nullptr,SCREEN_WIDTH*28*2,LV_DISPLAY_RENDER_MODE_PARTIAL);
+ lv_obj_invalidate(lv_screen_active());lv_refr_now(display);int previous_history_draws=0,corrected_history_draws=0;
+ for(int i=0;i<12;++i){
+  covered_draws=history_draws=0;lv_obj_scroll_to_y(list,i*5,LV_ANIM_OFF);lv_refr_now(display);
+  // Compact history may intersect the list's rounded top corners. Those
+  // uncovered pixels must still render; fully covered grid content must not.
+  assert(covered_draws==0);corrected_history_draws+=history_draws;const auto expected=composed;
+  history_draws=0;
+  lv_obj_remove_event_cb_with_user_data(list,dropdown_cover_check,nullptr);
+  lv_obj_invalidate(list);lv_refr_now(display);previous_history_draws+=history_draws;
+  assert(composed==expected&&"Cover culling must preserve every RGB565 pixel, including rounded corners");
+  lv_obj_add_event_cb(list,dropdown_cover_check,LV_EVENT_COVER_CHECK,nullptr);
+ }
+ assert(previous_history_draws>corrected_history_draws);
+ std::cout<<"Dropdown workload: options=64, previous_history_draws="<<previous_history_draws<<", corrected_history_draws="<<corrected_history_draws<<", identical_pixels=true\\n";
+ // Transparent surfaces and corner areas cannot claim opaque coverage.
+ for(bool translucent:{false,true}){
+  lv_area_t probe_area=translucent?lv_area_t{list_area.x1+30,list_area.y1+30,list_area.x1+40,list_area.y1+40}:
+                                  lv_area_t{list_area.x1,list_area.y1,list_area.x1+1,list_area.y1+1};
+  if(translucent)lv_obj_set_style_bg_opa(list,LV_OPA_50,LV_PART_MAIN);
+  lv_cover_check_info_t info{LV_COVER_RES_COVER,&probe_area};lv_obj_send_event(list,LV_EVENT_COVER_CHECK,&info);
+  assert(info.res!=LV_COVER_RES_COVER);
+ }
+ lv_obj_set_style_bg_opa(list,LV_OPA_COVER,LV_PART_MAIN);
+ editable_control_close(c);set_sensor_popup_visible(&ctx,false);
+ assert(lv_obj_get_parent(list)==c->dropdown);
+ assert(lv_obj_get_parent(ctx.overlay)==lv_layer_top());
+ auto* previous_screen=lv_screen_active();auto* next_screen=lv_obj_create(nullptr);lv_screen_load(next_screen);lv_obj_delete(previous_screen);
+ assert(lv_obj_is_valid(list));set_sensor_popup_visible(&ctx,true);assert(lv_obj_get_parent(ctx.overlay)==next_screen);
+ load(c,"select","First",",\\"options_complete\\":true,\\"options\\":[\\"First\\",\\"Second\\"]");
+ lv_dropdown_open(c->dropdown);assert(lv_dropdown_is_open(c->dropdown));editable_control_close(c);set_sensor_popup_visible(&ctx,false);
  auto* slider_after_delete=c->slider;auto* roller_after_delete=c->number_roller;auto* arrow_after_delete=c->fields[0].up;auto* clock_roller_after_delete=c->fields[4].roller;
  editable_control_delete(c);
+ assert(lv_display_remove_event_cb_with_user_data(display,dropdown_render_event,c)==0);
  assert(lv_obj_remove_event_cb_with_user_data(slider_after_delete,input_event,c)==0);
  assert(lv_obj_remove_event_cb_with_user_data(roller_after_delete,input_event,c)==0);
  assert(lv_obj_remove_event_cb_with_user_data(arrow_after_delete,input_event,c)==0);assert(lv_obj_remove_event_cb_with_user_data(clock_roller_after_delete,input_event,c)==0);
- lv_obj_delete(card);lv_deinit();std::cout<<"Real LVGL controls, event lifecycle and responsive geometry passed\\n";
+ lv_obj_delete(ctx.overlay);lv_deinit();std::cout<<"Real LVGL controls, axis layout, covered-grid culling, screen replacement and responsive geometry passed\\n";
 }
 `;
 const source = path.join(out, 'test.cpp'); fs.writeFileSync(source, cpp);
-for (const [profile,width,height,define] of [['square',480,480,'DEVICE_LAYOUT_480X480'],['wide',1024,600,'DEVICE_LAYOUT_1024X600'],['ws8',1280,800,''],['portrait',720,1280,''],['base',720,720,'']]) {
+for (const [profile,width,height,define] of [['square',480,480,'DEVICE_LAYOUT_480X480'],['wide',1024,600,'DEVICE_LAYOUT_1024X600'],['ws8',1280,800,''],['portrait',720,1280,''],['base',720,720,''],['landscape',1280,720,''],['compact-wide',800,480,'DEVICE_LAYOUT_480X480']]) {
   const binary=path.join(out,profile+(process.platform==='win32'?'.exe':''));
   let result=spawnSync(host.cxx,[...host.flags,'-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),source,host.archive,'-o',binary],{encoding:'utf8'});
   assert.equal(result.status,0,result.stdout+result.stderr);
   result=spawnSync(binary,[path.join(out,profile)],{encoding:'utf8',timeout:45000});assert.equal(result.status,0,profile+': '+result.stdout+result.stderr);
+  fs.writeFileSync(path.join(out,profile+'.log'),result.stdout+result.stderr);
 }
-console.log('Real LVGL controls: five layouts, neutral Settings dropdowns, clock wrap, coalescing, delayed ACK/state, live icons, stable history ranges and lifecycle passed.');
+console.log('Real LVGL controls: seven layouts, neutral Settings dropdowns, clock wrap, coalescing, delayed ACK/state, live icons, stable history ranges and lifecycle passed.');

@@ -108,8 +108,25 @@ inline void climateStepButton(lv_obj_t* button) {
 inline void valueDropdown(lv_obj_t* obj) {
   largeDropdown(obj);
   lv_obj_set_style_text_font(obj, popup_layout::headerTitleFont(), LV_PART_MAIN);
-  // 0x333333 stays neutral after RGB565 conversion (0x363636 gains green).
-  lv_obj_set_style_bg_color(obj, lv_color_hex(0x333333), LV_PART_MAIN);
+  // Match Settings' dark surface using RGB565-neutral gray levels.
+  lv_obj_set_style_bg_color(obj, lv_color_hex(0x1B1B1B), LV_PART_MAIN);
+  // CHECKED means the list is open, not that a finger is still pressing it.
+  const lv_style_selector_t feedback_states[] = {
+      LV_STATE_PRESSED, LV_STATE_CHECKED, LV_STATE_PRESSED | LV_STATE_CHECKED,
+      LV_STATE_DISABLED};
+  for (lv_style_selector_t state : feedback_states) {
+    const uint32_t color = (state & LV_STATE_PRESSED) ? 0x232323 : 0x1B1B1B;
+    lv_obj_set_style_bg_color(obj, lv_color_hex(color), LV_PART_MAIN | state);
+    lv_obj_set_style_border_color(obj, lv_color_hex(0x555555), LV_PART_MAIN | state);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN | state);
+    lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN | state);
+    // LVGL 9.5's light base theme recolors disabled controls separately from
+    // color filters. Keep the dark surface and dim only its text and arrow.
+    lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN | state);
+    lv_obj_set_style_text_color(obj, lv_color_white(), LV_PART_INDICATOR | state);
+  }
+  lv_obj_set_style_text_opa(obj, LV_OPA_50, LV_PART_MAIN | LV_STATE_DISABLED);
+  lv_obj_set_style_text_opa(obj, LV_OPA_50, LV_PART_INDICATOR | LV_STATE_DISABLED);
 }
 
 inline void valueDropdownList(lv_obj_t* obj) {
@@ -117,7 +134,15 @@ inline void valueDropdownList(lv_obj_t* obj) {
   largeDropdownList(obj);
   lv_obj_set_style_text_font(obj, popup_layout::headerTitleFont(), LV_PART_MAIN);
   lv_obj_set_style_text_font(obj, popup_layout::headerTitleFont(), LV_PART_SELECTED);
-  lv_obj_set_style_bg_color(obj, lv_color_hex(0x333333), LV_PART_MAIN);
-  lv_obj_set_style_bg_color(obj, lv_color_hex(0x5A5A5A), LV_PART_SELECTED);
+  lv_obj_set_style_bg_color(obj, lv_color_hex(0x1B1B1B), LV_PART_MAIN);
+  // Native list rendering uses CHECKED for the selected option and PRESSED
+  // for the touched option, independently of the dropdown button's state.
+  const lv_style_selector_t option_states[] = {
+      LV_STATE_CHECKED, LV_STATE_PRESSED, LV_STATE_CHECKED | LV_STATE_PRESSED};
+  for (lv_style_selector_t state : option_states) {
+    lv_obj_set_style_bg_color(obj, lv_color_hex(0x26A69A), LV_PART_SELECTED | state);
+    lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, LV_PART_SELECTED | state);
+    lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, LV_PART_SELECTED | state);
+  }
 }
 }  // namespace ui_control_style

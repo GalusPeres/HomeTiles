@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-09-06
+Last reviewed: 2026-09-07
 
 ## Sources of truth
 
@@ -17,9 +17,7 @@ Last reviewed: 2026-09-06
 ## Current firmware baseline
 
 - Firmware `v0.6.9` adds Binary/categorical Sensor history, Waveshare 4.3-inch support, the Waveshare 8 thin-PPA-strip guard, B4 brightness calibration and post-v0.6.8 stabilization.
-- Main also integrates the JC8012 V1 SDIO RX fix and Waveshare S3 LCD-4 Rev 4.0
-  (PR #35), including local builds, 15 release profiles, and installer support.
-  Both additions remain unreleased; `v0.6.9` is still the firmware version.
+- Main includes unreleased JC8012 V1 SDIO RX and Waveshare S3 LCD-4 Rev 4.0 (PR #35), with local builds, 15 release profiles and installer support. Version remains `v0.6.9`.
 - Recent stabilization covers S3 update/display guards, MQTT validation,
   Light coalescing and incremental Weather parsing (`e3de63c`–`33b4e06`).
 - Both test panels serve matching Admin assets; initial use reportedly stable. Full hardware validation and runtime measurements remain pending.
@@ -129,14 +127,15 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Editable value tiles: unreleased firmware
 
 - IDs 21 Number, 22 Select, 23 Date/Time reuse Sensor rendering/persistence/popups; `PackedTileV7` is unchanged.
-- Number/input_number: centered Media-width slider with its header-size value above; Climate +/- temperature controls and bounded numeric rollers; graph and Activity fit together. Select/input_select uses compact neutral dropdowns, timeline and Activity.
-- Time/date/datetime/input_datetime: one visible clock row with large hh/mm/ss fields in a shared neutral pill, no clock arrows, native 23/00 and 59/00 wrap, closer roller pitch, and date spinboxes without a keyboard. HA timezone and DST validation apply.
+- Number/input_number uses the centered Media slider/value, Climate +/- pill or bounded roller, with graph/Activity. Select/input_select uses Settings dropdowns, timeline and Activity.
+- Time/date/datetime/input_datetime: large single-row hh/mm/ss rollers in a neutral pill, no arrows, native 23/00 and 59/00 wrap; date spinboxes without keyboard. HA timezone/DST validation applies.
 - Additive `/control` payloads preserve legacy states/configurations; fixed services, sessions, revisions, deadlines and reconnect generation reject stale commands.
-- Bridge v0.6.44 (`148dec4`) is released for HACS and fixes a reproduced stale startup icon cache overwriting fresh config icons; automatic icons now refresh in open editable popups while explicit icons/none remain protected. 119 Bridge tests pass; firmware LVGL tests cover five geometries, RGB565 colors, mid-swipe spacing and incoming state during dropdown scrolling.
-- The approved references are the Climate tile target pill (larger inset +/-), centered Media slider and Settings dropdown with header-size font. Number/Select/Time share editor height; compact graph/Activity remain inside the footer. Unused timeline labels stay hidden; range buttons react immediately while old data remains until the correlated reply. Open dropdowns retain scroll position during state updates; capability changes/offline still close them.
-- The service ACK formerly restored stale HA values. Local drafts now coalesce steps/rollers for 600 ms, publish sliders on release, and retain pending values until matching state, rejection, changed capabilities/session, offline or 30-second timeout. Waveshare 8 incremental build/source identity: `build/roller-dropdown-verification/VERIFICATION.md`. Settings dropdowns are fluid per user; editable list/history latency needs hardware measurement. Delayed entities, icons, sleep/reconnect and S3 remain pending.
-- Published documentation stays unchanged. Notifications/sounds and folder colors remain deferred.
-
+- Bridge v0.6.44 (`148dec4`) is on HACS; fixes stale icon cache, preserves overrides. 119 Bridge tests pass. Firmware `7c37bb2` is committed locally, not pushed.
+- Control bands clear wrapped titles and the full close touch area. Number/Select share a height; Time is taller. Select keeps compact history and earlier Activity. Status shares the heading row. Range changes keep old data until reply; offline closes dropdowns.
+- Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
+- UI: neutral dropdown, subtle press, gray border; graphs survive reuse. Activity fills to the footer; its row pool scales. All 15 layouts have native tests. Header clearance: 82 tests pass, incremental S3 build verified; hardware pending. Proof: `build/editable-header-clearance/VERIFICATION.md`.
+- Wi-Fi audit: S3 idle (>3 s) requests MIN_MODEM/11 dBm; sleep/wake NONE/19.5. P4 blocks idle saving; boot/reconnect and failed-call caching have gaps on both. Unfixed; probes: `build/wifi-power-audit/VERIFICATION.md`.
+- Icon parser stopped at View state IDs `[f:1]`/`[t:13]`, dropping Select/later Time names/icons; reproduced and fixed, live cache matches. Device check pending. Docs unchanged; notifications/folder colors deferred.
 ## Current maintenance refactoring
 
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
@@ -156,4 +155,5 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Bridge migration checks registry ownership/capabilities, cleans shared selections and preserves user entities.
 - 76 firmware host tests and 107 Bridge tests pass; both sequential incremental builds pass. BINs/hashes: `build/controls-verification/VERIFICATION.md`.
 - View control is user-reported working on Waveshare 8-inch/S3; the S3 detour fix and new controls still need hardware/HA checks.
-- Full HA migration/re-pairing, old firmware compatibility, PIN, stream cleanup and sleep/reconnect also remain pending.
+- HA migration/re-pairing, old firmware compatibility, PIN, stream cleanup and sleep/reconnect remain pending.
+- Issue #37 candidate reproduced: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB. Local fix grows reception to 65,535 bytes; queue bounds, oversize draining/ACKs and diagnostics remain bounded. Reporter confirmation pending. Maintainer's log: no unplanned MQTT loss, ~7.5 h on earlier test BIN, ~25 min on latest, two OTA restarts.

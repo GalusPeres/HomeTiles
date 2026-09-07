@@ -67,17 +67,22 @@ constexpr size_t kStateHistoryMaxPaletteEntries = 16;
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kBinaryTimelineHeight = 22;
 constexpr int kBinaryActivityRowHeight = 42;
-constexpr int kBinaryVisibleActivityRows = 4;
 #elif defined(DEVICE_LAYOUT_1024X600)
 constexpr int kBinaryTimelineHeight = 24;
 constexpr int kBinaryActivityRowHeight = 42;
-constexpr int kBinaryVisibleActivityRows = 4;
 #else
 constexpr int kBinaryTimelineHeight = 30;
 constexpr int kBinaryActivityRowHeight = 50;
-constexpr int kBinaryVisibleActivityRows = 5;
 #endif
-constexpr int kBinaryActivityPoolRows = kBinaryVisibleActivityRows + 2;
+// Bound the reusable rows by the available body, including one partial row
+// during scrolling. Taller viewports must not stop rendering after five rows.
+constexpr int kBinaryActivityViewportLimit = std::max(
+    popup_layout::kBodyHeight,
+    popup_layout::kNavY - popup_layout::kValueY - popup_layout::kValueHeight -
+        2 * popup_layout::kCardPad);
+constexpr int kBinaryActivityPoolRows =
+    (kBinaryActivityViewportLimit + kBinaryActivityRowHeight - 1) /
+        kBinaryActivityRowHeight + 1;
 constexpr uint32_t kBinaryActiveColor = 0xFFC107;
 constexpr uint32_t kBinaryInactiveColor = 0x8B8E96;
 constexpr uint32_t kBinaryUnknownColor = 0x555861;
@@ -504,14 +509,18 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
   }
 }
 
-// Measure actual rendered text width of a label by temporarily setting it to content-size.
+// Measure text without changing label geometry or forcing a screen-wide layout.
 static lv_coord_t measure_label_text_width(lv_obj_t* label) {
   if (!label) return 0;
   const char* txt = lv_label_get_text(label);
   if (!txt || !*txt) return 0;
-  lv_obj_set_width(label, LV_SIZE_CONTENT);
-  lv_obj_update_layout(label);
-  return lv_obj_get_width(label);
+  lv_point_t size;
+  lv_text_get_size(&size, txt, lv_obj_get_style_text_font(label, LV_PART_MAIN),
+                   lv_obj_get_style_text_letter_space(label, LV_PART_MAIN),
+                   lv_obj_get_style_text_line_space(label, LV_PART_MAIN),
+                   LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  return size.x + lv_obj_get_style_pad_left(label, LV_PART_MAIN) +
+         lv_obj_get_style_pad_right(label, LV_PART_MAIN);
 }
 
 static bool get_valid_local_time(struct tm& out) {
@@ -726,12 +735,13 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
   float fracs[kTimeAxisMarkerCount];
   int n = calc_time_axis(ctx, labels, fracs, kTimeAxisMarkerCount);
   lv_coord_t max_time_label_w = 0;
+  lv_coord_t time_label_widths[kTimeAxisMarkerCount] = {};
 
   for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
     if (i < n && ctx->time_labels[i]) {
       lv_label_set_text(ctx->time_labels[i], labels[i].c_str());
-      lv_obj_update_layout(ctx->time_labels[i]);
-      lv_coord_t lbl_w = lv_obj_get_width(ctx->time_labels[i]);
+      lv_coord_t lbl_w = measure_label_text_width(ctx->time_labels[i]);
+      time_label_widths[i] = lbl_w;
       if (lbl_w > max_time_label_w) max_time_label_w = lbl_w;
     }
   }
@@ -784,7 +794,7 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
         }
       }
       if (ctx->time_labels[i]) {
-        lv_coord_t lbl_w = lv_obj_get_width(ctx->time_labels[i]);
+        lv_coord_t lbl_w = time_label_widths[i];
         int label_x = label_x_anchor - lbl_w / 2;
         int min_x = chart_left - (lbl_w / 2);
         if (min_x < 0) min_x = 0;
@@ -1159,6 +1169,14 @@ static void on_binary_timeline_draw(lv_event_t* event) {
 
 static void update_binary_time_axis(SensorPopupContext* ctx) {
   if (!ctx) return;
+  // Reused popups also call this when clearing/loading history. A Number
+  // uses the chart's axis; temporal editors have no timeline at all.
+  if (ctx->editable && ctx->editable_kind != "select") {
+    for (auto* label : ctx->binary_time_labels) {
+      if (label) lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
+    }
+    return;
+  }
   String labels[kTimeAxisMarkerCount];
   float fractions[kTimeAxisMarkerCount] = {};
   const int count = calc_time_axis(ctx, labels, fractions,
@@ -1174,8 +1192,7 @@ static void update_binary_time_axis(SensorPopupContext* ctx) {
     }
     lv_label_set_text(label, labels[index].c_str());
     lv_obj_set_width(label, LV_SIZE_CONTENT);
-    lv_obj_update_layout(label);
-    const int label_width = lv_obj_get_width(label);
+    const int label_width = measure_label_text_width(label);
     int x = static_cast<int>(fractions[index] * width) - (label_width / 2);
     if (x < 0) x = 0;
     if (x + label_width > width) x = width - label_width;
@@ -1973,6 +1990,20 @@ static void resize_editable_chart(SensorPopupContext* ctx, int height) {
   }
 }
 
+static int editable_control_top(const SensorPopupContext* ctx) {
+  // Include the close button's invisible touch extension and wrapped titles.
+  int header_bottom = std::max(popup_layout::kHeaderHeight,
+      popup_layout::kCloseButtonOffsetY + popup_layout::kCloseButtonSize +
+          popup_layout::kCloseButtonClickArea);
+  for (auto* label : {ctx->title_label, ctx->icon_label}) {
+    if (label && !lv_obj_has_flag(label, LV_OBJ_FLAG_HIDDEN)) {
+      header_bottom = std::max<int>(header_bottom,
+          lv_obj_get_y(label) + lv_obj_get_height(label));
+    }
+  }
+  return std::max(popup_layout::kValueY, header_bottom + popup_layout::scale(6));
+}
+
 static void layout_editable_history(SensorPopupContext* ctx) {
   if (!ctx || !ctx->body_box) return;
   const bool numeric = ctx->editable && ctx->editable_kind == "number";
@@ -1981,14 +2012,17 @@ static void layout_editable_history(SensorPopupContext* ctx) {
   const int timeline_y = section_height + popup_layout::scale(14);
   const int axis_y = timeline_y + kBinaryTimelineHeight + popup_layout::scale(6);
   const int default_activity_y = axis_y + lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(12);
-  const int body_y = ctx->editable ? popup_layout::kValueY + editable_control_height(ctx->editable_kind) +
-                                   lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(8) : popup_layout::kBodyY;
+  const int control_y = ctx->editable ? editable_control_top(ctx) : popup_layout::kValueY;
+  if (ctx->editable && ctx->control_row) lv_obj_set_y(ctx->control_row, control_y);
+  const int body_y = ctx->editable ? control_y + editable_control_height(ctx->editable_kind) +
+                                   popup_layout::scale(8) : popup_layout::kBodyY;
   // Both children are positioned inside the padded card. Reserve the actual
   // footer bounds, so the graph and Activity never require an outer scroll.
+  const int content_lift = ctx->editable ? 0 : kContentLiftY;
   const int body_height = ctx->editable ? popup_layout::kNavY - 2 * popup_layout::kCardPad -
-                                         popup_layout::scale(12) - body_y : popup_layout::kBodyHeight;
+                                         popup_layout::scale(12) - body_y + content_lift : popup_layout::kBodyHeight;
   lv_obj_set_height(ctx->body_box, body_height);
-  lv_obj_align(ctx->body_box, LV_ALIGN_TOP_MID, 0, body_y - kContentLiftY);
+  lv_obj_align(ctx->body_box, LV_ALIGN_TOP_MID, 0, body_y - content_lift);
   lv_obj_scroll_to_y(ctx->body_box, 0, LV_ANIM_OFF);
   lv_obj_remove_flag(ctx->body_box, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_scrollbar_mode(ctx->body_box, LV_SCROLLBAR_MODE_OFF);
@@ -1998,7 +2032,9 @@ static void layout_editable_history(SensorPopupContext* ctx) {
                                lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(6);
   const int chart_extra = popup_layout::contentScale(24) + kTimeAxisHeight + popup_layout::scale(12);
   const int reserved_rows = SCREEN_HEIGHT <= 600 ? 2 : 3;
-  const int chart_height = numeric ? std::max(40, std::min(popup_layout::contentScale(120),
+  // Reclaimed control spacing belongs to Activity, not a taller graph.
+  const int chart_limit = popup_layout::contentScale(SCREEN_HEIGHT <= 600 ? 60 : 90);
+  const int chart_height = numeric ? std::max(40, std::min(chart_limit,
       body_height - timeline_y - chart_extra - activity_heading - reserved_rows * kBinaryActivityRowHeight)) : kChartHeight;
   resize_editable_chart(ctx, chart_height);
   if (numeric) {
@@ -2016,11 +2052,10 @@ static void layout_editable_history(SensorPopupContext* ctx) {
     if (visible) lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
   };
-  const int activity_y = temporal ? 0 : numeric ? timeline_y + chart_height + chart_extra : default_activity_y;
+  const int activity_y = temporal ? popup_layout::scale(8) : numeric ? timeline_y + chart_height + chart_extra : default_activity_y;
   const int date_y = activity_y + section_height + popup_layout::scale(4);
   const int rows_y = activity_y + activity_heading;
-  const int viewport_height = std::max(kBinaryActivityRowHeight, ctx->editable ?
-      std::min(kBinaryVisibleActivityRows * kBinaryActivityRowHeight, body_height - rows_y) : body_height - rows_y);
+  const int viewport_height = std::max(kBinaryActivityRowHeight, body_height - rows_y);
   lv_obj_set_size(ctx->binary_body, LV_PCT(100), body_height);
   lv_obj_align(ctx->binary_body, LV_ALIGN_TOP_MID, 0, 0);
   lv_obj_set_y(ctx->binary_activity_title, activity_y);
@@ -2030,6 +2065,12 @@ static void layout_editable_history(SensorPopupContext* ctx) {
   lv_obj_set_y(ctx->binary_activity_status, rows_y);
   show(ctx->binary_history_title, !temporal);
   show(ctx->binary_timeline, !numeric && !temporal);
+  // Categorical history retains its compact bar and axis spacing, leaving
+  // the space that a numeric graph would occupy available for Activity.
+  lv_obj_set_y(ctx->binary_timeline, timeline_y);
+  for (auto* time_label : ctx->binary_time_labels) {
+    if (time_label) lv_obj_set_y(time_label, axis_y);
+  }
   if (numeric || temporal) {
     for (auto* time_label : ctx->binary_time_labels) show(time_label, false);
   } else {
@@ -2052,7 +2093,15 @@ static void apply_state_history_payload(SensorPopupContext* ctx,
   ctx->binary_mode = false;
   ctx->state_history_mode = true;
   ensure_binary_view(ctx);
-  if (ctx->chart_wrap) lv_obj_add_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
+  // Editable Numbers share Activity parsing with categorical histories but
+  // retain their numeric graph. Visibility must not depend on a later layout.
+  if (ctx->chart_wrap) {
+    if (ctx->editable && ctx->editable_kind == "number") {
+      lv_obj_remove_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
   if (ctx->binary_body) lv_obj_clear_flag(ctx->binary_body, LV_OBJ_FLAG_HIDDEN);
 
   if (!ctx->editable && doc.containsKey("current")) {
@@ -2192,7 +2241,7 @@ static void apply_state_history_payload(SensorPopupContext* ctx,
     }
   }
   set_range_buttons_visible(ctx, true);
-  update_binary_time_axis(ctx);
+  if (!ctx->editable || ctx->editable_kind == "select") update_binary_time_axis(ctx);
   if (ctx->binary_timeline) lv_obj_invalidate(ctx->binary_timeline);
 }
 
@@ -2229,7 +2278,8 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
   if (ctx->editable) {
     if (!accept_editable_history_range(ctx, doc)) return;
     apply_state_history_payload(ctx, doc);
-    layout_editable_history(ctx);
+    // Editor geometry is established on open/kind changes. A history response
+    // changes data and axes, not the control, graph or Activity allocation.
     if (ctx->editable_kind != "number") return;
   }
   const char* kind = doc["kind"] | "";
@@ -2500,14 +2550,32 @@ static void on_overlay_click(lv_event_t* e) {
   (void)e;
 }
 
+static void set_sensor_popup_visible(SensorPopupContext* ctx, bool visible) {
+  if (!ctx || !ctx->overlay || !ctx->card) return;
+  if (visible) {
+    // LVGL can skip covered grid tiles only when the opaque card participates
+    // in the active screen's cover search, just like the Settings popup.
+    lv_obj_set_parent(ctx->overlay, lv_screen_active());
+    lv_obj_set_pos(ctx->overlay, 0, 0);
+    lv_obj_remove_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_move_foreground(ctx->overlay);
+  } else {
+    lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
+    // Park the reusable shell off the screen so hidden popups survive screen
+    // replacement; the existing delete callback still owns final cleanup.
+    lv_obj_set_parent(ctx->overlay, lv_layer_top());
+  }
+}
+
 static void on_close_click(lv_event_t* e) {
   lv_event_code_t code = lv_event_get_code(e);
   if (code != LV_EVENT_CLICKED && code != LV_EVENT_RELEASED) return;
   SensorPopupContext* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->overlay || !ctx->card) return;
   editable_control_close(ctx->control);
-  lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_clear_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
+  set_sensor_popup_visible(ctx, false);
 }
 
 static void on_overlay_delete(lv_event_t* e) {
@@ -2660,7 +2728,7 @@ static void build_popup_ui(SensorPopupContext* ctx, const SensorPopupInit& init)
   ctx->control_row = lv_obj_create(card);
   lv_obj_remove_style_all(ctx->control_row);
   lv_obj_set_size(ctx->control_row, LV_PCT(100), popup_layout::kValueHeight);
-  lv_obj_align(ctx->control_row, LV_ALIGN_TOP_MID, 0, popup_layout::kValueY - kContentLiftY);
+  lv_obj_align(ctx->control_row, LV_ALIGN_TOP_MID, 0, popup_layout::kValueY);
   lv_obj_remove_flag(ctx->control_row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(ctx->control_row, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
   ctx->control = editable_control_create(ctx->control_row, card);
@@ -2836,17 +2904,12 @@ void show_sensor_popup(const SensorPopupInit& init) {
                   get_history_range_config(
                       g_sensor_popup_ctx->history_range).points);
     }
-    lv_obj_clear_flag(g_sensor_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(g_sensor_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
-    // The prebuilt popup overlay may sit behind a screensaver created later.
-    // Move it to the front of layer_top when opening it.
-    lv_obj_move_foreground(g_sensor_popup_ctx->overlay);
   } else {
     SensorPopupContext* ctx = new SensorPopupContext();
     g_sensor_popup_ctx = ctx;
     build_popup_ui(ctx, init);
-    if (ctx->overlay) lv_obj_move_foreground(ctx->overlay);
   }
+  set_sensor_popup_visible(g_sensor_popup_ctx, true);
 
   g_pending_history.valid = false;
   g_pending_binary_state.valid = false;
@@ -2867,16 +2930,14 @@ void preload_sensor_popup() {
   init.decimals = 0xFF;
   show_sensor_popup(init);
   if (g_sensor_popup_ctx && g_sensor_popup_ctx->card && g_sensor_popup_ctx->overlay) {
-    lv_obj_add_flag(g_sensor_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(g_sensor_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
+    set_sensor_popup_visible(g_sensor_popup_ctx, false);
   }
 }
 
 void hide_sensor_popup() {
   if (g_sensor_popup_ctx) editable_control_close(g_sensor_popup_ctx->control);
   if (!g_sensor_popup_ctx || !g_sensor_popup_ctx->card || !g_sensor_popup_ctx->overlay) return;
-  lv_obj_add_flag(g_sensor_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_clear_flag(g_sensor_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
+  set_sensor_popup_visible(g_sensor_popup_ctx, false);
 }
 
 void queue_sensor_popup_value(const char* entity_id, const char* value, const char* unit, uint8_t decimals) {

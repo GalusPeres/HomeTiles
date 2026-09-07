@@ -208,6 +208,7 @@ private:
   volatile uint32_t mqtt_post_connect_ready_at = 0;
   volatile uint32_t mqtt_large_until = 0;
   volatile uint16_t mqtt_buffer_size = 0;  // Client buffer-size mirror maintained by the worker.
+  uint16_t mqtt_receive_buffer_floor = 0;  // Bounded receive high-water mark; worker-owned.
   volatile bool mqtt_media_buffer_needed = false;  // Media tiles require the 24 KB normal buffer.
 
   // Target size of the "normal" buffer, depending on the media configuration.

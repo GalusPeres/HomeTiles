@@ -48,8 +48,8 @@ for (const marker of [
 }
 assert.match(
   popup,
-  /constexpr int kBinaryVisibleActivityRows = 4;[\s\S]*constexpr int kBinaryVisibleActivityRows = 4;[\s\S]*constexpr int kBinaryVisibleActivityRows = 5;[\s\S]*kBinaryActivityPoolRows = kBinaryVisibleActivityRows \+ 2;/,
-  'The virtual activity row pool must adapt to compact and large layouts',
+  /constexpr int kBinaryActivityPoolRows =[\s\S]*?kBinaryActivityViewportLimit/,
+  'The bounded virtual activity row pool must cover the available viewport height',
 );
 assert.match(
   popup,

@@ -8,6 +8,10 @@ namespace hometiles_mqtt {
 constexpr uint8_t kQosMask = 0x06;
 constexpr uint8_t kQos0 = 0x00;
 constexpr uint8_t kQos1 = 0x02;
+// The callback and packet-buffer API use 16-bit lengths. Receive growth is
+// bounded independently of the smaller normal transmit buffer.
+constexpr uint32_t kMaxInboundPacketBytes = UINT16_MAX;
+constexpr uint32_t kMaxDiscardPacketBytes = 256U * 1024U;
 
 struct PublishPacketLayout {
   size_t topic_source_offset = 0;

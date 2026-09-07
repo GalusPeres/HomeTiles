@@ -49,6 +49,7 @@
 // Possible values for client.state()
 #define MQTT_CONNECTION_TIMEOUT     -4
 #define MQTT_MALFORMED_PACKET       -5
+#define MQTT_PACKET_TOO_LARGE       -6
 #define MQTT_CONNECTION_LOST        -3
 #define MQTT_CONNECT_FAILED         -2
 #define MQTT_DISCONNECTED           -1
@@ -96,6 +97,8 @@ private:
    Client* _client;
    uint8_t* buffer;
    uint16_t bufferSize;
+   uint16_t receiveBufferSize = 0;
+   uint32_t droppedPublishCount = 0;
    uint16_t keepAlive;
    uint16_t socketTimeout;
    uint16_t nextMsgId;
@@ -147,6 +150,7 @@ public:
 
    boolean setBufferSize(uint16_t size);
    uint16_t getBufferSize();
+   uint16_t getReceiveBufferSize() const { return receiveBufferSize; }
    boolean bufferInExternalRam();
 
    boolean connect(const char* id);

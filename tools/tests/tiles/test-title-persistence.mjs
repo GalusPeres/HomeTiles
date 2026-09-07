@@ -19,6 +19,7 @@ const cpp=String.raw`
 #include <vector>
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <iostream>

@@ -1,4 +1,6 @@
 #include "src/types/types_registry.h"
+#include "src/types/value/value_control.h"
+#include "src/network/bridge/ha_bridge_config.h"
 
 #include <cstdio>
 #include <cstring>
@@ -10,6 +12,9 @@
 #include "src/types/scene/renderer.h"
 #include "src/types/sensor/renderer.h"
 #include "src/types/binary_sensor/renderer.h"
+#include "src/types/datetime/renderer.h"
+#include "src/types/select/renderer.h"
+#include "src/types/number/renderer.h"
 #include "src/types/switch/renderer.h"
 #include "src/types/text/renderer.h"
 #include "src/types/energy/renderer.h"
@@ -25,6 +30,9 @@
 #include "src/types/scene/web_handler.h"
 #include "src/types/sensor/web_handler.h"
 #include "src/types/binary_sensor/web_handler.h"
+#include "src/types/datetime/web_handler.h"
+#include "src/types/select/web_handler.h"
+#include "src/types/number/web_handler.h"
 #include "src/types/switch/web_handler.h"
 #include "src/types/text/web_handler.h"
 #include "src/types/energy/web_handler.h"
@@ -40,6 +48,9 @@
 #include "src/types/scene/web_html.h"
 #include "src/types/sensor/web_html.h"
 #include "src/types/binary_sensor/web_html.h"
+#include "src/types/datetime/web_html.h"
+#include "src/types/select/web_html.h"
+#include "src/types/number/web_html.h"
 #include "src/types/switch/web_html.h"
 #include "src/types/text/web_html.h"
 #include "src/types/energy/web_html.h"
@@ -56,6 +67,9 @@
 #include "src/types/scene/web_scripts.h"
 #include "src/types/sensor/web_scripts.h"
 #include "src/types/binary_sensor/web_scripts.h"
+#include "src/types/datetime/web_scripts.h"
+#include "src/types/select/web_scripts.h"
+#include "src/types/number/web_scripts.h"
 #include "src/types/switch/web_scripts.h"
 #include "src/types/text/web_scripts.h"
 #include "src/types/energy/web_scripts.h"
@@ -72,6 +86,9 @@
 #include "src/types/scene/web_styles.h"
 #include "src/types/sensor/web_styles.h"
 #include "src/types/binary_sensor/web_styles.h"
+#include "src/types/datetime/web_styles.h"
+#include "src/types/select/web_styles.h"
+#include "src/types/number/web_styles.h"
 #include "src/types/switch/web_styles.h"
 #include "src/types/text/web_styles.h"
 #include "src/types/energy/web_styles.h"
@@ -103,6 +120,42 @@ const std::vector<String>& safeStrings(const std::vector<String>* value) {
 
 const std::vector<SceneOption>& safeScenes(const std::vector<SceneOption>* value) {
   return value ? *value : kEmptyScenes;
+}
+
+lv_obj_t* render_number_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile,
+                                  uint8_t index, GridType grid, scene_publish_cb_t) {
+  return render_number_tile(parent, col, row, tile, index, grid);
+}
+bool apply_number_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
+  apply_number_fields_from_request(server, tile);
+  return editable_entity_matches(tile.type, tile.sensor_entity);
+}
+void append_number_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_number_fields_html(html, safeString(ctx.tab_id), parseSensorList(haBridgeConfig.get().numbers_text));
+}
+
+lv_obj_t* render_select_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile,
+                                  uint8_t index, GridType grid, scene_publish_cb_t) {
+  return render_select_tile(parent, col, row, tile, index, grid);
+}
+bool apply_select_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
+  apply_select_fields_from_request(server, tile);
+  return editable_entity_matches(tile.type, tile.sensor_entity);
+}
+void append_select_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_select_fields_html(html, safeString(ctx.tab_id), parseSensorList(haBridgeConfig.get().selects_text));
+}
+
+lv_obj_t* render_datetime_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile,
+                                  uint8_t index, GridType grid, scene_publish_cb_t) {
+  return render_datetime_tile(parent, col, row, tile, index, grid);
+}
+bool apply_datetime_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
+  apply_datetime_fields_from_request(server, tile);
+  return editable_entity_matches(tile.type, tile.sensor_entity);
+}
+void append_datetime_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_datetime_fields_html(html, safeString(ctx.tab_id), parseSensorList(haBridgeConfig.get().datetimes_text));
 }
 
 lv_obj_t* render_sensor_wrapper(lv_obj_t* parent,
@@ -461,6 +514,24 @@ const TileTypeDescriptor kTileTypes[] = {
     append_sensor_scripts
   },
   {
+    TILE_NUMBER, "Number", "number", "number", "number", nullptr,
+    "loadNumberFields", "saveNumberFields", "resetNumberFields", 0x2A2A2A, false,
+    render_number_wrapper, apply_number_wrapper, append_number_fields_wrapper,
+    append_number_styles, append_number_scripts
+  },
+  {
+    TILE_SELECT, "Select", "select", "select", "select", nullptr,
+    "loadSelectFields", "saveSelectFields", "resetSelectFields", 0x2A2A2A, false,
+    render_select_wrapper, apply_select_wrapper, append_select_fields_wrapper,
+    append_select_styles, append_select_scripts
+  },
+  {
+    TILE_DATETIME, "DateTime", "datetime", "datetime", "datetime", nullptr,
+    "loadDateTimeFields", "saveDateTimeFields", "resetDateTimeFields", 0x2A2A2A, false,
+    render_datetime_wrapper, apply_datetime_wrapper, append_datetime_fields_wrapper,
+    append_datetime_styles, append_datetime_scripts
+  },
+  {
     TILE_BINARY_SENSOR,
     "Binary Sensor",
     "binary_sensor",
@@ -795,6 +866,9 @@ static const char* localized_tile_type_label(const TileTypeDescriptor& entry) {
   switch (entry.type) {
     case TILE_EMPTY: return tr.tile_type_empty;
     case TILE_SENSOR: return tr.tile_type_sensor;
+    case TILE_NUMBER: return i18n::locale(language).editable_labels[0];
+    case TILE_SELECT: return i18n::locale(language).editable_labels[1];
+    case TILE_DATETIME: return i18n::locale(language).editable_labels[2];
     case TILE_BINARY_SENSOR: return i18n::binary_sensor_label(language, 0);
     case TILE_ENERGY: return tr.tile_type_energy;
     case TILE_WEATHER: return tr.tile_type_weather;

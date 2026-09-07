@@ -1384,7 +1384,8 @@ static const LocaleProfile kLocaleDe = {
      "Trocken", "In Bewegung", "Gestoppt", "Eingesteckt", "Ausgesteckt",
      "Strom erkannt", "Kein Strom", "Zuhause", "Abwesend", "Problem",
      "OK", "Läuft", "Läuft nicht", "Unsicher", "Sicher",
-     "Update verfügbar", "Aktuell", "Nicht verfügbar", "Unbekannt"}};
+     "Update verfügbar", "Aktuell", "Nicht verfügbar", "Unbekannt"},
+    {"Zahl", "Auswahl", "Datum/Uhrzeit", "Zahlen-Entity", "Auswahl-Entity", "Datum-/Uhrzeit-Entity", "Übernehmen", "Ungültiger Wert", "Wird übernommen…", "Änderung fehlgeschlagen", "JJJJ-MM-TT", "HH:MM:SS", "JJJJ-MM-TT HH:MM:SS", "Jahr", "Monat", "Tag", "hh", "mm", "ss"}};
 
 static const LocaleProfile kLocaleEn = {
     "en",
@@ -1462,7 +1463,8 @@ static const LocaleProfile kLocaleEn = {
      "Stopped", "Plugged in", "Unplugged", "Power detected", "No power",
      "Home", "Away", "Problem", "OK", "Running", "Not running",
      "Unsafe", "Safe", "Update available", "Up to date", "Unavailable",
-     "Unknown"}};
+     "Unknown"},
+    {"Number", "Select", "Date/time", "Number entity", "Select entity", "Date/time entity", "Apply", "Invalid value", "Applying…", "Change failed", "YYYY-MM-DD", "HH:MM:SS", "YYYY-MM-DD HH:MM:SS", "Year", "Month", "Day", "hh", "mm", "ss"}};
 
 static const LocaleProfile kLocaleFr = {
     "fr",
@@ -1542,7 +1544,8 @@ static const LocaleProfile kLocaleFr = {
      "Verrouillé", "Humide", "Sec", "En mouvement", "Arrêté", "Branché",
      "Débranché", "Alimentation détectée", "Aucune alimentation", "Présent",
      "Absent", "Problème", "OK", "En cours", "À l’arrêt", "Dangereux",
-     "Sûr", "Mise à jour disponible", "À jour", "Indisponible", "Inconnu"}};
+     "Sûr", "Mise à jour disponible", "À jour", "Indisponible", "Inconnu"},
+    {"Nombre", "Sélection", "Date/heure", "Entité numérique", "Entité de sélection", "Entité de date/heure", "Appliquer", "Valeur invalide", "Application…", "Échec de la modification", "AAAA-MM-JJ", "HH:MM:SS", "AAAA-MM-JJ HH:MM:SS", "Année", "Mois", "Jour", "hh", "mm", "ss"}};
 
 // Codes and groups match LocaleProfile::timezone_labels and
 // timezone_group_labels (see i18n.h).

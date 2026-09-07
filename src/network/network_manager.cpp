@@ -119,6 +119,7 @@ struct MqttOutboundCmd {
   MqttCmdKind kind;
   bool retain;
   uint32_t large_buffer_hold_ms;
+  uint32_t editable_connection_generation;
   size_t payload_len;
   char* topic;       // Points into the same allocation.
   uint8_t* payload;  // Points into the same allocation; empty for SUBSCRIBE/UNSUBSCRIBE.
@@ -131,6 +132,7 @@ struct MqttOutboundCmd {
 static constexpr size_t kMqttPublishQueueDepth = 128;
 static constexpr size_t kMqttLargePublishQueueDepth = 32;
 static constexpr size_t kMqttControlQueueDepth = 128;
+static std::atomic<uint32_t> g_editable_connection_generation{1};
 static QueueHandle_t g_mqtt_publish_queue = nullptr;
 static QueueHandle_t g_mqtt_large_publish_queue = nullptr;
 static QueueHandle_t g_mqtt_control_queue = nullptr;
@@ -248,6 +250,7 @@ static MqttOutboundCmd* mqttAllocOutbound(MqttCmdKind kind,
   MqttOutboundCmd* cmd = reinterpret_cast<MqttOutboundCmd*>(block);
   cmd->kind = kind;
   cmd->retain = retain;
+  cmd->editable_connection_generation = g_editable_connection_generation.load();
   cmd->large_buffer_hold_ms = large_buffer_hold_ms;
   cmd->payload_len = payload_len;
   cmd->topic = reinterpret_cast<char*>(block + sizeof(MqttOutboundCmd));
@@ -923,6 +926,7 @@ void HomeTilesNetworkManager::connectMqtt() {
     purgeOutboundQueue();
   }
 
+  ++g_editable_connection_generation;
   mqtt_connected_flag = true;
 
   // The loop task starts the application layer via mqttServicePostConnect():
@@ -1204,6 +1208,14 @@ void HomeTilesNetworkManager::drainOutboundQueues(uint8_t max_commands) {
     while (drained < normal_limit &&
            xQueueReceive(g_mqtt_publish_queue, &cmd, 0) == pdTRUE) {
       if (!cmd) continue;
+
+      const size_t topic_length = strlen(cmd->topic);
+      if (topic_length >= 11 && strcmp(cmd->topic + topic_length - 11, "/cmnd/value") == 0 &&
+          cmd->editable_connection_generation != g_editable_connection_generation.load()) {
+        heap_caps_free(cmd);
+        ++drained;
+        continue;
+      }
 
       // Small interactive publishes need no 32 KB receive buffer and remain
       // sendable with fragmented DMA RAM. Waiting history, energy or Bridge

@@ -103,6 +103,10 @@
       .then(data => {
         rebuildEntitySelect(tab + '_sensor_entity', data.sensors);
         rebuildEntitySelect(tab + '_binary_sensor_entity', data.binary_sensors);
+        rebuildEntitySelect(tab + '_number_entity', data.numbers);
+        rebuildEntitySelect(tab + '_select_entity', data.selects);
+        rebuildEntitySelect(tab + '_datetime_entity', data.datetimes);
+
         rebuildEntitySelect(tab + '_energy_entity', data.energy);
         rebuildEntitySelect(tab + '_weather_entity', data.weathers);
         rebuildEntitySelect(tab + '_switch_entity', data.switches);

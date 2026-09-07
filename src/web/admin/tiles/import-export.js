@@ -317,7 +317,7 @@
     const currentTiles = await fetchTilesForImport(folderId);
     const tileCount = GRID_COLS * GRID_ROWS;
     const preparedTiles = prepareScreensaverTilesForImport(sourceTiles, sourceLayout);
-    const supportedTypes = new Set([1, 2, 5, 14, 20, MEDIA_TILE_TYPE]);
+    const supportedTypes = new Set([1, 2, 5, 14, 20, 21, 22, 23, MEDIA_TILE_TYPE]);
     for (const entry of preparedTiles) {
       if (!supportedTypes.has(Number(entry.tile.type || 0))) {
         throw new Error('Unsupported screensaver tile type');
@@ -499,6 +499,10 @@
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
+    } else if (safeType >= 21 && safeType <= 23) {
+      const kind = ['number', 'select', 'datetime'][safeType - 21];
+      fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
+      fd.append('popup_open_mode', tile.popup_open_mode ?? 1);
     } else if (safeType === 20) {
       fd.append(
         'binary_sensor_entity',

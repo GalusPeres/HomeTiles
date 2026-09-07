@@ -14,20 +14,20 @@ const screensaver = read('src/ui/screensaver/screensaver_config.cpp');
 const persistedIds = [
   'EMPTY', 'SENSOR', 'SCENE', 'KEY', 'FOLDER', 'SWITCH', 'IMAGE', 'SETTINGS',
   'BACK', 'CLOCK', 'TEXT', 'COUNTER', 'WEATHER', 'RADAR', 'ENERGY', 'MEDIA',
-  'PIXELANIM', 'CLIMATE', 'CAMERA', 'COVER', 'BINARY_SENSOR',
+  'PIXELANIM', 'CLIMATE', 'CAMERA', 'COVER', 'BINARY_SENSOR', 'NUMBER', 'SELECT', 'DATETIME',
 ];
 // These expected sets characterize the pre-refactor consumers independently.
 const policies = [
   ['isRetiredTileType', [3, 6, 11, 13]],
-  ['entityTileStoresSensorEntity', [1, 5, 12, 14, 15, 17, 18, 19, 20]],
-  ['tileTypeUsesCachedEntityState', [1, 5, 12, 14, 15, 17, 19, 20]],
-  ['tileTypeStoresPopupMode', [1, 5, 12, 14, 17, 19, 20]],
-  ['tileTypeStoresPopupModeDirectly', [1, 12, 14, 17, 19, 20]],
-  ['tileTypeHasDynamicMqttRoute', [1, 5, 12, 15, 17, 19, 20]],
-  ['tileTypeSubscribesDynamicState', [1, 5, 14, 15, 17, 19, 20]],
-  ['tileTypeSubscribesScreensaverState', [1, 5, 14, 15, 19, 20]],
-  ['tileTypeAllowedInScreensaver', [0, 1, 2, 5, 14, 15, 19, 20]],
-  ['tileTypeRefreshesEntityIcon', [1, 2, 5, 14, 15, 17, 19, 20]],
+  ['entityTileStoresSensorEntity', [1, 5, 12, 14, 15, 17, 18, 19, 20, 21, 22, 23]],
+  ['tileTypeUsesCachedEntityState', [1, 5, 12, 14, 15, 17, 19, 20, 21, 22, 23]],
+  ['tileTypeStoresPopupMode', [1, 5, 12, 14, 17, 19, 20, 21, 22, 23]],
+  ['tileTypeStoresPopupModeDirectly', [1, 12, 14, 17, 19, 20, 21, 22, 23]],
+  ['tileTypeHasDynamicMqttRoute', [1, 5, 12, 15, 17, 19, 20, 21, 22, 23]],
+  ['tileTypeSubscribesDynamicState', [1, 5, 14, 15, 17, 19, 20, 21, 22, 23]],
+  ['tileTypeSubscribesScreensaverState', [1, 5, 14, 15, 19, 20, 21, 22, 23]],
+  ['tileTypeAllowedInScreensaver', [0, 1, 2, 5, 14, 15, 19, 20, 21, 22, 23]],
+  ['tileTypeRefreshesEntityIcon', [1, 2, 5, 14, 15, 17, 19, 20, 21, 22, 23]],
 ];
 
 function requiredMatch(source, pattern, label) {

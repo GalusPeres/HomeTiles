@@ -67,6 +67,10 @@ struct HaBridgeConfigData {
   String configured_sensors_text;
   bool has_configured_sensors = false;
   String binary_sensors_text;
+  bool has_editable_lists = false;
+  String numbers_text;
+  String selects_text;
+  String datetimes_text;
   String energy_text;
   String weathers_text;
   String lights_text;
@@ -116,6 +120,8 @@ public:
   String findSceneEntity(const String& alias) const;
 
   // Update live sensor value (for web interface)
+  String findEditableValue(const String& entity_id) const;
+  void updateEditableValue(const String& entity_id, const String& payload);
   void updateSensorValue(const String& entity_id, const String& value);
   void registerSensorMeta(const String& entity_id, const String& name, const String& unit);
   void updateEntityMeta(const String& entity_id, const String& name, const String& unit, const String& icon);
@@ -140,11 +146,13 @@ private:
   HaEntityKeyMap units_index_;
   HaEntityKeyMap names_index_;
   HaEntityKeyMap values_index_;
+  HaEntityKeyMap editable_values_index_;
   HaEntityKeyMap state_kinds_index_;
   HaEntityKeyMap icons_index_;
   // Call after every complete blob swap (load/save/applyJson). The single-value
   // updates such as updateSensorValue() maintain blob and index together.
   void rebuildEntityIndexes();
+  void pruneEditableValues();
 
   static void appendJsonEscaped(String& out, const String& value);
   static void appendSensorsJson(String& out, const String& text);

@@ -16,16 +16,13 @@ Last reviewed: 2026-09-06
 
 ## Current firmware baseline
 
-- Firmware release `v0.6.9` adds Binary Sensor and categorical Sensor history,
-  Waveshare 4.3-inch support, the Waveshare 8 thin-PPA-strip guard, B4 visible
-  brightness calibration, and the stabilization work committed after `v0.6.8`.
+- Firmware `v0.6.9` adds Binary/categorical Sensor history, Waveshare 4.3-inch support, the Waveshare 8 thin-PPA-strip guard, B4 brightness calibration and post-v0.6.8 stabilization.
 - Main also integrates the JC8012 V1 SDIO RX fix and Waveshare S3 LCD-4 Rev 4.0
   (PR #35), including local builds, 15 release profiles, and installer support.
   Both additions remain unreleased; `v0.6.9` is still the firmware version.
 - Recent stabilization covers S3 update/display guards, MQTT validation,
   Light coalescing and incremental Weather parsing (`e3de63c`–`33b4e06`).
-- Both test panels serve matching Admin assets; initial use reportedly stable.
-  Full hardware validation and runtime measurements remain pending.
+- Both test panels serve matching Admin assets; initial use reportedly stable. Full hardware validation and runtime measurements remain pending.
 - The experimental Guition S3 XIP/`-O2` performance path was reverted in
   `5279456`. Do not reintroduce it as an assumed optimization. It increased
   risk and did not solve the measured interaction problem.
@@ -125,17 +122,20 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Binary and textual Sensor history in v0.6.9
 
-- Firmware adds stable tile type 20, reusing `sensor_entity`
-  without changing `PackedTileV7`.
-- Device UI/Web Admin use central DE/EN/FR strings, state-aware HA icons,
-  autosave/previews, and a responsive 24-hour/7-day Sensor popup; textual
-  `sensor.*` states reuse its timeline/Activity while numbers keep the graph.
-- Missing, `unknown`, and `unavailable` remain distinct; state payloads and UI
-  queues are bounded. Notifications and sounds remain deferred.
-- Bridge v0.6.40 (`581150b`) is released with complete bounded Recorder paging,
-  categorical Sensor history, and explicit legacy-firmware compatibility.
+- Stable tile type 20 reuses `sensor_entity` without changing `PackedTileV7`; central DE/EN/FR strings, state-aware HA icons, autosave/previews and responsive 24-hour/7-day history are released.
+- Textual states use timeline/Activity; numeric sensors retain graphs. Missing, unknown and unavailable remain distinct.
+- Bridge v0.6.40 (`581150b`) released bounded Recorder paging, categorical history and legacy-firmware compatibility.
 
-Number, Select and Date/Time are discussion only; implementation is not authorized. Notifications/sounds and folder colors remain deferred.
+## Editable value tiles: unreleased firmware
+
+- IDs 21 Number, 22 Select, 23 Date/Time reuse Sensor rendering/persistence/popups; `PackedTileV7` is unchanged.
+- Number/input_number: centered Media-width slider with its header-size value above; Climate +/- temperature controls and bounded numeric rollers; graph and Activity fit together. Select/input_select uses compact neutral dropdowns, timeline and Activity.
+- Time/date/datetime/input_datetime: one visible clock row with large hh/mm/ss fields in a shared neutral pill, no clock arrows, native 23/00 and 59/00 wrap, closer roller pitch, and date spinboxes without a keyboard. HA timezone and DST validation apply.
+- Additive `/control` payloads preserve legacy states/configurations; fixed services, sessions, revisions, deadlines and reconnect generation reject stale commands.
+- Bridge v0.6.44 (`148dec4`) is released for HACS and fixes a reproduced stale startup icon cache overwriting fresh config icons; automatic icons now refresh in open editable popups while explicit icons/none remain protected. 119 Bridge tests pass; firmware LVGL tests cover five geometries, RGB565 colors, mid-swipe spacing and incoming state during dropdown scrolling.
+- The approved references are the Climate tile target pill (larger inset +/-), centered Media slider and Settings dropdown with header-size font. Number/Select/Time share editor height; compact graph/Activity remain inside the footer. Unused timeline labels stay hidden; range buttons react immediately while old data remains until the correlated reply. Open dropdowns retain scroll position during state updates; capability changes/offline still close them.
+- The service ACK formerly restored stale HA values. Local drafts now coalesce steps/rollers for 600 ms, publish sliders on release, and retain pending values until matching state, rejection, changed capabilities/session, offline or 30-second timeout. Waveshare 8 incremental build/source identity: `build/roller-dropdown-verification/VERIFICATION.md`. Settings dropdowns are fluid per user; editable list/history latency needs hardware measurement. Delayed entities, icons, sleep/reconnect and S3 remain pending.
+- Published documentation stays unchanged. Notifications/sounds and folder colors remain deferred.
 
 ## Current maintenance refactoring
 
@@ -146,10 +146,10 @@ Number, Select and Date/Time are discussion only; implementation is not authoriz
 
 ## Current view control, telemetry and compatible controls
 
-- Unreleased firmware adds Home/folder/popup navigation through existing UI, PIN and camera teardown paths; commit/push to main is user-authorized.
+- Main `4c9ea4e` adds unreleased Home/folder/popup navigation through existing UI, PIN and camera teardown paths; the authorized push is complete.
 - Visible folders are reused for their popup/descendants; new/locked paths still require access checks (S3 Home detour fix).
 - Stable tile IDs use reserved PackedTileV7 bytes and durable counters; MQTT sessions/sequences/deadlines reject replay.
-- Bridge v0.6.42 (`5ac2c71`) is released for HACS; View/telemetry migration remains. Firmware documentation changes are local drafts until firmware release.
+- Bridge v0.6.43 (`6a02859`) retains View/telemetry migration and compatible controls. Firmware documentation changes are local drafts until firmware release.
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
 - Commands validate selected targets, availability and on/off features; retained commands are ignored.
 - Firmware battery is a stub on all profiles. Unsupported battery/probes are no longer auto-registered; explicit local I/O remains.

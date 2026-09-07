@@ -29,11 +29,11 @@ assert.doesNotMatch(service,
   'The shared service must not own scheduling or request/response work');
 
 const queueTypes = ['sensor', 'switch', 'climate', 'cover',
-  'binary_sensor', 'weather', 'media'];
+  'binary_sensor', 'editable', 'weather', 'media'];
 const declarations = queueTypes.map(type =>
-  `void process_${type}_update_queue(uint8_t max_updates = 0);`).join('\n');
+  `void ${type === "editable" ? "process_editable_updates" : `process_${type}_update_queue`}(uint8_t max_updates = 0);`).join('\n');
 const endpoints = queueTypes.map((type, index) =>
-  `void process_${type}_update_queue(uint8_t budget) { consume(${index}, budget); }`
+  `void ${type === "editable" ? "process_editable_updates" : `process_${type}_update_queue`}(uint8_t budget) { consume(${index}, budget); }`
 ).join('\n');
 
 // Compile the production header. Only the queue endpoints are replaced so the
@@ -45,8 +45,8 @@ const source = `
 #include "src/tiles/runtime/tile_update_service.h"
 
 struct Call { std::size_t queue; uint8_t budget; };
-static std::array<unsigned, 7> pending{};
-static std::array<Call, 7> calls{};
+static std::array<unsigned, 8> pending{};
+static std::array<Call, 8> calls{};
 static std::size_t call_count = 0;
 
 static void consume(std::size_t queue, uint8_t budget) {
@@ -59,7 +59,7 @@ static void consume(std::size_t queue, uint8_t budget) {
 
 ${endpoints}
 
-static void expect_calls(const std::array<uint8_t, 7>& budgets) {
+static void expect_calls(const std::array<uint8_t, 8>& budgets) {
   assert(call_count == calls.size());
   for (std::size_t i = 0; i < calls.size(); ++i) {
     assert(calls[i].queue == i);
@@ -69,8 +69,8 @@ static void expect_calls(const std::array<uint8_t, 7>& budgets) {
 }
 
 int main() {
-  constexpr std::array<uint8_t, 7> active = {6, 6, 4, 4, 4, 4, 2};
-  constexpr std::array<uint8_t, 7> drain_all = {0, 0, 0, 0, 0, 0, 0};
+  constexpr std::array<uint8_t, 8> active = {6, 6, 4, 4, 4, 4, 4, 2};
+  constexpr std::array<uint8_t, 8> drain_all = {0, 0, 0, 0, 0, 0, 0, 0};
   pending.fill(20);
 
   process_tile_update_queues<TileUpdateBudget::Active>();
@@ -112,6 +112,8 @@ const buildRoot = path.join(repoRoot, 'build', 'tests');
 fs.mkdirSync(buildRoot, {recursive: true});
 const tempRoot = fs.mkdtempSync(path.join(buildRoot, 'tile-update-service-'));
 try {
+  fs.mkdirSync(path.join(tempRoot, 'src/types/value'), {recursive:true});
+  fs.writeFileSync(path.join(tempRoot, 'src/types/value/value_control.h'), '#pragma once\nvoid process_editable_updates(uint8_t);\n');
   const stubDir = path.join(tempRoot, 'src', 'tiles', 'runtime');
   fs.mkdirSync(stubDir, {recursive: true});
   fs.writeFileSync(path.join(stubDir, 'tile_renderer.h'),

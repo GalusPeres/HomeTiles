@@ -90,6 +90,9 @@
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'switch_entity')) {
       tile.sensor_entity = snapshot.switch_entity || '';
     }
+    for (const kind of ['number', 'select', 'datetime']) {
+      if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';
+    }
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'binary_sensor_entity')) {
       tile.sensor_entity = snapshot.binary_sensor_entity || '';
     }

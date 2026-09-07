@@ -1,3 +1,4 @@
+#include "src/types/value/value_control.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/network/mqtt/mqtt_packet_safety.h"
@@ -1303,6 +1304,15 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   };
 
   const HaBridgeConfigData& cfg = haBridgeConfig.get();
+  for (const String* list : {&cfg.numbers_text, &cfg.selects_text, &cfg.datetimes_text}) {
+    int start = 0;
+    while (start < static_cast<int>(list->length())) {
+      int end = list->indexOf('\n', start);
+      if (end < 0) end = list->length();
+      add_route(list->substring(start, end), -1, "control");
+      start = end + 1;
+    }
+  }
   // Legacy HA sensor slots
   for (uint8_t slot = 0; slot < HA_SENSOR_SLOT_COUNT; ++slot) {
     add_route(cfg.sensor_slots[slot], slot);
@@ -1311,13 +1321,14 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   // Load sensor routes from every folder through TileConfig's PSRAM entity
   // cache. Each folder needs a roughly 20 ms flash read only on the first
   // scan or after a grid change; subsequent full-folder scans are cheap.
-  bool has_media_tiles = false;
+  bool has_media_tiles = cfg.numbers_text.length() || cfg.selects_text.length() || cfg.datetimes_text.length();
   auto add_grid_entities = [&](const FolderEntitySlotView* slots, size_t count) {
     for (size_t i = 0; i < count; ++i) {
       const FolderEntitySlotView& slot = slots[i];
       if (tileTypeSubscribesDynamicState(slot.type) &&
           slot.entity[0]) {
-        add_route(String(slot.entity), -1);
+        add_route(String(slot.entity), -1, tileTypeIsEditableValue(slot.type) ? "control" : "state");
+        if (tileTypeIsEditableValue(slot.type)) has_media_tiles = true;
         if (slot.type == TILE_MEDIA) {
           has_media_tiles = true;
           // New bridges publish cover-free state changes here first. Keep the
@@ -1359,7 +1370,8 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
         !tile.sensor_entity.length()) {
       continue;
     }
-    add_route(tile.sensor_entity, -1);
+    add_route(tile.sensor_entity, -1, tileTypeIsEditableValue(tile.type) ? "control" : "state");
+    if (tileTypeIsEditableValue(tile.type)) has_media_tiles = true;
     if (tile.type == TILE_MEDIA) {
       has_media_tiles = true;
       add_route(tile.sensor_entity, -1, "state_fast");
@@ -1379,14 +1391,14 @@ bool mqttAnyMediaTileConfigured() {
   const TileGridConfig& screensaver_grid = screensaverConfig.tileGrid();
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& tile = screensaver_grid.tiles[i];
-    if (tile.type == TILE_MEDIA && tile.sensor_entity.length()) return true;
+    if ((tile.type == TILE_MEDIA || tileTypeIsEditableValue(tile.type)) && tile.sensor_entity.length()) return true;
   }
   const std::vector<FolderEntry>& folders = tileConfig.getFolders();
   FolderEntitySlotView slots[TILES_PER_GRID];
   for (const auto& folder : folders) {
     if (!tileConfig.getFolderEntitiesCached(folder.id, slots, TILES_PER_GRID)) continue;
     for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-      if (slots[i].type == TILE_MEDIA && slots[i].entity[0]) return true;
+      if ((slots[i].type == TILE_MEDIA || tileTypeIsEditableValue(slots[i].type)) && slots[i].entity[0]) return true;
     }
   }
   return false;
@@ -1443,6 +1455,10 @@ static bool tryHandleDynamicSensor(const char* topic, const char* payload,
                                    size_t payload_len) {
   for (const auto& route : g_dynamic_routes) {
     if (route.topic == topic) {
+      if (route.topic.endsWith("/control")) {
+        if (payload_len <= EDITABLE_PAYLOAD_MAX) queue_editable_value(route.entity_id, payload);
+        return true;
+      }
       if (route.entity_id.startsWith("binary_sensor.") &&
           payload_len > BINARY_SENSOR_PAYLOAD_MAX) {
         static uint32_t last_oversize_log_ms = 0;
@@ -1707,6 +1723,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
   if (hardwareIo.handleMqttMessage(topic, payload, length)) return;
 
   if (viewNavigationHandleMessage(topic, reinterpret_cast<const char*>(payload), length)) return;
+  if (editable_handle_ack(topic, reinterpret_cast<const char*>(payload), length)) return;
   const char* apply_topic = networkManager.getBridgeApplyTopic();
   if (apply_topic && strcmp(topic, apply_topic) == 0) {
     char* cfg_buf = mqttConfigBuffer();
@@ -1750,6 +1767,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
       }
       if (icons_changed) {
         tiles_request_icon_refresh();
+        queue_sensor_popup_icon_refresh();
       }
       sync_local_device_entities(false);
     } else {
@@ -1767,6 +1785,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
     large_buf[copy_len] = '\0';
     if (haBridgeConfig.applyIconUpdate(large_buf)) {
       tiles_request_icon_refresh();
+      queue_sensor_popup_icon_refresh();
     }
     return;
   }
@@ -1870,6 +1889,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
 
 // ========== Subscribe to topics ==========
 void mqttSubscribeTopics() {
+  networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + "/stat/value").c_str());
   for (const auto& route : kRoutes) {
     const char* tpc = mqttTopics.topic(route.key);
     if (!tpc || !*tpc) continue;

@@ -52,6 +52,8 @@ for (const marker of [
 const productionFunctions = [
   extractDeliveredFunction('enableTileKeys'),
   extractDeliveredFunction('applyTileAriaLabel'),
+  extractDeliveredFunction('isEditablePreview'),
+  extractDeliveredFunction('editablePreviewText'),
   extractDeliveredFunction('updateTilePreview'),
   extractDeliveredFunction('renderTileFromData')
 ].join('\n\n');

@@ -1,3 +1,5 @@
+#include "src/types/value/value_control.h"
+#include "src/network/bridge/ha_bridge_config.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
@@ -111,16 +113,25 @@ struct SensorPopupContext {
   uint8_t decimals = 0xFF;
   uint32_t bg_color = 0;
   SensorHistoryRange history_range = SensorHistoryRange::Day24;
+  SensorHistoryRange editable_requested_range = SensorHistoryRange::Day24;
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* value_label = nullptr;
+  lv_obj_t* value_box = nullptr;
+  lv_obj_t* control_row = nullptr;
+  EditableControl* control = nullptr;
+  bool editable = false;
+  String editable_kind, editable_state, editable_history_id;
+  uint32_t editable_generation = 0;
+  bool editable_available = false;
   lv_obj_t* body_box = nullptr;
   lv_obj_t* range_row = nullptr;
   lv_obj_t* range_day_btn = nullptr;
   lv_obj_t* range_week_btn = nullptr;
   lv_obj_t* chart = nullptr;
+  int chart_height = kChartHeight;
   lv_chart_series_t* series = nullptr;
   lv_obj_t* y_max_label = nullptr;
   lv_obj_t* y_min_label = nullptr;
@@ -207,8 +218,10 @@ static SensorPopupContext* g_sensor_popup_ctx = nullptr;
 static PendingValueUpdate g_pending_value;
 static PendingHistoryUpdate g_pending_history;
 static PendingBinaryStateUpdate g_pending_binary_state;
+static bool g_pending_icon_refresh = false;
 
 static void ensure_binary_view(SensorPopupContext* ctx);
+static void layout_editable_history(SensorPopupContext* ctx);
 static void clear_binary_history(SensorPopupContext* ctx);
 static void refresh_binary_activity_rows(SensorPopupContext* ctx,
                                          bool force = false);
@@ -341,8 +354,9 @@ static void style_range_button(lv_obj_t* btn, bool active) {
 
 static void update_range_buttons(SensorPopupContext* ctx) {
   if (!ctx) return;
-  style_range_button(ctx->range_day_btn, ctx->history_range == SensorHistoryRange::Day24);
-  style_range_button(ctx->range_week_btn, ctx->history_range == SensorHistoryRange::Day7);
+  const auto selected = ctx->editable ? ctx->editable_requested_range : ctx->history_range;
+  style_range_button(ctx->range_day_btn, selected == SensorHistoryRange::Day24);
+  style_range_button(ctx->range_week_btn, selected == SensorHistoryRange::Day7);
 }
 
 static void set_range_buttons_visible(SensorPopupContext* ctx, bool visible) {
@@ -397,12 +411,19 @@ static void align_header_row(lv_obj_t* card, lv_obj_t* title_label, lv_obj_t* ic
 
 static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit& init) {
   if (!ctx) return;
+  editable_control_close(ctx->control);
+  ctx->editable = init.editable;
+  ctx->editable_kind = init.editable ? parse_editable_value(haBridgeConfig.findEditableValue(init.entity_id)).kind : String();
+  ctx->editable_state = init.value;
+  ctx->editable_generation = 0;
+  ctx->editable_history_id = "";
+  ctx->editable_requested_range = SensorHistoryRange::Day24;
   ctx->entity_id = init.entity_id;
   ctx->lock_unit = init.lock_unit;
   ctx->decimals = init.decimals;
   ctx->bg_color = init.bg_color;
   ctx->binary_mode = init.binary_mode;
-  ctx->state_history_mode = init.binary_mode || init.state_history_mode;
+  ctx->state_history_mode = init.editable || init.binary_mode || init.state_history_mode;
   ctx->binary_available = init.binary_available;
   ctx->binary_icon_override = init.binary_icon_override;
   ctx->binary_device_class = init.binary_device_class;
@@ -473,6 +494,13 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
       if (label) lv_label_set_text(label, "7D");
     }
     update_value_label(ctx, init.value, init.unit);
+  }
+  layout_editable_history(ctx);
+  if (ctx->editable) {
+    lv_obj_add_flag(ctx->value_box, LV_OBJ_FLAG_HIDDEN);
+    editable_control_open(ctx->control, ctx->entity_id);
+  } else {
+    lv_obj_remove_flag(ctx->value_box, LV_OBJ_FLAG_HIDDEN);
   }
 }
 
@@ -766,7 +794,7 @@ static void update_y_axis_layout(SensorPopupContext* ctx) {
         if (label_x > max_x) label_x = max_x;
         lv_obj_set_pos(
             ctx->time_labels[i], label_x,
-            kLabelOverhang + kChartHeight + popup_layout::scale480(8));
+            kLabelOverhang + ctx->chart_height + popup_layout::scale480(8));
         lv_obj_clear_flag(ctx->time_labels[i], LV_OBJ_FLAG_HIDDEN);
       }
     } else {
@@ -1460,6 +1488,16 @@ static void update_binary_icon(SensorPopupContext* ctx,
   align_header_row(ctx->card, ctx->title_label, ctx->icon_label);
 }
 
+static void refresh_editable_popup_icon(SensorPopupContext* ctx) {
+  if (!ctx || !ctx->editable || !ctx->icon_label || ctx->binary_icon_override) return;
+  const String name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(ctx->entity_id));
+  const String glyph = name.length() ? getMdiChar(name) : String();
+  lv_label_set_text(ctx->icon_label, glyph.c_str());
+  if (glyph.length()) lv_obj_remove_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
+  align_header_row(ctx->card, ctx->title_label, ctx->icon_label);
+}
+
 static void update_binary_state(SensorPopupContext* ctx,
                                 const String& state_value,
                                 bool available,
@@ -1570,6 +1608,7 @@ static void ensure_binary_view(SensorPopupContext* ctx) {
     lv_obj_t* label = lv_label_create(body);
     ctx->binary_time_labels[index] = label;
     set_label_style(label, lv_color_white(), popup_layout::font20());
+    lv_label_set_text(label, "");
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
     lv_obj_set_y(label, axis_y);
     lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
@@ -1919,6 +1958,89 @@ static void apply_binary_history_payload(SensorPopupContext* ctx,
   if (ctx->binary_timeline) lv_obj_invalidate(ctx->binary_timeline);
 }
 
+
+static void resize_editable_chart(SensorPopupContext* ctx, int height) {
+  if (!ctx->chart_wrap || !ctx->chart) return;
+  ctx->chart_height = height;
+  constexpr int overhang = popup_layout::contentScale(12);
+  lv_obj_set_height(ctx->chart_wrap, height + 2 * overhang + kTimeAxisHeight);
+  lv_obj_set_height(ctx->chart, height);
+  if (ctx->y_min_label) lv_obj_set_y(ctx->y_min_label, height);
+  if (ctx->y_min_line) lv_obj_set_y(ctx->y_min_line, overhang + height - 1);
+  for (int i = 0; i < kTimeAxisMarkerCount; ++i) {
+    if (ctx->time_lines[i]) lv_obj_set_height(ctx->time_lines[i], height);
+    if (ctx->time_labels[i]) lv_obj_set_y(ctx->time_labels[i], overhang + height + popup_layout::scale480(8));
+  }
+}
+
+static void layout_editable_history(SensorPopupContext* ctx) {
+  if (!ctx || !ctx->body_box) return;
+  const bool numeric = ctx->editable && ctx->editable_kind == "number";
+  const bool temporal = ctx->editable && ctx->editable_kind != "select" && !numeric;
+  const int section_height = popup_layout::scale(28);
+  const int timeline_y = section_height + popup_layout::scale(14);
+  const int axis_y = timeline_y + kBinaryTimelineHeight + popup_layout::scale(6);
+  const int default_activity_y = axis_y + lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(12);
+  const int body_y = ctx->editable ? popup_layout::kValueY + editable_control_height(ctx->editable_kind) +
+                                   lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(8) : popup_layout::kBodyY;
+  // Both children are positioned inside the padded card. Reserve the actual
+  // footer bounds, so the graph and Activity never require an outer scroll.
+  const int body_height = ctx->editable ? popup_layout::kNavY - 2 * popup_layout::kCardPad -
+                                         popup_layout::scale(12) - body_y : popup_layout::kBodyHeight;
+  lv_obj_set_height(ctx->body_box, body_height);
+  lv_obj_align(ctx->body_box, LV_ALIGN_TOP_MID, 0, body_y - kContentLiftY);
+  lv_obj_scroll_to_y(ctx->body_box, 0, LV_ANIM_OFF);
+  lv_obj_remove_flag(ctx->body_box, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scrollbar_mode(ctx->body_box, LV_SCROLLBAR_MODE_OFF);
+  if (ctx->editable) lv_obj_remove_flag(ctx->body_box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  else lv_obj_add_flag(ctx->body_box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  const int activity_heading = section_height + popup_layout::scale(4) +
+                               lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(6);
+  const int chart_extra = popup_layout::contentScale(24) + kTimeAxisHeight + popup_layout::scale(12);
+  const int reserved_rows = SCREEN_HEIGHT <= 600 ? 2 : 3;
+  const int chart_height = numeric ? std::max(40, std::min(popup_layout::contentScale(120),
+      body_height - timeline_y - chart_extra - activity_heading - reserved_rows * kBinaryActivityRowHeight)) : kChartHeight;
+  resize_editable_chart(ctx, chart_height);
+  if (numeric) {
+    lv_obj_align(ctx->chart_wrap, LV_ALIGN_TOP_MID, 0, timeline_y);
+    lv_obj_remove_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(ctx->chart_wrap);
+  } else {
+    lv_obj_center(ctx->chart_wrap);
+    if (ctx->state_history_mode) lv_obj_add_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_remove_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (!ctx->binary_body) return;
+  auto show = [](lv_obj_t* obj, bool visible) {
+    if (!obj) return;
+    if (visible) lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+  };
+  const int activity_y = temporal ? 0 : numeric ? timeline_y + chart_height + chart_extra : default_activity_y;
+  const int date_y = activity_y + section_height + popup_layout::scale(4);
+  const int rows_y = activity_y + activity_heading;
+  const int viewport_height = std::max(kBinaryActivityRowHeight, ctx->editable ?
+      std::min(kBinaryVisibleActivityRows * kBinaryActivityRowHeight, body_height - rows_y) : body_height - rows_y);
+  lv_obj_set_size(ctx->binary_body, LV_PCT(100), body_height);
+  lv_obj_align(ctx->binary_body, LV_ALIGN_TOP_MID, 0, 0);
+  lv_obj_set_y(ctx->binary_activity_title, activity_y);
+  lv_obj_set_y(ctx->binary_activity_date, date_y);
+  lv_obj_set_y(ctx->binary_activity_viewport, rows_y);
+  lv_obj_set_height(ctx->binary_activity_viewport, viewport_height);
+  lv_obj_set_y(ctx->binary_activity_status, rows_y);
+  show(ctx->binary_history_title, !temporal);
+  show(ctx->binary_timeline, !numeric && !temporal);
+  if (numeric || temporal) {
+    for (auto* time_label : ctx->binary_time_labels) show(time_label, false);
+  } else {
+    // Only the current range's axis calculation may expose labels. Showing the
+    // entire pool resurrects default text and leftover seven-day markers.
+    update_binary_time_axis(ctx);
+  }
+  lv_obj_set_y(ctx->binary_history_status, temporal ? rows_y : timeline_y);
+  lv_obj_update_layout(ctx->body_box);
+}
+
 static void apply_state_history_payload(SensorPopupContext* ctx,
                                         DynamicJsonDocument& doc) {
   if (!ctx) return;
@@ -1933,7 +2055,7 @@ static void apply_state_history_payload(SensorPopupContext* ctx,
   if (ctx->chart_wrap) lv_obj_add_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
   if (ctx->binary_body) lv_obj_clear_flag(ctx->binary_body, LV_OBJ_FLAG_HIDDEN);
 
-  if (doc.containsKey("current")) {
+  if (!ctx->editable && doc.containsKey("current")) {
     const JsonVariantConst current_variant = doc["current"];
     ctx->state_history_value =
         current_variant.isNull()
@@ -2074,6 +2196,17 @@ static void apply_state_history_payload(SensorPopupContext* ctx,
   if (ctx->binary_timeline) lv_obj_invalidate(ctx->binary_timeline);
 }
 
+static bool accept_editable_history_range(SensorPopupContext* ctx, DynamicJsonDocument& doc) {
+  if (!ctx->editable_history_id.length() || ctx->editable_history_id != (doc["request_id"] | "")) return false;
+  const auto requested = get_history_range_config(ctx->editable_requested_range);
+  if ((doc["hours"] | 0) != requested.hours) return false;
+  // Keep the displayed range and its data intact until the matching reply is
+  // ready. Slow Recorder responses must not blank or resize the popup.
+  ctx->history_range = ctx->editable_requested_range;
+  update_range_buttons(ctx);
+  return true;
+}
+
 static void apply_history_payload(SensorPopupContext* ctx, const char* payload) {
   if (!ctx || !payload || !*payload) return;
 
@@ -2093,6 +2226,12 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
     return;
   }
 
+  if (ctx->editable) {
+    if (!accept_editable_history_range(ctx, doc)) return;
+    apply_state_history_payload(ctx, doc);
+    layout_editable_history(ctx);
+    if (ctx->editable_kind != "number") return;
+  }
   const char* kind = doc["kind"] | "";
   if (strcmp(kind, "binary") == 0) {
     if (!ctx->binary_mode) return;
@@ -2100,11 +2239,11 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
     return;
   }
   if (strcmp(kind, "state") == 0) {
-    if (ctx->binary_mode) return;
+    if (ctx->binary_mode || ctx->editable) return;
     apply_state_history_payload(ctx, doc);
     return;
   }
-  if (ctx->state_history_mode) return;
+  if (ctx->state_history_mode && !ctx->editable) return;
 
   if (!ctx->lock_unit && doc.containsKey("unit")) {
     String unit = String(doc["unit"].as<const char*>());
@@ -2121,7 +2260,7 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
     return;
   }
 
-  if (doc.containsKey("current")) {
+  if (!ctx->editable && doc.containsKey("current")) {
     String current = String(doc["current"].as<const char*>());
     update_value_label(ctx, current, ctx->unit);
   }
@@ -2132,8 +2271,9 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
   }
 
   size_t count = values.size();
+  if (ctx->editable && count > 288) return;
   if (count == 0) {
-    set_range_buttons_visible(ctx, false);
+    set_range_buttons_visible(ctx, ctx->editable);
     clear_chart(ctx, range_cfg.points);
     return;
   }
@@ -2144,7 +2284,7 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
   for (size_t i = 0; i < count; ++i) {
     JsonVariant v = values[i];
     float val = 0.0f;
-    if (extract_numeric(v, val)) {
+    if (extract_numeric(v, val) && (!ctx->editable || fabsf(val) < 100000000.0f)) {
       plot_values[i] = val;
     }
   }
@@ -2158,7 +2298,7 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
       break;
     }
   }
-  if (first_numeric < count) {
+  if (!ctx->editable && first_numeric < count) {
     float last = plot_values[first_numeric];
     for (size_t i = 0; i < first_numeric; ++i) {
       plot_values[i] = last;
@@ -2189,7 +2329,7 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
     }
   }
 
-  set_range_buttons_visible(ctx, numeric_count > 1);
+  set_range_buttons_visible(ctx, ctx->editable || numeric_count > 1);
 
   int scale = 1;
   if (has_range) {
@@ -2313,7 +2453,14 @@ static bool should_request_history(const String& entity_id) {
 
 static void request_history_for_context(SensorPopupContext* ctx) {
   if (!ctx || !should_request_history(ctx->entity_id)) return;
-  const HistoryRangeConfig cfg = get_history_range_config(ctx->history_range);
+  const HistoryRangeConfig cfg = get_history_range_config(
+      ctx->editable ? ctx->editable_requested_range : ctx->history_range);
+  if (ctx->editable) {
+    ctx->editable_history_id = editable_request_history(ctx->entity_id, cfg.hours);
+    ctx->state_history_refresh_pending = false;
+    ctx->state_history_last_request_ms = millis();
+    return;
+  }
   if (ctx->state_history_mode) {
     ctx->state_history_refresh_pending = false;
     ctx->state_history_last_request_ms = millis();
@@ -2358,6 +2505,7 @@ static void on_close_click(lv_event_t* e) {
   if (code != LV_EVENT_CLICKED && code != LV_EVENT_RELEASED) return;
   SensorPopupContext* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->overlay || !ctx->card) return;
+  editable_control_close(ctx->control);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }
@@ -2366,6 +2514,7 @@ static void on_overlay_delete(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_DELETE) return;
   SensorPopupContext* ctx = static_cast<SensorPopupContext*>(lv_event_get_user_data(e));
   if (!ctx) return;
+  editable_control_delete(ctx->control); ctx->control = nullptr;
   if (g_sensor_popup_ctx == ctx) {
     g_sensor_popup_ctx = nullptr;
   }
@@ -2380,12 +2529,20 @@ static void on_range_click(lv_event_t* e) {
 
   SensorHistoryRange next_range =
       (target == ctx->range_week_btn) ? SensorHistoryRange::Day7 : SensorHistoryRange::Day24;
+  if (ctx->editable) {
+    if (ctx->editable_requested_range == next_range) return;
+    ctx->editable_requested_range = next_range;
+    update_range_buttons(ctx);
+    request_history_for_context(ctx);
+    return;
+  }
   if (ctx->history_range == next_range) return;
 
   ctx->history_range = next_range;
   update_range_buttons(ctx);
   if (ctx->state_history_mode) {
     clear_binary_history(ctx);
+    if (ctx->editable) clear_chart(ctx, get_history_range_config(ctx->history_range).points);
   } else {
     clear_chart(ctx, get_history_range_config(ctx->history_range).points);
   }
@@ -2480,6 +2637,7 @@ static void build_popup_ui(SensorPopupContext* ctx, const SensorPopupInit& init)
   set_range_buttons_visible(ctx, false);
 
   lv_obj_t* value_box = lv_obj_create(card);
+  ctx->value_box = value_box;
   lv_obj_remove_style_all(value_box);
   lv_obj_set_size(value_box, LV_PCT(100), popup_layout::kValueHeight);
   lv_obj_align(
@@ -2498,6 +2656,14 @@ static void build_popup_ui(SensorPopupContext* ctx, const SensorPopupInit& init)
   lv_obj_set_style_text_align(value, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_translate_y(value, popup_layout::kLargeValueTextOffsetY, 0);
   lv_obj_set_width(value, LV_PCT(100));
+
+  ctx->control_row = lv_obj_create(card);
+  lv_obj_remove_style_all(ctx->control_row);
+  lv_obj_set_size(ctx->control_row, LV_PCT(100), popup_layout::kValueHeight);
+  lv_obj_align(ctx->control_row, LV_ALIGN_TOP_MID, 0, popup_layout::kValueY - kContentLiftY);
+  lv_obj_remove_flag(ctx->control_row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(ctx->control_row, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  ctx->control = editable_control_create(ctx->control_row, card);
 
   lv_obj_t* body_box = lv_obj_create(card);
   ctx->body_box = body_box;
@@ -2664,6 +2830,7 @@ void show_sensor_popup(const SensorPopupInit& init) {
     update_range_buttons(g_sensor_popup_ctx);
     if (g_sensor_popup_ctx->state_history_mode) {
       clear_binary_history(g_sensor_popup_ctx);
+      if (g_sensor_popup_ctx->editable) clear_chart(g_sensor_popup_ctx, get_history_range_config(g_sensor_popup_ctx->history_range).points);
     } else {
       clear_chart(g_sensor_popup_ctx,
                   get_history_range_config(
@@ -2706,6 +2873,7 @@ void preload_sensor_popup() {
 }
 
 void hide_sensor_popup() {
+  if (g_sensor_popup_ctx) editable_control_close(g_sensor_popup_ctx->control);
   if (!g_sensor_popup_ctx || !g_sensor_popup_ctx->card || !g_sensor_popup_ctx->overlay) return;
   lv_obj_add_flag(g_sensor_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_sensor_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
@@ -2733,6 +2901,8 @@ static String extract_history_entity_id(const String& payload) {
   entity.trim();
   return entity;
 }
+
+void queue_sensor_popup_icon_refresh() { g_pending_icon_refresh = true; }
 
 void queue_sensor_popup_history(const char* entity_id, const char* payload, size_t len) {
   if (!payload || len == 0) return;
@@ -2780,6 +2950,28 @@ void process_sensor_popup_queue() {
     return;
   }
 
+  if (g_pending_icon_refresh) {
+    g_pending_icon_refresh = false;
+    if (is_popup_visible(g_sensor_popup_ctx)) refresh_editable_popup_icon(g_sensor_popup_ctx);
+  }
+  if (g_sensor_popup_ctx->editable && is_popup_visible(g_sensor_popup_ctx)) {
+    auto* ctx = g_sensor_popup_ctx;
+    editable_control_refresh(ctx->control);
+    if (ctx->editable_generation != editable_value_generation()) {
+    ctx->editable_generation = editable_value_generation();
+    const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(ctx->entity_id));
+    if (value.valid && (ctx->editable_state != value.state || ctx->editable_kind != value.kind || ctx->editable_available != value.available)) {
+      const bool kind_changed = ctx->editable_kind != value.kind;
+      ctx->editable_state = value.state; ctx->editable_kind = value.kind;
+      ctx->editable_available = value.available;
+      if (value.last_changed) prepend_state_history_activity(ctx, value.last_changed, 2, value.available ? value.state : String("unavailable"));
+      ctx->unit = value.unit;
+      if (kind_changed) { layout_editable_history(ctx); request_history_for_context(ctx); }
+      else schedule_state_history_refresh(ctx);
+    }
+    }
+  }
+
   if (g_pending_binary_state.valid) {
     if (g_sensor_popup_ctx->binary_mode &&
         g_sensor_popup_ctx->entity_id.equalsIgnoreCase(
@@ -2807,7 +2999,7 @@ void process_sensor_popup_queue() {
   }
 
   if (g_pending_value.valid) {
-    if (!g_sensor_popup_ctx->binary_mode &&
+    if (!g_sensor_popup_ctx->editable && !g_sensor_popup_ctx->binary_mode &&
         g_sensor_popup_ctx->entity_id.equalsIgnoreCase(g_pending_value.entity_id) &&
         is_popup_visible(g_sensor_popup_ctx)) {
       const String previous_value = g_sensor_popup_ctx->state_history_value;

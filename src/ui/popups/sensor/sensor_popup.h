@@ -12,6 +12,7 @@ struct SensorPopupInit {
   bool lock_unit = false;
   uint8_t decimals = 0xFF;
   uint32_t bg_color = 0;
+  bool editable = false;
   bool binary_mode = false;
   bool state_history_mode = false;
   String binary_device_class;
@@ -41,3 +42,4 @@ void queue_sensor_popup_binary_state(const String& entity_id,
                                      uint64_t last_changed,
                                      const String& icon_name);
 void process_sensor_popup_queue();
+void queue_sensor_popup_icon_refresh();

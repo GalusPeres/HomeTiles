@@ -79,6 +79,7 @@ struct TileGridConfig { std::array<Tile, TILES_PER_GRID> tiles{}; };
 static std::map<std::string, String> cache, initial_values, bridge_units, energy_units;
 static std::vector<std::string> events;
 struct Bridge {
+  String findEditableValue(const String& entity) { return initial_values[entity.c_str()]; }
   String findSensorInitialValue(const String& entity) {
     events.push_back("initial");
     return initial_values[entity.c_str()];
@@ -128,6 +129,7 @@ ${['switch', 'weather', 'media', 'climate', 'cover', 'binary_sensor'].map(type =
   record("${type}", grid, index, payload);
 }`).join('\n')}
 
+static void refresh_editable_tile(GridType grid, uint8_t index) { record("editable", grid, index, cache["entity.state"].c_str()); }
 ${production}
 
 static void clear() {
@@ -137,9 +139,9 @@ static void clear() {
 
 // Expected routes use the stable persisted IDs, independent of policy helpers.
 static const char* expected_route(unsigned type) {
-  constexpr std::array<const char*, 21> routes = {
+  constexpr std::array<const char*, 24> routes = {
     "", "sensor", "", "", "", "switch", "", "", "", "", "", "",
-    "weather", "", "sensor", "media", "", "climate", "", "cover", "binary_sensor"
+    "weather", "", "sensor", "media", "", "climate", "", "cover", "binary_sensor", "editable", "editable", "editable"
   };
   return type < routes.size() ? routes[type] : "";
 }

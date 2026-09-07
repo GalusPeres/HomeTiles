@@ -41,7 +41,7 @@
     const climateEntity = document.getElementById(prefix + '_climate_entity')?.value || '';
     const coverEntity = document.getElementById(prefix + '_cover_entity')?.value || '';
     const cameraEntity = document.getElementById(prefix + '_camera_entity')?.value || '';
-    const iconEntity = (previewKind === 'sensor')
+    let iconEntity = (previewKind === 'sensor')
       ? (isEnergyType ? energyEntity : sensorEntity)
       : (previewKind === 'binary_sensor'
         ? binarySensorEntity
@@ -56,6 +56,7 @@
               : (previewKind === 'cover'
                 ? coverEntity
                 : (previewKind === 'camera' ? cameraEntity : '')))))));
+    if (isEditablePreview(previewKind)) iconEntity = document.getElementById(prefix + '_' + previewKind + '_entity')?.value || '';
     const rawIcon = iconInput ? iconInput.value : '';
     let iconName = resolveIconName(
       rawIcon,
@@ -186,6 +187,8 @@
         escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
         '</div>';
     }
+
+    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value sensor-value-size-24">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
 
     if (previewKind === 'sensor') {
       const entitySelect = document.getElementById(prefix + (isEnergyType ? '_energy_entity' : '_sensor_entity'));

@@ -110,7 +110,7 @@
     }
     else {
       const previewKind = meta.preview || 'none';
-      const iconEntity = (previewKind === 'sensor' ||
+      const iconEntity = (isEditablePreview(previewKind) || previewKind === 'sensor' ||
                           previewKind === 'binary_sensor' ||
                           previewKind === 'switch' ||
                           previewKind === 'weather' || previewKind === 'media' ||
@@ -218,6 +218,7 @@
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
       }
+      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value sensor-value-size-24">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
       if (previewKind === 'clock') {
         const flags = normalizeClockFlags(tile.sensor_decimals);
         const clockTimeFont = tile.key_code || 40;

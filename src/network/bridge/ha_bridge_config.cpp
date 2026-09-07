@@ -1,3 +1,4 @@
+#include "src/types/value/value_control.h"
 #include "src/core/power/battery_state.h"
 #include "src/network/bridge/ha_bridge_config.h"
 
@@ -68,6 +69,9 @@ bool HaBridgeConfig::load() {
   }
 
   data.sensors_text = "";
+  data.numbers_text = "";
+  data.selects_text = "";
+  data.datetimes_text = "";
   data.binary_sensors_text = "";
   data.energy_text = "";
   data.weathers_text = "";
@@ -221,6 +225,9 @@ bool HaBridgeConfig::save(const HaBridgeConfigData& incoming) {
 
 bool HaBridgeConfig::hasData() const {
   return data.sensors_text.length() > 0 ||
+         data.numbers_text.length() > 0 ||
+         data.selects_text.length() > 0 ||
+         data.datetimes_text.length() > 0 ||
          data.binary_sensors_text.length() > 0 ||
          data.energy_text.length() > 0 ||
          data.weathers_text.length() > 0 ||
@@ -324,6 +331,14 @@ String HaBridgeConfig::buildJsonPayload(const char* device_id,
   json += ",\"capabilities\":{\"view_navigation\":true,\"battery_soc\":";
   json += batteryStateSupportsMeasurement() ? "true" : "false";
   json += ",\"legacy_external_temperature\":false}";
+  if (data.has_editable_lists) {
+    json += ",\"numbers\":";
+    appendSensorsJson(json, data.numbers_text);
+    json += ",\"selects\":";
+    appendSensorsJson(json, data.selects_text);
+    json += ",\"datetimes\":";
+    appendSensorsJson(json, data.datetimes_text);
+  }
   json += ",\"binary_sensors\":";
   appendSensorsJson(json, data.binary_sensors_text);
 
@@ -542,6 +557,13 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
     merged.configured_sensors_text = "";
   }
 
+  const int numbers_idx = json.indexOf("\"numbers\"");
+  if (numbers_idx >= 0) parseArraySection(json.substring(numbers_idx), merged.numbers_text);
+  const int selects_idx = json.indexOf("\"selects\"");
+  if (selects_idx >= 0) parseArraySection(json.substring(selects_idx), merged.selects_text);
+  const int datetimes_idx = json.indexOf("\"datetimes\"");
+  if (numbers_idx >= 0 || selects_idx >= 0 || datetimes_idx >= 0) merged.has_editable_lists = true;
+  if (datetimes_idx >= 0) parseArraySection(json.substring(datetimes_idx), merged.datetimes_text);
   int binary_sensors_idx = json.indexOf("\"binary_sensors\"");
   if (binary_sensors_idx >= 0) {
     parseArraySection(json.substring(binary_sensors_idx),
@@ -615,6 +637,7 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
   parseEntityNameSection(json, "climate_meta", merged.sensor_names_map);
   parseEntityNameSection(json, "cover_meta", merged.sensor_names_map);
   parseEntityNameSection(json, "camera_meta", merged.sensor_names_map);
+  parseEntityNameSection(json, "editable_meta", merged.sensor_names_map);
   parseIconMetaSections(json, merged.entity_icons_map);
   if (!merged.entity_icons_map.length() && prev_icons.length()) {
     merged.entity_icons_map = prev_icons;
@@ -893,6 +916,9 @@ static bool mapEqualsIgnoringOrder(const String& a, const String& b) {
 
 static bool bridgeConfigEquals(const HaBridgeConfigData& a, const HaBridgeConfigData& b) {
   if (!listEqualsIgnoringOrder(a.sensors_text, b.sensors_text)) return false;
+  if (!listEqualsIgnoringOrder(a.numbers_text, b.numbers_text)) return false;
+  if (!listEqualsIgnoringOrder(a.selects_text, b.selects_text)) return false;
+  if (!listEqualsIgnoringOrder(a.datetimes_text, b.datetimes_text)) return false;
   if (!listEqualsIgnoringOrder(a.binary_sensors_text, b.binary_sensors_text)) {
     return false;
   }
@@ -1334,6 +1360,7 @@ static void parseIconMetaSections(const String& body, String& icons) {
   icons = "";
   parseEntityIconSection(body, "sensor_meta", icons);
   parseEntityIconSection(body, "binary_sensor_meta", icons);
+  parseEntityIconSection(body, "editable_meta", icons);
   parseEntityIconSection(body, "weather_meta", icons);
   parseEntityIconSection(body, "light_meta", icons);
   parseEntityIconSection(body, "switch_meta", icons);
@@ -1623,6 +1650,7 @@ static size_t indexApproxBytes(const HaEntityKeyMap& m) {
 }
 
 void HaBridgeConfig::rebuildEntityIndexes() {
+  pruneEditableValues();
   rebuildIndexFromBlob(data.sensor_units_map, units_index_);
   rebuildIndexFromBlob(data.sensor_names_map, names_index_);
   rebuildIndexFromBlob(data.sensor_values_map, values_index_);
@@ -1720,4 +1748,28 @@ void HaBridgeConfig::updateSensorValue(const String& entity_id, const String& va
 
   valuesMap = newMap;
   indexPut(values_index_, entity_id, value);
+}
+
+String HaBridgeConfig::findEditableValue(const String& entity_id) const {
+  auto it = editable_values_index_.find(entity_id.c_str());
+  return it == editable_values_index_.end() ? String() : String(it->second.c_str());
+}
+
+void HaBridgeConfig::updateEditableValue(const String& entity_id, const String& payload) {
+  if (!entity_id.length() || payload.length() > 24576) return;
+  auto it = editable_values_index_.find(entity_id.c_str());
+  if (it == editable_values_index_.end() && editable_values_index_.size() >= 128) return;
+  editable_values_index_[PsString(entity_id.c_str())] = PsString(payload.c_str());
+}
+
+void HaBridgeConfig::pruneEditableValues() {
+  if (!data.has_editable_lists) return;
+  const String selected = "\n" + data.numbers_text + "\n" + data.selects_text + "\n" + data.datetimes_text + "\n";
+  bool removed = false;
+  for (auto it = editable_values_index_.begin(); it != editable_values_index_.end();) {
+    if (selected.indexOf("\n" + String(it->first.c_str()) + "\n") < 0) {
+      it = editable_values_index_.erase(it); removed = true;
+    } else ++it;
+  }
+  if (removed) editable_configuration_changed();
 }

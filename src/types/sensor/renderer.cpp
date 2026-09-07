@@ -6,6 +6,7 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include <Arduino.h>
+#include "src/types/value/value_control.h"
 
 static const lv_font_t* get_sensor_value_font(const Tile& tile) {
   switch (tile.sensor_value_font) {
@@ -30,6 +31,7 @@ struct SensorEventData {
   String unit;
   uint8_t decimals = 0xFF;
   uint32_t bg_color = 0;
+  bool editable = false;
 };
 
 static bool is_disabled_token(const String& value) {
@@ -270,7 +272,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   // their existing behavior.
   if (tile.sensor_entity.length() && grid_type != GridType::SCREENSAVER) {
     bool icon_override = false;
-    if (tile.icon_name.length() && !isMdiIconDisabled(tile.icon_name)) {
+    if (tile.icon_name.length() &&
+        (tileTypeIsEditableValue(tile.type) || !isMdiIconDisabled(tile.icon_name))) {
       icon_override = true;
     }
     SensorEventData* data = new SensorEventData{
@@ -280,7 +283,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       icon_override,
       tile.sensor_unit,
       tile.sensor_decimals,
-      tileBgColorOrDefault(tile, 0x2A2A2A)
+      tileBgColorOrDefault(tile, 0x2A2A2A),
+      tileTypeIsEditableValue(tile.type)
     };
 
     const lv_event_code_t popup_event =
@@ -312,6 +316,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
             }
           }
           init.icon_name = icon_name;
+          init.binary_icon_override = data->icon_override;
           String unit = data->unit;
           const bool lock_unit = unit.length() > 0;
           if (is_disabled_token(unit)) {
@@ -338,6 +343,12 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
             // Backward compatibility with older Bridge metadata.
             init.state_history_mode =
                 sensor_popup_should_use_state_history(init.value, init.unit);
+          }
+          init.editable = data->editable;
+          if (init.editable) {
+            const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(data->entity_id));
+            init.value = value.state; init.unit = value.unit;
+            init.state_history_mode = value.kind != "number";
           }
           finish_press_before_popup(e);
           show_sensor_popup(init);

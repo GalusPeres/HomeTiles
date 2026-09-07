@@ -1,3 +1,4 @@
+#include "src/types/value/value_control.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/core/display/display_manager.h"
@@ -514,6 +515,10 @@ void tiles_cache_entity_payload(const char* entity_id, const char* payload) {
 
 static bool get_cached_or_initial_payload(const Tile& tile, String& out) {
   if (!tile.sensor_entity.length()) return false;
+  if (tileTypeIsEditableValue(tile.type)) {
+    out = haBridgeConfig.findEditableValue(tile.sensor_entity);
+    return out.length() > 0;
+  }
   if (get_cached_entity_payload(tile.sensor_entity.c_str(), out)) return true;
   String initial = haBridgeConfig.findSensorInitialValue(tile.sensor_entity);
   if (!initial.length()) return false;
@@ -1237,6 +1242,7 @@ static inline void enqueue_cached_tile_state(GridType grid_type, const Tile& til
   if (!tileTypeUsesCachedEntityState(tile.type)) return;
   if (!include_media && tile.type == TILE_MEDIA) return;
   if (tile.sensor_entity.length() == 0) return;
+  if (tileTypeIsEditableValue(tile.type)) { refresh_editable_tile(grid_type, index); return; }
 
   String payload;
   if (!get_cached_or_initial_payload(tile, payload)) return;

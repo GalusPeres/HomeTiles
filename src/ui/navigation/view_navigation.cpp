@@ -66,6 +66,7 @@ String topic(const char* suffix) {
 bool popupSupported(const Tile& tile) {
   if (!tile.sensor_entity.length()) return false;
   switch (tile.type) {
+    case TILE_NUMBER: case TILE_SELECT: case TILE_DATETIME:
     case TILE_SENSOR: case TILE_BINARY_SENSOR: case TILE_SWITCH:
     case TILE_WEATHER: case TILE_ENERGY: case TILE_MEDIA:
     case TILE_CLIMATE: case TILE_COVER: case TILE_CAMERA: return true;

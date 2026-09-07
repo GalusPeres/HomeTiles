@@ -24,7 +24,10 @@ enum TileType : uint8_t {
   TILE_CLIMATE = 17,
   TILE_CAMERA = 18,
   TILE_COVER = 19,
-  TILE_BINARY_SENSOR = 20
+  TILE_BINARY_SENSOR = 20,
+  TILE_NUMBER = 21,
+  TILE_SELECT = 22,
+  TILE_DATETIME = 23
 };
 
 static constexpr bool isRetiredTileType(TileType type) {

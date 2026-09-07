@@ -28,7 +28,8 @@
     if (!payload || typeof payload !== 'object') {
       return { values: {}, units: {}, icons: {}, names: {}, loaded: false };
     }
-    const hasMeta = Object.prototype.hasOwnProperty.call(payload, 'values') ||
+    const hasMeta = Object.prototype.hasOwnProperty.call(payload, 'editable_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'units') ||
                     Object.prototype.hasOwnProperty.call(payload, 'icons') ||
                     Object.prototype.hasOwnProperty.call(payload, 'names') ||
@@ -47,6 +48,7 @@
         payload.energy_values || {},
         payload.climate_values || {}
       ),
+      editableValues: payload.editable_values || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},

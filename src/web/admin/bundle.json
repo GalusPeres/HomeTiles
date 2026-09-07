@@ -51,6 +51,10 @@
     "src/types/camera/admin.js",
     "src/types/pixelanim/admin.js",
     "src/types/clock/admin.js",
-    "src/types/text/admin.js"
+    "src/types/text/admin.js",
+    "src/types/value/admin.js",
+    "src/types/number/admin-editor.js",
+    "src/types/select/admin-editor.js",
+    "src/types/datetime/admin-editor.js"
   ]
 }

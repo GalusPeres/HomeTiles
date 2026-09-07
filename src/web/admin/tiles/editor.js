@@ -232,6 +232,18 @@
       scheduleAutoSave(tab);
     });
     bindLive(entitySelect, 'change', 'sensorEntity', () => { maybeFillTitleFromSensor(tab); updateTilePreview(tab); updateSensorValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    for (const kind of ['number', 'select', 'datetime']) {
+      const select = document.getElementById(prefix + '_' + kind + '_entity');
+      bindLive(select, 'change', kind + 'Entity', () => {
+        if (select.value) select.dataset.configuredValue = select.value;
+        else delete select.dataset.configuredValue;
+        maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+      bindLive(document.getElementById(prefix + '_' + kind + '_popup_open_mode'), 'change', kind + 'PopupMode', () => {
+        updateDraft(tab); scheduleAutoSave(tab);
+      });
+    }
     bindLive(binarySensorSelect, 'change', 'binarySensorEntity', () => {
       if (binarySensorSelect.value) {
         binarySensorSelect.dataset.configuredValue = binarySensorSelect.value;

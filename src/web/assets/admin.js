@@ -1574,7 +1574,8 @@ function t(key) {
     if (!payload || typeof payload !== 'object') {
       return { values: {}, units: {}, icons: {}, names: {}, loaded: false };
     }
-    const hasMeta = Object.prototype.hasOwnProperty.call(payload, 'values') ||
+    const hasMeta = Object.prototype.hasOwnProperty.call(payload, 'editable_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'units') ||
                     Object.prototype.hasOwnProperty.call(payload, 'icons') ||
                     Object.prototype.hasOwnProperty.call(payload, 'names') ||
@@ -1593,6 +1594,7 @@ function t(key) {
         payload.energy_values || {},
         payload.climate_values || {}
       ),
+      editableValues: payload.editable_values || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},
@@ -1797,6 +1799,10 @@ function t(key) {
       .then(data => {
         rebuildEntitySelect(tab + '_sensor_entity', data.sensors);
         rebuildEntitySelect(tab + '_binary_sensor_entity', data.binary_sensors);
+        rebuildEntitySelect(tab + '_number_entity', data.numbers);
+        rebuildEntitySelect(tab + '_select_entity', data.selects);
+        rebuildEntitySelect(tab + '_datetime_entity', data.datetimes);
+
         rebuildEntitySelect(tab + '_energy_entity', data.energy);
         rebuildEntitySelect(tab + '_weather_entity', data.weathers);
         rebuildEntitySelect(tab + '_switch_entity', data.switches);
@@ -1899,6 +1905,9 @@ function t(key) {
 
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'switch_entity')) {
       tile.sensor_entity = snapshot.switch_entity || '';
+    }
+    for (const kind of ['number', 'select', 'datetime']) {
+      if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';
     }
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'binary_sensor_entity')) {
       tile.sensor_entity = snapshot.binary_sensor_entity || '';
@@ -3107,6 +3116,18 @@ function t(key) {
       scheduleAutoSave(tab);
     });
     bindLive(entitySelect, 'change', 'sensorEntity', () => { maybeFillTitleFromSensor(tab); updateTilePreview(tab); updateSensorValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    for (const kind of ['number', 'select', 'datetime']) {
+      const select = document.getElementById(prefix + '_' + kind + '_entity');
+      bindLive(select, 'change', kind + 'Entity', () => {
+        if (select.value) select.dataset.configuredValue = select.value;
+        else delete select.dataset.configuredValue;
+        maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+      bindLive(document.getElementById(prefix + '_' + kind + '_popup_open_mode'), 'change', kind + 'PopupMode', () => {
+        updateDraft(tab); scheduleAutoSave(tab);
+      });
+    }
     bindLive(binarySensorSelect, 'change', 'binarySensorEntity', () => {
       if (binarySensorSelect.value) {
         binarySensorSelect.dataset.configuredValue = binarySensorSelect.value;
@@ -3337,7 +3358,7 @@ function t(key) {
     const climateEntity = document.getElementById(prefix + '_climate_entity')?.value || '';
     const coverEntity = document.getElementById(prefix + '_cover_entity')?.value || '';
     const cameraEntity = document.getElementById(prefix + '_camera_entity')?.value || '';
-    const iconEntity = (previewKind === 'sensor')
+    let iconEntity = (previewKind === 'sensor')
       ? (isEnergyType ? energyEntity : sensorEntity)
       : (previewKind === 'binary_sensor'
         ? binarySensorEntity
@@ -3352,6 +3373,7 @@ function t(key) {
               : (previewKind === 'cover'
                 ? coverEntity
                 : (previewKind === 'camera' ? cameraEntity : '')))))));
+    if (isEditablePreview(previewKind)) iconEntity = document.getElementById(prefix + '_' + previewKind + '_entity')?.value || '';
     const rawIcon = iconInput ? iconInput.value : '';
     let iconName = resolveIconName(
       rawIcon,
@@ -3482,6 +3504,8 @@ function t(key) {
         escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
         '</div>';
     }
+
+    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value sensor-value-size-24">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
 
     if (previewKind === 'sensor') {
       const entitySelect = document.getElementById(prefix + (isEnergyType ? '_energy_entity' : '_sensor_entity'));
@@ -4236,7 +4260,7 @@ function t(key) {
     const currentTiles = await fetchTilesForImport(folderId);
     const tileCount = GRID_COLS * GRID_ROWS;
     const preparedTiles = prepareScreensaverTilesForImport(sourceTiles, sourceLayout);
-    const supportedTypes = new Set([1, 2, 5, 14, 20, MEDIA_TILE_TYPE]);
+    const supportedTypes = new Set([1, 2, 5, 14, 20, 21, 22, 23, MEDIA_TILE_TYPE]);
     for (const entry of preparedTiles) {
       if (!supportedTypes.has(Number(entry.tile.type || 0))) {
         throw new Error('Unsupported screensaver tile type');
@@ -4418,6 +4442,10 @@ function t(key) {
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
+    } else if (safeType >= 21 && safeType <= 23) {
+      const kind = ['number', 'select', 'datetime'][safeType - 21];
+      fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
+      fd.append('popup_open_mode', tile.popup_open_mode ?? 1);
     } else if (safeType === 20) {
       fd.append(
         'binary_sensor_entity',
@@ -4631,7 +4659,7 @@ function t(key) {
     }
     else {
       const previewKind = meta.preview || 'none';
-      const iconEntity = (previewKind === 'sensor' ||
+      const iconEntity = (isEditablePreview(previewKind) || previewKind === 'sensor' ||
                           previewKind === 'binary_sensor' ||
                           previewKind === 'switch' ||
                           previewKind === 'weather' || previewKind === 'media' ||
@@ -4739,6 +4767,7 @@ function t(key) {
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
       }
+      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value sensor-value-size-24">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
       if (previewKind === 'clock') {
         const flags = normalizeClockFlags(tile.sensor_decimals);
         const clockTimeFont = tile.key_code || 40;
@@ -11068,4 +11097,159 @@ function normalizeTextValueFont(value) {
     if (textEl) textEl.value = '';
     const fontEl = document.getElementById(prefix + '_text_value_font');
     if (fontEl) fontEl.value = '0';
+  }
+  function isEditablePreview(kind) { return ['number', 'select', 'datetime'].includes(kind); }
+  function editablePreviewText(entity, kind) {
+    let value = sensorMetaCache.editableValues?.[entity];
+    if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { return '--'; } }
+    if (!value || value.version !== 1 || value.state === null || value.state === undefined) return '--';
+    const tr = kind === 'number' ? NUMBER_I18N : kind === 'select' ? SELECT_I18N : DATETIME_I18N;
+    if (!value.available || value.state === 'unavailable') return tr.unavailable;
+    if (value.state === 'unknown') return tr.unknown;
+    if (value.kind === 'number') {
+      if (!String(value.state).trim() || !Number.isFinite(Number(value.state))) return tr.unknown;
+      return formatSensorValue(String(value.state), undefined) + (value.unit ? ' ' + value.unit : '');
+    }
+    return String(value.state);
+  }
+
+  function loadNumberFields(tab, data) {
+    const entity = document.getElementById(tab + '_number_entity');
+    const configured = data.sensor_entity || data.number_entity || '';
+    if (entity) {
+      if (configured) {
+        entity.dataset.configuredValue = configured;
+        if (!Array.from(entity.options).some(option => option.value === configured)) {
+          const option = document.createElement('option');
+          option.value = configured;
+          option.textContent = configured;
+          entity.appendChild(option);
+        }
+      } else {
+        delete entity.dataset.configuredValue;
+      }
+      entity.value = configured;
+    }
+    const popup = document.getElementById(
+      tab + '_number_popup_open_mode');
+    if (popup) {
+      popup.value = data.popup_open_mode !== undefined
+        ? String(data.popup_open_mode) : '1';
+    }
+  }
+
+  function saveNumberFields(tab, formData) {
+    const entityEl = document.getElementById(tab + '_number_entity');
+    const entity = entityEl
+      ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+    formData.append('number_entity', entity);
+    formData.append('sensor_entity', entity);
+    const popup = document.getElementById(
+      tab + '_number_popup_open_mode');
+    if (popup) formData.append('popup_open_mode', popup.value || '1');
+  }
+
+  function resetNumberFields(tab) {
+    const entity = document.getElementById(tab + '_number_entity');
+    if (entity) {
+      entity.value = '';
+      delete entity.dataset.configuredValue;
+    }
+    const popup = document.getElementById(
+      tab + '_number_popup_open_mode');
+    if (popup) popup.value = '1';
+  }
+
+  function loadSelectFields(tab, data) {
+    const entity = document.getElementById(tab + '_select_entity');
+    const configured = data.sensor_entity || data.select_entity || '';
+    if (entity) {
+      if (configured) {
+        entity.dataset.configuredValue = configured;
+        if (!Array.from(entity.options).some(option => option.value === configured)) {
+          const option = document.createElement('option');
+          option.value = configured;
+          option.textContent = configured;
+          entity.appendChild(option);
+        }
+      } else {
+        delete entity.dataset.configuredValue;
+      }
+      entity.value = configured;
+    }
+    const popup = document.getElementById(
+      tab + '_select_popup_open_mode');
+    if (popup) {
+      popup.value = data.popup_open_mode !== undefined
+        ? String(data.popup_open_mode) : '1';
+    }
+  }
+
+  function saveSelectFields(tab, formData) {
+    const entityEl = document.getElementById(tab + '_select_entity');
+    const entity = entityEl
+      ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+    formData.append('select_entity', entity);
+    formData.append('sensor_entity', entity);
+    const popup = document.getElementById(
+      tab + '_select_popup_open_mode');
+    if (popup) formData.append('popup_open_mode', popup.value || '1');
+  }
+
+  function resetSelectFields(tab) {
+    const entity = document.getElementById(tab + '_select_entity');
+    if (entity) {
+      entity.value = '';
+      delete entity.dataset.configuredValue;
+    }
+    const popup = document.getElementById(
+      tab + '_select_popup_open_mode');
+    if (popup) popup.value = '1';
+  }
+
+  function loadDateTimeFields(tab, data) {
+    const entity = document.getElementById(tab + '_datetime_entity');
+    const configured = data.sensor_entity || data.datetime_entity || '';
+    if (entity) {
+      if (configured) {
+        entity.dataset.configuredValue = configured;
+        if (!Array.from(entity.options).some(option => option.value === configured)) {
+          const option = document.createElement('option');
+          option.value = configured;
+          option.textContent = configured;
+          entity.appendChild(option);
+        }
+      } else {
+        delete entity.dataset.configuredValue;
+      }
+      entity.value = configured;
+    }
+    const popup = document.getElementById(
+      tab + '_datetime_popup_open_mode');
+    if (popup) {
+      popup.value = data.popup_open_mode !== undefined
+        ? String(data.popup_open_mode) : '1';
+    }
+  }
+
+  function saveDateTimeFields(tab, formData) {
+    const entityEl = document.getElementById(tab + '_datetime_entity');
+    const entity = entityEl
+      ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+    formData.append('datetime_entity', entity);
+    formData.append('sensor_entity', entity);
+    const popup = document.getElementById(
+      tab + '_datetime_popup_open_mode');
+    if (popup) formData.append('popup_open_mode', popup.value || '1');
+  }
+
+  function resetDateTimeFields(tab) {
+    const entity = document.getElementById(tab + '_datetime_entity');
+    if (entity) {
+      entity.value = '';
+      delete entity.dataset.configuredValue;
+    }
+    const popup = document.getElementById(
+      tab + '_datetime_popup_open_mode');
+    if (popup) popup.value = '1';
   }

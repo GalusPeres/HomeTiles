@@ -530,6 +530,9 @@ struct LocaleProfile {
   // home, away, problem, OK, running, not running, unsafe, safe,
   // update available, up to date, unavailable, unknown.
   const char* binary_sensor_states[36];
+
+  // Types, entity labels, apply, invalid value, pending, failed, input formats.
+  const char* editable_labels[19];
 };
 
 // Locale-independent timezone catalog with codes and group assignments.

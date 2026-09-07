@@ -1,6 +1,7 @@
 #pragma once
 
 #include "src/tiles/runtime/tile_renderer.h"
+#include "src/types/value/value_control.h"
 
 enum class TileUpdateBudget : uint8_t {
   Active,
@@ -19,6 +20,7 @@ inline void process_tile_update_queues() {
   process_climate_update_queue(drain_all ? 0 : 4);
   process_cover_update_queue(drain_all ? 0 : 4);
   process_binary_sensor_update_queue(drain_all ? 0 : 4);
+  process_editable_updates(drain_all ? 0 : 4);
   process_weather_update_queue(drain_all ? 0 : 4);
   process_media_update_queue(drain_all ? 0 : 2);
 }

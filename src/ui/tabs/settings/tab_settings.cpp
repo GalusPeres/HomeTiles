@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_control_style.h"
 #include <lvgl.h>
 #include <WiFi.h>
 #include <cstring>
@@ -221,9 +222,6 @@ static const int kSettingsBrightnessPctMin =
     Device::kConfiguredBrightnessPercentMin;
 static const int kSettingsBrightnessPctMax = 100;
 static const int kSettingsSliderValueWidth = popup_layout::scale(70);
-static const int kSettingsSliderHeight = popup_layout::scale(20);
-static const int kSettingsSliderKnobSize = popup_layout::scale(42);
-static const int kSettingsSliderClickPad = popup_layout::scale(20);
 static const uint8_t kSettingsCardColStart = 1;
 
 // Forward declarations
@@ -763,23 +761,8 @@ static lv_obj_t *create_slider_row(lv_obj_t *parent) {
   return row;
 }
 
-static void style_settings_slider(lv_obj_t *slider) {
-  if (!slider) return;
-  lv_obj_set_height(slider, kSettingsSliderHeight);
-  lv_obj_set_style_width(slider, kSettingsSliderKnobSize, LV_PART_KNOB);
-  lv_obj_set_style_height(slider, kSettingsSliderKnobSize, LV_PART_KNOB);
-  lv_obj_set_ext_click_area(slider, kSettingsSliderClickPad);
-  lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(slider, LV_OPA_20, LV_PART_MAIN);
-  lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-  lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_INDICATOR);
-  lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_INDICATOR);
-  lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
-  lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
-  lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_KNOB);
-  lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
-  lv_obj_set_style_border_width(slider, 0, LV_PART_KNOB);
-  lv_obj_clear_flag(slider, LV_OBJ_FLAG_SCROLLABLE);
+static void style_settings_slider(lv_obj_t* slider) {
+  ui_control_style::slider(slider);
 }
 
 // Timezone codes and display names come from the central i18n catalog
@@ -849,38 +832,11 @@ static void style_popup_textarea(lv_obj_t* ta) {
 }
 
 static void style_popup_dropdown(lv_obj_t* dd) {
-  lv_obj_set_height(dd, popup_layout::scale(52));
-  lv_obj_set_style_text_font(dd, popup_layout::font20(), LV_PART_MAIN);
-  lv_obj_set_style_text_font(dd, &ui_symbols_20, LV_PART_INDICATOR);
-  lv_obj_set_style_bg_color(dd, lv_color_hex(0x1E1E1E), 0);
-  lv_obj_set_style_text_color(dd, lv_color_white(), 0);
-  lv_obj_set_style_text_color(dd, lv_color_white(), LV_PART_INDICATOR);
-  lv_obj_set_style_radius(dd, popup_layout::scale(10), 0);
-  lv_obj_set_style_border_color(dd, lv_color_hex(0x555555), 0);
-  lv_obj_set_style_border_width(dd, 1, 0);
-  lv_obj_set_style_border_opa(dd, LV_OPA_COVER, 0);
-  lv_obj_set_style_pad_left(dd, popup_layout::scale(12), 0);
-  lv_obj_set_style_pad_right(dd, popup_layout::scale(36), 0);
+  ui_control_style::dropdown(dd);
 }
 
 static void style_popup_dropdown_list(lv_obj_t* list) {
-  if (!list) return;
-  lv_obj_set_style_bg_color(list, lv_color_hex(0x1E1E1E), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_set_style_text_font(list, popup_layout::font20(), LV_PART_MAIN);
-  lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_MAIN);
-  lv_obj_set_style_radius(list, popup_layout::scale(10), LV_PART_MAIN);
-  lv_obj_set_style_border_color(list, lv_color_hex(0x555555), LV_PART_MAIN);
-  lv_obj_set_style_border_width(list, 1, LV_PART_MAIN);
-  lv_obj_set_style_border_opa(list, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_set_style_pad_all(list, popup_layout::scale(6), LV_PART_MAIN);
-  lv_obj_set_style_bg_color(list, lv_color_hex(0x26A69A), LV_PART_SELECTED);
-  lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SELECTED);
-  lv_obj_set_style_text_font(list, popup_layout::font20(), LV_PART_SELECTED);
-  lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_SELECTED);
-  lv_obj_set_style_radius(list, popup_layout::scale(6), LV_PART_SELECTED);
-  lv_obj_set_style_bg_color(list, lv_color_hex(0x4A4A4A), LV_PART_SCROLLBAR);
-  lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+  ui_control_style::dropdownList(list);
 }
 
 static lv_obj_t* create_popup_button(lv_obj_t* parent, const char* text, uint32_t color,
@@ -2398,14 +2354,7 @@ static String format_options_text(bool time_format) {
 // and clip_corner to keep the first/last blue selection inside the
 // rounded corners.
 static void style_locale_dropdown_list(lv_obj_t* list) {
-  if (!list) return;
-  style_popup_dropdown_list(list);
-  lv_obj_set_style_text_font(list, popup_layout::font28(), LV_PART_MAIN);
-  lv_obj_set_style_text_font(list, popup_layout::font28(), LV_PART_SELECTED);
-  lv_obj_set_style_pad_left(list, popup_layout::scale(20), 0);
-  lv_obj_set_style_pad_right(list, popup_layout::scale(10), 0);
-  lv_obj_set_style_pad_ver(list, popup_layout::scale(8), 0);
-  lv_obj_set_style_clip_corner(list, true, 0);
+  ui_control_style::largeDropdownList(list);
 }
 
 // Restyle the list on every opening (READY event); otherwise LVGL's

@@ -1476,6 +1476,7 @@
     .tile-value.sensor-value-size-default { font-size:var(--fs28, 14px); }
     .tile-value.sensor-value-size-40 { font-size:var(--fs40, 20px); }
     .tile-value.sensor-value-size-32 { font-size:var(--fs32, 16px); }
+    .tile-value.tile-editable-value { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .tile-value.sensor-value-size-24 { font-size:var(--fs24, 12px); }
     .tile-value.sensor-value-size-20 { font-size:var(--fs20, 10px); }
     .tile-unit { color:inherit; font-size:inherit; margin-left:0.28em; }
@@ -1485,12 +1486,18 @@
       top:8px;
       left:6px;
     }
-    .tile.binary_sensor {
+    .tile.binary_sensor,
+    .tile.number,
+    .tile.select,
+    .tile.datetime {
       display:grid;
       grid-template-rows:auto 1fr;
       grid-template-columns:1fr;
     }
-    .tile.binary_sensor .tile-title {
+    .tile.binary_sensor .tile-title,
+    .tile.number .tile-title,
+    .tile.select .tile-title,
+    .tile.datetime .tile-title {
       text-align:right;
       align-self:start;
       width:auto;
@@ -1502,7 +1509,10 @@
       text-overflow:ellipsis;
       white-space:nowrap;
     }
-    .tile.binary_sensor .tile-icon {
+    .tile.binary_sensor .tile-icon,
+    .tile.number .tile-icon,
+    .tile.select .tile-icon,
+    .tile.datetime .tile-icon {
       position:absolute;
       top:8px;
       left:6px;

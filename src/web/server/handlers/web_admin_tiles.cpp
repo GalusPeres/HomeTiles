@@ -865,6 +865,20 @@ void WebAdminServer::handleGetSensorValues() {
   }
   json += "}";
 
+  json += ",\"editable_values\":{";
+  bool first_editable_value = true;
+  for (const String* list : {&ha.numbers_text, &ha.selects_text, &ha.datetimes_text}) {
+    for (const auto& id : parseSensorList(*list)) {
+      const String payload = haBridgeConfig.findEditableValue(id);
+      if (!payload.length()) continue;
+      if (!first_editable_value) json += ',';
+      first_editable_value = false;
+      json += '\"'; appendJsonEscaped(json, id); json += "\":\"";
+      appendJsonEscaped(json, payload); json += '\"';
+    }
+  }
+  json += "}";
+
   // Climate states include HVAC mode, action and unit alongside temperature.
   // Keep the complete JSON payload from the central entity cache because the
   // Web editor also uses it to derive the dynamic icon.
@@ -1008,6 +1022,12 @@ void WebAdminServer::handleGetEntityOptions() {
     }
   }
   json += "],";
+  appendHumanizedList(json, "numbers", parseSensorList(ha.numbers_text));
+  json += ",";
+  appendHumanizedList(json, "selects", parseSensorList(ha.selects_text));
+  json += ",";
+  appendHumanizedList(json, "datetimes", parseSensorList(ha.datetimes_text));
+  json += ",";
   appendHumanizedList(json, "weathers", parseSensorList(ha.weathers_text));
   json += ",";
   appendHumanizedList(json, "climates", parseSensorList(ha.climates_text));

@@ -1,3 +1,4 @@
+#include "src/types/value/value_control.h"
 #include "src/web/server/web_admin.h"
 #include "src/web/server/web_admin_utils.h"
 #include <WiFi.h>
@@ -342,6 +343,11 @@ static void appendTileTabHTML(
       }
       html += "</div>";
     }
+    if (tileTypeIsEditableValue(tile.type)) {
+      html += "<div class=\"tile-value tile-editable-value sensor-value-size-24\">";
+      appendHtmlEscaped(html, editable_display_value(parse_editable_value(haBridgeConfig.findEditableValue(tile.sensor_entity))));
+      html += "</div>";
+    }
     if (binary_sensor_preview) {
       html += "<div class=\"tile-value tile-binary-sensor-value\" id=\"";
       html += tab_id;
@@ -626,6 +632,12 @@ static void appendTileTabHTML(
     html += "</option><option value=\"20\">";
     html += i18n::binary_sensor_label(
         configManager.getConfig().language, 0);
+    html += "</option><option value=\"21\">";
+    html += i18n::locale(configManager.getConfig().language).editable_labels[0];
+    html += "</option><option value=\"22\">";
+    html += i18n::locale(configManager.getConfig().language).editable_labels[1];
+    html += "</option><option value=\"23\">";
+    html += i18n::locale(configManager.getConfig().language).editable_labels[2];
     html += "</option><option value=\"14\">";
     html += tr.tile_type_energy;
     html += "</option><option value=\"2\">";

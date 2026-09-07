@@ -1,0 +1,46 @@
+#include "src/types/number/web_html.h"
+
+#include "src/core/config/config_manager.h"
+#include "src/core/i18n/i18n.h"
+#include "src/network/bridge/ha_bridge_config.h"
+#include "src/web/server/web_admin_utils.h"
+
+void append_number_fields_html(
+    String& html, const String& tab_id,
+    const std::vector<String>& number_options) {
+  const char* language = configManager.getConfig().language;
+  const auto& tr = i18n::strings(language);
+
+  html += "<div id=\"";
+  html += tab_id;
+  html += "_number_fields\" class=\"type-fields\"><label>";
+  html += i18n::locale(language).editable_labels[3];
+  html += "</label><select id=\"";
+  html += tab_id;
+  html += "_number_entity\"><option value=\"\">";
+  html += tr.no_selection;
+  html += "</option>";
+  for (const String& entity : number_options) {
+    html += "<option value=\"";
+    appendHtmlEscaped(html, entity);
+    html += "\">";
+    String name = haBridgeConfig.findSensorName(entity);
+    if (!name.length()) name = humanizeIdentifier(entity, true);
+    appendHtmlEscaped(html, name + " - " + entity);
+    html += "</option>";
+  }
+  html += "</select>";
+
+  if (tab_id != "screensaver") {
+    html += "<label>";
+    html += tr.popup_open;
+    html += "</label><select id=\"";
+    html += tab_id;
+    html += "_number_popup_open_mode\"><option value=\"1\">";
+    html += tr.short_press;
+    html += "</option><option value=\"0\">";
+    html += tr.long_press;
+    html += "</option></select>";
+  }
+  html += "</div>\n";
+}

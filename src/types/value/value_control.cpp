@@ -14,6 +14,7 @@
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/shared/ui_control_style.h"
 #include "src/types/value/value_editor_model.h"
+#include "src/types/value/value_colors.h"
 #include "src/types/climate/layout.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
@@ -205,6 +206,7 @@ struct EditableControl {
            *number_box = nullptr, *number_roller = nullptr, *up = nullptr, *down = nullptr, *dropdown = nullptr,
            *apply = nullptr, *status = nullptr, *pressed = nullptr, *clock_box = nullptr, *separators[2] = {};
   EditableValue value;
+  editable_colors::Palette colors{};
   value_editor::Calendar calendar;
   double draft = 0;
   uint8_t option_offset = 0;
@@ -433,6 +435,7 @@ void style_open_options(EditableControl* c) {
   lv_obj_t* list = lv_dropdown_get_list(c->dropdown);
   // LVGL reapplies its theme when opening a list, just as in Settings.
   ui_control_style::valueDropdownList(list);
+  editable_colors::dropdownList(list, c->colors);
   // The Settings list already owns font, spacing and positioning. Only bound
   // its height to the popup body; do not synchronously relayout on opening.
   const int available = popup_layout::kNavY - 2 * popup_layout::kCardPad -
@@ -590,6 +593,16 @@ void style_roller(lv_obj_t* roller) {
   lv_roller_set_visible_row_count(roller, 1);
 }
 
+void apply_control_colors(EditableControl* c) {
+  c->colors = editable_colors::from(lv_obj_get_style_bg_color(c->card, LV_PART_MAIN));
+  editable_colors::dropdown(c->dropdown, c->colors);
+  editable_colors::surface(c->number_box, c->colors.raised);
+  editable_colors::surface(c->clock_box, c->colors.raised);
+  for (auto& field : c->fields) {
+    if (field.spinbox) editable_colors::surface(lv_obj_get_parent(field.spinbox), c->colors.field);
+  }
+}
+
 void layout_controls(EditableControl* c) {
   const bool number = c->value.kind == "number", select = c->value.kind == "select";
   c->number_roller_enabled = number_uses_roller(c->value);
@@ -613,7 +626,7 @@ void layout_controls(EditableControl* c) {
   const int number_height = slider ? value_height : std::max(48, popup_layout::scale(70));
   const int step_width = number_width / 2;
   lv_obj_set_size(c->number_box, number_width, number_height);
-  lv_obj_set_style_bg_color(c->number_box, lv_color_hex(0x3A3A3A), 0);
+  lv_obj_set_style_bg_color(c->number_box, c->colors.raised, 0);
   lv_obj_set_style_bg_opa(c->number_box, slider ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
   lv_obj_set_style_radius(c->number_box, climate_layout::kControlRadius, 0);
   lv_obj_align(c->number_box, LV_ALIGN_CENTER, 0, slider ? -(knob_height + value_gap) / 2 : 0);
@@ -749,6 +762,10 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card) {
   lv_obj_set_style_text_font(apply_label, popup_layout::font20(), 0); lv_obj_center(apply_label);
   c->dropdown = lv_dropdown_create(row); lv_obj_set_width(c->dropdown, LV_PCT(100));
   ui_control_style::valueDropdown(c->dropdown); lv_obj_center(c->dropdown);
+#if defined(DEVICE_GUITION_ESP32_4848S040)
+  // Keep the compact Guition dropdown arrow proportional to its title-sized text.
+  lv_obj_set_style_text_font(c->dropdown, &ui_symbols_20, LV_PART_INDICATOR);
+#endif
   lv_obj_add_event_cb(lv_dropdown_get_list(c->dropdown), dropdown_cover_check,
                       LV_EVENT_COVER_CHECK, nullptr);
   c->status = lv_label_create(row); lv_obj_set_width(c->status, LV_PCT(58));
@@ -757,6 +774,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card) {
   lv_obj_set_style_text_color(c->status, lv_color_white(), 0);
   lv_obj_set_style_text_align(c->status, LV_TEXT_ALIGN_RIGHT, 0);
   for (auto* obj : {c->slider, c->apply, c->dropdown}) lv_obj_add_event_cb(obj, input_event, LV_EVENT_ALL, c);
+  apply_control_colors(c);
   visible(row, false); return c;
 }
 
@@ -764,6 +782,7 @@ void editable_control_open(EditableControl* c, const String& entity) {
   if (!c) return;
   editable_control_close(c); c->entity = entity; c->active = true; active_control = c;
   c->value = {}; c->payload = "\x01"; c->generation = 0;
+  apply_control_colors(c);
   visible(c->row, true); editable_control_refresh(c);
 }
 

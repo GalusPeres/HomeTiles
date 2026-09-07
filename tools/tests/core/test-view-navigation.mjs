@@ -199,6 +199,16 @@ int main(){
   assert(boundedLabel("A\xc3\xbcZ", 2, true) == "Z");
   assert(boundedLabel("A\xc3\xbcZ", 3) == "A\xc3\xbc");
   assert(boundedLabel("A\xc3\xbcZ", 3, true) == "\xc3\xbcZ");
+  // Select options use line breaks as separators; visual title wrapping must
+  // never leak into the navigation catalog consumed by the Bridge.
+  const String visual_title = "Waveshare Touch\nLcd 8 Ansicht";
+  assert(boundedLabel(visual_title, 80) == "Waveshare Touch Lcd 8 Ansicht");
+  assert(visual_title == "Waveshare Touch\nLcd 8 Ansicht");
+  assert(boundedLabel("First\r\nSecond", 80) == "First Second");
+  assert(boundedLabel("First\rSecond", 80) == "First Second");
+  assert(boundedLabel("A\n\xc3\xbcZ", 4) == "A \xc3\xbc");
+  tileConfig.folders.push_back({4,0,"Two\nLines","folder",false});
+  assert(folderLabel(4) == "Home / Two Lines");
   prepare(2,id,{0,1,2});
   servicePending(100);servicePending(200);
   assert(pin_visible&&tileConfig.active==0&&opens==0);

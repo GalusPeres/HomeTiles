@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -30,6 +31,12 @@ if (s3Start < 0 || fallbackStart < 0) {
   throw new Error('The ESP32-S3 RGB NVS branch was not found');
 }
 const s3Branch = batchedNvs.slice(s3Start, fallbackStart);
+for (const fn of cppFunctionDefinitions(configManager)) {
+  if (!fn.source.includes('BatchedNvsWrite::Preferences prefs;')) continue;
+  for (const call of fn.source.matchAll(/\bprefs\.(\w+)\s*\(/g)) {
+    requireMarker(s3Branch, call[1] + '(', fn.name + ' S3 Preferences API');
+  }
+}
 
 requireMarker(
   s3Branch,

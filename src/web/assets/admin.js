@@ -412,7 +412,7 @@ function t(key) {
     if (snapshot.title) {
       const title = document.createElement('div');
       title.className = 'tile-title';
-      title.textContent = snapshot.title;
+      title.innerHTML = tileTitleHtml(snapshot.title);
       tile.appendChild(title);
     }
     if (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX &&
@@ -1594,7 +1594,7 @@ function t(key) {
         payload.energy_values || {},
         payload.climate_values || {}
       ),
-      editableValues: payload.editable_values || {},
+      editableValues: payload.editable_values || payload.editableValues || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},
@@ -1693,6 +1693,24 @@ function t(key) {
       return metaUnits[entityId];
     }
     return '';
+  }
+
+  function normalizeTileTitle(value) {
+    const lines = String(value ?? '').replace(/\r\n?/g, '\n').replace(/\\n/g, '\n').split('\n');
+    const text = lines.length > 2 ? lines[0] + '\n' + lines.slice(1).join(' ') : lines.join('\n');
+    let bytes = 0, result = '';
+    for (const character of text) {
+      const code = character.codePointAt(0);
+      bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+      if (bytes > 255) break;
+      result += character;
+    }
+    return result;
+  }
+
+  function tileTitleHtml(value) {
+    return '<span class="tile-title-lines">' + normalizeTileTitle(value).split('\n')
+      .map(line => '<span class="tile-title-line">' + escapeHtml(line) + '</span>').join('') + '</span>';
   }
 
   function getTileTypeMeta(typeValue) {
@@ -3083,7 +3101,11 @@ function t(key) {
     const clockDateFormatSelect = document.getElementById(prefix + '_clock_date_format');
     const settingsPanel = document.getElementById(prefix + 'Settings');
 
-    bindLive(titleInput, 'input', 'tileTitle', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(titleInput, 'input', 'tileTitle', () => {
+      const normalized = normalizeTileTitle(titleInput.value);
+      if (normalized !== titleInput.value) titleInput.value = normalized;
+      updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+    });
     bindLive(iconInput, 'input', 'tileIcon', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(colorInput, 'input', 'tileColor', () => { markTileColorInputExplicit(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(opacityInput, 'input', 'tileOpacity', () => { updateTilePreview(tab); updateDraft(tab); });
@@ -3122,6 +3144,9 @@ function t(key) {
         if (select.value) select.dataset.configuredValue = select.value;
         else delete select.dataset.configuredValue;
         maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+      bindLive(document.getElementById(prefix + '_' + kind + '_value_font'), 'change', kind + 'ValueFont', () => {
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
       bindLive(document.getElementById(prefix + '_' + kind + '_popup_open_mode'), 'change', kind + 'PopupMode', () => {
@@ -3346,8 +3371,9 @@ function t(key) {
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + '_sensor_value_font')?.value || '0');
-    const sensorValueClass = getSensorValueFontClass(sensorValueFont);
     const previewKind = meta.preview || 'none';
+    const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
+      ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);
     const sensorEntity = document.getElementById(prefix + '_sensor_entity')?.value || '';
     const binarySensorEntity = document.getElementById(
       prefix + '_binary_sensor_entity')?.value || '';
@@ -3469,7 +3495,7 @@ function t(key) {
     }
     if (displayTitle) {
       html += '<div class="tile-title" id="' + tileId + '-title">' +
-        escapeHtml(displayTitle) + '</div>';
+        tileTitleHtml(displayTitle) + '</div>';
     }
     applyTileAriaLabel(tileElem, displayTitle, type);
 
@@ -3505,7 +3531,7 @@ function t(key) {
         '</div>';
     }
 
-    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value sensor-value-size-24">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
+    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
 
     if (previewKind === 'sensor') {
       const entitySelect = document.getElementById(prefix + (isEnergyType ? '_energy_entity' : '_sensor_entity'));
@@ -4402,6 +4428,7 @@ function t(key) {
       fd.append('background_opacity', tile.background_opacity);
     }
 
+    if ([21, 22, 23].includes(safeType)) fd.append('sensor_value_font', tile.sensor_value_font ?? 2);
     if (safeType === 1) {
       fd.append('sensor_entity', tile.sensor_entity || '');
       fd.append('sensor_unit', tile.sensor_unit || '');
@@ -4724,7 +4751,7 @@ function t(key) {
       }
       if (displayTitle.length) {
         html += '<div class="tile-title" id="' + tab + '-tile-' + index + '-title">' +
-          escapeHtml(displayTitle) + '</div>';
+          tileTitleHtml(displayTitle) + '</div>';
       }
       applyTileAriaLabel(el, displayTitle, typeValue);
 
@@ -4767,7 +4794,7 @@ function t(key) {
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
       }
-      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value sensor-value-size-24">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
+      if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind, sensorMeta)) + '</div>';
       if (previewKind === 'clock') {
         const flags = normalizeClockFlags(tile.sensor_decimals);
         const clockTimeFont = tile.key_code || 40;
@@ -11099,8 +11126,8 @@ function normalizeTextValueFont(value) {
     if (fontEl) fontEl.value = '0';
   }
   function isEditablePreview(kind) { return ['number', 'select', 'datetime'].includes(kind); }
-  function editablePreviewText(entity, kind) {
-    let value = sensorMetaCache.editableValues?.[entity];
+  function editablePreviewText(entity, kind, meta = sensorMetaCache) {
+    let value = meta?.editableValues?.[entity];
     if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { return '--'; } }
     if (!value || value.version !== 1 || value.state === null || value.state === undefined) return '--';
     const tr = kind === 'number' ? NUMBER_I18N : kind === 'select' ? SELECT_I18N : DATETIME_I18N;
@@ -11114,6 +11141,8 @@ function normalizeTextValueFont(value) {
   }
 
   function loadNumberFields(tab, data) {
+    const font = document.getElementById(tab + '_number_value_font');
+    if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_number_entity');
     const configured = data.sensor_entity || data.number_entity || '';
     if (entity) {
@@ -11139,6 +11168,7 @@ function normalizeTextValueFont(value) {
   }
 
   function saveNumberFields(tab, formData) {
+    formData.append('sensor_value_font', document.getElementById(tab + '_number_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_number_entity');
     const entity = entityEl
       ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
@@ -11150,6 +11180,8 @@ function normalizeTextValueFont(value) {
   }
 
   function resetNumberFields(tab) {
+    const font = document.getElementById(tab + '_number_value_font');
+    if (font) font.value = '2';
     const entity = document.getElementById(tab + '_number_entity');
     if (entity) {
       entity.value = '';
@@ -11161,6 +11193,8 @@ function normalizeTextValueFont(value) {
   }
 
   function loadSelectFields(tab, data) {
+    const font = document.getElementById(tab + '_select_value_font');
+    if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_select_entity');
     const configured = data.sensor_entity || data.select_entity || '';
     if (entity) {
@@ -11186,6 +11220,7 @@ function normalizeTextValueFont(value) {
   }
 
   function saveSelectFields(tab, formData) {
+    formData.append('sensor_value_font', document.getElementById(tab + '_select_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_select_entity');
     const entity = entityEl
       ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
@@ -11197,6 +11232,8 @@ function normalizeTextValueFont(value) {
   }
 
   function resetSelectFields(tab) {
+    const font = document.getElementById(tab + '_select_value_font');
+    if (font) font.value = '2';
     const entity = document.getElementById(tab + '_select_entity');
     if (entity) {
       entity.value = '';
@@ -11208,6 +11245,8 @@ function normalizeTextValueFont(value) {
   }
 
   function loadDateTimeFields(tab, data) {
+    const font = document.getElementById(tab + '_datetime_value_font');
+    if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_datetime_entity');
     const configured = data.sensor_entity || data.datetime_entity || '';
     if (entity) {
@@ -11233,6 +11272,7 @@ function normalizeTextValueFont(value) {
   }
 
   function saveDateTimeFields(tab, formData) {
+    formData.append('sensor_value_font', document.getElementById(tab + '_datetime_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_datetime_entity');
     const entity = entityEl
       ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
@@ -11244,6 +11284,8 @@ function normalizeTextValueFont(value) {
   }
 
   function resetDateTimeFields(tab) {
+    const font = document.getElementById(tab + '_datetime_value_font');
+    if (font) font.value = '2';
     const entity = document.getElementById(tab + '_datetime_entity');
     if (entity) {
       entity.value = '';

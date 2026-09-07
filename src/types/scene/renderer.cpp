@@ -325,7 +325,7 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
     lv_obj_t* l = lv_label_create(btn);
     if (l) {
       set_label_style(l, lv_color_white(), tile_layout::header_title_font());
-      lv_label_set_text(l, tile.title.c_str());
+      hometiles_title::tile(l, tile.title.c_str(), false);
       if (has_icon) {
         lv_obj_align(l, LV_ALIGN_CENTER, 0, tile_layout::scale(35));
       } else {

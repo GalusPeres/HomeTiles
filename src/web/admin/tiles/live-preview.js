@@ -29,8 +29,9 @@
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + '_sensor_value_font')?.value || '0');
-    const sensorValueClass = getSensorValueFontClass(sensorValueFont);
     const previewKind = meta.preview || 'none';
+    const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
+      ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);
     const sensorEntity = document.getElementById(prefix + '_sensor_entity')?.value || '';
     const binarySensorEntity = document.getElementById(
       prefix + '_binary_sensor_entity')?.value || '';
@@ -152,7 +153,7 @@
     }
     if (displayTitle) {
       html += '<div class="tile-title" id="' + tileId + '-title">' +
-        escapeHtml(displayTitle) + '</div>';
+        tileTitleHtml(displayTitle) + '</div>';
     }
     applyTileAriaLabel(tileElem, displayTitle, type);
 
@@ -188,7 +189,7 @@
         '</div>';
     }
 
-    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value sensor-value-size-24">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
+    if (isEditablePreview(previewKind)) html += '<div class="tile-value tile-editable-value ' + sensorValueClass + '">' + escapeHtml(editablePreviewText(iconEntity, previewKind)) + '</div>';
 
     if (previewKind === 'sensor') {
       const entitySelect = document.getElementById(prefix + (isEnergyType ? '_energy_entity' : '_sensor_entity'));

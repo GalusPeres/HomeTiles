@@ -572,7 +572,7 @@ void apply_init(CoverPopupContext* ctx, const CoverPopupInit& init) {
                                        : CoverPopupMode::Controls;
   }
   if (ctx->title_label) {
-    lv_label_set_text(ctx->title_label, init.title.c_str());
+    hometiles_title::set(ctx->title_label, init.title.c_str());
   }
   if (ctx->icon_label) {
     set_hidden(ctx->icon_label, !init.icon_visible);

@@ -1,5 +1,7 @@
 
   function loadNumberFields(tab, data) {
+    const font = document.getElementById(tab + '_number_value_font');
+    if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_number_entity');
     const configured = data.sensor_entity || data.number_entity || '';
     if (entity) {
@@ -25,6 +27,7 @@
   }
 
   function saveNumberFields(tab, formData) {
+    formData.append('sensor_value_font', document.getElementById(tab + '_number_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_number_entity');
     const entity = entityEl
       ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
@@ -36,6 +39,8 @@
   }
 
   function resetNumberFields(tab) {
+    const font = document.getElementById(tab + '_number_value_font');
+    if (font) font.value = '2';
     const entity = document.getElementById(tab + '_number_entity');
     if (entity) {
       entity.value = '';

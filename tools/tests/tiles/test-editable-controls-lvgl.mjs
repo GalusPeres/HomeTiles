@@ -26,6 +26,8 @@ const iconChar = name => String.fromCodePoint(parseInt(mdi.match(new RegExp('\\{
 const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(icon);'));
 const cpp = `
 #include <lvgl.h>
+#include "src/types/value/value_colors.h"
+#include "src/ui/shared/title_label.h"
 #include <lvgl_private.h>
 #include <algorithm>
 #include <cassert>
@@ -154,7 +156,12 @@ int main(int argc,char**argv){
  auto* close=popup_layout::createCloseButton(card,[](lv_event_t*){},nullptr);
  auto* header_icon=text(card,getMdiChar("clock-end").c_str());lv_obj_set_style_text_font(header_icon,FONT_MDI_ICONS,0);popup_layout::applyIconScale(header_icon);align_header_row(card,title,header_icon);
  auto* row=box(card);lv_obj_set_pos(row,0,popup_layout::kValueY);lv_obj_add_flag(row,LV_OBJ_FLAG_OVERFLOW_VISIBLE);auto* c=editable_control_create(row,card);
- SensorPopupContext ctx;ctx.card=card;ctx.title_label=title;ctx.icon_label=header_icon;ctx.control_row=row;ctx.body_box=box(card);ctx.binary_body=box(ctx.body_box);
+#if defined(DEVICE_GUITION_ESP32_4848S040)
+ assert(lv_obj_get_style_text_font(c->dropdown,LV_PART_INDICATOR)==&ui_symbols_20);
+#else
+ assert(lv_obj_get_style_text_font(c->dropdown,LV_PART_INDICATOR)==&ui_symbols_24);
+#endif
+ SensorPopupContext ctx{};ctx.card=card;ctx.title_label=title;ctx.icon_label=header_icon;ctx.control_row=row;ctx.body_box=box(card);ctx.binary_body=box(ctx.body_box);
  ctx.binary_history_title=text(ctx.binary_body,"History");ctx.binary_timeline=box(ctx.binary_body);lv_obj_set_size(ctx.binary_timeline,LV_PCT(100),kBinaryTimelineHeight);lv_obj_set_y(ctx.binary_timeline,popup_layout::scale(42));lv_obj_set_style_bg_color(ctx.binary_timeline,lv_color_hex(0x4C74D9),0);lv_obj_set_style_bg_opa(ctx.binary_timeline,LV_OPA_COVER,0);
  ctx.binary_activity_title=text(ctx.binary_body,"Activity");ctx.binary_activity_date=text(ctx.binary_body,"Today · 09/06/2026");ctx.binary_activity_status=text(ctx.binary_body,"");ctx.binary_history_status=text(ctx.binary_body,"");ctx.binary_activity_viewport=box(ctx.binary_body);
  for(int i=0;i<5;++i){auto* entry=text(ctx.binary_activity_viewport,i==0?"100 %                       8:01:00 PM":"80 %                         7:59:32 PM");lv_obj_set_y(entry,i*kBinaryActivityRowHeight+popup_layout::scale(8));}
@@ -168,7 +175,7 @@ int main(int argc,char**argv){
   load(c,kind,state,strcmp(kind,"number")==0?number:strcmp(kind,"select")==0?",\\"options_complete\\":true,\\"options\\":[\\"Home\\",\\"Home / Lighting / Desk\\",\\"Home / Weather\\",\\"Home / Energy\\",\\"Home / Camera\\",\\"Home / Living room\\",\\"Home / Upstairs\\",\\"Home / Downstairs\\",\\"Home / Garage\\",\\"Home / Bedroom\\",\\"Home / Garden\\"]":"");
   ctx.editable_kind=kind;layout_editable_history(&ctx);
   for(const char* caption:{"View","Heating schedule\\nEnd time","Heating\\nSchedule\\nSecond floor\\nEnd time"}){
-   lv_label_set_text(title,caption);align_header_row(card,title,header_icon);layout_editable_history(&ctx);lv_obj_update_layout(card);
+   hometiles_title::set(title,caption);align_header_row(card,title,header_icon);layout_editable_history(&ctx);lv_obj_update_layout(card);
    for(bool pressed:{false,true}){
     if(pressed)lv_obj_add_state(close,LV_STATE_PRESSED);else lv_obj_remove_state(close,LV_STATE_PRESSED);
     lv_tick_inc(300);lv_timer_handler();lv_obj_update_layout(card);
@@ -177,7 +184,7 @@ int main(int argc,char**argv){
     for(auto* label:{title,header_icon}){lv_area_t header;lv_obj_get_coords(label,&header);assert(controls.y1-header.y2>=popup_layout::scale(6)&&"The header must retain breathing room above every editable control kind");}
    }
   }
-  lv_obj_remove_state(close,LV_STATE_PRESSED);lv_label_set_text(title,strcmp(kind,"select")==0?"View":strcmp(kind,"number")==0?"L10s Ultra Volume":"Heating schedule\\nEnd time");align_header_row(card,title,header_icon);layout_editable_history(&ctx);
+  lv_obj_remove_state(close,LV_STATE_PRESSED);hometiles_title::set(title,strcmp(kind,"select")==0?"View":strcmp(kind,"number")==0?"L10s Ultra Volume":"Heating schedule\\nEnd time");align_header_row(card,title,header_icon);layout_editable_history(&ctx);
   for(int i=4;i<8;++i)assert(lv_obj_has_flag(ctx.binary_time_labels[i],LV_OBJ_FLAG_HIDDEN)&&"Unused axis labels must stay hidden");update_y_axis_layout(&ctx);lv_obj_update_layout(card);
   assert(!lv_obj_has_flag(ctx.body_box,LV_OBJ_FLAG_SCROLLABLE));
   lv_area_t body,view,control_area;lv_obj_get_coords(ctx.body_box,&body);lv_obj_get_coords(ctx.binary_activity_viewport,&view);lv_obj_get_coords(row,&control_area);
@@ -210,7 +217,7 @@ int main(int argc,char**argv){
     auto* control_widget=strcmp(kind,"time")==0?c->clock_box:strcmp(kind,"select")==0?c->dropdown:c->number_box;
     control_bounds((String(argv[1])+"-"+kind+".bounds").c_str(),control_widget);
     if(strcmp(kind,"select")==0||strcmp(kind,"time")==0){lv_area_t area;lv_obj_get_coords(control_widget,&area);auto pixel=rendered_pixel(pixels,(area.y1+popup_layout::scale(12))*SCREEN_WIDTH+area.x1+popup_layout::scale(24));int r=(pixel>>16)&255,g=(pixel>>8)&255,b=pixel&255;assert(abs(r-g)<=2&&abs(g-b)<=2&&"The rendered RGB565 surface must be neutral");}}
-  if(strcmp(kind,"select")==0){for(int cycle=0;cycle<3;++cycle){lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);auto* list=lv_dropdown_get_list(c->dropdown);assert(lv_obj_get_style_text_font(list,LV_PART_MAIN)==popup_layout::headerTitleFont());assert(lv_obj_get_style_clip_corner(list,LV_PART_MAIN));auto selected=lv_obj_get_style_bg_color(list,LV_PART_SELECTED);assert(selected.red==0x26&&selected.green==0xa6&&selected.blue==0x9a);lv_area_t a;lv_obj_get_coords(list,&a);assert(a.x1>=0&&a.x2<SCREEN_WIDTH);if(argc>1&&cycle==0){lv_obj_invalidate(lv_screen_active());lv_tick_inc(200);lv_timer_handler();lv_refr_now(display);image((String(argv[1])+"-options.bmp").c_str(),pixels);}lv_dropdown_close(c->dropdown);}}
+  if(strcmp(kind,"select")==0){for(int cycle=0;cycle<3;++cycle){lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);auto* list=lv_dropdown_get_list(c->dropdown);assert(lv_obj_get_style_text_font(list,LV_PART_MAIN)==popup_layout::headerTitleFont());assert(lv_obj_get_style_clip_corner(list,LV_PART_MAIN));auto selected=lv_obj_get_style_bg_color(list,LV_PART_SELECTED);assert(selected.red==255&&selected.green==255&&selected.blue==255);lv_area_t a;lv_obj_get_coords(list,&a);assert(a.x1>=0&&a.x2<SCREEN_WIDTH);if(argc>1&&cycle==0){lv_obj_invalidate(lv_screen_active());lv_tick_inc(200);lv_timer_handler();lv_refr_now(display);image((String(argv[1])+"-options.bmp").c_str(),pixels);}lv_dropdown_close(c->dropdown);}}
  }
  if(argc>1){lv_refr_now(display);for(auto* icon:{header_icon,lv_obj_get_child(close,0)}){lv_area_t area;lv_obj_get_coords(icon,&area);int bright=0;for(int y=area.y1;y<=area.y2;++y)for(int x=area.x1;x<=area.x2;++x){auto pixel=rendered_pixel(pixels,y*SCREEN_WIDTH+x);if((pixel&255)>200&&((pixel>>8)&255)>200&&((pixel>>16)&255)>200)++bright;}assert(bright>10);}}
  // Exercise delayed metadata while the existing popup remains open.
@@ -302,7 +309,7 @@ int main(int argc,char**argv){
  load(c,"number","20.5",",\\"min\\":16,\\"max\\":30,\\"step\\":0.5,\\"mode\\":\\"auto\\",\\"unit\\":\\"°C\\"");
  assert(!c->number_roller_enabled&&lv_obj_has_flag(c->slider,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_width(c->up)==lv_obj_get_width(c->number_box)/2);assert(lv_obj_get_style_text_font(lv_obj_get_child(c->up,0),LV_PART_MAIN)==popup_layout::font24());assert(!lv_obj_has_flag(c->up,LV_OBJ_FLAG_HIDDEN)&&!lv_obj_has_flag(c->down,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_style_bg_opa(c->number_box,LV_PART_MAIN)==LV_OPA_COVER);assert(lv_obj_get_style_border_width(c->number_box,LV_PART_MAIN)==0);assert(lv_obj_get_style_radius(c->number_box,LV_PART_MAIN)==climate_layout::kControlRadius);
  ctx.editable_kind="number";layout_editable_history(&ctx);update_y_axis_layout(&ctx);
- lv_label_set_text(title,"Wolf Fhs280 T Min\\nEinstellen");align_header_row(card,title,header_icon);lv_obj_update_layout(card);
+ hometiles_title::set(title,"Wolf Fhs280 T Min\\nEinstellen");align_header_row(card,title,header_icon);lv_obj_update_layout(card);
  lv_area_t temperature_area,history_area;lv_obj_get_coords(c->number_box,&temperature_area);lv_obj_get_coords(ctx.binary_history_title,&history_area);
  const int temperature_gap=history_area.y1-temperature_area.y2-1;
  assert(temperature_gap>=popup_layout::scale(8)&&temperature_gap<=popup_layout::scale(24)&&"The temperature pill must not leave a large gap above History");
@@ -391,7 +398,7 @@ int main(int argc,char**argv){
  const int selected_pixel=(feedback_list_area.y1+lv_obj_get_style_pad_top(feedback_list,LV_PART_MAIN)+lv_font_get_line_height(popup_layout::headerTitleFont())/2)*SCREEN_WIDTH+feedback_list_area.x2-popup_layout::scale(24);
  const uint32_t selected_color=rendered_pixel(pixels,selected_pixel);
  const int selected_r=(selected_color>>16)&255,selected_g=(selected_color>>8)&255,selected_b=selected_color&255;
- assert(abs(selected_r-0x26)<=7&&abs(selected_g-0xa6)<=3&&abs(selected_b-0x9a)<=7&&"The list must use the Settings turquoise selection");
+ assert(selected_r==255&&selected_g==255&&selected_b==255&&"Editable dropdown selection must be white on every tile color");
  JsonDocument unavailable;deserializeJson(unavailable,haBridgeConfig.payload);
  unavailable["state"]="unavailable";unavailable["available"]=false;unavailable["writable"]=false;
  ArduinoJson::serializeJson(unavailable,static_cast<std::string&>(haBridgeConfig.payload));
@@ -411,6 +418,53 @@ int main(int argc,char**argv){
  assert(feedback_frame("recovered")==resting_background&&!lv_obj_has_state(c->dropdown,LV_STATE_DISABLED));
  lv_indev_delete(pointer);
  std::cout<<"Dropdown press feedback: native release, unavailable, combined disabled states and recovery passed\\n";
+
+ // Reuse the same controls across dark, saturated and light tile colors.
+ // No widget recreation, option replacement or command is needed to recolor.
+ auto same=[](lv_color_t a,lv_color_t b){return a.red==b.red&&a.green==b.green&&a.blue==b.blue;};
+ auto luminance=[](lv_color_t c){auto linear=[](int x){double v=x/255.0;return v<=0.04045?v/12.92:pow((v+0.055)/1.055,2.4);};return .2126*linear(c.red)+.7152*linear(c.green)+.0722*linear(c.blue);};
+ auto contrast=[&](lv_color_t a,lv_color_t b){double x=luminance(a)+.05,y=luminance(b)+.05;return std::max(x,y)/std::min(x,y);};
+ for(int r=0;r<=255;r+=17)for(int g=0;g<=255;g+=17)for(int b=0;b<=255;b+=17){
+  const auto p=editable_colors::from(lv_color_make(r,g,b));
+  assert(contrast(p.surface,lv_color_white())>=4.5);
+  assert(contrast(p.pressed,lv_color_white())>=4.5&&contrast(p.raised,lv_color_white())>=4.5);
+  assert(contrast(p.field,lv_color_white())>=4.5);
+ }
+ const auto commands_before_colors=networkManager.commands.size();
+ for(uint32_t rgb:{0x2A2A2Au,0x184A78u,0x8A283Cu,0x237053u,0xEBDCB8u,0xFFFFFFu,0x010101u}){
+  lv_obj_set_style_bg_color(card,lv_color_hex(rgb),0);
+  for(const char* kind:{"number","temperature","select","time","date"}){
+   const bool temperature=strcmp(kind,"temperature")==0;
+   load(c,temperature?"number":kind,temperature?"20":strcmp(kind,"number")==0?"50":strcmp(kind,"select")==0?"Home":strcmp(kind,"time")==0?"17:00:00":"2026-09-07",
+    temperature?",\\"min\\":5,\\"max\\":40,\\"step\\":0.5,\\"unit\\":\\"°C\\"":strcmp(kind,"number")==0?number:strcmp(kind,"select")==0?",\\"options_complete\\":true,\\"options\\":[\\"Home\\",\\"Office\\"]":"");
+   ctx.editable_kind=temperature?"number":kind;layout_editable_history(&ctx);lv_obj_update_layout(card);
+   assert(same(lv_obj_get_style_text_color(title,LV_PART_MAIN),lv_color_white()));
+   assert(same(lv_obj_get_style_text_color(ctx.binary_history_status,LV_PART_MAIN),lv_color_white()));
+   assert(same(lv_obj_get_style_text_color(lv_obj_get_child(close,0),LV_PART_MAIN),lv_color_white()));
+   assert(same(lv_obj_get_style_bg_color(c->clock_box,LV_PART_MAIN),c->colors.raised));
+   if(strcmp(kind,"select")==0){
+    const char* options=lv_dropdown_get_options(c->dropdown);apply_control_colors(c);
+    assert(options==lv_dropdown_get_options(c->dropdown));
+    lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);auto* list=lv_dropdown_get_list(c->dropdown);
+    assert(same(lv_obj_get_style_bg_color(list,LV_PART_MAIN),c->colors.surface));
+    assert(same(lv_obj_get_style_text_color(list,LV_PART_MAIN),lv_color_white()));
+    assert(same(lv_obj_get_style_bg_color(list,LV_PART_SELECTED),lv_color_white()));
+    assert(same(lv_obj_get_style_text_color(list,LV_PART_SELECTED),c->colors.surface));
+    lv_dropdown_close(c->dropdown);
+    lv_obj_add_state(c->dropdown,LV_STATE_DISABLED);
+    assert(same(lv_obj_get_style_bg_color(c->dropdown,LV_PART_MAIN),c->colors.surface));
+    lv_obj_remove_state(c->dropdown,LV_STATE_DISABLED);
+   }
+   if(argc>1&&(SCREEN_WIDTH==480||SCREEN_WIDTH==1280)&&(rgb==0x184A78u||rgb==0xEBDCB8u)){
+    lv_obj_set_style_text_color(footer,lv_color_white(),0);
+    for(uint32_t i=0;i<lv_obj_get_child_count(ctx.binary_activity_viewport);++i)lv_obj_set_style_text_color(lv_obj_get_child(ctx.binary_activity_viewport,i),lv_color_white(),0);
+    lv_tick_inc(300);lv_timer_handler();lv_refr_now(display);image((String(argv[1])+"-color-"+std::to_string(rgb)+"-"+kind+".bmp").c_str(),pixels);
+   }
+  }
+ }
+ assert(networkManager.commands.size()==commands_before_colors);
+ lv_obj_set_style_bg_color(card,lv_color_hex(0x2A2A2A),0);
+ std::cout<<"Editable palette: 4096 colors, reused controls, white selection, loading text and contrast passed\\n";
 
  // Use the actual popup visibility path with partial rendering, as on the
  // device. An opaque dropdown must not redraw covered grid tiles.
@@ -489,7 +543,7 @@ int main(int argc,char**argv){
 const source = path.join(out, 'test.cpp'); fs.writeFileSync(source, cpp);
 for (const [profile,width,height,define] of [['square',480,480,'DEVICE_LAYOUT_480X480'],['wide',1024,600,'DEVICE_LAYOUT_1024X600'],['ws8',1280,800,''],['portrait',720,1280,''],['base',720,720,''],['landscape',1280,720,''],['compact-wide',800,480,'DEVICE_LAYOUT_480X480']]) {
   const binary=path.join(out,profile+(process.platform==='win32'?'.exe':''));
-  let result=spawnSync(host.cxx,[...host.flags,'-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),source,host.archive,'-o',binary],{encoding:'utf8'});
+  let result=spawnSync(host.cxx,[...host.flags,'-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),...(profile==='square'?['-DDEVICE_GUITION_ESP32_4848S040']:[]),source,host.archive,'-o',binary],{encoding:'utf8'});
   assert.equal(result.status,0,result.stdout+result.stderr);
   result=spawnSync(binary,[path.join(out,profile)],{encoding:'utf8',timeout:45000});assert.equal(result.status,0,profile+': '+result.stdout+result.stderr);
   fs.writeFileSync(path.join(out,profile+'.log'),result.stdout+result.stderr);

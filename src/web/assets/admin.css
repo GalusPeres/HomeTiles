@@ -2258,3 +2258,31 @@
         scroll-behavior:auto !important;
       }
     }
+
+    /* Keep the original one-line anchor while centering both explicit lines. */
+    .tile.tile .tile-title {
+      min-width:0;
+      height:1.35em;
+      min-height:1.35em;
+      line-height:1.35;
+      overflow:visible;
+    }
+    .tile-title-lines {
+      display:block;
+      position:relative;
+      top:50%;
+      transform:translateY(-50%);
+    }
+    .tile-title-line {
+      display:block;
+      min-height:1.35em;
+      line-height:1.35;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    textarea.tile-title-input { resize:none; line-height:1.4; }
+    .tile.clock .tile-title { width:calc(100% - 16px); }
+    .tile.clock:has(.tile-icon) .tile-title,
+    .tile.text:has(.tile-icon) .tile-title,
+    .tile.switch.switch-toggle:has(.tile-icon) .tile-title { max-width:70%; }

@@ -23,7 +23,7 @@ Select a tile in the grid preview to open its settings. Each folder has its own 
 
 Every tile has these settings:
 
-- **Title:** optional label.
+- **Title:** optional label; press **Enter** for a second line. Both lines are centered together, and each line ends in `...` if it exceeds the available width. The display, popup header, and live preview follow the tile's size.
 - **Icon (MDI):** a [Material Design Icon](https://pictogrammers.com/library/mdi/) name. **Show icon list** opens the catalog.
 - **Color:** background color; Reset restores the type's default.
 - **Column, Row, Width, Height:** grid position and size.
@@ -51,6 +51,8 @@ Fields depend on the selected type. A numeric Sensor offers:
 | Decimals | Decimal places |
 | Value size | Size of the displayed value |
 | Display mode | Text or a gauge with a minimum and maximum |
+
+Number, Select, and Date/Time also offer **Value size** with the same five choices as Sensor. Their live values appear in the preview, including after switching folders or selecting another tile. Choose the matching entity and whether a tap or long press opens its popup.
 
 </div>
 <figure class="ht-screenshot ht-editor-detail">

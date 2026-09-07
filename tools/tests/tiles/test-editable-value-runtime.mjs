@@ -93,6 +93,8 @@ ${fn(popup,'resize_editable_chart')}
 void update_binary_time_axis(SensorPopupContext*){}
 ${fn(popup,'editable_control_top')}
 ${fn(popup,'layout_editable_history')}
+// Styling is exercised with real LVGL in test-editable-controls-lvgl.mjs.
+namespace editable_colors {struct Palette {};}
 ${control.match(/struct EditableControl \{[\s\S]*?\n};/)[0]}
 struct Network {bool online=true;int count=0;String payload;bool isMqttConnected(){return online;}
  bool mqttEnqueuePublish(const char*,const char* text,bool retained){assert(!retained);++count;payload=text;return true;}} networkManager;
@@ -107,6 +109,7 @@ ${fn(control,'submit')}
 EditableControl* active_control=nullptr;
 void editable_control_close(EditableControl*c){c->active=false;c->command_id="";}
 void editable_control_refresh(EditableControl*){}
+void apply_control_colors(EditableControl*){}
 void visible(Obj*,bool){}
 ${fn(control,'editable_control_open')}
 int main(){

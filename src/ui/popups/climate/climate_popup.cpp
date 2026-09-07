@@ -1205,7 +1205,7 @@ void apply_init(ClimatePopupContext* ctx, const ClimatePopupInit& init) {
   }
 
   if (ctx->title_label) {
-    lv_label_set_text(ctx->title_label, init.title.c_str());
+    hometiles_title::set(ctx->title_label, init.title.c_str());
   }
   parse_options(
       ctx->controls[static_cast<uint8_t>(ClimateControlType::HVAC)],

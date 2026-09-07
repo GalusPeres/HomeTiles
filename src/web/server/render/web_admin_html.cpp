@@ -308,7 +308,7 @@ static void appendTileTabHTML(
         html += "-tile-";
         html += String(i);
         html += "-title\">";
-        appendHtmlEscaped(html, tile.title);
+        appendTileTitleHtml(html, tile.title);
         html += "</div>";
       }
     }
@@ -344,7 +344,10 @@ static void appendTileTabHTML(
       html += "</div>";
     }
     if (tileTypeIsEditableValue(tile.type)) {
-      html += "<div class=\"tile-value tile-editable-value sensor-value-size-24\">";
+      html += "<div class=\"tile-value tile-editable-value sensor-value-size-";
+      html += tile.sensor_value_font == 1 ? "20" : tile.sensor_value_font == 2 ? "24" :
+              tile.sensor_value_font == 3 ? "32" : tile.sensor_value_font == 4 ? "40" : "default";
+      html += "\">";
       appendHtmlEscaped(html, editable_display_value(parse_editable_value(haBridgeConfig.findEditableValue(tile.sensor_entity))));
       html += "</div>";
     }
@@ -446,7 +449,7 @@ static void appendTileTabHTML(
       html += "><i class=\"mdi mdi-";
       appendHtmlEscaped(html, hidden_icon);
       html += " tile-icon\"></i><div class=\"tile-title\">";
-      appendHtmlEscaped(html, hidden_title);
+      appendTileTitleHtml(html, hidden_title);
       html += "</div>";
     } else {
       html += "><i class=\"mdi mdi-tray-arrow-down tile-icon\"></i>";
@@ -663,11 +666,11 @@ static void appendTileTabHTML(
             <label>)html";
   html += tr.admin_title;
   html += R"html(</label>
-            <input type="text" id=")html";
+            <textarea rows="2" class="tile-title-input" id=")html";
   html += tab_id;
   html += R"html(_tile_title" placeholder=")html";
   html += tr.admin_tile_title_placeholder;
-  html += R"html(">
+  html += R"html("></textarea>
 
             <label>)html";
   html += tr.admin_icon_label;

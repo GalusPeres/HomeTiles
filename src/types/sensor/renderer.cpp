@@ -120,7 +120,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       lv_label_set_long_mode(title_label, LV_LABEL_LONG_DOT);
       lv_obj_set_width(title_label, LV_PCT(70));
       lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_RIGHT, 0);
-      lv_label_set_text(title_label, tile.title.c_str());
+      hometiles_title::tile(title_label, tile.title.c_str(), true);
       lv_obj_align(title_label, LV_ALIGN_TOP_RIGHT,
                    tile_layout::scale_480(4),
                    tile_layout::scale_480(4));

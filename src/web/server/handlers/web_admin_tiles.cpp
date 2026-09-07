@@ -1,4 +1,5 @@
 #include "src/web/server/web_admin.h"
+#include "src/core/text/title_text.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/web/server/render/web_admin_html.h"
 #include "src/core/i18n/i18n.h"
@@ -573,7 +574,7 @@ void WebAdminServer::handleSaveTiles() {
   // Update tile data
   if (tile.type != static_cast<TileType>(type)) tile.view_id = 0;
   tile.type = static_cast<TileType>(type);
-  tile.title = server.hasArg("title") ? server.arg("title") : "";
+  tile.title = hometiles_title::normalize(server.hasArg("title") ? server.arg("title").c_str() : "").c_str();
   tile.icon_name = server.hasArg("icon_name") ? server.arg("icon_name") : "";
   // Parse color. bg_color_default keeps legacy/default tiles as true defaults;
   // bg_color=0 is reserved for an explicitly selected black background.

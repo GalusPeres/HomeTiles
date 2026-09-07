@@ -692,7 +692,7 @@ void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init)
     lv_obj_set_style_bg_color(ctx->card, lv_color_hex(ctx->bg_color), 0);
   }
   if (ctx->title_label) {
-    lv_label_set_text(ctx->title_label, ctx->title.length() ? ctx->title.c_str() : ctx->entity_id.c_str());
+    hometiles_title::set(ctx->title_label, ctx->title.length() ? ctx->title.c_str() : ctx->entity_id.c_str());
   }
   if (ctx->icon_label) {
     String icon_name = init.icon_name;

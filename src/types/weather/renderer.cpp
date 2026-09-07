@@ -177,7 +177,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   lv_label_set_long_mode(location_label, LV_LABEL_LONG_DOT);
   lv_obj_set_width(location_label, LV_PCT(70));
   lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_RIGHT, 0);
-  lv_label_set_text(location_label, location.c_str());
+  hometiles_title::tile(location_label, location.c_str(), true);
   lv_obj_align(location_label, LV_ALIGN_TOP_RIGHT,
                tile_layout::scale_480(4),
                tile_layout::scale_480(4));
@@ -424,7 +424,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       data->popup_opened_for_press = true;
       String title = data->title;
       if (data->location_label) {
-        const char* label_text = lv_label_get_text(data->location_label);
+        const char* label_text = hometiles_title::text(data->location_label);
         if (label_text && *label_text) {
           title = label_text;
         }

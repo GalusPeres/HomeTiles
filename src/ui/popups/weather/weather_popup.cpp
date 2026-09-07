@@ -2854,7 +2854,7 @@ static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupIn
     String title = ctx->title;
     title.trim();
     if (!title.length()) title = "--";
-    lv_label_set_text(ctx->location_label, title.c_str());
+    hometiles_title::set(ctx->location_label, title.c_str());
   }
   update_mode_buttons(ctx);
   align_header_row(ctx->card, ctx->location_label, ctx->icon_label);

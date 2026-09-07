@@ -459,6 +459,7 @@
       fd.append('background_opacity', tile.background_opacity);
     }
 
+    if ([21, 22, 23].includes(safeType)) fd.append('sensor_value_font', tile.sensor_value_font ?? 2);
     if (safeType === 1) {
       fd.append('sensor_entity', tile.sensor_entity || '');
       fd.append('sensor_unit', tile.sensor_unit || '');

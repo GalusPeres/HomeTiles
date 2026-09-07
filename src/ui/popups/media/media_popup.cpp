@@ -388,7 +388,7 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
     String title = init.title;
     title.trim();
     if (!title.length()) title = init.entity_id;
-    lv_label_set_text(ctx->title_label, title.c_str());
+    hometiles_title::set(ctx->title_label, title.c_str());
   }
 
   String icon_char = init.icon_char;

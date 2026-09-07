@@ -188,6 +188,7 @@ for (const [index,[kind, camel, entity, state, unit]] of types.entries()) {
   sandbox[kind.toUpperCase()+'_I18N']={unknown:'Unknown',unavailable:'Unavailable'};
   const select=elements['folder1_'+kind+'_entity']=new TestElement();
   const popup=elements['folder1_'+kind+'_popup_open_mode']=new TestElement('1');
+  const font=elements['folder1_'+kind+'_value_font']=new TestElement('2');
   select.options=[{value:'',textContent:'No selection'},{value:entity,textContent:'Entity - '+entity}];
   select.selectedOptions=[select.options[0]];
   elements.folder1_tile_title.value='';
@@ -198,29 +199,40 @@ for (const [index,[kind, camel, entity, state, unit]] of types.entries()) {
   select.value=entity;select.selectedOptions=[select.options[1]];
   const before=run('saveCount');select.dispatch('change');
   assert.equal(run('saveCount'),before+1,'Rebinding must replace listeners');
-  elements.folder1_tile_title.value='Desk <custom>';
+  elements.folder1_tile_title.value='Desk <custom>\nOffice';
   elements.folder1_tile_title.dispatch('input');
   popup.value='0';popup.dispatch('change');
   const fields=run(`(()=>{const form=new FormData();save${camel}Fields('folder1',form);return Object.fromEntries(form)})()`);
   assert.equal(fields[kind+'_entity'],entity);assert.equal(fields.sensor_entity,entity);assert.equal(fields.popup_open_mode,'0');
   const snapshot=run("getTileSnapshotForSave('folder1',3)");
+  assert.equal(snapshot.title,'Desk <custom>\nOffice');
   assert.equal(snapshot[kind+'_entity'],entity);assert.equal(String(snapshot.popup_open_mode),'0');
   run(`load${camel}Fields('folder1',{sensor_entity:'${entity}_missing',popup_open_mode:0});`);
   assert.equal(select.value,entity+'_missing');assert(select.options.some(o=>o.value===entity+'_missing'));
   run(`load${camel}Fields('folder1',{sensor_entity:'${entity}',popup_open_mode:0});`);
+  for (const [option,css] of [['0','default'],['1','20'],['2','24'],['3','32'],['4','40']]) {
+    const saves=run('saveCount');font.value=option;font.dispatch('change');
+    assert.equal(run('saveCount'),saves+1,'Font changes must autosave exactly once');
+    assert.equal(run("getTileSnapshotForSave('folder1',3)").sensor_value_font,option);
+    assert(elements['folder1-tile-3'].innerHTML.includes('sensor-value-size-'+css));
+    run(`load${camel}Fields('folder1',{sensor_entity:'${entity}',sensor_value_font:${option},popup_open_mode:0});`);
+    assert.equal(font.value,option);
+  }
+  font.value='2';font.dispatch('change');
   for (const [language,unknown,unavailable] of [['de','Unbekannt','Nicht verfügbar'],['en','Unknown','Unavailable'],['fr','Inconnu','Indisponible']]) {
     sandbox.APP_LOCALE=language; document.documentElement.lang=language;
     sandbox[kind.toUpperCase()+'_I18N']={unknown,unavailable};
     for (const [current,available,expected] of [[state,true,state+(unit?' '+unit:'')],['unknown',true,unknown],['unavailable',false,unavailable],[null,false,'--']]) {
       sandbox.testMeta={editable_values:{[entity]:JSON.stringify({version:1,kind:kind==='datetime'?'time':kind,state:current,available,unit})},
         values:{[entity]:'legacy-must-not-overwrite'},icons:{[entity]:'mdi:tune'},names:{[entity]:'Entity'}};
-      run(`sensorMetaCache=normalizeSensorMetaPayload(testMeta);updateTilePreview('folder1');`);
+      // The periodic refresh receives an already normalized cache from fetch.
+      run(`sensorMetaCache=normalizeSensorMetaPayload(normalizeSensorMetaPayload(testMeta));updateTilePreview('folder1');`);
       let html=elements['folder1-tile-3'].innerHTML;
       assert(html.includes(expected),kind+' live '+language+': '+html);
       assert(html.includes('tile-editable-value sensor-value-size-24'),'Value font must match the device');
       assert(html.includes('&lt;custom&gt;'),'Untrusted titles must be escaped');
       for (const [w,h] of [[1,1],[2,1],[2,2]]) {
-        run(`renderTileFromData('folder1',3,{type:${type},title:'Desk <custom>',sensor_entity:'${entity}',span_w:${w},span_h:${h}},sensorMetaCache);`);
+        run(`renderTileFromData('folder1',3,{type:${type},title:'Desk <custom>',sensor_entity:'${entity}',sensor_value_font:2,span_w:${w},span_h:${h}},sensorMetaCache);`);
         html=elements['folder1-tile-3'].innerHTML;
         assert(html.includes(expected),kind+' cached '+language+': '+html);
       }
@@ -228,8 +240,9 @@ for (const [index,[kind, camel, entity, state, unit]] of types.entries()) {
   }
   let request;
   sandbox.fetch=async (url,options)=>{request={url,fields:Object.fromEntries(options.body)};return {json:async()=>({success:true})}};
-  await run(`postTile(1,3,{type:${type},title:'Desk',sensor_entity:'${entity}',popup_open_mode:0,col:1,row:1,span_w:1,span_h:1})`);
+  await run(`postTile(1,3,{type:${type},title:${JSON.stringify('Desk\nOffice')},sensor_entity:'${entity}',sensor_value_font:4,popup_open_mode:0,col:1,row:1,span_w:1,span_h:1})`);
   assert.equal(request.url,'/api/tiles');assert.equal(request.fields[kind+'_entity'],entity);assert.equal(request.fields.popup_open_mode,'0');
-  run(`reset${camel}Fields('folder1');`);assert.equal(select.value,'');assert.equal(popup.value,'1');
+  assert.equal(request.fields.sensor_value_font,'4');assert.equal(request.fields.title,'Desk\nOffice');
+  run(`reset${camel}Fields('folder1');`);assert.equal(select.value,'');assert.equal(popup.value,'1');assert.equal(font.value,'2');
 }
 console.log('Editable types: real editor, preview, drafts, rebinding, import, availability and three locales passed.');

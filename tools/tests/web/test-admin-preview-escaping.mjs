@@ -19,7 +19,7 @@ for (const entity of ['&amp;', '&lt;', '&gt;', '&quot;']) {
 // preview and the cached-grid preview.
 for (const marker of [
   "'<i class=\"mdi mdi-' + escapeHtml(iconName) + ' tile-icon\"'",
-  'escapeHtml(displayTitle)',
+  'tileTitleHtml(displayTitle)',
   'escapeHtml(coverPreviewStateText(coverPreviewState))',
   "'<span class=\"tile-unit\">' + escapeHtml(unit) + '</span>'",
   'escapeHtml(textValue)',
@@ -51,10 +51,12 @@ const harness = `<!doctype html><html><body>
   <script>
   (() => {
     ${inlineScriptSafe(extractDeliveredFunction('escapeHtml'))}
+    ${inlineScriptSafe(extractDeliveredFunction('normalizeTileTitle'))}
+    ${inlineScriptSafe(extractDeliveredFunction('tileTitleHtml'))}
     try {
       const hostile = '<img src=x onerror="document.body.dataset.xss=1">';
       const tile = document.getElementById('tile');
-      tile.innerHTML = '<div class="tile-title">' + escapeHtml(hostile) +
+      tile.innerHTML = '<div class="tile-title">' + tileTitleHtml(hostile) +
         '</div><span class="tile-unit">' + escapeHtml('" onmouseover="1') +
         '</span>';
       if (tile.querySelector('img')) {

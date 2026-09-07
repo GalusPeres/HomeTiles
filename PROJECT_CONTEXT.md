@@ -16,11 +16,10 @@ Last reviewed: 2026-09-07
 
 ## Current firmware baseline
 
-- Firmware `v0.6.9` adds Binary/categorical Sensor history, Waveshare 4.3-inch support, the Waveshare 8 thin-PPA-strip guard, B4 brightness calibration and post-v0.6.8 stabilization.
-- Main includes unreleased JC8012 V1 SDIO RX and Waveshare S3 LCD-4 Rev 4.0 (PR #35), with local builds, 15 release profiles and installer support. Version remains `v0.6.9`.
-- Recent stabilization covers S3 update/display guards, MQTT validation,
-  Light coalescing and incremental Weather parsing (`e3de63c`–`33b4e06`).
-- Both test panels serve matching Admin assets; initial use reportedly stable. Full hardware validation and runtime measurements remain pending.
+- Release `v0.6.10`: editable values/history, HA View control, compatible Switch/Scene domains, centered two-line titles, Web preview/fonts, MQTT/icon fixes and capability-based sensor cleanup.
+- v0.6.10 includes the tested JC8012 V1 SDIO RX fix and Waveshare S3 LCD-4 Rev 4.0 (PR #35). Release workflow builds 15 profiles / 30 images and deploys the installer.
+- Stabilization: S3 display/update guards, MQTT validation, Light coalescing and incremental Weather (`e3de63c`–`33b4e06`).
+- Maintainer approved the current 8-inch/S3 test builds for release on 2026-09-07. Other device/runtime limits remain below.
 - The experimental Guition S3 XIP/`-O2` performance path was reverted in
   `5279456`. Do not reintroduce it as an assumed optimization. It increased
   risk and did not solve the measured interaction problem.
@@ -32,9 +31,7 @@ Last reviewed: 2026-09-07
 - v0.6.9 Binary/Text-State Sensor UI passed hardware tests on 4B, 8-inch and S3.
 - Other exact revisions depend on community testers. A successful compile does
   not promote an untested revision to supported status.
-- Similar P4 products share application code and sometimes base-board logic,
-  but panel controller, initialization table, timing, touch controller, board
-  revision, and firmware image remain exact-profile concerns.
+- P4 application code is shared; panel/touch controllers, initialization, timing, board revision and firmware images remain exact-profile concerns.
 - LCD-4 Rev 4.0 has contributor-tested display/touch/Wi-Fi/MQTT/Web OTA;
   older revisions and SD access are unsupported. See `docs/index.md` for validation.
 
@@ -95,7 +92,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
   Web Admin OTA succeeded, and the previous `0x109`/`0x107` failure did not
   recur. The regular-source integration retains the proven 1-bit/40-MHz V1
   configuration and splits large P4 RX reads into individual 512-byte CMD53
-  reads. It remains limited to the exact V1 profile; v0.6.9 does not contain it.
+  reads. Reporter confirmed integrated v0.6.9b1 Camera/Web OTA; v0.6.10 ships it.
 - Lowering camera FPS, resolution, or quality may be used only as a clearly
   identified diagnostic A/B test. It is not an acceptable final fix and must
   not silently reduce normal camera performance.
@@ -111,11 +108,11 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
   `tools/esp-hosted-3.3.7-rx-fix/README.md`; do not duplicate them here.
 - The `repo-a8204` variant is the release-safe baseline. The short-tail receive
   variant was an experimental field path and is not proof of a universal fix.
-- Historical P4 OTA experiments showed that generic transfer throttling,
+- P4 OTA experiments showed that generic transfer throttling,
   PSRAM-only staging, direct TLS-to-flash streaming, in-place ESP-Hosted
   restart, and extra permanent SDIO buffers did not cure the underlying
   failure. Do not repeat them without new evidence and an isolated test.
-- Existing safeguards against a permanent network wedge are recovery, not
+- Network wedge safeguards are recovery, not
   proof that the transport defect is solved.
 
 ## Binary and textual Sensor history in v0.6.9
@@ -124,18 +121,19 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Textual states use timeline/Activity; numeric sensors retain graphs. Missing, unknown and unavailable remain distinct.
 - Bridge v0.6.40 (`581150b`) released bounded Recorder paging, categorical history and legacy-firmware compatibility.
 
-## Editable value tiles: unreleased firmware
+## Editable value tiles in v0.6.10
 
-- IDs 21 Number, 22 Select, 23 Date/Time reuse Sensor rendering/persistence/popups; `PackedTileV7` is unchanged.
+- IDs 21 Number, 22 Select, 23 Date/Time reuse Sensor rendering/persistence/popups; value font uses Sensor's five choices. Preview refresh preserves normalized `editableValues`; `PackedTileV7` is unchanged.
 - Number/input_number uses the centered Media slider/value, Climate +/- pill or bounded roller, with graph/Activity. Select/input_select uses Settings dropdowns, timeline and Activity.
-- Time/date/datetime/input_datetime: large single-row hh/mm/ss rollers in a neutral pill, no arrows, native 23/00 and 59/00 wrap; date spinboxes without keyboard. HA timezone/DST validation applies.
-- Additive `/control` payloads preserve legacy states/configurations; fixed services, sessions, revisions, deadlines and reconnect generation reject stale commands.
-- Bridge v0.6.44 (`148dec4`) is on HACS; fixes stale icon cache, preserves overrides. 119 Bridge tests pass. Firmware `7c37bb2` is committed locally, not pushed.
+- Time/date/datetime/input_datetime: large single-row hh/mm/ss rollers in a pill matching popup color, no arrows, native 23/00 and 59/00 wrap; date spinboxes without keyboard. HA timezone/DST validation applies.
+- Additive `/control` preserves legacy clients; service allow-lists, sessions, revisions and deadlines reject stale commands.
+- Bridge v0.6.44 (`148dec4`) is on HACS; fixes stale icon cache, preserves overrides. 119 Bridge tests pass. The v0.6.10 release includes checkpoint `84511da` and subsequent title/color fixes.
 - Control bands clear wrapped titles and the full close touch area. Number/Select share a height; Time is taller. Select keeps compact history and earlier Activity. Status shares the heading row. Range changes keep old data until reply; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
-- UI: neutral dropdown, subtle press, gray border; graphs survive reuse. Activity fills to the footer; its row pool scales. All 15 layouts have native tests. Header clearance: 82 tests pass, incremental S3 build verified; hardware pending. Proof: `build/editable-header-clearance/VERIFICATION.md`.
+- Editable popup surfaces derive from tile color; white text/fonts stay unchanged. Dropdown selection is white with surface-colored text; Guition S3 arrow uses 20px. Tests cover 4096 colors and seven layouts. Builds: `build/editable-colors-view/`.
 - Wi-Fi audit: S3 idle (>3 s) requests MIN_MODEM/11 dBm; sleep/wake NONE/19.5. P4 blocks idle saving; boot/reconnect and failed-call caching have gaps on both. Unfixed; probes: `build/wifi-power-audit/VERIFICATION.md`.
-- Icon parser stopped at View state IDs `[f:1]`/`[t:13]`, dropping Select/later Time names/icons; reproduced and fixed, live cache matches. Device check pending. Docs unchanged; notifications/folder colors deferred.
+- Titles: two centered lines with ellipsis, 255 UTF-8 bytes in `/_tile_titles`; Settings uses `set_title`, record v4 unchanged. View labels flatten CR/LF to fix Bridge `writable:false` from multiline S3 titles. Current builds approved by maintainer.
+- S3 froze adding Number to active screensaver: Web answered, save persisted, user rebooted; crash log has an older ELF. Cause unproven; retained as a release validation limitation.
 ## Current maintenance refactoring
 
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
@@ -145,15 +143,15 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Current view control, telemetry and compatible controls
 
-- Main `4c9ea4e` adds unreleased Home/folder/popup navigation through existing UI, PIN and camera teardown paths; the authorized push is complete.
+- v0.6.10 includes Home/folder/popup navigation from `4c9ea4e`, using existing UI, PIN and camera teardown paths.
 - Visible folders are reused for their popup/descendants; new/locked paths still require access checks (S3 Home detour fix).
 - Stable tile IDs use reserved PackedTileV7 bytes and durable counters; MQTT sessions/sequences/deadlines reject replay.
-- Bridge v0.6.43 (`6a02859`) retains View/telemetry migration and compatible controls. Firmware documentation changes are local drafts until firmware release.
+- Bridge v0.6.44 (`148dec4`) retains View/telemetry migration and compatible controls. The firmware documentation now covers these features.
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
 - Commands validate selected targets, availability and on/off features; retained commands are ignored.
 - Firmware battery is a stub on all profiles. Unsupported battery/probes are no longer auto-registered; explicit local I/O remains.
 - Bridge migration checks registry ownership/capabilities, cleans shared selections and preserves user entities.
-- 76 firmware host tests and 107 Bridge tests pass; both sequential incremental builds pass. BINs/hashes: `build/controls-verification/VERIFICATION.md`.
-- View control is user-reported working on Waveshare 8-inch/S3; the S3 detour fix and new controls still need hardware/HA checks.
+- Current firmware verification: 85 host tests; sequential incremental S3/8-inch builds pass. BINs/hashes: `build/editable-colors-view/VERIFICATION.md`.
+- Maintainer reports View and editable controls working on Waveshare 8-inch/S3; broader HA/device validation remains pending.
 - HA migration/re-pairing, old firmware compatibility, PIN, stream cleanup and sleep/reconnect remain pending.
-- Issue #37 candidate reproduced: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB. Local fix grows reception to 65,535 bytes; queue bounds, oversize draining/ACKs and diagnostics remain bounded. Reporter confirmation pending. Maintainer's log: no unplanned MQTT loss, ~7.5 h on earlier test BIN, ~25 min on latest, two OTA restarts.
+- Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; local reception grows to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending. Maintainer log: no unplanned MQTT loss (~7.5 h earlier BIN, ~25 min latest; two OTA restarts).

@@ -150,7 +150,7 @@
     if (snapshot.title) {
       const title = document.createElement('div');
       title.className = 'tile-title';
-      title.textContent = snapshot.title;
+      title.innerHTML = tileTitleHtml(snapshot.title);
       tile.appendChild(title);
     }
     if (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX &&

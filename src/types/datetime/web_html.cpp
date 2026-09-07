@@ -31,6 +31,14 @@ void append_datetime_fields_html(
   }
   html += "</select>";
 
+  html += "<label>";
+  html += tr.sensor_value_size;
+  html += "</label><select id=\"";
+  html += tab_id;
+  html += "_datetime_value_font\"><option value=\"1\">20</option>"
+          "<option value=\"2\" selected>24</option><option value=\"0\">28</option>"
+          "<option value=\"3\">32</option><option value=\"4\">40</option></select>";
+
   if (tab_id != "screensaver") {
     html += "<label>";
     html += tr.popup_open;

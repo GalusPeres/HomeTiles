@@ -43,7 +43,7 @@ if (/Serial\.|printf\(|ESP_LOG/.test(pinSource)) {
 for (const marker of [
   'struct SettingsTileSnapshot {',
   'bool valid;',
-  'char title[32];',
+  'char title[256];',
   'char icon_name[32];',
   'uint32_t bg_color;',
   'bool settings_pin_enabled;',
@@ -79,7 +79,7 @@ for (const marker of [
   'snapshot_icon_name[32]',
   'fail_open_settings_access(config)',
   'prefs.putBytes(SETTINGS_ACCESS_KEY, &settings_access',
-  'settings_access_written || !transaction_finished',
+  'settings_access_written || !snapshot_title_written || !transaction_finished',
   'pin_access::isRecoveryPin(pin)',
 ]) requireMarker(configSource + settingsAccessRecord, marker, 'ConfigManager PIN contract');
 requireMarker(configSource, '#include "src/core/config/settings_access_record.h"',

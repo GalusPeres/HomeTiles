@@ -1,5 +1,7 @@
 
   function loadDateTimeFields(tab, data) {
+    const font = document.getElementById(tab + '_datetime_value_font');
+    if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_datetime_entity');
     const configured = data.sensor_entity || data.datetime_entity || '';
     if (entity) {
@@ -25,6 +27,7 @@
   }
 
   function saveDateTimeFields(tab, formData) {
+    formData.append('sensor_value_font', document.getElementById(tab + '_datetime_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_datetime_entity');
     const entity = entityEl
       ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
@@ -36,6 +39,8 @@
   }
 
   function resetDateTimeFields(tab) {
+    const font = document.getElementById(tab + '_datetime_value_font');
+    if (font) font.value = '2';
     const entity = document.getElementById(tab + '_datetime_entity');
     if (entity) {
       entity.value = '';

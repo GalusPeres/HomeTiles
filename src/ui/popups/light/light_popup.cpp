@@ -1651,7 +1651,7 @@ static void apply_init_to_context(LightPopupContext* ctx, const LightPopupInit& 
   if (ctx->val > 0) ctx->last_brightness = ctx->val;
   if (!ctx->is_on && ctx->supports_brightness) ctx->val = 0;
 
-  if (ctx->title_label) lv_label_set_text(ctx->title_label, init.title.c_str());
+  if (ctx->title_label) hometiles_title::set(ctx->title_label, init.title.c_str());
   if (ctx->icon_label) {
     String icon_char;
     if (init.icon_name.length() > 0) icon_char = getMdiChar(init.icon_name);
@@ -2073,7 +2073,7 @@ void show_light_popup(const LightPopupInit& init) {
   set_label_style(title, lv_color_white());
   lv_obj_set_style_text_font(title, popup_layout::headerTitleFont(), 0);
   lv_obj_set_width(title, LV_PCT(62));
-  lv_label_set_text(title, init.title.c_str());
+  hometiles_title::set(title, init.title.c_str());
 
   lv_obj_t* icon = lv_label_create(card);
   ctx->icon_label = icon;

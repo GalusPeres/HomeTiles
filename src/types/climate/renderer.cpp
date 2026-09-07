@@ -1381,7 +1381,7 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
     lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
     lv_obj_set_width(title, LV_PCT(70));
     lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_label_set_text(title, tile.title.c_str());
+    hometiles_title::tile(title, tile.title.c_str(), true);
     lv_obj_align(
         title, LV_ALIGN_TOP_RIGHT,
         4, 4);

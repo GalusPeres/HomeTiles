@@ -42,7 +42,7 @@ enum class SettingsRevealEdge : uint8_t {
 
 struct SettingsTileSnapshot {
   bool valid;
-  char title[32];
+  char title[256];
   char icon_name[32];
   uint32_t bg_color;
   uint8_t col;

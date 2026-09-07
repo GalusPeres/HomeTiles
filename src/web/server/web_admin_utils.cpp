@@ -1,8 +1,24 @@
 #include "src/web/server/web_admin_utils.h"
+#include "src/core/text/title_text.h"
 #include <WiFi.h>
 #include <algorithm>
 #include <vector>
 #include <ctype.h>
+
+void appendTileTitleHtml(String& out, const String& value) {
+  const std::string title = hometiles_title::normalize(value.c_str());
+  out += "<span class=\"tile-title-lines\">";
+  size_t start = 0;
+  do {
+    const size_t end = title.find('\n', start);
+    out += "<span class=\"tile-title-line\">";
+    appendHtmlEscaped(out, String(title.substr(start, end - start).c_str()));
+    out += "</span>";
+    if (end == std::string::npos) break;
+    start = end + 1;
+  } while (start <= title.size());
+  out += "</span>";
+}
 
 void copyToBuffer(char* dest, size_t max_len, const String& value) {
   if (!dest || !max_len) return;

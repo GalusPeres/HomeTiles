@@ -79,7 +79,18 @@ String folderTarget(uint16_t folder) {
                                              : "folder:" + String(folder);
 }
 
-String boundedLabel(const String& value, size_t bytes, bool suffix = false) {
+String boundedLabel(const String& title, size_t bytes, bool suffix = false) {
+  // Keep visual title wrapping out of HA Select options, where line breaks
+  // would invalidate the whole editable list. Preserve the stored title.
+  String value;
+  for (size_t i = 0; i < title.length(); ++i) {
+    const char c = title[i];
+    if (c == '\r' || c == '\n') {
+      if (value.length() && value[value.length() - 1] != ' ') value += ' ';
+    } else {
+      value += c;
+    }
+  }
   if (value.length() <= bytes) return value;
   size_t start = suffix ? value.length() - bytes : 0;
   size_t end = suffix ? value.length() : bytes;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "src/ui/shared/title_label.h"
+
 #include "src/core/display/display_manager.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"

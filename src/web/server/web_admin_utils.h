@@ -18,6 +18,7 @@ void copyToBuffer(char* dest, size_t max_len, const String& value);
 
 // Append HTML-escaped version of value to out
 void appendHtmlEscaped(String& out, const String& value);
+void appendTileTitleHtml(String& out, const String& value);
 
 // Convert identifier to human-readable format (e.g., "sensor.temp" -> "Sensor Temp")
 String humanizeIdentifier(const String& raw, bool strip_domain);

@@ -87,7 +87,7 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
     lv_obj_t* l = lv_label_create(btn);
     if (l) {
       set_label_style(l, lv_color_white(), tile_layout::header_title_font());
-      lv_label_set_text(l, tile.title.c_str());
+      hometiles_title::tile(l, tile.title.c_str(), false);
 
       // Position below the icon, or center when there is no icon.
       if (icon_lbl) {

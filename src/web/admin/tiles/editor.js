@@ -199,7 +199,11 @@
     const clockDateFormatSelect = document.getElementById(prefix + '_clock_date_format');
     const settingsPanel = document.getElementById(prefix + 'Settings');
 
-    bindLive(titleInput, 'input', 'tileTitle', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(titleInput, 'input', 'tileTitle', () => {
+      const normalized = normalizeTileTitle(titleInput.value);
+      if (normalized !== titleInput.value) titleInput.value = normalized;
+      updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+    });
     bindLive(iconInput, 'input', 'tileIcon', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(colorInput, 'input', 'tileColor', () => { markTileColorInputExplicit(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(opacityInput, 'input', 'tileOpacity', () => { updateTilePreview(tab); updateDraft(tab); });
@@ -238,6 +242,9 @@
         if (select.value) select.dataset.configuredValue = select.value;
         else delete select.dataset.configuredValue;
         maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+      bindLive(document.getElementById(prefix + '_' + kind + '_value_font'), 'change', kind + 'ValueFont', () => {
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
       bindLive(document.getElementById(prefix + '_' + kind + '_popup_open_mode'), 'change', kind + 'PopupMode', () => {

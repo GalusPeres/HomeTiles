@@ -18,6 +18,16 @@ Folders have their own grid. The back tile returns to the previous page.
 
 For tiles with detail controls, choose a tap or long press as the popup trigger in the Web Admin.
 
+Home Assistant can also open a folder or popup using the display's [View Select entity](bridge.md#control-the-displayed-view).
+
+### Number, Select, and Date/Time
+
+Editable controls sit above their history. Number uses a slider, a Climate-style temperature stepper, or a roller; Select uses the Settings dropdown; Date/Time uses swipeable time values and date step controls. See the [editable tile reference](tiles.md#number) for supported entities and input modes.
+
+Number shows a graph and Activity; Select uses a compact timeline and gives the remaining space to Activity. Date/Time shows Activity below its taller controls. **24H / 7D** changes the requested period while keeping the previous data visible until the reply arrives.
+
+Slider edits are sent on release. Step and time edits are grouped after a short pause. A slow HA device can take time to confirm the new value; the display keeps your edit while it waits. Control backgrounds follow the tile color.
+
 ### Light Control
 
 Switch tiles assigned to a `light` entity open brightness, color, and color-temperature controls. The bottom icons switch views; the power button toggles the light. Only supported controls appear.

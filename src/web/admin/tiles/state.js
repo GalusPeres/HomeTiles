@@ -48,7 +48,7 @@
         payload.energy_values || {},
         payload.climate_values || {}
       ),
-      editableValues: payload.editable_values || {},
+      editableValues: payload.editable_values || payload.editableValues || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},
@@ -147,4 +147,22 @@
       return metaUnits[entityId];
     }
     return '';
+  }
+
+  function normalizeTileTitle(value) {
+    const lines = String(value ?? '').replace(/\r\n?/g, '\n').replace(/\\n/g, '\n').split('\n');
+    const text = lines.length > 2 ? lines[0] + '\n' + lines.slice(1).join(' ') : lines.join('\n');
+    let bytes = 0, result = '';
+    for (const character of text) {
+      const code = character.codePointAt(0);
+      bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+      if (bytes > 255) break;
+      result += character;
+    }
+    return result;
+  }
+
+  function tileTitleHtml(value) {
+    return '<span class="tile-title-lines">' + normalizeTileTitle(value).split('\n')
+      .map(line => '<span class="tile-title-line">' + escapeHtml(line) + '</span>').join('') + '</span>';
   }

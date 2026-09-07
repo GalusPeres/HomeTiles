@@ -1,3 +1,4 @@
+#include "src/core/text/title_text.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/devices/device.h"
 #include "src/core/config/config_manager.h"
@@ -355,6 +356,7 @@ static bool shouldNormalizeGaugeRange(TileType type) {
 static bool looksLikeImagePath(const String& value);
 static const char* kImagePathDir = "/_tile_links";
 static const char* kEntityPathDir = "/_tile_entities";
+static const char* kTitlePathDir = "/_tile_titles";
 static const char* kTileGridDir = "/_tile_grids";
 static const char* kFolderIndexFile = "/_tile_grids/folders.bin";
 static constexpr uint32_t kFolderIndexMagic = 0x54464C44;  // 'TFLD'
@@ -490,6 +492,7 @@ static String entityPathFile(uint16_t folder_id, size_t index) {
 static bool g_sidecar_index_built = false;
 static std::vector<uint32_t> g_image_sidecar_keys;
 static std::vector<uint32_t> g_entity_sidecar_keys;
+static std::vector<uint32_t> g_title_sidecar_keys;
 
 static uint32_t sidecarKey(uint16_t folder_id, size_t index) {
   return (static_cast<uint32_t>(folder_id) << 8) | static_cast<uint8_t>(index);
@@ -527,6 +530,7 @@ static void ensureSidecarIndexBuilt() {
   if (!storageReady()) return;
   scanSidecarDir(kImagePathDir, g_image_sidecar_keys);
   scanSidecarDir(kEntityPathDir, g_entity_sidecar_keys);
+  scanSidecarDir(kTitlePathDir, g_title_sidecar_keys);
 }
 
 static String entityPathFileLegacy(const char* prefix, size_t index) {
@@ -814,6 +818,75 @@ static bool writeLongEntityIdSd(uint16_t folder_id, size_t index, const String& 
   return true;
 }
 
+static String titlePathFile(uint16_t folder_id, size_t index) {
+  char path[64];
+  snprintf(path, sizeof(path), "%s/f%u_%02u.txt", kTitlePathDir,
+           static_cast<unsigned>(folder_id), static_cast<unsigned>(index));
+  return String(path);
+}
+
+static bool readLongTitleSd(uint16_t folder_id, size_t index, String& out) {
+  if (!storageReady()) return false;
+  ensureSidecarIndexBuilt();
+  if (!sidecarKeyPresent(g_title_sidecar_keys, sidecarKey(folder_id, index))) return false;
+  const String path = titlePathFile(folder_id, index);
+  for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)}) {
+    File file = storageFS().open(candidate, FILE_READ);
+    if (!file) continue;
+    const size_t size = file.size();
+    if (size < TITLE_MAX || size > hometiles_title::kMaxBytes) { file.close(); continue; }
+    String value = file.readString();
+    file.close();
+    if (value.length() != size) continue;
+    out = value;
+    return true;
+  }
+  return false;
+}
+
+static bool writeLongTitleSd(uint16_t folder_id, size_t index, const String& title) {
+  if (!storageReady()) return false;
+  if (title.length() > hometiles_title::kMaxBytes) return false;
+  ensureSidecarIndexBuilt();
+  const uint32_t key = sidecarKey(folder_id, index);
+  const String path = titlePathFile(folder_id, index);
+  const bool present = sidecarKeyPresent(g_title_sidecar_keys, key);
+  if (title.length() < TITLE_MAX) {
+    if (!present) return true;
+    for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)})
+      if (storageFS().exists(candidate) && !storageFS().remove(candidate)) return false;
+    sidecarKeyRemove(g_title_sidecar_keys, key);
+    return true;
+  }
+  String current;
+  if (readLongTitleSd(folder_id, index, current) && current == title) return true;
+  if (!storageFS().exists(kTitlePathDir) && !storageFS().mkdir(kTitlePathDir)) return false;
+  const String temporary = tmpPathFor(path);
+  if (storageFS().exists(temporary)) storageFS().remove(temporary);
+  File file = storageFS().open(temporary, FILE_WRITE);
+  if (!file) return false;
+  const size_t written = file.print(title);
+  file.flush(); file.close();
+  if (written != title.length() || !replaceFileWithPreparedTmp(temporary, path)) {
+    storageFS().remove(temporary);
+    return false;
+  }
+  sidecarKeyAdd(g_title_sidecar_keys, key);
+  return true;
+}
+
+static void applyLongTitlesFromSd(uint16_t folder_id, TileGridConfig& grid) {
+  for (size_t index = 0; index < TILES_PER_GRID; ++index) {
+    Tile& tile = grid.tiles[index];
+    if (tile.type == TILE_EMPTY) continue;
+    String title;
+    // Ignore an orphan from a failed save if it does not match the packed prefix.
+    if (tile.title.length() == TITLE_MAX - 1 &&
+        readLongTitleSd(folder_id, index, title) && title.startsWith(tile.title))
+      tile.title = title;
+  }
+}
+
 #if defined(DEVICE_ESP32_S3_RGB_480)
 static bool sidecarTextMatches(bool has_sidecar, const String& file_path,
                                const String& expected,
@@ -842,6 +915,11 @@ static bool gridSidecarsMatchStored(uint16_t folder_id,
         return false;
       }
     }
+
+    String stored_title;
+    const bool title_required = tile.type != TILE_EMPTY && tile.title.length() >= TITLE_MAX;
+    if (title_required ? (!readLongTitleSd(folder_id, index, stored_title) || stored_title != tile.title)
+                       : sidecarKeyPresent(g_title_sidecar_keys, key)) return false;
 
     const bool entity_required =
         entityTileStoresSensorEntity(tile.type) &&
@@ -3163,6 +3241,7 @@ bool TileConfig::deleteFolder(uint16_t folder_id) {
       String entity_path = entityPathFile(id, i);
       if (storageFS().exists(entity_path)) storageFS().remove(entity_path);
       sidecarKeyRemove(g_entity_sidecar_keys, sidecarKey(id, i));
+      writeLongTitleSd(id, i, "");
     }
   }
 
@@ -3265,6 +3344,7 @@ bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
 #endif
   applyImagePathsFromSd(folder_id, grid);
   applyLongEntityIdsFromSd(folder_id, grid);
+  applyLongTitlesFromSd(folder_id, grid);
 
   // Retired tile types become empty without renumbering the persisted enum.
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
@@ -3291,6 +3371,7 @@ bool TileConfig::saveGrid(uint16_t folder_id, const TileGridConfig& grid,
 
   TileGridConfig working = grid;
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    working.tiles[i].title = hometiles_title::normalize(working.tiles[i].title.c_str()).c_str();
     if (isRetiredTileType(working.tiles[i].type)) {
       working.tiles[i] = Tile{};
     }
@@ -3342,6 +3423,12 @@ bool TileConfig::saveGrid(uint16_t folder_id, const TileGridConfig& grid,
 
   ScopedStorageWriteDisplayGuard storage_write_guard;
   for (size_t grid_idx = 0; grid_idx < TILES_PER_GRID; ++grid_idx) {
+    const Tile& tile = working.tiles[grid_idx];
+    if (!writeLongTitleSd(folder_id, grid_idx, tile.type == TILE_EMPTY ? String() : tile.title)) {
+      Serial.println("[TileConfig] Error saving full tile title");
+      invalidateFolderEntityCache();
+      return false;
+    }
     if (working.tiles[grid_idx].type == TILE_IMAGE ||
         working.tiles[grid_idx].type == TILE_SCENE) {
       if (!storageReady()) {

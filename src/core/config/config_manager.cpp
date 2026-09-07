@@ -1,5 +1,6 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/config/settings_access_record.h"
+#include "src/core/text/title_text.h"
 #include "src/core/config/batched_nvs_write.h"
 #include "src/core/i18n/i18n.h"
 #include "src/types/clock/clock_format.h"
@@ -469,6 +470,15 @@ bool ConfigManager::load() {
     }
   }
 
+  // Keep the access record binary compatible; long titles use an optional key.
+  auto& stored_snapshot = config.settings_tile_snapshot;
+  const String stored_title = prefs.getString("set_title", "");
+  if (stored_snapshot.valid && strlen(stored_snapshot.title) == 31 &&
+      stored_title.length() >= 32 && stored_title.length() <= hometiles_title::kMaxBytes &&
+      stored_title.startsWith(stored_snapshot.title)) {
+    stored_title.toCharArray(stored_snapshot.title, sizeof(stored_snapshot.title));
+  }
+
   apply_device_capability_limits(config);
   boot_static_enabled = config.wifi_static_enabled;
 
@@ -563,6 +573,8 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   }
   SettingsTileSnapshot& snapshot = normalized.settings_tile_snapshot;
   snapshot.title[sizeof(snapshot.title) - 1] = '\0';
+  const std::string normalized_title = hometiles_title::normalize(snapshot.title);
+  strncpy(snapshot.title, normalized_title.c_str(), sizeof(snapshot.title));
   snapshot.icon_name[sizeof(snapshot.icon_name) - 1] = '\0';
   if (!snapshot.valid || snapshot.col >= Device::kGridCols ||
       snapshot.row >= Device::kGridRows || snapshot.span_w < 1 ||
@@ -649,6 +661,12 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
                      sizeof(settings_access)) == sizeof(settings_access);
   pin_access::secureClear(&settings_access, sizeof(settings_access));
 
+  const char* snapshot_title = normalized.settings_tile_snapshot.valid &&
+      strlen(normalized.settings_tile_snapshot.title) >= 32
+      ? normalized.settings_tile_snapshot.title : "";
+  const bool snapshot_title_written =
+      prefs.putString("set_title", snapshot_title) == strlen(snapshot_title);
+
   uint16_t sleep_minutes = (normalized.auto_sleep_seconds + 59) / 60;
   if (sleep_minutes == 0) {
     sleep_minutes = 1;
@@ -664,7 +682,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   prefs.putBool("configured", true);
 
   const bool transaction_finished = BatchedNvsWrite::finish(prefs);
-  if (!settings_access_written || !transaction_finished) {
+  if (!settings_access_written || !snapshot_title_written || !transaction_finished) {
     Serial.println("[Config] NVS transaction failed");
     return false;
   }

@@ -438,7 +438,7 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
     lv_obj_set_style_bg_color(ctx->card, lv_color_hex(color), 0);
   }
   if (ctx->title_label) {
-    lv_label_set_text(ctx->title_label, init.title.c_str());
+    hometiles_title::set(ctx->title_label, init.title.c_str());
   }
   if (ctx->icon_label) {
     String icon_name = init.icon_name;
@@ -2646,7 +2646,7 @@ static void build_popup_ui(SensorPopupContext* ctx, const SensorPopupInit& init)
   lv_obj_t* title = lv_label_create(card);
   ctx->title_label = title;
   set_label_style(title, lv_color_white(), popup_layout::headerTitleFont());
-  lv_label_set_text(title, init.title.c_str());
+  hometiles_title::set(title, init.title.c_str());
   lv_obj_set_width(title, LV_PCT(38));
   lv_obj_align(title, LV_ALIGN_TOP_LEFT, 78, 10);
 

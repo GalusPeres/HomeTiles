@@ -462,7 +462,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     if (title_lbl) {
       set_label_style(title_lbl, lv_color_white(),
                       tile_layout::header_title_font());
-      lv_label_set_text(title_lbl, tile.title.c_str());
+      lv_obj_set_width(title_lbl, LV_PCT(has_icon ? 70 : 100));
+      hometiles_title::tile(title_lbl, tile.title.c_str(), true);
       lv_obj_align(title_lbl, LV_ALIGN_TOP_LEFT, 0,
                    tile_layout::scale_480(4));
     }

@@ -183,7 +183,8 @@ bool apply_settings_access_record(const SettingsAccessRecord& record,
     SettingsTileSnapshot& snapshot = config.settings_tile_snapshot;
     snapshot.valid = true;
     snapshot.bg_color = record.snapshot_bg_color;
-    memcpy(snapshot.title, record.snapshot_title, sizeof(snapshot.title));
+    memcpy(snapshot.title, record.snapshot_title, sizeof(record.snapshot_title));
+    snapshot.title[sizeof(record.snapshot_title) - 1] = '\0';
     memcpy(snapshot.icon_name, record.snapshot_icon_name,
            sizeof(snapshot.icon_name));
     snapshot.title[sizeof(snapshot.title) - 1] = '\0';
@@ -230,7 +231,8 @@ bool apply_settings_access_record_v3(const SettingsAccessRecordV3& record,
     SettingsTileSnapshot& snapshot = config.settings_tile_snapshot;
     snapshot.valid = true;
     snapshot.bg_color = record.snapshot_bg_color;
-    memcpy(snapshot.title, record.snapshot_title, sizeof(snapshot.title));
+    memcpy(snapshot.title, record.snapshot_title, sizeof(record.snapshot_title));
+    snapshot.title[sizeof(record.snapshot_title) - 1] = '\0';
     memcpy(snapshot.icon_name, record.snapshot_icon_name,
            sizeof(snapshot.icon_name));
     snapshot.title[sizeof(snapshot.title) - 1] = '\0';

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "src/ui/shared/title_label.h"
+
 #include <lvgl.h>
 
 #include "src/devices/device_select.h"

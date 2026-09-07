@@ -331,7 +331,7 @@ void show_camera_popup(const CameraPopupInit& init) {
   String title = init.title;
   title.trim();
   if (!title.length()) title = init.entity_id;
-  lv_label_set_text(g_camera_popup->title_label, title.c_str());
+  hometiles_title::set(g_camera_popup->title_label, title.c_str());
 
   String icon_name = normalizeMdiIconName(init.icon_name);
   if (!icon_name.length()) icon_name = "video";

@@ -191,7 +191,8 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
     if (title_lbl) {
       set_label_style(title_lbl, lv_color_white(),
                       tile_layout::header_title_font());
-      lv_label_set_text(title_lbl, tile.title.c_str());
+      if (use_switch_widget && has_icon) lv_obj_set_width(title_lbl, LV_PCT(70));
+      hometiles_title::tile(title_lbl, tile.title.c_str(), use_switch_widget);
 
       if (use_switch_widget) {
         lv_obj_align(title_lbl, LV_ALIGN_TOP_LEFT, 0,

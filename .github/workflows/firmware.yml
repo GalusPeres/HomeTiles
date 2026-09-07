@@ -1,6 +1,7 @@
 # Release workflow: update FW_VERSION in version.txt, commit, create the
 # matching vX.Y.Z tag, then push the tag. Release builds run only on tag pushes;
-# the tag must exactly match FW_VERSION, as checked below. See RELEASING.md.
+# the tag must exactly match FW_VERSION, as checked below. A manual S3 draft
+# repair rebuilds only S3 assets at the existing version. See RELEASING.md.
 name: Firmware builds
 
 on:
@@ -8,6 +9,12 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      repair_s3_release:
+        description: 'Existing draft release to repair with only the three S3 profiles (empty builds all candidates)'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -28,6 +35,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Validate requested S3 release repair
+        if: inputs.repair_s3_release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPAIR_RELEASE: ${{ inputs.repair_s3_release }}
+        run: node tools/repair-s3-release.mjs --preflight
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -205,17 +219,21 @@ jobs:
 
     steps:
       - name: Check out repository
+        if: ${{ !inputs.repair_s3_release || matrix.rx_variant == 'native-s3' }}
         uses: actions/checkout@v4
 
       - name: Set up Arduino CLI
+        if: ${{ !inputs.repair_s3_release || matrix.rx_variant == 'native-s3' }}
         uses: arduino/setup-arduino-cli@v2
 
       - name: Set up Node.js
+        if: ${{ !inputs.repair_s3_release || matrix.rx_variant == 'native-s3' }}
         uses: actions/setup-node@v4
         with:
           node-version: "24"
 
       - name: Restore Arduino cache
+        if: ${{ !inputs.repair_s3_release || matrix.rx_variant == 'native-s3' }}
         uses: actions/cache@v4
         with:
           path: |
@@ -224,6 +242,7 @@ jobs:
           key: ${{ env.ARDUINO_CACHE_KEY }}
 
       - name: Configure Arduino CLI
+        if: ${{ !inputs.repair_s3_release || matrix.rx_variant == 'native-s3' }}
         shell: bash
         run: |
           arduino-cli config init --overwrite
@@ -232,7 +251,7 @@ jobs:
           arduino-cli lib list
 
       - name: Apply target-specific ESP-Hosted 3.3.7 fixes
-        if: matrix.rx_variant != 'native-s3'
+        if: matrix.rx_variant != 'native-s3' && !inputs.repair_s3_release
         shell: bash
         run: |
           set -euo pipefail
@@ -288,6 +307,7 @@ jobs:
           fi
 
       - name: Compile firmware
+        if: ${{ !inputs.repair_s3_release || matrix.rx_variant == 'native-s3' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -383,9 +403,12 @@ jobs:
               echo "Obsolete masked PKT_LEN drop path found in ${firmware_bin}" >&2
               exit 1
             fi
+          else
+            grep -a -F -q "HTTPS host=%s tls=%d (%s) allocator=%s" "${firmware_bin}"
           fi
 
       - name: Package firmware binaries
+        if: ${{ !inputs.repair_s3_release || matrix.rx_variant == 'native-s3' }}
         shell: bash
         run: |
           node release-helper/package-ci-build.js \
@@ -395,17 +418,18 @@ jobs:
             --silicon-variant "${{ matrix.silicon_variant || 'default' }}"
 
       - name: Archive private debug symbols
-        if: startsWith(github.ref, 'refs/tags/') && matrix.publish
+        if: (startsWith(github.ref, 'refs/tags/') || inputs.repair_s3_release) && matrix.publish && (!inputs.repair_s3_release || matrix.rx_variant == 'native-s3')
         shell: bash
         env:
           SYMBOLS_DEPLOY_KEY: ${{ secrets.SYMBOLS_DEPLOY_KEY }}
           SYMBOLS_REPOSITORY: GalusPeres/HomeTiles-symbols
           DEVICE_KEY: ${{ matrix.key }}
+          RELEASE_TAG: ${{ inputs.repair_s3_release || github.ref_name }}
         run: |
           set -euo pipefail
 
           elf_path="build/ci/${DEVICE_KEY}/HomeTiles.ino.elf"
-          archive_name="hometiles_${GITHUB_REF_NAME}_${DEVICE_KEY}.elf.gz"
+          archive_name="hometiles_${RELEASE_TAG}_${DEVICE_KEY}.elf.gz"
           archive_path="${RUNNER_TEMP}/${archive_name}"
           test -f "${elf_path}"
           gzip -9 -c "${elf_path}" > "${archive_path}"
@@ -427,15 +451,15 @@ jobs:
           for attempt in 1 2 3 4 5; do
             git fetch origin main
             git reset --hard origin/main
-            mkdir -p "${GITHUB_REF_NAME}"
-            cp "${archive_path}" "${GITHUB_REF_NAME}/${archive_name}"
-            git add "${GITHUB_REF_NAME}/${archive_name}"
+            mkdir -p "${RELEASE_TAG}"
+            cp "${archive_path}" "${RELEASE_TAG}/${archive_name}"
+            git add "${RELEASE_TAG}/${archive_name}"
 
             if git diff --cached --quiet; then
               exit 0
             fi
 
-            git commit -m "Archive ${GITHUB_REF_NAME} ${DEVICE_KEY} symbols"
+            git commit -m "Archive ${RELEASE_TAG} ${DEVICE_KEY} symbols"
             if git push origin HEAD:main; then
               exit 0
             fi
@@ -446,13 +470,41 @@ jobs:
           exit 1
 
       - name: Upload firmware artifact
-        if: matrix.publish || matrix.candidate
+        if: (matrix.publish || matrix.candidate) && (!inputs.repair_s3_release || matrix.rx_variant == 'native-s3')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.candidate && format('candidate-{0}', matrix.key) || format('firmware-{0}', matrix.key) }}
           path: build/releases/*.bin
           if-no-files-found: error
           retention-days: 14
+
+  repair-s3-release:
+    name: Verify and publish S3 release repair
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.repair_s3_release != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: firmware-*
+          path: build/s3-repair-assets
+          merge-multiple: true
+      - name: Repair the draft and publish only after verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPAIR_RELEASE: ${{ inputs.repair_s3_release }}
+        run: node tools/repair-s3-release.mjs build/s3-repair-assets
+      - name: Deploy corrected installer assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
 
   release:
     name: Publish release assets

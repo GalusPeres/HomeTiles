@@ -416,6 +416,12 @@ bool fetchHttpRange(const String& start_url, size_t from, size_t to,
     return false;
   }
 
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  // OTA preparation releases mostly PSRAM on these boards. Keep the same TLS
+  // fallback as the update check when internal RAM cannot fit a handshake.
+  // All redirect/range clients must release their blocks before restoration.
+  ScopedCheckTlsAllocator tls_allocator;
+#endif
   String url = start_url;
   for (int redirect = 0; redirect < 5; ++redirect) {
     ParsedHttpsUrl parsed;
@@ -429,6 +435,16 @@ bool fetchHttpRange(const String& start_url, size_t from, size_t to,
     client.setTimeout(15000);
     if (!client.connect(parsed.host.c_str(), parsed.port, kConnectTimeoutMs)) {
       error_out = String("connect failed: ") + parsed.host;
+#if defined(DEVICE_ESP32_S3_RGB_480)
+      char tls_error[96] = {};
+      const int tls_code = client.lastError(tls_error, sizeof(tls_error));
+      char detail[224];
+      snprintf(detail, sizeof(detail), "HTTPS host=%s tls=%d (%s) allocator=%s",
+               parsed.host.c_str(), tls_code, tls_error,
+               tls_allocator.active() ? "internal/PSRAM" : "core default");
+      Serial.printf("[Update/Diag] %s\n", detail);
+      installDiagLine(String(detail) + " | " + memSnapshotLine());
+#endif
       return false;
     }
 

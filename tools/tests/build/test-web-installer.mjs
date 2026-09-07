@@ -497,21 +497,23 @@ assert.match(docsWorkflow, /ghp-import .*--no-history.* site/);
 assert.doesNotMatch(docsWorkflow, /mkdocs gh-deploy/);
 
 const firmwareWorkflow = read(".github/workflows/firmware.yml");
+const tagReleaseJob = firmwareWorkflow.split("\n  release:\n")[1];
+assert.ok(tagReleaseJob, "The normal tag release job must remain present.");
 assert.match(firmwareWorkflow, /node tools\/run-tests\.mjs/);
 assert.match(
   firmwareWorkflow,
   /release:[\s\S]*?permissions:\s*\n\s+actions:\s*write\s*\n\s+contents:\s*write/,
   "The release job needs Actions write permission to dispatch the docs workflow.",
 );
-const releaseUploadIndex = firmwareWorkflow.indexOf("gh release upload");
-const docsDispatchIndex = firmwareWorkflow.indexOf("gh workflow run docs.yml");
+const releaseUploadIndex = tagReleaseJob.indexOf("gh release upload");
+const docsDispatchIndex = tagReleaseJob.indexOf("gh workflow run docs.yml");
 assert.ok(releaseUploadIndex >= 0, "The release workflow must upload firmware assets.");
 assert.ok(
   docsDispatchIndex > releaseUploadIndex,
   "Docs must be dispatched only after all release assets were uploaded.",
 );
 assert.match(
-  firmwareWorkflow.slice(docsDispatchIndex),
+  tagReleaseJob.slice(docsDispatchIndex),
   /--repo "\$GITHUB_REPOSITORY"[\s\\]*\n\s+--ref "\$GITHUB_REF_NAME"/,
   "The docs workflow must run for the just-published release tag.",
 );

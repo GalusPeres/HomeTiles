@@ -130,6 +130,16 @@ the candidate full GitHub build coverage without making it available to OTA.
 
 ## If something goes wrong
 
+For an explicitly requested same-version S3 correction, return the existing
+release to Draft, push the tested fix, then dispatch `firmware.yml` with
+`repair_s3_release=vX.Y.Z`. The version must match `version.txt`. This uses the
+normal CI compiler and packager for the three S3 profiles, replaces only their
+six assets, verifies all P4 asset hashes remain unchanged, and publishes only
+after verification. `s3-rebuild.json` records the exact source commit and hashes;
+the existing Git tag remains unchanged. Device OTA must be field-tested before
+using this maintenance path. Older installed downloaders may need one Web Admin
+update, and devices already reporting the same version will not auto-upgrade.
+
 - A failed run can simply be re-run from the Actions tab — asset upload uses
   `--clobber`, so re-runs are idempotent.
 - Tag pushed but wrong/missing version bump? Fix `version.txt`, then move the

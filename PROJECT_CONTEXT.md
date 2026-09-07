@@ -16,10 +16,10 @@ Last reviewed: 2026-09-07
 
 ## Current firmware baseline
 
-- Release `v0.6.10`: editable values/history, HA View control, compatible Switch/Scene domains, centered two-line titles, Web preview/fonts, MQTT/icon fixes and capability-based sensor cleanup.
-- v0.6.10 includes the tested JC8012 V1 SDIO RX fix and Waveshare S3 LCD-4 Rev 4.0 (PR #35). Release workflow builds 15 profiles / 30 images and deploys the installer.
+- v0.6.10 draft S3 repair/publication authorized: rebuild only six S3 assets in CI, retain P4 hashes/tag, then publish. Pages still mirrors old assets.
+- CI passed 15 profiles / 30 images, including LCD-4 Rev 4.0 and the tested JC8012 V1 fix. Compilation did not validate S3 GitHub OTA.
 - Stabilization: S3 display/update guards, MQTT validation, Light coalescing and incremental Weather (`e3de63c`–`33b4e06`).
-- Maintainer approved the current 8-inch/S3 test builds for release on 2026-09-07. Other device/runtime limits remain below.
+- TLS fallback now covers all three S3 RGB profiles. Guition hardware OTA passed all 11 ranges first try and booted v0.6.10; Waveshare S3 OTA awaits field tests. Release assets still lack the fix. Prior TLS error/two boot watchdog resets remain unproven. Evidence: `build/s3-ota-release-v0.6.10/`.
 - The experimental Guition S3 XIP/`-O2` performance path was reverted in
   `5279456`. Do not reintroduce it as an assumed optimization. It increased
   risk and did not solve the measured interaction problem.
@@ -138,8 +138,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
 - Docs source: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`.
-- https://galusperes.github.io/ desktop/mobile pages and all 14 published flasher profiles checked 2026-09-06.
-- Previous maintenance BINs and hashes: `build/maintenance-20260905/VERIFICATION.md`.
+- Pages mirrored all 15 v0.6.10 profiles before the GitHub release returned to Draft.
 
 ## Current view control, telemetry and compatible controls
 
@@ -151,7 +150,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Commands validate selected targets, availability and on/off features; retained commands are ignored.
 - Firmware battery is a stub on all profiles. Unsupported battery/probes are no longer auto-registered; explicit local I/O remains.
 - Bridge migration checks registry ownership/capabilities, cleans shared selections and preserves user entities.
-- Current firmware verification: 85 host tests; sequential incremental S3/8-inch builds pass. BINs/hashes: `build/editable-colors-view/VERIFICATION.md`.
+- Pre-OTA-fix verification: 85 tests and S3/8-inch builds; hashes: `build/editable-colors-view/VERIFICATION.md`.
 - Maintainer reports View and editable controls working on Waveshare 8-inch/S3; broader HA/device validation remains pending.
 - HA migration/re-pairing, old firmware compatibility, PIN, stream cleanup and sleep/reconnect remain pending.
 - Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; local reception grows to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending. Maintainer log: no unplanned MQTT loss (~7.5 h earlier BIN, ~25 min latest; two OTA restarts).

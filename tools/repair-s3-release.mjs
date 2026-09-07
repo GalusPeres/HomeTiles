@@ -43,7 +43,7 @@ function gh(...args) {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return result.stdout;
 }
-function preflight() {
+function preflight(lookupRelease = true) {
   const tag = process.env.REPAIR_RELEASE ?? '';
   replacementNames(tag);
   const version = fs.readFileSync(path.join(root, 'version.txt'), 'utf8').match(/#define FW_VERSION "([^"]+)"/)[1];
@@ -51,6 +51,7 @@ function preflight() {
   const repo = process.env.GITHUB_REPOSITORY;
   assert.equal(repo, 'GalusPeres/HomeTiles');
   assert.match(process.env.GITHUB_SHA ?? '', /^[0-9a-f]{40}$/);
+  if (!lookupRelease) return {tag, repo};
   // GitHub's by-tag endpoint excludes drafts; discover their stable release ID.
   const pages = JSON.parse(gh('api', `repos/${repo}/releases?per_page=100`, '--paginate', '--slurp'));
   const release = pages.flat().find(r => r.tag_name === tag);
@@ -60,8 +61,8 @@ function preflight() {
   return {tag, repo, release};
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const {tag, repo, release:before} = preflight();
-  if (process.argv[2] !== '--preflight') {
+  const {tag, repo, release:before} = preflight(process.argv[2] !== '--validate');
+  if (!['--preflight', '--validate'].includes(process.argv[2])) {
     const directory = path.resolve(process.argv[2]);
     const replacements = inspectReplacements(directory, tag);
     // All six files are verified before any existing asset is replaced.
@@ -75,8 +76,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     fs.writeFileSync(proofFile, JSON.stringify(proof, null, 2)+'\n');
     gh('release', 'upload', tag, proofFile, '--repo', repo, '--clobber');
     const notesFile = path.join(directory, 'release-notes.md');
-    const note = `\n\nS3 OTA correction: internal-RAM-first TLS allocation now falls back to PSRAM on all three S3 boards. A complete GitHub OTA cycle is hardware-confirmed on Guition ESP32-4848S040; both Waveshare S3 variants still need field confirmation. S3 binaries rebuilt from [${proof.sourceCommit.slice(0,7)}](https://github.com/${repo}/commit/${proof.sourceCommit}); P4 binaries are unchanged. If device OTA fails, install the corrected regular BIN through Web Admin once.\n`;
-    fs.writeFileSync(notesFile, (before.body ?? '')+note);
+    const notes = (before.body ?? '')
+      .replace('## Highlights', '## Highlights\n\n- **S3 GitHub OTA:** TLS can fall back to PSRAM on all three S3 boards; P4 images are unchanged.')
+      .replace('## Update Notes', '## Update Notes\n\nIf S3 device OTA fails, install the corrected regular BIN through Web Admin once. Devices already on v0.6.10 also need a manual update to receive this same-version correction.')
+      .replace('## Hardware Confirmed', '## Hardware Confirmed\n\n- The corrected Guition ESP32-4848S040 downloader completed a full GitHub OTA cycle. GitHub OTA on both Waveshare S3 variants still awaits field confirmation.')
+      .replace('**Full Changelog:**', `**S3 correction source:** [${proof.sourceCommit.slice(0,7)}](https://github.com/${repo}/commit/${proof.sourceCommit})\n\n**Full Changelog:**`);
+    assert.ok(notes.includes(proof.sourceCommit.slice(0,7)), 'Release note structure is missing');
+    fs.writeFileSync(notesFile, notes);
     gh('release', 'edit', tag, '--repo', repo, '--notes-file', notesFile, '--draft=false', '--latest');
     const published = JSON.parse(gh('api', `repos/${repo}/releases/${before.id}`));
     assert.equal(published.draft, false);

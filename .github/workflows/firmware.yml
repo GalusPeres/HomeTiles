@@ -39,9 +39,8 @@ jobs:
       - name: Validate requested S3 release repair
         if: inputs.repair_s3_release != ''
         env:
-          GH_TOKEN: ${{ github.token }}
           REPAIR_RELEASE: ${{ inputs.repair_s3_release }}
-        run: node tools/repair-s3-release.mjs --preflight
+        run: node tools/repair-s3-release.mjs --validate
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

@@ -22,7 +22,7 @@ import {
   releaseAssetNames,
   resolveSameOriginAsset,
   validateFirmwareDescriptor,
-} from "./installer-contract.mjs?v=installer-ui-13";
+} from "./installer-contract.mjs?v=installer-ui-14";
 
 const LAST_RUN_STORAGE_KEY = "hometiles.webInstaller.lastRun.v1";
 const LOG_MAX_LINES = 300;
@@ -310,12 +310,12 @@ export function mountInstaller(root) {
   function showActivity(
     phase,
     message,
-    { kind = "info", progress = state.progress, persist = state.busy } = {},
+    { kind = "info", progress = state.progress, persist = state.busy, announce = true } = {},
   ) {
     setPhase(phase);
     setProgress(progress);
     setStatus(message, kind);
-    if (!state.busy && (kind === "error" || kind === "warning" || kind === "success")) {
+    if (announce && !state.busy && (kind === "error" || kind === "warning" || kind === "success")) {
       serialActivity.set("installer", kind === "success" ? "Flash complete" : phase, kind === "success" ? "success" : "error");
     }
     elements.progressPanel.hidden = !(state.busy || progress > 0);
@@ -373,6 +373,7 @@ export function mountInstaller(root) {
         kind: saved.kind,
         progress: saved.progress,
         persist: false,
+        announce: false,
       });
     }
     updateFormState();

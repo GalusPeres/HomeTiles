@@ -4,6 +4,10 @@ site_url: https://galusperes.github.io/
 repo_url: https://github.com/GalusPeres/HomeTiles
 repo_name: GalusPeres/HomeTiles
 
+extra:
+  sitemap_aliases:
+    - https://galusperes.github.io/HomeTiles/
+
 theme:
   name: material
   custom_dir: overrides
@@ -51,7 +55,7 @@ extra_css:
   - stylesheets/serial-status.css?v=serial-navigation-2
 
 extra_javascript:
-  - path: assets/javascripts/docs-session.mjs?v=serial-navigation-2
+  - path: assets/javascripts/docs-session.mjs?v=serial-navigation-3
     type: module
 
 markdown_extensions:

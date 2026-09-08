@@ -16,7 +16,7 @@ Last reviewed: 2026-09-08
 
 ## Current firmware baseline
 
-- v0.6.10 public with S3 repair from `766efc1`; CI `34149832043` rebuilt six S3 images and verified all 24 P4 hashes unchanged. Tag retained; provenance in `s3-rebuild.json`.
+- v0.6.11 released from `0e755d5`; CI `34263199753` passed all 15 profiles / 30 images. Notes distinguish four maintainer-tested devices from pending hardware.
 - CI passed 15 profiles / 30 images, including LCD-4 Rev 4.0 and the tested JC8012 V1 fix. Compilation did not validate S3 GitHub OTA.
 - Stabilization: S3 display/update guards, MQTT validation, Light coalescing and incremental Weather (`e3de63c`–`33b4e06`).
 - TLS fallback ships on all three S3 RGB profiles; 87 tests and three CI builds pass. Guition hardware OTA passed all 11 ranges first try; Waveshare S3 OTA awaits field tests. Prior TLS error/two boot watchdog resets remain unproven. Evidence: `build/s3-ota-release-v0.6.10/`.
@@ -86,7 +86,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Shared-popup/artwork checkpoint (2026-09-08)
 
-- v0.6.11 preparation includes checkpoint `3b534ab` and shared-style fixes resolving large Weather opening on 8-inch.
+- v0.6.11 includes checkpoint `3b534ab` and shared-style fixes resolving large Weather opening on 8-inch.
 - Popups share one visible frame/header/close button and cached bodies; title/icon/color remain variable. Matching bodies/Sensor graphs stay visible, cold contents follow the first frame. Close/switch/deletion cancel pending work; PIN checks remain. Settings forms are disposable; Camera widgets preloaded.
 - Artwork: Bridge URL-only `state_fast` precedes full MQTT. Blocked/failed replacements retain loaded covers; URL/content pairing prevents S3 redownloads/stale results. Deferred Media opening resolves current descriptors without borrowed pixels.
 - Memory unchanged: PSRAM LVGL pools S3 2 MiB/P4 12 MiB; internal/DMA draw band capped at 72 KiB; page caches S3 4/P4 6. Bindings use PSRAM, no extra framebuffers. Larger covers and bounded idle Media service remain.
@@ -102,8 +102,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
 - Docs source: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`.
-- Docs: retained USB/flash sessions and header; maintainer tested locally including flashing. 98 tests and strict docs build pass.
-- Pages mirrors all 15 v0.6.10 profiles; the S3 repair workflow dispatched updated installer assets after publication.
+- Docs: `/HomeTiles/` reloaded because the root-canonical sitemap omitted that mount. Sitemap aliases preserve native navigation at both mounts; saved flash results no longer overwrite current USB status. Browser regressions cover both.
+- Pages mirrors all 15 v0.6.11 profiles; root hosting must deploy that snapshot too.
 
 ## Current view control, telemetry and compatible controls
 

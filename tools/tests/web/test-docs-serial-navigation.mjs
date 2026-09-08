@@ -104,7 +104,7 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const base = origin + "/preview/";
 let browser;
 try {
-  const build = spawnSync(python, ["-c", "import sys; from mkdocs.config import load_config; from mkdocs.commands.build import build; build(load_config('mkdocs.yml', site_url=sys.argv[1], site_dir=sys.argv[2], strict=True))", base, site], { cwd: repository, encoding: "utf8", timeout: 60000 });
+  const build = spawnSync(python, ["-c", "import sys; from mkdocs.config import load_config; from mkdocs.commands.build import build; c=load_config('mkdocs.yml', site_url=sys.argv[1], site_dir=sys.argv[2], strict=True); c.extra['sitemap_aliases']=[sys.argv[3]]; build(c)", origin + "/", site, base], { cwd: repository, encoding: "utf8", timeout: 60000 });
   assert.equal(build.status, 0, build.stderr || build.stdout);
   browser = await startDocsBrowser(executable, profile);
   await browser.send("Page.addScriptToEvaluateOnNewDocument", { source: setupSerial });
@@ -177,6 +177,7 @@ try {
   await until("document.querySelector('#installer-progress').value === 100 && document.querySelector('#installer-log-output').textContent.includes('Simulated flash write')", "Retained flash progress and log");
   assert.equal(await evaluate("fixture.writes"), 2, "Expected inactive app and OTA selection writes only");
   assert.equal(await evaluate("fixture.events.at(-1)"), "flash-close");
+  const completedFlash = await evaluate("localStorage.getItem('hometiles.webInstaller.lastRun.v1')");
 
   // A new failed attempt must not erase, write or leave a stale busy status.
   await evaluate("fixture.wrongChip = true; fixture.finishWrite = null");
@@ -217,10 +218,15 @@ try {
   await navigate("device-logs/", ".ht-serial-status");
   await until("document.querySelector('[data-log-output]').textContent.includes('After flashing')", "Final capture");
   const snapshot = await evaluate("document.querySelector('[data-log-output]').textContent");
+  await evaluate(`localStorage.setItem('hometiles.webInstaller.lastRun.v1', ${JSON.stringify(completedFlash)})`);
   await browser.send("Page.reload");
   await until("!!document.querySelector('[data-log-connect]') && !document.querySelector('[data-log-connect]').disabled", "Reload logger");
   assert.equal(await evaluate("document.querySelector('[data-log-output]').textContent"), snapshot, "Full reload lost captured output");
   assert.equal(await evaluate("fixture.requests"), 0, "Reload must not reconnect automatically");
+  await evaluate("window.navigationToken = 'retained'; void document$.subscribe(() => window.finishedNavigation = location.href)");
+  await navigate("installer/");
+  await until("document.querySelector('#installer-progress')?.value === 100", "Saved flash result restored");
+  assert.equal(await evaluate("document.querySelector('.ht-serial-status').textContent"), "USB disconnected", "An old saved flash result must not become current USB activity");
   assert.deepEqual(browser.errors, [], "Unexpected browser runtime errors");
 
   // A CDN failure must leave instant navigation usable and explain the tool's

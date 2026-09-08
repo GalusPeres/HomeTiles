@@ -16,6 +16,7 @@ on:
       - "tools/tests/web/test-docs-device-status.mjs"
       - "tools/tests/web/test-device-logs.mjs"
       - "tools/tests/web/test-docs-serial-navigation.mjs"
+      - "tools/tests/web/test-docs-deployment-paths.mjs"
       - "tools/tests/web/fixtures/docs-serial.mjs"
       - "tools/lib/docs-browser.mjs"
       - "tools/check-docs.py"
@@ -47,6 +48,9 @@ jobs:
       - run: node tools/tests/web/test-docs-device-status.mjs
       - run: node tools/tests/web/test-device-logs.mjs
       - run: node tools/tests/web/test-docs-serial-navigation.mjs
+        env:
+          HOMETILES_REQUIRE_DOCS_BROWSER: "1"
+      - run: node tools/tests/web/test-docs-deployment-paths.mjs
         env:
           HOMETILES_REQUIRE_DOCS_BROWSER: "1"
       - run: mkdocs build --strict

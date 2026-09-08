@@ -10,7 +10,7 @@ const components = [
   { selector: "[data-device-logs]", status: "[data-log-status]", source: "logs",
     module: "./device-logs.mjs?v=device-logs-5" },
   { selector: "[data-hometiles-installer]", status: "#installer-status", source: "installer",
-    module: "./installer.mjs?v=installer-ui-13" },
+    module: "./installer.mjs?v=installer-ui-14" },
 ];
 
 function update() {

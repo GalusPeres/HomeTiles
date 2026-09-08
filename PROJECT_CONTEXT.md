@@ -102,7 +102,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Docs source: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`.
 - Docs: `/HomeTiles/` reloaded because the root-canonical sitemap omitted that mount. Sitemap aliases preserve native navigation at both mounts; saved flash results no longer overwrite current USB status. Browser regressions cover both.
 - Public docs serve v0.6.11 at both mounts; navigation/USB checks use simulated ports.
-- Successful flash results expire on reload or after viewing and leaving/changing selection; recovery checkpoints remain. USB status appears only while active. Logger help explains local-only logs. Six focused tests pass.
+- Flash success clears on reload or after viewing and leaving/changing selection; recovery persists. USB status is active-only. Logger help uses paragraphs, menu restart or RESET if fitted, and local-only logs.
 
 ## Current view control, telemetry and compatible controls
 

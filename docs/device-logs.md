@@ -1,14 +1,10 @@
 # Device logs
 
-Read and copy your display's live serial log directly in desktop **Chrome or Edge**, using a USB data cable.
+Read live USB logs from any HomeTiles **ESP32-P4 or ESP32-S3** device in desktop **Chrome or Edge**.
 
-Works with all HomeTiles **ESP32-P4 and ESP32-S3** profiles. No firmware installation is needed.
+**Logs stay in your browser and are never uploaded.**
 
-**Your logs stay locally in your browser. Nothing is uploaded.** Use **Copy log** to copy them to your clipboard and share them yourself.
-
-1. Connect the display's USB **data/debug** port to your computer and let HomeTiles start normally.
-2. Close other serial monitors or flashing tools, then select **Connect** and choose the display's serial port.
-3. Reproduce the problem, select **Disconnect**, then **Copy log** to include the output in your report.
+Connect the display's USB **data/debug** port with a data cable. Close other serial tools, select **Connect**, then choose the port. Reproduce the issue, select **Disconnect**, then **Copy log**.
 
 <div class="ht-installer ht-device-logs" data-device-logs>
   <div class="ht-installer-action">
@@ -35,17 +31,14 @@ Works with all HomeTiles **ESP32-P4 and ESP32-S3** profiles. No firmware install
 
 <noscript>Enable JavaScript to connect to your display and read its serial log.</noscript>
 
-- Capture continues while you browse this documentation. The USB status in the header takes you back here.
-- Reloading, closing the tab, leaving the documentation or starting a flash ends capture. Select **Connect** to resume.
-- Logs survive reloads in the same tab. **Clear log** removes the saved copy; copy anything you need before closing the tab.
+Capture continues while you browse this documentation. After reloading or flashing, select **Connect** to resume. Logs stay in this tab until you close it. Copy them first. **Clear log** removes the saved copy.
 
 ## Capture a restart
 
-Connect, then briefly press **RESET** if available, not BOOT. If USB disconnects, select **Connect** again when the port returns. Output missed while disconnected cannot be recovered.
+Select **Connect**, then choose **Settings → System → Restart** on the display. Alternatively, briefly press the **RESET** button if your device has one. If USB disconnects, select **Connect** again when the port returns.
 
 ## No output or no port
 
-- Check the USB data cable and data/debug port. Close other tools using the same port.
-- Keep the display's required power supply connected. Some USB-UART adapters need a driver.
+Check the data cable and data/debug port; close other serial tools. Use the display's power supply and install any required USB driver.
 
-This viewer captures new output. For saved crash logs, use **Screenshot & Diagnostics** in the Web Admin; see [Troubleshooting](faq.md#the-display-crashed-or-restarted-by-itself).
+For saved crash logs, see [Screenshot & Diagnostics](faq.md#the-display-crashed-or-restarted-by-itself).

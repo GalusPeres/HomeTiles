@@ -11,6 +11,7 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
+#include "src/ui/popups/camera/camera_popup.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -133,7 +134,7 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   }
   switchToTab(0);
 
-  // Preload popups so first use is instant.
+  // Keep popup bodies resident; the shared shell presents before content work.
   preload_light_popup();
   preload_sensor_popup();
   preload_weather_popup();
@@ -142,6 +143,7 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   preload_climate_popup();
   preload_cover_popup();
   preload_pin_popup();
+  preload_camera_popup();
 
   access_gesture_eligible = false;
   mqttPublishDeviceSettings();

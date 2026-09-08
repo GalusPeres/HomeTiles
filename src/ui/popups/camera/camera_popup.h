@@ -11,6 +11,7 @@ struct CameraPopupInit {
 
 void show_camera_popup(const CameraPopupInit& init);
 void hide_camera_popup();
+void preload_camera_popup();
 bool camera_popup_is_visible();
 bool camera_popup_is_busy();
 void process_camera_popup();

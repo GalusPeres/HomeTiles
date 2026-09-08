@@ -70,7 +70,7 @@ int main() {
   }
   MediaCoverRef artwork;
   assert(!artwork.dsc && !artwork.popup_dsc && artwork.source_url.empty() &&
-         artwork.requested_url_hash == 0 && artwork.failed_at_ms == 0);
+         artwork.embedded_url_hash == 0 && artwork.requested_url_hash == 0 && artwork.failed_at_ms == 0);
   MediaTileWidgets media;
   assert(!media.cover_ref && !media.has_media_position &&
          !media.has_media_volume && media.dynamic_icon);

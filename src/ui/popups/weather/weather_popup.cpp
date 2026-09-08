@@ -1,6 +1,9 @@
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/popups/weather/weather_popup.h"
+#include "src/ui/popups/energy/energy_popup.h"
 #include "src/core/json_scan.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
@@ -9,7 +12,6 @@
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
-#include "src/ui/shared/ui_surface_style.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/power/power_manager.h"
@@ -21,18 +23,15 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/types/clock/clock_format.h"
+#include "src/ui/popups/popup_first_frame.h"
+#include "src/ui/popups/popup_body.h"
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
 
 namespace {
 
-constexpr int kCardMargin = popup_layout::kCardMargin;
-constexpr int kCardWidth =
-    (SCREEN_WIDTH > SCREEN_HEIGHT)
-        ? (SCREEN_HEIGHT - (kCardMargin * 2))
-        : (SCREEN_WIDTH - (kCardMargin * 2));
-constexpr int kCardHeight = SCREEN_HEIGHT - (kCardMargin * 2);
+constexpr int kCardWidth = popup_layout::kCardWidth;
 constexpr int kCardPad = popup_layout::kCardPad;
 constexpr int kCols = 7;
 constexpr int kForecastHoursPerDay = 24;
@@ -197,8 +196,6 @@ constexpr int kDetailPrecipGuideHeight =
 constexpr int kDetailChartWrapHeight =
     kDetailProbabilityTop + kDetailProbabilityHeight + kDetailLabelOverhang;
 constexpr int kHeaderPadTop = popup_layout::scale(4);
-constexpr int kHeaderIconOffsetX = popup_layout::scale(4);
-constexpr int kHeaderIconOffsetY = -popup_layout::scale(8);
 
 const lv_font_t* weather_unit_font() {
 #if defined(DEVICE_LAYOUT_1024X600)
@@ -272,6 +269,7 @@ struct WeatherPopupContext {
   String current_icon;
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
+  lv_obj_t* close_button = nullptr;
   lv_obj_t* location_label = nullptr;
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* header_today_btn = nullptr;
@@ -369,9 +367,11 @@ struct PendingWeatherUpdate {
 };
 
 static WeatherPopupContext* g_weather_popup_ctx = nullptr;
+static PopupBody g_weather_body;
+static WeatherPopupInit g_pending_weather_init;
+static bool g_weather_open_pending = false;
 static PendingWeatherUpdate g_pending_weather;
 
-static void align_header_row(lv_obj_t* card, lv_obj_t* title_label, lv_obj_t* icon_label);
 static int find_active_day_index(const WeatherPopupContext* ctx, const String& date_local);
 static int find_prev_active_day_index(const WeatherPopupContext* ctx, int from_index);
 static int find_next_active_day_index(const WeatherPopupContext* ctx, int from_index);
@@ -407,6 +407,7 @@ static void reset_pending_weather_update() {
 }
 
 static bool weather_refresh_in_progress(const WeatherPopupContext* ctx) {
+  if (g_weather_open_pending) return true;
   if (!ctx) return false;
   const bool queued_for_entity =
       g_pending_weather.valid &&
@@ -2451,7 +2452,7 @@ static void reset_weather_popup_content(WeatherPopupContext* ctx) {
   // Hide both header action buttons until content loads (update_mode_buttons will show them)
   if (ctx->header_week_btn) lv_obj_add_flag(ctx->header_week_btn, LV_OBJ_FLAG_HIDDEN);
   if (ctx->header_today_btn) lv_obj_add_flag(ctx->header_today_btn, LV_OBJ_FLAG_HIDDEN);
-  align_header_row(ctx->card, ctx->location_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->location_label, ctx->icon_label);
 }
 
 static void hide_weather_model_widgets(WeatherPopupContext* ctx) {
@@ -2578,7 +2579,7 @@ static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
     lv_label_set_text(ctx->location_label, name.c_str());
     lv_obj_clear_flag(ctx->location_label, LV_OBJ_FLAG_HIDDEN);
   }
-  align_header_row(ctx->card, ctx->location_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->location_label, ctx->icon_label);
 }
 
 // Phase 1a: Parse the small current/daily section and retain the hourly JSON
@@ -2806,26 +2807,6 @@ static void build_weather_ui(WeatherPopupContext* ctx,
   }
 }
 
-static void align_header_row(lv_obj_t* card, lv_obj_t* title_label, lv_obj_t* icon_label) {
-  if (!card) return;
-  lv_obj_update_layout(card);
-  lv_coord_t header_center_y =
-      popup_layout::kHeaderCenterY - lv_obj_get_style_pad_top(card, LV_PART_MAIN);
-  if (header_center_y < 0) header_center_y = 0;
-  if (icon_label) {
-    lv_coord_t icon_y = header_center_y - (lv_obj_get_height(icon_label) / 2);
-    if (icon_y < 0) icon_y = 0;
-    lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderIconX, icon_y);
-  }
-  if (title_label) {
-    lv_coord_t title_y = header_center_y - (lv_obj_get_height(title_label) / 2);
-    if (title_y < 0) title_y = 0;
-    lv_obj_align(title_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderTitleX, title_y);
-  }
-}
-
 static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupInit& init) {
   if (!ctx) return;
   ctx->entity_id = init.entity_id;
@@ -2857,7 +2838,7 @@ static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupIn
     hometiles_title::set(ctx->location_label, title.c_str());
   }
   update_mode_buttons(ctx);
-  align_header_row(ctx->card, ctx->location_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->location_label, ctx->icon_label);
 }
 
 static void on_overlay_click(lv_event_t* e) {
@@ -2870,6 +2851,12 @@ static void on_close_click(lv_event_t* e) {
   if (code != LV_EVENT_CLICKED && code != LV_EVENT_RELEASED) return;
   WeatherPopupContext* ctx = static_cast<WeatherPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->overlay || !ctx->card) return;
+
+  g_weather_open_pending = false;
+  g_pending_weather_init = WeatherPopupInit{};
+  g_weather_body.restore();
+  hide_popup_shell(ctx->card);
+  cancel_popup_open(ctx->card);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }
@@ -2883,6 +2870,10 @@ static void on_overlay_delete(lv_event_t* e) {
     ctx->detail_title_timer = nullptr;
   }
   if (g_weather_popup_ctx == ctx) {
+
+    g_weather_open_pending = false;
+    g_pending_weather_init = WeatherPopupInit{};
+    g_weather_body.forget();
     g_weather_popup_ctx = nullptr;
     reset_pending_weather_update();
   }
@@ -3016,46 +3007,20 @@ static void on_day_column_click(lv_event_t* e) {
 }
 
 static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& init) {
-  lv_obj_t* overlay = lv_obj_create(lv_layer_top());
-  ctx->overlay = overlay;
-  lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_opa(overlay, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(overlay, 0, 0);
-  lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
-
-  lv_obj_t* card = lv_obj_create(overlay);
-  ctx->card = card;
-  lv_obj_set_size(card, kCardWidth, kCardHeight);
-  lv_obj_center(card);
+  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : 0x2A2A2A);
+  ctx->overlay = parts.overlay;
+  ctx->card = parts.card;
+  ctx->location_label = parts.title;
+  ctx->icon_label = parts.icon;
+  ctx->close_button = parts.close;
+  lv_obj_t* overlay = parts.overlay;
+  lv_obj_t* card = parts.card;
+  lv_obj_t* location = parts.title;
+  lv_obj_t* icon = parts.icon;
+  lv_obj_t* close_btn = parts.close;
   uint32_t popup_tile_bg_color = init.bg_color ? init.bg_color : 0x2A2A2A;
   ctx->bg_color = popup_tile_bg_color;
-  lv_obj_set_style_bg_color(card, lv_color_hex(popup_tile_bg_color), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, popup_layout::kCardRadius, 0);
-  lv_obj_set_style_border_width(card, 0, 0);
-  ui_surface_style::apply_global_tile_border(card);
-  lv_obj_set_style_pad_all(card, kCardPad, 0);
-  lv_obj_set_style_shadow_width(card, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(card, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_shadow_opa(card, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(card, popup_layout::scale480(2), 0);
-  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
-
-  lv_obj_t* location = lv_label_create(card);
-  ctx->location_label = location;
-  set_label_style(location, lv_color_white(),
-                  popup_layout::headerTitleFont());
-  lv_label_set_long_mode(location, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(location, LV_PCT(38));
-  lv_obj_align(location, LV_ALIGN_TOP_LEFT, 78, 10);
-
-  lv_obj_t* icon = lv_label_create(card);
-  ctx->icon_label = icon;
-  set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
-  popup_layout::applyIconScale(icon);
-  lv_label_set_text(icon, "");
-  lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(parts.icon, LV_OBJ_FLAG_HIDDEN);
 
   auto make_header_action_button = [&](const char* text, int x_ofs, const lv_font_t* font) -> lv_obj_t* {
     lv_obj_t* btn = lv_button_create(card);
@@ -3090,9 +3055,6 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_center(label);
     return btn;
   };
-
-  lv_obj_t* close_btn =
-      popup_layout::createCloseButton(card, on_close_click, ctx);
 
   ctx->header_week_btn = make_header_action_button("7D", kFooterWeekButtonX, FONT_UNIT);
   ctx->header_today_btn =
@@ -3958,16 +3920,14 @@ bool weather_popup_has_current_cached_payload(const char* entity_id) {
              entity_id, cached_hash, cached_length);
 }
 
-void show_weather_popup(const WeatherPopupInit& init) {
-  hide_pin_popup();
-  hide_camera_popup();
-  hide_climate_popup();
-  hide_cover_popup();
-  if (!init.entity_id.length()) return;
-
-  hide_light_popup();
-  hide_sensor_popup();
-  hide_media_popup();
+static void finish_weather_popup_open() {
+  if (g_weather_popup_ctx && popup_open_pending(g_weather_popup_ctx->card)) return;
+  if (!g_weather_open_pending ||
+      !g_weather_popup_ctx || !is_popup_visible(g_weather_popup_ctx)) return;
+  WeatherPopupInit init = std::move(g_pending_weather_init);
+  g_pending_weather_init = WeatherPopupInit{};
+  g_weather_open_pending = false;
+  g_weather_body.restore();
 
   const bool keep_pending_parse =
       (g_pending_weather.valid &&
@@ -4031,8 +3991,6 @@ void show_weather_popup(const WeatherPopupInit& init) {
       String cached;
       if (!tiles_get_cached_entity_payload(init.entity_id.c_str(), cached)) {
         request_weather_for_context(g_weather_popup_ctx);
-        if (g_weather_popup_ctx && g_weather_popup_ctx->card)
-          viewNavigationPopupShown(g_weather_popup_ctx->card, init.entity_id.c_str());
         return;
       }
       if (matching_refresh_pending) {
@@ -4052,7 +4010,44 @@ void show_weather_popup(const WeatherPopupInit& init) {
     // No cache — request fresh data via MQTT
     request_weather_for_context(g_weather_popup_ctx);
   }
-  if (g_weather_popup_ctx && g_weather_popup_ctx->card) viewNavigationPopupShown(g_weather_popup_ctx->card, init.entity_id.c_str());
+}
+
+void show_weather_popup(const WeatherPopupInit& init) {
+  hide_pin_popup();
+  hide_camera_popup();
+  hide_climate_popup();
+  hide_cover_popup();
+  if (!init.entity_id.length()) return;
+  hide_light_popup();
+  hide_sensor_popup();
+  hide_energy_popup();
+  hide_media_popup();
+  if (!g_weather_popup_ctx) {
+    g_weather_popup_ctx = new WeatherPopupContext();
+    build_popup_ui(g_weather_popup_ctx, init);
+  }
+  auto* ctx = g_weather_popup_ctx;
+  if (!ctx->has_rendered_data || !ctx->rendered_entity_id.equalsIgnoreCase(init.entity_id))
+    g_weather_body.hide(ctx->card, ctx->location_label, ctx->icon_label, ctx->close_button);
+  if (!ctx->entity_id.equalsIgnoreCase(init.entity_id)) {
+    lv_label_set_text(ctx->icon_label, "");
+    lv_obj_add_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
+  }
+  ctx->entity_id = init.entity_id;
+  ctx->title = init.title;
+  ctx->bg_color = init.bg_color;
+  lv_obj_set_style_bg_color(ctx->card, lv_color_hex(init.bg_color ? init.bg_color : 0x2A2A2A), 0);
+  hometiles_title::set(ctx->location_label, init.title.c_str());
+  popup_layout::alignHeader(ctx->card, ctx->location_label, ctx->icon_label);
+  g_pending_weather_init = init;
+  g_weather_open_pending = true;
+  defer_popup_content(g_weather_popup_ctx->card, finish_weather_popup_open);
+  lv_obj_clear_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
+
+  lv_obj_invalidate(ctx->card);
+  viewNavigationPopupShown(ctx->card, init.entity_id.c_str());
+  show_popup_shell(g_weather_popup_ctx->overlay, g_weather_popup_ctx->card, g_weather_popup_ctx->location_label, g_weather_popup_ctx->icon_label, g_weather_popup_ctx->close_button);
 }
 
 void preload_weather_popup() {
@@ -4062,14 +4057,17 @@ void preload_weather_popup() {
   init.title = "";
   init.bg_color = 0;
   show_weather_popup(init);
-  if (g_weather_popup_ctx && g_weather_popup_ctx->card && g_weather_popup_ctx->overlay) {
-    lv_obj_add_flag(g_weather_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(g_weather_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
-  }
+  hide_weather_popup();
 }
 
 void hide_weather_popup() {
+
+  g_weather_open_pending = false;
+  g_pending_weather_init = WeatherPopupInit{};
+  g_weather_body.restore();
   if (!g_weather_popup_ctx || !g_weather_popup_ctx->card || !g_weather_popup_ctx->overlay) return;
+  hide_popup_shell(g_weather_popup_ctx->card);
+  cancel_popup_open(g_weather_popup_ctx->card);
   lv_obj_add_flag(g_weather_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_weather_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }
@@ -4139,6 +4137,11 @@ void queue_weather_popup_payload(const char* entity_id, const char* payload) {
 void process_weather_popup_queue() {
   if (!g_weather_popup_ctx || !g_weather_popup_ctx->card) {
     reset_pending_weather_update();
+    return;
+  }
+  if (PopupFirstFrame::any_pending()) return;
+  if (g_weather_open_pending) {
+    finish_weather_popup_open();
     return;
   }
 
@@ -4334,4 +4337,3 @@ void weather_popup_refresh_language() {
   g_weather_popup_ctx->rendered_language = language;
   lv_obj_invalidate(g_weather_popup_ctx->card);
 }
-

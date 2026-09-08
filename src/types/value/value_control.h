@@ -31,6 +31,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card);
 void editable_control_open(EditableControl*, const String& entity);
 void editable_control_refresh(EditableControl*);
 void editable_control_close(EditableControl*);
+bool editable_control_is_interacting(const EditableControl*);
 void editable_control_delete(EditableControl*);
 
 int editable_control_height(const String& kind);

@@ -10,5 +10,3 @@ bool viewNavigationHandleMessage(const char* topic, const char* payload, size_t 
 void viewNavigationSource(lv_obj_t* source);
 void viewNavigationPopupShown(lv_obj_t* overlay, const char* entity);
 void viewNavigationClosePopups();
-uint32_t viewNavigationPopupGeneration();
-bool viewNavigationDeferredPopupAllowed(uint32_t generation);

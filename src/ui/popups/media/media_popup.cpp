@@ -1,3 +1,6 @@
+#include "src/tiles/runtime/tile_renderer.h"
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/popups/media/media_popup.h"
@@ -23,7 +26,6 @@
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
-#include "src/ui/shared/ui_surface_style.h"
 
 // lvgl.h no longer exports lv_image_cache_drop() in 9.5; its declaration
 // is available only in the instance header.
@@ -31,15 +33,9 @@
 
 namespace {
 
-constexpr int kCardMargin = popup_layout::kCardMargin;
-constexpr int kCardWidth =
-    (SCREEN_WIDTH > SCREEN_HEIGHT)
-        ? (SCREEN_HEIGHT - (kCardMargin * 2))
-        : (SCREEN_WIDTH - (kCardMargin * 2));
-constexpr int kCardHeight = SCREEN_HEIGHT - (kCardMargin * 2);
+constexpr int kCardWidth = popup_layout::kCardWidth;
+constexpr int kCardHeight = popup_layout::kCardHeight;
 constexpr int kCardPad = popup_layout::kCardPad;
-constexpr int kHeaderIconOffsetX = 0;
-constexpr int kHeaderIconOffsetY = 0;
 constexpr int kCoverSize = popup_layout::scale(240);
 constexpr int kControlButtonSize = popup_layout::scale(78);
 constexpr int kControlSideOffset = popup_layout::scale(116);
@@ -72,6 +68,7 @@ struct MediaPopupContext {
   String entity_id;
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
+  lv_obj_t* close_button = nullptr;
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* cover_clip = nullptr;
@@ -169,27 +166,6 @@ static void apply_popup_scroll_style(lv_obj_t* label) {
   if (!label) return;
   lv_obj_set_style_anim(label, media_popup_text_scroll_anim(), LV_PART_MAIN);
   lv_obj_set_style_anim_duration(label, lv_anim_speed_clamped(18, 300, 12000), LV_PART_MAIN);
-}
-
-static void align_header_row(lv_obj_t* card, lv_obj_t* title_label, lv_obj_t* icon_label) {
-  if (!card) return;
-  lv_obj_update_layout(card);
-  lv_coord_t header_center_y =
-      popup_layout::kHeaderCenterY - lv_obj_get_style_pad_top(card, LV_PART_MAIN);
-  if (header_center_y < 0) header_center_y = 0;
-  if (icon_label) {
-    lv_coord_t icon_y = header_center_y - (lv_obj_get_height(icon_label) / 2);
-    if (icon_y < 0) icon_y = 0;
-    lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderIconX + kHeaderIconOffsetX,
-                 icon_y + kHeaderIconOffsetY);
-  }
-  if (title_label) {
-    lv_coord_t title_y = header_center_y - (lv_obj_get_height(title_label) / 2);
-    if (title_y < 0) title_y = 0;
-    lv_obj_align(title_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderTitleX, title_y);
-  }
 }
 
 static void update_cover(MediaPopupContext* ctx, const lv_image_dsc_t* cover_dsc, uint32_t cover_hash) {
@@ -402,7 +378,7 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
   }
   if (ctx->icon_label) lv_label_set_text(ctx->icon_label, icon_char.c_str());
   if (ctx->fallback_icon) lv_label_set_text(ctx->fallback_icon, icon_char.c_str());
-  align_header_row(ctx->card, ctx->title_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
 
   String media_title = init.media_title;
   media_title.trim();
@@ -444,6 +420,8 @@ static void on_close_click(lv_event_t* e) {
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->overlay || !ctx->card) return;
   ctx->seek_dragging = false;
+  hide_popup_shell(ctx->card);
+  cancel_popup_open(ctx->card);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }
@@ -584,6 +562,36 @@ static lv_obj_t* create_control_button(lv_obj_t* parent,
 
 }  // namespace
 
+static void finish_media_popup_open(const MediaPopupInit& init) {
+  if (!g_media_popup_ctx) return;
+  MediaPopupInit current = init;
+  // Resolve pixels on the UI thread when content is actually applied. A tile
+  // may have been removed since the press; never retain its borrowed pointer.
+  current.cover_dsc = tile_renderer_find_media_cover(init.entity_id, current.cover_hash);
+  apply_init_to_context(g_media_popup_ctx, current);
+}
+
+static void prepare_media_popup_open(const MediaPopupInit& init) {
+  auto* ctx = g_media_popup_ctx;
+  String title = init.title;
+  title.trim();
+  if (!title.length()) title = init.entity_id;
+  hometiles_title::set(ctx->title_label, title.c_str());
+  String icon = init.icon_char;
+  icon.trim();
+  if (!icon.length()) icon = getMdiChar(init.icon_name);
+  if (!icon.length()) icon = getMdiChar("television");
+  lv_label_set_text(ctx->icon_label, icon.c_str());
+  lv_obj_set_style_bg_color(ctx->card,
+      lv_color_hex(init.bg_color ? init.bg_color : 0x2A2A2A), 0);
+  MediaPopupInit pending = init;
+  pending.cover_dsc = nullptr;
+  if (!defer_popup_body(ctx->card, ctx->title_label, ctx->icon_label,
+                        ctx->close_button, pending, finish_media_popup_open,
+                        ctx->entity_id == init.entity_id))
+    apply_init_to_context(ctx, init);
+}
+
 void show_media_popup(const MediaPopupInit& init) {
   hide_pin_popup();
   hide_camera_popup();
@@ -596,53 +604,26 @@ void show_media_popup(const MediaPopupInit& init) {
   hide_energy_popup();
 
   if (g_media_popup_ctx && g_media_popup_ctx->overlay && g_media_popup_ctx->card) {
-    apply_init_to_context(g_media_popup_ctx, init);
+    prepare_media_popup_open(init);
     lv_obj_clear_flag(g_media_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(g_media_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
     if (g_media_popup_ctx && g_media_popup_ctx->card) viewNavigationPopupShown(g_media_popup_ctx->card, init.entity_id.c_str());
+    show_popup_shell(g_media_popup_ctx->overlay, g_media_popup_ctx->card, g_media_popup_ctx->title_label, g_media_popup_ctx->icon_label, g_media_popup_ctx->close_button);
     return;
   }
 
   MediaPopupContext* ctx = new MediaPopupContext();
   g_media_popup_ctx = ctx;
 
-  lv_obj_t* overlay = lv_obj_create(lv_layer_top());
-  ctx->overlay = overlay;
-  lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_opa(overlay, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(overlay, 0, 0);
-  lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
-
-  lv_obj_t* card = lv_obj_create(overlay);
-  ctx->card = card;
-  lv_obj_set_size(card, kCardWidth, kCardHeight);
-  lv_obj_center(card);
-  lv_obj_set_style_bg_color(card, lv_color_hex(init.bg_color != 0 ? init.bg_color : 0x2A2A2A), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, popup_layout::kCardRadius, 0);
-  lv_obj_set_style_border_width(card, 0, 0);
-  ui_surface_style::apply_global_tile_border(card);
-  lv_obj_set_style_pad_all(card, kCardPad, 0);
-  lv_obj_set_style_shadow_width(card, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(card, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_shadow_opa(card, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(card, popup_layout::scale480(2), 0);
-  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
-
-  ctx->title_label = lv_label_create(card);
-  set_label_style(ctx->title_label, lv_color_white(),
-                  popup_layout::headerTitleFont());
-  lv_obj_set_width(ctx->title_label, LV_PCT(62));
-  lv_label_set_long_mode(ctx->title_label, LV_LABEL_LONG_DOT);
-
-  ctx->icon_label = lv_label_create(card);
-  lv_obj_set_style_text_font(ctx->icon_label, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(ctx->icon_label);
-  lv_obj_set_style_text_color(ctx->icon_label, lv_color_white(), 0);
-
-  lv_obj_t* close_btn =
-      popup_layout::createCloseButton(card, on_close_click, ctx);
+  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : 0x2A2A2A);
+  ctx->overlay = parts.overlay;
+  ctx->card = parts.card;
+  ctx->title_label = parts.title;
+  ctx->icon_label = parts.icon;
+  ctx->close_button = parts.close;
+  lv_obj_t* overlay = parts.overlay;
+  lv_obj_t* card = parts.card;
+  lv_obj_t* close_btn = parts.close;
 
   ctx->cover_clip = lv_obj_create(card);
   lv_obj_set_size(ctx->cover_clip, kCoverSize, kCoverSize);
@@ -820,6 +801,7 @@ void show_media_popup(const MediaPopupInit& init) {
   lv_obj_add_event_cb(overlay, on_overlay_click, LV_EVENT_CLICKED, ctx);
   lv_obj_add_event_cb(overlay, on_overlay_delete, LV_EVENT_DELETE, ctx);
   if (g_media_popup_ctx && g_media_popup_ctx->card) viewNavigationPopupShown(g_media_popup_ctx->card, init.entity_id.c_str());
+  show_popup_shell(g_media_popup_ctx->overlay, g_media_popup_ctx->card, g_media_popup_ctx->title_label, g_media_popup_ctx->icon_label, g_media_popup_ctx->close_button);
 }
 
 void preload_media_popup() {
@@ -833,6 +815,8 @@ void preload_media_popup() {
   init.bg_color = 0x2A2A2A;
   show_media_popup(init);
   if (g_media_popup_ctx && g_media_popup_ctx->card && g_media_popup_ctx->overlay) {
+    hide_popup_shell(g_media_popup_ctx->card);
+    cancel_popup_open(g_media_popup_ctx->card);
     lv_obj_add_flag(g_media_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(g_media_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
   }
@@ -856,6 +840,8 @@ void update_media_popup_cover(const char* entity_id, const lv_image_dsc_t* cover
 void hide_media_popup() {
   if (!g_media_popup_ctx || !g_media_popup_ctx->card || !g_media_popup_ctx->overlay) return;
   g_media_popup_ctx->seek_dragging = false;
+  hide_popup_shell(g_media_popup_ctx->card);
+  cancel_popup_open(g_media_popup_ctx->card);
   lv_obj_add_flag(g_media_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_media_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }

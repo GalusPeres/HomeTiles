@@ -1,6 +1,7 @@
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/navigation/view_protocol.h"
 #include "src/ui/ui_manager.h"
+#include "src/ui/tabs/settings/tab_settings.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/popups/light/light_popup.h"
@@ -43,7 +44,6 @@ String refresh_topic;
 String state_topic;
 lv_obj_t* popup_card = nullptr;
 uint16_t popup_source = 0;
-uint32_t popup_generation = 0;
 bool remote_opening = false;
 struct Pending {
   bool active = false;
@@ -290,7 +290,7 @@ void publishState(uint32_t now) {
 }  // namespace
 
 void viewNavigationClosePopups() {
-  ++popup_generation;
+  hide_settings_popup();
   hide_camera_popup();
   hide_light_popup();
   hide_sensor_popup();
@@ -302,13 +302,11 @@ void viewNavigationClosePopups() {
 }
 
 void viewNavigationSource(lv_obj_t* source) {
-  ++popup_generation;
   if (!remote_opening) cancelPending();
   popup_source = tiles_view_id_for_object(source);
 }
 
 void viewNavigationPopupShown(lv_obj_t* card, const char* entity) {
-  ++popup_generation;
   if (popup_card != card) {
     if (popup_card) lv_obj_remove_event_cb(popup_card, forgetPopup);
     popup_card = card;
@@ -328,14 +326,6 @@ void viewNavigationPopupShown(lv_obj_t* card, const char* entity) {
       }
     }
   }
-}
-
-uint32_t viewNavigationPopupGeneration() { return popup_generation; }
-
-bool viewNavigationDeferredPopupAllowed(uint32_t generation) {
-  return generation == popup_generation && uiManager.activeTab() == 0 &&
-         !powerManager.isInSleep() && !is_image_screensaver_visible() &&
-         !is_pin_popup_visible();
 }
 
 void viewNavigationConnected() {

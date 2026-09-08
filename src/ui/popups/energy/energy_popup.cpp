@@ -1,3 +1,5 @@
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/popups/energy/energy_popup.h"
@@ -23,16 +25,12 @@
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/popup_layout.h"
-#include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/popups/popup_first_frame.h"
+#include "src/ui/popups/popup_body.h"
 
 namespace {
 
-constexpr int kCardMargin = popup_layout::kCardMargin;
-constexpr int kCardWidth =
-    (SCREEN_WIDTH > SCREEN_HEIGHT)
-        ? (SCREEN_HEIGHT - (kCardMargin * 2))
-        : (SCREEN_WIDTH - (kCardMargin * 2));
-constexpr int kCardHeight = SCREEN_HEIGHT - (kCardMargin * 2);
+constexpr int kCardWidth = popup_layout::kCardWidth;
 constexpr int kCardPad = popup_layout::kCardPad;
 constexpr int kChartHeight = popup_layout::contentScale(325);
 #if defined(DEVICE_LAYOUT_480X480)
@@ -55,10 +53,12 @@ constexpr int kLabelOverhang = popup_layout::scale(12);
 constexpr int kMinBarHeight = popup_layout::scale(2);
 
 struct EnergyPopupContext {
+  bool body_ready = false;
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* icon_label = nullptr;
+  lv_obj_t* close_button = nullptr;
   lv_obj_t* value_label = nullptr;
   lv_obj_t* subtitle_label = nullptr;
   lv_obj_t* range_row = nullptr;
@@ -94,6 +94,8 @@ struct PendingPopupRefresh {
 
 EnergyPopupContext* g_energy_popup_ctx = nullptr;
 PendingPopupRefresh g_pending_refresh;
+PopupBody g_energy_body;
+bool g_energy_open_pending = false;
 
 const lv_font_t* value_font() {
 #if defined(DEVICE_LAYOUT_480X480)
@@ -166,26 +168,6 @@ void update_period_buttons(EnergyPopupContext* ctx) {
   const bool day = ctx->period == "day";
   style_period_button(ctx->day_btn, ctx->day_label, day);
   style_period_button(ctx->week_btn, ctx->week_label, !day);
-}
-
-void align_header_row(lv_obj_t* card, lv_obj_t* title_label, lv_obj_t* icon_label) {
-  if (!card) return;
-  lv_obj_update_layout(card);
-  lv_coord_t header_center_y =
-      popup_layout::kHeaderCenterY - lv_obj_get_style_pad_top(card, LV_PART_MAIN);
-  if (header_center_y < 0) header_center_y = 0;
-  if (icon_label) {
-    lv_coord_t icon_y = header_center_y - (lv_obj_get_height(icon_label) / 2);
-    if (icon_y < 0) icon_y = 0;
-    lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderIconX, icon_y);
-  }
-  if (title_label) {
-    lv_coord_t title_y = header_center_y - (lv_obj_get_height(title_label) / 2);
-    if (title_y < 0) title_y = 0;
-    lv_obj_align(title_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderTitleX, title_y);
-  }
 }
 
 lv_coord_t measure_label_text_width(lv_obj_t* label) {
@@ -679,7 +661,8 @@ void refresh_from_cache(EnergyPopupContext* ctx) {
   apply_entry_to_chart(ctx, entry);
 }
 
-void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
+void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init,
+                           bool reset_body = true) {
   if (!ctx) return;
   ctx->entity_id = init.entity_id;
   ctx->title = init.title;
@@ -711,9 +694,9 @@ void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init)
       }
     }
   }
-  align_header_row(ctx->card, ctx->title_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
   update_period_buttons(ctx);
-  clear_chart(ctx);
+  if (reset_body) clear_chart(ctx);
 }
 
 void on_close_click(lv_event_t* e) {
@@ -721,6 +704,11 @@ void on_close_click(lv_event_t* e) {
   if (code != LV_EVENT_CLICKED && code != LV_EVENT_RELEASED) return;
   EnergyPopupContext* ctx = static_cast<EnergyPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->overlay || !ctx->card) return;
+
+  g_energy_open_pending = false;
+  g_energy_body.restore();
+  hide_popup_shell(ctx->card);
+  cancel_popup_open(ctx->card);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }
@@ -735,6 +723,9 @@ void on_overlay_delete(lv_event_t* e) {
   EnergyPopupContext* ctx = static_cast<EnergyPopupContext*>(lv_event_get_user_data(e));
   if (!ctx) return;
   if (g_energy_popup_ctx == ctx) {
+
+    g_energy_open_pending = false;
+    g_energy_body.forget();
     g_energy_popup_ctx = nullptr;
   }
   delete ctx;
@@ -783,44 +774,18 @@ lv_obj_t* make_button_label(lv_obj_t* parent, const char* text, lv_obj_t** out_l
 }
 
 void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
-  lv_obj_t* overlay = lv_obj_create(lv_layer_top());
-  ctx->overlay = overlay;
-  lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_opa(overlay, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(overlay, 0, 0);
-  lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
+  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : 0x2A2A2A);
+  ctx->overlay = parts.overlay;
+  ctx->card = parts.card;
+  ctx->title_label = parts.title;
+  ctx->icon_label = parts.icon;
+  ctx->close_button = parts.close;
+  lv_obj_t* overlay = parts.overlay;
+  lv_obj_t* card = parts.card;
+  lv_obj_t* title = parts.title;
+  lv_obj_t* icon = parts.icon;
+  lv_obj_t* close_btn = parts.close;
 
-  lv_obj_t* card = lv_obj_create(overlay);
-  ctx->card = card;
-  lv_obj_set_size(card, kCardWidth, kCardHeight);
-  lv_obj_center(card);
-  lv_obj_set_style_bg_color(card, lv_color_hex(init.bg_color ? init.bg_color : 0x2A2A2A), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, popup_layout::kCardRadius, 0);
-  lv_obj_set_style_border_width(card, 0, 0);
-  ui_surface_style::apply_global_tile_border(card);
-  lv_obj_set_style_pad_all(card, kCardPad, 0);
-  lv_obj_set_style_shadow_width(card, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(card, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_shadow_opa(card, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(card, popup_layout::scale480(2), 0);
-  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
-
-  lv_obj_t* title = lv_label_create(card);
-  ctx->title_label = title;
-  set_label_style(title, lv_color_white(), popup_layout::headerTitleFont());
-  lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(title, LV_PCT(38));
-
-  lv_obj_t* icon = lv_label_create(card);
-  ctx->icon_label = icon;
-  lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(icon);
-  lv_obj_set_style_text_color(icon, lv_color_white(), 0);
-
-  lv_obj_t* close_btn =
-      popup_layout::createCloseButton(card, on_close_click, ctx);
   disable_pressed_button_animation(close_btn);
 
   lv_obj_t* period_row = lv_obj_create(card);
@@ -982,6 +947,17 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
 
 }  // namespace
 
+static void finish_energy_popup_open() {
+  if (!g_energy_popup_ctx || !g_energy_open_pending) return;
+  g_energy_open_pending = false;
+  g_energy_body.restore();
+  if (popup_visible(g_energy_popup_ctx)) {
+    refresh_from_cache(g_energy_popup_ctx);
+    g_energy_popup_ctx->body_ready = true;
+    energy_request_period("day", true);
+  }
+}
+
 void show_energy_popup(const EnergyPopupInit& init) {
   hide_pin_popup();
   hide_camera_popup();
@@ -995,18 +971,28 @@ void show_energy_popup(const EnergyPopupInit& init) {
   hide_media_popup();
 
   if (g_energy_popup_ctx && g_energy_popup_ctx->overlay && g_energy_popup_ctx->card) {
-    apply_init_to_context(g_energy_popup_ctx, init);
+    auto* ctx = g_energy_popup_ctx;
+    if (!ctx->body_ready || ctx->entity_id != init.entity_id || ctx->period != "day" ||
+        ctx->unit != init.unit || ctx->decimals != init.decimals) {
+      ctx->body_ready = false;
+      g_energy_body.hide(ctx->card, ctx->title_label, ctx->icon_label, ctx->close_button);
+    }
+    apply_init_to_context(g_energy_popup_ctx, init, false);
     lv_obj_clear_flag(g_energy_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(g_energy_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
   } else {
     EnergyPopupContext* ctx = new EnergyPopupContext();
     g_energy_popup_ctx = ctx;
     build_popup_ui(ctx, init);
+    g_energy_body.hide(ctx->card, ctx->title_label, ctx->icon_label, ctx->close_button);
   }
 
-  energy_request_period("day", true);
-  refresh_from_cache(g_energy_popup_ctx);
+  g_energy_open_pending = true;
+  defer_popup_content(g_energy_popup_ctx->card, finish_energy_popup_open);
+
+  lv_obj_invalidate(g_energy_popup_ctx->card);
   if (g_energy_popup_ctx && g_energy_popup_ctx->card) viewNavigationPopupShown(g_energy_popup_ctx->card, init.entity_id.c_str());
+  show_popup_shell(g_energy_popup_ctx->overlay, g_energy_popup_ctx->card, g_energy_popup_ctx->title_label, g_energy_popup_ctx->icon_label, g_energy_popup_ctx->close_button);
 }
 
 void preload_energy_popup() {
@@ -1025,13 +1011,20 @@ void preload_energy_popup() {
   build_popup_ui(ctx, init);
 
   if (g_energy_popup_ctx && g_energy_popup_ctx->card && g_energy_popup_ctx->overlay) {
+    hide_popup_shell(g_energy_popup_ctx->card);
+    cancel_popup_open(g_energy_popup_ctx->card);
     lv_obj_add_flag(g_energy_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(g_energy_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
   }
 }
 
 void hide_energy_popup() {
+
+  g_energy_open_pending = false;
+  g_energy_body.restore();
   if (!g_energy_popup_ctx || !g_energy_popup_ctx->card || !g_energy_popup_ctx->overlay) return;
+  hide_popup_shell(g_energy_popup_ctx->card);
+  cancel_popup_open(g_energy_popup_ctx->card);
   lv_obj_add_flag(g_energy_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_energy_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }
@@ -1044,6 +1037,16 @@ void queue_energy_popup_refresh(const char* period) {
 void process_energy_popup_queue() {
   if (!g_energy_popup_ctx || !g_energy_popup_ctx->card) {
     g_pending_refresh.valid = false;
+    return;
+  }
+  if (PopupFirstFrame::any_pending()) return;
+  if (g_energy_open_pending) {
+    g_energy_open_pending = false;
+    g_energy_body.restore();
+    if (popup_visible(g_energy_popup_ctx)) {
+      refresh_from_cache(g_energy_popup_ctx);
+      energy_request_period("day", true);
+    }
     return;
   }
   if (!g_pending_refresh.valid) return;

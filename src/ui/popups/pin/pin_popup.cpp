@@ -1,3 +1,5 @@
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/pin/pin_popup.h"
 
 #include "src/core/config/config_manager.h"
@@ -13,7 +15,6 @@
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
-#include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/popups/weather/weather_popup.h"
 
 #include <lvgl.h>
@@ -60,6 +61,7 @@ struct PinKeyData {
 struct PinPopupContext {
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
+  lv_obj_t* close_button = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* value_label = nullptr;
@@ -160,24 +162,6 @@ void update_value(PinPopupContext* ctx) {
   }
   lv_label_set_text(ctx->value_label, masked);
   lv_obj_set_style_text_color(ctx->value_label, lv_color_white(), 0);
-}
-
-void align_header(PinPopupContext* ctx) {
-  if (!ctx || !ctx->card) return;
-  lv_obj_update_layout(ctx->card);
-  lv_coord_t center_y = popup_layout::kHeaderCenterY -
-                        lv_obj_get_style_pad_top(ctx->card, LV_PART_MAIN);
-  if (center_y < 0) center_y = 0;
-  if (ctx->icon_label) {
-    lv_obj_align(ctx->icon_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderIconX,
-                 center_y - (lv_obj_get_height(ctx->icon_label) / 2));
-  }
-  if (ctx->title_label) {
-    lv_obj_align(ctx->title_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderTitleX,
-                 center_y - (lv_obj_get_height(ctx->title_label) / 2));
-  }
 }
 
 lv_obj_t* create_key(lv_obj_t* parent, const char* text,
@@ -333,11 +317,12 @@ void show_pin_popup(const PinPopupInit& init) {
     lv_label_set_text(g_ctx->icon_label,
                       popup_icon_glyph(init.icon_name).c_str());
     update_value(g_ctx);
-    align_header(g_ctx);
+    popup_layout::alignHeader(g_ctx->card, g_ctx->title_label, g_ctx->icon_label);
     lv_obj_clear_flag(g_ctx->card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(g_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_move_foreground(g_ctx->overlay);
+
     arm_auto_close_timer(g_ctx);
+    show_popup_shell(g_ctx->overlay, g_ctx->card, g_ctx->title_label, g_ctx->icon_label, g_ctx->close_button);
     return;
   }
 
@@ -349,69 +334,16 @@ void show_pin_popup(const PinPopupInit& init) {
   ctx->success = init.success;
   ctx->callback_context = init.context;
 
-  ctx->overlay = lv_obj_create(lv_layer_top());
-  lv_obj_set_size(ctx->overlay, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_opa(ctx->overlay, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(ctx->overlay, 0, 0);
-  lv_obj_remove_flag(ctx->overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
-
-  ctx->card = lv_obj_create(ctx->overlay);
-  lv_obj_set_size(ctx->card, popup_layout::kCardWidth,
-                  popup_layout::kCardHeight);
-  lv_obj_center(ctx->card);
-  lv_obj_set_style_bg_color(ctx->card, lv_color_hex(init.bg_color), 0);
-  lv_obj_set_style_bg_opa(ctx->card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(ctx->card, popup_layout::kCardRadius, 0);
-  lv_obj_set_style_border_width(ctx->card, 0, 0);
-  ui_surface_style::apply_global_tile_border(ctx->card);
-  lv_obj_set_style_pad_all(ctx->card, popup_layout::kCardPad, 0);
-  lv_obj_set_style_shadow_width(ctx->card, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(ctx->card, lv_color_black(), 0);
-  lv_obj_set_style_shadow_opa(ctx->card, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(ctx->card, popup_layout::scale480(2), 0);
-  lv_obj_remove_flag(ctx->card, LV_OBJ_FLAG_SCROLLABLE);
-
-  ctx->title_label = lv_label_create(ctx->card);
-  lv_obj_set_style_text_font(ctx->title_label,
-                             popup_layout::headerTitleFont(), 0);
-  lv_obj_set_style_text_color(ctx->title_label, lv_color_white(), 0);
-  lv_obj_set_width(ctx->title_label, LV_PCT(62));
-  lv_label_set_long_mode(ctx->title_label, LV_LABEL_LONG_DOT);
-  lv_label_set_text(ctx->title_label, init.title.c_str());
-
-  ctx->icon_label = lv_label_create(ctx->card);
-  lv_obj_set_style_text_font(ctx->icon_label, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(ctx->icon_label);
-  lv_obj_set_style_text_color(ctx->icon_label, lv_color_white(), 0);
-  lv_label_set_text(ctx->icon_label,
-                    popup_icon_glyph(init.icon_name).c_str());
-
-  lv_obj_t* close = lv_button_create(ctx->card);
-  lv_obj_set_size(close, popup_layout::kCloseButtonSize,
-                  popup_layout::kCloseButtonSize);
-  lv_obj_set_style_bg_opa(close, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(close, lv_color_white(), LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(close, LV_OPA_20, LV_STATE_PRESSED);
-  lv_obj_set_style_border_opa(close, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_outline_opa(close, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_shadow_opa(close, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_radius(close, popup_layout::kCloseButtonRadius, 0);
-  lv_obj_set_style_pad_all(close, 0, 0);
-  lv_obj_align(close, LV_ALIGN_TOP_RIGHT,
-               popup_layout::kCloseButtonOffsetX,
-               popup_layout::kCloseButtonOffsetY);
-  lv_obj_set_ext_click_area(close, popup_layout::kCloseButtonClickArea);
-  lv_obj_add_flag(close, LV_OBJ_FLAG_PRESS_LOCK);
-  lv_obj_clear_flag(close, LV_OBJ_FLAG_SCROLLABLE);
-  disable_pressed_button_animation(close);
-  lv_obj_t* close_icon = lv_label_create(close);
-  lv_obj_set_style_text_font(close_icon, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(close_icon);
-  lv_obj_set_style_text_color(close_icon, lv_color_white(), 0);
-  lv_label_set_text(close_icon, getMdiChar("window-close").c_str());
-  lv_obj_center(close_icon);
-  lv_obj_add_event_cb(close, on_close, LV_EVENT_CLICKED, ctx);
+  const auto parts = create_popup_body(on_close, ctx, init.bg_color);
+  ctx->overlay = parts.overlay;
+  ctx->card = parts.card;
+  ctx->title_label = parts.title;
+  ctx->icon_label = parts.icon;
+  ctx->close_button = parts.close;
+  lv_obj_t* close = parts.close;
+  disable_pressed_button_animation(parts.close);
+  hometiles_title::set(parts.title, init.title.c_str());
+  lv_label_set_text(parts.icon, popup_icon_glyph(init.icon_name).c_str());
 
   ctx->value_label = lv_label_create(ctx->card);
   lv_obj_set_size(ctx->value_label, LV_PCT(100), popup_layout::kValueHeight);
@@ -468,12 +400,13 @@ void show_pin_popup(const PinPopupInit& init) {
 
   lv_obj_add_event_cb(ctx->overlay, on_delete, LV_EVENT_DELETE, ctx);
   update_value(ctx);
-  align_header(ctx);
+  popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
   lv_obj_move_foreground(ctx->icon_label);
   lv_obj_move_foreground(ctx->title_label);
   lv_obj_move_foreground(close);
-  lv_obj_move_foreground(ctx->overlay);
+
   arm_auto_close_timer(ctx);
+  show_popup_shell(g_ctx->overlay, g_ctx->card, g_ctx->title_label, g_ctx->icon_label, g_ctx->close_button);
 }
 
 void preload_pin_popup() {
@@ -496,6 +429,8 @@ void hide_pin_popup() {
   g_ctx->success = nullptr;
   g_ctx->callback_context = nullptr;
   update_value(g_ctx);
+  hide_popup_shell(g_ctx->card);
+  cancel_popup_open(g_ctx->card);
   lv_obj_add_flag(g_ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }

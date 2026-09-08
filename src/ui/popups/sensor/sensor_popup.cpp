@@ -1,3 +1,5 @@
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_open.h"
 #include "src/types/value/value_control.h"
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/ui/popups/camera/camera_popup.h"
@@ -6,11 +8,12 @@
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
+#include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
-#include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/popups/popup_first_frame.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -31,16 +34,9 @@
 
 namespace {
 
-constexpr int kCardMargin = popup_layout::kCardMargin;
-constexpr int kCardWidth =
-    (SCREEN_WIDTH > SCREEN_HEIGHT)
-        ? (SCREEN_HEIGHT - (kCardMargin * 2))
-        : (SCREEN_WIDTH - (kCardMargin * 2));
-constexpr int kCardHeight = SCREEN_HEIGHT - (kCardMargin * 2);
+constexpr int kCardWidth = popup_layout::kCardWidth;
 constexpr int kCardPad = popup_layout::kCardPad;
 constexpr int kHeaderPadTop = popup_layout::scale(4);
-constexpr int kHeaderIconOffsetX = popup_layout::scale(4);
-constexpr int kHeaderIconOffsetY = -popup_layout::scale(8);
 constexpr int kChartHeight = popup_layout::contentScale(325);
 #if defined(DEVICE_LAYOUT_1024X600)
 constexpr int kTimeAxisHeight = 24;  // full UI16 line height plus bottom breathing room
@@ -119,10 +115,17 @@ struct SensorPopupContext {
   uint32_t bg_color = 0;
   SensorHistoryRange history_range = SensorHistoryRange::Day24;
   SensorHistoryRange editable_requested_range = SensorHistoryRange::Day24;
+  bool history_loaded = false;
+  uint32_t history_loaded_ms = 0;
+  uint32_t history_fingerprint = 0;
+  uint32_t history_request_fingerprint = 0;
+  String history_language;
+  String history_kind, history_unit;
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* icon_label = nullptr;
+  lv_obj_t* close_button = nullptr;
   lv_obj_t* value_label = nullptr;
   lv_obj_t* value_box = nullptr;
   lv_obj_t* control_row = nullptr;
@@ -224,9 +227,13 @@ static PendingValueUpdate g_pending_value;
 static PendingHistoryUpdate g_pending_history;
 static PendingBinaryStateUpdate g_pending_binary_state;
 static bool g_pending_icon_refresh = false;
+static PopupFirstFrame g_sensor_first_frame;
+static SensorPopupInit g_pending_sensor_init;
+static bool g_sensor_open_pending = false;
 
 static void ensure_binary_view(SensorPopupContext* ctx);
 static void layout_editable_history(SensorPopupContext* ctx);
+static int editable_control_top(const SensorPopupContext* ctx);
 static void clear_binary_history(SensorPopupContext* ctx);
 static void refresh_binary_activity_rows(SensorPopupContext* ctx,
                                          bool force = false);
@@ -394,47 +401,10 @@ static bool extract_numeric(JsonVariant v, float& out) {
   return false;
 }
 
-static void align_header_row(lv_obj_t* card, lv_obj_t* title_label, lv_obj_t* icon_label) {
-  if (!card) return;
-  lv_obj_update_layout(card);
-  lv_coord_t header_center_y =
-      popup_layout::kHeaderCenterY - lv_obj_get_style_pad_top(card, LV_PART_MAIN);
-  if (header_center_y < 0) header_center_y = 0;
-  if (icon_label) {
-    lv_coord_t icon_y = header_center_y - (lv_obj_get_height(icon_label) / 2);
-    if (icon_y < 0) icon_y = 0;
-    lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderIconX, icon_y);
-  }
-  if (title_label) {
-    lv_coord_t title_y = header_center_y - (lv_obj_get_height(title_label) / 2);
-    if (title_y < 0) title_y = 0;
-    lv_obj_align(title_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderTitleX, title_y);
-  }
-}
-
-static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit& init) {
+static void apply_sensor_header(SensorPopupContext* ctx, const SensorPopupInit& init) {
   if (!ctx) return;
-  editable_control_close(ctx->control);
-  ctx->editable = init.editable;
-  ctx->editable_kind = init.editable ? parse_editable_value(haBridgeConfig.findEditableValue(init.entity_id)).kind : String();
-  ctx->editable_state = init.value;
-  ctx->editable_generation = 0;
-  ctx->editable_history_id = "";
-  ctx->editable_requested_range = SensorHistoryRange::Day24;
-  ctx->entity_id = init.entity_id;
-  ctx->lock_unit = init.lock_unit;
-  ctx->decimals = init.decimals;
-  ctx->bg_color = init.bg_color;
-  ctx->binary_mode = init.binary_mode;
-  ctx->state_history_mode = init.editable || init.binary_mode || init.state_history_mode;
-  ctx->binary_available = init.binary_available;
-  ctx->binary_icon_override = init.binary_icon_override;
-  ctx->binary_device_class = init.binary_device_class;
-  ctx->binary_last_changed = init.binary_last_changed;
   if (ctx->card) {
-    uint32_t color = ctx->bg_color ? ctx->bg_color : 0x2A2A2A;
+    uint32_t color = init.bg_color ? init.bg_color : 0x2A2A2A;
     lv_obj_set_style_bg_color(ctx->card, lv_color_hex(color), 0);
   }
   if (ctx->title_label) {
@@ -460,10 +430,37 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
   if (ctx->icon_label) {
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_white(), 0);
   }
-  align_header_row(ctx->card, ctx->title_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
+}
+
+static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit& init,
+                                  bool reuse_history = false, bool apply_header = true) {
+  if (!ctx) return;
+  editable_control_close(ctx->control);
+  ctx->editable = init.editable;
+  const EditableValue editable_value = init.editable
+      ? parse_editable_value(haBridgeConfig.findEditableValue(init.entity_id)) : EditableValue{};
+  ctx->editable_kind = editable_value.kind;
+  ctx->editable_state = init.editable ? editable_value.state : init.value;
+  ctx->editable_generation = editable_value_generation();
+  ctx->editable_available = editable_value.available;
+  ctx->editable_history_id = "";
+  ctx->editable_requested_range = SensorHistoryRange::Day24;
+  ctx->entity_id = init.entity_id;
+  ctx->lock_unit = init.lock_unit;
+  ctx->decimals = init.decimals;
+  ctx->bg_color = init.bg_color;
+  ctx->binary_mode = init.binary_mode;
+  ctx->state_history_mode = init.editable || init.binary_mode || init.state_history_mode;
+  ctx->binary_available = init.binary_available;
+  ctx->binary_icon_override = init.binary_icon_override;
+  ctx->binary_device_class = init.binary_device_class;
+  ctx->binary_last_changed = init.binary_last_changed;
+  if (apply_header) apply_sensor_header(ctx, init);
   if (ctx->state_history_mode) {
-    ensure_binary_view(ctx);
-    if (ctx->chart_wrap) lv_obj_add_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
+    if (!reuse_history) ensure_binary_view(ctx);
+    if (ctx->chart_wrap && (!ctx->editable || ctx->editable_kind != "number"))
+      lv_obj_add_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
     if (ctx->binary_body) lv_obj_clear_flag(ctx->binary_body, LV_OBJ_FLAG_HIDDEN);
     if (ctx->range_day_btn) {
       lv_obj_t* label = lv_obj_get_child(ctx->range_day_btn, 0);
@@ -484,8 +481,9 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
                           init.binary_device_class, init.binary_last_changed,
                           init.icon_name);
     } else {
-      ctx->state_history_value = normalize_state_live_value(init.value);
-      update_value_label(ctx, init.value, init.unit);
+      ctx->state_history_value = normalize_state_live_value(ctx->editable_state);
+      if (ctx->editable) ctx->unit = editable_value.unit;
+      else update_value_label(ctx, init.value, init.unit);
     }
   } else {
     if (ctx->chart_wrap) lv_obj_clear_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
@@ -500,12 +498,18 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
     }
     update_value_label(ctx, init.value, init.unit);
   }
-  layout_editable_history(ctx);
+  // A warm history retains its geometry unless the new header needs more
+  // control clearance. The hidden Sensor value label is unused by editors.
+  if (!reuse_history || (ctx->editable && (!ctx->control_row ||
+      lv_obj_get_style_y(ctx->control_row, LV_PART_MAIN) != editable_control_top(ctx))))
+    layout_editable_history(ctx);
   if (ctx->editable) {
     lv_obj_add_flag(ctx->value_box, LV_OBJ_FLAG_HIDDEN);
     editable_control_open(ctx->control, ctx->entity_id);
   } else {
     lv_obj_remove_flag(ctx->value_box, LV_OBJ_FLAG_HIDDEN);
+    ctx->history_language = configManager.getConfig().language;
+    ctx->history_unit = init.unit;
   }
 }
 
@@ -1502,7 +1506,7 @@ static void update_binary_icon(SensorPopupContext* ctx,
   if (!icon.length()) return;
   lv_label_set_text(ctx->icon_label, icon.c_str());
   lv_obj_clear_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
-  align_header_row(ctx->card, ctx->title_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
 }
 
 static void refresh_editable_popup_icon(SensorPopupContext* ctx) {
@@ -1512,7 +1516,7 @@ static void refresh_editable_popup_icon(SensorPopupContext* ctx) {
   lv_label_set_text(ctx->icon_label, glyph.c_str());
   if (glyph.length()) lv_obj_remove_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
   else lv_obj_add_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
-  align_header_row(ctx->card, ctx->title_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
 }
 
 static void update_binary_state(SensorPopupContext* ctx,
@@ -2276,11 +2280,25 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
   }
 
   if (ctx->editable) {
+    const bool available = !doc.containsKey("error") && (doc["history_available"] | true);
+    const auto requested = get_history_range_config(ctx->editable_requested_range);
+    // Validate before changing the displayed range or cached Activity. Recorder
+    // errors intentionally have no values array and must still reach the UI.
+    if (ctx->editable_kind == "number" && available &&
+        (!doc["values"].is<JsonArray>() || doc["values"].size() > kHistoryPoints24h ||
+         (doc["period_minutes"] | requested.period_minutes) != requested.period_minutes)) return;
     if (!accept_editable_history_range(ctx, doc)) return;
     apply_state_history_payload(ctx, doc);
+    ctx->history_loaded = available;
+    ctx->history_loaded_ms = millis();
+    ctx->history_fingerprint = ctx->history_request_fingerprint;
+    ctx->history_language = configManager.getConfig().language;
+    ctx->history_kind = ctx->editable_kind;
+    ctx->history_unit = ctx->unit;
     // Editor geometry is established on open/kind changes. A history response
     // changes data and axes, not the control, graph or Activity allocation.
     if (ctx->editable_kind != "number") return;
+    if (!available) { clear_chart(ctx, requested.points); return; }
   }
   const char* kind = doc["kind"] | "";
   if (strcmp(kind, "binary") == 0) {
@@ -2501,11 +2519,24 @@ static bool should_request_history(const String& entity_id) {
          !hardwareIo.isLocalEntityId(entity_id.c_str());
 }
 
+static uint32_t editable_history_fingerprint(const String& entity_id) {
+  // Include last_changed, availability and Bridge session/revision so a value
+  // returning to its earlier state while hidden still invalidates the cache.
+  const String payload = haBridgeConfig.findEditableValue(entity_id);
+  uint32_t hash = 2166136261U;
+  for (size_t i = 0; i < payload.length(); ++i) {
+    hash ^= static_cast<uint8_t>(payload.charAt(i));
+    hash *= 16777619U;
+  }
+  return hash;
+}
+
 static void request_history_for_context(SensorPopupContext* ctx) {
   if (!ctx || !should_request_history(ctx->entity_id)) return;
   const HistoryRangeConfig cfg = get_history_range_config(
       ctx->editable ? ctx->editable_requested_range : ctx->history_range);
   if (ctx->editable) {
+    ctx->history_request_fingerprint = editable_history_fingerprint(ctx->entity_id);
     ctx->editable_history_id = editable_request_history(ctx->entity_id, cfg.hours);
     ctx->state_history_refresh_pending = false;
     ctx->state_history_last_request_ms = millis();
@@ -2559,8 +2590,13 @@ static void set_sensor_popup_visible(SensorPopupContext* ctx, bool visible) {
     lv_obj_set_pos(ctx->overlay, 0, 0);
     lv_obj_remove_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_move_foreground(ctx->overlay);
+
   } else {
+    g_sensor_first_frame.cancel();
+    g_sensor_open_pending = false;
+    g_pending_sensor_init = SensorPopupInit{};
+    hide_popup_shell(ctx->card);
+    cancel_popup_open(ctx->card);
     lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
     // Park the reusable shell off the screen so hidden popups survive screen
@@ -2584,6 +2620,9 @@ static void on_overlay_delete(lv_event_t* e) {
   if (!ctx) return;
   editable_control_delete(ctx->control); ctx->control = nullptr;
   if (g_sensor_popup_ctx == ctx) {
+    g_sensor_first_frame.cancel();
+    g_sensor_open_pending = false;
+    g_pending_sensor_init = SensorPopupInit{};
     g_sensor_popup_ctx = nullptr;
   }
   delete ctx;
@@ -2617,49 +2656,23 @@ static void on_range_click(lv_event_t* e) {
   request_history_for_context(ctx);
 }
 
-static void build_popup_ui(SensorPopupContext* ctx, const SensorPopupInit& init) {
-  lv_obj_t* overlay = lv_obj_create(lv_layer_top());
-  ctx->overlay = overlay;
-  lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_opa(overlay, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(overlay, 0, 0);
-  lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
+static void build_popup_shell(SensorPopupContext* ctx, const SensorPopupInit& init) {
+  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : 0x2A2A2A);
+  ctx->overlay = parts.overlay;
+  ctx->card = parts.card;
+  ctx->title_label = parts.title;
+  ctx->icon_label = parts.icon;
+  ctx->close_button = parts.close;
+  lv_obj_t* overlay = parts.overlay;
+  hometiles_title::set(parts.title, init.title.c_str());
 
-  lv_obj_t* card = lv_obj_create(overlay);
-  ctx->card = card;
-  lv_obj_set_size(card, kCardWidth, kCardHeight);
-  lv_obj_center(card);
-  uint32_t card_color = init.bg_color ? init.bg_color : 0x2A2A2A;
-  lv_obj_set_style_bg_color(card, lv_color_hex(card_color), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, popup_layout::kCardRadius, 0);
-  lv_obj_set_style_border_width(card, 0, 0);
-  ui_surface_style::apply_global_tile_border(card);
-  lv_obj_set_style_pad_all(card, kCardPad, 0);
-  lv_obj_set_style_shadow_width(card, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(card, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_shadow_opa(card, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(card, popup_layout::scale480(2), 0);
-  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_event_cb(overlay, on_overlay_click, LV_EVENT_CLICKED, ctx);
+  lv_obj_add_event_cb(overlay, on_overlay_delete, LV_EVENT_DELETE, ctx);
+}
 
-  lv_obj_t* title = lv_label_create(card);
-  ctx->title_label = title;
-  set_label_style(title, lv_color_white(), popup_layout::headerTitleFont());
-  hometiles_title::set(title, init.title.c_str());
-  lv_obj_set_width(title, LV_PCT(38));
-  lv_obj_align(title, LV_ALIGN_TOP_LEFT, 78, 10);
-
-  lv_obj_t* icon = lv_label_create(card);
-  ctx->icon_label = icon;
-  lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(icon);
-  lv_obj_set_style_text_color(icon, lv_color_white(), 0);
-
-  lv_obj_t* close_btn =
-      popup_layout::createCloseButton(card, on_close_click, ctx);
-
-  lv_obj_align(icon, LV_ALIGN_TOP_LEFT, 8, 0);
+static void build_popup_body(SensorPopupContext* ctx) {
+  if (ctx->body_box) return;
+  lv_obj_t* card = ctx->card;
 
   lv_obj_t* range_row = lv_obj_create(card);
   ctx->range_row = range_row;
@@ -2844,15 +2857,10 @@ static void build_popup_ui(SensorPopupContext* ctx, const SensorPopupInit& init)
   ctx->series = lv_chart_add_series(chart, lv_color_white(), LV_CHART_AXIS_PRIMARY_Y);
   clear_chart(ctx, get_history_range_config(ctx->history_range).points);
 
-  lv_obj_move_foreground(icon);
-  lv_obj_move_foreground(title);
+  lv_obj_move_foreground(ctx->icon_label);
+  lv_obj_move_foreground(ctx->title_label);
   lv_obj_move_foreground(range_row);
-  lv_obj_move_foreground(close_btn);
-
-  apply_init_to_context(ctx, init);
-
-  lv_obj_add_event_cb(overlay, on_overlay_click, LV_EVENT_CLICKED, ctx);
-  lv_obj_add_event_cb(overlay, on_overlay_delete, LV_EVENT_DELETE, ctx);
+  lv_obj_move_foreground(ctx->close_button);
 }
 
 }  // namespace
@@ -2880,43 +2888,93 @@ bool sensor_popup_should_use_state_history(const String& value,
   return !numeric;
 }
 
+static bool reusable_sensor_body(const SensorPopupContext* ctx, const SensorPopupInit& init) {
+  if (!ctx || !ctx->body_box || lv_obj_has_flag(ctx->body_box, LV_OBJ_FLAG_HIDDEN) ||
+      ctx->entity_id != init.entity_id || ctx->editable != init.editable ||
+      ctx->binary_mode != init.binary_mode ||
+      ctx->state_history_mode != (init.editable || init.binary_mode || init.state_history_mode) ||
+      ctx->history_range != SensorHistoryRange::Day24 ||
+      ctx->history_language != configManager.getConfig().language ||
+      ctx->decimals != init.decimals || ctx->history_unit != init.unit) return false;
+  return !init.editable || (ctx->history_loaded &&
+      ctx->history_kind == parse_editable_value(haBridgeConfig.findEditableValue(init.entity_id)).kind);
+}
+
+static void finish_sensor_popup_open() {
+  if (g_sensor_popup_ctx && popup_open_pending(g_sensor_popup_ctx->card)) return;
+  if (!g_sensor_open_pending || g_sensor_first_frame.pending() ||
+      !g_sensor_popup_ctx || !is_popup_visible(g_sensor_popup_ctx)) return;
+  SensorPopupInit init = std::move(g_pending_sensor_init);
+  g_sensor_open_pending = false;
+  g_pending_sensor_init = SensorPopupInit{};
+  build_popup_body(g_sensor_popup_ctx);
+
+  // Retain the last rendered history while its refresh is requested. There is
+  // still only one resident body, shared by all Sensor entities and modes.
+  const auto* previous = g_sensor_popup_ctx;
+  const bool reuse_history = reusable_sensor_body(previous, init);
+  const bool fresh_history = reuse_history && init.editable && !previous->state_history_refresh_pending &&
+      previous->history_fingerprint == editable_history_fingerprint(init.entity_id) &&
+      static_cast<uint32_t>(millis() - previous->history_loaded_ms) < kStateHistoryRefreshMinMs24h;
+  if (g_sensor_popup_ctx && g_sensor_popup_ctx->overlay && g_sensor_popup_ctx->card) {
+    apply_init_to_context(g_sensor_popup_ctx, init, reuse_history, false);
+    g_sensor_popup_ctx->history_range = SensorHistoryRange::Day24;
+    update_range_buttons(g_sensor_popup_ctx);
+    if (!reuse_history && g_sensor_popup_ctx->state_history_mode) {
+      g_sensor_popup_ctx->history_loaded = false;
+      clear_binary_history(g_sensor_popup_ctx);
+      if (g_sensor_popup_ctx->editable && g_sensor_popup_ctx->editable_kind == "number")
+        clear_chart(g_sensor_popup_ctx, get_history_range_config(g_sensor_popup_ctx->history_range).points);
+    } else if (!reuse_history) {
+      g_sensor_popup_ctx->history_loaded = false;
+      clear_chart(g_sensor_popup_ctx,
+                  get_history_range_config(
+                      g_sensor_popup_ctx->history_range).points);
+    }
+  }
+  lv_obj_remove_flag(g_sensor_popup_ctx->body_box, LV_OBJ_FLAG_HIDDEN);
+  set_range_buttons_visible(g_sensor_popup_ctx,
+                            g_sensor_popup_ctx->state_history_mode);
+  g_sensor_popup_ctx->state_history_refresh_pending = false;
+  // Present the controls before applying a returned history in another pass.
+  g_sensor_first_frame.begin();
+  if (!fresh_history) request_history_for_context(g_sensor_popup_ctx);
+}
+
 void show_sensor_popup(const SensorPopupInit& init) {
   hide_pin_popup();
   hide_camera_popup();
   hide_climate_popup();
   hide_cover_popup();
   if (!init.entity_id.length()) return;
-
-  // Hide other popups if visible
   hide_light_popup();
   hide_weather_popup();
+  hide_energy_popup();
   hide_media_popup();
 
-  if (g_sensor_popup_ctx && g_sensor_popup_ctx->overlay && g_sensor_popup_ctx->card) {
-    apply_init_to_context(g_sensor_popup_ctx, init);
-    g_sensor_popup_ctx->history_range = SensorHistoryRange::Day24;
-    update_range_buttons(g_sensor_popup_ctx);
-    if (g_sensor_popup_ctx->state_history_mode) {
-      clear_binary_history(g_sensor_popup_ctx);
-      if (g_sensor_popup_ctx->editable) clear_chart(g_sensor_popup_ctx, get_history_range_config(g_sensor_popup_ctx->history_range).points);
-    } else {
-      clear_chart(g_sensor_popup_ctx,
-                  get_history_range_config(
-                      g_sensor_popup_ctx->history_range).points);
-    }
-  } else {
-    SensorPopupContext* ctx = new SensorPopupContext();
-    g_sensor_popup_ctx = ctx;
-    build_popup_ui(ctx, init);
+  if (!g_sensor_popup_ctx) {
+    g_sensor_popup_ctx = new SensorPopupContext();
+    build_popup_shell(g_sensor_popup_ctx, init);
   }
-  set_sensor_popup_visible(g_sensor_popup_ctx, true);
-
+  auto* ctx = g_sensor_popup_ctx;
+  editable_control_close(ctx->control);
+  // A matching resident body is part of the first frame. Only a different
+  // entity or layout needs the header while its content is being rebound.
+  if (!reusable_sensor_body(ctx, init)) {
+    for (auto* body : {ctx->body_box, ctx->control_row, ctx->value_box, ctx->range_row}) {
+      if (body) lv_obj_add_flag(body, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+  g_pending_sensor_init = init;
+  g_sensor_open_pending = true;
   g_pending_history.valid = false;
   g_pending_binary_state.valid = false;
-  set_range_buttons_visible(g_sensor_popup_ctx,
-                            g_sensor_popup_ctx->state_history_mode);
-  request_history_for_context(g_sensor_popup_ctx);
+  apply_sensor_header(ctx, init);
+  defer_popup_content(g_sensor_popup_ctx->card, finish_sensor_popup_open);
+  set_sensor_popup_visible(ctx, true);
+  lv_obj_invalidate(ctx->card);
   if (g_sensor_popup_ctx && g_sensor_popup_ctx->card) viewNavigationPopupShown(g_sensor_popup_ctx->card, init.entity_id.c_str());
+  show_popup_shell(g_sensor_popup_ctx->overlay, g_sensor_popup_ctx->card, g_sensor_popup_ctx->title_label, g_sensor_popup_ctx->icon_label, g_sensor_popup_ctx->close_button);
 }
 
 void preload_sensor_popup() {
@@ -2928,13 +2986,19 @@ void preload_sensor_popup() {
   init.value = "";
   init.unit = "";
   init.decimals = 0xFF;
-  show_sensor_popup(init);
+  g_sensor_popup_ctx = new SensorPopupContext();
+  build_popup_shell(g_sensor_popup_ctx, init);
+  build_popup_body(g_sensor_popup_ctx);
+  apply_init_to_context(g_sensor_popup_ctx, init);
   if (g_sensor_popup_ctx && g_sensor_popup_ctx->card && g_sensor_popup_ctx->overlay) {
     set_sensor_popup_visible(g_sensor_popup_ctx, false);
   }
 }
 
 void hide_sensor_popup() {
+  g_sensor_first_frame.cancel();
+  g_sensor_open_pending = false;
+  g_pending_sensor_init = SensorPopupInit{};
   if (g_sensor_popup_ctx) editable_control_close(g_sensor_popup_ctx->control);
   if (!g_sensor_popup_ctx || !g_sensor_popup_ctx->card || !g_sensor_popup_ctx->overlay) return;
   set_sensor_popup_visible(g_sensor_popup_ctx, false);
@@ -2967,6 +3031,7 @@ void queue_sensor_popup_icon_refresh() { g_pending_icon_refresh = true; }
 
 void queue_sensor_popup_history(const char* entity_id, const char* payload, size_t len) {
   if (!payload || len == 0) return;
+  if (g_sensor_open_pending) return;
   if (!g_sensor_popup_ctx || !is_popup_visible(g_sensor_popup_ctx)) return;
 
   String payload_text = String(payload).substring(0, len);
@@ -3010,6 +3075,12 @@ void process_sensor_popup_queue() {
     g_pending_binary_state.valid = false;
     return;
   }
+
+  if (g_sensor_open_pending) {
+    finish_sensor_popup_open();
+    return;
+  }
+  if (g_sensor_first_frame.pending()) return;
 
   if (g_pending_icon_refresh) {
     g_pending_icon_refresh = false;
@@ -3082,7 +3153,8 @@ void process_sensor_popup_queue() {
     g_pending_value.valid = false;
   }
 
-  if (g_pending_history.valid) {
+  if (g_pending_history.valid && !g_sensor_first_frame.pending() &&
+      !editable_control_is_interacting(g_sensor_popup_ctx->control)) {
     bool same_entity = true;
     if (g_pending_history.entity_id.length()) {
       same_entity = g_sensor_popup_ctx->entity_id.equalsIgnoreCase(g_pending_history.entity_id);
@@ -3102,8 +3174,3 @@ void process_sensor_popup_queue() {
     request_history_for_context(g_sensor_popup_ctx);
   }
 }
-
-
-
-
-

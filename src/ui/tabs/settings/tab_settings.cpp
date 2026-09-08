@@ -1,3 +1,5 @@
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_open.h"
 #include "src/ui/shared/ui_control_style.h"
 #include <lvgl.h>
 #include <WiFi.h>
@@ -1029,6 +1031,8 @@ static void reset_popup_refs() {
 }
 
 static void close_settings_popup() {
+  hide_popup_shell(settings_popup_card);
+  cancel_popup_open(settings_popup_card);
   wifi_stop_scan_timer();
   if (ap_btn_cooldown_timer) {
     lv_timer_del(ap_btn_cooldown_timer);
@@ -1048,7 +1052,12 @@ static void close_settings_popup() {
   reset_popup_refs();
 }
 
-static void on_settings_popup_close_clicked(lv_event_t*) {
+void hide_settings_popup() {
+  if (settings_popup_overlay) close_settings_popup();
+}
+
+static void on_settings_popup_close_clicked(lv_event_t* event) {
+  if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
   // In the Wi-Fi entry view, the header button is a back arrow, replaced
   // by wifi_show_entry_view, and returns to the list. Only from the list
   // does it actually close the popup.
@@ -2845,97 +2854,44 @@ static void build_popup_content(SettingsPopupKind kind, lv_obj_t* parent) {
   }
 }
 
+static void finish_settings_popup_open() {
+  if (settings_popup_content) build_popup_content(settings_popup_kind, settings_popup_content);
+}
+
 static void open_settings_popup(SettingsPopupKind kind) {
   if (settings_popup_overlay) return;
   reset_popup_refs();
   settings_popup_kind = kind;
 
-  settings_popup_overlay = lv_obj_create(lv_screen_active());
-  lv_obj_set_size(settings_popup_overlay, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_pos(settings_popup_overlay, 0, 0);
+  const auto parts = create_popup_body(on_settings_popup_close_clicked, nullptr);
+  settings_popup_overlay = parts.overlay;
+  settings_popup_card = parts.card;
+  settings_popup_title = parts.title;
+  settings_popup_close_icon = lv_obj_get_child(parts.close, 0);
+  lv_obj_t* header_icon = parts.icon;
+  lv_obj_t* close_btn = parts.close;
+  lv_label_set_text(header_icon, getMdiChar(popup_icon_for_kind(kind)).c_str());
+  hometiles_title::set(settings_popup_title, popup_title_for_kind(kind));
+
+  // Settings keeps its full-width form and readable content cap. The shared
+  // header ignores flex layout; this spacer reserves the existing header band.
   lv_obj_set_style_bg_color(settings_popup_overlay, lv_color_hex(0x0A0A0A), 0);
   lv_obj_set_style_bg_opa(settings_popup_overlay, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_opa(settings_popup_overlay, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(settings_popup_overlay, 0, 0);
   lv_obj_set_style_radius(settings_popup_overlay, 0, 0);
   lv_obj_set_style_pad_all(settings_popup_overlay, Device::kGridPad, 0);
-  lv_obj_clear_flag(settings_popup_overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(settings_popup_overlay, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(settings_popup_overlay, LV_OBJ_FLAG_FLOATING);
-
-  settings_popup_card = lv_obj_create(settings_popup_overlay);
   lv_obj_set_size(settings_popup_card, LV_PCT(100), LV_PCT(100));
-  lv_obj_center(settings_popup_card);
-  lv_obj_set_style_bg_color(settings_popup_card, lv_color_hex(0x2A2A2A), 0);
-  lv_obj_set_style_border_opa(settings_popup_card, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(settings_popup_card, 0, 0);
-  ui_surface_style::apply_global_tile_border(settings_popup_card);
   lv_obj_set_style_radius(settings_popup_card, popup_layout::scale(22), 0);
+  lv_obj_set_style_shadow_opa(settings_popup_card, LV_OPA_TRANSP, 0);
   lv_obj_set_style_clip_corner(settings_popup_card, false, 0);
   lv_obj_set_style_pad_all(settings_popup_card, kPopupCardPad, 0);
   lv_obj_set_style_pad_row(settings_popup_card, popup_layout::scale(8), 0);
-  lv_obj_clear_flag(settings_popup_card, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_flex_flow(settings_popup_card, LV_FLEX_FLOW_COLUMN);
-  // Cross-axis CENTER centers content capped at readable width on 1280 px
-  // devices, without affecting full-width children such as the header.
   lv_obj_set_flex_align(settings_popup_card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-
   lv_obj_t* header = lv_obj_create(settings_popup_card);
-  lv_obj_set_width(header, LV_PCT(100));
-  // Choose the height so LEFT_MID icon/title children align with the
-  // save/close button centers at content-y=42; see their align offsets
-  // below.
-  lv_obj_set_height(header, popup_layout::scale(84));
+  lv_obj_set_size(header, LV_PCT(100), popup_layout::scale(84));
   style_plain_container(header);
-
-  lv_obj_t* header_icon = lv_label_create(header);
-  lv_label_set_text(header_icon, getMdiChar(popup_icon_for_kind(kind)).c_str());
-  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(header_icon, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(header_icon);
-  lv_obj_set_style_text_color(header_icon, lv_color_white(), 0);
-  lv_obj_align(header_icon, LV_ALIGN_LEFT_MID,
-               popup_layout::kHeaderIconX, 0);
-
-  // Wi-Fi connect and localization save are at the bottom of their
-  // content; no upper-right save button is needed.
-  settings_popup_title = lv_label_create(header);
-  lv_label_set_text(settings_popup_title, popup_title_for_kind(kind));
-  lv_label_set_long_mode(settings_popup_title, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(settings_popup_title, LV_PCT(62));
-  // Header title and icon use the same compact geometry as tiles.
-  lv_obj_set_style_text_font(settings_popup_title,
-                              popup_layout::headerTitleFont(), 0);
-  lv_obj_set_style_text_color(settings_popup_title, lv_color_white(), 0);
-  lv_obj_align(settings_popup_title, LV_ALIGN_LEFT_MID,
-               popup_layout::kHeaderTitleX, 0);
-
-  lv_obj_t* close_btn = lv_button_create(settings_popup_card);
-  lv_obj_add_flag(close_btn, LV_OBJ_FLAG_IGNORE_LAYOUT);
-  lv_obj_set_size(close_btn, popup_layout::kCloseButtonSize,
-                   popup_layout::kCloseButtonSize);
-  lv_obj_set_style_bg_opa(close_btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(close_btn, lv_color_hex(0xFFFFFF), LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(close_btn, LV_OPA_20, LV_STATE_PRESSED);
-  lv_obj_set_style_border_opa(close_btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_outline_opa(close_btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_shadow_opa(close_btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_radius(close_btn, popup_layout::kCloseButtonRadius, 0);
-  lv_obj_set_style_pad_all(close_btn, 0, 0);
-  lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT,
-                popup_layout::kCloseButtonOffsetX,
-                popup_layout::kCloseButtonOffsetY);
-  lv_obj_set_ext_click_area(close_btn, popup_layout::kCloseButtonClickArea);
-  lv_obj_add_flag(close_btn, LV_OBJ_FLAG_PRESS_LOCK);
-  lv_obj_clear_flag(close_btn, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_event_cb(close_btn, on_settings_popup_close_clicked, LV_EVENT_CLICKED, nullptr);
-  lv_obj_t* close_label = lv_label_create(close_btn);
-  lv_obj_set_style_text_font(close_label, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(close_label);
-  lv_obj_set_style_text_color(close_label, lv_color_white(), 0);
-  lv_label_set_text(close_label, getMdiChar("window-close").c_str());
-  lv_obj_center(close_label);
-  settings_popup_close_icon = close_label;
 
   settings_popup_content = lv_obj_create(settings_popup_card);
   lv_obj_set_width(settings_popup_content, LV_PCT(100));
@@ -2959,16 +2915,11 @@ static void open_settings_popup(SettingsPopupKind kind) {
   // Cross-axis CENTER centers narrow action buttons such as save;
   // full-width children stay full-width.
   lv_obj_set_flex_align(settings_popup_content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-  build_popup_content(settings_popup_kind, settings_popup_content);
+  show_popup_shell(settings_popup_overlay, settings_popup_card,
+                   settings_popup_title, header_icon, close_btn, hide_settings_popup);
+  defer_popup_content(settings_popup_card, finish_settings_popup_open);
 
-  lv_obj_move_foreground(settings_popup_overlay);
   lv_obj_invalidate(settings_popup_overlay);
-
-#if !defined(DEVICE_ESP32_S3_RGB_480)
-  if (lv_display_t* disp = lv_display_get_default()) {
-    lv_refr_now(disp);
-  }
-#endif
 }
 
 static void on_settings_tile_clicked(lv_event_t* e) {

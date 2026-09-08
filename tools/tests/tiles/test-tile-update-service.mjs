@@ -11,7 +11,7 @@ const service = fs.readFileSync(
 
 // The extraction must preserve the existing scheduling decisions in loop().
 const sleepStart = sketch.indexOf('if (powerManager.isInSleep())');
-const activeStart = sketch.indexOf('// In idle mode, process bounded tile batches');
+const activeStart = sketch.indexOf('if (!camera_popup_busy && !PopupFirstFrame::any_pending())', sketch.indexOf('uint32_t t_popup_queues'));
 const activeEnd = sketch.indexOf('uint32_t t_update_queues', activeStart);
 assert.ok(sleepStart >= 0 && activeStart > sleepStart && activeEnd > activeStart);
 const sleep = sketch.slice(sleepStart, activeStart);
@@ -22,11 +22,15 @@ assert.match(sleep,
 assert.doesNotMatch(sleep, /process_tile_graph_queue\(\);/,
   'Sleep must not start request/response graph processing');
 assert.match(active,
-  /if \(!camera_popup_busy\)\s*\{[\s\S]*bool idle = !powerManager\.isHighPerformance\(\);[\s\S]*if \(!idle \|\| \(millis\(\) - last_queue_ms >= 2000\)\)\s*\{[\s\S]*process_tile_update_queues<TileUpdateBudget::Active>\(\);[\s\S]*process_tile_graph_queue\(\);[\s\S]*if \(idle\) energy_service_periodic\(\);[\s\S]*last_queue_ms = millis\(\);/,
+  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{[\s\S]*bool idle = !powerManager\.isHighPerformance\(\);[\s\S]*if \(!idle \|\| \(millis\(\) - last_queue_ms >= 2000\)\)\s*\{[\s\S]*process_tile_update_queues<TileUpdateBudget::Active>\(\);[\s\S]*process_tile_graph_queue\(\);[\s\S]*if \(idle\) energy_service_periodic\(\);[\s\S]*last_queue_ms = millis\(\);/,
   'Camera gating, idle interval, graph order, and energy scheduling must stay in loop()');
 assert.doesNotMatch(service,
   /process_tile_graph_queue|energy_service_periodic|millis\(|delay\(/,
   'The shared service must not own scheduling or request/response work');
+assert.match(active, /last_queue_ms = millis\(\);\s*\} else \{\s*process_idle_media_updates\(\);/,
+  'Fast media service belongs only between idle batches, inside the camera gate');
+assert.doesNotMatch(sleep, /process_idle_media_updates\(\);/,
+  'The sleep path retains its existing drain policy');
 
 const queueTypes = ['sensor', 'switch', 'climate', 'cover',
   'binary_sensor', 'editable', 'weather', 'media'];

@@ -26,12 +26,18 @@ if (!host || !jsonInclude) {
 }
 const out = path.join(root, 'build/tests/editable-history-lvgl');
 fs.mkdirSync(out, {recursive: true});
+fs.writeFileSync(path.join(out,'esp_heap_caps.h'),'#pragma once\n#include <cstdlib>\n#define MALLOC_CAP_SPIRAM 1\n#define MALLOC_CAP_8BIT 2\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void heap_caps_free(void*p){free(p);}\n');
 const layout = read('src/ui/popups/popup_layout.h');
 const geometry = layout.slice(layout.indexOf('namespace popup_layout {'), layout.indexOf('// Standard popup close button.')) + '}';
-const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(icon);'));
+const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(ctx->icon_label);'));
 const rangeBuild = popup.slice(popup.indexOf('  lv_obj_t* range_row = lv_obj_create(card);'), popup.indexOf('  set_range_buttons_visible(ctx, false);', popup.indexOf('  lv_obj_t* range_row = lv_obj_create(card);')));
 const cpp = `
 #include <lvgl.h>
+#include "src/ui/popups/popup_first_frame.h"
+#include "src/ui/popups/popup_open.h"
+void hide_popup_shell(lv_obj_t*){}
+void show_popup_shell(lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*){}
+#include "src/ui/shared/title_label.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -66,9 +72,13 @@ String normalize_state_history_value(const String& value){return value;}
 String format_state_history_label(const String& value){return value;}
 String format_state_history_date(uint64_t){return "Today · 09/07/2026";}
 String format_binary_activity_time(uint64_t,bool){return "11:16:39 AM";}
-uint32_t millis(){return 100;}
+uint32_t ticks=100;uint32_t millis(){return ticks;}
 struct Logger{void println(const char*){}template<class... T>void printf(const char*,T...){}}Serial;
+int opening_layout_calls=0;
+void counted_opening_layout(lv_obj_t* object){++opening_layout_calls;lv_obj_update_layout(object);}
+#define lv_obj_update_layout counted_opening_layout
 ${geometry}
+#undef lv_obj_update_layout
 ${popup.slice(popup.indexOf('constexpr int kBinaryTimelineHeight') - '#if defined(DEVICE_LAYOUT_480X480)\n'.length, popup.indexOf('struct HistoryRangeConfig'))}
 constexpr int kCardWidth=popup_layout::kCardWidth,kCardPad=popup_layout::kCardPad,kChartHeight=popup_layout::contentScale(325),kTimeAxisMarkerCount=8,kChartLineWidth=popup_layout::scale(4),kHistoryPoints24h=288;
 constexpr int kRangeButtonWidth=popup_layout::scale(92),kRangeButtonHeight=popup_layout::kNavHeight,kRangeButtonGap=popup_layout::scale(10);
@@ -83,6 +93,19 @@ constexpr size_t kBinaryMaxActivityEntries=96,kBinaryMaxSegments=96,kBinaryMaxTi
 struct EditableControl;
 ${popup.match(/struct HistoryRangeConfig \{[\s\S]*?\n};/)[0]}
 ${popup.match(/struct SensorPopupContext \{[\s\S]*?\n};/)[0]}
+${read('src/ui/popups/sensor/sensor_popup.h').match(/struct SensorPopupInit \{[\s\S]*?\n};/)[0]}
+SensorPopupContext* g_sensor_popup_ctx=nullptr;PopupFirstFrame g_sensor_first_frame;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;
+struct Pending{bool valid=false;}g_pending_history,g_pending_binary_state;
+struct EditableValue{String kind,state="32",unit="%";bool available=true;};
+struct Bridge{String payload="number";String findEditableValue(const String&){return payload;}}haBridgeConfig;
+EditableValue parse_editable_value(const String&p){EditableValue v;v.kind=String(p.substr(0,p.find('|')));return v;}
+uint32_t editable_value_generation(){return 1;}
+void editable_control_close(EditableControl*){}void editable_control_open(EditableControl*,const String&){}
+bool isMdiIconDisabled(const String&){return false;}String getMdiChar(const String&){return "";}
+
+void update_binary_state(SensorPopupContext*,const String&,bool,const String&,uint64_t,const String&){assert(false);}
+void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_weather_popup(){}void hide_energy_popup(){}void hide_media_popup(){}
+void viewNavigationPopupShown(lv_obj_t*,const char*){}
 HistoryRangeConfig get_history_range_config(SensorHistoryRange r){return r==SensorHistoryRange::Day7?HistoryRangeConfig{168,35,288}:HistoryRangeConfig{24,5,288};}
 ${fn(control, 'editable_control_height')}
 ${['set_label_style','set_range_buttons_visible','style_range_button','update_range_buttons','accept_editable_history_range','clear_chart'].map(n => fn(popup,n)).join('\n')}
@@ -91,12 +114,23 @@ ${fn(popup,'measure_label_text_width')}
 int calc_time_axis(const SensorPopupContext* ctx,String* labels,float* fracs,int){int count=ctx->history_range==SensorHistoryRange::Day7?7:4;for(int i=0;i<count;++i){labels[i]=std::to_string(i);fracs[i]=float(i)/(count-1);}return count;}
 int calc_day7_boundary_axis(float*,int){return 0;}
 static void refresh_binary_activity_rows(SensorPopupContext*,bool force=false);
-${['update_binary_time_axis','update_y_axis_layout','resize_editable_chart','editable_control_top','layout_editable_history','extract_epoch','extract_numeric','binary_state_code','binary_state_color','binary_state_priority','binary_state_identifier','state_history_color','local_date_key','on_binary_timeline_draw','refresh_binary_labels','refresh_binary_activity_rows','on_binary_activity_scroll','clear_binary_history','ensure_binary_view','binary_timeline_hex_nibble','decode_state_timeline'].map(n => fn(popup,n)).join('\n')}
+int history_layout_calls=0;
+${['update_binary_time_axis','update_y_axis_layout','resize_editable_chart','editable_control_top','layout_editable_history','extract_epoch','extract_numeric','binary_state_code','binary_state_color','binary_state_priority','binary_state_identifier','state_history_color','local_date_key','on_binary_timeline_draw','refresh_binary_labels','refresh_binary_activity_rows','on_binary_activity_scroll','clear_binary_history','ensure_binary_view','binary_timeline_hex_nibble','decode_state_timeline'].map(n => n==='layout_editable_history' ? fn(popup,n).replace('{','{ ++history_layout_calls;') : fn(popup,n)).join('\n')}
 void update_value_label(SensorPopupContext*ctx,const String& value,const String& unit){ctx->unit=unit;if(ctx->value_label)lv_label_set_text(ctx->value_label,value.c_str());}
 void apply_binary_history_payload(SensorPopupContext*,DynamicJsonDocument&){assert(false&&"Unexpected binary response");}
 ${fn(popup,'apply_state_history_payload')}
 ${fn(popup,'apply_history_payload')}
-void request_history_for_context(SensorPopupContext*ctx){static int id=0;ctx->editable_history_id=std::to_string(++id);}
+${fn(popup,'editable_history_fingerprint')}
+int requests=0;
+void request_history_for_context(SensorPopupContext*ctx){ctx->editable_history_id=std::to_string(++requests);ctx->history_request_fingerprint=editable_history_fingerprint(ctx->entity_id);}
+${fn(popup,'apply_sensor_header')}
+${fn(popup,'apply_init_to_context')}
+void build_popup_shell(SensorPopupContext*,const SensorPopupInit&){assert(false&&"Reopening must reuse the existing shell");}
+void build_popup_body(SensorPopupContext*){}
+bool is_popup_visible(SensorPopupContext*c){return c&&c->card&&!lv_obj_has_flag(c->card,LV_OBJ_FLAG_HIDDEN);}
+${fn(popup,'reusable_sensor_body')}
+${fn(popup,'finish_sensor_popup_open')}
+${['set_sensor_popup_visible','show_sensor_popup','hide_sensor_popup'].map(n=>fn(popup,n)).join('\n')}
 ${fn(popup,'on_range_click')}
 void build_range_buttons(SensorPopupContext*ctx){auto*card=ctx->card;${rangeBuild}}
 lv_obj_t* box(lv_obj_t*parent){auto*obj=lv_obj_create(parent);lv_obj_remove_style_all(obj);lv_obj_set_width(obj,LV_PCT(100));lv_obj_remove_flag(obj,LV_OBJ_FLAG_SCROLLABLE);return obj;}
@@ -173,7 +207,39 @@ int main(int argc,char**argv){
   apply_history_payload(&ctx,payload(true).c_str());assert(ctx.binary_activity.empty()&&shown(ctx.binary_activity_status)&&geometry()==expected);axes(ctx.editable_kind=="select");
   apply_history_payload(&ctx,payload(false,true).c_str());assert(shown(ctx.binary_history_status)&&geometry()==expected);axes(ctx.editable_kind=="select");
   apply_history_payload(&ctx,payload().c_str());assert(!shown(ctx.binary_history_status)&&geometry()==expected&&shown(ctx.chart_wrap)==numeric);
+  if(numeric){
+   JsonDocument invalid;deserializeJson(invalid,payload());invalid["period_minutes"]=99;invalid["values"]=nullptr;String json;serializeJson(invalid,static_cast<std::string&>(json));const auto count=ctx.binary_activity.size();const auto range=ctx.history_range;apply_history_payload(&ctx,json.c_str());assert(ctx.binary_activity.size()==count&&ctx.history_range==range);
+   deserializeJson(invalid,payload(false,true));invalid.remove("values");json.clear();serializeJson(invalid,static_cast<std::string&>(json));apply_history_payload(&ctx,json.c_str());assert(!ctx.history_loaded&&shown(ctx.binary_history_status)&&ctx.binary_activity.empty());
+  }
  }
+ // Execute the actual open/rebind/hide path on the populated LVGL shell.
+ // History data and rows must survive a warm reopen; changed metadata, state
+ // during an in-flight request, locale, range and entity force fresh history.
+ ctx.overlay=box(lv_screen_active());lv_obj_set_size(ctx.overlay,SCREEN_WIDTH,SCREEN_HEIGHT);lv_obj_set_parent(card,ctx.overlay);
+ ctx.value_box=box(card);ctx.value_label=lv_label_create(ctx.value_box);ctx.control_row=box(card);
+ g_sensor_popup_ctx=&ctx;SensorPopupInit init;init.editable=true;init.entity_id="test.entity";init.value="32";init.unit="%";
+ auto open=[&](){const bool cached=reusable_sensor_body(&ctx,init);const int before=requests,layouts=history_layout_calls,opening_layouts=opening_layout_calls;show_sensor_popup(init);assert(opening_layout_calls==opening_layouts&&"Opening must not force a whole-screen layout before its first frame");assert(popup_open_pending(ctx.card)&&PopupFirstFrame::any_pending()&&g_sensor_open_pending&&requests==before&&history_layout_calls==layouts);assert(shown(ctx.body_box)==cached&&"Matching cached content must be visible in the first frame");finish_sensor_popup_open();assert(g_sensor_open_pending&&requests==before);lv_refr_now(display);process_popup_open();assert(!g_sensor_open_pending&&g_sensor_first_frame.pending()&&shown(ctx.body_box));lv_refr_now(display);};
+ auto open_and_load=[&](){open();apply_history_payload(&ctx,payload().c_str());assert(ctx.history_loaded);};
+ for(const char*kind:{"number","select","time"}){
+  haBridgeConfig.payload=kind;open_and_load();const auto children=lv_obj_get_child_count(ctx.binary_activity_viewport);const auto count=ctx.binary_activity.size();const int requested=requests,layouts=history_layout_calls;
+  for(int i=0;i<20;++i){hide_sensor_popup();show_sensor_popup(init);assert(requests==requested&&ctx.binary_activity.size()==count&&lv_obj_get_child_count(ctx.binary_activity_viewport)==children&&history_layout_calls==layouts);assert(shown(ctx.chart_wrap)==(ctx.editable_kind=="number"));assert(PopupFirstFrame::any_pending());hide_sensor_popup();assert(!PopupFirstFrame::any_pending());}
+  haBridgeConfig.payload=String(kind)+"|state_changed";open();assert(requests==requested+1&&ctx.binary_activity.size()==count);
+  haBridgeConfig.payload=String(kind)+"|state_changed_again";apply_history_payload(&ctx,payload().c_str());hide_sensor_popup();open();assert(requests==requested+2&&"A response to an old state must not mark the current state fresh");
+  open_and_load();ticks+=60000;int before=requests;hide_sensor_popup();open();assert(requests==before+1&&ctx.binary_activity.size()==count);
+  open_and_load();ctx.state_history_refresh_pending=true;before=requests;hide_sensor_popup();open();assert(requests==before+1);
+  open_and_load();configManager.cfg.language="de";open();assert(ctx.binary_activity.empty());configManager.cfg.language="en";
+  open_and_load();ctx.history_range=SensorHistoryRange::Day7;open();assert(ctx.binary_activity.empty());
+  open_and_load();ctx.unit="changed";init.unit="changed";open();assert(ctx.binary_activity.empty()&&"Live metadata must not relabel the cached history");init.unit="%";
+  open_and_load();ctx.editable_kind="date";haBridgeConfig.payload="date";open();assert(ctx.binary_activity.empty()&&"History belongs to the rendered kind, not subsequently changed live metadata");haBridgeConfig.payload=kind;
+  open_and_load();init.entity_id="other.entity";open();assert(ctx.binary_activity.empty());init.entity_id="test.entity";
+ }
+ // Numeric Sensor history uses the same resident graph on every warm opening.
+ hide_sensor_popup();init.editable=false;init.entity_id="sensor.temperature";init.unit="C";
+ open();lv_chart_set_value_by_id(ctx.chart,ctx.series,0,123);
+ const auto* sensor_graph=ctx.chart;const int sensor_layouts=history_layout_calls;
+ for(int i=0;i<20;++i){hide_sensor_popup();open();assert(ctx.chart==sensor_graph&&shown(ctx.value_box)&&shown(ctx.chart_wrap));assert(lv_chart_get_y_array(ctx.chart,ctx.series)[0]==123&&"Warm Sensor opens must not clear the cached graph");assert(history_layout_calls==sensor_layouts);}
+ init.entity_id="sensor.other";open();assert(lv_chart_get_y_array(ctx.chart,ctx.series)[0]==LV_CHART_POINT_NONE&&"A different entity must not inherit the previous graph");
+ hide_sensor_popup();g_sensor_popup_ctx=nullptr;
  // Existing textual and numeric Sensor modes must still restore their own UI.
  ctx.editable=false;ctx.state_history_mode=true;layout_editable_history(&ctx);clear_binary_history(&ctx);axes(true);assert(!shown(ctx.chart_wrap)&&shown(ctx.binary_timeline));
  ctx.state_history_mode=false;layout_editable_history(&ctx);assert(shown(ctx.chart_wrap));
@@ -198,7 +264,7 @@ for(const device of deviceCatalog.profiles){
 }
 for(const [profile,width,height,define] of layouts){
  const binary=path.join(out,profile+(process.platform==='win32'?'.exe':''));
- let result=spawnSync(host.cxx,[...host.flags,'-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),source,host.archive,'-o',binary],{encoding:'utf8'});
+ let result=spawnSync(host.cxx,[...host.flags,'-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),source,path.join(root,'src/ui/popups/popup_open.cpp'),'-I',out,host.archive,'-o',binary],{encoding:'utf8'});
  assert.equal(result.status,0,result.stdout+result.stderr);
  result=spawnSync(binary,[path.join(out,profile)],{encoding:'utf8',timeout:45000});assert.equal(result.status,0,profile+': '+result.stdout+result.stderr);
  fs.writeFileSync(path.join(out,profile+'.log'),result.stdout+result.stderr);

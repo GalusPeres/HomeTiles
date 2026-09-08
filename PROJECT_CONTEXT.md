@@ -39,66 +39,15 @@ Last reviewed: 2026-09-08
 
 Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
-- External hardware: Guition `JC8012P4A1C_I_W_Y` V1. The reporter uses Foscam
-  cameras through Home Assistant's Generic Camera integration.
-- The reporter also cannot install normal OTA updates; USB installation works.
-- The `v0.6.8b1` and `v0.6.8b2` logs repeatedly show the same sequence: the
-  stream connects and the first JPEG decodes successfully, then
-  ESP-Hosted/SDIO reports CMD53 error `0x109`, wait timeout `0x107`, raw
-  `0xcccccccc`, and an out-of-range RX length, followed by
-  `rst:0xc (SW_CPU_RESET)`. One b2 failure began before opening the camera.
-- The same SDIO failure can occur during ordinary MQTT startup without an open
-  camera. Camera traffic and OTA both exercise the P4-to-C6 network transport;
-  the evidence points below JPEG decoding and LVGL, but the exact electrical,
-  board-revision, or driver cause is not yet proven.
-- There is no normal panic core dump because the observed path ends in a
-  software restart/transport recovery rather than an application exception.
-- Beta b1 already contained the a8204 raw-PKT_LEN/pending-drain recovery and
-  the short-tail CMD53 marker. It still failed, so repeating that patch or
-  merely changing its label is not a solution.
-- The ESP-Hosted version RPC timeout `0x15e` also occurs on a stable Waveshare
-  8-inch unit. It identifies an older C6 protocol but is not sufficient to
-  cause the crash; the fatal Guition-only evidence is the `0x109`/`0x107`
-  transport cascade.
-- Do not use or publish `v0.6.8b3`; it only requested 4-bit SDIO at 20 MHz and
-  did not contain the later first-fault diagnostics. Espressif issue #167 also
-  reports that 20 MHz did not reliably prevent this failure sequence.
-- The b4 logs locate the first failure at a large C6-to-P4 CMD53 block read:
-  raw DCRC status `0x80` occurs on 11- or 14-block reads before `0x109` and the
-  later `0x107` timeout. JPEG decode, display, and Home Assistant are downstream
-  of the failing transport operation.
-- The b5 1-bit/40-MHz build still produces the same first DCRC failure, including
-  failures before opening the camera. Reducing the active SDIO data lanes is
-  therefore not a fix.
-- Exact schematics explain why this Guition can behave differently from other
-  P4 boards despite sharing the same P4/C6 architecture: Guition V1 uses
-  5.1-kohm pull-ups on CMD, CLK, and D0-D3 without series termination;
-  Waveshare 8-inch uses 51-kohm pull-ups, while Tab5 combines 5.1-kohm
-  pull-ups with 22-ohm series resistors and a separately switched WLAN rail.
-  This makes Guition-specific SDIO signal or power margin plausible. The b6
-  result proves that limiting the RX CMD53 transaction length is an effective
-  mitigation, but it does not by itself prove the underlying electrical cause.
-- Guition's original `JC8012P4A1_C6.bin` and the current HomeTiles host both
-  use ESP-Hosted streaming mode. The newer official
-  `JC-C6-slave_v2.3.2.bin` uses packet mode and is not a drop-in C6 update for
-  the current host. Do not flash it alone. The onboard USB paths reach only
-  the P4; C6 UART/boot access requires the internal CN5 header and an external
-  3.3 V UART adapter.
-- Do not use the reported ESP-Hosted 2.9.3 rollback as the next test. That
-  report concerns a different `0x102` TX/alignment failure on another board;
-  the normal 2.9.3-to-2.11.6 CMD53 RX path does not explain this Guition's
-  `0x109` CRC failure, and rollback would discard relevant safety fixes.
-- `v0.6.8b6` passed the reporter's hardware test: both cameras ran at 15-20 FPS,
-  Web Admin OTA succeeded, and the previous `0x109`/`0x107` failure did not
-  recur. The regular-source integration retains the proven 1-bit/40-MHz V1
-  configuration and splits large P4 RX reads into individual 512-byte CMD53
-  reads. Reporter confirmed integrated v0.6.9b1 Camera/Web OTA; v0.6.10 ships it.
-- Lowering camera FPS, resolution, or quality may be used only as a clearly
-  identified diagnostic A/B test. It is not an acceptable final fix and must
-  not silently reduce normal camera performance.
-- Keep the release integration limited to the exact V1 profile and verify the
-  single-block marker plus 1-bit configuration in its final build. Other P4
-  profiles must retain their baseline ESP-Hosted object; S3 remains unaffected.
+- External Guition `JC8012P4A1C_I_W_Y` V1; Foscam via HA Generic Camera. Normal OTA failed; USB worked.
+- b1/b2 logs: first JPEG succeeds, then CMD53 `0x109`, timeout `0x107`, raw `0xcccccccc`, invalid RX length and `rst:0xc`. Failures also occur during MQTT startup without a camera. Recovery restarts explain the absence of a panic core dump.
+- b1 already contained a8204 raw-PKT_LEN/pending-drain and short-tail markers; repeating that patch is not a solution. Version RPC `0x15e` also occurs on stable Waveshare 8-inch and is insufficient to explain the fatal Guition transport cascade.
+- Do not use/publish b3 (4-bit/20 MHz, no first-fault diagnostics). Issue #167 also found 20 MHz unreliable. b4 located the first DCRC `0x80` on 11-/14-block C6-to-P4 reads, before `0x109`/`0x107`. b5 1-bit/40 MHz still failed, sometimes before Camera; lane reduction alone is not a fix.
+- Schematics: Guition V1 has 5.1-kohm CMD/CLK/D0-D3 pull-ups without series termination; Waveshare 8-inch has 51-kohm pull-ups; Tab5 has 5.1-kohm pull-ups, 22-ohm series resistors and switched WLAN power. Signal/power margin is plausible, not proven by the working mitigation.
+- Original `JC8012P4A1_C6.bin` and HomeTiles use streaming mode. New `JC-C6-slave_v2.3.2.bin` uses packet mode: do not flash it alone. USB reaches P4 only; C6 flashing needs CN5 and a 3.3 V UART adapter.
+- Do not retry the reported 2.9.3 rollback: it concerns another board's `0x102` TX/alignment failure, not this CRC path, and discards relevant safety fixes.
+- b6 passed reporter hardware tests: two cameras at 15-20 FPS and Web OTA, without the transport cascade. Exact V1 retains 1-bit/40 MHz and splits large RX into individual 512-byte CMD53 reads. Reporter confirmed integrated v0.6.9b1; v0.6.10 ships it.
+- Keep the single-block marker/1-bit configuration exact-V1 only; other P4 profiles retain baseline objects, S3 is unaffected. Lower camera quality/FPS/resolution is allowed only for a labeled diagnostic A/B, never a silent final fix.
 
 ## ESP32-P4 network history that remains relevant
 
@@ -134,6 +83,17 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Wi-Fi audit: S3 idle (>3 s) requests MIN_MODEM/11 dBm; sleep/wake NONE/19.5. P4 blocks idle saving; boot/reconnect and failed-call caching have gaps on both. Unfixed; probes: `build/wifi-power-audit/VERIFICATION.md`.
 - Titles: two centered lines with ellipsis, 255 UTF-8 bytes in `/_tile_titles`; Settings uses `set_title`, record v4 unchanged. View labels flatten CR/LF to fix Bridge `writable:false` from multiline S3 titles. Current builds approved by maintainer.
 - S3 froze adding Number to active screensaver: Web answered, save persisted, user rebooted; crash log has an older ELF. Cause unproven; retained as a release validation limitation.
+
+## Shared-popup/artwork checkpoint (2026-09-08)
+
+- Checkpoint after `4adff2d`; no release. Maintainer confirms fast tile opening on Waveshare 8-inch with the corrected BIN. Larger Weather tiles still open slowly; this size-dependent issue predates the fixed universal delay.
+- All popups use one visible frame/header/close button and one construction helper; duplicate setup is removed from nine type modules and Settings. Colors/titles/icons remain variable. Tile bodies stay cached; invisible header labels retain state bindings. Settings forms remain disposable; Camera widgets are preloaded.
+- One dispatcher defers expensive content until the regular frame. Matching cached bodies stay visible immediately; Sensor retains the last graph during refresh. Cold/rebound contents follow the header. Close/switch/deletion cancel pending work; PIN refusal and Settings back/cleanup remain.
+- Cover regression: Bridge URL-only `state_fast` precedes full MQTT artwork. P4's HTTPS guard previously hid loaded pixels. Blocked/failed replacements now retain the old image; paired URL/content hashes prevent S3 redownloads and stale results. Deferred Media opening resolves a current descriptor by entity, without retaining borrowed pixels.
+- Memory layout unchanged: LVGL pool in PSRAM (S3 2 MiB, P4 12 MiB), internal/DMA draw band capped at 72 KiB with existing reserves; resident page caches remain bounded (S3 4, P4 6). New binding records use PSRAM, not additional framebuffers. Existing larger covers and bounded idle Media service remain.
+- Bounded invalidation fixes the reproduced full-screen redraws from moving the shared overlay. Shared header positioning removes a forced whole-screen layout; warm Sensor graphs remain populated. Corrected Waveshare 8-inch build and 91 tests pass. BIN: `build/local-safe-waveshare_8/HomeTiles.ino.bin`, 6322592 bytes, SHA256 `91334c7c125e7193277ebfae6334a57fda27c9100c0ec807ac1a69cc613741f8`. Details: `build/popup-shell-cover-fix/VERIFICATION.md`.
+- Pending: larger Weather tile opening, broader control/history and artwork continuity validation, navigation, sleep/wake, camera/ESP-Hosted soak and memory minima. S3 build/hardware validation is deferred at the user's request.
+
 ## Current maintenance refactoring
 
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.

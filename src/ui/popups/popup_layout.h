@@ -275,6 +275,26 @@ constexpr int kValueY = kValueBaseY + extra_gap_before_value();
 constexpr int kBodyY = kBodyBaseY + extra_gap_before_body();
 constexpr int kNavY = kCardHeight - kNavBottomInset - kNavHeight;
 
+// Header coordinates depend only on the font and fixed padding. Do not force
+// layout of the entire screen to position cached header metadata before opening.
+inline void alignHeader(lv_obj_t* card, lv_obj_t* title, lv_obj_t* icon) {
+  if (!card) return;
+  const int center = kHeaderCenterY - lv_obj_get_style_pad_top(card, LV_PART_MAIN);
+  for (auto* label : {title, icon}) {
+    if (!label) continue;
+    const auto* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+    int height = lv_font_get_line_height(font);
+    const auto* state = hometiles_title::state_for(label);
+    if (label == title && state && !state->top_aligned &&
+        state->text.find('\n') != std::string::npos) height *= 2;
+    const int x = label == title ? kHeaderTitleX : kHeaderIconX;
+    const int y = std::max(0, center - height / 2);
+    if (lv_obj_get_style_x(label, LV_PART_MAIN) != x ||
+        lv_obj_get_style_y(label, LV_PART_MAIN) != y)
+      lv_obj_align(label, LV_ALIGN_TOP_LEFT, x, y);
+  }
+}
+
 // Standard popup close button. Every popup shares the same geometry, pressed
 // feedback, touch area and icon, so the header stays consistent and a change to
 // the close control does not have to be repeated per popup. `handler` is

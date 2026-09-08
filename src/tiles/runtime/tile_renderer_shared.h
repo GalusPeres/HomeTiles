@@ -86,102 +86,17 @@ static inline void disable_pressed_button_animation(lv_obj_t* obj) {
   lv_obj_set_style_translate_y(obj, 0, LV_PART_MAIN | LV_STATE_PRESSED);
 }
 
-// A preloaded popup is shown immediately from the click callback. If the last
-// press/release refresh of the triggering tile is still pending, LVGL renders
-// that tile's rectangular dirty area with a single slice of the popup already.
-// So draw the button fully back to its normal state first; the popup can then
-// appear cleanly from top to bottom.
+// Release the source and let the regular refresh draw the complete popup.
+// A nested refresh here redraws the old page before the new card can appear.
 static inline void finish_press_before_popup(lv_event_t* event) {
   if (!event) return;
-  lv_obj_t* source = static_cast<lv_obj_t*>(lv_event_get_target(event));
-  if (source) {
-    viewNavigationSource(source);
-    lv_obj_clear_state(source, LV_STATE_PRESSED);
-    lv_obj_invalidate(source);
-  }
-#if defined(DEVICE_ESP32_S3_RGB_480)
-  // Avoid a nested refresh in the input callback. The preloaded popup shown
-  // immediately afterwards invalidates its card, so the normal refresh can
-  // present both the released tile state and popup in one pass.
-#else
-  lv_display_t* display = lv_display_get_default();
-  if (display) lv_refr_now(display);
-#endif
-}
-
-// Weather and other large preloaded popups should not force a nested display
-// refresh from inside the input callback.  Finish the pressed frame first and
-// open the popup only after LVGL has rendered and flushed that frame.  A plain
-// lv_async_call() is insufficient here: its zero-delay timer can still run in
-// the same lv_timer_handler() pass before the display refresh timer.
-template <typename Init>
-struct DeferredPopupAfterRefresh {
-  Init init{};
-  void (*show)(const Init&) = nullptr;
-  lv_display_t* registered_display = nullptr;
-  bool pending = false;
-  uint32_t view_generation = 0;
-};
-
-template <typename Init>
-static DeferredPopupAfterRefresh<Init>& deferred_popup_after_refresh_state() {
-  static DeferredPopupAfterRefresh<Init> state;
-  return state;
-}
-
-template <typename Init>
-static void deferred_popup_after_refresh_cb(lv_event_t* event) {
-  auto* state = static_cast<DeferredPopupAfterRefresh<Init>*>(
-      lv_event_get_user_data(event));
-  if (!state || !state->pending || !state->registered_display) return;
-
-  // Clear the shared state before invoking user code. This keeps the helper
-  // correct even if show() synchronously schedules another popup of this type.
-  Init init = state->init;
-  void (*show)(const Init&) = state->show;
-  state->pending = false;
-  state->show = nullptr;
-  state->init = Init{};
-  if (show && viewNavigationDeferredPopupAllowed(state->view_generation)) show(init);
-}
-
-template <typename Init>
-static inline void defer_popup_until_source_refreshed(
-    lv_event_t* event, const Init& init, void (*show)(const Init&)) {
-  if (!event || !show) return;
-
-  // Weather children bubble their events to the card. The card is the current
-  // target and owns the pressed style; the original target may only be a label.
   lv_obj_t* source = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
   if (!source) source = static_cast<lv_obj_t*>(lv_event_get_target(event));
-  lv_display_t* display = source ? lv_obj_get_display(source)
-                                 : lv_display_get_default();
   if (source) {
     viewNavigationSource(source);
     lv_obj_clear_state(source, LV_STATE_PRESSED);
     lv_obj_invalidate(source);
   }
-  if (!display) {
-    show(init);
-    return;
-  }
-
-  auto& state = deferred_popup_after_refresh_state<Init>();
-  if (state.registered_display && state.registered_display != display) {
-    lv_display_remove_event_cb_with_user_data(
-        state.registered_display, deferred_popup_after_refresh_cb<Init>, &state);
-    state.registered_display = nullptr;
-  }
-
-  state.init = init;
-  state.show = show;
-  state.pending = true;
-  state.view_generation = viewNavigationPopupGeneration();
-  if (!state.registered_display) {
-    // Keep one callback for the static display instead of allocating and
-    // freeing an LVGL event descriptor on every Weather click.
-    lv_display_add_event_cb(display, deferred_popup_after_refresh_cb<Init>,
-                            LV_EVENT_REFR_READY, &state);
-    state.registered_display = display;
-  }
+  lv_display_t* display = lv_display_get_default();
+  if (display) lv_timer_ready(lv_display_get_refr_timer(display));
 }

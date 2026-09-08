@@ -9,6 +9,8 @@ struct MediaCoverRef {
   lv_image_dsc_t* popup_dsc = nullptr;
   String source_url;
   uint32_t url_hash = 0;
+  // URL paired with the displayed MQTT pixels; their content hash is separate.
+  uint32_t embedded_url_hash = 0;
   uint32_t requested_url_hash = 0;
   uint32_t failed_url_hash = 0;
   uint32_t failed_at_ms = 0;

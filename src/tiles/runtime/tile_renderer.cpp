@@ -1,3 +1,8 @@
+#include "src/types/media/artwork_scale.h"
+#include "src/types/media/artwork_payload.h"
+#include "src/types/media/content_layout.h"
+#include "src/types/media/update_schedule.h"
+#include "src/types/media/update_service.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/json_scan.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -3018,6 +3023,24 @@ static String media_entity_for_grid_index(GridType grid_type, uint8_t grid_index
   return tile->sensor_entity;
 }
 
+const lv_image_dsc_t* tile_renderer_find_media_cover(const String& entity_id, uint32_t& hash) {
+  const GridType types[] = {GridType::TAB0, GridType::TAB1, GridType::TAB2};
+  MediaTileWidgets* const grids[] = {g_tab0_media, g_tab1_media, g_tab2_media};
+  for (size_t grid = 0; grid < 3; ++grid) {
+    if (!grids[grid]) continue;
+    for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
+      const auto& widgets = grids[grid][i];
+      if (!widgets.cover_ref || !widgets.cover_ref->dsc || !widgets.cover_clip ||
+          lv_obj_has_flag(widgets.cover_clip, LV_OBJ_FLAG_HIDDEN)) continue;
+      if (!media_entity_for_grid_index(types[grid], i).equalsIgnoreCase(entity_id)) continue;
+      hash = widgets.cover_ref->url_hash;
+      return widgets.cover_ref->popup_dsc ? widgets.cover_ref->popup_dsc : widgets.cover_ref->dsc;
+    }
+  }
+  hash = 0;
+  return nullptr;
+}
+
 static void update_media_popup_from_widgets(GridType grid_type,
                                             uint8_t grid_index,
                                             MediaTileWidgets& widgets,
@@ -3455,73 +3478,12 @@ static lv_image_dsc_t* make_media_cover_decoded_jpeg_dsc(const uint8_t* data, si
   return dsc;
 }
 
-static lv_image_dsc_t* make_media_tile_cover_dsc(const lv_image_dsc_t* source) {
-  if (!source || !source->data ||
-      source->header.cf != LV_COLOR_FORMAT_RGB565_SWAPPED ||
-      source->header.w == 0 || source->header.h == 0) {
-    return nullptr;
-  }
-
-  constexpr uint16_t kTileCoverMaxSide =
-      tile_layout::scale_u16(120);
-  if (source->header.w <= kTileCoverMaxSide &&
-      source->header.h <= kTileCoverMaxSide) {
-    return nullptr;
-  }
-
-  uint16_t dst_w = source->header.w;
-  uint16_t dst_h = source->header.h;
-  if (dst_w >= dst_h) {
-    dst_w = kTileCoverMaxSide;
-    dst_h = static_cast<uint16_t>((static_cast<uint32_t>(source->header.h) * dst_w) /
-                                  source->header.w);
-  } else {
-    dst_h = kTileCoverMaxSide;
-    dst_w = static_cast<uint16_t>((static_cast<uint32_t>(source->header.w) * dst_h) /
-                                  source->header.h);
-  }
-  if (dst_w == 0) dst_w = 1;
-  if (dst_h == 0) dst_h = 1;
-
-  const size_t bytes = static_cast<size_t>(dst_w) * dst_h * sizeof(uint16_t);
-  uint16_t* pixels = static_cast<uint16_t*>(alloc_media_cover_memory(bytes, true));
-  if (!pixels) return nullptr;
-
-  const uint16_t* src_pixels = reinterpret_cast<const uint16_t*>(source->data);
-  const uint16_t src_w = source->header.w;
-  const uint16_t src_h = source->header.h;
-  for (uint16_t y = 0; y < dst_h; ++y) {
-    const uint16_t sy = static_cast<uint16_t>((static_cast<uint32_t>(y) * src_h) / dst_h);
-    for (uint16_t x = 0; x < dst_w; ++x) {
-      const uint16_t sx = static_cast<uint16_t>((static_cast<uint32_t>(x) * src_w) / dst_w);
-      pixels[static_cast<size_t>(y) * dst_w + x] =
-          src_pixels[static_cast<size_t>(sy) * src_w + sx];
-    }
-  }
-
-  lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(
-      alloc_media_cover_memory(sizeof(lv_image_dsc_t)));
-  if (!dsc) {
-    free(pixels);
-    return nullptr;
-  }
-  memset(dsc, 0, sizeof(*dsc));
-  dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-  dsc->header.cf = LV_COLOR_FORMAT_RGB565_SWAPPED;
-  dsc->header.w = dst_w;
-  dsc->header.h = dst_h;
-  dsc->header.stride = dst_w * 2;
-  dsc->data_size = bytes;
-  dsc->data = reinterpret_cast<const uint8_t*>(pixels);
-  return dsc;
-}
-
 // Copy pixels from a completed cover descriptor. Each tile still owns its
 // buffers, so existing cleanup paths work without reference counting.
 static lv_image_dsc_t* clone_media_cover_dsc(const lv_image_dsc_t* source) {
   if (!source || !source->data || !source->data_size) return nullptr;
   uint8_t* pixels = static_cast<uint8_t*>(
-      alloc_media_cover_memory(source->data_size, true));
+      heap_caps_malloc(source->data_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
   if (!pixels) return nullptr;
   memcpy(pixels, source->data, source->data_size);
   lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(
@@ -3835,81 +3797,6 @@ static bool media_widgets_are_visible(const MediaTileWidgets& widgets) {
          media_obj_is_visible(widgets.play_pause_label);
 }
 
-static void set_media_cover_text_layout(MediaTileWidgets& widgets, bool cover_visible) {
-  const bool has_subtitle = widgets.media_subtitle_label &&
-                            !lv_obj_has_flag(widgets.media_subtitle_label, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_t* text_parent = widgets.media_title_label ? lv_obj_get_parent(widgets.media_title_label) : nullptr;
-  if (text_parent) {
-    lv_obj_update_layout(text_parent);
-  }
-  const lv_coord_t parent_w = text_parent ? lv_obj_get_width(text_parent) : 720;
-  const lv_coord_t parent_h = text_parent ? lv_obj_get_height(text_parent) : 240;
-  const bool large_cover =
-      widgets.cover_clip &&
-      lv_obj_get_width(widgets.cover_clip) >= tile_layout::scale(120);
-  const lv_coord_t text_x =
-      tile_layout::scale(cover_visible ? (large_cover ? 138 : 112) : 20);
-  const lv_coord_t text_right_margin =
-      tile_layout::scale(cover_visible ? 42 : 28);
-  lv_coord_t text_w = parent_w - text_x - text_right_margin;
-  if (text_w < tile_layout::scale(120)) {
-    const lv_coord_t fallback_margin = tile_layout::scale(40);
-    text_w =
-        parent_w > fallback_margin ? parent_w - fallback_margin : parent_w;
-  }
-
-  lv_coord_t title_h = tile_layout::scale(32);
-  lv_coord_t subtitle_h = 0;
-  if (widgets.media_title_label) {
-    lv_obj_set_width(widgets.media_title_label, text_w);
-    lv_obj_set_style_text_align(widgets.media_title_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_update_layout(widgets.media_title_label);
-    title_h = lv_obj_get_height(widgets.media_title_label);
-    if (title_h < 1) title_h = tile_layout::scale(32);
-  }
-  if (widgets.media_subtitle_label) {
-    lv_obj_set_width(widgets.media_subtitle_label, text_w);
-    lv_obj_set_style_text_align(widgets.media_subtitle_label, LV_TEXT_ALIGN_LEFT, 0);
-    if (has_subtitle) {
-      lv_obj_update_layout(widgets.media_subtitle_label);
-      subtitle_h = lv_obj_get_height(widgets.media_subtitle_label);
-      if (subtitle_h < 1) subtitle_h = tile_layout::scale(20);
-    }
-  }
-
-  lv_coord_t center_y = parent_h / 2;
-  if (widgets.cover_clip) {
-    lv_obj_update_layout(widgets.cover_clip);
-    center_y = lv_obj_get_y(widgets.cover_clip) + (lv_obj_get_height(widgets.cover_clip) / 2);
-  }
-
-  const lv_coord_t subtitle_gap =
-      has_subtitle ? tile_layout::scale(6) : 0;
-  const lv_coord_t block_h = title_h + subtitle_gap + subtitle_h;
-  lv_coord_t title_y = center_y - (block_h / 2);
-  const lv_coord_t min_title_y = tile_layout::scale(
-      cover_visible ? (large_cover ? 58 : 42) : 76);
-  const lv_coord_t max_title_y =
-      parent_h - block_h - tile_layout::scale(68);
-  if (title_y < min_title_y) title_y = min_title_y;
-  if (max_title_y > min_title_y && title_y > max_title_y) title_y = max_title_y;
-
-  if (widgets.media_title_label) {
-    lv_obj_align(widgets.media_title_label, LV_ALIGN_TOP_LEFT, text_x, title_y);
-  }
-  if (widgets.media_subtitle_label) {
-    if (widgets.media_title_label && has_subtitle) {
-      lv_obj_align_to(widgets.media_subtitle_label,
-                      widgets.media_title_label,
-                      LV_ALIGN_OUT_BOTTOM_LEFT,
-                      0,
-                      subtitle_gap);
-    } else {
-      lv_obj_align(widgets.media_subtitle_label, LV_ALIGN_TOP_LEFT, text_x, title_y + title_h);
-    }
-  }
-}
-
 static bool set_media_cover_visible(MediaTileWidgets& widgets, bool visible) {
   bool changed = false;
   if (widgets.cover_clip) {
@@ -4072,7 +3959,8 @@ static void process_media_cover_results() {
   if (!g_media_cover_result_queue) return;
 
   MediaCoverResult result{};
-  while (xQueueReceive(g_media_cover_result_queue, &result, 0) == pdTRUE) {
+  for (uint8_t processed = 0; processed < 1 &&
+       xQueueReceive(g_media_cover_result_queue, &result, 0) == pdTRUE; ++processed) {
     MediaTileWidgets* target = tile_renderer_get_media_widgets(result.grid_type);
     if (!target || result.grid_index >= TILES_PER_GRID) {
       free_media_cover_dsc(result.dsc);
@@ -4097,39 +3985,32 @@ static void process_media_cover_results() {
     if (!result.ok || !result.dsc) {
       ref->failed_url_hash = result.url_hash;
       ref->failed_at_ms = millis();
-      if (ref->url_hash != result.url_hash) {
-        const bool cover_visibility_changed = set_media_cover_visible(widgets, false);
-        if (widgets.icon_label) lv_obj_clear_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
-        if (cover_visibility_changed) {
-          set_media_cover_text_layout(widgets, false);
-        }
-        String entity_id = media_entity_for_grid_index(result.grid_type, result.grid_index);
-        if (entity_id.length()) {
-          update_media_popup_cover(entity_id.c_str(), nullptr, 0);
-        }
-      }
+      // A failed replacement does not invalidate the displayed artwork.
+      // Keep the tile and popup stable while the existing retry path runs.
       free_media_cover_dsc(result.dsc);
       continue;
     }
 
     lv_image_dsc_t* old = ref->dsc;
     lv_image_dsc_t* old_popup = ref->popup_dsc;
-    lv_image_set_src(widgets.cover_image, result.dsc);
+    lv_image_dsc_t* tile_dsc = make_media_tile_cover_dsc(result.dsc, lv_obj_get_style_width(widgets.cover_clip, LV_PART_MAIN));
+    lv_image_set_src(widgets.cover_image, tile_dsc ? tile_dsc : result.dsc);
     const bool cover_visibility_changed = set_media_cover_visible(widgets, true);
     if (widgets.icon_label) lv_obj_clear_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
     if (cover_visibility_changed) {
       set_media_cover_text_layout(widgets, true);
     }
 
-    ref->dsc = result.dsc;
-    ref->popup_dsc = nullptr;
+    ref->dsc = tile_dsc ? tile_dsc : result.dsc;
+    ref->popup_dsc = tile_dsc ? result.dsc : nullptr;
     ref->url_hash = result.url_hash;
+    ref->embedded_url_hash = 0;
     ref->failed_url_hash = 0;
     ref->failed_at_ms = 0;
     {
       String entity_id = media_entity_for_grid_index(result.grid_type, result.grid_index);
       if (entity_id.length()) {
-        update_media_popup_cover(entity_id.c_str(), ref->dsc, ref->url_hash);
+        update_media_popup_cover(entity_id.c_str(), ref->popup_dsc ? ref->popup_dsc : ref->dsc, ref->url_hash);
       }
     }
     result.dsc = nullptr;
@@ -4149,6 +4030,7 @@ static void update_media_cover(GridType grid_type,
 
   if (!url.length()) {
     ref->source_url = "";
+    ref->embedded_url_hash = 0;
     ref->requested_url_hash = 0;
     ref->failed_url_hash = 0;
     ref->failed_at_ms = 0;
@@ -4163,21 +4045,18 @@ static void update_media_cover(GridType grid_type,
   uint32_t hash = fnv1a_hash(url.c_str());
   if (ref->source_url != url) {
     ref->source_url = url;
+    // Reject an older result even if the new request cannot be queued yet.
+    ref->requested_url_hash = 0;
     ref->failed_url_hash = 0;
     ref->failed_at_ms = 0;
   }
 
   if (!kMediaCoverDownloadsEnabled) {
     ref->requested_url_hash = 0;
-    const bool cover_visibility_changed = set_media_cover_visible(widgets, false);
-    if (widgets.icon_label) lv_obj_clear_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
-    if (cover_visibility_changed) {
-      set_media_cover_text_layout(widgets, false);
-    }
     return;
   }
 
-  if (ref->url_hash == hash && ref->dsc) {
+  if (ref->dsc && (ref->url_hash == hash || ref->embedded_url_hash == hash)) {
     ref->requested_url_hash = 0;
     const bool cover_visibility_changed = set_media_cover_visible(widgets, true);
     if (widgets.icon_label) lv_obj_clear_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
@@ -4190,11 +4069,8 @@ static void update_media_cover(GridType grid_type,
     ref->requested_url_hash = 0;
     ref->failed_url_hash = 0;
     ref->failed_at_ms = 0;
-    const bool cover_visibility_changed = set_media_cover_visible(widgets, false);
-    if (widgets.icon_label) lv_obj_clear_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
-    if (cover_visibility_changed) {
-      set_media_cover_text_layout(widgets, false);
-    }
+    // state_fast carries URLs before the Bridge sends MQTT pixels. P4's
+    // HTTPS restriction must never hide an already displayed MQTT cover.
     log_media_cover_download_blocked();
     return;
   }
@@ -4208,10 +4084,10 @@ static void update_media_cover(GridType grid_type,
   // If another tile has already downloaded and decoded this URL, clone its
   // pixels instead of starting another HTTP download.
   if (const MediaCoverRef* sibling = find_decoded_media_cover_sibling(ref, hash)) {
-    lv_image_dsc_t* cloned = clone_media_cover_dsc(sibling->dsc);
-    lv_image_dsc_t* cloned_popup =
-        sibling->popup_dsc ? clone_media_cover_dsc(sibling->popup_dsc) : nullptr;
-    if (cloned && (cloned_popup || !sibling->popup_dsc)) {
+    lv_image_dsc_t* cloned_popup = clone_media_cover_dsc(sibling->popup_dsc ? sibling->popup_dsc : sibling->dsc);
+    lv_image_dsc_t* cloned = cloned_popup ? make_media_tile_cover_dsc(cloned_popup, lv_obj_get_style_width(widgets.cover_clip, LV_PART_MAIN)) : nullptr;
+    if (cloned_popup && !cloned) { cloned = cloned_popup; cloned_popup = nullptr; }
+    if (cloned) {
       lv_image_dsc_t* old = ref->dsc;
       lv_image_dsc_t* old_popup = ref->popup_dsc;
       lv_image_set_src(widgets.cover_image, cloned);
@@ -4224,6 +4100,7 @@ static void update_media_cover(GridType grid_type,
       ref->popup_dsc = cloned_popup;
       ref->source_url = url;
       ref->url_hash = hash;
+      ref->embedded_url_hash = 0;
       ref->requested_url_hash = 0;
       ref->failed_url_hash = 0;
       ref->failed_at_ms = 0;
@@ -4241,7 +4118,8 @@ static void update_media_cover(GridType grid_type,
   queue_media_cover_request(grid_type, grid_index, ref, url, hash);
 }
 
-static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const String& raw_data) {
+static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const String& raw_data,
+                                         const String& source_url = String()) {
   String encoded = raw_data;
   encoded.trim();
   if (!widgets.cover_image || !widgets.cover_ref || !encoded.length()) return false;
@@ -4249,7 +4127,11 @@ static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const Stri
   MediaCoverRef* ref = widgets.cover_ref;
   const uint32_t hash = fnv1a_hash(encoded.c_str());
   if (ref->url_hash == hash && ref->dsc) {
+    ref->source_url = "mqtt";
+    ref->embedded_url_hash = source_url.length() ? fnv1a_hash(source_url.c_str()) : 0;
     ref->requested_url_hash = 0;
+    ref->failed_url_hash = 0;
+    ref->failed_at_ms = 0;
     const bool cover_visibility_changed = set_media_cover_visible(widgets, true);
     if (widgets.icon_label) lv_obj_clear_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
     if (cover_visibility_changed) {
@@ -4265,9 +4147,13 @@ static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const Stri
   uint32_t tile_scale_ms = 0;
   bool adopted_from_sibling = false;
   if (const MediaCoverRef* sibling = find_decoded_media_cover_sibling(ref, hash)) {
-    dsc = clone_media_cover_dsc(sibling->dsc);
-    popup_dsc = sibling->popup_dsc ? clone_media_cover_dsc(sibling->popup_dsc) : nullptr;
-    if (dsc && (popup_dsc || !sibling->popup_dsc)) {
+    const auto* full = sibling->popup_dsc ? sibling->popup_dsc : sibling->dsc;
+    popup_dsc = clone_media_cover_dsc(full);
+    if (popup_dsc) {
+      dsc = make_media_tile_cover_dsc(popup_dsc, lv_obj_get_style_width(widgets.cover_clip, LV_PART_MAIN));
+      if (!dsc) { dsc = popup_dsc; popup_dsc = nullptr; }
+    }
+    if (dsc) {
       adopted_from_sibling = true;
     } else {
       free_media_cover_dsc(dsc);
@@ -4282,11 +4168,10 @@ static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const Stri
       return false;
     }
 
-    // Keep the tile descriptor at 120px so routine LVGL redraws never rescale
-    // the 240px popup artwork. The high-resolution descriptor is retained only
-    // for the popup and therefore has no cost while navigating the normal UI.
+    // Prepare the actual tile size once. Larger tiles use the existing 240px
+    // source; smaller tiles retain their cheap, pre-scaled redraw path.
     const uint32_t tile_scale_started_ms = millis();
-    lv_image_dsc_t* tile_dsc = make_media_tile_cover_dsc(decoded_dsc);
+    lv_image_dsc_t* tile_dsc = make_media_tile_cover_dsc(decoded_dsc, lv_obj_get_style_width(widgets.cover_clip, LV_PART_MAIN));
     tile_scale_ms = millis() - tile_scale_started_ms;
     dsc = decoded_dsc;
     if (tile_dsc) {
@@ -4308,6 +4193,7 @@ static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const Stri
   ref->popup_dsc = popup_dsc;
   ref->source_url = "mqtt";
   ref->url_hash = hash;
+  ref->embedded_url_hash = source_url.length() ? fnv1a_hash(source_url.c_str()) : 0;
   ref->requested_url_hash = 0;
   ref->failed_url_hash = 0;
   ref->failed_at_ms = 0;
@@ -4458,16 +4344,11 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   media_text_key += '\x1f';
   media_text_key += subtitle;
   const uint32_t media_text_hash = fnv1a_hash(media_text_key.c_str());
-  const bool media_text_changed = widgets.last_media_text_hash != media_text_hash;
   widgets.last_media_text_hash = media_text_hash;
 
-  MediaCoverRef* cover_ref = widgets.cover_ref;
-  const bool cover_ready_or_pending = cover_ref &&
-                                      (cover_ref->dsc || cover_ref->requested_url_hash != 0);
-  const bool has_embedded_cover =
-      is_json_payload && strstr(payload_start, "\"entity_picture_data\"") != nullptr;
-  const bool should_update_cover = is_json_payload &&
-                                   (has_embedded_cover || !cover_ready_or_pending);
+  // Artwork is independent of title/state. Lightweight payloads omit it;
+  // explicit empty/null fields clear it, and URL changes must always apply.
+  const bool should_update_cover = is_json_payload && media_artwork::has_fields(payload_start);
   if (widgets.play_pause_label) {
     String icon = getMdiChar(media_icon_for_state(state));
     if (icon.length()) {
@@ -4512,20 +4393,17 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   if (should_update_cover) {
     String cover_url;
     String cover_data;
-    if (!extract_json_string_field_cstr(payload_start, "entity_picture", cover_url)) {
-      extract_json_string_field_cstr(payload_start, "media_image_url", cover_url);
+    if (!media_artwork::read_string(payload_start, "entity_picture", cover_url)) {
+      media_artwork::read_string(payload_start, "media_image_url", cover_url);
     }
-    extract_json_string_field_cstr(payload_start, "entity_picture_data", cover_data);
+    media_artwork::read_string(payload_start, "entity_picture_data", cover_data);
     decode_basic_json_escapes(cover_url);
     decode_basic_json_escapes(cover_data);
 
     if (cover_data.length()) {
-      update_media_cover_from_base64(widgets, cover_data);
+      update_media_cover_from_base64(widgets, cover_data, cover_url);
     } else {
       update_media_cover(grid_type, grid_index, widgets, cover_url);
-    }
-    if (!cover_url.length() && !cover_data.length()) {
-      Serial.println("[MediaCover] No cover URL in media payload");
     }
   }
 
@@ -4563,7 +4441,7 @@ void queue_media_tile_update(GridType grid_type, uint8_t grid_index, const char*
   g_media_head = next_head;
 }
 
-void process_media_update_queue(uint8_t max_updates) {
+static void process_media_state_updates(uint8_t max_updates) {
   uint8_t processed = 0;
   while (g_media_tail != g_media_head && (max_updates == 0 || processed < max_updates)) {
     MediaUpdate& upd = g_media_queue[g_media_tail];
@@ -4574,8 +4452,25 @@ void process_media_update_queue(uint8_t max_updates) {
     }
     g_media_tail = (g_media_tail + 1) % MEDIA_QUEUE_SIZE;
   }
+}
+
+void process_media_update_queue(uint8_t max_updates) {
+  process_media_state_updates(max_updates);
   process_media_cover_results();
   process_pending_media_cover_retries();
+}
+
+void process_idle_media_updates() {
+  static uint32_t last_batch_ms = 0;
+  const bool pending = g_media_tail != g_media_head ||
+      (g_media_cover_result_queue && uxQueueMessagesWaiting(g_media_cover_result_queue) != 0);
+  if (media_updates::idle_batch_due(pending, millis(), last_batch_ms)) {
+    // The result queue has capacity one. Prioritize it, otherwise consume one
+    // state. Retry scans keep their existing cadence in the normal batches.
+    if (g_media_cover_result_queue && uxQueueMessagesWaiting(g_media_cover_result_queue) != 0)
+      process_media_cover_results();
+    else process_media_state_updates(1);
+  }
 }
 
 /* === Thread-safe tile graph history queue (MQTT -> main loop) === */

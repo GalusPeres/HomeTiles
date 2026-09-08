@@ -1,3 +1,5 @@
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/popups/climate/climate_popup.h"
@@ -13,7 +15,6 @@
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
-#include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
@@ -165,6 +166,7 @@ struct ClimatePopupContext {
 
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
+  lv_obj_t* close_button = nullptr;
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* title_label = nullptr;
   lv_obj_t* top_caption_label = nullptr;
@@ -1539,6 +1541,8 @@ void on_close(lv_event_t* event) {
   if (!ctx || !ctx->card || !ctx->overlay) return;
   flush_pending_climate_commands(ctx);
   close_control_menu(ctx);
+  hide_popup_shell(ctx->card);
+  cancel_popup_open(ctx->card);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
 }
@@ -2310,30 +2314,6 @@ lv_obj_t* create_visual_arc(lv_obj_t* parent, uint32_t color) {
   return arc;
 }
 
-void align_header_row(
-    lv_obj_t* card, lv_obj_t* title_label, lv_obj_t* icon_label) {
-  if (!card) return;
-  lv_obj_update_layout(card);
-  lv_coord_t header_center_y =
-      popup_layout::kHeaderCenterY -
-      lv_obj_get_style_pad_top(card, LV_PART_MAIN);
-  if (header_center_y < 0) header_center_y = 0;
-  if (icon_label) {
-    lv_coord_t icon_y =
-        header_center_y - (lv_obj_get_height(icon_label) / 2);
-    if (icon_y < 0) icon_y = 0;
-    lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderIconX, icon_y);
-  }
-  if (title_label) {
-    lv_coord_t title_y =
-        header_center_y - (lv_obj_get_height(title_label) / 2);
-    if (title_y < 0) title_y = 0;
-    lv_obj_align(title_label, LV_ALIGN_TOP_LEFT,
-                 popup_layout::kHeaderTitleX, title_y);
-  }
-}
-
 void on_overlay_delete(lv_event_t* event) {
   if (lv_event_get_code(event) != LV_EVENT_DELETE) return;
   ClimatePopupContext* ctx =
@@ -2349,6 +2329,31 @@ void on_overlay_delete(lv_event_t* event) {
 
 }  // namespace
 
+static void finish_climate_popup_open(const ClimatePopupInit& init) {
+  if (!g_climate_popup) return;
+  apply_init(g_climate_popup, init);
+}
+
+static void prepare_climate_popup_open(const ClimatePopupInit& init) {
+  auto* ctx = g_climate_popup;
+  hometiles_title::set(ctx->title_label, init.title.c_str());
+  const String name = init.dynamic_icon
+      ? dynamic_state_icon(init.hvac_mode, init.hvac_action, init.icon_name)
+      : init.icon_name;
+  String icon = getMdiChar(name);
+  if (!icon.length()) icon = getMdiChar("thermostat");
+  lv_label_set_text(ctx->icon_label, icon.c_str());
+  if (init.icon_visible) lv_obj_remove_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.available
+      ? climate_visuals::state_foreground_color(init.hvac_mode, init.hvac_action)
+      : 0x9E9E9E), 0);
+  if (!defer_popup_body(ctx->card, ctx->title_label, ctx->icon_label,
+                        ctx->close_button, init, finish_climate_popup_open,
+                        ctx->entity_id == init.entity_id))
+    apply_init(ctx, init);
+}
+
 void show_climate_popup(const ClimatePopupInit& init) {
   hide_pin_popup();
   hide_camera_popup();
@@ -2363,87 +2368,30 @@ void show_climate_popup(const ClimatePopupInit& init) {
   if (g_climate_popup && g_climate_popup->overlay &&
       g_climate_popup->card) {
     cancel_deferred_remote_apply(g_climate_popup);
-    apply_init(g_climate_popup, init);
+    prepare_climate_popup_open(init);
     lv_obj_clear_flag(
         g_climate_popup->card, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(
         g_climate_popup->overlay, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_move_foreground(g_climate_popup->overlay);
+
     if (g_climate_popup && g_climate_popup->card) viewNavigationPopupShown(g_climate_popup->card, init.entity_id.c_str());
+    show_popup_shell(g_climate_popup->overlay, g_climate_popup->card, g_climate_popup->title_label, g_climate_popup->icon_label, g_climate_popup->close_button);
     return;
   }
 
   ClimatePopupContext* ctx = new ClimatePopupContext();
   g_climate_popup = ctx;
-  ctx->overlay = lv_obj_create(lv_layer_top());
-  lv_obj_set_size(ctx->overlay, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_opa(ctx->overlay, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(ctx->overlay, 0, 0);
-  lv_obj_remove_flag(ctx->overlay, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_event_cb(
-      ctx->overlay, on_popup_surface_pressed, LV_EVENT_PRESSED, ctx);
-
-  ctx->card = lv_obj_create(ctx->overlay);
-  lv_obj_set_size(
-      ctx->card, popup_layout::kCardWidth, popup_layout::kCardHeight);
-  lv_obj_center(ctx->card);
-  lv_obj_set_style_bg_color(ctx->card, lv_color_hex(kCardBg), 0);
-  lv_obj_set_style_bg_opa(ctx->card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(ctx->card, popup_layout::kCardRadius, 0);
-  lv_obj_set_style_border_width(ctx->card, 0, 0);
-  ui_surface_style::apply_global_tile_border(ctx->card);
-  lv_obj_set_style_pad_all(ctx->card, popup_layout::kCardPad, 0);
-  lv_obj_set_style_shadow_width(
-      ctx->card, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(ctx->card, lv_color_black(), 0);
-  lv_obj_set_style_shadow_opa(ctx->card, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(
-      ctx->card, popup_layout::scale480(2), 0);
-  lv_obj_remove_flag(ctx->card, LV_OBJ_FLAG_SCROLLABLE);
+  const auto parts = create_popup_body(on_close, ctx, kCardBg);
+  ctx->overlay = parts.overlay;
+  ctx->card = parts.card;
+  ctx->title_label = parts.title;
+  ctx->icon_label = parts.icon;
+  ctx->close_button = parts.close;
+  lv_obj_t* close = parts.close;
+  lv_obj_add_event_cb(ctx->overlay, on_popup_surface_pressed, LV_EVENT_PRESSED, ctx);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_event_cb(
-      ctx->card, on_popup_surface_pressed, LV_EVENT_PRESSED, ctx);
-
-  ctx->icon_label = lv_label_create(ctx->card);
-  lv_obj_set_style_text_font(ctx->icon_label, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(ctx->icon_label);
-
-  ctx->title_label = lv_label_create(ctx->card);
-  lv_obj_set_style_text_font(ctx->title_label,
-                             popup_layout::headerTitleFont(), 0);
-  lv_obj_set_style_text_color(ctx->title_label, lv_color_white(), 0);
-  lv_obj_set_width(ctx->title_label, LV_PCT(62));
-  lv_label_set_long_mode(ctx->title_label, LV_LABEL_LONG_DOT);
-
-  lv_obj_t* close = lv_button_create(ctx->card);
-  lv_obj_set_size(close, popup_layout::kCloseButtonSize,
-                  popup_layout::kCloseButtonSize);
-  lv_obj_set_style_bg_opa(close, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(
-      close, lv_color_white(), LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(close, LV_OPA_20, LV_STATE_PRESSED);
-  lv_obj_set_style_border_opa(close, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_outline_opa(close, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_shadow_opa(close, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_radius(close, popup_layout::kCloseButtonRadius, 0);
-  lv_obj_set_style_pad_all(close, 0, 0);
-  lv_obj_align(close, LV_ALIGN_TOP_RIGHT,
-               popup_layout::kCloseButtonOffsetX,
-               popup_layout::kCloseButtonOffsetY);
-  lv_obj_set_ext_click_area(close, popup_layout::kCloseButtonClickArea);
-  lv_obj_add_flag(close, LV_OBJ_FLAG_PRESS_LOCK);
-  lv_obj_clear_flag(close, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_event_cb(close, on_close, LV_EVENT_CLICKED, ctx);
-  lv_obj_add_event_cb(close, on_close, LV_EVENT_RELEASED, ctx);
-  lv_obj_t* close_icon = lv_label_create(close);
-  lv_obj_set_style_text_font(close_icon, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(close_icon);
-  lv_obj_set_style_text_color(close_icon, lv_color_white(), 0);
-  const String close_char = getMdiChar("window-close");
-  lv_label_set_text(close_icon, close_char.c_str());
-  lv_obj_center(close_icon);
+  lv_obj_add_event_cb(ctx->card, on_popup_surface_pressed, LV_EVENT_PRESSED, ctx);
 
   lv_obj_t* value_box = lv_obj_create(ctx->card);
   lv_obj_remove_style_all(value_box);
@@ -2853,13 +2801,14 @@ void show_climate_popup(const ClimatePopupInit& init) {
 
   lv_obj_add_event_cb(
       ctx->overlay, on_overlay_delete, LV_EVENT_DELETE, ctx);
-  align_header_row(ctx->card, ctx->title_label, ctx->icon_label);
+  popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
   lv_obj_move_foreground(ctx->icon_label);
   lv_obj_move_foreground(ctx->title_label);
   lv_obj_move_foreground(close);
   apply_init(ctx, init);
-  lv_obj_move_foreground(ctx->overlay);
+
   if (g_climate_popup && g_climate_popup->card) viewNavigationPopupShown(g_climate_popup->card, init.entity_id.c_str());
+  show_popup_shell(g_climate_popup->overlay, g_climate_popup->card, g_climate_popup->title_label, g_climate_popup->icon_label, g_climate_popup->close_button);
 }
 
 void update_climate_popup(const ClimatePopupInit& init) {
@@ -2926,6 +2875,8 @@ void hide_climate_popup() {
   }
   flush_pending_climate_commands(g_climate_popup);
   close_control_menu(g_climate_popup);
+  hide_popup_shell(g_climate_popup->card);
+  cancel_popup_open(g_climate_popup->card);
   lv_obj_add_flag(g_climate_popup->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(
       g_climate_popup->overlay, LV_OBJ_FLAG_CLICKABLE);

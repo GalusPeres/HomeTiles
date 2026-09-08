@@ -25,6 +25,9 @@
 #include "src/devices/guition_esp32_4848s040/s3_diagnostics.h"
 #include "src/ui/ui_manager.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
+#include "src/ui/popups/popup_first_frame.h"
+#include "src/ui/popups/popup_open.h"
+#include "src/ui/popups/popup_shell.h"
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/camera/camera_popup.h"
@@ -44,6 +47,7 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/tiles/runtime/tile_update_service.h"
+#include "src/types/media/update_service.h"
 #include "src/tiles/icons/mdi_icons.h"      // MDI Icon Mapping
 
 // MDI icon font (48px, 4bpp), defined in src/fonts/mdi_icons_48.c.
@@ -1048,6 +1052,7 @@ void loop() {
       Serial.flush();
     }
     yield();
+    sync_popup_shell();
     lv_timer_handler();
     yield();
     if (first_run) {
@@ -1218,10 +1223,13 @@ void loop() {
   // the display, not introduce another data-processing path.
   uint32_t t_wake = millis();
 
+  process_popup_open();
+  sync_popup_shell();
   const bool camera_popup_busy = camera_popup_is_busy();
   const bool admin_busy = webAdminRecentlyActive(20000);
   const bool ui_idle_for_background_refresh =
       !camera_popup_busy &&
+      !PopupFirstFrame::any_pending() &&
       !powerManager.isHighPerformance() &&
       !admin_busy;
   service_background_state_refresh(ui_idle_for_background_refresh);
@@ -1239,17 +1247,20 @@ void loop() {
   if (first_run) Serial.println("[Loop] process_sensor_update_queue()...");
   // The camera covers other popups. Keep their coalesced updates queued until
   // it closes so weather parsing and graph construction do not interrupt frames.
-  if (!camera_popup_busy) {
+  if (!camera_popup_busy && !PopupFirstFrame::any_pending()) {
     process_sensor_popup_queue();
-    process_weather_popup_queue();
-    process_energy_response_queue();
-    process_energy_popup_queue();
+    if (!PopupFirstFrame::any_pending()) {
+      process_weather_popup_queue();
+      process_energy_response_queue();
+      process_energy_popup_queue();
+    }
   }
   process_camera_popup();
   uint32_t t_popup_queues = millis();
 
-  // In idle mode, process bounded tile batches once per two-second interval.
-  if (!camera_popup_busy) {
+  // In idle mode, retain the normal tile budgets and service pending media
+  // separately so artwork does not wait for the two-second background batch.
+  if (!camera_popup_busy && !PopupFirstFrame::any_pending()) {
     static uint32_t last_queue_ms = 0;
     bool idle = !powerManager.isHighPerformance();
     if (!idle || (millis() - last_queue_ms >= 2000)) {
@@ -1259,12 +1270,14 @@ void loop() {
       process_tile_graph_queue();
       if (idle) energy_service_periodic();
       last_queue_ms = millis();
+    } else {
+      process_idle_media_updates();
     }
   }
   uint32_t t_update_queues = millis();
   // Retain navigation/layout/style reload flags while the camera covers them;
   // rebuilding invisible content could otherwise cost a complete camera frame.
-  if (!camera_popup_busy) {
+  if (!camera_popup_busy && !PopupFirstFrame::any_pending()) {
     tiles_process_reload_requests();
   }
   uint32_t t_reload_requests = millis();
@@ -1289,6 +1302,7 @@ void loop() {
   const uint32_t s3_lvgl_started_us = micros();
 #endif
   yield();  // Yield so the watchdog can be serviced.
+  sync_popup_shell();
   lv_timer_handler();
 #if HOMETILES_GUITION_S3_DIAGNOSTICS_ACTIVE
   GuitionS3Diagnostics::noteUiLoop(

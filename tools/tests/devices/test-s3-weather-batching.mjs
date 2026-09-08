@@ -86,7 +86,7 @@ assert.ok(finalHeader >= 0 && finalGraph > finalHeader &&
           commitLanguage > finalGraph && releasePayload > commitLanguage,
           'Final build must translate the header before committing language and releasing payload');
 
-const showStart = weather.indexOf('void show_weather_popup(');
+const showStart = weather.indexOf('static void finish_weather_popup_open(');
 const preloadStart = weather.indexOf('void preload_weather_popup(', showStart);
 assert.ok(showStart >= 0 && preloadStart > showStart,
           'Weather popup show function was not found');

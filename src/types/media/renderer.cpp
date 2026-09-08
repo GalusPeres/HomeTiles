@@ -1,4 +1,5 @@
 #include "src/types/media/renderer.h"
+#include "src/types/media/content_layout.h"
 
 #include <Arduino.h>
 
@@ -80,6 +81,7 @@ static void free_cover_dsc(MediaCoverRef* ref) {
   }
   ref->source_url = "";
   ref->url_hash = 0;
+  ref->embedded_url_hash = 0;
   ref->requested_url_hash = 0;
   ref->failed_url_hash = 0;
   ref->failed_at_ms = 0;
@@ -324,11 +326,9 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
 
   lv_obj_t* cover_clip = nullptr;
   lv_obj_t* cover_img = nullptr;
-  // Match the bridge's MEDIA_COVER_THUMBNAIL_SIZE (120) so the JPEG is shown
-  // 1:1 without LV_IMAGE_ALIGN_COVER cropping right/bottom edges. On a 1x1
-  // tile (168x145) we still cap to 96 because there isn't room for 120.
-  const lv_coord_t cover_size =
-      tile_layout::scale((tile.span_w > 1 || tile.span_h > 1) ? 120 : 96);
+  // The final content geometry below determines the artwork size before the
+  // first state payload is decoded, including empty and cached tiles.
+  const lv_coord_t cover_size = 1;
   cover_clip = lv_obj_create(card);
   if (cover_clip) {
     lv_obj_set_size(cover_clip, cover_size, cover_size);
@@ -519,6 +519,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     target[index].media_position = 0.0f;
     target[index].media_duration = 0.0f;
     target[index].media_position_received_ms = 0;
+    set_media_cover_text_layout(target[index], false);
   }
 
   if (tile.sensor_entity.length()) {

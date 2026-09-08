@@ -207,6 +207,8 @@ struct EditableControl {
            *apply = nullptr, *status = nullptr, *pressed = nullptr, *clock_box = nullptr, *separators[2] = {};
   EditableValue value;
   editable_colors::Palette colors{};
+  bool colors_initialized = false;
+  bool layout_initialized = false;
   value_editor::Calendar calendar;
   double draft = 0;
   uint8_t option_offset = 0;
@@ -594,7 +596,10 @@ void style_roller(lv_obj_t* roller) {
 }
 
 void apply_control_colors(EditableControl* c) {
-  c->colors = editable_colors::from(lv_obj_get_style_bg_color(c->card, LV_PART_MAIN));
+  const lv_color_t base = lv_obj_get_style_bg_color(c->card, LV_PART_MAIN);
+  if (c->colors_initialized && lv_color_eq(base, c->colors.base)) return;
+  c->colors = editable_colors::from(base);
+  c->colors_initialized = true;
   editable_colors::dropdown(c->dropdown, c->colors);
   editable_colors::surface(c->number_box, c->colors.raised);
   editable_colors::surface(c->clock_box, c->colors.raised);
@@ -780,8 +785,10 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card) {
 
 void editable_control_open(EditableControl* c, const String& entity) {
   if (!c) return;
-  editable_control_close(c); c->entity = entity; c->active = true; active_control = c;
-  c->value = {}; c->payload = "\x01"; c->generation = 0;
+  editable_control_close(c);
+  if (c->entity != entity) { c->value = {}; c->layout_initialized = false; }
+  c->entity = entity; c->active = true; active_control = c;
+  c->payload = "\x01"; c->generation = 0;
   apply_control_colors(c);
   visible(c->row, true); editable_control_refresh(c);
 }
@@ -813,8 +820,12 @@ void editable_control_refresh(EditableControl* c) {
     // Keep the native list and its scroll position stable while it is open.
     // Session, capability and availability changes above still close it.
     if (!c->editing && !c->dragging && !c->command_id.length() && !lv_dropdown_is_open(c->dropdown)) {
+      const bool layout_changed = !c->layout_initialized || next.kind != c->value.kind ||
+          next.mode != c->value.mode || next.unit != c->value.unit ||
+          next.minimum != c->value.minimum || next.maximum != c->value.maximum ||
+          next.step != c->value.step || next.writable != c->value.writable;
       c->syncing = true; c->value = std::move(next); c->payload = payload; c->generation = value_generation;
-      layout_controls(c);
+      if (layout_changed) { layout_controls(c); c->layout_initialized = true; }
       c->draft_valid = c->value.has_state && c->value.available && c->value.state != "unknown";
       if (c->value.kind == "number") {
         char* end = nullptr; c->draft = strtod(c->value.state.c_str(), &end);
@@ -865,8 +876,13 @@ void editable_control_refresh(EditableControl* c) {
   else lv_obj_add_state(c->apply, LV_STATE_DISABLED);
 }
 
+bool editable_control_is_interacting(const EditableControl* c) {
+  return c && c->active && (c->pressed || c->dragging || c->editing ||
+                           lv_dropdown_is_open(c->dropdown));
+}
+
 void editable_control_close(EditableControl* c) {
-  if (!c) return;
+  if (!c || !c->active) return;
   finish_editing(c); lv_dropdown_close(c->dropdown); c->command_id = "";
   finish_dropdown_timing(c);
   // LVGL places the expanded list on the screen. Keep the hidden list with

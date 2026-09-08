@@ -117,6 +117,8 @@ void tile_renderer_invalidate_weather_payload(GridType grid_type);
 void queue_weather_tile_update(GridType grid_type, uint8_t grid_index, const char* payload);
 void process_weather_update_queue(uint8_t max_updates = 0);  // 0 drains the queue
 
+// UI-thread lookup for the deferred popup body; the caller copies pixels immediately.
+const lv_image_dsc_t* tile_renderer_find_media_cover(const String& entity_id, uint32_t& hash);
 void reset_media_widget(GridType grid_type, uint8_t grid_index);
 void reset_media_widgets(GridType grid_type);
 void queue_media_tile_update(GridType grid_type, uint8_t grid_index, const char* payload);

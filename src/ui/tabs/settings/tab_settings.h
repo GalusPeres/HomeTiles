@@ -6,6 +6,7 @@
 // Hotspot-button callback type
 typedef void (*hotspot_callback_t)(bool enable);
 
+void hide_settings_popup();
 void build_settings_tab(lv_obj_t *tab, hotspot_callback_t hotspot_cb = nullptr);
 
 // Registered by the sketch to request main-loop Wi-Fi reconnection

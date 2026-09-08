@@ -12,57 +12,37 @@ const deviceSelect = read('src/devices/device_select.h');
 
 const helperStart = shared.indexOf(
   'static inline void finish_press_before_popup(lv_event_t* event)');
-const helperEnd = shared.indexOf(
-  '// Weather and other large preloaded popups', helperStart);
+const helperEnd = shared.length;
 assert.ok(helperStart >= 0 && helperEnd > helperStart,
           'Shared popup press helper must exist');
 const helper = shared.slice(helperStart, helperEnd);
-const s3Start = helper.indexOf('#if defined(DEVICE_ESP32_S3_RGB_480)');
-const fallbackStart = helper.indexOf('#else', s3Start);
-const branchEnd = helper.indexOf('#endif', fallbackStart);
-assert.ok(s3Start >= 0 && fallbackStart > s3Start && branchEnd > fallbackStart,
-          'Shared popup helper must have an S3-specific refresh branch');
-const s3Branch = helper.slice(s3Start, fallbackStart);
-const fallbackBranch = helper.slice(fallbackStart, branchEnd);
-assert.doesNotMatch(s3Branch, /lv_refr_now\s*\(/,
-                    'S3 popup path must not force a nested refresh');
-assert.match(fallbackBranch, /lv_refr_now\s*\(/,
-             'Non-S3 popup behavior must retain the immediate refresh');
-
+assert.doesNotMatch(helper, /lv_refr_now\s*\(/,
+                    'P4 and S3 must both present the popup with the regular refresh');
+assert.match(helper, /lv_timer_ready\(lv_display_get_refr_timer/,
+             'The prepared popup must request the next regular frame immediately');
+assert.match(helper, /lv_event_get_current_target/,
+             'Bubbled child events must release the owning card');
 const callbackStart = weather.indexOf('auto show_popup = [](lv_event_t* e)');
-const callbackEnd = weather.indexOf(
-  'lv_obj_add_event_cb(card, show_popup, LV_EVENT_ALL, data);', callbackStart);
-assert.ok(callbackStart >= 0 && callbackEnd > callbackStart,
-          'Weather popup callback must exist');
+const callbackEnd = weather.indexOf('lv_obj_add_event_cb(card, show_popup, LV_EVENT_ALL, data);', callbackStart);
+assert.ok(callbackStart >= 0 && callbackEnd > callbackStart);
 const callback = weather.slice(callbackStart, callbackEnd);
-const weatherS3Start = callback.indexOf(
-  '#if defined(DEVICE_ESP32_S3_RGB_480)');
-const weatherFallback = callback.indexOf('#else', weatherS3Start);
-const weatherBranchEnd = callback.indexOf('#endif', weatherFallback);
-assert.ok(weatherS3Start >= 0 && weatherFallback > weatherS3Start &&
-          weatherBranchEnd > weatherFallback,
-          'Weather popup must have an S3-specific open path');
-const weatherS3Branch = callback.slice(weatherS3Start, weatherFallback);
-const weatherFallbackBranch = callback.slice(weatherFallback, weatherBranchEnd);
-assert.match(weatherS3Branch, /open_current_weather_popup\(e, init\)/,
-             'S3 weather popup must show its prepared shell immediately');
-assert.doesNotMatch(weatherS3Branch, /defer_popup_until_source_refreshed/,
-                    'S3 weather popup must not wait for another display frame');
-assert.match(weatherFallbackBranch,
-             /weather_popup_has_current_cached_payload/,
-             'Non-S3 cached weather behavior must remain intact');
-assert.match(weatherFallbackBranch, /defer_popup_until_source_refreshed/,
-             'Non-S3 cold-cache behavior must remain intact');
-
-const settingsOpenStart = settings.indexOf('static void open_settings_popup(');
+assert.match(callback, /open_current_weather_popup\(e, init\)/);
+assert.doesNotMatch(callback, /defer_popup_until_source_refreshed/,
+                    'A cold weather payload must not delay the common shell');
+const openStart = weather.indexOf('void open_current_weather_popup(');
+const openEnd = weather.indexOf('\n}', openStart);
+assert.match(weather.slice(openStart, openEnd), /finish_press_before_popup\(event\);\s+show_weather_popup\(init\);/);
+assert.doesNotMatch(weather.slice(openStart, openEnd), /lv_refr_now/);
+const settingsOpenStart = settings.indexOf('static void open_settings_popup(SettingsPopupKind kind) {');
 const settingsClickStart = settings.indexOf(
   'static void on_settings_tile_clicked(', settingsOpenStart);
 assert.ok(settingsOpenStart >= 0 && settingsClickStart > settingsOpenStart,
           'Settings popup open function must exist');
 const settingsOpen = settings.slice(settingsOpenStart, settingsClickStart);
-assert.match(settingsOpen,
-             /#if !defined\(DEVICE_ESP32_S3_RGB_480\)[\s\S]*lv_refr_now\s*\(/,
-             'Settings nested refresh must be disabled on S3 RGB');
+assert.doesNotMatch(settingsOpen, /lv_refr_now\s*\(/,
+                    'Settings must use the normal popup refresh on P4 and S3');
+assert.match(settingsOpen, /show_popup_shell\(/);
+assert.match(settingsOpen, /defer_popup_content\(/);
 
 for (const marker of [
   'defined(DEVICE_GUITION_ESP32_4848S040) ||',

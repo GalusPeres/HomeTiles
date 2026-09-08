@@ -23,11 +23,15 @@ assert.equal(catalog.length, 3); for (const labels of catalog) assert.equal(JSON
 const styles = read('src/ui/shared/ui_control_style.h').replace(/^#.*$/gm, '');
 const mdi = read('src/tiles/icons/mdi_icons.cpp');
 const iconChar = name => String.fromCodePoint(parseInt(mdi.match(new RegExp('\\{"' + name + '", (0x[0-9A-F]+)\\}'))[1]));
-const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(icon);'));
+const chartBuild = popup.slice(popup.indexOf('  // Chart wrapper: Y-axis labels'), popup.indexOf('  lv_obj_move_foreground(ctx->icon_label);'));
 const cpp = `
 #include <lvgl.h>
 #include "src/types/value/value_colors.h"
 #include "src/ui/shared/title_label.h"
+#include "src/ui/popups/popup_first_frame.h"
+PopupFirstFrame g_sensor_first_frame;
+void hide_popup_shell(lv_obj_t*){} void cancel_popup_open(lv_obj_t*){}
+struct PendingSensorInit{};using SensorPopupInit=PendingSensorInit;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;
 #include <lvgl_private.h>
 #include <algorithm>
 #include <cassert>
@@ -111,7 +115,6 @@ void request_history_for_context(SensorPopupContext*ctx){++history_requests;ctx-
 void clear_binary_history(SensorPopupContext*){++history_clears;}
 ${fn(popup,'style_range_button')}
 ${fn(popup,'update_range_buttons')}
-${fn(popup,'align_header_row')}
 ${fn(popup,'on_range_click')}
 ${fn(popup,'accept_editable_history_range')}
 ${fn(popup,'refresh_editable_popup_icon')}
@@ -154,7 +157,7 @@ int main(int argc,char**argv){
  auto* card=lv_obj_create(lv_screen_active());lv_obj_set_size(card,popup_layout::kCardWidth,popup_layout::kCardHeight);lv_obj_center(card);lv_obj_set_style_bg_color(card,lv_color_hex(0x2A2A2A),0);lv_obj_set_style_radius(card,popup_layout::kCardRadius,0);lv_obj_set_style_border_width(card,0,0);lv_obj_set_style_pad_all(card,popup_layout::kCardPad,0);lv_obj_remove_flag(card,LV_OBJ_FLAG_SCROLLABLE);
  auto* title=text(card,"L10s Ultra Volume");lv_obj_set_style_text_font(title,popup_layout::headerTitleFont(),0);lv_obj_set_width(title,LV_PCT(38));
  auto* close=popup_layout::createCloseButton(card,[](lv_event_t*){},nullptr);
- auto* header_icon=text(card,getMdiChar("clock-end").c_str());lv_obj_set_style_text_font(header_icon,FONT_MDI_ICONS,0);popup_layout::applyIconScale(header_icon);align_header_row(card,title,header_icon);
+ auto* header_icon=text(card,getMdiChar("clock-end").c_str());lv_obj_set_style_text_font(header_icon,FONT_MDI_ICONS,0);popup_layout::applyIconScale(header_icon);popup_layout::alignHeader(card,title,header_icon);
  auto* row=box(card);lv_obj_set_pos(row,0,popup_layout::kValueY);lv_obj_add_flag(row,LV_OBJ_FLAG_OVERFLOW_VISIBLE);auto* c=editable_control_create(row,card);
 #if defined(DEVICE_GUITION_ESP32_4848S040)
  assert(lv_obj_get_style_text_font(c->dropdown,LV_PART_INDICATOR)==&ui_symbols_20);
@@ -175,7 +178,7 @@ int main(int argc,char**argv){
   load(c,kind,state,strcmp(kind,"number")==0?number:strcmp(kind,"select")==0?",\\"options_complete\\":true,\\"options\\":[\\"Home\\",\\"Home / Lighting / Desk\\",\\"Home / Weather\\",\\"Home / Energy\\",\\"Home / Camera\\",\\"Home / Living room\\",\\"Home / Upstairs\\",\\"Home / Downstairs\\",\\"Home / Garage\\",\\"Home / Bedroom\\",\\"Home / Garden\\"]":"");
   ctx.editable_kind=kind;layout_editable_history(&ctx);
   for(const char* caption:{"View","Heating schedule\\nEnd time","Heating\\nSchedule\\nSecond floor\\nEnd time"}){
-   hometiles_title::set(title,caption);align_header_row(card,title,header_icon);layout_editable_history(&ctx);lv_obj_update_layout(card);
+   hometiles_title::set(title,caption);popup_layout::alignHeader(card,title,header_icon);layout_editable_history(&ctx);lv_obj_update_layout(card);
    for(bool pressed:{false,true}){
     if(pressed)lv_obj_add_state(close,LV_STATE_PRESSED);else lv_obj_remove_state(close,LV_STATE_PRESSED);
     lv_tick_inc(300);lv_timer_handler();lv_obj_update_layout(card);
@@ -184,7 +187,7 @@ int main(int argc,char**argv){
     for(auto* label:{title,header_icon}){lv_area_t header;lv_obj_get_coords(label,&header);assert(controls.y1-header.y2>=popup_layout::scale(6)&&"The header must retain breathing room above every editable control kind");}
    }
   }
-  lv_obj_remove_state(close,LV_STATE_PRESSED);hometiles_title::set(title,strcmp(kind,"select")==0?"View":strcmp(kind,"number")==0?"L10s Ultra Volume":"Heating schedule\\nEnd time");align_header_row(card,title,header_icon);layout_editable_history(&ctx);
+  lv_obj_remove_state(close,LV_STATE_PRESSED);hometiles_title::set(title,strcmp(kind,"select")==0?"View":strcmp(kind,"number")==0?"L10s Ultra Volume":"Heating schedule\\nEnd time");popup_layout::alignHeader(card,title,header_icon);layout_editable_history(&ctx);
   for(int i=4;i<8;++i)assert(lv_obj_has_flag(ctx.binary_time_labels[i],LV_OBJ_FLAG_HIDDEN)&&"Unused axis labels must stay hidden");update_y_axis_layout(&ctx);lv_obj_update_layout(card);
   assert(!lv_obj_has_flag(ctx.body_box,LV_OBJ_FLAG_SCROLLABLE));
   lv_area_t body,view,control_area;lv_obj_get_coords(ctx.body_box,&body);lv_obj_get_coords(ctx.binary_activity_viewport,&view);lv_obj_get_coords(row,&control_area);
@@ -309,7 +312,7 @@ int main(int argc,char**argv){
  load(c,"number","20.5",",\\"min\\":16,\\"max\\":30,\\"step\\":0.5,\\"mode\\":\\"auto\\",\\"unit\\":\\"°C\\"");
  assert(!c->number_roller_enabled&&lv_obj_has_flag(c->slider,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_width(c->up)==lv_obj_get_width(c->number_box)/2);assert(lv_obj_get_style_text_font(lv_obj_get_child(c->up,0),LV_PART_MAIN)==popup_layout::font24());assert(!lv_obj_has_flag(c->up,LV_OBJ_FLAG_HIDDEN)&&!lv_obj_has_flag(c->down,LV_OBJ_FLAG_HIDDEN));assert(lv_obj_get_style_bg_opa(c->number_box,LV_PART_MAIN)==LV_OPA_COVER);assert(lv_obj_get_style_border_width(c->number_box,LV_PART_MAIN)==0);assert(lv_obj_get_style_radius(c->number_box,LV_PART_MAIN)==climate_layout::kControlRadius);
  ctx.editable_kind="number";layout_editable_history(&ctx);update_y_axis_layout(&ctx);
- hometiles_title::set(title,"Wolf Fhs280 T Min\\nEinstellen");align_header_row(card,title,header_icon);lv_obj_update_layout(card);
+ hometiles_title::set(title,"Wolf Fhs280 T Min\\nEinstellen");popup_layout::alignHeader(card,title,header_icon);lv_obj_update_layout(card);
  lv_area_t temperature_area,history_area;lv_obj_get_coords(c->number_box,&temperature_area);lv_obj_get_coords(ctx.binary_history_title,&history_area);
  const int temperature_gap=history_area.y1-temperature_area.y2-1;
  assert(temperature_gap>=popup_layout::scale(8)&&temperature_gap<=popup_layout::scale(24)&&"The temperature pill must not leave a large gap above History");

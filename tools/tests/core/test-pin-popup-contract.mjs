@@ -40,7 +40,7 @@ for (const marker of [
   'pin_access::secureClear(ctx->input, sizeof(ctx->input))',
   'LV_EVENT_CLICKED',
   'lv_obj_set_style_bg_color(g_ctx->card, lv_color_hex(init.bg_color), 0);',
-  'lv_obj_set_style_bg_color(ctx->card, lv_color_hex(init.bg_color), 0);',
+  'create_popup_body(on_close, ctx, init.bg_color);',
   'popup_icon_glyph(init.icon_name)',
   'lv_timer_create(auto_close_timer_cb, kAutoCloseMs, ctx)',
   'arm_auto_close_timer(ctx);',

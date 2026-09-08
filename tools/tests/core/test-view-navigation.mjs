@@ -103,13 +103,13 @@ constexpr size_t kMaxFolders=128;
 String popup_entity;
 lv_obj_t* popup_card=nullptr;
 uint16_t popup_source=0;
-uint32_t popup_generation=0;
 bool remote_opening=false;
 bool g_tiles_loaded[1]={true}, g_tiles_reload_requested[1]={false}, g_folder_switch_pending=false;
 lv_obj_t* g_tiles_objs[1][TILES_PER_GRID]={&object};
 uint16_t tiles_view_id_for_object(lv_obj_t* obj){return obj?obj->source:0;}
 bool tiles_folder_switch_pending(){return switch_pending;}
 void tiles_cancel_folder_switch(uint16_t){switch_pending=false;}
+void hide_settings_popup(){}
 void hide_camera_popup(){++camera_stops;card.hidden=true;}
 void hide_light_popup(){card.hidden=true;}
 void hide_sensor_popup(){card.hidden=true;}
@@ -155,10 +155,6 @@ struct Preferences {
   + definition(navigation, 'void viewNavigationClosePopups(')
   + definition(navigation, 'void viewNavigationSource(')
   + definition(navigation, 'void viewNavigationPopupShown(')
-  + definition(navigation, 'uint32_t viewNavigationPopupGeneration(')
-  + definition(navigation, 'bool viewNavigationDeferredPopupAllowed(')
-  + 'template <typename Init>\n' + definition(renderer, 'struct DeferredPopupAfterRefresh') + ';\n'
-  + 'template <typename Init>\n' + definition(renderer, 'static void deferred_popup_after_refresh_cb(')
   + definition(persistence, 'static uint16_t reserveNavigationId(')
   + definition(persistence, 'static bool ensureNavigationIds(')
   + String.raw`
@@ -238,22 +234,7 @@ int main(){
   g_folder_switch_pending=true;assert(!tiles_open_view_popup(id));g_folder_switch_pending=false;
   g_tiles_reload_requested[0]=true;assert(!tiles_open_view_popup(id));g_tiles_reload_requested[0]=false;
   viewNavigationClosePopups();assert(camera_stops==1&&card.hidden);
-  struct Init {String entity;};
-  DeferredPopupAfterRefresh<Init> deferred;
-  lv_display_t display;
-  deferred.registered_display=&display;
-  lv_event_t event{&deferred};
-  auto schedule=[&](){deferred.init.entity="weather.home";deferred.pending=true;
-    deferred.view_generation=viewNavigationPopupGeneration();
-    deferred.show=[](const Init&){++opens;};};
   auto before=opens;
-  schedule();deferred_popup_after_refresh_cb<Init>(&event);assert(opens==before+1);
-  schedule();viewNavigationClosePopups();deferred_popup_after_refresh_cb<Init>(&event);
-  assert(opens==before+1&&!deferred.pending&&deferred.init.entity.empty());
-  schedule();viewNavigationSource(&object);deferred_popup_after_refresh_cb<Init>(&event);
-  assert(opens==before+1);
-  schedule();sleeping=true;deferred_popup_after_refresh_cb<Init>(&event);
-  assert(opens==before+1);sleeping=false;
 
   // A remote popup in the visible folder must not leave and rebuild its path.
   tileConfig.active=2;requests.clear();

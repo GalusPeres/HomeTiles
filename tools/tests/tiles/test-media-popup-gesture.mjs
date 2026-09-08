@@ -49,6 +49,7 @@ struct lv_obj_t {
   std::string text;
   std::vector<Registration> callbacks;
 };
+void hide_popup_shell(lv_obj_t*){} void cancel_popup_open(lv_obj_t*){}
 struct lv_image_dsc_t {};
 struct lv_timer_t { void* user_data; };
 constexpr unsigned LV_OBJ_FLAG_HIDDEN = 1, LV_OBJ_FLAG_CLICKABLE = 2;

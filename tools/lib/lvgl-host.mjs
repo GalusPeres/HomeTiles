@@ -12,7 +12,7 @@ export async function lvglHost(root) {
   const cxx = ['clang++', 'g++'].find(c => spawnSync(c, ['--version']).status === 0);
   const ar = ['llvm-ar', 'ar'].find(c => spawnSync(c, ['--version']).status === 0);
   if (!library || !cc || !cxx || !ar) return null;
-  const flags = ['-DLV_CONF_SKIP', '-DLV_FONT_FMT_TXT_LARGE=1', '-DLV_USE_FONT_COMPRESSED=1', '-DLV_COLOR_DEPTH=32', '-DLV_MEM_SIZE=33554432', '-I', library, '-I', root, '-DMDI_ICONS_32=1', '-DMDI_ICONS_40=1', '-DMDI_ICONS_48=1', '-DUI_FONT_32=1', '-DUI_FONT_40=1', '-DUI_FONT_14=1', '-DUI_FONT_CYRILLIC_14=1'];
+  const flags = ['-DLV_CONF_SKIP', '-DLV_FONT_FMT_TXT_LARGE=1', '-DLV_USE_FONT_COMPRESSED=1', '-DLV_COLOR_DEPTH=32', '-DLV_MEM_SIZE=33554432', '-I', library, '-I', root, '-DMDI_ICONS_32=1', '-DMDI_ICONS_40=1', '-DMDI_ICONS_48=1', '-DUI_FONT_12=1', '-DUI_FONT_32=1', '-DUI_FONT_40=1', '-DUI_FONT_14=1', '-DUI_FONT_CYRILLIC_14=1'];
   const walk = p => fs.readdirSync(p, {withFileTypes: true}).flatMap(e => e.isDirectory() ? walk(path.join(p, e.name)) : [path.join(p, e.name)]);
   const sources = walk(path.join(library, 'src'));
   const signature = crypto.createHash('sha256').update(JSON.stringify(flags));
@@ -20,7 +20,7 @@ export async function lvglHost(root) {
   signature.update(spawnSync(cc, ['--version']).stdout);
   const out = path.join(root, 'build/tests/lvgl-host', signature.digest('hex').slice(0, 16));
   fs.mkdirSync(out, {recursive: true});
-  const fonts = walk(path.join(root, 'src/fonts')).filter(p => /(?:ui_(font_(14|16|20|24|28|32|40|cyrillic_14|cyrillic_16|cyrillic_20|cyrillic_24)|symbols_(20|24))|mdi_icons_(32|40|48))\.c$/.test(p));
+  const fonts = walk(path.join(root, 'src/fonts')).filter(p => /(?:ui_(font_(12|14|16|20|24|28|32|40|cyrillic_12|cyrillic_14|cyrillic_16|cyrillic_20|cyrillic_24)|symbols_(20|24))|mdi_icons_(32|40|48))\.c$/.test(p));
   const objects = [], pending = [];
   for (const file of [...sources.filter(p => p.endsWith('.c')), ...fonts]) {
     const digest = crypto.createHash('sha256').update(file).update(fs.readFileSync(file)).digest('hex');

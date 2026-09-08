@@ -17,7 +17,7 @@ if(!compiler||!jsonInclude){console.log('SKIP: Editable runtime tests need a hos
 const out=path.join(root,'build/tests/editable-runtime');fs.mkdirSync(out,{recursive:true});
 let geometry=read('src/ui/popups/popup_layout.h');
 geometry=geometry.slice(geometry.indexOf('namespace popup_layout {'),geometry.indexOf('// Standard popup close button.'));
-for(const f of cppFunctionDefinitions(geometry).reverse()) if(f.name.startsWith('font')||['headerTitleFont','applyIconScale'].includes(f.name)) geometry=geometry.slice(0,f.start)+geometry.slice(f.end);
+for(const f of cppFunctionDefinitions(geometry).reverse()) if(f.name.startsWith('font')||['headerTitleFont','applyIconScale','alignHeader'].includes(f.name)) geometry=geometry.slice(0,f.start)+geometry.slice(f.end);
 geometry+='inline const int* headerTitleFont(){static const int height=scale(24);return &height;}\ninline const int* font20(){static const int height=scale(20);return &height;}\ninline const int* font40(){static const int height=scale(40);return &height;}\n}';
 const valueStruct=header.match(/struct EditableValue \{[\s\S]*?\n};/)[0];
 const source=`

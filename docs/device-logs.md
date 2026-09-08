@@ -2,7 +2,7 @@
 
 Read live USB logs from any HomeTiles **ESP32-P4 or ESP32-S3** device in desktop **Chrome or Edge**.
 
-**Logs stay in your browser and are never uploaded.**
+!!! note ht-device-logs-privacy "Your logs stay locally in your browser. Nothing is uploaded."
 
 Connect the display's USB **data/debug** port with a data cable. Close other serial tools, select **Connect**, then choose the port. Reproduce the issue, select **Disconnect**, then **Copy log**.
 

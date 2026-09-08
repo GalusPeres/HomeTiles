@@ -1444,18 +1444,22 @@
   
 .tile.sensor,
     .tile.cover { display:grid; grid-template-rows:auto 1fr; grid-template-columns:1fr; }
-    .tile.sensor .tile-title,
-    .tile.cover .tile-title {
+    /* These renderers share the Sensor header on the device. Scale its
+       coordinates once and compensate the preview's 3 px selection border. */
+    .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
+             .cover, .energy, .weather, .media, .climate) > .tile-title {
+      position:absolute;
+      top:calc(var(--tile-header-title-top, 14px) - 3px);
+      right:calc(var(--tile-header-title-right, 8px) - 3px);
+      width:calc((100% + 6px - 2 * var(--tile-pad-h, 10px)) * .7);
+      max-width:none;
       text-align:right;
-      align-self:start;
-      width:auto;
-      grid-column:1;
-      grid-row:1;
-      justify-self:end;
-      max-width:70%;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
+    }
+    .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
+             .cover, .energy, .weather, .media, .climate) > .tile-icon {
+      position:absolute;
+      top:calc(var(--tile-header-icon-top, 8px) - 3px);
+      left:calc(var(--tile-header-icon-left, 6px) - 3px);
     }
     /* As on the display: value and unit are one label in the same font,
        horizontally centered, vertically middle + value-dy
@@ -1480,12 +1484,6 @@
     .tile-value.sensor-value-size-24 { font-size:var(--fs24, 12px); }
     .tile-value.sensor-value-size-20 { font-size:var(--fs20, 10px); }
     .tile-unit { color:inherit; font-size:inherit; margin-left:0.28em; }
-    .tile.sensor .tile-icon,
-    .tile.cover .tile-icon {
-      position:absolute;
-      top:8px;
-      left:6px;
-    }
     .tile.binary_sensor,
     .tile.number,
     .tile.select,
@@ -1494,65 +1492,10 @@
       grid-template-rows:auto 1fr;
       grid-template-columns:1fr;
     }
-    .tile.binary_sensor .tile-title,
-    .tile.number .tile-title,
-    .tile.select .tile-title,
-    .tile.datetime .tile-title {
-      text-align:right;
-      align-self:start;
-      width:auto;
-      grid-column:1;
-      grid-row:1;
-      justify-self:end;
-      max-width:70%;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-    .tile.binary_sensor .tile-icon,
-    .tile.number .tile-icon,
-    .tile.select .tile-icon,
-    .tile.datetime .tile-icon {
-      position:absolute;
-      top:8px;
-      left:6px;
-    }
 
 .tile.energy { display:grid; grid-template-rows:auto 1fr; grid-template-columns:1fr; }
-    .tile.energy .tile-title {
-      text-align:right;
-      align-self:start;
-      width:auto;
-      grid-column:1;
-      grid-row:1;
-      justify-self:end;
-      max-width:70%;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-    .tile.energy .tile-icon {
-      position:absolute;
-      top:8px;
-      left:6px;
-    }
 
 .tile.weather { position:relative; }
-    .tile.weather .tile-icon {
-      position:absolute;
-      top:4px;
-      left:6px;
-    }
-    .tile.weather .tile-title {
-      position:absolute;
-      top:8px;
-      right:8px;
-      text-align:right;
-      max-width:60%;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
 
 .tile.scene { display:flex; flex-direction:column; align-items:center; justify-content:center; }
     .tile.scene .tile-title { text-align:center; align-self:auto; width:100%; margin-top:4px; }
@@ -1609,21 +1552,6 @@
     }
 
 .tile.media { position:relative; overflow:hidden; }
-    .tile.media .tile-icon {
-      position:absolute;
-      top:4px;
-      left:6px;
-    }
-    .tile.media .tile-title {
-      position:absolute;
-      top:8px;
-      right:8px;
-      text-align:right;
-      max-width:60%;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
     .tile.media .tile-media-title,
     .tile.media .tile-media-subtitle,
     .tile.media .tile-media-state {
@@ -1634,23 +1562,6 @@
       display:grid;
       grid-template-rows:auto 1fr;
       grid-template-columns:1fr;
-    }
-    .tile.climate .tile-title {
-      grid-column:1;
-      grid-row:1;
-      justify-self:end;
-      align-self:start;
-      width:auto;
-      max-width:70%;
-      text-align:right;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-    .tile.climate .tile-icon {
-      position:absolute;
-      top:8px;
-      left:6px;
     }
     .tile.climate .tile-value {
       position:absolute;

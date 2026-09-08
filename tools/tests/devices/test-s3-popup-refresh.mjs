@@ -23,16 +23,13 @@ assert.match(helper, /lv_timer_ready\(lv_display_get_refr_timer/,
 assert.match(helper, /lv_event_get_current_target/,
              'Bubbled child events must release the owning card');
 const callbackStart = weather.indexOf('auto show_popup = [](lv_event_t* e)');
-const callbackEnd = weather.indexOf('lv_obj_add_event_cb(card, show_popup, LV_EVENT_ALL, data);', callbackStart);
+const callbackEnd = weather.indexOf('lv_obj_add_event_cb(card, show_popup, popup_event, data);', callbackStart);
 assert.ok(callbackStart >= 0 && callbackEnd > callbackStart);
 const callback = weather.slice(callbackStart, callbackEnd);
-assert.match(callback, /open_current_weather_popup\(e, init\)/);
+assert.match(callback, /finish_press_before_popup\(e\);\s+show_weather_popup\(init\);/);
 assert.doesNotMatch(callback, /defer_popup_until_source_refreshed/,
                     'A cold weather payload must not delay the common shell');
-const openStart = weather.indexOf('void open_current_weather_popup(');
-const openEnd = weather.indexOf('\n}', openStart);
-assert.match(weather.slice(openStart, openEnd), /finish_press_before_popup\(event\);\s+show_weather_popup\(init\);/);
-assert.doesNotMatch(weather.slice(openStart, openEnd), /lv_refr_now/);
+assert.doesNotMatch(callback, /lv_refr_now/);
 const settingsOpenStart = settings.indexOf('static void open_settings_popup(SettingsPopupKind kind) {');
 const settingsClickStart = settings.indexOf(
   'static void on_settings_tile_clicked(', settingsOpenStart);

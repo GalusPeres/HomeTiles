@@ -82,8 +82,8 @@ static inline void disable_pressed_button_animation(lv_obj_t* obj) {
   if (!obj) return;
   lv_obj_set_style_transform_width(obj, 0, LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_transform_height(obj, 0, LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_translate_x(obj, 0, LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_translate_y(obj, 0, LV_PART_MAIN | LV_STATE_PRESSED);
+  // A state-specific translate property forces LVGL to refresh every child's
+  // layout even when its value is zero. The theme does not translate buttons.
 }
 
 // Release the source and let the regular refresh draw the complete popup.

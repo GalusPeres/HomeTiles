@@ -395,8 +395,8 @@ if (JSON.stringify(iconContract) !== JSON.stringify(expectedIcons)) {
 const css = readText(new URL('../../../src/web/assets/admin.css', import.meta.url));
 for (const pattern of [
   /\.tile\.binary_sensor(?:\s*,[^{}]+)?\s*\{/,
-  /\.tile\.binary_sensor \.tile-title(?:\s*,[^{}]+)?\s*\{/,
-  /\.tile\.binary_sensor \.tile-icon(?:\s*,[^{}]+)?\s*\{/
+  /\.tile:is\(\.sensor,[^)]*\.binary_sensor[^)]*\) > \.tile-title\s*\{/,
+  /\.tile:is\(\.sensor,[^)]*\.binary_sensor[^)]*\) > \.tile-icon\s*\{/
 ]) {
   if (!pattern.test(css)) {
     throw new Error('Binary Sensor preview no longer shares the Sensor layout');

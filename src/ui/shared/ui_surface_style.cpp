@@ -23,8 +23,10 @@ void apply_style(lv_obj_t* obj, bool enabled) {
       LV_PART_MAIN | LV_STATE_FOCUSED,
       LV_PART_MAIN | (LV_STATE_FOCUSED | LV_STATE_PRESSED),
   };
+  // Border width is constant. State-specific copies force a full descendant
+  // layout refresh on every press/release, even when they are all zero.
+  lv_obj_set_style_border_width(obj, 0, LV_PART_MAIN);
   for (lv_style_selector_t selector : kSelectors) {
-    lv_obj_set_style_border_width(obj, 0, selector);
     lv_obj_set_style_border_opa(obj, LV_OPA_TRANSP, selector);
     lv_obj_set_style_outline_width(obj, enabled ? 1 : 0, selector);
     lv_obj_set_style_outline_pad(obj, -1, selector);

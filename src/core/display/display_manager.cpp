@@ -3,6 +3,7 @@
 #include "src/core/hardware/board_hal.h"
 #include "src/devices/device_select.h"
 #include "src/devices/guition_esp32_4848s040/s3_diagnostics.h"
+#include "src/core/diagnostics/popup_timing.h"
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
     defined(DEVICE_GUITION_JC1060P470C_FAMILY)
 #include "src/devices/active_device.h"
@@ -918,6 +919,9 @@ bool DisplayManager::init() {
   lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(indev, touch_cb);
   lv_indev_set_display(indev, disp);
+#if defined(HOMETILES_POPUP_TIMING)
+  popup_timing::attach(disp, indev);
+#endif
 #if HOMETILES_GUITION_S3_DIAGNOSTICS_ACTIVE
   lv_indev_add_event_cb(indev, guition_s3_indev_event_cb, LV_EVENT_ALL,
                         nullptr);

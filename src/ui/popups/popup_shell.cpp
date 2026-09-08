@@ -50,6 +50,25 @@ void invalidate_shell() {
   else lv_obj_invalidate(shell.frame);
 }
 
+void draw_popup_background(lv_event_t* event) {
+  if (!shell.active) return;
+  // A shadow makes LVGL's refresh band wider than the opaque frame, so its
+  // whole-band cover test cannot skip the background. Check each widget's
+  // clipped draw area instead, before decoding its text or drawing its fill.
+  const auto* layer = lv_event_get_layer(event);
+  // Child layers may be translucent or use transformed coordinates.
+  if (layer->parent) return;
+  const auto& clip = layer->_clip_area;
+  lv_area_t frame;
+  lv_obj_get_coords(shell.frame, &frame);
+  if (clip.x1 < frame.x1 || clip.x2 > frame.x2 ||
+      clip.y1 < frame.y1 || clip.y2 > frame.y2) return;
+  const int radius = lv_obj_get_style_radius(shell.frame, LV_PART_MAIN);
+  if ((clip.x1 >= frame.x1 + radius && clip.x2 <= frame.x2 - radius) ||
+      (clip.y1 >= frame.y1 + radius && clip.y2 <= frame.y2 - radius))
+    lv_event_stop_processing(event);
+}
+
 void create_header(lv_obj_t* parent, lv_obj_t*& title, lv_obj_t*& icon,
                    lv_obj_t*& close, lv_event_cb_t handler, void* context) {
   title = lv_label_create(parent);
@@ -184,6 +203,14 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title) {
     lv_obj_set_style_text_color(target, color, 0);
 
 }
+}
+
+void register_popup_background(lv_obj_t* root) {
+  if (!root) return;
+  lv_obj_add_event_cb(root, draw_popup_background,
+      static_cast<lv_event_code_t>(LV_EVENT_DRAW_MAIN | LV_EVENT_PREPROCESS), nullptr);
+  for (uint32_t i = 0; i < lv_obj_get_child_count(root); ++i)
+    register_popup_background(lv_obj_get_child(root, i));
 }
 
 PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,

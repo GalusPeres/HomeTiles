@@ -22,3 +22,7 @@ void show_popup_shell(lv_obj_t* owner_overlay, lv_obj_t* body,
                      void (*dismiss)() = nullptr);
 void hide_popup_shell(lv_obj_t* body);
 void sync_popup_shell();
+
+// Register an existing background tree, once after construction. Opaque popup
+// pixels can skip its covered draw calls without hiding or rebuilding widgets.
+void register_popup_background(lv_obj_t* root);

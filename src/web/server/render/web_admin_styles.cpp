@@ -181,6 +181,10 @@ void appendPreviewScaleVars(String& html) {
 #endif
   emit("tile-pad-v", climate_layout::kCardPaddingVertical);
   emit("tile-pad-h", climate_layout::kCardPaddingHorizontal);
+  emit_exact("tile-header-title-top", tile_layout::scale_480(24) + tile_layout::scale_480(4));
+  emit_exact("tile-header-title-right", tile_layout::scale_480(20) - tile_layout::scale_480(4));
+  emit_exact("tile-header-icon-top", tile_layout::scale_480(24) + tile_layout::scale_480(-8));
+  emit_exact("tile-header-icon-left", tile_layout::scale_480(20) + tile_layout::scale_480(-8));
 #if defined(DEVICE_LAYOUT_1024X600)
   emit("value-dy", 23);
 #elif defined(DEVICE_LAYOUT_480X480)

@@ -2644,7 +2644,7 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
       }
     }
     if (!name.length()) name = "--";
-    lv_label_set_text(widgets.location_label, name.c_str());
+    hometiles_title::tile(widgets.location_label, name.c_str(), true);
     lv_obj_clear_flag(widgets.location_label, LV_OBJ_FLAG_HIDDEN);
   }
 

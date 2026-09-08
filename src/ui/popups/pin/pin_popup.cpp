@@ -313,7 +313,7 @@ void show_pin_popup(const PinPopupInit& init) {
     g_ctx->success = init.success;
     g_ctx->callback_context = init.context;
     lv_obj_set_style_bg_color(g_ctx->card, lv_color_hex(init.bg_color), 0);
-    lv_label_set_text(g_ctx->title_label, init.title.c_str());
+    hometiles_title::set(g_ctx->title_label, init.title.c_str());
     lv_label_set_text(g_ctx->icon_label,
                       popup_icon_glyph(init.icon_name).c_str());
     update_value(g_ctx);

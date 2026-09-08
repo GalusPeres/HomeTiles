@@ -103,7 +103,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
 - Docs source: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`.
 - Docs: `/HomeTiles/` reloaded because the root-canonical sitemap omitted that mount. Sitemap aliases preserve native navigation at both mounts; saved flash results no longer overwrite current USB status. Browser regressions cover both.
-- Pages mirrors all 15 v0.6.11 profiles; root hosting must deploy that snapshot too.
+- Both public mounts serve v0.6.11 and the docs fix `77845a2`; live browser checks retain navigation/USB capture (simulated port). Five focused tests pass.
 
 ## Current view control, telemetry and compatible controls
 

@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-09-07
+Last reviewed: 2026-09-08
 
 ## Sources of truth
 
@@ -16,10 +16,10 @@ Last reviewed: 2026-09-07
 
 ## Current firmware baseline
 
-- v0.6.10 draft S3 repair/publication authorized: rebuild only six S3 assets in CI, retain P4 hashes/tag, then publish. Pages still mirrors old assets.
+- v0.6.10 public with S3 repair from `766efc1`; CI `34149832043` rebuilt six S3 images and verified all 24 P4 hashes unchanged. Tag retained; provenance in `s3-rebuild.json`.
 - CI passed 15 profiles / 30 images, including LCD-4 Rev 4.0 and the tested JC8012 V1 fix. Compilation did not validate S3 GitHub OTA.
 - Stabilization: S3 display/update guards, MQTT validation, Light coalescing and incremental Weather (`e3de63c`–`33b4e06`).
-- TLS fallback now covers all three S3 RGB profiles. Guition hardware OTA passed all 11 ranges first try and booted v0.6.10; Waveshare S3 OTA awaits field tests. Release assets still lack the fix. Prior TLS error/two boot watchdog resets remain unproven. Evidence: `build/s3-ota-release-v0.6.10/`.
+- TLS fallback ships on all three S3 RGB profiles; 87 tests and three CI builds pass. Guition hardware OTA passed all 11 ranges first try; Waveshare S3 OTA awaits field tests. Prior TLS error/two boot watchdog resets remain unproven. Evidence: `build/s3-ota-release-v0.6.10/`.
 - The experimental Guition S3 XIP/`-O2` performance path was reverted in
   `5279456`. Do not reintroduce it as an assumed optimization. It increased
   risk and did not solve the measured interaction problem.
@@ -138,7 +138,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
 - Docs source: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`.
-- Pages mirrored all 15 v0.6.10 profiles before the GitHub release returned to Draft.
+- Pages mirrors all 15 v0.6.10 profiles; the S3 repair workflow dispatched updated installer assets after publication.
 
 ## Current view control, telemetry and compatible controls
 

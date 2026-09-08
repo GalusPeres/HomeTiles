@@ -17,7 +17,6 @@ Last reviewed: 2026-09-08
 ## Current firmware baseline
 
 - v0.6.11 released from `0e755d5`; CI `34263199753` passed all 15 profiles / 30 images. Notes distinguish four maintainer-tested devices from pending hardware.
-- CI passed 15 profiles / 30 images, including LCD-4 Rev 4.0 and the tested JC8012 V1 fix. Compilation did not validate S3 GitHub OTA.
 - Stabilization: S3 display/update guards, MQTT validation, Light coalescing and incremental Weather (`e3de63c`–`33b4e06`).
 - TLS fallback ships on all three S3 RGB profiles; 87 tests and three CI builds pass. Guition hardware OTA passed all 11 ranges first try; Waveshare S3 OTA awaits field tests. Prior TLS error/two boot watchdog resets remain unproven. Evidence: `build/s3-ota-release-v0.6.10/`.
 - The experimental Guition S3 XIP/`-O2` performance path was reverted in
@@ -102,7 +101,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
 - Docs source: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`.
 - Docs: `/HomeTiles/` reloaded because the root-canonical sitemap omitted that mount. Sitemap aliases preserve native navigation at both mounts; saved flash results no longer overwrite current USB status. Browser regressions cover both.
-- Both public mounts serve v0.6.11 and the docs fix `77845a2`; live browser checks retain navigation/USB capture (simulated port). Five focused tests pass.
+- Public docs serve v0.6.11 at both mounts; navigation/USB checks use simulated ports.
+- Successful flash results expire on reload or after viewing and leaving/changing selection; recovery checkpoints remain. USB status appears only while active. Logger help explains local-only logs. Six focused tests pass.
 
 ## Current view control, telemetry and compatible controls
 

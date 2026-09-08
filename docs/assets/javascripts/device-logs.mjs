@@ -3,7 +3,7 @@ import { SerialLogSession } from "./serial-log-session.mjs?v=device-logs-5";
 import { SerialLogStore } from "./serial-log-store.mjs?v=device-logs-2";
 import { retainPageComponent } from "./retained-page-component.mjs?v=serial-navigation-2";
 import { serialAccess } from "./serial-access.mjs?v=serial-navigation-2";
-import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-2";
+import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-3";
 
 export function mountDeviceLogs(root, { browser = window, platform = navigator } = {}) {
   const find = (name) => root.querySelector(`[data-log-${name}]`);

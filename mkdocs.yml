@@ -52,10 +52,10 @@ extra_css:
 
   - stylesheets/device-status.css?v=2
   - stylesheets/device-logs.css?v=device-logs-1
-  - stylesheets/serial-status.css?v=serial-navigation-2
+  - stylesheets/serial-status.css?v=serial-navigation-3
 
 extra_javascript:
-  - path: assets/javascripts/docs-session.mjs?v=serial-navigation-3
+  - path: assets/javascripts/docs-session.mjs?v=serial-navigation-4
     type: module
 
 markdown_extensions:

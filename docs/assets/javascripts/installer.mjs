@@ -3,7 +3,7 @@ import { ESP32P4ROM } from "https://unpkg.com/esptool-js@0.6.1/lib/targets/esp32
 import { ESP32S3ROM } from "https://unpkg.com/esptool-js@0.6.1/lib/targets/esp32s3.js";
 import { retainPageComponent } from "./retained-page-component.mjs?v=serial-navigation-2";
 import { serialAccess } from "./serial-access.mjs?v=serial-navigation-2";
-import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-2";
+import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-3";
 
 import {
   APP_SLOTS,
@@ -22,7 +22,7 @@ import {
   releaseAssetNames,
   resolveSameOriginAsset,
   validateFirmwareDescriptor,
-} from "./installer-contract.mjs?v=installer-ui-14";
+} from "./installer-contract.mjs?v=installer-ui-15";
 
 const LAST_RUN_STORAGE_KEY = "hometiles.webInstaller.lastRun.v1";
 const LOG_MAX_LINES = 300;
@@ -82,6 +82,11 @@ export function mountInstaller(root) {
       ) {
         return null;
       }
+      // Older versions persisted successful results indefinitely.
+      if (!saved.busy && !saved.recoveryRequired && saved.kind === "success") {
+        window.localStorage.removeItem(LAST_RUN_STORAGE_KEY);
+        return null;
+      }
       return {
         version: 1,
         deviceKey: saved.deviceKey,
@@ -110,6 +115,7 @@ export function mountInstaller(root) {
     lastRun: readLastRun(),
     progress: 0,
     releaseIndex: null,
+    visible: root.isConnected,
   };
 
   const logState = {
@@ -300,7 +306,11 @@ export function mountInstaller(root) {
       ...overrides,
     };
     try {
-      window.localStorage.setItem(LAST_RUN_STORAGE_KEY, JSON.stringify(record));
+      if (!record.busy && !record.recoveryRequired && record.kind === "success") {
+        window.localStorage.removeItem(LAST_RUN_STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(LAST_RUN_STORAGE_KEY, JSON.stringify(record));
+      }
       state.lastRun = record;
     } catch (error) {
       console.debug("[WebInstaller] Installer state could not be saved", error);
@@ -378,6 +388,22 @@ export function mountInstaller(root) {
     }
     updateFormState();
     return true;
+  }
+
+  function resetCompletedRun() {
+    if (state.busy || elements.status.dataset.kind !== "success") return;
+    state.lastRun = null;
+    state.flashMutationStarted = false;
+    serialActivity.clear("installer");
+    resetLog();
+    setLogActionStatus("");
+    elements.logPanel.hidden = true;
+    showActivity("Ready", "Choose a device and confirm its model.", { progress: 0 });
+  }
+
+  function formChanged() {
+    resetCompletedRun();
+    updateFormState();
   }
 
   function updateFormState() {
@@ -827,15 +853,15 @@ export function mountInstaller(root) {
   elements.device.addEventListener("change", () => {
     elements.exactHardware.checked = false;
     elements.factoryConfirmation.checked = false;
-    updateFormState();
+    formChanged();
   });
-  elements.firmwareSource.addEventListener("change", updateFormState);
-  elements.firmwareFile.addEventListener("change", updateFormState);
+  elements.firmwareSource.addEventListener("change", formChanged);
+  elements.firmwareFile.addEventListener("change", formChanged);
   root.querySelectorAll('input[name="installer-mode"]').forEach((input) => {
-    input.addEventListener("change", updateFormState);
+    input.addEventListener("change", formChanged);
   });
-  elements.exactHardware.addEventListener("change", updateFormState);
-  elements.factoryConfirmation.addEventListener("change", updateFormState);
+  elements.exactHardware.addEventListener("change", formChanged);
+  elements.factoryConfirmation.addEventListener("change", formChanged);
   elements.flash.addEventListener("click", flashSelectedFirmware);
   elements.copyLog.addEventListener("click", copyFlashLog);
   elements.logOutput.addEventListener("scroll", () => {
@@ -884,7 +910,14 @@ export function mountInstaller(root) {
   }
   updateFormState();
   serialAccess.subscribe(updateFormState);
-  return { pageChanged(visible) { if (visible) scheduleLogRender(); } };
+  return {
+    pageChanged(visible) {
+      // A flash completed offscreen stays available until its result is viewed.
+      if (state.visible && !visible) resetCompletedRun();
+      state.visible = visible;
+      if (visible) scheduleLogRender();
+    },
+  };
 }
 
 retainPageComponent("[data-hometiles-installer]", mountInstaller);

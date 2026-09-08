@@ -21,6 +21,11 @@ export class SerialActivity {
       || { source: "logs", label: "USB disconnected", kind: "idle", active: false };
   }
 
+  clear(source) {
+    if (!this.entries.delete(source)) return;
+    for (const listener of this.listeners) listener(this.current);
+  }
+
   subscribe(listener) {
     this.listeners.add(listener);
     listener(this.current);

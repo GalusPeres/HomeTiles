@@ -14,6 +14,7 @@
   color: var(--md-default-fg-color);
 }
 
+.ht-serial-status[hidden] { display: none; }
 .ht-serial-status:hover { border-color: var(--md-accent-fg-color); }
 .ht-serial-status:focus-visible { outline: 2px solid var(--md-accent-fg-color); outline-offset: 2px; }
 .ht-serial-status-dot { width: 0.35rem; height: 0.35rem; border-radius: 50%; background: #9aa3ad; }

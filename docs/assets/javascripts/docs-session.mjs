@@ -1,5 +1,5 @@
-import { mountSerialStatus } from "./serial-status.mjs?v=serial-navigation-2";
-import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-2";
+import { mountSerialStatus } from "./serial-status.mjs?v=serial-navigation-3";
+import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-3";
 
 const baseUrl = new URL("../../", import.meta.url);
 mountSerialStatus(document, baseUrl);
@@ -8,9 +8,9 @@ mountSerialStatus(document, baseUrl);
 // wait for esptool's CDN. The page modules retain their controls and sessions.
 const components = [
   { selector: "[data-device-logs]", status: "[data-log-status]", source: "logs",
-    module: "./device-logs.mjs?v=device-logs-5" },
+    module: "./device-logs.mjs?v=device-logs-6" },
   { selector: "[data-hometiles-installer]", status: "#installer-status", source: "installer",
-    module: "./installer.mjs?v=installer-ui-14" },
+    module: "./installer.mjs?v=installer-ui-15" },
 ];
 
 function update() {

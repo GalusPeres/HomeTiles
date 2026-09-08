@@ -2,7 +2,9 @@
 
 Read and copy your display's live serial log directly in desktop **Chrome or Edge**, using a USB data cable.
 
-Works with the serial console of all HomeTiles **ESP32-P4 and ESP32-S3** profiles, including native USB serial and USB-UART adapters. No firmware selection or installation is needed.
+Works with all HomeTiles **ESP32-P4 and ESP32-S3** profiles. No firmware installation is needed.
+
+**Your logs stay locally in your browser. Nothing is uploaded.** Use **Copy log** to copy them to your clipboard and share them yourself.
 
 1. Connect the display's USB **data/debug** port to your computer and let HomeTiles start normally.
 2. Close other serial monitors or flashing tools, then select **Connect** and choose the display's serial port.
@@ -33,23 +35,17 @@ Works with the serial console of all HomeTiles **ESP32-P4 and ESP32-S3** profile
 
 <noscript>Enable JavaScript to connect to your display and read its serial log.</noscript>
 
-Your captured log is restored when you return to this page or reload it in the same browser tab. **Clear log** also removes the saved copy. The viewer keeps the most recent 2,000 lines, up to 128 Ki characters, and trims individual lines beyond 4,096 characters.
-
-The USB connection and capture continue while you browse other documentation pages in this tab. The status in the header shows the current USB activity; select it to return to the active tool. Select **Disconnect** to stop capture.
-
-Opening the firmware installer keeps capture running. Selecting a USB port with **Connect and flash** stops capture and releases its port before the installer connects. Cancelling the port selection keeps capture running. After flashing, reconnect here to capture new output.
-
-Reloading, closing the tab, or leaving the documentation ends the USB connection. After a reload, select **Connect** to capture new output. The saved log stays in this tab's browser session; copy it before closing the tab.
+- Capture continues while you browse this documentation. The USB status in the header takes you back here.
+- Reloading, closing the tab, leaving the documentation or starting a flash ends capture. Select **Connect** to resume.
+- Logs survive reloads in the same tab. **Clear log** removes the saved copy; copy anything you need before closing the tab.
 
 ## Capture a restart
 
-Connect first, then briefly press the display's **RESET** button if it has one. **Do not hold BOOT**: that starts the flashing bootloader instead of HomeTiles. If a restart removes the USB port, select **Connect** again after it reappears; output sent while disconnected cannot be recovered.
+Connect, then briefly press **RESET** if available, not BOOT. If USB disconnects, select **Connect** again when the port returns. Output missed while disconnected cannot be recovered.
 
 ## No output or no port
 
-- Use the data/debug port, not a power-only or USB host port. Some boards have more than one USB connector.
-- Check the USB data cable and close any serial monitor, flasher, or other tab using the same port.
-- Keep the display's normal power supply connected if required by its model. A USB-UART adapter may need its manufacturer's driver.
-- Confirm HomeTiles is running normally, then wait for output or reproduce the problem. The viewer reads new serial output; it does not retrieve stored crash logs.
+- Check the USB data cable and data/debug port. Close other tools using the same port.
+- Keep the display's required power supply connected. Some USB-UART adapters need a driver.
 
-For a saved crash log or core dump, use **Screenshot & Diagnostics** in the Web Admin. See [Troubleshooting](faq.md#the-display-crashed-or-restarted-by-itself).
+This viewer captures new output. For saved crash logs, use **Screenshot & Diagnostics** in the Web Admin; see [Troubleshooting](faq.md#the-display-crashed-or-restarted-by-itself).

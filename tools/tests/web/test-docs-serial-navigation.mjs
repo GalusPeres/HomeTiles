@@ -50,6 +50,10 @@ activity.set("installer", "Flash cancelled");
 assert.equal(activity.current.label, "Logs active");
 activity.set("logs", "Logs active", "success", true);
 assert.equal(notifications, 4, "Unchanged activity must not redraw the header");
+activity.clear("installer");
+assert.equal(activity.current.label, "Logs active", "Clearing a flash result must preserve active capture status");
+activity.clear("logs");
+assert.equal(activity.current.label, "USB disconnected");
 
 const executable = findBrowser();
 const python = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
@@ -111,6 +115,7 @@ try {
   const evaluate = browser.evaluate;
   const until = browser.until;
   const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  const headerVisible = () => evaluate("getComputedStyle(document.querySelector('.ht-serial-status')).display !== 'none'");
   const navigate = async (page, selector) => {
     if (selector) await click(selector);
     else await evaluate(`Array.from(document.querySelectorAll('.md-sidebar--primary a')).find(a => a.href === ${JSON.stringify(base + page)}).click()`);
@@ -120,12 +125,16 @@ try {
 
   await browser.send("Page.navigate", { url: base + "faq/" });
   await until("!!document.querySelector('.ht-serial-status')", "Global status on ordinary documentation page");
+  assert.equal(await headerVisible(), false, "Ordinary documentation must not show an idle USB badge");
   await evaluate("window.navigationToken = 'retained'; void document$.subscribe(() => window.finishedNavigation = location.href)");
-  await navigate("device-logs/", ".ht-serial-status");
+  await navigate("device-logs/");
   await until("!document.querySelector('[data-log-connect]').disabled", "Logger loaded after navigation");
+  const idleLogger = await browser.send("Page.captureScreenshot");
+  fs.writeFileSync(path.join(artifacts, "logger-idle.png"), Buffer.from(idleLogger.data, "base64"));
   await evaluate("window.logRoot = document.querySelector('[data-device-logs]')");
   await click("[data-log-connect]");
   await until("fixture.opened && document.querySelector('.ht-serial-status').textContent === 'Logs active'", "Connected status");
+  assert.equal(await headerVisible(), true, "Active capture needs a visible return link");
   await evaluate("fixture.emit('Before navigation\\n')");
   await until("logRoot.querySelector('[data-log-output]').textContent.includes('Before navigation')", "Initial output");
   await navigate("faq/");
@@ -167,23 +176,45 @@ try {
   await click("#installer-flash");
   await until("!!fixture.finishWrite", "Simulated update reached flash write");
   assert.equal(await evaluate("document.querySelector('.ht-serial-status').textContent"), "Flashing · 48%");
+  assert.equal(await headerVisible(), true, "Active flash progress must be visible");
   assert.deepEqual(await evaluate("fixture.events.slice(0, 5)"), ["log-open", "log-cancel", "log-cancelled", "log-close", "flash-open"]);
   await navigate("device-logs/");
   assert.equal(await evaluate("document.querySelector('[data-log-connect]').disabled"), true, "Logger competed with active flashing");
   await navigate("faq/");
   await evaluate("fixture.finishWrite()");
-  await until("document.querySelector('.ht-serial-status').textContent === 'Flash complete'", "Completion visible on another page");
-  await navigate("installer/", ".ht-serial-status");
+  await until("document.querySelector('.ht-serial-status').textContent === 'Flash complete'", "Flash finished on another page");
+  assert.equal(await headerVisible(), false, "Completion must hide the inactive USB badge");
+  await navigate("installer/");
   await until("document.querySelector('#installer-progress').value === 100 && document.querySelector('#installer-log-output').textContent.includes('Simulated flash write')", "Retained flash progress and log");
   assert.equal(await evaluate("fixture.writes"), 2, "Expected inactive app and OTA selection writes only");
   assert.equal(await evaluate("fixture.events.at(-1)"), "flash-close");
-  const completedFlash = await evaluate("localStorage.getItem('hometiles.webInstaller.lastRun.v1')");
+  assert.equal(await evaluate("localStorage.getItem('hometiles.webInstaller.lastRun.v1')"), null, "A successful flash must clear its persistent checkpoint");
+  const completedFlash = JSON.stringify({ version: 1, deviceKey: device.key, mode: "update",
+    busy: false, mutationStarted: true, recoveryRequired: false, progress: 100,
+    phase: "Complete", message: "Update complete. Settings were preserved. Please restart the device manually.", kind: "success" });
+  await navigate("faq/");
+  await navigate("installer/");
+  assert.equal(await evaluate("document.querySelector('#installer-phase').textContent"), "Ready", "Leaving an already viewed completion must reset it");
+  assert.equal(await evaluate("document.querySelector('#installer-progress-panel').hidden && document.querySelector('#installer-log-panel').hidden"), true);
+  assert.notEqual(await evaluate("document.querySelector('.ht-serial-status').textContent"), "Flash complete");
+
+  // Preparing the next operation also clears a fresh result without navigation.
+  await evaluate("fixture.finishWrite = null");
+  await click("#installer-flash");
+  await until("!!fixture.finishWrite", "Second simulated update");
+  await evaluate("fixture.finishWrite()");
+  await until("document.querySelector('#installer-phase').textContent === 'Complete'", "Fresh completion stays visible");
+  await evaluate("{ const source = document.querySelector('#installer-firmware-source'); source.value = 'published'; source.dispatchEvent(new Event('change')); }");
+  assert.equal(await evaluate("document.querySelector('#installer-phase').textContent"), "Ready", "Changing firmware must clear the previous completion");
+  assert.equal(await evaluate("document.querySelector('#installer-progress-panel').hidden && document.querySelector('#installer-log-panel').hidden"), true);
+  await evaluate("{ const source = document.querySelector('#installer-firmware-source'); source.value = 'local'; source.dispatchEvent(new Event('change')); }");
 
   // A new failed attempt must not erase, write or leave a stale busy status.
   await evaluate("fixture.wrongChip = true; fixture.finishWrite = null");
   await click("#installer-flash");
   await until("document.querySelector('.ht-serial-status').dataset.kind === 'error' && !document.querySelector('#installer-flash').disabled", "Flash error status");
-  assert.equal(await evaluate("fixture.writes"), 2);
+  assert.equal(await headerVisible(), false, "A finished failure is shown on the installer, not as idle USB activity");
+  assert.equal(await evaluate("fixture.writes"), 4);
   await navigate("device-logs/");
   await click("[data-log-connect]");
   await until("fixture.opened", "Reconnect after flasher releases USB");
@@ -223,10 +254,24 @@ try {
   await until("!!document.querySelector('[data-log-connect]') && !document.querySelector('[data-log-connect]').disabled", "Reload logger");
   assert.equal(await evaluate("document.querySelector('[data-log-output]').textContent"), snapshot, "Full reload lost captured output");
   assert.equal(await evaluate("fixture.requests"), 0, "Reload must not reconnect automatically");
+  assert.equal(await headerVisible(), false, "A restored log is not an active USB connection");
   await evaluate("window.navigationToken = 'retained'; void document$.subscribe(() => window.finishedNavigation = location.href)");
   await navigate("installer/");
-  await until("document.querySelector('#installer-progress')?.value === 100", "Saved flash result restored");
+  await until("document.querySelector('#installer-phase')?.textContent === 'Ready'", "Old completion discarded after reload");
+  assert.equal(await evaluate("document.querySelector('#installer-progress-panel').hidden && document.querySelector('#installer-log-panel').hidden"), true, "Old completion must not restore progress or a synthetic flash log");
+  assert.equal(await evaluate("localStorage.getItem('hometiles.webInstaller.lastRun.v1')"), null, "Legacy successful results must be removed");
   assert.equal(await evaluate("document.querySelector('.ht-serial-status').textContent"), "USB disconnected", "An old saved flash result must not become current USB activity");
+  const readyInstaller = await browser.send("Page.captureScreenshot");
+  fs.writeFileSync(path.join(artifacts, "installer-ready.png"), Buffer.from(readyInstaller.data, "base64"));
+
+  // Successful-result cleanup must preserve interrupted factory recovery.
+  const interruptedFlash = JSON.stringify({ ...JSON.parse(completedFlash), mode: "factory", busy: true, progress: 48, kind: "info", phase: "Writing firmware" });
+  await evaluate(`localStorage.setItem('hometiles.webInstaller.lastRun.v1', ${JSON.stringify(interruptedFlash)})`);
+  await browser.send("Page.reload");
+  await until("document.querySelector('#installer-phase')?.textContent === 'Recovery required'", "Interrupted factory checkpoint restored");
+  assert.equal(await evaluate("JSON.parse(localStorage.getItem('hometiles.webInstaller.lastRun.v1')).recoveryRequired"), true);
+  await browser.send("Page.reload");
+  await until("document.querySelector('#installer-phase')?.textContent === 'Recovery required'", "Recovery survives another reload");
   assert.deepEqual(browser.errors, [], "Unexpected browser runtime errors");
 
   // A CDN failure must leave instant navigation usable and explain the tool's

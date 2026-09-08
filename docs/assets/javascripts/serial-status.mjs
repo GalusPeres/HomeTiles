@@ -1,4 +1,4 @@
-import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-2";
+import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-3";
 
 export function mountSerialStatus(document, baseUrl) {
   const title = document.querySelector(".md-header__title");
@@ -11,7 +11,8 @@ export function mountSerialStatus(document, baseUrl) {
   const text = document.createElement("span");
   link.append(dot, text);
   title.after(link);
-  serialActivity.subscribe(({ source, label, kind }) => {
+  serialActivity.subscribe(({ source, label, kind, active }) => {
+    link.hidden = !active;
     const page = source === "installer" ? "installer/" : "device-logs/";
     link.href = new URL(page, baseUrl).href;
     link.dataset.kind = kind;

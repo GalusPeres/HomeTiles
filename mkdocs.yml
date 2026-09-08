@@ -15,6 +15,7 @@ theme:
       primary: black
       accent: teal
   features:
+    - navigation.instant
     - navigation.sections
     - navigation.top
     - navigation.footer
@@ -38,6 +39,7 @@ nav:
   - Help:
       - Firmware Updates: updating.md
       - Troubleshooting: faq.md
+      - Device logs: device-logs.md
       - Release Notes: releases/index.md
 
 extra_css:
@@ -45,6 +47,12 @@ extra_css:
   - stylesheets/readability.css?v=20260906-docs20
 
   - stylesheets/device-status.css?v=2
+  - stylesheets/device-logs.css?v=device-logs-1
+  - stylesheets/serial-status.css?v=serial-navigation-2
+
+extra_javascript:
+  - path: assets/javascripts/docs-session.mjs?v=serial-navigation-2
+    type: module
 
 markdown_extensions:
   - admonition

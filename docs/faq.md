@@ -111,6 +111,7 @@ Use the [Web Admin upload](updating.md#2-web-admin-ota-upload) with the matching
 
 1. Open **Screenshot & Diagnostics** in the Web Admin and select **Download crash log**.
 2. If a core dump is available, download it and put the `.bin` in a `.zip` for GitHub.
-3. [Open an issue](https://github.com/GalusPeres/HomeTiles/issues) with the exact model, firmware version, action that triggered the problem, and logs.
+3. For live output or a restart loop, use the browser [Device logs](device-logs.md) viewer and copy the serial log.
+4. [Open an issue](https://github.com/GalusPeres/HomeTiles/issues) with the exact model, firmware version, action that triggered the problem, and logs.
 
 A core dump can contain tile names, entity data, and other working memory. Share only the crash log if you prefer. Check the [device status](index.md#device-support) for known issues and available fixes.

@@ -75,11 +75,12 @@ Use desktop Chrome or Edge and a USB data cable.
     <div class="ht-installer-section ht-installer-section-connect">
       <div class="ht-installer-section-heading">5. Connect and flash</div>
       <div class="ht-installer-section-body ht-installer-action">
-        <p class="ht-installer-section-info">Keep power, USB, and this page connected until flashing finishes.</p>
+        <p class="ht-installer-section-info">Keep power, USB, and this browser tab open until flashing finishes. You can browse other pages in this documentation; the header shows progress and returns you here.</p>
         <div class="ht-installer-action-row">
           <button id="installer-flash" type="button" disabled>Connect and flash</button>
           <div id="installer-status" class="ht-installer-status" role="status" aria-live="polite" data-kind="info">Loading...</div>
         </div>
+        <p id="installer-serial-busy" class="ht-installer-status" role="status" hidden>Log capture is active. Selecting a port with Connect and flash stops capture and releases its USB port. Cancelling the port selection keeps capture running.</p>
         <div id="installer-progress-panel" class="ht-installer-progress" hidden>
           <div class="ht-installer-progress-meta">
             <strong id="installer-phase">Preparing</strong>
@@ -100,7 +101,6 @@ Use desktop Chrome or Edge and a USB data cable.
   </div>
 </div>
 
-<script type="module" src="../assets/javascripts/installer.mjs?v=installer-ui-11"></script>
 
 After flashing, restart the display and follow [Home Assistant setup](home-assistant-setup.md).
 

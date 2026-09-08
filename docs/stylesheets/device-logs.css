@@ -1,0 +1,47 @@
+/* Reuse the installer's log surface, buttons and status colors. */
+.ht-device-logs-connection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.9rem;
+}
+
+.ht-device-logs .ht-installer-log-panel pre {
+  min-height: 12rem;
+  max-height: 24rem;
+}
+
+.ht-device-logs-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.62rem;
+}
+
+.ht-device-logs-follow input {
+  margin: 0;
+  accent-color: var(--md-accent-fg-color);
+}
+
+.ht-device-logs-action,
+.ht-device-logs-limit {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.62rem;
+}
+
+.ht-device-logs .ht-installer-log-header button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #343b46;
+  color: var(--md-default-fg-color--light);
+}
+
+.ht-device-logs button:focus-visible,
+.ht-device-logs pre:focus-visible,
+.ht-device-logs input:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 3px;
+}

@@ -520,7 +520,7 @@ assert.match(
 
 const installerSource = read("docs/assets/javascripts/installer.mjs");
 const installerPageSource = read("docs/installer.md");
-const installerPageVersion = installerPageSource.match(/installer\.mjs\?v=([a-z0-9-]+)/)?.[1];
+const installerPageVersion = read("docs/assets/javascripts/docs-session.mjs").match(/installer\.mjs\?v=([a-z0-9-]+)/)?.[1];
 const installerContractVersion = installerSource.match(/installer-contract\.mjs\?v=([a-z0-9-]+)/)?.[1];
 assert.ok(installerPageVersion, "The installer module needs an explicit browser-cache version.");
 assert.equal(

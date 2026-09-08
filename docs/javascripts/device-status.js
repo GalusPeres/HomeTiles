@@ -1,4 +1,7 @@
 (() => {
+  // Markdown scripts run again after instant navigation. Release the previous
+  // page's global listeners before binding the replacement table.
+  globalThis.hometilesDeviceStatusCleanup?.();
   let active = null;
   let pinned = false;
   let closeTimer;
@@ -102,4 +105,9 @@
   };
   addEventListener('resize', reposition);
   addEventListener('scroll', reposition, true);
+  globalThis.hometilesDeviceStatusCleanup = () => {
+    hide();
+    removeEventListener('resize', reposition);
+    removeEventListener('scroll', reposition, true);
+  };
 })();

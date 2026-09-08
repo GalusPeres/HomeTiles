@@ -90,7 +90,6 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Popups share one visible frame/header/close button and cached bodies; title/icon/color remain variable. Matching bodies/Sensor graphs stay visible, cold contents follow the first frame. Close/switch/deletion cancel pending work; PIN checks remain. Settings forms are disposable; Camera widgets preloaded.
 - Artwork: Bridge URL-only `state_fast` precedes full MQTT. Blocked/failed replacements retain loaded covers; URL/content pairing prevents S3 redownloads/stale results. Deferred Media opening resolves current descriptors without borrowed pixels.
 - Memory unchanged: PSRAM LVGL pools S3 2 MiB/P4 12 MiB; internal/DMA draw band capped at 72 KiB; page caches S3 4/P4 6. Bindings use PSRAM, no extra framebuffers. Larger covers and bounded idle Media service remain.
-- Accepted checkpoint: 91 tests/8-inch build pass; BIN `build/local-safe-waveshare_8/HomeTiles.ino.bin`.
 - Maintainer accepted fast 8-inch opening: removed state-specific zero translations/border widths that forced descendant layout. Tests use real global borders and Weather trees. BIN/hash: `build/tile-state-layout/VERIFICATION.md`.
 - Weather values/preview headers match Sensor; runtime names use the shared title helper. Maintainer confirms `Viecht...` on 8-inch. 95 tests/build pass; BIN/hash: `build/weather-title-ellipsis/VERIFICATION.md`.
 - Native Weather/Sensor tests cover all 17 profiles: real global styles, colors, short/long input, first-frame gating, geometry and covered drawing. Timing instrumentation is opt-in only.

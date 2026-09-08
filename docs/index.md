@@ -114,16 +114,16 @@ Match the exact hardware revision before flashing. [Open online flasher](install
 
 <div class="ht-device-note" id="device-note-16" popover="auto" role="dialog" aria-labelledby="device-note-16-title"><div class="ht-device-note-title" id="device-note-16-title">Waveshare LCD-4B (S3)</div><button type="button" class="ht-device-note-close" aria-label="Close support details">×</button><p>Initial hardware testing was reported with PR #29. The adapted release profile still needs confirmation. No microSD or Camera tiles.</p><p class="ht-device-note-links"><a href="https://github.com/GalusPeres/HomeTiles/issues/26">Issue #26</a><a href="https://github.com/GalusPeres/HomeTiles/pull/29">PR #29</a></p></div>
 
-<script src="javascripts/device-status.js?v=2" defer></script>
+<script src="javascripts/device-status.js?v=3" defer></script>
 
-## New In v0.6.10
+## New In v0.6.11
 
-- **Editable tiles:** Number, Select and Date/Time controls with history, plus more switchable entities and button actions.
-- **Dashboard:** Home Assistant View control, two-line titles, configurable value sizes and matching live previews.
-- **Hardware:** Waveshare S3 LCD-4 Rev 4.0 support and the confirmed Guition JC8012 V1 Camera/Web OTA transport fix.
+- **Faster popups:** shared popup surfaces and corrected tile press handling remove unnecessary layout work, including on large Weather tiles.
+- **Consistent dashboard:** stable media covers, aligned Weather values and previews, correct title truncation and PIN unlock titles.
+- **Browser USB tools:** the new [Device Logs](device-logs.md) page and [installer](installer.md) keep their sessions running while you browse the documentation, with status in the header.
 - **Bridge:** use v0.6.44 or newer through HACS. Camera remains experimental and ESP32-P4-only.
 
-[Read the v0.6.10 release notes](releases/v0.6.10.md)
+[Read the v0.6.11 release notes](releases/v0.6.11.md)
 
 ## How It Works
 

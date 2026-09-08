@@ -86,18 +86,23 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Shared-popup/artwork checkpoint (2026-09-08)
 
-- Checkpoint after `4adff2d`; no release. Maintainer confirms fast tile opening on Waveshare 8-inch with the corrected BIN. Larger Weather tiles still open slowly; this size-dependent issue predates the fixed universal delay.
-- All popups use one visible frame/header/close button and one construction helper; duplicate setup is removed from nine type modules and Settings. Colors/titles/icons remain variable. Tile bodies stay cached; invisible header labels retain state bindings. Settings forms remain disposable; Camera widgets are preloaded.
-- One dispatcher defers expensive content until the regular frame. Matching cached bodies stay visible immediately; Sensor retains the last graph during refresh. Cold/rebound contents follow the header. Close/switch/deletion cancel pending work; PIN refusal and Settings back/cleanup remain.
-- Cover regression: Bridge URL-only `state_fast` precedes full MQTT artwork. P4's HTTPS guard previously hid loaded pixels. Blocked/failed replacements now retain the old image; paired URL/content hashes prevent S3 redownloads and stale results. Deferred Media opening resolves a current descriptor by entity, without retaining borrowed pixels.
-- Memory layout unchanged: LVGL pool in PSRAM (S3 2 MiB, P4 12 MiB), internal/DMA draw band capped at 72 KiB with existing reserves; resident page caches remain bounded (S3 4, P4 6). New binding records use PSRAM, not additional framebuffers. Existing larger covers and bounded idle Media service remain.
-- Bounded invalidation fixes the reproduced full-screen redraws from moving the shared overlay. Shared header positioning removes a forced whole-screen layout; warm Sensor graphs remain populated. Corrected Waveshare 8-inch build and 91 tests pass. BIN: `build/local-safe-waveshare_8/HomeTiles.ino.bin`, 6322592 bytes, SHA256 `91334c7c125e7193277ebfae6334a57fda27c9100c0ec807ac1a69cc613741f8`. Details: `build/popup-shell-cover-fix/VERIFICATION.md`.
-- Pending: larger Weather tile opening, broader control/history and artwork continuity validation, navigation, sleep/wake, camera/ESP-Hosted soak and memory minima. S3 build/hardware validation is deferred at the user's request.
+- v0.6.11 preparation includes checkpoint `3b534ab` and shared-style fixes resolving large Weather opening on 8-inch.
+- Popups share one visible frame/header/close button and cached bodies; title/icon/color remain variable. Matching bodies/Sensor graphs stay visible, cold contents follow the first frame. Close/switch/deletion cancel pending work; PIN checks remain. Settings forms are disposable; Camera widgets preloaded.
+- Artwork: Bridge URL-only `state_fast` precedes full MQTT. Blocked/failed replacements retain loaded covers; URL/content pairing prevents S3 redownloads/stale results. Deferred Media opening resolves current descriptors without borrowed pixels.
+- Memory unchanged: PSRAM LVGL pools S3 2 MiB/P4 12 MiB; internal/DMA draw band capped at 72 KiB; page caches S3 4/P4 6. Bindings use PSRAM, no extra framebuffers. Larger covers and bounded idle Media service remain.
+- Accepted checkpoint: 91 tests/8-inch build pass; BIN `build/local-safe-waveshare_8/HomeTiles.ino.bin`.
+- Maintainer accepted fast 8-inch opening: removed state-specific zero translations/border widths that forced descendant layout. Tests use real global borders and Weather trees. BIN/hash: `build/tile-state-layout/VERIFICATION.md`.
+- Weather values/preview headers match Sensor; runtime names use the shared title helper. Maintainer confirms `Viecht...` on 8-inch. 95 tests/build pass; BIN/hash: `build/weather-title-ellipsis/VERIFICATION.md`.
+- Native Weather/Sensor tests cover all 17 profiles: real global styles, colors, short/long input, first-frame gating, geometry and covered drawing. Timing instrumentation is opt-in only.
+- Maintainer confirms Guition S3, 4B and Tab5 builds work well; 95 tests, no popup timing. BINs/hashes: `build/test-devices-popup-title/VERIFICATION.md`.
+- PIN reuse updates the full title; maintainer confirmed Tab5 correction. BIN/hash: `build/pin-popup-title/VERIFICATION.md`.
+- Pending: broader controls/artwork, navigation, sleep/wake, camera/ESP-Hosted soak and memory minima. No post-fix serial timing comparison captured.
 
 ## Current maintenance refactoring
 
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
 - Docs source: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`.
+- Docs: retained USB/flash sessions and header; maintainer tested locally including flashing. 98 tests and strict docs build pass.
 - Pages mirrors all 15 v0.6.10 profiles; the S3 repair workflow dispatched updated installer assets after publication.
 
 ## Current view control, telemetry and compatible controls

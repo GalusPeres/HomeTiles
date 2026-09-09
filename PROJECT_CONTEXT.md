@@ -25,7 +25,7 @@ Last reviewed: 2026-09-09
 
 ## Hardware and validation reality
 
-- Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 PPA/SD confirmed; V1 hardware pending.
+- Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 Tested, PPA/SD confirmed; V1 hardware pending.
 - v0.6.9 Binary/Text-State Sensor UI passed hardware tests on 4B, 8-inch and S3.
 - Other exact revisions depend on community testers. A successful compile does
   not promote an untested revision to supported status.

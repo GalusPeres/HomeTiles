@@ -14,7 +14,7 @@ const compatibility = JSON.parse(fs.readFileSync(
 const existingKeys = new Set(compatibility.profiles.map(({ key }) => key));
 
 function assertExistingProfileCompatibility(actual) {
-  // This independent fixture records the profiles before catalog extraction.
+  // This independent fixture records the accepted installer profile contract.
   // New profiles may be inserted anywhere without changing existing values or
   // relative order, and without updating a hash or a fixed total.
   assert.deepEqual(actual.filter(({ key }) => existingKeys.has(key)), compatibility.profiles,

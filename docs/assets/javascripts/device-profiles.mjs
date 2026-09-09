@@ -106,7 +106,7 @@ export const DEVICE_PROFILES = Object.freeze([
     "label": "Guition JC8012P4A1 V2",
     "chipFamily": "ESP32-P4",
     "flashSize": 16777216,
-    "status": "validation-pending",
+    "status": "supported",
     "hardwareCheck": "The rear label explicitly shows SKU:10153002-V2.",
     "siliconVariant": "pre_v3",
     "minimumRevision": 1,

@@ -17,7 +17,9 @@ struct WeatherEventData {
 };
 
 namespace {
-#if defined(DEVICE_WAVESHARE_TOUCH_LCD_1280X800)
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_1280X800) || \
+    defined(DEVICE_GUITION_JC8012P4A1) || \
+    defined(DEVICE_GUITION_JC8012P4A1_V2)
 constexpr lv_coord_t kWeatherTileForecastYOffset = -10;
 #elif defined(DEVICE_LAYOUT_1024X600)
 constexpr lv_coord_t kWeatherTileForecastYOffset = -5;

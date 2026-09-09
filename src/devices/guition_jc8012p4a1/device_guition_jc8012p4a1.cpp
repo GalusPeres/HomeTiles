@@ -22,7 +22,7 @@
 #include <driver/ppa.h>
 #include <hal/lcd_types.h>
 
-#include "src/core/display/dma2d_arbiter.h"
+#include "src/devices/common/p4_dsi_ui_ppa.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
 #include "src/devices/guition_jc8012p4a1/vendor/displays_config.h"
 #include "src/devices/guition_jc8012p4a1/vendor/gsl3680_touch.h"
@@ -58,11 +58,9 @@ esp_lcd_panel_io_handle_t g_panel_io = nullptr;
 esp_lcd_panel_handle_t g_panel = nullptr;
 esp_lcd_touch_handle_t g_touch = nullptr;
 esp_ldo_channel_handle_t g_mipi_phy_ldo = nullptr;
-ppa_client_handle_t g_ppa_handle = nullptr;
+p4_dsi_ui_ppa::Client g_ui_ppa("Guition JC8012P4A1");
 SemaphoreHandle_t g_transfer_done = nullptr;
 SemaphoreHandle_t g_refresh_done = nullptr;
-SemaphoreHandle_t g_ppa_done = nullptr;
-bool g_ppa_async_ready = false;
 
 bool g_pmic_ready = false;
 uint16_t* g_rotate_buf = nullptr;
@@ -116,17 +114,8 @@ bool IRAM_ATTR on_refresh_done(esp_lcd_panel_handle_t, esp_lcd_dpi_panel_event_d
   return high_task_woken == pdTRUE;
 }
 
-bool IRAM_ATTR on_ppa_trans_done(ppa_client_handle_t,
-                                ppa_event_data_t*,
-                                void* user_data) {
-  SemaphoreHandle_t sem = static_cast<SemaphoreHandle_t>(user_data);
-  if (!sem) {
-    return false;
-  }
-
-  BaseType_t high_task_woken = pdFALSE;
-  xSemaphoreGiveFromISR(sem, &high_task_woken);
-  return high_task_woken == pdTRUE;
+void note_ppa_fault() {
+  g_ui_ppa.noteFault();
 }
 
 void drain_transfer_signal() {
@@ -444,6 +433,17 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
     dst_y = x;
   }
 
+  // Use the shared wide-band PPA policy already adopted by the V2 driver.
+  // Small regions keep the existing CPU path and its exact panel geometry.
+  const auto ppa_result = g_ui_ppa.rotate(
+      g_camera_presenter, display_cfg.width, display_cfg.height,
+      x, y, w, h, data, g_rotation);
+  if (ppa_result == p4_dsi_ui_ppa::Result::Drawn) {
+    mark_dirty_rect(dst_x, dst_y, dst_w, dst_h);
+    return true;
+  }
+  if (ppa_result == p4_dsi_ui_ppa::Result::Failed) return false;
+
   const size_t pixel_count = static_cast<size_t>(w) * static_cast<size_t>(h);
   if (!ensure_rotate_buffer(pixel_count)) {
     return false;
@@ -701,28 +701,7 @@ bool init_display() {
   }
   log_step("Panel display on OK");
 
-  ppa_client_config_t ppa_cfg = {};
-  ppa_cfg.oper_type = PPA_OPERATION_SRM;
-  const esp_err_t ppa_err = ppa_register_client(&ppa_cfg, &g_ppa_handle);
-  if (ppa_err != ESP_OK) {
-    Serial.printf("[Device/Guition JC8012P4A1] PPA client register failed err=%d, falling back to CPU rotate\n",
-                  static_cast<int>(ppa_err));
-    g_ppa_handle = nullptr;
-  } else {
-    log_step("PPA client registered");
-    g_ppa_done = xSemaphoreCreateBinary();
-    if (g_ppa_done) {
-      ppa_event_callbacks_t ppa_cbs = {};
-      ppa_cbs.on_trans_done = on_ppa_trans_done;
-      if (ppa_client_register_event_callbacks(g_ppa_handle, &ppa_cbs) == ESP_OK) {
-        g_ppa_async_ready = true;
-        log_step("PPA timeout-safe mode ready");
-      }
-    }
-    if (!g_ppa_async_ready) {
-      Serial.println("[Device/Guition JC8012P4A1] PPA event callback unavailable");
-    }
-  }
+  g_ui_ppa.init();
 
   return true;
 }
@@ -794,6 +773,10 @@ bool DeviceGuitionJC8012P4A1::init() {
 void DeviceGuitionJC8012P4A1::update() {
 }
 
+bool DeviceGuitionJC8012P4A1::ppaCooldownActive() {
+  return g_ui_ppa.cooldownActive();
+}
+
 void DeviceGuitionJC8012P4A1::displayPushPixels(int32_t x, int32_t y, int32_t w, int32_t h,
                                          const uint16_t* data) {
   draw_landscape_area(x, y, w, h, data);
@@ -808,18 +791,12 @@ bool DeviceGuitionJC8012P4A1::displayTryFullFramePreview(
     int32_t x, int32_t y, int32_t w, int32_t h,
     int32_t source_stride, const uint16_t* data, size_t data_size,
     bool byte_swap) {
-  const p4_dsi_camera_presenter::PpaRuntime runtime{
-      g_ppa_handle,
-      g_ppa_done,
-      g_ppa_async_ready,
-      false,
-      false,
-      nullptr,
-      nullptr,
-  };
-  return g_camera_presenter.present(
+  const auto runtime = g_ui_ppa.runtime(note_ppa_fault);
+  const bool presented = g_camera_presenter.present(
       x, y, w, h, source_stride, data, data_size, byte_swap, g_rotation,
       runtime);
+  if (presented) g_ui_ppa.noteSuccess();
+  return presented;
 }
 
 void DeviceGuitionJC8012P4A1::displayEndFullFramePreview() {

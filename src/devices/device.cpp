@@ -50,7 +50,9 @@ void displayEndFullFramePreview() {
 
 bool ppaCooldownActive() {
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
-    defined(DEVICE_GUITION_JC1060P470C_FAMILY)
+    defined(DEVICE_GUITION_JC1060P470C_FAMILY) || \
+    defined(DEVICE_GUITION_JC8012P4A1) || \
+    defined(DEVICE_GUITION_JC8012P4A1_V2)
   return DeviceImpl::ppaCooldownActive();
 #else
   return false;

@@ -248,6 +248,13 @@ void check_value_alignment(lv_display_t* display) {
     assert(actual_y==expected_y&&"Weather must retain the 1x1 Sensor value height for every span");
     if(height>1){lv_area_t day;lv_obj_get_coords(w.forecast[0].day_label,&day);assert(day.y1>weather_value.y2&&"Forecast must start below the value");}
    }
+   // Compare actual forecast coordinates across devices sharing the same grid.
+   std::cout<<"Forecast layout: "<<width<<"x"<<height;
+   if(height>1)for(int i=0;i<weather_forecast_count(width);++i){
+    lv_area_t day,area;lv_obj_get_coords(w.forecast[i].day_label,&day);lv_obj_get_coords(card,&area);
+    std::cout<<" "<<day.x1-area.x1<<","<<day.y1-area.y1<<","<<day.x2-area.x1<<","<<day.y2-area.y1;
+   }
+   std::cout<<std::endl;
    lv_obj_delete(card);
   }
  }
@@ -282,9 +289,17 @@ int main(){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::v
  assert(total_covered==0&&"Opening must not redraw Weather objects fully covered by the popup");lv_deinit();}
 `;
 const source=path.join(out,'test.cpp');fs.writeFileSync(source,cpp);
+const forecastLayouts=new Map();
 for (const {buildProfile:name,define} of JSON.parse(read('tools/device-profiles.json')).profiles) {
   const binary=path.join(out,name+(process.platform==='win32'?'.exe':''));
   let r=spawnSync(host.cxx,[...host.flags,'-std=c++17','-I',out,'-DHOMETILES_CI_TARGET',`-D${define}`,source,host.archive,'-o',binary],{encoding:'utf8'});assert.equal(r.status,0,r.stdout+r.stderr);
   r=spawnSync(binary,[],{encoding:'utf8'});fs.writeFileSync(path.join(out,name+'.log'),r.stdout+r.stderr);assert.equal(r.status,0,name+': '+r.stdout+r.stderr);
-  console.log(name+': '+r.stdout.trim());
+  const lines=r.stdout.trim().split(/\r?\n/);
+  forecastLayouts.set(name,lines.filter(line=>line.startsWith('Forecast layout: ')));
+  console.log(name+': '+lines.filter(line=>!line.startsWith('Forecast layout: ')).join('\n'));
 }
+assert.equal(forecastLayouts.get('waveshare_8').length,35);
+assert.deepEqual(forecastLayouts.get('guition_jc8012p4a1'),forecastLayouts.get('waveshare_8'),
+  'Guition V1 forecast must match Waveshare 8-inch coordinates for all 35 tile spans');
+assert.deepEqual(forecastLayouts.get('guition_jc8012p4a1_v2'),forecastLayouts.get('waveshare_8'),
+  'Guition V2 forecast must match Waveshare 8-inch coordinates for all 35 tile spans');

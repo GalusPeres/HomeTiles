@@ -719,12 +719,15 @@ static void update_forecast_graph(WeatherPopupContext* ctx) {
       if (scaled > max_temp) max_temp = scaled;
     }
 
-    if (!day_has_low_anchor[day_index] || hour.temp < day_low_label_temp[day_index]) {
+    // Partial hourly coverage must not replace the provider's full-day extrema.
+    if (!ctx->forecast_data[day_index].has_low &&
+        (!day_has_low_anchor[day_index] || hour.temp < day_low_label_temp[day_index])) {
       day_has_low_anchor[day_index] = true;
       day_low_label_temp[day_index] = hour.temp;
     }
 
-    if (!day_has_high_anchor[day_index] || hour.temp > day_high_label_temp[day_index]) {
+    if (!ctx->forecast_data[day_index].has_high &&
+        (!day_has_high_anchor[day_index] || hour.temp > day_high_label_temp[day_index])) {
       day_has_high_anchor[day_index] = true;
       day_high_label_temp[day_index] = hour.temp;
     }

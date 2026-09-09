@@ -116,14 +116,14 @@ Match the exact hardware revision before flashing. [Open online flasher](install
 
 <script src="javascripts/device-status.js?v=3" defer></script>
 
-## New In v0.6.11
+## New In v0.6.12
 
-- **Faster popups:** shared popup surfaces and corrected tile press handling remove unnecessary layout work, including on large Weather tiles.
-- **Consistent dashboard:** stable media covers, aligned Weather values and previews, correct title truncation and PIN unlock titles.
-- **Browser USB tools:** the new [Device Logs](device-logs.md) page and [installer](installer.md) keep their sessions running while you browse the documentation, with status in the header.
+- **Faster Guition UI:** PPA hardware rotation now handles larger ordinary interface updates on JC8012P4A1 V1 and V2. The improvement is confirmed on V2; V1 hardware feedback is pending.
+- **Aligned Weather forecasts:** both Guition revisions now use the same forecast position as Waveshare 8-inch and 10.1-inch.
+- **Correct daily temperatures:** partial hourly forecasts preserve the provider's full-day minimum and maximum.
 - **Bridge:** use v0.6.44 or newer through HACS. Camera remains experimental and ESP32-P4-only.
 
-[Read the v0.6.11 release notes](releases/v0.6.11.md)
+[Read the v0.6.12 release notes](releases/v0.6.12.md)
 
 ## How It Works
 

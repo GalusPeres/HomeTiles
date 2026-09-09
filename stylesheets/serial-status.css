@@ -1,0 +1,27 @@
+/* Match the documentation's existing rounded controls and status colors. */
+.ht-serial-status {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+  margin: 0 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #343b46;
+  border-radius: 0.5rem;
+  font-size: 0.62rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--md-default-fg-color);
+}
+
+.ht-serial-status[hidden] { display: none; }
+.ht-serial-status:hover { border-color: var(--md-accent-fg-color); }
+.ht-serial-status:focus-visible { outline: 2px solid var(--md-accent-fg-color); outline-offset: 2px; }
+.ht-serial-status-dot { width: 0.35rem; height: 0.35rem; border-radius: 50%; background: #9aa3ad; }
+.ht-serial-status[data-kind="success"] .ht-serial-status-dot { background: #4ade80; }
+.ht-serial-status[data-kind="busy"] .ht-serial-status-dot { background: #60a5fa; }
+.ht-serial-status[data-kind="error"] .ht-serial-status-dot { background: #fb7185; }
+
+@media (max-width: 44.9375em) {
+  .ht-serial-status { margin: 0 0.2rem; padding: 0.2rem 0.35rem; font-size: 0.55rem; }
+}

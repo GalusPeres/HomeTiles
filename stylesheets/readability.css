@@ -1,0 +1,272 @@
+/* Use the lighter Inter face for documentation text. */
+@font-face {
+  font-family: 'HomeTiles Inter';
+  src: url('../assets/fonts/inter-4.1-light.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+}
+/* Reuse the exact Inter 4.1 faces served by HomeTiles Web Admin. */
+@font-face {
+      font-family:'HomeTiles Inter';
+      src:url('../assets/fonts/inter-4.1-regular.woff2') format('woff2');
+      font-style:normal;
+      font-weight:400;
+      font-display:swap;
+    }
+    @font-face {
+      font-family:'HomeTiles Inter';
+      src:url('../assets/fonts/inter-4.1-regular.woff2') format('woff2');
+      font-style:normal;
+      font-weight:500;
+      font-display:swap;
+    }
+    @font-face {
+      font-family:'HomeTiles Inter';
+      src:url('../assets/fonts/inter-4.1-semibold.woff2') format('woff2');
+      font-style:normal;
+      font-weight:600;
+      font-display:swap;
+    }
+    @font-face {
+      font-family:'HomeTiles Inter';
+      src:url('../assets/fonts/inter-4.1-semibold.woff2') format('woff2');
+      font-style:normal;
+      font-weight:700;
+      font-display:swap;
+    }
+:root { --md-text-font: "HomeTiles Inter"; --md-code-font: "Consolas"; }
+html { scrollbar-gutter: stable; }
+.md-grid { max-width: 1280px; }
+.md-main__inner { margin-top: 0; }
+.md-content__inner { padding-top: 24px; }
+.md-sidebar { padding-top: 36px; }
+/* Keep the root navigation inside its scroll container before script sizing. */
+.md-sidebar__inner > .md-nav { margin-bottom: 0; }
+.md-typeset { font-size: 16px; font-weight: 300; line-height: 1.65; }
+.md-typeset h1, .md-typeset h2, .md-typeset h3,
+.md-typeset h4, .md-typeset h5, .md-typeset h6 {
+  color: var(--md-default-fg-color);
+  font-family: inherit;
+  letter-spacing: normal;
+}
+/* Align anchor jumps with the fixed header and Material's section tracking. */
+.md-typeset :target { scroll-margin-top: 2.4rem; }
+.md-typeset h2, .md-typeset h3,
+.md-typeset h4, .md-typeset h5, .md-typeset h6 {
+  padding-top: 0;
+  padding-bottom: 10px;
+  border-top: 0;
+  border-bottom: 1px solid #343b46;
+}
+.md-typeset h1 { font-size: 25px; line-height: 1.3; font-weight: 300; margin: 0 0 18px; padding: 0; border: 0; }
+.md-typeset h2 { font-size: 21px; line-height: 1.35; font-weight: 300; margin: 38px 0 16px; }
+.md-typeset h3 { font-size: 18px; line-height: 1.4; font-weight: 300; margin: 36px 0 12px; }
+.md-typeset h2 + h3 { margin-top: 22px; }
+.md-typeset h4 { font-size: 16px; font-weight: 300; }
+.md-typeset h5, .md-typeset h6 { font-weight: 300; }
+.md-typeset strong, .md-typeset b { font-weight: 700; }
+.md-typeset p { font-size: 15px; margin: 10px 0 14px; }
+.md-typeset ul, .md-typeset ol { margin-top: 10px; margin-bottom: 16px; }
+.md-typeset li { font-size: 15px; margin-bottom: 6px; }
+.md-typeset table:not([class]) { font-size: 13px; line-height: 1.55; }
+.md-typeset table:not([class]) th { font-weight: 700; }
+.md-typeset table:not([class]) td, .md-typeset table:not([class]) th { padding: 9px 12px; }
+.md-typeset table code { overflow-wrap: anywhere; }
+.ht-device-table table:not([class]) { display: table; width: 100%; font-size: 13.5px; }
+.ht-device-table .md-typeset__table { display: block; width: 100%; }
+.ht-device-table table:not([class]) th,
+.ht-device-table table:not([class]) td { padding: 7px 10px; vertical-align: middle; white-space: nowrap; }
+.ht-device-table table:not([class]) th { background: #12171d; }
+.ht-device-table th:nth-child(1) { width: 45%; }
+.ht-device-table th:nth-child(2) { width: 23%; }
+.ht-device-table th:nth-child(3) { width: 20%; }
+.ht-device-table th:nth-child(4) { width: 12%; }
+.ht-device-table a { text-underline-offset: 3px; }
+.ht-device-table a:hover { text-decoration: underline; }
+.md-typeset .admonition, .md-typeset details { font-size: 13.5px; }
+.md-typeset .admonition-title, .md-typeset summary { font-weight: 600; }
+.md-typeset pre > code { font-size: 12.5px; }
+.md-nav { font-size: 16px; font-weight: 300; line-height: 1.45; }
+.md-nav__title { font-weight: 300; }
+.md-sidebar--primary .md-nav__link,
+.md-sidebar--secondary .md-nav__link { padding: 7px 12px; margin-top: 1px; border-radius: 8px; }
+/* Indent the group as a whole so link padding remains consistent. */
+.md-sidebar--primary .md-nav__item--section > .md-nav { margin-left: 0; }
+.md-sidebar--primary .md-nav__item--section > .md-nav > .md-nav__list { padding-left: .6rem; }
+.md-sidebar--secondary .md-nav { font-size: 16px; }
+.md-sidebar--secondary .md-nav__link:focus-within:not(.md-nav__link--active) {
+  background: transparent;
+  color: inherit !important;
+}
+.md-sidebar--secondary .md-nav__link:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: -2px;
+}
+.md-nav__link--active, .md-nav__item .md-nav__link[aria-current="page"] { font-weight: 300; border-radius: 8px; }
+.md-sidebar--primary .md-nav__item--section > .md-nav__link {
+  color: #f0f2f5 !important;
+  font-size: 16px;
+  font-weight: 300;
+  text-transform: none;
+  letter-spacing: 0;
+  pointer-events: none;
+  cursor: default;
+}
+.md-sidebar--secondary .md-nav__title { padding-left: 12px; margin-bottom: 8px; box-shadow: none; font-weight: 300; }
+.md-header__title { font-size: 17px; font-weight: 600; letter-spacing: 0; }
+.md-header__button.md-logo { margin-right: 0; padding-right: 0; }
+.md-header__title { margin-left: 10px !important; }
+.md-header__topic:first-child { position: static; opacity: 1 !important; transform: none !important; }
+.md-header__topic + .md-header__topic { display: none; }
+.md-search__input { font-size: 14px; }
+.md-search__form { border-radius: 8px; }
+.md-search__input:focus-visible { outline: 2px solid var(--md-accent-fg-color); outline-offset: -2px; border-radius: 8px; }
+.md-typeset .admonition, .md-typeset details { border-radius: 8px; }
+.md-typeset .admonition-title, .md-typeset summary { border-radius: 7px 7px 0 0; }
+
+@media screen and (min-width: 76.25em) {
+  .md-sidebar--primary { width: 230px; }
+  .md-sidebar--secondary { width: 230px; }
+  .md-nav__item--section { margin-top: 22px; }
+  .md-nav__item--section > .md-nav__link {
+    padding-top: 0;
+    margin-bottom: 5px;
+  }
+}
+
+/* PNG screenshots already include their own corners and transparent edges. */
+.md-typeset img { border: 0; border-radius: 0; box-shadow: none; height: auto; }
+.md-typeset img.ht-hero { max-width: 680px; margin: 18px auto; }
+.md-typeset video.ht-demo { width: 100%; max-width: 680px; height: auto; aspect-ratio: auto; border: 0; border-radius: 0; margin: 16px auto; }
+.ht-illustrated-intro { display: block; margin: 12px 0 24px; }
+.ht-illustrated-intro > div { min-width: 0; }
+.ht-illustrated-intro img { display: block; width: 100%; margin: 0; }
+.ht-illustrated-intro h2:first-child { margin-top: 0; }
+
+/* Keep full display captures large enough to read, in the order of the explanation. */
+.md-typeset figure.ht-screenshot { display: block; width: 100%; max-width: 680px; margin: 20px auto 28px; text-align: center; }
+.md-typeset figure.ht-screenshot.ht-editor-detail { max-width: 300px; }
+.md-typeset figure.ht-screenshot img { display: block; width: 100%; height: auto; margin: 0; }
+.md-typeset figure.ht-screenshot figcaption { max-width: none; margin: 8px 0 0; font-size: 14px; font-style: normal; line-height: 1.5; color: #c2c7cf; text-align: center; }
+
+/* Keep the existing first-install instructions as a plain numbered list. */
+.ht-steps { margin: 12px 0 20px; }
+.ht-steps > ol { list-style: decimal; margin-left: 20px !important; padding: 0; counter-reset: none; }
+.ht-steps > ol > li { padding: 0; margin: 0 0 14px !important; border: 0; border-radius: 0; background: none; }
+.ht-steps > ol > li::before { content: none; }
+.ht-steps > ol > li > p:first-child { font-size: inherit; margin: 0 0 4px; }
+.ht-steps > ol > li > p:last-child { font-weight: 300; }
+.ht-steps > ol > li > p { margin: 4px 0; }
+
+/* The existing installer keeps all controls and firmware checks. */
+.ht-installer-section { grid-template-columns: 150px minmax(0,1fr); gap: 18px; padding: 14px 0; align-items: first baseline; }
+.ht-installer-section-heading { font-size: 14px; font-weight: 600; padding-top: 0; line-height: 1.5; }
+.md-typeset .ht-installer-section-info { font-size: 13.5px; line-height: 1.5; margin: 0 0 7px; }
+.ht-installer select { width: 330px; min-height: 36px; padding: 7px 25px 7px 10px; font-size: 14px; }
+.ht-installer-mode, .ht-installer-confirmations { font-size: 13.5px; }
+.ht-installer-mode strong { font-weight: 500; }
+.ht-installer-modes { gap: 20px; flex-wrap: wrap; }
+.ht-installer-status, .ht-installer-device-details { font-size: 13px; line-height: 1.5; }
+.ht-installer-action button { min-height: 36px; padding: 8px 12px; font-size: 14px; font-weight: 600; }
+.ht-installer-log-header button { font-size: 12px; }
+.ht-installer select, .ht-installer button,
+.ht-installer-firmware-file::file-selector-button { border-radius: 8px; }
+.ht-installer select:focus-visible, .ht-installer button:focus-visible,
+.ht-installer input:focus-visible { outline: 2px solid var(--md-accent-fg-color); outline-offset: 2px; }
+
+/* Keep native selection and keyboard behavior, with themed pickers where supported. */
+@supports (appearance: base-select) {
+  .ht-installer select, .ht-installer select::picker(select) { appearance: base-select; }
+  .ht-installer select { background-image: none; padding-right: 10px; white-space: normal; line-height: 1.45; cursor: pointer; }
+  .ht-installer select::picker-icon { color: var(--md-accent-fg-color); }
+  .ht-installer select:open { border-color: var(--md-accent-fg-color); }
+  .ht-installer select::picker(select) {
+    margin-block: 6px;
+    padding: 5px;
+    max-height: min(460px, 65vh);
+    max-width: calc(100vw - 24px);
+    overflow: auto;
+    border: 1px solid #343b46;
+    border-radius: 8px;
+    color: var(--md-default-fg-color);
+    background: #12171d;
+    box-shadow: 0 8px 24px #0006;
+    font: 400 14px/1.45 "HomeTiles Inter", sans-serif;
+  }
+  .ht-installer option {
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 5px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+  .ht-installer option:hover, .ht-installer option:focus-visible {
+    outline: none;
+    color: #071c19;
+    background: var(--md-accent-fg-color);
+  }
+  .ht-installer option:checked { color: var(--md-accent-fg-color); background: #163b38; font-weight: 300; }
+  .ht-installer option:checked:hover, .ht-installer option:checked:focus-visible { color: #071c19; background: var(--md-accent-fg-color); }
+  .ht-installer option::checkmark { color: currentColor; }
+}
+.ht-installer-log-panel pre { font-size: 11.5px; }
+.md-typeset details.ht-installer-doc-details > summary { font-size: 14px; font-weight: 500; }
+.md-footer__title { font-size: 14px; max-width: 100%; }
+.md-footer__title .md-ellipsis { white-space: normal; }
+.md-footer__button { display: none; }
+
+@media screen and (max-width: 76.234375em) {
+  .md-nav--primary > .md-nav__title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: auto;
+    min-height: 0;
+    padding: 18px 16px;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  .md-nav--primary > .md-nav__title .md-logo {
+    position: static;
+    margin: 0;
+    padding: 0;
+  }
+  .md-nav--primary > .md-nav__title .md-logo img { width: 28px; height: 28px; }
+  .md-nav--primary .md-nav__item--section > .md-nav {
+    display: block;
+    position: static;
+    height: auto;
+    transform: none;
+    transition: none;
+    visibility: visible;
+    opacity: 1;
+  }
+  .md-nav--primary .md-nav__item--section > .md-nav > .md-nav__title,
+  .md-nav--primary .md-nav__item--section > .md-nav__link .md-nav__icon { display: none; }
+  .md-nav--primary .md-nav__item--section > .md-nav__link {
+    margin-top: 16px;
+    padding: 6px 16px;
+    font-weight: 300;
+    pointer-events: none;
+  }
+  .md-nav--primary .md-nav__item { border-top: 0; }
+  .md-nav--primary .md-nav__item .md-nav__link { padding-left: 16px; }
+  .md-nav__source, .md-source, .md-source__repository { font-weight: 300; }
+}
+
+@media screen and (max-width: 760px) {
+  .md-typeset { font-size: 16px; }
+  .md-typeset h1 { font-size: 24px; }
+  .ht-illustrated-intro { grid-template-columns: 1fr; gap: 16px; }
+  .ht-illustrated-intro figure { max-width: 300px; margin: 0 auto; }
+  .md-typeset img[width="32.8%"], .md-typeset img[width="49.5%"], .md-typeset img[width="48%"] {
+    display: block;
+    width: 100%;
+    max-width: 520px;
+    margin: 12px auto;
+  }
+  .ht-installer-section { grid-template-columns: 1fr; gap: 6px; }
+}

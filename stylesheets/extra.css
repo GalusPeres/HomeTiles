@@ -1,0 +1,708 @@
+/* Kompaktere, technischere Typografie als die Material-Defaults */
+
+.md-typeset {
+  font-size: 0.72rem;      /* Default 0.8rem (16px) -> ~14.4px */
+  line-height: 1.65;
+}
+
+.md-typeset h1 {
+  font-size: 1.7em;        /* Default 2em */
+  font-weight: 700;
+  margin-bottom: 0.8em;
+}
+
+.md-typeset h2 {
+  font-size: 1.3em;        /* Default 1.5625em */
+  font-weight: 700;
+  margin-top: 1.4em;
+}
+
+.md-typeset h3 {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+/* Navigation und Inhaltsverzeichnis */
+.md-nav {
+  font-size: 0.7rem;
+}
+
+/* Links in der linken Navigation als volle Zeilen mit Luft - die aktive
+   Pille wird dadurch gross und gut sichtbar statt eng um den Text */
+.md-sidebar--primary .md-nav__link {
+  padding: 0.4em 0.75em;
+  margin-top: 0.15em;
+  border-radius: 8px;
+}
+
+/* Tabellen lesbarer: etwas groesser als der Material-Mini-Default */
+.md-typeset table:not([class]) {
+  font-size: 0.66rem;
+}
+
+/* Code-Bloecke leicht verkleinert */
+.md-typeset pre > code {
+  font-size: 0.9em;
+}
+
+/* Bilder abgerundet */
+.md-typeset img {
+  border-radius: 10px;
+}
+
+/* Karten: dezenter Rahmen, Hover-Anhebung */
+.md-typeset .grid.cards > ul > li {
+  border-radius: 10px;
+  transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  border-color: var(--md-accent-fg-color);
+}
+
+/* ---------------------------------------------------------------------
+   Eigenes dunkles Farbschema statt des generischen Material-"black"/"teal"
+   Presets - kraeftigerer Cyan-Akzent, mehr Kontrast zwischen Kopfleiste,
+   Seitenleiste und Inhalt statt eines einzigen flachen Grautons.
+   ------------------------------------------------------------------- */
+/* Doppelter Attribut-Selektor noetig: das Theme setzt die Linkfarbe ueber
+   [data-md-color-scheme][data-md-color-primary] und wuerde sonst gewinnen. */
+[data-md-color-scheme="slate"],
+[data-md-color-scheme="slate"][data-md-color-primary="black"] {
+  --md-default-bg-color: #0b0d10;
+  --md-default-fg-color: #e8eaed;
+  --md-default-fg-color--light: #c2c7cf;
+  --md-default-fg-color--lighter: #8a919c;
+  --md-default-fg-color--lightest: #2a2f38;
+
+  --md-primary-fg-color: #12151a;
+  --md-primary-bg-color: #e8eaed;
+
+  --md-accent-fg-color: #2dd4bf;
+  --md-accent-fg-color--transparent: #2dd4bf26;
+  --md-accent-bg-color: #0b0d10;
+
+  --md-typeset-a-color: #2dd4bf;
+
+  --md-code-bg-color: #12151a;
+  --md-code-fg-color: #d7dadf;
+}
+
+.md-typeset a {
+  transition: color 0.1s;
+}
+
+.md-typeset a:hover {
+  color: #5eead4;
+}
+
+/* Kopfleiste optisch von Inhalt/Seitenleiste abheben statt gleicher Grauton */
+.md-header {
+  background-color: #12151a;
+  box-shadow: none;
+}
+
+.md-header {
+  border-bottom: 1px solid #22262e;
+}
+
+/* Eine einzige Navigation links: Gruppen-Ueberschriften klein und dezent,
+   doppelter Seitentitel ausgeblendet (steht schon im Header) */
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary > .md-nav__title {
+    display: none;
+  }
+
+  .md-nav__item--section {
+    margin-top: 1.1em;
+  }
+
+  .md-nav__item--section > .md-nav__link {
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--md-default-fg-color--lighter) !important;
+    background: transparent !important;
+    pointer-events: none;
+  }
+}
+
+/* --------------------------------------------------------------------
+   Startseite
+   ------------------------------------------------------------------ */
+
+/* Hero-Bild zentrieren */
+.md-typeset img.ht-hero {
+  display: block;
+  margin: 1.2em auto 1.6em;
+}
+
+/* Browser-native demo video, matching the rounded documentation imagery */
+.md-typeset video.ht-demo {
+  display: block;
+  width: 100%;
+  max-width: 1200px;
+  aspect-ratio: 16 / 9;
+  margin: 1.2em auto 0.6em;
+  border-radius: 10px;
+  background: #000;
+}
+
+/* Center standalone screenshots without disturbing two- or three-image rows */
+.md-typeset p > img:only-child,
+.md-typeset p > a:only-child > img:only-child {
+  display: block;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+/* Bildreihen (mehrere Screenshots in einem Absatz) ebenfalls zentrieren,
+   damit Einzelbilder und Reihen dieselbe Achse haben */
+.md-typeset p:has(> img + img) {
+  text-align: center;
+}
+
+/* Gefuehrter Einstieg: nummerierte Schritte mit Akzent-Ziffern */
+.ht-steps {
+  margin: 1.2em 0 1.6em;
+}
+
+.ht-steps > ol {
+  list-style: none;
+  margin-left: 0 !important;
+  padding-left: 0;
+  counter-reset: ht-step;
+}
+
+.ht-steps > ol > li {
+  counter-increment: ht-step;
+  position: relative;
+  margin: 0 0 0.9em 0 !important;
+  padding: 0.9em 1.1em 0.9em 3.4em;
+  border: 1px solid #22262e;
+  border-radius: 10px;
+  background: #10131a;
+}
+
+.ht-steps > ol > li::before {
+  content: counter(ht-step);
+  position: absolute;
+  left: 1em;
+  top: 1em;
+  width: 1.65em;
+  height: 1.65em;
+  line-height: 1.65em;
+  text-align: center;
+  border-radius: 50%;
+  font-weight: 700;
+  color: var(--md-accent-fg-color);
+  background: var(--md-accent-fg-color--transparent);
+}
+
+.ht-steps > ol > li > p {
+  margin: 0.35em 0;
+}
+
+.ht-steps > ol > li > p:first-child {
+  font-size: 0.82rem;
+  margin-top: 0.05em;
+}
+
+.ht-steps > ol > li > p:last-child {
+  margin-bottom: 0;
+  font-weight: 600;
+}
+
+/* Architektur-Diagramm: Kaestchen + Pfeile statt ASCII-Codeblock */
+.ht-flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.6em 0.8em;
+  margin: 1.4em 0;
+}
+
+.ht-flow .ht-node {
+  padding: 0.55em 1.1em;
+  border: 1px solid #2a2f38;
+  border-radius: 8px;
+  background: #12151a;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.ht-flow .ht-node small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.85em;
+  color: var(--md-default-fg-color--lighter);
+}
+
+.ht-flow .ht-link {
+  color: var(--md-default-fg-color--lighter);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Note-Admonitions auf die Markenfarbe statt Material-Blau */
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-color: var(--md-accent-fg-color);
+}
+
+.md-typeset .note > .admonition-title,
+.md-typeset .note > summary {
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
+.md-typeset .note > .admonition-title::before,
+.md-typeset .note > summary::before {
+  background-color: var(--md-accent-fg-color);
+}
+
+/* Aktiver Menuepunkt: Pille mit Akzentfarbe statt reinem Textfarbwechsel */
+.md-nav__link--active,
+.md-nav__link:focus-within,
+.md-nav__item .md-nav__link[aria-current="page"] {
+  background-color: var(--md-accent-fg-color--transparent);
+  border-radius: 6px;
+  color: var(--md-accent-fg-color) !important;
+}
+
+.md-nav__item .md-nav__link[aria-current="page"] {
+  font-weight: 600;
+}
+
+/* Logo/Titel in der Kopfleiste etwas praesenter */
+.md-header__title {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* Suchfeld dezent absetzen statt komplett transparent im Header */
+.md-search__input {
+  background-color: #0b0d10;
+  border-radius: 8px;
+}
+
+.md-search__input:hover {
+  background-color: #191d24;
+}
+
+/* Buy Me a Coffee sits between search and the GitHub repository link. */
+@media screen and (min-width: 60em) {
+  .md-header__source {
+    display: flex;
+    flex: 0 0 calc(12.1rem + 138px);
+    align-items: center;
+    width: calc(12.1rem + 138px);
+    max-width: none;
+  }
+
+  .md-header__source .md-source {
+    flex: 0 0 12.1rem;
+    width: 12.1rem;
+  }
+}
+
+.ht-header-support {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin: 0 0.55rem;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.ht-header-support img {
+  display: block;
+  width: 116px;
+  height: auto;
+}
+
+@media screen and (max-width: 76.234375em) {
+  .md-header__source {
+    flex-basis: calc(12.1rem + 106px);
+    width: calc(12.1rem + 106px);
+  }
+
+  .ht-header-support {
+    margin: 0 0.3rem;
+  }
+
+  .ht-header-support img {
+    width: 94px;
+  }
+}
+
+@media screen and (max-width: 44.984375em) {
+  .ht-header-support {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------
+   Browser firmware installer
+   ------------------------------------------------------------------ */
+
+.ht-installer {
+  width: 100%;
+  margin: 0.7rem 0 0.5rem;
+}
+
+.ht-installer-form {
+  display: grid;
+  gap: 0;
+}
+
+.ht-installer-section {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  margin: 0;
+  padding: 0.7rem 0;
+  border: 0;
+}
+
+.ht-installer-section + .ht-installer-section {
+  border-top: 1px solid #2a3039;
+}
+
+.ht-installer-section-heading {
+  padding-top: 0.08rem;
+  color: var(--md-default-fg-color);
+  font-weight: 700;
+}
+
+.ht-installer-section-body {
+  min-width: 0;
+}
+
+.ht-installer-section-info {
+  max-width: 34rem;
+  margin: 0 0 0.35rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.ht-installer-control {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ht-installer select {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15rem;
+  max-width: 100%;
+  min-height: 2.15rem;
+  margin: 0;
+  padding: 0.5rem 1.2rem 0.5rem 0.65rem;
+  border: 1px solid #343b46;
+  border-radius: 5px;
+  color: var(--md-default-fg-color);
+  background-color: #12171d;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%208%205%22%3E%3Cpath%20d%3D%22M1%201l3%203%203-3%22%20fill%3D%22none%22%20stroke%3D%22%23b8c0cc%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.38rem center;
+  background-size: 0.5rem 0.32rem;
+  font: inherit;
+}
+
+.ht-installer-firmware-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.ht-installer-firmware-file {
+  max-width: 20rem;
+  color: var(--md-default-fg-color--light);
+  font: inherit;
+  font-size: 0.62rem;
+}
+
+.ht-installer-firmware-file::file-selector-button {
+  min-height: 2.15rem;
+  margin-right: 0.5rem;
+  padding: 0.42rem 0.65rem;
+  border: 1px solid #343b46;
+  border-radius: 5px;
+  color: var(--md-default-fg-color);
+  background: #12171d;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ht-installer-device-details {
+  margin-top: 0.2rem;
+  padding: 0;
+  border: 0;
+  color: var(--md-default-fg-color--lighter);
+  font-size: 0.62rem;
+}
+
+.ht-installer-device-details strong,
+.ht-installer-device-details span {
+  display: block;
+}
+
+.ht-installer-device-details strong {
+  color: var(--md-default-fg-color);
+}
+
+.ht-installer-modes {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1.25rem;
+  align-items: center;
+  padding-top: 0;
+}
+
+.ht-installer-mode {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ht-installer-mode input,
+.ht-installer-confirmations input {
+  flex: 0 0 auto;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin: 0;
+  accent-color: var(--md-accent-fg-color);
+}
+
+.ht-installer-mode strong {
+  color: var(--md-default-fg-color);
+}
+
+.ht-installer-confirmations {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ht-installer-confirmations label {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  min-height: 1.8rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.ht-installer-confirmations label[hidden] {
+  display: none;
+}
+
+.ht-installer-confirmations .ht-installer-danger-check {
+  color: #fecaca;
+}
+
+.ht-installer-action {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ht-installer-action-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  min-height: 2.15rem;
+}
+
+.ht-installer-action button {
+  min-height: 2.15rem;
+  padding: 0.42rem 0.75rem;
+  border: 0;
+  border-radius: 5px;
+  color: #062a25;
+  background: var(--md-accent-fg-color);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ht-installer-action button:disabled {
+  color: #8a919c;
+  background: #252b33;
+  cursor: not-allowed;
+}
+
+.ht-installer-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.45rem;
+  color: var(--md-default-fg-color);
+  font-size: 0.64rem;
+}
+
+.ht-installer-action progress {
+  display: block;
+  width: 100%;
+  height: 0.4rem;
+  margin: 0.3rem 0 0;
+  accent-color: var(--md-accent-fg-color);
+}
+
+.ht-installer-status {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--md-default-fg-color--light);
+  background: transparent;
+  font-size: 0.64rem;
+}
+
+.ht-installer-status[data-kind="success"] {
+  color: #86efac;
+  background: transparent;
+}
+
+.ht-installer-status[data-kind="warning"] {
+  color: #fcd34d;
+  background: transparent;
+}
+
+.ht-installer-status[data-kind="error"] {
+  color: #fca5a5;
+  background: transparent;
+}
+
+.md-typeset details.ht-installer-log {
+  margin-top: 0.55rem;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  color: var(--md-default-fg-color--lighter);
+  background: transparent;
+  font-size: 0.62rem;
+}
+
+.md-typeset details.ht-installer-log > summary {
+  display: list-item;
+  width: max-content;
+  min-height: 0;
+  padding: 0;
+  list-style: disclosure-closed;
+  border: 0;
+  color: var(--md-default-fg-color--lighter);
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.md-typeset details.ht-installer-log[open] > summary {
+  margin-bottom: 0.45rem;
+  list-style: disclosure-open;
+}
+
+.md-typeset details.ht-installer-log > summary::before,
+.md-typeset details.ht-installer-log > summary::after {
+  display: none;
+}
+
+.ht-installer-log-panel {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 0.45rem;
+}
+
+.ht-installer-log-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.ht-installer-log-header button {
+  min-height: 1.8rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid #343b46;
+  border-radius: 4px;
+  color: var(--md-default-fg-color--light);
+  background: transparent;
+  font-size: 0.58rem;
+  font-weight: 600;
+}
+
+.ht-installer-log-header button:hover {
+  border-color: var(--md-accent-fg-color);
+  color: var(--md-accent-fg-color);
+}
+
+#installer-log-action-status {
+  min-height: 1em;
+  color: var(--md-default-fg-color--lighter);
+}
+
+.ht-installer-log-panel pre {
+  width: 100%;
+  max-height: 14rem;
+  margin: 0;
+  padding: 0.55rem;
+  overflow: auto;
+  border: 1px solid #2a3039;
+  border-radius: 4px;
+  color: #cbd5e1;
+  background: #090c10;
+  font-size: 0.54rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.md-typeset details.ht-installer-doc-details {
+  font-size: inherit;
+}
+
+.md-typeset details.ht-installer-doc-details > summary {
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+@media screen and (max-width: 44em) {
+  .ht-installer-section {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .ht-installer-section-heading {
+    padding-top: 0;
+  }
+
+  .ht-installer-modes {
+    flex-wrap: wrap;
+  }
+
+  .ht-installer-action-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ht-installer-log-panel {
+    grid-column: 1;
+  }
+}

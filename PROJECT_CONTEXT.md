@@ -16,7 +16,7 @@ Last reviewed: 2026-09-09
 
 ## Current firmware baseline
 
-- v0.6.12 prepared: Guition V1/V2 UI PPA and Weather alignment; daily extrema preserved. 102 tests pass; release CI pending. V2 confirmed, V1 hardware pending.
+- v0.6.12: `9605b6a`, CI `34353664113`, 15 profiles / 30 images; 102 tests pass. Guition V1/V2 PPA and Weather fixes; V2 confirmed, V1 hardware pending.
 - Stabilization: S3 display/update guards, MQTT validation, Light coalescing and incremental Weather (`e3de63c`–`33b4e06`).
 - TLS fallback ships on all three S3 RGB profiles; 87 tests and three CI builds pass. Guition hardware OTA passed all 11 ranges first try; Waveshare S3 OTA awaits field tests. Prior TLS error/two boot watchdog resets remain unproven. Evidence: `build/s3-ota-release-v0.6.10/`.
 - The experimental Guition S3 XIP/`-O2` performance path was reverted in
@@ -25,7 +25,7 @@ Last reviewed: 2026-09-09
 
 ## Hardware and validation reality
 
-- Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2. V2 PPA/SD confirmed; V1 port awaits CI/hardware. See `docs/releases/v0.6.12.md`.
+- Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 PPA/SD confirmed; V1 hardware pending.
 - v0.6.9 Binary/Text-State Sensor UI passed hardware tests on 4B, 8-inch and S3.
 - Other exact revisions depend on community testers. A successful compile does
   not promote an untested revision to supported status.
@@ -100,7 +100,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
 - Docs source: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`.
 - Docs: `/HomeTiles/` reloaded because the root-canonical sitemap omitted that mount. Sitemap aliases preserve native navigation at both mounts; saved flash results no longer overwrite current USB status. Browser regressions cover both.
-- Public docs serve v0.6.11 at both mounts; navigation/USB checks use simulated ports.
+- Public docs serve v0.6.12 at both mounts; navigation/USB checks use simulated ports.
 - Flash success clears on reload or after viewing and leaving/changing selection; recovery persists. USB status is active-only. Logger help: paragraphs, menu restart or RESET if fitted, local-only log notice.
 
 ## Current view control, telemetry and compatible controls

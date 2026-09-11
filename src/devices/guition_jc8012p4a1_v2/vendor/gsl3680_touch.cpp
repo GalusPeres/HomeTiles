@@ -392,11 +392,16 @@ bool esp_lcd_touch_read_data(esp_lcd_touch_handle_t handle) {
     return true;
   }
 
-  state->count = count;
+  state->count = 0;
   for (uint8_t i = 0; i < count; ++i) {
     const size_t offset = 4 + static_cast<size_t>(i) * 4;
     const uint16_t raw_x = (static_cast<uint16_t>(data[offset + 3] & 0x0F) << 8) | data[offset + 2];
     const uint16_t raw_y = (static_cast<uint16_t>(data[offset + 1]) << 8) | data[offset];
+    // Reject the entire report before publishing contacts. Clamping invalid
+    // raw coordinates would turn a malformed report into an edge press.
+    if (raw_x > kRawMaxX || raw_y > kRawMaxY) {
+      return true;
+    }
     // Keep Espressif's clean driver relationship exactly: controller X maps
     // to the panel's 1280-pixel long axis, controller Y to its 800-pixel
     // short axis. The board driver then applies HomeTiles' landscape rotation.
@@ -405,6 +410,7 @@ bool esp_lcd_touch_read_data(esp_lcd_touch_handle_t handle) {
     state->strength[i] = 100;
     state->track_ids[i] = static_cast<uint8_t>(data[offset + 3] >> 4);
   }
+  state->count = count;
   return true;
 }
 

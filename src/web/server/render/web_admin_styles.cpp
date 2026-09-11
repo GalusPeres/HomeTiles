@@ -1,3 +1,4 @@
+#include "src/core/config/config_manager.h"
 #include "src/web/server/render/web_admin_styles.h"
 #include "src/web/server/assets/web_admin_assets.h"
 #include "src/types/climate/layout.h"
@@ -192,7 +193,12 @@ void appendPreviewScaleVars(String& html) {
 #else
   emit("value-dy", 28);
 #endif
-  emit_exact("tile-radius", tile_layout::scale_480(22));
+  emit_exact("tile-radius", configManager.getConfig().tile_radius);
+  html += "--radius-preview-scale:";
+  html += String(static_cast<double>(preview_cell_h_px()) / GRID_CELL_H, 8);
+  html += ";--tile-radius-device:";
+  html += String(configManager.getConfig().tile_radius);
+  html += ";";
   // Climate tile geometry uses the exact same LVGL-to-preview scale as the
   // device. Keeping these separate from font variables avoids the 6 px
   // minimum used for readable preview text.
@@ -200,9 +206,7 @@ void appendPreviewScaleVars(String& html) {
   emit_exact("climate-grid-gap", climate_layout::kGap);
   emit_exact("climate-slots-top", climate_layout::kContentTop);
   emit_exact("climate-slots-bottom", climate_layout::kOuterInset);
-  emit_exact(
-      "climate-control-radius",
-      climate_layout::kControlRadius);
+  html += "--climate-control-radius:max(0px,calc(var(--tile-radius) - var(--climate-margin-x)));";
   emit_exact("climate-control-side-pad", tile_layout::scale_480(8));
   emit_exact("climate-control-caption-w", tile_layout::scale_480(96));
   emit_exact("climate-control-button-w", tile_layout::scale_480(40));
@@ -234,17 +238,12 @@ void appendPreviewScaleVars(String& html) {
   const int image_inset = preview_pad_px() > image_bleed
                               ? preview_pad_px() - image_bleed
                               : 0;
-  int image_radius = preview_scaled_exact_px(26);
-#if defined(DEVICE_LAYOUT_480X480)
-  // The 480x480 preview has a visible black display rim. Keep the inner
-  // wallpaper corner concentric with the 21px outer preview corner.
-  image_radius = 21 > image_inset ? 21 - image_inset : 0;
-#endif
   html += "--screensaver-image-inset:";
   html += String(image_inset);
   html += "px;--screensaver-image-radius:";
-  html += String(image_radius);
-  html += "px;";
+  html += "calc(var(--tile-radius) + ";
+  html += String(image_bleed);
+  html += "px);";
   html += "}</style>\n";
 }
 

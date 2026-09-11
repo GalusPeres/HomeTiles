@@ -5,6 +5,7 @@
 
 #include "src/devices/device.h"
 #include "src/core/config/pin_access.h"
+#include "src/core/config/tile_radius.h"
 
 // WiFi/MQTT configuration manager.
 // Stores and loads the connection data in flash (Preferences).
@@ -80,6 +81,7 @@ struct DeviceConfig {
   // One visible percentage for every device. Device::backlightRawFromPercent()
   // converts it to the range of the respective driver.
   uint8_t screensaver_brightness_pct;  // 1-100
+  uint16_t tile_radius = tile_radius::kMinimum;
   bool tile_borders;           // Thin borders around normal dashboard tiles.
   bool display_rotated_180;    // Display rotated by 180 degrees?
   uint8_t display_rotation_quarters; // 0=0°, 1=90°, 2=180°, 3=270°
@@ -137,6 +139,7 @@ public:
   bool saveScreensaverTimeout(bool enabled, uint16_t seconds);
   bool saveScreensaverBrightness(uint8_t brightness_pct);
   bool saveTileBorders(bool enabled);
+  bool saveTileRadius(uint16_t radius);
   bool saveEthernetEnabled(bool enabled);
   bool saveStaticAddressingEnabled(bool enabled);
 

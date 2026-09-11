@@ -276,7 +276,7 @@ try {
     fs.writeFileSync(filename, text);
   };
   write('Arduino.h', '#pragma once\n#include <string>\n#include <stdint.h>\nusing String = std::string;\n');
-  write('src/devices/device.h', '#pragma once\nnamespace Device { constexpr uint8_t kGridCols = 4; constexpr uint8_t kGridRows = 4; }\n');
+  write('src/devices/device.h', '#pragma once\nnamespace Device { constexpr int kGridCellH = 110, kGridGap = 10; constexpr uint8_t kGridCols = 4; constexpr uint8_t kGridRows = 4; }\n');
   write('esp_random.h', '#pragma once\n#include <stddef.h>\nvoid esp_fill_random(void*, size_t);\n');
   write('mbedtls/sha256.h', '#pragma once\n#include <stddef.h>\nint mbedtls_sha256(const unsigned char*, size_t, unsigned char[32], int);\n');
   write('test.cpp', source);

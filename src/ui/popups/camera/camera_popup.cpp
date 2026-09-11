@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/popups/popup_shell.h"
 #include "src/ui/popups/popup_open.h"
 #include "src/ui/navigation/view_navigation.h"
@@ -183,7 +184,7 @@ static CameraPopupContext* create_popup() {
   lv_obj_align(video, LV_ALIGN_TOP_MID, 0, kVideoTop);
   lv_obj_set_style_bg_color(video, lv_color_black(), 0);
   lv_obj_set_style_bg_opa(video, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(video, camera_geometry::kCornerRadius, 0);
+  ui_surface_style::apply_radius(video, camera_geometry::kCornerRadius, 0);
   // Camera frames carry their own small rounded-corner mask. Generic child
   // clipping makes every full video redraw pixel-bound and stalls the P4 UI.
   lv_obj_set_style_clip_corner(video, false, 0);

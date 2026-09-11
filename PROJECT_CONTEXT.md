@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-09-09
+Last reviewed: 2026-09-11
 
 ## Sources of truth
 
@@ -18,7 +18,7 @@ Last reviewed: 2026-09-09
 
 - v0.6.12: `9605b6a`, CI `34353664113`, 15 profiles / 30 images; 102 tests pass. Guition V1/V2 PPA and Weather fixes; V2 confirmed, V1 hardware pending.
 - Stabilization: S3 display/update guards, MQTT validation, Light coalescing and incremental Weather (`e3de63c`–`33b4e06`).
-- TLS fallback ships on all three S3 RGB profiles; 87 tests and three CI builds pass. Guition hardware OTA passed all 11 ranges first try; Waveshare S3 OTA awaits field tests. Prior TLS error/two boot watchdog resets remain unproven. Evidence: `build/s3-ota-release-v0.6.10/`.
+- S3 TLS fallback: 87 tests/three builds pass; Guition OTA passed all 11 ranges, Waveshare S3 field tests pending. Earlier TLS error/two watchdogs unproven. Evidence: `build/s3-ota-release-v0.6.10/`.
 - Guition S3 XIP/`-O2` was reverted in `5279456`: increased risk without solving measured interaction problems. Do not reintroduce without evidence.
 
 ## Hardware and validation reality
@@ -36,10 +36,10 @@ Last reviewed: 2026-09-09
 Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - External Guition `JC8012P4A1C_I_W_Y` V1; Foscam via HA Generic Camera. Normal OTA failed; USB worked.
-- b1/b2 logs: first JPEG succeeds, then CMD53 `0x109`, timeout `0x107`, raw `0xcccccccc`, invalid RX length and `rst:0xc`. Failures also occur during MQTT startup without a camera. Recovery restarts explain the absence of a panic core dump.
+- b1/b2: CMD53 `0x109`, timeout `0x107`, raw `0xcccccccc`, invalid RX length and `rst:0xc`, also without cameras. Recovery restarts leave no panic dump.
 - b1 already contained a8204 raw-PKT_LEN/pending-drain and short-tail markers; repeating that patch is not a solution. Version RPC `0x15e` also occurs on stable Waveshare 8-inch and is insufficient to explain the fatal Guition transport cascade.
 - Do not use/publish b3 (4-bit/20 MHz, no first-fault diagnostics). Issue #167 also found 20 MHz unreliable. b4 located the first DCRC `0x80` on 11-/14-block C6-to-P4 reads, before `0x109`/`0x107`. b5 1-bit/40 MHz still failed, sometimes before Camera; lane reduction alone is not a fix.
-- Schematics: Guition V1 has 5.1-kohm CMD/CLK/D0-D3 pull-ups without series termination; Waveshare 8-inch has 51-kohm pull-ups; Tab5 has 5.1-kohm pull-ups, 22-ohm series resistors and switched WLAN power. Signal/power margin is plausible, not proven by the working mitigation.
+- SDIO schematics: V1 5.1-kohm pull-ups/no series termination; 8-inch 51-kohm pull-ups; Tab5 5.1-kohm pull-ups/22-ohm series resistors/switched WLAN power. Signal margin remains unproven.
 - Original `JC8012P4A1_C6.bin` and HomeTiles use streaming mode. New `JC-C6-slave_v2.3.2.bin` uses packet mode: do not flash it alone. USB reaches P4 only; C6 flashing needs CN5 and a 3.3 V UART adapter.
 - Do not retry the reported 2.9.3 rollback: it concerns another board's `0x102` TX/alignment failure, not this CRC path, and discards relevant safety fixes.
 - b6 passed reporter hardware tests: two cameras at 15-20 FPS and Web OTA, without the transport cascade. Exact V1 retains 1-bit/40 MHz and splits large RX into individual 512-byte CMD53 reads. Reporter confirmed integrated v0.6.9b1; v0.6.10 ships it.
@@ -63,10 +63,11 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Active problem: GitHub issue #38
 
 - Reporter: JC8012P4A1 V2, SKU10153001-V2 (2632), `_I_W_Y`; #18 tested SKU10153002-V2 (2627), `_I_W_Y1`. Maintainer received JC8012P4A1C_I_W_Y1, SKU10153002-V2. Labels alone do not establish another panel variant.
-- V2 SD: maintainer SD works; reporter v0.6.12 log shows card-init failure at 40 MHz, clock timeout on 20 MHz retry, then Hosted slot-1 init assertion/reboot. V2 overwrites default host flags, dropping DEINIT_ARG; IDF cleanup then calls slot deinit without its argument (V1 already preserves flags). Exact-V2 SD correction preserves default flags; regression fails before/passes after, 105 tests pass and V2 compile succeeds. Combined touch/I2C/SD v0.6.12b1 beta built with exact-V2 HOMETILES_ISSUE38_BETA; 105 tests pass, version/device metadata and ZIP integrity verified. Package/hash: `build/guition-v2-v0.6.12b1/VERIFICATION.md`. Hardware validation and initial card failure cause remain pending. Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`.
-- V2 rapid-tap edge jumps: maintainer confirms raw-bounds fix works well on hardware. BIN/ELF: `build/guition-v2-touch/`.
-- V2 interrupt-WDT dump inspected 2026-09-11 matches touch-build ELF SHA256 `af562d1cea4dc3d8096ec17cd631e45cc6d82ab1ea6fb0037c03e8638c234a67`. IDLE1 is in `esp_cpu_wait_for_intr`; loopTask is still in setup, uploading GSL3680 firmware over I2C. Bus object `0x483e96bc` is in PSRAM: exposed to upstream atomic-allocation defect. Exact-V2 backport `37758ef327f9` compiles; 104 tests pass (six needed temporary sketch.yaml restoration). ELF verifies internal allocation 0x804. Hardware/WDT validation pending. BIN/hash: `build/guition-v2-crash-20260911/VERIFICATION.md`. No wall-clock time. Evidence: `build/guition-v2-crash-20260911/`.
-- Bridge v0.6.45 (`261c0c4`) aggregates twice-daily periods. After HA update/restart, HA returned 14 periods but retained MQTT lacked forecasts; reloading Bridge restored seven days and rainfall on Waveshare 8-inch.
+- V2 fixes committed in `e1a9297`: touch bounds, internal I2C atomic-state allocation, slot-aware SD cleanup; exact-V2 only. Beta `HOMETILES_ISSUE38_BETA` reports v0.6.12b1; release version stays v0.6.12.
+- SD: reporter card-init failure at 40 MHz, clock timeout on 20 MHz retry, then Hosted slot-1 assertion. V2 dropped DEINIT_ARG from default host flags; preserve defaults as V1 already does. Regression and V2 build pass; 105 tests. Maintainer beta SD diagnostic passes mkdir/write/read/remove (~8 GB). Reporter validation/initial card failure cause pending. Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`; package/hash: `build/guition-v2-v0.6.12b1/VERIFICATION.md`.
+- Touch: maintainer confirms rapid-tap raw-bounds fix works. BIN/ELF: `build/guition-v2-touch/`.
+- Interrupt-WDT dump matches touch ELF SHA256 `af562d1cea4dc3d8096ec17cd631e45cc6d82ab1ea6fb0037c03e8638c234a67`; IDLE1 waits for interrupt, setup uploads touch firmware. I2C atomic-state object at `0x483e96bc` is in PSRAM. Backport `37758ef327f9` ensures internal allocation (ELF caps 0x804). Exposure proven, WDT causality unproven; no wall-clock timestamp. Evidence/hash: `build/guition-v2-crash-20260911/`.
+- Bridge v0.6.45 aggregates twice-daily forecasts; missing retained data after HA restart recovered by reloading Bridge.
 - Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. Released firmware v0.6.12 preserves daily extrema (24 C daily versus partial hourly 11 C).
 
 ## Binary and textual Sensor history in v0.6.9
@@ -80,33 +81,34 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - IDs 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups and five fonts; preview preserves `editableValues`, `PackedTileV7` unchanged.
 - Number/input_number uses the centered Media slider/value, Climate +/- pill or bounded roller, with graph/Activity. Select/input_select uses Settings dropdowns, timeline and Activity.
 - Date/Time: single-row hh/mm/ss rollers, popup-colored pill, no arrows, native 23/00 and 59/00 wrap; date spinboxes without keyboard; HA timezone/DST validation.
-- Additive `/control` preserves legacy clients; service allow-lists, sessions, revisions and deadlines reject stale commands.
+- Additive `/control` preserves legacy clients; sessions/revisions/deadlines reject stale commands.
 - Bridge v0.6.44 (`148dec4`) is on HACS; fixes stale icon cache, preserves overrides. 119 Bridge tests pass. The v0.6.10 release includes checkpoint `84511da` and subsequent title/color fixes.
 - Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
 - Editable surfaces follow tile color, white text unchanged; selection white with surface-colored text; S3 arrow 20px. 4096 colors/seven layouts tested: `build/editable-colors-view/`.
-- Wi-Fi audit: S3 idle (>3 s) requests MIN_MODEM/11 dBm; sleep/wake NONE/19.5. P4 blocks idle saving; boot/reconnect and failed-call caching have gaps on both. Unfixed; probes: `build/wifi-power-audit/VERIFICATION.md`.
-- Titles: two centered lines with ellipsis, 255 UTF-8 bytes in `/_tile_titles`; Settings uses `set_title`, record v4 unchanged. View labels flatten CR/LF to fix Bridge `writable:false` from multiline S3 titles. Current builds approved by maintainer.
+- Wi-Fi idle/reconnect gaps remain unfixed; findings/probes: `build/wifi-power-audit/VERIFICATION.md`.
+- Titles: two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings record v4 unchanged. View labels flatten CR/LF for Bridge compatibility. Maintainer approved.
 - S3 froze adding Number to active screensaver: Web answered, save persisted, user rebooted; crash log has an older ELF. Cause unproven; retained as a release validation limitation.
 
-## Shared-popup/artwork checkpoint (2026-09-08)
+## Shared-popup/artwork baseline
 
-- v0.6.11 includes checkpoint `3b534ab` and shared-style fixes resolving large Weather opening on 8-inch.
-- Popups share frame/header/close and cached bodies; title/icon/color vary. Matching bodies/graphs stay visible; cold contents follow first frame. Close/switch/delete cancel work; PIN remains. Settings forms disposable, Camera preloaded.
-- Artwork: URL-only `state_fast` precedes full MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
-- Memory unchanged: PSRAM LVGL pools S3 2 MiB/P4 12 MiB; internal/DMA draw band capped at 72 KiB; page caches S3 4/P4 6. Bindings use PSRAM, no extra framebuffers. Larger covers and bounded idle Media service remain.
-- Maintainer accepted 8-inch popup opening after removing zero translations/border widths that forced descendant layout; real-style tests/BIN/hash: `build/tile-state-layout/VERIFICATION.md`.
-- Weather values/headers match Sensor; shared title helper preserves `Viecht...` on 8-inch (maintainer verified). 95 tests/BIN/hash: `build/weather-title-ellipsis/VERIFICATION.md`.
-- Native Weather/Sensor tests cover all 17 profiles: real global styles, colors, short/long input, first-frame gating, geometry and covered drawing. Timing instrumentation is opt-in only.
-- Maintainer confirms Guition S3, 4B and Tab5 builds work well; 95 tests, no popup timing. BINs/hashes: `build/test-devices-popup-title/VERIFICATION.md`.
-- PIN reuse updates the full title; maintainer confirmed Tab5 correction. BIN/hash: `build/pin-popup-title/VERIFICATION.md`.
-- Pending: broader controls/artwork, navigation, sleep/wake, camera/ESP-Hosted soak and memory minima. No post-fix serial timing comparison captured.
+- v0.6.11: `3b534ab` shared frame/header/close with cached bodies; matching content stays visible, cold content waits for first frame. Close/switch/delete cancel work; PIN retained. Settings forms disposable, Camera preloaded.
+- Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
+- Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings in PSRAM, no extra framebuffers.
+- Maintainer accepts popup/title fixes on 8-inch, Guition S3, 4B and Tab5. Native Weather/Sensor tests cover 17 profiles. Removed state-specific zero translations/border widths that forced descendant layout on press. Evidence: `build/tile-state-layout/`, `build/weather-title-ellipsis/`, `build/test-devices-popup-title/`.
+- Reused PIN popup full title corrected (Tab5 confirmed): `build/pin-popup-title/`. Broader artwork/controls, sleep/wake, camera/Hosted soak and memory minima pending.
+
+## Global tile radius
+
+- NVS radius: current minimum; maximum = rounded `(profile cell height - gap) / 4`. Half-height spans not implemented.
+- Shared styles cover cached tiles, Climate, popup/Settings and artwork. Web previews immediately, saves on release; wallpaper refresh coalesces 350 ms.
+- First V2 build: 107 tests pass, native radius/NVS covers 17 profiles. BIN/hash: `build/global-radius-guition-v2/VERIFICATION.md`. Maintainer likes the main appearance.
+- Follow-up: restore original close-highlight baseline with live updates; align Web radius control with checkboxes, suppress pointer-focus field ring. 107 tests and V2 build pass; BIN/hash: `build/global-radius-guition-v2-corrections/VERIFICATION.md`. Hardware/reboot checks pending.
 
 ## Current maintenance refactoring
 
 - Architecture/workflows: `ARCHITECTURE.md`, `CONTRIBUTING.md`; host dependencies need `npm ci --ignore-scripts`.
-- Docs: `docs/`, `mkdocs.yml`, `overrides/`; root hosting deploys `HomeTiles/gh-pages`, v0.6.12 at both mounts. Sitemap aliases fix `/HomeTiles/` reloads. Tests use simulated USB ports.
-- Flash results cannot overwrite active USB status. Success clears on reload/leaving/changing selection; recovery persists. Logger: paragraphs, menu restart or RESET if fitted, local-only notice.
+- Docs: `docs/`, `mkdocs.yml`, `overrides/`; `HomeTiles/gh-pages` v0.6.12 at both mounts. Sitemap aliases fix reloads. Flash success clears on reload/selection change; recovery persists. USB tests are simulated.
 
 ## Current view control, telemetry and compatible controls
 
@@ -115,8 +117,6 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Stable tile IDs use reserved PackedTileV7 bytes and durable counters; MQTT sessions/sequences/deadlines reject replay.
 - Bridge v0.6.44 retains documented View/telemetry migration and compatible controls.
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
-- Commands validate selected targets, availability and on/off features; retained commands are ignored.
-- Firmware battery is a stub on all profiles. Unsupported battery/probes are no longer auto-registered; explicit local I/O remains.
-- Bridge migration checks registry ownership/capabilities, cleans shared selections and preserves user entities.
-- Maintainer confirms View/editable controls on 8-inch/S3; pre-OTA-fix 85 tests/BINs: `build/editable-colors-view/VERIFICATION.md`. HA migration/re-pairing, legacy firmware, PIN, stream cleanup and sleep/reconnect need broader validation.
+- Commands validate targets/availability/features; ignore retained commands. Battery is a stub; unsupported probes stay unregistered. Bridge migration preserves user entities and validates ownership/capabilities.
+- View/editable controls confirmed on 8-inch/S3; tests/BINs: `build/editable-colors-view/VERIFICATION.md`. HA migration, legacy firmware and lifecycle coverage pending.
 - Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; local reception grows to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending. Maintainer log: no unplanned MQTT loss (~7.5 h earlier BIN, ~25 min latest; two OTA restarts).

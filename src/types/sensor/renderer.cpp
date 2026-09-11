@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/types/sensor/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
@@ -78,7 +79,7 @@ lv_obj_set_style_bg_grad_color(card, lv_color_hex(pressed_color), LV_PART_MAIN |
 lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRESSED);
 
   lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, tile_layout::scale_480(22), 0);
+  ui_surface_style::apply_radius(card, tile_layout::scale_480(22), 0);
   lv_obj_set_style_border_width(card, 0, 0);
   lv_obj_set_style_shadow_width(card, 0, 0);
   lv_obj_set_style_pad_hor(card, tile_layout::scale_480(20), 0);

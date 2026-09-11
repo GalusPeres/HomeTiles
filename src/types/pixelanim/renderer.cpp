@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/types/pixelanim/renderer.h"
 
 #include <Arduino.h>
@@ -435,7 +436,7 @@ lv_obj_t* render_pixelanim_tile(lv_obj_t* parent, int col, int row, const Tile& 
   } else {
     lv_obj_set_style_bg_color(card, lv_color_hex(tileBgColorOrDefault(tile, 0x000000)), 0);
     lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(card, tile_layout::scale_480(22), 0);
+    ui_surface_style::apply_radius(card, tile_layout::scale_480(22), 0);
     lv_obj_set_style_clip_corner(card, true, 0);
   }
   set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);

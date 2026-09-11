@@ -94,7 +94,9 @@ bool WebAdminServer::start() {
               [this]() { this->handleGetHardwareIo(); });
     server.on("/api/hardware-io", HTTP_POST,
               [this]() { this->handleSaveHardwareIo(); });
-    server.on("/api/display/tile-borders", HTTP_POST,
+    server.on("/api/display/tile-radius", HTTP_GET, [this]() { handleTileRadius(); });
+  server.on("/api/display/tile-radius", HTTP_POST, [this]() { handleTileRadius(); });
+  server.on("/api/display/tile-borders", HTTP_POST,
               [this]() { this->handleSaveTileBorders(); });
     server.on("/api/screensaver/wallpaper", HTTP_GET,
               [this]() { this->handleGetScreensaverWallpaper(); });

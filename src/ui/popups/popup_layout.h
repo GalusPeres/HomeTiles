@@ -1,5 +1,7 @@
 #pragma once
 
+#include "src/ui/shared/ui_surface_style.h"
+
 #include "src/ui/shared/title_label.h"
 
 #include "src/core/display/display_manager.h"
@@ -310,7 +312,7 @@ inline lv_obj_t* createCloseButton(lv_obj_t* card, lv_event_cb_t handler,
   lv_obj_set_style_border_opa(close_btn, LV_OPA_TRANSP, 0);
   lv_obj_set_style_outline_opa(close_btn, LV_OPA_TRANSP, 0);
   lv_obj_set_style_shadow_opa(close_btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_radius(close_btn, kCloseButtonRadius, 0);
+  ui_surface_style::apply_radius(close_btn, kCloseButtonRadius, 0);
   lv_obj_set_style_pad_all(close_btn, 0, 0);
   lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT, kCloseButtonOffsetX,
                kCloseButtonOffsetY);

@@ -739,7 +739,7 @@
 
       background:#000000;
       border:1px solid var(--line);
-      border-radius:21px;
+      border-radius:calc(var(--tile-radius, 11px) + var(--preview-pad) + 1px);
       width:fit-content;
       height:fit-content;
     }
@@ -2197,3 +2197,9 @@
     .tile.clock:has(.tile-icon) .tile-title,
     .tile.text:has(.tile-icon) .tile-title,
     .tile.switch.switch-toggle:has(.tile-icon) .tile-title { max-width:70%; }
+
+    .tile-radius-control { display:flex; align-items:center; gap:8px; margin:0; }
+    .tile-radius-control input[type="range"] { width:120px; height:18px; margin:0; accent-color:var(--accent); }
+    .tile-radius-control input[type="range"]:focus { outline:none; box-shadow:none; }
+    .tile-radius-control input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    .global-tile-radius-value { min-width:2ch; text-align:right; font-variant-numeric:tabular-nums; }

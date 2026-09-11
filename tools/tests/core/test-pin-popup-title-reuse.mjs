@@ -1,3 +1,4 @@
+import {radiusPolicyHost, surfaceStyleHost} from '../../lib/surface-style-host.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -58,7 +59,8 @@ const Strings& strings(const char* language) {
   return kStringsEn;
 }
 }
-struct Config { const char* language = "de"; bool tile_borders = true; };
+${radiusPolicyHost(root)}
+struct Config { int tile_radius = tile_radius::kMinimum; const char* language = "de"; bool tile_borders = true; };
 struct ConfigManager { Config config; const Config& getConfig() { return config; } } configManager;
 extern "C" {
 LV_FONT_DECLARE(ui_font_12); LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16);
@@ -78,8 +80,7 @@ constexpr int MALLOC_CAP_SPIRAM = 1, MALLOC_CAP_8BIT = 2;
 int allocations = 0;
 void* heap_caps_malloc(size_t size, int) { ++allocations; return malloc(size); }
 void heap_caps_free(void* pointer) { if (pointer) { --allocations; free(pointer); } }
-${stripIncludes(read('src/ui/shared/ui_surface_style.h'))}
-${stripIncludes(read('src/ui/shared/ui_surface_style.cpp'))}
+${surfaceStyleHost(root)}
 ${stripIncludes(read('src/ui/popups/popup_layout.h'))}
 ${stripIncludes(read('src/ui/popups/popup_open.h'))}
 ${stripIncludes(read('src/ui/popups/popup_shell.h'))}
@@ -112,6 +113,9 @@ void check_title(const String& expected) {
   assert(!strcmp(lv_label_get_text(shell.title), lv_label_get_text(g_ctx->title_label)));
 }
 int main() {
+  assert(!strcmp(i18n::strings("de").tile_radius,"Kachelradius"));
+  assert(!strcmp(i18n::strings("en").tile_radius,"Tile radius"));
+  assert(!strcmp(i18n::strings("fr").tile_radius,"Rayon des tuiles"));
   lv_init();
   auto* display = lv_display_create(SCREEN_WIDTH, SCREEN_HEIGHT);
   std::vector<uint32_t> band(SCREEN_WIDTH * 16);

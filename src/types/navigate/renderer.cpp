@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/types/navigate/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
@@ -20,7 +21,7 @@ static uint16_t navFolderIdFromTile(const Tile& tile) {
 
 lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index) {
   lv_obj_t* btn = lv_button_create(parent);
-  lv_obj_set_style_radius(btn, tile_layout::scale_480(22), 0);
+  ui_surface_style::apply_radius(btn, tile_layout::scale_480(22), 0);
   lv_obj_set_style_border_width(btn, 0, 0);
 
   // Without an explicit color, all navigation types use the same neutral

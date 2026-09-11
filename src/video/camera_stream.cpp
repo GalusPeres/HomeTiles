@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/video/camera_stream.h"
 
 #include <esp_heap_caps.h>
@@ -34,7 +35,6 @@ constexpr uint16_t kWidth = camera_geometry::kWidth;
 constexpr uint16_t kHeight = camera_geometry::kHeight;
 constexpr uint16_t kDecodedWidth = camera_geometry::kDecodedWidth;
 constexpr uint16_t kDecodedHeight = camera_geometry::kDecodedHeight;
-constexpr uint16_t kCornerRadius = camera_geometry::kCornerRadius;
 constexpr size_t kPixelBytes =
     static_cast<size_t>(kDecodedWidth) * kDecodedHeight * sizeof(uint16_t);
 constexpr size_t kMaxJpegBytes = 256U * 1024U;
@@ -300,6 +300,7 @@ static uint16_t rgb888_to_swapped_rgb565(uint32_t rgb) {
 }
 
 static void apply_rounded_frame_corners(uint16_t* pixels) {
+  const uint16_t kCornerRadius = ui_surface_style::radius(camera_geometry::kCornerRadius);
   if (!pixels || kCornerRadius == 0 ||
       kCornerRadius * 2U > kWidth || kCornerRadius * 2U > kHeight) {
     return;

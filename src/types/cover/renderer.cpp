@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/types/cover/renderer.h"
 
 #include <ArduinoJson.h>
@@ -337,7 +338,7 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
       card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(card, 0, 0);
-  lv_obj_set_style_radius(card, tile_layout::scale_480(22), 0);
+  ui_surface_style::apply_radius(card, tile_layout::scale_480(22), 0);
   lv_obj_set_style_shadow_width(card, 0, 0);
   lv_obj_set_style_pad_hor(card, tile_layout::scale_480(20), 0);
   lv_obj_set_style_pad_ver(card, tile_layout::scale_480(24), 0);

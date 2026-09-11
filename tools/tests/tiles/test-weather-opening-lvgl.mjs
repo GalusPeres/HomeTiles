@@ -1,3 +1,4 @@
+import {radiusPolicyHost, surfaceStyleHost} from '../../lib/surface-style-host.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,10 +43,10 @@ class String:public std::string{public:using std::string::string;using std::stri
 #include "src/devices/device.h"
 constexpr int SCREEN_WIDTH=Device::kScreenWidth,SCREEN_HEIGHT=Device::kScreenHeight;
 String getMdiChar(const String&){return "\xF3\xB0\x96\xAD";}
-struct TestConfig { bool tile_borders = true; };
+${radiusPolicyHost(root, 'Device::kGridCellH', 'Device::kGridGap')}
+struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = true; };
 struct TestConfigManager { TestConfig config; const TestConfig& getConfig() const { return config; } } configManager;
-${strip(read('src/ui/shared/ui_surface_style.h'))}
-${strip(read('src/ui/shared/ui_surface_style.cpp'))}
+${surfaceStyleHost(root)}
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
 void* heap_caps_malloc(size_t n,int){return malloc(n);}void heap_caps_free(void*p){free(p);}
 ${strip(read('src/tiles/runtime/tile_renderer_fonts.h'))}

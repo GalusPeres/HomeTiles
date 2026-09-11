@@ -88,6 +88,7 @@
 
   function syncFolderFragmentWithRoot(tabEl) {
     if (!tabEl) return;
+    syncTileRadiusControls(tabEl);
 
     const sourceBorderToggle = Array.from(
       document.querySelectorAll('.normal-tile-border-toggle'))

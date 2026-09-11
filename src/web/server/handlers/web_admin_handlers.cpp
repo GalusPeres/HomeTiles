@@ -31,6 +31,7 @@ void WebAdminServer::handleSaveMQTT() {
     strncpy(cfg.mqtt_base_topic, "hometiles", CONFIG_MQTT_BASE_MAX - 1);
     strncpy(cfg.ha_prefix, "ha/statestream", CONFIG_HA_PREFIX_MAX - 1);
     cfg.tile_borders = true;
+    cfg.tile_radius = tile_radius::kMinimum;
   }
   const DeviceConfig previous_cfg = cfg;
 
@@ -574,6 +575,33 @@ void WebAdminServer::handleRestart() {
   prepareDisplayForRestart();
   delay(200);
   BoardHAL::restart();
+}
+
+void WebAdminServer::handleTileRadius() {
+  webAdminMarkActivity();
+  if (server.method() == HTTP_POST) {
+    const String value = server.arg("radius");
+    bool valid = value.length() > 0 && value.length() <= 4;
+    for (size_t i = 0; i < value.length(); ++i)
+      valid = valid && value[i] >= '0' && value[i] <= '9';
+    const long radius = value.toInt();
+    if (!valid || radius < tile_radius::kMinimum || radius > tile_radius::kMaximum) {
+      sendJsonError(server, 400, "Invalid tile radius");
+      return;
+    }
+    if (server.arg("preview") == "1") {
+      ui_surface_style::preview_radius(radius);
+      server.send(200, "application/json", String("{\"success\":true,\"radius\":") + radius + "}");
+      return;
+    }
+    if (!configManager.saveTileRadius(static_cast<uint16_t>(radius))) {
+      sendJsonError(server, 500, "Could not save tile radius");
+      return;
+    }
+    ui_surface_style::request_global_radius_refresh();
+  }
+  server.send(200, "application/json",
+      String("{\"success\":true,\"radius\":") + configManager.getConfig().tile_radius + "}");
 }
 
 void WebAdminServer::handleSaveTileBorders() {

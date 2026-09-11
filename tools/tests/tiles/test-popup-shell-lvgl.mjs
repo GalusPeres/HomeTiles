@@ -1,3 +1,4 @@
+import {radiusPolicyHost, surfaceStyleHost} from '../../lib/surface-style-host.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,7 +34,10 @@ extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECL
 #define FONT_MDI_ICONS (&mdi_icons_48)
 #endif
 std::string getMdiChar(const char*){return "\xF3\xB0\x96\xAD";}
-namespace ui_surface_style { void apply_global_tile_border(lv_obj_t* object){lv_obj_set_style_border_width(object,0,0);} }
+${radiusPolicyHost(root)}
+struct Config {bool tile_borders=true;int tile_radius=tile_radius::kMinimum;};
+struct Manager{Config cfg;const Config& getConfig(){return cfg;}}configManager;
+${surfaceStyleHost(root)}
 bool fail_alloc=false;int allocations=0;
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
 void* heap_caps_malloc(size_t n,int caps){assert(caps==(MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));if(fail_alloc)return nullptr;++allocations;return malloc(n);}
@@ -106,6 +110,19 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
  if(SCREEN_WIDTH>SCREEN_HEIGHT)assert(outside_draws==0&&"A warm popup must not repaint cached tiles outside its frame");
  lv_refr_now(d);
  const int rendered=flushed;for(int i=0;i<20;++i){sync_popup_shell();lv_refr_now(d);}assert(flushed==rendered);
+ // The visible shared close highlight retains its established shape at the
+ // minimum and follows live changes, including while already pressed.
+ const int close_baseline = SCREEN_WIDTH == 480 ? 11 : 16;
+ for(int radius : {tile_radius::kMinimum,tile_radius::kMaximum,tile_radius::kMinimum}) {
+   ui_surface_style::preview_radius(radius);
+   ui_surface_style::process_pending_updates();
+   lv_obj_add_state(button,LV_STATE_PRESSED);
+   lv_tick_inc(300);lv_refr_now(d);
+   assert(lv_obj_get_style_bg_opa(button,LV_PART_MAIN)>0);
+   assert(lv_obj_get_style_radius(button,LV_PART_MAIN)==close_baseline+radius-tile_radius::kMinimum);
+ }
+ lv_obj_remove_state(button,LV_STATE_PRESSED);
+ ui_surface_style::request_global_radius_refresh();ui_surface_style::process_pending_updates();
  lv_obj_update_layout(shell.overlay);assert(lv_obj_get_width(shell.frame)==lv_obj_get_width(a.body));assert(strcmp(hometiles_title::text(shell.title),"Number\nLiving room")==0);
  lv_obj_set_style_bg_color(b.body,lv_color_hex(0x885522),0);lv_obj_set_style_text_color(b.icon,lv_color_hex(0x00FF00),0);show(b,"Weather");assert(lv_color_eq(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN),lv_color_hex(0x885522)));assert(lv_color_eq(lv_obj_get_style_text_color(shell.icon,LV_PART_MAIN),lv_color_hex(0x00FF00)));assert(shell.frame==frame&&shell.header==header&&shell.close==button);assert(lv_obj_get_parent(a.body)==a.owner);assert(lv_obj_has_flag(a.body,LV_OBJ_FLAG_HIDDEN));assert(strcmp(hometiles_title::text(shell.title),"Weather")==0);
  hometiles_title::set(a.title,"Hidden background update");lv_obj_set_style_bg_color(a.body,lv_color_hex(0xEE0000),0);sync_popup_shell();assert(lv_color_eq(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN),lv_color_hex(0x885522)));assert(strcmp(hometiles_title::text(shell.title),"Weather")==0);

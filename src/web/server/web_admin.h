@@ -65,6 +65,7 @@ public:
   void handleGetHardwareIo();
   void handleSaveHardwareIo();
   void handleSaveTileBorders();
+  void handleTileRadius();
   void handleGetScreensaverWallpaper();
   void handleGetSdImages();
   void handleGetSdIcons();

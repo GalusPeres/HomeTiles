@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/types/climate/renderer.h"
 
 #include <algorithm>
@@ -1057,7 +1058,7 @@ lv_obj_t* create_climate_slot(
   lv_obj_set_style_border_width(root, 0, 0);
   lv_obj_set_style_shadow_width(root, 0, 0);
   // Keep the inner control radius concentric with the active layout's card.
-  lv_obj_set_style_radius(
+  ui_surface_style::apply_radius(
       root, climate_layout::kControlRadius, 0);
   lv_obj_set_style_pad_all(root, 0, 0);
   lv_obj_remove_flag(root, LV_OBJ_FLAG_SCROLLABLE);
@@ -1346,7 +1347,7 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
   lv_obj_set_style_bg_color(
       card, lv_color_hex(brighten_rgb_color(color, 0x10)),
       LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_radius(card, tile_layout::scale_480(22), 0);
+  ui_surface_style::apply_radius(card, tile_layout::scale_480(22), 0);
   lv_obj_set_style_border_width(card, 0, 0);
   lv_obj_set_style_shadow_width(card, 0, 0);
   lv_obj_set_style_pad_hor(

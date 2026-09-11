@@ -279,6 +279,7 @@ struct Strings {
   const char* alignment_center;
   const char* alignment_right;
   const char* screensaver_tile_shadow;
+  const char* tile_radius;
   const char* screensaver_tile_border;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;

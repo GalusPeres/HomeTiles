@@ -1,3 +1,4 @@
+import {radiusPolicyHost, surfaceStyleHost} from '../../lib/surface-style-host.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -47,7 +48,9 @@ MediaTileWidgets widgets[16];
 MediaTileWidgets* tile_renderer_get_media_widgets(GridType){return widgets;}
 struct Logger{void println(const char*){}}Serial;
 struct Bridge{String findEntityIcon(const String&){return "speaker";}String findSensorName(const String&){return "Player";}String findSensorInitialValue(const String&){return "";}}haBridgeConfig;
-struct Config{const char*language="en";};struct Manager{Config cfg;const Config&getConfig(){return cfg;}}configManager;
+${radiusPolicyHost(root)}
+struct Config{bool tile_borders=true;int tile_radius=tile_radius::kMinimum;const char*language="en";};struct Manager{Config cfg;const Config&getConfig(){return cfg;}}configManager;
+${surfaceStyleHost(root)}
 namespace i18n{struct Strings{const char*media_no_playback="No playback";};const Strings&strings(const char*){static Strings s;return s;}}
 uint32_t tileBgColorOrDefault(const Tile&,uint32_t d){return d;}
 uint32_t brighten_rgb_color(uint32_t c,uint32_t){return c;}

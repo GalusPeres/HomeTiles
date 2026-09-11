@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/types/scene/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
@@ -154,7 +155,7 @@ struct SceneEventData {
 
 lv_obj_t* render_scene_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index, scene_publish_cb_t scene_cb) {
   lv_obj_t* btn = lv_button_create(parent);
-  lv_obj_set_style_radius(btn, tile_layout::scale_480(22), 0);
+  ui_surface_style::apply_radius(btn, tile_layout::scale_480(22), 0);
   lv_obj_set_style_border_width(btn, 0, 0);
 
   uint32_t btn_color = tileBgColorOrDefault(tile, 0x2A2A2A);
@@ -208,7 +209,7 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
       lv_obj_set_style_bg_opa(icon_img, LV_OPA_TRANSP, 0);
       lv_obj_set_style_border_width(icon_img, 0, 0);
       lv_obj_set_style_pad_all(icon_img, 0, 0);
-      lv_obj_set_style_radius(icon_img, tile_layout::scale_480(22), 0);
+      ui_surface_style::apply_radius(icon_img, tile_layout::scale_480(22), 0);
       lv_obj_set_style_clip_corner(icon_img, true, 0);
       lv_obj_clear_flag(icon_img, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_clear_flag(icon_img, LV_OBJ_FLAG_CLICKABLE);
@@ -246,7 +247,7 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
         lv_obj_set_style_bg_opa(icon_img, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(icon_img, 0, 0);
         lv_obj_set_style_pad_all(icon_img, 0, 0);
-        lv_obj_set_style_radius(icon_img, tile_layout::scale_480(8), 0);
+        ui_surface_style::apply_radius(icon_img, tile_layout::scale_480(8), 0);
         lv_obj_set_style_clip_corner(icon_img, true, 0);
         lv_obj_clear_flag(icon_img, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_clear_flag(icon_img, LV_OBJ_FLAG_CLICKABLE);

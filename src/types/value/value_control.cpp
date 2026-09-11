@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/types/value/value_control.h"
 #include <ArduinoJson.h>
 #include <algorithm>
@@ -529,7 +530,7 @@ void style_panel(lv_obj_t* obj) {
   lv_obj_set_style_text_color(obj, lv_color_white(), 0);
   lv_obj_set_style_border_color(obj, lv_color_hex(0x555555), 0);
   lv_obj_set_style_border_width(obj, 0, 0);
-  lv_obj_set_style_radius(obj, popup_layout::scale(10), 0);
+  ui_surface_style::apply_radius(obj, popup_layout::scale(10), 0);
   lv_obj_set_style_pad_all(obj, 0, 0);
   lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
 }
@@ -541,7 +542,7 @@ lv_obj_t* arrow_button(lv_obj_t* parent, bool up, EditableControl* c) {
   lv_obj_set_style_bg_color(button, lv_color_white(), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(button, LV_OPA_20, LV_STATE_PRESSED);
   lv_obj_set_style_shadow_width(button, 0, LV_PART_MAIN);
-  lv_obj_set_style_radius(button, popup_layout::scale(12), 0);
+  ui_surface_style::apply_radius(button, popup_layout::scale(12), 0);
   lv_obj_set_style_pad_all(button, 0, 0);
   lv_obj_remove_flag(button, LV_OBJ_FLAG_SCROLLABLE);
   auto* icon = lv_label_create(button); lv_label_set_text(icon, LV_SYMBOL_DOWN);
@@ -633,7 +634,7 @@ void layout_controls(EditableControl* c) {
   lv_obj_set_size(c->number_box, number_width, number_height);
   lv_obj_set_style_bg_color(c->number_box, c->colors.raised, 0);
   lv_obj_set_style_bg_opa(c->number_box, slider ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(c->number_box, climate_layout::kControlRadius, 0);
+  ui_surface_style::apply_radius(c->number_box, climate_layout::kControlRadius, 0);
   lv_obj_align(c->number_box, LV_ALIGN_CENTER, 0, slider ? -(knob_height + value_gap) / 2 : 0);
   lv_obj_set_style_text_font(c->field, slider ? popup_layout::headerTitleFont() : popup_layout::font28(), 0);
   lv_obj_set_style_text_align(c->field, c->number_roller_enabled ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_CENTER, 0);
@@ -712,7 +713,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card) {
   lv_obj_add_event_cb(c->number_roller, input_event, LV_EVENT_ALL, c);
   c->clock_box = lv_obj_create(row); style_panel(c->clock_box);
   lv_obj_set_style_bg_color(c->clock_box, lv_color_hex(0x3A3A3A), 0);
-  lv_obj_set_style_radius(c->clock_box, popup_layout::scale(18), 0);
+  ui_surface_style::apply_radius(c->clock_box, popup_layout::scale(18), 0);
   for (int i = 0; i < 2; ++i) {
     c->separators[i] = lv_obj_create(c->clock_box); lv_obj_remove_style_all(c->separators[i]);
     auto* colon = lv_label_create(c->separators[i]); lv_label_set_text(colon, ":");
@@ -761,7 +762,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card) {
   lv_obj_set_style_bg_color(c->apply, lv_color_white(), 0);
   lv_obj_set_style_text_color(c->apply, lv_color_hex(0x2A2A2A), 0);
   lv_obj_set_style_bg_color(c->apply, lv_color_hex(0xBBBBBB), LV_STATE_PRESSED);
-  lv_obj_set_style_radius(c->apply, popup_layout::scale(18), 0);
+  ui_surface_style::apply_radius(c->apply, popup_layout::scale(18), 0);
   lv_obj_set_style_shadow_width(c->apply, 0, 0);
   auto* apply_label = lv_label_create(c->apply); lv_label_set_text(apply_label, label(6));
   lv_obj_set_style_text_font(apply_label, popup_layout::font20(), 0); lv_obj_center(apply_label);

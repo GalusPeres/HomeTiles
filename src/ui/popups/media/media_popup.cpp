@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/ui/popups/popup_shell.h"
 #include "src/ui/popups/popup_open.h"
@@ -633,7 +634,7 @@ void show_media_popup(const MediaPopupInit& init) {
   lv_obj_set_style_border_width(ctx->cover_clip, 0, 0);
   lv_obj_set_style_shadow_width(ctx->cover_clip, 0, 0);
   lv_obj_set_style_pad_all(ctx->cover_clip, 0, 0);
-  lv_obj_set_style_radius(ctx->cover_clip, popup_layout::scale480(18), 0);
+  ui_surface_style::apply_radius(ctx->cover_clip, popup_layout::scale480(18), 0);
   lv_obj_set_style_clip_corner(ctx->cover_clip, true, 0);
   lv_obj_remove_flag(ctx->cover_clip, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_clear_flag(ctx->cover_clip, LV_OBJ_FLAG_CLICKABLE);

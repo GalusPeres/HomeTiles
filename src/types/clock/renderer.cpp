@@ -1,3 +1,4 @@
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/types/clock/renderer.h"
 #include "src/types/clock/clock_format.h"
 #include "src/core/config/config_manager.h"
@@ -418,7 +419,7 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
 lv_obj_t* render_clock_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index) {
   (void)index;
   lv_obj_t* card = lv_button_create(parent);
-  lv_obj_set_style_radius(card, tile_layout::scale_480(22), 0);
+  ui_surface_style::apply_radius(card, tile_layout::scale_480(22), 0);
   lv_obj_set_style_border_width(card, 0, 0);
 
   uint32_t card_color = tileBgColorOrDefault(tile, 0x2A2A2A);

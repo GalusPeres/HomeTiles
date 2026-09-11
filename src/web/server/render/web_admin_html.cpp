@@ -473,6 +473,18 @@ static void appendTileTabHTML(
   html += tr.screensaver_tile_border;
   html += R"html(</label>
 )html";
+  html += "<label class=\"tile-radius-control\"><span>";
+  appendHtmlEscaped(html, tr.tile_radius);
+  html += "</span><input class=\"global-tile-radius\" type=\"range\" min=\"";
+  html += String(tile_radius::kMinimum);
+  html += "\" max=\"";
+  html += String(tile_radius::kMaximum);
+  html += "\" step=\"1\" value=\"";
+  html += String(configManager.getConfig().tile_radius);
+  html += "\" oninput=\"previewTileRadiusLive(this.value)\" onchange=\"saveTileRadius(this.value)\"><output class=\"global-tile-radius-value\">";
+  html += String(configManager.getConfig().tile_radius);
+  html += "</output></label>";
+
   if (screensaver_mode) {
     html += R"html(              <label class="inline-checkbox"><input id="screensaverTileShadow" type="checkbox"> )html";
     html += tr.screensaver_tile_shadow;

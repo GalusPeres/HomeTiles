@@ -34,6 +34,7 @@
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/core/config/tile_radius.h"
 
 namespace {
 
@@ -50,8 +51,9 @@ constexpr uint32_t kMaxDecodePixels = 2048U * 2048U;
 // UI: the cover worker, popups and LVGL intermediate buffers.
 constexpr size_t kMaxPsramReserveBytes = 4U * 1024U * 1024U;
 constexpr size_t kPpaBufferAlignment = 64;
-constexpr uint16_t kImageRadius =
-    static_cast<uint16_t>(tile_layout::scale(26));
+uint16_t image_radius() {
+  return ui_surface_style::radius(tile_radius::kMinimum) + (GRID_PAD < 4 ? GRID_PAD : 4);
+}
 // After interaction, let visible tile/MQTT state settle first. Otherwise
 // a decode/composite pass due at the same time can block the loop before
 // LVGL has flushed the switch change to the panel.
@@ -116,6 +118,7 @@ uint16_t g_cache_h = 0;
 uint16_t g_cache_focus_x = 500;
 uint16_t g_cache_focus_y = 500;
 uint16_t g_cache_zoom = 1000;
+uint16_t g_cache_radius = 0;
 lv_image_dsc_t* g_cache_dsc = nullptr;
 
 // Preload the image a few seconds after tile construction so the first
@@ -577,6 +580,7 @@ struct S3DirectJpegCtx {
   uint32_t crop_w = 0;
   uint32_t crop_h = 0;
   uint32_t written_pixels = 0;
+  uint16_t corner_radius = 0;
 };
 
 size_t s3_direct_jpeg_input(JDEC* jd, uint8_t* buffer, size_t bytes) {
@@ -651,7 +655,7 @@ int s3_direct_jpeg_output(JDEC* jd, void* bitmap, JRECT* rect) {
           static_cast<uint16_t>((native >> 8) | (native << 8));
       destination[dx] = blend_swapped_rgb565_with_black(
           swapped, rounded_pixel_coverage(dx, dy, ctx->image_w,
-                                           ctx->image_h, kImageRadius));
+                                           ctx->image_h, ctx->corner_radius));
       ++ctx->written_pixels;
     }
   }
@@ -661,7 +665,7 @@ int s3_direct_jpeg_output(JDEC* jd, void* bitmap, JRECT* rect) {
 lv_image_dsc_t* s3_decode_jpeg_direct_cover(
     const uint8_t* data, size_t len, uint16_t target_w, uint16_t target_h,
     uint16_t focus_x, uint16_t focus_y, uint16_t zoom,
-    uint16_t& source_w, uint16_t& source_h) {
+    uint16_t& source_w, uint16_t& source_h, uint16_t corner_radius) {
   source_w = 0;
   source_h = 0;
   uint8_t* work =
@@ -669,6 +673,7 @@ lv_image_dsc_t* s3_decode_jpeg_direct_cover(
   if (!work) return nullptr;
 
   S3DirectJpegCtx ctx{};
+  ctx.corner_radius = corner_radius;
   ctx.data = data;
   ctx.len = len;
   JDEC decoder{};
@@ -784,13 +789,13 @@ lv_image_dsc_t* s3_decode_jpeg_direct_cover(
 
 // Build the final screen image with the same outer black border as the
 // normal tile grid. The image edge sits exactly 4 px outside the tiles
-// (GRID_PAD - 4), including a 26-px radius: the tiles' 22 px plus the
+// (GRID_PAD - 4), with the configured tile radius plus the
 // extra 4 px outside them. PPA and LVGL share this full-frame buffer,
 // so opening needs neither additional clipping nor rendering in bands.
 lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
                                uint16_t src_h, uint16_t target_w,
                                uint16_t target_h, uint16_t focus_x,
-                               uint16_t focus_y, uint16_t zoom) {
+                               uint16_t focus_y, uint16_t zoom, uint16_t corner_radius) {
   if (!src || src_w == 0 || src_h == 0 || target_w == 0 || target_h == 0) {
     return nullptr;
   }
@@ -840,7 +845,7 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
     for (uint16_t x = 0; x < image_w; ++x) {
       const uint32_t sx = x0 + (static_cast<uint32_t>(x) * crop_w) / image_w;
       const uint8_t coverage =
-          rounded_pixel_coverage(x, y, image_w, image_h, kImageRadius);
+          rounded_pixel_coverage(x, y, image_w, image_h, corner_radius);
       dst_row[x] = blend_swapped_rgb565_with_black(src_row[sx], coverage);
     }
   }
@@ -864,7 +869,7 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
 lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
                                          uint16_t target_w, uint16_t target_h,
                                          uint16_t focus_x, uint16_t focus_y,
-                                         uint16_t zoom) {
+                                         uint16_t zoom, uint16_t corner_radius) {
   const uint32_t pipeline_started_ms = millis();
   size_t len = 0;
   uint8_t* file = read_wallpaper_file(file_name, len);
@@ -891,7 +896,7 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
   uint16_t h = 0;
 #if defined(DEVICE_ESP32_S3_RGB_480)
   lv_image_dsc_t* dsc = s3_decode_jpeg_direct_cover(
-      file, len, target_w, target_h, focus_x, focus_y, zoom, w, h);
+      file, len, target_w, target_h, focus_x, focus_y, zoom, w, h, corner_radius);
   const uint32_t decode_ms = millis() - decode_started_ms;
   free(file);
   GuitionS3Diagnostics::logSlideshowDecode(
@@ -930,7 +935,7 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
 
   const uint32_t cover_started_ms = millis();
   lv_image_dsc_t* dsc = make_cover_dsc(pixels, w, h, target_w, target_h,
-                                       focus_x, focus_y, zoom);
+                                       focus_x, focus_y, zoom, corner_radius);
   const uint32_t cover_ms = millis() - cover_started_ms;
   free(pixels);
   GuitionS3Diagnostics::logSlideshowDecode(
@@ -954,11 +959,12 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
   const String& name = wallpaper.file_name;
   if (g_cache_dsc && g_cache_name == name && g_cache_w == w && g_cache_h == h &&
       g_cache_focus_x == wallpaper.focus_x &&
-      g_cache_focus_y == wallpaper.focus_y && g_cache_zoom == wallpaper.zoom) {
+      g_cache_focus_y == wallpaper.focus_y && g_cache_zoom == wallpaper.zoom && g_cache_radius == image_radius()) {
     return g_cache_dsc;
   }
+  const uint16_t corner_radius = image_radius();
   lv_image_dsc_t* dsc = decode_wallpaper_to_size(
-      name, w, h, wallpaper.focus_x, wallpaper.focus_y, wallpaper.zoom);
+      name, w, h, wallpaper.focus_x, wallpaper.focus_y, wallpaper.zoom, corner_radius);
   if (!dsc) return nullptr;
   // Detach the old source from the visible LVGL object only now, immediately
   // before swapping caches. The previous slide stays visible during decoding
@@ -976,6 +982,7 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
   g_cache_focus_x = wallpaper.focus_x;
   g_cache_focus_y = wallpaper.focus_y;
   g_cache_zoom = wallpaper.zoom;
+  g_cache_radius = corner_radius;
   return dsc;
 }
 
@@ -1163,7 +1170,7 @@ bool apply_wallpaper(ScreensaverState* st, int index, bool allow_fallback,
                          g_cache_h == Device::kScreenHeight &&
                          g_cache_focus_x == wallpaper.focus_x &&
                          g_cache_focus_y == wallpaper.focus_y &&
-                         g_cache_zoom == wallpaper.zoom;
+                         g_cache_zoom == wallpaper.zoom && g_cache_radius == image_radius();
   lv_image_dsc_t* dsc = get_or_decode_cached(
       wallpaper, Device::kScreenWidth, Device::kScreenHeight, st->image);
   if (!dsc) {
@@ -1441,7 +1448,7 @@ void refresh_live_background_and_clock(ScreensaverState* st,
                              g_cache_h == Device::kScreenHeight &&
                              g_cache_focus_x == wallpaper.focus_x &&
                              g_cache_focus_y == wallpaper.focus_y &&
-                             g_cache_zoom == wallpaper.zoom &&
+                             g_cache_zoom == wallpaper.zoom && g_cache_radius == image_radius() &&
                              !lv_obj_has_flag(st->image, LV_OBJ_FLAG_HIDDEN);
     if (same_pixels) {
       // Clock settings and slide duration may change live without rewriting

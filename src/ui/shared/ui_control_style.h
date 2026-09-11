@@ -1,4 +1,6 @@
 #pragma once
+
+#include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/popups/popup_layout.h"
 
 // Shared Settings controls; keep popup editors visually identical to Settings.
@@ -29,7 +31,7 @@ inline void dropdown(lv_obj_t* dd) {
   lv_obj_set_style_bg_color(dd, lv_color_hex(0x1E1E1E), 0);
   lv_obj_set_style_text_color(dd, lv_color_white(), 0);
   lv_obj_set_style_text_color(dd, lv_color_white(), LV_PART_INDICATOR);
-  lv_obj_set_style_radius(dd, popup_layout::scale(10), 0);
+  ui_surface_style::apply_radius(dd, popup_layout::scale(10), 0);
   lv_obj_set_style_border_color(dd, lv_color_hex(0x555555), 0);
   lv_obj_set_style_border_width(dd, 1, 0);
   lv_obj_set_style_border_opa(dd, LV_OPA_COVER, 0);
@@ -43,7 +45,7 @@ inline void dropdownList(lv_obj_t* list) {
   lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_text_font(list, popup_layout::font20(), LV_PART_MAIN);
   lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_MAIN);
-  lv_obj_set_style_radius(list, popup_layout::scale(10), LV_PART_MAIN);
+  ui_surface_style::apply_radius(list, popup_layout::scale(10), LV_PART_MAIN);
   lv_obj_set_style_border_color(list, lv_color_hex(0x555555), LV_PART_MAIN);
   lv_obj_set_style_border_width(list, 1, LV_PART_MAIN);
   lv_obj_set_style_border_opa(list, LV_OPA_COVER, LV_PART_MAIN);
@@ -52,7 +54,7 @@ inline void dropdownList(lv_obj_t* list) {
   lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SELECTED);
   lv_obj_set_style_text_font(list, popup_layout::font20(), LV_PART_SELECTED);
   lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_SELECTED);
-  lv_obj_set_style_radius(list, popup_layout::scale(6), LV_PART_SELECTED);
+  ui_surface_style::apply_radius(list, popup_layout::scale(6), LV_PART_SELECTED);
   lv_obj_set_style_bg_color(list, lv_color_hex(0x4A4A4A), LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SCROLLBAR);
 }
@@ -74,7 +76,7 @@ inline void largeDropdown(lv_obj_t* dd) {
   lv_obj_set_height(dd, LV_SIZE_CONTENT);
   lv_obj_set_style_pad_ver(dd, popup_layout::scale(18), 0);
   lv_obj_set_style_pad_left(dd, popup_layout::scale(20), 0);
-  lv_obj_set_style_radius(dd, popup_layout::scale(18), 0);
+  ui_surface_style::apply_radius(dd, popup_layout::scale(18), 0);
   lv_obj_set_style_text_font(dd, popup_layout::font28(), LV_PART_MAIN);
   lv_obj_set_style_text_font(dd, &ui_symbols_24, LV_PART_INDICATOR);
 }

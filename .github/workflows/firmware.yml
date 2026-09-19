@@ -214,6 +214,13 @@ jobs:
             define: DEVICE_WAVESHARE_S3_TOUCH_LCD_4B
             rx_variant: native-s3
             publish: true
+          - label: Guition JC4880P443
+            profile: guition_jc4880p443_portrait
+            key: guition_jc4880p443_portrait
+            define: DEVICE_GUITION_JC4880P443_PORTRAIT
+            silicon_variant: pre_v3
+            rx_variant: repo-a8204
+            publish: true
         # END GENERATED DEVICE MATRIX
 
     steps:

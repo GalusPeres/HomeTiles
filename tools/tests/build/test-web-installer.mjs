@@ -82,10 +82,10 @@ function firmwareFixture(deviceKey, appOffset = 0, silicon = null) {
   return bytes;
 }
 
-assert.equal(DEVICE_PROFILES.length, 15, "Every explicit firmware choice needs an installer profile.");
-assert.equal(new Set(DEVICE_PROFILES.map((device) => device.key)).size, 15);
+assert.equal(DEVICE_PROFILES.length, 16, "Every explicit firmware choice needs an installer profile.");
+assert.equal(new Set(DEVICE_PROFILES.map((device) => device.key)).size, 16);
 assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-S3").length, 3);
-assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-P4").length, 12);
+assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-P4").length, 13);
 for (const device of DEVICE_PROFILES.filter((candidate) => candidate.chipFamily === "ESP32-P4")) {
   const isRev3 = device.key === "waveshare_touch_lcd_7b_rev3_1";
   assert.equal(device.siliconVariant, isRev3 ? "rev3_1" : "pre_v3");
@@ -100,18 +100,19 @@ assert.equal(
   DEVICE_PROFILES.find((device) => device.key === "guition_esp32_4848s040").chipFamily,
   "ESP32-S3",
 );
-for (const [key, chipFamily, flashSize, labelPattern] of [
+for (const [key, chipFamily, flashSize, labelPattern, status = "validation-pending"] of [
   ["waveshare_touch_lcd_4_3", "ESP32-P4", 32 * 1024 * 1024, /4\.3 inch/],
   ["waveshare_touch_lcd_7b", "ESP32-P4", 32 * 1024 * 1024, /before v3\.0/],
   ["waveshare_touch_lcd_7b_rev3_1", "ESP32-P4", 32 * 1024 * 1024, /v3\.1 only, experimental/],
   ["guition_jc1060p470c_v2", "ESP32-P4", 16 * 1024 * 1024, /V2 \(New Panel\)/],
+  ["guition_jc4880p443_portrait", "ESP32-P4", 16 * 1024 * 1024, /JC4880P443/, "supported"],
   ["waveshare_s3_touch_lcd_4b", "ESP32-S3", 16 * 1024 * 1024, /ESP32-S3 Touch LCD 4B/],
 ]) {
   const device = DEVICE_PROFILES.find((candidate) => candidate.key === key);
   assert.ok(device, `Missing installer profile ${key}.`);
   assert.equal(device.chipFamily, chipFamily);
   assert.equal(device.flashSize, flashSize);
-  assert.equal(device.status, "validation-pending");
+  assert.equal(device.status, status);
   assert.match(device.label, labelPattern);
 }
 
@@ -142,7 +143,7 @@ assert.throws(() => parseEspRomChipIdentity(securityInfoFixture(0x46b6b8de)), /U
 
 const sketchProfiles = read("sketch.yaml");
 const releaseTargets = DEVICE_PROFILES;
-assert.equal(releaseTargets.length, 15, "The two explicit 7B choices need separate release builds.");
+assert.equal(releaseTargets.length, 16, "The two explicit 7B choices need separate release builds.");
 for (const target of releaseTargets) {
   const escapedProfile = target.buildProfile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = sketchProfiles.match(new RegExp(`^  ${escapedProfile}:\\r?\\n    fqbn: ([^\\r\\n]+)$`, "m"));
@@ -185,7 +186,7 @@ assert.match(packageSource, /const otaSlotSize = 0x680000;/);
 
 const releaseIndex = buildReleaseIndex(fixtureRelease());
 assert.equal(releaseIndex.tag, "v0.6.5");
-assert.equal(releaseIndex.devices.length, 15);
+assert.equal(releaseIndex.devices.length, 16);
 for (const device of releaseIndex.devices) {
   const names = releaseAssetNames("v0.6.5", device.key);
   assert.equal(device.update.file, names.update);
@@ -231,7 +232,7 @@ for (const unsupportedRevision of [0, 200, 300, 302, 399, 400]) {
 
 const fullPublication = selectDevicesForPublication(releaseIndex);
 assert.equal(fullPublication.partial, false);
-assert.equal(fullPublication.devices.length, 15);
+assert.equal(fullPublication.devices.length, 16);
 const localPublication = selectDevicesForPublication(releaseIndex, "guition_esp32_4848s040");
 assert.equal(localPublication.partial, true);
 assert.deepEqual(localPublication.devices.map((device) => device.key), ["guition_esp32_4848s040"]);
@@ -250,7 +251,8 @@ assert.throws(
 );
 const legacy7bRelease = fixtureRelease("v0.6.7");
 legacy7bRelease.assets = legacy7bRelease.assets.filter(
-  (asset) => !asset.name.includes("_waveshare_touch_lcd_7b_rev3_1"),
+  (asset) => !asset.name.includes("_waveshare_touch_lcd_7b_rev3_1") &&
+    !asset.name.includes("_guition_jc4880p443_portrait"),
 );
 assert.throws(() => buildReleaseIndex(legacy7bRelease), /rev3_1/);
 const legacy7bIndex = buildReleaseIndex(legacy7bRelease, { allowMissingProfiles: true });
@@ -271,6 +273,7 @@ const pendingDeviceKeys = new Set([
   "waveshare_touch_lcd_7b",
   "waveshare_touch_lcd_7b_rev3_1",
   "guition_jc1060p470c_v2",
+  "guition_jc4880p443_portrait",
   "waveshare_s3_touch_lcd_4",
   "waveshare_s3_touch_lcd_4b",
 ]);
@@ -301,8 +304,9 @@ assert.throws(
 );
 const beforeLcd4Release = fixtureRelease("v0.6.9");
 const lcd4AssetNames = Object.values(releaseAssetNames("v0.6.9", waveshareS3Lcd4.key));
+const jc4880AssetNames = Object.values(releaseAssetNames("v0.6.9", "guition_jc4880p443_portrait"));
 beforeLcd4Release.assets = beforeLcd4Release.assets.filter(
-  (asset) => !lcd4AssetNames.includes(asset.name),
+  (asset) => !lcd4AssetNames.includes(asset.name) && !jc4880AssetNames.includes(asset.name),
 );
 const beforeLcd4Publication = selectDevicesForPublication(
   buildReleaseIndex(beforeLcd4Release, { allowMissingProfiles: true }),

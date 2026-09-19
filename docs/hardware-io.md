@@ -44,6 +44,7 @@ The I/O selector offers only pins assigned for use by that device's firmware pro
     | Guition JC8012P4A1 | Expansion FPC GPIO 2, 3, 4, 5, 28, 29, 30, 31, 32, 33, 34, 45, 46, 47, 48 | Schematic-derived; verify the connected expansion board |
     | Guition JC8012P4A1 V2 | Expansion FPC GPIO 2, 3, 4, 5, 28, 29, 30, 31, 32, 33, 34, 45, 46, 47, 48 | Separate V2 profile; same reported board wiring, community validation ongoing |
     | Guition JC1060P470C V1 / V2 | Expand GPIO 1, 2, 3, 4, 5, 20, 32, 33, 46, 47 | GPIO45 is reserved for the active-low SD-card power switch; physical validation needed |
+    | Guition JC4880P443 | None | The exact board profile reserves its documented display, touch, microSD, USB and ESP-Hosted connections; hardware-validated |
     | Guition ESP32-4848S040 | Onboard Relay 1 on GPIO 40 for relay-equipped variants | Supported; relay-equipped variants only |
     | Waveshare 7B / 7B-C | None | No configurable GPIOs in these profiles |
     | Waveshare S3 LCD-4 Rev 4.0 / S3 LCD-4B | None | No configurable GPIOs in these profiles |

@@ -330,6 +330,53 @@ Arduino IDE:
 - Upload Speed: `921600`
 - USB Mode: `USB-OTG (TinyUSB)`
 
+## Guition JC4880P443
+
+Used for:
+- `src/devices/guition_jc4880p443_portrait`
+- build profile `guition_jc4880p443_portrait`
+
+Important:
+- This target is only for the exact `JC4880P443C_I_W` variant
+  (JC-ESP32P4-M3 module: ESP32-P4 host + ESP32-C6 Wi-Fi co-processor). It is
+  not interchangeable with the Waveshare Touch LCD 4.3 profile even though
+  both use a 480x800 ST7701 panel.
+- This profile is hardware-tested on the exact `JC4880P443C_I_W` board
+  (display, touch, rotation, camera, sleep/wake, Wi-Fi, MQTT, tiles,
+  microSD and Web OTA).
+- ESP32-P4 with `16MB` flash and `32MB` PSRAM.
+- Native `480x800` ST7701S MIPI-DSI panel (2 lanes at 500 Mbps, 34 MHz DPI
+  clock, vsync timing 2/8/166), rendered as a `480x800` portrait dashboard
+  (`4x6` grid).
+- LCD reset is GPIO 5 (active-low); backlight is active-high on GPIO 23
+  using LEDC PWM. MIPI-DSI PHY power uses P4 LDO channel 3 at 2500 mV.
+- Touch is GT911 on SDA 7 / SCL 8 without interrupt or reset pins. Both
+  GT911 addresses are probed at 400 kHz first with a 100 kHz fallback.
+- SDMMC slot 0 uses GPIO39-44 with TF_VCC from on-chip LDO channel 4.
+- Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
+
+Arduino IDE:
+- Board: `ESP32P4 Dev Module`
+- USB CDC On Boot: `Enabled`
+- Chip Variant: `Before v3.00`
+- Core Debug Level: `None`
+- USB DFU On Boot: `Disabled`
+- Erase All Flash Before Sketch Upload: `Disabled`
+- Flash Frequency: `80MHz`
+- Flash Mode: `QIO`
+- Flash Size: `16MB (128Mb)`
+- JTAG Adapter: `Disabled`
+- USB Firmware MSC On Boot: `Disabled`
+- Partition Scheme: `Custom`
+- PSRAM: `Enabled`
+- Upload Mode: `UART0 / Hardware CDC`
+- Upload Speed: `921600`
+- USB Mode: `Hardware CDC and JTAG`
+
+The sketch console (`Serial`) runs on the USB-Serial/JTAG flashing port. The
+second USB-C connector does not enumerate a data device, so all diagnostics
+must be read from the flashing port.
+
 ## GUITION ESP32-4848S040
 
 Used for:

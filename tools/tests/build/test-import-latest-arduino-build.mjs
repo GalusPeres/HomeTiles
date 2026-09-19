@@ -55,6 +55,10 @@ const releaseTargets = new Map([
     key: 'guition_jc1060p470c_v2',
     siliconVariant: 'pre_v3',
   }],
+  ['DEVICE_GUITION_JC4880P443_PORTRAIT', {
+    key: 'guition_jc4880p443_portrait',
+    siliconVariant: 'pre_v3',
+  }],
   ['DEVICE_GUITION_ESP32_4848S040', {
     key: 'guition_esp32_4848s040',
     siliconVariant: 'default',

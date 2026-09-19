@@ -166,6 +166,15 @@ const profiles = [
     panel: [1024, 600],
     logical: [1024, 600],
   },
+  {
+    file: 'src/devices/guition_jc4880p443_portrait/device_guition_jc4880p443_portrait.cpp',
+    header: 'src/devices/guition_jc4880p443_portrait/device_guition_jc4880p443_portrait.h',
+    qualified: 'DeviceGuitionJC4880P443Portrait::displayTryFullFramePreview',
+    transform: 'Transform::Native0Or180',
+    panel: [480, 800],
+    logical: [480, 800],
+    genericPpa: false,
+  },
 ];
 
 for (const profile of profiles) {

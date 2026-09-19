@@ -134,6 +134,21 @@ profiles:
       - OneWire (2.3.8)
       - PubSubClient (2.8)
 
+  guition_jc4880p443_portrait:
+    fqbn: esp32:esp32:esp32p4:UploadSpeed=921600,USBMode=hwcdc,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=default,FlashFreq=80,FlashMode=qio,FlashSize=16M,PartitionScheme=custom,DebugLevel=none,PSRAM=enabled,EraseFlash=none,JTAGAdapter=default,ChipVariant=prev3
+    platforms:
+      - platform: esp32:esp32 (3.3.7)
+        platform_index_url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+    libraries:
+      - ArduinoJson (7.4.3)
+      - DallasTemperature (4.0.6)
+      - GFX Library for Arduino (1.6.5)
+      - lvgl (9.5.0)
+      - M5GFX (0.2.25)
+      - M5Unified (0.2.14)
+      - OneWire (2.3.8)
+      - PubSubClient (2.8)
+
   waveshare_7b:
     fqbn: esp32:esp32:esp32p4:UploadSpeed=921600,USBMode=default,CDCOnBoot=default,MSCOnBoot=default,DFUOnBoot=default,UploadMode=default,FlashFreq=80,FlashMode=qio,FlashSize=32M,PartitionScheme=app13M_data7M_32MB,DebugLevel=none,PSRAM=enabled,EraseFlash=none,JTAGAdapter=default,ChipVariant=prev3
     platforms:

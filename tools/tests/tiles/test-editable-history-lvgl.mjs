@@ -247,7 +247,7 @@ int main(int argc,char**argv){
 }
 `;
 const source = path.join(out,'test.cpp');fs.writeFileSync(source,cpp);
-const layouts=[['square',480,480,'DEVICE_LAYOUT_480X480'],['wide',1024,600,'DEVICE_LAYOUT_1024X600'],['ws8',1280,800,''],['portrait',720,1280,''],['base',720,720,''],['landscape',1280,720,''],['compact-wide',800,480,'DEVICE_LAYOUT_480X480']];
+const layouts=[['square',480,480,'DEVICE_LAYOUT_480X480'],['wide',1024,600,'DEVICE_LAYOUT_1024X600'],['ws8',1280,800,''],['portrait',720,1280,''],['base',720,720,''],['landscape',1280,720,''],['compact-wide',800,480,'DEVICE_LAYOUT_480X480'],['tall',480,800,'DEVICE_LAYOUT_480X480']];
 const selection=read('src/devices/device_select.h');
 for(const device of deviceCatalog.profiles){
  const dir=`src/devices/${device.metadataDeviceKey}`;

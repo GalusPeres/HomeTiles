@@ -302,6 +302,29 @@
       }
     },
     {
+      "buildProfile": "guition_jc4880p443_portrait",
+      "key": "guition_jc4880p443_portrait",
+      "metadataDeviceKey": "guition_jc4880p443_portrait",
+      "define": "DEVICE_GUITION_JC4880P443_PORTRAIT",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "rxVariant": "repo-a8204",
+      "elfFlags": "",
+      "publish": true,
+      "ciOrder": 15,
+      "ciLabel": "Guition JC4880P443",
+      "legacySlug": "guition-jc4880p443-portrait",
+      "installer": {
+        "label": "Guition JC4880P443C_I_W",
+        "status": "supported",
+        "hardwareCheck": "The board is the 4.3-inch Guition JC4880P443 (JC-ESP32P4-M3 module) with a 480x800 ST7701S panel.",
+        "acceptsLegacyDescriptor": true
+      }
+    },
+    {
       "buildProfile": "waveshare_s3_touch_lcd_4",
       "key": "waveshare_s3_touch_lcd_4",
       "metadataDeviceKey": "waveshare_s3_touch_lcd_4",

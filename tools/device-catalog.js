@@ -30,9 +30,9 @@ function validateCatalog(catalog) {
     assert(typeof profile.publish === 'boolean', `publish must be explicit for ${profile.key}`);
     const s3 = profile.chipFamily === 'ESP32-S3';
     const revision = profile.siliconVariant;
-    assert(s3 ? revision === 'default' : ['pre_v3', 'rev3_1'].includes(revision),
+    assert(s3 ? revision === 'default' : ['pre_v3', 'rev3_1', 'post_v3'].includes(revision),
       `invalid silicon variant for ${profile.key}`);
-    const [minimum, maximum] = s3 ? [0, 65535] : revision === 'pre_v3' ? [1, 199] : [301, 301];
+    const [minimum, maximum] = s3 ? [0, 65535] : revision === 'pre_v3' ? [1, 199] : revision === 'rev3_1' ? [301, 301] : [301, 399];
     assert(profile.minimumRevision === minimum && profile.maximumRevision === maximum,
       `unsafe revision range for ${profile.key}`);
     assert(revision !== 'rev3_1' || (profile.key === 'waveshare_touch_lcd_7b_rev3_1' &&

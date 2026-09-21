@@ -165,7 +165,7 @@ jobs:
             profile: waveshare_10_1
             key: waveshare_touch_lcd_10_1
             define: DEVICE_WAVESHARE_TOUCH_LCD_10_1
-            silicon_variant: pre_v3
+            silicon_variant: post_v3
             rx_variant: repo-a8204
             publish: true
           - label: Guition JC8012P4A1

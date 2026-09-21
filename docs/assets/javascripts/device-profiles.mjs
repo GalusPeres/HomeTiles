@@ -95,10 +95,10 @@ export const DEVICE_PROFILES = Object.freeze([
     "flashSize": 33554432,
     "status": "validation-pending",
     "hardwareCheck": "The device is the 10.1-inch ESP32-P4-WIFI6-Touch-LCD model.",
-    "siliconVariant": "pre_v3",
-    "minimumRevision": 1,
-    "maximumRevision": 199,
-    "acceptsLegacyDescriptor": true
+    "siliconVariant": "post_v3",
+    "minimumRevision": 301,
+    "maximumRevision": 399,
+    "acceptsLegacyDescriptor": false
   }),
   Object.freeze({
     "key": "guition_jc8012p4a1_v2",

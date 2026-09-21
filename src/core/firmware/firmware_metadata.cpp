@@ -83,7 +83,9 @@
 #define FW_META_SILICON_MIN_REV 301
 #define FW_META_SILICON_MAX_REV 301
 #else
-#error "Every ESP32-P4 build must target one unambiguous silicon generation"
+#define FW_META_SILICON_VARIANT "post_v3"
+#define FW_META_SILICON_MIN_REV CONFIG_ESP_REV_MIN_FULL
+#define FW_META_SILICON_MAX_REV CONFIG_ESP_REV_MAX_FULL
 #endif
 #else
 #define FW_META_SILICON_VARIANT "default"

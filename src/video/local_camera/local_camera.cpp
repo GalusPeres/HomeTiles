@@ -70,6 +70,7 @@ constexpr char kPrefsContrastKey[] = "lcam_contrast";
 constexpr char kPrefsSaturationKey[] = "lcam_sat";
 constexpr char kPrefsRedKey[] = "lcam_red";
 constexpr char kPrefsBlueKey[] = "lcam_blue";
+constexpr char kPrefsGainKey[] = "lcam_gain";
 
 // Web Admin status values. MQTT uses the reduced ready/disabled/error set.
 enum class ServiceState : uint8_t { Disabled, Probing, Ready, NotFound, Error };
@@ -509,6 +510,8 @@ float g_gamma_curve_gain = 1.0f;
 // Digital gain step kept across pipelines, so the next stream or snapshot
 // starts where the last one ended. Worker task only.
 uint8_t g_digital_step = 0;
+// Highest digital gain step the Max. gain setting allows (applyGainLimit()).
+uint8_t g_max_digital_step = kMaxDigitalGainStep;
 uint32_t g_digital_log_ms = 0;
 constexpr uint32_t kDigitalGainLogIntervalMs = 10000;
 // Last exposure for /api/local-camera, written by the worker.
@@ -715,6 +718,27 @@ bool setExposureIfChanged(const ExposureSetting& next) {
   return true;
 }
 
+// Max. gain setting (Web Admin) on top of the board's gain range.
+GainLimits currentGainLimits() {
+  return gainLimitsFor(currentImageSettings().gain, kMode.min_gain_x16, kMode.max_gain_x16,
+                       kMode.max_total_gain_x16);
+}
+
+// Applies the Max. gain setting to the AE stages. Runs before every AE step,
+// so a change takes effect within a running stream; a sensor gain above the
+// new limit drops at once, the digital gain with the next digital step.
+// Worker task only.
+void applyGainLimit(ExposureStages& stages) {
+  const GainLimits limits = currentGainLimits();
+  stages.normal.max_gain_x16 = limits.sensor_gain_x16;
+  stages.max_total_gain_x16 = limits.sensor_total_gain_x16;
+  g_max_digital_step = limits.max_digital_step;
+  if (g_exposure.gain_x16 > limits.sensor_total_gain_x16) {
+    g_exposure.gain_x16 = limits.sensor_total_gain_x16;
+    if (g_sensor_ready) g_sensor.setExposure(g_exposure.lines, g_exposure.gain_x16);
+  }
+}
+
 void publishExposure(uint32_t mean_luma) {
   g_report_lines.store(g_exposure.lines);
   g_report_gain_x16.store(g_exposure.gain_x16);
@@ -731,7 +755,7 @@ bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit) {
   const uint8_t current = g_pipe.gamma_digital_step;
   const uint32_t target = aeTarget();
   const uint8_t next = nextDigitalGainStep(current, mean_luma, target, 12, kGammaExponent,
-                                           sensor_at_brighter_limit);
+                                           sensor_at_brighter_limit, g_max_digital_step);
   if (next == current) return false;
   const esp_err_t err = loadGammaCurve(g_pipe.gamma_contrast, next);
   if (err != ESP_OK) {
@@ -1126,6 +1150,9 @@ bool ensurePipeline() {
     if (err != ESP_OK) break;
 
     step = "gamma";
+    if (g_digital_step > currentGainLimits().max_digital_step) {
+      g_digital_step = currentGainLimits().max_digital_step;
+    }
     err = loadGammaCurve(image.contrast, g_digital_step);
     if (err == ESP_OK) err = esp_isp_gamma_enable(g_pipe.isp);
     if (err != ESP_OK) break;
@@ -1312,6 +1339,7 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
                                  kMode.min_gain_x16, kMode.max_gain_x16};
   stages.night_max_lines = kMode.max_exposure_lines;
   stages.max_total_gain_x16 = kMode.max_total_gain_x16;
+  applyGainLimit(stages);
   bool exposure_done = false;
   bool balance_done = false;
   AutoTuneReport report{};
@@ -1634,6 +1662,7 @@ bool applyStreamSettings(StreamRun& run) {
                                    ? kMode.max_exposure_lines
                                    : run.stages.normal.max_lines;
   run.stages.max_total_gain_x16 = kMode.max_total_gain_x16;
+  applyGainLimit(run.stages);
   const uint16_t longest = run.stages.night_max_lines > run.stages.normal.max_lines
                                ? run.stages.night_max_lines
                                : run.stages.normal.max_lines;
@@ -1737,6 +1766,8 @@ void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
     timeout_ms = kStreamStatisticsTimeoutMs;
   }
   run.last_tune_ms = now_ms;
+  // A Max. gain change applies within the running stream.
+  applyGainLimit(run.stages);
   const bool awb = run.awb_next &&
                    static_cast<uint32_t>(now_ms - run.last_awb_ms) >= kStreamAwbIntervalMs;
   run.awb_next = !run.awb_next;
@@ -2377,7 +2408,8 @@ void begin() {
     const ImageSettings image = makeImageSettings(
         prefs.getChar(kPrefsBrightnessKey, 0), prefs.getChar(kPrefsContrastKey, 0),
         prefs.getUChar(kPrefsSaturationKey, kSaturationDefault),
-        prefs.getChar(kPrefsRedKey, 0), prefs.getChar(kPrefsBlueKey, 0));
+        prefs.getChar(kPrefsRedKey, 0), prefs.getChar(kPrefsBlueKey, 0),
+        prefs.getUChar(kPrefsGainKey, kGainLimitDefault));
     portENTER_CRITICAL(&g_image_mux);
     g_image = image;
     portEXIT_CRITICAL(&g_image_mux);
@@ -2670,13 +2702,13 @@ void appendStatusJson(String& json) {
   json += String(static_cast<unsigned>(g_indicator_style.load()));
   {
     const ImageSettings image = currentImageSettings();
-    char image_json[112];
+    char image_json[128];
     snprintf(image_json, sizeof(image_json),
              ",\"image\":{\"brightness\":%d,\"contrast\":%d,\"saturation\":%u,"
-             "\"red\":%d,\"blue\":%d}",
+             "\"red\":%d,\"blue\":%d,\"gain\":%u}",
              static_cast<int>(image.brightness), static_cast<int>(image.contrast),
              static_cast<unsigned>(image.saturation), static_cast<int>(image.red),
-             static_cast<int>(image.blue));
+             static_cast<int>(image.blue), static_cast<unsigned>(image.gain));
     json += image_json;
   }
   portENTER_CRITICAL(&g_stream_mux);
@@ -2888,7 +2920,7 @@ bool setImageSettings(const ImageSettings& requested) {
   // Clamp again: the handler validates, but NVS must never hold other values.
   const ImageSettings wanted = makeImageSettings(
       requested.brightness, requested.contrast, requested.saturation,
-      requested.red, requested.blue);
+      requested.red, requested.blue, requested.gain);
   const ImageSettings current = currentImageSettings();
   if (sameImageSettings(wanted, current)) return true;
   {
@@ -2915,6 +2947,9 @@ bool setImageSettings(const ImageSettings& requested) {
     if (wanted.blue != current.blue) {
       written = prefs.putChar(kPrefsBlueKey, wanted.blue) > 0 && written;
     }
+    if (wanted.gain != current.gain) {
+      written = prefs.putUChar(kPrefsGainKey, wanted.gain) > 0 && written;
+    }
     if (!BatchedNvsWrite::finish(prefs) || !written) {
       Serial.println("[LocalCam] Could not save the image settings");
       return false;
@@ -2925,10 +2960,11 @@ bool setImageSettings(const ImageSettings& requested) {
   portEXIT_CRITICAL(&g_image_mux);
   // The worker applies it before the next snapshot or stream frame.
   g_image_generation.fetch_add(1);
-  Serial.printf("[LocalCam] Image brightness=%d contrast=%d saturation=%u red=%d blue=%d\n",
+  Serial.printf("[LocalCam] Image brightness=%d contrast=%d saturation=%u red=%d blue=%d "
+                "gain=%u%%\n",
                 static_cast<int>(wanted.brightness), static_cast<int>(wanted.contrast),
                 static_cast<unsigned>(wanted.saturation), static_cast<int>(wanted.red),
-                static_cast<int>(wanted.blue));
+                static_cast<int>(wanted.blue), static_cast<unsigned>(wanted.gain));
   return true;
 #else
   (void)requested;

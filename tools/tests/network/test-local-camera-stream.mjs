@@ -397,9 +397,11 @@ int main() {
       assert(resolveSettings(kModeCustom, StreamHints{}, 1280, 720, &s, custom));
       assert(s.mode_id == kModeCustom && s.width == 1280 && s.height == 720 && !s.half &&
              s.fps == 1 && s.quality == 80);
-      custom.fps = 60; custom.quality = 10;
+      custom.fps = 60; custom.quality = 5;
       assert(resolveSettings(kModeCustom, StreamHints{}, 1280, 720, &s, custom));
-      assert(s.fps == 25 && s.quality == kMinQuality);
+      assert(s.fps == 25 && s.quality == kCustomMinQuality && kCustomMinQuality == 10);
+      custom.quality = 10;
+      assert(resolveSettings(kModeCustom, StreamHints{}, 1280, 720, &s, custom) && s.quality == 10);
       custom.fps = 0; custom.quality = 200;
       assert(resolveSettings(kModeCustom, StreamHints{}, 1280, 720, &s, custom));
       assert(s.fps == 1 && s.quality == kMaxQuality);

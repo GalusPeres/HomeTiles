@@ -239,12 +239,12 @@
     }
   }
 
-  // Image controls (brightness, contrast, saturation, red, blue). Sliders save
+  // Image controls (brightness, contrast, saturation, red, blue, Max. gain). Sliders save
   // while dragging (debounced) and immediately on release. One POST is in
   // flight at a time so the device applies values in order; a value that is
   // still pending is never overwritten by a status update, and a failed save
   // restores the last saved value. Numbers are untranslated.
-  const LOCAL_CAMERA_IMAGE_KEYS = ['brightness', 'contrast', 'saturation', 'red', 'blue'];
+  const LOCAL_CAMERA_IMAGE_KEYS = ['brightness', 'contrast', 'saturation', 'red', 'blue', 'gain'];
   const LOCAL_CAMERA_IMAGE_DEBOUNCE_MS = 300;
   let localCameraImagePending = {};
   let localCameraImageTimer = null;

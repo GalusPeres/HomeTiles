@@ -470,7 +470,8 @@ static const Strings kStringsDe = {
     "Bilder pro Sekunde",
     "JPEG-Qualität",
     "Aufnahme-Anzeige (experimentell)",
-    "Live-Stream"};
+    "Live-Stream",
+    "Max. Verstärkung"};
 
 static const Strings kStringsEn = {
     "en",
@@ -935,7 +936,8 @@ static const Strings kStringsEn = {
     "Frames per second",
     "JPEG quality",
     "Recording indicator (experimental)",
-    "Live stream"};
+    "Live stream",
+    "Max. gain"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1400,7 +1402,8 @@ static const Strings kStringsFr = {
     "Images par seconde",
     "Qualité JPEG",
     "Indicateur d'enregistrement (expérimental)",
-    "Flux en direct"};
+    "Flux en direct",
+    "Gain max."};
 
 static const LocaleProfile kLocaleDe = {
     "de",

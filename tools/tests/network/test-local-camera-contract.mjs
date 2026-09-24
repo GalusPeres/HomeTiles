@@ -603,7 +603,7 @@ int main() {
     WhiteBalanceGains strongest;
     strongest.red = 3.0f;
     strongest.blue = 3.0f;
-    ImageSettings extreme = makeImageSettings(50, 50, 200, 50, 50);
+    ImageSettings extreme = makeImageSettings(50, 50, 200, 50, 50, 100);
     buildImageCcm(kBaseCcm, strongest, extreme, m);
     for (auto& row : m) for (float value : row) assert(value <= 3.99f && value >= -3.99f);
   }
@@ -613,11 +613,53 @@ int main() {
   assert(!isValidImageAdjust(-51) && !isValidImageAdjust(51));
   assert(isValidSaturation(0) && isValidSaturation(200) && !isValidSaturation(201) && !isValidSaturation(-1));
   {
-    const ImageSettings clamped = makeImageSettings(-120, 99, 250, -51, 127);
+    const ImageSettings clamped = makeImageSettings(-120, 99, 250, -51, 127, 180);
     assert(clamped.brightness == -50 && clamped.contrast == 50 && clamped.saturation == 200 &&
-           clamped.red == -50 && clamped.blue == 50);
-    assert(sameImageSettings(makeImageSettings(0, 0, 100, 0, 0), defaults));
-    assert(!sameImageSettings(makeImageSettings(0, 0, 100, 0, 1), defaults));
+           clamped.red == -50 && clamped.blue == 50 && clamped.gain == 100);
+    assert(makeImageSettings(0, 0, 100, 0, 0, -5).gain == 0);
+    assert(sameImageSettings(makeImageSettings(0, 0, 100, 0, 0, 100), defaults));
+    assert(!sameImageSettings(makeImageSettings(0, 0, 100, 0, 1, 100), defaults));
+    // Max. gain: the default is the full range; a change is a change.
+    assert(defaults.gain == kGainLimitDefault && kGainLimitDefault == 100);
+    assert(!sameImageSettings(makeImageSettings(0, 0, 100, 0, 0, 60), defaults));
+  }
+  {
+    // Max. gain limits (Tab5 SC202CS: 16x analog, 31.5x with sensor digital
+    // gain; hardware 2026-09-25 ran at 31.5x plus 3.4x digital at night).
+    const GainLimits full = gainLimitsFor(100, 16, 256, 504);
+    assert(full.sensor_gain_x16 == 256 && full.sensor_total_gain_x16 == 504 &&
+           full.max_digital_step == kMaxDigitalGainStep);
+    const GainLimits none = gainLimitsFor(0, 16, 256, 504);
+    assert(none.sensor_gain_x16 == 16 && none.sensor_total_gain_x16 == 16 && none.max_digital_step == 0);
+    // Log scale: 50 % is the square root of the full 252x, about 15.9x,
+    // all on the sensor (analog first), no digital gain.
+    const GainLimits half = gainLimitsFor(50, 16, 256, 504);
+    assert(half.sensor_total_gain_x16 >= 250 && half.sensor_total_gain_x16 <= 256);
+    assert(half.sensor_gain_x16 == half.sensor_total_gain_x16 && half.max_digital_step == 0);
+    // Above the sensor range the rest becomes digital steps.
+    const GainLimits high = gainLimitsFor(80, 16, 256, 504);
+    assert(high.sensor_total_gain_x16 == 504 && high.sensor_gain_x16 == 256);
+    assert(high.max_digital_step > 0 && high.max_digital_step < kMaxDigitalGainStep);
+    // Monotonic: more percent never allows less gain.
+    uint16_t previous_total = 0;
+    uint8_t previous_step = 0;
+    for (int percent = 0; percent <= 100; ++percent) {
+      const GainLimits limits = gainLimitsFor(percent, 16, 256, 504);
+      assert(limits.sensor_total_gain_x16 >= previous_total);
+      assert(limits.sensor_total_gain_x16 > previous_total || limits.max_digital_step >= previous_step);
+      assert(limits.sensor_gain_x16 <= 256 && limits.sensor_gain_x16 <= limits.sensor_total_gain_x16);
+      previous_total = limits.sensor_total_gain_x16;
+      previous_step = limits.max_digital_step;
+    }
+    // Out-of-range percent is clamped; a sensor without a digital stage.
+    assert(gainLimitsFor(250, 16, 256, 504).max_digital_step == kMaxDigitalGainStep);
+    const GainLimits analog_only = gainLimitsFor(60, 16, 248, 248);
+    assert(analog_only.sensor_total_gain_x16 == analog_only.sensor_gain_x16);
+    // The digital step obeys the limit: never above it, dropped to it at once.
+    assert(nextDigitalGainStep(0, 20, 115, 12, kGammaExponent, true, 2) == 2);
+    assert(nextDigitalGainStep(2, 20, 115, 12, kGammaExponent, true, 2) == 2);
+    assert(nextDigitalGainStep(9, 115, 115, 12, kGammaExponent, true, 3) == 3);
+    assert(nextDigitalGainStep(5, 20, 115, 12, kGammaExponent, true, 0) == 0);
   }
   long parsed = 0;
   assert(parseImageInteger("0", &parsed) && parsed == 0);

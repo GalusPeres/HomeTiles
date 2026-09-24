@@ -280,7 +280,7 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
                                 local_camera_stream::kCustomMinFps,
                                 local_camera_stream::kCustomMaxFps, custom.fps);
   appendLocalCameraCustomSlider(html, "quality", tr.local_camera_custom_quality,
-                                local_camera_stream::kMinQuality,
+                                local_camera_stream::kCustomMinQuality,
                                 local_camera_stream::kMaxQuality, custom.quality);
   html += R"html(
                 </div>
@@ -341,6 +341,9 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
                                kImageAdjustMin, kImageAdjustMax, image.red, "%");
   appendLocalCameraImageSlider(html, "blue", tr.local_camera_blue,
                                kImageAdjustMin, kImageAdjustMax, image.blue, "%");
+  appendLocalCameraImageSlider(html, "gain", tr.local_camera_gain,
+                               local_camera_contract::kGainLimitMin,
+                               local_camera_contract::kGainLimitMax, image.gain, "%");
   html += R"html(
                 <div class="settings-actions local-camera-image-actions">
                   <button type="button" class="btn btn-secondary" id="local_camera_image_reset" onclick="resetLocalCameraImage()">)html";

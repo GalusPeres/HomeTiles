@@ -43,9 +43,9 @@ bool readSwitchArg(WebServer& server, const char* name, bool* value) {
   return false;
 }
 
-// reset=1 starts from the defaults; brightness, contrast, saturation, red and
-// blue then override single values. Every argument is validated before
-// anything is applied.
+// reset=1 starts from the defaults; brightness, contrast, saturation, red,
+// blue and gain (Max. gain) then override single values. Every argument is
+// validated before anything is applied.
 ImageArgs readImageSettings(WebServer& server, ImageSettings* out) {
   using namespace local_camera_contract;
   bool any = false;
@@ -63,19 +63,21 @@ ImageArgs readImageSettings(WebServer& server, ImageSettings* out) {
   long saturation = base.saturation;
   long red = base.red;
   long blue = base.blue;
+  long gain = base.gain;
   const ImageArgs results[] = {
       readImageArg(server, "brightness", kImageAdjustMin, kImageAdjustMax, &brightness),
       readImageArg(server, "contrast", kImageAdjustMin, kImageAdjustMax, &contrast),
       readImageArg(server, "saturation", kSaturationMin, kSaturationMax, &saturation),
       readImageArg(server, "red", kImageAdjustMin, kImageAdjustMax, &red),
       readImageArg(server, "blue", kImageAdjustMin, kImageAdjustMax, &blue),
+      readImageArg(server, "gain", kGainLimitMin, kGainLimitMax, &gain),
   };
   for (const ImageArgs result : results) {
     if (result == ImageArgs::Invalid) return ImageArgs::Invalid;
     if (result == ImageArgs::Valid) any = true;
   }
   if (!any) return ImageArgs::None;
-  *out = makeImageSettings(brightness, contrast, saturation, red, blue);
+  *out = makeImageSettings(brightness, contrast, saturation, red, blue, gain);
   return ImageArgs::Valid;
 }
 
@@ -83,9 +85,9 @@ ImageArgs readImageSettings(WebServer& server, ImageSettings* out) {
 
 // GET returns the built-in camera status; POST enabled=0|1 saves the opt-in,
 // POST mode=<id> the live-stream mode, POST custom_fps=<1-25> and
-// custom_quality=<30-90> the Custom mode values, POST mirror=0|1 the mirror,
+// custom_quality=<10-90> the Custom mode values, POST mirror=0|1 the mirror,
 // POST indicator=0|1|2 the on-display indicator style and the image controls
-// (reset, brightness, contrast, saturation, red, blue) their values, each
+// (reset, brightness, contrast, saturation, red, blue, gain) their values, each
 // immediately. The status JSON is diagnostic data only; every
 // user-visible text is rendered from the central translations.
 void WebAdminServer::handleLocalCamera() {
@@ -114,7 +116,7 @@ void WebAdminServer::handleLocalCamera() {
     const ImageArgs custom_results[] = {
         readImageArg(server, "custom_fps", local_camera_stream::kCustomMinFps,
                      local_camera_stream::kCustomMaxFps, &custom_fps),
-        readImageArg(server, "custom_quality", local_camera_stream::kMinQuality,
+        readImageArg(server, "custom_quality", local_camera_stream::kCustomMinQuality,
                      local_camera_stream::kMaxQuality, &custom_quality),
     };
     bool has_custom = false;

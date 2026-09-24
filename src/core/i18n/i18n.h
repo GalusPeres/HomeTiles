@@ -503,6 +503,8 @@ struct Strings {
   const char* local_camera_indicator_section;
   // Heading of the live stream sub-block (mode, Custom values, mirror).
   const char* local_camera_stream_section;
+  // Image control: upper limit of the sensor plus digital gain (percent).
+  const char* local_camera_gain;
 
 };
 

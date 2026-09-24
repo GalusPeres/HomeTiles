@@ -59,6 +59,9 @@ constexpr ModeEntry kModes[] = {
 constexpr size_t kModeCount = sizeof(kModes) / sizeof(kModes[0]);
 
 constexpr uint8_t kMinQuality = 30;
+// The Custom mode slider reaches the floor of oversized frames, so a noisy
+// night image can be kept small on purpose.
+constexpr uint8_t kCustomMinQuality = 10;
 constexpr uint8_t kMaxQuality = 90;
 constexpr uint8_t kQualityStep = 5;
 constexpr uint8_t kMaxFps = 30;
@@ -86,9 +89,9 @@ inline CustomMode makeCustomMode(long fps, long quality) {
   mode.fps = static_cast<uint8_t>(fps < kCustomMinFps   ? kCustomMinFps
                                   : fps > kCustomMaxFps ? kCustomMaxFps
                                                         : fps);
-  mode.quality = static_cast<uint8_t>(quality < kMinQuality   ? kMinQuality
-                                      : quality > kMaxQuality ? kMaxQuality
-                                                              : quality);
+  mode.quality = static_cast<uint8_t>(quality < kCustomMinQuality ? kCustomMinQuality
+                                      : quality > kMaxQuality     ? kMaxQuality
+                                                                  : quality);
   return mode;
 }
 
@@ -234,6 +237,7 @@ inline uint8_t reducedQuality(uint8_t quality) {
 // Floor for frames over kMaxFrameBytes. Noisy low-light frames can exceed the
 // limit even at kMinQuality; a coarse frame beats sending none at all.
 constexpr uint8_t kMinOversizeQuality = 10;
+static_assert(kCustomMinQuality >= kMinOversizeQuality, "Custom quality below the floor");
 
 // Lower quality after an oversized frame, never below kMinOversizeQuality.
 inline uint8_t reducedQualityForSize(uint8_t quality) {

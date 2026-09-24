@@ -26,7 +26,7 @@ const keys = ['local_camera_section', 'local_camera_enable', 'local_camera_note'
   'local_camera_image_reset', 'local_camera_indicator_active', 'local_camera_indicator_end',
   'local_camera_indicator_line', 'local_camera_indicator_pill', 'local_camera_indicator_note',
   'local_camera_stream_mode_custom', 'local_camera_custom_fps', 'local_camera_custom_quality',
-  'local_camera_indicator_section', 'local_camera_stream_section'];
+  'local_camera_indicator_section', 'local_camera_stream_section', 'local_camera_gain'];
 const members = [...header.matchAll(/^\s*const char\* (\w+);/gm)].map(match => match[1]);
 const stringsMembers = members.slice(0, members.indexOf('settings_tile_parking') + keys.length + 1);
 for (const key of keys) {
@@ -129,7 +129,9 @@ assert.match(helper, /html \+= String\(static_cast<unsigned>\(local_camera_strea
 assert.match(helper, /id="local_camera_custom" data-mode="\)html";/);
 assert.match(helper, /if \(selected_mode != local_camera_stream::kModeCustom\) html \+= " hidden";/);
 assert.match(helper, /appendLocalCameraCustomSlider\(html, "fps", tr\.local_camera_custom_fps,\s*local_camera_stream::kCustomMinFps,\s*local_camera_stream::kCustomMaxFps, custom\.fps\);/);
-assert.match(helper, /appendLocalCameraCustomSlider\(html, "quality", tr\.local_camera_custom_quality,\s*local_camera_stream::kMinQuality,\s*local_camera_stream::kMaxQuality, custom\.quality\);/);
+// The Custom quality reaches the oversize floor (10), so a noisy night
+// stream can be kept small on purpose.
+assert.match(helper, /appendLocalCameraCustomSlider\(html, "quality", tr\.local_camera_custom_quality,\s*local_camera_stream::kCustomMinQuality,\s*local_camera_stream::kMaxQuality, custom\.quality\);/);
 assert.match(html, /oninput="localCameraCustomInput\(this\)" onchange="localCameraCustomChange\(this\)"/);
 assert.match(handler, /"Invalid custom stream value"/);
 assert.ok(handler.indexOf('"Invalid custom stream value"') < handler.indexOf('local_camera::setImageSettings(image)'),

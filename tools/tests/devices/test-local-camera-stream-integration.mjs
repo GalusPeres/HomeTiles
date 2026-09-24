@@ -177,6 +177,18 @@ assert.match(run, /releaseUsedPipeline\(\);\s*if \(!ensurePipeline\(\) \|\| !app
 for (const body of [svc('captureJpeg'), run]) {
   assert.match(body, /g_pipe\.csi_running = true;\s*g_pipe\.started = true;/, 'A started receiver marks the pipeline used');
 }
+
+// Max. gain (Web Admin) caps the sensor and the digital gain for stills, at the
+// stream start and before every stream AE step (a change applies while live).
+assert.match(svc('applyGainLimit'), /stages\.normal\.max_gain_x16 = limits\.sensor_gain_x16;\s*stages\.max_total_gain_x16 = limits\.sensor_total_gain_x16;\s*g_max_digital_step = limits\.max_digital_step;/);
+assert.match(svc('applyGainLimit'), /if \(g_exposure\.gain_x16 > limits\.sensor_total_gain_x16\) \{\s*g_exposure\.gain_x16 = limits\.sensor_total_gain_x16;/,
+  'A gain above a lowered limit drops at once');
+assert.match(svc('captureJpeg'), /stages\.max_total_gain_x16 = kMode\.max_total_gain_x16;\s*applyGainLimit\(stages\);/);
+assert.match(svc('applyStreamSettings'), /run\.stages\.max_total_gain_x16 = kMode\.max_total_gain_x16;\s*applyGainLimit\(run\.stages\);/);
+assert.match(svc('streamAutoTune'), /run\.last_tune_ms = now_ms;\s*\/\/[^\n]*\n\s*applyGainLimit\(run\.stages\);/);
+assert.match(svc('stepDigitalGain'), /sensor_at_brighter_limit, g_max_digital_step\);/);
+assert.match(service, /if \(g_digital_step > currentGainLimits\(\)\.max_digital_step\) \{\s*g_digital_step = currentGainLimits\(\)\.max_digital_step;\s*\}\s*err = loadGammaCurve\(image\.contrast, g_digital_step\);/,
+  'A new pipeline starts inside the limit');
 assert.match(run, /if \(run\.pacer\.consume\(now_us\)\) \+\+run\.window\.late;/);
 assert.match(svc('streamAutoTune'), /since_ms < kStreamTuneIntervalMs\) return;/);
 assert.match(service, /constexpr uint32_t kStreamTuneIntervalMs = 250;/);

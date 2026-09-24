@@ -14,7 +14,7 @@ const service = readRepoFile('src/video/local_camera/local_camera.cpp').replaceA
 const publicHeader = readRepoFile('src/video/local_camera/local_camera.h');
 const css = readRepoFile('src/web/assets/admin.css');
 
-const IMAGE_KEYS = ['brightness', 'contrast', 'saturation', 'red', 'blue'];
+const IMAGE_KEYS = ['brightness', 'contrast', 'saturation', 'red', 'blue', 'gain'];
 
 // --- Server-rendered sliders ---------------------------------------------------
 const sliderStart = html.indexOf('static void appendLocalCameraImageSlider(');
@@ -38,7 +38,7 @@ assert.match(section, /const local_camera_contract::ImageSettings image = local_
 const sliders = [...section.matchAll(
   /appendLocalCameraImageSlider\(html, "(\w+)", tr\.(\w+),\s*([\w:]+),\s*([\w:]+),\s*image\.(\w+),\s*"(%?)"\);/g)]
   .map(m => ({key: m[1], label: m[2], min: m[3], max: m[4], field: m[5], unit: m[6]}));
-assert.deepEqual(sliders.map(s => s.key), IMAGE_KEYS, 'Five sliders in a fixed order');
+assert.deepEqual(sliders.map(s => s.key), IMAGE_KEYS, 'Six sliders in a fixed order');
 for (const slider of sliders) {
   assert.equal(slider.field, slider.key);
   assert.equal(slider.label, `local_camera_${slider.key}`);
@@ -46,8 +46,8 @@ for (const slider of sliders) {
 assert.deepEqual(sliders.map(s => [s.min.replace(/^.*::/, ''), s.max.replace(/^.*::/, '')]), [
   ['kImageAdjustMin', 'kImageAdjustMax'], ['kImageAdjustMin', 'kImageAdjustMax'],
   ['kSaturationMin', 'kSaturationMax'], ['kImageAdjustMin', 'kImageAdjustMax'],
-  ['kImageAdjustMin', 'kImageAdjustMax']]);
-assert.deepEqual(sliders.map(s => s.unit), ['', '', '%', '%', '%']);
+  ['kImageAdjustMin', 'kImageAdjustMax'], ['kGainLimitMin', 'kGainLimitMax']]);
+assert.deepEqual(sliders.map(s => s.unit), ['', '', '%', '%', '%', '%']);
 assert.match(section, /<div class="network-settings-heading">\)html";\s*appendHtmlEscaped\(html, tr\.local_camera_image_section\);/,
   'The sub-block has a translated heading');
 assert.match(section, /<button type="button" class="btn btn-secondary" id="local_camera_image_reset" onclick="resetLocalCameraImage\(\)">\)html";\s*appendHtmlEscaped\(html, tr\.local_camera_image_reset\);/);
@@ -59,6 +59,9 @@ assert.match(handler, /readImageArg\(server, "contrast", kImageAdjustMin, kImage
 assert.match(handler, /readImageArg\(server, "saturation", kSaturationMin, kSaturationMax, &saturation\)/);
 assert.match(handler, /readImageArg\(server, "red", kImageAdjustMin, kImageAdjustMax, &red\)/);
 assert.match(handler, /readImageArg\(server, "blue", kImageAdjustMin, kImageAdjustMax, &blue\)/);
+// Max. gain (hardware 2026-09-25: night images far too noisy at full gain).
+assert.match(handler, /readImageArg\(server, "gain", kGainLimitMin, kGainLimitMax, &gain\)/);
+assert.match(handler, /makeImageSettings\(brightness, contrast, saturation, red, blue, gain\)/);
 assert.match(handler, /!local_camera_contract::parseImageInteger\(text\.c_str\(\), &parsed\) \|\|\s*parsed < min_value \|\| parsed > max_value/,
   'Non-integers and out-of-range values are invalid');
 assert.match(handler, /if \(value != "1" && value != "true" && value != "on"\) return ImageArgs::Invalid;\s*base = ImageSettings\{\};/,
@@ -95,7 +98,10 @@ const ranges = {
   saturation: [constant('kSaturationMin'), constant('kSaturationMax')],
   red: [constant('kImageAdjustMin'), constant('kImageAdjustMax')],
   blue: [constant('kImageAdjustMin'), constant('kImageAdjustMax')],
+  gain: [constant('kGainLimitMin'), constant('kGainLimitMax')],
 };
+assert.deepEqual(ranges.gain, [0, 100]);
+assert.equal(constant('kGainLimitDefault'), 100, 'The default keeps the full gain range');
 assert.deepEqual(ranges.brightness, [-50, 50]);
 assert.deepEqual(ranges.saturation, [0, 200]);
 assert.equal(constant('kSaturationDefault'), 100);
@@ -103,17 +109,19 @@ assert.equal(constant('kSaturationDefault'), 100);
 // --- Persistence and status ------------------------------------------------------
 const prefKeys = {
   kPrefsBrightnessKey: 'lcam_bright', kPrefsContrastKey: 'lcam_contrast',
-  kPrefsSaturationKey: 'lcam_sat', kPrefsRedKey: 'lcam_red', kPrefsBlueKey: 'lcam_blue'};
+  kPrefsSaturationKey: 'lcam_sat', kPrefsRedKey: 'lcam_red', kPrefsBlueKey: 'lcam_blue',
+  kPrefsGainKey: 'lcam_gain'};
 const allKeys = [...service.matchAll(/constexpr char kPrefs\w+Key\[\] = "([^"]+)";/g)].map(m => m[1]);
 for (const [name, key] of Object.entries(prefKeys)) {
   assert.ok(service.includes(`constexpr char ${name}[] = "${key}";`), `${name} must be "${key}"`);
   assert.ok(key.length <= 15, `NVS key ${key} must fit 15 characters`);
 }
 assert.equal(new Set(allKeys).size, allKeys.length, 'Camera NVS keys must be unique');
-assert.match(service, /makeImageSettings\(\s*prefs\.getChar\(kPrefsBrightnessKey, 0\), prefs\.getChar\(kPrefsContrastKey, 0\),\s*prefs\.getUChar\(kPrefsSaturationKey, kSaturationDefault\),\s*prefs\.getChar\(kPrefsRedKey, 0\), prefs\.getChar\(kPrefsBlueKey, 0\)\)/,
+assert.match(service, /makeImageSettings\(\s*prefs\.getChar\(kPrefsBrightnessKey, 0\), prefs\.getChar\(kPrefsContrastKey, 0\),\s*prefs\.getUChar\(kPrefsSaturationKey, kSaturationDefault\),\s*prefs\.getChar\(kPrefsRedKey, 0\), prefs\.getChar\(kPrefsBlueKey, 0\),\s*prefs\.getUChar\(kPrefsGainKey, kGainLimitDefault\)\)/,
   'Missing keys load the defaults; stored values are clamped');
 for (const [name, put] of [['kPrefsBrightnessKey', 'putChar'], ['kPrefsContrastKey', 'putChar'],
-  ['kPrefsSaturationKey', 'putUChar'], ['kPrefsRedKey', 'putChar'], ['kPrefsBlueKey', 'putChar']]) {
+  ['kPrefsSaturationKey', 'putUChar'], ['kPrefsRedKey', 'putChar'], ['kPrefsBlueKey', 'putChar'],
+  ['kPrefsGainKey', 'putUChar']]) {
   assert.ok(service.includes(`prefs.${put}(${name}, wanted.`), `${name} is written with ${put}`);
 }
 const setter = service.slice(service.indexOf('bool setImageSettings('));
@@ -121,7 +129,7 @@ assert.match(setter, /if \(sameImageSettings\(wanted, current\)\) return true;/,
 assert.match(setter, /BatchedNvsWrite::finish\(prefs\) \|\| !written\) \{[\s\S]*?return false;[\s\S]*?g_image = wanted;[\s\S]*?g_image_generation\.fetch_add\(1\);/,
   'Only a successful save changes the live settings');
 assert.match(publicHeader, /bool setImageSettings\(const local_camera_contract::ImageSettings& settings\);/);
-assert.match(service, /",\\"image\\":\{\\"brightness\\":%d,\\"contrast\\":%d,\\"saturation\\":%u,"\s*"\\"red\\":%d,\\"blue\\":%d\}"/,
+assert.match(service, /",\\"image\\":\{\\"brightness\\":%d,\\"contrast\\":%d,\\"saturation\\":%u,"\s*"\\"red\\":%d,\\"blue\\":%d,\\"gain\\":%u\}"/,
   'The status JSON returns every value');
 
 // --- Live application on the capture worker -----------------------------------
@@ -191,7 +199,7 @@ function createHarness(fetchImpl, initial = {}) {
 
 const statusWith = image => ({ok: true, status: 200, json: async () => ({
   supported: true, enabled: true, state: 'ready', image})});
-const defaults = {brightness: 0, contrast: 0, saturation: 100, red: 0, blue: 0};
+const defaults = {brightness: 0, contrast: 0, saturation: 100, red: 0, blue: 0, gain: 100};
 
 {
   // Dragging: the value shows at once, the save waits 300 ms and only the

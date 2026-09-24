@@ -572,6 +572,11 @@ constexpr int kImageAdjustMax = 50;
 constexpr int kSaturationMin = 0;     // Percent.
 constexpr int kSaturationMax = 200;
 constexpr int kSaturationDefault = 100;
+// Max. gain setting in percent: 100 = the full sensor plus digital gain range
+// (the default, the behaviour before the setting), 0 = no amplification.
+constexpr int kGainLimitMin = 0;
+constexpr int kGainLimitMax = 100;
+constexpr int kGainLimitDefault = 100;
 // Auto-exposure target bounds after the brightness adjustment.
 constexpr uint32_t kMinAeTarget = 40;
 constexpr uint32_t kMaxAeTarget = 220;
@@ -586,6 +591,7 @@ struct ImageSettings {
   uint8_t saturation = kSaturationDefault;  // 0..200 %, blends the CCM toward luma.
   int8_t red = 0;         // -50..50 %, on top of the automatic white balance.
   int8_t blue = 0;        // -50..50 %.
+  uint8_t gain = kGainLimitDefault;  // 0..100 %, caps sensor and digital gain.
 };
 
 inline bool isValidImageAdjust(long value) {
@@ -629,21 +635,30 @@ inline int clampSaturation(long value) {
   return static_cast<int>(value);
 }
 
+inline int clampGainLimit(long value) {
+  if (value < kGainLimitMin) return kGainLimitMin;
+  if (value > kGainLimitMax) return kGainLimitMax;
+  return static_cast<int>(value);
+}
+
 // Clamps stored or requested values into the supported ranges.
 inline ImageSettings makeImageSettings(long brightness, long contrast,
-                                       long saturation, long red, long blue) {
+                                       long saturation, long red, long blue,
+                                       long gain) {
   ImageSettings settings;
   settings.brightness = static_cast<int8_t>(clampImageAdjust(brightness));
   settings.contrast = static_cast<int8_t>(clampImageAdjust(contrast));
   settings.saturation = static_cast<uint8_t>(clampSaturation(saturation));
   settings.red = static_cast<int8_t>(clampImageAdjust(red));
   settings.blue = static_cast<int8_t>(clampImageAdjust(blue));
+  settings.gain = static_cast<uint8_t>(clampGainLimit(gain));
   return settings;
 }
 
 inline bool sameImageSettings(const ImageSettings& a, const ImageSettings& b) {
   return a.brightness == b.brightness && a.contrast == b.contrast &&
-         a.saturation == b.saturation && a.red == b.red && a.blue == b.blue;
+         a.saturation == b.saturation && a.red == b.red && a.blue == b.blue &&
+         a.gain == b.gain;
 }
 
 // Brightness applied to the image at once: the linear gain whose gamma
@@ -725,16 +740,20 @@ inline float digitalGainForStep(uint8_t step) {
 // sensor is already at its brighter limit. The jump follows the missing ratio
 // back through the gamma exponent, at least one and at most
 // kMaxDigitalGainJump steps per call.
+// max_step: the Max. gain setting (gainLimitsFor()); a step above it drops to
+// it at once.
 inline uint8_t nextDigitalGainStep(uint8_t step, uint32_t mean_luma, uint32_t target_luma,
                                    uint32_t tolerance, float exponent,
-                                   bool sensor_at_brighter_limit) {
-  if (step > kMaxDigitalGainStep) step = kMaxDigitalGainStep;
+                                   bool sensor_at_brighter_limit,
+                                   uint8_t max_step = kMaxDigitalGainStep) {
+  if (max_step > kMaxDigitalGainStep) max_step = kMaxDigitalGainStep;
+  if (step > max_step) return max_step;
   const uint32_t low = target_luma > tolerance ? target_luma - tolerance : 0;
   const uint32_t high = target_luma + tolerance;
   const bool too_bright = mean_luma > high;
   const bool too_dark = mean_luma < low && sensor_at_brighter_limit;
   if (too_bright && step == 0) return 0;
-  if (!too_bright && !(too_dark && step < kMaxDigitalGainStep)) return step;
+  if (!too_bright && !(too_dark && step < max_step)) return step;
   const float ratio = static_cast<float>(target_luma ? target_luma : 1) /
                       static_cast<float>(mean_luma ? mean_luma : 1);
   const float ev = log2f(ratio) / (exponent > 0.05f ? exponent : 1.0f);
@@ -745,8 +764,46 @@ inline uint8_t nextDigitalGainStep(uint8_t step, uint32_t mean_luma, uint32_t ta
   if (delta < -kMaxDigitalGainJump) delta = -kMaxDigitalGainJump;
   int next = static_cast<int>(step) + delta;
   if (next < 0) next = 0;
-  if (next > kMaxDigitalGainStep) next = kMaxDigitalGainStep;
+  if (next > max_step) next = max_step;
   return static_cast<uint8_t>(next);
+}
+
+// Limits of the Max. gain setting. 1x to the full amplification (sensor
+// maximum times the 8x digital gain) is mapped on a log scale, so every
+// percent changes the brightness by the same ratio. The sensor gain comes
+// first (less noise than the same digital gain), the rest is digital.
+struct GainLimits {
+  uint16_t sensor_gain_x16;        // Analog stage (ExposureLimits::max_gain_x16).
+  uint16_t sensor_total_gain_x16;  // Analog plus sensor digital gain.
+  uint8_t max_digital_step;        // Digital gain in the gamma curve.
+};
+
+inline GainLimits gainLimitsFor(long percent, uint16_t min_gain_x16, uint16_t max_gain_x16,
+                                uint16_t max_total_gain_x16) {
+  const int value = clampGainLimit(percent);
+  const uint16_t sensor_max =
+      max_total_gain_x16 > max_gain_x16 ? max_total_gain_x16 : max_gain_x16;
+  if (value >= kGainLimitMax) {
+    return GainLimits{max_gain_x16, sensor_max, kMaxDigitalGainStep};
+  }
+  const float sensor_x = static_cast<float>(sensor_max) / 16.0f;
+  const float full_x = sensor_x * digitalGainForStep(kMaxDigitalGainStep);
+  const float limit_x = powf(full_x, static_cast<float>(value) / 100.0f);
+  const float sensor_limit_x = limit_x < sensor_x ? limit_x : sensor_x;
+  long total = lroundf(sensor_limit_x * 16.0f);
+  if (total < min_gain_x16) total = min_gain_x16;
+  if (total > sensor_max) total = sensor_max;
+  const uint16_t total_x16 = static_cast<uint16_t>(total);
+  const uint16_t analog_x16 = total_x16 < max_gain_x16 ? total_x16 : max_gain_x16;
+  const float rest = limit_x / (static_cast<float>(total_x16) / 16.0f);
+  int step = 0;
+  if (rest > 1.0f) {
+    step = static_cast<int>(
+        floorf(log2f(rest) * static_cast<float>(kDigitalGainStepsPerEv) + 0.001f));
+  }
+  if (step < 0) step = 0;
+  if (step > kMaxDigitalGainStep) step = kMaxDigitalGainStep;
+  return GainLimits{analog_x16, total_x16, static_cast<uint8_t>(step)};
 }
 
 // ---------------------------------------------------------------------------

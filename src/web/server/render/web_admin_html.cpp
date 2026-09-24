@@ -244,7 +244,11 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
   html += "</option>";
   for (const local_camera_stream::ModeEntry& mode : local_camera_stream::kModes) {
     char label[48];
-    if (!local_camera_stream::formatModeLabel(label, sizeof(label), mode)) continue;
+    if (!local_camera_stream::formatModeLabel(label, sizeof(label), mode,
+                                              local_camera::imageWidth(),
+                                              local_camera::imageHeight())) {
+      continue;
+    }
     html += R"html(
                   <option value=")html";
     html += String(static_cast<unsigned>(mode.id));

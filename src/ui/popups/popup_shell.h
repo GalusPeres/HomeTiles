@@ -22,6 +22,9 @@ void show_popup_shell(lv_obj_t* owner_overlay, lv_obj_t* body,
                      void (*dismiss)() = nullptr);
 void hide_popup_shell(lv_obj_t* body);
 void sync_popup_shell();
+// True from show_popup_shell() until the popup is hidden again. Every tile
+// popup and the PIN pad open through the shell.
+bool popup_shell_active();
 
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.

@@ -42,6 +42,8 @@
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/screensaver/image_screensaver.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/ui_manager.h"
 #include "src/video/local_camera/local_camera.h"
@@ -354,32 +356,14 @@ inline void setVisible(Objects& ui, bool visible, bool with_pill) {
   }
 }
 
-inline bool isOwnPart(const Objects& ui, const lv_obj_t* obj) {
-  for (const lv_obj_t* part : {ui.pill, ui.frame_clip, ui.bar, ui.left, ui.right,
-                               ui.fillet_left, ui.fillet_right}) {
-    if (obj == part) return true;
-  }
-  return false;
-}
-
-// Popups (all built on popup_shell), the PIN pad and the screensaver overlay
-// live on the top layer and are hidden while closed.
-inline bool overlayOpen(const Objects& ui) {
-  lv_obj_t* layer = lv_layer_top();
-  const uint32_t children = lv_obj_get_child_count(layer);
-  for (uint32_t i = 0; i < children; ++i) {
-    lv_obj_t* child = lv_obj_get_child(layer, static_cast<int32_t>(i));
-    if (child && !isOwnPart(ui, child) && !lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// The pill only on a tile grid without anything open above it.
-inline bool pillAllowed(const Objects& ui) {
+// The pill only on a tile grid without a popup (tile popups and the PIN pad
+// all open through popup_shell) or the screensaver above it. Closed popups
+// stay parked, not hidden, on the top layer, so the layer's children say
+// nothing about an open popup; the shell and the screensaver do.
+inline bool pillAllowed() {
   const uint8_t tab = uiManager.activeTab();
-  return tab != UINT8_MAX && tab != kSettingsTab && !overlayOpen(ui);
+  return tab != UINT8_MAX && tab != kSettingsTab && !popup_shell_active() &&
+         !is_image_screensaver_visible();
 }
 
 // Popups and the screensaver are added to the same layer later: keep the pill
@@ -406,7 +390,7 @@ inline void refresh(Objects& ui) {
     if (!visible) return;
     create(ui);
   }
-  setVisible(ui, visible, style == local_camera::IndicatorStyle::Pill && pillAllowed(ui));
+  setVisible(ui, visible, style == local_camera::IndicatorStyle::Pill && pillAllowed());
   if (!visible) return;
   updateShape(ui);
   keepOnTop(ui);

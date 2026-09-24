@@ -291,6 +291,8 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
   invalidate_shell();
 }
 
+bool popup_shell_active() { return shell.active != nullptr; }
+
 void hide_popup_shell(lv_obj_t* body) {
   if (!shell.active || shell.active->body != body) return;
   invalidate_shell();

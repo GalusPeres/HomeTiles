@@ -2787,6 +2787,22 @@ bool stopStreamForTransportRecovery() {
 
 uint8_t streamMode() { return g_stream_mode.load(); }
 
+uint16_t imageWidth() {
+#if defined(HOMETILES_LOCAL_CAMERA)
+  return static_cast<uint16_t>(kImageWidth);
+#else
+  return 0;
+#endif
+}
+
+uint16_t imageHeight() {
+#if defined(HOMETILES_LOCAL_CAMERA)
+  return static_cast<uint16_t>(kImageHeight);
+#else
+  return 0;
+#endif
+}
+
 bool indicatorActive() {
   if (g_sensor_capturing.load()) return true;
   return static_cast<int32_t>(g_indicator_hold_until_ms.load() - millis()) > 0;

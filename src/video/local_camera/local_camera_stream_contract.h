@@ -41,21 +41,20 @@ constexpr uint8_t kModeAuto = 0;
 
 struct ModeEntry {
   uint8_t id;
-  uint16_t width;
-  uint16_t height;
   uint8_t fps;
   uint8_t quality;  // Hardware JPEG quality at the start of a stream.
 };
 
-// Every mode streams the full board image: the sensor delivers the JPEG size
-// and no pixel pass runs. Higher rates use a lower quality to keep the frames
+// Every mode streams the full board image (whatever size the board delivers:
+// 1280x720 on the V2, 960x544 on the Waveshare 8-inch); a mode is only a rate
+// and a start quality. Higher rates use a lower quality to keep the frames
 // small. Adding a mode is one line here.
 constexpr ModeEntry kModes[] = {
-    {1, 1280, 720, 5, 65},
-    {2, 1280, 720, 10, 45},
-    {3, 1280, 720, 15, 50},
-    {4, 1280, 720, 20, 45},
-    {5, 1280, 720, 25, 40},
+    {1, 5, 65},
+    {2, 10, 45},
+    {3, 15, 50},
+    {4, 20, 45},
+    {5, 25, 40},
 };
 constexpr size_t kModeCount = sizeof(kModes) / sizeof(kModes[0]);
 
@@ -97,12 +96,14 @@ inline bool isKnownMode(uint8_t id) {
   return id == kModeAuto || id == kModeCustom || findMode(id) != nullptr;
 }
 
-// Untranslated technical label, e.g. "1280x720, 5 fps, q65".
-inline size_t formatModeLabel(char* out, size_t capacity, const ModeEntry& mode) {
+// Untranslated technical label with the board image size, e.g.
+// "1280x720, 5 fps, q65".
+inline size_t formatModeLabel(char* out, size_t capacity, const ModeEntry& mode,
+                              uint16_t image_width, uint16_t image_height) {
   if (!out || capacity == 0) return 0;
   const int written = snprintf(out, capacity, "%ux%u, %u fps, q%u",
-                               static_cast<unsigned>(mode.width),
-                               static_cast<unsigned>(mode.height),
+                               static_cast<unsigned>(image_width),
+                               static_cast<unsigned>(image_height),
                                static_cast<unsigned>(mode.fps),
                                static_cast<unsigned>(mode.quality));
   if (written < 0 || static_cast<size_t>(written) >= capacity) {
@@ -163,15 +164,14 @@ inline bool sizeSupported(uint16_t width, uint16_t height, uint16_t image_width,
   return false;
 }
 
-// Highest table fps for one output size; 5 when the table has none.
-inline uint8_t maxTableFps(uint16_t width, uint16_t height) {
+// Highest table fps; the modes apply to every board image size (b26 keyed
+// them to 1280x720 and capped the 960x544 image at 5 fps).
+inline uint8_t maxTableFps() {
   uint8_t best = 0;
   for (const ModeEntry& mode : kModes) {
-    if (mode.width == width && mode.height == height && mode.fps > best) {
-      best = mode.fps;
-    }
+    if (mode.fps > best) best = mode.fps;
   }
-  return best ? best : 5;
+  return best;
 }
 
 // Resolves the stored setting (or Auto) against the request hints, the
@@ -188,7 +188,7 @@ inline bool resolveSettings(uint8_t mode_id, const StreamHints& hints,
     // mode for this size.
     if (!outputSizeUsable(image_width, image_height)) return false;
     const CustomMode clamped = makeCustomMode(custom.fps, custom.quality);
-    const uint8_t max_fps = maxTableFps(image_width, image_height);
+    const uint8_t max_fps = maxTableFps();
     settings.width = image_width;
     settings.height = image_height;
     settings.half = false;
@@ -197,26 +197,19 @@ inline bool resolveSettings(uint8_t mode_id, const StreamHints& hints,
     *out = settings;
     return true;
   }
-  if (const ModeEntry* mode = findMode(settings.mode_id)) {
-    bool half = false;
-    if (sizeSupported(mode->width, mode->height, image_width, image_height, &half) && !half) {
-      settings.width = mode->width;
-      settings.height = mode->height;
-      settings.fps = mode->fps;
-      settings.quality = mode->quality;
-      settings.half = half;
-      *out = settings;
-      return true;
-    }
-    // A table size this board cannot produce falls back to the hints.
-  }
-  // Auto streams the full image too; the hinted size only reaches the
-  // Bridge, which scales for its viewers.
+  // Every mode, Auto included, streams the full board image; the hinted size
+  // only reaches the Bridge, which scales for its viewers.
   if (!outputSizeUsable(image_width, image_height)) return false;
   settings.width = image_width;
   settings.height = image_height;
   settings.half = false;
-  const uint8_t max_fps = maxTableFps(settings.width, settings.height);
+  if (const ModeEntry* mode = findMode(settings.mode_id)) {
+    settings.fps = mode->fps;
+    settings.quality = mode->quality;
+    *out = settings;
+    return true;
+  }
+  const uint8_t max_fps = maxTableFps();
   uint8_t fps = hints.fps == 0 ? 1 : hints.fps;
   if (fps > max_fps) fps = max_fps;
   settings.fps = fps;
@@ -224,7 +217,7 @@ inline bool resolveSettings(uint8_t mode_id, const StreamHints& hints,
   // Never above the table quality of the slowest mode that reaches this rate.
   const ModeEntry* rate_mode = nullptr;
   for (const ModeEntry& mode : kModes) {
-    if (mode.width != settings.width || mode.height != settings.height || mode.fps < fps) continue;
+    if (mode.fps < fps) continue;
     if (!rate_mode || mode.fps < rate_mode->fps) rate_mode = &mode;
   }
   if (rate_mode && settings.quality > rate_mode->quality) settings.quality = rate_mode->quality;

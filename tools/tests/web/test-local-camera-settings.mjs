@@ -166,7 +166,7 @@ assert.match(markup, /<select id="local_camera_stream_mode" onchange="saveLocalC
 assert.doesNotMatch(markup, /id="local_camera_stream_mode"[^>]*\bname=/,
   'The stream mode must not be submitted with the /mqtt settings form');
 assert.match(helper, /<option value="0"\)html";\s*if \(selected_mode == local_camera_stream::kModeAuto\) html \+= " selected";\s*html \+= ">";\s*appendHtmlEscaped\(html, tr\.local_camera_stream_mode_auto\);/);
-assert.match(helper, /for \(const local_camera_stream::ModeEntry& mode : local_camera_stream::kModes\)[\s\S]*formatModeLabel\(label, sizeof\(label\), mode\)[\s\S]*if \(mode\.id == selected_mode\) html \+= " selected";/);
+assert.match(helper, /for \(const local_camera_stream::ModeEntry& mode : local_camera_stream::kModes\)[\s\S]*formatModeLabel\(label, sizeof\(label\), mode,\s*local_camera::imageWidth\(\),\s*local_camera::imageHeight\(\)\)[\s\S]*if \(mode\.id == selected_mode\) html \+= " selected";/);
 assert.match(helper, /const uint8_t selected_mode = local_camera::streamMode\(\);/);
 assert.doesNotMatch(markup, /id="local_camera_enabled"[^>]*\bname=/,
   'The opt-in must not be submitted with the /mqtt settings form');

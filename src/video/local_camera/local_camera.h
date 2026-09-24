@@ -70,6 +70,9 @@ bool streamActive();
 bool stopStreamForTransportRecovery();
 // Stored stream mode id (local_camera_stream::kModes, 0 = Auto).
 uint8_t streamMode();
+// Board image size of snapshots and the live stream; 0 where unsupported.
+uint16_t imageWidth();
+uint16_t imageHeight();
 // Validates and persists the mode; a running stream switches after its
 // current frame and reconnects within the same session. Loop task only.
 bool setStreamMode(uint8_t mode);

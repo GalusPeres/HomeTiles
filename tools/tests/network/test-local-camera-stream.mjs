@@ -332,33 +332,48 @@ int main() {
 
   // --- Mode table: stable, unique, append-only ids. -------------------------
   {
-    const struct { uint8_t id; uint16_t w, h; uint8_t fps, q; } expected[] = {
-        {1, 1280, 720, 5, 65}, {2, 1280, 720, 10, 45}, {3, 1280, 720, 15, 50},
-        {4, 1280, 720, 20, 45}, {5, 1280, 720, 25, 40}};
+    // A mode is a rate and a start quality for the board's own full image.
+    const struct { uint8_t id; uint8_t fps, q; } expected[] = {
+        {1, 5, 65}, {2, 10, 45}, {3, 15, 50}, {4, 20, 45}, {5, 25, 40}};
     assert(kModeCount == 5);
     for (size_t i = 0; i < kModeCount; ++i) {
-      assert(kModes[i].id == expected[i].id && kModes[i].width == expected[i].w &&
-             kModes[i].height == expected[i].h && kModes[i].fps == expected[i].fps &&
+      assert(kModes[i].id == expected[i].id && kModes[i].fps == expected[i].fps &&
              kModes[i].quality == expected[i].q);
       assert(findMode(kModes[i].id) == &kModes[i]);
       assert(kModes[i].id != kModeAuto);
-      assert(outputSizeUsable(kModes[i].width, kModes[i].height));
     }
+    assert(maxTableFps() == 25);
     assert(isKnownMode(0) && isKnownMode(5) && !isKnownMode(6) && !isKnownMode(255));
     // Custom: its own id outside the table, user fps (1..25) and quality.
     assert(kModeCustom == 100 && isKnownMode(kModeCustom) && findMode(kModeCustom) == nullptr);
     char label[48];
-    assert(formatModeLabel(label, sizeof(label), kModes[0]) &&
+    assert(formatModeLabel(label, sizeof(label), kModes[0], 1280, 720) &&
            std::string(label) == "1280x720, 5 fps, q65");
+    assert(formatModeLabel(label, sizeof(label), kModes[4], 960, 544) &&
+           std::string(label) == "960x544, 25 fps, q40");
 
     StreamSettings s;
     StreamHints hints;  // Bridge default: 640x360@15 q65.
     for (size_t i = 0; i < kModeCount; ++i) {
       assert(resolveSettings(kModes[i].id, hints, 1280, 720, &s));
-      assert(s.mode_id == kModes[i].id && s.width == kModes[i].width &&
-             s.height == kModes[i].height && s.fps == kModes[i].fps &&
-             s.quality == kModes[i].quality);
+      assert(s.mode_id == kModes[i].id && s.width == 1280 && s.height == 720 &&
+             s.fps == kModes[i].fps && s.quality == kModes[i].quality);
       assert(!s.half);  // Every mode is the full sensor image.
+    }
+    // Regression b26: the Waveshare 8-inch image (960x544) had no table entry
+    // and every mode, Auto and Custom ran at 5 fps. Every size gets the table.
+    for (size_t i = 0; i < kModeCount; ++i) {
+      assert(resolveSettings(kModes[i].id, hints, 960, 544, &s));
+      assert(s.mode_id == kModes[i].id && s.width == 960 && s.height == 544 &&
+             s.fps == kModes[i].fps && s.quality == kModes[i].quality && !s.half);
+    }
+    assert(resolveSettings(kModeAuto, hints, 960, 544, &s) && s.fps == 15 && s.quality == 50);
+    {
+      CustomMode custom;
+      custom.fps = 20;
+      custom.quality = 60;
+      assert(resolveSettings(kModeCustom, hints, 960, 544, &s, custom) && s.fps == 20 &&
+             s.width == 960 && s.height == 544);
     }
     // Auto streams the full image; fps follows the hint, the quality stays at
     // or below the table mode for that rate.
@@ -397,8 +412,10 @@ int main() {
     }
     // Unknown stored ids behave like Auto.
     assert(resolveSettings(99, StreamHints{}, 1280, 720, &s) && s.mode_id == 0 && s.width == 1280);
-    // A board whose image is not 1280x720 streams its own full image.
-    assert(resolveSettings(1, StreamHints{}, 1920, 1088, &s) && s.width == 1920 && s.height == 1088);
+    // A board whose image is not 1280x720 streams its own full image at the mode rate.
+    assert(resolveSettings(1, StreamHints{}, 1920, 1088, &s) && s.width == 1920 && s.height == 1088 &&
+           s.fps == 5);
+    assert(resolveSettings(3, StreamHints{}, 1920, 1088, &s) && s.width == 1920 && s.fps == 15);
     assert(!resolveSettings(0, StreamHints{}, 100, 50, &s));
 
     assert(reducedQuality(65) == 60 && reducedQuality(34) == 30 && reducedQuality(30) == 30);

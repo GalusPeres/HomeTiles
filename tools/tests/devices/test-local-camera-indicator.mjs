@@ -112,7 +112,7 @@ assert.match(indicator, /if \(!visible\) return;\s*updateShape\(ui\);\s*keepOnTo
 // Style (Web Admin, experimental): none hides everything, line keeps only the
 // stripe, pill adds the pill, its fillets and border.
 assert.match(indicator, /const local_camera::IndicatorStyle style = local_camera::indicatorStyle\(\);\s*const bool visible =\s*style != local_camera::IndicatorStyle::None && local_camera::indicatorActive\(\);/);
-assert.match(indicator, /setVisible\(ui, visible, style == local_camera::IndicatorStyle::Pill && pillAllowed\(ui\)\);/);
+assert.match(indicator, /setVisible\(ui, visible, style == local_camera::IndicatorStyle::Pill && pillAllowed\(\)\);/);
 assert.match(indicator, /for \(lv_obj_t\* part : \{ui\.bar, ui\.left, ui\.right\}\) setShown\(part, visible\);/);
 assert.match(indicator, /for \(lv_obj_t\* part : \{ui\.pill, ui\.frame_clip, ui\.fillet_left, ui\.fillet_right\}\) \{\s*setShown\(part, with_pill\);/);
 assert.match(indicator, /if \(radius == ui\.radius && fillet == ui\.fillet && border == ui\.border\) return;/);
@@ -222,11 +222,18 @@ assert.match(indicator, /lv_obj_add_event_cb\(lv_layer_top\(\), detail::onTopLay
 assert.match(indicator, /if \(busy \|\| !ui\.pill \|\| !ui\.visible\) return;\s*busy = true;\s*refresh\(ui\);\s*busy = false;/);
 assert.match(indicator, /inline void poll\(lv_timer_t\*\) \{ refresh\(objects\(\)\); \}/);
 assert.match(indicator, /constexpr uint8_t kSettingsTab = 3;/);
-assert.match(indicator, /return tab != UINT8_MAX && tab != kSettingsTab && !overlayOpen\(ui\);/);
-assert.match(indicator, /if \(child && !isOwnPart\(ui, child\) && !lv_obj_has_flag\(child, LV_OBJ_FLAG_HIDDEN\)\) \{\s*return true;/,
-  'Any visible foreign top-layer child (popup, PIN, screensaver) hides the pill');
-for (const part of ['ui.pill', 'ui.frame_clip', 'ui.bar', 'ui.left', 'ui.right', 'ui.fillet_left', 'ui.fillet_right']) {
-  assert.ok(indicator.slice(indicator.indexOf('inline bool isOwnPart'), indicator.indexOf('inline bool overlayOpen')).includes(part), part);
+// Closed popups stay parked but visible on the top layer (b26 hid the pill for
+// good on the 8-inch and the V2): the shell and the screensaver decide.
+assert.match(indicator, /return tab != UINT8_MAX && tab != kSettingsTab && !popup_shell_active\(\) &&\s*!is_image_screensaver_visible\(\);/);
+assert.doesNotMatch(indicator, /overlayOpen|lv_obj_get_child_count\(layer\);[\s\S]*LV_OBJ_FLAG_HIDDEN\)\) \{\s*return true;/,
+  'No guess from the top-layer children');
+const shellSource = read('src/ui/popups/popup_shell.cpp');
+assert.match(shellSource, /bool popup_shell_active\(\) \{ return shell\.active != nullptr; \}/);
+assert.match(shellSource, /shell\.active = binding;\s*lv_obj_set_parent\(owner, lv_layer_top\(\)\);[\s\S]*?lv_obj_set_parent\(shell\.overlay, lv_screen_active\(\)\);/,
+  'The shell is active before it leaves the top layer, whose change event refreshes the pill');
+assert.match(shellSource, /void hide_popup_shell\(lv_obj_t\* body\) \{[\s\S]*?detach\(\);\s*lv_obj_add_flag\(shell\.overlay, LV_OBJ_FLAG_HIDDEN\);\s*lv_obj_set_parent\(shell\.overlay, lv_layer_top\(\)\);/);
+for (const popup of ['camera', 'climate', 'cover', 'energy', 'light', 'media', 'pin', 'sensor', 'weather']) {
+  assert.match(read(`src/ui/popups/${popup}/${popup}_popup.cpp`), /show_popup_shell\(/, ` ${popup} opens through the shell`);
 }
 
 // Encode only frames the sender can take: a pending frame is waited for (at

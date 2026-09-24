@@ -27,6 +27,8 @@
 
 namespace local_camera_board {
 
+// The sensor is an ESP-IDF i2c_master device on the board bus.
+using SccbBus = i2c_master_bus_handle_t;
 using Sensor = ov5647::Sensor;
 
 inline constexpr local_camera::SensorMode kMode = {

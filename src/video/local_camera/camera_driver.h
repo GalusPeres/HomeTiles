@@ -11,12 +11,15 @@
 //                                   (src/video/local_camera/sensors/<name>/)
 //   HOMETILES_LOCAL_CAMERA_BOARD    "path/to/local_camera_board.h"
 // and its board file provides, in namespace local_camera_board:
+//   using SccbBus = <bus handle>;      what Sensor::attach() takes: an ESP-IDF
+//                                      i2c_master bus, or a board transport
+//                                      where another driver owns the I2C port
 //   using Sensor = <sensor>::Sensor;   attach(bus), detach(), attached(),
 //                                      probe(&chip_id), loadDefaultMode(mirror),
 //                                      setStream(on), setExposure(lines, gain_x16),
 //                                      setOrientation(mirror, flip)
 //   constexpr local_camera::SensorMode kMode;
-//   local_camera::BoardError acquire(i2c_master_bus_handle_t* sccb_bus);
+//   local_camera::BoardError acquire(SccbBus* sccb_bus);
 //   void release();
 
 #include <stdint.h>
@@ -30,7 +33,7 @@ struct SensorMode {
   const char* name;             // Protocol token for the Bridge status, e.g. "ov02c10".
   uint16_t chip_id;
   uint8_t sccb_address;
-  uint16_t frame_width;         // CSI RAW10 frame.
+  uint16_t frame_width;         // CSI RAW frame (raw_bits per pixel).
   uint16_t frame_height;
   uint16_t image_width;         // JPEG size; equal to the frame (the sensor window is
                                 // the JPEG size, this silicon has no ISP crop).
@@ -56,6 +59,8 @@ struct SensorMode {
   uint16_t min_gain_x16;
   uint16_t max_gain_x16;        // Analog gain maximum.
   uint16_t max_total_gain_x16;  // Analog times sensor digital gain; setExposure() splits it.
+  // CSI/ISP input format: RAW10 (default) or RAW8.
+  uint8_t raw_bits = 10;
 };
 
 enum class BoardError : uint8_t {

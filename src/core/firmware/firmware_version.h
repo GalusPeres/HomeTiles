@@ -19,6 +19,11 @@
 #undef FW_VERSION
 #define FW_VERSION "v0.6.12b29"
 #endif
+#if defined(DEVICE_M5STACKS_TAB5) && \
+    defined(HOMETILES_CAMERA_BETA)
+#undef FW_VERSION
+#define FW_VERSION "v0.6.12b29"
+#endif
 
 #ifndef FW_VERSION
 #error "FW_VERSION is missing in version.txt"

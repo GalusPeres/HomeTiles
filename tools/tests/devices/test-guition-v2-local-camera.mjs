@@ -102,7 +102,7 @@ assert.doesNotMatch(noComments(hardware), /adjustable\s*=\s*1|esp_ldo_channel_ad
 // The V2 always; the Waveshare 8-inch only in camera beta builds
 // (tools/tests/devices/test-waveshare-8-local-camera.mjs).
 assert.match(deviceSelect,
-  /#if defined\(DEVICE_GUITION_JC8012P4A1_V2\) \|\| \\\n    \(defined\(DEVICE_WAVESHARE_TOUCH_LCD_8\) && defined\(HOMETILES_CAMERA_BETA\)\)\n#define HOMETILES_LOCAL_CAMERA 1\n#endif/);
+  /#if defined\(DEVICE_GUITION_JC8012P4A1_V2\) \|\| \\\n    \(defined\(DEVICE_WAVESHARE_TOUCH_LCD_8\) && defined\(HOMETILES_CAMERA_BETA\)\) \|\| \\\n    \(defined\(DEVICE_M5STACKS_TAB5\) && defined\(HOMETILES_CAMERA_BETA\)\)\n#define HOMETILES_LOCAL_CAMERA 1\n#endif/);
 assert.match(deviceTypes, /bool has_builtin_camera = false;/);
 const profileHeaders = fs.readdirSync(path.join(root, 'src/devices'), {withFileTypes: true})
   .filter(entry => entry.isDirectory())

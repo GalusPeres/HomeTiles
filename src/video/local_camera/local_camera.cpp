@@ -362,6 +362,9 @@ static_assert(kMode.frame_width == kMode.image_width &&
 // clockwise, announced as "rotate" in the retained status. A PPA turn on the
 // panel held the 2D-DMA for ~29 ms per frame and made the display sluggish.
 constexpr bool kQuarterTurn = kMode.quarter_turn;
+// RAW8 or RAW10 from the sensor; the ISP output (RGB565) is the same.
+constexpr bool kRaw8 = kMode.raw_bits == 8;
+static_assert(kMode.raw_bits == 8 || kMode.raw_bits == 10, "RAW8 or RAW10 only");
 // The Bridge turns the JPEG losslessly (whole MCUs only). 4:2:2 (16x8 MCUs)
 // would turn into the uncommon 4:4:0; 4:2:0 (16x16 MCUs) stays 4:2:0.
 constexpr jpeg_down_sampling_type_t kJpegSubsampling =
@@ -449,7 +452,7 @@ SnapshotRequest g_pending;  // Written by the loop task before g_capture_busy.
 
 IsrState g_isr;
 Pipeline g_pipe;
-i2c_master_bus_handle_t g_sccb_bus = nullptr;
+board::SccbBus g_sccb_bus{};
 bool g_hw_acquired = false;
 board::Sensor g_sensor;
 // True only after the chip ID matched; register writes go to no other device.
@@ -848,7 +851,7 @@ void releaseSensor() {
   g_applied_orientation = kOrientationUnknown;
   if (g_hw_acquired) {
     board::release();
-    g_sccb_bus = nullptr;
+    g_sccb_bus = board::SccbBus{};
     g_hw_acquired = false;
   }
 }
@@ -941,11 +944,11 @@ bool ensureSensor(bool report_state) {
   g_applied_orientation = 0;
   g_sensor_ready = true;
   Serial.printf(
-      "[LocalCam] Sensor %s detected (chip id 0x%04x), %ux%u RAW10 %u-lane "
+      "[LocalCam] Sensor %s detected (chip id 0x%04x), %ux%u RAW%u %u-lane "
       "mode loaded in %u ms, sensor in standby\n",
       kMode.name, static_cast<unsigned>(chip_id),
       static_cast<unsigned>(kMode.frame_width), static_cast<unsigned>(kMode.frame_height),
-      static_cast<unsigned>(kMode.data_lanes),
+      static_cast<unsigned>(kMode.raw_bits), static_cast<unsigned>(kMode.data_lanes),
       static_cast<unsigned>(millis() - started_ms));
   if (report_state) publishWorkerState(ServiceState::Ready, Detail::None);
   return true;
@@ -1018,7 +1021,7 @@ bool ensurePipeline() {
     csi_config.v_res = kMode.frame_height;
     csi_config.data_lane_num = kMode.data_lanes;
     csi_config.lane_bit_rate_mbps = kMode.lane_bit_rate_mbps;
-    csi_config.input_data_color_type = CAM_CTLR_COLOR_RAW10;
+    csi_config.input_data_color_type = kRaw8 ? CAM_CTLR_COLOR_RAW8 : CAM_CTLR_COLOR_RAW10;
     csi_config.output_data_color_type = CAM_CTLR_COLOR_RGB565;
     csi_config.queue_items = 1;
     csi_config.byte_swap_en = 0;
@@ -1065,7 +1068,7 @@ bool ensurePipeline() {
     isp_config.clk_src = ISP_CLK_SRC_DEFAULT;
     isp_config.clk_hz = kIspClockHz;
     isp_config.input_data_source = ISP_INPUT_DATA_SOURCE_CSI;
-    isp_config.input_data_color_type = ISP_COLOR_RAW10;
+    isp_config.input_data_color_type = kRaw8 ? ISP_COLOR_RAW8 : ISP_COLOR_RAW10;
     isp_config.output_data_color_type = ISP_COLOR_RGB565;
     isp_config.yuv_range = ISP_COLOR_RANGE_FULL;
     isp_config.yuv_std = ISP_YUV_CONV_STD_BT601;
@@ -1179,11 +1182,12 @@ bool ensurePipeline() {
   g_pipe.ready = true;
   if (!logDue(&g_pipeline_log_ms, 600000)) return true;
   Serial.printf(
-      "[LocalCam] Pipeline ready in %u ms: CSI %ux%u RAW10 %u lane @ %u Mbps, "
+      "[LocalCam] Pipeline ready in %u ms: CSI %ux%u RAW%u %u lane @ %u Mbps, "
       "ISP RGB565, AE target %u, PSRAM free %u KB, internal free %u KB\n",
       static_cast<unsigned>(millis() - started_ms),
       static_cast<unsigned>(kMode.frame_width),
       static_cast<unsigned>(kMode.frame_height),
+      static_cast<unsigned>(kMode.raw_bits),
       static_cast<unsigned>(kMode.data_lanes),
       static_cast<unsigned>(kMode.lane_bit_rate_mbps),
       static_cast<unsigned>(aeTarget()),

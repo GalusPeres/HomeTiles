@@ -18,6 +18,11 @@
 #define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_touch_lcd_8/local_camera_board.h"
 #endif
 
+#if defined(DEVICE_M5STACKS_TAB5)
+#define HOMETILES_CAMERA_SENSOR_SC202CS 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/m5stacks_tab5/local_camera_board.h"
+#endif
+
 #if !defined(HOMETILES_LOCAL_CAMERA_BOARD)
 #error "HOMETILES_LOCAL_CAMERA is set but no camera board file is selected"
 #endif

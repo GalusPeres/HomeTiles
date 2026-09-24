@@ -653,11 +653,17 @@ boolean PubSubClient::beginPublish(const char* topic, unsigned int plength, bool
         // Send the header and variable length field
         uint16_t length = MQTT_MAX_HEADER_SIZE;
         length = writeString(topic,this->buffer,length);
+        // HomeTiles: refuse lengths the four-byte remaining-length field
+        // cannot represent instead of silently truncating the header.
+        const uint32_t remaining = static_cast<uint32_t>(length - MQTT_MAX_HEADER_SIZE);
+        if (plength > 268435455UL - remaining) {
+            return false;
+        }
         uint8_t header = MQTTPUBLISH;
         if (retained) {
             header |= 1;
         }
-        size_t hlen = buildHeader(header, this->buffer, plength+length-MQTT_MAX_HEADER_SIZE);
+        size_t hlen = buildHeader(header, this->buffer, static_cast<uint32_t>(plength) + remaining);
         uint16_t rc = _client->write(this->buffer+(MQTT_MAX_HEADER_SIZE-hlen),length-(MQTT_MAX_HEADER_SIZE-hlen));
         lastOutActivity = millis();
         return (rc == (length-(MQTT_MAX_HEADER_SIZE-hlen)));
@@ -679,12 +685,12 @@ size_t PubSubClient::write(const uint8_t *buffer, size_t size) {
     return _client->write(buffer,size);
 }
 
-size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint16_t length) {
+size_t PubSubClient::buildHeader(uint8_t header, uint8_t* buf, uint32_t length) {
     uint8_t lenBuf[4];
     uint8_t llen = 0;
     uint8_t digit;
     uint8_t pos = 0;
-    uint16_t len = length;
+    uint32_t len = length;
     do {
 
         digit = len  & 127; //digit = len %128

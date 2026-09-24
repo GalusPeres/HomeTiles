@@ -372,6 +372,10 @@ esp_lcd_touch_handle_t touch_gsl3680_init() {
   return nullptr;
 }
 
+i2c_master_bus_handle_t gsl3680_i2c_bus() {
+  return g_state.initialized ? g_state.bus : nullptr;
+}
+
 bool esp_lcd_touch_read_data(esp_lcd_touch_handle_t handle) {
   auto* state = static_cast<TouchState*>(handle);
   if (!state || !state->initialized) {

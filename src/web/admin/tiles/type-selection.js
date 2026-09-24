@@ -45,6 +45,7 @@
           rowEl.value = String(layout.row + 1);
           spanWEl.value = String(layout.span_w);
           spanHEl.value = String(layout.span_h);
+          syncTileSizePolicy(tab);
         }
         const meta = colorMeta;
         callTypeHandler(meta, 'load', prefix, data);
@@ -157,22 +158,32 @@
     if (!typeEl) return;
     const w = Number(document.getElementById(tab + '_tile_span_w')?.value || 1);
     const h = Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
+    // Half a row high only suits the half-size types; any other half step
+    // only excludes Settings/Back, which stay whole.
+    const halfHeight = h < 1;
+    const fractional = !Number.isInteger(w) || !Number.isInteger(h);
+    const fixedGrid = type => [7, 8].includes(Number(type));
+    // A new half-height tile may still take a larger type when it can grow.
+    const isNewTile = Number(getTilesData(tab)?.[currentTileIndex]?.type || 0) === 0;
     for (const option of typeEl.options) {
       if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
-      if ((!Number.isInteger(w) || !Number.isInteger(h)) && Number(option.value) !== 0 && !isCompactSensorType(option.value) && !option.disabled) {
+      const type = Number(option.value);
+      const grows = isNewTile && type !== 0 && !!grownNewTileLayout(tab, type);
+      const blocked = type !== 0 && !grows &&
+        ((halfHeight && !supportsHalfSize(type)) || (fractional && fixedGrid(type)));
+      if (blocked && !option.disabled) {
         option.disabled = true; option.dataset.sizeDisabled = '1';
       }
     }
-    const compact = isCompactSensorType(typeEl.value);
+    const compact = supportsHalfSize(typeEl.value);
     for (const field of ['col', 'row', 'span_w', 'span_h']) {
       const input = document.getElementById(tab + '_tile_' + field);
-      const position = field === 'col' || field === 'row';
-      if (input) input.step = (position ? ![7, 8].includes(Number(typeEl.value)) : compact) ? '0.5' : '1';
+      if (input) input.step = fixedGrid(typeEl.value) ? '1' : '0.5';
     }
     const row = document.getElementById(tab + '_tile_row');
     if (row) row.max = String(GRID_ROWS + (compact && h === 0.5 ? 0.5 : 0));
     const height = document.getElementById(tab + '_tile_span_h');
     if (height && compact) height.min = '0.5';
     const note = document.getElementById(tab + '_tile_size_note');
-    if (note) note.hidden = Number.isInteger(w) && Number.isInteger(h);
+    if (note) note.hidden = !halfHeight;
   }

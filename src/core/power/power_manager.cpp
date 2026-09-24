@@ -7,6 +7,7 @@
 #include "src/core/power/battery_state.h"
 #include "src/network/network_manager.h"
 #include "src/network/mqtt/mqtt_handlers.h"
+#include "src/video/local_camera/local_camera.h"
 #include <cmath>
 #if defined(ARDUINO_ARCH_ESP32)
 #include "esp32-hal-cpu.h"
@@ -166,6 +167,8 @@ void PowerManager::enterDisplaySleep() {
   networkManager.setWifiPowerSaving(false);
   is_display_sleeping = true;
   is_high_performance = false;
+  // Free the camera pipeline buffers; snapshot requests re-create them.
+  local_camera::releaseForSleep();
   mqttPublishDeviceSettings();
 }
 

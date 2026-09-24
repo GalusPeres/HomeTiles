@@ -93,6 +93,19 @@ int main() {
     assert(weather_forecast_count(mask) == (mask < 6 ? forecast[mask] : 8));
     if (mask >= 8) assert(std::strcmp(climatePresetName(mask), "") == 0);
   }
+  // Half steps never drop below or jump past their whole neighbours
+  // (168 px cells, 16 px gap: 2.5 cells = 444 px, 3 cells = 536 px).
+  assert(weather_forecast_count(2.5f, 444, 536) == 3);
+  assert(weather_forecast_count(1.5f, 260, 352) == 1);
+  assert(weather_forecast_count(3.0f, 536, 628) == 4);
+  for (int half = 2; half <= 12; ++half) {
+    const float span = half / 2.0f;
+    const auto width = [](float s) { return static_cast<lv_coord_t>(s * 168 + (s - 1) * 16); };
+    const uint8_t count = weather_forecast_count(span, width(span), width(span + 0.5f));
+    const uint8_t below = weather_forecast_count(span - 0.5f, width(span - 0.5f), width(span));
+    assert(count >= below);
+    if (half % 2) assert(count <= weather_forecast_count(span + 0.5f));
+  }
   for (unsigned mask = 0; mask < 65536; ++mask) {
     assert(climateFanModesCsv(mask) == expected_csv(mask,
       {"auto", "low", "medium", "high", "on", "off", "top", "middle", "focus", "diffuse"}));
@@ -130,6 +143,7 @@ using lv_coord_t = int;
 namespace Device {
 constexpr uint8_t kGridCols = 4, kGridRows = 4;
 constexpr int kGridGap = 8, kGridPad = 8, kGridCellW = 108, kGridCellH = 108;
+constexpr uint16_t kScreenWidth = 472, kScreenHeight = 472;  // 4 x 108 + 3 x 8 + 2 x 8.
 }
 `);
   const flags = ['-std=c++17', '-Wall', '-Wextra', '-Werror',

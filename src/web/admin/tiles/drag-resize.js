@@ -119,22 +119,24 @@
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
     const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
-    const half = isCompactSensorType(typeValue);
-    const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, half ? 0.5 : 1);
+    // Every type resizes in half steps except Settings/Back, which stay whole.
+    const fixedGrid = [7, 8].includes(Number(typeValue));
+    const unit = fixedGrid ? 1 : 0.5;
+    const snap = fixedGrid ? clampInt : clampHalf;
+    const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, unit);
     if (!rawCell) return null;
-    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (half ? 0.5 : 1);
+    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (supportsHalfSize(typeValue) ? 0.5 : 1);
     const maxW = isMedia
       ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS - layout.col)
       : GRID_COLS - layout.col;
     const maxH = isMedia
       ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_ROWS - layout.row)
       : GRID_ROWS - layout.row;
-    // Width snapping follows the candidate height during a corner resize.
     if (String(direction || '').includes('s')) {
-      spanH = (half ? clampHalf : clampInt)(rawCell.row - layout.row + (half ? 0.5 : 1), minH, maxH, layout.span_h);
+      spanH = snap(rawCell.row - layout.row + unit, minH, maxH, layout.span_h);
     }
     if (String(direction || '').includes('e')) {
-      spanW = (half && spanH === 0.5 ? clampHalf : clampInt)(rawCell.col - layout.col + (half ? 0.5 : 1), minW, maxW, layout.span_w);
+      spanW = snap(rawCell.col - layout.col + unit, minW, maxW, layout.span_w);
     }
 
     return {

@@ -95,6 +95,11 @@ int main(){
   lv_obj_delete(card);
  }
 
+ assert(tile_geometry::supported(TILE_CLOCK,0,0,1,.5f));
+ assert(tile_geometry::supported(TILE_CLOCK,0,0,2.5f,.5f));
+ assert(tile_geometry::compact_clock(TILE_CLOCK,1,.5f));
+ assert(!tile_geometry::compact_clock(TILE_CLOCK,2,1));
+ assert(!tile_geometry::compact(TILE_CLOCK,1,.5f));
  assert(tile_geometry::compact(TILE_SENSOR,2,.5f));
  assert(!tile_geometry::compact(TILE_SENSOR,2,1));
  for(int type:{TILE_SENSOR,TILE_BINARY_SENSOR,TILE_ENERGY}) for(float width:{1.f,1.5f,2.f,2.5f}) {
@@ -115,7 +120,7 @@ int main(){
   assert(lv_obj_get_style_text_align(value,LV_PART_MAIN)==LV_TEXT_ALIGN_LEFT);
   lv_obj_add_state(card,LV_STATE_PRESSED);lv_obj_update_layout(card);
   lv_area_t pressed;lv_obj_get_coords(value,&pressed);assert(memcmp(&pressed,&v,sizeof(v))==0);
-  compact_sensor_layout::apply(card, nullptr, title, value, tile, tile_layout::content_font_20());
+  // Half-height values always use the 20 px title size, whatever size was chosen.
   assert(lv_obj_get_style_text_font(value, LV_PART_MAIN)==tile_layout::content_font_20());
   lv_obj_delete(card);
  }

@@ -61,6 +61,8 @@ void set_label_style(lv_obj_t*l,lv_color_t c,const lv_font_t*f){lv_obj_set_style
 void enable_event_bubble(lv_obj_t*){}void apply_media_text_scroll_style(lv_obj_t*){}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'disable_pressed_button_animation')}
 void set_tile_grid_cell(lv_obj_t*c,int,int,int w,int h){lv_obj_set_size(c,w*CELL_W+(w-1)*GAP,h*CELL_H+(h-1)*GAP);lv_obj_center(c);}
+void apply_fractional_tile_geometry(lv_obj_t*,const Tile&){}
+void place_tile_card(lv_obj_t*c,int col,int row,const Tile&t){set_tile_grid_cell(c,col,row,t.span_w,t.span_h);apply_fractional_tile_geometry(c,t);}
 void cover_ref_delete_cb(lv_event_t*e){delete static_cast<MediaCoverRef*>(lv_event_get_user_data(e));}
 ${renderer.match(/struct MediaPopupEventData \{[\s\S]*?\n};/)[0]}
 void show_media_popup_event_cb(lv_event_t*){}

@@ -3,8 +3,22 @@
 #include "src/web/server/assets/web_admin_fonts.h"
 #include "src/web/server/web_admin_utils.h"
 #include "src/network/transport/network_transport.h"
+#include "src/video/local_camera/local_camera.h"
 
 WebAdminServer webAdminServer;
+
+namespace {
+// Routes that read and write the flash (LittleFS, NVS) hold the built-in
+// camera off while they run: flash operations stall both cores, and with the
+// camera streaming this tripped the interrupt watchdog during tile saves.
+template <typename Handler>
+auto withStorageHold(Handler handler) {
+  return [handler]() {
+    local_camera::ScopedStorageHold hold;
+    handler();
+  };
+}
+}  // namespace
 static volatile uint32_t g_web_admin_last_activity_ms = 0;
 
 WebAdminServer::WebAdminServer()
@@ -64,24 +78,24 @@ bool WebAdminServer::start() {
               [this]() { sendAdminCssAsset(this->server); });
     server.on(adminJsAssetPath(), HTTP_GET,
               [this]() { sendAdminJsAsset(this->server); });
-    server.on("/mqtt", HTTP_POST, [this]() { this->handleSaveMQTT(); });
+    server.on("/mqtt", HTTP_POST, withStorageHold([this]() { this->handleSaveMQTT(); }));
     server.on("/status", [this]() { this->handleStatus(); });
     server.on("/bridge_refresh", HTTP_POST,
               [this]() { this->handleBridgeRefresh(); });
-    server.on("/bridge", HTTP_POST, [this]() { this->handleSaveBridge(); });
+    server.on("/bridge", HTTP_POST, withStorageHold([this]() { this->handleSaveBridge(); }));
     server.on("/restart", HTTP_POST, [this]() { this->handleRestart(); });
     server.on("/api/status", [this]() { this->handleStatus(); });
     server.on("/api/tiles", HTTP_GET, [this]() { this->handleGetTiles(); });
-    server.on("/api/tiles", HTTP_POST, [this]() { this->handleSaveTiles(); });
+    server.on("/api/tiles", HTTP_POST, withStorageHold([this]() { this->handleSaveTiles(); }));
     server.on("/api/tiles/reorder", HTTP_POST,
-              [this]() { this->handleReorderTiles(); });
+              withStorageHold([this]() { this->handleReorderTiles(); }));
     server.on("/api/folders", HTTP_GET, [this]() { this->handleGetFolders(); });
     server.on("/api/folders/tab", HTTP_GET,
               [this]() { this->handleGetFolderTab(); });
     server.on("/api/folders/access", HTTP_POST,
-              [this]() { this->handleSaveFolderAccess(); });
+              withStorageHold([this]() { this->handleSaveFolderAccess(); }));
     server.on("/api/folders/delete", HTTP_POST,
-              [this]() { this->handleDeleteFolder(); });
+              withStorageHold([this]() { this->handleDeleteFolder(); }));
     server.on("/api/sensor_values", HTTP_GET,
               [this]() { this->handleGetSensorValues(); });
     server.on("/api/entity_options", HTTP_GET,
@@ -89,15 +103,23 @@ bool WebAdminServer::start() {
     server.on("/api/screensaver", HTTP_GET,
               [this]() { this->handleGetScreensaver(); });
     server.on("/api/screensaver", HTTP_POST,
-              [this]() { this->handleSaveScreensaver(); });
+              withStorageHold([this]() { this->handleSaveScreensaver(); }));
     server.on("/api/hardware-io", HTTP_GET,
               [this]() { this->handleGetHardwareIo(); });
     server.on("/api/hardware-io", HTTP_POST,
-              [this]() { this->handleSaveHardwareIo(); });
+              withStorageHold([this]() { this->handleSaveHardwareIo(); }));
     server.on("/api/display/tile-radius", HTTP_GET, [this]() { handleTileRadius(); });
-  server.on("/api/display/tile-radius", HTTP_POST, [this]() { handleTileRadius(); });
+  server.on("/api/display/tile-radius", HTTP_POST, [this]() {
+    // The live preview (preview=1) only changes the style; saving writes NVS.
+    local_camera::ScopedStorageHold hold(server.arg("preview") != "1");
+    handleTileRadius();
+  });
   server.on("/api/display/tile-borders", HTTP_POST,
-              [this]() { this->handleSaveTileBorders(); });
+              withStorageHold([this]() { this->handleSaveTileBorders(); }));
+    server.on("/api/local-camera", HTTP_GET,
+              [this]() { this->handleLocalCamera(); });
+    server.on("/api/local-camera", HTTP_POST,
+              [this]() { this->handleLocalCamera(); });
     server.on("/api/screensaver/wallpaper", HTTP_GET,
               [this]() { this->handleGetScreensaverWallpaper(); });
     server.on("/api/sd_images", HTTP_GET,
@@ -136,11 +158,11 @@ bool WebAdminServer::start() {
     server.on("/api/files/download", HTTP_GET,
               [this]() { this->handleFileManagerDownload(); });
     server.on("/api/files/delete", HTTP_POST,
-              [this]() { this->handleFileManagerDelete(); });
+              withStorageHold([this]() { this->handleFileManagerDelete(); }));
     server.on("/api/files/rename", HTTP_POST,
-              [this]() { this->handleFileManagerRename(); });
+              withStorageHold([this]() { this->handleFileManagerRename(); }));
     server.on("/api/files/mkdir", HTTP_POST,
-              [this]() { this->handleFileManagerMkdir(); });
+              withStorageHold([this]() { this->handleFileManagerMkdir(); }));
     server.on(
         "/api/files/upload", HTTP_POST,
         [this]() { this->handleFileManagerUploadDone(); },
@@ -148,7 +170,7 @@ bool WebAdminServer::start() {
     server.on("/api/coredump", HTTP_GET,
               [this]() { this->handleCoreDumpDownload(); });
     server.on("/api/coredump/erase", HTTP_POST,
-              [this]() { this->handleCoreDumpErase(); });
+              withStorageHold([this]() { this->handleCoreDumpErase(); }));
     server.on("/api/crashlog", HTTP_GET,
               [this]() { this->handleCrashLogDownload(); });
     server.on("/api/sd-diagnostics", HTTP_GET,

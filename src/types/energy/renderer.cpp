@@ -85,7 +85,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(card);
 
-  set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);
+  place_tile_card(card, col, row, tile);
 
   lv_obj_t* icon_lbl = nullptr;
   String icon_name = tile.icon_name;
@@ -148,8 +148,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
                tile_layout::scale(28) + value_y_offset);
 
   if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h)) {
-    compact_sensor_layout::apply(card, icon_lbl, title_label, value_label, tile,
-                                tile.sensor_value_font ? get_energy_value_font(tile) : nullptr);
+    compact_sensor_layout::apply(card, icon_lbl, title_label, value_label, tile);
   }
 
   SensorTileWidgets* target = tile_renderer_get_sensor_widgets(grid_type);

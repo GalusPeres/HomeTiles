@@ -33,6 +33,19 @@ cannot silently alter the V1 image.
 - HomeTiles target, release asset and OTA key: `guition_jc8012p4a1_v2`
 - Build define: `DEVICE_GUITION_JC8012P4A1_V2`
 
+## Built-in camera (opt-in, hardware validation pending)
+
+The V2 board carries an OV02C10 MIPI-CSI camera. HomeTiles compiles the
+capture path only for this profile (`HOMETILES_LOCAL_CAMERA`) and keeps it off
+until the user enables it in Web Admin Settings. Board facts, the vendored
+Espressif register table and open assumptions are listed in
+`vendor/ov02c10/PROVENANCE.md`; the hardware glue is `local_camera_hw.cpp`.
+
+- SCCB 0x36 shares the touch bus (SDA 7, SCL 8); no reset, power-down or XCLK
+  pin, so "off" means software standby
+- 1288x728 RAW10, one lane at 400 Mbit/s, cropped to 1280x720 JPEG snapshots
+  requested by the Home Assistant Bridge over MQTT
+
 ## Provenance and validation
 
 The V2 command table was extracted verbatim from the

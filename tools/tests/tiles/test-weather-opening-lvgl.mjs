@@ -72,6 +72,7 @@ WeatherTileWidgets widgets[TILES_PER_GRID];WeatherTileWidgets* tile_renderer_get
 void viewNavigationSource(lv_obj_t*){}
 ${['brighten_rgb_color','disable_pressed_button_animation','finish_press_before_popup'].map(n=>fn(read('src/tiles/runtime/tile_renderer_shared.h'),n)).join('\n')}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'apply_fractional_tile_geometry')}
+${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'place_tile_card')}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 PopupShellParts popup;int opens=0,completed_opens=0,sensor_opens=0;
 // Execute the production opening function with a small resident body. Forecast
@@ -116,7 +117,7 @@ void check_energy_layout() {
    Tile tile;tile.type=TILE_ENERGY;tile.span_w=width;tile.span_h=height;tile.sensor_value_font=choice;tile.title="Long energy title";
    auto*card=render_energy_tile(lv_screen_active(),0,0,tile,0,GridType::SCREENSAVER);
    lv_obj_update_layout(card);auto*value=sensor_widgets[0].value_label;
-   const auto*font=choice?get_energy_value_font(tile):(height==.5f?compact_sensor_layout::value_font():FONT_VALUE);
+   const auto*font=height==.5f?compact_sensor_layout::value_font():(choice?get_energy_value_font(tile):FONT_VALUE);
    assert(lv_obj_get_style_text_font(value,LV_PART_MAIN)==font);
    assert(lv_obj_get_style_text_align(value,LV_PART_MAIN)==(height==.5f?LV_TEXT_ALIGN_LEFT:LV_TEXT_ALIGN_CENTER));
    if(height==.5f) {

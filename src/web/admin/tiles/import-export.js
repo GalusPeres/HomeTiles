@@ -267,8 +267,9 @@
       if (prepared.length >= tileCount) throw new Error('Screensaver grid does not fit target device');
       const tile = entry.tile;
       const mediaTile = Number(tile.type) === MEDIA_TILE_TYPE;
-      let spanW = Math.max(0.5, Number(tile.span_w || 1));
-      let spanH = Math.max(0.5, Number(tile.span_h || 1));
+      const half = value => Math.round(Number(value || 1) * 2) / 2;
+      let spanW = Math.max(1, half(tile.span_w));
+      let spanH = Math.max(supportsHalfSize(tile.type) ? 0.5 : 1, half(tile.span_h));
       if (mediaTile) {
         spanW = Math.max(MEDIA_TILE_MIN_SPAN, spanW);
         spanH = Math.max(MEDIA_TILE_MIN_SPAN, spanH);
@@ -276,7 +277,7 @@
       spanW = Math.min(spanW, GRID_COLS, mediaTile ? MEDIA_TILE_MAX_SPAN : GRID_COLS);
       spanH = Math.min(spanH, 2, mediaTile ? MEDIA_TILE_MAX_SPAN : 2);
 
-      const sourceSpanW = Math.max(0.5, Number(tile.span_w || 1));
+      const sourceSpanW = Math.max(1, half(tile.span_w));
       const sourceColRange = Math.max(0, sourceCols - sourceSpanW);
       const targetColRange = Math.max(0, GRID_COLS - spanW);
       const relativeCol = sourceColRange > 0
@@ -450,7 +451,7 @@
     } else {
       fd.append('bg_color_default', '1');
     }
-    const layout = normalizeTileLayout(tile, index, tabByFolder[folderId] || '');
+    const layout = normalizeTileLayout({ ...tile, type: safeType }, index, tabByFolder[folderId] || '');
     fd.append('col', layout.col);
     fd.append('row', layout.row);
     fd.append('span_w', layout.span_w);

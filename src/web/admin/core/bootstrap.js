@@ -38,6 +38,7 @@
       enableTileDrag(tab);
       enableTileKeys(tab);
       enableTileResize(tab);
+      enableFreeSlotHover(tab);
     });
     enableSettingsHiddenSlot();
     associateFieldLabels();

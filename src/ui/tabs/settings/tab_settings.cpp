@@ -3116,7 +3116,10 @@ void build_settings_tab(lv_obj_t *tab, hotspot_callback_t hotspot_cb) {
   lv_obj_set_style_bg_color(tab, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, 0);
   lv_obj_set_style_border_opa(tab, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_pad_all(tab, GRID_PAD, 0);
+  lv_obj_set_style_pad_left(tab, GRID_PAD_LEFT, 0);
+  lv_obj_set_style_pad_right(tab, GRID_PAD_RIGHT, 0);
+  lv_obj_set_style_pad_top(tab, GRID_PAD_TOP, 0);
+  lv_obj_set_style_pad_bottom(tab, GRID_PAD_BOTTOM, 0);
 
   // 4x4 Grid
   static lv_coord_t col_dsc[GRID_COLS + 1];

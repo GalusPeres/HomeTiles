@@ -63,10 +63,19 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
     return nullptr;
   }
 
-  const uint8_t span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  const uint8_t span_h = tile.span_h < 1 ? 1 : tile.span_h;
-  const bool show_forecast = (span_h >= 2);
-  uint8_t forecast_cols = show_forecast ? weather_forecast_count(span_w) : 0;
+  const uint8_t span_w = weather_whole_cells(tile.span_w);
+  const uint8_t span_h = weather_whole_cells(tile.span_h);
+  const bool show_forecast = weather_shows_forecast(tile.span_h);
+  // Pixel geometry uses the real card size, including half steps.
+  const lv_coord_t tile_w = tile_geometry::extent(
+      tile.col, tile.span_w < 1 ? 1.0f : tile.span_w, GRID_CELL_W, GRID_GAP);
+  const lv_coord_t tile_h = tile_geometry::extent(
+      tile.row, tile.span_h < 1 ? 1.0f : tile.span_h, GRID_CELL_H, GRID_GAP);
+  uint8_t forecast_cols = show_forecast
+      ? weather_forecast_count(tile.span_w, tile_w,
+                               tile_geometry::extent(tile.col, tile.span_w + 0.5f,
+                                                     GRID_CELL_W, GRID_GAP))
+      : 0;
 
   lv_obj_t* card = lv_button_create(parent);
   if (!card) return nullptr;
@@ -92,7 +101,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(card);
 
-  set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);
+  place_tile_card(card, col, row, tile);
 
   // Title (location)
   String location = tile.title;
@@ -152,7 +161,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   lv_obj_t* sep_label = nullptr;
   lv_obj_t* temp_label = nullptr;
 
-  if (span_w > 1) {
+  if (weather_shows_condition(tile.span_w)) {
     const lv_font_t* condition_font = weather_value_font();
 
     condition_label = lv_label_create(value_row);
@@ -160,9 +169,8 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
     lv_label_set_long_mode(condition_label, LV_LABEL_LONG_DOT);
     lv_obj_set_height(condition_label, lv_font_get_line_height(condition_font));
     lv_obj_set_width(condition_label, LV_SIZE_CONTENT);
-    lv_obj_set_style_max_width(
-        condition_label,
-        tile_layout::scale((span_w >= 3) ? 220 : 140), 0);
+    // The state update narrows this to the room left beside the temperature.
+    lv_obj_set_style_max_width(condition_label, tile_w - 2 * pad_hor, 0);
     lv_label_set_text(condition_label, "--");
     lv_obj_add_flag(condition_label, LV_OBJ_FLAG_HIDDEN);
 
@@ -177,12 +185,18 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   set_label_style(temp_label, lv_color_white(), weather_value_font());
   lv_label_set_text(temp_label, "--");
 
-  // Position like a 1x1 sensor tile: keep the same top offset regardless of span.
-  lv_obj_update_layout(value_row);
-  lv_coord_t row_h = lv_obj_get_height(value_row);
-  lv_coord_t value_row_y =
-      (GRID_CELL_H - 2 * pad_ver) / 2 - row_h / 2 + tile_layout::scale(28);
-  lv_obj_align(value_row, LV_ALIGN_TOP_MID, 0, value_row_y);
+  if (!show_forecast) {
+    // Like the Sensor tile: centred in the real card plus the same offset, so
+    // a half-step taller card moves the value down with it (identical at 1 cell).
+    lv_obj_align(value_row, LV_ALIGN_CENTER, 0, tile_layout::scale(28));
+  } else {
+    // With a forecast the value stays in the top cell above the forecast row.
+    lv_obj_update_layout(value_row);
+    lv_coord_t row_h = lv_obj_get_height(value_row);
+    lv_coord_t value_row_y =
+        (GRID_CELL_H - 2 * pad_ver) / 2 - row_h / 2 + tile_layout::scale(28);
+    lv_obj_align(value_row, LV_ALIGN_TOP_MID, 0, value_row_y);
+  }
 
   lv_obj_t* forecast_row = nullptr;
   if (show_forecast) {
@@ -190,8 +204,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
         tile_layout::scale(52);
     forecast_row = lv_obj_create(card);
     lv_obj_remove_style_all(forecast_row);
-    lv_obj_set_size(forecast_row,
-                    (span_w * GRID_CELL_W) + ((span_w - 1) * GRID_GAP),
+    lv_obj_set_size(forecast_row, tile_w,
                     GRID_CELL_H + kTileForecastTopHeadroom);
     lv_obj_set_style_bg_opa(forecast_row, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_all(forecast_row, 0, 0);
@@ -200,7 +213,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
     lv_obj_add_flag(forecast_row, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
     lv_coord_t forecast_x = -pad_hor;
     lv_coord_t forecast_y =
-        ((span_h - 1) * (GRID_CELL_H + GRID_GAP)) - pad_ver - kTileForecastTopHeadroom +
+        (tile_h - GRID_CELL_H) - pad_ver - kTileForecastTopHeadroom +
         kWeatherTileForecastYOffset;
     lv_obj_set_pos(forecast_row, forecast_x, forecast_y);
   }
@@ -217,7 +230,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
     if (forecast_row && forecast_cols > 0) {
       constexpr lv_coord_t kTileForecastTopHeadroom =
           tile_layout::scale(52);
-      const lv_coord_t total_w = (span_w * GRID_CELL_W) + ((span_w - 1) * GRID_GAP);
+      const lv_coord_t total_w = tile_w;
       const lv_coord_t cols_total = forecast_cols * WEATHER_FORECAST_COL_W;
       const lv_coord_t remaining = total_w - cols_total;
       // Distribute evenly: left margin + gaps + right margin = forecast_cols + 1 spaces.

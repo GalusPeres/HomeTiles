@@ -3,7 +3,7 @@
 This directory owns the shared browser editor. Type-specific browser code
 lives beside its firmware module in `src/types/<type>/admin*.js`.
 
-`bundle.json` lists 51 complete source units in execution order. The asset
+`bundle.json` lists 56 complete source units in execution order. The asset
 generator keeps a readable assembly at `src/web/assets/admin.js`. It separately
 formats a delivery copy and creates the compressed includes and content hashes
 used by firmware. Edit the source units, not the assembled or compressed files.

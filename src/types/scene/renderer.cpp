@@ -173,7 +173,7 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
   lv_obj_set_style_transform_height(btn, 0, LV_STATE_PRESSED);
   lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
 
-  set_tile_grid_cell(btn, col, row, tile.span_w, tile.span_h);
+  place_tile_card(btn, col, row, tile);
 
   String title_trim = tile.title;
   title_trim.trim();

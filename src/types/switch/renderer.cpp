@@ -146,7 +146,7 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
   lv_obj_remove_flag(container, LV_OBJ_FLAG_SCROLLABLE);
   if (!use_switch_widget) disable_pressed_button_animation(container);
 
-  set_tile_grid_cell(container, col, row, tile.span_w, tile.span_h);
+  place_tile_card(container, col, row, tile);
 
   // Optional icon label when icon_name is set.
   lv_obj_t* icon_lbl = nullptr;

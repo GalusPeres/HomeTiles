@@ -77,7 +77,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(card);
 
-  set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);
+  place_tile_card(card, col, row, tile);
 
   // Optional right-aligned icon label when icon_name is set.
   lv_obj_t* icon_lbl = nullptr;
@@ -118,6 +118,15 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     }
   }
 
+  // At half-step heights the arc and its value stay together: they share the
+  // extra half row equally. Whole spans give 0 and stay pixel-identical.
+  const lv_coord_t gauge_extra_h =
+      tile.span_h >= 1
+          ? tile_geometry::extent(tile.row, tile.span_h, GRID_CELL_H, GRID_GAP) -
+                tile_geometry::extent(tile.row, std::floor(tile.span_h), GRID_CELL_H, GRID_GAP)
+          : 0;
+  const lv_coord_t gauge_shift = gauge_extra_h / 2;
+
   lv_obj_t* gauge = nullptr;
   if (gauge_enabled) {
     // Get gauge appearance from tile settings (with defaults)
@@ -138,7 +147,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     gauge = lv_arc_create(card);
     if (gauge) {
       lv_obj_set_size(gauge, gauge_size, gauge_size);
-      lv_obj_align(gauge, LV_ALIGN_TOP_MID, 0, y_offset);
+      lv_obj_align(gauge, LV_ALIGN_TOP_MID, 0, y_offset + gauge_shift);
       lv_obj_remove_flag(gauge, LV_OBJ_FLAG_CLICKABLE);
       lv_obj_remove_flag(gauge, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_set_style_bg_opa(gauge, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -236,7 +245,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
 
   if (gauge_enabled) {
     lv_obj_align(v, LV_ALIGN_BOTTOM_MID, 0,
-                 tile_layout::scale(12) + value_y_offset);
+                 tile_layout::scale(12) + value_y_offset - (gauge_extra_h - gauge_shift));
   } else if (graph_enabled) {
     // Value above graph: center vertically in upper area
     lv_obj_align(v, LV_ALIGN_CENTER, 0,
@@ -247,8 +256,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   }
 
   if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h) && display_mode == 0) {
-    compact_sensor_layout::apply(card, icon_lbl, title_label, v, tile,
-                                 tile.sensor_value_font ? get_sensor_value_font(tile) : nullptr);
+    compact_sensor_layout::apply(card, icon_lbl, title_label, v, tile);
   }
 
   // Store for later updates.

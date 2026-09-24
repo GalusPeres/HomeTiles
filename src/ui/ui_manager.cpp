@@ -22,6 +22,7 @@
 #include "src/network/transport/network_transport.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/shared/camera_indicator.h"
 
 #include <time.h>
 #include <string.h>
@@ -147,6 +148,8 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
 
   access_gesture_eligible = false;
   mqttPublishDeviceSettings();
+  // Red frame in the outer margin while the built-in camera captures.
+  camera_indicator::init();
 
   Serial.println("[UI] UI built");
 }

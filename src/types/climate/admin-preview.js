@@ -144,8 +144,9 @@
   function climatePreviewSlots(
       state, spanW, spanH, slotConfig = null,
       targetLayoutConfig = null, geometryConfig = null) {
-    const w = Math.max(1, Number(spanW) || 1);
-    const h = Math.max(1, Number(spanH) || 1);
+    // Layout variants follow whole cells, like build_automatic_slot_kinds.
+    const w = Math.max(1, Math.floor(Number(spanW) || 1));
+    const h = Math.max(1, Math.floor(Number(spanH) || 1));
     const capacity = climateSlotCapacity(w, h);
     const { columns, rows } =
       climateGridDimensions(w, h);

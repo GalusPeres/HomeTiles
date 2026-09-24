@@ -56,7 +56,7 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
   lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(btn);
 
-  set_tile_grid_cell(btn, col, row, tile.span_w, tile.span_h);
+  place_tile_card(btn, col, row, tile);
 
   // Optional icon label when icon_name is set.
   lv_obj_t* icon_lbl = nullptr;

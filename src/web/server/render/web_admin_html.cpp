@@ -25,6 +25,8 @@
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/energy/energy_data.h"
 #include "src/ui/screensaver/screensaver_config.h"
+#include "src/video/local_camera/local_camera.h"
+#include "src/video/local_camera/local_camera_stream_contract.h"
 #include <cstring>
 
 namespace {
@@ -100,6 +102,252 @@ static String buildGlobalDateFormatOptionsHtml(uint8_t selected_format, const i1
 }
 
 }  // namespace
+
+// One image-control slider: translated label, range, current value. The
+// number is rendered untranslated; data-unit adds "%" for percent controls.
+static void appendLocalCameraImageSlider(String& html, const char* key,
+                                         const char* label, int min_value,
+                                         int max_value, int value,
+                                         const char* unit) {
+  html += R"html(
+                <label class="local-camera-slider" for="local_camera_)html";
+  html += key;
+  html += R"html("><span>)html";
+  appendHtmlEscaped(html, label);
+  html += R"html(</span><input type="range" id="local_camera_)html";
+  html += key;
+  html += R"html(" data-image-key=")html";
+  html += key;
+  html += R"html(" data-unit=")html";
+  html += unit;
+  html += R"html(" min=")html";
+  html += String(min_value);
+  html += R"html(" max=")html";
+  html += String(max_value);
+  html += R"html(" step="1" value=")html";
+  html += String(value);
+  html += R"html(" data-saved=")html";
+  html += String(value);
+  html += R"html(" oninput="localCameraImageInput(this)" onchange="localCameraImageChange(this)"><output id="local_camera_)html";
+  html += key;
+  html += R"html(_value">)html";
+  html += String(value);
+  html += unit;
+  html += R"html(</output></label>)html";
+}
+
+// One Custom stream mode slider (frames per second or JPEG quality), laid
+// out like the image sliders; saved through /api/local-camera on release.
+static void appendLocalCameraCustomSlider(String& html, const char* key,
+                                          const char* label, int min_value,
+                                          int max_value, int value) {
+  html += R"html(
+                <label class="local-camera-slider" for="local_camera_custom_)html";
+  html += key;
+  html += R"html("><span>)html";
+  appendHtmlEscaped(html, label);
+  html += R"html(</span><input type="range" id="local_camera_custom_)html";
+  html += key;
+  html += R"html(" data-custom-key=")html";
+  html += key;
+  html += R"html(" min=")html";
+  html += String(min_value);
+  html += R"html(" max=")html";
+  html += String(max_value);
+  html += R"html(" step="1" value=")html";
+  html += String(value);
+  html += R"html(" data-saved=")html";
+  html += String(value);
+  html += R"html(" oninput="localCameraCustomInput(this)" onchange="localCameraCustomChange(this)"><output id="local_camera_custom_)html";
+  html += key;
+  html += R"html(_value">)html";
+  html += String(value);
+  html += R"html(</output></label>)html";
+}
+
+static const char* localCameraStateText(const char* state,
+                                        const i18n::Strings& tr) {
+  if (!state) return tr.local_camera_status_error;
+  if (strcmp(state, "disabled") == 0) return tr.local_camera_status_disabled;
+  if (strcmp(state, "probing") == 0) return tr.local_camera_status_probing;
+  if (strcmp(state, "ready") == 0) return tr.local_camera_status_ready;
+  if (strcmp(state, "not_found") == 0) return tr.local_camera_status_not_found;
+  return tr.local_camera_status_error;
+}
+
+// Built-in camera opt-in. Rendered only on the exact camera profile; the
+// toggle and the live-stream mode save immediately through /api/local-camera
+// and are not part of the /mqtt settings form (no name attributes). All state
+// texts come from the central translations and travel as data attributes for
+// the status line; stream mode names are untranslated technical values.
+static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr) {
+  if (!local_camera::supported() || !Device::kCapabilities.has_builtin_camera) {
+    return;
+  }
+  const char* state = local_camera::stateName();
+  html += R"html(
+          <div class="settings-section" id="local_camera_section">
+            <div class="section-title">)html";
+  appendHtmlEscaped(html, tr.local_camera_section);
+  html += R"html(</div>
+            <div class="settings-grid">
+              <div class="settings-full">
+                <label class="settings-checkbox">
+                  <input type="checkbox" id="local_camera_enabled" onchange="saveLocalCameraEnabled(this.checked)")html";
+  if (local_camera::enabled()) html += " checked";
+  html += R"html(>
+                  <span>)html";
+  appendHtmlEscaped(html, tr.local_camera_enable);
+  html += R"html(</span>
+                </label>
+                <div class="settings-note">)html";
+  appendHtmlEscaped(html, tr.local_camera_note);
+  html += R"html(</div>
+                <div id="local_camera_status" class="settings-note" data-state=")html";
+  html += state;
+  html += R"html(" data-label=")html";
+  appendHtmlEscaped(html, tr.local_camera_status_label);
+  html += R"html(" data-state-disabled=")html";
+  appendHtmlEscaped(html, tr.local_camera_status_disabled);
+  html += R"html(" data-state-probing=")html";
+  appendHtmlEscaped(html, tr.local_camera_status_probing);
+  html += R"html(" data-state-ready=")html";
+  appendHtmlEscaped(html, tr.local_camera_status_ready);
+  html += R"html(" data-state-not-found=")html";
+  appendHtmlEscaped(html, tr.local_camera_status_not_found);
+  html += R"html(" data-state-error=")html";
+  appendHtmlEscaped(html, tr.local_camera_status_error);
+  html += R"html(">)html";
+  appendHtmlEscaped(html, tr.local_camera_status_label);
+  html += ": ";
+  appendHtmlEscaped(html, localCameraStateText(state, tr));
+  html += R"html(</div>
+              </div>
+              <div class="local-camera-group" id="local_camera_stream">
+                <div class="network-settings-heading">)html";
+  // Two columns: the live stream (mode, Custom sliders, mirror) on the left,
+  // the experimental indicator on the right, the image controls below over
+  // the full width. Narrow screens stack them (.settings-grid).
+  appendHtmlEscaped(html, tr.local_camera_stream_section);
+  html += R"html(</div>
+                <div>
+                <label for="local_camera_stream_mode">)html";
+  appendHtmlEscaped(html, tr.local_camera_stream_mode);
+  html += R"html(:</label>
+                <select id="local_camera_stream_mode" onchange="saveLocalCameraStreamMode(this.value)">)html";
+  const uint8_t selected_mode = local_camera::streamMode();
+  html += R"html(
+                  <option value="0")html";
+  if (selected_mode == local_camera_stream::kModeAuto) html += " selected";
+  html += ">";
+  appendHtmlEscaped(html, tr.local_camera_stream_mode_auto);
+  html += "</option>";
+  for (const local_camera_stream::ModeEntry& mode : local_camera_stream::kModes) {
+    char label[48];
+    if (!local_camera_stream::formatModeLabel(label, sizeof(label), mode)) continue;
+    html += R"html(
+                  <option value=")html";
+    html += String(static_cast<unsigned>(mode.id));
+    html += "\"";
+    if (mode.id == selected_mode) html += " selected";
+    html += ">";
+    html += label;
+    html += "</option>";
+  }
+  html += R"html(
+                  <option value=")html";
+  html += String(static_cast<unsigned>(local_camera_stream::kModeCustom));
+  html += "\"";
+  if (selected_mode == local_camera_stream::kModeCustom) html += " selected";
+  html += ">";
+  appendHtmlEscaped(html, tr.local_camera_stream_mode_custom);
+  html += R"html(</option>
+                </select>
+                </div>
+                <div class="local-camera-custom" id="local_camera_custom" data-mode=")html";
+  // Custom mode: frames per second and JPEG quality, shown only while the
+  // Custom mode is selected; the resolution stays the full image.
+  html += String(static_cast<unsigned>(local_camera_stream::kModeCustom));
+  html += "\"";
+  if (selected_mode != local_camera_stream::kModeCustom) html += " hidden";
+  html += ">";
+  const local_camera_stream::CustomMode custom = local_camera::customMode();
+  appendLocalCameraCustomSlider(html, "fps", tr.local_camera_custom_fps,
+                                local_camera_stream::kCustomMinFps,
+                                local_camera_stream::kCustomMaxFps, custom.fps);
+  appendLocalCameraCustomSlider(html, "quality", tr.local_camera_custom_quality,
+                                local_camera_stream::kMinQuality,
+                                local_camera_stream::kMaxQuality, custom.quality);
+  html += R"html(
+                </div>
+                <label class="settings-checkbox">
+                  <input type="checkbox" id="local_camera_mirror" onchange="saveLocalCameraMirror(this.checked)")html";
+  if (local_camera::mirror()) html += " checked";
+  html += R"html(>
+                  <span>)html";
+  appendHtmlEscaped(html, tr.local_camera_mirror);
+  html += R"html(</span>
+                </label>
+              </div>
+              <div class="local-camera-group local-camera-indicator" id="local_camera_indicator">
+                <div class="network-settings-heading">)html";
+  // Indicator style (experimental): the line checkbox switches the whole
+  // indicator, the pill checkbox only applies while the line is shown.
+  appendHtmlEscaped(html, tr.local_camera_indicator_section);
+  html += R"html(</div>
+                  <label class="settings-checkbox">
+                    <input type="checkbox" id="local_camera_indicator_line" onchange="saveLocalCameraIndicator()")html";
+  const local_camera::IndicatorStyle indicator = local_camera::indicatorStyle();
+  if (indicator != local_camera::IndicatorStyle::None) html += " checked";
+  html += R"html(>
+                    <span>)html";
+  appendHtmlEscaped(html, tr.local_camera_indicator_line);
+  html += R"html(</span>
+                  </label>
+                  <label class="settings-checkbox">
+                    <input type="checkbox" id="local_camera_indicator_pill" onchange="saveLocalCameraIndicator()")html";
+  if (indicator != local_camera::IndicatorStyle::Line) html += " checked";
+  if (indicator == local_camera::IndicatorStyle::None) html += " disabled";
+  html += R"html(>
+                    <span>)html";
+  appendHtmlEscaped(html, tr.local_camera_indicator_pill);
+  html += R"html(</span>
+                  </label>
+                <div class="settings-note">)html";
+  appendHtmlEscaped(html, tr.local_camera_indicator_note);
+  html += R"html(</div>
+              </div>
+              <div class="settings-full local-camera-image" id="local_camera_image">
+                <div class="network-settings-heading">)html";
+  appendHtmlEscaped(html, tr.local_camera_image_section);
+  html += R"html(</div>)html";
+  // Live controls: saved through /api/local-camera while dragging (debounced)
+  // and on release; the camera applies them with the next frame.
+  const local_camera_contract::ImageSettings image = local_camera::imageSettings();
+  using local_camera_contract::kImageAdjustMax;
+  using local_camera_contract::kImageAdjustMin;
+  appendLocalCameraImageSlider(html, "brightness", tr.local_camera_brightness,
+                               kImageAdjustMin, kImageAdjustMax, image.brightness, "");
+  appendLocalCameraImageSlider(html, "contrast", tr.local_camera_contrast,
+                               kImageAdjustMin, kImageAdjustMax, image.contrast, "");
+  appendLocalCameraImageSlider(html, "saturation", tr.local_camera_saturation,
+                               local_camera_contract::kSaturationMin,
+                               local_camera_contract::kSaturationMax, image.saturation, "%");
+  appendLocalCameraImageSlider(html, "red", tr.local_camera_red,
+                               kImageAdjustMin, kImageAdjustMax, image.red, "%");
+  appendLocalCameraImageSlider(html, "blue", tr.local_camera_blue,
+                               kImageAdjustMin, kImageAdjustMax, image.blue, "%");
+  html += R"html(
+                <div class="settings-actions local-camera-image-actions">
+                  <button type="button" class="btn btn-secondary" id="local_camera_image_reset" onclick="resetLocalCameraImage()">)html";
+  appendHtmlEscaped(html, tr.local_camera_image_reset);
+  html += R"html(</button>
+                </div>
+              </div>
+            </div>
+          </div>
+)html";
+}
 
 // Helper function to generate tile tab HTML (unified for all folders)
 static void appendTileTabHTML(
@@ -236,6 +484,7 @@ static void appendTileTabHTML(
       cssClass += " sensor-compact";
       if (span_h == 0.5f) cssClass += " sensor-half";
     }
+    if (tile_geometry::compact_clock(tile.type, span_w, span_h)) cssClass += " clock-compact";
     html += "<div class=\"";
     html += cssClass;
     html += "\" data-index=\"";
@@ -751,7 +1000,7 @@ static void appendTileTabHTML(
   html += tab_id;
   html += R"html(_tile_col" min="1" max=")html";
   html += String(GRID_COLS);
-  html += R"html(" step="1" value="1">
+  html += R"html(" step="0.5" value="1">
               </div>
               <div class="layout-field">
                 <label>)html";
@@ -763,7 +1012,7 @@ static void appendTileTabHTML(
   html += String(screensaver_mode && GRID_ROWS > 1 ? GRID_ROWS - 1 : 1);
   html += R"html(" max=")html";
   html += String(GRID_ROWS);
-  html += R"html(" step="1" value="1">
+  html += R"html(" step="0.5" value="1">
               </div>
               <div class="layout-field">
                 <label>)html";
@@ -773,7 +1022,7 @@ static void appendTileTabHTML(
   html += tab_id;
   html += R"html(_tile_span_w" min="1" max=")html";
   html += String(GRID_COLS);
-  html += R"html(" step="1" value="1">
+  html += R"html(" step="0.5" value="1">
               </div>
               <div class="layout-field">
                 <label>)html";
@@ -783,7 +1032,7 @@ static void appendTileTabHTML(
   html += tab_id;
   html += R"html(_tile_span_h" min="1" max=")html";
   html += String(GRID_ROWS);
-  html += R"html(" step="1" value="1">
+  html += R"html(" step="0.5" value="1">
               </div>
             </div>
 
@@ -1454,6 +1703,9 @@ String WebAdminServer::getAdminPage() {
             </div>
           </div>
 
+)html";
+  appendLocalCameraSettingsHtml(html, tr);
+  html += R"html(
           <div class="settings-section">
             <div class="section-title">)html";
   html += tr.admin_settings_screenshot;
@@ -1809,6 +2061,11 @@ String WebAdminServer::getStatusJSON() {
   json += ",\"nvs_namespace_count\":" + String(stats_ok ? stats.namespace_count : -1);
   json += ",\"nvs_tab5_tiles_used\":" + String(tiles_used);
   json += ",\"nvs_tab5_config_used\":" + String(config_used);
+  // Camera profile only; every other profile keeps its previous API.
+  if (local_camera::supported() && Device::kCapabilities.has_builtin_camera) {
+    json += ",\"local_camera\":";
+    local_camera::appendStatusJson(json);
+  }
   json += "}";
   return json;
 }

@@ -18,6 +18,22 @@ static constexpr int GRID_PAD = Device::kGridPad;
 static constexpr int GRID_CELL_W = Device::kGridCellW;
 static constexpr int GRID_CELL_H = Device::kGridCellH;
 
+// The fixed tracks rarely fill the screen exactly (1280x800 with 7x5 cells
+// leaves 3 px vertically). The rest is split between both outer margins, the
+// top and left margins taking the smaller half, instead of collecting at the
+// bottom or right edge; opposite margins then differ by at most one pixel.
+static constexpr int GRID_EXTRA_X =
+    static_cast<int>(Device::kScreenWidth) -
+    (GRID_COLS * GRID_CELL_W + (GRID_COLS - 1) * GRID_GAP + 2 * GRID_PAD);
+static constexpr int GRID_EXTRA_Y =
+    static_cast<int>(Device::kScreenHeight) -
+    (GRID_ROWS * GRID_CELL_H + (GRID_ROWS - 1) * GRID_GAP + 2 * GRID_PAD);
+static_assert(GRID_EXTRA_X >= 0 && GRID_EXTRA_Y >= 0, "The tile grid must fit the screen");
+static constexpr int GRID_PAD_LEFT = GRID_PAD + GRID_EXTRA_X / 2;
+static constexpr int GRID_PAD_RIGHT = GRID_PAD + GRID_EXTRA_X - GRID_EXTRA_X / 2;
+static constexpr int GRID_PAD_TOP = GRID_PAD + GRID_EXTRA_Y / 2;
+static constexpr int GRID_PAD_BOTTOM = GRID_PAD + GRID_EXTRA_Y - GRID_EXTRA_Y / 2;
+
 // A media tile renders its (often long) title as a horizontally scrolling band the
 // full width of the tile. On the 8-inch device every flush is PPA-rotated, and a
 // band wider than the safe rotate width jams the single-slot SRM engine (see

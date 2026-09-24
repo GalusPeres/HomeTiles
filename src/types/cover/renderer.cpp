@@ -344,7 +344,7 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
   lv_obj_set_style_pad_ver(card, tile_layout::scale_480(24), 0);
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(card);
-  set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);
+  place_tile_card(card, col, row, tile);
 
   CoverTileWidgets& widget =
       tile_renderer_get_cover_widgets(grid_type)[index];

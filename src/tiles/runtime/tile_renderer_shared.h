@@ -111,3 +111,11 @@ inline void apply_fractional_tile_geometry(lv_obj_t* obj, const Tile& tile) {
   lv_obj_set_size(obj, tile_geometry::extent(tile.col, tile.span_w, GRID_CELL_W, GRID_GAP),
                  tile_geometry::extent(tile.row, tile.span_h, GRID_CELL_H, GRID_GAP));
 }
+
+// Places a tile card. Half-step geometry is applied immediately: once a
+// renderer runs lv_obj_update_layout(), the grid has stretched the card to whole
+// cells and LVGL keeps that layout-driven size, ignoring a later set_size.
+inline void place_tile_card(lv_obj_t* obj, int col, int row, const Tile& tile) {
+  set_tile_grid_cell(obj, col, row, tile.span_w, tile.span_h);
+  apply_fractional_tile_geometry(obj, tile);
+}

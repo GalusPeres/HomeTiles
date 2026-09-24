@@ -76,6 +76,7 @@
     if (spanWEl) spanWEl.value = d.span_w || '1';
     const spanHEl = document.getElementById(prefix + '_tile_span_h');
     if (spanHEl) spanHEl.value = d.span_h || '1';
+    syncTileSizePolicy(tab);
     const meta = getTileTypeMeta(d.type || '0');
     callTypeHandler(meta, 'load', prefix, d);
     refreshEntityOptionLists(prefix);

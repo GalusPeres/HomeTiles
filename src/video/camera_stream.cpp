@@ -28,6 +28,7 @@
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/devices/device.h"
 #include "src/video/camera_geometry.h"
+#include "src/video/tcp_ack_socket.h"
 
 namespace {
 
@@ -42,23 +43,25 @@ constexpr size_t kMaxJpegBytes = 256U * 1024U;
 // A third buffer lets the decoder reserve the next frame instead of silently
 // dropping it during that ~25 ms presentation window.
 constexpr uint8_t kFrameBufferCount = 3;
+// Wire format, socket helpers and the DMA headroom guard are shared with the
+// built-in camera upload (src/video/tcp_ack_wire.h, tcp_ack_socket.h).
 constexpr int kCameraReceiveBufferBytes = 4 * 1024;
-constexpr size_t kCameraChunkBytes = 8 * 1024;
+constexpr size_t kCameraChunkBytes = tcp_ack::kChunkBytes;
 constexpr uint32_t kCameraConnectTimeoutMs = 4000;
 constexpr uint32_t kSocketPollTimeoutMs = 250;
-constexpr size_t kMinCameraDmaHeadroomBytes = 24 * 1024;
-constexpr uint32_t kDmaHeadroomGraceMs = 250;
+constexpr size_t kMinCameraDmaHeadroomBytes = tcp_ack::kMinCameraDmaHeadroomBytes;
+constexpr uint32_t kDmaHeadroomGraceMs = tcp_ack::kDmaHeadroomGraceMs;
 constexpr char kCameraScheme[] = "tcp://";
 constexpr char kCameraRequestPrefix[] = "HTCAM/1 ";
-constexpr uint8_t kCameraHelloMagic[] = {'H', 'T', 'C', '1'};
-constexpr uint8_t kCameraFrameMagic[] = {'H', 'T', 'F', '1'};
-constexpr uint8_t kCameraAckMagic[] = {'H', 'T', 'A', '1'};
-constexpr uint8_t kCameraMessageFrame = 1;
-constexpr uint8_t kCameraMessageFlush = 2;
-constexpr uint8_t kCameraMessageEnd = 3;
-constexpr size_t kCameraHelloBytes = 8;
-constexpr size_t kCameraFrameHeaderBytes = 16;
-constexpr size_t kCameraAckBytes = 12;
+constexpr const uint8_t (&kCameraHelloMagic)[4] = tcp_ack::kHelloMagic;
+constexpr const uint8_t (&kCameraFrameMagic)[4] = tcp_ack::kFrameMagic;
+constexpr const uint8_t (&kCameraAckMagic)[4] = tcp_ack::kAckMagic;
+constexpr uint8_t kCameraMessageFrame = tcp_ack::kMessageFrame;
+constexpr uint8_t kCameraMessageFlush = tcp_ack::kMessageFlush;
+constexpr uint8_t kCameraMessageEnd = tcp_ack::kMessageEnd;
+constexpr size_t kCameraHelloBytes = tcp_ack::kHelloBytes;
+constexpr size_t kCameraFrameHeaderBytes = tcp_ack::kFrameHeaderBytes;
+constexpr size_t kCameraAckBytes = tcp_ack::kAckBytes;
 
 enum class FrameState : uint8_t {
   Free,
@@ -716,143 +719,41 @@ static bool parse_camera_url(const char* url, CameraEndpoint& endpoint) {
   return true;
 }
 
+static bool camera_stop_requested(void*) { return g_stop_requested; }
+
 static int connect_camera_socket(const CameraEndpoint& endpoint) {
-  char port_text[8] = {};
-  snprintf(port_text, sizeof(port_text), "%u",
-           static_cast<unsigned>(endpoint.port));
-  addrinfo hints{};
-  hints.ai_family = AF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_protocol = IPPROTO_TCP;
-  addrinfo* addresses = nullptr;
-  const int lookup = getaddrinfo(endpoint.host, port_text, &hints, &addresses);
-  if (lookup != 0 || !addresses) {
-    Serial.printf("[CameraStream] TCP DNS failed: %d\n", lookup);
-    return -1;
-  }
-
-  int connected_fd = -1;
-  for (addrinfo* address = addresses; address; address = address->ai_next) {
-    const int fd =
-        socket(address->ai_family, address->ai_socktype, address->ai_protocol);
-    if (fd < 0) continue;
-
-    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &kCameraReceiveBufferBytes,
-               sizeof(kCameraReceiveBufferBytes));
-    const int tcp_no_delay = 1;
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &tcp_no_delay,
-               sizeof(tcp_no_delay));
-    const int original_flags = fcntl(fd, F_GETFL, 0);
-    if (original_flags < 0 ||
-        fcntl(fd, F_SETFL, original_flags | O_NONBLOCK) < 0) {
-      close(fd);
-      continue;
-    }
-
-    int result = connect(fd, address->ai_addr, address->ai_addrlen);
-    bool connected = result == 0;
-    if (!connected && result < 0 && errno == EINPROGRESS) {
-      fd_set writable;
-      FD_ZERO(&writable);
-      FD_SET(fd, &writable);
-      timeval timeout{
-          static_cast<time_t>(kCameraConnectTimeoutMs / 1000U),
-          static_cast<suseconds_t>(
-              (kCameraConnectTimeoutMs % 1000U) * 1000U)};
-      const int selected =
-          select(fd + 1, nullptr, &writable, nullptr, &timeout);
-      if (selected > 0) {
-        int socket_error = 0;
-        socklen_t error_size = sizeof(socket_error);
-        result = getsockopt(fd, SOL_SOCKET, SO_ERROR, &socket_error,
-                            &error_size);
-        connected = result == 0 && socket_error == 0;
-        if (!connected && socket_error != 0) errno = socket_error;
-      }
-    }
-    if (!connected) {
-      close(fd);
-      continue;
-    }
-
-    fcntl(fd, F_SETFL, original_flags & ~O_NONBLOCK);
-    timeval poll_timeout{
-        static_cast<time_t>(kSocketPollTimeoutMs / 1000U),
-        static_cast<suseconds_t>(
-            (kSocketPollTimeoutMs % 1000U) * 1000U)};
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &poll_timeout,
-               sizeof(poll_timeout));
-    connected_fd = fd;
-    break;
-  }
-  freeaddrinfo(addresses);
-  return connected_fd;
+  tcp_ack::ConnectOptions options;
+  options.log_prefix = "[CameraStream]";
+  options.receive_buffer_bytes = kCameraReceiveBufferBytes;
+  options.connect_timeout_ms = kCameraConnectTimeoutMs;
+  options.poll_timeout_ms = kSocketPollTimeoutMs;
+  // No stop callback: one select() over the whole connect timeout, as before.
+  return tcp_ack::connectTo(endpoint.host, endpoint.port, options);
 }
 
 static bool socket_send_all(int fd, const void* source, size_t bytes) {
-  const uint8_t* data = static_cast<const uint8_t*>(source);
-  while (bytes > 0 && !g_stop_requested) {
-    const int sent = send(fd, data, bytes, 0);
-    if (sent > 0) {
-      data += sent;
-      bytes -= static_cast<size_t>(sent);
-      continue;
-    }
-    if (sent < 0 && errno == EINTR) continue;
-    return false;
-  }
-  return bytes == 0;
+  return tcp_ack::sendAll(fd, source, bytes, camera_stop_requested, nullptr);
 }
 
-enum class SocketReadResult : uint8_t {
-  Ok,
-  Closed,
-  Error,
-  Stopped,
-};
+using tcp_ack::SocketReadResult;
 
 static SocketReadResult socket_receive_exact(int fd,
                                              void* destination,
                                              size_t bytes) {
-  uint8_t* output = static_cast<uint8_t*>(destination);
-  size_t received_bytes = 0;
-  while (received_bytes < bytes) {
-    if (g_stop_requested) return SocketReadResult::Stopped;
-    const int received =
-        recv(fd, output + received_bytes, bytes - received_bytes, 0);
-    if (received > 0) {
-      received_bytes += static_cast<size_t>(received);
-      continue;
-    }
-    if (received == 0) return SocketReadResult::Closed;
-    if (errno == EINTR) continue;
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      taskYIELD();
-      continue;
-    }
-    return SocketReadResult::Error;
-  }
-  return SocketReadResult::Ok;
+  return tcp_ack::receiveExact(fd, destination, bytes, camera_stop_requested,
+                               nullptr);
 }
 
 static uint16_t read_be16(const uint8_t* data) {
-  return static_cast<uint16_t>(
-      (static_cast<uint16_t>(data[0]) << 8) |
-      static_cast<uint16_t>(data[1]));
+  return tcp_ack::readBe16(data);
 }
 
 static uint32_t read_be32(const uint8_t* data) {
-  return (static_cast<uint32_t>(data[0]) << 24) |
-         (static_cast<uint32_t>(data[1]) << 16) |
-         (static_cast<uint32_t>(data[2]) << 8) |
-         static_cast<uint32_t>(data[3]);
+  return tcp_ack::readBe32(data);
 }
 
 static void write_be32(uint8_t* data, uint32_t value) {
-  data[0] = static_cast<uint8_t>(value >> 24);
-  data[1] = static_cast<uint8_t>(value >> 16);
-  data[2] = static_cast<uint8_t>(value >> 8);
-  data[3] = static_cast<uint8_t>(value);
+  tcp_ack::writeBe32(data, value);
 }
 
 #if 0
@@ -1213,25 +1114,17 @@ static void run_camera_task() {
   bool received_first_frame = false;
   uint32_t frame_count = 0;
   uint32_t last_fps_ms = millis();
-  uint32_t low_dma_headroom_since_ms = 0;
+  tcp_ack::DmaHeadroomGuard dma_guard(kMinCameraDmaHeadroomBytes,
+                                      kDmaHeadroomGraceMs);
 
   auto dma_headroom_available = [&]() -> bool {
     const size_t dma_free = heap_caps_get_free_size(
         MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     const size_t mqtt_dma_reserve = networkManager.mqttDmaReserveBytes();
     const size_t dma_headroom = dma_free + mqtt_dma_reserve;
-    if (dma_headroom >= kMinCameraDmaHeadroomBytes) {
-      low_dma_headroom_since_ms = 0;
-      return true;
-    }
-
     const uint32_t now = millis();
-    if (low_dma_headroom_since_ms == 0) {
-      low_dma_headroom_since_ms = now ? now : 1;
-      return true;
-    }
-    if (static_cast<uint32_t>(now - low_dma_headroom_since_ms) <
-        kDmaHeadroomGraceMs) {
+    if (dma_guard.check(dma_headroom, now) !=
+        tcp_ack::DmaHeadroomGuard::Result::Exhausted) {
       return true;
     }
 
@@ -1241,7 +1134,7 @@ static void run_camera_task() {
         static_cast<unsigned>(dma_free / 1024U),
         static_cast<unsigned>(mqtt_dma_reserve / 1024U),
         static_cast<unsigned>(dma_headroom / 1024U),
-        static_cast<unsigned>(now - low_dma_headroom_since_ms));
+        static_cast<unsigned>(dma_guard.lowForMs(now)));
     set_status(camera_text().camera_connection_ended, true);
     return false;
   };

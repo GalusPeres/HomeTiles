@@ -4,6 +4,7 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/tiles/config/tile_geometry.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/fonts/ui_fonts.h"
@@ -163,6 +164,7 @@ struct ClockTileData {
   bool show_weekday = false;
   const char* weekday_language = nullptr;
   bool fill_parent = false;
+  bool horizontal = false;
   lv_obj_t* stack = nullptr;
   lv_obj_t* time_label = nullptr;
   lv_obj_t* date_label = nullptr;
@@ -172,7 +174,7 @@ struct ClockTileData {
 };
 
 static void apply_clock_line_alignment(ClockTileData* data) {
-  if (!data || data->fill_parent) return;
+  if (!data || data->fill_parent || data->horizontal) return;
   lv_coord_t width = 0;
   if (data->time_label) width = max(width, data->time_shadows.text_width);
   if (data->date_label) width = max(width, data->date_shadows.text_width);
@@ -353,7 +355,7 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
   } else {
     lv_obj_set_size(stack, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   }
-  lv_obj_set_flex_flow(stack, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_flow(stack, config.horizontal ? LV_FLEX_FLOW_ROW : LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(stack, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_all(stack, 0, 0);
@@ -394,6 +396,7 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
   data->show_weekday = config.show_weekday;
   data->weekday_language = config.weekday_language;
   data->fill_parent = config.fill_parent;
+  data->horizontal = config.horizontal;
   data->stack = stack;
   data->time_label = time_label;
   data->date_label = date_label;
@@ -414,6 +417,62 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
       LV_EVENT_DELETE,
       data);
   return stack;
+}
+
+static constexpr uint8_t kClockFontSizes[] = {20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96};
+
+static lv_coord_t clock_text_width(uint8_t size, const char* text) {
+  lv_point_t text_size{};
+  lv_text_get_size(&text_size, text, ui_font_for_size(layout_clock_font_size(size)), 0, 0,
+                   LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  return text_size.x;
+}
+
+// Largest configured-or-smaller size whose rendered size stays within cap_px
+// and whose sample text fits next to used_w. Returns 0 when nothing fits.
+static uint8_t fit_clock_size(uint8_t configured, lv_coord_t cap_px, lv_coord_t avail_w,
+                              lv_coord_t used_w, const char* sample, lv_coord_t* width_out) {
+  for (int i = static_cast<int>(sizeof(kClockFontSizes)) - 1; i >= 0; --i) {
+    const uint8_t size = kClockFontSizes[i];
+    if (size > configured || layout_clock_font_size(size) > cap_px) continue;
+    const lv_coord_t width = clock_text_width(size, sample);
+    if (used_w + width <= avail_w) {
+      if (width_out) *width_out = width;
+      return size;
+    }
+  }
+  return 0;
+}
+
+// Half-height clocks use one row: the largest configured-or-smaller size whose
+// rendered size fits 80% of the tile height and whose text fits the width.
+// The date follows only from width 2 and only when it still fits. The Web
+// Admin preview applies the same rule (fitCompactClockPreview in admin.js).
+static void fit_compact_clock(const Tile& tile, lv_coord_t pad, ClockWidgetConfig& config) {
+  const lv_coord_t width = tile_geometry::extent(tile.col, tile.span_w, GRID_CELL_W, GRID_GAP) - pad * 2;
+  const lv_coord_t cap = tile_geometry::extent(tile.row, tile.span_h, GRID_CELL_H, GRID_GAP) * 4 / 5;
+  const char* time_sample = config.time_format == clock_tile::TIME_FORMAT_12H ? "88:88 PM" : "88:88";
+  const char* date_sample = config.date_format == clock_tile::DATE_FORMAT_MDY ||
+                                    config.date_format == clock_tile::DATE_FORMAT_YMD
+                                ? "88/88/8888"
+                                : "88.88.8888";
+  const bool date_is_primary = !config.show_time;
+  uint8_t& primary_size = date_is_primary ? config.date_font_size : config.time_font_size;
+  lv_coord_t used = 0;
+  primary_size = fit_clock_size(primary_size, cap, width, 0,
+                                date_is_primary ? date_sample : time_sample, &used);
+  if (primary_size == 0) primary_size = kClockFontSizes[0];
+  if (date_is_primary || !config.show_date) return;
+  const uint8_t date_size =
+      tile.span_w >= 2 ? fit_clock_size(min(config.date_font_size, config.time_font_size),
+                                        layout_clock_font_size(config.time_font_size), width,
+                                        used + tile_layout::scale(6), date_sample, nullptr)
+                       : 0;
+  if (date_size == 0) {
+    config.show_date = false;
+  } else {
+    config.date_font_size = date_size;
+  }
 }
 
 lv_obj_t* render_clock_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index) {
@@ -438,11 +497,18 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(card);
 
-  set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);
+  place_tile_card(card, col, row, tile);
 
-  // Icon Label (optional)
+  const bool compact = tile_geometry::compact_clock(tile.type, tile.span_w, tile.span_h);
+  const lv_coord_t compact_pad = tile_layout::scale_480(8);
+  if (compact) {
+    lv_obj_set_style_pad_hor(card, compact_pad, 0);
+    lv_obj_set_style_pad_ver(card, 0, 0);
+  }
+
+  // Icon Label (optional). Half-height clocks show only the time row.
   String iconChar;
-  if (tile.icon_name.length() > 0 && FONT_MDI_ICONS != nullptr) {
+  if (!compact && tile.icon_name.length() > 0 && FONT_MDI_ICONS != nullptr) {
     iconChar = getMdiChar(tile.icon_name);
   }
   const bool has_icon = iconChar.length() > 0;
@@ -458,7 +524,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   }
 
   // Title Label (optional)
-  if (tile.title.length() > 0) {
+  if (!compact && tile.title.length() > 0) {
     lv_obj_t* title_lbl = lv_label_create(card);
     if (title_lbl) {
       set_label_style(title_lbl, lv_color_white(),
@@ -473,7 +539,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   uint8_t flags = get_clock_flags(tile);
   const bool show_time = (flags & 1) != 0;
   const bool show_date = (flags & 2) != 0;
-  const bool has_header = tile.title.length() > 0 || has_icon;
+  const bool has_header = !compact && (tile.title.length() > 0 || has_icon);
 
   ClockWidgetConfig widget_config;
   widget_config.show_time = show_time;
@@ -484,6 +550,11 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       normalize_clock_date_font_size(tile.key_modifier, 20);
   widget_config.time_format = resolve_clock_time_format(tile);
   widget_config.date_format = resolve_clock_date_format(tile);
+  if (compact) {
+    widget_config.fill_parent = false;
+    widget_config.horizontal = true;
+    fit_compact_clock(tile, compact_pad, widget_config);
+  }
   lv_obj_t* stack = create_clock_widget(card, widget_config);
   if (stack) {
     lv_obj_align(stack, LV_ALIGN_CENTER, 0,

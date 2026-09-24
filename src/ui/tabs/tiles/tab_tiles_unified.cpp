@@ -29,7 +29,6 @@
 // Layout constants
 static const int GAP = GRID_GAP;
 static const int OUTER = 0;
-static const int GRID_PAD_PX = GRID_PAD;
 
 // Global state shared by all three grids
 static lv_obj_t* g_tiles_grids[3] = {nullptr};           // [TAB0, TAB1, TAB2]
@@ -1217,7 +1216,10 @@ static lv_obj_t* create_tiles_grid(lv_obj_t* parent) {
   lv_obj_set_style_bg_color(grid, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(grid, 0, 0);
-  lv_obj_set_style_pad_all(grid, GRID_PAD_PX, 0);
+  lv_obj_set_style_pad_left(grid, GRID_PAD_LEFT, 0);
+  lv_obj_set_style_pad_right(grid, GRID_PAD_RIGHT, 0);
+  lv_obj_set_style_pad_top(grid, GRID_PAD_TOP, 0);
+  lv_obj_set_style_pad_bottom(grid, GRID_PAD_BOTTOM, 0);
   lv_obj_remove_flag(grid, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(grid, LV_PCT(100), LV_PCT(100));
   lv_obj_set_style_pad_column(grid, GAP, 0);

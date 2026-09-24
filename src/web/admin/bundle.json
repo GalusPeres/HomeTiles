@@ -7,6 +7,7 @@
     "src/web/admin/settings/network.js",
     "src/web/admin/settings/access.js",
     "src/web/admin/settings/diagnostics.js",
+    "src/web/admin/settings/local-camera.js",
     "src/web/admin/files/manager.js",
     "src/web/admin/firmware/ota.js",
     "src/web/admin/tiles/state.js",

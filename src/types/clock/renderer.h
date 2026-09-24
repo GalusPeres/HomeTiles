@@ -11,6 +11,8 @@ struct ClockWidgetConfig {
   // Language code for the weekday name; nullptr falls back to English.
   const char* weekday_language = nullptr;
   bool fill_parent = false;
+  // Put time and date side by side (half-height clock tiles).
+  bool horizontal = false;
   // LVGL has no glyph shadow. Several slightly offset dark copies behind
   // each line approximate a blur. Used only by the screensaver.
   bool text_shadow = false;

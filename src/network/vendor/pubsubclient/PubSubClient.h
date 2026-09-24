@@ -115,7 +115,9 @@ private:
    // Returns the size of the header
    // Note: the header is built at the end of the first MQTT_MAX_HEADER_SIZE bytes, so will start
    //       (MQTT_MAX_HEADER_SIZE - <returned size>) bytes into the buffer
-   size_t buildHeader(uint8_t header, uint8_t* buf, uint16_t length);
+   // HomeTiles: 32-bit length so beginPublish() can announce payloads above
+   // 65,535 bytes (MQTT allows up to 268,435,455 in four length bytes).
+   size_t buildHeader(uint8_t header, uint8_t* buf, uint32_t length);
    IPAddress ip;
    const char* domain;
    uint16_t port;
@@ -188,6 +190,12 @@ public:
    boolean loop();
    boolean connected();
    int state();
+   // HomeTiles: retain flag of the PUBLISH that is currently being delivered
+   // to the message callback. Only valid inside that callback; loop() leaves
+   // the fixed header byte at buffer[0] while the callback runs.
+   boolean lastPublishRetained() const {
+      return this->buffer != nullptr && (this->buffer[0] & 0x01) != 0;
+   }
 
 };
 

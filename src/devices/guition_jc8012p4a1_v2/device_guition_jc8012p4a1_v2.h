@@ -23,7 +23,8 @@ inline constexpr Device::Profile kProfile{
     Device::RotationStepMode::FlipOnly,
     0,
     2,
-    Device::Capabilities{false, false, false, false, false, false},
+    // Last flag: built-in OV02C10 camera (see local_camera_hw.h).
+    Device::Capabilities{false, false, false, false, false, false, true},
     kHardwareIoProfile,
 };
 

@@ -9,7 +9,20 @@ param(
     [ValidateSet('auto', 'repo-short-tail', 'repo-a8204', 'repo-guition-jc8012-rx-single-block')]
     [string]$EspHostedRxVariant = 'auto',
 
-    [switch]$Clean
+    # Persistent Arduino build folder. Each profile/define set needs its own
+    # folder: arduino-cli discards a folder whose build options changed, and a
+    # cold build spends most of its time re-detecting libraries.
+    [string]$BuildPath,
+
+    # Skip the host suite only when it passed right before this build.
+    [switch]$SkipTests,
+
+    [switch]$Clean,
+
+    # Reuse the last arduino-cli build in $BuildPath (tools/fast-build.mjs):
+    # recompile changed sketch sources in parallel and relink, skipping the
+    # serial library detection. Falls back to the full build when needed.
+    [switch]$Fast
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,10 +60,23 @@ if ($LASTEXITCODE -ne 0) {
 if ($LASTEXITCODE -ne 0) {
     throw 'WebUI asset verification failed. Install host dependencies with npm ci --ignore-scripts, then run node tools/generate-web-assets.mjs.'
 }
-& $node.Source (Join-Path $PSScriptRoot 'run-tests.mjs')
-if ($LASTEXITCODE -ne 0) {
-    throw 'Host regression suite failed.'
+if (-not $SkipTests) {
+    & $node.Source (Join-Path $PSScriptRoot 'run-tests.mjs')
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Host regression suite failed.'
+    }
 }
+
+if (-not $BuildPath) {
+    $defineKey = ($ExtraDefine | Sort-Object) -join ','
+    $suffix = ''
+    if ($defineKey) {
+        $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($defineKey))
+        $suffix = '-' + (($hash[0..3] | ForEach-Object { $_.ToString('x2') }) -join '')
+    }
+    $BuildPath = Join-Path $env:LOCALAPPDATA "arduino\sketches\hometiles-$Profile$suffix"
+}
+Write-Host "Build cache: $BuildPath"
 
 $isNativeS3 = $buildProfile.chipFamily -eq 'ESP32-S3'
 
@@ -111,21 +137,52 @@ $elfFlags = $buildProfile.elfFlags
 
 Move-Item -LiteralPath $sketchProfiles -Destination $hiddenSketchProfiles
 try {
-    [string[]]$cleanArgs = @()
-    if ($Clean) {
-        $cleanArgs += '--clean'
+    $buildArgs = @(
+        '--fqbn', $fqbn,
+        '--build-path', $BuildPath,
+        '--libraries', $repoLibraries,
+        '--build-property', "compiler.c.extra_flags=$cFlags",
+        '--build-property', "compiler.cpp.extra_flags=$cppFlags",
+        '--build-property', "compiler.c.elf.extra_flags=$elfFlags")
+    $fastDone = $false
+    if ($Fast -and -not $Clean) {
+        # The expanded platform recipes only change with these arguments.
+        $propsFile = Join-Path $BuildPath 'hometiles-fast-props.txt'
+        $propsKeyFile = Join-Path $BuildPath 'hometiles-fast-props.key'
+        $propsKey = $buildArgs -join '|'
+        $cachedKey = if (Test-Path -LiteralPath $propsKeyFile) { Get-Content -LiteralPath $propsKeyFile -Raw } else { '' }
+        if (-not (Test-Path -LiteralPath $propsFile) -or $cachedKey -ne $propsKey) {
+            New-Item -ItemType Directory -Path $BuildPath -Force | Out-Null
+            & $arduinoCli compile @buildArgs --show-properties=expanded $repoRoot |
+                Out-File -LiteralPath $propsFile -Encoding utf8
+            if ($LASTEXITCODE -ne 0) {
+                throw "Reading the platform recipes failed for profile '$Profile'."
+            }
+            Set-Content -LiteralPath $propsKeyFile -Value $propsKey -NoNewline -Encoding utf8
+        }
+        & $node.Source (Join-Path $PSScriptRoot 'fast-build.mjs') `
+            --build-path $BuildPath --repo $repoRoot --props $propsFile `
+            --output-dir $OutputDirectory --expect-flags $cppFlags --fqbn $fqbn
+        if ($LASTEXITCODE -eq 0) {
+            $fastDone = $true
+        } elseif ($LASTEXITCODE -eq 3) {
+            Write-Host 'Falling back to the full arduino-cli build.'
+        } else {
+            throw "Fast build failed for profile '$Profile'."
+        }
     }
-    & $arduinoCli compile @cleanArgs `
-        --fqbn $fqbn `
-        --export-binaries `
-        --output-dir $OutputDirectory `
-        --libraries $repoLibraries `
-        --build-property "compiler.c.extra_flags=$cFlags" `
-        --build-property "compiler.cpp.extra_flags=$cppFlags" `
-        --build-property "compiler.c.elf.extra_flags=$elfFlags" `
-        $repoRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "Arduino build failed for profile '$Profile'."
+    if (-not $fastDone) {
+        [string[]]$cleanArgs = @()
+        if ($Clean) {
+            $cleanArgs += '--clean'
+        }
+        & $arduinoCli compile @cleanArgs @buildArgs `
+            --export-binaries `
+            --output-dir $OutputDirectory `
+            $repoRoot
+        if ($LASTEXITCODE -ne 0) {
+            throw "Arduino build failed for profile '$Profile'."
+        }
     }
 }
 finally {

@@ -36,6 +36,9 @@ enum class TopicKey : uint8_t {
   SLEEP_MAINS_STAT,
   SLEEP_BAT_CMND,
   SLEEP_BAT_STAT,
+  // Built-in camera snapshots (exact camera profiles only subscribe).
+  LOCAL_CAMERA_CMND,
+  LOCAL_CAMERA_STAT,
   COUNT
 };
 

@@ -385,6 +385,7 @@
       cursor:pointer;
     }
     select option, select optgroup { background:#1a1a1a; color:var(--text); }
+    select option:disabled { color:var(--muted); }
     @supports (appearance: base-select) {
       select, ::picker(select) { appearance:base-select; }
       select::picker-icon { display:none; }
@@ -405,6 +406,7 @@
         cursor:pointer;
       }
       select option:hover, select option:focus { background:#2a2a2a; }
+      select option:disabled { color:var(--muted); cursor:not-allowed; background:transparent; }
       select option:checked { background:var(--accent-soft); color:#5fd4c7; font-weight:600; }
       select option::checkmark { color:var(--accent); }
       select optgroup { background:transparent; font-size:12px; color:var(--text-3); }
@@ -527,6 +529,25 @@
       font-size:14px;
       flex:0 0 auto;
     }
+    /* Built-in camera image controls: label, slider and value in one row,
+       following the global tile radius control. */
+    .local-camera-image { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); align-items:center; gap:10px 32px; }
+    .local-camera-image > .network-settings-heading, .local-camera-image > .local-camera-image-actions { grid-column:1 / -1; }
+    /* Built-in camera: live stream (left) and indicator (right) groups, each
+       with a sub-heading like the image controls; the Custom sliders stack in
+       the column; the pill toggle is dimmed while the line is off. */
+    .local-camera-group { display:flex; flex-direction:column; gap:12px; min-width:0; }
+    .local-camera-group .settings-note { margin-top:0; }
+    .local-camera-custom { display:flex; flex-direction:column; gap:10px; }
+    .local-camera-custom[hidden] { display:none; }
+    .local-camera-custom .local-camera-slider { grid-template-columns:minmax(72px, 150px) minmax(0, 1fr) 44px; }
+    .local-camera-indicator .settings-checkbox:has(input:disabled) { opacity:.45; }
+    .local-camera-slider { display:grid; grid-template-columns:minmax(72px, 110px) minmax(0, 1fr) 44px; align-items:center; gap:12px; margin:0; font-size:14px; color:var(--text); }
+    @media (max-width: 780px) { .local-camera-image { grid-template-columns:minmax(0, 1fr); } }
+    .local-camera-slider span { min-width:0; overflow-wrap:anywhere; }
+    .local-camera-slider input[type="range"] { width:100%; min-width:0; height:24px; margin:0; accent-color:var(--accent); }
+    .local-camera-slider input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    .local-camera-slider output { text-align:right; font-variant-numeric:tabular-nums; color:var(--text-2); }
     .ota-github-actions { margin-top:8px; }
     .file-picker { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px; }
     .file-picker-name { color:var(--text-3); font-size:14px; overflow-wrap:anywhere; }
@@ -1102,7 +1123,8 @@
     .tile.empty { background:transparent !important; border:3px solid transparent; }
     .tile.empty.active,
     .tile.empty[data-selected="1"] { border:3px solid #26a69a; box-shadow:0 0 12px rgba(38,166,154,0.55); }
-    .tile.empty:hover:not(.active) { border-color:rgba(38,166,154,0.4); }
+    .tile.empty:hover:not(.active),
+    .tile.empty.free-slot-hover:not(.active) { border-color:rgba(38,166,154,0.4); }
     .tile-title {
       color:#fff;
       font-weight:normal;
@@ -2130,6 +2152,12 @@
       font-weight:500;
       line-height:1.1;
     }
+    /* Half-height clock: one row, no title or icon (clock/renderer.cpp). */
+    .tile.clock.clock-compact { flex-direction:row; gap:6px; padding:0 8px; }
+    .tile.clock.clock-compact .tile-title,
+    .tile.clock.clock-compact .tile-icon { display:none; }
+    .tile.clock.clock-compact .tile-clock-time,
+    .tile.clock.clock-compact .tile-clock-date { white-space:nowrap; line-height:1; }
 
 .tile.text { display:grid; grid-template-rows:auto 1fr; grid-template-columns:1fr; }
     .tile.text .tile-title { text-align:left; align-self:start; width:100%; }
@@ -2255,9 +2283,3 @@
 .tile.sensor-compact:hover:not(.active) { box-shadow:inset 0 0 0 2px rgba(38,166,154,.6); }
 .tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { box-shadow:inset 0 0 0 3px #26a69a, 0 0 12px rgba(38,166,154,.55); }
 .tile.sensor-compact:focus-visible { box-shadow:inset 0 0 0 3px #64d8cb, 0 0 12px rgba(38,166,154,.55); }
-
-/* Keep explicit value font choices in the half-height layout. */
-.tile.sensor-compact:has(> .tile-value.sensor-value-size-20) { --compact-value-font:var(--fs20); --compact-value-line:var(--compact-value-line-20); }
-.tile.sensor-compact:has(> .tile-value.sensor-value-size-24) { --compact-value-font:var(--fs24); --compact-value-line:var(--compact-value-line-24); }
-.tile.sensor-compact:has(> .tile-value.sensor-value-size-32) { --compact-value-font:var(--fs32); --compact-value-line:var(--compact-value-line-32); }
-.tile.sensor-compact:has(> .tile-value.sensor-value-size-40) { --compact-value-font:var(--fs40); --compact-value-line:var(--compact-value-line-40); }

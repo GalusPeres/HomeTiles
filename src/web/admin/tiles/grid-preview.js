@@ -243,6 +243,7 @@
       }
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
+      if (typeValue === '9') fitCompactClockPreview(el);
     }
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');
     if (typeValue === '5' && tile.sensor_entity) {

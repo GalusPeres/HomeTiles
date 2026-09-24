@@ -254,8 +254,12 @@ Important:
   `4/10/30`. The original target remains at 60MHz and `4/8/20`.
 - V1 and V2 factory/OTA images are deliberately incompatible and have separate
   embedded device keys.
-- Board, flash, PSRAM, partition, upload, touch, SDMMC and USB settings are the
+- Board, flash, PSRAM, partition, upload, touch and SDMMC settings are the
   same as the Guition JC8012P4A1 V1 section above.
+- USB: the V2 USB-C port is the ESP32-P4 USB-Serial-JTAG, so HomeTiles logs
+  (`Serial`) must go there: USB CDC On Boot `Enabled`, USB Mode
+  `Hardware CDC and JTAG`, like the Tab5 and JC4880P443. With the V1 settings
+  the browser log viewer shows only ESP-IDF system errors.
 - Physical release and OTA validation is tracked in
   [issue #18](https://github.com/GalusPeres/HomeTiles/issues/18).
 

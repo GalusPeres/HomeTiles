@@ -69,6 +69,25 @@ public:
   bool mqttEnqueueSubscribe(const char* topic);
   bool mqttEnqueueUnsubscribe(const char* topic);
 
+  // Streams one binary payload that exceeds the client buffer (the local
+  // camera JPEG) with beginPublish/write/endPublish on the MQTT worker. The
+  // payload is NOT copied: the caller keeps it unchanged until
+  // mqttStreamPublishWait() returns Sent or Failed. One stream at a time;
+  // QoS 0, never retained. Any task except the worker may call these.
+  // start_deadline_ms (absolute millis(), 0 = none) fails a stream that has
+  // not started by then; an upload that has started runs to its end.
+  enum class StreamPublishResult : uint8_t { Pending, Sent, Failed };
+  bool mqttStreamPublishSubmit(const char* topic, const uint8_t* data,
+                               size_t length, uint32_t start_deadline_ms = 0);
+  // Pending means the worker is still writing; call again later. With
+  // withdraw_pending false a stream that has not started also returns
+  // Pending; otherwise it is withdrawn and reported as Failed.
+  StreamPublishResult mqttStreamPublishWait(uint32_t timeout_ms,
+                                            bool withdraw_pending = true);
+  // Withdraws a stream that has not started. Returns false when the worker is
+  // already writing it or has finished it; keep waiting in that case.
+  bool mqttStreamPublishCancel();
+
   // After a successful (re)connect the worker sets a pending flag. The loop task
   // consumes it through mqttServicePostConnect() in mqtt_handlers.cpp and brings
   // the application layer up: subscribes, discovery, device settings and the
@@ -228,6 +247,8 @@ private:
   void connectMqtt();
   void drainOutboundQueues(uint8_t max_commands);
   void serviceBufferHousekeeping(uint32_t now_ms);
+  void serviceStreamPublish(uint32_t now_ms);
+  void failPendingStreamPublish(const char* reason);
   bool setMqttBufferSize(uint16_t size, const char* reason);
 
   // Wired transports are exclusive with STA WiFi. This matters especially on

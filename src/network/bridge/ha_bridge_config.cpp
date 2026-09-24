@@ -11,6 +11,7 @@
 #include "src/core/config/batched_nvs_write.h"
 #include "src/devices/device.h"
 #include "src/io/hardware_io.h"
+#include "src/video/local_camera/local_camera.h"
 #include <vector>
 
 static const char* PREF_NAMESPACE = "tab5_config";
@@ -331,7 +332,15 @@ String HaBridgeConfig::buildJsonPayload(const char* device_id,
   }
   json += ",\"capabilities\":{\"view_navigation\":true,\"battery_soc\":";
   json += batteryStateSupportsMeasurement() ? "true" : "false";
-  json += ",\"legacy_external_temperature\":false}";
+  json += ",\"legacy_external_temperature\":false";
+  // Only an enabled and detected built-in camera on its exact profile; older
+  // Bridges drop unknown capability keys.
+  json += ",\"local_camera\":";
+  json += local_camera::bridgeCapability() ? "true" : "false";
+  // Live upload to the Bridge (panel -> Bridge TCP stream); same conditions.
+  json += ",\"local_camera_stream\":";
+  json += local_camera::bridgeStreamCapability() ? "true" : "false";
+  json += "}";
   if (data.has_editable_lists) {
     json += ",\"numbers\":";
     appendSensorsJson(json, data.numbers_text);

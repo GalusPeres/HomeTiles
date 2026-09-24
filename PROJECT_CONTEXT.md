@@ -34,15 +34,11 @@ Last reviewed: 2026-09-11
 
 Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
-- External Guition `JC8012P4A1C_I_W_Y` V1; Foscam via HA Generic Camera. Normal OTA failed; USB worked.
-- b1/b2: CMD53 `0x109`, timeout `0x107`, raw `0xcccccccc`, invalid RX length and `rst:0xc`, also without cameras. Recovery restarts leave no panic dump.
-- b1 already contained a8204 raw-PKT_LEN/pending-drain and short-tail markers; repeating that patch is not a solution. Version RPC `0x15e` also occurs on stable Waveshare 8-inch and is insufficient to explain the fatal Guition transport cascade.
-- Do not use/publish b3 (4-bit/20 MHz, no first-fault diagnostics). Issue #167 also found 20 MHz unreliable. b4 located the first DCRC `0x80` on 11-/14-block C6-to-P4 reads, before `0x109`/`0x107`. b5 1-bit/40 MHz still failed, sometimes before Camera; lane reduction alone is not a fix.
-- SDIO schematics: V1 5.1-kohm pull-ups/no series termination; 8-inch 51-kohm pull-ups; Tab5 5.1-kohm pull-ups/22-ohm series resistors/switched WLAN power. Signal margin remains unproven.
-- Original `JC8012P4A1_C6.bin` and HomeTiles use streaming mode. New `JC-C6-slave_v2.3.2.bin` uses packet mode: do not flash it alone. USB reaches P4 only; C6 flashing needs CN5 and a 3.3 V UART adapter.
-- Do not retry 2.9.3 rollback: another board's TX/alignment failure, not this CRC path; loses safety fixes.
-- b6 passed reporter hardware tests: two cameras at 15-20 FPS and Web OTA, without the transport cascade. Exact V1 retains 1-bit/40 MHz and splits large RX into individual 512-byte CMD53 reads. Reporter confirmed integrated v0.6.9b1; v0.6.10 ships it.
-- Keep the single-block marker/1-bit configuration exact-V1 only; other P4 profiles retain baseline objects, S3 is unaffected. Lower camera quality/FPS/resolution is allowed only for a labeled diagnostic A/B, never a silent final fix.
+- External Guition `JC8012P4A1C_I_W_Y` V1, Foscam via HA Generic Camera; normal OTA failed, USB worked. SDIO cascade (CMD53 `0x109`, timeout `0x107`, raw `0xcccccccc`, invalid RX length, `rst:0xc`), also without cameras; recovery restarts leave no panic dump. First DCRC `0x80` on 11-/14-block C6-to-P4 reads. Repeated a8204 markers, 20 MHz (b3, also Issue #167), 1-bit alone (b5) and the 2.9.3 rollback are not fixes; do not retry them.
+- Version RPC `0x15e` also occurs on the stable 8-inch; it does not explain the cascade.
+- SDIO schematics: V1 5.1-kohm pull-ups/no series termination; 8-inch 51-kohm; Tab5 5.1-kohm/22-ohm series/switched WLAN power. Signal margin unproven.
+- Original `JC8012P4A1_C6.bin` and HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 flashing needs CN5 and a 3.3 V UART adapter.
+- Fix b6 passed reporter tests (two cameras at 15-20 FPS, Web OTA); reporter confirmed v0.6.9b1, v0.6.10 ships it. Exact V1 keeps 1-bit/40 MHz and splits large RX into 512-byte CMD53 reads; other P4 profiles keep baseline objects, S3 unaffected. Lower camera quality/FPS only as a labeled diagnostic A/B.
 
 ## ESP32-P4 network history
 
@@ -108,6 +104,12 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it. V2 BIN `build/clock-text-border-guition-v2/` (SHA256 `8752AF47...62C4`); hardware pending.
 - Open: cross-grid import clamps whole tiles to half steps (HTTP 400), snapshot type accepts halves, value fonts 32/40 clip in half tiles.
+
+## Local camera (branch `local-camera-beta`)
+
+- Core `src/video/local_camera/` names no device/sensor; drivers `sensors/<name>/`, boards `src/devices/<device>/local_camera_board.*`; opt-in `local_cam_en`.
+- V2 OV02C10 (`HOMETILES_ISSUE38_BETA`): snapshots/720p stream via sensor flips, `HTCAMUP/1`. 8-inch OV5647 (`HOMETILES_CAMERA_BETA`) is mounted 90 degrees.
+- Open: int WDT saving during stream (MQTT heap walk suspected; storage hold mitigates); TEST `kChunkWindow = 2`.
 
 ## Maintenance
 

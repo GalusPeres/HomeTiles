@@ -464,6 +464,45 @@ struct Strings {
   const char* pin_popup_incorrect;
   const char* pin_popup_unlock_format;
   const char* settings_tile_parking;
+  // Built-in camera opt-in (Web Admin Settings, camera profiles only).
+  const char* local_camera_section;
+  const char* local_camera_enable;
+  const char* local_camera_note;
+  const char* local_camera_status_label;
+  const char* local_camera_status_disabled;
+  const char* local_camera_status_probing;
+  const char* local_camera_status_ready;
+  const char* local_camera_status_not_found;
+  const char* local_camera_status_error;
+  // Live-stream mode select; the numeric mode names stay untranslated.
+  const char* local_camera_stream_mode;
+  const char* local_camera_stream_mode_auto;
+  // Mirrors snapshots and the live stream horizontally.
+  const char* local_camera_mirror;
+  // User image controls; the slider numbers stay untranslated.
+  const char* local_camera_image_section;
+  const char* local_camera_brightness;
+  const char* local_camera_contrast;
+  const char* local_camera_saturation;
+  const char* local_camera_red;
+  const char* local_camera_blue;
+  const char* local_camera_image_reset;
+  // On-display camera pill: title while capturing and the tap hint.
+  const char* local_camera_indicator_active;
+  const char* local_camera_indicator_end;
+  // Web Admin: indicator style checkboxes and their note (the sub-block
+  // heading, marked experimental, is local_camera_indicator_section).
+  const char* local_camera_indicator_line;
+  const char* local_camera_indicator_pill;
+  const char* local_camera_indicator_note;
+  // Custom stream mode: select entry and its two sliders (numbers untranslated).
+  const char* local_camera_stream_mode_custom;
+  const char* local_camera_custom_fps;
+  const char* local_camera_custom_quality;
+  // Heading of the indicator sub-block (marked experimental).
+  const char* local_camera_indicator_section;
+  // Heading of the live stream sub-block (mode, Custom values, mirror).
+  const char* local_camera_stream_section;
 
 };
 

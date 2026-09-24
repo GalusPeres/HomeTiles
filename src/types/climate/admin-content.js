@@ -76,12 +76,12 @@
 
   function climateAutomaticEditorKinds(tab) {
     const state = climateEditorState(tab);
-    const spanW = Math.max(1, Number(
+    const spanW = Math.max(1, Math.floor(Number(
       document.getElementById(
-        tab + '_tile_span_w')?.value) || 1);
-    const spanH = Math.max(1, Number(
+        tab + '_tile_span_w')?.value) || 1));
+    const spanH = Math.max(1, Math.floor(Number(
       document.getElementById(
-        tab + '_tile_span_h')?.value) || 1);
+        tab + '_tile_span_h')?.value) || 1));
     const capacity = climateSlotCapacity(spanW, spanH);
     const kinds = [];
     const add = kind => {

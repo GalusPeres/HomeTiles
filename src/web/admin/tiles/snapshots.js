@@ -66,7 +66,7 @@
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
     const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity'];
 
-    tile.type = clampHalf(snapshot?.type, 0, 255, Number(prev.type) || 0);
+    tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
     tile.icon_name = snapshot?.icon || '';
     tile.bg_color = snapshotBgColorIsDefault(snapshot)

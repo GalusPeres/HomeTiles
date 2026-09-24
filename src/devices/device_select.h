@@ -124,6 +124,16 @@
 #define DEVICE_GUITION_JC1060P470C_FAMILY
 #endif
 
+// Built-in camera. The exact JC8012P4A1 V2 profile carries the demo-verified
+// OV02C10 SCCB/CSI wiring; the Waveshare 8-inch ESP32-P4-WIFI6-Touch-LCD
+// front camera (OV5647) is enabled only in camera beta builds
+// (HOMETILES_CAMERA_BETA) until hardware validation. V1 and every other board
+// keep the capture path out of their images.
+#if defined(DEVICE_GUITION_JC8012P4A1_V2) || \
+    (defined(DEVICE_WAVESHARE_TOUCH_LCD_8) && defined(HOMETILES_CAMERA_BETA))
+#define HOMETILES_LOCAL_CAMERA 1
+#endif
+
 // Native ESP-IDF MIPI-DSI profiles share the same two-framebuffer camera
 // presenter. M5GFX Tab5 and Arduino_GFX B4 intentionally keep their library
 // owned display backends.

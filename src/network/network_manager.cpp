@@ -11,9 +11,12 @@
 #include "src/core/hardware/board_hal.h"
 #include "src/core/diagnostics/crash_log.h"
 #include "src/video/camera_stream.h"
+#include "src/video/local_camera/local_camera.h"
+#include <atomic>
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <freertos/semphr.h>
 #include <freertos/task.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
@@ -312,6 +315,72 @@ static void purgeOutboundQueue() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Single streamed publish (local camera JPEG)
+//
+// Payloads above the client buffer are written with beginPublish/write/
+// endPublish by the worker, which stays the only owner of mqtt_client. The
+// submitting task keeps ownership of the bytes and waits for the result; the
+// slot is never queued twice. Claimed = being filled by the submitter,
+// Pending = ready for the worker, Active = being written by the worker.
+// ---------------------------------------------------------------------------
+enum : uint8_t {
+  kStreamIdle = 0,
+  kStreamClaimed,
+  kStreamPending,
+  kStreamActive,
+  kStreamSent,
+  kStreamFailed,
+};
+static constexpr size_t kStreamTopicCapacity = 192;
+static constexpr size_t kStreamChunkBytes = 2048;
+// A stream that cannot start (DMA headroom, startup burst) within this time
+// fails instead of holding the camera buffer indefinitely. A submitter
+// deadline may end the wait earlier.
+static constexpr uint32_t kStreamStartTimeoutMs = 8000;
+// P4 SDIO: the DMA headroom is checked again before every 8 KiB of payload.
+// A stream that makes no progress for this long is aborted; a partially sent
+// PUBLISH cannot be resumed, so that closes the connection.
+static constexpr size_t kStreamHeadroomCheckBytes = 8 * 1024;
+static constexpr uint32_t kStreamStallLimitMs = 3000;
+static constexpr uint32_t kStreamHeadroomSliceMs = 10;
+static std::atomic<uint8_t> g_stream_state{kStreamIdle};
+static char g_stream_topic[kStreamTopicCapacity] = {};
+static const uint8_t* g_stream_data = nullptr;
+static size_t g_stream_length = 0;
+static uint32_t g_stream_submitted_ms = 0;
+// Absolute millis() by which a Pending stream must have started; 0 = none.
+static uint32_t g_stream_start_deadline_ms = 0;
+static SemaphoreHandle_t g_stream_done = nullptr;
+static uint32_t g_stream_sent_count = 0;
+static uint32_t g_stream_failed_count = 0;
+static uint32_t g_stream_last_log_ms = 0;
+
+static bool streamLogDue(uint32_t now_ms) {
+  if (g_stream_last_log_ms != 0 &&
+      static_cast<uint32_t>(now_ms - g_stream_last_log_ms) < 60000) {
+    return false;
+  }
+  g_stream_last_log_ms = now_ms == 0 ? 1 : now_ms;
+  return true;
+}
+
+// Retained commands would replay a snapshot request after every reconnect.
+// The flag is only visible inside the client callback, so filter there.
+static bool dropRetainedLocalCameraCommand(PubSubClient& client,
+                                           const char* topic) {
+  if (!client.lastPublishRetained() || !local_camera::isCommandTopic(topic)) {
+    return false;
+  }
+  static uint32_t dropped = 0;
+  ++dropped;
+  if (dropped == 1 || (dropped % 20U) == 0U) {
+    Serial.printf("[LocalCam] Ignored retained command (count=%u)\n",
+                  static_cast<unsigned>(dropped));
+  }
+  return true;
+}
+
 // Use the full 48-bit MAC, not just its low 16 bits. Two panels from
 // similar manufacturing batches were observed to collide in those bits:
 // HA silently rejected one Zeroconf event as already configured because
@@ -604,6 +673,7 @@ void HomeTilesNetworkManager::init() {
       // callback bounds. Publish its actual capacity before copying the data.
       mqtt_buffer_size = mqtt_client.getBufferSize();
       mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
+      if (dropRetainedLocalCameraCommand(mqtt_client, topic)) return;
       mqttCallback(topic, payload, length);
     });
   } else {
@@ -798,6 +868,9 @@ void HomeTilesNetworkManager::handleWifiDriverWedge(const char* context) {
   detail += camera_stream_is_active()
                 ? "camera_stream=active\n"
                 : "camera_stream=inactive\n";
+  detail += local_camera::streamActive()
+                ? "local_camera_stream=active\n"
+                : "local_camera_stream=inactive\n";
   detail += wired
                 ? "Continuing over Ethernet; Wi-Fi disabled until restart\n"
                 : "Safe restart follows (also resets the C6)\n";
@@ -976,6 +1049,12 @@ void HomeTilesNetworkManager::beginMqttWorker() {
       Serial.println("[MQTT] Could not create outbound control queue");
     }
   }
+  if (!g_stream_done) {
+    g_stream_done = xSemaphoreCreateBinary();
+    if (!g_stream_done) {
+      Serial.println("[MQTT] Could not create stream-publish semaphore");
+    }
+  }
   initMqttDmaReserve();
 }
 
@@ -989,6 +1068,15 @@ size_t HomeTilesNetworkManager::mqttDmaReserveBytes() const {
 
 // Worker task body: the only post-init owner of mqtt_client.
 void HomeTilesNetworkManager::serviceMqttWorker() {
+  // A waiting stream must never outlive the connection it was meant for.
+  if (g_stream_state.load() == kStreamPending &&
+      (mqtt_reconfig_requested || mqtt_transport_recovery_requested ||
+       !mqtt_enabled || mqtt_ota_prep_requested || mqtt_disconnect_requested ||
+       mqtt_suspended || !networkTransport.isConnected() ||
+       !mqtt_client.connected())) {
+    failPendingStreamPublish("MQTT unavailable");
+  }
+
   // Handle reconfiguration before the mqtt_enabled gate because it updates
   // that flag live: initial Admin configuration, a cleared host or a new
   // host. Other requests stay behind the gate because they apply only to
@@ -1023,6 +1111,7 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
       mqtt_client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
         mqtt_buffer_size = mqtt_client.getBufferSize();
         mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
+        if (dropRetainedLocalCameraCommand(mqtt_client, topic)) return;
         mqttCallback(topic, payload, length);
       });
       mqtt_retry_at = 0;  // Connect immediately on the next iteration.
@@ -1123,6 +1212,9 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
       mqtt_connected_at != 0 && (uint32_t)(now_ms - mqtt_connected_at) < kMqttStormWindowMs;
   drainOutboundQueues(startup_storm ? kMqttOutboundDrainStorm
                                     : kMqttOutboundDrainNormal);
+  // No-op unless a camera profile submitted a stream. A failed stream closes
+  // the connection; loop() below then reports it like any other loss.
+  serviceStreamPublish(now_ms);
   mqtt_client.loop();
   mqtt_buffer_size = mqtt_client.getBufferSize();
   mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
@@ -1280,6 +1372,19 @@ void HomeTilesNetworkManager::drainOutboundQueues(uint8_t max_commands) {
             log_dma_wait("Recovery waiting for camera to stop", dma_largest);
             return;
           }
+          // The built-in camera upload owns a socket on the same transport,
+          // but unlike the display stream it never ends on low DMA by itself
+          // while the Bridge keeps sending keepalives. Stop it explicitly and
+          // wait until its sender has closed the socket.
+          if (local_camera::streamActive()) {
+            if (local_camera::stopStreamForTransportRecovery()) {
+              Serial.printf(
+                  "[MQTT] DMA starvation for %u ms: stopping the camera upload before recovery\n",
+                  static_cast<unsigned>(now_ms - g_mqtt_dma_low_since));
+            }
+            log_dma_wait("Recovery waiting for camera upload to stop", dma_largest);
+            return;
+          }
           Serial.printf(
               "[MQTT] DMA starvation for %u ms: Wi-Fi/SDIO recovery\n",
               static_cast<unsigned>(now_ms - g_mqtt_dma_low_since));
@@ -1403,6 +1508,183 @@ bool HomeTilesNetworkManager::mqttEnqueueUnsubscribe(const char* topic) {
   return enqueueOutboundCmd(MqttCmdKind::UNSUBSCRIBE, topic, nullptr, 0, false);
 }
 
+bool HomeTilesNetworkManager::mqttStreamPublishSubmit(const char* topic,
+                                                      const uint8_t* data,
+                                                      size_t length,
+                                                      uint32_t start_deadline_ms) {
+  if (!g_stream_done || !topic || !*topic || !data || length == 0 ||
+      !mqtt_connected_flag) {
+    return false;
+  }
+  const size_t topic_length = strlen(topic);
+  if (topic_length >= kStreamTopicCapacity) return false;
+  uint8_t expected = kStreamIdle;
+  if (!g_stream_state.compare_exchange_strong(expected, kStreamClaimed)) {
+    return false;
+  }
+  memcpy(g_stream_topic, topic, topic_length + 1);
+  g_stream_data = data;
+  g_stream_length = length;
+  g_stream_submitted_ms = millis();
+  g_stream_start_deadline_ms = start_deadline_ms;
+  xSemaphoreTake(g_stream_done, 0);  // Drop a stale completion signal.
+  g_stream_state.store(kStreamPending);
+  return true;
+}
+
+HomeTilesNetworkManager::StreamPublishResult
+HomeTilesNetworkManager::mqttStreamPublishWait(uint32_t timeout_ms,
+                                               bool withdraw_pending) {
+  if (!g_stream_done) return StreamPublishResult::Failed;
+  xSemaphoreTake(g_stream_done, pdMS_TO_TICKS(timeout_ms));
+  for (;;) {
+    uint8_t state = g_stream_state.load();
+    if (state == kStreamSent || state == kStreamFailed) {
+      g_stream_data = nullptr;
+      g_stream_length = 0;
+      g_stream_state.store(kStreamIdle);
+      return state == kStreamSent ? StreamPublishResult::Sent
+                                  : StreamPublishResult::Failed;
+    }
+    if (state == kStreamPending) {
+      if (!withdraw_pending) return StreamPublishResult::Pending;
+      // Not started in time: withdraw it so the caller may reuse the buffer.
+      if (g_stream_state.compare_exchange_strong(state, kStreamIdle)) {
+        g_stream_data = nullptr;
+        g_stream_length = 0;
+        return StreamPublishResult::Failed;
+      }
+      continue;  // The worker just took or finished it; evaluate again.
+    }
+    if (state == kStreamActive) return StreamPublishResult::Pending;
+    return StreamPublishResult::Failed;  // Idle/Claimed: nothing submitted.
+  }
+}
+
+bool HomeTilesNetworkManager::mqttStreamPublishCancel() {
+  // Only a stream that has not started can be withdrawn. An Active stream is
+  // already on the wire and cannot be cut short without closing the
+  // connection, so the caller keeps waiting for it.
+  uint8_t expected = kStreamPending;
+  if (!g_stream_state.compare_exchange_strong(expected, kStreamIdle)) {
+    return false;
+  }
+  g_stream_data = nullptr;
+  g_stream_length = 0;
+  return true;
+}
+
+void HomeTilesNetworkManager::failPendingStreamPublish(const char* reason) {
+  uint8_t expected = kStreamPending;
+  if (!g_stream_state.compare_exchange_strong(expected, kStreamFailed)) return;
+  ++g_stream_failed_count;
+  if (g_stream_done) xSemaphoreGive(g_stream_done);
+  const uint32_t now_ms = millis();
+  if (streamLogDue(now_ms)) {
+    Serial.printf("[MQTT] Stream publish failed: %s (sent=%u failed=%u)\n",
+                  reason ? reason : "?",
+                  static_cast<unsigned>(g_stream_sent_count),
+                  static_cast<unsigned>(g_stream_failed_count));
+  }
+}
+
+// Worker only. Writes the whole payload in bounded chunks and yields between
+// them; a partially written packet cannot be resynchronized, so any short
+// write or a stalled upload closes the connection.
+void HomeTilesNetworkManager::serviceStreamPublish(uint32_t now_ms) {
+  if (g_stream_state.load() != kStreamPending) return;
+  const bool past_deadline =
+      g_stream_start_deadline_ms != 0 &&
+      static_cast<int32_t>(now_ms - g_stream_start_deadline_ms) >= 0;
+  if (past_deadline ||
+      static_cast<uint32_t>(now_ms - g_stream_submitted_ms) >= kStreamStartTimeoutMs) {
+    failPendingStreamPublish(past_deadline ? "request deadline" : "start timeout");
+    return;
+  }
+  // Like the large-publish queue, stay behind the retained startup burst.
+  if (mqtt_connected_at != 0 &&
+      static_cast<uint32_t>(now_ms - mqtt_connected_at) < kMqttStormWindowMs) {
+    return;
+  }
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  if (networkTransport.isSdioWifiActive()) {
+    // A subscribe/unsubscribe was just sent: let mqtt_client.loop() receive
+    // its retained response before a long write occupies the worker.
+    if (g_mqtt_sdio_control_quiet_until != 0 &&
+        static_cast<int32_t>(now_ms - g_mqtt_sdio_control_quiet_until) < 0) {
+      return;
+    }
+    if (serviceMqttDmaHeadroom(now_ms) < kMqttMinDmaLargestBeforeTx) return;
+  }
+#endif
+  uint8_t expected = kStreamPending;
+  if (!g_stream_state.compare_exchange_strong(expected, kStreamActive)) return;
+
+  const uint32_t started_ms = millis();
+  const uint8_t* data = g_stream_data;
+  const size_t length = g_stream_length;
+  bool ok = mqtt_client.beginPublish(
+      g_stream_topic, static_cast<unsigned int>(length), false);
+  const bool began = ok;
+  const char* failure = began ? "short write" : "begin";
+  size_t offset = 0;
+  uint32_t chunks = 0;
+  uint32_t progress_ms = started_ms;
+  while (ok && offset < length) {
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+    // Re-check the DMA headroom at each 8 KiB boundary and wait for it in
+    // short slices, but never longer than the no-progress limit.
+    if (offset != 0 && (offset % kStreamHeadroomCheckBytes) == 0 &&
+        networkTransport.isSdioWifiActive()) {
+      while (serviceMqttDmaHeadroom(millis()) < kMqttMinDmaLargestBeforeTx) {
+        if (static_cast<uint32_t>(millis() - progress_ms) >= kStreamStallLimitMs) {
+          ok = false;
+          failure = "DMA headroom stall";
+          break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(kStreamHeadroomSliceMs));
+      }
+      if (!ok) break;
+    }
+#endif
+    const size_t chunk =
+        length - offset < kStreamChunkBytes ? length - offset : kStreamChunkBytes;
+    const size_t written = mqtt_client.write(data + offset, chunk);
+    if (written != chunk) {
+      ok = false;
+      break;
+    }
+    offset += written;
+    progress_ms = millis();
+    if ((++chunks & 0x03U) == 0U) vTaskDelay(1);
+  }
+  if (ok) {
+    mqtt_client.endPublish();
+  } else if (began || mqtt_client.connected()) {
+    // The broker would read the rest of the stream as a corrupt packet.
+    mqtt_client.disconnect();
+    mqtt_connected_flag = false;
+  }
+
+  if (ok) {
+    ++g_stream_sent_count;
+  } else {
+    ++g_stream_failed_count;
+  }
+  const uint32_t finished_ms = millis();
+  if (!ok || streamLogDue(finished_ms)) {
+    Serial.printf(
+        "[MQTT] Stream publish %s%s: %u/%u bytes in %u ms (sent=%u failed=%u)\n",
+        ok ? "sent" : "FAILED, connection closed after ", ok ? "" : failure,
+        static_cast<unsigned>(offset), static_cast<unsigned>(length),
+        static_cast<unsigned>(finished_ms - started_ms),
+        static_cast<unsigned>(g_stream_sent_count),
+        static_cast<unsigned>(g_stream_failed_count));
+  }
+  g_stream_state.store(ok ? kStreamSent : kStreamFailed);
+  if (g_stream_done) xSemaphoreGive(g_stream_done);
+}
+
 bool HomeTilesNetworkManager::consumeMqttPostConnectPending() {
   if (!mqtt_post_connect_pending) return false;
   if (!mqtt_connected_flag) {
@@ -1446,6 +1728,9 @@ void HomeTilesNetworkManager::requestMqttReconfigure() {
 }
 
 void HomeTilesNetworkManager::prepareMqttForOta() {
+  // Release the camera pipeline first; a snapshot upload in progress can still
+  // finish or fail while MQTT is up.
+  local_camera::shutdown("ota");
   if (!mqtt_enabled) return;
   mqtt_ota_prep_requested = true;
   for (int i = 0; i < 100 && mqtt_ota_prep_requested; ++i) {

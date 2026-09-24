@@ -167,6 +167,9 @@
         el.textContent = getClockPreviewDate(0);
       }
     });
+    if (typeof fitCompactClockPreview === 'function') {
+      document.querySelectorAll('.tile.clock-compact').forEach(fitCompactClockPreview);
+    }
     if (screensaverDraft) {
       const time = document.getElementById('screensaverClockTime');
       const date = document.getElementById('screensaverClockDate');

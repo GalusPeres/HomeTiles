@@ -79,7 +79,7 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
   lv_obj_set_style_shadow_width(card, 0, 0);
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(card);
-  set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);
+  place_tile_card(card, col, row, tile);
 
   String icon_name = tile.icon_name;
   const bool icon_disabled = isMdiIconDisabled(icon_name);

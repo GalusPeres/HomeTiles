@@ -492,7 +492,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
   lv_obj_set_style_pad_ver(card, tile_layout::scale_480(24), 0);
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(card);
-  set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);
+  place_tile_card(card, col, row, tile);
 
   BinarySensorTileWidgets& widgets =
       tile_renderer_get_binary_sensor_widgets(grid_type)[index];
@@ -550,8 +550,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
                tile_layout::scale(28));
 
   if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h)) {
-    compact_sensor_layout::apply(card, widgets.icon_label, widgets.title_label, widgets.state_label, tile,
-                                 tile_layout::value_font_for_choice(tile.sensor_value_font, nullptr));
+    compact_sensor_layout::apply(card, widgets.icon_label, widgets.title_label, widgets.state_label, tile);
   }
 
   if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {

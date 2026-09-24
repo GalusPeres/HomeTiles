@@ -18,6 +18,9 @@ struct Capabilities {
   bool supports_battery_sleep_profile;
   bool supports_usb_host_network;
   bool supports_native_ethernet;
+  // Built-in MIPI-CSI camera with a verified board wiring. Profiles that do not
+  // list it keep the default.
+  bool has_builtin_camera = false;
 };
 
 struct Profile {

@@ -601,16 +601,14 @@ void layout_climate_slots(
   const uint8_t count = widgets.active_slot_count;
   if (count == 0) return;
 
-  const uint8_t span_w = std::max<uint8_t>(1, tile.span_w);
-  const uint8_t span_h = std::max<uint8_t>(1, tile.span_h);
   const uint8_t columns = climateTileGridColumns(tile);
   const uint8_t logical_rows = climateTileGridRows(tile);
-  const lv_coord_t tile_w =
-      static_cast<lv_coord_t>(
-          span_w * GRID_CELL_W + (span_w - 1) * GRID_GAP);
-  const lv_coord_t tile_h =
-      static_cast<lv_coord_t>(
-          span_h * GRID_CELL_H + (span_h - 1) * GRID_GAP);
+  // The mini-grid follows whole cells; the pixel box is the real card size,
+  // which includes half steps (same as apply_fractional_tile_geometry).
+  const lv_coord_t tile_w = static_cast<lv_coord_t>(tile_geometry::extent(
+      tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP));
+  const lv_coord_t tile_h = static_cast<lv_coord_t>(tile_geometry::extent(
+      tile.row, std::max(1.0f, tile.span_h), GRID_CELL_H, GRID_GAP));
   // Climate cards retain the original 20/24 px tile padding. Child
   // coordinates therefore address the padded content box, not the full card.
   const lv_coord_t content_x =
@@ -1356,7 +1354,7 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
       card, climate_layout::kCardPaddingVertical, 0);
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(card);
-  set_tile_grid_cell(card, col, row, tile.span_w, tile.span_h);
+  place_tile_card(card, col, row, tile);
 
   const bool icon_disabled = isMdiIconDisabled(tile.icon_name);
   const String configured_icon = normalizeMdiIconName(tile.icon_name);

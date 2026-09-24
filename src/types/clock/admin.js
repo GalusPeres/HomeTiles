@@ -80,12 +80,14 @@ function getClockPreviewLanguage() {
   function getClockPreviewTextStyle(raw, fallback, color) {
     const size = getClockPreviewCssPx(raw, fallback);
     const safeColor = color || '#fff';
-    return 'style="font-size:' + size + 'px; line-height:1; color:' + safeColor + ';"';
+    return 'data-clock-font="' + normalizeClockPreviewFont(raw, fallback) +
+      '" style="font-size:' + size + 'px; line-height:1; color:' + safeColor + ';"';
   }
 
   function applyClockPreviewTextStyle(el, raw, fallback, color, lineHeight) {
     if (!el) return;
     const size = getClockPreviewCssPx(raw, fallback);
+    el.dataset.clockFont = String(normalizeClockPreviewFont(raw, fallback));
     el.style.fontSize = size + 'px';
     el.style.color = color || '#fff';
     el.style.lineHeight = lineHeight || '1';
@@ -195,6 +197,73 @@ function getClockPreviewLanguage() {
       dateEl.textContent = getClockPreviewDate(dateFormat);
       applyClockPreviewTextStyle(dateEl, dateFont, 24, '#fff', '1.1');
     }
+    fitCompactClockPreview(tileElem);
+  }
+
+  const CLOCK_PREVIEW_FONT_SIZES = [20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96];
+  let clockPreviewMeasureContext = null;
+
+  function measureClockPreviewText(el, text, px) {
+    clockPreviewMeasureContext = clockPreviewMeasureContext ||
+      document.createElement('canvas').getContext('2d');
+    if (!clockPreviewMeasureContext) return 0;
+    const style = getComputedStyle(el);
+    clockPreviewMeasureContext.font = style.fontWeight + ' ' + px + 'px ' + style.fontFamily;
+    return clockPreviewMeasureContext.measureText(text).width;
+  }
+
+  // Worst-case samples keep the chosen size stable while the time changes.
+  function clockPreviewSample(el, isTime) {
+    return isTime ? (/[AP]M/.test(el.textContent) ? '88:88 PM' : '88:88')
+      : el.textContent.replace(/[0-9]/g, '8');
+  }
+
+  // Half-height clocks use one row: the largest configured-or-smaller size whose
+  // rendered size fits 80% of the tile height and whose text fits the width.
+  // The date follows only from width 2 and only when it still fits.
+  // The firmware applies the same rule (fit_compact_clock in clock/renderer.cpp).
+  function fitCompactClockPreview(tileElem) {
+    if (!tileElem) return;
+    const lines = [tileElem.querySelector('.tile-clock-time'), tileElem.querySelector('.tile-clock-date')];
+    lines.forEach(el => {
+      if (!el) return;
+      el.hidden = false;
+      el.style.fontSize = getClockPreviewCssPx(el.dataset.clockFont, 40) + 'px';
+    });
+    if (!tileElem.classList.contains('clock-compact')) return;
+    const style = getComputedStyle(tileElem);
+    const root = getComputedStyle(document.documentElement);
+    const cellW = parseFloat(root.getPropertyValue('--preview-cell-w'));
+    const cellH = parseFloat(root.getPropertyValue('--preview-cell-h'));
+    const gridGap = parseFloat(root.getPropertyValue('--preview-gap')) || 0;
+    const span = (value, cell) => (Number(value) || 1) * (cell + gridGap) - gridGap;
+    // Hidden folder tabs have no layout yet; the grid variables still hold the size.
+    const tileW = cellW > 0 ? span(tileElem.dataset.spanW, cellW) : tileElem.clientWidth;
+    const tileH = cellH > 0 ? span(tileElem.dataset.spanH, cellH) : tileElem.clientHeight;
+    const availW = tileW - parseFloat(style.paddingLeft || 0) - parseFloat(style.paddingRight || 0);
+    const maxPx = tileH * 0.8;
+    const gap = parseFloat(style.columnGap || 0) || 0;
+    const [time, date] = lines;
+    const primary = time || date;
+    const secondary = time && date && Number(tileElem.dataset.spanW) >= 2 ? date : null;
+    if (date && date !== primary && date !== secondary) date.hidden = true;
+    if (!primary) return;
+    const fit = (el, capPx, usedW) => {
+      const sample = clockPreviewSample(el, el === time);
+      for (const size of [...CLOCK_PREVIEW_FONT_SIZES].reverse()) {
+        const px = getClockPreviewCssPx(size, size);
+        if (size > Number(el.dataset.clockFont || 40) || px > capPx) continue;
+        const width = measureClockPreviewText(el, sample, px);
+        if (usedW + width <= availW) return { px, width };
+      }
+      return null;
+    };
+    const first = fit(primary, maxPx, 0) || { px: getClockPreviewCssPx(20, 20), width: 0 };
+    primary.style.fontSize = first.px + 'px';
+    if (!secondary) return;
+    const second = fit(secondary, first.px, first.width + gap);
+    if (second) secondary.style.fontSize = second.px + 'px';
+    else secondary.hidden = true;
   }
 
   function saveClockFields(tab, formData) {

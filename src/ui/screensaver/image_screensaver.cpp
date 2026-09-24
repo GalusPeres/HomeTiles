@@ -1358,7 +1358,11 @@ void rebuild_slot_grid(ScreensaverState* st) {
     lv_obj_set_pos(st->slot_grid, 0, 0);
     lv_obj_set_style_bg_opa(st->slot_grid, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(st->slot_grid, 0, 0);
-    lv_obj_set_style_pad_all(st->slot_grid, GRID_PAD, 0);
+    // Same margins as the tile grid, so screensaver tiles sit where tiles do.
+    lv_obj_set_style_pad_left(st->slot_grid, GRID_PAD_LEFT, 0);
+    lv_obj_set_style_pad_right(st->slot_grid, GRID_PAD_RIGHT, 0);
+    lv_obj_set_style_pad_top(st->slot_grid, GRID_PAD_TOP, 0);
+    lv_obj_set_style_pad_bottom(st->slot_grid, GRID_PAD_BOTTOM, 0);
     lv_obj_set_style_pad_column(st->slot_grid, GRID_GAP, 0);
     lv_obj_set_style_pad_row(st->slot_grid, GRID_GAP, 0);
     lv_obj_set_layout(st->slot_grid, LV_LAYOUT_GRID);

@@ -343,7 +343,7 @@
       "legacySlug": "guition-jc4880p443-portrait",
       "installer": {
         "label": "Guition JC4880P443C_I_W",
-        "status": "supported",
+        "status": "validation-pending",
         "hardwareCheck": "The board is the 4.3-inch Guition JC4880P443 (JC-ESP32P4-M3 module) with a 480x800 ST7701S panel.",
         "acceptsLegacyDescriptor": true
       }

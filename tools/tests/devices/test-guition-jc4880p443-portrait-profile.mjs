@@ -94,7 +94,7 @@ assert.equal(installer.buildProfile, 'guition_jc4880p443_portrait');
 assert.equal(installer.chipFamily, 'ESP32-P4');
 assert.equal(installer.flashSize, 16 * 1024 * 1024);
 assert.equal(installer.siliconVariant, 'pre_v3');
-assert.equal(installer.status, 'supported');
+assert.equal(installer.status, 'validation-pending');
 
 for (const [file, marker] of [
   ['README.md', 'https://galusperes.github.io/#device-support'],

@@ -109,7 +109,7 @@ for (const [key, chipFamily, flashSize, labelPattern, status = "validation-pendi
   ["waveshare_touch_lcd_7b_rev3_1", "ESP32-P4", 32 * 1024 * 1024, /v3\.1 only, experimental/],
   ["waveshare_touch_lcd_10_1_rev3", "ESP32-P4", 32 * 1024 * 1024, /10\.1 inch \(ESP32-P4 v3\.1 or newer, experimental\)/],
   ["guition_jc1060p470c_v2", "ESP32-P4", 16 * 1024 * 1024, /V2 \(New Panel\)/],
-  ["guition_jc4880p443_portrait", "ESP32-P4", 16 * 1024 * 1024, /JC4880P443/, "supported"],
+  ["guition_jc4880p443_portrait", "ESP32-P4", 16 * 1024 * 1024, /JC4880P443/],
   ["waveshare_s3_touch_lcd_4b", "ESP32-S3", 16 * 1024 * 1024, /ESP32-S3 Touch LCD 4B/],
 ]) {
   const device = DEVICE_PROFILES.find((candidate) => candidate.key === key);

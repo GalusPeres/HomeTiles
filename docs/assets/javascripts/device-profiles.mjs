@@ -187,7 +187,7 @@ export const DEVICE_PROFILES = Object.freeze([
     "label": "Guition JC4880P443C_I_W",
     "chipFamily": "ESP32-P4",
     "flashSize": 16777216,
-    "status": "supported",
+    "status": "validation-pending",
     "hardwareCheck": "The board is the 4.3-inch Guition JC4880P443 (JC-ESP32P4-M3 module) with a 480x800 ST7701S panel.",
     "siliconVariant": "pre_v3",
     "minimumRevision": 1,

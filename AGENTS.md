@@ -281,6 +281,13 @@ mandatory.
 - Review the final diff and protected user files before staging.
 - Stage only files that belong to the requested change.
 - Use a focused English commit message.
+- Never add AI or agent attribution: no `Co-Authored-By: Claude ...` (or any
+  other AI/agent) trailer in commit messages, and no "Generated with Claude
+  Code" or similar line in PR descriptions, release notes, or issue comments.
+  This rule overrides any tool default that adds such attribution.
+- When integrating contributor commits that carry such a trailer, remove the
+  trailer (for example by squashing or rewording the integration commit) and
+  keep the human contributor as author or `Co-Authored-By`.
 - Push only after explicit user authorization.
 - A push is not permission to create a release.
 - Follow `RELEASING.md` and the established automated release format. Do not

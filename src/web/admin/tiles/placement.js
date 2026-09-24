@@ -13,8 +13,8 @@
     if (!candidateLayout) return false;
     if (candidateLayout.col < 0 ||
         candidateLayout.row < firstRow ||
-        candidateLayout.span_w < 1 ||
-        candidateLayout.span_h < 1 ||
+        candidateLayout.span_w < 0.5 ||
+        candidateLayout.span_h < 0.5 ||
         candidateLayout.col + candidateLayout.span_w > columns ||
         candidateLayout.row + candidateLayout.span_h > rows) {
       return false;
@@ -34,6 +34,9 @@
   function canPlaceTileLayout(tab, index, candidateLayout) {
     const tiles = getTilesData(tab);
     if (!Array.isArray(tiles)) return false;
+    const type = tab === currentTileTab && index === currentTileIndex
+      ? document.getElementById(tab + '_tile_type')?.value ?? tiles[index]?.type : tiles[index]?.type;
+    if (Number(type) !== 0 && index >= 0 && !supportedTileLayout(type, candidateLayout)) return false;
     const layouts = tiles.map((tile, tileIndex) =>
       getTileElementLayout(tab, tileIndex) ||
       getTileLayoutFromData(tab, tileIndex));
@@ -71,10 +74,10 @@
 
   function buildGridPlacementCandidates(
       columns, rows, firstRow,
-      spanW, spanH, preferredCol, preferredRow) {
+      spanW, spanH, preferredCol, preferredRow, step = 1) {
     const candidates = [];
-    for (let row = firstRow; row < rows; row++) {
-      for (let col = 0; col < columns; col++) {
+    for (let row = firstRow; row < rows; row += step) {
+      for (let col = 0; col < columns; col += step) {
         if ((col + spanW) > columns || (row + spanH) > rows) continue;
         let distance = (row * columns) + col;
         if (preferredCol >= 0 && preferredRow >= 0) {
@@ -100,7 +103,7 @@
 
   function simulateGridReorderLayouts(
       baseLayouts, activeIndices, fromIdx,
-      targetCol, targetRow, columns, rows, firstRow = 0) {
+      targetCol, targetRow, columns, rows, firstRow = 0, tileTypes = []) {
     const active = activeIndices instanceof Set
       ? new Set(activeIndices) : new Set(activeIndices || []);
     if (!active.has(fromIdx)) return null;
@@ -130,6 +133,8 @@
         displacedIndices.push(index);
       }
     });
+    const fractional = [targetLayout, ...baseLayouts.filter((_, i) => active.has(i))]
+      .some(layout => layout && [layout.col, layout.row, layout.span_w, layout.span_h].some(v => !Number.isInteger(v)));
     displacedIndices.sort((a, b) => {
       const layoutA = baseLayouts[a];
       const layoutB = baseLayouts[b];
@@ -150,7 +155,8 @@
       const candidates = buildGridPlacementCandidates(
         columns, rows, firstRow,
         layout.span_w, layout.span_h,
-        preferredCol, preferredRow);
+        preferredCol, preferredRow,
+        fractional && ![7, 8].includes(Number(tileTypes[displacedIndex])) ? 0.5 : 1);
       let placed = false;
       for (const candidate of candidates) {
         const nextLayout = {
@@ -201,5 +207,5 @@
     return simulateGridReorderLayouts(
       baseLayouts, active, fromIdx,
       targetCol, targetRow,
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab));
+      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab), tiles.map(tile => tile?.type));
   }

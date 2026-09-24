@@ -4694,21 +4694,21 @@ void set_tile_grid_cell(lv_obj_t* obj, uint8_t col, uint8_t row, uint8_t span_w,
       LV_GRID_ALIGN_STRETCH, row, h);
 }
 
-static bool get_tile_layout(const Tile& tile, uint8_t& col, uint8_t& row, uint8_t& span_w, uint8_t& span_h) {
+static bool get_tile_layout(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
   if (tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
   col = tile.col;
   row = tile.row;
-  span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  span_h = tile.span_h < 1 ? 1 : tile.span_h;
+  span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
+  span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
   clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
   if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
   if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
   return true;
 }
 
-static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], uint8_t col, uint8_t row, uint8_t span_w, uint8_t span_h) {
-  for (uint8_t r = row; r < row + span_h; ++r) {
-    for (uint8_t c = col; c < col + span_w; ++c) {
+static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], float col, float row, float span_w, float span_h) {
+  for (uint8_t r = static_cast<uint8_t>(row); r < row + span_h; ++r) {
+    for (uint8_t c = static_cast<uint8_t>(col); c < col + span_w; ++c) {
       if (r < GRID_ROWS && c < GRID_COLS) {
         occupied[r][c] = true;
       }
@@ -4744,10 +4744,10 @@ void render_tile_grid(lv_obj_t* parent, const TileGridConfig& config, GridType g
 
   bool occupied[GRID_ROWS][GRID_COLS] = {};
   struct TileLayout {
-    uint8_t col = 0;
-    uint8_t row = 0;
-    uint8_t span_w = 1;
-    uint8_t span_h = 1;
+    float col = 0;
+    float row = 0;
+    float span_w = 1;
+    float span_h = 1;
     bool valid = false;
   };
   TileLayout layouts[TILES_PER_GRID]{};
@@ -4755,10 +4755,10 @@ void render_tile_grid(lv_obj_t* parent, const TileGridConfig& config, GridType g
   for (int i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& tile = config.tiles[i];
     if (tile.type == TILE_EMPTY) continue;
-    uint8_t col = 0;
-    uint8_t row = 0;
-    uint8_t span_w = 1;
-    uint8_t span_h = 1;
+    float col = 0;
+    float row = 0;
+    float span_w = 1;
+    float span_h = 1;
     if (!get_tile_layout(tile, col, row, span_w, span_h)) continue;
     layouts[i] = {col, row, span_w, span_h, true};
     mark_occupied(occupied, col, row, span_w, span_h);
@@ -4815,6 +4815,8 @@ lv_obj_t* render_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint
   if (desc && desc->render) {
     lv_obj_t* tile_obj =
         desc->render(parent, col, row, tile, index, grid_type, scene_cb);
+    apply_fractional_tile_geometry(tile_obj, tile);
+    if (!tileBorderEnabled(tile)) ui_surface_style::disable_tile_border(tile_obj);
     // Normal grids use the global display option. The screensaver has its
     // own setting and applies it after rendering in image_screensaver.cpp.
     if (tile_obj && grid_type != GridType::SCREENSAVER &&

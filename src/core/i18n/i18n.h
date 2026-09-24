@@ -147,6 +147,7 @@ struct Strings {
   const char* sensor_unit;
   const char* sensor_decimals;
   const char* sensor_value_size;
+  const char* sensor_value_size_default;
   const char* sensor_display_mode;
   const char* sensor_display_none;
   const char* sensor_display_gauge;
@@ -280,6 +281,7 @@ struct Strings {
   const char* alignment_right;
   const char* screensaver_tile_shadow;
   const char* tile_radius;
+  const char* tile_fractional_type_hint;
   const char* screensaver_tile_border;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;

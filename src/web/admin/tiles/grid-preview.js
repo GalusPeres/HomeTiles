@@ -84,6 +84,8 @@
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     el.className = cls.join(' ');
     el.dataset.type = typeValue;
+    el.classList.toggle('tile-border-hidden', ['9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
+    applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
     else delete el.dataset.navigateTarget;
     if (typeValue === '0') el.style.background = 'transparent';
@@ -213,7 +215,7 @@
           '<br>' + escapeHtml(value) + '</div>';
       }
       if (previewKind === 'binary_sensor') {
-        html += '<div class="tile-value tile-binary-sensor-value" id="' +
+        html += '<div class="tile-value tile-binary-sensor-value ' + (Number(tile.sensor_value_font) ? sensorValueClass : '') + '" id="' +
           tab + '-tile-' + index + '-value">' +
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
@@ -257,15 +259,21 @@
     const folderId = getFolderIdForTab(tab);
     if (folderId === undefined) return Promise.resolve([]);
 
+    const baseline = getTilesData(tab).map(tile => JSON.stringify(tile));
     tileDataLoadPromises[tab] = fetch(
       '/api/tiles?folder=' + encodeURIComponent(folderId))
       .then(async response => {
         if (!response.ok) throw new Error('Tiles HTTP ' + response.status);
         const tiles = await response.json();
         if (!Array.isArray(tiles)) throw new Error('Invalid tile grid response');
-        tilesData[tab] = tiles;
+        const current = getTilesData(tab);
+        tilesData[tab] = tiles.map((tile, index) => {
+          const changed = JSON.stringify(current[index]) !== baseline[index];
+          return current[index] && (changed || drafts[tab]?.[index]?._dirty)
+            ? current[index] : tile;
+        });
         tileDataLoadedTabs.add(tab);
-        return tiles;
+        return tilesData[tab];
       })
       .finally(() => { delete tileDataLoadPromises[tab]; });
     return tileDataLoadPromises[tab];
@@ -302,11 +310,8 @@
       const sensorMeta = normalizeSensorMetaPayload(results[0] || {});
       sensorMetaCache = sensorMeta;
       tabs.forEach((tab, idx) => {
-        const tiles = Array.isArray(results[idx + 1]) ? results[idx + 1] : [];
-        if (refreshTiles) {
-          tilesData[tab] = tiles;
-        }
-        const tilesForRender = refreshTiles ? tiles : getTilesData(tab);
+        // Metadata may finish after another edit; render the current cache.
+        const tilesForRender = getTilesData(tab);
         if (!Array.isArray(tilesForRender)) return;
         tilesForRender.forEach((tile, i) => renderTileFromData(tab, i, tile, sensorMeta));
         layoutTiles(tab, tilesForRender);

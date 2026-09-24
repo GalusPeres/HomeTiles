@@ -147,4 +147,14 @@ inline const lv_font_t* content_font_40() {
 #endif
 }
 
+inline const lv_font_t* value_font_for_choice(uint8_t choice, const lv_font_t* fallback) {
+  switch (choice) {
+    case 1: return content_font_20();
+    case 2: return content_font_24();
+    case 3: return content_font_32();
+    case 4: return content_font_40();
+    default: return fallback;
+  }
+}
+
 }  // namespace tile_layout

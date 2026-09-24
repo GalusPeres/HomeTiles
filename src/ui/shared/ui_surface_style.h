@@ -11,6 +11,7 @@ void apply_radius(lv_obj_t* obj, int baseline, lv_style_selector_t selector = 0)
 void request_global_radius_refresh();
 void preview_radius(int value);
 
+void disable_tile_border(lv_obj_t* obj);
 void apply_tile_border(lv_obj_t* obj, bool enabled);
 void apply_global_tile_border(lv_obj_t* obj);
 

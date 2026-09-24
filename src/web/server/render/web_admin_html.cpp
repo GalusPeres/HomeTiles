@@ -175,10 +175,10 @@ static void appendTileTabHTML(
     String tileStyle = "";
     const TileTypeDescriptor* type_desc = get_tile_type_descriptor(tile.type);
     const char* type_css = type_desc ? type_desc->css_class : nullptr;
-    uint8_t col = (tile.col < GRID_COLS) ? tile.col : 0;
-    uint8_t row = (tile.row < GRID_ROWS) ? tile.row : 0;
-    uint8_t span_w = (tile.span_w < 1) ? 1 : tile.span_w;
-    uint8_t span_h = (tile.span_h < 1) ? 1 : tile.span_h;
+    float col = (tile.col < GRID_COLS) ? tile.col : 0;
+    float row = (tile.row < GRID_ROWS) ? tile.row : 0;
+    float span_w = (tile.span_w < 0.5f) ? 1 : tile.span_w;
+    float span_h = (tile.span_h < 0.5f) ? 1 : tile.span_h;
     clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
     if (screensaver_mode && GRID_ROWS > 1 && row < GRID_ROWS - 2) {
       row = GRID_ROWS - 2;
@@ -186,6 +186,7 @@ static void appendTileTabHTML(
     if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
     if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
 
+    if (!tileBorderEnabled(tile)) cssClass += " tile-border-hidden";
     if (type_css && type_css[0]) {
       cssClass += " ";
       cssClass += type_css;
@@ -224,18 +225,29 @@ static void appendTileTabHTML(
       tileStyle += "display:none;";
     }
 
+    if (tile_geometry::fraction_bits(col, row, span_w, span_h)) {
+      cssClass += " fractional-tile";
+      tileStyle += ";--tile-col:" + String(col) + ";--tile-row:" + String(row) +
+                   ";--tile-w:" + String(span_w) + ";--tile-h:" + String(span_h) +
+                   ";grid-column:auto;grid-row:auto";
+    }
+    if (tile_geometry::compact(tile.type, span_w, span_h) &&
+        (tile.type == TILE_BINARY_SENSOR || span_h == 0.5f || tile.sensor_display_mode == 0)) {
+      cssClass += " sensor-compact";
+      if (span_h == 0.5f) cssClass += " sensor-half";
+    }
     html += "<div class=\"";
     html += cssClass;
     html += "\" data-index=\"";
     html += String(i);
     html += "\" data-col=\"";
-    html += String(static_cast<unsigned>(col));
+    html += String(col);
     html += "\" data-row=\"";
-    html += String(static_cast<unsigned>(row));
+    html += String(row);
     html += "\" data-span-w=\"";
-    html += String(static_cast<unsigned>(span_w));
+    html += String(span_w);
     html += "\" data-span-h=\"";
-    html += String(static_cast<unsigned>(span_h));
+    html += String(span_h);
     html += "\" data-type=\"";
     html += String(static_cast<unsigned>(tile.type));
     if (tile.type == TILE_FOLDER) {
@@ -352,7 +364,12 @@ static void appendTileTabHTML(
       html += "</div>";
     }
     if (binary_sensor_preview) {
-      html += "<div class=\"tile-value tile-binary-sensor-value\" id=\"";
+      html += "<div class=\"tile-value tile-binary-sensor-value";
+      if (tile.sensor_value_font >= 1 && tile.sensor_value_font <= 4) {
+        html += " sensor-value-size-";
+        html += tile.sensor_value_font == 1 ? "20" : tile.sensor_value_font == 2 ? "24" : tile.sensor_value_font == 3 ? "32" : "40";
+      }
+      html += "\" id=\"";
       html += tab_id;
       html += "-tile-";
       html += String(i);
@@ -772,6 +789,9 @@ static void appendTileTabHTML(
 
 )html";
 
+  html += "<p class=\"settings-note\" hidden id=\"" + tab_id + "_tile_size_note\">";
+  appendHtmlEscaped(html, tr.tile_fractional_type_hint);
+  html += "</p>";
             TileTypeWebContext type_ctx;
             type_ctx.tab_id = &tab_id;
             type_ctx.sensor_options = &sensorOptions;

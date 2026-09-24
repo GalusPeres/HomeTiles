@@ -9,6 +9,7 @@ namespace {
 
 // USER_1/USER_2 are already used for image-preview states.
 constexpr lv_obj_flag_t kGlobalTileBorderFlag = LV_OBJ_FLAG_USER_3;
+constexpr lv_obj_flag_t kHiddenTileBorderFlag = LV_OBJ_FLAG_USER_4;
 volatile bool g_global_tile_border_refresh_pending = false;
 std::atomic<bool> g_radius_refresh_pending{false};
 std::atomic<int> g_preview_radius{-1};
@@ -20,6 +21,8 @@ bool g_radius_style_initialized[kRadiusStyleCount]{};
 
 void apply_style(lv_obj_t* obj, bool enabled) {
   if (!obj) return;
+
+  enabled = enabled && !lv_obj_has_flag(obj, kHiddenTileBorderFlag);
 
   // An LVGL border occupies the inner box and reduces usable content space.
   // A 1 px outline with -1 px padding follows the same inset edge
@@ -87,6 +90,12 @@ void request_global_radius_refresh() {
 void preview_radius(int value) {
   g_preview_radius.store(tile_radius::clamp(value));
   g_radius_refresh_pending.store(true);
+}
+
+void disable_tile_border(lv_obj_t* obj) {
+  if (!obj) return;
+  lv_obj_add_flag(obj, kHiddenTileBorderFlag);
+  apply_style(obj, false);
 }
 
 void apply_tile_border(lv_obj_t* obj, bool enabled) {

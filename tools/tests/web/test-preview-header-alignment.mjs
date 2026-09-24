@@ -9,7 +9,7 @@ const helpers = [
   'resolveIconName', 'normalizeMdiIconName', 'isExplicitlyDisabledValue',
   'tileColorInputIsDefault', 'tileBgToHex', 'rgbToHex', 'applyTileAriaLabel',
   'resolveUnitValue', 'isScreensaverTileTab', 'getTileResizeHandlesHtml',
-  'renderTileFromData', 'updateTilePreview'
+  'applyCompactSensorPreview', 'isCompactSensorType', 'renderTileFromData', 'updateTilePreview'
 ].map(extractDeliveredFunction).join('\n');
 const html = `<!doctype html><html><head><style>
 ${readRepoFile('src/web/assets/admin.css')}

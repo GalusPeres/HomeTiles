@@ -51,10 +51,10 @@
   function climateGridDimensions(spanW, spanH) {
     const columns = Math.max(
       1, Math.min(
-        climateMaxGridColumns(), Number(spanW) || 1));
+        climateMaxGridColumns(), Math.floor(Number(spanW) || 1)));
     const outerRows = Math.max(
       1, Math.min(
-        climateMaxOuterRows(), Number(spanH) || 1));
+        climateMaxOuterRows(), Math.floor(Number(spanH) || 1)));
     return {
       columns,
       rows: outerRows * 2 - 1

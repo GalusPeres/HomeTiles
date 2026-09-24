@@ -9,6 +9,7 @@ namespace hometiles_title {
 struct State {
   std::string text;
   bool top_aligned = false;
+  bool single_line = false;
   bool updating = false;
 };
 
@@ -34,10 +35,16 @@ inline void render(lv_obj_t* label, State* state) {
   if (state->updating) return;
   state->updating = true;
   const int width = lv_obj_get_content_width(label);
-  const size_t split = state->text.find('\n');
-  std::string shown = fit_line(label, state->text.substr(0, split), width);
+  std::string flattened;
+  if (state->single_line) {
+    flattened = state->text;
+    std::replace(flattened.begin(), flattened.end(), '\n', ' ');
+  }
+  const std::string& text = state->single_line ? flattened : state->text;
+  const size_t split = text.find('\n');
+  std::string shown = fit_line(label, text.substr(0, split), width);
   if (split != std::string::npos)
-    shown += "\n" + fit_line(label, state->text.substr(split + 1), width);
+    shown += "\n" + fit_line(label, text.substr(split + 1), width);
   const int line_height = lv_font_get_line_height(lv_obj_get_style_text_font(label, LV_PART_MAIN));
   const int extra = split == std::string::npos ? 0 : line_height;
   lv_obj_set_height(label, line_height + extra);

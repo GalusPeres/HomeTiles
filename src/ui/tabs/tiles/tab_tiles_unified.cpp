@@ -269,8 +269,8 @@ static void schedule_navigation_preload(
 
   struct NavigationCandidate {
     uint16_t folder_id = kInvalidFolderId;
-    uint8_t row = 0;
-    uint8_t col = 0;
+    float row = 0;
+    float col = 0;
     uint8_t config_index = 0;
   };
   NavigationCandidate candidates[TILES_PER_GRID]{};
@@ -686,21 +686,21 @@ static const char* getGridName(GridType type) {
   return "TilesFolder";
 }
 
-static bool get_tile_layout(const Tile& tile, uint8_t& col, uint8_t& row, uint8_t& span_w, uint8_t& span_h) {
+static bool get_tile_layout(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
   if (tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
   col = tile.col;
   row = tile.row;
-  span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  span_h = tile.span_h < 1 ? 1 : tile.span_h;
+  span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
+  span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
   clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
   if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
   if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
   return true;
 }
 
-static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], uint8_t col, uint8_t row, uint8_t span_w, uint8_t span_h) {
-  for (uint8_t r = row; r < row + span_h; ++r) {
-    for (uint8_t c = col; c < col + span_w; ++c) {
+static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], float col, float row, float span_w, float span_h) {
+  for (uint8_t r = static_cast<uint8_t>(row); r < row + span_h; ++r) {
+    for (uint8_t c = static_cast<uint8_t>(col); c < col + span_w; ++c) {
       if (r < GRID_ROWS && c < GRID_COLS) {
         occupied[r][c] = true;
       }
@@ -1586,10 +1586,10 @@ void tiles_reload_layout(GridType grid_type) {
   const TileGridConfig& config = getGridConfig(grid_type);
   bool occupied[GRID_ROWS][GRID_COLS] = {};
   struct TileLayout {
-    uint8_t col = 0;
-    uint8_t row = 0;
-    uint8_t span_w = 1;
-    uint8_t span_h = 1;
+    float col = 0;
+    float row = 0;
+    float span_w = 1;
+    float span_h = 1;
     bool valid = false;
   };
   TileLayout layouts[TILES_PER_GRID]{};
@@ -1597,10 +1597,10 @@ void tiles_reload_layout(GridType grid_type) {
   for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& tile = config.tiles[i];
     if (tile.type == TILE_EMPTY) continue;
-    uint8_t col = 0;
-    uint8_t row = 0;
-    uint8_t span_w = 1;
-    uint8_t span_h = 1;
+    float col = 0;
+    float row = 0;
+    float span_w = 1;
+    float span_h = 1;
     if (!get_tile_layout(tile, col, row, span_w, span_h)) continue;
     layouts[i] = {col, row, span_w, span_h, true};
     mark_occupied(occupied, col, row, span_w, span_h);
@@ -2129,10 +2129,10 @@ static void rebuild_tile_at_index(GridType grid_type, uint8_t index) {
   const Tile& tile = config.tiles[index];
   if (tile.type == TILE_EMPTY) return;
 
-  uint8_t col = 0;
-  uint8_t row = 0;
-  uint8_t span_w = 1;
-  uint8_t span_h = 1;
+  float col = 0;
+  float row = 0;
+  float span_w = 1;
+  float span_h = 1;
   if (!get_tile_layout(tile, col, row, span_w, span_h)) return;
 
   if (g_tiles_objs[idx][index]) {

@@ -216,6 +216,11 @@
       const tileEl = document.getElementById(tab + '-tile-' + currentTileIndex);
       const previousType = Number(tileEl?.dataset.type ?? 0);
       const nextType = Number(typeSelect.value);
+      const currentLayout = getTileElementLayout(tab, currentTileIndex);
+      if (nextType !== 0 && currentLayout && !supportedTileLayout(nextType, currentLayout)) {
+        typeSelect.value = String(previousType);
+        return;
+      }
       // A freshly created tile must start with the selected type's real
       // default colour. Do not inherit an explicit colour state from the empty
       // editor placeholder.
@@ -262,6 +267,7 @@
       updateDraft(tab);
       scheduleAutoSave(tab);
     });
+    bindLive(document.getElementById(prefix + '_binary_sensor_value_font'), 'change', 'binarySensorValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(binarySensorPopupModeSelect, 'change', 'binarySensorPopupMode', () => {
       updateDraft(tab);
       scheduleAutoSave(tab);
@@ -375,6 +381,9 @@
     bindLive(animationFpsInput, 'input', 'animationFps', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(animationFitSelect, 'change', 'animationFit', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(animationZoomInput, 'input', 'animationZoom', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    for (const kind of ['clock','text']) {
+      bindLive(document.getElementById(prefix + '_' + kind + '_tile_border'), 'change', kind + 'TileBorder', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    }
     bindLive(clockTimeCheck, 'change', 'clockShowTime', () => {
       ensureClockSelection(prefix);
       updateTilePreview(tab);

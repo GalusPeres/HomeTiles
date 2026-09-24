@@ -1926,10 +1926,10 @@ function syncTileRadiusControls(tabEl) {
     const fallbackRow = (index >= 0)
       ? (Math.max(firstRow, Math.floor(index / GRID_COLS)) + 1)
       : (firstRow + 1);
-    let col = clampInt(snapshot?.col, 1, GRID_COLS, fallbackCol);
-    let row = clampInt(snapshot?.row, firstRow + 1, GRID_ROWS, fallbackRow);
-    let spanW = clampInt(snapshot?.span_w, 1, GRID_COLS, 1);
-    let spanH = clampInt(snapshot?.span_h, 1, GRID_ROWS, 1);
+    let col = clampHalf(snapshot?.col, 1, GRID_COLS, fallbackCol);
+    let row = clampHalf(snapshot?.row, firstRow + 1, GRID_ROWS + 0.5, fallbackRow);
+    let spanW = clampHalf(snapshot?.span_w, 0.5, GRID_COLS, 1);
+    let spanH = clampHalf(snapshot?.span_h, 0.5, GRID_ROWS, 1);
     return constrainLayoutToTab(
       normalizeLayoutForTileType(snapshot?.type, col - 1, row - 1,
                                  spanW, spanH),
@@ -1973,7 +1973,7 @@ function syncTileRadiusControls(tabEl) {
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
     const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity'];
 
-    tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
+    tile.type = clampHalf(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
     tile.icon_name = snapshot?.icon || '';
     tile.bg_color = snapshotBgColorIsDefault(snapshot)
@@ -2042,6 +2042,9 @@ function syncTileRadiusControls(tabEl) {
       tile.sensor_gauge_max = Number.isFinite(num) ? num : 100;
     }
 
+    if ([9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
+      tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
+    }
     tiles[index] = tile;
     tilesData[tab] = tiles;
   }
@@ -2606,16 +2609,34 @@ function syncTileRadiusControls(tabEl) {
     return v;
   }
 
+  function clampHalf(value, min, max, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.round(number * 2) / 2)) : fallback;
+  }
+  function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
+  function supportedTileLayout(type, layout) {
+    if (!layout || ![layout.col, layout.row, layout.span_w, layout.span_h].every(v => Number.isFinite(v) && v >= 0 && Number.isInteger(v * 2))) return false;
+    if ([7,8].includes(Number(type)) && (!Number.isInteger(layout.col) || !Number.isInteger(layout.row))) return false;
+    const fractionalSize = !Number.isInteger(layout.span_w) || !Number.isInteger(layout.span_h);
+    return fractionalSize ? isCompactSensorType(type) && layout.span_w >= 1 && layout.span_h === 0.5 : layout.span_w >= 1 && layout.span_h >= 1;
+  }
+  function applyCompactSensorPreview(el, type, layout, mode = 0) {
+    const compact = isCompactSensorType(type) && layout?.span_w >= 1 &&
+      layout.span_h === 0.5;
+    el.classList.toggle('sensor-compact', compact);
+    el.classList.toggle('sensor-half', compact && layout.span_h === 0.5);
+  }
+
   function normalizeLayoutForTileType(typeValue, col, row, spanW, spanH) {
-    let safeCol = clampInt(col, 0, GRID_COLS - 1, 0);
-    let safeRow = clampInt(row, 0, GRID_ROWS - 1, 0);
-    let safeW = clampInt(spanW, 1, GRID_COLS, 1);
-    let safeH = clampInt(spanH, 1, GRID_ROWS, 1);
+    let safeCol = clampHalf(col, 0, GRID_COLS - 0.5, 0);
+    let safeRow = clampHalf(row, 0, GRID_ROWS - 0.5, 0);
+    let safeW = clampHalf(spanW, 0.5, GRID_COLS, 1);
+    let safeH = clampHalf(spanH, 0.5, GRID_ROWS, 1);
     if (Number(typeValue) === MEDIA_TILE_TYPE) {
       const minW = Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS);
       const minH = Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS);
-      safeW = clampInt(safeW, minW, Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS), minW);
-      safeH = clampInt(safeH, minH, Math.min(MEDIA_TILE_MAX_SPAN, GRID_ROWS), minH);
+      safeW = clampHalf(safeW, minW, Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS), minW);
+      safeH = clampHalf(safeH, minH, Math.min(MEDIA_TILE_MAX_SPAN, GRID_ROWS), minH);
       safeCol = Math.min(safeCol, GRID_COLS - safeW);
       safeRow = Math.min(safeRow, GRID_ROWS - safeH);
     } else {
@@ -2638,10 +2659,10 @@ function syncTileRadiusControls(tabEl) {
     const fallbackCol = index % GRID_COLS;
     const firstRow = firstAllowedGridRow(tab);
     const fallbackRow = Math.max(firstRow, Math.floor(index / GRID_COLS));
-    const col = clampInt(tile?.col, 0, GRID_COLS - 1, fallbackCol);
-    const row = clampInt(tile?.row, firstRow, GRID_ROWS - 1, fallbackRow);
-    let spanW = clampInt(tile?.span_w, 1, GRID_COLS, 1);
-    let spanH = clampInt(tile?.span_h, 1, GRID_ROWS, 1);
+    const col = clampHalf(tile?.col, 0, GRID_COLS - 0.5, fallbackCol);
+    const row = clampHalf(tile?.row, firstRow, GRID_ROWS - 0.5, fallbackRow);
+    let spanW = clampHalf(tile?.span_w, 0.5, GRID_COLS, 1);
+    let spanH = clampHalf(tile?.span_h, 0.5, GRID_ROWS, 1);
     return constrainLayoutToTab(
       normalizeLayoutForTileType(tile?.type, col, row, spanW, spanH), tab);
   }
@@ -2658,22 +2679,27 @@ function syncTileRadiusControls(tabEl) {
 
   function setTileGridPosition(el, col, row, spanW, spanH) {
     setGridItemPosition(el, col, row, spanW, spanH);
+    const fractional = [col, row, spanW, spanH].some(v => !Number.isInteger(v));
+    el.classList.toggle('fractional-tile', fractional);
+    for (const [name, value] of Object.entries({col, row, w: spanW, h: spanH})) el.style.setProperty('--tile-' + name, String(value));
+    if (fractional) { el.style.gridColumn = 'auto'; el.style.gridRow = 'auto'; }
+
   }
 
   function getTileElementLayout(tab, index) {
     const el = document.getElementById(tab + '-tile-' + index);
     if (!el) return null;
-    const col = clampInt(el.dataset.col, 0, GRID_COLS - 1, null);
-    const row = clampInt(el.dataset.row, firstAllowedGridRow(tab), GRID_ROWS - 1, null);
-    const spanW = clampInt(el.dataset.spanW, 1, GRID_COLS, null);
-    const spanH = clampInt(el.dataset.spanH, 1, GRID_ROWS, null);
+    const col = clampHalf(el.dataset.col, 0, GRID_COLS - 0.5, null);
+    const row = clampHalf(el.dataset.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, null);
+    const spanW = clampHalf(el.dataset.spanW, 0.5, GRID_COLS, null);
+    const spanH = clampHalf(el.dataset.spanH, 0.5, GRID_ROWS, null);
     if (col === null || row === null || spanW === null || spanH === null) return null;
     return { col, row, span_w: spanW, span_h: spanH };
   }
 
   function layoutTiles(tab, tiles) {
     if (!Array.isArray(tiles)) return;
-    const occupied = Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(false));
+    const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
     const emptyIndices = [];
 
     tiles.forEach((tile, idx) => {
@@ -2688,17 +2714,21 @@ function syncTileRadiusControls(tabEl) {
         setTileGridPosition(el, layout.col, layout.row, layout.span_w, layout.span_h);
         el.style.display = '';
       }
-      for (let r = layout.row; r < layout.row + layout.span_h; r++) {
-        for (let c = layout.col; c < layout.col + layout.span_w; c++) {
-          if (r < GRID_ROWS && c < GRID_COLS) occupied[r][c] = true;
+      for (let r = layout.row * 2; r < (layout.row + layout.span_h) * 2; r++) {
+        for (let c = layout.col * 2; c < (layout.col + layout.span_w) * 2; c++) {
+          if (r < GRID_ROWS * 2 && c < GRID_COLS * 2) occupied[r][c] = true;
         }
       }
     });
 
     const freeCells = [];
-    for (let r = firstAllowedGridRow(tab); r < GRID_ROWS; r++) {
-      for (let c = 0; c < GRID_COLS; c++) {
-        if (!occupied[r][c]) freeCells.push({ col: c, row: r });
+    // New tiles still start at 1x1, but their free slots can start on half cells.
+    // Reserve each placeholder so adjacent click targets never overlap.
+    for (let r = firstAllowedGridRow(tab) * 2; r + 1 < GRID_ROWS * 2; r++) {
+      for (let c = 0; c + 1 < GRID_COLS * 2; c++) {
+        if ([occupied[r][c], occupied[r][c+1], occupied[r+1][c], occupied[r+1][c+1]].some(Boolean)) continue;
+        freeCells.push({ col: c / 2, row: r / 2 });
+        occupied[r][c] = occupied[r][c+1] = occupied[r+1][c] = occupied[r+1][c+1] = true;
       }
     }
 
@@ -2739,11 +2769,11 @@ function syncTileRadiusControls(tabEl) {
       return { col: 0, row: 0, span_w: 1, span_h: 1 };
     }
 
-    let col = clampInt(colEl.value, 1, GRID_COLS, 1);
+    let col = clampHalf(colEl.value, 1, GRID_COLS, 1);
     const firstRow = firstAllowedGridRow(tab);
-    let row = clampInt(rowEl.value, firstRow + 1, GRID_ROWS, firstRow + 1);
-    let spanW = clampInt(spanWEl.value, 1, GRID_COLS, 1);
-    let spanH = clampInt(spanHEl.value, 1, GRID_ROWS, 1);
+    let row = clampHalf(rowEl.value, firstRow + 1, GRID_ROWS + 0.5, firstRow + 1);
+    let spanW = clampHalf(spanWEl.value, 0.5, GRID_COLS, 1);
+    let spanH = clampHalf(spanHEl.value, 0.5, GRID_ROWS, 1);
 
     const typeValue = document.getElementById(prefix + '_tile_type')?.value || '0';
     const layout = constrainLayoutToTab(
@@ -2773,6 +2803,11 @@ function syncTileRadiusControls(tabEl) {
     }
     if (!Array.isArray(tiles) || currentTileIndex >= tiles.length) return;
     const tile = tiles[currentTileIndex] || {};
+    const type = document.getElementById(tab + '_tile_type')?.value ?? tile.type;
+    if (Number(type) !== 0 && (!supportedTileLayout(type, layout) || !canPlaceTileLayout(tab, currentTileIndex, layout))) {
+      applyLayoutInputsFromLayout(tab, normalizeTileLayout(tile, currentTileIndex, tab), false);
+      return;
+    }
     tile.col = layout.col;
     tile.row = layout.row;
     tile.span_w = layout.span_w;
@@ -2782,6 +2817,7 @@ function syncTileRadiusControls(tabEl) {
     tile.type = isNaN(typeNum) ? 0 : typeNum;
     tiles[currentTileIndex] = tile;
     layoutTiles(tab, tiles);
+    syncTileSizePolicy(tab);
   }
 
   function applyLayoutInputsFromLayout(tab, layout, persistDraft = true) {
@@ -3192,6 +3228,11 @@ function syncTileRadiusControls(tabEl) {
       const tileEl = document.getElementById(tab + '-tile-' + currentTileIndex);
       const previousType = Number(tileEl?.dataset.type ?? 0);
       const nextType = Number(typeSelect.value);
+      const currentLayout = getTileElementLayout(tab, currentTileIndex);
+      if (nextType !== 0 && currentLayout && !supportedTileLayout(nextType, currentLayout)) {
+        typeSelect.value = String(previousType);
+        return;
+      }
       // A freshly created tile must start with the selected type's real
       // default colour. Do not inherit an explicit colour state from the empty
       // editor placeholder.
@@ -3238,6 +3279,7 @@ function syncTileRadiusControls(tabEl) {
       updateDraft(tab);
       scheduleAutoSave(tab);
     });
+    bindLive(document.getElementById(prefix + '_binary_sensor_value_font'), 'change', 'binarySensorValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(binarySensorPopupModeSelect, 'change', 'binarySensorPopupMode', () => {
       updateDraft(tab);
       scheduleAutoSave(tab);
@@ -3351,6 +3393,9 @@ function syncTileRadiusControls(tabEl) {
     bindLive(animationFpsInput, 'input', 'animationFps', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(animationFitSelect, 'change', 'animationFit', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(animationZoomInput, 'input', 'animationZoom', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    for (const kind of ['clock','text']) {
+      bindLive(document.getElementById(prefix + '_' + kind + '_tile_border'), 'change', kind + 'TileBorder', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    }
     bindLive(clockTimeCheck, 'change', 'clockShowTime', () => {
       ensureClockSelection(prefix);
       updateTilePreview(tab);
@@ -3444,7 +3489,7 @@ function syncTileRadiusControls(tabEl) {
     const isEnergyType = type === '14';
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
-      : (document.getElementById(prefix + '_sensor_value_font')?.value || '0');
+      : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font' : '_sensor_value_font'))?.value || '0');
     const previewKind = meta.preview || 'none';
     const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
       ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);
@@ -3516,6 +3561,7 @@ function syncTileRadiusControls(tabEl) {
     if (type === '5' && switchStyle === '1') tileElem.classList.add('switch-toggle');
     tileElem.style.background = '';
     tileElem.dataset.type = type;
+    tileElem.classList.toggle('tile-border-hidden', ['9','10'].includes(type) && document.getElementById(prefix + (type === '9' ? '_clock_tile_border' : '_text_tile_border'))?.checked === false);
 
     if (type === '0') {
       tileElem.classList.add('empty');
@@ -3524,6 +3570,9 @@ function syncTileRadiusControls(tabEl) {
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
       updateLayoutFromInputs(tab);
+    applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
+      span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
       return;
     }
 
@@ -3599,7 +3648,7 @@ function syncTileRadiusControls(tabEl) {
         '<br>' + escapeHtml(value) + '</div>';
     }
     if (previewKind === 'binary_sensor') {
-      html += '<div class="tile-value tile-binary-sensor-value" id="' +
+      html += '<div class="tile-value tile-binary-sensor-value ' + (Number(sensorValueFont) ? sensorValueClass : '') + '" id="' +
         tileId + '-value">' +
         escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
         '</div>';
@@ -3658,6 +3707,9 @@ function syncTileRadiusControls(tabEl) {
     }
     if (type === '5') updateSwitchValuePreview(tab);
     updateLayoutFromInputs(tab);
+    applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
+      span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
     if (previewKind === 'climate' &&
         typeof mountClimateMiniEditor === 'function') {
       mountClimateMiniEditor(tab);
@@ -3694,6 +3746,7 @@ function syncTileRadiusControls(tabEl) {
         if (colEl && rowEl && spanWEl && spanHEl) {
           const fallbackLayout = (data.type === 0) ? getTileElementLayout(tab, index) : null;
           const layoutInput = {
+            type: data.type,
             col: data.col,
             row: data.row,
             span_w: data.span_w,
@@ -3738,9 +3791,15 @@ function syncTileRadiusControls(tabEl) {
     }
     const folderId = getFolderIdForTab(tab);
     if (folderId === undefined) return;
+    const baseline = JSON.stringify(cached);
     fetch('/api/tiles?folder=' + encodeURIComponent(folderId) + '&index=' + index)
       .then(res => res.json())
-      .then(data => applyTileDataToEditor(index, tab, data))
+      .then(data => {
+        const current = getTilesData(tab)[index];
+        const changed = JSON.stringify(current) !== baseline;
+        applyTileDataToEditor(index, tab,
+          current && (changed || drafts[tab]?.[index]?._dirty) ? current : data);
+      })
       .catch(error => console.error('Tile load failed:', error));
   }
 
@@ -3808,6 +3867,32 @@ function syncTileRadiusControls(tabEl) {
     syncGaugeUi(tab);
     applySpecialTileUiState(tab);
     syncFolderPinControls(tab);
+    syncTileSizePolicy(tab);
+  }
+
+  function syncTileSizePolicy(tab) {
+    const typeEl = document.getElementById(tab + '_tile_type');
+    if (!typeEl) return;
+    const w = Number(document.getElementById(tab + '_tile_span_w')?.value || 1);
+    const h = Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
+    for (const option of typeEl.options) {
+      if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
+      if ((!Number.isInteger(w) || !Number.isInteger(h)) && Number(option.value) !== 0 && !isCompactSensorType(option.value) && !option.disabled) {
+        option.disabled = true; option.dataset.sizeDisabled = '1';
+      }
+    }
+    const compact = isCompactSensorType(typeEl.value);
+    for (const field of ['col', 'row', 'span_w', 'span_h']) {
+      const input = document.getElementById(tab + '_tile_' + field);
+      const position = field === 'col' || field === 'row';
+      if (input) input.step = (position ? ![7, 8].includes(Number(typeEl.value)) : compact) ? '0.5' : '1';
+    }
+    const row = document.getElementById(tab + '_tile_row');
+    if (row) row.max = String(GRID_ROWS + (compact && h === 0.5 ? 0.5 : 0));
+    const height = document.getElementById(tab + '_tile_span_h');
+    if (height && compact) height.min = '0.5';
+    const note = document.getElementById(tab + '_tile_size_note');
+    if (note) note.hidden = Number.isInteger(w) && Number.isInteger(h);
   }
 
   let notificationTimer = null;
@@ -4304,14 +4389,14 @@ function syncTileRadiusControls(tabEl) {
     // bottom rows and packs it into the target grid.
     const firstTargetRow = Math.max(0, GRID_ROWS - 2);
     const firstSourceRow = sourceRows > 1 ? sourceRows - 2 : 0;
-    const occupied = Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(false));
+    const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
     const prepared = [];
     for (const entry of sourceEntries) {
       if (prepared.length >= tileCount) throw new Error('Screensaver grid does not fit target device');
       const tile = entry.tile;
       const mediaTile = Number(tile.type) === MEDIA_TILE_TYPE;
-      let spanW = Math.max(1, Number(tile.span_w || 1));
-      let spanH = Math.max(1, Number(tile.span_h || 1));
+      let spanW = Math.max(0.5, Number(tile.span_w || 1));
+      let spanH = Math.max(0.5, Number(tile.span_h || 1));
       if (mediaTile) {
         spanW = Math.max(MEDIA_TILE_MIN_SPAN, spanW);
         spanH = Math.max(MEDIA_TILE_MIN_SPAN, spanH);
@@ -4319,7 +4404,7 @@ function syncTileRadiusControls(tabEl) {
       spanW = Math.min(spanW, GRID_COLS, mediaTile ? MEDIA_TILE_MAX_SPAN : GRID_COLS);
       spanH = Math.min(spanH, 2, mediaTile ? MEDIA_TILE_MAX_SPAN : 2);
 
-      const sourceSpanW = Math.max(1, Number(tile.span_w || 1));
+      const sourceSpanW = Math.max(0.5, Number(tile.span_w || 1));
       const sourceColRange = Math.max(0, sourceCols - sourceSpanW);
       const targetColRange = Math.max(0, GRID_COLS - spanW);
       const relativeCol = sourceColRange > 0
@@ -4330,11 +4415,11 @@ function syncTileRadiusControls(tabEl) {
       const desiredRow = Math.min(GRID_ROWS - spanH, firstTargetRow + sourceRowOffset);
 
       let best = null;
-      for (let row = firstTargetRow; row <= GRID_ROWS - spanH; row++) {
-        for (let col = 0; col <= GRID_COLS - spanW; col++) {
+      for (let row = firstTargetRow; row <= GRID_ROWS - spanH; row += 0.5) {
+        for (let col = 0; col <= GRID_COLS - spanW; col += 0.5) {
           let free = true;
-          for (let y = row; y < row + spanH && free; y++) {
-            for (let x = col; x < col + spanW; x++) {
+          for (let y = row * 2; y < (row + spanH) * 2 && free; y++) {
+            for (let x = col * 2; x < (col + spanW) * 2; x++) {
               if (occupied[y][x]) { free = false; break; }
             }
           }
@@ -4344,8 +4429,8 @@ function syncTileRadiusControls(tabEl) {
         }
       }
       if (!best) throw new Error('Screensaver grid does not fit target device');
-      for (let y = best.row; y < best.row + spanH; y++) {
-        for (let x = best.col; x < best.col + spanW; x++) occupied[y][x] = true;
+      for (let y = best.row * 2; y < (best.row + spanH) * 2; y++) {
+        for (let x = best.col * 2; x < (best.col + spanW) * 2; x++) occupied[y][x] = true;
       }
       prepared.push({
         targetIndex: prepared.length,
@@ -4548,6 +4633,7 @@ function syncTileRadiusControls(tabEl) {
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');
       fd.append('popup_open_mode', tile.popup_open_mode ?? 1);
     } else if (safeType === 20) {
+      fd.append('sensor_value_font', tile.sensor_value_font ?? 0);
       fd.append(
         'binary_sensor_entity',
         tile.sensor_entity || tile.binary_sensor_entity || '');
@@ -4578,7 +4664,9 @@ function syncTileRadiusControls(tabEl) {
     } else if (safeType === 10) {
       fd.append('text_value', tile.text_value || tile.scene_alias || tile.key_macro || '');
       fd.append('text_value_font', tile.text_value_font || tile.sensor_value_font || '0');
+      fd.append('tile_border', Number(tile.sensor_display_mode) === 1 ? '0' : '1');
     } else if (safeType === 9) {
+      fd.append('tile_border', Number(tile.sensor_display_mode) === 1 ? '0' : '1');
       fd.append('clock_show_time', ((Number(tile.sensor_decimals || 1) & 1) !== 0) ? '1' : '0');
       fd.append('clock_show_date', ((Number(tile.sensor_decimals || 1) & 2) !== 0) ? '1' : '0');
       fd.append('key_code', tile.key_code || 40);
@@ -4734,6 +4822,8 @@ function syncTileRadiusControls(tabEl) {
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     el.className = cls.join(' ');
     el.dataset.type = typeValue;
+    el.classList.toggle('tile-border-hidden', ['9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
+    applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
     else delete el.dataset.navigateTarget;
     if (typeValue === '0') el.style.background = 'transparent';
@@ -4863,7 +4953,7 @@ function syncTileRadiusControls(tabEl) {
           '<br>' + escapeHtml(value) + '</div>';
       }
       if (previewKind === 'binary_sensor') {
-        html += '<div class="tile-value tile-binary-sensor-value" id="' +
+        html += '<div class="tile-value tile-binary-sensor-value ' + (Number(tile.sensor_value_font) ? sensorValueClass : '') + '" id="' +
           tab + '-tile-' + index + '-value">' +
           escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
           '</div>';
@@ -4907,15 +4997,21 @@ function syncTileRadiusControls(tabEl) {
     const folderId = getFolderIdForTab(tab);
     if (folderId === undefined) return Promise.resolve([]);
 
+    const baseline = getTilesData(tab).map(tile => JSON.stringify(tile));
     tileDataLoadPromises[tab] = fetch(
       '/api/tiles?folder=' + encodeURIComponent(folderId))
       .then(async response => {
         if (!response.ok) throw new Error('Tiles HTTP ' + response.status);
         const tiles = await response.json();
         if (!Array.isArray(tiles)) throw new Error('Invalid tile grid response');
-        tilesData[tab] = tiles;
+        const current = getTilesData(tab);
+        tilesData[tab] = tiles.map((tile, index) => {
+          const changed = JSON.stringify(current[index]) !== baseline[index];
+          return current[index] && (changed || drafts[tab]?.[index]?._dirty)
+            ? current[index] : tile;
+        });
         tileDataLoadedTabs.add(tab);
-        return tiles;
+        return tilesData[tab];
       })
       .finally(() => { delete tileDataLoadPromises[tab]; });
     return tileDataLoadPromises[tab];
@@ -4952,11 +5048,8 @@ function syncTileRadiusControls(tabEl) {
       const sensorMeta = normalizeSensorMetaPayload(results[0] || {});
       sensorMetaCache = sensorMeta;
       tabs.forEach((tab, idx) => {
-        const tiles = Array.isArray(results[idx + 1]) ? results[idx + 1] : [];
-        if (refreshTiles) {
-          tilesData[tab] = tiles;
-        }
-        const tilesForRender = refreshTiles ? tiles : getTilesData(tab);
+        // Metadata may finish after another edit; render the current cache.
+        const tilesForRender = getTilesData(tab);
         if (!Array.isArray(tilesForRender)) return;
         tilesForRender.forEach((tile, i) => renderTileFromData(tab, i, tile, sensorMeta));
         layoutTiles(tab, tilesForRender);
@@ -5098,7 +5191,7 @@ function syncTileRadiusControls(tabEl) {
     return getGridElementMetrics(grid, GRID_COLS, GRID_ROWS);
   }
 
-  function getRawGridCellFromPointer(tab, clientX, clientY) {
+  function getRawGridCellFromPointer(tab, clientX, clientY, sizeStep = null) {
     const metrics = getTileGridMetrics(tab);
     if (!metrics) return null;
     const stepX = metrics.cellW + metrics.gapX;
@@ -5108,15 +5201,17 @@ function syncTileRadiusControls(tabEl) {
     if (!isFinite(relX) || !isFinite(relY)) return null;
     relX = Math.max(0, relX);
     relY = Math.max(0, relY);
-    let col = Math.floor((relX + (metrics.gapX / 2)) / stepX);
-    let row = Math.floor((relY + (metrics.gapY / 2)) / stepY);
+    const type = Number(dragSource?.type ?? getTilesData(tab)?.[currentTileIndex]?.type);
+    const unit = sizeStep ?? ([7, 8].includes(type) ? 1 : 0.5);
+    let col = Math.floor((relX + (metrics.gapX / 2)) / (stepX * unit)) * unit;
+    let row = Math.floor((relY + (metrics.gapY / 2)) / (stepY * unit)) * unit;
     if (!isFinite(col)) col = 0;
     if (!isFinite(row)) row = 0;
     if (col < 0) col = 0;
     const firstRow = firstAllowedGridRow(tab);
     if (row < firstRow) row = firstRow;
-    if (col >= GRID_COLS) col = GRID_COLS - 1;
-    if (row >= GRID_ROWS) row = GRID_ROWS - 1;
+    if (col >= GRID_COLS) col = GRID_COLS - unit;
+    if (row >= GRID_ROWS) row = GRID_ROWS - unit;
     return { col, row };
   }
 
@@ -5124,8 +5219,8 @@ function syncTileRadiusControls(tabEl) {
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
     if (!rawCell) return null;
     if (!dragSource || dragSource.tab !== tab) return rawCell;
-    const anchorCol = clampInt(dragSource.grabCellCol, 0, GRID_COLS - 1, 0);
-    const anchorRow = clampInt(dragSource.grabCellRow, 0, GRID_ROWS - 1, 0);
+    const anchorCol = clampHalf(dragSource.grabCellCol, 0, GRID_COLS - 1, 0);
+    const anchorRow = clampHalf(dragSource.grabCellRow, 0, GRID_ROWS - 1, 0);
     return {
       col: rawCell.col - anchorCol,
       row: rawCell.row - anchorRow
@@ -5148,8 +5243,9 @@ function syncTileRadiusControls(tabEl) {
   function getDragAnchorCell(tab, layout, clientX, clientY) {
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
     if (!layout || !rawCell) return { col: 0, row: 0 };
-    const col = clampInt(rawCell.col - layout.col, 0, Math.max(0, layout.span_w - 1), 0);
-    const row = clampInt(rawCell.row - layout.row, 0, Math.max(0, layout.span_h - 1), 0);
+    const unit = [7, 8].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
+    const col = clampHalf(rawCell.col - layout.col, 0, Math.max(0, layout.span_w - unit), 0);
+    const row = clampHalf(rawCell.row - layout.row, 0, Math.max(0, layout.span_h - unit), 0);
     return { col, row };
   }
 
@@ -5162,8 +5258,9 @@ function syncTileRadiusControls(tabEl) {
         y: Math.max(0, (rect.height / 2) || 0)
       };
     }
-    const x = (grabCellCol * (metrics.cellW + metrics.gapX)) + (metrics.cellW / 2);
-    const y = (grabCellRow * (metrics.cellH + metrics.gapY)) + (metrics.cellH / 2);
+    const unit = [7, 8].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
+    const x = (grabCellCol * (metrics.cellW + metrics.gapX)) + ((metrics.cellW + metrics.gapX) * unit - metrics.gapX) / 2;
+    const y = (grabCellRow * (metrics.cellH + metrics.gapY)) + ((metrics.cellH + metrics.gapY) * unit - metrics.gapY) / 2;
     const maxX = Math.max(0, rect.width - 1);
     const maxY = Math.max(0, rect.height - 1);
     return {
@@ -5271,8 +5368,8 @@ function syncTileRadiusControls(tabEl) {
     if (!candidateLayout) return false;
     if (candidateLayout.col < 0 ||
         candidateLayout.row < firstRow ||
-        candidateLayout.span_w < 1 ||
-        candidateLayout.span_h < 1 ||
+        candidateLayout.span_w < 0.5 ||
+        candidateLayout.span_h < 0.5 ||
         candidateLayout.col + candidateLayout.span_w > columns ||
         candidateLayout.row + candidateLayout.span_h > rows) {
       return false;
@@ -5292,6 +5389,9 @@ function syncTileRadiusControls(tabEl) {
   function canPlaceTileLayout(tab, index, candidateLayout) {
     const tiles = getTilesData(tab);
     if (!Array.isArray(tiles)) return false;
+    const type = tab === currentTileTab && index === currentTileIndex
+      ? document.getElementById(tab + '_tile_type')?.value ?? tiles[index]?.type : tiles[index]?.type;
+    if (Number(type) !== 0 && index >= 0 && !supportedTileLayout(type, candidateLayout)) return false;
     const layouts = tiles.map((tile, tileIndex) =>
       getTileElementLayout(tab, tileIndex) ||
       getTileLayoutFromData(tab, tileIndex));
@@ -5329,10 +5429,10 @@ function syncTileRadiusControls(tabEl) {
 
   function buildGridPlacementCandidates(
       columns, rows, firstRow,
-      spanW, spanH, preferredCol, preferredRow) {
+      spanW, spanH, preferredCol, preferredRow, step = 1) {
     const candidates = [];
-    for (let row = firstRow; row < rows; row++) {
-      for (let col = 0; col < columns; col++) {
+    for (let row = firstRow; row < rows; row += step) {
+      for (let col = 0; col < columns; col += step) {
         if ((col + spanW) > columns || (row + spanH) > rows) continue;
         let distance = (row * columns) + col;
         if (preferredCol >= 0 && preferredRow >= 0) {
@@ -5358,7 +5458,7 @@ function syncTileRadiusControls(tabEl) {
 
   function simulateGridReorderLayouts(
       baseLayouts, activeIndices, fromIdx,
-      targetCol, targetRow, columns, rows, firstRow = 0) {
+      targetCol, targetRow, columns, rows, firstRow = 0, tileTypes = []) {
     const active = activeIndices instanceof Set
       ? new Set(activeIndices) : new Set(activeIndices || []);
     if (!active.has(fromIdx)) return null;
@@ -5388,6 +5488,8 @@ function syncTileRadiusControls(tabEl) {
         displacedIndices.push(index);
       }
     });
+    const fractional = [targetLayout, ...baseLayouts.filter((_, i) => active.has(i))]
+      .some(layout => layout && [layout.col, layout.row, layout.span_w, layout.span_h].some(v => !Number.isInteger(v)));
     displacedIndices.sort((a, b) => {
       const layoutA = baseLayouts[a];
       const layoutB = baseLayouts[b];
@@ -5408,7 +5510,8 @@ function syncTileRadiusControls(tabEl) {
       const candidates = buildGridPlacementCandidates(
         columns, rows, firstRow,
         layout.span_w, layout.span_h,
-        preferredCol, preferredRow);
+        preferredCol, preferredRow,
+        fractional && ![7, 8].includes(Number(tileTypes[displacedIndex])) ? 0.5 : 1);
       let placed = false;
       for (const candidate of candidates) {
         const nextLayout = {
@@ -5459,7 +5562,7 @@ function syncTileRadiusControls(tabEl) {
     return simulateGridReorderLayouts(
       baseLayouts, active, fromIdx,
       targetCol, targetRow,
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab));
+      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab), tiles.map(tile => tile?.type));
   }
 
   function clearDragPlaceholder() {
@@ -5546,6 +5649,8 @@ function syncTileRadiusControls(tabEl) {
         layout.span_h);
       if (slots && html) slots.outerHTML = html;
     }
+    const data = getTilesData(tab)?.[resizeState?.index];
+    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode);
     placeholder.replaceChildren(preview);
   }
 
@@ -5570,8 +5675,7 @@ function syncTileRadiusControls(tabEl) {
   }
 
   function buildResizeCandidate(layout, direction, clientX, clientY, tab) {
-    const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
-    if (!layout || !rawCell) return null;
+    if (!layout) return null;
 
     let spanW = layout.span_w;
     let spanH = layout.span_h;
@@ -5581,18 +5685,22 @@ function syncTileRadiusControls(tabEl) {
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
     const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
-    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : 1;
+    const half = isCompactSensorType(typeValue);
+    const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, half ? 0.5 : 1);
+    if (!rawCell) return null;
+    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (half ? 0.5 : 1);
     const maxW = isMedia
       ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS - layout.col)
       : GRID_COLS - layout.col;
     const maxH = isMedia
       ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_ROWS - layout.row)
       : GRID_ROWS - layout.row;
-    if (String(direction || '').includes('e')) {
-      spanW = clampInt(rawCell.col - layout.col + 1, minW, maxW, layout.span_w);
-    }
+    // Width snapping follows the candidate height during a corner resize.
     if (String(direction || '').includes('s')) {
-      spanH = clampInt(rawCell.row - layout.row + 1, minH, maxH, layout.span_h);
+      spanH = (half ? clampHalf : clampInt)(rawCell.row - layout.row + (half ? 0.5 : 1), minH, maxH, layout.span_h);
+    }
+    if (String(direction || '').includes('e')) {
+      spanW = (half && spanH === 0.5 ? clampHalf : clampInt)(rawCell.col - layout.col + (half ? 0.5 : 1), minW, maxW, layout.span_w);
     }
 
     return {
@@ -5720,12 +5828,12 @@ function syncTileRadiusControls(tabEl) {
     const placeholder = ensureDragPlaceholder(tab);
     if (!sourceLayout || !placeholder) return;
 
-    const targetCol = clampInt(col, 0, GRID_COLS - 1, sourceLayout.col);
-    const targetRow = clampInt(row, firstAllowedGridRow(tab), GRID_ROWS - 1, sourceLayout.row);
+    const targetCol = clampHalf(col, 0, GRID_COLS - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
     const fits = (targetCol + sourceLayout.span_w <= GRID_COLS) &&
                  (targetRow + sourceLayout.span_h <= GRID_ROWS);
     const spanW = Math.max(1, Math.min(sourceLayout.span_w, GRID_COLS - targetCol));
-    const spanH = Math.max(1, Math.min(sourceLayout.span_h, GRID_ROWS - targetRow));
+    const spanH = Math.max(0.5, Math.min(sourceLayout.span_h, GRID_ROWS - targetRow));
 
     placeholder.classList.toggle('invalid', !fits);
     placeholder.classList.add('show');
@@ -5740,8 +5848,8 @@ function syncTileRadiusControls(tabEl) {
     e.dataTransfer.dropEffect = 'move';
     const sourceLayout = getDragSourceLayout();
     if (!sourceLayout) return;
-    const targetCol = clampInt(cell.col, 0, GRID_COLS - 1, sourceLayout.col);
-    const targetRow = clampInt(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 1, sourceLayout.row);
+    const targetCol = clampHalf(cell.col, 0, GRID_COLS - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
     updateDragPlaceholder(tab, targetCol, targetRow);
 
     if (dragSource.kind === 'hidden-settings') {
@@ -5789,8 +5897,8 @@ function syncTileRadiusControls(tabEl) {
 
     e.preventDefault();
     e.stopPropagation();
-    const targetCol = clampInt(cell.col, 0, GRID_COLS - 1, sourceLayout.col);
-    const targetRow = clampInt(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 1, sourceLayout.row);
+    const targetCol = clampHalf(cell.col, 0, GRID_COLS - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
     const fits = (targetCol + sourceLayout.span_w <= GRID_COLS) &&
                  (targetRow + sourceLayout.span_h <= GRID_ROWS);
 
@@ -5853,9 +5961,17 @@ function syncTileRadiusControls(tabEl) {
       const tile = tiles[i];
       const layout = previewResult.layouts[i];
       if (!tile || Number(tile.type || 0) === 0 || !layout) continue;
+      const changed = tile.col !== layout.col || tile.row !== layout.row;
       tile.col = layout.col;
       tile.row = layout.row;
+      const draft = drafts[tab]?.[i];
+      if (changed && draft?._dirty) {
+        draft.col = String(layout.col + 1);
+        draft.row = String(layout.row + 1);
+        draft._rev = Number(draft._rev || 0) + 1;
+      }
     }
+    persistDrafts();
 
     tilesData[tab] = tiles;
     layoutTiles(tab, tiles);
@@ -5872,9 +5988,17 @@ function syncTileRadiusControls(tabEl) {
       const tile = tiles[i];
       const saved = snapshot[i];
       if (!tile || !saved) continue;
+      const changed = tile.col !== saved.col || tile.row !== saved.row;
       tile.col = saved.col;
       tile.row = saved.row;
+      const draft = drafts[tab]?.[i];
+      if (changed && draft?._dirty) {
+        draft.col = String(saved.col + 1);
+        draft.row = String(saved.row + 1);
+        draft._rev = Number(draft._rev || 0) + 1;
+      }
     }
+    persistDrafts();
     tilesData[tab] = tiles;
     layoutTiles(tab, tiles);
     clearReflowPreviewClasses(tab);
@@ -6141,8 +6265,8 @@ function syncTileRadiusControls(tabEl) {
   }
 
   function reorderTiles(tab, fromIdx, toIdx, targetCol, targetRow) {
-    let col = parseInt(targetCol, 10);
-    let row = parseInt(targetRow, 10);
+    let col = Number(targetCol);
+    let row = Number(targetRow);
     if (isNaN(col)) col = -1;
     if (isNaN(row)) row = -1;
     const folderId = getFolderIdForTab(tab);
@@ -6204,8 +6328,8 @@ function syncTileRadiusControls(tabEl) {
     document.querySelectorAll('#tab-tiles-' + tab + ' .tile').forEach(tile => {
       const index = parseInt(tile.dataset.index, 10);
       if (isNaN(index) || Number(tile.dataset.type || 0) === 0) return;
-      const row = parseInt(tile.style.gridRowStart, 10);
-      const col = parseInt(tile.style.gridColumnStart, 10);
+      const row = Number(tile.dataset.row);
+      const col = Number(tile.dataset.col);
       const safeRow = isNaN(row) ? Number.MAX_SAFE_INTEGER : row;
       const safeCol = isNaN(col) ? Number.MAX_SAFE_INTEGER : col;
       if (safeRow < selectedRow || (safeRow === selectedRow && safeCol < selectedCol)) {
@@ -6557,14 +6681,18 @@ function syncTileRadiusControls(tabEl) {
     const clockResize = clock?.querySelector('.screensaver-clock-resize-handle');
     if (!preview || preview.dataset.bound === '1') return;
     preview.dataset.bound = '1';
+    // Tile selection replaces the clicked child before the event reaches the grid.
+    // The original event path retains its tile even when that child is detached.
+    const fromTileOrClock = event => event.composedPath().some(
+      node => node?.matches?.('.tile, #screensaverClock'));
     preview.addEventListener('click', e => {
-      if (!e.target.closest('.tile') && !e.target.closest('#screensaverClock')) {
+      if (!fromTileOrClock(e)) {
         selectScreensaverBackground();
       }
     });
     let backgroundDrag = null;
     preview.addEventListener('pointerdown', e => {
-      if (e.target.closest('.tile') || e.target.closest('#screensaverClock')) return;
+      if (fromTileOrClock(e)) return;
       selectScreensaverBackground();
       const wallpaper = ssCurrentWallpaper();
       if (!wallpaper) return;
@@ -7518,6 +7646,8 @@ function maybeFillTitleFromSensor(tab) {
       }
       entity.value = configured;
     }
+    const font = document.getElementById(tab + '_binary_sensor_value_font');
+    if (font) font.value = normalizeSensorValueFont(data.sensor_value_font);
     const popup = document.getElementById(
       tab + '_binary_sensor_popup_open_mode');
     if (popup) {
@@ -7532,12 +7662,15 @@ function maybeFillTitleFromSensor(tab) {
       ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
     formData.append('binary_sensor_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('sensor_value_font', document.getElementById(tab + '_binary_sensor_value_font')?.value || '0');
     const popup = document.getElementById(
       tab + '_binary_sensor_popup_open_mode');
     if (popup) formData.append('popup_open_mode', popup.value || '1');
   }
 
   function resetBinarySensorFields(tab) {
+    const font = document.getElementById(tab + '_binary_sensor_value_font');
+    if (font) font.value = '0';
     const entity = document.getElementById(tab + '_binary_sensor_entity');
     if (entity) {
       entity.value = '';
@@ -8367,10 +8500,10 @@ function maybeFillTitleFromMedia(tab) {
   function climateGridDimensions(spanW, spanH) {
     const columns = Math.max(
       1, Math.min(
-        climateMaxGridColumns(), Number(spanW) || 1));
+        climateMaxGridColumns(), Math.floor(Number(spanW) || 1)));
     const outerRows = Math.max(
       1, Math.min(
-        climateMaxOuterRows(), Number(spanH) || 1));
+        climateMaxOuterRows(), Math.floor(Number(spanH) || 1)));
     return {
       columns,
       rows: outerRows * 2 - 1
@@ -10039,6 +10172,10 @@ function maybeFillTitleFromMedia(tab) {
 
   function syncClimateSlotFields(
       tab, finalizePreviewSelection = false) {
+    if (Number(document.getElementById(tab + '_tile_type')?.value) !== 17) {
+      parkClimateMiniEditor(tab);
+      return;
+    }
     mountClimateMiniEditor(tab);
     const spanW = Math.max(1, Number(document.getElementById(
       tab + '_tile_span_w')?.value) || 1);
@@ -11062,6 +11199,8 @@ function getClockPreviewLanguage() {
   }
 
   function loadClockFields(tab, data) {
+    const border = document.getElementById(tab + '_clock_tile_border');
+    if (border) border.checked = data?.tile_border !== undefined ? !['0','false'].includes(String(data.tile_border)) : Number(data?.sensor_display_mode) !== 1;
     const timeFontEl = document.getElementById(tab + '_clock_time_font');
     if (timeFontEl) {
       const timeFont = (data && data.key_code !== undefined) ? Number(data.key_code) : 40;
@@ -11134,6 +11273,7 @@ function getClockPreviewLanguage() {
   }
 
   function saveClockFields(tab, formData) {
+    formData.append('tile_border', document.getElementById(tab + '_clock_tile_border')?.checked === false ? '0' : '1');
     ensureClockSelection(tab);
     const flags = getClockFlagsFromInputs(tab);
     formData.append('clock_show_time', (flags & 1) ? '1' : '0');
@@ -11145,6 +11285,8 @@ function getClockPreviewLanguage() {
   }
 
   function resetClockFields(tab) {
+    const border = document.getElementById(tab + '_clock_tile_border');
+    if (border) border.checked = true;
     applyClockFlagsToInputs(tab, 1);
     const timeFontEl = document.getElementById(tab + '_clock_time_font');
     if (timeFontEl) timeFontEl.value = '40';
@@ -11162,6 +11304,8 @@ function normalizeTextValueFont(value) {
   }
 
   function loadTextFields(tab, data) {
+    const border = document.getElementById(tab + '_text_tile_border');
+    if (border) border.checked = data?.tile_border !== undefined ? !['0','false'].includes(String(data.tile_border)) : Number(data?.sensor_display_mode) !== 1;
     const prefix = tab;
     const textEl = document.getElementById(prefix + '_text_value');
     const fontEl = document.getElementById(prefix + '_text_value_font');
@@ -11187,12 +11331,15 @@ function normalizeTextValueFont(value) {
   }
 
   function saveTextFields(tab, formData) {
+    formData.append('tile_border', document.getElementById(tab + '_text_tile_border')?.checked === false ? '0' : '1');
     const prefix = tab;
     formData.append('text_value', document.getElementById(prefix + '_text_value')?.value || '');
     formData.append('text_value_font', document.getElementById(prefix + '_text_value_font')?.value || '0');
   }
 
   function resetTextFields(tab) {
+    const border = document.getElementById(tab + '_text_tile_border');
+    if (border) border.checked = true;
     const prefix = tab;
     const textEl = document.getElementById(prefix + '_text_value');
     if (textEl) textEl.value = '';

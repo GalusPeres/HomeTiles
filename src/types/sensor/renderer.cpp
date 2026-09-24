@@ -1,3 +1,4 @@
+#include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/sensor/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
@@ -10,18 +11,7 @@
 #include "src/types/value/value_control.h"
 
 static const lv_font_t* get_sensor_value_font(const Tile& tile) {
-  switch (tile.sensor_value_font) {
-    case 1:
-      return tile_layout::content_font_20();
-    case 2:
-      return tile_layout::content_font_24();
-    case 3:
-      return tile_layout::content_font_32();
-    case 4:
-      return tile_layout::content_font_40();
-    default:
-      return FONT_VALUE;
-  }
+  return tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE);
 }
 
 struct SensorEventData {
@@ -50,7 +40,7 @@ lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& til
     return nullptr;
   }
 
-  const uint8_t display_mode = tile.sensor_display_mode;  // 0=none, 1=gauge, 2=graph
+  const uint8_t display_mode = tile.span_h == 0.5f ? 0 : tile.sensor_display_mode;  // 0=none, 1=gauge, 2=graph
   const bool gauge_enabled = (display_mode == 1);
   const bool graph_enabled = (display_mode == 2);
   int32_t gauge_min = tile.sensor_gauge_min;
@@ -254,6 +244,11 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   } else {
     lv_obj_align(v, LV_ALIGN_CENTER, 0,
                  tile_layout::scale(28) + value_y_offset);
+  }
+
+  if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h) && display_mode == 0) {
+    compact_sensor_layout::apply(card, icon_lbl, title_label, v, tile,
+                                 tile.sensor_value_font ? get_sensor_value_font(tile) : nullptr);
   }
 
   // Store for later updates.

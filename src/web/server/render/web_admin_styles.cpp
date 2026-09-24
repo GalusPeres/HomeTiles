@@ -1,3 +1,4 @@
+#include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/core/config/config_manager.h"
 #include "src/web/server/render/web_admin_styles.h"
 #include "src/web/server/assets/web_admin_assets.h"
@@ -92,6 +93,17 @@ void appendPreviewScaleVars(String& html) {
     html += "px;";
   };
   html += "  <style>:root{";
+  emit_exact("compact-inset", compact_sensor_layout::inset());
+  emit_exact("compact-text-gap", compact_sensor_layout::text_gap());
+  emit_exact("compact-title-font", compact_sensor_layout::title_size());
+  emit_exact("compact-title-line", compact_sensor_layout::title_font()->line_height);
+  emit_exact("compact-value-font", compact_sensor_layout::value_size());
+  emit_exact("compact-value-line", compact_sensor_layout::value_font()->line_height);
+  emit_exact("compact-value-line-20", tile_layout::content_font_20()->line_height);
+  emit_exact("compact-value-line-24", tile_layout::content_font_24()->line_height);
+  emit_exact("compact-value-line-32", tile_layout::content_font_32()->line_height);
+  emit_exact("compact-value-line-40", tile_layout::content_font_40()->line_height);
+
 #if defined(DEVICE_LAYOUT_1024X600)
   // Match the compact layout's real LVGL font substitutions. The preview
   // variables describe the rendered font, not the originally requested size.

@@ -1,3 +1,4 @@
+#include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/energy/renderer.h"
 
@@ -112,8 +113,9 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
     title_text = haBridgeConfig.findSensorName(tile.sensor_entity);
   }
 
+  lv_obj_t* title_label = nullptr;
   if (title_text.length() > 0) {
-    lv_obj_t* title_label = lv_label_create(card);
+    title_label = lv_label_create(card);
     if (title_label) {
       set_label_style(title_label, lv_color_hex(0xFFFFFF),
                       tile_layout::header_title_font());
@@ -144,6 +146,11 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
   value_y_offset = tile_layout::scale_i16(value_y_offset);
   lv_obj_align(value_label, LV_ALIGN_CENTER, 0,
                tile_layout::scale(28) + value_y_offset);
+
+  if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h)) {
+    compact_sensor_layout::apply(card, icon_lbl, title_label, value_label, tile,
+                                tile.sensor_value_font ? get_energy_value_font(tile) : nullptr);
+  }
 
   SensorTileWidgets* target = tile_renderer_get_sensor_widgets(grid_type);
   if (target && index < TILES_PER_GRID) {

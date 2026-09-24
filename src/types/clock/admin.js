@@ -124,6 +124,8 @@ function getClockPreviewLanguage() {
   }
 
   function loadClockFields(tab, data) {
+    const border = document.getElementById(tab + '_clock_tile_border');
+    if (border) border.checked = data?.tile_border !== undefined ? !['0','false'].includes(String(data.tile_border)) : Number(data?.sensor_display_mode) !== 1;
     const timeFontEl = document.getElementById(tab + '_clock_time_font');
     if (timeFontEl) {
       const timeFont = (data && data.key_code !== undefined) ? Number(data.key_code) : 40;
@@ -196,6 +198,7 @@ function getClockPreviewLanguage() {
   }
 
   function saveClockFields(tab, formData) {
+    formData.append('tile_border', document.getElementById(tab + '_clock_tile_border')?.checked === false ? '0' : '1');
     ensureClockSelection(tab);
     const flags = getClockFlagsFromInputs(tab);
     formData.append('clock_show_time', (flags & 1) ? '1' : '0');
@@ -207,6 +210,8 @@ function getClockPreviewLanguage() {
   }
 
   function resetClockFields(tab) {
+    const border = document.getElementById(tab + '_clock_tile_border');
+    if (border) border.checked = true;
     applyClockFlagsToInputs(tab, 1);
     const timeFontEl = document.getElementById(tab + '_clock_time_font');
     if (timeFontEl) timeFontEl.value = '40';

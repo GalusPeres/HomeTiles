@@ -335,6 +335,7 @@ vm.runInContext(`
   renderTileFromData('folder1', 3, {
     type: 20,
     title: 'Tür',
+  sensor_value_font: 3,
     icon_name: '',
     bg_color: 0,
     sensor_entity: 'binary_sensor.door',
@@ -464,6 +465,7 @@ sandbox.fetch = async (url, options = {}) => {
 await vm.runInContext(`postTile(1, 3, {
   type: 20,
   title: 'Tür',
+  sensor_value_font: 3,
   icon_name: '',
   bg_color: 0,
   sensor_entity: 'binary_sensor.door',
@@ -477,9 +479,28 @@ if (importRequest?.url !== '/api/tiles' ||
     importRequest?.method !== 'POST' ||
     importRequest?.fields?.type !== '20' ||
     importRequest?.fields?.binary_sensor_entity !== 'binary_sensor.door' ||
+    importRequest?.fields?.sensor_value_font !== '3' ||
     importRequest?.fields?.popup_open_mode !== '0') {
   throw new Error(
     `Binary Sensor import payload is incomplete: ${JSON.stringify(importRequest)}`);
 }
 
 console.log('Binary Sensor Web Admin contract: PASS');
+
+for (const type of [1,20]) {
+  const entity=type===20?'binary_sensor.door':'sensor.temperature';
+  await vm.runInContext(`postTile(1, 3, {type:${type},title:'Room',sensor_entity:'${entity}',col:0.5,row:1.5,span_w:2,span_h:0.5})`,sandbox);
+  if(importRequest.fields.col!=='0.5'||importRequest.fields.row!=='1.5'||importRequest.fields.span_w!=='2'||importRequest.fields.span_h!=='0.5') throw Error('Import truncated fractional geometry');
+}
+elements.folder1_tile_type.value='20';
+elements.folder1_tile_col.value='1.5';elements.folder1_tile_row.value='2.5';
+elements.folder1_tile_span_w.value='2';elements.folder1_tile_span_h.value='0.5';
+vm.runInContext(`
+ tilesData.folder1[3]={type:20,title:'Room',sensor_entity:'binary_sensor.door',col:.5,row:1.5,span_w:2,span_h:.5};
+ updateTilePreview('folder1');__realUpdateDraft('folder1');
+`,sandbox);
+const half=vm.runInContext(`normalizeSnapshotLayout(getTileSnapshotForSave('folder1',3),3,'folder1')`,sandbox);
+if(half.col!==.5||half.row!==1.5||half.span_h!==.5)throw Error('Editor snapshot lost half geometry');
+vm.runInContext(`renderTileFromData('folder1',3,tilesData.folder1[3],sensorMetaCache)`,sandbox);
+if(!elements['folder1-tile-3'].innerHTML.includes('tile-binary-sensor-value'))throw Error('Cached half tile lost state');
+console.log('Sensor and Binary Sensor fractional import and editor snapshots: PASS');

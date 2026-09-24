@@ -100,3 +100,14 @@ static inline void finish_press_before_popup(lv_event_t* event) {
   lv_display_t* display = lv_display_get_default();
   if (display) lv_timer_ready(lv_display_get_refr_timer(display));
 }
+
+// Fractional tiles share the existing grid's pitch and padding. Whole tiles keep
+// their LVGL grid placement unchanged.
+inline void apply_fractional_tile_geometry(lv_obj_t* obj, const Tile& tile) {
+  if (!obj || !tile_geometry::fraction_bits(tile.col, tile.row, tile.span_w, tile.span_h)) return;
+  lv_obj_add_flag(obj, LV_OBJ_FLAG_IGNORE_LAYOUT);
+  lv_obj_set_pos(obj, tile_geometry::edge(tile.col, GRID_CELL_W, GRID_GAP),
+                tile_geometry::edge(tile.row, GRID_CELL_H, GRID_GAP));
+  lv_obj_set_size(obj, tile_geometry::extent(tile.col, tile.span_w, GRID_CELL_W, GRID_GAP),
+                 tile_geometry::extent(tile.row, tile.span_h, GRID_CELL_H, GRID_GAP));
+}

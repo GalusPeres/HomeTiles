@@ -16,6 +16,8 @@
       }
       entity.value = configured;
     }
+    const font = document.getElementById(tab + '_binary_sensor_value_font');
+    if (font) font.value = normalizeSensorValueFont(data.sensor_value_font);
     const popup = document.getElementById(
       tab + '_binary_sensor_popup_open_mode');
     if (popup) {
@@ -30,12 +32,15 @@
       ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
     formData.append('binary_sensor_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('sensor_value_font', document.getElementById(tab + '_binary_sensor_value_font')?.value || '0');
     const popup = document.getElementById(
       tab + '_binary_sensor_popup_open_mode');
     if (popup) formData.append('popup_open_mode', popup.value || '1');
   }
 
   function resetBinarySensorFields(tab) {
+    const font = document.getElementById(tab + '_binary_sensor_value_font');
+    if (font) font.value = '0';
     const entity = document.getElementById(tab + '_binary_sensor_entity');
     if (entity) {
       entity.value = '';

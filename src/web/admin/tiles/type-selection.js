@@ -28,6 +28,7 @@
         if (colEl && rowEl && spanWEl && spanHEl) {
           const fallbackLayout = (data.type === 0) ? getTileElementLayout(tab, index) : null;
           const layoutInput = {
+            type: data.type,
             col: data.col,
             row: data.row,
             span_w: data.span_w,
@@ -72,9 +73,15 @@
     }
     const folderId = getFolderIdForTab(tab);
     if (folderId === undefined) return;
+    const baseline = JSON.stringify(cached);
     fetch('/api/tiles?folder=' + encodeURIComponent(folderId) + '&index=' + index)
       .then(res => res.json())
-      .then(data => applyTileDataToEditor(index, tab, data))
+      .then(data => {
+        const current = getTilesData(tab)[index];
+        const changed = JSON.stringify(current) !== baseline;
+        applyTileDataToEditor(index, tab,
+          current && (changed || drafts[tab]?.[index]?._dirty) ? current : data);
+      })
       .catch(error => console.error('Tile load failed:', error));
   }
 
@@ -142,4 +149,30 @@
     syncGaugeUi(tab);
     applySpecialTileUiState(tab);
     syncFolderPinControls(tab);
+    syncTileSizePolicy(tab);
+  }
+
+  function syncTileSizePolicy(tab) {
+    const typeEl = document.getElementById(tab + '_tile_type');
+    if (!typeEl) return;
+    const w = Number(document.getElementById(tab + '_tile_span_w')?.value || 1);
+    const h = Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
+    for (const option of typeEl.options) {
+      if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
+      if ((!Number.isInteger(w) || !Number.isInteger(h)) && Number(option.value) !== 0 && !isCompactSensorType(option.value) && !option.disabled) {
+        option.disabled = true; option.dataset.sizeDisabled = '1';
+      }
+    }
+    const compact = isCompactSensorType(typeEl.value);
+    for (const field of ['col', 'row', 'span_w', 'span_h']) {
+      const input = document.getElementById(tab + '_tile_' + field);
+      const position = field === 'col' || field === 'row';
+      if (input) input.step = (position ? ![7, 8].includes(Number(typeEl.value)) : compact) ? '0.5' : '1';
+    }
+    const row = document.getElementById(tab + '_tile_row');
+    if (row) row.max = String(GRID_ROWS + (compact && h === 0.5 ? 0.5 : 0));
+    const height = document.getElementById(tab + '_tile_span_h');
+    if (height && compact) height.min = '0.5';
+    const note = document.getElementById(tab + '_tile_size_note');
+    if (note) note.hidden = Number.isInteger(w) && Number.isInteger(h);
   }

@@ -9,6 +9,11 @@ void append_text_fields_html(String& html, const String& tab_id) {
             <div id=")html";
   html += tab_id;
   html += R"html(_text_fields" class="type-fields">
+              <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_text_tile_border" checked>)html";
+  html += tr.screensaver_tile_border;
+  html += R"html(</label>
               <label>)html";
   html += tr.text_label;
   html += R"html(</label>

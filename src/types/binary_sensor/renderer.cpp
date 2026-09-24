@@ -1,3 +1,4 @@
+#include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/binary_sensor/renderer.h"
 
@@ -539,7 +540,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
 
   widgets.state_label = lv_label_create(card);
   set_label_style(widgets.state_label, lv_color_white(),
-                  tile_layout::header_title_font());
+                  tile_layout::value_font_for_choice(tile.sensor_value_font, tile_layout::header_title_font()));
   lv_label_set_long_mode(widgets.state_label, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(widgets.state_label, LV_PCT(100));
   lv_obj_set_style_text_align(widgets.state_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -547,6 +548,11 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
   lv_label_set_text(widgets.state_label, initial_label.c_str());
   lv_obj_align(widgets.state_label, LV_ALIGN_CENTER, 0,
                tile_layout::scale(28));
+
+  if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h)) {
+    compact_sensor_layout::apply(card, widgets.icon_label, widgets.title_label, widgets.state_label, tile,
+                                 tile_layout::value_font_for_choice(tile.sensor_value_font, nullptr));
+  }
 
   if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
     BinarySensorEventData* data =

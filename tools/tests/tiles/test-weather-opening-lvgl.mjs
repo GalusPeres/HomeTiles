@@ -41,6 +41,7 @@ extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECL
 #endif
 class String:public std::string{public:using std::string::string;using std::string::operator=;String()=default;String(const std::string&s):std::string(s){}String(int n):std::string(std::to_string(n)){}void trim(){auto a=find_first_not_of(" \r\n");if(a==npos){clear();return;}*this=substr(a,find_last_not_of(" \r\n")-a+1);}void toLowerCase(){for(auto&c:*this)c=std::tolower(static_cast<unsigned char>(c));}bool equalsIgnoreCase(const String&s)const{String a=*this,b=s;a.toLowerCase();b.toLowerCase();return a==b;}};
 #include "src/devices/device.h"
+#include "src/tiles/config/tile_geometry.h"
 constexpr int SCREEN_WIDTH=Device::kScreenWidth,SCREEN_HEIGHT=Device::kScreenHeight;
 String getMdiChar(const String&){return "\xF3\xB0\x96\xAD";}
 ${radiusPolicyHost(root, 'Device::kGridCellH', 'Device::kGridGap')}
@@ -58,7 +59,7 @@ ${strip(read('src/ui/popups/popup_shell.cpp'))}
 ${strip(read('src/types/weather/widgets.h'))}
 ${strip(read('src/ui/popups/weather/weather_popup.h'))}
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=1,GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device::kGridCellH,GRID_GAP=Device::kGridGap;
-struct Tile{String title="Weather",sensor_entity="weather.home",icon_name="weather-sunny",sensor_unit;uint8_t span_w=1,span_h=1,sensor_value_font=0,sensor_display_mode=0,sensor_decimals=0xFF,popup_open_mode=1;int type=1,sensor_gauge_min=0,sensor_gauge_max=100,sensor_gauge_arc=270,sensor_gauge_size=160,sensor_gauge_y_offset=0,sensor_graph_height=60,sensor_value_y_offset=0;};
+struct Tile{String title="Weather",sensor_entity="weather.home",icon_name="weather-sunny",sensor_unit;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_value_font=0,sensor_display_mode=0,sensor_decimals=0xFF,popup_open_mode=1;int type=1,sensor_gauge_min=0,sensor_gauge_max=100,sensor_gauge_arc=270,sensor_gauge_size=160,sensor_gauge_y_offset=0,sensor_graph_height=60,sensor_value_y_offset=0;};
 constexpr int TILE_POPUP_OPEN_SHORT_PRESS=1;
 int getTilePopupOpenMode(const Tile&t){return t.popup_open_mode;}
 struct Logger{void println(const char*){}}Serial;
@@ -70,6 +71,8 @@ void set_tile_grid_cell(lv_obj_t*o,int col,int row,int w,int h){lv_obj_set_size(
 WeatherTileWidgets widgets[TILES_PER_GRID];WeatherTileWidgets* tile_renderer_get_weather_widgets(GridType){return widgets;}
 void viewNavigationSource(lv_obj_t*){}
 ${['brighten_rgb_color','disable_pressed_button_animation','finish_press_before_popup'].map(n=>fn(read('src/tiles/runtime/tile_renderer_shared.h'),n)).join('\n')}
+${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'apply_fractional_tile_geometry')}
+${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 PopupShellParts popup;int opens=0,completed_opens=0,sensor_opens=0;
 // Execute the production opening function with a small resident body. Forecast
 // model parsing and transport are outside this input/first-frame regression.
@@ -102,6 +105,28 @@ lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& til
  auto* card = render_sensor_tile_content(parent,col,row,tile,index,grid_type);
  ui_surface_style::apply_global_tile_border(card);
  return card;
+}
+${strip(read('src/ui/popups/energy/energy_popup.h'))}
+void show_energy_popup(const EnergyPopupInit&){}void energy_request_period(const char*,bool){}
+${strip(read('src/types/energy/renderer.cpp')).replaceAll('is_disabled_token','energy_is_disabled_token')}
+void check_energy_layout() {
+ for(float width:{1.f,1.5f,2.f}) for(float height:{.5f,1.f}) {
+  if(height==1.f && width==1.5f) continue;
+  for(int choice:{0,1,2,3,4}) {
+   Tile tile;tile.type=TILE_ENERGY;tile.span_w=width;tile.span_h=height;tile.sensor_value_font=choice;tile.title="Long energy title";
+   auto*card=render_energy_tile(lv_screen_active(),0,0,tile,0,GridType::SCREENSAVER);
+   lv_obj_update_layout(card);auto*value=sensor_widgets[0].value_label;
+   const auto*font=choice?get_energy_value_font(tile):(height==.5f?compact_sensor_layout::value_font():FONT_VALUE);
+   assert(lv_obj_get_style_text_font(value,LV_PART_MAIN)==font);
+   assert(lv_obj_get_style_text_align(value,LV_PART_MAIN)==(height==.5f?LV_TEXT_ALIGN_LEFT:LV_TEXT_ALIGN_CENTER));
+   if(height==.5f) {
+    assert(lv_obj_get_height(card)==tile_geometry::extent(0,height,GRID_CELL_H,GRID_GAP));
+    auto*disc=lv_obj_get_child(card,0);
+    assert(lv_obj_get_style_radius(disc,LV_PART_MAIN)==tile_radius::kMinimum-compact_sensor_layout::inset());
+   }
+   lv_obj_delete(card);
+  }
+ }
 }
 #include "src/types/climate/layout.h"
 constexpr int GRID_COLS=Device::kGridCols,GRID_ROWS=Device::kGridRows;
@@ -272,6 +297,7 @@ int main(){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::v
  auto*input=lv_indev_create();lv_indev_set_type(input,LV_INDEV_TYPE_POINTER);lv_indev_set_read_cb(input,[](lv_indev_t*,lv_indev_data_t*data){data->point=pointer;data->state=pressed?LV_INDEV_STATE_PRESSED:LV_INDEV_STATE_RELEASED;});
  WeatherPopupInit initial;initial.entity_id="weather.home";initial.title="Weather";show_weather_popup(initial);lv_refr_now(d);process_popup_open();hide_popup_shell(popup.card);lv_refr_now(d);
  check_sensor_interaction(d,input);
+ check_energy_layout();
  int total_covered=0;
  const std::vector<int> columns=Device::kGridCols>=7?std::vector<int>{0,1,4}:std::vector<int>{0,1};
  for(int span:{1,2,3})for(int col:columns){Tile tile;tile.span_w=tile.span_h=span;auto*card=render_weather_tile(lv_screen_active(),col,col==0?0:1,tile,0,GridType::TAB0);auto&w=widgets[0];fill(w.temp_label,"23 C");fill(w.condition_label,"Sunny");fill(w.condition_sep_label,"|");for(int i=0;i<weather_forecast_count(span)&&span>1;++i){auto&f=w.forecast[i];fill(f.day_label,"Monday");fill(f.icon_label,getMdiChar("").c_str());fill(f.temp_high_label,"24 C");fill(f.temp_low_label,"16 C");}watch(card);lv_refr_now(d);

@@ -208,8 +208,9 @@ void ScreensaverConfigStore::normalizeTileGrid(TileGridConfig& grid) {
     if (tile.col >= GRID_COLS) tile.col = GRID_COLS - 1;
     if (tile.row < first_row) tile.row = first_row;
     if (tile.row >= GRID_ROWS) tile.row = GRID_ROWS - 1;
-    if (tile.span_w < 1) tile.span_w = 1;
-    if (tile.span_h < 1) tile.span_h = 1;
+    const bool compact = tile_geometry::supported(tile.type, tile.col, tile.row, tile.span_w, tile.span_h);
+    if (tile.span_w < 1 && !compact) tile.span_w = 1;
+    if (tile.span_h < 1 && !compact) tile.span_h = 1;
     clamp_media_tile_layout(tile.type, tile.col, tile.row,
                             tile.span_w, tile.span_h);
     if (tile.row < first_row) tile.row = first_row;

@@ -28,7 +28,7 @@
     const isEnergyType = type === '14';
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
-      : (document.getElementById(prefix + '_sensor_value_font')?.value || '0');
+      : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font' : '_sensor_value_font'))?.value || '0');
     const previewKind = meta.preview || 'none';
     const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
       ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);
@@ -100,6 +100,7 @@
     if (type === '5' && switchStyle === '1') tileElem.classList.add('switch-toggle');
     tileElem.style.background = '';
     tileElem.dataset.type = type;
+    tileElem.classList.toggle('tile-border-hidden', ['9','10'].includes(type) && document.getElementById(prefix + (type === '9' ? '_clock_tile_border' : '_text_tile_border'))?.checked === false);
 
     if (type === '0') {
       tileElem.classList.add('empty');
@@ -108,6 +109,9 @@
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
       updateLayoutFromInputs(tab);
+    applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
+      span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
       return;
     }
 
@@ -183,7 +187,7 @@
         '<br>' + escapeHtml(value) + '</div>';
     }
     if (previewKind === 'binary_sensor') {
-      html += '<div class="tile-value tile-binary-sensor-value" id="' +
+      html += '<div class="tile-value tile-binary-sensor-value ' + (Number(sensorValueFont) ? sensorValueClass : '') + '" id="' +
         tileId + '-value">' +
         escapeHtml(binarySensorPreviewStateText(binarySensorPreviewState)) +
         '</div>';
@@ -242,6 +246,9 @@
     }
     if (type === '5') updateSwitchValuePreview(tab);
     updateLayoutFromInputs(tab);
+    applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
+      span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
     if (previewKind === 'climate' &&
         typeof mountClimateMiniEditor === 'function') {
       mountClimateMiniEditor(tab);

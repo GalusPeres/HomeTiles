@@ -339,14 +339,18 @@
     const clockResize = clock?.querySelector('.screensaver-clock-resize-handle');
     if (!preview || preview.dataset.bound === '1') return;
     preview.dataset.bound = '1';
+    // Tile selection replaces the clicked child before the event reaches the grid.
+    // The original event path retains its tile even when that child is detached.
+    const fromTileOrClock = event => event.composedPath().some(
+      node => node?.matches?.('.tile, #screensaverClock'));
     preview.addEventListener('click', e => {
-      if (!e.target.closest('.tile') && !e.target.closest('#screensaverClock')) {
+      if (!fromTileOrClock(e)) {
         selectScreensaverBackground();
       }
     });
     let backgroundDrag = null;
     preview.addEventListener('pointerdown', e => {
-      if (e.target.closest('.tile') || e.target.closest('#screensaverClock')) return;
+      if (fromTileOrClock(e)) return;
       selectScreensaverBackground();
       const wallpaper = ssCurrentWallpaper();
       if (!wallpaper) return;

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "src/devices/device.h"
+#include "src/tiles/config/tile_geometry.h"
 #include "src/core/config/pin_access.h"
 #include "src/types/tile_type_policy.h"
 
@@ -26,7 +27,8 @@ static constexpr int GRID_CELL_H = Device::kGridCellH;
 static constexpr uint8_t MEDIA_TILE_MIN_SPAN = 2;
 static constexpr uint8_t MEDIA_TILE_MAX_SPAN = 3;
 
-static inline void clamp_media_tile_span(TileType type, uint8_t& span_w, uint8_t& span_h) {
+template <typename T>
+static inline void clamp_media_tile_span(TileType type, T& span_w, T& span_h) {
   if (type != TILE_MEDIA) return;
   const uint8_t min_w = GRID_COLS >= MEDIA_TILE_MIN_SPAN
                             ? MEDIA_TILE_MIN_SPAN
@@ -43,9 +45,10 @@ static inline void clamp_media_tile_span(TileType type, uint8_t& span_w, uint8_t
 // A media tile must not be clipped back below its 2x2 minimum at the right or
 // bottom edge. Move its position inwards in that case; the layout of every other
 // tile type stays as it is.
+template <typename P, typename S>
 static inline void clamp_media_tile_layout(TileType type,
-                                           uint8_t& col, uint8_t& row,
-                                           uint8_t& span_w, uint8_t& span_h) {
+                                           P& col, P& row,
+                                           S& span_w, S& span_h) {
   clamp_media_tile_span(type, span_w, span_h);
   if (type != TILE_MEDIA) return;
   if (span_w > GRID_COLS) span_w = GRID_COLS;
@@ -77,10 +80,10 @@ struct Tile {
   // Persisted in the reserved byte V7 already carries.
   uint8_t background_opacity;
 
-  uint8_t col;
-  uint8_t row;
-  uint8_t span_w;
-  uint8_t span_h;
+  float col;
+  float row;
+  float span_w;
+  float span_h;
 
   String sensor_entity;
   String sensor_unit;
@@ -128,6 +131,11 @@ struct Tile {
         key_modifier(0),
         image_slideshow_sec(10) {}
 };
+
+// Clock/Text use the otherwise unused display mode byte: 0 inherits borders, 1 hides them.
+static inline bool tileBorderEnabled(const Tile& tile) {
+  return (tile.type != TILE_CLOCK && tile.type != TILE_TEXT) || tile.sensor_display_mode != 1;
+}
 
 // Climate tile content is packed into sensor_gauge_min. Climate tiles do not
 // use the sensor gauge range, so this preserves the existing V7 storage layout

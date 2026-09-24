@@ -49,7 +49,9 @@ void apply_clock_fields_from_request(WebServer& server, Tile& tile) {
   tile.scene_alias = "";
 
   tile.sensor_value_font = 0;
-  tile.sensor_display_mode = 0;
+  if (server.hasArg("tile_border")) {
+    tile.sensor_display_mode = server.arg("tile_border").toInt() == 0 ? 1 : 0;
+  }
   tile.sensor_gauge_min = server.hasArg("clock_time_format")
                               ? clock_tile::normalize_time_format(server.arg("clock_time_format").toInt())
                               : clock_tile::TIME_FORMAT_AUTO;

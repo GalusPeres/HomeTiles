@@ -19,10 +19,10 @@
     const fallbackRow = (index >= 0)
       ? (Math.max(firstRow, Math.floor(index / GRID_COLS)) + 1)
       : (firstRow + 1);
-    let col = clampInt(snapshot?.col, 1, GRID_COLS, fallbackCol);
-    let row = clampInt(snapshot?.row, firstRow + 1, GRID_ROWS, fallbackRow);
-    let spanW = clampInt(snapshot?.span_w, 1, GRID_COLS, 1);
-    let spanH = clampInt(snapshot?.span_h, 1, GRID_ROWS, 1);
+    let col = clampHalf(snapshot?.col, 1, GRID_COLS, fallbackCol);
+    let row = clampHalf(snapshot?.row, firstRow + 1, GRID_ROWS + 0.5, fallbackRow);
+    let spanW = clampHalf(snapshot?.span_w, 0.5, GRID_COLS, 1);
+    let spanH = clampHalf(snapshot?.span_h, 0.5, GRID_ROWS, 1);
     return constrainLayoutToTab(
       normalizeLayoutForTileType(snapshot?.type, col - 1, row - 1,
                                  spanW, spanH),
@@ -66,7 +66,7 @@
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
     const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity'];
 
-    tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
+    tile.type = clampHalf(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
     tile.icon_name = snapshot?.icon || '';
     tile.bg_color = snapshotBgColorIsDefault(snapshot)
@@ -135,6 +135,9 @@
       tile.sensor_gauge_max = Number.isFinite(num) ? num : 100;
     }
 
+    if ([9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
+      tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
+    }
     tiles[index] = tile;
     tilesData[tab] = tiles;
   }

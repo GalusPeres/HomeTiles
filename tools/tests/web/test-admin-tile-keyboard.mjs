@@ -55,6 +55,8 @@ const productionFunctions = [
   extractDeliveredFunction('isEditablePreview'),
   extractDeliveredFunction('editablePreviewText'),
   extractDeliveredFunction('updateTilePreview'),
+  extractDeliveredFunction('applyCompactSensorPreview'),
+  extractDeliveredFunction('isCompactSensorType'),
   extractDeliveredFunction('renderTileFromData')
 ].join('\n\n');
 

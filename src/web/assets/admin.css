@@ -731,6 +731,7 @@
       white-space:nowrap;
     }
     .tile-grid {
+      position:relative;
       display:grid;
       grid-template-columns:repeat(var(--grid-cols), var(--preview-cell-w));
       grid-template-rows:repeat(var(--grid-rows), var(--preview-cell-h));
@@ -915,7 +916,7 @@
     }
     /* The hairline sits on the outer card edge. A child overlay would be
        visibly indented by the transparent 3px editor border. */
-    .tile-grid.tiles-bordered > .tile:not(.empty) {
+    .tile-grid.tiles-bordered > .tile:not(.empty):not(.tile-border-hidden) {
       outline:1px solid rgba(255,255,255,0.20);
       outline-offset:-1px;
     }
@@ -2203,3 +2204,60 @@
     .tile-radius-control input[type="range"]:focus { outline:none; box-shadow:none; }
     .tile-radius-control input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     .global-tile-radius-value { min-width:2ch; text-align:right; font-variant-numeric:tabular-nums; }
+
+/* Fractional placement preserves the existing cell pitch and gutter. */
+.tile-grid > .fractional-tile {
+  position:absolute;
+  left:calc(var(--preview-pad) + var(--tile-col) * (var(--preview-cell-w) + var(--preview-gap)));
+  top:calc(var(--preview-pad) + var(--tile-row) * (var(--preview-cell-h) + var(--preview-gap)));
+  width:calc(var(--tile-w) * (var(--preview-cell-w) + var(--preview-gap)) - var(--preview-gap));
+  height:calc(var(--tile-h) * (var(--preview-cell-h) + var(--preview-gap)) - var(--preview-gap));
+  box-sizing:border-box;
+}
+.tile.sensor-compact {
+  display:block;
+  padding:0;
+  --compact-h:calc((var(--preview-cell-h) - var(--preview-gap)) / 2);
+  --compact-icon:calc(var(--compact-h) - 2 * var(--compact-inset));
+}
+.tile.sensor-compact > .tile-icon {
+  position:absolute; left:var(--compact-inset); top:var(--compact-inset);
+  width:var(--compact-icon); height:var(--compact-icon); margin:0;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:max(0px, calc(var(--tile-radius) - var(--compact-inset))); background:rgba(255,255,255,0.15);
+  font-size:var(--icon-size, 48px); line-height:1;
+}
+.tile.sensor-compact > .tile-title,
+.tile.sensor-compact > .tile-value {
+  position:absolute; left:calc(var(--compact-h) + var(--compact-inset));
+  right:var(--compact-inset); width:auto; max-width:none; margin:0; padding:0;
+  transform:none; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  height:auto; min-height:0; display:block; line-height:1;
+}
+.tile.sensor-compact > .tile-title {
+  top:max(0px, calc((var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2));
+  font-size:var(--compact-title-font); line-height:var(--compact-title-line);
+}
+.tile.sensor-compact > .tile-value {
+  top:calc(max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-line) + var(--compact-text-gap)); bottom:auto;
+  font-size:var(--compact-value-font); line-height:var(--compact-value-line);
+}
+.tile.sensor-compact .tile-unit { font-size:inherit; }
+.tile.sensor-half .tile-gauge, .tile.sensor-half .tile-graph { display:none; }
+
+.tile.sensor-compact .tile-title-lines { display:block; top:0; transform:none; white-space:nowrap; }
+.tile.sensor-compact .tile-title-line { display:inline; line-height:inherit; min-height:0; }
+.tile.sensor-compact .tile-title-line + .tile-title-line::before { content:" "; }
+
+/* Draw editor borders inward without shifting the concentric content. */
+.tile.sensor-compact, .tile.sensor-compact:hover,
+.tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { border-width:0; background-clip:border-box; }
+.tile.sensor-compact:hover:not(.active) { box-shadow:inset 0 0 0 2px rgba(38,166,154,.6); }
+.tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { box-shadow:inset 0 0 0 3px #26a69a, 0 0 12px rgba(38,166,154,.55); }
+.tile.sensor-compact:focus-visible { box-shadow:inset 0 0 0 3px #64d8cb, 0 0 12px rgba(38,166,154,.55); }
+
+/* Keep explicit value font choices in the half-height layout. */
+.tile.sensor-compact:has(> .tile-value.sensor-value-size-20) { --compact-value-font:var(--fs20); --compact-value-line:var(--compact-value-line-20); }
+.tile.sensor-compact:has(> .tile-value.sensor-value-size-24) { --compact-value-font:var(--fs24); --compact-value-line:var(--compact-value-line-24); }
+.tile.sensor-compact:has(> .tile-value.sensor-value-size-32) { --compact-value-font:var(--fs32); --compact-value-line:var(--compact-value-line-32); }
+.tile.sensor-compact:has(> .tile-value.sensor-value-size-40) { --compact-value-font:var(--fs40); --compact-value-line:var(--compact-value-line-40); }

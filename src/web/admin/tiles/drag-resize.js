@@ -83,6 +83,8 @@
         layout.span_h);
       if (slots && html) slots.outerHTML = html;
     }
+    const data = getTilesData(tab)?.[resizeState?.index];
+    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode);
     placeholder.replaceChildren(preview);
   }
 
@@ -107,8 +109,7 @@
   }
 
   function buildResizeCandidate(layout, direction, clientX, clientY, tab) {
-    const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
-    if (!layout || !rawCell) return null;
+    if (!layout) return null;
 
     let spanW = layout.span_w;
     let spanH = layout.span_h;
@@ -118,18 +119,22 @@
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
     const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
-    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : 1;
+    const half = isCompactSensorType(typeValue);
+    const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, half ? 0.5 : 1);
+    if (!rawCell) return null;
+    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (half ? 0.5 : 1);
     const maxW = isMedia
       ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS - layout.col)
       : GRID_COLS - layout.col;
     const maxH = isMedia
       ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_ROWS - layout.row)
       : GRID_ROWS - layout.row;
-    if (String(direction || '').includes('e')) {
-      spanW = clampInt(rawCell.col - layout.col + 1, minW, maxW, layout.span_w);
-    }
+    // Width snapping follows the candidate height during a corner resize.
     if (String(direction || '').includes('s')) {
-      spanH = clampInt(rawCell.row - layout.row + 1, minH, maxH, layout.span_h);
+      spanH = (half ? clampHalf : clampInt)(rawCell.row - layout.row + (half ? 0.5 : 1), minH, maxH, layout.span_h);
+    }
+    if (String(direction || '').includes('e')) {
+      spanW = (half && spanH === 0.5 ? clampHalf : clampInt)(rawCell.col - layout.col + (half ? 0.5 : 1), minW, maxW, layout.span_w);
     }
 
     return {
@@ -257,12 +262,12 @@
     const placeholder = ensureDragPlaceholder(tab);
     if (!sourceLayout || !placeholder) return;
 
-    const targetCol = clampInt(col, 0, GRID_COLS - 1, sourceLayout.col);
-    const targetRow = clampInt(row, firstAllowedGridRow(tab), GRID_ROWS - 1, sourceLayout.row);
+    const targetCol = clampHalf(col, 0, GRID_COLS - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
     const fits = (targetCol + sourceLayout.span_w <= GRID_COLS) &&
                  (targetRow + sourceLayout.span_h <= GRID_ROWS);
     const spanW = Math.max(1, Math.min(sourceLayout.span_w, GRID_COLS - targetCol));
-    const spanH = Math.max(1, Math.min(sourceLayout.span_h, GRID_ROWS - targetRow));
+    const spanH = Math.max(0.5, Math.min(sourceLayout.span_h, GRID_ROWS - targetRow));
 
     placeholder.classList.toggle('invalid', !fits);
     placeholder.classList.add('show');
@@ -277,8 +282,8 @@
     e.dataTransfer.dropEffect = 'move';
     const sourceLayout = getDragSourceLayout();
     if (!sourceLayout) return;
-    const targetCol = clampInt(cell.col, 0, GRID_COLS - 1, sourceLayout.col);
-    const targetRow = clampInt(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 1, sourceLayout.row);
+    const targetCol = clampHalf(cell.col, 0, GRID_COLS - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
     updateDragPlaceholder(tab, targetCol, targetRow);
 
     if (dragSource.kind === 'hidden-settings') {
@@ -326,8 +331,8 @@
 
     e.preventDefault();
     e.stopPropagation();
-    const targetCol = clampInt(cell.col, 0, GRID_COLS - 1, sourceLayout.col);
-    const targetRow = clampInt(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 1, sourceLayout.row);
+    const targetCol = clampHalf(cell.col, 0, GRID_COLS - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
     const fits = (targetCol + sourceLayout.span_w <= GRID_COLS) &&
                  (targetRow + sourceLayout.span_h <= GRID_ROWS);
 
@@ -390,9 +395,17 @@
       const tile = tiles[i];
       const layout = previewResult.layouts[i];
       if (!tile || Number(tile.type || 0) === 0 || !layout) continue;
+      const changed = tile.col !== layout.col || tile.row !== layout.row;
       tile.col = layout.col;
       tile.row = layout.row;
+      const draft = drafts[tab]?.[i];
+      if (changed && draft?._dirty) {
+        draft.col = String(layout.col + 1);
+        draft.row = String(layout.row + 1);
+        draft._rev = Number(draft._rev || 0) + 1;
+      }
     }
+    persistDrafts();
 
     tilesData[tab] = tiles;
     layoutTiles(tab, tiles);
@@ -409,9 +422,17 @@
       const tile = tiles[i];
       const saved = snapshot[i];
       if (!tile || !saved) continue;
+      const changed = tile.col !== saved.col || tile.row !== saved.row;
       tile.col = saved.col;
       tile.row = saved.row;
+      const draft = drafts[tab]?.[i];
+      if (changed && draft?._dirty) {
+        draft.col = String(saved.col + 1);
+        draft.row = String(saved.row + 1);
+        draft._rev = Number(draft._rev || 0) + 1;
+      }
     }
+    persistDrafts();
     tilesData[tab] = tiles;
     layoutTiles(tab, tiles);
     clearReflowPreviewClasses(tab);
@@ -678,8 +699,8 @@
   }
 
   function reorderTiles(tab, fromIdx, toIdx, targetCol, targetRow) {
-    let col = parseInt(targetCol, 10);
-    let row = parseInt(targetRow, 10);
+    let col = Number(targetCol);
+    let row = Number(targetRow);
     if (isNaN(col)) col = -1;
     if (isNaN(row)) row = -1;
     const folderId = getFolderIdForTab(tab);
@@ -741,8 +762,8 @@
     document.querySelectorAll('#tab-tiles-' + tab + ' .tile').forEach(tile => {
       const index = parseInt(tile.dataset.index, 10);
       if (isNaN(index) || Number(tile.dataset.type || 0) === 0) return;
-      const row = parseInt(tile.style.gridRowStart, 10);
-      const col = parseInt(tile.style.gridColumnStart, 10);
+      const row = Number(tile.dataset.row);
+      const col = Number(tile.dataset.col);
       const safeRow = isNaN(row) ? Number.MAX_SAFE_INTEGER : row;
       const safeCol = isNaN(col) ? Number.MAX_SAFE_INTEGER : col;
       if (safeRow < selectedRow || (safeRow === selectedRow && safeCol < selectedCol)) {

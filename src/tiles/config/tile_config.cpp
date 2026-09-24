@@ -262,6 +262,24 @@ struct PackedQuarterGridV7 {
   PackedTileV7 tiles[TILES_PER_QUARTER];
 };
 
+static void packGeometry(const Tile& tile, PackedQuarterGridV7& quarter, size_t index) {
+  const unsigned shift = (index % 2) * 4;
+  const unsigned bits = tile.type == TILE_EMPTY ? 0 :
+      tile_geometry::fraction_bits(tile.col, tile.row, tile.span_w, tile.span_h);
+  quarter.reserved[index / 2] |= static_cast<uint8_t>(bits << shift);
+}
+
+static void unpackGeometry(const PackedQuarterGridV7& quarter, size_t index, Tile& tile) {
+  const unsigned bits = (quarter.reserved[index / 2] >> ((index % 2) * 4)) & 15;
+  if (!bits || tile.type == TILE_EMPTY) return;
+  const float col = tile.col + ((bits & 1) ? 0.5f : 0);
+  const float row = tile.row + ((bits & 2) ? 0.5f : 0);
+  const float w = tile.span_w - ((bits & 4) ? 0.5f : 0);
+  const float h = tile.span_h - ((bits & 8) ? 0.5f : 0);
+  if (!tile_geometry::supported(tile.type, col, row, w, h)) return;
+  tile.col = col; tile.row = row; tile.span_w = w; tile.span_h = h;
+}
+
 struct FolderIndexHeader {
   uint32_t magic;
   uint16_t version;
@@ -976,8 +994,8 @@ static void packTile(const Tile& in, PackedTileV7& out) {
   out.bg_color = in.bg_color;
   out.col = (in.col < GRID_COLS) ? in.col : 0;
   out.row = (in.row < GRID_ROWS) ? in.row : 0;
-  uint8_t span_w = (in.span_w < 1) ? 1 : ((in.span_w > GRID_COLS) ? GRID_COLS : in.span_w);
-  uint8_t span_h = (in.span_h < 1) ? 1 : ((in.span_h > GRID_ROWS) ? GRID_ROWS : in.span_h);
+  uint8_t span_w = (in.span_w < 1) ? 1 : ((in.span_w > GRID_COLS) ? GRID_COLS : std::ceil(in.span_w));
+  uint8_t span_h = (in.span_h < 1) ? 1 : ((in.span_h > GRID_ROWS) ? GRID_ROWS : std::ceil(in.span_h));
   clamp_media_tile_layout(in.type, out.col, out.row, span_w, span_h);
   if (span_w > GRID_COLS - out.col) span_w = GRID_COLS - out.col;
   if (span_h > GRID_ROWS - out.row) span_h = GRID_ROWS - out.row;
@@ -1570,21 +1588,21 @@ static void unpackTileV1(const PackedTileV1& in, Tile& out, uint8_t index) {
     out.image_path = "";
   }
 }
-static bool get_tile_layout_clamped(const Tile& tile, uint8_t& col, uint8_t& row, uint8_t& span_w, uint8_t& span_h) {
+static bool get_tile_layout_clamped(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
   if (tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
   col = tile.col;
   row = tile.row;
-  span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  span_h = tile.span_h < 1 ? 1 : tile.span_h;
+  span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
+  span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
   clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
   if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
   if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
   return true;
 }
 
-static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], uint8_t col, uint8_t row, uint8_t span_w, uint8_t span_h) {
-  for (uint8_t r = row; r < row + span_h; ++r) {
-    for (uint8_t c = col; c < col + span_w; ++c) {
+static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], float col, float row, float span_w, float span_h) {
+  for (uint8_t r = static_cast<uint8_t>(row); r < row + span_h; ++r) {
+    for (uint8_t c = static_cast<uint8_t>(col); c < col + span_w; ++c) {
       if (r < GRID_ROWS && c < GRID_COLS) {
         occupied[r][c] = true;
       }
@@ -1602,15 +1620,15 @@ static void initGridDefaults(TileGridConfig& grid) {
   }
 }
 
-static bool find_free_cell_top_left(const TileGridConfig& grid, uint8_t& out_col, uint8_t& out_row) {
+static bool find_free_cell_top_left(const TileGridConfig& grid, float& out_col, float& out_row) {
   bool occupied[GRID_ROWS][GRID_COLS] = {};
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& tile = grid.tiles[i];
     if (tile.type == TILE_EMPTY) continue;
-    uint8_t col = 0;
-    uint8_t row = 0;
-    uint8_t span_w = 1;
-    uint8_t span_h = 1;
+    float col = 0;
+    float row = 0;
+    float span_w = 1;
+    float span_h = 1;
     if (!get_tile_layout_clamped(tile, col, row, span_w, span_h)) continue;
     mark_occupied(occupied, col, row, span_w, span_h);
   }
@@ -1628,8 +1646,8 @@ static bool find_free_cell_top_left(const TileGridConfig& grid, uint8_t& out_col
 }
 
 static bool settings_tile_rect_is_free(const TileGridConfig& grid,
-                                       uint8_t col, uint8_t row,
-                                       uint8_t span_w, uint8_t span_h) {
+                                       float col, float row,
+                                       float span_w, float span_h) {
   if (span_w < 1 || span_h < 1 || col >= GRID_COLS || row >= GRID_ROWS ||
       span_w > GRID_COLS - col || span_h > GRID_ROWS - row) {
     return false;
@@ -1637,10 +1655,10 @@ static bool settings_tile_rect_is_free(const TileGridConfig& grid,
   bool occupied[GRID_ROWS][GRID_COLS] = {};
   for (const auto& tile : grid.tiles) {
     if (tile.type == TILE_EMPTY || tile.type == TILE_SETTINGS) continue;
-    uint8_t tile_col = 0;
-    uint8_t tile_row = 0;
-    uint8_t tile_span_w = 1;
-    uint8_t tile_span_h = 1;
+    float tile_col = 0;
+    float tile_row = 0;
+    float tile_span_w = 1;
+    float tile_span_h = 1;
     if (!get_tile_layout_clamped(tile, tile_col, tile_row, tile_span_w,
                                  tile_span_h)) {
       continue;
@@ -1656,8 +1674,8 @@ static bool settings_tile_rect_is_free(const TileGridConfig& grid,
 }
 
 static bool find_settings_tile_rect_bottom_right(
-    const TileGridConfig& grid, uint8_t span_w, uint8_t span_h,
-    uint8_t& out_col, uint8_t& out_row) {
+    const TileGridConfig& grid, float span_w, float span_h,
+    float& out_col, float& out_row) {
   if (span_w < 1 || span_h < 1 || span_w > GRID_COLS ||
       span_h > GRID_ROWS) {
     return false;
@@ -1696,17 +1714,17 @@ bool TileConfig::ensureSettingsTile(TileGridConfig& grid, int target_col,
 
   const SettingsTileSnapshot& snapshot =
       configManager.getConfig().settings_tile_snapshot;
-  uint8_t span_w = snapshot.valid && snapshot.span_w >= 1
+  float span_w = snapshot.valid && snapshot.span_w >= 1
                        ? snapshot.span_w
                        : 1;
-  uint8_t span_h = snapshot.valid && snapshot.span_h >= 1
+  float span_h = snapshot.valid && snapshot.span_h >= 1
                        ? snapshot.span_h
                        : 1;
   if (span_w > GRID_COLS) span_w = 1;
   if (span_h > GRID_ROWS) span_h = 1;
 
-  uint8_t col = 0;
-  uint8_t row = 0;
+  float col = 0;
+  float row = 0;
   const bool explicit_target = target_col >= 0 || target_row >= 0;
   if (explicit_target) {
     if (target_col < 0 || target_row < 0 || target_col >= GRID_COLS ||
@@ -1784,8 +1802,8 @@ bool TileConfig::ensureBackTile(uint16_t folder_id, TileGridConfig& grid) {
     }
   }
 
-  uint8_t col = 0;
-  uint8_t row = 0;
+  float col = 0;
+  float row = 0;
   if (!find_free_cell_top_left(grid, col, row)) {
     return false;
   }
@@ -3276,6 +3294,7 @@ bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
           continue;
         }
         unpackTileV7(packed_v7[q].tiles[i], grid.tiles[grid_idx]);
+        unpackGeometry(packed_v7[q], i, grid.tiles[grid_idx]);
         // Early V7 files could still carry TILE_IMAGE paths inline. Promote
         // them to the sidecar format once, under the same guarded migration
         // transaction used for V6, instead of writing LittleFS during an
@@ -3403,6 +3422,7 @@ bool TileConfig::saveGrid(uint16_t folder_id, const TileGridConfig& grid,
         continue;
       }
       packTile(working.tiles[grid_idx], packed[q].tiles[i]);
+      packGeometry(working.tiles[grid_idx], packed[q], i);
     }
   }
 

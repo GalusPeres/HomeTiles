@@ -1,6 +1,10 @@
 
   function syncClimateSlotFields(
       tab, finalizePreviewSelection = false) {
+    if (Number(document.getElementById(tab + '_tile_type')?.value) !== 17) {
+      parkClimateMiniEditor(tab);
+      return;
+    }
     mountClimateMiniEditor(tab);
     const spanW = Math.max(1, Number(document.getElementById(
       tab + '_tile_span_w')?.value) || 1);

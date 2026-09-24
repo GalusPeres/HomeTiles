@@ -10,6 +10,11 @@ void append_clock_fields_html(String& html, const String& tab_id) {
             <div id=")html";
   html += tab_id;
   html += R"html(_clock_fields" class="type-fields">
+              <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_clock_tile_border" checked>)html";
+  html += tr.screensaver_tile_border;
+  html += R"html(</label>
               <div class="clock-toggle-row">
               <label class="inline-checkbox">
                 <input type="checkbox" id=")html";

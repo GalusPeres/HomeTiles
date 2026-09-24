@@ -7,7 +7,9 @@ void apply_text_fields_from_request(WebServer& server, Tile& tile) {
   if (font_raw > 4) font_raw = 4;
   tile.sensor_value_font = static_cast<uint8_t>(font_raw);
   tile.sensor_decimals = 0xFF;
-  tile.sensor_display_mode = 0;
+  if (server.hasArg("tile_border")) {
+    tile.sensor_display_mode = server.arg("tile_border").toInt() == 0 ? 1 : 0;
+  }
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;
 }

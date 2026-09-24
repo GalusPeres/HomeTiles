@@ -77,15 +77,17 @@ void appendKeyValueMapJson(String& out, const String& map) {
 }
 
 struct TileRect {
-  uint8_t col;
-  uint8_t row;
-  uint8_t span_w;
-  uint8_t span_h;
+  float col;
+  float row;
+  float span_w;
+  float span_h;
 };
 
-static bool buildTileRect(uint8_t col, uint8_t row, uint8_t span_w, uint8_t span_h, TileRect& out) {
+static bool buildTileRect(float col, float row, float span_w, float span_h, TileRect& out) {
   if (col >= GRID_COLS || row >= GRID_ROWS) return false;
-  if (span_w < 1 || span_h < 1) return false;
+  if (!tile_geometry::half_step(col) || !tile_geometry::half_step(row) ||
+      !tile_geometry::half_step(span_w) || !tile_geometry::half_step(span_h) ||
+      span_w < 0.5f || span_h < 0.5f) return false;
   if (span_w > GRID_COLS - col) return false;
   if (span_h > GRID_ROWS - row) return false;
   out = TileRect{col, row, span_w, span_h};
@@ -93,10 +95,10 @@ static bool buildTileRect(uint8_t col, uint8_t row, uint8_t span_w, uint8_t span
 }
 
 static bool getTileRect(const Tile& tile, TileRect& out) {
-  uint8_t col = tile.col;
-  uint8_t row = tile.row;
-  uint8_t span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  uint8_t span_h = tile.span_h < 1 ? 1 : tile.span_h;
+  float col = tile.col;
+  float row = tile.row;
+  float span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
+  float span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
   clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
   return buildTileRect(col, row, span_w, span_h, out);
 }
@@ -142,38 +144,37 @@ static bool placementOverlapsAny(
 
 struct TilePosSnapshot {
   size_t index;
-  uint8_t col;
-  uint8_t row;
+  float col;
+  float row;
 };
 
 struct PlacementCandidate {
-  uint8_t col;
-  uint8_t row;
-  uint16_t distance;
+  float col;
+  float row;
+  float distance;
 };
 
-static uint16_t manhattanDistance(uint8_t col_a, uint8_t row_a, uint8_t col_b, uint8_t row_b) {
-  const int dx = static_cast<int>(col_a) - static_cast<int>(col_b);
-  const int dy = static_cast<int>(row_a) - static_cast<int>(row_b);
-  return static_cast<uint16_t>(abs(dx) + abs(dy));
+static float manhattanDistance(float col_a, float row_a, float col_b, float row_b) {
+  return std::abs(col_a - col_b) + std::abs(row_a - row_b);
 }
 
 static std::vector<PlacementCandidate> buildPlacementCandidates(
-    uint8_t span_w,
-    uint8_t span_h,
-    int preferred_col,
-    int preferred_row,
-    uint8_t first_row = 0) {
+    float span_w,
+    float span_h,
+    float preferred_col,
+    float preferred_row,
+    uint8_t first_row = 0,
+    float step = 1) {
   std::vector<PlacementCandidate> out;
-  for (uint8_t row = first_row; row < GRID_ROWS; ++row) {
-    for (uint8_t col = 0; col < GRID_COLS; ++col) {
+  for (float row = first_row; row < GRID_ROWS; row += step) {
+    for (float col = 0; col < GRID_COLS; col += step) {
       TileRect rect{};
       if (!buildTileRect(col, row, span_w, span_h, rect)) continue;
-      uint16_t distance = static_cast<uint16_t>(row * GRID_COLS + col);
+      float distance = row * GRID_COLS + col;
       if (preferred_col >= 0 && preferred_row >= 0) {
         distance = manhattanDistance(col, row,
-                                     static_cast<uint8_t>(preferred_col),
-                                     static_cast<uint8_t>(preferred_row));
+                                     preferred_col,
+                                     preferred_row);
       }
       out.push_back(PlacementCandidate{col, row, distance});
     }
@@ -190,16 +191,17 @@ static std::vector<PlacementCandidate> buildPlacementCandidates(
 static bool findPlacementForTile(
     TileGridConfig& grid,
     size_t tile_index,
-    int preferred_col,
-    int preferred_row,
+    float preferred_col,
+    float preferred_row,
     const std::vector<size_t>& floating_indices,
-    uint8_t first_row = 0) {
+    uint8_t first_row = 0,
+    float step = 1) {
   if (tile_index >= TILES_PER_GRID) return false;
   Tile& tile = grid.tiles[tile_index];
-  const uint8_t span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  const uint8_t span_h = tile.span_h < 1 ? 1 : tile.span_h;
+  const float span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
+  const float span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
 
-  auto can_place = [&](uint8_t col, uint8_t row) -> bool {
+  auto can_place = [&](float col, float row) -> bool {
     TileRect rect{};
     if (!buildTileRect(col, row, span_w, span_h, rect)) return false;
     return !placementOverlapsAny(grid, tile_index, rect, floating_indices);
@@ -207,7 +209,7 @@ static bool findPlacementForTile(
 
   const std::vector<PlacementCandidate> candidates =
       buildPlacementCandidates(span_w, span_h, preferred_col, preferred_row,
-                               first_row);
+                               first_row, step);
   for (const PlacementCandidate& candidate : candidates) {
     if (!can_place(candidate.col, candidate.row)) continue;
     tile.col = candidate.col;
@@ -221,21 +223,28 @@ static bool findPlacementForTile(
 static bool applySmartReorder(
     TileGridConfig& grid,
     size_t from_index,
-    uint8_t target_col,
-    uint8_t target_row,
+    float target_col,
+    float target_row,
     uint8_t first_row = 0) {
   if (from_index >= TILES_PER_GRID) return false;
   if (target_row < first_row) return false;
   Tile& moving_tile = grid.tiles[from_index];
   if (moving_tile.type == TILE_EMPTY) return false;
 
-  const uint8_t from_col = moving_tile.col;
-  const uint8_t from_row = moving_tile.row;
-  const uint8_t span_w = moving_tile.span_w < 1 ? 1 : moving_tile.span_w;
-  const uint8_t span_h = moving_tile.span_h < 1 ? 1 : moving_tile.span_h;
+  const float from_col = moving_tile.col;
+  const float from_row = moving_tile.row;
+  const float span_w = moving_tile.span_w < 0.5f ? 1 : moving_tile.span_w;
+  const float span_h = moving_tile.span_h < 0.5f ? 1 : moving_tile.span_h;
 
   TileRect target_rect{};
-  if (!buildTileRect(target_col, target_row, span_w, span_h, target_rect)) return false;
+  if (!tile_geometry::supported(moving_tile.type, target_col, target_row, span_w, span_h) ||
+      !buildTileRect(target_col, target_row, span_w, span_h, target_rect)) return false;
+
+  bool fractional_grid = false;
+  for (const Tile& item : grid.tiles) {
+    if (item.type != TILE_EMPTY && tile_geometry::fraction_bits(item.col, item.row, item.span_w, item.span_h)) fractional_grid = true;
+  }
+  fractional_grid = fractional_grid || tile_geometry::fraction_bits(target_col, target_row, span_w, span_h);
 
   std::vector<size_t> displaced_indices;
   std::vector<TilePosSnapshot> snapshots;
@@ -266,10 +275,12 @@ static bool applySmartReorder(
     auto it = std::find(floating_indices.begin(), floating_indices.end(), displaced_index);
     if (it != floating_indices.end()) floating_indices.erase(it);
 
-    const int preferred_col = (displaced_index == displaced_indices.front()) ? from_col : grid.tiles[displaced_index].col;
-    const int preferred_row = (displaced_index == displaced_indices.front()) ? from_row : grid.tiles[displaced_index].row;
+    const float preferred_col = (displaced_index == displaced_indices.front()) ? from_col : grid.tiles[displaced_index].col;
+    const float preferred_row = (displaced_index == displaced_indices.front()) ? from_row : grid.tiles[displaced_index].row;
+    const TileType displaced_type = grid.tiles[displaced_index].type;
+    const float step = fractional_grid && displaced_type != TILE_SETTINGS && displaced_type != TILE_BACK ? 0.5f : 1.0f;
     if (findPlacementForTile(grid, displaced_index, preferred_col, preferred_row,
-                             floating_indices, first_row)) {
+                             floating_indices, first_row, step)) {
       continue;
     }
 
@@ -573,6 +584,7 @@ void WebAdminServer::handleSaveTiles() {
 
   // Update tile data
   if (tile.type != static_cast<TileType>(type)) tile.view_id = 0;
+  if (tile.type != static_cast<TileType>(type) && (type == TILE_CLOCK || type == TILE_TEXT)) tile.sensor_display_mode = 0;
   tile.type = static_cast<TileType>(type);
   tile.title = hometiles_title::normalize(server.hasArg("title") ? server.arg("title").c_str() : "").c_str();
   tile.icon_name = server.hasArg("icon_name") ? server.arg("icon_name") : "";
@@ -591,54 +603,31 @@ void WebAdminServer::handleSaveTiles() {
     tile.background_opacity = kScreensaverDefaultTileOpacity;
   }
 
-  // Parse layout (0-based col/row, span >= 1)
-  uint8_t col = tile.col;
-  uint8_t row = tile.row;
-  uint8_t span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  uint8_t span_h = tile.span_h < 1 ? 1 : tile.span_h;
-
-  if (server.hasArg("col")) {
-    int raw = server.arg("col").toInt();
-    if (raw < 0) raw = 0;
-    if (raw >= GRID_COLS) raw = GRID_COLS - 1;
-    col = static_cast<uint8_t>(raw);
+  // Parse exact half-cell values without truncating malformed input.
+  float col = tile.col, row = tile.row;
+  float span_w = tile.span_w > 0 ? tile.span_w : 1;
+  float span_h = tile.span_h > 0 ? tile.span_h : 1;
+  auto parse_geometry = [&](const char* name, float& value) {
+    if (!server.hasArg(name)) return true;
+    const String input = server.arg(name);
+    char* end = nullptr;
+    value = strtof(input.c_str(), &end);
+    return end != input.c_str() && *end == '\0' && tile_geometry::half_step(value);
+  };
+  if (!parse_geometry("col", col) || !parse_geometry("row", row) ||
+      !parse_geometry("span_w", span_w) || !parse_geometry("span_h", span_h)) {
+    tile = previous_tile;
+    server.send(400, "application/json", "{\"success\":false,\"error\":\"Invalid layout\"}");
+    return;
   }
-  if (server.hasArg("row")) {
-    int raw = server.arg("row").toInt();
-    const int first_row = screensaver_grid && GRID_ROWS > 1 ? GRID_ROWS - 2 : 0;
-    if (raw < first_row) raw = first_row;
-    if (raw >= GRID_ROWS) raw = GRID_ROWS - 1;
-    row = static_cast<uint8_t>(raw);
+  clamp_media_tile_layout(static_cast<TileType>(type), col, row, span_w, span_h);
+  if ((type != TILE_EMPTY && !tile_geometry::supported(type, col, row, span_w, span_h)) ||
+      (screensaver_grid && row < GRID_ROWS - 2)) {
+    tile = previous_tile;
+    server.send(400, "application/json", "{\"success\":false,\"error\":\"Unsupported tile size\"}");
+    return;
   }
-  if (server.hasArg("span_w")) {
-    int raw = server.arg("span_w").toInt();
-    if (raw < 1) raw = 1;
-    if (raw > GRID_COLS) raw = GRID_COLS;
-    span_w = static_cast<uint8_t>(raw);
-  }
-  if (server.hasArg("span_h")) {
-    int raw = server.arg("span_h").toInt();
-    if (raw < 1) raw = 1;
-    if (raw > GRID_ROWS) raw = GRID_ROWS;
-    span_h = static_cast<uint8_t>(raw);
-  }
-
-  if (screensaver_grid && GRID_ROWS > 1 && row < GRID_ROWS - 2) {
-    row = GRID_ROWS - 2;
-  }
-
-  clamp_media_tile_layout(static_cast<TileType>(type), col, row,
-                          span_w, span_h);
-  if (screensaver_grid && GRID_ROWS > 1 && row < GRID_ROWS - 2) {
-    row = GRID_ROWS - 2;
-  }
-  if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
-  if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
-
-  tile.col = col;
-  tile.row = row;
-  tile.span_w = span_w;
-  tile.span_h = span_h;
+  tile.col = col; tile.row = row; tile.span_w = span_w; tile.span_h = span_h;
 
   // Type-specific fields
   String error_message;
@@ -790,10 +779,10 @@ void WebAdminServer::handleReorderTiles() {
 
   Tile& tile_to = grid.tiles[to];
 
-  int target_col_raw = server.hasArg("target_col") ? server.arg("target_col").toInt() : -1;
-  int target_row_raw = server.hasArg("target_row") ? server.arg("target_row").toInt() : -1;
-  uint8_t target_col = (target_col_raw >= 0 && target_col_raw < GRID_COLS) ? static_cast<uint8_t>(target_col_raw) : tile_to.col;
-  uint8_t target_row = (target_row_raw >= 0 && target_row_raw < GRID_ROWS) ? static_cast<uint8_t>(target_row_raw) : tile_to.row;
+  float target_col_raw = server.hasArg("target_col") ? server.arg("target_col").toFloat() : -1;
+  float target_row_raw = server.hasArg("target_row") ? server.arg("target_row").toFloat() : -1;
+  float target_col = (target_col_raw >= 0 && target_col_raw < GRID_COLS) ? target_col_raw : tile_to.col;
+  float target_row = (target_row_raw >= 0 && target_row_raw < GRID_ROWS) ? target_row_raw : tile_to.row;
 
   if (target_col >= GRID_COLS || target_row >= GRID_ROWS) {
     server.send(400, "application/json", "{\"success\":false,\"error\":\"Invalid target\"}");

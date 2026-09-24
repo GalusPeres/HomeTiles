@@ -35,8 +35,10 @@ tuning file uses a black level of 16.
 - Default exposure VTS - 6 at 1x gain; gain split analog coarse first, the
   rest as digital fine gain (upstream's default map raises digital gain
   first).
-- A mirror or flip moves the output window start (`0x3211`, `0x3213`, 4 -> 5)
-  by one pixel to keep BGGR, like the OV drivers.
+- The output window start (`0x3211`, `0x3213`) stays at the table value 4 in
+  every orientation, as upstream: the sensor keeps BGGR under mirror/flip by
+  itself. A one-pixel move per flip (b29) turned the Tab5 image
+  green/magenta on hardware.
 - SCCB through a board transport: on the Tab5, M5Unified owns the I2C port.
 
 ## Board facts (M5Stack Tab5)
@@ -49,7 +51,6 @@ pin P6 (high = run, 100 ms before detection); 24 MHz oscillator on the board;
 
 ## Assumptions that still need hardware confirmation
 
-- Orientation in the HomeTiles landscape UI (the demo mirrors the image).
-- The Bayer phase with mirror/flip and the window shift.
+- Colours with mirror and flip after the window fix (b30).
 - The SCCB clock without the demo's (unconnected) GPIO36 clock output.
 - Night exposure beyond VTS - 6 and the combined gain range.

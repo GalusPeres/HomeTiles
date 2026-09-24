@@ -107,6 +107,13 @@ for (const text of [boardHeader, boardCpp]) {
 assert.match(boardHeader, /using SccbBus = sc202cs::Transport\*;/);
 assert.match(boardHeader, /using Sensor = sc202cs::Sensor;/);
 assert.match(boardHeader, /COLOR_RAW_ELEMENT_ORDER_BGGR/);
+// Mounting (hardware 2026-09-25): the demo mirror plus a 180 degree turn.
+assert.match(boardHeader, /true,\s*\/\/ Mirrored like the M5Stack demo[^\n]*\n\s*true,\s*\/\/ Upside down in the landscape UI/);
+// The SC202CS keeps BGGR under mirror/flip itself (upstream writes 0x3221
+// only); a one-pixel window move per flip turned the image green/magenta.
+assert.doesNotMatch(sensorCpp, /kStartXMirrored|kStartYFlipped/);
+assert.match(sensorCpp, /const uint8_t x = kStartX;\s*const uint8_t y = kStartY;/);
+assert.match(sensorCpp, /constexpr uint8_t kStartX = 0x04;\s*constexpr uint8_t kStartY = 0x04;/);
 assert.match(boardHeader, /false,\s*\/\/ The mode sends no MIPI line-sync packets\./);
 assert.match(boardHeader, /sc202cs::kRawBits,\s*\};/);
 // SCCB only through M5Unified (it owns I2C0 with a per-port mutex).

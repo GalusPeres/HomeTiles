@@ -30,14 +30,16 @@ constexpr uint32_t kSoftResetDelayMs = 5;
 constexpr uint8_t kMirrorBits = 0x06;
 constexpr uint8_t kFlipBits = 0x60;
 // Output window start inside the 1288x728 array window of the table (4/4).
-// A mirror or flip moves it by one pixel so the Bayer phase (BGGR) stays,
-// as on the OV sensors; 5 + 1280 <= 1288 and 5 + 720 <= 728.
+// Unlike the OV sensors, the SC202CS keeps BGGR in every mirror/flip state
+// by itself: upstream sc202cs_set_mirror/vflip only write 0x3221 and report
+// BGGR throughout. A one-pixel window move per flip (b29) shifted the phase
+// and turned the Tab5 image green/magenta (hardware 2026-09-25). The start
+// stays at the table value in every orientation; it is rewritten so a
+// firmware that moved it leaves no trace.
 constexpr uint8_t kStartX = 0x04;
-constexpr uint8_t kStartXMirrored = 0x05;
 constexpr uint8_t kStartY = 0x04;
-constexpr uint8_t kStartYFlipped = 0x05;
-static_assert(kStartXMirrored + kFrameWidth <= 1288, "x window");
-static_assert(kStartYFlipped + kFrameHeight <= 728, "y window");
+static_assert(kStartX + kFrameWidth <= 1288, "x window");
+static_assert(kStartY + kFrameHeight <= 728, "y window");
 
 // HomeTiles overrides, not vendor data (PROVENANCE.md): the table leaves VTS
 // at its reset value 1250; it is written explicitly because longer exposures
@@ -135,8 +137,8 @@ esp_err_t Sensor::setOrientation(bool mirror, bool flip) {
   const uint8_t wanted = static_cast<uint8_t>((value & ~(kMirrorBits | kFlipBits)) |
                                               (mirrored ? kMirrorBits : 0) |
                                               (flip ? kFlipBits : 0));
-  const uint8_t x = mirrored ? kStartXMirrored : kStartX;
-  const uint8_t y = flip ? kStartYFlipped : kStartY;
+  const uint8_t x = kStartX;
+  const uint8_t y = kStartY;
   err = write(SC202CS_REG_OUT_START_PIXEL_L, x);
   if (err == ESP_OK) err = write(SC202CS_REG_OUT_START_LINE_L, y);
   if (err == ESP_OK) err = write(SC202CS_REG_FLIP_MIRROR, wanted);

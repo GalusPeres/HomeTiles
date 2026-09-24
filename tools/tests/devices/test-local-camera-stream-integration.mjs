@@ -158,7 +158,25 @@ assert.match(orientation, /desiredOrientation\(imageRotated180\(\), g_mirror\.lo
 assert.match(orientation, /if \(code == g_applied_orientation\) return true;/, 'No SCCB write per frame');
 assert.match(orientation, /xQueueReset\(g_isr\.frames\);[\s\S]*?kOrientationSettleFrames/,
   'Frames in flight during a live change are dropped');
-assert.match(captureFrame, /reducedQuality\(run\.quality\)/, 'An oversized frame lowers the quality, never re-encodes');
+assert.match(captureFrame, /reducedQualityForSize\(run\.quality\)/, 'An oversized frame lowers the quality, never re-encodes');
+// Noisy low-light frames: below the normal floor instead of sending nothing
+// (Tab5 hardware 2026-09-25: 226 KB at q30, every frame dropped).
+assert.doesNotMatch(captureFrame, /[^r]reducedQuality\(/, 'The size limit has its own lower floor');
+assert.match(service, /constexpr uint8_t kJpegQualities\[\] = \{80, 65, 50, 38, 25, 15\};/,
+  'Stills step down far enough for noisy frames');
+
+// Every capture and stream starts from a pipeline that has not run yet: a stop
+// could leave the CSI/ISP inside a frame (8-inch 2026-09-24: swapped colours or
+// no frames after a restart, correct after the rebuild).
+assert.match(service, /void releaseUsedPipeline\(\) \{\s*if \(g_pipe\.started\) releasePipeline\(\);\s*\}/);
+assert.match(svc('releasePipeline'), /g_pipe\.ready = false;\s*g_pipe\.started = false;/);
+assert.match(svc('captureJpeg'), /releaseUsedPipeline\(\);\s*if \(!ensurePipeline\(\)\)/,
+  'A still starts from a fresh pipeline');
+assert.match(run, /releaseUsedPipeline\(\);\s*if \(!ensurePipeline\(\) \|\| !applyStreamSettings\(run\)\)/,
+  'A stream starts from a fresh pipeline');
+for (const body of [svc('captureJpeg'), run]) {
+  assert.match(body, /g_pipe\.csi_running = true;\s*g_pipe\.started = true;/, 'A started receiver marks the pipeline used');
+}
 assert.match(run, /if \(run\.pacer\.consume\(now_us\)\) \+\+run\.window\.late;/);
 assert.match(svc('streamAutoTune'), /since_ms < kStreamTuneIntervalMs\) return;/);
 assert.match(service, /constexpr uint32_t kStreamTuneIntervalMs = 250;/);

@@ -419,6 +419,9 @@ int main() {
     assert(!resolveSettings(0, StreamHints{}, 100, 50, &s));
 
     assert(reducedQuality(65) == 60 && reducedQuality(34) == 30 && reducedQuality(30) == 30);
+    // Oversized frames go below the normal floor, down to 10.
+    assert(reducedQualityForSize(40) == 35 && reducedQualityForSize(30) == 25);
+    assert(reducedQualityForSize(14) == 10 && reducedQualityForSize(10) == 10);
     // Exposure limits keep the frame interval (34 ms frame at 1132 lines).
     assert(maxExposureLinesForFps(30, 34, 1132, 4624) == 1132);
     assert(maxExposureLinesForFps(25, 34, 1132, 4624) == 1331);

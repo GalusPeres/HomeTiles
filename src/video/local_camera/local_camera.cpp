@@ -387,7 +387,8 @@ constexpr uint8_t kAutoExposureMaxIterations = 10;
 constexpr int kStatisticsTimeoutMs = 200;
 constexpr uint32_t kFreezeTimeoutMs = 300;
 constexpr uint32_t kMinAwbSamples = 1000;
-constexpr uint8_t kJpegQualities[] = {80, 65, 50, 38};
+// The last steps keep noisy low-light stills under max_bytes.
+constexpr uint8_t kJpegQualities[] = {80, 65, 50, 38, 25, 15};
 // Upload wait slices: a disable, shutdown or the request deadline can still
 // withdraw a stream that the MQTT worker has not started.
 constexpr uint32_t kStreamPollMs = 100;
@@ -443,6 +444,9 @@ struct Pipeline {
   // kept (leaked) instead of reused until the next restart.
   bool ppa_wedged = false;
   bool ready = false;
+  // The CSI receiver ran since the pipeline was built (see
+  // releaseUsedPipeline()).
+  bool started = false;
 };
 
 TaskHandle_t g_worker = nullptr;
@@ -833,6 +837,17 @@ void releasePipeline() {
     g_pipe.jpeg_capacity = 0;
   }
   g_pipe.ready = false;
+  g_pipe.started = false;
+}
+
+// A stop can leave the CSI receiver and the ISP inside a frame, and the next
+// start continued from that state (8-inch hardware 2026-09-24: red and blue
+// swapped or no frames after a stream restart, correct again after the
+// rebuild). Every capture and stream therefore starts from a pipeline that
+// has not run yet, like the first start after boot; the sensor configuration
+// stays. Worker task only, after the previous run has released its buffers.
+void releaseUsedPipeline() {
+  if (g_pipe.started) releasePipeline();
 }
 
 void releaseSensor() {
@@ -1234,6 +1249,7 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
     *detail = static_cast<Detail>(g_detail.load());
     return ErrorCode::SensorUnavailable;
   }
+  releaseUsedPipeline();
   if (!ensurePipeline()) {
     *detail = Detail::PipelineFailed;
     return ErrorCode::SensorUnavailable;
@@ -1259,6 +1275,7 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
     return ErrorCode::SensorUnavailable;
   }
   g_pipe.csi_running = true;
+  g_pipe.started = true;
   // No indicator for single still images: Home Assistant refreshes camera
   // thumbnails every few seconds, and the pill would pop up each time. It
   // shows while a live stream runs (someone is watching).
@@ -1872,10 +1889,11 @@ void streamCaptureFrame(StreamRun& run) {
 
   if (size > local_camera_stream::kMaxFrameBytes || size > g_pipe.jpeg_capacity) {
     // Never re-encode the same frame (each attempt holds the arbiter); the
-    // rest of this mode run uses a lower quality instead.
+    // rest of this mode run uses a lower quality instead, below the normal
+    // floor if needed.
     ++window.big;
     const uint8_t previous = run.quality;
-    run.quality = local_camera_stream::reducedQuality(run.quality);
+    run.quality = local_camera_stream::reducedQualityForSize(run.quality);
     if (logDue(&run.big_log_ms, kErrorLogIntervalMs)) {
       Serial.printf("[LocalCamStream] Frame of %u bytes over the %u byte limit; quality %u -> %u\n",
                     static_cast<unsigned>(size),
@@ -1950,6 +1968,7 @@ uint32_t runStream() {
       reason = StopReason::SensorUnavailable;
       break;
     }
+    releaseUsedPipeline();
     if (!ensurePipeline() || !applyStreamSettings(run)) {
       reason = StopReason::Error;
       break;
@@ -1979,6 +1998,7 @@ uint32_t runStream() {
       break;
     }
     g_pipe.csi_running = true;
+    g_pipe.started = true;
     sensor_started = true;
     g_sensor_capturing.store(true);
     err = g_sensor.setStream(true);

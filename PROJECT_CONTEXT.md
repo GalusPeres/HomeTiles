@@ -108,8 +108,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Local camera (branch `local-camera-beta`)
 
 - Core `src/video/local_camera/` names no device/sensor; drivers `sensors/<name>/`, boards `src/devices/<device>/local_camera_board.*`; opt-in `local_cam_en`.
-- V2 OV02C10 (`HOMETILES_ISSUE38_BETA`): 720p via sensor flips, `HTCAMUP/1`. 8-inch OV5647 (`HOMETILES_CAMERA_BETA`): 544x960 4:2:0 + `"rotate":90`, Bridge turns it.
-- Open: int WDT saving during stream (b26: MQTT heap walk max. every 100 ms; HW pending); TEST `kChunkWindow = 2`.
+- V2 OV02C10 720p. 8-inch OV5647 544x960 + `"rotate":90` (Bridge turns). Tab5 SC202CS 720p RAW8, mirror+180; keeps BGGR itself (no window shift).
+- b30: fresh CSI/ISP per start (8-inch swapped colours/no frames after restart), oversize floor q10; HW pending.
+- Open: gain slider, int WDT fix HW test, TEST `kChunkWindow = 2`.
 
 ## Maintenance
 

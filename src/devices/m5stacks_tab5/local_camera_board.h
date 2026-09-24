@@ -13,8 +13,9 @@
 //   - 24 MHz clock from an oscillator on the board (GPIO36 path not fitted)
 //   - 1 MIPI data lane; the CSI/DSI PHY supply is LDO channel 3 at 2500 mV,
 //     also used by the display (M5GFX), so it is shared rather than reconfigured
-//   - RAW8 1280x720 BGGR, the demo's default mode; mounting in the landscape
-//     orientation (upright, mirrored, flipped) still needs hardware confirmation
+//   - RAW8 1280x720 BGGR, the demo's default mode, BGGR in every orientation
+//   - in the HomeTiles landscape UI the image is upside down with the demo's
+//     mirror alone (hardware 2026-09-25): the board adds a 180 degree turn
 
 #include "src/video/local_camera/camera_select.h"
 
@@ -41,7 +42,7 @@ inline constexpr local_camera::SensorMode kMode = {
     static_cast<uint8_t>(sc202cs::kDataLanes),
     static_cast<uint16_t>(sc202cs::kLaneBitRateMbps),
     true,   // Mirrored like the M5Stack demo shows its front camera.
-    false,
+    true,   // Upside down in the landscape UI (hardware 2026-09-25).
     false,  // Landscape sensor: the frame is the image.
     COLOR_RAW_ELEMENT_ORDER_BGGR,
     false,  // The mode sends no MIPI line-sync packets.

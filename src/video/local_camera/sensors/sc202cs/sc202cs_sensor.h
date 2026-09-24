@@ -107,8 +107,8 @@ class Sensor {
   // orientation state 0.
   esp_err_t loadDefaultMode(bool mirror);
   // Readout orientation relative to state 0: mirror horizontally, flip
-  // vertically, both = 180 degrees (0x3221). The output window moves by one
-  // pixel with each flip so the Bayer order stays the same. Read back.
+  // vertically, both = 180 degrees (0x3221). The sensor keeps the Bayer
+  // order itself; the output window stays at the table start. Read back.
   esp_err_t setOrientation(bool mirror, bool flip);
   esp_err_t setStream(bool enable);
   // lines: exposure in lines; gain_x16: total gain, 16 == 1.0x.

@@ -121,7 +121,7 @@ for (const [file, marker] of [
   ['README.md', 'https://galusperes.github.io/#device-support'],
   ['docs/index.md', '| Guition JC8012P4A1 V2 |'],
   ['docs/index.md', 'Support details for Guition JC8012P4A1 V2'],
-  ['RELEASING.md', '30 binaries'],
+  ['RELEASING.md', '32 binaries'],
 ]) {
   requireMarker(read(file), marker, `${file} release documentation`);
 }

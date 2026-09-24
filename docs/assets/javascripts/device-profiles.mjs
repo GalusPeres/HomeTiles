@@ -168,6 +168,19 @@ export const DEVICE_PROFILES = Object.freeze([
     "acceptsLegacyDescriptor": true
   }),
   Object.freeze({
+    "key": "guition_jc4880p443_portrait",
+    "buildProfile": "guition_jc4880p443_portrait",
+    "label": "Guition JC4880P443C_I_W",
+    "chipFamily": "ESP32-P4",
+    "flashSize": 16777216,
+    "status": "supported",
+    "hardwareCheck": "The board is the 4.3-inch Guition JC4880P443 (JC-ESP32P4-M3 module) with a 480x800 ST7701S panel.",
+    "siliconVariant": "pre_v3",
+    "minimumRevision": 1,
+    "maximumRevision": 199,
+    "acceptsLegacyDescriptor": true
+  }),
+  Object.freeze({
     "key": "waveshare_s3_touch_lcd_4",
     "buildProfile": "waveshare_s3_touch_lcd_4",
     "label": "Waveshare ESP32-S3 Touch LCD 4 (Rev 4.0)",

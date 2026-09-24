@@ -53,6 +53,7 @@ const p4Profiles = [
   'guition_jc8012p4a1_v2',
   'guition_jc1060p470c',
   'guition_jc1060p470c_v2',
+  'guition_jc4880p443_portrait',
 ];
 
 for (const profile of p4Profiles) {

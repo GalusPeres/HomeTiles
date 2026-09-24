@@ -17,6 +17,9 @@ namespace DeviceImpl = DeviceGuitionJC1060P470C;
 #elif defined(DEVICE_GUITION_JC1060P470C_V2)
 #include "src/devices/guition_jc1060p470c_v2/device_guition_jc1060p470c_v2.h"
 namespace DeviceImpl = DeviceGuitionJC1060P470CV2;
+#elif defined(DEVICE_GUITION_JC4880P443_PORTRAIT)
+#include "src/devices/guition_jc4880p443_portrait/device_guition_jc4880p443_portrait.h"
+namespace DeviceImpl = DeviceGuitionJC4880P443Portrait;
 #elif defined(DEVICE_GUITION_ESP32_4848S040)
 #include "src/devices/guition_esp32_4848s040/device_guition_esp32_4848s040.h"
 namespace DeviceImpl = DeviceGuitionESP324848S040;

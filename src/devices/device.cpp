@@ -51,6 +51,7 @@ void displayEndFullFramePreview() {
 bool ppaCooldownActive() {
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
     defined(DEVICE_GUITION_JC1060P470C_FAMILY) || \
+    defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
     defined(DEVICE_GUITION_JC8012P4A1) || \
     defined(DEVICE_GUITION_JC8012P4A1_V2)
   return DeviceImpl::ppaCooldownActive();
@@ -102,6 +103,7 @@ void displayWakeDark() {
     defined(DEVICE_M5STACKS_TAB5) || \
     defined(DEVICE_GUITION_JC8012P4A1_FAMILY) || \
     defined(DEVICE_GUITION_JC1060P470C_FAMILY) || \
+    defined(DEVICE_GUITION_JC4880P443_PORTRAIT) || \
     defined(DEVICE_ESP32_S3_RGB_480)
   DeviceImpl::displayWakeDark();
 #else

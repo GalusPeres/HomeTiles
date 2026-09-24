@@ -795,6 +795,7 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
     !defined(DEVICE_WAVESHARE_TOUCH_LCD_X) && \
     !defined(DEVICE_GUITION_JC8012P4A1_FAMILY) && \
     !defined(DEVICE_GUITION_JC1060P470C_FAMILY) && \
+    !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_ESP32_S3_RGB_480)
     switch (rotation & 0x03) {
       case 1:

@@ -28,6 +28,7 @@ Last reviewed: 2026-09-11
 - LCD-4 Rev 4.0 has contributor-tested display/touch/Wi-Fi/MQTT/Web OTA;
   older revisions and SD access are unsupported. See `docs/index.md` for validation.
 - JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups, tall popups.
+- WS 10.1 v3 (PR #48, memooox3): separate `waveshare_10_1_rev3`, post_v3 301-399; pre-v3 image unchanged. Chip-id/CI image test pending.
 
 ## Issue #30
 

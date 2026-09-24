@@ -185,6 +185,30 @@
       }
     },
     {
+      "buildProfile": "waveshare_10_1_rev3",
+      "key": "waveshare_touch_lcd_10_1_rev3",
+      "metadataDeviceKey": "waveshare_touch_lcd_10_1",
+      "define": "DEVICE_WAVESHARE_TOUCH_LCD_10_1",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "siliconVariant": "post_v3",
+      "minimumRevision": 301,
+      "maximumRevision": 399,
+      "rxVariant": "repo-a8204",
+      "elfFlags": "",
+      "publish": true,
+      "ciOrder": 16,
+      "ciLabel": "Waveshare 10.1 inch (ESP32-P4 v3.1 or newer, experimental)",
+      "legacySlug": "waveshare-touch-lcd-10-1-rev3",
+      "installer": {
+        "label": "Waveshare Touch LCD 10.1 inch (ESP32-P4 v3.1 or newer, experimental)",
+        "status": "validation-pending",
+        "hardwareCheck": "The device is the 10.1-inch ESP32-P4-WIFI6-Touch-LCD model and esptool chip-id reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
+        "acceptsLegacyDescriptor": false,
+        "explicitMetadataKey": true
+      }
+    },
+    {
       "buildProfile": "guition_jc8012p4a1_v2",
       "key": "guition_jc8012p4a1_v2",
       "metadataDeviceKey": "guition_jc8012p4a1_v2",

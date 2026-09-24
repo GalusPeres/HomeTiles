@@ -22,6 +22,7 @@ for (const profile of releaseProfiles) {
     ...(variants.length > 1 ? {
       siliconVariants: new Map(variants.map((variant) => [variant.siliconVariant, {
         key: variant.key, slug: variant.legacySlug,
+        minimumRevision: variant.minimumRevision, maximumRevision: variant.maximumRevision,
       }])),
     } : { expectedSiliconVariant: profile.siliconVariant }),
   });
@@ -137,14 +138,14 @@ function resolveReleaseDevice(selection, metadata) {
   }
   if (!metadata.silicon) {
     throw new Error(
-      'Waveshare 7B firmware has no silicon-revision metadata; rebuild it before packaging.'
+      `${selection.define} firmware has no silicon-revision metadata; rebuild it before packaging.`
     );
   }
 
   const variantTarget = selection.siliconVariants.get(metadata.silicon.variant);
   if (!variantTarget) {
     throw new Error(
-      `Unsupported Waveshare 7B silicon variant: ${metadata.silicon.variant || '(empty)'}`
+      `Unsupported ${selection.define} silicon variant: ${metadata.silicon.variant || '(empty)'}`
     );
   }
   if (
@@ -163,7 +164,16 @@ function resolveReleaseDevice(selection, metadata) {
       `Unsafe Waveshare 7B v3.1 revision range: ${metadata.silicon.minimumRevision}-${metadata.silicon.maximumRevision}`
     );
   }
-  return variantTarget;
+  // Every catalog variant carries its exact HomeTiles revision contract.
+  if (
+    metadata.silicon.minimumRevision !== variantTarget.minimumRevision ||
+    metadata.silicon.maximumRevision !== variantTarget.maximumRevision
+  ) {
+    throw new Error(
+      `Unsafe ${selection.define} ${metadata.silicon.variant} revision range: ${metadata.silicon.minimumRevision}-${metadata.silicon.maximumRevision}`
+    );
+  }
+  return { key: variantTarget.key, slug: variantTarget.slug };
 }
 
 function getArduinoSketchesPath() {

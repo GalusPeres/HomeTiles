@@ -100,7 +100,7 @@ for (const [file, marker] of [
   ['README.md', 'https://galusperes.github.io/#device-support'],
   ['docs/index.md', '| Guition JC4880P443 | 4.3" / 480×800 |'],
   ['docs/index.md', 'Support details for Guition JC4880P443'],
-  ['RELEASING.md', '32 binaries'],
+  ['RELEASING.md', '34 binaries'],
 ]) {
   requireMarker(read(file), marker, `${file} release documentation`);
 }

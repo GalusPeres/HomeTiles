@@ -221,6 +221,14 @@ jobs:
             silicon_variant: pre_v3
             rx_variant: repo-a8204
             publish: true
+          - label: Waveshare 10.1 inch (ESP32-P4 v3.1 or newer, experimental)
+            profile: waveshare_10_1_rev3
+            key: waveshare_touch_lcd_10_1_rev3
+            metadata_key: waveshare_touch_lcd_10_1
+            define: DEVICE_WAVESHARE_TOUCH_LCD_10_1
+            silicon_variant: post_v3
+            rx_variant: repo-a8204
+            publish: true
         # END GENERATED DEVICE MATRIX
 
     steps:

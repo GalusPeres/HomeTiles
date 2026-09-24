@@ -29,7 +29,7 @@ for (const profile of profiles) {
   assert.match(match[1], new RegExp(`^esp32:esp32:${board}:`));
   assert.match(match[1], new RegExp(`FlashSize=${profile.flashSize / 1048576}M(?:,|$)`));
   if (match[1].includes('esp32p4:')) {
-    assert.match(match[1], new RegExp(`ChipVariant=${profile.siliconVariant === 'rev3_1' ? 'postv3' : 'prev3'}(?:,|$)`));
+    assert.match(match[1], new RegExp(`ChipVariant=${profile.siliconVariant === 'pre_v3' ? 'prev3' : 'postv3'}(?:,|$)`));
   }
   assert.equal(getBuildProfile(profile.buildProfile).define, profile.define);
   if (!profile.publish) {

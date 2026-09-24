@@ -30,14 +30,17 @@ function validateCatalog(catalog) {
     assert(typeof profile.publish === 'boolean', `publish must be explicit for ${profile.key}`);
     const s3 = profile.chipFamily === 'ESP32-S3';
     const revision = profile.siliconVariant;
-    assert(s3 ? revision === 'default' : ['pre_v3', 'rev3_1'].includes(revision),
+    assert(s3 ? revision === 'default' : ['pre_v3', 'rev3_1', 'post_v3'].includes(revision),
       `invalid silicon variant for ${profile.key}`);
-    const [minimum, maximum] = s3 ? [0, 65535] : revision === 'pre_v3' ? [1, 199] : [301, 301];
+    const [minimum, maximum] = s3 ? [0, 65535] : revision === 'pre_v3' ? [1, 199] : revision === 'rev3_1' ? [301, 301] : [301, 399];
     assert(profile.minimumRevision === minimum && profile.maximumRevision === maximum,
       `unsafe revision range for ${profile.key}`);
     assert(revision !== 'rev3_1' || (profile.key === 'waveshare_touch_lcd_7b_rev3_1' &&
       profile.metadataDeviceKey === 'waveshare_touch_lcd_7b' && profile.define === 'DEVICE_WAVESHARE_TOUCH_LCD_7B'),
     `unsupported exact-v3.1 target ${profile.key}`);
+    assert(revision !== 'post_v3' || (profile.key === 'waveshare_touch_lcd_10_1_rev3' &&
+      profile.metadataDeviceKey === 'waveshare_touch_lcd_10_1' && profile.define === 'DEVICE_WAVESHARE_TOUCH_LCD_10_1'),
+    `unsupported v3.x target ${profile.key}`);
     const identity = `${profile.define}:${revision}`;
     assert(!identities.has(identity), `ambiguous define/silicon identity ${identity}`);
     identities.add(identity);

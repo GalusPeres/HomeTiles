@@ -114,7 +114,8 @@ Used for:
 - `src/devices/waveshare_touch_lcd_7`
 - `src/devices/waveshare_touch_lcd_8`
 - `src/devices/waveshare_touch_lcd_10_1`
-- build profiles `waveshare_7`, `waveshare_8`, and `waveshare_10_1`
+- build profiles `waveshare_7`, `waveshare_8`, `waveshare_10_1`, and
+  `waveshare_10_1_rev3`
 
 Important:
 - The 8-inch profile is hardware-confirmed. The 7-inch and 10.1-inch profiles
@@ -128,7 +129,10 @@ Important:
   initialization and timing.
 - Leave `Partition Scheme` on the normal 32MB ESP32-P4 setting.
 - The actual partition layout still comes from the shared repo `partitions.csv`.
-- The `Chip Variant` must be set to `Before v3.00` for this hardware.
+- The `Chip Variant` must be set to `Before v3.00` for this hardware, except
+  for 10.1-inch boards with ESP32-P4 v3.1 or newer: use `waveshare_10_1_rev3`
+  with `v3.00 or newer`. Check the revision with `esptool chip-id` first. The
+  v3 build is experimental and contributor-tested on v3.2 only.
 
 Arduino IDE:
 - Board: `ESP32P4 Dev Module`

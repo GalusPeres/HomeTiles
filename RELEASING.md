@@ -36,28 +36,32 @@ git push --atomic origin main refs/tags/vX.Y.Z
 
 That's it. The action then:
 
-1. Builds 16 explicit installer/release profiles for fifteen physical device
+1. Builds 17 explicit installer/release profiles for fifteen physical device
    profiles with the pinned toolchain (ESP32 core + libraries, see workflow
    `env`). Waveshare 7B/7B-C has a build for pre-v3 revisions 1–199 and a
    separate, experimental exact-v3.1 build. The latter uses profile
    `waveshare_7b_rev3_1` and assets containing
    `waveshare_touch_lcd_7b_rev3_1`. Exact-v3.1 hardware remains unverified.
+   Waveshare 10.1 likewise has a pre-v3 build and a separate, experimental
+   v3.1-or-newer build (`waveshare_10_1_rev3`, revisions 301–399, assets
+   containing `waveshare_touch_lcd_10_1_rev3`), contributor-tested on v3.2.
    Every other current P4 profile is a vendor P4NRW32/pre-v3 target explicitly
-   guarded to revisions 1–199. ESP32-P4 v3.2 or newer is unsupported with the
-   pinned Arduino-ESP32 3.3.7 / ESP-IDF 5.5.2 toolchain.
+   guarded to revisions 1–199. Outside the 10.1 v3 build, ESP32-P4 v3.2 or
+   newer is unsupported with the pinned Arduino-ESP32 3.3.7 / ESP-IDF 5.5.2
+   toolchain.
 2. Verifies that the tag matches `FW_VERSION` in `version.txt` — a mismatch
    fails the build on purpose.
 3. Verifies the device descriptor and exact silicon-revision contract embedded
    in each binary. The v3.1 HomeTiles contract must be 301–301 even though the
    Arduino `v3.00 or newer` ESP image header can remain 301–399.
 4. Creates the GitHub release with auto-generated notes and uploads all
-   32 binaries (`<device>.bin` for OTA + `<device>_factory.bin` for first flash).
+   34 binaries (`<device>.bin` for OTA + `<device>_factory.bin` for first flash).
 
-After all 32 assets were uploaded successfully, the release job explicitly
+After all 34 assets were uploaded successfully, the release job explicitly
 dispatches the documentation workflow for the release tag. This explicit
 `workflow_dispatch` is required because GitHub suppresses ordinary follow-up
 workflow events created with `GITHUB_TOKEN`. The documentation workflow
-validates the installer device/asset contract, downloads the same 32 published
+validates the installer device/asset contract, downloads the same 34 published
 release assets, verifies their GitHub SHA-256 digests, and places them in the
 generated documentation site under `firmware/latest/`. Normal documentation
 changes pushed to `main` still deploy through the workflow's filtered `push`

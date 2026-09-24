@@ -75,7 +75,7 @@ for (const [file, marker] of [
   ['docs/index.md', '| Waveshare LCD-4.3 (P4) | 4.3" / 800×480 |'],
   ['docs/index.md', 'Support details for Waveshare LCD-4.3 (P4)'],
   ['docs/screensaver.md', '(index.md#device-support)'],
-  ['RELEASING.md', '32 binaries'],
+  ['RELEASING.md', '34 binaries'],
 ]) {
   requireMarker(read(file), marker, `${file} release documentation`);
 }

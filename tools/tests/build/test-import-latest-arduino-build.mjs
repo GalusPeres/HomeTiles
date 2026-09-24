@@ -29,7 +29,7 @@ const releaseTargets = new Map([
   }],
   ['DEVICE_WAVESHARE_TOUCH_LCD_10_1', {
     key: 'waveshare_touch_lcd_10_1',
-    siliconVariant: 'pre_v3',
+    siliconVariant: null,
   }],
   ['DEVICE_WAVESHARE_S3_TOUCH_LCD_4', {
     key: 'waveshare_s3_touch_lcd_4',
@@ -243,6 +243,37 @@ const rev3Metadata = parseFirmwareMetadata(
 assert.equal(
   resolveReleaseDevice(waveshare7BSelection, rev3Metadata).key,
   'waveshare_touch_lcd_7b_rev3_1',
+);
+
+const waveshare101Selection = readManualDeviceSelection(
+  selectorSource('DEVICE_WAVESHARE_TOUCH_LCD_10_1'),
+);
+assert.equal(
+  resolveReleaseDevice(waveshare101Selection, parseFirmwareMetadata(
+    firmwareImage('waveshare_touch_lcd_10_1', { siliconVariant: 'pre_v3', minimumRevision: 1, maximumRevision: 199 }),
+  )).key,
+  'waveshare_touch_lcd_10_1',
+  'The existing pre-v3 10.1 image keeps its release asset name.',
+);
+assert.equal(
+  resolveReleaseDevice(waveshare101Selection, parseFirmwareMetadata(
+    firmwareImage('waveshare_touch_lcd_10_1', { siliconVariant: 'post_v3', minimumRevision: 301, maximumRevision: 399 }),
+  )).key,
+  'waveshare_touch_lcd_10_1_rev3',
+);
+for (const [minimumRevision, maximumRevision] of [[300, 399], [301, 301], [1, 399]]) {
+  assert.throws(
+    () => resolveReleaseDevice(waveshare101Selection, parseFirmwareMetadata(
+      firmwareImage('waveshare_touch_lcd_10_1', { siliconVariant: 'post_v3', minimumRevision, maximumRevision }),
+    )),
+    /Unsafe DEVICE_WAVESHARE_TOUCH_LCD_10_1 post_v3 revision range/,
+  );
+}
+assert.throws(
+  () => resolveReleaseDevice(waveshare101Selection, parseFirmwareMetadata(
+    firmwareImage('waveshare_touch_lcd_10_1', { siliconVariant: 'rev3_1', minimumRevision: 301, maximumRevision: 301 }),
+  )),
+  /Unsupported DEVICE_WAVESHARE_TOUCH_LCD_10_1 silicon variant/,
 );
 
 const legacy7BImage = firmwareImage('waveshare_touch_lcd_7b', {

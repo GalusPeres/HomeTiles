@@ -101,6 +101,20 @@ export const DEVICE_PROFILES = Object.freeze([
     "acceptsLegacyDescriptor": true
   }),
   Object.freeze({
+    "key": "waveshare_touch_lcd_10_1_rev3",
+    "buildProfile": "waveshare_10_1_rev3",
+    "label": "Waveshare Touch LCD 10.1 inch (ESP32-P4 v3.1 or newer, experimental)",
+    "chipFamily": "ESP32-P4",
+    "flashSize": 33554432,
+    "status": "validation-pending",
+    "hardwareCheck": "The device is the 10.1-inch ESP32-P4-WIFI6-Touch-LCD model and esptool chip-id reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
+    "metadataDeviceKey": "waveshare_touch_lcd_10_1",
+    "siliconVariant": "post_v3",
+    "minimumRevision": 301,
+    "maximumRevision": 399,
+    "acceptsLegacyDescriptor": false
+  }),
+  Object.freeze({
     "key": "guition_jc8012p4a1_v2",
     "buildProfile": "guition_jc8012p4a1_v2",
     "label": "Guition JC8012P4A1 V2",

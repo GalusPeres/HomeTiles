@@ -11,7 +11,9 @@
 //   {base}/stat/local_camera            panel -> Bridge, QoS0, retained,
 //       {"v":1,"state":"ready"|"disabled"|"error","width":1280,"height":720,
 //        "format":"jpeg","max_bytes":131072,"min_interval_ms":1000}
-//       plus optional "sensor":"ov02c10" and "error":"<code>"
+//       plus optional "sensor":"ov02c10" and "error":"<code>", and
+//       "rotate":90 when the receiver has to turn every JPEG (width/height
+//       are the JPEG as sent) clockwise by that many degrees
 //   {base}/stat/local_camera/image/<id> panel -> Bridge, QoS0, not retained,
 //       raw JPEG bytes (FFD8 ... FFD9)
 //   {base}/stat/local_camera/error/<id> panel -> Bridge, QoS0, not retained,
@@ -181,6 +183,9 @@ struct StatusFields {
   PublicState state = PublicState::Disabled;
   uint16_t width = 0;            // JPEG size of the active sensor mode.
   uint16_t height = 0;
+  // Clockwise degrees the receiver turns every JPEG (0 or 90); sent only when
+  // not 0, so older Bridges and landscape boards see no change.
+  uint16_t rotate = 0;
   const char* sensor = nullptr;  // Included only when it is a protocol token.
   const char* error = nullptr;   // Included only for PublicState::Error.
   // Privacy pause from the display or Home Assistant: the camera stays
@@ -228,6 +233,15 @@ inline size_t buildStatusJson(char* out, size_t capacity,
   }
   if (fields.paused) {
     const int n = snprintf(out + length, capacity - length, ",\"paused\":true");
+    if (n < 0 || static_cast<size_t>(n) >= capacity - length) {
+      out[0] = '\0';
+      return 0;
+    }
+    length += static_cast<size_t>(n);
+  }
+  if (fields.rotate == 90 || fields.rotate == 180 || fields.rotate == 270) {
+    const int n = snprintf(out + length, capacity - length, ",\"rotate\":%u",
+                           static_cast<unsigned>(fields.rotate));
     if (n < 0 || static_cast<size_t>(n) >= capacity - length) {
       out[0] = '\0';
       return 0;

@@ -127,10 +127,13 @@ constexpr bool kSupported = false;
 constexpr const char* kSensorName = local_camera_board::kMode.name;
 constexpr uint16_t kStatusWidth = local_camera_board::kMode.image_width;
 constexpr uint16_t kStatusHeight = local_camera_board::kMode.image_height;
+// Clockwise turn the Bridge applies to every JPEG (quarter-turn mounting).
+constexpr uint16_t kStatusRotate = local_camera_board::kMode.quarter_turn ? 90 : 0;
 #else
 constexpr const char* kSensorName = "";
 constexpr uint16_t kStatusWidth = 0;
 constexpr uint16_t kStatusHeight = 0;
+constexpr uint16_t kStatusRotate = 0;
 #endif
 
 std::atomic<bool> g_enabled{false};
@@ -284,6 +287,7 @@ StatusFields currentStatusFields() {
   StatusFields fields;
   fields.width = kStatusWidth;
   fields.height = kStatusHeight;
+  fields.rotate = kStatusRotate;
   if (g_ended_session[0] != '\0') fields.ended_session = g_ended_session;
   if (!g_enabled.load()) {
     fields.state = PublicState::Disabled;
@@ -349,20 +353,23 @@ constexpr uint32_t kFrameBytes =
 constexpr uint32_t kImageWidth = kMode.image_width;
 constexpr uint32_t kImageHeight = kMode.image_height;
 // This silicon has no ISP crop and the JPEG encoder has no stride: the sensor
-// window must be the JPEG size. A sensor mounted a quarter turn from the
-// landscape image delivers it portrait; one PPA pass turns it.
-constexpr bool kQuarterTurn = kMode.quarter_turn;
-static_assert(kQuarterTurn ? kMode.frame_width == kMode.image_height &&
-                                 kMode.frame_height == kMode.image_width
-                           : kMode.frame_width == kMode.image_width &&
-                                 kMode.frame_height == kMode.image_height,
+// window must be the JPEG size.
+static_assert(kMode.frame_width == kMode.image_width &&
+                  kMode.frame_height == kMode.image_height,
               "the sensor must deliver the JPEG size");
+// A sensor mounted a quarter turn from the landscape image: the JPEG leaves
+// the panel portrait and the receiver (the Bridge) turns it 90 degrees
+// clockwise, announced as "rotate" in the retained status. A PPA turn on the
+// panel held the 2D-DMA for ~29 ms per frame and made the display sluggish.
+constexpr bool kQuarterTurn = kMode.quarter_turn;
+// The Bridge turns the JPEG losslessly (whole MCUs only). 4:2:2 (16x8 MCUs)
+// would turn into the uncommon 4:4:0; 4:2:0 (16x16 MCUs) stays 4:2:0.
+constexpr jpeg_down_sampling_type_t kJpegSubsampling =
+    kQuarterTurn ? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;
+static_assert(!kQuarterTurn || (kMode.image_width % 16 == 0 && kMode.image_height % 16 == 0),
+              "a lossless quarter turn needs whole 16x16 MCUs");
 constexpr size_t kFrameBufferAlign = 128;
 constexpr uint32_t kJpegInputBytes = kImageWidth * kImageHeight * 2;
-static_assert(kJpegInputBytes % kFrameBufferAlign == 0, "turned frame must fill cache lines");
-// The PPA turns about 1 MB in a few tens of milliseconds; a transform that is
-// still running after this never completed.
-constexpr uint32_t kTurnTimeoutMs = 200;
 // ISP statistics see the frame as the sensor delivers it: 5x5 blocks over
 // the largest centred window whose sides are multiples of 5.
 constexpr uint32_t kStatsWidth = kMode.frame_width / 5 * 5;
@@ -426,14 +433,11 @@ struct Pipeline {
   // statistics see it (sample point after gamma).
   uint8_t gamma_digital_step = 0;
   bool ae_after_gamma = false;
-  // Quarter-turn boards only: the PPA turns each portrait frame into this
-  // JPEG input buffer.
+  // Stream frame preparation on the PPA (crop, turn and scale in hardware).
   ppa_client_handle_t ppa = nullptr;
   SemaphoreHandle_t ppa_done = nullptr;
-  uint8_t* turned = nullptr;
   // A PPA transform that never finished may still own its buffers: they are
-  // kept (leaked) instead of reused, and the camera stays off until the next
-  // restart.
+  // kept (leaked) instead of reused until the next restart.
   bool ppa_wedged = false;
   bool ready = false;
 };
@@ -739,8 +743,9 @@ bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit) {
 }
 
 // Sensor-side orientation: the display rotation and the mirror setting become
-// sensor readout flips, so no pixel pass (PPA or CPU) turns or mirrors the
-// image; only a quarter-turn mounting adds its fixed PPA turn (turnFrame).
+// sensor readout flips, so no pixel pass (PPA or CPU) ever turns the image.
+// A quarter-turn mounting maps the mirror to the other sensor flip; the
+// Bridge turns the JPEG afterwards.
 // live: the sensor streams; the frames still in flight are dropped. Returns
 // false when the sensor did not confirm the registers.
 bool applyOrientation(bool live) {
@@ -814,8 +819,6 @@ void releasePipeline() {
     if (buffer && !g_pipe.ppa_wedged) heap_caps_free(buffer);
     buffer = nullptr;
   }
-  if (g_pipe.turned && !g_pipe.ppa_wedged) heap_caps_free(g_pipe.turned);
-  g_pipe.turned = nullptr;
   g_isr.buffer_bytes = 0;
   if (g_pipe.jpeg) {
     jpeg_del_encoder_engine(g_pipe.jpeg);
@@ -853,6 +856,17 @@ void releaseSensor() {
 void releaseAll() {
   releasePipeline();
   releaseSensor();
+}
+
+// Full re-initialisation after missing frames: pipeline (CSI, ISP, JPEG,
+// buffers) and sensor (standby, detach, board release). The next capture
+// or stream starts with a software reset of the sensor. Worker task only.
+void resetAfterNoFrames(const char* where) {
+  static uint32_t log_ms = 0;
+  if (logDue(&log_ms, kErrorLogIntervalMs)) {
+    Serial.printf("[LocalCam] No frames (%s): rebuilding sensor and pipeline\n", where);
+  }
+  releaseAll();
 }
 
 // Settles the final state against a concurrent disable from the loop task.
@@ -970,60 +984,7 @@ bool createJpegEncoder() {
   return true;
 }
 
-// PPA ISR: wakes turnFrame(); user_ctx is the semaphore in oper.user_data.
-bool IRAM_ATTR onPpaTransDone(ppa_client_handle_t, ppa_event_data_t*, void* user_ctx) {
-  SemaphoreHandle_t done = static_cast<SemaphoreHandle_t>(user_ctx);
-  if (!done) return false;
-  BaseType_t high_task_woken = pdFALSE;
-  xSemaphoreGiveFromISR(done, &high_task_woken);
-  return high_task_woken == pdTRUE;
-}
-
-// Quarter-turn boards: one PPA pass turns the portrait CSI frame clockwise
-// into the landscape JPEG input (g_pipe.turned). The caller holds the 2D-DMA
-// arbiter. False when the PPA rejected the frame or never finished it; the
-// latter marks the pipeline wedged.
-bool turnFrame(const uint8_t* frame) {
-  if (!g_pipe.ppa || !g_pipe.ppa_done || !g_pipe.turned || g_pipe.ppa_wedged) return false;
-  ppa_srm_oper_config_t oper = {};
-  oper.in.buffer = frame;
-  oper.in.pic_w = kMode.frame_width;
-  oper.in.pic_h = kMode.frame_height;
-  oper.in.block_w = kMode.frame_width;
-  oper.in.block_h = kMode.frame_height;
-  oper.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-  oper.out.buffer = g_pipe.turned;
-  oper.out.buffer_size = kJpegInputBytes;
-  oper.out.pic_w = kImageWidth;
-  oper.out.pic_h = kImageHeight;
-  oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-  // PPA angles are counterclockwise: 270 degrees is a clockwise quarter turn.
-  oper.rotation_angle = PPA_SRM_ROTATION_ANGLE_270;
-  oper.scale_x = 1.0f;
-  oper.scale_y = 1.0f;
-  oper.mode = PPA_TRANS_MODE_NON_BLOCKING;
-  oper.user_data = g_pipe.ppa_done;
-  xSemaphoreTake(g_pipe.ppa_done, 0);  // Drop a stale completion.
-  const esp_err_t err = ppa_do_scale_rotate_mirror(g_pipe.ppa, &oper);
-  if (err != ESP_OK) {
-    logCaptureError("PPA frame turn rejected", err);
-    return false;
-  }
-  if (xSemaphoreTake(g_pipe.ppa_done, pdMS_TO_TICKS(kTurnTimeoutMs)) == pdTRUE) return true;
-  g_pipe.ppa_wedged = true;
-  Serial.printf("[LocalCam] PPA frame turn did not finish in %u ms; camera off until restart\n",
-                static_cast<unsigned>(kTurnTimeoutMs));
-  return false;
-}
-
 bool ensurePipeline() {
-  if (g_pipe.ppa_wedged) {
-    // The stuck transform may still write its buffers: no new pipeline.
-    if (pipelineErrorLogDue()) {
-      Serial.println("[LocalCam] PPA did not finish a frame turn; camera off until restart");
-    }
-    return false;
-  }
   if (g_pipe.ready) {
     // After an encode failure only the engine was dropped; the buffers stay
     // allocated until the idle release in case the DMA still touched them.
@@ -1203,35 +1164,6 @@ bool ensurePipeline() {
       break;
     }
 
-    if (kQuarterTurn) {
-      step = "PPA client";
-      ppa_client_config_t ppa_config = {};
-      ppa_config.oper_type = PPA_OPERATION_SRM;
-      err = ppa_register_client(&ppa_config, &g_pipe.ppa);
-      if (err != ESP_OK) {
-        g_pipe.ppa = nullptr;
-        break;
-      }
-      if (!g_pipe.ppa_done) g_pipe.ppa_done = xSemaphoreCreateBinary();
-      if (!g_pipe.ppa_done) {
-        err = ESP_ERR_NO_MEM;
-        break;
-      }
-      // Non-blocking with a bounded wait: a blocking PPA call waits forever.
-      ppa_event_callbacks_t ppa_callbacks = {};
-      ppa_callbacks.on_trans_done = onPpaTransDone;
-      err = ppa_client_register_event_callbacks(g_pipe.ppa, &ppa_callbacks);
-      if (err != ESP_OK) break;
-      step = "turn buffer";
-      g_pipe.turned = static_cast<uint8_t*>(
-          heap_caps_aligned_calloc(kFrameBufferAlign, 1, kJpegInputBytes, MALLOC_CAP_SPIRAM));
-      if (!g_pipe.turned) {
-        err = ESP_ERR_NO_MEM;
-        break;
-      }
-      esp_cache_msync(g_pipe.turned, kJpegInputBytes,
-                      ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
-    }
   } while (false);
 
   if (err != ESP_OK) {
@@ -1345,6 +1277,7 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
           static_cast<unsigned>(kMode.data_lanes),
           static_cast<unsigned>(kMode.lane_bit_rate_mbps));
     }
+    resetAfterNoFrames("snapshot");
     *detail = Detail::NoFrames;
     return ErrorCode::SensorUnavailable;
   }
@@ -1450,25 +1383,8 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
   }
 
   // The sensor delivered the JPEG size in the wanted orientation: the frozen
-  // CSI buffer is the JPEG input as it is, or after the PPA turn on
-  // quarter-turn boards. The CPU never touches it.
+  // CSI buffer is the JPEG input as it is. The CPU never touches it.
   const uint8_t* frame = g_isr.buffers[frozen];
-  if (kQuarterTurn) {
-    bool turned = false;
-    {
-      Dma2dArbiterGuard guard(500);
-      if (!guard.locked()) {
-        *detail = Detail::EncoderBusy;
-        return ErrorCode::EncoderBusy;
-      }
-      turned = turnFrame(frame);
-    }
-    if (!turned) {
-      *detail = Detail::EncoderBusy;
-      return ErrorCode::EncoderBusy;
-    }
-    frame = g_pipe.turned;
-  }
 
   const uint32_t encode_started_ms = millis();
   for (uint8_t quality : kJpegQualities) {
@@ -1486,7 +1402,7 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
       config.width = kImageWidth;
       config.height = kImageHeight;
       config.src_type = JPEG_ENCODE_IN_FORMAT_RGB565;
-      config.sub_sample = JPEG_DOWN_SAMPLING_YUV422;
+      config.sub_sample = kJpegSubsampling;
       config.image_quality = quality;
       err = jpeg_encoder_process(g_pipe.jpeg, &config, frame, kJpegInputBytes,
                                  g_pipe.jpeg_out,
@@ -1651,7 +1567,17 @@ struct StreamRun {
   uint8_t busy_frames = 0;
   uint16_t calm_frames = 0;
   uint32_t quality_log_ms = 0;
+  // Consecutive capture attempts without a complete CSI frame.
+  uint16_t noframe_streak = 0;
 };
+
+// A sensor/receiver pair that stopped delivering frames stays stuck while
+// its handles are kept: on the Waveshare 8-inch every retry after a quick
+// stop/start saw no frame until the idle release rebuilt everything 30 s
+// later. After this many attempts in a row (~1-2 s) the run ends and the
+// whole camera path is rebuilt.
+constexpr uint16_t kNoFrameResetStreak = 12;
+
 
 StreamRun g_stream_run;  // Worker-owned.
 // Adaptive quality: drop one step after this many frames the upload could not
@@ -1836,7 +1762,7 @@ StreamEncode encodeStreamFrame(const uint8_t* input, uint32_t input_bytes, uint1
     config.width = width;
     config.height = height;
     config.src_type = JPEG_ENCODE_IN_FORMAT_RGB565;
-    config.sub_sample = JPEG_DOWN_SAMPLING_YUV422;
+    config.sub_sample = kJpegSubsampling;
     config.image_quality = quality;
     err = jpeg_encoder_process(g_pipe.jpeg, &config, input, input_bytes, g_pipe.jpeg_out,
                                static_cast<uint32_t>(g_pipe.jpeg_capacity), size);
@@ -1904,31 +1830,16 @@ void streamCaptureFrame(StreamRun& run) {
   const int8_t frozen = g_isr.frozen;
   if (frozen < 0) {
     ++window.noframe;
+    if (run.noframe_streak < UINT16_MAX) ++run.noframe_streak;
     return;
   }
+  run.noframe_streak = 0;
 
-  // The JPEG encoder uses the 2D-DMA pool, on quarter-turn boards after one
-  // PPA turn in its own hold, so the display can flush in between. Short
-  // holds; when the display or the HA camera decoder has the pool, the frame
-  // is skipped instead of waited for.
+  // Only the JPEG encoder uses the 2D-DMA pool (no PPA pass): one short
+  // hold per frame. When the display or the HA camera decoder has the pool,
+  // the frame is skipped instead of waited for.
   const uint8_t* input = g_isr.buffers[frozen];
-  uint32_t prep_ms = 0;
-  if (kQuarterTurn) {
-    const uint32_t turn_started_ms = millis();
-    bool locked = false;
-    bool turned = false;
-    {
-      Dma2dArbiterGuard guard(kStreamArbiterTimeoutMs);
-      locked = guard.locked();
-      if (locked) turned = turnFrame(input);
-    }
-    // The PPA has read the CSI buffer; the ISR may write it again.
-    g_isr.frozen = -1;
-    if (!locked) ++window.arb;
-    if (!turned) return;
-    prep_ms = millis() - turn_started_ms;
-    input = g_pipe.turned;
-  }
+  const uint32_t prep_ms = 0;  // No pixel pass before the encoder.
   uint32_t size = 0;
   uint32_t encode_ms = 0;
   StreamEncode result = StreamEncode::Failed;
@@ -1941,7 +1852,7 @@ void streamCaptureFrame(StreamRun& run) {
     }
     const uint32_t encode_started_ms = millis();
     // The sensor delivered the JPEG size in the wanted orientation: the
-    // frozen CSI buffer (or its turned copy) is the encoder input as it is.
+    // frozen CSI buffer is the encoder input as it is.
     result = encodeStreamFrame(input, kJpegInputBytes, kImageWidth, kImageHeight, run.quality,
                                &size);
     encode_ms = millis() - encode_started_ms;
@@ -2025,6 +1936,8 @@ uint32_t runStream() {
   run = StreamRun{};
   bool sensor_started = false;
   bool upload_started = false;
+  // The sensor or receiver stopped delivering frames: rebuild after the stop.
+  bool no_frames = false;
   const uint32_t started_ms = millis();
   const uint32_t frames_at_start = local_camera_upload::framesSentTotal();
 
@@ -2074,6 +1987,7 @@ uint32_t runStream() {
     if (xQueueReceive(g_isr.frames, &event, pdMS_TO_TICKS(kFirstFrameTimeoutMs)) != pdTRUE) {
       logCaptureError("Stream got no CSI frame", ESP_ERR_TIMEOUT);
       reason = StopReason::Error;
+      no_frames = true;
       break;
     }
     reason = streamSettle(run, &leftover);
@@ -2138,6 +2052,11 @@ uint32_t runStream() {
       }
       if (run.pacer.consume(now_us)) ++run.window.late;
       streamCaptureFrame(run);
+      if (run.noframe_streak >= kNoFrameResetStreak) {
+        reason = StopReason::Error;
+        no_frames = true;
+        break;
+      }
       const uint64_t after_us = static_cast<uint64_t>(esp_timer_get_time());
       streamAutoTune(run, static_cast<uint32_t>(run.pacer.waitUs(after_us) / 1000u));
       reason = streamWait(0, &leftover);
@@ -2158,6 +2077,9 @@ uint32_t runStream() {
   if (sensor_started) stopStreaming();
   g_isr.armed = false;
   g_isr.frozen = -1;
+  // After the sender stopped (it no longer reads a frame slot or the CSI
+  // buffers): the next run starts from a sensor software reset.
+  if (no_frames) resetAfterNoFrames("stream");
   g_last_used_ms = millis();
   if (run.window_started_ms != 0) streamDiagnostics(run, true);
 
@@ -2787,9 +2709,10 @@ bool stopStreamForTransportRecovery() {
 
 uint8_t streamMode() { return g_stream_mode.load(); }
 
+// The picture Home Assistant shows: a quarter-turn board's JPEG turned.
 uint16_t imageWidth() {
 #if defined(HOMETILES_LOCAL_CAMERA)
-  return static_cast<uint16_t>(kImageWidth);
+  return static_cast<uint16_t>(kQuarterTurn ? kImageHeight : kImageWidth);
 #else
   return 0;
 #endif
@@ -2797,7 +2720,7 @@ uint16_t imageWidth() {
 
 uint16_t imageHeight() {
 #if defined(HOMETILES_LOCAL_CAMERA)
-  return static_cast<uint16_t>(kImageHeight);
+  return static_cast<uint16_t>(kQuarterTurn ? kImageWidth : kImageHeight);
 #else
   return 0;
 #endif

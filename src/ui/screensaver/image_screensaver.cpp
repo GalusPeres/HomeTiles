@@ -91,6 +91,8 @@ struct ScreensaverState {
 };
 
 ScreensaverState* g_state = nullptr;
+// show_image_screensaver() is building the overlay (image_screensaver_covers_ui).
+bool g_opening = false;
 // Web Admin saves run in loopTask, but LVGL changes wait until the next
 // LVGL timer tick. The HTTP handler therefore never changes object
 // lifetimes directly, and the visible overlay state is never recreated.
@@ -1583,6 +1585,9 @@ void show_image_screensaver() {
                     configManager.getConfig().screensaver_brightness_pct));
   ScreensaverState* st = new ScreensaverState();
   if (!st) return;
+  // Covers the UI from the overlay's creation on, before g_state is set after
+  // the ~0.5 s setup: the camera pill leaves as soon as the overlay appears.
+  g_opening = true;
 
 #if defined(DEVICE_ESP32_S3_RGB_480)
   // Everything created below becomes visible in one completed RGB frame.
@@ -1615,6 +1620,7 @@ void show_image_screensaver() {
   rebuild_slot_grid(st);
 
   g_state = st;
+  g_opening = false;
   g_live_config_refresh_requested = false;
   g_live_grid_refresh_requested = false;
   g_live_preview_wallpaper = String();
@@ -1679,6 +1685,10 @@ void hide_image_screensaver() {
 
 bool is_image_screensaver_visible() {
   return g_state != nullptr;
+}
+
+bool image_screensaver_covers_ui() {
+  return g_opening || g_state != nullptr;
 }
 
 void image_screensaver_brightness_changed() {

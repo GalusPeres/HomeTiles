@@ -119,8 +119,10 @@ for (const text of [boardHeader, boardCpp]) {
 }
 assert.match(boardHeader, /using Sensor = ov5647::Sensor;/);
 assert.match(boardHeader, /COLOR_RAW_ELEMENT_ORDER_GBRG/);
-// Quarter-turn mounting: the image is the frame turned (960x544).
-assert.match(boardHeader, /static_cast<uint16_t>\(ov5647::kFrameWidth\),\s*static_cast<uint16_t>\(ov5647::kFrameHeight\),\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*static_cast<uint16_t>\(ov5647::kFrameHeight\),\s*static_cast<uint16_t>\(ov5647::kFrameWidth\),/);
+// Quarter-turn mounting: the JPEG is the portrait frame (544x960, 4:2:0);
+// the Bridge turns it (the PPA turn on the panel made the display sluggish).
+assert.match(boardHeader, /static_cast<uint16_t>\(ov5647::kFrameWidth\),\s*static_cast<uint16_t>\(ov5647::kFrameHeight\),\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*static_cast<uint16_t>\(ov5647::kFrameWidth\),\s*static_cast<uint16_t>\(ov5647::kFrameHeight\),/);
+assert.ok(544 % 16 === 0 && 960 % 16 === 0, 'Whole 16x16 MCUs for the lossless turn');
 assert.match(boardHeader, /true,   \/\/ The table reads out mirrored, like the Waveshare example\.\s*false,\s*(\/\/[^\n]*\n\s*)+true,\s*COLOR_RAW_ELEMENT_ORDER_GBRG,/,
   'mirror, rotate_180 false, quarter_turn true');
 assert.match(boardCpp, /DeviceWaveshareTouchLCD8::sharedI2cBus\(\)/);

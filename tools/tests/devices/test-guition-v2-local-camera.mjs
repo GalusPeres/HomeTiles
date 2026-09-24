@@ -193,23 +193,22 @@ assert.equal((service.match(/jpeg_encoder_process\(/g) || []).length, 2);
 const streamEncode = body('encodeStreamFrame');
 // The stream encodes the frozen CSI buffer directly (the V2 sensor delivers
 // the JPEG size and orientation): one short arbiter lease for the encode only,
-// the buffer is released after the encoder read it. The only PPA pass is the
-// fixed turn of quarter-turn boards, and the V2 is not one.
+// the buffer is released after the encoder read it, and no PPA pass remains.
 const streamCapture = body('streamCaptureFrame');
 assert.match(streamCapture, /const uint8_t\* input = g_isr\.buffers\[frozen\];/);
 assert.match(streamCapture, /Dma2dArbiterGuard guard\(kStreamArbiterTimeoutMs\);\s*if \(!guard\.locked\(\)\) \{[\s\S]*?\+\+window\.arb;[\s\S]*?encodeStreamFrame\(input, kJpegInputBytes, kImageWidth, kImageHeight,[\s\S]*?\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;/,
   'The stream encode reads the frozen CSI buffer inside one short arbiter lease and releases it afterwards');
 assert.match(boardHeader, /false,\s*\/\/ Landscape sensor: the frame is the image, no PPA pass\./,
   'The V2 sensor is not a quarter-turn mounting');
-assert.equal((noComments(service).match(/ppa_do_scale_rotate_mirror\(/g) || []).length, 1,
-  'One PPA call: the quarter-turn helper');
-assert.match(body('turnFrame'), /ppa_do_scale_rotate_mirror\(/);
-assert.doesNotMatch(noComments(service), /ppaPrepareStreamFrame/);
+assert.doesNotMatch(noComments(service), /ppa_do_scale_rotate_mirror|ppaPrepareStreamFrame/,
+  'No PPA pass in the camera pipeline');
 assert.match(streamEncode, /jpeg_encoder_process\(/);
 assert.match(streamEncode, /jpeg_del_encoder_engine\(g_pipe\.jpeg\);[\s\S]*?\}\s*\}\s*if \(err != ESP_OK\)/,
   'A failed stream encode drops the engine while the arbiter is still held');
 assert.match(capture, /JPEG_ENCODE_IN_FORMAT_RGB565/);
-assert.match(capture, /JPEG_DOWN_SAMPLING_YUV422/);
+// 4:2:2 on landscape boards like the V2; quarter-turn boards use 4:2:0.
+assert.match(capture, /config\.sub_sample = kJpegSubsampling;/);
+assert.match(service, /kQuarterTurn \? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;/);
 // Pre-v3 silicon has no ISP crop block: the sensor window is the JPEG size,
 // so the snapshot encodes the frozen buffer without any CPU pixel pass.
 assert.doesNotMatch(capture, /compactCenterCrop|std::reverse|esp_cache_msync/,

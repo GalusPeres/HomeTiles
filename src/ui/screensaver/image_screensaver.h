@@ -10,6 +10,9 @@
 void show_image_screensaver();
 void hide_image_screensaver();
 bool is_image_screensaver_visible();
+// True from the start of show_image_screensaver() (its overlay exists before
+// the setup finishes) until hide_image_screensaver().
+bool image_screensaver_covers_ui();
 void image_screensaver_brightness_changed();
 
 // Load the first configured image into the PSRAM cache after a delay.

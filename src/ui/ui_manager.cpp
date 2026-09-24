@@ -377,6 +377,10 @@ void UIManager::switchToTab(uint8_t index) {
     BoardHAL::displayFillScreen(0x0000);
     const uint32_t cleared_ms = millis();
 
+    // The cleared framebuffer also lost the camera stripe on the top layer.
+    // LVGL draws the dirty areas in this order: the stripe first, so its
+    // faded ends do not appear only after the Settings controls.
+    camera_indicator::invalidateVisible();
     const uint32_t child_count = lv_obj_get_child_count(tab_panels[index]);
     for (uint32_t i = 0; i < child_count; ++i) {
       lv_obj_t* child = lv_obj_get_child(tab_panels[index], static_cast<int32_t>(i));
@@ -384,8 +388,6 @@ void UIManager::switchToTab(uint8_t index) {
         lv_obj_invalidate(child);
       }
     }
-    // The cleared framebuffer also lost the camera stripe on the top layer.
-    camera_indicator::invalidateVisible();
 #endif
     lv_refr_now(disp);
 

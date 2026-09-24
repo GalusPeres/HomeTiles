@@ -92,6 +92,26 @@ int main() {
     assert(buildStatusJson(buffer, sizeof(buffer), paused) > 0);
     assert(std::string(buffer).find("paused") == std::string::npos);
   }
+  // Quarter-turn boards: the JPEG size as sent plus the clockwise turn the
+  // Bridge applies; landscape boards (0) send no field at all.
+  {
+    StatusFields turned;
+    turned.width = 544;
+    turned.height = 960;
+    turned.state = PublicState::Ready;
+    turned.rotate = 90;
+    char buffer[256];
+    assert(buildStatusJson(buffer, sizeof(buffer), turned) > 0);
+    const std::string text(buffer);
+    assert(text.find("\"width\":544,\"height\":960") != std::string::npos);
+    assert(text.find(",\"rotate\":90}") != std::string::npos);
+    turned.rotate = 0;
+    assert(buildStatusJson(buffer, sizeof(buffer), turned) > 0);
+    assert(std::string(buffer).find("rotate") == std::string::npos);
+    turned.rotate = 45;  // Not a quarter turn: never announced.
+    assert(buildStatusJson(buffer, sizeof(buffer), turned) > 0);
+    assert(std::string(buffer).find("rotate") == std::string::npos);
+  }
 
   SnapshotRequest request;
   assert(validateRequestFields(1, "snapshot", "00112233445566778899aabbccddeeff",

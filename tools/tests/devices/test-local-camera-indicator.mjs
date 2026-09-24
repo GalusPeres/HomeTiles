@@ -229,15 +229,29 @@ assert.match(indicator, /inline void poll\(lv_timer_t\*\) \{ refresh\(objects\(\
   const ui = read('src/ui/ui_manager.cpp');
   const partial = ui.slice(ui.indexOf('if (partial_settings_switch) {\n    lv_display_enable_invalidation(disp, true);'));
   assert.match(partial, /^if \(partial_settings_switch\) \{\s*lv_display_enable_invalidation\(disp, true\);\s*\/\/[^\n]*\n\s*camera_indicator::refreshNow\(\);/);
+  // Stripe first: LVGL draws the dirty areas in order, and b28 drew the faded
+  // ends only after the ~150 ms of Settings controls.
   assert.ok(partial.indexOf('BoardHAL::displayFillScreen(0x0000);') < partial.indexOf('camera_indicator::invalidateVisible();') &&
-    partial.indexOf('camera_indicator::invalidateVisible();') < partial.indexOf('lv_refr_now(disp);'));
+    partial.indexOf('camera_indicator::invalidateVisible();') < partial.indexOf('lv_obj_invalidate(child);') &&
+    partial.indexOf('lv_obj_invalidate(child);') < partial.indexOf('lv_refr_now(disp);'));
   assert.match(ui, /camera_indicator::refreshNow\(\);\s*lv_obj_invalidate\(lv_scr_act\(\)\);/);
   assert.match(indicator, /inline void invalidateVisible\(\) \{[\s\S]*?for \(lv_obj_t\* part : \{ui\.bar, ui\.left, ui\.right\}\) lv_obj_invalidate\(part\);/);
 }
 assert.match(indicator, /constexpr uint8_t kSettingsTab = 3;/);
 // Closed popups stay parked but visible on the top layer (b26 hid the pill for
 // good on the 8-inch and the V2): the shell and the screensaver decide.
-assert.match(indicator, /return tab != UINT8_MAX && tab != kSettingsTab && !popup_shell_active\(\) &&\s*!is_image_screensaver_visible\(\);/);
+assert.match(indicator, /return tab != UINT8_MAX && tab != kSettingsTab && !popup_shell_active\(\) &&\s*!image_screensaver_covers_ui\(\);/);
+// The screensaver covers the UI from its overlay's creation on, not only after
+// its ~0.5 s setup (b28 showed the pill over the opening screensaver).
+{
+  const saver = read('src/ui/screensaver/image_screensaver.cpp');
+  assert.match(saver, /bool image_screensaver_covers_ui\(\) \{\s*return g_opening \|\| g_state != nullptr;/);
+  const show = saver.slice(saver.indexOf('void show_image_screensaver() {'), saver.indexOf('void hide_image_screensaver() {'));
+  assert.ok(show.indexOf('g_opening = true;') < show.indexOf('st->overlay = lv_obj_create(lv_layer_top());'));
+  assert.match(show, /g_state = st;\s*g_opening = false;/);
+  assert.doesNotMatch(show.slice(show.indexOf('g_opening = true;'), show.indexOf('g_opening = false;')), /return;/,
+    'No early return leaves the flag set');
+}
 assert.doesNotMatch(indicator, /overlayOpen|lv_obj_get_child_count\(layer\);[\s\S]*LV_OBJ_FLAG_HIDDEN\)\) \{\s*return true;/,
   'No guess from the top-layer children');
 const shellSource = read('src/ui/popups/popup_shell.cpp');

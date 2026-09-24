@@ -105,7 +105,7 @@ assert.doesNotMatch(service, /freeStreamScale|run\.scale/, 'No stream scale buff
 // Stop order: sender, then sensor/CSI, then buffers.
 const run = svc('runStream');
 assert.ok(run.indexOf('local_camera_upload::stop();') < run.indexOf('if (sensor_started) stopStreaming();'));
-assert.ok(run.indexOf('if (sensor_started) stopStreaming();') < run.indexOf('g_isr.frozen = -1;\n  g_last_used_ms'));
+assert.ok(run.indexOf('if (sensor_started) stopStreaming();') < run.indexOf('g_isr.frozen = -1;\n  // After the sender stopped'));
 assert.match(run, /if \(local_camera_upload::waitIdle\(kSenderStopWaitMs\)\) \{\s*local_camera_upload::releaseBuffers\(\);/);
 assert.match(up('releaseBuffers'), /if \(g_busy\.load\(\)\) return;/, 'Slots stay while the sender may read them');
 
@@ -116,36 +116,38 @@ assert.doesNotMatch(captureFrame, /setStream\(|esp_cam_ctlr_start|esp_cam_ctlr_s
 assert.match(captureFrame, /g_isr\.armed = true;/);
 // The sensor turns by 180 degrees, mirrors and crops (a CPU pass took
 // ~107 ms, the PPA pass 45 ms per frame on the V2 and starved the display's
-// PPA rotation, hardware logs 2026-09-24): the encoder reads the frozen CSI
-// buffer, which is released only after the encode. Only a quarter-turn
-// mounting adds its fixed PPA turn, in a separate short arbiter hold that
-// frees the CSI buffer before the encode.
+// PPA rotation, hardware logs 2026-09-24; a quarter-turn PPA pass on the
+// 8-inch cost 29 ms per frame and made the display sluggish): the encoder
+// reads the frozen CSI buffer, which is released only after the encode. A
+// quarter-turn mounting is turned by the Bridge ("rotate" in the status).
 assert.match(captureFrame, /const uint8_t\* input = g_isr\.buffers\[frozen\];/);
 assert.match(captureFrame, /encodeStreamFrame\(input[\s\S]*?\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;/,
   'The CSI buffer is released after the encoder read it');
-assert.match(captureFrame, /if \(kQuarterTurn\) \{[\s\S]*?\{\s*Dma2dArbiterGuard guard\(kStreamArbiterTimeoutMs\);\s*locked = guard\.locked\(\);\s*if \(locked\) turned = turnFrame\(input\);\s*\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;\s*if \(!locked\) \+\+window\.arb;\s*if \(!turned\) return;\s*prep_ms = millis\(\) - turn_started_ms;\s*input = g_pipe\.turned;\s*\}/,
-  'The quarter turn has its own arbiter hold, frees the CSI buffer and feeds the encoder');
-assert.doesNotMatch(captureFrame, /downscale2x2Rgb565|compactCenterCrop|std::reverse|imageRotated180|mirror_x|ppa_do_scale_rotate_mirror/,
-  'No other pixel pass (CPU or PPA) in the stream path');
-// The quarter turn: non-blocking PPA with a bounded wait; a transform that
-// never finishes keeps its buffers and switches the camera off until restart.
-const turn = svc('turnFrame');
-assert.match(turn, /oper\.rotation_angle = PPA_SRM_ROTATION_ANGLE_270;/, 'Clockwise quarter turn');
-assert.match(turn, /oper\.in\.pic_w = kMode\.frame_width;[\s\S]*?oper\.out\.pic_w = kImageWidth;\s*oper\.out\.pic_h = kImageHeight;/);
-assert.match(turn, /oper\.mode = PPA_TRANS_MODE_NON_BLOCKING;/);
-assert.doesNotMatch(service, /PPA_TRANS_MODE_BLOCKING/, 'Never an unbounded blocking PPA call');
-assert.match(turn, /xSemaphoreTake\(g_pipe\.ppa_done, pdMS_TO_TICKS\(kTurnTimeoutMs\)\) == pdTRUE\) return true;\s*g_pipe\.ppa_wedged = true;/);
-const pipelineSetup = svc('ensurePipeline');
-assert.ok(pipelineSetup.indexOf('if (g_pipe.ppa_wedged) {') >= 0 &&
-  pipelineSetup.indexOf('if (g_pipe.ppa_wedged) {') < pipelineSetup.indexOf('if (g_pipe.ready) {'),
-  'A wedged PPA blocks every new pipeline, checked first');
-assert.match(pipelineSetup, /if \(kQuarterTurn\) \{[\s\S]*?ppa_register_client\([\s\S]*?ppa_client_register_event_callbacks\([\s\S]*?heap_caps_aligned_calloc\(kFrameBufferAlign, 1, kJpegInputBytes, MALLOC_CAP_SPIRAM\)/);
-assert.match(svc('releasePipeline'), /if \(g_pipe\.turned && !g_pipe\.ppa_wedged\) heap_caps_free\(g_pipe\.turned\);/);
-assert.match(service, /static_assert\(kQuarterTurn \? kMode\.frame_width == kMode\.image_height &&\s*kMode\.frame_height == kMode\.image_width\s*: kMode\.frame_width == kMode\.image_width &&\s*kMode\.frame_height == kMode\.image_height,/);
-// ISP statistics run on the frame as delivered (portrait on quarter-turn boards).
+assert.doesNotMatch(captureFrame, /downscale2x2Rgb565|compactCenterCrop|std::reverse|imageRotated180|mirror_x|ppa|kQuarterTurn/,
+  'No pixel pass (CPU or PPA) in the stream path');
+assert.doesNotMatch(service, /ppa_do_scale_rotate_mirror|turnFrame|g_pipe\.turned/, 'No PPA turn on the panel');
+assert.match(service, /static_assert\(kMode\.frame_width == kMode\.image_width &&\s*kMode\.frame_height == kMode\.image_height,/);
+// Quarter turn: 4:2:0 so the Bridge's lossless turn keeps a common format.
+assert.match(service, /constexpr jpeg_down_sampling_type_t kJpegSubsampling =\s*kQuarterTurn \? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;/);
+assert.equal((service.match(/config\.sub_sample = kJpegSubsampling;/g) || []).length, 2, 'Snapshot and stream');
+assert.doesNotMatch(service, /config\.sub_sample = JPEG_DOWN_SAMPLING/);
+assert.match(service, /constexpr uint16_t kStatusRotate = local_camera_board::kMode\.quarter_turn \? 90 : 0;/);
+assert.match(svc('currentStatusFields'), /fields\.rotate = kStatusRotate;/);
+// ISP statistics run on the frame as delivered.
 assert.match(svc('createAutoExposure'), /config\.window\.btm_right\.x = kStatsLeft \+ kStatsWidth;/);
 assert.match(service, /constexpr uint32_t kStatsWidth = kMode\.frame_width \/ 5 \* 5;/);
-// Orientation: display rotation and the mirror setting are sensor flips,
+// No frames (b28 on the 8-inch: after a quick stop/start every retry saw no
+// frame until the 30 s idle release): the run ends and the whole camera path
+// is rebuilt, the snapshot path likewise.
+assert.match(svc('resetAfterNoFrames'), /releaseAll\(\);/);
+assert.match(service, /constexpr uint16_t kNoFrameResetStreak = 12;/);
+assert.match(captureFrame, /\+\+window\.noframe;\s*if \(run\.noframe_streak < UINT16_MAX\) \+\+run\.noframe_streak;\s*return;\s*\}\s*run\.noframe_streak = 0;/);
+assert.match(run, /streamCaptureFrame\(run\);\s*if \(run\.noframe_streak >= kNoFrameResetStreak\) \{\s*reason = StopReason::Error;\s*no_frames = true;\s*break;/);
+assert.match(run, /logCaptureError\("Stream got no CSI frame", ESP_ERR_TIMEOUT\);\s*reason = StopReason::Error;\s*no_frames = true;/);
+assert.ok(run.indexOf('local_camera_upload::stop();') < run.indexOf('if (no_frames) resetAfterNoFrames("stream");') &&
+  run.indexOf('if (sensor_started) stopStreaming();') < run.indexOf('if (no_frames) resetAfterNoFrames("stream");'),
+  'Rebuild only after the sender and the sensor stopped');
+assert.match(svc('captureJpeg'), /resetAfterNoFrames\("snapshot"\);\s*\*detail = Detail::NoFrames;/);// Orientation: display rotation and the mirror setting are sensor flips,
 // written in standby before stream on and live between frames.
 assert.match(run, /applyOrientation\(false\)[\s\S]*?esp_cam_ctlr_start\([\s\S]*?setStream\(true\)/,
   'The stream starts in the wanted sensor orientation');

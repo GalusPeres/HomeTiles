@@ -34,8 +34,8 @@ exposure and colour, like on the OV02C10.
 
 - Portrait output 544x960 for the quarter-turn mounting: all 960 binned rows
   of the table window, 544 centred columns (`0x3808/0x3809 = 544`, ISP x offset
-  `0x3810/0x3811 = 372`). The camera core turns it into the 960x544 JPEG input
-  with one PPA pass.
+  `0x3810/0x3811 = 372`). The JPEG leaves the panel portrait; the Bridge turns it
+  into 960x544.
 - VTS 1640 (`0x380E/0x380F`) for 30 fps instead of 45 (less CSI/PSRAM traffic).
 - Manual exposure and analog gain after the Linux ov5647 driver: `0x3503 =
   0x03`, exposure `0x3500..0x3502` in 1/16 lines, gain `0x350A/0x350B` in 1/16
@@ -62,7 +62,7 @@ From `waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X`, example
   board (2026-09-24, 1280x720 window); the 544x960 window with the large ISP x
   offset is not exercised by the Waveshare example.
 - Mounting: the 8-inch board showed the scene's top at the left image edge in
-  landscape (a quarter turn, fixed by the clockwise PPA turn); the horizontal
+  landscape (a quarter turn, turned clockwise by the Bridge); the horizontal
   mirror state still needs a check.
 - Bayer phase under mirror/flip, black level (4 in 8-bit units, the OV5647
   default BLC target 0x10 of 1023) and the useful analog gain range.

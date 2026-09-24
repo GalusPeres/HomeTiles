@@ -363,7 +363,7 @@ inline void setVisible(Objects& ui, bool visible, bool with_pill) {
 inline bool pillAllowed() {
   const uint8_t tab = uiManager.activeTab();
   return tab != UINT8_MAX && tab != kSettingsTab && !popup_shell_active() &&
-         !is_image_screensaver_visible();
+         !image_screensaver_covers_ui();
 }
 
 // Popups and the screensaver are added to the same layer later: keep the pill

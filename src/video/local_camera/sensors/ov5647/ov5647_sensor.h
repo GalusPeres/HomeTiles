@@ -30,8 +30,8 @@ constexpr uint16_t kChipId = 0x5647;
 // 2-lane 24 MHz RAW10 mode: the vendored 1280x960 2x2-binning table plus the
 // HomeTiles window override (PROVENANCE.md). The Waveshare LCD-X front camera
 // sits a quarter turn from the landscape UI, so the sensor outputs a portrait
-// window with all 960 binned rows and 544 centred columns; the camera core
-// turns it into the 960x544 JPEG input. 30 fps instead of the table's 45
+// window with all 960 binned rows and 544 centred columns; the Bridge turns
+// the JPEG into 960x544. 30 fps instead of the table's 45
 // (less CSI and PSRAM traffic).
 constexpr uint32_t kFrameWidth = 544;
 constexpr uint32_t kFrameHeight = 960;

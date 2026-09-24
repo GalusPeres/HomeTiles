@@ -11,7 +11,9 @@
 //     also used by the display, so it is shared rather than reconfigured
 //   - GBRG Bayer order with the table's mirrored readout; display rotation
 //     and the mirror setting are sensor readout flips that keep GBRG
-//   - mounting in the landscape orientation still needs hardware confirmation
+//   - mounted a quarter turn from the landscape UI (confirmed on hardware):
+//     the sensor delivers a 544x960 portrait window that the PPA turns into
+//     the 960x544 JPEG input
 //   - black level: the OV5647 default BLC target 0x10 of 1023, 4 in 8-bit units
 
 #include "src/video/local_camera/camera_select.h"
@@ -33,13 +35,17 @@ inline constexpr local_camera::SensorMode kMode = {
     static_cast<uint8_t>(ov5647::kSccbAddress),
     static_cast<uint16_t>(ov5647::kFrameWidth),
     static_cast<uint16_t>(ov5647::kFrameHeight),
-    // The sensor window is the JPEG size (whole 16x8 MCUs), no crop.
-    static_cast<uint16_t>(ov5647::kFrameWidth),
+    // The portrait sensor window turned by 90 degrees: 960x544 (whole 16x8
+    // MCUs), no crop.
     static_cast<uint16_t>(ov5647::kFrameHeight),
+    static_cast<uint16_t>(ov5647::kFrameWidth),
     static_cast<uint8_t>(ov5647::kDataLanes),
     static_cast<uint16_t>(ov5647::kLaneBitRateMbps),
     true,   // The table reads out mirrored, like the Waveshare example.
     false,
+    // Mounted for the panel's native portrait orientation (hardware test
+    // 2026-09-24: the scene's top at the left image edge in landscape).
+    true,
     COLOR_RAW_ELEMENT_ORDER_GBRG,
     true,   // Stream-on enables line-sync packets (0x4800 = 0x14).
     4,

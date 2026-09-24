@@ -20,8 +20,10 @@
 //     fades out towards the stripe. A tap ends the running live stream and
 //     hides the pill; nothing is paused or stored, Home Assistant can open the
 //     camera again.
-// The stripe and fillets lie above the pill, and everything lies above every
-// screen, popup and the screensaver.
+// The stripe and fillets lie above the pill. The stripe lies above every
+// screen, popup and the screensaver. The pill belongs to the tile grids: it
+// hides on the Settings tab and while a popup, the PIN pad or the screensaver
+// is open on the top layer, so it never covers them.
 // Header-only; ui_manager.cpp owns the single instance.
 
 #include <Arduino.h>
@@ -41,6 +43,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/ui_manager.h"
 #include "src/video/local_camera/local_camera.h"
 
 namespace camera_indicator {
@@ -70,6 +73,8 @@ constexpr lv_opa_t kDiscOpa = 64;
 constexpr lv_opa_t kBorderOpa = kDiscOpa;
 // Coverage samples per pixel axis for the fillet edge (anti-aliasing).
 constexpr int kFilletSamples = 4;
+// Tabs 0-2 are the tile grids; the pill never shows on Settings.
+constexpr uint8_t kSettingsTab = 3;
 
 struct Objects {
   lv_obj_t* pill = nullptr;
@@ -349,6 +354,34 @@ inline void setVisible(Objects& ui, bool visible, bool with_pill) {
   }
 }
 
+inline bool isOwnPart(const Objects& ui, const lv_obj_t* obj) {
+  for (const lv_obj_t* part : {ui.pill, ui.frame_clip, ui.bar, ui.left, ui.right,
+                               ui.fillet_left, ui.fillet_right}) {
+    if (obj == part) return true;
+  }
+  return false;
+}
+
+// Popups (all built on popup_shell), the PIN pad and the screensaver overlay
+// live on the top layer and are hidden while closed.
+inline bool overlayOpen(const Objects& ui) {
+  lv_obj_t* layer = lv_layer_top();
+  const uint32_t children = lv_obj_get_child_count(layer);
+  for (uint32_t i = 0; i < children; ++i) {
+    lv_obj_t* child = lv_obj_get_child(layer, static_cast<int32_t>(i));
+    if (child && !isOwnPart(ui, child) && !lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// The pill only on a tile grid without anything open above it.
+inline bool pillAllowed(const Objects& ui) {
+  const uint8_t tab = uiManager.activeTab();
+  return tab != UINT8_MAX && tab != kSettingsTab && !overlayOpen(ui);
+}
+
 // Popups and the screensaver are added to the same layer later: keep the pill
 // and, above it, the stripe and fillets on top.
 inline void keepOnTop(Objects& ui) {
@@ -365,19 +398,7 @@ inline void keepOnTop(Objects& ui) {
   for (lv_obj_t* part : order) lv_obj_move_foreground(part);
 }
 
-// A popup or the screensaver overlay created on the top layer would cover
-// the indicator until the next poll: move it back up at once.
-inline void onTopLayerChanged(lv_event_t*) {
-  static bool busy = false;
-  Objects& ui = objects();
-  if (busy || !ui.pill || !ui.visible) return;
-  busy = true;
-  keepOnTop(ui);
-  busy = false;
-}
-
-inline void poll(lv_timer_t*) {
-  Objects& ui = objects();
+inline void refresh(Objects& ui) {
   const local_camera::IndicatorStyle style = local_camera::indicatorStyle();
   const bool visible =
       style != local_camera::IndicatorStyle::None && local_camera::indicatorActive();
@@ -385,11 +406,25 @@ inline void poll(lv_timer_t*) {
     if (!visible) return;
     create(ui);
   }
-  setVisible(ui, visible, style == local_camera::IndicatorStyle::Pill);
+  setVisible(ui, visible, style == local_camera::IndicatorStyle::Pill && pillAllowed(ui));
   if (!visible) return;
   updateShape(ui);
   keepOnTop(ui);
 }
+
+// A popup or the screensaver overlay opened or closed on the top layer: hide
+// or restore the pill and keep the stripe above it at once, not at the next
+// poll. The indicator's own changes re-enter here; busy stops that.
+inline void onTopLayerChanged(lv_event_t*) {
+  static bool busy = false;
+  Objects& ui = objects();
+  if (busy || !ui.pill || !ui.visible) return;
+  busy = true;
+  refresh(ui);
+  busy = false;
+}
+
+inline void poll(lv_timer_t*) { refresh(objects()); }
 
 }  // namespace detail
 

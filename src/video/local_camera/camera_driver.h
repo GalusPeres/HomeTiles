@@ -33,13 +33,17 @@ struct SensorMode {
   uint16_t frame_width;         // CSI RAW10 frame.
   uint16_t frame_height;
   uint16_t image_width;         // JPEG size; equal to the frame (the sensor window is
-                                // the JPEG size, this silicon has no ISP crop).
+                                // the JPEG size, this silicon has no ISP crop), or the
+                                // frame turned by 90 degrees with quarter_turn.
   uint16_t image_height;
   uint8_t data_lanes;
   uint16_t lane_bit_rate_mbps;
   bool mirror;                  // Board mounting, passed to loadDefaultMode().
   bool rotate_180;              // Board mounting in the default display orientation;
                                 // the core adds the active display rotation.
+  bool quarter_turn;            // Sensor mounted a quarter turn from the landscape
+                                // image: the PPA turns every portrait frame 90 degrees
+                                // clockwise before the JPEG encoder.
   color_raw_element_order_t bayer_order;  // Constant in every orientation; the sensor
                                           // compensates the phase.
   bool line_sync_packets;       // MIPI line start/end packets enabled by the mode.

@@ -108,8 +108,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Local camera (branch `local-camera-beta`)
 
 - Core `src/video/local_camera/` names no device/sensor; drivers `sensors/<name>/`, boards `src/devices/<device>/local_camera_board.*`; opt-in `local_cam_en`.
-- V2 OV02C10 (`HOMETILES_ISSUE38_BETA`): snapshots/720p stream via sensor flips, `HTCAMUP/1`. 8-inch OV5647 (`HOMETILES_CAMERA_BETA`) is mounted 90 degrees.
-- Open: int WDT saving during stream (MQTT heap walk suspected; storage hold mitigates); TEST `kChunkWindow = 2`.
+- V2 OV02C10 (`HOMETILES_ISSUE38_BETA`): 720p via sensor flips, `HTCAMUP/1`. 8-inch OV5647 (`HOMETILES_CAMERA_BETA`): quarter turn, 544x960 + PPA to 960x544.
+- Open: int WDT saving during stream (b26: MQTT heap walk max. every 100 ms; HW pending); TEST `kChunkWindow = 2`.
 
 ## Maintenance
 

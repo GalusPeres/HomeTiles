@@ -191,14 +191,20 @@ assert.match(capture, /Dma2dArbiterGuard guard\(\d+\);\s*if \(!guard\.locked\(\)
 // One encode for snapshots, one for the live stream; both under the arbiter.
 assert.equal((service.match(/jpeg_encoder_process\(/g) || []).length, 2);
 const streamEncode = body('encodeStreamFrame');
-// The stream encodes the frozen CSI buffer directly (the sensor delivers the
-// JPEG size and orientation): one short arbiter lease for the encode only, the
-// buffer is released after the encoder read it, and no PPA pass remains.
+// The stream encodes the frozen CSI buffer directly (the V2 sensor delivers
+// the JPEG size and orientation): one short arbiter lease for the encode only,
+// the buffer is released after the encoder read it. The only PPA pass is the
+// fixed turn of quarter-turn boards, and the V2 is not one.
 const streamCapture = body('streamCaptureFrame');
-assert.match(streamCapture, /Dma2dArbiterGuard guard\(kStreamArbiterTimeoutMs\);\s*if \(!guard\.locked\(\)\) \{[\s\S]*?\+\+window\.arb;[\s\S]*?encodeStreamFrame\(g_isr\.buffers\[frozen\], kFrameBytes, kImageWidth, kImageHeight,[\s\S]*?\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;/,
+assert.match(streamCapture, /const uint8_t\* input = g_isr\.buffers\[frozen\];/);
+assert.match(streamCapture, /Dma2dArbiterGuard guard\(kStreamArbiterTimeoutMs\);\s*if \(!guard\.locked\(\)\) \{[\s\S]*?\+\+window\.arb;[\s\S]*?encodeStreamFrame\(input, kJpegInputBytes, kImageWidth, kImageHeight,[\s\S]*?\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;/,
   'The stream encode reads the frozen CSI buffer inside one short arbiter lease and releases it afterwards');
-assert.doesNotMatch(noComments(service), /ppa_do_scale_rotate_mirror|ppaPrepareStreamFrame/,
-  'No PPA pass in the camera pipeline');
+assert.match(boardHeader, /false,\s*\/\/ Landscape sensor: the frame is the image, no PPA pass\./,
+  'The V2 sensor is not a quarter-turn mounting');
+assert.equal((noComments(service).match(/ppa_do_scale_rotate_mirror\(/g) || []).length, 1,
+  'One PPA call: the quarter-turn helper');
+assert.match(body('turnFrame'), /ppa_do_scale_rotate_mirror\(/);
+assert.doesNotMatch(noComments(service), /ppaPrepareStreamFrame/);
 assert.match(streamEncode, /jpeg_encoder_process\(/);
 assert.match(streamEncode, /jpeg_del_encoder_engine\(g_pipe\.jpeg\);[\s\S]*?\}\s*\}\s*if \(err != ESP_OK\)/,
   'A failed stream encode drops the engine while the arbiter is still held');

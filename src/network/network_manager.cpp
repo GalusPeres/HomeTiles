@@ -238,6 +238,28 @@ static size_t serviceMqttDmaHeadroom(uint32_t now_ms) {
 #endif
 }
 
+// heap_caps_get_largest_free_block() walks the whole internal heap under the
+// heap lock with interrupts masked on this core. The worker runs every 2 ms,
+// and a flash write from the other core must wait for this core (IDF flash
+// IPC); both interrupt watchdog crash dumps during Web Admin saves showed
+// this walk. The per-pass pressure check therefore reuses a recent result;
+// the gates in front of large transmissions still walk every time.
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+static constexpr uint32_t kMqttDmaPassCheckIntervalMs = 100;
+static uint32_t g_mqtt_dma_pass_checked_ms = 0;
+static size_t g_mqtt_dma_pass_largest = static_cast<size_t>(-1);
+
+static size_t serviceMqttDmaHeadroomPerPass(uint32_t now_ms) {
+  if (g_mqtt_dma_pass_checked_ms != 0 &&
+      static_cast<uint32_t>(now_ms - g_mqtt_dma_pass_checked_ms) < kMqttDmaPassCheckIntervalMs) {
+    return g_mqtt_dma_pass_largest;
+  }
+  g_mqtt_dma_pass_checked_ms = now_ms != 0 ? now_ms : 1;
+  g_mqtt_dma_pass_largest = serviceMqttDmaHeadroom(now_ms);
+  return g_mqtt_dma_pass_largest;
+}
+#endif
+
 static MqttOutboundCmd* mqttAllocOutbound(MqttCmdKind kind,
                                           const char* topic,
                                           const uint8_t* payload,
@@ -1238,8 +1260,9 @@ void HomeTilesNetworkManager::drainOutboundQueues(uint8_t max_commands) {
         static_cast<int32_t>(now_ms - g_mqtt_sdio_control_quiet_until) < 0;
     if (!control_quiet) g_mqtt_sdio_control_quiet_until = 0;
     // Release the reserve under acute pressure even without a waiting large
-    // request, giving the currently active SDIO RX path immediate headroom.
-    dma_largest = serviceMqttDmaHeadroom(now_ms);
+    // request, giving the currently active SDIO RX path headroom within
+    // kMqttDmaPassCheckIntervalMs.
+    dma_largest = serviceMqttDmaHeadroomPerPass(now_ms);
   }
 #endif
 

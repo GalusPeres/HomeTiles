@@ -28,11 +28,13 @@ constexpr uint32_t kSccbFrequencyHz = 100000;
 constexpr uint16_t kChipId = 0x5647;
 
 // 2-lane 24 MHz RAW10 mode: the vendored 1280x960 2x2-binning table plus the
-// HomeTiles window override (PROVENANCE.md). The sensor outputs exactly the
-// JPEG size, so no crop pass runs: 1280x720 from a centred 1452-row array
-// window, 30 fps instead of the table's 45 (less CSI and PSRAM traffic).
-constexpr uint32_t kFrameWidth = 1280;
-constexpr uint32_t kFrameHeight = 720;
+// HomeTiles window override (PROVENANCE.md). The Waveshare LCD-X front camera
+// sits a quarter turn from the landscape UI, so the sensor outputs a portrait
+// window with all 960 binned rows and 544 centred columns; the camera core
+// turns it into the 960x544 JPEG input. 30 fps instead of the table's 45
+// (less CSI and PSRAM traffic).
+constexpr uint32_t kFrameWidth = 544;
+constexpr uint32_t kFrameHeight = 960;
 constexpr uint32_t kDataLanes = 2;
 // Table pixel clock 88333333 Hz, RAW10 over two lanes (esp_cam_sensor:
 // OV5647_MIPI_CSI_LINE_RATE_1280x960_45FPS = 441.7 Mbit/s per lane).
@@ -73,7 +75,7 @@ class Sensor {
   // ACK probe followed by the chip-ID read. chip_id receives the raw value
   // even when it does not match kChipId.
   esp_err_t probe(uint16_t* chip_id);
-  // Software reset, 1280x960 table, 1280x720 window at 30 fps, manual
+  // Software reset, 1280x960 table, 544x960 window at 30 fps, manual
   // exposure, gain and white balance (the ISP pipeline owns them), stream off,
   // table-default mirror when mirror is set. The readout is then orientation
   // state 0.

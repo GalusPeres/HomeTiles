@@ -40,6 +40,7 @@ inline constexpr local_camera::SensorMode kMode = {
     static_cast<uint16_t>(ov02c10::kLaneBitRateMbps),
     true,
     false,
+    false,  // Landscape sensor: the frame is the image, no PPA pass.
     COLOR_RAW_ELEMENT_ORDER_GBRG,
     true,  // The table enables line-sync packets (0x4800 = 0x64).
     16,

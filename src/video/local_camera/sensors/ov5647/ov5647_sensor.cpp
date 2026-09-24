@@ -52,20 +52,25 @@ constexpr uint16_t kRegFrameLengthLow = 0x380f;
 constexpr uint16_t kRegTimingV = 0x3820;
 constexpr uint16_t kRegTimingH = 0x3821;
 constexpr uint8_t kTimingFlipBit = 0x02;
-// ISP window offsets inside the binned array window (table: 4 and 2). A flip
-// moves the window by one pixel so the Bayer phase (GBRG) stays the same, as
-// on the OV02C10.
+// ISP window offsets inside the binned array window (table: x 4, y 2). The x
+// offset centres the 544 columns (0x3810 holds its high bits). A flip moves
+// the window by one pixel so the Bayer phase (GBRG) stays the same, as on the
+// OV02C10.
+constexpr uint16_t kRegIspXOffsetHigh = 0x3810;
 constexpr uint16_t kRegIspXOffset = 0x3811;
 constexpr uint16_t kRegIspYOffset = 0x3813;
-constexpr uint8_t kOffsetX = 0x04;
-constexpr uint8_t kOffsetXMirrored = 0x05;
+// Binned input of the table: x 24..2599 -> 1288 columns, y 12..1943 -> 966 rows.
+constexpr uint32_t kBinnedWidth = 1288;
+constexpr uint32_t kBinnedHeight = 966;
+constexpr uint16_t kOffsetXCentred = (kBinnedWidth - kFrameWidth) / 2;  // 372, even like 4
+constexpr uint8_t kOffsetXHigh = static_cast<uint8_t>(kOffsetXCentred >> 8);
+constexpr uint8_t kOffsetX = static_cast<uint8_t>(kOffsetXCentred & 0xff);
+constexpr uint8_t kOffsetXMirrored = static_cast<uint8_t>((kOffsetXCentred + 1) & 0xff);
 constexpr uint8_t kOffsetY = 0x02;
 constexpr uint8_t kOffsetYFlipped = 0x03;
-// Binned input of the table: x 24..2599 -> 1288 columns; the HomeTiles y
-// window 252..1703 -> 726 rows.
-constexpr uint32_t kBinnedWidth = 1288;
-constexpr uint32_t kBinnedHeight = 726;
-static_assert(kOffsetXMirrored + kFrameWidth <= kBinnedWidth, "x window");
+static_assert(kOffsetXCentred % 2 == 0 && (kOffsetXCentred + 1) >> 8 == kOffsetXHigh,
+              "only the low offset byte changes with the mirror");
+static_assert(kOffsetXCentred + 1 + kFrameWidth <= kBinnedWidth, "x window");
 static_assert(kOffsetYFlipped + kFrameHeight <= kBinnedHeight, "y window");
 static_assert((kOffsetX & 1) != (kOffsetXMirrored & 1), "a mirror moves the x phase");
 static_assert((kOffsetY & 1) != (kOffsetYFlipped & 1), "a flip moves the y phase");
@@ -74,17 +79,17 @@ static_assert((kOffsetY & 1) != (kOffsetYFlipped & 1), "a flip moves the y phase
 // (0x0400); the ISP pipeline balances the colours like on the OV02C10.
 constexpr uint16_t kRegAwbManual = 0x3406;
 
-// HomeTiles overrides, not vendor data (PROVENANCE.md): 1280x720 output from a
-// centred window inside the table's y range 12..1943 (1452 array rows, even
-// start for the Bayer phase), VTS 1640 = 30 fps, manual AEC/AGC/AWB with a
+// HomeTiles overrides, not vendor data (PROVENANCE.md): 544x960 portrait
+// output inside the table's array window (all binned rows, centred columns
+// through the ISP x offset), VTS 1640 = 30 fps, manual AEC/AGC/AWB with a
 // full-frame default exposure at 1x gain.
 constexpr uint16_t kExposureReg = static_cast<uint16_t>(kDefaultExposureLines);
-const ov5647_reginfo_t kWindow1280x720[] = {
-    {0x3802, 0x00}, {0x3803, 0xfc},  // y start 252
-    {0x3806, 0x06}, {0x3807, 0xa7},  // y end 1703
-    {0x380a, 0x02}, {0x380b, 0xd0},  // y output size 720
+const ov5647_reginfo_t kWindow544x960[] = {
+    {0x3808, 0x02}, {0x3809, 0x20},  // x output size 544
+    {0x380a, 0x03}, {0x380b, 0xc0},  // y output size 960
     {kRegFrameLengthHigh, static_cast<uint8_t>(kFrameLengthLines >> 8)},
     {kRegFrameLengthLow, static_cast<uint8_t>(kFrameLengthLines & 0xff)},
+    {kRegIspXOffsetHigh, kOffsetXHigh},
     {kRegIspXOffset, kOffsetX},
     {kRegIspYOffset, kOffsetY},
     {kRegAecAgc, kAecAgcManual},
@@ -187,7 +192,7 @@ esp_err_t Sensor::loadDefaultMode(bool mirror) {
   if (err != ESP_OK) return err;
   err = write_table(this, ov5647_mipi_2lane_24Minput_1280x960_raw10_45fps, &Sensor::write);
   if (err != ESP_OK) return err;
-  err = write_table(this, kWindow1280x720, &Sensor::write);
+  err = write_table(this, kWindow544x960, &Sensor::write);
   if (err != ESP_OK) return err;
   err = setStream(false);
   if (err != ESP_OK) return err;
@@ -215,7 +220,7 @@ esp_err_t Sensor::setStream(bool enable) {
 esp_err_t Sensor::setOrientation(bool mirror, bool flip) {
   // mirror is relative to orientation state 0 (the board mirror). The x
   // offset follows the hardware mirror bit relative to the table readout,
-  // which is mirrored with offset 4; the table is not flipped (offset 2).
+  // which is mirrored with an even offset; the table is not flipped (offset 2).
   const bool mirrored = default_mirror_ != mirror;
   const uint8_t x = mirrored ? kOffsetX : kOffsetXMirrored;
   const uint8_t y = flip ? kOffsetYFlipped : kOffsetY;

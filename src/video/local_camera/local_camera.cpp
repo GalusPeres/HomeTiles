@@ -349,12 +349,26 @@ constexpr uint32_t kFrameBytes =
 constexpr uint32_t kImageWidth = kMode.image_width;
 constexpr uint32_t kImageHeight = kMode.image_height;
 // This silicon has no ISP crop and the JPEG encoder has no stride: the sensor
-// window must be the JPEG size.
-static_assert(kMode.frame_width == kMode.image_width &&
-                  kMode.frame_height == kMode.image_height,
+// window must be the JPEG size. A sensor mounted a quarter turn from the
+// landscape image delivers it portrait; one PPA pass turns it.
+constexpr bool kQuarterTurn = kMode.quarter_turn;
+static_assert(kQuarterTurn ? kMode.frame_width == kMode.image_height &&
+                                 kMode.frame_height == kMode.image_width
+                           : kMode.frame_width == kMode.image_width &&
+                                 kMode.frame_height == kMode.image_height,
               "the sensor must deliver the JPEG size");
 constexpr size_t kFrameBufferAlign = 128;
 constexpr uint32_t kJpegInputBytes = kImageWidth * kImageHeight * 2;
+static_assert(kJpegInputBytes % kFrameBufferAlign == 0, "turned frame must fill cache lines");
+// The PPA turns about 1 MB in a few tens of milliseconds; a transform that is
+// still running after this never completed.
+constexpr uint32_t kTurnTimeoutMs = 200;
+// ISP statistics see the frame as the sensor delivers it: 5x5 blocks over
+// the largest centred window whose sides are multiples of 5.
+constexpr uint32_t kStatsWidth = kMode.frame_width / 5 * 5;
+constexpr uint32_t kStatsHeight = kMode.frame_height / 5 * 5;
+constexpr uint32_t kStatsLeft = (kMode.frame_width - kStatsWidth) / 2;
+constexpr uint32_t kStatsTop = (kMode.frame_height - kStatsHeight) / 2;
 // Generously sized: an undersized hardware JPEG output buffer is unsafe.
 constexpr size_t kJpegOutputCapacity = kJpegInputBytes / 2;
 constexpr uint32_t kFirstFrameTimeoutMs = 600;
@@ -412,11 +426,14 @@ struct Pipeline {
   // statistics see it (sample point after gamma).
   uint8_t gamma_digital_step = 0;
   bool ae_after_gamma = false;
-  // Stream frame preparation on the PPA (crop, turn and scale in hardware).
+  // Quarter-turn boards only: the PPA turns each portrait frame into this
+  // JPEG input buffer.
   ppa_client_handle_t ppa = nullptr;
   SemaphoreHandle_t ppa_done = nullptr;
+  uint8_t* turned = nullptr;
   // A PPA transform that never finished may still own its buffers: they are
-  // kept (leaked) instead of reused until the next restart.
+  // kept (leaked) instead of reused, and the camera stays off until the next
+  // restart.
   bool ppa_wedged = false;
   bool ready = false;
 };
@@ -722,11 +739,13 @@ bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit) {
 }
 
 // Sensor-side orientation: the display rotation and the mirror setting become
-// sensor readout flips, so no pixel pass (PPA or CPU) ever turns the image.
+// sensor readout flips, so no pixel pass (PPA or CPU) turns or mirrors the
+// image; only a quarter-turn mounting adds its fixed PPA turn (turnFrame).
 // live: the sensor streams; the frames still in flight are dropped. Returns
 // false when the sensor did not confirm the registers.
 bool applyOrientation(bool live) {
-  const SensorOrientation wanted = desiredOrientation(imageRotated180(), g_mirror.load());
+  const SensorOrientation wanted =
+      desiredOrientation(imageRotated180(), g_mirror.load(), kQuarterTurn);
   const uint8_t code = orientationCode(wanted);
   if (code == g_applied_orientation) return true;
   esp_err_t err = g_sensor.setOrientation(wanted.mirror, wanted.flip);
@@ -795,6 +814,8 @@ void releasePipeline() {
     if (buffer && !g_pipe.ppa_wedged) heap_caps_free(buffer);
     buffer = nullptr;
   }
+  if (g_pipe.turned && !g_pipe.ppa_wedged) heap_caps_free(g_pipe.turned);
+  g_pipe.turned = nullptr;
   g_isr.buffer_bytes = 0;
   if (g_pipe.jpeg) {
     jpeg_del_encoder_engine(g_pipe.jpeg);
@@ -920,10 +941,10 @@ bool createAutoExposure(isp_ae_sample_point_t sample_point, uint32_t target) {
   esp_isp_ae_config_t config = {};
   config.sample_point = sample_point;
   // The whole frame: 5x5 blocks of exactly (width / 5) x (height / 5).
-  config.window.top_left.x = 0;
-  config.window.top_left.y = 0;
-  config.window.btm_right.x = kImageWidth;
-  config.window.btm_right.y = kImageHeight;
+  config.window.top_left.x = kStatsLeft;
+  config.window.top_left.y = kStatsTop;
+  config.window.btm_right.x = kStatsLeft + kStatsWidth;
+  config.window.btm_right.y = kStatsTop + kStatsHeight;
   if (esp_isp_new_ae_controller(g_pipe.isp, &config, &g_pipe.ae) != ESP_OK) {
     g_pipe.ae = nullptr;
     return false;
@@ -949,7 +970,60 @@ bool createJpegEncoder() {
   return true;
 }
 
+// PPA ISR: wakes turnFrame(); user_ctx is the semaphore in oper.user_data.
+bool IRAM_ATTR onPpaTransDone(ppa_client_handle_t, ppa_event_data_t*, void* user_ctx) {
+  SemaphoreHandle_t done = static_cast<SemaphoreHandle_t>(user_ctx);
+  if (!done) return false;
+  BaseType_t high_task_woken = pdFALSE;
+  xSemaphoreGiveFromISR(done, &high_task_woken);
+  return high_task_woken == pdTRUE;
+}
+
+// Quarter-turn boards: one PPA pass turns the portrait CSI frame clockwise
+// into the landscape JPEG input (g_pipe.turned). The caller holds the 2D-DMA
+// arbiter. False when the PPA rejected the frame or never finished it; the
+// latter marks the pipeline wedged.
+bool turnFrame(const uint8_t* frame) {
+  if (!g_pipe.ppa || !g_pipe.ppa_done || !g_pipe.turned || g_pipe.ppa_wedged) return false;
+  ppa_srm_oper_config_t oper = {};
+  oper.in.buffer = frame;
+  oper.in.pic_w = kMode.frame_width;
+  oper.in.pic_h = kMode.frame_height;
+  oper.in.block_w = kMode.frame_width;
+  oper.in.block_h = kMode.frame_height;
+  oper.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  oper.out.buffer = g_pipe.turned;
+  oper.out.buffer_size = kJpegInputBytes;
+  oper.out.pic_w = kImageWidth;
+  oper.out.pic_h = kImageHeight;
+  oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  // PPA angles are counterclockwise: 270 degrees is a clockwise quarter turn.
+  oper.rotation_angle = PPA_SRM_ROTATION_ANGLE_270;
+  oper.scale_x = 1.0f;
+  oper.scale_y = 1.0f;
+  oper.mode = PPA_TRANS_MODE_NON_BLOCKING;
+  oper.user_data = g_pipe.ppa_done;
+  xSemaphoreTake(g_pipe.ppa_done, 0);  // Drop a stale completion.
+  const esp_err_t err = ppa_do_scale_rotate_mirror(g_pipe.ppa, &oper);
+  if (err != ESP_OK) {
+    logCaptureError("PPA frame turn rejected", err);
+    return false;
+  }
+  if (xSemaphoreTake(g_pipe.ppa_done, pdMS_TO_TICKS(kTurnTimeoutMs)) == pdTRUE) return true;
+  g_pipe.ppa_wedged = true;
+  Serial.printf("[LocalCam] PPA frame turn did not finish in %u ms; camera off until restart\n",
+                static_cast<unsigned>(kTurnTimeoutMs));
+  return false;
+}
+
 bool ensurePipeline() {
+  if (g_pipe.ppa_wedged) {
+    // The stuck transform may still write its buffers: no new pipeline.
+    if (pipelineErrorLogDue()) {
+      Serial.println("[LocalCam] PPA did not finish a frame turn; camera off until restart");
+    }
+    return false;
+  }
   if (g_pipe.ready) {
     // After an encode failure only the engine was dropped; the buffers stay
     // allocated until the idle release in case the DMA still touched them.
@@ -1095,10 +1169,10 @@ bool ensurePipeline() {
     step = "white-balance statistics";
     esp_isp_awb_config_t awb = {};
     awb.sample_point = ISP_AWB_SAMPLE_POINT_BEFORE_CCM;
-    awb.window.top_left.x = 0;
-    awb.window.top_left.y = 0;
-    awb.window.btm_right.x = kImageWidth - 1;
-    awb.window.btm_right.y = kImageHeight - 1;
+    awb.window.top_left.x = kStatsLeft;
+    awb.window.top_left.y = kStatsTop;
+    awb.window.btm_right.x = kStatsLeft + kStatsWidth - 1;
+    awb.window.btm_right.y = kStatsTop + kStatsHeight - 1;
     awb.subwindow = awb.window;
     awb.white_patch.luminance.min = 30;
     awb.white_patch.luminance.max = 600;
@@ -1127,6 +1201,36 @@ bool ensurePipeline() {
     if (!g_pipe.jpeg_out || g_pipe.jpeg_capacity < kPanelMaxJpegBytes) {
       err = ESP_ERR_NO_MEM;
       break;
+    }
+
+    if (kQuarterTurn) {
+      step = "PPA client";
+      ppa_client_config_t ppa_config = {};
+      ppa_config.oper_type = PPA_OPERATION_SRM;
+      err = ppa_register_client(&ppa_config, &g_pipe.ppa);
+      if (err != ESP_OK) {
+        g_pipe.ppa = nullptr;
+        break;
+      }
+      if (!g_pipe.ppa_done) g_pipe.ppa_done = xSemaphoreCreateBinary();
+      if (!g_pipe.ppa_done) {
+        err = ESP_ERR_NO_MEM;
+        break;
+      }
+      // Non-blocking with a bounded wait: a blocking PPA call waits forever.
+      ppa_event_callbacks_t ppa_callbacks = {};
+      ppa_callbacks.on_trans_done = onPpaTransDone;
+      err = ppa_client_register_event_callbacks(g_pipe.ppa, &ppa_callbacks);
+      if (err != ESP_OK) break;
+      step = "turn buffer";
+      g_pipe.turned = static_cast<uint8_t*>(
+          heap_caps_aligned_calloc(kFrameBufferAlign, 1, kJpegInputBytes, MALLOC_CAP_SPIRAM));
+      if (!g_pipe.turned) {
+        err = ESP_ERR_NO_MEM;
+        break;
+      }
+      esp_cache_msync(g_pipe.turned, kJpegInputBytes,
+                      ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
     }
   } while (false);
 
@@ -1346,8 +1450,25 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
   }
 
   // The sensor delivered the JPEG size in the wanted orientation: the frozen
-  // CSI buffer is the JPEG input as it is. The CPU never touches it.
+  // CSI buffer is the JPEG input as it is, or after the PPA turn on
+  // quarter-turn boards. The CPU never touches it.
   const uint8_t* frame = g_isr.buffers[frozen];
+  if (kQuarterTurn) {
+    bool turned = false;
+    {
+      Dma2dArbiterGuard guard(500);
+      if (!guard.locked()) {
+        *detail = Detail::EncoderBusy;
+        return ErrorCode::EncoderBusy;
+      }
+      turned = turnFrame(frame);
+    }
+    if (!turned) {
+      *detail = Detail::EncoderBusy;
+      return ErrorCode::EncoderBusy;
+    }
+    frame = g_pipe.turned;
+  }
 
   const uint32_t encode_started_ms = millis();
   for (uint8_t quality : kJpegQualities) {
@@ -1786,9 +1907,28 @@ void streamCaptureFrame(StreamRun& run) {
     return;
   }
 
-  // Only the JPEG encoder uses the 2D-DMA pool (no PPA pass): one short
-  // hold per frame. When the display or the HA camera decoder has the pool,
-  // the frame is skipped instead of waited for.
+  // The JPEG encoder uses the 2D-DMA pool, on quarter-turn boards after one
+  // PPA turn in its own hold, so the display can flush in between. Short
+  // holds; when the display or the HA camera decoder has the pool, the frame
+  // is skipped instead of waited for.
+  const uint8_t* input = g_isr.buffers[frozen];
+  uint32_t prep_ms = 0;
+  if (kQuarterTurn) {
+    const uint32_t turn_started_ms = millis();
+    bool locked = false;
+    bool turned = false;
+    {
+      Dma2dArbiterGuard guard(kStreamArbiterTimeoutMs);
+      locked = guard.locked();
+      if (locked) turned = turnFrame(input);
+    }
+    // The PPA has read the CSI buffer; the ISR may write it again.
+    g_isr.frozen = -1;
+    if (!locked) ++window.arb;
+    if (!turned) return;
+    prep_ms = millis() - turn_started_ms;
+    input = g_pipe.turned;
+  }
   uint32_t size = 0;
   uint32_t encode_ms = 0;
   StreamEncode result = StreamEncode::Failed;
@@ -1801,15 +1941,14 @@ void streamCaptureFrame(StreamRun& run) {
     }
     const uint32_t encode_started_ms = millis();
     // The sensor delivered the JPEG size in the wanted orientation: the
-    // frozen CSI buffer is the encoder input as it is.
-    result = encodeStreamFrame(g_isr.buffers[frozen], kFrameBytes, kImageWidth, kImageHeight,
-                               run.quality, &size);
+    // frozen CSI buffer (or its turned copy) is the encoder input as it is.
+    result = encodeStreamFrame(input, kJpegInputBytes, kImageWidth, kImageHeight, run.quality,
+                               &size);
     encode_ms = millis() - encode_started_ms;
   }
   // The encoder has read the CSI buffer; the ISR may write it again.
   g_isr.frozen = -1;
   if (result != StreamEncode::Ok) return;
-  const uint32_t prep_ms = 0;  // No pixel pass before the encoder any more.
   ++window.encoded;
   ++run.encoded_total;
   window.encode_ms_total += encode_ms;

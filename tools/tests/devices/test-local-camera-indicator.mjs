@@ -112,7 +112,7 @@ assert.match(indicator, /if \(!visible\) return;\s*updateShape\(ui\);\s*keepOnTo
 // Style (Web Admin, experimental): none hides everything, line keeps only the
 // stripe, pill adds the pill, its fillets and border.
 assert.match(indicator, /const local_camera::IndicatorStyle style = local_camera::indicatorStyle\(\);\s*const bool visible =\s*style != local_camera::IndicatorStyle::None && local_camera::indicatorActive\(\);/);
-assert.match(indicator, /setVisible\(ui, visible, style == local_camera::IndicatorStyle::Pill\);/);
+assert.match(indicator, /setVisible\(ui, visible, style == local_camera::IndicatorStyle::Pill && pillAllowed\(ui\)\);/);
 assert.match(indicator, /for \(lv_obj_t\* part : \{ui\.bar, ui\.left, ui\.right\}\) setShown\(part, visible\);/);
 assert.match(indicator, /for \(lv_obj_t\* part : \{ui\.pill, ui\.frame_clip, ui\.fillet_left, ui\.fillet_right\}\) \{\s*setShown\(part, with_pill\);/);
 assert.match(indicator, /if \(radius == ui\.radius && fillet == ui\.fillet && border == ui\.border\) return;/);
@@ -215,10 +215,19 @@ assert.match(body('currentStatusFields'), /if \(g_ended_session\[0\] != '\\0'\) 
 assert.match(contract, /if \(isProtocolToken\(fields\.ended_session\) && !append\("ended", fields\.ended_session\)\)/);
 assert.doesNotMatch(service, /endedViewerActive|g_ended_seen_ms/);
 
-// Screensaver overlay and popups on the top layer never hide the indicator.
+// The stripe stays above popups and the screensaver; the pill belongs to the
+// tile grids and hides on Settings and under every open top-layer overlay.
 assert.match(indicator, /lv_obj_add_event_cb\(lv_layer_top\(\), detail::onTopLayerChanged, LV_EVENT_CHILD_CREATED, nullptr\);/);
 assert.match(indicator, /lv_obj_add_event_cb\(lv_layer_top\(\), detail::onTopLayerChanged, LV_EVENT_CHILD_CHANGED, nullptr\);/);
-assert.match(indicator, /if \(busy \|\| !ui\.pill \|\| !ui\.visible\) return;\s*busy = true;\s*keepOnTop\(ui\);\s*busy = false;/);
+assert.match(indicator, /if \(busy \|\| !ui\.pill \|\| !ui\.visible\) return;\s*busy = true;\s*refresh\(ui\);\s*busy = false;/);
+assert.match(indicator, /inline void poll\(lv_timer_t\*\) \{ refresh\(objects\(\)\); \}/);
+assert.match(indicator, /constexpr uint8_t kSettingsTab = 3;/);
+assert.match(indicator, /return tab != UINT8_MAX && tab != kSettingsTab && !overlayOpen\(ui\);/);
+assert.match(indicator, /if \(child && !isOwnPart\(ui, child\) && !lv_obj_has_flag\(child, LV_OBJ_FLAG_HIDDEN\)\) \{\s*return true;/,
+  'Any visible foreign top-layer child (popup, PIN, screensaver) hides the pill');
+for (const part of ['ui.pill', 'ui.frame_clip', 'ui.bar', 'ui.left', 'ui.right', 'ui.fillet_left', 'ui.fillet_right']) {
+  assert.ok(indicator.slice(indicator.indexOf('inline bool isOwnPart'), indicator.indexOf('inline bool overlayOpen')).includes(part), part);
+}
 
 // Encode only frames the sender can take: a pending frame is waited for (at
 // most one frame interval) instead of being replaced by a fresh encode.

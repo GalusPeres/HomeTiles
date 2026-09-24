@@ -411,6 +411,39 @@ int main() {
     assert(orientationCode(desiredOrientation(true, false)) == 3);
   }
 
+  // Quarter turn: the sensor flips before the clockwise PPA turn give the
+  // same 180 degree turn and horizontal mirror of the turned image.
+  {
+    constexpr int W = 5;  // Sensor frame; the turned image is H wide and W tall.
+    constexpr int H = 3;
+    for (int rotated = 0; rotated < 2; ++rotated) {
+      for (int user_mirror = 0; user_mirror < 2; ++user_mirror) {
+        const SensorOrientation o = desiredOrientation(rotated != 0, user_mirror != 0, true);
+        for (int r = 0; r < W; ++r) {
+          for (int c = 0; c < H; ++c) {
+            // Wanted: the unflipped turned image, turned by 180 and mirrored.
+            int br = r;
+            int bc = c;
+            if (rotated) {
+              br = W - 1 - br;
+              bc = H - 1 - bc;
+            }
+            if (user_mirror) bc = H - 1 - bc;
+            const int wanted = (H - 1 - bc) * W + br;
+            // Actual: the flipped readout, then the clockwise turn.
+            const int fy = H - 1 - c;
+            const int fx = r;
+            const int sy = o.flip ? H - 1 - fy : fy;
+            const int sx = o.mirror ? W - 1 - fx : fx;
+            assert(sy * W + sx == wanted);
+          }
+        }
+      }
+    }
+    assert(orientationCode(desiredOrientation(false, true, true)) == 2);
+    assert(orientationCode(desiredOrientation(true, false, true)) == 3);
+  }
+
   // Instant brightness: 0 leaves the curve alone; the post-gamma effect of
   // the gain equals the AE target change, so the auto exposure keeps it.
   assert(brightnessLinearGain(0, kGammaExponent) == 1.0f);

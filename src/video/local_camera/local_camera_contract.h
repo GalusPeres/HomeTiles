@@ -745,10 +745,19 @@ struct SensorOrientation {
   bool flip = false;
 };
 
-inline SensorOrientation desiredOrientation(bool rotated_180, bool user_mirror) {
+// quarter_turn: the frame is turned by 90 degrees after readout, so sensor
+// columns become image rows. An image mirror is then a sensor flip and the
+// other way round; 180 degrees stays both.
+inline SensorOrientation desiredOrientation(bool rotated_180, bool user_mirror,
+                                           bool quarter_turn = false) {
   SensorOrientation orientation;
   orientation.mirror = rotated_180 != user_mirror;
   orientation.flip = rotated_180;
+  if (quarter_turn) {
+    const bool mirror = orientation.mirror;
+    orientation.mirror = orientation.flip;
+    orientation.flip = mirror;
+  }
   return orientation;
 }
 

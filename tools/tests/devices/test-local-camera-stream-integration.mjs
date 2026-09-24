@@ -114,14 +114,37 @@ const captureFrame = svc('streamCaptureFrame');
 assert.doesNotMatch(captureFrame, /setStream\(|esp_cam_ctlr_start|esp_cam_ctlr_stop|stopStreaming/,
   'The sensor streams for the whole session, never per frame');
 assert.match(captureFrame, /g_isr\.armed = true;/);
-// The sensor turns, mirrors and crops (a CPU pass took ~107 ms, the PPA
-// pass 45 ms per frame on the V2 and starved the display's PPA rotation,
-// hardware logs 2026-09-24): the encoder reads the frozen CSI buffer, which
-// is released only after the encode.
-assert.match(captureFrame, /encodeStreamFrame\(g_isr\.buffers\[frozen\][\s\S]*?\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;/,
+// The sensor turns by 180 degrees, mirrors and crops (a CPU pass took
+// ~107 ms, the PPA pass 45 ms per frame on the V2 and starved the display's
+// PPA rotation, hardware logs 2026-09-24): the encoder reads the frozen CSI
+// buffer, which is released only after the encode. Only a quarter-turn
+// mounting adds its fixed PPA turn, in a separate short arbiter hold that
+// frees the CSI buffer before the encode.
+assert.match(captureFrame, /const uint8_t\* input = g_isr\.buffers\[frozen\];/);
+assert.match(captureFrame, /encodeStreamFrame\(input[\s\S]*?\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;/,
   'The CSI buffer is released after the encoder read it');
-assert.doesNotMatch(captureFrame, /downscale2x2Rgb565|compactCenterCrop|std::reverse|imageRotated180|mirror_x|ppa/,
-  'No pixel pass (CPU or PPA) in the stream path');
+assert.match(captureFrame, /if \(kQuarterTurn\) \{[\s\S]*?\{\s*Dma2dArbiterGuard guard\(kStreamArbiterTimeoutMs\);\s*locked = guard\.locked\(\);\s*if \(locked\) turned = turnFrame\(input\);\s*\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;\s*if \(!locked\) \+\+window\.arb;\s*if \(!turned\) return;\s*prep_ms = millis\(\) - turn_started_ms;\s*input = g_pipe\.turned;\s*\}/,
+  'The quarter turn has its own arbiter hold, frees the CSI buffer and feeds the encoder');
+assert.doesNotMatch(captureFrame, /downscale2x2Rgb565|compactCenterCrop|std::reverse|imageRotated180|mirror_x|ppa_do_scale_rotate_mirror/,
+  'No other pixel pass (CPU or PPA) in the stream path');
+// The quarter turn: non-blocking PPA with a bounded wait; a transform that
+// never finishes keeps its buffers and switches the camera off until restart.
+const turn = svc('turnFrame');
+assert.match(turn, /oper\.rotation_angle = PPA_SRM_ROTATION_ANGLE_270;/, 'Clockwise quarter turn');
+assert.match(turn, /oper\.in\.pic_w = kMode\.frame_width;[\s\S]*?oper\.out\.pic_w = kImageWidth;\s*oper\.out\.pic_h = kImageHeight;/);
+assert.match(turn, /oper\.mode = PPA_TRANS_MODE_NON_BLOCKING;/);
+assert.doesNotMatch(service, /PPA_TRANS_MODE_BLOCKING/, 'Never an unbounded blocking PPA call');
+assert.match(turn, /xSemaphoreTake\(g_pipe\.ppa_done, pdMS_TO_TICKS\(kTurnTimeoutMs\)\) == pdTRUE\) return true;\s*g_pipe\.ppa_wedged = true;/);
+const pipelineSetup = svc('ensurePipeline');
+assert.ok(pipelineSetup.indexOf('if (g_pipe.ppa_wedged) {') >= 0 &&
+  pipelineSetup.indexOf('if (g_pipe.ppa_wedged) {') < pipelineSetup.indexOf('if (g_pipe.ready) {'),
+  'A wedged PPA blocks every new pipeline, checked first');
+assert.match(pipelineSetup, /if \(kQuarterTurn\) \{[\s\S]*?ppa_register_client\([\s\S]*?ppa_client_register_event_callbacks\([\s\S]*?heap_caps_aligned_calloc\(kFrameBufferAlign, 1, kJpegInputBytes, MALLOC_CAP_SPIRAM\)/);
+assert.match(svc('releasePipeline'), /if \(g_pipe\.turned && !g_pipe\.ppa_wedged\) heap_caps_free\(g_pipe\.turned\);/);
+assert.match(service, /static_assert\(kQuarterTurn \? kMode\.frame_width == kMode\.image_height &&\s*kMode\.frame_height == kMode\.image_width\s*: kMode\.frame_width == kMode\.image_width &&\s*kMode\.frame_height == kMode\.image_height,/);
+// ISP statistics run on the frame as delivered (portrait on quarter-turn boards).
+assert.match(svc('createAutoExposure'), /config\.window\.btm_right\.x = kStatsLeft \+ kStatsWidth;/);
+assert.match(service, /constexpr uint32_t kStatsWidth = kMode\.frame_width \/ 5 \* 5;/);
 // Orientation: display rotation and the mirror setting are sensor flips,
 // written in standby before stream on and live between frames.
 assert.match(run, /applyOrientation\(false\)[\s\S]*?esp_cam_ctlr_start\([\s\S]*?setStream\(true\)/,
@@ -129,7 +152,7 @@ assert.match(run, /applyOrientation\(false\)[\s\S]*?esp_cam_ctlr_start\([\s\S]*?
 assert.match(run, /applyImageSettingsIfChanged\(\);\s*\/\/[^\n]*\n\s*if \(!applyOrientation\(true\)\) \{\s*reason = StopReason::Error;/,
   'A rotation or mirror change during the stream turns the sensor readout');
 const orientation = svc('applyOrientation');
-assert.match(orientation, /desiredOrientation\(imageRotated180\(\), g_mirror\.load\(\)\)/);
+assert.match(orientation, /desiredOrientation\(imageRotated180\(\), g_mirror\.load\(\), kQuarterTurn\)/);
 assert.match(orientation, /if \(code == g_applied_orientation\) return true;/, 'No SCCB write per frame');
 assert.match(orientation, /xQueueReset\(g_isr\.frames\);[\s\S]*?kOrientationSettleFrames/,
   'Frames in flight during a live change are dropped');

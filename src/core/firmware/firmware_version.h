@@ -11,13 +11,13 @@
 #if defined(DEVICE_GUITION_JC8012P4A1_V2) && \
     defined(HOMETILES_ISSUE38_BETA)
 #undef FW_VERSION
-#define FW_VERSION "v0.6.12b27"
+#define FW_VERSION "v0.6.12b28"
 #endif
 
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_8) && \
     defined(HOMETILES_CAMERA_BETA)
 #undef FW_VERSION
-#define FW_VERSION "v0.6.12b27"
+#define FW_VERSION "v0.6.12b28"
 #endif
 
 #ifndef FW_VERSION

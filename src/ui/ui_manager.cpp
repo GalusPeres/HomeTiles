@@ -361,6 +361,8 @@ void UIManager::switchToTab(uint8_t index) {
 
   if (partial_settings_switch) {
     lv_display_enable_invalidation(disp, true);
+    // Hides the camera pill now; hiding invalidates its area for this refresh.
+    camera_indicator::refreshNow();
 
     const uint32_t switch_started_ms = millis();
 #if defined(DEVICE_ESP32_S3_RGB_480)
@@ -382,6 +384,8 @@ void UIManager::switchToTab(uint8_t index) {
         lv_obj_invalidate(child);
       }
     }
+    // The cleared framebuffer also lost the camera stripe on the top layer.
+    camera_indicator::invalidateVisible();
 #endif
     lv_refr_now(disp);
 
@@ -402,6 +406,8 @@ void UIManager::switchToTab(uint8_t index) {
     return;
   }
 
+  // The camera pill comes back together with the tile grid, not a poll later.
+  camera_indicator::refreshNow();
   lv_obj_invalidate(lv_scr_act());
   if (disp) {
     lv_refr_now(disp);

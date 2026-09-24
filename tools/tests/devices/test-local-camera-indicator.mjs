@@ -221,6 +221,19 @@ assert.match(indicator, /lv_obj_add_event_cb\(lv_layer_top\(\), detail::onTopLay
 assert.match(indicator, /lv_obj_add_event_cb\(lv_layer_top\(\), detail::onTopLayerChanged, LV_EVENT_CHILD_CHANGED, nullptr\);/);
 assert.match(indicator, /if \(busy \|\| !ui\.pill \|\| !ui\.visible\) return;\s*busy = true;\s*refresh\(ui\);\s*busy = false;/);
 assert.match(indicator, /inline void poll\(lv_timer_t\*\) \{ refresh\(objects\(\)\); \}/);
+// Tab switches set the pill before the switch is drawn (b27 hid it one poll
+// later, visibly over the Settings page), and the partial Settings refresh
+// after the framebuffer clear redraws the stripe (b27 kept only the pieces
+// above the Settings controls on the 8-inch).
+{
+  const ui = read('src/ui/ui_manager.cpp');
+  const partial = ui.slice(ui.indexOf('if (partial_settings_switch) {\n    lv_display_enable_invalidation(disp, true);'));
+  assert.match(partial, /^if \(partial_settings_switch\) \{\s*lv_display_enable_invalidation\(disp, true\);\s*\/\/[^\n]*\n\s*camera_indicator::refreshNow\(\);/);
+  assert.ok(partial.indexOf('BoardHAL::displayFillScreen(0x0000);') < partial.indexOf('camera_indicator::invalidateVisible();') &&
+    partial.indexOf('camera_indicator::invalidateVisible();') < partial.indexOf('lv_refr_now(disp);'));
+  assert.match(ui, /camera_indicator::refreshNow\(\);\s*lv_obj_invalidate\(lv_scr_act\(\)\);/);
+  assert.match(indicator, /inline void invalidateVisible\(\) \{[\s\S]*?for \(lv_obj_t\* part : \{ui\.bar, ui\.left, ui\.right\}\) lv_obj_invalidate\(part\);/);
+}
 assert.match(indicator, /constexpr uint8_t kSettingsTab = 3;/);
 // Closed popups stay parked but visible on the top layer (b26 hid the pill for
 // good on the 8-inch and the V2): the shell and the screensaver decide.

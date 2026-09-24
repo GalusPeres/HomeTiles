@@ -412,6 +412,28 @@ inline void poll(lv_timer_t*) { refresh(objects()); }
 
 }  // namespace detail
 
+// Tab switches: apply the pill rule before the switch is drawn; the poll
+// would show or hide the pill one poll later, visibly over the new page.
+// Call with display invalidation enabled, so a hidden pill's area is redrawn.
+// LVGL task only.
+inline void refreshNow() {
+  if (!local_camera::supported()) return;
+  detail::refresh(detail::objects());
+}
+
+// The Settings switch clears the framebuffer and redraws only its own
+// controls: redraw the visible indicator parts as well, or the stripe keeps
+// only the pieces above those controls. LVGL task only.
+inline void invalidateVisible() {
+  detail::Objects& ui = detail::objects();
+  if (!ui.pill || !ui.visible) return;
+  for (lv_obj_t* part : {ui.bar, ui.left, ui.right}) lv_obj_invalidate(part);
+  if (!ui.with_pill) return;
+  for (lv_obj_t* part : {ui.pill, ui.frame_clip, ui.fillet_left, ui.fillet_right}) {
+    lv_obj_invalidate(part);
+  }
+}
+
 // Starts the poll timer on devices with a built-in camera. LVGL task only.
 inline void init() {
   static bool started = false;

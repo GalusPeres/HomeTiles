@@ -762,14 +762,24 @@
       border-radius:18px;
       padding:20px;
     }
-    .global-settings-fields {
+    /* One row per setting: label left, control right (Tile Settings rows). */
+    .global-settings-rows {
       display:grid;
-      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
-      gap:0 20px;
-      align-items:start;
+      grid-template-columns:minmax(110px, 170px) minmax(0, 1fr);
+      gap:10px 16px;
+      align-items:center;
+      max-width:560px;
     }
-    .global-settings-field .inline-checkbox:first-child { margin-top:0; }
-    .global-radius-field { display:flex; align-items:center; gap:8px; margin-bottom:10px; height:38px; }
+    .global-settings-panel .global-settings-label {
+      margin:0;
+      color:var(--text);
+      font-size:14px;
+      font-weight:600;
+    }
+    .global-settings-control { display:flex; align-items:center; height:38px; }
+    .global-settings-control input[type="checkbox"] { width:18px; height:18px; margin:0; accent-color:var(--accent); }
+    .global-settings-rows .tile-color-row { margin:0; }
+    .global-radius-field { display:flex; align-items:center; gap:8px; height:38px; }
     .global-radius-field input[type="range"] { flex:1 1 auto; min-width:0; height:18px; margin:0; accent-color:var(--accent); }
     .global-radius-field input[type="range"]:focus { outline:none; box-shadow:none; }
     .global-radius-field input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
@@ -2357,7 +2367,7 @@
 
 /* Per-tile icon colors in the tile editor: the fixed icon color uses the
    tile color row; color rules are operator, value, color and remove. */
-.tile-icon-color-fields input[type="color"][data-unset="1"] { opacity:.4; }
+/* An unset icon color shows the default white icon color at full strength. */
 .tile-icon-rule {
   display:grid;
   grid-template-columns:minmax(84px,1fr) minmax(0,1.3fr) 44px 38px;

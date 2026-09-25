@@ -115,9 +115,10 @@ assert.match(read('src/web/assets/admin.css'), /\.icon-discs-off \.tile\.sensor-
 // labeled radius field and the tile Color field with its reset button.
 for (const marker of [
   'html += "<section class=\\"global-settings-panel\\"><h3>";',
-  '"<label class=\\"inline-checkbox\\"><input class=\\"normal-tile-border-toggle\\" "',
-  'html += "</label></div><div class=\\"global-settings-field\\"><label for=\\"" + radius_id + "\\">";',
-  'html += "</span></div><div class=\\"tile-color-row\\"><input class=\\"global-tile-color\\" type=\\"color\\" value=\\"";',
+  'html += "</h3><div class=\\"global-settings-rows\\"><label class=\\"global-settings-label\\" for=\\"" +',
+  'html += "</label><div class=\\"global-settings-control\\"><input class=\\"normal-tile-border-toggle\\" id=\\"" +',
+  'html += "></div><label class=\\"global-settings-label\\" for=\\"" + radius_id + "\\">";',
+  'html += "</label><div class=\\"tile-color-row\\"><input class=\\"global-tile-color\\" id=\\"" + color_id +',
   '"<button type=\\"button\\" class=\\"tile-color-reset-btn\\" title=\\"Reset\\" "',
   'static_cast<unsigned>(tile_color::kDefault));',
   '<label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";',
@@ -127,7 +128,7 @@ assert.match(css, /\.global-settings-panel \{\s*flex:0 0 100%;\s*box-sizing:bord
   'Same card as the Tile Settings panel');
 assert.ok(css.includes('.tile-settings label, .global-settings-panel label { font-size:12px; margin-bottom:4px; }'));
 assert.ok(css.includes('.tile-settings h3, .global-settings-panel h3 { margin:0 0 14px; color:var(--text); font-size:17px; }'));
-assert.match(css, /\.global-settings-fields \{\s*display:grid;\s*grid-template-columns:repeat\(auto-fit, minmax\(180px, 1fr\)\);/,
+assert.match(css, /\.global-settings-rows \{\s*display:grid;\s*grid-template-columns:minmax\(110px, 170px\) minmax\(0, 1fr\);/,
   'The global fields wrap on narrow widths');
 
 // A stored built-in default grey (older editors saved it explicitly) follows

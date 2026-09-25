@@ -831,25 +831,30 @@ static void appendTileTabHTML(
     // Global display settings in the Tile Settings card style: the same
     // heading, checkbox rows, labeled fields and color field with reset.
     const DeviceConfig& display = configManager.getConfig();
+    // One row per setting: the label on the left, the control on the right,
+    // like the label/field rows in Tile Settings.
+    const String borders_id = tab_id + "_global_tile_borders";
+    const String discs_id = tab_id + "_global_icon_discs";
+    const String radius_id = tab_id + "_global_tile_radius";
+    const String color_id = tab_id + "_global_tile_color";
     html += "<section class=\"global-settings-panel\"><h3>";
     appendHtmlEscaped(html, tr.global_settings_heading);
-    html += "</h3><div class=\"global-settings-fields\"><div class=\"global-settings-field\">"
-            "<label class=\"inline-checkbox\"><input class=\"normal-tile-border-toggle\" "
-            "type=\"checkbox\" onchange=\"saveNormalTileBorders(this.checked)\"";
-    if (display.tile_borders) html += " checked";
-    html += "> ";
+    html += "</h3><div class=\"global-settings-rows\"><label class=\"global-settings-label\" for=\"" +
+            borders_id + "\">";
     appendHtmlEscaped(html, tr.screensaver_tile_border);
-    html += "</label><label class=\"inline-checkbox\"><input class=\"global-icon-disc-toggle\" "
-            "type=\"checkbox\" onchange=\"saveIconDiscs(this.checked)\"";
-    if (display.icon_discs) html += " checked";
-    html += "> ";
+    html += "</label><div class=\"global-settings-control\"><input class=\"normal-tile-border-toggle\" id=\"" +
+            borders_id + "\" type=\"checkbox\" onchange=\"saveNormalTileBorders(this.checked)\"";
+    if (display.tile_borders) html += " checked";
+    html += "></div><label class=\"global-settings-label\" for=\"" + discs_id + "\">";
     appendHtmlEscaped(html, tr.icon_discs);
-    const String radius_id = tab_id + "_global_tile_radius";
-    html += "</label></div><div class=\"global-settings-field\"><label for=\"" + radius_id + "\">";
+    html += "</label><div class=\"global-settings-control\"><input class=\"global-icon-disc-toggle\" id=\"" +
+            discs_id + "\" type=\"checkbox\" onchange=\"saveIconDiscs(this.checked)\"";
+    if (display.icon_discs) html += " checked";
+    html += "></div><label class=\"global-settings-label\" for=\"" + radius_id + "\">";
     appendHtmlEscaped(html, tr.tile_radius);
     html += "</label><div class=\"global-radius-field\">";
     append_radius_input(radius_id);
-    html += "</div></div><div class=\"global-settings-field\"><div class=\"tile-color-label-row\"><span>";
+    html += "</div><label class=\"global-settings-label\" for=\"" + color_id + "\">";
     appendHtmlEscaped(html, tr.default_tile_color);
     char default_color_hex[8];
     snprintf(default_color_hex, sizeof(default_color_hex), "#%06X",
@@ -857,14 +862,15 @@ static void appendTileTabHTML(
     char factory_color_hex[8];
     snprintf(factory_color_hex, sizeof(factory_color_hex), "#%06X",
              static_cast<unsigned>(tile_color::kDefault));
-    html += "</span></div><div class=\"tile-color-row\"><input class=\"global-tile-color\" type=\"color\" value=\"";
+    html += "</label><div class=\"tile-color-row\"><input class=\"global-tile-color\" id=\"" + color_id +
+            "\" type=\"color\" value=\"";
     html += default_color_hex;
     html += "\" oninput=\"previewDefaultTileColor(this.value)\" "
             "onchange=\"saveDefaultTileColor(this.value)\">"
             "<button type=\"button\" class=\"tile-color-reset-btn\" title=\"Reset\" "
             "onclick=\"saveDefaultTileColor('";
     html += factory_color_hex;
-    html += "')\"><i class=\"mdi mdi-restore\"></i></button></div></div></div></section>\n";
+    html += "')\"><i class=\"mdi mdi-restore\"></i></button></div></div></section>\n";
     html += R"html(            <p class="hint">)html";
   } else {
     html += R"html(            <div class="folder-footer-options">

@@ -1229,6 +1229,10 @@ void DeviceGuitionJC4880P443Portrait::prepareForRestart() {
   gpio_set_level(kBacklightPin, kBacklightActiveLow ? 1 : 0);
 }
 
+i2c_master_bus_handle_t DeviceGuitionJC4880P443Portrait::sharedI2cBus() {
+  return g_i2c_ready ? g_i2c.bus : nullptr;
+}
+
 bool DeviceGuitionJC4880P443Portrait::initSDCard() {
   if (g_sd_available && GuitionPortraitSDMMC.cardType() != CARD_NONE) {
     return true;

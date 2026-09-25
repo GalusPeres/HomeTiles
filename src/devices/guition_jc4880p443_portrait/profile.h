@@ -1,8 +1,17 @@
 #pragma once
 
+#include "src/devices/device_select.h"
 #include "src/devices/device_types.h"
 
 namespace DeviceGuitionJC4880P443PortraitProfile {
+
+// Optional OV02C10 on the CSI connector: enabled only in camera beta builds
+// (HOMETILES_LOCAL_CAMERA in device_select.h) until hardware validation.
+#if defined(HOMETILES_LOCAL_CAMERA)
+inline constexpr bool kBuiltinCamera = true;
+#else
+inline constexpr bool kBuiltinCamera = false;
+#endif
 
 inline constexpr Device::Profile kProfile{
     "guition_jc4880p443_portrait",
@@ -20,7 +29,7 @@ inline constexpr Device::Profile kProfile{
     Device::RotationStepMode::FlipOnly,
     0,
     2,
-    Device::Capabilities{false, false, false, false, true, false},
+    Device::Capabilities{false, false, false, false, true, false, kBuiltinCamera},
     Device::kNoHardwareIoProfile,
 };
 

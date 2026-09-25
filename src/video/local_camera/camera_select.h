@@ -23,6 +23,46 @@
 #define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/m5stacks_tab5/local_camera_board.h"
 #endif
 
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_7)
+#define HOMETILES_CAMERA_SENSOR_OV5647 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_touch_lcd_7/local_camera_board.h"
+#endif
+
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
+#define HOMETILES_CAMERA_SENSOR_OV5647 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_touch_lcd_10_1/local_camera_board.h"
+#endif
+
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_7B)
+#define HOMETILES_CAMERA_SENSOR_OV5647 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_touch_lcd_7b/local_camera_board.h"
+#endif
+
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3)
+#define HOMETILES_CAMERA_SENSOR_OV5647 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_touch_lcd_4_3/local_camera_board.h"
+#endif
+
+#if defined(DEVICE_WAVESHARE_4B)
+#define HOMETILES_CAMERA_SENSOR_OV5647 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_4b/local_camera_board.h"
+#endif
+
+#if defined(DEVICE_GUITION_JC8012P4A1)
+#define HOMETILES_CAMERA_SENSOR_OV02C10 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/guition_jc8012p4a1/local_camera_board.h"
+#endif
+
+#if defined(DEVICE_GUITION_JC1060P470C_V2)
+#define HOMETILES_CAMERA_SENSOR_OV02C10 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/guition_jc1060p470c_v2/local_camera_board.h"
+#endif
+
+#if defined(DEVICE_GUITION_JC4880P443_PORTRAIT)
+#define HOMETILES_CAMERA_SENSOR_OV02C10 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/guition_jc4880p443_portrait/local_camera_board.h"
+#endif
+
 #if !defined(HOMETILES_LOCAL_CAMERA_BOARD)
 #error "HOMETILES_LOCAL_CAMERA is set but no camera board file is selected"
 #endif

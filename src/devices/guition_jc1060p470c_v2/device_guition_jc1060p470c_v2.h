@@ -2,10 +2,23 @@
 
 #include <FS.h>
 
+#include "src/devices/device_select.h"
 #include "src/devices/device_types.h"
 #include "src/devices/guition_jc1060p470c_v2/hardware_io_profile.h"
 
+// Same typedef as ESP-IDF's i2c_types.h; host tests include this header
+// without the IDF drivers.
+typedef struct i2c_master_bus_t* i2c_master_bus_handle_t;
+
 namespace DeviceGuitionJC1060P470CV2 {
+
+// Optional OV02C10 on the CSI connector: enabled only in camera beta builds
+// (HOMETILES_LOCAL_CAMERA in device_select.h) until hardware validation.
+#if defined(HOMETILES_LOCAL_CAMERA)
+inline constexpr bool kBuiltinCamera = true;
+#else
+inline constexpr bool kBuiltinCamera = false;
+#endif
 
 inline constexpr Device::Profile kProfile{
     "guition_jc1060p470c_v2",
@@ -23,7 +36,7 @@ inline constexpr Device::Profile kProfile{
     Device::RotationStepMode::FlipOnly,
     0,
     0,
-    Device::Capabilities{false, false, false, false, false, false},
+    Device::Capabilities{false, false, false, false, false, false, kBuiltinCamera},
     kHardwareIoProfile,
 };
 
@@ -66,6 +79,9 @@ void displayPowerSaveOn();
 void displayPowerSaveOff();
 void displayWaitDisplay();
 void prepareForRestart();
+
+// The board I2C bus (touch, camera SCCB) once init() created it, else nullptr.
+i2c_master_bus_handle_t sharedI2cBus();
 
 bool initSDCard();
 bool storageReady();

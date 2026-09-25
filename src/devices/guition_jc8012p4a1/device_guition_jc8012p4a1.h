@@ -2,10 +2,19 @@
 
 #include <FS.h>
 
+#include "src/devices/device_select.h"
 #include "src/devices/device_types.h"
 #include "src/devices/guition_jc8012p4a1/hardware_io_profile.h"
 
 namespace DeviceGuitionJC8012P4A1 {
+
+// Built-in OV02C10 camera: enabled only in camera beta builds
+// (HOMETILES_LOCAL_CAMERA in device_select.h) until hardware validation.
+#if defined(HOMETILES_LOCAL_CAMERA)
+inline constexpr bool kBuiltinCamera = true;
+#else
+inline constexpr bool kBuiltinCamera = false;
+#endif
 
 inline constexpr Device::Profile kProfile{
     "guition_jc8012p4a1",
@@ -23,7 +32,7 @@ inline constexpr Device::Profile kProfile{
     Device::RotationStepMode::FlipOnly,
     0,
     2,
-    Device::Capabilities{false, false, false, false, false, false},
+    Device::Capabilities{false, false, false, false, false, false, kBuiltinCamera},
     kHardwareIoProfile,
 };
 

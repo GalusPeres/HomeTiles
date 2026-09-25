@@ -32,6 +32,7 @@ constexpr int kPanelPowerLdoVoltageMv = 3300;
 Arduino_ESP32DSIPanel* g_dsi_panel = nullptr;
 Arduino_DSI_Display* g_gfx = nullptr;
 esp_lcd_touch_handle_t g_touch = nullptr;
+i2c_master_bus_handle_t g_i2c_bus = nullptr;
 esp_ldo_channel_handle_t g_panel_power_ldo = nullptr;
 
 uint8_t g_brightness = 150;
@@ -261,6 +262,7 @@ bool init_touch() {
   }
 
   DEV_I2C_Port port = DEV_I2C_Init();
+  g_i2c_bus = port.bus;
   g_touch = touch_gt911_init(port);
   if (!g_touch) {
     Serial.println("[Device/Waveshare4B] Touch init failed");
@@ -470,6 +472,10 @@ void DeviceWaveshare4B::prepareForRestart() {
                     static_cast<unsigned>(hold_err));
     }
   }
+}
+
+i2c_master_bus_handle_t DeviceWaveshare4B::sharedI2cBus() {
+  return g_i2c_bus;
 }
 
 bool DeviceWaveshare4B::initSDCard() {

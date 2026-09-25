@@ -1,7 +1,9 @@
 # OV02C10 sensor data for the built-in camera
 
 Compiled only for boards that select `HOMETILES_CAMERA_SENSOR_OV02C10` in
-`src/video/local_camera/camera_select.h` (first: Guition JC8012P4A1 V2).
+`src/video/local_camera/camera_select.h` (first: Guition JC8012P4A1 V2; camera
+beta builds also the V1 and the CSI connectors of the JC1060P470C V2 and the
+JC4880P443).
 
 ## Source
 
@@ -39,6 +41,13 @@ OV5640-style AE-target and banding registers (`0x3A0x`, `0x3C0x`, PLL reads at
   own oscillator.
 - The format entry declares 1 MIPI data lane at 400 Mbit/s, RAW10, Bayer GBRG,
   VTS 1164, HTS 2280. The demo enables horizontal mirror.
+
+The V1 bundle contains the same demo archive. Guition's official
+JC1060P470C_I_W_Y and JC4880P443C_I_W packages (`guitionofficial/P4-series`
+commit `9f1510954d281e30b19cd8baf115e2ed2a65a90a`) use the same SCCB port,
+pins and frequency, no reset or power-down pin, the OV02C10 and LDO channel 3
+at 2500 mV; their demos build the one-lane 1920x1080 table, and the JC4880
+demo turns the frame 270 degrees onto its portrait panel.
 
 ## Assumptions that still need hardware confirmation
 

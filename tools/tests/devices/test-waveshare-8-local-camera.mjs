@@ -133,7 +133,7 @@ assert.doesNotMatch(boardCpp, /i2c_new_master_bus|esp_ldo_channel_adjust_voltage
 assert.match(deviceCpp, /i2c_master_bus_handle_t DeviceWaveshareTouchLCD8::sharedI2cBus\(\) \{\s*return g_i2c_ready \? g_i2c\.bus : nullptr;/);
 assert.match(deviceHeader, /#if defined\(HOMETILES_LOCAL_CAMERA\)\ninline constexpr bool kBuiltinCamera = true;\n#else\ninline constexpr bool kBuiltinCamera = false;\n#endif/);
 assert.match(deviceHeader, /Device::Capabilities\{false, false, false, false, true, false, kBuiltinCamera\}/);
-assert.match(version, /#if defined\(DEVICE_WAVESHARE_TOUCH_LCD_8\) && \\\n    defined\(HOMETILES_CAMERA_BETA\)\n#undef FW_VERSION/);
+assert.match(version, /#if defined\(HOMETILES_CAMERA_BETA\)\n#undef FW_VERSION/);
 
 // Normal 8-inch builds keep the camera out; camera beta builds enable it.
 const cc = ['clang', 'gcc'].find(candidate => spawnSync(candidate, ['--version']).status === 0);
@@ -144,7 +144,7 @@ if (cc) {
   for (const [defines, expected] of [
     [['-DDEVICE_WAVESHARE_TOUCH_LCD_8'], false],
     [['-DDEVICE_WAVESHARE_TOUCH_LCD_8', '-DHOMETILES_CAMERA_BETA'], true],
-    [['-DDEVICE_WAVESHARE_TOUCH_LCD_7', '-DHOMETILES_CAMERA_BETA'], false],
+    [['-DDEVICE_GUITION_JC1060P470C', '-DHOMETILES_CAMERA_BETA'], false],
   ]) {
     const result = spawnSync(cc, ['-E', '-P', '-x', 'c++', '-DHOMETILES_CI_TARGET', ...defines,
       '-I', root, probe], {encoding: 'utf8'});

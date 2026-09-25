@@ -4,6 +4,10 @@
 
 #include "src/devices/waveshare_touch_lcd_7/profile.h"
 
+// Same typedef as ESP-IDF's i2c_types.h; host tests include this header
+// without the IDF drivers.
+typedef struct i2c_master_bus_t* i2c_master_bus_handle_t;
+
 namespace DeviceWaveshareTouchLCD7 {
 
 inline constexpr Device::Profile kProfile =
@@ -36,6 +40,8 @@ void displayPowerSaveOn();
 void displayPowerSaveOff();
 void displayWaitDisplay();
 void prepareForRestart();
+// The board I2C bus (touch, camera SCCB) once init() created it, else nullptr.
+i2c_master_bus_handle_t sharedI2cBus();
 bool initSDCard();
 bool storageReady();
 fs::FS& storageFS();

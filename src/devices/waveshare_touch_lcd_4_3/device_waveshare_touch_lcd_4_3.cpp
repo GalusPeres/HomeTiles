@@ -1313,6 +1313,10 @@ void DeviceWaveshareTouchLCD4_3::prepareForRestart() {
   gpio_set_level(kBacklightPin, kBacklightActiveLow ? 1 : 0);
 }
 
+i2c_master_bus_handle_t DeviceWaveshareTouchLCD4_3::sharedI2cBus() {
+  return g_i2c_ready ? g_i2c.bus : nullptr;
+}
+
 bool DeviceWaveshareTouchLCD4_3::initSDCard() {
   if (g_sd_available && WaveshareSDMMC.cardType() != CARD_NONE) {
     return true;

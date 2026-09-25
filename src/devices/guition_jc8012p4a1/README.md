@@ -37,7 +37,22 @@ HomeTiles' display rotation.
   screensaver and screenshot paths. The existing one-time migration copies only
   legacy `/_tile_grids`, `/_tile_links` and `/icons` data to LittleFS.
 - SD mount first uses 40MHz high-speed mode and retries at 20MHz default speed.
-- Audio, RTC, camera and battery reporting are not enabled yet.
+- Audio, RTC and battery reporting are not enabled yet.
+
+## Built-in camera (camera beta builds only)
+
+The V1 board carries the same OV02C10 camera as the V2 on connector FPC5;
+Guition's V1 `video_lcd_display` demo is the archive the V2 sensor data comes
+from. Only camera beta builds (`HOMETILES_CAMERA_BETA`) compile the capture
+path, and the user enables it in Web Admin Settings. The board file is
+`local_camera_board.cpp`; sensor data and open assumptions are in
+`src/video/local_camera/sensors/ov02c10/PROVENANCE.md`.
+
+- SCCB 0x36 shares the GSL3680 touch bus (SDA 7, SCL 8); no reset, power-down
+  or XCLK pin, so "off" means software standby
+- V2 capture mode and mounting defaults; orientation, the fitted module and a
+  combined stream plus Web OTA soak on the Issue #30 SDIO path are pending
+  hardware checks
 
 The device target has been validated on real hardware through
 [HomeTiles issue #5](https://github.com/GalusPeres/HomeTiles/issues/5):

@@ -1,8 +1,9 @@
 # OV5647 sensor data for the built-in camera
 
 Compiled only for boards that select `HOMETILES_CAMERA_SENSOR_OV5647` in
-`src/video/local_camera/camera_select.h` (first: Waveshare
-ESP32-P4-WIFI6-Touch-LCD-8, camera beta builds only).
+`src/video/local_camera/camera_select.h`, camera beta builds only (first:
+Waveshare ESP32-P4-WIFI6-Touch-LCD-8; also the 7-inch and 10.1-inch front
+cameras and the OV5647 modules on the CSI connectors of the 7B-C, 4.3-C and 4B).
 
 ## Source
 
@@ -55,6 +56,10 @@ From `waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X`, example
 - `reset_pin = -1`, `pwdn_pin = -1`, no XCLK: the module carries its own
   24 MHz clock.
 - 2 MIPI data lanes; the example uses the esp_cam_sensor OV5647 driver.
+- The 7-inch and 10.1-inch share the LCD-X schematic (camera connectors J3
+  and J5, the 8-inch J6). The 4B, 4.3-inch and 7B schematics wire their 15-pin
+  CSI connector the same way: SCCB on GPIO 7/8, CSI_IO0 pulled up, no XCLK,
+  reset or power-down line, VDD_MIPI_DPHY on LDO channel 3 at 2500 mV.
 
 ## Assumptions that still need hardware confirmation
 
@@ -64,5 +69,8 @@ From `waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X`, example
 - Mounting: the 8-inch board showed the scene's top at the left image edge in
   landscape (a quarter turn, turned clockwise by the Bridge); the horizontal
   mirror state still needs a check.
+- The other OV5647 boards start with the 8-inch mode and mounting; their
+  orientation, mirror and, for loose modules, the 24 MHz module clock are
+  unconfirmed.
 - Bayer phase under mirror/flip, black level (4 in 8-bit units, the OV5647
   default BLC target 0x10 of 1023) and the useful analog gain range.

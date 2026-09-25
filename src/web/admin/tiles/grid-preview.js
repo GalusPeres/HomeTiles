@@ -153,7 +153,7 @@
     if (!el || !record || typeof iconColorTilePreviewTint !== 'function') return;
     const tint = iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta);
     if (!tint) return;
-    const rgb = String(getComputedStyle(el).backgroundColor || '').match(/(d+)D+(d+)D+(d+)/);
+    const rgb = String(getComputedStyle(el).backgroundColor || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
     const base = rgb ? '#' + [rgb[1], rgb[2], rgb[3]].map(v => Number(v).toString(16).padStart(2, '0')).join('') : '#2A2A2A';
     el.style.background = tileTintBackground(base, tint.color, tint.percent);
   }

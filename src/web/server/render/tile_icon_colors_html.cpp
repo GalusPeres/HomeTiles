@@ -70,8 +70,7 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
   html += "_tile_icon_source_section\">\n";
   html += R"html(                <div class="tile-settings-group">)html";
   appendHtmlEscaped(html, tr.tile_rules);
-  html += "</div>
-";
+  html += "</div>\n";
   html += R"html(                <input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_rules_on" value="0">

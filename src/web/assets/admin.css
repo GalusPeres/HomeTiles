@@ -542,6 +542,18 @@
     .local-camera-custom[hidden] { display:none; }
     .local-camera-custom .local-camera-slider { grid-template-columns:minmax(72px, 150px) minmax(0, 1fr) 44px; }
     .local-camera-indicator .settings-checkbox:has(input:disabled) { opacity:.45; }
+    /* Built-in camera: the fine-tuning controls (rotation, mirror, red/blue
+       swap, image) in a collapsed Advanced block below the two groups. The
+       summary reads like the sub-headings, with a chevron instead of the
+       native marker. */
+    .local-camera-advanced { border-top:1px solid #232323; padding-top:16px; }
+    .local-camera-advanced > summary { display:flex; align-items:center; gap:8px; width:max-content; max-width:100%; cursor:pointer; list-style:none; }
+    .local-camera-advanced > summary::-webkit-details-marker { display:none; }
+    .local-camera-advanced > summary::before { content:""; width:6px; height:6px; border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(-45deg); transition:transform .15s; }
+    .local-camera-advanced[open] > summary { margin-bottom:16px; }
+    .local-camera-advanced[open] > summary::before { transform:rotate(45deg); }
+    .local-camera-advanced > summary:hover { color:var(--text-2); }
+    .local-camera-advanced > summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:4px; }
     .local-camera-slider { display:grid; grid-template-columns:minmax(72px, 110px) minmax(0, 1fr) 44px; align-items:center; gap:12px; margin:0; font-size:14px; color:var(--text); }
     @media (max-width: 780px) { .local-camera-image { grid-template-columns:minmax(0, 1fr); } }
     .local-camera-slider span { min-width:0; overflow-wrap:anywhere; }

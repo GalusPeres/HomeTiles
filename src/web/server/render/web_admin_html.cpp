@@ -225,9 +225,9 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
               </div>
               <div class="local-camera-group" id="local_camera_stream">
                 <div class="network-settings-heading">)html";
-  // Two columns: the live stream (mode, Custom sliders, mirror) on the left,
-  // the experimental indicator on the right, the image controls below over
-  // the full width. Narrow screens stack them (.settings-grid).
+  // Two columns: the live stream (mode, Custom sliders) on the left, the
+  // experimental indicator on the right, the collapsed Advanced block below
+  // over the full width. Narrow screens stack them (.settings-grid).
   appendHtmlEscaped(html, tr.local_camera_stream_section);
   html += R"html(</div>
                 <div>
@@ -284,14 +284,6 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
                                 local_camera_stream::kMaxQuality, custom.quality);
   html += R"html(
                 </div>
-                <label class="settings-checkbox">
-                  <input type="checkbox" id="local_camera_mirror" onchange="saveLocalCameraMirror(this.checked)")html";
-  if (local_camera::mirror()) html += " checked";
-  html += R"html(>
-                  <span>)html";
-  appendHtmlEscaped(html, tr.local_camera_mirror);
-  html += R"html(</span>
-                </label>
               </div>
               <div class="local-camera-group local-camera-indicator" id="local_camera_indicator">
                 <div class="network-settings-heading">)html";
@@ -319,6 +311,57 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
                   </label>
                 <div class="settings-note">)html";
   appendHtmlEscaped(html, tr.local_camera_indicator_note);
+  html += R"html(</div>
+              </div>
+              <details class="settings-full local-camera-advanced" id="local_camera_advanced">
+                <summary class="network-settings-heading">)html";
+  // Fine-tuning controls, collapsed by default: rotation and mirror (left),
+  // red/blue swap (right), the image controls below. Every control keeps
+  // saving immediately through /api/local-camera.
+  appendHtmlEscaped(html, tr.local_camera_advanced);
+  html += R"html(</summary>
+                <div class="settings-grid">
+              <div class="local-camera-group" id="local_camera_orientation">
+                <div>
+                <label for="local_camera_rotation">)html";
+  appendHtmlEscaped(html, tr.local_camera_rotation);
+  html += R"html(:</label>
+                <select id="local_camera_rotation" onchange="saveLocalCameraRotation(this.value)">)html";
+  const uint8_t rotation = local_camera::rotation();
+  for (uint8_t turns = 0; turns <= local_camera_contract::kRotationMax; ++turns) {
+    html += R"html(
+                  <option value=")html";
+    html += String(static_cast<unsigned>(turns));
+    html += "\"";
+    if (turns == rotation) html += " selected";
+    html += ">";
+    // Clockwise degrees: untranslated numbers.
+    html += String(static_cast<unsigned>(turns) * 90u);
+    html += "\xC2\xB0</option>";
+  }
+  html += R"html(
+                </select>
+                </div>
+                <label class="settings-checkbox">
+                  <input type="checkbox" id="local_camera_mirror" onchange="saveLocalCameraMirror(this.checked)")html";
+  if (local_camera::mirror()) html += " checked";
+  html += R"html(>
+                  <span>)html";
+  appendHtmlEscaped(html, tr.local_camera_mirror);
+  html += R"html(</span>
+                </label>
+              </div>
+              <div class="local-camera-group" id="local_camera_color">
+                <label class="settings-checkbox">
+                  <input type="checkbox" id="local_camera_rb_swap" onchange="saveLocalCameraRbSwap(this.checked)")html";
+  if (local_camera::redBlueSwap()) html += " checked";
+  html += R"html(>
+                  <span>)html";
+  appendHtmlEscaped(html, tr.local_camera_rb_swap);
+  html += R"html(</span>
+                </label>
+                <div class="settings-note">)html";
+  appendHtmlEscaped(html, tr.local_camera_rb_swap_note);
   html += R"html(</div>
               </div>
               <div class="settings-full local-camera-image" id="local_camera_image">
@@ -351,6 +394,8 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
   html += R"html(</button>
                 </div>
               </div>
+                </div>
+              </details>
             </div>
           </div>
 )html";

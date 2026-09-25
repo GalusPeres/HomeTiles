@@ -121,6 +121,19 @@ class ScopedStorageHold {
 bool mirror();
 // Persists the mirror setting; the next frame uses it. Loop task only.
 bool setMirror(bool mirror);
+// Stored user rotation: clockwise quarter turns (0..3) on top of the board's
+// default orientation.
+uint8_t rotation();
+// Validates (0..local_camera_contract::kRotationMax) and persists the
+// rotation. The 180 degree part is a sensor flip from the next frame on; the
+// quarter turn is announced in the retained status, which is republished so
+// the Bridge turns the JPEGs accordingly. Loop task only.
+bool setRotation(uint8_t quarter_turns);
+// Stored red/blue swap for boards whose colours come out exchanged.
+bool redBlueSwap();
+// Persists it; the ISP uses the swapped Bayer order from the next capture or
+// stream start on. Loop task only.
+bool setRedBlueSwap(bool swap);
 // Stored user image controls (brightness, contrast, saturation, red, blue).
 local_camera_contract::ImageSettings imageSettings();
 // Clamps, persists the changed keys and applies them live: the worker pushes

@@ -55,6 +55,10 @@ constexpr char kPrefsEnabledKey[] = "local_cam_en";
 // Live-stream mode id (local_camera_stream::kModes, 0 = Auto), u8.
 constexpr char kPrefsStreamModeKey[] = "lcam_mode";
 constexpr char kPrefsMirrorKey[] = "lcam_mirror";
+// User rotation: clockwise quarter turns 0..3 (kRotationMax), u8.
+constexpr char kPrefsRotationKey[] = "lcam_rot";
+// Red/blue swap for boards whose colours come out exchanged, bool.
+constexpr char kPrefsRbSwapKey[] = "lcam_rbswap";
 // On-display indicator style (IndicatorStyle as uint8_t).
 constexpr char kPrefsIndicatorKey[] = "lcam_ind";
 // Custom stream mode (local_camera_stream::kModeCustom): frames per second and
@@ -128,13 +132,10 @@ constexpr bool kSupported = false;
 constexpr const char* kSensorName = local_camera_board::kMode.name;
 constexpr uint16_t kStatusWidth = local_camera_board::kMode.image_width;
 constexpr uint16_t kStatusHeight = local_camera_board::kMode.image_height;
-// Clockwise turn the Bridge applies to every JPEG (quarter-turn mounting).
-constexpr uint16_t kStatusRotate = local_camera_board::kMode.quarter_turn ? 90 : 0;
 #else
 constexpr const char* kSensorName = "";
 constexpr uint16_t kStatusWidth = 0;
 constexpr uint16_t kStatusHeight = 0;
-constexpr uint16_t kStatusRotate = 0;
 #endif
 
 std::atomic<bool> g_enabled{false};
@@ -170,6 +171,14 @@ std::atomic<uint8_t> g_custom_quality{local_camera_stream::CustomMode{}.quality}
 }
 // Horizontal mirror of the delivered image (Web Admin setting).
 std::atomic<bool> g_mirror{false};
+// User rotation in clockwise quarter turns, 0..kRotationMax (Web Admin
+// setting). The worker reads it per frame (applyOrientation()), the loop task
+// for the retained status.
+std::atomic<uint8_t> g_rotation{0};
+// Red and blue exchanged in the ISP Bayer order (Web Admin setting); read by
+// the worker when it builds the pipeline, i.e. from the next capture or stream
+// start on.
+std::atomic<bool> g_rb_swap{false};
 // Pause from Home Assistant (Bridge switch): no capture at all, but the
 // camera stays announced to the Bridge. RAM-only.
 std::atomic<bool> g_paused{false};
@@ -284,11 +293,23 @@ String deviceTopic(const char* leaf, const char* id = nullptr) {
   networkManager.mqttEnqueuePublish(topic.c_str(), payload, false);
 }
 
+// Clockwise turn the Bridge applies to every JPEG: the quarter turn left from
+// the board mounting and the user rotation. The 180 degree part (and the
+// display rotation, which only adds 180 degree steps) is a sensor flip.
+uint16_t statusRotate() {
+#if defined(HOMETILES_LOCAL_CAMERA)
+  return statusRotateDegrees(
+      imageTurn(false, local_camera_board::kMode.quarter_turn, g_rotation.load()));
+#else
+  return 0;
+#endif
+}
+
 StatusFields currentStatusFields() {
   StatusFields fields;
   fields.width = kStatusWidth;
   fields.height = kStatusHeight;
-  fields.rotate = kStatusRotate;
+  fields.rotate = statusRotate();
   if (g_ended_session[0] != '\0') fields.ended_session = g_ended_session;
   if (!g_enabled.load()) {
     fields.state = PublicState::Disabled;
@@ -475,6 +496,20 @@ bool imageRotated180() {
   const uint8_t turns = static_cast<uint8_t>(
       (displayManager.getRotation() + 4u - Device::kRotationDefault) & 3u);
   return kMode.rotate_180 != (turns == 2);
+}
+
+// The Bayer order with red and blue exchanged; the green sites stay. The
+// demosaic then gives the red sites' samples to blue and the other way round,
+// so the white balance statistics, the colour matrix and the user red/blue
+// controls all work on the corrected channels.
+color_raw_element_order_t redBlueSwapped(color_raw_element_order_t order) {
+  switch (order) {
+    case COLOR_RAW_ELEMENT_ORDER_RGGB: return COLOR_RAW_ELEMENT_ORDER_BGGR;
+    case COLOR_RAW_ELEMENT_ORDER_BGGR: return COLOR_RAW_ELEMENT_ORDER_RGGB;
+    case COLOR_RAW_ELEMENT_ORDER_GRBG: return COLOR_RAW_ELEMENT_ORDER_GBRG;
+    case COLOR_RAW_ELEMENT_ORDER_GBRG: return COLOR_RAW_ELEMENT_ORDER_GRBG;
+  }
+  return order;
 }
 
 // Sensor readout orientation last written (orientationCode), or unknown.
@@ -773,15 +808,17 @@ bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit) {
   return true;
 }
 
-// Sensor-side orientation: the display rotation and the mirror setting become
-// sensor readout flips, so no pixel pass (PPA or CPU) ever turns the image.
-// A quarter-turn mounting maps the mirror to the other sensor flip; the
-// Bridge turns the JPEG afterwards.
+// Sensor-side orientation: the display rotation, the 180 degree part of the
+// user rotation and the mirror setting become sensor readout flips, so no
+// pixel pass (PPA or CPU) ever turns the image. When the Bridge turns the
+// JPEG by a quarter (mounting or user rotation, see statusRotate()), the
+// mirror maps to the other sensor flip.
 // live: the sensor streams; the frames still in flight are dropped. Returns
 // false when the sensor did not confirm the registers.
 bool applyOrientation(bool live) {
+  const ImageTurn turn = imageTurn(imageRotated180(), kQuarterTurn, g_rotation.load());
   const SensorOrientation wanted =
-      desiredOrientation(imageRotated180(), g_mirror.load(), kQuarterTurn);
+      desiredOrientation(turn.rotated_180, g_mirror.load(), turn.quarter_turn);
   const uint8_t code = orientationCode(wanted);
   if (code == g_applied_orientation) return true;
   esp_err_t err = g_sensor.setOrientation(wanted.mirror, wanted.flip);
@@ -1116,6 +1153,9 @@ bool ensurePipeline() {
     isp_config.h_res = kMode.frame_width;
     isp_config.v_res = kMode.frame_height;
     isp_config.bayer_order = kMode.bayer_order;
+    // User red/blue swap: the pipeline is built for every capture and stream
+    // start (releaseUsedPipeline()), so a change applies from the next start.
+    if (g_rb_swap.load()) isp_config.bayer_order = redBlueSwapped(isp_config.bayer_order);
     err = esp_isp_new_processor(&isp_config, &g_pipe.isp);
     if (err != ESP_OK) {
       g_pipe.isp = nullptr;
@@ -2082,7 +2122,7 @@ uint32_t runStream() {
       }
       // User image settings take effect with the next captured frame.
       applyImageSettingsIfChanged();
-      // A display rotation or mirror change turns the sensor readout.
+      // A display or user rotation or a mirror change turns the sensor readout.
       if (!applyOrientation(true)) {
         reason = StopReason::Error;
         break;
@@ -2391,6 +2431,10 @@ void begin() {
     stored = prefs.getBool(kPrefsEnabledKey, false);
     mode = prefs.getUChar(kPrefsStreamModeKey, local_camera_stream::kModeAuto);
     g_mirror.store(prefs.getBool(kPrefsMirrorKey, false));
+    // Unknown rotations (e.g. from a newer firmware) fall back to none.
+    const uint8_t rotation = prefs.getUChar(kPrefsRotationKey, 0);
+    g_rotation.store(rotation <= kRotationMax ? rotation : 0);
+    g_rb_swap.store(prefs.getBool(kPrefsRbSwapKey, false));
     // Unknown styles (e.g. from a newer firmware) fall back to the default.
     const uint8_t style =
         prefs.getUChar(kPrefsIndicatorKey, static_cast<uint8_t>(IndicatorStyle::Pill));
@@ -2698,6 +2742,10 @@ void appendStatusJson(String& json) {
   json += g_paused.load() ? "true" : "false";
   json += ",\"mirror\":";
   json += g_mirror.load() ? "true" : "false";
+  json += ",\"rotation\":";
+  json += String(static_cast<unsigned>(g_rotation.load()));
+  json += ",\"rb_swap\":";
+  json += g_rb_swap.load() ? "true" : "false";
   json += ",\"indicator\":";
   json += String(static_cast<unsigned>(g_indicator_style.load()));
   {
@@ -2765,10 +2813,10 @@ bool stopStreamForTransportRecovery() {
 
 uint8_t streamMode() { return g_stream_mode.load(); }
 
-// The picture Home Assistant shows: a quarter-turn board's JPEG turned.
+// The picture Home Assistant shows: the JPEG as turned by the Bridge.
 uint16_t imageWidth() {
 #if defined(HOMETILES_LOCAL_CAMERA)
-  return static_cast<uint16_t>(kQuarterTurn ? kImageHeight : kImageWidth);
+  return static_cast<uint16_t>(statusRotate() != 0 ? kImageHeight : kImageWidth);
 #else
   return 0;
 #endif
@@ -2776,7 +2824,7 @@ uint16_t imageWidth() {
 
 uint16_t imageHeight() {
 #if defined(HOMETILES_LOCAL_CAMERA)
-  return static_cast<uint16_t>(kQuarterTurn ? kImageWidth : kImageHeight);
+  return static_cast<uint16_t>(statusRotate() != 0 ? kImageWidth : kImageHeight);
 #else
   return 0;
 #endif
@@ -2844,6 +2892,67 @@ bool setMirror(bool mirror) {
   return true;
 #else
   (void)mirror;
+  return false;
+#endif
+}
+
+uint8_t rotation() { return g_rotation.load(); }
+
+bool setRotation(uint8_t quarter_turns) {
+#if defined(HOMETILES_LOCAL_CAMERA)
+  if (quarter_turns > kRotationMax) return false;
+  if (quarter_turns == g_rotation.load()) return true;
+  {
+    Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
+    BatchedNvsWrite::Preferences prefs;
+    if (!prefs.begin(kPrefsNamespace, false)) {
+      Serial.println("[LocalCam] Could not open preferences");
+      return false;
+    }
+    const bool written = prefs.putUChar(kPrefsRotationKey, quarter_turns) > 0;
+    if (!BatchedNvsWrite::finish(prefs) || !written) {
+      Serial.println("[LocalCam] Could not save the rotation setting");
+      return false;
+    }
+  }
+  g_rotation.store(quarter_turns);
+  Serial.printf("[LocalCam] Rotation %u degrees, Bridge turn %u\n",
+                static_cast<unsigned>(quarter_turns) * 90u,
+                static_cast<unsigned>(statusRotate()));
+  // The quarter turn the Bridge applies may have changed; the sensor flips
+  // follow with the next frame (applyOrientation()).
+  publishStatus();
+  return true;
+#else
+  (void)quarter_turns;
+  return false;
+#endif
+}
+
+bool redBlueSwap() { return g_rb_swap.load(); }
+
+bool setRedBlueSwap(bool swap) {
+#if defined(HOMETILES_LOCAL_CAMERA)
+  if (swap == g_rb_swap.load()) return true;
+  {
+    Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
+    BatchedNvsWrite::Preferences prefs;
+    if (!prefs.begin(kPrefsNamespace, false)) {
+      Serial.println("[LocalCam] Could not open preferences");
+      return false;
+    }
+    const bool written = prefs.putBool(kPrefsRbSwapKey, swap) > 0;
+    if (!BatchedNvsWrite::finish(prefs) || !written) {
+      Serial.println("[LocalCam] Could not save the red/blue swap setting");
+      return false;
+    }
+  }
+  g_rb_swap.store(swap);
+  Serial.printf("[LocalCam] Red/blue swap %s from the next capture or stream start\n",
+                swap ? "on" : "off");
+  return true;
+#else
+  (void)swap;
   return false;
 #endif
 }

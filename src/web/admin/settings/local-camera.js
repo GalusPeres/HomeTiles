@@ -2,10 +2,13 @@
   // server provides every visible text as data attributes on the status line;
   // this code only selects between them. A ready sensor adds its model name
   // and chip ID; internal detail codes stay diagnostic-only in the JSON.
-  // The live-stream mode select is server-rendered too and saves on change.
+  // The live-stream mode and rotation selects are server-rendered too and
+  // save on change.
   let localCameraSaveSequence = 0;
   let localCameraModeSequence = 0;
   let localCameraMirrorSequence = 0;
+  let localCameraRotationSequence = 0;
+  let localCameraRbSwapSequence = 0;
   let localCameraIndicatorSequence = 0;
   let localCameraPollTimer = null;
   const LOCAL_CAMERA_STATE_KEYS = {
@@ -36,6 +39,13 @@
     if (toggle && typeof status.enabled === 'boolean') toggle.checked = status.enabled;
     const mirrorToggle = document.getElementById('local_camera_mirror');
     if (mirrorToggle && typeof status.mirror === 'boolean') mirrorToggle.checked = status.mirror;
+    const rotationSelect = document.getElementById('local_camera_rotation');
+    if (rotationSelect && Number.isInteger(status.rotation)) {
+      rotationSelect.value = String(status.rotation);
+      rotationSelect.dataset.saved = String(status.rotation);
+    }
+    const rbSwapToggle = document.getElementById('local_camera_rb_swap');
+    if (rbSwapToggle && typeof status.rb_swap === 'boolean') rbSwapToggle.checked = status.rb_swap;
     if (Number.isInteger(status.indicator)) applyLocalCameraIndicator(status.indicator);
     const modeSelect = document.getElementById('local_camera_stream_mode');
     if (modeSelect && Number.isInteger(status.stream_mode)) {
@@ -103,6 +113,51 @@
       applyLocalCameraStatus(status);
     } catch (error) {
       if (sequence !== localCameraMirrorSequence) return;
+      if (toggle) toggle.checked = !wanted;
+      showNotification(t('networkErrorSave'), false);
+    }
+  }
+
+  // Rotation: clockwise quarter turns 0..3 (the select shows the degrees).
+  // A failed save restores the last saved value.
+  async function saveLocalCameraRotation(value) {
+    const rotation = String(value);
+    const sequence = ++localCameraRotationSequence;
+    const select = document.getElementById('local_camera_rotation');
+    const previous = select && select.dataset.saved !== undefined ? select.dataset.saved : null;
+    try {
+      const response = await fetch('/api/local-camera', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'rotation=' + encodeURIComponent(rotation)
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const status = await response.json();
+      if (sequence !== localCameraRotationSequence) return;
+      applyLocalCameraStatus(status);
+    } catch (error) {
+      if (sequence !== localCameraRotationSequence) return;
+      if (select && previous !== null) select.value = previous;
+      showNotification(t('networkErrorSave'), false);
+    }
+  }
+
+  async function saveLocalCameraRbSwap(enabled) {
+    const wanted = !!enabled;
+    const sequence = ++localCameraRbSwapSequence;
+    const toggle = document.getElementById('local_camera_rb_swap');
+    try {
+      const response = await fetch('/api/local-camera', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'rb_swap=' + (wanted ? '1' : '0')
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const status = await response.json();
+      if (sequence !== localCameraRbSwapSequence) return;
+      applyLocalCameraStatus(status);
+    } catch (error) {
+      if (sequence !== localCameraRbSwapSequence) return;
       if (toggle) toggle.checked = !wanted;
       showNotification(t('networkErrorSave'), false);
     }
@@ -343,6 +398,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     const modeSelect = document.getElementById('local_camera_stream_mode');
     if (modeSelect) modeSelect.dataset.saved = modeSelect.value;
+    const rotationSelect = document.getElementById('local_camera_rotation');
+    if (rotationSelect) rotationSelect.dataset.saved = rotationSelect.value;
     const indicatorLine = document.getElementById('local_camera_indicator_line');
     if (indicatorLine) indicatorLine.dataset.saved = String(localCameraIndicatorStyle());
     const note = document.getElementById('local_camera_status');

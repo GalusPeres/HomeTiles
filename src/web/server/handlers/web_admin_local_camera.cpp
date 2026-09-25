@@ -86,9 +86,10 @@ ImageArgs readImageSettings(WebServer& server, ImageSettings* out) {
 // GET returns the built-in camera status; POST enabled=0|1 saves the opt-in,
 // POST mode=<id> the live-stream mode, POST custom_fps=<1-25> and
 // custom_quality=<10-90> the Custom mode values, POST mirror=0|1 the mirror,
-// POST indicator=0|1|2 the on-display indicator style and the image controls
-// (reset, brightness, contrast, saturation, red, blue, gain) their values, each
-// immediately. The status JSON is diagnostic data only; every
+// POST rotation=0..3 the clockwise quarter turns, POST rb_swap=0|1 the
+// red/blue swap, POST indicator=0|1|2 the on-display indicator style and the
+// image controls (reset, brightness, contrast, saturation, red, blue, gain)
+// their values, each immediately. The status JSON is diagnostic data only; every
 // user-visible text is rendered from the central translations.
 void WebAdminServer::handleLocalCamera() {
   webAdminMarkActivity();
@@ -102,6 +103,7 @@ void WebAdminServer::handleLocalCamera() {
     const bool has_enabled = server.hasArg("enabled");
     const bool has_mode = server.hasArg("mode");
     const bool has_mirror = server.hasArg("mirror");
+    const bool has_rb_swap = server.hasArg("rb_swap");
     const bool has_indicator = server.hasArg("indicator");
     ImageSettings image;
     const ImageArgs image_args = readImageSettings(server, &image);
@@ -127,8 +129,17 @@ void WebAdminServer::handleLocalCamera() {
       }
       if (result == ImageArgs::Valid) has_custom = true;
     }
-    if (!has_enabled && !has_mode && !has_mirror && !has_indicator && !has_custom &&
-        image_args == ImageArgs::None) {
+    // Rotation: clockwise quarter turns, a strict integer 0..3.
+    long rotation = local_camera::rotation();
+    const ImageArgs rotation_arg = readImageArg(
+        server, "rotation", 0, local_camera_contract::kRotationMax, &rotation);
+    if (rotation_arg == ImageArgs::Invalid) {
+      web_admin_handlers::sendJsonError(server, 400, "Invalid rotation value");
+      return;
+    }
+    const bool has_rotation = rotation_arg == ImageArgs::Valid;
+    if (!has_enabled && !has_mode && !has_mirror && !has_rotation && !has_rb_swap &&
+        !has_indicator && !has_custom && image_args == ImageArgs::None) {
       web_admin_handlers::sendJsonError(server, 400, "Missing enabled value");
       return;
     }
@@ -153,6 +164,11 @@ void WebAdminServer::handleLocalCamera() {
     bool mirror = false;
     if (has_mirror && !readSwitchArg(server, "mirror", &mirror)) {
       web_admin_handlers::sendJsonError(server, 400, "Invalid mirror value");
+      return;
+    }
+    bool rb_swap = false;
+    if (has_rb_swap && !readSwitchArg(server, "rb_swap", &rb_swap)) {
+      web_admin_handlers::sendJsonError(server, 400, "Invalid red/blue swap value");
       return;
     }
     bool enable = false;
@@ -190,6 +206,14 @@ void WebAdminServer::handleLocalCamera() {
       return;
     }
     if (has_mirror && !local_camera::setMirror(mirror)) {
+      web_admin_handlers::sendJsonError(server, 500, "Could not save the camera setting");
+      return;
+    }
+    if (has_rotation && !local_camera::setRotation(static_cast<uint8_t>(rotation))) {
+      web_admin_handlers::sendJsonError(server, 500, "Could not save the camera setting");
+      return;
+    }
+    if (has_rb_swap && !local_camera::setRedBlueSwap(rb_swap)) {
       web_admin_handlers::sendJsonError(server, 500, "Could not save the camera setting");
       return;
     }

@@ -471,7 +471,11 @@ static const Strings kStringsDe = {
     "JPEG-Qualität",
     "Aufnahme-Anzeige (experimentell)",
     "Live-Stream",
-    "Max. Verstärkung"};
+    "Max. Verstärkung",
+    "Erweitert",
+    "Drehung",
+    "Rot und Blau tauschen",
+    "Für Platinen, deren Farben vertauscht sind. Gilt ab dem nächsten Standbild oder Start des Live-Streams."};
 
 static const Strings kStringsEn = {
     "en",
@@ -937,7 +941,11 @@ static const Strings kStringsEn = {
     "JPEG quality",
     "Recording indicator (experimental)",
     "Live stream",
-    "Max. gain"};
+    "Max. gain",
+    "Advanced",
+    "Rotation",
+    "Swap red and blue",
+    "For boards whose colors come out swapped. Applies from the next still image or live stream start."};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1403,7 +1411,11 @@ static const Strings kStringsFr = {
     "Qualité JPEG",
     "Indicateur d'enregistrement (expérimental)",
     "Flux en direct",
-    "Gain max."};
+    "Gain max.",
+    "Avancé",
+    "Rotation",
+    "Inverser le rouge et le bleu",
+    "Pour les cartes dont les couleurs sont inversées. S’applique à partir de la prochaine image fixe ou du prochain démarrage du flux en direct."};
 
 static const LocaleProfile kLocaleDe = {
     "de",

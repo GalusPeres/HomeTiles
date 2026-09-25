@@ -26,7 +26,9 @@ const keys = ['local_camera_section', 'local_camera_enable', 'local_camera_note'
   'local_camera_image_reset', 'local_camera_indicator_active', 'local_camera_indicator_end',
   'local_camera_indicator_line', 'local_camera_indicator_pill', 'local_camera_indicator_note',
   'local_camera_stream_mode_custom', 'local_camera_custom_fps', 'local_camera_custom_quality',
-  'local_camera_indicator_section', 'local_camera_stream_section', 'local_camera_gain'];
+  'local_camera_indicator_section', 'local_camera_stream_section', 'local_camera_gain',
+  'local_camera_advanced', 'local_camera_rotation', 'local_camera_rb_swap',
+  'local_camera_rb_swap_note'];
 const members = [...header.matchAll(/^\s*const char\* (\w+);/gm)].map(match => match[1]);
 const stringsMembers = members.slice(0, members.indexOf('settings_tile_parking') + keys.length + 1);
 for (const key of keys) {
@@ -87,20 +89,23 @@ assert.match(handler, /local_camera::setMirror\(mirror\)/);
 // line is off. The handler validates before anything is saved.
 assert.match(helper, /id="local_camera_indicator_line" onchange="saveLocalCameraIndicator\(\)"/);
 // Two columns in the settings grid: the live stream group (heading, mode,
-// Custom sliders, mirror) left, the indicator group (heading, toggles, note)
-// right, the image controls below over the full width. Each group has a
-// sub-heading like the image block; the pill toggle dims while disabled.
+// Custom sliders) left, the indicator group (heading, toggles, note) right,
+// the collapsed Advanced block (rotation, mirror, red/blue swap, image
+// controls) below over the full width. Each group has a sub-heading like the
+// image block; the pill toggle dims while disabled.
 assert.match(helper, /<div class="local-camera-group" id="local_camera_stream">\s*<div class="network-settings-heading">\)html";[\s\S]*?appendHtmlEscaped\(html, tr\.local_camera_stream_section\);/);
 assert.match(helper, /<div class="local-camera-group local-camera-indicator" id="local_camera_indicator">\s*<div class="network-settings-heading">\)html";[\s\S]*?appendHtmlEscaped\(html, tr\.local_camera_indicator_section\);/);
 {
   const streamAt = helper.indexOf('id="local_camera_stream"');
   const indicatorAt = helper.indexOf('id="local_camera_indicator"');
+  const advancedAt = helper.indexOf('id="local_camera_advanced"');
   const imageAt = helper.indexOf('id="local_camera_image"');
   assert.ok(streamAt < helper.indexOf('id="local_camera_stream_mode"') &&
-            helper.indexOf('id="local_camera_custom"') < helper.indexOf('id="local_camera_mirror"') &&
-            helper.indexOf('id="local_camera_mirror"') < indicatorAt && indicatorAt < imageAt,
-    'Stream group (mode, Custom, mirror), then the indicator group, then the image block');
-  assert.doesNotMatch(helper.slice(streamAt, helper.indexOf('<div class="settings-full local-camera-image"')), /settings-full/,
+            helper.indexOf('id="local_camera_custom"') < indicatorAt && indicatorAt < advancedAt &&
+            advancedAt < helper.indexOf('id="local_camera_mirror"') &&
+            helper.indexOf('id="local_camera_mirror"') < imageAt,
+    'Stream group (mode, Custom), then the indicator group, then the Advanced block with the mirror and the image block');
+  assert.doesNotMatch(helper.slice(streamAt, helper.indexOf('<details class="settings-full local-camera-advanced"')), /settings-full/,
     'Both groups take one column each');
   assert.match(helper, /<div class="settings-full local-camera-image" id="local_camera_image">/);
 }

@@ -13,7 +13,8 @@
 //        "format":"jpeg","max_bytes":131072,"min_interval_ms":1000}
 //       plus optional "sensor":"ov02c10" and "error":"<code>", and
 //       "rotate":90 when the receiver has to turn every JPEG (width/height
-//       are the JPEG as sent) clockwise by that many degrees
+//       are the JPEG as sent) clockwise by that many degrees; it follows the
+//       board mounting and the user rotation (imageTurn())
 //   {base}/stat/local_camera/image/<id> panel -> Bridge, QoS0, not retained,
 //       raw JPEG bytes (FFD8 ... FFD9)
 //   {base}/stat/local_camera/error/<id> panel -> Bridge, QoS0, not retained,
@@ -834,6 +835,36 @@ inline SensorOrientation desiredOrientation(bool rotated_180, bool user_mirror,
 
 inline uint8_t orientationCode(const SensorOrientation& orientation) {
   return static_cast<uint8_t>((orientation.flip ? 2u : 0u) | (orientation.mirror ? 1u : 0u));
+}
+
+// User rotation (Web Admin): extra clockwise quarter turns, 0..3, on top of
+// the board's default orientation.
+constexpr uint8_t kRotationMax = 3;
+
+// Split of the total clockwise turn of the delivered image. The board default
+// (quarter-turn mounting plus the 180 degrees of rotate_180 and the display
+// rotation) and the user quarter turns add up to 0..3 quarter turns. The 180
+// degree part becomes sensor readout flips (desiredOrientation(), free); the
+// quarter turn that is left is done by the receiver: the status announces
+// "rotate":90 and the Bridge turns every JPEG. Rotations commute, so the
+// order of the two parts does not matter.
+struct ImageTurn {
+  bool rotated_180 = false;   // Sensor flips.
+  bool quarter_turn = false;  // The Bridge turns the JPEG 90 degrees clockwise.
+};
+
+inline ImageTurn imageTurn(bool rotated_180, bool quarter_turn, uint8_t user_turns) {
+  const unsigned turns =
+      ((quarter_turn ? 1u : 0u) + (rotated_180 ? 2u : 0u) + user_turns) & 3u;
+  ImageTurn turn;
+  turn.rotated_180 = (turns & 2u) != 0;
+  turn.quarter_turn = (turns & 1u) != 0;
+  return turn;
+}
+
+// Clockwise degrees for the "rotate" field of the retained status.
+inline uint16_t statusRotateDegrees(const ImageTurn& turn) {
+  return turn.quarter_turn ? 90 : 0;
 }
 
 // User red/blue correction as a multiplier on the automatic gain.

@@ -102,10 +102,11 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Local camera (branch `local-camera-beta`)
 
-- Core `src/video/local_camera/` names no device/sensor; drivers `sensors/<name>/`, boards `src/devices/<device>/local_camera_board.*`; opt-in `local_cam_en`.
-- V2 OV02C10 720p. 8-inch OV5647 544x960 + `"rotate":90` (Bridge turns). Tab5 SC202CS 720p RAW8, mirror+180; keeps BGGR itself (no window shift).
+- Core `src/video/local_camera/` is device-agnostic; drivers `sensors/*/`, boards `src/devices/*/local_camera_board.*`; opt-in `local_cam_en`.
+- V2 OV02C10 720p. 8-inch OV5647 544x960, Bridge `rotate` 90. Tab5 SC202CS 720p RAW8, mirror+180, BGGR under flips.
 - Beta, build/HW pending: WS 7/10.1/7B/4.3/4B OV5647 as 8-inch; V1/JC1060 V2 OV02C10 as V2, JC4880 +quarter turn.
-- HW pending: b30 fresh CSI/ISP per start, floor q10; b31 Max. gain, quality 10-90; b32 screenshot under 2D-DMA arbiter; b33 Wi-Fi/AP popup, EN keyboard, climate vendor modes (#43).
+- Advanced: `lcam_rot` (180 = flip, odd = `rotate` 90), `lcam_rbswap` (Bayer, next start); HW pending.
+- HW pending: b30 fresh CSI/ISP, floor q10; b31 Max. gain, quality 10-90; b32 screenshot arbiter; b33 Wi-Fi/AP popup, EN keyboard, climate modes (#43).
 - Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
 
 ## Maintenance

@@ -501,10 +501,18 @@ struct Strings {
   const char* local_camera_custom_quality;
   // Heading of the indicator sub-block (marked experimental).
   const char* local_camera_indicator_section;
-  // Heading of the live stream sub-block (mode, Custom values, mirror).
+  // Heading of the live stream sub-block (mode, Custom values).
   const char* local_camera_stream_section;
   // Image control: upper limit of the sensor plus digital gain (percent).
   const char* local_camera_gain;
+  // Collapsed Web Admin block with the fine-tuning controls (rotation,
+  // mirror, red/blue swap, image controls).
+  const char* local_camera_advanced;
+  // Clockwise rotation select; the degree values stay untranslated.
+  const char* local_camera_rotation;
+  // Red/blue swap checkbox and its note (applies from the next start).
+  const char* local_camera_rb_swap;
+  const char* local_camera_rb_swap_note;
 
 };
 

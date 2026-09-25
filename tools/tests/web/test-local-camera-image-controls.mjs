@@ -86,7 +86,7 @@ for (const message of ['"Invalid image value"', '"Missing enabled value"', '"Inv
   assert.ok(at > 0 && at < firstSave, `${message} is rejected before any setting is saved`);
   assert.equal(post.indexOf(message, at + 1), -1, `${message} is reported once`);
 }
-assert.match(post, /if \(!has_enabled && !has_mode && !has_mirror && !has_indicator && !has_custom &&\s*image_args == ImageArgs::None\)/);
+assert.match(post, /if \(!has_enabled && !has_mode && !has_mirror && !has_rotation && !has_rb_swap &&\s*!has_indicator && !has_custom && image_args == ImageArgs::None\)/);
 assert.match(post, /image_args == ImageArgs::Valid && !local_camera::setImageSettings\(image\)/);
 
 // Reference model of the handler arguments against the real contract ranges.

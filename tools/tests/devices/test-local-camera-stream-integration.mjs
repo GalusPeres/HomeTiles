@@ -131,8 +131,10 @@ assert.match(service, /static_assert\(kMode\.frame_width == kMode\.image_width &
 assert.match(service, /constexpr jpeg_down_sampling_type_t kJpegSubsampling =\s*kQuarterTurn \? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;/);
 assert.equal((service.match(/config\.sub_sample = kJpegSubsampling;/g) || []).length, 2, 'Snapshot and stream');
 assert.doesNotMatch(service, /config\.sub_sample = JPEG_DOWN_SAMPLING/);
-assert.match(service, /constexpr uint16_t kStatusRotate = local_camera_board::kMode\.quarter_turn \? 90 : 0;/);
-assert.match(svc('currentStatusFields'), /fields\.rotate = kStatusRotate;/);
+// The announced turn follows the mounting and the user rotation at runtime
+// (tools/tests/web/test-local-camera-rotation.mjs covers the combinations).
+assert.match(svc('statusRotate'), /statusRotateDegrees\(\s*imageTurn\(false, local_camera_board::kMode\.quarter_turn, g_rotation\.load\(\)\)\)/);
+assert.match(svc('currentStatusFields'), /fields\.rotate = statusRotate\(\);/);
 // ISP statistics run on the frame as delivered.
 assert.match(svc('createAutoExposure'), /config\.window\.btm_right\.x = kStatsLeft \+ kStatsWidth;/);
 assert.match(service, /constexpr uint32_t kStatsWidth = kMode\.frame_width \/ 5 \* 5;/);
@@ -154,7 +156,7 @@ assert.match(run, /applyOrientation\(false\)[\s\S]*?esp_cam_ctlr_start\([\s\S]*?
 assert.match(run, /applyImageSettingsIfChanged\(\);\s*\/\/[^\n]*\n\s*if \(!applyOrientation\(true\)\) \{\s*reason = StopReason::Error;/,
   'A rotation or mirror change during the stream turns the sensor readout');
 const orientation = svc('applyOrientation');
-assert.match(orientation, /desiredOrientation\(imageRotated180\(\), g_mirror\.load\(\), kQuarterTurn\)/);
+assert.match(orientation, /const ImageTurn turn = imageTurn\(imageRotated180\(\), kQuarterTurn, g_rotation\.load\(\)\);\s*const SensorOrientation wanted =\s*desiredOrientation\(turn\.rotated_180, g_mirror\.load\(\), turn\.quarter_turn\);/);
 assert.match(orientation, /if \(code == g_applied_orientation\) return true;/, 'No SCCB write per frame');
 assert.match(orientation, /xQueueReset\(g_isr\.frames\);[\s\S]*?kOrientationSettleFrames/,
   'Frames in flight during a live change are dropped');

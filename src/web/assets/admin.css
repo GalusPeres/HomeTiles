@@ -771,12 +771,18 @@
       align-items:end;
       max-width:560px;
     }
-    .global-settings-grid .inline-checkbox { margin:0 0 4px; }
-    .global-settings-field label { display:block; }
-    .global-settings-grid .tile-color-row { margin:0; }
-    .global-settings-grid .tile-color-row input[type="color"] { margin-bottom:0; }
+    .global-settings-grid .inline-checkbox { margin:0; }
+    /* The label sits left of its control, like the font size rows in Tile
+       Settings, so the block stays low enough for the page height. */
+    .global-settings-field { display:flex; align-items:center; gap:10px; min-width:0; }
+    .global-settings-panel .global-settings-field > label { flex:0 0 auto; margin:0; }
+    .global-settings-field > .global-radius-field,
+    .global-settings-field > .tile-color-row { flex:1 1 auto; min-width:0; }
+    .global-settings-grid .tile-color-row { margin:0; grid-template-columns:minmax(72px,1fr) 32px; }
+    .global-settings-grid .tile-color-row input[type="color"] { height:32px; margin-bottom:0; }
+    .global-settings-grid .tile-color-reset-btn { flex-basis:32px; width:32px; height:32px; }
     @media (max-width:520px) { .global-settings-grid { grid-template-columns:minmax(0, 1fr); } }
-    .global-radius-field { display:flex; align-items:center; gap:8px; height:38px; }
+    .global-radius-field { display:flex; align-items:center; gap:8px; height:32px; }
     .global-radius-field input[type="range"] { flex:1 1 auto; min-width:0; height:18px; margin:0; accent-color:var(--accent); }
     .global-radius-field input[type="range"]:focus { outline:none; box-shadow:none; }
     .global-radius-field input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
@@ -2284,8 +2290,13 @@
     .tile-radius-control input[type="range"] { width:120px; height:18px; margin:0; accent-color:var(--accent); }
     .tile-radius-control input[type="range"]:focus { outline:none; box-shadow:none; }
     .tile-radius-control input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-    .global-tile-radius-value { min-width:2ch; text-align:right; font-variant-numeric:tabular-nums; }
-    .global-icon-glow-value { min-width:4.5ch; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+    /* Slider values in the label size of Tile Settings. */
+    .global-tile-radius-value, .global-icon-glow-value {
+      font-size:12px; font-weight:600; color:var(--text-2); text-align:right;
+      white-space:nowrap; font-variant-numeric:tabular-nums;
+    }
+    .global-tile-radius-value { min-width:2ch; }
+    .global-icon-glow-value { min-width:4.5ch; }
 
 /* Fractional placement preserves the existing cell pitch and gutter. */
 .tile-grid > .fractional-tile {
@@ -2475,5 +2486,7 @@
 .tile-icon-rule input[type="color"] { width:100%; height:38px; padding:4px 7px; border-radius:10px; }
 .icon-color-contains { display:inline-flex; align-items:center; gap:6px; margin:0; font-size:12px; white-space:nowrap; }
 .icon-color-contains input { width:16px; height:16px; }
-.tile-icon-rule-add { margin-top:2px; }
-.tile-icon-color-fields .hint { margin:8px 0 0; }
+/* Same sizes as the other Tile Settings texts and buttons: hints like
+   .settings-note, the add button like the Copy/Paste/Delete actions. */
+.tile-icon-rule-add { margin-top:2px; padding:8px 10px; font-size:12px; }
+.tile-icon-color-fields .hint { font-size:12px; margin:4px 0 12px; }

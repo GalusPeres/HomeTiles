@@ -493,6 +493,8 @@ static void update_range_buttons(SensorPopupContext* ctx) {
   style_range_button(ctx->range_week_btn, selected == SensorHistoryRange::Day7);
 }
 
+}  // namespace
+
 // While open, the popup follows its tile's current background (a rules tint
 // that changes with the entity state); tile_icon_source calls this.
 void sensor_popup_follow_tile_color(uint32_t color) {
@@ -502,6 +504,8 @@ void sensor_popup_follow_tile_color(uint32_t color) {
   lv_obj_set_style_bg_color(ctx->card, lv_color_hex(color), 0);
   update_range_buttons(ctx);
 }
+
+namespace {
 
 static void set_range_buttons_visible(SensorPopupContext* ctx, bool visible) {
   if (!ctx || !ctx->range_row) return;

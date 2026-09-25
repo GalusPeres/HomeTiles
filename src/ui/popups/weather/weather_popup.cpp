@@ -2856,6 +2856,8 @@ static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupIn
   popup_layout::alignHeader(ctx->card, ctx->location_label, ctx->icon_label);
 }
 
+}  // namespace
+
 // While open, the popup follows its tile's current background (a rules tint
 // that changes with the entity state); tile_icon_source calls this.
 void weather_popup_follow_tile_color(uint32_t color) {
@@ -2863,6 +2865,8 @@ void weather_popup_follow_tile_color(uint32_t color) {
   if (!ctx || !ctx->card || lv_obj_has_flag(ctx->card, LV_OBJ_FLAG_HIDDEN) || ctx->bg_color == color) return;
   apply_card_color(ctx, color);
 }
+
+namespace {
 
 static void on_overlay_click(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;

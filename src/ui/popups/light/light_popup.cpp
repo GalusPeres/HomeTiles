@@ -1590,6 +1590,8 @@ static void apply_card_color(LightPopupContext* ctx, uint32_t bg_color) {
   ctx->body_ready = false;
 }
 
+}  // namespace
+
 // While open, the popup follows its tile's current background (a rules tint
 // that changes with the entity state); tile_icon_source calls this.
 void light_popup_follow_tile_color(uint32_t bg_color) {
@@ -1603,6 +1605,8 @@ void light_popup_follow_tile_color(uint32_t bg_color) {
   apply_mode_visibility(ctx);
   update_preview(ctx);
 }
+
+namespace {
 
 static void apply_init_to_context(LightPopupContext* ctx, const LightPopupInit& init,
                                   bool apply_content = true) {

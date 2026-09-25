@@ -106,7 +106,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - V2 OV02C10 720p. 8-inch OV5647 544x960, Bridge `rotate` 90. Tab5 SC202CS 720p RAW8, mirror+180, BGGR under flips.
 - Beta, build/HW pending: WS 7/10.1/7B/4.3/4B OV5647 as 8-inch; V1/JC1060 V2 OV02C10 as V2, JC4880 +quarter turn.
 - Advanced: `lcam_rot` (180 = flip, odd = `rotate` 90), `lcam_rbswap` (Bayer, next start).
-- HW pending: b30 fresh CSI/ISP, floor q10; b31 Max. gain, quality 10-90; b32 screenshot arbiter; b33 Wi-Fi/AP, EN keyboard, #43 climate; b34 rotation, new boards.
+- HW pending: b30 CSI/ISP, q10; b31 gain, q10-90; b32 screenshot; b33 Wi-Fi/AP, kbd, #43; b34 rotation, boards; b35 sleep stream/indicator wake, Tab5 1% wake, S3 150Hz.
 - Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
 
 ## Maintenance

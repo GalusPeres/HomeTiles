@@ -302,11 +302,18 @@ ClimateState* tile_renderer_get_climate_states(GridType grid_type) {
   return g_tab0_climate_states;
 }
 
+static const TileGridConfig* g_build_grid = nullptr;
+
+void tile_renderer_set_build_grid(const TileGridConfig* grid) {
+  g_build_grid = grid;
+}
+
 const Tile* tile_renderer_get_tile_config(GridType grid_type, uint8_t index) {
   if (index >= TILES_PER_GRID) return nullptr;
   if (grid_type == GridType::SCREENSAVER) {
     return screensaverConfig.tile(index);
   }
+  if (g_build_grid) return &g_build_grid->tiles[index];
   return &tileConfig.getActiveGrid().tiles[index];
 }
 

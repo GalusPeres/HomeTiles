@@ -2775,7 +2775,7 @@ bool TileConfig::saveFolderGrid(uint16_t folder_id, TileGridConfig& grid) {
   if (!folderExists(folder_id)) return false;
   bool ids_changed = false;
   if (!ensureNavigationIds(grid, ids_changed)) return false;
-  bool ok = saveGrid(folder_id, grid);
+  bool ok = saveGridInPlace(folder_id, grid);
   if (ok && folder_id == active_folder_id) {
     // Keep the runtime cache identical to the policy-normalized grid that was
     // written. Normalize the existing member in place so this storage call
@@ -3173,7 +3173,7 @@ bool TileConfig::createFolder(uint16_t parent_id, const String& name, const Stri
 
   initGridDefaults(*grid);
   ensureBackTile(next_id, *grid);
-  if (!saveGrid(next_id, *grid)) {
+  if (!saveGridInPlace(next_id, *grid)) {
     return false;
   }
 
@@ -3302,7 +3302,7 @@ SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
     changed = removeSettingsTiles(grid);
   }
 
-  if (changed && !saveGrid(kRootFolderId, grid, false)) {
+  if (changed && !saveGridInPlace(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
   }
   if (active_folder_id == kRootFolderId) active_grid = grid;
@@ -3497,19 +3497,34 @@ bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
   if (folder_id != kScreensaverGridStorageId &&
       !ensureNavigationIds(grid, changed)) return false;
   if (needs_migration_save || changed) {
-    if (!saveGrid(folder_id, grid, ensure_navigation_tile)) return false;
+    if (!saveGridInPlace(folder_id, grid, ensure_navigation_tile)) return false;
   }
   return true;
 }
 
 bool TileConfig::saveGrid(uint16_t folder_id, const TileGridConfig& grid,
                           bool ensure_navigation_tile) {
+  // Only callers that cannot hand over their grid (the screensaver config)
+  // come here; the copy lives on the heap, never on a task stack.
+  std::unique_ptr<TileGridConfig> copy(new (std::nothrow) TileGridConfig(grid));
+  if (!copy) {
+    Serial.println("[TileConfig] ERROR: No memory for the grid save copy");
+    return false;
+  }
+  return saveGridInPlace(folder_id, *copy, ensure_navigation_tile);
+}
+
+// Normalizes the caller's grid in place (titles, retired types, icon colors,
+// navigation tile) and writes it. No second full grid copy: two copies on the
+// loop task stack overflowed it when the Web Admin saved a folder (b39).
+bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
+                                 bool ensure_navigation_tile) {
   if (!storageReady()) {
     Serial.println("[TileConfig] WARN: Storage unavailable, grid cannot be saved");
     return false;
   }
 
-  TileGridConfig working = grid;
+  TileGridConfig& working = grid;
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     working.tiles[i].title = hometiles_title::normalize(working.tiles[i].title.c_str()).c_str();
     if (isRetiredTileType(working.tiles[i].type)) {

@@ -84,7 +84,7 @@ try{
  // Per-tile icon colors (icon-colors.js): first matching rule, else the fixed
  // color; unknown states keep the type color. Glow follows the result.
  const colored=(value,record)=>{meta.values['sensor.t']=value;renderTileFromData('test',1,{type:1,title:'T',sensor_entity:'sensor.t',icon_name:'thermometer',icon_colors:record},meta);return getComputedStyle(sensor.querySelector('.tile-icon')).color;};
- const rule='FF0000'+String.fromCharCode(10)+'ge 00FF00 20';
+ const rule=['v2','FF0000','is 00FF00 25'].join(String.fromCharCode(10));
  check(colored('25',rule)==='rgb(0, 255, 0)','Matching rule colors the icon');
  check(sensor.querySelector('.tile-icon').classList.contains('tile-icon-tinted'),'Rule color tints the disc');
  check(colored('10',rule)==='rgb(255, 0, 0)','Fixed icon color without a matching rule');

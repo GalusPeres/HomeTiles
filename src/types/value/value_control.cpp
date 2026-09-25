@@ -143,8 +143,8 @@ void refresh_editable_tile(GridType grid, uint8_t index) {
   const String display = editable_display_value(value);
   lv_label_set_long_mode(widgets[index].value_label, LV_LABEL_LONG_DOT);
   lv_label_set_text(widgets[index].value_label, display.c_str());
-  // Per-tile icon colors: Number rules compare the raw number; Select and
-  // Date/Time rules match the raw state or its displayed text.
+  // Per-tile icon colors: Number uses the color bar on the raw number; Select
+  // and Date/Time state colors match the raw state or its displayed text.
   if (widgets[index].icon_label && tile->icon_colors.length()) {
     const bool known = value.valid && value.has_state && value.available && value.state != "unknown";
     tile_icon_color_rules::apply(widgets[index].icon_label, tile->icon_colors.c_str(), known,

@@ -27,7 +27,7 @@ for (const marker of [
   'inline constexpr char kTags[6] = {};',
   'return r != g || g != b;',
   'const bool tinted = glow_of(disc) && icon_color_tints(rgb);',
-  ': scaled_opa(tinted ? kGlowOpa : kOpa, contrast_step(disc));',
+  ': scaled_opa(tinted ? kGlowOpa : kOpa, step);',
   'inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {',
   'if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);',
   'set_tag(child, disc_mode, glow);',

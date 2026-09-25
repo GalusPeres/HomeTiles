@@ -349,7 +349,14 @@ void WebAdminServer::handleGetTiles() {
     return;
   }
 
-  TileGridConfig grid{};
+  // A full folder grid is too large for the WebServer/loop task stack; keep
+  // it on the heap (saving no longer adds a second copy, see saveGridInPlace).
+  std::unique_ptr<TileGridConfig> grid_storage(new (std::nothrow) TileGridConfig{});
+  if (!grid_storage) {
+    server.send(500, "application/json", "{\"success\":false,\"error\":\"No memory\"}");
+    return;
+  }
+  TileGridConfig& grid = *grid_storage;
   bool loaded = true;
   if (screensaver_grid) {
     grid = screensaverConfig.tileGrid();
@@ -781,7 +788,14 @@ void WebAdminServer::handleReorderTiles() {
     return;
   }
 
-  TileGridConfig grid{};
+  // A full folder grid is too large for the WebServer/loop task stack; keep
+  // it on the heap (saving no longer adds a second copy, see saveGridInPlace).
+  std::unique_ptr<TileGridConfig> grid_storage(new (std::nothrow) TileGridConfig{});
+  if (!grid_storage) {
+    server.send(500, "application/json", "{\"success\":false,\"error\":\"No memory\"}");
+    return;
+  }
+  TileGridConfig& grid = *grid_storage;
   // Abort rather than overwrite the whole folder if the current grid can't be loaded.
   bool grid_loaded = true;
   if (screensaver_grid) {
@@ -1270,8 +1284,9 @@ void WebAdminServer::handleDeleteFolder() {
 
   // Find parent folder and clear the tile that references this folder
   uint16_t parent_id = tileConfig.getFolderParent(folder_id);
-  TileGridConfig parent_grid{};
-  if (tileConfig.loadFolderGrid(parent_id, parent_grid)) {
+  std::unique_ptr<TileGridConfig> parent_storage(new (std::nothrow) TileGridConfig{});
+  if (parent_storage && tileConfig.loadFolderGrid(parent_id, *parent_storage)) {
+    TileGridConfig& parent_grid = *parent_storage;
     for (size_t i = 0; i < TILES_PER_GRID; ++i) {
       Tile& t = parent_grid.tiles[i];
       if (t.type == TILE_FOLDER) {

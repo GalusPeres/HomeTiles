@@ -294,16 +294,30 @@ struct Strings {
   const char* icon_disc_on;
   const char* icon_disc_off;
   const char* icon_glow;
-  // Web Admin tile editor: per-tile icon color and color rules (Sensor
-  // family, Binary sensor, Energy). The numeric operators stay symbols.
+  // Web Admin tile editor: per-tile icon color, color bar for numeric states
+  // ("by value"), state colors for text states ("by state") and the On/Off
+  // colors of Binary sensors (Sensor family, Binary sensor, Energy).
   const char* tile_icon_color;
-  const char* tile_icon_color_rules;
-  const char* tile_icon_color_equals;
+  const char* tile_icon_color_by_value;
+  const char* tile_icon_color_bar_off;
+  const char* tile_icon_color_smooth;
+  const char* tile_icon_color_steps;
+  const char* tile_icon_color_min;
+  const char* tile_icon_color_max;
+  const char* tile_icon_color_preset_cold_warm;
+  const char* tile_icon_color_preset_traffic;
+  const char* tile_icon_color_preset_battery;
+  const char* tile_icon_color_preset_humidity;
+  const char* tile_icon_color_preset_single;
+  const char* tile_icon_color_bar_hint;
+  const char* tile_icon_color_by_state;
+  const char* tile_icon_color_state;
   const char* tile_icon_color_contains;
-  const char* tile_icon_color_value;
-  const char* tile_icon_color_add_rule;
+  const char* tile_icon_color_add_state;
   const char* tile_icon_color_remove;
-  const char* tile_icon_color_hint;
+  const char* tile_icon_color_state_hint;
+  const char* tile_icon_color_state_on;
+  const char* tile_icon_color_state_off;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;
   const char* screensaver_storage_hint;

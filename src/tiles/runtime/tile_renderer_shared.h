@@ -57,6 +57,10 @@ SwitchState* tile_renderer_get_switch_states(GridType grid_type);
 ClimateTileWidgets* tile_renderer_get_climate_widgets(GridType grid_type);
 ClimateState* tile_renderer_get_climate_states(GridType grid_type);
 const Tile* tile_renderer_get_tile_config(GridType grid_type, uint8_t index);
+// While a hidden folder grid is built into the TAB0 widget arrays, state
+// updates must read that folder's tiles, not the visible folder's (per-tile
+// icon colors, switch and binary settings). nullptr restores the active grid.
+void tile_renderer_set_build_grid(const TileGridConfig* grid);
 
 bool is_light_entity_id(const String& entity_id);
 void update_switch_tile_state(GridType grid_type, uint8_t grid_index, const char* payload);

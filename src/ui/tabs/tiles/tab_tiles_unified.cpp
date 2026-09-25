@@ -1079,6 +1079,12 @@ static void build_folder_cache_entry(FolderCacheEntry& entry, GridType grid_type
   }
   lv_obj_add_flag(entry.grid, LV_OBJ_FLAG_HIDDEN);
 
+  // The hidden folder's widgets sit in the TAB0 arrays now, so its state
+  // updates must resolve their tiles from this grid. Before, a preloaded
+  // folder took the icon colors of the visible folder's tile at the same
+  // index, and Binary sensors kept that color after the switch because the
+  // unchanged payload is skipped there.
+  tile_renderer_set_build_grid(&config);
   render_tile_grid(entry.grid, config, grid_type, g_tiles_scene_cbs[idx], entry.tile_objs);
 
   // Warm hidden folder caches with lightweight states only. Media payloads can
@@ -1090,6 +1096,7 @@ static void build_folder_cache_entry(FolderCacheEntry& entry, GridType grid_type
   process_cover_update_queue();
   process_binary_sensor_update_queue();
   process_weather_update_queue();
+  tile_renderer_set_build_grid(nullptr);
   lv_obj_update_layout(entry.grid);
 
   tile_renderer_snapshot_tab0(&entry.widgets);

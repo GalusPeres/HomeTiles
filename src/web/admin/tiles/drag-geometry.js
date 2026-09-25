@@ -134,7 +134,7 @@
     relX = Math.max(0, relX);
     relY = Math.max(0, relY);
     const type = Number(dragSource?.type ?? getTilesData(tab)?.[currentTileIndex]?.type);
-    const unit = sizeStep ?? ([7, 8].includes(type) ? 1 : 0.5);
+    const unit = sizeStep ?? ([7].includes(type) ? 1 : 0.5);
     let col = Math.floor((relX + (metrics.gapX / 2)) / (stepX * unit)) * unit;
     let row = Math.floor((relY + (metrics.gapY / 2)) / (stepY * unit)) * unit;
     if (!isFinite(col)) col = 0;
@@ -175,7 +175,7 @@
   function getDragAnchorCell(tab, layout, clientX, clientY) {
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
     if (!layout || !rawCell) return { col: 0, row: 0 };
-    const unit = [7, 8].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
+    const unit = [7].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
     const col = clampHalf(rawCell.col - layout.col, 0, Math.max(0, layout.span_w - unit), 0);
     const row = clampHalf(rawCell.row - layout.row, 0, Math.max(0, layout.span_h - unit), 0);
     return { col, row };
@@ -190,7 +190,7 @@
         y: Math.max(0, (rect.height / 2) || 0)
       };
     }
-    const unit = [7, 8].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
+    const unit = [7].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
     const x = (grabCellCol * (metrics.cellW + metrics.gapX)) + ((metrics.cellW + metrics.gapX) * unit - metrics.gapX) / 2;
     const y = (grabCellRow * (metrics.cellH + metrics.gapY)) + ((metrics.cellH + metrics.gapY) * unit - metrics.gapY) / 2;
     const maxX = Math.max(0, rect.width - 1);

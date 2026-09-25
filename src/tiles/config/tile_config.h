@@ -130,8 +130,8 @@ struct Tile {
   uint8_t icon_disc_mode = 0;
   // Glow: a colored icon tints its disc with the same hue.
   bool icon_glow = true;
-  // Fixed icon color and color rules (tile_icon_colors.h), kept in the
-  // /_tile_icon_colors sidecar. Empty = the type's default icon colors.
+  // Fixed icon color, color bar and state colors (tile_icon_colors.h), kept
+  // in the /_tile_icon_colors sidecar. Empty = the type's default icon colors.
   String icon_colors;
 
   Tile()
@@ -170,12 +170,14 @@ static inline uint8_t normalizeTileIconDiscMode(int mode) {
              : TILE_ICON_DISC_GLOBAL;
 }
 
-// Canonical icon color record for a type; types without icon colors keep
-// none.
+// Canonical icon color record for a type: numeric types keep only the color
+// bar, text types only the state lines, Sensor keeps both; types without icon
+// colors keep none.
 static inline String normalizeTileIconColors(int type, const char* record) {
   if (!tileTypeHasIconColors(type) || !record || !*record) return String();
   char out[tile_icon_colors::kMaxRecordBytes + 1];
-  const size_t length = tile_icon_colors::normalize(record, out, sizeof(out));
+  const size_t length = tile_icon_colors::normalize(
+      record, out, sizeof(out), tileTypeIconColorsByValue(type), tileTypeIconColorsByState(type));
   return length ? String(out) : String();
 }
 
@@ -655,6 +657,9 @@ private:
                 bool ensure_navigation_tile = true);
   bool saveGrid(uint16_t folder_id, const TileGridConfig& grid,
                 bool ensure_navigation_tile = true);
+  // Normalizes and saves the caller's grid without another full copy.
+  bool saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
+                       bool ensure_navigation_tile = true);
   uint16_t nextFolderId() const;
   void ensureRootFolder();
   bool ensureSettingsTile(TileGridConfig& grid, int target_col = -1,

@@ -981,7 +981,7 @@
     /* The hairline sits on the outer card edge. A child overlay would be
        visibly indented by the transparent 3px editor border. */
     .tile-grid.tiles-bordered > .tile:not(.empty):not(.tile-border-hidden) {
-      outline:1px solid rgba(255,255,255,0.20);
+      outline:1px solid var(--tile-border-tint, rgba(255,255,255,0.20));
       outline-offset:-1px;
     }
 
@@ -1369,7 +1369,11 @@
     }
     .layout-field label { margin-bottom:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .layout-field input { padding:8px 10px; font-size:13px; margin-bottom:0; }
-    .inline-checkbox { display:flex; align-items:center; gap:8px; font-weight:600; margin-top:8px; }
+    .inline-checkbox { display:flex; width:fit-content; align-items:center; gap:8px; font-weight:600; margin-top:8px; }
+    /* Only the checkbox itself toggles: a click next to it (or on its text)
+       must not change the setting by accident. */
+    .inline-checkbox { pointer-events:none; user-select:none; }
+    .inline-checkbox input { pointer-events:auto; cursor:pointer; }
     .inline-checkbox input { width:auto; padding:0; margin:0; flex:0 0 auto; }
     .clock-toggle-row { display:grid; grid-template-columns:repeat(2, minmax(120px, max-content)); gap:8px 18px; align-items:center; justify-content:start; margin-bottom:8px; }
     .clock-toggle-row .inline-checkbox { display:inline-flex; width:auto; margin-top:0; white-space:nowrap; }
@@ -2365,17 +2369,113 @@
 .tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { box-shadow:inset 0 0 0 3px #26a69a, 0 0 12px rgba(38,166,154,.55); }
 .tile.sensor-compact:focus-visible { box-shadow:inset 0 0 0 3px #64d8cb, 0 0 12px rgba(38,166,154,.55); }
 
-/* Per-tile icon colors in the tile editor: the fixed icon color uses the
-   tile color row; color rules are operator, value, color and remove. */
+/* Per-tile icon colors in the tile editor: the fixed icon color and the
+   Binary On/Off colors use the tile color row; the color bar has a mode
+   toggle, preset chips, the bar, draggable stop handles with value labels
+   and the range; state colors are text, contains, color and remove. */
 /* An unset icon color shows the default white icon color at full strength. */
+.icon-color-segmented {
+  display:inline-grid;
+  grid-auto-flow:column;
+  grid-auto-columns:1fr;
+  gap:2px;
+  padding:2px;
+  margin-bottom:10px;
+  border:1px solid var(--line-strong);
+  border-radius:10px;
+  background:var(--well);
+}
+.icon-color-segmented button {
+  padding:6px 14px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:var(--text-2);
+  font:inherit;
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+}
+.icon-color-segmented button.active { background:var(--accent-soft); color:#5fd4c7; }
+.icon-color-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.icon-color-chip {
+  padding:4px 10px;
+  border:1px solid var(--line-strong);
+  border-radius:999px;
+  background:var(--well);
+  color:var(--text-2);
+  font:inherit;
+  font-size:12px;
+  cursor:pointer;
+}
+.icon-color-chip:hover { border-color:#4a4a4a; color:var(--text); }
+.icon-color-bar {
+  height:22px;
+  margin:0 9px;
+  border:1px solid var(--line-strong);
+  border-radius:11px;
+  cursor:copy;
+  touch-action:manipulation;
+}
+.icon-color-handles { position:relative; height:42px; margin:4px 9px 0; }
+.icon-color-stop {
+  position:absolute;
+  top:0;
+  width:18px;
+  height:18px;
+  margin:0 0 0 -9px;
+  padding:0;
+  border:2px solid #fff;
+  border-radius:50%;
+  box-shadow:0 0 0 1px rgba(0,0,0,.6);
+  cursor:grab;
+  touch-action:none;
+}
+.icon-color-stop.selected { box-shadow:0 0 0 2px var(--accent); }
+.icon-color-stop-label {
+  position:absolute;
+  top:21px;
+  transform:translateX(-50%);
+  color:var(--text-2);
+  font-size:11px;
+  white-space:nowrap;
+  pointer-events:none;
+}
+.icon-color-stop-remove {
+  position:absolute;
+  top:-6px;
+  width:16px;
+  height:16px;
+  margin-left:6px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--line-strong);
+  border-radius:50%;
+  background:var(--card);
+  color:var(--text-2);
+  font-size:11px;
+  cursor:pointer;
+  z-index:1;
+}
+.icon-color-stop-remove.hidden { display:none; }
+.icon-color-stop-picker { position:absolute; width:1px; height:1px; padding:0; border:0; opacity:0; pointer-events:none; }
+.icon-color-bar-editor { position:relative; }
+.icon-color-range { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+.icon-color-range label { margin:0; font-size:12px; }
+.icon-color-range input { margin-top:4px; padding:8px 10px; font-size:13px; }
 .tile-icon-rule {
   display:grid;
-  grid-template-columns:minmax(84px,1fr) minmax(0,1.3fr) 44px 38px;
+  grid-template-columns:minmax(0,1.6fr) auto 44px 38px;
   gap:8px;
   align-items:center;
   margin-bottom:8px;
 }
-.tile-icon-rule select, .tile-icon-rule input { min-width:0; margin:0; }
+.tile-icon-rule input { min-width:0; margin:0; }
+.tile-icon-rule input[type="text"] { padding:8px 10px; font-size:13px; }
 .tile-icon-rule input[type="color"] { width:100%; height:38px; padding:4px 7px; border-radius:10px; }
+.icon-color-contains { display:inline-flex; align-items:center; gap:6px; margin:0; font-size:12px; white-space:nowrap; }
+.icon-color-contains input { width:16px; height:16px; }
 .tile-icon-rule-add { margin-top:2px; }
 .tile-icon-color-fields .hint { margin:8px 0 0; }

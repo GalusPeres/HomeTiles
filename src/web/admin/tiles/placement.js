@@ -156,7 +156,7 @@
         columns, rows, firstRow,
         layout.span_w, layout.span_h,
         preferredCol, preferredRow,
-        fractional && ![7, 8].includes(Number(tileTypes[displacedIndex])) ? 0.5 : 1);
+        fractional && ![7].includes(Number(tileTypes[displacedIndex])) ? 0.5 : 1);
       let placed = false;
       for (const candidate of candidates) {
         const nextLayout = {

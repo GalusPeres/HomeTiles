@@ -52,6 +52,16 @@
     const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);
     tileElem.style.setProperty('--icon-disc-opa', (scaled(38) / 255).toFixed(3));
     tileElem.style.setProperty('--icon-disc-glow', (scaled(51) * 100 / 255).toFixed(1) + '%');
+    // Mirrors ui_surface_style::set_tile_border_tint(): a glowing disc tints
+    // the tile border hairline with its hue (kGlowBorderOpa, scaled).
+    const hue = icon.classList.contains('tile-icon-tinted')
+      ? String(getComputedStyle(icon).color || '').match(/(\d+)\D+(\d+)\D+(\d+)/) : null;
+    if (hue) {
+      tileElem.style.setProperty('--tile-border-tint',
+        'rgba(' + hue[1] + ',' + hue[2] + ',' + hue[3] + ',' + (scaled(102) / 255).toFixed(3) + ')');
+    } else {
+      tileElem.style.removeProperty('--tile-border-tint');
+    }
   }
   // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
   // default grey (stored explicitly by older editors) follow the global

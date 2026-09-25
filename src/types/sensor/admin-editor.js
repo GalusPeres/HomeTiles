@@ -107,6 +107,9 @@
     const graphHeightEl = document.getElementById(prefix + '_sensor_graph_height');
     if (graphHeightEl) graphHeightEl.value = (data.sensor_graph_height !== undefined && data.sensor_graph_height !== null) ? String(data.sensor_graph_height) : '';
     syncGaugeUi(tab);
+    // The entity is known now: numeric states show the color bar, text
+    // states the state list.
+    syncIconColorFields(tab);
   }
 
   function saveSensorFields(tab, formData) {

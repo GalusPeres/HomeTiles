@@ -3,32 +3,60 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 // Per-tile icon colors for Sensor, Number, Select, Date/Time, Binary sensor
-// and Energy tiles: an optional fixed icon color and up to three color
-// rules. A tile keeps one canonical text record, which
-// is also the /_tile_icon_colors sidecar content, the Web Admin field
-// "icon_colors" and the import/export value:
+// and Energy tiles. A tile keeps one canonical text record, which is also the
+// /_tile_icon_colors sidecar content, the Web Admin field "icon_colors" and
+// the import/export value (format v2):
 //
-//   line 1:    fixed icon color "RRGGBB", or empty for the type's default
-//   lines 2-4: "<op> RRGGBB <value>", evaluated in order, first match wins;
-//              op ge, le, eq compare numbers, is (equals) and has (contains)
-//              compare text case-insensitively.
+//   line 1:  "v2"
+//   line 2:  fixed icon color "RRGGBB", or empty for the type's default
+//   then at most one color bar for numeric states:
+//            "bar <smooth|steps> <min> <max> <P>:<RRGGBB> ..." with 2 to 6
+//            stops in ascending order; P is the stop position on the bar in
+//            thousandths (0..1000), min < max are plain decimal numbers
+//   then up to six state lines for text states:
+//            "is RRGGBB <text>" (equals) or "has RRGGBB <text>" (contains),
+//            compared case-insensitively, first match wins
 //
-// Values never contain line breaks or control characters, so the record
-// needs no escaping. Evaluation walks the record in place and never
-// allocates. This header has no Arduino/LVGL dependency so host tests can
-// compile it unchanged.
+// A state with a leading decimal number takes the bar color when there is a
+// bar. Smooth bars interpolate linearly in 8-bit RGB between neighbouring
+// stops; steps bars give a value the color of the last stop at or below it.
+// Other states take the first matching state line. Without a result the
+// fixed color applies, else the type's default. The Web Admin preview
+// (src/web/admin/tiles/icon-colors.js) mirrors every formula exactly.
+//
+// Records without the "v2" line come from the first test format (b39): line 1
+// is the fixed color, then up to three "<ge|le|eq|is|has> RRGGBB <value>"
+// rules. normalize() keeps the fixed color, turns text rules into state lines
+// and turns numeric rules into a steps bar only when they are plain ">="
+// thresholds on whole numbers that map exactly onto bar positions; other
+// numeric rules are dropped.
+//
+// Values never contain line breaks or control characters, so the record needs
+// no escaping. Evaluation walks the record in place and never allocates. This
+// header has no Arduino/LVGL dependency so host tests can compile it
+// unchanged.
 namespace tile_icon_colors {
 
-inline constexpr size_t kMaxRules = 3;
+inline constexpr size_t kMaxStops = 6;
+inline constexpr size_t kMaxRows = 6;
 inline constexpr size_t kMaxValueBytes = 32;
-// "RRGGBB" plus three "has RRGGBB <value>" lines with their line breaks.
-inline constexpr size_t kMaxRecordBytes = 6 + kMaxRules * (1 + 3 + 1 + 6 + 1 + kMaxValueBytes);
+inline constexpr size_t kMaxNumberBytes = 12;
+inline constexpr unsigned kPositionScale = 1000;
+inline constexpr size_t kLegacyMaxRules = 3;
+// "\nbar smooth <min> <max>" plus " PPPP:RRGGBB" per stop.
+inline constexpr size_t kMaxBarBytes = 5 + 6 + 1 + kMaxNumberBytes + 1 + kMaxNumberBytes + kMaxStops * 12;
+// "\nhas RRGGBB <text>".
+inline constexpr size_t kMaxRowBytes = 1 + 3 + 1 + 6 + 1 + kMaxValueBytes;
+// "v2\nRRGGBB", the bar and the state lines.
+inline constexpr size_t kMaxRecordBytes = 2 + 1 + 6 + kMaxBarBytes + kMaxRows * kMaxRowBytes;
 
 enum class Op : uint8_t { None, Ge, Le, Eq, Is, Has };
+enum class BarMode : uint8_t { Smooth, Steps };
 
 inline bool is_space(char c) { return c == ' ' || c == '\t' || c == '\r'; }
 
@@ -42,18 +70,7 @@ inline Op parse_op(const char* begin, const char* end) {
   return Op::None;
 }
 
-inline const char* op_name(Op op) {
-  switch (op) {
-    case Op::Ge: return "ge";
-    case Op::Le: return "le";
-    case Op::Eq: return "eq";
-    case Op::Is: return "is";
-    case Op::Has: return "has";
-    default: return "";
-  }
-}
-
-inline bool numeric_op(Op op) { return op == Op::Ge || op == Op::Le || op == Op::Eq; }
+inline bool text_op(Op op) { return op == Op::Is || op == Op::Has; }
 
 inline int hex_digit(char c) {
   if (c >= '0' && c <= '9') return c - '0';
@@ -76,21 +93,107 @@ inline bool parse_color(const char* begin, const char* end, uint32_t& rgb) {
   return true;
 }
 
-// Parses a leading decimal number (comma or dot) without allocating, like
-// the sensor gauge does: "21.5", "21,5" and "21.5 kWh" all give 21.5.
-inline bool parse_number(const char* begin, const char* end, double& out) {
+inline void trim(const char*& begin, const char*& end) {
   while (begin < end && is_space(*begin)) ++begin;
   while (end > begin && is_space(end[-1])) --end;
-  char buffer[40];
-  const size_t n = static_cast<size_t>(end - begin);
-  if (n == 0 || n >= sizeof(buffer)) return false;
-  for (size_t i = 0; i < n; ++i) buffer[i] = begin[i] == ',' ? '.' : begin[i];
-  buffer[n] = '\0';
-  char* stop = nullptr;
-  const double value = strtod(buffer, &stop);
-  if (!stop || stop == buffer || !isfinite(value)) return false;
-  out = value;
+}
+
+inline const char* line_end(const char* p) {
+  while (*p && *p != '\n') ++p;
+  return p;
+}
+
+inline bool starts_with(const char* begin, const char* end, const char* prefix) {
+  const size_t n = strlen(prefix);
+  return static_cast<size_t>(end - begin) >= n && memcmp(begin, prefix, n) == 0;
+}
+
+inline bool is_v2(const char* record) {
+  return record && record[0] == 'v' && record[1] == '2' &&
+         (record[2] == '\n' || record[2] == '\r' || record[2] == '\0');
+}
+
+// Start of the line after the first one (the fixed color line of a v2
+// record), or the terminating zero.
+inline const char* second_line(const char* record) {
+  const char* end = line_end(record);
+  return *end == '\n' ? end + 1 : end;
+}
+
+// Next space-separated token of [p, end).
+inline bool next_token(const char*& p, const char* end, const char*& begin, const char*& stop) {
+  while (p < end && is_space(*p)) ++p;
+  if (p >= end) return false;
+  begin = p;
+  while (p < end && !is_space(*p)) ++p;
+  stop = p;
   return true;
+}
+
+inline bool token_is(const char* begin, const char* end, const char* word) {
+  const size_t n = strlen(word);
+  return static_cast<size_t>(end - begin) == n && memcmp(begin, word, n) == 0;
+}
+
+// Plain decimal "[-]digits[.digits]" (comma or dot) spanning [begin, end)
+// after trimming, at most kMaxNumberBytes long. `text` receives the canonical
+// spelling with a dot.
+inline bool parse_decimal(const char* begin, const char* end, double& value,
+                          char (&text)[kMaxNumberBytes + 1]) {
+  trim(begin, end);
+  const size_t n = static_cast<size_t>(end - begin);
+  if (n == 0 || n > kMaxNumberBytes) return false;
+  size_t digits = 0;
+  bool separator = false;
+  for (size_t i = 0; i < n; ++i) {
+    const char c = begin[i];
+    if (c >= '0' && c <= '9') {
+      ++digits;
+      text[i] = c;
+    } else if (c == '-' && i == 0) {
+      text[i] = c;
+    } else if ((c == '.' || c == ',') && !separator) {
+      separator = true;
+      text[i] = '.';
+    } else {
+      return false;
+    }
+  }
+  if (!digits) return false;
+  text[n] = '\0';
+  value = strtod(text, nullptr);
+  return isfinite(value);
+}
+
+// The leading decimal number of a state ("21.5", "21,5", "21.5 kWh" give
+// 21.5), without exponent. False for text states.
+inline bool leading_number(const char* state, double& out) {
+  if (!state) return false;
+  while (is_space(*state)) ++state;
+  char buffer[32];
+  size_t n = 0;
+  size_t digits = 0;
+  const char* p = state;
+  if (*p == '-') buffer[n++] = *p++;
+  while (*p >= '0' && *p <= '9') {
+    if (n + 1 >= sizeof(buffer)) return false;
+    buffer[n++] = *p++;
+    ++digits;
+  }
+  if (*p == '.' || *p == ',') {
+    if (n + 1 >= sizeof(buffer)) return false;
+    buffer[n++] = '.';
+    ++p;
+    while (*p >= '0' && *p <= '9') {
+      if (n + 1 >= sizeof(buffer)) return false;
+      buffer[n++] = *p++;
+      ++digits;
+    }
+  }
+  if (!digits) return false;
+  buffer[n] = '\0';
+  out = strtod(buffer, nullptr);
+  return isfinite(out);
 }
 
 // Case folding for ASCII and the Latin-1 letters of two-byte UTF-8 (C3 80-9E
@@ -121,11 +224,6 @@ inline bool fold_contains(const char* haystack, size_t h_len, const char* needle
   return false;
 }
 
-inline void trim(const char*& begin, const char*& end) {
-  while (begin < end && is_space(*begin)) ++begin;
-  while (end > begin && is_space(end[-1])) --end;
-}
-
 inline bool text_matches(Op op, const char* value, size_t value_len, const char* state) {
   if (!state) return false;
   const char* begin = state;
@@ -136,7 +234,7 @@ inline bool text_matches(Op op, const char* value, size_t value_len, const char*
                       : fold_contains(begin, len, value, value_len);
 }
 
-// One parsed rule line; value points into the record.
+// One parsed "<op> RRGGBB <value>" line; value points into the record.
 struct Rule {
   Op op = Op::None;
   uint32_t color = 0;
@@ -161,63 +259,149 @@ inline bool parse_rule(const char* begin, const char* end, Rule& rule) {
   return rule.value_len > 0;
 }
 
-inline const char* line_end(const char* p) {
-  while (*p && *p != '\n') ++p;
-  return p;
+struct Stop {
+  uint16_t position = 0;
+  uint32_t color = 0;
+};
+
+struct Bar {
+  BarMode mode = BarMode::Smooth;
+  double min = 0;
+  double max = 0;
+  char min_text[kMaxNumberBytes + 1] = {};
+  char max_text[kMaxNumberBytes + 1] = {};
+  size_t count = 0;
+  Stop stops[kMaxStops] = {};
+};
+
+// Keeps the stops in ascending order; equal positions keep their order.
+inline void sort_stops(Bar& bar) {
+  for (size_t i = 1; i < bar.count; ++i) {
+    const Stop stop = bar.stops[i];
+    size_t j = i;
+    while (j > 0 && bar.stops[j - 1].position > stop.position) {
+      bar.stops[j] = bar.stops[j - 1];
+      --j;
+    }
+    bar.stops[j] = stop;
+  }
 }
 
-// Fixed icon color of a record (line 1).
-inline bool fixed_color(const char* record, uint32_t& rgb) {
-  if (!record || !*record) return false;
-  const char* begin = record;
-  const char* end = line_end(record);
-  trim(begin, end);
-  return parse_color(begin, end, rgb);
+// "P:RRGGBB" with P as 1-4 digits, clamped to 0..1000.
+inline bool parse_stop(const char* begin, const char* end, Stop& stop) {
+  const char* colon = begin;
+  while (colon < end && *colon != ':') ++colon;
+  const size_t digits = static_cast<size_t>(colon - begin);
+  if (colon >= end || digits == 0 || digits > 4) return false;
+  unsigned position = 0;
+  for (const char* p = begin; p < colon; ++p) {
+    if (*p < '0' || *p > '9') return false;
+    position = position * 10 + static_cast<unsigned>(*p - '0');
+  }
+  if (!parse_color(colon + 1, end, stop.color)) return false;
+  stop.position = static_cast<uint16_t>(position > kPositionScale ? kPositionScale : position);
+  return true;
 }
 
-// Icon color for a known entity state: the first matching rule in order,
-// else the fixed icon color. `state` is the raw Home Assistant state;
-// `display`, when set, is the displayed text (for example the translated
-// Binary sensor state) that text rules may also match. Returns false when
-// the type's default color applies. Callers skip unavailable or unknown
-// states, which always use the default.
+// Parses a "bar ..." line; invalid stops are skipped, stops beyond six are
+// ignored, and a bar needs a valid range and at least two stops.
+inline bool parse_bar(const char* p, const char* end, Bar& bar) {
+  const char* begin = nullptr;
+  const char* stop = nullptr;
+  if (!next_token(p, end, begin, stop) || !token_is(begin, stop, "bar")) return false;
+  if (!next_token(p, end, begin, stop)) return false;
+  if (token_is(begin, stop, "smooth")) bar.mode = BarMode::Smooth;
+  else if (token_is(begin, stop, "steps")) bar.mode = BarMode::Steps;
+  else return false;
+  if (!next_token(p, end, begin, stop) || !parse_decimal(begin, stop, bar.min, bar.min_text)) return false;
+  if (!next_token(p, end, begin, stop) || !parse_decimal(begin, stop, bar.max, bar.max_text)) return false;
+  if (!(bar.min < bar.max)) return false;
+  bar.count = 0;
+  while (bar.count < kMaxStops && next_token(p, end, begin, stop)) {
+    Stop parsed;
+    if (parse_stop(begin, stop, parsed)) bar.stops[bar.count++] = parsed;
+  }
+  if (bar.count < 2) return false;
+  sort_stops(bar);
+  return true;
+}
+
+// Mixes two colors per 8-bit channel with a weight of 0..1024 for `b`,
+// rounding to the nearest value.
+inline uint32_t mix_colors(uint32_t a, uint32_t b, int weight) {
+  uint32_t out = 0;
+  for (int shift = 16; shift >= 0; shift -= 8) {
+    const int from = static_cast<int>((a >> shift) & 0xFF);
+    const int to = static_cast<int>((b >> shift) & 0xFF);
+    const int channel = (from * (1024 - weight) + to * weight + 512) >> 10;
+    out |= static_cast<uint32_t>(channel) << shift;
+  }
+  return out;
+}
+
+// Color at bar position t (0..1, clamped).
+inline uint32_t bar_color_at(const Bar& bar, double t) {
+  if (!(t > 0)) t = 0;
+  if (t > 1) t = 1;
+  int index = -1;
+  for (size_t i = 0; i < bar.count; ++i) {
+    if (bar.stops[i].position / 1000.0 <= t) index = static_cast<int>(i);
+  }
+  if (index < 0) return bar.stops[0].color;
+  if (bar.mode == BarMode::Steps || static_cast<size_t>(index) + 1 == bar.count)
+    return bar.stops[index].color;
+  const double from = bar.stops[index].position / 1000.0;
+  const double to = bar.stops[index + 1].position / 1000.0;
+  const double fraction = (t - from) / (to - from);
+  const int weight = static_cast<int>(floor(fraction * 1024 + 0.5));
+  return mix_colors(bar.stops[index].color, bar.stops[index + 1].color, weight);
+}
+
+inline uint32_t bar_color(const Bar& bar, double value) {
+  return bar_color_at(bar, (value - bar.min) / (bar.max - bar.min));
+}
+
+// Icon color for a known entity state. `state` is the raw Home Assistant
+// state; `display`, when set, is the displayed text (for example the
+// translated Binary sensor state) that state lines may also match. Returns
+// false when the type's default color applies. Callers skip unavailable or
+// unknown states, which always use the default. Only v2 records are
+// evaluated; stored records are always normalized first.
 inline bool resolve(const char* record, const char* state, const char* display, uint32_t& rgb) {
-  if (!record || !*record || !state) return false;
-  const char* p = strchr(record, '\n');
-  bool number_parsed = false;
-  bool has_number = false;
+  if (!is_v2(record) || !state) return false;
+  const char* fixed_begin = second_line(record);
+  const char* fixed_end = line_end(fixed_begin);
+  const char* p = fixed_end;
   double number = 0;
-  for (size_t index = 0; p && *p == '\n' && index < kMaxRules; ++index) {
+  const bool numeric = leading_number(state, number);
+  bool bar_seen = false;
+  while (*p == '\n') {
     const char* begin = p + 1;
     const char* end = line_end(begin);
     p = end;
-    Rule rule;
-    if (!parse_rule(begin, end, rule)) continue;
-    bool match = false;
-    if (numeric_op(rule.op)) {
-      if (!number_parsed) {
-        number_parsed = true;
-        has_number = parse_number(state, state + strlen(state), number);
+    if (starts_with(begin, end, "bar ")) {
+      if (bar_seen) continue;
+      bar_seen = true;
+      Bar bar;
+      if (numeric && parse_bar(begin, end, bar)) {
+        rgb = bar_color(bar, number);
+        return true;
       }
-      double limit = 0;
-      if (has_number && parse_number(rule.value, rule.value + rule.value_len, limit)) {
-        if (rule.op == Op::Ge) match = number >= limit;
-        else if (rule.op == Op::Le) match = number <= limit;
-        else match = fabs(number - limit) <= 1e-6 * (fabs(limit) > 1 ? fabs(limit) : 1);
-      }
-    } else {
-      match = text_matches(rule.op, rule.value, rule.value_len, state) ||
-              (display && text_matches(rule.op, rule.value, rule.value_len, display));
+      continue;
     }
-    if (match) {
+    Rule rule;
+    if (!parse_rule(begin, end, rule) || !text_op(rule.op)) continue;
+    if (text_matches(rule.op, rule.value, rule.value_len, state) ||
+        (display && text_matches(rule.op, rule.value, rule.value_len, display))) {
       rgb = rule.color;
       return true;
     }
   }
-  return fixed_color(record, rgb);
+  trim(fixed_begin, fixed_end);
+  return parse_color(fixed_begin, fixed_end, rgb);
 }
 
-// Appends at most `max_bytes` of [begin, end) without splitting a UTF-8
+// Copies at most `max_bytes` of [begin, end) without splitting a UTF-8
 // sequence and without control characters.
 inline size_t copy_value(const char* begin, const char* end, char* out, size_t max_bytes) {
   size_t n = 0;
@@ -242,57 +426,185 @@ inline void append_hex(char* out, size_t& n, uint32_t rgb) {
   for (int shift = 20; shift >= 0; shift -= 4) out[n++] = kHex[(rgb >> shift) & 0xF];
 }
 
-// Normalizes any input record (Web Admin, import, sidecar) into the canonical
-// form: uppercase colors, known operators, at most three non-empty rules,
-// numeric rules with a valid number (comma becomes dot), values trimmed and
-// clipped to kMaxValueBytes. Invalid lines are dropped. Returns the length
-// written to `out` (0 = no icon colors); `out` is always terminated.
-inline size_t normalize(const char* in, char* out, size_t out_size) {
+inline void append_text(char* out, size_t& n, const char* text) {
+  while (*text) out[n++] = *text++;
+}
+
+// Whole number "[-]digits" of at most seven digits (b39 thresholds).
+inline bool parse_whole(const char* begin, const char* end, long long& value) {
+  trim(begin, end);
+  bool negative = false;
+  if (begin < end && *begin == '-') {
+    negative = true;
+    ++begin;
+  }
+  const size_t digits = static_cast<size_t>(end - begin);
+  if (digits == 0 || digits > 7) return false;
+  long long result = 0;
+  for (const char* p = begin; p < end; ++p) {
+    if (*p < '0' || *p > '9') return false;
+    result = result * 10 + (*p - '0');
+  }
+  value = negative ? -result : result;
+  return true;
+}
+
+// A b39 numeric rule counts only when its value is a complete number, like
+// the b39 normalizer required.
+inline bool legacy_numeric_valid(const Rule& rule) {
+  char buffer[kMaxValueBytes + 1];
+  const size_t n = rule.value_len < kMaxValueBytes ? rule.value_len : kMaxValueBytes;
+  if (n != rule.value_len) return false;
+  for (size_t i = 0; i < n; ++i) buffer[i] = rule.value[i] == ',' ? '.' : rule.value[i];
+  buffer[n] = '\0';
+  char* stop = nullptr;
+  const double value = strtod(buffer, &stop);
+  return stop && stop != buffer && !*stop && isfinite(value);
+}
+
+// Converts the numeric b39 rules of a legacy record into a steps bar when
+// they are ">=" thresholds on whole numbers in descending order (first match
+// wins) whose positions are exact thousandths. Values below the lowest
+// threshold keep the fixed color, or white as the numeric types' default.
+inline bool migrate_legacy_bar(const char* record, bool has_fixed, uint32_t fixed, Bar& bar) {
+  long long thresholds[kLegacyMaxRules];
+  uint32_t colors[kLegacyMaxRules];
+  size_t count = 0;
+  size_t rules = 0;
+  const char* p = line_end(record);
+  while (*p == '\n' && rules < kLegacyMaxRules) {
+    const char* begin = p + 1;
+    const char* end = line_end(begin);
+    p = end;
+    Rule rule;
+    if (!parse_rule(begin, end, rule)) continue;
+    if (text_op(rule.op)) {
+      ++rules;
+      continue;
+    }
+    if (!legacy_numeric_valid(rule)) continue;
+    ++rules;
+    long long value = 0;
+    if (rule.op != Op::Ge || !parse_whole(rule.value, rule.value + rule.value_len, value)) return false;
+    if (count > 0 && value >= thresholds[count - 1]) return false;
+    thresholds[count] = value;
+    colors[count] = rule.color;
+    ++count;
+  }
+  if (count == 0) return false;
+  // Ascending order: the last rule holds the lowest threshold.
+  const long long lowest = thresholds[count - 1];
+  const long long highest = thresholds[0];
+  const long long min = count == 1 ? lowest - 1 : lowest - (highest - lowest);
+  const long long range = highest - min;
+  bar.mode = BarMode::Steps;
+  bar.count = 0;
+  bar.stops[bar.count++] = {0, has_fixed ? fixed : 0xFFFFFFu};
+  for (size_t i = count; i-- > 0;) {
+    const long long scaled = (thresholds[i] - min) * static_cast<long long>(kPositionScale);
+    if (scaled % range) return false;
+    bar.stops[bar.count++] = {static_cast<uint16_t>(scaled / range), colors[i]};
+  }
+  snprintf(bar.min_text, sizeof(bar.min_text), "%lld", min);
+  snprintf(bar.max_text, sizeof(bar.max_text), "%lld", highest);
+  bar.min = static_cast<double>(min);
+  bar.max = static_cast<double>(highest);
+  return true;
+}
+
+// Appends one state line when it is valid; returns true when appended.
+inline bool append_row(const Rule& rule, char* out, size_t& n) {
+  char value[kMaxValueBytes + 1];
+  const size_t length = copy_value(rule.value, rule.value + rule.value_len, value, kMaxValueBytes);
+  const char* begin = value;
+  const char* end = value + length;
+  trim(begin, end);
+  if (begin == end) return false;
+  out[n++] = '\n';
+  append_text(out, n, rule.op == Op::Is ? "is" : "has");
+  out[n++] = ' ';
+  append_hex(out, n, rule.color);
+  out[n++] = ' ';
+  memcpy(out + n, begin, static_cast<size_t>(end - begin));
+  n += static_cast<size_t>(end - begin);
+  return true;
+}
+
+// Normalizes any input record (Web Admin, import, sidecar, b39 format) into
+// the canonical v2 form: uppercase colors, one valid bar with sorted stops
+// when `allow_bar`, up to six non-empty state lines when `allow_rows`,
+// values trimmed and clipped to kMaxValueBytes. Invalid lines are dropped.
+// Returns the length written to `out` (0 = no icon colors); `out` is always
+// terminated.
+inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_bar, bool allow_rows) {
   if (!out || out_size == 0) return 0;
   out[0] = '\0';
   if (!in || out_size < kMaxRecordBytes + 1) return 0;
-  size_t n = 0;
-  uint32_t rgb = 0;
-  const char* end = line_end(in);
-  const char* begin = in;
-  trim(begin, end);
-  if (parse_color(begin, end, rgb)) append_hex(out, n, rgb);
-  size_t rules = 0;
-  const char* p = line_end(in);
-  while (*p == '\n' && rules < kMaxRules) {
-    const char* line = p + 1;
-    const char* line_stop = line_end(line);
-    p = line_stop;
-    Rule rule;
-    if (!parse_rule(line, line_stop, rule)) continue;
-    char value[kMaxValueBytes + 1];
-    size_t value_len = copy_value(rule.value, rule.value + rule.value_len, value, kMaxValueBytes);
-    const char* value_begin = value;
-    const char* value_end = value + value_len;
-    trim(value_begin, value_end);
-    value_len = static_cast<size_t>(value_end - value_begin);
-    if (value_len == 0) continue;
-    if (numeric_op(rule.op)) {
-      // A numeric rule holds only its number, with a dot as separator.
-      char buffer[kMaxValueBytes + 1];
-      for (size_t i = 0; i < value_len; ++i) buffer[i] = value_begin[i] == ',' ? '.' : value_begin[i];
-      buffer[value_len] = '\0';
-      char* stop = nullptr;
-      const double number = strtod(buffer, &stop);
-      if (!stop || stop == buffer || *stop || !isfinite(number)) continue;
-      memcpy(value, buffer, value_len + 1);
-      value_begin = value;
+  const bool v2 = is_v2(in);
+  // Fixed color: line 2 of a v2 record, line 1 of a b39 record.
+  const char* fixed_begin = v2 ? second_line(in) : in;
+  const char* fixed_end = line_end(fixed_begin);
+  const char* body = fixed_end;
+  trim(fixed_begin, fixed_end);
+  uint32_t fixed = 0;
+  const bool has_fixed = parse_color(fixed_begin, fixed_end, fixed);
+
+  Bar bar;
+  bool has_bar = false;
+  if (allow_bar && v2) {
+    for (const char* p = body; *p == '\n' && !has_bar;) {
+      const char* begin = p + 1;
+      const char* end = line_end(begin);
+      p = end;
+      if (starts_with(begin, end, "bar ")) {
+        has_bar = parse_bar(begin, end, bar);
+        break;
+      }
     }
-    out[n++] = '\n';
-    const char* name = op_name(rule.op);
-    while (*name) out[n++] = *name++;
-    out[n++] = ' ';
-    append_hex(out, n, rule.color);
-    out[n++] = ' ';
-    memmove(out + n, value_begin, value_len);
-    n += value_len;
-    ++rules;
+  } else if (allow_bar) {
+    has_bar = migrate_legacy_bar(in, has_fixed, fixed, bar);
   }
+
+  size_t n = 0;
+  append_text(out, n, "v2\n");
+  if (has_fixed) append_hex(out, n, fixed);
+  if (has_bar) {
+    append_text(out, n, "\nbar ");
+    append_text(out, n, bar.mode == BarMode::Steps ? "steps" : "smooth");
+    out[n++] = ' ';
+    append_text(out, n, bar.min_text);
+    out[n++] = ' ';
+    append_text(out, n, bar.max_text);
+    for (size_t i = 0; i < bar.count; ++i) {
+      n += static_cast<size_t>(snprintf(out + n, out_size - n, " %u:", static_cast<unsigned>(bar.stops[i].position)));
+      append_hex(out, n, bar.stops[i].color);
+    }
+  }
+  size_t rows = 0;
+  if (allow_rows) {
+    // b39 records count their first three valid rules, numeric or text.
+    size_t legacy_rules = 0;
+    for (const char* p = body; *p == '\n' && rows < kMaxRows;) {
+      const char* begin = p + 1;
+      const char* end = line_end(begin);
+      p = end;
+      if (v2 && starts_with(begin, end, "bar ")) continue;
+      Rule rule;
+      if (!parse_rule(begin, end, rule)) continue;
+      if (!v2) {
+        if (legacy_rules >= kLegacyMaxRules) break;
+        if (!text_op(rule.op)) {
+          if (legacy_numeric_valid(rule)) ++legacy_rules;
+          continue;
+        }
+        ++legacy_rules;
+      } else if (!text_op(rule.op)) {
+        continue;
+      }
+      if (append_row(rule, out, n)) ++rows;
+    }
+  }
+  if (!has_fixed && !has_bar && rows == 0) n = 0;
   out[n] = '\0';
   return n;
 }

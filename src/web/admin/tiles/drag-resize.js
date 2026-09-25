@@ -119,8 +119,8 @@
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
     const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
-    // Every type resizes in half steps except Settings/Back, which stay whole.
-    const fixedGrid = [7, 8].includes(Number(typeValue));
+    // Every type resizes in half steps except Settings, which stays whole.
+    const fixedGrid = [7].includes(Number(typeValue));
     const unit = fixedGrid ? 1 : 0.5;
     const snap = fixedGrid ? clampInt : clampHalf;
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, unit);

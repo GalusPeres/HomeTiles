@@ -19,6 +19,13 @@ void apply_global_tile_border(lv_obj_t* obj);
 // `opa` while the option is on and stays transparent while it is off; other
 // discs always use `opa`. Shared styles update cached and hidden discs
 // without rebuilding them.
+// Tints a tile card's border hairline (found from obj or up to three parents)
+// with a glowing icon disc's hue; clear restores the white 20 % border.
+void set_tile_border_tint(lv_obj_t* obj, lv_color_t color, lv_opa_t opa);
+void clear_tile_border_tint(lv_obj_t* obj);
+// The popup card hairline: follows the global Tile borders option, drawn in the
+// header disc's color (white 20 %, or the glowing icon hue).
+void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa);
 void apply_icon_disc_opa(lv_obj_t* obj, lv_opa_t opa, bool follows_global);
 
 // Safe to call from the Web handler: only sets a flag. Apply the actual

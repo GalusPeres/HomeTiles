@@ -63,11 +63,22 @@ static constexpr bool tileTypeAllowedInScreensaver(int type) {
          type == TILE_COVER || tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
 }
 
-// Per-tile icon colors (fixed icon color and color rules) evaluate entity
-// states: the Sensor family, Binary sensor and Energy tiles.
+// Per-tile icon colors (fixed icon color, color bar and state colors)
+// evaluate entity states: the Sensor family, Binary sensor and Energy tiles.
 static constexpr bool tileTypeHasIconColors(int type) {
   return type == TILE_SENSOR || type == TILE_ENERGY || type == TILE_BINARY_SENSOR ||
          tileTypeIsEditableValue(type);
+}
+
+// Numeric states take the color bar ("Icon color by value"), text states the
+// state list ("Icon color by state"); Sensor states can be either.
+static constexpr bool tileTypeIconColorsByValue(int type) {
+  return type == TILE_SENSOR || type == TILE_ENERGY || type == TILE_NUMBER;
+}
+
+static constexpr bool tileTypeIconColorsByState(int type) {
+  return type == TILE_SENSOR || type == TILE_BINARY_SENSOR || type == TILE_SELECT ||
+         type == TILE_DATETIME;
 }
 
 static constexpr bool tileTypeRefreshesEntityIcon(TileType type) {

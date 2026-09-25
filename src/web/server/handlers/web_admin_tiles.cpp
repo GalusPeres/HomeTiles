@@ -368,7 +368,9 @@ void WebAdminServer::handleGetTiles() {
     appendJsonEscaped(out, tile.title);
     out += "\",\"icon_name\":\"";
     appendJsonEscaped(out, tile.icon_name);
-    out += "\",\"bg_color\":";
+    out += "\",\"icon_disc\":";
+    out += String(tile.icon_disc_mode);
+    out += ",\"bg_color\":";
     out += String(tile.bg_color);
     out += ",\"background_opacity\":";
     out += String(tile.background_opacity);
@@ -588,6 +590,10 @@ void WebAdminServer::handleSaveTiles() {
   tile.type = static_cast<TileType>(type);
   tile.title = hometiles_title::normalize(server.hasArg("title") ? server.arg("title").c_str() : "").c_str();
   tile.icon_name = server.hasArg("icon_name") ? server.arg("icon_name") : "";
+  // Partial requests keep the stored disc override.
+  if (server.hasArg("icon_disc")) {
+    tile.icon_disc_mode = normalizeTileIconDiscMode(server.arg("icon_disc").toInt());
+  }
   // Parse color. bg_color_default keeps legacy/default tiles as true defaults;
   // bg_color=0 is reserved for an explicitly selected black background.
   if (server.hasArg("bg_color_default") && server.arg("bg_color_default").toInt() != 0) {

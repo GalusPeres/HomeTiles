@@ -355,6 +355,31 @@ static uint16_t clampImageSlideshowSeconds(uint16_t val) {
   return val;
 }
 
+// Per-tile icon disc options live in the top bits of the V7 slideshow field.
+// Only the animation tile uses that field (at most 3600, 12 bits); every other
+// type stores its disc options there. Firmware without these bits clamps the
+// field to 3600 and ignores it, so the packed layout stays V7-compatible.
+static constexpr uint16_t kIconDiscModeShift = 13;
+static constexpr uint16_t kIconDiscModeMask = 0x3u << kIconDiscModeShift;
+static constexpr uint16_t kSlideshowValueMask = 0x1FFFu;
+
+static bool tileStoresIconDiscOptions(TileType type) {
+  return type != TILE_PIXELANIM && type != TILE_EMPTY;
+}
+
+static uint16_t packIconDiscOptions(const Tile& tile) {
+  if (!tileStoresIconDiscOptions(tile.type)) return 0;
+  return static_cast<uint16_t>(
+      normalizeTileIconDiscMode(tile.icon_disc_mode) << kIconDiscModeShift);
+}
+
+static void unpackIconDiscOptions(uint16_t packed, Tile& tile) {
+  tile.icon_disc_mode = TILE_ICON_DISC_GLOBAL;
+  if (!tileStoresIconDiscOptions(tile.type)) return;
+  tile.icon_disc_mode = normalizeTileIconDiscMode(
+      (packed & kIconDiscModeMask) >> kIconDiscModeShift);
+}
+
 static uint16_t getNavigateTargetId(const Tile& tile) {
   return static_cast<uint16_t>((static_cast<uint16_t>(tile.key_modifier) << 8) | tile.key_code);
 }
@@ -1007,6 +1032,10 @@ static void packTile(const Tile& in, PackedTileV7& out) {
   out.span_h = span_h;
   out.sensor_value_font = clampSensorValueFont(in.sensor_value_font);
   out.image_slideshow_sec = clampImageSlideshowSeconds(in.image_slideshow_sec);
+  if (tileStoresIconDiscOptions(in.type)) {
+    out.image_slideshow_sec = static_cast<uint16_t>(
+        (out.image_slideshow_sec & kSlideshowValueMask) | packIconDiscOptions(in));
+  }
   out.sensor_gauge_enabled = (in.sensor_display_mode <= 2) ? in.sensor_display_mode : 0;
   out.sensor_gauge_min = in.sensor_gauge_min;
   out.sensor_gauge_max = in.sensor_gauge_max;
@@ -1189,7 +1218,10 @@ static void unpackTileV7(const PackedTileV7& in, Tile& out) {
     out.key_code = 0;
     out.key_modifier = 0;
   }
-  out.image_slideshow_sec = clampImageSlideshowSeconds(in.image_slideshow_sec);
+  uint16_t slideshow = in.image_slideshow_sec;
+  unpackIconDiscOptions(slideshow, out);
+  if (tileStoresIconDiscOptions(out.type)) slideshow &= kSlideshowValueMask;
+  out.image_slideshow_sec = clampImageSlideshowSeconds(slideshow);
   out.title = String(in.title);
   out.icon_name = String(in.icon_name);
   out.sensor_entity = String(in.sensor_entity);

@@ -445,6 +445,9 @@
     fd.append('type', safeType);
     fd.append('title', tile.title || '');
     fd.append('icon_name', tile.icon_name || '');
+    if (tile.icon_disc !== undefined && tile.icon_disc !== null) {
+      fd.append('icon_disc', tile.icon_disc);
+    }
     const parsedBgColor = parseBgColorValue(tile.bg_color);
     if (parsedBgColor !== 0 || (typeof tile.bg_color === 'string' && tile.bg_color.trim().startsWith('#'))) {
       fd.append('bg_color', parsedBgColor);

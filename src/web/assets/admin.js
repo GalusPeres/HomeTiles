@@ -2405,14 +2405,39 @@ function syncTileRadiusControls(tabEl) {
       .catch(() => {});
   }
 
+  // Per-tile icon disc options are common to every type with an icon, so
+  // they travel with the type fields through drafts, copy/paste and saves.
+  function tileTypeHasIcon(typeValue) {
+    return !['0', '16'].includes(String(typeValue ?? '0'));
+  }
+  function collectIconDiscFields(tab, typeValue) {
+    const select = document.getElementById(tab + '_tile_icon_disc');
+    if (!select || !tileTypeHasIcon(typeValue)) return {};
+    return { icon_disc: select.value || '0' };
+  }
+  function loadIconDiscFields(tab, data) {
+    const select = document.getElementById(tab + '_tile_icon_disc');
+    if (select) select.value = ['1', '2'].includes(String(data?.icon_disc)) ? String(data.icon_disc) : '0';
+    syncIconDiscFields(tab);
+  }
+  function resetIconDiscFields(tab) {
+    const select = document.getElementById(tab + '_tile_icon_disc');
+    if (select) select.value = '0';
+  }
+  function syncIconDiscFields(tab) {
+    const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
+    document.getElementById(tab + '_tile_icon_disc_fields')
+      ?.classList.toggle('hidden', !tileTypeHasIcon(typeValue));
+  }
+
   function collectTypeFieldValues(tab) {
     const prefix = tab;
     const typeValue = document.getElementById(prefix + '_tile_type')?.value || '0';
     const meta = getTileTypeMeta(typeValue);
-    if (!meta.save) return {};
+    const out = collectIconDiscFields(prefix, typeValue);
+    if (!meta.save) return out;
     const fd = new FormData();
     callTypeHandler(meta, 'save', prefix, fd);
-    const out = {};
     for (const [key, value] of fd.entries()) {
       out[key] = value;
     }
@@ -2470,7 +2495,7 @@ function syncTileRadiusControls(tabEl) {
     const prev = tiles[index] || {};
     const tile = Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
-    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity'];
+    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc'];
 
     tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
@@ -3619,6 +3644,7 @@ function syncTileRadiusControls(tabEl) {
     syncTileSizePolicy(tab);
     const meta = getTileTypeMeta(d.type || '0');
     callTypeHandler(meta, 'load', prefix, d);
+    loadIconDiscFields(prefix, d);
     refreshEntityOptionLists(prefix);
     syncGaugeUi(tab);
     updateTilePreview(tab);
@@ -3680,6 +3706,7 @@ function syncTileRadiusControls(tabEl) {
     syncTileSizePolicy(tab);
     const meta = getTileTypeMeta(typeValue);
     callTypeHandler(meta, 'load', prefix, data);
+    loadIconDiscFields(prefix, data);
     refreshEntityOptionLists(prefix);
     syncGaugeUi(tab);
   }
@@ -3920,6 +3947,7 @@ function syncTileRadiusControls(tabEl) {
       updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
     });
     bindLive(iconInput, 'input', 'tileIcon', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(document.getElementById(prefix + '_tile_icon_disc'), 'change', 'tileIconDisc', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(colorInput, 'input', 'tileColor', () => { markTileColorInputExplicit(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(opacityInput, 'input', 'tileOpacity', () => { updateTilePreview(tab); updateDraft(tab); });
     bindLive(opacityInput, 'change', 'tileOpacitySave', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
@@ -4272,6 +4300,7 @@ function syncTileRadiusControls(tabEl) {
     if (type === '5' && switchStyle === '1') tileElem.classList.add('switch-toggle');
     tileElem.style.background = '';
     tileElem.dataset.type = type;
+    tileElem.dataset.iconDisc = document.getElementById(prefix + '_tile_icon_disc')?.value || '0';
     tileElem.classList.toggle('tile-border-hidden', ['9','10'].includes(type) && document.getElementById(prefix + (type === '9' ? '_clock_tile_border' : '_text_tile_border'))?.checked === false);
 
     if (type === '0') {
@@ -4481,6 +4510,7 @@ function syncTileRadiusControls(tabEl) {
         }
         const meta = colorMeta;
         callTypeHandler(meta, 'load', prefix, data);
+        loadIconDiscFields(prefix, data);
         refreshEntityOptionLists(prefix);
         syncGaugeUi(tab);
         const tileElem = document.getElementById(tab + '-tile-' + index);
@@ -4583,6 +4613,7 @@ function syncTileRadiusControls(tabEl) {
     applySpecialTileUiState(tab);
     syncFolderPinControls(tab);
     syncTileSizePolicy(tab);
+    syncIconDiscFields(tab);
   }
 
   function syncTileSizePolicy(tab) {
@@ -4652,6 +4683,7 @@ function syncTileRadiusControls(tabEl) {
   function resetAllTypeFields(tab) {
     const metas = Object.values(TILE_TYPE_REGISTRY || {});
     metas.forEach(meta => callTypeHandler(meta, 'reset', tab));
+    resetIconDiscFields(tab);
   }
 
   function applyFolderTypeLock(tab, locked) {
@@ -5298,6 +5330,9 @@ function syncTileRadiusControls(tabEl) {
     fd.append('type', safeType);
     fd.append('title', tile.title || '');
     fd.append('icon_name', tile.icon_name || '');
+    if (tile.icon_disc !== undefined && tile.icon_disc !== null) {
+      fd.append('icon_disc', tile.icon_disc);
+    }
     const parsedBgColor = parseBgColorValue(tile.bg_color);
     if (parsedBgColor !== 0 || (typeof tile.bg_color === 'string' && tile.bg_color.trim().startsWith('#'))) {
       fd.append('bg_color', parsedBgColor);
@@ -5561,6 +5596,7 @@ function syncTileRadiusControls(tabEl) {
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     el.className = cls.join(' ');
     el.dataset.type = typeValue;
+    el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
     el.classList.toggle('tile-border-hidden', ['9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
     applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);

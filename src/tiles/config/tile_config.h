@@ -124,6 +124,9 @@ struct Tile {
   String image_path;
   uint16_t image_slideshow_sec;
 
+  // Icon disc override: TILE_ICON_DISC_GLOBAL follows the global option.
+  uint8_t icon_disc_mode = 0;
+
   Tile()
       : type(TILE_EMPTY),
         bg_color(0),
@@ -147,6 +150,18 @@ struct Tile {
         key_modifier(0),
         image_slideshow_sec(10) {}
 };
+
+enum TileIconDiscMode : uint8_t {
+  TILE_ICON_DISC_GLOBAL = 0,
+  TILE_ICON_DISC_ON = 1,
+  TILE_ICON_DISC_OFF = 2
+};
+
+static inline uint8_t normalizeTileIconDiscMode(int mode) {
+  return (mode >= TILE_ICON_DISC_GLOBAL && mode <= TILE_ICON_DISC_OFF)
+             ? static_cast<uint8_t>(mode)
+             : TILE_ICON_DISC_GLOBAL;
+}
 
 // Clock/Text use the otherwise unused display mode byte: 0 inherits borders, 1 hides them.
 static inline bool tileBorderEnabled(const Tile& tile) {

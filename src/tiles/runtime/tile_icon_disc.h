@@ -28,12 +28,38 @@ inline constexpr uint32_t kMdiReferenceGlyph = 0xF0001;
 
 enum class Shape : uint8_t { Concentric, Round };
 
-// Disc objects carry this address as user data, so icon hide/show paths can
-// find the disc of an icon without an extra allocation per tile.
-inline constexpr char kTag = 0;
+// Per-tile disc override (TileIconDiscMode): follow the global icon disc
+// option, always show the disc, or never show it.
+enum class Mode : uint8_t { Global = 0, On = 1, Off = 2 };
+
+// Disc objects carry one of these addresses as user data. The address marks
+// the object as a disc and holds its mode, so icon paths find the disc of an
+// icon and its options without an extra allocation per tile.
+inline constexpr char kTags[3] = {};
 
 inline bool is_disc(lv_obj_t* obj) {
-  return obj && lv_obj_get_user_data(obj) == static_cast<const void*>(&kTag);
+  if (!obj) return false;
+  const uintptr_t tag = reinterpret_cast<uintptr_t>(lv_obj_get_user_data(obj));
+  return tag - reinterpret_cast<uintptr_t>(&kTags[0]) < sizeof(kTags);
+}
+
+inline Mode mode_of(lv_obj_t* disc) {
+  return static_cast<Mode>(reinterpret_cast<uintptr_t>(lv_obj_get_user_data(disc)) -
+                           reinterpret_cast<uintptr_t>(&kTags[0]));
+}
+
+inline void set_tag(lv_obj_t* disc, Mode mode) {
+  lv_obj_set_user_data(disc, const_cast<char*>(&kTags[static_cast<uint8_t>(mode)]));
+}
+
+// Opacity of a disc for its mode: Global discs follow the global option
+// through the shared style, On discs always show, Off discs stay transparent.
+inline void apply_fill(lv_obj_t* disc) {
+  if (!is_disc(disc)) return;
+  const Mode mode = mode_of(disc);
+  ui_surface_style::apply_icon_disc_opa(
+      disc, mode == Mode::Off ? static_cast<lv_opa_t>(LV_OPA_TRANSP) : kOpa,
+      mode == Mode::Global);
 }
 
 // A wrapped icon's disc is its parent; a round disc sits directly behind it.
@@ -61,16 +87,32 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   lv_obj_remove_flag(disc, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
   // Presses on a wrapped icon still reach the card through the disc.
   lv_obj_add_flag(disc, LV_OBJ_FLAG_EVENT_BUBBLE);
-  lv_obj_set_user_data(disc, const_cast<char*>(&kTag));
+  set_tag(disc, Mode::Global);
   const int size = shape == Shape::Round ? round_diameter() : diameter();
   lv_obj_set_size(disc, size, size);
   // Both shapes follow the global radius with the half-height rule. The shape
   // decides the placement (corner or behind the icon) and the diameter.
   ui_surface_style::apply_radius(disc, radius_baseline(), 0);
   lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
-  // The shared opacity style follows the global icon disc option.
+  // New discs follow the global option until the tile's own mode is applied.
   ui_surface_style::apply_icon_disc_opa(disc, kOpa, true);
   return disc;
+}
+
+// Applies the tile's persisted disc mode to the discs of a rendered card.
+// render_tile() calls it once for every tile type after rendering.
+inline void apply_tile_mode(lv_obj_t* card, uint8_t mode) {
+  if (!card) return;
+  const Mode disc_mode = mode <= static_cast<uint8_t>(Mode::Off)
+                             ? static_cast<Mode>(mode)
+                             : Mode::Global;
+  const uint32_t count = lv_obj_get_child_count(card);
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
+    if (!is_disc(child)) continue;
+    set_tag(child, disc_mode);
+    apply_fill(child);
+  }
 }
 
 // Half-height tiles: moves `icon` into a concentric disc on `card` and centers

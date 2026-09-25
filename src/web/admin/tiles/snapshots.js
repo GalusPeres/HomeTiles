@@ -1,12 +1,37 @@
 
+  // Per-tile icon disc options are common to every type with an icon, so
+  // they travel with the type fields through drafts, copy/paste and saves.
+  function tileTypeHasIcon(typeValue) {
+    return !['0', '16'].includes(String(typeValue ?? '0'));
+  }
+  function collectIconDiscFields(tab, typeValue) {
+    const select = document.getElementById(tab + '_tile_icon_disc');
+    if (!select || !tileTypeHasIcon(typeValue)) return {};
+    return { icon_disc: select.value || '0' };
+  }
+  function loadIconDiscFields(tab, data) {
+    const select = document.getElementById(tab + '_tile_icon_disc');
+    if (select) select.value = ['1', '2'].includes(String(data?.icon_disc)) ? String(data.icon_disc) : '0';
+    syncIconDiscFields(tab);
+  }
+  function resetIconDiscFields(tab) {
+    const select = document.getElementById(tab + '_tile_icon_disc');
+    if (select) select.value = '0';
+  }
+  function syncIconDiscFields(tab) {
+    const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
+    document.getElementById(tab + '_tile_icon_disc_fields')
+      ?.classList.toggle('hidden', !tileTypeHasIcon(typeValue));
+  }
+
   function collectTypeFieldValues(tab) {
     const prefix = tab;
     const typeValue = document.getElementById(prefix + '_tile_type')?.value || '0';
     const meta = getTileTypeMeta(typeValue);
-    if (!meta.save) return {};
+    const out = collectIconDiscFields(prefix, typeValue);
+    if (!meta.save) return out;
     const fd = new FormData();
     callTypeHandler(meta, 'save', prefix, fd);
-    const out = {};
     for (const [key, value] of fd.entries()) {
       out[key] = value;
     }
@@ -64,7 +89,7 @@
     const prev = tiles[index] || {};
     const tile = Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
-    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity'];
+    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc'];
 
     tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';

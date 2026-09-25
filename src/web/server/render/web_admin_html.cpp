@@ -562,6 +562,8 @@ static void appendTileTabHTML(
     html += String(span_h);
     html += "\" data-type=\"";
     html += String(static_cast<unsigned>(tile.type));
+    html += "\" data-icon-disc=\"";
+    html += String(tile.icon_disc_mode);
     if (tile.type == TILE_FOLDER) {
       html += "\" data-navigate-target=\"";
       html += String(getNavigateTargetId(tile));
@@ -1049,6 +1051,22 @@ static void appendTileTabHTML(
               Material Design Icons: <a href="https://pictogrammers.com/library/mdi/" target="_blank" style="color:#4db6ac;">)html";
   html += tr.admin_icon_list;
   html += R"html(</a>
+            </div>
+            <div class="tile-icon-disc-fields" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_disc_fields">
+              <label>)html";
+  appendHtmlEscaped(html, tr.icon_disc_label);
+  html += R"html(</label>
+              <select id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_disc"><option value="0">)html";
+  appendHtmlEscaped(html, tr.icon_disc_global);
+  html += R"html(</option><option value="1">)html";
+  appendHtmlEscaped(html, tr.icon_disc_on);
+  html += R"html(</option><option value="2">)html";
+  appendHtmlEscaped(html, tr.icon_disc_off);
+  html += R"html(</option></select>
             </div>
 
             <div class="tile-color-label-row)html";

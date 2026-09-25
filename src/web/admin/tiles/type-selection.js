@@ -49,6 +49,7 @@
         }
         const meta = colorMeta;
         callTypeHandler(meta, 'load', prefix, data);
+        loadIconDiscFields(prefix, data);
         refreshEntityOptionLists(prefix);
         syncGaugeUi(tab);
         const tileElem = document.getElementById(tab + '-tile-' + index);
@@ -151,6 +152,7 @@
     applySpecialTileUiState(tab);
     syncFolderPinControls(tab);
     syncTileSizePolicy(tab);
+    syncIconDiscFields(tab);
   }
 
   function syncTileSizePolicy(tab) {

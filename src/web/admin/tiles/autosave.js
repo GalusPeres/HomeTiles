@@ -31,6 +31,7 @@
   function resetAllTypeFields(tab) {
     const metas = Object.values(TILE_TYPE_REGISTRY || {});
     metas.forEach(meta => callTypeHandler(meta, 'reset', tab));
+    resetIconDiscFields(tab);
   }
 
   function applyFolderTypeLock(tab, locked) {

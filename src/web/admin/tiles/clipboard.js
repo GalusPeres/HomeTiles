@@ -54,6 +54,7 @@
     syncTileSizePolicy(tab);
     const meta = getTileTypeMeta(typeValue);
     callTypeHandler(meta, 'load', prefix, data);
+    loadIconDiscFields(prefix, data);
     refreshEntityOptionLists(prefix);
     syncGaugeUi(tab);
   }

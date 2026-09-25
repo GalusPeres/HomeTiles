@@ -107,7 +107,7 @@ assert.ok(read('src/web/admin/folders/navigation.js').includes('syncGlobalDispla
 const preview = read('src/web/admin/tiles/grid-preview.js');
 assert.ok(preview.includes("const sharedCss = 'var(--tile-default-bg, #2A2A2A)';"));
 assert.match(read('src/web/admin/tiles/live-preview.js'), /tileBackgroundCss\(meta, isDefaultBg,/);
-assert.match(read('src/web/assets/admin.css'), /\.icon-discs-off \.tile\.sensor-compact > \.tile-icon \{ background:transparent; \}/);
+assert.match(read('src/web/assets/admin.css'), /\.icon-discs-off \.tile\.sensor-compact:not\(\[data-icon-disc="1"\]\) > \.tile-icon/);
 assert.match(read('src/web/assets/admin.css'), /\.folder-footer-options \{[^}]*flex-wrap:wrap;/, 'The global row wraps on narrow widths');
 
 console.log('Global icon discs and default tile color: config, endpoints, live apply, translations and preview pass');

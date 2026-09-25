@@ -2132,7 +2132,7 @@ function syncTileRadiusControls(tabEl) {
   let latestSaveRequestByTab = {};
   let saveInFlightByTile = {};
   let queuedSaveByTile = {};
-  let sensorMetaCache = { values: {}, units: {}, icons: {}, names: {}, loaded: false };
+  let sensorMetaCache = { values: {}, units: {}, icons: {}, names: {}, sceneEntities: {}, loaded: false };
   let sensorMetaFetchInFlight = null;
   let lastSensorMetaFetchMs = 0;
   let entityOptionsCache = null;
@@ -2144,7 +2144,7 @@ function syncTileRadiusControls(tabEl) {
 
   function normalizeSensorMetaPayload(payload) {
     if (!payload || typeof payload !== 'object') {
-      return { values: {}, units: {}, icons: {}, names: {}, loaded: false };
+      return { values: {}, units: {}, icons: {}, names: {}, sceneEntities: {}, loaded: false };
     }
     const hasMeta = Object.prototype.hasOwnProperty.call(payload, 'editable_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'values') ||
@@ -2156,7 +2156,7 @@ function syncTileRadiusControls(tabEl) {
                     Object.prototype.hasOwnProperty.call(payload, 'energy_units') ||
                     Object.prototype.hasOwnProperty.call(payload, 'climate_values');
     if (!hasMeta) {
-      return { values: payload || {}, units: {}, icons: {}, names: {}, loaded: true };
+      return { values: payload || {}, units: {}, icons: {}, names: {}, sceneEntities: {}, loaded: true };
     }
     return {
       values: Object.assign(
@@ -2170,6 +2170,8 @@ function syncTileRadiusControls(tabEl) {
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},
+      // Scene alias -> entity, so scene tiles resolve the entity icon like the device.
+      sceneEntities: payload.scene_entities || {},
       loaded: true
     };
   }
@@ -4267,6 +4269,10 @@ function syncTileRadiusControls(tabEl) {
                 ? coverEntity
                 : (previewKind === 'camera' ? cameraEntity : '')))))));
     if (isEditablePreview(previewKind)) iconEntity = document.getElementById(prefix + '_' + previewKind + '_entity')?.value || '';
+    if (type === '2') {
+      const alias = document.getElementById(prefix + '_scene_alias')?.value || '';
+      iconEntity = sensorMetaCache.sceneEntities?.[alias] || '';
+    }
     const rawIcon = iconInput ? iconInput.value : '';
     let iconName = resolveIconName(
       rawIcon,
@@ -5666,7 +5672,7 @@ function syncTileRadiusControls(tabEl) {
                           previewKind === 'climate' || previewKind === 'cover' ||
                           previewKind === 'camera')
         ? (tile.sensor_entity || '')
-        : '';
+        : (typeValue === '2' ? (sensorMeta?.sceneEntities?.[tile.scene_alias] || '') : '');
       const rawIcon = tile.icon_name || '';
       let iconName = resolveIconName(
         rawIcon,

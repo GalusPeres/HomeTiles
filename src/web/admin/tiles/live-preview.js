@@ -58,6 +58,10 @@
                 ? coverEntity
                 : (previewKind === 'camera' ? cameraEntity : '')))))));
     if (isEditablePreview(previewKind)) iconEntity = document.getElementById(prefix + '_' + previewKind + '_entity')?.value || '';
+    if (type === '2') {
+      const alias = document.getElementById(prefix + '_scene_alias')?.value || '';
+      iconEntity = sensorMetaCache.sceneEntities?.[alias] || '';
+    }
     const rawIcon = iconInput ? iconInput.value : '';
     let iconName = resolveIconName(
       rawIcon,

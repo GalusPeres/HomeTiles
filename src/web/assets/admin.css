@@ -1154,6 +1154,8 @@
       color:#fff;
       font-size:var(--icon-size, 24px);
       line-height:1;
+      /* Anchor for the round icon disc; header icons stay absolute. */
+      position:relative;
     }
     /* Centered ghost hint for tiles without a live preview (weather/media) */
     .tile-ghost-icon {
@@ -2275,6 +2277,20 @@
 .tile.sensor-compact > .tile-icon.tile-icon-tinted {
   background:color-mix(in srgb, currentColor var(--icon-disc-glow, 20%), transparent);
 }
+/* Taller tiles: a disc of tile_icon_disc::round_diameter() centered on the
+   unchanged icon, behind it, with the half-height radius rule. */
+.tile:not(.empty):not(.sensor-compact) > .tile-icon::after {
+  content:""; position:absolute; left:50%; top:50%; z-index:-1;
+  width:var(--icon-disc-round, 30px); height:var(--icon-disc-round, 30px);
+  transform:translate(-50%, -50%); pointer-events:none;
+  border-radius:max(0px, calc(var(--tile-radius) - var(--compact-inset)));
+  background:rgba(255,255,255,var(--icon-disc-opa, 0.149));
+}
+.tile:not(.sensor-compact) > .tile-icon.tile-icon-tinted::after {
+  background:color-mix(in srgb, currentColor var(--icon-disc-glow, 20%), transparent);
+}
+.icon-discs-off .tile:not([data-icon-disc="1"]) > .tile-icon::after,
+.tile[data-icon-disc="2"] > .tile-icon::after { display:none; }
 /* The global icon disc option (root class, mirrors the device's shared disc
    style) and the per-tile override: data-icon-disc 0 global, 1 on, 2 off. */
 .icon-discs-off .tile.sensor-compact:not([data-icon-disc="1"]) > .tile-icon,

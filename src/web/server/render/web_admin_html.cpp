@@ -23,6 +23,8 @@
 #include "src/devices/device.h"
 #include "src/types/clock/clock_format.h"
 #include "src/types/binary_sensor/renderer.h"
+#include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/types/energy/energy_data.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/video/local_camera/local_camera.h"
@@ -613,13 +615,26 @@ static void appendTileTabHTML(
       if (binary_sensor_preview) {
         iconName = binary_sensor_resolve_icon(tile, binary_sensor_state);
       }
+      // Scene tiles without an icon use their scene entity's icon, as on the device.
+      if (tile.type == TILE_SCENE && !iconName.length() &&
+          !isMdiIconDisabled(tile.icon_name) && tile.scene_alias.length()) {
+        const String scene_entity = haBridgeConfig.findSceneEntity(tile.scene_alias);
+        if (scene_entity.length()) {
+          iconName = normalizeMdiIconName(haBridgeConfig.findEntityIcon(scene_entity));
+        }
+      }
 
       bool hasIcon = iconName.length() > 0;
 
       if (hasIcon) {
         html += "<i class=\"mdi mdi-";
         appendHtmlEscaped(html, iconName);
-        html += " tile-icon\"";
+        html += " tile-icon";
+        if (binary_sensor_preview && tile.icon_glow &&
+            tile_icon_disc::icon_color_tints(binary_sensor_visual_color(binary_sensor_state))) {
+          html += " tile-icon-tinted";
+        }
+        html += "\"";
         if (binary_sensor_preview) {
           char color_hex[8];
           snprintf(color_hex, sizeof(color_hex), "#%06X",

@@ -149,7 +149,7 @@
                           previewKind === 'climate' || previewKind === 'cover' ||
                           previewKind === 'camera')
         ? (tile.sensor_entity || '')
-        : '';
+        : (typeValue === '2' ? (sensorMeta?.sceneEntities?.[tile.scene_alias] || '') : '');
       const rawIcon = tile.icon_name || '';
       let iconName = resolveIconName(
         rawIcon,

@@ -934,6 +934,21 @@ void WebAdminServer::handleGetSensorValues() {
     json += '"';
   }
   json += "}";
+  // Scene tiles store an alias; the device resolves its entity (and the
+  // entity's icon) through the bridge scene list. The preview needs the same
+  // alias -> entity map to show the scene's Home Assistant icon.
+  json += ",\"scene_entities\":{";
+  bool first_scene = true;
+  for (const auto& scene : parseSceneList(ha.scene_alias_text)) {
+    if (!first_scene) json += ',';
+    first_scene = false;
+    json += '"';
+    appendJsonEscaped(json, scene.alias);
+    json += "\":\"";
+    appendJsonEscaped(json, scene.entity);
+    json += '"';
+  }
+  json += "}";
   json += "}";
 
   sendChunkedResponse(server, 200, "application/json", json);

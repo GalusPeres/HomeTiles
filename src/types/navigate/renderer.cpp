@@ -4,6 +4,7 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/compact_sensor_layout.h"
+#include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/ui/ui_manager.h"
@@ -67,15 +68,16 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
   }
   bool has_icon = iconChar.length() > 0;
   bool has_title = tile.title.length() > 0;
-  // A half-height Back tile uses the half-height Sensor header: the arrow in
-  // the concentric corner disc and the title, if any, beside it.
-  const bool compact = tile_geometry::compact_back(tile.type, tile.span_w, tile.span_h);
+  // A half-height Folder or Back tile uses the half-height Sensor header: the
+  // icon in the concentric corner disc and the title, if any, beside it.
+  const bool compact = tile_geometry::compact_icon_title(tile.type, tile.span_w, tile.span_h);
 
   if (has_icon) {
     icon_lbl = lv_label_create(btn);
     if (icon_lbl) {
       set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
       lv_label_set_text(icon_lbl, iconChar.c_str());
+      tile_icon_color_rules::apply_fixed(icon_lbl, tile.icon_colors.c_str());
 
       // Center icon and title on two lines, or the icon alone on one line.
       if (!compact) {

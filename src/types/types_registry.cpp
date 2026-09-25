@@ -863,8 +863,8 @@ void append_tile_type_fields_html(String& html, const TileTypeWebContext& ctx) {
       entry.append_fields(html, ctx);
     }
   }
-  // Shared by the Sensor family, Binary sensor and Energy; the editor shows
-  // it for those types only.
+  // Shared by the Sensor family, Binary sensor, Energy and the icon-and-title
+  // tiles (fixed color only); the editor shows it for those types only.
   if (ctx.tab_id) append_tile_icon_color_fields_html(html, *ctx.tab_id);
 }
 

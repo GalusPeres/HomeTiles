@@ -5,10 +5,12 @@
     return !['0', '16'].includes(String(typeValue ?? '0'));
   }
   // Glow only matters where the icon can take a color: from its entity
-  // (switch/light, climate, cover, binary sensor) or from color rules
-  // (sensor family, energy). Other icons are always white.
+  // (switch/light, climate, cover, binary sensor), from the color bar or
+  // state colors (sensor family, energy) or from a fixed icon color (scene,
+  // folder, back, camera). Other icons are always white.
   function tileTypeHasColoredIcon(typeValue) {
-    return ['1', '5', '14', '17', '19', '20', '21', '22', '23'].includes(String(typeValue ?? '0'));
+    return ['1', '2', '4', '5', '8', '14', '17', '18', '19', '20', '21', '22', '23']
+      .includes(String(typeValue ?? '0'));
   }
   // Stored disc mode: 0 follows the global option, 2 hides the disc on this
   // tile. A legacy stored 1 ("on") loads as checked.

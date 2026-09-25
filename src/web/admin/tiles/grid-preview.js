@@ -102,6 +102,9 @@
   // while it is missing, unknown or unavailable (the type color applies).
   function iconColorRuleState(typeValue, entity, meta, binaryState) {
     const type = String(typeValue ?? '0');
+    // Icon-and-title tiles have no state; their fixed icon color applies.
+    if (typeof tileTypeHasFixedIconColorOnly === 'function' &&
+        tileTypeHasFixedIconColorOnly(type)) return { state: '', display: null };
     if (type === '20') {
       if (!binaryState?.valid || binaryState.available !== true ||
           !['on', 'off'].includes(binaryState.state)) return null;

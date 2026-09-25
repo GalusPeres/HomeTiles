@@ -23,4 +23,11 @@ inline void apply(lv_obj_t* icon, const char* record, bool known,
   tile_icon_disc::set_icon_color(icon, color);
 }
 
+// Icon-and-title tiles (Scene, Folder, Back, Camera) have no entity state:
+// the icon takes the tile's fixed icon color, else stays white. Called once
+// when the tile is built; the disc reads the color when its options apply.
+inline void apply_fixed(lv_obj_t* icon, const char* record) {
+  apply(icon, record, true, "", nullptr, lv_color_white());
+}
+
 }  // namespace tile_icon_color_rules

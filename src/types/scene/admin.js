@@ -15,6 +15,7 @@ function maybeFillTitleFromScene(tab) {
   }
 
   function loadSceneFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const sceneEl = document.getElementById(prefix + '_scene_alias');
     if (sceneEl) sceneEl.value = data.scene_alias || '';
@@ -24,10 +25,12 @@ function maybeFillTitleFromScene(tab) {
   function saveSceneFields(tab, formData) {
     const prefix = tab;
     formData.append('scene_alias', document.getElementById(prefix + '_scene_alias')?.value || '');
+    saveIconColorFields(tab, formData);
   }
 
   function resetSceneFields(tab) {
     const prefix = tab;
     const sceneEl = document.getElementById(prefix + '_scene_alias');
     if (sceneEl) sceneEl.value = '';
+    resetIconColorFields(tab);
   }

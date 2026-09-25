@@ -550,7 +550,7 @@ static void appendTileTabHTML(
       if (span_h == 0.5f) cssClass += " sensor-half";
     }
     if (tile_geometry::compact_clock(tile.type, span_w, span_h)) cssClass += " clock-compact";
-    if (tile_geometry::compact_back(tile.type, span_w, span_h)) {
+    if (tile_geometry::compact_icon_title(tile.type, span_w, span_h)) {
       cssClass += " sensor-compact sensor-half compact-title-only";
     }
     html += "<div class=\"";

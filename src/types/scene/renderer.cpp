@@ -3,6 +3,8 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_color_rules.h"
+#include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/devices/device.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -302,11 +304,21 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
   }
 
   bool has_icon = (icon_img != nullptr) || (icon_lbl != nullptr);
+  // A half-height Scene uses the half-height Sensor header: the icon in the
+  // concentric corner disc and the title beside it.
+  const bool compact = tile_geometry::compact_icon_title(tile.type, tile.span_w, tile.span_h);
 
   // Position icon
   if (icon_img) {
     if (!icon_full_bleed) {
-      if (has_title) {
+      if (compact) {
+        // An image icon takes the disc's size and corner position.
+        const int size = tile_icon_disc::diameter();
+        lv_obj_set_size(icon_img, size, size);
+        ui_surface_style::apply_radius(icon_img, tile_icon_disc::radius_baseline(), 0);
+        if (lv_obj_t* img = lv_obj_get_child(icon_img, 0)) lv_obj_set_size(img, size, size);
+        lv_obj_align(icon_img, LV_ALIGN_TOP_LEFT, tile_icon_disc::inset(), tile_icon_disc::inset());
+      } else if (has_title) {
         lv_obj_align(icon_img, LV_ALIGN_CENTER, 0,
                      tile_layout::scale_i16(-20));
       } else {
@@ -314,29 +326,37 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
       }
     }
   } else if (icon_lbl) {
-    if (has_title) {
-      lv_obj_align(icon_lbl, LV_ALIGN_CENTER, 0,
-                   tile_layout::scale_i16(-20));
-    } else {
-      lv_obj_center(icon_lbl);
+    tile_icon_color_rules::apply_fixed(icon_lbl, tile.icon_colors.c_str());
+    if (!compact) {
+      if (has_title) {
+        lv_obj_align(icon_lbl, LV_ALIGN_CENTER, 0,
+                     tile_layout::scale_i16(-20));
+      } else {
+        lv_obj_center(icon_lbl);
+      }
+      // Only MDI icons get the disc; user images keep their own frame.
+      tile_icon_disc::add_round(btn, icon_lbl);
     }
-    // Only MDI icons get the disc; user images keep their own frame.
-    tile_icon_disc::add_round(btn, icon_lbl);
   }
 
   // Title
+  lv_obj_t* title_lbl = nullptr;
   if (has_title) {
     lv_obj_t* l = lv_label_create(btn);
+    title_lbl = l;
     if (l) {
       set_label_style(l, lv_color_white(), tile_layout::header_title_font());
       hometiles_title::tile(l, tile.title.c_str(), false);
-      if (has_icon) {
+      if (compact) {
+        // compact_sensor_layout places it beside the disc below.
+      } else if (has_icon) {
         lv_obj_align(l, LV_ALIGN_CENTER, 0, tile_layout::scale(35));
       } else {
         lv_obj_center(l);
       }
     }
   }
+  if (compact) compact_sensor_layout::apply(btn, icon_lbl, title_lbl, nullptr, tile);
 
   // Event handler for scene activation.
   if (scene_cb && tile.scene_alias.length()) {

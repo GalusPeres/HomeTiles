@@ -64,10 +64,11 @@ assert.ok(read('src/web/admin/tiles/autosave.js').includes('resetIconDiscFields(
 assert.ok(read('src/web/admin/tiles/editor.js').includes("_tile_icon_disc'), 'change', 'tileIconDisc'"));
 assert.match(read('src/web/admin/tiles/import-export.js'), /fd\.append\('icon_disc', tile\.icon_disc\);/);
 assert.ok(read('src/web/admin/tiles/live-preview.js').includes("tileElem.dataset.iconDisc = tileTypeHasDiscToggle(type)"));
-// Glow is offered only where the icon can take a color (entity or rules):
-// sensor, switch, energy, climate, cover, binary, number, select, date/time.
+// Glow is offered only where the icon can take a color (entity, color bar,
+// state colors or a fixed color): sensor, scene, folder, switch, back, energy,
+// climate, camera, cover, binary, number, select, date/time.
 const snapshotsJs = read('src/web/admin/tiles/snapshots.js');
-assert.ok(snapshotsJs.includes("return ['1', '5', '14', '17', '19', '20', '21', '22', '23'].includes(String(typeValue ?? '0'));"));
+assert.ok(snapshotsJs.includes("return ['1', '2', '4', '5', '8', '14', '17', '18', '19', '20', '21', '22', '23']\n      .includes(String(typeValue ?? '0'));"));
 assert.ok(snapshotsJs.includes("document.getElementById(tab + '_tile_icon_glow_row')"));
 assert.ok(snapshotsJs.includes("return box?.checked === false ? '2' : '0';"));
 // Like per-tile Tile borders, only Back, Clock and Text can hide their own disc.

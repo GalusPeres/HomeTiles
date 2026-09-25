@@ -12,7 +12,8 @@
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [8, 9].includes(Number(type)); }
+  // Scene, Folder, Back and Camera show only an icon and a title.
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 8, 9, 18].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high. Settings stays whole (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
@@ -24,13 +25,14 @@
   }
   function applyCompactSensorPreview(el, type, layout, mode = 0) {
     const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
-    // A half-height Back tile uses the half-height Sensor header: the arrow in
-    // the corner disc and the title (if any) centered beside it.
-    const compactBack = Number(type) === 8 && halfHeight;
-    const compact = (isCompactSensorType(type) || compactBack) && halfHeight;
+    // A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
+    // half-height Sensor header: the icon in the corner disc and the title
+    // (if any) centered beside it.
+    const compactIconTitle = [2, 4, 8, 18].includes(Number(type)) && halfHeight;
+    const compact = (isCompactSensorType(type) || compactIconTitle) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
-    el.classList.toggle('compact-title-only', compactBack);
+    el.classList.toggle('compact-title-only', compactIconTitle);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
   }

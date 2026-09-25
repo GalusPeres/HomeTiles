@@ -9,8 +9,12 @@ inline bool half_step(float value) {
   return std::isfinite(value) && value >= 0 && value * 2 == std::floor(value * 2);
 }
 inline bool sensor(int type) { return type == TILE_SENSOR || type == TILE_BINARY_SENSOR || type == TILE_ENERGY; }
+// Tiles that show only an icon and a title.
+inline bool icon_title(int type) {
+  return type == TILE_SCENE || type == TILE_FOLDER || type == TILE_BACK || type == TILE_CAMERA;
+}
 // Types that may use half-cell sizes (mirrors supportsHalfSize in layout.js).
-inline bool half_size(int type) { return sensor(type) || type == TILE_CLOCK || type == TILE_BACK; }
+inline bool half_size(int type) { return sensor(type) || type == TILE_CLOCK || icon_title(type); }
 inline bool fractional(float value) { return value != std::floor(value); }
 // Every type resizes in half steps from 1x1; only half-size types may be half
 // a row high (mirrors supportedTileLayout in layout.js).
@@ -28,9 +32,10 @@ inline bool compact(int type, float w, float h) {
 inline bool compact_clock(int type, float w, float h) {
   return type == TILE_CLOCK && w >= 1 && h == 0.5f;
 }
-// A half-height Back tile uses the half-height Sensor header layout.
-inline bool compact_back(int type, float w, float h) {
-  return type == TILE_BACK && w >= 1 && h == 0.5f;
+// A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
+// half-height Sensor header layout without a value line.
+inline bool compact_icon_title(int type, float w, float h) {
+  return icon_title(type) && w >= 1 && h == 0.5f;
 }
 inline int edge(float position, int cell, int gap) {
   return static_cast<int>(std::lround(position * (cell + gap)));

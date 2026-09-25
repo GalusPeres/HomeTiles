@@ -6,6 +6,8 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_color_rules.h"
+#include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/camera/camera_popup.h"
@@ -96,6 +98,9 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
   if (!title.length()) title = friendly_camera_name(tile.sensor_entity);
   if (!title.length()) title = camera_text().camera_tile_type;
 
+  // A half-height Camera uses the half-height Sensor header: the icon in the
+  // concentric corner disc and the title beside it.
+  const bool compact = tile_geometry::compact_icon_title(tile.type, tile.span_w, tile.span_h);
   lv_obj_t* icon = nullptr;
   String icon_char;
   if (icon_name.length() && FONT_MDI_ICONS != nullptr) {
@@ -105,15 +110,20 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
     icon = lv_label_create(card);
     set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
     lv_label_set_text(icon, icon_char.c_str());
-    lv_obj_align(icon, LV_ALIGN_CENTER, 0, tile_layout::scale_i16(-20));
-    tile_icon_disc::add_round(card, icon);
+    tile_icon_color_rules::apply_fixed(icon, tile.icon_colors.c_str());
+    if (!compact) {
+      lv_obj_align(icon, LV_ALIGN_CENTER, 0, tile_layout::scale_i16(-20));
+      tile_icon_disc::add_round(card, icon);
+    }
   }
 
   lv_obj_t* title_label = lv_label_create(card);
   set_label_style(title_label, lv_color_white(),
                   tile_layout::header_title_font());
   hometiles_title::tile(title_label, title.c_str(), false);
-  if (icon) {
+  if (compact) {
+    compact_sensor_layout::apply(card, icon, title_label, nullptr, tile);
+  } else if (icon) {
     lv_obj_align(title_label, LV_ALIGN_CENTER, 0, tile_layout::scale(35));
   } else {
     lv_obj_center(title_label);

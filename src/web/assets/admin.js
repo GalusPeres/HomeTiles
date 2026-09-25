@@ -2413,10 +2413,12 @@ function syncTileRadiusControls(tabEl) {
     return !['0', '16'].includes(String(typeValue ?? '0'));
   }
   // Glow only matters where the icon can take a color: from its entity
-  // (switch/light, climate, cover, binary sensor) or from color rules
-  // (sensor family, energy). Other icons are always white.
+  // (switch/light, climate, cover, binary sensor), from the color bar or
+  // state colors (sensor family, energy) or from a fixed icon color (scene,
+  // folder, back, camera). Other icons are always white.
   function tileTypeHasColoredIcon(typeValue) {
-    return ['1', '5', '14', '17', '19', '20', '21', '22', '23'].includes(String(typeValue ?? '0'));
+    return ['1', '2', '4', '5', '8', '14', '17', '18', '19', '20', '21', '22', '23']
+      .includes(String(typeValue ?? '0'));
   }
   // Stored disc mode: 0 follows the global option, 2 hides the disc on this
   // tile. A legacy stored 1 ("on") loads as checked.
@@ -2644,7 +2646,10 @@ function syncTileRadiusControls(tabEl) {
   // modules call the load/save/reset helpers from their own field handlers,
   // so drafts, copy/paste, autosave and import/export carry the record like
   // any other type field.
-  const ICON_COLOR_TYPES = ['1', '14', '20', '21', '22', '23'];
+  // Scene, Folder, Back and Camera have no entity state and keep only the
+  // fixed icon color (tileTypeHasFixedIconColorOnly in tile_type_policy.h).
+  const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '18'];
+  const ICON_COLOR_TYPES = ['1', '14', '20', '21', '22', '23'].concat(ICON_COLOR_FIXED_TYPES);
   const ICON_COLOR_BAR_TYPES = ['1', '14', '21'];
   const ICON_COLOR_ROW_TYPES = ['1', '20', '22', '23'];
   const ICON_COLOR_MAX_STOPS = 6;
@@ -2666,6 +2671,10 @@ function syncTileRadiusControls(tabEl) {
 
   function tileTypeHasIconColors(typeValue) {
     return ICON_COLOR_TYPES.includes(String(typeValue ?? '0'));
+  }
+
+  function tileTypeHasFixedIconColorOnly(typeValue) {
+    return ICON_COLOR_FIXED_TYPES.includes(String(typeValue ?? '0'));
   }
 
   // ---- Record model (mirrors tile_icon_colors.h) ----
@@ -4016,7 +4025,8 @@ function syncTileRadiusControls(tabEl) {
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [8, 9].includes(Number(type)); }
+  // Scene, Folder, Back and Camera show only an icon and a title.
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 8, 9, 18].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high. Settings stays whole (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
@@ -4028,13 +4038,14 @@ function syncTileRadiusControls(tabEl) {
   }
   function applyCompactSensorPreview(el, type, layout, mode = 0) {
     const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
-    // A half-height Back tile uses the half-height Sensor header: the arrow in
-    // the corner disc and the title (if any) centered beside it.
-    const compactBack = Number(type) === 8 && halfHeight;
-    const compact = (isCompactSensorType(type) || compactBack) && halfHeight;
+    // A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
+    // half-height Sensor header: the icon in the corner disc and the title
+    // (if any) centered beside it.
+    const compactIconTitle = [2, 4, 8, 18].includes(Number(type)) && halfHeight;
+    const compact = (isCompactSensorType(type) || compactIconTitle) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
-    el.classList.toggle('compact-title-only', compactBack);
+    el.classList.toggle('compact-title-only', compactIconTitle);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
   }
@@ -6506,6 +6517,9 @@ function syncTileRadiusControls(tabEl) {
   // while it is missing, unknown or unavailable (the type color applies).
   function iconColorRuleState(typeValue, entity, meta, binaryState) {
     const type = String(typeValue ?? '0');
+    // Icon-and-title tiles have no state; their fixed icon color applies.
+    if (typeof tileTypeHasFixedIconColorOnly === 'function' &&
+        tileTypeHasFixedIconColorOnly(type)) return { state: '', display: null };
     if (type === '20') {
       if (!binaryState?.valid || binaryState.available !== true ||
           !['on', 'off'].includes(binaryState.state)) return null;
@@ -9615,6 +9629,7 @@ function maybeFillTitleFromScene(tab) {
   }
 
   function loadSceneFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const sceneEl = document.getElementById(prefix + '_scene_alias');
     if (sceneEl) sceneEl.value = data.scene_alias || '';
@@ -9624,12 +9639,14 @@ function maybeFillTitleFromScene(tab) {
   function saveSceneFields(tab, formData) {
     const prefix = tab;
     formData.append('scene_alias', document.getElementById(prefix + '_scene_alias')?.value || '');
+    saveIconColorFields(tab, formData);
   }
 
   function resetSceneFields(tab) {
     const prefix = tab;
     const sceneEl = document.getElementById(prefix + '_scene_alias');
     if (sceneEl) sceneEl.value = '';
+    resetIconColorFields(tab);
   }
 
 function normalizeIconName(value) {
@@ -9688,6 +9705,7 @@ function normalizeIconName(value) {
   }
 
   function loadNavigateFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const toggle = document.getElementById(prefix + '_folder_pin_enabled');
     const input = document.getElementById(prefix + '_folder_pin');
@@ -9716,9 +9734,11 @@ function normalizeIconName(value) {
     if (navEl) {
       formData.append('navigate_target', navEl.value || '0');
     }
+    saveIconColorFields(tab, formData);
   }
 
   function resetNavigateFields(tab) {
+    resetIconColorFields(tab);
     const prefix = tab;
     const toggle = document.getElementById(prefix + '_folder_pin_enabled');
     const input = document.getElementById(prefix + '_folder_pin');
@@ -9828,17 +9848,20 @@ function normalizeIconName(value) {
 
   // Back tile: the same per-tile border flag as Clock and Text.
   function loadBackFields(tab, data) {
+    loadIconColorFields(tab, data);
     const border = document.getElementById(tab + '_back_tile_border');
     if (border) border.checked = data?.tile_border !== undefined ? !['0','false'].includes(String(data.tile_border)) : Number(data?.sensor_display_mode) !== 1;
   }
 
   function saveBackFields(tab, formData) {
     formData.append('tile_border', document.getElementById(tab + '_back_tile_border')?.checked === false ? '0' : '1');
+    saveIconColorFields(tab, formData);
   }
 
   function resetBackFields(tab) {
     const border = document.getElementById(tab + '_back_tile_border');
     if (border) border.checked = true;
+    resetIconColorFields(tab);
   }
 
 function maybeFillTitleFromSwitch(tab) {
@@ -12804,6 +12827,7 @@ function maybeFillTitleFromMedia(tab) {
   bindClimatePreviewSelection();
 
 function loadCameraFields(tab, data) {
+    loadIconColorFields(tab, data);
     const el = document.getElementById(tab + '_camera_entity');
     const configured = data.sensor_entity || data.camera_entity || '';
     if (el) {
@@ -12827,8 +12851,10 @@ function loadCameraFields(tab, data) {
       document.getElementById(tab + '_camera_entity')?.value || '';
     formData.append('camera_entity', entity);
     formData.append('sensor_entity', entity);
+    saveIconColorFields(tab, formData);
   }
   function resetCameraFields(tab) {
+    resetIconColorFields(tab);
     const el = document.getElementById(tab + '_camera_entity');
     if (el) {
       el.value = '';

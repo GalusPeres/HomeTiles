@@ -326,9 +326,14 @@ int main(){
  }
  assert(normalizeTileIconColors(TILE_NUMBER,full.c_str())=="v2\nFF8800\nbar smooth 0 100 0:3B82F6 1000:EF4444");
  assert(normalizeTileIconColors(TILE_SELECT,full.c_str())=="v2\nFF8800\nis 4CAF50 on");
- // Other types never take a record, even from a stale file.
+ // Icon-and-title tiles keep only the fixed color, also from a stale file.
  assert(writeIconColorsSd(3,2,full));
- for(TileType type:{TILE_EMPTY,TILE_SWITCH,TILE_SCENE,TILE_CLIMATE,TILE_COVER,TILE_BACK,TILE_WEATHER}){
+ for(TileType type:{TILE_SCENE,TILE_FOLDER,TILE_BACK,TILE_CAMERA}){
+  assert(normalizeTileIconColors(type,full.c_str())=="v2\nFF8800");
+  TileGridConfig grid;grid.tiles[2].type=type;reboot();applyIconColorsFromSd(3,grid);assert(grid.tiles[2].icon_colors=="v2\nFF8800");
+ }
+ // Other types never take a record, even from a stale file.
+ for(TileType type:{TILE_EMPTY,TILE_SWITCH,TILE_SETTINGS,TILE_CLIMATE,TILE_COVER,TILE_TEXT,TILE_WEATHER}){
   TileGridConfig grid;grid.tiles[2].type=type;reboot();applyIconColorsFromSd(3,grid);assert(grid.tiles[2].icon_colors.empty());
   assert(normalizeTileIconColors(type,full.c_str()).empty());
  }

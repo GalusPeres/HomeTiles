@@ -10,7 +10,10 @@
   // modules call the load/save/reset helpers from their own field handlers,
   // so drafts, copy/paste, autosave and import/export carry the record like
   // any other type field.
-  const ICON_COLOR_TYPES = ['1', '14', '20', '21', '22', '23'];
+  // Scene, Folder, Back and Camera have no entity state and keep only the
+  // fixed icon color (tileTypeHasFixedIconColorOnly in tile_type_policy.h).
+  const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '18'];
+  const ICON_COLOR_TYPES = ['1', '14', '20', '21', '22', '23'].concat(ICON_COLOR_FIXED_TYPES);
   const ICON_COLOR_BAR_TYPES = ['1', '14', '21'];
   const ICON_COLOR_ROW_TYPES = ['1', '20', '22', '23'];
   const ICON_COLOR_MAX_STOPS = 6;
@@ -32,6 +35,10 @@
 
   function tileTypeHasIconColors(typeValue) {
     return ICON_COLOR_TYPES.includes(String(typeValue ?? '0'));
+  }
+
+  function tileTypeHasFixedIconColorOnly(typeValue) {
+    return ICON_COLOR_FIXED_TYPES.includes(String(typeValue ?? '0'));
   }
 
   // ---- Record model (mirrors tile_icon_colors.h) ----

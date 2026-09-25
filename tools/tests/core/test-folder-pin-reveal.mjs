@@ -18,6 +18,7 @@ const harness = `<!doctype html><html><body>
   <script>
   (() => {
     function syncFolderPinControls() {}
+    function loadIconColorFields() {}
     function navigateText(key) { return key === 'folderPinSaved' ? 'PIN saved' : key; }
     ${inlineScriptSafe(productionFunctions)}
     try {

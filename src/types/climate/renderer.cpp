@@ -1338,7 +1338,7 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
   if (!parent) return nullptr;
 
   lv_obj_t* card = lv_button_create(parent);
-  const uint32_t color = tileBgColorOrDefault(tile, 0x2A2A2A);
+  const uint32_t color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(card, lv_color_hex(color), LV_PART_MAIN);
   lv_obj_set_style_bg_grad_color(card, lv_color_hex(color), LV_PART_MAIN);
   lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN);

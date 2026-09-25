@@ -20,6 +20,19 @@
     if (!Number.isFinite(num) || num === 0) return fallback || '#353535';
     return rgbToHex(num);
   }
+  // Tiles without their own color follow the global default tile color. The
+  // preview paints them through one root variable, so a change of that color
+  // repaints loaded, cached and lazily inserted grids at once.
+  function tileBackgroundCss(meta, isDefault, hex, opacity = null) {
+    const shared = !!isDefault && !!meta?.sharedBg;
+    const sharedCss = 'var(--tile-default-bg, #2A2A2A)';
+    if (opacity === null || opacity === undefined) return shared ? sharedCss : hex;
+    if (shared) {
+      return 'color-mix(in srgb, ' + sharedCss + ' ' +
+        (opacity * 100 / 255).toFixed(2) + '%, transparent)';
+    }
+    return hex + opacity.toString(16).padStart(2, '0');
+  }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1';
   }
@@ -90,11 +103,14 @@
     else delete el.dataset.navigateTarget;
     if (typeValue === '0') el.style.background = 'transparent';
     else {
-      const bg = tileBgToHex(tile.bg_color, meta.defaultBg || '#353535');
+      const isDefaultBg = !tileBgValueIsSet(tile.bg_color);
+      const bg = tileBackgroundCss(meta, isDefaultBg,
+        tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'));
       if (isScreensaverTileTab(tab)) {
         const opacity = clampInt(tile.background_opacity, 0, 255,
                                  SCREENSAVER_TILE_DEFAULT_OPACITY);
-        el.style.background = bg + opacity.toString(16).padStart(2, '0');
+        el.style.background = tileBackgroundCss(meta, isDefaultBg,
+          tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
       } else {
         el.style.background = bg;
       }

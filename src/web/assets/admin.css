@@ -751,7 +751,8 @@
     /* width:0 + min-width:100% - the footer follows the grid width without
        its long hint text inflating the column. */
     .folder-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; width:0; min-width:100%; }
-    .folder-footer-options { flex:0 0 100%; display:flex; align-items:center; gap:16px; }
+    .folder-footer-options { flex:0 0 100%; display:flex; align-items:center; gap:10px 16px; flex-wrap:wrap; }
+    .global-settings-heading { flex:0 0 100%; margin:0 0 -4px; color:var(--text-2); font-size:12px; font-weight:600; line-height:14px; text-transform:none; }
     .folder-footer-options .inline-checkbox { margin:0; }
     .folder-footer .hint { margin:0; }
     .btn-delete-folder { padding:8px 16px; font-size:13px; flex:0 0 auto; }
@@ -2244,6 +2245,8 @@
     .tile-radius-control input[type="range"]:focus { outline:none; box-shadow:none; }
     .tile-radius-control input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     .global-tile-radius-value { min-width:2ch; text-align:right; font-variant-numeric:tabular-nums; }
+    .tile-default-color-control { display:flex; align-items:center; gap:8px; margin:0; font-weight:600; }
+    .tile-default-color-control input[type="color"] { width:44px; height:26px; margin:0; padding:2px 4px; border-radius:8px; }
 
 /* Fractional placement preserves the existing cell pitch and gutter. */
 .tile-grid > .fractional-tile {
@@ -2267,6 +2270,8 @@
   border-radius:max(0px, calc(var(--tile-radius) - var(--compact-inset))); background:rgba(255,255,255,0.15);
   font-size:var(--icon-size, 48px); line-height:1;
 }
+/* The global icon disc option (root class, mirrors the device's shared disc style). */
+.icon-discs-off .tile.sensor-compact > .tile-icon { background:transparent; }
 .tile.sensor-compact > .tile-title,
 .tile.sensor-compact > .tile-value {
   position:absolute; left:calc(var(--compact-h) + var(--compact-inset));

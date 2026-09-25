@@ -812,6 +812,17 @@ const TileTypeDescriptor* find_descriptor(TileType type) {
   return nullptr;
 }
 
+// Types with the standard default background follow the global default tile
+// color; the animation tile keeps its own black default.
+bool follows_default_tile_color(const TileTypeDescriptor& entry) {
+  return entry.default_bg_color == tile_color::kDefault;
+}
+
+uint32_t effective_default_bg(const TileTypeDescriptor& entry) {
+  return follows_default_tile_color(entry) ? tileDefaultBgColor()
+                                           : entry.default_bg_color;
+}
+
 }  // namespace
 
 const TileTypeDescriptor* get_tile_type_descriptor(TileType type) {
@@ -820,7 +831,12 @@ const TileTypeDescriptor* get_tile_type_descriptor(TileType type) {
 
 uint32_t get_tile_type_default_bg(TileType type) {
   const TileTypeDescriptor* desc = find_descriptor(type);
-  return desc ? desc->default_bg_color : 0;
+  return desc ? effective_default_bg(*desc) : 0;
+}
+
+bool tile_type_follows_default_tile_color(TileType type) {
+  const TileTypeDescriptor* desc = find_descriptor(type);
+  return desc && follows_default_tile_color(*desc);
 }
 
 const char* get_tile_type_css_class(TileType type) {
@@ -957,11 +973,13 @@ void append_tile_type_registry_js(String& html) {
     // tile to grey on edit.
     if (entry.default_bg_color || entry.type == TILE_PIXELANIM) {
       char color_hex[10] = {0};
-      const uint32_t color24 = static_cast<uint32_t>(entry.default_bg_color) & 0x00FFFFFFu;
+      const uint32_t color24 = effective_default_bg(entry) & 0x00FFFFFFu;
       snprintf(color_hex, sizeof(color_hex), "#%06" PRIX32, color24);
       html += "defaultBg:\"";
       html += color_hex;
       html += "\",";
+      // The browser repaints these defaults when the global color changes.
+      if (follows_default_tile_color(entry)) html += "sharedBg:true,";
     }
     html += "locked:";
     html += entry.locked ? "true" : "false";

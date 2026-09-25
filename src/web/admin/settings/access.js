@@ -139,7 +139,8 @@
       return;
     }
     tile.style.background = snapshot.bg_color_default === '1'
-      ? (getTileTypeMeta('7').defaultBg || '#2A2A2A')
+      ? tileBackgroundCss(getTileTypeMeta('7'), true,
+          getTileTypeMeta('7').defaultBg || '#2A2A2A')
       : snapshot.color;
     const iconName = normalizeMdiIconName(snapshot.icon);
     if (iconName) {

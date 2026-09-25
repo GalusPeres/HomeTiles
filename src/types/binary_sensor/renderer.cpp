@@ -188,7 +188,7 @@ BinarySensorPopupInit popup_init(GridType grid_type, uint8_t index) {
   init.last_changed = state.has_last_changed ? state.last_changed : 0;
   init.available = state.valid ? state.available : true;
   init.icon_override = has_explicit_icon_setting(*tile);
-  init.bg_color = tileBgColorOrDefault(*tile, 0x2A2A2A);
+  init.bg_color = tileBgColorOrDefault(*tile, tileDefaultBgColor());
   return init;
 }
 
@@ -471,7 +471,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
   if (!parent || index >= TILES_PER_GRID) return nullptr;
 
   lv_obj_t* card = lv_button_create(parent);
-  const uint32_t color = tileBgColorOrDefault(tile, 0x2A2A2A);
+  const uint32_t color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(
       card, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_grad_color(

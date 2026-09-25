@@ -283,6 +283,10 @@ struct Strings {
   const char* tile_radius;
   const char* tile_fractional_type_hint;
   const char* screensaver_tile_border;
+  // Web Admin: global display settings row below the grid preview.
+  const char* global_settings_heading;
+  const char* icon_discs;
+  const char* default_tile_color;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;
   const char* screensaver_storage_hint;

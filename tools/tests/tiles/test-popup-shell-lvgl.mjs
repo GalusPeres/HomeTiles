@@ -35,7 +35,7 @@ extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECL
 #endif
 std::string getMdiChar(const char*){return "\xF3\xB0\x96\xAD";}
 ${radiusPolicyHost(root)}
-struct Config {bool tile_borders=true;int tile_radius=tile_radius::kMinimum;};
+struct Config {bool tile_borders=true;bool icon_discs=true;int tile_radius=tile_radius::kMinimum;};
 struct Manager{Config cfg;const Config& getConfig(){return cfg;}}configManager;
 ${surfaceStyleHost(root)}
 bool fail_alloc=false;int allocations=0;

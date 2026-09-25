@@ -323,7 +323,7 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
                             const Tile& tile, uint8_t index,
                             GridType grid_type) {
   lv_obj_t* card = lv_button_create(parent);
-  const uint32_t color = tileBgColorOrDefault(tile, 0x2A2A2A);
+  const uint32_t color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(
       card, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_grad_color(

@@ -66,7 +66,7 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
 
   lv_obj_t* card = lv_button_create(parent);
   if (!card) return nullptr;
-  const uint32_t card_color = tileBgColorOrDefault(tile, 0x2A2A2A);
+  const uint32_t card_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(card, lv_color_hex(card_color),
                             LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE,

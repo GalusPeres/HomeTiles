@@ -493,6 +493,10 @@ static inline uint32_t tileBgColorOrDefault(const Tile& tile, uint32_t default_c
   return tileBgColorIsSet(tile) ? tileBgColorRgb(tile) : (default_color & TILE_BG_COLOR_RGB_MASK);
 }
 
+// Background of tiles without their own color: the global default tile color
+// from the display settings (tile_color::kDefault until the user picks one).
+uint32_t tileDefaultBgColor();
+
 struct FolderEntry {
   uint16_t id;
   uint16_t parent_id;

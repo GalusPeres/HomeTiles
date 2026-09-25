@@ -494,7 +494,18 @@ static void appendTileTabHTML(
       cssClass += " empty";
     }
 
-    if (tile.type != TILE_EMPTY) {
+    if (tile.type != TILE_EMPTY &&
+        !tileBgColorIsSet(tile) && tile_type_follows_default_tile_color(tile.type)) {
+      // Tiles without their own color follow the global default tile color
+      // through one CSS variable, so the preview repaints them live.
+      if (screensaver_mode) {
+        tileStyle = "background:color-mix(in srgb,var(--tile-default-bg) ";
+        tileStyle += String(tile.background_opacity * 100.0f / 255.0f, 2);
+        tileStyle += "%,transparent)";
+      } else {
+        tileStyle = "background:var(--tile-default-bg)";
+      }
+    } else if (tile.type != TILE_EMPTY) {
       uint32_t bg_color = tileBgColorIsSet(tile)
                               ? tileBgColorRgb(tile)
                               : (type_desc ? type_desc->default_bg_color : 0);
@@ -738,7 +749,7 @@ static void appendTileTabHTML(
     const uint32_t hidden_color =
         snapshot.valid && snapshot.bg_color != 0
             ? (snapshot.bg_color & TILE_BG_COLOR_RGB_MASK)
-            : 0x2A2A2A;
+            : tileDefaultBgColor();
     char hidden_color_hex[8];
     snprintf(hidden_color_hex, sizeof(hidden_color_hex), "#%06X",
              static_cast<unsigned>(hidden_color));
@@ -779,7 +790,13 @@ static void appendTileTabHTML(
     html += "</div></div>";
   }
   html += R"html(          <div class="folder-footer">
-            <div class="folder-footer-options">
+)html";
+  if (!screensaver_mode) {
+    html += "<h4 class=\"global-settings-heading\">";
+    appendHtmlEscaped(html, tr.global_settings_heading);
+    html += "</h4>\n";
+  }
+  html += R"html(            <div class="folder-footer-options">
 )html";
   if (screensaver_mode) {
     html += R"html(              <label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";
@@ -802,6 +819,24 @@ static void appendTileTabHTML(
   html += "\" oninput=\"previewTileRadiusLive(this.value)\" onchange=\"saveTileRadius(this.value)\"><output class=\"global-tile-radius-value\">";
   html += String(configManager.getConfig().tile_radius);
   html += "</output></label>";
+  if (!screensaver_mode) {
+    // Global icon discs and default tile color, applied live like the
+    // border and radius options above.
+    html += "<label class=\"inline-checkbox\"><input class=\"global-icon-disc-toggle\" "
+            "type=\"checkbox\" onchange=\"saveIconDiscs(this.checked)\"";
+    if (configManager.getConfig().icon_discs) html += " checked";
+    html += "> ";
+    appendHtmlEscaped(html, tr.icon_discs);
+    html += "</label><label class=\"tile-default-color-control\"><span>";
+    appendHtmlEscaped(html, tr.default_tile_color);
+    char default_color_hex[8];
+    snprintf(default_color_hex, sizeof(default_color_hex), "#%06X",
+             static_cast<unsigned>(tileDefaultBgColor()));
+    html += "</span><input class=\"global-tile-color\" type=\"color\" value=\"";
+    html += default_color_hex;
+    html += "\" oninput=\"previewDefaultTileColor(this.value)\" "
+            "onchange=\"saveDefaultTileColor(this.value)\"></label>";
+  }
 
   if (screensaver_mode) {
     html += R"html(              <label class="inline-checkbox"><input id="screensaverTileShadow" type="checkbox"> )html";
@@ -1355,6 +1390,9 @@ String WebAdminServer::getAdminPage() {
   html.reserve(192 * 1024);
   html += "<!DOCTYPE html>\n<html lang=\"";
   html += tr.html_lang;
+  // The global icon disc option is a root class, so every preview grid,
+  // including lazily inserted folders, follows it without re-rendering.
+  if (!configManager.getConfig().icon_discs) html += "\" class=\"icon-discs-off";
   html += R"html(">
 <head>
   <meta charset="utf-8">

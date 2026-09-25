@@ -90,7 +90,7 @@ for (const marker of [
   'bool settings_in_grid = false;',
   'const bool hidden = cfg.settings_tile_hidden && !settings_in_grid;',
   'snapshot.valid && snapshot.bg_color != 0',
-  ': 0x2A2A2A;',
+  ': tileDefaultBgColor();',
   'data-hidden=\\"',
   'draggable=\\"true\\"',
   'tile-icon',

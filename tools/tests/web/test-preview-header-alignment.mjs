@@ -7,7 +7,8 @@ const helpers = [
   'escapeHtml', 'normalizeTileTitle', 'tileTitleHtml', 'getTileTypeMeta',
   'isEditablePreview', 'normalizeSensorValueFont', 'getSensorValueFontClass',
   'resolveIconName', 'normalizeMdiIconName', 'isExplicitlyDisabledValue',
-  'tileColorInputIsDefault', 'tileBgToHex', 'rgbToHex', 'applyTileAriaLabel',
+  'tileColorInputIsDefault', 'tileBgToHex', 'tileBgValueIsSet', 'tileBackgroundCss',
+  'rgbToHex', 'applyTileAriaLabel',
   'resolveUnitValue', 'isScreensaverTileTab', 'getTileResizeHandlesHtml',
   'applyCompactSensorPreview', 'isCompactSensorType', 'renderTileFromData', 'updateTilePreview'
 ].map(extractDeliveredFunction).join('\n');

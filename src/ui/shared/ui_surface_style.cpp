@@ -19,6 +19,42 @@ constexpr int kRadiusStyleCount = 64;
 lv_style_t g_radius_styles[kRadiusStyleCount]{};
 bool g_radius_style_initialized[kRadiusStyleCount]{};
 
+// One shared opacity style per (opacity, follows global option) pair. Discs
+// use at most a handful of opacities; the table is small and static.
+struct IconDiscStyle {
+  lv_style_t style;
+  lv_opa_t opa = 0;
+  bool follows_global = false;
+  bool initialized = false;
+};
+constexpr int kIconDiscStyleCount = 6;
+IconDiscStyle g_icon_disc_styles[kIconDiscStyleCount]{};
+std::atomic<bool> g_icon_disc_refresh_pending{false};
+
+lv_opa_t icon_disc_opa(const IconDiscStyle& entry) {
+  return entry.follows_global && !configManager.getConfig().icon_discs
+             ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
+             : entry.opa;
+}
+
+IconDiscStyle* icon_disc_style(lv_opa_t opa, bool follows_global) {
+  IconDiscStyle* free_entry = nullptr;
+  for (IconDiscStyle& entry : g_icon_disc_styles) {
+    if (!entry.initialized) {
+      if (!free_entry) free_entry = &entry;
+      continue;
+    }
+    if (entry.opa == opa && entry.follows_global == follows_global) return &entry;
+  }
+  if (!free_entry) return nullptr;
+  lv_style_init(&free_entry->style);
+  free_entry->opa = opa;
+  free_entry->follows_global = follows_global;
+  free_entry->initialized = true;
+  lv_style_set_bg_opa(&free_entry->style, icon_disc_opa(*free_entry));
+  return free_entry;
+}
+
 void apply_style(lv_obj_t* obj, bool enabled) {
   if (!obj) return;
 
@@ -108,8 +144,26 @@ void apply_global_tile_border(lv_obj_t* obj) {
   apply_style(obj, configManager.getConfig().tile_borders);
 }
 
+void apply_icon_disc_opa(lv_obj_t* obj, lv_opa_t opa, bool follows_global) {
+  if (!obj) return;
+  IconDiscStyle* target = icon_disc_style(opa, follows_global);
+  if (!target) return;
+  // A disc carries exactly one of the shared opacity styles.
+  for (IconDiscStyle& entry : g_icon_disc_styles) {
+    if (entry.initialized && &entry != target) {
+      lv_obj_remove_style(obj, &entry.style, 0);
+    }
+  }
+  lv_obj_remove_local_style_prop(obj, LV_STYLE_BG_OPA, 0);
+  lv_obj_add_style(obj, &target->style, 0);
+}
+
 void request_global_tile_border_refresh() {
   g_global_tile_border_refresh_pending = true;
+}
+
+void request_icon_disc_refresh() {
+  g_icon_disc_refresh_pending.store(true);
 }
 
 void process_pending_updates() {
@@ -127,6 +181,13 @@ void process_pending_updates() {
   if (g_wallpaper_radius_pending && lv_tick_elaps(g_wallpaper_radius_changed_at) >= 350) {
     g_wallpaper_radius_pending = false;
     image_screensaver_config_changed();
+  }
+  if (g_icon_disc_refresh_pending.exchange(false)) {
+    for (IconDiscStyle& entry : g_icon_disc_styles) {
+      if (!entry.initialized) continue;
+      lv_style_set_bg_opa(&entry.style, icon_disc_opa(entry));
+      lv_obj_report_style_change(&entry.style);
+    }
   }
   if (!g_global_tile_border_refresh_pending) return;
   g_global_tile_border_refresh_pending = false;

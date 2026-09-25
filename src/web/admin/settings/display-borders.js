@@ -27,6 +27,94 @@
     }
   }
 
+// Icon discs are a root class: every preview grid, including cached and lazily
+// inserted folders, follows it without re-rendering a tile.
+let iconDiscsSaveSequence = 0;
+function iconDiscsEnabled() {
+  return !document.documentElement.classList.contains('icon-discs-off');
+}
+function applyIconDiscsPreview(enabled) {
+  document.documentElement.classList.toggle('icon-discs-off', !enabled);
+  document.querySelectorAll('.global-icon-disc-toggle').forEach(input => {
+    input.checked = !!enabled;
+  });
+}
+async function saveIconDiscs(enabled) {
+  const wanted = !!enabled;
+  const sequence = ++iconDiscsSaveSequence;
+  applyIconDiscsPreview(wanted);
+  try {
+    const response = await fetch('/api/display/icon-discs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'enabled=' + (wanted ? '1' : '0')
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+  } catch (error) {
+    if (sequence !== iconDiscsSaveSequence) return;
+    applyIconDiscsPreview(!wanted);
+    showNotification(t('networkErrorSave'), false);
+  }
+}
+
+// The global default tile color paints every tile without its own color
+// through --tile-default-bg; reset and new tiles take it as their default.
+let defaultTileColorConfirmed = null;
+let defaultTileColorSaveSequence = 0;
+function currentDefaultTileColor() {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue('--tile-default-bg').trim();
+  return /^#[0-9a-f]{6}$/i.test(value) ? value.toUpperCase() : '#2A2A2A';
+}
+function previewDefaultTileColor(value) {
+  const color = String(value || '').trim().toUpperCase();
+  if (!/^#[0-9A-F]{6}$/.test(color)) return;
+  if (defaultTileColorConfirmed === null) {
+    defaultTileColorConfirmed = currentDefaultTileColor();
+  }
+  document.documentElement.style.setProperty('--tile-default-bg', color);
+  Object.values(typeof TILE_TYPE_REGISTRY === 'object' ? TILE_TYPE_REGISTRY : {})
+    .forEach(meta => { if (meta && meta.sharedBg) meta.defaultBg = color; });
+  document.querySelectorAll('.global-tile-color').forEach(input => { input.value = color; });
+  // Open editors of tiles without their own color show the new default.
+  document.querySelectorAll('input[type="color"][id$="_tile_color"]').forEach(input => {
+    if (input.dataset.bgColorDefault !== '1') return;
+    const tab = input.id.slice(0, -'_tile_color'.length);
+    const type = document.getElementById(tab + '_tile_type')?.value || '0';
+    if (getTileTypeMeta(type).sharedBg) input.value = color;
+  });
+  return color;
+}
+async function saveDefaultTileColor(value) {
+  const color = previewDefaultTileColor(value);
+  if (!color) return;
+  const sequence = ++defaultTileColorSaveSequence;
+  try {
+    const response = await fetch('/api/display/tile-color', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({color}).toString()
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const result = await response.json();
+    if (!result.success || String(result.color).toUpperCase() !== color) {
+      throw new Error('invalid response');
+    }
+    if (sequence === defaultTileColorSaveSequence) defaultTileColorConfirmed = color;
+  } catch (error) {
+    if (sequence !== defaultTileColorSaveSequence) return;
+    previewDefaultTileColor(defaultTileColorConfirmed || color);
+    showNotification(t('networkErrorSave'), false);
+  }
+}
+function syncGlobalDisplayControls(tabEl) {
+  tabEl.querySelectorAll('.global-icon-disc-toggle').forEach(input => {
+    input.checked = iconDiscsEnabled();
+  });
+  const color = currentDefaultTileColor();
+  tabEl.querySelectorAll('.global-tile-color').forEach(input => { input.value = color; });
+}
+
 // The shared root variables also reach cached and lazily inserted folder grids.
 let tileRadiusConfirmed = null;
 let tileRadiusWanted = null;

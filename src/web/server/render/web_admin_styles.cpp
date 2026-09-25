@@ -205,6 +205,16 @@ void appendPreviewScaleVars(String& html) {
 #else
   emit("value-dy", 28);
 #endif
+  {
+    // Tiles without their own color paint with this variable, so a change of
+    // the global default tile color repaints every preview grid at once.
+    char color_hex[8];
+    snprintf(color_hex, sizeof(color_hex), "#%06X",
+             static_cast<unsigned>(tileDefaultBgColor()));
+    html += "--tile-default-bg:";
+    html += color_hex;
+    html += ";";
+  }
   emit_exact("tile-radius", configManager.getConfig().tile_radius);
   html += "--radius-preview-scale:";
   html += String(static_cast<double>(preview_cell_h_px()) / GRID_CELL_H, 8);

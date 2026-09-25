@@ -120,12 +120,15 @@
       const colorInput = document.getElementById(prefix + '_tile_color');
       if (colorInput) colorInput.value = defaultBg;
     }
-    const tileBg = tileColorInputIsDefault(tab) ? defaultBg : (color || defaultBg);
+    const isDefaultBg = tileColorInputIsDefault(tab);
+    const tileBg = tileBackgroundCss(meta, isDefaultBg,
+      isDefaultBg ? defaultBg : (color || defaultBg));
     if (isScreensaverTileTab(tab)) {
       const opacity = clampInt(
         document.getElementById('screensaver_tile_opacity')?.value,
         0, 255, 0);
-      tileElem.style.background = tileBg + opacity.toString(16).padStart(2, '0');
+      tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
+        isDefaultBg ? defaultBg : (color || defaultBg), opacity);
     } else {
       tileElem.style.background = tileBg;
     }

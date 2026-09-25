@@ -68,7 +68,8 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   // decides the placement (corner or behind the icon) and the diameter.
   ui_surface_style::apply_radius(disc, radius_baseline(), 0);
   lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
-  lv_obj_set_style_bg_opa(disc, kOpa, 0);
+  // The shared opacity style follows the global icon disc option.
+  ui_surface_style::apply_icon_disc_opa(disc, kOpa, true);
   return disc;
 }
 

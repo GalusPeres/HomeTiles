@@ -28,7 +28,7 @@ extern "C" { LV_FONT_DECLARE(ui_font_12); LV_FONT_DECLARE(ui_font_14); LV_FONT_D
 constexpr int GRID_COLS=Device::kGridCols,GRID_ROWS=Device::kGridRows;
 constexpr int GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device::kGridCellH,GRID_GAP=Device::kGridGap;
 ${radiusPolicyHost(root,'Device::kGridCellH','Device::kGridGap')}
-struct Config{int tile_radius=tile_radius::kMinimum;bool tile_borders=true;};
+struct Config{int tile_radius=tile_radius::kMinimum;bool tile_borders=true;bool icon_discs=true;};
 struct Manager{Config config;const Config& getConfig(){return config;}}configManager;
 ${surfaceStyleHost(root)}
 struct Tile{int type=TILE_SENSOR;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_display_mode=0;};

@@ -25,10 +25,9 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
   ui_surface_style::apply_radius(btn, tile_layout::scale_480(22), 0);
   lv_obj_set_style_border_width(btn, 0, 0);
 
-  // Without an explicit color, all navigation types use the same neutral
-  // background as the other HomeTiles tiles.
-  const uint32_t default_color = 0x2A2A2A;
-  uint32_t btn_color = tileBgColorOrDefault(tile, default_color);
+  // Without an explicit color, all navigation types use the global default
+  // tile color like the other HomeTiles tiles.
+  uint32_t btn_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(btn, lv_color_hex(btn_color), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_color(btn, lv_color_hex(btn_color), LV_PART_MAIN | LV_STATE_FOCUSED);
   lv_obj_set_style_bg_grad_color(btn, lv_color_hex(btn_color), LV_PART_MAIN | LV_STATE_DEFAULT);

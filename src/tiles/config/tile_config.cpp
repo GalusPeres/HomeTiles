@@ -325,6 +325,10 @@ TileConfig tileConfig;
 
 TileConfig::TileConfig() = default;
 
+uint32_t tileDefaultBgColor() {
+  return tile_color::normalize(configManager.getConfig().default_tile_color);
+}
+
 static void copyString(const String& src, char* dst, size_t max_len) {
   if (!dst || max_len == 0) return;
   memset(dst, 0, max_len);

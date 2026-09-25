@@ -123,8 +123,8 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
   ui_surface_style::apply_radius(container, tile_layout::scale_480(22), 0);
   lv_obj_set_style_border_width(container, 0, 0);
 
-  // Use the configured color; default to 0x353535 when color is 0.
-  uint32_t tile_color = tileBgColorOrDefault(tile, 0x2A2A2A);
+  // Use the configured color, else the global default tile color.
+  uint32_t tile_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(container, lv_color_hex(tile_color), LV_PART_MAIN | LV_STATE_DEFAULT);
 lv_obj_set_style_bg_grad_color(container, lv_color_hex(tile_color), LV_PART_MAIN | LV_STATE_DEFAULT);
 lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_DEFAULT);

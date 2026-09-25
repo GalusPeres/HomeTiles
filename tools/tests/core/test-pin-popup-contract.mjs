@@ -121,7 +121,7 @@ for (const marker of [
   'void UIManager::setSettingsGestureStyle(const String& title,',
   'const uint32_t snapshot_color = snapshot.bg_color;',
   '? (snapshot_color != 0',
-  ': 0x2A2A2A)',
+  ': tileDefaultBgColor())',
   ': settings_gesture_bg_color;',
   'config.settings_tile_hidden && snapshot.valid',
   'requestSettingsAccess(title, icon_name, bg_color);',

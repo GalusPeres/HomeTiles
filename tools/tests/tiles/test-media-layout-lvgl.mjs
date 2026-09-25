@@ -49,12 +49,12 @@ MediaTileWidgets* tile_renderer_get_media_widgets(GridType){return widgets;}
 struct Logger{void println(const char*){}}Serial;
 struct Bridge{String findEntityIcon(const String&){return "speaker";}String findSensorName(const String&){return "Player";}String findSensorInitialValue(const String&){return "";}}haBridgeConfig;
 ${radiusPolicyHost(root)}
-struct Config{bool tile_borders=true;int tile_radius=tile_radius::kMinimum;const char*language="en";};struct Manager{Config cfg;const Config&getConfig(){return cfg;}}configManager;
+struct Config{bool tile_borders=true;bool icon_discs=true;int tile_radius=tile_radius::kMinimum;const char*language="en";};struct Manager{Config cfg;const Config&getConfig(){return cfg;}}configManager;
 ${surfaceStyleHost(root)}
 constexpr int GRID_CELL_H=CELL_H,GRID_GAP=GAP;
 ${read('src/tiles/runtime/tile_icon_disc.h').replace(/^#.*$/gm,'')}
 namespace i18n{struct Strings{const char*media_no_playback="No playback";};const Strings&strings(const char*){static Strings s;return s;}}
-uint32_t tileBgColorOrDefault(const Tile&,uint32_t d){return d;}
+uint32_t tileBgColorOrDefault(const Tile&,uint32_t d){return d;}uint32_t tileDefaultBgColor(){return 0x2A2A2A;}
 uint32_t brighten_rgb_color(uint32_t c,uint32_t){return c;}
 String normalizeMdiIconName(const String&s){return s;}
 String getMdiChar(const String&s){return s=="play"?"\xF3\xB0\x8F\xA8":s=="skip-next"?"\xF3\xB0\x92\xAD":s=="skip-previous"?"\xF3\xB0\x92\xAE":"\xF3\xB0\x92\x83";}

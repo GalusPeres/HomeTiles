@@ -57,8 +57,8 @@ lv_obj_t* render_sensor_tile(lv_obj_t* parent, int col, int row, const Tile& til
     return nullptr;
   }
 
-  // Use the configured color; default to 0x2A2A2A when color is 0.
-  uint32_t card_color = tileBgColorOrDefault(tile, 0x2A2A2A);
+  // Use the configured color, else the global default tile color.
+  uint32_t card_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(card, lv_color_hex(card_color), LV_PART_MAIN | LV_STATE_DEFAULT);
 lv_obj_set_style_bg_grad_color(card, lv_color_hex(card_color), LV_PART_MAIN | LV_STATE_DEFAULT);
 lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -290,7 +290,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       icon_override,
       tile.sensor_unit,
       tile.sensor_decimals,
-      tileBgColorOrDefault(tile, 0x2A2A2A),
+      tileBgColorOrDefault(tile, tileDefaultBgColor()),
       tileTypeIsEditableValue(tile.type)
     };
 

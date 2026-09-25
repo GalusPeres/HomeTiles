@@ -10,6 +10,7 @@
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/ui/ui_manager.h"
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/screensaver/image_screensaver.h"
 #include "src/types/clock/clock_format.h"
 #include "src/web/server/web_admin_utils.h"
 #include <stdlib.h>
@@ -32,6 +33,8 @@ void WebAdminServer::handleSaveMQTT() {
     strncpy(cfg.ha_prefix, "ha/statestream", CONFIG_HA_PREFIX_MAX - 1);
     cfg.tile_borders = true;
     cfg.tile_radius = tile_radius::kMinimum;
+    cfg.icon_discs = true;
+    cfg.default_tile_color = tile_color::kDefault;
   }
   const DeviceConfig previous_cfg = cfg;
 
@@ -602,6 +605,56 @@ void WebAdminServer::handleTileRadius() {
   }
   server.send(200, "application/json",
       String("{\"success\":true,\"radius\":") + configManager.getConfig().tile_radius + "}");
+}
+
+void WebAdminServer::handleSaveIconDiscs() {
+  webAdminMarkActivity();
+  if (!server.hasArg("enabled")) {
+    sendJsonError(server, 400, "Missing enabled value");
+    return;
+  }
+  String value = server.arg("enabled");
+  value.trim();
+  value.toLowerCase();
+  const bool enabled = value == "1" || value == "true" || value == "on";
+  if (!configManager.saveIconDiscs(enabled)) {
+    sendJsonError(server, 500, "Could not save icon discs");
+    return;
+  }
+  // Shared disc styles update every grid, including cached and screensaver
+  // tiles, on the next safe UI pass. This handler does not touch LVGL.
+  ui_surface_style::request_icon_disc_refresh();
+  server.send(200, "application/json",
+              enabled ? "{\"success\":true,\"enabled\":true}"
+                      : "{\"success\":true,\"enabled\":false}");
+}
+
+void WebAdminServer::handleSaveDefaultTileColor() {
+  webAdminMarkActivity();
+  // Accepts "#RRGGBB" from the color picker.
+  String value = server.arg("color");
+  value.trim();
+  bool valid = value.length() == 7 && value[0] == '#';
+  for (size_t i = 1; valid && i < value.length(); ++i) valid = isxdigit(value[i]);
+  if (!valid) {
+    sendJsonError(server, 400, "Invalid tile color");
+    return;
+  }
+  const uint32_t rgb = static_cast<uint32_t>(strtoul(value.c_str() + 1, nullptr, 16));
+  if (!configManager.saveDefaultTileColor(rgb)) {
+    sendJsonError(server, 500, "Could not save tile color");
+    return;
+  }
+  // Tiles without their own color use the new default: the visible grid
+  // reloads, cached folder grids rebuild when opened and the screensaver
+  // grid refreshes. These calls only set flags for the UI loop.
+  tiles_invalidate_folder(tileConfig.rootFolderId());
+  tiles_request_reload_all();
+  image_screensaver_tiles_changed();
+  char response[48];
+  snprintf(response, sizeof(response), "{\"success\":true,\"color\":\"#%06X\"}",
+           static_cast<unsigned>(configManager.getConfig().default_tile_color));
+  server.send(200, "application/json", response);
 }
 
 void WebAdminServer::handleSaveTileBorders() {

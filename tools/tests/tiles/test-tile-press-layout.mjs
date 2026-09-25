@@ -27,7 +27,7 @@ fs.writeFileSync(source, String.raw`
 #include <cstdio>
 #include <vector>
 ${radiusPolicyHost(root)}
-struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = false; };
+struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = false; bool icon_discs = true; };
 struct TestConfigManager { TestConfig config; const TestConfig& getConfig() const { return config; } } configManager;
 ${surfaceStyleHost(root)}
 ${helper}

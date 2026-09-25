@@ -25,7 +25,7 @@ for (const marker of [
   'const int size = shape == Shape::Round ? round_diameter() : diameter();',
   'lv_obj_set_size(disc, size, size);',
   'ui_surface_style::apply_radius(disc, radius_baseline(), 0);',
-  'lv_obj_set_style_bg_opa(disc, kOpa, 0);',
+  'ui_surface_style::apply_icon_disc_opa(disc, kOpa, true);',
   'lv_obj_t* disc = create(card, Shape::Concentric);',
   'lv_obj_t* disc = create(card, Shape::Round);',
   'lv_obj_move_to_index(disc, lv_obj_get_index(icon));',

@@ -81,9 +81,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   lv_obj_t* card = lv_button_create(parent);
   if (!card) return nullptr;
 
-  uint32_t default_color = get_tile_type_default_bg(tile.type);
-  if (default_color == 0) default_color = 0x2A2A2A;
-  uint32_t card_color = tileBgColorOrDefault(tile, default_color);
+  uint32_t card_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(card, lv_color_hex(card_color), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_grad_color(card, lv_color_hex(card_color), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_DEFAULT);

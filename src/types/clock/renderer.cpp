@@ -482,7 +482,7 @@ lv_obj_t* render_clock_tile(lv_obj_t* parent, int col, int row, const Tile& tile
   ui_surface_style::apply_radius(card, tile_layout::scale_480(22), 0);
   lv_obj_set_style_border_width(card, 0, 0);
 
-  uint32_t card_color = tileBgColorOrDefault(tile, 0x2A2A2A);
+  uint32_t card_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
   lv_obj_set_style_bg_color(card, lv_color_hex(card_color), LV_PART_MAIN | LV_STATE_DEFAULT);
 lv_obj_set_style_bg_grad_color(card, lv_color_hex(card_color), LV_PART_MAIN | LV_STATE_DEFAULT);
 lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_DEFAULT);

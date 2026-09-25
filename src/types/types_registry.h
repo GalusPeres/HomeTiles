@@ -66,6 +66,8 @@ struct TileTypeDescriptor {
 
 const TileTypeDescriptor* get_tile_type_descriptor(TileType type);
 uint32_t get_tile_type_default_bg(TileType type);
+// True for types whose default background is the global default tile color.
+bool tile_type_follows_default_tile_color(TileType type);
 const char* get_tile_type_css_class(TileType type);
 const char* get_tile_type_preview_kind(TileType type);
 // Localized type name in the configured language, shared by the tile type

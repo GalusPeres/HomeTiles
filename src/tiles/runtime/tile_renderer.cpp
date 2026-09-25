@@ -2070,69 +2070,31 @@ static uint8_t climate_preset_modes_mask(const String& normalized_modes) {
   return mask;
 }
 
-static uint16_t climate_fan_modes_mask(const String& normalized_modes) {
-  static const char* const names[] = {
-      "auto", "low", "medium", "high", "on",
-      "off", "top", "middle", "focus", "diffuse"};
-  uint16_t mask = 0;
+// Keep every option Home Assistant lists (vendor modes such as "1" or
+// "Silent" included); only the JSON array syntax is removed. Names keep inner
+// spaces and are lowercased like the current mode. Options that do not fit
+// the bounded buffer are left out.
+static void climate_copy_mode_list(char* out, size_t out_size, String modes) {
+  modes.replace("[", "");
+  modes.replace("]", "");
+  modes.replace("\"", "");
+  String csv;
   int start = 0;
-  while (start <= normalized_modes.length()) {
-    int comma = normalized_modes.indexOf(',', start);
-    if (comma < 0) comma = normalized_modes.length();
-    const String mode = normalized_modes.substring(start, comma);
-    for (uint8_t id = 0; id < 10; ++id) {
-      if (mode == names[id]) {
-        mask |= static_cast<uint16_t>(1U << id);
-        break;
-      }
+  while (start <= modes.length()) {
+    int comma = modes.indexOf(',', start);
+    if (comma < 0) comma = modes.length();
+    String mode = modes.substring(start, comma);
+    mode.trim();
+    mode.toLowerCase();
+    const size_t needed = csv.length() + mode.length() + (csv.length() ? 1 : 0);
+    if (mode.length() && needed < out_size) {
+      if (csv.length()) csv += ',';
+      csv += mode;
     }
-    if (comma >= normalized_modes.length()) break;
+    if (comma >= modes.length()) break;
     start = comma + 1;
   }
-  return mask;
-}
-
-static uint8_t climate_swing_modes_mask(const String& normalized_modes) {
-  static const char* const names[] = {
-      "off", "on", "vertical", "horizontal", "both"};
-  uint8_t mask = 0;
-  int start = 0;
-  while (start <= normalized_modes.length()) {
-    int comma = normalized_modes.indexOf(',', start);
-    if (comma < 0) comma = normalized_modes.length();
-    const String mode = normalized_modes.substring(start, comma);
-    for (uint8_t id = 0; id < 5; ++id) {
-      if (mode == names[id]) {
-        mask |= static_cast<uint8_t>(1U << id);
-        break;
-      }
-    }
-    if (comma >= normalized_modes.length()) break;
-    start = comma + 1;
-  }
-  return mask;
-}
-
-static uint8_t climate_horizontal_swing_modes_mask(
-    const String& normalized_modes) {
-  static const char* const names[] = {
-      "off", "on", "left", "center", "right", "swing", "wide"};
-  uint8_t mask = 0;
-  int start = 0;
-  while (start <= normalized_modes.length()) {
-    int comma = normalized_modes.indexOf(',', start);
-    if (comma < 0) comma = normalized_modes.length();
-    const String mode = normalized_modes.substring(start, comma);
-    for (uint8_t id = 0; id < 7; ++id) {
-      if (mode == names[id]) {
-        mask |= static_cast<uint8_t>(1U << id);
-        break;
-      }
-    }
-    if (comma >= normalized_modes.length()) break;
-    start = comma + 1;
-  }
-  return mask;
+  climate_copy_text(out, out_size, csv);
 }
 
 static ClimateState parse_climate_payload(const char* payload) {
@@ -2197,17 +2159,14 @@ static ClimateState parse_climate_payload(const char* payload) {
       out.preset_modes_mask = climate_preset_modes_mask(modes);
     }
     if (extract_json_array_field(source, "fan_modes", modes)) {
-      climate_normalize_modes(modes);
-      out.fan_modes_mask = climate_fan_modes_mask(modes);
+      climate_copy_mode_list(out.fan_modes, sizeof(out.fan_modes), modes);
     }
     if (extract_json_array_field(source, "swing_modes", modes)) {
-      climate_normalize_modes(modes);
-      out.swing_modes_mask = climate_swing_modes_mask(modes);
+      climate_copy_mode_list(out.swing_modes, sizeof(out.swing_modes), modes);
     }
     if (extract_json_array_field(source, "swing_horizontal_modes", modes)) {
-      climate_normalize_modes(modes);
-      out.swing_horizontal_modes_mask =
-          climate_horizontal_swing_modes_mask(modes);
+      climate_copy_mode_list(out.swing_horizontal_modes,
+                             sizeof(out.swing_horizontal_modes), modes);
     }
 
     float number = 0.0f;
@@ -2377,12 +2336,11 @@ static ClimatePopupInit build_climate_popup_init(
   init.preset_mode = climatePresetName(state.preset_mode_id);
   init.preset_modes = climatePresetModesCsv(state.preset_modes_mask);
   init.fan_mode = state.fan_mode;
-  init.fan_modes = climateFanModesCsv(state.fan_modes_mask);
+  init.fan_modes = state.fan_modes;
   init.swing_mode = state.swing_mode;
-  init.swing_modes = climateSwingModesCsv(state.swing_modes_mask);
+  init.swing_modes = state.swing_modes;
   init.swing_horizontal_mode = state.swing_horizontal_mode;
-  init.swing_horizontal_modes =
-      climateHorizontalSwingModesCsv(state.swing_horizontal_modes_mask);
+  init.swing_horizontal_modes = state.swing_horizontal_modes;
   init.temperature_unit = state.temperature_unit;
   init.current_temperature = state.current_temperature;
   init.current_humidity = state.current_humidity;

@@ -37,9 +37,11 @@ struct ClimateState {
   uint8_t hvac_modes_mask = 0;
   uint8_t preset_mode_id = 0xFF;
   uint8_t preset_modes_mask = 0;
-  uint16_t fan_modes_mask = 0;
-  uint8_t swing_modes_mask = 0;
-  uint8_t swing_horizontal_modes_mask = 0;
+  // Home Assistant's own option names as comma-separated lists, including
+  // vendor modes such as "1" or "silent" that have no fixed name here.
+  char fan_modes[96] = {};
+  char swing_modes[64] = {};
+  char swing_horizontal_modes[64] = {};
 };
 
 enum ClimateHvacModeMask : uint8_t {

@@ -928,12 +928,11 @@ ClimatePopupInit popup_init_for(const ClimateEventData* data) {
   init.preset_mode = climatePresetName(state.preset_mode_id);
   init.preset_modes = climatePresetModesCsv(state.preset_modes_mask);
   init.fan_mode = state.fan_mode;
-  init.fan_modes = climateFanModesCsv(state.fan_modes_mask);
+  init.fan_modes = state.fan_modes;
   init.swing_mode = state.swing_mode;
-  init.swing_modes = climateSwingModesCsv(state.swing_modes_mask);
+  init.swing_modes = state.swing_modes;
   init.swing_horizontal_mode = state.swing_horizontal_mode;
-  init.swing_horizontal_modes =
-      climateHorizontalSwingModesCsv(state.swing_horizontal_modes_mask);
+  init.swing_horizontal_modes = state.swing_horizontal_modes;
   init.temperature_unit = state.temperature_unit;
   init.current_temperature = state.current_temperature;
   init.current_humidity = state.current_humidity;

@@ -465,6 +465,9 @@
     if (tile.background_opacity !== undefined && tile.background_opacity !== null) {
       fd.append('background_opacity', tile.background_opacity);
     }
+    // Per-tile icon colors (Sensor family, Binary sensor, Energy); older
+    // exports without the field import without icon colors.
+    if (typeof tile.icon_colors === 'string') fd.append('icon_colors', tile.icon_colors);
 
     if ([21, 22, 23].includes(safeType)) fd.append('sensor_value_font', tile.sensor_value_font ?? 2);
     if (safeType === 1) {

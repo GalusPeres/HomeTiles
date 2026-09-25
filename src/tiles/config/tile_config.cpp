@@ -409,6 +409,7 @@ static bool looksLikeImagePath(const String& value);
 static const char* kImagePathDir = "/_tile_links";
 static const char* kEntityPathDir = "/_tile_entities";
 static const char* kTitlePathDir = "/_tile_titles";
+static const char* kIconColorPathDir = "/_tile_icon_colors";
 static const char* kTileGridDir = "/_tile_grids";
 static const char* kFolderIndexFile = "/_tile_grids/folders.bin";
 static constexpr uint32_t kFolderIndexMagic = 0x54464C44;  // 'TFLD'
@@ -545,6 +546,7 @@ static bool g_sidecar_index_built = false;
 static std::vector<uint32_t> g_image_sidecar_keys;
 static std::vector<uint32_t> g_entity_sidecar_keys;
 static std::vector<uint32_t> g_title_sidecar_keys;
+static std::vector<uint32_t> g_icon_color_sidecar_keys;
 
 static uint32_t sidecarKey(uint16_t folder_id, size_t index) {
   return (static_cast<uint32_t>(folder_id) << 8) | static_cast<uint8_t>(index);
@@ -583,6 +585,7 @@ static void ensureSidecarIndexBuilt() {
   scanSidecarDir(kImagePathDir, g_image_sidecar_keys);
   scanSidecarDir(kEntityPathDir, g_entity_sidecar_keys);
   scanSidecarDir(kTitlePathDir, g_title_sidecar_keys);
+  scanSidecarDir(kIconColorPathDir, g_icon_color_sidecar_keys);
 }
 
 static String entityPathFileLegacy(const char* prefix, size_t index) {
@@ -939,6 +942,76 @@ static void applyLongTitlesFromSd(uint16_t folder_id, TileGridConfig& grid) {
   }
 }
 
+// Icon color records (tile_icon_colors.h) do not fit PackedTileV7. They follow
+// the long-title sidecar pattern: written through .tmp, recovered from .tmp
+// or .bak, skipped when unchanged and removed when empty.
+static String iconColorPathFile(uint16_t folder_id, size_t index) {
+  char path[64];
+  snprintf(path, sizeof(path), "%s/f%u_%02u.txt", kIconColorPathDir,
+           static_cast<unsigned>(folder_id), static_cast<unsigned>(index));
+  return String(path);
+}
+
+static bool readIconColorsSd(uint16_t folder_id, size_t index, String& out) {
+  if (!storageReady()) return false;
+  ensureSidecarIndexBuilt();
+  if (!sidecarKeyPresent(g_icon_color_sidecar_keys, sidecarKey(folder_id, index))) return false;
+  const String path = iconColorPathFile(folder_id, index);
+  for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)}) {
+    File file = storageFS().open(candidate, FILE_READ);
+    if (!file) continue;
+    const size_t size = file.size();
+    if (size == 0 || size > tile_icon_colors::kMaxRecordBytes) { file.close(); continue; }
+    String value = file.readString();
+    file.close();
+    if (value.length() != size) continue;
+    out = value;
+    return true;
+  }
+  return false;
+}
+
+static bool writeIconColorsSd(uint16_t folder_id, size_t index, const String& record) {
+  if (!storageReady()) return false;
+  if (record.length() > tile_icon_colors::kMaxRecordBytes) return false;
+  ensureSidecarIndexBuilt();
+  const uint32_t key = sidecarKey(folder_id, index);
+  const String path = iconColorPathFile(folder_id, index);
+  const bool present = sidecarKeyPresent(g_icon_color_sidecar_keys, key);
+  if (record.length() == 0) {
+    if (!present) return true;
+    for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)})
+      if (storageFS().exists(candidate) && !storageFS().remove(candidate)) return false;
+    sidecarKeyRemove(g_icon_color_sidecar_keys, key);
+    return true;
+  }
+  String current;
+  if (readIconColorsSd(folder_id, index, current) && current == record) return true;
+  if (!storageFS().exists(kIconColorPathDir) && !storageFS().mkdir(kIconColorPathDir)) return false;
+  const String temporary = tmpPathFor(path);
+  if (storageFS().exists(temporary)) storageFS().remove(temporary);
+  File file = storageFS().open(temporary, FILE_WRITE);
+  if (!file) return false;
+  const size_t written = file.print(record);
+  file.flush(); file.close();
+  if (written != record.length() || !replaceFileWithPreparedTmp(temporary, path)) {
+    storageFS().remove(temporary);
+    return false;
+  }
+  sidecarKeyAdd(g_icon_color_sidecar_keys, key);
+  return true;
+}
+
+static void applyIconColorsFromSd(uint16_t folder_id, TileGridConfig& grid) {
+  for (size_t index = 0; index < TILES_PER_GRID; ++index) {
+    Tile& tile = grid.tiles[index];
+    String record;
+    if (!tileTypeHasIconColors(tile.type) || !readIconColorsSd(folder_id, index, record)) continue;
+    // Normalize again so a damaged or foreign file cannot reach the runtime.
+    tile.icon_colors = normalizeTileIconColors(tile.type, record.c_str());
+  }
+}
+
 #if defined(DEVICE_ESP32_S3_RGB_480)
 static bool sidecarTextMatches(bool has_sidecar, const String& file_path,
                                const String& expected,
@@ -972,6 +1045,11 @@ static bool gridSidecarsMatchStored(uint16_t folder_id,
     const bool title_required = tile.type != TILE_EMPTY && tile.title.length() >= TITLE_MAX;
     if (title_required ? (!readLongTitleSd(folder_id, index, stored_title) || stored_title != tile.title)
                        : sidecarKeyPresent(g_title_sidecar_keys, key)) return false;
+
+    String stored_colors;
+    if (tile.icon_colors.length()
+            ? (!readIconColorsSd(folder_id, index, stored_colors) || stored_colors != tile.icon_colors)
+            : sidecarKeyPresent(g_icon_color_sidecar_keys, key)) return false;
 
     const bool entity_required =
         entityTileStoresSensorEntity(tile.type) &&
@@ -3301,6 +3379,7 @@ bool TileConfig::deleteFolder(uint16_t folder_id) {
       if (storageFS().exists(entity_path)) storageFS().remove(entity_path);
       sidecarKeyRemove(g_entity_sidecar_keys, sidecarKey(id, i));
       writeLongTitleSd(id, i, "");
+      writeIconColorsSd(id, i, "");
     }
   }
 
@@ -3405,6 +3484,7 @@ bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
   applyImagePathsFromSd(folder_id, grid);
   applyLongEntityIdsFromSd(folder_id, grid);
   applyLongTitlesFromSd(folder_id, grid);
+  applyIconColorsFromSd(folder_id, grid);
 
   // Retired tile types become empty without renumbering the persisted enum.
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
@@ -3435,6 +3515,8 @@ bool TileConfig::saveGrid(uint16_t folder_id, const TileGridConfig& grid,
     if (isRetiredTileType(working.tiles[i].type)) {
       working.tiles[i] = Tile{};
     }
+    working.tiles[i].icon_colors = normalizeTileIconColors(
+        working.tiles[i].type, working.tiles[i].icon_colors.c_str());
   }
   if (ensure_navigation_tile) {
     if (folder_id == kRootFolderId) {
@@ -3487,6 +3569,11 @@ bool TileConfig::saveGrid(uint16_t folder_id, const TileGridConfig& grid,
     const Tile& tile = working.tiles[grid_idx];
     if (!writeLongTitleSd(folder_id, grid_idx, tile.type == TILE_EMPTY ? String() : tile.title)) {
       Serial.println("[TileConfig] Error saving full tile title");
+      invalidateFolderEntityCache();
+      return false;
+    }
+    if (!writeIconColorsSd(folder_id, grid_idx, tile.icon_colors)) {
+      Serial.println("[TileConfig] Error saving tile icon colors");
       invalidateFolderEntityCache();
       return false;
     }

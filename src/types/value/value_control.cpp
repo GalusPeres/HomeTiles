@@ -1,5 +1,6 @@
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/value/value_control.h"
+#include "src/tiles/runtime/tile_icon_color_rules.h"
 #include <ArduinoJson.h>
 #include <algorithm>
 #include <cmath>
@@ -139,8 +140,16 @@ void refresh_editable_tile(GridType grid, uint8_t index) {
   SensorTileWidgets* widgets = tile_renderer_get_sensor_widgets(grid);
   if (!widgets || !widgets[index].value_label) return;
   const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(tile->sensor_entity));
+  const String display = editable_display_value(value);
   lv_label_set_long_mode(widgets[index].value_label, LV_LABEL_LONG_DOT);
-  lv_label_set_text(widgets[index].value_label, editable_display_value(value).c_str());
+  lv_label_set_text(widgets[index].value_label, display.c_str());
+  // Per-tile icon colors: Number rules compare the raw number; Select and
+  // Date/Time rules match the raw state or its displayed text.
+  if (widgets[index].icon_label && tile->icon_colors.length()) {
+    const bool known = value.valid && value.has_state && value.available && value.state != "unknown";
+    tile_icon_color_rules::apply(widgets[index].icon_label, tile->icon_colors.c_str(), known,
+                                 value.state.c_str(), display.c_str(), lv_color_white());
+  }
 }
 
 void queue_editable_value(const String& entity, const char* payload) {

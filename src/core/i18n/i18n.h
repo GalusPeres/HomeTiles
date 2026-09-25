@@ -293,6 +293,16 @@ struct Strings {
   const char* icon_disc_on;
   const char* icon_disc_off;
   const char* icon_glow;
+  // Web Admin tile editor: per-tile icon color and color rules (Sensor
+  // family, Binary sensor, Energy). The numeric operators stay symbols.
+  const char* tile_icon_color;
+  const char* tile_icon_color_rules;
+  const char* tile_icon_color_equals;
+  const char* tile_icon_color_contains;
+  const char* tile_icon_color_value;
+  const char* tile_icon_color_add_rule;
+  const char* tile_icon_color_remove;
+  const char* tile_icon_color_hint;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;
   const char* screensaver_storage_hint;

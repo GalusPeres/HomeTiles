@@ -157,6 +157,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
   SensorTileWidgets* target = tile_renderer_get_sensor_widgets(grid_type);
   if (target && index < TILES_PER_GRID) {
     target[index].value_label = value_label;
+    target[index].icon_label = icon_lbl;
     target[index].unit_label = nullptr;
     target[index].gauge = nullptr;
     target[index].gauge_min = 0;

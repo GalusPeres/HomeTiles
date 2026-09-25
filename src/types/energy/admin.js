@@ -31,6 +31,7 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   function loadEnergyFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
     if (entityEl) {
@@ -59,6 +60,7 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   function saveEnergyFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
     const entity = entityEl ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
@@ -72,6 +74,7 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   function resetEnergyFields(tab) {
+    resetIconColorFields(tab);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
     if (entityEl) entityEl.value = '';

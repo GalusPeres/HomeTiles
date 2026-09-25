@@ -60,8 +60,8 @@ inline void set_tag(lv_obj_t* disc, Mode mode, bool glow) {
 
 // Central disc fill rule, shared with the Web Admin preview (iconDiscTinted):
 // with glow on, a colored icon tints its disc with its own hue; white and
-// grey icons keep the neutral white disc. Future icon colors (thresholds)
-// reach the disc through set_icon_color() below.
+// grey icons keep the neutral white disc. Per-tile icon colors and color
+// rules (tile_icon_color_rules.h) reach the disc through set_icon_color().
 inline bool icon_color_tints(uint32_t rgb) {
   const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
   return r != g || g != b;

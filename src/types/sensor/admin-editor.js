@@ -78,6 +78,7 @@
   }
 
   function loadSensorFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_sensor_entity');
     if (entityEl) entityEl.value = data.sensor_entity || '';
@@ -109,6 +110,7 @@
   }
 
   function saveSensorFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const prefix = tab;
     formData.append('sensor_entity', document.getElementById(prefix + '_sensor_entity')?.value || '');
     formData.append('sensor_unit', document.getElementById(prefix + '_sensor_unit')?.value || '');
@@ -126,6 +128,7 @@
   }
 
   function resetSensorFields(tab) {
+    resetIconColorFields(tab);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_sensor_entity');
     if (entityEl) entityEl.value = '';

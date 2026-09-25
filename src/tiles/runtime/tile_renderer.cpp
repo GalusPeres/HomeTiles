@@ -21,6 +21,7 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/i18n/i18n.h"
@@ -319,6 +320,7 @@ static void clear_sensor_widgets(GridType grid_type) {
   else if (grid_type == GridType::TAB2) target = g_tab2_sensors;
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     target[i].value_label = nullptr;
+    target[i].icon_label = nullptr;
     target[i].unit_label = nullptr;
     target[i].gauge = nullptr;
     target[i].gauge_min = 0;
@@ -4877,4 +4879,16 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
     combined += unit;
   }
   lv_label_set_text(value_label, combined.c_str());
+
+  // Per-tile icon colors follow every state update; "--" covers empty,
+  // unavailable and unknown states, which keep the default white icon.
+  // Tiles without icon colors keep their icon untouched.
+  if (lv_obj_t* icon = target[grid_index].icon_label) {
+    const Tile* tile = tile_renderer_get_tile_config(grid_type, grid_index);
+    if (tile && tile->icon_colors.length()) {
+      tile_icon_color_rules::apply(icon, tile->icon_colors.c_str(),
+                                   displayValue != "--", value, nullptr,
+                                   lv_color_white());
+    }
+  }
 }

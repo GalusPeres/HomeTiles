@@ -2348,3 +2348,18 @@
 .tile.sensor-compact:hover:not(.active) { box-shadow:inset 0 0 0 2px rgba(38,166,154,.6); }
 .tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { box-shadow:inset 0 0 0 3px #26a69a, 0 0 12px rgba(38,166,154,.55); }
 .tile.sensor-compact:focus-visible { box-shadow:inset 0 0 0 3px #64d8cb, 0 0 12px rgba(38,166,154,.55); }
+
+/* Per-tile icon colors in the tile editor: the fixed icon color uses the
+   tile color row; color rules are operator, value, color and remove. */
+.tile-icon-color-fields input[type="color"][data-unset="1"] { opacity:.4; }
+.tile-icon-rule {
+  display:grid;
+  grid-template-columns:minmax(84px,1fr) minmax(0,1.3fr) 44px 38px;
+  gap:8px;
+  align-items:center;
+  margin-bottom:8px;
+}
+.tile-icon-rule select, .tile-icon-rule input { min-width:0; margin:0; }
+.tile-icon-rule input[type="color"] { width:100%; height:38px; padding:4px 7px; border-radius:10px; }
+.tile-icon-rule-add { margin-top:2px; }
+.tile-icon-color-fields .hint { margin:8px 0 0; }

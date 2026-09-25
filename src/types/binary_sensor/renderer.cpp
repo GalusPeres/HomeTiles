@@ -1,5 +1,6 @@
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/binary_sensor/renderer.h"
 
@@ -160,6 +161,13 @@ String state_label(const BinarySensorState& state) {
       String(state.device_class));
 }
 
+// Per-tile icon colors apply to real on/off states only; color rules match
+// the raw state (on/off) and its translated label.
+bool rule_state_known(const BinarySensorState& state) {
+  return state.valid && state.available &&
+         (state.value == BinarySensorValue::On || state.value == BinarySensorValue::Off);
+}
+
 bool has_explicit_icon_setting(const Tile& tile) {
   String setting = tile.icon_name;
   setting.trim();
@@ -201,15 +209,17 @@ void apply_state(GridType grid_type, uint8_t index,
 
   widgets.last_payload_hash = payload_hash;
   tile_renderer_get_binary_sensor_states(grid_type)[index] = state;
+  const String label = state_label(state);
   if (widgets.state_label) {
-    const String label = state_label(state);
     lv_label_set_text(widgets.state_label, label.c_str());
   }
   if (widgets.icon_label) {
-    tile_icon_disc::set_icon_color(
-        widgets.icon_label, lv_color_hex(binary_sensor_visual_color(state)));
+    const Tile* tile = tile_renderer_get_tile_config(grid_type, index);
+    tile_icon_color_rules::apply(
+        widgets.icon_label, tile ? tile->icon_colors.c_str() : nullptr,
+        rule_state_known(state), binary_sensor_state_name(state.value),
+        label.c_str(), lv_color_hex(binary_sensor_visual_color(state)));
     if (widgets.dynamic_icon) {
-      const Tile* tile = tile_renderer_get_tile_config(grid_type, index);
       if (tile) {
         const String icon = binary_sensor_resolve_icon(*tile, state);
         if (icon.length()) {
@@ -515,11 +525,16 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
   const String icon =
       binary_sensor_resolve_icon(tile, state, &widgets.dynamic_icon);
   widgets.dynamic_icon = icon_visible && widgets.dynamic_icon;
+  const String initial_label = state_label(state);
   if (icon_visible && icon.length() && FONT_MDI_ICONS) {
+    uint32_t icon_color = binary_sensor_visual_color(state);
+    if (rule_state_known(state)) {
+      tile_icon_colors::resolve(tile.icon_colors.c_str(),
+                                binary_sensor_state_name(state.value),
+                                initial_label.c_str(), icon_color);
+    }
     widgets.icon_label = lv_label_create(card);
-    set_label_style(widgets.icon_label,
-                    lv_color_hex(binary_sensor_visual_color(state)),
-                    FONT_MDI_ICONS);
+    set_label_style(widgets.icon_label, lv_color_hex(icon_color), FONT_MDI_ICONS);
     lv_label_set_text(widgets.icon_label, getMdiChar(icon).c_str());
     lv_obj_align(widgets.icon_label, LV_ALIGN_TOP_LEFT,
                  tile_layout::scale_480(-8),
@@ -544,7 +559,6 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
   lv_label_set_long_mode(widgets.state_label, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(widgets.state_label, LV_PCT(100));
   lv_obj_set_style_text_align(widgets.state_label, LV_TEXT_ALIGN_CENTER, 0);
-  const String initial_label = state_label(state);
   lv_label_set_text(widgets.state_label, initial_label.c_str());
   lv_obj_align(widgets.state_label, LV_ALIGN_CENTER, 0,
                tile_layout::scale(28));

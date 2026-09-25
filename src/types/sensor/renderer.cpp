@@ -266,6 +266,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   SensorTileWidgets* target = tile_renderer_get_sensor_widgets(grid_type);
   if (target && index < TILES_PER_GRID) {
     target[index].value_label = v;
+    target[index].icon_label = icon_lbl;
     target[index].unit_label = nullptr;
     target[index].gauge = gauge;
     target[index].gauge_min = gauge_min;

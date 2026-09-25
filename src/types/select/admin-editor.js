@@ -1,5 +1,6 @@
 
   function loadSelectFields(tab, data) {
+    loadIconColorFields(tab, data);
     const font = document.getElementById(tab + '_select_value_font');
     if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_select_entity');
@@ -27,6 +28,7 @@
   }
 
   function saveSelectFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     formData.append('sensor_value_font', document.getElementById(tab + '_select_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_select_entity');
     const entity = entityEl
@@ -39,6 +41,7 @@
   }
 
   function resetSelectFields(tab) {
+    resetIconColorFields(tab);
     const font = document.getElementById(tab + '_select_value_font');
     if (font) font.value = '2';
     const entity = document.getElementById(tab + '_select_entity');

@@ -63,6 +63,13 @@ static constexpr bool tileTypeAllowedInScreensaver(int type) {
          type == TILE_COVER || tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
 }
 
+// Per-tile icon colors (fixed icon color and color rules) evaluate entity
+// states: the Sensor family, Binary sensor and Energy tiles.
+static constexpr bool tileTypeHasIconColors(int type) {
+  return type == TILE_SENSOR || type == TILE_ENERGY || type == TILE_BINARY_SENSOR ||
+         tileTypeIsEditableValue(type);
+}
+
 static constexpr bool tileTypeRefreshesEntityIcon(TileType type) {
   return type == TILE_SENSOR || type == TILE_SWITCH || type == TILE_SCENE ||
          type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||

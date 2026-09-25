@@ -7,6 +7,7 @@
 #include "src/devices/device.h"
 #include "src/tiles/config/tile_geometry.h"
 #include "src/core/config/pin_access.h"
+#include "src/tiles/config/tile_icon_colors.h"
 #include "src/types/tile_type_policy.h"
 
 static constexpr uint8_t GRID_COLS = Device::kGridCols;
@@ -128,6 +129,9 @@ struct Tile {
   uint8_t icon_disc_mode = 0;
   // Glow: a colored icon tints its disc with the same hue.
   bool icon_glow = true;
+  // Fixed icon color and color rules (tile_icon_colors.h), kept in the
+  // /_tile_icon_colors sidecar. Empty = the type's default icon colors.
+  String icon_colors;
 
   Tile()
       : type(TILE_EMPTY),
@@ -163,6 +167,15 @@ static inline uint8_t normalizeTileIconDiscMode(int mode) {
   return (mode >= TILE_ICON_DISC_GLOBAL && mode <= TILE_ICON_DISC_OFF)
              ? static_cast<uint8_t>(mode)
              : TILE_ICON_DISC_GLOBAL;
+}
+
+// Canonical icon color record for a type; types without icon colors keep
+// none.
+static inline String normalizeTileIconColors(int type, const char* record) {
+  if (!tileTypeHasIconColors(type) || !record || !*record) return String();
+  char out[tile_icon_colors::kMaxRecordBytes + 1];
+  const size_t length = tile_icon_colors::normalize(record, out, sizeof(out));
+  return length ? String(out) : String();
 }
 
 // Clock/Text/Back use the otherwise unused display mode byte: 0 inherits

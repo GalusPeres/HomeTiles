@@ -13,6 +13,7 @@
     "src/web/admin/tiles/state.js",
     "src/web/admin/tiles/registry.js",
     "src/web/admin/tiles/snapshots.js",
+    "src/web/admin/tiles/icon-colors.js",
     "src/web/admin/folders/navigation.js",
     "src/web/admin/folders/session-cache.js",
     "src/web/admin/tiles/layout.js",

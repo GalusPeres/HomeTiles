@@ -80,6 +80,7 @@
 #include "src/types/camera/web_scripts.h"
 #include "src/types/pixelanim/web_scripts.h"
 #include "src/types/settings/web_scripts.h"
+#include "src/web/server/render/tile_icon_colors_html.h"
 
 #include "src/types/clock/web_styles.h"
 #include "src/types/navigate/web_styles.h"
@@ -862,6 +863,9 @@ void append_tile_type_fields_html(String& html, const TileTypeWebContext& ctx) {
       entry.append_fields(html, ctx);
     }
   }
+  // Shared by the Sensor family, Binary sensor and Energy; the editor shows
+  // it for those types only.
+  if (ctx.tab_id) append_tile_icon_color_fields_html(html, *ctx.tab_id);
 }
 
 void append_tile_type_styles(String& html) {

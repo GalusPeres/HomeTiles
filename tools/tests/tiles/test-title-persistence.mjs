@@ -44,8 +44,8 @@ struct FS {bool exists(const String&p){return files.count(p)||directories.count(
  }} filesystem;
 FS& storageFS(){return filesystem;}bool storageReady(){return ready;}
 constexpr size_t TITLE_MAX=32,TILES_PER_GRID=4;constexpr int TILE_EMPTY=0;
-const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities";
-bool g_sidecar_index_built=false;std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys;
+const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors";
+bool g_sidecar_index_built=false;std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys;
 struct Tile {int type=0;String title;};struct TileGridConfig{Tile tiles[TILES_PER_GRID];};
 `+['sidecarKey','sidecarKeyPresent','sidecarKeyAdd','sidecarKeyRemove','scanSidecarDir','ensureSidecarIndexBuilt',
  'tmpPathFor','backupPathFor','replaceFileWithPreparedTmp','titlePathFile','readLongTitleSd','writeLongTitleSd','applyLongTitlesFromSd'].map(fn).join('\n')+String.raw`

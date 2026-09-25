@@ -813,61 +813,77 @@ static void appendTileTabHTML(
   }
   html += R"html(          <div class="folder-footer">
 )html";
+  const String radius_value = String(configManager.getConfig().tile_radius);
+  auto append_radius_input = [&](const String& id) {
+    html += "<input class=\"global-tile-radius\"";
+    if (id.length()) html += " id=\"" + id + "\"";
+    html += " type=\"range\" min=\"";
+    html += String(tile_radius::kMinimum);
+    html += "\" max=\"";
+    html += String(tile_radius::kMaximum);
+    html += "\" step=\"1\" value=\"";
+    html += radius_value;
+    html += "\" oninput=\"previewTileRadiusLive(this.value)\" onchange=\"saveTileRadius(this.value)\"><output class=\"global-tile-radius-value\">";
+    html += radius_value;
+    html += "</output>";
+  };
   if (!screensaver_mode) {
-    html += "<h4 class=\"global-settings-heading\">";
+    // Global display settings in the Tile Settings card style: the same
+    // heading, checkbox rows, labeled fields and color field with reset.
+    const DeviceConfig& display = configManager.getConfig();
+    html += "<section class=\"global-settings-panel\"><h3>";
     appendHtmlEscaped(html, tr.global_settings_heading);
-    html += "</h4>\n";
-  }
-  html += R"html(            <div class="folder-footer-options">
-)html";
-  if (screensaver_mode) {
-    html += R"html(              <label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";
-  } else {
-    html += R"html(              <label class="inline-checkbox"><input class="normal-tile-border-toggle" type="checkbox" onchange="saveNormalTileBorders(this.checked)" )html";
-    if (configManager.getConfig().tile_borders) html += "checked";
+    html += "</h3><div class=\"global-settings-fields\"><div class=\"global-settings-field\">"
+            "<label class=\"inline-checkbox\"><input class=\"normal-tile-border-toggle\" "
+            "type=\"checkbox\" onchange=\"saveNormalTileBorders(this.checked)\"";
+    if (display.tile_borders) html += " checked";
     html += "> ";
-  }
-  html += tr.screensaver_tile_border;
-  html += R"html(</label>
-)html";
-  html += "<label class=\"tile-radius-control\"><span>";
-  appendHtmlEscaped(html, tr.tile_radius);
-  html += "</span><input class=\"global-tile-radius\" type=\"range\" min=\"";
-  html += String(tile_radius::kMinimum);
-  html += "\" max=\"";
-  html += String(tile_radius::kMaximum);
-  html += "\" step=\"1\" value=\"";
-  html += String(configManager.getConfig().tile_radius);
-  html += "\" oninput=\"previewTileRadiusLive(this.value)\" onchange=\"saveTileRadius(this.value)\"><output class=\"global-tile-radius-value\">";
-  html += String(configManager.getConfig().tile_radius);
-  html += "</output></label>";
-  if (!screensaver_mode) {
-    // Global icon discs and default tile color, applied live like the
-    // border and radius options above.
-    html += "<label class=\"inline-checkbox\"><input class=\"global-icon-disc-toggle\" "
+    appendHtmlEscaped(html, tr.screensaver_tile_border);
+    html += "</label><label class=\"inline-checkbox\"><input class=\"global-icon-disc-toggle\" "
             "type=\"checkbox\" onchange=\"saveIconDiscs(this.checked)\"";
-    if (configManager.getConfig().icon_discs) html += " checked";
+    if (display.icon_discs) html += " checked";
     html += "> ";
     appendHtmlEscaped(html, tr.icon_discs);
-    html += "</label><label class=\"tile-default-color-control\"><span>";
+    const String radius_id = tab_id + "_global_tile_radius";
+    html += "</label></div><div class=\"global-settings-field\"><label for=\"" + radius_id + "\">";
+    appendHtmlEscaped(html, tr.tile_radius);
+    html += "</label><div class=\"global-radius-field\">";
+    append_radius_input(radius_id);
+    html += "</div></div><div class=\"global-settings-field\"><div class=\"tile-color-label-row\"><span>";
     appendHtmlEscaped(html, tr.default_tile_color);
     char default_color_hex[8];
     snprintf(default_color_hex, sizeof(default_color_hex), "#%06X",
              static_cast<unsigned>(tileDefaultBgColor()));
-    html += "</span><input class=\"global-tile-color\" type=\"color\" value=\"";
+    char factory_color_hex[8];
+    snprintf(factory_color_hex, sizeof(factory_color_hex), "#%06X",
+             static_cast<unsigned>(tile_color::kDefault));
+    html += "</span></div><div class=\"tile-color-row\"><input class=\"global-tile-color\" type=\"color\" value=\"";
     html += default_color_hex;
     html += "\" oninput=\"previewDefaultTileColor(this.value)\" "
-            "onchange=\"saveDefaultTileColor(this.value)\"></label>";
-  }
-
-  if (screensaver_mode) {
+            "onchange=\"saveDefaultTileColor(this.value)\">"
+            "<button type=\"button\" class=\"tile-color-reset-btn\" title=\"Reset\" "
+            "onclick=\"saveDefaultTileColor('";
+    html += factory_color_hex;
+    html += "')\"><i class=\"mdi mdi-restore\"></i></button></div></div></div></section>\n";
+    html += R"html(            <p class="hint">)html";
+  } else {
+    html += R"html(            <div class="folder-footer-options">
+              <label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";
+    html += tr.screensaver_tile_border;
+    html += R"html(</label>
+)html";
+    html += "<label class=\"tile-radius-control\"><span>";
+    appendHtmlEscaped(html, tr.tile_radius);
+    html += "</span>";
+    append_radius_input(String());
+    html += "</label>";
     html += R"html(              <label class="inline-checkbox"><input id="screensaverTileShadow" type="checkbox"> )html";
     html += tr.screensaver_tile_shadow;
     html += R"html(</label>
 )html";
-  }
-  html += R"html(            </div>
+    html += R"html(            </div>
             <p class="hint">)html";
+  }
   if (screensaver_mode) {
     html += tr.screensaver_hint;
   } else {
@@ -1075,19 +1091,16 @@ static void appendTileTabHTML(
             <div class="tile-icon-disc-fields" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_disc_fields">
-              <label>)html";
+              <label class="inline-checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_disc_row"><input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_disc" checked> )html";
   appendHtmlEscaped(html, tr.icon_disc_label);
   html += R"html(</label>
-              <select id=")html";
+              <label class="inline-checkbox" id=")html";
   html += tab_id;
-  html += R"html(_tile_icon_disc"><option value="0">)html";
-  appendHtmlEscaped(html, tr.icon_disc_global);
-  html += R"html(</option><option value="1">)html";
-  appendHtmlEscaped(html, tr.icon_disc_on);
-  html += R"html(</option><option value="2">)html";
-  appendHtmlEscaped(html, tr.icon_disc_off);
-  html += R"html(</option></select>
-              <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += R"html(_tile_icon_glow_row"><input type="checkbox" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_glow" checked> )html";
   appendHtmlEscaped(html, tr.icon_glow);

@@ -46,10 +46,10 @@ for (const marker of [
   'set_tag(child, disc_mode, glow);',
 ]) assert.ok(disc.includes(marker), `tile_icon_disc: ${marker}`);
 
-// Web Admin editor: localized select in the common fields for icon types.
+// Web Admin editor: a localized checkbox like Tile borders in the common fields for icon types; Glow only for types whose icon can take a color.
 const html = read('src/web/server/render/web_admin_html.cpp');
-for (const marker of ['tr.icon_disc_label', 'tr.icon_disc_global', 'tr.icon_disc_on', 'tr.icon_disc_off',
-  '_tile_icon_disc_fields', '_tile_icon_disc"><option value="0">', 'html += "\\" data-icon-disc=\\"";']) {
+for (const marker of ['tr.icon_disc_label', '_tile_icon_glow_row',
+  '_tile_icon_disc_fields', '_tile_icon_disc" checked> ', 'html += "\\" data-icon-disc=\\"";']) {
   assert.ok(html.includes(marker), `admin HTML: ${marker}`);
 }
 const snapshots = read('src/web/admin/tiles/snapshots.js');
@@ -63,7 +63,16 @@ for (const file of ['type-selection.js', 'drafts.js', 'clipboard.js']) {
 assert.ok(read('src/web/admin/tiles/autosave.js').includes('resetIconDiscFields(tab);'), 'Reset restores Global');
 assert.ok(read('src/web/admin/tiles/editor.js').includes("_tile_icon_disc'), 'change', 'tileIconDisc'"));
 assert.match(read('src/web/admin/tiles/import-export.js'), /fd\.append\('icon_disc', tile\.icon_disc\);/);
-assert.ok(read('src/web/admin/tiles/live-preview.js').includes("tileElem.dataset.iconDisc = document.getElementById(prefix + '_tile_icon_disc')?.value || '0';"));
+assert.ok(read('src/web/admin/tiles/live-preview.js').includes("tileElem.dataset.iconDisc = tileTypeHasDiscToggle(type)"));
+// Glow is offered only where the icon can take a color (entity or rules):
+// sensor, switch, energy, climate, cover, binary, number, select, date/time.
+const snapshotsJs = read('src/web/admin/tiles/snapshots.js');
+assert.ok(snapshotsJs.includes("return ['1', '5', '14', '17', '19', '20', '21', '22', '23'].includes(String(typeValue ?? '0'));"));
+assert.ok(snapshotsJs.includes("document.getElementById(tab + '_tile_icon_glow_row')"));
+assert.ok(snapshotsJs.includes("return box?.checked === false ? '2' : '0';"));
+// Like per-tile Tile borders, only Back, Clock and Text can hide their own disc.
+assert.ok(snapshotsJs.includes("return ['8', '9', '10'].includes(String(typeValue ?? '0'));"));
+assert.ok(snapshotsJs.includes("document.getElementById(tab + '_tile_icon_disc_row')"));
 assert.ok(read('src/web/admin/tiles/grid-preview.js').includes("el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';"));
 assert.match(read('src/web/assets/admin.css'), /\.icon-discs-off \.tile\.sensor-compact:not\(\[data-icon-disc="1"\]\) > \.tile-icon,\s*\.tile\.sensor-compact\[data-icon-disc="2"\] > \.tile-icon \{ background:transparent; \}/);
 

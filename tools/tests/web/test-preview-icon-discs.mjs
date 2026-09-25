@@ -27,7 +27,7 @@ const page = `<!doctype html><html lang="en"><head><style>${readRepoFile('src/we
 <div id="testSettings"><select id="test_tile_type"><option value="1">Sensor</option><option value="2">Scene</option></select>
 <textarea id="test_tile_title"></textarea><input id="test_tile_icon"><input type="color" id="test_tile_color">
 ${['col','row','span_w','span_h'].map(n=>`<input id="test_tile_${n}" value="1">`).join('')}
-<select id="test_tile_icon_disc"><option value="0">G</option><option value="1">On</option><option value="2">Off</option></select>
+<input type="checkbox" id="test_tile_icon_disc" checked>
 <input type="checkbox" id="test_tile_icon_glow" checked><select id="test_scene_alias"><option value="tv">TV</option></select></div>
 <pre id="result"></pre><script>
 const nativeListen=document.addEventListener.bind(document);document.addEventListener=(name,...args)=>{if(name!=='DOMContentLoaded')nativeListen(name,...args);};

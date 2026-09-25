@@ -4,29 +4,52 @@
   function tileTypeHasIcon(typeValue) {
     return !['0', '16'].includes(String(typeValue ?? '0'));
   }
+  // Glow only matters where the icon can take a color: from its entity
+  // (switch/light, climate, cover, binary sensor) or from color rules
+  // (sensor family, energy). Other icons are always white.
+  function tileTypeHasColoredIcon(typeValue) {
+    return ['1', '5', '14', '17', '19', '20', '21', '22', '23'].includes(String(typeValue ?? '0'));
+  }
+  // Stored disc mode: 0 follows the global option, 2 hides the disc on this
+  // tile. A legacy stored 1 ("on") loads as checked.
+  function iconDiscModeFromCheckbox(box) {
+    return box?.checked === false ? '2' : '0';
+  }
+  // Like the per-tile Tile borders option, only Back, Clock and Text can hide
+  // their own icon disc; every other tile follows the global option.
+  function tileTypeHasDiscToggle(typeValue) {
+    return ['8', '9', '10'].includes(String(typeValue ?? '0'));
+  }
   function collectIconDiscFields(tab, typeValue) {
-    const select = document.getElementById(tab + '_tile_icon_disc');
-    if (!select || !tileTypeHasIcon(typeValue)) return {};
+    const box = document.getElementById(tab + '_tile_icon_disc');
+    if (!box || !tileTypeHasIcon(typeValue)) return {};
     const glow = document.getElementById(tab + '_tile_icon_glow');
-    return { icon_disc: select.value || '0', icon_glow: glow?.checked === false ? '0' : '1' };
+    return {
+      icon_disc: tileTypeHasDiscToggle(typeValue) ? iconDiscModeFromCheckbox(box) : '0',
+      icon_glow: tileTypeHasColoredIcon(typeValue) && glow?.checked === false ? '0' : '1',
+    };
   }
   function loadIconDiscFields(tab, data) {
-    const select = document.getElementById(tab + '_tile_icon_disc');
-    if (select) select.value = ['1', '2'].includes(String(data?.icon_disc)) ? String(data.icon_disc) : '0';
+    const box = document.getElementById(tab + '_tile_icon_disc');
+    if (box) box.checked = String(data?.icon_disc) !== '2';
     const glow = document.getElementById(tab + '_tile_icon_glow');
     if (glow) glow.checked = !['0', 'false'].includes(String(data?.icon_glow));
     syncIconDiscFields(tab);
   }
   function resetIconDiscFields(tab) {
-    const select = document.getElementById(tab + '_tile_icon_disc');
-    if (select) select.value = '0';
+    const box = document.getElementById(tab + '_tile_icon_disc');
+    if (box) box.checked = true;
     const glow = document.getElementById(tab + '_tile_icon_glow');
     if (glow) glow.checked = true;
   }
   function syncIconDiscFields(tab) {
     const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
+    const discToggle = tileTypeHasDiscToggle(typeValue);
+    const colored = tileTypeHasColoredIcon(typeValue);
     document.getElementById(tab + '_tile_icon_disc_fields')
-      ?.classList.toggle('hidden', !tileTypeHasIcon(typeValue));
+      ?.classList.toggle('hidden', !tileTypeHasIcon(typeValue) || (!discToggle && !colored));
+    document.getElementById(tab + '_tile_icon_disc_row')?.classList.toggle('hidden', !discToggle);
+    document.getElementById(tab + '_tile_icon_glow_row')?.classList.toggle('hidden', !colored);
   }
 
   function collectTypeFieldValues(tab) {

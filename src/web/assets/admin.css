@@ -752,7 +752,27 @@
        its long hint text inflating the column. */
     .folder-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; width:0; min-width:100%; }
     .folder-footer-options { flex:0 0 100%; display:flex; align-items:center; gap:10px 16px; flex-wrap:wrap; }
-    .global-settings-heading { flex:0 0 100%; margin:0 0 -4px; color:var(--text-2); font-size:12px; font-weight:600; line-height:14px; text-transform:none; }
+    /* Global settings under the grid: the Tile Settings card and fields,
+       laid out in columns that wrap on narrow widths. */
+    .global-settings-panel {
+      flex:0 0 100%;
+      box-sizing:border-box;
+      background:var(--panel);
+      border:1px solid #232323;
+      border-radius:18px;
+      padding:20px;
+    }
+    .global-settings-fields {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+      gap:0 20px;
+      align-items:start;
+    }
+    .global-settings-field .inline-checkbox:first-child { margin-top:0; }
+    .global-radius-field { display:flex; align-items:center; gap:8px; margin-bottom:10px; height:38px; }
+    .global-radius-field input[type="range"] { flex:1 1 auto; min-width:0; height:18px; margin:0; accent-color:var(--accent); }
+    .global-radius-field input[type="range"]:focus { outline:none; box-shadow:none; }
+    .global-radius-field input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     .folder-footer-options .inline-checkbox { margin:0; }
     .folder-footer .hint { margin:0; }
     .btn-delete-folder { padding:8px 16px; font-size:13px; flex:0 0 auto; }
@@ -1216,16 +1236,17 @@
       border-top:1px solid #232323;
     }
     /* More compact controls, panel only */
-    .tile-settings label { font-size:12px; margin-bottom:4px; }
-    .tile-settings input, .tile-settings select, .tile-settings textarea {
+    .tile-settings label, .global-settings-panel label { font-size:12px; margin-bottom:4px; }
+    .tile-settings input, .tile-settings select, .tile-settings textarea,
+    .global-settings-panel input {
       padding:9px 12px;
       font-size:13px;
       border-radius:10px;
       margin-bottom:10px;
     }
     .tile-settings select { background-position:right 12px center; padding-right:32px; }
-    .tile-settings input[type="range"] { padding:0; }
-    .tile-settings h3 { margin:0 0 14px; color:var(--text); font-size:17px; }
+    .tile-settings input[type="range"], .global-settings-panel input[type="range"] { padding:0; }
+    .tile-settings h3, .global-settings-panel h3 { margin:0 0 14px; color:var(--text); font-size:17px; }
     .tile-settings .hidden { display:none; }
     /* Typ-Felder: kompakte zweispaltige Zeilen (Label links, Feld rechts) */
     .type-fields { display:none; margin-top:10px; }
@@ -2247,8 +2268,6 @@
     .tile-radius-control input[type="range"]:focus { outline:none; box-shadow:none; }
     .tile-radius-control input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     .global-tile-radius-value { min-width:2ch; text-align:right; font-variant-numeric:tabular-nums; }
-    .tile-default-color-control { display:flex; align-items:center; gap:8px; margin:0; font-weight:600; }
-    .tile-default-color-control input[type="color"] { width:44px; height:26px; margin:0; padding:2px 4px; border-radius:8px; }
 
 /* Fractional placement preserves the existing cell pitch and gutter. */
 .tile-grid > .fractional-tile {
@@ -2296,6 +2315,7 @@
 .icon-discs-off .tile.sensor-compact:not([data-icon-disc="1"]) > .tile-icon,
 .tile.sensor-compact[data-icon-disc="2"] > .tile-icon { background:transparent; }
 .tile-icon-disc-fields.hidden { display:none; }
+.tile-icon-disc-fields .inline-checkbox.hidden { display:none; }
 .tile.sensor-compact > .tile-title,
 .tile.sensor-compact > .tile-value {
   position:absolute; left:calc(var(--compact-h) + var(--compact-inset));

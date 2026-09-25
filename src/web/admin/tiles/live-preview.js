@@ -104,8 +104,10 @@
     if (type === '5' && switchStyle === '1') tileElem.classList.add('switch-toggle');
     tileElem.style.background = '';
     tileElem.dataset.type = type;
-    tileElem.dataset.iconDisc = document.getElementById(prefix + '_tile_icon_disc')?.value || '0';
-    tileElem.dataset.iconGlow = document.getElementById(prefix + '_tile_icon_glow')?.checked === false ? '0' : '1';
+    tileElem.dataset.iconDisc = tileTypeHasDiscToggle(type)
+      && document.getElementById(prefix + '_tile_icon_disc')?.checked === false ? '2' : '0';
+    tileElem.dataset.iconGlow = tileTypeHasColoredIcon(type)
+      && document.getElementById(prefix + '_tile_icon_glow')?.checked === false ? '0' : '1';
     const borderToggle = type === '8' ? '_back_tile_border'
       : (type === '9' ? '_clock_tile_border' : (type === '10' ? '_text_tile_border' : ''));
     tileElem.classList.toggle('tile-border-hidden', !!borderToggle && document.getElementById(prefix + borderToggle)?.checked === false);

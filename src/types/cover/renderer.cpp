@@ -420,10 +420,10 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
               tile_renderer_get_tile_config(data->grid_type, data->index);
           CoverPopupInit init = popup_init(data->grid_type, data->index);
           if (!tile || !init.entity_id.length()) return;
-          // The popup inherits the tile background, including a rules tint.
-          init.bg_color = tile_icon_source::popup_background(
-              static_cast<lv_obj_t*>(lv_event_get_current_target(event)),
-              tileBgColorOrDefault(*tile, tileDefaultBgColor()));
+          // For now the popup keeps the global tile color and does not follow the
+          // tile (tile_icon_source::forget_popup_source).
+          init.bg_color = tileDefaultBgColor();
+          tile_icon_source::forget_popup_source();
           finish_press_before_popup(event);
           show_cover_popup(init);
         },

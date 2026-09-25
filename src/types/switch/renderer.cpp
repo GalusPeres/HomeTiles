@@ -283,12 +283,11 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
             SwitchEventData* data = static_cast<SwitchEventData*>(lv_event_get_user_data(e));
             if (!data) return;
             LightPopupInit init = build_light_popup_init(data);
-            // The popup inherits the tile background, including a rules tint.
-            if (const Tile* tile = tile_renderer_get_tile_config(data->grid_type, data->index)) {
-              init.bg_color = tile_icon_source::popup_background(
-                  static_cast<lv_obj_t*>(lv_event_get_current_target(e)),
-                  tileBgColorOrDefault(*tile, tileDefaultBgColor()));
-            }
+            // For now the popup keeps the global tile color and does not follow
+            // the tile: following a light color dragged in the popup restyled it
+            // on every step (tile_icon_source::forget_popup_source).
+            init.bg_color = tileDefaultBgColor();
+            tile_icon_source::forget_popup_source();
             finish_press_before_popup(e);
             show_light_popup(init);
           },

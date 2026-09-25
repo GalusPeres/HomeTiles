@@ -329,6 +329,8 @@ lv_obj_t* card_icon(lv_obj_t* card) {
   return nullptr;
 }
 
+void forget_popup_source() { remember_popup_source(nullptr); }
+
 uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
   remember_popup_source(obj);
   for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {

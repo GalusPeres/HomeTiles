@@ -48,4 +48,9 @@ void refresh_card(lv_obj_t* card, const Tile& tile);
 // popup is open it follows the tile's color (refresh_card).
 uint32_t popup_background(lv_obj_t* obj, uint32_t fallback);
 
+// Openers of popups that keep the global tile color (Climate, Light and Cover
+// for now: following a light color while it is dragged restyled the popup on
+// every step) call this, so no earlier opener makes them follow a tile.
+void forget_popup_source();
+
 }  // namespace tile_icon_source

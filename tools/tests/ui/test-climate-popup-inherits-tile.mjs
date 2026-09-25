@@ -19,14 +19,14 @@ const body = name => {
   return popupFunctions.get(name);
 };
 
-// Opener: the tile's own background, swapped for a rules tint on the card.
+// Opener: the global tile color for now; the popup does not follow the tile.
 assert.ok(renderer.includes('#include "src/tiles/runtime/tile_icon_source.h"'));
 const initFor = functions(renderer).get('popup_init_for');
-assert.ok(initFor && initFor.includes('init.bg_color = tileBgColorOrDefault(*tile, tileDefaultBgColor());'),
-  'popup_init_for passes the tile background');
+assert.ok(initFor && initFor.includes('init.bg_color = tileDefaultBgColor();'),
+  'popup_init_for passes the global tile color');
 assert.match(renderer,
-  /ClimatePopupInit init = popup_init_for\(data\);\s*if \(!init\.entity_id\.length\(\)\) return;\s*(?:\/\/[^\n]*\n\s*)*init\.bg_color = tile_icon_source::popup_background\(\s*static_cast<lv_obj_t\*>\(lv_event_get_current_target\(event\)\),\s*init\.bg_color\);\s*finish_press_before_popup\(event\);\s*show_climate_popup\(init\);/,
-  'The opener hands the card background (with rules tint) to the popup');
+  /ClimatePopupInit init = popup_init_for\(data\);\s*if \(!init\.entity_id\.length\(\)\) return;\s*(?:\/\/[^\n]*\n\s*)*tile_icon_source::forget_popup_source\(\);\s*finish_press_before_popup\(event\);\s*show_climate_popup\(init\);/,
+  'The opener keeps the global color and never follows the tile');
 
 // Init field and context color.
 assert.ok(header.includes('  uint32_t bg_color = 0;\n};'), 'ClimatePopupInit carries bg_color (0 = default card)');

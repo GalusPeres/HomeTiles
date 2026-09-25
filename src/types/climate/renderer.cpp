@@ -959,9 +959,8 @@ ClimatePopupInit popup_init_for(const ClimateEventData* data) {
   init.has_target_temperature = state.has_target_temperature;
   init.has_target_humidity = state.has_target_humidity;
   init.has_target_range = state.has_target_range;
-  // The tile's own background; the opener swaps in a rules tint and updates
-  // ignore it.
-  init.bg_color = tileBgColorOrDefault(*tile, tileDefaultBgColor());
+  // The popup keeps the global tile color for now; updates ignore it.
+  init.bg_color = tileDefaultBgColor();
   return init;
 }
 
@@ -1456,10 +1455,9 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
               static_cast<ClimateEventData*>(lv_event_get_user_data(event));
           ClimatePopupInit init = popup_init_for(data);
           if (!init.entity_id.length()) return;
-          // The popup inherits the tile background, including a rules tint.
-          init.bg_color = tile_icon_source::popup_background(
-              static_cast<lv_obj_t*>(lv_event_get_current_target(event)),
-              init.bg_color);
+          // For now the popup keeps the global tile color and does not follow the
+          // tile (tile_icon_source::forget_popup_source).
+          tile_icon_source::forget_popup_source();
           finish_press_before_popup(event);
           show_climate_popup(init);
         },

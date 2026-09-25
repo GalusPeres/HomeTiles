@@ -93,11 +93,11 @@ for (const gone of ['kControlButtonBg', 'kControlButtonDisabled', 'kControlBarBg
   assert.ok(!popup.includes(gone), `light popup still contains ${gone}`);
 }
 
-// The tile hands over its current background (own color or rules tint).
+// The opener passes the global tile color for now and never follows the tile.
 const opener = slice(read('src/types/switch/renderer.cpp'),
   'LightPopupInit init = build_light_popup_init(data);', 'show_light_popup(init);');
 assert.match(opener,
-  /init\.bg_color = tile_icon_source::popup_background\(\s*static_cast<lv_obj_t\*>\(lv_event_get_current_target\(e\)\),[^;]*tileBgColorOrDefault\(/,
-  'Switch/Light tiles pass their current background to the Light popup');
+  /init\.bg_color = tileDefaultBgColor\(\);\s*tile_icon_source::forget_popup_source\(\);/,
+  'Switch/Light tiles pass the global tile color to the Light popup');
 
 console.log('Light popup inherits the tile background');

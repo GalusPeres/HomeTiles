@@ -1788,6 +1788,7 @@ static const Strings kStringsPl = {
     "Jednostka",
     "Miejsca dziesiętne (puste = oryginalna wartość)",
     "Rozmiar wartości",
+    "Domyślny",
     "Tryb wyświetlania",
     "Brak",
     "Wskaźnik",
@@ -1819,7 +1820,7 @@ static const Strings kStringsPl = {
     "Maksymalnie 31 znaków zostanie zapisanych.",
     "Folder docelowy",
     "Nowy folder",
-    "Scena",
+    "Scena / Skrypt / Przycisk",
 
     "Najpierw wybierz kafelek",
     "Kafelek skopiowany",
@@ -1847,6 +1848,8 @@ static const Strings kStringsPl = {
     "Nie znaleziono prawidłowego układu",
     "Kafelki przeniesione i zapisane!",
     "Przenoszenie nie powiodło się",
+    "Przenieś do góry",
+    "Przenieś w dół",
     "Błąd sieci podczas przenoszenia",
     "Tworzenie zrzutu ekranu...",
     "Zrzut ekranu zapisany i pobieranie rozpoczęte!",
@@ -1858,6 +1861,7 @@ static const Strings kStringsPl = {
     "Aktualizacja zainstalowana pomyślnie. Urządzenie restartuje się teraz.",
     "Aktualizacja oprogramowania nie powiodła się",
 
+    // Wybór sieci WiFi na urządzeniu
     "Skanowanie sieci...",
     "Nie znaleziono sieci",
     "Skanuj ponownie",
@@ -1910,6 +1914,8 @@ static const Strings kStringsPl = {
     "Wyśrodkowane",
     "Prawo",
     "Cienie kafelków",
+    "Zaokrąglenie rogów kafelków",
+    "Podaj wysokość przynajmniej jednego kafelka, aby zmienić jego typ.",
     "Obramowanie kafelków",
     "Przezroczystość",
     "Kliknij tło lub zegar. Kafelki w dwóch dolnych rzędach można przesuwać i zmieniać rozmiar jak zwykle.",

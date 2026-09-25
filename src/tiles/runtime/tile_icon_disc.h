@@ -123,6 +123,11 @@ inline lv_obj_t* icon_of(lv_obj_t* disc) {
   return parent ? lv_obj_get_child(parent, lv_obj_get_index(disc) + 1) : nullptr;
 }
 
+// Called at the end of apply_fill(), which every icon color change reaches:
+// tile_icon_source registers it so the "Tint tile" option of the icon color
+// follows the icon. Stays null in host tests.
+inline void (*g_icon_color_hook)(lv_obj_t* disc) = nullptr;
+
 // Color and opacity of a disc from its mode, glow option and the icon's
 // current color. Global discs follow the global option through the shared
 // style, On discs always show, Off discs stay transparent.
@@ -147,6 +152,7 @@ inline void apply_fill(lv_obj_t* disc) {
   const lv_opa_t opa = mode == Mode::Off ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
                                          : scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);
   ui_surface_style::apply_icon_disc_opa(disc, opa, mode == Mode::Global);
+  if (g_icon_color_hook) g_icon_color_hook(disc);
 }
 
 // A wrapped icon's disc is its parent; a round disc sits directly behind it.

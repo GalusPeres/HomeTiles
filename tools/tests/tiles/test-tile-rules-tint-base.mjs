@@ -30,7 +30,7 @@ vm.runInContext(extractFunction(read('src/web/admin/tiles/grid-preview.js'), 'ap
 context.iconColorTilePreviewTint = () => ({color: '#2196F3', percent: 20});
 
 function tint(ownBackground, globalColor) {
-  const el = {style: {background: ''}};
+  const el = {style: {background: ''}, dataset: {}};
   context.getComputedStyle = target => target === el
     ? {backgroundColor: ownBackground}
     : {getPropertyValue: name => (name === '--tile-default-bg' ? globalColor : '')};

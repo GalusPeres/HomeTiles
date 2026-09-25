@@ -350,7 +350,7 @@
       bar = iconColorMigrateLegacyBar(body, fixed);
     }
     let out = 'v2\n' + (fixed === null ? '' : iconColorHex(fixed));
-    const fill = v2 && fixed !== null ? iconColorFillOf(body) : 0;
+    const fill = v2 ? iconColorFillOf(body) : 0;
     if (fill) out += '\nfill ' + fill;
     if (emitLayer) {
       out += '\nsrc ' + source.mode + ' ' + (source.self ? 'self' : source.entity) +
@@ -385,7 +385,7 @@
         rows++;
       }
     }
-    return fixed === null && !emitLayer && !bar && rows === 0 ? '' : out;
+    return fixed === null && !fill && !emitLayer && !bar && rows === 0 ? '' : out;
   }
 
   // tile_icon_colors::fill_of(): the "fill NN" tint of the fixed color in
@@ -536,10 +536,9 @@
       }
       return { color, percent: layer.tile };
     })();
-    if (ruleTint) return ruleTint;
-    // The icon color's own "Tint tile" option applies below a rule tint.
-    const parsed = parseIconColorRecord(record);
-    return parsed.color && parsed.fill ? { color: parsed.color, percent: parsed.fill } : null;
+    // The icon color's "Tint tile" option follows the icon in the preview
+    // (applyIconDiscTint), below this rule tint.
+    return ruleTint;
   }
 
   // tile_tint::background(): the base mixed with the color, darkened in 5 %
@@ -811,7 +810,7 @@
     const input = iconColorEl(tab, '_tile_icon_color');
     const fixed = input && input.dataset.unset !== '1' ? normalizeIconColorHex(input.value).slice(1) : '';
     const lines = ['v2', fixed];
-    if (fixed && iconColorEl(tab, '_tile_icon_fill')?.checked) {
+    if (iconColorEl(tab, '_tile_icon_fill')?.checked) {
       lines.push('fill ' + (iconColorEl(tab, '_tile_icon_fill_strength')?.value || '20'));
     }
     const layer = ICON_COLOR_TYPES.includes(type) ? readIconColorSource(tab) : null;
@@ -884,11 +883,11 @@
     const strength = iconColorEl(tab, '_tile_icon_rule_strength');
     const output = iconColorEl(tab, '_tile_icon_rule_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
-    // "Tint tile" of the icon color: only with a fixed icon color.
-    const hasFixed = iconColorEl(tab, '_tile_icon_color')?.dataset.unset === '0';
+    // "Tint tile" of the icon color: always offered, it follows the color the
+    // icon shows (own icon color or the entity's color).
     const fillOn = !!iconColorEl(tab, '_tile_icon_fill')?.checked;
-    iconColorEl(tab, '_tile_icon_fill_row')?.classList.toggle('hidden', !hasFixed);
-    iconColorEl(tab, '_tile_icon_fill_strength_row')?.classList.toggle('hidden', !hasFixed || !fillOn);
+    iconColorEl(tab, '_tile_icon_fill_row')?.classList.remove('hidden');
+    iconColorEl(tab, '_tile_icon_fill_strength_row')?.classList.toggle('hidden', !fillOn);
     const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
     const fillOutput = iconColorEl(tab, '_tile_icon_fill_strength_value');
     if (fillStrength && fillOutput) fillOutput.textContent = fillStrength.value + ' %';

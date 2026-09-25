@@ -3031,7 +3031,7 @@ function syncTileRadiusControls(tabEl) {
       bar = iconColorMigrateLegacyBar(body, fixed);
     }
     let out = 'v2\n' + (fixed === null ? '' : iconColorHex(fixed));
-    const fill = v2 && fixed !== null ? iconColorFillOf(body) : 0;
+    const fill = v2 ? iconColorFillOf(body) : 0;
     if (fill) out += '\nfill ' + fill;
     if (emitLayer) {
       out += '\nsrc ' + source.mode + ' ' + (source.self ? 'self' : source.entity) +
@@ -3066,7 +3066,7 @@ function syncTileRadiusControls(tabEl) {
         rows++;
       }
     }
-    return fixed === null && !emitLayer && !bar && rows === 0 ? '' : out;
+    return fixed === null && !fill && !emitLayer && !bar && rows === 0 ? '' : out;
   }
 
   // tile_icon_colors::fill_of(): the "fill NN" tint of the fixed color in
@@ -3217,10 +3217,9 @@ function syncTileRadiusControls(tabEl) {
       }
       return { color, percent: layer.tile };
     })();
-    if (ruleTint) return ruleTint;
-    // The icon color's own "Tint tile" option applies below a rule tint.
-    const parsed = parseIconColorRecord(record);
-    return parsed.color && parsed.fill ? { color: parsed.color, percent: parsed.fill } : null;
+    // The icon color's "Tint tile" option follows the icon in the preview
+    // (applyIconDiscTint), below this rule tint.
+    return ruleTint;
   }
 
   // tile_tint::background(): the base mixed with the color, darkened in 5 %
@@ -3492,7 +3491,7 @@ function syncTileRadiusControls(tabEl) {
     const input = iconColorEl(tab, '_tile_icon_color');
     const fixed = input && input.dataset.unset !== '1' ? normalizeIconColorHex(input.value).slice(1) : '';
     const lines = ['v2', fixed];
-    if (fixed && iconColorEl(tab, '_tile_icon_fill')?.checked) {
+    if (iconColorEl(tab, '_tile_icon_fill')?.checked) {
       lines.push('fill ' + (iconColorEl(tab, '_tile_icon_fill_strength')?.value || '20'));
     }
     const layer = ICON_COLOR_TYPES.includes(type) ? readIconColorSource(tab) : null;
@@ -3565,11 +3564,11 @@ function syncTileRadiusControls(tabEl) {
     const strength = iconColorEl(tab, '_tile_icon_rule_strength');
     const output = iconColorEl(tab, '_tile_icon_rule_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
-    // "Tint tile" of the icon color: only with a fixed icon color.
-    const hasFixed = iconColorEl(tab, '_tile_icon_color')?.dataset.unset === '0';
+    // "Tint tile" of the icon color: always offered, it follows the color the
+    // icon shows (own icon color or the entity's color).
     const fillOn = !!iconColorEl(tab, '_tile_icon_fill')?.checked;
-    iconColorEl(tab, '_tile_icon_fill_row')?.classList.toggle('hidden', !hasFixed);
-    iconColorEl(tab, '_tile_icon_fill_strength_row')?.classList.toggle('hidden', !hasFixed || !fillOn);
+    iconColorEl(tab, '_tile_icon_fill_row')?.classList.remove('hidden');
+    iconColorEl(tab, '_tile_icon_fill_strength_row')?.classList.toggle('hidden', !fillOn);
     const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
     const fillOutput = iconColorEl(tab, '_tile_icon_fill_strength_value');
     if (fillStrength && fillOutput) fillOutput.textContent = fillStrength.value + ' %';
@@ -6884,6 +6883,30 @@ function syncTileRadiusControls(tabEl) {
     const icon = tileElem?.querySelector(':scope > .tile-icon');
     if (!icon) return;
     const glow = tileElem.dataset.iconGlow !== '0';
+    // Mirrors tile_icon_source.cpp on_icon_color(): with the icon color's
+    // "Tint tile" option the tile takes the color the icon shows; grey and
+    // white icons (off, default) keep the untinted background.
+    const fill = Number(tileElem.dataset.iconFill || 0);
+    if (fill && tileElem.dataset.ruleTint !== '1' && typeof tileTintBackground === 'function') {
+      const iconRgb = cssColorChannels(getComputedStyle(icon).color);
+      if (iconRgb && !(iconRgb[0] === iconRgb[1] && iconRgb[1] === iconRgb[2])) {
+        const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
+        tileElem.style.background = tileTintBackground(base || '#222222',
+          '#' + iconRgb.map(v => v.toString(16).padStart(2, '0')).join(''), fill);
+      } else if (tileElem.dataset.baseBg !== undefined) {
+        tileElem.style.background = tileElem.dataset.baseBg;
+      }
+    }
+    // An unset Icon color field of the edited tile shows the color the icon
+    // has now (the entity's own color, e.g. a light or a detected Binary
+    // sensor); only picking a color stores a fixed one.
+    if (typeof currentTileTab === 'string' && tileElem.id === currentTileTab + '-tile-' + currentTileIndex) {
+      const input = document.getElementById(currentTileTab + '_tile_icon_color');
+      const shown = cssColorChannels(getComputedStyle(icon).color);
+      if (input && input.dataset.unset === '1' && shown) {
+        input.value = '#' + shown.map(v => v.toString(16).padStart(2, '0')).join('');
+      }
+    }
     // Mirrors tile_icon_disc::contrast_step_for()/scaled_opa(): discs are
     // subtler on dark tiles (8 % instead of 15 % at luma <= 0.08) in 4 steps.
     const bg = cssColorChannels(getComputedStyle(tileElem).backgroundColor);
@@ -6986,8 +7009,16 @@ function syncTileRadiusControls(tabEl) {
   // tint replaces the tile color and starts from the global default tile
   // color, never from an own tile color.
   function applyTileRulesTint(el, typeValue, record, ownEntity, meta) {
-    if (!el || !record || typeof iconColorTilePreviewTint !== 'function') return;
-    const tint = iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta);
+    if (!el) return;
+    // The icon color's "Tint tile" option follows the icon (applyIconDiscTint)
+    // from this untinted background, unless a rule tint wins.
+    el.dataset.baseBg = el.style.background || '';
+    const fill = record && typeof parseIconColorRecord === 'function' ? parseIconColorRecord(record).fill : 0;
+    if (fill) el.dataset.iconFill = String(fill);
+    else delete el.dataset.iconFill;
+    const tint = record && typeof iconColorTilePreviewTint === 'function'
+      ? iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta) : null;
+    el.dataset.ruleTint = tint ? '1' : '0';
     if (!tint) return;
     const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
     el.style.background = tileTintBackground(base || '#222222', tint.color, tint.percent);

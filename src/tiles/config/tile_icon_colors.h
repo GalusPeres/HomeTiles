@@ -15,9 +15,10 @@
 //
 //   line 1:  "v2"
 //   line 2:  fixed icon color "RRGGBB", or empty for the type's default
-//   then optionally "fill NN": the fixed color also tints the tile at NN
-//            percent (the "Tint tile" option of the icon color); only with
-//            a fixed color, below an active rule tint
+//   then optionally "fill NN": the tile is tinted at NN percent with the
+//            color its icon shows (the fixed color or the entity's own
+//            color); the "Tint tile" option of the icon color, below an
+//            active rule tint (tile_icon_source.cpp)
 //   then at most one rule layer ("Rules" in the Web Admin):
 //            "src <auto|rules> <self|entity_id> [tile=NN] [noicon] [off]"
 //            auto takes the entity's own icon color (light color, on/off,
@@ -429,10 +430,9 @@ inline bool fixed_color(const char* record, uint32_t& rgb) {
   return parse_color(begin, end, rgb);
 }
 
-// The "fill NN" tint of the fixed icon color in percent, 0 without one.
+// The "fill NN" tint strength in percent, 0 without one.
 inline uint8_t fill_of(const char* record) {
-  uint32_t fixed = 0;
-  if (!fixed_color(record, fixed)) return 0;
+  if (!record || !is_v2(record)) return 0;
   for (const char* p = line_end(second_line(record)); *p == '\n';) {
     const char* begin = p + 1;
     const char* end = line_end(begin);
@@ -817,7 +817,7 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
       if (append_row(rule, out, n)) ++rows;
     }
   }
-  if (!has_fixed && !emit_layer && !has_bar && rows == 0) n = 0;
+  if (!has_fixed && !fill && !emit_layer && !has_bar && rows == 0) n = 0;
   out[n] = '\0';
   return n;
 }

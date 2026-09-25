@@ -117,6 +117,84 @@ void remember_popup_source(lv_obj_t* obj) {
   }
 }
 
+// The icon color's "Tint tile" option of a card: its strength (0 = off) and
+// whether an active rule tint wins, kept as a local style value in the unused
+// tint selector so the icon color hook finds it without a lookup table.
+constexpr uint8_t kRuleTintWins = 0x80;
+
+bool icon_fill_marker(lv_obj_t* obj, uint8_t& marker) {
+  lv_style_value_t value;
+  if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_OPA, &value, kTintStore) != LV_STYLE_RES_FOUND) return false;
+  marker = static_cast<uint8_t>(value.num);
+  return true;
+}
+
+void set_icon_fill_marker(lv_obj_t* card, uint8_t marker) {
+  uint8_t current = 0;
+  const bool found = icon_fill_marker(card, current);
+  if (!marker) {
+    if (found) lv_obj_remove_local_style_prop(card, LV_STYLE_BG_OPA, kTintStore);
+    return;
+  }
+  if (!found || current != marker) lv_obj_set_style_bg_opa(card, marker, kTintStore);
+}
+
+// The first icon disc of a card, directly or in a content container.
+lv_obj_t* find_disc(lv_obj_t* card) {
+  const uint32_t count = lv_obj_get_child_count(card);
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
+    if (tile_icon_disc::is_disc(child)) return child;
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
+    const uint32_t inner = lv_obj_get_child_count(child);
+    for (uint32_t j = 0; j < inner; ++j) {
+      lv_obj_t* grandchild = lv_obj_get_child(child, static_cast<int32_t>(j));
+      if (tile_icon_disc::is_disc(grandchild)) return grandchild;
+    }
+  }
+  return nullptr;
+}
+
+// Tints the card with the color its icon shows; grey and white icons (off,
+// default) leave it. False without a tint.
+bool apply_icon_fill(lv_obj_t* card, lv_obj_t* disc, uint8_t fill) {
+  lv_obj_t* icon = disc ? tile_icon_disc::icon_of(disc) : nullptr;
+  if (!fill || !icon) return false;
+  const uint32_t rgb = lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF;
+  if (!tile_icon_disc::icon_color_tints(rgb)) return false;
+  set_tile_tint(card, rgb, fill);
+  return true;
+}
+
+void follow_open_popup(lv_obj_t* card);
+
+// Disc opacity and glow follow the (tinted) background.
+void refresh_discs(lv_obj_t* card) {
+  const uint32_t count = lv_obj_get_child_count(card);
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
+    if (tile_icon_disc::is_disc(child)) tile_icon_disc::apply_fill(child);
+  }
+}
+
+// tile_icon_disc::g_icon_color_hook: an icon color change retints a card with
+// the "Tint tile" option unless an active rule tint wins.
+void on_icon_color(lv_obj_t* disc) {
+  lv_obj_t* card = lv_obj_get_parent(disc);
+  uint8_t marker = 0;
+  for (int depth = 0; card && depth < 3 && !icon_fill_marker(card, marker); ++depth) {
+    card = lv_obj_get_parent(card);
+  }
+  if (!card || !marker || (marker & kRuleTintWins)) return;
+  const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
+  if (!apply_icon_fill(card, disc, marker & ~kRuleTintWins)) clear_tile_tint(card);
+  if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) == before) return;
+  follow_open_popup(card);
+  refresh_discs(card);
+}
+
 // An open popup of this card takes the card's current background.
 void follow_open_popup(lv_obj_t* card) {
   if (!card || !popup_shell_active()) return;
@@ -265,6 +343,7 @@ uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
 }
 
 void refresh_card(lv_obj_t* card, const Tile& tile) {
+  tile_icon_disc::g_icon_color_hook = &on_icon_color;
   if (!card || !tileTypeHasIconColors(tile.type)) return;
   const tile_icon_colors::Source layer = tile_icon_colors::source_of(tile.icon_colors.c_str());
   uint32_t rgb = 0;
@@ -286,25 +365,20 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
   // Entity color tints only while the entity is active; its grey off color
   // keeps the tile's own color (the icon still shows the grey).
   const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
-  // The icon color's own "Tint tile" option (fill) applies below a rule tint.
-  uint32_t fixed = 0;
+  // The icon color's own "Tint tile" option (fill) follows the color the icon
+  // shows and applies below an active rule tint.
   const uint8_t fill = tile_icon_colors::fill_of(tile.icon_colors.c_str());
-  if (colored && active && layer.tile) {
+  const bool rule_tint = colored && active && layer.tile;
+  set_icon_fill_marker(card, fill ? static_cast<uint8_t>(fill | (rule_tint ? kRuleTintWins : 0)) : 0);
+  if (rule_tint) {
     set_tile_tint(card, rgb, layer.tile);
-  } else if (fill && tile_icon_colors::fixed_color(tile.icon_colors.c_str(), fixed)) {
-    set_tile_tint(card, fixed, fill);
-  } else {
+  } else if (!apply_icon_fill(card, find_disc(card), fill)) {
     clear_tile_tint(card);
   }
   if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) != before) {
     follow_open_popup(card);
   }
-  // Disc opacity follows the (tinted) background.
-  const uint32_t count = lv_obj_get_child_count(card);
-  for (uint32_t i = 0; i < count; ++i) {
-    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
-    if (tile_icon_disc::is_disc(child)) tile_icon_disc::apply_fill(child);
-  }
+  refresh_discs(card);
 }
 
 }  // namespace tile_icon_source

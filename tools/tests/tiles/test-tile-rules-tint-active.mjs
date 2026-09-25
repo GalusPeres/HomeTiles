@@ -25,7 +25,7 @@ for (const marker of [
   'if (domain == "cover") return cover_payload_icon_color(payload, rgb, &active);',
   'active = state.value == BinarySensorValue::On;',
   'rule_color(tile, rgb, &active);',
-  'if (colored && active && layer.tile) {',
+  'const bool rule_tint = colored && active && layer.tile;',
 ]) assert.ok(source.includes(marker), `tile_icon_source: ${marker}`);
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(renderer.includes('if (active) *active = state.is_on;'), 'Switch activity is the on state');

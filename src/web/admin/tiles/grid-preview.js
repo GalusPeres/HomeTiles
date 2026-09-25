@@ -71,6 +71,30 @@
     const icon = tileElem?.querySelector(':scope > .tile-icon');
     if (!icon) return;
     const glow = tileElem.dataset.iconGlow !== '0';
+    // Mirrors tile_icon_source.cpp on_icon_color(): with the icon color's
+    // "Tint tile" option the tile takes the color the icon shows; grey and
+    // white icons (off, default) keep the untinted background.
+    const fill = Number(tileElem.dataset.iconFill || 0);
+    if (fill && tileElem.dataset.ruleTint !== '1' && typeof tileTintBackground === 'function') {
+      const iconRgb = cssColorChannels(getComputedStyle(icon).color);
+      if (iconRgb && !(iconRgb[0] === iconRgb[1] && iconRgb[1] === iconRgb[2])) {
+        const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
+        tileElem.style.background = tileTintBackground(base || '#222222',
+          '#' + iconRgb.map(v => v.toString(16).padStart(2, '0')).join(''), fill);
+      } else if (tileElem.dataset.baseBg !== undefined) {
+        tileElem.style.background = tileElem.dataset.baseBg;
+      }
+    }
+    // An unset Icon color field of the edited tile shows the color the icon
+    // has now (the entity's own color, e.g. a light or a detected Binary
+    // sensor); only picking a color stores a fixed one.
+    if (typeof currentTileTab === 'string' && tileElem.id === currentTileTab + '-tile-' + currentTileIndex) {
+      const input = document.getElementById(currentTileTab + '_tile_icon_color');
+      const shown = cssColorChannels(getComputedStyle(icon).color);
+      if (input && input.dataset.unset === '1' && shown) {
+        input.value = '#' + shown.map(v => v.toString(16).padStart(2, '0')).join('');
+      }
+    }
     // Mirrors tile_icon_disc::contrast_step_for()/scaled_opa(): discs are
     // subtler on dark tiles (8 % instead of 15 % at luma <= 0.08) in 4 steps.
     const bg = cssColorChannels(getComputedStyle(tileElem).backgroundColor);
@@ -173,8 +197,16 @@
   // tint replaces the tile color and starts from the global default tile
   // color, never from an own tile color.
   function applyTileRulesTint(el, typeValue, record, ownEntity, meta) {
-    if (!el || !record || typeof iconColorTilePreviewTint !== 'function') return;
-    const tint = iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta);
+    if (!el) return;
+    // The icon color's "Tint tile" option follows the icon (applyIconDiscTint)
+    // from this untinted background, unless a rule tint wins.
+    el.dataset.baseBg = el.style.background || '';
+    const fill = record && typeof parseIconColorRecord === 'function' ? parseIconColorRecord(record).fill : 0;
+    if (fill) el.dataset.iconFill = String(fill);
+    else delete el.dataset.iconFill;
+    const tint = record && typeof iconColorTilePreviewTint === 'function'
+      ? iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta) : null;
+    el.dataset.ruleTint = tint ? '1' : '0';
     if (!tint) return;
     const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
     el.style.background = tileTintBackground(base || '#222222', tint.color, tint.percent);

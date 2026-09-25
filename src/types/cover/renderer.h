@@ -9,3 +9,6 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
 String cover_resolve_icon(const Tile& tile, const CoverState& state,
                           bool* dynamic_icon = nullptr);
 void refresh_cover_popup_for_tile(GridType grid_type, uint8_t index);
+// Icon color of a raw Cover state payload as the Cover tile shows it; false
+// while the payload has no available state.
+bool cover_payload_icon_color(const char* payload, uint32_t& rgb);

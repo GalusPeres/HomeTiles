@@ -58,11 +58,12 @@ assert.ok(!/tileTypeIconColorsByValue[^}]*TILE_(SCENE|FOLDER|BACK|CAMERA)/.test(
 assert.match(read('src/tiles/runtime/tile_icon_color_rules.h'),
   /inline void apply_fixed\(lv_obj_t\* icon, const char\* record\) \{\s*apply\(icon, record, true, "", nullptr, lv_color_white\(\)\);/);
 for (const [name, source, icon] of [['navigate', navigate, 'icon_lbl'], ['scene', scene, 'icon_lbl'], ['camera', camera, 'icon']]) {
-  assert.ok(source.includes(`tile_icon_color_rules::apply_fixed(${icon}, tile.icon_colors.c_str());`), `${name} applies the fixed icon color`);
+  assert.ok(source.includes(`tile_icon_source::apply_initial(${icon}, tile);`), `${name} applies the fixed or source icon color`);
 }
 const colorHelpers = ['tileTypeHasIconColors', 'tileTypeHasFixedIconColorOnly'].map(extractDeliveredFunction).join('\n');
 const iconColorsSource = read('src/web/admin/tiles/icon-colors.js');
-const constants = iconColorsSource.match(/const ICON_COLOR_FIXED_TYPES = [^;]+;\s*const ICON_COLOR_TYPES = [^;]+;/)[0];
+const constants = iconColorsSource.match(/const ICON_COLOR_FIXED_TYPES = [^;]+;/)[0] + '\n' +
+  iconColorsSource.match(/const ICON_COLOR_TYPES = [^;]+;/)[0];
 const {tileTypeHasIconColors, tileTypeHasFixedIconColorOnly} =
   new Function(`${constants}\n${colorHelpers}; return {tileTypeHasIconColors, tileTypeHasFixedIconColorOnly};`)();
 for (const type of ['2', '4', '8', '18']) {

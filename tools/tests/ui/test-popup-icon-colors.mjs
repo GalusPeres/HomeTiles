@@ -35,8 +35,8 @@ assert.ok(energy.includes('data->icon_colors = tile.icon_colors;') &&
   energy.includes('tile_icon_colors::resolve(data->icon_colors.c_str(), state.c_str(), nullptr, rgb)'));
 assert.ok(read('src/ui/popups/energy/energy_popup.cpp').includes('lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);'));
 const camera = read('src/types/camera/renderer.cpp');
-assert.ok(camera.includes('tile_icon_colors::resolve(tile.icon_colors.c_str(), "", nullptr, icon_rgb);') &&
-  camera.includes('init.icon_color = data->icon_color;'));
+assert.ok(camera.includes('tile.sensor_entity, title, icon_name, card_color, tile.icon_colors};') &&
+  camera.includes('init.icon_color = tile_icon_source::color(data->icon_colors, payload.c_str());'));
 assert.ok(read('src/ui/popups/camera/camera_popup.cpp').includes('lv_obj_set_style_text_color(g_camera_popup->icon_label, lv_color_hex(init.icon_color), 0);'));
 // The shell follows the body icon color every sync, so disc and border follow.
 assert.match(read('src/ui/popups/popup_shell.cpp'), /copy_label\(shell\.icon, shell\.active->icon, false\);\s*apply_header_disc_tint\(shell\.icon_disc, shell\.icon\);/);

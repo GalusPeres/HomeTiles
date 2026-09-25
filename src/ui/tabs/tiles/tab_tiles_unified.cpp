@@ -21,9 +21,12 @@
 #include "src/types/energy/energy_data.h"
 #include "src/web/server/web_admin.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include <misc/cache/instance/lv_image_cache.h>
 #include <Arduino.h>
+#include <atomic>
 #include <cstring>
+#include <strings.h>
 #include <esp_heap_caps.h>
 #include <new>
 
@@ -1246,6 +1249,38 @@ static lv_obj_t* create_tiles_grid(lv_obj_t* parent) {
   return grid;
 }
 
+// Icon-and-title tiles of the visible grid whose icon colors' source entity
+// changed; the loop task recolors them from the entity cache. MQTT dispatch
+// only sets bits here and never touches LVGL.
+static std::atomic<uint64_t> g_icon_source_pending{0};
+
+// True when the tile's icon colors take their color from `entity_id`. The
+// record is compared in place, so MQTT dispatch allocates nothing.
+static bool tile_icon_source_matches(const Tile& tile, const char* entity_id) {
+  if (!tileTypeHasFixedIconColorOnly(tile.type) || !tile.icon_colors.length()) return false;
+  const char* source = nullptr;
+  size_t length = 0;
+  if (tile_icon_colors::source(tile.icon_colors.c_str(), source, length) ==
+      tile_icon_colors::SourceMode::None) {
+    return false;
+  }
+  return strlen(entity_id) == length && strncasecmp(source, entity_id, length) == 0;
+}
+
+void process_icon_source_updates() {
+  uint64_t pending = g_icon_source_pending.exchange(0);
+  if (!pending) return;
+  const uint8_t idx = static_cast<uint8_t>(GridType::TAB0);
+  if (!g_tiles_loaded[idx]) return;
+  const TileGridConfig& config = getGridConfig(GridType::TAB0);
+  for (uint8_t i = 0; i < TILES_PER_GRID && pending; ++i) {
+    const uint64_t bit = uint64_t{1} << i;
+    if (!(pending & bit)) continue;
+    pending &= ~bit;
+    tile_icon_source::refresh_card(g_tiles_objs[idx][i], config.tiles[i]);
+  }
+}
+
 // Hidden cache builds omit Media until its widgets become visible.
 static inline void enqueue_cached_tile_state(GridType grid_type, const Tile& tile,
                                              uint8_t index, bool include_media) {
@@ -1277,8 +1312,18 @@ static inline void enqueue_cached_tile_state(GridType grid_type, const Tile& til
 }
 
 static void apply_cached_states(GridType grid_type, const TileGridConfig& config, bool include_media) {
+  uint64_t icon_sources = 0;
   for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
     enqueue_cached_tile_state(grid_type, config.tiles[i], i, include_media);
+    if (tileTypeHasFixedIconColorOnly(config.tiles[i].type) && config.tiles[i].icon_colors.length()) {
+      icon_sources |= uint64_t{1} << i;
+    }
+  }
+  // Visible grids (the only callers that include Media) recolor their
+  // icon-and-title tiles from the latest source states; hidden cache builds
+  // take them from the cache while rendering.
+  if (include_media && grid_type == GridType::TAB0 && icon_sources) {
+    g_icon_source_pending.fetch_or(icon_sources);
   }
 }
 
@@ -2286,6 +2331,7 @@ void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, co
   bool popup_queued = false;
   uint64_t switch_indices = 0;
   uint64_t binary_sensor_indices = 0;
+  uint64_t icon_source_indices = 0;
   bool binary_popup_queued = false;
 
   // Find tile with matching sensor_entity
@@ -2310,6 +2356,9 @@ void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, co
     }
     if (tile.type == TILE_SWITCH && tile.sensor_entity.equalsIgnoreCase(entity_id)) {
       switch_indices |= uint64_t{1} << i;
+    }
+    if (tile_icon_source_matches(tile, entity_id)) {
+      icon_source_indices |= uint64_t{1} << i;
     }
     if (tile.type == TILE_MEDIA && tile.sensor_entity.equalsIgnoreCase(entity_id)) {
       queue_media_tile_update(grid_type, i, value);
@@ -2351,6 +2400,9 @@ void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, co
   if (binary_sensor_indices != 0) {
     queue_binary_sensor_tile_updates(
         grid_type, binary_sensor_indices, value);
+  }
+  if (icon_source_indices != 0 && grid_type == GridType::TAB0) {
+    g_icon_source_pending.fetch_or(icon_source_indices);
   }
 }
 

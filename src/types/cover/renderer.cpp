@@ -473,3 +473,11 @@ void process_cover_update_queue(uint8_t max_updates) {
     g_queue_tail = (g_queue_tail + 1) % kQueueSize;
   }
 }
+
+bool cover_payload_icon_color(const char* payload, uint32_t& rgb) {
+  if (!payload || !*payload) return false;
+  const CoverState state = parse_cover_payload(payload);
+  if (!state.valid || !state.available) return false;
+  rgb = cover_icon_color(state);
+  return true;
+}

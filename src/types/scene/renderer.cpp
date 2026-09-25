@@ -3,7 +3,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
-#include "src/tiles/runtime/tile_icon_color_rules.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/devices/device.h"
@@ -326,7 +326,7 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
       }
     }
   } else if (icon_lbl) {
-    tile_icon_color_rules::apply_fixed(icon_lbl, tile.icon_colors.c_str());
+    tile_icon_source::apply_initial(icon_lbl, tile);
     if (!compact) {
       if (has_title) {
         lv_obj_align(icon_lbl, LV_ALIGN_CENTER, 0,

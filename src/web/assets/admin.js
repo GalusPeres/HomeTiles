@@ -2445,6 +2445,9 @@ function syncTileRadiusControls(tabEl) {
         rebuildEntitySelect(tab + '_cover_entity', data.covers);
         rebuildEntitySelect(tab + '_camera_entity', data.cameras);
         rebuildEntitySelect(tab + '_scene_alias', data.scenes);
+        if (typeof iconColorSourceEntries === 'function') {
+          rebuildEntitySelect(tab + '_tile_icon_source', iconColorSourceEntries(data));
+        }
       })
       .catch(() => {});
   }
@@ -2688,9 +2691,14 @@ function syncTileRadiusControls(tabEl) {
   // modules call the load/save/reset helpers from their own field handlers,
   // so drafts, copy/paste, autosave and import/export carry the record like
   // any other type field.
-  // Scene, Folder, Back and Camera have no entity state and keep only the
-  // fixed icon color (tileTypeHasFixedIconColorOnly in tile_type_policy.h).
+  // Scene, Folder, Back and Camera have no entity state of their own: a fixed
+  // icon color and optionally a source entity ("src auto|rules <entity>")
+  // whose own color or state colors their icon (tileTypeHasFixedIconColorOnly
+  // in tile_type_policy.h, tile_icon_source.cpp).
   const ICON_COLOR_FIXED_TYPES = ['2', '4', '8', '18'];
+  // Domains shown by the Switch tile (tile_icon_source.cpp switch_domain).
+  const ICON_COLOR_SWITCH_DOMAINS = ['light', 'switch', 'input_boolean', 'automation', 'fan',
+    'humidifier', 'remote', 'siren'];
   const ICON_COLOR_TYPES = ['1', '14', '20', '21', '22', '23'].concat(ICON_COLOR_FIXED_TYPES);
   const ICON_COLOR_BAR_TYPES = ['1', '14', '21'];
   const ICON_COLOR_ROW_TYPES = ['1', '20', '22', '23'];
@@ -2829,6 +2837,28 @@ function syncTileRadiusControls(tabEl) {
       stops: iconColorSortStops(stops) };
   }
 
+  // valid_entity(): "<domain>.<object>" in lowercase letters, digits and
+  // underscores, at most 128 characters.
+  function iconColorValidEntity(entity) {
+    const text = String(entity ?? '');
+    return text.length <= 128 && /^[a-z0-9_]+\.[a-z0-9_]+$/.test(text);
+  }
+
+  // parse_source(): "src <auto|rules> <entity_id>".
+  function iconColorParseSource(line) {
+    const tokens = String(line).split(/[ \t\r]+/).filter(Boolean);
+    if (tokens.length !== 3 || tokens[0] !== 'src' || !['auto', 'rules'].includes(tokens[1])) return null;
+    return iconColorValidEntity(tokens[2]) ? { mode: tokens[1], entity: tokens[2] } : null;
+  }
+
+  // source(): the first "src" line of a v2 record, or null.
+  function iconColorRecordSource(record) {
+    const text = String(record ?? '');
+    if (!iconColorIsV2(text)) return null;
+    const line = text.split('\n').slice(2).find(candidate => candidate.startsWith('src '));
+    return line === undefined ? null : iconColorParseSource(line);
+  }
+
   // mix_colors(): per 8-bit channel with a weight of 0..1024, rounded.
   function iconColorMix(a, b, weight) {
     let out = 0;
@@ -2945,9 +2975,17 @@ function syncTileRadiusControls(tabEl) {
 
   // normalize(): any record (editor, import, b39) in the canonical v2 form;
   // numeric types keep only the bar, text types only the state lines.
-  function normalizeIconColorRecord(record, allowBar, allowRows) {
+  function normalizeIconColorRecord(record, allowBar, allowRows, allowSource = false) {
     const text = String(record ?? '');
     const v2 = iconColorIsV2(text);
+    const source = allowSource ? iconColorRecordSource(text) : null;
+    if (source?.mode === 'rules') {
+      allowBar = true;
+      allowRows = true;
+    } else if (source?.mode === 'auto') {
+      allowBar = false;
+      allowRows = false;
+    }
     const lines = text.split('\n');
     const fixedIndex = v2 ? 1 : 0;
     const fixed = iconColorParseHex(iconColorTrim(lines[fixedIndex] ?? ''));
@@ -2960,6 +2998,7 @@ function syncTileRadiusControls(tabEl) {
       bar = iconColorMigrateLegacyBar(body, fixed);
     }
     let out = 'v2\n' + (fixed === null ? '' : iconColorHex(fixed));
+    if (source) out += '\nsrc ' + source.mode + ' ' + source.entity;
     if (bar) {
       out += '\nbar ' + bar.mode + ' ' + bar.minText + ' ' + bar.maxText +
         bar.stops.map(stop => ' ' + stop.position + ':' + iconColorHex(stop.color)).join('');
@@ -2969,7 +3008,7 @@ function syncTileRadiusControls(tabEl) {
       let legacyRules = 0;
       for (const line of body) {
         if (rows >= ICON_COLOR_MAX_ROWS) break;
-        if (v2 && line.startsWith('bar ')) continue;
+        if (v2 && (line.startsWith('bar ') || line.startsWith('src '))) continue;
         const rule = iconColorParseRule(line);
         if (!rule) continue;
         const textRule = rule.op === 'is' || rule.op === 'has';
@@ -2989,12 +3028,12 @@ function syncTileRadiusControls(tabEl) {
         rows++;
       }
     }
-    return fixed === null && !bar && rows === 0 ? '' : out;
+    return fixed === null && !source && !bar && rows === 0 ? '' : out;
   }
 
   // Editor view of a record: fixed color, bar and state rows.
   function parseIconColorRecord(record) {
-    const lines = normalizeIconColorRecord(record, true, true).split('\n');
+    const lines = normalizeIconColorRecord(record, true, true, true).split('\n');
     const fixed = iconColorParseHex(lines[1] ?? '');
     let bar = null;
     const rows = [];
@@ -3003,7 +3042,95 @@ function syncTileRadiusControls(tabEl) {
       const rule = iconColorParseRule(line);
       if (rule) rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value });
     }
-    return { color: fixed === null ? '' : '#' + iconColorHex(fixed), bar, rows };
+    return { color: fixed === null ? '' : '#' + iconColorHex(fixed), bar, rows,
+      source: iconColorRecordSource(lines.join('\n')) };
+  }
+
+  // ---- Source entity (icon-and-title tiles), mirrors tile_icon_source.cpp ----
+
+  // The raw state of a payload: the JSON "state" field, else the plain text.
+  function iconColorPayloadState(payload) {
+    const text = String(payload ?? '').trim();
+    if (!text.startsWith('{')) return text;
+    try {
+      const value = JSON.parse(text);
+      return value && value.state !== undefined && value.state !== null ? String(value.state).trim() : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function iconColorStateKnown(state) {
+    const text = String(state ?? '').trim().toLowerCase();
+    return !!text && !['unavailable', 'unknown', 'none', 'null'].includes(text);
+  }
+
+  // "auto": the entity's own icon color as its tile preview shows it.
+  function iconColorSourceAutoColor(entity, payload) {
+    const domain = String(entity).split('.')[0];
+    const text = String(payload ?? '').trim();
+    if (!text) return '';
+    if (ICON_COLOR_SWITCH_DOMAINS.includes(domain) && typeof parseSwitchPayload === 'function') {
+      const state = parseSwitchPayload(text);
+      if (!state || state.available === false || !state.hasState) return '';
+      return state.isOn ? (state.hasColor ? state.color : '#FFD54F') : '#B0B0B0';
+    }
+    if (domain === 'binary_sensor' && typeof parseBinarySensorPreviewPayload === 'function') {
+      const state = parseBinarySensorPreviewPayload(text);
+      if (!state?.valid || state.available !== true || !['on', 'off'].includes(state.state)) return '';
+      return binarySensorPreviewColor(state);
+    }
+    if (domain === 'climate' && typeof parseClimatePreviewPayload === 'function') {
+      const state = parseClimatePreviewPayload(text);
+      return state && state.available !== false ? climatePreviewColor(state) : '';
+    }
+    if (domain === 'cover' && typeof parseCoverPreviewPayload === 'function') {
+      const state = parseCoverPreviewPayload(text);
+      return state && state.available !== false ? coverPreviewColor(state) : '';
+    }
+    return '';
+  }
+
+  // tile_icon_source::color(): the source entity's color or state color,
+  // else the fixed color ('' = white).
+  function iconColorSourcePreview(record, meta) {
+    const source = iconColorRecordSource(record);
+    const payload = source ? meta?.values?.[source.entity] : undefined;
+    if (source && payload !== undefined && payload !== null && String(payload).trim()) {
+      if (source.mode === 'auto') {
+        const color = normalizeIconColorHex(iconColorSourceAutoColor(source.entity, payload));
+        if (color) return color;
+      } else {
+        const state = iconColorPayloadState(payload);
+        if (iconColorStateKnown(state)) {
+          let display = null;
+          if (source.entity.startsWith('binary_sensor.') &&
+              typeof parseBinarySensorPreviewPayload === 'function' &&
+              typeof binarySensorPreviewStateText === 'function') {
+            const parsed = parseBinarySensorPreviewPayload(String(payload));
+            if (parsed?.valid && ['on', 'off'].includes(parsed.state)) display = binarySensorPreviewStateText(parsed);
+          }
+          const color = resolveIconColorRecord(record, state, display);
+          if (color) return color;
+        }
+      }
+    }
+    return resolveIconColorRecord(record, '', null);
+  }
+
+  // Entities offered as a source: the states the Bridge publishes to tiles.
+  function iconColorSourceEntries(data) {
+    const seen = new Set();
+    const entries = [];
+    for (const list of [data?.sensors, data?.binary_sensors, data?.switches, data?.climates, data?.covers]) {
+      for (const entry of Array.isArray(list) ? list : []) {
+        const value = String(entry?.v ?? '');
+        if (!iconColorValidEntity(value) || seen.has(value)) continue;
+        seen.add(value);
+        entries.push(entry);
+      }
+    }
+    return entries;
   }
 
   // ---- Editor ----
@@ -3190,11 +3317,39 @@ function syncTileRadiusControls(tabEl) {
     input.dataset.unset = hex ? '0' : '1';
   }
 
+  function readIconColorSource(tab) {
+    const entity = String(iconColorEl(tab, '_tile_icon_source')?.value || '').trim();
+    if (!iconColorValidEntity(entity)) return null;
+    const mode = iconColorEl(tab, '_tile_icon_source_mode')?.value === 'rules' ? 'rules' : 'auto';
+    return { mode, entity };
+  }
+
+  function writeIconColorSource(tab, source) {
+    const select = iconColorEl(tab, '_tile_icon_source');
+    const entity = source?.entity || '';
+    if (select) {
+      if (entity && !Array.from(select.options).some(option => option.value === entity)) {
+        const option = document.createElement('option');
+        option.value = entity;
+        option.textContent = entity;
+        select.appendChild(option);
+      }
+      select.value = entity;
+      if (entity) select.dataset.configuredValue = entity;
+      else delete select.dataset.configuredValue;
+    }
+    const mode = iconColorEl(tab, '_tile_icon_source_mode');
+    if (mode) mode.value = source?.mode === 'rules' ? 'rules' : 'auto';
+  }
+
   function collectIconColorRecord(tab) {
     const type = iconColorTypeOf(tab);
     const input = iconColorEl(tab, '_tile_icon_color');
     const fixed = input && input.dataset.unset !== '1' ? normalizeIconColorHex(input.value).slice(1) : '';
     const lines = ['v2', fixed];
+    const fixedOnly = ICON_COLOR_FIXED_TYPES.includes(type);
+    const source = fixedOnly ? readIconColorSource(tab) : null;
+    if (source) lines.push('src ' + source.mode + ' ' + source.entity);
     const bar = readIconColorBar(tab);
     if (bar.mode !== 'off') {
       // A number with inner spaces is invalid rather than a second token.
@@ -3212,15 +3367,15 @@ function syncTileRadiusControls(tabEl) {
       lines.push((row.has ? 'has ' : 'is ') + color.slice(1) + ' ' + value);
     }
     return normalizeIconColorRecord(lines.join('\n'),
-      ICON_COLOR_BAR_TYPES.includes(type), ICON_COLOR_ROW_TYPES.includes(type));
+      ICON_COLOR_BAR_TYPES.includes(type), ICON_COLOR_ROW_TYPES.includes(type), fixedOnly);
   }
 
   // Sensor states can be numbers or text: the current state picks the bar or
   // the state list while neither holds colors.
-  function iconColorSensorIsText(tab) {
-    const entity = iconColorEl(tab, '_sensor_entity')?.value || '';
+  function iconColorSensorIsText(tab, sourceEntity = null) {
+    const entity = sourceEntity ?? (iconColorEl(tab, '_sensor_entity')?.value || '');
     const meta = typeof sensorMetaCache === 'object' ? sensorMetaCache : null;
-    const raw = String(meta?.values?.[entity] ?? '').trim();
+    const raw = iconColorPayloadState(meta?.values?.[entity] ?? '');
     if (!raw || ['unavailable', 'unknown', 'none', 'null', '--'].includes(raw.toLowerCase())) return false;
     return iconColorLeadingNumber(raw) === null;
   }
@@ -3235,6 +3390,22 @@ function syncTileRadiusControls(tabEl) {
     const showBinary = type === '20';
     let showBar = ICON_COLOR_BAR_TYPES.includes(type);
     let showRows = ICON_COLOR_ROW_TYPES.includes(type) && !showBinary;
+    const fixedOnly = ICON_COLOR_FIXED_TYPES.includes(type);
+    const source = fixedOnly ? readIconColorSource(tab) : null;
+    iconColorEl(tab, '_tile_icon_source_section')?.classList.toggle('hidden', !fixedOnly);
+    iconColorEl(tab, '_tile_icon_source_modes')?.classList.toggle('hidden', !source);
+    if (fixedOnly) {
+      const mode = source ? source.mode : 'auto';
+      iconColorEl(tab, '_tile_icon_source_section')?.querySelectorAll('[data-icon-color="source-mode"]').forEach(button => {
+        const active = button.dataset.mode === mode;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      // Own rules evaluate the source state: the bar for numbers, the state
+      // list for text, like a Sensor.
+      showBar = source?.mode === 'rules';
+      showRows = showBar;
+    }
     if (showBar && showRows) {
       const hasBar = readIconColorBar(tab).mode !== 'off';
       const hasRows = readIconColorRows(tab).length > 0;
@@ -3242,7 +3413,7 @@ function syncTileRadiusControls(tabEl) {
         showBar = hasBar;
         showRows = hasRows;
       } else {
-        const text = iconColorSensorIsText(tab);
+        const text = iconColorSensorIsText(tab, source ? source.entity : null);
         showBar = !text;
         showRows = text;
         if (typeof isSensorMetaCacheLoaded === 'function' && !isSensorMetaCacheLoaded() &&
@@ -3270,6 +3441,7 @@ function syncTileRadiusControls(tabEl) {
     if (max) max.value = parsed.bar ? parsed.bar.maxText : '';
     setIconColorSelectedStop(tab, -1);
     writeIconColorRows(tab, parsed.rows);
+    writeIconColorSource(tab, parsed.source);
     for (const state of ['on', 'off']) {
       const row = parsed.rows.find(entry => !entry.has && iconColorFold(entry.value) === state);
       setIconColorBinaryInput(tab, state, row ? row.color : '');
@@ -3351,7 +3523,7 @@ function syncTileRadiusControls(tabEl) {
   document.addEventListener('change', event => {
     const target = event.target;
     const id = target?.id || '';
-    if (target?.dataset?.iconColor === 'has') {
+    if (target?.dataset?.iconColor === 'has' || target?.dataset?.iconColor === 'source') {
       const tab = iconColorEventTab(target);
       if (tab) commitIconColorChange(tab);
       return;
@@ -3380,6 +3552,9 @@ function syncTileRadiusControls(tabEl) {
     }
     if (role === 'clear') {
       setIconColorInput(tab, '');
+    } else if (role === 'source-mode') {
+      const mode = iconColorEl(tab, '_tile_icon_source_mode');
+      if (mode) mode.value = button.dataset.mode === 'rules' ? 'rules' : 'auto';
     } else if (role === 'binary-clear') {
       setIconColorBinaryInput(tab, button.dataset.state, '');
     } else if (role === 'remove') {
@@ -6558,6 +6733,12 @@ function syncTileRadiusControls(tabEl) {
   function previewIconColor(typeValue, record, entity, meta, binaryState, fallback) {
     if (!record || typeof tileTypeHasIconColors !== 'function' ||
         !tileTypeHasIconColors(typeValue)) return fallback;
+    // Icon-and-title tiles: the source entity's color or state colors, else
+    // the fixed color (tile_icon_source::color).
+    if (typeof tileTypeHasFixedIconColorOnly === 'function' && tileTypeHasFixedIconColorOnly(typeValue) &&
+        typeof iconColorSourcePreview === 'function') {
+      return iconColorSourcePreview(record, meta) || fallback;
+    }
     const rule = iconColorRuleState(typeValue, entity, meta, binaryState);
     return (rule && resolveIconColorRecord(record, rule.state, rule.display)) || fallback;
   }

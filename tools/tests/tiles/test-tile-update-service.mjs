@@ -48,6 +48,10 @@ const source = `
 #include <cstddef>
 #include "src/tiles/runtime/tile_update_service.h"
 
+// Icon-and-title recolors run last and are bounded by the pending mask.
+static unsigned icon_source_calls = 0;
+void process_icon_source_updates() { ++icon_source_calls; }
+
 struct Call { std::size_t queue; uint8_t budget; };
 static std::array<unsigned, 8> pending{};
 static std::array<Call, 8> calls{};

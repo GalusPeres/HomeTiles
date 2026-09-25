@@ -25,6 +25,8 @@ using namespace web_admin_handlers;
 namespace {
 
 static String dynamicMqttEntityForTile(const Tile& tile) {
+  // Icon-and-title tiles subscribe to the source entity of their icon colors.
+  if (tileTypeHasFixedIconColorOnly(tile.type)) return tileIconSourceEntity(tile.type, tile.icon_colors);
   if (!tileTypeHasDynamicMqttRoute(tile.type)) return "";
   String entity = tile.sensor_entity;
   entity.trim();

@@ -3,6 +3,9 @@
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/types/value/value_control.h"
 
+// tab_tiles_unified.cpp: recolors icon-and-title tiles from their source entity.
+void process_icon_source_updates();
+
 enum class TileUpdateBudget : uint8_t {
   Active,
   DrainAll,
@@ -23,4 +26,5 @@ inline void process_tile_update_queues() {
   process_editable_updates(drain_all ? 0 : 4);
   process_weather_update_queue(drain_all ? 0 : 4);
   process_media_update_queue(drain_all ? 0 : 2);
+  process_icon_source_updates();
 }

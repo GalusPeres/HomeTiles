@@ -1719,6 +1719,25 @@ static bool switch_state_has_update(const SwitchState& state) {
          state.supports_brightness || state.supports_temperature;
 }
 
+// The Switch tile's icon color for a state: the light color (or the Kelvin
+// color of CCT-only lights, else amber) while on, grey while off or
+// unavailable.
+static uint32_t switch_state_icon_color(const SwitchState& state) {
+  if (!state.available || (state.has_state && !state.is_on)) return 0xB0B0B0;
+  if (state.supports_temperature && !state.supports_color && state.has_color_temp) {
+    return lv_color_to_u32(light_color_from_temperature_kelvin(state.color_temp_kelvin)) & 0xFFFFFF;
+  }
+  return state.has_color ? state.color : 0xFFD54F;
+}
+
+bool switch_payload_icon_color(const char* payload, uint32_t& rgb) {
+  if (!payload || !*payload) return false;
+  const SwitchState state = parse_switch_payload(payload);
+  if (!state.available || !state.has_state) return false;
+  rgb = switch_state_icon_color(state);
+  return true;
+}
+
 static void apply_switch_tile_state(GridType grid_type, uint8_t grid_index,
                                     SwitchState state) {
   if (grid_index >= TILES_PER_GRID) return;
@@ -1793,26 +1812,15 @@ static void apply_switch_tile_state(GridType grid_type, uint8_t grid_index,
   SwitchTileWidgets& widgets = target[grid_index];
   if (!widgets.icon_label && !widgets.title_label && !widgets.switch_obj) return;
 
-  static const uint32_t kIconOn = 0xFFD54F;
   static const uint32_t kIconOff = 0xB0B0B0;
   static const uint32_t kIconNeutral = 0xFFFFFF;
   static const uint32_t kSwitchOff = 0xFFFFFF;
   static const uint32_t kSwitchOn = 0x3B82F6;
 
   const bool control_unavailable = !state.available;
-  uint32_t icon_color = kIconOff;
-  if (!control_unavailable && (!state.has_state || state.is_on)) {
-    if (state.supports_temperature && !state.supports_color && state.has_color_temp) {
-      // CCT-only lights have no true RGB capability. Their tiles use the same
-      // Kelvin color as the popup instead of the fixed yellow default used
-      // for simple on/off lights.
-      icon_color = lv_color_to_u32(
-                       light_color_from_temperature_kelvin(state.color_temp_kelvin)) &
-                   0xFFFFFF;
-    } else {
-      icon_color = state.has_color ? state.color : kIconOn;
-    }
-  }
+  // CCT-only lights use the same Kelvin color as the popup instead of the
+  // fixed yellow default used for simple on/off lights.
+  const uint32_t icon_color = switch_state_icon_color(state);
 
   uint32_t label_color =
       control_unavailable
@@ -2321,6 +2329,14 @@ uint32_t climate_visual_color(const ClimateState& state) {
   if (!state.available) return 0x9E9E9E;
   return climate_visuals::state_foreground_color(
       state.hvac_mode, state.hvac_action);
+}
+
+bool climate_payload_icon_color(const char* payload, uint32_t& rgb) {
+  if (!payload || !*payload) return false;
+  const ClimateState state = parse_climate_payload(payload);
+  if (!state.valid || !state.available) return false;
+  rgb = climate_visual_color(state);
+  return true;
 }
 
 static ClimatePopupInit build_climate_popup_init(

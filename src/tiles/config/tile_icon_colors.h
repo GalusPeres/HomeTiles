@@ -8,12 +8,18 @@
 #include <string.h>
 
 // Per-tile icon colors for Sensor, Number, Select, Date/Time, Binary sensor
-// and Energy tiles. A tile keeps one canonical text record, which is also the
+// and Energy tiles, and for the icon-and-title tiles (Scene, Folder, Back,
+// Camera). A tile keeps one canonical text record, which is also the
 // /_tile_icon_colors sidecar content, the Web Admin field "icon_colors" and
 // the import/export value (format v2):
 //
 //   line 1:  "v2"
 //   line 2:  fixed icon color "RRGGBB", or empty for the type's default
+//   then, for icon-and-title tiles only, at most one source entity:
+//            "src auto <entity_id>" takes the entity's own icon color (light
+//            color, on/off, climate mode, cover state), "src rules
+//            <entity_id>" evaluates the bar and state lines below on that
+//            entity's state
 //   then at most one color bar for numeric states:
 //            "bar <smooth|steps> <min> <max> <P>:<RRGGBB> ..." with 2 to 6
 //            stops in ascending order; P is the stop position on the bar in
@@ -48,15 +54,20 @@ inline constexpr size_t kMaxValueBytes = 32;
 inline constexpr size_t kMaxNumberBytes = 12;
 inline constexpr unsigned kPositionScale = 1000;
 inline constexpr size_t kLegacyMaxRules = 3;
+inline constexpr size_t kMaxEntityBytes = 128;
 // "\nbar smooth <min> <max>" plus " PPPP:RRGGBB" per stop.
 inline constexpr size_t kMaxBarBytes = 5 + 6 + 1 + kMaxNumberBytes + 1 + kMaxNumberBytes + kMaxStops * 12;
 // "\nhas RRGGBB <text>".
 inline constexpr size_t kMaxRowBytes = 1 + 3 + 1 + 6 + 1 + kMaxValueBytes;
-// "v2\nRRGGBB", the bar and the state lines.
-inline constexpr size_t kMaxRecordBytes = 2 + 1 + 6 + kMaxBarBytes + kMaxRows * kMaxRowBytes;
+// "\nsrc rules <entity_id>".
+inline constexpr size_t kMaxSourceBytes = 1 + 3 + 1 + 5 + 1 + kMaxEntityBytes;
+// "v2\nRRGGBB", the source, the bar and the state lines.
+inline constexpr size_t kMaxRecordBytes =
+    2 + 1 + 6 + kMaxSourceBytes + kMaxBarBytes + kMaxRows * kMaxRowBytes;
 
 enum class Op : uint8_t { None, Ge, Le, Eq, Is, Has };
 enum class BarMode : uint8_t { Smooth, Steps };
+enum class SourceMode : uint8_t { None, Auto, Rules };
 
 inline bool is_space(char c) { return c == ' ' || c == '\t' || c == '\r'; }
 
@@ -361,6 +372,61 @@ inline uint32_t bar_color(const Bar& bar, double value) {
   return bar_color_at(bar, (value - bar.min) / (bar.max - bar.min));
 }
 
+// Home Assistant entity id "<domain>.<object>": lowercase letters, digits and
+// underscores with exactly one inner dot, at most kMaxEntityBytes.
+inline bool valid_entity(const char* begin, size_t length) {
+  if (length < 3 || length > kMaxEntityBytes) return false;
+  size_t dots = 0;
+  for (size_t i = 0; i < length; ++i) {
+    const char c = begin[i];
+    if (c == '.') {
+      if (i == 0 || i + 1 == length) return false;
+      ++dots;
+    } else if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) {
+      return false;
+    }
+  }
+  return dots == 1;
+}
+
+// Parses "src <auto|rules> <entity_id>" spanning [begin, end).
+inline bool parse_source(const char* begin, const char* end, SourceMode& mode,
+                         const char*& entity, size_t& entity_len) {
+  const char* p = begin;
+  const char* token = nullptr;
+  const char* stop = nullptr;
+  if (!next_token(p, end, token, stop) || !token_is(token, stop, "src")) return false;
+  if (!next_token(p, end, token, stop)) return false;
+  if (token_is(token, stop, "auto")) mode = SourceMode::Auto;
+  else if (token_is(token, stop, "rules")) mode = SourceMode::Rules;
+  else return false;
+  if (!next_token(p, end, token, stop)) return false;
+  const char* extra = nullptr;
+  const char* extra_stop = nullptr;
+  if (next_token(p, end, extra, extra_stop)) return false;
+  if (!valid_entity(token, static_cast<size_t>(stop - token))) return false;
+  entity = token;
+  entity_len = static_cast<size_t>(stop - token);
+  return true;
+}
+
+// The source entity of a v2 record (the first "src" line), or None.
+inline SourceMode source(const char* record, const char*& entity, size_t& entity_len) {
+  entity = nullptr;
+  entity_len = 0;
+  if (!is_v2(record)) return SourceMode::None;
+  const char* p = line_end(second_line(record));
+  while (*p == '\n') {
+    const char* begin = p + 1;
+    const char* end = line_end(begin);
+    p = end;
+    if (!starts_with(begin, end, "src ")) continue;
+    SourceMode mode = SourceMode::None;
+    return parse_source(begin, end, mode, entity, entity_len) ? mode : SourceMode::None;
+  }
+  return SourceMode::None;
+}
+
 // Icon color for a known entity state. `state` is the raw Home Assistant
 // state; `display`, when set, is the displayed text (for example the
 // translated Binary sensor state) that state lines may also match. Returns
@@ -531,16 +597,30 @@ inline bool append_row(const Rule& rule, char* out, size_t& n) {
 }
 
 // Normalizes any input record (Web Admin, import, sidecar, b39 format) into
-// the canonical v2 form: uppercase colors, one valid bar with sorted stops
-// when `allow_bar`, up to six non-empty state lines when `allow_rows`,
-// values trimmed and clipped to kMaxValueBytes. Invalid lines are dropped.
-// Returns the length written to `out` (0 = no icon colors); `out` is always
-// terminated.
-inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_bar, bool allow_rows) {
+// the canonical v2 form: uppercase colors, one valid source entity when
+// `allow_source`, one valid bar with sorted stops when `allow_bar`, up to six
+// non-empty state lines when `allow_rows`, values trimmed and clipped to
+// kMaxValueBytes. A "rules" source allows the bar and the state lines, an
+// "auto" source takes the entity's own color and drops them. Invalid lines
+// are dropped. Returns the length written to `out` (0 = no icon colors);
+// `out` is always terminated.
+inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_bar, bool allow_rows,
+                        bool allow_source = false) {
   if (!out || out_size == 0) return 0;
   out[0] = '\0';
   if (!in || out_size < kMaxRecordBytes + 1) return 0;
   const bool v2 = is_v2(in);
+  const char* source_entity = nullptr;
+  size_t source_len = 0;
+  const SourceMode source_mode =
+      allow_source ? source(in, source_entity, source_len) : SourceMode::None;
+  if (source_mode == SourceMode::Rules) {
+    allow_bar = true;
+    allow_rows = true;
+  } else if (source_mode == SourceMode::Auto) {
+    allow_bar = false;
+    allow_rows = false;
+  }
   // Fixed color: line 2 of a v2 record, line 1 of a b39 record.
   const char* fixed_begin = v2 ? second_line(in) : in;
   const char* fixed_end = line_end(fixed_begin);
@@ -568,6 +648,11 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
   size_t n = 0;
   append_text(out, n, "v2\n");
   if (has_fixed) append_hex(out, n, fixed);
+  if (source_mode != SourceMode::None) {
+    append_text(out, n, source_mode == SourceMode::Auto ? "\nsrc auto " : "\nsrc rules ");
+    memcpy(out + n, source_entity, source_len);
+    n += source_len;
+  }
   if (has_bar) {
     append_text(out, n, "\nbar ");
     append_text(out, n, bar.mode == BarMode::Steps ? "steps" : "smooth");
@@ -588,7 +673,7 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
       const char* begin = p + 1;
       const char* end = line_end(begin);
       p = end;
-      if (v2 && starts_with(begin, end, "bar ")) continue;
+      if (v2 && (starts_with(begin, end, "bar ") || starts_with(begin, end, "src "))) continue;
       Rule rule;
       if (!parse_rule(begin, end, rule)) continue;
       if (!v2) {
@@ -604,7 +689,7 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
       if (append_row(rule, out, n)) ++rows;
     }
   }
-  if (!has_fixed && !has_bar && rows == 0) n = 0;
+  if (!has_fixed && source_mode == SourceMode::None && !has_bar && rows == 0) n = 0;
   out[n] = '\0';
   return n;
 }

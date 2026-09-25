@@ -33,6 +33,7 @@
 #include "src/types/energy/energy_data.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/core/config/tile_radius.h"
 
@@ -78,6 +79,9 @@ struct ScreensaverState {
   // the first Bridge sync supplies HA metadata such as kWh. Comparing only
   // the payload would permanently miss the unit when it arrives later.
   String slot_units[TILES_PER_GRID];
+  // Rendered slot cards, for icon-and-title tiles that follow their icon
+  // colors' source entity. Cleared with every rebuild.
+  lv_obj_t* slot_objs[TILES_PER_GRID] = {};
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   // Prepare a complete LVGL frame for smooth slide transitions: wallpaper,
   // clock, tiles and any open popup are rendered off-screen in PSRAM, then
@@ -1243,6 +1247,17 @@ void refresh_slot_values(ScreensaverState* st) {
   const TileGridConfig& grid = screensaverConfig.tileGrid();
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& tile = grid.tiles[i];
+    if (tileTypeHasFixedIconColorOnly(tile.type)) {
+      // Icon-and-title tiles follow the source entity of their icon colors.
+      const String source = tileIconSourceEntity(tile.type, tile.icon_colors);
+      if (!source.length() || !st->slot_objs[i]) continue;
+      String source_payload;
+      tile_icon_source::cached_payload(source, source_payload);
+      if (source_payload == st->slot_payloads[i]) continue;
+      st->slot_payloads[i] = source_payload;
+      tile_icon_source::refresh_card(st->slot_objs[i], tile);
+      continue;
+    }
     if (!tile.sensor_entity.length()) continue;
     String payload;
     if (!tiles_get_cached_entity_payload(tile.sensor_entity.c_str(), payload)) {
@@ -1339,6 +1354,7 @@ void rebuild_slot_grid(ScreensaverState* st) {
     lv_obj_clean(st->slot_grid);
   }
   for (String& payload : st->slot_payloads) payload = String();
+  for (lv_obj_t*& obj : st->slot_objs) obj = nullptr;
 
   // Use exactly the normal tile system's tracks, gaps and outer padding.
   // The prepared full-frame image starts at GRID_PAD - 4, placing it
@@ -1381,6 +1397,7 @@ void rebuild_slot_grid(ScreensaverState* st) {
                                      static_cast<uint8_t>(i),
                                      GridType::SCREENSAVER, g_scene_callback);
     if (!tile_obj) continue;
+    st->slot_objs[i] = tile_obj;
     const lv_opa_t opacity = tile.background_opacity;
     lv_obj_set_style_bg_opa(tile_obj, opacity,
                             LV_PART_MAIN | LV_STATE_DEFAULT);

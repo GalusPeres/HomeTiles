@@ -133,6 +133,12 @@
   function previewIconColor(typeValue, record, entity, meta, binaryState, fallback) {
     if (!record || typeof tileTypeHasIconColors !== 'function' ||
         !tileTypeHasIconColors(typeValue)) return fallback;
+    // Icon-and-title tiles: the source entity's color or state colors, else
+    // the fixed color (tile_icon_source::color).
+    if (typeof tileTypeHasFixedIconColorOnly === 'function' && tileTypeHasFixedIconColorOnly(typeValue) &&
+        typeof iconColorSourcePreview === 'function') {
+      return iconColorSourcePreview(record, meta) || fallback;
+    }
     const rule = iconColorRuleState(typeValue, entity, meta, binaryState);
     return (rule && resolveIconColorRecord(record, rule.state, rule.display)) || fallback;
   }

@@ -6,7 +6,7 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
-#include "src/tiles/runtime/tile_icon_color_rules.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
@@ -23,7 +23,8 @@ struct CameraEventData {
   String title;
   String icon_name;
   uint32_t bg_color = 0x2A2A2A;
-  uint32_t icon_color = 0xFFFFFF;
+  // Icon colors record: the popup header icon takes the tile icon's color.
+  String icon_colors;
 };
 
 static String friendly_camera_name(const String& entity_id) {
@@ -49,7 +50,12 @@ static void camera_tile_event_cb(lv_event_t* event) {
   init.title = data->title;
   init.icon_name = data->icon_name;
   init.bg_color = data->bg_color;
-  init.icon_color = data->icon_color;
+  // The header icon takes the tile icon's color (fixed or from the source
+  // entity's latest state).
+  const String source = tileIconSourceEntity(TILE_CAMERA, data->icon_colors);
+  String payload;
+  if (source.length()) tile_icon_source::cached_payload(source, payload);
+  init.icon_color = tile_icon_source::color(data->icon_colors, payload.c_str());
   show_camera_popup(init);
 }
 
@@ -112,7 +118,7 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
     icon = lv_label_create(card);
     set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
     lv_label_set_text(icon, icon_char.c_str());
-    tile_icon_color_rules::apply_fixed(icon, tile.icon_colors.c_str());
+    tile_icon_source::apply_initial(icon, tile);
     if (!compact) {
       lv_obj_align(icon, LV_ALIGN_CENTER, 0, tile_layout::scale_i16(-20));
       tile_icon_disc::add_round(card, icon);
@@ -132,11 +138,8 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
   }
 
   if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
-    // The popup header icon takes the tile's fixed icon color.
-    uint32_t icon_rgb = 0xFFFFFF;
-    tile_icon_colors::resolve(tile.icon_colors.c_str(), "", nullptr, icon_rgb);
     CameraEventData* event_data = new CameraEventData{
-        tile.sensor_entity, title, icon_name, card_color, icon_rgb};
+        tile.sensor_entity, title, icon_name, card_color, tile.icon_colors};
     lv_obj_add_event_cb(card, camera_tile_event_cb, LV_EVENT_SHORT_CLICKED,
                         event_data);
     lv_obj_add_event_cb(card, camera_tile_delete_cb, LV_EVENT_DELETE,

@@ -2601,7 +2601,9 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
     if (!loadGrid(folder_id, full)) return false;
     for (size_t i = 0; i < TILES_PER_GRID; ++i) {
       out[i].type = full.tiles[i].type;
-      out[i].sensor_entity = full.tiles[i].sensor_entity;
+      out[i].sensor_entity = tileTypeHasFixedIconColorOnly(full.tiles[i].type)
+                                 ? tileIconSourceEntity(full.tiles[i].type, full.tiles[i].icon_colors)
+                                 : full.tiles[i].sensor_entity;
     }
     return true;
   }
@@ -2625,6 +2627,16 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
     if (readLongEntityIdSd(folder_id, i, full_entity)) {
       out[i].sensor_entity = full_entity;
     }
+  }
+  // Icon-and-title tiles subscribe to the source entity of their icon colors
+  // instead: its state colors the icon. No consumer of this projection reads
+  // their own entity (Camera keeps its camera entity in the full grid).
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    if (!tileTypeHasFixedIconColorOnly(out[i].type)) continue;
+    String record;
+    out[i].sensor_entity = readIconColorsSd(folder_id, i, record)
+                               ? tileIconSourceEntity(out[i].type, record)
+                               : String();
   }
   uint32_t sidecar_ms = millis() - t_sidecar0;
   if (read_ms + unpack_ms + sidecar_ms >= 5) {

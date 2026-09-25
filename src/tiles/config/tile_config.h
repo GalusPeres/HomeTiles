@@ -171,14 +171,30 @@ static inline uint8_t normalizeTileIconDiscMode(int mode) {
 }
 
 // Canonical icon color record for a type: numeric types keep only the color
-// bar, text types only the state lines, Sensor keeps both; types without icon
-// colors keep none.
+// bar, text types only the state lines, Sensor keeps both; icon-and-title
+// tiles keep the fixed color and a source entity (with the bar and state
+// lines for a "rules" source); types without icon colors keep none.
 static inline String normalizeTileIconColors(int type, const char* record) {
   if (!tileTypeHasIconColors(type) || !record || !*record) return String();
   char out[tile_icon_colors::kMaxRecordBytes + 1];
   const size_t length = tile_icon_colors::normalize(
-      record, out, sizeof(out), tileTypeIconColorsByValue(type), tileTypeIconColorsByState(type));
+      record, out, sizeof(out), tileTypeIconColorsByValue(type), tileTypeIconColorsByState(type),
+      tileTypeHasFixedIconColorOnly(type));
   return length ? String(out) : String();
+}
+
+// Source entity of an icon-and-title tile's icon colors, or "".
+static inline String tileIconSourceEntity(int type, const String& record) {
+  if (!tileTypeHasFixedIconColorOnly(type) || !record.length()) return String();
+  const char* entity = nullptr;
+  size_t length = 0;
+  if (tile_icon_colors::source(record.c_str(), entity, length) == tile_icon_colors::SourceMode::None) {
+    return String();
+  }
+  String out;
+  out.reserve(length);
+  for (size_t i = 0; i < length; ++i) out += entity[i];
+  return out;
 }
 
 // Clock/Text/Back use the otherwise unused display mode byte: 0 inherits

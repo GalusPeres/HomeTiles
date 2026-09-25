@@ -73,8 +73,11 @@ struct Tile {
   TileType type = TILE_EMPTY;
   String sensor_entity;
   String sensor_unit;
+  String icon_colors{};
 };
 struct TileGridConfig { std::array<Tile, TILES_PER_GRID> tiles{}; };
+#include <atomic>
+static std::atomic<uint64_t> g_icon_source_pending{0};
 
 static std::map<std::string, String> cache, initial_values, bridge_units, energy_units;
 static std::vector<std::string> events;

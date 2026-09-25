@@ -51,6 +51,32 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
               </div>
 )html";
 
+  // Icon-and-title tiles: a source entity whose own color or state colors
+  // the icon ("src auto|rules <entity>" in the record).
+  html += R"html(              <div class="icon-color-section hidden" id=")html";
+  html += tab_id;
+  html += "_tile_icon_source_section\">\n";
+  append_label_row(html, tr.tile_icon_color_source);
+  html += R"html(                <select id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_source" data-icon-color="source"><option value="">)html";
+  appendHtmlEscaped(html, tr.tile_icon_color_source_none);
+  html += R"html(</option></select>
+                <input type="hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_source_mode" value="auto">
+                <div class="icon-color-segmented hidden" role="group" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_source_modes">)html";
+  append_button(html, "", "source-mode", "data-mode", "auto", tr.tile_icon_color_source_auto);
+  append_button(html, "", "source-mode", "data-mode", "rules", tr.tile_icon_color_source_rules);
+  html += R"html(</div>
+                <p class="hint">)html";
+  appendHtmlEscaped(html, tr.tile_icon_color_source_hint);
+  html += R"html(</p>
+              </div>
+)html";
+
   // Color bar for numeric states.
   html += R"html(              <div class="icon-color-section hidden" id=")html";
   html += tab_id;

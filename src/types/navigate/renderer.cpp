@@ -4,7 +4,7 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/compact_sensor_layout.h"
-#include "src/tiles/runtime/tile_icon_color_rules.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/ui/ui_manager.h"
@@ -77,7 +77,7 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
     if (icon_lbl) {
       set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
       lv_label_set_text(icon_lbl, iconChar.c_str());
-      tile_icon_color_rules::apply_fixed(icon_lbl, tile.icon_colors.c_str());
+      tile_icon_source::apply_initial(icon_lbl, tile);
 
       // Center icon and title on two lines, or the icon alone on one line.
       if (!compact) {

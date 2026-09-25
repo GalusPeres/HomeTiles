@@ -119,6 +119,8 @@ const handlers = {
   21: ['Number', 'src/types/number/admin-editor.js'],
   22: ['Select', 'src/types/select/admin-editor.js'],
   23: ['DateTime', 'src/types/datetime/admin-editor.js'],
+  2: ['Scene', 'src/types/scene/admin.js'],
+  4: ['Navigate', 'src/types/navigate/admin.js'],
 };
 for (const [name, file] of Object.values(handlers)) {
   const source = read(file);
@@ -154,7 +156,7 @@ const policy = read('src/types/tile_type_policy.h');
 assert.match(policy, /tileTypeIconColorsByValue\(int type\) \{\s*return type == TILE_SENSOR \|\| type == TILE_ENERGY \|\| type == TILE_NUMBER;/);
 assert.match(policy, /tileTypeIconColorsByState\(int type\) \{\s*return type == TILE_SENSOR \|\| type == TILE_BINARY_SENSOR \|\| type == TILE_SELECT \|\|\s*type == TILE_DATETIME;/);
 assert.match(read('src/tiles/config/tile_config.h'),
-  /tile_icon_colors::normalize\(\s*record, out, sizeof\(out\), tileTypeIconColorsByValue\(type\), tileTypeIconColorsByState\(type\)\);/);
+  /tile_icon_colors::normalize\(\s*record, out, sizeof\(out\), tileTypeIconColorsByValue\(type\), tileTypeIconColorsByState\(type\),\s*tileTypeHasFixedIconColorOnly\(type\)\);/);
 
 const rules = code(read('src/tiles/runtime/tile_icon_color_rules.h'));
 assert.ok(rules.includes('tile_icon_disc::set_icon_color(icon, color);'), 'Colors go through the disc glow path');
@@ -252,7 +254,9 @@ if (!compiler) {
   const cStr = value => value === null ? 'nullptr' : JSON.stringify(value);
   const tileConfigHeader = read('src/tiles/config/tile_config.h');
   const normalizeStart = tileConfigHeader.indexOf('static inline String normalizeTileIconColors(');
-  const normalizeTile = tileConfigHeader.slice(normalizeStart, tileConfigHeader.indexOf('}\n', normalizeStart) + 2);
+  const sourceStart = tileConfigHeader.indexOf('static inline String tileIconSourceEntity(');
+  const normalizeTile = tileConfigHeader.slice(normalizeStart, tileConfigHeader.indexOf('}\n', normalizeStart) + 2) +
+    tileConfigHeader.slice(sourceStart, tileConfigHeader.indexOf('\n}\n', sourceStart) + 3);
   const cpp = String.raw`
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/types/tile_type_policy.h"
@@ -306,10 +310,21 @@ int main(){
  const R resolve_cases[]={${resolveCases.map(([r, s, d]) => `{${cStr(r)},${cStr(s)},${cStr(d)}}`).join(',')}};
  for(const R& c:resolve_cases){uint32_t rgb=0;if(resolve(c.record,c.state,c.display,rgb))std::printf("R:#%06X\n",static_cast<unsigned>(rgb));else std::printf("R:-\n");}
  uint32_t rgb=0;assert(!resolve("","on",nullptr,rgb)&&!resolve(nullptr,"on",nullptr,rgb)&&!resolve("v2\n\nis FFC107 on",nullptr,nullptr,rgb));
- // Worst case fits the sidecar limit.
- std::string worst="v2\nFFFFFF\nbar smooth -12345678901 999999999999 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000";
+ // Worst case (source, bar and six states) fits the sidecar limit.
+ std::string worst="v2\nFFFFFF\nsrc rules a."+std::string(126,'b')+"\nbar smooth -12345678901 999999999999 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000";
  for(int i=0;i<6;++i){worst+="\nhas FFFFFF ";worst+=std::string(64,'w');}
- assert(norm(worst.c_str(),true,true).size()==kMaxRecordBytes);
+ {char out[kMaxRecordBytes+1];assert(normalize(worst.c_str(),out,sizeof(out),false,false,true)==kMaxRecordBytes);}
+ // Icon-and-title tiles: a source entity; "rules" keeps the bar and states,
+ // "auto" drops them; other types never keep a source line.
+ assert(normalizeTileIconColors(TILE_FOLDER,"v2\nff0000\nsrc rules sensor.waste\nhas f44336 6\nbar steps 0 10 0:000000 1000:FFFFFF")=="v2\nFF0000\nsrc rules sensor.waste\nbar steps 0 10 0:000000 1000:FFFFFF\nhas F44336 6");
+ assert(normalizeTileIconColors(TILE_SCENE,"v2\n\nsrc auto light.kitchen\nhas f44336 6")=="v2\n\nsrc auto light.kitchen");
+ assert(normalizeTileIconColors(TILE_CAMERA,"v2\n\nsrc auto Light.Kitchen")=="");
+ assert(normalizeTileIconColors(TILE_BACK,"v2\n\nsrc maybe light.kitchen")=="");
+ assert(normalizeTileIconColors(TILE_SENSOR,"v2\n\nsrc rules sensor.waste\nhas f44336 6")=="v2\n\nhas F44336 6");
+ assert(tileIconSourceEntity(TILE_FOLDER,"v2\n\nsrc rules sensor.waste\nhas F44336 6")=="sensor.waste");
+ assert(tileIconSourceEntity(TILE_SENSOR,"v2\n\nsrc rules sensor.waste")=="");
+ assert(resolve("v2\n00FF00\nsrc rules sensor.waste\nhas F44336 6","in 6 Tagen rausstellen",nullptr,rgb)&&rgb==0xF44336);
+ assert(resolve("v2\n00FF00\nsrc rules sensor.waste\nhas F44336 6","",nullptr,rgb)&&rgb==0x00FF00);
  // Device path of the maintainer case: POST normalization for a Sensor, then the state update.
  const String waste=normalizeTileIconColors(TILE_SENSOR,"v2\n\nhas f44336 6");
  assert(waste=="v2\n\nhas F44336 6");
@@ -386,6 +401,8 @@ const rows = [0, 1, 2, 3, 4, 5].map(i => `<div class="tile-icon-rule hidden" id=
 const block = `<div id="t_tile_icon_color_fields" class="tile-icon-color-fields hidden" data-tab="t">
 <input type="color" id="t_tile_icon_color" value="#FFFFFF" data-unset="1" data-icon-color="color">
 <button type="button" id="clear" data-icon-color="clear">r</button>
+<div class="icon-color-section hidden" id="t_tile_icon_source_section"><select id="t_tile_icon_source" data-icon-color="source"><option value="">None</option></select>
+<input type="hidden" id="t_tile_icon_source_mode" value="auto"><div class="icon-color-segmented hidden" id="t_tile_icon_source_modes"><button type="button" data-icon-color="source-mode" data-mode="auto">A</button><button type="button" data-icon-color="source-mode" data-mode="rules">R</button></div></div>
 <div class="icon-color-section hidden" id="t_tile_icon_bar_section"><input type="hidden" id="t_tile_icon_bar" value="">
 <div class="icon-color-segmented"><button type="button" data-icon-color="mode" data-mode="off">Off</button><button type="button" data-icon-color="mode" data-mode="smooth">Smooth</button><button type="button" data-icon-color="mode" data-mode="steps">Steps</button></div>
 <div class="icon-color-bar-editor hidden" id="t_tile_icon_bar_editor"><div class="icon-color-presets">
@@ -403,7 +420,7 @@ const registry = Object.fromEntries(Object.entries(handlers).map(([type, [name]]
   [type, {load: `load${name}Fields`, save: `save${name}Fields`, reset: `reset${name}Fields`, fields: name.toLowerCase()}]));
 const page = `<!doctype html><html lang="en"><head><style>${readRepoFile('src/web/assets/admin.css')}</style></head><body>
 <div class="tile-settings" style="width:400px">
-<select id="t_tile_type">${['0', '1', '14', '20', '21', '22', '23', '5'].map(v => `<option value="${v}">${v}</option>`).join('')}</select>
+<select id="t_tile_type">${['0', '1', '14', '20', '21', '22', '23', '5', '2', '4'].map(v => `<option value="${v}">${v}</option>`).join('')}</select>
 <select id="t_sensor_entity"><option value=""></option><option value="sensor.temp">t</option><option value="sensor.waste">w</option></select>
 <select id="t_select_entity"><option value=""></option><option value="input_select.mode">m</option></select>
 ${block}</div><pre id="result"></pre><script>
@@ -511,6 +528,33 @@ try{
  load('20',{icon_colors:'v2\\n\\nis 4CAF50 on\\nis 607D8B off'});
  check($('t_tile_icon_on').value==='#4caf50'&&$('t_tile_icon_off').dataset.unset==='0','Binary colors load');
  click($('clear_on'));check(snapshot()==='v2\\n\\nis 607D8B off'&&$('t_tile_icon_on').value==='#ffc107','Reset returns On to amber');
+ // Icon-and-title tiles: a source entity with Entity color or Own rules.
+ rebuildEntitySelect('t_tile_icon_source', iconColorSourceEntries({sensors:[{v:'sensor.waste',t:'Waste'}],
+   switches:[{v:'light.kitchen',t:'Kitchen'}],binary_sensors:[{v:'sensor.waste'},{v:'Bad Entity'}]}));
+ check([...$('t_tile_icon_source').options].map(o=>o.value).join()===',sensor.waste,light.kitchen','Source list merges valid Bridge entities once');
+ load('4',{icon_colors:'v2\\nFF0000\\nsrc rules sensor.waste\\nhas F44336 6'});
+ check(!hidden('t_tile_icon_source_section')&&$('t_tile_icon_source').value==='sensor.waste'&&$('t_tile_icon_source_mode').value==='rules','Folder loads its source');
+ check(!hidden('t_tile_icon_state_section')&&hidden('t_tile_icon_bar_section')&&!hidden('t_tile_icon_source_modes'),'A text source shows the state list');
+ check(snapshot()==='v2\\nFF0000\\nsrc rules sensor.waste\\nhas F44336 6','Folder record round trip: '+snapshot());
+ calls.length=0;click(document.querySelector('[data-icon-color="source-mode"][data-mode="auto"]'));
+ check(snapshot()==='v2\\nFF0000\\nsrc auto sensor.waste'&&hidden('t_tile_icon_state_section'),'Entity color drops the rules: '+snapshot());
+ check(calls.join()==='preview,draft,autosave','The mode takes the live-editor path');
+ $('t_tile_icon_source').value='light.kitchen';$('t_tile_icon_source').dispatchEvent(new Event('change',{bubbles:true}));
+ check(snapshot()==='v2\\nFF0000\\nsrc auto light.kitchen','Changing the entity: '+snapshot());
+ $('t_tile_icon_source').value='';$('t_tile_icon_source').dispatchEvent(new Event('change',{bubbles:true}));
+ check(snapshot()==='v2\\nFF0000'&&hidden('t_tile_icon_source_modes'),'None keeps the fixed color only');
+ load('2',{icon_colors:'v2\\n\\nsrc auto light.kitchen'});
+ check($('t_tile_icon_source').value==='light.kitchen'&&$('t_tile_icon_source_mode').value==='auto'&&snapshot()==='v2\\n\\nsrc auto light.kitchen','Scene loads Entity color');
+ load('1',{sensor_entity:'sensor.temp',icon_colors:''});check(hidden('t_tile_icon_source_section'),'Sensors have no source entity');
+ // Preview: the same colors as tile_icon_source::color().
+ const meta2={values:{'light.kitchen':JSON.stringify({state:'on',rgb_color:[255,0,0]}),'light.off':'off',
+   'sensor.waste':'in 6 Tagen rausstellen','binary_sensor.door':'on'}};
+ check(iconColorSourcePreview('v2\\n\\nsrc auto light.kitchen',meta2)==='#FF0000','Entity color takes the light color');
+ check(iconColorSourcePreview('v2\\n\\nsrc auto light.off',meta2)==='#B0B0B0','A light that is off is grey');
+ check(iconColorSourcePreview('v2\\n00FF00\\nsrc rules sensor.waste\\nhas F44336 6',meta2)==='#F44336','Own rules evaluate the source state');
+ check(iconColorSourcePreview('v2\\n00FF00\\nsrc rules sensor.other\\nhas F44336 6',meta2)==='#00FF00','An unknown source keeps the fixed color');
+ check(iconColorSourcePreview('v2\\n\\nsrc auto binary_sensor.door',meta2)==='#FFC107','A Binary sensor that is on is amber');
+ check(previewIconColor('4','v2\\n\\nsrc auto light.kitchen','',meta2,null,'')==='#FF0000','Folder previews use the source');
  setType('5');syncIconColorFields('t');check(hidden('t_tile_icon_color_fields'),'Other types hide the block');
  document.body.dataset.result='pass';
 }catch(error){document.body.dataset.result='fail';document.getElementById('result').textContent=error.stack;}

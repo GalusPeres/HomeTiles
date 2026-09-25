@@ -115,6 +115,9 @@
         rebuildEntitySelect(tab + '_cover_entity', data.covers);
         rebuildEntitySelect(tab + '_camera_entity', data.cameras);
         rebuildEntitySelect(tab + '_scene_alias', data.scenes);
+        if (typeof iconColorSourceEntries === 'function') {
+          rebuildEntitySelect(tab + '_tile_icon_source', iconColorSourceEntries(data));
+        }
       })
       .catch(() => {});
   }

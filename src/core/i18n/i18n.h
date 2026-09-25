@@ -318,6 +318,12 @@ struct Strings {
   const char* tile_icon_color_state_hint;
   const char* tile_icon_color_state_on;
   const char* tile_icon_color_state_off;
+  // Icon-and-title tiles: the source entity of their icon color.
+  const char* tile_icon_color_source;
+  const char* tile_icon_color_source_none;
+  const char* tile_icon_color_source_auto;
+  const char* tile_icon_color_source_rules;
+  const char* tile_icon_color_source_hint;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;
   const char* screensaver_storage_hint;

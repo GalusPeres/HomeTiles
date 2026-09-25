@@ -2846,6 +2846,8 @@ static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupIn
   ctx->entity_id = init.entity_id;
   ctx->title = init.title;
   apply_card_color(ctx, init.bg_color);
+  // The header icon takes the tile icon's color; the shell tints its disc.
+  if (ctx->icon_label) lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);
   if (ctx->location_label) {
     String title = ctx->title;
     title.trim();

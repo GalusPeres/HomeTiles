@@ -3086,6 +3086,9 @@ static void update_media_popup_from_widgets(GridType grid_type,
   init.icon_char = media_label_text(widgets.icon_label);
   init.bg_color = tile_icon_source::popup_background(widgets.icon_label,
                                                      tileBgColorOrDefault(tile, tileDefaultBgColor()));
+  if (widgets.icon_label) {
+    init.icon_color = lv_color_to_u32(lv_obj_get_style_text_color(widgets.icon_label, LV_PART_MAIN)) & 0xFFFFFF;
+  }
   init.media_title = media_label_text(widgets.media_title_label);
   init.media_subtitle = media_label_text(widgets.media_subtitle_label);
   init.is_playing = state_override.length() ? media_is_playing_state(state_override)

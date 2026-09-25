@@ -7,6 +7,8 @@ struct WeatherPopupInit {
   String entity_id;
   String title;
   uint32_t bg_color = 0;
+  // The tile icon's current color: the header icon and its disc glow take it.
+  uint32_t icon_color = 0xFFFFFF;
 };
 
 void show_weather_popup(const WeatherPopupInit& init);

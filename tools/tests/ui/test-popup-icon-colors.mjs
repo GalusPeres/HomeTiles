@@ -75,6 +75,18 @@ for (const file of ['src/types/climate/renderer.cpp', 'src/types/cover/renderer.
 }
 assert.ok(read('src/types/climate/renderer.cpp').includes('init.bg_color = tileDefaultBgColor();'));
 assert.ok(read('src/tiles/runtime/tile_icon_source.cpp').includes('void forget_popup_source() { remember_popup_source(nullptr); }'));
+// Weather and Media pass the tile icon's color to the popup header icon.
+const weatherOpener = read('src/types/weather/renderer.cpp');
+assert.ok(weatherOpener.includes('init.icon_color = lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF;'),
+  'Weather passes the tile icon color');
+assert.ok(read('src/ui/popups/weather/weather_popup.cpp').includes(
+  'if (ctx->icon_label) lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);'));
+for (const file of ['src/types/media/renderer.cpp', 'src/tiles/runtime/tile_renderer.cpp']) {
+  assert.ok(read(file).includes('init.icon_color = lv_color_to_u32(lv_obj_get_style_text_color(widgets.icon_label, LV_PART_MAIN)) & 0xFFFFFF;'),
+    `${file} passes the Media tile icon color`);
+}
+assert.equal((read('src/ui/popups/media/media_popup.cpp').match(/lv_obj_set_style_text_color\(ctx->icon_label, lv_color_hex\(init\.icon_color\), 0\);/g) || []).length, 2,
+  'Media applies the icon color on update and on opening');
 // The shell follows the body icon color every sync, so disc and border follow.
 assert.match(read('src/ui/popups/popup_shell.cpp'), /copy_label\(shell\.icon, shell\.active->icon, false\);\s*apply_header_disc_tint\(shell\.icon_disc, shell\.icon\);/);
 console.log('Popup header icons follow the tile icon colors');

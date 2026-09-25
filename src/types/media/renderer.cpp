@@ -171,6 +171,9 @@ static void show_media_popup_event_cb(lv_event_t* e) {
   init.icon_name = data->icon_name;
   init.icon_char = media_label_text(widgets.icon_label);
   init.bg_color = tile_icon_source::popup_background(widgets.icon_label, data->bg_color);
+  if (widgets.icon_label) {
+    init.icon_color = lv_color_to_u32(lv_obj_get_style_text_color(widgets.icon_label, LV_PART_MAIN)) & 0xFFFFFF;
+  }
   init.media_title = media_label_text(widgets.media_title_label);
   init.media_subtitle = media_label_text(widgets.media_subtitle_label);
   init.is_playing = media_widget_is_playing(widgets);

@@ -19,6 +19,8 @@ struct MediaPopupInit {
   float volume_level = 0.0f;
   bool is_muted = false;
   uint32_t bg_color = 0;
+  // The tile icon's current color: the header icon and its disc glow take it.
+  uint32_t icon_color = 0xFFFFFF;
   const lv_image_dsc_t* cover_dsc = nullptr;
   uint32_t cover_hash = 0;
 };

@@ -377,7 +377,11 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
     icon_char = getMdiChar(icon_name);
     if (!icon_char.length()) icon_char = getMdiChar("television");
   }
-  if (ctx->icon_label) lv_label_set_text(ctx->icon_label, icon_char.c_str());
+  if (ctx->icon_label) {
+    lv_label_set_text(ctx->icon_label, icon_char.c_str());
+    // The header icon takes the tile icon's color; the shell tints its disc.
+    lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);
+  }
   if (ctx->fallback_icon) lv_label_set_text(ctx->fallback_icon, icon_char.c_str());
   popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
 
@@ -583,6 +587,7 @@ static void prepare_media_popup_open(const MediaPopupInit& init) {
   if (!icon.length()) icon = getMdiChar(init.icon_name);
   if (!icon.length()) icon = getMdiChar("television");
   lv_label_set_text(ctx->icon_label, icon.c_str());
+  lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);
   lv_obj_set_style_bg_color(ctx->card,
       lv_color_hex(init.bg_color ? init.bg_color : 0x2A2A2A), 0);
   MediaPopupInit pending = init;

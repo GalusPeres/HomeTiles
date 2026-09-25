@@ -29,7 +29,10 @@ for (const marker of [
   'return r != g || g != b;',
   'inline constexpr uint8_t kNeutralSpread = 12;',
   'return hi - lo <= kNeutralSpread;',
-  'const bool neutral_card = !card_color(disc, card) || card_is_neutral(card);',
+  'const bool known_card = card_color(disc, card, 1);',
+  'const bool neutral_card = !known_card || card_is_neutral(card);',
+  ': known_card ? ui_surface_style::surface_hue(lv_color_hex(card))',
+  'inline bool card_color(lv_obj_t* disc, uint32_t& rgb, lv_opa_t min_opa = LV_OPA_50) {',
   'const bool tinted = glow_of(disc) && icon_color_tints(rgb) && neutral_card;',
   ': scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);',
   'inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {',
@@ -67,9 +70,26 @@ for (const rgb of [0xFFFFFF, 0xB0B0B0, 0x000000, 0xFFD54F, 0x3B82F6, 0xFF7043, 0
 const iconDiscCardNeutral = new Function(`${extractDeliveredFunction('iconDiscCardNeutral')}; return iconDiscCardNeutral;`)();
 const cppNeutral = rgb => { const c = [rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255]; return Math.max(...c) - Math.min(...c) <= 12; };
 for (const rgb of [0x222222, 0x2A2A2A, 0x2A2B36, 0x2A2B37, 0x7B2E2E, 0x1E3A5F, 0x3D3D3D]) {
-  const match = [null, String(rgb >> 16 & 255), String(rgb >> 8 & 255), String(rgb & 255)];
-  assert.equal(iconDiscCardNeutral(match), cppNeutral(rgb), 'preview card rule for ' + rgb.toString(16));
+  const channels = [rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255];
+  assert.equal(iconDiscCardNeutral(channels), cppNeutral(rgb), 'preview card rule for ' + rgb.toString(16));
 }
+// Computed backgrounds: rgb(), transparent and the color(srgb ...) form of
+// translucent screensaver tiles (the b47 preview misread it and lost the glow).
+const cssColorChannels = new Function(`${extractDeliveredFunction('cssColorChannels')}; return cssColorChannels;`)();
+assert.deepEqual(cssColorChannels('rgb(34, 34, 34)'), [34, 34, 34]);
+assert.deepEqual(cssColorChannels('color(srgb 0.133333 0.133333 0.133333 / 0.7)'), [34, 34, 34]);
+assert.equal(iconDiscCardNeutral(cssColorChannels('color(srgb 0.133333 0.133333 0.133333 / 0.7)')), true,
+  'A translucent grey tile still glows');
+assert.equal(cssColorChannels('rgba(0, 0, 0, 0)'), null);
+assert.equal(cssColorChannels('transparent'), null);
+// The tile hue (ui_surface_style::surface_hue) in the preview.
+const tileSurfaceHue = new Function(`${extractDeliveredFunction('tileSurfaceHue')}; return tileSurfaceHue;`)();
+const cppHue = c => { const hi = Math.max(...c); return hi ? c.map(v => Math.floor(v * 255 / hi)) : [255, 255, 255]; };
+for (const c of [[34, 34, 34], [33, 56, 35], [123, 46, 46], [0, 0, 0]]) {
+  assert.deepEqual(tileSurfaceHue(c), cppHue(c), 'preview tile hue for ' + c);
+}
+assert.deepEqual(tileSurfaceHue(null), [255, 255, 255]);
+assert.ok(read('src/ui/shared/ui_surface_style.h').includes('return lv_color_make(static_cast<uint8_t>(bg.red * 255 / hi),'));
 assert.equal(iconDiscCardNeutral(null), true, 'Unknown card background counts as neutral');
 assert.match(read('src/web/admin/tiles/grid-preview.js'),
   /icon\.classList\.toggle\('tile-icon-tinted',\s*glow && iconDiscTinted\(getComputedStyle\(icon\)\.color\) && iconDiscCardNeutral\(bg\)\);/);

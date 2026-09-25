@@ -63,3 +63,4 @@ void show_climate_popup(const ClimatePopupInit& init);
 void update_climate_popup(const ClimatePopupInit& init);
 void preload_climate_popup();
 void hide_climate_popup();
+void climate_popup_follow_tile_color(uint32_t color);

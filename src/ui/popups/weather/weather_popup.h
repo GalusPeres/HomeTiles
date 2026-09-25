@@ -15,6 +15,7 @@ void show_weather_popup(const WeatherPopupInit& init);
 bool weather_popup_has_current_cached_payload(const char* entity_id);
 void preload_weather_popup();
 void hide_weather_popup();
+void weather_popup_follow_tile_color(uint32_t color);
 void weather_popup_refresh_language();
 
 // Main-loop queue helper for state dispatched from inbound MQTT.

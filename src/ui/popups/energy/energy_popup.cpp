@@ -185,6 +185,20 @@ void update_period_buttons(EnergyPopupContext* ctx) {
   style_period_button(ctx->week_btn, ctx->week_label, !day);
 }
 
+}  // namespace
+
+// While open, the popup follows its tile's current background (a rules tint
+// that changes with the entity state); tile_icon_source calls this.
+void energy_popup_follow_tile_color(uint32_t color) {
+  EnergyPopupContext* ctx = g_energy_popup_ctx;
+  if (!ctx || !ctx->card || lv_obj_has_flag(ctx->card, LV_OBJ_FLAG_HIDDEN) || ctx->bg_color == color) return;
+  ctx->bg_color = color;
+  lv_obj_set_style_bg_color(ctx->card, lv_color_hex(color), 0);
+  update_period_buttons(ctx);
+}
+
+namespace {
+
 lv_coord_t measure_label_text_width(lv_obj_t* label) {
   if (!label) return 0;
   const char* txt = lv_label_get_text(label);

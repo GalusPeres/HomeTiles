@@ -49,6 +49,36 @@ void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
   appendHtmlEscaped(html, tr.tile_icon_color_remove);
   html += R"html("><i class="mdi mdi-restore"></i></button>
               </div>
+              <div class="icon-color-fill hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill_row">
+                <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill" data-icon-color="fill-target"> )html";
+  appendHtmlEscaped(html, tr.tile_rules_tint_tile);
+  html += R"html(</label>
+                <div class="icon-color-strength hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill_strength_row"><label for=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill_strength">)html";
+  appendHtmlEscaped(html, tr.tile_rules_strength);
+  html += R"html(</label><input type="range" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill_strength" min=")html";
+  html += String(tile_icon_colors::kTintMinimum);
+  html += R"html(" max=")html";
+  html += String(tile_icon_colors::kTintMaximum);
+  html += R"html(" step="5" value=")html";
+  html += String(tile_icon_colors::kTintDefault);
+  html += R"html(" data-icon-color="fill-strength"><output id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill_strength_value">)html";
+  html += String(tile_icon_colors::kTintDefault);
+  html += R"html( %</output><button type="button" class="tile-color-reset-btn" data-icon-color="fill-strength-reset" title=")html";
+  appendHtmlEscaped(html, tr.tile_icon_color_remove);
+  html += R"html("><i class="mdi mdi-restore"></i></button></div>
+              </div>
             </div>
 )html";
 }

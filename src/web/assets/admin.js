@@ -3031,6 +3031,8 @@ function syncTileRadiusControls(tabEl) {
       bar = iconColorMigrateLegacyBar(body, fixed);
     }
     let out = 'v2\n' + (fixed === null ? '' : iconColorHex(fixed));
+    const fill = v2 && fixed !== null ? iconColorFillOf(body) : 0;
+    if (fill) out += '\nfill ' + fill;
     if (emitLayer) {
       out += '\nsrc ' + source.mode + ' ' + (source.self ? 'self' : source.entity) +
         (source.tile ? ' tile=' + source.tile : '') + (source.icon ? '' : ' noicon') + (source.enabled ? '' : ' off');
@@ -3067,6 +3069,16 @@ function syncTileRadiusControls(tabEl) {
     return fixed === null && !emitLayer && !bar && rows === 0 ? '' : out;
   }
 
+  // tile_icon_colors::fill_of(): the "fill NN" tint of the fixed color in
+  // percent (clamped like the rule tint), 0 without one.
+  function iconColorFillOf(lines) {
+    const line = lines.find(candidate => candidate.startsWith('fill '));
+    if (line === undefined) return 0;
+    const text = iconColorTrim(line.slice(5));
+    if (!/^[0-9]+$/.test(text) || text.length > 4) return 0;
+    return Math.min(50, Math.max(10, Number(text)));
+  }
+
   // Editor view of a record: fixed color, bar and state rows.
   function parseIconColorRecord(record) {
     const lines = normalizeIconColorRecord(record, true, true, true, true).split('\n');
@@ -3079,7 +3091,7 @@ function syncTileRadiusControls(tabEl) {
       if (rule) rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value });
     }
     return { color: fixed === null ? '' : '#' + iconColorHex(fixed), bar, rows,
-      source: iconColorRecordSource(lines.join('\n')) };
+      fill: iconColorFillOf(lines.slice(2)), source: iconColorRecordSource(lines.join('\n')) };
   }
 
   // ---- Source entity (icon-and-title tiles), mirrors tile_icon_source.cpp ----
@@ -3195,14 +3207,20 @@ function syncTileRadiusControls(tabEl) {
   // color tints only while the entity is active, like refresh_card().
   function iconColorTilePreviewTint(typeValue, record, ownEntity, meta) {
     const layer = iconColorRecordSource(record);
-    if (!layer || !layer.enabled || !layer.tile) return null;
-    const color = iconColorLayerColor(record, layer, ownEntity, meta, typeValue);
-    if (!color) return null;
-    if (layer.mode === 'auto') {
-      const entity = layer.self ? String(ownEntity || '') : layer.entity;
-      if (!iconColorSourceAutoActive(entity, meta?.values?.[entity])) return null;
-    }
-    return { color, percent: layer.tile };
+    const ruleTint = (() => {
+      if (!layer || !layer.enabled || !layer.tile) return null;
+      const color = iconColorLayerColor(record, layer, ownEntity, meta, typeValue);
+      if (!color) return null;
+      if (layer.mode === 'auto') {
+        const entity = layer.self ? String(ownEntity || '') : layer.entity;
+        if (!iconColorSourceAutoActive(entity, meta?.values?.[entity])) return null;
+      }
+      return { color, percent: layer.tile };
+    })();
+    if (ruleTint) return ruleTint;
+    // The icon color's own "Tint tile" option applies below a rule tint.
+    const parsed = parseIconColorRecord(record);
+    return parsed.color && parsed.fill ? { color: parsed.color, percent: parsed.fill } : null;
   }
 
   // tile_tint::background(): the base mixed with the color, darkened in 5 %
@@ -3474,6 +3492,9 @@ function syncTileRadiusControls(tabEl) {
     const input = iconColorEl(tab, '_tile_icon_color');
     const fixed = input && input.dataset.unset !== '1' ? normalizeIconColorHex(input.value).slice(1) : '';
     const lines = ['v2', fixed];
+    if (fixed && iconColorEl(tab, '_tile_icon_fill')?.checked) {
+      lines.push('fill ' + (iconColorEl(tab, '_tile_icon_fill_strength')?.value || '20'));
+    }
     const layer = ICON_COLOR_TYPES.includes(type) ? readIconColorSource(tab) : null;
     const bar = readIconColorBar(tab);
     if (bar.mode !== 'off') {
@@ -3544,6 +3565,14 @@ function syncTileRadiusControls(tabEl) {
     const strength = iconColorEl(tab, '_tile_icon_rule_strength');
     const output = iconColorEl(tab, '_tile_icon_rule_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
+    // "Tint tile" of the icon color: only with a fixed icon color.
+    const hasFixed = iconColorEl(tab, '_tile_icon_color')?.dataset.unset === '0';
+    const fillOn = !!iconColorEl(tab, '_tile_icon_fill')?.checked;
+    iconColorEl(tab, '_tile_icon_fill_row')?.classList.toggle('hidden', !hasFixed);
+    iconColorEl(tab, '_tile_icon_fill_strength_row')?.classList.toggle('hidden', !hasFixed || !fillOn);
+    const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
+    const fillOutput = iconColorEl(tab, '_tile_icon_fill_strength_value');
+    if (fillStrength && fillOutput) fillOutput.textContent = fillStrength.value + ' %';
     iconColorMarkActive(tab, 'rules-on', on ? '1' : '0');
     iconColorMarkActive(tab, 'source-kind', kind);
     iconColorMarkActive(tab, 'source-mode', mode);
@@ -3591,6 +3620,10 @@ function syncTileRadiusControls(tabEl) {
     const type = iconColorTypeOf(tab);
     const parsed = parseIconColorRecord(data?.icon_colors);
     setIconColorInput(tab, parsed.color);
+    const fill = iconColorEl(tab, '_tile_icon_fill');
+    if (fill) fill.checked = parsed.fill > 0;
+    const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
+    if (fillStrength) fillStrength.value = String(parsed.fill || 20);
     const barInput = iconColorEl(tab, '_tile_icon_bar');
     if (barInput) barInput.dataset.last = '';
     writeIconColorBar(tab, parsed.bar ? parsed.bar.mode : 'off', parsed.bar ? parsed.bar.stops : []);
@@ -3669,7 +3702,7 @@ function syncTileRadiusControls(tabEl) {
   document.addEventListener('input', event => {
     const target = event.target;
     const role = target?.dataset?.iconColor;
-    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength'].includes(role)) return;
+    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength', 'fill-strength'].includes(role)) return;
     const tab = iconColorEventTab(target);
     if (!tab) return;
     if (role === 'color' || role === 'binary') target.dataset.unset = '0';
@@ -3687,7 +3720,7 @@ function syncTileRadiusControls(tabEl) {
   document.addEventListener('change', event => {
     const target = event.target;
     const id = target?.id || '';
-    if (['has', 'source', 'rule-target'].includes(target?.dataset?.iconColor)) {
+    if (['has', 'source', 'rule-target', 'fill-target'].includes(target?.dataset?.iconColor)) {
       const tab = iconColorEventTab(target);
       if (tab) commitIconColorChange(tab);
       return;
@@ -3721,6 +3754,9 @@ function syncTileRadiusControls(tabEl) {
       if (mode) mode.value = button.dataset.mode === 'rules' ? 'rules' : 'auto';
     } else if (role === 'strength-reset') {
       const strength = iconColorEl(tab, '_tile_icon_rule_strength');
+      if (strength) strength.value = '20';
+    } else if (role === 'fill-strength-reset') {
+      const strength = iconColorEl(tab, '_tile_icon_fill_strength');
       if (strength) strength.value = '20';
     } else if (role === 'rules-on') {
       const on = iconColorEl(tab, '_tile_icon_rules_on');
@@ -6818,10 +6854,31 @@ function syncTileRadiusControls(tabEl) {
   }
   // Mirrors tile_icon_disc::card_is_neutral(): only a neutral (grey) card lets
   // the disc glow in the icon hue; colored cards keep the neutral disc.
-  function iconDiscCardNeutral(rgb) {
-    if (!rgb) return true;
-    const channels = [1, 2, 3].map(i => Number(rgb[i]));
+  function iconDiscCardNeutral(channels) {
+    if (!channels) return true;
     return Math.max(...channels) - Math.min(...channels) <= 12;
+  }
+  function tileSurfaceHue(channels) {
+    if (!channels) return [255, 255, 255];
+    const hi = Math.max(...channels);
+    return hi > 0 ? channels.map(v => Math.floor(v * 255 / hi)) : [255, 255, 255];
+  }
+  // Channels (0..255) of a computed CSS color, or null when it is fully
+  // transparent or unknown. Chrome reports color-mix() backgrounds (screensaver
+  // tiles with an opacity) as color(srgb r g b / a) with 0..1 channels.
+  function cssColorChannels(value) {
+    const text = String(value || '').trim();
+    const srgb = text.match(/^color\(srgb\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)(?:\s*\/\s*([\d.]+%?))?/);
+    const rgb = text.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?/);
+    const match = srgb || rgb;
+    if (!match) return null;
+    const alpha = match[4] === undefined ? 1
+      : match[4].endsWith('%') ? Number(match[4].slice(0, -1)) / 100 : Number(match[4]);
+    if (!(alpha > 0)) return null;
+    return [1, 2, 3].map(i => {
+      const v = Number(match[i]) * (srgb ? 255 : 1);
+      return Math.max(0, Math.min(255, Math.round(v)));
+    });
   }
   function applyIconDiscTint(tileElem) {
     const icon = tileElem?.querySelector(':scope > .tile-icon');
@@ -6829,15 +6886,18 @@ function syncTileRadiusControls(tabEl) {
     const glow = tileElem.dataset.iconGlow !== '0';
     // Mirrors tile_icon_disc::contrast_step_for()/scaled_opa(): discs are
     // subtler on dark tiles (8 % instead of 15 % at luma <= 0.08) in 4 steps.
-    const bg = String(getComputedStyle(tileElem).backgroundColor || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
+    const bg = cssColorChannels(getComputedStyle(tileElem).backgroundColor);
     icon.classList.toggle('tile-icon-tinted',
       glow && iconDiscTinted(getComputedStyle(icon).color) && iconDiscCardNeutral(bg));
-    const luma = bg ? (0.2126 * Number(bg[1]) + 0.7152 * Number(bg[2]) + 0.0722 * Number(bg[3])) / 255 : 1;
+    // Mirrors ui_surface_style::surface_hue(): neutral discs and the outline
+    // are the tile's own hue at full brightness, white on grey tiles.
+    tileElem.style.setProperty('--tile-hue-rgb', tileSurfaceHue(bg).join(','));
+    const luma = bg ? (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255 : 1;
     const step = Math.floor(Math.min(1, Math.max(0, (luma - 0.08) / 0.17)) * 3 + 0.5);
     const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);
     tileElem.style.setProperty('--icon-disc-opa', (scaled(38) / 255).toFixed(3));
     // Global Glow strength (icon_glow.h): the disc at that percentage, scaled
-    // like the device. The tile border stays the neutral hairline.
+    // like the device.
     const glowValue = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
     const glowPct = Math.min(60, Math.max(10, Number.isFinite(glowValue) && glowValue > 0 ? glowValue : 25));
     const glowOpa = Math.floor((glowPct * 255 + 50) / 100);
@@ -6962,6 +7022,17 @@ function syncTileRadiusControls(tabEl) {
     const input = document.getElementById(tab + '_tile_color');
     if (input) input.dataset.bgColorDefault = '0';
     syncTileColorGlobalToggle(tab);
+    // A tile color picked by hand is kept: "Tint tile" of the rules and of
+    // the icon color would replace it, so picking a color switches both off.
+    let tintOff = false;
+    for (const suffix of ['_tile_icon_rule_tile', '_tile_icon_fill']) {
+      const tint = document.getElementById(tab + suffix);
+      if (tint?.checked) {
+        tint.checked = false;
+        tintOff = true;
+      }
+    }
+    if (tintOff && typeof syncIconColorFields === 'function') syncIconColorFields(tab);
   }
   function resetTileColor(tab) {
     const input = document.getElementById(tab + '_tile_color');

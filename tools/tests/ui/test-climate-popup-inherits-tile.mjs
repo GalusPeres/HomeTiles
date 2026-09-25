@@ -69,8 +69,9 @@ for (const marker of [
   'refresh_target_toggle(ctx);',
   'refresh_controls(ctx);',
 ]) assert.ok(applyColor.includes(marker), `apply_card_color: ${marker}`);
-assert.equal((popup.match(/apply_card_color\(/g) || []).length, 2,
-  'Only the opening path applies a card color');
+assert.equal((popup.match(/apply_card_color\(/g) || []).length, 3,
+  'Only the opening path and the live tile follow apply a card color');
+assert.ok(popup.includes('apply_card_color(ctx, color, false);'), 'The live follow keeps an open menu');
 
 // Update paths (MQTT state, mini +/- taps) never reset the card color.
 for (const name of ['update_climate_popup', 'apply_init', 'remote_apply_timer_cb', 'defer_remote_apply']) {

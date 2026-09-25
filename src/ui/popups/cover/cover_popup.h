@@ -21,3 +21,4 @@ void show_cover_popup(const CoverPopupInit& init);
 void update_cover_popup(const CoverPopupInit& init);
 void preload_cover_popup();
 void hide_cover_popup();
+void cover_popup_follow_tile_color(uint32_t color);

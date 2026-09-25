@@ -39,3 +39,4 @@ void update_light_popup(const LightPopupInit& init);
 lv_color_t light_color_from_temperature_kelvin(uint16_t kelvin);
 void preload_light_popup();
 void hide_light_popup();
+void light_popup_follow_tile_color(uint32_t color);

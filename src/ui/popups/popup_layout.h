@@ -196,7 +196,7 @@ constexpr int kHeaderIconDiscGap = scale(16);
 constexpr int kHeaderIconDiscOpa = 38;
 // A colored header icon tints its disc like tile glow on a neutral card, with
 // the global Glow strength (ui_surface_style::icon_glow_opa, scaled). The
-// card hairline is always the neutral tile border, white 20 %.
+// card hairline is the tile border: the card's own hue at 20 %.
 constexpr int kPopupBorderOpa = 51;
 // Same neutral card rule as tile_icon_disc::card_is_neutral: a channel spread
 // up to 12 counts as grey.

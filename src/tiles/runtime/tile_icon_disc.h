@@ -68,9 +68,10 @@ inline bool icon_color_tints(uint32_t rgb) {
   return r != g || g != b;
 }
 
-// A colored card (own tile color or a rules tint) keeps the neutral disc, a
-// lighter step of the card itself, so disc and card never clash. Near-grey
-// cards (channel spread up to kNeutralSpread) count as neutral.
+// A colored card (own tile color or a rules tint) gets a disc in its own hue
+// (ui_surface_style::surface_hue), a lighter step of the card, so disc and
+// card never clash. Near-grey cards (channel spread up to kNeutralSpread)
+// count as neutral and let a colored icon glow in its hue.
 inline constexpr uint8_t kNeutralSpread = 12;
 inline bool card_is_neutral(uint32_t rgb) {
   const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
@@ -96,15 +97,17 @@ inline uint8_t contrast_step_for(uint32_t rgb) {
 inline lv_opa_t scaled_opa(lv_opa_t full, uint8_t step) {
   return static_cast<lv_opa_t>((full * (24 + 7 * step) + 22) / 45);
 }
-// The color of the nearest opaque background behind the disc (the tile
-// card); false without one.
-inline bool card_color(lv_obj_t* disc, uint32_t& rgb) {
+// The color of the nearest background behind the disc with at least
+// `min_opa` (the tile card); false without one. The neutral-card rule uses
+// any visible background, so a translucent screensaver tile keeps its own
+// color instead of the wallpaper layer behind it.
+inline bool card_color(lv_obj_t* disc, uint32_t& rgb, lv_opa_t min_opa = LV_OPA_50) {
   lv_obj_t* host = lv_obj_get_parent(disc);
   for (int depth = 0; host && depth < 3 &&
-       lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < LV_OPA_50; ++depth) {
+       lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < min_opa; ++depth) {
     host = lv_obj_get_parent(host);
   }
-  if (!host) return false;
+  if (!host || lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < min_opa) return false;
   rgb = lv_color_to_u32(lv_obj_get_style_bg_color(host, LV_PART_MAIN)) & 0xFFFFFF;
   return true;
 }
@@ -131,9 +134,12 @@ inline void apply_fill(lv_obj_t* disc) {
       icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF
            : 0xFFFFFF;
   uint32_t card = 0;
-  const bool neutral_card = !card_color(disc, card) || card_is_neutral(card);
+  const bool known_card = card_color(disc, card, 1);
+  const bool neutral_card = !known_card || card_is_neutral(card);
   const bool tinted = glow_of(disc) && icon_color_tints(rgb) && neutral_card;
-  const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
+  const lv_color_t color = tinted ? lv_color_hex(rgb)
+                           : known_card ? ui_surface_style::surface_hue(lv_color_hex(card))
+                                        : lv_color_white();
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color)) {
     lv_obj_set_style_bg_color(disc, color, 0);
   }

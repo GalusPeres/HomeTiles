@@ -1201,6 +1201,14 @@ static void finish_cover_popup_open(const CoverPopupInit& init) {
   apply_init(g_ctx, init);
 }
 
+// While open, the popup follows its tile's current background (a rules tint
+// that changes with the entity state); tile_icon_source calls this.
+void cover_popup_follow_tile_color(uint32_t color) {
+  CoverPopupContext* ctx = g_ctx;
+  if (!ctx || !ctx->card || lv_obj_has_flag(ctx->card, LV_OBJ_FLAG_HIDDEN)) return;
+  apply_card_color(ctx, color);
+}
+
 static void prepare_cover_popup_open(const CoverPopupInit& init) {
   auto* ctx = g_ctx;
   // Before the first frame, so the resident body never shows the previous

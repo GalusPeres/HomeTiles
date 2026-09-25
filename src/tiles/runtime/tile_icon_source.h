@@ -44,6 +44,8 @@ void refresh_card(lv_obj_t* card, const Tile& tile);
 
 // The background a popup inherits from its tile: the rules' tint when the
 // card (`obj` or up to three of its parents) is tinted, else `fallback`.
+// Every opener calls it, so it also remembers the opening tile: while that
+// popup is open it follows the tile's color (refresh_card).
 uint32_t popup_background(lv_obj_t* obj, uint32_t fallback);
 
 }  // namespace tile_icon_source

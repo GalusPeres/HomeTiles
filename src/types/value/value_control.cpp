@@ -813,6 +813,8 @@ void editable_control_open(EditableControl* c, const String& entity) {
 
 void editable_control_refresh(EditableControl* c) {
   if (!c || !c->active) return;
+  // The card follows its tile's color while open; only a change restyles.
+  apply_control_colors(c);
   const bool online = networkManager.isMqttConnected();
   if (!online && c->online) { finish_editing(c); c->dragging = false; lv_dropdown_close(c->dropdown); c->payload = "\x01"; }
   if (c->command_id.length() && (!online || millis() - c->command_ms >= 30000)) {

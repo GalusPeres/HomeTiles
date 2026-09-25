@@ -242,16 +242,18 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   const uint32_t card = lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame, LV_PART_MAIN)) & 0xFFFFFFu;
   const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
   const bool tinted = (r != g || g != b) && popup_layout::headerCardIsNeutral(card);
-  const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
+  // A colored card gets a disc and a hairline in its own hue, lighter.
+  const lv_color_t card_hue = ui_surface_style::surface_hue(lv_color_hex(card));
+  const lv_color_t color = tinted ? lv_color_hex(rgb) : card_hue;
   const uint8_t step = popup_layout::headerDiscContrastStep(card);
   const lv_opa_t opa = static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
       tinted ? ui_surface_style::icon_glow_opa() : popup_layout::kHeaderIconDiscOpa, step));
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
-  // The card hairline is the neutral tile border: a slightly lighter step of
-  // the card, never the icon hue.
-  ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),
+  // The card hairline is the tile border: a slightly lighter step of the card
+  // in its own hue, never the icon hue.
+  ui_surface_style::apply_popup_border(shell.frame, card_hue,
                                        static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));
 }
 
@@ -309,7 +311,8 @@ PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
   lv_obj_set_style_bg_opa(parts.card, LV_OPA_COVER, 0);
   ui_surface_style::apply_radius(parts.card, popup_layout::kCardRadius, 0);
   lv_obj_set_style_border_width(parts.card, 0, 0);
-  ui_surface_style::apply_global_tile_border(parts.card);
+  // No hairline on the body: the shell frame draws the only card border
+  // (apply_popup_border); a second one on the body doubled its strength.
   lv_obj_set_style_pad_all(parts.card, popup_layout::kCardPad, 0);
   lv_obj_set_style_shadow_width(parts.card, popup_layout::scale480(28), 0);
   lv_obj_set_style_shadow_color(parts.card, lv_color_black(), 0);
@@ -374,6 +377,13 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 }
 
 bool popup_shell_active() { return shell.active != nullptr; }
+
+void popup_shell_follow_tile_color(uint32_t color) {
+  if (!shell.active || !shell.active->body) return;
+  const lv_color_t value = lv_color_hex(color);
+  if (!lv_color_eq(lv_obj_get_style_bg_color(shell.active->body, LV_PART_MAIN), value))
+    lv_obj_set_style_bg_color(shell.active->body, value, 0);
+}
 
 void hide_popup_shell(lv_obj_t* body) {
   if (!shell.active || shell.active->body != body) return;

@@ -13,6 +13,13 @@
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/cover/renderer.h"
 #include "src/types/value/value_control.h"
+#include "src/ui/popups/climate/climate_popup.h"
+#include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/popups/energy/energy_popup.h"
+#include "src/ui/popups/light/light_popup.h"
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/sensor/sensor_popup.h"
+#include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 
@@ -98,6 +105,34 @@ bool type_applies_fixed_icon_color(int type) {
 
 constexpr lv_style_selector_t kTintStore = LV_PART_MAIN | LV_STATE_USER_4;
 
+// The opener object of the popup opened last and its parents. Only compared
+// with cards, never dereferenced, so a deleted card cannot be touched.
+constexpr int kPopupSourceDepth = 5;
+lv_obj_t* g_popup_source[kPopupSourceDepth] = {};
+
+void remember_popup_source(lv_obj_t* obj) {
+  for (int i = 0; i < kPopupSourceDepth; ++i) {
+    g_popup_source[i] = obj;
+    obj = obj ? lv_obj_get_parent(obj) : nullptr;
+  }
+}
+
+// An open popup of this card takes the card's current background.
+void follow_open_popup(lv_obj_t* card) {
+  if (!card || !popup_shell_active()) return;
+  bool opened_here = false;
+  for (lv_obj_t* source : g_popup_source) opened_here = opened_here || source == card;
+  if (!opened_here) return;
+  const uint32_t color = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
+  climate_popup_follow_tile_color(color);
+  light_popup_follow_tile_color(color);
+  cover_popup_follow_tile_color(color);
+  sensor_popup_follow_tile_color(color);
+  energy_popup_follow_tile_color(color);
+  weather_popup_follow_tile_color(color);
+  popup_shell_follow_tile_color(color);
+}
+
 // Sets the card background in its normal and pressed states (pressed about
 // 6 % brighter, like the tile renderers).
 void apply_card_background(lv_obj_t* card, uint32_t rgb) {
@@ -116,6 +151,8 @@ void apply_card_background(lv_obj_t* card, uint32_t rgb) {
     lv_obj_set_style_bg_color(card, lv_color_hex(pressed), selector);
     lv_obj_set_style_bg_grad_color(card, lv_color_hex(pressed), selector);
   }
+  // The border is a lighter step of the new background in its hue.
+  ui_surface_style::refresh_tile_border(card);
 }
 // Tints a tile card for its rules (tile_tint.h). The tint replaces the card's
 // own color and always starts from the global default tile color, so an own
@@ -214,6 +251,7 @@ lv_obj_t* card_icon(lv_obj_t* card) {
 }
 
 uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
+  remember_popup_source(obj);
   for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
     lv_style_value_t value;
     if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, kTintStore) != LV_STYLE_RES_FOUND) continue;
@@ -247,10 +285,19 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
   }
   // Entity color tints only while the entity is active; its grey off color
   // keeps the tile's own color (the icon still shows the grey).
+  const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
+  // The icon color's own "Tint tile" option (fill) applies below a rule tint.
+  uint32_t fixed = 0;
+  const uint8_t fill = tile_icon_colors::fill_of(tile.icon_colors.c_str());
   if (colored && active && layer.tile) {
     set_tile_tint(card, rgb, layer.tile);
+  } else if (fill && tile_icon_colors::fixed_color(tile.icon_colors.c_str(), fixed)) {
+    set_tile_tint(card, fixed, fill);
   } else {
     clear_tile_tint(card);
+  }
+  if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) != before) {
+    follow_open_popup(card);
   }
   // Disc opacity follows the (tinted) background.
   const uint32_t count = lv_obj_get_child_count(card);

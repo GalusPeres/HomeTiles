@@ -17,5 +17,6 @@ struct EnergyPopupInit {
 void show_energy_popup(const EnergyPopupInit& init);
 void preload_energy_popup();
 void hide_energy_popup();
+void energy_popup_follow_tile_color(uint32_t color);
 void queue_energy_popup_refresh(const char* period);
 void process_energy_popup_queue();

@@ -15,6 +15,9 @@
 //
 //   line 1:  "v2"
 //   line 2:  fixed icon color "RRGGBB", or empty for the type's default
+//   then optionally "fill NN": the fixed color also tints the tile at NN
+//            percent (the "Tint tile" option of the icon color); only with
+//            a fixed color, below an active rule tint
 //   then at most one rule layer ("Rules" in the Web Admin):
 //            "src <auto|rules> <self|entity_id> [tile=NN] [noicon] [off]"
 //            auto takes the entity's own icon color (light color, on/off,
@@ -70,9 +73,11 @@ inline constexpr uint8_t kTintMaximum = 50;
 inline constexpr uint8_t kTintDefault = 20;
 // "\nsrc rules <entity_id> tile=50 noicon off".
 inline constexpr size_t kMaxSourceBytes = 1 + 3 + 1 + 5 + 1 + kMaxEntityBytes + 8 + 7 + 4;
-// "v2\nRRGGBB", the source, the bar and the state lines.
+// "\nfill 50".
+inline constexpr size_t kMaxFillBytes = 8;
+// "v2\nRRGGBB", the fill, the source, the bar and the state lines.
 inline constexpr size_t kMaxRecordBytes =
-    2 + 1 + 6 + kMaxSourceBytes + kMaxBarBytes + kMaxRows * kMaxRowBytes;
+    2 + 1 + 6 + kMaxFillBytes + kMaxSourceBytes + kMaxBarBytes + kMaxRows * kMaxRowBytes;
 
 enum class Op : uint8_t { None, Ge, Le, Eq, Is, Has };
 enum class BarMode : uint8_t { Smooth, Steps };
@@ -415,6 +420,38 @@ inline uint8_t clamp_tint(unsigned percent) {
   return static_cast<uint8_t>(percent);
 }
 
+// The fixed icon color (line 2 of a v2 record).
+inline bool fixed_color(const char* record, uint32_t& rgb) {
+  if (!record || !is_v2(record)) return false;
+  const char* begin = second_line(record);
+  const char* end = line_end(begin);
+  trim(begin, end);
+  return parse_color(begin, end, rgb);
+}
+
+// The "fill NN" tint of the fixed icon color in percent, 0 without one.
+inline uint8_t fill_of(const char* record) {
+  uint32_t fixed = 0;
+  if (!fixed_color(record, fixed)) return 0;
+  for (const char* p = line_end(second_line(record)); *p == '\n';) {
+    const char* begin = p + 1;
+    const char* end = line_end(begin);
+    p = end;
+    if (!starts_with(begin, end, "fill ")) continue;
+    const char* token = begin + 5;
+    const char* stop = end;
+    trim(token, stop);
+    unsigned value = 0;
+    if (token == stop) return 0;
+    for (const char* c = token; c < stop; ++c) {
+      if (*c < '0' || *c > '9' || value > 1000) return 0;
+      value = value * 10 + static_cast<unsigned>(*c - '0');
+    }
+    return clamp_tint(value);
+  }
+  return 0;
+}
+
 // Parses "src <auto|rules> <self|entity_id> [tile=NN] [noicon] [off]"
 // spanning [begin, end); options may come in any order, unknown tokens make
 // the line invalid.
@@ -730,6 +767,8 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
   size_t n = 0;
   append_text(out, n, "v2\n");
   if (has_fixed) append_hex(out, n, fixed);
+  const uint8_t fill = v2 ? fill_of(in) : 0;
+  if (fill) n += static_cast<size_t>(snprintf(out + n, out_size - n, "\nfill %u", static_cast<unsigned>(fill)));
   if (emit_layer) {
     append_text(out, n, layer.mode == SourceMode::Auto ? "\nsrc auto " : "\nsrc rules ");
     if (layer.self) {

@@ -28,6 +28,9 @@ void sync_popup_shell();
 // True from show_popup_shell() until the popup is hidden again. Every tile
 // popup and the PIN pad open through the shell.
 bool popup_shell_active();
+// Sets the active popup body's background; the frame copies it on the next
+// sync. Used when an open popup follows its tile's color.
+void popup_shell_follow_tile_color(uint32_t color);
 
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.

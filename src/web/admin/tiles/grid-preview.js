@@ -41,10 +41,31 @@
   }
   // Mirrors tile_icon_disc::card_is_neutral(): only a neutral (grey) card lets
   // the disc glow in the icon hue; colored cards keep the neutral disc.
-  function iconDiscCardNeutral(rgb) {
-    if (!rgb) return true;
-    const channels = [1, 2, 3].map(i => Number(rgb[i]));
+  function iconDiscCardNeutral(channels) {
+    if (!channels) return true;
     return Math.max(...channels) - Math.min(...channels) <= 12;
+  }
+  function tileSurfaceHue(channels) {
+    if (!channels) return [255, 255, 255];
+    const hi = Math.max(...channels);
+    return hi > 0 ? channels.map(v => Math.floor(v * 255 / hi)) : [255, 255, 255];
+  }
+  // Channels (0..255) of a computed CSS color, or null when it is fully
+  // transparent or unknown. Chrome reports color-mix() backgrounds (screensaver
+  // tiles with an opacity) as color(srgb r g b / a) with 0..1 channels.
+  function cssColorChannels(value) {
+    const text = String(value || '').trim();
+    const srgb = text.match(/^color\(srgb\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)(?:\s*\/\s*([\d.]+%?))?/);
+    const rgb = text.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?/);
+    const match = srgb || rgb;
+    if (!match) return null;
+    const alpha = match[4] === undefined ? 1
+      : match[4].endsWith('%') ? Number(match[4].slice(0, -1)) / 100 : Number(match[4]);
+    if (!(alpha > 0)) return null;
+    return [1, 2, 3].map(i => {
+      const v = Number(match[i]) * (srgb ? 255 : 1);
+      return Math.max(0, Math.min(255, Math.round(v)));
+    });
   }
   function applyIconDiscTint(tileElem) {
     const icon = tileElem?.querySelector(':scope > .tile-icon');
@@ -52,15 +73,18 @@
     const glow = tileElem.dataset.iconGlow !== '0';
     // Mirrors tile_icon_disc::contrast_step_for()/scaled_opa(): discs are
     // subtler on dark tiles (8 % instead of 15 % at luma <= 0.08) in 4 steps.
-    const bg = String(getComputedStyle(tileElem).backgroundColor || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
+    const bg = cssColorChannels(getComputedStyle(tileElem).backgroundColor);
     icon.classList.toggle('tile-icon-tinted',
       glow && iconDiscTinted(getComputedStyle(icon).color) && iconDiscCardNeutral(bg));
-    const luma = bg ? (0.2126 * Number(bg[1]) + 0.7152 * Number(bg[2]) + 0.0722 * Number(bg[3])) / 255 : 1;
+    // Mirrors ui_surface_style::surface_hue(): neutral discs and the outline
+    // are the tile's own hue at full brightness, white on grey tiles.
+    tileElem.style.setProperty('--tile-hue-rgb', tileSurfaceHue(bg).join(','));
+    const luma = bg ? (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255 : 1;
     const step = Math.floor(Math.min(1, Math.max(0, (luma - 0.08) / 0.17)) * 3 + 0.5);
     const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);
     tileElem.style.setProperty('--icon-disc-opa', (scaled(38) / 255).toFixed(3));
     // Global Glow strength (icon_glow.h): the disc at that percentage, scaled
-    // like the device. The tile border stays the neutral hairline.
+    // like the device.
     const glowValue = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
     const glowPct = Math.min(60, Math.max(10, Number.isFinite(glowValue) && glowValue > 0 ? glowValue : 25));
     const glowOpa = Math.floor((glowPct * 255 + 50) / 100);
@@ -185,6 +209,17 @@
     const input = document.getElementById(tab + '_tile_color');
     if (input) input.dataset.bgColorDefault = '0';
     syncTileColorGlobalToggle(tab);
+    // A tile color picked by hand is kept: "Tint tile" of the rules and of
+    // the icon color would replace it, so picking a color switches both off.
+    let tintOff = false;
+    for (const suffix of ['_tile_icon_rule_tile', '_tile_icon_fill']) {
+      const tint = document.getElementById(tab + suffix);
+      if (tint?.checked) {
+        tint.checked = false;
+        tintOff = true;
+      }
+    }
+    if (tintOff && typeof syncIconColorFields === 'function') syncIconColorFields(tab);
   }
   function resetTileColor(tab) {
     const input = document.getElementById(tab + '_tile_color');

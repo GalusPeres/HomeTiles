@@ -350,6 +350,8 @@
       bar = iconColorMigrateLegacyBar(body, fixed);
     }
     let out = 'v2\n' + (fixed === null ? '' : iconColorHex(fixed));
+    const fill = v2 && fixed !== null ? iconColorFillOf(body) : 0;
+    if (fill) out += '\nfill ' + fill;
     if (emitLayer) {
       out += '\nsrc ' + source.mode + ' ' + (source.self ? 'self' : source.entity) +
         (source.tile ? ' tile=' + source.tile : '') + (source.icon ? '' : ' noicon') + (source.enabled ? '' : ' off');
@@ -386,6 +388,16 @@
     return fixed === null && !emitLayer && !bar && rows === 0 ? '' : out;
   }
 
+  // tile_icon_colors::fill_of(): the "fill NN" tint of the fixed color in
+  // percent (clamped like the rule tint), 0 without one.
+  function iconColorFillOf(lines) {
+    const line = lines.find(candidate => candidate.startsWith('fill '));
+    if (line === undefined) return 0;
+    const text = iconColorTrim(line.slice(5));
+    if (!/^[0-9]+$/.test(text) || text.length > 4) return 0;
+    return Math.min(50, Math.max(10, Number(text)));
+  }
+
   // Editor view of a record: fixed color, bar and state rows.
   function parseIconColorRecord(record) {
     const lines = normalizeIconColorRecord(record, true, true, true, true).split('\n');
@@ -398,7 +410,7 @@
       if (rule) rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value });
     }
     return { color: fixed === null ? '' : '#' + iconColorHex(fixed), bar, rows,
-      source: iconColorRecordSource(lines.join('\n')) };
+      fill: iconColorFillOf(lines.slice(2)), source: iconColorRecordSource(lines.join('\n')) };
   }
 
   // ---- Source entity (icon-and-title tiles), mirrors tile_icon_source.cpp ----
@@ -514,14 +526,20 @@
   // color tints only while the entity is active, like refresh_card().
   function iconColorTilePreviewTint(typeValue, record, ownEntity, meta) {
     const layer = iconColorRecordSource(record);
-    if (!layer || !layer.enabled || !layer.tile) return null;
-    const color = iconColorLayerColor(record, layer, ownEntity, meta, typeValue);
-    if (!color) return null;
-    if (layer.mode === 'auto') {
-      const entity = layer.self ? String(ownEntity || '') : layer.entity;
-      if (!iconColorSourceAutoActive(entity, meta?.values?.[entity])) return null;
-    }
-    return { color, percent: layer.tile };
+    const ruleTint = (() => {
+      if (!layer || !layer.enabled || !layer.tile) return null;
+      const color = iconColorLayerColor(record, layer, ownEntity, meta, typeValue);
+      if (!color) return null;
+      if (layer.mode === 'auto') {
+        const entity = layer.self ? String(ownEntity || '') : layer.entity;
+        if (!iconColorSourceAutoActive(entity, meta?.values?.[entity])) return null;
+      }
+      return { color, percent: layer.tile };
+    })();
+    if (ruleTint) return ruleTint;
+    // The icon color's own "Tint tile" option applies below a rule tint.
+    const parsed = parseIconColorRecord(record);
+    return parsed.color && parsed.fill ? { color: parsed.color, percent: parsed.fill } : null;
   }
 
   // tile_tint::background(): the base mixed with the color, darkened in 5 %
@@ -793,6 +811,9 @@
     const input = iconColorEl(tab, '_tile_icon_color');
     const fixed = input && input.dataset.unset !== '1' ? normalizeIconColorHex(input.value).slice(1) : '';
     const lines = ['v2', fixed];
+    if (fixed && iconColorEl(tab, '_tile_icon_fill')?.checked) {
+      lines.push('fill ' + (iconColorEl(tab, '_tile_icon_fill_strength')?.value || '20'));
+    }
     const layer = ICON_COLOR_TYPES.includes(type) ? readIconColorSource(tab) : null;
     const bar = readIconColorBar(tab);
     if (bar.mode !== 'off') {
@@ -863,6 +884,14 @@
     const strength = iconColorEl(tab, '_tile_icon_rule_strength');
     const output = iconColorEl(tab, '_tile_icon_rule_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
+    // "Tint tile" of the icon color: only with a fixed icon color.
+    const hasFixed = iconColorEl(tab, '_tile_icon_color')?.dataset.unset === '0';
+    const fillOn = !!iconColorEl(tab, '_tile_icon_fill')?.checked;
+    iconColorEl(tab, '_tile_icon_fill_row')?.classList.toggle('hidden', !hasFixed);
+    iconColorEl(tab, '_tile_icon_fill_strength_row')?.classList.toggle('hidden', !hasFixed || !fillOn);
+    const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
+    const fillOutput = iconColorEl(tab, '_tile_icon_fill_strength_value');
+    if (fillStrength && fillOutput) fillOutput.textContent = fillStrength.value + ' %';
     iconColorMarkActive(tab, 'rules-on', on ? '1' : '0');
     iconColorMarkActive(tab, 'source-kind', kind);
     iconColorMarkActive(tab, 'source-mode', mode);
@@ -910,6 +939,10 @@
     const type = iconColorTypeOf(tab);
     const parsed = parseIconColorRecord(data?.icon_colors);
     setIconColorInput(tab, parsed.color);
+    const fill = iconColorEl(tab, '_tile_icon_fill');
+    if (fill) fill.checked = parsed.fill > 0;
+    const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
+    if (fillStrength) fillStrength.value = String(parsed.fill || 20);
     const barInput = iconColorEl(tab, '_tile_icon_bar');
     if (barInput) barInput.dataset.last = '';
     writeIconColorBar(tab, parsed.bar ? parsed.bar.mode : 'off', parsed.bar ? parsed.bar.stops : []);
@@ -988,7 +1021,7 @@
   document.addEventListener('input', event => {
     const target = event.target;
     const role = target?.dataset?.iconColor;
-    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength'].includes(role)) return;
+    if (!['color', 'binary', 'value', 'rule-color', 'min', 'max', 'stop-color', 'rule-strength', 'fill-strength'].includes(role)) return;
     const tab = iconColorEventTab(target);
     if (!tab) return;
     if (role === 'color' || role === 'binary') target.dataset.unset = '0';
@@ -1006,7 +1039,7 @@
   document.addEventListener('change', event => {
     const target = event.target;
     const id = target?.id || '';
-    if (['has', 'source', 'rule-target'].includes(target?.dataset?.iconColor)) {
+    if (['has', 'source', 'rule-target', 'fill-target'].includes(target?.dataset?.iconColor)) {
       const tab = iconColorEventTab(target);
       if (tab) commitIconColorChange(tab);
       return;
@@ -1040,6 +1073,9 @@
       if (mode) mode.value = button.dataset.mode === 'rules' ? 'rules' : 'auto';
     } else if (role === 'strength-reset') {
       const strength = iconColorEl(tab, '_tile_icon_rule_strength');
+      if (strength) strength.value = '20';
+    } else if (role === 'fill-strength-reset') {
+      const strength = iconColorEl(tab, '_tile_icon_fill_strength');
       if (strength) strength.value = '20';
     } else if (role === 'rules-on') {
       const on = iconColorEl(tab, '_tile_icon_rules_on');

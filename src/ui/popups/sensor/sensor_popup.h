@@ -37,6 +37,7 @@ bool sensor_popup_should_use_state_history(const String& value,
 void show_sensor_popup(const SensorPopupInit& init);
 void preload_sensor_popup();
 void hide_sensor_popup();
+void sensor_popup_follow_tile_color(uint32_t color);
 
 // Main-loop queue helpers for state/history dispatched from inbound MQTT.
 // These shared pending values are not synchronized for worker-task access.

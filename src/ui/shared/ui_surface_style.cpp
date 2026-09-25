@@ -11,8 +11,9 @@ namespace {
 // USER_1/USER_2 are already used for image-preview states.
 constexpr lv_obj_flag_t kGlobalTileBorderFlag = LV_OBJ_FLAG_USER_3;
 constexpr lv_obj_flag_t kHiddenTileBorderFlag = LV_OBJ_FLAG_USER_4;
-// The tile border hairline: white at about 20 %, a slightly lighter step of
-// whatever color the tile shows. It never takes the icon hue.
+// The tile border hairline: the tile's own hue (surface_hue) at about 20 %,
+// a slightly lighter step of whatever color the tile shows; white on grey
+// tiles. It never takes the icon hue.
 constexpr lv_opa_t kTileBorderOpa = 51;
 volatile bool g_global_tile_border_refresh_pending = false;
 std::atomic<bool> g_radius_refresh_pending{false};
@@ -77,7 +78,11 @@ void apply_style(lv_obj_t* obj, bool enabled) {
       LV_PART_MAIN | LV_STATE_FOCUSED,
       LV_PART_MAIN | (LV_STATE_FOCUSED | LV_STATE_PRESSED),
   };
-  const lv_color_t color = lv_color_white();
+  // Transparent cards (screensaver overlays) keep the white hairline.
+  const lv_color_t color =
+      lv_obj_get_style_bg_opa(obj, LV_PART_MAIN) >= LV_OPA_50
+          ? surface_hue(lv_obj_get_style_bg_color(obj, LV_PART_MAIN))
+          : lv_color_white();
   const lv_opa_t opa = kTileBorderOpa;
   // Border width is constant. State-specific copies force a full descendant
   // layout refresh on every press/release, even when they are all zero.
@@ -143,6 +148,20 @@ void disable_tile_border(lv_obj_t* obj) {
 
 void apply_tile_border(lv_obj_t* obj, bool enabled) {
   apply_style(obj, enabled);
+}
+
+void refresh_tile_border(lv_obj_t* obj) {
+  lv_obj_t* host = obj;
+  for (int depth = 0; host && depth < 3; ++depth) {
+    if (lv_obj_has_flag(host, kGlobalTileBorderFlag) || lv_obj_has_flag(host, kHiddenTileBorderFlag))
+      break;
+    host = lv_obj_get_parent(host);
+  }
+  if (!host || !(lv_obj_has_flag(host, kGlobalTileBorderFlag) ||
+                 lv_obj_has_flag(host, kHiddenTileBorderFlag))) {
+    return;
+  }
+  apply_style(host, lv_obj_get_style_outline_width(host, LV_PART_MAIN) > 0);
 }
 
 void apply_global_tile_border(lv_obj_t* obj) {

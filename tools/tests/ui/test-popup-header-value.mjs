@@ -129,6 +129,7 @@ std::string getMdiChar(const char*){return "\xF3\xB0\x96\xAD";}
 namespace ui_surface_style {
 template<class T> void apply_radius(lv_obj_t* obj,T radius,lv_style_selector_t selector){lv_obj_set_style_radius(obj,static_cast<int32_t>(radius),selector);}
 inline void apply_global_tile_border(lv_obj_t*){}inline void apply_popup_border(lv_obj_t*,lv_color_t,lv_opa_t){}inline lv_opa_t icon_glow_opa(){return 64;}
+inline lv_color_t surface_hue(lv_color_t c){const uint8_t h=c.red>c.green?(c.red>c.blue?c.red:c.blue):(c.green>c.blue?c.green:c.blue);return h?lv_color_make(c.red*255/h,c.green*255/h,c.blue*255/h):lv_color_white();}
 }
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
 void* heap_caps_malloc(size_t n,int){return malloc(n);}void heap_caps_free(void*p){free(p);}

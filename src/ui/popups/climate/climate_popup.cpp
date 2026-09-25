@@ -1151,7 +1151,7 @@ void refresh_all(ClimatePopupContext* ctx) {
 // before the first frame, only when the tile brings a different color. The
 // state refreshes then read the new color; the control menu is rebuilt on its
 // next opening. State updates never call this.
-void apply_card_color(ClimatePopupContext* ctx, uint32_t color) {
+void apply_card_color(ClimatePopupContext* ctx, uint32_t color, bool close_menu = true) {
   if (!ctx || !ctx->card) return;
   color = popup_surface::card_or_default(color);
   if (color == ctx->bg_color) return;
@@ -1175,7 +1175,7 @@ void apply_card_color(ClimatePopupContext* ctx, uint32_t color) {
         button, popup_surface::lighter(color, popup_surface::kPressed),
         LV_STATE_PRESSED);
   }
-  close_control_menu(ctx);
+  if (close_menu) close_control_menu(ctx);
   refresh_ring(ctx);
   refresh_target_toggle(ctx);
   refresh_controls(ctx);
@@ -2389,6 +2389,14 @@ void on_overlay_delete(lv_event_t* event) {
 static void finish_climate_popup_open(const ClimatePopupInit& init) {
   if (!g_climate_popup) return;
   apply_init(g_climate_popup, init);
+}
+
+// While open, the popup follows its tile's current background (a rules tint
+// that changes with the entity state); tile_icon_source calls this.
+void climate_popup_follow_tile_color(uint32_t color) {
+  ClimatePopupContext* ctx = g_climate_popup;
+  if (!ctx || !ctx->card || lv_obj_has_flag(ctx->card, LV_OBJ_FLAG_HIDDEN)) return;
+  apply_card_color(ctx, color, false);
 }
 
 static void prepare_climate_popup_open(const ClimatePopupInit& init) {

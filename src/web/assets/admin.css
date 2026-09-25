@@ -2296,6 +2296,10 @@
   font-size:var(--compact-value-font); line-height:var(--compact-value-line);
 }
 .tile.sensor-compact .tile-unit { font-size:inherit; }
+/* Half-height Back: the title alone is centered on the disc row. */
+.tile.sensor-compact.compact-title-only > .tile-title {
+  top:max(0px, calc((var(--compact-h) - var(--compact-title-line)) / 2));
+}
 .tile.sensor-half .tile-gauge, .tile.sensor-half .tile-graph { display:none; }
 
 .tile.sensor-compact .tile-title-lines { display:block; top:0; transform:none; white-space:nowrap; }

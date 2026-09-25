@@ -53,3 +53,20 @@ void append_navigate_fields_html(String& html, const String& tab_id, const Strin
             </div>
 )html";
 }
+
+// Back tile: the Clock/Text per-tile border checkbox.
+void append_back_fields_html(String& html, const String& tab_id) {
+  const auto& tr = i18n::strings(configManager.getConfig().language);
+  html += R"html(
+            <!-- Back Fields -->
+            <div id=")html";
+  html += tab_id;
+  html += R"html(_back_fields" class="type-fields">
+              <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_back_tile_border" checked>)html";
+  html += tr.screensaver_tile_border;
+  html += R"html(</label>
+            </div>
+)html";
+}

@@ -398,13 +398,16 @@ bool apply_settings_wrapper(WebServer&, Tile& tile, const TileTypeApplyContext&)
   return true;
 }
 
-bool apply_back_wrapper(WebServer&, Tile& tile, const TileTypeApplyContext&) {
+bool apply_back_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
   if (!tile.icon_name.length()) tile.icon_name = "arrow-left";
   tile.sensor_decimals = 0xFF;
   tile.key_code = 0;
   tile.key_modifier = 0;
   tile.sensor_value_font = 0;
-  tile.sensor_display_mode = 0;
+  // Same per-tile border flag as Clock/Text: 1 hides the border.
+  if (server.hasArg("tile_border")) {
+    tile.sensor_display_mode = server.arg("tile_border").toInt() == 0 ? 1 : 0;
+  }
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;
   return true;
@@ -426,6 +429,10 @@ void append_scene_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
 
 void append_navigate_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
   append_navigate_fields_html(html, safeString(ctx.tab_id), safeString(ctx.navigate_options_html));
+}
+
+void append_back_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_back_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_switch_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
@@ -789,17 +796,17 @@ const TileTypeDescriptor kTileTypes[] = {
     TILE_BACK,
     "Zurück",
     "navigate",
-    "navigate",
+    "back",
     "none",
     nullptr,
-    nullptr,
-    nullptr,
-    "resetNavigateFields",
+    "loadBackFields",
+    "saveBackFields",
+    "resetBackFields",
     0x2A2A2A,
     true,
     render_navigate_wrapper,
     apply_back_wrapper,
-    nullptr,
+    append_back_fields_wrapper,
     nullptr,
     nullptr
   }

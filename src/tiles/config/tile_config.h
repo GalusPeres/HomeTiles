@@ -165,9 +165,11 @@ static inline uint8_t normalizeTileIconDiscMode(int mode) {
              : TILE_ICON_DISC_GLOBAL;
 }
 
-// Clock/Text use the otherwise unused display mode byte: 0 inherits borders, 1 hides them.
+// Clock/Text/Back use the otherwise unused display mode byte: 0 inherits
+// borders, 1 hides them.
 static inline bool tileBorderEnabled(const Tile& tile) {
-  return (tile.type != TILE_CLOCK && tile.type != TILE_TEXT) || tile.sensor_display_mode != 1;
+  return (tile.type != TILE_CLOCK && tile.type != TILE_TEXT && tile.type != TILE_BACK) ||
+         tile.sensor_display_mode != 1;
 }
 
 // Climate tile content is packed into sensor_gauge_min. Climate tiles do not

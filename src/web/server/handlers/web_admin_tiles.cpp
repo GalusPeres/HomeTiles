@@ -588,7 +588,7 @@ void WebAdminServer::handleSaveTiles() {
 
   // Update tile data
   if (tile.type != static_cast<TileType>(type)) tile.view_id = 0;
-  if (tile.type != static_cast<TileType>(type) && (type == TILE_CLOCK || type == TILE_TEXT)) tile.sensor_display_mode = 0;
+  if (tile.type != static_cast<TileType>(type) && (type == TILE_CLOCK || type == TILE_TEXT || type == TILE_BACK)) tile.sensor_display_mode = 0;
   tile.type = static_cast<TileType>(type);
   tile.title = hometiles_title::normalize(server.hasArg("title") ? server.arg("title").c_str() : "").c_str();
   tile.icon_name = server.hasArg("icon_name") ? server.arg("icon_name") : "";

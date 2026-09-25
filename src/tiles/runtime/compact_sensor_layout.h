@@ -50,7 +50,9 @@ inline void apply_content(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, lv_ob
   }
   const lv_font_t* value_face = value_font();
   const int gap = text_gap();
-  const int text_y = std::max<int>(0, (height - title_font()->line_height - value_face->line_height - gap) / 2);
+  // Without a value line (half-height Back) the title alone is centered.
+  const int block = title_font()->line_height + (value ? value_face->line_height + gap : 0);
+  const int text_y = std::max<int>(0, (height - block) / 2);
   text(title, title_font(), text_y);
   text(value, value_face, text_y + title_font()->line_height + gap);
 }

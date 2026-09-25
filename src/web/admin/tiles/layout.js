@@ -12,23 +12,26 @@
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  function supportsHalfSize(type) { return isCompactSensorType(type) || Number(type) === 9; }
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [8, 9].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
-  // a row high. Settings/Back stay whole (mirrors tile_geometry::supported).
+  // a row high. Settings stays whole (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
     const values = layout ? [layout.col, layout.row, layout.span_w, layout.span_h] : [];
     if (!layout || !values.every(v => Number.isFinite(v) && v >= 0 && Number.isInteger(v * 2))) return false;
-    if ([7, 8].includes(Number(type)) && values.some(v => !Number.isInteger(v))) return false;
+    if (Number(type) === 7 && values.some(v => !Number.isInteger(v))) return false;
     if (layout.span_w < 1) return false;
     return layout.span_h >= 1 || (supportsHalfSize(type) && layout.span_h === 0.5);
   }
   function applyCompactSensorPreview(el, type, layout, mode = 0) {
-    const compact = isCompactSensorType(type) && layout?.span_w >= 1 &&
-      layout.span_h === 0.5;
+    const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
+    // A half-height Back tile uses the half-height Sensor header: the arrow in
+    // the corner disc and the title (if any) centered beside it.
+    const compactBack = Number(type) === 8 && halfHeight;
+    const compact = (isCompactSensorType(type) || compactBack) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
-    el.classList.toggle('sensor-half', compact && layout.span_h === 0.5);
-    el.classList.toggle('clock-compact', Number(type) === 9 && layout?.span_w >= 1 &&
-      layout.span_h === 0.5);
+    el.classList.toggle('sensor-half', compact);
+    el.classList.toggle('compact-title-only', compactBack);
+    el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
   }
 
@@ -53,7 +56,7 @@
       safeH = Math.max(minH, safeH);
       safeCol = Math.min(safeCol, GRID_COLS - 1);
       safeRow = Math.min(safeRow, GRID_ROWS - minH);
-      if (type === 7 || type === 8) {
+      if (type === 7) {
         safeCol = Math.floor(safeCol);
         safeRow = Math.floor(safeRow);
         safeW = Math.max(1, Math.floor(safeW));

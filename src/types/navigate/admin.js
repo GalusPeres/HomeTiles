@@ -192,3 +192,18 @@ function normalizeIconName(value) {
       if (button) button.disabled = false;
     }
   }
+
+  // Back tile: the same per-tile border flag as Clock and Text.
+  function loadBackFields(tab, data) {
+    const border = document.getElementById(tab + '_back_tile_border');
+    if (border) border.checked = data?.tile_border !== undefined ? !['0','false'].includes(String(data.tile_border)) : Number(data?.sensor_display_mode) !== 1;
+  }
+
+  function saveBackFields(tab, formData) {
+    formData.append('tile_border', document.getElementById(tab + '_back_tile_border')?.checked === false ? '0' : '1');
+  }
+
+  function resetBackFields(tab) {
+    const border = document.getElementById(tab + '_back_tile_border');
+    if (border) border.checked = true;
+  }

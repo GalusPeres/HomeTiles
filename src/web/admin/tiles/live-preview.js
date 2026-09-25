@@ -102,7 +102,9 @@
     tileElem.dataset.type = type;
     tileElem.dataset.iconDisc = document.getElementById(prefix + '_tile_icon_disc')?.value || '0';
     tileElem.dataset.iconGlow = document.getElementById(prefix + '_tile_icon_glow')?.checked === false ? '0' : '1';
-    tileElem.classList.toggle('tile-border-hidden', ['9','10'].includes(type) && document.getElementById(prefix + (type === '9' ? '_clock_tile_border' : '_text_tile_border'))?.checked === false);
+    const borderToggle = type === '8' ? '_back_tile_border'
+      : (type === '9' ? '_clock_tile_border' : (type === '10' ? '_text_tile_border' : ''));
+    tileElem.classList.toggle('tile-border-hidden', !!borderToggle && document.getElementById(prefix + borderToggle)?.checked === false);
 
     if (type === '0') {
       tileElem.classList.add('empty');

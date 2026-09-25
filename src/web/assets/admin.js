@@ -2571,7 +2571,7 @@ function syncTileRadiusControls(tabEl) {
       tile.sensor_gauge_max = Number.isFinite(num) ? num : 100;
     }
 
-    if ([9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
+    if ([8,9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
     }
     tiles[index] = tile;
@@ -3146,23 +3146,26 @@ function syncTileRadiusControls(tabEl) {
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  function supportsHalfSize(type) { return isCompactSensorType(type) || Number(type) === 9; }
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [8, 9].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
-  // a row high. Settings/Back stay whole (mirrors tile_geometry::supported).
+  // a row high. Settings stays whole (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
     const values = layout ? [layout.col, layout.row, layout.span_w, layout.span_h] : [];
     if (!layout || !values.every(v => Number.isFinite(v) && v >= 0 && Number.isInteger(v * 2))) return false;
-    if ([7, 8].includes(Number(type)) && values.some(v => !Number.isInteger(v))) return false;
+    if (Number(type) === 7 && values.some(v => !Number.isInteger(v))) return false;
     if (layout.span_w < 1) return false;
     return layout.span_h >= 1 || (supportsHalfSize(type) && layout.span_h === 0.5);
   }
   function applyCompactSensorPreview(el, type, layout, mode = 0) {
-    const compact = isCompactSensorType(type) && layout?.span_w >= 1 &&
-      layout.span_h === 0.5;
+    const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
+    // A half-height Back tile uses the half-height Sensor header: the arrow in
+    // the corner disc and the title (if any) centered beside it.
+    const compactBack = Number(type) === 8 && halfHeight;
+    const compact = (isCompactSensorType(type) || compactBack) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
-    el.classList.toggle('sensor-half', compact && layout.span_h === 0.5);
-    el.classList.toggle('clock-compact', Number(type) === 9 && layout?.span_w >= 1 &&
-      layout.span_h === 0.5);
+    el.classList.toggle('sensor-half', compact);
+    el.classList.toggle('compact-title-only', compactBack);
+    el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
   }
 
@@ -3187,7 +3190,7 @@ function syncTileRadiusControls(tabEl) {
       safeH = Math.max(minH, safeH);
       safeCol = Math.min(safeCol, GRID_COLS - 1);
       safeRow = Math.min(safeRow, GRID_ROWS - minH);
-      if (type === 7 || type === 8) {
+      if (type === 7) {
         safeCol = Math.floor(safeCol);
         safeRow = Math.floor(safeRow);
         safeW = Math.max(1, Math.floor(safeW));
@@ -4138,7 +4141,7 @@ function syncTileRadiusControls(tabEl) {
     bindLive(animationFpsInput, 'input', 'animationFps', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(animationFitSelect, 'change', 'animationFit', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(animationZoomInput, 'input', 'animationZoom', () => { updateDraft(tab); scheduleAutoSave(tab); });
-    for (const kind of ['clock','text']) {
+    for (const kind of ['clock','text','back']) {
       bindLive(document.getElementById(prefix + '_' + kind + '_tile_border'), 'change', kind + 'TileBorder', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     }
     bindLive(clockTimeCheck, 'change', 'clockShowTime', () => {
@@ -4308,7 +4311,9 @@ function syncTileRadiusControls(tabEl) {
     tileElem.dataset.type = type;
     tileElem.dataset.iconDisc = document.getElementById(prefix + '_tile_icon_disc')?.value || '0';
     tileElem.dataset.iconGlow = document.getElementById(prefix + '_tile_icon_glow')?.checked === false ? '0' : '1';
-    tileElem.classList.toggle('tile-border-hidden', ['9','10'].includes(type) && document.getElementById(prefix + (type === '9' ? '_clock_tile_border' : '_text_tile_border'))?.checked === false);
+    const borderToggle = type === '8' ? '_back_tile_border'
+      : (type === '9' ? '_clock_tile_border' : (type === '10' ? '_text_tile_border' : ''));
+    tileElem.classList.toggle('tile-border-hidden', !!borderToggle && document.getElementById(prefix + borderToggle)?.checked === false);
 
     if (type === '0') {
       tileElem.classList.add('empty');
@@ -4630,10 +4635,10 @@ function syncTileRadiusControls(tabEl) {
     const w = Number(document.getElementById(tab + '_tile_span_w')?.value || 1);
     const h = Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
     // Half a row high only suits the half-size types; any other half step
-    // only excludes Settings/Back, which stay whole.
+    // only excludes Settings, which stays whole.
     const halfHeight = h < 1;
     const fractional = !Number.isInteger(w) || !Number.isInteger(h);
-    const fixedGrid = type => [7, 8].includes(Number(type));
+    const fixedGrid = type => Number(type) === 7;
     // A new half-height tile may still take a larger type when it can grow.
     const isNewTile = Number(getTilesData(tab)?.[currentTileIndex]?.type || 0) === 0;
     for (const option of typeEl.options) {
@@ -5433,6 +5438,8 @@ function syncTileRadiusControls(tabEl) {
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
+    } else if (safeType === 8) {
+      fd.append('tile_border', Number(tile.sensor_display_mode) === 1 ? '0' : '1');
     } else if (safeType === 10) {
       fd.append('text_value', tile.text_value || tile.scene_alias || tile.key_macro || '');
       fd.append('text_value_font', tile.text_value_font || tile.sensor_value_font || '0');
@@ -5621,7 +5628,7 @@ function syncTileRadiusControls(tabEl) {
     el.dataset.type = typeValue;
     el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
     el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
-    el.classList.toggle('tile-border-hidden', ['9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
+    el.classList.toggle('tile-border-hidden', ['8','9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
     applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
     else delete el.dataset.navigateTarget;
@@ -8828,6 +8835,21 @@ function normalizeIconName(value) {
     } finally {
       if (button) button.disabled = false;
     }
+  }
+
+  // Back tile: the same per-tile border flag as Clock and Text.
+  function loadBackFields(tab, data) {
+    const border = document.getElementById(tab + '_back_tile_border');
+    if (border) border.checked = data?.tile_border !== undefined ? !['0','false'].includes(String(data.tile_border)) : Number(data?.sensor_display_mode) !== 1;
+  }
+
+  function saveBackFields(tab, formData) {
+    formData.append('tile_border', document.getElementById(tab + '_back_tile_border')?.checked === false ? '0' : '1');
+  }
+
+  function resetBackFields(tab) {
+    const border = document.getElementById(tab + '_back_tile_border');
+    if (border) border.checked = true;
   }
 
 function maybeFillTitleFromSwitch(tab) {

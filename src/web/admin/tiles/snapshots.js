@@ -165,7 +165,7 @@
       tile.sensor_gauge_max = Number.isFinite(num) ? num : 100;
     }
 
-    if ([9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
+    if ([8,9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
     }
     tiles[index] = tile;

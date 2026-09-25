@@ -3,6 +3,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/ui/ui_manager.h"
@@ -66,6 +67,9 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
   }
   bool has_icon = iconChar.length() > 0;
   bool has_title = tile.title.length() > 0;
+  // A half-height Back tile uses the half-height Sensor header: the arrow in
+  // the concentric corner disc and the title, if any, beside it.
+  const bool compact = tile_geometry::compact_back(tile.type, tile.span_w, tile.span_h);
 
   if (has_icon) {
     icon_lbl = lv_label_create(btn);
@@ -74,31 +78,38 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
       lv_label_set_text(icon_lbl, iconChar.c_str());
 
       // Center icon and title on two lines, or the icon alone on one line.
-      if (has_title) {
-        lv_obj_align(icon_lbl, LV_ALIGN_CENTER, 0,
-                     tile_layout::scale_i16(-20));
-      } else {
-        lv_obj_center(icon_lbl);  // Center the icon when there is no title.
+      if (!compact) {
+        if (has_title) {
+          lv_obj_align(icon_lbl, LV_ALIGN_CENTER, 0,
+                       tile_layout::scale_i16(-20));
+        } else {
+          lv_obj_center(icon_lbl);  // Center the icon when there is no title.
+        }
+        tile_icon_disc::add_round(btn, icon_lbl);
       }
-      tile_icon_disc::add_round(btn, icon_lbl);
     }
   }
 
   // Show the title label only when a title is set.
+  lv_obj_t* title_lbl = nullptr;
   if (has_title) {
     lv_obj_t* l = lv_label_create(btn);
+    title_lbl = l;
     if (l) {
       set_label_style(l, lv_color_white(), tile_layout::header_title_font());
       hometiles_title::tile(l, tile.title.c_str(), false);
 
       // Position below the icon, or center when there is no icon.
-      if (icon_lbl) {
+      if (compact) {
+        // compact_sensor_layout places it beside the disc below.
+      } else if (icon_lbl) {
         lv_obj_align(l, LV_ALIGN_CENTER, 0, tile_layout::scale(35));
       } else {
         lv_obj_center(l);  // Center the title when there is no icon.
       }
     }
   }
+  if (compact) compact_sensor_layout::apply(btn, icon_lbl, title_lbl, nullptr, tile);
 
   // Event handler for tab navigation.
   static constexpr uint8_t NAV_KIND_FOLDER = 0;

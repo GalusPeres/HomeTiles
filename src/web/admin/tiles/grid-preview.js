@@ -111,7 +111,7 @@
     el.dataset.type = typeValue;
     el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
     el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
-    el.classList.toggle('tile-border-hidden', ['9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
+    el.classList.toggle('tile-border-hidden', ['8','9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
     applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
     else delete el.dataset.navigateTarget;

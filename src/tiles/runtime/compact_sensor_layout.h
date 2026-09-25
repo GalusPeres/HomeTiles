@@ -33,7 +33,7 @@ inline void apply_content(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, lv_ob
   const int height = header_height();
   const int text_x = height + margin;
   if (lv_obj_t* disc = tile_icon_disc::wrap(card, icon)) {
-    tile_icon_disc::place_in_corner(card, disc, tile_icon_disc::Corner::Left);
+    tile_icon_disc::place_in_corner(card, disc);
     lv_obj_move_background(disc);
   }
   auto text = [&](lv_obj_t* label, const lv_font_t* font, int y) {

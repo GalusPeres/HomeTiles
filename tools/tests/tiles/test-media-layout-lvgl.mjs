@@ -27,7 +27,6 @@ const cpp=String.raw`
 #include <vector>
 #include <fstream>
 #include <iostream>
-#include <cmath>
 #include "src/ui/shared/title_label.h"
 #include "src/types/media/cover_geometry.h"
 extern "C" { LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECLARE(ui_font_16);LV_FONT_DECLARE(ui_font_20);LV_FONT_DECLARE(ui_font_24);LV_FONT_DECLARE(ui_font_28);LV_FONT_DECLARE(ui_font_32);LV_FONT_DECLARE(ui_font_40);LV_FONT_DECLARE(mdi_icons_32);LV_FONT_DECLARE(mdi_icons_48); }
@@ -44,7 +43,7 @@ ${renderer.slice(renderer.indexOf('#if defined(DEVICE_WAVESHARE_4B)'),renderer.i
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=16;
 using TileType=int;constexpr int TILE_MEDIA=7,GRID_COLS=4,GRID_ROWS=4;
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t MEDIA_TILE_MIN_SPAN[^]*?(?=\/\/ A media tile must)/)[0]}
-struct Tile{String title,icon_name,sensor_entity;float col=0;int span_w=2,span_h=2;};
+struct Tile{String title,icon_name,sensor_entity;int span_w=2,span_h=2;};
 MediaTileWidgets widgets[16];
 MediaTileWidgets* tile_renderer_get_media_widgets(GridType){return widgets;}
 struct Logger{void println(const char*){}}Serial;
@@ -52,11 +51,7 @@ struct Bridge{String findEntityIcon(const String&){return "speaker";}String find
 ${radiusPolicyHost(root)}
 struct Config{bool tile_borders=true;int tile_radius=tile_radius::kMinimum;const char*language="en";};struct Manager{Config cfg;const Config&getConfig(){return cfg;}}configManager;
 ${surfaceStyleHost(root)}
-constexpr int GRID_CELL_W=CELL_W,GRID_CELL_H=CELL_H,GRID_GAP=GAP;
-namespace tile_geometry {
-${fn(read('src/tiles/config/tile_geometry.h'),'edge')}
-${fn(read('src/tiles/config/tile_geometry.h'),'extent')}
-}
+constexpr int GRID_CELL_H=CELL_H,GRID_GAP=GAP;
 ${read('src/tiles/runtime/tile_icon_disc.h').replace(/^#.*$/gm,'')}
 namespace i18n{struct Strings{const char*media_no_playback="No playback";};const Strings&strings(const char*){static Strings s;return s;}}
 uint32_t tileBgColorOrDefault(const Tile&,uint32_t d){return d;}
@@ -84,9 +79,6 @@ int main(int argc,char**argv){lv_init();auto*display=lv_display_create(SCREEN_WI
  for(int h=2;h<=4;++h)for(int w=2;w<=4;++w){Tile t;t.span_w=w;t.span_h=h;t.title="Living room player with a very long title";t.sensor_entity="media_player.test";auto*card=render_media_tile(lv_screen_active(),0,0,t,0,GridType::TAB0);auto&m=widgets[0];
   for(bool subtitle:{true,false})for(bool cover:{true,false}){lv_label_set_text(m.media_title_label,"A long song title that scrolls within the space beside its artwork");lv_label_set_text(m.media_subtitle_label,"Artist with a long name");if(subtitle)lv_obj_remove_flag(m.media_subtitle_label,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(m.media_subtitle_label,LV_OBJ_FLAG_HIDDEN);if(cover)lv_obj_remove_flag(m.cover_clip,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(m.cover_clip,LV_OBJ_FLAG_HIDDEN);set_media_cover_text_layout(m,cover);lv_obj_update_layout(card);
    lv_area_t content,art,title,sub,buttons,header;lv_obj_get_content_coords(card,&content);lv_obj_get_coords(m.cover_clip,&art);lv_obj_get_coords(m.media_title_label,&title);lv_obj_get_coords(m.media_subtitle_label,&sub);lv_obj_get_coords(lv_obj_get_parent(m.play_pause_label),&buttons);lv_obj_get_coords(m.title_label,&header);
-   // The header icon sits in the shared disc; title and artwork stay clear of it.
-   auto*disc=tile_icon_disc::disc_of(m.icon_label);assert(disc&&lv_obj_get_width(disc)==tile_icon_disc::diameter());
-   lv_area_t disc_area;lv_obj_get_coords(disc,&disc_area);assert(header.x1>disc_area.x2&&art.y1>disc_area.y2);
    assert(art.x2-art.x1==art.y2-art.y1&&lv_obj_get_width(m.cover_clip)<=240);assert(art.y1>header.y2&&art.y2<buttons.y1);assert(title.y1>=art.y1&&title.y2<buttons.y1);assert(title.x2<=content.x2);if(cover)assert(title.x1>art.x2);if(subtitle)assert(sub.y1>title.y2&&sub.y2<buttons.y1&&sub.x1==title.x1);
    if(cover&&subtitle&&w==h){const int side=lv_obj_get_width(m.cover_clip);assert(side>previous);previous=side;std::cout<<w<<"x"<<h<<": cover="<<side<<", title width="<<lv_obj_get_width(m.media_title_label)<<"\n";lv_obj_set_style_bg_color(m.cover_clip,lv_color_hex(0x447D7A),0);lv_obj_set_style_bg_opa(m.cover_clip,LV_OPA_COVER,0);lv_refr_now(display);if(argc>1)snapshot((String(argv[1])+"-"+std::to_string(w)+".bmp").c_str(),pixels);}
   }

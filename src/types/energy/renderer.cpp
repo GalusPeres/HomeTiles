@@ -102,6 +102,9 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
       if (icon_lbl) {
         set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
         lv_label_set_text(icon_lbl, iconChar.c_str());
+        lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT,
+                     tile_layout::scale_480(-8),
+                     tile_layout::scale_480(-8));
       }
     }
   }
@@ -122,12 +125,10 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
       lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_RIGHT, 0);
       hometiles_title::tile(title_label, title_text.c_str(), true);
       lv_obj_align(title_label, LV_ALIGN_TOP_RIGHT,
-                   tile_layout::scale_480(4), 0);
+                   tile_layout::scale_480(4),
+                   tile_layout::scale_480(4));
     }
   }
-  // Half-height tiles place the disc and title in compact_sensor_layout.
-  const bool compact = tile_geometry::compact(tile.type, tile.span_w, tile.span_h);
-  if (!compact) tile_icon_disc::apply_header(card, icon_lbl, title_label, tile);
 
   lv_obj_t* value_label = lv_label_create(card);
   if (!value_label) {
@@ -147,8 +148,10 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
   lv_obj_align(value_label, LV_ALIGN_CENTER, 0,
                tile_layout::scale(28) + value_y_offset);
 
-  if (compact) {
+  if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h)) {
     compact_sensor_layout::apply(card, icon_lbl, title_label, value_label, tile);
+  } else {
+    tile_icon_disc::add_round(card, icon_lbl);
   }
 
   SensorTileWidgets* target = tile_renderer_get_sensor_widgets(grid_type);

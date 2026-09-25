@@ -324,7 +324,7 @@ if (!/\.tile\.sensor,\s*\.tile\.cover\s*\{/.test(adminCss) ||
 const coverRenderer = readText(
   new URL('../../../src/types/cover/renderer.cpp', import.meta.url));
 for (const marker of [
-  'tile_icon_disc::apply_header(card, widget.icon_label, widget.title_label, tile);',
+  'tile_layout::scale_480(-8)',
   'tile_layout::header_title_font()',
   'lv_obj_set_width(widget.title_label, LV_PCT(70))',
   'lv_obj_set_style_text_line_space(widget.value_label, 8, 0)',

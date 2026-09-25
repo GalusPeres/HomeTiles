@@ -106,6 +106,7 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
     set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
     lv_label_set_text(icon, icon_char.c_str());
     lv_obj_align(icon, LV_ALIGN_CENTER, 0, tile_layout::scale_i16(-20));
+    tile_icon_disc::add_round(card, icon);
   }
 
   lv_obj_t* title_label = lv_label_create(card);
@@ -117,7 +118,6 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
   } else {
     lv_obj_center(title_label);
   }
-  tile_icon_disc::apply_centered(card, icon, title_label);
 
   if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
     CameraEventData* event_data = new CameraEventData{

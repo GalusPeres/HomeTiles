@@ -113,6 +113,9 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
 
   lv_obj_t* icon_label = lv_label_create(card);
   set_label_style(icon_label, lv_color_white(), FONT_MDI_ICONS);
+  lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
+               tile_layout::scale_480(-8),
+               tile_layout::scale_480(-8));
 
   lv_obj_t* location_label = lv_label_create(card);
   set_label_style(location_label, lv_color_white(),
@@ -122,7 +125,8 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_RIGHT, 0);
   hometiles_title::tile(location_label, location.c_str(), true);
   lv_obj_align(location_label, LV_ALIGN_TOP_RIGHT,
-               tile_layout::scale_480(4), 0);
+               tile_layout::scale_480(4),
+               tile_layout::scale_480(4));
 
   String icon_name = tile.icon_name;
   bool icon_disabled = isMdiIconDisabled(icon_name);
@@ -144,7 +148,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
     }
   }
   // The disc takes over the icon's hidden state; state updates toggle both.
-  tile_icon_disc::apply_header(card, icon_label, location_label, tile);
+  tile_icon_disc::add_round(card, icon_label);
 
   lv_obj_t* value_row = lv_obj_create(card);
   lv_obj_remove_style_all(value_row);

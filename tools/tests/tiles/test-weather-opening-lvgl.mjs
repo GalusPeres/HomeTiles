@@ -251,21 +251,22 @@ void check_value_alignment(lv_display_t* display) {
  lv_obj_get_coords(value,&sensor_value); lv_obj_get_coords(sensor,&sensor_area);
  const int expected_y=sensor_value.y1-sensor_area.y1;
  String css; appendPreviewScaleVars(css);
- lv_area_t icon,title;
- auto* disc=lv_obj_get_child(sensor,0);
- assert(tile_icon_disc::is_disc(disc)&&"The Sensor icon sits in the shared disc");
- lv_obj_get_coords(disc,&icon);
- lv_obj_get_coords(lv_obj_get_child(sensor,1),&title);
- // The device header uses the shared icon disc: disc at the tile inset, title
- // centered on the disc. The Web Admin preview is not updated in this design
- // test build, so only the unchanged title-right anchor must still match it.
- const int title_line=lv_font_get_line_height(tile_layout::header_title_font());
- assert(icon.x1-sensor_area.x1==tile_icon_disc::inset()&&icon.y1-sensor_area.y1==tile_icon_disc::inset());
- assert(lv_area_get_width(&icon)==tile_icon_disc::diameter()&&lv_area_get_height(&icon)==tile_icon_disc::diameter());
- assert(title.y1-sensor_area.y1==tile_icon_disc::inset()+tile_icon_disc::diameter()/2-title_line/2);
- const auto property=std::string("--tile-header-title-right:")+
-     std::to_string(preview_scaled_exact_px(sensor_area.x2-title.x2))+"px;";
- assert(css.find(property)!=std::string::npos&&"Preview scale must come from the actual Sensor header");
+ lv_area_t icon,title,disc;
+ // A round disc sits directly behind the unchanged icon, centered on it.
+ assert(tile_icon_disc::disc_of(lv_obj_get_child(sensor,1))==lv_obj_get_child(sensor,0));
+ lv_obj_get_coords(lv_obj_get_child(sensor,0),&disc);
+ lv_obj_get_coords(lv_obj_get_child(sensor,1),&icon);
+ lv_obj_get_coords(lv_obj_get_child(sensor,2),&title);
+ assert(lv_obj_get_style_radius(lv_obj_get_child(sensor,0),LV_PART_MAIN)==LV_RADIUS_CIRCLE);
+ assert(lv_area_get_width(&disc)==tile_icon_disc::diameter()&&lv_area_get_height(&disc)==tile_icon_disc::diameter());
+ assert(std::abs((disc.x1+disc.x2)-(icon.x1+icon.x2))<=1&&std::abs((disc.y1+disc.y2)-(icon.y1+icon.y2))<=1);
+ for(const auto& item:std::vector<std::pair<const char*,int>>{
+     {"title-top",title.y1-sensor_area.y1},{"title-right",sensor_area.x2-title.x2},
+     {"icon-top",icon.y1-sensor_area.y1},{"icon-left",icon.x1-sensor_area.x1}}) {
+  const auto property=std::string("--tile-header-")+item.first+":"+
+      std::to_string(preview_scaled_exact_px(item.second))+"px;";
+  assert(css.find(property)!=std::string::npos&&"Preview scale must come from the actual Sensor header");
+ }
  for (int width=1;width<=Device::kGridCols;++width) {
   for (int height=1;height<=Device::kGridRows;++height) {
    Tile tile; tile.span_w=width; tile.span_h=height;

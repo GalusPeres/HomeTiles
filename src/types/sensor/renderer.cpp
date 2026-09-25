@@ -95,6 +95,9 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       if (icon_lbl) {
         set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
         lv_label_set_text(icon_lbl, iconChar.c_str());
+        lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT,
+                     tile_layout::scale_480(-8),
+                     tile_layout::scale_480(-8));
       }
     }
   }
@@ -111,13 +114,10 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_RIGHT, 0);
       hometiles_title::tile(title_label, tile.title.c_str(), true);
       lv_obj_align(title_label, LV_ALIGN_TOP_RIGHT,
-                   tile_layout::scale_480(4), 0);
+                   tile_layout::scale_480(4),
+                   tile_layout::scale_480(4));
     }
   }
-  // Half-height tiles place the disc and title in compact_sensor_layout.
-  const bool compact =
-      tile_geometry::compact(tile.type, tile.span_w, tile.span_h) && display_mode == 0;
-  if (!compact) tile_icon_disc::apply_header(card, icon_lbl, title_label, tile);
 
   // At half-step heights the arc and its value stay together: they share the
   // extra half row equally. Whole spans give 0 and stay pixel-identical.
@@ -178,7 +178,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     }
   }
   if (gauge_enabled) {
-    if (icon_lbl) lv_obj_move_foreground(tile_icon_disc::outer(icon_lbl));
+    if (icon_lbl) lv_obj_move_foreground(icon_lbl);
     if (title_label) lv_obj_move_foreground(title_label);
   }
 
@@ -221,7 +221,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       // Initialize with LV_CHART_POINT_NONE; history will replace it.
       lv_chart_set_all_value(chart, series, LV_CHART_POINT_NONE);
     }
-    if (icon_lbl) lv_obj_move_foreground(tile_icon_disc::outer(icon_lbl));
+    if (icon_lbl) lv_obj_move_foreground(icon_lbl);
     if (title_label) lv_obj_move_foreground(title_label);
   }
 
@@ -256,8 +256,10 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
                  tile_layout::scale(28) + value_y_offset);
   }
 
-  if (compact) {
+  if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h) && display_mode == 0) {
     compact_sensor_layout::apply(card, icon_lbl, title_label, v, tile);
+  } else {
+    tile_icon_disc::add_round(card, icon_lbl);
   }
 
   // Store for later updates.

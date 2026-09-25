@@ -81,13 +81,13 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
       } else {
         lv_obj_center(icon_lbl);  // Center the icon when there is no title.
       }
+      tile_icon_disc::add_round(btn, icon_lbl);
     }
   }
 
   // Show the title label only when a title is set.
-  lv_obj_t* l = nullptr;
   if (has_title) {
-    l = lv_label_create(btn);
+    lv_obj_t* l = lv_label_create(btn);
     if (l) {
       set_label_style(l, lv_color_white(), tile_layout::header_title_font());
       hometiles_title::tile(l, tile.title.c_str(), false);
@@ -100,7 +100,6 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
       }
     }
   }
-  tile_icon_disc::apply_centered(btn, icon_lbl, l);
 
   // Event handler for tab navigation.
   static constexpr uint8_t NAV_KIND_FOLDER = 0;

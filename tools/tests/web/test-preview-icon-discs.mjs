@@ -50,8 +50,8 @@ try{
  check(disc(scene).display!=='none'&&disc(scene).width==='30px'&&disc(scene).height==='30px','Taller tile disc uses round_diameter');
  const icon=scene.querySelector('.tile-icon').getBoundingClientRect();
  check(Math.abs(icon.width/2-parseFloat(disc(scene).left))<0.6,'Disc is centered on the icon');
- const white=c=>c.startsWith('rgba(255, 255, 255, 0.1')&&Math.abs(parseFloat(c.split(',')[3])-0.149)<0.01;
- check(white(disc(scene).backgroundColor),'White icon keeps the white disc at the device opacity');
+ const white=c=>c.startsWith('rgba(255, 255, 255, 0.')&&parseFloat(c.split(',')[3])>=0.075&&parseFloat(c.split(',')[3])<=0.155;
+ check(white(disc(scene).backgroundColor),'White icon keeps the white disc at the device opacity (8..15 % by tile luma)');
  // A colored icon tints its disc; glow off keeps it white.
  renderTileFromData('test',1,{type:1,title:'T',sensor_entity:'sensor.t',icon_name:'thermometer'},meta);
  const sensor=document.getElementById('test-tile-1');

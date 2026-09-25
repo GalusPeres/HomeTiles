@@ -201,9 +201,21 @@ void appendPreviewScaleVars(String& html) {
 #endif
   emit("tile-pad-v", climate_layout::kCardPaddingVertical);
   emit("tile-pad-h", climate_layout::kCardPaddingHorizontal);
-  emit_exact("tile-header-title-top", tile_layout::scale_480(24) + tile_layout::scale_480(4));
+  // The device lifts a corner header until its icon disc's top gap equals the
+  // side gap (tile_icon_disc::corner_lift); the preview header follows.
+  const int header_lift =
+      FONT_MDI_ICONS
+          ? tile_icon_disc::corner_lift(
+                tile_layout::scale_480(24), tile_layout::scale_480(20), tile_layout::scale_480(-8),
+                tile_layout::scale_480(-8),
+                lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0),
+                lv_font_get_line_height(FONT_MDI_ICONS))
+          : 0;
+  emit_exact("tile-header-title-top",
+             tile_layout::scale_480(24) + tile_layout::scale_480(4) - header_lift);
   emit_exact("tile-header-title-right", tile_layout::scale_480(20) - tile_layout::scale_480(4));
-  emit_exact("tile-header-icon-top", tile_layout::scale_480(24) + tile_layout::scale_480(-8));
+  emit_exact("tile-header-icon-top",
+             tile_layout::scale_480(24) + tile_layout::scale_480(-8) - header_lift);
   emit_exact("tile-header-icon-left", tile_layout::scale_480(20) + tile_layout::scale_480(-8));
 #if defined(DEVICE_LAYOUT_1024X600)
   emit("value-dy", 23);

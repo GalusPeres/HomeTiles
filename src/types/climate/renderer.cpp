@@ -1371,7 +1371,6 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
     lv_obj_align(
         icon_label, LV_ALIGN_TOP_LEFT,
         -8, -8);
-    tile_icon_disc::add_round(card, icon_label);
   }
 
   if (tile.title.length()) {
@@ -1386,6 +1385,8 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
         title, LV_ALIGN_TOP_RIGHT,
         4, 4);
   }
+  // After the title exists, so the disc can lift the whole header.
+  if (icon_label) tile_icon_disc::add_round(card, icon_label);
 
   ClimateTileWidgets* widgets = tile_renderer_get_climate_widgets(grid_type);
   if (widgets && index < TILES_PER_GRID) {

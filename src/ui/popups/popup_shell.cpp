@@ -240,8 +240,10 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
   const bool tinted = r != g || g != b;
   const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
-  const lv_opa_t opa = tinted ? static_cast<lv_opa_t>(popup_layout::kHeaderIconDiscGlowOpa)
-                              : static_cast<lv_opa_t>(popup_layout::kHeaderIconDiscOpa);
+  const uint8_t step = popup_layout::headerDiscContrastStep(
+      lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame, LV_PART_MAIN)) & 0xFFFFFFu);
+  const lv_opa_t opa = static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
+      tinted ? popup_layout::kHeaderIconDiscGlowOpa : popup_layout::kHeaderIconDiscOpa, step));
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);

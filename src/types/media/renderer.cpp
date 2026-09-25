@@ -391,7 +391,6 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
                  tile_layout::scale_480(-8),
                  tile_layout::scale_480(-8));
     enable_event_bubble(icon_label);
-    tile_icon_disc::add_round(card, icon_label);
   }
 
   String title_text = tile.title;
@@ -417,6 +416,8 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
                  tile_layout::scale_480(4));
     enable_event_bubble(title_label);
   }
+  // After the title exists, so the disc can lift the whole header.
+  if (icon_label) tile_icon_disc::add_round(card, icon_label);
 
 #if defined(DEVICE_WAVESHARE_4B)
   const lv_font_t* media_font = (tile.span_w > 1 || tile.span_h > 1) ? &ui_font_28 : &ui_font_24;

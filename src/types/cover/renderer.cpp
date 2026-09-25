@@ -365,7 +365,6 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
     lv_obj_align(widget.icon_label, LV_ALIGN_TOP_LEFT,
                  tile_layout::scale_480(-8),
                  tile_layout::scale_480(-8));
-    tile_icon_disc::add_round(card, widget.icon_label);
   }
 
   if (tile.title.length()) {
@@ -380,6 +379,8 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
                  tile_layout::scale_480(4),
                  tile_layout::scale_480(4));
   }
+  // After the title exists, so the disc can lift the whole header.
+  if (widget.icon_label) tile_icon_disc::add_round(card, widget.icon_label);
 
   // Same value block as a Sensor tile, but with the HA Cover state and
   // position on two lines (for example "Open\n40%").

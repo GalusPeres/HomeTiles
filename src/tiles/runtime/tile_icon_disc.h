@@ -67,6 +67,35 @@ inline bool icon_color_tints(uint32_t rgb) {
   return r != g || g != b;
 }
 
+// Discs are subtler on dark tiles: the same step from tile to disc reads much
+// stronger on near-black. The opacity scales from 8 % (tile luma <= 0.08) to
+// the full value (luma >= 0.25) in four steps, so only a few shared opacity
+// styles exist. The Web Admin preview (iconDiscContrastStep) and the popup
+// header (popup_layout::headerDiscContrastStep) use the same rule.
+inline uint8_t contrast_step_for(uint32_t rgb) {
+  const float luma = (0.2126f * ((rgb >> 16) & 0xFF) + 0.7152f * ((rgb >> 8) & 0xFF) +
+                      0.0722f * (rgb & 0xFF)) / 255.0f;
+  float t = (luma - 0.08f) / 0.17f;
+  if (t < 0.0f) t = 0.0f;
+  if (t > 1.0f) t = 1.0f;
+  return static_cast<uint8_t>(t * 3.0f + 0.5f);
+}
+// Step 3 keeps `full`; step 0 is 8/15 of it (8 % instead of 15 % for kOpa).
+inline lv_opa_t scaled_opa(lv_opa_t full, uint8_t step) {
+  return static_cast<lv_opa_t>((full * (24 + 7 * step) + 22) / 45);
+}
+// The nearest opaque background behind the disc (the tile card).
+inline uint8_t contrast_step(lv_obj_t* disc) {
+  lv_obj_t* host = lv_obj_get_parent(disc);
+  for (int depth = 0; host && depth < 3 &&
+       lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < LV_OPA_50; ++depth) {
+    host = lv_obj_get_parent(host);
+  }
+  if (!host) return 3;
+  return contrast_step_for(lv_color_to_u32(lv_obj_get_style_bg_color(host, LV_PART_MAIN)) &
+                           0xFFFFFF);
+}
+
 // The icon a disc belongs to: its child (half-height) or its next sibling.
 inline lv_obj_t* icon_of(lv_obj_t* disc) {
   if (lv_obj_get_child_count(disc) > 0) return lv_obj_get_child(disc, 0);
@@ -89,8 +118,9 @@ inline void apply_fill(lv_obj_t* disc) {
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color)) {
     lv_obj_set_style_bg_color(disc, color, 0);
   }
-  const lv_opa_t opa = mode == Mode::Off ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
-                                         : (tinted ? kGlowOpa : kOpa);
+  const lv_opa_t opa = mode == Mode::Off
+                           ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
+                           : scaled_opa(tinted ? kGlowOpa : kOpa, contrast_step(disc));
   ui_surface_style::apply_icon_disc_opa(disc, opa, mode == Mode::Global);
 }
 
@@ -186,6 +216,18 @@ inline int centered_offset(int anchor, int offset, int icon_size, int size) {
   return offset - icon_size / 2 + size / 2 + start_shift;
 }
 
+// How far a corner header (disc, icon and header labels) moves up so the
+// round disc's top gap matches its side gap. The icon sits at (offset_side,
+// offset_top) inside a card with these paddings (offsets measured towards the
+// card's inside). The Web Admin header CSS uses the same value.
+inline int corner_lift(int pad_top, int pad_side, int offset_side, int offset_top,
+                       int icon_width, int icon_height) {
+  const int size = round_diameter();
+  const int top_gap = pad_top + centered_offset(0, offset_top, icon_height, size);
+  const int side_gap = pad_side + centered_offset(0, offset_side, icon_width, size);
+  return top_gap > side_gap ? top_gap - side_gap : 0;
+}
+
 // Taller tiles: a disc of round_diameter() directly behind `icon`, centered on
 // the icon's current aligned position. The icon itself does not move. Call it
 // once the icon's alignment is final; it takes the icon's hidden state.
@@ -219,6 +261,33 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
   lv_obj_align(disc, align,
                centered_offset(horizontal, lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x, size),
                centered_offset(vertical, lv_obj_get_style_y(icon, LV_PART_MAIN), icon_size.y, size));
+  // Header icons in a top corner: the disc sits closer to the side edge than
+  // to the top edge. Move the whole header (disc, icon and the header labels
+  // beside it) up until both gaps match; never down, never sideways.
+  if (vertical == 0 && horizontal != 1) {
+    const int icon_x = lv_obj_get_style_x(icon, LV_PART_MAIN);
+    const int shift = corner_lift(
+        lv_obj_get_style_pad_top(card, LV_PART_MAIN),
+        horizontal == 0 ? lv_obj_get_style_pad_left(card, LV_PART_MAIN)
+                        : lv_obj_get_style_pad_right(card, LV_PART_MAIN),
+        horizontal == 0 ? icon_x : -icon_x, lv_obj_get_style_y(icon, LV_PART_MAIN),
+        icon_size.x, icon_size.y);
+    if (shift > 0) {
+      const int header_bottom = lv_obj_get_style_y(icon, LV_PART_MAIN) + icon_size.y;
+      const uint32_t count = lv_obj_get_child_count(card);
+      for (uint32_t i = 0; i < count; ++i) {
+        lv_obj_t* child = lv_obj_get_child(card, i);
+        const lv_align_t child_align = lv_obj_get_style_align(child, LV_PART_MAIN);
+        if (child_align != LV_ALIGN_TOP_LEFT && child_align != LV_ALIGN_TOP_MID &&
+            child_align != LV_ALIGN_TOP_RIGHT) {
+          continue;
+        }
+        const int y = lv_obj_get_style_y(child, LV_PART_MAIN);
+        if (child != disc && child != icon && y >= header_bottom) continue;
+        lv_obj_set_y(child, y - shift);
+      }
+    }
+  }
   lv_obj_set_flag(disc, LV_OBJ_FLAG_HIDDEN, lv_obj_has_flag(icon, LV_OBJ_FLAG_HIDDEN));
   lv_obj_move_to_index(disc, lv_obj_get_index(icon));
   return disc;

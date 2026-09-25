@@ -38,6 +38,12 @@ assert.doesNotMatch(helper, /LV_RADIUS_CIRCLE/, 'Tile discs follow the global ra
 const addRound = helper.slice(helper.indexOf('inline lv_obj_t* add_round('));
 assert.doesNotMatch(addRound, /lv_obj_(?:align|set_pos|set_parent|center)\(icon/, 'The round disc must not move the icon');
 assert.match(addRound, /lv_obj_align\(disc, align,/);
+// corner_lift(): top gap minus side gap, never negative.
+assert.match(helper, /return top_gap > side_gap \? top_gap - side_gap : 0;/);
+// Corner headers: the disc lifts the whole header (disc, icon, header labels)
+// until its top gap equals its side gap; never down or sideways.
+assert.match(addRound, /const int shift = corner_lift\([\s\S]*?\);\s*if \(shift > 0\) \{/);
+assert.match(addRound, /if \(child != disc && child != icon && y >= header_bottom\) continue;\s*lv_obj_set_y\(child, y - shift\);/);
 // Taller tiles get the larger disc, centered with its own diameter.
 assert.match(addRound, /const int size = round_diameter\(\);/);
 assert.match(addRound, /icon_size\.x, size\)/);
@@ -63,8 +69,8 @@ const round = {
   climate: 'tile_icon_disc::add_round(card, icon_label);',
   weather: 'tile_icon_disc::add_round(card, icon_label);',
   media: 'tile_icon_disc::add_round(card, icon_label);',
-  text: 'tile_icon_disc::add_round(card, icon_lbl);',
-  clock: 'tile_icon_disc::add_round(card, icon_lbl);',
+  text: 'tile_icon_disc::add_round(card, header_icon);',
+  clock: 'tile_icon_disc::add_round(card, header_icon);',
   switch: 'tile_icon_disc::add_round(container, icon_lbl);',
   navigate: 'tile_icon_disc::add_round(btn, icon_lbl);',
   scene: 'tile_icon_disc::add_round(btn, icon_lbl);',

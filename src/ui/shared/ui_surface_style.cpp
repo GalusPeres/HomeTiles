@@ -27,7 +27,9 @@ struct IconDiscStyle {
   bool follows_global = false;
   bool initialized = false;
 };
-constexpr int kIconDiscStyleCount = 6;
+// Neutral and glow opacities in four contrast steps, global and fixed, plus
+// the transparent Off style (tile_icon_disc::scaled_opa).
+constexpr int kIconDiscStyleCount = 20;
 IconDiscStyle g_icon_disc_styles[kIconDiscStyleCount]{};
 std::atomic<bool> g_icon_disc_refresh_pending{false};
 

@@ -184,7 +184,6 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
           lv_obj_center(icon_lbl);
         }
       }
-      tile_icon_disc::add_round(container, icon_lbl);
     }
   }
 
@@ -211,6 +210,8 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
       }
     }
   }
+  // After the title exists, so the disc can lift a corner header.
+  if (icon_lbl) tile_icon_disc::add_round(container, icon_lbl);
 
   lv_obj_t* switch_obj = nullptr;
   if (use_switch_widget) {

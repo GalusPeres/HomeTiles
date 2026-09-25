@@ -42,6 +42,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     iconChar = getMdiChar(tile.icon_name);
   }
   const bool has_icon = iconChar.length() > 0;
+  lv_obj_t* header_icon = nullptr;
   if (has_icon) {
     lv_obj_t* icon_lbl = lv_label_create(card);
     if (icon_lbl) {
@@ -50,7 +51,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       lv_obj_align(icon_lbl, LV_ALIGN_TOP_RIGHT,
                    tile_layout::scale_480(4),
                    tile_layout::scale_480(-8));
-      tile_icon_disc::add_round(card, icon_lbl);
+      header_icon = icon_lbl;
     }
   }
 
@@ -66,6 +67,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
                    tile_layout::scale_480(4));
     }
   }
+  // After the title exists, so the disc can lift the whole header.
+  if (header_icon) tile_icon_disc::add_round(card, header_icon);
 
   auto get_text_font = [&](const Tile& t) -> const lv_font_t* {
     switch (t.sensor_value_font) {

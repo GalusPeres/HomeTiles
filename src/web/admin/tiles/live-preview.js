@@ -126,11 +126,17 @@
     }
 
     const defaultBg = meta.defaultBg || '#353535';
-    if (tileColorInputIsDefault(tab)) {
-      const colorInput = document.getElementById(prefix + '_tile_color');
-      if (colorInput) colorInput.value = defaultBg;
-    }
+    // Tiles without their own color (or with the stored default grey) show
+    // and keep following the global default tile color.
     const isDefaultBg = tileColorInputIsDefault(tab);
+    if (isDefaultBg) {
+      const colorInput = document.getElementById(prefix + '_tile_color');
+      if (colorInput) {
+        colorInput.value = defaultBg;
+        colorInput.dataset.bgColorDefault = '1';
+      }
+    }
+    syncTileColorGlobalToggle(tab);
     const tileBg = tileBackgroundCss(meta, isDefaultBg,
       isDefaultBg ? defaultBg : (color || defaultBg));
     if (isScreensaverTileTab(tab)) {
@@ -152,14 +158,16 @@
     let html = '';
 
     if (iconName) {
-      const iconStyle = previewKind === 'climate'
-        ? ' style="color:' + climatePreviewColor(climatePreviewState) + '"'
-        : (previewKind === 'cover'
-          ? ' style="color:' + coverPreviewColor(coverPreviewState) + '"'
-          : (previewKind === 'binary_sensor'
-            ? ' style="color:' + binarySensorPreviewColor(
-                binarySensorPreviewState) + '"'
-            : ''));
+      const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
+      const iconColor = previewIconColor(type, iconRecord, iconEntity, sensorMetaCache,
+        binarySensorPreviewState, previewKind === 'climate'
+          ? climatePreviewColor(climatePreviewState)
+          : (previewKind === 'cover'
+            ? coverPreviewColor(coverPreviewState)
+            : (previewKind === 'binary_sensor'
+              ? binarySensorPreviewColor(binarySensorPreviewState)
+              : '')));
+      const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
       html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
     }
 

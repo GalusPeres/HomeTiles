@@ -7,6 +7,7 @@
 #include "src/devices/device.h"
 #include "src/tiles/config/tile_geometry.h"
 #include "src/core/config/pin_access.h"
+#include "src/core/config/tile_color.h"
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/types/tile_type_policy.h"
 
@@ -521,13 +522,21 @@ static inline uint32_t tileBgColorRgb(const Tile& tile) {
   return tile.bg_color & TILE_BG_COLOR_RGB_MASK;
 }
 
-static inline uint32_t tileBgColorOrDefault(const Tile& tile, uint32_t default_color) {
-  return tileBgColorIsSet(tile) ? tileBgColorRgb(tile) : (default_color & TILE_BG_COLOR_RGB_MASK);
-}
-
 // Background of tiles without their own color: the global default tile color
 // from the display settings (tile_color::kDefault until the user picks one).
 uint32_t tileDefaultBgColor();
+
+// A stored built-in default grey (saved explicitly by older editors) counts
+// as "no own color" and follows the global default tile color like an unset
+// color. Every other stored color is kept.
+static inline bool tileBgColorFollowsDefault(uint32_t stored) {
+  return stored == 0 || tile_color::isDefaultGrey(stored);
+}
+
+static inline uint32_t tileBgColorOrDefault(const Tile& tile, uint32_t default_color) {
+  if (!tileBgColorIsSet(tile)) return default_color & TILE_BG_COLOR_RGB_MASK;
+  return tileBgColorFollowsDefault(tile.bg_color) ? tileDefaultBgColor() : tileBgColorRgb(tile);
+}
 
 struct FolderEntry {
   uint16_t id;

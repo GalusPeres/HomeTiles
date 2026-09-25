@@ -2,7 +2,7 @@
 // and the default tile color. Both follow the tile border setting end to end:
 // NVS config, Web Admin row, live device apply and live preview.
 import assert from 'node:assert/strict';
-import {readRepoFile} from '../../lib/admin-source.mjs';
+import {extractFunction, readRepoFile} from '../../lib/admin-source.mjs';
 
 const read = file => readRepoFile(file).replace(/\r\n?/g, '\n');
 const config = read('src/core/config/config_manager.cpp');
@@ -11,7 +11,10 @@ const header = read('src/core/config/config_manager.h');
 // Config: defaults, equality, load, save and single-value saves with NVS keys.
 assert.match(header, /bool icon_discs = true;/);
 assert.match(header, /uint32_t default_tile_color = tile_color::kDefault;/);
-assert.match(read('src/core/config/tile_color.h'), /constexpr uint32_t kDefault = 0x2A2A2A;/);
+const tileColor = read('src/core/config/tile_color.h');
+assert.match(tileColor, /constexpr uint32_t kDefault = 0x222222;/, 'The built-in default is slightly darker');
+assert.match(tileColor, /constexpr uint32_t kLegacyDefault = 0x2A2A2A;/);
+assert.match(tileColor, /return normalize\(rgb\) == kDefault \|\| normalize\(rgb\) == kLegacyDefault;/);
 for (const marker of [
   'a.icon_discs == b.icon_discs &&',
   'a.default_tile_color == b.default_tile_color &&',
@@ -56,7 +59,7 @@ assert.doesNotMatch(read('src/tiles/runtime/tile_renderer.cpp'), /tileBgColorOrD
 // The animation tile keeps its black default.
 assert.match(read('src/types/pixelanim/renderer.cpp'), /tileBgColorOrDefault\(tile, 0x000000\)/);
 const registry = read('src/types/types_registry.cpp');
-assert.match(registry, /return entry\.default_bg_color == tile_color::kDefault;/);
+assert.match(registry, /return tile_color::isDefaultGrey\(entry\.default_bg_color\);/);
 assert.match(registry, /if \(follows_default_tile_color\(entry\)\) html \+= "sharedBg:true,";/);
 
 // Web Admin row: heading and labels come from the central translations.
@@ -126,5 +129,43 @@ assert.ok(css.includes('.tile-settings label, .global-settings-panel label { fon
 assert.ok(css.includes('.tile-settings h3, .global-settings-panel h3 { margin:0 0 14px; color:var(--text); font-size:17px; }'));
 assert.match(css, /\.global-settings-fields \{\s*display:grid;\s*grid-template-columns:repeat\(auto-fit, minmax\(180px, 1fr\)\);/,
   'The global fields wrap on narrow widths');
+
+// A stored built-in default grey (older editors saved it explicitly) follows
+// the global default tile color like an unset color, on the device and in
+// both previews; every other stored color is kept.
+const tileHeader = read('src/tiles/config/tile_config.h');
+assert.match(tileHeader, /return stored == 0 \|\| tile_color::isDefaultGrey\(stored\);/);
+assert.match(tileHeader, /return tileBgColorFollowsDefault\(tile\.bg_color\) \? tileDefaultBgColor\(\) : tileBgColorRgb\(tile\);/);
+assert.ok(read('src/ui/ui_manager.cpp').includes('? (tileBgColorFollowsDefault(snapshot_color)'), 'Hidden Settings gesture color');
+assert.ok(html.includes('tileBgColorFollowsDefault(tile.bg_color) && tile_type_follows_default_tile_color(tile.type)'));
+assert.ok(html.includes('snapshot.valid && !tileBgColorFollowsDefault(snapshot.bg_color)'));
+const gridPreview = read('src/web/admin/tiles/grid-preview.js');
+const follows = new Function(`${extractFunction('isDefaultTileGrey', gridPreview)}
+${extractFunction('tileBgFollowsDefault', gridPreview)}; return tileBgFollowsDefault;`)();
+for (const [value, expected] of [[0, true], [undefined, true], [0x2A2A2A, true], [0x012A2A2A, true],
+                                 [0x01222222, true], [0x01353535, false], [0x01000000, false], [0x01FF0000, false]]) {
+  assert.equal(follows(value), expected, `preview follows the global color for ${value}`);
+}
+const firmwareFollows = stored => stored === 0 || [0x222222, 0x2A2A2A].includes(stored & 0xFFFFFF);
+for (const value of [0, 0x012A2A2A, 0x01222222, 0x01353535, 0x01000000]) assert.equal(follows(value), firmwareFollows(value));
+
+// "Use global color" replaces the tile color reset button: checked follows the
+// global color (default marker), picking a color unchecks it.
+for (const marker of [
+  '<div class="tile-color-row no-reset)html";',
+  '_tile_color_global" checked onchange="toggleTileGlobalColor(\')html";',
+  'appendHtmlEscaped(html, tr.use_global_tile_color);',
+]) assert.ok(html.includes(marker), `tile color HTML: ${marker}`);
+assert.doesNotMatch(html, /onclick="resetTileColor\(/, 'The tile Color field has no reset button');
+assert.match(gridPreview, /function markTileColorInputExplicit\(tab\) \{[\s\S]*?input\.dataset\.bgColorDefault = '0';\s*syncTileColorGlobalToggle\(tab\);/);
+assert.match(gridPreview, /function toggleTileGlobalColor\(tab, useGlobal\) \{[\s\S]*?input\.dataset\.bgColorDefault = useGlobal \? '1' : '0';[\s\S]*?scheduleAutoSave\(tab\);/);
+assert.equal((gridPreview.match(/syncTileColorGlobalToggle\(tab\);/g) || []).length, 5, 'Every color state change syncs the checkbox');
+assert.ok(i18n.includes('"Use global color"') && i18n.includes('"Globale Farbe verwenden"') && i18n.includes('"Utiliser la couleur globale"'));
+assert.ok(gridPreview.includes('const isDefaultBg = tileBgFollowsDefault(tile.bg_color);'));
+assert.ok(gridPreview.includes("input.dataset.bgColorDefault === '1' || tileColorHexIsDefaultGrey(input.value)"));
+assert.ok(read('src/web/admin/settings/access.js').includes(': tileBgFollowsDefault(bgValue);'));
+assert.match(read('src/web/admin/tiles/live-preview.js'),
+  /const isDefaultBg = tileColorInputIsDefault\(tab\);\s*if \(isDefaultBg\) \{[\s\S]*?colorInput\.dataset\.bgColorDefault = '1';/,
+  'The live preview decides before replacing the input with the global color');
 
 console.log('Global icon discs and default tile color: config, endpoints, live apply, translations and preview pass');

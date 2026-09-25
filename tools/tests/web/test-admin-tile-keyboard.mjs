@@ -57,6 +57,8 @@ const productionFunctions = [
   extractDeliveredFunction('updateTilePreview'),
   extractDeliveredFunction('applyCompactSensorPreview'),
   extractDeliveredFunction('isCompactSensorType'),
+  extractDeliveredFunction('tileTypeHasDiscToggle'),
+  extractDeliveredFunction('tileTypeHasColoredIcon'),
   extractDeliveredFunction('renderTileFromData')
 ].join('\n\n');
 

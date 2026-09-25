@@ -89,7 +89,7 @@
           : Number(hiddenTile?.dataset.bgColor || 0));
     const isDefault = source && source.bg_color_default !== undefined
       ? String(source.bg_color_default) === '1'
-      : !tileBgValueIsSet(bgValue);
+      : tileBgFollowsDefault(bgValue);
     const color = source?.color ||
       tileBgToHex(bgValue, getTileTypeMeta('7').defaultBg || '#2A2A2A');
     const rawCol = Number(source?.col ?? hiddenTile?.dataset.col ?? 0);

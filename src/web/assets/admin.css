@@ -1324,6 +1324,12 @@
     .tile-color-row { display:grid; grid-template-columns:minmax(72px,1fr) 38px; gap:8px; align-items:center; }
     .tile-color-label-row.has-opacity,
     .tile-color-row.has-opacity { grid-template-columns:minmax(72px,1fr) minmax(110px,1.5fr) 38px; }
+    /* The tile Color field has no reset button: "Use global color" replaces it. */
+    .tile-color-label-row.no-reset,
+    .tile-color-row.no-reset { grid-template-columns:minmax(72px,1fr); }
+    .tile-color-label-row.no-reset.has-opacity,
+    .tile-color-row.no-reset.has-opacity { grid-template-columns:minmax(72px,1fr) minmax(110px,1.5fr); }
+    .tile-color-global-toggle { margin:0 0 10px; }
     .tile-color-label-row { margin-top:13px; margin-bottom:4px; }
     .tile-color-label-row span { color:var(--text-2); font-size:12px; font-weight:600; line-height:14px; }
     .tile-color-row { margin-bottom:10px; }

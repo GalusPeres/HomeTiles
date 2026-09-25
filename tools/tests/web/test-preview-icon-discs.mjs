@@ -28,11 +28,13 @@ const page = `<!doctype html><html lang="en"><head><style>${readRepoFile('src/we
 <textarea id="test_tile_title"></textarea><input id="test_tile_icon"><input type="color" id="test_tile_color">
 ${['col','row','span_w','span_h'].map(n=>`<input id="test_tile_${n}" value="1">`).join('')}
 <input type="checkbox" id="test_tile_icon_disc" checked>
-<input type="checkbox" id="test_tile_icon_glow" checked><select id="test_scene_alias"><option value="tv">TV</option></select></div>
+<input type="checkbox" id="test_tile_icon_glow" checked><select id="test_scene_alias"><option value="tv">TV</option></select>
+<input type="checkbox" id="test_tile_color_global" checked></div>
+<div class="tile" id="test-tile-3" data-index="3" style="width:84px;height:34px"></div>
 <pre id="result"></pre><script>
 const nativeListen=document.addEventListener.bind(document);document.addEventListener=(name,...args)=>{if(name!=='DOMContentLoaded')nativeListen(name,...args);};
 const APP_I18N={},CLIMATE_I18N={},BINARY_SENSOR_I18N={},GRID_COLS=7,GRID_ROWS=5,TILES_PER_GRID=35,ADMIN_WEB_SESSION_TOKEN='test';
-const TILE_TYPE_REGISTRY={0:{},1:{css:'sensor',fields:'sensor',preview:'sensor',sharedBg:true,defaultBg:'#2A2A2A'},2:{css:'scene',fields:'scene',preview:'none',sharedBg:true,defaultBg:'#2A2A2A'}};
+const TILE_TYPE_REGISTRY={0:{},1:{css:'sensor',fields:'sensor',preview:'sensor',sharedBg:true,defaultBg:'#222222'},2:{css:'scene',fields:'scene',preview:'none',sharedBg:true,defaultBg:'#222222'}};
 const TILE_TABS=[],TAB_BY_FOLDER={},FOLDER_BY_TAB={},SCREENSAVER_FOLDER_ID=65535,SCREENSAVER_TILE_DEFAULT_OPACITY=0,SCREENSAVER_TILE_DEFAULT_COLOR='#000000',MEDIA_TILE_TYPE=15,MEDIA_TILE_MIN_SPAN=2,MEDIA_TILE_MAX_SPAN=3;
 window.fetch=async()=>({json:async()=>({success:true})});
 ${inlineScriptSafe(readAdminDeliverySource())}
@@ -67,6 +69,38 @@ try{
  renderTileFromData('test',1,{type:1,title:'T',sensor_entity:'sensor.t',icon_name:'thermometer',icon_disc:1},meta);
  check(disc(sensor).display!=='none','Per-tile On keeps the disc with the global option off');
  document.documentElement.classList.remove('icon-discs-off');
+ // Tiles with the stored default grey follow a global tile color change live,
+ // and their discs stay translucent white over the new background.
+ renderTileFromData('test',3,{type:1,title:'Half',sensor_entity:'sensor.t',icon_name:'thermometer',span_w:1,span_h:0.5,bg_color:0x012A2A2A},meta);
+ renderTileFromData('test',0,{type:2,title:'TV',scene_alias:'tv',icon_name:'',bg_color:0x012A2A2A},meta);
+ previewDefaultTileColor('#101010');
+ const half=document.getElementById('test-tile-3');
+ check(half.classList.contains('sensor-compact'),'Half-height tile uses the compact disc');
+ for(const el of [scene,half]) check(getComputedStyle(el).backgroundColor==='rgb(16, 16, 16)','Default-grey tile follows the global color live');
+ check(white(disc(scene).backgroundColor),'Taller disc stays translucent white over the new color');
+ check(white(getComputedStyle(half.querySelector('.tile-icon')).backgroundColor),'Half-height disc stays translucent white over the new color');
+ renderTileFromData('test',0,{type:2,title:'TV',scene_alias:'tv',icon_name:'',bg_color:0x01FF0000},meta);
+ check(getComputedStyle(scene).backgroundColor==='rgb(255, 0, 0)','Other stored colors are kept');
+ // Per-tile icon colors (icon-colors.js): first matching rule, else the fixed
+ // color; unknown states keep the type color. Glow follows the result.
+ const colored=(value,record)=>{meta.values['sensor.t']=value;renderTileFromData('test',1,{type:1,title:'T',sensor_entity:'sensor.t',icon_name:'thermometer',icon_colors:record},meta);return getComputedStyle(sensor.querySelector('.tile-icon')).color;};
+ const rule='FF0000'+String.fromCharCode(10)+'ge 00FF00 20';
+ check(colored('25',rule)==='rgb(0, 255, 0)','Matching rule colors the icon');
+ check(sensor.querySelector('.tile-icon').classList.contains('tile-icon-tinted'),'Rule color tints the disc');
+ check(colored('10',rule)==='rgb(255, 0, 0)','Fixed icon color without a matching rule');
+ check(colored('unavailable',rule)==='rgb(255, 255, 255)','Unknown states keep the type color');
+ // "Use global color": stored default grey loads checked; picking a color
+ // unchecks it; checking it again returns to the global color.
+ currentTileTab='test';currentTileIndex=1;folderByTab.test=1;
+ const box=document.getElementById('test_tile_color_global'),colorInput=document.getElementById('test_tile_color');
+ document.getElementById('test_tile_type').value='1';
+ setTileColorInputFromStored('test',0x012A2A2A,'#101010');
+ check(box.checked&&colorInput.value==='#101010','Stored default grey loads as Use global color');
+ colorInput.value='#ff0000';markTileColorInputExplicit('test');
+ check(!box.checked&&!tileColorInputIsDefault('test'),'Picking a color unchecks Use global color');
+ box.checked=true;toggleTileGlobalColor('test',true);
+ check(box.checked&&tileColorInputIsDefault('test')&&colorInput.value==='#101010','Checking returns to the global color');
+ check(getComputedStyle(sensor).backgroundColor==='rgb(16, 16, 16)','Live preview follows the global color');
  // Live preview: the scene alias field resolves the same icon.
  currentTileTab='test';currentTileIndex=2;folderByTab.test=1;
  document.getElementById('test_tile_type').value='2';document.getElementById('test_scene_alias').value='tv';

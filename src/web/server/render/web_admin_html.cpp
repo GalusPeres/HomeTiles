@@ -497,7 +497,7 @@ static void appendTileTabHTML(
     }
 
     if (tile.type != TILE_EMPTY &&
-        !tileBgColorIsSet(tile) && tile_type_follows_default_tile_color(tile.type)) {
+        tileBgColorFollowsDefault(tile.bg_color) && tile_type_follows_default_tile_color(tile.type)) {
       // Tiles without their own color follow the global default tile color
       // through one CSS variable, so the preview repaints them live.
       if (screensaver_mode) {
@@ -769,7 +769,7 @@ static void appendTileTabHTML(
     if (hidden_icon.startsWith("mdi:")) hidden_icon.remove(0, 4);
     else if (hidden_icon.startsWith("mdi-")) hidden_icon.remove(0, 4);
     const uint32_t hidden_color =
-        snapshot.valid && snapshot.bg_color != 0
+        snapshot.valid && !tileBgColorFollowsDefault(snapshot.bg_color)
             ? (snapshot.bg_color & TILE_BG_COLOR_RGB_MASK)
             : tileDefaultBgColor();
     char hidden_color_hex[8];
@@ -1107,7 +1107,7 @@ static void appendTileTabHTML(
   html += R"html(</label>
             </div>
 
-            <div class="tile-color-label-row)html";
+            <div class="tile-color-label-row no-reset)html";
   if (screensaver_mode) html += " has-opacity";
   html += R"html("><span>)html";
   html += tr.admin_color;
@@ -1115,10 +1115,10 @@ static void appendTileTabHTML(
   if (screensaver_mode) {
     html += R"html(<span>)html";
     html += tr.screensaver_background_opacity;
-    html += R"html(</span><span aria-hidden="true"></span>)html";
+    html += R"html(</span>)html";
   }
   html += R"html(</div>
-            <div class="tile-color-row)html";
+            <div class="tile-color-row no-reset)html";
   if (screensaver_mode) html += " has-opacity";
   html += R"html(">
             <input type="color" id=")html";
@@ -1129,10 +1129,14 @@ static void appendTileTabHTML(
     html += R"html(              <input type="range" id="screensaver_tile_opacity" min="0" max="255" step="1" value="0">
 )html";
   }
-  html += R"html(              <button type="button" class="tile-color-reset-btn" title="Reset" onclick="resetTileColor(')html";
+  html += R"html(            </div>
+            <label class="inline-checkbox tile-color-global-toggle"><input type="checkbox" id=")html";
   html += tab_id;
-  html += R"html(')"><i class="mdi mdi-restore"></i></button>
-            </div>
+  html += R"html(_tile_color_global" checked onchange="toggleTileGlobalColor(')html";
+  html += tab_id;
+  html += R"html(', this.checked)"> )html";
+  appendHtmlEscaped(html, tr.use_global_tile_color);
+  html += R"html(</label>
 
             <div class="tile-layout">
               <div class="layout-field">

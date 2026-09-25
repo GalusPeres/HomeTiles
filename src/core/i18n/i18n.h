@@ -287,6 +287,7 @@ struct Strings {
   const char* global_settings_heading;
   const char* icon_discs;
   const char* default_tile_color;
+  const char* use_global_tile_color;
   // Web Admin tile editor: per-tile icon disc override.
   const char* icon_disc_label;
   const char* icon_disc_global;

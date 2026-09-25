@@ -515,7 +515,7 @@ function syncTileRadiusControls(tabEl) {
           : Number(hiddenTile?.dataset.bgColor || 0));
     const isDefault = source && source.bg_color_default !== undefined
       ? String(source.bg_color_default) === '1'
-      : !tileBgValueIsSet(bgValue);
+      : tileBgFollowsDefault(bgValue);
     const color = source?.color ||
       tileBgToHex(bgValue, getTileTypeMeta('7').defaultBg || '#2A2A2A');
     const rawCol = Number(source?.col ?? hiddenTile?.dataset.col ?? 0);
@@ -2633,6 +2633,241 @@ function syncTileRadiusControls(tabEl) {
     saveTile(tab, queued.silent, index);
   }
 
+  // Per-tile icon colors for the Sensor family (Sensor, Number, Select,
+  // Date/Time), Binary sensor and Energy: an optional fixed icon color and up
+  // to three color rules, first match wins. The editor keeps the canonical
+  // record of src/tiles/config/tile_icon_colors.h in the "icon_colors" field:
+  // line 1 is the fixed color "RRGGBB" or empty, then one
+  // "<op> RRGGBB <value>" line per rule. The six type modules call the
+  // load/save/reset helpers below from their own field handlers, so drafts,
+  // copy/paste, autosave and import/export carry the record like any other
+  // type field.
+  const ICON_COLOR_TYPES = ['1', '14', '20', '21', '22', '23'];
+  const ICON_COLOR_NUMERIC_TYPES = ['14', '21'];
+  const ICON_COLOR_TEXT_TYPES = ['20', '22', '23'];
+  const ICON_COLOR_NUMERIC_OPS = ['ge', 'le', 'eq'];
+  const ICON_COLOR_TEXT_OPS = ['is', 'has'];
+  const ICON_COLOR_MAX_RULES = 3;
+  const ICON_COLOR_MAX_VALUE_BYTES = 32;
+  const ICON_COLOR_RULE_DEFAULT = '#F44336';
+
+  function tileTypeHasIconColors(typeValue) {
+    return ICON_COLOR_TYPES.includes(String(typeValue ?? '0'));
+  }
+
+  // Sensor states can be numbers or text; the other types have one kind.
+  function iconColorOpsForType(typeValue) {
+    const type = String(typeValue ?? '0');
+    if (ICON_COLOR_NUMERIC_TYPES.includes(type)) return ICON_COLOR_NUMERIC_OPS;
+    if (ICON_COLOR_TEXT_TYPES.includes(type)) return ICON_COLOR_TEXT_OPS;
+    return ICON_COLOR_NUMERIC_OPS.concat(ICON_COLOR_TEXT_OPS);
+  }
+
+  function normalizeIconColorHex(value) {
+    const match = /^#?([0-9a-fA-F]{6})$/.exec(String(value ?? '').trim());
+    return match ? '#' + match[1].toUpperCase() : '';
+  }
+
+  // Clips to the firmware's byte limit without splitting a character.
+  function clipIconRuleValue(value) {
+    let text = String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+    const encoder = new TextEncoder();
+    while (encoder.encode(text).length > ICON_COLOR_MAX_VALUE_BYTES) text = Array.from(text).slice(0, -1).join('');
+    return text.trim();
+  }
+
+  function parseIconColorRecord(record) {
+    const lines = String(record ?? '').replace(/\r/g, '').split('\n');
+    const rules = [];
+    for (const line of lines.slice(1)) {
+      const match = /^(ge|le|eq|is|has) #?([0-9a-fA-F]{6}) (.+)$/.exec(line.trim());
+      if (!match || rules.length >= ICON_COLOR_MAX_RULES) continue;
+      rules.push({ op: match[1], color: '#' + match[2].toUpperCase(), value: match[3].trim() });
+    }
+    return { color: normalizeIconColorHex(lines[0]), rules };
+  }
+
+  // Same rules as tile_icon_colors::normalize(): numeric rules need a number,
+  // empty values are dropped, at most three rules.
+  function buildIconColorRecord(color, rules) {
+    const lines = [normalizeIconColorHex(color).slice(1)];
+    for (const rule of rules || []) {
+      if (lines.length > ICON_COLOR_MAX_RULES) break;
+      if (!ICON_COLOR_NUMERIC_OPS.includes(rule.op) && !ICON_COLOR_TEXT_OPS.includes(rule.op)) continue;
+      let value = clipIconRuleValue(rule.value);
+      if (ICON_COLOR_NUMERIC_OPS.includes(rule.op)) {
+        value = value.replace(',', '.');
+        if (!value || !Number.isFinite(Number(value))) continue;
+      }
+      const ruleColor = normalizeIconColorHex(rule.color);
+      if (!value || !ruleColor) continue;
+      lines.push(rule.op + ' ' + ruleColor.slice(1) + ' ' + value);
+    }
+    return lines.length > 1 || lines[0] ? lines.join('\n') : '';
+  }
+
+  // Rule matching used by the Web Admin preview; mirrors resolve() in
+  // tile_icon_colors.h. Returns the icon color or '' for the type default.
+  function resolveIconColorRecord(record, state, display) {
+    const parsed = parseIconColorRecord(record);
+    if (state === undefined || state === null) return '';
+    const fold = text => String(text ?? '').trim().toLowerCase();
+    const number = parseFloat(String(state).trim().replace(',', '.'));
+    for (const rule of parsed.rules) {
+      let match = false;
+      if (ICON_COLOR_NUMERIC_OPS.includes(rule.op)) {
+        const limit = Number(rule.value);
+        if (Number.isFinite(number) && Number.isFinite(limit)) {
+          if (rule.op === 'ge') match = number >= limit;
+          else if (rule.op === 'le') match = number <= limit;
+          else match = Math.abs(number - limit) <= 1e-6 * Math.max(1, Math.abs(limit));
+        }
+      } else {
+        const needle = fold(rule.value);
+        const test = text => rule.op === 'is' ? fold(text) === needle : fold(text).includes(needle);
+        match = test(state) || (display !== undefined && display !== null && test(display));
+      }
+      if (match) return rule.color;
+    }
+    return parsed.color;
+  }
+
+  function iconColorRuleRow(tab, index) {
+    return document.getElementById(tab + '_tile_icon_rule_' + index);
+  }
+
+  function readIconColorRules(tab) {
+    const rules = [];
+    for (let index = 0; index < ICON_COLOR_MAX_RULES; index++) {
+      const row = iconColorRuleRow(tab, index);
+      if (!row || row.classList.contains('hidden')) continue;
+      rules.push({
+        op: document.getElementById(row.id + '_op')?.value || 'ge',
+        value: document.getElementById(row.id + '_value')?.value || '',
+        color: document.getElementById(row.id + '_color')?.value || ICON_COLOR_RULE_DEFAULT
+      });
+    }
+    return rules;
+  }
+
+  function writeIconColorRules(tab, rules) {
+    for (let index = 0; index < ICON_COLOR_MAX_RULES; index++) {
+      const row = iconColorRuleRow(tab, index);
+      if (!row) continue;
+      const rule = rules[index];
+      row.classList.toggle('hidden', !rule);
+      const op = document.getElementById(row.id + '_op');
+      const value = document.getElementById(row.id + '_value');
+      const color = document.getElementById(row.id + '_color');
+      if (op) op.value = rule ? rule.op : 'ge';
+      if (value) value.value = rule ? rule.value : '';
+      if (color) color.value = rule ? (normalizeIconColorHex(rule.color) || ICON_COLOR_RULE_DEFAULT) : ICON_COLOR_RULE_DEFAULT;
+    }
+    document.getElementById(tab + '_tile_icon_rule_add')
+      ?.classList.toggle('hidden', rules.length >= ICON_COLOR_MAX_RULES);
+  }
+
+  // An unset icon color keeps the type's default (white or state color).
+  function setIconColorInput(tab, color) {
+    const input = document.getElementById(tab + '_tile_icon_color');
+    if (!input) return;
+    const hex = normalizeIconColorHex(color);
+    input.value = hex || '#FFFFFF';
+    input.dataset.unset = hex ? '0' : '1';
+  }
+
+  function collectIconColorRecord(tab) {
+    const input = document.getElementById(tab + '_tile_icon_color');
+    const color = input && input.dataset.unset !== '1' ? input.value : '';
+    return buildIconColorRecord(color, readIconColorRules(tab));
+  }
+
+  function syncIconColorFields(tab) {
+    const block = document.getElementById(tab + '_tile_icon_color_fields');
+    if (!block) return;
+    const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
+    const visible = tileTypeHasIconColors(typeValue);
+    block.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    const ops = iconColorOpsForType(typeValue);
+    block.querySelectorAll('select[data-icon-color="op"]').forEach(select => {
+      Array.from(select.options).forEach(option => {
+        option.hidden = !ops.includes(option.value);
+        option.disabled = option.hidden;
+      });
+      if (!ops.includes(select.value)) select.value = ops[0];
+    });
+  }
+
+  function loadIconColorFields(tab, data) {
+    const parsed = parseIconColorRecord(data?.icon_colors);
+    setIconColorInput(tab, parsed.color);
+    writeIconColorRules(tab, parsed.rules);
+    syncIconColorFields(tab);
+  }
+
+  function saveIconColorFields(tab, formData) {
+    formData.append('icon_colors', collectIconColorRecord(tab));
+  }
+
+  function resetIconColorFields(tab) {
+    setIconColorInput(tab, '');
+    writeIconColorRules(tab, []);
+    syncIconColorFields(tab);
+  }
+
+  // Delegated listeners survive folder-tab HTML replacement without stale or
+  // duplicate handlers. Every change takes the shared live-editor path:
+  // preview, draft snapshot and autosave.
+  function commitIconColorChange(tab) {
+    syncIconColorFields(tab);
+    updateTilePreview(tab);
+    updateDraft(tab);
+    scheduleAutoSave(tab);
+  }
+
+  function iconColorEventTab(element) {
+    return element?.closest?.('.tile-icon-color-fields')?.dataset.tab || '';
+  }
+
+  document.addEventListener('input', event => {
+    const role = event.target?.dataset?.iconColor;
+    if (!['color', 'op', 'value', 'rule-color'].includes(role)) return;
+    const tab = iconColorEventTab(event.target);
+    if (!tab) return;
+    if (role === 'color') event.target.dataset.unset = '0';
+    commitIconColorChange(tab);
+  });
+
+  document.addEventListener('change', event => {
+    const id = event.target?.id || '';
+    if (id.endsWith('_tile_type')) syncIconColorFields(id.slice(0, -'_tile_type'.length));
+  });
+
+  document.addEventListener('click', event => {
+    const button = event.target?.closest?.('button[data-icon-color]');
+    const tab = iconColorEventTab(button);
+    if (!button || !tab) return;
+    const role = button.dataset.iconColor;
+    if (role === 'clear') {
+      setIconColorInput(tab, '');
+    } else if (role === 'remove') {
+      const rules = readIconColorRules(tab);
+      rules.splice(Number(button.dataset.rule), 1);
+      writeIconColorRules(tab, rules);
+    } else if (role === 'add') {
+      const rules = readIconColorRules(tab);
+      if (rules.length >= ICON_COLOR_MAX_RULES) return;
+      const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
+      rules.push({ op: iconColorOpsForType(typeValue)[0], value: '', color: ICON_COLOR_RULE_DEFAULT });
+      writeIconColorRules(tab, rules);
+      document.getElementById(tab + '_tile_icon_rule_' + (rules.length - 1) + '_value')?.focus();
+    } else {
+      return;
+    }
+    commitIconColorChange(tab);
+  });
+
   function getTileResizeHandlesHtml(typeValue) {
     if (String(typeValue || '0') === '0') return '';
     return '' +
@@ -4360,11 +4595,17 @@ function syncTileRadiusControls(tabEl) {
     }
 
     const defaultBg = meta.defaultBg || '#353535';
-    if (tileColorInputIsDefault(tab)) {
-      const colorInput = document.getElementById(prefix + '_tile_color');
-      if (colorInput) colorInput.value = defaultBg;
-    }
+    // Tiles without their own color (or with the stored default grey) show
+    // and keep following the global default tile color.
     const isDefaultBg = tileColorInputIsDefault(tab);
+    if (isDefaultBg) {
+      const colorInput = document.getElementById(prefix + '_tile_color');
+      if (colorInput) {
+        colorInput.value = defaultBg;
+        colorInput.dataset.bgColorDefault = '1';
+      }
+    }
+    syncTileColorGlobalToggle(tab);
     const tileBg = tileBackgroundCss(meta, isDefaultBg,
       isDefaultBg ? defaultBg : (color || defaultBg));
     if (isScreensaverTileTab(tab)) {
@@ -4386,14 +4627,16 @@ function syncTileRadiusControls(tabEl) {
     let html = '';
 
     if (iconName) {
-      const iconStyle = previewKind === 'climate'
-        ? ' style="color:' + climatePreviewColor(climatePreviewState) + '"'
-        : (previewKind === 'cover'
-          ? ' style="color:' + coverPreviewColor(coverPreviewState) + '"'
-          : (previewKind === 'binary_sensor'
-            ? ' style="color:' + binarySensorPreviewColor(
-                binarySensorPreviewState) + '"'
-            : ''));
+      const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
+      const iconColor = previewIconColor(type, iconRecord, iconEntity, sensorMetaCache,
+        binarySensorPreviewState, previewKind === 'climate'
+          ? climatePreviewColor(climatePreviewState)
+          : (previewKind === 'cover'
+            ? coverPreviewColor(coverPreviewState)
+            : (previewKind === 'binary_sensor'
+              ? binarySensorPreviewColor(binarySensorPreviewState)
+              : '')));
+      const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
       html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
     }
 
@@ -5394,6 +5637,9 @@ function syncTileRadiusControls(tabEl) {
     if (tile.background_opacity !== undefined && tile.background_opacity !== null) {
       fd.append('background_opacity', tile.background_opacity);
     }
+    // Per-tile icon colors (Sensor family, Binary sensor, Energy); older
+    // exports without the field import without icon colors.
+    if (typeof tile.icon_colors === 'string') fd.append('icon_colors', tile.icon_colors);
 
     if ([21, 22, 23].includes(safeType)) fd.append('sensor_value_font', tile.sensor_value_font ?? 2);
     if (safeType === 1) {
@@ -5593,18 +5839,85 @@ function syncTileRadiusControls(tabEl) {
     const glow = tileElem.dataset.iconGlow !== '0';
     icon.classList.toggle('tile-icon-tinted', glow && iconDiscTinted(getComputedStyle(icon).color));
   }
+  // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
+  // default grey (stored explicitly by older editors) follow the global
+  // default tile color; every other stored color is kept.
+  // Built-in default greys: tile_color::kDefault and kLegacyDefault.
+  function isDefaultTileGrey(rgb) {
+    return rgb === 0x222222 || rgb === 0x2A2A2A;
+  }
+  function tileBgFollowsDefault(value) {
+    const num = Number(value);
+    return !Number.isFinite(num) || num === 0 || isDefaultTileGrey(num & 0xFFFFFF);
+  }
+  function tileColorHexIsDefaultGrey(hex) {
+    const text = String(hex || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(text) && isDefaultTileGrey(parseInt(text.slice(1), 16));
+  }
+  // "Use global color" mirrors whether the tile follows the global color.
+  function syncTileColorGlobalToggle(tab) {
+    const box = document.getElementById(tab + '_tile_color_global');
+    if (box) box.checked = tileColorInputIsDefault(tab);
+  }
+  // Checked: the tile follows the global tile color (stored as the default
+  // marker). Unchecked: the tile keeps the color shown in the Color field.
+  function toggleTileGlobalColor(tab, useGlobal) {
+    const input = document.getElementById(tab + '_tile_color');
+    if (!input) return;
+    if (useGlobal) {
+      const type = document.getElementById(tab + '_tile_type')?.value || '0';
+      input.value = getTileTypeMeta(type).defaultBg || '#222222';
+    }
+    input.dataset.bgColorDefault = useGlobal ? '1' : '0';
+    syncTileColorGlobalToggle(tab);
+    updateTilePreview(tab);
+    updateDraft(tab);
+    scheduleAutoSave(tab);
+  }
+  // State the firmware compares with the per-tile icon color rules, or null
+  // while it is missing, unknown or unavailable (the type color applies).
+  function iconColorRuleState(typeValue, entity, meta, binaryState) {
+    const type = String(typeValue ?? '0');
+    if (type === '20') {
+      if (!binaryState?.valid || binaryState.available !== true ||
+          !['on', 'off'].includes(binaryState.state)) return null;
+      return { state: binaryState.state, display: binarySensorPreviewStateText(binaryState) };
+    }
+    if (['21', '22', '23'].includes(type)) {
+      let value = meta?.editableValues?.[entity];
+      if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { return null; } }
+      if (!value || value.state === null || value.state === undefined || !value.available ||
+          ['unknown', 'unavailable'].includes(String(value.state))) return null;
+      const kind = type === '21' ? 'number' : (type === '22' ? 'select' : 'datetime');
+      return { state: String(value.state), display: editablePreviewText(entity, kind, meta) };
+    }
+    const raw = String(meta?.values?.[entity] ?? '').trim();
+    if (!raw || ['unavailable', 'unknown', 'none', 'null', '--'].includes(raw.toLowerCase())) return null;
+    return { state: raw, display: null };
+  }
+  // Icon color of a preview tile: the per-tile rule or fixed icon color
+  // (resolveIconColorRecord, same result as the firmware), else `fallback`.
+  function previewIconColor(typeValue, record, entity, meta, binaryState, fallback) {
+    if (!record || typeof tileTypeHasIconColors !== 'function' ||
+        !tileTypeHasIconColors(typeValue)) return fallback;
+    const rule = iconColorRuleState(typeValue, entity, meta, binaryState);
+    return (rule && resolveIconColorRecord(record, rule.state, rule.display)) || fallback;
+  }
   function snapshotBgColorIsDefault(snapshot) {
-    return String(snapshot?.bg_color_default || '0') === '1';
+    return String(snapshot?.bg_color_default || '0') === '1' ||
+      tileColorHexIsDefaultGrey(snapshot?.color);
   }
   function tileColorInputIsDefault(tab) {
     const input = document.getElementById(tab + '_tile_color');
-    return !!input && input.dataset.bgColorDefault === '1';
+    return !!input && (input.dataset.bgColorDefault === '1' || tileColorHexIsDefaultGrey(input.value));
   }
   function setTileColorInputFromStored(tab, value, fallback) {
     const input = document.getElementById(tab + '_tile_color');
     if (!input) return;
-    input.value = tileBgToHex(value, fallback || '#2A2A2A');
-    input.dataset.bgColorDefault = tileBgValueIsSet(value) ? '0' : '1';
+    const follows = tileBgFollowsDefault(value);
+    input.value = follows ? (fallback || '#2A2A2A') : tileBgToHex(value, fallback || '#2A2A2A');
+    input.dataset.bgColorDefault = follows ? '1' : '0';
+    syncTileColorGlobalToggle(tab);
   }
   function setTileColorInputFromSnapshot(tab, snapshot) {
     const input = document.getElementById(tab + '_tile_color');
@@ -5613,10 +5926,13 @@ function syncTileRadiusControls(tabEl) {
     const isDefault = snapshotBgColorIsDefault(snapshot);
     input.value = isDefault ? (meta.defaultBg || '#2A2A2A') : (snapshot?.color || meta.defaultBg || '#2A2A2A');
     input.dataset.bgColorDefault = isDefault ? '1' : '0';
+    syncTileColorGlobalToggle(tab);
   }
+  // Picking a color unchecks "Use global color".
   function markTileColorInputExplicit(tab) {
     const input = document.getElementById(tab + '_tile_color');
     if (input) input.dataset.bgColorDefault = '0';
+    syncTileColorGlobalToggle(tab);
   }
   function resetTileColor(tab) {
     const input = document.getElementById(tab + '_tile_color');
@@ -5625,6 +5941,7 @@ function syncTileRadiusControls(tabEl) {
     const meta = getTileTypeMeta(typeValue);
     input.value = meta.defaultBg || '#2A2A2A';
     input.dataset.bgColorDefault = '1';
+    syncTileColorGlobalToggle(tab);
     if (isScreensaverTileTab(tab)) {
       const opacity = document.getElementById('screensaver_tile_opacity');
       if (opacity) opacity.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);
@@ -5665,7 +5982,7 @@ function syncTileRadiusControls(tabEl) {
     else delete el.dataset.navigateTarget;
     if (typeValue === '0') el.style.background = 'transparent';
     else {
-      const isDefaultBg = !tileBgValueIsSet(tile.bg_color);
+      const isDefaultBg = tileBgFollowsDefault(tile.bg_color);
       const bg = tileBackgroundCss(meta, isDefaultBg,
         tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'));
       if (isScreensaverTileTab(tab)) {
@@ -5737,14 +6054,15 @@ function syncTileRadiusControls(tabEl) {
       let html = '';
 
       if (iconName) {
-        const iconStyle = previewKind === 'climate'
-          ? ' style="color:' + climatePreviewColor(climatePreviewState) + '"'
-          : (previewKind === 'cover'
-            ? ' style="color:' + coverPreviewColor(coverPreviewState) + '"'
-            : (previewKind === 'binary_sensor'
-              ? ' style="color:' + binarySensorPreviewColor(
-                  binarySensorPreviewState) + '"'
-              : ''));
+        const iconColor = previewIconColor(typeValue, tile.icon_colors, tile.sensor_entity || '',
+          sensorMeta, binarySensorPreviewState, previewKind === 'climate'
+            ? climatePreviewColor(climatePreviewState)
+            : (previewKind === 'cover'
+              ? coverPreviewColor(coverPreviewState)
+              : (previewKind === 'binary_sensor'
+                ? binarySensorPreviewColor(binarySensorPreviewState)
+                : '')));
+        const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
         html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
       }
 
@@ -8397,6 +8715,7 @@ function maybeFillTitleFromSensor(tab) {
   }
 
   function loadSensorFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_sensor_entity');
     if (entityEl) entityEl.value = data.sensor_entity || '';
@@ -8428,6 +8747,7 @@ function maybeFillTitleFromSensor(tab) {
   }
 
   function saveSensorFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const prefix = tab;
     formData.append('sensor_entity', document.getElementById(prefix + '_sensor_entity')?.value || '');
     formData.append('sensor_unit', document.getElementById(prefix + '_sensor_unit')?.value || '');
@@ -8445,6 +8765,7 @@ function maybeFillTitleFromSensor(tab) {
   }
 
   function resetSensorFields(tab) {
+    resetIconColorFields(tab);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_sensor_entity');
     if (entityEl) entityEl.value = '';
@@ -8475,6 +8796,7 @@ function maybeFillTitleFromSensor(tab) {
   }
 
   function loadBinarySensorFields(tab, data) {
+    loadIconColorFields(tab, data);
     const entity = document.getElementById(tab + '_binary_sensor_entity');
     const configured = data.sensor_entity || data.binary_sensor_entity || '';
     if (entity) {
@@ -8502,6 +8824,7 @@ function maybeFillTitleFromSensor(tab) {
   }
 
   function saveBinarySensorFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const entityEl = document.getElementById(tab + '_binary_sensor_entity');
     const entity = entityEl
       ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
@@ -8514,6 +8837,7 @@ function maybeFillTitleFromSensor(tab) {
   }
 
   function resetBinarySensorFields(tab) {
+    resetIconColorFields(tab);
     const font = document.getElementById(tab + '_binary_sensor_value_font');
     if (font) font.value = '0';
     const entity = document.getElementById(tab + '_binary_sensor_entity');
@@ -8558,6 +8882,7 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   function loadEnergyFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
     if (entityEl) {
@@ -8586,6 +8911,7 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   function saveEnergyFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
     const entity = entityEl ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
@@ -8599,6 +8925,7 @@ function maybeFillTitleFromEnergy(tab) {
   }
 
   function resetEnergyFields(tab) {
+    resetIconColorFields(tab);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
     if (entityEl) entityEl.value = '';
@@ -12299,6 +12626,7 @@ function normalizeTextValueFont(value) {
   }
 
   function loadNumberFields(tab, data) {
+    loadIconColorFields(tab, data);
     const font = document.getElementById(tab + '_number_value_font');
     if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_number_entity');
@@ -12326,6 +12654,7 @@ function normalizeTextValueFont(value) {
   }
 
   function saveNumberFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     formData.append('sensor_value_font', document.getElementById(tab + '_number_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_number_entity');
     const entity = entityEl
@@ -12338,6 +12667,7 @@ function normalizeTextValueFont(value) {
   }
 
   function resetNumberFields(tab) {
+    resetIconColorFields(tab);
     const font = document.getElementById(tab + '_number_value_font');
     if (font) font.value = '2';
     const entity = document.getElementById(tab + '_number_entity');
@@ -12351,6 +12681,7 @@ function normalizeTextValueFont(value) {
   }
 
   function loadSelectFields(tab, data) {
+    loadIconColorFields(tab, data);
     const font = document.getElementById(tab + '_select_value_font');
     if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_select_entity');
@@ -12378,6 +12709,7 @@ function normalizeTextValueFont(value) {
   }
 
   function saveSelectFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     formData.append('sensor_value_font', document.getElementById(tab + '_select_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_select_entity');
     const entity = entityEl
@@ -12390,6 +12722,7 @@ function normalizeTextValueFont(value) {
   }
 
   function resetSelectFields(tab) {
+    resetIconColorFields(tab);
     const font = document.getElementById(tab + '_select_value_font');
     if (font) font.value = '2';
     const entity = document.getElementById(tab + '_select_entity');
@@ -12403,6 +12736,7 @@ function normalizeTextValueFont(value) {
   }
 
   function loadDateTimeFields(tab, data) {
+    loadIconColorFields(tab, data);
     const font = document.getElementById(tab + '_datetime_value_font');
     if (font) font.value = String(data.sensor_value_font ?? 2);
     const entity = document.getElementById(tab + '_datetime_entity');
@@ -12430,6 +12764,7 @@ function normalizeTextValueFont(value) {
   }
 
   function saveDateTimeFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     formData.append('sensor_value_font', document.getElementById(tab + '_datetime_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_datetime_entity');
     const entity = entityEl
@@ -12442,6 +12777,7 @@ function normalizeTextValueFont(value) {
   }
 
   function resetDateTimeFields(tab) {
+    resetIconColorFields(tab);
     const font = document.getElementById(tab + '_datetime_value_font');
     if (font) font.value = '2';
     const entity = document.getElementById(tab + '_datetime_entity');

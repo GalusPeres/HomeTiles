@@ -45,18 +45,85 @@
     const glow = tileElem.dataset.iconGlow !== '0';
     icon.classList.toggle('tile-icon-tinted', glow && iconDiscTinted(getComputedStyle(icon).color));
   }
+  // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
+  // default grey (stored explicitly by older editors) follow the global
+  // default tile color; every other stored color is kept.
+  // Built-in default greys: tile_color::kDefault and kLegacyDefault.
+  function isDefaultTileGrey(rgb) {
+    return rgb === 0x222222 || rgb === 0x2A2A2A;
+  }
+  function tileBgFollowsDefault(value) {
+    const num = Number(value);
+    return !Number.isFinite(num) || num === 0 || isDefaultTileGrey(num & 0xFFFFFF);
+  }
+  function tileColorHexIsDefaultGrey(hex) {
+    const text = String(hex || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(text) && isDefaultTileGrey(parseInt(text.slice(1), 16));
+  }
+  // "Use global color" mirrors whether the tile follows the global color.
+  function syncTileColorGlobalToggle(tab) {
+    const box = document.getElementById(tab + '_tile_color_global');
+    if (box) box.checked = tileColorInputIsDefault(tab);
+  }
+  // Checked: the tile follows the global tile color (stored as the default
+  // marker). Unchecked: the tile keeps the color shown in the Color field.
+  function toggleTileGlobalColor(tab, useGlobal) {
+    const input = document.getElementById(tab + '_tile_color');
+    if (!input) return;
+    if (useGlobal) {
+      const type = document.getElementById(tab + '_tile_type')?.value || '0';
+      input.value = getTileTypeMeta(type).defaultBg || '#222222';
+    }
+    input.dataset.bgColorDefault = useGlobal ? '1' : '0';
+    syncTileColorGlobalToggle(tab);
+    updateTilePreview(tab);
+    updateDraft(tab);
+    scheduleAutoSave(tab);
+  }
+  // State the firmware compares with the per-tile icon color rules, or null
+  // while it is missing, unknown or unavailable (the type color applies).
+  function iconColorRuleState(typeValue, entity, meta, binaryState) {
+    const type = String(typeValue ?? '0');
+    if (type === '20') {
+      if (!binaryState?.valid || binaryState.available !== true ||
+          !['on', 'off'].includes(binaryState.state)) return null;
+      return { state: binaryState.state, display: binarySensorPreviewStateText(binaryState) };
+    }
+    if (['21', '22', '23'].includes(type)) {
+      let value = meta?.editableValues?.[entity];
+      if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { return null; } }
+      if (!value || value.state === null || value.state === undefined || !value.available ||
+          ['unknown', 'unavailable'].includes(String(value.state))) return null;
+      const kind = type === '21' ? 'number' : (type === '22' ? 'select' : 'datetime');
+      return { state: String(value.state), display: editablePreviewText(entity, kind, meta) };
+    }
+    const raw = String(meta?.values?.[entity] ?? '').trim();
+    if (!raw || ['unavailable', 'unknown', 'none', 'null', '--'].includes(raw.toLowerCase())) return null;
+    return { state: raw, display: null };
+  }
+  // Icon color of a preview tile: the per-tile rule or fixed icon color
+  // (resolveIconColorRecord, same result as the firmware), else `fallback`.
+  function previewIconColor(typeValue, record, entity, meta, binaryState, fallback) {
+    if (!record || typeof tileTypeHasIconColors !== 'function' ||
+        !tileTypeHasIconColors(typeValue)) return fallback;
+    const rule = iconColorRuleState(typeValue, entity, meta, binaryState);
+    return (rule && resolveIconColorRecord(record, rule.state, rule.display)) || fallback;
+  }
   function snapshotBgColorIsDefault(snapshot) {
-    return String(snapshot?.bg_color_default || '0') === '1';
+    return String(snapshot?.bg_color_default || '0') === '1' ||
+      tileColorHexIsDefaultGrey(snapshot?.color);
   }
   function tileColorInputIsDefault(tab) {
     const input = document.getElementById(tab + '_tile_color');
-    return !!input && input.dataset.bgColorDefault === '1';
+    return !!input && (input.dataset.bgColorDefault === '1' || tileColorHexIsDefaultGrey(input.value));
   }
   function setTileColorInputFromStored(tab, value, fallback) {
     const input = document.getElementById(tab + '_tile_color');
     if (!input) return;
-    input.value = tileBgToHex(value, fallback || '#2A2A2A');
-    input.dataset.bgColorDefault = tileBgValueIsSet(value) ? '0' : '1';
+    const follows = tileBgFollowsDefault(value);
+    input.value = follows ? (fallback || '#2A2A2A') : tileBgToHex(value, fallback || '#2A2A2A');
+    input.dataset.bgColorDefault = follows ? '1' : '0';
+    syncTileColorGlobalToggle(tab);
   }
   function setTileColorInputFromSnapshot(tab, snapshot) {
     const input = document.getElementById(tab + '_tile_color');
@@ -65,10 +132,13 @@
     const isDefault = snapshotBgColorIsDefault(snapshot);
     input.value = isDefault ? (meta.defaultBg || '#2A2A2A') : (snapshot?.color || meta.defaultBg || '#2A2A2A');
     input.dataset.bgColorDefault = isDefault ? '1' : '0';
+    syncTileColorGlobalToggle(tab);
   }
+  // Picking a color unchecks "Use global color".
   function markTileColorInputExplicit(tab) {
     const input = document.getElementById(tab + '_tile_color');
     if (input) input.dataset.bgColorDefault = '0';
+    syncTileColorGlobalToggle(tab);
   }
   function resetTileColor(tab) {
     const input = document.getElementById(tab + '_tile_color');
@@ -77,6 +147,7 @@
     const meta = getTileTypeMeta(typeValue);
     input.value = meta.defaultBg || '#2A2A2A';
     input.dataset.bgColorDefault = '1';
+    syncTileColorGlobalToggle(tab);
     if (isScreensaverTileTab(tab)) {
       const opacity = document.getElementById('screensaver_tile_opacity');
       if (opacity) opacity.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);
@@ -117,7 +188,7 @@
     else delete el.dataset.navigateTarget;
     if (typeValue === '0') el.style.background = 'transparent';
     else {
-      const isDefaultBg = !tileBgValueIsSet(tile.bg_color);
+      const isDefaultBg = tileBgFollowsDefault(tile.bg_color);
       const bg = tileBackgroundCss(meta, isDefaultBg,
         tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'));
       if (isScreensaverTileTab(tab)) {
@@ -189,14 +260,15 @@
       let html = '';
 
       if (iconName) {
-        const iconStyle = previewKind === 'climate'
-          ? ' style="color:' + climatePreviewColor(climatePreviewState) + '"'
-          : (previewKind === 'cover'
-            ? ' style="color:' + coverPreviewColor(coverPreviewState) + '"'
-            : (previewKind === 'binary_sensor'
-              ? ' style="color:' + binarySensorPreviewColor(
-                  binarySensorPreviewState) + '"'
-              : ''));
+        const iconColor = previewIconColor(typeValue, tile.icon_colors, tile.sensor_entity || '',
+          sensorMeta, binarySensorPreviewState, previewKind === 'climate'
+            ? climatePreviewColor(climatePreviewState)
+            : (previewKind === 'cover'
+              ? coverPreviewColor(coverPreviewState)
+              : (previewKind === 'binary_sensor'
+                ? binarySensorPreviewColor(binarySensorPreviewState)
+                : '')));
+        const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
         html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
       }
 

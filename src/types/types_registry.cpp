@@ -823,7 +823,7 @@ const TileTypeDescriptor* find_descriptor(TileType type) {
 // Types with the standard default background follow the global default tile
 // color; the animation tile keeps its own black default.
 bool follows_default_tile_color(const TileTypeDescriptor& entry) {
-  return entry.default_bg_color == tile_color::kDefault;
+  return tile_color::isDefaultGrey(entry.default_bg_color);
 }
 
 uint32_t effective_default_bg(const TileTypeDescriptor& entry) {

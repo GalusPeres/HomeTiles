@@ -670,9 +670,9 @@ void UIManager::processSettingsGestureMotion(lv_indev_t* input,
   const bool use_snapshot = config.settings_tile_hidden && snapshot.valid;
   const uint32_t bg_color =
       use_snapshot
-          ? (snapshot_color != 0
-                 ? (snapshot_color & TILE_BG_COLOR_RGB_MASK)
-                 : tileDefaultBgColor())
+          ? (tileBgColorFollowsDefault(snapshot_color)
+                 ? tileDefaultBgColor()
+                 : (snapshot_color & TILE_BG_COLOR_RGB_MASK))
           : settings_gesture_bg_color;
   const String title = use_snapshot ? String(snapshot.title)
                                     : settings_gesture_title;

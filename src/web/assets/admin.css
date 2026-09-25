@@ -780,7 +780,7 @@
     .global-settings-field > .tile-color-row { flex:1 1 auto; min-width:0; }
     .global-settings-grid .tile-color-row { margin:0; grid-template-columns:minmax(72px,1fr) 32px; }
     .global-settings-grid .tile-color-row input[type="color"] { height:32px; margin-bottom:0; }
-    .global-settings-grid .tile-color-reset-btn { flex-basis:32px; width:32px; height:32px; }
+    .global-settings-grid .tile-color-reset-btn { flex:0 0 32px; width:32px; height:32px; }
     @media (max-width:520px) { .global-settings-grid { grid-template-columns:minmax(0, 1fr); } }
     .global-radius-field { display:flex; align-items:center; gap:8px; height:32px; }
     .global-radius-field input[type="range"] { flex:1 1 auto; min-width:0; height:18px; margin:0; accent-color:var(--accent); }

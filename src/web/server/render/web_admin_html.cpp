@@ -861,7 +861,10 @@ static void appendTileTabHTML(
             "\" type=\"range\" min=\"" + String(icon_glow::kMinimum) + "\" max=\"" +
             String(icon_glow::kMaximum) + "\" step=\"" + String(icon_glow::kStep) + "\" value=\"" + glow_value +
             "\" oninput=\"previewIconGlowLive(this.value)\" onchange=\"saveIconGlow(this.value)\">"
-            "<output class=\"global-icon-glow-value\">" + glow_value + " %</output></div></div>";
+            "<output class=\"global-icon-glow-value\">" + glow_value + " %</output>"
+            "<button type=\"button\" class=\"tile-color-reset-btn global-icon-glow-reset\" title=\"Reset\" "
+            "onclick=\"saveIconGlow(" + String(icon_glow::kDefault) + ")\"><i class=\"mdi mdi-restore\"></i></button>"
+            "</div></div>";
     html += "<div class=\"global-settings-field\"><label for=\"" + color_id + "\">";
     appendHtmlEscaped(html, tr.default_tile_color);
     char default_color_hex[8];

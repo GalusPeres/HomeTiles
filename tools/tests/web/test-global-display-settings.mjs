@@ -123,6 +123,7 @@ for (const marker of [
   'html += "</div></div><div class=\\"global-settings-field\\"><label for=\\"" + glow_id + "\\">";',
   'appendHtmlEscaped(html, tr.icon_glow);',
   '"\\" oninput=\\"previewIconGlowLive(this.value)\\" onchange=\\"saveIconGlow(this.value)\\">"',
+  '"onclick=\\"saveIconGlow(" + String(icon_glow::kDefault) + ")\\"><i class=\\"mdi mdi-restore\\"></i></button>"',
   'html += "<div class=\\"global-settings-field\\"><label for=\\"" + color_id + "\\">";',
   'html += "</label><div class=\\"tile-color-row\\"><input class=\\"global-tile-color\\" id=\\"" + color_id +',
   '"<button type=\\"button\\" class=\\"tile-color-reset-btn\\" title=\\"Reset\\" "',

@@ -102,11 +102,14 @@
     const luma = bg ? (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255 : 1;
     const step = Math.floor(Math.min(1, Math.max(0, (luma - 0.08) / 0.17)) * 3 + 0.5);
     const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);
-    tileElem.style.setProperty('--icon-disc-opa', (scaled(38) / 255).toFixed(3));
-    // Global Glow strength (icon_glow.h): the disc at that percentage, scaled
+    // Global Glow strength (icon_glow.h, 0..100 %): the glowing disc at that
+    // percentage and the white disc scaled with it (38 at 25 %), both scaled
     // like the device.
-    const glowValue = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
-    const glowPct = Math.min(60, Math.max(10, Number.isFinite(glowValue) && glowValue > 0 ? glowValue : 25));
+    const glowRaw = String(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct')).trim();
+    const glowValue = glowRaw === '' ? 25 : Number(glowRaw);
+    const glowPct = Math.min(100, Math.max(0, Number.isFinite(glowValue) ? glowValue : 25));
+    const neutralOpa = Math.floor((38 * glowPct + 12) / 25);
+    tileElem.style.setProperty('--icon-disc-opa', (scaled(neutralOpa) / 255).toFixed(3));
     const glowOpa = Math.floor((glowPct * 255 + 50) / 100);
     tileElem.style.setProperty('--icon-disc-glow', (scaled(glowOpa) * 100 / 255).toFixed(1) + '%');
   }

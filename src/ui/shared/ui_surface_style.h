@@ -26,9 +26,10 @@ void apply_global_tile_border(lv_obj_t* obj);
 // `opa` while the option is on and stays transparent while it is off; other
 // discs always use `opa`. Shared styles update cached and hidden discs
 // without rebuilding them.
-// Glow strength of colored icon discs (global display setting, icon_glow.h):
-// the disc tint as a full opacity before the dark-tile contrast scaling.
+// Glow strength of the icon discs (global display setting, icon_glow.h): the
+// glowing and the white disc opacity before the dark-tile contrast scaling.
 lv_opa_t icon_glow_opa();
+lv_opa_t icon_neutral_opa();
 // Gives a tile card's border hairline (found from obj or up to three parents)
 // the hint of a glowing icon (border_hint); clear restores the plain white
 // hairline. Both keep the 20 % hairline opacity.
@@ -37,7 +38,9 @@ void clear_tile_border_tint(lv_obj_t* obj);
 // The popup card hairline: follows the global Tile borders option, drawn like
 // the tile border.
 void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa);
-void apply_icon_disc_opa(lv_obj_t* obj, lv_opa_t opa, bool follows_global);
+// Gives a disc the shared opacity style of its kind (glowing or white), the
+// tile's contrast step (0..3, tile_icon_disc::contrast_step) and its mode.
+void apply_icon_disc(lv_obj_t* obj, bool glow, uint8_t step, bool off, bool follows_global);
 
 // Safe to call from the Web handler: only sets a flag. Apply the actual
 // LVGL update later during the safe UI service pass.

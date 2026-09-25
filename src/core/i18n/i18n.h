@@ -281,6 +281,8 @@ struct Strings {
   const char* alignment_right;
   const char* screensaver_tile_shadow;
   const char* tile_radius;
+  // Global display setting: strength of every icon disc (icon_glow.h).
+  const char* icon_glow_strength;
   const char* tile_fractional_type_hint;
   const char* screensaver_tile_border;
   // Web Admin: global display settings row below the grid preview.

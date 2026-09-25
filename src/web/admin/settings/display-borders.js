@@ -63,12 +63,13 @@ async function saveIconDiscs(enabled) {
 let iconGlowConfirmed = null;
 let iconGlowSaveSequence = 0;
 function currentIconGlow() {
-  const value = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
-  return Number.isFinite(value) && value > 0 ? value : 25;
+  const raw = String(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct')).trim();
+  const value = Number(raw);
+  return raw !== '' && Number.isFinite(value) ? value : 25;
 }
 function previewIconGlowLive(value) {
   const number = Math.round(Number(value) / 5) * 5;
-  const percent = Math.min(60, Math.max(10, Number.isFinite(number) ? number : 25));
+  const percent = Math.min(100, Math.max(0, Number.isFinite(number) ? number : 25));
   if (iconGlowConfirmed === null) iconGlowConfirmed = currentIconGlow();
   document.documentElement.style.setProperty('--icon-glow-pct', String(percent));
   document.querySelectorAll('.global-icon-glow').forEach(input => { input.value = String(percent); });

@@ -857,7 +857,7 @@ static void appendTileTabHTML(
     html += "</label><div class=\"global-radius-field\">";
     append_radius_input(radius_id);
     html += "</div></div><div class=\"global-settings-field\"><label for=\"" + glow_id + "\">";
-    appendHtmlEscaped(html, tr.icon_glow);
+    appendHtmlEscaped(html, tr.icon_glow_strength);
     html += "</label><div class=\"global-radius-field\"><input class=\"global-icon-glow\" id=\"" + glow_id +
             "\" type=\"range\" min=\"" + String(icon_glow::kMinimum) + "\" max=\"" +
             String(icon_glow::kMaximum) + "\" step=\"" + String(icon_glow::kStep) + "\" value=\"" + glow_value +

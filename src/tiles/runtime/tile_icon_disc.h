@@ -2,6 +2,7 @@
 
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
+#include "src/core/config/icon_glow.h"
 #include "src/ui/shared/ui_surface_style.h"
 
 // One translucent disc behind every tile icon. Half-height tiles hold the icon
@@ -22,10 +23,10 @@ inline int round_diameter() { return diameter() + inset(); }
 // Tile radius baseline minus the inset keeps the half-height disc concentric
 // with the tile corner; the shared radius style follows global radius changes.
 inline int radius_baseline() { return tile_layout::scale_480(22) - inset(); }
-inline constexpr lv_opa_t kOpa = 38;
+inline constexpr lv_opa_t kOpa = icon_glow::kNeutralOpa;
 // With glow, a colored icon tints its disc with its hue over the tile (a color
-// between icon and tile); the strength is the global Glow setting
-// (ui_surface_style::icon_glow_opa, default 25 %). The tile border takes only
+// between icon and tile). The global Glow setting (icon_glow.h) sets the
+// strength of every disc: the glowing hue and the white disc of other icons. The tile border takes only
 // a hint of the icon hue (ui_surface_style::set_tile_border_tint).
 // MDI icon fonts give every glyph this glyph's advance width.
 inline constexpr uint32_t kMdiReferenceGlyph = 0xF0001;
@@ -126,8 +127,6 @@ inline void apply_fill(lv_obj_t* disc) {
     lv_obj_set_style_bg_color(disc, color, 0);
   }
   const uint8_t step = contrast_step(disc);
-  const lv_opa_t opa = mode == Mode::Off ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
-                                         : scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);
   // The tile border takes a hint of a glowing icon's hue: mostly the tile,
   // slightly lighter; otherwise it is the plain lighter hairline.
   if (tinted) {
@@ -135,7 +134,7 @@ inline void apply_fill(lv_obj_t* disc) {
   } else {
     ui_surface_style::clear_tile_border_tint(lv_obj_get_parent(disc));
   }
-  ui_surface_style::apply_icon_disc_opa(disc, opa, mode == Mode::Global);
+  ui_surface_style::apply_icon_disc(disc, tinted, step, mode == Mode::Off, mode == Mode::Global);
   if (g_icon_color_hook) g_icon_color_hook(disc);
 }
 
@@ -229,7 +228,7 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   ui_surface_style::apply_radius(disc, radius_baseline(), 0);
   lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
   // New discs follow the global option until the tile's own mode is applied.
-  ui_surface_style::apply_icon_disc_opa(disc, kOpa, true);
+  ui_surface_style::apply_icon_disc(disc, false, 3, false, true);
   return disc;
 }
 

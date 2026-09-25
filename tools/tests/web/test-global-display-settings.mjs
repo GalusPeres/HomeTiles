@@ -44,9 +44,9 @@ assert.doesNotMatch(colorBody + discHandler.slice(0, discHandler.indexOf('\n}\n'
 // Device: discs use one shared opacity style that follows the option, so
 // cached and hidden grids update without a rebuild.
 const surface = read('src/ui/shared/ui_surface_style.cpp');
-assert.match(surface, /entry\.follows_global && !configManager\.getConfig\(\)\.icon_discs/);
+assert.match(surface, /if \(follows_global && !configManager\.getConfig\(\)\.icon_discs\) return LV_OPA_TRANSP;/);
 assert.match(surface, /g_icon_disc_refresh_pending\.exchange\(false\)[\s\S]*lv_obj_report_style_change\(&entry\.style\);/);
-assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('ui_surface_style::apply_icon_disc_opa(disc, kOpa, true);'));
+assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('ui_surface_style::apply_icon_disc(disc, false, 3, false, true);'));
 
 // Device: every tile without its own color uses the global default color.
 assert.match(read('src/tiles/config/tile_config.cpp'), /uint32_t tileDefaultBgColor\(\) \{\s*return tile_color::normalize\(configManager\.getConfig\(\)\.default_tile_color\);/);
@@ -145,7 +145,8 @@ assert.doesNotMatch(css, /global-settings-rows|global-settings-label|global-sett
 // NVS, validated over HTTP, read by tile and popup discs (borders stay the
 // neutral hairline), and previewed live through --icon-glow-pct.
 const glow = read('src/core/config/icon_glow.h');
-for (const marker of ['inline constexpr uint8_t kMinimum = 10;', 'inline constexpr uint8_t kMaximum = 60;',
+for (const marker of ['inline constexpr uint8_t kMinimum = 0;', 'inline constexpr uint8_t kMaximum = 100;',
+  'return static_cast<uint8_t>((kNeutralOpa * clamp(percent) + kDefault / 2) / kDefault);',
   'inline constexpr uint8_t kStep = 5;', 'inline constexpr uint8_t kDefault = 25;',
   'return static_cast<uint8_t>((percent * 255 + 50) / 100);',
   'inline uint8_t disc_opa(int percent) { return to_opa(clamp(percent)); }'])
@@ -213,7 +214,7 @@ const editorHtml = read('src/web/server/render/web_admin_html.cpp');
 assert.ok(editorHtml.includes('appendHtmlEscaped(html, tr.tile_group_icon);') && editorHtml.includes('appendHtmlEscaped(html, tr.tile_group_tile);'));
 assert.ok(editorHtml.indexOf('append_tile_icon_color_fixed_html(html, tab_id);') < editorHtml.indexOf('_tile_icon_disc_fields">'),
   'The icon color sits with the icon');
-assert.ok(i18n.includes('"Tile color",') && i18n.includes('"Kachelfarbe",') && i18n.includes('"Circle glow",'));
+assert.ok(i18n.includes('"Tile color",') && i18n.includes('"Kachelfarbe",') && i18n.includes('"Circle strength",'));
 assert.ok(gridPreview.includes('const isDefaultBg = tileBgFollowsDefault(tile.bg_color);'));
 assert.ok(gridPreview.includes("input.dataset.bgColorDefault === '1' || tileColorHexIsDefaultGrey(input.value)"));
 assert.ok(read('src/web/admin/settings/access.js').includes(': tileBgFollowsDefault(bgValue);'));

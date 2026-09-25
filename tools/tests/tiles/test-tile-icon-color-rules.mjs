@@ -250,7 +250,7 @@ const translations = {
     'Feu tricolore', 'Batterie', 'Humidité', 'Couleur unique', null, "Couleur selon l'état", 'État', 'contient',
     'Ajouter un état', 'Supprimer', null, 'Activé', 'Désactivé'],
 };
-const glowLabels = {de: '"Kreis leuchtet",', en: '"Circle glow",', fr: '"Halo du cercle",'};
+const glowLabels = {de: '"Kreis in Icon-Farbe",', en: '"Circle in icon color",', fr: '"Cercle couleur de l\'icône",'};
 for (const [language, texts] of Object.entries(translations)) {
   // The strings follow the glow label of each table in struct order.
   const start = tables[language].indexOf(glowLabels[language]) + glowLabels[language].length;

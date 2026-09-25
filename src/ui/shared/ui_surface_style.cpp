@@ -26,42 +26,30 @@ constexpr int kRadiusStyleCount = 64;
 lv_style_t g_radius_styles[kRadiusStyleCount]{};
 bool g_radius_style_initialized[kRadiusStyleCount]{};
 
-// One shared opacity style per (opacity, follows global option) pair. Discs
-// use at most a handful of opacities; the table is small and static.
+// One shared opacity style per (white or glowing disc, contrast step 0..3,
+// follows the global disc option), plus the transparent Off style. The
+// opacity is computed from the global Glow strength and the global disc
+// option, so a change of either only updates these 17 styles
+// (request_icon_disc_refresh) and every disc follows, also in cached grids.
 struct IconDiscStyle {
   lv_style_t style;
-  lv_opa_t opa = 0;
-  bool follows_global = false;
   bool initialized = false;
 };
-// Neutral and glow opacities in four contrast steps, global and fixed, plus
-// the transparent Off style (tile_icon_disc::scaled_opa).
-constexpr int kIconDiscStyleCount = 20;
+constexpr uint8_t kIconDiscGlowKey = 8;
+constexpr uint8_t kIconDiscOffKey = 16;
+constexpr int kIconDiscStyleCount = kIconDiscOffKey + 1;
 IconDiscStyle g_icon_disc_styles[kIconDiscStyleCount]{};
 std::atomic<bool> g_icon_disc_refresh_pending{false};
 
-lv_opa_t icon_disc_opa(const IconDiscStyle& entry) {
-  return entry.follows_global && !configManager.getConfig().icon_discs
-             ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
-             : entry.opa;
-}
-
-IconDiscStyle* icon_disc_style(lv_opa_t opa, bool follows_global) {
-  IconDiscStyle* free_entry = nullptr;
-  for (IconDiscStyle& entry : g_icon_disc_styles) {
-    if (!entry.initialized) {
-      if (!free_entry) free_entry = &entry;
-      continue;
-    }
-    if (entry.opa == opa && entry.follows_global == follows_global) return &entry;
-  }
-  if (!free_entry) return nullptr;
-  lv_style_init(&free_entry->style);
-  free_entry->opa = opa;
-  free_entry->follows_global = follows_global;
-  free_entry->initialized = true;
-  lv_style_set_bg_opa(&free_entry->style, icon_disc_opa(*free_entry));
-  return free_entry;
+lv_opa_t icon_disc_opa(uint8_t key) {
+  if (key == kIconDiscOffKey) return LV_OPA_TRANSP;
+  const bool follows_global = (key & 1) != 0;
+  if (follows_global && !configManager.getConfig().icon_discs) return LV_OPA_TRANSP;
+  const uint8_t glow = configManager.getConfig().icon_glow;
+  const unsigned full = (key & kIconDiscGlowKey) ? icon_glow::disc_opa(glow) : icon_glow::neutral_opa(glow);
+  const unsigned step = (key >> 1) & 3;
+  // tile_icon_disc::scaled_opa(): subtler on dark tiles.
+  return static_cast<lv_opa_t>((full * (24 + 7 * step) + 22) / 45);
 }
 
 void apply_style(lv_obj_t* obj, bool enabled) {
@@ -203,6 +191,10 @@ lv_opa_t icon_glow_opa() {
   return icon_glow::disc_opa(configManager.getConfig().icon_glow);
 }
 
+lv_opa_t icon_neutral_opa() {
+  return icon_glow::neutral_opa(configManager.getConfig().icon_glow);
+}
+
 void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {
   if (!obj) return;
   // Same hairline as the tiles and the same global Tile borders option.
@@ -220,18 +212,25 @@ void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {
     lv_obj_set_style_outline_opa(obj, target, 0);
 }
 
-void apply_icon_disc_opa(lv_obj_t* obj, lv_opa_t opa, bool follows_global) {
+void apply_icon_disc(lv_obj_t* obj, bool glow, uint8_t step, bool off, bool follows_global) {
   if (!obj) return;
-  IconDiscStyle* target = icon_disc_style(opa, follows_global);
-  if (!target) return;
+  const uint8_t key = off ? kIconDiscOffKey
+                          : static_cast<uint8_t>((glow ? kIconDiscGlowKey : 0) | ((step & 3) << 1) |
+                                                 (follows_global ? 1 : 0));
+  IconDiscStyle& target = g_icon_disc_styles[key];
+  if (!target.initialized) {
+    lv_style_init(&target.style);
+    lv_style_set_bg_opa(&target.style, icon_disc_opa(key));
+    target.initialized = true;
+  }
   // A disc carries exactly one of the shared opacity styles.
   for (IconDiscStyle& entry : g_icon_disc_styles) {
-    if (entry.initialized && &entry != target) {
+    if (entry.initialized && &entry != &target) {
       lv_obj_remove_style(obj, &entry.style, 0);
     }
   }
   lv_obj_remove_local_style_prop(obj, LV_STYLE_BG_OPA, 0);
-  lv_obj_add_style(obj, &target->style, 0);
+  lv_obj_add_style(obj, &target.style, 0);
 }
 
 void request_global_tile_border_refresh() {
@@ -259,9 +258,10 @@ void process_pending_updates() {
     image_screensaver_config_changed();
   }
   if (g_icon_disc_refresh_pending.exchange(false)) {
-    for (IconDiscStyle& entry : g_icon_disc_styles) {
+    for (int key = 0; key < kIconDiscStyleCount; ++key) {
+      IconDiscStyle& entry = g_icon_disc_styles[key];
       if (!entry.initialized) continue;
-      lv_style_set_bg_opa(&entry.style, icon_disc_opa(entry));
+      lv_style_set_bg_opa(&entry.style, icon_disc_opa(static_cast<uint8_t>(key)));
       lv_obj_report_style_change(&entry.style);
     }
   }

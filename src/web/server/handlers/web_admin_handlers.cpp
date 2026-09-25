@@ -645,9 +645,10 @@ void WebAdminServer::handleSaveIconGlow() {
     sendJsonError(server, 500, "Could not save icon glow");
     return;
   }
-  // Glowing discs and borders take the new strength when their tiles are
-  // rebuilt, like a default tile color change; popups use it when they open.
-  // These calls only set flags for the UI loop.
+  // Every disc takes the new strength through the shared disc styles; tiles
+  // are rebuilt like a default tile color change and popups use it on their
+  // next sync. These calls only set flags for the UI loop.
+  ui_surface_style::request_icon_disc_refresh();
   tiles_invalidate_folder(tileConfig.rootFolderId());
   tiles_request_reload_all();
   image_screensaver_tiles_changed();

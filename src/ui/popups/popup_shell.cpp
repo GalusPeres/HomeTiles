@@ -243,7 +243,7 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
   const uint8_t step = popup_layout::headerDiscContrastStep(card);
   const lv_opa_t opa = static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
-      tinted ? ui_surface_style::icon_glow_opa() : popup_layout::kHeaderIconDiscOpa, step));
+      tinted ? ui_surface_style::icon_glow_opa() : ui_surface_style::icon_neutral_opa(), step));
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);

@@ -17,13 +17,13 @@ inline constexpr size_t kAdminCssSourceSize = 95574;
 inline constexpr size_t kAdminCssGzipSize = 17924;
 
 inline constexpr char kAdminJsPath[] =
-    "/assets/admin.be7e7129415b.js";
+    "/assets/admin.b9a207d6b06f.js";
 inline constexpr char kAdminJsEtag[] =
-    "\"acb240a3172dd7b4cbd0dca95c0ec276132c313a7d0adb0b3b552b1708153835\"";
+    "\"24bf01472fb374984934a9d022a5c8e287507e87ee9092b89653b80b593d61a3\"";
 inline constexpr char kAdminJsContentType[] =
     "application/javascript; charset=utf-8";
-inline constexpr size_t kAdminJsSourceSize = 436218;
-inline constexpr size_t kAdminJsGzipSize = 95157;
+inline constexpr size_t kAdminJsSourceSize = 436344;
+inline constexpr size_t kAdminJsGzipSize = 95201;
 
 }  // namespace web_admin_assets_generated
 

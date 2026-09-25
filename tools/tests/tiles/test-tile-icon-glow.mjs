@@ -28,7 +28,7 @@ for (const marker of [
   'return r != g || g != b;',
   'const bool tinted = glow_of(disc) && icon_color_tints(rgb);',
   'const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();',
-  ': scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);',
+  'ui_surface_style::apply_icon_disc(disc, tinted, step, mode == Mode::Off, mode == Mode::Global);',
   'inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {',
   'if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);',
   'set_tag(child, disc_mode, glow);',
@@ -52,7 +52,7 @@ for (const [file, count] of [['src/tiles/runtime/tile_renderer.cpp', 2],
 
 // Preview: same rule, same opacities from the firmware constants.
 const styles = read('src/web/server/render/web_admin_styles.cpp');
-assert.ok(styles.includes('html += String(tile_icon_disc::kOpa / 255.0f, 3);'));
+assert.ok(styles.includes('html += String(icon_glow::neutral_opa(glow) / 255.0f, 3);'));
 assert.ok(styles.includes('html += String(icon_glow::disc_opa(glow) * 100.0f / 255.0f, 1);'));
 const iconDiscTinted = new Function(`${extractDeliveredFunction('iconDiscTinted')}; return iconDiscTinted;`)();
 const cppRule = rgb => { const r = rgb >> 16 & 255, g = rgb >> 8 & 255, b = rgb & 255; return r !== g || g !== b; };
@@ -87,5 +87,6 @@ assert.ok(snapshots.includes("if (glow) glow.checked = true;"), 'Reset turns glo
 assert.ok(read('src/web/admin/tiles/editor.js').includes("_tile_icon_glow'), 'change', 'tileIconGlow'"));
 assert.ok(read('src/web/admin/tiles/import-export.js').includes("fd.append('icon_glow',"));
 const i18n = read('src/core/i18n/i18n.cpp');
-for (const text of ['"Kreis leuchtet"', '"Circle glow"', '"Halo du cercle"']) assert.ok(i18n.includes(text), `i18n ${text}`);
+for (const text of ['"Kreis in Icon-Farbe"', '"Circle in icon color"', '"Cercle couleur de l\'icône"',
+  '"Kreis-Stärke"', '"Circle strength"', '"Intensité du cercle"']) assert.ok(i18n.includes(text), `i18n ${text}`);
 console.log('Icon glow: persistence, central tint rule, runtime color path, preview rule and editor pass');

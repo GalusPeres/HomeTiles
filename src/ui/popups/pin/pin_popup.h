@@ -9,6 +9,8 @@ struct PinPopupInit {
   String title;
   String icon_name;
   uint32_t bg_color = 0x2A2A2A;
+  // Header icon color: a Folder's PIN popup takes the folder tile's icon color.
+  uint32_t icon_color = 0xFFFFFF;
   bool hide_on_success = true;
   PinPopupVerifyCallback verify = nullptr;
   PinPopupSuccessCallback success = nullptr;

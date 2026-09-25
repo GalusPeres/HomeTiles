@@ -316,6 +316,7 @@ void show_pin_popup(const PinPopupInit& init) {
     hometiles_title::set(g_ctx->title_label, init.title.c_str());
     lv_label_set_text(g_ctx->icon_label,
                       popup_icon_glyph(init.icon_name).c_str());
+    lv_obj_set_style_text_color(g_ctx->icon_label, lv_color_hex(init.icon_color), 0);
     update_value(g_ctx);
     popup_layout::alignHeader(g_ctx->card, g_ctx->title_label, g_ctx->icon_label);
     lv_obj_clear_flag(g_ctx->card, LV_OBJ_FLAG_HIDDEN);
@@ -344,6 +345,7 @@ void show_pin_popup(const PinPopupInit& init) {
   disable_pressed_button_animation(parts.close);
   hometiles_title::set(parts.title, init.title.c_str());
   lv_label_set_text(parts.icon, popup_icon_glyph(init.icon_name).c_str());
+  lv_obj_set_style_text_color(parts.icon, lv_color_hex(init.icon_color), 0);
 
   ctx->value_label = lv_label_create(ctx->card);
   lv_obj_set_size(ctx->value_label, LV_PCT(100), popup_layout::kValueHeight);

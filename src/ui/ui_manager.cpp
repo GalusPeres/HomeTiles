@@ -457,7 +457,7 @@ void UIManager::requestSettingsAccess(const String& title,
 
 void UIManager::requestFolderAccess(uint16_t folder_id, const String& title,
                                     const String& icon_name,
-                                    uint32_t bg_color) {
+                                    uint32_t bg_color, uint32_t icon_color) {
   if (!tileConfig.isFolderPinEnabled(folder_id)) {
     switchToFolder(folder_id);
     return;
@@ -472,6 +472,7 @@ void UIManager::requestFolderAccess(uint16_t folder_id, const String& title,
   init.title = make_unlock_title(tr.pin_popup_unlock_format, source_title);
   init.icon_name = icon_name.length() ? icon_name : String("folder");
   init.bg_color = bg_color;
+  init.icon_color = icon_color;
   init.hide_on_success = false;
   init.verify = verify_pending_access;
   init.success = complete_pending_access;

@@ -159,9 +159,16 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
         } else {
           Serial.printf("[Tile] Navigation CLICKED! Folder %u, title: %s\n",
                         static_cast<unsigned>(data->target_folder_id), data->title.c_str());
+          // A PIN popup shows the icon in the color the tile shows right now
+          // (fixed or from the source entity).
+          lv_obj_t* icon = tile_icon_source::card_icon(
+              static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
+          const uint32_t icon_color =
+              icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF
+                   : 0xFFFFFF;
           uiManager.requestFolderAccess(data->target_folder_id, data->title,
                                         data->icon_name,
-                                        data->bg_color);
+                                        data->bg_color, icon_color);
         }
       },
       LV_EVENT_CLICKED,

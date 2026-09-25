@@ -38,6 +38,15 @@ const camera = read('src/types/camera/renderer.cpp');
 assert.ok(camera.includes('tile.sensor_entity, title, icon_name, card_color, tile.icon_colors};') &&
   camera.includes('init.icon_color = tile_icon_source::color(data->icon_colors, payload.c_str());'));
 assert.ok(read('src/ui/popups/camera/camera_popup.cpp').includes('lv_obj_set_style_text_color(g_camera_popup->icon_label, lv_color_hex(init.icon_color), 0);'));
+// A protected Folder's PIN popup shows the icon in the tile's current color.
+const pin = read('src/ui/popups/pin/pin_popup.cpp');
+assert.ok(pin.includes('lv_obj_set_style_text_color(g_ctx->icon_label, lv_color_hex(init.icon_color), 0);') &&
+  pin.includes('lv_obj_set_style_text_color(parts.icon, lv_color_hex(init.icon_color), 0);'),
+  'PIN popup icon color on first build and on reuse');
+assert.ok(read('src/ui/ui_manager.cpp').includes('init.icon_color = icon_color;'));
+const navigateSource = read('src/types/navigate/renderer.cpp');
+assert.ok(navigateSource.includes('lv_obj_t* icon = tile_icon_source::card_icon(') &&
+  navigateSource.includes('data->bg_color, icon_color);'), 'Folder tiles pass their current icon color');
 // The shell follows the body icon color every sync, so disc and border follow.
 assert.match(read('src/ui/popups/popup_shell.cpp'), /copy_label\(shell\.icon, shell\.active->icon, false\);\s*apply_header_disc_tint\(shell\.icon_disc, shell\.icon\);/);
 console.log('Popup header icons follow the tile icon colors');

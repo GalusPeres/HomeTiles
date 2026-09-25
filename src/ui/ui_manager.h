@@ -33,7 +33,8 @@ public:
                              uint32_t bg_color = 0x2A2A2A);
   void requestFolderAccess(uint16_t folder_id, const String& title,
                            const String& icon_name,
-                           uint32_t bg_color = 0x2A2A2A);
+                           uint32_t bg_color = 0x2A2A2A,
+                           uint32_t icon_color = 0xFFFFFF);
   void lockProtectedAccess();
   void finishFolderSwitch(uint16_t folder_id, bool success);
   void refreshSettingsGestureZone();

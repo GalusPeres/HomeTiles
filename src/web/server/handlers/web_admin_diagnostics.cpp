@@ -23,6 +23,7 @@
 #include <img_converters.h>
 #else
 #include <driver/jpeg_encode.h>
+#include "src/core/display/dma2d_arbiter.h"
 #endif
 #include "src/web/server/handlers/web_admin_handler_utils.h"
 
@@ -33,6 +34,11 @@ namespace {
 constexpr const char* kScreenshotPath = "/ui_screenshot.jpg";
 constexpr const char* kLegacyScreenshotPath = "/ui_screenshot.bmp";
 constexpr uint32_t kScreenshotJpegQuality = 92;
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+// Other 2D-DMA users hold the arbiter for at most one frame or decode, so
+// waiting this long lets a requested screenshot finish instead of failing.
+constexpr uint32_t kScreenshotArbiterTimeoutMs = 2000;
+#endif
 
 bool saveDrawBufferAsJpeg(const lv_draw_buf_t* draw_buf, const String& path, String& error) {
   if (!draw_buf || !draw_buf->data) {
@@ -119,30 +125,45 @@ bool saveDrawBufferAsJpeg(const lv_draw_buf_t* draw_buf, const String& path, Str
     return false;
   }
 
-  jpeg_encode_engine_cfg_t engine_cfg = {};
-  engine_cfg.timeout_ms = 1000;
-  jpeg_encoder_handle_t encoder = nullptr;
-  esp_err_t result = jpeg_new_encoder_engine(&engine_cfg, &encoder);
-  if (result != ESP_OK) {
-    free(output);
-    free(input);
-    error = String("Could not start JPEG encoder: ") + esp_err_to_name(result);
-    return false;
+  esp_err_t result = ESP_FAIL;
+  {
+    // The JPEG engine shares the 2D-DMA pool with display PPA rotation and
+    // the camera, cover and screensaver decoders; never overlap them. Keep
+    // the engine lifecycle and encoding under one lock, as the decoders do.
+    Dma2dArbiterGuard dma2d_guard(kScreenshotArbiterTimeoutMs);
+    if (!dma2d_guard.locked()) {
+      free(output);
+      free(input);
+      Serial.println("[Screenshot] 2D DMA arbiter timeout, JPEG not encoded");
+      error = "JPEG encoder busy (2D DMA arbiter timeout)";
+      return false;
+    }
+
+    jpeg_encode_engine_cfg_t engine_cfg = {};
+    engine_cfg.timeout_ms = 1000;
+    jpeg_encoder_handle_t encoder = nullptr;
+    result = jpeg_new_encoder_engine(&engine_cfg, &encoder);
+    if (result != ESP_OK) {
+      free(output);
+      free(input);
+      error = String("Could not start JPEG encoder: ") + esp_err_to_name(result);
+      return false;
+    }
+
+    jpeg_encode_cfg_t encode_cfg = {};
+    encode_cfg.height = static_cast<uint32_t>(height);
+    encode_cfg.width = static_cast<uint32_t>(width);
+    encode_cfg.src_type = JPEG_ENCODE_IN_FORMAT_RGB565;
+    encode_cfg.sub_sample = JPEG_DOWN_SAMPLING_YUV444;
+    encode_cfg.image_quality = kScreenshotJpegQuality;
+
+    uint32_t hardware_jpeg_size = 0;
+    result = jpeg_encoder_process(
+        encoder, &encode_cfg, input, static_cast<uint32_t>(raw_size), output,
+        static_cast<uint32_t>(output_capacity), &hardware_jpeg_size);
+    jpeg_size = hardware_jpeg_size;
+    jpeg_del_encoder_engine(encoder);
   }
-
-  jpeg_encode_cfg_t encode_cfg = {};
-  encode_cfg.height = static_cast<uint32_t>(height);
-  encode_cfg.width = static_cast<uint32_t>(width);
-  encode_cfg.src_type = JPEG_ENCODE_IN_FORMAT_RGB565;
-  encode_cfg.sub_sample = JPEG_DOWN_SAMPLING_YUV444;
-  encode_cfg.image_quality = kScreenshotJpegQuality;
-
-  uint32_t hardware_jpeg_size = 0;
-  result = jpeg_encoder_process(
-      encoder, &encode_cfg, input, static_cast<uint32_t>(raw_size), output,
-      static_cast<uint32_t>(output_capacity), &hardware_jpeg_size);
-  jpeg_size = hardware_jpeg_size;
-  jpeg_del_encoder_engine(encoder);
 
   if (result != ESP_OK) {
     free(input);

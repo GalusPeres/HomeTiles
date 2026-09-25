@@ -109,8 +109,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Core `src/video/local_camera/` names no device/sensor; drivers `sensors/<name>/`, boards `src/devices/<device>/local_camera_board.*`; opt-in `local_cam_en`.
 - V2 OV02C10 720p. 8-inch OV5647 544x960 + `"rotate":90` (Bridge turns). Tab5 SC202CS 720p RAW8, mirror+180; keeps BGGR itself (no window shift).
-- b30: fresh CSI/ISP per start (8-inch swapped colours/no frames after restart), oversize floor q10; HW pending.
-- b31: Web Admin Max. gain (0-100 %, log, default 100), Custom quality 10-90; HW pending.
+- HW pending: b30 fresh CSI/ISP per start (8-inch colour/no-frame fix), floor q10; b31 Max. gain 0-100 %, Custom quality 10-90; b32 screenshot JPEG under 2D-DMA arbiter (all P4).
 - Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
 
 ## Maintenance

@@ -121,7 +121,9 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
   html += tab_id;
   html += R"html(_tile_icon_rule_strength_value">)html";
   html += String(tile_icon_colors::kTintDefault);
-  html += R"html( %</output></div>
+  html += R"html( %</output><button type="button" class="tile-color-reset-btn" data-icon-color="strength-reset" title=")html";
+  appendHtmlEscaped(html, tr.tile_icon_color_remove);
+  html += R"html("><i class="mdi mdi-restore"></i></button></div>
                   <p class="hint">)html";
   appendHtmlEscaped(html, tr.tile_icon_color_source_hint);
   html += R"html(</p>

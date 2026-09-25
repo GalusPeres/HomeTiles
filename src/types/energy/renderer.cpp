@@ -214,7 +214,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
           }
           init.unit = unit;
           init.decimals = data->decimals;
-          init.bg_color = data->bg_color;
+          init.bg_color = tile_icon_source::popup_background(static_cast<lv_obj_t*>(lv_event_get_current_target(e)), data->bg_color);
           // The header icon shows the color the tile icon shows right now
           // (fixed, own-state colors or rules).
           if (lv_obj_t* icon = tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(e)))) {

@@ -166,9 +166,12 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
           const uint32_t icon_color =
               icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF
                    : 0xFFFFFF;
+          // The PIN popup also inherits a rules tint of the tile.
+          const uint32_t popup_color = tile_icon_source::popup_background(
+              static_cast<lv_obj_t*>(lv_event_get_current_target(e)), data->bg_color);
           uiManager.requestFolderAccess(data->target_folder_id, data->title,
                                         data->icon_name,
-                                        data->bg_color, icon_color);
+                                        popup_color, icon_color);
         }
       },
       LV_EVENT_CLICKED,

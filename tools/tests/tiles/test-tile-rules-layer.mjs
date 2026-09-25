@@ -83,13 +83,16 @@ const html = read('src/web/server/render/tile_icon_colors_html.cpp');
 for (const marker of ['append_label_row(html, tr.tile_rules);', '_tile_icon_rules_on" value="0">',
   '"rules-on", "data-mode", "1", tr.icon_disc_on', '"source-kind", "data-mode", "self", tr.tile_rules_own_entity',
   '"source-kind", "data-mode", "other", tr.tile_rules_other_entity', '_tile_icon_rule_icon" data-icon-color="rule-target" checked> ',
-  '_tile_icon_rule_tile" data-icon-color="rule-target"> ', 'html += String(tile_icon_colors::kTintMinimum);'])
+  '_tile_icon_rule_tile" data-icon-color="rule-target"> ', 'html += String(tile_icon_colors::kTintMinimum);',
+  'data-icon-color="strength-reset"'])
   assert.ok(html.includes(marker), `HTML: ${marker}`);
 for (const [file, name] of [['src/types/switch/admin.js', 'Switch'], ['src/types/cover/admin.js', 'Cover'],
   ['src/types/media/admin.js', 'Media'], ['src/types/weather/admin.js', 'Weather'], ['src/types/clock/admin.js', 'Clock'],
   ['src/types/text/admin.js', 'Text'], ['src/types/climate/admin-editor.js', 'Climate']]) {
   assert.ok(read(file).includes(`function load${name}Fields(tab, data) {\n    loadIconColorFields(tab, data);`), `${name} loads its rules`);
 }
+assert.ok(read('src/web/admin/tiles/icon-colors.js').includes("} else if (role === 'strength-reset') {") &&
+  read('src/web/admin/tiles/icon-colors.js').includes("if (strength) strength.value = '25';"), 'Strength reset returns to 25 %');
 const i18n = read('src/core/i18n/i18n.cpp');
 for (const text of ['"Regeln"', '"Rules"', '"Règles"', '"Eigene Entität"', '"Other entity"', '"Kachel tönen"', '"Tint tile"', '"Intensité"'])
   assert.ok(i18n.includes(text), `translation ${text}`);

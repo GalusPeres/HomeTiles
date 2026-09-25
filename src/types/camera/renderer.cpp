@@ -47,7 +47,7 @@ static void camera_tile_event_cb(lv_event_t* event) {
   init.entity_id = data->entity_id;
   init.title = data->title;
   init.icon_name = data->icon_name;
-  init.bg_color = data->bg_color;
+  init.bg_color = tile_icon_source::popup_background(static_cast<lv_obj_t*>(lv_event_get_current_target(event)), data->bg_color);
   // The header icon takes the color the tile icon shows right now (fixed or
   // from its rules).
   lv_obj_t* icon = tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(event)));

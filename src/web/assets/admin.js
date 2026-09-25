@@ -3682,6 +3682,9 @@ function syncTileRadiusControls(tabEl) {
     } else if (role === 'source-mode') {
       const mode = iconColorEl(tab, '_tile_icon_source_mode');
       if (mode) mode.value = button.dataset.mode === 'rules' ? 'rules' : 'auto';
+    } else if (role === 'strength-reset') {
+      const strength = iconColorEl(tab, '_tile_icon_rule_strength');
+      if (strength) strength.value = '25';
     } else if (role === 'rules-on') {
       const on = iconColorEl(tab, '_tile_icon_rules_on');
       if (on) on.value = button.dataset.mode === '1' ? '1' : '0';

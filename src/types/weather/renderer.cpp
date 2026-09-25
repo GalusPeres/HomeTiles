@@ -1,4 +1,5 @@
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/weather/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
@@ -342,7 +343,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
       WeatherPopupInit init;
       init.entity_id = data->entity_id;
       init.title = title;
-      init.bg_color = data->bg_color;
+      init.bg_color = tile_icon_source::popup_background(static_cast<lv_obj_t*>(lv_event_get_current_target(e)), data->bg_color);
       finish_press_before_popup(e);
       show_weather_popup(init);
     };

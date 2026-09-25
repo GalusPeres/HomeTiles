@@ -3082,7 +3082,8 @@ static void update_media_popup_from_widgets(GridType grid_type,
   init.title = media_popup_title_for_tile(tile);
   init.icon_name = media_popup_icon_for_tile(tile);
   init.icon_char = media_label_text(widgets.icon_label);
-  init.bg_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
+  init.bg_color = tile_icon_source::popup_background(widgets.icon_label,
+                                                     tileBgColorOrDefault(tile, tileDefaultBgColor()));
   init.media_title = media_label_text(widgets.media_title_label);
   init.media_subtitle = media_label_text(widgets.media_subtitle_label);
   init.is_playing = state_override.length() ? media_is_playing_state(state_override)

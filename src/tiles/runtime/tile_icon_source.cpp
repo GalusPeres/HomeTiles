@@ -209,6 +209,19 @@ lv_obj_t* card_icon(lv_obj_t* card) {
   return nullptr;
 }
 
+uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
+  for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
+    lv_style_value_t value;
+    if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, kTintStore) != LV_STYLE_RES_FOUND) continue;
+    if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, LV_PART_MAIN | LV_STATE_DEFAULT) !=
+        LV_STYLE_RES_FOUND) {
+      return fallback;
+    }
+    return lv_color_to_u32(value.color) & 0xFFFFFF;
+  }
+  return fallback;
+}
+
 void refresh_card(lv_obj_t* card, const Tile& tile) {
   if (!card || !tileTypeHasIconColors(tile.type)) return;
   const tile_icon_colors::Source layer = tile_icon_colors::source_of(tile.icon_colors.c_str());

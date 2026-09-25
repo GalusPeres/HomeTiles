@@ -1,4 +1,5 @@
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/media/renderer.h"
 #include "src/types/media/content_layout.h"
 
@@ -169,7 +170,7 @@ static void show_media_popup_event_cb(lv_event_t* e) {
   init.title = data->title;
   init.icon_name = data->icon_name;
   init.icon_char = media_label_text(widgets.icon_label);
-  init.bg_color = data->bg_color;
+  init.bg_color = tile_icon_source::popup_background(widgets.icon_label, data->bg_color);
   init.media_title = media_label_text(widgets.media_title_label);
   init.media_subtitle = media_label_text(widgets.media_subtitle_label);
   init.is_playing = media_widget_is_playing(widgets);

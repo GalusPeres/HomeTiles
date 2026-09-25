@@ -52,7 +52,20 @@ assert.ok(pin.includes('lv_obj_set_style_text_color(g_ctx->icon_label, lv_color_
 assert.ok(read('src/ui/ui_manager.cpp').includes('init.icon_color = icon_color;'));
 const navigateSource = read('src/types/navigate/renderer.cpp');
 assert.ok(navigateSource.includes('lv_obj_t* icon = tile_icon_source::card_icon(') &&
-  navigateSource.includes('data->bg_color, icon_color);'), 'Folder tiles pass their current icon color');
+  navigateSource.includes('popup_color, icon_color);'), 'Folder tiles pass their current icon color');
+// Popups that take the tile color also take its rules tint.
+const tintSource = read('src/tiles/runtime/tile_icon_source.cpp');
+assert.ok(tintSource.includes('uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {'));
+for (const [file, marker] of [
+  ['src/types/sensor/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
+  ['src/types/binary_sensor/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
+  ['src/types/energy/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
+  ['src/types/camera/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
+  ['src/types/media/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background(widgets.icon_label, data->bg_color);'],
+  ['src/tiles/runtime/tile_renderer.cpp', 'init.bg_color = tile_icon_source::popup_background(widgets.icon_label,'],
+  ['src/types/weather/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
+  ['src/types/navigate/renderer.cpp', 'const uint32_t popup_color = tile_icon_source::popup_background('],
+]) assert.ok(read(file).includes(marker), `${file} inherits the tile tint`);
 // The shell follows the body icon color every sync, so disc and border follow.
 assert.match(read('src/ui/popups/popup_shell.cpp'), /copy_label\(shell\.icon, shell\.active->icon, false\);\s*apply_header_disc_tint\(shell\.icon_disc, shell\.icon\);/);
 console.log('Popup header icons follow the tile icon colors');

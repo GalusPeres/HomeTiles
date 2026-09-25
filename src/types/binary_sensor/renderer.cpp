@@ -591,6 +591,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
           if (!data) return;
           BinarySensorPopupInit init = popup_init(data->grid_type, data->index);
           if (!init.entity_id.length()) return;
+          init.bg_color = tile_icon_source::popup_background(static_cast<lv_obj_t*>(lv_event_get_current_target(event)), init.bg_color);
           lv_color_t forced;
           if (tile_icon_disc::forced_color(
                   tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(event))),

@@ -2395,6 +2395,7 @@
 .tile-settings .icon-color-strength label { flex:0 0 auto; margin:0; }
 .icon-color-strength input[type="range"] { flex:1 1 auto; min-width:0; margin:0; padding:0; accent-color:var(--accent); }
 .icon-color-strength output { font-size:12px; font-weight:600; color:var(--text-2); min-width:4.5ch; text-align:right; white-space:nowrap; }
+.icon-color-strength .tile-color-reset-btn { flex:0 0 32px; width:32px; height:32px; }
 .icon-color-segmented {
   display:inline-grid;
   grid-auto-flow:column;

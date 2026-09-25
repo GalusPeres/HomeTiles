@@ -41,4 +41,8 @@ lv_obj_t* card_icon(lv_obj_t* card);
 // discs that follow the background. Skips unchanged values.
 void refresh_card(lv_obj_t* card, const Tile& tile);
 
+// The background a popup inherits from its tile: the rules' tint when the
+// card (`obj` or up to three of its parents) is tinted, else `fallback`.
+uint32_t popup_background(lv_obj_t* obj, uint32_t fallback);
+
 }  // namespace tile_icon_source

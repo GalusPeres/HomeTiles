@@ -341,7 +341,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
           init.unit = unit;
           init.lock_unit = lock_unit;
           init.decimals = data->decimals;
-          init.bg_color = data->bg_color;
+          // The popup inherits the tile background, including a rules tint.
+          init.bg_color = tile_icon_source::popup_background(static_cast<lv_obj_t*>(lv_event_get_current_target(e)), data->bg_color);
           init.value = haBridgeConfig.findSensorInitialValue(data->entity_id);
           String state_kind =
               haBridgeConfig.findSensorStateKind(data->entity_id);

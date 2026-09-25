@@ -1992,6 +1992,7 @@ static const Strings kStringsPl = {
     "Przygotowywanie strumienia kamery ...",
     "Żądanie do mostu ...",
     "Kamera wymaga HomeTiles Bridge v0.6.28 lub nowszego",
+    "Brak odpowiedzi kamery – MQTT lub most niedostępny",
     "Nieprawidłowa odpowiedź kamery",
     "Most nie dostarczył adresu URL strumienia",
     "Łączenie ze strumieniem ...",

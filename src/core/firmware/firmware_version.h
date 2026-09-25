@@ -25,6 +25,14 @@
 #define FW_VERSION "v0.6.12b33"
 #endif
 
+// Local test builds of the other profiles (for example Waveshare 4B and
+// Guition ESP32-S3) carry the same beta number as the camera builds.
+#if defined(HOMETILES_TEST_BETA) && !defined(HOMETILES_CAMERA_BETA) && \
+    !defined(HOMETILES_ISSUE38_BETA)
+#undef FW_VERSION
+#define FW_VERSION "v0.6.12b33"
+#endif
+
 #ifndef FW_VERSION
 #error "FW_VERSION is missing in version.txt"
 #endif

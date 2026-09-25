@@ -24,7 +24,8 @@ const cpp=String.raw`
 struct String:std::string{using std::string::string;bool equalsIgnoreCase(const String&s)const{return *this==s;}};
 struct EditableControl{bool active=true,dragging=false,editing=false;lv_obj_t*pressed=nullptr;lv_obj_t*dropdown=nullptr;};
 ${interacting}
-struct Context{EditableControl*control;String entity_id="number.test";bool visible=true;}context;
+struct Readout{bool touching=false;bool active()const{return touching;}};
+struct Context{EditableControl*control;String entity_id="number.test";bool visible=true;Readout readout;}context;
 auto*g_sensor_popup_ctx=&context;PopupFirstFrame g_sensor_first_frame;
 struct Pending{bool valid=true;String entity_id="number.test",payload="history";}g_pending_history;
 int applied=0,flushed=0;
@@ -37,6 +38,8 @@ int main(){lv_init();g_sensor_first_frame.begin();assert(!g_sensor_first_frame.p
  g_sensor_first_frame.begin();service();assert(applied==0&&g_pending_history.valid);lv_display_send_event(display,LV_EVENT_REFR_START,nullptr);service();assert(applied==0);
  lv_obj_invalidate(lv_screen_active());lv_refr_now(display);service();assert(applied==1&&!g_pending_history.valid);
  for(int mode=0;mode<4;++mode){g_pending_history.valid=true;if(mode==0)c.dragging=true;if(mode==1)c.editing=true;if(mode==2)c.pressed=c.dropdown;if(mode==3)lv_dropdown_open(c.dropdown);service();assert(g_pending_history.valid);c.dragging=c.editing=false;c.pressed=nullptr;lv_dropdown_close(c.dropdown);service();assert(!g_pending_history.valid);}
+ // A finger reading the graph defers history the same way.
+ g_pending_history.valid=true;context.readout.touching=true;service();assert(g_pending_history.valid&&"History waits while a finger reads the graph");context.readout.touching=false;service();assert(!g_pending_history.valid);
  for(int i=0;i<100;++i){g_sensor_first_frame.begin();g_sensor_first_frame.begin();assert(g_sensor_first_frame.pending());g_sensor_first_frame.cancel();assert(!g_sensor_first_frame.pending());lv_display_send_event(display,LV_EVENT_REFR_READY,nullptr);}
  g_sensor_first_frame.begin();lv_display_delete(display);assert(!g_sensor_first_frame.pending());g_sensor_first_frame.cancel();lv_deinit();
 }
@@ -44,4 +47,4 @@ int main(){lv_init();g_sensor_first_frame.begin();assert(!g_sensor_first_frame.p
 const source=path.join(out,'test.cpp'),binary=path.join(out,process.platform==='win32'?'test.exe':'test');fs.writeFileSync(source,cpp);
 let result=spawnSync(host.cxx,[...host.flags,'-std=c++17',source,host.archive,'-o',binary],{encoding:'utf8'});assert.equal(result.status,0,result.stdout+result.stderr);
 result=spawnSync(binary,[],{encoding:'utf8'});assert.equal(result.status,0,result.stdout+result.stderr);
-console.log('History waits for the first rendered frame and control release; repeated begin/cancel/display teardown passed.');
+console.log('History waits for the first rendered frame, control release and graph readout; repeated begin/cancel/display teardown passed.');

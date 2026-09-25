@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <new>
 #include <cstring>
+#include <string>
 
 namespace {
 struct Binding {
@@ -16,6 +17,8 @@ struct Binding {
   lv_obj_t* title = nullptr;
   lv_obj_t* icon = nullptr;
   lv_obj_t* close = nullptr;
+  // Optional hidden label holding the current value for the header.
+  lv_obj_t* value = nullptr;
   int32_t border_width = 0, shadow_width = 0, shadow_spread = 0;
   lv_color_t border_color{}, shadow_color{};
   void (*dismiss)() = nullptr;
@@ -30,6 +33,9 @@ struct Shell {
   lv_obj_t* icon_disc = nullptr;
   lv_obj_t* icon = nullptr;
   lv_obj_t* close = nullptr;
+  lv_obj_t* value = nullptr;
+  // Last source text copied into `value`; the visible label holds fitted text.
+  std::string value_source;
   Binding* active = nullptr;
 } shell;
 
@@ -187,16 +193,28 @@ void ensure_shell() {
   lv_obj_remove_flag(shell.header, LV_OBJ_FLAG_SCROLLABLE);
   create_header(shell.header, shell.title, shell.icon, shell.close, close_clicked, nullptr,
                 &shell.icon_disc);
+  // Second header line with the current value; only popups that pass a value
+  // source show it.
+  shell.value = lv_label_create(shell.header);
+  lv_obj_set_width(shell.value, LV_PCT(62));
+  lv_obj_set_style_text_font(shell.value, popup_layout::headerValueFont(), 0);
+  lv_obj_set_style_text_color(shell.value, lv_color_white(), 0);
+  lv_label_set_text(shell.value, "");
+  lv_obj_add_flag(shell.value, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_IGNORE_LAYOUT |
+                                                          LV_OBJ_FLAG_HIDDEN));
+  lv_obj_remove_flag(shell.value, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(shell.overlay, shell_deleted, LV_EVENT_DELETE, nullptr);
 }
 
-void copy_label(lv_obj_t* target, lv_obj_t* source, bool title) {
+void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
+                const lv_font_t* font_override = nullptr) {
   if (!source || lv_obj_has_flag(source, LV_OBJ_FLAG_HIDDEN)) {
     lv_obj_add_flag(target, LV_OBJ_FLAG_HIDDEN);
     return;
   }
   lv_obj_remove_flag(target, LV_OBJ_FLAG_HIDDEN);
-  const auto* font = lv_obj_get_style_text_font(source, LV_PART_MAIN);
+  const auto* font = font_override ? font_override
+                                   : lv_obj_get_style_text_font(source, LV_PART_MAIN);
   if (font != lv_obj_get_style_text_font(target, LV_PART_MAIN))
     lv_obj_set_style_text_font(target, font, 0);
   const char* text = title ? hometiles_title::text(source) : lv_label_get_text(source);
@@ -209,6 +227,34 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title) {
   if (!lv_color_eq(color, lv_obj_get_style_text_color(target, LV_PART_MAIN)))
     lv_obj_set_style_text_color(target, color, 0);
 
+}
+
+// A header with a value line shows the title on one line; the classic header
+// keeps the configured two-line title. Only a change re-renders the title.
+void set_title_single_line(lv_obj_t* title, bool single_line) {
+  auto* state = hometiles_title::state_for(title);
+  if (!state || state->single_line == single_line) return;
+  state->single_line = single_line;
+  hometiles_title::render(title, state);
+}
+
+// Copy the current value text from the popup's hidden holder. The holder is
+// never drawn, so its own changes do not repaint anything.
+bool sync_header_value(lv_obj_t* source) {
+  const char* text = source ? lv_label_get_text(source) : nullptr;
+  const bool visible = text && text[0];
+  const bool hidden = lv_obj_has_flag(shell.value, LV_OBJ_FLAG_HIDDEN);
+  if (!visible) {
+    if (!hidden) lv_obj_add_flag(shell.value, LV_OBJ_FLAG_HIDDEN);
+    return false;
+  }
+  if (shell.value_source != text) {
+    shell.value_source = text;
+    hometiles_title::set(shell.value, text, true);
+    set_title_single_line(shell.value, true);
+  }
+  if (hidden) lv_obj_remove_flag(shell.value, LV_OBJ_FLAG_HIDDEN);
+  return true;
 }
 }
 
@@ -249,10 +295,12 @@ PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
 }
 
 void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
-                       lv_obj_t* icon, lv_obj_t* close, void (*dismiss)()) {
+                       lv_obj_t* icon, lv_obj_t* close, void (*dismiss)(),
+                       lv_obj_t* value) {
   if (!owner || !body || !close) return;
   Binding* binding = bind(owner, body, title, icon, close);
   if (!binding) return;
+  binding->value = value;
   ensure_shell();
   if (shell.active && shell.active != binding) {
     auto dismiss_previous = shell.active->dismiss;
@@ -317,13 +365,20 @@ void sync_popup_shell() {
   const auto color = lv_obj_get_style_bg_color(body, LV_PART_MAIN);
   if (!lv_color_eq(color, lv_obj_get_style_bg_color(shell.frame, LV_PART_MAIN)))
     lv_obj_set_style_bg_color(shell.frame, color, 0);
-  copy_label(shell.title, shell.active->title, true);
+  const bool with_value = sync_header_value(shell.active->value);
+  copy_label(shell.title, shell.active->title, true,
+             with_value ? popup_layout::headerCompactTitleFont() : nullptr);
+  set_title_single_line(shell.title, with_value);
   copy_label(shell.icon, shell.active->icon, false);
   // The disc appears only behind a visible header icon.
   lv_obj_set_flag(shell.icon_disc, LV_OBJ_FLAG_HIDDEN,
                   lv_obj_has_flag(shell.icon, LV_OBJ_FLAG_HIDDEN) ||
                       !lv_label_get_text(shell.icon)[0]);
-  popup_layout::alignHeader(shell.header, shell.title, shell.icon, shell.icon_disc);
+  if (with_value)
+    popup_layout::alignHeaderWithValue(shell.header, shell.title, shell.value, shell.icon,
+                                       shell.icon_disc);
+  else
+    popup_layout::alignHeader(shell.header, shell.title, shell.icon, shell.icon_disc);
   copy_label(lv_obj_get_child(shell.close, 0), lv_obj_get_child(shell.active->close, 0), false);
   if (lv_obj_has_state(shell.active->close, LV_STATE_DISABLED))
     lv_obj_add_state(shell.close, LV_STATE_DISABLED);

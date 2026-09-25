@@ -362,4 +362,28 @@ inline lv_obj_t* createHeaderIconDisc(lv_obj_t* card) {
   return disc;
 }
 
+// Headers that show the entity's current value (Sensor, Number, Select,
+// Date/Time, Binary Sensor, Energy): a smaller title above the value, both
+// white, stacked as one block centered on the icon disc.
+inline const lv_font_t* headerCompactTitleFont() { return font20(); }
+inline const lv_font_t* headerValueFont() { return font28(); }
+
+inline void alignHeaderWithValue(lv_obj_t* card, lv_obj_t* title, lv_obj_t* value,
+                                 lv_obj_t* icon, lv_obj_t* icon_disc = nullptr) {
+  alignHeader(card, nullptr, icon, icon_disc);
+  if (!card || !title || !value) return;
+  const int center = kHeaderCenterY - lv_obj_get_style_pad_top(card, LV_PART_MAIN);
+  const int title_height =
+      lv_font_get_line_height(lv_obj_get_style_text_font(title, LV_PART_MAIN));
+  const int value_height =
+      lv_font_get_line_height(lv_obj_get_style_text_font(value, LV_PART_MAIN));
+  const int top = std::max(0, center - (title_height + value_height) / 2);
+  for (auto* label : {title, value}) {
+    const int y = label == title ? top : top + title_height;
+    if (lv_obj_get_style_x(label, LV_PART_MAIN) != kHeaderTitleX ||
+        lv_obj_get_style_y(label, LV_PART_MAIN) != y)
+      lv_obj_align(label, LV_ALIGN_TOP_LEFT, kHeaderTitleX, y);
+  }
+}
+
 }  // namespace popup_layout

@@ -17,9 +17,12 @@ PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
 
 // The UI owns one visible frame/header. Type-specific resident cards supply
 // only their cached content and keep their existing event/state ownership.
+// `value` is an optional hidden label holding the entity's current value.
+// While it has text, the header shows a smaller one-line title with the value
+// below it; popups without a value keep the classic header.
 void show_popup_shell(lv_obj_t* owner_overlay, lv_obj_t* body,
                       lv_obj_t* title, lv_obj_t* icon, lv_obj_t* close,
-                     void (*dismiss)() = nullptr);
+                     void (*dismiss)() = nullptr, lv_obj_t* value = nullptr);
 void hide_popup_shell(lv_obj_t* body);
 void sync_popup_shell();
 // True from show_popup_shell() until the popup is hidden again. Every tile

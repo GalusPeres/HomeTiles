@@ -567,24 +567,16 @@ int main() {
     sensor.sensor_ready = false;
     assert(streamGate(sensor) == StopReason::SensorUnavailable);
     assert(!reasonEndsSession(StopReason::Sleep) && reasonEndsSession(StopReason::StreamStop));
-    // Display sleep stops the upload and defers keepalives until wake, but the
-    // session survives so the first keepalive after wake resumes it.
-    GateInputs sleeping = in;
-    sleeping.display_sleeping = true;
-    assert(streamGate(sleeping) == StopReason::Sleep);
-    GateInputs sleeping_popup = sleeping;
-    sleeping_popup.popup_active = true;
-    assert(streamGate(sleeping_popup) != StopReason::None);
-    GateInputs sleeping_ttl = sleeping;
-    sleeping_ttl.ttl_expired = true;
-    assert(streamGate(sleeping_ttl) == StopReason::Keepalive);  // ttl still ends it.
+    // Display sleep is no gate input: the stream also runs while the display
+    // sleeps (streamDisplayStep() decides about the display). A pipeline
+    // release that reaches a run still ends it with "sleep" and keeps the session.
     assert(std::string(stopReasonName(StopReason::Sleep)) == "sleep");
     GateInputs no_session = in;
     no_session.session_valid = false;
     assert(streamGate(no_session) != StopReason::None);
     assert(std::string(stopReasonName(StopReason::Popup)) == "popup");
-    // Web Admin storage work stops the upload like display sleep: keepalives
-    // defer, the session survives and resumes afterwards.
+    // Web Admin storage work stops the upload: keepalives defer, the session
+    // survives and resumes afterwards.
     GateInputs storage = in;
     storage.storage_hold = true;
     assert(streamGate(storage) == StopReason::Storage);

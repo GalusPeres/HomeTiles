@@ -218,7 +218,7 @@ ImageSettings currentImageSettings() {
 }
 [[maybe_unused]] std::atomic<uint32_t> g_stream_mode_generation{0};
 // Loop task -> worker: keep streaming. The worker clears it when it stops by
-// itself (popup, sleep, error) so the next keepalive can start it again.
+// itself (popup, storage, error) so the next keepalive can start it again.
 [[maybe_unused]] std::atomic<bool> g_stream_wanted{false};
 // Worker: a stream run is in progress (set before the pipeline starts).
 [[maybe_unused]] std::atomic<bool> g_stream_running{false};
@@ -2305,9 +2305,7 @@ local_camera_stream::GateInputs currentGate() {
   in.sensor_ready = currentState() == ServiceState::Ready;
   in.mqtt_connected = networkManager.isMqttConnected();
   in.popup_active = camera_stream_is_active();
-  // The upload stays off while the display sleeps (reduced power profile);
-  // the session is kept and the first keepalive after wake resumes it.
-  in.display_sleeping = powerManager.isInSleep();
+  // Display sleep does not gate the upload (serviceStreamDisplay()).
   in.storage_hold = storageHoldActive();
   const uint32_t blocked_until = g_stream_blocked_until_ms.load();
   in.shutdown_latched = blocked_until != 0 &&
@@ -2410,6 +2408,30 @@ void serviceStream() {
     endStreamSession(reason);
   } else {
     requestStreamStop(reason);
+  }
+}
+
+// Loop-task only: the previous keep-awake decision (streamDisplayStep()).
+bool g_display_kept_awake = false;
+
+// Every loop iteration, awake and asleep: with the indicator enabled a wanted
+// or running live stream wakes the display and keeps it awake, so the
+// indicator is always visible while the camera streams. Only the stream flags
+// count; still images never wake the display. Wake runs here on the loop task,
+// never on the camera worker.
+void serviceStreamDisplay() {
+  const bool stream_active = g_stream_wanted.load() || g_stream_running.load();
+  const bool indicator_enabled =
+      g_indicator_style.load() != static_cast<uint8_t>(IndicatorStyle::None);
+  const bool was_kept_awake = g_display_kept_awake;
+  const local_camera_stream::StreamDisplayAction action = local_camera_stream::streamDisplayStep(
+      stream_active, indicator_enabled, powerManager.isInSleep(), &g_display_kept_awake);
+  if (action.wake) powerManager.wakeFromDisplaySleep("camera");
+  if (action.reset_activity) displayManager.resetActivityTimer();
+  if (g_display_kept_awake != was_kept_awake) {
+    Serial.println(g_display_kept_awake
+                       ? "[LocalCamStream] Display kept awake while the stream runs (indicator on)"
+                       : "[LocalCamStream] Display idle timer restarted after the stream");
   }
 }
 
@@ -2541,6 +2563,7 @@ void service() {
   if (!kSupported) return;
 #if defined(HOMETILES_LOCAL_CAMERA)
   serviceStream();
+  serviceStreamDisplay();
 #endif
   const uint32_t generation = g_state_generation.load();
   if (generation != g_published_generation) {
@@ -2775,10 +2798,13 @@ void appendStatusJson(String& json) {
 
 void releaseForSleep() {
 #if defined(HOMETILES_LOCAL_CAMERA)
-  // A running stream stops with reason "sleep". While the display sleeps the
-  // stream gate defers every keepalive (GateInputs::display_sleeping), so the
-  // pipeline stays released; the first keepalive after wake resumes the same
-  // session.
+  // The live stream keeps running while the display sleeps, so only an idle
+  // camera frees its pipeline here: the release notification would end a
+  // running stream (streamWait() maps it to "sleep"). A stream that ends
+  // during sleep leaves the pipeline to the worker's idle release. Only the
+  // loop task sets g_stream_wanted, so no stream can start between this check
+  // and the notification.
+  if (g_stream_wanted.load() || g_stream_running.load()) return;
   notifyWorker(kNotifyRelease);
 #endif
 }

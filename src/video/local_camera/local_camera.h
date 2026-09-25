@@ -43,6 +43,9 @@ bool setPaused(bool paused);
 bool endStream();
 
 // Publishes retained status changes and, when needed, the Bridge capability.
+// Runs in the awake and the sleep loop: with the indicator enabled a live
+// stream wakes the display and keeps it awake while it runs
+// (local_camera_stream::streamDisplayStep()).
 void service();
 
 // Post-connect hook: the retained {base}/stat/local_camera status.
@@ -146,8 +149,9 @@ const char* stateName();
 // Appends one JSON object (without a leading comma) for Web Admin.
 void appendStatusJson(String& json);
 
-// Releases the capture pipeline while the display sleeps. Requests still work
-// and re-create it on demand.
+// Releases the capture pipeline while the display sleeps, unless a live
+// stream is wanted or running (the stream continues during display sleep).
+// Requests still work and re-create it on demand.
 void releaseForSleep();
 // OTA or restart: releases every camera resource and puts the sensor into
 // software standby. Waits a bounded time for the worker.

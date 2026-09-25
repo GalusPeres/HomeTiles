@@ -49,7 +49,7 @@ const tryStartCallers = [...maskCpp(service).matchAll(/tryStartStream\(\);/g)].l
 assert.equal(tryStartCallers, 1, 'tryStartStream is called from the keepalive handler only');
 assert.match(svc('serviceStream'),
   /if \(local_camera_stream::reasonEndsSession\(reason\)\) \{\s*endStreamSession\(reason\);\s*\} else \{\s*requestStreamStop\(reason\);/,
-  'Popup/sleep/errors stop the upload but keep the session for the next keepalive');
+  'Popup/storage/errors stop the upload but keep the session for the next keepalive');
 
 // --- Stop paths --------------------------------------------------------------------------
 assert.match(svc('setEnabled'), /if \(g_worker\) g_abort\.store\(true\);\s*endStreamSession\(StopReason::Disabled\);/);
@@ -58,10 +58,13 @@ assert.match(svc('shutdown'), /g_stream_blocked_until_ms\.store\([\s\S]*endStrea
 assert.match(svc('streamWait'), /if \(bits & kNotifyShutdown\) return StopReason::Shutdown;\s*if \(bits & kNotifyDisable\) return StopReason::Disabled;\s*if \(bits & kNotifyRelease\) return StopReason::Sleep;/);
 assert.match(svc('streamWait'), /\*leftover \|= bits & \(kNotifyShutdown \| kNotifyDisable \| kNotifyRelease \| kNotifyProbe\);/,
   'Lifecycle notifications are handed back to the worker loop');
-assert.match(svc('releaseForSleep'), /notifyWorker\(kNotifyRelease\);/);
-assert.match(svc('currentGate'), /in\.display_sleeping = powerManager\.isInSleep\(\);/,
-  'Keepalives defer while the display sleeps, so the sleep release is not undone');
-assert.match(contract, /if \(in\.display_sleeping\) return StopReason::Sleep;/);
+// Display sleep no longer stops or defers the stream
+// (tools/tests/devices/test-local-camera-sleep-stream.mjs covers the display).
+assert.match(svc('releaseForSleep'),
+  /if \(g_stream_wanted\.load\(\) \|\| g_stream_running\.load\(\)\) return;\s*notifyWorker\(kNotifyRelease\);/,
+  'The sleep release frees only an idle pipeline, never a running stream');
+assert.doesNotMatch(svc('currentGate'), /isInSleep|display_sleeping/);
+assert.doesNotMatch(bodyOf(contract, 'streamGate'), /sleep|StopReason::Sleep/i);
 assert.match(svc('handleStreamStop'), /endStreamSession\(StopReason::StreamStop\);/);
 assert.match(contract, /if \(!in\.mqtt_connected\) return StopReason::Mqtt;/);
 assert.match(contract, /if \(in\.ttl_expired\) return StopReason::Keepalive;/);

@@ -686,7 +686,7 @@ enum class StopReason : uint8_t {
   Popup,        // A camera popup stream on the display has priority.
   Disabled,     // User disabled the camera.
   Shutdown,     // OTA or restart.
-  Sleep,        // Display sleep released the pipeline.
+  Sleep,        // A pipeline release reached the run (releaseForSleep() skips streams).
   Mqtt,         // MQTT connection lost.
   SensorUnavailable,
   Error,
@@ -719,19 +719,19 @@ struct GateInputs {
   bool mqtt_connected = false;
   bool popup_active = false;  // camera_stream_is_active(): display stream has priority.
   bool shutdown_latched = false;
-  bool display_sleeping = false;  // Display sleep: keepalives defer until wake.
-  bool storage_hold = false;      // Web Admin storage work: keepalives defer until it ends.
+  bool storage_hold = false;  // Web Admin storage work: keepalives defer until it ends.
 };
 
 // First reason that forbids streaming, or None. Used both to stop a running
-// upload and to decide whether a keepalive may (re)start it.
+// upload and to decide whether a keepalive may (re)start it. Display sleep is
+// deliberately not a reason: the stream also runs while the display sleeps
+// (streamDisplayStep() decides what the display does).
 inline StopReason streamGate(const GateInputs& in) {
   if (!in.enabled) return StopReason::Disabled;
   if (in.shutdown_latched) return StopReason::Shutdown;
   if (!in.mqtt_connected) return StopReason::Mqtt;
   if (!in.session_valid) return StopReason::StreamStop;
   if (in.ttl_expired) return StopReason::Keepalive;
-  if (in.display_sleeping) return StopReason::Sleep;
   if (in.storage_hold) return StopReason::Storage;
   if (in.popup_active) return StopReason::Popup;
   if (!in.sensor_ready) return StopReason::SensorUnavailable;
@@ -744,6 +744,31 @@ inline bool reasonEndsSession(StopReason reason) {
   return reason == StopReason::StreamStop || reason == StopReason::Keepalive ||
          reason == StopReason::Disabled || reason == StopReason::Shutdown ||
          reason == StopReason::Mqtt;
+}
+
+// ---------------------------------------------------------------------------
+// Display while a live stream runs (evaluated on the loop task every pass).
+// With the on-display indicator enabled, a wanted or running stream wakes a
+// sleeping display and counts as activity, so the idle timer cannot put the
+// display to sleep and the indicator stays visible; when that ends the idle
+// timer restarts once, so normal idle timing starts from the stream end. With
+// the indicator off the stream runs while the display sleeps and nothing
+// wakes it. Still images are not streams and never reach this decision.
+// ---------------------------------------------------------------------------
+struct StreamDisplayAction {
+  bool wake = false;            // Wake the sleeping display now.
+  bool reset_activity = false;  // Restart the display idle timer.
+};
+
+// *kept_awake carries the previous result between calls (loop task state).
+inline StreamDisplayAction streamDisplayStep(bool stream_active, bool indicator_enabled,
+                                             bool display_asleep, bool* kept_awake) {
+  const bool keep = stream_active && indicator_enabled;
+  StreamDisplayAction action;
+  action.wake = keep && display_asleep;
+  action.reset_activity = keep || (kept_awake && *kept_awake);
+  if (kept_awake) *kept_awake = keep;
+  return action;
 }
 
 // ---------------------------------------------------------------------------

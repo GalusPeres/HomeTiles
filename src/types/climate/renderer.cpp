@@ -9,6 +9,7 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/climate/layout.h"
@@ -1367,13 +1368,11 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
     icon_label = lv_label_create(card);
     set_label_style(icon_label, lv_color_white(), FONT_MDI_ICONS);
     lv_label_set_text(icon_label, icon_char.c_str());
-    lv_obj_align(
-        icon_label, LV_ALIGN_TOP_LEFT,
-        -8, -8);
   }
 
+  lv_obj_t* title = nullptr;
   if (tile.title.length()) {
-    lv_obj_t* title = lv_label_create(card);
+    title = lv_label_create(card);
     set_label_style(title, lv_color_white(),
                     tile_layout::header_title_font());
     lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
@@ -1382,8 +1381,10 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
     hometiles_title::tile(title, tile.title.c_str(), true);
     lv_obj_align(
         title, LV_ALIGN_TOP_RIGHT,
-        4, 4);
+        4, 0);
   }
+  // The concentric control below keeps its own geometry.
+  tile_icon_disc::apply_header(card, icon_label, title, tile);
 
   ClimateTileWidgets* widgets = tile_renderer_get_climate_widgets(grid_type);
   if (widgets && index < TILES_PER_GRID) {

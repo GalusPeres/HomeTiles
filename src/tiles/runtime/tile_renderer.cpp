@@ -20,6 +20,7 @@
 #include "src/types/types_registry.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/i18n/i18n.h"
@@ -2540,16 +2541,17 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   decode_basic_json_escapes(unit);
 
   if (widgets.icon_label) {
+    // The icon disc follows the icon; an empty disc never shows.
     if (icon_name.length()) {
       String iconChar = getMdiChar(icon_name);
       if (iconChar.length()) {
         lv_label_set_text(widgets.icon_label, iconChar.c_str());
-        lv_obj_clear_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
+        tile_icon_disc::set_icon_hidden(widgets.icon_label, false);
       } else {
-        lv_obj_add_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
+        tile_icon_disc::set_icon_hidden(widgets.icon_label, true);
       }
     } else {
-      lv_obj_add_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
+      tile_icon_disc::set_icon_hidden(widgets.icon_label, true);
     }
   }
 

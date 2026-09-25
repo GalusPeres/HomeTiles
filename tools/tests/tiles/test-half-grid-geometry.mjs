@@ -40,6 +40,7 @@ ${fn('src/tiles/config/tile_config.cpp','packGeometry')}
 ${fn('src/tiles/config/tile_config.cpp','unpackGeometry')}
 ${fn('src/tiles/runtime/tile_renderer_shared.h','apply_fractional_tile_geometry')}
 ${fn('src/tiles/runtime/tile_renderer.cpp','set_tile_grid_cell')}
+${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 int main(){
  assert(tile_layout::value_font_for_choice(0,nullptr)==nullptr);

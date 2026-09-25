@@ -27,6 +27,7 @@ struct Shell {
   lv_obj_t* frame = nullptr;
   lv_obj_t* header = nullptr;
   lv_obj_t* title = nullptr;
+  lv_obj_t* icon_disc = nullptr;
   lv_obj_t* icon = nullptr;
   lv_obj_t* close = nullptr;
   Binding* active = nullptr;
@@ -69,23 +70,29 @@ void draw_popup_background(lv_event_t* event) {
     lv_event_stop_processing(event);
 }
 
+// Only the shared shell header draws, so only it gets the icon disc. The
+// resident bodies keep invisible header labels as metadata holders.
 void create_header(lv_obj_t* parent, lv_obj_t*& title, lv_obj_t*& icon,
-                   lv_obj_t*& close, lv_event_cb_t handler, void* context) {
+                   lv_obj_t*& close, lv_event_cb_t handler, void* context,
+                   lv_obj_t** icon_disc = nullptr) {
   title = lv_label_create(parent);
   lv_obj_set_width(title, LV_PCT(62));
   lv_obj_set_style_text_font(title, popup_layout::headerTitleFont(), 0);
   lv_obj_set_style_text_color(title, lv_color_white(), 0);
   lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
   lv_label_set_text(title, "");
+  lv_obj_t* disc = icon_disc ? popup_layout::createHeaderIconDisc(parent) : nullptr;
+  if (icon_disc) *icon_disc = disc;
   icon = lv_label_create(parent);
   lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
   popup_layout::applyIconScale(icon);
+  popup_layout::styleHeaderIcon(icon);
   lv_obj_set_style_text_color(icon, lv_color_white(), 0);
   lv_label_set_text(icon, "");
   close = popup_layout::createCloseButton(parent, handler, context);
-  for (auto* object : {title, icon, close})
-    lv_obj_add_flag(object, LV_OBJ_FLAG_IGNORE_LAYOUT);
-  popup_layout::alignHeader(parent, title, icon);
+  for (auto* object : {title, disc, icon, close})
+    if (object) lv_obj_add_flag(object, LV_OBJ_FLAG_IGNORE_LAYOUT);
+  popup_layout::alignHeader(parent, title, icon, disc);
 }
 
 void detach() {
@@ -178,7 +185,8 @@ void ensure_shell() {
   lv_obj_remove_style_all(shell.header);
   lv_obj_remove_flag(shell.header, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_remove_flag(shell.header, LV_OBJ_FLAG_SCROLLABLE);
-  create_header(shell.header, shell.title, shell.icon, shell.close, close_clicked, nullptr);
+  create_header(shell.header, shell.title, shell.icon, shell.close, close_clicked, nullptr,
+                &shell.icon_disc);
   lv_obj_add_event_cb(shell.overlay, shell_deleted, LV_EVENT_DELETE, nullptr);
 }
 
@@ -311,7 +319,11 @@ void sync_popup_shell() {
     lv_obj_set_style_bg_color(shell.frame, color, 0);
   copy_label(shell.title, shell.active->title, true);
   copy_label(shell.icon, shell.active->icon, false);
-  popup_layout::alignHeader(shell.header, shell.title, shell.icon);
+  // The disc appears only behind a visible header icon.
+  lv_obj_set_flag(shell.icon_disc, LV_OBJ_FLAG_HIDDEN,
+                  lv_obj_has_flag(shell.icon, LV_OBJ_FLAG_HIDDEN) ||
+                      !lv_label_get_text(shell.icon)[0]);
+  popup_layout::alignHeader(shell.header, shell.title, shell.icon, shell.icon_disc);
   copy_label(lv_obj_get_child(shell.close, 0), lv_obj_get_child(shell.active->close, 0), false);
   if (lv_obj_has_state(shell.active->close, LV_STATE_DISABLED))
     lv_obj_add_state(shell.close, LV_STATE_DISABLED);

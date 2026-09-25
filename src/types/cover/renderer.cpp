@@ -8,6 +8,7 @@
 #include "src/core/i18n/i18n.h"
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/cover/cover_popup.h"
@@ -361,9 +362,6 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
     set_label_style(widget.icon_label,
                     lv_color_hex(cover_icon_color(state)), FONT_MDI_ICONS);
     lv_label_set_text(widget.icon_label, getMdiChar(configured_icon).c_str());
-    lv_obj_align(widget.icon_label, LV_ALIGN_TOP_LEFT,
-                 tile_layout::scale_480(-8),
-                 tile_layout::scale_480(-8));
   }
 
   if (tile.title.length()) {
@@ -375,9 +373,9 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
     lv_label_set_long_mode(widget.title_label, LV_LABEL_LONG_DOT);
     hometiles_title::tile(widget.title_label, tile.title.c_str(), true);
     lv_obj_align(widget.title_label, LV_ALIGN_TOP_RIGHT,
-                 tile_layout::scale_480(4),
-                 tile_layout::scale_480(4));
+                 tile_layout::scale_480(4), 0);
   }
+  tile_icon_disc::apply_header(card, widget.icon_label, widget.title_label, tile);
 
   // Same value block as a Sensor tile, but with the HA Cover state and
   // position on two lines (for example "Open\n40%").

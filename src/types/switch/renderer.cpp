@@ -2,6 +2,7 @@
 #include "src/types/switch/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -170,11 +171,7 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
       set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
       lv_label_set_text(icon_lbl, iconChar.c_str());
 
-      if (use_switch_widget) {
-        lv_obj_align(icon_lbl, LV_ALIGN_TOP_RIGHT,
-                     tile_layout::scale_480(4),
-                     tile_layout::scale_480(-8));
-      } else {
+      if (!use_switch_widget) {
         // Center icon and title on two lines, or the icon alone on one line.
         if (has_title) {
           lv_obj_align(icon_lbl, LV_ALIGN_CENTER, 0,
@@ -196,8 +193,7 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
       hometiles_title::tile(title_lbl, tile.title.c_str(), use_switch_widget);
 
       if (use_switch_widget) {
-        lv_obj_align(title_lbl, LV_ALIGN_TOP_LEFT, 0,
-                     tile_layout::scale_480(4));
+        lv_obj_align(title_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
       } else {
         // Position below the icon, or center when there is no icon.
         if (icon_lbl) {
@@ -208,6 +204,14 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
         }
       }
     }
+  }
+
+  if (use_switch_widget) {
+    // The icon keeps its top-right corner; the title stays on the left.
+    tile_icon_disc::apply_header(container, icon_lbl, title_lbl, tile,
+                                 tile_icon_disc::Corner::Right);
+  } else {
+    tile_icon_disc::apply_centered(container, icon_lbl, title_lbl);
   }
 
   lv_obj_t* switch_obj = nullptr;

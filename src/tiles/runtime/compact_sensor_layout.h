@@ -4,6 +4,7 @@
 
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/ui/shared/ui_surface_style.h"
 
 namespace compact_sensor_layout {
@@ -19,31 +20,21 @@ inline int title_size() {
 // Half-height tiles always show the value at the title size (20 px on the
 // 1280x800 layouts), so explicit value sizes can never clip.
 inline int value_size() { return title_size(); }
-inline int inset() { return tile_layout::scale_480(4); }
+inline int inset() { return tile_icon_disc::inset(); }
 inline int text_gap() { return 0; }
 inline const lv_font_t* title_font() { return tile_layout::header_title_font(); }
 inline const lv_font_t* value_font() { return tile_layout::content_font_20(); }
-inline int header_height() { return (GRID_CELL_H - GRID_GAP) / 2; }
+inline int header_height() { return tile_icon_disc::row_height(); }
 // Half-height tile content (icon disc, title and value lines) on a card of the
 // given width. Overlays that look like a half-height tile use it directly.
 inline void apply_content(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, lv_obj_t* value, int width) {
   lv_obj_set_style_pad_all(card, 0, 0);
   const int margin = inset();
   const int height = header_height();
-  const int diameter = height - margin * 2;
   const int text_x = height + margin;
-  if (icon) {
-    lv_obj_t* disc = lv_obj_create(card);
-    lv_obj_remove_style_all(disc);
-    lv_obj_remove_flag(disc, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
-    lv_obj_set_pos(disc, margin, margin);
-    lv_obj_set_size(disc, diameter, diameter);
-    ui_surface_style::apply_radius(disc, tile_layout::scale_480(22) - margin, 0);
-    lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(disc, static_cast<lv_opa_t>(38), 0);
+  if (lv_obj_t* disc = tile_icon_disc::wrap(card, icon)) {
+    tile_icon_disc::place_in_corner(card, disc, tile_icon_disc::Corner::Left);
     lv_obj_move_background(disc);
-    lv_obj_set_parent(icon, disc);
-    lv_obj_center(icon);
   }
   auto text = [&](lv_obj_t* label, const lv_font_t* font, int y) {
     if (!label) return;

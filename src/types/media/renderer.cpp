@@ -10,6 +10,7 @@
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/devices/device_select.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/media/media_popup.h"
@@ -386,9 +387,6 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
       lv_label_set_text(icon_label, "");
       lv_obj_add_flag(icon_label, LV_OBJ_FLAG_HIDDEN);
     }
-    lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
-                 tile_layout::scale_480(-8),
-                 tile_layout::scale_480(-8));
     enable_event_bubble(icon_label);
   }
 
@@ -411,10 +409,10 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     lv_obj_set_style_text_align(title_label, LV_TEXT_ALIGN_RIGHT, 0);
     hometiles_title::tile(title_label, title_text.c_str(), true);
     lv_obj_align(title_label, LV_ALIGN_TOP_RIGHT,
-                 tile_layout::scale_480(4),
-                 tile_layout::scale_480(4));
+                 tile_layout::scale_480(4), 0);
     enable_event_bubble(title_label);
   }
+  tile_icon_disc::apply_header(card, icon_label, title_label, tile);
 
 #if defined(DEVICE_WAVESHARE_4B)
   const lv_font_t* media_font = (tile.span_w > 1 || tile.span_h > 1) ? &ui_font_28 : &ui_font_24;

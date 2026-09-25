@@ -2,6 +2,7 @@
 #include "src/types/text/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include <Arduino.h>
 
@@ -41,29 +42,30 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     iconChar = getMdiChar(tile.icon_name);
   }
   const bool has_icon = iconChar.length() > 0;
+  lv_obj_t* icon_lbl = nullptr;
   if (has_icon) {
-    lv_obj_t* icon_lbl = lv_label_create(card);
+    icon_lbl = lv_label_create(card);
     if (icon_lbl) {
       set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
       lv_label_set_text(icon_lbl, iconChar.c_str());
-      lv_obj_align(icon_lbl, LV_ALIGN_TOP_RIGHT,
-                   tile_layout::scale_480(4),
-                   tile_layout::scale_480(-8));
     }
   }
 
   // Title (optional)
+  lv_obj_t* title_lbl = nullptr;
   if (tile.title.length() > 0) {
-    lv_obj_t* title_lbl = lv_label_create(card);
+    title_lbl = lv_label_create(card);
     if (title_lbl) {
       set_label_style(title_lbl, lv_color_hex(0xFFFFFF),
                       tile_layout::header_title_font());
       lv_obj_set_width(title_lbl, LV_PCT(has_icon ? 70 : 100));
       hometiles_title::tile(title_lbl, tile.title.c_str(), true);
-      lv_obj_align(title_lbl, LV_ALIGN_TOP_LEFT, 0,
-                   tile_layout::scale_480(4));
+      lv_obj_align(title_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
     }
   }
+  // The icon keeps its top-right corner; the title stays on the left.
+  tile_icon_disc::apply_header(card, icon_lbl, title_lbl, tile,
+                               tile_icon_disc::Corner::Right);
 
   auto get_text_font = [&](const Tile& t) -> const lv_font_t* {
     switch (t.sensor_value_font) {

@@ -7,6 +7,7 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/binary_sensor/binary_sensor_popup.h"
@@ -2231,18 +2232,19 @@ static void tiles_refresh_icons_for_grid(GridType grid_type) {
       continue;
     }
 
+    // A tile icon may sit on a disc: hide and show both together.
     if (icon_disabled || !icon_name.length()) {
-      lv_obj_add_flag(icon_lbl, LV_OBJ_FLAG_HIDDEN);
+      tile_icon_disc::set_icon_hidden(icon_lbl, true);
       continue;
     }
 
     if (!iconChar.length()) {
-      lv_obj_add_flag(icon_lbl, LV_OBJ_FLAG_HIDDEN);
+      tile_icon_disc::set_icon_hidden(icon_lbl, true);
       continue;
     }
 
     lv_label_set_text(icon_lbl, iconChar.c_str());
-    lv_obj_clear_flag(icon_lbl, LV_OBJ_FLAG_HIDDEN);
+    tile_icon_disc::set_icon_hidden(icon_lbl, false);
     lv_obj_invalidate(icon_lbl);
   }
 }

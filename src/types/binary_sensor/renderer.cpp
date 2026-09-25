@@ -1,4 +1,5 @@
 #include "src/tiles/runtime/compact_sensor_layout.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/binary_sensor/renderer.h"
 
@@ -214,9 +215,9 @@ void apply_state(GridType grid_type, uint8_t index,
         const String icon = binary_sensor_resolve_icon(*tile, state);
         if (icon.length()) {
           lv_label_set_text(widgets.icon_label, getMdiChar(icon).c_str());
-          lv_obj_clear_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
+          tile_icon_disc::set_icon_hidden(widgets.icon_label, false);
         } else {
-          lv_obj_add_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN);
+          tile_icon_disc::set_icon_hidden(widgets.icon_label, true);
         }
       }
     }
@@ -521,9 +522,6 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
                     lv_color_hex(binary_sensor_visual_color(state)),
                     FONT_MDI_ICONS);
     lv_label_set_text(widgets.icon_label, getMdiChar(icon).c_str());
-    lv_obj_align(widgets.icon_label, LV_ALIGN_TOP_LEFT,
-                 tile_layout::scale_480(-8),
-                 tile_layout::scale_480(-8));
   }
 
   if (tile.title.length()) {
@@ -535,7 +533,12 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
     lv_label_set_long_mode(widgets.title_label, LV_LABEL_LONG_DOT);
     hometiles_title::tile(widgets.title_label, tile.title.c_str(), true);
     lv_obj_align(widgets.title_label, LV_ALIGN_TOP_RIGHT,
-                 tile_layout::scale_480(4), tile_layout::scale_480(4));
+                 tile_layout::scale_480(4), 0);
+  }
+  // Half-height tiles place the disc and title in compact_sensor_layout.
+  const bool compact = tile_geometry::compact(tile.type, tile.span_w, tile.span_h);
+  if (!compact) {
+    tile_icon_disc::apply_header(card, widgets.icon_label, widgets.title_label, tile);
   }
 
   widgets.state_label = lv_label_create(card);
@@ -549,7 +552,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
   lv_obj_align(widgets.state_label, LV_ALIGN_CENTER, 0,
                tile_layout::scale(28));
 
-  if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h)) {
+  if (compact) {
     compact_sensor_layout::apply(card, widgets.icon_label, widgets.title_label, widgets.state_label, tile);
   }
 

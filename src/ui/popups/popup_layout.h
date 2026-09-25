@@ -168,7 +168,6 @@ inline void applyIconScale(lv_obj_t* label) {
 
 #if defined(DEVICE_LAYOUT_1024X600)
 constexpr int kHeaderCenterY = 50;
-constexpr int kHeaderTitleX = 62;
 constexpr int kCloseButtonSize = 72;
 constexpr int kCloseButtonRadius = 13;
 constexpr int kCloseButtonOffsetX = 3;
@@ -176,7 +175,6 @@ constexpr int kCloseButtonOffsetY = -3;
 constexpr int kCloseButtonClickArea = 7;
 #elif defined(DEVICE_LAYOUT_480X480)
 constexpr int kHeaderCenterY = 40;
-constexpr int kHeaderTitleX = 52;
 constexpr int kCloseButtonSize = 64;
 constexpr int kCloseButtonRadius = 11;
 constexpr int kCloseButtonOffsetX = 4;
@@ -184,14 +182,20 @@ constexpr int kCloseButtonOffsetY = -4;
 constexpr int kCloseButtonClickArea = 6;
 #else
 constexpr int kHeaderCenterY = 60;
-constexpr int kHeaderTitleX = 78;
 constexpr int kCloseButtonSize = 96;
 constexpr int kCloseButtonRadius = 16;
 constexpr int kCloseButtonOffsetX = 6;
 constexpr int kCloseButtonOffsetY = -6;
 constexpr int kCloseButtonClickArea = 8;
 #endif
-constexpr int kHeaderIconX = scale(8);
+// Header icon disc: a translucent circle at the card content's left edge,
+// centered on the header line. The header icon label spans the disc width
+// with centered text, so its glyph sits in the middle of the circle.
+constexpr int kHeaderIconDiscSize = scale(72);
+constexpr int kHeaderIconDiscGap = scale(16);
+constexpr int kHeaderIconDiscOpa = 38;
+constexpr int kHeaderIconX = 0;
+constexpr int kHeaderTitleX = kHeaderIconDiscSize + kHeaderIconDiscGap;
 
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kCardMargin = 3;
@@ -279,9 +283,16 @@ constexpr int kNavY = kCardHeight - kNavBottomInset - kNavHeight;
 
 // Header coordinates depend only on the font and fixed padding. Do not force
 // layout of the entire screen to position cached header metadata before opening.
-inline void alignHeader(lv_obj_t* card, lv_obj_t* title, lv_obj_t* icon) {
+inline void alignHeader(lv_obj_t* card, lv_obj_t* title, lv_obj_t* icon,
+                        lv_obj_t* icon_disc = nullptr) {
   if (!card) return;
   const int center = kHeaderCenterY - lv_obj_get_style_pad_top(card, LV_PART_MAIN);
+  if (icon_disc) {
+    const int y = center - kHeaderIconDiscSize / 2;
+    if (lv_obj_get_style_x(icon_disc, LV_PART_MAIN) != kHeaderIconX ||
+        lv_obj_get_style_y(icon_disc, LV_PART_MAIN) != y)
+      lv_obj_align(icon_disc, LV_ALIGN_TOP_LEFT, kHeaderIconX, y);
+  }
   for (auto* label : {title, icon}) {
     if (!label) continue;
     const auto* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
@@ -329,6 +340,26 @@ inline lv_obj_t* createCloseButton(lv_obj_t* card, lv_event_cb_t handler,
   lv_label_set_text(close_label, getMdiChar("window-close").c_str());
   lv_obj_center(close_label);
   return close_btn;
+}
+
+// Header icon label: as wide as the icon disc with centered text, so the
+// glyph is centered in the disc without measuring it or forcing a layout.
+inline void styleHeaderIcon(lv_obj_t* icon) {
+  lv_obj_set_width(icon, kHeaderIconDiscSize);
+  lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
+}
+
+// Translucent circle behind the visible header icon. It is a plain circle,
+// independent of the global tile radius.
+inline lv_obj_t* createHeaderIconDisc(lv_obj_t* card) {
+  lv_obj_t* disc = lv_obj_create(card);
+  lv_obj_remove_style_all(disc);
+  lv_obj_remove_flag(disc, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
+  lv_obj_set_size(disc, kHeaderIconDiscSize, kHeaderIconDiscSize);
+  lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
+  lv_obj_set_style_bg_opa(disc, static_cast<lv_opa_t>(kHeaderIconDiscOpa), 0);
+  return disc;
 }
 
 }  // namespace popup_layout

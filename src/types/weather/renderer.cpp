@@ -2,6 +2,7 @@
 #include "src/types/weather/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/types/types_registry.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -112,9 +113,6 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
 
   lv_obj_t* icon_label = lv_label_create(card);
   set_label_style(icon_label, lv_color_white(), FONT_MDI_ICONS);
-  lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
-               tile_layout::scale_480(-8),
-               tile_layout::scale_480(-8));
 
   lv_obj_t* location_label = lv_label_create(card);
   set_label_style(location_label, lv_color_white(),
@@ -124,8 +122,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_RIGHT, 0);
   hometiles_title::tile(location_label, location.c_str(), true);
   lv_obj_align(location_label, LV_ALIGN_TOP_RIGHT,
-               tile_layout::scale_480(4),
-               tile_layout::scale_480(4));
+               tile_layout::scale_480(4), 0);
 
   String icon_name = tile.icon_name;
   bool icon_disabled = isMdiIconDisabled(icon_name);
@@ -146,6 +143,8 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
       lv_obj_add_flag(icon_label, LV_OBJ_FLAG_HIDDEN);
     }
   }
+  // The disc takes over the icon's hidden state; state updates toggle both.
+  tile_icon_disc::apply_header(card, icon_label, location_label, tile);
 
   lv_obj_t* value_row = lv_obj_create(card);
   lv_obj_remove_style_all(value_row);

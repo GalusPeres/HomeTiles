@@ -5,6 +5,7 @@
 #include "src/core/i18n/i18n.h"
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/camera/camera_popup.h"
@@ -116,6 +117,7 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
   } else {
     lv_obj_center(title_label);
   }
+  tile_icon_disc::apply_centered(card, icon, title_label);
 
   if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
     CameraEventData* event_data = new CameraEventData{

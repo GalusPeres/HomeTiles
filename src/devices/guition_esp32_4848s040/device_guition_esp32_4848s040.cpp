@@ -52,12 +52,24 @@ constexpr int8_t kPanelB3 = 7;
 constexpr int8_t kPanelB4 = 15;
 
 constexpr int8_t kBacklightPin = 38;
-// Guition's board demo uses 600 Hz and Espressif's maintained exact-board
-// profile uses 1 kHz. 1 kHz keeps the backlight well clear of visible PWM
-// flicker while retaining the board's documented 10-bit resolution.
-constexpr uint32_t kBacklightFrequency = 1000;
+// GPIO38 switches the board's backlight driver on and off as a whole. At the
+// former 1 kHz that switching and its harmonics sit in the ear's most
+// sensitive range, and the driver whines whenever the backlight is dimmed
+// (Issue #45: silent at duty 0, silent with EspControl on the same board).
+// Ultrasonic rates do not work on this board: EspControl's former 20 kHz
+// setting made every level below roughly 85 % go dark, and openHASP users
+// settled on 100 Hz. 150 Hz matches EspControl's current exact-board value,
+// chosen there over the visible shimmer at 100 Hz, and the ESPHome device
+// page. The 10-bit resolution is unchanged (40 MHz XTAL divider ~260), so
+// the raw 0..255 mapping and the calibrated visible floor stay identical;
+// each pulse only gets longer at the same duty.
+constexpr uint32_t kBacklightFrequency = 150;
 constexpr uint8_t kBacklightResolution = 10;
 constexpr uint16_t kBacklightMaxDuty = (1u << kBacklightResolution) - 1u;
+// LEDC applies a new duty only from the next PWM cycle. Wait one full period
+// plus margin before relying on a blanked backlight.
+constexpr uint32_t kBacklightDutyLatchMs =
+    (1000u + kBacklightFrequency - 1u) / kBacklightFrequency + 1u;
 
 constexpr int8_t kTouchSda = 19;
 constexpr int8_t kTouchScl = 45;
@@ -1256,7 +1268,7 @@ void DeviceGuitionESP324848S040::storageWriteBegin() {
     g_storage_blackout_active = true;
     g_storage_restore_brightness = g_applied_brightness;
     applyBrightness(0, false);
-    delay(2);
+    delay(kBacklightDutyLatchMs);
   }
 
   // IDF's ESP32-S3 restart descriptor is permanently wired to framebuffer 0.

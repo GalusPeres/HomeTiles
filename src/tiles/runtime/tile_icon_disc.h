@@ -61,11 +61,11 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   lv_obj_add_flag(disc, LV_OBJ_FLAG_EVENT_BUBBLE);
   lv_obj_set_user_data(disc, const_cast<char*>(&kTag));
   lv_obj_set_size(disc, diameter(), diameter());
-  if (shape == Shape::Concentric) {
-    ui_surface_style::apply_radius(disc, radius_baseline(), 0);
-  } else {
-    lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
-  }
+  // Both shapes follow the global radius with the half-height rule, so every
+  // disc has the same form: a circle at the largest radius, a rounded square
+  // below. The shape only decides the placement (corner or behind the icon).
+  (void)shape;
+  ui_surface_style::apply_radius(disc, radius_baseline(), 0);
   lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
   lv_obj_set_style_bg_opa(disc, kOpa, 0);
   return disc;

@@ -22,7 +22,6 @@ for (const marker of [
   'inline constexpr lv_opa_t kOpa = 38;',
   'lv_obj_set_size(disc, diameter(), diameter());',
   'ui_surface_style::apply_radius(disc, radius_baseline(), 0);',
-  'lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);',
   'lv_obj_set_style_bg_opa(disc, kOpa, 0);',
   'lv_obj_t* disc = create(card, Shape::Concentric);',
   'lv_obj_t* disc = create(card, Shape::Round);',
@@ -30,6 +29,8 @@ for (const marker of [
   'inline void set_icon_hidden(lv_obj_t* icon, bool hidden)',
 ]) assert.ok(helper.includes(marker), `tile_icon_disc: ${marker}`);
 assert.equal((helper.match(/lv_obj_create\(/g) || []).length, 1, 'One disc implementation');
+// Every tile disc follows the global radius; none is a fixed circle.
+assert.doesNotMatch(helper, /LV_RADIUS_CIRCLE/, 'Tile discs follow the global radius');
 // The round disc moves to the icon; it never moves the icon.
 const addRound = helper.slice(helper.indexOf('inline lv_obj_t* add_round('));
 assert.doesNotMatch(addRound, /lv_obj_(?:align|set_pos|set_parent|center)\(icon/, 'The round disc must not move the icon');

@@ -72,7 +72,8 @@ const html = read('src/web/server/render/web_admin_html.cpp');
 assert.ok(html.includes('_tile_icon_glow" checked> )html";') && html.includes('appendHtmlEscaped(html, tr.icon_glow);'));
 assert.ok(html.includes('html += "\\" data-icon-glow=\\"";'));
 const snapshots = read('src/web/admin/tiles/snapshots.js');
-assert.ok(snapshots.includes("icon_glow: glow?.checked === false ? '0' : '1'"));
+// Glow is stored only for types whose icon can take a color; others keep on.
+assert.ok(snapshots.includes("icon_glow: tileTypeHasColoredIcon(typeValue) && glow?.checked === false ? '0' : '1',"));
 assert.ok(snapshots.includes("if (glow) glow.checked = true;"), 'Reset turns glow back on');
 assert.ok(read('src/web/admin/tiles/editor.js').includes("_tile_icon_glow'), 'change', 'tileIconGlow'"));
 assert.ok(read('src/web/admin/tiles/import-export.js').includes("fd.append('icon_glow',"));

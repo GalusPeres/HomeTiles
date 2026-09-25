@@ -1811,7 +1811,7 @@ static void apply_switch_tile_state(GridType grid_type, uint8_t grid_index,
           : (use_switch_widget ? kIconNeutral : icon_color);
   lv_color_t lv_color = lv_color_hex(label_color);
   if (widgets.icon_label) {
-    lv_obj_set_style_text_color(widgets.icon_label, lv_color, 0);
+    tile_icon_disc::set_icon_color(widgets.icon_label, lv_color);
   } else if (widgets.title_label) {
     lv_obj_set_style_text_color(widgets.title_label, lv_color, 0);
   }
@@ -2414,8 +2414,8 @@ static void update_climate_tile_state(
       if (!icon.length()) icon = getMdiChar("thermostat");
       lv_label_set_text(widget.icon_label, icon.c_str());
     }
-    lv_obj_set_style_text_color(
-        widget.icon_label, lv_color_hex(climate_visual_color(state)), 0);
+    tile_icon_disc::set_icon_color(
+        widget.icon_label, lv_color_hex(climate_visual_color(state)));
   }
 
   ClimatePopupInit init = build_climate_popup_init(grid_type, grid_index, state);
@@ -4814,7 +4814,7 @@ lv_obj_t* render_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint
     lv_obj_t* tile_obj =
         desc->render(parent, col, row, tile, index, grid_type, scene_cb);
     apply_fractional_tile_geometry(tile_obj, tile);
-    tile_icon_disc::apply_tile_mode(tile_obj, tile.icon_disc_mode);
+    tile_icon_disc::apply_tile_options(tile_obj, tile.icon_disc_mode, tile.icon_glow);
     if (!tileBorderEnabled(tile)) ui_surface_style::disable_tile_border(tile_obj);
     // Normal grids use the global display option. The screensaver has its
     // own setting and applies it after rendering in image_screensaver.cpp.

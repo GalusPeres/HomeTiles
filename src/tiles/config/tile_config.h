@@ -126,6 +126,8 @@ struct Tile {
 
   // Icon disc override: TILE_ICON_DISC_GLOBAL follows the global option.
   uint8_t icon_disc_mode = 0;
+  // Glow: a colored icon tints its disc with the same hue.
+  bool icon_glow = true;
 
   Tile()
       : type(TILE_EMPTY),

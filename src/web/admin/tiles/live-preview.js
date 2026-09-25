@@ -101,6 +101,7 @@
     tileElem.style.background = '';
     tileElem.dataset.type = type;
     tileElem.dataset.iconDisc = document.getElementById(prefix + '_tile_icon_disc')?.value || '0';
+    tileElem.dataset.iconGlow = document.getElementById(prefix + '_tile_icon_glow')?.checked === false ? '0' : '1';
     tileElem.classList.toggle('tile-border-hidden', ['9','10'].includes(type) && document.getElementById(prefix + (type === '9' ? '_clock_tile_border' : '_text_tile_border'))?.checked === false);
 
     if (type === '0') {
@@ -242,6 +243,7 @@
 
     html += getTileResizeHandlesHtml(type);
     tileElem.innerHTML = html;
+    applyIconDiscTint(tileElem);
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');

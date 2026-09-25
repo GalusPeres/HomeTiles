@@ -564,6 +564,8 @@ static void appendTileTabHTML(
     html += String(static_cast<unsigned>(tile.type));
     html += "\" data-icon-disc=\"";
     html += String(tile.icon_disc_mode);
+    html += "\" data-icon-glow=\"";
+    html += tile.icon_glow ? "1" : "0";
     if (tile.type == TILE_FOLDER) {
       html += "\" data-navigate-target=\"";
       html += String(getNavigateTargetId(tile));
@@ -1067,6 +1069,11 @@ static void appendTileTabHTML(
   html += R"html(</option><option value="2">)html";
   appendHtmlEscaped(html, tr.icon_disc_off);
   html += R"html(</option></select>
+              <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_glow" checked> )html";
+  appendHtmlEscaped(html, tr.icon_glow);
+  html += R"html(</label>
             </div>
 
             <div class="tile-color-label-row)html";

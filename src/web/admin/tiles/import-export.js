@@ -448,6 +448,9 @@
     if (tile.icon_disc !== undefined && tile.icon_disc !== null) {
       fd.append('icon_disc', tile.icon_disc);
     }
+    if (tile.icon_glow !== undefined && tile.icon_glow !== null) {
+      fd.append('icon_glow', ['0', 'false'].includes(String(tile.icon_glow)) ? '0' : '1');
+    }
     const parsedBgColor = parseBgColorValue(tile.bg_color);
     if (parsedBgColor !== 0 || (typeof tile.bg_color === 'string' && tile.bg_color.trim().startsWith('#'))) {
       fd.append('bg_color', parsedBgColor);

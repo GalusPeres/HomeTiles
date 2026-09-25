@@ -156,6 +156,12 @@ function maybeFillTitleFromSwitch(tab) {
 
   function applySwitchPreviewState(tileElem, state) {
     if (!tileElem) return;
+    applySwitchPreviewColors(tileElem, state);
+    // The icon disc follows the state color like on the device.
+    applyIconDiscTint(tileElem);
+  }
+
+  function applySwitchPreviewColors(tileElem, state) {
     const iconEl = tileElem.querySelector('.tile-icon');
     const switchEl = tileElem.querySelector('.tile-switch');
     const isToggleStyle = tileElem.classList.contains('switch-toggle');

@@ -23,6 +23,8 @@ inline int round_diameter() { return diameter() + inset(); }
 // with the tile corner; the shared radius style follows global radius changes.
 inline int radius_baseline() { return tile_layout::scale_480(22) - inset(); }
 inline constexpr lv_opa_t kOpa = 38;
+// With glow, a colored icon tints its disc with its hue at about 20 %.
+inline constexpr lv_opa_t kGlowOpa = 51;
 // MDI icon fonts give every glyph this glyph's advance width.
 inline constexpr uint32_t kMdiReferenceGlyph = 0xF0001;
 
@@ -33,9 +35,10 @@ enum class Shape : uint8_t { Concentric, Round };
 enum class Mode : uint8_t { Global = 0, On = 1, Off = 2 };
 
 // Disc objects carry one of these addresses as user data. The address marks
-// the object as a disc and holds its mode, so icon paths find the disc of an
-// icon and its options without an extra allocation per tile.
-inline constexpr char kTags[3] = {};
+// the object as a disc and holds its mode and glow option (mode * 2 + glow),
+// so icon paths find the disc of an icon and its options without an extra
+// allocation per tile.
+inline constexpr char kTags[6] = {};
 
 inline bool is_disc(lv_obj_t* obj) {
   if (!obj) return false;
@@ -43,23 +46,52 @@ inline bool is_disc(lv_obj_t* obj) {
   return tag - reinterpret_cast<uintptr_t>(&kTags[0]) < sizeof(kTags);
 }
 
-inline Mode mode_of(lv_obj_t* disc) {
-  return static_cast<Mode>(reinterpret_cast<uintptr_t>(lv_obj_get_user_data(disc)) -
-                           reinterpret_cast<uintptr_t>(&kTags[0]));
+inline uintptr_t tag_index(lv_obj_t* disc) {
+  return reinterpret_cast<uintptr_t>(lv_obj_get_user_data(disc)) -
+         reinterpret_cast<uintptr_t>(&kTags[0]);
+}
+inline Mode mode_of(lv_obj_t* disc) { return static_cast<Mode>(tag_index(disc) / 2); }
+inline bool glow_of(lv_obj_t* disc) { return (tag_index(disc) % 2) != 0; }
+
+inline void set_tag(lv_obj_t* disc, Mode mode, bool glow) {
+  lv_obj_set_user_data(
+      disc, const_cast<char*>(&kTags[static_cast<uint8_t>(mode) * 2 + (glow ? 1 : 0)]));
 }
 
-inline void set_tag(lv_obj_t* disc, Mode mode) {
-  lv_obj_set_user_data(disc, const_cast<char*>(&kTags[static_cast<uint8_t>(mode)]));
+// Central disc fill rule, shared with the Web Admin preview (iconDiscTinted):
+// with glow on, a colored icon tints its disc with its own hue; white and
+// grey icons keep the neutral white disc. Future icon colors (thresholds)
+// reach the disc through set_icon_color() below.
+inline bool icon_color_tints(uint32_t rgb) {
+  const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+  return r != g || g != b;
 }
 
-// Opacity of a disc for its mode: Global discs follow the global option
-// through the shared style, On discs always show, Off discs stay transparent.
+// The icon a disc belongs to: its child (half-height) or its next sibling.
+inline lv_obj_t* icon_of(lv_obj_t* disc) {
+  if (lv_obj_get_child_count(disc) > 0) return lv_obj_get_child(disc, 0);
+  lv_obj_t* parent = lv_obj_get_parent(disc);
+  return parent ? lv_obj_get_child(parent, lv_obj_get_index(disc) + 1) : nullptr;
+}
+
+// Color and opacity of a disc from its mode, glow option and the icon's
+// current color. Global discs follow the global option through the shared
+// style, On discs always show, Off discs stay transparent.
 inline void apply_fill(lv_obj_t* disc) {
   if (!is_disc(disc)) return;
   const Mode mode = mode_of(disc);
-  ui_surface_style::apply_icon_disc_opa(
-      disc, mode == Mode::Off ? static_cast<lv_opa_t>(LV_OPA_TRANSP) : kOpa,
-      mode == Mode::Global);
+  lv_obj_t* icon = icon_of(disc);
+  const uint32_t rgb =
+      icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF
+           : 0xFFFFFF;
+  const bool tinted = glow_of(disc) && icon_color_tints(rgb);
+  const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
+  if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color)) {
+    lv_obj_set_style_bg_color(disc, color, 0);
+  }
+  const lv_opa_t opa = mode == Mode::Off ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
+                                         : (tinted ? kGlowOpa : kOpa);
+  ui_surface_style::apply_icon_disc_opa(disc, opa, mode == Mode::Global);
 }
 
 // A wrapped icon's disc is its parent; a round disc sits directly behind it.
@@ -70,6 +102,14 @@ inline lv_obj_t* disc_of(lv_obj_t* icon) {
   const int32_t index = lv_obj_get_index(icon);
   lv_obj_t* below = parent && index > 0 ? lv_obj_get_child(parent, index - 1) : nullptr;
   return is_disc(below) ? below : nullptr;
+}
+
+// The one path for runtime icon color changes: the disc follows the new
+// color without a rebuild and without per-frame work.
+inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {
+  if (!icon) return;
+  lv_obj_set_style_text_color(icon, color, 0);
+  if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);
 }
 
 // Hides or shows an icon together with its disc; an empty disc never shows.
@@ -87,7 +127,7 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   lv_obj_remove_flag(disc, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
   // Presses on a wrapped icon still reach the card through the disc.
   lv_obj_add_flag(disc, LV_OBJ_FLAG_EVENT_BUBBLE);
-  set_tag(disc, Mode::Global);
+  set_tag(disc, Mode::Global, false);
   const int size = shape == Shape::Round ? round_diameter() : diameter();
   lv_obj_set_size(disc, size, size);
   // Both shapes follow the global radius with the half-height rule. The shape
@@ -99,9 +139,9 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   return disc;
 }
 
-// Applies the tile's persisted disc mode to the discs of a rendered card.
-// render_tile() calls it once for every tile type after rendering.
-inline void apply_tile_mode(lv_obj_t* card, uint8_t mode) {
+// Applies the tile's persisted disc mode and glow option to the discs of a
+// rendered card. render_tile() calls it once for every tile type.
+inline void apply_tile_options(lv_obj_t* card, uint8_t mode, bool glow) {
   if (!card) return;
   const Mode disc_mode = mode <= static_cast<uint8_t>(Mode::Off)
                              ? static_cast<Mode>(mode)
@@ -110,7 +150,7 @@ inline void apply_tile_mode(lv_obj_t* card, uint8_t mode) {
   for (uint32_t i = 0; i < count; ++i) {
     lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
     if (!is_disc(child)) continue;
-    set_tag(child, disc_mode);
+    set_tag(child, disc_mode, glow);
     apply_fill(child);
   }
 }

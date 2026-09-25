@@ -361,6 +361,8 @@ static uint16_t clampImageSlideshowSeconds(uint16_t val) {
 // field to 3600 and ignores it, so the packed layout stays V7-compatible.
 static constexpr uint16_t kIconDiscModeShift = 13;
 static constexpr uint16_t kIconDiscModeMask = 0x3u << kIconDiscModeShift;
+// Stored inverted so zero keeps the default (glow on) for existing tiles.
+static constexpr uint16_t kIconGlowOffBit = 0x1u << 15;
 static constexpr uint16_t kSlideshowValueMask = 0x1FFFu;
 
 static bool tileStoresIconDiscOptions(TileType type) {
@@ -370,14 +372,17 @@ static bool tileStoresIconDiscOptions(TileType type) {
 static uint16_t packIconDiscOptions(const Tile& tile) {
   if (!tileStoresIconDiscOptions(tile.type)) return 0;
   return static_cast<uint16_t>(
-      normalizeTileIconDiscMode(tile.icon_disc_mode) << kIconDiscModeShift);
+      (normalizeTileIconDiscMode(tile.icon_disc_mode) << kIconDiscModeShift) |
+      (tile.icon_glow ? 0u : kIconGlowOffBit));
 }
 
 static void unpackIconDiscOptions(uint16_t packed, Tile& tile) {
   tile.icon_disc_mode = TILE_ICON_DISC_GLOBAL;
+  tile.icon_glow = true;
   if (!tileStoresIconDiscOptions(tile.type)) return;
   tile.icon_disc_mode = normalizeTileIconDiscMode(
       (packed & kIconDiscModeMask) >> kIconDiscModeShift);
+  tile.icon_glow = (packed & kIconGlowOffBit) == 0;
 }
 
 static uint16_t getNavigateTargetId(const Tile& tile) {

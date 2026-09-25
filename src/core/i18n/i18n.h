@@ -292,6 +292,7 @@ struct Strings {
   const char* icon_disc_global;
   const char* icon_disc_on;
   const char* icon_disc_off;
+  const char* icon_glow;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;
   const char* screensaver_storage_hint;

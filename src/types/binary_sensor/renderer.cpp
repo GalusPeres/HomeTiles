@@ -206,9 +206,8 @@ void apply_state(GridType grid_type, uint8_t index,
     lv_label_set_text(widgets.state_label, label.c_str());
   }
   if (widgets.icon_label) {
-    lv_obj_set_style_text_color(
-        widgets.icon_label,
-        lv_color_hex(binary_sensor_visual_color(state)), 0);
+    tile_icon_disc::set_icon_color(
+        widgets.icon_label, lv_color_hex(binary_sensor_visual_color(state)));
     if (widgets.dynamic_icon) {
       const Tile* tile = tile_renderer_get_tile_config(grid_type, index);
       if (tile) {

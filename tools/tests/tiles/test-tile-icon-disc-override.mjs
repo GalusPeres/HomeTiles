@@ -37,13 +37,13 @@ assert.ok(tiles.includes('out += "\\",\\"icon_disc\\":";'));
 // Device: one call for every type after rendering; Off stays transparent and
 // Global follows the shared option style.
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
-assert.ok(renderer.includes('tile_icon_disc::apply_tile_mode(tile_obj, tile.icon_disc_mode);'));
+assert.ok(renderer.includes('tile_icon_disc::apply_tile_options(tile_obj, tile.icon_disc_mode, tile.icon_glow);'));
 const disc = read('src/tiles/runtime/tile_icon_disc.h');
 for (const marker of [
   'enum class Mode : uint8_t { Global = 0, On = 1, Off = 2 };',
-  'inline constexpr char kTags[3] = {};',
+  'inline constexpr char kTags[6] = {};',
   'mode == Mode::Global);',
-  'set_tag(child, disc_mode);',
+  'set_tag(child, disc_mode, glow);',
 ]) assert.ok(disc.includes(marker), `tile_icon_disc: ${marker}`);
 
 // Web Admin editor: localized select in the common fields for icon types.
@@ -55,7 +55,7 @@ for (const marker of ['tr.icon_disc_label', 'tr.icon_disc_global', 'tr.icon_disc
 const snapshots = read('src/web/admin/tiles/snapshots.js');
 assert.match(snapshots, /const out = collectIconDiscFields\(prefix, typeValue\);\s*if \(!meta\.save\) return out;/,
   'Draft snapshots, copy/paste and autosave carry the mode for every type, including Back/Settings');
-assert.match(snapshots, /'background_opacity', 'icon_disc'\];/);
+assert.match(snapshots, /'background_opacity', 'icon_disc', 'icon_glow'\];/);
 assert.match(snapshots, /return !\['0', '16'\]\.includes\(String\(typeValue \?\? '0'\)\);/);
 for (const file of ['type-selection.js', 'drafts.js', 'clipboard.js']) {
   assert.ok(read(`src/web/admin/tiles/${file}`).includes('loadIconDiscFields(prefix, '), `${file} loads the mode`);

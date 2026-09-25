@@ -283,8 +283,8 @@ void apply_state(GridType grid_type, uint8_t index, const char* payload) {
     lv_label_set_text(widget.value_label, value.c_str());
   }
   if (widget.icon_label) {
-    lv_obj_set_style_text_color(
-        widget.icon_label, lv_color_hex(cover_icon_color(state)), 0);
+    tile_icon_disc::set_icon_color(
+        widget.icon_label, lv_color_hex(cover_icon_color(state)));
     if (widget.dynamic_icon) {
       lv_label_set_text(
           widget.icon_label, getMdiChar(fallback_icon(state)).c_str());

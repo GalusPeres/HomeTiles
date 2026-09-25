@@ -94,6 +94,12 @@ void appendPreviewScaleVars(String& html) {
   };
   html += "  <style>:root{";
   emit_exact("compact-inset", compact_sensor_layout::inset());
+  // Disc opacities shared with the device (tile_icon_disc::kOpa/kGlowOpa).
+  html += "--icon-disc-opa:";
+  html += String(tile_icon_disc::kOpa / 255.0f, 3);
+  html += ";--icon-disc-glow:";
+  html += String(tile_icon_disc::kGlowOpa * 100.0f / 255.0f, 1);
+  html += "%;";
   emit_exact("compact-text-gap", compact_sensor_layout::text_gap());
   emit_exact("compact-title-font", compact_sensor_layout::title_size());
   emit_exact("compact-title-line", compact_sensor_layout::title_font()->line_height);

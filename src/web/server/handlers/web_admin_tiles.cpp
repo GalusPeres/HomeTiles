@@ -370,6 +370,8 @@ void WebAdminServer::handleGetTiles() {
     appendJsonEscaped(out, tile.icon_name);
     out += "\",\"icon_disc\":";
     out += String(tile.icon_disc_mode);
+    out += ",\"icon_glow\":";
+    out += tile.icon_glow ? "1" : "0";
     out += ",\"bg_color\":";
     out += String(tile.bg_color);
     out += ",\"background_opacity\":";
@@ -594,6 +596,7 @@ void WebAdminServer::handleSaveTiles() {
   if (server.hasArg("icon_disc")) {
     tile.icon_disc_mode = normalizeTileIconDiscMode(server.arg("icon_disc").toInt());
   }
+  if (server.hasArg("icon_glow")) tile.icon_glow = server.arg("icon_glow").toInt() != 0;
   // Parse color. bg_color_default keeps legacy/default tiles as true defaults;
   // bg_color=0 is reserved for an explicitly selected black background.
   if (server.hasArg("bg_color_default") && server.arg("bg_color_default").toInt() != 0) {

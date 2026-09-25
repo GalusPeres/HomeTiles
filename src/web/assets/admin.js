@@ -2413,16 +2413,21 @@ function syncTileRadiusControls(tabEl) {
   function collectIconDiscFields(tab, typeValue) {
     const select = document.getElementById(tab + '_tile_icon_disc');
     if (!select || !tileTypeHasIcon(typeValue)) return {};
-    return { icon_disc: select.value || '0' };
+    const glow = document.getElementById(tab + '_tile_icon_glow');
+    return { icon_disc: select.value || '0', icon_glow: glow?.checked === false ? '0' : '1' };
   }
   function loadIconDiscFields(tab, data) {
     const select = document.getElementById(tab + '_tile_icon_disc');
     if (select) select.value = ['1', '2'].includes(String(data?.icon_disc)) ? String(data.icon_disc) : '0';
+    const glow = document.getElementById(tab + '_tile_icon_glow');
+    if (glow) glow.checked = !['0', 'false'].includes(String(data?.icon_glow));
     syncIconDiscFields(tab);
   }
   function resetIconDiscFields(tab) {
     const select = document.getElementById(tab + '_tile_icon_disc');
     if (select) select.value = '0';
+    const glow = document.getElementById(tab + '_tile_icon_glow');
+    if (glow) glow.checked = true;
   }
   function syncIconDiscFields(tab) {
     const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
@@ -2495,7 +2500,7 @@ function syncTileRadiusControls(tabEl) {
     const prev = tiles[index] || {};
     const tile = Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
-    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc'];
+    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
 
     tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
@@ -3948,6 +3953,7 @@ function syncTileRadiusControls(tabEl) {
     });
     bindLive(iconInput, 'input', 'tileIcon', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(document.getElementById(prefix + '_tile_icon_disc'), 'change', 'tileIconDisc', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(document.getElementById(prefix + '_tile_icon_glow'), 'change', 'tileIconGlow', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(colorInput, 'input', 'tileColor', () => { markTileColorInputExplicit(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(opacityInput, 'input', 'tileOpacity', () => { updateTilePreview(tab); updateDraft(tab); });
     bindLive(opacityInput, 'change', 'tileOpacitySave', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
@@ -4301,6 +4307,7 @@ function syncTileRadiusControls(tabEl) {
     tileElem.style.background = '';
     tileElem.dataset.type = type;
     tileElem.dataset.iconDisc = document.getElementById(prefix + '_tile_icon_disc')?.value || '0';
+    tileElem.dataset.iconGlow = document.getElementById(prefix + '_tile_icon_glow')?.checked === false ? '0' : '1';
     tileElem.classList.toggle('tile-border-hidden', ['9','10'].includes(type) && document.getElementById(prefix + (type === '9' ? '_clock_tile_border' : '_text_tile_border'))?.checked === false);
 
     if (type === '0') {
@@ -4442,6 +4449,7 @@ function syncTileRadiusControls(tabEl) {
 
     html += getTileResizeHandlesHtml(type);
     tileElem.innerHTML = html;
+    applyIconDiscTint(tileElem);
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');
@@ -5333,6 +5341,9 @@ function syncTileRadiusControls(tabEl) {
     if (tile.icon_disc !== undefined && tile.icon_disc !== null) {
       fd.append('icon_disc', tile.icon_disc);
     }
+    if (tile.icon_glow !== undefined && tile.icon_glow !== null) {
+      fd.append('icon_glow', ['0', 'false'].includes(String(tile.icon_glow)) ? '0' : '1');
+    }
     const parsedBgColor = parseBgColorValue(tile.bg_color);
     if (parsedBgColor !== 0 || (typeof tile.bg_color === 'string' && tile.bg_color.trim().startsWith('#'))) {
       fd.append('bg_color', parsedBgColor);
@@ -5532,6 +5543,18 @@ function syncTileRadiusControls(tabEl) {
     }
     return hex + opacity.toString(16).padStart(2, '0');
   }
+  // Mirrors tile_icon_disc::icon_color_tints(): with glow on, a colored icon
+  // tints its disc with its own hue; white and grey icons keep the white disc.
+  function iconDiscTinted(color) {
+    const rgb = String(color || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
+    return !!rgb && !(rgb[1] === rgb[2] && rgb[2] === rgb[3]);
+  }
+  function applyIconDiscTint(tileElem) {
+    const icon = tileElem?.querySelector(':scope > .tile-icon');
+    if (!icon) return;
+    const glow = tileElem.dataset.iconGlow !== '0';
+    icon.classList.toggle('tile-icon-tinted', glow && iconDiscTinted(getComputedStyle(icon).color));
+  }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1';
   }
@@ -5597,6 +5620,7 @@ function syncTileRadiusControls(tabEl) {
     el.className = cls.join(' ');
     el.dataset.type = typeValue;
     el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
+    el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
     el.classList.toggle('tile-border-hidden', ['9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
     applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
@@ -5759,6 +5783,7 @@ function syncTileRadiusControls(tabEl) {
       }
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
+      applyIconDiscTint(el);
       if (typeValue === '9') fitCompactClockPreview(el);
     }
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');
@@ -8962,6 +8987,12 @@ function maybeFillTitleFromSwitch(tab) {
 
   function applySwitchPreviewState(tileElem, state) {
     if (!tileElem) return;
+    applySwitchPreviewColors(tileElem, state);
+    // The icon disc follows the state color like on the device.
+    applyIconDiscTint(tileElem);
+  }
+
+  function applySwitchPreviewColors(tileElem, state) {
     const iconEl = tileElem.querySelector('.tile-icon');
     const switchEl = tileElem.querySelector('.tile-switch');
     const isToggleStyle = tileElem.classList.contains('switch-toggle');

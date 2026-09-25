@@ -33,6 +33,18 @@
     }
     return hex + opacity.toString(16).padStart(2, '0');
   }
+  // Mirrors tile_icon_disc::icon_color_tints(): with glow on, a colored icon
+  // tints its disc with its own hue; white and grey icons keep the white disc.
+  function iconDiscTinted(color) {
+    const rgb = String(color || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
+    return !!rgb && !(rgb[1] === rgb[2] && rgb[2] === rgb[3]);
+  }
+  function applyIconDiscTint(tileElem) {
+    const icon = tileElem?.querySelector(':scope > .tile-icon');
+    if (!icon) return;
+    const glow = tileElem.dataset.iconGlow !== '0';
+    icon.classList.toggle('tile-icon-tinted', glow && iconDiscTinted(getComputedStyle(icon).color));
+  }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1';
   }
@@ -98,6 +110,7 @@
     el.className = cls.join(' ');
     el.dataset.type = typeValue;
     el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
+    el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
     el.classList.toggle('tile-border-hidden', ['9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
     applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
@@ -260,6 +273,7 @@
       }
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
+      applyIconDiscTint(el);
       if (typeValue === '9') fitCompactClockPreview(el);
     }
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');

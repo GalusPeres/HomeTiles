@@ -7,16 +7,21 @@
   function collectIconDiscFields(tab, typeValue) {
     const select = document.getElementById(tab + '_tile_icon_disc');
     if (!select || !tileTypeHasIcon(typeValue)) return {};
-    return { icon_disc: select.value || '0' };
+    const glow = document.getElementById(tab + '_tile_icon_glow');
+    return { icon_disc: select.value || '0', icon_glow: glow?.checked === false ? '0' : '1' };
   }
   function loadIconDiscFields(tab, data) {
     const select = document.getElementById(tab + '_tile_icon_disc');
     if (select) select.value = ['1', '2'].includes(String(data?.icon_disc)) ? String(data.icon_disc) : '0';
+    const glow = document.getElementById(tab + '_tile_icon_glow');
+    if (glow) glow.checked = !['0', 'false'].includes(String(data?.icon_glow));
     syncIconDiscFields(tab);
   }
   function resetIconDiscFields(tab) {
     const select = document.getElementById(tab + '_tile_icon_disc');
     if (select) select.value = '0';
+    const glow = document.getElementById(tab + '_tile_icon_glow');
+    if (glow) glow.checked = true;
   }
   function syncIconDiscFields(tab) {
     const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
@@ -89,7 +94,7 @@
     const prev = tiles[index] || {};
     const tile = Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
-    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc'];
+    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
 
     tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';

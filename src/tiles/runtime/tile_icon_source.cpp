@@ -53,11 +53,12 @@ bool state_known(const String& state) {
          lower != "null";
 }
 
-// "auto": the entity's own icon color as its tile shows it.
-bool auto_color(const String& domain, const char* payload, uint32_t& rgb) {
-  if (switch_domain(domain)) return switch_payload_icon_color(payload, rgb);
-  if (domain == "climate") return climate_payload_icon_color(payload, rgb);
-  if (domain == "cover") return cover_payload_icon_color(payload, rgb);
+// "auto": the entity's own icon color as its tile shows it. `active` is
+// false while the entity is off, closed or not running (its grey color).
+bool auto_color(const String& domain, const char* payload, uint32_t& rgb, bool& active) {
+  if (switch_domain(domain)) return switch_payload_icon_color(payload, rgb, &active);
+  if (domain == "climate") return climate_payload_icon_color(payload, rgb, &active);
+  if (domain == "cover") return cover_payload_icon_color(payload, rgb, &active);
   if (domain == "binary_sensor") {
     const BinarySensorState state = parse_binary_sensor_payload(payload);
     if (!state.valid || !state.available ||
@@ -65,6 +66,7 @@ bool auto_color(const String& domain, const char* payload, uint32_t& rgb) {
       return false;
     }
     rgb = binary_sensor_visual_color(state);
+    active = state.value == BinarySensorValue::On;
     return true;
   }
   return false;
@@ -115,20 +117,17 @@ void apply_card_background(lv_obj_t* card, uint32_t rgb) {
     lv_obj_set_style_bg_grad_color(card, lv_color_hex(pressed), selector);
   }
 }
-// Tints a tile card for its rules (tile_tint.h): the first tint keeps the
-// card's own color in an unused state selector, clear restores it.
+// Tints a tile card for its rules (tile_tint.h). The tint replaces the card's
+// own color and always starts from the global default tile color, so an own
+// tile color never mixes with the rule color. The first tint keeps the card's
+// own color in an unused state selector; clear restores it.
 void set_tile_tint(lv_obj_t* card, uint32_t color, uint8_t percent) {
   if (!card) return;
   lv_style_value_t stored;
-  uint32_t base = 0;
-  if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &stored, kTintStore) == LV_STYLE_RES_FOUND) {
-    base = lv_color_to_u32(stored.color) & 0xFFFFFF;
-  } else {
-    const lv_color_t own = lv_obj_get_style_bg_color(card, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(card, own, kTintStore);
-    base = lv_color_to_u32(own) & 0xFFFFFF;
+  if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &stored, kTintStore) != LV_STYLE_RES_FOUND) {
+    lv_obj_set_style_bg_color(card, lv_obj_get_style_bg_color(card, LV_PART_MAIN), kTintStore);
   }
-  const uint32_t tint = tile_tint::background(base, color, percent);
+  const uint32_t tint = tile_tint::background(tileDefaultBgColor(), color, percent);
   if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) == tint) return;
   apply_card_background(card, tint);
 }
@@ -166,7 +165,9 @@ String rule_entity(const Tile& tile) {
   return layer_entity(tile, tile_icon_colors::source_of(tile.icon_colors.c_str()));
 }
 
-bool rule_color(const Tile& tile, uint32_t& rgb) {
+bool rule_color(const Tile& tile, uint32_t& rgb, bool* active) {
+  // Own rules only give a color while one matches, which counts as active.
+  if (active) *active = true;
   if (!tileTypeHasIconColors(tile.type) || !tile.icon_colors.length()) return false;
   const tile_icon_colors::Source layer = tile_icon_colors::source_of(tile.icon_colors.c_str());
   const String entity = layer_entity(tile, layer);
@@ -185,8 +186,11 @@ bool rule_color(const Tile& tile, uint32_t& rgb) {
   String domain;
   const int dot = entity.indexOf('.');
   if (dot > 0) domain = entity.substring(0, dot);
-  return automatic ? auto_color(domain, payload.c_str(), rgb)
-                   : rules_color(tile.icon_colors, domain, payload.c_str(), rgb);
+  if (!automatic) return rules_color(tile.icon_colors, domain, payload.c_str(), rgb);
+  bool running = true;
+  if (!auto_color(domain, payload.c_str(), rgb, running)) return false;
+  if (active) *active = running;
+  return true;
 }
 
 void apply_initial(lv_obj_t* icon, const Tile& tile) {
@@ -226,8 +230,9 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
   if (!card || !tileTypeHasIconColors(tile.type)) return;
   const tile_icon_colors::Source layer = tile_icon_colors::source_of(tile.icon_colors.c_str());
   uint32_t rgb = 0;
+  bool active = false;
   const bool colored = layer.mode != tile_icon_colors::SourceMode::None && layer.enabled &&
-                       rule_color(tile, rgb);
+                       rule_color(tile, rgb, &active);
   if (lv_obj_t* icon = card_icon(card)) {
     uint32_t fixed = 0;
     const bool force_fixed = !type_applies_fixed_icon_color(tile.type) && tile.icon_colors.length() &&
@@ -240,7 +245,9 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
       tile_icon_disc::release_icon_color(icon);
     }
   }
-  if (colored && layer.tile) {
+  // Entity color tints only while the entity is active; its grey off color
+  // keeps the tile's own color (the icon still shows the grey).
+  if (colored && active && layer.tile) {
     set_tile_tint(card, rgb, layer.tile);
   } else {
     clear_tile_tint(card);

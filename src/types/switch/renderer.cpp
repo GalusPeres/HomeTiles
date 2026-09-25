@@ -3,6 +3,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -282,6 +283,12 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
             SwitchEventData* data = static_cast<SwitchEventData*>(lv_event_get_user_data(e));
             if (!data) return;
             LightPopupInit init = build_light_popup_init(data);
+            // The popup inherits the tile background, including a rules tint.
+            if (const Tile* tile = tile_renderer_get_tile_config(data->grid_type, data->index)) {
+              init.bg_color = tile_icon_source::popup_background(
+                  static_cast<lv_obj_t*>(lv_event_get_current_target(e)),
+                  tileBgColorOrDefault(*tile, tileDefaultBgColor()));
+            }
             finish_press_before_popup(e);
             show_light_popup(init);
           },

@@ -9,6 +9,7 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/cover/cover_popup.h"
@@ -415,8 +416,14 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
           CoverEventData* data = static_cast<CoverEventData*>(
               lv_event_get_user_data(event));
           if (!data) return;
+          const Tile* tile =
+              tile_renderer_get_tile_config(data->grid_type, data->index);
           CoverPopupInit init = popup_init(data->grid_type, data->index);
-          if (!init.entity_id.length()) return;
+          if (!tile || !init.entity_id.length()) return;
+          // The popup inherits the tile background, including a rules tint.
+          init.bg_color = tile_icon_source::popup_background(
+              static_cast<lv_obj_t*>(lv_event_get_current_target(event)),
+              tileBgColorOrDefault(*tile, tileDefaultBgColor()));
           finish_press_before_popup(event);
           show_cover_popup(init);
         },
@@ -474,10 +481,13 @@ void process_cover_update_queue(uint8_t max_updates) {
   }
 }
 
-bool cover_payload_icon_color(const char* payload, uint32_t& rgb) {
+bool cover_payload_icon_color(const char* payload, uint32_t& rgb, bool* active) {
   if (!payload || !*payload) return false;
   const CoverState state = parse_cover_payload(payload);
   if (!state.valid || !state.available) return false;
   rgb = cover_icon_color(state);
+  // Active exactly when cover_icon_color() shows the active color.
+  if (active) *active = strcmp(state.state, "unknown") != 0 && strcmp(state.state, "unavailable") != 0 &&
+                        strcmp(state.state, "closed") != 0;
   return true;
 }

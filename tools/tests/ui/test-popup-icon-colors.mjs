@@ -65,6 +65,9 @@ for (const [file, marker] of [
   ['src/tiles/runtime/tile_renderer.cpp', 'init.bg_color = tile_icon_source::popup_background(widgets.icon_label,'],
   ['src/types/weather/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
   ['src/types/navigate/renderer.cpp', 'const uint32_t popup_color = tile_icon_source::popup_background('],
+  ['src/types/climate/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
+  ['src/types/cover/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
+  ['src/types/switch/renderer.cpp', 'init.bg_color = tile_icon_source::popup_background('],
 ]) assert.ok(read(file).includes(marker), `${file} inherits the tile tint`);
 // The shell follows the body icon color every sync, so disc and border follow.
 assert.match(read('src/ui/popups/popup_shell.cpp'), /copy_label\(shell\.icon, shell\.active->icon, false\);\s*apply_header_disc_tint\(shell\.icon_disc, shell\.icon\);/);

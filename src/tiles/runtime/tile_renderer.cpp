@@ -1731,11 +1731,12 @@ static uint32_t switch_state_icon_color(const SwitchState& state) {
   return state.has_color ? state.color : 0xFFD54F;
 }
 
-bool switch_payload_icon_color(const char* payload, uint32_t& rgb) {
+bool switch_payload_icon_color(const char* payload, uint32_t& rgb, bool* active) {
   if (!payload || !*payload) return false;
   const SwitchState state = parse_switch_payload(payload);
   if (!state.available || !state.has_state) return false;
   rgb = switch_state_icon_color(state);
+  if (active) *active = state.is_on;
   return true;
 }
 
@@ -2332,11 +2333,12 @@ uint32_t climate_visual_color(const ClimateState& state) {
       state.hvac_mode, state.hvac_action);
 }
 
-bool climate_payload_icon_color(const char* payload, uint32_t& rgb) {
+bool climate_payload_icon_color(const char* payload, uint32_t& rgb, bool* active) {
   if (!payload || !*payload) return false;
   const ClimateState state = parse_climate_payload(payload);
   if (!state.valid || !state.available) return false;
   rgb = climate_visual_color(state);
+  if (active) *active = climate_visuals::state_active(state.hvac_mode, state.hvac_action);
   return true;
 }
 

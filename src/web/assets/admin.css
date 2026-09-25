@@ -984,7 +984,7 @@
     /* The hairline sits on the outer card edge. A child overlay would be
        visibly indented by the transparent 3px editor border. */
     .tile-grid.tiles-bordered > .tile:not(.empty):not(.tile-border-hidden) {
-      outline:1px solid var(--tile-border-tint, rgba(255,255,255,0.20));
+      outline:1px solid rgba(255,255,255,0.20);
       outline-offset:-1px;
     }
 
@@ -1736,7 +1736,8 @@
       border:0;
       /* 11 px outer radius - 3 px effective inset = 8 px. */
       border-radius:var(--climate-control-radius, 8px);
-      background:#3a3a3a;
+      /* A lighter step of the tile like the device (kSlotSurfaceOpa 28/255). */
+      background:rgba(255,255,255,0.11);
     }
     .tile.climate .climate-slot-control span {
       font-size:var(--fs24, 12px);

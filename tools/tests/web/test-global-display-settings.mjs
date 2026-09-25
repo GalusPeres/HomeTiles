@@ -142,14 +142,15 @@ assert.ok(css.includes('@media (max-width:520px) { .global-settings-grid { grid-
 assert.doesNotMatch(css, /global-settings-rows|global-settings-label|global-settings-control/, 'No stale row styles');
 
 // Global Glow strength: one setting in percent (icon_glow.h), persisted in
-// NVS, validated over HTTP, read by tile discs, borders and popups, and
-// previewed live through --icon-glow-pct.
+// NVS, validated over HTTP, read by tile and popup discs (borders stay the
+// neutral hairline), and previewed live through --icon-glow-pct.
 const glow = read('src/core/config/icon_glow.h');
 for (const marker of ['inline constexpr uint8_t kMinimum = 10;', 'inline constexpr uint8_t kMaximum = 60;',
   'inline constexpr uint8_t kStep = 5;', 'inline constexpr uint8_t kDefault = 25;',
-  'inline constexpr uint8_t kBorderExtra = 20;', 'return static_cast<uint8_t>((percent * 255 + 50) / 100);',
-  'inline uint8_t border_opa(int percent) { return to_opa(clamp(percent) + kBorderExtra); }'])
+  'return static_cast<uint8_t>((percent * 255 + 50) / 100);',
+  'inline uint8_t disc_opa(int percent) { return to_opa(clamp(percent)); }'])
   assert.ok(glow.includes(marker), `icon_glow.h: ${marker}`);
+assert.doesNotMatch(glow, /kBorderExtra|border_opa/, 'Borders take no glow');
 const configCpp = read('src/core/config/config_manager.cpp');
 for (const marker of ['config.icon_glow = icon_glow::clamp(prefs.getUChar("icon_glow", icon_glow::kDefault));',
   'prefs.putUChar("icon_glow", normalized.icon_glow);', 'a.icon_glow == b.icon_glow &&',
@@ -161,7 +162,7 @@ assert.match(glowHandlers, /void WebAdminServer::handleSaveIconGlow\(\) \{[\s\S]
 assert.ok(read('src/web/server/web_admin.cpp').includes('server.on("/api/display/icon-glow", HTTP_POST,'));
 const glowSurface = read('src/ui/shared/ui_surface_style.cpp');
 assert.ok(glowSurface.includes('return icon_glow::disc_opa(configManager.getConfig().icon_glow);'));
-assert.ok(glowSurface.includes('return icon_glow::border_opa(configManager.getConfig().icon_glow);'));
+assert.ok(!glowSurface.includes('icon_glow_border_opa'), 'No glow border opacity');
 const toOpa = p => Math.floor((p * 255 + 50) / 100);
 assert.deepEqual([toOpa(25), toOpa(45), toOpa(10), toOpa(80)], [64, 115, 26, 204], 'Default glow is minimally stronger (20 -> 25 %)');
 const displayJs = read('src/web/admin/settings/display-borders.js');
@@ -172,7 +173,7 @@ for (const marker of ["document.documentElement.style.setProperty('--icon-glow-p
   assert.ok(displayJs.includes(marker), `display JS: ${marker}`);
 const glowTint = read('src/web/admin/tiles/grid-preview.js');
 assert.ok(glowTint.includes("const glowOpa = Math.floor((glowPct * 255 + 50) / 100);") &&
-  glowTint.includes("const glowBorderOpa = Math.floor(((glowPct + 20) * 255 + 50) / 100);"), 'Preview uses the device formula');
+  !glowTint.includes('glowBorderOpa'), 'Preview uses the device formula');
 assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes('html += "%;--icon-glow-pct:";'));
 
 // A stored built-in default grey (older editors saved it explicitly) follows

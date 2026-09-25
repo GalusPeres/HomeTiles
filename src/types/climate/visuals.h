@@ -50,6 +50,18 @@ inline uint32_t state_foreground_color(
   return mode_foreground_color(mode);
 }
 
+// False when state_foreground_color() shows the off color, or the mode is
+// empty or unknown: the climate entity is not running.
+inline bool state_active(const char* mode, const char* action) {
+  if (equals(action, "heating") || equals(action, "preheating") ||
+      equals(action, "cooling") || equals(action, "drying") ||
+      equals(action, "fan") || equals(action, "defrosting")) {
+    return true;
+  }
+  return mode && *mode && !equals(mode, "off") && !equals(mode, "unknown") &&
+         !equals(action, "off");
+}
+
 inline uint32_t mode_foreground_color(const String& mode) {
   return mode_foreground_color(mode.c_str());
 }

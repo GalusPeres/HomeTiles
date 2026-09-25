@@ -230,29 +230,29 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
 }
 
 // The header disc takes the icon's hue like a tile disc with glow: a colored
-// icon (binary on, light color, climate mode, ...) tints it, white and grey
-// icons keep the neutral white disc. Same rule and opacities as the tile
-// discs (tile_icon_disc::icon_color_tints, the global Glow strength, kOpa).
+// icon (binary on, light color, climate mode, ...) tints it on a neutral
+// (grey) card; white and grey icons and colored cards (own tile color or a
+// rules tint) keep the neutral white disc. Same rule and opacities as the
+// tile discs (tile_icon_disc::icon_color_tints/card_is_neutral, the global
+// Glow strength, kOpa).
 void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   if (!disc || !icon) return;
   const uint32_t rgb =
       lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFFu;
+  const uint32_t card = lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame, LV_PART_MAIN)) & 0xFFFFFFu;
   const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
-  const bool tinted = r != g || g != b;
+  const bool tinted = (r != g || g != b) && popup_layout::headerCardIsNeutral(card);
   const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
-  const uint8_t step = popup_layout::headerDiscContrastStep(
-      lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame, LV_PART_MAIN)) & 0xFFFFFFu);
+  const uint8_t step = popup_layout::headerDiscContrastStep(card);
   const lv_opa_t opa = static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
       tinted ? ui_surface_style::icon_glow_opa() : popup_layout::kHeaderIconDiscOpa, step));
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
-  // The card hairline takes the disc's color like a tile border.
-  ui_surface_style::apply_popup_border(
-      shell.frame, color,
-      static_cast<lv_opa_t>(tinted ? popup_layout::headerDiscScaledOpa(
-                                         ui_surface_style::icon_glow_border_opa(), step)
-                                   : popup_layout::kPopupBorderOpa));
+  // The card hairline is the neutral tile border: a slightly lighter step of
+  // the card, never the icon hue.
+  ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),
+                                       static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));
 }
 
 // A header with a value line shows the title on one line; the classic header

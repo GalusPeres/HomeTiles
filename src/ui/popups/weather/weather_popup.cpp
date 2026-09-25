@@ -2829,6 +2829,12 @@ static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupIn
     lv_obj_set_style_bg_color(ctx->detail_now_temp_value_label, lv_color_hex(color), 0);
   if (ctx->detail_now_temp_unit_label)
     lv_obj_set_style_bg_color(ctx->detail_now_temp_unit_label, lv_color_hex(color), 0);
+  // The white week-range and day-title pills cut their text out in the card
+  // color; the resident popup reopens with other tile colors and tints.
+  if (ctx->week_range_label)
+    lv_obj_set_style_text_color(ctx->week_range_label, lv_color_hex(color), 0);
+  if (ctx->detail_title_label)
+    lv_obj_set_style_text_color(ctx->detail_title_label, lv_color_hex(color), 0);
   for (int i = 0; i < ctx->detail_disabled_separator_count; ++i) {
     if (ctx->detail_disabled_separators[i]) {
       lv_obj_set_style_bg_color(ctx->detail_disabled_separators[i], lv_color_hex(color), 0);

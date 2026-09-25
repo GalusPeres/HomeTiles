@@ -1,7 +1,9 @@
 // Per-tile glow (default on): a colored icon tints its disc with its own hue
-// at the global Glow strength (default 25 %) instead of white at 38. The tint is computed centrally from the
-// icon's current color, so every runtime icon color change reaches the disc,
-// and the Web Admin preview uses the same rule and the same opacities.
+// at the global Glow strength (default 25 %) instead of white at 38, but only
+// on a neutral (grey) card; an own tile color or a rules tint keeps the
+// neutral disc so disc and card never clash. The tint is computed centrally
+// from the icon's current color and the card color, so every runtime change
+// reaches the disc, and the Web Admin preview uses the same rule.
 import assert from 'node:assert/strict';
 import {extractDeliveredFunction, readRepoFile} from '../../lib/admin-source.mjs';
 
@@ -25,7 +27,10 @@ const disc = code(read('src/tiles/runtime/tile_icon_disc.h'));
 for (const marker of [
   'inline constexpr char kTags[6] = {};',
   'return r != g || g != b;',
-  'const bool tinted = glow_of(disc) && icon_color_tints(rgb);',
+  'inline constexpr uint8_t kNeutralSpread = 12;',
+  'return hi - lo <= kNeutralSpread;',
+  'const bool neutral_card = !card_color(disc, card) || card_is_neutral(card);',
+  'const bool tinted = glow_of(disc) && icon_color_tints(rgb) && neutral_card;',
   ': scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);',
   'inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {',
   'if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);',
@@ -58,6 +63,16 @@ for (const rgb of [0xFFFFFF, 0xB0B0B0, 0x000000, 0xFFD54F, 0x3B82F6, 0xFF7043, 0
   const css = `rgb(${rgb >> 16 & 255}, ${rgb >> 8 & 255}, ${rgb & 255})`;
   assert.equal(iconDiscTinted(css), cppRule(rgb), `preview tint rule for ${css}`);
 }
+// Neutral card rule: preview == firmware for grey, near-grey and colored cards.
+const iconDiscCardNeutral = new Function(`${extractDeliveredFunction('iconDiscCardNeutral')}; return iconDiscCardNeutral;`)();
+const cppNeutral = rgb => { const c = [rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255]; return Math.max(...c) - Math.min(...c) <= 12; };
+for (const rgb of [0x222222, 0x2A2A2A, 0x2A2B36, 0x2A2B37, 0x7B2E2E, 0x1E3A5F, 0x3D3D3D]) {
+  const match = [null, String(rgb >> 16 & 255), String(rgb >> 8 & 255), String(rgb & 255)];
+  assert.equal(iconDiscCardNeutral(match), cppNeutral(rgb), 'preview card rule for ' + rgb.toString(16));
+}
+assert.equal(iconDiscCardNeutral(null), true, 'Unknown card background counts as neutral');
+assert.match(read('src/web/admin/tiles/grid-preview.js'),
+  /icon\.classList\.toggle\('tile-icon-tinted',\s*glow && iconDiscTinted\(getComputedStyle\(icon\)\.color\) && iconDiscCardNeutral\(bg\)\);/);
 const css = read('src/web/assets/admin.css');
 assert.match(css, /\.tile\.sensor-compact > \.tile-icon\.tile-icon-tinted \{\s*background:color-mix\(in srgb, currentColor var\(--icon-disc-glow, 25%\), transparent\);/);
 assert.ok(css.indexOf('.tile-icon.tile-icon-tinted') < css.indexOf('.icon-discs-off .tile.sensor-compact'),

@@ -11,6 +11,7 @@
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/popups/popup_surface.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -63,12 +64,12 @@ constexpr uint32_t kDefaultColor = 0xFFD54F;
 constexpr uint32_t kSwitchOnColor = 0x3B82F6;
 constexpr uint32_t kRemoteBlockMs = 3000;
 constexpr uint32_t kLivePublishIntervalMs = 500;
-constexpr uint32_t kControlButtonBg = 0x2A2A2A;
 constexpr uint32_t kControlButtonIndicatorBg = 0xFFFFFF;
 constexpr lv_opa_t kControlButtonIndicatorOpa = LV_OPA_20;
 constexpr lv_opa_t kControlButtonActiveIndicatorOpa = kControlButtonIndicatorOpa;
-constexpr uint32_t kControlButtonDisabled = 0x6B6B6B;
-constexpr uint32_t kControlBarBg = 0x1F1F22;
+// White share of the card for the off switch thumb: 0x8D8D8D on the default
+// card, the neutral match for the former fixed blue-grey thumb.
+constexpr lv_opa_t kSwitchThumbOffStep = 119;
 constexpr uint32_t kTempWarmColor = 0xFFD27D;
 constexpr uint32_t kTempCoolColor = 0xF7F1E8;
 constexpr float kPi = 3.14159265358979323846f;
@@ -114,7 +115,11 @@ struct LightPopupContext {
   lv_obj_t* temp_slider_wrap = nullptr;
   lv_obj_t* temp_slider = nullptr;
   lv_obj_t* temp_slider_handle = nullptr;
+  lv_obj_t* temp_handle_dash = nullptr;
   lv_obj_t* temp_value_label = nullptr;
+  // Background of the tile that opened the popup. Card-colored cut-outs and
+  // lighter neutral surfaces derive from it.
+  uint32_t card_bg = popup_surface::kDefaultCard;
   uint16_t hue = 0;
   uint8_t sat = 0;
   uint8_t val = 100;
@@ -555,12 +560,11 @@ static void update_header_and_power_visuals(LightPopupContext* ctx, uint32_t ico
     lv_obj_set_style_border_opa(ctx->power_button, LV_OPA_TRANSP, LV_STATE_PRESSED);
   }
   if (ctx->power_button_icon) {
-    lv_obj_set_style_text_color(ctx->power_button_icon,
-                                lv_color_hex(visual_on ? kControlButtonBg : 0xFFFFFF),
-                                0);
-    lv_obj_set_style_text_color(ctx->power_button_icon,
-                                lv_color_hex(visual_on ? kControlButtonBg : 0xFFFFFF),
-                                LV_STATE_PRESSED);
+    // While on, the glyph is a card-colored cut-out of the accent fill.
+    const lv_color_t glyph_color =
+        visual_on ? popup_surface::card(ctx->card_bg) : lv_color_white();
+    lv_obj_set_style_text_color(ctx->power_button_icon, glyph_color, 0);
+    lv_obj_set_style_text_color(ctx->power_button_icon, glyph_color, LV_STATE_PRESSED);
   }
 }
 
@@ -584,7 +588,8 @@ static void update_switch_slider_visuals(LightPopupContext* ctx, uint32_t icon_r
   ctx->brightness_draw_active = false;
   ctx->brightness_draw_center_y = -1;
   const lv_color_t accent_color = lv_color_hex(icon_rgb);
-  const lv_color_t thumb_color = ctx->is_on ? accent_color : lv_color_hex(0x8A8D96);
+  const lv_color_t thumb_color =
+      ctx->is_on ? accent_color : popup_surface::lighter(ctx->card_bg, kSwitchThumbOffStep);
 
   lv_obj_set_style_bg_color(ctx->val_slider, accent_color, LV_PART_MAIN);
   lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_30, LV_PART_MAIN);
@@ -608,7 +613,7 @@ static void update_switch_slider_visuals(LightPopupContext* ctx, uint32_t icon_r
 
   if (ctx->val_switch_icon) {
     lv_obj_clear_flag(ctx->val_switch_icon, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_style_text_color(ctx->val_switch_icon, lv_color_hex(0x2A2A2A), 0);
+    lv_obj_set_style_text_color(ctx->val_switch_icon, popup_surface::card(ctx->card_bg), 0);
     lv_label_set_text(ctx->val_switch_icon, getMdiChar(get_switch_slider_icon_name(ctx)).c_str());
     lv_obj_center(ctx->val_switch_icon);
   }
@@ -782,7 +787,8 @@ static void on_brightness_slider_draw(lv_event_t* e) {
   lv_draw_rect_dsc_t dash_dsc;
   lv_draw_rect_dsc_init(&dash_dsc);
   dash_dsc.base.layer = layer;
-  dash_dsc.bg_color = lv_color_hex(0x2A2A2A);
+  // The notch is read at draw time, so a new card color needs no rebuild.
+  dash_dsc.bg_color = popup_surface::card(ctx->card_bg);
   dash_dsc.bg_opa = LV_OPA_COVER;
   dash_dsc.border_opa = LV_OPA_TRANSP;
   dash_dsc.radius = LV_RADIUS_CIRCLE;
@@ -881,6 +887,7 @@ static void style_control_button(lv_obj_t* button,
                                  lv_obj_t* icon,
                                  bool active,
                                  bool enabled,
+                                 uint32_t card,
                                  lv_color_t accent = lv_color_white()) {
   if (!button) return;
   auto apply_selector = [&](lv_style_selector_t selector, bool pressed) {
@@ -904,13 +911,15 @@ static void style_control_button(lv_obj_t* button,
   apply_selector(0, false);
   apply_selector(LV_STATE_PRESSED, true);
   if (icon) {
+    // A disabled button has no fill, so its icon is a lighter step of the card.
+    const lv_color_t disabled_color = popup_surface::lighter(card, popup_surface::kDisabled);
     lv_obj_set_style_text_color(
         icon,
-        enabled ? lv_color_white() : lv_color_hex(kControlButtonDisabled),
+        enabled ? lv_color_white() : disabled_color,
         0);
     lv_obj_set_style_text_color(
         icon,
-        enabled ? lv_color_white() : lv_color_hex(kControlButtonDisabled),
+        enabled ? lv_color_white() : disabled_color,
         LV_STATE_PRESSED);
   }
 }
@@ -981,17 +990,20 @@ static void apply_mode_visibility(LightPopupContext* ctx) {
                        ctx->brightness_button_icon,
                        ctx->mode == LightPopupMode::Brightness,
                        ctx->available && ctx->is_light &&
-                           ctx->supports_brightness);
+                           ctx->supports_brightness,
+                       ctx->card_bg);
   style_control_button(ctx->color_button,
                        ctx->color_button_icon,
                        ctx->mode == LightPopupMode::Color,
                        ctx->available && ctx->is_light &&
-                           ctx->supports_color);
+                           ctx->supports_color,
+                       ctx->card_bg);
   style_control_button(ctx->temperature_button,
                        ctx->temperature_button_icon,
                        ctx->mode == LightPopupMode::Temperature,
                        ctx->available && ctx->is_light &&
-                           ctx->supports_temperature);
+                           ctx->supports_temperature,
+                       ctx->card_bg);
   set_control_disabled(ctx->power_button, !ctx->available);
   set_control_disabled(
       ctx->brightness_button,
@@ -1389,10 +1401,10 @@ static lv_obj_t* create_vertical_slider_panel(lv_obj_t* parent,
     lv_obj_clear_flag(cap, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(cap, LV_OBJ_FLAG_SCROLLABLE);
 
+    // Card-colored by apply_card_cutouts().
     dash = lv_obj_create(cap);
     lv_obj_set_size(dash, kBrightnessDashWidth, kBrightnessDashHeight);
     lv_obj_set_style_radius(dash, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(dash, lv_color_hex(0x2A2A2A), 0);
     lv_obj_set_style_bg_opa(dash, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(dash, 0, 0);
     lv_obj_set_style_shadow_width(dash, 0, 0);
@@ -1433,6 +1445,7 @@ static lv_obj_t* create_temperature_panel(lv_obj_t* parent,
                                           lv_obj_t** wrap_out,
                                           lv_obj_t** slider_out,
                                           lv_obj_t** handle_out,
+                                          lv_obj_t** dash_out,
                                           lv_obj_t** value_out) {
   lv_obj_t* panel = lv_obj_create(parent);
   lv_obj_set_size(panel, LV_PCT(100), LV_PCT(100));
@@ -1488,10 +1501,10 @@ static lv_obj_t* create_temperature_panel(lv_obj_t* parent,
   lv_obj_set_scrollbar_mode(handle, LV_SCROLLBAR_MODE_OFF);
   lv_obj_move_foreground(handle);
 
+  // Card-colored by apply_card_cutouts().
   lv_obj_t* dash = lv_obj_create(handle);
   lv_obj_set_size(dash, kTempHandleDashWidth, kTempHandleDashHeight);
   lv_obj_set_style_radius(dash, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(dash, lv_color_hex(kControlButtonBg), 0);
   lv_obj_set_style_bg_opa(dash, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(dash, 0, 0);
   lv_obj_set_style_shadow_width(dash, 0, 0);
@@ -1508,6 +1521,7 @@ static lv_obj_t* create_temperature_panel(lv_obj_t* parent,
   if (wrap_out) *wrap_out = wrap;
   if (slider_out) *slider_out = slider;
   if (handle_out) *handle_out = handle;
+  if (dash_out) *dash_out = dash;
   if (value_out) *value_out = value;
   return panel;
 }
@@ -1551,6 +1565,29 @@ static lv_obj_t* create_control_icon_button(lv_obj_t* parent, const char* icon_n
 
   if (icon_out) *icon_out = icon;
   return btn;
+}
+
+// Resident notches on the accent handles are card-colored cut-outs. The
+// brightness notch reads the card color while it is drawn instead.
+static void apply_card_cutouts(LightPopupContext* ctx) {
+  if (!ctx) return;
+  const lv_color_t cutout = popup_surface::card(ctx->card_bg);
+  if (ctx->val_dash) lv_obj_set_style_bg_color(ctx->val_dash, cutout, 0);
+  if (ctx->temp_handle_dash) lv_obj_set_style_bg_color(ctx->temp_handle_dash, cutout, 0);
+}
+
+// The card is the current background of the tile that opened the popup (own
+// color or rules tint). Only an opening changes it; state updates keep the
+// color of the last opening.
+static void apply_card_color(LightPopupContext* ctx, uint32_t bg_color) {
+  const uint32_t color = popup_surface::card_or_default(bg_color);
+  if (!ctx || !ctx->card || color == ctx->card_bg) return;
+  ctx->card_bg = color;
+  lv_obj_set_style_bg_color(ctx->card, lv_color_hex(color), 0);
+  apply_card_cutouts(ctx);
+  // The resident content still carries surfaces derived from the previous
+  // card. Hide it until the full apply re-derives them, like a cold opening.
+  ctx->body_ready = false;
 }
 
 static void apply_init_to_context(LightPopupContext* ctx, const LightPopupInit& init,
@@ -2011,6 +2048,8 @@ static void finish_light_popup_open(const LightPopupInit& init) {
 
 static void prepare_light_popup_open(const LightPopupInit& init) {
   auto* ctx = g_light_popup_ctx;
+  // Before the first frame: the reused card takes the opening tile's color.
+  apply_card_color(ctx, init.bg_color);
   const bool keep_visible = ctx->body_ready && ctx->entity_id == init.entity_id;
   apply_init_to_context(ctx, init, false);
   if (!defer_popup_body(ctx->card, ctx->title_label, ctx->icon_label,
@@ -2041,8 +2080,9 @@ void show_light_popup(const LightPopupInit& init) {
 
   LightPopupContext* ctx = new LightPopupContext();
   g_light_popup_ctx = ctx;
+  ctx->card_bg = popup_surface::card_or_default(init.bg_color);
 
-  const auto parts = create_popup_body(on_close_click, ctx, 0x2A2A2A);
+  const auto parts = create_popup_body(on_close_click, ctx, ctx->card_bg);
   ctx->overlay = parts.overlay;
   ctx->card = parts.card;
   ctx->title_label = parts.title;
@@ -2109,7 +2149,9 @@ void show_light_popup(const LightPopupInit& init) {
                                                     &ctx->temp_slider_wrap,
                                                     &ctx->temp_slider,
                                                     &ctx->temp_slider_handle,
+                                                    &ctx->temp_handle_dash,
                                                     &ctx->temp_value_label);
+  apply_card_cutouts(ctx);
   render_color_field(ctx);
 
   ctx->controls_row = lv_obj_create(card);
@@ -2170,6 +2212,8 @@ void show_light_popup(const LightPopupInit& init) {
   show_popup_shell(g_light_popup_ctx->overlay, g_light_popup_ctx->card, g_light_popup_ctx->title_label, g_light_popup_ctx->icon_label, g_light_popup_ctx->close_button);
 }
 
+// State updates never recolor the card: the popup keeps the background of
+// the tile it was opened from, so init.bg_color is ignored here.
 void update_light_popup(const LightPopupInit& init) {
   if (!g_light_popup_ctx || !g_light_popup_ctx->overlay || !g_light_popup_ctx->card) return;
   if (!g_light_popup_ctx->entity_id.length()) return;

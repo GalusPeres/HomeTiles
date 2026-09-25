@@ -39,35 +39,32 @@
     const rgb = String(color || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
     return !!rgb && !(rgb[1] === rgb[2] && rgb[2] === rgb[3]);
   }
+  // Mirrors tile_icon_disc::card_is_neutral(): only a neutral (grey) card lets
+  // the disc glow in the icon hue; colored cards keep the neutral disc.
+  function iconDiscCardNeutral(rgb) {
+    if (!rgb) return true;
+    const channels = [1, 2, 3].map(i => Number(rgb[i]));
+    return Math.max(...channels) - Math.min(...channels) <= 12;
+  }
   function applyIconDiscTint(tileElem) {
     const icon = tileElem?.querySelector(':scope > .tile-icon');
     if (!icon) return;
     const glow = tileElem.dataset.iconGlow !== '0';
-    icon.classList.toggle('tile-icon-tinted', glow && iconDiscTinted(getComputedStyle(icon).color));
     // Mirrors tile_icon_disc::contrast_step_for()/scaled_opa(): discs are
     // subtler on dark tiles (8 % instead of 15 % at luma <= 0.08) in 4 steps.
     const bg = String(getComputedStyle(tileElem).backgroundColor || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
+    icon.classList.toggle('tile-icon-tinted',
+      glow && iconDiscTinted(getComputedStyle(icon).color) && iconDiscCardNeutral(bg));
     const luma = bg ? (0.2126 * Number(bg[1]) + 0.7152 * Number(bg[2]) + 0.0722 * Number(bg[3])) / 255 : 1;
     const step = Math.floor(Math.min(1, Math.max(0, (luma - 0.08) / 0.17)) * 3 + 0.5);
     const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);
     tileElem.style.setProperty('--icon-disc-opa', (scaled(38) / 255).toFixed(3));
-    // Global Glow strength (icon_glow.h): the disc at that percentage, the
-    // tinted border 20 points more, both scaled like the device.
+    // Global Glow strength (icon_glow.h): the disc at that percentage, scaled
+    // like the device. The tile border stays the neutral hairline.
     const glowValue = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
     const glowPct = Math.min(60, Math.max(10, Number.isFinite(glowValue) && glowValue > 0 ? glowValue : 25));
     const glowOpa = Math.floor((glowPct * 255 + 50) / 100);
-    const glowBorderOpa = Math.floor(((glowPct + 20) * 255 + 50) / 100);
     tileElem.style.setProperty('--icon-disc-glow', (scaled(glowOpa) * 100 / 255).toFixed(1) + '%');
-    // Mirrors ui_surface_style::set_tile_border_tint(): a glowing disc tints
-    // the tile border hairline with its hue (icon_glow_border_opa, scaled).
-    const hue = icon.classList.contains('tile-icon-tinted')
-      ? String(getComputedStyle(icon).color || '').match(/(\d+)\D+(\d+)\D+(\d+)/) : null;
-    if (hue) {
-      tileElem.style.setProperty('--tile-border-tint',
-        'rgba(' + hue[1] + ',' + hue[2] + ',' + hue[3] + ',' + (scaled(glowBorderOpa) / 255).toFixed(3) + ')');
-    } else {
-      tileElem.style.removeProperty('--tile-border-tint');
-    }
   }
   // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
   // default grey (stored explicitly by older editors) follow the global
@@ -148,14 +145,15 @@
     const rule = iconColorRuleState(typeValue, entity, meta, binaryState);
     return (rule && resolveIconColorRecord(record, rule.state, rule.display)) || fallback;
   }
-  // Tints a preview tile like tile_icon_source.cpp ("Tint tile" rules).
+  // Tints a preview tile like tile_icon_source.cpp ("Tint tile" rules): the
+  // tint replaces the tile color and starts from the global default tile
+  // color, never from an own tile color.
   function applyTileRulesTint(el, typeValue, record, ownEntity, meta) {
     if (!el || !record || typeof iconColorTilePreviewTint !== 'function') return;
     const tint = iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta);
     if (!tint) return;
-    const rgb = String(getComputedStyle(el).backgroundColor || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
-    const base = rgb ? '#' + [rgb[1], rgb[2], rgb[3]].map(v => Number(v).toString(16).padStart(2, '0')).join('') : '#2A2A2A';
-    el.style.background = tileTintBackground(base, tint.color, tint.percent);
+    const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
+    el.style.background = tileTintBackground(base || '#222222', tint.color, tint.percent);
   }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1' ||

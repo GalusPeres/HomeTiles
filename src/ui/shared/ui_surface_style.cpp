@@ -11,11 +11,9 @@ namespace {
 // USER_1/USER_2 are already used for image-preview states.
 constexpr lv_obj_flag_t kGlobalTileBorderFlag = LV_OBJ_FLAG_USER_3;
 constexpr lv_obj_flag_t kHiddenTileBorderFlag = LV_OBJ_FLAG_USER_4;
-// The tile border hairline: white at about 20 %.
+// The tile border hairline: white at about 20 %, a slightly lighter step of
+// whatever color the tile shows. It never takes the icon hue.
 constexpr lv_opa_t kTileBorderOpa = 51;
-// A glowing icon disc's border tint is kept as local style values under a
-// state tiles never enter, so border refreshes can restore it.
-constexpr lv_style_selector_t kBorderTintStore = LV_PART_MAIN | LV_STATE_USER_4;
 volatile bool g_global_tile_border_refresh_pending = false;
 std::atomic<bool> g_radius_refresh_pending{false};
 std::atomic<int> g_preview_radius{-1};
@@ -79,19 +77,8 @@ void apply_style(lv_obj_t* obj, bool enabled) {
       LV_PART_MAIN | LV_STATE_FOCUSED,
       LV_PART_MAIN | (LV_STATE_FOCUSED | LV_STATE_PRESSED),
   };
-  // A tile whose icon disc glows keeps its border in the disc's hue
-  // (set_tile_border_tint); every other tile uses white at about 20 %.
-  lv_color_t color = lv_color_white();
-  lv_opa_t opa = kTileBorderOpa;
-  lv_style_value_t stored{};
-  if (lv_obj_get_local_style_prop(obj, LV_STYLE_OUTLINE_COLOR, &stored, kBorderTintStore) ==
-      LV_STYLE_RES_FOUND) {
-    color = stored.color;
-  }
-  if (lv_obj_get_local_style_prop(obj, LV_STYLE_OUTLINE_OPA, &stored, kBorderTintStore) ==
-      LV_STYLE_RES_FOUND) {
-    opa = static_cast<lv_opa_t>(stored.num);
-  }
+  const lv_color_t color = lv_color_white();
+  const lv_opa_t opa = kTileBorderOpa;
   // Border width is constant. State-specific copies force a full descendant
   // layout refresh on every press/release, even when they are all zero.
   lv_obj_set_style_border_width(obj, 0, LV_PART_MAIN);
@@ -166,42 +153,6 @@ void apply_global_tile_border(lv_obj_t* obj) {
 
 lv_opa_t icon_glow_opa() {
   return icon_glow::disc_opa(configManager.getConfig().icon_glow);
-}
-
-lv_opa_t icon_glow_border_opa() {
-  return icon_glow::border_opa(configManager.getConfig().icon_glow);
-}
-
-void set_tile_border_tint(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {
-  // The border belongs to the tile card, which may be a parent of the object
-  // that holds the disc (for example a switch tile's content container).
-  lv_obj_t* host = obj;
-  for (int depth = 0; host && depth < 3; ++depth) {
-    if (lv_obj_has_flag(host, kGlobalTileBorderFlag) || lv_obj_has_flag(host, kHiddenTileBorderFlag))
-      break;
-    host = lv_obj_get_parent(host);
-  }
-  if (!host || !(lv_obj_has_flag(host, kGlobalTileBorderFlag) ||
-                 lv_obj_has_flag(host, kHiddenTileBorderFlag))) {
-    return;
-  }
-  lv_style_value_t stored{};
-  const bool same_color =
-      lv_obj_get_local_style_prop(host, LV_STYLE_OUTLINE_COLOR, &stored, kBorderTintStore) ==
-          LV_STYLE_RES_FOUND &&
-      lv_color_eq(stored.color, color);
-  const bool same_opa =
-      lv_obj_get_local_style_prop(host, LV_STYLE_OUTLINE_OPA, &stored, kBorderTintStore) ==
-          LV_STYLE_RES_FOUND &&
-      stored.num == opa;
-  if (same_color && same_opa) return;
-  lv_obj_set_style_outline_color(host, color, kBorderTintStore);
-  lv_obj_set_style_outline_opa(host, opa, kBorderTintStore);
-  apply_style(host, lv_obj_get_style_outline_width(host, LV_PART_MAIN) > 0);
-}
-
-void clear_tile_border_tint(lv_obj_t* obj) {
-  set_tile_border_tint(obj, lv_color_white(), kTileBorderOpa);
 }
 
 void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {

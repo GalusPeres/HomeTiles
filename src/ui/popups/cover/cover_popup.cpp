@@ -15,6 +15,7 @@
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/popups/popup_surface.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
 
@@ -37,6 +38,7 @@ struct CoverSliderView {
   lv_obj_t* column = nullptr;
   lv_obj_t* track = nullptr;
   lv_obj_t* handle = nullptr;
+  lv_obj_t* handle_dash = nullptr;
   bool fill_active = false;
   int16_t fill_center_y = -1;
 };
@@ -46,6 +48,8 @@ struct CoverPopupContext {
   String device_class;
   CoverState state;
   CoverPopupMode mode = CoverPopupMode::Position;
+  // Card color of the last opening; state updates never change it.
+  uint32_t card_color = popup_surface::kDefaultCard;
   CoverChannel dragging_channel = CoverChannel::None;
   CoverChannel protected_channel = CoverChannel::None;
   lv_obj_t* overlay = nullptr;
@@ -120,8 +124,6 @@ constexpr int kActionButtonGap =
     kActionButtonGapRaw > 0 ? kActionButtonGapRaw : 0;
 constexpr uint32_t kRemoteBlockMs = 1500;
 constexpr uint32_t kLivePublishIntervalMs = 500;
-constexpr uint32_t kPanelBg = 0x2A2A2A;
-constexpr uint32_t kDisabled = 0x6B6B6B;
 constexpr uint32_t kHaCoverActive = 0x926BC7;
 constexpr uint32_t kHaCoverInactive = 0x9E9E9E;
 
@@ -480,7 +482,7 @@ void update_controls_ui(CoverPopupContext* ctx) {
 }
 
 void style_mode_button(lv_obj_t* button, lv_obj_t* icon, bool active,
-                       bool enabled) {
+                       bool enabled, uint32_t card_color) {
   if (!button) return;
   const lv_opa_t normal_opa =
       enabled && active ? LV_OPA_20 : LV_OPA_TRANSP;
@@ -491,8 +493,25 @@ void style_mode_button(lv_obj_t* button, lv_obj_t* icon, bool active,
       button, enabled ? LV_OPA_20 : LV_OPA_TRANSP, LV_STATE_PRESSED);
   if (icon) {
     lv_obj_set_style_text_color(
-        icon, enabled ? lv_color_white() : lv_color_hex(kDisabled), 0);
+        icon,
+        enabled ? lv_color_white()
+                : popup_surface::lighter(card_color, popup_surface::kDisabled),
+        0);
   }
+}
+
+void style_mode_buttons(CoverPopupContext* ctx) {
+  if (!ctx) return;
+  const bool position_available = has_position_mode(ctx);
+  const bool controls_available = has_controls_mode(ctx);
+  style_mode_button(ctx->position_mode_button, ctx->position_mode_icon,
+                    ctx->mode == CoverPopupMode::Position &&
+                        position_available,
+                    position_available, ctx->card_color);
+  style_mode_button(ctx->controls_mode_button, ctx->controls_mode_icon,
+                    ctx->mode == CoverPopupMode::Controls &&
+                        controls_available,
+                    controls_available, ctx->card_color);
 }
 
 void update_mode_visibility(CoverPopupContext* ctx) {
@@ -515,10 +534,7 @@ void update_mode_visibility(CoverPopupContext* ctx) {
   set_hidden(ctx->mode_row, !show_mode_switch);
   set_hidden(ctx->position_mode_button, !show_mode_switch);
   set_hidden(ctx->controls_mode_button, !show_mode_switch);
-  style_mode_button(ctx->position_mode_button, ctx->position_mode_icon,
-                    position_active, position_available);
-  style_mode_button(ctx->controls_mode_button, ctx->controls_mode_icon,
-                    controls_active, controls_available);
+  style_mode_buttons(ctx);
 }
 
 void refresh_popup(CoverPopupContext* ctx) {
@@ -890,10 +906,11 @@ void on_position_slider_draw(lv_event_t* event) {
   lv_area_t middle = {area.x1, top_center_y, area.x2, center_y};
   lv_draw_rect(layer, &fill, &middle);
 
+  // The notch is cut out of the opaque fill in the current card color.
   lv_draw_rect_dsc_t dash;
   lv_draw_rect_dsc_init(&dash);
   dash.base.layer = layer;
-  dash.bg_color = lv_color_hex(kPanelBg);
+  dash.bg_color = popup_surface::card(ctx->card_color);
   dash.bg_opa = LV_OPA_COVER;
   dash.border_opa = LV_OPA_TRANSP;
   dash.radius = LV_RADIUS_CIRCLE;
@@ -910,7 +927,9 @@ void on_position_slider_draw(lv_event_t* event) {
   lv_draw_rect(layer, &dash, &dash_area);
 }
 
-void create_tilt_gap_mask(lv_obj_t* track) {
+// The gaps hide the opaque track beneath them, so they take the exact card
+// color. They are created once; apply_card_color() recolors them.
+void create_tilt_gap_mask(lv_obj_t* track, uint32_t card_color) {
   if (!track) return;
   const int track_span = kVerticalSliderHeight - 1;
   const int taper_range = kTiltGapTopHeight - kTiltGapBottomHeight;
@@ -928,7 +947,7 @@ void create_tilt_gap_mask(lv_obj_t* track) {
     lv_obj_remove_style_all(gap);
     lv_obj_set_size(gap, LV_PCT(100), gap_height);
     lv_obj_set_pos(gap, 0, y);
-    lv_obj_set_style_bg_color(gap, lv_color_hex(kPanelBg), 0);
+    lv_obj_set_style_bg_color(gap, popup_surface::card(card_color), 0);
     lv_obj_set_style_bg_opa(gap, LV_OPA_COVER, 0);
     lv_obj_add_flag(gap, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_clear_flag(gap, LV_OBJ_FLAG_CLICKABLE);
@@ -1035,7 +1054,7 @@ lv_obj_t* create_mode_button(lv_obj_t* parent, const char* icon_name,
 }
 
 CoverSliderView create_slider_view(lv_obj_t* parent, CoverChannel channel,
-                                   bool handled) {
+                                   bool handled, uint32_t card_color) {
   CoverSliderView view;
   view.channel = channel;
   view.column = lv_obj_create(parent);
@@ -1064,7 +1083,7 @@ CoverSliderView create_slider_view(lv_obj_t* parent, CoverChannel channel,
     lv_obj_set_style_bg_color(view.track, lv_color_hex(kHaCoverActive), 0);
     lv_obj_set_style_bg_grad_dir(view.track, LV_GRAD_DIR_NONE, 0);
     lv_obj_set_style_bg_opa(view.track, LV_OPA_COVER, 0);
-    create_tilt_gap_mask(view.track);
+    create_tilt_gap_mask(view.track, card_color);
     view.handle = lv_obj_create(view.track);
     lv_obj_set_size(view.handle, kVerticalSliderWidth,
                     kVerticalSliderRadius * 2);
@@ -1080,9 +1099,11 @@ CoverSliderView create_slider_view(lv_obj_t* parent, CoverChannel channel,
     lv_obj_clear_flag(view.handle, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(view.handle, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t* dash = lv_obj_create(view.handle);
+    view.handle_dash = dash;
     lv_obj_set_size(dash, kSliderDashWidth, kSliderDashHeight);
     lv_obj_set_style_radius(dash, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(dash, lv_color_hex(kDisabled), 0);
+    lv_obj_set_style_bg_color(
+        dash, popup_surface::lighter(card_color, popup_surface::kDisabled), 0);
     lv_obj_set_style_bg_opa(dash, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(dash, 0, 0);
     lv_obj_set_style_shadow_width(dash, 0, 0);
@@ -1143,6 +1164,36 @@ void create_preset_buttons(CoverPopupContext* ctx,
   }
 }
 
+// An opening takes the tile's background as the card color. Surfaces created
+// once follow it here: the tilt gaps, the tilt handle dash and disabled mode
+// icons. The position notch reads the color while drawing.
+void apply_card_color(CoverPopupContext* ctx, uint32_t bg_color) {
+  if (!ctx) return;
+  const uint32_t color = popup_surface::card_or_default(bg_color);
+  if (color == ctx->card_color) return;
+  ctx->card_color = color;
+  if (ctx->card) {
+    lv_obj_set_style_bg_color(ctx->card, popup_surface::card(color), 0);
+  }
+  if (lv_obj_t* track = ctx->tilt_slider.track) {
+    const uint32_t count = lv_obj_get_child_count(track);
+    for (uint32_t i = 0; i < count; ++i) {
+      lv_obj_t* gap = lv_obj_get_child(track, static_cast<int32_t>(i));
+      if (gap == ctx->tilt_slider.handle) continue;
+      lv_obj_set_style_bg_color(gap, popup_surface::card(color), 0);
+    }
+  }
+  if (ctx->tilt_slider.handle_dash) {
+    lv_obj_set_style_bg_color(
+        ctx->tilt_slider.handle_dash,
+        popup_surface::lighter(color, popup_surface::kDisabled), 0);
+  }
+  style_mode_buttons(ctx);
+  if (ctx->position_slider.track) {
+    lv_obj_invalidate(ctx->position_slider.track);
+  }
+}
+
 }  // namespace
 
 static void finish_cover_popup_open(const CoverPopupInit& init) {
@@ -1152,6 +1203,9 @@ static void finish_cover_popup_open(const CoverPopupInit& init) {
 
 static void prepare_cover_popup_open(const CoverPopupInit& init) {
   auto* ctx = g_ctx;
+  // Before the first frame, so the resident body never shows the previous
+  // tile's color.
+  apply_card_color(ctx, init.bg_color);
   hometiles_title::set(ctx->title_label, init.title.c_str());
   set_hidden(ctx->icon_label, !init.icon_visible);
   lv_label_set_text(ctx->icon_label, getMdiChar(init.icon_name).c_str());
@@ -1191,7 +1245,8 @@ void show_cover_popup(const CoverPopupInit& init) {
 
   CoverPopupContext* ctx = new CoverPopupContext();
   g_ctx = ctx;
-  const auto parts = create_popup_body(on_close, ctx, kPanelBg);
+  ctx->card_color = popup_surface::card_or_default(init.bg_color);
+  const auto parts = create_popup_body(on_close, ctx, ctx->card_color);
   ctx->overlay = parts.overlay;
   ctx->card = parts.card;
   ctx->title_label = parts.title;
@@ -1244,9 +1299,9 @@ void show_cover_popup(const CoverPopupInit& init) {
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_clear_flag(ctx->position_panel, LV_OBJ_FLAG_SCROLLABLE);
   ctx->position_slider = create_slider_view(
-      ctx->position_panel, CoverChannel::Position, false);
+      ctx->position_panel, CoverChannel::Position, false, ctx->card_color);
   ctx->tilt_slider = create_slider_view(
-      ctx->position_panel, CoverChannel::Tilt, true);
+      ctx->position_panel, CoverChannel::Tilt, true, ctx->card_color);
   create_preset_buttons(ctx, ctx->position_slider, CoverChannel::Position,
                         ctx->position_presets);
   create_preset_buttons(ctx, ctx->tilt_slider, CoverChannel::Tilt,

@@ -23,9 +23,9 @@ inline int round_diameter() { return diameter() + inset(); }
 // with the tile corner; the shared radius style follows global radius changes.
 inline int radius_baseline() { return tile_layout::scale_480(22) - inset(); }
 inline constexpr lv_opa_t kOpa = 38;
-// With glow, a colored icon tints its disc with its hue and the tile border
-// hairline 20 points stronger; the strength is the global Glow setting
-// (ui_surface_style::icon_glow_opa, default 25 %).
+// With glow, a colored icon tints its disc with its hue on a neutral (grey)
+// card; the strength is the global Glow setting (ui_surface_style::
+// icon_glow_opa, default 25 %). The tile border stays the neutral hairline.
 // MDI icon fonts give every glyph this glyph's advance width.
 inline constexpr uint32_t kMdiReferenceGlyph = 0xF0001;
 
@@ -68,6 +68,17 @@ inline bool icon_color_tints(uint32_t rgb) {
   return r != g || g != b;
 }
 
+// A colored card (own tile color or a rules tint) keeps the neutral disc, a
+// lighter step of the card itself, so disc and card never clash. Near-grey
+// cards (channel spread up to kNeutralSpread) count as neutral.
+inline constexpr uint8_t kNeutralSpread = 12;
+inline bool card_is_neutral(uint32_t rgb) {
+  const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+  const uint8_t hi = r > g ? (r > b ? r : b) : (g > b ? g : b);
+  const uint8_t lo = r < g ? (r < b ? r : b) : (g < b ? g : b);
+  return hi - lo <= kNeutralSpread;
+}
+
 // Discs are subtler on dark tiles: the same step from tile to disc reads much
 // stronger on near-black. The opacity scales from 8 % (tile luma <= 0.08) to
 // the full value (luma >= 0.25) in four steps, so only a few shared opacity
@@ -85,16 +96,21 @@ inline uint8_t contrast_step_for(uint32_t rgb) {
 inline lv_opa_t scaled_opa(lv_opa_t full, uint8_t step) {
   return static_cast<lv_opa_t>((full * (24 + 7 * step) + 22) / 45);
 }
-// The nearest opaque background behind the disc (the tile card).
-inline uint8_t contrast_step(lv_obj_t* disc) {
+// The color of the nearest opaque background behind the disc (the tile
+// card); false without one.
+inline bool card_color(lv_obj_t* disc, uint32_t& rgb) {
   lv_obj_t* host = lv_obj_get_parent(disc);
   for (int depth = 0; host && depth < 3 &&
        lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < LV_OPA_50; ++depth) {
     host = lv_obj_get_parent(host);
   }
-  if (!host) return 3;
-  return contrast_step_for(lv_color_to_u32(lv_obj_get_style_bg_color(host, LV_PART_MAIN)) &
-                           0xFFFFFF);
+  if (!host) return false;
+  rgb = lv_color_to_u32(lv_obj_get_style_bg_color(host, LV_PART_MAIN)) & 0xFFFFFF;
+  return true;
+}
+inline uint8_t contrast_step(lv_obj_t* disc) {
+  uint32_t rgb = 0;
+  return card_color(disc, rgb) ? contrast_step_for(rgb) : 3;
 }
 
 // The icon a disc belongs to: its child (half-height) or its next sibling.
@@ -114,7 +130,9 @@ inline void apply_fill(lv_obj_t* disc) {
   const uint32_t rgb =
       icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF
            : 0xFFFFFF;
-  const bool tinted = glow_of(disc) && icon_color_tints(rgb);
+  uint32_t card = 0;
+  const bool neutral_card = !card_color(disc, card) || card_is_neutral(card);
+  const bool tinted = glow_of(disc) && icon_color_tints(rgb) && neutral_card;
   const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color)) {
     lv_obj_set_style_bg_color(disc, color, 0);
@@ -122,14 +140,6 @@ inline void apply_fill(lv_obj_t* disc) {
   const uint8_t step = contrast_step(disc);
   const lv_opa_t opa = mode == Mode::Off ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
                                          : scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);
-  // The tile border follows a glowing disc's hue; otherwise it stays the
-  // white 20 % hairline. The popup card border does the same (popup_shell).
-  if (tinted) {
-    ui_surface_style::set_tile_border_tint(lv_obj_get_parent(disc), color,
-                                           scaled_opa(ui_surface_style::icon_glow_border_opa(), step));
-  } else {
-    ui_surface_style::clear_tile_border_tint(lv_obj_get_parent(disc));
-  }
   ui_surface_style::apply_icon_disc_opa(disc, opa, mode == Mode::Global);
 }
 

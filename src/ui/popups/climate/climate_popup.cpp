@@ -14,6 +14,7 @@
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/popups/popup_surface.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
@@ -30,10 +31,6 @@ constexpr uint8_t kMaxControlOptions = 10;
 constexpr uint32_t kRemoteBlockMs = 2200;
 constexpr uint32_t kAdjustmentDebounceMs = 1000;
 constexpr uint32_t kModeDebounceMs = 160;
-constexpr uint32_t kCardBg = 0x2A2A2A;
-constexpr uint32_t kTrackColor = 0x444444;
-constexpr uint32_t kPillBg = 0x363636;
-constexpr uint32_t kPillPressedBg = 0x5A5A5A;
 constexpr uint32_t kSelectedBg = 0x26A69A;
 constexpr uint32_t kHumidityAccent = 0x29B6C8;
 constexpr float kPi = 3.14159265358979323846f;
@@ -64,6 +61,11 @@ constexpr int kMenuOptionHeight = popup_layout::scale(64);
 constexpr int kMenuSeparatorAreaHeight = popup_layout::scale(9);
 constexpr int kMenuSeparatorLineHeight = 1;
 constexpr int kMenuSeparatorLineBottomInset = popup_layout::scale(4);
+// Solid menu separator step: 0x5D5D5D on the default card, the former
+// 0x777777 line at 60 % over the menu pill.
+constexpr lv_opa_t kMenuSeparatorStep = 62;
+// Pill caption step: the former 0xD0D0D0 caption on the default card.
+constexpr lv_opa_t kCaptionStep = 199;
 constexpr int kTargetToggleWidth = popup_layout::contentScale(188);
 constexpr int kTargetToggleHeight = popup_layout::kNavHeight;
 constexpr int kTargetToggleButtonSize = popup_layout::contentScale(80);
@@ -163,6 +165,9 @@ struct ClimatePopupContext {
   bool has_supported_features = false;
   uint16_t supported_features = 0;
   uint32_t block_remote_until_ms = 0;
+  // Card color of the last opening. Neutral surfaces derive from it, and
+  // state updates never change it.
+  uint32_t bg_color = popup_surface::kDefaultCard;
 
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
@@ -640,8 +645,10 @@ void refresh_current_marker(ClimatePopupContext* ctx) {
 
   lv_obj_set_style_bg_color(
       ctx->current_marker,
-      lv_color_hex(
-          current_on_colored_ring ? kTrackColor : 0xA8A8A8),
+      popup_surface::lighter(
+          ctx->bg_color,
+          current_on_colored_ring ? popup_surface::kTrack
+                                  : popup_surface::kMarker),
       0);
   lv_obj_clear_flag(ctx->current_marker, LV_OBJ_FLAG_HIDDEN);
   align_marker_to_value(
@@ -820,7 +827,8 @@ void refresh_ring(ClimatePopupContext* ctx) {
     } else {
       lv_obj_set_style_border_color(
           ctx->target_marker,
-          lv_color_hex(off ? kTrackColor : heat_foreground),
+          off ? popup_surface::lighter(ctx->bg_color, popup_surface::kTrack)
+              : lv_color_hex(heat_foreground),
           0);
       lv_obj_clear_flag(ctx->target_marker, LV_OBJ_FLAG_HIDDEN);
       align_marker_to_value(
@@ -835,7 +843,8 @@ void refresh_ring(ClimatePopupContext* ctx) {
     } else {
       lv_obj_set_style_border_color(
           ctx->range_high_marker,
-          lv_color_hex(off ? kTrackColor : cool_foreground),
+          off ? popup_surface::lighter(ctx->bg_color, popup_surface::kTrack)
+              : lv_color_hex(cool_foreground),
           0);
       lv_obj_clear_flag(ctx->range_high_marker, LV_OBJ_FLAG_HIDDEN);
       align_marker_to_value(
@@ -918,15 +927,17 @@ void refresh_target_toggle(ClimatePopupContext* ctx) {
     return;
   }
   lv_obj_clear_flag(ctx->target_toggle, LV_OBJ_FLAG_HIDDEN);
-  auto apply_button = [](lv_obj_t* button, lv_obj_t* icon, bool selected) {
+  const lv_color_t pill =
+      popup_surface::lighter(ctx->bg_color, popup_surface::kPill);
+  auto apply_button = [pill](lv_obj_t* button, lv_obj_t* icon, bool selected) {
     if (!button) return;
     lv_obj_set_style_bg_color(
-        button, selected ? lv_color_white() : lv_color_hex(kPillBg), 0);
+        button, selected ? lv_color_white() : pill, 0);
     lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
     if (icon) {
       lv_obj_set_style_text_color(
           icon,
-          selected ? lv_color_hex(kPillBg) : lv_color_white(),
+          selected ? pill : lv_color_white(),
           0);
       lv_obj_set_style_text_color(
           icon, lv_color_white(), LV_STATE_PRESSED);
@@ -1038,14 +1049,18 @@ void refresh_control(
       colored_mode
           ? lv_color_hex(
                 climate_visuals::mode_foreground_color(ctx->hvac_mode))
-          : lv_color_hex(kPillBg);
+          : popup_surface::lighter(ctx->bg_color, popup_surface::kPill);
+  // Text on the colored HVAC pill is cut out in the card color.
+  const lv_color_t cut_out = popup_surface::card(ctx->bg_color);
   const lv_color_t control_text =
-      colored_mode ? lv_color_hex(kCardBg) : lv_color_white();
+      colored_mode ? cut_out : lv_color_white();
   lv_obj_set_style_bg_color(control.dropdown, control_bg, 0);
   lv_obj_set_style_bg_opa(control.dropdown, LV_OPA_COVER, 0);
   lv_obj_set_style_bg_color(
       control.dropdown,
-      colored_mode ? control_bg : lv_color_hex(kPillPressedBg),
+      colored_mode
+          ? control_bg
+          : popup_surface::lighter(ctx->bg_color, popup_surface::kPressed),
       LV_STATE_PRESSED);
   if (control.caption) {
     lv_label_set_text(
@@ -1056,7 +1071,8 @@ void refresh_control(
         has_current_value ? kPillCaptionYWithValue : 0);
     lv_obj_set_style_text_color(
         control.caption,
-        colored_mode ? lv_color_hex(kCardBg) : lv_color_hex(0xD0D0D0),
+        colored_mode ? cut_out
+                     : popup_surface::lighter(ctx->bg_color, kCaptionStep),
         0);
   }
   if (control.value) {
@@ -1085,7 +1101,7 @@ void refresh_control(
     lv_obj_set_style_text_color(
         control.icon,
         colored_mode
-            ? lv_color_hex(kCardBg)
+            ? cut_out
             : lv_color_hex(
                   type == ClimateControlType::HVAC
                       ? climate_visuals::mode_foreground_color(ctx->hvac_mode)
@@ -1129,6 +1145,40 @@ void refresh_all(ClimatePopupContext* ctx) {
   refresh_ring(ctx);
   refresh_controls(ctx);
   refresh_interactive_state(ctx);
+}
+
+// An opening restyles the resident card and every surface derived from it
+// before the first frame, only when the tile brings a different color. The
+// state refreshes then read the new color; the control menu is rebuilt on its
+// next opening. State updates never call this.
+void apply_card_color(ClimatePopupContext* ctx, uint32_t color) {
+  if (!ctx || !ctx->card) return;
+  color = popup_surface::card_or_default(color);
+  if (color == ctx->bg_color) return;
+  ctx->bg_color = color;
+  lv_obj_set_style_bg_color(ctx->card, popup_surface::card(color), 0);
+  if (ctx->track_arc) {
+    lv_obj_set_style_arc_color(
+        ctx->track_arc,
+        popup_surface::lighter(color, popup_surface::kTrack),
+        LV_PART_MAIN);
+  }
+  if (ctx->target_toggle) {
+    lv_obj_set_style_bg_color(
+        ctx->target_toggle,
+        popup_surface::lighter(color, popup_surface::kPill), 0);
+  }
+  for (lv_obj_t* button :
+       {ctx->temperature_toggle_button, ctx->humidity_toggle_button}) {
+    if (!button) continue;
+    lv_obj_set_style_bg_color(
+        button, popup_surface::lighter(color, popup_surface::kPressed),
+        LV_STATE_PRESSED);
+  }
+  close_control_menu(ctx);
+  refresh_ring(ctx);
+  refresh_target_toggle(ctx);
+  refresh_controls(ctx);
 }
 
 void apply_init(ClimatePopupContext* ctx, const ClimatePopupInit& init) {
@@ -1904,12 +1954,18 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
   const bool colored_current =
       current_type == ClimateControlType::HVAC && current &&
       current->length() && !current->equalsIgnoreCase("off");
+  // The menu is built per opening, so it reads the current card color.
+  const lv_color_t menu_bg =
+      popup_surface::lighter(ctx->bg_color, popup_surface::kPill);
+  const lv_color_t menu_pressed_bg =
+      popup_surface::lighter(ctx->bg_color, popup_surface::kPressed);
+  const lv_color_t cut_out = popup_surface::card(ctx->bg_color);
   const lv_color_t current_bg =
       colored_current
           ? lv_color_hex(climate_visuals::mode_foreground_color(*current))
-          : lv_color_hex(kPillBg);
+          : menu_bg;
   const lv_color_t current_text_color =
-      colored_current ? lv_color_hex(kCardBg) : lv_color_white();
+      colored_current ? cut_out : lv_color_white();
   ctx->control_menu = lv_obj_create(ctx->card);
   ctx->open_control_index = static_cast<int8_t>(control_index);
   ctx->menu_option_button_count = 0;
@@ -1917,8 +1973,7 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
   lv_obj_set_size(ctx->control_menu, kPillWidth, menu_height);
   // The visible shells draw their own subtle outline. This lets the upper
   // list radius and lower pill radius differ without exposing the parent.
-  lv_obj_set_style_bg_color(
-      ctx->control_menu, lv_color_hex(kPillBg), 0);
+  lv_obj_set_style_bg_color(ctx->control_menu, menu_bg, 0);
   lv_obj_set_style_bg_opa(ctx->control_menu, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(ctx->control_menu, 0, 0);
   lv_obj_set_style_border_opa(ctx->control_menu, LV_OPA_TRANSP, 0);
@@ -1941,7 +1996,7 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
   lv_obj_t* top_shell = lv_obj_create(ctx->control_menu);
   lv_obj_set_size(top_shell, kPillWidth, kMenuOptionHeight);
   lv_obj_set_pos(top_shell, 0, 0);
-  lv_obj_set_style_bg_color(top_shell, lv_color_hex(kPillBg), 0);
+  lv_obj_set_style_bg_color(top_shell, menu_bg, 0);
   lv_obj_set_style_bg_opa(top_shell, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(top_shell, 1, 0);
   lv_obj_set_style_border_color(top_shell, lv_color_black(), 0);
@@ -1963,7 +2018,7 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
       middle_shell, kPillWidth,
       menu_height - (kMenuOptionHeight / 2) - (kPillHeight / 2));
   lv_obj_set_pos(middle_shell, 0, kMenuOptionHeight / 2);
-  lv_obj_set_style_bg_color(middle_shell, lv_color_hex(kPillBg), 0);
+  lv_obj_set_style_bg_color(middle_shell, menu_bg, 0);
   lv_obj_set_style_bg_opa(middle_shell, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(middle_shell, 1, 0);
   lv_obj_set_style_border_color(middle_shell, lv_color_black(), 0);
@@ -2045,11 +2100,11 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
     lv_obj_set_pos(option, 0, static_cast<int>(i) * kMenuOptionHeight);
     lv_obj_set_style_bg_color(
         option,
-        selected ? lv_color_white() : lv_color_hex(kPillBg), 0);
+        selected ? lv_color_white() : menu_bg, 0);
     lv_obj_set_style_bg_opa(
         option, selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_color(
-        option, lv_color_hex(kPillPressedBg), LV_STATE_PRESSED);
+        option, menu_pressed_bg, LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(option, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_set_style_radius(option, kMenuOptionHeight / 2, 0);
     lv_obj_set_style_radius(
@@ -2087,7 +2142,7 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
     lv_obj_t* label = lv_label_create(option);
     lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
     lv_obj_set_style_text_color(
-        label, selected ? lv_color_hex(kCardBg) : lv_color_white(), 0);
+        label, selected ? cut_out : lv_color_white(), 0);
     const String text =
         i18n::climate_option_label(language, control.options[i]);
     lv_label_set_text(label, text.c_str());
@@ -2110,8 +2165,9 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
             kMenuSeparatorLineHeight -
             kMenuSeparatorLineBottomInset);
     lv_obj_set_style_bg_color(
-        separator_line, lv_color_hex(0x777777), 0);
-    lv_obj_set_style_bg_opa(separator_line, LV_OPA_60, 0);
+        separator_line,
+        popup_surface::lighter(ctx->bg_color, kMenuSeparatorStep), 0);
+    lv_obj_set_style_bg_opa(separator_line, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(separator_line, 0, 0);
     lv_obj_set_style_radius(separator_line, 0, 0);
     lv_obj_set_style_pad_all(separator_line, 0, 0);
@@ -2124,11 +2180,10 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
   lv_obj_t* current_pill = lv_button_create(ctx->control_menu);
   lv_obj_set_size(current_pill, kPillWidth, kPillHeight);
   lv_obj_set_pos(current_pill, 0, current_pill_y);
-  lv_obj_set_style_bg_color(
-      current_pill, lv_color_hex(kPillBg), 0);
+  lv_obj_set_style_bg_color(current_pill, menu_bg, 0);
   lv_obj_set_style_bg_opa(current_pill, LV_OPA_TRANSP, 0);
   lv_obj_set_style_bg_color(
-      current_pill, lv_color_hex(kPillPressedBg), LV_STATE_PRESSED);
+      current_pill, menu_pressed_bg, LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(
       current_pill, LV_OPA_COVER, LV_STATE_PRESSED);
   lv_obj_set_style_radius(current_pill, kPillHeight / 2, 0);
@@ -2172,7 +2227,10 @@ void open_control_menu(ClimatePopupContext* ctx, uint8_t control_index) {
       current_caption, climate_control_caption_font(), 0);
   lv_obj_set_style_text_color(
       current_caption,
-      colored_current ? lv_color_hex(kCardBg) : lv_color_hex(0xD0D0D0), 0);
+      colored_current
+          ? cut_out
+          : popup_surface::lighter(ctx->bg_color, kCaptionStep),
+      0);
   lv_label_set_text(
       current_caption,
       i18n::climate_control_label(language, control_index));
@@ -2295,15 +2353,14 @@ lv_obj_t* create_step_button(
   return button;
 }
 
-lv_obj_t* create_visual_arc(lv_obj_t* parent, uint32_t color) {
+lv_obj_t* create_visual_arc(lv_obj_t* parent, lv_color_t color) {
   lv_obj_t* arc = lv_arc_create(parent);
   lv_obj_set_size(arc, kGaugeSize, kGaugeSize);
   lv_obj_align(arc, LV_ALIGN_CENTER, 0, kGaugeOffsetY);
   lv_arc_set_rotation(arc, kGaugeRotation);
   lv_arc_set_bg_angles(arc, 0, kGaugeSweep);
   lv_obj_set_style_arc_width(arc, kArcWidth, LV_PART_MAIN);
-  lv_obj_set_style_arc_color(
-      arc, lv_color_hex(color), LV_PART_MAIN);
+  lv_obj_set_style_arc_color(arc, color, LV_PART_MAIN);
   lv_obj_set_style_arc_rounded(arc, true, LV_PART_MAIN);
   lv_obj_set_style_arc_opa(arc, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_arc_opa(arc, LV_OPA_TRANSP, LV_PART_INDICATOR);
@@ -2336,6 +2393,9 @@ static void finish_climate_popup_open(const ClimatePopupInit& init) {
 
 static void prepare_climate_popup_open(const ClimatePopupInit& init) {
   auto* ctx = g_climate_popup;
+  // The resident card takes the opening tile's background before its first
+  // frame, also when the same entity keeps its content visible.
+  apply_card_color(ctx, init.bg_color);
   hometiles_title::set(ctx->title_label, init.title.c_str());
   const String name = init.dynamic_icon
       ? dynamic_state_icon(init.hvac_mode, init.hvac_action, init.icon_name)
@@ -2381,7 +2441,10 @@ void show_climate_popup(const ClimatePopupInit& init) {
 
   ClimatePopupContext* ctx = new ClimatePopupContext();
   g_climate_popup = ctx;
-  const auto parts = create_popup_body(on_close, ctx, kCardBg);
+  // The card is the opening tile's background; the surfaces below derive
+  // from it.
+  ctx->bg_color = popup_surface::card_or_default(init.bg_color);
+  const auto parts = create_popup_body(on_close, ctx, ctx->bg_color);
   ctx->overlay = parts.overlay;
   ctx->card = parts.card;
   ctx->title_label = parts.title;
@@ -2460,10 +2523,11 @@ void show_climate_popup(const ClimatePopupInit& init) {
   lv_obj_add_event_cb(
       ctx->body, on_popup_surface_pressed, LV_EVENT_PRESSED, ctx);
 
-  ctx->track_arc = create_visual_arc(ctx->body, kTrackColor);
-  ctx->color_arc = create_visual_arc(ctx->body, 0xFF6F22);
-  ctx->range_high_arc = create_visual_arc(ctx->body, 0x2196F3);
-  ctx->active_arc = create_visual_arc(ctx->body, 0xFF6F22);
+  ctx->track_arc = create_visual_arc(
+      ctx->body, popup_surface::lighter(ctx->bg_color, popup_surface::kTrack));
+  ctx->color_arc = create_visual_arc(ctx->body, lv_color_hex(0xFF6F22));
+  ctx->range_high_arc = create_visual_arc(ctx->body, lv_color_hex(0x2196F3));
+  ctx->active_arc = create_visual_arc(ctx->body, lv_color_hex(0xFF6F22));
 
   ctx->input_arc = lv_arc_create(ctx->body);
   lv_obj_set_size(ctx->input_arc, kGaugeSize, kGaugeSize);
@@ -2556,7 +2620,8 @@ void show_climate_popup(const ClimatePopupInit& init) {
       ctx->current_marker, kCurrentMarkerSize, kCurrentMarkerSize);
   lv_obj_set_style_radius(ctx->current_marker, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_color(
-      ctx->current_marker, lv_color_hex(0xA8A8A8), 0);
+      ctx->current_marker,
+      popup_surface::lighter(ctx->bg_color, popup_surface::kMarker), 0);
   lv_obj_set_style_bg_opa(ctx->current_marker, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(ctx->current_marker, 0, 0);
   lv_obj_set_style_pad_all(ctx->current_marker, 0, 0);
@@ -2604,7 +2669,8 @@ void show_climate_popup(const ClimatePopupInit& init) {
   lv_obj_align(ctx->target_toggle, LV_ALIGN_BOTTOM_MID, 0,
                -popup_layout::contentScale(2));
   lv_obj_set_style_bg_color(
-      ctx->target_toggle, lv_color_hex(kPillBg), 0);
+      ctx->target_toggle,
+      popup_surface::lighter(ctx->bg_color, popup_surface::kPill), 0);
   lv_obj_set_style_bg_opa(ctx->target_toggle, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(
       ctx->target_toggle, kTargetToggleHeight / 2, 0);
@@ -2637,7 +2703,9 @@ void show_climate_popup(const ClimatePopupInit& init) {
         lv_obj_set_style_radius(
             button, LV_RADIUS_CIRCLE, LV_STATE_PRESSED);
         lv_obj_set_style_bg_color(
-            button, lv_color_hex(kPillPressedBg), LV_STATE_PRESSED);
+            button,
+            popup_surface::lighter(ctx->bg_color, popup_surface::kPressed),
+            LV_STATE_PRESSED);
         lv_obj_set_style_bg_opa(
             button, LV_OPA_COVER, LV_STATE_PRESSED);
         lv_obj_set_style_border_width(button, 0, 0);
@@ -2711,12 +2779,14 @@ void show_climate_popup(const ClimatePopupInit& init) {
     lv_obj_set_height(control.dropdown, kPillHeight);
     lv_obj_set_flex_grow(control.dropdown, 0);
     lv_obj_set_style_bg_color(
-        control.dropdown, lv_color_hex(kPillBg), 0);
+        control.dropdown,
+        popup_surface::lighter(ctx->bg_color, popup_surface::kPill), 0);
     lv_obj_set_style_bg_opa(
         control.dropdown, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(
         control.dropdown,
-        lv_color_hex(kPillPressedBg), LV_STATE_PRESSED);
+        popup_surface::lighter(ctx->bg_color, popup_surface::kPressed),
+        LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(
         control.dropdown, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_set_style_radius(control.dropdown, kPillHeight / 2, 0);
@@ -2774,7 +2844,8 @@ void show_climate_popup(const ClimatePopupInit& init) {
     lv_obj_set_style_text_font(
         control.caption, climate_control_caption_font(), 0);
     lv_obj_set_style_text_color(
-        control.caption, lv_color_hex(0xD0D0D0), 0);
+        control.caption,
+        popup_surface::lighter(ctx->bg_color, kCaptionStep), 0);
     lv_obj_set_width(control.caption, kPillWidth - 16);
     lv_obj_set_height(control.caption, kPillCaptionHeight);
     lv_label_set_long_mode(control.caption, LV_LABEL_LONG_DOT);

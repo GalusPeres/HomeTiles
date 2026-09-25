@@ -63,15 +63,15 @@ assert.ok(saver.includes('const String rule_entity = tile_icon_source::rule_enti
 // Colors, forced icon and tint.
 const source = read('src/tiles/runtime/tile_icon_source.cpp');
 for (const marker of [
-  'if (switch_domain(domain)) return switch_payload_icon_color(payload, rgb);',
-  'if (domain == "climate") return climate_payload_icon_color(payload, rgb);',
-  'if (domain == "cover") return cover_payload_icon_color(payload, rgb);',
+  'if (switch_domain(domain)) return switch_payload_icon_color(payload, rgb, &active);',
+  'if (domain == "climate") return climate_payload_icon_color(payload, rgb, &active);',
+  'if (domain == "cover") return cover_payload_icon_color(payload, rgb, &active);',
   'return tile_icon_colors::resolve(record.c_str(), state.c_str(), display, rgb, false);',
   'tile_icon_disc::force_icon_color(icon, lv_color_hex(rgb));',
   'tile_icon_disc::force_icon_color(icon, lv_color_hex(fixed));',
   'tile_icon_disc::release_icon_color(icon);',
   'set_tile_tint(card, rgb, layer.tile);',
-  'const uint32_t tint = tile_tint::background(base, color, percent);',
+  'const uint32_t tint = tile_tint::background(tileDefaultBgColor(), color, percent);',
 ]) assert.ok(source.includes(marker), `tile_icon_source: ${marker}`);
 const disc = read('src/tiles/runtime/tile_icon_disc.h');
 assert.match(disc, /if \(forced_color\(icon, forced\)\) \{\s*lv_obj_set_style_text_color\(icon, color, kIconRequested\);\s*color = forced;/,

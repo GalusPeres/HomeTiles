@@ -22,8 +22,9 @@ namespace tile_icon_source {
 bool cached_payload(const String& entity, String& payload);
 
 // The rule color of a tile from the cached state of its rule entity; false
-// without an enabled rule, a known state or a result.
-bool rule_color(const Tile& tile, uint32_t& rgb);
+// without an enabled rule, a known state or a result. `active` (when given)
+// is false while an Entity color entity is off, closed or not running.
+bool rule_color(const Tile& tile, uint32_t& rgb, bool* active = nullptr);
 
 // The entity whose state drives the tile's enabled rules (own or other), or
 // "" without enabled rules.

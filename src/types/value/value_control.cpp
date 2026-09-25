@@ -613,6 +613,12 @@ void apply_control_colors(EditableControl* c) {
   c->colors = editable_colors::from(base);
   c->colors_initialized = true;
   editable_colors::dropdown(c->dropdown, c->colors);
+  // The white Apply button cuts its label out in the card color; pressed is
+  // the white mixed toward the card (0xBBBBBB on the default 0x2A2A2A card).
+  if (c->apply) {
+    lv_obj_set_style_text_color(c->apply, base, 0);
+    lv_obj_set_style_bg_color(c->apply, lv_color_mix(base, lv_color_white(), 81), LV_STATE_PRESSED);
+  }
   editable_colors::surface(c->number_box, c->colors.raised);
   editable_colors::surface(c->clock_box, c->colors.raised);
   for (auto& field : c->fields) {

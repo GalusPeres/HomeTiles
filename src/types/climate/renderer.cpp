@@ -10,6 +10,7 @@
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/climate/layout.h"
@@ -42,6 +43,12 @@ struct ClimateAdjustEventData {
 
 constexpr uint32_t kMiniTargetRemoteBlockMs = 2200;
 constexpr uint32_t kMiniTargetDebounceMs = 1000;
+// The control pill and its pressed buttons are white overlays, a lighter step
+// of whatever the tile shows (global, own color or a rules tint). On the
+// default 0x222222 tile they give the former 0x3A3A3A pill and 0x4A4A4A
+// pressed button.
+constexpr lv_opa_t kSlotSurfaceOpa = 28;
+constexpr lv_opa_t kSlotPressedOpa = 21;
 
 enum class ClimateMiniTargetCommand : uint8_t {
   NONE = 0,
@@ -723,7 +730,7 @@ void layout_climate_slots(
           (compact_target || horizontal_target ||
            vertical_target)
               ? LV_OPA_TRANSP
-              : LV_OPA_50,
+              : kSlotPressedOpa,
           LV_PART_MAIN | LV_STATE_PRESSED);
     };
     auto layout_adjust_symbol = [
@@ -952,6 +959,9 @@ ClimatePopupInit popup_init_for(const ClimateEventData* data) {
   init.has_target_temperature = state.has_target_temperature;
   init.has_target_humidity = state.has_target_humidity;
   init.has_target_range = state.has_target_range;
+  // The tile's own background; the opener swaps in a rules tint and updates
+  // ignore it.
+  init.bg_color = tileBgColorOrDefault(*tile, tileDefaultBgColor());
   return init;
 }
 
@@ -1050,8 +1060,7 @@ lv_obj_t* create_climate_slot(
     lv_obj_t* card, GridType grid_type, uint8_t index,
     uint8_t slot_index) {
   lv_obj_t* root = lv_obj_create(card);
-  lv_obj_set_style_bg_color(
-      root, lv_color_hex(0x3A3A3A), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(root, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(root, LV_OPA_TRANSP, LV_PART_MAIN);
   lv_obj_set_style_border_width(root, 0, 0);
   lv_obj_set_style_shadow_width(root, 0, 0);
@@ -1067,10 +1076,10 @@ lv_obj_t* create_climate_slot(
     lv_obj_set_style_bg_opa(
         button, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_bg_color(
-        button, lv_color_hex(0x5A5A5A),
+        button, lv_color_white(),
         LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(
-        button, LV_OPA_50,
+        button, kSlotPressedOpa,
         LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_border_width(button, 0, 0);
     lv_obj_set_style_shadow_width(button, 0, 0);
@@ -1270,7 +1279,7 @@ void refresh_climate_tile_content(
     const bool adjustable = slot_is_adjustable(kind);
     const bool interactive_control = slot_is_interactive(kind, state);
     lv_obj_set_style_bg_opa(
-        root, interactive_control ? LV_OPA_COVER : LV_OPA_TRANSP,
+        root, interactive_control ? kSlotSurfaceOpa : LV_OPA_TRANSP,
         LV_PART_MAIN);
     lv_obj_set_style_border_width(root, 0, LV_PART_MAIN);
 
@@ -1447,6 +1456,10 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
               static_cast<ClimateEventData*>(lv_event_get_user_data(event));
           ClimatePopupInit init = popup_init_for(data);
           if (!init.entity_id.length()) return;
+          // The popup inherits the tile background, including a rules tint.
+          init.bg_color = tile_icon_source::popup_background(
+              static_cast<lv_obj_t*>(lv_event_get_current_target(event)),
+              init.bg_color);
           finish_press_before_popup(event);
           show_climate_popup(init);
         },

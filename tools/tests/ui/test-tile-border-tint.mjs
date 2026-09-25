@@ -1,6 +1,7 @@
-// The tile border hairline and the popup card hairline take the icon disc's
-// color: white 20 % normally, the icon hue (Glow strength + 20 points, scaled for dark tiles) when
-// the disc glows. Global border refreshes keep a tint; the preview matches.
+// The tile border hairline is always neutral: white at about 20 %, a slightly
+// lighter step of whatever color the tile shows (global, own color or a rules
+// tint). It never takes the icon hue, so a red icon on a grey tile keeps a
+// grey border. Global border refreshes and the Web Admin preview match.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,29 +13,19 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\
 const style = read('src/ui/shared/ui_surface_style.cpp');
 for (const marker of [
   'constexpr lv_opa_t kTileBorderOpa = 51;',
-  'constexpr lv_style_selector_t kBorderTintStore = LV_PART_MAIN | LV_STATE_USER_4;',
-  'lv_obj_get_local_style_prop(obj, LV_STYLE_OUTLINE_COLOR, &stored, kBorderTintStore)',
+  'const lv_color_t color = lv_color_white();',
+  'const lv_opa_t opa = kTileBorderOpa;',
   'lv_obj_set_style_outline_color(obj, color, selector);',
   'lv_obj_set_style_outline_opa(obj, enabled ? opa : LV_OPA_TRANSP, selector);',
-  'void set_tile_border_tint(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {',
-  'if (same_color && same_opa) return;',
-  'void clear_tile_border_tint(lv_obj_t* obj) {',
-  'void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {',
-  'const bool enabled = configManager.getConfig().tile_borders;',
 ]) assert.ok(style.includes(marker), `ui_surface_style: ${marker}`);
+for (const source of [style, read('src/ui/shared/ui_surface_style.h'), read('src/tiles/runtime/tile_icon_disc.h')]) {
+  assert.doesNotMatch(source, /set_tile_border_tint|clear_tile_border_tint|kBorderTintStore/, 'No icon hue border tint');
+}
 
-const disc = read('src/tiles/runtime/tile_icon_disc.h');
-assert.match(disc, /if \(tinted\) \{\s*ui_surface_style::set_tile_border_tint\(lv_obj_get_parent\(disc\), color,\s*scaled_opa\(ui_surface_style::icon_glow_border_opa\(\), step\)\);\s*\} else \{\s*ui_surface_style::clear_tile_border_tint\(lv_obj_get_parent\(disc\)\);/);
-
-const shell = read('src/ui/popups/popup_shell.cpp');
-assert.match(shell, /ui_surface_style::apply_popup_border\(\s*shell\.frame, color,/);
-const layout = read('src/ui/popups/popup_layout.h');
-assert.ok(layout.includes('constexpr int kPopupBorderOpa = 51;'));
-assert.ok(shell.includes('ui_surface_style::icon_glow_border_opa(), step)'));
-
-// Preview: the same hue on the tile outline through a CSS variable.
+// Preview: the same neutral outline, no per-tile tint variable.
 const preview = read('src/web/admin/tiles/grid-preview.js');
-assert.ok(preview.includes("tileElem.style.setProperty('--tile-border-tint',"));
-assert.ok(preview.includes('(scaled(glowBorderOpa) / 255).toFixed(3)'));
-assert.ok(read('src/web/assets/admin.css').includes('outline:1px solid var(--tile-border-tint, rgba(255,255,255,0.20));'));
-console.log('Tile and popup borders follow the icon disc color');
+assert.ok(!preview.includes('--tile-border-tint'), 'Preview sets no border tint');
+const css = read('src/web/assets/admin.css');
+assert.ok(css.includes('outline:1px solid rgba(255,255,255,0.20);'));
+assert.ok(!css.includes('--tile-border-tint'));
+console.log('Tile borders stay the neutral hairline');

@@ -91,9 +91,10 @@ String climate_visual_icon(
     const ClimateState& state, const String& base_icon = "thermostat");
 uint32_t climate_visual_color(const ClimateState& state);
 // Icon colors of a raw Switch/light or Climate state payload as their tiles
-// show them; false while the payload has no available state.
-bool switch_payload_icon_color(const char* payload, uint32_t& rgb);
-bool climate_payload_icon_color(const char* payload, uint32_t& rgb);
+// show them; false while the payload has no available state. `active` (when
+// given) tells whether the entity is on or running rather than off.
+bool switch_payload_icon_color(const char* payload, uint32_t& rgb, bool* active = nullptr);
+bool climate_payload_icon_color(const char* payload, uint32_t& rgb, bool* active = nullptr);
 
 CoverTileWidgets* tile_renderer_get_cover_widgets(GridType grid_type);
 CoverState* tile_renderer_get_cover_states(GridType grid_type);

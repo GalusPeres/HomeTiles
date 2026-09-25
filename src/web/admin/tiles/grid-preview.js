@@ -51,14 +51,20 @@
     const step = Math.floor(Math.min(1, Math.max(0, (luma - 0.08) / 0.17)) * 3 + 0.5);
     const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);
     tileElem.style.setProperty('--icon-disc-opa', (scaled(38) / 255).toFixed(3));
-    tileElem.style.setProperty('--icon-disc-glow', (scaled(51) * 100 / 255).toFixed(1) + '%');
+    // Global Glow strength (icon_glow.h): the disc at that percentage, the
+    // tinted border 20 points more, both scaled like the device.
+    const glowValue = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
+    const glowPct = Math.min(60, Math.max(10, Number.isFinite(glowValue) && glowValue > 0 ? glowValue : 25));
+    const glowOpa = Math.floor((glowPct * 255 + 50) / 100);
+    const glowBorderOpa = Math.floor(((glowPct + 20) * 255 + 50) / 100);
+    tileElem.style.setProperty('--icon-disc-glow', (scaled(glowOpa) * 100 / 255).toFixed(1) + '%');
     // Mirrors ui_surface_style::set_tile_border_tint(): a glowing disc tints
-    // the tile border hairline with its hue (kGlowBorderOpa, scaled).
+    // the tile border hairline with its hue (icon_glow_border_opa, scaled).
     const hue = icon.classList.contains('tile-icon-tinted')
       ? String(getComputedStyle(icon).color || '').match(/(\d+)\D+(\d+)\D+(\d+)/) : null;
     if (hue) {
       tileElem.style.setProperty('--tile-border-tint',
-        'rgba(' + hue[1] + ',' + hue[2] + ',' + hue[3] + ',' + (scaled(102) / 255).toFixed(3) + ')');
+        'rgba(' + hue[1] + ',' + hue[2] + ',' + hue[3] + ',' + (scaled(glowBorderOpa) / 255).toFixed(3) + ')');
     } else {
       tileElem.style.removeProperty('--tile-border-tint');
     }

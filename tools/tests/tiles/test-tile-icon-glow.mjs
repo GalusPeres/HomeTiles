@@ -1,5 +1,5 @@
 // Per-tile glow (default on): a colored icon tints its disc with its own hue
-// at ~20 % instead of white at 38. The tint is computed centrally from the
+// at the global Glow strength (default 25 %) instead of white at 38. The tint is computed centrally from the
 // icon's current color, so every runtime icon color change reaches the disc,
 // and the Web Admin preview uses the same rule and the same opacities.
 import assert from 'node:assert/strict';
@@ -23,11 +23,10 @@ assert.ok(tiles.includes('out += tile.icon_glow ? "1" : "0";'));
 // Central fill rule and the one icon color path.
 const disc = code(read('src/tiles/runtime/tile_icon_disc.h'));
 for (const marker of [
-  'inline constexpr lv_opa_t kGlowOpa = 51;',
   'inline constexpr char kTags[6] = {};',
   'return r != g || g != b;',
   'const bool tinted = glow_of(disc) && icon_color_tints(rgb);',
-  ': scaled_opa(tinted ? kGlowOpa : kOpa, step);',
+  ': scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);',
   'inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {',
   'if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);',
   'set_tag(child, disc_mode, glow);',
@@ -52,7 +51,7 @@ for (const [file, count] of [['src/tiles/runtime/tile_renderer.cpp', 2],
 // Preview: same rule, same opacities from the firmware constants.
 const styles = read('src/web/server/render/web_admin_styles.cpp');
 assert.ok(styles.includes('html += String(tile_icon_disc::kOpa / 255.0f, 3);'));
-assert.ok(styles.includes('html += String(tile_icon_disc::kGlowOpa * 100.0f / 255.0f, 1);'));
+assert.ok(styles.includes('html += String(icon_glow::disc_opa(glow) * 100.0f / 255.0f, 1);'));
 const iconDiscTinted = new Function(`${extractDeliveredFunction('iconDiscTinted')}; return iconDiscTinted;`)();
 const cppRule = rgb => { const r = rgb >> 16 & 255, g = rgb >> 8 & 255, b = rgb & 255; return r !== g || g !== b; };
 for (const rgb of [0xFFFFFF, 0xB0B0B0, 0x000000, 0xFFD54F, 0x3B82F6, 0xFF7043, 0xFFFFFE]) {
@@ -60,7 +59,7 @@ for (const rgb of [0xFFFFFF, 0xB0B0B0, 0x000000, 0xFFD54F, 0x3B82F6, 0xFF7043, 0
   assert.equal(iconDiscTinted(css), cppRule(rgb), `preview tint rule for ${css}`);
 }
 const css = read('src/web/assets/admin.css');
-assert.match(css, /\.tile\.sensor-compact > \.tile-icon\.tile-icon-tinted \{\s*background:color-mix\(in srgb, currentColor var\(--icon-disc-glow, 20%\), transparent\);/);
+assert.match(css, /\.tile\.sensor-compact > \.tile-icon\.tile-icon-tinted \{\s*background:color-mix\(in srgb, currentColor var\(--icon-disc-glow, 25%\), transparent\);/);
 assert.ok(css.indexOf('.tile-icon.tile-icon-tinted') < css.indexOf('.icon-discs-off .tile.sensor-compact'),
   'Off rules win over the tint');
 assert.match(read('src/web/admin/tiles/grid-preview.js'), /el\.innerHTML = html;\s*applyIconDiscTint\(el\);/);

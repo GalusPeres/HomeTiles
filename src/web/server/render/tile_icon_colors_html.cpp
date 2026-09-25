@@ -113,9 +113,6 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
   html += tab_id;
   html += "_tile_icon_state_section\">\n";
   append_label_row(html, tr.tile_icon_color_by_state);
-  html += R"html(                <datalist id=")html";
-  html += tab_id;
-  html += "_tile_icon_states\"></datalist>\n";
   for (size_t row = 0; row < tile_icon_colors::kMaxRows; ++row) {
     const String id = tab_id + "_tile_icon_rule_" + String(row);
     html += R"html(                <div class="tile-icon-rule hidden" id=")html";
@@ -123,9 +120,7 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
     html += R"html(">
                   <input type="text" id=")html";
     html += id;
-    html += R"html(_value" list=")html";
-    html += tab_id;
-    html += R"html(_tile_icon_states" maxlength=")html";
+    html += R"html(_value" autocomplete="off" maxlength=")html";
     html += String(tile_icon_colors::kMaxValueBytes);
     html += R"html(" data-icon-color="value" placeholder=")html";
     appendHtmlEscaped(html, tr.tile_icon_color_state);

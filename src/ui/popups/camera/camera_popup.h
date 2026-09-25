@@ -7,6 +7,8 @@ struct CameraPopupInit {
   String title;
   String icon_name;
   uint32_t bg_color = 0x2A2A2A;
+  // Header icon color: the tile's fixed icon color, else white.
+  uint32_t icon_color = 0xFFFFFF;
 };
 
 void show_camera_popup(const CameraPopupInit& init);

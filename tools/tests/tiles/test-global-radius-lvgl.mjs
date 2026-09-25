@@ -40,7 +40,8 @@ bool finish(Preferences&){return true;}
 }
 struct Logger{void println(const char*){}}Serial;
 const char* PREF_NAMESPACE="tab5_config";
-struct Config{bool tile_borders=true;bool icon_discs=true;uint16_t tile_radius=tile_radius::kMinimum;};
+#include "src/core/config/icon_glow.h"
+struct Config{bool tile_borders=true;bool icon_discs=true;uint8_t icon_glow=icon_glow::kDefault;uint16_t tile_radius=tile_radius::kMinimum;};
 struct ConfigManager {
  Config config; const Config& getConfig(){return config;}
  bool saveTileRadius(uint16_t);

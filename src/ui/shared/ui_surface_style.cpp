@@ -1,6 +1,7 @@
 #include "src/ui/shared/ui_surface_style.h"
 
 #include "src/core/config/config_manager.h"
+#include "src/core/config/icon_glow.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include <atomic>
 
@@ -161,6 +162,14 @@ void apply_global_tile_border(lv_obj_t* obj) {
   if (!obj) return;
   lv_obj_add_flag(obj, kGlobalTileBorderFlag);
   apply_style(obj, configManager.getConfig().tile_borders);
+}
+
+lv_opa_t icon_glow_opa() {
+  return icon_glow::disc_opa(configManager.getConfig().icon_glow);
+}
+
+lv_opa_t icon_glow_border_opa() {
+  return icon_glow::border_opa(configManager.getConfig().icon_glow);
 }
 
 void set_tile_border_tint(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {

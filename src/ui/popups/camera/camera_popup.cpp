@@ -276,6 +276,7 @@ void show_camera_popup(const CameraPopupInit& init) {
   if (!icon_name.length()) icon_name = "video";
   lv_label_set_text(g_camera_popup->icon_label,
                     getMdiChar(icon_name).c_str());
+  lv_obj_set_style_text_color(g_camera_popup->icon_label, lv_color_hex(init.icon_color), 0);
   popup_layout::alignHeader(g_camera_popup->card, g_camera_popup->title_label, g_camera_popup->icon_label);
 
   lv_image_set_src(g_camera_popup->image, nullptr);

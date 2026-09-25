@@ -19,6 +19,9 @@ struct SensorPopupInit {
   uint64_t binary_last_changed = 0;
   bool binary_available = true;
   bool binary_icon_override = false;
+  // The tile's per-tile icon colors (tile_icon_colors.h): the header icon
+  // takes the same color as the tile icon for the current state.
+  String icon_colors;
 };
 
 // Ordinary HA sensors with textual states use the same discrete history view

@@ -87,6 +87,45 @@ async function saveIconDiscs(enabled) {
   }
 }
 
+// Glow strength of colored icon discs: previews read the root variable
+// --icon-glow-pct (applyIconDiscTint); the device rebuilds its tiles after
+// the save. Range and step mirror icon_glow.h.
+let iconGlowConfirmed = null;
+let iconGlowSaveSequence = 0;
+function currentIconGlow() {
+  const value = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
+  return Number.isFinite(value) && value > 0 ? value : 25;
+}
+function previewIconGlowLive(value) {
+  const number = Math.round(Number(value) / 5) * 5;
+  const percent = Math.min(60, Math.max(10, Number.isFinite(number) ? number : 25));
+  if (iconGlowConfirmed === null) iconGlowConfirmed = currentIconGlow();
+  document.documentElement.style.setProperty('--icon-glow-pct', String(percent));
+  document.querySelectorAll('.global-icon-glow').forEach(input => { input.value = String(percent); });
+  document.querySelectorAll('.global-icon-glow-value').forEach(output => { output.textContent = percent + ' %'; });
+  document.querySelectorAll('.tile').forEach(tile => applyIconDiscTint(tile));
+  return percent;
+}
+async function saveIconGlow(value) {
+  const percent = previewIconGlowLive(value);
+  const sequence = ++iconGlowSaveSequence;
+  try {
+    const response = await fetch('/api/display/icon-glow', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'percent=' + percent
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    if (sequence === iconGlowSaveSequence) iconGlowConfirmed = percent;
+  } catch (error) {
+    if (sequence !== iconGlowSaveSequence) return;
+    const confirmed = iconGlowConfirmed;
+    iconGlowConfirmed = null;
+    if (confirmed !== null) previewIconGlowLive(confirmed);
+    showNotification(t('networkErrorSave'), false);
+  }
+}
+
 // The global default tile color paints every tile without its own color
 // through --tile-default-bg; reset and new tiles take it as their default.
 let defaultTileColorConfirmed = null;
@@ -143,6 +182,9 @@ function syncGlobalDisplayControls(tabEl) {
   });
   const color = currentDefaultTileColor();
   tabEl.querySelectorAll('.global-tile-color').forEach(input => { input.value = color; });
+  const glow = currentIconGlow();
+  tabEl.querySelectorAll('.global-icon-glow').forEach(input => { input.value = String(glow); });
+  tabEl.querySelectorAll('.global-icon-glow-value').forEach(output => { output.textContent = glow + ' %'; });
 }
 
 // The shared root variables also reach cached and lazily inserted folder grids.
@@ -3183,37 +3225,6 @@ function syncTileRadiusControls(tabEl) {
     return iconColorLeadingNumber(raw) === null;
   }
 
-  // Suggestions for the state text: raw states the entity is known to take.
-  function fillIconColorStates(tab, type) {
-    const list = iconColorEl(tab, '_tile_icon_states');
-    if (!list) return;
-    // No object literal with numeric keys: the delivery formatter would print
-    // them as numbers and fail its AST equivalence check.
-    const field = type === '1' ? '_sensor_entity' : type === '20' ? '_binary_sensor_entity'
-      : type === '22' ? '_select_entity' : type === '23' ? '_datetime_entity' : '';
-    const entity = field ? (iconColorEl(tab, field)?.value || '') : '';
-    const meta = typeof sensorMetaCache === 'object' ? sensorMetaCache : null;
-    let states = [];
-    if (type === '20') {
-      states = ['on', 'off'];
-    } else if (type === '22' || type === '23') {
-      let value = meta?.editableValues?.[entity];
-      if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { value = null; } }
-      if (Array.isArray(value?.options)) states = value.options.map(String);
-      else if (value?.state !== undefined && value?.state !== null) states = [String(value.state)];
-    } else if (entity && meta?.values?.[entity] !== undefined) {
-      states = [String(meta.values[entity])];
-    }
-    states = states.filter(state => state && !['unavailable', 'unknown'].includes(state)).slice(0, 50);
-    if (list.dataset.states === states.join('\n')) return;
-    list.dataset.states = states.join('\n');
-    list.replaceChildren(...states.map(state => {
-      const option = document.createElement('option');
-      option.value = state;
-      return option;
-    }));
-  }
-
   function syncIconColorFields(tab) {
     const block = iconColorEl(tab, '_tile_icon_color_fields');
     if (!block) return;
@@ -3244,7 +3255,6 @@ function syncTileRadiusControls(tabEl) {
     iconColorEl(tab, '_tile_icon_bar_section')?.classList.toggle('hidden', !showBar);
     iconColorEl(tab, '_tile_icon_state_section')?.classList.toggle('hidden', !showRows);
     iconColorEl(tab, '_tile_icon_binary_section')?.classList.toggle('hidden', !showBinary);
-    if (showRows) fillIconColorStates(tab, type);
     if (showBar) renderIconColorBar(tab);
   }
 
@@ -6466,14 +6476,20 @@ function syncTileRadiusControls(tabEl) {
     const step = Math.floor(Math.min(1, Math.max(0, (luma - 0.08) / 0.17)) * 3 + 0.5);
     const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);
     tileElem.style.setProperty('--icon-disc-opa', (scaled(38) / 255).toFixed(3));
-    tileElem.style.setProperty('--icon-disc-glow', (scaled(51) * 100 / 255).toFixed(1) + '%');
+    // Global Glow strength (icon_glow.h): the disc at that percentage, the
+    // tinted border 20 points more, both scaled like the device.
+    const glowValue = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
+    const glowPct = Math.min(60, Math.max(10, Number.isFinite(glowValue) && glowValue > 0 ? glowValue : 25));
+    const glowOpa = Math.floor((glowPct * 255 + 50) / 100);
+    const glowBorderOpa = Math.floor(((glowPct + 20) * 255 + 50) / 100);
+    tileElem.style.setProperty('--icon-disc-glow', (scaled(glowOpa) * 100 / 255).toFixed(1) + '%');
     // Mirrors ui_surface_style::set_tile_border_tint(): a glowing disc tints
-    // the tile border hairline with its hue (kGlowBorderOpa, scaled).
+    // the tile border hairline with its hue (icon_glow_border_opa, scaled).
     const hue = icon.classList.contains('tile-icon-tinted')
       ? String(getComputedStyle(icon).color || '').match(/(\d+)\D+(\d+)\D+(\d+)/) : null;
     if (hue) {
       tileElem.style.setProperty('--tile-border-tint',
-        'rgba(' + hue[1] + ',' + hue[2] + ',' + hue[3] + ',' + (scaled(102) / 255).toFixed(3) + ')');
+        'rgba(' + hue[1] + ',' + hue[2] + ',' + hue[3] + ',' + (scaled(glowBorderOpa) / 255).toFixed(3) + ')');
     } else {
       tileElem.style.removeProperty('--tile-border-tint');
     }
@@ -13363,7 +13379,7 @@ function normalizeTextValueFont(value) {
       popup.value = data.popup_open_mode !== undefined
         ? String(data.popup_open_mode) : '1';
     }
-    // The entity is known now: its options become the state suggestions.
+    // The entity is known now: the state color section follows it.
     syncIconColorFields(tab);
   }
 
@@ -13420,7 +13436,7 @@ function normalizeTextValueFont(value) {
       popup.value = data.popup_open_mode !== undefined
         ? String(data.popup_open_mode) : '1';
     }
-    // The entity is known now: its options become the state suggestions.
+    // The entity is known now: the state color section follows it.
     syncIconColorFields(tab);
   }
 

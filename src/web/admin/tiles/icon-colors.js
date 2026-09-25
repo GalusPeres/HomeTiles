@@ -547,37 +547,6 @@
     return iconColorLeadingNumber(raw) === null;
   }
 
-  // Suggestions for the state text: raw states the entity is known to take.
-  function fillIconColorStates(tab, type) {
-    const list = iconColorEl(tab, '_tile_icon_states');
-    if (!list) return;
-    // No object literal with numeric keys: the delivery formatter would print
-    // them as numbers and fail its AST equivalence check.
-    const field = type === '1' ? '_sensor_entity' : type === '20' ? '_binary_sensor_entity'
-      : type === '22' ? '_select_entity' : type === '23' ? '_datetime_entity' : '';
-    const entity = field ? (iconColorEl(tab, field)?.value || '') : '';
-    const meta = typeof sensorMetaCache === 'object' ? sensorMetaCache : null;
-    let states = [];
-    if (type === '20') {
-      states = ['on', 'off'];
-    } else if (type === '22' || type === '23') {
-      let value = meta?.editableValues?.[entity];
-      if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) { value = null; } }
-      if (Array.isArray(value?.options)) states = value.options.map(String);
-      else if (value?.state !== undefined && value?.state !== null) states = [String(value.state)];
-    } else if (entity && meta?.values?.[entity] !== undefined) {
-      states = [String(meta.values[entity])];
-    }
-    states = states.filter(state => state && !['unavailable', 'unknown'].includes(state)).slice(0, 50);
-    if (list.dataset.states === states.join('\n')) return;
-    list.dataset.states = states.join('\n');
-    list.replaceChildren(...states.map(state => {
-      const option = document.createElement('option');
-      option.value = state;
-      return option;
-    }));
-  }
-
   function syncIconColorFields(tab) {
     const block = iconColorEl(tab, '_tile_icon_color_fields');
     if (!block) return;
@@ -608,7 +577,6 @@
     iconColorEl(tab, '_tile_icon_bar_section')?.classList.toggle('hidden', !showBar);
     iconColorEl(tab, '_tile_icon_state_section')?.classList.toggle('hidden', !showRows);
     iconColorEl(tab, '_tile_icon_binary_section')?.classList.toggle('hidden', !showBinary);
-    if (showRows) fillIconColorStates(tab, type);
     if (showBar) renderIconColorBar(tab);
   }
 

@@ -762,23 +762,20 @@
       border-radius:18px;
       padding:20px;
     }
-    /* One row per setting: label left, control right (Tile Settings rows). */
-    .global-settings-rows {
+    /* Two compact columns in the Tile Settings style: checkboxes like Glow,
+       fields with a small label above like Column/Row; one column on phones. */
+    .global-settings-grid {
       display:grid;
-      grid-template-columns:minmax(110px, 170px) minmax(0, 1fr);
-      gap:10px 16px;
-      align-items:center;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:8px 24px;
+      align-items:end;
       max-width:560px;
     }
-    .global-settings-panel .global-settings-label {
-      margin:0;
-      color:var(--text);
-      font-size:14px;
-      font-weight:600;
-    }
-    .global-settings-control { display:flex; align-items:center; height:38px; }
-    .global-settings-control input[type="checkbox"] { width:18px; height:18px; margin:0; accent-color:var(--accent); }
-    .global-settings-rows .tile-color-row { margin:0; }
+    .global-settings-grid .inline-checkbox { margin:0 0 4px; }
+    .global-settings-field label { display:block; }
+    .global-settings-grid .tile-color-row { margin:0; }
+    .global-settings-grid .tile-color-row input[type="color"] { margin-bottom:0; }
+    @media (max-width:520px) { .global-settings-grid { grid-template-columns:minmax(0, 1fr); } }
     .global-radius-field { display:flex; align-items:center; gap:8px; height:38px; }
     .global-radius-field input[type="range"] { flex:1 1 auto; min-width:0; height:18px; margin:0; accent-color:var(--accent); }
     .global-radius-field input[type="range"]:focus { outline:none; box-shadow:none; }
@@ -2288,6 +2285,7 @@
     .tile-radius-control input[type="range"]:focus { outline:none; box-shadow:none; }
     .tile-radius-control input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     .global-tile-radius-value { min-width:2ch; text-align:right; font-variant-numeric:tabular-nums; }
+    .global-icon-glow-value { min-width:4.5ch; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 
 /* Fractional placement preserves the existing cell pitch and gutter. */
 .tile-grid > .fractional-tile {
@@ -2314,7 +2312,7 @@
 }
 /* Glow: a colored icon tints its disc with its own hue (tile_icon_disc). */
 .tile.sensor-compact > .tile-icon.tile-icon-tinted {
-  background:color-mix(in srgb, currentColor var(--icon-disc-glow, 20%), transparent);
+  background:color-mix(in srgb, currentColor var(--icon-disc-glow, 25%), transparent);
 }
 /* Taller tiles: a disc of tile_icon_disc::round_diameter() centered on the
    unchanged icon, behind it, with the half-height radius rule. */
@@ -2326,7 +2324,7 @@
   background:rgba(255,255,255,var(--icon-disc-opa, 0.149));
 }
 .tile:not(.sensor-compact) > .tile-icon.tile-icon-tinted::after {
-  background:color-mix(in srgb, currentColor var(--icon-disc-glow, 20%), transparent);
+  background:color-mix(in srgb, currentColor var(--icon-disc-glow, 25%), transparent);
 }
 .icon-discs-off .tile:not([data-icon-disc="1"]) > .tile-icon::after,
 .tile[data-icon-disc="2"] > .tile-icon::after { display:none; }

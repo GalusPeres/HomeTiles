@@ -199,7 +199,7 @@ for (const marker of ['_tile_icon_color_fields" class="tile-icon-color-fields hi
   '"preset", "data-preset", "humidity"', '"preset", "data-preset", "single"', '_tile_icon_bar_strip" data-icon-color="bar">',
   '_tile_icon_bar_handles" data-selected="-1"><button type="button" class="icon-color-stop-remove hidden" data-icon-color="stop-remove"',
   '_tile_icon_stop_color" data-icon-color="stop-color"', '_tile_icon_bar_min" maxlength=', '" data-icon-color="min">',
-  '"_tile_icon_state_section\\">\\n"', '"_tile_icon_states\\"></datalist>\\n"', '_value" list=")html";',
+  '"_tile_icon_state_section\\">\\n"', '_value" autocomplete="off" maxlength=")html";',
   '_has" data-icon-color="has">', '_color" value="#22C55E" data-icon-color="rule-color">', '_tile_icon_rule_add" data-icon-color="add">',
   '"_tile_icon_binary_section\\">\\n"', '{"on", tr.tile_icon_color_state_on, "#FFC107"}', '{"off", tr.tile_icon_color_state_off, "#9E9E9E"}',
   '" data-unset="1" data-icon-color="binary">', 'data-icon-color="binary-clear" data-state="']) {
@@ -379,7 +379,7 @@ int main(){
 // ---------------------------------------------------------------------------
 // Headless Chrome: the real editor module with the real type handlers.
 const rows = [0, 1, 2, 3, 4, 5].map(i => `<div class="tile-icon-rule hidden" id="t_tile_icon_rule_${i}">
-<input type="text" id="t_tile_icon_rule_${i}_value" list="t_tile_icon_states" data-icon-color="value">
+<input type="text" id="t_tile_icon_rule_${i}_value" data-icon-color="value">
 <label class="icon-color-contains"><input type="checkbox" id="t_tile_icon_rule_${i}_has" data-icon-color="has"> contains</label>
 <input type="color" id="t_tile_icon_rule_${i}_color" value="#22C55E" data-icon-color="rule-color">
 <button type="button" class="tile-color-reset-btn" data-icon-color="remove" data-rule="${i}">x</button></div>`).join('');
@@ -394,7 +394,7 @@ ${['cold_warm', 'traffic', 'battery', 'humidity', 'single'].map(p => `<button ty
 <div class="icon-color-handles" id="t_tile_icon_bar_handles" data-selected="-1"><button type="button" class="icon-color-stop-remove hidden" data-icon-color="stop-remove">x</button></div>
 <input type="color" class="icon-color-stop-picker" id="t_tile_icon_stop_color" data-icon-color="stop-color">
 <div class="icon-color-range"><label>Min<input type="text" id="t_tile_icon_bar_min" data-icon-color="min"></label><label>Max<input type="text" id="t_tile_icon_bar_max" data-icon-color="max"></label></div></div></div>
-<div class="icon-color-section hidden" id="t_tile_icon_state_section"><datalist id="t_tile_icon_states"></datalist>${rows}
+<div class="icon-color-section hidden" id="t_tile_icon_state_section">${rows}
 <button type="button" class="btn btn-secondary tile-icon-rule-add" id="t_tile_icon_rule_add" data-icon-color="add">+</button></div>
 <div class="icon-color-section hidden" id="t_tile_icon_binary_section">
 <input type="color" id="t_tile_icon_on" value="#FFC107" data-default="#FFC107" data-unset="1" data-icon-color="binary"><button type="button" id="clear_on" data-icon-color="binary-clear" data-state="on">r</button>
@@ -486,7 +486,7 @@ try{
  // Text Sensor (maintainer case): the state list, contains 6.
  load('1',{sensor_entity:'sensor.waste',icon_colors:''});
  check(hidden('t_tile_icon_bar_section')&&!hidden('t_tile_icon_state_section'),'Text Sensor shows the state list');
- check([...$('t_tile_icon_states').options].map(o=>o.value).join()==='in 6 Tagen rausstellen','Known states are suggested');
+ check(!document.querySelector('datalist'),'No native suggestion popup on the state field');
  click($('t_tile_icon_rule_add'));check(document.activeElement===$('t_tile_icon_rule_0_value'),'Add focuses the text');
  $('t_tile_icon_rule_0_value').value='6';$('t_tile_icon_rule_0_has').checked=true;$('t_tile_icon_rule_0_has').dispatchEvent(new Event('change',{bubbles:true}));
  $('t_tile_icon_rule_0_color').value='#f44336';$('t_tile_icon_rule_0_color').dispatchEvent(new Event('input',{bubbles:true}));
@@ -498,7 +498,6 @@ try{
  check(!hidden('t_tile_icon_rule_add')&&snapshot()==='','Remove keeps the others (empty rows are not stored)');
  // Select: known options; Number: bar only; Binary: On/Off colors.
  load('22',{sensor_entity:'input_select.mode',icon_colors:'v2\\n\\nis 4CAF50 eco'});
- check([...$('t_tile_icon_states').options].map(o=>o.value).join()==='eco,comfort,away','Select suggests its options');
  check(snapshot()==='v2\\n\\nis 4CAF50 eco'&&hidden('t_tile_icon_bar_section'),'Select keeps state colors only');
  load('21',{icon_colors:cold+'\\nis 4CAF50 eco'});
  check(snapshot()===cold&&hidden('t_tile_icon_state_section'),'Number keeps the bar only');

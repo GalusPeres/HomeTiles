@@ -61,7 +61,8 @@ class String : public std::string { public: using std::string::string; using std
 String normalizeMdiIconName(const String& name){return name;}
 String getMdiChar(const String& name){if(name=="window-close")return ${JSON.stringify(iconChar('window-close'))};if(name=="clock-end")return ${JSON.stringify(iconChar('clock-end'))};return name=="plus"?${JSON.stringify(iconChar('plus'))}:${JSON.stringify(iconChar('minus'))};}
 ${radiusPolicyHost(root)}
-struct Config {bool tile_borders=true;bool icon_discs=true;int tile_radius=tile_radius::kMinimum;const char* language="en";}; struct Manager {Config cfg;const Config& getConfig(){return cfg;}} configManager;
+#include "src/core/config/icon_glow.h"
+struct Config {bool tile_borders=true;bool icon_discs=true;uint8_t icon_glow=icon_glow::kDefault;int tile_radius=tile_radius::kMinimum;const char* language="en";}; struct Manager {Config cfg;const Config& getConfig(){return cfg;}} configManager;
 ${surfaceStyleHost(root)}
 namespace i18n {
 struct Profile {const char* decimal_separator;const char* editable_labels[19];};

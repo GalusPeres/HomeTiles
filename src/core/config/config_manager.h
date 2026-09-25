@@ -7,6 +7,7 @@
 #include "src/core/config/pin_access.h"
 #include "src/core/config/tile_color.h"
 #include "src/core/config/tile_radius.h"
+#include "src/core/config/icon_glow.h"
 
 // WiFi/MQTT configuration manager.
 // Stores and loads the connection data in flash (Preferences).
@@ -85,6 +86,8 @@ struct DeviceConfig {
   uint16_t tile_radius = tile_radius::kMinimum;
   bool tile_borders;           // Thin borders around normal dashboard tiles.
   bool icon_discs = true;      // Background discs behind tile icons.
+  // Glow strength of colored icon discs in percent (icon_glow.h).
+  uint8_t icon_glow = icon_glow::kDefault;
   // Background of tiles without their own color (and of reset/new tiles).
   uint32_t default_tile_color = tile_color::kDefault;
   bool display_rotated_180;    // Display rotated by 180 degrees?
@@ -145,6 +148,7 @@ public:
   bool saveTileBorders(bool enabled);
   bool saveTileRadius(uint16_t radius);
   bool saveIconDiscs(bool enabled);
+  bool saveIconGlow(uint8_t percent);
   bool saveDefaultTileColor(uint32_t rgb);
   bool saveEthernetEnabled(bool enabled);
   bool saveStaticAddressingEnabled(bool enabled);

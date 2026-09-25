@@ -23,10 +23,9 @@ inline int round_diameter() { return diameter() + inset(); }
 // with the tile corner; the shared radius style follows global radius changes.
 inline int radius_baseline() { return tile_layout::scale_480(22) - inset(); }
 inline constexpr lv_opa_t kOpa = 38;
-// With glow, a colored icon tints its disc with its hue at about 20 %.
-inline constexpr lv_opa_t kGlowOpa = 51;
-// A glowing disc also tints the tile border hairline at about 40 %.
-inline constexpr lv_opa_t kGlowBorderOpa = 102;
+// With glow, a colored icon tints its disc with its hue and the tile border
+// hairline 20 points stronger; the strength is the global Glow setting
+// (ui_surface_style::icon_glow_opa, default 25 %).
 // MDI icon fonts give every glyph this glyph's advance width.
 inline constexpr uint32_t kMdiReferenceGlyph = 0xF0001;
 
@@ -122,12 +121,12 @@ inline void apply_fill(lv_obj_t* disc) {
   }
   const uint8_t step = contrast_step(disc);
   const lv_opa_t opa = mode == Mode::Off ? static_cast<lv_opa_t>(LV_OPA_TRANSP)
-                                         : scaled_opa(tinted ? kGlowOpa : kOpa, step);
+                                         : scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);
   // The tile border follows a glowing disc's hue; otherwise it stays the
   // white 20 % hairline. The popup card border does the same (popup_shell).
   if (tinted) {
     ui_surface_style::set_tile_border_tint(lv_obj_get_parent(disc), color,
-                                           scaled_opa(kGlowBorderOpa, step));
+                                           scaled_opa(ui_surface_style::icon_glow_border_opa(), step));
   } else {
     ui_surface_style::clear_tile_border_tint(lv_obj_get_parent(disc));
   }

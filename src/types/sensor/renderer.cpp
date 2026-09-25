@@ -24,6 +24,8 @@ struct SensorEventData {
   uint8_t decimals = 0xFF;
   uint32_t bg_color = 0;
   bool editable = false;
+  // Per-tile icon colors for the popup header icon.
+  String icon_colors;
 };
 
 static bool is_disabled_token(const String& value) {
@@ -292,7 +294,8 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       tile.sensor_unit,
       tile.sensor_decimals,
       tileBgColorOrDefault(tile, tileDefaultBgColor()),
-      tileTypeIsEditableValue(tile.type)
+      tileTypeIsEditableValue(tile.type),
+      tile.icon_colors
     };
 
     const lv_event_code_t popup_event =
@@ -353,6 +356,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
                 sensor_popup_should_use_state_history(init.value, init.unit);
           }
           init.editable = data->editable;
+          init.icon_colors = data->icon_colors;
           if (init.editable) {
             const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(data->entity_id));
             init.value = value.state; init.unit = value.unit;

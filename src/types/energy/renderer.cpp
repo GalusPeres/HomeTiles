@@ -10,6 +10,7 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/energy/energy_data.h"
+#include "src/tiles/config/tile_icon_colors.h"
 #include "src/ui/popups/energy/energy_popup.h"
 
 namespace {
@@ -22,6 +23,8 @@ struct EnergyEventData {
   String unit;
   uint8_t decimals = 1;
   uint32_t bg_color = 0;
+  // Per-tile icon colors for the popup header icon.
+  String icon_colors;
 };
 
 const lv_font_t* get_energy_value_font(const Tile& tile) {
@@ -179,6 +182,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
     data->unit = tile.sensor_unit;
     data->decimals = tile.sensor_decimals == 0xFF ? static_cast<uint8_t>(1) : tile.sensor_decimals;
     data->bg_color = card_color;
+    data->icon_colors = tile.icon_colors;
 
     const lv_event_code_t popup_event =
         (getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS)
@@ -210,6 +214,15 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
           init.unit = unit;
           init.decimals = data->decimals;
           init.bg_color = data->bg_color;
+          // The header icon shows the tile's icon color for the current state.
+          String state = haBridgeConfig.findSensorInitialValue(data->entity_id);
+          state.trim();
+          uint32_t rgb = 0;
+          if (data->icon_colors.length() && state.length() &&
+              !state.equalsIgnoreCase("unavailable") && !state.equalsIgnoreCase("unknown") &&
+              tile_icon_colors::resolve(data->icon_colors.c_str(), state.c_str(), nullptr, rgb)) {
+            init.icon_color = rgb;
+          }
 
           finish_press_before_popup(e);
           show_energy_popup(init);

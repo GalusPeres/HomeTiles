@@ -60,7 +60,8 @@ const Strings& strings(const char* language) {
 }
 }
 ${radiusPolicyHost(root)}
-struct Config { int tile_radius = tile_radius::kMinimum; const char* language = "de"; bool tile_borders = true; bool icon_discs = true; };
+#include "src/core/config/icon_glow.h"
+struct Config { int tile_radius = tile_radius::kMinimum; const char* language = "de"; bool tile_borders = true; bool icon_discs = true; uint8_t icon_glow = icon_glow::kDefault; };
 struct ConfigManager { Config config; const Config& getConfig() { return config; } } configManager;
 extern "C" {
 LV_FONT_DECLARE(ui_font_12); LV_FONT_DECLARE(ui_font_14); LV_FONT_DECLARE(ui_font_16);

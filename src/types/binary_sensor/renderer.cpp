@@ -197,6 +197,7 @@ BinarySensorPopupInit popup_init(GridType grid_type, uint8_t index) {
   init.available = state.valid ? state.available : true;
   init.icon_override = has_explicit_icon_setting(*tile);
   init.bg_color = tileBgColorOrDefault(*tile, tileDefaultBgColor());
+  init.icon_colors = tile->icon_colors;
   return init;
 }
 

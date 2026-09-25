@@ -14,6 +14,7 @@ void show_binary_sensor_popup(const BinarySensorPopupInit& init) {
   sensor_init.binary_last_changed = init.last_changed;
   sensor_init.binary_available = init.available;
   sensor_init.binary_icon_override = init.icon_override;
+  sensor_init.icon_colors = init.icon_colors;
   show_sensor_popup(sensor_init);
 }
 

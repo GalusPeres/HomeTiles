@@ -1,6 +1,6 @@
 // The popup header disc takes the icon's hue like a tile disc with glow:
 // colored icons tint it, white and grey icons keep the neutral white disc.
-// It reuses the tile rule and glow opacity so tiles and popups match.
+// It reuses the tile rule and the global Glow strength so tiles and popups match.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +16,7 @@ for (const marker of [
   'const bool tinted = r != g || g != b;',
   'const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();',
   'popup_layout::headerDiscContrastStep(',
-  'tinted ? popup_layout::kHeaderIconDiscGlowOpa : popup_layout::kHeaderIconDiscOpa, step));',
+  'tinted ? ui_surface_style::icon_glow_opa() : popup_layout::kHeaderIconDiscOpa, step));',
 ]) assert.ok(tint.includes(marker), `header tint: ${marker}`);
 // The shell follows the copied icon color on every sync.
 assert.match(shell, /copy_label\(shell\.icon, shell\.active->icon, false\);\s*apply_header_disc_tint\(shell\.icon_disc, shell\.icon\);/);
@@ -26,8 +26,8 @@ assert.match(tint, /if \(lv_obj_get_style_bg_opa\(disc, LV_PART_MAIN\) != opa\)/
 // Same rule and opacities as the tile disc (popup code is compiled without it).
 const tileDisc = read('src/tiles/runtime/tile_icon_disc.h');
 assert.ok(tileDisc.includes('return r != g || g != b;'), 'Tiles use the same tint rule');
-assert.ok(tileDisc.includes('inline constexpr lv_opa_t kGlowOpa = 51;'));
-assert.ok(read('src/ui/popups/popup_layout.h').includes('constexpr int kHeaderIconDiscGlowOpa = 51;'));
+assert.ok(tileDisc.includes(': scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);'));
+assert.doesNotMatch(read('src/ui/popups/popup_layout.h'), /kHeaderIconDiscGlowOpa|kPopupBorderGlowOpa/);
 assert.ok(read('src/ui/popups/popup_layout.h').includes('constexpr int kHeaderIconDiscOpa = 38;'));
 // Dark cards get a subtler disc with the tile rule (8 % .. full in four steps).
 const layoutH = read('src/ui/popups/popup_layout.h');

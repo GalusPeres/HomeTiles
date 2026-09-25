@@ -166,6 +166,7 @@ struct SensorPopupContext {
   bool state_history_mode = false;
   bool binary_available = true;
   bool binary_icon_override = false;
+  String icon_colors;
   String binary_state;
   String state_history_value;
   String binary_device_class;
@@ -368,12 +369,48 @@ static int8_t numeric_fraction_digits(const String& value) {
 }
 
 // The shared popup header shows this hidden label's text as the current value.
+// The tile's per-tile icon colors (tile_icon_colors.h) color the header icon
+// like the tile icon: the color bar or state colors for the current state,
+// else the fixed color, else `fallback`. The shell copies the icon color into
+// the header, so the disc glow and the card border follow it.
+static bool popup_icon_state_known(const String& raw) {
+  String state = raw;
+  state.trim();
+  state.toLowerCase();
+  return state.length() && state != "unavailable" && state != "unknown" &&
+         state != "none" && state != "null";
+}
+
+static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const char* state,
+                                   const char* display, lv_color_t fallback) {
+  if (!ctx || !ctx->icon_label) return;
+  uint32_t rgb = 0;
+  const bool colored = known && ctx->icon_colors.length() &&
+                       tile_icon_colors::resolve(ctx->icon_colors.c_str(), state, display, rgb);
+  const lv_color_t color = colored ? lv_color_hex(rgb) : fallback;
+  if (!lv_color_eq(lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN), color)) {
+    lv_obj_set_style_text_color(ctx->icon_label, color, 0);
+  }
+}
+
+// Number, Select and Date/Time: the same known-state rule as the tile
+// (refresh_editable_tile) with the displayed text for state colors.
+static void apply_editable_icon_color(SensorPopupContext* ctx, const EditableValue& value) {
+  const bool known = value.valid && value.has_state && value.available && value.state != "unknown";
+  apply_popup_icon_color(ctx, known, value.state.c_str(), editable_display_value(value).c_str(),
+                         lv_color_white());
+}
+
 static void update_value_label(SensorPopupContext* ctx, const String& value, const String& unit) {
   if (!ctx || !ctx->value_label) return;
   const bool categorical_state = ctx->state_history_mode && !ctx->binary_mode;
   const String display =
       sensor_value_display(value, unit, ctx->decimals, categorical_state);
   set_label_text_if_changed(ctx->value_label, display.c_str());
+  if (!ctx->binary_mode && !ctx->editable) {
+    apply_popup_icon_color(ctx, popup_icon_state_known(value), value.c_str(), nullptr,
+                           lv_color_white());
+  }
   String display_unit = unit;
   display_unit.trim();
   ctx->unit = display_unit;
@@ -505,6 +542,7 @@ static void apply_sensor_header(SensorPopupContext* ctx, const SensorPopupInit& 
       }
     }
   }
+  ctx->icon_colors = init.icon_colors;
   if (ctx->icon_label) {
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_white(), 0);
   }
@@ -527,6 +565,7 @@ static void apply_init_to_context(SensorPopupContext* ctx, const SensorPopupInit
   if (init.editable) {
     set_label_text_if_changed(ctx->value_label,
                               editable_display_value(editable_value).c_str());
+    apply_editable_icon_color(ctx, editable_value);
     ctx->value_fraction_digits = numeric_fraction_digits(editable_value.state);
   }
   ctx->entity_id = init.entity_id;
@@ -1642,10 +1681,15 @@ static void update_binary_state(SensorPopupContext* ctx,
     }
   }
   if (ctx->icon_label) {
-    lv_obj_set_style_text_color(
-        ctx->icon_label,
-        lv_color_hex(binary_state_color(binary_state_code(state, available))),
-        0);
+    // Per-tile On/Off or state colors match the raw state or its label, like
+    // the tile; otherwise the Binary sensor state color stays.
+    const bool known = available && (state == "on" || state == "off");
+    apply_popup_icon_color(
+        ctx, known, state.c_str(),
+        known ? i18n::binary_sensor_state_label(configManager.getConfig().language, state,
+                                                device_class)
+              : nullptr,
+        lv_color_hex(binary_state_color(binary_state_code(state, available))));
   }
   update_binary_icon(ctx, icon_name);
 }
@@ -1659,6 +1703,7 @@ static void apply_sensor_header_value(SensorPopupContext* ctx,
     const EditableValue value =
         parse_editable_value(haBridgeConfig.findEditableValue(init.entity_id));
     set_label_text_if_changed(ctx->value_label, editable_display_value(value).c_str());
+    apply_editable_icon_color(ctx, value);
     return;
   }
   if (init.binary_mode) {
@@ -1672,6 +1717,8 @@ static void apply_sensor_header_value(SensorPopupContext* ctx,
       ctx->value_label,
       sensor_value_display(init.value, init.unit, init.decimals,
                            init.state_history_mode).c_str());
+  apply_popup_icon_color(ctx, popup_icon_state_known(init.value), init.value.c_str(), nullptr,
+                         lv_color_white());
 }
 
 // ---------------------------------------------------------------------------
@@ -3667,6 +3714,7 @@ void process_sensor_popup_queue() {
     ctx->editable_generation = editable_value_generation();
     const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(ctx->entity_id));
     set_label_text_if_changed(ctx->value_label, editable_display_value(value).c_str());
+    apply_editable_icon_color(ctx, value);
     ctx->value_fraction_digits = numeric_fraction_digits(value.state);
     if (value.valid && (ctx->editable_state != value.state || ctx->editable_kind != value.kind || ctx->editable_available != value.available)) {
       const bool kind_changed = ctx->editable_kind != value.kind;

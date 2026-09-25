@@ -57,6 +57,45 @@ async function saveIconDiscs(enabled) {
   }
 }
 
+// Glow strength of colored icon discs: previews read the root variable
+// --icon-glow-pct (applyIconDiscTint); the device rebuilds its tiles after
+// the save. Range and step mirror icon_glow.h.
+let iconGlowConfirmed = null;
+let iconGlowSaveSequence = 0;
+function currentIconGlow() {
+  const value = Number(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct'));
+  return Number.isFinite(value) && value > 0 ? value : 25;
+}
+function previewIconGlowLive(value) {
+  const number = Math.round(Number(value) / 5) * 5;
+  const percent = Math.min(60, Math.max(10, Number.isFinite(number) ? number : 25));
+  if (iconGlowConfirmed === null) iconGlowConfirmed = currentIconGlow();
+  document.documentElement.style.setProperty('--icon-glow-pct', String(percent));
+  document.querySelectorAll('.global-icon-glow').forEach(input => { input.value = String(percent); });
+  document.querySelectorAll('.global-icon-glow-value').forEach(output => { output.textContent = percent + ' %'; });
+  document.querySelectorAll('.tile').forEach(tile => applyIconDiscTint(tile));
+  return percent;
+}
+async function saveIconGlow(value) {
+  const percent = previewIconGlowLive(value);
+  const sequence = ++iconGlowSaveSequence;
+  try {
+    const response = await fetch('/api/display/icon-glow', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'percent=' + percent
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    if (sequence === iconGlowSaveSequence) iconGlowConfirmed = percent;
+  } catch (error) {
+    if (sequence !== iconGlowSaveSequence) return;
+    const confirmed = iconGlowConfirmed;
+    iconGlowConfirmed = null;
+    if (confirmed !== null) previewIconGlowLive(confirmed);
+    showNotification(t('networkErrorSave'), false);
+  }
+}
+
 // The global default tile color paints every tile without its own color
 // through --tile-default-bg; reset and new tiles take it as their default.
 let defaultTileColorConfirmed = null;
@@ -113,6 +152,9 @@ function syncGlobalDisplayControls(tabEl) {
   });
   const color = currentDefaultTileColor();
   tabEl.querySelectorAll('.global-tile-color').forEach(input => { input.value = color; });
+  const glow = currentIconGlow();
+  tabEl.querySelectorAll('.global-icon-glow').forEach(input => { input.value = String(glow); });
+  tabEl.querySelectorAll('.global-icon-glow-value').forEach(output => { output.textContent = glow + ' %'; });
 }
 
 // The shared root variables also reach cached and lazily inserted folder grids.

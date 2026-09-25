@@ -25,7 +25,7 @@
       popup.value = data.popup_open_mode !== undefined
         ? String(data.popup_open_mode) : '1';
     }
-    // The entity is known now: its options become the state suggestions.
+    // The entity is known now: the state color section follows it.
     syncIconColorFields(tab);
   }
 

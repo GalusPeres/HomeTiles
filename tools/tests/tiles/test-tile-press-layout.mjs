@@ -27,7 +27,8 @@ fs.writeFileSync(source, String.raw`
 #include <cstdio>
 #include <vector>
 ${radiusPolicyHost(root)}
-struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = false; bool icon_discs = true; };
+#include "src/core/config/icon_glow.h"
+struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = false; bool icon_discs = true; uint8_t icon_glow = icon_glow::kDefault; };
 struct TestConfigManager { TestConfig config; const TestConfig& getConfig() const { return config; } } configManager;
 ${surfaceStyleHost(root)}
 ${helper}

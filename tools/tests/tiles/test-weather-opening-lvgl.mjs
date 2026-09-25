@@ -45,7 +45,8 @@ class String:public std::string{public:using std::string::string;using std::stri
 constexpr int SCREEN_WIDTH=Device::kScreenWidth,SCREEN_HEIGHT=Device::kScreenHeight;
 String getMdiChar(const String&){return "\xF3\xB0\x96\xAD";}
 ${radiusPolicyHost(root, 'Device::kGridCellH', 'Device::kGridGap')}
-struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = true; bool icon_discs = true; };
+#include "src/core/config/icon_glow.h"
+struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = true; bool icon_discs = true; uint8_t icon_glow = icon_glow::kDefault; };
 struct TestConfigManager { TestConfig config; const TestConfig& getConfig() const { return config; } } configManager;
 ${surfaceStyleHost(root)}
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
@@ -59,7 +60,8 @@ ${strip(read('src/ui/popups/popup_shell.cpp'))}
 ${strip(read('src/types/weather/widgets.h'))}
 ${strip(read('src/ui/popups/weather/weather_popup.h'))}
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=1,GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device::kGridCellH,GRID_GAP=Device::kGridGap;
-struct Tile{String title="Weather",sensor_entity="weather.home",icon_name="weather-sunny",sensor_unit;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_value_font=0,sensor_display_mode=0,sensor_decimals=0xFF,popup_open_mode=1;int type=1,sensor_gauge_min=0,sensor_gauge_max=100,sensor_gauge_arc=270,sensor_gauge_size=160,sensor_gauge_y_offset=0,sensor_graph_height=60,sensor_value_y_offset=0;};
+#include "src/tiles/config/tile_icon_colors.h"
+struct Tile{String title="Weather",sensor_entity="weather.home",icon_name="weather-sunny",sensor_unit,icon_colors;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_value_font=0,sensor_display_mode=0,sensor_decimals=0xFF,popup_open_mode=1;int type=1,sensor_gauge_min=0,sensor_gauge_max=100,sensor_gauge_arc=270,sensor_gauge_size=160,sensor_gauge_y_offset=0,sensor_graph_height=60,sensor_value_y_offset=0;};
 constexpr int TILE_POPUP_OPEN_SHORT_PRESS=1;
 int getTilePopupOpenMode(const Tile&t){return t.popup_open_mode;}
 struct Logger{void println(const char*){}}Serial;

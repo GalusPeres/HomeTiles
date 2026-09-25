@@ -807,6 +807,7 @@ void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init,
       String icon_char = getMdiChar(icon_name);
       if (icon_char.length()) {
         lv_label_set_text(ctx->icon_label, icon_char.c_str());
+        lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);
         lv_obj_clear_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
       } else {
         lv_label_set_text(ctx->icon_label, "");

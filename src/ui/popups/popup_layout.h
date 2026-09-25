@@ -194,11 +194,10 @@ constexpr int kCloseButtonClickArea = 8;
 constexpr int kHeaderIconDiscSize = scale(72);
 constexpr int kHeaderIconDiscGap = scale(16);
 constexpr int kHeaderIconDiscOpa = 38;
-// A colored header icon tints its disc like tile glow (tile_icon_disc::kGlowOpa).
-constexpr int kHeaderIconDiscGlowOpa = 51;
-// Popup card hairline like the tiles: white 20 %, glowing hue 40 % (scaled).
+// A colored header icon tints its disc and the popup card hairline like tile
+// glow, with the global Glow strength (ui_surface_style::icon_glow_opa and
+// icon_glow_border_opa, scaled); otherwise the hairline is white 20 %.
 constexpr int kPopupBorderOpa = 51;
-constexpr int kPopupBorderGlowOpa = 102;
 // Same contrast rule as tile_icon_disc::contrast_step_for/scaled_opa: the disc
 // is subtler on dark cards (8 % instead of 15 % at luma <= 0.08).
 inline uint8_t headerDiscContrastStep(uint32_t rgb) {

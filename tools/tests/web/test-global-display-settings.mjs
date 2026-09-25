@@ -111,13 +111,19 @@ const preview = read('src/web/admin/tiles/grid-preview.js');
 assert.ok(preview.includes("const sharedCss = 'var(--tile-default-bg, #2A2A2A)';"));
 assert.match(read('src/web/admin/tiles/live-preview.js'), /tileBackgroundCss\(meta, isDefaultBg,/);
 assert.match(read('src/web/assets/admin.css'), /\.icon-discs-off \.tile\.sensor-compact:not\(\[data-icon-disc="1"\]\) > \.tile-icon/);
-// The global block uses the Tile Settings card: same heading, checkbox rows,
-// labeled radius field and the tile Color field with its reset button.
+// The global block uses the Tile Settings style in two compact columns:
+// checkboxes like Glow, small labels above the radius, glow and color fields,
+// and the tile Color field with its reset button.
 for (const marker of [
   'html += "<section class=\\"global-settings-panel\\"><h3>";',
-  'html += "</h3><div class=\\"global-settings-rows\\"><label class=\\"global-settings-label\\" for=\\"" +',
-  'html += "</label><div class=\\"global-settings-control\\"><input class=\\"normal-tile-border-toggle\\" id=\\"" +',
-  'html += "></div><label class=\\"global-settings-label\\" for=\\"" + radius_id + "\\">";',
+  'html += "</h3><div class=\\"global-settings-grid\\"><label class=\\"inline-checkbox\\">"',
+  '"<input class=\\"normal-tile-border-toggle\\" id=\\"" +',
+  'html += "</label><label class=\\"inline-checkbox\\"><input class=\\"global-icon-disc-toggle\\" id=\\"" +',
+  'html += "</label><div class=\\"global-settings-field\\"><label for=\\"" + radius_id + "\\">";',
+  'html += "</div></div><div class=\\"global-settings-field\\"><label for=\\"" + glow_id + "\\">";',
+  'appendHtmlEscaped(html, tr.icon_glow);',
+  '"\\" oninput=\\"previewIconGlowLive(this.value)\\" onchange=\\"saveIconGlow(this.value)\\">"',
+  'html += "<div class=\\"global-settings-field\\"><label for=\\"" + color_id + "\\">";',
   'html += "</label><div class=\\"tile-color-row\\"><input class=\\"global-tile-color\\" id=\\"" + color_id +',
   '"<button type=\\"button\\" class=\\"tile-color-reset-btn\\" title=\\"Reset\\" "',
   'static_cast<unsigned>(tile_color::kDefault));',
@@ -128,8 +134,45 @@ assert.match(css, /\.global-settings-panel \{\s*flex:0 0 100%;\s*box-sizing:bord
   'Same card as the Tile Settings panel');
 assert.ok(css.includes('.tile-settings label, .global-settings-panel label { font-size:12px; margin-bottom:4px; }'));
 assert.ok(css.includes('.tile-settings h3, .global-settings-panel h3 { margin:0 0 14px; color:var(--text); font-size:17px; }'));
-assert.match(css, /\.global-settings-rows \{\s*display:grid;\s*grid-template-columns:minmax\(110px, 170px\) minmax\(0, 1fr\);/,
-  'The global fields wrap on narrow widths');
+assert.match(css, /\.global-settings-grid \{\s*display:grid;\s*grid-template-columns:repeat\(2, minmax\(0, 1fr\)\);/,
+  'Two compact columns');
+assert.ok(css.includes('@media (max-width:520px) { .global-settings-grid { grid-template-columns:minmax(0, 1fr); } }'),
+  'One column on phones');
+assert.doesNotMatch(css, /global-settings-rows|global-settings-label|global-settings-control/, 'No stale row styles');
+
+// Global Glow strength: one setting in percent (icon_glow.h), persisted in
+// NVS, validated over HTTP, read by tile discs, borders and popups, and
+// previewed live through --icon-glow-pct.
+const glow = read('src/core/config/icon_glow.h');
+for (const marker of ['inline constexpr uint8_t kMinimum = 10;', 'inline constexpr uint8_t kMaximum = 60;',
+  'inline constexpr uint8_t kStep = 5;', 'inline constexpr uint8_t kDefault = 25;',
+  'inline constexpr uint8_t kBorderExtra = 20;', 'return static_cast<uint8_t>((percent * 255 + 50) / 100);',
+  'inline uint8_t border_opa(int percent) { return to_opa(clamp(percent) + kBorderExtra); }'])
+  assert.ok(glow.includes(marker), `icon_glow.h: ${marker}`);
+const configCpp = read('src/core/config/config_manager.cpp');
+for (const marker of ['config.icon_glow = icon_glow::clamp(prefs.getUChar("icon_glow", icon_glow::kDefault));',
+  'prefs.putUChar("icon_glow", normalized.icon_glow);', 'a.icon_glow == b.icon_glow &&',
+  'normalized.icon_glow = icon_glow::clamp(normalized.icon_glow);', 'bool ConfigManager::saveIconGlow(uint8_t percent) {'])
+  assert.ok(configCpp.includes(marker), `config: ${marker}`);
+assert.equal((configCpp.match(/config\.icon_glow = icon_glow::kDefault;/g) || []).length, 2, 'Both default paths reset the glow');
+const glowHandlers = read('src/web/server/handlers/web_admin_handlers.cpp');
+assert.match(glowHandlers, /void WebAdminServer::handleSaveIconGlow\(\) \{[\s\S]*?percent < icon_glow::kMinimum \|\| percent > icon_glow::kMaximum[\s\S]*?tiles_request_reload_all\(\);/);
+assert.ok(read('src/web/server/web_admin.cpp').includes('server.on("/api/display/icon-glow", HTTP_POST,'));
+const glowSurface = read('src/ui/shared/ui_surface_style.cpp');
+assert.ok(glowSurface.includes('return icon_glow::disc_opa(configManager.getConfig().icon_glow);'));
+assert.ok(glowSurface.includes('return icon_glow::border_opa(configManager.getConfig().icon_glow);'));
+const toOpa = p => Math.floor((p * 255 + 50) / 100);
+assert.deepEqual([toOpa(25), toOpa(45), toOpa(10), toOpa(80)], [64, 115, 26, 204], 'Default glow is minimally stronger (20 -> 25 %)');
+const displayJs = read('src/web/admin/settings/display-borders.js');
+for (const marker of ["document.documentElement.style.setProperty('--icon-glow-pct', String(percent));",
+  "document.querySelectorAll('.tile').forEach(tile => applyIconDiscTint(tile));",
+  "const response = await fetch('/api/display/icon-glow', {", "body: 'percent=' + percent",
+  "tabEl.querySelectorAll('.global-icon-glow').forEach(input => { input.value = String(glow); });"])
+  assert.ok(displayJs.includes(marker), `display JS: ${marker}`);
+const glowTint = read('src/web/admin/tiles/grid-preview.js');
+assert.ok(glowTint.includes("const glowOpa = Math.floor((glowPct * 255 + 50) / 100);") &&
+  glowTint.includes("const glowBorderOpa = Math.floor(((glowPct + 20) * 255 + 50) / 100);"), 'Preview uses the device formula');
+assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes('html += "%;--icon-glow-pct:";'));
 
 // A stored built-in default grey (older editors saved it explicitly) follows
 // the global default tile color like an unset color, on the device and in

@@ -232,7 +232,7 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
 // The header disc takes the icon's hue like a tile disc with glow: a colored
 // icon (binary on, light color, climate mode, ...) tints it, white and grey
 // icons keep the neutral white disc. Same rule and opacities as the tile
-// discs (tile_icon_disc::icon_color_tints, kGlowOpa, kOpa).
+// discs (tile_icon_disc::icon_color_tints, the global Glow strength, kOpa).
 void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   if (!disc || !icon) return;
   const uint32_t rgb =
@@ -243,7 +243,7 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   const uint8_t step = popup_layout::headerDiscContrastStep(
       lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame, LV_PART_MAIN)) & 0xFFFFFFu);
   const lv_opa_t opa = static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
-      tinted ? popup_layout::kHeaderIconDiscGlowOpa : popup_layout::kHeaderIconDiscOpa, step));
+      tinted ? ui_surface_style::icon_glow_opa() : popup_layout::kHeaderIconDiscOpa, step));
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
@@ -251,7 +251,7 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   ui_surface_style::apply_popup_border(
       shell.frame, color,
       static_cast<lv_opa_t>(tinted ? popup_layout::headerDiscScaledOpa(
-                                         popup_layout::kPopupBorderGlowOpa, step)
+                                         ui_surface_style::icon_glow_border_opa(), step)
                                    : popup_layout::kPopupBorderOpa));
 }
 

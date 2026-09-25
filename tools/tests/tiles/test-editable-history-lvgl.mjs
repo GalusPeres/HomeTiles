@@ -107,7 +107,7 @@ ${popup.match(/struct SensorPopupContext \{[\s\S]*?\n};/)[0]}
 ${read('src/ui/popups/sensor/sensor_popup.h').match(/struct SensorPopupInit \{[\s\S]*?\n};/)[0]}
 SensorPopupContext* g_sensor_popup_ctx=nullptr;PopupFirstFrame g_sensor_first_frame;SensorPopupInit g_pending_sensor_init;bool g_sensor_open_pending=false;
 struct Pending{bool valid=false;}g_pending_history,g_pending_binary_state;
-struct EditableValue{String kind,state="32",unit="%";bool available=true;};
+struct EditableValue{String kind,state="32",unit="%";bool available=true,valid=true,has_state=true;};
 struct Bridge{String payload="number";String findEditableValue(const String&){return payload;}}haBridgeConfig;
 EditableValue parse_editable_value(const String&p){EditableValue v;v.kind=String(p.substr(0,p.find('|')));return v;}
 uint32_t editable_value_generation(){return 1;}
@@ -144,6 +144,8 @@ ${fn(popup,'apply_history_payload')}
 ${fn(popup,'editable_history_fingerprint')}
 int requests=0;
 void request_history_for_context(SensorPopupContext*ctx){ctx->editable_history_id=std::to_string(++requests);ctx->history_request_fingerprint=editable_history_fingerprint(ctx->entity_id);}
+#include "src/tiles/config/tile_icon_colors.h"
+${['popup_icon_state_known','apply_popup_icon_color','apply_editable_icon_color'].map(n=>fn(popup,n)).join('\n')}
 ${fn(popup,'apply_sensor_header')}
 ${fn(popup,'apply_sensor_header_value')}
 ${fn(popup,'apply_init_to_context')}

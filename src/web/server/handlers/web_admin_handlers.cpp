@@ -34,6 +34,7 @@ void WebAdminServer::handleSaveMQTT() {
     cfg.tile_borders = true;
     cfg.tile_radius = tile_radius::kMinimum;
     cfg.icon_discs = true;
+    cfg.icon_glow = icon_glow::kDefault;
     cfg.default_tile_color = tile_color::kDefault;
   }
   const DeviceConfig previous_cfg = cfg;
@@ -627,6 +628,31 @@ void WebAdminServer::handleSaveIconDiscs() {
   server.send(200, "application/json",
               enabled ? "{\"success\":true,\"enabled\":true}"
                       : "{\"success\":true,\"enabled\":false}");
+}
+
+void WebAdminServer::handleSaveIconGlow() {
+  webAdminMarkActivity();
+  const String value = server.arg("percent");
+  bool valid = value.length() > 0 && value.length() <= 3;
+  for (size_t i = 0; i < value.length(); ++i)
+    valid = valid && value[i] >= '0' && value[i] <= '9';
+  const long percent = value.toInt();
+  if (!valid || percent < icon_glow::kMinimum || percent > icon_glow::kMaximum) {
+    sendJsonError(server, 400, "Invalid icon glow");
+    return;
+  }
+  if (!configManager.saveIconGlow(static_cast<uint8_t>(percent))) {
+    sendJsonError(server, 500, "Could not save icon glow");
+    return;
+  }
+  // Glowing discs and borders take the new strength when their tiles are
+  // rebuilt, like a default tile color change; popups use it when they open.
+  // These calls only set flags for the UI loop.
+  tiles_invalidate_folder(tileConfig.rootFolderId());
+  tiles_request_reload_all();
+  image_screensaver_tiles_changed();
+  server.send(200, "application/json",
+              String("{\"success\":true,\"percent\":") + static_cast<int>(configManager.getConfig().icon_glow) + "}");
 }
 
 void WebAdminServer::handleSaveDefaultTileColor() {

@@ -10,6 +10,8 @@ struct EnergyPopupInit {
   String unit;
   uint8_t decimals = 1;
   uint32_t bg_color = 0;
+  // Header icon color: the tile icon's color for the state at opening.
+  uint32_t icon_color = 0xFFFFFF;
 };
 
 void show_energy_popup(const EnergyPopupInit& init);

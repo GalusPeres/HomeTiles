@@ -49,10 +49,31 @@ static const char* const kMapUpperDe[] = {
     "_", "-", "Y", "X", "C", "V", "B", "N", "M", "\xC3\x9F", ".", ",", ":", "\n",
     LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
 
+// English/QWERTY copies LVGL 9.5's default_kb_map_lc/uc and their identical
+// control maps. Only the uppercase bottom-left key differs: LVGL uses
+// LV_SYMBOL_CLOSE there, which ui_symbols_20/24 lack (it drew an empty box),
+// so it uses LV_SYMBOL_KEYBOARD like the lowercase and German maps.
+static const char* const kMapLowerEn[] = {
+    "1#", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", LV_SYMBOL_BACKSPACE, "\n",
+    "ABC", "a", "s", "d", "f", "g", "h", "j", "k", "l", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "z", "x", "c", "v", "b", "n", "m", ".", ",", ":", "\n",
+    LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
+
+static const lv_buttonmatrix_ctrl_t kCtrlEn[] = {
+    kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 5), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 7),
+    kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 6), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 7),
+    kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)),
+    kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 2), kCtrl(6), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 2), kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2)};
+
+static const char* const kMapUpperEn[] = {
+    "1#", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", LV_SYMBOL_BACKSPACE, "\n",
+    "abc", "A", "S", "D", "F", "G", "H", "J", "K", "L", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "Z", "X", "C", "V", "B", "N", "M", ".", ",", ":", "\n",
+    LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
+
 // An explicit keyboard layout setting takes precedence; "Auto" follows
-// the UI language. Only non-default mappings need an entry (currently
-// German/QWERTZ for umlauts and sharp S). Without a match, LVGL's built-in
-// English/QWERTY map remains active.
+// the UI language: German/QWERTZ for umlauts and sharp S, otherwise
+// English/QWERTY.
 struct KeyboardLayout {
   const char* const* lower_map;
   const char* const* upper_map;
@@ -72,7 +93,8 @@ const KeyboardLayout* layout_for_config(uint8_t keyboard_layout, const char* lan
     static const KeyboardLayout kDeLayout{kMapLowerDe, kMapUpperDe, kCtrlDe};
     return &kDeLayout;
   }
-  return nullptr;
+  static const KeyboardLayout kEnLayout{kMapLowerEn, kMapUpperEn, kCtrlEn};
+  return &kEnLayout;
 }
 
 constexpr uint32_t kKeyBg = 0x3A3A3A;
@@ -194,14 +216,12 @@ lv_obj_t* ui_keyboard_create(lv_obj_t* parent) {
       kb, large ? &ui_font_24 : &ui_font_20, LV_PART_ITEMS);
 #endif
 
-  // Without a layout entry, retain the built-in English map already
-  // activated by lv_keyboard_create.
+  // Always install both letter maps; LVGL's default uppercase map has a
+  // glyph our symbol fonts lack.
   const DeviceConfig& kb_cfg = configManager.getConfig();
   const KeyboardLayout* layout = layout_for_config(kb_cfg.keyboard_layout, kb_cfg.language);
-  if (layout) {
-    lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_TEXT_LOWER, layout->lower_map, layout->ctrl_map);
-    lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_TEXT_UPPER, layout->upper_map, layout->ctrl_map);
-  }
+  lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_TEXT_LOWER, layout->lower_map, layout->ctrl_map);
+  lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_TEXT_UPPER, layout->upper_map, layout->ctrl_map);
 
   lv_obj_set_style_bg_color(kb, lv_color_hex(kKeyBg), LV_PART_ITEMS);
   lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, LV_PART_ITEMS);

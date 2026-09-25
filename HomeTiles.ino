@@ -1056,6 +1056,9 @@ void loop() {
       Serial.flush();
     }
     yield();
+    // This branch returns before the normal loop's process_popup_open();
+    // without it, a popup opened during AP mode never gets its content.
+    process_popup_open();
     sync_popup_shell();
     lv_timer_handler();
     yield();

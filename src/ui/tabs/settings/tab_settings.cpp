@@ -1359,7 +1359,11 @@ static void wifi_update_conn_status_label() {
     }
 #if LV_USE_QRCODE
     if (wifi_ap_qr) {
-      if (!wifi_ap_qr_sized) {
+      // lv_qrcode_set_size clears the canvas, so redraw after every sizing.
+      // Comparing object pointers is not enough: a reopened popup's QR code
+      // can reuse the freed address of the previous one.
+      const bool qr_resized = !wifi_ap_qr_sized;
+      if (qr_resized) {
         // Measure once per popup; the main loop calls here on every AP-mode pass.
         // Lay out with the QR code hidden so the flex-grow spacer measures its
         // remaining space, minus the information box's pad_row and a small gap.
@@ -1381,12 +1385,10 @@ static void wifi_update_conn_status_label() {
       // Phone cameras can use this code to connect directly to the hotspot.
       static char qr_buf[128];
       static char last_qr_buf[128] = {};
-      static lv_obj_t* last_qr_obj = nullptr;
       snprintf(qr_buf, sizeof(qr_buf), "WIFI:T:WPA;S:%s;P:%s;;",
                webConfigApSsid(), webConfigApPassword());
-      if (last_qr_obj != wifi_ap_qr || strcmp(last_qr_buf, qr_buf) != 0) {
+      if (qr_resized || strcmp(last_qr_buf, qr_buf) != 0) {
         lv_qrcode_update(wifi_ap_qr, qr_buf, strlen(qr_buf));
-        last_qr_obj = wifi_ap_qr;
         strncpy(last_qr_buf, qr_buf, sizeof(last_qr_buf) - 1);
         last_qr_buf[sizeof(last_qr_buf) - 1] = '\0';
       }

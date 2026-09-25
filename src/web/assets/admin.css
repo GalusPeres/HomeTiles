@@ -984,7 +984,7 @@
     /* The hairline sits on the outer card edge. A child overlay would be
        visibly indented by the transparent 3px editor border. */
     .tile-grid.tiles-bordered > .tile:not(.empty):not(.tile-border-hidden) {
-      outline:1px solid rgba(var(--tile-hue-rgb, 255,255,255),0.20);
+      outline:1px solid var(--tile-border-tint, rgba(255,255,255,0.20));
       outline-offset:-1px;
     }
 
@@ -2319,7 +2319,7 @@
   width:var(--compact-icon); height:var(--compact-icon); margin:0;
   display:flex; align-items:center; justify-content:center;
   border-radius:max(0px, calc(var(--tile-radius) - var(--compact-inset)));
-  background:rgba(var(--tile-hue-rgb, 255,255,255),var(--icon-disc-opa, 0.149));
+  background:rgba(255,255,255,var(--icon-disc-opa, 0.149));
   font-size:var(--icon-size, 48px); line-height:1;
 }
 /* Glow: a colored icon tints its disc with its own hue (tile_icon_disc). */
@@ -2333,7 +2333,7 @@
   width:var(--icon-disc-round, 30px); height:var(--icon-disc-round, 30px);
   transform:translate(-50%, -50%); pointer-events:none;
   border-radius:max(0px, calc(var(--tile-radius) - var(--compact-inset)));
-  background:rgba(var(--tile-hue-rgb, 255,255,255),var(--icon-disc-opa, 0.149));
+  background:rgba(255,255,255,var(--icon-disc-opa, 0.149));
 }
 .tile:not(.sensor-compact) > .tile-icon.tile-icon-tinted::after {
   background:color-mix(in srgb, currentColor var(--icon-disc-glow, 25%), transparent);

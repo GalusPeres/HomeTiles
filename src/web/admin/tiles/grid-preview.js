@@ -39,17 +39,6 @@
     const rgb = String(color || '').match(/(\d+)\D+(\d+)\D+(\d+)/);
     return !!rgb && !(rgb[1] === rgb[2] && rgb[2] === rgb[3]);
   }
-  // Mirrors tile_icon_disc::card_is_neutral(): only a neutral (grey) card lets
-  // the disc glow in the icon hue; colored cards keep the neutral disc.
-  function iconDiscCardNeutral(channels) {
-    if (!channels) return true;
-    return Math.max(...channels) - Math.min(...channels) <= 12;
-  }
-  function tileSurfaceHue(channels) {
-    if (!channels) return [255, 255, 255];
-    const hi = Math.max(...channels);
-    return hi > 0 ? channels.map(v => Math.floor(v * 255 / hi)) : [255, 255, 255];
-  }
   // Channels (0..255) of a computed CSS color, or null when it is fully
   // transparent or unknown. Chrome reports color-mix() backgrounds (screensaver
   // tiles with an opacity) as color(srgb r g b / a) with 0..1 channels.
@@ -98,11 +87,18 @@
     // Mirrors tile_icon_disc::contrast_step_for()/scaled_opa(): discs are
     // subtler on dark tiles (8 % instead of 15 % at luma <= 0.08) in 4 steps.
     const bg = cssColorChannels(getComputedStyle(tileElem).backgroundColor);
-    icon.classList.toggle('tile-icon-tinted',
-      glow && iconDiscTinted(getComputedStyle(icon).color) && iconDiscCardNeutral(bg));
-    // Mirrors ui_surface_style::surface_hue(): neutral discs and the outline
-    // are the tile's own hue at full brightness, white on grey tiles.
-    tileElem.style.setProperty('--tile-hue-rgb', tileSurfaceHue(bg).join(','));
+    const iconRgb = cssColorChannels(getComputedStyle(icon).color);
+    const tinted = glow && iconDiscTinted(getComputedStyle(icon).color);
+    icon.classList.toggle('tile-icon-tinted', tinted);
+    // Mirrors ui_surface_style::border_hint(): a glowing icon gives the tile
+    // outline its hue halfway to white (lv_color_mix(white, icon, 128)) at the
+    // hairline's 20 %, mostly the tile with a hint of the icon.
+    if (tinted && iconRgb) {
+      const hint = iconRgb.map(v => Math.floor(((255 * 128 + v * 127) * 0x8081) / 0x800000));
+      tileElem.style.setProperty('--tile-border-tint', 'rgba(' + hint.join(',') + ',0.20)');
+    } else {
+      tileElem.style.removeProperty('--tile-border-tint');
+    }
     const luma = bg ? (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255 : 1;
     const step = Math.floor(Math.min(1, Math.max(0, (luma - 0.08) / 0.17)) * 3 + 0.5);
     const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);

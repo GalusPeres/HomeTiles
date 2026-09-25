@@ -122,6 +122,9 @@ void remember_popup_source(lv_obj_t* obj) {
 // tint selector so the icon color hook finds it without a lookup table.
 constexpr uint8_t kRuleTintWins = 0x80;
 
+void set_tile_tint(lv_obj_t* card, uint32_t color, uint8_t percent);
+void clear_tile_tint(lv_obj_t* card);
+
 bool icon_fill_marker(lv_obj_t* obj, uint8_t& marker) {
   lv_style_value_t value;
   if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_OPA, &value, kTintStore) != LV_STYLE_RES_FOUND) return false;
@@ -229,8 +232,6 @@ void apply_card_background(lv_obj_t* card, uint32_t rgb) {
     lv_obj_set_style_bg_color(card, lv_color_hex(pressed), selector);
     lv_obj_set_style_bg_grad_color(card, lv_color_hex(pressed), selector);
   }
-  // The border is a lighter step of the new background in its hue.
-  ui_surface_style::refresh_tile_border(card);
 }
 // Tints a tile card for its rules (tile_tint.h). The tint replaces the card's
 // own color and always starts from the global default tile color, so an own

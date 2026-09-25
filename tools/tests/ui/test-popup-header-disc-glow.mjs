@@ -1,8 +1,8 @@
 // The popup header disc takes the icon's hue like a tile disc with glow:
-// colored icons tint it on a neutral (grey) card; white and grey icons and
-// colored cards (own tile color, rules tint) keep the neutral white disc. The
-// card hairline is the tile border in the card's own hue. It reuses the tile rules
-// and the global Glow strength so tiles and popups match.
+// colored icons tint it (a color between icon and card), white and grey icons
+// keep the neutral white disc. The card hairline is the tile border: white,
+// or a hint of the glowing icon's hue. It reuses the tile rules and the global
+// Glow strength so tiles and popups match.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,10 +15,9 @@ const shell = read('src/ui/popups/popup_shell.cpp');
 const tint = shell.slice(shell.indexOf('void apply_header_disc_tint('));
 assert.ok(tint.startsWith('void apply_header_disc_tint('), 'Header tint helper exists');
 for (const marker of [
-  'const bool tinted = (r != g || g != b) && popup_layout::headerCardIsNeutral(card);',
-  'const lv_color_t card_hue = ui_surface_style::surface_hue(lv_color_hex(card));',
-  'const lv_color_t color = tinted ? lv_color_hex(rgb) : card_hue;',
-  'ui_surface_style::apply_popup_border(shell.frame, card_hue,',
+  'const bool tinted = r != g || g != b;',
+  'const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();',
+  'shell.frame, tinted ? ui_surface_style::border_hint(color) : lv_color_white(),',
   'static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));',
   'popup_layout::headerDiscContrastStep(',
   'tinted ? ui_surface_style::icon_glow_opa() : popup_layout::kHeaderIconDiscOpa, step));',
@@ -31,8 +30,6 @@ assert.match(tint, /if \(lv_obj_get_style_bg_opa\(disc, LV_PART_MAIN\) != opa\)/
 // Same rule and opacities as the tile disc (popup code is compiled without it).
 const tileDisc = read('src/tiles/runtime/tile_icon_disc.h');
 assert.ok(tileDisc.includes('return r != g || g != b;'), 'Tiles use the same tint rule');
-assert.ok(tileDisc.includes('inline constexpr uint8_t kNeutralSpread = 12;') &&
-  read('src/ui/popups/popup_layout.h').includes('return hi - lo <= 12;'), 'Tiles and popups share the neutral card rule');
 assert.doesNotMatch(tint, /icon_glow_border_opa/, 'The hairline never takes the icon hue');
 assert.ok(tileDisc.includes(': scaled_opa(tinted ? ui_surface_style::icon_glow_opa() : kOpa, step);'));
 assert.doesNotMatch(read('src/ui/popups/popup_layout.h'), /kHeaderIconDiscGlowOpa|kPopupBorderGlowOpa/);
@@ -49,4 +46,4 @@ const step = rgb => { const y = (0.2126 * (rgb >> 16 & 255) + 0.7152 * (rgb >> 8
 const opa = (full, s) => Math.floor((full * (24 + 7 * s) + 22) / 45);
 assert.deepEqual([0x191C19, 0x222222, 0x282828, 0x1E3453, 0xA4530F].map(c => opa(38, step(c))), [20, 26, 26, 32, 38]);
 assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('inline constexpr lv_opa_t kOpa = 38;'));
-console.log('Popup header disc follows the icon hue like tile glow on neutral cards');
+console.log('Popup header disc follows the icon hue like tile glow');

@@ -250,7 +250,7 @@ const translations = {
     'Feu tricolore', 'Batterie', 'Humidité', 'Couleur unique', null, "Couleur selon l'état", 'État', 'contient',
     'Ajouter un état', 'Supprimer', null, 'Activé', 'Désactivé'],
 };
-const glowLabels = {de: '"Leuchten",', en: '"Glow",', fr: '"Lueur",'};
+const glowLabels = {de: '"Kreis leuchtet",', en: '"Circle glow",', fr: '"Halo du cercle",'};
 for (const [language, texts] of Object.entries(translations)) {
   // The strings follow the glow label of each table in struct order.
   const start = tables[language].indexOf(glowLabels[language]) + glowLabels[language].length;
@@ -449,7 +449,7 @@ const block = `<div id="t_tile_icon_color_fields" class="tile-icon-color-fields 
 <div class="icon-color-segmented" id="t_tile_icon_source_modes"><button type="button" data-icon-color="source-mode" data-mode="auto">A</button><button type="button" data-icon-color="source-mode" data-mode="rules">R</button></div>
 <label class="inline-checkbox"><input type="checkbox" id="t_tile_icon_rule_icon" data-icon-color="rule-target" checked> Icon</label>
 <label class="inline-checkbox"><input type="checkbox" id="t_tile_icon_rule_tile" data-icon-color="rule-target"> Tile</label>
-<div class="icon-color-strength hidden" id="t_tile_icon_rule_strength_row"><input type="range" id="t_tile_icon_rule_strength" min="10" max="50" step="5" value="25" data-icon-color="rule-strength"><output id="t_tile_icon_rule_strength_value">25 %</output></div></div></div>
+<div class="icon-color-strength hidden" id="t_tile_icon_rule_strength_row"><input type="range" id="t_tile_icon_rule_strength" min="10" max="50" step="5" value="20" data-icon-color="rule-strength"><output id="t_tile_icon_rule_strength_value">20 %</output></div></div></div>
 <div class="icon-color-section hidden" id="t_tile_icon_bar_section"><input type="hidden" id="t_tile_icon_bar" value="">
 <div class="icon-color-segmented"><button type="button" data-icon-color="mode" data-mode="off">Off</button><button type="button" data-icon-color="mode" data-mode="smooth">Smooth</button><button type="button" data-icon-color="mode" data-mode="steps">Steps</button></div>
 <div class="icon-color-bar-editor hidden" id="t_tile_icon_bar_editor"><div class="icon-color-presets">
@@ -561,7 +561,7 @@ try{
  check(resolveIconColorRecord(snapshot(),'in 6 Tagen rausstellen',null)==='#F44336','Preview colors the waste state');
  // Tint the tile, then switch the rules off: settings stay, no effect.
  $('t_tile_icon_rule_tile').checked=true;$('t_tile_icon_rule_tile').dispatchEvent(new Event('change',{bubbles:true}));
- check(!hidden('t_tile_icon_rule_strength_row')&&snapshot()==='v2\\n\\nsrc rules self tile=25\\nhas F44336 6','Tint tile: '+snapshot());
+ check(!hidden('t_tile_icon_rule_strength_row')&&snapshot()==='v2\\n\\nsrc rules self tile=20\\nhas F44336 6','Tint tile: '+snapshot());
  $('t_tile_icon_rule_strength').value='35';$('t_tile_icon_rule_strength').dispatchEvent(new Event('input',{bubbles:true}));
  check($('t_tile_icon_rule_strength_value').textContent==='35 %'&&snapshot()==='v2\\n\\nsrc rules self tile=35\\nhas F44336 6','Strength: '+snapshot());
  $('t_tile_icon_rule_icon').checked=false;$('t_tile_icon_rule_icon').dispatchEvent(new Event('change',{bubbles:true}));
@@ -614,7 +614,7 @@ try{
  load('5',{icon_colors:''});click(document.querySelector('[data-icon-color="rules-on"][data-mode="1"]'));
  click(document.querySelector('[data-icon-color="source-mode"][data-mode="auto"]'));
  $('t_tile_icon_rule_tile').checked=true;$('t_tile_icon_rule_tile').dispatchEvent(new Event('change',{bubbles:true}));
- check(!hidden('t_tile_icon_source_kinds')&&snapshot()==='v2\\n\\nsrc auto self tile=25','Switch tints with its own color: '+snapshot());
+ check(!hidden('t_tile_icon_source_kinds')&&snapshot()==='v2\\n\\nsrc auto self tile=20','Switch tints with its own color: '+snapshot());
  // Preview: the same colors as tile_icon_source.cpp.
  const meta2={values:{'light.kitchen':JSON.stringify({state:'on',rgb_color:[255,0,0]}),'light.off':'off',
    'sensor.waste':'in 6 Tagen rausstellen','binary_sensor.door':'on','sensor.temp':'21.5'}};

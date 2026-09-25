@@ -3396,7 +3396,7 @@ function syncTileRadiusControls(tabEl) {
     const own = ICON_COLOR_OWN_TYPES.includes(type) && iconColorEl(tab, '_tile_icon_source_kind')?.value !== 'other';
     const entity = String(iconColorEl(tab, '_tile_icon_source')?.value || '').trim();
     if (!own && !iconColorValidEntity(entity)) return null;
-    const strength = Number(iconColorEl(tab, '_tile_icon_rule_strength')?.value || 25);
+    const strength = Number(iconColorEl(tab, '_tile_icon_rule_strength')?.value || 20);
     return {
       mode: iconColorEl(tab, '_tile_icon_source_mode')?.value === 'auto' ? 'auto' : 'rules',
       self: own,
@@ -3430,7 +3430,7 @@ function syncTileRadiusControls(tabEl) {
     if (icon) icon.checked = layer ? layer.icon : true;
     const tile = iconColorEl(tab, '_tile_icon_rule_tile');
     if (tile) tile.checked = !!layer?.tile;
-    set('_tile_icon_rule_strength', String(layer?.tile || 25));
+    set('_tile_icon_rule_strength', String(layer?.tile || 20));
   }
 
   function collectIconColorRecord(tab) {
@@ -3491,6 +3491,7 @@ function syncTileRadiusControls(tabEl) {
     const type = iconColorTypeOf(tab);
     const visible = tileTypeHasIconColors(type);
     block.classList.toggle('hidden', !visible);
+    iconColorEl(tab, '_tile_icon_color_fixed')?.classList.toggle('hidden', !visible);
     if (!visible) return;
     const own = ICON_COLOR_OWN_TYPES.includes(type);
     const kindInput = iconColorEl(tab, '_tile_icon_source_kind');
@@ -3684,7 +3685,7 @@ function syncTileRadiusControls(tabEl) {
       if (mode) mode.value = button.dataset.mode === 'rules' ? 'rules' : 'auto';
     } else if (role === 'strength-reset') {
       const strength = iconColorEl(tab, '_tile_icon_rule_strength');
-      if (strength) strength.value = '25';
+      if (strength) strength.value = '20';
     } else if (role === 'rules-on') {
       const on = iconColorEl(tab, '_tile_icon_rules_on');
       if (on) on.value = button.dataset.mode === '1' ? '1' : '0';

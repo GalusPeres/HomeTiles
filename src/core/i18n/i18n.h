@@ -331,6 +331,9 @@ struct Strings {
   const char* tile_rules_color_icon;
   const char* tile_rules_tint_tile;
   const char* tile_rules_strength;
+  // Tile Settings group captions: what belongs to the icon, what to the tile.
+  const char* tile_group_icon;
+  const char* tile_group_tile;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;
   const char* screensaver_storage_hint;

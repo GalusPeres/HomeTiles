@@ -1,6 +1,7 @@
 #include "src/types/value/value_control.h"
 #include "src/web/server/web_admin.h"
 #include "src/web/server/web_admin_utils.h"
+#include "src/web/server/render/tile_icon_colors_html.h"
 #include <WiFi.h>
 #include <math.h>
 #include <stdlib.h>
@@ -1092,6 +1093,9 @@ static void appendTileTabHTML(
   html += tr.admin_tile_title_placeholder;
   html += R"html("></textarea>
 
+            <div class="tile-settings-group">)html";
+  appendHtmlEscaped(html, tr.tile_group_icon);
+  html += R"html(</div>
             <label>)html";
   html += tr.admin_icon_label;
   html += R"html(</label>
@@ -1105,7 +1109,9 @@ static void appendTileTabHTML(
   html += tr.admin_icon_list;
   html += R"html(</a>
             </div>
-            <div class="tile-icon-disc-fields" id=")html";
+)html";
+  append_tile_icon_color_fixed_html(html, tab_id);
+  html += R"html(            <div class="tile-icon-disc-fields" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_disc_fields">
               <label class="inline-checkbox" id=")html";
@@ -1124,6 +1130,9 @@ static void appendTileTabHTML(
   html += R"html(</label>
             </div>
 
+            <div class="tile-settings-group">)html";
+  appendHtmlEscaped(html, tr.tile_group_tile);
+  html += R"html(</div>
             <div class="tile-color-label-row no-reset)html";
   if (screensaver_mode) html += " has-opacity";
   html += R"html("><span>)html";

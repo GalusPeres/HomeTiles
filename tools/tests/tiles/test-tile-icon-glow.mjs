@@ -77,5 +77,5 @@ assert.ok(snapshots.includes("if (glow) glow.checked = true;"), 'Reset turns glo
 assert.ok(read('src/web/admin/tiles/editor.js').includes("_tile_icon_glow'), 'change', 'tileIconGlow'"));
 assert.ok(read('src/web/admin/tiles/import-export.js').includes("fd.append('icon_glow',"));
 const i18n = read('src/core/i18n/i18n.cpp');
-for (const text of ['"Leuchten"', '"Glow"', '"Lueur"']) assert.ok(i18n.includes(text), `i18n ${text}`);
+for (const text of ['"Kreis leuchtet"', '"Circle glow"', '"Halo du cercle"']) assert.ok(i18n.includes(text), `i18n ${text}`);
 console.log('Icon glow: persistence, central tint rule, runtime color path, preview rule and editor pass');

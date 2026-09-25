@@ -67,7 +67,7 @@ inline constexpr size_t kMaxRowBytes = 1 + 3 + 1 + 6 + 1 + kMaxValueBytes;
 // Tile tint strength of the rule layer in percent.
 inline constexpr uint8_t kTintMinimum = 10;
 inline constexpr uint8_t kTintMaximum = 50;
-inline constexpr uint8_t kTintDefault = 25;
+inline constexpr uint8_t kTintDefault = 20;
 // "\nsrc rules <entity_id> tile=50 noicon off".
 inline constexpr size_t kMaxSourceBytes = 1 + 3 + 1 + 5 + 1 + kMaxEntityBytes + 8 + 7 + 4;
 // "v2\nRRGGBB", the source, the bar and the state lines.

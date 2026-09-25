@@ -80,7 +80,7 @@ assert.ok(read('src/tiles/runtime/tile_icon_color_rules.h').includes('const bool
 
 // Web Admin: Rules section for every type with an icon or surface.
 const html = read('src/web/server/render/tile_icon_colors_html.cpp');
-for (const marker of ['append_label_row(html, tr.tile_rules);', '_tile_icon_rules_on" value="0">',
+for (const marker of ['appendHtmlEscaped(html, tr.tile_rules);', '_tile_icon_rules_on" value="0">',
   '"rules-on", "data-mode", "1", tr.icon_disc_on', '"source-kind", "data-mode", "self", tr.tile_rules_own_entity',
   '"source-kind", "data-mode", "other", tr.tile_rules_other_entity', '_tile_icon_rule_icon" data-icon-color="rule-target" checked> ',
   '_tile_icon_rule_tile" data-icon-color="rule-target"> ', 'html += String(tile_icon_colors::kTintMinimum);',
@@ -92,7 +92,7 @@ for (const [file, name] of [['src/types/switch/admin.js', 'Switch'], ['src/types
   assert.ok(read(file).includes(`function load${name}Fields(tab, data) {\n    loadIconColorFields(tab, data);`), `${name} loads its rules`);
 }
 assert.ok(read('src/web/admin/tiles/icon-colors.js').includes("} else if (role === 'strength-reset') {") &&
-  read('src/web/admin/tiles/icon-colors.js').includes("if (strength) strength.value = '25';"), 'Strength reset returns to 25 %');
+  read('src/web/admin/tiles/icon-colors.js').includes("if (strength) strength.value = '20';"), 'Strength reset returns to 20 %');
 const i18n = read('src/core/i18n/i18n.cpp');
 for (const text of ['"Regeln"', '"Rules"', '"Règles"', '"Eigene Entität"', '"Other entity"', '"Kachel tönen"', '"Tint tile"', '"Intensité"'])
   assert.ok(i18n.includes(text), `translation ${text}`);

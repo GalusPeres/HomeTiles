@@ -31,13 +31,13 @@ void append_button(String& html, const char* css, const char* role, const char* 
 
 }  // namespace
 
-void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
+// The fixed icon color sits with the icon fields (Icon group); its own
+// tile-icon-color-fields wrapper keeps the delegated editor events working.
+void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
-  html += R"html(
-            <!-- Icon colors -->
-            <div id=")html";
+  html += R"html(            <div class="tile-icon-color-fields tile-icon-color-fixed hidden" id=")html";
   html += tab_id;
-  html += R"html(_tile_icon_color_fields" class="tile-icon-color-fields hidden" data-tab=")html";
+  html += R"html(_tile_icon_color_fixed" data-tab=")html";
   html += tab_id;
   html += "\">\n";
   append_label_row(html, tr.tile_icon_color);
@@ -49,15 +49,29 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
   appendHtmlEscaped(html, tr.tile_icon_color_remove);
   html += R"html("><i class="mdi mdi-restore"></i></button>
               </div>
+            </div>
 )html";
+}
 
+void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
+  const auto& tr = i18n::strings(configManager.getConfig().language);
+  html += R"html(
+            <!-- Icon colors -->
+            <div id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_color_fields" class="tile-icon-color-fields hidden" data-tab=")html";
+  html += tab_id;
+  html += "\">\n";
   // Rules (every tile type): off/on, the tile's own entity or another one,
   // entity color or own rules, and what they color: the icon and/or a tint
   // of the tile ("src ..." in the record, tile_icon_colors.h).
   html += R"html(              <div class="icon-color-section hidden" id=")html";
   html += tab_id;
   html += "_tile_icon_source_section\">\n";
-  append_label_row(html, tr.tile_rules);
+  html += R"html(                <div class="tile-settings-group">)html";
+  appendHtmlEscaped(html, tr.tile_rules);
+  html += "</div>
+";
   html += R"html(                <input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_rules_on" value="0">

@@ -205,7 +205,14 @@ assert.doesNotMatch(html, /onclick="resetTileColor\(/, 'The tile Color field has
 assert.match(gridPreview, /function markTileColorInputExplicit\(tab\) \{[\s\S]*?input\.dataset\.bgColorDefault = '0';\s*syncTileColorGlobalToggle\(tab\);/);
 assert.match(gridPreview, /function toggleTileGlobalColor\(tab, useGlobal\) \{[\s\S]*?input\.dataset\.bgColorDefault = useGlobal \? '1' : '0';[\s\S]*?scheduleAutoSave\(tab\);/);
 assert.equal((gridPreview.match(/syncTileColorGlobalToggle\(tab\);/g) || []).length, 5, 'Every color state change syncs the checkbox');
-assert.ok(i18n.includes('"Use global color"') && i18n.includes('"Globale Farbe verwenden"') && i18n.includes('"Utiliser la couleur globale"'));
+assert.ok(i18n.includes('"Use global tile color"') && i18n.includes('"Globale Kachelfarbe verwenden"') && i18n.includes('"Utiliser la couleur de tuile globale"'));
+// Tile Settings groups: Icon (icon, icon color, circle options), Tile (color,
+// global color, layout) and Rules; clear names for what each field colors.
+const editorHtml = read('src/web/server/render/web_admin_html.cpp');
+assert.ok(editorHtml.includes('appendHtmlEscaped(html, tr.tile_group_icon);') && editorHtml.includes('appendHtmlEscaped(html, tr.tile_group_tile);'));
+assert.ok(editorHtml.indexOf('append_tile_icon_color_fixed_html(html, tab_id);') < editorHtml.indexOf('_tile_icon_disc_fields">'),
+  'The icon color sits with the icon');
+assert.ok(i18n.includes('"Tile color",') && i18n.includes('"Kachelfarbe",') && i18n.includes('"Circle glow",'));
 assert.ok(gridPreview.includes('const isDefaultBg = tileBgFollowsDefault(tile.bg_color);'));
 assert.ok(gridPreview.includes("input.dataset.bgColorDefault === '1' || tileColorHexIsDefaultGrey(input.value)"));
 assert.ok(read('src/web/admin/settings/access.js').includes(': tileBgFollowsDefault(bgValue);'));

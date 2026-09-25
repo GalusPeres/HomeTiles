@@ -2383,6 +2383,13 @@
    toggle, preset chips, the bar, draggable stop handles with value labels
    and the range; state colors are text, contains, color and remove. */
 /* An unset icon color shows the default white icon color at full strength. */
+/* Tile Settings group captions (Icon, Tile, Rules): what belongs to what. */
+.tile-settings-group {
+  margin:18px 0 8px; padding-top:12px; border-top:1px solid #232323;
+  font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-3);
+}
+.tile-icon-color-fixed { margin-top:10px; }
+.tile-icon-color-fixed.hidden { display:none; }
 /* Rules: stacked controls, targets side by side, strength on one line with
    the value in the label size (like the Global settings sliders). */
 .icon-color-rules-body { display:flex; flex-direction:column; align-items:flex-start; gap:8px; margin-top:8px; }

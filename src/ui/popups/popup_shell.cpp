@@ -229,6 +229,24 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
 
 }
 
+// The header disc takes the icon's hue like a tile disc with glow: a colored
+// icon (binary on, light color, climate mode, ...) tints it, white and grey
+// icons keep the neutral white disc. Same rule and opacities as the tile
+// discs (tile_icon_disc::icon_color_tints, kGlowOpa, kOpa).
+void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
+  if (!disc || !icon) return;
+  const uint32_t rgb =
+      lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFFu;
+  const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+  const bool tinted = r != g || g != b;
+  const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
+  const lv_opa_t opa = tinted ? static_cast<lv_opa_t>(popup_layout::kHeaderIconDiscGlowOpa)
+                              : static_cast<lv_opa_t>(popup_layout::kHeaderIconDiscOpa);
+  if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
+    lv_obj_set_style_bg_color(disc, color, 0);
+  if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
+}
+
 // A header with a value line shows the title on one line; the classic header
 // keeps the configured two-line title. Only a change re-renders the title.
 void set_title_single_line(lv_obj_t* title, bool single_line) {
@@ -370,6 +388,7 @@ void sync_popup_shell() {
              with_value ? popup_layout::headerCompactTitleFont() : nullptr);
   set_title_single_line(shell.title, with_value);
   copy_label(shell.icon, shell.active->icon, false);
+  apply_header_disc_tint(shell.icon_disc, shell.icon);
   // The disc appears only behind a visible header icon.
   lv_obj_set_flag(shell.icon_disc, LV_OBJ_FLAG_HIDDEN,
                   lv_obj_has_flag(shell.icon, LV_OBJ_FLAG_HIDDEN) ||

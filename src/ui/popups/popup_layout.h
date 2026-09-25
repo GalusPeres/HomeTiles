@@ -194,6 +194,8 @@ constexpr int kCloseButtonClickArea = 8;
 constexpr int kHeaderIconDiscSize = scale(72);
 constexpr int kHeaderIconDiscGap = scale(16);
 constexpr int kHeaderIconDiscOpa = 38;
+// A colored header icon tints its disc like tile glow (tile_icon_disc::kGlowOpa).
+constexpr int kHeaderIconDiscGlowOpa = 51;
 constexpr int kHeaderIconX = 0;
 constexpr int kHeaderTitleX = kHeaderIconDiscSize + kHeaderIconDiscGap;
 

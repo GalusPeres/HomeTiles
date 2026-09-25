@@ -1272,10 +1272,6 @@ void tiles_request_rule_refresh(GridType grid_type, uint8_t index) {
 }
 
 void process_icon_source_updates() {
-  // A dragged Light color or Kelvin value sends state echoes several times a
-  // second; retinting the tile under the popup on each one redrew the popup
-  // and made the drag stutter. The pending tiles apply once it is released.
-  if (light_popup_is_dragging()) return;
   uint64_t pending = g_icon_source_pending.exchange(0);
   if (!pending) return;
   const uint8_t idx = static_cast<uint8_t>(GridType::TAB0);

@@ -182,38 +182,8 @@ void refresh_discs(lv_obj_t* card) {
   }
 }
 
-// Retints a card with the "Tint tile" option from its icon's current color.
-void apply_icon_fill_now(lv_obj_t* card) {
-  uint8_t marker = 0;
-  if (!icon_fill_marker(card, marker) || !marker || (marker & kRuleTintWins)) return;
-  const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
-  if (!apply_icon_fill(card, find_disc(card), marker & ~kRuleTintWins)) clear_tile_tint(card);
-  if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) == before) return;
-  follow_open_popup(card);
-  refresh_discs(card);
-}
-
-// Icon colors change in fast bursts (a light color or Kelvin value dragged in
-// its popup). A card tint redraws the whole tile and any popup covering it,
-// so the retint waits until the burst settles and a Light popup drag ends.
-// Pending cards are checked with lv_obj_is_valid() before use.
-constexpr uint32_t kIconFillSettleMs = 250;
-constexpr int kIconFillPendingCount = 8;
-lv_obj_t* g_icon_fill_pending[kIconFillPendingCount] = {};
-lv_timer_t* g_icon_fill_timer = nullptr;
-
-void icon_fill_timer_cb(lv_timer_t* timer) {
-  if (light_popup_is_dragging()) return;
-  lv_timer_pause(timer);
-  for (lv_obj_t*& card : g_icon_fill_pending) {
-    lv_obj_t* pending = card;
-    card = nullptr;
-    if (pending && lv_obj_is_valid(pending)) apply_icon_fill_now(pending);
-  }
-}
-
-// tile_icon_disc::g_icon_color_hook: an icon color change queues the retint
-// of a card with the "Tint tile" option unless an active rule tint wins.
+// tile_icon_disc::g_icon_color_hook: an icon color change retints a card with
+// the "Tint tile" option unless an active rule tint wins.
 void on_icon_color(lv_obj_t* disc) {
   lv_obj_t* card = lv_obj_get_parent(disc);
   uint8_t marker = 0;
@@ -221,26 +191,11 @@ void on_icon_color(lv_obj_t* disc) {
     card = lv_obj_get_parent(card);
   }
   if (!card || !marker || (marker & kRuleTintWins)) return;
-  bool queued = false;
-  for (lv_obj_t*& slot : g_icon_fill_pending) {
-    if (slot == card) {
-      queued = true;
-      break;
-    }
-    if (!slot) {
-      slot = card;
-      queued = true;
-      break;
-    }
-  }
-  if (!queued) {
-    apply_icon_fill_now(card);
-    return;
-  }
-  if (!g_icon_fill_timer) g_icon_fill_timer = lv_timer_create(icon_fill_timer_cb, kIconFillSettleMs, nullptr);
-  if (!g_icon_fill_timer) return;
-  lv_timer_reset(g_icon_fill_timer);
-  lv_timer_resume(g_icon_fill_timer);
+  const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
+  if (!apply_icon_fill(card, disc, marker & ~kRuleTintWins)) clear_tile_tint(card);
+  if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) == before) return;
+  follow_open_popup(card);
+  refresh_discs(card);
 }
 
 // An open popup of this card takes the card's current background.

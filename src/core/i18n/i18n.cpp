@@ -2132,8 +2132,7 @@ static const LocaleProfile kLocalePl = {
     "Cel chłodzenia",
     {"Grzanie", "Wstępne grzanie", "Chłodzenie", "Osuszanie", "Wentylacja",
      "Rozmrażanie", "Bezczynny", "Wyłączone", "Grzej", "Chłodź",
-     "Grzej/Chłodź", "Auto", "Osusz", "Tylko wentylator",
-     "Klimatyzacja", "Niedostępne", "Nieznane"},
+     "Grzej/Chłodź", "Auto", "Osusz", "Tylko wentylator", "Klimatyzacja", "Niedostępne", "Nieznane"},
     {"Bieżący", "Temperatura docelowa", "Bieżąca wilgotność"},
     {"Tryb", "Ustawienie wstępne", "Tryb wentylatora", "Tryb oscylacji",
      "Poziomy tryb oscylacji"},
@@ -2145,8 +2144,7 @@ static const LocaleProfile kLocalePl = {
      "Zawartość wybranego pola", "Poziomy", "Pionowy"},
     {"Roleta", "Encja rolety", "Pozycja", "Pochylenie",
      "Otwórz", "Zatrzymaj", "Zamknij"},
-    {"Otwarty", "Otwieranie", "Zamknięty", "Zamykanie",
-     "Niedostępne", "Nieznane"},
+    {"Otwarty", "Otwieranie", "Zamknięty", "Zamykanie", "Niedostępne", "Nieznane"},
     1,  // 24-godzinny
     1,  // dzień.miesiąc.rok
     ":00",
@@ -2181,7 +2179,17 @@ static const LocaleProfile kLocalePl = {
      "UTC+9 - Tokio",
      "UTC+9:30 - Darwin",
      "UTC+10 / UTC+11 - Sydney",
-     "UTC+12 / UTC+13 - Auckland"}};
+     "UTC+12 / UTC+13 - Auckland"},
+     {"Czujnik binarny", "Encja czujnika binarnego", "Historia", "Aktywność",
+     "Historia niedostępna", "Brak aktywności", "24H", "7D"},
+    {"Włączony", "Wyłączony", "Niski", "Normalny", "Ładowanie", "Nie ładuje się",
+     "Wykryto", "Brak wykrycia", "Zimno", "Podłączony", "Odłączony", "Otwarty",
+     "Zamknięty", "Gorący", "Odblokowany", "Zablokowany", "Mokry", "Suchy", "W ruchu",
+     "Zatrzymany", "Podłączony", "Odłączony", "Wykryto zasilanie", "Brak zasilania",
+     "W domu", "Poza domem", "Problem", "OK", "Działa", "Nie działa",
+     "Niebezpieczny", "Bezpieczny", "Dostępna aktualizacja", "Aktualny", "Niedostępny",
+     "Nieznany"},
+    {"Liczba", "Wybór", "Data/czas", "Encja liczby", "Encja wyboru", "Encja daty/czasu", "Zastosuj", "Nieprawidłowa wartość", "Zastosowywanie…", "Niepowodzenie zmiany", "RRRR-MM-DD", "GG:MM:SS", "RRRR-MM-DD GG:MM:SS", "Rok", "Miesiąc", "Dzień", "gg", "mm", "ss"}};
 
 // Codes and groups match LocaleProfile::timezone_labels and
 // timezone_group_labels (see i18n.h).

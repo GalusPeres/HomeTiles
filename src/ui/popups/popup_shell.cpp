@@ -247,11 +247,11 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
-  // The card hairline is the tile border: mostly the card, slightly lighter,
-  // with only a hint of a glowing icon's hue.
-  ui_surface_style::apply_popup_border(
-      shell.frame, tinted ? ui_surface_style::border_hint(color) : lv_color_white(),
-      static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));
+  // The card hairline is the plain lighter tile border. It never follows the
+  // icon color: a hairline change redraws the whole popup, and a Light popup
+  // changes its icon color on every step of a dragged color or Kelvin value.
+  ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),
+                                       static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));
 }
 
 // A header with a value line shows the title on one line; the classic header

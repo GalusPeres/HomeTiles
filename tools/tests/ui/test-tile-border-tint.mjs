@@ -26,11 +26,19 @@ for (const marker of [
 ]) assert.ok(style.includes(marker), 'ui_surface_style: ' + marker);
 assert.doesNotMatch(style + header, /icon_glow_border_opa|surface_hue|surface_accent/, 'No strong icon border, no tile-hue border');
 
+// The hint is set when the tile is built; icon color changes never touch the
+// border (a border change redraws the whole tile and any popup above it,
+// which made a dragged Light color stutter).
 const disc = read('src/tiles/runtime/tile_icon_disc.h');
-assert.match(disc, /if \(tinted\) \{\s*ui_surface_style::set_tile_border_tint\(lv_obj_get_parent\(disc\), color\);\s*\} else \{\s*ui_surface_style::clear_tile_border_tint\(lv_obj_get_parent\(disc\)\);/);
+const applyFill = disc.slice(disc.indexOf('inline void apply_fill(lv_obj_t* disc) {'), disc.indexOf('// A wrapped icon'));
+assert.doesNotMatch(applyFill, /set_tile_border_tint|clear_tile_border_tint/, 'Icon color changes never touch the border');
+assert.match(disc, /if \(glow && disc_mode != Mode::Off && icon_color_tints\(rgb\)\) \{\s*ui_surface_style::set_tile_border_tint\(card, lv_color_hex\(rgb\)\);\s*\} else \{\s*ui_surface_style::clear_tile_border_tint\(card\);/,
+  'The border hint is set when the tile is built');
 
+// The popup hairline is the plain white border and never follows the icon.
 const shell = read('src/ui/popups/popup_shell.cpp');
-assert.ok(shell.includes('shell.frame, tinted ? ui_surface_style::border_hint(color) : lv_color_white(),'));
+assert.ok(shell.includes('ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),'), 'Popup hairline is fixed');
+assert.ok(!shell.includes('border_hint('), 'The popup hairline never follows the icon');
 assert.ok(!shell.includes('ui_surface_style::apply_global_tile_border(parts.card);'), 'One popup hairline, not two');
 
 // Preview: the same hint through --tile-border-tint at 20 %.

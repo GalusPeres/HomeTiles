@@ -127,13 +127,6 @@ inline void apply_fill(lv_obj_t* disc) {
     lv_obj_set_style_bg_color(disc, color, 0);
   }
   const uint8_t step = contrast_step(disc);
-  // The tile border takes a hint of a glowing icon's hue: mostly the tile,
-  // slightly lighter; otherwise it is the plain lighter hairline.
-  if (tinted) {
-    ui_surface_style::set_tile_border_tint(lv_obj_get_parent(disc), color);
-  } else {
-    ui_surface_style::clear_tile_border_tint(lv_obj_get_parent(disc));
-  }
   ui_surface_style::apply_icon_disc(disc, tinted, step, mode == Mode::Off, mode == Mode::Global);
   if (g_icon_color_hook) g_icon_color_hook(disc);
 }
@@ -245,6 +238,18 @@ inline void apply_tile_options(lv_obj_t* card, uint8_t mode, bool glow) {
     if (!is_disc(child)) continue;
     set_tag(child, disc_mode, glow);
     apply_fill(child);
+    // The tile border takes a hint of a glowing icon's hue when the tile is
+    // built: mostly the tile, slightly lighter. Icon color changes do not
+    // touch it: a border change redraws the whole tile and any popup above
+    // it, which made a dragged Light color or Kelvin value stutter.
+    lv_obj_t* icon = icon_of(child);
+    const uint32_t rgb =
+        icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF : 0xFFFFFF;
+    if (glow && disc_mode != Mode::Off && icon_color_tints(rgb)) {
+      ui_surface_style::set_tile_border_tint(card, lv_color_hex(rgb));
+    } else {
+      ui_surface_style::clear_tile_border_tint(card);
+    }
   }
 }
 

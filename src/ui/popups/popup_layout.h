@@ -196,7 +196,7 @@ constexpr int kHeaderIconDiscGap = scale(16);
 constexpr int kHeaderIconDiscOpa = 38;
 // A colored header icon tints its disc like tile glow, with the global Glow
 // strength (ui_surface_style::icon_glow_opa, scaled). The card hairline is
-// the tile border at 20 %: white, or a hint of the glowing icon's hue.
+// the plain white 20 % tile border.
 constexpr int kPopupBorderOpa = 51;
 // Same contrast rule as tile_icon_disc::contrast_step_for/scaled_opa: the disc
 // is subtler on dark cards (8 % instead of 15 % at luma <= 0.08).

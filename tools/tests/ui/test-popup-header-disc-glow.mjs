@@ -17,7 +17,7 @@ assert.ok(tint.startsWith('void apply_header_disc_tint('), 'Header tint helper e
 for (const marker of [
   'const bool tinted = r != g || g != b;',
   'const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();',
-  'shell.frame, tinted ? ui_surface_style::border_hint(color) : lv_color_white(),',
+  'ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),',
   'static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));',
   'popup_layout::headerDiscContrastStep(',
   'tinted ? ui_surface_style::icon_glow_opa() : ui_surface_style::icon_neutral_opa(), step));',

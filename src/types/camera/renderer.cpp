@@ -23,8 +23,6 @@ struct CameraEventData {
   String title;
   String icon_name;
   uint32_t bg_color = 0x2A2A2A;
-  // Icon colors record: the popup header icon takes the tile icon's color.
-  String icon_colors;
 };
 
 static String friendly_camera_name(const String& entity_id) {
@@ -50,12 +48,11 @@ static void camera_tile_event_cb(lv_event_t* event) {
   init.title = data->title;
   init.icon_name = data->icon_name;
   init.bg_color = data->bg_color;
-  // The header icon takes the tile icon's color (fixed or from the source
-  // entity's latest state).
-  const String source = tileIconSourceEntity(TILE_CAMERA, data->icon_colors);
-  String payload;
-  if (source.length()) tile_icon_source::cached_payload(source, payload);
-  init.icon_color = tile_icon_source::color(data->icon_colors, payload.c_str());
+  // The header icon takes the color the tile icon shows right now (fixed or
+  // from its rules).
+  lv_obj_t* icon = tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(event)));
+  init.icon_color =
+      icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF : 0xFFFFFF;
   show_camera_popup(init);
 }
 
@@ -139,7 +136,7 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
 
   if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
     CameraEventData* event_data = new CameraEventData{
-        tile.sensor_entity, title, icon_name, card_color, tile.icon_colors};
+        tile.sensor_entity, title, icon_name, card_color};
     lv_obj_add_event_cb(card, camera_tile_event_cb, LV_EVENT_SHORT_CLICKED,
                         event_data);
     lv_obj_add_event_cb(card, camera_tile_delete_cb, LV_EVENT_DELETE,

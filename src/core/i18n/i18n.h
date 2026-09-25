@@ -324,6 +324,13 @@ struct Strings {
   const char* tile_icon_color_source_auto;
   const char* tile_icon_color_source_rules;
   const char* tile_icon_color_source_hint;
+  // The rule layer of every tile: source, targets and tile tint strength.
+  const char* tile_rules;
+  const char* tile_rules_own_entity;
+  const char* tile_rules_other_entity;
+  const char* tile_rules_color_icon;
+  const char* tile_rules_tint_tile;
+  const char* tile_rules_strength;
   const char* screensaver_background_opacity;
   const char* screensaver_hint;
   const char* screensaver_storage_hint;

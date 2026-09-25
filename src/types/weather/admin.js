@@ -4,6 +4,7 @@ function maybeFillTitleFromWeather(tab) {
   }
 
   function loadWeatherFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const el = document.getElementById(prefix + '_weather_entity');
     if (el) el.value = data.sensor_entity || data.weather_entity || '';
@@ -13,12 +14,14 @@ function maybeFillTitleFromWeather(tab) {
   }
 
   function saveWeatherFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const prefix = tab;
     formData.append('weather_entity', document.getElementById(prefix + '_weather_entity')?.value || '');
     formData.append('popup_open_mode', document.getElementById(prefix + '_weather_popup_open_mode')?.value || '1');
   }
 
   function resetWeatherFields(tab) {
+    resetIconColorFields(tab);
     const prefix = tab;
     const el = document.getElementById(prefix + '_weather_entity');
     if (el) el.value = '';

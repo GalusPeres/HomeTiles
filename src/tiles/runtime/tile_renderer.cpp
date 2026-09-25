@@ -22,6 +22,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_color_rules.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/i18n/i18n.h"
@@ -4839,6 +4840,9 @@ lv_obj_t* render_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint
     lv_obj_t* tile_obj =
         desc->render(parent, col, row, tile, index, grid_type, scene_cb);
     apply_fractional_tile_geometry(tile_obj, tile);
+    // Rules (forced icon color, tile tint) from the cached states, before the
+    // discs take the icon color and the background.
+    tile_icon_source::refresh_card(tile_obj, tile);
     tile_icon_disc::apply_tile_options(tile_obj, tile.icon_disc_mode, tile.icon_glow);
     if (!tileBorderEnabled(tile)) ui_surface_style::disable_tile_border(tile_obj);
     // Normal grids use the global display option. The screensaver has its

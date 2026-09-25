@@ -179,13 +179,13 @@ static inline String normalizeTileIconColors(int type, const char* record) {
   char out[tile_icon_colors::kMaxRecordBytes + 1];
   const size_t length = tile_icon_colors::normalize(
       record, out, sizeof(out), tileTypeIconColorsByValue(type), tileTypeIconColorsByState(type),
-      tileTypeHasFixedIconColorOnly(type));
+      true, tileTypeRulesUseOwnEntity(type));
   return length ? String(out) : String();
 }
 
-// Source entity of an icon-and-title tile's icon colors, or "".
+// The other entity of a tile's enabled rules (subscriptions), or "".
 static inline String tileIconSourceEntity(int type, const String& record) {
-  if (!tileTypeHasFixedIconColorOnly(type) || !record.length()) return String();
+  if (!tileTypeHasIconColors(type) || !record.length()) return String();
   const char* entity = nullptr;
   size_t length = 0;
   if (tile_icon_colors::source(record.c_str(), entity, length) == tile_icon_colors::SourceMode::None) {
@@ -580,6 +580,8 @@ enum class SettingsTileVisibilityResult : uint8_t {
 struct TileEntitySlot {
   TileType type = TILE_EMPTY;
   String sensor_entity;
+  // The other entity of the tile's rules (tile_icon_colors.h), or "".
+  String rule_entity;
 };
 
 // Read-only view of one slot of the PSRAM folder entity cache, see
@@ -588,7 +590,8 @@ struct TileEntitySlot {
 // the same folder: use them right away, do not keep them.
 struct FolderEntitySlotView {
   TileType type = TILE_EMPTY;
-  const char* entity = "";  // Never nullptr.
+  const char* entity = "";       // Never nullptr.
+  const char* rule_entity = "";  // Never nullptr; the rules' other entity.
 };
 
 struct FolderEntityCacheEntry;

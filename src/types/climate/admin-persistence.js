@@ -1,5 +1,6 @@
 
   function saveClimateFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const packed = packClimateSlotConfig(tab);
     const packedLayouts = packClimateTargetLayouts(tab);
     const geometry = document.getElementById(
@@ -21,6 +22,7 @@
   }
 
   function resetClimateFields(tab) {
+    resetIconColorFields(tab);
     const entity = document.getElementById(tab + '_climate_entity');
     if (entity) {
       entity.value = '';

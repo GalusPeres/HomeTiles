@@ -62,8 +62,8 @@ const css = read('src/web/assets/admin.css');
 assert.match(css, /\.tile\.sensor-compact > \.tile-icon\.tile-icon-tinted \{\s*background:color-mix\(in srgb, currentColor var\(--icon-disc-glow, 25%\), transparent\);/);
 assert.ok(css.indexOf('.tile-icon.tile-icon-tinted') < css.indexOf('.icon-discs-off .tile.sensor-compact'),
   'Off rules win over the tint');
-assert.match(read('src/web/admin/tiles/grid-preview.js'), /el\.innerHTML = html;\s*applyIconDiscTint\(el\);/);
-assert.match(read('src/web/admin/tiles/live-preview.js'), /tileElem\.innerHTML = html;\s*applyIconDiscTint\(tileElem\);/);
+assert.match(read('src/web/admin/tiles/grid-preview.js'), /el\.innerHTML = html;\s*if \(typeof applyTileRulesTint === 'function'\) \{[\s\S]*?\}\s*applyIconDiscTint\(el\);/);
+assert.match(read('src/web/admin/tiles/live-preview.js'), /tileElem\.innerHTML = html;\s*if \(typeof applyTileRulesTint === 'function'[\s\S]*?\}\s*applyIconDiscTint\(tileElem\);/);
 assert.match(read('src/types/switch/admin.js'), /applySwitchPreviewColors\(tileElem, state\);\s*\/\/[^\n]*\s*applyIconDiscTint\(tileElem\);/);
 
 // Editor, drafts, import/export and translations.

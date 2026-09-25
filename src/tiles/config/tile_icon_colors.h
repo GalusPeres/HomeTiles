@@ -15,11 +15,16 @@
 //
 //   line 1:  "v2"
 //   line 2:  fixed icon color "RRGGBB", or empty for the type's default
-//   then, for icon-and-title tiles only, at most one source entity:
-//            "src auto <entity_id>" takes the entity's own icon color (light
-//            color, on/off, climate mode, cover state), "src rules
-//            <entity_id>" evaluates the bar and state lines below on that
-//            entity's state
+//   then at most one rule layer ("Rules" in the Web Admin):
+//            "src <auto|rules> <self|entity_id> [tile=NN] [noicon] [off]"
+//            auto takes the entity's own icon color (light color, on/off,
+//            climate mode, cover state), rules evaluates the bar and state
+//            lines below on that entity's state; self is the tile's own
+//            entity. tile=NN also tints the tile background with the color
+//            at NN percent (readable, see tile_tint.h), noicon leaves the
+//            icon alone, off keeps the settings without effect. Without a
+//            "src" line, tiles with their own entity evaluate the bar and
+//            state lines on their own state (the b40 records).
 //   then at most one color bar for numeric states:
 //            "bar <smooth|steps> <min> <max> <P>:<RRGGBB> ..." with 2 to 6
 //            stops in ascending order; P is the stop position on the bar in
@@ -59,8 +64,12 @@ inline constexpr size_t kMaxEntityBytes = 128;
 inline constexpr size_t kMaxBarBytes = 5 + 6 + 1 + kMaxNumberBytes + 1 + kMaxNumberBytes + kMaxStops * 12;
 // "\nhas RRGGBB <text>".
 inline constexpr size_t kMaxRowBytes = 1 + 3 + 1 + 6 + 1 + kMaxValueBytes;
-// "\nsrc rules <entity_id>".
-inline constexpr size_t kMaxSourceBytes = 1 + 3 + 1 + 5 + 1 + kMaxEntityBytes;
+// Tile tint strength of the rule layer in percent.
+inline constexpr uint8_t kTintMinimum = 10;
+inline constexpr uint8_t kTintMaximum = 50;
+inline constexpr uint8_t kTintDefault = 25;
+// "\nsrc rules <entity_id> tile=50 noicon off".
+inline constexpr size_t kMaxSourceBytes = 1 + 3 + 1 + 5 + 1 + kMaxEntityBytes + 8 + 7 + 4;
 // "v2\nRRGGBB", the source, the bar and the state lines.
 inline constexpr size_t kMaxRecordBytes =
     2 + 1 + 6 + kMaxSourceBytes + kMaxBarBytes + kMaxRows * kMaxRowBytes;
@@ -389,42 +398,104 @@ inline bool valid_entity(const char* begin, size_t length) {
   return dots == 1;
 }
 
-// Parses "src <auto|rules> <entity_id>" spanning [begin, end).
-inline bool parse_source(const char* begin, const char* end, SourceMode& mode,
-                         const char*& entity, size_t& entity_len) {
+// The rule layer of a record (its "src" line).
+struct Source {
+  SourceMode mode = SourceMode::None;
+  bool self = false;             // the tile's own entity
+  const char* entity = nullptr;  // other entity, points into the record
+  size_t entity_len = 0;
+  uint8_t tile = 0;              // tile tint in percent, 0 = no tint
+  bool icon = true;              // the rule colors the icon
+  bool enabled = true;           // "off" keeps the settings without effect
+};
+
+inline uint8_t clamp_tint(unsigned percent) {
+  if (percent < kTintMinimum) return kTintMinimum;
+  if (percent > kTintMaximum) return kTintMaximum;
+  return static_cast<uint8_t>(percent);
+}
+
+// Parses "src <auto|rules> <self|entity_id> [tile=NN] [noicon] [off]"
+// spanning [begin, end); options may come in any order, unknown tokens make
+// the line invalid.
+inline bool parse_source_line(const char* begin, const char* end, Source& out) {
+  Source parsed;
   const char* p = begin;
   const char* token = nullptr;
   const char* stop = nullptr;
   if (!next_token(p, end, token, stop) || !token_is(token, stop, "src")) return false;
   if (!next_token(p, end, token, stop)) return false;
-  if (token_is(token, stop, "auto")) mode = SourceMode::Auto;
-  else if (token_is(token, stop, "rules")) mode = SourceMode::Rules;
+  if (token_is(token, stop, "auto")) parsed.mode = SourceMode::Auto;
+  else if (token_is(token, stop, "rules")) parsed.mode = SourceMode::Rules;
   else return false;
   if (!next_token(p, end, token, stop)) return false;
-  const char* extra = nullptr;
-  const char* extra_stop = nullptr;
-  if (next_token(p, end, extra, extra_stop)) return false;
-  if (!valid_entity(token, static_cast<size_t>(stop - token))) return false;
-  entity = token;
-  entity_len = static_cast<size_t>(stop - token);
+  if (token_is(token, stop, "self")) {
+    parsed.self = true;
+  } else if (valid_entity(token, static_cast<size_t>(stop - token))) {
+    parsed.entity = token;
+    parsed.entity_len = static_cast<size_t>(stop - token);
+  } else {
+    return false;
+  }
+  while (next_token(p, end, token, stop)) {
+    const size_t length = static_cast<size_t>(stop - token);
+    if (token_is(token, stop, "noicon")) {
+      parsed.icon = false;
+    } else if (token_is(token, stop, "off")) {
+      parsed.enabled = false;
+    } else if (length >= 6 && length <= 7 && memcmp(token, "tile=", 5) == 0) {
+      unsigned percent = 0;
+      for (const char* d = token + 5; d < stop; ++d) {
+        if (*d < '0' || *d > '9') return false;
+        percent = percent * 10 + static_cast<unsigned>(*d - '0');
+      }
+      parsed.tile = clamp_tint(percent);
+    } else {
+      return false;
+    }
+  }
+  out = parsed;
   return true;
 }
 
-// The source entity of a v2 record (the first "src" line), or None.
-inline SourceMode source(const char* record, const char*& entity, size_t& entity_len) {
-  entity = nullptr;
-  entity_len = 0;
-  if (!is_v2(record)) return SourceMode::None;
+// The rule layer of a v2 record (the first "src" line, if valid).
+inline Source source_of(const char* record) {
+  Source out;
+  if (!is_v2(record)) return out;
   const char* p = line_end(second_line(record));
   while (*p == '\n') {
     const char* begin = p + 1;
     const char* end = line_end(begin);
     p = end;
     if (!starts_with(begin, end, "src ")) continue;
-    SourceMode mode = SourceMode::None;
-    return parse_source(begin, end, mode, entity, entity_len) ? mode : SourceMode::None;
+    Source parsed;
+    if (parse_source_line(begin, end, parsed)) out = parsed;
+    return out;
   }
-  return SourceMode::None;
+  return out;
+}
+
+// The other entity of an enabled rule layer (subscriptions and dispatch), or
+// None for no layer, the tile's own entity or a switched-off layer.
+inline SourceMode source(const char* record, const char*& entity, size_t& entity_len) {
+  const Source layer = source_of(record);
+  if (layer.mode == SourceMode::None || layer.self || !layer.enabled) {
+    entity = nullptr;
+    entity_len = 0;
+    return SourceMode::None;
+  }
+  entity = layer.entity;
+  entity_len = layer.entity_len;
+  return layer.mode;
+}
+
+// True when the color bar and state lines color the icon from the tile's own
+// state: no rule layer (b40 records) or an enabled "src rules self" that
+// colors the icon.
+inline bool own_state_colors_icon(const char* record) {
+  const Source layer = source_of(record);
+  return layer.mode == SourceMode::None ||
+         (layer.mode == SourceMode::Rules && layer.self && layer.enabled && layer.icon);
 }
 
 // Icon color for a known entity state. `state` is the raw Home Assistant
@@ -433,7 +504,8 @@ inline SourceMode source(const char* record, const char*& entity, size_t& entity
 // false when the type's default color applies. Callers skip unavailable or
 // unknown states, which always use the default. Only v2 records are
 // evaluated; stored records are always normalized first.
-inline bool resolve(const char* record, const char* state, const char* display, uint32_t& rgb) {
+inline bool resolve(const char* record, const char* state, const char* display, uint32_t& rgb,
+                    bool fixed_fallback = true) {
   if (!is_v2(record) || !state) return false;
   const char* fixed_begin = second_line(record);
   const char* fixed_end = line_end(fixed_begin);
@@ -463,6 +535,8 @@ inline bool resolve(const char* record, const char* state, const char* display, 
       return true;
     }
   }
+  // Rules alone (the tile tint) do not fall back to the fixed icon color.
+  if (!fixed_fallback) return false;
   trim(fixed_begin, fixed_end);
   return parse_color(fixed_begin, fixed_end, rgb);
 }
@@ -605,22 +679,30 @@ inline bool append_row(const Rule& rule, char* out, size_t& n) {
 // are dropped. Returns the length written to `out` (0 = no icon colors);
 // `out` is always terminated.
 inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_bar, bool allow_rows,
-                        bool allow_source = false) {
+                        bool allow_source = false, bool allow_self = false) {
   if (!out || out_size == 0) return 0;
   out[0] = '\0';
   if (!in || out_size < kMaxRecordBytes + 1) return 0;
   const bool v2 = is_v2(in);
-  const char* source_entity = nullptr;
-  size_t source_len = 0;
-  const SourceMode source_mode =
-      allow_source ? source(in, source_entity, source_len) : SourceMode::None;
-  if (source_mode == SourceMode::Rules) {
-    allow_bar = true;
-    allow_rows = true;
-  } else if (source_mode == SourceMode::Auto) {
+  Source layer = allow_source ? source_of(in) : Source{};
+  if (layer.self && !allow_self) layer = Source{};
+  if (layer.mode == SourceMode::Rules) {
+    // Another entity, or a type without its own state colors, can use both
+    // the bar and the state lines; the Sensor family keeps its type's choice.
+    if (!layer.self || (!allow_bar && !allow_rows)) {
+      allow_bar = true;
+      allow_rows = true;
+    }
+  } else if (layer.mode == SourceMode::Auto) {
     allow_bar = false;
     allow_rows = false;
   }
+  // "src rules self" that colors the icon only is the b40 default of tiles
+  // with their own entity; it stays implicit so existing records keep their
+  // exact form.
+  const bool emit_layer = layer.mode != SourceMode::None &&
+                          !(layer.mode == SourceMode::Rules && layer.self && layer.icon &&
+                            layer.tile == 0 && layer.enabled);
   // Fixed color: line 2 of a v2 record, line 1 of a b39 record.
   const char* fixed_begin = v2 ? second_line(in) : in;
   const char* fixed_end = line_end(fixed_begin);
@@ -648,10 +730,17 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
   size_t n = 0;
   append_text(out, n, "v2\n");
   if (has_fixed) append_hex(out, n, fixed);
-  if (source_mode != SourceMode::None) {
-    append_text(out, n, source_mode == SourceMode::Auto ? "\nsrc auto " : "\nsrc rules ");
-    memcpy(out + n, source_entity, source_len);
-    n += source_len;
+  if (emit_layer) {
+    append_text(out, n, layer.mode == SourceMode::Auto ? "\nsrc auto " : "\nsrc rules ");
+    if (layer.self) {
+      append_text(out, n, "self");
+    } else {
+      memcpy(out + n, layer.entity, layer.entity_len);
+      n += layer.entity_len;
+    }
+    if (layer.tile) n += static_cast<size_t>(snprintf(out + n, out_size - n, " tile=%u", static_cast<unsigned>(layer.tile)));
+    if (!layer.icon) append_text(out, n, " noicon");
+    if (!layer.enabled) append_text(out, n, " off");
   }
   if (has_bar) {
     append_text(out, n, "\nbar ");
@@ -689,7 +778,7 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
       if (append_row(rule, out, n)) ++rows;
     }
   }
-  if (!has_fixed && source_mode == SourceMode::None && !has_bar && rows == 0) n = 0;
+  if (!has_fixed && !emit_layer && !has_bar && rows == 0) n = 0;
   out[n] = '\0';
   return n;
 }

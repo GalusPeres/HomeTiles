@@ -51,29 +51,81 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
               </div>
 )html";
 
-  // Icon-and-title tiles: a source entity whose own color or state colors
-  // the icon ("src auto|rules <entity>" in the record).
+  // Rules (every tile type): off/on, the tile's own entity or another one,
+  // entity color or own rules, and what they color: the icon and/or a tint
+  // of the tile ("src ..." in the record, tile_icon_colors.h).
   html += R"html(              <div class="icon-color-section hidden" id=")html";
   html += tab_id;
   html += "_tile_icon_source_section\">\n";
-  append_label_row(html, tr.tile_icon_color_source);
-  html += R"html(                <select id=")html";
+  append_label_row(html, tr.tile_rules);
+  html += R"html(                <input type="hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rules_on" value="0">
+                <div class="icon-color-segmented" role="group">)html";
+  append_button(html, "", "rules-on", "data-mode", "0", tr.icon_disc_off);
+  append_button(html, "", "rules-on", "data-mode", "1", tr.icon_disc_on);
+  html += R"html(</div>
+                <div class="icon-color-rules-body hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rules_body">
+                  <input type="hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_source_kind" value="self">
+                  <div class="icon-color-segmented" role="group" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_source_kinds">)html";
+  append_button(html, "", "source-kind", "data-mode", "self", tr.tile_rules_own_entity);
+  append_button(html, "", "source-kind", "data-mode", "other", tr.tile_rules_other_entity);
+  html += R"html(</div>
+                  <select id=")html";
   html += tab_id;
   html += R"html(_tile_icon_source" data-icon-color="source"><option value="">)html";
   appendHtmlEscaped(html, tr.tile_icon_color_source_none);
   html += R"html(</option></select>
-                <input type="hidden" id=")html";
+                  <input type="hidden" id=")html";
   html += tab_id;
-  html += R"html(_tile_icon_source_mode" value="auto">
-                <div class="icon-color-segmented hidden" role="group" id=")html";
+  html += R"html(_tile_icon_source_mode" value="rules">
+                  <div class="icon-color-segmented" role="group" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_source_modes">)html";
   append_button(html, "", "source-mode", "data-mode", "auto", tr.tile_icon_color_source_auto);
   append_button(html, "", "source-mode", "data-mode", "rules", tr.tile_icon_color_source_rules);
   html += R"html(</div>
-                <p class="hint">)html";
+                  <div class="icon-color-targets">
+                    <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rule_icon" data-icon-color="rule-target" checked> )html";
+  appendHtmlEscaped(html, tr.tile_rules_color_icon);
+  html += R"html(</label>
+                    <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rule_tile" data-icon-color="rule-target"> )html";
+  appendHtmlEscaped(html, tr.tile_rules_tint_tile);
+  html += R"html(</label>
+                  </div>
+                  <div class="icon-color-strength hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rule_strength_row"><label for=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rule_strength">)html";
+  appendHtmlEscaped(html, tr.tile_rules_strength);
+  html += R"html(</label><input type="range" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rule_strength" min=")html";
+  html += String(tile_icon_colors::kTintMinimum);
+  html += R"html(" max=")html";
+  html += String(tile_icon_colors::kTintMaximum);
+  html += R"html(" step="5" value=")html";
+  html += String(tile_icon_colors::kTintDefault);
+  html += R"html(" data-icon-color="rule-strength"><output id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rule_strength_value">)html";
+  html += String(tile_icon_colors::kTintDefault);
+  html += R"html( %</output></div>
+                  <p class="hint">)html";
   appendHtmlEscaped(html, tr.tile_icon_color_source_hint);
   html += R"html(</p>
+                </div>
               </div>
 )html";
 

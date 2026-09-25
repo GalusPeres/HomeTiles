@@ -51,8 +51,8 @@ assert.match(camera, /if \(!compact\) \{[\s\S]*?tile_icon_disc::add_round\(card,
 // Fixed icon color with glow: persisted like the Sensor family's record,
 // applied once when the tile is built, previewed with the same color.
 const policy = read('src/types/tile_type_policy.h');
-assert.match(policy, /static constexpr bool tileTypeHasFixedIconColorOnly\(int type\) \{\s*return type == TILE_SCENE \|\| type == TILE_FOLDER \|\| type == TILE_BACK \|\| type == TILE_CAMERA;/);
-assert.match(policy, /tileTypeIsEditableValue\(type\) \|\| tileTypeHasFixedIconColorOnly\(type\);/);
+assert.match(policy, /static constexpr bool tileTypeHasFixedIconColorOnly\(int type\) \{\s*return type == TILE_SCENE \|\| type == TILE_FOLDER \|\| type == TILE_BACK \|\| type == TILE_CAMERA \|\|\s*type == TILE_CLOCK \|\| type == TILE_TEXT;/);
+assert.match(policy, /return tileTypeRulesUseOwnEntity\(type\) \|\| tileTypeHasFixedIconColorOnly\(type\);/);
 assert.ok(!/tileTypeIconColorsByValue[^}]*TILE_(SCENE|FOLDER|BACK|CAMERA)/.test(policy) &&
   !/tileTypeIconColorsByState[^}]*TILE_(SCENE|FOLDER|BACK|CAMERA)/.test(policy), 'Fixed color only: no bar and no state list');
 assert.match(read('src/tiles/runtime/tile_icon_color_rules.h'),
@@ -62,14 +62,14 @@ for (const [name, source, icon] of [['navigate', navigate, 'icon_lbl'], ['scene'
 }
 const colorHelpers = ['tileTypeHasIconColors', 'tileTypeHasFixedIconColorOnly'].map(extractDeliveredFunction).join('\n');
 const iconColorsSource = read('src/web/admin/tiles/icon-colors.js');
-const constants = iconColorsSource.match(/const ICON_COLOR_FIXED_TYPES = [^;]+;/)[0] + '\n' +
-  iconColorsSource.match(/const ICON_COLOR_TYPES = [^;]+;/)[0];
+const constants = ['FIXED_TYPES', 'OWN_TYPES', 'TYPES'].map(name =>
+  iconColorsSource.match(new RegExp('const ICON_COLOR_' + name + ' = [^;]+;'))[0]).join('\n');
 const {tileTypeHasIconColors, tileTypeHasFixedIconColorOnly} =
   new Function(`${constants}\n${colorHelpers}; return {tileTypeHasIconColors, tileTypeHasFixedIconColorOnly};`)();
 for (const type of ['2', '4', '8', '18']) {
   assert.ok(tileTypeHasIconColors(type) && tileTypeHasFixedIconColorOnly(type), `type ${type} has a fixed icon color`);
 }
-assert.ok(!tileTypeHasFixedIconColorOnly('1') && !tileTypeHasIconColors('7'));
+assert.ok(!tileTypeHasFixedIconColorOnly('1') && !tileTypeHasIconColors('7') && tileTypeHasIconColors('5'));
 const tileTypeHasColoredIcon = new Function(`${extractDeliveredFunction('tileTypeHasColoredIcon')}; return tileTypeHasColoredIcon;`)();
 for (const type of ['2', '4', '8', '18']) assert.ok(tileTypeHasColoredIcon(type), `Glow checkbox for type ${type}`);
 assert.ok(!tileTypeHasColoredIcon('7') && !tileTypeHasColoredIcon('10'));

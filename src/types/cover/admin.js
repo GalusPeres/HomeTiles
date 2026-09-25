@@ -105,6 +105,7 @@
   }
 
   function loadCoverFields(tab, data) {
+    loadIconColorFields(tab, data);
     const entity = document.getElementById(tab + '_cover_entity');
     const configured = data.sensor_entity || data.cover_entity || '';
     if (entity) {
@@ -130,6 +131,7 @@
   }
 
   function saveCoverFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const entity = document.getElementById(tab + '_cover_entity')?.value || '';
     formData.append('cover_entity', entity);
     formData.append('sensor_entity', entity);
@@ -138,6 +140,7 @@
   }
 
   function resetCoverFields(tab) {
+    resetIconColorFields(tab);
     const entity = document.getElementById(tab + '_cover_entity');
     if (entity) {
       entity.value = '';

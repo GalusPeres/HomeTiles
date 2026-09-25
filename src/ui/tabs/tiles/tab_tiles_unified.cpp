@@ -1249,22 +1249,26 @@ static lv_obj_t* create_tiles_grid(lv_obj_t* parent) {
   return grid;
 }
 
-// Icon-and-title tiles of the visible grid whose icon colors' source entity
-// changed; the loop task recolors them from the entity cache. MQTT dispatch
+// Tiles of the visible grid whose rule entity (tile_icon_source.h) changed;
+// the loop task reapplies their rules from the entity cache. MQTT dispatch
 // only sets bits here and never touches LVGL.
 static std::atomic<uint64_t> g_icon_source_pending{0};
 
-// True when the tile's icon colors take their color from `entity_id`. The
-// record is compared in place, so MQTT dispatch allocates nothing.
+// True when the tile's enabled rules take their color from `entity_id` (its
+// own entity or another one). The record is read in place, so MQTT dispatch
+// allocates nothing.
 static bool tile_icon_source_matches(const Tile& tile, const char* entity_id) {
-  if (!tileTypeHasFixedIconColorOnly(tile.type) || !tile.icon_colors.length()) return false;
-  const char* source = nullptr;
-  size_t length = 0;
-  if (tile_icon_colors::source(tile.icon_colors.c_str(), source, length) ==
-      tile_icon_colors::SourceMode::None) {
-    return false;
+  if (!tileTypeHasIconColors(tile.type) || !tile.icon_colors.length()) return false;
+  const tile_icon_colors::Source layer = tile_icon_colors::source_of(tile.icon_colors.c_str());
+  if (layer.mode == tile_icon_colors::SourceMode::None || !layer.enabled) return false;
+  if (layer.self) return tile.sensor_entity.equalsIgnoreCase(entity_id);
+  return strlen(entity_id) == layer.entity_len && strncasecmp(layer.entity, entity_id, layer.entity_len) == 0;
+}
+
+void tiles_request_rule_refresh(GridType grid_type, uint8_t index) {
+  if (grid_type == GridType::TAB0 && index < TILES_PER_GRID) {
+    g_icon_source_pending.fetch_or(uint64_t{1} << index);
   }
-  return strlen(entity_id) == length && strncasecmp(source, entity_id, length) == 0;
 }
 
 void process_icon_source_updates() {
@@ -1315,13 +1319,13 @@ static void apply_cached_states(GridType grid_type, const TileGridConfig& config
   uint64_t icon_sources = 0;
   for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
     enqueue_cached_tile_state(grid_type, config.tiles[i], i, include_media);
-    if (tileTypeHasFixedIconColorOnly(config.tiles[i].type) && config.tiles[i].icon_colors.length()) {
+    if (tileTypeHasIconColors(config.tiles[i].type) && config.tiles[i].icon_colors.length()) {
       icon_sources |= uint64_t{1} << i;
     }
   }
-  // Visible grids (the only callers that include Media) recolor their
-  // icon-and-title tiles from the latest source states; hidden cache builds
-  // take them from the cache while rendering.
+  // Visible grids (the only callers that include Media) reapply the rules
+  // from the latest states; hidden cache builds take them from the cache
+  // while rendering (render_tile).
   if (include_media && grid_type == GridType::TAB0 && icon_sources) {
     g_icon_source_pending.fetch_or(icon_sources);
   }

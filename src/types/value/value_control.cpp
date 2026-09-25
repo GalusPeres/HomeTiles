@@ -1,6 +1,7 @@
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/value/value_control.h"
 #include "src/tiles/runtime/tile_icon_color_rules.h"
+#include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include <ArduinoJson.h>
 #include <algorithm>
 #include <cmath>
@@ -147,6 +148,7 @@ void refresh_editable_tile(GridType grid, uint8_t index) {
   // and Date/Time state colors match the raw state or its displayed text.
   if (widgets[index].icon_label && tile->icon_colors.length()) {
     const bool known = value.valid && value.has_state && value.available && value.state != "unknown";
+    tiles_request_rule_refresh(grid, index);
     tile_icon_color_rules::apply(widgets[index].icon_label, tile->icon_colors.c_str(), known,
                                  value.state.c_str(), display.c_str(), lv_color_white());
   }

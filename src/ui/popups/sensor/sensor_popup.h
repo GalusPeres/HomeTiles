@@ -22,6 +22,10 @@ struct SensorPopupInit {
   // The tile's per-tile icon colors (tile_icon_colors.h): the header icon
   // takes the same color as the tile icon for the current state.
   String icon_colors;
+  // Rules that force the tile icon color (another entity, entity color):
+  // the header shows the tile icon's color from the opening.
+  bool forced_icon = false;
+  uint32_t forced_icon_color = 0xFFFFFF;
 };
 
 // Ordinary HA sensors with textual states use the same discrete history view

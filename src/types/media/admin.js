@@ -9,6 +9,7 @@ function maybeFillTitleFromMedia(tab) {
   }
 
   function loadMediaFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = data.sensor_entity || data.media_entity || '';
@@ -17,6 +18,7 @@ function maybeFillTitleFromMedia(tab) {
   }
 
   function saveMediaFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const prefix = tab;
     const entity = document.getElementById(prefix + '_media_entity')?.value || '';
     formData.append('media_entity', entity);
@@ -24,6 +26,7 @@ function maybeFillTitleFromMedia(tab) {
   }
 
   function resetMediaFields(tab) {
+    resetIconColorFields(tab);
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = '';

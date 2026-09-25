@@ -220,6 +220,7 @@ function maybeFillTitleFromSwitch(tab) {
   }
 
   function loadSwitchFields(tab, data) {
+    loadIconColorFields(tab, data);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_switch_entity');
     if (entityEl) entityEl.value = data.sensor_entity || data.switch_entity || '';
@@ -235,6 +236,7 @@ function maybeFillTitleFromSwitch(tab) {
   }
 
   function saveSwitchFields(tab, formData) {
+    saveIconColorFields(tab, formData);
     const prefix = tab;
     formData.append('switch_entity', document.getElementById(prefix + '_switch_entity')?.value || '');
     const styleEl = document.getElementById(prefix + '_switch_style');
@@ -243,6 +245,7 @@ function maybeFillTitleFromSwitch(tab) {
   }
 
   function resetSwitchFields(tab) {
+    resetIconColorFields(tab);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_switch_entity');
     if (entityEl) entityEl.value = '';

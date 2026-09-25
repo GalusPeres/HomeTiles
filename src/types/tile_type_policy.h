@@ -63,18 +63,25 @@ static constexpr bool tileTypeAllowedInScreensaver(int type) {
          type == TILE_COVER || tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
 }
 
-// Icon-and-title tiles without an entity state (Scene, Folder, Back,
-// Camera) keep only the fixed icon color.
+// Tiles without an entity state of their own (Scene, Folder, Back, Camera,
+// Clock, Text): a fixed icon color, and rules only on another entity.
 static constexpr bool tileTypeHasFixedIconColorOnly(int type) {
-  return type == TILE_SCENE || type == TILE_FOLDER || type == TILE_BACK || type == TILE_CAMERA;
+  return type == TILE_SCENE || type == TILE_FOLDER || type == TILE_BACK || type == TILE_CAMERA ||
+         type == TILE_CLOCK || type == TILE_TEXT;
 }
 
-// Per-tile icon colors (fixed icon color, color bar and state colors): the
-// Sensor family, Binary sensor and Energy evaluate entity states, the
-// icon-and-title tiles use the fixed color only.
+// Tiles whose rules can use their own entity ("src ... self") as well as
+// another entity.
+static constexpr bool tileTypeRulesUseOwnEntity(int type) {
+  return type == TILE_SENSOR || type == TILE_SWITCH || type == TILE_WEATHER ||
+         type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||
+         type == TILE_COVER || type == TILE_BINARY_SENSOR || tileTypeIsEditableValue(type);
+}
+
+// Per-tile icon colors and rules (tile_icon_colors.h): every tile type with
+// an icon or a surface to color.
 static constexpr bool tileTypeHasIconColors(int type) {
-  return type == TILE_SENSOR || type == TILE_ENERGY || type == TILE_BINARY_SENSOR ||
-         tileTypeIsEditableValue(type) || tileTypeHasFixedIconColorOnly(type);
+  return tileTypeRulesUseOwnEntity(type) || tileTypeHasFixedIconColorOnly(type);
 }
 
 // Numeric states take the color bar ("Icon color by value"), text states the

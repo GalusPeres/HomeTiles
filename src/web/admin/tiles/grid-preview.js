@@ -133,14 +133,29 @@
   function previewIconColor(typeValue, record, entity, meta, binaryState, fallback) {
     if (!record || typeof tileTypeHasIconColors !== 'function' ||
         !tileTypeHasIconColors(typeValue)) return fallback;
-    // Icon-and-title tiles: the source entity's color or state colors, else
-    // the fixed color (tile_icon_source::color).
-    if (typeof tileTypeHasFixedIconColorOnly === 'function' && tileTypeHasFixedIconColorOnly(typeValue) &&
-        typeof iconColorSourcePreview === 'function') {
-      return iconColorSourcePreview(record, meta) || fallback;
+    const type = String(typeValue ?? '0');
+    // Rules that color the icon win (tile_icon_source::refresh_card).
+    const layer = typeof iconColorRecordSource === 'function' ? iconColorRecordSource(record) : null;
+    if (layer && layer.enabled && layer.icon && typeof iconColorLayerColor === 'function') {
+      const color = iconColorLayerColor(record, layer, entity, meta, type);
+      if (color) return color;
     }
+    // Only the Sensor family colors its icon from its own state; every other
+    // case shows the fixed icon color, else the type's color.
+    const ownRules = ['1', '14', '20', '21', '22', '23'].includes(type) &&
+      typeof iconColorOwnStateColorsIcon === 'function' && iconColorOwnStateColorsIcon(record);
+    if (!ownRules) return resolveIconColorRecord(record, '', null) || fallback;
     const rule = iconColorRuleState(typeValue, entity, meta, binaryState);
     return (rule && resolveIconColorRecord(record, rule.state, rule.display)) || fallback;
+  }
+  // Tints a preview tile like tile_icon_source.cpp ("Tint tile" rules).
+  function applyTileRulesTint(el, typeValue, record, ownEntity, meta) {
+    if (!el || !record || typeof iconColorTilePreviewTint !== 'function') return;
+    const tint = iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta);
+    if (!tint) return;
+    const rgb = String(getComputedStyle(el).backgroundColor || '').match(/(d+)D+(d+)D+(d+)/);
+    const base = rgb ? '#' + [rgb[1], rgb[2], rgb[3]].map(v => Number(v).toString(16).padStart(2, '0')).join('') : '#2A2A2A';
+    el.style.background = tileTintBackground(base, tint.color, tint.percent);
   }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1' ||
@@ -378,6 +393,9 @@
       }
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
+      if (typeof applyTileRulesTint === 'function') {
+        applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
+      }
       applyIconDiscTint(el);
       if (typeValue === '9') fitCompactClockPreview(el);
     }

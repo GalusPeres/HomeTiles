@@ -25,11 +25,11 @@ using namespace web_admin_handlers;
 namespace {
 
 static String dynamicMqttEntityForTile(const Tile& tile) {
-  // Icon-and-title tiles subscribe to the source entity of their icon colors.
-  if (tileTypeHasFixedIconColorOnly(tile.type)) return tileIconSourceEntity(tile.type, tile.icon_colors);
-  if (!tileTypeHasDynamicMqttRoute(tile.type)) return "";
-  String entity = tile.sensor_entity;
+  // The tile's own route plus the other entity of its rules.
+  String entity = tileTypeHasDynamicMqttRoute(tile.type) ? tile.sensor_entity : String();
   entity.trim();
+  const String rule_entity = tileIconSourceEntity(tile.type, tile.icon_colors);
+  if (rule_entity.length()) entity += "|" + rule_entity;
   return entity;
 }
 

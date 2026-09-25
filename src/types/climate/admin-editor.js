@@ -223,6 +223,7 @@
   }
 
   function loadClimateFields(tab, data) {
+    loadIconColorFields(tab, data);
     const entity = document.getElementById(tab + '_climate_entity');
     if (entity) {
       const configuredEntity =

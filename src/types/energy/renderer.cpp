@@ -1,5 +1,6 @@
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/energy/renderer.h"
 
@@ -214,14 +215,10 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
           init.unit = unit;
           init.decimals = data->decimals;
           init.bg_color = data->bg_color;
-          // The header icon shows the tile's icon color for the current state.
-          String state = haBridgeConfig.findSensorInitialValue(data->entity_id);
-          state.trim();
-          uint32_t rgb = 0;
-          if (data->icon_colors.length() && state.length() &&
-              !state.equalsIgnoreCase("unavailable") && !state.equalsIgnoreCase("unknown") &&
-              tile_icon_colors::resolve(data->icon_colors.c_str(), state.c_str(), nullptr, rgb)) {
-            init.icon_color = rgb;
+          // The header icon shows the color the tile icon shows right now
+          // (fixed, own-state colors or rules).
+          if (lv_obj_t* icon = tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(e)))) {
+            init.icon_color = lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF;
           }
 
           finish_press_before_popup(e);

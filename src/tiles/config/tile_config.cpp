@@ -2601,9 +2601,8 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
     if (!loadGrid(folder_id, full)) return false;
     for (size_t i = 0; i < TILES_PER_GRID; ++i) {
       out[i].type = full.tiles[i].type;
-      out[i].sensor_entity = tileTypeHasFixedIconColorOnly(full.tiles[i].type)
-                                 ? tileIconSourceEntity(full.tiles[i].type, full.tiles[i].icon_colors)
-                                 : full.tiles[i].sensor_entity;
+      out[i].sensor_entity = full.tiles[i].sensor_entity;
+      out[i].rule_entity = tileIconSourceEntity(full.tiles[i].type, full.tiles[i].icon_colors);
     }
     return true;
   }
@@ -2628,15 +2627,11 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
       out[i].sensor_entity = full_entity;
     }
   }
-  // Icon-and-title tiles subscribe to the source entity of their icon colors
-  // instead: its state colors the icon. No consumer of this projection reads
-  // their own entity (Camera keeps its camera entity in the full grid).
+  // Rules on another entity subscribe to it as well (tile_icon_colors.h).
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    if (!tileTypeHasFixedIconColorOnly(out[i].type)) continue;
+    if (!tileTypeHasIconColors(out[i].type)) continue;
     String record;
-    out[i].sensor_entity = readIconColorsSd(folder_id, i, record)
-                               ? tileIconSourceEntity(out[i].type, record)
-                               : String();
+    if (readIconColorsSd(folder_id, i, record)) out[i].rule_entity = tileIconSourceEntity(out[i].type, record);
   }
   uint32_t sidecar_ms = millis() - t_sidecar0;
   if (read_ms + unpack_ms + sidecar_ms >= 5) {
@@ -2657,6 +2652,7 @@ struct FolderEntityCacheEntry {
   uint32_t built_gen;
   TileType types[TILES_PER_GRID];
   char* entities[TILES_PER_GRID];  // PSRAM copies; nullptr means empty.
+  char* rule_entities[TILES_PER_GRID];  // The rules' other entity, same rules.
 };
 
 // 128 entries x ~184 B = ~24 KB of PSRAM. Beyond 128 live folders,
@@ -2715,8 +2711,13 @@ FolderEntityCacheEntry* TileConfig::storeFolderEntityCache(uint16_t folder_id,
       heap_caps_free(e->entities[i]);
       e->entities[i] = nullptr;
     }
+    if (e->rule_entities[i]) {
+      heap_caps_free(e->rule_entities[i]);
+      e->rule_entities[i] = nullptr;
+    }
     e->types[i] = slots[i].type;
     e->entities[i] = psramStrdupLocal(slots[i].sensor_entity);
+    e->rule_entities[i] = psramStrdupLocal(slots[i].rule_entity);
   }
   e->built_gen = built_gen;
   return e;
@@ -2741,6 +2742,7 @@ bool TileConfig::getFolderEntitiesCached(uint16_t folder_id, FolderEntitySlotVie
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     out[i].type = e->types[i];
     out[i].entity = e->entities[i] ? e->entities[i] : "";
+    out[i].rule_entity = e->rule_entities[i] ? e->rule_entities[i] : "";
   }
   return true;
 }

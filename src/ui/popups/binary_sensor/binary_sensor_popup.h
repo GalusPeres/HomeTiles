@@ -15,6 +15,8 @@ struct BinarySensorPopupInit {
   uint32_t bg_color = 0;
   // Per-tile icon colors for the popup header icon (tile_icon_colors.h).
   String icon_colors;
+  bool forced_icon = false;
+  uint32_t forced_icon_color = 0xFFFFFF;
 };
 
 // Binary sensors reuse the established Sensor popup surface and lifecycle.

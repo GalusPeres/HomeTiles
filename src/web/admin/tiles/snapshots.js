@@ -9,7 +9,7 @@
   // state colors (sensor family, energy) or from a fixed icon color (scene,
   // folder, back, camera). Other icons are always white.
   function tileTypeHasColoredIcon(typeValue) {
-    return ['1', '2', '4', '5', '8', '14', '17', '18', '19', '20', '21', '22', '23']
+    return ['1', '2', '4', '5', '8', '12', '14', '15', '17', '18', '19', '20', '21', '22', '23']
       .includes(String(typeValue ?? '0'));
   }
   // Stored disc mode: 0 follows the global option, 2 hides the disc on this

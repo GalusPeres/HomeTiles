@@ -16,10 +16,18 @@ inline void apply(lv_obj_t* icon, const char* record, bool known,
                   const char* state, const char* display, lv_color_t fallback) {
   if (!icon) return;
   uint32_t rgb = 0;
+  // Rules on another entity, switched off or not coloring the icon leave the
+  // icon to the fixed color here; the rule layer forces its own color.
+  const bool own_rules = tile_icon_colors::own_state_colors_icon(record);
   const lv_color_t color =
-      known && tile_icon_colors::resolve(record, state, display, rgb) ? lv_color_hex(rgb)
-                                                                       : fallback;
-  if (lv_color_eq(lv_obj_get_style_text_color(icon, LV_PART_MAIN), color)) return;
+      known && tile_icon_colors::resolve(record, own_rules ? state : "", own_rules ? display : nullptr, rgb)
+          ? lv_color_hex(rgb)
+          : fallback;
+  lv_color_t forced;
+  if (!tile_icon_disc::forced_color(icon, forced) &&
+      lv_color_eq(lv_obj_get_style_text_color(icon, LV_PART_MAIN), color)) {
+    return;
+  }
   tile_icon_disc::set_icon_color(icon, color);
 }
 

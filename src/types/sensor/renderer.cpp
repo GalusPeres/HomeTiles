@@ -1,5 +1,6 @@
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/sensor/renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
@@ -361,6 +362,13 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
             const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(data->entity_id));
             init.value = value.state; init.unit = value.unit;
             init.state_history_mode = value.kind != "number";
+          }
+          // Rules that force the tile icon color also color the header icon.
+          lv_color_t forced;
+          if (tile_icon_disc::forced_color(
+                  tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(e))), forced)) {
+            init.forced_icon = true;
+            init.forced_icon_color = lv_color_to_u32(forced) & 0xFFFFFF;
           }
           finish_press_before_popup(e);
           show_sensor_popup(init);

@@ -259,6 +259,10 @@
 
     html += getTileResizeHandlesHtml(type);
     tileElem.innerHTML = html;
+    if (typeof applyTileRulesTint === 'function' && typeof collectIconColorRecord === 'function' &&
+        typeof iconColorOwnEntity === 'function') {
+      applyTileRulesTint(tileElem, type, collectIconColorRecord(prefix), iconColorOwnEntity(prefix, String(type)), sensorMetaCache);
+    }
     applyIconDiscTint(tileElem);
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {

@@ -143,11 +143,60 @@ inline lv_obj_t* disc_of(lv_obj_t* icon) {
   return is_disc(below) ? below : nullptr;
 }
 
+// Rules (tile_icon_source.cpp) can force an icon color over the color the
+// tile type sets from its state. The forced color and the type's latest
+// color live in unused state selectors, so releasing the rule returns to the
+// type's color without a rebuild.
+inline constexpr lv_style_selector_t kIconForced = LV_PART_MAIN | LV_STATE_USER_3;
+inline constexpr lv_style_selector_t kIconRequested = LV_PART_MAIN | LV_STATE_USER_2;
+
+inline bool forced_color(lv_obj_t* icon, lv_color_t& out) {
+  lv_style_value_t value;
+  if (!icon || lv_obj_get_local_style_prop(icon, LV_STYLE_TEXT_COLOR, &value, kIconForced) != LV_STYLE_RES_FOUND) {
+    return false;
+  }
+  out = value.color;
+  return true;
+}
+
 // The one path for runtime icon color changes: the disc follows the new
-// color without a rebuild and without per-frame work.
+// color without a rebuild and without per-frame work. A forced rule color
+// wins; the requested color is kept for when the rule releases the icon.
 inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {
   if (!icon) return;
+  lv_color_t forced;
+  if (forced_color(icon, forced)) {
+    lv_obj_set_style_text_color(icon, color, kIconRequested);
+    color = forced;
+  }
   lv_obj_set_style_text_color(icon, color, 0);
+  if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);
+}
+
+inline void force_icon_color(lv_obj_t* icon, lv_color_t color) {
+  if (!icon) return;
+  lv_color_t forced;
+  if (!forced_color(icon, forced)) {
+    lv_obj_set_style_text_color(icon, lv_obj_get_style_text_color(icon, LV_PART_MAIN), kIconRequested);
+  } else if (lv_color_eq(forced, color)) {
+    return;
+  }
+  lv_obj_set_style_text_color(icon, color, kIconForced);
+  lv_obj_set_style_text_color(icon, color, 0);
+  if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);
+}
+
+inline void release_icon_color(lv_obj_t* icon) {
+  lv_color_t forced;
+  if (!forced_color(icon, forced)) return;
+  lv_style_value_t value;
+  lv_color_t requested = lv_color_white();
+  if (lv_obj_get_local_style_prop(icon, LV_STYLE_TEXT_COLOR, &value, kIconRequested) == LV_STYLE_RES_FOUND) {
+    requested = value.color;
+  }
+  lv_obj_remove_local_style_prop(icon, LV_STYLE_TEXT_COLOR, kIconForced);
+  lv_obj_remove_local_style_prop(icon, LV_STYLE_TEXT_COLOR, kIconRequested);
+  lv_obj_set_style_text_color(icon, requested, 0);
   if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);
 }
 

@@ -28,9 +28,10 @@ void tiles_update_tile(GridType grid_type, uint8_t index);
 void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, const char* value);
 void tiles_update_weather_by_entity(GridType grid_type, const char* entity_id, const char* payload);
 bool tiles_get_cached_entity_payload(const char* entity_id, String& out);
-// Recolors icon-and-title tiles of the visible grid whose icon colors' source
-// entity changed (loop task; tile_update_service.h).
+// Reapplies the rules of visible tiles whose rule entity changed (loop task;
+// tile_update_service.h). Editable values request their tile directly.
 void process_icon_source_updates();
+void tiles_request_rule_refresh(GridType grid_type, uint8_t index);
 bool tiles_get_cached_entity_payload_signature(const char* entity_id,
                                                uint32_t& hash_out,
                                                size_t& length_out);

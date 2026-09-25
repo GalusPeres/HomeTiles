@@ -1,5 +1,6 @@
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/binary_sensor/renderer.h"
@@ -590,6 +591,13 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
           if (!data) return;
           BinarySensorPopupInit init = popup_init(data->grid_type, data->index);
           if (!init.entity_id.length()) return;
+          lv_color_t forced;
+          if (tile_icon_disc::forced_color(
+                  tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(event))),
+                  forced)) {
+            init.forced_icon = true;
+            init.forced_icon_color = lv_color_to_u32(forced) & 0xFFFFFF;
+          }
           finish_press_before_popup(event);
           show_binary_sensor_popup(init);
         },

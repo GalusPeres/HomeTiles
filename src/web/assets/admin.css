@@ -2383,6 +2383,18 @@
    toggle, preset chips, the bar, draggable stop handles with value labels
    and the range; state colors are text, contains, color and remove. */
 /* An unset icon color shows the default white icon color at full strength. */
+/* Rules: stacked controls, targets side by side, strength on one line with
+   the value in the label size (like the Global settings sliders). */
+.icon-color-rules-body { display:flex; flex-direction:column; align-items:flex-start; gap:8px; margin-top:8px; }
+.icon-color-rules-body.hidden { display:none; }
+.icon-color-rules-body > select { width:100%; margin:0; }
+.icon-color-targets { display:flex; gap:16px; flex-wrap:wrap; }
+.icon-color-targets .inline-checkbox { margin:0; }
+.icon-color-strength { display:flex; align-items:center; gap:10px; width:100%; }
+.icon-color-strength.hidden { display:none; }
+.tile-settings .icon-color-strength label { flex:0 0 auto; margin:0; }
+.icon-color-strength input[type="range"] { flex:1 1 auto; min-width:0; margin:0; padding:0; accent-color:var(--accent); }
+.icon-color-strength output { font-size:12px; font-weight:600; color:var(--text-2); min-width:4.5ch; text-align:right; white-space:nowrap; }
 .icon-color-segmented {
   display:inline-grid;
   grid-auto-flow:column;

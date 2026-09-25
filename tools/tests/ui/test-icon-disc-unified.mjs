@@ -1,8 +1,9 @@
 // Every tile icon and the popup header icon sit on a background disc.
 // tile_icon_disc is the single source: half-height tiles wrap the icon in a
-// concentric disc; taller tiles keep their icon where it was and get a round
-// disc of the same diameter centered on it. The popup header uses a plain
-// circle of popup_layout::scale(72). No renderer builds its own disc.
+// concentric disc; taller tiles keep their icon where it was and get a disc
+// one inset larger, centered on it, with the same radius rule. The popup
+// header uses a plain circle of popup_layout::scale(72). No renderer builds
+// its own disc.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,8 +20,10 @@ for (const marker of [
   'inline int row_height() { return (GRID_CELL_H - GRID_GAP) / 2; }',
   'inline int diameter() { return row_height() - inset() * 2; }',
   'inline int radius_baseline() { return tile_layout::scale_480(22) - inset(); }',
+  'inline int round_diameter() { return diameter() + inset(); }',
   'inline constexpr lv_opa_t kOpa = 38;',
-  'lv_obj_set_size(disc, diameter(), diameter());',
+  'const int size = shape == Shape::Round ? round_diameter() : diameter();',
+  'lv_obj_set_size(disc, size, size);',
   'ui_surface_style::apply_radius(disc, radius_baseline(), 0);',
   'lv_obj_set_style_bg_opa(disc, kOpa, 0);',
   'lv_obj_t* disc = create(card, Shape::Concentric);',
@@ -35,6 +38,10 @@ assert.doesNotMatch(helper, /LV_RADIUS_CIRCLE/, 'Tile discs follow the global ra
 const addRound = helper.slice(helper.indexOf('inline lv_obj_t* add_round('));
 assert.doesNotMatch(addRound, /lv_obj_(?:align|set_pos|set_parent|center)\(icon/, 'The round disc must not move the icon');
 assert.match(addRound, /lv_obj_align\(disc, align,/);
+// Taller tiles get the larger disc, centered with its own diameter.
+assert.match(addRound, /const int size = round_diameter\(\);/);
+assert.match(addRound, /icon_size\.x, size\)/);
+assert.match(addRound, /icon_size\.y, size\)/);
 
 // Half-height tiles keep the concentric disc through the same helper.
 const compact = code(read('src/tiles/runtime/compact_sensor_layout.h'));

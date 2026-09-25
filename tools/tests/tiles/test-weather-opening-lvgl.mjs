@@ -258,7 +258,8 @@ void check_value_alignment(lv_display_t* display) {
  lv_obj_get_coords(lv_obj_get_child(sensor,1),&icon);
  lv_obj_get_coords(lv_obj_get_child(sensor,2),&title);
  assert(lv_obj_get_style_radius(lv_obj_get_child(sensor,0),LV_PART_MAIN)==ui_surface_style::radius(tile_icon_disc::radius_baseline()));
- assert(lv_area_get_width(&disc)==tile_icon_disc::diameter()&&lv_area_get_height(&disc)==tile_icon_disc::diameter());
+ assert(tile_icon_disc::round_diameter()==tile_icon_disc::diameter()+tile_icon_disc::inset());
+ assert(lv_area_get_width(&disc)==tile_icon_disc::round_diameter()&&lv_area_get_height(&disc)==tile_icon_disc::round_diameter());
  assert(std::abs((disc.x1+disc.x2)-(icon.x1+icon.x2))<=1&&std::abs((disc.y1+disc.y2)-(icon.y1+icon.y2))<=1);
  for(const auto& item:std::vector<std::pair<const char*,int>>{
      {"title-top",title.y1-sensor_area.y1},{"title-right",sensor_area.x2-title.x2},

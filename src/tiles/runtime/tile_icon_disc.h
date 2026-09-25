@@ -4,10 +4,10 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/ui/shared/ui_surface_style.h"
 
-// One translucent disc behind every tile icon, all with the same diameter
-// and opacity. Half-height tiles hold the icon in a disc that is concentric
-// with the tile corner and follows the global radius. Taller tiles keep their
-// icon exactly where it is and get a plain circle centered on the icon.
+// One translucent disc behind every tile icon. Half-height tiles hold the icon
+// in a disc that is concentric with the tile corner. Taller tiles keep their
+// icon exactly where it is and get a slightly larger disc centered on the
+// icon. Both follow the global radius with the half-height radius rule.
 // Discs are children of the tile card: they are created and released with the
 // card, so cached grids, folder snapshots and cache restores keep them.
 namespace tile_icon_disc {
@@ -17,6 +17,8 @@ inline int inset() { return tile_layout::scale_480(4); }
 // One half-height tile row; the disc fills it minus the inset on both sides.
 inline int row_height() { return (GRID_CELL_H - GRID_GAP) / 2; }
 inline int diameter() { return row_height() - inset() * 2; }
+// Taller tiles have room for a slightly larger disc around the unchanged icon.
+inline int round_diameter() { return diameter() + inset(); }
 // Tile radius baseline minus the inset keeps the half-height disc concentric
 // with the tile corner; the shared radius style follows global radius changes.
 inline int radius_baseline() { return tile_layout::scale_480(22) - inset(); }
@@ -60,11 +62,10 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   // Presses on a wrapped icon still reach the card through the disc.
   lv_obj_add_flag(disc, LV_OBJ_FLAG_EVENT_BUBBLE);
   lv_obj_set_user_data(disc, const_cast<char*>(&kTag));
-  lv_obj_set_size(disc, diameter(), diameter());
-  // Both shapes follow the global radius with the half-height rule, so every
-  // disc has the same form: a circle at the largest radius, a rounded square
-  // below. The shape only decides the placement (corner or behind the icon).
-  (void)shape;
+  const int size = shape == Shape::Round ? round_diameter() : diameter();
+  lv_obj_set_size(disc, size, size);
+  // Both shapes follow the global radius with the half-height rule. The shape
+  // decides the placement (corner or behind the icon) and the diameter.
   ui_surface_style::apply_radius(disc, radius_baseline(), 0);
   lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
   lv_obj_set_style_bg_opa(disc, kOpa, 0);
@@ -102,9 +103,9 @@ inline int centered_offset(int anchor, int offset, int icon_size, int size) {
   return offset - icon_size / 2 + size / 2 + start_shift;
 }
 
-// Taller tiles: a round disc directly behind `icon`, centered on the icon's
-// current aligned position. The icon itself does not move. Call it once the
-// icon's alignment is final; it takes the icon's hidden state.
+// Taller tiles: a disc of round_diameter() directly behind `icon`, centered on
+// the icon's current aligned position. The icon itself does not move. Call it
+// once the icon's alignment is final; it takes the icon's hidden state.
 inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
   if (!card || !icon || lv_obj_get_parent(icon) != card) return nullptr;
   if (lv_obj_t* existing = disc_of(icon)) return existing;
@@ -131,9 +132,10 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
     case LV_ALIGN_BOTTOM_RIGHT: horizontal = 2; vertical = 2; break;
     default: break;
   }
+  const int size = round_diameter();
   lv_obj_align(disc, align,
-               centered_offset(horizontal, lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x, diameter()),
-               centered_offset(vertical, lv_obj_get_style_y(icon, LV_PART_MAIN), icon_size.y, diameter()));
+               centered_offset(horizontal, lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x, size),
+               centered_offset(vertical, lv_obj_get_style_y(icon, LV_PART_MAIN), icon_size.y, size));
   lv_obj_set_flag(disc, LV_OBJ_FLAG_HIDDEN, lv_obj_has_flag(icon, LV_OBJ_FLAG_HIDDEN));
   lv_obj_move_to_index(disc, lv_obj_get_index(icon));
   return disc;

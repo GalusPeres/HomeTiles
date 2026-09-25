@@ -95,6 +95,9 @@ static lv_obj_t *wifi_list_view = nullptr;
 static lv_obj_t *wifi_entry_view = nullptr;
 static lv_obj_t *wifi_conn_status_label = nullptr;
 static lv_obj_t *wifi_scan_status_label = nullptr;
+// Holds the scan status, network list and manual row; takes the free height
+// above the footer so a long list scrolls instead of pushing it down.
+static lv_obj_t *wifi_list_block = nullptr;
 static lv_obj_t *wifi_list_container = nullptr;
 static lv_obj_t *wifi_manual_row = nullptr;
 static lv_obj_t *wifi_manual_gap = nullptr;
@@ -994,6 +997,7 @@ static void reset_popup_refs() {
   wifi_entry_view = nullptr;
   wifi_conn_status_label = nullptr;
   wifi_scan_status_label = nullptr;
+  wifi_list_block = nullptr;
   wifi_list_container = nullptr;
   wifi_manual_row = nullptr;
   wifi_manual_gap = nullptr;
@@ -1319,28 +1323,21 @@ static void wifi_update_conn_status_label() {
     else lv_obj_add_flag(wifi_disconnect_btn, LV_OBJ_FLAG_HIDDEN);
   }
 
-  if (wifi_list_spacer) {
-    lv_obj_clear_flag(wifi_list_spacer, LV_OBJ_FLAG_HIDDEN);
-  }
   if (wifi_info_box) lv_obj_clear_flag(wifi_info_box, LV_OBJ_FLAG_HIDDEN);
 
   // In AP mode, replace the unused scan/network list with the large
   // credentials/QR information box. Scans are disabled during portal
-  // operation; see wifi_start_scan.
+  // operation; see wifi_start_scan. Only one of the two flex-grow items
+  // is visible, so they never split the free height.
   const bool ap = ap_mode_active;
-  if (wifi_list_container) {
-    if (ap) lv_obj_add_flag(wifi_list_container, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_clear_flag(wifi_list_container, LV_OBJ_FLAG_HIDDEN);
+  if (wifi_list_block) {
+    if (ap) lv_obj_add_flag(wifi_list_block, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_clear_flag(wifi_list_block, LV_OBJ_FLAG_HIDDEN);
   }
-  if (wifi_manual_gap) {
-    if (ap) lv_obj_add_flag(wifi_manual_gap, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_clear_flag(wifi_manual_gap, LV_OBJ_FLAG_HIDDEN);
+  if (wifi_list_spacer) {
+    if (ap) lv_obj_clear_flag(wifi_list_spacer, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(wifi_list_spacer, LV_OBJ_FLAG_HIDDEN);
   }
-  if (wifi_manual_row) {
-    if (ap) lv_obj_add_flag(wifi_manual_row, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_clear_flag(wifi_manual_row, LV_OBJ_FLAG_HIDDEN);
-  }
-  if (ap && wifi_scan_status_label) lv_obj_add_flag(wifi_scan_status_label, LV_OBJ_FLAG_HIDDEN);
 
   if (ap) {
     // Use a heading and aligned SSID/password/IP rows instead of inline
@@ -1374,8 +1371,9 @@ static void wifi_update_conn_status_label() {
         }
         const int max_w = lv_obj_get_content_width(lv_obj_get_parent(wifi_ap_qr));
         if (target > max_w) target = max_w;
-        if (target < popup_layout::scale(240)) {
-          target = popup_layout::scale(240);
+        // A low floor keeps the footer, including the Ethernet row, on screen.
+        if (target < popup_layout::scale(120)) {
+          target = popup_layout::scale(120);
         }
         lv_qrcode_set_size(wifi_ap_qr, target);
         wifi_ap_qr_sized = true;
@@ -2091,20 +2089,31 @@ static void build_wifi_popup(lv_obj_t* parent) {
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(wifi_list_view, popup_layout::scale(10), 0);
 
-  wifi_scan_status_label = lv_label_create(wifi_list_view);
+  wifi_list_block = lv_obj_create(wifi_list_view);
+  style_plain_container(wifi_list_block);
+  lv_obj_set_width(wifi_list_block, LV_PCT(100));
+  lv_obj_set_flex_grow(wifi_list_block, 1);
+  lv_obj_set_flex_flow(wifi_list_block, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(wifi_list_block, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(wifi_list_block, popup_layout::scale(10), 0);
+
+  wifi_scan_status_label = lv_label_create(wifi_list_block);
   lv_label_set_text(wifi_scan_status_label, tr().wifi_scan_searching);
   lv_obj_set_style_text_font(wifi_scan_status_label,
                              popup_layout::font20(), 0);
   lv_obj_set_style_text_color(wifi_scan_status_label, lv_color_hex(0xA0A0A0), 0);
 
-  // Size the list to its content, capped just below half the view before
-  // scrolling. Manual entry then sits directly below the results instead
-  // of sticking to the bottom edge.
-  wifi_list_container = lv_obj_create(wifi_list_view);
+  // Grow into the free height, but never beyond the content (LVGL flex
+  // clamps grow items to max_height, and LV_SIZE_CONTENT resolves to the
+  // rows' height). Short lists keep Manual directly below; long lists
+  // scroll inside the free space instead of pushing the footer down.
+  wifi_list_container = lv_obj_create(wifi_list_block);
   style_plain_container(wifi_list_container);
   lv_obj_set_width(wifi_list_container, LV_PCT(100));
   lv_obj_set_height(wifi_list_container, LV_SIZE_CONTENT);
-  lv_obj_set_style_max_height(wifi_list_container, LV_PCT(44), 0);
+  lv_obj_set_flex_grow(wifi_list_container, 1);
+  lv_obj_set_style_max_height(wifi_list_container, LV_SIZE_CONTENT, 0);
   lv_obj_add_flag(wifi_list_container, LV_OBJ_FLAG_SCROLLABLE);
   // Retain touch scrolling; hide only the scrollbar.
   lv_obj_set_scrollbar_mode(wifi_list_container, LV_SCROLLBAR_MODE_OFF);
@@ -2113,13 +2122,13 @@ static void build_wifi_popup(lv_obj_t* parent) {
 
   // Keep outside the scroll container, fixed below the list and separated
   // by a gap. Rescans need not recreate it with the results.
-  wifi_manual_gap = lv_obj_create(wifi_list_view);
+  wifi_manual_gap = lv_obj_create(wifi_list_block);
   style_plain_container(wifi_manual_gap);
   lv_obj_clear_flag(wifi_manual_gap, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_width(wifi_manual_gap, LV_PCT(100));
   lv_obj_set_height(wifi_manual_gap, popup_layout::scale(6));
 
-  wifi_manual_row = wifi_create_row(wifi_list_view, tr().wifi_manual_entry, false, false);
+  wifi_manual_row = wifi_create_row(wifi_list_block, tr().wifi_manual_entry, false, false);
   lv_obj_add_event_cb(wifi_manual_row, on_wifi_manual_clicked, LV_EVENT_CLICKED, nullptr);
   lv_obj_t* manual_chevron = lv_label_create(wifi_manual_row);
   lv_label_set_text(manual_chevron, getMdiChar("chevron-right").c_str());
@@ -2127,9 +2136,9 @@ static void build_wifi_popup(lv_obj_t* parent) {
   popup_layout::applyIconScale(manual_chevron);
   lv_obj_set_style_text_color(manual_chevron, lv_color_hex(0x888888), 0);
 
-  // The spacer pushes the information box/AP button to the bottom.
-  // In AP mode, wifi_update_conn_status_label uses its height to size
-  // the QR code.
+  // Only visible in AP mode, where it replaces wifi_list_block and pushes
+  // the information box/AP button to the bottom;
+  // wifi_update_conn_status_label uses its height to size the QR code.
   wifi_list_spacer = create_flex_spacer(wifi_list_view);
 
   // Distinct information card for connection status; AP mode also includes

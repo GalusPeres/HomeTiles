@@ -117,7 +117,7 @@ void remember_popup_source(lv_obj_t* obj) {
   }
 }
 
-// The icon color's "Tint tile" option of a card: its strength (0 = off) and
+// Tile color "From icon color" of a card: its strength (0 = off) and
 // whether an active rule tint wins, kept as a local style value in the unused
 // tint selector so the icon color hook finds it without a lookup table.
 constexpr uint8_t kRuleTintWins = 0x80;
@@ -160,15 +160,16 @@ lv_obj_t* find_disc(lv_obj_t* card) {
   return nullptr;
 }
 
-// Tints the card with the color its icon shows; grey and white icons (off,
-// default) leave it. False without a tint.
-bool apply_icon_fill(lv_obj_t* card, lv_obj_t* disc, uint8_t fill) {
+// The color the icon of a disc shows; white without an icon.
+uint32_t disc_icon_rgb(lv_obj_t* disc) {
   lv_obj_t* icon = disc ? tile_icon_disc::icon_of(disc) : nullptr;
-  if (!fill || !icon) return false;
-  const uint32_t rgb = lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF;
-  if (!tile_icon_disc::icon_color_tints(rgb)) return false;
-  set_tile_tint(card, rgb, fill);
-  return true;
+  return icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF : 0xFFFFFF;
+}
+
+// Shows the tint tile_tint::choose() picked, or the card's own color.
+void apply_tint_choice(lv_obj_t* card, const tile_tint::Choice& choice) {
+  if (choice.percent) set_tile_tint(card, choice.color, choice.percent);
+  else clear_tile_tint(card);
 }
 
 void follow_open_popup(lv_obj_t* card);
@@ -183,7 +184,7 @@ void refresh_discs(lv_obj_t* card) {
 }
 
 // tile_icon_disc::g_icon_color_hook: an icon color change retints a card with
-// the "Tint tile" option unless an active rule tint wins.
+// Tile color "From icon color" unless an active rule tint wins.
 void on_icon_color(lv_obj_t* disc) {
   lv_obj_t* card = lv_obj_get_parent(disc);
   uint8_t marker = 0;
@@ -192,7 +193,8 @@ void on_icon_color(lv_obj_t* disc) {
   }
   if (!card || !marker || (marker & kRuleTintWins)) return;
   const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
-  if (!apply_icon_fill(card, disc, marker & ~kRuleTintWins)) clear_tile_tint(card);
+  apply_tint_choice(card, tile_tint::choose(false, 0, 0, static_cast<uint8_t>(marker & ~kRuleTintWins),
+                                            disc_icon_rgb(disc)));
   if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) == before) return;
   follow_open_popup(card);
   refresh_discs(card);
@@ -329,10 +331,27 @@ lv_obj_t* card_icon(lv_obj_t* card) {
   return nullptr;
 }
 
-void forget_popup_source() { remember_popup_source(nullptr); }
+namespace {
+// Hands the opening tile's circle options to the popup header. `obj` is the
+// tile card or its icon label.
+void pass_popup_disc(lv_obj_t* obj) {
+  lv_obj_t* disc = obj ? tile_icon_disc::disc_of(obj) : nullptr;
+  if (!disc && obj) disc = find_disc(obj);
+  if (!disc) return;
+  const tile_icon_disc::Mode mode = tile_icon_disc::mode_of(disc);
+  popup_shell_use_tile_disc(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,
+                            tile_icon_disc::glow_of(disc));
+}
+}  // namespace
+
+void forget_popup_source(lv_obj_t* obj) {
+  remember_popup_source(nullptr);
+  pass_popup_disc(obj);
+}
 
 uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
   remember_popup_source(obj);
+  pass_popup_disc(obj);
   for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
     lv_style_value_t value;
     if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, kTintStore) != LV_STYLE_RES_FOUND) continue;
@@ -365,19 +384,16 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
       tile_icon_disc::release_icon_color(icon);
     }
   }
-  // Entity color tints only while the entity is active; its grey off color
-  // keeps the tile's own color (the icon still shows the grey).
+  // Entity color tints only while the entity is active; grey off colors never
+  // tint (the icon still shows the grey). An applying rule tint wins over
+  // Tile color "From icon color" (fill), which follows the color the icon
+  // shows (tile_tint::choose).
   const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
-  // The icon color's own "Tint tile" option (fill) follows the color the icon
-  // shows and applies below an active rule tint.
   const uint8_t fill = tile_icon_colors::fill_of(tile.icon_colors.c_str());
-  const bool rule_tint = colored && active && layer.tile;
-  set_icon_fill_marker(card, fill ? static_cast<uint8_t>(fill | (rule_tint ? kRuleTintWins : 0)) : 0);
-  if (rule_tint) {
-    set_tile_tint(card, rgb, layer.tile);
-  } else if (!apply_icon_fill(card, find_disc(card), fill)) {
-    clear_tile_tint(card);
-  }
+  const tile_tint::Choice choice =
+      tile_tint::choose(colored && active, rgb, layer.tile, fill, disc_icon_rgb(find_disc(card)));
+  set_icon_fill_marker(card, fill ? static_cast<uint8_t>(fill | (choice.rule ? kRuleTintWins : 0)) : 0);
+  apply_tint_choice(card, choice);
   if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) != before) {
     follow_open_popup(card);
   }

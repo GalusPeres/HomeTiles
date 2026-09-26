@@ -421,9 +421,9 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
           CoverPopupInit init = popup_init(data->grid_type, data->index);
           if (!tile || !init.entity_id.length()) return;
           // For now the popup keeps the global tile color and does not follow the
-          // tile (tile_icon_source::forget_popup_source).
+          // tile (tile_icon_source::forget_popup_source); icon and circle match it.
           init.bg_color = tileDefaultBgColor();
-          tile_icon_source::forget_popup_source();
+          tile_icon_source::forget_popup_source(static_cast<lv_obj_t*>(lv_event_get_current_target(event)));
           finish_press_before_popup(event);
           show_cover_popup(init);
         },

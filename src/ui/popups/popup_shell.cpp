@@ -25,7 +25,16 @@ struct Binding {
   bool owner_deleting = false;
   lv_opa_t border_opa = LV_OPA_TRANSP, shadow_opa = LV_OPA_TRANSP;
 };
+// Header disc options from the opening tile (popup_shell_use_tile_disc).
+struct HeaderDisc {
+  bool from_tile = false;
+  bool off = false;
+  bool follows_global = false;
+  bool glow = true;
+};
+HeaderDisc g_next_disc;
 struct Shell {
+  HeaderDisc disc;
   lv_obj_t* overlay = nullptr;
   lv_obj_t* frame = nullptr;
   lv_obj_t* header = nullptr;
@@ -229,21 +238,29 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
 
 }
 
-// The header disc takes the icon's hue like a tile disc with glow: a colored
-// icon (binary on, light color, climate mode, ...) tints it, white and grey
-// icons keep the neutral white disc. Same rule and opacities as the tile
-// discs (tile_icon_disc::icon_color_tints, the global Glow strength, kOpa).
+// The header disc looks like the opening tile's disc: shown or hidden by its
+// Icon circle mode, and with "Circle in icon color" a colored icon (binary
+// on, light color, climate mode, ...) tints it; white and grey icons keep the
+// neutral white disc. Same rule and opacities as the tile discs
+// (tile_icon_disc::apply_fill, the global Glow strength, kOpa). Popups
+// opened without a tile tint by a colored icon and always show the disc.
 void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   if (!disc || !icon) return;
   const uint32_t rgb =
       lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFFu;
   const uint32_t card = lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame, LV_PART_MAIN)) & 0xFFFFFFu;
   const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
-  const bool tinted = r != g || g != b;
+  const HeaderDisc& options = shell.disc;
+  const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);
+  const bool shown = !options.from_tile ||
+                     (!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));
   const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
   const uint8_t step = popup_layout::headerDiscContrastStep(card);
-  const lv_opa_t opa = static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
-      tinted ? ui_surface_style::icon_glow_opa() : ui_surface_style::icon_neutral_opa(), step));
+  const lv_opa_t opa = shown ? static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
+                                   tinted ? ui_surface_style::icon_glow_opa()
+                                          : ui_surface_style::icon_neutral_opa(),
+                                   step))
+                             : LV_OPA_TRANSP;
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
@@ -328,6 +345,10 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
   if (!binding) return;
   binding->value = value;
   ensure_shell();
+  // A newly shown popup takes the disc options of the tile that opened it (or
+  // the default without one); a re-show keeps them unless a tile passed new ones.
+  if (shell.active != binding || g_next_disc.from_tile) shell.disc = g_next_disc;
+  g_next_disc = {};
   if (shell.active && shell.active != binding) {
     auto dismiss_previous = shell.active->dismiss;
     if (dismiss_previous) dismiss_previous();
@@ -374,6 +395,13 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 }
 
 bool popup_shell_active() { return shell.active != nullptr; }
+
+void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow) {
+  g_next_disc.from_tile = true;
+  g_next_disc.off = off;
+  g_next_disc.follows_global = follows_global;
+  g_next_disc.glow = glow;
+}
 
 void popup_shell_follow_tile_color(uint32_t color) {
   if (!shell.active || !shell.active->body) return;

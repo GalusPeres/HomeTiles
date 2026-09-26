@@ -128,7 +128,7 @@ std::string getMdiChar(const char*){return "\xF3\xB0\x96\xAD";}
 // Surface styles are covered by the shell tests; this test needs geometry only.
 namespace ui_surface_style {
 template<class T> void apply_radius(lv_obj_t* obj,T radius,lv_style_selector_t selector){lv_obj_set_style_radius(obj,static_cast<int32_t>(radius),selector);}
-inline void apply_global_tile_border(lv_obj_t*){}inline void apply_popup_border(lv_obj_t*,lv_color_t,lv_opa_t){}inline lv_opa_t icon_glow_opa(){return 64;}inline lv_opa_t icon_neutral_opa(){return 38;}
+inline void apply_global_tile_border(lv_obj_t*){}inline void apply_popup_border(lv_obj_t*,lv_color_t,lv_opa_t){}inline lv_opa_t icon_glow_opa(){return 64;}inline lv_opa_t icon_neutral_opa(){return 38;}inline bool icon_discs_shown(){return true;}
 inline lv_color_t border_hint(lv_color_t c){return lv_color_mix(lv_color_white(),c,128);}
 }
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
@@ -202,7 +202,21 @@ int main(){
   show(sensor);render(display);check_value_header("--");
   flushed=0;for(int i=0;i<5;++i){sync_popup_shell();lv_refr_now(display);}assert(flushed==0);
  }
- hide_popup_shell(sensor.parts.card);lv_obj_delete(sensor.parts.overlay);lv_obj_delete(light.parts.overlay);
+ // The header disc looks like the opening tile's disc (popup_shell_use_tile_disc).
+ lv_obj_set_style_text_color(light.parts.icon,lv_color_hex(0xFFC107),0);hide_popup_shell(sensor.parts.card);
+ auto disc_opa=[]{return lv_obj_get_style_bg_opa(shell.icon_disc,LV_PART_MAIN);};
+ auto disc_rgb=[]{return lv_color_to_u32(lv_obj_get_style_bg_color(shell.icon_disc,LV_PART_MAIN))&0xFFFFFFu;};
+ show(light);render(display);assert(disc_rgb()==0xFFC107u&&disc_opa()>0&&"Without a tile a colored icon tints the disc");
+ hide_popup_shell(light.parts.card);popup_shell_use_tile_disc(false,true,false);show(light);render(display);
+ assert(disc_rgb()==0xFFFFFFu&&disc_opa()>0&&"Without Circle in icon color the disc stays white");
+ sync_popup_shell();assert(disc_rgb()==0xFFFFFFu&&"A re-sync keeps the tile options");
+ hide_popup_shell(light.parts.card);popup_shell_use_tile_disc(true,false,true);show(light);render(display);
+ assert(disc_opa()==LV_OPA_TRANSP&&"A tile with its circle off shows no disc");
+ hide_popup_shell(light.parts.card);popup_shell_use_tile_disc(false,false,true);show(light);render(display);
+ assert(disc_rgb()==0xFFC107u&&disc_opa()>0&&"Circle in icon color tints the disc");
+ hide_popup_shell(light.parts.card);show(light);render(display);
+ assert(disc_rgb()==0xFFC107u&&disc_opa()>0&&"A popup without a tile returns to the default disc");
+ hide_popup_shell(light.parts.card);lv_obj_delete(sensor.parts.overlay);lv_obj_delete(light.parts.overlay);
  lv_deinit();std::cout<<SCREEN_WIDTH<<"x"<<SCREEN_HEIGHT<<": header value passed\n";
 }
 `;

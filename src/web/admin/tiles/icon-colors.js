@@ -534,11 +534,30 @@
         const entity = layer.self ? String(ownEntity || '') : layer.entity;
         if (!iconColorSourceAutoActive(entity, meta?.values?.[entity])) return null;
       }
-      return { color, percent: layer.tile };
+      return tileTintChoice(true, color, layer.tile, 0, '');
     })();
-    // The icon color's "Tint tile" option follows the icon in the preview
+    // Tile color "From icon color" follows the icon in the preview
     // (applyIconDiscTint), below this rule tint.
     return ruleTint;
+  }
+
+  // tile_tint::has_hue(): white, grey and black never tint a tile.
+  function tileTintHasHue(color) {
+    const hex = normalizeIconColorHex(color);
+    return !!hex && !(hex.slice(1, 3) === hex.slice(3, 5) && hex.slice(3, 5) === hex.slice(5, 7));
+  }
+
+  // tile_tint::choose(), the one tint rule of device and preview: an applying
+  // rule "Tint tile" with a real color wins, else Tile color "From icon color"
+  // follows the real icon color; null without a tint.
+  function tileTintChoice(ruleActive, ruleColor, rulePercent, fillPercent, iconColor) {
+    if (ruleActive && rulePercent && tileTintHasHue(ruleColor)) {
+      return { color: normalizeIconColorHex(ruleColor), percent: rulePercent, rule: true };
+    }
+    if (fillPercent && tileTintHasHue(iconColor)) {
+      return { color: normalizeIconColorHex(iconColor), percent: fillPercent, rule: false };
+    }
+    return null;
   }
 
   // tile_tint::background(): the base mixed with the color, darkened in 5 %
@@ -865,6 +884,8 @@
     if (!block) return;
     const type = iconColorTypeOf(tab);
     const visible = tileTypeHasIconColors(type);
+    // Tile color "From icon color" lives with the tile color (grid-preview.js).
+    if (typeof syncTileColorMode === 'function') syncTileColorMode(tab);
     block.classList.toggle('hidden', !visible);
     iconColorEl(tab, '_tile_icon_color_fixed')?.classList.toggle('hidden', !visible);
     if (!visible) return;
@@ -883,14 +904,6 @@
     const strength = iconColorEl(tab, '_tile_icon_rule_strength');
     const output = iconColorEl(tab, '_tile_icon_rule_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
-    // "Tint tile" of the icon color: always offered, it follows the color the
-    // icon shows (own icon color or the entity's color).
-    const fillOn = !!iconColorEl(tab, '_tile_icon_fill')?.checked;
-    iconColorEl(tab, '_tile_icon_fill_row')?.classList.remove('hidden');
-    iconColorEl(tab, '_tile_icon_fill_strength_row')?.classList.toggle('hidden', !fillOn);
-    const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
-    const fillOutput = iconColorEl(tab, '_tile_icon_fill_strength_value');
-    if (fillStrength && fillOutput) fillOutput.textContent = fillStrength.value + ' %';
     iconColorMarkActive(tab, 'rules-on', on ? '1' : '0');
     iconColorMarkActive(tab, 'source-kind', kind);
     iconColorMarkActive(tab, 'source-mode', mode);

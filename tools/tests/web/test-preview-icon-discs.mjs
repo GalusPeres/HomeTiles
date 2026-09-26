@@ -29,7 +29,9 @@ const page = `<!doctype html><html lang="en"><head><style>${readRepoFile('src/we
 ${['col','row','span_w','span_h'].map(n=>`<input id="test_tile_${n}" value="1">`).join('')}
 <input type="checkbox" id="test_tile_icon_disc" checked>
 <input type="checkbox" id="test_tile_icon_glow" checked><select id="test_scene_alias"><option value="tv">TV</option></select>
-<input type="checkbox" id="test_tile_color_global" checked></div>
+<div id="test_tile_color_modes"><button data-tile-color-mode="global"></button><button data-tile-color-mode="custom"></button><button data-tile-color-mode="icon" id="test_tile_color_mode_icon"></button></div>
+<div id="test_tile_color_row" class="tile-color-row"></div>
+<div id="test_tile_icon_fill_row" class="tile-icon-color-fields icon-color-fill hidden" data-tab="test"><input type="checkbox" id="test_tile_icon_fill" hidden><input type="range" id="test_tile_icon_fill_strength" value="20"><output id="test_tile_icon_fill_strength_value"></output></div></div>
 <div class="tile" id="test-tile-3" data-index="3" style="width:84px;height:34px"></div>
 <pre id="result"></pre><script>
 const nativeListen=document.addEventListener.bind(document);document.addEventListener=(name,...args)=>{if(name!=='DOMContentLoaded')nativeListen(name,...args);};
@@ -89,18 +91,31 @@ try{
  check(sensor.querySelector('.tile-icon').classList.contains('tile-icon-tinted'),'Rule color tints the disc');
  check(colored('10',rule)==='rgb(255, 0, 0)','Fixed icon color without a matching rule');
  check(colored('unavailable',rule)==='rgb(255, 255, 255)','Unknown states keep the type color');
- // "Use global color": stored default grey loads checked; picking a color
- // unchecks it; checking it again returns to the global color.
+ // Tile color is one choice: a stored default grey loads as Global, picking a
+ // color selects Custom, Global returns to the global color, From icon color
+ // sets the hidden fill option and shows its strength, and a return to
+ // Custom restores the picked color. The choice never depends on the order.
  currentTileTab='test';currentTileIndex=1;folderByTab.test=1;
- const box=document.getElementById('test_tile_color_global'),colorInput=document.getElementById('test_tile_color');
+ const colorInput=document.getElementById('test_tile_color'),fill=document.getElementById('test_tile_icon_fill');
+ const active=()=>[...document.querySelectorAll('#test_tile_color_modes button.active')].map(b=>b.dataset.tileColorMode).join();
+ const hidden=id=>document.getElementById(id).classList.contains('hidden')||document.getElementById(id).classList.contains('color-hidden');
  document.getElementById('test_tile_type').value='1';
  setTileColorInputFromStored('test',0x012A2A2A,'#101010');
- check(box.checked&&colorInput.value==='#101010','Stored default grey loads as Use global color');
+ check(active()==='global'&&colorInput.value==='#101010'&&hidden('test_tile_color_row'),'Stored default grey loads as Global without a color field');
  colorInput.value='#ff0000';markTileColorInputExplicit('test');
- check(!box.checked&&!tileColorInputIsDefault('test'),'Picking a color unchecks Use global color');
- box.checked=true;toggleTileGlobalColor('test',true);
- check(box.checked&&tileColorInputIsDefault('test')&&colorInput.value==='#101010','Checking returns to the global color');
+ check(active()==='custom'&&!tileColorInputIsDefault('test')&&!hidden('test_tile_color_row'),'Picking a color selects Custom');
+ setTileColorMode('test','global');
+ check(active()==='global'&&tileColorInputIsDefault('test')&&colorInput.value==='#101010'&&!fill.checked,'Global returns to the global color');
  check(getComputedStyle(sensor).backgroundColor==='rgb(16, 16, 16)','Live preview follows the global color');
+ setTileColorMode('test','icon');
+ check(active()==='icon'&&fill.checked&&tileColorInputIsDefault('test')&&!hidden('test_tile_icon_fill_row')&&hidden('test_tile_color_row'),
+  'From icon color sets the fill option on the global base and shows its strength');
+ check(document.getElementById('test_tile_icon_fill_strength_value').textContent==='20 %','Strength output');
+ setTileColorMode('test','custom');
+ check(active()==='custom'&&!fill.checked&&colorInput.value==='#ff0000'&&hidden('test_tile_icon_fill_row'),'Custom restores the picked color');
+ setTileColorMode('test','icon');colorInput.value='#00ff00';markTileColorInputExplicit('test');
+ check(active()==='custom'&&!fill.checked,'Picking a color leaves From icon color');
+ check(hidden('test_tile_color_mode_icon')===!tileTypeHasIconColors('1'),'From icon color is offered only with icon colors');
  // Live preview: the scene alias field resolves the same icon.
  currentTileTab='test';currentTileIndex=2;folderByTab.test=1;
  document.getElementById('test_tile_type').value='2';document.getElementById('test_scene_alias').value='tv';

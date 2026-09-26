@@ -31,6 +31,11 @@ bool popup_shell_active();
 // Sets the active popup body's background; the frame copies it on the next
 // sync. Used when an open popup follows its tile's color.
 void popup_shell_follow_tile_color(uint32_t color);
+// The circle options of the tile that opens the next popup (Icon circle
+// Off/Global/On and "Circle in icon color"), so the header disc looks like
+// the tile's disc. The next show_popup_shell() takes them; popups opened
+// without a tile keep the default disc (tinted by a colored icon, shown).
+void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow);
 
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.

@@ -195,6 +195,8 @@ lv_opa_t icon_neutral_opa() {
   return icon_glow::neutral_opa(configManager.getConfig().icon_glow);
 }
 
+bool icon_discs_shown() { return configManager.getConfig().icon_discs; }
+
 void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {
   if (!obj) return;
   // Same hairline as the tiles and the same global Tile borders option.

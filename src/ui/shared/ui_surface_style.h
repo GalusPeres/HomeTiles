@@ -30,6 +30,8 @@ void apply_global_tile_border(lv_obj_t* obj);
 // glowing and the white disc opacity before the dark-tile contrast scaling.
 lv_opa_t icon_glow_opa();
 lv_opa_t icon_neutral_opa();
+// The global icon disc option, which discs in Global mode follow.
+bool icon_discs_shown();
 // Gives a tile card's border hairline (found from obj or up to three parents)
 // the hint of a glowing icon (border_hint); clear restores the plain white
 // hairline. Both keep the 20 % hairline opacity.

@@ -1144,9 +1144,38 @@ static void appendTileTabHTML(
     html += R"html(</span>)html";
   }
   html += R"html(</div>
+            <div class="icon-color-segmented tile-color-modes" role="group" id=")html";
+  html += tab_id;
+  html += R"html(_tile_color_modes">)html";
+  // Tile color is one choice: the global tile color, an own color, or a tint
+  // that follows the icon color (only for tiles with icon colors).
+  const struct {
+    const char* mode;
+    const char* label;
+  } tile_color_modes[] = {{"global", tr.tile_color_mode_global},
+                          {"custom", tr.tile_color_mode_custom},
+                          {"icon", tr.tile_color_mode_from_icon}};
+  for (const auto& entry : tile_color_modes) {
+    html += R"html(<button type="button" id=")html";
+    html += tab_id;
+    html += "_tile_color_mode_";
+    html += entry.mode;
+    html += R"html(" data-tile-color-mode=")html";
+    html += entry.mode;
+    html += R"html(" onclick="setTileColorMode(')html";
+    html += tab_id;
+    html += "', '";
+    html += entry.mode;
+    html += R"html(')">)html";
+    appendHtmlEscaped(html, entry.label);
+    html += "</button>";
+  }
+  html += R"html(</div>
             <div class="tile-color-row no-reset)html";
   if (screensaver_mode) html += " has-opacity";
-  html += R"html(">
+  html += R"html(" id=")html";
+  html += tab_id;
+  html += R"html(_tile_color_row">
             <input type="color" id=")html";
   html += tab_id;
   html += R"html(_tile_color" value="#2A2A2A">
@@ -1156,13 +1185,9 @@ static void appendTileTabHTML(
 )html";
   }
   html += R"html(            </div>
-            <label class="inline-checkbox tile-color-global-toggle"><input type="checkbox" id=")html";
-  html += tab_id;
-  html += R"html(_tile_color_global" checked onchange="toggleTileGlobalColor(')html";
-  html += tab_id;
-  html += R"html(', this.checked)"> )html";
-  appendHtmlEscaped(html, tr.use_global_tile_color);
-  html += R"html(</label>
+)html";
+  append_tile_color_from_icon_html(html, tab_id);
+  html += R"html(
 
             <div class="tile-layout">
               <div class="layout-field">

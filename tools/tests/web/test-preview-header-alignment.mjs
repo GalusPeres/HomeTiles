@@ -10,7 +10,7 @@ const helpers = [
   'tileColorInputIsDefault', 'tileBgToHex', 'tileBgValueIsSet', 'tileBackgroundCss',
   'applyIconDiscTint', 'iconDiscTinted', 'cssColorChannels',
   'tileBgFollowsDefault', 'tileColorHexIsDefaultGrey',
-  'isDefaultTileGrey', 'syncTileColorGlobalToggle', 'previewIconColor', 'iconColorRuleState',
+  'isDefaultTileGrey', 'tileColorMode', 'syncTileColorMode', 'previewIconColor', 'iconColorRuleState',
   'tileTypeHasDiscToggle', 'tileTypeHasColoredIcon',
   'rgbToHex', 'applyTileAriaLabel',
   'resolveUnitValue', 'isScreensaverTileTab', 'getTileResizeHandlesHtml',

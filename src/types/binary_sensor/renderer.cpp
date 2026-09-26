@@ -529,12 +529,12 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
   widgets.dynamic_icon = icon_visible && widgets.dynamic_icon;
   const String initial_label = state_label(state);
   if (icon_visible && icon.length() && FONT_MDI_ICONS) {
-    uint32_t icon_color = binary_sensor_visual_color(state);
-    if (rule_state_known(state)) {
-      tile_icon_colors::resolve(tile.icon_colors.c_str(),
-                                binary_sensor_state_name(state.value),
-                                initial_label.c_str(), icon_color);
-    }
+    // The same icon color rule as every later state update
+    // (tile_icon_color_rules::apply): own rules only color the icon while
+    // "Color icon" is set.
+    const uint32_t icon_color = tile_icon_colors::state_icon_color(
+        tile.icon_colors.c_str(), rule_state_known(state), binary_sensor_state_name(state.value),
+        initial_label.c_str(), binary_sensor_visual_color(state));
     widgets.icon_label = lv_label_create(card);
     set_label_style(widgets.icon_label, lv_color_hex(icon_color), FONT_MDI_ICONS);
     lv_label_set_text(widgets.icon_label, getMdiChar(icon).c_str());

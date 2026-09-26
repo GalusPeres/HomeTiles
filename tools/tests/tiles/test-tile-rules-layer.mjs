@@ -70,13 +70,15 @@ for (const marker of [
   'tile_icon_disc::force_icon_color(icon, lv_color_hex(rgb));',
   'tile_icon_disc::force_icon_color(icon, lv_color_hex(fixed));',
   'tile_icon_disc::release_icon_color(icon);',
-  'set_tile_tint(card, rgb, layer.tile);',
+  'tile_tint::choose(colored && active, rgb, layer.tile, fill, disc_icon_rgb(find_disc(card)));',
+  'apply_tint_choice(card, choice);',
   'const uint32_t tint = tile_tint::background(tileDefaultBgColor(), color, percent);',
 ]) assert.ok(source.includes(marker), `tile_icon_source: ${marker}`);
 const disc = read('src/tiles/runtime/tile_icon_disc.h');
 assert.match(disc, /if \(forced_color\(icon, forced\)\) \{\s*lv_obj_set_style_text_color\(icon, color, kIconRequested\);\s*color = forced;/,
   'Type state colors wait behind a forced rule color');
-assert.ok(read('src/tiles/runtime/tile_icon_color_rules.h').includes('const bool own_rules = tile_icon_colors::own_state_colors_icon(record);'));
+assert.ok(read('src/tiles/runtime/tile_icon_color_rules.h').includes('lv_color_hex(tile_icon_colors::state_icon_color(') &&
+  read('src/tiles/config/tile_icon_colors.h').includes('const bool own_rules = own_state_colors_icon(record);'));
 
 // Web Admin: Rules section for every type with an icon or surface.
 const html = read('src/web/server/render/tile_icon_colors_html.cpp');

@@ -35,7 +35,7 @@ assert.match(body(header, 'struct CoverPopupInit', 'Cover init'), /\n  uint32_t 
 assert.ok(renderer.includes('#include "src/tiles/runtime/tile_icon_source.h"'));
 const opener = renderer.slice(renderer.indexOf('CoverEventData* data = new CoverEventData{'));
 assert.match(opener,
-  /init\.bg_color = tileDefaultBgColor\(\);\s*tile_icon_source::forget_popup_source\(\);\s*finish_press_before_popup\(event\);\s*show_cover_popup\(init\);/,
+  /init\.bg_color = tileDefaultBgColor\(\);\s*tile_icon_source::forget_popup_source\(static_cast<lv_obj_t\*>\(lv_event_get_current_target\(event\)\)\);\s*finish_press_before_popup\(event\);\s*show_cover_popup\(init\);/,
   'Cover tile passes its current background to the popup');
 // The shared builder also feeds MQTT updates, so it carries no color.
 assert.doesNotMatch(body(renderer, 'CoverPopupInit popup_init(', 'Cover renderer'), /bg_color/,

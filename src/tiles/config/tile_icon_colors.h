@@ -578,6 +578,20 @@ inline bool resolve(const char* record, const char* state, const char* display, 
   return parse_color(fixed_begin, fixed_end, rgb);
 }
 
+// The one icon color rule for a tile's own state, shared by the tile build,
+// its state updates and its popup (Web Admin: previewIconColor): own rules
+// color the icon only while they are on and "Color icon" is set
+// (own_state_colors_icon); otherwise the fixed icon color applies, else
+// `fallback`, the type's own color for this state. Unknown states always
+// use `fallback`.
+inline uint32_t state_icon_color(const char* record, bool known, const char* state,
+                                 const char* display, uint32_t fallback) {
+  if (!known || !record) return fallback;
+  const bool own_rules = own_state_colors_icon(record);
+  uint32_t rgb = 0;
+  return resolve(record, own_rules ? state : "", own_rules ? display : nullptr, rgb) ? rgb : fallback;
+}
+
 // Copies at most `max_bytes` of [begin, end) without splitting a UTF-8
 // sequence and without control characters.
 inline size_t copy_value(const char* begin, const char* end, char* out, size_t max_bytes) {

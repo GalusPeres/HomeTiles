@@ -11,8 +11,8 @@ const read = file => readRepoFile(file).replace(/\r\n?/g, '\n');
 const popup = read('src/ui/popups/sensor/sensor_popup.cpp');
 for (const marker of [
   'static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const char* state,',
-  'const bool own_rules = tile_icon_colors::own_state_colors_icon(ctx->icon_colors.c_str());',
-  'const lv_color_t color = ctx->forced_icon ? lv_color_hex(ctx->forced_icon_color)',
+  'tile_icon_colors::state_icon_color(',
+  'ctx->forced_icon ? lv_color_hex(ctx->forced_icon_color)',
   'ctx->forced_icon = init.forced_icon;',
   'const bool known = value.valid && value.has_state && value.available && value.state != "unknown";',
   'ctx->icon_colors = init.icon_colors;',
@@ -67,14 +67,16 @@ for (const [file, marker] of [
   ['src/types/navigate/renderer.cpp', 'const uint32_t popup_color = tile_icon_source::popup_background('],
 ]) assert.ok(read(file).includes(marker), `${file} inherits the tile tint`);
 // Climate, Light and Cover keep the global tile color for now and never follow
-// a tile (a light color dragged in its popup restyled it on every step).
+// a tile (a light color dragged in its popup restyled it on every step); they
+// still pass their tile card for the header circle.
 for (const file of ['src/types/climate/renderer.cpp', 'src/types/cover/renderer.cpp', 'src/types/switch/renderer.cpp']) {
   const source = read(file);
-  assert.ok(source.includes('tile_icon_source::forget_popup_source();') && !source.includes('popup_background('),
+  assert.ok(source.includes('tile_icon_source::forget_popup_source(static_cast<lv_obj_t*>(lv_event_get_current_target(') &&
+    !source.includes('popup_background('),
     `${file} keeps the global tile color`);
 }
 assert.ok(read('src/types/climate/renderer.cpp').includes('init.bg_color = tileDefaultBgColor();'));
-assert.ok(read('src/tiles/runtime/tile_icon_source.cpp').includes('void forget_popup_source() { remember_popup_source(nullptr); }'));
+assert.match(read('src/tiles/runtime/tile_icon_source.cpp'), /void forget_popup_source\(lv_obj_t\* obj\) \{\s*remember_popup_source\(nullptr\);/);
 // Weather and Media pass the tile icon's color to the popup header icon.
 const weatherOpener = read('src/types/weather/renderer.cpp');
 assert.ok(weatherOpener.includes('init.icon_color = lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF;'),

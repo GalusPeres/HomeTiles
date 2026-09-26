@@ -285,9 +285,10 @@ lv_obj_set_style_bg_grad_dir(container, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STAT
             LightPopupInit init = build_light_popup_init(data);
             // For now the popup keeps the global tile color and does not follow
             // the tile: following a light color dragged in the popup restyled it
-            // on every step (tile_icon_source::forget_popup_source).
+            // on every step (tile_icon_source::forget_popup_source). Icon and
+            // circle still match the tile.
             init.bg_color = tileDefaultBgColor();
-            tile_icon_source::forget_popup_source();
+            tile_icon_source::forget_popup_source(static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
             finish_press_before_popup(e);
             show_light_popup(init);
           },

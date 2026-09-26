@@ -289,7 +289,10 @@ struct Strings {
   const char* global_settings_heading;
   const char* icon_discs;
   const char* default_tile_color;
-  const char* use_global_tile_color;
+  // Tile color choice: global tile color, own color or a tint from the icon.
+  const char* tile_color_mode_global;
+  const char* tile_color_mode_custom;
+  const char* tile_color_mode_from_icon;
   // Web Admin tile editor: per-tile icon disc override.
   const char* icon_disc_label;
   const char* icon_disc_global;
@@ -333,6 +336,7 @@ struct Strings {
   const char* tile_rules_color_icon;
   const char* tile_rules_tint_tile;
   const char* tile_rules_strength;
+  const char* tile_rules_priority_hint;
   // Tile Settings group captions: what belongs to the icon, what to the tile.
   const char* tile_group_icon;
   const char* tile_group_tile;

@@ -3216,11 +3216,30 @@ function syncTileRadiusControls(tabEl) {
         const entity = layer.self ? String(ownEntity || '') : layer.entity;
         if (!iconColorSourceAutoActive(entity, meta?.values?.[entity])) return null;
       }
-      return { color, percent: layer.tile };
+      return tileTintChoice(true, color, layer.tile, 0, '');
     })();
-    // The icon color's "Tint tile" option follows the icon in the preview
+    // Tile color "From icon color" follows the icon in the preview
     // (applyIconDiscTint), below this rule tint.
     return ruleTint;
+  }
+
+  // tile_tint::has_hue(): white, grey and black never tint a tile.
+  function tileTintHasHue(color) {
+    const hex = normalizeIconColorHex(color);
+    return !!hex && !(hex.slice(1, 3) === hex.slice(3, 5) && hex.slice(3, 5) === hex.slice(5, 7));
+  }
+
+  // tile_tint::choose(), the one tint rule of device and preview: an applying
+  // rule "Tint tile" with a real color wins, else Tile color "From icon color"
+  // follows the real icon color; null without a tint.
+  function tileTintChoice(ruleActive, ruleColor, rulePercent, fillPercent, iconColor) {
+    if (ruleActive && rulePercent && tileTintHasHue(ruleColor)) {
+      return { color: normalizeIconColorHex(ruleColor), percent: rulePercent, rule: true };
+    }
+    if (fillPercent && tileTintHasHue(iconColor)) {
+      return { color: normalizeIconColorHex(iconColor), percent: fillPercent, rule: false };
+    }
+    return null;
   }
 
   // tile_tint::background(): the base mixed with the color, darkened in 5 %
@@ -3547,6 +3566,8 @@ function syncTileRadiusControls(tabEl) {
     if (!block) return;
     const type = iconColorTypeOf(tab);
     const visible = tileTypeHasIconColors(type);
+    // Tile color "From icon color" lives with the tile color (grid-preview.js).
+    if (typeof syncTileColorMode === 'function') syncTileColorMode(tab);
     block.classList.toggle('hidden', !visible);
     iconColorEl(tab, '_tile_icon_color_fixed')?.classList.toggle('hidden', !visible);
     if (!visible) return;
@@ -3565,14 +3586,6 @@ function syncTileRadiusControls(tabEl) {
     const strength = iconColorEl(tab, '_tile_icon_rule_strength');
     const output = iconColorEl(tab, '_tile_icon_rule_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
-    // "Tint tile" of the icon color: always offered, it follows the color the
-    // icon shows (own icon color or the entity's color).
-    const fillOn = !!iconColorEl(tab, '_tile_icon_fill')?.checked;
-    iconColorEl(tab, '_tile_icon_fill_row')?.classList.remove('hidden');
-    iconColorEl(tab, '_tile_icon_fill_strength_row')?.classList.toggle('hidden', !fillOn);
-    const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
-    const fillOutput = iconColorEl(tab, '_tile_icon_fill_strength_value');
-    if (fillStrength && fillOutput) fillOutput.textContent = fillStrength.value + ' %';
     iconColorMarkActive(tab, 'rules-on', on ? '1' : '0');
     iconColorMarkActive(tab, 'source-kind', kind);
     iconColorMarkActive(tab, 'source-mode', mode);
@@ -5620,7 +5633,7 @@ function syncTileRadiusControls(tabEl) {
         colorInput.dataset.bgColorDefault = '1';
       }
     }
-    syncTileColorGlobalToggle(tab);
+    syncTileColorMode(tab);
     const tileBg = tileBackgroundCss(meta, isDefaultBg,
       isDefaultBg ? defaultBg : (color || defaultBg));
     if (isScreensaverTileTab(tab)) {
@@ -6873,16 +6886,19 @@ function syncTileRadiusControls(tabEl) {
     const icon = tileElem?.querySelector(':scope > .tile-icon');
     if (!icon) return;
     const glow = tileElem.dataset.iconGlow !== '0';
-    // Mirrors tile_icon_source.cpp on_icon_color(): with the icon color's
-    // "Tint tile" option the tile takes the color the icon shows; grey and
-    // white icons (off, default) keep the untinted background.
+    // Mirrors tile_icon_source.cpp on_icon_color(): with Tile color "From
+    // icon color" the tile takes the color the icon shows; grey and white
+    // icons (off, default) keep the untinted background (tile_tint::choose).
     const fill = Number(tileElem.dataset.iconFill || 0);
-    if (fill && tileElem.dataset.ruleTint !== '1' && typeof tileTintBackground === 'function') {
+    if (fill && tileElem.dataset.ruleTint !== '1' && typeof tileTintBackground === 'function' &&
+        typeof tileTintChoice === 'function') {
       const iconRgb = cssColorChannels(getComputedStyle(icon).color);
-      if (iconRgb && !(iconRgb[0] === iconRgb[1] && iconRgb[1] === iconRgb[2])) {
+      const choice = iconRgb
+        ? tileTintChoice(false, '', 0, fill, '#' + iconRgb.map(v => v.toString(16).padStart(2, '0')).join(''))
+        : null;
+      if (choice) {
         const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-        tileElem.style.background = tileTintBackground(base || '#222222',
-          '#' + iconRgb.map(v => v.toString(16).padStart(2, '0')).join(''), fill);
+        tileElem.style.background = tileTintBackground(base || '#222222', choice.color, choice.percent);
       } else if (tileElem.dataset.baseBg !== undefined) {
         tileElem.style.background = tileElem.dataset.baseBg;
       }
@@ -6941,25 +6957,60 @@ function syncTileRadiusControls(tabEl) {
     const text = String(hex || '').trim();
     return /^#[0-9a-f]{6}$/i.test(text) && isDefaultTileGrey(parseInt(text.slice(1), 16));
   }
-  // "Use global color" mirrors whether the tile follows the global color.
-  function syncTileColorGlobalToggle(tab) {
-    const box = document.getElementById(tab + '_tile_color_global');
-    if (box) box.checked = tileColorInputIsDefault(tab);
+  // Tile color is one choice, like the device (tile_tint::choose): Global
+  // follows the global tile color (stored as the default marker), Custom keeps
+  // the picked color, From icon color tints the tile with the color the icon
+  // shows (the icon colors' hidden "fill" checkbox). Only tiles with icon
+  // colors offer From icon color. Nothing else switches the choice.
+  function tileColorMode(tab) {
+    if (document.getElementById(tab + '_tile_icon_fill')?.checked) return 'icon';
+    return document.getElementById(tab + '_tile_color')?.dataset.bgColorDefault === '0' ? 'custom' : 'global';
   }
-  // Checked: the tile follows the global tile color (stored as the default
-  // marker). Unchecked: the tile keeps the color shown in the Color field.
-  function toggleTileGlobalColor(tab, useGlobal) {
+  function syncTileColorMode(tab) {
+    const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
+    const iconOffered = typeof tileTypeHasIconColors === 'function' && tileTypeHasIconColors(typeValue);
+    const fill = document.getElementById(tab + '_tile_icon_fill');
+    if (fill?.checked && !iconOffered) fill.checked = false;
+    const mode = tileColorMode(tab);
+    document.getElementById(tab + '_tile_color_modes')?.querySelectorAll('[data-tile-color-mode]').forEach(button => {
+      const active = button.dataset.tileColorMode === mode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      if (button.dataset.tileColorMode === 'icon') button.classList.toggle('hidden', !iconOffered);
+    });
+    document.getElementById(tab + '_tile_color_row')?.classList.toggle('color-hidden', mode !== 'custom');
+    document.getElementById(tab + '_tile_icon_fill_row')?.classList.toggle('hidden', mode !== 'icon');
+    const strength = document.getElementById(tab + '_tile_icon_fill_strength');
+    const output = document.getElementById(tab + '_tile_icon_fill_strength_value');
+    if (strength && output) output.textContent = strength.value + ' %';
+  }
+  function setTileColorMode(tab, mode) {
     const input = document.getElementById(tab + '_tile_color');
     if (!input) return;
-    if (useGlobal) {
+    const before = tileColorMode(tab);
+    // Leaving Custom remembers its color for a later return.
+    if (before === 'custom' && mode !== 'custom') input.dataset.customColor = input.value;
+    const fill = document.getElementById(tab + '_tile_icon_fill');
+    if (fill) fill.checked = mode === 'icon';
+    const remembered = input.dataset.customColor || '';
+    if (mode === 'custom') {
+      if (before !== 'custom' && remembered) input.value = remembered;
+      input.dataset.bgColorDefault = '0';
+    } else {
       const type = document.getElementById(tab + '_tile_type')?.value || '0';
       input.value = getTileTypeMeta(type).defaultBg || '#222222';
+      input.dataset.bgColorDefault = '1';
     }
-    input.dataset.bgColorDefault = useGlobal ? '1' : '0';
-    syncTileColorGlobalToggle(tab);
+    syncTileColorMode(tab);
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
+    // A first Custom opens the color picker right away.
+    if (mode === 'custom' && before !== 'custom' && !remembered) {
+      try {
+        if (typeof input.showPicker === 'function') input.showPicker();
+      } catch (_) {}
+    }
   }
   // State the firmware compares with the per-tile icon color rules, or null
   // while it is missing, unknown or unavailable (the type color applies).
@@ -7037,7 +7088,8 @@ function syncTileRadiusControls(tabEl) {
     const follows = tileBgFollowsDefault(value);
     input.value = follows ? (fallback || '#2A2A2A') : tileBgToHex(value, fallback || '#2A2A2A');
     input.dataset.bgColorDefault = follows ? '1' : '0';
-    syncTileColorGlobalToggle(tab);
+    delete input.dataset.customColor;
+    syncTileColorMode(tab);
   }
   function setTileColorInputFromSnapshot(tab, snapshot) {
     const input = document.getElementById(tab + '_tile_color');
@@ -7046,24 +7098,17 @@ function syncTileRadiusControls(tabEl) {
     const isDefault = snapshotBgColorIsDefault(snapshot);
     input.value = isDefault ? (meta.defaultBg || '#2A2A2A') : (snapshot?.color || meta.defaultBg || '#2A2A2A');
     input.dataset.bgColorDefault = isDefault ? '1' : '0';
-    syncTileColorGlobalToggle(tab);
+    delete input.dataset.customColor;
+    syncTileColorMode(tab);
   }
-  // Picking a color unchecks "Use global color".
+  // Picking a color selects Tile color Custom. Rules are never switched off:
+  // while a rule "Tint tile" applies, it wins (tile_tint::choose).
   function markTileColorInputExplicit(tab) {
     const input = document.getElementById(tab + '_tile_color');
     if (input) input.dataset.bgColorDefault = '0';
-    syncTileColorGlobalToggle(tab);
-    // A tile color picked by hand is kept: "Tint tile" of the rules and of
-    // the icon color would replace it, so picking a color switches both off.
-    let tintOff = false;
-    for (const suffix of ['_tile_icon_rule_tile', '_tile_icon_fill']) {
-      const tint = document.getElementById(tab + suffix);
-      if (tint?.checked) {
-        tint.checked = false;
-        tintOff = true;
-      }
-    }
-    if (tintOff && typeof syncIconColorFields === 'function') syncIconColorFields(tab);
+    const fill = document.getElementById(tab + '_tile_icon_fill');
+    if (fill) fill.checked = false;
+    syncTileColorMode(tab);
   }
   function resetTileColor(tab) {
     const input = document.getElementById(tab + '_tile_color');
@@ -7072,7 +7117,9 @@ function syncTileRadiusControls(tabEl) {
     const meta = getTileTypeMeta(typeValue);
     input.value = meta.defaultBg || '#2A2A2A';
     input.dataset.bgColorDefault = '1';
-    syncTileColorGlobalToggle(tab);
+    const fill = document.getElementById(tab + '_tile_icon_fill');
+    if (fill) fill.checked = false;
+    syncTileColorMode(tab);
     if (isScreensaverTileTab(tab)) {
       const opacity = document.getElementById('screensaver_tile_opacity');
       if (opacity) opacity.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);

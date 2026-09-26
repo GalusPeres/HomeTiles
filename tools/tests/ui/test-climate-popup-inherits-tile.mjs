@@ -25,7 +25,7 @@ const initFor = functions(renderer).get('popup_init_for');
 assert.ok(initFor && initFor.includes('init.bg_color = tileDefaultBgColor();'),
   'popup_init_for passes the global tile color');
 assert.match(renderer,
-  /ClimatePopupInit init = popup_init_for\(data\);\s*if \(!init\.entity_id\.length\(\)\) return;\s*(?:\/\/[^\n]*\n\s*)*tile_icon_source::forget_popup_source\(\);\s*finish_press_before_popup\(event\);\s*show_climate_popup\(init\);/,
+  /ClimatePopupInit init = popup_init_for\(data\);\s*if \(!init\.entity_id\.length\(\)\) return;\s*(?:\/\/[^\n]*\n\s*)*tile_icon_source::forget_popup_source\(static_cast<lv_obj_t\*>\(lv_event_get_current_target\(event\)\)\);\s*finish_press_before_popup\(event\);\s*show_climate_popup\(init\);/,
   'The opener keeps the global color and never follows the tile');
 
 // Init field and context color.

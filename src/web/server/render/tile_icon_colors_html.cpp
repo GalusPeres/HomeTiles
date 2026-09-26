@@ -49,15 +49,25 @@ void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
   appendHtmlEscaped(html, tr.tile_icon_color_remove);
   html += R"html("><i class="mdi mdi-restore"></i></button>
               </div>
-              <div class="icon-color-fill hidden" id=")html";
+            </div>
+)html";
+}
+
+// Tile color "From icon color": the strength of the tint that follows the
+// color the icon shows ("fill NN" in the record, tile_icon_colors.h). The Tile
+// color choice (setTileColorMode) sets the hidden checkbox; its own
+// tile-icon-color-fields wrapper keeps the delegated editor events working.
+void append_tile_color_from_icon_html(String& html, const String& tab_id) {
+  const auto& tr = i18n::strings(configManager.getConfig().language);
+  html += R"html(            <div class="tile-icon-color-fields icon-color-fill hidden" id=")html";
   html += tab_id;
-  html += R"html(_tile_icon_fill_row">
-                <label class="inline-checkbox"><input type="checkbox" id=")html";
+  html += R"html(_tile_icon_fill_row" data-tab=")html";
   html += tab_id;
-  html += R"html(_tile_icon_fill" data-icon-color="fill-target"> )html";
-  appendHtmlEscaped(html, tr.tile_rules_tint_tile);
-  html += R"html(</label>
-                <div class="icon-color-strength hidden" id=")html";
+  html += R"html(">
+              <input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill" hidden>
+              <div class="icon-color-strength" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_fill_strength_row"><label for=")html";
   html += tab_id;
@@ -78,7 +88,6 @@ void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
   html += R"html( %</output><button type="button" class="tile-color-reset-btn" data-icon-color="fill-strength-reset" title=")html";
   appendHtmlEscaped(html, tr.tile_icon_color_remove);
   html += R"html("><i class="mdi mdi-restore"></i></button></div>
-              </div>
             </div>
 )html";
 }
@@ -167,6 +176,9 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
   html += R"html( %</output><button type="button" class="tile-color-reset-btn" data-icon-color="strength-reset" title=")html";
   appendHtmlEscaped(html, tr.tile_icon_color_remove);
   html += R"html("><i class="mdi mdi-restore"></i></button></div>
+                  <p class="hint">)html";
+  appendHtmlEscaped(html, tr.tile_rules_priority_hint);
+  html += R"html(</p>
                   <p class="hint">)html";
   appendHtmlEscaped(html, tr.tile_icon_color_source_hint);
   html += R"html(</p>

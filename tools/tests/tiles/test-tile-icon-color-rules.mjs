@@ -196,8 +196,8 @@ assert.match(control, /const bool known = value\.valid && value\.has_state && va
 const binary = code(read('src/types/binary_sensor/renderer.cpp'));
 assert.match(binary, /tile_icon_color_rules::apply\(\s*widgets\.icon_label, tile \? tile->icon_colors\.c_str\(\) : nullptr,\s*rule_state_known\(state\), binary_sensor_state_name\(state\.value\),\s*label\.c_str\(\), lv_color_hex\(binary_sensor_visual_color\(state\)\)\);/,
   'Binary sensor matches the raw state and its translation, default is the state color');
-assert.match(binary, /if \(rule_state_known\(state\)\) \{\s*tile_icon_colors::resolve\(tile\.icon_colors\.c_str\(\),\s*binary_sensor_state_name\(state\.value\),\s*initial_label\.c_str\(\), icon_color\);/,
-  'The first Binary render uses the same colors');
+assert.match(binary, /const uint32_t icon_color = tile_icon_colors::state_icon_color\(\s*tile\.icon_colors\.c_str\(\), rule_state_known\(state\), binary_sensor_state_name\(state\.value\),\s*initial_label\.c_str\(\), binary_sensor_visual_color\(state\)\);/,
+  'The first Binary render uses the same rule as every state update ("Color icon" off keeps the fixed color)');
 assert.match(binary, /\? 0xFFC107\s*: 0x9E9E9E;/, 'Binary defaults stay amber and grey');
 const cppFunction = (file, name) => {
   const found = cppFunctionDefinitions(read(file)).find(f => f.name === name);

@@ -196,18 +196,24 @@ for (const [value, expected] of [[0, true], [undefined, true], [0x2A2A2A, true],
 const firmwareFollows = stored => stored === 0 || [0x222222, 0x2A2A2A].includes(stored & 0xFFFFFF);
 for (const value of [0, 0x012A2A2A, 0x01222222, 0x01353535, 0x01000000]) assert.equal(follows(value), firmwareFollows(value));
 
-// "Use global color" replaces the tile color reset button: checked follows the
-// global color (default marker), picking a color unchecks it.
+// Tile color is one choice (Global | Custom | From icon color) and replaces
+// the tile color reset button: Global follows the global color (default
+// marker), picking a color selects Custom. The behavior runs in
+// test-tile-color-choice.mjs.
 for (const marker of [
   '<div class="tile-color-row no-reset)html";',
-  '_tile_color_global" checked onchange="toggleTileGlobalColor(\')html";',
-  'appendHtmlEscaped(html, tr.use_global_tile_color);',
+  '_tile_color_modes">)html";',
+  '{{"global", tr.tile_color_mode_global},',
+  'html += R"html(" onclick="setTileColorMode(\')html";',
+  'append_tile_color_from_icon_html(html, tab_id);',
 ]) assert.ok(html.includes(marker), `tile color HTML: ${marker}`);
-assert.doesNotMatch(html, /onclick="resetTileColor\(/, 'The tile Color field has no reset button');
-assert.match(gridPreview, /function markTileColorInputExplicit\(tab\) \{[\s\S]*?input\.dataset\.bgColorDefault = '0';\s*syncTileColorGlobalToggle\(tab\);/);
-assert.match(gridPreview, /function toggleTileGlobalColor\(tab, useGlobal\) \{[\s\S]*?input\.dataset\.bgColorDefault = useGlobal \? '1' : '0';[\s\S]*?scheduleAutoSave\(tab\);/);
-assert.equal((gridPreview.match(/syncTileColorGlobalToggle\(tab\);/g) || []).length, 5, 'Every color state change syncs the checkbox');
-assert.ok(i18n.includes('"Use global tile color"') && i18n.includes('"Globale Kachelfarbe verwenden"') && i18n.includes('"Utiliser la couleur de tuile globale"'));
+assert.doesNotMatch(html, /onclick="resetTileColor\(|_tile_color_global|use_global_tile_color/, 'No reset button, no global checkbox');
+assert.match(gridPreview, /function markTileColorInputExplicit\(tab\) \{[\s\S]*?input\.dataset\.bgColorDefault = '0';[\s\S]*?syncTileColorMode\(tab\);/);
+assert.match(gridPreview, /function setTileColorMode\(tab, mode\) \{[\s\S]*?input\.dataset\.bgColorDefault = '1';[\s\S]*?scheduleAutoSave\(tab\);/);
+assert.equal((gridPreview.match(/syncTileColorMode\(tab\);/g) || []).length, 5, 'Every color state change syncs the choice');
+for (const text of ['"From icon color"', '"Aus Icon-Farbe"', '"Couleur de l\'icône"', '"Custom"', '"Eigene"', '"Personnalisée"'])
+  assert.ok(i18n.includes(text), `translation ${text}`);
+assert.doesNotMatch(i18n, /Use global tile color|Globale Kachelfarbe verwenden|Utiliser la couleur de tuile globale/);
 // Tile Settings groups: Icon (icon, icon color, circle options), Tile (color,
 // global color, layout) and Rules; clear names for what each field colors.
 const editorHtml = read('src/web/server/render/web_admin_html.cpp');

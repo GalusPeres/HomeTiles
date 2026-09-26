@@ -386,15 +386,14 @@ static bool popup_icon_state_known(const String& raw) {
 static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const char* state,
                                    const char* display, lv_color_t fallback) {
   if (!ctx || !ctx->icon_label) return;
-  uint32_t rgb = 0;
-  // Own-state rules as on the tile; rules on another entity (or switched
-  // off) leave the fixed color, and a forced tile color wins.
-  const bool own_rules = tile_icon_colors::own_state_colors_icon(ctx->icon_colors.c_str());
-  const bool colored = known && ctx->icon_colors.length() &&
-                       tile_icon_colors::resolve(ctx->icon_colors.c_str(), own_rules ? state : "",
-                                                 own_rules ? display : nullptr, rgb);
-  const lv_color_t color = ctx->forced_icon ? lv_color_hex(ctx->forced_icon_color)
-                                            : (colored ? lv_color_hex(rgb) : fallback);
+  // Own-state rules as on the tile (tile_icon_colors::state_icon_color); rules
+  // on another entity (or switched off) leave the fixed color, and a forced
+  // tile color wins.
+  const lv_color_t color =
+      ctx->forced_icon ? lv_color_hex(ctx->forced_icon_color)
+                       : lv_color_hex(tile_icon_colors::state_icon_color(
+                             ctx->icon_colors.c_str(), known && ctx->icon_colors.length(), state,
+                             display, lv_color_to_u32(fallback) & 0xFFFFFF));
   if (!lv_color_eq(lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN), color)) {
     lv_obj_set_style_text_color(ctx->icon_label, color, 0);
   }

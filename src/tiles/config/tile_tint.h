@@ -46,4 +46,39 @@ inline uint32_t background(uint32_t base, uint32_t color, unsigned percent) {
   return out;
 }
 
+// True for a real color; white, grey and black (the off and default colors)
+// never tint a tile (tile_icon_disc::icon_color_tints uses the same rule).
+inline bool has_hue(uint32_t rgb) {
+  const uint32_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+  return r != g || g != b;
+}
+
+// The tint a tile shows, the one rule for the device (tile_icon_source.cpp)
+// and the Web Admin preview (icon-colors.js tileTintChoice):
+//   1. a rule "Tint tile" wins while the rule applies (`rule_active`) and
+//      gives a real color;
+//   2. else Tile color "From icon color" (`fill_percent`) follows the real
+//      color the icon shows;
+//   3. else no tint: the tile keeps its own or the global color.
+// A percent of 0 means no tint.
+struct Choice {
+  uint32_t color = 0;
+  uint8_t percent = 0;
+  bool rule = false;
+};
+
+inline Choice choose(bool rule_active, uint32_t rule_rgb, uint8_t rule_percent, uint8_t fill_percent,
+                     uint32_t icon_rgb) {
+  Choice choice;
+  if (rule_active && rule_percent && has_hue(rule_rgb)) {
+    choice.color = rule_rgb & 0xFFFFFF;
+    choice.percent = rule_percent;
+    choice.rule = true;
+  } else if (fill_percent && has_hue(icon_rgb)) {
+    choice.color = icon_rgb & 0xFFFFFF;
+    choice.percent = fill_percent;
+  }
+  return choice;
+}
+
 }  // namespace tile_tint

@@ -136,7 +136,7 @@
         colorInput.dataset.bgColorDefault = '1';
       }
     }
-    syncTileColorGlobalToggle(tab);
+    syncTileColorMode(tab);
     const tileBg = tileBackgroundCss(meta, isDefaultBg,
       isDefaultBg ? defaultBg : (color || defaultBg));
     if (isScreensaverTileTab(tab)) {

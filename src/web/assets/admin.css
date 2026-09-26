@@ -1337,12 +1337,15 @@
     .tile-color-row { display:grid; grid-template-columns:minmax(72px,1fr) 38px; gap:8px; align-items:center; }
     .tile-color-label-row.has-opacity,
     .tile-color-row.has-opacity { grid-template-columns:minmax(72px,1fr) minmax(110px,1.5fr) 38px; }
-    /* The tile Color field has no reset button: "Use global color" replaces it. */
+    /* The tile Color field has no reset button: the Global choice replaces it. */
     .tile-color-label-row.no-reset,
     .tile-color-row.no-reset { grid-template-columns:minmax(72px,1fr); }
     .tile-color-label-row.no-reset.has-opacity,
     .tile-color-row.no-reset.has-opacity { grid-template-columns:minmax(72px,1fr) minmax(110px,1.5fr); }
-    .tile-color-global-toggle { margin:0 0 10px; }
+    /* Tile color choice: the color field shows only for Custom; screensaver
+       tiles keep their opacity slider in place. */
+    .tile-color-row.color-hidden:not(.has-opacity) { display:none; }
+    .tile-color-row.color-hidden input[type="color"] { visibility:hidden; }
     .tile-color-label-row { margin-top:13px; margin-bottom:4px; }
     .tile-color-label-row span { color:var(--text-2); font-size:12px; font-weight:600; line-height:14px; }
     .tile-color-row { margin-bottom:10px; }
@@ -2404,7 +2407,8 @@
 .icon-color-strength input[type="range"] { flex:1 1 auto; min-width:0; margin:0; padding:0; accent-color:var(--accent); }
 .icon-color-strength output { font-size:12px; font-weight:600; color:var(--text-2); min-width:4.5ch; text-align:right; white-space:nowrap; }
 .icon-color-strength .tile-color-reset-btn { flex:0 0 32px; width:32px; height:32px; }
-.icon-color-fill { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+/* Strength of Tile color "From icon color", below the Tile color choice. */
+.icon-color-fill { display:flex; flex-direction:column; gap:8px; margin:0 0 10px; }
 .icon-color-fill.hidden { display:none; }
 .icon-color-segmented {
   display:inline-grid;

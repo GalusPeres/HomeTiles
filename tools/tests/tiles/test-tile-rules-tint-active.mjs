@@ -2,7 +2,8 @@
 // switch that is on, a Binary sensor that is on, a Climate entity that runs
 // (not off) and a Cover that is not closed. Off, closed and unknown states
 // keep the tile's own color; the icon still shows the entity's grey. Own
-// rules tint while one matches. Checks the firmware path (native Climate
+// rules tint while one matches with a real color (grey, white and black
+// never tint, tile_tint::choose). Checks the firmware path (native Climate
 // activity, source contracts) and the Web Admin preview mirror.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -25,7 +26,7 @@ for (const marker of [
   'if (domain == "cover") return cover_payload_icon_color(payload, rgb, &active);',
   'active = state.value == BinarySensorValue::On;',
   'rule_color(tile, rgb, &active);',
-  'const bool rule_tint = colored && active && layer.tile;',
+  'tile_tint::choose(colored && active, rgb, layer.tile, fill, disc_icon_rgb(find_disc(card)));',
 ]) assert.ok(source.includes(marker), `tile_icon_source: ${marker}`);
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(renderer.includes('if (active) *active = state.is_on;'), 'Switch activity is the on state');
@@ -68,15 +69,17 @@ const meta = {values: {
 }};
 const tint = (entity, record = `v2\n\nsrc auto ${entity} tile=20`) =>
   context.iconColorTilePreviewTint('4', record, '', meta);
+// [entity, active, tints]: an idle heating Climate is active, but its grey
+// icon never tints (tile_tint::has_hue).
 const expectations = [
-  ['light.on', true], ['light.off', false], ['switch.unavailable', false],
-  ['binary_sensor.open', true], ['binary_sensor.closed', false],
-  ['climate.cool', true], ['climate.heat_idle', true], ['climate.off', false],
-  ['climate.action_off', false], ['climate.unknown', false],
-  ['cover.open', true], ['cover.closing', true], ['cover.closed', false],
+  ['light.on', true, true], ['light.off', false, false], ['switch.unavailable', false, false],
+  ['binary_sensor.open', true, true], ['binary_sensor.closed', false, false],
+  ['climate.cool', true, true], ['climate.heat_idle', true, false], ['climate.off', false, false],
+  ['climate.action_off', false, false], ['climate.unknown', false, false],
+  ['cover.open', true, true], ['cover.closing', true, true], ['cover.closed', false, false],
 ];
-for (const [entity, active] of expectations) {
-  assert.equal(!!tint(entity), active, `${entity} ${active ? 'tints' : 'keeps the tile color'}`);
+for (const [entity, active, tints] of expectations) {
+  assert.equal(!!tint(entity), tints, `${entity} ${tints ? 'tints' : 'keeps the tile color'}`);
   assert.equal(context.iconColorSourceAutoActive(entity, meta.values[entity]), active, `${entity} activity`);
 }
 // The icon still takes the grey of an inactive entity.
@@ -89,6 +92,7 @@ assert.equal(context.iconColorTilePreviewTint('5', 'v2\n\nsrc auto self tile=25'
 // Own rules tint while one matches, whatever the state means.
 assert.ok(tint('sensor.waste', 'v2\n\nsrc rules sensor.waste tile=20\nhas F44336 6'), 'Matching own rule tints');
 assert.equal(tint('sensor.waste', 'v2\n\nsrc rules sensor.waste tile=20\nhas F44336 9'), null, 'No match, no tint');
+assert.equal(tint('sensor.waste', 'v2\n\nsrc rules sensor.waste tile=20\nhas A0A0A0 6'), null, 'A grey rule color never tints');
 
 // ---------------------------------------------------------------------------
 // Native: climate_visuals::state_active() == preview for the same states.

@@ -97,7 +97,7 @@ for (const gone of ['kControlButtonBg', 'kControlButtonDisabled', 'kControlBarBg
 const opener = slice(read('src/types/switch/renderer.cpp'),
   'LightPopupInit init = build_light_popup_init(data);', 'show_light_popup(init);');
 assert.match(opener,
-  /init\.bg_color = tileDefaultBgColor\(\);\s*tile_icon_source::forget_popup_source\(\);/,
+  /init\.bg_color = tileDefaultBgColor\(\);\s*tile_icon_source::forget_popup_source\(static_cast<lv_obj_t\*>\(lv_event_get_current_target\(e\)\)\);/,
   'Switch/Light tiles pass the global tile color to the Light popup');
 
 console.log('Light popup inherits the tile background');

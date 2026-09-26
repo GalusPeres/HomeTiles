@@ -4456,7 +4456,34 @@ function syncTileRadiusControls(tabEl) {
     if (layout.span_w < 1) return false;
     return layout.span_h >= 1 || (supportsHalfSize(type) && layout.span_h === 0.5);
   }
-  function applyCompactSensorPreview(el, type, layout, mode = 0) {
+  // Half-height value size for a value size choice, like
+  // compact_sensor_layout::value_step: the title size by default and for 20,
+  // 24, or 28 for 28 and the larger choices (32, 40), which do not fit.
+  function compactValueSize(choice) {
+    const value = String(choice ?? '0');
+    if (value === '2') return 24;
+    return ['3', '4', '5'].includes(value) ? 28 : 20;
+  }
+  // The value size choices a tile shows: Default, 24 and 28 in half-height
+  // tiles; Default, 20, 24, 32 and 40 otherwise (28 is the default there).
+  // A choice the other size lacks moves to the one that looks the same.
+  function syncCompactValueFontOptions(select, halfHeight) {
+    if (!select?.options) return;
+    const shown = halfHeight ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    for (const option of Array.from(select.options)) {
+      const hidden = !shown.includes(option.value);
+      option.hidden = hidden;
+      option.disabled = hidden;
+      if (option.value === '0') {
+        option.textContent = option.textContent.replace(/^\d+(?= )/, halfHeight ? '20' : '28');
+      }
+    }
+    const value = select.value;
+    if (halfHeight && value === '1') select.value = '0';
+    else if (halfHeight && (value === '3' || value === '4')) select.value = '5';
+    else if (!halfHeight && value === '5') select.value = '0';
+  }
+  function applyCompactSensorPreview(el, type, layout, mode = 0, valueFont = 0) {
     const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
     // A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
     // half-height Sensor header: the icon in the corner disc and the title
@@ -4466,6 +4493,9 @@ function syncTileRadiusControls(tabEl) {
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
     el.classList.toggle('compact-title-only', compactIconTitle);
+    const valueSize = compact && !compactIconTitle ? compactValueSize(valueFont) : 20;
+    el.classList.toggle('compact-value-24', valueSize === 24);
+    el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
   }
@@ -5602,6 +5632,10 @@ function syncTileRadiusControls(tabEl) {
     const iconInput = document.getElementById(prefix + '_tile_icon');
     const switchStyle = document.getElementById(prefix + '_switch_style')?.value || '0';
     const isEnergyType = type === '14';
+    // Half-height tiles offer only the value sizes that fit.
+    const halfHeight = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) === 0.5;
+    for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
+      syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font' : '_sensor_value_font'))?.value || '0');
@@ -5697,7 +5731,7 @@ function syncTileRadiusControls(tabEl) {
       updateLayoutFromInputs(tab);
     applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
       span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
       return;
     }
 
@@ -5850,7 +5884,7 @@ function syncTileRadiusControls(tabEl) {
     updateLayoutFromInputs(tab);
     applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
       span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
     if (previewKind === 'climate' &&
         typeof mountClimateMiniEditor === 'function') {
       mountClimateMiniEditor(tab);
@@ -7238,7 +7272,7 @@ function syncTileRadiusControls(tabEl) {
     el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
     el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
     el.classList.toggle('tile-border-hidden', ['8','9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
-    applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
+    applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
     else delete el.dataset.navigateTarget;
     if (typeValue === '0') el.style.background = 'transparent';
@@ -8074,7 +8108,7 @@ function syncTileRadiusControls(tabEl) {
       if (slots && html) slots.outerHTML = html;
     }
     const data = getTilesData(tab)?.[resizeState?.index];
-    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode);
+    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode, data?.sensor_value_font);
     placeholder.replaceChildren(preview);
   }
 
@@ -9939,7 +9973,7 @@ function maybeFillTitleFromSensor(tab) {
 
   function normalizeSensorValueFont(value) {
     const v = String(value || '0');
-    return (['1','2','3','4'].includes(v)) ? v : '0';
+    return (['1','2','3','4','5'].includes(v)) ? v : '0';
   }
 
   function getSensorValueFontClass(value) {

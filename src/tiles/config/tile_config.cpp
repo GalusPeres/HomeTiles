@@ -345,7 +345,7 @@ static uint8_t clampDecimals(uint8_t val) {
 }
 
 static uint8_t clampSensorValueFont(uint8_t val) {
-  if (val > 4) return 0;
+  if (val > SENSOR_VALUE_FONT_MAX) return 0;
   return val;
 }
 

@@ -91,6 +91,7 @@ void append_energy_fields_html(String& html,
                 <option value="2">24</option>
                 <option value="3">32</option>
                 <option value="4">40</option>
+                <option value="5" hidden disabled>28</option>
               </select>
 )html";
   if (tab_id != "screensaver") {

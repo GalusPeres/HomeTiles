@@ -8,7 +8,7 @@ const noteParts=Array.from(noteSourceLine.matchAll(/"(?:\\.|[^"\\])*"/g),match=>
 assert.equal(noteParts.length,2);
 const noteOpening=noteParts[0]+'test'+noteParts[1];
 const helpers=[
- 'clampInt','clampHalf','isCompactSensorType','supportedTileLayout','applyCompactSensorPreview','supportsHalfSize','markOccupied','slotFits','firstFreeSlot','fitCompactClockPreview',
+ 'clampInt','clampHalf','isCompactSensorType','supportedTileLayout','compactValueSize','syncCompactValueFontOptions','applyCompactSensorPreview','supportsHalfSize','markOccupied','slotFits','firstFreeSlot','fitCompactClockPreview',
  'normalizeLayoutForTileType','normalizeTileLayout','constrainLayoutToTab','setGridItemPosition','setTileGridPosition',
  'getTileElementLayout','layoutTiles','normalizeLayoutInputs','applyLayoutInputsFromLayout','updateLayoutFromInputs',
  'rectsOverlap','canPlaceGridLayout','canPlaceTileLayout','cloneLayout','simulateGridReorderLayouts','manhattanDistance','buildGridPlacementCandidates',
@@ -16,7 +16,7 @@ const helpers=[
  'getTileGrid','getTileGridMetrics','getRawGridCellFromPointer'
 ].map(extractDeliveredFunction).join('\n');
 const html=`<!doctype html><html><head><style>${readRepoFile('src/web/assets/admin.css')}
-:root{--grid-cols:7;--grid-rows:5;--preview-cell-w:168px;--preview-cell-h:145px;--preview-gap:16px;--preview-pad:4px;--tile-radius:32px;--compact-inset:4px;--compact-title-font:20px;--compact-title-line:26px;--compact-value-line:31px;--compact-value-font:24px;--compact-text-gap:2px;--compact-icon-font:48px;}
+:root{--grid-cols:7;--grid-rows:5;--preview-cell-w:168px;--preview-cell-h:145px;--preview-gap:16px;--preview-pad:4px;--tile-radius:32px;--compact-inset:4px;--compact-title-font:20px;--compact-title-line:26px;--compact-value-line:31px;--compact-value-font:24px;--compact-text-gap:2px;--compact-icon-font:48px;--compact-value-font-24:25px;--compact-value-line-step-24:32px;--compact-value-font-28:28px;--compact-value-line-step-28:36px;}
 </style></head><body><section id="tab-tiles-test"><div class="tile-grid">
 ${[0,1,2,3].map(i=>`<div class="tile sensor" id="test-tile-${i}" data-index="${i}" data-type="1"><i class="tile-icon">i</i><div class="tile-title"><span class="tile-title-lines"><span class="tile-title-line">Room</span><span class="tile-title-line">Upstairs</span></span></div><div class="tile-value">22.5 C</div></div>`).join('')}
 </div></section><select id="test_tile_type"><option value="1">Sensor</option><option value="20">Binary</option><option value="14">Energy</option><option value="5">Switch</option><option value="7">Settings</option><option value="0">Empty</option></select>
@@ -47,6 +47,29 @@ try {
  check(getComputedStyle(valueLabel).fontSize==='24px','explicit value sizes never change the half-height font');
  valueLabel.classList.remove('sensor-value-size-40');
  check(getComputedStyle(valueLabel).fontSize==='24px','automatic font keeps the compact default');
+ // Chosen half-height value sizes: 24, and 28 for 28, 32 and 40; the title
+ // moves up so the larger value stays inside the half tile.
+ const titleTop=()=>card.querySelector('.tile-title').getBoundingClientRect().top;
+ const defaultTitleTop=titleTop();
+ for(const [choice,size] of [['0','24px'],['1','24px'],['2','25px'],['3','28px'],['4','28px'],['5','28px']]){
+  applyCompactSensorPreview(card,1,tiles[0],0,choice);
+  check(getComputedStyle(valueLabel).fontSize===size,'half-height value size for choice '+choice);
+  check(valueLabel.getBoundingClientRect().bottom<=rect(0).bottom,'chosen value size stays inside the half tile');
+ }
+ check(titleTop()<defaultTitleTop&&card.classList.contains('compact-value-28'),'the title moves up for the larger value');
+ applyCompactSensorPreview(card,1,tiles[0],0,'0');
+ check(!card.classList.contains('compact-value-24')&&!card.classList.contains('compact-value-28'),'default keeps the title size');
+ applyCompactSensorPreview(card,1,{...tiles[0],span_h:1},0,'5');
+ check(!card.classList.contains('compact-value-28'),'full-height tiles keep their own value sizes');
+ applyCompactSensorPreview(card,1,tiles[0],0,'0');
+ const sel=document.createElement('select');
+ sel.innerHTML='<option value="0">28 (Default)</option><option value="1">20</option><option value="2">24</option><option value="3">32</option><option value="4">40</option><option value="5" hidden disabled>28</option>';
+ const shown=()=>[...sel.options].filter(o=>!o.hidden&&!o.disabled).map(o=>o.value).join();
+ sel.value='4';syncCompactValueFontOptions(sel,true);
+ check(sel.value==='5'&&shown()==='0,2,5'&&sel.options[0].textContent==='20 (Default)','half-height tiles offer Default (20), 24 and 28');
+ sel.value='1';syncCompactValueFontOptions(sel,true);check(sel.value==='0','20 is the half-height default');
+ sel.value='5';syncCompactValueFontOptions(sel,false);
+ check(sel.value==='0'&&shown()==='0,1,2,3,4'&&sel.options[0].textContent==='28 (Default)','full-height tiles offer their sizes again');
  const snapshot=normalizeSnapshotLayout({type:1,col:'1.5',row:'2.5',span_w:'2',span_h:'0.5'},0,'test');
  check(snapshot.col===.5&&snapshot.row===1.5&&snapshot.span_h===.5,'draft reload retains half steps');
  for(const width of [1,1.5,2,2.5,3]) check(supportedTileLayout(14,{...snapshot,span_w:width}),'Energy compact widths');

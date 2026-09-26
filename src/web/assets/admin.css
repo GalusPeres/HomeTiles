@@ -2380,6 +2380,14 @@
   font-size:var(--compact-value-font); line-height:var(--compact-value-line);
 }
 .tile.sensor-compact .tile-unit { font-size:inherit; }
+/* Chosen half-height value sizes (compact_sensor_layout::value_font); title
+   and value both use the value line to center their block. */
+.tile.sensor-compact.compact-value-24 {
+  --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
+}
+.tile.sensor-compact.compact-value-28 {
+  --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
+}
 /* Half-height Back: the title alone is centered on the disc row. */
 .tile.sensor-compact.compact-title-only > .tile-title {
   top:max(0px, calc((var(--compact-h) - var(--compact-title-line)) / 2));

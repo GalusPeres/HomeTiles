@@ -16,7 +16,8 @@ void apply_binary_sensor_fields_from_request(WebServer& server, Tile& tile) {
   tile.sensor_decimals = 0xFF;
   if (server.hasArg("sensor_value_font")) {
     const int font = server.arg("sensor_value_font").toInt();
-    tile.sensor_value_font = font >= 1 && font <= 4 ? static_cast<uint8_t>(font) : 0;
+    tile.sensor_value_font =
+        font >= 1 && font <= SENSOR_VALUE_FONT_MAX ? static_cast<uint8_t>(font) : 0;
   }
   tile.sensor_display_mode = 0;
   tile.sensor_gauge_min = 0;

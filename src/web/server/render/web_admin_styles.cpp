@@ -115,6 +115,11 @@ void appendPreviewScaleVars(String& html) {
   emit_exact("compact-value-line-24", tile_layout::content_font_24()->line_height);
   emit_exact("compact-value-line-32", tile_layout::content_font_32()->line_height);
   emit_exact("compact-value-line-40", tile_layout::content_font_40()->line_height);
+  // Chosen half-height value sizes (compact_sensor_layout::value_font).
+  emit_exact("compact-value-font-24", compact_sensor_layout::value_size(2));
+  emit_exact("compact-value-line-step-24", compact_sensor_layout::value_font(2)->line_height);
+  emit_exact("compact-value-font-28", compact_sensor_layout::value_size(5));
+  emit_exact("compact-value-line-step-28", compact_sensor_layout::value_font(5)->line_height);
 
 #if defined(DEVICE_LAYOUT_1024X600)
   // Match the compact layout's real LVGL font substitutions. The preview

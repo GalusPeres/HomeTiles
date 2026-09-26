@@ -223,6 +223,9 @@ inline void apply_global_tile_border(lv_obj_t*){}inline void apply_popup_border(
 inline lv_color_t border_hint(lv_color_t c){return lv_color_mix(lv_color_white(),c,128);}
 }
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
+// Period switch timing lines; their content is not part of this test.
+uint32_t millis(){static uint32_t now=0;return now+=1;}
+struct TestSerial{template<class... T> void printf(const char*,T...){}} Serial;
 void* heap_caps_malloc(size_t n,int){return malloc(n);}void heap_caps_free(void*p){free(p);}
 struct DeviceConfig{const char* language="en";uint8_t global_time_format=1;};
 struct Manager{DeviceConfig cfg;const DeviceConfig& getConfig(){return cfg;}}configManager;

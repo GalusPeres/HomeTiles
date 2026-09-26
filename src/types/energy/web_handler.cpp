@@ -25,7 +25,7 @@ void apply_energy_fields_from_request(WebServer& server, Tile& tile) {
   uint8_t value_font = 0;
   if (server.hasArg("sensor_value_font")) {
     int raw = server.arg("sensor_value_font").toInt();
-    value_font = (raw >= 1 && raw <= 4) ? static_cast<uint8_t>(raw) : 0;
+    value_font = (raw >= 1 && raw <= SENSOR_VALUE_FONT_MAX) ? static_cast<uint8_t>(raw) : 0;
   }
   tile.sensor_value_font = value_font;
 

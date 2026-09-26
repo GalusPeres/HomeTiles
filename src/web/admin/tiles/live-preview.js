@@ -26,6 +26,10 @@
     const iconInput = document.getElementById(prefix + '_tile_icon');
     const switchStyle = document.getElementById(prefix + '_switch_style')?.value || '0';
     const isEnergyType = type === '14';
+    // Half-height tiles offer only the value sizes that fit.
+    const halfHeight = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) === 0.5;
+    for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
+      syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font' : '_sensor_value_font'))?.value || '0');
@@ -121,7 +125,7 @@
       updateLayoutFromInputs(tab);
     applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
       span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
       return;
     }
 
@@ -274,7 +278,7 @@
     updateLayoutFromInputs(tab);
     applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
       span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
     if (previewKind === 'climate' &&
         typeof mountClimateMiniEditor === 'function') {
       mountClimateMiniEditor(tab);

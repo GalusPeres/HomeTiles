@@ -62,6 +62,7 @@ ${strip(read('src/ui/popups/weather/weather_popup.h'))}
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=1,GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device::kGridCellH,GRID_GAP=Device::kGridGap;
 #include "src/tiles/config/tile_icon_colors.h"
 struct Tile{String title="Weather",sensor_entity="weather.home",icon_name="weather-sunny",sensor_unit,icon_colors;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_value_font=0,sensor_display_mode=0,sensor_decimals=0xFF,popup_open_mode=1;int type=1,sensor_gauge_min=0,sensor_gauge_max=100,sensor_gauge_arc=270,sensor_gauge_size=160,sensor_gauge_y_offset=0,sensor_graph_height=60,sensor_value_y_offset=0;};
+${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
 namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } }
 constexpr int TILE_POPUP_OPEN_SHORT_PRESS=1;
 int getTilePopupOpenMode(const Tile&t){return t.popup_open_mode;}
@@ -117,15 +118,17 @@ ${strip(read('src/types/energy/renderer.cpp')).replaceAll('is_disabled_token','e
 void check_energy_layout() {
  for(float width:{1.f,1.5f,2.f}) for(float height:{.5f,1.f}) {
   if(height==1.f && width==1.5f) continue;
-  for(int choice:{0,1,2,3,4}) {
+  for(int choice:{0,1,2,3,4,5}) {
    Tile tile;tile.type=TILE_ENERGY;tile.span_w=width;tile.span_h=height;tile.sensor_value_font=choice;tile.title="Long energy title";
    auto*card=render_energy_tile(lv_screen_active(),0,0,tile,0,GridType::SCREENSAVER);
    lv_obj_update_layout(card);auto*value=sensor_widgets[0].value_label;
-   const auto*font=height==.5f?compact_sensor_layout::value_font():(choice?get_energy_value_font(tile):FONT_VALUE);
+   const auto*font=height==.5f?compact_sensor_layout::value_font(choice):(choice?get_energy_value_font(tile):FONT_VALUE);
    assert(lv_obj_get_style_text_font(value,LV_PART_MAIN)==font);
    assert(lv_obj_get_style_text_align(value,LV_PART_MAIN)==(height==.5f?LV_TEXT_ALIGN_LEFT:LV_TEXT_ALIGN_CENTER));
    if(height==.5f) {
     assert(lv_obj_get_height(card)==tile_geometry::extent(0,height,GRID_CELL_H,GRID_GAP));
+    lv_area_t card_area,value_area;lv_obj_get_coords(card,&card_area);lv_obj_get_coords(value,&value_area);
+    assert(value_area.y2<=card_area.y2&&"Every chosen value size fits in the half tile");
     auto*disc=lv_obj_get_child(card,0);
     assert(lv_obj_get_style_radius(disc,LV_PART_MAIN)==tile_radius::kMinimum-compact_sensor_layout::inset());
    }

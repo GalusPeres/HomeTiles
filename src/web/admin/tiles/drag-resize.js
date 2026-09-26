@@ -84,7 +84,7 @@
       if (slots && html) slots.outerHTML = html;
     }
     const data = getTilesData(tab)?.[resizeState?.index];
-    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode);
+    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode, data?.sensor_value_font);
     placeholder.replaceChildren(preview);
   }
 

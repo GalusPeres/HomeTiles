@@ -1007,6 +1007,7 @@ void on_period_click(lv_event_t* e) {
 
   String next = (target == ctx->week_btn) ? "week" : "day";
   if (ctx->period == next) return;
+  const uint32_t started_ms = millis();
   ctx->readout.cancel();
   ctx->period = next;
   update_period_buttons(ctx);
@@ -1014,6 +1015,11 @@ void on_period_click(lv_event_t* e) {
   update_loading_header(ctx);
   energy_request_period(ctx->period.c_str(), true);
   refresh_from_cache(ctx);
+  // One line per tap: whether cached bars were shown at once, and how long
+  // the switch took on the UI task. The response line follows in energy_data.
+  Serial.printf("[EnergyPopup] Period %s: %s in %lu ms\n", ctx->period.c_str(),
+                ctx->shown_entry.value_count ? "cached bars shown" : "no cached data",
+                static_cast<unsigned long>(millis() - started_ms));
 }
 
 lv_obj_t* make_button_label(lv_obj_t* parent, const char* text, lv_obj_t** out_label) {
@@ -1338,5 +1344,8 @@ void process_energy_popup_queue() {
   g_pending_refresh.valid = false;
   if (!popup_visible(g_energy_popup_ctx)) return;
   if (!g_energy_popup_ctx->period.equalsIgnoreCase(period)) return;
+  const uint32_t started_ms = millis();
   refresh_from_cache(g_energy_popup_ctx);
+  Serial.printf("[EnergyPopup] New %s data shown in %lu ms\n", period.c_str(),
+                static_cast<unsigned long>(millis() - started_ms));
 }

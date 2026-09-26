@@ -38,7 +38,7 @@
 
   function normalizeSensorValueFont(value) {
     const v = String(value || '0');
-    return (['1','2','3','4'].includes(v)) ? v : '0';
+    return (['1','2','3','4','5'].includes(v)) ? v : '0';
   }
 
   function getSensorValueFontClass(value) {

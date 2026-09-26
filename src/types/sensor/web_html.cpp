@@ -56,6 +56,7 @@ void append_sensor_fields_html(String& html, const String& tab_id, const std::ve
                   <option value="2">24</option>
                   <option value="3">32</option>
                   <option value="4">40</option>
+                  <option value="5" hidden disabled>28</option>
                 </select>
 )html";
   // Screensaver tiles never receive graph history (and gauges would turn the

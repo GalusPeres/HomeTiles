@@ -155,7 +155,8 @@ assert.doesNotMatch(indicator, /LV_STATE_PRESSED/);
   assert.ok(weight(f * 0.7, f * 0.7) > 0.4 && weight(f * 0.7, f * 0.7) < 0.6);
 }
 // Half-height tiles and the pill share one content layout.
-assert.match(compact, /inline void apply_content\(lv_obj_t\* card, lv_obj_t\* icon, lv_obj_t\* title, lv_obj_t\* value, int width\)/);
+// The pill passes no value size choice, so its hint keeps the title size.
+assert.match(compact, /inline void apply_content\(lv_obj_t\* card, lv_obj_t\* icon, lv_obj_t\* title, lv_obj_t\* value, int width,\s*uint8_t value_choice = 0\)/);
 assert.match(compact, /apply_fractional_tile_geometry\(card, tile\);\s*apply_content\(card, icon, title, value,/);
 
 // A tap ends the stream, it never pauses or disables the camera.

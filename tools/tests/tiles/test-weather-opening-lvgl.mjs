@@ -283,7 +283,16 @@ void check_value_alignment(lv_display_t* display) {
   assert(top>=2*tile_icon_disc::inset()+disc_side&&top>=climate_layout::kContentTop);
   assert(css.find("--climate-slots-top:"+std::to_string(preview_scaled_exact_px(top))+"px;")!=std::string::npos&&
          "The preview mini-grid starts below the same disc");
-  std::cout<<"Climate mini-grid top: "<<top<<" px"<<std::endl;
+  // Half heights add mini-grid rows (climateTileGridRows) that are never
+  // smaller than the rows whole sizes use on the same device.
+  auto row_height=[&](float h){
+   const int tile_h=tile_geometry::extent(0,h,Device::kGridCellH,Device::kGridGap);
+   const int rows=static_cast<int>(h*2+0.5f)-1;
+   return (tile_h-climate_layout::kOuterInset-top-(rows-1)*climate_layout::kGap)/rows;};
+  int whole=1<<30;for(float h:{1.0f,2.0f,3.0f})whole=std::min(whole,row_height(h));
+  for(float h:{1.5f,2.5f})assert(row_height(h)>=whole&&"Half-step mini-grid rows are as tall as whole-size rows");
+  std::cout<<"Climate mini-grid top: "<<top<<" px, gap below disc "<<top-tile_icon_disc::inset()-disc_side
+           <<" px, rows 1/1.5/2 cells: "<<row_height(1.0f)<<"/"<<row_height(1.5f)<<"/"<<row_height(2.0f)<<" px"<<std::endl;
  }
  assert(disc.x1-sensor_area.x1==tile_icon_disc::inset()&&"Left gap equals the half-height inset");
  assert(disc.y1-sensor_area.y1==tile_icon_disc::inset()&&"Top gap equals the half-height inset");

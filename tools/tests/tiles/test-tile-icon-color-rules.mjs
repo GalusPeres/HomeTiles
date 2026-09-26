@@ -449,7 +449,8 @@ const block = `<div id="t_tile_icon_color_fields" class="tile-icon-color-fields 
 <div class="icon-color-segmented" id="t_tile_icon_source_modes"><button type="button" data-icon-color="source-mode" data-mode="auto">A</button><button type="button" data-icon-color="source-mode" data-mode="rules">R</button></div>
 <label class="inline-checkbox"><input type="checkbox" id="t_tile_icon_rule_icon" data-icon-color="rule-target" checked> Icon</label>
 <label class="inline-checkbox"><input type="checkbox" id="t_tile_icon_rule_tile" data-icon-color="rule-target"> Tile</label>
-<div class="icon-color-strength hidden" id="t_tile_icon_rule_strength_row"><input type="range" id="t_tile_icon_rule_strength" min="10" max="50" step="5" value="20" data-icon-color="rule-strength"><output id="t_tile_icon_rule_strength_value">20 %</output></div></div></div>
+<div class="icon-color-strength hidden" id="t_tile_icon_rule_strength_row"><input type="range" id="t_tile_icon_rule_strength" min="10" max="50" step="5" value="20" data-icon-color="rule-strength"><output id="t_tile_icon_rule_strength_value">20 %</output></div>
+<p class="hint hidden" id="t_tile_icon_rule_follows_icon">follows</p><input type="checkbox" id="t_tile_icon_fill" hidden></div></div>
 <div class="icon-color-section hidden" id="t_tile_icon_bar_section"><input type="hidden" id="t_tile_icon_bar" value="">
 <div class="icon-color-segmented"><button type="button" data-icon-color="mode" data-mode="off">Off</button><button type="button" data-icon-color="mode" data-mode="smooth">Smooth</button><button type="button" data-icon-color="mode" data-mode="steps">Steps</button></div>
 <div class="icon-color-bar-editor hidden" id="t_tile_icon_bar_editor"><div class="icon-color-presets">
@@ -566,6 +567,13 @@ try{
  check($('t_tile_icon_rule_strength_value').textContent==='35 %'&&snapshot()==='v2\\n\\nsrc rules self tile=35\\nhas F44336 6','Strength: '+snapshot());
  $('t_tile_icon_rule_icon').checked=false;$('t_tile_icon_rule_icon').dispatchEvent(new Event('change',{bubbles:true}));
  check(snapshot()==='v2\\n\\nsrc rules self tile=35 noicon\\nhas F44336 6','Tile only: '+snapshot());
+ // Tile color "From icon": the tile follows the icon, so "Tint tile" hides
+ // (its setting is kept) and a note says why; Global brings it back.
+ $('t_tile_icon_fill').checked=true;syncIconColorFields('t');
+ check($('t_tile_icon_rule_tile').closest('label').classList.contains('hidden')&&hidden('t_tile_icon_rule_strength_row')&&!hidden('t_tile_icon_rule_follows_icon')&&
+  snapshot()==='v2\\n\\nfill 20\\nsrc rules self tile=35 noicon\\nhas F44336 6','From icon hides Tint tile and keeps it: '+snapshot());
+ $('t_tile_icon_fill').checked=false;syncIconColorFields('t');
+ check(!$('t_tile_icon_rule_tile').closest('label').classList.contains('hidden')&&!hidden('t_tile_icon_rule_strength_row')&&hidden('t_tile_icon_rule_follows_icon'),'Global shows Tint tile again');
  click(document.querySelector('[data-icon-color="rules-on"][data-mode="0"]'));
  check(hidden('t_tile_icon_rules_body')&&snapshot()==='v2\\n\\nsrc rules self tile=35 noicon off\\nhas F44336 6','Off keeps the settings: '+snapshot());
  click(document.querySelector('[data-icon-color="rules-on"][data-mode="1"]'));

@@ -155,6 +155,11 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
   appendHtmlEscaped(html, tr.tile_rules_tint_tile);
   html += R"html(</label>
                   </div>
+                  <p class="hint hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_rule_follows_icon">)html";
+  appendHtmlEscaped(html, tr.tile_rules_tile_follows_icon);
+  html += R"html(</p>
                   <div class="icon-color-strength hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_rule_strength_row"><label for=")html";

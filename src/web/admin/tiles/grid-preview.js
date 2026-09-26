@@ -176,6 +176,8 @@
       input.dataset.bgColorDefault = '1';
     }
     syncTileColorMode(tab);
+    // The rules hide "Tint tile" while the tile follows the icon.
+    if (typeof syncIconColorFields === 'function') syncIconColorFields(tab);
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
@@ -281,8 +283,10 @@
     const input = document.getElementById(tab + '_tile_color');
     if (input) input.dataset.bgColorDefault = '0';
     const fill = document.getElementById(tab + '_tile_icon_fill');
+    const followed = !!fill?.checked;
     if (fill) fill.checked = false;
     syncTileColorMode(tab);
+    if (followed && typeof syncIconColorFields === 'function') syncIconColorFields(tab);
   }
   function resetTileColor(tab) {
     const input = document.getElementById(tab + '_tile_color');

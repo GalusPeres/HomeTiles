@@ -211,7 +211,7 @@ assert.doesNotMatch(html, /onclick="resetTileColor\(|_tile_color_global|use_glob
 assert.match(gridPreview, /function markTileColorInputExplicit\(tab\) \{[\s\S]*?input\.dataset\.bgColorDefault = '0';[\s\S]*?syncTileColorMode\(tab\);/);
 assert.match(gridPreview, /function setTileColorMode\(tab, mode\) \{[\s\S]*?input\.dataset\.bgColorDefault = '1';[\s\S]*?scheduleAutoSave\(tab\);/);
 assert.equal((gridPreview.match(/syncTileColorMode\(tab\);/g) || []).length, 5, 'Every color state change syncs the choice');
-for (const text of ['"From icon color"', '"Aus Icon-Farbe"', '"Couleur de l\'icône"', '"Custom"', '"Eigene"', '"Personnalisée"'])
+for (const text of ['"From icon",', '"Aus Icon",', '"De l\'icône",', '"Custom"', '"Eigene"', '"Personnalisée"'])
   assert.ok(i18n.includes(text), `translation ${text}`);
 assert.doesNotMatch(i18n, /Use global tile color|Globale Kachelfarbe verwenden|Utiliser la couleur de tuile globale/);
 // Tile Settings groups: Icon (icon, icon color, circle options), Tile (color,

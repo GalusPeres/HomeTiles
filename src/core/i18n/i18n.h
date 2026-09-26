@@ -337,6 +337,7 @@ struct Strings {
   const char* tile_rules_tint_tile;
   const char* tile_rules_strength;
   const char* tile_rules_priority_hint;
+  const char* tile_rules_tile_follows_icon;
   // Tile Settings group captions: what belongs to the icon, what to the tile.
   const char* tile_group_icon;
   const char* tile_group_tile;

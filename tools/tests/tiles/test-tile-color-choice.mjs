@@ -1,10 +1,10 @@
-// Tile color is one choice (Global | Custom | From icon color) and rules win
-// while they apply. "From icon color" is the record line "fill NN" (clamped
-// like the rule tint "tile=NN"): the tile takes the color the icon shows
-// (own icon color or the entity's color). One tint rule for device and
-// preview (tile_tint::choose == tileTintChoice): an applying rule "Tint tile"
-// with a real color wins, else From icon color follows a real icon color;
-// grey, white and black never tint. One icon color rule
+// Tile color is one choice (Global | Custom | From icon). "From icon" is the
+// record line "fill NN" (clamped like the rule tint "tile=NN"): the tile
+// always follows the color the icon shows (own, Home Assistant or a rule's
+// "Color icon" color), so a rule's "Tint tile" does not apply and the editor
+// hides it. Otherwise a rule "Tint tile" tints while it applies. One tint
+// rule for device and preview (tile_tint::choose == tileTintChoice); grey,
+// white and black never tint. One icon color rule
 // (tile_icon_colors::state_icon_color == previewIconColor): own rules color
 // the icon only with "Color icon". The maintainer's Desk (Binary sensor) and
 // Water (Sensor bar) tiles run through both, natively and in the preview.
@@ -78,6 +78,7 @@ const scenarios = [
   ['Custom color, no rule', '1', 'v2\n\nsrc rules self tile=30\nhas F44336 6', 'in 5 Tagen', null, '#FFFFFF'],
   ['From icon color, own icon color', '1', 'v2\n00BCD4\nfill 35', '12', null, '#FFFFFF'],
   ['From icon color, white icon', '1', 'v2\n\nfill 35', '12', null, '#FFFFFF'],
+  ['From icon ignores Tint tile', '1', 'v2\nD63B3B\nfill 20\nsrc rules self tile=30 noicon\nbar smooth 20 70 0:3B82F6 540:EF4444', '47.7', null, '#FFFFFF'],
 ].map(([name, type, record, state, display, fallback]) =>
   [name, type, js.normalizeIconColorRecord(record, true, true, true, true), state, display, fallback]);
 for (const scenario of scenarios) assert.ok(scenario[2].startsWith('v2\n'), `normalized ${scenario[0]}: ${scenario[2]}`);
@@ -92,22 +93,27 @@ const preview = scenarios.map(([, type, record, state, display, fallback]) => {
   const rule = layer && layer.enabled ? js.resolveIconColorRecord(record, state, display, false) : '';
   const choice = js.tileTintChoice(!!rule, rule, layer?.tile || 0, js.parseIconColorRecord(record).fill, icon);
   const bg = choice ? js.tileTintBackground(GLOBAL, choice.color, choice.percent) : '-';
-  return [icon, rule || '-', choice ? `${choice.color}@${choice.percent}${choice.rule ? 'R' : 'F'}` : '-', bg].join('|');
+  return [icon, rule || '-', choice ? `${choice.color}@${choice.percent}` : '-', bg].join('|');
 });
 const expect = (name, predicate) => {
   const index = scenarios.findIndex(s => s[0] === name);
   assert.ok(predicate(preview[index].split('|')), `${name}: ${preview[index]}`);
 };
-expect('Desk detected', ([icon, , choice]) => icon === '#FFC107' && choice === '#787161@20R');
-expect('Desk clear', ([icon, rule, choice]) => icon === '#FFC107' && rule === '#A0A0A0' && choice === '#FFC107@20F');
+// Desk uses From icon: the tile follows the icon (yellow, or the rule color
+// with "Color icon"); its grey Clear color never tints.
+expect('Desk detected', ([icon, , choice]) => icon === '#FFC107' && choice === '#FFC107@20');
+expect('Desk clear', ([icon, rule, choice]) => icon === '#FFC107' && rule === '#A0A0A0' && choice === '#FFC107@20');
 expect('Desk with Color icon, clear', ([icon, , choice]) => icon === '#A0A0A0' && choice === '-');
-expect('Desk with Color icon, detected', ([icon, , choice]) => icon === '#787161' && choice === '#787161@20R');
-expect('Water 47.7', ([icon, rule, choice]) => icon === '#D63B3B' && rule === '#EF4444' && choice === '#EF4444@20R');
-expect('Water 25', ([icon, , choice]) => icon === '#D63B3B' && choice.endsWith('@20R'));
-expect('Custom color, rule applies', ([, , choice]) => choice === '#F44336@30R');
+expect('Desk with Color icon, detected', ([icon, , choice]) => icon === '#787161' && choice === '#787161@20');
+// Water uses Global and "Tint tile": the tile takes the bar color, the icon
+// stays red.
+expect('Water 47.7', ([icon, rule, choice]) => icon === '#D63B3B' && rule === '#EF4444' && choice === '#EF4444@20');
+expect('Water 25', ([icon, , choice]) => icon === '#D63B3B' && choice.endsWith('@20') && choice !== '-');
+expect('Custom color, rule applies', ([, , choice]) => choice === '#F44336@30');
 expect('Custom color, no rule', ([, , choice]) => choice === '-');
-expect('From icon color, own icon color', ([icon, , choice]) => icon === '#00BCD4' && choice === '#00BCD4@35F');
+expect('From icon color, own icon color', ([icon, , choice]) => icon === '#00BCD4' && choice === '#00BCD4@35');
 expect('From icon color, white icon', ([, , choice]) => choice === '-');
+expect('From icon ignores Tint tile', ([icon, rule, choice]) => icon === '#D63B3B' && rule === '#EF4444' && choice === '#D63B3B@20');
 
 // Preview: the rule tint and the From icon color tint go through tileTintChoice.
 for (const marker of [
@@ -118,16 +124,18 @@ for (const marker of [
   'tileElem.style.background = tileElem.dataset.baseBg;',
   "if (input && input.dataset.unset === '1' && shown) {",
 ]) assert.ok(grid.includes(marker), 'grid-preview: ' + marker);
-assert.ok(read('src/web/admin/tiles/icon-colors.js').includes("return tileTintChoice(true, color, layer.tile, 0, '');"));
+assert.ok(read('src/web/admin/tiles/icon-colors.js').includes("return tileTintChoice(true, color, layer.tile, 0, '');") &&
+  read('src/web/admin/tiles/icon-colors.js').includes('if (parseIconColorRecord(record).fill) return null;'),
+  'The preview applies no rule tint while the tile follows the icon');
 
 // Firmware: refresh_card and the icon color hook both decide through
 // tile_tint::choose; icon color changes reach the hook through apply_fill().
 const source = read('src/tiles/runtime/tile_icon_source.cpp');
 for (const marker of [
   'tile_tint::choose(colored && active, rgb, layer.tile, fill, disc_icon_rgb(find_disc(card)));',
-  'set_icon_fill_marker(card, fill ? static_cast<uint8_t>(fill | (choice.rule ? kRuleTintWins : 0)) : 0);',
-  'apply_tint_choice(card, tile_tint::choose(false, 0, 0, static_cast<uint8_t>(marker & ~kRuleTintWins),',
-  'if (!card || !marker || (marker & kRuleTintWins)) return;',
+  'set_icon_fill_marker(card, fill);',
+  'apply_tint_choice(card, tile_tint::choose(false, 0, 0, marker, disc_icon_rgb(disc)));',
+  'if (!card || !marker) return;',
   'tile_icon_disc::g_icon_color_hook = &on_icon_color;',
 ]) assert.ok(source.includes(marker), 'tile_icon_source: ' + marker);
 assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('if (g_icon_color_hook) g_icon_color_hook(disc);'));
@@ -137,7 +145,8 @@ assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('if (g_icon_color_
 const html = read('src/web/server/render/tile_icon_colors_html.cpp');
 for (const marker of ['void append_tile_color_from_icon_html(String& html, const String& tab_id) {',
   '_tile_icon_fill" hidden>', 'data-icon-color="fill-strength"', 'data-icon-color="fill-strength-reset"',
-  'appendHtmlEscaped(html, tr.tile_rules_priority_hint);']) assert.ok(html.includes(marker), marker);
+  'appendHtmlEscaped(html, tr.tile_rules_priority_hint);', '_tile_icon_rule_follows_icon">)html";',
+  'appendHtmlEscaped(html, tr.tile_rules_tile_follows_icon);']) assert.ok(html.includes(marker), marker);
 const fixed = html.slice(html.indexOf('void append_tile_icon_color_fixed_html('), html.indexOf('void append_tile_color_from_icon_html('));
 assert.doesNotMatch(fixed, /_tile_icon_fill|tile_rules_tint_tile/, 'No second "Tint tile" under the icon color');
 const editor = read('src/web/admin/tiles/icon-colors.js');
@@ -182,8 +191,8 @@ static void row(const char* record, const char* state, const char* display, uint
   std::printf("#%06X|", static_cast<unsigned>(icon));
   if (colored) std::printf("#%06X|", static_cast<unsigned>(rule)); else std::printf("-|");
   if (choice.percent) {
-    std::printf("#%06X@%u%c|#%06X\\x1e", static_cast<unsigned>(choice.color), static_cast<unsigned>(choice.percent),
-                choice.rule ? 'R' : 'F', static_cast<unsigned>(tile_tint::background(${hex(GLOBAL)}, choice.color, choice.percent)));
+    std::printf("#%06X@%u|#%06X\\x1e", static_cast<unsigned>(choice.color), static_cast<unsigned>(choice.percent),
+                static_cast<unsigned>(tile_tint::background(${hex(GLOBAL)}, choice.color, choice.percent)));
   } else {
     std::printf("-|-\\x1e");
   }

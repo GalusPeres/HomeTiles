@@ -3205,9 +3205,11 @@ function syncTileRadiusControls(tabEl) {
   }
 
   // The rules' tile tint for the preview: { color, percent } or null. Entity
-  // color tints only while the entity is active, like refresh_card().
+  // color tints only while the entity is active, like refresh_card(). With
+  // Tile color "From icon" the tile follows the icon instead (no rule tint).
   function iconColorTilePreviewTint(typeValue, record, ownEntity, meta) {
     const layer = iconColorRecordSource(record);
+    if (parseIconColorRecord(record).fill) return null;
     const ruleTint = (() => {
       if (!layer || !layer.enabled || !layer.tile) return null;
       const color = iconColorLayerColor(record, layer, ownEntity, meta, typeValue);
@@ -3218,8 +3220,6 @@ function syncTileRadiusControls(tabEl) {
       }
       return tileTintChoice(true, color, layer.tile, 0, '');
     })();
-    // Tile color "From icon color" follows the icon in the preview
-    // (applyIconDiscTint), below this rule tint.
     return ruleTint;
   }
 
@@ -3229,15 +3229,16 @@ function syncTileRadiusControls(tabEl) {
     return !!hex && !(hex.slice(1, 3) === hex.slice(3, 5) && hex.slice(3, 5) === hex.slice(5, 7));
   }
 
-  // tile_tint::choose(), the one tint rule of device and preview: an applying
-  // rule "Tint tile" with a real color wins, else Tile color "From icon color"
-  // follows the real icon color; null without a tint.
+  // tile_tint::choose(), the one tint rule of device and preview: with Tile
+  // color "From icon" the tile follows the real color the icon shows (rules
+  // included), else an applying rule "Tint tile" with a real color tints it;
+  // null without a tint.
   function tileTintChoice(ruleActive, ruleColor, rulePercent, fillPercent, iconColor) {
-    if (ruleActive && rulePercent && tileTintHasHue(ruleColor)) {
-      return { color: normalizeIconColorHex(ruleColor), percent: rulePercent, rule: true };
+    if (fillPercent) {
+      return tileTintHasHue(iconColor) ? { color: normalizeIconColorHex(iconColor), percent: fillPercent } : null;
     }
-    if (fillPercent && tileTintHasHue(iconColor)) {
-      return { color: normalizeIconColorHex(iconColor), percent: fillPercent, rule: false };
+    if (ruleActive && rulePercent && tileTintHasHue(ruleColor)) {
+      return { color: normalizeIconColorHex(ruleColor), percent: rulePercent };
     }
     return null;
   }
@@ -3578,11 +3579,16 @@ function syncTileRadiusControls(tabEl) {
     const on = iconColorEl(tab, '_tile_icon_rules_on')?.value === '1';
     const mode = iconColorEl(tab, '_tile_icon_source_mode')?.value === 'auto' ? 'auto' : 'rules';
     const tileTint = !!iconColorEl(tab, '_tile_icon_rule_tile')?.checked;
+    // With Tile color "From icon" the tile follows the icon: "Tint tile" is
+    // hidden (and kept) and a note says why.
+    const followsIcon = !!iconColorEl(tab, '_tile_icon_fill')?.checked;
     iconColorEl(tab, '_tile_icon_source_section')?.classList.remove('hidden');
     iconColorEl(tab, '_tile_icon_rules_body')?.classList.toggle('hidden', !on);
     iconColorEl(tab, '_tile_icon_source_kinds')?.classList.toggle('hidden', !own);
     iconColorEl(tab, '_tile_icon_source')?.classList.toggle('hidden', kind !== 'other');
-    iconColorEl(tab, '_tile_icon_rule_strength_row')?.classList.toggle('hidden', !tileTint);
+    iconColorEl(tab, '_tile_icon_rule_strength_row')?.classList.toggle('hidden', !tileTint || followsIcon);
+    iconColorEl(tab, '_tile_icon_rule_tile')?.closest('label')?.classList.toggle('hidden', followsIcon);
+    iconColorEl(tab, '_tile_icon_rule_follows_icon')?.classList.toggle('hidden', !followsIcon);
     const strength = iconColorEl(tab, '_tile_icon_rule_strength');
     const output = iconColorEl(tab, '_tile_icon_rule_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
@@ -7002,6 +7008,8 @@ function syncTileRadiusControls(tabEl) {
       input.dataset.bgColorDefault = '1';
     }
     syncTileColorMode(tab);
+    // The rules hide "Tint tile" while the tile follows the icon.
+    if (typeof syncIconColorFields === 'function') syncIconColorFields(tab);
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
@@ -7107,8 +7115,10 @@ function syncTileRadiusControls(tabEl) {
     const input = document.getElementById(tab + '_tile_color');
     if (input) input.dataset.bgColorDefault = '0';
     const fill = document.getElementById(tab + '_tile_icon_fill');
+    const followed = !!fill?.checked;
     if (fill) fill.checked = false;
     syncTileColorMode(tab);
+    if (followed && typeof syncIconColorFields === 'function') syncIconColorFields(tab);
   }
   function resetTileColor(tab) {
     const input = document.getElementById(tab + '_tile_color');

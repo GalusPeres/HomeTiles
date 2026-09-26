@@ -52,10 +52,14 @@ constexpr uint8_t kDaySlotCount = 24;
 constexpr uint8_t kWeekSlotCount = 7;
 constexpr int kLabelOverhang = popup_layout::scale(12);
 constexpr int kMinBarHeight = popup_layout::scale(2);
-// The read bar stays white with a thin white line through the chart, like the
-// Sensor cursor; the other bars stay visible but dimmed.
-constexpr lv_opa_t kReadoutDimmedBarOpa = LV_OPA_60;
+// The read bar stays white and the other bars dim. A white dot above the plot
+// marks it, with a line from the bar's top edge (the zero line for negative
+// or empty bars) up to the dot.
+constexpr lv_opa_t kReadoutDimmedBarOpa = LV_OPA_30;
 constexpr int kReadoutLineWidth = popup_layout::scale(2) > 1 ? popup_layout::scale(2) : 1;
+constexpr int kReadoutDotSize = popup_layout::scale(12);
+// From the plot's top edge up to the dot's center.
+constexpr int kReadoutDotLift = popup_layout::scale(14);
 
 struct EnergyPopupContext {
   bool body_ready = false;
@@ -101,7 +105,9 @@ struct EnergyPopupContext {
   int plot_left = 0;
   int plot_w = 0;
   int readout_slot = -1;
-  int readout_x = 0;  // cursor line, relative to chart_wrap
+  int readout_x = 0;  // marker, relative to chart_wrap
+  int readout_line_bottom = 0;  // top edge of the read bar, relative to chart_wrap
+  int zero_y = 0;  // zero line of the shown bars, relative to chart_wrap
   int readout_pin_slot = -1;
   bool readout_latest = true;
   char readout_time_text[72] = "";
@@ -449,34 +455,58 @@ void set_bar_opa(EnergyPopupContext* ctx, int index, lv_opa_t opa) {
     lv_obj_set_style_bg_opa(bar, opa, 0);
 }
 
-// The cursor line spans the plot height at the read bar's center.
+// The dot sits above the plot, partly outside chart_wrap, which extends its
+// drawing area by this much (on_energy_cursor_ext_draw).
+constexpr int kReadoutMarkerOverhang =
+    kReadoutDotLift + kReadoutDotSize / 2 + 1 - kLabelOverhang > 0
+        ? kReadoutDotLift + kReadoutDotSize / 2 + 1 - kLabelOverhang
+        : 0;
+
+// Marker area: the dot above the plot down to the bottom of the plot.
 void invalidate_energy_cursor(EnergyPopupContext* ctx) {
   if (!ctx->chart_wrap || ctx->readout_slot < 0) return;
   lv_area_t coords;
   lv_obj_get_coords(ctx->chart_wrap, &coords);
-  const int x = coords.x1 + ctx->readout_x - kReadoutLineWidth / 2;
-  lv_area_t area = {x - 1, coords.y1 + kLabelOverhang, x + kReadoutLineWidth,
-                    coords.y1 + kLabelOverhang + kChartHeight};
+  const int x = coords.x1 + ctx->readout_x;
+  const int reach = kReadoutDotSize / 2 + kReadoutLineWidth + 1;
+  lv_area_t area = {x - reach,
+                    coords.y1 + kLabelOverhang - kReadoutDotLift - kReadoutDotSize / 2 - 1,
+                    x + reach, coords.y1 + kLabelOverhang + kChartHeight};
   lv_obj_invalidate_area(ctx->chart_wrap, &area);
 }
 
-// Drawn after the bars, so the line needs no object that moves while dragging.
+void on_energy_cursor_ext_draw(lv_event_t* event) {
+  auto* size = static_cast<int32_t*>(lv_event_get_param(event));
+  if (size && *size < kReadoutMarkerOverhang) *size = kReadoutMarkerOverhang;
+}
+
+// Drawn with chart_wrap's own layer, which reaches above the plot (the
+// extended draw size); the post-draw layer after the children would clip the
+// dot to chart_wrap. The marker needs no object that moves while dragging and
+// never overlaps a bar: the line ends at the read bar's top edge.
 void on_energy_cursor_draw(lv_event_t* event) {
   auto* ctx = static_cast<EnergyPopupContext*>(lv_event_get_user_data(event));
   lv_layer_t* layer = lv_event_get_layer(event);
   if (!ctx || !layer || ctx->readout_slot < 0) return;
   lv_area_t coords;
   lv_obj_get_coords(ctx->chart_wrap, &coords);
-  lv_draw_rect_dsc_t line;
-  lv_draw_rect_dsc_init(&line);
-  line.base.layer = layer;
-  line.bg_color = lv_color_white();
-  line.bg_opa = LV_OPA_COVER;
-  line.radius = 0;
-  const int x = coords.x1 + ctx->readout_x - kReadoutLineWidth / 2;
-  lv_area_t area = {x, coords.y1 + kLabelOverhang, x + kReadoutLineWidth - 1,
-                    coords.y1 + kLabelOverhang + kChartHeight - 1};
-  lv_draw_rect(layer, &line, &area);
+  const int x = coords.x1 + ctx->readout_x;
+  const int dot_y = coords.y1 + kLabelOverhang - kReadoutDotLift;
+  lv_draw_rect_dsc_t mark;
+  lv_draw_rect_dsc_init(&mark);
+  mark.base.layer = layer;
+  mark.bg_color = lv_color_white();
+  mark.bg_opa = LV_OPA_COVER;
+  mark.radius = 0;
+  const int line_x = x - kReadoutLineWidth / 2;
+  lv_area_t line = {line_x, dot_y, line_x + kReadoutLineWidth - 1,
+                    coords.y1 + ctx->readout_line_bottom - 1};
+  if (line.y2 >= line.y1) lv_draw_rect(layer, &mark, &line);
+  mark.radius = LV_RADIUS_CIRCLE;
+  const int dot_x = x - kReadoutDotSize / 2;
+  const int dot_top = dot_y - kReadoutDotSize / 2;
+  lv_area_t dot = {dot_x, dot_top, dot_x + kReadoutDotSize - 1, dot_top + kReadoutDotSize - 1};
+  lv_draw_rect(layer, &mark, &dot);
 }
 
 // Hiding, opening, a period change and new chart data restore the normal bars.
@@ -554,6 +584,10 @@ void show_energy_slot(EnergyPopupContext* ctx, int slot) {
   const int slot_r = ctx->plot_left + static_cast<int>(lroundf(
       (static_cast<float>(slot + 1) / static_cast<float>(slots)) * static_cast<float>(ctx->plot_w)));
   ctx->readout_x = slot_l + (slot_r - slot_l) / 2;
+  // Negative bars start at the zero line; empty slots have no bar.
+  lv_obj_t* bar = slot < ENERGY_VALUES_MAX ? ctx->bars[slot] : nullptr;
+  ctx->readout_line_bottom =
+      bar && !lv_obj_has_flag(bar, LV_OBJ_FLAG_HIDDEN) ? lv_obj_get_y(bar) : ctx->zero_y;
   invalidate_energy_cursor(ctx);
 
   format_energy_slot_time(ctx, slot);
@@ -862,6 +896,7 @@ void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry)
   ctx->shown_slots = slot_count;
   ctx->plot_left = plot_left;
   ctx->plot_w = plot_w;
+  ctx->zero_y = zero_y;
   refresh_energy_readout(ctx);
 }
 
@@ -1175,7 +1210,9 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
 
   ctx->readout.init(ctx, on_energy_readout_apply, on_energy_readout_end);
   ctx->readout.attach(chart_wrap);
-  lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_POST, ctx);
+  lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_MAIN, ctx);
+  lv_obj_add_event_cb(chart_wrap, on_energy_cursor_ext_draw, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr);
+  lv_obj_refresh_ext_draw_size(chart_wrap);
 
   apply_init_to_context(ctx, init);
   lv_obj_move_foreground(icon);

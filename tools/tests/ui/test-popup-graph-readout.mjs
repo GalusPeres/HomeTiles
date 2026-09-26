@@ -159,10 +159,14 @@ for (const marker of ['ctx->readout.attach(chart_wrap);', 'lv_obj_remove_flag(x_
 for (const name of ['apply_energy_readout', 'show_energy_slot', 'on_energy_cursor_draw', 'invalidate_energy_cursor'])
   assert.doesNotMatch(code(fn(energy, name)), /lv_label_set_text\(|lv_obj_set_(?:pos|size|x|y)\(|lv_chart_|String\(|lv_obj_update_layout\(/,
     `Dragging over Energy bars changes only bar opacity, the cursor line and static labels (${name})`);
-assert.ok(energyUi.includes('lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_POST, ctx);'));
+assert.ok(energyUi.includes('lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_MAIN, ctx);'));
 assert.match(code(fn(energy, 'on_energy_readout_end')),
   /if \(keep && ctx->readout_slot >= 0\) \{\s*ctx->readout_pin_slot = ctx->readout_slot;\s*ctx->readout_latest = ctx->readout_slot == latest_energy_slot\(ctx\);/);
-assert.match(code(fn(energy, 'apply_entry_to_chart')), /ctx->plot_w = plot_w;\s*refresh_energy_readout\(ctx\);\s*\}$/);
+assert.match(code(fn(energy, 'apply_entry_to_chart')), /ctx->plot_w = plot_w;\s*ctx->zero_y = zero_y;\s*refresh_energy_readout\(ctx\);\s*\}$/);
+// The marker's dot sits above the plot, outside chart_wrap's own box.
+assert.match(energyUi, /lv_obj_add_event_cb\(chart_wrap, on_energy_cursor_ext_draw, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr\);\s*lv_obj_refresh_ext_draw_size\(chart_wrap\);/);
+assert.match(code(fn(energy, 'show_energy_slot')),
+  /ctx->readout_line_bottom =\s*bar && !lv_obj_has_flag\(bar, LV_OBJ_FLAG_HIDDEN\) \? lv_obj_get_y\(bar\) : ctx->zero_y;/);
 // The time axis holds a full line of its labels on every layout.
 assert.match(code(fn(energy, 'time_axis_height')), /lv_font_get_line_height\(popup_layout::font20\(\)\)/);
 assert.doesNotMatch(code(energy).replace(/constexpr int kTimeAxisHeight[^\n]*/g, '').replace(/return line > kTimeAxisHeight \? line : kTimeAxisHeight;/, ''),
@@ -301,11 +305,16 @@ int main(){
  assert(lv_obj_get_style_text_font(ctx->readout_time_label,LV_PART_MAIN)==popup_layout::font20()&&lv_obj_get_style_text_font(ctx->readout_value_label,LV_PART_MAIN)==value_font());
  lv_area_t time_area,value_area,band_area;lv_obj_get_coords(ctx->readout_time_label,&time_area);lv_obj_get_coords(ctx->readout_value_label,&value_area);lv_obj_get_coords(value_box,&band_area);
  assert(time_area.y2<=value_area.y1&&std::abs((time_area.y1+value_area.y2)-(band_area.y1+band_area.y2))<=2&&"Time above value, centered in the old value row");
- // A thin white line through the plot marks the read bar, centered on it.
+ // A white dot above the plot marks the read bar, with a thin line from the
+ // bar's top edge up to it, centered on the bar.
  {lv_area_t bar;lv_obj_get_coords(ctx->bars[11],&bar);const int cursor_x=wrap.x1+ctx->readout_x;
-  assert(std::abs(cursor_x-(bar.x1+bar.x2)/2)<=1&&"The line runs through the bar's center");
-  assert(white_at(cursor_x,chart.y1+2)&&white_at(cursor_x,bar.y1-2)&&"The line is drawn above the bar up to the plot top");
-  assert(!white_at(cursor_x+kReadoutLineWidth+2,chart.y1+2)&&"The line stays thin");}
+  assert(std::abs(cursor_x-(bar.x1+bar.x2)/2)<=1&&"The marker is centered on the bar");
+  assert(ctx->readout_line_bottom==lv_obj_get_y(ctx->bars[11])&&"The line ends at the bar's top edge");
+  assert(white_at(cursor_x,chart.y1+2)&&white_at(cursor_x,bar.y1-2)&&"The line runs from the bar up through the plot top");
+  const int dot_y=chart.y1-kReadoutDotLift;
+  assert(dot_y<chart.y1&&white_at(cursor_x,dot_y)&&white_at(cursor_x-kReadoutDotSize/2+2,dot_y)&&"The dot sits above the plot");
+  assert(white_at(cursor_x,dot_y-kReadoutDotSize/2+1)&&"The dot is not clipped at the top of the chart area");
+  assert(!white_at(cursor_x+kReadoutDotSize/2+2,dot_y)&&!white_at(cursor_x+kReadoutLineWidth+2,chart.y1+2)&&"Dot and line stay small");}
  // Several moves within one frame apply only the latest position.
  touch_at(bar_x(23,24),y);touch_at(bar_x(20,24),y);assert(ctx->readout_slot==11);
  lv_refr_now(display);
@@ -348,6 +357,13 @@ int main(){
  touch_release();
  lv_obj_send_event(ctx->day_btn,LV_EVENT_CLICKED,nullptr);settle(display);
  assert(ctx->period=="day"&&ctx->readout_slot==23&&ctx->readout_latest&&strcmp(ctx->readout_value_text,"9.00 kWh")==0);
+ // A negative bar hangs below the zero line; the line starts at the zero line.
+ cache[0].values[3]=-2.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
+ touch_at(bar_x(3,24),y);touch_release();lv_refr_now(display);
+ assert(ctx->readout_slot==3&&shown(ctx->y_zero_line)&&ctx->readout_line_bottom==lv_obj_get_y(ctx->y_zero_line)&&
+        ctx->readout_line_bottom==lv_obj_get_y(ctx->bars[3])&&"Negative bars: the line starts at the zero line");
+ assert(white_at(wrap.x1+ctx->readout_x,wrap.y1+ctx->readout_line_bottom-3)&&white_at(wrap.x1+ctx->readout_x,chart.y1-kReadoutDotLift)&&"Line and dot above a negative bar");
+ cache[0].values[3]=0.75f;queue_energy_popup_refresh("day");process_energy_popup_queue();
  // Hiding while touching ends the readout and restores the bars.
  touch_at(bar_x(4,24),y);lv_refr_now(display);
  hide_energy_popup();assert(!ctx->readout.active()&&ctx->readout_slot<0&&bars_restored(ctx)&&lv_display_get_event_count(display)==display_events);

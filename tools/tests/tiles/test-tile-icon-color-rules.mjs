@@ -567,13 +567,18 @@ try{
  check($('t_tile_icon_rule_strength_value').textContent==='35 %'&&snapshot()==='v2\\n\\nsrc rules self tile=35\\nhas F44336 6','Strength: '+snapshot());
  $('t_tile_icon_rule_icon').checked=false;$('t_tile_icon_rule_icon').dispatchEvent(new Event('change',{bubbles:true}));
  check(snapshot()==='v2\\n\\nsrc rules self tile=35 noicon\\nhas F44336 6','Tile only: '+snapshot());
- // Tile color "From icon": the tile follows the icon, so "Tint tile" hides
- // (its setting is kept) and a note says why; Global brings it back.
+ // Tile color "From icon": the tile follows the icon, so "Tint tile" stays
+ // visible but greyed out and not clickable (its setting is kept) and a note
+ // says why; Global makes it active again. Nothing disappears.
+ const tintLabel=()=>$('t_tile_icon_rule_tile').closest('label');
  $('t_tile_icon_fill').checked=true;syncIconColorFields('t');
- check($('t_tile_icon_rule_tile').closest('label').classList.contains('hidden')&&hidden('t_tile_icon_rule_strength_row')&&!hidden('t_tile_icon_rule_follows_icon')&&
-  snapshot()==='v2\\n\\nfill 20\\nsrc rules self tile=35 noicon\\nhas F44336 6','From icon hides Tint tile and keeps it: '+snapshot());
+ check(!tintLabel().classList.contains('hidden')&&tintLabel().classList.contains('is-disabled')&&$('t_tile_icon_rule_tile').disabled&&$('t_tile_icon_rule_tile').checked&&
+  !hidden('t_tile_icon_rule_strength_row')&&$('t_tile_icon_rule_strength_row').classList.contains('is-disabled')&&$('t_tile_icon_rule_strength').disabled&&
+  !hidden('t_tile_icon_rule_follows_icon')&&getComputedStyle(tintLabel()).opacity<0.6&&
+  snapshot()==='v2\\n\\nfill 20\\nsrc rules self tile=35 noicon\\nhas F44336 6','From icon greys Tint tile out and keeps it: '+snapshot());
  $('t_tile_icon_fill').checked=false;syncIconColorFields('t');
- check(!$('t_tile_icon_rule_tile').closest('label').classList.contains('hidden')&&!hidden('t_tile_icon_rule_strength_row')&&hidden('t_tile_icon_rule_follows_icon'),'Global shows Tint tile again');
+ check(!tintLabel().classList.contains('is-disabled')&&!$('t_tile_icon_rule_tile').disabled&&!$('t_tile_icon_rule_strength').disabled&&
+  !$('t_tile_icon_rule_strength_row').classList.contains('is-disabled')&&hidden('t_tile_icon_rule_follows_icon'),'Global makes Tint tile active again');
  click(document.querySelector('[data-icon-color="rules-on"][data-mode="0"]'));
  check(hidden('t_tile_icon_rules_body')&&snapshot()==='v2\\n\\nsrc rules self tile=35 noicon off\\nhas F44336 6','Off keeps the settings: '+snapshot());
  click(document.querySelector('[data-icon-color="rules-on"][data-mode="1"]'));

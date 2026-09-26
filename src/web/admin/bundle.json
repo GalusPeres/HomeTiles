@@ -20,6 +20,7 @@
     "src/web/admin/tiles/drafts.js",
     "src/web/admin/tiles/clipboard.js",
     "src/web/admin/tiles/editor.js",
+    "src/web/admin/tiles/settings-scroll.js",
     "src/web/admin/tiles/live-preview.js",
     "src/web/admin/tiles/type-selection.js",
     "src/web/admin/tiles/autosave.js",

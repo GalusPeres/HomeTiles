@@ -1236,6 +1236,7 @@
     .tile-settings-body {
       flex:1 1 auto;
       min-height:0;
+      overflow-x:hidden;
       overflow-y:auto;
       overscroll-behavior:contain;
       margin-right:-12px;
@@ -1258,6 +1259,10 @@
       margin-bottom:10px;
     }
     .tile-settings select { background-position:right 12px center; padding-right:32px; }
+    /* Long entity names never widen the panel: fields may shrink below their
+       text, which ends in an ellipsis on one line. */
+    .tile-settings select { min-width:0; max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    .type-fields.show > * { min-width:0; }
     .tile-settings input[type="range"], .global-settings-panel input[type="range"] { padding:0; }
     .tile-settings h3, .global-settings-panel h3 { margin:0 0 14px; color:var(--text); font-size:17px; }
     .tile-settings .hidden { display:none; }
@@ -2407,6 +2412,10 @@
 .icon-color-strength input[type="range"] { flex:1 1 auto; min-width:0; margin:0; padding:0; accent-color:var(--accent); }
 .icon-color-strength output { font-size:12px; font-weight:600; color:var(--text-2); min-width:4.5ch; text-align:right; white-space:nowrap; }
 .icon-color-strength .tile-color-reset-btn { flex:0 0 32px; width:32px; height:32px; }
+/* "Tint tile" while Tile color "From icon" makes the tile follow the icon:
+   visible, greyed out and not clickable. */
+.inline-checkbox.is-disabled, .icon-color-strength.is-disabled { opacity:0.45; }
+.inline-checkbox.is-disabled input, .icon-color-strength.is-disabled * { cursor:not-allowed; pointer-events:none; }
 /* Strength of Tile color "From icon color", below the Tile color choice. */
 .icon-color-fill { display:flex; flex-direction:column; gap:8px; margin:0 0 10px; }
 .icon-color-fill.hidden { display:none; }

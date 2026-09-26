@@ -897,15 +897,20 @@
     const on = iconColorEl(tab, '_tile_icon_rules_on')?.value === '1';
     const mode = iconColorEl(tab, '_tile_icon_source_mode')?.value === 'auto' ? 'auto' : 'rules';
     const tileTint = !!iconColorEl(tab, '_tile_icon_rule_tile')?.checked;
-    // With Tile color "From icon" the tile follows the icon: "Tint tile" is
-    // hidden (and kept) and a note says why.
+    // With Tile color "From icon" the tile follows the icon: "Tint tile"
+    // stays visible but greyed out (its setting is kept) and a note says why.
     const followsIcon = !!iconColorEl(tab, '_tile_icon_fill')?.checked;
     iconColorEl(tab, '_tile_icon_source_section')?.classList.remove('hidden');
     iconColorEl(tab, '_tile_icon_rules_body')?.classList.toggle('hidden', !on);
     iconColorEl(tab, '_tile_icon_source_kinds')?.classList.toggle('hidden', !own);
     iconColorEl(tab, '_tile_icon_source')?.classList.toggle('hidden', kind !== 'other');
-    iconColorEl(tab, '_tile_icon_rule_strength_row')?.classList.toggle('hidden', !tileTint || followsIcon);
-    iconColorEl(tab, '_tile_icon_rule_tile')?.closest('label')?.classList.toggle('hidden', followsIcon);
+    iconColorEl(tab, '_tile_icon_rule_strength_row')?.classList.toggle('hidden', !tileTint);
+    iconColorEl(tab, '_tile_icon_rule_strength_row')?.classList.toggle('is-disabled', followsIcon);
+    const tintBox = iconColorEl(tab, '_tile_icon_rule_tile');
+    if (tintBox) tintBox.disabled = followsIcon;
+    tintBox?.closest('label')?.classList.toggle('is-disabled', followsIcon);
+    const tintStrength = iconColorEl(tab, '_tile_icon_rule_strength');
+    if (tintStrength) tintStrength.disabled = followsIcon;
     iconColorEl(tab, '_tile_icon_rule_follows_icon')?.classList.toggle('hidden', !followsIcon);
     const strength = iconColorEl(tab, '_tile_icon_rule_strength');
     const output = iconColorEl(tab, '_tile_icon_rule_strength_value');

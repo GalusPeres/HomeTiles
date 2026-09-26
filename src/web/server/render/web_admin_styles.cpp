@@ -206,23 +206,19 @@ void appendPreviewScaleVars(String& html) {
 #endif
   emit("tile-pad-v", climate_layout::kCardPaddingVertical);
   emit("tile-pad-h", climate_layout::kCardPaddingHorizontal);
-  // The device lifts a corner header until its icon disc's top gap equals the
-  // side gap (tile_icon_disc::corner_lift); the preview header follows.
-  // Its disc grows into the corner like the device's (corner_diameter).
-  const int header_icon_width =
-      lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0);
-  const int header_disc = tile_icon_disc::header_diameter(header_icon_width);
-  emit_exact("icon-disc-corner", header_disc);
-  const int header_lift = tile_icon_disc::corner_lift(
+  // The device places a corner header's disc in the tile corner like the
+  // half-height disc and centers the icon in it; the header labels move with
+  // the icon (tile_icon_disc::corner_header). The preview header follows.
+  const tile_icon_disc::CornerHeader header = tile_icon_disc::corner_header(
       tile_layout::scale_480(24), tile_layout::scale_480(20), tile_layout::scale_480(-8),
-      tile_layout::scale_480(-8), header_icon_width, lv_font_get_line_height(FONT_MDI_ICONS),
-      header_disc);
+      lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0),
+      lv_font_get_line_height(FONT_MDI_ICONS));
+  emit_exact("icon-disc-corner", header.disc);
   emit_exact("tile-header-title-top",
-             tile_layout::scale_480(24) + tile_layout::scale_480(4) - header_lift);
+             tile_layout::scale_480(24) + tile_layout::scale_480(4) + header.shift);
   emit_exact("tile-header-title-right", tile_layout::scale_480(20) - tile_layout::scale_480(4));
-  emit_exact("tile-header-icon-top",
-             tile_layout::scale_480(24) + tile_layout::scale_480(-8) - header_lift);
-  emit_exact("tile-header-icon-left", tile_layout::scale_480(20) + tile_layout::scale_480(-8));
+  emit_exact("tile-header-icon-top", tile_layout::scale_480(24) + header.icon_top);
+  emit_exact("tile-header-icon-left", tile_layout::scale_480(20) + header.icon_side);
 #if defined(DEVICE_LAYOUT_1024X600)
   emit("value-dy", 23);
 #elif defined(DEVICE_LAYOUT_480X480)

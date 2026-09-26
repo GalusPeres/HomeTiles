@@ -255,16 +255,17 @@ void check_value_alignment(lv_display_t* display) {
  const int expected_y=sensor_value.y1-sensor_area.y1;
  String css; appendPreviewScaleVars(css);
  lv_area_t icon,title,disc;
- // A round disc sits directly behind the unchanged icon, centered on it.
+ // The header disc sits directly behind the icon.
  assert(tile_icon_disc::disc_of(lv_obj_get_child(sensor,1))==lv_obj_get_child(sensor,0));
  lv_obj_get_coords(lv_obj_get_child(sensor,0),&disc);
  lv_obj_get_coords(lv_obj_get_child(sensor,1),&icon);
  lv_obj_get_coords(lv_obj_get_child(sensor,2),&title);
  assert(lv_obj_get_style_radius(lv_obj_get_child(sensor,0),LV_PART_MAIN)==ui_surface_style::radius(tile_icon_disc::radius_baseline()));
  assert(tile_icon_disc::round_diameter()==tile_icon_disc::diameter()+tile_icon_disc::inset());
- // The top-left header disc grows into the corner: its left and top gaps
- // equal the half-height disc's inset, the icon stays where it is.
- assert(lv_area_get_width(&disc)==lv_area_get_height(&disc));
+ // One half-height row square in the corner, concentric with the tile corner
+ // like the half-height disc (left and top gaps equal its inset), with the
+ // icon centered in it; the preview header uses the rendered positions.
+ assert(lv_area_get_width(&disc)==tile_icon_disc::row_height()&&lv_area_get_height(&disc)==tile_icon_disc::row_height());
  assert(disc.x1-sensor_area.x1==tile_icon_disc::inset()&&"Left gap equals the half-height inset");
  assert(disc.y1-sensor_area.y1==tile_icon_disc::inset()&&"Top gap equals the half-height inset");
  assert(std::abs((disc.x1+disc.x2)-(icon.x1+icon.x2))<=1&&std::abs((disc.y1+disc.y2)-(icon.y1+icon.y2))<=1);

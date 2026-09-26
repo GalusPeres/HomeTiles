@@ -290,17 +290,35 @@ inline int centered_offset(int anchor, int offset, int icon_size, int size) {
 // sits in the corner like the half-height disc. The icon sits `offset_side`
 // from a card padding of `pad_side`. The Web Admin header CSS uses the same
 // value (--icon-disc-corner).
-inline int corner_diameter(int pad_side, int offset_side, int icon_width) {
-  return icon_width + 2 * (pad_side + offset_side - inset());
+// Taller tiles with the icon in the top-left corner place the disc like the
+// half-height tiles: one half-height row square, the half-height inset from
+// the tile's left and top edges, so it is concentric with the tile corner on
+// every device (the tile radius follows the row height too). The icon sits
+// centered in it; the header labels beside the icon move with it vertically.
+// On the 8-inch and 10-inch layouts, where the header was tuned, nothing
+// moves. `pad_*` are the card paddings, `offset_top` the icon's current y
+// inside them. The Web Admin header CSS uses the same values.
+struct CornerHeader {
+  int disc = 0;       // disc side
+  int icon_side = 0;  // icon x inside the side padding
+  int icon_top = 0;   // icon y inside the top padding
+  int shift = 0;      // vertical move of the icon and the header labels
+};
+
+inline CornerHeader corner_header(int pad_top, int pad_side, int offset_top, int icon_width,
+                                  int icon_height) {
+  CornerHeader header;
+  header.disc = row_height();
+  header.icon_side = inset() - pad_side + (header.disc - icon_width) / 2;
+  header.icon_top = inset() - pad_top + (header.disc - icon_height) / 2;
+  header.shift = header.icon_top - offset_top;
+  return header;
 }
 
-// The corner disc of the shared Sensor header (card padding 20, icon offset
-// -8 at the 480 scale). Centered icons (icon above a title: Folder, Scene,
-// Camera, Switch) use the same size, so every taller tile shows one disc.
+// Centered icons (icon above a title: Folder, Scene, Camera, Switch) take the
+// same disc size as the corner headers, so every taller tile shows one disc.
 // The Web Admin uses it as --icon-disc-corner.
-inline int header_diameter(int icon_width) {
-  return corner_diameter(tile_layout::scale_480(20), tile_layout::scale_480(-8), icon_width);
-}
+inline int header_diameter() { return row_height(); }
 
 // How far a corner header (disc, icon and header labels) moves up so the
 // disc of `size` has the same top gap as side gap. The icon sits at
@@ -343,21 +361,49 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
     case LV_ALIGN_BOTTOM_RIGHT: horizontal = 2; vertical = 2; break;
     default: break;
   }
-  // A top-left corner disc grows into the corner (corner_diameter); a
-  // centered icon takes the same size as the header corner disc.
-  const int corner = vertical == 0 && horizontal == 0
-                         ? corner_diameter(lv_obj_get_style_pad_left(card, LV_PART_MAIN),
-                                           lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x)
-                         : (vertical == 1 && horizontal == 1 ? header_diameter(icon_size.x) : 0);
-  const int size = corner > 0 ? corner : round_diameter();
+  // Top-left corner header: the disc sits in the corner like the half-height
+  // disc, the icon centered in it, the header labels move with the icon
+  // (corner_header).
+  if (vertical == 0 && horizontal == 0) {
+    const int pad_top = lv_obj_get_style_pad_top(card, LV_PART_MAIN);
+    const int pad_left = lv_obj_get_style_pad_left(card, LV_PART_MAIN);
+    const int icon_y = lv_obj_get_style_y(icon, LV_PART_MAIN);
+    const CornerHeader header = corner_header(pad_top, pad_left, icon_y, icon_size.x, icon_size.y);
+    lv_obj_set_size(disc, header.disc, header.disc);
+    lv_obj_align(disc, LV_ALIGN_TOP_LEFT, inset() - pad_left, inset() - pad_top);
+    if (header.shift != 0) {
+      const int header_bottom = icon_y + icon_size.y;
+      const uint32_t count = lv_obj_get_child_count(card);
+      for (uint32_t i = 0; i < count; ++i) {
+        lv_obj_t* child = lv_obj_get_child(card, i);
+        if (child == disc) continue;
+        const lv_align_t child_align = lv_obj_get_style_align(child, LV_PART_MAIN);
+        if (child_align != LV_ALIGN_TOP_LEFT && child_align != LV_ALIGN_TOP_MID &&
+            child_align != LV_ALIGN_TOP_RIGHT) {
+          continue;
+        }
+        const int y = lv_obj_get_style_y(child, LV_PART_MAIN);
+        if (child != icon && y >= header_bottom) continue;
+        lv_obj_set_y(child, y + header.shift);
+      }
+    }
+    lv_obj_set_x(icon, header.icon_side);
+    lv_obj_set_flag(disc, LV_OBJ_FLAG_HIDDEN, lv_obj_has_flag(icon, LV_OBJ_FLAG_HIDDEN));
+    lv_obj_move_to_index(disc, lv_obj_get_index(icon));
+    return disc;
+  }
+  // Centered icons take the corner header's disc size; other icons keep the
+  // round disc.
+  const int size = vertical == 1 && horizontal == 1 ? header_diameter() : round_diameter();
   if (size != round_diameter()) lv_obj_set_size(disc, size, size);
   lv_obj_align(disc, align,
                centered_offset(horizontal, lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x, size),
                centered_offset(vertical, lv_obj_get_style_y(icon, LV_PART_MAIN), icon_size.y, size));
-  // Header icons in a top corner: the disc sits closer to the side edge than
-  // to the top edge. Move the whole header (disc, icon and the header labels
-  // beside it) up until both gaps match; never down, never sideways.
-  if (vertical == 0 && horizontal != 1) {
+  // Header icons in the top-right corner: the disc sits closer to the side
+  // edge than to the top edge. Move the whole header (disc, icon and the
+  // header labels beside it) up until both gaps match; never down, never
+  // sideways.
+  if (vertical == 0 && horizontal == 2) {
     const int icon_x = lv_obj_get_style_x(icon, LV_PART_MAIN);
     const int shift = corner_lift(
         lv_obj_get_style_pad_top(card, LV_PART_MAIN),

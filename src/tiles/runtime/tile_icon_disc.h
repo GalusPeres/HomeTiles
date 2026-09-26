@@ -290,14 +290,25 @@ inline int centered_offset(int anchor, int offset, int icon_size, int size) {
 // sits in the corner like the half-height disc. The icon sits `offset_side`
 // from a card padding of `pad_side`. The Web Admin header CSS uses the same
 // value (--icon-disc-corner).
+// The disc of taller tiles: the size the tuned 8/10-inch header gives around
+// its icon (card padding 20, icon offset -8 at the 480 scale, the half-height
+// inset to the edges), but never smaller than the half-height disc. Where the
+// cells are taller than the header needs (Tab5, 4B, S3), it is the
+// half-height disc itself, the same circle at the largest tile radius. The
+// Web Admin uses it as --icon-disc-corner.
+inline int header_diameter(int icon_width) {
+  const int around_icon =
+      icon_width + 2 * (tile_layout::scale_480(20) + tile_layout::scale_480(-8) - inset());
+  return around_icon > diameter() ? around_icon : diameter();
+}
+
 // Taller tiles with the icon in the top-left corner place the disc like the
-// half-height tiles: one half-height row square, the half-height inset from
-// the tile's left and top edges, so it is concentric with the tile corner on
-// every device (the tile radius follows the row height too). The icon sits
-// centered in it; the header labels beside the icon move with it vertically.
-// On the 8-inch and 10-inch layouts, where the header was tuned, nothing
-// moves. `pad_*` are the card paddings, `offset_top` the icon's current y
-// inside them. The Web Admin header CSS uses the same values.
+// half-height tiles: the half-height inset from the tile's left and top
+// edges, so it is concentric with the tile corner on every device. The icon
+// sits centered in it; the header labels beside the icon move with it
+// vertically. On the 8-inch and 10-inch layouts, where the header was tuned,
+// nothing moves. `pad_*` are the card paddings, `offset_top` the icon's
+// current y inside them. The Web Admin header CSS uses the same values.
 struct CornerHeader {
   int disc = 0;       // disc side
   int icon_side = 0;  // icon x inside the side padding
@@ -308,17 +319,12 @@ struct CornerHeader {
 inline CornerHeader corner_header(int pad_top, int pad_side, int offset_top, int icon_width,
                                   int icon_height) {
   CornerHeader header;
-  header.disc = row_height();
+  header.disc = header_diameter(icon_width);
   header.icon_side = inset() - pad_side + (header.disc - icon_width) / 2;
   header.icon_top = inset() - pad_top + (header.disc - icon_height) / 2;
   header.shift = header.icon_top - offset_top;
   return header;
 }
-
-// Centered icons (icon above a title: Folder, Scene, Camera, Switch) take the
-// same disc size as the corner headers, so every taller tile shows one disc.
-// The Web Admin uses it as --icon-disc-corner.
-inline int header_diameter() { return row_height(); }
 
 // How far a corner header (disc, icon and header labels) moves up so the
 // disc of `size` has the same top gap as side gap. The icon sits at
@@ -392,9 +398,10 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
     lv_obj_move_to_index(disc, lv_obj_get_index(icon));
     return disc;
   }
-  // Centered icons take the corner header's disc size; other icons keep the
-  // round disc.
-  const int size = vertical == 1 && horizontal == 1 ? header_diameter() : round_diameter();
+  // Centered icons (icon above a title: Folder, Scene, Camera, Switch) take
+  // the corner header's disc size, so every taller tile shows one disc;
+  // other icons keep the round disc.
+  const int size = vertical == 1 && horizontal == 1 ? header_diameter(icon_size.x) : round_diameter();
   if (size != round_diameter()) lv_obj_set_size(disc, size, size);
   lv_obj_align(disc, align,
                centered_offset(horizontal, lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x, size),

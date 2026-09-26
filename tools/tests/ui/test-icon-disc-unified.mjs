@@ -43,36 +43,44 @@ assert.match(addRound, /lv_obj_align\(disc, align,/);
 assert.match(helper, /return top_gap > side_gap \? top_gap - side_gap : 0;/);
 assert.match(addRound, /if \(vertical == 0 && horizontal == 2\) \{[\s\S]*?const int shift = corner_lift\([\s\S]*?\);\s*if \(shift > 0\) \{/);
 assert.match(addRound, /if \(child != disc && child != icon && y >= header_bottom\) continue;\s*lv_obj_set_y\(child, y - shift\);/);
-// Top-left corner headers: the disc is one half-height row square with the
-// half-height inset to the tile edges (concentric with the tile corner on
-// every device, like the half-height disc), the icon centered in it and the
-// header labels moving with the icon.
-assert.match(helper, /header\.disc = row_height\(\);\s*header\.icon_side = inset\(\) - pad_side \+ \(header\.disc - icon_width\) \/ 2;\s*header\.icon_top = inset\(\) - pad_top \+ \(header\.disc - icon_height\) \/ 2;\s*header\.shift = header\.icon_top - offset_top;/);
+// Top-left corner headers: the disc sits with the half-height inset in the
+// tile corner (concentric with it on every device), the icon centered in it
+// and the header labels moving with the icon. Its size is what the tuned
+// 8/10-inch header gives around the icon, never smaller than the half-height
+// disc (header_diameter).
+assert.match(helper, /header\.disc = header_diameter\(icon_width\);\s*header\.icon_side = inset\(\) - pad_side \+ \(header\.disc - icon_width\) \/ 2;\s*header\.icon_top = inset\(\) - pad_top \+ \(header\.disc - icon_height\) \/ 2;\s*header\.shift = header\.icon_top - offset_top;/);
 assert.match(addRound, /if \(vertical == 0 && horizontal == 0\) \{[\s\S]*?const CornerHeader header = corner_header\(pad_top, pad_left, icon_y, icon_size\.x, icon_size\.y\);\s*lv_obj_set_size\(disc, header\.disc, header\.disc\);\s*lv_obj_align\(disc, LV_ALIGN_TOP_LEFT, inset\(\) - pad_left, inset\(\) - pad_top\);/);
 assert.match(addRound, /if \(child != icon && y >= header_bottom\) continue;\s*lv_obj_set_y\(child, y \+ header\.shift\);[\s\S]*?lv_obj_set_x\(icon, header\.icon_side\);/);
+assert.match(helper, /const int around_icon =\s*icon_width \+ 2 \* \(tile_layout::scale_480\(20\) \+ tile_layout::scale_480\(-8\) - inset\(\)\);\s*return around_icon > diameter\(\) \? around_icon : diameter\(\);/);
 // Centered icons above a title use the same size (Folder, Scene, Camera,
 // Switch); other icons keep the round disc.
-assert.match(helper, /inline int header_diameter\(\) \{ return row_height\(\); \}/);
-assert.match(addRound, /const int size = vertical == 1 && horizontal == 1 \? header_diameter\(\) : round_diameter\(\);/);
+assert.match(addRound, /const int size = vertical == 1 && horizontal == 1 \? header_diameter\(icon_size\.x\) : round_diameter\(\);/);
 assert.match(addRound, /icon_size\.x, size\)/);
 assert.match(addRound, /icon_size\.y, size\)/);
 // Geometry for the three cell sizes: the tuned 8/10-inch header (row 64,
-// 48 px icon) does not move; Tab5/4B (row 75) and S3 (row 50, inset 3,
-// 32 px icon) center the icon in their corner disc. Gaps equal the inset.
+// 48 px icon) keeps its 64 px disc and does not move; Tab5/4B (row 75) and
+// S3 (row 50, inset 3, 32 px icon) take the half-height disc (67 and 44 px)
+// with the icon centered in it. Gaps equal the inset. The LVGL render test
+// (test-weather-opening-lvgl.mjs) checks every device profile.
 {
   const header = (row, inset, padTop, padSide, offsetTop, iconW, iconH) => {
-    const iconSide = inset - padSide + Math.trunc((row - iconW) / 2);
-    const iconTop = inset - padTop + Math.trunc((row - iconH) / 2);
-    return {iconSide, iconTop, shift: iconTop - offsetTop};
+    const diameter = row - 2 * inset;
+    const around = iconW + 2 * (padSide - 8 * padSide / 20 - inset);
+    const disc = Math.max(Math.round(around), diameter);
+    const iconSide = inset - padSide + Math.trunc((disc - iconW) / 2);
+    const iconTop = inset - padTop + Math.trunc((disc - iconH) / 2);
+    return {disc, iconSide, iconTop, shift: iconTop - offsetTop};
   };
   const v2 = header(64, 4, 24, 20, -8, 48, 50);
-  assert.deepEqual([v2.iconSide, v2.shift], [-8, -5], 'The tuned 8/10-inch header keeps its position (and lift)');
+  assert.deepEqual([v2.disc, v2.iconSide, v2.shift], [64, -8, -5], 'The tuned 8/10-inch header keeps its disc and position');
+  assert.equal(header(75, 4, 24, 20, -8, 48, 50).disc, 67, 'Tab5/4B: the half-height disc');
+  assert.equal(header(50, 3, 16, 13, -5, 32, 34).disc, 44, 'S3: the half-height disc');
   for (const [row, inset, padTop, padSide, offsetTop, iconW, iconH] of
     [[64, 4, 24, 20, -8, 48, 50], [75, 4, 24, 20, -8, 48, 50], [50, 3, 16, 13, -5, 32, 34]]) {
     const h = header(row, inset, padTop, padSide, offsetTop, iconW, iconH);
     const left = padSide + h.iconSide, top = padTop + h.iconTop;
-    assert.ok(Math.abs(left + iconW / 2 - (inset + row / 2)) <= 0.5, `icon centered horizontally (row ${row})`);
-    assert.ok(Math.abs(top + iconH / 2 - (inset + row / 2)) <= 0.5, `icon centered vertically (row ${row})`);
+    assert.ok(Math.abs(left + iconW / 2 - (inset + h.disc / 2)) <= 0.5, `icon centered horizontally (row ${row})`);
+    assert.ok(Math.abs(top + iconH / 2 - (inset + h.disc / 2)) <= 0.5, `icon centered vertically (row ${row})`);
   }
 }
 // Web Admin: header discs, icon and title positions come from corner_header.

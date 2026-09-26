@@ -265,7 +265,17 @@ void check_value_alignment(lv_display_t* display) {
  // One half-height row square in the corner, concentric with the tile corner
  // like the half-height disc (left and top gaps equal its inset), with the
  // icon centered in it; the preview header uses the rendered positions.
- assert(lv_area_get_width(&disc)==tile_icon_disc::row_height()&&lv_area_get_height(&disc)==tile_icon_disc::row_height());
+ const int disc_side=lv_area_get_width(&disc);
+ assert(disc_side==lv_area_get_height(&disc)&&disc_side==tile_icon_disc::header_diameter(lv_area_get_width(&icon)));
+ assert(disc_side>=tile_icon_disc::diameter()&&"Never smaller than the half-height disc");
+ {
+  // Per device: at the largest tile radius the disc radius is that radius
+  // minus the inset; half the side or more draws a circle like the
+  // half-height disc.
+  const int radius=tile_radius::kMaximum-tile_icon_disc::inset();
+  std::cout<<"Header disc: "<<disc_side<<" px, half-height disc "<<tile_icon_disc::diameter()
+           <<" px, radius "<<radius<<" -> "<<(2*radius>=disc_side?"circle":"rounded square")<<std::endl;
+ }
  assert(disc.x1-sensor_area.x1==tile_icon_disc::inset()&&"Left gap equals the half-height inset");
  assert(disc.y1-sensor_area.y1==tile_icon_disc::inset()&&"Top gap equals the half-height inset");
  assert(std::abs((disc.x1+disc.x2)-(icon.x1+icon.x2))<=1&&std::abs((disc.y1+disc.y2)-(icon.y1+icon.y2))<=1);

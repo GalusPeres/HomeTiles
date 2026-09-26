@@ -8,13 +8,13 @@ namespace web_admin_assets_generated {
 // The readable Admin JS bundle is formatted only during host generation.
 
 inline constexpr char kAdminCssPath[] =
-    "/assets/admin.a2f0ee06d3b5.css";
+    "/assets/admin.74efd4890c63.css";
 inline constexpr char kAdminCssEtag[] =
-    "\"e7f74c8c88cc56ff69c4b99329b7480b7035beeb2f854f22d8687b7b2968547d\"";
+    "\"0e5e02d8af10581b7415a94348d64218a1fd85a99aa907f0c09e41d261fb7252\"";
 inline constexpr char kAdminCssContentType[] =
     "text/css; charset=utf-8";
-inline constexpr size_t kAdminCssSourceSize = 96513;
-inline constexpr size_t kAdminCssGzipSize = 18269;
+inline constexpr size_t kAdminCssSourceSize = 96973;
+inline constexpr size_t kAdminCssGzipSize = 18353;
 
 inline constexpr char kAdminJsPath[] =
     "/assets/admin.556e63b33d62.js";

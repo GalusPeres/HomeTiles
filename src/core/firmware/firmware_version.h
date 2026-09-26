@@ -11,14 +11,14 @@
 #if defined(DEVICE_GUITION_JC8012P4A1_V2) && \
     defined(HOMETILES_ISSUE38_BETA)
 #undef FW_VERSION
-#define FW_VERSION "v0.6.12b57"
+#define FW_VERSION "v0.6.12b58"
 #endif
 
 // Camera beta builds of every camera board (HOMETILES_LOCAL_CAMERA in
 // device_select.h) carry the beta number.
 #if defined(HOMETILES_CAMERA_BETA)
 #undef FW_VERSION
-#define FW_VERSION "v0.6.12b57"
+#define FW_VERSION "v0.6.12b58"
 #endif
 
 // Local test builds of the other profiles (for example Waveshare 4B and
@@ -26,7 +26,7 @@
 #if defined(HOMETILES_TEST_BETA) && !defined(HOMETILES_CAMERA_BETA) && \
     !defined(HOMETILES_ISSUE38_BETA)
 #undef FW_VERSION
-#define FW_VERSION "v0.6.12b57"
+#define FW_VERSION "v0.6.12b58"
 #endif
 
 #ifndef FW_VERSION

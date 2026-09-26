@@ -2343,6 +2343,13 @@
   border-radius:max(0px, calc(var(--tile-radius) - var(--compact-inset)));
   background:rgba(255,255,255,var(--icon-disc-opa, 0.149));
 }
+/* Corner headers (the shared Sensor header, icon top left): the disc grows
+   into the corner like the half-height disc (tile_icon_disc::corner_diameter). */
+.tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
+         .cover, .energy, .weather, .media, .climate):not(.empty):not(.sensor-compact) > .tile-icon::after {
+  width:var(--icon-disc-corner, var(--icon-disc-round, 30px));
+  height:var(--icon-disc-corner, var(--icon-disc-round, 30px));
+}
 .tile:not(.sensor-compact) > .tile-icon.tile-icon-tinted::after {
   background:color-mix(in srgb, currentColor var(--icon-disc-glow, 25%), transparent);
 }

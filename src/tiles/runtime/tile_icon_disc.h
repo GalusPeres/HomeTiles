@@ -284,13 +284,23 @@ inline int centered_offset(int anchor, int offset, int icon_size, int size) {
   return offset - icon_size / 2 + size / 2 + start_shift;
 }
 
+// Taller tiles with the icon in the top-left corner: the disc grows around
+// the unchanged icon until its gap to the tile's left edge equals the
+// half-height disc's inset (the header lift makes the top gap match), so it
+// sits in the corner like the half-height disc. The icon sits `offset_side`
+// from a card padding of `pad_side`. The Web Admin header CSS uses the same
+// value (--icon-disc-corner).
+inline int corner_diameter(int pad_side, int offset_side, int icon_width) {
+  return icon_width + 2 * (pad_side + offset_side - inset());
+}
+
 // How far a corner header (disc, icon and header labels) moves up so the
-// round disc's top gap matches its side gap. The icon sits at (offset_side,
-// offset_top) inside a card with these paddings (offsets measured towards the
-// card's inside). The Web Admin header CSS uses the same value.
+// disc of `size` has the same top gap as side gap. The icon sits at
+// (offset_side, offset_top) inside a card with these paddings (offsets
+// measured towards the card's inside). The Web Admin header CSS uses the
+// same value.
 inline int corner_lift(int pad_top, int pad_side, int offset_side, int offset_top,
-                       int icon_width, int icon_height) {
-  const int size = round_diameter();
+                       int icon_width, int icon_height, int size) {
   const int top_gap = pad_top + centered_offset(0, offset_top, icon_height, size);
   const int side_gap = pad_side + centered_offset(0, offset_side, icon_width, size);
   return top_gap > side_gap ? top_gap - side_gap : 0;
@@ -325,7 +335,13 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
     case LV_ALIGN_BOTTOM_RIGHT: horizontal = 2; vertical = 2; break;
     default: break;
   }
-  const int size = round_diameter();
+  // A top-left corner disc grows into the corner (corner_diameter).
+  const int corner = vertical == 0 && horizontal == 0
+                         ? corner_diameter(lv_obj_get_style_pad_left(card, LV_PART_MAIN),
+                                           lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x)
+                         : 0;
+  const int size = corner > 0 ? corner : round_diameter();
+  if (size != round_diameter()) lv_obj_set_size(disc, size, size);
   lv_obj_align(disc, align,
                centered_offset(horizontal, lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x, size),
                centered_offset(vertical, lv_obj_get_style_y(icon, LV_PART_MAIN), icon_size.y, size));
@@ -339,7 +355,7 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
         horizontal == 0 ? lv_obj_get_style_pad_left(card, LV_PART_MAIN)
                         : lv_obj_get_style_pad_right(card, LV_PART_MAIN),
         horizontal == 0 ? icon_x : -icon_x, lv_obj_get_style_y(icon, LV_PART_MAIN),
-        icon_size.x, icon_size.y);
+        icon_size.x, icon_size.y, size);
     if (shift > 0) {
       const int header_bottom = lv_obj_get_style_y(icon, LV_PART_MAIN) + icon_size.y;
       const uint32_t count = lv_obj_get_child_count(card);

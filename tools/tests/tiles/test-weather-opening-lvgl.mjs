@@ -262,8 +262,14 @@ void check_value_alignment(lv_display_t* display) {
  lv_obj_get_coords(lv_obj_get_child(sensor,2),&title);
  assert(lv_obj_get_style_radius(lv_obj_get_child(sensor,0),LV_PART_MAIN)==ui_surface_style::radius(tile_icon_disc::radius_baseline()));
  assert(tile_icon_disc::round_diameter()==tile_icon_disc::diameter()+tile_icon_disc::inset());
- assert(lv_area_get_width(&disc)==tile_icon_disc::round_diameter()&&lv_area_get_height(&disc)==tile_icon_disc::round_diameter());
+ // The top-left header disc grows into the corner: its left and top gaps
+ // equal the half-height disc's inset, the icon stays where it is.
+ assert(lv_area_get_width(&disc)==lv_area_get_height(&disc));
+ assert(disc.x1-sensor_area.x1==tile_icon_disc::inset()&&"Left gap equals the half-height inset");
+ assert(disc.y1-sensor_area.y1==tile_icon_disc::inset()&&"Top gap equals the half-height inset");
  assert(std::abs((disc.x1+disc.x2)-(icon.x1+icon.x2))<=1&&std::abs((disc.y1+disc.y2)-(icon.y1+icon.y2))<=1);
+ assert(css.find("--icon-disc-corner:"+std::to_string(preview_scaled_exact_px(lv_area_get_width(&disc)))+"px;")!=std::string::npos&&
+        "The preview header disc has the device size");
  for(const auto& item:std::vector<std::pair<const char*,int>>{
      {"title-top",title.y1-sensor_area.y1},{"title-right",sensor_area.x2-title.x2},
      {"icon-top",icon.y1-sensor_area.y1},{"icon-left",icon.x1-sensor_area.x1}}) {

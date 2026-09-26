@@ -44,10 +44,33 @@ assert.match(helper, /return top_gap > side_gap \? top_gap - side_gap : 0;/);
 // until its top gap equals its side gap; never down or sideways.
 assert.match(addRound, /const int shift = corner_lift\([\s\S]*?\);\s*if \(shift > 0\) \{/);
 assert.match(addRound, /if \(child != disc && child != icon && y >= header_bottom\) continue;\s*lv_obj_set_y\(child, y - shift\);/);
-// Taller tiles get the larger disc, centered with its own diameter.
-assert.match(addRound, /const int size = round_diameter\(\);/);
+// Taller tiles get the larger disc, centered with its own diameter. With the
+// icon in the top-left corner it grows around the unchanged icon until its
+// left gap equals the half-height inset (the lift makes the top gap match).
+assert.match(helper, /inline int corner_diameter\(int pad_side, int offset_side, int icon_width\) \{\s*return icon_width \+ 2 \* \(pad_side \+ offset_side - inset\(\)\);/);
+assert.match(addRound, /const int corner = vertical == 0 && horizontal == 0\s*\? corner_diameter\(lv_obj_get_style_pad_left\(card, LV_PART_MAIN\),\s*lv_obj_get_style_x\(icon, LV_PART_MAIN\), icon_size\.x\)\s*: 0;\s*const int size = corner > 0 \? corner : round_diameter\(\);\s*if \(size != round_diameter\(\)\) lv_obj_set_size\(disc, size, size\);/);
 assert.match(addRound, /icon_size\.x, size\)/);
 assert.match(addRound, /icon_size\.y, size\)/);
+assert.match(addRound, /icon_size\.x, icon_size\.y, size\);/, 'The lift uses the same disc size');
+// Geometry: left gap == inset, and the lift makes the top gap equal (the
+// shared header: padding 24/20, icon offset -8/-8, 480 scale).
+{
+  const inset = 4;
+  const centered = (offset, icon, size) => offset + Math.trunc((icon - size) / 2);
+  for (const [iconW, iconH] of [[48, 48], [40, 40], [32, 32], [36, 42]]) {
+    const size = iconW + 2 * (20 - 8 - inset);
+    const side = 20 + centered(-8, iconW, size);
+    const top = 24 + centered(-8, iconH, size);
+    const lift = top > side ? top - side : 0;
+    assert.equal(side, inset, `left gap ${iconW}`);
+    assert.equal(top - lift, inset, `top gap after lift ${iconW}x${iconH}`);
+  }
+}
+// Web Admin: the header discs use the same size.
+const styles = read('src/web/server/render/web_admin_styles.cpp');
+assert.ok(styles.includes('emit_exact("icon-disc-corner", header_disc);') &&
+  styles.includes('tile_icon_disc::corner_diameter(tile_layout::scale_480(20), tile_layout::scale_480(-8), header_icon_width);'));
+assert.ok(read('src/web/assets/admin.css').includes('width:var(--icon-disc-corner, var(--icon-disc-round, 30px));'));
 
 // Half-height tiles keep the concentric disc through the same helper.
 const compact = code(read('src/tiles/runtime/compact_sensor_layout.h'));

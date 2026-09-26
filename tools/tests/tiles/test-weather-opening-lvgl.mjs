@@ -276,6 +276,15 @@ void check_value_alignment(lv_display_t* display) {
   std::cout<<"Header disc: "<<disc_side<<" px, half-height disc "<<tile_icon_disc::diameter()
            <<" px, radius "<<radius<<" -> "<<(2*radius>=disc_side?"circle":"rounded square")<<std::endl;
  }
+ {
+  // Climate mini tiles start below this disc with its inset as the gap, never
+  // above the tuned content top; the preview uses the same top.
+  const int top=climate_layout::content_top(disc_side,tile_icon_disc::inset());
+  assert(top>=2*tile_icon_disc::inset()+disc_side&&top>=climate_layout::kContentTop);
+  assert(css.find("--climate-slots-top:"+std::to_string(preview_scaled_exact_px(top))+"px;")!=std::string::npos&&
+         "The preview mini-grid starts below the same disc");
+  std::cout<<"Climate mini-grid top: "<<top<<" px"<<std::endl;
+ }
  assert(disc.x1-sensor_area.x1==tile_icon_disc::inset()&&"Left gap equals the half-height inset");
  assert(disc.y1-sensor_area.y1==tile_icon_disc::inset()&&"Top gap equals the half-height inset");
  assert(std::abs((disc.x1+disc.x2)-(icon.x1+icon.x2))<=1&&std::abs((disc.y1+disc.y2)-(icon.y1+icon.y2))<=1);

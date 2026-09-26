@@ -235,12 +235,14 @@ static inline uint8_t climateTileGridColumns(const Tile& tile) {
              : span_w;
 }
 
+// One mini-grid row per half cell below the header row, so half steps add a
+// row: 1 -> 1, 1.5 -> 2, 2 -> 3, 2.5 -> 4. Whole sizes keep their rows.
 static inline uint8_t climateTileGridRows(const Tile& tile) {
-  const uint8_t span_h =
+  const float span_h =
       tile.span_h < 1
-          ? 1
-          : (tile.span_h > GRID_ROWS ? GRID_ROWS : tile.span_h);
-  return static_cast<uint8_t>(span_h * 2u - 1u);
+          ? 1.0f
+          : (tile.span_h > GRID_ROWS ? static_cast<float>(GRID_ROWS) : tile.span_h);
+  return static_cast<uint8_t>(static_cast<uint8_t>(span_h * 2.0f + 0.5f) - 1u);
 }
 
 // Adjustable climate values consume two cells. Their preferred orientation is

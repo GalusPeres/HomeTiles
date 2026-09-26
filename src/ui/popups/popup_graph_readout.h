@@ -13,12 +13,13 @@
 // Energy). The graph's touch surface keeps the press, so dragging never
 // scrolls, swipes or clicks anything else. Pointer moves are only stored; the
 // owner applies them once per display refresh (LV_EVENT_REFR_START). Release,
-// press loss and an input reset end the readout at once. Nothing is allocated
-// while dragging.
+// press loss and an input reset end the drag at once: the last position is
+// applied and the owner decides whether its readout stays (keep = true).
+// cancel() always ends with keep = false. Nothing is allocated while dragging.
 class PopupGraphScrub {
  public:
   using Apply = void (*)(void* owner, lv_obj_t* target, const lv_point_t& point);
-  using End = void (*)(void* owner);
+  using End = void (*)(void* owner, bool keep);
 
   PopupGraphScrub() = default;
   PopupGraphScrub(const PopupGraphScrub&) = delete;
@@ -59,28 +60,42 @@ class PopupGraphScrub {
     if (active_ && target_) schedule();
   }
 
-  // End the readout now: popup hidden, content replaced or owner teardown.
+  // End the readout now, including a kept one: popup hidden or opened again,
+  // range changed or owner teardown.
   void cancel() {
-    const bool was_active = active_;
     active_ = false;
     pending_ = false;
     target_ = nullptr;
     stop_refresh();
-    if (was_active && end_) end_(owner_);
+    if (end_) end_(owner_, false);
   }
 
  private:
+  // The finger left the graph: show its last position, then let the owner
+  // keep the readout.
+  void release() {
+    lv_obj_t* target = target_;
+    const bool apply_last = pending_ && target && apply_;
+    active_ = false;
+    pending_ = false;
+    target_ = nullptr;
+    stop_refresh();
+    if (apply_last) apply_(owner_, target, point_);
+    if (end_) end_(owner_, true);
+  }
+
   static void input(lv_event_t* event) {
     auto* self = static_cast<PopupGraphScrub*>(lv_event_get_user_data(event));
     auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
     if (!self || !target) return;
     const lv_event_code_t code = lv_event_get_code(event);
     if (code == LV_EVENT_PRESSED) {
-      self->cancel();
+      // A kept readout stays until the new press is applied.
       self->active_ = true;
+      self->pending_ = false;
       self->target_ = target;
     } else if (code != LV_EVENT_PRESSING) {
-      if (self->target_ == target) self->cancel();
+      if (self->active_ && self->target_ == target) self->release();
       return;
     }
     if (!self->active_ || self->target_ != target) return;

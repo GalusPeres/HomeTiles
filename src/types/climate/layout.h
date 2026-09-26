@@ -30,7 +30,15 @@ inline constexpr int kControlRadius = 16;
 inline constexpr int kContentTop = 69;
 #endif
 
-inline constexpr int kContentTopInPaddedCard =
-    kContentTop - kCardPaddingVertical;
+// Top of the mini-grid in the card: below the corner header disc
+// (tile_icon_disc::corner_header) with the disc's inset as the gap, never
+// above kContentTop. Taller cells (Tab5, 4B, S3) have a larger disc that
+// would otherwise reach into the first mini tile. Device and Web preview
+// (--climate-slots-top) use the same value.
+inline constexpr int content_top(int header_disc, int disc_inset) {
+  return disc_inset * 2 + header_disc > kContentTop
+             ? disc_inset * 2 + header_disc
+             : kContentTop;
+}
 
 }  // namespace climate_layout

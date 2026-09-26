@@ -79,9 +79,11 @@
     const spanW = Math.max(1, Math.floor(Number(
       document.getElementById(
         tab + '_tile_span_w')?.value) || 1));
-    const spanH = Math.max(1, Math.floor(Number(
+    // Height follows half steps through the mini-grid rows.
+    const spanH = Math.max(1, Number(
       document.getElementById(
-        tab + '_tile_span_h')?.value) || 1));
+        tab + '_tile_span_h')?.value) || 1);
+    const { rows } = climateGridDimensions(spanW, spanH);
     const capacity = climateSlotCapacity(spanW, spanH);
     const kinds = [];
     const add = kind => {
@@ -101,13 +103,13 @@
       }
     };
 
-    if (spanW === 1 && spanH === 1) {
+    if (spanW === 1 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
-    } else if (spanW >= 2 && spanH === 1) {
+    } else if (spanW >= 2 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
@@ -117,7 +119,7 @@
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
-      if (spanH === 2) return kinds;
+      if (rows <= 3) return kinds;
       if (state.targetHumidity !== null &&
           (state.targetLow !== null ||
            state.targetHigh !== null ||

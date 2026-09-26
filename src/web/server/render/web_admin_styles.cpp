@@ -247,7 +247,8 @@ void appendPreviewScaleVars(String& html) {
   // minimum used for readable preview text.
   emit_exact("climate-margin-x", climate_layout::kOuterInset);
   emit_exact("climate-grid-gap", climate_layout::kGap);
-  emit_exact("climate-slots-top", climate_layout::kContentTop);
+  emit_exact("climate-slots-top",
+             climate_layout::content_top(header.disc, tile_icon_disc::inset()));
   emit_exact("climate-slots-bottom", climate_layout::kOuterInset);
   html += "--climate-control-radius:max(0px,calc(var(--tile-radius) - var(--climate-margin-x)));";
   emit_exact("climate-control-side-pad", tile_layout::scale_480(8));

@@ -10978,16 +10978,20 @@ function maybeFillTitleFromMedia(tab) {
     return Math.min(6, columns * rows);
   }
 
+  // Width counts whole cells. The mini-grid has one row per half cell below
+  // the header row, so half steps add a row: 1 -> 1, 1.5 -> 2, 2 -> 3
+  // (climateTileGridRows on the device).
   function climateGridDimensions(spanW, spanH) {
     const columns = Math.max(
       1, Math.min(
         climateMaxGridColumns(), Math.floor(Number(spanW) || 1)));
-    const outerRows = Math.max(
-      1, Math.min(
-        climateMaxOuterRows(), Math.floor(Number(spanH) || 1)));
+    const halfRows = Math.max(
+      2, Math.min(
+        climateMaxOuterRows() * 2,
+        Math.round((Number(spanH) || 1) * 2)));
     return {
       columns,
-      rows: outerRows * 2 - 1
+      rows: halfRows - 1
     };
   }
 
@@ -11677,9 +11681,11 @@ function maybeFillTitleFromMedia(tab) {
     const spanW = Math.max(1, Math.floor(Number(
       document.getElementById(
         tab + '_tile_span_w')?.value) || 1));
-    const spanH = Math.max(1, Math.floor(Number(
+    // Height follows half steps through the mini-grid rows.
+    const spanH = Math.max(1, Number(
       document.getElementById(
-        tab + '_tile_span_h')?.value) || 1));
+        tab + '_tile_span_h')?.value) || 1);
+    const { rows } = climateGridDimensions(spanW, spanH);
     const capacity = climateSlotCapacity(spanW, spanH);
     const kinds = [];
     const add = kind => {
@@ -11699,13 +11705,13 @@ function maybeFillTitleFromMedia(tab) {
       }
     };
 
-    if (spanW === 1 && spanH === 1) {
+    if (spanW === 1 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
-    } else if (spanW >= 2 && spanH === 1) {
+    } else if (spanW >= 2 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
@@ -11715,7 +11721,7 @@ function maybeFillTitleFromMedia(tab) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
-      if (spanH === 2) return kinds;
+      if (rows <= 3) return kinds;
       if (state.targetHumidity !== null &&
           (state.targetLow !== null ||
            state.targetHigh !== null ||
@@ -12658,11 +12664,11 @@ function maybeFillTitleFromMedia(tab) {
       return;
     }
     mountClimateMiniEditor(tab);
-    // Half steps do not change the mini-grid, so only whole cells count here.
+    // Width counts whole cells; half heights add a mini-grid row.
     const spanW = Math.max(1, Math.floor(Number(document.getElementById(
       tab + '_tile_span_w')?.value) || 1));
-    const spanH = Math.max(1, Math.floor(Number(document.getElementById(
-      tab + '_tile_span_h')?.value) || 1));
+    const spanH = Math.max(1, Math.round(Number(document.getElementById(
+      tab + '_tile_span_h')?.value) * 2 || 2) / 2);
     const capacity = climateSlotCapacity(spanW, spanH);
     const { columns, rows } =
       climateGridDimensions(spanW, spanH);
@@ -13064,9 +13070,10 @@ function maybeFillTitleFromMedia(tab) {
   function climatePreviewSlots(
       state, spanW, spanH, slotConfig = null,
       targetLayoutConfig = null, geometryConfig = null) {
-    // Layout variants follow whole cells, like build_automatic_slot_kinds.
+    // Layout variants follow whole cells in width and mini-grid rows in
+    // height (half steps add a row), like build_automatic_slot_kinds.
     const w = Math.max(1, Math.floor(Number(spanW) || 1));
-    const h = Math.max(1, Math.floor(Number(spanH) || 1));
+    const h = Math.max(1, Math.round(Number(spanH) * 2 || 2) / 2);
     const capacity = climateSlotCapacity(w, h);
     const { columns, rows } =
       climateGridDimensions(w, h);
@@ -13115,13 +13122,13 @@ function maybeFillTitleFromMedia(tab) {
     if (state?.available === false || entityState === 'unavailable' ||
         entityState === 'unknown') {
       addAutomatic(CLIMATE_TILE_CONTENT.HVAC_MODE);
-    } else if (w === 1 && h === 1) {
+    } else if (w === 1 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
-    } else if (w >= 2 && h === 1) {
+    } else if (w >= 2 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
@@ -13131,7 +13138,7 @@ function maybeFillTitleFromMedia(tab) {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
-      if (h > 2 &&
+      if (rows > 3 &&
           state.targetHumidity !== null &&
           (state.targetLow !== null ||
            state.targetHigh !== null ||

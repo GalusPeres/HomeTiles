@@ -48,16 +48,20 @@
     return Math.min(6, columns * rows);
   }
 
+  // Width counts whole cells. The mini-grid has one row per half cell below
+  // the header row, so half steps add a row: 1 -> 1, 1.5 -> 2, 2 -> 3
+  // (climateTileGridRows on the device).
   function climateGridDimensions(spanW, spanH) {
     const columns = Math.max(
       1, Math.min(
         climateMaxGridColumns(), Math.floor(Number(spanW) || 1)));
-    const outerRows = Math.max(
-      1, Math.min(
-        climateMaxOuterRows(), Math.floor(Number(spanH) || 1)));
+    const halfRows = Math.max(
+      2, Math.min(
+        climateMaxOuterRows() * 2,
+        Math.round((Number(spanH) || 1) * 2)));
     return {
       columns,
-      rows: outerRows * 2 - 1
+      rows: halfRows - 1
     };
   }
 

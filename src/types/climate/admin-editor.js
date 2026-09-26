@@ -6,11 +6,11 @@
       return;
     }
     mountClimateMiniEditor(tab);
-    // Half steps do not change the mini-grid, so only whole cells count here.
+    // Width counts whole cells; half heights add a mini-grid row.
     const spanW = Math.max(1, Math.floor(Number(document.getElementById(
       tab + '_tile_span_w')?.value) || 1));
-    const spanH = Math.max(1, Math.floor(Number(document.getElementById(
-      tab + '_tile_span_h')?.value) || 1));
+    const spanH = Math.max(1, Math.round(Number(document.getElementById(
+      tab + '_tile_span_h')?.value) * 2 || 2) / 2);
     const capacity = climateSlotCapacity(spanW, spanH);
     const { columns, rows } =
       climateGridDimensions(spanW, spanH);

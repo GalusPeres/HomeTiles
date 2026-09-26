@@ -52,8 +52,10 @@ constexpr uint8_t kDaySlotCount = 24;
 constexpr uint8_t kWeekSlotCount = 7;
 constexpr int kLabelOverhang = popup_layout::scale(12);
 constexpr int kMinBarHeight = popup_layout::scale(2);
-// While a finger reads one bar, the other bars stay visible but dimmed.
+// The read bar stays white with a thin white line through the chart, like the
+// Sensor cursor; the other bars stay visible but dimmed.
 constexpr lv_opa_t kReadoutDimmedBarOpa = LV_OPA_60;
+constexpr int kReadoutLineWidth = popup_layout::scale(2) > 1 ? popup_layout::scale(2) : 1;
 
 struct EnergyPopupContext {
   bool body_ready = false;
@@ -89,7 +91,8 @@ struct EnergyPopupContext {
   uint8_t decimals = 1;
   uint32_t bg_color = 0x2A2A2A;
   // Bar readout in the old value row; texts are static label buffers, so
-  // dragging allocates nothing.
+  // dragging allocates nothing. It opens on the newest bar, stays where the
+  // finger leaves it and follows the newest bar while it shows that bar.
   PopupGraphScrub readout;
   lv_obj_t* readout_time_label = nullptr;
   lv_obj_t* readout_value_label = nullptr;
@@ -98,6 +101,9 @@ struct EnergyPopupContext {
   int plot_left = 0;
   int plot_w = 0;
   int readout_slot = -1;
+  int readout_x = 0;  // cursor line, relative to chart_wrap
+  int readout_pin_slot = -1;
+  bool readout_latest = true;
   char readout_time_text[72] = "";
   char readout_value_text[96] = "";
 };
@@ -144,6 +150,13 @@ String format_value_with_unit(float value, const String& unit, uint8_t decimals)
 
 bool popup_visible(const EnergyPopupContext* ctx) {
   return ctx && ctx->card && !lv_obj_has_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
+}
+
+// The time axis holds one full line of its labels, so hour and weekday
+// labels are never clipped at the bottom.
+int time_axis_height() {
+  const int line = lv_font_get_line_height(popup_layout::font20());
+  return line > kTimeAxisHeight ? line : kTimeAxisHeight;
 }
 
 void style_period_button(lv_obj_t* btn, lv_obj_t* label, bool active) {
@@ -320,7 +333,7 @@ void update_x_axis(EnergyPopupContext* ctx,
                    int plot_w) {
   if (!ctx || !ctx->x_axis || slot_count == 0 || plot_w <= 0) return;
   lv_obj_set_pos(ctx->x_axis, 0, kLabelOverhang + kChartHeight + kTimeAxisGap);
-  lv_obj_set_size(ctx->x_axis, LV_PCT(100), kTimeAxisHeight);
+  lv_obj_set_size(ctx->x_axis, LV_PCT(100), time_axis_height());
 
   for (uint8_t i = 0; i < ENERGY_VALUES_MAX; ++i) {
     if (ctx->x_lines[i]) lv_obj_add_flag(ctx->x_lines[i], LV_OBJ_FLAG_HIDDEN);
@@ -436,15 +449,56 @@ void set_bar_opa(EnergyPopupContext* ctx, int index, lv_opa_t opa) {
     lv_obj_set_style_bg_opa(bar, opa, 0);
 }
 
-// Release, press loss, hiding and new chart data restore the normal bars.
+// The cursor line spans the plot height at the read bar's center.
+void invalidate_energy_cursor(EnergyPopupContext* ctx) {
+  if (!ctx->chart_wrap || ctx->readout_slot < 0) return;
+  lv_area_t coords;
+  lv_obj_get_coords(ctx->chart_wrap, &coords);
+  const int x = coords.x1 + ctx->readout_x - kReadoutLineWidth / 2;
+  lv_area_t area = {x - 1, coords.y1 + kLabelOverhang, x + kReadoutLineWidth,
+                    coords.y1 + kLabelOverhang + kChartHeight};
+  lv_obj_invalidate_area(ctx->chart_wrap, &area);
+}
+
+// Drawn after the bars, so the line needs no object that moves while dragging.
+void on_energy_cursor_draw(lv_event_t* event) {
+  auto* ctx = static_cast<EnergyPopupContext*>(lv_event_get_user_data(event));
+  lv_layer_t* layer = lv_event_get_layer(event);
+  if (!ctx || !layer || ctx->readout_slot < 0) return;
+  lv_area_t coords;
+  lv_obj_get_coords(ctx->chart_wrap, &coords);
+  lv_draw_rect_dsc_t line;
+  lv_draw_rect_dsc_init(&line);
+  line.base.layer = layer;
+  line.bg_color = lv_color_white();
+  line.bg_opa = LV_OPA_COVER;
+  line.radius = 0;
+  const int x = coords.x1 + ctx->readout_x - kReadoutLineWidth / 2;
+  lv_area_t area = {x, coords.y1 + kLabelOverhang, x + kReadoutLineWidth - 1,
+                    coords.y1 + kLabelOverhang + kChartHeight - 1};
+  lv_draw_rect(layer, &line, &area);
+}
+
+// Hiding, opening, a period change and new chart data restore the normal bars.
 void clear_energy_readout(EnergyPopupContext* ctx) {
   if (!ctx) return;
+  invalidate_energy_cursor(ctx);
   if (ctx->readout_slot >= 0) {
     for (int i = 0; i < ENERGY_VALUES_MAX; ++i) set_bar_opa(ctx, i, LV_OPA_COVER);
   }
   ctx->readout_slot = -1;
   popup_graph_readout::show_band_labels(ctx->readout_time_label, ctx->readout_value_label,
                                         false);
+}
+
+// The newest bar with a value: the current hour or day.
+int latest_energy_slot(const EnergyPopupContext* ctx) {
+  const EnergyEntryData& entry = ctx->shown_entry;
+  int slot = entry.value_count < ctx->shown_slots ? entry.value_count : ctx->shown_slots;
+  while (--slot >= 0) {
+    if (entry.value_valid[slot]) return slot;
+  }
+  return -1;
 }
 
 // Hourly bars read as their hour range, weekly bars as their weekday.
@@ -473,22 +527,18 @@ void format_energy_slot_time(EnergyPopupContext* ctx, int slot) {
   }
 }
 
-// The touched bar stays white and the others dim a little. Only bar opacity
-// and the two static readout labels change while dragging.
-void apply_energy_readout(EnergyPopupContext* ctx, const lv_point_t& point) {
+bool energy_readout_ready(const EnergyPopupContext* ctx) {
+  return popup_visible(ctx) && ctx->shown_slots > 0 && ctx->plot_w > 0 &&
+         ctx->shown_entry.value_count && ctx->readout_time_label &&
+         ctx->readout_value_label;
+}
+
+// The read bar stays white, the others dim a little and a thin line marks
+// it. Only bar opacity, the line and the two static labels change.
+void show_energy_slot(EnergyPopupContext* ctx, int slot) {
   const int slots = ctx->shown_slots;
-  if (!popup_visible(ctx) || slots <= 0 || ctx->plot_w <= 0 ||
-      !ctx->shown_entry.value_count || !ctx->readout_time_label ||
-      !ctx->readout_value_label) {
-    clear_energy_readout(ctx);
-    return;
-  }
-  lv_area_t wrap;
-  lv_obj_get_coords(ctx->chart_wrap, &wrap);
-  const int x = point.x - wrap.x1 - ctx->plot_left;
-  int slot = x <= 0 ? 0 : x * slots / ctx->plot_w;
   if (slot >= slots) slot = slots - 1;
-  if (slot == ctx->readout_slot) return;
+  if (slot < 0 || slot == ctx->readout_slot) return;
   if (ctx->readout_slot < 0) {
     for (int i = 0; i < ENERGY_VALUES_MAX; ++i)
       set_bar_opa(ctx, i, i == slot ? LV_OPA_COVER : kReadoutDimmedBarOpa);
@@ -496,7 +546,15 @@ void apply_energy_readout(EnergyPopupContext* ctx, const lv_point_t& point) {
     set_bar_opa(ctx, ctx->readout_slot, kReadoutDimmedBarOpa);
     set_bar_opa(ctx, slot, LV_OPA_COVER);
   }
+  invalidate_energy_cursor(ctx);
   ctx->readout_slot = slot;
+  // Same slot geometry as the bars in apply_entry_to_chart().
+  const int slot_l = ctx->plot_left + static_cast<int>(lroundf(
+      (static_cast<float>(slot) / static_cast<float>(slots)) * static_cast<float>(ctx->plot_w)));
+  const int slot_r = ctx->plot_left + static_cast<int>(lroundf(
+      (static_cast<float>(slot + 1) / static_cast<float>(slots)) * static_cast<float>(ctx->plot_w)));
+  ctx->readout_x = slot_l + (slot_r - slot_l) / 2;
+  invalidate_energy_cursor(ctx);
 
   format_energy_slot_time(ctx, slot);
   const EnergyEntryData& entry = ctx->shown_entry;
@@ -512,20 +570,54 @@ void apply_energy_readout(EnergyPopupContext* ctx, const lv_point_t& point) {
                                         true);
 }
 
+// The touched bar: the finger's x over the plot, clamped to the bars.
+void apply_energy_readout(EnergyPopupContext* ctx, const lv_point_t& point) {
+  if (!energy_readout_ready(ctx)) {
+    clear_energy_readout(ctx);
+    return;
+  }
+  lv_area_t wrap;
+  lv_obj_get_coords(ctx->chart_wrap, &wrap);
+  const int x = point.x - wrap.x1 - ctx->plot_left;
+  show_energy_slot(ctx, x <= 0 ? 0 : x * ctx->shown_slots / ctx->plot_w);
+}
+
 void on_energy_readout_apply(void* owner, lv_obj_t*, const lv_point_t& point) {
   auto* ctx = static_cast<EnergyPopupContext*>(owner);
   if (ctx) apply_energy_readout(ctx, point);
 }
 
-void on_energy_readout_end(void* owner) {
-  clear_energy_readout(static_cast<EnergyPopupContext*>(owner));
+// Release keeps the read bar; it follows new data while it is the newest bar.
+void on_energy_readout_end(void* owner, bool keep) {
+  auto* ctx = static_cast<EnergyPopupContext*>(owner);
+  if (!ctx) return;
+  if (keep && ctx->readout_slot >= 0) {
+    ctx->readout_pin_slot = ctx->readout_slot;
+    ctx->readout_latest = ctx->readout_slot == latest_energy_slot(ctx);
+    return;
+  }
+  clear_energy_readout(ctx);
+  if (!keep) {
+    ctx->readout_latest = true;
+    ctx->readout_pin_slot = -1;
+  }
+}
+
+// After new bars: the newest bar, or the bar the finger left.
+void refresh_energy_readout(EnergyPopupContext* ctx) {
+  if (ctx->readout.active()) return;
+  clear_energy_readout(ctx);
+  if (!energy_readout_ready(ctx)) return;
+  show_energy_slot(ctx, ctx->readout_latest ? latest_energy_slot(ctx) : ctx->readout_pin_slot);
 }
 
 void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry) {
   if (!ctx || !ctx->chart || !ctx->series) return;
 
-  // New bars replace what a finger may be reading.
-  ctx->readout.cancel();
+  // New bars replace what a finger may be reading; a kept readout returns
+  // with refresh_energy_readout() below.
+  if (ctx->readout.active()) ctx->readout.cancel();
+  clear_energy_readout(ctx);
   ctx->shown_slots = 0;
   update_header_value(ctx, entry);
 
@@ -704,7 +796,7 @@ void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry)
     int h = lv_obj_get_height(label);
     int y = line_y - (h / 2);
     if (y < 0) y = 0;
-    const int max_y = kLabelOverhang + kChartHeight + kTimeAxisHeight - h;
+    const int max_y = kLabelOverhang + kChartHeight + time_axis_height() - h;
     if (y > max_y) y = max_y;
     lv_obj_set_pos(label, 0, y);
     lv_obj_clear_flag(label, LV_OBJ_FLAG_HIDDEN);
@@ -770,6 +862,7 @@ void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry)
   ctx->shown_slots = slot_count;
   ctx->plot_left = plot_left;
   ctx->plot_w = plot_w;
+  refresh_energy_readout(ctx);
 }
 
 void show_empty_chart(EnergyPopupContext* ctx) {
@@ -990,7 +1083,7 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
   lv_obj_t* chart_wrap = lv_obj_create(body_box);
   ctx->chart_wrap = chart_wrap;
   lv_obj_remove_style_all(chart_wrap);
-  lv_obj_set_size(chart_wrap, LV_PCT(100), kLabelOverhang + kChartHeight + kTimeAxisGap + kTimeAxisHeight);
+  lv_obj_set_size(chart_wrap, LV_PCT(100), kLabelOverhang + kChartHeight + kTimeAxisGap + time_axis_height());
   lv_obj_center(chart_wrap);
   lv_obj_set_style_bg_opa(chart_wrap, LV_OPA_TRANSP, 0);
   lv_obj_remove_flag(chart_wrap, LV_OBJ_FLAG_SCROLLABLE);
@@ -1067,7 +1160,7 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
   lv_obj_remove_style_all(x_axis);
   // Touches on the axis belong to the bar readout.
   lv_obj_remove_flag(x_axis, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_size(x_axis, LV_PCT(100), kTimeAxisHeight);
+  lv_obj_set_size(x_axis, LV_PCT(100), time_axis_height());
   lv_obj_set_pos(x_axis, 0, kLabelOverhang + kChartHeight + kTimeAxisGap);
 
   for (uint8_t i = 0; i < ENERGY_VALUES_MAX; ++i) {
@@ -1082,6 +1175,7 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
 
   ctx->readout.init(ctx, on_energy_readout_apply, on_energy_readout_end);
   ctx->readout.attach(chart_wrap);
+  lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_POST, ctx);
 
   apply_init_to_context(ctx, init);
   lv_obj_move_foreground(icon);

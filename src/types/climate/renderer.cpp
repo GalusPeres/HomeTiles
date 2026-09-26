@@ -381,8 +381,10 @@ uint8_t build_automatic_slot_kinds(
     }
   };
 
-  const uint8_t span_w = std::max<uint8_t>(1, tile.span_w);
-  const uint8_t span_h = std::max<uint8_t>(1, tile.span_h);
+  // Width counts whole cells; height counts mini-grid rows, which follow
+  // half steps (1 -> 1 row, 1.5 -> 2, 2 -> 3, 2.5 -> 4).
+  const uint8_t span_w = climateTileGridColumns(tile);
+  const uint8_t rows = climateTileGridRows(tile);
 
   const String mode = state.hvac_mode;
   if (!state.available || mode.equalsIgnoreCase("unavailable") ||
@@ -406,7 +408,7 @@ uint8_t build_automatic_slot_kinds(
     }
   };
 
-  if (span_w == 1 && span_h == 1) {
+  if (span_w == 1 && rows == 1) {
     if (!state.valid || state.has_current_temperature) {
       append(ClimateTileSlotKind::CURRENT_TEMPERATURE);
     } else {
@@ -417,7 +419,7 @@ uint8_t build_automatic_slot_kinds(
     return count;
   }
 
-  if (span_w >= 2 && span_h == 1) {
+  if (span_w >= 2 && rows == 1) {
     if (!state.valid || state.has_current_temperature) {
       append(ClimateTileSlotKind::CURRENT_TEMPERATURE);
     }
@@ -430,7 +432,7 @@ uint8_t build_automatic_slot_kinds(
       append(ClimateTileSlotKind::CURRENT_TEMPERATURE);
     }
     append_primary_target();
-    if (span_h == 2) return count;
+    if (rows <= 3) return count;
     if (state.has_target_humidity &&
         (state.has_target_range ||
          state.has_target_temperature)) {
@@ -624,8 +626,14 @@ void layout_climate_slots(
       climate_layout::kCardPaddingHorizontal;
   const lv_coord_t content_w =
       tile_w - climate_layout::kOuterInset * 2;
-  const lv_coord_t grid_top =
-      climate_layout::kContentTopInPaddedCard;
+  const int icon_width =
+      FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS,
+                                               tile_icon_disc::kMdiReferenceGlyph, 0)
+                     : 0;
+  const lv_coord_t grid_top = static_cast<lv_coord_t>(
+      climate_layout::content_top(tile_icon_disc::header_diameter(icon_width),
+                                  tile_icon_disc::inset()) -
+      climate_layout::kCardPaddingVertical);
   const lv_coord_t grid_bottom =
       tile_h - climate_layout::kCardPaddingVertical -
       climate_layout::kOuterInset;

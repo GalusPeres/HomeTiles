@@ -211,8 +211,7 @@ void appendPreviewScaleVars(String& html) {
   // Its disc grows into the corner like the device's (corner_diameter).
   const int header_icon_width =
       lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0);
-  const int header_disc =
-      tile_icon_disc::corner_diameter(tile_layout::scale_480(20), tile_layout::scale_480(-8), header_icon_width);
+  const int header_disc = tile_icon_disc::header_diameter(header_icon_width);
   emit_exact("icon-disc-corner", header_disc);
   const int header_lift = tile_icon_disc::corner_lift(
       tile_layout::scale_480(24), tile_layout::scale_480(20), tile_layout::scale_480(-8),

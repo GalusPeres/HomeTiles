@@ -294,6 +294,14 @@ inline int corner_diameter(int pad_side, int offset_side, int icon_width) {
   return icon_width + 2 * (pad_side + offset_side - inset());
 }
 
+// The corner disc of the shared Sensor header (card padding 20, icon offset
+// -8 at the 480 scale). Centered icons (icon above a title: Folder, Scene,
+// Camera, Switch) use the same size, so every taller tile shows one disc.
+// The Web Admin uses it as --icon-disc-corner.
+inline int header_diameter(int icon_width) {
+  return corner_diameter(tile_layout::scale_480(20), tile_layout::scale_480(-8), icon_width);
+}
+
 // How far a corner header (disc, icon and header labels) moves up so the
 // disc of `size` has the same top gap as side gap. The icon sits at
 // (offset_side, offset_top) inside a card with these paddings (offsets
@@ -335,11 +343,12 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
     case LV_ALIGN_BOTTOM_RIGHT: horizontal = 2; vertical = 2; break;
     default: break;
   }
-  // A top-left corner disc grows into the corner (corner_diameter).
+  // A top-left corner disc grows into the corner (corner_diameter); a
+  // centered icon takes the same size as the header corner disc.
   const int corner = vertical == 0 && horizontal == 0
                          ? corner_diameter(lv_obj_get_style_pad_left(card, LV_PART_MAIN),
                                            lv_obj_get_style_x(icon, LV_PART_MAIN), icon_size.x)
-                         : 0;
+                         : (vertical == 1 && horizontal == 1 ? header_diameter(icon_size.x) : 0);
   const int size = corner > 0 ? corner : round_diameter();
   if (size != round_diameter()) lv_obj_set_size(disc, size, size);
   lv_obj_align(disc, align,

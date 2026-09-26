@@ -18,7 +18,7 @@ assert.match(html, /if \(tile\.type == TILE_SCENE && !iconName\.length\(\) &&[\s
 assert.match(html, /tile_icon_disc::icon_color_tints\(binary_sensor_visual_color\(binary_sensor_state\)\)/);
 
 const page = `<!doctype html><html lang="en"><head><style>${readRepoFile('src/web/assets/admin.css')}
-:root{--icon-size:24px;--icon-disc-round:30px;--compact-inset:2px;--tile-radius:11px;--icon-disc-opa:0.149;--icon-disc-glow:20%;--preview-cell-w:84px;--preview-cell-h:72px;--preview-gap:5px;}
+:root{--icon-size:24px;--icon-disc-round:30px;--icon-disc-corner:34px;--compact-inset:2px;--tile-radius:11px;--icon-disc-opa:0.149;--icon-disc-glow:20%;--preview-cell-w:84px;--preview-cell-h:72px;--preview-gap:5px;}
 </style></head><body>
 <div id="tab-tiles-test" class="tile-tab"><div class="tile-grid">
 <div class="tile" id="test-tile-0" data-index="0" style="width:84px;height:72px"></div>
@@ -49,7 +49,15 @@ try{
  renderTileFromData('test',0,{type:2,title:'TV',scene_alias:'tv',icon_name:''},meta);
  const scene=document.getElementById('test-tile-0');
  check(scene.querySelector('.tile-icon.mdi-television'),'Scene tile resolves the scene entity icon');
- check(disc(scene).display!=='none'&&disc(scene).width==='30px'&&disc(scene).height==='30px','Taller tile disc uses round_diameter');
+ check(disc(scene).display!=='none'&&disc(scene).width==='34px'&&disc(scene).height==='34px','A centered icon uses the header corner disc (header_diameter)');
+ // A grid refresh normalizes the cached metadata a second time; the scene
+ // map must survive it (it lost every scene icon in the preview).
+ const twice=normalizeSensorMetaPayload(meta);
+ check(twice.sceneEntities.tv==='scene.tv','The scene map survives a second normalization');
+ renderTileFromData('test',0,{type:2,title:'TV',scene_alias:'tv',icon_name:''},twice);
+ check(scene.querySelector('.tile-icon.mdi-television'),'Scene icons stay after a grid refresh');
+ renderTileFromData('test',3,{type:2,title:'TV',scene_alias:'tv',icon_name:'',span_w:1,span_h:0.5},twice);
+ check(document.querySelector('#test-tile-3 .tile-icon.mdi-television'),'Half-height scene tiles show the entity icon too');
  const icon=scene.querySelector('.tile-icon').getBoundingClientRect();
  check(Math.abs(icon.width/2-parseFloat(disc(scene).left))<0.6,'Disc is centered on the icon');
  const white=c=>c.startsWith('rgba(255, 255, 255, 0.')&&parseFloat(c.split(',')[3])>=0.075&&parseFloat(c.split(',')[3])<=0.155;

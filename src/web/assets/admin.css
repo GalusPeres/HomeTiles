@@ -2344,9 +2344,12 @@
   background:rgba(255,255,255,var(--icon-disc-opa, 0.149));
 }
 /* Corner headers (the shared Sensor header, icon top left): the disc grows
-   into the corner like the half-height disc (tile_icon_disc::corner_diameter). */
+   into the corner like the half-height disc (tile_icon_disc::corner_diameter).
+   Centered icons above a title (Folder, Scene, Camera, Switch) use the same
+   size (tile_icon_disc::header_diameter). */
 .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-         .cover, .energy, .weather, .media, .climate):not(.empty):not(.sensor-compact) > .tile-icon::after {
+         .cover, .energy, .weather, .media, .climate):not(.empty):not(.sensor-compact) > .tile-icon::after,
+.tile:is(.scene, .navigate, .camera, .switch:not(.switch-toggle)):not(.empty):not(.sensor-compact) > .tile-icon::after {
   width:var(--icon-disc-corner, var(--icon-disc-round, 30px));
   height:var(--icon-disc-corner, var(--icon-disc-round, 30px));
 }

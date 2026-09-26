@@ -2213,8 +2213,10 @@ function syncTileRadiusControls(tabEl) {
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},
-      // Scene alias -> entity, so scene tiles resolve the entity icon like the device.
-      sceneEntities: payload.scene_entities || {},
+      // Scene alias -> entity, so scene tiles resolve the entity icon like the
+      // device. A grid refresh normalizes the already normalized cache again,
+      // so the normalized name must survive too (it lost every scene icon).
+      sceneEntities: payload.scene_entities || payload.sceneEntities || {},
       loaded: true
     };
   }

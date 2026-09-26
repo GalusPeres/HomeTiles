@@ -48,7 +48,10 @@ assert.match(addRound, /if \(child != disc && child != icon && y >= header_botto
 // icon in the top-left corner it grows around the unchanged icon until its
 // left gap equals the half-height inset (the lift makes the top gap match).
 assert.match(helper, /inline int corner_diameter\(int pad_side, int offset_side, int icon_width\) \{\s*return icon_width \+ 2 \* \(pad_side \+ offset_side - inset\(\)\);/);
-assert.match(addRound, /const int corner = vertical == 0 && horizontal == 0\s*\? corner_diameter\(lv_obj_get_style_pad_left\(card, LV_PART_MAIN\),\s*lv_obj_get_style_x\(icon, LV_PART_MAIN\), icon_size\.x\)\s*: 0;\s*const int size = corner > 0 \? corner : round_diameter\(\);\s*if \(size != round_diameter\(\)\) lv_obj_set_size\(disc, size, size\);/);
+assert.match(addRound, /const int corner = vertical == 0 && horizontal == 0\s*\? corner_diameter\(lv_obj_get_style_pad_left\(card, LV_PART_MAIN\),\s*lv_obj_get_style_x\(icon, LV_PART_MAIN\), icon_size\.x\)\s*: \(vertical == 1 && horizontal == 1 \? header_diameter\(icon_size\.x\) : 0\);\s*const int size = corner > 0 \? corner : round_diameter\(\);\s*if \(size != round_diameter\(\)\) lv_obj_set_size\(disc, size, size\);/);
+// Centered icons above a title use the header corner disc, so every taller
+// tile shows one disc size (Folder, Scene, Camera, Switch).
+assert.match(helper, /inline int header_diameter\(int icon_width\) \{\s*return corner_diameter\(tile_layout::scale_480\(20\), tile_layout::scale_480\(-8\), icon_width\);/);
 assert.match(addRound, /icon_size\.x, size\)/);
 assert.match(addRound, /icon_size\.y, size\)/);
 assert.match(addRound, /icon_size\.x, icon_size\.y, size\);/, 'The lift uses the same disc size');
@@ -69,7 +72,10 @@ assert.match(addRound, /icon_size\.x, icon_size\.y, size\);/, 'The lift uses the
 // Web Admin: the header discs use the same size.
 const styles = read('src/web/server/render/web_admin_styles.cpp');
 assert.ok(styles.includes('emit_exact("icon-disc-corner", header_disc);') &&
-  styles.includes('tile_icon_disc::corner_diameter(tile_layout::scale_480(20), tile_layout::scale_480(-8), header_icon_width);'));
+  styles.includes('const int header_disc = tile_icon_disc::header_diameter(header_icon_width);'));
+assert.ok(read('src/web/assets/admin.css').includes(
+  '.tile:is(.scene, .navigate, .camera, .switch:not(.switch-toggle)):not(.empty):not(.sensor-compact) > .tile-icon::after {'),
+  'Centered preview icons use the corner disc size');
 assert.ok(read('src/web/assets/admin.css').includes('width:var(--icon-disc-corner, var(--icon-disc-round, 30px));'));
 
 // Half-height tiles keep the concentric disc through the same helper.

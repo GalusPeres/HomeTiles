@@ -46,7 +46,7 @@ export class Transport {
 }
 export class ESPLoader {
   constructor({ terminal }) { this.terminal = terminal; }
-  async main() { this.chip = { CHIP_NAME: fixture.wrongChip ? 'ESP32-P4' : 'ESP32-S3' }; return this.chip.CHIP_NAME; }
+  async main() { this.IS_STUB = true; this.chip = { CHIP_NAME: fixture.wrongChip ? 'ESP32-P4' : 'ESP32-S3' }; return this.chip.CHIP_NAME; }
   async flashId() {}
   async detectFlashSize() { return '16MB'; }
   async readFlash(offset) {

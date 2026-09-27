@@ -89,8 +89,8 @@ const server = http.createServer((request, response) => {
   if (pathname.startsWith("/__test__/")) {
     response.setHeader("Content-Type", "text/javascript");
     if (failEsptool) { response.writeHead(503); response.end("Unavailable"); return; }
-    response.end(pathname.endsWith("bundle.js") ? esptool
-      : `export class ${pathname.includes("esp32p4") ? "ESP32P4ROM" : "ESP32S3ROM"} {}`);
+    if (!pathname.endsWith("/bundle.js")) { response.writeHead(404); response.end(); return; }
+    response.end(esptool);
     return;
   }
   let filename = path.resolve(site, decodeURIComponent(pathname.replace(/^\/preview\//, "")));
@@ -100,7 +100,7 @@ const server = http.createServer((request, response) => {
   const type = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".xml": "application/xml", ".svg": "image/svg+xml" }[path.extname(filename)];
   if (type) response.setHeader("Content-Type", type);
   if (filename.endsWith(`${path.sep}installer.mjs`)) {
-    response.end(fs.readFileSync(filename, "utf8").replaceAll("https://unpkg.com/esptool-js@0.6.1/", "/__test__/"));
+    response.end(fs.readFileSync(filename, "utf8").replaceAll("https://unpkg.com/esptool-js@0.7.0/", "/__test__/"));
   } else response.end(fs.readFileSync(filename));
 });
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));

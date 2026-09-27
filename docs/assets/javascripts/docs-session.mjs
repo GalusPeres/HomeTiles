@@ -11,7 +11,7 @@ const components = [
   { selector: "[data-device-logs]", status: "[data-log-status]", source: "logs",
     module: "./device-logs.mjs?v=device-logs-6" },
   { selector: "[data-hometiles-installer]", status: "#installer-status", source: "installer",
-    module: "./installer.mjs?v=installer-ui-15" },
+    module: "./installer.mjs?v=installer-ui-16" },
 ];
 
 function update() {

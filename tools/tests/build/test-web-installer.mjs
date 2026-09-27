@@ -10,11 +10,11 @@ import {
   PARTITION_TABLE,
   REQUIRED_PARTITIONS,
   assertFirmwareRevisionCompatible,
+  assertSupportedEspRomChip,
   assertHomeTilesPartitionLayout,
   buildFlashPlan,
   buildReleaseIndex,
   parseEspIdfPartitionTable,
-  parseEspRomChipIdentity,
   releaseAssetNames,
   resolveSameOriginAsset,
   validateFirmwareDescriptor,
@@ -129,21 +129,30 @@ assert.equal(waveshareS3Lcd4.status, "supported");
 assert.match(waveshareS3Lcd4.label, /Rev 4\.0/);
 assert.match(waveshareS3Lcd4.hardwareCheck, /revision 4\.0.*CH32V003/);
 
-function securityInfoFixture(chipId) {
-  const bytes = new Uint8Array(20);
-  new DataView(bytes.buffer).setUint32(12, chipId, true);
-  return bytes;
-}
-
-assert.deepEqual(parseEspRomChipIdentity(securityInfoFixture(18)), {
+assert.deepEqual(assertSupportedEspRomChip({ chipId: 18, chipName: "ESP32-P4", secureDownloadMode: false }), {
   chipId: 18,
   chipFamily: "ESP32-P4",
 });
-assert.deepEqual(parseEspRomChipIdentity(securityInfoFixture(9)), {
+assert.deepEqual(assertSupportedEspRomChip({ chipId: 9, chipName: "ESP32-S3", secureDownloadMode: false }), {
   chipId: 9,
   chipFamily: "ESP32-S3",
 });
-assert.throws(() => parseEspRomChipIdentity(securityInfoFixture(0x46b6b8de)), /Unsupported ESP ROM chip ID/);
+assert.throws(
+  () => assertSupportedEspRomChip({ chipId: 0x46b6b8de, chipName: "ESP32-S3", secureDownloadMode: false }),
+  /Unsupported ESP ROM chip ID/,
+);
+assert.throws(
+  () => assertSupportedEspRomChip({ chipId: 13, chipName: "ESP32-C6", secureDownloadMode: false }),
+  /Unsupported ESP ROM chip ID 13/,
+);
+assert.throws(
+  () => assertSupportedEspRomChip({ chipId: 18, chipName: "ESP32-S3", secureDownloadMode: false }),
+  /ROM reports ESP32-P4, but esptool-js selected ESP32-S3/,
+);
+assert.throws(
+  () => assertSupportedEspRomChip({ chipId: 9, chipName: "ESP32-S3", secureDownloadMode: true }),
+  /Secure Download Mode/,
+);
 
 const sketchProfiles = read("sketch.yaml");
 const releaseTargets = DEVICE_PROFILES;
@@ -554,12 +563,34 @@ assert.equal(
   installerPageVersion,
   "The installer and its contract module must use the same browser-cache version.",
 );
-assert.match(installerSource, /esptool-js@0\.6\.1\/bundle\.js/);
-assert.doesNotMatch(installerSource, /esptool-js@0\.6\.0\/bundle\.js/);
-assert.match(installerSource, /class HomeTilesESPLoader extends ESPLoader/);
-assert.match(installerSource, /await this\.connect\(mode, 7, false\)/);
-assert.match(installerSource, /parseEspRomChipIdentity\(securityInfo\)/);
+const installerEsptoolSource = read("docs/assets/javascripts/installer-esptool.mjs");
+assert.equal(
+  installerSource.match(/installer-esptool\.mjs\?v=([a-z0-9-]+)/)?.[1],
+  installerPageVersion,
+  "The installer and its esptool-js adapter must use the same browser-cache version.",
+);
+assert.equal(
+  installerEsptoolSource.match(/installer-contract\.mjs\?v=([a-z0-9-]+)/)?.[1],
+  installerPageVersion,
+  "The esptool-js adapter must load the same contract module instance as the installer.",
+);
+const esptoolUrls = [...installerSource.matchAll(/https:\/\/unpkg\.com\/esptool-js@[^"]+/g)].map((match) => match[0]);
+assert.deepEqual(
+  esptoolUrls,
+  ["https://unpkg.com/esptool-js@0.7.0/bundle.js"],
+  "Loader and chip classes must come from one esptool-js 0.7.0 bundle; mixed lib/ targets skip the P4 flash power-on.",
+);
+assert.match(installerSource, /import \* as esptool from "https:\/\/unpkg\.com\/esptool-js@0\.7\.0\/bundle\.js"/);
+assert.match(installerSource, /defineHomeTilesEsptool\(esptool\)/);
+assert.doesNotMatch(installerSource, /lib\/targets\/|ESP32P4ROM|ESP32S3ROM|ESP_GET_SECURITY_INFO/);
+assert.match(installerEsptoolSource, /class HomeTilesESPLoader extends ESPLoader/);
+assert.match(installerEsptoolSource, /class HomeTilesTransport extends Transport/);
+assert.match(installerSource, /new HomeTilesTransport\(port\)/);
 assert.match(installerSource, /new HomeTilesESPLoader\(/);
+assert.doesNotMatch(installerSource, /romBaudrate/, "The ROM baud rate stays at the esptool-js default of 115200.");
+assert.match(installerSource, /if \(!esploader\.IS_STUB\)/);
+assert.match(installerSource, /if \(!detectedFlashSize\)/);
+assert.match(installerSource, /esploader\.after\("hard_reset", false\)/);
 assert.doesNotMatch(installerSource, /github\.com\/GalusPeres\/HomeTiles\/releases\/download/);
 assert.match(installerSource, /resolveSameOriginAsset/);
 assert.match(installerSource, /verifyExistingLayout/);

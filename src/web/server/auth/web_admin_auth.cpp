@@ -211,6 +211,10 @@ bool csrfForCookie(const char* cookie_header, char csrf_hex[kTokenHexSize]) {
                               kTokenHexSize);
 }
 
+bool storedSecretsHidden() {
+  return enabled();
+}
+
 void logout(const char* cookie_header) {
   begin();
   if (!g_tables) return;

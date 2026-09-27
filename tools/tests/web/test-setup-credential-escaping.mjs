@@ -22,7 +22,18 @@ struct String : std::string {
   String(const std::string& value) : std::string(value) {}
   char charAt(size_t index) const { return at(index); }
 };
-struct DeviceConfig { String wifi_ssid; String wifi_pass; };
+struct DeviceConfig { String wifi_ssid; String wifi_pass; String language; };
+namespace web_admin_auth {
+bool hidden = false;
+bool storedSecretsHidden() { return hidden; }
+}
+namespace i18n {
+struct Strings { const char* ap_wifi_keep_password_hint; };
+const Strings& strings(const String&) {
+  static const Strings strings{"Saved password hidden"};
+  return strings;
+}
+}
 struct ConfigManager {
   DeviceConfig config;
   const DeviceConfig& getConfig() const { return config; }
@@ -42,9 +53,10 @@ String fromHex(const char* input) {
   return result;
 }
 int main(int argc, char** argv) {
-  if (argc != 3) return 1;
+  if (argc != 3 && argc != 4) return 1;
   configManager.config.wifi_ssid = fromHex(argv[1]);
   configManager.config.wifi_pass = fromHex(argv[2]);
+  web_admin_auth::hidden = argc == 4;
   std::cout << WebConfigServer().getConfigPage();
 }
 `;
@@ -94,6 +106,15 @@ try {
       html: run.stdout.replace('</body>', check + '</body>'),
       tmpPrefix: 'hometiles-setup-escaping-'});
   }
+  // With a Web Admin password the portal never renders the stored password.
+  const secret = 'portal-secret-9';
+  const hidden = spawnSync(executable,
+    [...['Home network', secret].map(value => Buffer.from(value).toString('hex')), 'hidden'],
+    {encoding: 'utf8'});
+  assert.equal(hidden.status, 0, hidden.stderr);
+  assert.ok(!hidden.stdout.includes(secret), 'the hidden password is not in the page');
+  assert.match(hidden.stdout, /id="wifi_pass" name="wifi_pass" placeholder="Password" value="">/);
+  assert.ok(hidden.stdout.includes('Saved password hidden'), 'the keep-password hint is shown');
 } finally {
   assert.ok(path.resolve(temporary).startsWith(path.resolve(buildRoot) + path.sep));
   fs.rmSync(temporary, {recursive: true, force: true});

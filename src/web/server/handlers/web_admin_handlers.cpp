@@ -1,4 +1,5 @@
 #include "src/web/server/web_admin.h"
+#include "src/web/server/auth/web_admin_auth.h"
 #include "src/core/i18n/i18n.h"
 #include "src/core/config/pin_access.h"
 #include "src/network/bridge/device_entities.h"
@@ -419,7 +420,8 @@ void WebAdminServer::handleSaveMQTT() {
       response += access_changed && !access_only ? "true" : "false";
       response += ",\"settings_pin\":\"";
       String stored_pin;
-      if (configManager.getSettingsPin(stored_pin)) {
+      if (!web_admin_auth::storedSecretsHidden() &&
+          configManager.getSettingsPin(stored_pin)) {
         appendJsonEscaped(response, stored_pin);
       }
       stored_pin = "";

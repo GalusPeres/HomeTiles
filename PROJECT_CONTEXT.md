@@ -53,7 +53,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - V2 fixes committed in `e1a9297`: touch bounds, internal I2C atomic-state allocation, slot-aware SD cleanup; exact-V2 only. Beta `HOMETILES_ISSUE38_BETA` reports v0.6.12b1; release version stays v0.6.12.
 - SD (open in #55): 40 MHz card-init failure, 20 MHz retry timeout, then Hosted slot-1 assertion; V2 keeps default host flags without DEINIT_ARG (as V1), leaving slot 1 untouched; causes open. Beta SD diagnostic passes (~8 GB). Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`, `build/guition-v2-v0.6.12b1/VERIFICATION.md`.
 - Touch: maintainer confirms rapid-tap raw-bounds fix works. BIN/ELF: `build/guition-v2-touch/`.
-- Interrupt-WDT dump matches touch ELF SHA256 `af562d1cea4dc3d8096ec17cd631e45cc6d82ab1ea6fb0037c03e8638c234a67`; IDLE1 waits for interrupt, setup uploads touch firmware. I2C atomic-state object at `0x483e96bc` is in PSRAM. Backport `37758ef327f9` ensures internal allocation (ELF caps 0x804). Exposure proven, WDT causality unproven; no wall-clock timestamp. Evidence/hash: `build/guition-v2-crash-20260911/`.
+- Interrupt-WDT dump matches touch ELF SHA256 `af562d1cea4dc3d8096ec17cd631e45cc6d82ab1ea6fb0037c03e8638c234a67`: IDLE1 waits for an interrupt while setup uploads touch firmware; the I2C atomic-state object (`0x483e96bc`) was in PSRAM. Backport `37758ef327f9` forces internal allocation (caps 0x804). Exposure proven, WDT causality unproven (no timestamp). Evidence: `build/guition-v2-crash-20260911/`.
 - Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. Released firmware v0.6.12 preserves daily extrema (24 C daily versus partial hourly 11 C).
 
 ## Sensor history
@@ -134,4 +134,4 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Security branch (unreleased)
 
-- Optional Web Admin password: salt/key only, HMAC challenge, sessions in PSRAM, CSRF header; removable on device (System > Security). Bridge uses it only for pairing. HW pending.
+- Web Admin password (optional): salt/key only, HMAC challenge, PSRAM sessions, CSRF; removed on device (System > Security); hides stored Wi-Fi/MQTT passwords/PINs. Bridge: pairing only. HW pending.

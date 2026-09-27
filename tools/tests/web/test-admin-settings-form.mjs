@@ -22,8 +22,18 @@ const CONFIG_VALUES = [
   'wifi_dns', 'mqtt_host', 'mqtt_user', 'mqtt_pass', 'mqtt_client_id',
   'mqtt_base_topic', 'ha_prefix'
 ];
+// The two passwords go through appendStoredSecretValue, which escapes them
+// and leaves them out entirely while a Web Admin password is set.
+const SECRET_VALUES = new Set(['wifi_pass', 'mqtt_pass']);
+const secretHelper = readRepoFile('src/web/server/render/web_admin_security_html.cpp');
+assert.match(secretHelper,
+  /void appendStoredSecretValue\([\s\S]*?appendHtmlEscaped\(html, String\(secret \? secret : ""\)\);/,
+  'appendStoredSecretValue must escape the stored secret');
 for (const field of CONFIG_VALUES) {
-  assert.ok(html.includes(`appendHtmlEscaped(html, cfg.${field});`),
+  const writer = SECRET_VALUES.has(field)
+    ? `appendStoredSecretValue(html, cfg.${field}, tr);`
+    : `appendHtmlEscaped(html, cfg.${field});`;
+  assert.ok(html.includes(writer),
     `cfg.${field} must be escaped before it lands in a value attribute`);
   assert.ok(!new RegExp(`^\\s*html \\+= cfg\\.${field};`, 'm').test(html),
     `cfg.${field} must not be appended raw any more`);

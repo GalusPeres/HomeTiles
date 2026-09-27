@@ -13,6 +13,7 @@
 #include "src/network/transport/usb_ethernet_backend.h"
 #include "src/web/server/render/web_admin_scripts.h"
 #include "src/web/server/render/web_admin_html.h"
+#include "src/web/server/auth/web_admin_auth.h"
 #include "src/web/server/render/web_admin_styles.h"
 #include "src/web/server/assets/web_admin_fonts.h"
 #include "src/web/server/handlers/web_admin_tile_helpers.h"
@@ -1710,7 +1711,7 @@ String WebAdminServer::getAdminPage() {
                 <div class="password-field">
                   <input type="password" id="wifi_pass" name="wifi_pass"
                          autocomplete="new-password" value=")html";
-  appendHtmlEscaped(html, cfg.wifi_pass);
+  appendStoredSecretValue(html, cfg.wifi_pass, tr);
   html += R"html(">
                   <button type="button" class="password-toggle" data-label-show=")html";
   html += tr.password_show;
@@ -1823,7 +1824,7 @@ String WebAdminServer::getAdminPage() {
                 <div class="password-field">
                   <input type="password" id="mqtt_pass" name="mqtt_pass"
                          autocomplete="new-password" value=")html";
-  appendHtmlEscaped(html, cfg.mqtt_pass);
+  appendStoredSecretValue(html, cfg.mqtt_pass, tr);
   html += R"html(">
                   <button type="button" class="password-toggle" data-label-show=")html";
   html += tr.password_show;

@@ -3,13 +3,18 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/web/server/web_admin_utils.h"
+#include "src/web/server/auth/web_admin_auth.h"
 
 void append_settings_access_fields_html(String& html, const String& tab_id) {
   const DeviceConfig& cfg = configManager.getConfig();
   const auto& tr = i18n::strings(cfg.language);
   const String prefix = tab_id + "_";
   String stored_pin;
-  configManager.getSettingsPin(stored_pin);
+  // A Web Admin password hides stored PINs; the status line still reports
+  // whether one is configured.
+  if (!web_admin_auth::storedSecretsHidden()) {
+    configManager.getSettingsPin(stored_pin);
+  }
 
   html += "<div id=\"" + prefix +
           "settings_access_fields\" class=\"type-fields "

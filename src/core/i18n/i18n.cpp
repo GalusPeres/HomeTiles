@@ -551,7 +551,10 @@ static const Strings kStringsDe = {
     "Passwort vergessen? Am Display unter Einstellungen > System > Sicherheit entfernen.",
     "Sicherheit",
     "An",
-    "Aus"};
+    "Aus",
+    "Gespeichert (verborgen)",
+    "Solange das Passwort aktiv ist, zeigt der Browser gespeicherte WLAN- und MQTT-Passwörter und PINs nicht an; zum Ändern einen neuen Wert eingeben.",
+    "Das gespeicherte Passwort ist verborgen. Feld leer lassen, um es zu behalten."};
 
 static const Strings kStringsEn = {
     "en",
@@ -1097,7 +1100,10 @@ static const Strings kStringsEn = {
     "Forgot the password? Remove it on the display under Settings > System > Security.",
     "Security",
     "On",
-    "Off"};
+    "Off",
+    "Saved (hidden)",
+    "While the password is on, saved Wi-Fi and MQTT passwords and PINs are not shown in the browser; enter a new value to change them.",
+    "The saved password is hidden. Leave the field empty to keep it."};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1643,7 +1649,10 @@ static const Strings kStringsFr = {
     "Mot de passe oublié ? Supprimez-le sur l'écran sous Paramètres > Système > Sécurité.",
     "Sécurité",
     "Activé",
-    "Désactivé"};
+    "Désactivé",
+    "Enregistré (masqué)",
+    "Tant que le mot de passe est actif, les mots de passe Wi-Fi et MQTT et les codes PIN enregistrés ne sont pas affichés dans le navigateur ; saisissez une nouvelle valeur pour les modifier.",
+    "Le mot de passe enregistré est masqué. Laissez le champ vide pour le conserver."};
 
 static const LocaleProfile kLocaleDe = {
     "de",

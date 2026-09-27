@@ -38,4 +38,9 @@ bool csrfForCookie(const char* cookie_header, char csrf_hex[kTokenHexSize]);
 
 void logout(const char* cookie_header);
 
+// While a password is set, stored Wi-Fi/MQTT passwords and PINs are never sent
+// to a browser (pages, JSON replies, the setup portal); they can only be
+// replaced with a new value.
+bool storedSecretsHidden();
+
 }  // namespace web_admin_auth

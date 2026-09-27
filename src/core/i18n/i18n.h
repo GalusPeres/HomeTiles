@@ -602,6 +602,11 @@ struct Strings {
   const char* security_btn;
   const char* security_state_on;
   const char* security_state_off;
+  // Stored Wi-Fi/MQTT passwords and PINs are not sent to browsers while a
+  // Web Admin password is set; they can only be replaced.
+  const char* secret_hidden_placeholder;
+  const char* web_auth_secrets_note;
+  const char* ap_wifi_keep_password_hint;
 };
 
 // Locale-specific display rules and short runtime strings shared by

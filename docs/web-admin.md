@@ -229,6 +229,7 @@ The Web Admin is open to everyone on your network by default. Enter a new passwo
 
 - The password is never sent in plain text: the browser proves it with a one-time challenge, and the display stores only a salted hash.
 - Wrong passwords lock the sign-in for an increasing time, up to five minutes.
+- Saved WiFi and MQTT passwords and PINs are no longer shown, neither here nor in the WiFi setup hotspot. Enter a new value to change them; an empty field keeps the saved one.
 - **Sign out** ends the browser session; **Remove password** opens the Web Admin to the network again.
 - Forgot the password? On the display, open **Settings → System → Security** and select **Remove password**.
 - When [pairing](home-assistant-setup.md) with the HomeTiles Bridge, enter the password in the Bridge setup dialog.

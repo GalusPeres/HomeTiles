@@ -139,8 +139,23 @@ void appendWebAdminPasswordSettingsHtml(String& html, const i18n::Strings& tr) {
             <div class="settings-note">)html";
   appendHtmlEscaped(html, String(tr.web_auth_note));
   html += R"html(</div>
+            <div class="settings-note">)html";
+  appendHtmlEscaped(html, String(tr.web_auth_secrets_note));
+  html += R"html(</div>
           </div>
 )html";
+}
+
+void appendStoredSecretValue(String& html, const char* secret,
+                             const i18n::Strings& tr) {
+  if (!web_admin_auth::storedSecretsHidden()) {
+    appendHtmlEscaped(html, String(secret ? secret : ""));
+    return;
+  }
+  if (!secret || !secret[0]) return;
+  html += "\" placeholder=\"";
+  appendHtmlEscaped(html, String(tr.secret_hidden_placeholder));
+  html += "\" data-secret-hidden=\"1";
 }
 
 void appendWebAdminCsrfMeta(String& html, WebServer& server) {

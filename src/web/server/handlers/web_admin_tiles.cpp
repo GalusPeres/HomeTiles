@@ -1,4 +1,5 @@
 #include "src/web/server/web_admin.h"
+#include "src/web/server/auth/web_admin_auth.h"
 #include "src/core/text/title_text.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/web/server/render/web_admin_html.h"
@@ -449,7 +450,8 @@ void WebAdminServer::handleGetTiles() {
     out += ",\"folder_pin\":\"";
     if (tile.type == TILE_FOLDER) {
       String folder_pin;
-      if (tileConfig.getFolderPin(getNavigateTargetId(tile), folder_pin)) {
+      if (!web_admin_auth::storedSecretsHidden() &&
+          tileConfig.getFolderPin(getNavigateTargetId(tile), folder_pin)) {
         appendJsonEscaped(out, folder_pin);
       }
       folder_pin = "";
@@ -748,7 +750,8 @@ void WebAdminServer::handleSaveTiles() {
                       : "false";
       response += ",\"folder_pin\":\"";
       String folder_pin;
-      if (tileConfig.getFolderPin(getNavigateTargetId(tile), folder_pin)) {
+      if (!web_admin_auth::storedSecretsHidden() &&
+          tileConfig.getFolderPin(getNavigateTargetId(tile), folder_pin)) {
         appendJsonEscaped(response, folder_pin);
       }
       folder_pin = "";
@@ -1258,7 +1261,8 @@ void WebAdminServer::handleSaveFolderAccess() {
   json += tileConfig.isFolderPinEnabled(folder_id) ? "true" : "false";
   json += ",\"folder_pin\":\"";
   String stored_pin;
-  if (tileConfig.getFolderPin(folder_id, stored_pin)) {
+  if (!web_admin_auth::storedSecretsHidden() &&
+      tileConfig.getFolderPin(folder_id, stored_pin)) {
     appendJsonEscaped(json, stored_pin);
   }
   stored_pin = "";

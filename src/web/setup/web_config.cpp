@@ -3,6 +3,8 @@
 #include "src/devices/device.h"
 #include "src/web/server/web_admin_utils.h"
 #include "src/web/server/assets/web_admin_fonts.h"
+#include "src/web/server/auth/web_admin_auth.h"
+#include "src/core/i18n/i18n.h"
 #include <WiFi.h>
 
 // Shared instance.
@@ -254,6 +256,8 @@ void WebConfigServer::handleSave() {
   }
 
   // Replace only the Wi-Fi credentials.
+  char previous_ssid[CONFIG_WIFI_SSID_MAX] = {};
+  strncpy(previous_ssid, cfg.wifi_ssid, sizeof(previous_ssid) - 1);
   if (server.hasArg("wifi_ssid")) {
     String ssid = server.arg("wifi_ssid");
     strncpy(cfg.wifi_ssid, ssid.c_str(), CONFIG_WIFI_SSID_MAX - 1);
@@ -261,7 +265,15 @@ void WebConfigServer::handleSave() {
 
   if (server.hasArg("wifi_pass")) {
     String pass = server.arg("wifi_pass");
-    strncpy(cfg.wifi_pass, pass.c_str(), CONFIG_WIFI_PASS_MAX - 1);
+    // With a Web Admin password the form never shows the stored password. An
+    // empty field for the same network keeps it instead of erasing it.
+    const bool keep_hidden_password =
+        pass.isEmpty() && web_admin_auth::storedSecretsHidden() &&
+        strcmp(cfg.wifi_ssid, previous_ssid) == 0;
+    if (!keep_hidden_password) {
+      strncpy(cfg.wifi_pass, pass.c_str(), CONFIG_WIFI_PASS_MAX - 1);
+      cfg.wifi_pass[CONFIG_WIFI_PASS_MAX - 1] = '\0';
+    }
   }
 
   // Captive portal always resets WiFi addressing back to DHCP.
@@ -451,11 +463,19 @@ String WebConfigServer::getConfigPage() {
         <label for="wifi_pass">Password</label>
         <div class="password-field">
           <input type="password" id="wifi_pass" name="wifi_pass" placeholder="Password" value=")html";
-  appendHtmlEscaped(html, String(cfg.wifi_pass));
+  const bool hide_password =
+      web_admin_auth::storedSecretsHidden() && cfg.wifi_pass[0] != '\0';
+  if (!hide_password) appendHtmlEscaped(html, String(cfg.wifi_pass));
   html += R"html(">
           <button type="button" class="password-toggle" onclick="togglePasswordVisibility('wifi_pass', this)">Show</button>
         </div>
-        <div class="hint">Leave empty for an open network</div>
+        <div class="hint">Leave empty for an open network</div>)html";
+  if (hide_password) {
+    html += "\n        <div class=\"hint\">";
+    appendHtmlEscaped(html, String(i18n::strings(cfg.language).ap_wifi_keep_password_hint));
+    html += "</div>";
+  }
+  html += R"html(
       </div>
 
       <button type="submit" class="btn">Connect</button>

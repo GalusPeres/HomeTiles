@@ -37,12 +37,12 @@ Lights, climate, sensors, energy, weather and more on a 4 to 10.1 inch touch scr
 </picture>
 </p>
 
-- **Half-size tiles:** place and size tiles in half steps.
-- **Color rules per tile:** icon and tile change color by value or state, e.g. a waste tile turns red on collection day.
-- **Entity color:** a rule can show the entity's own color, like the color of a light.
-- **Other entity:** a rule can follow any entity, e.g. a climate folder turns orange while heating.
-- **Graph readout:** slide through sensor and energy history.
-- **Built-in cameras:** ESP32-P4 displays stream to Home Assistant.
+- **[Half-size tiles](https://galusperes.github.io/web-admin/#moving-resizing-copying):** place and size tiles in half steps.
+- **[Color rules per tile](https://galusperes.github.io/web-admin/#icon-color-by-state):** icon and tile change color by value or state, e.g. a waste tile turns red on collection day.
+- **[Entity color](https://galusperes.github.io/web-admin/#colors-and-rules):** a rule can show the entity's own color, like the color of a light.
+- **[Other entity](https://galusperes.github.io/web-admin/#colors-and-rules):** a rule can follow any entity, e.g. a climate folder turns orange while heating.
+- **[Graph readout](https://galusperes.github.io/tiles/#sensor):** slide through sensor and energy history.
+- **[Built-in cameras](https://galusperes.github.io/web-admin/#built-in-camera):** ESP32-P4 displays stream to Home Assistant.
 
 Before updating, update HomeTiles Bridge to **v0.7.0** and [export your dashboard](https://galusperes.github.io/updating/). [All changes](docs/releases/v0.7.0.md)
 

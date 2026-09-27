@@ -11,11 +11,11 @@
 <a href="https://galusperes.github.io/installer/"><img src="https://img.shields.io/badge/flasher-web-26a69a" alt="Online flasher"></a>
 <a href="https://buymeacoffee.com/galusperes"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=white" alt="Buy Me a Coffee"></a>
 
-<img src="docs/images/readme-hero.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%">
+<img src="docs/images/readme-overview.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%">
 
 ## New in v0.7.0
 
-<img src="docs/images/readme-new.png" alt="Half-size tiles, color rules, tiles in the color of their light and folders that follow an entity" width="100%">
+<img src="docs/images/readme-tiles.png" alt="Half-size tiles, color rules, tiles in the color of their light and folders that follow an entity" width="100%">
 
 Half-size tiles, icon circles, color rules and adjustable corners. Folders can follow an entity, like a climate folder that turns orange while heating and blue while cooling, or a lighting folder in the color of its lights. Built-in cameras are shared with Home Assistant. Update HomeTiles Bridge to **v0.7.0** first and [export your dashboard](https://galusperes.github.io/updating/) before updating. [All changes](docs/releases/v0.7.0.md)
 

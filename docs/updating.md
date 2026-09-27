@@ -7,7 +7,7 @@ Normal updates keep your Wi-Fi, MQTT settings and dashboard. Keep the display po
 Open **Settings → System**, tap **Check for updates**, and install the offered version. The display restarts when finished; Web Admin and MQTT reconnect automatically.
 
 <figure class="ht-screenshot">
-<img src="../images/8in-system-popup.png" alt="System popup with the update check" width="1308" height="828" loading="lazy">
+<img src="../images/8in-system-popup.png" alt="System popup with the update check" width="1272" height="792" loading="lazy">
 <figcaption>System information and firmware update</figcaption>
 </figure>
 

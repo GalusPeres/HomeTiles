@@ -96,6 +96,18 @@ Camera tiles are available on ESP32-P4. Allow the display to reach the Home Assi
 
 Each open display uses its own stream. Video conversion uses Home Assistant CPU time, while snapshot cameras are limited by their source refresh rate. See [Camera troubleshooting](faq.md#the-camera-tile-asks-for-a-newer-bridge-or-never-shows-video) if no video appears.
 
+## Built-in Camera
+
+Displays with a camera can share it with Home Assistant. This needs HomeTiles v0.7.0 and Bridge v0.6.48 or newer. Supported displays: Guition JC8012P4A1 V2, Waveshare ESP32-P4 8-inch, and M5Stack Tab5.
+
+1. In the Web Admin, open **Settings → Built-in camera** and enable **Allow Home Assistant to use the built-in camera**, then press **Save**.
+2. The Bridge adds a **Camera** entity to the display's Home Assistant device, plus a **Camera** switch that pauses it.
+3. Open the camera in Home Assistant, or show it on another display with a [Camera tile](tiles.md#camera-experimental).
+
+The display captures images only while Home Assistant asks for them. Opening the camera starts a live stream that uses the same TCP ports `8124`–`8131` as camera tiles; it stops a few seconds after the last viewer closes. While the camera is in use, the display shows the [camera indicator](device-ui.md#built-in-camera-indicator). Tapping its pill ends the current stream.
+
+Disabling the setting removes the entity. The paused switch keeps the entity but sends no images. A display cannot show its own camera in its own camera popup.
+
 ## MQTT Topics Reference { data-toc-label="MQTT reference" }
 
 Entity states use `<HA prefix>/<entity>/...`. The Bridge publishes them itself; Home Assistant's MQTT Statestream integration is not required.
@@ -125,6 +137,8 @@ Entity states use `<HA prefix>/<entity>/...`. The Bridge publishes them itself; 
     | `<base>/cmnd/scene` | Display → HA | Scene/script activation or button press |
     | `<base>/cmnd/camera` | Display → HA | Open/close a camera session |
     | `<base>/stat/camera` | HA → Display | Camera connection and status |
+    | `<base>/cmnd/local_camera` | HA → Display | Still image or live stream request for the built-in camera |
+    | `<base>/stat/local_camera` | Display → HA | Built-in camera status (`ready`, `disabled`, `error`) |
     | `<base>/cmnd/display_brightness` | HA → Display | Display brightness (1–100%) |
     | `<base>/stat/display_brightness` | Display → HA | Current display brightness |
     | `<base>/cmnd/screensaver_brightness` | HA → Display | Screensaver brightness (1–100%) |

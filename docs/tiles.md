@@ -10,6 +10,10 @@ All tiles share title, icon, color, size, and position settings. For types with 
 
 Press **Enter** in the title field for a second line. The two lines share the same vertical center as a single-line title; text that does not fit ends in `...`. The display, popup header, and Web Admin preview use the same title. Number, Select, and Date/Time tiles also offer the same five value-size choices as Sensor tiles.
 
+**Sizes:** every tile resizes in half steps from 1×1. Sensor, Binary Sensor, Energy, Scene, Folder, Back, Clock, and Camera tiles can also be half a cell high; value tiles then show the title and value next to the icon.
+
+**Colors:** each tile has an icon color, an icon circle, and a tile color (**Global**, **Custom**, or **From icon**). [Rules](web-admin.md#colors-and-rules) color the icon or tint the tile while an entity has a matching state, for example by temperature or by a text state.
+
 ## Home Assistant Tiles
 
 ### Sensor
@@ -123,18 +127,18 @@ Shows cover art, title, and playback controls for a `media_player` entity.
 
 Controls a `climate` entity. The icon and accent indicate active heating, cooling, drying, or fan operation.
 
-Configure mini-tiles for temperatures, humidity, targets, and mode, or choose **Automatic**. Arrange them in the [Climate mini-tile editor](web-admin.md#editing-climate-mini-tiles).
+Configure mini-tiles for temperatures, humidity, targets, and mode, or choose **Automatic**. Arrange them in the [Climate mini-tile editor](web-admin.md#editing-climate-mini-tiles). Wide target controls show the active mode, such as **Heat**, **Cool**, or **Auto**, and a humidity target is labeled **Humidity**.
 
 <figure class="ht-screenshot">
-<img src="../images/8in-climate.png" alt="Climate tiles with several mini-tile layouts" width="1308" height="828" loading="lazy">
-<figcaption>Climate tiles with different mini-tile layouts</figcaption>
+<img src="../images/8in-climate.png" alt="Climate tiles while heating, cooling, and in auto mode" width="1088" height="225" loading="lazy">
+<figcaption>Climate tiles while heating, cooling, and in auto mode</figcaption>
 </figure>
 
 **Popup:** temperature controls and supported modes, presets, fan, swing, and humidity settings. Heating/cooling ranges have separate targets.
 
 ### Camera (experimental) { data-toc-label="Camera" }
 
-Opens a 16:9 video popup on ESP32-P4. Select the camera in the Bridge's **Entity Configuration**, then assign it to this tile.
+Opens a 16:9 video popup on ESP32-P4. Select the camera in the Bridge's **Entity Configuration**, then assign it to this tile. The camera can also be the [built-in camera](bridge.md#built-in-camera) of another HomeTiles display.
 
 Allow local TCP access to the Home Assistant host on ports `8124`–`8131`. See [Camera connection](bridge.md#experimental-camera-transport) for requirements and performance notes. Camera tiles are unavailable on ESP32-S3.
 
@@ -144,15 +148,17 @@ These types work without Home Assistant.
 
 ### Clock
 
-Shows time and date using the device's localization settings. You can override the formats and sizes for each tile. Tap it to open the [screensaver](screensaver.md).
+Shows time and date using the device's localization settings. You can override the formats and sizes for each tile and hide its border. Tap it to open the [screensaver](screensaver.md).
 
 ### Text
 
-A static label with a selectable font size.
+A static label with a selectable font size. Its border can be hidden per tile.
 
 ### Folder
 
 Opens a sub-page with its own grid and an automatic back tile. See [Folders](web-admin.md#folders) for setup and optional PIN protection.
+
+A folder tile can follow an entity inside it: with [rules](web-admin.md#colors-and-rules) and **Entity color**, a Climate folder turns orange while heating and blue while cooling. The [back tile](web-admin.md#back-tile) has its own icon, color, border, and size.
 
 ### Animation
 

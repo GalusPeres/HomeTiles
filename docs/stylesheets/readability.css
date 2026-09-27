@@ -149,6 +149,11 @@ html { scrollbar-gutter: stable; }
 .md-typeset figure.ht-screenshot.ht-editor-detail { max-width: 300px; }
 .md-typeset figure.ht-screenshot img { display: block; width: 100%; height: auto; margin: 0; }
 .md-typeset figure.ht-screenshot figcaption { max-width: none; margin: 8px 0 0; font-size: 14px; font-style: normal; line-height: 1.5; color: #c2c7cf; text-align: center; }
+/* Popups are cut out at their own size: square ones stay compact, and
+   related popups sit side by side where the page is wide enough. */
+.md-typeset figure.ht-screenshot.ht-popup { max-width: 420px; }
+.md-typeset .ht-popup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0 28px; }
+.md-typeset .ht-popup-grid figure.ht-screenshot { max-width: none; margin: 0; }
 
 /* Keep the existing first-install instructions as a plain numbered list. */
 .ht-steps { margin: 12px 0 20px; }

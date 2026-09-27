@@ -8,8 +8,8 @@
 
 namespace DeviceGuitionJC8012P4A1 {
 
-// Built-in OV02C10 camera: enabled only in camera beta builds
-// (HOMETILES_LOCAL_CAMERA in device_select.h) until hardware validation.
+// Built-in OV02C10 camera (HOMETILES_LOCAL_CAMERA in device_select.h); off
+// until the user enables it in the Web Admin.
 #if defined(HOMETILES_LOCAL_CAMERA)
 inline constexpr bool kBuiltinCamera = true;
 #else

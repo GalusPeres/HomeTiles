@@ -143,7 +143,7 @@ for (const board of ['src/devices/guition_jc8012p4a1_v2/local_camera_board.h',
 // --- Profile ----------------------------------------------------------------------------------
 assert.match(cameraSelect,
   /#if defined\(DEVICE_M5STACKS_TAB5\)\n#define HOMETILES_CAMERA_SENSOR_SC202CS 1\n#define HOMETILES_LOCAL_CAMERA_BOARD "src\/devices\/m5stacks_tab5\/local_camera_board\.h"/);
-assert.match(deviceSelect, /\(defined\(DEVICE_M5STACKS_TAB5\) && defined\(HOMETILES_CAMERA_BETA\)\)\n#define HOMETILES_LOCAL_CAMERA 1/);
+assert.match(deviceSelect, / {4}defined\(DEVICE_M5STACKS_TAB5\)\n#define HOMETILES_LOCAL_CAMERA 1/);
 assert.match(deviceHeader, /#if defined\(HOMETILES_LOCAL_CAMERA\)\ninline constexpr bool kBuiltinCamera = true;\n#else\ninline constexpr bool kBuiltinCamera = false;\n#endif/);
 assert.match(deviceHeader, /Device::Capabilities\{false, false, false, false, false, false, kBuiltinCamera\}/);
 assert.match(version, /#if defined\(HOMETILES_CAMERA_BETA\)\n#undef FW_VERSION/);
@@ -154,7 +154,7 @@ if (cc) {
   fs.mkdirSync(path.dirname(probe), {recursive: true});
   fs.writeFileSync(probe, '#include "src/devices/device_select.h"\n#if defined(HOMETILES_LOCAL_CAMERA)\nLOCAL_CAMERA_ON\n#endif\n');
   for (const [defines, expected] of [
-    [['-DDEVICE_M5STACKS_TAB5'], false],
+    [['-DDEVICE_M5STACKS_TAB5'], true],
     [['-DDEVICE_M5STACKS_TAB5', '-DHOMETILES_CAMERA_BETA'], true],
   ]) {
     const result = spawnSync(cc, ['-E', '-P', '-x', 'c++', '-DHOMETILES_CI_TARGET', ...defines,
@@ -166,4 +166,4 @@ if (cc) {
   console.log('Profile preprocessing skipped: clang or gcc not found');
 }
 
-console.log('Tab5 SC202CS camera: vendored table, encoding, M5Unified transport, reset line, RAW8 core and beta isolation passed.');
+console.log('Tab5 SC202CS camera: vendored table, encoding, M5Unified transport, reset line, RAW8 core and release selection passed.');

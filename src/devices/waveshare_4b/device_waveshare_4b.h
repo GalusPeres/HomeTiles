@@ -17,8 +17,8 @@ namespace DeviceWaveshare4B {
 inline constexpr uint8_t kVisibleBacklightRawMin = 122;
 
 // User-supplied OV5647 on the 4B CSI connector (the 86-Panel has none):
-// enabled only in camera beta builds (HOMETILES_LOCAL_CAMERA in
-// device_select.h) until hardware validation.
+// HOMETILES_LOCAL_CAMERA in device_select.h, off until the user enables it
+// in the Web Admin.
 #if defined(HOMETILES_LOCAL_CAMERA)
 inline constexpr bool kBuiltinCamera = true;
 #else

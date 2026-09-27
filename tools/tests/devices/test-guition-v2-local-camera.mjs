@@ -99,10 +99,10 @@ assert.doesNotMatch(noComments(hardware), /adjustable\s*=\s*1|esp_ldo_channel_ad
   'The display\'s PHY supply is shared, never adjusted');
 
 // --- Exact-profile isolation --------------------------------------------------
-// The V2 always; every other camera board only in camera beta builds
+// Every camera board in every build, the V2 first
 // (tools/tests/devices/test-local-camera-boards.mjs).
 assert.match(deviceSelect,
-  /#if defined\(DEVICE_GUITION_JC8012P4A1_V2\) \|\|(?: \\\n    \(defined\(DEVICE_\w+\) && defined\(HOMETILES_CAMERA_BETA\)\) \|\|)* \\\n    \(defined\(DEVICE_M5STACKS_TAB5\) && defined\(HOMETILES_CAMERA_BETA\)\)\n#define HOMETILES_LOCAL_CAMERA 1\n#endif/);
+  /#if defined\(DEVICE_GUITION_JC8012P4A1_V2\) \|\|(?: \\\n    defined\(DEVICE_\w+\) \|\|)* \\\n    defined\(DEVICE_M5STACKS_TAB5\)\n#define HOMETILES_LOCAL_CAMERA 1\n#endif/);
 assert.match(deviceTypes, /bool has_builtin_camera = false;/);
 const profileHeaders = fs.readdirSync(path.join(root, 'src/devices'), {withFileTypes: true})
   .filter(entry => entry.isDirectory())
@@ -171,7 +171,8 @@ if (cc) {
     const result = spawnSync(cc, ['-E', '-P', '-x', 'c++', '-DHOMETILES_CI_TARGET', `-D${profile}`,
       '-I', root, probe], {encoding: 'utf8'});
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout.includes('LOCAL_CAMERA_ON'), profile === 'DEVICE_GUITION_JC8012P4A1_V2',
+    // Every ESP32-P4 camera board; the ESP32-S3 panel never.
+    assert.equal(result.stdout.includes('LOCAL_CAMERA_ON'), profile !== 'DEVICE_GUITION_ESP32_4848S040',
       `${profile} camera feature define`);
   }
 } else {

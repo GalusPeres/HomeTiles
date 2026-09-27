@@ -1,7 +1,7 @@
 #pragma once
 
 // Camera board file of the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B profiles
-// (pre-v3 and v3.1 silicon), camera beta builds only (contract:
+// (pre-v3 and v3.1 silicon), (contract:
 // src/video/local_camera/camera_driver.h). Board facts come from the 7B
 // schematic and Waveshare's 7B camera examples (see the OV5647 PROVENANCE.md):
 //   - OV5647 module of the 7B-C kit on the 15-pin 1.0 mm CSI connector J2;

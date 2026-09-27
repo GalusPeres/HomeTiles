@@ -1,7 +1,7 @@
 #pragma once
 
 // Built-in camera board file of the exact Guition JC8012P4A1 V1 profile,
-// camera beta builds only (contract: src/video/local_camera/camera_driver.h).
+// (contract: src/video/local_camera/camera_driver.h).
 // Board facts come from Guition's V1 schematic and video_lcd_display demo,
 // the archive the V2 OV02C10 data comes from (see the OV02C10 PROVENANCE.md):
 //   - OV02C10 on the SCCB/I2C_NUM_0 bus shared with the GSL3680 touch

@@ -1,7 +1,6 @@
 #pragma once
 
-// Built-in camera board file of the M5Stack Tab5 profile, camera beta builds
-// only (contract: src/video/local_camera/camera_driver.h). Board facts from
+// Built-in camera board file of the M5Stack Tab5 profile, (contract: src/video/local_camera/camera_driver.h). Board facts from
 // M5Stack's Tab5 schematic, espressif/esp-bsp m5stack_tab5 and the
 // M5Tab5-UserDemo (see the SC202CS PROVENANCE.md):
 //   - SC2356 = esp_cam_sensor SC202CS, SCCB 0x36 on the system I2C bus

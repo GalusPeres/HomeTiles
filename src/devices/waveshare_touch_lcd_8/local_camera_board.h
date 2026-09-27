@@ -1,7 +1,7 @@
 #pragma once
 
 // Built-in camera board file of the Waveshare ESP32-P4-WIFI6-Touch-LCD-8
-// profile, camera beta builds only (contract:
+// profile, (contract:
 // src/video/local_camera/camera_driver.h). Board facts come from Waveshare's
 // 09_video_lcd_display example (see the OV5647 PROVENANCE.md):
 //   - OV5647 front camera on the board I2C bus (I2C0, SDA 7, SCL 8) that the

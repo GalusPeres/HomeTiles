@@ -1,7 +1,7 @@
 #pragma once
 
-// Camera board file of the Guition JC1060P470C_I_W_Y V2 profile, camera
-// beta builds only (contract: src/video/local_camera/camera_driver.h). Board
+// Camera board file of the Guition JC1060P470C_I_W_Y V2 profile
+// (contract: src/video/local_camera/camera_driver.h). Board
 // facts come from Guition's official JC1060P470C_I_W_Y schematic V1.0 and
 // video_lcd_display demo (see the OV02C10 PROVENANCE.md):
 //   - optional OV02C10 module on the 15-pin 0.3 mm CSI connector FPC2; boards

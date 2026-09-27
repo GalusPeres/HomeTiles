@@ -135,14 +135,14 @@ assert.match(deviceHeader, /#if defined\(HOMETILES_LOCAL_CAMERA\)\ninline conste
 assert.match(deviceHeader, /Device::Capabilities\{false, false, false, false, true, false, kBuiltinCamera\}/);
 assert.match(version, /#if defined\(HOMETILES_CAMERA_BETA\)\n#undef FW_VERSION/);
 
-// Normal 8-inch builds keep the camera out; camera beta builds enable it.
+// Every 8-inch build carries the camera; the original-panel JC1060P470C never.
 const cc = ['clang', 'gcc'].find(candidate => spawnSync(candidate, ['--version']).status === 0);
 if (cc) {
   const probe = path.join(root, 'build/tests/local-camera-profile/probe-ws8.cpp');
   fs.mkdirSync(path.dirname(probe), {recursive: true});
   fs.writeFileSync(probe, '#include "src/devices/device_select.h"\n#if defined(HOMETILES_LOCAL_CAMERA)\nLOCAL_CAMERA_ON\n#endif\n');
   for (const [defines, expected] of [
-    [['-DDEVICE_WAVESHARE_TOUCH_LCD_8'], false],
+    [['-DDEVICE_WAVESHARE_TOUCH_LCD_8'], true],
     [['-DDEVICE_WAVESHARE_TOUCH_LCD_8', '-DHOMETILES_CAMERA_BETA'], true],
     [['-DDEVICE_GUITION_JC1060P470C', '-DHOMETILES_CAMERA_BETA'], false],
   ]) {
@@ -155,4 +155,4 @@ if (cc) {
   console.log('Profile preprocessing skipped: clang or gcc not found');
 }
 
-console.log('Waveshare 8-inch OV5647 camera: vendored tables, overrides, board file and beta isolation passed.');
+console.log('Waveshare 8-inch OV5647 camera: vendored tables, overrides, board file and release selection passed.');

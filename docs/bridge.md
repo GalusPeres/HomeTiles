@@ -98,7 +98,17 @@ Each open display uses its own stream. Video conversion uses Home Assistant CPU 
 
 ## Built-in Camera
 
-Displays with a camera can share it with Home Assistant. This needs HomeTiles v0.7.0 and Bridge v0.6.48 or newer. Supported displays: Guition JC8012P4A1 V2, Waveshare ESP32-P4 8-inch, and M5Stack Tab5.
+Displays with a camera can share it with Home Assistant. This needs HomeTiles v0.7.0 and Bridge v0.6.48 or newer.
+
+| Display | Camera |
+| --- | --- |
+| Guition JC8012P4A1 V2 and V1 | Built-in OV02C10 |
+| Guition JC1060P470C V2, JC4880P443 | Optional OV02C10 module on the CSI connector |
+| Waveshare ESP32-P4 7-inch, 8-inch, 10.1-inch | Built-in OV5647 front camera |
+| Waveshare ESP32-P4 7B, 4.3-inch, 4B | Optional OV5647 module on the CSI connector |
+| M5Stack Tab5 | Built-in SC2356 |
+
+Tested on the Guition JC8012P4A1 V2, Waveshare 8-inch, and M5Stack Tab5; the JC4880P443 camera was contributor-tested. On the other displays, use **Rotation**, **Mirror image**, or **Swap red and blue** under [Advanced](web-admin.md#built-in-camera) if the image appears turned or its colors are swapped.
 
 1. In the Web Admin, open **Settings → Built-in camera** and enable **Allow Home Assistant to use the built-in camera**, then press **Save**.
 2. The Bridge adds a **Camera** entity to the display's Home Assistant device, plus a **Camera** switch that pauses it.

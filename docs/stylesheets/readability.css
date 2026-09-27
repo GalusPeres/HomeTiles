@@ -146,7 +146,7 @@ html { scrollbar-gutter: stable; }
 
 /* Keep full display captures large enough to read, in the order of the explanation. */
 .md-typeset figure.ht-screenshot { display: block; width: 100%; max-width: 680px; margin: 20px auto 28px; text-align: center; }
-.md-typeset figure.ht-screenshot.ht-editor-detail { max-width: 440px; }
+.md-typeset figure.ht-screenshot.ht-editor-detail { max-width: 320px; }
 .md-typeset figure.ht-screenshot img { display: block; width: 100%; height: auto; margin: 0; }
 .md-typeset figure.ht-screenshot figcaption { max-width: none; margin: 8px 0 0; font-size: 14px; font-style: normal; line-height: 1.5; color: #c2c7cf; text-align: center; }
 /* Popups are cut out at their own size: square ones stay compact, and

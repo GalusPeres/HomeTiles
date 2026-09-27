@@ -103,16 +103,16 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Core `src/video/local_camera/` is device-agnostic; drivers `sensors/*/`, boards `src/devices/*/local_camera_board.*`; opt-in `local_cam_en`.
 - V2 OV02C10 720p. 8-inch OV5647 544x960, Bridge `rotate` 90. Tab5 SC202CS 720p RAW8, mirror+180, BGGR under flips.
-- Every build, opt-in; build/HW pending: WS 7/10.1/7B/4.3/4B OV5647, V1/JC1060 V2 OV02C10, JC4880 quarter turn.
+- Camera builds pass; HW pending: WS 7/10.1/7B/4.3/4B OV5647, V1/JC1060 V2 OV02C10, JC4880 quarter turn.
 - Advanced: `lcam_rot` (180 = flip, odd = `rotate` 90), `lcam_rbswap` (Bayer, next start).
 - HW pending: b30 CSI/ISP, q10; b31 gain, q10-90; b32 screenshot; b33 Wi-Fi/AP, kbd, #43; b34 rotation, boards; b35 sleep stream/indicator wake, Tab5 1% wake, S3 150Hz.
 - Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
 
 ## v0.7.0 release prep
 
-- Local v0.6.12b72 BINs: `build/settings-half-grid-20260927/`.
-- PR #52: 17 CI builds/15 devices. Next with user OK: 5-device HW tests, Bridge v0.6.48 first, v0.7.0 version/notes, merge/tag back to back (`RELEASING.md`).
-- Docs/Settings done; 171 tests, V2/S3 builds pass. Tab5 FQBN: custom OTA layout; HW pending.
+- CI 36321117119 (`ea8d2c8`): 17/17 builds pass; BINs `build/ci-pr52-ea8d2c8/`.
+- PR #52. Next with user OK: 5-device HW tests, Bridge v0.6.48 first, v0.7.0 version/notes, merge/tag back to back (`RELEASING.md`).
+- Docs/Settings done; CI 152 pass/20 optional skips; local 171 pass. Tab5 FQBN custom. HW pending.
 - After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 
 ## Maintenance

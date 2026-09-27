@@ -3,41 +3,49 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-logo-dark.png">
   <img src="docs/images/readme-logo-light.png" alt="HomeTiles" height="63">
-</picture><br>
+</picture>
+
 Touch dashboards for Home Assistant on ESP32 displays.<br>
 Lights, climate, sensors, energy, weather and more on a 4 to 10.1 inch touch screen.
 
-<a href="https://galusperes.github.io/"><img src="docs/images/readme-button-docs.png" alt="Documentation" height="49"></a>
-<a href="https://galusperes.github.io/installer/"><img src="docs/images/readme-button-flasher.png" alt="Online flasher" height="49"></a>
-<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-button-release.png" alt="Latest release" height="49"></a>
-<a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-button-coffee.png" alt="Buy Me a Coffee" height="49"></a>
+<a href="https://galusperes.github.io/"><img src="docs/images/readme-pill-docs.png" alt="Documentation" height="40"></a>
+<a href="https://galusperes.github.io/installer/"><img src="docs/images/readme-pill-flasher.png" alt="Online flasher" height="40"></a>
+<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-pill-release.png" alt="Latest release" height="40"></a>
+<a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-pill-coffee.png" alt="Buy Me a Coffee" height="40"></a>
+<br>
+<img src="docs/images/readme-start.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%"><br>
+Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors.
 
 </div>
-
-<p align="center">
-<img src="docs/images/readme-home.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%"><br>
-Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors.
-</p>
 
 ## New in v0.7.0
 
 <p align="center">
-<img src="docs/images/readme-new-half.png" alt="Half-size tiles" width="390">
-<img src="docs/images/readme-new-rules.png" alt="Color rules" width="390"><br>
-Half-size tiles&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Color rules&nbsp;&nbsp;&nbsp;&nbsp;
+<img src="docs/images/readme-new-half.png" alt="Half-size tiles" width="48%">
+<img src="docs/images/readme-new-rules.png" alt="Color rules" width="48%"><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-caption-row1-dark.svg">
+  <img src="docs/images/readme-caption-row1-light.svg" alt="Half-size tiles · Color rules" width="97%">
+</picture>
 </p>
 
 <p align="center">
-<img src="docs/images/readme-new-lights.png" alt="Colors from your lights" width="390">
-<img src="docs/images/readme-new-folders.png" alt="Folders that follow an entity" width="390"><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Colors from your lights&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Folders that follow an entity
+<img src="docs/images/readme-new-lights.png" alt="Colors from your lights" width="48%">
+<img src="docs/images/readme-new-folders.png" alt="Folders that follow an entity" width="48%"><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-caption-row2-dark.svg">
+  <img src="docs/images/readme-caption-row2-light.svg" alt="Colors from your lights · Folders that follow an entity" width="97%">
+</picture>
 </p>
 
-Folders can follow an entity, like a climate folder that turns orange while heating and blue while cooling. Light tiles take on the color of the light, and color rules turn a waste tile red on collection day.
+- **Half-size tiles:** place and size tiles in half steps.
+- **Color rules:** tiles change color by value or state.
+- **Light colors:** light tiles show the color of the light.
+- **Folders follow an entity:** a climate folder turns orange while heating.
+- **Graph readout:** slide through sensor and energy history.
+- **Built-in cameras:** ESP32-P4 displays stream to Home Assistant.
 
-**Built-in cameras** on ESP32-P4 boards are shared with Home Assistant.
-
-Update HomeTiles Bridge to **v0.7.0** first and [export your dashboard](https://galusperes.github.io/updating/) before updating. [All changes](docs/releases/v0.7.0.md)
+Before updating, update HomeTiles Bridge to **v0.7.0** and [export your dashboard](https://galusperes.github.io/updating/). [All changes](docs/releases/v0.7.0.md)
 
 ## Get started
 

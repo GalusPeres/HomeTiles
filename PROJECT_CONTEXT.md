@@ -99,7 +99,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it.
 - Open: cross-grid import clamps whole tiles to half steps (HTTP 400), snapshot type accepts halves, value fonts 32/40 clip in half tiles.
 
-## Local camera (branch `local-camera-beta`)
+## Local camera
 
 - Core `src/video/local_camera/` is device-agnostic; drivers `sensors/*/`, boards `src/devices/*/local_camera_board.*`; opt-in `local_cam_en`.
 - V2 OV02C10 720p. 8-inch OV5647 544x960, Bridge `rotate` 90. Tab5 SC202CS 720p RAW8, mirror+180, BGGR under flips.
@@ -108,18 +108,18 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - HW pending: b30 CSI/ISP, q10; b31 gain, q10-90; b32 screenshot; b33 Wi-Fi/AP, kbd, #43; b34 rotation, boards; b35 sleep stream/indicator wake, Tab5 1% wake, S3 150Hz.
 - Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
 
-## v0.7.0 release prep
+## v0.7.0 release
 
-- PR #52, CI 36325726234 (`e6c7772`): 17 builds pass; BINs `build/ci-pr52-e6c7772/`.
-- Bridge v0.7.0 released (`1c12eda`, 267 pass/1 skip); firmware tag `609550a` building.
+- Firmware v0.7.0 (`609550a`): CI 36329510982, 17 builds/34 images; PR #52 merged.
+- Bridge v0.7.0 released first (`1c12eda`, 267 pass/1 skip). Evidence: `build/release-v0.7.0/`.
 - Cache b73 frees drained queues. V2: 76 cached switches, final 124 KiB. Maintainer: all five CI devices stable, including S3.
 - S3 b61 dump: Web Admin file open failed to allocate a 92-byte internal mutex; not the new CI build.
-- CI 152 pass/21 skips; local 173 pass. Firmware version/notes/README prepared; Tab5 custom.
-- After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
+- CI 152 pass/21 skips; local 173 pass. Notes/README include export/downgrade; overview corrected.
+- User OK needed for issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 
 ## Maintenance
 
-- Docs: `docs/`, `mkdocs.yml`, `overrides/`; gh-pages v0.6.12. USB installer tests are simulated.
+- Docs: `docs/`, `mkdocs.yml`, `overrides/`; published via gh-pages. USB installer tests are simulated.
 
 ## View control and telemetry
 

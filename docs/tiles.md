@@ -10,7 +10,7 @@ All tiles share title, icon, color, size, and position settings. For types with 
 
 Press **Enter** in the title field for a second line. The two lines share the same vertical center as a single-line title; text that does not fit ends in `...`. The display, popup header, and Web Admin preview use the same title.
 
-**Sizes:** every tile resizes in half steps from 1×1. Sensor, Binary Sensor, Energy, Scene, Folder, Back, Clock, and Camera tiles can also be half a cell high; value tiles then show the title and value next to the icon.
+**Sizes:** every tile resizes in half steps from 1×1. Sensor, Binary Sensor, Energy, Scene, Folder, Back, Clock, Camera, and Settings tiles can also be half a cell high; value tiles then show the title and value next to the icon.
 
 **Colors:** each tile has an icon color, an icon circle, and a tile color (**Global**, **Custom**, or **From icon**). [Rules](web-admin.md#colors-and-rules) color the icon or tint the tile while an entity has a matching state, for example by temperature or by a text state.
 

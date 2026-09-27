@@ -11,7 +11,7 @@ The [HomeTiles Bridge](https://github.com/GalusPeres/HomeTiles-Bridge) connects 
 
 ## Installation
 
-You need Home Assistant 2025.11 or newer, an MQTT broker, and HomeTiles Bridge v0.6.44 or newer for all documented tile features with firmware v0.6.10. Follow the [Home Assistant setup guide](home-assistant-setup.md) to install the Bridge and pair your first display.
+You need Home Assistant 2025.11 or newer, an MQTT broker, and HomeTiles Bridge v0.7.0 or newer for all documented features with firmware v0.7.0. Follow the [Home Assistant setup guide](home-assistant-setup.md) to install the Bridge and pair your first display.
 
 <a id="via-hacs-recommended"></a>
 <a id="manual"></a>
@@ -45,7 +45,7 @@ Older display configurations, entity selections, aliases, and MQTT topic names r
 
 **Numbers** accepts `number` and `input_number`; **Selects** accepts `select` and `input_select`; **Date/Time** accepts `time`, `date`, `datetime`, and `input_datetime`. Use their dedicated [editable tile types](tiles.md#number). State, writable limits, options, availability, and history come from Home Assistant. Recorder exclusions also apply to these history views.
 
-Bridge v0.6.44 remains compatible with older firmware and existing configurations. New editable controls require the new firmware; no reset or re-pairing is needed for a normal update.
+Bridge v0.7.0 remains compatible with older firmware and existing configurations. New features require the corresponding firmware; no reset or re-pairing is needed for a normal update.
 
 ## Control the Displayed View
 
@@ -98,7 +98,7 @@ Each open display uses its own stream. Video conversion uses Home Assistant CPU 
 
 ## Built-in Camera
 
-Displays with a camera can share it with Home Assistant. This needs HomeTiles v0.7.0 and Bridge v0.6.48 or newer.
+Displays with a camera can share it with Home Assistant. This needs HomeTiles v0.7.0 and Bridge v0.7.0 or newer.
 
 | Display | Camera |
 | --- | --- |

@@ -144,7 +144,7 @@ Resizing the parent changes the available slots. Mini-tiles that still fit keep 
 ## Moving, Resizing, Copying { data-toc-label="Move, resize, copy" }
 
 - **Move:** drag a tile to another cell.
-- **Resize:** drag its edge handles or enter **Width / Height**. Sizes change in half steps. Sensor, Binary Sensor, Energy, Scene, Folder, Back, Clock, and Camera tiles can also be half a cell high; Settings stays whole.
+- **Resize:** drag its edge handles or enter **Width / Height**. Sizes change in half steps. Sensor, Binary Sensor, Energy, Scene, Folder, Back, Clock, Camera, and Settings tiles can also be half a cell high.
 - **Copy / Paste:** duplicate a tile, including between folders. Paste onto an empty cell where the copied size fits; Settings and Back tiles cannot be replaced.
 - **Delete:** clear a tile back to an empty cell.
 
@@ -185,7 +185,7 @@ Select the Settings tile in the **Home** tab to set how Settings opens on the di
 - **Hide tile:** remove the Settings tile from the Home grid. You can also drag the tile out of the grid into the field below the preview; this hides it and turns on the edge swipe.
 - **Open by edge swipe:** open Settings by swiping inward from the chosen **Swipe edge** (left, right, top, or bottom). This also works while the tile is visible.
 
-To show the tile again, drag it from the field below the preview back into a free Home cell. Restoring it requires a free 1×1 cell.
+To show the tile again, drag it from the field below the preview back into a free Home area that fits its saved size. Its size is preserved, including 1×0.5.
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">

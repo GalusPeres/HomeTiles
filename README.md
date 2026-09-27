@@ -12,7 +12,7 @@ Touch dashboards for Home Assistant on ESP32-P4 and ESP32-S3 displays.
 
 Control lights, covers, heating and music, or display sensors, energy statistics and weather. Arrange tiles and folders in the built-in Web Admin, with a live preview and automatic saving. A configurable screensaver adds a clock, photos and tiles.
 
-**New in [v0.6.10](docs/releases/v0.6.10.md):** Number, Select and Date/Time controls with history, display navigation from Home Assistant, two-line titles, Waveshare LCD-4 Rev 4.0 support, and the hardware-confirmed Guition JC8012 V1 Camera/Web OTA transport fix.
+**New in [v0.7.0](docs/releases/v0.7.0.md):** half-step layouts, adjustable tile corners, icon circles and color rules, built-in cameras shared with Home Assistant, and improved Settings editing and folder-cache memory use. Update HomeTiles Bridge to **v0.7.0** first and [export your dashboard before updating](https://galusperes.github.io/updating/).
 
 ## Get started
 

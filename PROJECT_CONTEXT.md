@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-09-11
+Last reviewed: 2026-09-27
 
 ## Sources of truth
 
@@ -17,7 +17,7 @@ Last reviewed: 2026-09-11
 - v0.6.12: `9605b6a`, CI `34353664113`, 15 profiles / 30 images; 102 tests pass. Guition V1/V2 PPA and Weather fixes; V2 confirmed, V1 hardware pending.
 - Stabilization: display/MQTT guards, Light coalescing, incremental Weather (`e3de63c`-`33b4e06`).
 - S3 TLS fallback: 87 tests/three builds pass; Guition OTA passed, Waveshare S3 pending. Earlier watchdogs unproven: `build/s3-ota-release-v0.6.10/`.
-- Guition S3 XIP/`-O2` was reverted in `5279456`: increased risk without solving measured interaction problems. Do not reintroduce without evidence.
+- Guition S3 XIP/`-O2` reverted in `5279456` (more risk, no measured gain); do not reintroduce without evidence.
 
 ## Hardware validation
 
@@ -71,7 +71,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Bridge v0.6.44 (`148dec4`) on HACS: stale icon cache fixed, overrides preserved. v0.6.10 includes `84511da` plus title/color fixes.
 - Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
-- Editable surfaces follow tile color, white text unchanged; selection white with surface-colored text; S3 arrow 20px. 4096 colors/seven layouts tested: `build/editable-colors-view/`.
+- Editable surfaces follow tile color, white text unchanged; selection white with surface-colored text; S3 arrow 20px.
 - Wi-Fi idle/reconnect gaps remain unfixed; findings/probes: `build/wifi-power-audit/VERIFICATION.md`.
 - Titles: two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings record v4 unchanged. View labels flatten CR/LF for Bridge compatibility. Maintainer approved.
 - S3 froze adding Number to active screensaver: Web answered, save persisted, user rebooted; crash log has an older ELF. Cause unproven; retained as a release validation limitation.
@@ -81,23 +81,22 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - v0.6.11: `3b534ab` shared frame/header/close with cached bodies; matching content stays visible, cold content waits for first frame. Close/switch/delete cancel work; PIN retained. Settings forms disposable, Camera preloaded.
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings in PSRAM, no extra framebuffers.
-- Popup/title fixes accepted on 8-inch, Guition S3, 4B and Tab5; native tests cover 17 profiles. Pressed-state layout fix: `build/tile-state-layout/`; title evidence: `build/weather-title-ellipsis/`, `build/test-devices-popup-title/`.
-- Reused PIN popup full title corrected (Tab5 confirmed): `build/pin-popup-title/`. Broader artwork/controls, sleep/wake, camera/Hosted soak and memory minima pending.
+- Popup/title fixes accepted on 8-inch, Guition S3, 4B and Tab5; native tests cover 17 profiles.
+- PIN popup title fixed (Tab5). Pending: artwork/controls, sleep/wake, camera/Hosted soak, memory minima.
 
 ## Radius and half-grid
 
 - NVS radius: old radius to `(cell h - gap)/4`, unset = max; tile color `#1A1A1A`; new icon tiles "From icon" 20 %. Used by tiles, Climate, popups, previews.
-- Radius/close-highlight V2 accepted; reboot pending. Evidence: `build/global-radius-guition-v2-corrections/`.
-- Half-grid: Sensor/Binary/Energy height 0.5, width >=1 in half steps; original 2x1. Whole layouts/V7 size unchanged; header bits store fractions. Fractional-layout downgrade unsupported.
+- Half-grid: Sensor/Binary/Energy height 0.5, width >=1 in half steps; original 2x1. Whole layouts/V7 size unchanged; header bits store fractions. Downgrade to 0.6.x only after all tiles are whole (`docs/updating.md`).
 - Device/Web: concentric icon radius, original title font, smaller default value font; explicit sizes respected; text gap 0. Masking declined.
 - Half-grid reflow restored; drafts/rollback retain positions, stale GETs preserve edits. Empty 1x1 slots now scan both axes in half steps without overlaps. Settings/Back integral.
 - Hidden Climate reset crashed on fractional Sensor width; Climate-only integer guard fixes it; browser regression covers switching/autosave.
 - Binary Sensor now shares Sensor value sizes (20/24/32/40); default preserves old layout. Stored in existing V7 field; editor, import and previews retain it.
-- Hardware pending: screensaver child-click `build/screensaver-click-guition-v2/`, Energy compact/empty slots `build/half-grid-empty-guition-v2/`.
+- HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
 
 - Popup-overlapped buttons briefly appear square; deferred by user, no fix.
 
-- Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it. V2 BIN `build/clock-text-border-guition-v2/` (SHA256 `8752AF47...62C4`); hardware pending.
+- Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it.
 - Open: cross-grid import clamps whole tiles to half steps (HTTP 400), snapshot type accepts halves, value fonts 32/40 clip in half tiles.
 
 ## Local camera (branch `local-camera-beta`)
@@ -108,6 +107,13 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Advanced: `lcam_rot` (180 = flip, odd = `rotate` 90), `lcam_rbswap` (Bayer, next start).
 - HW pending: b30 CSI/ISP, q10; b31 gain, q10-90; b32 screenshot; b33 Wi-Fi/AP, kbd, #43; b34 rotation, boards; b35 sleep stream/indicator wake, Tab5 1% wake, S3 150Hz.
 - Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
+
+## v0.7.0 release prep
+
+- Branch `local-camera-beta`, local only; V2 test BINs to b72 in `build/guition-v2-test/`; FW_VERSION v0.6.12bNN.
+- Next, each with the user's OK: push + PR to `main` (CI builds all 15 profiles); CI BINs for 5 devices; Bridge v0.6.48 first; v0.7.0 version/notes; merge + tag back to back per `RELEASING.md`.
+- Docs refreshed; missing shots: heat-only Climate, Screensaver editor, I/O tab, Settings tile.
+- After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 
 ## Maintenance
 
@@ -120,5 +126,5 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Stable tile IDs use reserved PackedTileV7 bytes and durable counters; MQTT sessions/sequences/deadlines reject replay.
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
 - Commands validate targets/availability/features; ignore retained commands. Battery is a stub; unsupported probes stay unregistered.
-- View/editable controls confirmed on 8-inch/S3; tests/BINs: `build/editable-colors-view/VERIFICATION.md`. HA migration, legacy firmware and lifecycle coverage pending.
+- View/editable controls confirmed on 8-inch/S3. HA migration, legacy firmware and lifecycle coverage pending.
 - Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; local reception grows to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending. Maintainer log: no unplanned MQTT loss over ~8 h.

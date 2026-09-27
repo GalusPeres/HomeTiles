@@ -31,8 +31,8 @@ assert.equal((config.match(/config\.icon_discs = true;/g) || []).length, 2, 'Bot
 // Endpoints only set flags; the UI loop applies the change.
 const handlers = read('src/web/server/handlers/web_admin_handlers.cpp');
 const routes = read('src/web/server/web_admin.cpp');
-assert.match(routes, /"\/api\/display\/icon-discs", HTTP_POST,\s*withStorageHold\(\[this\]\(\) \{ this->handleSaveIconDiscs\(\); \}\)/);
-assert.match(routes, /"\/api\/display\/tile-color", HTTP_POST,\s*withStorageHold\(\[this\]\(\) \{ this->handleSaveDefaultTileColor\(\); \}\)/);
+assert.match(routes, /"\/api\/display\/icon-discs", HTTP_POST,\s*(?:guarded\()?withStorageHold\(\[this\]\(\) \{ this->handleSaveIconDiscs\(\); \}\)/);
+assert.match(routes, /"\/api\/display\/tile-color", HTTP_POST,\s*(?:guarded\()?withStorageHold\(\[this\]\(\) \{ this->handleSaveDefaultTileColor\(\); \}\)/);
 const discHandler = handlers.slice(handlers.indexOf('void WebAdminServer::handleSaveIconDiscs()'));
 assert.match(discHandler.slice(0, discHandler.indexOf('\n}\n')), /configManager\.saveIconDiscs\(enabled\)[\s\S]*ui_surface_style::request_icon_disc_refresh\(\);/);
 const colorHandler = handlers.slice(handlers.indexOf('void WebAdminServer::handleSaveDefaultTileColor()'));

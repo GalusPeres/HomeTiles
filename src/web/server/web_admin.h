@@ -97,9 +97,21 @@ public:
   void handleCoreDumpErase();
   void handleCrashLogDownload();
   void handleSdDiagnosticsDownload();
+  void handleAuthChallenge();
+  void handleAuthLogin();
+  void handleAuthLogout();
+  void handleAuthPassword();
+
+  // Optional Web Admin password (web_admin_auth_handlers.cpp). Without a
+  // password every check passes. authorizeRequest() sends the 401/403 reply
+  // itself; the upload helpers gate chunk callbacks of multipart/raw uploads.
+  bool authorizeRequest();
+  bool authorizeUploadChunk(bool starting);
+  void finishUploadRequest();
 
   // HTML pages, implemented in web_admin_html.cpp.
   String getAdminPage();
+  String getLoginPage();
   String getSuccessPage();
   String getBridgeSuccessPage();
   String getStatusJSON();

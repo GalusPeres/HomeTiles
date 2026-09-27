@@ -25,6 +25,16 @@ const assets = [
     generated: 'src/web/generated/admin_js_gzip.inc',
     extension: 'js',
     contentType: 'application/javascript; charset=utf-8'
+  },
+  {
+    // Login page and Web Admin password helpers (SHA-256/HMAC, CSRF header).
+    // Served without a session, so it must stay free of device data.
+    key: 'AuthJs',
+    name: 'auth',
+    source: 'src/web/assets/auth.js',
+    generated: 'src/web/generated/auth_js_gzip.inc',
+    extension: 'js',
+    contentType: 'application/javascript; charset=utf-8'
   }
 ];
 
@@ -76,7 +86,7 @@ writeOrCheck('src/web/assets/admin.js', readAdminBundle(repoRoot).source);
 const generated = await Promise.all(assets.map(async asset => {
   const source = normalizedSource(asset.source);
   const sourceBytes = Buffer.from(source, 'utf8');
-  const delivery = asset.key === 'Js' ? await formatAdminDelivery(source) : source;
+  const delivery = asset.extension === 'js' ? await formatAdminDelivery(source) : source;
   const deliveryBytes = Buffer.from(delivery, 'utf8');
   // Hash the decoded HTTP response, so a formatter update cannot reuse an
   // immutable asset URL for different delivered bytes. ETags identify gzip.
@@ -103,7 +113,7 @@ for (const asset of generated) {
   const shortHash = asset.hash.slice(0, 12);
   metaLines.push(
     `inline constexpr char kAdmin${asset.key}Path[] =`,
-    `    "/assets/admin.${shortHash}.${asset.extension}";`,
+    `    "/assets/${asset.name || 'admin'}.${shortHash}.${asset.extension}";`,
     `inline constexpr char kAdmin${asset.key}Etag[] =`,
     `    "\\\"${asset.gzipHash}\\\"";`,
     `inline constexpr char kAdmin${asset.key}ContentType[] =`,

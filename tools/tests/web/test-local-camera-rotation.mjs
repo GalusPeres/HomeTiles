@@ -333,13 +333,18 @@ assert.match(css, /\.local-camera-advanced > summary \{[^}]*cursor:pointer;[^}]*
 assert.match(css, /\.local-camera-advanced > summary::-webkit-details-marker \{ display:none; \}/);
 assert.match(css, /\.local-camera-advanced\[open\] > summary::before \{ transform:rotate\(45deg\); \}/);
 
-// --- Translations: every language table ends with the new texts ------------------
+// --- Translations: every language table holds the texts at their position ------
 const newKeys = ['local_camera_advanced', 'local_camera_rotation', 'local_camera_rb_swap',
   'local_camera_rb_swap_note'];
+let membersAfter = 0;
 {
   const members = [...header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')))
     .matchAll(/^\s*const char\* (\w+);/gm)].map(match => match[1]);
-  assert.deepEqual(members.slice(-newKeys.length), newKeys, 'The new members close i18n::Strings');
+  const blockStart = members.indexOf(newKeys[0]);
+  assert.deepEqual(members.slice(blockStart, blockStart + newKeys.length), newKeys,
+    'The new members close the local camera block of i18n::Strings');
+  // Later features append their own members after this block.
+  membersAfter = members.length - (blockStart + newKeys.length);
 }
 const expected = {
   kStringsEn: ['Advanced', 'Rotation', 'Swap red and blue'],
@@ -354,7 +359,8 @@ for (const table of tables) {
   assert.notEqual(start, -1, table);
   const values = [...i18n.slice(start, i18n.indexOf('};', start)).matchAll(/"((?:\\.|[^"\\])*)"/g)]
     .map(match => match[1]);
-  tails[table] = values.slice(-newKeys.length);
+  tails[table] = values.slice(values.length - membersAfter - newKeys.length,
+                              values.length - membersAfter);
   assert.deepEqual(tails[table].slice(0, 3), expected[table], `${table} labels`);
   assert.ok(tails[table][3].length > 20, `${table} has the red/blue swap note`);
 }

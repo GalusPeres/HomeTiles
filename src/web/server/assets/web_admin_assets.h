@@ -8,8 +8,11 @@
 // deterministic gzip byte arrays by tools/generate-web-assets.mjs.
 const char* adminCssAssetPath();
 const char* adminJsAssetPath();
+// Login and password helpers; public so the login page can load it.
+const char* authJsAssetPath();
 
 void sendAdminCssAsset(WebServer& server);
 void sendAdminJsAsset(WebServer& server);
+void sendAuthJsAsset(WebServer& server);
 
 #endif  // WEB_ADMIN_ASSETS_H

@@ -2,8 +2,18 @@
 #define WEB_ADMIN_HTML_H
 
 #include <Arduino.h>
+#include <WebServer.h>
+
+namespace i18n {
+struct Strings;
+}
 
 bool buildAdminFolderTabFragments(uint16_t folder_id, String& button_html, String& tab_html, String& tab_id);
+
+// Optional Web Admin password (web_admin_security_html.cpp): the settings
+// section and the per-session CSRF meta tag of the admin page.
+void appendWebAdminPasswordSettingsHtml(String& html, const i18n::Strings& tr);
+void appendWebAdminCsrfMeta(String& html, WebServer& server);
 
 // Forward declaration to avoid circular dependency
 class WebAdminServer;

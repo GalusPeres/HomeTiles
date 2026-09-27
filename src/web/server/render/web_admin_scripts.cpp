@@ -140,6 +140,12 @@ void appendAdminScripts(String& html) {
   appendJsEntry("ioCouldNotLoad", tr.admin_io_could_not_load);
   appendJsEntry("ioRestartUnsavedConfirm", tr.admin_io_restart_unsaved_confirm);
   appendJsEntry("ioRestarting", tr.admin_io_restarting);
+  appendJsEntry("webAuthTooShort", tr.web_auth_too_short);
+  appendJsEntry("webAuthMismatch", tr.web_auth_mismatch);
+  appendJsEntry("webAuthSaved", tr.web_auth_saved);
+  appendJsEntry("webAuthRemoved", tr.web_auth_removed);
+  appendJsEntry("webAuthChangeFailed", tr.web_auth_change_failed);
+  appendJsEntry("webAuthRemoveConfirm", tr.web_auth_remove_confirm);
   html += "  };\n";
   html += "  const GRID_COLS = " + String(GRID_COLS) + ";\n";
   html += "  const GRID_ROWS = " + String(GRID_ROWS) + ";\n";
@@ -161,6 +167,12 @@ void appendAdminScripts(String& html) {
   // available before the deferred static application script executes.
   append_tile_type_scripts(html);
 
+  // The password helpers run first: on a protected panel they add the CSRF
+  // header to every request admin.js sends.
+  html += R"html(  <script defer src=")html";
+  html += authJsAssetPath();
+  html += R"html("></script>
+)html";
   html += R"html(  <script defer src=")html";
   html += adminJsAssetPath();
   html += R"html("></script>

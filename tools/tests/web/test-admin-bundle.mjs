@@ -36,7 +36,8 @@ const writeManifest = sources => write('src/web/admin/bundle.json',
   JSON.stringify({ version: 1, sources }));
 const unit = 'src/web/admin/core.js';
 const outputs = ['src/web/assets/admin.js', 'src/web/generated/admin_js_gzip.inc',
-  'src/web/generated/admin_css_gzip.inc', 'src/web/generated/admin_assets_meta.h'];
+  'src/web/generated/admin_css_gzip.inc', 'src/web/generated/auth_js_gzip.inc',
+  'src/web/generated/admin_assets_meta.h'];
 try {
   fs.mkdirSync(path.join(fixture, 'src/types'), { recursive: true });
   fs.mkdirSync(path.join(fixture, 'src/web/generated'), { recursive: true });
@@ -56,6 +57,7 @@ try {
   assert.throws(() => readAdminBundle(fixture), /missing from the manifest/);
   writeManifest([unit, 'src/types/example/admin.js']);
   write('src/web/assets/admin.css', 'body { color: red; }\n');
+  write('src/web/assets/auth.js', 'window.HomeTilesAuth = {};\n');
   write('tools/generate-web-assets.mjs', read('tools/generate-web-assets.mjs'));
   write('tools/lib/admin-bundle.mjs', read('tools/lib/admin-bundle.mjs'));
   write('tools/lib/admin-delivery.mjs', read('tools/lib/admin-delivery.mjs'));

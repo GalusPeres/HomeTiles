@@ -2,6 +2,7 @@
 #include "src/web/server/assets/web_admin_assets.h"
 #include "src/web/server/assets/web_admin_fonts.h"
 #include "src/web/server/web_admin_utils.h"
+#include "src/web/server/auth/web_admin_auth.h"
 #include "src/network/transport/network_transport.h"
 #include "src/video/local_camera/local_camera.h"
 
@@ -58,6 +59,7 @@ bool WebAdminServer::start() {
     return false;
   }
 
+  web_admin_auth::begin();
   // WebServer::stop() retains handlers. Register once so repeated Wi-Fi/AP
   // cycles do not allocate duplicate routes in internal heap.
   if (!routes_registered) {
@@ -65,122 +67,181 @@ bool WebAdminServer::start() {
         "Content-Length",
         "Content-Type",
         "X-HomeTiles-OTA-Filename",
+        // Optional Web Admin password: session cookie and CSRF header.
+        "Cookie",
+        "X-HomeTiles-CSRF",
     };
     server.collectHeaders(request_headers,
                           sizeof(request_headers) / sizeof(request_headers[0]));
+
+    // Every route except the login page, the login endpoints and static
+    // assets passes the optional password check first. Without a password
+    // the check always passes, so the routes behave exactly as before.
+    auto guarded = [this](auto handler) {
+      return [this, handler]() {
+        if (!this->authorizeRequest()) return;
+        handler();
+      };
+    };
+    // Upload chunks arrive before the final handler runs. They are dropped
+    // unless the request carries a valid session and CSRF token.
+    auto guardedUpload = [this](auto handler) {
+      return [this, handler]() {
+        if (!this->authorizeUploadChunk(this->server.upload().status ==
+                                        UPLOAD_FILE_START)) {
+          return;
+        }
+        handler();
+      };
+    };
+    auto guardedRaw = [this](auto handler) {
+      return [this, handler]() {
+        if (!this->authorizeUploadChunk(this->server.raw().status == RAW_START)) {
+          return;
+        }
+        handler();
+      };
+    };
+    auto guardedUploadDone = [this](auto handler) {
+      return [this, handler]() {
+        this->finishUploadRequest();
+        if (!this->authorizeRequest()) return;
+        handler();
+      };
+    };
 
     server.on("/", [this]() { this->handleRoot(); });
     server.on("/assets/inter-4.1-regular.woff2", HTTP_GET,
               [this]() { sendWebFontRegular(this->server); });
     server.on("/assets/inter-4.1-semibold.woff2", HTTP_GET,
               [this]() { sendWebFontSemibold(this->server); });
+    // The stylesheet and the login script are needed by the login page and
+    // hold no device data.
     server.on(adminCssAssetPath(), HTTP_GET,
               [this]() { sendAdminCssAsset(this->server); });
+    server.on(authJsAssetPath(), HTTP_GET,
+              [this]() { sendAuthJsAsset(this->server); });
     server.on(adminJsAssetPath(), HTTP_GET,
-              [this]() { sendAdminJsAsset(this->server); });
-    server.on("/mqtt", HTTP_POST, withStorageHold([this]() { this->handleSaveMQTT(); }));
-    server.on("/status", [this]() { this->handleStatus(); });
+              guarded([this]() { sendAdminJsAsset(this->server); }));
+    server.on("/api/auth/challenge", HTTP_GET,
+              [this]() { this->handleAuthChallenge(); });
+    server.on("/api/auth/login", HTTP_POST,
+              [this]() { this->handleAuthLogin(); });
+    server.on("/api/auth/logout", HTTP_POST,
+              [this]() { this->handleAuthLogout(); });
+    server.on("/api/auth/password", HTTP_POST,
+              withStorageHold([this]() { this->handleAuthPassword(); }));
+    server.on("/mqtt", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveMQTT(); })));
+    server.on("/status", guarded([this]() { this->handleStatus(); }));
     server.on("/bridge_refresh", HTTP_POST,
-              [this]() { this->handleBridgeRefresh(); });
-    server.on("/bridge", HTTP_POST, withStorageHold([this]() { this->handleSaveBridge(); }));
-    server.on("/restart", HTTP_POST, [this]() { this->handleRestart(); });
-    server.on("/api/status", [this]() { this->handleStatus(); });
-    server.on("/api/tiles", HTTP_GET, [this]() { this->handleGetTiles(); });
-    server.on("/api/tiles", HTTP_POST, withStorageHold([this]() { this->handleSaveTiles(); }));
+              guarded([this]() { this->handleBridgeRefresh(); }));
+    server.on("/bridge", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveBridge(); })));
+    server.on("/restart", HTTP_POST,
+              guarded([this]() { this->handleRestart(); }));
+    server.on("/api/status", guarded([this]() { this->handleStatus(); }));
+    server.on("/api/tiles", HTTP_GET,
+              guarded([this]() { this->handleGetTiles(); }));
+    server.on("/api/tiles", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveTiles(); })));
     server.on("/api/tiles/reorder", HTTP_POST,
-              withStorageHold([this]() { this->handleReorderTiles(); }));
-    server.on("/api/folders", HTTP_GET, [this]() { this->handleGetFolders(); });
+              guarded(withStorageHold([this]() { this->handleReorderTiles(); })));
+    server.on("/api/folders", HTTP_GET,
+              guarded([this]() { this->handleGetFolders(); }));
     server.on("/api/folders/tab", HTTP_GET,
-              [this]() { this->handleGetFolderTab(); });
+              guarded([this]() { this->handleGetFolderTab(); }));
     server.on("/api/folders/access", HTTP_POST,
-              withStorageHold([this]() { this->handleSaveFolderAccess(); }));
+              guarded(withStorageHold([this]() { this->handleSaveFolderAccess(); })));
     server.on("/api/folders/delete", HTTP_POST,
-              withStorageHold([this]() { this->handleDeleteFolder(); }));
+              guarded(withStorageHold([this]() { this->handleDeleteFolder(); })));
     server.on("/api/sensor_values", HTTP_GET,
-              [this]() { this->handleGetSensorValues(); });
+              guarded([this]() { this->handleGetSensorValues(); }));
     server.on("/api/entity_options", HTTP_GET,
-              [this]() { this->handleGetEntityOptions(); });
+              guarded([this]() { this->handleGetEntityOptions(); }));
     server.on("/api/screensaver", HTTP_GET,
-              [this]() { this->handleGetScreensaver(); });
+              guarded([this]() { this->handleGetScreensaver(); }));
     server.on("/api/screensaver", HTTP_POST,
-              withStorageHold([this]() { this->handleSaveScreensaver(); }));
+              guarded(withStorageHold([this]() { this->handleSaveScreensaver(); })));
     server.on("/api/hardware-io", HTTP_GET,
-              [this]() { this->handleGetHardwareIo(); });
+              guarded([this]() { this->handleGetHardwareIo(); }));
     server.on("/api/hardware-io", HTTP_POST,
-              withStorageHold([this]() { this->handleSaveHardwareIo(); }));
-    server.on("/api/display/tile-radius", HTTP_GET, [this]() { handleTileRadius(); });
-  server.on("/api/display/tile-radius", HTTP_POST, [this]() {
-    // The live preview (preview=1) only changes the style; saving writes NVS.
-    local_camera::ScopedStorageHold hold(server.arg("preview") != "1");
-    handleTileRadius();
-  });
-  server.on("/api/display/tile-borders", HTTP_POST,
-              withStorageHold([this]() { this->handleSaveTileBorders(); }));
-  server.on("/api/display/icon-discs", HTTP_POST,
-              withStorageHold([this]() { this->handleSaveIconDiscs(); }));
-  server.on("/api/display/icon-glow", HTTP_POST,
-              withStorageHold([this]() { this->handleSaveIconGlow(); }));
-  server.on("/api/display/tile-color", HTTP_POST,
-              withStorageHold([this]() { this->handleSaveDefaultTileColor(); }));
+              guarded(withStorageHold([this]() { this->handleSaveHardwareIo(); })));
+    server.on("/api/display/tile-radius", HTTP_GET,
+              guarded([this]() { handleTileRadius(); }));
+    server.on("/api/display/tile-radius", HTTP_POST, guarded([this]() {
+      // The live preview (preview=1) only changes the style; saving writes NVS.
+      local_camera::ScopedStorageHold hold(server.arg("preview") != "1");
+      handleTileRadius();
+    }));
+    server.on("/api/display/tile-borders", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveTileBorders(); })));
+    server.on("/api/display/icon-discs", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveIconDiscs(); })));
+    server.on("/api/display/icon-glow", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveIconGlow(); })));
+    server.on("/api/display/tile-color", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveDefaultTileColor(); })));
     server.on("/api/local-camera", HTTP_GET,
-              [this]() { this->handleLocalCamera(); });
+              guarded([this]() { this->handleLocalCamera(); }));
     server.on("/api/local-camera", HTTP_POST,
-              [this]() { this->handleLocalCamera(); });
+              guarded([this]() { this->handleLocalCamera(); }));
     server.on("/api/screensaver/wallpaper", HTTP_GET,
-              [this]() { this->handleGetScreensaverWallpaper(); });
+              guarded([this]() { this->handleGetScreensaverWallpaper(); }));
     server.on("/api/sd_images", HTTP_GET,
-              [this]() { this->handleGetSdImages(); });
+              guarded([this]() { this->handleGetSdImages(); }));
     server.on("/api/sd_icons", HTTP_GET,
-              [this]() { this->handleGetSdIcons(); });
+              guarded([this]() { this->handleGetSdIcons(); }));
     server.on("/api/screenshot", HTTP_POST,
-              [this]() { this->handleCreateScreenshot(); });
+              guarded([this]() { this->handleCreateScreenshot(); }));
     server.on("/api/screenshot/download", HTTP_GET,
-              [this]() { this->handleDownloadScreenshot(); });
+              guarded([this]() { this->handleDownloadScreenshot(); }));
     server.on("/api/ota/prepare", HTTP_POST,
-              [this]() { this->handlePrepareOtaUpload(); });
+              guarded([this]() { this->handlePrepareOtaUpload(); }));
     server.on(
-        "/api/ota/upload", HTTP_POST, [this]() { this->handleOtaUploadDone(); },
-        [this]() { this->handleOtaUpdate(); });
+        "/api/ota/upload", HTTP_POST,
+        guardedUploadDone([this]() { this->handleOtaUploadDone(); }),
+        guardedUpload([this]() { this->handleOtaUpdate(); }));
     server.on(
         "/api/ota/upload/raw", HTTP_POST,
-        [this]() { this->handleOtaUploadDone(); },
-        [this]() { this->handleOtaRawUpdate(); });
+        guardedUploadDone([this]() { this->handleOtaUploadDone(); }),
+        guardedRaw([this]() { this->handleOtaRawUpdate(); }));
     server.on("/api/ota/install", HTTP_POST,
-              [this]() { this->handleStartOtaInstall(); });
+              guarded([this]() { this->handleStartOtaInstall(); }));
     server.on("/api/ota/status", HTTP_GET,
-              [this]() { this->handleGetOtaStatus(); });
+              guarded([this]() { this->handleGetOtaStatus(); }));
     server.on("/api/ota/github/check", HTTP_POST,
-              [this]() { this->handleGithubUpdateCheck(); });
+              guarded([this]() { this->handleGithubUpdateCheck(); }));
     server.on("/api/ota/github/install", HTTP_POST,
-              [this]() { this->handleGithubUpdateInstall(); });
+              guarded([this]() { this->handleGithubUpdateInstall(); }));
     server.on("/api/ota/github/status", HTTP_GET,
-              [this]() { this->handleGetGithubUpdateStatus(); });
+              guarded([this]() { this->handleGetGithubUpdateStatus(); }));
     server.on(
         "/api/upload_icon", HTTP_POST,
-        [this]() { this->handleUploadIconDone(); },
-        [this]() { this->handleUploadIcon(); });
+        guardedUploadDone([this]() { this->handleUploadIconDone(); }),
+        guardedUpload([this]() { this->handleUploadIcon(); }));
     server.on("/api/files/list", HTTP_GET,
-              [this]() { this->handleFileManagerList(); });
+              guarded([this]() { this->handleFileManagerList(); }));
     server.on("/api/files/download", HTTP_GET,
-              [this]() { this->handleFileManagerDownload(); });
+              guarded([this]() { this->handleFileManagerDownload(); }));
     server.on("/api/files/delete", HTTP_POST,
-              withStorageHold([this]() { this->handleFileManagerDelete(); }));
+              guarded(withStorageHold([this]() { this->handleFileManagerDelete(); })));
     server.on("/api/files/rename", HTTP_POST,
-              withStorageHold([this]() { this->handleFileManagerRename(); }));
+              guarded(withStorageHold([this]() { this->handleFileManagerRename(); })));
     server.on("/api/files/mkdir", HTTP_POST,
-              withStorageHold([this]() { this->handleFileManagerMkdir(); }));
+              guarded(withStorageHold([this]() { this->handleFileManagerMkdir(); })));
     server.on(
         "/api/files/upload", HTTP_POST,
-        [this]() { this->handleFileManagerUploadDone(); },
-        [this]() { this->handleFileManagerUpload(); });
+        guardedUploadDone([this]() { this->handleFileManagerUploadDone(); }),
+        guardedUpload([this]() { this->handleFileManagerUpload(); }));
     server.on("/api/coredump", HTTP_GET,
-              [this]() { this->handleCoreDumpDownload(); });
+              guarded([this]() { this->handleCoreDumpDownload(); }));
     server.on("/api/coredump/erase", HTTP_POST,
-              withStorageHold([this]() { this->handleCoreDumpErase(); }));
+              guarded(withStorageHold([this]() { this->handleCoreDumpErase(); })));
     server.on("/api/crashlog", HTTP_GET,
-              [this]() { this->handleCrashLogDownload(); });
+              guarded([this]() { this->handleCrashLogDownload(); }));
     server.on("/api/sd-diagnostics", HTTP_GET,
-              [this]() { this->handleSdDiagnosticsDownload(); });
+              guarded([this]() { this->handleSdDiagnosticsDownload(); }));
     routes_registered = true;
   }
 
@@ -208,6 +269,14 @@ void WebAdminServer::handleRoot() {
   webAdminMarkActivity();
   server.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
   server.sendHeader("Pragma", "no-cache");
+  if (web_admin_auth::enabled()) {
+    const String cookie = server.header("Cookie");
+    if (web_admin_auth::checkRequest(cookie.c_str(), nullptr, false) !=
+        web_admin_auth::AccessResult::Allowed) {
+      sendChunkedResponse(server, 200, "text/html; charset=utf-8", getLoginPage());
+      return;
+    }
+  }
   sendChunkedResponse(server, 200, "text/html; charset=utf-8", getAdminPage());
   webAdminMarkActivity();
 }

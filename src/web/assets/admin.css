@@ -2546,3 +2546,13 @@
    .settings-note, the add button like the Copy/Paste/Delete actions. */
 .tile-icon-rule-add { margin-top:2px; padding:8px 10px; font-size:12px; }
 .tile-icon-color-fields .hint { font-size:12px; margin:4px 0 12px; }
+/* Optional Web Admin password: the login page reuses the admin card and brand
+   header in a narrow column; the settings section uses .settings-actions. */
+.login-wrapper { max-width:440px; height:auto; min-height:100vh; display:flex; align-items:center; }
+.login-wrapper .card { height:auto; width:100%; }
+.login-form { margin-bottom:0; }
+.login-form .section-title { margin:0; }
+.login-message { min-height:18px; font-size:13px; color:var(--text-3); }
+.login-message.is-error { color:var(--danger); }
+.web-auth-status { margin:0 0 14px; }
+.web-auth-actions { margin-top:16px; }

@@ -34,16 +34,22 @@ const stringsMembers = members.slice(0, members.indexOf('settings_tile_parking')
 for (const key of keys) {
   assert.ok(stringsMembers.includes(key), `${key} must be part of i18n::Strings`);
 }
-// The positional tables end with the new keys, in declaration order.
+// The positional tables hold the new keys in declaration order; later
+// features append their own members after this block.
 const lastKeys = stringsMembers.slice(-keys.length);
 assert.deepEqual(lastKeys, keys);
+const structMembers = [...header.slice(header.indexOf('struct Strings {'),
+  header.indexOf('\n};', header.indexOf('struct Strings {')))
+  .matchAll(/^\s*const char\* (\w+);/gm)].map(match => match[1]);
+const membersAfter = structMembers.length - (structMembers.indexOf(keys[0]) + keys.length);
 const tails = {};
 for (const table of ['kStringsDe', 'kStringsEn', 'kStringsFr']) {
   const start = i18n.indexOf(`static const Strings ${table} = {`);
   assert.notEqual(start, -1, table);
   const end = i18n.indexOf('};', start);
   const values = [...i18n.slice(start, end).matchAll(/"((?:\\.|[^"\\])*)"/g)].map(match => match[1]);
-  tails[table] = values.slice(-keys.length);
+  tails[table] = values.slice(values.length - membersAfter - keys.length,
+                              values.length - membersAfter);
   for (const [index, value] of tails[table].entries()) {
     assert.ok(value.trim().length > 0, `${table}.${keys[index]} must not be empty`);
   }
@@ -179,7 +185,7 @@ assert.doesNotMatch(markup, /id="local_camera_enabled"[^>]*\bname=/,
   'The opt-in must not be submitted with the /mqtt settings form');
 const visibleText = markup.replace(/<[^>]*>/g, ' ').replace(/[\s:]+/g, '');
 assert.equal(visibleText, '', 'No display text may be hard-coded in the section markup');
-assert.match(html, /\)html";\n  appendLocalCameraSettingsHtml\(html, tr\);\n  html \+= R"html\(\n          <div class="settings-section">\n            <div class="section-title">\)html";\n  html \+= tr\.admin_settings_screenshot;/);
+assert.match(html, /\)html";\n  (?:appendWebAdminPasswordSettingsHtml\(html, tr\);\n  )?appendLocalCameraSettingsHtml\(html, tr\);\n  html \+= R"html\(\n          <div class="settings-section">\n            <div class="section-title">\)html";\n  html \+= tr\.admin_settings_screenshot;/);
 assert.match(html, /if \(local_camera::supported\(\) && Device::kCapabilities\.has_builtin_camera\) \{\n    json \+= ",\\"local_camera\\":";\n    local_camera::appendStatusJson\(json\);\n  \}/,
   '/api/status exposes the camera status only on the exact camera profile');
 

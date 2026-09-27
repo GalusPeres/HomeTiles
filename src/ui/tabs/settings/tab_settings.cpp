@@ -24,6 +24,7 @@
 #include "src/core/i18n/i18n.h"
 #include "src/types/clock/clock_format.h"
 #include "src/web/setup/web_config.h"
+#include "src/web/server/auth/web_admin_auth.h"
 #include "src/ui/shared/ui_keyboard.h"
 #include "src/ui/startup/hometiles_logo.h"
 #include "src/ui/popups/popup_layout.h"
@@ -142,6 +143,13 @@ static lv_obj_t *system_pair_btn = nullptr;
 static lv_obj_t *system_action_row = nullptr;  // Restart and pairing row
 static lv_obj_t *system_qr = nullptr;
 static lv_obj_t *system_spacer = nullptr;
+// Security view: replaces branding, status and actions like the GitHub QR.
+static lv_obj_t *system_brand = nullptr;
+static lv_obj_t *system_security_btn = nullptr;
+static lv_obj_t *system_security_box = nullptr;
+static lv_obj_t *security_password_value = nullptr;
+static lv_obj_t *security_password_remove_btn = nullptr;
+static lv_obj_t *security_status_label = nullptr;
 static bool system_qr_sized = false;
 static bool system_check_running = false;
 static bool system_install_running = false;
@@ -1028,6 +1036,12 @@ static void reset_popup_refs() {
   system_action_row = nullptr;
   system_qr = nullptr;
   system_spacer = nullptr;
+  system_brand = nullptr;
+  system_security_btn = nullptr;
+  system_security_box = nullptr;
+  security_password_value = nullptr;
+  security_password_remove_btn = nullptr;
+  security_status_label = nullptr;
   system_qr_sized = false;
   system_check_running = false;
   system_install_running = false;
@@ -2473,7 +2487,7 @@ static void build_localization_popup(lv_obj_t* parent) {
 
 static void system_set_buttons_enabled(bool enabled) {
   lv_obj_t* btns[] = {system_check_btn, system_github_btn, system_reboot_btn,
-                      system_pair_btn};
+                      system_pair_btn, system_security_btn};
   for (lv_obj_t* btn : btns) {
     if (!btn) continue;
     lv_obj_set_style_opa(btn, enabled ? LV_OPA_COVER : LV_OPA_50, 0);
@@ -2558,12 +2572,137 @@ static void system_show_qr(bool show) {
 #endif
 }
 
+static bool system_security_visible() {
+  return system_security_box &&
+         !lv_obj_has_flag(system_security_box, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void system_show_security(bool show);
+
 static void on_system_github_clicked(lv_event_t*) {
   if (system_install_running) return;
 #if LV_USE_QRCODE
   if (!system_qr) return;
+  if (system_security_visible()) system_show_security(false);
   system_show_qr(lv_obj_has_flag(system_qr, LV_OBJ_FLAG_HIDDEN));
 #endif
+}
+
+// Security view: Web Admin password state and on-device removal, the recovery
+// path for a forgotten password. Settings itself may be behind the local PIN.
+static void security_refresh() {
+  const bool password_on = web_admin_auth::enabled();
+  if (security_password_value) {
+    lv_label_set_text(security_password_value,
+                      password_on ? tr().security_state_on
+                                  : tr().security_state_off);
+    lv_obj_set_style_text_color(security_password_value,
+                                lv_color_hex(password_on ? 0x51CF66 : 0xA8A8A8),
+                                0);
+  }
+  if (security_password_remove_btn) {
+    if (password_on) {
+      lv_obj_clear_flag(security_password_remove_btn, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(security_password_remove_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+}
+
+static void security_show_status(const char* text, uint32_t color) {
+  if (!security_status_label) return;
+  lv_label_set_text(security_status_label, text ? text : "");
+  lv_obj_set_style_text_color(security_status_label, lv_color_hex(color), 0);
+}
+
+static void on_security_remove_password_clicked(lv_event_t*) {
+  if (web_admin_auth::clearCredential()) {
+    security_show_status(tr().web_auth_removed, 0x51CF66);
+  } else {
+    security_show_status(tr().web_auth_change_failed, 0xFF6B6B);
+  }
+  security_refresh();
+}
+
+static void system_show_security(bool show) {
+  if (!system_security_box) return;
+  lv_obj_t* regular[] = {system_brand, system_info_rows, system_status_label,
+                         system_check_btn, system_action_row};
+  if (show) {
+    system_show_qr(false);
+    for (lv_obj_t* obj : regular) {
+      if (obj) lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    }
+    security_show_status("", 0xC8C8C8);
+    security_refresh();
+    lv_obj_clear_flag(system_security_box, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(system_security_box, LV_OBJ_FLAG_HIDDEN);
+    for (lv_obj_t* obj : regular) {
+      if (obj) lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+}
+
+static void on_system_security_clicked(lv_event_t*) {
+  if (system_check_running || system_install_running) return;
+  system_show_security(!system_security_visible());
+}
+
+static lv_obj_t* create_security_row(lv_obj_t* parent, const char* title,
+                                     lv_obj_t** value_out) {
+  lv_obj_t* row = lv_obj_create(parent);
+  style_plain_container(row);
+  lv_obj_set_width(row, LV_PCT(100));
+  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, popup_layout::scale(12), 0);
+  lv_obj_t* label = lv_label_create(row);
+  lv_label_set_text(label, title);
+  lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+  lv_obj_set_flex_grow(label, 1);
+  lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
+  lv_obj_set_style_text_color(label, lv_color_white(), 0);
+  lv_obj_t* value = lv_label_create(row);
+  lv_label_set_text(value, "");
+  lv_obj_set_style_text_font(value, popup_layout::font24(), 0);
+  lv_obj_set_style_text_color(value, lv_color_hex(0xA8A8A8), 0);
+  if (value_out) *value_out = value;
+  return row;
+}
+
+static void build_security_box(lv_obj_t* parent) {
+  system_security_box = lv_obj_create(parent);
+  style_plain_container(system_security_box);
+  lv_obj_set_width(system_security_box, LV_PCT(100));
+  lv_obj_set_height(system_security_box, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(system_security_box, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(system_security_box, LV_FLEX_ALIGN_START,
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(system_security_box, popup_layout::scale(14), 0);
+
+  create_security_row(system_security_box, tr().web_auth_section,
+                      &security_password_value);
+  security_password_remove_btn = create_popup_button(
+      system_security_box, tr().web_auth_remove, 0x424242,
+      on_security_remove_password_clicked);
+  lv_obj_set_width(security_password_remove_btn, LV_PCT(100));
+  lv_obj_set_height(security_password_remove_btn, popup_layout::scale(76));
+  lv_obj_t* remove_label = lv_obj_get_child(security_password_remove_btn, 0);
+  if (remove_label) {
+    lv_obj_set_style_text_font(remove_label, popup_layout::font28(), 0);
+  }
+
+  security_status_label = lv_label_create(system_security_box);
+  lv_obj_set_width(security_status_label, LV_PCT(100));
+  lv_label_set_long_mode(security_status_label, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(security_status_label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(security_status_label, popup_layout::font24(), 0);
+  lv_label_set_text(security_status_label, "");
+
+  lv_obj_add_flag(system_security_box, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void on_system_reboot_clicked(lv_event_t*) {
@@ -2654,6 +2793,7 @@ static void build_system_popup(lv_obj_t* parent) {
   // Branding at the top: icon on the left, product name beside it and
   // smaller version underneath, as in an app's About screen.
   lv_obj_t* brand = lv_obj_create(box);
+  system_brand = brand;
   style_plain_container(brand);
   lv_obj_clear_flag(brand, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(brand, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -2711,6 +2851,8 @@ static void build_system_popup(lv_obj_t* parent) {
   system_qr_sized = true;
   lv_obj_add_flag(system_qr, LV_OBJ_FLAG_HIDDEN);
 #endif
+
+  build_security_box(box);
 
   // Push status/progress and buttons downward; also measure available
   // space here when showing the QR code.
@@ -2799,9 +2941,18 @@ static void build_system_popup(lv_obj_t* parent) {
   lv_obj_set_style_text_font(pair_text, popup_layout::font28(), 0);
   lv_obj_set_style_text_color(pair_text, lv_color_white(), 0);
 
+  // GitHub and Security share the last row, matching the restart/pairing row.
+  lv_obj_t* link_row = lv_obj_create(box);
+  style_plain_container(link_row);
+  lv_obj_clear_flag(link_row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(link_row, LV_PCT(100));
+  lv_obj_set_height(link_row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(link_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(link_row, popup_layout::scale(12), 0);
+
   // GitHub button with icon and text inside, matching the rotation button
-  system_github_btn = create_popup_button(box, "", 0x424242, on_system_github_clicked);
-  lv_obj_set_width(system_github_btn, LV_PCT(100));
+  system_github_btn = create_popup_button(link_row, "", 0x424242, on_system_github_clicked);
+  lv_obj_set_flex_grow(system_github_btn, 1);
   lv_obj_set_height(system_github_btn, popup_layout::scale(76));
   lv_obj_set_flex_flow(system_github_btn, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(system_github_btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
@@ -2818,6 +2969,26 @@ static void build_system_popup(lv_obj_t* parent) {
   lv_label_set_text(gh_text, "GitHub");
   lv_obj_set_style_text_font(gh_text, popup_layout::font28(), 0);
   lv_obj_set_style_text_color(gh_text, lv_color_white(), 0);
+
+  system_security_btn = create_popup_button(link_row, "", 0x424242,
+                                            on_system_security_clicked);
+  lv_obj_set_flex_grow(system_security_btn, 1);
+  lv_obj_set_height(system_security_btn, popup_layout::scale(76));
+  lv_obj_set_flex_flow(system_security_btn, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(system_security_btn, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(system_security_btn, popup_layout::scale(14), 0);
+  lv_obj_t* security_icon = lv_obj_get_child(system_security_btn, 0);
+  if (security_icon) {
+    lv_label_set_text(security_icon, getMdiChar("shield-lock").c_str());
+    if (FONT_MDI_ICONS) lv_obj_set_style_text_font(security_icon, FONT_MDI_ICONS, 0);
+    popup_layout::applyIconScale(security_icon);
+  }
+  lv_obj_t* security_text = lv_label_create(system_security_btn);
+  lv_label_set_text(security_text, tr().security_btn);
+  lv_label_set_long_mode(security_text, LV_LABEL_LONG_DOT);
+  lv_obj_set_style_text_font(security_text, popup_layout::font28(), 0);
+  lv_obj_set_style_text_color(security_text, lv_color_white(), 0);
 }
 
 static const char* popup_title_for_kind(SettingsPopupKind kind) {

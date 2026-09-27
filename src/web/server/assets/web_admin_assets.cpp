@@ -14,12 +14,19 @@ static const uint8_t kAdminJsGzip[] PROGMEM = {
 #include "src/web/generated/admin_js_gzip.inc"
 };
 
+static const uint8_t kAuthJsGzip[] PROGMEM = {
+#include "src/web/generated/auth_js_gzip.inc"
+};
+
 static_assert(
     sizeof(kAdminCssGzip) == web_admin_assets_generated::kAdminCssGzipSize,
     "Generated admin CSS size mismatch");
 static_assert(
     sizeof(kAdminJsGzip) == web_admin_assets_generated::kAdminJsGzipSize,
     "Generated admin JavaScript size mismatch");
+static_assert(
+    sizeof(kAuthJsGzip) == web_admin_assets_generated::kAdminAuthJsGzipSize,
+    "Generated auth JavaScript size mismatch");
 
 struct GzipWebAsset {
   const uint8_t* data;
@@ -71,6 +78,10 @@ const char* adminJsAssetPath() {
   return web_admin_assets_generated::kAdminJsPath;
 }
 
+const char* authJsAssetPath() {
+  return web_admin_assets_generated::kAdminAuthJsPath;
+}
+
 void sendAdminCssAsset(WebServer& server) {
   const GzipWebAsset asset{
       kAdminCssGzip,
@@ -86,5 +97,14 @@ void sendAdminJsAsset(WebServer& server) {
       sizeof(kAdminJsGzip),
       web_admin_assets_generated::kAdminJsContentType,
       web_admin_assets_generated::kAdminJsEtag};
+  sendGzipProgmemAsset(server, asset);
+}
+
+void sendAuthJsAsset(WebServer& server) {
+  const GzipWebAsset asset{
+      kAuthJsGzip,
+      sizeof(kAuthJsGzip),
+      web_admin_assets_generated::kAdminAuthJsContentType,
+      web_admin_assets_generated::kAdminAuthJsEtag};
   sendGzipProgmemAsset(server, asset);
 }

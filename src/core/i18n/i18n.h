@@ -574,6 +574,34 @@ struct Strings {
   const char* local_camera_rb_swap;
   const char* local_camera_rb_swap_note;
 
+  // Optional Web Admin password: login page, Web Admin settings section and
+  // the Security view in the device System popup. %s is a number of seconds.
+  const char* web_auth_section;
+  const char* web_auth_status_on;
+  const char* web_auth_status_off;
+  const char* web_auth_new_password;
+  const char* web_auth_repeat_password;
+  const char* web_auth_set;
+  const char* web_auth_remove;
+  const char* web_auth_logout;
+  const char* web_auth_too_short;
+  const char* web_auth_mismatch;
+  const char* web_auth_saved;
+  const char* web_auth_removed;
+  const char* web_auth_change_failed;
+  const char* web_auth_remove_confirm;
+  const char* web_auth_note;
+  const char* web_auth_login_title;
+  const char* web_auth_password_label;
+  const char* web_auth_login_button;
+  const char* web_auth_checking;
+  const char* web_auth_wrong_password;
+  const char* web_auth_wait_fmt;
+  const char* web_auth_login_failed;
+  const char* web_auth_forgot;
+  const char* security_btn;
+  const char* security_state_on;
+  const char* security_state_off;
 };
 
 // Locale-specific display rules and short runtime strings shared by

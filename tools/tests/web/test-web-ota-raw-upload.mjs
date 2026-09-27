@@ -94,12 +94,14 @@ if (stagingPolicy.includes('DEVICE_WAVESHARE') ||
 
 requireMarker(server, '"/api/ota/upload/raw", HTTP_POST,',
   'Raw OTA route');
+// Both OTA routes pass the optional Web Admin password gate; upload chunks of
+// an unauthorised request never reach the OTA writer.
 requireMarker(server,
-  '"/api/ota/upload", HTTP_POST, [this]() { this->handleOtaUploadDone(); },',
+  '"/api/ota/upload", HTTP_POST,\n        guardedUploadDone([this]() { this->handleOtaUploadDone(); }),',
   'Legacy multipart OTA route');
-requireMarker(server, '[this]() { this->handleOtaUpdate(); });',
+requireMarker(server, 'guardedUpload([this]() { this->handleOtaUpdate(); }));',
   'Legacy multipart OTA callback');
-requireMarker(server, '[this]() { this->handleOtaRawUpdate(); });',
+requireMarker(server, 'guardedRaw([this]() { this->handleOtaRawUpdate(); }));',
   'Raw OTA callback');
 
 const browserUpload = functionBody(

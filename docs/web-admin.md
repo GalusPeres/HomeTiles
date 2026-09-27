@@ -198,7 +198,7 @@ To show the tile again, drag it from the field below the preview back into a fre
 </figure>
 </div>
 
-The public factory PIN **466384537** unlocks Settings and protected folders. This is a local child lock; the Web Admin has no login protection. PINs are excluded from dashboard exports.
+The public factory PIN **466384537** unlocks Settings and protected folders. This is a local child lock, not a login; protect the Web Admin itself with a [Web Admin password](#web-admin-password). PINs are excluded from dashboard exports.
 
 ## Screensaver Editor
 
@@ -213,6 +213,7 @@ The **Settings** tab contains:
 - **Network:** WiFi credentials, connection type on Ethernet-capable devices, and an optional static IP shared by WiFi and Ethernet.
 - **MQTT:** broker address, credentials, and topics; normally supplied by [pairing](home-assistant-setup.md).
 - **Localization:** language, time zone, and date/time formats.
+- **Web Admin password:** optional login for the Web Admin, see below.
 - **Built-in camera:** on displays with a camera, see below.
 
 <figure class="ht-screenshot">
@@ -221,6 +222,16 @@ The **Settings** tab contains:
 </figure>
 
 Use **Save** for the settings form. **Restart** is a separate action.
+
+### Web Admin Password { data-toc-label="Password" }
+
+The Web Admin is open to everyone on your network by default. Enter a new password twice and select **Set password** to protect every page and API request, including MQTT settings, restart, firmware upload, the file manager, and screenshots. The browser then shows a sign-in page first.
+
+- The password is never sent in plain text: the browser proves it with a one-time challenge, and the display stores only a salted hash.
+- Wrong passwords lock the sign-in for an increasing time, up to five minutes.
+- **Sign out** ends the browser session; **Remove password** opens the Web Admin to the network again.
+- Forgot the password? On the display, open **Settings → System → Security** and select **Remove password**.
+- When [pairing](home-assistant-setup.md) with the HomeTiles Bridge, enter the password in the Bridge setup dialog.
 
 ### Built-in Camera
 

@@ -55,6 +55,8 @@ A display without saved MQTT credentials announces itself on the network.
 2. Check the proposed broker address and port, then enter the MQTT username and password from Step 1.
 3. Keep the suggested unique base topic and confirm. The Bridge sends these settings to the display.
 
+If you set a [Web Admin password](web-admin.md#web-admin-password) on the display, enter it in the **Panel Web Admin password** field of the card; otherwise leave the field empty. The Bridge uses it only for this pairing and does not store it.
+
 <figure class="ht-screenshot">
 <img src="../images/bridge-devices.png" alt="Panels as devices in the bridge integration" width="1328" height="918" loading="lazy">
 <figcaption>Displays in the HomeTiles Bridge integration</figcaption>

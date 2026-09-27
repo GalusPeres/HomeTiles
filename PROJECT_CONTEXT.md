@@ -51,7 +51,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Reporter: JC8012P4A1 V2, SKU10153001-V2 (2632), `_I_W_Y`; #18 tested SKU10153002-V2 (2627), `_I_W_Y1`. Maintainer received JC8012P4A1C_I_W_Y1, SKU10153002-V2. Labels alone do not establish another panel variant.
 - V2 fixes committed in `e1a9297`: touch bounds, internal I2C atomic-state allocation, slot-aware SD cleanup; exact-V2 only. Beta `HOMETILES_ISSUE38_BETA` reports v0.6.12b1; release version stays v0.6.12.
-- SD: reporter card-init failure at 40 MHz, clock timeout on 20 MHz retry, then Hosted slot-1 assertion. V2 dropped DEINIT_ARG from default host flags; preserve defaults as V1 already does. Regression and V2 build pass; 105 tests. Maintainer beta SD diagnostic passes mkdir/write/read/remove (~8 GB). Without DEINIT_ARG, core 3.3.7 passes a pointer that deinit rejects, so slot 1 is untouched; assertion and card failure causes remain open. Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`; package/hash: `build/guition-v2-v0.6.12b1/VERIFICATION.md`.
+- SD (open in #55): 40 MHz card-init failure, 20 MHz retry timeout, then Hosted slot-1 assertion; V2 keeps default host flags without DEINIT_ARG (as V1), leaving slot 1 untouched; causes open. Beta SD diagnostic passes (~8 GB). Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`, `build/guition-v2-v0.6.12b1/VERIFICATION.md`.
 - Touch: maintainer confirms rapid-tap raw-bounds fix works. BIN/ELF: `build/guition-v2-touch/`.
 - Interrupt-WDT dump matches touch ELF SHA256 `af562d1cea4dc3d8096ec17cd631e45cc6d82ab1ea6fb0037c03e8638c234a67`; IDLE1 waits for interrupt, setup uploads touch firmware. I2C atomic-state object at `0x483e96bc` is in PSRAM. Backport `37758ef327f9` ensures internal allocation (ELF caps 0x804). Exposure proven, WDT causality unproven; no wall-clock timestamp. Evidence/hash: `build/guition-v2-crash-20260911/`.
 - Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. Released firmware v0.6.12 preserves daily extrema (24 C daily versus partial hourly 11 C).
@@ -131,3 +131,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Commands validate targets/availability/features; ignore retained commands. Battery is a stub; unsupported probes stay unregistered.
 - View/editable controls confirmed on 8-inch/S3. HA migration, legacy firmware and lifecycle coverage pending.
 - Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; local reception grows to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending. Maintainer log: no unplanned MQTT loss over ~8 h.
+
+## Security branch (unreleased)
+
+- Optional Web Admin password: salt/key only, HMAC challenge, sessions in PSRAM, CSRF header; removable on device (System > Security). Bridge uses it only for pairing. HW pending.

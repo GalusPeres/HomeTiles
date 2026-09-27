@@ -367,11 +367,15 @@
   function restartHardwareIoNow() {
     setHardwareIoSaveState(t('ioRestarting'), 'saving');
     const restartForm = document.getElementById('admin_restart_form');
-    if (restartForm) {
+    // form.submit() cannot carry the CSRF header a password-protected panel
+    // requires; send the same request with fetch and reload as before.
+    if (restartForm && !window.HomeTilesAuth?.csrfToken()) {
       window.setTimeout(() => restartForm.submit(), 100);
       return;
     }
-    fetch('/restart', {method: 'POST'}).catch(() => {});
+    fetch('/restart', {method: 'POST'}).catch(() => {}).finally(() => {
+      if (restartForm) window.setTimeout(() => window.location.assign('/'), 300);
+    });
   }
 
   async function saveHardwareIoNow() {

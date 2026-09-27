@@ -882,6 +882,73 @@ function syncTileRadiusControls(tabEl) {
       }
     });
   }
+  // Optional Web Admin password section (Settings tab). The password never
+  // leaves the browser: auth.js derives SHA-256(salt || password) and the
+  // panel stores only salt and key.
+  function initWebAdminPasswordSettings() {
+    const section = document.getElementById('web_auth_section');
+    const auth = window.HomeTilesAuth;
+    if (!section || !auth) return;
+    const input = document.getElementById('web_auth_password');
+    const repeat = document.getElementById('web_auth_password_repeat');
+    const setButton = document.getElementById('web_auth_set');
+    const removeButton = document.getElementById('web_auth_remove');
+    const logoutButton = document.getElementById('web_auth_logout');
+    const busy = value => {
+      [setButton, removeButton, logoutButton].forEach(button => {
+        if (button) button.disabled = value;
+      });
+    };
+
+    setButton?.addEventListener('click', async () => {
+      const password = String(input?.value || '');
+      if (password.length < 8) {
+        showNotification(t('webAuthTooShort'), false);
+        input?.focus();
+        return;
+      }
+      if (password !== String(repeat?.value || '')) {
+        showNotification(t('webAuthMismatch'), false);
+        repeat?.focus();
+        return;
+      }
+      busy(true);
+      try {
+        if (!await auth.setPassword(password)) throw new Error('set');
+        // Setting a password ends every session, including this one. Sign in
+        // again right away so the page stays usable.
+        const login = await auth.login(password);
+        if (input) input.value = '';
+        if (repeat) repeat.value = '';
+        showNotification(t('webAuthSaved'), true);
+        window.setTimeout(() => window.location.reload(), login.ok ? 400 : 1200);
+      } catch (error) {
+        showNotification(t('webAuthChangeFailed'), false);
+      } finally {
+        busy(false);
+      }
+    });
+
+    removeButton?.addEventListener('click', async () => {
+      if (!window.confirm(t('webAuthRemoveConfirm'))) return;
+      busy(true);
+      try {
+        if (!await auth.removePassword()) throw new Error('remove');
+        showNotification(t('webAuthRemoved'), true);
+        window.setTimeout(() => window.location.reload(), 400);
+      } catch (error) {
+        showNotification(t('webAuthChangeFailed'), false);
+      } finally {
+        busy(false);
+      }
+    });
+
+    logoutButton?.addEventListener('click', async () => {
+      busy(true);
+      await auth.logout();
+      window.location.replace('/');
+    });
+  }
 
   function togglePasswordVisibility(inputId, buttonEl) {
     const input = document.getElementById(inputId);
@@ -9721,11 +9788,15 @@ function syncTileRadiusControls(tabEl) {
   function restartHardwareIoNow() {
     setHardwareIoSaveState(t('ioRestarting'), 'saving');
     const restartForm = document.getElementById('admin_restart_form');
-    if (restartForm) {
+    // form.submit() cannot carry the CSRF header a password-protected panel
+    // requires; send the same request with fetch and reload as before.
+    if (restartForm && !window.HomeTilesAuth?.csrfToken()) {
       window.setTimeout(() => restartForm.submit(), 100);
       return;
     }
-    fetch('/restart', {method: 'POST'}).catch(() => {});
+    fetch('/restart', {method: 'POST'}).catch(() => {}).finally(() => {
+      if (restartForm) window.setTimeout(() => window.location.assign('/'), 300);
+    });
   }
 
   async function saveHardwareIoNow() {
@@ -9825,6 +9896,7 @@ function syncTileRadiusControls(tabEl) {
     toggleSettingsAccessFields();
     initSettingsAccessControls();
     initAdminSettingsSave();
+    initWebAdminPasswordSettings();
     initTileTabs();
     let initialTab = '';
     try { initialTab = localStorage.getItem('activeAdminTab') || ''; } catch (e) {}

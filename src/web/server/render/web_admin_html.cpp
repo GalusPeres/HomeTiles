@@ -12,6 +12,7 @@
 #include "src/network/transport/network_transport.h"
 #include "src/network/transport/usb_ethernet_backend.h"
 #include "src/web/server/render/web_admin_scripts.h"
+#include "src/web/server/render/web_admin_html.h"
 #include "src/web/server/render/web_admin_styles.h"
 #include "src/web/server/assets/web_admin_fonts.h"
 #include "src/web/server/handlers/web_admin_tile_helpers.h"
@@ -1513,6 +1514,7 @@ String WebAdminServer::getAdminPage() {
   html += R"html(</title>
 )html";
 
+  appendWebAdminCsrfMeta(html, server);
   appendAdminStyles(html);
   appendAdminScripts(html);
 
@@ -1905,6 +1907,7 @@ String WebAdminServer::getAdminPage() {
           </div>
 
 )html";
+  appendWebAdminPasswordSettingsHtml(html, tr);
   appendLocalCameraSettingsHtml(html, tr);
   html += R"html(
           <div class="settings-section">

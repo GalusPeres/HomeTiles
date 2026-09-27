@@ -5,6 +5,7 @@
     toggleSettingsAccessFields();
     initSettingsAccessControls();
     initAdminSettingsSave();
+    initWebAdminPasswordSettings();
     initTileTabs();
     let initialTab = '';
     try { initialTab = localStorage.getItem('activeAdminTab') || ''; } catch (e) {}

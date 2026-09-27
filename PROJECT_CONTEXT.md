@@ -74,7 +74,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Editable surfaces follow tile color, white text unchanged; selection white with surface-colored text; S3 arrow 20px.
 - Wi-Fi idle/reconnect gaps remain unfixed; findings/probes: `build/wifi-power-audit/VERIFICATION.md`.
 - Titles: two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged. View labels flatten CR/LF for Bridge. Maintainer approved.
-- S3 froze adding Number to active screensaver: Web answered, save persisted, user rebooted; crash log has an older ELF. Cause unproven; retained as a release validation limitation.
+- S3 froze adding Number to active screensaver: Web responded, save persisted; manual reboot. Older dump, cause unknown.
 
 ## Shared-popup/artwork baseline
 
@@ -111,8 +111,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## v0.7.0 release prep
 
 - PR #52, CI 36325726234 (`e6c7772`): 17 builds pass; BINs `build/ci-pr52-e6c7772/`.
-- Pending: HW tests; Bridge v0.6.48 and v0.7.0 notes/version/merge/tag need separate OK (`RELEASING.md`).
-- Cache b73 frees drained queue Strings; native tests/V2/S3 builds pass. V2 log: 76 cached switches, no eviction/rollback, final 124 KiB. Long-run/S3 HW pending.
+- Next: Bridge v0.6.48 (267 pass/1 skip), then v0.7.0 per `RELEASING.md`; each needs user OK.
+- Cache b73 frees drained queues. V2: 76 cached switches, final 124 KiB. Maintainer: all five CI devices stable, including S3.
+- S3 b61 dump: Web Admin file open failed to allocate a 92-byte internal mutex; not the new CI build.
 - CI 152 pass/21 skips; local 173 pass. Docs/Settings done; README pending; Tab5 custom.
 - After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 

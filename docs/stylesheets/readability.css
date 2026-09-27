@@ -157,7 +157,7 @@ html { scrollbar-gutter: stable; }
 /* Tile type pages: tiles and popups at one scale (60 % of the device pixels,
    set per image), so a tile keeps its real size next to its popup. */
 .md-typeset .ht-type-shots figure.ht-screenshot img { max-width: 100%; height: auto; }
-.md-typeset .ht-type-shots { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; margin: 16px 0 26px; }
+.md-typeset .ht-type-shots { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 20px; margin: 16px 0 26px; }
 .md-typeset .ht-type-shots figure.ht-screenshot { width: auto; max-width: 100%; margin: 0; flex: 0 1 auto; }
 .md-typeset .ht-type-shots .ht-type-stack { display: flex; flex-direction: column; gap: 20px; }
 .md-typeset .ht-type-shots figure.ht-screenshot.ht-popup { max-width: 100%; }
@@ -166,8 +166,6 @@ html { scrollbar-gutter: stable; }
 .md-typeset .ht-type-shots.ht-type-pair { flex-wrap: nowrap; }
 .md-typeset .ht-type-shots.ht-type-pair > .ht-type-stack { flex: 0 0 auto; }
 .md-typeset .ht-type-shots.ht-type-pair > figure.ht-popup { flex: 0 1 auto; min-width: 0; }
-/* Popups without a tile next to them sit in the middle. */
-.md-typeset .ht-type-shots.ht-type-center { justify-content: center; }
 @media (max-width: 600px) { .md-typeset .ht-type-shots.ht-type-pair { flex-wrap: wrap; } }
 
 /* Keep the existing first-install instructions as a plain numbered list. */

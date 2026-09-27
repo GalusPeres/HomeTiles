@@ -140,7 +140,7 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 </figure>
 </div>
 
-<div class="ht-type-shots ht-type-center" markdown>
+<div class="ht-type-shots" markdown>
 <figure class="ht-screenshot ht-popup">
 <img style="width:475px" src="../images/8in-energy-24h.png" alt="Energy day view with a read bar" width="792" height="792" loading="lazy">
 <figcaption>Popup, 24 hours</figcaption>
@@ -194,7 +194,7 @@ Local [outputs and relays](hardware-io.md) appear in the same selector and work 
 
 **Popup for lights:** brightness, color, and color temperature; only the controls the light supports appear. The bottom icons switch views, and the power button toggles the light.
 
-<div class="ht-type-shots ht-type-center" markdown>
+<div class="ht-type-shots" markdown>
 <figure class="ht-screenshot ht-popup">
 <img style="width:475px" src="../images/8in-light-brightness.png" alt="Brightness slider" width="792" height="792" loading="lazy">
 <figcaption>Brightness</figcaption>
@@ -311,7 +311,7 @@ Configure mini-tiles for temperatures, humidity, targets, and mode, or choose **
 
 **Popup:** adjust the target with the dial or plus/minus buttons. Available controls may include heating/cooling targets, humidity, mode, presets, fan, and swing; longer option lists scroll.
 
-<div class="ht-type-shots ht-type-center" markdown>
+<div class="ht-type-shots" markdown>
 <figure class="ht-screenshot ht-popup">
 <img style="width:475px" src="../images/8in-climate-popup-1.png" alt="Climate popup with HVAC mode, humidity, preset, fan, and swing controls" width="792" height="792" loading="lazy">
 <figcaption>Popup with all supported controls</figcaption>

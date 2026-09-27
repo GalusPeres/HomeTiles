@@ -103,7 +103,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Core `src/video/local_camera/` is device-agnostic; drivers `sensors/*/`, boards `src/devices/*/local_camera_board.*`; opt-in `local_cam_en`.
 - V2 OV02C10 720p. 8-inch OV5647 544x960, Bridge `rotate` 90. Tab5 SC202CS 720p RAW8, mirror+180, BGGR under flips.
-- Camera builds pass; HW pending (#54): WS 7/10.1/7B/4.3/4B OV5647, V1/JC1060 V2 OV02C10, JC4880 quarter turn.
+- Camera builds pass; HW pending (#56): WS 7/10.1/7B/4.3/4B OV5647, V1/JC1060 V2 OV02C10, JC4880 quarter turn.
 - Advanced: `lcam_rot` (180 = flip, odd = `rotate` 90), `lcam_rbswap` (Bayer, next start).
 - HW pending: b30 CSI/ISP, q10; b31 gain, q10-90; b32 screenshot; b33 Wi-Fi/AP, kbd, #43; b34 rotation, boards; b35 sleep stream/indicator wake, Tab5 1% wake, S3 150Hz.
 - Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
@@ -116,7 +116,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
 - CI `36334088502`: 17 builds, 152 tests/21 skips; local 173 pass. Six S3 BINs verified.
 - v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44) incl. installer stub crash; French.
-- Issues answered 09-27: closed #25 #31 #36 #42 #43 #47, PRs #28/#29; tests pending #7 #11 #27 #34 #45; #38 closed, V2 SD restart now #53.
+- Issues answered 09-27: closed #25 #31 #36 #42 #43 #47, PRs #28/#29; tests pending #7 #11 #27 #34 #45; #38 closed, V2 SD restart now #55.
 
 ## Maintenance
 

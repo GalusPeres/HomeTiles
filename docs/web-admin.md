@@ -85,51 +85,47 @@ New displays start with the maximum radius and the tile color `#1A1A1A`.
 
 ## Colors and Rules { data-toc-label="Colors and rules" }
 
-<div class="ht-illustrated-intro" markdown>
-<div markdown>
-
 Rules change the icon and tile color while an entity has a matching state. Set **Rules** to **On** in the tile settings; a tile with its own entity starts at **Own entity** and **Own rules**:
 
 - **Own entity / Other entity:** follow the tile's own entity or any other entity selected in the Bridge. Scene, Folder, Back, Camera, Clock, and Text tiles have no entity of their own and always use another entity.
 - **Entity color:** use the color the entity shows itself: a light's color, heating or cooling on a climate entity, and the state colors of switches, covers, and binary sensors.
-- **Own rules:** choose the colors yourself (see below).
+- **Own rules:** choose the colors yourself, by value or by state (see below).
 - **Color icon / Tint tile:** what the rule colors. **Strength** sets the tint.
 
 While a rule matches, it wins. Otherwise the icon and tile colors above apply. Without a state, for example while Home Assistant is offline, the tile keeps its icon color.
 
-</div>
-<figure class="ht-screenshot ht-editor-detail">
-<img src="../images/web-admin-rules.png" alt="Rules with a color bar for a sensor value" width="439" height="978" loading="lazy">
-<figcaption>Rules with an icon color by value</figcaption>
+### Icon Color by Value { data-toc-label="By value" }
+
+For Sensor, Energy, and Number tiles: a color bar between **Min** and **Max**. **Smooth** blends the colors, **Steps** changes at each marker. Start from **Cold → Warm**, **Traffic light**, **Battery**, **Humidity**, or **Single color**. Drag a marker to move it, click it to choose its color, and double-click the bar to add one (up to six).
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot">
+<img src="../images/web-admin-rules.png" alt="Rules with a color bar from 15 to 25" width="408" height="784" loading="lazy">
+<figcaption>A temperature from blue to red</figcaption>
 </figure>
 </div>
 
-**Own rules** depend on the state:
+### Icon Color by State { data-toc-label="By state" }
 
-- **Icon color by value** (Sensor, Energy, Number): a color bar between **Min** and **Max**. **Smooth** blends the colors, **Steps** changes at each marker. Start from **Cold → Warm**, **Traffic light**, **Battery**, **Humidity**, or **Single color**. Drag a marker to move it, click it to choose its color, and double-click the bar to add one (up to six).
-- **Icon color by state** (Sensor, Binary Sensor, Select, Date/Time): up to six states, each with a color. A row matches the exact state, or any state containing its text when **contains** is ticked; upper and lower case do not matter, and the first match wins. Binary sensors have one color for On and one for Off. Unavailable states keep the default color.
-
-<div class="ht-illustrated-intro" markdown>
-<div markdown>
+For Sensor, Binary Sensor, Select, and Date/Time tiles: up to six states, each with a color. A row matches the exact state, or any state containing its text when **contains** is ticked; upper and lower case do not matter, and the first match wins. Binary sensors have one color for On and one for Off. Unavailable states keep the default color.
 
 In this example, a waste sensor says when to put the bin out, such as "Put out in 4 days". Its icon turns red while the state contains "today" and green while it contains "4". With **Tile color → From icon**, the circle and the tile follow the icon color.
 
-<div class="ht-popup-grid" markdown>
+<div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
-<img src="../images/8in-waste-tile.png" alt="Waste tile with a green icon: put out in four days" width="260" height="145" loading="lazy">
+<img src="../images/web-admin-rules-state.png" alt="Icon color by state with two contains rules" width="408" height="609" loading="lazy">
+<figcaption>Two state rules</figcaption>
+</figure>
+<div class="ht-type-stack" markdown>
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/8in-waste-tile.png" alt="Waste tile with a green icon: put out in four days" width="260" height="145" loading="lazy">
 <figcaption>Contains "4": green</figcaption>
 </figure>
 <figure class="ht-screenshot">
-<img src="../images/8in-waste-tile-today.png" alt="Waste tile tinted red: put out today" width="260" height="145" loading="lazy">
+<img style="width:156px" src="../images/8in-waste-tile-today.png" alt="Waste tile tinted red: put out today" width="260" height="145" loading="lazy">
 <figcaption>Contains "today": red</figcaption>
 </figure>
 </div>
-
-</div>
-<figure class="ht-screenshot ht-editor-detail">
-<img src="../images/web-admin-rules-state.png" alt="Icon color by state with two contains rules" width="439" height="978" loading="lazy">
-<figcaption>Rules with an icon color by state</figcaption>
-</figure>
 </div>
 
 ## Editing Climate Mini-Tiles { data-toc-label="Climate mini-tiles" }

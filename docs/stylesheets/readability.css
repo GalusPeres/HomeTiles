@@ -146,7 +146,7 @@ html { scrollbar-gutter: stable; }
 
 /* Keep full display captures large enough to read, in the order of the explanation. */
 .md-typeset figure.ht-screenshot { display: block; width: 100%; max-width: 680px; margin: 20px auto 28px; text-align: center; }
-.md-typeset figure.ht-screenshot.ht-editor-detail { max-width: 300px; }
+.md-typeset figure.ht-screenshot.ht-editor-detail { max-width: 440px; }
 .md-typeset figure.ht-screenshot img { display: block; width: 100%; height: auto; margin: 0; }
 .md-typeset figure.ht-screenshot figcaption { max-width: none; margin: 8px 0 0; font-size: 14px; font-style: normal; line-height: 1.5; color: #c2c7cf; text-align: center; }
 /* Popups are cut out at their own size: square ones stay compact, and
@@ -154,6 +154,21 @@ html { scrollbar-gutter: stable; }
 .md-typeset figure.ht-screenshot.ht-popup { max-width: 420px; }
 .md-typeset .ht-popup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0 28px; }
 .md-typeset .ht-popup-grid figure.ht-screenshot { max-width: none; margin: 0; }
+/* Tile type pages: tiles and popups at one scale (60 % of the device pixels,
+   set per image), so a tile keeps its real size next to its popup. */
+.md-typeset .ht-type-shots figure.ht-screenshot img { max-width: 100%; height: auto; }
+.md-typeset .ht-type-shots { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; margin: 16px 0 26px; }
+.md-typeset .ht-type-shots figure.ht-screenshot { width: auto; max-width: 100%; margin: 0; flex: 0 1 auto; }
+.md-typeset .ht-type-shots .ht-type-stack { display: flex; flex-direction: column; gap: 20px; }
+.md-typeset .ht-type-shots figure.ht-screenshot.ht-popup { max-width: 100%; }
+/* Tile and popup pairs: the tiles in a column on the left, the popup always
+   on the right; in a narrow column the popup shrinks instead of wrapping. */
+.md-typeset .ht-type-shots.ht-type-pair { flex-wrap: nowrap; }
+.md-typeset .ht-type-shots.ht-type-pair > .ht-type-stack { flex: 0 0 auto; }
+.md-typeset .ht-type-shots.ht-type-pair > figure.ht-popup { flex: 0 1 auto; min-width: 0; }
+/* Popups without a tile next to them sit in the middle. */
+.md-typeset .ht-type-shots.ht-type-center { justify-content: center; }
+@media (max-width: 600px) { .md-typeset .ht-type-shots.ht-type-pair { flex-wrap: wrap; } }
 
 /* Keep the existing first-install instructions as a plain numbered list. */
 .ht-steps { margin: 12px 0 20px; }

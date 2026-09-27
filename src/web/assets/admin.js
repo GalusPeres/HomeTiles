@@ -4738,9 +4738,15 @@ function syncTileRadiusControls(tabEl) {
   // new tile, but without the free slot itself.
   function occupiedFromGrid(tab, grid, freeEl) {
     const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
+    // A selected new tile still of type Empty does not block the free slot:
+    // the pointer may pick a spot half a cell next to or over it, and a click
+    // moves the new tile there. Once a type is chosen it blocks like a tile.
+    const selectedIsEmpty =
+      String(document.getElementById(tab + '_tile_type')?.value ?? '0') === '0';
     grid.querySelectorAll(':scope > .tile[data-index]').forEach(el => {
       if (el === freeEl || el.style.display === 'none') return;
-      if (Number(el.dataset.type || 0) === 0 && el.dataset.selected !== '1') return;
+      if (Number(el.dataset.type || 0) === 0 &&
+          (el.dataset.selected !== '1' || selectedIsEmpty)) return;
       const layout = getTileElementLayout(tab, parseInt(el.dataset.index, 10));
       if (layout) markOccupied(occupied, layout);
     });

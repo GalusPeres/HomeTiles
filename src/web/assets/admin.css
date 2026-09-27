@@ -1171,6 +1171,8 @@
     .tile.empty[data-selected="1"] { border:3px solid #26a69a; box-shadow:0 0 12px rgba(38,166,154,0.55); }
     .tile.empty:hover:not(.active),
     .tile.empty.free-slot-hover:not(.active) { border-color:rgba(38,166,154,0.4); }
+    /* The free slot may lie over a selected empty new tile; it takes the click. */
+    .tile.empty.free-slot-hover:not([data-selected="1"]) { z-index:1; }
     .tile-title {
       color:#fff;
       font-weight:normal;

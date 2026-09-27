@@ -1,19 +1,21 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-logo-dark.png">
-  <img src="docs/images/readme-logo-light.png" alt="HomeTiles" height="63">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-brand-dark.png">
+  <img src="docs/images/readme-brand-light.png" alt="HomeTiles" height="73">
 </picture>
 
 Touch dashboards for Home Assistant on ESP32 displays.<br>
 Lights, climate, sensors, energy, weather and more on a 4 to 10.1 inch touch screen.
 
-<a href="https://galusperes.github.io/"><img src="docs/images/readme-pill-docs.png" alt="Documentation" height="40"></a>
-<a href="https://galusperes.github.io/installer/"><img src="docs/images/readme-pill-flasher.png" alt="Online flasher" height="40"></a>
-<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-pill-release.png" alt="Latest release" height="40"></a>
-<a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-pill-coffee.png" alt="Buy Me a Coffee" height="40"></a>
+<a href="https://galusperes.github.io/"><img src="docs/images/readme-link-docs.png" alt="Documentation" height="48"></a>
+<a href="https://galusperes.github.io/installer/"><img src="docs/images/readme-link-flasher.png" alt="Online flasher" height="48"></a>
+<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-link-release.png" alt="Latest release" height="48"></a>
+<a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-link-coffee.png" alt="Buy Me a Coffee" height="48"></a>
+<a href="LICENSE"><img src="docs/images/readme-link-license.png" alt="MIT License" height="48"></a>
 <br>
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-hero-dark.png"><img src="docs/images/readme-hero-light.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups. Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors." width="100%"></picture>
+<img src="docs/images/readme-hero-home.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%"><br>
+Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors.
 
 </div>
 

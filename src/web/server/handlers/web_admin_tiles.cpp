@@ -280,7 +280,7 @@ static bool applySmartReorder(
     const float preferred_col = (displaced_index == displaced_indices.front()) ? from_col : grid.tiles[displaced_index].col;
     const float preferred_row = (displaced_index == displaced_indices.front()) ? from_row : grid.tiles[displaced_index].row;
     const TileType displaced_type = grid.tiles[displaced_index].type;
-    const float step = fractional_grid && displaced_type != TILE_SETTINGS && displaced_type != TILE_BACK ? 0.5f : 1.0f;
+    const float step = fractional_grid && displaced_type != TILE_BACK ? 0.5f : 1.0f;
     if (findPlacementForTile(grid, displaced_index, preferred_col, preferred_row,
                              floating_indices, first_row, step)) {
       continue;

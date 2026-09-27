@@ -694,7 +694,8 @@ function syncTileRadiusControls(tabEl) {
     if (requested.swipeEnabled) body.set('settings_swipe_enabled', '1');
     body.set('settings_reveal_edge', requested.revealEdge);
     if (hasNewPin) body.set('settings_pin', pinValue);
-    if (target && Number.isInteger(target.col) && Number.isInteger(target.row)) {
+    if (target && [target.col, target.row].every(value =>
+        Number.isFinite(value) && value >= 0 && Number.isInteger(value * 2))) {
       body.set('settings_tile_target_col', String(target.col));
       body.set('settings_tile_target_row', String(target.row));
     }
@@ -4446,14 +4447,13 @@ function syncTileRadiusControls(tabEl) {
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  // Scene, Folder, Back and Camera show only an icon and a title.
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 8, 9, 18].includes(Number(type)); }
+  // Scene, Folder, Settings, Back and Camera show only an icon and a title.
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 7, 8, 9, 18].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
-  // a row high. Settings stays whole (mirrors tile_geometry::supported).
+  // a row high (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
     const values = layout ? [layout.col, layout.row, layout.span_w, layout.span_h] : [];
     if (!layout || !values.every(v => Number.isFinite(v) && v >= 0 && Number.isInteger(v * 2))) return false;
-    if (Number(type) === 7 && values.some(v => !Number.isInteger(v))) return false;
     if (layout.span_w < 1) return false;
     return layout.span_h >= 1 || (supportsHalfSize(type) && layout.span_h === 0.5);
   }
@@ -4486,10 +4486,10 @@ function syncTileRadiusControls(tabEl) {
   }
   function applyCompactSensorPreview(el, type, layout, mode = 0, valueFont = 0) {
     const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
-    // A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
+    // A half-height icon-and-title tile (Scene, Folder, Settings, Back, Camera) uses the
     // half-height Sensor header: the icon in the corner disc and the title
     // (if any) centered beside it.
-    const compactIconTitle = [2, 4, 8, 18].includes(Number(type)) && halfHeight;
+    const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     const compact = (isCompactSensorType(type) || compactIconTitle) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
@@ -4522,12 +4522,6 @@ function syncTileRadiusControls(tabEl) {
       safeH = Math.max(minH, safeH);
       safeCol = Math.min(safeCol, GRID_COLS - 1);
       safeRow = Math.min(safeRow, GRID_ROWS - minH);
-      if (type === 7) {
-        safeCol = Math.floor(safeCol);
-        safeRow = Math.floor(safeRow);
-        safeW = Math.max(1, Math.floor(safeW));
-        safeH = Math.max(1, Math.floor(safeH));
-      }
       safeW = Math.min(safeW, GRID_COLS - safeCol);
       safeH = Math.min(safeH, GRID_ROWS - safeRow);
     }
@@ -5172,6 +5166,7 @@ function syncTileRadiusControls(tabEl) {
     if (specific) {
       specific.classList.remove('hidden');
     }
+    applyFolderTypeLock('folder0', false);
     const snapshot = normalizeHiddenSettingsSnapshot();
     if (!applyDraft('folder0', HIDDEN_SETTINGS_TILE_INDEX)) {
       applyTileFormData('folder0', snapshot);
@@ -6093,21 +6088,16 @@ function syncTileRadiusControls(tabEl) {
   function syncTileSizePolicy(tab) {
     const typeEl = document.getElementById(tab + '_tile_type');
     if (!typeEl) return;
-    const w = Number(document.getElementById(tab + '_tile_span_w')?.value || 1);
     const h = Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
-    // Half a row high only suits the half-size types; any other half step
-    // only excludes Settings, which stays whole.
+    // Half a row high only suits the half-size types.
     const halfHeight = h < 1;
-    const fractional = !Number.isInteger(w) || !Number.isInteger(h);
-    const fixedGrid = type => Number(type) === 7;
     // A new half-height tile may still take a larger type when it can grow.
     const isNewTile = Number(getTilesData(tab)?.[currentTileIndex]?.type || 0) === 0;
     for (const option of typeEl.options) {
       if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
       const type = Number(option.value);
       const grows = isNewTile && type !== 0 && !!grownNewTileLayout(tab, type);
-      const blocked = type !== 0 && !grows &&
-        ((halfHeight && !supportsHalfSize(type)) || (fractional && fixedGrid(type)));
+      const blocked = type !== 0 && !grows && halfHeight && !supportsHalfSize(type);
       if (blocked && !option.disabled) {
         option.disabled = true; option.dataset.sizeDisabled = '1';
       }
@@ -6115,7 +6105,7 @@ function syncTileRadiusControls(tabEl) {
     const compact = supportsHalfSize(typeEl.value);
     for (const field of ['col', 'row', 'span_w', 'span_h']) {
       const input = document.getElementById(tab + '_tile_' + field);
-      if (input) input.step = fixedGrid(typeEl.value) ? '1' : '0.5';
+      if (input) input.step = '0.5';
     }
     const row = document.getElementById(tab + '_tile_row');
     if (row) row.max = String(GRID_ROWS + (compact && h === 0.5 ? 0.5 : 0));
@@ -7702,8 +7692,7 @@ function syncTileRadiusControls(tabEl) {
     if (!isFinite(relX) || !isFinite(relY)) return null;
     relX = Math.max(0, relX);
     relY = Math.max(0, relY);
-    const type = Number(dragSource?.type ?? getTilesData(tab)?.[currentTileIndex]?.type);
-    const unit = sizeStep ?? ([7].includes(type) ? 1 : 0.5);
+    const unit = sizeStep ?? 0.5;
     let col = Math.floor((relX + (metrics.gapX / 2)) / (stepX * unit)) * unit;
     let row = Math.floor((relY + (metrics.gapY / 2)) / (stepY * unit)) * unit;
     if (!isFinite(col)) col = 0;
@@ -7744,7 +7733,7 @@ function syncTileRadiusControls(tabEl) {
   function getDragAnchorCell(tab, layout, clientX, clientY) {
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
     if (!layout || !rawCell) return { col: 0, row: 0 };
-    const unit = [7].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
+    const unit = 0.5;
     const col = clampHalf(rawCell.col - layout.col, 0, Math.max(0, layout.span_w - unit), 0);
     const row = clampHalf(rawCell.row - layout.row, 0, Math.max(0, layout.span_h - unit), 0);
     return { col, row };
@@ -7759,7 +7748,7 @@ function syncTileRadiusControls(tabEl) {
         y: Math.max(0, (rect.height / 2) || 0)
       };
     }
-    const unit = [7].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
+    const unit = 0.5;
     const x = (grabCellCol * (metrics.cellW + metrics.gapX)) + ((metrics.cellW + metrics.gapX) * unit - metrics.gapX) / 2;
     const y = (grabCellRow * (metrics.cellH + metrics.gapY)) + ((metrics.cellH + metrics.gapY) * unit - metrics.gapY) / 2;
     const maxX = Math.max(0, rect.width - 1);
@@ -7906,6 +7895,7 @@ function syncTileRadiusControls(tabEl) {
   }
 
   function canPlaceHiddenSettingsLayout(tab, candidateLayout) {
+    if (!supportedTileLayout(7, candidateLayout)) return false;
     if (tileDataLoadedTabs.has(tab)) {
       return canPlaceTileLayout(tab, -1, candidateLayout);
     }
@@ -8012,7 +8002,7 @@ function syncTileRadiusControls(tabEl) {
         columns, rows, firstRow,
         layout.span_w, layout.span_h,
         preferredCol, preferredRow,
-        fractional && ![7].includes(Number(tileTypes[displacedIndex])) ? 0.5 : 1);
+        fractional ? 0.5 : 1);
       let placed = false;
       for (const candidate of candidates) {
         const nextLayout = {
@@ -8186,10 +8176,8 @@ function syncTileRadiusControls(tabEl) {
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
     const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
-    // Every type resizes in half steps except Settings, which stays whole.
-    const fixedGrid = [7].includes(Number(typeValue));
-    const unit = fixedGrid ? 1 : 0.5;
-    const snap = fixedGrid ? clampInt : clampHalf;
+    const unit = 0.5;
+    const snap = clampHalf;
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, unit);
     if (!rawCell) return null;
     const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (supportsHalfSize(typeValue) ? 0.5 : 1);
@@ -8722,8 +8710,8 @@ function syncTileRadiusControls(tabEl) {
         event.preventDefault();
         return;
       }
-      const spanW = clampInt(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
-      const spanH = clampInt(hiddenTile.dataset.spanH, 1, GRID_ROWS, 1);
+      const spanW = clampHalf(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
+      const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, GRID_ROWS, 1);
       dragSource = {
         kind: 'hidden-settings',
         tab: 'folder0',

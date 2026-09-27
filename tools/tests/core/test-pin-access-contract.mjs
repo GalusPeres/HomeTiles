@@ -134,7 +134,7 @@ if (/pin_[a-z]/.test(folderDisk)) {
 for (const marker of [
   'bool getSettingsTile(Tile& out);',
   'SettingsTileVisibilityResult validateSettingsTileVisible(',
-  'bool visible, int target_col = -1, int target_row = -1);',
+  'bool visible, float target_col = -1, float target_row = -1);',
   'SettingsTileVisibilityResult setSettingsTileVisible(',
 ]) requireMarker(tileHeader, marker, 'Settings tile visibility API');
 
@@ -154,10 +154,10 @@ for (const marker of [
   'new_pin.toCharArray(cfg.settings_pin_value,',
   'configManager.getSettingsPin(stored_pin)',
   ',\\"settings_pin\\":\\"',
-  'snapshot.col = static_cast<uint8_t>(snapshot_col);',
-  'snapshot.row = static_cast<uint8_t>(snapshot_row);',
-  'snapshot.span_w = static_cast<uint8_t>(snapshot_span_w);',
-  'snapshot.span_h = static_cast<uint8_t>(snapshot_span_h);',
+  'snapshot.col = snapshot_col;',
+  'snapshot.row = snapshot_row;',
+  'snapshot.span_w = snapshot_span_w;',
+  'snapshot.span_h = snapshot_span_h;',
   'tileConfig.getSettingsTile(settings_tile)',
   'SettingsTileVisibilityResult::NoFreeCell ? 409 : 500',
   'settings_config_rolled_back = configManager.save(previous_cfg);',

@@ -80,7 +80,7 @@ try{
  check(supportedTileLayout(9,{col:0,row:0,span_w:1,span_h:.5}),'Clocks accept the half-height size');
  check(!supportedTileLayout(5,{col:0,row:0,span_w:1,span_h:.5}),'Switches still need a whole cell height');
  check(supportedTileLayout(5,{col:.5,row:0,span_w:1.5,span_h:1}) && supportedTileLayout(12,{col:0,row:0,span_w:2.5,span_h:1.5}),'Every type resizes in half steps');
- check(!supportedTileLayout(7,{col:0,row:0,span_w:1.5,span_h:1}),'Settings stays whole');
+ check(supportedTileLayout(7,{col:0,row:0,span_w:1.5,span_h:1}),'Settings supports half-step widths');
  document.querySelectorAll('.tile-grid > .tile').forEach(el=>{el.className='tile empty';el.dataset.type='0';delete el.dataset.selected;});
  layoutTiles('test',Array.from({length:9},()=>({type:0})));
  check(visibleEmpty().length===1,'An empty grid shows one resting slot');

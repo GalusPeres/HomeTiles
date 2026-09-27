@@ -12,14 +12,13 @@
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  // Scene, Folder, Back and Camera show only an icon and a title.
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 8, 9, 18].includes(Number(type)); }
+  // Scene, Folder, Settings, Back and Camera show only an icon and a title.
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 7, 8, 9, 18].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
-  // a row high. Settings stays whole (mirrors tile_geometry::supported).
+  // a row high (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
     const values = layout ? [layout.col, layout.row, layout.span_w, layout.span_h] : [];
     if (!layout || !values.every(v => Number.isFinite(v) && v >= 0 && Number.isInteger(v * 2))) return false;
-    if (Number(type) === 7 && values.some(v => !Number.isInteger(v))) return false;
     if (layout.span_w < 1) return false;
     return layout.span_h >= 1 || (supportsHalfSize(type) && layout.span_h === 0.5);
   }
@@ -52,10 +51,10 @@
   }
   function applyCompactSensorPreview(el, type, layout, mode = 0, valueFont = 0) {
     const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
-    // A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
+    // A half-height icon-and-title tile (Scene, Folder, Settings, Back, Camera) uses the
     // half-height Sensor header: the icon in the corner disc and the title
     // (if any) centered beside it.
-    const compactIconTitle = [2, 4, 8, 18].includes(Number(type)) && halfHeight;
+    const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     const compact = (isCompactSensorType(type) || compactIconTitle) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
@@ -88,12 +87,6 @@
       safeH = Math.max(minH, safeH);
       safeCol = Math.min(safeCol, GRID_COLS - 1);
       safeRow = Math.min(safeRow, GRID_ROWS - minH);
-      if (type === 7) {
-        safeCol = Math.floor(safeCol);
-        safeRow = Math.floor(safeRow);
-        safeW = Math.max(1, Math.floor(safeW));
-        safeH = Math.max(1, Math.floor(safeH));
-      }
       safeW = Math.min(safeW, GRID_COLS - safeCol);
       safeH = Math.min(safeH, GRID_ROWS - safeRow);
     }

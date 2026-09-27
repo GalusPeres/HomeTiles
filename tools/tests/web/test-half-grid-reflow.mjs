@@ -13,7 +13,7 @@ const cases = [
   {tiles: [rect(.5,1.5,2,.5,1),rect(3.5,1.5,2,.5,20)], target:[3.5,1.5], expected:[[3.5,1.5],[.5,1.5]]},
   {tiles: [rect(0,0,2,1,1),rect(2,0,2,.5,1),rect(2,.5,2,.5,20)], target:[2,0], expected:[[2,0],[0,0],[2,1]]},
   {tiles: [rect(0,0),rect(1,0)], target:[1,0], expected:[[1,0],[0,0]]},
-  {tiles: [rect(.5,.5),rect(2,0,1,1,7)], target:[2,0], expected:[[2,0],[0,0]]},
+  {tiles: [rect(.5,.5),rect(2,0,1,1,7)], target:[2,0], expected:[[2,0],[.5,.5]]},
   {tiles: [rect(0,3,2,.5,1),rect(2,3,2,.5,20)], target:[2,3], firstRow:3, expected:[[2,3],[0,3]]},
   {tiles: [rect(0,0,2,.5,1),rect(2,0,2,1,1),rect(0,.5,2,1),rect(4,0,3,5),rect(0,1.5,2,3),rect(2,1,2,4),rect(0,4.5,2,.5,20)], target:[2,0], fail:true}
 ];

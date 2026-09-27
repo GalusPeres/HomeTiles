@@ -103,7 +103,7 @@ try {
  check(document.getElementById('test_tile_col').step==='0.5' && document.getElementById('test_tile_row').step==='0.5','switch position fields allow half steps');
  check(document.getElementById('test_tile_span_h').step==='0.5','switch size resizes in half steps');
  document.getElementById('test_tile_type').value='7';syncTileSizePolicy('test');
- check(document.getElementById('test_tile_span_h').step==='1','settings size remains whole');
+ check(document.getElementById('test_tile_span_h').step==='0.5','settings size uses half steps');
  document.getElementById('test_tile_type').value='5';syncTileSizePolicy('test');
  dragSource={tab:'test',type:5};
  const metrics=getTileGridMetrics('test');

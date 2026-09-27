@@ -68,7 +68,7 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
   }
   bool has_icon = iconChar.length() > 0;
   bool has_title = tile.title.length() > 0;
-  // A half-height Folder or Back tile uses the half-height Sensor header: the
+  // A half-height navigation tile uses the half-height Sensor header: the
   // icon in the concentric corner disc and the title, if any, beside it.
   const bool compact = tile_geometry::compact_icon_title(tile.type, tile.span_w, tile.span_h);
 
@@ -188,5 +188,4 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
 
   return btn;
 }
-
 

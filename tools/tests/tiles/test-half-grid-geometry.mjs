@@ -51,7 +51,7 @@ int main(){
  assert(tile_layout::value_font_for_choice(2,nullptr)==tile_layout::content_font_24());
  assert(tile_layout::value_font_for_choice(3,nullptr)==tile_layout::content_font_32());
  assert(tile_layout::value_font_for_choice(4,nullptr)==tile_layout::content_font_40());
- for(int type:{TILE_SENSOR,TILE_BINARY_SENSOR,TILE_ENERGY}) {
+ for(int type:{TILE_SENSOR,TILE_BINARY_SENSOR,TILE_ENERGY,TILE_SETTINGS}) {
   for(float row:{0.f,0.5f,1.f,1.5f}) {
    Tile input{type,0.5f,row,2,0.5f};
    PackedQuarterGridV7 record; Tile loaded{type,0,std::floor(row),2,1};

@@ -66,6 +66,7 @@
     if (specific) {
       specific.classList.remove('hidden');
     }
+    applyFolderTypeLock('folder0', false);
     const snapshot = normalizeHiddenSettingsSnapshot();
     if (!applyDraft('folder0', HIDDEN_SETTINGS_TILE_INDEX)) {
       applyTileFormData('folder0', snapshot);

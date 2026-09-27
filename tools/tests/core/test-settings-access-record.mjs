@@ -15,7 +15,7 @@ const bytes = value => Array.from(value).join(',');
 
 // Encode independent fixtures by documented byte offsets, not production
 // structs or the production checksum function. These bytes are the contract.
-function recordFixture(version, flags) {
+function recordFixture(version, flags, fractional = false) {
   const size = version < 3 ? 60 : version === 3 ? 132 : 144;
   const record = Buffer.alloc(size);
   record.writeUInt32LE(0x43415448, 0);
@@ -30,6 +30,10 @@ function recordFixture(version, flags) {
     record.write('Private settings', 60, 'utf8');
     record.write('cog', 92, 'utf8');
     record.set([1, 1, 2, 1], 124);
+    if (fractional) {
+      record[7] = 0x1f; // Valid plus half steps in column, row, width and height.
+      record.set([1, 1, 1, 0], 124);
+    }
   }
   if (version === 4) {
     record[128] = 4;
@@ -84,6 +88,7 @@ int mbedtls_sha256(const unsigned char* input, size_t length,
 
 ${fixtures.map((fixture, index) =>
   `static const uint8_t fixture_v${index + 1}[] = {${bytes(fixture)}};`).join('\n')}
+static const uint8_t fixture_half[] = {${bytes(recordFixture(4, 7, true))}};
 
 template <typename Record, size_t size>
 Record read_fixture(const uint8_t (&bytes)[size]) {
@@ -143,10 +148,37 @@ int main() {
   assert(config.settings_swipe_enabled && config.settings_reveal_edge == 2);
   assert(pin_access::verifyCredential(config.settings_pin_value,
       config.settings_pin_salt, config.settings_pin_hash));
+
+  for (unsigned mask = 0; mask < 16; ++mask) {
+    auto& snapshot = config.settings_tile_snapshot;
+    snapshot.col = 1 + ((mask & 1) ? 0.5f : 0);
+    snapshot.row = 1 + ((mask & 2) ? 0.5f : 0);
+    snapshot.span_w = 1 + ((mask & 4) ? 0.5f : 0);
+    snapshot.span_h = 1 + ((mask & 8) ? 0.5f : 0);
+    const auto before = snapshot;
+    const auto packed = make_settings_access_record(config);
+    assert(packed.version == 4 && packed.snapshot_flags == (1 | (mask << 1)));
+    assert(apply_settings_access_record(packed, config));
+    assert(snapshot.valid && snapshot.col == before.col && snapshot.row == before.row);
+    assert(snapshot.span_w == before.span_w && snapshot.span_h == before.span_h);
+  }
+  assert(apply_settings_access_record(current, config));
   expect_snapshot(config);
   assert(std::strcmp(config.wifi_ssid, "unchanged-network") == 0);
   const auto encoded = make_settings_access_record(config);
   assert(std::memcmp(&encoded, fixture_v4, sizeof(encoded)) == 0);
+
+  // Half steps reuse unused snapshot flag bits; whole-cell v4 bytes stay exact.
+  const auto fractional = read_fixture<SettingsAccessRecord>(fixture_half);
+  assert(apply_settings_access_record(fractional, config));
+  const auto& half = config.settings_tile_snapshot;
+  assert(half.valid && half.col == 1.5f && half.row == 1.5f);
+  assert(half.span_w == 1.5f && half.span_h == 0.5f);
+  const auto encoded_half = make_settings_access_record(config);
+  assert(std::memcmp(&encoded_half, fixture_half, sizeof(encoded_half)) == 0);
+  assert(config.settings_pin_enabled && config.settings_tile_hidden);
+  assert(pin_access::verifyCredential(config.settings_pin_value,
+      config.settings_pin_salt, config.settings_pin_hash));
 
   // Every legacy record migrates its own flags and clears an old recovery PIN.
   const auto v1 = read_fixture<LegacySettingsAccessRecord>(fixture_v1);

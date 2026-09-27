@@ -225,7 +225,8 @@
     if (requested.swipeEnabled) body.set('settings_swipe_enabled', '1');
     body.set('settings_reveal_edge', requested.revealEdge);
     if (hasNewPin) body.set('settings_pin', pinValue);
-    if (target && Number.isInteger(target.col) && Number.isInteger(target.row)) {
+    if (target && [target.col, target.row].every(value =>
+        Number.isFinite(value) && value >= 0 && Number.isInteger(value * 2))) {
       body.set('settings_tile_target_col', String(target.col));
       body.set('settings_tile_target_row', String(target.row));
     }

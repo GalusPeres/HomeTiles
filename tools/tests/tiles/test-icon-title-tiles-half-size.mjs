@@ -2,7 +2,7 @@
 // down to 1x0.5 like Sensor/Binary/Energy/Clock; at half height they use the
 // half-height Sensor header (icon in the corner disc, title beside it). They
 // take a fixed icon color with optional glow. Back can hide its border per
-// tile through the Clock/Text border flag. Settings stays on whole cells.
+// tile through the Clock/Text border flag. Settings shares their geometry.
 import assert from 'node:assert/strict';
 import {extractDeliveredFunction, readRepoFile} from '../../lib/admin-source.mjs';
 
@@ -10,9 +10,8 @@ const read = file => readRepoFile(file).replace(/\r\n?/g, '\n');
 
 // Firmware geometry.
 const geometry = read('src/tiles/config/tile_geometry.h');
-assert.match(geometry, /inline bool icon_title\(int type\) \{\s*return type == TILE_SCENE \|\| type == TILE_FOLDER \|\| type == TILE_BACK \|\| type == TILE_CAMERA;/);
+assert.match(geometry, /inline bool icon_title\(int type\) \{\s*return type == TILE_SCENE \|\| type == TILE_FOLDER \|\| type == TILE_BACK \|\| type == TILE_CAMERA \|\| type == TILE_SETTINGS;/);
 assert.match(geometry, /inline bool half_size\(int type\) \{ return sensor\(type\) \|\| type == TILE_CLOCK \|\| icon_title\(type\); \}/);
-assert.match(geometry, /if \(type == TILE_SETTINGS &&\s*\(fractional\(col\)/, 'Settings stays whole');
 assert.doesNotMatch(geometry, /type == TILE_BACK\) &&\s*\(fractional/, 'Back may use half steps');
 assert.match(geometry, /inline bool compact_icon_title\(int type, float w, float h\) \{\s*return icon_title\(type\) && w >= 1 && h == 0\.5f;/);
 assert.doesNotMatch(geometry, /compact_back/);
@@ -20,17 +19,15 @@ assert.doesNotMatch(geometry, /compact_back/);
 // Editor geometry mirrors the firmware.
 const helpers = ['isCompactSensorType', 'supportsHalfSize', 'supportedTileLayout'].map(extractDeliveredFunction).join('\n');
 const {supportsHalfSize, supportedTileLayout} = new Function(`${helpers}; return {supportsHalfSize, supportedTileLayout};`)();
-for (const type of [2, 4, 8, 18]) {
+for (const type of [2, 4, 7, 8, 18]) {
   assert.ok(supportsHalfSize(type) && supportsHalfSize(String(type)), `type ${type} may be half a row high`);
   assert.ok(supportedTileLayout(type, {col: 0, row: 0.5, span_w: 1, span_h: 0.5}), `type ${type} 1x0.5`);
 }
-assert.ok(!supportsHalfSize(7) && !supportsHalfSize(5) && !supportsHalfSize(10));
+assert.ok(!supportsHalfSize(5) && !supportsHalfSize(10));
 assert.ok(supportedTileLayout(8, {col: 0, row: 0.5, span_w: 1, span_h: 0.5}), 'Back 1x0.5');
 assert.ok(supportedTileLayout(8, {col: 1.5, row: 0, span_w: 1.5, span_h: 1}), 'Back half steps');
 assert.ok(!supportedTileLayout(8, {col: 0, row: 0, span_w: 0.5, span_h: 1}), 'Back stays at least one cell wide');
-assert.ok(!supportedTileLayout(7, {col: 0.5, row: 0, span_w: 1, span_h: 1}), 'Settings stays whole');
-assert.match(read('src/web/admin/tiles/type-selection.js'), /const fixedGrid = type => Number\(type\) === 7;/);
-assert.match(read('src/web/admin/tiles/layout.js'), /if \(type === 7\) \{/);
+assert.ok(supportedTileLayout(7, {col: 0.5, row: 0, span_w: 1, span_h: 0.5}), 'Settings supports half steps');
 
 // Device layout: half-height Back uses the compact header; taller Back keeps
 // the centered icon with the round disc and the title below.
@@ -113,6 +110,6 @@ assert.match(read('src/web/admin/tiles/import-export.js'), /\} else if \(safeTyp
 const serverPreview = read('src/web/server/render/web_admin_html.cpp');
 assert.ok(serverPreview.includes('if (tile_geometry::compact_icon_title(tile.type, span_w, span_h)) {') &&
   serverPreview.includes('cssClass += " sensor-compact sensor-half compact-title-only";'));
-assert.ok(read('src/web/admin/tiles/layout.js').includes("const compactIconTitle = [2, 4, 8, 18].includes(Number(type)) && halfHeight;"));
+assert.ok(read('src/web/admin/tiles/layout.js').includes("const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;"));
 assert.match(read('src/web/assets/admin.css'), /\.tile\.sensor-compact\.compact-title-only > \.tile-title \{\s*top:max\(0px, calc\(\(var\(--compact-h\) - var\(--compact-title-line\)\) \/ 2\)\);/);
 console.log('Icon-and-title tiles: 1x0.5 compact header, fixed icon color with glow, Back border and preview pass');

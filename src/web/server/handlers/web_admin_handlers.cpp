@@ -7,6 +7,7 @@
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/ui/tabs/settings/tab_settings.h"
 #include "src/tiles/config/tile_config.h"
+#include "src/tiles/config/tile_geometry.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/ui/ui_manager.h"
 #include "src/ui/shared/ui_surface_style.h"
@@ -155,8 +156,8 @@ void WebAdminServer::handleSaveMQTT() {
   bool settings_visibility_changed = false;
   bool settings_visibility_commit_needed = false;
   bool settings_gesture_changed = false;
-  int settings_tile_target_col = -1;
-  int settings_tile_target_row = -1;
+  float settings_tile_target_col = -1;
+  float settings_tile_target_row = -1;
   if (server.hasArg("settings_access_present")) {
     const auto& tr = i18n::strings(cfg.language);
     const bool enable_pin = server.hasArg("settings_pin_enabled");
@@ -169,19 +170,27 @@ void WebAdminServer::handleSaveMQTT() {
 
     const bool has_target_col = server.hasArg("settings_tile_target_col");
     const bool has_target_row = server.hasArg("settings_tile_target_row");
+    auto parse_bounded_arg = [&](const char* name, float minimum,
+                                 float maximum, float& out) {
+      String value = server.arg(name);
+      value.trim();
+      char* end = nullptr;
+      const float parsed = strtof(value.c_str(), &end);
+      if (end == value.c_str() || *end != '\0' ||
+          !tile_geometry::half_step(parsed) || parsed < minimum ||
+          parsed > maximum) return false;
+      out = parsed;
+      return true;
+    };
     if (has_target_col != has_target_row) {
       sendSaveError(400, tr.save_failed);
       return;
     }
     if (has_target_col) {
-      settings_tile_target_col =
-          server.arg("settings_tile_target_col").toInt();
-      settings_tile_target_row =
-          server.arg("settings_tile_target_row").toInt();
-      if (settings_tile_target_col < 0 ||
-          settings_tile_target_col >= GRID_COLS ||
-          settings_tile_target_row < 0 ||
-          settings_tile_target_row >= GRID_ROWS) {
+      if (!parse_bounded_arg("settings_tile_target_col", 0, GRID_COLS - 1,
+                             settings_tile_target_col) ||
+          !parse_bounded_arg("settings_tile_target_row", 0, GRID_ROWS - 0.5f,
+                             settings_tile_target_row)) {
         sendSaveError(400, tr.save_failed);
         return;
       }
@@ -225,14 +234,12 @@ void WebAdminServer::handleSaveMQTT() {
       snapshot.col = settings_tile.col;
       snapshot.row = settings_tile.row;
       snapshot.span_w = settings_tile.span_w < 1 ? 1 : settings_tile.span_w;
-      snapshot.span_h = settings_tile.span_h < 1 ? 1 : settings_tile.span_h;
+      snapshot.span_h = settings_tile.span_h < 0.5f ? 1 : settings_tile.span_h;
     }
     if (!hide_tile && previous_cfg.settings_tile_hidden &&
         settings_tile_target_col >= 0 && cfg.settings_tile_snapshot.valid) {
-      cfg.settings_tile_snapshot.col =
-          static_cast<uint8_t>(settings_tile_target_col);
-      cfg.settings_tile_snapshot.row =
-          static_cast<uint8_t>(settings_tile_target_row);
+      cfg.settings_tile_snapshot.col = settings_tile_target_col;
+      cfg.settings_tile_snapshot.row = settings_tile_target_row;
     }
     if (server.hasArg("settings_tile_snapshot_present")) {
       if (!(hide_tile || previous_cfg.settings_tile_hidden) ||
@@ -271,41 +278,27 @@ void WebAdminServer::handleSaveMQTT() {
         return;
       }
       if (has_complete_snapshot_layout) {
-        auto parse_bounded_arg = [&](const char* name, int minimum,
-                                     int maximum, int& out) {
-          String value = server.arg(name);
-          value.trim();
-          if (!value.length()) return false;
-          char* end = nullptr;
-          const long parsed = strtol(value.c_str(), &end, 10);
-          if (end == value.c_str() || *end != '\0' || parsed < minimum ||
-              parsed > maximum) {
-            return false;
-          }
-          out = static_cast<int>(parsed);
-          return true;
-        };
-        int snapshot_col = 0;
-        int snapshot_row = 0;
-        int snapshot_span_w = 1;
-        int snapshot_span_h = 1;
+        float snapshot_col = 0;
+        float snapshot_row = 0;
+        float snapshot_span_w = 1;
+        float snapshot_span_h = 1;
         if (!parse_bounded_arg("settings_tile_col", 0, GRID_COLS - 1,
                                snapshot_col) ||
-            !parse_bounded_arg("settings_tile_row", 0, GRID_ROWS - 1,
+            !parse_bounded_arg("settings_tile_row", 0, GRID_ROWS - 0.5f,
                                snapshot_row) ||
             !parse_bounded_arg("settings_tile_span_w", 1, GRID_COLS,
                                snapshot_span_w) ||
-            !parse_bounded_arg("settings_tile_span_h", 1, GRID_ROWS,
+            !parse_bounded_arg("settings_tile_span_h", 0.5f, GRID_ROWS,
                                snapshot_span_h) ||
             snapshot_col + snapshot_span_w > GRID_COLS ||
             snapshot_row + snapshot_span_h > GRID_ROWS) {
           sendSaveError(400, tr.save_failed);
           return;
         }
-        snapshot.col = static_cast<uint8_t>(snapshot_col);
-        snapshot.row = static_cast<uint8_t>(snapshot_row);
-        snapshot.span_w = static_cast<uint8_t>(snapshot_span_w);
-        snapshot.span_h = static_cast<uint8_t>(snapshot_span_h);
+        snapshot.col = snapshot_col;
+        snapshot.row = snapshot_row;
+        snapshot.span_w = snapshot_span_w;
+        snapshot.span_h = snapshot_span_h;
       }
     }
     cfg.settings_tile_hidden = hide_tile;

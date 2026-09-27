@@ -592,10 +592,8 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   const std::string normalized_title = hometiles_title::normalize(snapshot.title);
   strncpy(snapshot.title, normalized_title.c_str(), sizeof(snapshot.title));
   snapshot.icon_name[sizeof(snapshot.icon_name) - 1] = '\0';
-  if (!snapshot.valid || snapshot.col >= Device::kGridCols ||
-      snapshot.row >= Device::kGridRows || snapshot.span_w < 1 ||
-      snapshot.span_h < 1 || snapshot.span_w > Device::kGridCols ||
-      snapshot.span_h > Device::kGridRows) {
+  if (!snapshot.valid || !tile_geometry::supported(TILE_SETTINGS,
+      snapshot.col, snapshot.row, snapshot.span_w, snapshot.span_h)) {
     clear_settings_tile_snapshot(normalized);
   }
 #if defined(DEVICE_ESP32_S3_RGB_480)

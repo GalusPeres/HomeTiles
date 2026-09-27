@@ -73,7 +73,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
 - Editable surfaces follow tile color, white text unchanged; selection white with surface-colored text; S3 arrow 20px.
 - Wi-Fi idle/reconnect gaps remain unfixed; findings/probes: `build/wifi-power-audit/VERIFICATION.md`.
-- Titles: two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings record v4 unchanged. View labels flatten CR/LF for Bridge compatibility. Maintainer approved.
+- Titles: two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged. View labels flatten CR/LF for Bridge. Maintainer approved.
 - S3 froze adding Number to active screensaver: Web answered, save persisted, user rebooted; crash log has an older ELF. Cause unproven; retained as a release validation limitation.
 
 ## Shared-popup/artwork baseline
@@ -87,9 +87,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Radius and half-grid
 
 - NVS radius: old radius to `(cell h - gap)/4`, unset = max; tile color `#1A1A1A`; new icon tiles "From icon" 20 %. Used by tiles, Climate, popups, previews.
-- Half-grid: Sensor/Binary/Energy height 0.5, width >=1 in half steps; original 2x1. Whole layouts/V7 size unchanged; header bits store fractions. Downgrade to 0.6.x only after all tiles are whole (`docs/updating.md`).
+- Half-grid: Sensor/Binary/Energy height 0.5, width >=1 by 0.5; original 2x1. Whole layouts/V7 size unchanged; header fraction bits. Make every tile whole before 0.6.x (`docs/updating.md`).
 - Device/Web: concentric icon radius, original title font, smaller default value font; explicit sizes respected; text gap 0. Masking declined.
-- Half-grid reflow restored; drafts/rollback retain positions, stale GETs preserve edits. Empty 1x1 slots now scan both axes in half steps without overlaps. Settings/Back integral.
+- Reflow/drafts/rollback keep positions; stale GETs preserve edits. Empty 1x1 slots scan both axes by 0.5, no overlaps. Settings/Back: 1x0.5; Settings v4 bits 1-4 store snapshot fractions.
 - Hidden Climate reset crashed on fractional Sensor width; Climate-only integer guard fixes it; browser regression covers switching/autosave.
 - Binary Sensor now shares Sensor value sizes (20/24/32/40); default preserves old layout. Stored in existing V7 field; editor, import and previews retain it.
 - HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
@@ -110,9 +110,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## v0.7.0 release prep
 
-- Branch `local-camera-beta`, local only; V2 test BINs to b72 in `build/guition-v2-test/`; FW_VERSION v0.6.12bNN.
-- Next, each with the user's OK: push + PR to `main` (CI builds all 15 profiles); CI BINs for 5 devices; Bridge v0.6.48 first; v0.7.0 version/notes; merge + tag back to back per `RELEASING.md`.
-- Docs complete. Bug: the Web Admin Settings tile shows the Folder "Type locked" hint and an empty field.
+- Local v0.6.12b72 BINs: `build/settings-half-grid-20260927/`.
+- User OK each: push/PR to `main` (17 builds/15 devices), 5-device HW tests, Bridge v0.6.48 first, v0.7.0 version/notes, merge/tag back to back (`RELEASING.md`).
+- Docs done. Settings folder hint/half-grid fixed; 171 tests + V2/S3 builds pass. HW pending.
 - After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 
 ## Maintenance

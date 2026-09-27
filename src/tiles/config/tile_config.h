@@ -643,9 +643,9 @@ public:
   bool getFolderPin(uint16_t folder_id, String& out) const;
   bool getSettingsTile(Tile& out);
   SettingsTileVisibilityResult validateSettingsTileVisible(
-      bool visible, int target_col = -1, int target_row = -1);
+      bool visible, float target_col = -1, float target_row = -1);
   SettingsTileVisibilityResult setSettingsTileVisible(
-      bool visible, int target_col = -1, int target_row = -1);
+      bool visible, float target_col = -1, float target_row = -1);
 
 private:
   volatile uint32_t view_revision_ = 1;
@@ -682,8 +682,8 @@ private:
                        bool ensure_navigation_tile = true);
   uint16_t nextFolderId() const;
   void ensureRootFolder();
-  bool ensureSettingsTile(TileGridConfig& grid, int target_col = -1,
-                          int target_row = -1);
+  bool ensureSettingsTile(TileGridConfig& grid, float target_col = -1,
+                          float target_row = -1);
   bool removeSettingsTiles(TileGridConfig& grid);
   bool applySettingsTilePolicy(TileGridConfig& grid);
   bool ensureBackTile(uint16_t folder_id, TileGridConfig& grid);

@@ -48,10 +48,10 @@ struct SettingsTileSnapshot {
   char title[256];
   char icon_name[32];
   uint32_t bg_color;
-  uint8_t col;
-  uint8_t row;
-  uint8_t span_w;
-  uint8_t span_h;
+  float col;
+  float row;
+  float span_w;
+  float span_h;
 };
 
 struct DeviceConfig {

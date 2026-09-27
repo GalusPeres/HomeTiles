@@ -55,7 +55,7 @@ extra_css:
   - stylesheets/serial-status.css?v=serial-navigation-3
 
 extra_javascript:
-  - path: assets/javascripts/docs-session.mjs?v=serial-navigation-4
+  - path: assets/javascripts/docs-session.mjs?v=serial-navigation-4-toc2
     type: module
 
 markdown_extensions:

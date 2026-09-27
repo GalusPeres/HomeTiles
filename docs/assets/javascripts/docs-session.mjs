@@ -1,5 +1,6 @@
 import { mountSerialStatus } from "./serial-status.mjs?v=serial-navigation-3";
 import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-3";
+import { mountTocEndSpace } from "./toc-end-space.mjs?v=2";
 
 const baseUrl = new URL("../../", import.meta.url);
 mountSerialStatus(document, baseUrl);
@@ -18,6 +19,7 @@ function update() {
   // Legacy documentation URLs use the same navigation lifecycle as normal
   // links, so following a redirect cannot tear down an active USB session.
   if (redirect) setTimeout(() => { if (redirect.isConnected) redirect.click(); }, 0);
+  mountTocEndSpace();
   for (const component of components) {
     const root = document.querySelector(component.selector);
     if (!root) continue;

@@ -111,8 +111,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## v0.7.0 release prep
 
 - PR #52, CI 36321117119 (`ea8d2c8`): 17 builds pass; BINs `build/ci-pr52-ea8d2c8/`.
-- Pending with user OK: b73 push/CI, HW tests, Bridge v0.6.48, v0.7.0 notes/version/merge/tag (`RELEASING.md`).
-- Cache b73: drained Media/Weather/Climate/Cover/Switch queues release retained Strings (native proof). V2/S3 built; HW pending. V2 b71 had Media running.
+- Pending: b73 CI/HW; Bridge v0.6.48 and v0.7.0 notes/version/merge/tag need separate OK (`RELEASING.md`).
+- Cache b73 frees drained queue Strings; native tests/V2/S3 builds pass. V2 log: 76 cached switches, no eviction/rollback, final 124 KiB. Long-run/S3 HW pending.
 - CI 152 pass/20 skips; local 173 pass. Docs/Settings done; Tab5 FQBN custom.
 - After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 

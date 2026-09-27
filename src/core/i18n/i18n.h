@@ -607,6 +607,16 @@ struct Strings {
   const char* secret_hidden_placeholder;
   const char* web_auth_secrets_note;
   const char* ap_wifi_keep_password_hint;
+  // Encrypted commands to the HomeTiles Bridge (Security view of the System
+  // popup): state, pairing code actions and hints.
+  const char* security_bridge_encryption;
+  const char* security_encryption_waiting;
+  const char* security_encryption_setup;
+  const char* security_encryption_new_code;
+  const char* security_encryption_turn_off;
+  const char* security_encryption_code_hint;
+  const char* security_encryption_active_hint;
+  const char* security_encryption_off_hint;
 };
 
 // Locale-specific display rules and short runtime strings shared by

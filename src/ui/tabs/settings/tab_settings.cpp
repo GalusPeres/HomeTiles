@@ -25,6 +25,7 @@
 #include "src/types/clock/clock_format.h"
 #include "src/web/setup/web_config.h"
 #include "src/web/server/auth/web_admin_auth.h"
+#include "src/network/secure/command_channel.h"
 #include "src/ui/shared/ui_keyboard.h"
 #include "src/ui/startup/hometiles_logo.h"
 #include "src/ui/popups/popup_layout.h"
@@ -150,6 +151,13 @@ static lv_obj_t *system_security_box = nullptr;
 static lv_obj_t *security_password_value = nullptr;
 static lv_obj_t *security_password_remove_btn = nullptr;
 static lv_obj_t *security_status_label = nullptr;
+static lv_obj_t *security_encryption_value = nullptr;
+static lv_obj_t *security_code_label = nullptr;
+static lv_obj_t *security_hint_label = nullptr;
+static lv_obj_t *security_pair_btn_label = nullptr;
+static lv_obj_t *security_unpair_btn = nullptr;
+// Refreshes the view while it is open: the Bridge confirms a pairing later.
+static lv_timer_t *security_refresh_timer = nullptr;
 static bool system_qr_sized = false;
 static bool system_check_running = false;
 static bool system_install_running = false;
@@ -1042,6 +1050,11 @@ static void reset_popup_refs() {
   security_password_value = nullptr;
   security_password_remove_btn = nullptr;
   security_status_label = nullptr;
+  security_encryption_value = nullptr;
+  security_code_label = nullptr;
+  security_hint_label = nullptr;
+  security_pair_btn_label = nullptr;
+  security_unpair_btn = nullptr;
   system_qr_sized = false;
   system_check_running = false;
   system_install_running = false;
@@ -1055,6 +1068,10 @@ static void close_settings_popup() {
   if (ap_btn_cooldown_timer) {
     lv_timer_del(ap_btn_cooldown_timer);
     ap_btn_cooldown_timer = nullptr;
+  }
+  if (security_refresh_timer) {
+    lv_timer_del(security_refresh_timer);
+    security_refresh_timer = nullptr;
   }
   if (networkTransport.isWifiDriverActive()) WiFi.scanDelete();
   // If the screensaver brightness control closes during a preview,
@@ -2607,6 +2624,63 @@ static void security_refresh() {
       lv_obj_add_flag(security_password_remove_btn, LV_OBJ_FLAG_HIDDEN);
     }
   }
+
+  // The code is shown only while the Bridge has not confirmed it yet.
+  const command_channel::PairingState pairing = command_channel::state();
+  if (security_encryption_value) {
+    const char* text = pairing == command_channel::PairingState::Active
+                           ? tr().security_state_on
+                       : pairing == command_channel::PairingState::Pending
+                           ? tr().security_encryption_waiting
+                           : tr().security_state_off;
+    lv_label_set_text(security_encryption_value, text);
+    lv_obj_set_style_text_color(
+        security_encryption_value,
+        lv_color_hex(pairing == command_channel::PairingState::Active ? 0x51CF66
+                     : pairing == command_channel::PairingState::Pending ? 0xFFB74D
+                                                                         : 0xA8A8A8),
+        0);
+  }
+  if (security_code_label) {
+    char code[command_channel::kCodeDisplaySize];
+    if (pairing == command_channel::PairingState::Pending &&
+        command_channel::displayCode(code)) {
+      lv_label_set_text(security_code_label, code);
+      lv_obj_clear_flag(security_code_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_label_set_text(security_code_label, "");
+      lv_obj_add_flag(security_code_label, LV_OBJ_FLAG_HIDDEN);
+    }
+    memset(code, 0, sizeof(code));
+  }
+  if (security_hint_label) {
+    if (pairing == command_channel::PairingState::Off) {
+      lv_obj_add_flag(security_hint_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_label_set_text(security_hint_label,
+                        pairing == command_channel::PairingState::Pending
+                            ? tr().security_encryption_code_hint
+                            : tr().security_encryption_active_hint);
+      lv_obj_clear_flag(security_hint_label, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+  if (security_pair_btn_label) {
+    lv_label_set_text(security_pair_btn_label,
+                      pairing == command_channel::PairingState::Off
+                          ? tr().security_encryption_setup
+                          : tr().security_encryption_new_code);
+  }
+  if (security_unpair_btn) {
+    if (pairing == command_channel::PairingState::Off) {
+      lv_obj_add_flag(security_unpair_btn, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_clear_flag(security_unpair_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+}
+
+static void on_security_refresh_timer(lv_timer_t*) {
+  security_refresh();
 }
 
 static void security_show_status(const char* text, uint32_t color) {
@@ -2624,6 +2698,24 @@ static void on_security_remove_password_clicked(lv_event_t*) {
   security_refresh();
 }
 
+static void on_security_pair_clicked(lv_event_t*) {
+  if (command_channel::createCode()) {
+    security_show_status("", 0xC8C8C8);
+  } else {
+    security_show_status(tr().save_failed, 0xFF6B6B);
+  }
+  security_refresh();
+}
+
+static void on_security_unpair_clicked(lv_event_t*) {
+  if (command_channel::disable()) {
+    security_show_status(tr().security_encryption_off_hint, 0xC8C8C8);
+  } else {
+    security_show_status(tr().save_failed, 0xFF6B6B);
+  }
+  security_refresh();
+}
+
 static void system_show_security(bool show) {
   if (!system_security_box) return;
   lv_obj_t* regular[] = {system_brand, system_info_rows, system_status_label,
@@ -2636,7 +2728,14 @@ static void system_show_security(bool show) {
     security_show_status("", 0xC8C8C8);
     security_refresh();
     lv_obj_clear_flag(system_security_box, LV_OBJ_FLAG_HIDDEN);
+    if (!security_refresh_timer) {
+      security_refresh_timer = lv_timer_create(on_security_refresh_timer, 1000, nullptr);
+    }
   } else {
+    if (security_refresh_timer) {
+      lv_timer_del(security_refresh_timer);
+      security_refresh_timer = nullptr;
+    }
     lv_obj_add_flag(system_security_box, LV_OBJ_FLAG_HIDDEN);
     for (lv_obj_t* obj : regular) {
       if (obj) lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
@@ -2681,7 +2780,7 @@ static void build_security_box(lv_obj_t* parent) {
   lv_obj_set_flex_flow(system_security_box, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(system_security_box, LV_FLEX_ALIGN_START,
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(system_security_box, popup_layout::scale(14), 0);
+  lv_obj_set_style_pad_row(system_security_box, popup_layout::scale(10), 0);
 
   create_security_row(system_security_box, tr().web_auth_section,
                       &security_password_value);
@@ -2689,10 +2788,49 @@ static void build_security_box(lv_obj_t* parent) {
       system_security_box, tr().web_auth_remove, 0x424242,
       on_security_remove_password_clicked);
   lv_obj_set_width(security_password_remove_btn, LV_PCT(100));
-  lv_obj_set_height(security_password_remove_btn, popup_layout::scale(76));
   lv_obj_t* remove_label = lv_obj_get_child(security_password_remove_btn, 0);
   if (remove_label) {
-    lv_obj_set_style_text_font(remove_label, popup_layout::font28(), 0);
+    lv_obj_set_style_text_font(remove_label, popup_layout::font24(), 0);
+  }
+
+  create_security_row(system_security_box, tr().security_bridge_encryption,
+                      &security_encryption_value);
+  security_code_label = lv_label_create(system_security_box);
+  lv_obj_set_width(security_code_label, LV_PCT(100));
+  lv_label_set_long_mode(security_code_label, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(security_code_label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(security_code_label, popup_layout::font28(), 0);
+  lv_obj_set_style_text_color(security_code_label, lv_color_white(), 0);
+  lv_label_set_text(security_code_label, "");
+  security_hint_label = lv_label_create(system_security_box);
+  lv_obj_set_width(security_hint_label, LV_PCT(100));
+  lv_label_set_long_mode(security_hint_label, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(security_hint_label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(security_hint_label, popup_layout::font20(), 0);
+  lv_obj_set_style_text_color(security_hint_label, lv_color_hex(0xA8A8A8), 0);
+  lv_label_set_text(security_hint_label, "");
+
+  // Blue marks synchronization with Home Assistant, as for HA pairing.
+  lv_obj_t* pairing_row = lv_obj_create(system_security_box);
+  style_plain_container(pairing_row);
+  lv_obj_set_width(pairing_row, LV_PCT(100));
+  lv_obj_set_height(pairing_row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(pairing_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(pairing_row, popup_layout::scale(12), 0);
+  lv_obj_t* pair_btn = create_popup_button(pairing_row, "", 0x1E88E5,
+                                           on_security_pair_clicked);
+  lv_obj_set_flex_grow(pair_btn, 1);
+  security_pair_btn_label = lv_obj_get_child(pair_btn, 0);
+  if (security_pair_btn_label) {
+    lv_obj_set_style_text_font(security_pair_btn_label, popup_layout::font24(), 0);
+  }
+  security_unpair_btn = create_popup_button(pairing_row,
+                                            tr().security_encryption_turn_off,
+                                            0x424242, on_security_unpair_clicked);
+  lv_obj_set_flex_grow(security_unpair_btn, 1);
+  lv_obj_t* unpair_label = lv_obj_get_child(security_unpair_btn, 0);
+  if (unpair_label) {
+    lv_obj_set_style_text_font(unpair_label, popup_layout::font24(), 0);
   }
 
   security_status_label = lv_label_create(system_security_box);

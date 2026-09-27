@@ -287,13 +287,13 @@ assert.doesNotMatch(service, /g_paused\.store\(prefs\./, 'A stored pause is neve
 assert.match(body('currentGate'), /in\.enabled = g_enabled\.load\(\) && !g_paused\.load\(\);/);
 assert.match(body('streamStopCondition'), /if \(!g_enabled\.load\(\) \|\| g_paused\.load\(\)\) return StopReason::Disabled;/);
 assert.match(body('abortRequested'), /g_paused\.load\(\)/);
-assert.match(body('handleMqttMessage'), /if \(!g_enabled\.load\(\) \|\| g_paused\.load\(\)\) \{\s*code = ErrorCode::Disabled;/);
+assert.match(body('handleCommandPayload'), /if \(!g_enabled\.load\(\) \|\| g_paused\.load\(\)\) \{\s*code = ErrorCode::Disabled;/);
 assert.doesNotMatch(body('bridgeCapability'), /g_paused/, 'A pause keeps the camera in Home Assistant');
 assert.match(body('currentStatusFields'), /if \(g_paused\.load\(\)\) \{\s*fields\.state = PublicState::Disabled;\s*fields\.paused = true;/);
 assert.match(contract, /if \(fields\.paused\) \{[\s\S]*?",\\"paused\\":true"/);
 // Home Assistant pause/resume commands on the camera command topic.
 assert.match(request, /enum class CommandKind : uint8_t \{ Snapshot, Stream, StreamStop, Pause, Resume \};/);
-assert.match(body('handleMqttMessage'), /command\.kind == CommandKind::Pause \|\| command\.kind == CommandKind::Resume[\s\S]*?setPaused\(pause\);/);
+assert.match(body('handleCommandPayload'), /command\.kind == CommandKind::Pause \|\| command\.kind == CommandKind::Resume[\s\S]*?setPaused\(pause\);/);
 
 // Grid margins: leftover pixels are split between both sides (1280x800: top
 // 5, bottom 6) for the tiles, the screensaver tiles and the settings grid.

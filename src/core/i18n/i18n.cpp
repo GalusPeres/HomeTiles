@@ -554,7 +554,15 @@ static const Strings kStringsDe = {
     "Aus",
     "Gespeichert (verborgen)",
     "Solange das Passwort aktiv ist, zeigt der Browser gespeicherte WLAN- und MQTT-Passwörter und PINs nicht an; zum Ändern einen neuen Wert eingeben.",
-    "Das gespeicherte Passwort ist verborgen. Feld leer lassen, um es zu behalten."};
+    "Das gespeicherte Passwort ist verborgen. Feld leer lassen, um es zu behalten.",
+    "Bridge-Verschlüsselung",
+    "Wartet auf Bridge",
+    "Verschlüsselung einrichten",
+    "Neuer Code",
+    "Ausschalten",
+    "Diesen Kopplungscode in Home Assistant unter HomeTiles Bridge > Konfigurieren > Sicherheit eintragen.",
+    "Befehle an Home Assistant werden verschlüsselt und signiert.",
+    "Den Kopplungscode auch in der HomeTiles Bridge entfernen."};
 
 static const Strings kStringsEn = {
     "en",
@@ -1103,7 +1111,15 @@ static const Strings kStringsEn = {
     "Off",
     "Saved (hidden)",
     "While the password is on, saved Wi-Fi and MQTT passwords and PINs are not shown in the browser; enter a new value to change them.",
-    "The saved password is hidden. Leave the field empty to keep it."};
+    "The saved password is hidden. Leave the field empty to keep it.",
+    "Bridge encryption",
+    "Waiting for Bridge",
+    "Set up encryption",
+    "New code",
+    "Turn off",
+    "Enter this pairing code in Home Assistant under HomeTiles Bridge > Configure > Security.",
+    "Commands to Home Assistant are encrypted and signed.",
+    "Also remove the pairing code in the HomeTiles Bridge."};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1652,7 +1668,15 @@ static const Strings kStringsFr = {
     "Désactivé",
     "Enregistré (masqué)",
     "Tant que le mot de passe est actif, les mots de passe Wi-Fi et MQTT et les codes PIN enregistrés ne sont pas affichés dans le navigateur ; saisissez une nouvelle valeur pour les modifier.",
-    "Le mot de passe enregistré est masqué. Laissez le champ vide pour le conserver."};
+    "Le mot de passe enregistré est masqué. Laissez le champ vide pour le conserver.",
+    "Chiffrement du Bridge",
+    "En attente du Bridge",
+    "Configurer le chiffrement",
+    "Nouveau code",
+    "Désactiver",
+    "Saisissez ce code d'appairage dans Home Assistant sous HomeTiles Bridge > Configurer > Sécurité.",
+    "Les commandes vers Home Assistant sont chiffrées et signées.",
+    "Supprimez aussi le code d'appairage dans le Bridge HomeTiles."};
 
 static const LocaleProfile kLocaleDe = {
     "de",

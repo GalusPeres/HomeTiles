@@ -45,6 +45,7 @@
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/io/hardware_io.h"
 #include "src/video/local_camera/local_camera.h"
+#include "src/network/secure/command_channel.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/tiles/runtime/tile_update_service.h"
@@ -896,6 +897,8 @@ void setup() {
   // Built-in camera opt-in (exact camera profiles only). The sensor probe
   // runs on its own worker and needs the touch-owned I2C bus from Device init.
   local_camera::begin();
+  // Optional encrypted Bridge commands; loads the stored pairing, if any.
+  command_channel::begin();
   Serial.flush();
 
   if (has_config) {
@@ -1168,6 +1171,7 @@ void loop() {
     viewNavigationService();
       mqtt_process_inbound_queue();
       local_camera::service();
+      command_channel::service();
       // Keep live tile state current during sleep. The paused refresh timer
       // prevents drawing to the sleeping display, so wake needs no catch-up.
       // Graph history remains on the active request/response path below.
@@ -1338,6 +1342,7 @@ void loop() {
     mqttServicePostConnect();
     viewNavigationService();
     local_camera::service();
+    command_channel::service();
     // Keep S3 input service bounded when Home Assistant echoes a live slider
     // command or sends a retained-state burst. Eight messages per UI cycle
     // still drains far more than normal traffic without starving the next

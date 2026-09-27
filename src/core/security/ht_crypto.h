@@ -43,6 +43,30 @@ void hmacSha256Final(HmacSha256& ctx, uint8_t out[kSha256Size]);
 void hmacSha256(const uint8_t* key, size_t key_length, const void* data,
                 size_t length, uint8_t out[kSha256Size]);
 
+// HKDF with HMAC-SHA256 (RFC 5869). out_length is at most 255 * 32 bytes.
+void hkdfSha256(const uint8_t* salt, size_t salt_length, const uint8_t* ikm,
+                size_t ikm_length, const uint8_t* info, size_t info_length,
+                uint8_t* out, size_t out_length);
+
+// ChaCha20-Poly1305 AEAD (RFC 8439) with a 256-bit key and a 96-bit nonce.
+// ciphertext may equal plaintext for in-place encryption. open() checks the
+// tag in constant time before it decrypts anything and returns false (with
+// the output cleared) on any mismatch.
+constexpr size_t kAeadKeySize = 32;
+constexpr size_t kAeadNonceSize = 12;
+constexpr size_t kAeadTagSize = 16;
+
+void chacha20Poly1305Seal(const uint8_t key[kAeadKeySize],
+                          const uint8_t nonce[kAeadNonceSize],
+                          const uint8_t* aad, size_t aad_length,
+                          const uint8_t* plaintext, size_t length,
+                          uint8_t* ciphertext, uint8_t tag[kAeadTagSize]);
+bool chacha20Poly1305Open(const uint8_t key[kAeadKeySize],
+                          const uint8_t nonce[kAeadNonceSize],
+                          const uint8_t* aad, size_t aad_length,
+                          const uint8_t* ciphertext, size_t length,
+                          const uint8_t tag[kAeadTagSize], uint8_t* plaintext);
+
 // Compares without an early exit, so the duration does not reveal the
 // position of the first differing byte.
 bool equalConstantTime(const uint8_t* a, const uint8_t* b, size_t length);

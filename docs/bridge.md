@@ -78,6 +78,16 @@ Commands to offline displays or missing targets are rejected. Status updates do 
 
 Enable the electricity, gas, or water categories you need. Each requires the corresponding data in Home Assistant's [Energy Dashboard](https://my.home-assistant.io/redirect/energy/). These selections are also shared across displays.
 
+### Encrypted Commands { #encrypted-commands data-toc-label="Encryption" }
+
+Optional. Anyone who can publish on your MQTT broker could otherwise send commands in the display's name. With encryption, the Bridge runs only commands that the paired display encrypted and signed, each at most once, and camera stream tokens travel encrypted as well. Entity states, weather, history and camera images stay unencrypted.
+
+1. On the display, open **Settings → System → Security** and tap **Set up encryption**. A code such as `ABCDE-FGHJK-MNPQR-STVWX-YZ012` appears.
+2. In Home Assistant, open **HomeTiles Bridge → Configure → Security**, enter the code, and submit. The Bridge checks it against the display and restarts the entry.
+3. The display then shows that commands are encrypted.
+
+To turn it off, tap **Turn off** on the display and tick **Remove pairing** in the Bridge. A display without a code, and older firmware or Bridge versions, keep working unencrypted. Protocol details: [command-encryption.md](https://github.com/GalusPeres/HomeTiles/blob/main/docs-dev/command-encryption.md).
+
 ## Local Hardware Entities { data-toc-label="Local I/O" }
 
 Configure GPIO switches, onboard relays, and DS18B20 inputs on the display's [I/O tab](hardware-io.md). The Bridge adds them to that display's Home Assistant device automatically; they do not belong in the shared entity selection.

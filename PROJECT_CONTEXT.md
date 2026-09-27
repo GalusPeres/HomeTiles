@@ -17,13 +17,13 @@ Last reviewed: 2026-09-27
 - v0.6.12: `9605b6a`, CI `34353664113`, 15 profiles / 30 images; 102 tests pass. Guition V1/V2 PPA and Weather fixes; V2 confirmed, V1 hardware pending.
 - Stabilization: display/MQTT guards, Light coalescing, incremental Weather (`e3de63c`-`33b4e06`).
 - S3 TLS fallback: 87 tests/three builds pass; Guition OTA passed, Waveshare S3 pending. Earlier watchdogs unproven: `build/s3-ota-release-v0.6.10/`.
-- Guition S3 XIP/`-O2` reverted in `5279456` (more risk, no measured gain); do not reintroduce without evidence.
+- Guition S3 XIP/`-O2` reverted in `5279456` (more risk, no measured gain); reintroduce only with evidence.
 
 ## Hardware validation
 
 - Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 Tested, PPA/SD confirmed; V1 hardware pending.
 - v0.6.9 Binary/Text-State Sensor UI passed hardware tests on 4B, 8-inch and S3.
-- Other revisions need community hardware validation; compilation does not establish support.
+- Other revisions need community hardware validation; compiling is not support.
 - P4 code is shared; panel/touch initialization, timings, revision and firmware images remain profile-specific.
 - LCD-4 Rev 4.0 has contributor-tested display/touch/Wi-Fi/MQTT/Web OTA;
   older revisions and SD access are unsupported. See `docs/index.md` for validation.
@@ -34,18 +34,18 @@ Last reviewed: 2026-09-27
 
 Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
-- External Guition `JC8012P4A1C_I_W_Y` V1, Foscam via HA Generic Camera; normal OTA failed, USB worked. SDIO cascade (CMD53 `0x109`, timeout `0x107`, raw `0xcccccccc`, invalid RX length, `rst:0xc`), also without cameras; recovery restarts leave no panic dump. First DCRC `0x80` on 11-/14-block C6-to-P4 reads. Repeated a8204 markers, 20 MHz (b3, also Issue #167), 1-bit alone (b5) and the 2.9.3 rollback are not fixes; do not retry them.
-- Version RPC `0x15e` also occurs on the stable 8-inch; it does not explain the cascade.
+- External Guition `JC8012P4A1C_I_W_Y` V1, Foscam via HA Generic Camera; OTA failed, USB worked. SDIO cascade (CMD53 `0x109`, timeout `0x107`, raw `0xcccccccc`, invalid RX length, `rst:0xc`), also without cameras; restarts leave no panic dump. First DCRC `0x80` on 11-/14-block C6-to-P4 reads. Repeated a8204 markers, 20 MHz (b3, also Issue #167), 1-bit alone (b5) and the 2.9.3 rollback are not fixes; do not retry.
+- Version RPC `0x15e` also occurs on the stable 8-inch; not the cascade cause.
 - SDIO schematics: V1 5.1-kohm pull-ups/no series termination; 8-inch 51-kohm; Tab5 5.1-kohm/22-ohm series/switched WLAN power. Signal margin unproven.
-- Original `JC8012P4A1_C6.bin` and HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 flashing needs CN5 and a 3.3 V UART adapter.
-- Fix b6 passed reporter tests (two cameras at 15-20 FPS, Web OTA); reporter confirmed v0.6.9b1, v0.6.10 ships it. Exact V1 keeps 1-bit/40 MHz and splits large RX into 512-byte CMD53 reads; other P4 profiles keep baseline objects, S3 unaffected. Lower camera quality/FPS only as a labeled diagnostic A/B.
+- Original `JC8012P4A1_C6.bin`/HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 needs CN5 and a 3.3 V UART.
+- Fix b6 passed reporter tests (two cameras 15-20 FPS, Web OTA); confirmed v0.6.9b1, shipped v0.6.10. Exact V1 keeps 1-bit/40 MHz, splits large RX into 512-byte CMD53 reads; other P4 profiles unchanged, S3 unaffected. Lower camera quality/FPS only as labeled diagnostic A/B.
 
 ## ESP32-P4 network history
 
 - Backported: ESP-Hosted allocation/PSRAM fixes, synchronous RPC UID routing, Espressif's `a8204f9` dropped-RX recovery, sparse diagnostics. Patches, variants, hashes, limits: `tools/esp-hosted-3.3.7-rx-fix/README.md`; do not duplicate.
-- `repo-a8204` is the release-safe baseline; the short-tail receive variant was an experimental field path, not a universal fix.
-- Failed P4 OTA approaches: throttling, PSRAM staging, TLS-to-flash streaming, Hosted restart, permanent SDIO buffers. Retry only with new evidence.
-- Network wedge safeguards are recovery, not proof of a transport fix.
+- `repo-a8204` is the release-safe baseline; the short-tail receive variant was experimental, not a universal fix.
+- Failed P4 OTA approaches: throttling, PSRAM staging, TLS-to-flash streaming, Hosted restart, permanent SDIO buffers; retry only with new evidence.
+- Network wedge safeguards are recovery, not a transport fix.
 
 ## Issue #38
 
@@ -134,4 +134,5 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Security branch (unreleased)
 
-- Web Admin password (optional): salt/key only, HMAC challenge, PSRAM sessions, CSRF; removed on device (System > Security); hides stored Wi-Fi/MQTT passwords/PINs. Bridge: pairing only. HW pending.
+- Web Admin password (optional): salt/key only, HMAC challenge, PSRAM sessions, CSRF; removed on device (System > Security); hides stored Wi-Fi/MQTT passwords/PINs. Bridge: pairing only.
+- Command channel (optional): pairing code, sealed commands/stream tokens, replay window; `docs-dev/command-encryption.md`. HW/HA pending.

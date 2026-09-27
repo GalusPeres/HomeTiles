@@ -74,6 +74,230 @@ void sha256Transform(uint32_t state[8], const uint8_t block[kSha256BlockSize]) {
   secureZero(w, sizeof(w));
 }
 
+inline uint32_t loadLe32(const uint8_t* p) {
+  return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8) |
+         (static_cast<uint32_t>(p[2]) << 16) |
+         (static_cast<uint32_t>(p[3]) << 24);
+}
+
+inline void storeLe32(uint8_t* p, uint32_t value) {
+  p[0] = static_cast<uint8_t>(value);
+  p[1] = static_cast<uint8_t>(value >> 8);
+  p[2] = static_cast<uint8_t>(value >> 16);
+  p[3] = static_cast<uint8_t>(value >> 24);
+}
+
+inline uint32_t rotl(uint32_t value, unsigned bits) {
+  return (value << bits) | (value >> (32U - bits));
+}
+
+inline void quarterRound(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d) {
+  a += b; d ^= a; d = rotl(d, 16);
+  c += d; b ^= c; b = rotl(b, 12);
+  a += b; d ^= a; d = rotl(d, 8);
+  c += d; b ^= c; b = rotl(b, 7);
+}
+
+// One 64-byte ChaCha20 key stream block (RFC 8439 section 2.3).
+void chacha20Block(const uint8_t key[32], uint32_t counter,
+                   const uint8_t nonce[12], uint8_t out[64]) {
+  uint32_t state[16] = {0x61707865, 0x3320646e, 0x79622d32, 0x6b206574};
+  for (size_t i = 0; i < 8; ++i) state[4 + i] = loadLe32(key + i * 4);
+  state[12] = counter;
+  for (size_t i = 0; i < 3; ++i) state[13 + i] = loadLe32(nonce + i * 4);
+  uint32_t x[16];
+  memcpy(x, state, sizeof(x));
+  for (int round = 0; round < 10; ++round) {
+    quarterRound(x[0], x[4], x[8], x[12]);
+    quarterRound(x[1], x[5], x[9], x[13]);
+    quarterRound(x[2], x[6], x[10], x[14]);
+    quarterRound(x[3], x[7], x[11], x[15]);
+    quarterRound(x[0], x[5], x[10], x[15]);
+    quarterRound(x[1], x[6], x[11], x[12]);
+    quarterRound(x[2], x[7], x[8], x[13]);
+    quarterRound(x[3], x[4], x[9], x[14]);
+  }
+  for (size_t i = 0; i < 16; ++i) storeLe32(out + i * 4, x[i] + state[i]);
+  secureZero(x, sizeof(x));
+  secureZero(state, sizeof(state));
+}
+
+void chacha20Xor(const uint8_t key[32], uint32_t counter,
+                 const uint8_t nonce[12], const uint8_t* in, size_t length,
+                 uint8_t* out) {
+  uint8_t block[64];
+  size_t offset = 0;
+  while (offset < length) {
+    chacha20Block(key, counter++, nonce, block);
+    const size_t take = length - offset < 64 ? length - offset : 64;
+    for (size_t i = 0; i < take; ++i) out[offset + i] = in[offset + i] ^ block[i];
+    offset += take;
+  }
+  secureZero(block, sizeof(block));
+}
+
+// Poly1305 with 26-bit limbs (the well-known "donna" 32-bit layout).
+struct Poly1305 {
+  uint32_t r[5];
+  uint32_t h[5];
+  uint32_t pad[4];
+  uint8_t buffer[16];
+  size_t leftover;
+};
+
+void poly1305Init(Poly1305& st, const uint8_t key[32]) {
+  st.r[0] = loadLe32(key + 0) & 0x3ffffff;
+  st.r[1] = (loadLe32(key + 3) >> 2) & 0x3ffff03;
+  st.r[2] = (loadLe32(key + 6) >> 4) & 0x3ffc0ff;
+  st.r[3] = (loadLe32(key + 9) >> 6) & 0x3f03fff;
+  st.r[4] = (loadLe32(key + 12) >> 8) & 0x00fffff;
+  for (size_t i = 0; i < 5; ++i) st.h[i] = 0;
+  for (size_t i = 0; i < 4; ++i) st.pad[i] = loadLe32(key + 16 + i * 4);
+  st.leftover = 0;
+}
+
+void poly1305Blocks(Poly1305& st, const uint8_t* m, size_t bytes, bool final_block) {
+  const uint32_t hibit = final_block ? 0 : (1UL << 24);
+  const uint32_t r0 = st.r[0], r1 = st.r[1], r2 = st.r[2], r3 = st.r[3], r4 = st.r[4];
+  const uint32_t s1 = r1 * 5, s2 = r2 * 5, s3 = r3 * 5, s4 = r4 * 5;
+  uint32_t h0 = st.h[0], h1 = st.h[1], h2 = st.h[2], h3 = st.h[3], h4 = st.h[4];
+  while (bytes >= 16) {
+    h0 += loadLe32(m + 0) & 0x3ffffff;
+    h1 += (loadLe32(m + 3) >> 2) & 0x3ffffff;
+    h2 += (loadLe32(m + 6) >> 4) & 0x3ffffff;
+    h3 += (loadLe32(m + 9) >> 6) & 0x3ffffff;
+    h4 += (loadLe32(m + 12) >> 8) | hibit;
+
+    uint64_t d0 = static_cast<uint64_t>(h0) * r0 + static_cast<uint64_t>(h1) * s4 +
+                  static_cast<uint64_t>(h2) * s3 + static_cast<uint64_t>(h3) * s2 +
+                  static_cast<uint64_t>(h4) * s1;
+    uint64_t d1 = static_cast<uint64_t>(h0) * r1 + static_cast<uint64_t>(h1) * r0 +
+                  static_cast<uint64_t>(h2) * s4 + static_cast<uint64_t>(h3) * s3 +
+                  static_cast<uint64_t>(h4) * s2;
+    uint64_t d2 = static_cast<uint64_t>(h0) * r2 + static_cast<uint64_t>(h1) * r1 +
+                  static_cast<uint64_t>(h2) * r0 + static_cast<uint64_t>(h3) * s4 +
+                  static_cast<uint64_t>(h4) * s3;
+    uint64_t d3 = static_cast<uint64_t>(h0) * r3 + static_cast<uint64_t>(h1) * r2 +
+                  static_cast<uint64_t>(h2) * r1 + static_cast<uint64_t>(h3) * r0 +
+                  static_cast<uint64_t>(h4) * s4;
+    uint64_t d4 = static_cast<uint64_t>(h0) * r4 + static_cast<uint64_t>(h1) * r3 +
+                  static_cast<uint64_t>(h2) * r2 + static_cast<uint64_t>(h3) * r1 +
+                  static_cast<uint64_t>(h4) * r0;
+
+    uint32_t c = static_cast<uint32_t>(d0 >> 26);
+    h0 = static_cast<uint32_t>(d0) & 0x3ffffff;
+    d1 += c; c = static_cast<uint32_t>(d1 >> 26); h1 = static_cast<uint32_t>(d1) & 0x3ffffff;
+    d2 += c; c = static_cast<uint32_t>(d2 >> 26); h2 = static_cast<uint32_t>(d2) & 0x3ffffff;
+    d3 += c; c = static_cast<uint32_t>(d3 >> 26); h3 = static_cast<uint32_t>(d3) & 0x3ffffff;
+    d4 += c; c = static_cast<uint32_t>(d4 >> 26); h4 = static_cast<uint32_t>(d4) & 0x3ffffff;
+    h0 += c * 5;
+    c = h0 >> 26;
+    h0 &= 0x3ffffff;
+    h1 += c;
+    m += 16;
+    bytes -= 16;
+  }
+  st.h[0] = h0; st.h[1] = h1; st.h[2] = h2; st.h[3] = h3; st.h[4] = h4;
+}
+
+void poly1305Update(Poly1305& st, const uint8_t* m, size_t bytes) {
+  if (st.leftover) {
+    size_t want = 16 - st.leftover;
+    if (want > bytes) want = bytes;
+    memcpy(st.buffer + st.leftover, m, want);
+    bytes -= want;
+    m += want;
+    st.leftover += want;
+    if (st.leftover < 16) return;
+    poly1305Blocks(st, st.buffer, 16, false);
+    st.leftover = 0;
+  }
+  if (bytes >= 16) {
+    const size_t want = bytes & ~static_cast<size_t>(15);
+    poly1305Blocks(st, m, want, false);
+    m += want;
+    bytes -= want;
+  }
+  if (bytes) {
+    memcpy(st.buffer + st.leftover, m, bytes);
+    st.leftover += bytes;
+  }
+}
+
+void poly1305Finish(Poly1305& st, uint8_t mac[16]) {
+  if (st.leftover) {
+    size_t i = st.leftover;
+    st.buffer[i++] = 1;
+    for (; i < 16; ++i) st.buffer[i] = 0;
+    poly1305Blocks(st, st.buffer, 16, true);
+  }
+  uint32_t h0 = st.h[0], h1 = st.h[1], h2 = st.h[2], h3 = st.h[3], h4 = st.h[4];
+  uint32_t c = h1 >> 26;
+  h1 &= 0x3ffffff;
+  h2 += c; c = h2 >> 26; h2 &= 0x3ffffff;
+  h3 += c; c = h3 >> 26; h3 &= 0x3ffffff;
+  h4 += c; c = h4 >> 26; h4 &= 0x3ffffff;
+  h0 += c * 5; c = h0 >> 26; h0 &= 0x3ffffff;
+  h1 += c;
+
+  // Compute h - p and keep it when it does not underflow.
+  uint32_t g0 = h0 + 5; c = g0 >> 26; g0 &= 0x3ffffff;
+  uint32_t g1 = h1 + c; c = g1 >> 26; g1 &= 0x3ffffff;
+  uint32_t g2 = h2 + c; c = g2 >> 26; g2 &= 0x3ffffff;
+  uint32_t g3 = h3 + c; c = g3 >> 26; g3 &= 0x3ffffff;
+  uint32_t g4 = h4 + c - (1UL << 26);
+  uint32_t mask = (g4 >> 31) - 1;
+  g0 &= mask; g1 &= mask; g2 &= mask; g3 &= mask; g4 &= mask;
+  mask = ~mask;
+  h0 = (h0 & mask) | g0;
+  h1 = (h1 & mask) | g1;
+  h2 = (h2 & mask) | g2;
+  h3 = (h3 & mask) | g3;
+  h4 = (h4 & mask) | g4;
+
+  h0 = h0 | (h1 << 26);
+  h1 = (h1 >> 6) | (h2 << 20);
+  h2 = (h2 >> 12) | (h3 << 14);
+  h3 = (h3 >> 18) | (h4 << 8);
+
+  uint64_t f = static_cast<uint64_t>(h0) + st.pad[0];
+  h0 = static_cast<uint32_t>(f);
+  f = static_cast<uint64_t>(h1) + st.pad[1] + (f >> 32);
+  h1 = static_cast<uint32_t>(f);
+  f = static_cast<uint64_t>(h2) + st.pad[2] + (f >> 32);
+  h2 = static_cast<uint32_t>(f);
+  f = static_cast<uint64_t>(h3) + st.pad[3] + (f >> 32);
+  h3 = static_cast<uint32_t>(f);
+  storeLe32(mac + 0, h0);
+  storeLe32(mac + 4, h1);
+  storeLe32(mac + 8, h2);
+  storeLe32(mac + 12, h3);
+  secureZero(&st, sizeof(st));
+}
+
+// Tag over aad || pad16 || ciphertext || pad16 || le64(aad) || le64(ct).
+void aeadTag(const uint8_t key[32], const uint8_t nonce[12], const uint8_t* aad,
+             size_t aad_length, const uint8_t* ciphertext, size_t length,
+             uint8_t tag[16]) {
+  uint8_t block[64];
+  chacha20Block(key, 0, nonce, block);
+  Poly1305 mac;
+  poly1305Init(mac, block);
+  secureZero(block, sizeof(block));
+  static const uint8_t kZeros[16] = {};
+  if (aad_length) poly1305Update(mac, aad, aad_length);
+  if (aad_length % 16) poly1305Update(mac, kZeros, 16 - aad_length % 16);
+  if (length) poly1305Update(mac, ciphertext, length);
+  if (length % 16) poly1305Update(mac, kZeros, 16 - length % 16);
+  uint8_t lengths[16];
+  for (size_t i = 0; i < 8; ++i) {
+    lengths[i] = static_cast<uint8_t>(static_cast<uint64_t>(aad_length) >> (8 * i));
+    lengths[8 + i] = static_cast<uint8_t>(static_cast<uint64_t>(length) >> (8 * i));
+  }
+  poly1305Update(mac, lengths, sizeof(lengths));
+  poly1305Finish(mac, tag);
+}
+
 int hexValue(char c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -182,6 +406,57 @@ void hmacSha256(const uint8_t* key, size_t key_length, const void* data,
   hmacSha256Init(ctx, key, key_length);
   hmacSha256Update(ctx, data, length);
   hmacSha256Final(ctx, out);
+}
+
+void hkdfSha256(const uint8_t* salt, size_t salt_length, const uint8_t* ikm,
+                size_t ikm_length, const uint8_t* info, size_t info_length,
+                uint8_t* out, size_t out_length) {
+  if (!out || out_length == 0 || out_length > 255 * kSha256Size) return;
+  uint8_t prk[kSha256Size];
+  hmacSha256(salt, salt_length, ikm, ikm_length, prk);
+  uint8_t block[kSha256Size];
+  size_t produced = 0;
+  for (uint8_t counter = 1; produced < out_length; ++counter) {
+    HmacSha256 mac;
+    hmacSha256Init(mac, prk, sizeof(prk));
+    if (counter > 1) hmacSha256Update(mac, block, sizeof(block));
+    if (info && info_length) hmacSha256Update(mac, info, info_length);
+    hmacSha256Update(mac, &counter, 1);
+    hmacSha256Final(mac, block);
+    const size_t take = out_length - produced < kSha256Size
+                            ? out_length - produced
+                            : kSha256Size;
+    memcpy(out + produced, block, take);
+    produced += take;
+  }
+  secureZero(prk, sizeof(prk));
+  secureZero(block, sizeof(block));
+}
+
+void chacha20Poly1305Seal(const uint8_t key[kAeadKeySize],
+                          const uint8_t nonce[kAeadNonceSize],
+                          const uint8_t* aad, size_t aad_length,
+                          const uint8_t* plaintext, size_t length,
+                          uint8_t* ciphertext, uint8_t tag[kAeadTagSize]) {
+  chacha20Xor(key, 1, nonce, plaintext, length, ciphertext);
+  aeadTag(key, nonce, aad, aad_length, ciphertext, length, tag);
+}
+
+bool chacha20Poly1305Open(const uint8_t key[kAeadKeySize],
+                          const uint8_t nonce[kAeadNonceSize],
+                          const uint8_t* aad, size_t aad_length,
+                          const uint8_t* ciphertext, size_t length,
+                          const uint8_t tag[kAeadTagSize], uint8_t* plaintext) {
+  uint8_t expected[kAeadTagSize];
+  aeadTag(key, nonce, aad, aad_length, ciphertext, length, expected);
+  const bool valid = equalConstantTime(expected, tag, kAeadTagSize);
+  secureZero(expected, sizeof(expected));
+  if (!valid) {
+    if (plaintext && plaintext != ciphertext) secureZero(plaintext, length);
+    return false;
+  }
+  chacha20Xor(key, 1, nonce, ciphertext, length, plaintext);
+  return true;
 }
 
 bool equalConstantTime(const uint8_t* a, const uint8_t* b, size_t length) {

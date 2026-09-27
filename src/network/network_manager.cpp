@@ -1,4 +1,5 @@
 #include "src/network/network_manager.h"
+#include "src/network/secure/command_channel.h"
 #include "src/network/transport/network_transport.h"
 #include "src/core/config/config_manager.h"
 #include "src/network/mqtt/mqtt_handlers.h"
@@ -295,6 +296,26 @@ static bool enqueueOutboundCmd(MqttCmdKind kind,
                                bool retain,
                                bool priority = false,
                                uint32_t large_buffer_hold_ms = 0) {
+  // With an active Bridge pairing, panel commands travel sealed on the secure
+  // topic instead (src/network/secure/command_channel.h). Everything else,
+  // and every command without pairing, is published unchanged.
+  command_channel::SealedPublish sealed;
+  if (kind == MqttCmdKind::PUBLISH) {
+    switch (command_channel::prepareOutbound(topic, payload, payload_len, &sealed)) {
+      case command_channel::OutboundResult::Plain:
+        break;
+      case command_channel::OutboundResult::Sealed:
+        topic = sealed.topic();
+        payload = sealed.payload();
+        payload_len = sealed.length();
+        retain = false;
+        break;
+      case command_channel::OutboundResult::Held:
+        return true;
+      case command_channel::OutboundResult::Dropped:
+        return false;
+    }
+  }
   const bool large_publish =
       kind == MqttCmdKind::PUBLISH && large_buffer_hold_ms > 0;
   QueueHandle_t queue = kind == MqttCmdKind::PUBLISH

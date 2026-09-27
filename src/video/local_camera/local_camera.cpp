@@ -2598,6 +2598,11 @@ bool isCommandTopic(const char* topic) {
 
 bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length) {
   if (!isCommandTopic(topic)) return false;
+  handleCommandPayload(payload, length);
+  return true;
+}
+
+void handleCommandPayload(const uint8_t* payload, size_t length) {
 #if defined(HOMETILES_LOCAL_CAMERA)
   LocalCameraCommand command;
   parseCommand(reinterpret_cast<const char*>(payload), length, &command);
@@ -2617,7 +2622,7 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
     } else {
       handleStreamStop(command.stop_session);
     }
-    return true;
+    return;
   }
   SnapshotRequest request = command.snapshot;
   const RequestStatus status = command.snapshot_status;
@@ -2626,7 +2631,7 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
       Serial.printf("[LocalCam] Ignored request: %s (%u bytes)\n",
                     requestStatusName(status), static_cast<unsigned>(length));
     }
-    return true;
+    return;
   }
 
   const uint32_t now_ms = millis();
@@ -2649,7 +2654,7 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
   }
   if (code != ErrorCode::None) {
     publishErrorReply(request.id, code);
-    return true;
+    return;
   }
   g_rate_limiter.markAccepted(now_ms);
   request.received_ms = now_ms;
@@ -2660,7 +2665,6 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
   (void)payload;
   (void)length;
 #endif
-  return true;
 }
 
 bool bridgeCapability() {

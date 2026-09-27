@@ -1,6 +1,7 @@
 #include "src/types/value/value_control.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/network/mqtt/mqtt_handlers.h"
+#include "src/network/secure/command_channel.h"
 #include "src/network/mqtt/mqtt_packet_safety.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
@@ -1723,6 +1724,11 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
 static void processMqttMessage(char* topic, uint8_t* payload, unsigned int length) {
   yield();  // Let the web server run.
 
+  // Sealed Bridge messages, and while pairing is active the unencrypted
+  // copies of stream-token topics, never reach the plain handlers below.
+  if (command_channel::handleMqttMessage(topic, payload, length)) return;
+  if (command_channel::blocksPlaintext(topic)) return;
+
   // Local relays use a small direct topic path, avoiding JSON parsing
   // while normal Bridge and camera messages retain the established router.
   if (hardwareIo.handleMqttMessage(topic, payload, length)) return;
@@ -2721,6 +2727,8 @@ void mqttServicePostConnect() {
   mqttPublishHomeSnapshot();
   // Retained {base}/stat/local_camera on camera profiles; no-op elsewhere.
   local_camera::onMqttConnected();
+  // Bridge pairing: secure topic subscription, status and session request.
+  command_channel::onMqttConnected();
   // Announce the exact MAC-based Bridge topic after every connection. Without
   // this retained message the HA integration cannot discover a new device or
   // repair an entry that still points at an older device ID. The publish uses

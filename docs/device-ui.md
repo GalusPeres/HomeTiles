@@ -114,4 +114,5 @@ View the firmware version and device name, or use the maintenance actions:
 - **Check for updates:** find and install a new release; see [Firmware Updates](updating.md).
 - **Restart:** reboot the display.
 - **Pairing:** reconnect MQTT and announce the display to Home Assistant again.
+- **Security:** remove a forgotten [Web Admin password](web-admin.md#web-admin-password), and set up [encrypted Bridge commands](bridge.md#encrypted-commands): **Set up encryption** shows a pairing code, **New code** replaces it, **Turn off** returns to unencrypted commands.
 - **GitHub:** show a QR code for the project.

@@ -233,7 +233,7 @@ assert.ok(pipeline.indexOf('esp_cam_new_csi_ctlr') < pipeline.indexOf('esp_isp_n
   'The CSI controller must exist before the ISP claims the shared bridge');
 
 // Request handling on the loop only validates and notifies the worker.
-const request = body('handleMqttMessage');
+const request = body('handleCommandPayload');
 assert.doesNotMatch(request, /captureJpeg|ensureSensor|ensurePipeline|vTaskDelay|mqttStreamPublish/);
 assert.match(request, /notifyWorker\(kNotifyCapture\)/);
 assert.match(request, /g_rate_limiter\.wouldAccept/);

@@ -78,7 +78,7 @@ assert.match(up('setEndpoint'), /strcmp\(g_endpoint\.session, endpoint\.session\
 assert.match(up('runConnection'), /if \(g_generation\.load\(\) != generation\) \{\s*end = ConnectionEnd::Reconnect;/);
 // A snapshot while the stream owns the pipeline (or storage work holds the
 // camera off) is answered as busy.
-assert.match(svc('handleMqttMessage'), /g_capture_busy\.load\(\) \|\|\s*g_stream_running\.load\(\) \|\| g_stream_wanted\.load\(\) \|\|\s*storageHoldActive\(\)\) \{[\s\S]*?code = ErrorCode::Busy;/);
+assert.match(svc('handleCommandPayload'), /g_capture_busy\.load\(\) \|\|\s*g_stream_running\.load\(\) \|\| g_stream_wanted\.load\(\) \|\|\s*storageHoldActive\(\)\) \{[\s\S]*?code = ErrorCode::Busy;/);
 assert.match(svc('streamWait'), /publishErrorReply\(g_pending\.id, ErrorCode::Busy\);/);
 
 // --- Mode changes reconnect within the same session -----------------------------------

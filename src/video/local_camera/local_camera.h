@@ -57,6 +57,10 @@ const char* commandTopic();
 bool isCommandTopic(const char* topic);
 // Returns true when the topic belonged to this module.
 bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length);
+// Processes a command payload whose origin was already checked: the plain
+// {base}/cmnd/local_camera topic or a Bridge message on the encrypted command
+// channel (src/network/secure/command_channel.h).
+void handleCommandPayload(const uint8_t* payload, size_t length);
 
 // "local_camera" flag in the Bridge capabilities: enabled and sensor detected.
 bool bridgeCapability();

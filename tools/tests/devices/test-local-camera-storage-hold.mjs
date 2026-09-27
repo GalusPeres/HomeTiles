@@ -70,7 +70,7 @@ assert.match(body('storageHoldActive'), /if \(g_storage_holds\.load\(\) != 0\) r
 // A snapshot in progress aborts, new snapshot requests are busy, keepalives
 // defer through the gate.
 assert.match(body('abortRequested'), /storageHoldActive\(\)/);
-assert.match(body('handleMqttMessage'), /g_stream_running\.load\(\) \|\| g_stream_wanted\.load\(\) \|\|\s*storageHoldActive\(\)\) \{/);
+assert.match(body('handleCommandPayload'), /g_stream_running\.load\(\) \|\| g_stream_wanted\.load\(\) \|\|\s*storageHoldActive\(\)\) \{/);
 assert.match(body('currentGate'), /in\.storage_hold = storageHoldActive\(\);/);
 
 // --- Contract ----------------------------------------------------------------------

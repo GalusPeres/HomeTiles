@@ -13,8 +13,7 @@ Lights, climate, sensors, energy, weather and more on a 4 to 10.1 inch touch scr
 <a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-pill-release.png" alt="Latest release" height="40"></a>
 <a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-pill-coffee.png" alt="Buy Me a Coffee" height="40"></a>
 <br>
-<img src="docs/images/readme-start.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%"><br>
-Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors.
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-hero-dark.png"><img src="docs/images/readme-hero-light.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups. Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors." width="100%"></picture>
 
 </div>
 

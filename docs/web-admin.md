@@ -112,12 +112,18 @@ While a rule matches, it wins. Otherwise the icon and tile colors above apply. W
 <div class="ht-illustrated-intro" markdown>
 <div markdown>
 
-In this example, a waste collection sensor reports text such as "Collection in 4 days". Its icon turns red while the state contains "today" and green while it contains "4". With **Tile color → From icon**, the tile follows the icon color.
+In this example, a waste sensor says when to put the bin out, such as "Put out in 4 days". Its icon turns red while the state contains "today" and green while it contains "4". With **Tile color → From icon**, the circle and the tile follow the icon color.
 
-<figure class="ht-screenshot ht-editor-detail">
-<img src="../images/8in-waste-tile.png" alt="Waste tile with a green icon for collection in four days" width="260" height="145" loading="lazy">
-<figcaption>The state contains "4": green</figcaption>
+<div class="ht-popup-grid" markdown>
+<figure class="ht-screenshot">
+<img src="../images/8in-waste-tile.png" alt="Waste tile with a green icon: put out in four days" width="260" height="145" loading="lazy">
+<figcaption>Contains "4": green</figcaption>
 </figure>
+<figure class="ht-screenshot">
+<img src="../images/8in-waste-tile-today.png" alt="Waste tile tinted red: put out today" width="260" height="145" loading="lazy">
+<figcaption>Contains "today": red</figcaption>
+</figure>
+</div>
 
 </div>
 <figure class="ht-screenshot ht-editor-detail">

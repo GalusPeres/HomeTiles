@@ -1015,8 +1015,26 @@ bool sd_wallpaper_file_exists(const String& file_name) {
          Device::sdFS().exists(String(kLegacyWallpaperDir) + "/" + file_name);
 }
 
+// A slide is shown only when it is checked and its file is still on the card.
+// Entries of deleted files stay in the stored list until the next Web Admin
+// save; they must neither be shown nor stall the slideshow.
+bool wallpaper_usable(const ScreensaverWallpaperConfig& wallpaper) {
+  return wallpaper.enabled && sd_wallpaper_file_exists(wallpaper.file_name);
+}
+
+bool any_configured_wallpaper_on_card() {
+  for (const auto& wallpaper : screensaverConfig.get().wallpapers) {
+    if (sd_wallpaper_file_exists(wallpaper.file_name)) return true;
+  }
+  return false;
+}
+
+// The first-image fallback is only for a card whose images were never
+// configured or were all deleted since. Unchecked images stay hidden.
 bool find_first_sd_wallpaper(ScreensaverWallpaperConfig& out) {
-  if (!Device::sdReadyCached()) return false;
+  if (!Device::sdReadyCached() || any_configured_wallpaper_on_card()) {
+    return false;
+  }
   const char* directories[] = {kImageDir, kLegacyWallpaperDir};
   for (const char* directory : directories) {
     fs::File dir = Device::sdFS().open(directory, FILE_READ);
@@ -1047,9 +1065,7 @@ bool find_first_sd_wallpaper(ScreensaverWallpaperConfig& out) {
 int first_enabled_wallpaper() {
   const auto& wallpapers = screensaverConfig.get().wallpapers;
   for (size_t i = 0; i < wallpapers.size(); ++i) {
-    if (wallpapers[i].enabled && is_wallpaper_file(wallpapers[i].file_name)) {
-      return static_cast<int>(i);
-    }
+    if (wallpaper_usable(wallpapers[i])) return static_cast<int>(i);
   }
   return -1;
 }
@@ -1062,8 +1078,7 @@ int next_enabled_wallpaper(int current) {
     int choices[kMaxScreensaverWallpapers];
     size_t choice_count = 0;
     for (size_t i = 0; i < count; ++i) {
-      if (config.wallpapers[i].enabled &&
-          is_wallpaper_file(config.wallpapers[i].file_name) &&
+      if (wallpaper_usable(config.wallpapers[i]) &&
           (static_cast<int>(i) != current || count == 1)) {
         choices[choice_count++] = static_cast<int>(i);
       }
@@ -1072,9 +1087,7 @@ int next_enabled_wallpaper(int current) {
   }
   for (size_t step = 1; step <= count; ++step) {
     const size_t i = (static_cast<size_t>(current < 0 ? 0 : current) + step) % count;
-    if (config.wallpapers[i].enabled && is_wallpaper_file(config.wallpapers[i].file_name)) {
-      return static_cast<int>(i);
-    }
+    if (wallpaper_usable(config.wallpapers[i])) return static_cast<int>(i);
   }
   return first_enabled_wallpaper();
 }

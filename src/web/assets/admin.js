@@ -8815,6 +8815,7 @@ function syncTileRadiusControls(tabEl) {
     screensaverLoading = false;
     screensaverDraft = null;
     screensaverWallpaperIndex = -1;
+    syncScreensaverImages();
   }
 
   function ssClamp(value, min, max) {
@@ -8859,19 +8860,50 @@ function syncTileRadiusControls(tabEl) {
     data.wallpapers = Array.isArray(data.wallpapers) ? data.wallpapers : [];
     data.duration_seconds = Math.round(ssClamp(
       data.duration_seconds ?? 15, 3, 3600));
-    const configured = new Map(data.wallpapers.map(item => [item.file_name, item]));
-    const hadConfiguredWallpapers = data.wallpapers.length > 0;
-    (data.available_wallpapers || []).forEach(name => {
-      if (!configured.has(name)) {
-        data.wallpapers.push({
-          file_name: name, enabled: !hadConfiguredWallpapers,
-          focus_x: 500, focus_y: 500, zoom: 1000
-        });
-      }
-    });
-    screensaverWallpaperIndex = data.wallpapers.findIndex(w => w.enabled);
-    if (screensaverWallpaperIndex < 0 && data.wallpapers.length) screensaverWallpaperIndex = 0;
     return data;
+  }
+
+  // Keep the stored image list in step with the card: entries of deleted
+  // files are dropped and new images join checked, so an upload appears in
+  // the slideshow without extra clicks. Returns true when the list changed.
+  function ssSyncCardImages(data) {
+    const available = Array.isArray(data.available_wallpapers) ? data.available_wallpapers : [];
+    const key = name => String(name || '').toLowerCase();
+    let changed = false;
+    // Without a card the list stays untouched; its images may come back.
+    if (data.sd_ready === true) {
+      const onCard = new Set(available.map(key));
+      const kept = data.wallpapers.filter(item => onCard.has(key(item.file_name)));
+      changed = kept.length !== data.wallpapers.length;
+      data.wallpapers = kept;
+    }
+    const listed = new Set(data.wallpapers.map(item => key(item.file_name)));
+    available.forEach(name => {
+      // The display stores at most 32 images.
+      if (listed.has(key(name)) || data.wallpapers.length >= 32) return;
+      listed.add(key(name));
+      data.wallpapers.push({
+        file_name: name, enabled: true,
+        focus_x: 500, focus_y: 500, zoom: 1000
+      });
+      changed = true;
+    });
+    return changed;
+  }
+
+  // File manager uploads, renames and deletions store the updated list right
+  // away, so the display follows the card even while the Screensaver tab is
+  // closed. An open editor syncs and saves through its own load instead.
+  function syncScreensaverImages() {
+    fetch('/api/screensaver').then(r => r.json()).then(config => {
+      if (!config || !config.success || screensaverLoaded || screensaverLoading) return;
+      const data = ssNormalizeLoaded(config);
+      if (!ssSyncCardImages(data)) return;
+      return fetch('/api/screensaver', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ssPayload(data, ''))
+      });
+    }).catch(() => {});
   }
 
   function initScreensaverEditor() {
@@ -8883,16 +8915,19 @@ function syncTileRadiusControls(tabEl) {
     fetch('/api/screensaver').then(r => r.json()).then(config => {
       if (!config || !config.success) throw new Error('screensaver config');
       screensaverDraft = ssNormalizeLoaded(config);
+      const imagesChanged = ssSyncCardImages(screensaverDraft);
+      screensaverWallpaperIndex = screensaverDraft.wallpapers.findIndex(w => w.enabled);
+      if (screensaverWallpaperIndex < 0 && screensaverDraft.wallpapers.length) screensaverWallpaperIndex = 0;
       screensaverLoaded = true;
       bindScreensaverEditor();
       selectScreensaverBackground();
       renderScreensaverEditor();
+      if (imagesChanged) scheduleScreensaverSave();
     }).catch(() => showNotification(t('screensaverLoadFailed'), false))
       .finally(() => { screensaverLoading = false; });
   }
 
-  function ssPayload() {
-    const d = screensaverDraft;
+  function ssPayload(d = screensaverDraft, previewName = null) {
     return {
       version: 2,
       use_wallpapers: !!d.use_wallpapers,
@@ -8912,7 +8947,7 @@ function syncTileRadiusControls(tabEl) {
       clock_x: Math.round(ssClamp(d.clock_x, 0, 1000)),
       clock_y: Math.round(ssClamp(d.clock_y, 0, 1000)),
       duration_seconds: Math.round(ssClamp(d.duration_seconds, 3, 3600)),
-      preview_wallpaper: ssCurrentWallpaper()?.file_name || '',
+      preview_wallpaper: previewName ?? (ssCurrentWallpaper()?.file_name || ''),
       wallpapers: d.wallpapers.map(w => ({
         file_name: w.file_name, enabled: !!w.enabled,
         focus_x: Math.round(ssClamp(w.focus_x, 0, 1000)),

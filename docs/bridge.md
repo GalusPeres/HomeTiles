@@ -108,7 +108,7 @@ Displays with a camera can share it with Home Assistant. This needs HomeTiles v0
 | Waveshare ESP32-P4 7B, 4.3-inch, 4B | Optional OV5647 module on the CSI connector |
 | M5Stack Tab5 | Built-in SC2356 |
 
-Tested on the Guition JC8012P4A1 V2, Waveshare 8-inch, and M5Stack Tab5; the JC4880P443 camera was contributor-tested. On the other displays, use **Rotation**, **Mirror image**, or **Swap red and blue** under [Advanced](web-admin.md#built-in-camera) if the image appears turned or its colors are swapped.
+Tested on the Guition JC8012P4A1 V2, Waveshare 8-inch, and M5Stack Tab5. On the other displays, use **Rotation**, **Mirror image**, or **Swap red and blue** under [Advanced](web-admin.md#built-in-camera) if the image appears turned or its colors are swapped.
 
 1. In the Web Admin, open **Settings → Built-in camera** and enable **Allow Home Assistant to use the built-in camera**, then press **Save**.
 2. The Bridge adds a **Camera** entity to the display's Home Assistant device, plus a **Camera** switch that pauses it.

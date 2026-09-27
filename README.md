@@ -1,24 +1,23 @@
-<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-title-dark.png">
+  <img src="docs/images/readme-title-light.png" alt="HomeTiles" height="56">
+</picture>
 
-# <img src="docs/images/favicon.svg" width="42" alt="" align="top"> HomeTiles
+**Touch dashboards for Home Assistant on ESP32 displays.** Lights, climate, sensors, energy, weather and more on a 4 to 10.1 inch touch screen.
 
-**Touch dashboards for Home Assistant on ESP32 displays.**
+<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="https://img.shields.io/github/v/release/GalusPeres/HomeTiles?label=release" alt="Latest release"></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/GalusPeres/HomeTiles" alt="MIT License"></a>
+<a href="https://galusperes.github.io/"><img src="https://img.shields.io/badge/docs-online-2f81f7" alt="Documentation"></a>
+<a href="https://galusperes.github.io/installer/"><img src="https://img.shields.io/badge/flasher-web-26a69a" alt="Online flasher"></a>
+<a href="https://buymeacoffee.com/galusperes"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=white" alt="Buy Me a Coffee"></a>
 
-[**Documentation**](https://galusperes.github.io/) · [**Online flasher**](https://galusperes.github.io/installer/) · [**Latest release**](https://github.com/GalusPeres/HomeTiles/releases/latest)
-
-<a href="https://buymeacoffee.com/galusperes"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40"></a>
-
-<img src="docs/images/readme-hero.png" alt="HomeTiles home screen with sensor and energy popups" width="100%">
-
-<sub>Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors.</sub>
-
-</div>
+<img src="docs/images/readme-hero.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%">
 
 ## New in v0.7.0
 
-<img src="docs/images/readme-new.png" alt="Half-size tiles, color rules and tiles in the color of their light" width="100%">
+<img src="docs/images/readme-new.png" alt="Half-size tiles, color rules, tiles in the color of their light and folders that follow an entity" width="100%">
 
-Half-size tiles, icon circles, color rules and adjustable corners, plus built-in cameras shared with Home Assistant. Update HomeTiles Bridge to **v0.7.0** first and [export your dashboard](https://galusperes.github.io/updating/) before updating. [All changes](docs/releases/v0.7.0.md)
+Half-size tiles, icon circles, color rules and adjustable corners. Folders can follow an entity, like a climate folder that turns orange while heating and blue while cooling, or a lighting folder in the color of its lights. Built-in cameras are shared with Home Assistant. Update HomeTiles Bridge to **v0.7.0** first and [export your dashboard](https://galusperes.github.io/updating/) before updating. [All changes](docs/releases/v0.7.0.md)
 
 ## Get started
 

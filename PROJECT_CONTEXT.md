@@ -115,7 +115,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Cache b73 frees queues; V2: 76 cached switches, final 124 KiB. Five owned devices stable.
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
 - CI `36334088502`: 17 builds, 152 tests/21 skips; local 173 pass. Six S3 BINs verified.
-- Docs deployment pending. Issues need OK: #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B (PCLK 16 vs 10 MHz).
+- Docs/installer live; S3 downloads hash-verified. Issues need OK: #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B (PCLK 16 vs 10 MHz).
 
 ## Maintenance
 

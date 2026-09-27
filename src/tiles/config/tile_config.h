@@ -413,6 +413,7 @@ static inline bool parseClimateTileGeometry(
   return true;
 }
 
+// Stored position of one mini tile; build_slot_kinds clamps it to the grid.
 static inline ClimateTileItemGeometry getClimateTileItemGeometry(
     const Tile& tile, uint8_t item_index) {
   const uint8_t columns = climateTileGridColumns(tile);
@@ -479,16 +480,9 @@ static inline ClimateTileItemGeometry getClimateTileItemGeometry(
       }
     }
   }
-  if (geometry.col >= columns) geometry.col = columns - 1;
-  if (geometry.row >= rows) geometry.row = rows - 1;
-  if (geometry.span_w < 1) geometry.span_w = 1;
-  if (geometry.span_h < 1) geometry.span_h = 1;
-  if (geometry.span_w > columns - geometry.col) {
-    geometry.span_w = columns - geometry.col;
-  }
-  if (geometry.span_h > rows - geometry.row) {
-    geometry.span_h = rows - geometry.row;
-  }
+  // Deliberately not clamped into the current grid: placement orders the
+  // items by where they were stored and clamps afterwards, so an item from a
+  // row that no longer exists cannot jump ahead of the items above it.
   return geometry;
 }
 

@@ -38,6 +38,8 @@ HomeTiles is free, open-source firmware that turns a supported touch display int
 
 ## Demo
 
+This video shows an older version. The current release is faster and looks better; a new demo video will follow soon.
+
 <figure class="ht-screenshot">
 <video class="ht-demo" controls playsinline preload="metadata" poster="images/hometiles-demo-poster.jpg" aria-label="HomeTiles device demo">
 <source src="videos/hometiles-demo.mp4" type="video/mp4">

@@ -32,7 +32,7 @@ layout profile. The hardware-tested orientation is now the default; its
 flip-only setting rotates the display and touch mapping together and persists
 the selected orientation.
 
-Camera beta builds (`HOMETILES_CAMERA_BETA`) support Guition's optional
+Every build supports Guition's optional
 OV02C10 module on the 15-pin 0.3 mm CSI connector, with SCCB on the touch bus
 and the display's MIPI PHY supply shared. Orientation and the 1280x720
 one-lane mode are pending a hardware check.

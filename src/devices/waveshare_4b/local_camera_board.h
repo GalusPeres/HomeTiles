@@ -1,7 +1,7 @@
 #pragma once
 
 // Camera board file of the Waveshare ESP32-P4-WIFI6-Touch-LCD-4B profile,
-// camera beta builds only (contract: src/video/local_camera/camera_driver.h).
+// (contract: src/video/local_camera/camera_driver.h).
 // Board facts come from the 4B schematic and Waveshare's 4B camera examples
 // (see the OV5647 PROVENANCE.md):
 //   - a user-supplied OV5647 module on the 15-pin 1.0 mm CSI connector J1;

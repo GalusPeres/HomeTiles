@@ -59,10 +59,28 @@ try{
  newTileSpot.layout={col:1.5,row:.5,span_w:1,span_h:.5};
  check(grownNewTileLayout('test',5)===null,'Without room a larger type cannot be chosen');
  currentTileIndex=-1;newTileSpot=null;
+ // A selected new tile still of type Empty does not block the free slot; the
+ // slot may lie half a cell over it and takes the click.
+ layoutTiles('test',tiles);
+ const chosen=[...document.querySelectorAll('.tile.empty')].find(el=>el.style.display==='none');
+ chosen.dataset.selected='1';chosen.classList.add('active');setTileGridPosition(chosen,0,2,1,1);chosen.style.display='';
+ move(1,2.2);
+ const hoverEl=document.querySelector('.tile.empty.free-slot-hover');
+ const over=getTileElementLayout('test',Number(hoverEl.dataset.index));
+ check(over.col===.5 && over.row===2,'The free slot may lie half a cell over a selected Empty tile '+JSON.stringify(over));
+ const hr=hoverEl.getBoundingClientRect();
+ document.elementFromPoint(hr.left+hr.width*.25,hr.top+hr.height/2).click();
+ check(selected===Number(hoverEl.dataset.index),'The free slot takes the click where it lies over the selected tile');
+ const typeSel=document.createElement('select');typeSel.id='test_tile_type';
+ typeSel.innerHTML='<option value="0"></option><option value="5"></option>';document.body.append(typeSel);typeSel.value='5';
+ move(1,2.2);
+ const blocked=getTileElementLayout('test',Number(document.querySelector('.tile.empty.free-slot-hover').dataset.index));
+ check(blocked.col===1 && blocked.row===2,'Once a type is chosen the selected tile blocks the free slot '+JSON.stringify(blocked));
+ typeSel.remove();delete chosen.dataset.selected;chosen.classList.remove('active');chosen.style.display='none';
  check(supportedTileLayout(9,{col:0,row:0,span_w:1,span_h:.5}),'Clocks accept the half-height size');
  check(!supportedTileLayout(5,{col:0,row:0,span_w:1,span_h:.5}),'Switches still need a whole cell height');
  check(supportedTileLayout(5,{col:.5,row:0,span_w:1.5,span_h:1}) && supportedTileLayout(12,{col:0,row:0,span_w:2.5,span_h:1.5}),'Every type resizes in half steps');
- check(!supportedTileLayout(7,{col:0,row:0,span_w:1.5,span_h:1}),'Settings stays whole');
+ check(supportedTileLayout(7,{col:0,row:0,span_w:1.5,span_h:1}),'Settings supports half-step widths');
  document.querySelectorAll('.tile-grid > .tile').forEach(el=>{el.className='tile empty';el.dataset.type='0';delete el.dataset.selected;});
  layoutTiles('test',Array.from({length:9},()=>({type:0})));
  check(visibleEmpty().length===1,'An empty grid shows one resting slot');

@@ -50,6 +50,7 @@
   }
 
   function canPlaceHiddenSettingsLayout(tab, candidateLayout) {
+    if (!supportedTileLayout(7, candidateLayout)) return false;
     if (tileDataLoadedTabs.has(tab)) {
       return canPlaceTileLayout(tab, -1, candidateLayout);
     }
@@ -156,7 +157,7 @@
         columns, rows, firstRow,
         layout.span_w, layout.span_h,
         preferredCol, preferredRow,
-        fractional && ![7].includes(Number(tileTypes[displacedIndex])) ? 0.5 : 1);
+        fractional ? 0.5 : 1);
       let placed = false;
       for (const candidate of candidates) {
         const nextLayout = {

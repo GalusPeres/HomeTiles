@@ -11,11 +11,11 @@ Create a separate layout with a clock, tiles, and an optional image slideshow in
 
 - Tap a **Clock** tile to open it immediately.
 - Set an inactivity timeout under **Settings → Display → Screensaver**. **Never** disables automatic activation.
-- Use **Saver bright.** for separate screensaver brightness; the display previews the level while you drag.
+- Use **Screensaver Brightness** for separate screensaver brightness; the display previews the level while you drag.
 - Tap free background space to return to the dashboard.
 
 <figure class="ht-screenshot">
-<img src="../images/8in-display-popup-screensaver.png" alt="Display settings with screensaver timeout" width="1308" height="828" loading="lazy">
+<img src="../images/8in-display-popup.png" alt="Display settings with screensaver timeout" width="1272" height="792" loading="lazy">
 <figcaption>Display and screensaver settings</figcaption>
 </figure>
 
@@ -26,7 +26,7 @@ A slideshow needs microSD support. The Waveshare S3 LCD-4 Rev 4.0 and S3 LCD-4B 
 1. Format the card as FAT32 and insert it.
 2. Create an `images` folder in the card's root (`/images`).
 3. Copy your JPEGs there, or upload them with the Web Admin file manager.
-4. Reload the **Screensaver** tab to update the image list.
+4. Open the **Screensaver** tab. New images are added to the list, and deleted files disappear from it.
 
 ### Image Requirements { data-toc-label="Image format" }
 
@@ -44,7 +44,7 @@ If an image stays black, re-export it at the display's native size with these se
 In the Web Admin's **Screensaver** tab, click the background.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-screensaver.png" alt="Screensaver editor in the web admin" width="1450" height="1212" loading="lazy">
+<img src="../images/web-admin-screensaver.png" alt="Screensaver editor in the web admin" width="1305" height="790" loading="lazy">
 <figcaption>Screensaver editor</figcaption>
 </figure>
 

@@ -199,6 +199,7 @@ void queue_energy_tile_update_for_entry(const EnergyEntryData& entry) {
 }
 
 void parse_energy_response(const char* payload) {
+  const uint32_t parse_started_ms = millis();
   DynamicJsonDocument doc(32768);
   DeserializationError err = deserializeJson(doc, payload);
   if (err) {
@@ -278,9 +279,14 @@ void parse_energy_response(const char* payload) {
 
   cache_for_period(period) = parsed;
   queue_energy_popup_refresh(period);
-  Serial.printf("[Energy] Response parsed: period=%s entries=%u\n",
+  // Timing of one response: since its request was sent, and the parse itself.
+  const uint32_t now = millis();
+  const uint32_t requested_ms = request_state_for_period(period).last_attempt_ms;
+  Serial.printf("[Energy] Response parsed: period=%s entries=%u after=%lu ms parse=%lu ms\n",
                 period,
-                static_cast<unsigned>(parsed.size()));
+                static_cast<unsigned>(parsed.size()),
+                static_cast<unsigned long>(requested_ms ? now - requested_ms : 0),
+                static_cast<unsigned long>(now - parse_started_ms));
 }
 
 }  // namespace

@@ -1171,6 +1171,8 @@
     .tile.empty[data-selected="1"] { border:3px solid #26a69a; box-shadow:0 0 12px rgba(38,166,154,0.55); }
     .tile.empty:hover:not(.active),
     .tile.empty.free-slot-hover:not(.active) { border-color:rgba(38,166,154,0.4); }
+    /* The free slot may lie over a selected empty new tile; it takes the click. */
+    .tile.empty.free-slot-hover:not([data-selected="1"]) { z-index:1; }
     .tile-title {
       color:#fff;
       font-weight:normal;
@@ -1754,7 +1756,7 @@
     .tile.climate .climate-slot-control small {
       min-width:0;
       overflow:hidden;
-      color:#e0e0e0;
+      color:#fff;
       font-size:var(--fs20, 10px);
       font-weight:400;
       line-height:1.2;
@@ -2380,6 +2382,14 @@
   font-size:var(--compact-value-font); line-height:var(--compact-value-line);
 }
 .tile.sensor-compact .tile-unit { font-size:inherit; }
+/* Chosen half-height value sizes (compact_sensor_layout::value_font); title
+   and value both use the value line to center their block. */
+.tile.sensor-compact.compact-value-24 {
+  --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
+}
+.tile.sensor-compact.compact-value-28 {
+  --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
+}
 /* Half-height Back: the title alone is centered on the disc row. */
 .tile.sensor-compact.compact-title-only > .tile-title {
   top:max(0px, calc((var(--compact-h) - var(--compact-title-line)) / 2));

@@ -58,6 +58,8 @@ void appendAdminScripts(String& html) {
   appendJsEntry("settingsTileParking", tr.settings_tile_parking);
   appendJsEntry("backTileFixed", tr.js_back_tile_fixed);
   appendJsEntry("tileCannotDelete", tr.js_tile_cannot_delete);
+  appendJsEntry("pasteEmptyOnly", tr.js_paste_empty_only);
+  appendJsEntry("pasteNoSpace", tr.js_paste_no_space);
   appendJsEntry("folderCannotDelete", tr.js_folder_cannot_delete);
   appendJsEntry("deleteFolderConfirm", tr.js_delete_folder_confirm);
   appendJsEntry("folderDeleted", tr.js_folder_deleted);

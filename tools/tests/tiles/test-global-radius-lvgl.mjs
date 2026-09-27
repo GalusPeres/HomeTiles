@@ -41,7 +41,7 @@ bool finish(Preferences&){return true;}
 struct Logger{void println(const char*){}}Serial;
 const char* PREF_NAMESPACE="tab5_config";
 #include "src/core/config/icon_glow.h"
-struct Config{bool tile_borders=true;bool icon_discs=true;uint8_t icon_glow=icon_glow::kDefault;uint16_t tile_radius=tile_radius::kMinimum;};
+struct Config{bool tile_borders=true;bool icon_discs=true;uint8_t icon_glow=icon_glow::kDefault;uint16_t tile_radius=tile_radius::kDefault;};
 struct ConfigManager {
  Config config; const Config& getConfig(){return config;}
  bool saveTileRadius(uint16_t);
@@ -51,7 +51,8 @@ ${save}
 ${surfaceStyleHost(root)}
 int main(){
  using namespace BatchedNvsWrite;
- configManager.load();assert(configManager.config.tile_radius==tile_radius::kMinimum);
+ // New devices and updates without a stored radius start with round half tiles.
+ configManager.load();assert(configManager.config.tile_radius==tile_radius::kDefault && tile_radius::kDefault==tile_radius::kMaximum);
  assert(tile_radius::kMaximum==(Device::kGridCellH-Device::kGridGap+2)/4);
  lv_init(); auto*d=lv_display_create(Device::kScreenWidth,Device::kScreenHeight);
  std::vector<uint16_t> buffer(Device::kScreenWidth*16);
@@ -69,17 +70,17 @@ int main(){
  auto*popup=lv_obj_create(lv_layer_top());ui_surface_style::apply_radius(popup,tile_radius::kMinimum);
  for(int r=tile_radius::kMinimum;r<=tile_radius::kMaximum;++r){
    ui_surface_style::preview_radius(r);ui_surface_style::process_pending_updates();
-   assert(writes==0 && configManager.config.tile_radius==tile_radius::kMinimum);
+   assert(writes==0 && configManager.config.tile_radius==tile_radius::kDefault);
    assert(lv_obj_get_style_radius(outer,LV_PART_MAIN)==r && lv_obj_get_style_radius(popup,LV_PART_MAIN)==r);
    assert(lv_obj_get_style_radius(inner,LV_PART_MAIN)+climate_layout::kOuterInset==r);
    lv_obj_add_state(outer,LV_STATE_PRESSED);assert(lv_obj_get_style_radius(outer,LV_PART_MAIN)==r);lv_obj_remove_state(outer,LV_STATE_PRESSED);
  }
- assert(configManager.saveTileRadius(tile_radius::kMaximum));
+ assert(configManager.saveTileRadius(tile_radius::kMinimum));
  ui_surface_style::request_global_radius_refresh();ui_surface_style::process_pending_updates();
- assert(writes==1);assert(configManager.saveTileRadius(tile_radius::kMaximum));assert(writes==1);
- ConfigManager reboot;reboot.load();assert(reboot.config.tile_radius==tile_radius::kMaximum);
- fail_write=true;assert(!configManager.saveTileRadius(tile_radius::kMinimum));assert(configManager.config.tile_radius==tile_radius::kMaximum);fail_write=false;
- fail_open=true;assert(!configManager.saveTileRadius(tile_radius::kMinimum));fail_open=false;
+ assert(writes==1);assert(configManager.saveTileRadius(tile_radius::kMinimum));assert(writes==1);
+ ConfigManager reboot;reboot.load();assert(reboot.config.tile_radius==tile_radius::kMinimum);
+ fail_write=true;assert(!configManager.saveTileRadius(tile_radius::kMaximum));assert(configManager.config.tile_radius==tile_radius::kMinimum);fail_write=false;
+ fail_open=true;assert(!configManager.saveTileRadius(tile_radius::kMaximum));fail_open=false;
  assert(configManager.saveTileRadius(0));ui_surface_style::request_global_radius_refresh();ui_surface_style::process_pending_updates();
  assert(lv_obj_get_style_radius(inner,LV_PART_MAIN)==climate_layout::kControlRadius);
  stored["tile_radius"]=65535;reboot.load();assert(reboot.config.tile_radius==tile_radius::kMaximum);

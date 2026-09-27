@@ -17,11 +17,12 @@ HomeTiles is free, open-source firmware that turns a supported touch display int
 
 - **Controls:** lights, switches, covers, heating, media, numbers, selections and date/time values.
 - **Sensors & energy:** live values, state history, energy statistics and weather.
-- **Dashboard:** arrange tiles and folders with a live browser preview; open views from Home Assistant.
+- **Dashboard:** arrange tiles and folders in half steps with a live browser preview; open views from Home Assistant.
+- **Colors:** icon circles, tile colors from the icon, and rules that color tiles by an entity's state.
 - **Screensaver:** display a clock, photos and sensor tiles.
 - **Local hardware:** use supported GPIO outputs, relays and temperature sensors.
 - **Updates:** install firmware from the display or your browser.
-- **Camera:** experimental live video on ESP32-P4 displays.
+- **Camera:** live video on ESP32-P4 displays; supported displays share their built-in camera with Home Assistant.
 
 <figure class="ht-screenshot">
 <img src="images/8in-home-new.png" alt="HomeTiles dashboard" width="1308" height="828" loading="lazy">
@@ -36,6 +37,8 @@ HomeTiles is free, open-source firmware that turns a supported touch display int
 [All tile types](tiles.md) and [screensaver configuration](screensaver.md).
 
 ## Demo
+
+This video shows an older version. The current release is faster and looks better; a new demo video will follow soon.
 
 <figure class="ht-screenshot">
 <video class="ht-demo" controls playsinline preload="metadata" poster="images/hometiles-demo-poster.jpg" aria-label="HomeTiles device demo">

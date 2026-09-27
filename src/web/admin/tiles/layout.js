@@ -12,27 +12,56 @@
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  // Scene, Folder, Back and Camera show only an icon and a title.
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 8, 9, 18].includes(Number(type)); }
+  // Scene, Folder, Settings, Back and Camera show only an icon and a title.
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 7, 8, 9, 18].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
-  // a row high. Settings stays whole (mirrors tile_geometry::supported).
+  // a row high (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
     const values = layout ? [layout.col, layout.row, layout.span_w, layout.span_h] : [];
     if (!layout || !values.every(v => Number.isFinite(v) && v >= 0 && Number.isInteger(v * 2))) return false;
-    if (Number(type) === 7 && values.some(v => !Number.isInteger(v))) return false;
     if (layout.span_w < 1) return false;
     return layout.span_h >= 1 || (supportsHalfSize(type) && layout.span_h === 0.5);
   }
-  function applyCompactSensorPreview(el, type, layout, mode = 0) {
+  // Half-height value size for a value size choice, like
+  // compact_sensor_layout::value_step: the title size by default and for 20,
+  // 24, or 28 for 28 and the larger choices (32, 40), which do not fit.
+  function compactValueSize(choice) {
+    const value = String(choice ?? '0');
+    if (value === '2') return 24;
+    return ['3', '4', '5'].includes(value) ? 28 : 20;
+  }
+  // The value size choices a tile shows: Default, 24 and 28 in half-height
+  // tiles; Default, 20, 24, 32 and 40 otherwise (28 is the default there).
+  // A choice the other size lacks moves to the one that looks the same.
+  function syncCompactValueFontOptions(select, halfHeight) {
+    if (!select?.options) return;
+    const shown = halfHeight ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    for (const option of Array.from(select.options)) {
+      const hidden = !shown.includes(option.value);
+      option.hidden = hidden;
+      option.disabled = hidden;
+      if (option.value === '0') {
+        option.textContent = option.textContent.replace(/^\d+(?= )/, halfHeight ? '20' : '28');
+      }
+    }
+    const value = select.value;
+    if (halfHeight && value === '1') select.value = '0';
+    else if (halfHeight && (value === '3' || value === '4')) select.value = '5';
+    else if (!halfHeight && value === '5') select.value = '0';
+  }
+  function applyCompactSensorPreview(el, type, layout, mode = 0, valueFont = 0) {
     const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
-    // A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
+    // A half-height icon-and-title tile (Scene, Folder, Settings, Back, Camera) uses the
     // half-height Sensor header: the icon in the corner disc and the title
     // (if any) centered beside it.
-    const compactIconTitle = [2, 4, 8, 18].includes(Number(type)) && halfHeight;
+    const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     const compact = (isCompactSensorType(type) || compactIconTitle) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
     el.classList.toggle('compact-title-only', compactIconTitle);
+    const valueSize = compact && !compactIconTitle ? compactValueSize(valueFont) : 20;
+    el.classList.toggle('compact-value-24', valueSize === 24);
+    el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
   }
@@ -58,12 +87,6 @@
       safeH = Math.max(minH, safeH);
       safeCol = Math.min(safeCol, GRID_COLS - 1);
       safeRow = Math.min(safeRow, GRID_ROWS - minH);
-      if (type === 7) {
-        safeCol = Math.floor(safeCol);
-        safeRow = Math.floor(safeRow);
-        safeW = Math.max(1, Math.floor(safeW));
-        safeH = Math.max(1, Math.floor(safeH));
-      }
       safeW = Math.min(safeW, GRID_COLS - safeCol);
       safeH = Math.min(safeH, GRID_ROWS - safeRow);
     }
@@ -275,9 +298,15 @@
   // new tile, but without the free slot itself.
   function occupiedFromGrid(tab, grid, freeEl) {
     const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
+    // A selected new tile still of type Empty does not block the free slot:
+    // the pointer may pick a spot half a cell next to or over it, and a click
+    // moves the new tile there. Once a type is chosen it blocks like a tile.
+    const selectedIsEmpty =
+      String(document.getElementById(tab + '_tile_type')?.value ?? '0') === '0';
     grid.querySelectorAll(':scope > .tile[data-index]').forEach(el => {
       if (el === freeEl || el.style.display === 'none') return;
-      if (Number(el.dataset.type || 0) === 0 && el.dataset.selected !== '1') return;
+      if (Number(el.dataset.type || 0) === 0 &&
+          (el.dataset.selected !== '1' || selectedIsEmpty)) return;
       const layout = getTileElementLayout(tab, parseInt(el.dataset.index, 10));
       if (layout) markOccupied(occupied, layout);
     });

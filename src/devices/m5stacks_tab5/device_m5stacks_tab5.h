@@ -8,7 +8,7 @@
 
 namespace DeviceM5StacksTab5 {
 
-// Built-in SC202CS (SC2356) camera, camera beta builds only (device_select.h).
+// Built-in SC202CS (SC2356) camera (HOMETILES_LOCAL_CAMERA in device_select.h).
 #if defined(HOMETILES_LOCAL_CAMERA)
 inline constexpr bool kBuiltinCamera = true;
 #else

@@ -1,7 +1,7 @@
 #pragma once
 
 // Camera board file of the Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3 profile,
-// camera beta builds only (contract: src/video/local_camera/camera_driver.h).
+// (contract: src/video/local_camera/camera_driver.h).
 // Board facts come from the 4.3-inch schematic and Waveshare's
 // 09_video_lcd_display example (see the OV5647 PROVENANCE.md):
 //   - OV5647 module of the -C kit on the 15-pin 0.5 mm CSI connector J1; the

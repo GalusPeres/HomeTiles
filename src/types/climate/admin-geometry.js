@@ -48,16 +48,20 @@
     return Math.min(6, columns * rows);
   }
 
+  // Width counts whole cells. The mini-grid has one row per half cell below
+  // the header row, so half steps add a row: 1 -> 1, 1.5 -> 2, 2 -> 3
+  // (climateTileGridRows on the device).
   function climateGridDimensions(spanW, spanH) {
     const columns = Math.max(
       1, Math.min(
         climateMaxGridColumns(), Math.floor(Number(spanW) || 1)));
-    const outerRows = Math.max(
-      1, Math.min(
-        climateMaxOuterRows(), Math.floor(Number(spanH) || 1)));
+    const halfRows = Math.max(
+      2, Math.min(
+        climateMaxOuterRows() * 2,
+        Math.round((Number(spanH) || 1) * 2)));
     return {
       columns,
-      rows: outerRows * 2 - 1
+      rows: halfRows - 1
     };
   }
 
@@ -287,42 +291,25 @@
       a.row + a.spanH > b.row;
   }
 
-  function canPlaceClimateItem(
-      items, configured, index, candidate, capacity) {
-    for (let other = 0; other < capacity; ++other) {
-      if (other === index) continue;
-      if (Number(configured[other]) === CLIMATE_TILE_CONTENT.EMPTY) {
-        continue;
-      }
-      if (climateGeometryOverlaps(candidate, items[other])) {
-        return false;
-      }
-    }
-    return true;
+  // Items are placed top-left first (row, column, then item number) when the
+  // tile has a stored mini-grid, so a smaller tile keeps what it can still
+  // show and drops only the rest. Without stored geometry the item number is
+  // the position (build_slot_kinds on the device).
+  function climatePlacementOrderFor(geometry, hasStoredGeometry) {
+    const order = [0, 1, 2, 3, 4, 5];
+    if (!hasStoredGeometry) return order;
+    const at = (index, key) => Number(geometry[index]?.[key]) || 0;
+    return order.sort((a, b) =>
+      at(a, 'row') - at(b, 'row') ||
+      at(a, 'col') - at(b, 'col') ||
+      a - b);
   }
 
-  function firstFreeClimatePlacement(
-      items, configured, capacity, columns, rows,
-      ignoreIndex = -1, spanW = 1, spanH = 1) {
-    const safeSpanW = Math.max(
-      1, Math.min(columns, Number(spanW) || 1));
-    const safeSpanH = Math.max(
-      1, Math.min(rows, Number(spanH) || 1));
-    for (let row = 0; row + safeSpanH <= rows; ++row) {
-      for (let col = 0; col + safeSpanW <= columns; ++col) {
-        const candidate = {
-          col, row,
-          spanW: safeSpanW,
-          spanH: safeSpanH
-        };
-        if (canPlaceClimateItem(
-              items, configured, ignoreIndex,
-              candidate, capacity)) {
-          return candidate;
-        }
-      }
-    }
-    return null;
+  function climatePlacementOrder(tab, geometry) {
+    const stored = document.getElementById(
+      tab + '_climate_geometry')?.value || '';
+    return climatePlacementOrderFor(
+      geometry, /^CLG[12]:/i.test(String(stored).trim()));
   }
 
   function notifyClimateGridChanged(tab) {

@@ -6,12 +6,11 @@
       return;
     }
     mountClimateMiniEditor(tab);
-    // Half steps do not change the mini-grid, so only whole cells count here.
+    // Width counts whole cells; half heights add a mini-grid row.
     const spanW = Math.max(1, Math.floor(Number(document.getElementById(
       tab + '_tile_span_w')?.value) || 1));
-    const spanH = Math.max(1, Math.floor(Number(document.getElementById(
-      tab + '_tile_span_h')?.value) || 1));
-    const capacity = climateSlotCapacity(spanW, spanH);
+    const spanH = Math.max(1, Math.round(Number(document.getElementById(
+      tab + '_tile_span_h')?.value) * 2 || 2) / 2);
     const { columns, rows } =
       climateGridDimensions(spanW, spanH);
     let configured = currentClimateSlotConfig(tab);
@@ -40,8 +39,6 @@
         resolvedKinds = climateResolvedEditorKinds(tab);
       }
     }
-    const placementConfig = climatePlacementConfig(
-      configured, resolvedKinds);
     const stored = currentClimateGeometry(tab);
     const items = stored.map(entry =>
       clampClimateGeometryItem(entry, columns, rows));
@@ -56,12 +53,13 @@
 
     const occupied = Array(columns * rows).fill(false);
     const accepted = [];
-    for (let index = 0; index < 6; ++index) {
+    const fits = candidate => !accepted.some(other =>
+      climateGeometryOverlaps(candidate, other.geometry));
+    for (const index of climatePlacementOrder(tab, stored)) {
       const item = document.getElementById(
         tab + '_climate_slot_row_' + index);
       const kind = Number(configured[index]) || 0;
       const active =
-        index < capacity &&
         kind !== CLIMATE_TILE_CONTENT.EMPTY &&
         resolvedKinds[index] !== null;
       if (!item) continue;
@@ -69,13 +67,23 @@
       if (!active) continue;
 
       let geometry = items[index];
-      if (accepted.some(other =>
-            climateGeometryOverlaps(
-              geometry, other.geometry))) {
-        const free = firstFreeClimatePlacement(
-          items, placementConfig, capacity,
-          columns, rows, index,
-          geometry.spanW, geometry.spanH);
+      if (!fits(geometry)) {
+        let free = null;
+        for (let row = 0;
+             row + geometry.spanH <= rows && !free; ++row) {
+          for (let col = 0;
+               col + geometry.spanW <= columns; ++col) {
+            const candidate = {
+              col, row,
+              spanW: geometry.spanW,
+              spanH: geometry.spanH
+            };
+            if (fits(candidate)) {
+              free = candidate;
+              break;
+            }
+          }
+        }
         if (!free) {
           item.classList.add('hidden');
           continue;
@@ -156,10 +164,9 @@
           tab + '_climate_cell_' + directCell);
         const index = configured.findIndex(
           (value, candidate) =>
-            candidate < capacity &&
-            (Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
-             (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
-              resolvedKinds[candidate] === null)));
+            Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
+            (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
+             resolvedKinds[candidate] === null));
         if (cell &&
             !cell.classList.contains('hidden') &&
             !cell.classList.contains('occupied') &&

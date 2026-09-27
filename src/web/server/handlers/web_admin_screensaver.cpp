@@ -15,9 +15,14 @@ void WebAdminServer::handleGetScreensaver() {
     return;
   }
   json.remove(json.length() - 1);
-  json += ",\"success\":true,\"available_wallpapers\":[";
+  // sd_ready tells the Web Admin that available_wallpapers is the complete
+  // card listing, so entries of deleted files can be dropped from the list.
+  const bool sd_ready = Device::sdReady();
+  json += ",\"success\":true,\"sd_ready\":";
+  json += sd_ready ? "true" : "false";
+  json += ",\"available_wallpapers\":[";
   bool first = true;
-  if (Device::sdReady()) {
+  if (sd_ready) {
     std::vector<String> names;
     const char* directories[] = {"/images", "/wallpapers"};
     for (const char* directory : directories) {

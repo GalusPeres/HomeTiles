@@ -11,8 +11,8 @@ namespace DeviceWaveshareTouchLCD7BProfile {
 inline constexpr uint32_t kFlashSizeBytes = 32U * 1024U * 1024U;
 inline constexpr uint32_t kPsramSizeBytes = 32U * 1024U * 1024U;
 
-// OV5647 on the CSI connector (7B-C kit): enabled only in camera beta builds
-// (HOMETILES_LOCAL_CAMERA in device_select.h) until hardware validation.
+// OV5647 on the CSI connector (7B-C kit), HOMETILES_LOCAL_CAMERA in device_select.h;
+// off until the user enables it in the Web Admin.
 #if defined(HOMETILES_LOCAL_CAMERA)
 inline constexpr bool kBuiltinCamera = true;
 #else

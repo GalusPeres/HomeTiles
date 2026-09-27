@@ -120,7 +120,7 @@ for (const marker of [
   "el.dataset.ruleTint = tint ? '1' : '0';",
   'if (fill) el.dataset.iconFill = String(fill);',
   "tileTintChoice(false, '', 0, fill, '#' + iconRgb.map(v => v.toString(16).padStart(2, '0')).join(''))",
-  'tileElem.style.background = tileTintBackground(base || \'#222222\', choice.color, choice.percent);',
+  'tileElem.style.background = tileTintBackground(base || \'#1A1A1A\', choice.color, choice.percent);',
   'tileElem.style.background = tileElem.dataset.baseBg;',
   "if (input && input.dataset.unset === '1' && shown) {",
 ]) assert.ok(grid.includes(marker), 'grid-preview: ' + marker);
@@ -224,5 +224,21 @@ ${scenarios.map(([, , record, state, display, fallback]) =>
   } finally {
     fs.rmSync(dir, {recursive: true, force: true});
   }
+}
+// New tiles start in the HomeTiles look: choosing a type with icon colors on
+// an empty tile turns on Tile color "From icon" at 20 %; existing tiles and
+// the screensaver keep their style.
+{
+  const editor = read('src/web/admin/tiles/editor.js');
+  const start = editor.indexOf('New tiles start in the HomeTiles look');
+  assert.ok(start > 0, 'New tile style block exists');
+  const block = editor.slice(start, editor.indexOf('normalizeLayoutInputs(tab);', start));
+  assert.match(block, /previousType === 0 && nextType !== 0 && !isScreensaverTileTab\(tab\)/);
+  assert.match(block, /tileTypeHasIconColors\(String\(nextType\)\)/);
+  assert.match(block, /_tile_icon_fill_strength'\);\s*if \(strength\) strength\.value = '20';/);
+  assert.match(block, /_tile_icon_fill'\);\s*if \(fill\) fill\.checked = true;/);
+  assert.match(block, /syncTileColorMode\(tab\);/);
+  assert.ok(editor.indexOf('updateTileType(tab);', start - 400) < start,
+    'The style is set after the type fields are switched');
 }
 console.log(`Tile color choice: one tint rule, one icon color rule, Desk and Water pass${native ? '; firmware == preview' : ''}`);

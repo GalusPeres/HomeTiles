@@ -78,14 +78,13 @@ assert.equal(referenceMode.ov5647.length, 23, 'raw_bits keeps its RAW10 default'
 assert.equal(referenceMode.ov5647[kQuarterTurnField], 'true', '8-inch quarter-turn mounting');
 assert.equal(referenceMode.ov02c10[kQuarterTurnField], 'false', 'V2 landscape mounting');
 
-// --- Selection: only camera beta builds, except the exact V2 -----------------
-const cameraBlock = deviceSelect.slice(deviceSelect.indexOf('// Built-in camera.'),
+// --- Selection: every camera board in every build ----------------------------
+// The camera stays off until the user enables it, so release builds carry it.
+const cameraBlock = deviceSelect.slice(deviceSelect.indexOf('// Built-in camera on every'),
   deviceSelect.indexOf('#define HOMETILES_LOCAL_CAMERA 1'));
+assert.ok(cameraBlock.startsWith('// Built-in camera on every'), 'Camera selection block found');
+assert.doesNotMatch(cameraBlock, /HOMETILES_CAMERA_BETA/, 'Release builds include the camera boards');
 const selected = [...cameraBlock.matchAll(/defined\((DEVICE_\w+)\)/g)].map(match => match[1]);
-for (const define of selected.filter(name => name !== 'DEVICE_GUITION_JC8012P4A1_V2')) {
-  assert.match(cameraBlock, new RegExp(`\\(defined\\(${define}\\) && defined\\(HOMETILES_CAMERA_BETA\\)\\)`),
-    `${define} is a camera beta board`);
-}
 assert.match(version, /#if defined\(HOMETILES_CAMERA_BETA\)\n#undef FW_VERSION\n#define FW_VERSION "v[^"]+"\n#endif/,
   'Every camera beta build carries the beta number');
 assert.match(version, /defined\(DEVICE_GUITION_JC8012P4A1_V2\) && \\\n    defined\(HOMETILES_ISSUE38_BETA\)/);
@@ -182,12 +181,12 @@ for (const dir of ['guition_jc1060p470c', 'guition_esp32_4848s040', 'waveshare_s
 }
 
 // Every device target is classified, so a new profile cannot slip in untested.
-const betaCamera = ['DEVICE_WAVESHARE_TOUCH_LCD_8', 'DEVICE_M5STACKS_TAB5', ...boards.map(board => board.define)];
+const cameraBoards = ['DEVICE_WAVESHARE_TOUCH_LCD_8', 'DEVICE_M5STACKS_TAB5', ...boards.map(board => board.define)];
 const targets = [...deviceSelect.slice(0, deviceSelect.indexOf('#error "Select only one device target."'))
   .matchAll(/defined\((DEVICE_\w+)\)/g)].map(match => match[1]).filter(name => name.startsWith('DEVICE_'));
 const uniqueTargets = [...new Set(targets)].filter(name => !['DEVICE_TAB5', 'DEVICE_WAVESHARE_WIFI6_TOUCH_LCD_8'].includes(name));
 assert.deepEqual([...uniqueTargets].sort(),
-  ['DEVICE_GUITION_JC8012P4A1_V2', ...betaCamera, ...neverCamera].sort(), 'Every device target is classified');
+  ['DEVICE_GUITION_JC8012P4A1_V2', ...cameraBoards, ...neverCamera].sort(), 'Every device target is classified');
 
 const cc = ['clang', 'gcc'].find(candidate => spawnSync(candidate, ['--version']).status === 0);
 if (cc) {
@@ -202,7 +201,7 @@ if (cc) {
       const result = spawnSync(cc, ['-E', '-P', '-x', 'c++', '-DHOMETILES_CI_TARGET', `-D${define}`,
         ...(beta ? ['-DHOMETILES_CAMERA_BETA'] : []), '-I', root, '-'], {encoding: 'utf8', input: probe});
       assert.equal(result.status, 0, result.stderr);
-      const expected = define === 'DEVICE_GUITION_JC8012P4A1_V2' || (beta && betaCamera.includes(define));
+      const expected = define === 'DEVICE_GUITION_JC8012P4A1_V2' || cameraBoards.includes(define);
       const label = `${define}${beta ? ' + HOMETILES_CAMERA_BETA' : ''}`;
       assert.equal(result.stdout.includes('LOCAL_CAMERA_ON'), expected, `${label} camera feature define`);
       const sensors = result.stdout.match(/SENSOR_\w+/g) || [];
@@ -218,4 +217,4 @@ if (cc) {
   console.log('Profile preprocessing skipped: clang or gcc not found');
 }
 
-console.log(`Local camera beta boards: ${boards.length} boards, selection, board files, shared bus, PHY supply, modes and profile isolation passed.`);
+console.log(`Local camera boards: ${boards.length} boards, selection, board files, shared bus, PHY supply, modes and profile isolation passed.`);

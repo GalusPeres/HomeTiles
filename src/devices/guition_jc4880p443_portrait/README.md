@@ -13,7 +13,7 @@ Hardware contract:
 - MIPI-DSI PHY power from LDO channel 3 at 2500 mV;
 - SDMMC slot 0 on GPIO39-44 with LDO channel 4;
 - ESP32-C6 networking through the existing ESP-Hosted transport;
-- camera beta builds only (`HOMETILES_CAMERA_BETA`): Guition's optional
+- Guition's optional
   OV02C10 module on the 15-pin 0.3 mm CSI connector as a built-in camera,
   sent as a quarter turn after Guition's demo; its direction and mirror are
   pending a hardware check.

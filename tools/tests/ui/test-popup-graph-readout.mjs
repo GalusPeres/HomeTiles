@@ -1,8 +1,11 @@
 // Finger readout in the Sensor, Number, Select, Binary Sensor and Energy
-// popups. While a finger rests on a graph, the old value row shows the touched
-// time and value; release restores the normal drawing. The readout must never
-// scroll, swipe or click anything else, and dragging changes only the cursor
-// and two static labels, once per display refresh.
+// popups. The old value row shows the time and value under the cursor.
+// Sensor, Binary Sensor and Energy open on the newest point, keep the cursor
+// where the finger leaves it and follow the newest point while they show it;
+// a range change starts at the newest point again. Editors (Number, Select)
+// show it only while touching. The readout must never scroll, swipe or click
+// anything else, and dragging changes only the cursor and two static labels,
+// once per display refresh.
 //
 // The Sensor chart and timeline readout run in real LVGL in
 // tools/tests/tiles/test-editable-history-lvgl.mjs. This test checks the
@@ -50,6 +53,14 @@ assert.doesNotMatch(helper, /lv_obj_add_event_cb\([^;]*LV_EVENT_(?:ALL|DELETE)/,
 // Moves are stored in input events and applied by the refresh hook.
 const input = helper.slice(helper.indexOf('static void input('), helper.indexOf('void schedule()'));
 assert.doesNotMatch(input, /apply_\(/, 'Input events must not apply the readout directly');
+// Release shows the last position and lets the owner keep it; cancel always
+// ends a kept readout too.
+const release = helper.slice(helper.indexOf('void release()'), helper.indexOf('static void input('));
+assert.match(release, /if \(apply_last\) apply_\(owner_, target, point_\);\s*if \(end_\) end_\(owner_, true\);/);
+assert.match(input, /if \(self->active_ && self->target_ == target\) self->release\(\);/);
+const cancel = helper.slice(helper.indexOf('void cancel()'), helper.indexOf('void release()'));
+assert.match(cancel, /if \(end_\) end_\(owner_, false\);/);
+assert.doesNotMatch(cancel, /was_active/, 'cancel() also ends a kept readout');
 
 // ---- Sensor, Number, Select, Binary Sensor ---------------------------------
 const sensor = read('src/ui/popups/sensor/sensor_popup.cpp');
@@ -100,9 +111,30 @@ assert.match(band, /if \(ctx->editable && !ctx->readout_band_raised\)/);
 assert.doesNotMatch(band, /control_row, LV_OBJ_FLAG_HIDDEN|editable_control_/, 'The readout never hides or drives an editor');
 const clear = code(fn(sensor, 'clear_sensor_readout'));
 assert.match(clear, /lv_obj_set_style_bg_opa\(ctx->value_box, LV_OPA_TRANSP, 0\);[\s\S]*if \(ctx->editable\) lv_obj_add_flag\(ctx->value_box, LV_OBJ_FLAG_HIDDEN\);/);
-// Lifecycle: every close, hide, open and teardown path ends the readout.
-for (const name of ['on_close_click', 'hide_sensor_popup', 'show_sensor_popup'])
+// Lifecycle: every close, hide, open, range change and teardown path ends the
+// readout, so the next data starts at the newest point.
+for (const name of ['on_close_click', 'hide_sensor_popup', 'show_sensor_popup', 'on_range_click'])
   assert.ok(code(fn(sensor, name)).includes('readout.cancel();'), `${name} ends the readout`);
+// Sensors keep it after release; editors keep their controls.
+const sensorEnd = code(fn(sensor, 'on_sensor_readout_end'));
+assert.match(sensorEnd, /if \(keep && graph && readout_target\(ctx\) == graph\) \{\s*ctx->readout_pin_x = ctx->readout_x;\s*ctx->readout_latest = sensor_readout_is_latest\(ctx\);\s*return;/);
+assert.match(sensorEnd, /if \(!keep\) ctx->readout_latest = true;/);
+assert.match(code(fn(sensor, 'sensor_readout_graph')), /if \(!ctx \|\| ctx->editable\) return nullptr;/);
+const sensorRefresh = code(fn(sensor, 'refresh_sensor_readout'));
+assert.match(sensorRefresh, /ctx->readout\.active\(\)/, 'A finger on the graph reads new data itself');
+assert.match(sensorRefresh, /ctx->readout_latest \? area\.x2 : area\.x1 \+ ctx->readout_pin_x/);
+// New data, a live state and a warm opening show the kept readout again.
+const historyApply = code(fn(sensor, 'apply_history_payload'));
+assert.match(historyApply, /apply_binary_history_payload\(ctx, doc\);\s*refresh_sensor_readout\(ctx\);/);
+assert.match(historyApply, /apply_state_history_payload\(ctx, doc\);\s*refresh_sensor_readout\(ctx\);\s*return;/);
+assert.match(historyApply, /lv_chart_refresh\(ctx->chart\);\s*refresh_sensor_readout\(ctx\);/);
+assert.match(code(fn(sensor, 'prepend_state_history_activity')), /ctx->readout\.request_apply\(\);\s*refresh_sensor_readout\(ctx\);/);
+assert.match(code(fn(sensor, 'finish_sensor_popup_open')), /readout_refresh_pending = reuse_history;/);
+assert.match(code(fn(sensor, 'process_sensor_popup_queue')),
+  /if \(g_sensor_first_frame\.pending\(\)\) return;\s*if \(g_sensor_popup_ctx->readout_refresh_pending\) \{\s*g_sensor_popup_ctx->readout_refresh_pending = false;\s*refresh_sensor_readout\(g_sensor_popup_ctx\);/);
+// Cleared data takes its kept readout along.
+assert.match(code(fn(sensor, 'clear_chart')), /if \(ctx->readout_kind == kReadoutChart\) clear_sensor_readout\(ctx\);/);
+assert.match(code(fn(sensor, 'clear_binary_history')), /if \(ctx->readout_kind == kReadoutTimeline\) clear_sensor_readout\(ctx\);/);
 const teardown = code(fn(sensor, 'on_overlay_delete'));
 assert.match(teardown, /ctx->readout\.cancel\(\);[\s\S]*heap_caps_free\(ctx->history_values\);[\s\S]*delete ctx;/,
   'Teardown detaches the refresh hook and frees the history buffer');
@@ -124,9 +156,21 @@ for (const marker of ['ctx->readout.attach(chart_wrap);', 'lv_obj_remove_flag(x_
   'popup_graph_readout::create_band_label(\n      value_box, popup_layout::font20(), ctx->readout_time_text);',
   'popup_graph_readout::create_band_label(\n      value_box, value_font(), ctx->readout_value_text);'])
   assert.ok(energyUi.includes(marker), `Energy readout: ${marker}`);
-const energyApply = code(fn(energy, 'apply_energy_readout'));
-assert.doesNotMatch(energyApply, /lv_label_set_text\(|lv_obj_set_(?:pos|size|x|y)\(|lv_chart_|String\(/,
-  'Dragging over Energy bars changes only bar opacity and static labels');
+for (const name of ['apply_energy_readout', 'show_energy_slot', 'on_energy_cursor_draw', 'invalidate_energy_cursor'])
+  assert.doesNotMatch(code(fn(energy, name)), /lv_label_set_text\(|lv_obj_set_(?:pos|size|x|y)\(|lv_chart_|String\(|lv_obj_update_layout\(/,
+    `Dragging over Energy bars changes only bar opacity, the cursor line and static labels (${name})`);
+assert.ok(energyUi.includes('lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_MAIN, ctx);'));
+assert.match(code(fn(energy, 'on_energy_readout_end')),
+  /if \(keep && ctx->readout_slot >= 0\) \{\s*ctx->readout_pin_slot = ctx->readout_slot;\s*ctx->readout_latest = ctx->readout_slot == latest_energy_slot\(ctx\);/);
+assert.match(code(fn(energy, 'apply_entry_to_chart')), /ctx->plot_w = plot_w;\s*ctx->zero_y = zero_y;\s*refresh_energy_readout\(ctx\);\s*\}$/);
+// The marker's dot sits above the plot, outside chart_wrap's own box.
+assert.match(energyUi, /lv_obj_add_event_cb\(chart_wrap, on_energy_cursor_ext_draw, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr\);\s*lv_obj_refresh_ext_draw_size\(chart_wrap\);/);
+assert.match(code(fn(energy, 'show_energy_slot')),
+  /ctx->readout_line_bottom =\s*bar && !lv_obj_has_flag\(bar, LV_OBJ_FLAG_HIDDEN\) \? lv_obj_get_y\(bar\) : ctx->zero_y;/);
+// The time axis holds a full line of its labels on every layout.
+assert.match(code(fn(energy, 'time_axis_height')), /lv_font_get_line_height\(popup_layout::font20\(\)\)/);
+assert.doesNotMatch(code(energy).replace(/constexpr int kTimeAxisHeight[^\n]*/g, '').replace(/return line > kTimeAxisHeight \? line : kTimeAxisHeight;/, ''),
+  /kTimeAxisHeight/, 'Energy geometry uses time_axis_height()');
 for (const name of ['on_close_click', 'on_overlay_delete', 'on_period_click', 'hide_energy_popup',
   'show_energy_popup', 'apply_entry_to_chart'])
   assert.ok(code(fn(energy, name)).includes('readout.cancel();'), `Energy ${name} ends the readout`);
@@ -179,6 +223,9 @@ inline void apply_global_tile_border(lv_obj_t*){}inline void apply_popup_border(
 inline lv_color_t border_hint(lv_color_t c){return lv_color_mix(lv_color_white(),c,128);}
 }
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
+// Period switch timing lines; their content is not part of this test.
+uint32_t millis(){static uint32_t now=0;return now+=1;}
+struct TestSerial{template<class... T> void printf(const char*,T...){}} Serial;
 void* heap_caps_malloc(size_t n,int){return malloc(n);}void heap_caps_free(void*p){free(p);}
 struct DeviceConfig{const char* language="en";uint8_t global_time_format=1;};
 struct Manager{DeviceConfig cfg;const DeviceConfig& getConfig(){return cfg;}}configManager;
@@ -222,9 +269,12 @@ EnergyEntryData week_entry(){EnergyEntryData e=day_entry();e.period="week";e.sta
 bool bars_restored(EnergyPopupContext* ctx){for(auto* bar:ctx->bars)if(lv_obj_get_style_bg_opa(bar,LV_PART_MAIN)!=LV_OPA_COVER)return false;return true;}
 bool shown(lv_obj_t* obj){return !lv_obj_has_flag(obj,LV_OBJ_FLAG_HIDDEN);}
 void settle(lv_display_t* display){lv_refr_now(display);process_popup_open();sync_popup_shell();lv_refr_now(display);}
+// Rendered frame, to check the cursor line.
+std::vector<uint32_t> pixels;
+bool white_at(int x,int y){return x>=0&&y>=0&&x<SCREEN_WIDTH&&y<SCREEN_HEIGHT&&(pixels[y*SCREEN_WIDTH+x]&0xffffff)==0xffffff;}
 int main(){
- lv_init();auto* display=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t> band(SCREEN_WIDTH*24);
- lv_display_set_color_format(display,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(display,band.data(),nullptr,band.size()*4,LV_DISPLAY_RENDER_MODE_PARTIAL);
+ lv_init();auto* display=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);pixels.assign(SCREEN_WIDTH*SCREEN_HEIGHT,0);
+ lv_display_set_color_format(display,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(display,pixels.data(),nullptr,pixels.size()*4,LV_DISPLAY_RENDER_MODE_FULL);
  lv_display_set_flush_cb(display,[](lv_display_t* d,const lv_area_t*,uint8_t*){lv_display_flush_ready(d);});
  lv_theme_default_init(display,lv_color_hex(0x26A69A),lv_color_hex(0xC14444),false,&ui_font_20);
  touch=lv_indev_create();lv_indev_set_type(touch,LV_INDEV_TYPE_POINTER);
@@ -237,13 +287,20 @@ int main(){
  assert(lv_obj_has_flag(ctx->value_label,LV_OBJ_FLAG_HIDDEN)&&strcmp(lv_label_get_text(ctx->value_label),"12.34 kWh")==0);
  sync_popup_shell();assert(shown(shell.value)&&strcmp(hometiles_title::text(shell.value),"12.34 kWh")==0);
  settle(display);
- assert(ctx->shown_slots==24&&ctx->plot_w>0&&!shown(ctx->readout_time_label)&&!shown(ctx->readout_value_label));
- lv_area_t wrap,chart,axis;lv_obj_get_coords(ctx->chart_wrap,&wrap);lv_obj_get_coords(ctx->chart,&chart);lv_obj_get_coords(ctx->x_axis,&axis);
+ // Opening reads the newest bar.
+ assert(ctx->shown_slots==24&&ctx->plot_w>0&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label));
+ assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0&&strcmp(ctx->readout_value_text,"5.75 kWh")==0);
+ lv_area_t wrap,chart,axis,nav;lv_obj_get_coords(ctx->chart_wrap,&wrap);lv_obj_get_coords(ctx->chart,&chart);lv_obj_get_coords(ctx->x_axis,&axis);lv_obj_get_coords(ctx->range_row,&nav);
+ // Hour labels keep their full line inside the axis and above the buttons.
+ int axis_labels=0;
+ for(auto* label:ctx->x_labels){if(!shown(label))continue;++axis_labels;lv_area_t area;lv_obj_get_coords(label,&area);
+  assert(area.y1>=axis.y1&&area.y2<=axis.y2&&area.y2<=wrap.y2&&lv_area_get_height(&area)>=lv_font_get_line_height(popup_layout::font20())&&"Time axis labels are never clipped");}
+ assert(axis_labels==5&&wrap.y2<nav.y1&&"The axis stays above the period buttons");
  auto bar_x=[&](int slot,int slots){return wrap.x1+ctx->plot_left+static_cast<int>((slot+0.5f)*ctx->plot_w/slots);};
  const int y=(chart.y1+chart.y2)/2;const auto display_events=lv_display_get_event_count(display);
  auto* value_box=lv_obj_get_parent(ctx->readout_value_label);const int band_y=lv_obj_get_y(value_box);
  touch_at(bar_x(11,24),y);
- assert(ctx->readout.active()&&ctx->readout_slot<0&&"A press is applied with the next display refresh");
+ assert(ctx->readout.active()&&ctx->readout_slot==23&&"A press is applied with the next display refresh; the kept bar stays until then");
  lv_refr_now(display);
  assert(ctx->readout_slot==11&&strcmp(ctx->readout_time_text,"11:00 \xE2\x80\x93 12:00")==0&&strcmp(ctx->readout_value_text,"2.75 kWh")==0);
  for(int i=0;i<ENERGY_VALUES_MAX;++i)assert(lv_obj_get_style_bg_opa(ctx->bars[i],LV_PART_MAIN)==(i==11?LV_OPA_COVER:kReadoutDimmedBarOpa));
@@ -251,11 +308,22 @@ int main(){
  assert(lv_obj_get_style_text_font(ctx->readout_time_label,LV_PART_MAIN)==popup_layout::font20()&&lv_obj_get_style_text_font(ctx->readout_value_label,LV_PART_MAIN)==value_font());
  lv_area_t time_area,value_area,band_area;lv_obj_get_coords(ctx->readout_time_label,&time_area);lv_obj_get_coords(ctx->readout_value_label,&value_area);lv_obj_get_coords(value_box,&band_area);
  assert(time_area.y2<=value_area.y1&&std::abs((time_area.y1+value_area.y2)-(band_area.y1+band_area.y2))<=2&&"Time above value, centered in the old value row");
+ // A white dot above the plot marks the read bar, with a thin line from the
+ // bar's top edge up to it, centered on the bar.
+ {lv_area_t bar;lv_obj_get_coords(ctx->bars[11],&bar);const int cursor_x=wrap.x1+ctx->readout_x;
+  assert(std::abs(cursor_x-(bar.x1+bar.x2)/2)<=1&&"The marker is centered on the bar");
+  assert(ctx->readout_line_bottom==lv_obj_get_y(ctx->bars[11])&&"The line ends at the bar's top edge");
+  assert(white_at(cursor_x,chart.y1+2)&&white_at(cursor_x,bar.y1-2)&&"The line runs from the bar up through the plot top");
+  const int dot_y=chart.y1-kReadoutDotLift;
+  assert(dot_y<chart.y1&&white_at(cursor_x,dot_y)&&white_at(cursor_x-kReadoutDotSize/2+2,dot_y)&&"The dot sits above the plot");
+  assert(white_at(cursor_x,dot_y-kReadoutDotSize/2+1)&&"The dot is not clipped at the top of the chart area");
+  assert(!white_at(cursor_x+kReadoutDotSize/2+2,dot_y)&&!white_at(cursor_x+kReadoutLineWidth+2,chart.y1+2)&&"Dot and line stay small");}
  // Several moves within one frame apply only the latest position.
  touch_at(bar_x(23,24),y);touch_at(bar_x(20,24),y);assert(ctx->readout_slot==11);
  lv_refr_now(display);
  assert(ctx->readout_slot==20&&strcmp(ctx->readout_time_text,"20:00 \xE2\x80\x93 21:00")==0);
  assert(lv_obj_get_style_bg_opa(ctx->bars[11],LV_PART_MAIN)==kReadoutDimmedBarOpa&&lv_obj_get_style_bg_opa(ctx->bars[20],LV_PART_MAIN)==LV_OPA_COVER);
+ assert(!white_at(bar_x(11,24),chart.y1+2)&&white_at(wrap.x1+ctx->readout_x,chart.y1+2)&&"The line moves with the finger");
  touch_at(bar_x(5,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_value_text,"--")==0&&"A missing bar value is not zero");
  touch_at(bar_x(23,24),y);lv_refr_now(display);assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0);
  configManager.cfg.global_time_format=clock_tile::TIME_FORMAT_12H;
@@ -270,22 +338,40 @@ int main(){
  cache[0].values[23]=9.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
  assert(g_pending_refresh.valid&&ctx->shown_entry.values[23]!=9.0f&&"Bars stay unchanged while touched");
  touch_release();
- assert(!ctx->readout.active()&&ctx->readout_slot<0&&bars_restored(ctx)&&!shown(ctx->readout_time_label)&&!shown(ctx->readout_value_label)&&"Release restores the normal bars at once");
+ assert(!ctx->readout.active()&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label)&&"Release keeps the read bar");
  assert(lv_display_get_event_count(display)==display_events&&"The refresh hook exists only while a finger is down");
  process_energy_popup_queue();assert(!g_pending_refresh.valid&&ctx->shown_entry.values[23]==9.0f);
- // Axis labels belong to the chart surface.
+ assert(ctx->readout_slot==23&&strcmp(ctx->readout_value_text,"9.00 kWh")==0&&"The newest bar follows new data");
+ lv_refr_now(display);assert(white_at(wrap.x1+ctx->readout_x,chart.y1+2)&&"New bars keep the line");
+ // Axis labels belong to the chart surface. A bar the finger left stays.
  touch_at(bar_x(6,24),(axis.y1+axis.y2)/2);lv_refr_now(display);assert(ctx->readout_slot==6);touch_release();
- // A tap is released before any frame shows a readout.
- touch_at(bar_x(3,24),y);touch_release();lv_refr_now(display);assert(ctx->readout_slot<0&&!shown(ctx->readout_value_label)&&bars_restored(ctx));
- // Week bars read their weekday; the range buttons still work normally.
+ assert(ctx->readout_slot==6&&!ctx->readout_latest);
+ cache[0].values[6]=4.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
+ assert(ctx->shown_entry.values[6]==4.0f&&ctx->readout_slot==6&&strcmp(ctx->readout_value_text,"4.00 kWh")==0&&"New data keeps the bar the finger left");
+ // A tap reads its bar at once and keeps it.
+ touch_at(bar_x(3,24),y);touch_release();assert(ctx->readout_slot==3&&shown(ctx->readout_value_label)&&strcmp(ctx->readout_time_text,"03:00 \xE2\x80\x93 04:00")==0);
+ lv_refr_now(display);
+ // A period change starts at its newest bar; the header keeps today's value.
  lv_obj_send_event(ctx->week_btn,LV_EVENT_CLICKED,nullptr);settle(display);assert(ctx->period=="week"&&ctx->shown_slots==7);
+ assert(ctx->readout_slot==6&&ctx->readout_latest&&strcmp(ctx->readout_time_text,"Sunday")==0);
  touch_at(bar_x(2,7),y);lv_refr_now(display);
  assert(strcmp(ctx->readout_time_text,"Wednesday")==0&&strcmp(ctx->readout_value_text,"3.00 kWh")==0);
  sync_popup_shell();assert(strcmp(hometiles_title::text(shell.value),"12.34 kWh")==0&&"The header keeps today's value");
- // Hiding while touching ends the readout and restores the bars.
- hide_energy_popup();assert(!ctx->readout.active()&&bars_restored(ctx)&&lv_display_get_event_count(display)==display_events);
  touch_release();
- for(int cycle=0;cycle<10;++cycle){show_energy_popup(init);settle(display);touch_at(bar_x(cycle,24),y);lv_refr_now(display);assert(ctx->readout_slot==cycle);touch_release();hide_energy_popup();}
+ lv_obj_send_event(ctx->day_btn,LV_EVENT_CLICKED,nullptr);settle(display);
+ assert(ctx->period=="day"&&ctx->readout_slot==23&&ctx->readout_latest&&strcmp(ctx->readout_value_text,"9.00 kWh")==0);
+ // A negative bar hangs below the zero line; the line starts at the zero line.
+ cache[0].values[3]=-2.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
+ touch_at(bar_x(3,24),y);touch_release();lv_refr_now(display);
+ assert(ctx->readout_slot==3&&shown(ctx->y_zero_line)&&ctx->readout_line_bottom==lv_obj_get_y(ctx->y_zero_line)&&
+        ctx->readout_line_bottom==lv_obj_get_y(ctx->bars[3])&&"Negative bars: the line starts at the zero line");
+ assert(white_at(wrap.x1+ctx->readout_x,wrap.y1+ctx->readout_line_bottom-3)&&white_at(wrap.x1+ctx->readout_x,chart.y1-kReadoutDotLift)&&"Line and dot above a negative bar");
+ cache[0].values[3]=0.75f;queue_energy_popup_refresh("day");process_energy_popup_queue();
+ // Hiding while touching ends the readout and restores the bars.
+ touch_at(bar_x(4,24),y);lv_refr_now(display);
+ hide_energy_popup();assert(!ctx->readout.active()&&ctx->readout_slot<0&&bars_restored(ctx)&&lv_display_get_event_count(display)==display_events);
+ touch_release();
+ for(int cycle=0;cycle<10;++cycle){show_energy_popup(init);settle(display);assert(ctx->readout_slot==23&&ctx->readout_latest&&"Every opening starts at the newest bar");touch_at(bar_x(cycle,24),y);lv_refr_now(display);assert(ctx->readout_slot==cycle);touch_release();assert(ctx->readout_slot==cycle);hide_energy_popup();}
  assert(g_energy_popup_ctx==ctx&&lv_display_get_event_count(display)==display_events);
  lv_deinit();
  std::cout<<SCREEN_WIDTH<<"x"<<SCREEN_HEIGHT<<": Energy readout, header value, lifecycle and deferred data passed\n";
@@ -295,7 +381,7 @@ const source = path.join(out, 'test.cpp');
 fs.writeFileSync(source, cpp);
 fs.writeFileSync(path.join(out, 'Arduino.h'), '#pragma once\n#include <cstdint>\n#include <cstddef>\n');
 for (const [name, width, height, define] of [['square', 480, 480, 'DEVICE_LAYOUT_480X480'],
-  ['wide', 1024, 600, 'DEVICE_LAYOUT_1024X600'], ['ws8', 1280, 800, '']]) {
+  ['wide', 1024, 600, 'DEVICE_LAYOUT_1024X600'], ['ws8', 1280, 800, ''], ['tab5', 1280, 720, '']]) {
   const binary = path.join(out, name + (process.platform === 'win32' ? '.exe' : ''));
   let result = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-I', out, `-DSCREEN_WIDTH=${width}`,
     `-DSCREEN_HEIGHT=${height}`, ...(define ? ['-D' + define] : []), source, host.archive, '-o', binary], {encoding: 'utf8'});

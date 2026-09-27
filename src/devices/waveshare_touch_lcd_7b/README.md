@@ -11,7 +11,7 @@ ESP-IDF example, which vendors Espressif's `esp_lcd_ek79007` component version
 SPDX headers and is distributed under the Apache License 2.0 in
 `vendor/LICENSE-APACHE-2.0.txt`.
 
-The 7B-C uses the same display, touch, backlight and SDMMC contract. A normal
-build does not enable or expose its optional camera; camera beta builds
-(`HOMETILES_CAMERA_BETA`) support the 7B-C OV5647 module on the 15-pin 1.0 mm
-CSI connector, with its orientation pending a hardware check.
+The 7B-C uses the same display, touch, backlight and SDMMC contract. Every
+build supports the 7B-C OV5647 module on the 15-pin 1.0 mm CSI connector; the
+user enables it in Web Admin Settings, and its orientation is pending a
+hardware check.

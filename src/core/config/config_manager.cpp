@@ -227,7 +227,7 @@ ConfigManager::ConfigManager() {
   config.display_brightness = 200;
   config.screensaver_brightness_pct = kScreensaverBrightnessPctDefault;
   config.tile_borders = true;
-  config.tile_radius = tile_radius::kMinimum;
+  config.tile_radius = tile_radius::kDefault;
   config.icon_discs = true;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;
@@ -361,7 +361,7 @@ bool ConfigManager::load() {
   config.screensaver_brightness_pct =
       prefs.getUChar("ss_bright", kScreensaverBrightnessPctDefault);
   config.tile_borders = prefs.getBool("tile_border", true);
-  config.tile_radius = tile_radius::clamp(prefs.getUShort("tile_radius", tile_radius::kMinimum));
+  config.tile_radius = tile_radius::clamp(prefs.getUShort("tile_radius", tile_radius::kDefault));
   config.icon_discs = prefs.getBool("icon_disc", true);
   config.icon_glow = icon_glow::clamp(prefs.getUChar("icon_glow", icon_glow::kDefault));
   config.default_tile_color =
@@ -592,10 +592,8 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   const std::string normalized_title = hometiles_title::normalize(snapshot.title);
   strncpy(snapshot.title, normalized_title.c_str(), sizeof(snapshot.title));
   snapshot.icon_name[sizeof(snapshot.icon_name) - 1] = '\0';
-  if (!snapshot.valid || snapshot.col >= Device::kGridCols ||
-      snapshot.row >= Device::kGridRows || snapshot.span_w < 1 ||
-      snapshot.span_h < 1 || snapshot.span_w > Device::kGridCols ||
-      snapshot.span_h > Device::kGridRows) {
+  if (!snapshot.valid || !tile_geometry::supported(TILE_SETTINGS,
+      snapshot.col, snapshot.row, snapshot.span_w, snapshot.span_h)) {
     clear_settings_tile_snapshot(normalized);
   }
 #if defined(DEVICE_ESP32_S3_RGB_480)
@@ -1056,7 +1054,7 @@ void ConfigManager::clear() {
   config.display_brightness = 200;
   config.screensaver_brightness_pct = kScreensaverBrightnessPctDefault;
   config.tile_borders = true;
-  config.tile_radius = tile_radius::kMinimum;
+  config.tile_radius = tile_radius::kDefault;
   config.icon_discs = true;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;

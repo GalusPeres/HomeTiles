@@ -84,7 +84,7 @@
       if (slots && html) slots.outerHTML = html;
     }
     const data = getTilesData(tab)?.[resizeState?.index];
-    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode);
+    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode, data?.sensor_value_font);
     placeholder.replaceChildren(preview);
   }
 
@@ -119,10 +119,8 @@
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
     const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
-    // Every type resizes in half steps except Settings, which stays whole.
-    const fixedGrid = [7].includes(Number(typeValue));
-    const unit = fixedGrid ? 1 : 0.5;
-    const snap = fixedGrid ? clampInt : clampHalf;
+    const unit = 0.5;
+    const snap = clampHalf;
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, unit);
     if (!rawCell) return null;
     const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (supportsHalfSize(typeValue) ? 0.5 : 1);
@@ -655,8 +653,8 @@
         event.preventDefault();
         return;
       }
-      const spanW = clampInt(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
-      const spanH = clampInt(hiddenTile.dataset.spanH, 1, GRID_ROWS, 1);
+      const spanW = clampHalf(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
+      const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, GRID_ROWS, 1);
       dragSource = {
         kind: 'hidden-settings',
         tab: 'folder0',

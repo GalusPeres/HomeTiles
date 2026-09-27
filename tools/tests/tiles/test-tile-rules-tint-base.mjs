@@ -43,7 +43,8 @@ assert.equal(tint('rgb(139, 0, 0)', ' #222222'), expected, 'An own tile color is
 assert.equal(tint('rgb(34, 34, 34)', '#222222'), expected, 'Global tiles tint the same');
 assert.equal(tint('rgb(139, 0, 0)', '#3A3A3A'), context.tileTintBackground('#3A3A3A', '#2196F3', 20),
   'The global default tile color is the base');
-assert.equal(tint('rgb(139, 0, 0)', ''), expected, 'Without the variable the built-in default is the base');
+assert.equal(tint('rgb(139, 0, 0)', ''), context.tileTintBackground('#1A1A1A', '#2196F3', 20),
+  'Without the variable the built-in default is the base');
 
 // Firmware: the same base.
 assert.ok(read('src/tiles/runtime/tile_icon_source.cpp')

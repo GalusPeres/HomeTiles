@@ -12,8 +12,8 @@ typedef struct i2c_master_bus_t* i2c_master_bus_handle_t;
 
 namespace DeviceGuitionJC1060P470CV2 {
 
-// Optional OV02C10 on the CSI connector: enabled only in camera beta builds
-// (HOMETILES_LOCAL_CAMERA in device_select.h) until hardware validation.
+// Optional OV02C10 on the CSI connector (HOMETILES_LOCAL_CAMERA in
+// device_select.h); off until the user enables it in the Web Admin.
 #if defined(HOMETILES_LOCAL_CAMERA)
 inline constexpr bool kBuiltinCamera = true;
 #else

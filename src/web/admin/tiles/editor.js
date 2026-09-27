@@ -66,6 +66,7 @@
     if (specific) {
       specific.classList.remove('hidden');
     }
+    applyFolderTypeLock('folder0', false);
     const snapshot = normalizeHiddenSettingsSnapshot();
     if (!applyDraft('folder0', HIDDEN_SETTINGS_TILE_INDEX)) {
       applyTileFormData('folder0', snapshot);
@@ -248,6 +249,19 @@
         opacityInput.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);
       }
       updateTileType(tab);
+      // New tiles start in the HomeTiles look: a type with icon colors tints
+      // the tile with the color its icon shows at 20 % (Tile color "From
+      // icon"). Existing tiles and the screensaver keep their own style.
+      if (previousType === 0 && nextType !== 0 && !isScreensaverTileTab(tab) &&
+          typeof tileTypeHasIconColors === 'function' &&
+          tileTypeHasIconColors(String(nextType))) {
+        const strength = document.getElementById(tab + '_tile_icon_fill_strength');
+        if (strength) strength.value = '20';
+        const fill = document.getElementById(tab + '_tile_icon_fill');
+        if (fill) fill.checked = true;
+        syncTileColorMode(tab);
+        if (typeof syncIconColorFields === 'function') syncIconColorFields(tab);
+      }
       normalizeLayoutInputs(tab);
       updateLayoutFromInputs(tab);
       updateTilePreview(tab);

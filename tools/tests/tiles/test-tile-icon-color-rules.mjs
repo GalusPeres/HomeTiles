@@ -553,6 +553,19 @@ try{
  check($('t_tile_icon_rules_on').value==='0'&&hidden('t_tile_icon_rules_body')&&hidden('t_tile_icon_state_section'),'Without colors the rules start off');
  click(document.querySelector('[data-icon-color="rules-on"][data-mode="1"]'));
  check(!hidden('t_tile_icon_rules_body')&&!hidden('t_tile_icon_source_kinds')&&hidden('t_tile_icon_source'),'Own entity by default');
+ // Reported: a new tile is an Empty cell first and gets its type afterwards;
+ // Rules On then showed Other entity. The same after a Folder became a Sensor.
+ for(const from of ['0','4']){
+  setType(from);loadIconColorFields('t',{});syncIconColorFields('t');
+  setType('1');$('t_tile_type').dispatchEvent(new Event('change',{bubbles:true}));
+  click(document.querySelector('[data-icon-color="rules-on"][data-mode="1"]'));
+  check($('t_tile_icon_source_kind').value==='self'&&$('t_tile_icon_source_mode').value==='rules'&&
+   !hidden('t_tile_icon_source_kinds')&&hidden('t_tile_icon_source')&&
+   document.querySelector('[data-icon-color="source-kind"][data-mode="self"]').classList.contains('active'),
+   'Type '+from+' then Sensor: Rules On starts at Own entity and Own rules');
+ }
+ load('1',{sensor_entity:'sensor.waste',icon_colors:''});
+ click(document.querySelector('[data-icon-color="rules-on"][data-mode="1"]'));
  check(hidden('t_tile_icon_bar_section')&&!hidden('t_tile_icon_state_section'),'Text Sensor shows the state list');
  check(!document.querySelector('datalist'),'No native suggestion popup on the state field');
  click($('t_tile_icon_rule_add'));check(document.activeElement===$('t_tile_icon_rule_0_value'),'Add focuses the text');

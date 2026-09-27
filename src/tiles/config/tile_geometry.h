@@ -11,7 +11,7 @@ inline bool half_step(float value) {
 inline bool sensor(int type) { return type == TILE_SENSOR || type == TILE_BINARY_SENSOR || type == TILE_ENERGY; }
 // Tiles that show only an icon and a title.
 inline bool icon_title(int type) {
-  return type == TILE_SCENE || type == TILE_FOLDER || type == TILE_BACK || type == TILE_CAMERA;
+  return type == TILE_SCENE || type == TILE_FOLDER || type == TILE_BACK || type == TILE_CAMERA || type == TILE_SETTINGS;
 }
 // Types that may use half-cell sizes (mirrors supportsHalfSize in layout.js).
 inline bool half_size(int type) { return sensor(type) || type == TILE_CLOCK || icon_title(type); }
@@ -21,9 +21,6 @@ inline bool fractional(float value) { return value != std::floor(value); }
 inline bool supported(int type, float col, float row, float w, float h) {
   if (!half_step(col) || !half_step(row) || !half_step(w) || !half_step(h) ||
       w < 1 || h < 0.5f || col + w > Device::kGridCols || row + h > Device::kGridRows) return false;
-  // Settings stays whole: the hidden-Settings snapshot stores uint8 geometry.
-  if (type == TILE_SETTINGS &&
-      (fractional(col) || fractional(row) || fractional(w) || fractional(h))) return false;
   return h >= 1 || (half_size(type) && h == 0.5f);
 }
 inline bool compact(int type, float w, float h) {
@@ -32,7 +29,7 @@ inline bool compact(int type, float w, float h) {
 inline bool compact_clock(int type, float w, float h) {
   return type == TILE_CLOCK && w >= 1 && h == 0.5f;
 }
-// A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
+// A half-height icon-and-title tile (Scene, Folder, Settings, Back, Camera) uses the
 // half-height Sensor header layout without a value line.
 inline bool compact_icon_title(int type, float w, float h) {
   return icon_title(type) && w >= 1 && h == 0.5f;

@@ -694,7 +694,8 @@ function syncTileRadiusControls(tabEl) {
     if (requested.swipeEnabled) body.set('settings_swipe_enabled', '1');
     body.set('settings_reveal_edge', requested.revealEdge);
     if (hasNewPin) body.set('settings_pin', pinValue);
-    if (target && Number.isInteger(target.col) && Number.isInteger(target.row)) {
+    if (target && [target.col, target.row].every(value =>
+        Number.isFinite(value) && value >= 0 && Number.isInteger(value * 2))) {
       body.set('settings_tile_target_col', String(target.col));
       body.set('settings_tile_target_row', String(target.row));
     }
@@ -3484,8 +3485,7 @@ function syncTileRadiusControls(tabEl) {
     };
   }
 
-  function writeIconColorSource(tab, layer, type) {
-    const own = ICON_COLOR_OWN_TYPES.includes(type);
+  function writeIconColorSource(tab, layer) {
     const select = iconColorEl(tab, '_tile_icon_source');
     const entity = layer && !layer.self ? layer.entity : '';
     if (select) {
@@ -3500,7 +3500,10 @@ function syncTileRadiusControls(tabEl) {
       else delete select.dataset.configuredValue;
     }
     const set = (suffix, value) => { const el = iconColorEl(tab, suffix); if (el) el.value = value; };
-    set('_tile_icon_source_kind', layer ? (layer.self ? 'self' : 'other') : (own ? 'self' : 'other'));
+    // Without a stored layer the rules start at Own entity and Own rules, also
+    // when the cell is still Empty and only gets its type afterwards; types
+    // without an entity of their own show Other entity regardless.
+    set('_tile_icon_source_kind', layer && !layer.self ? 'other' : 'self');
     set('_tile_icon_source_mode', layer?.mode === 'auto' ? 'auto' : 'rules');
     const icon = iconColorEl(tab, '_tile_icon_rule_icon');
     if (icon) icon.checked = layer ? layer.icon : true;
@@ -3576,7 +3579,6 @@ function syncTileRadiusControls(tabEl) {
     if (!visible) return;
     const own = ICON_COLOR_OWN_TYPES.includes(type);
     const kindInput = iconColorEl(tab, '_tile_icon_source_kind');
-    if (kindInput && !own) kindInput.value = 'other';
     const kind = own && kindInput?.value !== 'other' ? 'self' : 'other';
     const on = iconColorEl(tab, '_tile_icon_rules_on')?.value === '1';
     const mode = iconColorEl(tab, '_tile_icon_source_mode')?.value === 'auto' ? 'auto' : 'rules';
@@ -3659,7 +3661,7 @@ function syncTileRadiusControls(tabEl) {
     if (max) max.value = parsed.bar ? parsed.bar.maxText : '';
     setIconColorSelectedStop(tab, -1);
     writeIconColorRows(tab, parsed.rows);
-    writeIconColorSource(tab, parsed.source, type);
+    writeIconColorSource(tab, parsed.source);
     // Records without a layer (b40) keep their own rules switched on.
     const own = ICON_COLOR_OWN_TYPES.includes(type);
     const on = parsed.source ? parsed.source.enabled : own && (!!parsed.bar || parsed.rows.length > 0);
@@ -4445,27 +4447,56 @@ function syncTileRadiusControls(tabEl) {
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  // Scene, Folder, Back and Camera show only an icon and a title.
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 8, 9, 18].includes(Number(type)); }
+  // Scene, Folder, Settings, Back and Camera show only an icon and a title.
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 7, 8, 9, 18].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
-  // a row high. Settings stays whole (mirrors tile_geometry::supported).
+  // a row high (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
     const values = layout ? [layout.col, layout.row, layout.span_w, layout.span_h] : [];
     if (!layout || !values.every(v => Number.isFinite(v) && v >= 0 && Number.isInteger(v * 2))) return false;
-    if (Number(type) === 7 && values.some(v => !Number.isInteger(v))) return false;
     if (layout.span_w < 1) return false;
     return layout.span_h >= 1 || (supportsHalfSize(type) && layout.span_h === 0.5);
   }
-  function applyCompactSensorPreview(el, type, layout, mode = 0) {
+  // Half-height value size for a value size choice, like
+  // compact_sensor_layout::value_step: the title size by default and for 20,
+  // 24, or 28 for 28 and the larger choices (32, 40), which do not fit.
+  function compactValueSize(choice) {
+    const value = String(choice ?? '0');
+    if (value === '2') return 24;
+    return ['3', '4', '5'].includes(value) ? 28 : 20;
+  }
+  // The value size choices a tile shows: Default, 24 and 28 in half-height
+  // tiles; Default, 20, 24, 32 and 40 otherwise (28 is the default there).
+  // A choice the other size lacks moves to the one that looks the same.
+  function syncCompactValueFontOptions(select, halfHeight) {
+    if (!select?.options) return;
+    const shown = halfHeight ? ['0', '2', '5'] : ['0', '1', '2', '3', '4'];
+    for (const option of Array.from(select.options)) {
+      const hidden = !shown.includes(option.value);
+      option.hidden = hidden;
+      option.disabled = hidden;
+      if (option.value === '0') {
+        option.textContent = option.textContent.replace(/^\d+(?= )/, halfHeight ? '20' : '28');
+      }
+    }
+    const value = select.value;
+    if (halfHeight && value === '1') select.value = '0';
+    else if (halfHeight && (value === '3' || value === '4')) select.value = '5';
+    else if (!halfHeight && value === '5') select.value = '0';
+  }
+  function applyCompactSensorPreview(el, type, layout, mode = 0, valueFont = 0) {
     const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
-    // A half-height icon-and-title tile (Scene, Folder, Back, Camera) uses the
+    // A half-height icon-and-title tile (Scene, Folder, Settings, Back, Camera) uses the
     // half-height Sensor header: the icon in the corner disc and the title
     // (if any) centered beside it.
-    const compactIconTitle = [2, 4, 8, 18].includes(Number(type)) && halfHeight;
+    const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     const compact = (isCompactSensorType(type) || compactIconTitle) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
     el.classList.toggle('compact-title-only', compactIconTitle);
+    const valueSize = compact && !compactIconTitle ? compactValueSize(valueFont) : 20;
+    el.classList.toggle('compact-value-24', valueSize === 24);
+    el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
     if (Number(type) === 9) fitCompactClockPreview(el);
   }
@@ -4491,12 +4522,6 @@ function syncTileRadiusControls(tabEl) {
       safeH = Math.max(minH, safeH);
       safeCol = Math.min(safeCol, GRID_COLS - 1);
       safeRow = Math.min(safeRow, GRID_ROWS - minH);
-      if (type === 7) {
-        safeCol = Math.floor(safeCol);
-        safeRow = Math.floor(safeRow);
-        safeW = Math.max(1, Math.floor(safeW));
-        safeH = Math.max(1, Math.floor(safeH));
-      }
       safeW = Math.min(safeW, GRID_COLS - safeCol);
       safeH = Math.min(safeH, GRID_ROWS - safeRow);
     }
@@ -4708,9 +4733,15 @@ function syncTileRadiusControls(tabEl) {
   // new tile, but without the free slot itself.
   function occupiedFromGrid(tab, grid, freeEl) {
     const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
+    // A selected new tile still of type Empty does not block the free slot:
+    // the pointer may pick a spot half a cell next to or over it, and a click
+    // moves the new tile there. Once a type is chosen it blocks like a tile.
+    const selectedIsEmpty =
+      String(document.getElementById(tab + '_tile_type')?.value ?? '0') === '0';
     grid.querySelectorAll(':scope > .tile[data-index]').forEach(el => {
       if (el === freeEl || el.style.display === 'none') return;
-      if (Number(el.dataset.type || 0) === 0 && el.dataset.selected !== '1') return;
+      if (Number(el.dataset.type || 0) === 0 &&
+          (el.dataset.selected !== '1' || selectedIsEmpty)) return;
       const layout = getTileElementLayout(tab, parseInt(el.dataset.index, 10));
       if (layout) markOccupied(occupied, layout);
     });
@@ -5039,6 +5070,28 @@ function syncTileRadiusControls(tabEl) {
       showNotification(t('noCopiedTile'), false);
       return;
     }
+    // Paste fills an empty tile only, and only where the copied size fits
+    // without covering other tiles. Pasting over a tile or into too small a
+    // gap used to replace the Back, Settings or a folder tile, or let the
+    // overlap fix move the pasted tile to column 1 / row 1.
+    if (Number(getCurrentTileType(tab) || 0) !== 0) {
+      showNotification(t('pasteEmptyOnly'), false);
+      return;
+    }
+    const target = getTileElementLayout(tab, currentTileIndex) ||
+      getTileLayoutFromData(tab, currentTileIndex);
+    const candidate = target && {
+      col: target.col,
+      row: target.row,
+      span_w: Number(tileClipboard.span_w) || 1,
+      span_h: Number(tileClipboard.span_h) || 1
+    };
+    if (!candidate ||
+        !supportedTileLayout(tileClipboard.type, candidate) ||
+        !canPlaceTileLayout(tab, currentTileIndex, candidate)) {
+      showNotification(t('pasteNoSpace'), false);
+      return;
+    }
     applyTileFormData(tab, tileClipboard);
     updateTilePreview(tab);
     updateDraft(tab);
@@ -5113,6 +5166,7 @@ function syncTileRadiusControls(tabEl) {
     if (specific) {
       specific.classList.remove('hidden');
     }
+    applyFolderTypeLock('folder0', false);
     const snapshot = normalizeHiddenSettingsSnapshot();
     if (!applyDraft('folder0', HIDDEN_SETTINGS_TILE_INDEX)) {
       applyTileFormData('folder0', snapshot);
@@ -5295,6 +5349,19 @@ function syncTileRadiusControls(tabEl) {
         opacityInput.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);
       }
       updateTileType(tab);
+      // New tiles start in the HomeTiles look: a type with icon colors tints
+      // the tile with the color its icon shows at 20 % (Tile color "From
+      // icon"). Existing tiles and the screensaver keep their own style.
+      if (previousType === 0 && nextType !== 0 && !isScreensaverTileTab(tab) &&
+          typeof tileTypeHasIconColors === 'function' &&
+          tileTypeHasIconColors(String(nextType))) {
+        const strength = document.getElementById(tab + '_tile_icon_fill_strength');
+        if (strength) strength.value = '20';
+        const fill = document.getElementById(tab + '_tile_icon_fill');
+        if (fill) fill.checked = true;
+        syncTileColorMode(tab);
+        if (typeof syncIconColorFields === 'function') syncIconColorFields(tab);
+      }
       normalizeLayoutInputs(tab);
       updateLayoutFromInputs(tab);
       updateTilePreview(tab);
@@ -5602,6 +5669,10 @@ function syncTileRadiusControls(tabEl) {
     const iconInput = document.getElementById(prefix + '_tile_icon');
     const switchStyle = document.getElementById(prefix + '_switch_style')?.value || '0';
     const isEnergyType = type === '14';
+    // Half-height tiles offer only the value sizes that fit.
+    const halfHeight = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) === 0.5;
+    for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
+      syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font' : '_sensor_value_font'))?.value || '0');
@@ -5697,7 +5768,7 @@ function syncTileRadiusControls(tabEl) {
       updateLayoutFromInputs(tab);
     applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
       span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
       return;
     }
 
@@ -5850,7 +5921,7 @@ function syncTileRadiusControls(tabEl) {
     updateLayoutFromInputs(tab);
     applyCompactSensorPreview(tileElem, type, {span_w:Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
       span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
-      document.getElementById(prefix + '_sensor_display_mode')?.value || 0);
+      document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
     if (previewKind === 'climate' &&
         typeof mountClimateMiniEditor === 'function') {
       mountClimateMiniEditor(tab);
@@ -6017,21 +6088,16 @@ function syncTileRadiusControls(tabEl) {
   function syncTileSizePolicy(tab) {
     const typeEl = document.getElementById(tab + '_tile_type');
     if (!typeEl) return;
-    const w = Number(document.getElementById(tab + '_tile_span_w')?.value || 1);
     const h = Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
-    // Half a row high only suits the half-size types; any other half step
-    // only excludes Settings, which stays whole.
+    // Half a row high only suits the half-size types.
     const halfHeight = h < 1;
-    const fractional = !Number.isInteger(w) || !Number.isInteger(h);
-    const fixedGrid = type => Number(type) === 7;
     // A new half-height tile may still take a larger type when it can grow.
     const isNewTile = Number(getTilesData(tab)?.[currentTileIndex]?.type || 0) === 0;
     for (const option of typeEl.options) {
       if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
       const type = Number(option.value);
       const grows = isNewTile && type !== 0 && !!grownNewTileLayout(tab, type);
-      const blocked = type !== 0 && !grows &&
-        ((halfHeight && !supportsHalfSize(type)) || (fractional && fixedGrid(type)));
+      const blocked = type !== 0 && !grows && halfHeight && !supportsHalfSize(type);
       if (blocked && !option.disabled) {
         option.disabled = true; option.dataset.sizeDisabled = '1';
       }
@@ -6039,7 +6105,7 @@ function syncTileRadiusControls(tabEl) {
     const compact = supportsHalfSize(typeEl.value);
     for (const field of ['col', 'row', 'span_w', 'span_h']) {
       const input = document.getElementById(tab + '_tile_' + field);
-      if (input) input.step = fixedGrid(typeEl.value) ? '1' : '0.5';
+      if (input) input.step = '0.5';
     }
     const row = document.getElementById(tab + '_tile_row');
     if (row) row.max = String(GRID_ROWS + (compact && h === 0.5 ? 0.5 : 0));
@@ -6977,7 +7043,7 @@ function syncTileRadiusControls(tabEl) {
         : null;
       if (choice) {
         const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-        tileElem.style.background = tileTintBackground(base || '#222222', choice.color, choice.percent);
+        tileElem.style.background = tileTintBackground(base || '#1A1A1A', choice.color, choice.percent);
       } else if (tileElem.dataset.baseBg !== undefined) {
         tileElem.style.background = tileElem.dataset.baseBg;
       }
@@ -7024,9 +7090,10 @@ function syncTileRadiusControls(tabEl) {
   // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
   // default grey (stored explicitly by older editors) follow the global
   // default tile color; every other stored color is kept.
-  // Built-in default greys: tile_color::kDefault and kLegacyDefault.
+  // Built-in default greys: tile_color::kDefault, kLegacyDefault and
+  // kPreviousDefault.
   function isDefaultTileGrey(rgb) {
-    return rgb === 0x222222 || rgb === 0x2A2A2A;
+    return rgb === 0x1A1A1A || rgb === 0x2A2A2A || rgb === 0x222222;
   }
   function tileBgFollowsDefault(value) {
     const num = Number(value);
@@ -7077,7 +7144,7 @@ function syncTileRadiusControls(tabEl) {
       input.dataset.bgColorDefault = '0';
     } else {
       const type = document.getElementById(tab + '_tile_type')?.value || '0';
-      input.value = getTileTypeMeta(type).defaultBg || '#222222';
+      input.value = getTileTypeMeta(type).defaultBg || '#1A1A1A';
       input.dataset.bgColorDefault = '1';
     }
     syncTileColorMode(tab);
@@ -7153,7 +7220,7 @@ function syncTileRadiusControls(tabEl) {
     el.dataset.ruleTint = tint ? '1' : '0';
     if (!tint) return;
     const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-    el.style.background = tileTintBackground(base || '#222222', tint.color, tint.percent);
+    el.style.background = tileTintBackground(base || '#1A1A1A', tint.color, tint.percent);
   }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1' ||
@@ -7238,7 +7305,7 @@ function syncTileRadiusControls(tabEl) {
     el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
     el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
     el.classList.toggle('tile-border-hidden', ['8','9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
-    applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode);
+    applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
     if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
     else delete el.dataset.navigateTarget;
     if (typeValue === '0') el.style.background = 'transparent';
@@ -7625,8 +7692,7 @@ function syncTileRadiusControls(tabEl) {
     if (!isFinite(relX) || !isFinite(relY)) return null;
     relX = Math.max(0, relX);
     relY = Math.max(0, relY);
-    const type = Number(dragSource?.type ?? getTilesData(tab)?.[currentTileIndex]?.type);
-    const unit = sizeStep ?? ([7].includes(type) ? 1 : 0.5);
+    const unit = sizeStep ?? 0.5;
     let col = Math.floor((relX + (metrics.gapX / 2)) / (stepX * unit)) * unit;
     let row = Math.floor((relY + (metrics.gapY / 2)) / (stepY * unit)) * unit;
     if (!isFinite(col)) col = 0;
@@ -7667,7 +7733,7 @@ function syncTileRadiusControls(tabEl) {
   function getDragAnchorCell(tab, layout, clientX, clientY) {
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
     if (!layout || !rawCell) return { col: 0, row: 0 };
-    const unit = [7].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
+    const unit = 0.5;
     const col = clampHalf(rawCell.col - layout.col, 0, Math.max(0, layout.span_w - unit), 0);
     const row = clampHalf(rawCell.row - layout.row, 0, Math.max(0, layout.span_h - unit), 0);
     return { col, row };
@@ -7682,7 +7748,7 @@ function syncTileRadiusControls(tabEl) {
         y: Math.max(0, (rect.height / 2) || 0)
       };
     }
-    const unit = [7].includes(Number(getTilesData(tab)?.[currentTileIndex]?.type)) ? 1 : 0.5;
+    const unit = 0.5;
     const x = (grabCellCol * (metrics.cellW + metrics.gapX)) + ((metrics.cellW + metrics.gapX) * unit - metrics.gapX) / 2;
     const y = (grabCellRow * (metrics.cellH + metrics.gapY)) + ((metrics.cellH + metrics.gapY) * unit - metrics.gapY) / 2;
     const maxX = Math.max(0, rect.width - 1);
@@ -7829,6 +7895,7 @@ function syncTileRadiusControls(tabEl) {
   }
 
   function canPlaceHiddenSettingsLayout(tab, candidateLayout) {
+    if (!supportedTileLayout(7, candidateLayout)) return false;
     if (tileDataLoadedTabs.has(tab)) {
       return canPlaceTileLayout(tab, -1, candidateLayout);
     }
@@ -7935,7 +8002,7 @@ function syncTileRadiusControls(tabEl) {
         columns, rows, firstRow,
         layout.span_w, layout.span_h,
         preferredCol, preferredRow,
-        fractional && ![7].includes(Number(tileTypes[displacedIndex])) ? 0.5 : 1);
+        fractional ? 0.5 : 1);
       let placed = false;
       for (const candidate of candidates) {
         const nextLayout = {
@@ -8074,7 +8141,7 @@ function syncTileRadiusControls(tabEl) {
       if (slots && html) slots.outerHTML = html;
     }
     const data = getTilesData(tab)?.[resizeState?.index];
-    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode);
+    applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode, data?.sensor_value_font);
     placeholder.replaceChildren(preview);
   }
 
@@ -8109,10 +8176,8 @@ function syncTileRadiusControls(tabEl) {
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
     const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
-    // Every type resizes in half steps except Settings, which stays whole.
-    const fixedGrid = [7].includes(Number(typeValue));
-    const unit = fixedGrid ? 1 : 0.5;
-    const snap = fixedGrid ? clampInt : clampHalf;
+    const unit = 0.5;
+    const snap = clampHalf;
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, unit);
     if (!rawCell) return null;
     const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (supportsHalfSize(typeValue) ? 0.5 : 1);
@@ -8645,8 +8710,8 @@ function syncTileRadiusControls(tabEl) {
         event.preventDefault();
         return;
       }
-      const spanW = clampInt(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
-      const spanH = clampInt(hiddenTile.dataset.spanH, 1, GRID_ROWS, 1);
+      const spanW = clampHalf(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
+      const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, GRID_ROWS, 1);
       dragSource = {
         kind: 'hidden-settings',
         tab: 'folder0',
@@ -8781,6 +8846,7 @@ function syncTileRadiusControls(tabEl) {
     screensaverLoading = false;
     screensaverDraft = null;
     screensaverWallpaperIndex = -1;
+    syncScreensaverImages();
   }
 
   function ssClamp(value, min, max) {
@@ -8825,19 +8891,50 @@ function syncTileRadiusControls(tabEl) {
     data.wallpapers = Array.isArray(data.wallpapers) ? data.wallpapers : [];
     data.duration_seconds = Math.round(ssClamp(
       data.duration_seconds ?? 15, 3, 3600));
-    const configured = new Map(data.wallpapers.map(item => [item.file_name, item]));
-    const hadConfiguredWallpapers = data.wallpapers.length > 0;
-    (data.available_wallpapers || []).forEach(name => {
-      if (!configured.has(name)) {
-        data.wallpapers.push({
-          file_name: name, enabled: !hadConfiguredWallpapers,
-          focus_x: 500, focus_y: 500, zoom: 1000
-        });
-      }
-    });
-    screensaverWallpaperIndex = data.wallpapers.findIndex(w => w.enabled);
-    if (screensaverWallpaperIndex < 0 && data.wallpapers.length) screensaverWallpaperIndex = 0;
     return data;
+  }
+
+  // Keep the stored image list in step with the card: entries of deleted
+  // files are dropped and new images join checked, so an upload appears in
+  // the slideshow without extra clicks. Returns true when the list changed.
+  function ssSyncCardImages(data) {
+    const available = Array.isArray(data.available_wallpapers) ? data.available_wallpapers : [];
+    const key = name => String(name || '').toLowerCase();
+    let changed = false;
+    // Without a card the list stays untouched; its images may come back.
+    if (data.sd_ready === true) {
+      const onCard = new Set(available.map(key));
+      const kept = data.wallpapers.filter(item => onCard.has(key(item.file_name)));
+      changed = kept.length !== data.wallpapers.length;
+      data.wallpapers = kept;
+    }
+    const listed = new Set(data.wallpapers.map(item => key(item.file_name)));
+    available.forEach(name => {
+      // The display stores at most 32 images.
+      if (listed.has(key(name)) || data.wallpapers.length >= 32) return;
+      listed.add(key(name));
+      data.wallpapers.push({
+        file_name: name, enabled: true,
+        focus_x: 500, focus_y: 500, zoom: 1000
+      });
+      changed = true;
+    });
+    return changed;
+  }
+
+  // File manager uploads, renames and deletions store the updated list right
+  // away, so the display follows the card even while the Screensaver tab is
+  // closed. An open editor syncs and saves through its own load instead.
+  function syncScreensaverImages() {
+    fetch('/api/screensaver').then(r => r.json()).then(config => {
+      if (!config || !config.success || screensaverLoaded || screensaverLoading) return;
+      const data = ssNormalizeLoaded(config);
+      if (!ssSyncCardImages(data)) return;
+      return fetch('/api/screensaver', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ssPayload(data, ''))
+      });
+    }).catch(() => {});
   }
 
   function initScreensaverEditor() {
@@ -8849,16 +8946,19 @@ function syncTileRadiusControls(tabEl) {
     fetch('/api/screensaver').then(r => r.json()).then(config => {
       if (!config || !config.success) throw new Error('screensaver config');
       screensaverDraft = ssNormalizeLoaded(config);
+      const imagesChanged = ssSyncCardImages(screensaverDraft);
+      screensaverWallpaperIndex = screensaverDraft.wallpapers.findIndex(w => w.enabled);
+      if (screensaverWallpaperIndex < 0 && screensaverDraft.wallpapers.length) screensaverWallpaperIndex = 0;
       screensaverLoaded = true;
       bindScreensaverEditor();
       selectScreensaverBackground();
       renderScreensaverEditor();
+      if (imagesChanged) scheduleScreensaverSave();
     }).catch(() => showNotification(t('screensaverLoadFailed'), false))
       .finally(() => { screensaverLoading = false; });
   }
 
-  function ssPayload() {
-    const d = screensaverDraft;
+  function ssPayload(d = screensaverDraft, previewName = null) {
     return {
       version: 2,
       use_wallpapers: !!d.use_wallpapers,
@@ -8878,7 +8978,7 @@ function syncTileRadiusControls(tabEl) {
       clock_x: Math.round(ssClamp(d.clock_x, 0, 1000)),
       clock_y: Math.round(ssClamp(d.clock_y, 0, 1000)),
       duration_seconds: Math.round(ssClamp(d.duration_seconds, 3, 3600)),
-      preview_wallpaper: ssCurrentWallpaper()?.file_name || '',
+      preview_wallpaper: previewName ?? (ssCurrentWallpaper()?.file_name || ''),
       wallpapers: d.wallpapers.map(w => ({
         file_name: w.file_name, enabled: !!w.enabled,
         focus_x: Math.round(ssClamp(w.focus_x, 0, 1000)),
@@ -9939,7 +10039,7 @@ function maybeFillTitleFromSensor(tab) {
 
   function normalizeSensorValueFont(value) {
     const v = String(value || '0');
-    return (['1','2','3','4'].includes(v)) ? v : '0';
+    return (['1','2','3','4','5'].includes(v)) ? v : '0';
   }
 
   function getSensorValueFontClass(value) {
@@ -10978,16 +11078,20 @@ function maybeFillTitleFromMedia(tab) {
     return Math.min(6, columns * rows);
   }
 
+  // Width counts whole cells. The mini-grid has one row per half cell below
+  // the header row, so half steps add a row: 1 -> 1, 1.5 -> 2, 2 -> 3
+  // (climateTileGridRows on the device).
   function climateGridDimensions(spanW, spanH) {
     const columns = Math.max(
       1, Math.min(
         climateMaxGridColumns(), Math.floor(Number(spanW) || 1)));
-    const outerRows = Math.max(
-      1, Math.min(
-        climateMaxOuterRows(), Math.floor(Number(spanH) || 1)));
+    const halfRows = Math.max(
+      2, Math.min(
+        climateMaxOuterRows() * 2,
+        Math.round((Number(spanH) || 1) * 2)));
     return {
       columns,
-      rows: outerRows * 2 - 1
+      rows: halfRows - 1
     };
   }
 
@@ -11217,42 +11321,25 @@ function maybeFillTitleFromMedia(tab) {
       a.row + a.spanH > b.row;
   }
 
-  function canPlaceClimateItem(
-      items, configured, index, candidate, capacity) {
-    for (let other = 0; other < capacity; ++other) {
-      if (other === index) continue;
-      if (Number(configured[other]) === CLIMATE_TILE_CONTENT.EMPTY) {
-        continue;
-      }
-      if (climateGeometryOverlaps(candidate, items[other])) {
-        return false;
-      }
-    }
-    return true;
+  // Items are placed top-left first (row, column, then item number) when the
+  // tile has a stored mini-grid, so a smaller tile keeps what it can still
+  // show and drops only the rest. Without stored geometry the item number is
+  // the position (build_slot_kinds on the device).
+  function climatePlacementOrderFor(geometry, hasStoredGeometry) {
+    const order = [0, 1, 2, 3, 4, 5];
+    if (!hasStoredGeometry) return order;
+    const at = (index, key) => Number(geometry[index]?.[key]) || 0;
+    return order.sort((a, b) =>
+      at(a, 'row') - at(b, 'row') ||
+      at(a, 'col') - at(b, 'col') ||
+      a - b);
   }
 
-  function firstFreeClimatePlacement(
-      items, configured, capacity, columns, rows,
-      ignoreIndex = -1, spanW = 1, spanH = 1) {
-    const safeSpanW = Math.max(
-      1, Math.min(columns, Number(spanW) || 1));
-    const safeSpanH = Math.max(
-      1, Math.min(rows, Number(spanH) || 1));
-    for (let row = 0; row + safeSpanH <= rows; ++row) {
-      for (let col = 0; col + safeSpanW <= columns; ++col) {
-        const candidate = {
-          col, row,
-          spanW: safeSpanW,
-          spanH: safeSpanH
-        };
-        if (canPlaceClimateItem(
-              items, configured, ignoreIndex,
-              candidate, capacity)) {
-          return candidate;
-        }
-      }
-    }
-    return null;
+  function climatePlacementOrder(tab, geometry) {
+    const stored = document.getElementById(
+      tab + '_climate_geometry')?.value || '';
+    return climatePlacementOrderFor(
+      geometry, /^CLG[12]:/i.test(String(stored).trim()));
   }
 
   function notifyClimateGridChanged(tab) {
@@ -11677,9 +11764,11 @@ function maybeFillTitleFromMedia(tab) {
     const spanW = Math.max(1, Math.floor(Number(
       document.getElementById(
         tab + '_tile_span_w')?.value) || 1));
-    const spanH = Math.max(1, Math.floor(Number(
+    // Height follows half steps through the mini-grid rows.
+    const spanH = Math.max(1, Number(
       document.getElementById(
-        tab + '_tile_span_h')?.value) || 1));
+        tab + '_tile_span_h')?.value) || 1);
+    const { rows } = climateGridDimensions(spanW, spanH);
     const capacity = climateSlotCapacity(spanW, spanH);
     const kinds = [];
     const add = kind => {
@@ -11699,13 +11788,13 @@ function maybeFillTitleFromMedia(tab) {
       }
     };
 
-    if (spanW === 1 && spanH === 1) {
+    if (spanW === 1 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
-    } else if (spanW >= 2 && spanH === 1) {
+    } else if (spanW >= 2 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
@@ -11715,7 +11804,7 @@ function maybeFillTitleFromMedia(tab) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
-      if (spanH === 2) return kinds;
+      if (rows <= 3) return kinds;
       if (state.targetHumidity !== null &&
           (state.targetLow !== null ||
            state.targetHigh !== null ||
@@ -11744,16 +11833,14 @@ function maybeFillTitleFromMedia(tab) {
     return kinds;
   }
 
+  // Every configured item takes part, not only the first cells-many item
+  // numbers: after a resize the items that still fit stay, whatever their
+  // number (build_slot_kinds on the device).
   function climateResolvedEditorKinds(tab) {
     const configured = currentClimateSlotConfig(tab);
     const automatic = climateAutomaticEditorKinds(tab);
-    const capacity = climateSlotCapacity(
-      document.getElementById(
-        tab + '_tile_span_w')?.value || 1,
-      document.getElementById(
-        tab + '_tile_span_h')?.value || 1);
     const explicit = new Set();
-    configured.slice(0, capacity).forEach(selection => {
+    configured.forEach(selection => {
       const kind = Number(selection) || 0;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO &&
           kind !== CLIMATE_TILE_CONTENT.EMPTY) {
@@ -11761,12 +11848,9 @@ function maybeFillTitleFromMedia(tab) {
       }
     });
     let cursor = 0;
-    return configured.map((selection, index) => {
+    return configured.map(selection => {
       const kind = Number(selection) || 0;
-      if (index >= capacity ||
-          kind === CLIMATE_TILE_CONTENT.EMPTY) {
-        return null;
-      }
+      if (kind === CLIMATE_TILE_CONTENT.EMPTY) return null;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO) return kind;
       while (cursor < automatic.length) {
         const candidate = automatic[cursor++];
@@ -11795,20 +11879,12 @@ function maybeFillTitleFromMedia(tab) {
     }
   }
 
-  function climatePlacementConfig(
-      configured, resolvedKinds) {
-    return configured.map((selection, index) =>
-      resolvedKinds[index] === null
-        ? CLIMATE_TILE_CONTENT.EMPTY
-        : selection);
-  }
-
   function climateTargetCaption(state, kind) {
     if (state?.available === false) return CLIMATE_I18N.unavailable;
     const entityState = String(state?.mode || '').toLowerCase();
     if (entityState === 'unknown') return CLIMATE_I18N.unknown;
     if (kind === CLIMATE_TILE_CONTENT.TARGET_HUMIDITY) {
-      return CLIMATE_I18N.targetHumidity;
+      return CLIMATE_I18N.humidityCaption;
     }
     if (kind === CLIMATE_TILE_CONTENT.TARGET_TEMPERATURE_LOW) {
       return CLIMATE_I18N.heat;
@@ -12069,11 +12145,11 @@ function maybeFillTitleFromMedia(tab) {
     });
   }
 
-  function climateActiveGridIndices(tab, capacity) {
+  function climateActiveGridIndices(tab) {
     const configured = currentClimateSlotConfig(tab);
     const resolved = climateResolvedEditorKinds(tab);
     const active = new Set();
-    for (let index = 0; index < capacity; ++index) {
+    for (let index = 0; index < 6; ++index) {
       // Count only items that are actually placed: syncClimateSlotFields hides
       // slots without free space, and their stored geometry must not block drag
       // and resize as a phantom occupancy.
@@ -12223,16 +12299,14 @@ function maybeFillTitleFromMedia(tab) {
           tab + '_tile_span_h')?.value || 1;
         const { columns, rows } =
           climateGridDimensions(spanW, spanH);
-        const capacity = climateSlotCapacity(spanW, spanH);
         const configured = currentClimateSlotConfig(tab);
         const resolvedKinds =
           climateResolvedEditorKinds(tab);
         const index = configured.findIndex(
           (value, candidate) =>
-            candidate < capacity &&
-            (Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
-             (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
-              resolvedKinds[candidate] === null)));
+            Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
+            (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
+             resolvedKinds[candidate] === null));
         if (index < 0) return;
         const row = Math.floor(cellIndex / columns);
         const col = cellIndex % columns;
@@ -12368,9 +12442,8 @@ function maybeFillTitleFromMedia(tab) {
         tab + '_tile_span_h')?.value || 1;
       const { columns, rows } =
         climateGridDimensions(spanW, spanH);
-      const capacity = climateSlotCapacity(spanW, spanH);
       const activeIndices =
-        climateActiveGridIndices(tab, capacity);
+        climateActiveGridIndices(tab);
       const baseLayouts =
         climateGridLayouts(tab, columns, rows);
       const origin = cloneLayout(baseLayouts[index]);
@@ -12564,8 +12637,6 @@ function maybeFillTitleFromMedia(tab) {
               tab + '_tile_span_h')?.value || 1;
             const { columns, rows } =
               climateGridDimensions(spanW, spanH);
-            const capacity =
-              climateSlotCapacity(spanW, spanH);
             const configured = currentClimateSlotConfig(tab);
             const stored = currentClimateGeometry(tab);
             const items = stored.map(entry =>
@@ -12574,7 +12645,7 @@ function maybeFillTitleFromMedia(tab) {
             const layouts =
               climateGridLayouts(tab, columns, rows);
             const activeIndices =
-              climateActiveGridIndices(tab, capacity);
+              climateActiveGridIndices(tab);
             const direction =
               String(handle.dataset.climateResize || 'se');
             item.classList.add('resizing');
@@ -12658,12 +12729,11 @@ function maybeFillTitleFromMedia(tab) {
       return;
     }
     mountClimateMiniEditor(tab);
-    // Half steps do not change the mini-grid, so only whole cells count here.
+    // Width counts whole cells; half heights add a mini-grid row.
     const spanW = Math.max(1, Math.floor(Number(document.getElementById(
       tab + '_tile_span_w')?.value) || 1));
-    const spanH = Math.max(1, Math.floor(Number(document.getElementById(
-      tab + '_tile_span_h')?.value) || 1));
-    const capacity = climateSlotCapacity(spanW, spanH);
+    const spanH = Math.max(1, Math.round(Number(document.getElementById(
+      tab + '_tile_span_h')?.value) * 2 || 2) / 2);
     const { columns, rows } =
       climateGridDimensions(spanW, spanH);
     let configured = currentClimateSlotConfig(tab);
@@ -12692,8 +12762,6 @@ function maybeFillTitleFromMedia(tab) {
         resolvedKinds = climateResolvedEditorKinds(tab);
       }
     }
-    const placementConfig = climatePlacementConfig(
-      configured, resolvedKinds);
     const stored = currentClimateGeometry(tab);
     const items = stored.map(entry =>
       clampClimateGeometryItem(entry, columns, rows));
@@ -12708,12 +12776,13 @@ function maybeFillTitleFromMedia(tab) {
 
     const occupied = Array(columns * rows).fill(false);
     const accepted = [];
-    for (let index = 0; index < 6; ++index) {
+    const fits = candidate => !accepted.some(other =>
+      climateGeometryOverlaps(candidate, other.geometry));
+    for (const index of climatePlacementOrder(tab, stored)) {
       const item = document.getElementById(
         tab + '_climate_slot_row_' + index);
       const kind = Number(configured[index]) || 0;
       const active =
-        index < capacity &&
         kind !== CLIMATE_TILE_CONTENT.EMPTY &&
         resolvedKinds[index] !== null;
       if (!item) continue;
@@ -12721,13 +12790,23 @@ function maybeFillTitleFromMedia(tab) {
       if (!active) continue;
 
       let geometry = items[index];
-      if (accepted.some(other =>
-            climateGeometryOverlaps(
-              geometry, other.geometry))) {
-        const free = firstFreeClimatePlacement(
-          items, placementConfig, capacity,
-          columns, rows, index,
-          geometry.spanW, geometry.spanH);
+      if (!fits(geometry)) {
+        let free = null;
+        for (let row = 0;
+             row + geometry.spanH <= rows && !free; ++row) {
+          for (let col = 0;
+               col + geometry.spanW <= columns; ++col) {
+            const candidate = {
+              col, row,
+              spanW: geometry.spanW,
+              spanH: geometry.spanH
+            };
+            if (fits(candidate)) {
+              free = candidate;
+              break;
+            }
+          }
+        }
         if (!free) {
           item.classList.add('hidden');
           continue;
@@ -12808,10 +12887,9 @@ function maybeFillTitleFromMedia(tab) {
           tab + '_climate_cell_' + directCell);
         const index = configured.findIndex(
           (value, candidate) =>
-            candidate < capacity &&
-            (Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
-             (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
-              resolvedKinds[candidate] === null)));
+            Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
+            (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
+             resolvedKinds[candidate] === null));
         if (cell &&
             !cell.classList.contains('hidden') &&
             !cell.classList.contains('occupied') &&
@@ -13064,9 +13142,10 @@ function maybeFillTitleFromMedia(tab) {
   function climatePreviewSlots(
       state, spanW, spanH, slotConfig = null,
       targetLayoutConfig = null, geometryConfig = null) {
-    // Layout variants follow whole cells, like build_automatic_slot_kinds.
+    // Layout variants follow whole cells in width and mini-grid rows in
+    // height (half steps add a row), like build_automatic_slot_kinds.
     const w = Math.max(1, Math.floor(Number(spanW) || 1));
-    const h = Math.max(1, Math.floor(Number(spanH) || 1));
+    const h = Math.max(1, Math.round(Number(spanH) * 2 || 2) / 2);
     const capacity = climateSlotCapacity(w, h);
     const { columns, rows } =
       climateGridDimensions(w, h);
@@ -13115,13 +13194,13 @@ function maybeFillTitleFromMedia(tab) {
     if (state?.available === false || entityState === 'unavailable' ||
         entityState === 'unknown') {
       addAutomatic(CLIMATE_TILE_CONTENT.HVAC_MODE);
-    } else if (w === 1 && h === 1) {
+    } else if (w === 1 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
-    } else if (w >= 2 && h === 1) {
+    } else if (w >= 2 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
@@ -13131,7 +13210,7 @@ function maybeFillTitleFromMedia(tab) {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
-      if (h > 2 &&
+      if (rows > 3 &&
           state.targetHumidity !== null &&
           (state.targetLow !== null ||
            state.targetHigh !== null ||
@@ -13214,8 +13293,10 @@ function maybeFillTitleFromMedia(tab) {
       }
     };
 
+    // Every configured item takes part, not only the first cells-many item
+    // numbers; what does not fit is dropped during placement below.
     const explicitlyConfigured = new Set();
-    configured.slice(0, capacity).forEach(selection => {
+    configured.forEach(selection => {
       const kind = Number(selection) || 0;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO &&
           kind !== CLIMATE_TILE_CONTENT.EMPTY) {
@@ -13225,7 +13306,7 @@ function maybeFillTitleFromMedia(tab) {
 
     const slots = [];
     let automaticCursor = 0;
-    for (let index = 0; index < capacity; ++index) {
+    for (let index = 0; index < 6; ++index) {
       const selection = Number(configured[index]) || 0;
       if (selection === CLIMATE_TILE_CONTENT.EMPTY) continue;
       let kind = selection;
@@ -13255,6 +13336,9 @@ function maybeFillTitleFromMedia(tab) {
     const hasStoredGeometry =
       Array.isArray(geometryConfig) ||
       /^CLG[12]:/i.test(String(geometryConfig || '').trim());
+    const order = climatePlacementOrderFor(geometry, hasStoredGeometry);
+    slots.sort((a, b) =>
+      order.indexOf(a.itemIndex) - order.indexOf(b.itemIndex));
     const placedSlots = [];
     slots.forEach(slot => {
       let candidate = {

@@ -1,12 +1,14 @@
 #pragma once
 
 #include "src/core/config/config_manager.h"
+#include "src/tiles/config/tile_geometry.h"
 
 #include <stddef.h>
 #include <string.h>
 
 // Internal persistence codec for the Settings parental-control record.
 // Record layouts, migration versions, and credential handling are unchanged.
+// Snapshot flag bits 1-4 preserve half steps; legacy whole-cell bytes stay exact.
 // Corrupt storage deliberately recovers by revealing and unlocking Settings;
 // this prevents a damaged parental-control record from locking out the owner.
 // NVS reads/writes and post-load policy remain in ConfigManager. Keep this
@@ -121,6 +123,8 @@ SettingsAccessRecord make_settings_access_record(const DeviceConfig& config) {
   record.snapshot_row = snapshot.row;
   record.snapshot_span_w = snapshot.span_w;
   record.snapshot_span_h = snapshot.span_h;
+  record.snapshot_flags |= static_cast<uint8_t>(tile_geometry::fraction_bits(
+      snapshot.col, snapshot.row, snapshot.span_w, snapshot.span_h) << 1);
   const String stored_pin(config.settings_pin_value);
   if (config.settings_pin_enabled &&
       pin_access::isValidUserPin(stored_pin) &&
@@ -172,13 +176,13 @@ bool apply_settings_access_record(const SettingsAccessRecord& record,
     pin_access::secureClear(candidate, sizeof(candidate));
   }
   clear_settings_tile_snapshot(config);
+  const float col = record.snapshot_col + ((record.snapshot_flags & 2) ? 0.5f : 0);
+  const float row = record.snapshot_row + ((record.snapshot_flags & 4) ? 0.5f : 0);
+  const float span_w = record.snapshot_span_w + ((record.snapshot_flags & 8) ? 0.5f : 0);
+  const float span_h = record.snapshot_span_h + ((record.snapshot_flags & 16) ? 0.5f : 0);
   const bool snapshot_valid =
       (record.snapshot_flags & kSettingsTileSnapshotValid) != 0 &&
-      record.snapshot_col < Device::kGridCols &&
-      record.snapshot_row < Device::kGridRows &&
-      record.snapshot_span_w >= 1 && record.snapshot_span_h >= 1 &&
-      record.snapshot_span_w <= Device::kGridCols &&
-      record.snapshot_span_h <= Device::kGridRows;
+      tile_geometry::supported(TILE_SETTINGS, col, row, span_w, span_h);
   if (snapshot_valid) {
     SettingsTileSnapshot& snapshot = config.settings_tile_snapshot;
     snapshot.valid = true;
@@ -189,10 +193,10 @@ bool apply_settings_access_record(const SettingsAccessRecord& record,
            sizeof(snapshot.icon_name));
     snapshot.title[sizeof(snapshot.title) - 1] = '\0';
     snapshot.icon_name[sizeof(snapshot.icon_name) - 1] = '\0';
-    snapshot.col = record.snapshot_col;
-    snapshot.row = record.snapshot_row;
-    snapshot.span_w = record.snapshot_span_w;
-    snapshot.span_h = record.snapshot_span_h;
+    snapshot.col = col;
+    snapshot.row = row;
+    snapshot.span_w = span_w;
+    snapshot.span_h = span_h;
   }
   return true;
 }

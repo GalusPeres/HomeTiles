@@ -2,6 +2,7 @@ import {extractDeliveredFunction, inlineScriptSafe} from '../../lib/admin-source
 import {runDomHarness} from '../../lib/headless-dom.mjs';
 
 const productionFunctions = [
+  extractDeliveredFunction('clampHalf'),
   extractDeliveredFunction('restoreCurrentTileSelectionUi'),
   extractDeliveredFunction('enableTileDrag'),
   extractDeliveredFunction('enableSettingsHiddenSlot')
@@ -84,10 +85,6 @@ const harness = `<!doctype html>
         wrongGridDropCalls++;
         dragSource.dropCommitted = true;
       }
-    }
-    function clampInt(value, min, max, fallback) {
-      const number = Number.parseInt(value, 10);
-      return Math.max(min, Math.min(max, Number.isFinite(number) ? number : fallback));
     }
     function settingsAccessElement() { return null; }
     function selectHiddenSettingsTile() {}

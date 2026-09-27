@@ -86,6 +86,11 @@ enum SwitchPopupOpenModeStorage : uint8_t {
   TILE_SWITCH_POPUP_MODE_LONG = 2
 };
 
+// Value size choices (Tile::sensor_value_font): 0 = default (28 px, the title
+// size in half-height tiles), 1 = 20, 2 = 24, 3 = 32, 4 = 40, 5 = 28 (sizes on
+// the 1280x800 layouts). Half-height tiles show at most 28.
+static constexpr uint8_t SENSOR_VALUE_FONT_MAX = 5;
+
 struct Tile {
   TileType type;
   // Stable navigation identity, stored in the two unused V7 reserved bytes.
@@ -235,12 +240,14 @@ static inline uint8_t climateTileGridColumns(const Tile& tile) {
              : span_w;
 }
 
+// One mini-grid row per half cell below the header row, so half steps add a
+// row: 1 -> 1, 1.5 -> 2, 2 -> 3, 2.5 -> 4. Whole sizes keep their rows.
 static inline uint8_t climateTileGridRows(const Tile& tile) {
-  const uint8_t span_h =
+  const float span_h =
       tile.span_h < 1
-          ? 1
-          : (tile.span_h > GRID_ROWS ? GRID_ROWS : tile.span_h);
-  return static_cast<uint8_t>(span_h * 2u - 1u);
+          ? 1.0f
+          : (tile.span_h > GRID_ROWS ? static_cast<float>(GRID_ROWS) : tile.span_h);
+  return static_cast<uint8_t>(static_cast<uint8_t>(span_h * 2.0f + 0.5f) - 1u);
 }
 
 // Adjustable climate values consume two cells. Their preferred orientation is
@@ -406,6 +413,7 @@ static inline bool parseClimateTileGeometry(
   return true;
 }
 
+// Stored position of one mini tile; build_slot_kinds clamps it to the grid.
 static inline ClimateTileItemGeometry getClimateTileItemGeometry(
     const Tile& tile, uint8_t item_index) {
   const uint8_t columns = climateTileGridColumns(tile);
@@ -472,16 +480,9 @@ static inline ClimateTileItemGeometry getClimateTileItemGeometry(
       }
     }
   }
-  if (geometry.col >= columns) geometry.col = columns - 1;
-  if (geometry.row >= rows) geometry.row = rows - 1;
-  if (geometry.span_w < 1) geometry.span_w = 1;
-  if (geometry.span_h < 1) geometry.span_h = 1;
-  if (geometry.span_w > columns - geometry.col) {
-    geometry.span_w = columns - geometry.col;
-  }
-  if (geometry.span_h > rows - geometry.row) {
-    geometry.span_h = rows - geometry.row;
-  }
+  // Deliberately not clamped into the current grid: placement orders the
+  // items by where they were stored and clamps afterwards, so an item from a
+  // row that no longer exists cannot jump ahead of the items above it.
   return geometry;
 }
 
@@ -642,9 +643,9 @@ public:
   bool getFolderPin(uint16_t folder_id, String& out) const;
   bool getSettingsTile(Tile& out);
   SettingsTileVisibilityResult validateSettingsTileVisible(
-      bool visible, int target_col = -1, int target_row = -1);
+      bool visible, float target_col = -1, float target_row = -1);
   SettingsTileVisibilityResult setSettingsTileVisible(
-      bool visible, int target_col = -1, int target_row = -1);
+      bool visible, float target_col = -1, float target_row = -1);
 
 private:
   volatile uint32_t view_revision_ = 1;
@@ -681,8 +682,8 @@ private:
                        bool ensure_navigation_tile = true);
   uint16_t nextFolderId() const;
   void ensureRootFolder();
-  bool ensureSettingsTile(TileGridConfig& grid, int target_col = -1,
-                          int target_row = -1);
+  bool ensureSettingsTile(TileGridConfig& grid, float target_col = -1,
+                          float target_row = -1);
   bool removeSettingsTiles(TileGridConfig& grid);
   bool applySettingsTilePolicy(TileGridConfig& grid);
   bool ensureBackTile(uint16_t folder_id, TileGridConfig& grid);

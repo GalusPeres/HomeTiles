@@ -158,21 +158,16 @@
   function syncTileSizePolicy(tab) {
     const typeEl = document.getElementById(tab + '_tile_type');
     if (!typeEl) return;
-    const w = Number(document.getElementById(tab + '_tile_span_w')?.value || 1);
     const h = Number(document.getElementById(tab + '_tile_span_h')?.value || 1);
-    // Half a row high only suits the half-size types; any other half step
-    // only excludes Settings, which stays whole.
+    // Half a row high only suits the half-size types.
     const halfHeight = h < 1;
-    const fractional = !Number.isInteger(w) || !Number.isInteger(h);
-    const fixedGrid = type => Number(type) === 7;
     // A new half-height tile may still take a larger type when it can grow.
     const isNewTile = Number(getTilesData(tab)?.[currentTileIndex]?.type || 0) === 0;
     for (const option of typeEl.options) {
       if (option.dataset.sizeDisabled === '1') { option.disabled = false; delete option.dataset.sizeDisabled; }
       const type = Number(option.value);
       const grows = isNewTile && type !== 0 && !!grownNewTileLayout(tab, type);
-      const blocked = type !== 0 && !grows &&
-        ((halfHeight && !supportsHalfSize(type)) || (fractional && fixedGrid(type)));
+      const blocked = type !== 0 && !grows && halfHeight && !supportsHalfSize(type);
       if (blocked && !option.disabled) {
         option.disabled = true; option.dataset.sizeDisabled = '1';
       }
@@ -180,7 +175,7 @@
     const compact = supportsHalfSize(typeEl.value);
     for (const field of ['col', 'row', 'span_w', 'span_h']) {
       const input = document.getElementById(tab + '_tile_' + field);
-      if (input) input.step = fixedGrid(typeEl.value) ? '1' : '0.5';
+      if (input) input.step = '0.5';
     }
     const row = document.getElementById(tab + '_tile_row');
     if (row) row.max = String(GRID_ROWS + (compact && h === 0.5 ? 0.5 : 0));

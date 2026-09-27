@@ -4,6 +4,11 @@ Use up to eight available GPIOs for switches or DS18B20 temperature inputs. Thes
 
 Open **I/O** in the Web Admin. Assignments belong to the physical panel and are excluded from dashboard exports.
 
+<figure class="ht-screenshot">
+<img src="../images/web-admin-io.png" alt="I/O tab with one switch output" width="1305" height="405" loading="lazy">
+<figcaption>I/O tab with a switch output</figcaption>
+</figure>
+
 ## Switch Outputs
 
 1. Select **+ Switch** and enter a name.

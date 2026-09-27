@@ -345,7 +345,7 @@ static uint8_t clampDecimals(uint8_t val) {
 }
 
 static uint8_t clampSensorValueFont(uint8_t val) {
-  if (val > 4) return 0;
+  if (val > SENSOR_VALUE_FONT_MAX) return 0;
   return val;
 }
 
@@ -1767,11 +1767,9 @@ static bool find_free_cell_top_left(const TileGridConfig& grid, float& out_col, 
 static bool settings_tile_rect_is_free(const TileGridConfig& grid,
                                        float col, float row,
                                        float span_w, float span_h) {
-  if (span_w < 1 || span_h < 1 || col >= GRID_COLS || row >= GRID_ROWS ||
-      span_w > GRID_COLS - col || span_h > GRID_ROWS - row) {
+  if (!tile_geometry::supported(TILE_SETTINGS, col, row, span_w, span_h)) {
     return false;
   }
-  bool occupied[GRID_ROWS][GRID_COLS] = {};
   for (const auto& tile : grid.tiles) {
     if (tile.type == TILE_EMPTY || tile.type == TILE_SETTINGS) continue;
     float tile_col = 0;
@@ -1782,11 +1780,9 @@ static bool settings_tile_rect_is_free(const TileGridConfig& grid,
                                  tile_span_h)) {
       continue;
     }
-    mark_occupied(occupied, tile_col, tile_row, tile_span_w, tile_span_h);
-  }
-  for (uint8_t check_row = row; check_row < row + span_h; ++check_row) {
-    for (uint8_t check_col = col; check_col < col + span_w; ++check_col) {
-      if (occupied[check_row][check_col]) return false;
+    if (col < tile_col + tile_span_w && col + span_w > tile_col &&
+        row < tile_row + tile_span_h && row + span_h > tile_row) {
+      return false;
     }
   }
   return true;
@@ -1795,17 +1791,14 @@ static bool settings_tile_rect_is_free(const TileGridConfig& grid,
 static bool find_settings_tile_rect_bottom_right(
     const TileGridConfig& grid, float span_w, float span_h,
     float& out_col, float& out_row) {
-  if (span_w < 1 || span_h < 1 || span_w > GRID_COLS ||
-      span_h > GRID_ROWS) {
+  if (!tile_geometry::supported(TILE_SETTINGS, 0, 0, span_w, span_h)) {
     return false;
   }
-  for (int row = GRID_ROWS - span_h; row >= 0; --row) {
-    for (int col = GRID_COLS - span_w; col >= 0; --col) {
-      if (settings_tile_rect_is_free(
-              grid, static_cast<uint8_t>(col), static_cast<uint8_t>(row),
-              span_w, span_h)) {
-        out_col = static_cast<uint8_t>(col);
-        out_row = static_cast<uint8_t>(row);
+  for (float row = GRID_ROWS - span_h; row >= 0; row -= 0.5f) {
+    for (float col = GRID_COLS - span_w; col >= 0; col -= 0.5f) {
+      if (settings_tile_rect_is_free(grid, col, row, span_w, span_h)) {
+        out_col = col;
+        out_row = row;
         return true;
       }
     }
@@ -1822,8 +1815,8 @@ static void collectFolderSubtree(const std::vector<FolderEntry>& entries, uint16
   }
 }
 
-bool TileConfig::ensureSettingsTile(TileGridConfig& grid, int target_col,
-                                    int target_row) {
+bool TileConfig::ensureSettingsTile(TileGridConfig& grid, float target_col,
+                                    float target_row) {
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& tile = grid.tiles[i];
     if (tile.type == TILE_SETTINGS) {
@@ -1836,7 +1829,7 @@ bool TileConfig::ensureSettingsTile(TileGridConfig& grid, int target_col,
   float span_w = snapshot.valid && snapshot.span_w >= 1
                        ? snapshot.span_w
                        : 1;
-  float span_h = snapshot.valid && snapshot.span_h >= 1
+  float span_h = snapshot.valid && snapshot.span_h >= 0.5f
                        ? snapshot.span_h
                        : 1;
   if (span_w > GRID_COLS) span_w = 1;
@@ -1848,13 +1841,11 @@ bool TileConfig::ensureSettingsTile(TileGridConfig& grid, int target_col,
   if (explicit_target) {
     if (target_col < 0 || target_row < 0 || target_col >= GRID_COLS ||
         target_row >= GRID_ROWS ||
-        !settings_tile_rect_is_free(
-            grid, static_cast<uint8_t>(target_col),
-            static_cast<uint8_t>(target_row), span_w, span_h)) {
+        !settings_tile_rect_is_free(grid, target_col, target_row, span_w, span_h)) {
       return false;
     }
-    col = static_cast<uint8_t>(target_col);
-    row = static_cast<uint8_t>(target_row);
+    col = target_col;
+    row = target_row;
   } else if (snapshot.valid && snapshot.col < GRID_COLS &&
              snapshot.row < GRID_ROWS &&
              settings_tile_rect_is_free(grid, snapshot.col, snapshot.row,
@@ -3291,7 +3282,7 @@ bool TileConfig::getSettingsTile(Tile& out) {
 }
 
 SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
-    bool visible, int target_col, int target_row) {
+    bool visible, float target_col, float target_row) {
   TileGridConfig grid{};
   if (!loadGrid(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
@@ -3324,7 +3315,7 @@ SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
 }
 
 SettingsTileVisibilityResult TileConfig::validateSettingsTileVisible(
-    bool visible, int target_col, int target_row) {
+    bool visible, float target_col, float target_row) {
   TileGridConfig grid{};
   if (!loadGrid(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;

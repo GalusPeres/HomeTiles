@@ -102,16 +102,14 @@
           tab + '_tile_span_h')?.value || 1;
         const { columns, rows } =
           climateGridDimensions(spanW, spanH);
-        const capacity = climateSlotCapacity(spanW, spanH);
         const configured = currentClimateSlotConfig(tab);
         const resolvedKinds =
           climateResolvedEditorKinds(tab);
         const index = configured.findIndex(
           (value, candidate) =>
-            candidate < capacity &&
-            (Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
-             (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
-              resolvedKinds[candidate] === null)));
+            Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
+            (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
+             resolvedKinds[candidate] === null));
         if (index < 0) return;
         const row = Math.floor(cellIndex / columns);
         const col = cellIndex % columns;
@@ -247,9 +245,8 @@
         tab + '_tile_span_h')?.value || 1;
       const { columns, rows } =
         climateGridDimensions(spanW, spanH);
-      const capacity = climateSlotCapacity(spanW, spanH);
       const activeIndices =
-        climateActiveGridIndices(tab, capacity);
+        climateActiveGridIndices(tab);
       const baseLayouts =
         climateGridLayouts(tab, columns, rows);
       const origin = cloneLayout(baseLayouts[index]);
@@ -443,8 +440,6 @@
               tab + '_tile_span_h')?.value || 1;
             const { columns, rows } =
               climateGridDimensions(spanW, spanH);
-            const capacity =
-              climateSlotCapacity(spanW, spanH);
             const configured = currentClimateSlotConfig(tab);
             const stored = currentClimateGeometry(tab);
             const items = stored.map(entry =>
@@ -453,7 +448,7 @@
             const layouts =
               climateGridLayouts(tab, columns, rows);
             const activeIndices =
-              climateActiveGridIndices(tab, capacity);
+              climateActiveGridIndices(tab);
             const direction =
               String(handle.dataset.climateResize || 'se');
             item.classList.add('resizing');

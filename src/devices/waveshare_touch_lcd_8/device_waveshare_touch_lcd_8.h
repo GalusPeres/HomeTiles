@@ -12,8 +12,8 @@ typedef struct i2c_master_bus_t* i2c_master_bus_handle_t;
 
 namespace DeviceWaveshareTouchLCD8 {
 
-// Built-in OV5647 front camera: enabled only in camera beta builds
-// (HOMETILES_LOCAL_CAMERA in device_select.h) until hardware validation.
+// Built-in OV5647 front camera (HOMETILES_LOCAL_CAMERA in device_select.h);
+// off until the user enables it in the Web Admin.
 #if defined(HOMETILES_LOCAL_CAMERA)
 inline constexpr bool kBuiltinCamera = true;
 #else

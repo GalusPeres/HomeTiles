@@ -455,6 +455,8 @@ void queue_cover_tile_update(GridType grid_type, uint8_t grid_index,
   }
   const uint8_t next = (g_queue_head + 1) % kQueueSize;
   if (next == g_queue_tail) {
+    g_queue[g_queue_tail].payload = static_cast<const char*>(nullptr);
+    g_queue[g_queue_tail].valid = false;
     g_queue_tail = (g_queue_tail + 1) % kQueueSize;
     Serial.println("[Queue] Cover full, oldest update replaced");
   }
@@ -477,6 +479,7 @@ void process_cover_update_queue(uint8_t max_updates) {
       update.valid = false;
       ++processed;
     }
+    update.payload = static_cast<const char*>(nullptr);
     g_queue_tail = (g_queue_tail + 1) % kQueueSize;
   }
 }

@@ -39,12 +39,12 @@ HomeTiles' display rotation.
 - SD mount first uses 40MHz high-speed mode and retries at 20MHz default speed.
 - Audio, RTC and battery reporting are not enabled yet.
 
-## Built-in camera (camera beta builds only)
+## Built-in camera
 
 The V1 board carries the same OV02C10 camera as the V2 on connector FPC5;
 Guition's V1 `video_lcd_display` demo is the archive the V2 sensor data comes
-from. Only camera beta builds (`HOMETILES_CAMERA_BETA`) compile the capture
-path, and the user enables it in Web Admin Settings. The board file is
+from. Every build compiles the capture path; the user enables it in Web
+Admin Settings. The board file is
 `local_camera_board.cpp`; sensor data and open assumptions are in
 `src/video/local_camera/sensors/ov02c10/PROVENANCE.md`.
 

@@ -11,7 +11,7 @@ The [HomeTiles Bridge](https://github.com/GalusPeres/HomeTiles-Bridge) connects 
 
 ## Installation
 
-You need Home Assistant 2025.11 or newer, an MQTT broker, and HomeTiles Bridge v0.6.44 or newer for all documented tile features with firmware v0.6.10. Follow the [Home Assistant setup guide](home-assistant-setup.md) to install the Bridge and pair your first display.
+You need Home Assistant 2025.11 or newer, an MQTT broker, and HomeTiles Bridge v0.7.0 or newer for all documented features with firmware v0.7.0. Follow the [Home Assistant setup guide](home-assistant-setup.md) to install the Bridge and pair your first display.
 
 <a id="via-hacs-recommended"></a>
 <a id="manual"></a>
@@ -45,7 +45,7 @@ Older display configurations, entity selections, aliases, and MQTT topic names r
 
 **Numbers** accepts `number` and `input_number`; **Selects** accepts `select` and `input_select`; **Date/Time** accepts `time`, `date`, `datetime`, and `input_datetime`. Use their dedicated [editable tile types](tiles.md#number). State, writable limits, options, availability, and history come from Home Assistant. Recorder exclusions also apply to these history views.
 
-Bridge v0.6.44 remains compatible with older firmware and existing configurations. New editable controls require the new firmware; no reset or re-pairing is needed for a normal update.
+Bridge v0.7.0 remains compatible with older firmware and existing configurations. New features require the corresponding firmware; no reset or re-pairing is needed for a normal update.
 
 ## Control the Displayed View
 
@@ -96,6 +96,28 @@ Camera tiles are available on ESP32-P4. Allow the display to reach the Home Assi
 
 Each open display uses its own stream. Video conversion uses Home Assistant CPU time, while snapshot cameras are limited by their source refresh rate. See [Camera troubleshooting](faq.md#the-camera-tile-asks-for-a-newer-bridge-or-never-shows-video) if no video appears.
 
+## Built-in Camera
+
+Displays with a camera can share it with Home Assistant. This needs HomeTiles v0.7.0 and Bridge v0.7.0 or newer.
+
+| Display | Camera |
+| --- | --- |
+| Guition JC8012P4A1 V2 and V1 | Built-in OV02C10 |
+| Guition JC1060P470C V2, JC4880P443 | Optional OV02C10 module on the CSI connector |
+| Waveshare ESP32-P4 7-inch, 8-inch, 10.1-inch | Built-in OV5647 front camera |
+| Waveshare ESP32-P4 7B, 4.3-inch, 4B | Optional OV5647 module on the CSI connector |
+| M5Stack Tab5 | Built-in SC2356 |
+
+Tested on the Guition JC8012P4A1 V2, Waveshare 8-inch, and M5Stack Tab5; the JC4880P443 camera was contributor-tested. On the other displays, use **Rotation**, **Mirror image**, or **Swap red and blue** under [Advanced](web-admin.md#built-in-camera) if the image appears turned or its colors are swapped.
+
+1. In the Web Admin, open **Settings → Built-in camera** and enable **Allow Home Assistant to use the built-in camera**, then press **Save**.
+2. The Bridge adds a **Camera** entity to the display's Home Assistant device, plus a **Camera** switch that pauses it.
+3. Open the camera in Home Assistant, or show it on another display with a [Camera tile](tiles.md#camera-experimental).
+
+The display captures images only while Home Assistant asks for them. Opening the camera starts a live stream that uses the same TCP ports `8124`–`8131` as camera tiles; it stops a few seconds after the last viewer closes. While the camera is in use, the display shows the [camera indicator](device-ui.md#built-in-camera-indicator). Tapping its pill ends the current stream.
+
+Disabling the setting removes the entity. The paused switch keeps the entity but sends no images. A display cannot show its own camera in its own camera popup.
+
 ## MQTT Topics Reference { data-toc-label="MQTT reference" }
 
 Entity states use `<HA prefix>/<entity>/...`. The Bridge publishes them itself; Home Assistant's MQTT Statestream integration is not required.
@@ -125,6 +147,8 @@ Entity states use `<HA prefix>/<entity>/...`. The Bridge publishes them itself; 
     | `<base>/cmnd/scene` | Display → HA | Scene/script activation or button press |
     | `<base>/cmnd/camera` | Display → HA | Open/close a camera session |
     | `<base>/stat/camera` | HA → Display | Camera connection and status |
+    | `<base>/cmnd/local_camera` | HA → Display | Still image or live stream request for the built-in camera |
+    | `<base>/stat/local_camera` | Display → HA | Built-in camera status (`ready`, `disabled`, `error`) |
     | `<base>/cmnd/display_brightness` | HA → Display | Display brightness (1–100%) |
     | `<base>/stat/display_brightness` | Display → HA | Current display brightness |
     | `<base>/cmnd/screensaver_brightness` | HA → Display | Screensaver brightness (1–100%) |

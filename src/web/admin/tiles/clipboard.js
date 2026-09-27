@@ -78,6 +78,28 @@
       showNotification(t('noCopiedTile'), false);
       return;
     }
+    // Paste fills an empty tile only, and only where the copied size fits
+    // without covering other tiles. Pasting over a tile or into too small a
+    // gap used to replace the Back, Settings or a folder tile, or let the
+    // overlap fix move the pasted tile to column 1 / row 1.
+    if (Number(getCurrentTileType(tab) || 0) !== 0) {
+      showNotification(t('pasteEmptyOnly'), false);
+      return;
+    }
+    const target = getTileElementLayout(tab, currentTileIndex) ||
+      getTileLayoutFromData(tab, currentTileIndex);
+    const candidate = target && {
+      col: target.col,
+      row: target.row,
+      span_w: Number(tileClipboard.span_w) || 1,
+      span_h: Number(tileClipboard.span_h) || 1
+    };
+    if (!candidate ||
+        !supportedTileLayout(tileClipboard.type, candidate) ||
+        !canPlaceTileLayout(tab, currentTileIndex, candidate)) {
+      showNotification(t('pasteNoSpace'), false);
+      return;
+    }
     applyTileFormData(tab, tileClipboard);
     updateTilePreview(tab);
     updateDraft(tab);

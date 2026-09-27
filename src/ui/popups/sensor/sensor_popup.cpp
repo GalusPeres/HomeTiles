@@ -226,6 +226,14 @@ struct SensorPopupContext {
   int32_t readout_y = 0;
   int32_t readout_top = 0;
   int32_t readout_bottom = 0;
+  // Sensors keep the readout after release, at the finger's last position
+  // (x in the graph). It follows the newest point while it shows that point:
+  // on opening, after a range change and while new data arrives.
+  bool readout_latest = true;
+  int32_t readout_pin_x = 0;
+  // A warm opening with retained history shows the newest point after its
+  // first frame, when the graph has its layout.
+  bool readout_refresh_pending = false;
   char readout_time_text[72] = "";
   char readout_value_text[176] = "";
   // Unscaled history values in PSRAM; the chart keeps scaled integers.
@@ -277,6 +285,8 @@ static void ensure_binary_view(SensorPopupContext* ctx);
 static void layout_editable_history(SensorPopupContext* ctx);
 static int editable_control_top(const SensorPopupContext* ctx);
 static void clear_binary_history(SensorPopupContext* ctx);
+static void clear_sensor_readout(SensorPopupContext* ctx);
+static void refresh_sensor_readout(SensorPopupContext* ctx);
 static void refresh_binary_activity_rows(SensorPopupContext* ctx,
                                          bool force = false);
 static void update_binary_state(SensorPopupContext* ctx,
@@ -967,6 +977,8 @@ static void clear_chart(SensorPopupContext* ctx, uint16_t points) {
   ctx->point_count = points;
   ctx->history_values_count = 0;
   ctx->readout_point = -1;
+  // A kept readout leaves with its data; the next history shows it again.
+  if (ctx->readout_kind == kReadoutChart) clear_sensor_readout(ctx);
   lv_chart_set_point_count(ctx->chart, points);
   lv_chart_set_all_value(ctx->chart, ctx->series, LV_CHART_POINT_NONE);
   if (ctx->y_max_label) lv_label_set_text(ctx->y_max_label, "");
@@ -1561,10 +1573,12 @@ static void prepend_state_history_activity(SensorPopupContext* ctx,
                 ctx->binary_timeline_bins.end(), timeline_state);
     }
     if (ctx->binary_timeline) lv_obj_invalidate(ctx->binary_timeline);
-    // A finger resting on the timeline reads the new state with the next frame.
+    // A finger resting on the timeline reads the new state with the next frame;
+    // a kept readout reads it now.
     ctx->readout_point = -1;
     ctx->readout_from = ctx->readout_to = 0;
     ctx->readout.request_apply();
+    refresh_sensor_readout(ctx);
   }
 
   if (ctx->binary_activity_status) {
@@ -1600,6 +1614,7 @@ static void prepend_state_history_activity(SensorPopupContext* ctx,
 
 static void clear_binary_history(SensorPopupContext* ctx) {
   if (!ctx) return;
+  if (ctx->readout_kind == kReadoutTimeline) clear_sensor_readout(ctx);
   ctx->binary_segments.clear();
   ctx->binary_timeline_bins.clear();
   ctx->state_history_palette.clear();
@@ -1744,9 +1759,11 @@ static void apply_sensor_header_value(SensorPopupContext* ctx,
 }
 
 // ---------------------------------------------------------------------------
-// Graph readout. While a finger rests on the numeric chart or the state
-// timeline, the old value row shows the touched time and value. Only the
-// cursor and two static labels change; chart, timeline and Activity stay.
+// Graph readout. The old value row shows the time and value under the cursor
+// on the numeric chart or the state timeline. Sensors open on the newest
+// point and keep the cursor where the finger leaves it; editors show it only
+// while touching. Only the cursor and two static labels change; chart,
+// timeline and Activity stay.
 
 static bool readout_twelve_hour() {
   const DeviceConfig& cfg = configManager.getConfig();
@@ -1891,7 +1908,8 @@ static void show_readout_band(SensorPopupContext* ctx) {
                                         ctx->readout_value_label, true);
 }
 
-// Release, press loss, hiding and teardown all restore the normal drawing.
+// Hiding, opening, a range change, teardown and an editor's release restore
+// the normal drawing.
 static void clear_sensor_readout(SensorPopupContext* ctx) {
   if (!ctx) return;
   invalidate_readout_cursor(ctx);
@@ -2128,12 +2146,64 @@ static void on_sensor_readout_apply(void* owner, lv_obj_t* target,
   else if (target == ctx->binary_timeline) apply_timeline_readout(ctx, point);
 }
 
-static void on_sensor_readout_end(void* owner) {
-  clear_sensor_readout(static_cast<SensorPopupContext*>(owner));
+// The graph whose readout stays after release: the numeric chart or the state
+// timeline. Editors keep their controls in the value row, so their readout
+// exists only while a finger is on the graph.
+static lv_obj_t* sensor_readout_graph(const SensorPopupContext* ctx) {
+  if (!ctx || ctx->editable) return nullptr;
+  return ctx->state_history_mode ? ctx->binary_timeline : ctx->chart_wrap;
+}
+
+// The readout shows the newest point: the last real chart point, or the
+// timeline segment that reaches the end of the range.
+static bool sensor_readout_is_latest(const SensorPopupContext* ctx) {
+  if (ctx->readout_kind == kReadoutTimeline) {
+    return ctx->binary_range_end > ctx->binary_range_start &&
+           ctx->readout_to >= ctx->binary_range_end;
+  }
+  if (ctx->readout_kind != kReadoutChart || !ctx->chart || !ctx->series) return false;
+  const uint32_t count = lv_chart_get_point_count(ctx->chart);
+  const int32_t* values = count ? lv_chart_get_series_y_array(ctx->chart, ctx->series) : nullptr;
+  if (!values) return false;
+  for (uint32_t index = count; index-- > 0;) {
+    if (values[index] != LV_CHART_POINT_NONE) return ctx->readout_point == static_cast<int32_t>(index);
+  }
+  return false;
+}
+
+static void on_sensor_readout_end(void* owner, bool keep) {
+  auto* ctx = static_cast<SensorPopupContext*>(owner);
+  if (!ctx) return;
+  lv_obj_t* graph = sensor_readout_graph(ctx);
+  if (keep && graph && readout_target(ctx) == graph) {
+    ctx->readout_pin_x = ctx->readout_x;
+    ctx->readout_latest = sensor_readout_is_latest(ctx);
+    return;
+  }
+  clear_sensor_readout(ctx);
+  if (!keep) ctx->readout_latest = true;
+}
+
+// Show the kept readout again after its data changed or the popup opened:
+// the newest point, or the finger's last position. Never while a finger is on
+// the graph, which reads the new data itself.
+static void refresh_sensor_readout(SensorPopupContext* ctx) {
+  lv_obj_t* graph = sensor_readout_graph(ctx);
+  if (!graph || ctx->readout.active() || !is_popup_visible(ctx) ||
+      !ctx->readout_time_label || !ctx->readout_value_label ||
+      lv_obj_has_flag(graph, LV_OBJ_FLAG_HIDDEN)) return;
+  lv_obj_update_layout(graph);
+  lv_area_t area;
+  lv_obj_get_coords(graph, &area);
+  const lv_point_t point = {ctx->readout_latest ? area.x2 : area.x1 + ctx->readout_pin_x,
+                            area.y1};
+  ctx->readout_point = -1;
+  ctx->readout_from = ctx->readout_to = 0;
+  on_sensor_readout_apply(ctx, graph, point);
 }
 
 // The old value row becomes the readout band: a small time line above the
-// large value line, centered, empty while no finger is on a graph.
+// large value line, centered, empty while there is no readout.
 static void build_readout_band(SensorPopupContext* ctx) {
   if (!ctx || !ctx->value_box || ctx->readout_time_label) return;
   lv_obj_add_flag(ctx->value_box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
@@ -2934,11 +3004,13 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
   if (strcmp(kind, "binary") == 0) {
     if (!ctx->binary_mode) return;
     apply_binary_history_payload(ctx, doc);
+    refresh_sensor_readout(ctx);
     return;
   }
   if (strcmp(kind, "state") == 0) {
     if (ctx->binary_mode || ctx->editable) return;
     apply_state_history_payload(ctx, doc);
+    refresh_sensor_readout(ctx);
     return;
   }
   if (ctx->state_history_mode && !ctx->editable) return;
@@ -3131,6 +3203,7 @@ static void apply_history_payload(SensorPopupContext* ctx, const char* payload) 
   // One refresh is sufficient after the complete buffer, scale and labels
   // have been prepared.
   lv_chart_refresh(ctx->chart);
+  refresh_sensor_readout(ctx);
 
   const uint32_t apply_finished_ms = millis();
   const uint32_t total_ms = apply_finished_ms - apply_started_ms;
@@ -3273,6 +3346,9 @@ static void on_range_click(lv_event_t* e) {
 
   SensorHistoryRange next_range =
       (target == ctx->range_week_btn) ? SensorHistoryRange::Day7 : SensorHistoryRange::Day24;
+  if (!ctx->editable && ctx->history_range == next_range) return;
+  // A new range starts at its newest point.
+  ctx->readout.cancel();
   if (ctx->editable) {
     if (ctx->editable_requested_range == next_range) return;
     ctx->editable_requested_range = next_range;
@@ -3280,7 +3356,6 @@ static void on_range_click(lv_event_t* e) {
     request_history_for_context(ctx);
     return;
   }
-  if (ctx->history_range == next_range) return;
 
   ctx->history_range = next_range;
   update_range_buttons(ctx);
@@ -3573,6 +3648,7 @@ static void finish_sensor_popup_open() {
   set_range_buttons_visible(g_sensor_popup_ctx,
                             g_sensor_popup_ctx->state_history_mode);
   g_sensor_popup_ctx->state_history_refresh_pending = false;
+  g_sensor_popup_ctx->readout_refresh_pending = reuse_history;
   // Present the controls before applying a returned history in another pass.
   g_sensor_first_frame.begin();
   if (!fresh_history) request_history_for_context(g_sensor_popup_ctx);
@@ -3724,6 +3800,10 @@ void process_sensor_popup_queue() {
     return;
   }
   if (g_sensor_first_frame.pending()) return;
+  if (g_sensor_popup_ctx->readout_refresh_pending) {
+    g_sensor_popup_ctx->readout_refresh_pending = false;
+    refresh_sensor_readout(g_sensor_popup_ctx);
+  }
 
   if (g_pending_icon_refresh) {
     g_pending_icon_refresh = false;

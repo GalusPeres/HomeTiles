@@ -153,6 +153,7 @@ inline const lv_font_t* value_font_for_choice(uint8_t choice, const lv_font_t* f
     case 2: return content_font_24();
     case 3: return content_font_32();
     case 4: return content_font_40();
+    case 5: return content_font_28();
     default: return fallback;
   }
 }

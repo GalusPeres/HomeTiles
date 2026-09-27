@@ -1,7 +1,7 @@
 #pragma once
 
 // Built-in camera board file of the Waveshare ESP32-P4-WIFI6-Touch-LCD-10.1
-// profiles (pre-v3 and v3.x silicon), camera beta builds only (contract:
+// profiles (pre-v3 and v3.x silicon), (contract:
 // src/video/local_camera/camera_driver.h). Same LCD-X main board as the
 // 8-inch (Waveshare LCD-X schematic, 10.1-inch camera connector J5; see the
 // OV5647 PROVENANCE.md):

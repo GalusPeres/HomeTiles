@@ -38,6 +38,8 @@ const lv_font_t* get_energy_value_font(const Tile& tile) {
       return tile_layout::content_font_32();
     case 4:
       return tile_layout::content_font_40();
+    case 5:
+      return tile_layout::content_font_28();
     default:
       return FONT_VALUE;
   }

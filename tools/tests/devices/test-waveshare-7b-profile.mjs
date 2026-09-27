@@ -199,7 +199,7 @@ requireMarker(vendorLicense, 'Apache License', 'Vendored EK79007 license');
 
 for (const marker of [
   '7B-C uses the same display, touch, backlight and SDMMC contract',
-  'does not enable or expose its optional camera',
+  'supports the 7B-C OV5647 module on the 15-pin 1.0 mm CSI connector',
 ]) {
   requireMarker(profileReadme, marker, 'Waveshare 7B-C scope');
 }

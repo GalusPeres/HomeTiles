@@ -62,6 +62,7 @@ ${strip(read('src/ui/popups/weather/weather_popup.h'))}
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=1,GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device::kGridCellH,GRID_GAP=Device::kGridGap;
 #include "src/tiles/config/tile_icon_colors.h"
 struct Tile{String title="Weather",sensor_entity="weather.home",icon_name="weather-sunny",sensor_unit,icon_colors;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_value_font=0,sensor_display_mode=0,sensor_decimals=0xFF,popup_open_mode=1;int type=1,sensor_gauge_min=0,sensor_gauge_max=100,sensor_gauge_arc=270,sensor_gauge_size=160,sensor_gauge_y_offset=0,sensor_graph_height=60,sensor_value_y_offset=0;};
+${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
 namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } }
 constexpr int TILE_POPUP_OPEN_SHORT_PRESS=1;
 int getTilePopupOpenMode(const Tile&t){return t.popup_open_mode;}
@@ -117,15 +118,17 @@ ${strip(read('src/types/energy/renderer.cpp')).replaceAll('is_disabled_token','e
 void check_energy_layout() {
  for(float width:{1.f,1.5f,2.f}) for(float height:{.5f,1.f}) {
   if(height==1.f && width==1.5f) continue;
-  for(int choice:{0,1,2,3,4}) {
+  for(int choice:{0,1,2,3,4,5}) {
    Tile tile;tile.type=TILE_ENERGY;tile.span_w=width;tile.span_h=height;tile.sensor_value_font=choice;tile.title="Long energy title";
    auto*card=render_energy_tile(lv_screen_active(),0,0,tile,0,GridType::SCREENSAVER);
    lv_obj_update_layout(card);auto*value=sensor_widgets[0].value_label;
-   const auto*font=height==.5f?compact_sensor_layout::value_font():(choice?get_energy_value_font(tile):FONT_VALUE);
+   const auto*font=height==.5f?compact_sensor_layout::value_font(choice):(choice?get_energy_value_font(tile):FONT_VALUE);
    assert(lv_obj_get_style_text_font(value,LV_PART_MAIN)==font);
    assert(lv_obj_get_style_text_align(value,LV_PART_MAIN)==(height==.5f?LV_TEXT_ALIGN_LEFT:LV_TEXT_ALIGN_CENTER));
    if(height==.5f) {
     assert(lv_obj_get_height(card)==tile_geometry::extent(0,height,GRID_CELL_H,GRID_GAP));
+    lv_area_t card_area,value_area;lv_obj_get_coords(card,&card_area);lv_obj_get_coords(value,&value_area);
+    assert(value_area.y2<=card_area.y2&&"Every chosen value size fits in the half tile");
     auto*disc=lv_obj_get_child(card,0);
     assert(lv_obj_get_style_radius(disc,LV_PART_MAIN)==tile_radius::kMinimum-compact_sensor_layout::inset());
    }
@@ -255,16 +258,45 @@ void check_value_alignment(lv_display_t* display) {
  const int expected_y=sensor_value.y1-sensor_area.y1;
  String css; appendPreviewScaleVars(css);
  lv_area_t icon,title,disc;
- // A round disc sits directly behind the unchanged icon, centered on it.
+ // The header disc sits directly behind the icon.
  assert(tile_icon_disc::disc_of(lv_obj_get_child(sensor,1))==lv_obj_get_child(sensor,0));
  lv_obj_get_coords(lv_obj_get_child(sensor,0),&disc);
  lv_obj_get_coords(lv_obj_get_child(sensor,1),&icon);
  lv_obj_get_coords(lv_obj_get_child(sensor,2),&title);
  assert(lv_obj_get_style_radius(lv_obj_get_child(sensor,0),LV_PART_MAIN)==ui_surface_style::radius(tile_icon_disc::radius_baseline()));
  assert(tile_icon_disc::round_diameter()==tile_icon_disc::diameter()+tile_icon_disc::inset());
- // The top-left header disc grows into the corner: its left and top gaps
- // equal the half-height disc's inset, the icon stays where it is.
- assert(lv_area_get_width(&disc)==lv_area_get_height(&disc));
+ // One half-height row square in the corner, concentric with the tile corner
+ // like the half-height disc (left and top gaps equal its inset), with the
+ // icon centered in it; the preview header uses the rendered positions.
+ const int disc_side=lv_area_get_width(&disc);
+ assert(disc_side==lv_area_get_height(&disc)&&disc_side==tile_icon_disc::header_diameter(lv_area_get_width(&icon)));
+ assert(disc_side>=tile_icon_disc::diameter()&&"Never smaller than the half-height disc");
+ {
+  // Per device: at the largest tile radius the disc radius is that radius
+  // minus the inset; half the side or more draws a circle like the
+  // half-height disc.
+  const int radius=tile_radius::kMaximum-tile_icon_disc::inset();
+  std::cout<<"Header disc: "<<disc_side<<" px, half-height disc "<<tile_icon_disc::diameter()
+           <<" px, radius "<<radius<<" -> "<<(2*radius>=disc_side?"circle":"rounded square")<<std::endl;
+ }
+ {
+  // Climate mini tiles start below this disc with its inset as the gap, never
+  // above the tuned content top; the preview uses the same top.
+  const int top=climate_layout::content_top(disc_side,tile_icon_disc::inset());
+  assert(top>=2*tile_icon_disc::inset()+disc_side&&top>=climate_layout::kContentTop);
+  assert(css.find("--climate-slots-top:"+std::to_string(preview_scaled_exact_px(top))+"px;")!=std::string::npos&&
+         "The preview mini-grid starts below the same disc");
+  // Half heights add mini-grid rows (climateTileGridRows) that are never
+  // smaller than the rows whole sizes use on the same device.
+  auto row_height=[&](float h){
+   const int tile_h=tile_geometry::extent(0,h,Device::kGridCellH,Device::kGridGap);
+   const int rows=static_cast<int>(h*2+0.5f)-1;
+   return (tile_h-climate_layout::kOuterInset-top-(rows-1)*climate_layout::kGap)/rows;};
+  int whole=1<<30;for(float h:{1.0f,2.0f,3.0f})whole=std::min(whole,row_height(h));
+  for(float h:{1.5f,2.5f})assert(row_height(h)>=whole&&"Half-step mini-grid rows are as tall as whole-size rows");
+  std::cout<<"Climate mini-grid top: "<<top<<" px, gap below disc "<<top-tile_icon_disc::inset()-disc_side
+           <<" px, rows 1/1.5/2 cells: "<<row_height(1.0f)<<"/"<<row_height(1.5f)<<"/"<<row_height(2.0f)<<" px"<<std::endl;
+ }
  assert(disc.x1-sensor_area.x1==tile_icon_disc::inset()&&"Left gap equals the half-height inset");
  assert(disc.y1-sensor_area.y1==tile_icon_disc::inset()&&"Top gap equals the half-height inset");
  assert(std::abs((disc.x1+disc.x2)-(icon.x1+icon.x2))<=1&&std::abs((disc.y1+disc.y2)-(icon.y1+icon.y2))<=1);

@@ -144,9 +144,10 @@
   function climatePreviewSlots(
       state, spanW, spanH, slotConfig = null,
       targetLayoutConfig = null, geometryConfig = null) {
-    // Layout variants follow whole cells, like build_automatic_slot_kinds.
+    // Layout variants follow whole cells in width and mini-grid rows in
+    // height (half steps add a row), like build_automatic_slot_kinds.
     const w = Math.max(1, Math.floor(Number(spanW) || 1));
-    const h = Math.max(1, Math.floor(Number(spanH) || 1));
+    const h = Math.max(1, Math.round(Number(spanH) * 2 || 2) / 2);
     const capacity = climateSlotCapacity(w, h);
     const { columns, rows } =
       climateGridDimensions(w, h);
@@ -195,13 +196,13 @@
     if (state?.available === false || entityState === 'unavailable' ||
         entityState === 'unknown') {
       addAutomatic(CLIMATE_TILE_CONTENT.HVAC_MODE);
-    } else if (w === 1 && h === 1) {
+    } else if (w === 1 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
-    } else if (w >= 2 && h === 1) {
+    } else if (w >= 2 && rows === 1) {
       if (!state.valid || state.current !== '--') {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
@@ -211,7 +212,7 @@
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
-      if (h > 2 &&
+      if (rows > 3 &&
           state.targetHumidity !== null &&
           (state.targetLow !== null ||
            state.targetHigh !== null ||
@@ -294,8 +295,10 @@
       }
     };
 
+    // Every configured item takes part, not only the first cells-many item
+    // numbers; what does not fit is dropped during placement below.
     const explicitlyConfigured = new Set();
-    configured.slice(0, capacity).forEach(selection => {
+    configured.forEach(selection => {
       const kind = Number(selection) || 0;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO &&
           kind !== CLIMATE_TILE_CONTENT.EMPTY) {
@@ -305,7 +308,7 @@
 
     const slots = [];
     let automaticCursor = 0;
-    for (let index = 0; index < capacity; ++index) {
+    for (let index = 0; index < 6; ++index) {
       const selection = Number(configured[index]) || 0;
       if (selection === CLIMATE_TILE_CONTENT.EMPTY) continue;
       let kind = selection;
@@ -335,6 +338,9 @@
     const hasStoredGeometry =
       Array.isArray(geometryConfig) ||
       /^CLG[12]:/i.test(String(geometryConfig || '').trim());
+    const order = climatePlacementOrderFor(geometry, hasStoredGeometry);
+    slots.sort((a, b) =>
+      order.indexOf(a.itemIndex) - order.indexOf(b.itemIndex));
     const placedSlots = [];
     slots.forEach(slot => {
       let candidate = {

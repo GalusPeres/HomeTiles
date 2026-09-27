@@ -190,6 +190,8 @@ static const Strings kStringsDe = {
     "Settings-Kachel (fest)",
     "Zurück-Kachel (fest)",
     "Diese Kachel kann nicht gelöscht werden",
+    "Nur auf eine leere Kachel einfügen",
+    "Hier ist kein Platz für diese Kachel",
     "Dieser Ordner kann nicht gelöscht werden",
     "Ordner \"{name}\" wirklich löschen?\n\nAlle Kacheln in diesem Ordner werden gelöscht und die Ordner-Kachel im übergeordneten Ordner wird entfernt.",
     "Ordner gelöscht",
@@ -708,6 +710,8 @@ static const Strings kStringsEn = {
     "Settings tile (fixed)",
     "Back tile (fixed)",
     "This tile cannot be deleted",
+    "Paste only onto an empty tile",
+    "Not enough space for this tile here",
     "This folder cannot be deleted",
     "Delete folder \"{name}\"?\n\nAll tiles in this folder will be deleted and the folder tile in the parent folder will be removed.",
     "Folder deleted",
@@ -1226,6 +1230,8 @@ static const Strings kStringsFr = {
     "Tuile Réglages (fixe)",
     "Tuile Retour (fixe)",
     "Cette tuile ne peut pas être supprimée",
+    "Coller uniquement sur une tuile vide",
+    "Pas assez de place pour cette tuile ici",
     "Ce dossier ne peut pas être supprimé",
     "Vraiment supprimer le dossier \"{name}\" ?\n\nToutes les tuiles de ce dossier seront supprimées et la tuile du dossier sera retirée du dossier parent.",
     "Dossier supprimé",
@@ -1577,6 +1583,7 @@ static const LocaleProfile kLocaleDe = {
     "Klima-Entity",
     "Solltemperatur",
     "Soll-Luftfeuchtigkeit",
+    "Luftfeuchte",
     "Heiz-Sollwert",
     "Kühl-Sollwert",
     {"Heizbetrieb", "Vorheizen", "Kühlbetrieb", "Entfeuchtung", "Lüfter",
@@ -1658,6 +1665,7 @@ static const LocaleProfile kLocaleEn = {
     "Climate Entity",
     "Target",
     "Target humidity",
+    "Humidity",
     "Heating target",
     "Cooling target",
     {"Heating", "Preheating", "Cooling", "Drying", "Fan", "Defrosting",
@@ -1737,6 +1745,7 @@ static const LocaleProfile kLocaleFr = {
     "Entité climat",
     "Température cible",
     "Humidité cible",
+    "Humidité",
     "Consigne de chauffage",
     "Consigne de refroidissement",
     {"Chauffage", "Préchauffage", "Refroidissement", "Séchage", "Ventilation",
@@ -2046,6 +2055,10 @@ const char* climate_target_temperature_label(const char* language_code) {
 
 const char* climate_target_humidity_label(const char* language_code) {
   return locale(language_code).climate_target_humidity;
+}
+
+const char* climate_humidity_caption_label(const char* language_code) {
+  return locale(language_code).climate_humidity_caption;
 }
 
 const char* climate_heating_target_label(const char* language_code) {

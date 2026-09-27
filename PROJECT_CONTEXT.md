@@ -112,7 +112,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Local v0.6.12b72 BINs: `build/settings-half-grid-20260927/`.
 - PR #52: 17 CI builds/15 devices. Next with user OK: 5-device HW tests, Bridge v0.6.48 first, v0.7.0 version/notes, merge/tag back to back (`RELEASING.md`).
-- Docs/Settings done; 171 tests, V2/S3 builds pass. CI `<algorithm>` fix; HW pending.
+- Docs/Settings done; 171 tests, V2/S3 builds pass. Tab5 FQBN: custom OTA layout; HW pending.
 - After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 
 ## Maintenance

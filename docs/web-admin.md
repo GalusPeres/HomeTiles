@@ -88,7 +88,7 @@ New displays start with the maximum radius and the tile color `#1A1A1A`.
 <div class="ht-illustrated-intro" markdown>
 <div markdown>
 
-Rules change the icon and tile color while an entity has a matching state. Set **Rules** to **On** in the tile settings:
+Rules change the icon and tile color while an entity has a matching state. Set **Rules** to **On** in the tile settings; a tile with its own entity starts at **Own entity** and **Own rules**:
 
 - **Own entity / Other entity:** follow the tile's own entity or any other entity selected in the Bridge. Scene, Folder, Back, Camera, Clock, and Text tiles have no entity of their own and always use another entity.
 - **Entity color:** use the color the entity shows itself: a light's color, heating or cooling on a climate entity, and the state colors of switches, covers, and binary sensors.
@@ -107,7 +107,24 @@ While a rule matches, it wins. Otherwise the icon and tile colors above apply. W
 **Own rules** depend on the state:
 
 - **Icon color by value** (Sensor, Energy, Number): a color bar between **Min** and **Max**. **Smooth** blends the colors, **Steps** changes at each marker. Start from **Cold → Warm**, **Traffic light**, **Battery**, **Humidity**, or **Single color**. Drag a marker to move it, click it to choose its color, and double-click the bar to add one (up to six).
-- **Icon color by state** (Sensor, Binary Sensor, Select, Date/Time): up to six states, each with a color. A row matches the exact state, or any state containing its text when **contains** is ticked; upper and lower case do not matter, and the first match wins. For example, a waste collection sensor can turn red while its state contains "today". Binary sensors have one color for On and one for Off. Unavailable states keep the default color.
+- **Icon color by state** (Sensor, Binary Sensor, Select, Date/Time): up to six states, each with a color. A row matches the exact state, or any state containing its text when **contains** is ticked; upper and lower case do not matter, and the first match wins. Binary sensors have one color for On and one for Off. Unavailable states keep the default color.
+
+<div class="ht-illustrated-intro" markdown>
+<div markdown>
+
+In this example, a waste collection sensor reports text such as "Collection in 4 days". Its icon turns red while the state contains "today" and green while it contains "4". With **Tile color → From icon**, the tile follows the icon color.
+
+<figure class="ht-screenshot ht-editor-detail">
+<img src="../images/8in-waste-tile.png" alt="Waste tile with a green icon for collection in four days" width="260" height="145" loading="lazy">
+<figcaption>The state contains "4": green</figcaption>
+</figure>
+
+</div>
+<figure class="ht-screenshot ht-editor-detail">
+<img src="../images/web-admin-rules-state.png" alt="Icon color by state with two contains rules" width="439" height="978" loading="lazy">
+<figcaption>Rules with an icon color by state</figcaption>
+</figure>
+</div>
 
 ## Editing Climate Mini-Tiles { data-toc-label="Climate mini-tiles" }
 

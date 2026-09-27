@@ -20,7 +20,7 @@ Use this method for a local test build or when downloading directly on the displ
 3. Choose the file and start the upload. The screen may go black during installation; wait for the display to restart.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-firmware.png" alt="Firmware section in the web admin" width="1355" height="459" loading="lazy">
+<img src="../images/web-admin-firmware.png" alt="Firmware section in the web admin" width="1218" height="342" loading="lazy">
 <figcaption>Firmware update in the Web Admin</figcaption>
 </figure>
 
@@ -32,6 +32,18 @@ If the display is unreachable over the network, open the [online flasher](instal
 
 <span id="4-factory-flash-first-installation-full-reset"></span>
 For a new device or an intentional full reset, use **First install / factory reset** there instead. This erases all local data.
+
+## Going back to v0.6.x { data-toc-label="Downgrade" }
+
+The display only offers newer versions, but you can install an older release with the [Web Admin upload](#2-web-admin-ota-upload). v0.6.x does not know half-size tiles: a half tile appears at whole size and can overlap its neighbor. Prepare the dashboard first:
+
+1. **Back up:** use [Export](web-admin.md#import-export) in the Web Admin and keep the file.
+2. **Make every tile whole:** give every tile a whole position and size (no 0.5 values), and arrange the tiles so they do not overlap. This includes back tiles in folders, Climate tiles with a height of 1.5, and the tiles in the screensaver.
+3. **Upload** the older model's plain `.bin` in the Web Admin.
+
+Colors, rules, icon circles, the tile radius, and camera settings need no preparation. v0.6.x ignores them, and they return when you update to v0.7.0 again, as long as the tiles keep their places in between.
+
+An export that contains half-size tiles cannot be imported in v0.6.x. Export again after step 2 if you want a file for the older version.
 
 ## If an update fails { #troubleshooting-esp32-p4c6-github-downloads }
 

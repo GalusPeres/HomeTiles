@@ -188,6 +188,7 @@ struct Strings {
   const char* js_settings_tile_fixed;
   const char* js_back_tile_fixed;
   const char* js_tile_cannot_delete;
+  const char* js_tile_cannot_replace;
   const char* js_folder_cannot_delete;
   const char* js_delete_folder_confirm;
   const char* js_folder_deleted;

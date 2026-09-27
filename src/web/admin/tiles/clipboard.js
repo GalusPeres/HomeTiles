@@ -78,6 +78,12 @@
       showNotification(t('noCopiedTile'), false);
       return;
     }
+    // The fixed Settings and Back tiles keep their type; pasting over them
+    // used to turn a folder's Back tile into the copied tile.
+    if (isLockedTileType(getCurrentTileType(tab))) {
+      showNotification(t('tileCannotReplace'), false);
+      return;
+    }
     applyTileFormData(tab, tileClipboard);
     updateTilePreview(tab);
     updateDraft(tab);

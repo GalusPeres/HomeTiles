@@ -50,8 +50,11 @@ html { scrollbar-gutter: stable; }
   font-family: inherit;
   letter-spacing: normal;
 }
-/* Align anchor jumps with the fixed header and Material's section tracking. */
-.md-typeset :target { scroll-margin-top: 2.4rem; }
+/* Anchor jumps: the heading box starts 3px behind the fixed header
+   (2.4rem + 1px border), its text stays just below it. Material marks a TOC
+   entry active only while its heading starts above the header edge; with an
+   equal offset, pixel rounding kept the previous entry active. */
+.md-typeset :target { scroll-margin-top: calc(2.4rem - 2px); }
 .md-typeset h2, .md-typeset h3,
 .md-typeset h4, .md-typeset h5, .md-typeset h6 {
   padding-top: 0;

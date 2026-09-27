@@ -48,7 +48,7 @@ nav:
 
 extra_css:
   - stylesheets/extra.css?v=installer-ui-5
-  - stylesheets/readability.css?v=20260906-docs20
+  - stylesheets/readability.css?v=20260927-toc1
 
   - stylesheets/device-status.css?v=2
   - stylesheets/device-logs.css?v=device-logs-2

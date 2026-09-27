@@ -34,6 +34,8 @@ extern "C" { LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DEC
 ${read('src/tiles/runtime/tile_renderer_fonts.h').replace(/^#include.*$/gm,'').replace('#pragma once','')}
 class String : public std::string {public:
  using std::string::string; using std::string::operator=; String()=default; String(const std::string&s):std::string(s){}
+ // Arduino String accepts a null assignment to release its backing storage.
+ String& operator=(const char*s){std::string::operator=(s?s:"");return *this;}
  void trim(){auto a=find_first_not_of(" \r\n\t");if(a==npos){clear();return;}*this=substr(a,find_last_not_of(" \r\n\t")-a+1);}
  void toLowerCase(){std::transform(begin(),end(),begin(),[](unsigned char c){return std::tolower(c);});}
  bool equalsIgnoreCase(String b)const{String a=*this;a.toLowerCase();b.toLowerCase();return a==b;}

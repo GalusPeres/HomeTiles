@@ -1927,6 +1927,9 @@ static void enqueue_switch_update(GridType grid_type, uint64_t grid_indices,
     if ((g_switch_overflow_count++ % 10) == 0) {
       Serial.println("[Queue] Full; replacing the oldest switch update");
     }
+    g_switch_queue[g_switch_tail].entity_id = static_cast<const char*>(nullptr);
+    g_switch_queue[g_switch_tail].payload = static_cast<const char*>(nullptr);
+    g_switch_queue[g_switch_tail].valid = false;
     g_switch_tail = (g_switch_tail + 1) % SWITCH_QUEUE_SIZE;
   }
 
@@ -2023,8 +2026,10 @@ void process_switch_update_queue(uint8_t max_updates) {
     upd.parsed = false;
     upd.require_entity_match = false;
     upd.layout_generation = 0;
-    upd.entity_id.remove(0);
-    upd.payload.remove(0);
+    // Consumed slots are not a state cache. clear/remove and empty-string
+    // assignments retain Arduino String capacity, including large HA payloads.
+    upd.entity_id = static_cast<const char*>(nullptr);
+    upd.payload = static_cast<const char*>(nullptr);
     g_switch_tail = (g_switch_tail + 1) % SWITCH_QUEUE_SIZE;
   }
 }
@@ -2477,6 +2482,8 @@ void queue_climate_tile_update(
 
   const uint8_t next = (g_climate_head + 1) % CLIMATE_QUEUE_SIZE;
   if (next == g_climate_tail) {
+    g_climate_queue[g_climate_tail].payload = static_cast<const char*>(nullptr);
+    g_climate_queue[g_climate_tail].valid = false;
     g_climate_tail = (g_climate_tail + 1) % CLIMATE_QUEUE_SIZE;
     Serial.println("[Queue] Climate queue full, oldest update replaced");
   }
@@ -2499,6 +2506,7 @@ void process_climate_update_queue(uint8_t max_updates) {
       update.valid = false;
       ++processed;
     }
+    update.payload = static_cast<const char*>(nullptr);
     g_climate_tail = (g_climate_tail + 1) % CLIMATE_QUEUE_SIZE;
   }
 }
@@ -2877,6 +2885,8 @@ void queue_weather_tile_update(GridType grid_type, uint8_t grid_index, const cha
     if ((g_weather_overflow_count++ % 10) == 0) {
       Serial.println("[Queue] FULL! Oldest weather update will be overwritten");
     }
+    g_weather_queue[g_weather_tail].payload = static_cast<const char*>(nullptr);
+    g_weather_queue[g_weather_tail].valid = false;
     g_weather_tail = (g_weather_tail + 1) % WEATHER_QUEUE_SIZE;
   }
 
@@ -2896,6 +2906,7 @@ void process_weather_update_queue(uint8_t max_updates) {
       upd.valid = false;
       ++processed;
     }
+    upd.payload = static_cast<const char*>(nullptr);
     g_weather_tail = (g_weather_tail + 1) % WEATHER_QUEUE_SIZE;
   }
 }
@@ -4462,6 +4473,8 @@ void queue_media_tile_update(GridType grid_type, uint8_t grid_index, const char*
     if ((g_media_overflow_count++ % 10) == 0) {
       Serial.println("[Queue] FULL! Oldest media update will be overwritten");
     }
+    g_media_queue[g_media_tail].payload = static_cast<const char*>(nullptr);
+    g_media_queue[g_media_tail].valid = false;
     g_media_tail = (g_media_tail + 1) % MEDIA_QUEUE_SIZE;
   }
 
@@ -4481,6 +4494,7 @@ static void process_media_state_updates(uint8_t max_updates) {
       upd.valid = false;
       ++processed;
     }
+    upd.payload = static_cast<const char*>(nullptr);
     g_media_tail = (g_media_tail + 1) % MEDIA_QUEUE_SIZE;
   }
 }

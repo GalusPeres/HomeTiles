@@ -10,7 +10,7 @@ Last reviewed: 2026-09-27
 - Release procedure: `RELEASING.md`
 - Live bug status: the current GitHub issue and its newest comments; recheck
   online before changing an issue status
-- Bridge is a separate repository; firmware authorization does not cover Bridge publishing or vice versa.
+- Bridge publishing requires separate authorization.
 
 ## Firmware baseline
 
@@ -24,7 +24,7 @@ Last reviewed: 2026-09-27
 - Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 Tested, PPA/SD confirmed; V1 hardware pending.
 - v0.6.9 Binary/Text-State Sensor UI passed hardware tests on 4B, 8-inch and S3.
 - Other revisions need community hardware validation; compilation does not establish support.
-- P4 application code is shared; panel/touch controllers, initialization, timing, board revision and firmware images remain exact-profile concerns.
+- P4 code is shared; panel/touch initialization, timings, revision and firmware images remain profile-specific.
 - LCD-4 Rev 4.0 has contributor-tested display/touch/Wi-Fi/MQTT/Web OTA;
   older revisions and SD access are unsupported. See `docs/index.md` for validation.
 - JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups, tall popups.
@@ -110,14 +110,15 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## v0.7.0 release prep
 
-- CI 36321117119 (`ea8d2c8`): 17/17 builds pass; BINs `build/ci-pr52-ea8d2c8/`.
-- PR #52. Next with user OK: 5-device HW tests, Bridge v0.6.48 first, v0.7.0 version/notes, merge/tag back to back (`RELEASING.md`).
-- Docs/Settings done; CI 152 pass/20 optional skips; local 171 pass. Tab5 FQBN custom. HW pending.
+- PR #52, CI 36321117119 (`ea8d2c8`): 17 builds pass; BINs `build/ci-pr52-ea8d2c8/`.
+- Pending with user OK: b73 push/CI, HW tests, Bridge v0.6.48, v0.7.0 notes/version/merge/tag (`RELEASING.md`).
+- Cache b73: drained Media/Weather/Climate/Cover/Switch queues release retained Strings (native proof). V2/S3 built; HW pending. V2 b71 had Media running.
+- CI 152 pass/20 skips; local 173 pass. Docs/Settings done; Tab5 FQBN custom.
 - After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 
 ## Maintenance
 
-- Docs: `docs/`, `mkdocs.yml`, `overrides/`; `HomeTiles/gh-pages` v0.6.12 at both mounts. USB installer tests are simulated.
+- Docs: `docs/`, `mkdocs.yml`, `overrides/`; gh-pages v0.6.12. USB installer tests are simulated.
 
 ## View control and telemetry
 

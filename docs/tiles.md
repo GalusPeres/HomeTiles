@@ -135,7 +135,7 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 <figcaption>Tile</figcaption>
 </figure>
 <figure class="ht-screenshot">
-<img style="width:156px" src="../images/tile-energy-cost.png" alt="Half-height energy tile with cost and savings" width="260" height="64" loading="lazy">
+<img style="width:156px" src="../images/tile-energy-yield-half.png" alt="Half-height energy tile with today's solar yield" width="260" height="64" loading="lazy">
 <figcaption>Half height</figcaption>
 </figure>
 </div>

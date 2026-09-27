@@ -187,6 +187,17 @@ Select the Settings tile in the **Home** tab to set how Settings opens on the di
 
 To show the tile again, drag it from the field below the preview back into a free Home cell. Restoring it requires a free 1×1 cell.
 
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot">
+<img src="../images/web-admin-settings-hidden.png" alt="Hidden Settings tile in the field below the preview" width="124" height="111" loading="lazy">
+<figcaption>Hidden Settings tile</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img src="../images/web-admin-settings-access.png" alt="PIN protection, Hide tile, Open by edge swipe and Swipe edge" width="406" height="287" loading="lazy">
+<figcaption>Access settings of the Settings tile</figcaption>
+</figure>
+</div>
+
 The public factory PIN **466384537** unlocks Settings and protected folders. This is a local child lock; the Web Admin has no login protection. PINs are excluded from dashboard exports.
 
 ## Screensaver Editor

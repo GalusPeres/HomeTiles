@@ -44,6 +44,8 @@ constexpr uint32_t kReplayWindow = 64;
 struct Keys {
   uint8_t panel_to_bridge[kKeySize];
   uint8_t bridge_to_panel[kKeySize];
+  // Signs the retained Bridge announcement (signAnnouncement()).
+  uint8_t announce[kKeySize];
   char key_id[kKeyIdHexSize];
 };
 
@@ -100,6 +102,7 @@ inline bool deriveKeys(const char code[kCodeLength + 1], Keys& keys) {
   };
   expand("panel-to-bridge", keys.panel_to_bridge, kKeySize);
   expand("bridge-to-panel", keys.bridge_to_panel, kKeySize);
+  expand("announce", keys.announce, kKeySize);
   uint8_t key_id[kKeyIdSize];
   expand("key-id", key_id, sizeof(key_id));
   ht_crypto::hexEncode(key_id, sizeof(key_id), keys.key_id, sizeof(keys.key_id));
@@ -419,6 +422,43 @@ inline bool applyRecord(const PairingRecord& record, PairingState& state,
   if (!normalizeCode(stored, code) || strcmp(stored, code) != 0) return false;
   state = static_cast<PairingState>(record.state);
   return true;
+}
+
+// Signed announcement on tab5_lvgl/config/{id}/bridge. The member
+// ,"sig":"<64 hex>" goes before the final '}', with
+// sig = HMAC-SHA256(announce key, topic "\n" unsigned payload), so the Bridge
+// verifies the exact bytes without re-serializing JSON. Returns the signed
+// length (payload length + 73), or 0 when the payload is not a JSON object
+// or out is too small.
+constexpr size_t kAnnouncementSignatureOverhead = 8 + 2 * ht_crypto::kSha256Size + 1;
+
+inline size_t signAnnouncement(const uint8_t key[kKeySize], const char* topic,
+                               const char* payload, size_t length, char* out,
+                               size_t out_size) {
+  if (!key || !topic || !payload || !out || length < 2 || payload[0] != '{' ||
+      payload[length - 1] != '}' ||
+      out_size < length + kAnnouncementSignatureOverhead + 1) {
+    return 0;
+  }
+  ht_crypto::HmacSha256 mac;
+  ht_crypto::hmacSha256Init(mac, key, kKeySize);
+  ht_crypto::hmacSha256Update(mac, topic, strlen(topic));
+  ht_crypto::hmacSha256Update(mac, "\n", 1);
+  ht_crypto::hmacSha256Update(mac, payload, length);
+  uint8_t digest[ht_crypto::kSha256Size];
+  ht_crypto::hmacSha256Final(mac, digest);
+  ht_crypto::secureZero(&mac, sizeof(mac));
+  size_t offset = length - 1;
+  memcpy(out, payload, offset);
+  memcpy(out + offset, ",\"sig\":\"", 8);
+  offset += 8;
+  ht_crypto::hexEncode(digest, sizeof(digest), out + offset, out_size - offset);
+  offset += 2 * sizeof(digest);
+  out[offset++] = '"';
+  out[offset++] = '}';
+  out[offset] = '\0';
+  ht_crypto::secureZero(digest, sizeof(digest));
+  return offset;
 }
 
 // Panel-to-Bridge command topics that travel sealed while pairing is active:

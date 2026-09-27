@@ -4,7 +4,7 @@
 // docs-dev/command-encryption.md. The fixed vector at the end is shared with
 // HomeTiles Bridge tests/test_command_channel.py.
 import assert from 'node:assert/strict';
-import {createCipheriv, createDecipheriv, hkdfSync} from 'node:crypto';
+import {createCipheriv, createDecipheriv, createHmac, hkdfSync} from 'node:crypto';
 
 import {compileAndRun} from '../../lib/cpp-host.mjs';
 
@@ -15,6 +15,7 @@ const derive = info => Buffer.from(hkdfSync('sha256', Buffer.from(CANONICAL), Bu
 const panelKey = derive('panel-to-bridge');
 const bridgeKey = derive('bridge-to-panel');
 const keyId = derive('key-id').toString('hex');
+const announceKey = derive('announce');
 const TOPIC_PANEL = 'hometiles/secure/panel';
 const TOPIC_BRIDGE = 'hometiles/secure/bridge';
 const SESSION = '00112233445566778899aabbccddeeff';
@@ -81,6 +82,26 @@ int main() {
   ht_crypto::hexEncode(keys.bridge_to_panel, 32, hex, sizeof(hex));
   std::printf("bp %s\n", hex);
   std::printf("kid %s\n", keys.key_id);
+  ht_crypto::hexEncode(keys.announce, 32, hex, sizeof(hex));
+  std::printf("ak %s\n", hex);
+
+  // Signed announcement: the signature member replaces the final brace.
+  {
+    const char* topic = "tab5_lvgl/config/A1B2C3D4E5F6/bridge";
+    const char* unsigned_payload = "{\"device_id\":\"A1B2C3D4E5F6\",\"base_topic\":\"hometiles\",\"ha_prefix\":\"ha\"}";
+    const size_t unsigned_length = std::strlen(unsigned_payload);
+    char signed_payload[256];
+    const size_t signed_length = signAnnouncement(keys.announce, topic, unsigned_payload, unsigned_length,
+                                                  signed_payload, sizeof(signed_payload));
+    CHECK(signed_length == unsigned_length + kAnnouncementSignatureOverhead);
+    CHECK(signed_length == std::strlen(signed_payload));
+    std::printf("announce %s\n", signed_payload);
+    // Too small, not an object, or empty: nothing is written.
+    CHECK(signAnnouncement(keys.announce, topic, unsigned_payload, unsigned_length, signed_payload,
+                           unsigned_length + kAnnouncementSignatureOverhead) == 0);
+    CHECK(signAnnouncement(keys.announce, topic, "[1]", 3, signed_payload, sizeof(signed_payload)) == 0);
+    CHECK(signAnnouncement(keys.announce, topic, "{", 1, signed_payload, sizeof(signed_payload)) == 0);
+  }
 
   // Panel command: header, sealing with the panel-to-bridge key.
   Header header;
@@ -213,7 +234,17 @@ if (stdout !== null) {
     'open session 0 ffeeddccbbaa99887766554433221100 ',
     'open data 7 camera {"status":"ready","url":"tcp://h:1/t0k3n"}'
   ]);
-  // Shared vector with the Python Bridge.
+  // Announcement signature: HMAC(announce key, topic "\n" unsigned payload).
+  assert.equal(value('ak'), announceKey.toString('hex'));
+  const announceTopic = 'tab5_lvgl/config/A1B2C3D4E5F6/bridge';
+  const unsignedAnnouncement = '{"device_id":"A1B2C3D4E5F6","base_topic":"hometiles","ha_prefix":"ha"}';
+  const signature = createHmac('sha256', announceKey).update(`${announceTopic}\n${unsignedAnnouncement}`).digest('hex');
+  assert.equal(value('announce'), `${unsignedAnnouncement.slice(0, -1)},"sig":"${signature}"}`);
+  assert.deepEqual(JSON.parse(value('announce')), {...JSON.parse(unsignedAnnouncement), sig: signature});
+  // Shared vectors with the Python Bridge (tests/test_command_channel.py and
+  // tests/test_announcement_guard.py).
+  assert.equal(announceKey.toString('hex'), '73fcf8b4dfdb0ea67138ebc100e63e0e25f93c342b1cbc4df27b76df17e0d321');
+  assert.equal(signature, '8d87186d122e8b1d8e04b428db076c6ca09bffb81748a99e55abafdd974eb34c');
   assert.equal(keyId, '8982fb24a78d94e1');
   assert.equal(value('cmd'), '{"v":1,"k":"8982fb24a78d94e1","n":"0102030405060708090a0b0c","d":"7832dd1bd249db728b0a50bc7f872a71128e0ceb9914732336b5052b125d2e15b17d8e61b37b8088f840f1bf08fff2509452d86153ead2e27de853dc2e18ceb8216139e4dd9f2ca29ecc3c75b9e87b874ff98daef024584a856613fa5f1d52fbb43bb25a9350ab84ebf6299d"}');
   console.log('Command channel core: keys, envelopes, headers, replay window and records passed');

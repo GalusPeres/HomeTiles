@@ -74,7 +74,7 @@ If you set a [Web Admin password](web-admin.md#web-admin-password) on the displa
     - **Username / Password:** the broker credentials from Step 1.
     - **Device topic base / Home Assistant prefix:** use the values from the Bridge entry.
 
-    Select **Save**. The display reconnects to MQTT with the new settings.
+    Select **Save**. The display reconnects to MQTT with the new settings. Home Assistant then shows a **Link panel** card for the display; confirm it so the entry belongs to this display.
 
 ## Step 5: Choose What The Display Can See { #step-6-choose-what-the-display-can-see data-toc-label="5. Select entities" }
 

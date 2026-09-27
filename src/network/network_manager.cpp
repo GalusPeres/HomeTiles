@@ -1876,15 +1876,23 @@ void HomeTilesNetworkManager::publishBridgeConfig() {
   String topic = "tab5_lvgl/config/";
   topic += did;
   topic += "/bridge";
-  const size_t packet_estimate = payload.length() + topic.length() + 16;
+  // With a Bridge pairing code the announcement carries a signature, so a
+  // paired Bridge ignores forged announcements for this panel.
+  char* signed_payload =
+      command_channel::signAnnouncement(topic.c_str(), payload.c_str(), payload.length());
+  const bool is_signed = signed_payload != nullptr;
+  const char* publish_payload = is_signed ? signed_payload : payload.c_str();
+  const size_t packet_estimate = strlen(publish_payload) + topic.length() + 16;
   if (packet_estimate > kMqttBufferLarge) {
     Serial.printf("[Network] Bridge config too large for MQTT buffer: %u > %u bytes\n",
                   static_cast<unsigned>(packet_estimate),
                   static_cast<unsigned>(kMqttBufferLarge));
   }
   mqttEnqueuePublishWithLargeBuffer(
-      topic.c_str(), payload.c_str(), true, 15000);
-  Serial.println("[Network] Home Assistant Bridge configuration published");
+      topic.c_str(), publish_payload, true, 15000);
+  if (signed_payload) heap_caps_free(signed_payload);
+  Serial.printf("[Network] Home Assistant Bridge configuration published%s\n",
+                is_signed ? " (signed)" : "");
 }
 
 const char* HomeTilesNetworkManager::getBridgeApplyTopic() const {

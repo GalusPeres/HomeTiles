@@ -23,7 +23,7 @@ Last reviewed: 2026-09-27
 
 - Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 Tested, PPA/SD confirmed; V1 hardware pending.
 - v0.6.9 Binary/Text-State Sensor UI passed hardware tests on 4B, 8-inch and S3.
-- Other revisions need community hardware validation; compiling is not support.
+- Other revisions need community validation; compiling is not support.
 - P4 code is shared; panel/touch initialization, timings, revision and firmware images remain profile-specific.
 - LCD-4 Rev 4.0 has contributor-tested display/touch/Wi-Fi/MQTT/Web OTA;
   older revisions and SD access are unsupported. See `docs/index.md` for validation.
@@ -68,12 +68,12 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Number/input_number uses the centered Media slider/value, Climate +/- pill or bounded roller, with graph/Activity. Select/input_select uses Settings dropdowns, timeline and Activity.
 - Date/Time: single-row hh/mm/ss rollers, popup-colored pill, no arrows, native 23/00 and 59/00 wrap; date spinboxes without keyboard; HA timezone/DST validation.
 - Additive `/control` preserves legacy clients; sessions/revisions/deadlines reject stale commands.
-- Bridge v0.6.44 (`148dec4`) on HACS: stale icon cache fixed, overrides preserved. v0.6.10 includes `84511da` plus title/color fixes.
+- Bridge v0.6.44 (`148dec4`): stale icon cache fixed, overrides kept. v0.6.10 has `84511da` plus title/color fixes.
 - Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
 - Editable surfaces follow tile color, white text unchanged; selection white with surface-colored text; S3 arrow 20px.
 - Wi-Fi idle/reconnect gaps remain unfixed; findings/probes: `build/wifi-power-audit/VERIFICATION.md`.
-- Titles: two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged. View labels flatten CR/LF for Bridge. Maintainer approved.
+- Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
 - S3 froze adding Number to active screensaver: Web responded, save persisted; manual reboot. Older dump, cause unknown.
 
 ## Shared-popup/artwork baseline
@@ -94,7 +94,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Binary Sensor now shares Sensor value sizes (20/24/32/40); default preserves old layout. Stored in existing V7 field; editor, import and previews retain it.
 - HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
 
-- Popup-overlapped buttons briefly appear square; deferred by user, no fix.
+- Popup-overlapped buttons briefly appear square; deferred by user.
 
 - Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it.
 - Open: cross-grid import clamps whole tiles to half steps (HTTP 400), snapshot type accepts halves, value fonts 32/40 clip in half tiles.
@@ -130,9 +130,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
 - Commands validate targets/availability/features; ignore retained commands. Battery is a stub; unsupported probes stay unregistered.
 - View/editable controls confirmed on 8-inch/S3. HA migration, legacy firmware and lifecycle coverage pending.
-- Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; local reception grows to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending. Maintainer log: no unplanned MQTT loss over ~8 h.
+- Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; local reception grows to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending; maintainer saw no unplanned MQTT loss in ~8 h.
 
 ## Security branch (unreleased)
 
-- Web Admin password (optional): salt/key only, HMAC challenge, PSRAM sessions, CSRF; removed on device (System > Security); hides stored Wi-Fi/MQTT passwords/PINs. Bridge: pairing only.
-- Command channel (optional): pairing code, sealed commands/stream tokens, replay window; `docs-dev/command-encryption.md`. HW/HA pending.
+- Web Admin password (optional): salt/key, HMAC login, PSRAM sessions, CSRF; reset on device; hides stored secrets; Bridge uses it only to pair.
+- Command channel (optional): pairing code, sealed commands/stream tokens, replay window, signed announcement; Bridge binds announcements to topic/base, confirms linking, bounds cards/history (`docs-dev/command-encryption.md`). HW/HA pending.

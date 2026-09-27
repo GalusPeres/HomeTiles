@@ -36,6 +36,12 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
 // the Bridge sends them sealed instead.
 bool blocksPlaintext(const char* topic);
 
+// Retained Bridge announcement (tab5_lvgl/config/{id}/bridge): while a
+// pairing code exists, returns a PSRAM copy of the payload with its signature
+// (release it with heap_caps_free()); nullptr while pairing is off, so the
+// announcement stays exactly as before.
+char* signAnnouncement(const char* topic, const char* payload, size_t length);
+
 // Outbound hook of the MQTT publish queues.
 enum class OutboundResult : uint8_t { Plain, Sealed, Held, Dropped };
 

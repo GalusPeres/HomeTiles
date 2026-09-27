@@ -53,9 +53,27 @@ for (const key of ['security_bridge_encryption', 'security_encryption_waiting', 
   'security_encryption_active_hint', 'security_encryption_off_hint']) {
   assert.match(settings, new RegExp(`tr\\(\\)\\.${key}`), `${key} comes from i18n`);
 }
+// The retained announcement is signed while a code exists and republished
+// whenever the code changes; without pairing it stays byte-identical.
+const announce = network.slice(network.indexOf('void HomeTilesNetworkManager::publishBridgeConfig() {'),
+  network.indexOf('const char* HomeTilesNetworkManager::getBridgeApplyTopic()'));
+assert.match(announce, /command_channel::signAnnouncement\(topic\.c_str\(\), payload\.c_str\(\), payload\.length\(\)\)/);
+assert.match(announce, /is_signed \? signed_payload : payload\.c_str\(\)/);
+assert.match(announce, /if \(signed_payload\) heap_caps_free\(signed_payload\);/);
+assert.ok(announce.indexOf('mqttEnqueuePublishWithLargeBuffer') < announce.indexOf('heap_caps_free(signed_payload)'),
+  'the signed copy is freed only after the queue copied it');
+const signer = channel.slice(channel.indexOf('char* signAnnouncement(const char* topic, const char* payload, size_t length) {'));
+assert.match(signer, /if \(!g_state \|\| !topic \|\| !payload \|\|\s*xTaskGetCurrentTaskHandle\(\) != g_owner\) \{\s*return nullptr;/,
+  'no pairing (or a foreign task) leaves the announcement unsigned');
+assert.match(signer, /allocPreferPsram\(size\)/);
+const create = channel.slice(channel.indexOf('bool createCode() {'), channel.indexOf('bool disable() {'));
+const disable = channel.slice(channel.indexOf('bool disable() {'), channel.indexOf('char* signAnnouncement('));
+assert.match(create, /networkManager\.publishBridgeConfig\(\);/);
+assert.match(disable, /releaseState\(\);[\s\S]*networkManager\.publishBridgeConfig\(\);/);
+
 const doc = readRepoFile('docs-dev/command-encryption.md');
 for (const marker of ['secure/panel', 'secure/bridge', 'stat/secure', 'HomeTiles command pairing v1',
-  'panel-to-bridge', 'bridge-to-panel', 'key-id', 'ChaCha20-Poly1305', 'replay']) {
+  'panel-to-bridge', 'bridge-to-panel', 'key-id', 'announce', '"sig"', 'ChaCha20-Poly1305', 'replay']) {
   assert.ok(doc.includes(marker), `protocol document covers ${marker}`);
 }
 console.log('Command channel wiring: outbound sealing, inbound routing, lifecycle and UI passed');

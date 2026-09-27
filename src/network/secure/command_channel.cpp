@@ -376,6 +376,8 @@ bool createCode() {
   if (networkManager.isMqttConnected()) {
     networkManager.mqttEnqueueSubscribe(topicFor(kBridgeLeaf).c_str());
     publishStatus();
+    // The retained announcement is signed with the new code from now on.
+    networkManager.publishBridgeConfig();
   }
   Serial.printf("[SecureCmd] New pairing code created (key %s)\n",
                 g_state->keys.key_id);
@@ -391,8 +393,26 @@ bool disable() {
   releaseState();
   g_clear_status = true;
   publishStatus();
+  // Replace the signed retained announcement with an unsigned one.
+  if (networkManager.isMqttConnected()) networkManager.publishBridgeConfig();
   Serial.println("[SecureCmd] Command encryption turned off");
   return true;
+}
+
+char* signAnnouncement(const char* topic, const char* payload, size_t length) {
+  if (!g_state || !topic || !payload ||
+      xTaskGetCurrentTaskHandle() != g_owner) {
+    return nullptr;
+  }
+  const size_t size = length + kAnnouncementSignatureOverhead + 1;
+  char* out = static_cast<char*>(allocPreferPsram(size));
+  if (!out) return nullptr;
+  if (command_channel::signAnnouncement(g_state->keys.announce, topic, payload,
+                                        length, out, size) == 0) {
+    heap_caps_free(out);
+    return nullptr;
+  }
+  return out;
 }
 
 bool displayCode(char out[kCodeDisplaySize]) {

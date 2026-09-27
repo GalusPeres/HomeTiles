@@ -97,6 +97,7 @@ Keys use HKDF-SHA256 (RFC 5869) with salt `HomeTiles command pairing v1`, the
 | --- | --- | --- |
 | `panel-to-bridge` | 32 | Messages from the panel |
 | `bridge-to-panel` | 32 | Messages from the Bridge |
+| `announce` | 32 | HMAC key of the signed announcement |
 | `key-id` | 8 | Public key identifier, lowercase hex |
 
 Separate keys per direction make a reflected message undecryptable. The panel
@@ -181,3 +182,39 @@ and then sends it sealed; after that it drops it.
 Old firmware never shows a code, so its Bridge entry cannot be paired. Old
 Bridges never answer `hello`, so a new panel stays pending and keeps sending
 plain commands.
+
+## Announcements, discovery and history requests
+
+The retained announcement on `tab5_lvgl/config/{id}/bridge` tells the Bridge
+a panel's base topic, entity selections, local I/O and capabilities. Anyone on
+the broker can publish there too, so the Bridge applies these rules:
+
+- The `{id}` in the topic must equal the announced `device_id` (current
+  firmware: 12 upper-case hex digits of the MAC); payloads over 64 KiB are
+  dropped.
+- An announcement for an existing entry must carry that entry's base topic;
+  otherwise it cannot change the entry's entities or selections.
+- While a pairing code exists (pending or active), the panel signs the
+  announcement and republishes it whenever the code is created or removed:
+
+  ```text
+  sig = HMAC-SHA256(announce key, topic "\n" unsigned payload)
+  signed payload = unsigned payload without its final "}" + ,"sig":"<64 hex>"}
+  ```
+
+  The Bridge verifies the exact received bytes, so no JSON re-serialisation is
+  involved. An entry with a stored code accepts only announcements with a
+  valid signature. An old signed announcement can be replayed, but it only
+  repeats what the panel itself once announced.
+- A new panel never creates an entry by itself: it gets a discovery card. At
+  most three cards wait at a time and at most five new panels get a card per
+  ten minutes. Linking a panel to an existing entry that has no panel yet
+  (manually added, or from firmware before v0.3.1) also waits for the user's
+  confirmation.
+
+History requests (`tab5_lvgl/config/{id}/history/request`) are answered only
+for configured entities, never when retained, at most two at a time and 30
+per minute per panel. The numeric graph reads the Recorder newest first in
+pages of 1,000 rows and at most 20,160 rows (one change per 30 s for a week);
+beyond that the oldest buckets stay empty. State, binary and editable
+histories keep their existing paged limit of 8,192 changes.

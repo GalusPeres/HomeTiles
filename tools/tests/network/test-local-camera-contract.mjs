@@ -43,6 +43,7 @@ if (!compiler) {
 
 const contractProgram = String.raw`
 #include "src/video/local_camera/local_camera_contract.h"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdio>

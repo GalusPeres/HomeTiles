@@ -800,8 +800,7 @@
     };
   }
 
-  function writeIconColorSource(tab, layer, type) {
-    const own = ICON_COLOR_OWN_TYPES.includes(type);
+  function writeIconColorSource(tab, layer) {
     const select = iconColorEl(tab, '_tile_icon_source');
     const entity = layer && !layer.self ? layer.entity : '';
     if (select) {
@@ -816,7 +815,10 @@
       else delete select.dataset.configuredValue;
     }
     const set = (suffix, value) => { const el = iconColorEl(tab, suffix); if (el) el.value = value; };
-    set('_tile_icon_source_kind', layer ? (layer.self ? 'self' : 'other') : (own ? 'self' : 'other'));
+    // Without a stored layer the rules start at Own entity and Own rules, also
+    // when the cell is still Empty and only gets its type afterwards; types
+    // without an entity of their own show Other entity regardless.
+    set('_tile_icon_source_kind', layer && !layer.self ? 'other' : 'self');
     set('_tile_icon_source_mode', layer?.mode === 'auto' ? 'auto' : 'rules');
     const icon = iconColorEl(tab, '_tile_icon_rule_icon');
     if (icon) icon.checked = layer ? layer.icon : true;
@@ -892,7 +894,6 @@
     if (!visible) return;
     const own = ICON_COLOR_OWN_TYPES.includes(type);
     const kindInput = iconColorEl(tab, '_tile_icon_source_kind');
-    if (kindInput && !own) kindInput.value = 'other';
     const kind = own && kindInput?.value !== 'other' ? 'self' : 'other';
     const on = iconColorEl(tab, '_tile_icon_rules_on')?.value === '1';
     const mode = iconColorEl(tab, '_tile_icon_source_mode')?.value === 'auto' ? 'auto' : 'rules';
@@ -975,7 +976,7 @@
     if (max) max.value = parsed.bar ? parsed.bar.maxText : '';
     setIconColorSelectedStop(tab, -1);
     writeIconColorRows(tab, parsed.rows);
-    writeIconColorSource(tab, parsed.source, type);
+    writeIconColorSource(tab, parsed.source);
     // Records without a layer (b40) keep their own rules switched on.
     const own = ICON_COLOR_OWN_TYPES.includes(type);
     const on = parsed.source ? parsed.source.enabled : own && (!!parsed.bar || parsed.rows.length > 0);

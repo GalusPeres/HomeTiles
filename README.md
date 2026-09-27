@@ -30,18 +30,18 @@ Tap a tile for its popup, then slide through the history of sensors, energy and 
 </p>
 
 <p align="center">
-<img src="docs/images/readme-new-lights.png" alt="Colors from your lights" width="48%">
-<img src="docs/images/readme-new-folders.png" alt="Folders that follow an entity" width="48%"><br>
+<img src="docs/images/readme-new-lights.png" alt="Light tiles in the color of their light" width="48%">
+<img src="docs/images/readme-new-folders.png" alt="Climate and lighting folders colored by another entity" width="48%"><br>
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-caption-row2-dark.svg">
-  <img src="docs/images/readme-caption-row2-light.svg" alt="Colors from your lights · Folders that follow an entity" width="97%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-caption-colors-dark.svg">
+  <img src="docs/images/readme-caption-colors-light.svg" alt="Entity color · Other entity" width="97%">
 </picture>
 </p>
 
 - **Half-size tiles:** place and size tiles in half steps.
-- **Color rules:** tiles change color by value or state.
-- **Light colors:** light tiles show the color of the light.
-- **Folders follow an entity:** a climate folder turns orange while heating.
+- **Color rules per tile:** icon and tile change color by value or state, e.g. a waste tile turns red on collection day.
+- **Entity color:** a rule can show the entity's own color, like the color of a light.
+- **Other entity:** a rule can follow any entity, e.g. a climate folder turns orange while heating.
 - **Graph readout:** slide through sensor and energy history.
 - **Built-in cameras:** ESP32-P4 displays stream to Home Assistant.
 

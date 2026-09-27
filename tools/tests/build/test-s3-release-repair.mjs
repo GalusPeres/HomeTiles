@@ -39,3 +39,16 @@ for(const name of ['Check out repository','Set up Arduino CLI','Compile firmware
 console.log('S3-only replacement set, version, fix marker and unchanged P4 digests: PASS');
 const repairJob=workflow.slice(workflow.indexOf('  repair-s3-release:'),workflow.indexOf('\n  release:'));
 assert.ok(repairJob.indexOf('node tools/repair-s3-release.mjs') < repairJob.indexOf('gh workflow run docs.yml'));
+
+// Run the actual release-note expression without invoking GitHub mutations.
+const helper=fs.readFileSync(new URL('../../repair-s3-release.mjs',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+const expression=helper.match(/const notes = ([\s\S]+?);\n    assert\.ok\(notes\.includes/)[1];
+const renderNotes=new Function('before','tag','proof','repo','return '+expression);
+const body='## Highlights\n\n## Update Notes\n\nKeep the dashboard export.\n\n## Hardware Confirmed\n\n## Pending Hardware Validation\n\n**Full Changelog:** compare';
+for(const version of ['v0.7.0','v0.8.0']) {
+  const notes=renderNotes({body},version,{sourceCommit:'c'.repeat(40)},'GalusPeres/HomeTiles');
+  assert.ok(notes.includes(`Devices already on ${version} also need a manual update`),'Use the repaired release version in the update instructions');
+  assert.ok(!notes.includes('v0.6.10'),'Do not retain an unrelated old release version');
+  assert.ok(notes.includes('Keep the dashboard export.'));
+  assert.ok(notes.includes('https://github.com/GalusPeres/HomeTiles/commit/'+'c'.repeat(40)));
+}

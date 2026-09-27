@@ -77,9 +77,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     gh('release', 'upload', tag, proofFile, '--repo', repo, '--clobber');
     const notesFile = path.join(directory, 'release-notes.md');
     const notes = (before.body ?? '')
-      .replace('## Highlights', '## Highlights\n\n- **S3 GitHub OTA:** TLS can fall back to PSRAM on all three S3 boards; P4 images are unchanged.')
-      .replace('## Update Notes', '## Update Notes\n\nIf S3 device OTA fails, install the corrected regular BIN through Web Admin once. Devices already on v0.6.10 also need a manual update to receive this same-version correction.')
-      .replace('## Hardware Confirmed', '## Hardware Confirmed\n\n- The corrected Guition ESP32-4848S040 downloader completed a full GitHub OTA cycle. GitHub OTA on both Waveshare S3 variants still awaits field confirmation.')
+      .replace('## Highlights', '## Highlights\n\n- **S3 GitHub OTA:** download TLS now prefers PSRAM on all three S3 boards, leaving internal memory available for Wi-Fi; P4 images are unchanged.')
+      .replace('## Update Notes', `## Update Notes\n\nIf S3 device OTA fails, install the corrected regular BIN through Web Admin once. Devices already on ${tag} also need a manual update to receive this same-version correction; System Update will report that the firmware is current.`)
+      .replace('## Hardware Confirmed', '## Hardware Confirmed\n\n- The corrected Guition ESP32-4848S040 downloader completed a full GitHub OTA cycle, including reboot and MQTT reconnection.')
+      .replace('## Pending Hardware Validation', '## Pending Hardware Validation\n\nGitHub OTA with the corrected downloader on both Waveshare S3 variants still awaits field confirmation.')
       .replace('**Full Changelog:**', `**S3 correction source:** [${proof.sourceCommit.slice(0,7)}](https://github.com/${repo}/commit/${proof.sourceCommit})\n\n**Full Changelog:**`);
     assert.ok(notes.includes(proof.sourceCommit.slice(0,7)), 'Release note structure is missing');
     fs.writeFileSync(notesFile, notes);

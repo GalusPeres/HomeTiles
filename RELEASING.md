@@ -144,6 +144,12 @@ the existing Git tag remains unchanged. Device OTA must be field-tested before
 using this maintenance path. Older installed downloaders may need one Web Admin
 update, and devices already reporting the same version will not auto-upgrade.
 
+If a successful, verified candidate run already produced the six S3 images,
+reuse those files with `tools/repair-s3-release.mjs` without rebuilding.
+Set `REPAIR_RELEASE`, `GITHUB_REPOSITORY`, `GITHUB_SHA` and `GITHUB_RUN_ID` to
+the release, repository and original producing CI commit/run. Then dispatch
+the documentation workflow on `main` to publish the current notes and assets.
+
 - A failed run can simply be re-run from the Actions tab — asset upload uses
   `--clobber`, so re-runs are idempotent.
 - Tag pushed but wrong/missing version bump? Fix `version.txt`, then move the

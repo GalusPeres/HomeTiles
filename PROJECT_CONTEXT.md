@@ -110,12 +110,12 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## v0.7.0 release
 
-- v0.7.0 (`609550a`): Draft; assets/installed v0.7.0 retain old S3 OTA code. Release needs OK.
+- v0.7.0 (`609550a`): public, S3 assets from `c3e0a673`; P4 unchanged. Existing S3 v0.7.0 needs Web Admin update.
 - Bridge v0.7.0 (`1c12eda`): 267 pass/1 skip. Evidence: `build/release-v0.7.0/`.
 - Cache b73 frees queues; V2: 76 cached switches, final 124 KiB. Five owned devices stable.
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
 - CI `36334088502`: 17 builds, 152 tests/21 skips; local 173 pass. Six S3 BINs verified.
-- README pushed; docs held for release. Export/downgrade ready. Issues need OK: #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B (PCLK 16 vs 10 MHz).
+- Docs deployment pending. Issues need OK: #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B (PCLK 16 vs 10 MHz).
 
 ## Maintenance
 

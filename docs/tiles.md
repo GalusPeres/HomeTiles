@@ -16,6 +16,8 @@ Press **Enter** in the title field for a second line. The two lines share the sa
 
 ## Home Assistant Tiles
 
+These types show or control a Home Assistant entity that you selected in the [Bridge options](bridge.md#entity-configuration).
+
 ### Sensor
 
 Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, value size, and an optional gauge with a minimum and maximum.

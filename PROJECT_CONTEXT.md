@@ -112,7 +112,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Branch `local-camera-beta`, local only; V2 test BINs to b72 in `build/guition-v2-test/`; FW_VERSION v0.6.12bNN.
 - Next, each with the user's OK: push + PR to `main` (CI builds all 15 profiles); CI BINs for 5 devices; Bridge v0.6.48 first; v0.7.0 version/notes; merge + tag back to back per `RELEASING.md`.
-- Docs complete. Open bug: Settings tile in Web Admin shows the Folder "Type locked" hint and an empty field.
+- Docs complete. Bug: the Web Admin Settings tile shows the Folder "Type locked" hint and an empty field.
 - After release: issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 
 ## Maintenance

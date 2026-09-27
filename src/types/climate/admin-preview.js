@@ -295,8 +295,10 @@
       }
     };
 
+    // Every configured item takes part, not only the first cells-many item
+    // numbers; what does not fit is dropped during placement below.
     const explicitlyConfigured = new Set();
-    configured.slice(0, capacity).forEach(selection => {
+    configured.forEach(selection => {
       const kind = Number(selection) || 0;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO &&
           kind !== CLIMATE_TILE_CONTENT.EMPTY) {
@@ -306,7 +308,7 @@
 
     const slots = [];
     let automaticCursor = 0;
-    for (let index = 0; index < capacity; ++index) {
+    for (let index = 0; index < 6; ++index) {
       const selection = Number(configured[index]) || 0;
       if (selection === CLIMATE_TILE_CONTENT.EMPTY) continue;
       let kind = selection;
@@ -336,6 +338,9 @@
     const hasStoredGeometry =
       Array.isArray(geometryConfig) ||
       /^CLG[12]:/i.test(String(geometryConfig || '').trim());
+    const order = climatePlacementOrderFor(geometry, hasStoredGeometry);
+    slots.sort((a, b) =>
+      order.indexOf(a.itemIndex) - order.indexOf(b.itemIndex));
     const placedSlots = [];
     slots.forEach(slot => {
       let candidate = {

@@ -51,6 +51,9 @@ void append_climate_scripts(String& html) {
   append_i18n(
       "targetHumidity",
       i18n::climate_target_humidity_label(language));
+  append_i18n(
+      "humidityCaption",
+      i18n::climate_humidity_caption_label(language));
   append_i18n("mode", i18n::climate_control_label(language, 0));
   append_i18n("off", i18n::climate_state_label(language, "off", ""));
   append_i18n("heat", i18n::climate_state_label(language, "heat", ""));

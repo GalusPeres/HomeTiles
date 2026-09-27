@@ -1754,7 +1754,7 @@
     .tile.climate .climate-slot-control small {
       min-width:0;
       overflow:hidden;
-      color:#e0e0e0;
+      color:#fff;
       font-size:var(--fs20, 10px);
       font-weight:400;
       line-height:1.2;

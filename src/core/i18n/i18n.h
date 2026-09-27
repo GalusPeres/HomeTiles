@@ -592,6 +592,8 @@ struct LocaleProfile {
   const char* climate_entity;
   const char* climate_target_temperature;
   const char* climate_target_humidity;
+  // Caption above the target humidity control in a Climate mini tile.
+  const char* climate_humidity_caption;
   const char* climate_heating_target;
   const char* climate_cooling_target;
   // heating, preheating, cooling, drying, fan, defrosting, idle, off,
@@ -681,6 +683,7 @@ const char* climate_tile_type_label(const char* language_code);
 const char* climate_entity_label(const char* language_code);
 const char* climate_target_temperature_label(const char* language_code);
 const char* climate_target_humidity_label(const char* language_code);
+const char* climate_humidity_caption_label(const char* language_code);
 const char* climate_heating_target_label(const char* language_code);
 const char* climate_cooling_target_label(const char* language_code);
 const char* climate_target_heat_label(const char* language_code);

@@ -1577,6 +1577,7 @@ static const LocaleProfile kLocaleDe = {
     "Klima-Entity",
     "Solltemperatur",
     "Soll-Luftfeuchtigkeit",
+    "Luftfeuchte",
     "Heiz-Sollwert",
     "Kühl-Sollwert",
     {"Heizbetrieb", "Vorheizen", "Kühlbetrieb", "Entfeuchtung", "Lüfter",
@@ -1658,6 +1659,7 @@ static const LocaleProfile kLocaleEn = {
     "Climate Entity",
     "Target",
     "Target humidity",
+    "Humidity",
     "Heating target",
     "Cooling target",
     {"Heating", "Preheating", "Cooling", "Drying", "Fan", "Defrosting",
@@ -1737,6 +1739,7 @@ static const LocaleProfile kLocaleFr = {
     "Entité climat",
     "Température cible",
     "Humidité cible",
+    "Humidité",
     "Consigne de chauffage",
     "Consigne de refroidissement",
     {"Chauffage", "Préchauffage", "Refroidissement", "Séchage", "Ventilation",
@@ -2046,6 +2049,10 @@ const char* climate_target_temperature_label(const char* language_code) {
 
 const char* climate_target_humidity_label(const char* language_code) {
   return locale(language_code).climate_target_humidity;
+}
+
+const char* climate_humidity_caption_label(const char* language_code) {
+  return locale(language_code).climate_humidity_caption;
 }
 
 const char* climate_heating_target_label(const char* language_code) {

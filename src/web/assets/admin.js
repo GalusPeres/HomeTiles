@@ -11290,42 +11290,25 @@ function maybeFillTitleFromMedia(tab) {
       a.row + a.spanH > b.row;
   }
 
-  function canPlaceClimateItem(
-      items, configured, index, candidate, capacity) {
-    for (let other = 0; other < capacity; ++other) {
-      if (other === index) continue;
-      if (Number(configured[other]) === CLIMATE_TILE_CONTENT.EMPTY) {
-        continue;
-      }
-      if (climateGeometryOverlaps(candidate, items[other])) {
-        return false;
-      }
-    }
-    return true;
+  // Items are placed top-left first (row, column, then item number) when the
+  // tile has a stored mini-grid, so a smaller tile keeps what it can still
+  // show and drops only the rest. Without stored geometry the item number is
+  // the position (build_slot_kinds on the device).
+  function climatePlacementOrderFor(geometry, hasStoredGeometry) {
+    const order = [0, 1, 2, 3, 4, 5];
+    if (!hasStoredGeometry) return order;
+    const at = (index, key) => Number(geometry[index]?.[key]) || 0;
+    return order.sort((a, b) =>
+      at(a, 'row') - at(b, 'row') ||
+      at(a, 'col') - at(b, 'col') ||
+      a - b);
   }
 
-  function firstFreeClimatePlacement(
-      items, configured, capacity, columns, rows,
-      ignoreIndex = -1, spanW = 1, spanH = 1) {
-    const safeSpanW = Math.max(
-      1, Math.min(columns, Number(spanW) || 1));
-    const safeSpanH = Math.max(
-      1, Math.min(rows, Number(spanH) || 1));
-    for (let row = 0; row + safeSpanH <= rows; ++row) {
-      for (let col = 0; col + safeSpanW <= columns; ++col) {
-        const candidate = {
-          col, row,
-          spanW: safeSpanW,
-          spanH: safeSpanH
-        };
-        if (canPlaceClimateItem(
-              items, configured, ignoreIndex,
-              candidate, capacity)) {
-          return candidate;
-        }
-      }
-    }
-    return null;
+  function climatePlacementOrder(tab, geometry) {
+    const stored = document.getElementById(
+      tab + '_climate_geometry')?.value || '';
+    return climatePlacementOrderFor(
+      geometry, /^CLG[12]:/i.test(String(stored).trim()));
   }
 
   function notifyClimateGridChanged(tab) {
@@ -11819,16 +11802,14 @@ function maybeFillTitleFromMedia(tab) {
     return kinds;
   }
 
+  // Every configured item takes part, not only the first cells-many item
+  // numbers: after a resize the items that still fit stay, whatever their
+  // number (build_slot_kinds on the device).
   function climateResolvedEditorKinds(tab) {
     const configured = currentClimateSlotConfig(tab);
     const automatic = climateAutomaticEditorKinds(tab);
-    const capacity = climateSlotCapacity(
-      document.getElementById(
-        tab + '_tile_span_w')?.value || 1,
-      document.getElementById(
-        tab + '_tile_span_h')?.value || 1);
     const explicit = new Set();
-    configured.slice(0, capacity).forEach(selection => {
+    configured.forEach(selection => {
       const kind = Number(selection) || 0;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO &&
           kind !== CLIMATE_TILE_CONTENT.EMPTY) {
@@ -11836,12 +11817,9 @@ function maybeFillTitleFromMedia(tab) {
       }
     });
     let cursor = 0;
-    return configured.map((selection, index) => {
+    return configured.map(selection => {
       const kind = Number(selection) || 0;
-      if (index >= capacity ||
-          kind === CLIMATE_TILE_CONTENT.EMPTY) {
-        return null;
-      }
+      if (kind === CLIMATE_TILE_CONTENT.EMPTY) return null;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO) return kind;
       while (cursor < automatic.length) {
         const candidate = automatic[cursor++];
@@ -11870,20 +11848,12 @@ function maybeFillTitleFromMedia(tab) {
     }
   }
 
-  function climatePlacementConfig(
-      configured, resolvedKinds) {
-    return configured.map((selection, index) =>
-      resolvedKinds[index] === null
-        ? CLIMATE_TILE_CONTENT.EMPTY
-        : selection);
-  }
-
   function climateTargetCaption(state, kind) {
     if (state?.available === false) return CLIMATE_I18N.unavailable;
     const entityState = String(state?.mode || '').toLowerCase();
     if (entityState === 'unknown') return CLIMATE_I18N.unknown;
     if (kind === CLIMATE_TILE_CONTENT.TARGET_HUMIDITY) {
-      return CLIMATE_I18N.targetHumidity;
+      return CLIMATE_I18N.humidityCaption;
     }
     if (kind === CLIMATE_TILE_CONTENT.TARGET_TEMPERATURE_LOW) {
       return CLIMATE_I18N.heat;
@@ -12144,11 +12114,11 @@ function maybeFillTitleFromMedia(tab) {
     });
   }
 
-  function climateActiveGridIndices(tab, capacity) {
+  function climateActiveGridIndices(tab) {
     const configured = currentClimateSlotConfig(tab);
     const resolved = climateResolvedEditorKinds(tab);
     const active = new Set();
-    for (let index = 0; index < capacity; ++index) {
+    for (let index = 0; index < 6; ++index) {
       // Count only items that are actually placed: syncClimateSlotFields hides
       // slots without free space, and their stored geometry must not block drag
       // and resize as a phantom occupancy.
@@ -12298,16 +12268,14 @@ function maybeFillTitleFromMedia(tab) {
           tab + '_tile_span_h')?.value || 1;
         const { columns, rows } =
           climateGridDimensions(spanW, spanH);
-        const capacity = climateSlotCapacity(spanW, spanH);
         const configured = currentClimateSlotConfig(tab);
         const resolvedKinds =
           climateResolvedEditorKinds(tab);
         const index = configured.findIndex(
           (value, candidate) =>
-            candidate < capacity &&
-            (Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
-             (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
-              resolvedKinds[candidate] === null)));
+            Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
+            (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
+             resolvedKinds[candidate] === null));
         if (index < 0) return;
         const row = Math.floor(cellIndex / columns);
         const col = cellIndex % columns;
@@ -12443,9 +12411,8 @@ function maybeFillTitleFromMedia(tab) {
         tab + '_tile_span_h')?.value || 1;
       const { columns, rows } =
         climateGridDimensions(spanW, spanH);
-      const capacity = climateSlotCapacity(spanW, spanH);
       const activeIndices =
-        climateActiveGridIndices(tab, capacity);
+        climateActiveGridIndices(tab);
       const baseLayouts =
         climateGridLayouts(tab, columns, rows);
       const origin = cloneLayout(baseLayouts[index]);
@@ -12639,8 +12606,6 @@ function maybeFillTitleFromMedia(tab) {
               tab + '_tile_span_h')?.value || 1;
             const { columns, rows } =
               climateGridDimensions(spanW, spanH);
-            const capacity =
-              climateSlotCapacity(spanW, spanH);
             const configured = currentClimateSlotConfig(tab);
             const stored = currentClimateGeometry(tab);
             const items = stored.map(entry =>
@@ -12649,7 +12614,7 @@ function maybeFillTitleFromMedia(tab) {
             const layouts =
               climateGridLayouts(tab, columns, rows);
             const activeIndices =
-              climateActiveGridIndices(tab, capacity);
+              climateActiveGridIndices(tab);
             const direction =
               String(handle.dataset.climateResize || 'se');
             item.classList.add('resizing');
@@ -12738,7 +12703,6 @@ function maybeFillTitleFromMedia(tab) {
       tab + '_tile_span_w')?.value) || 1));
     const spanH = Math.max(1, Math.round(Number(document.getElementById(
       tab + '_tile_span_h')?.value) * 2 || 2) / 2);
-    const capacity = climateSlotCapacity(spanW, spanH);
     const { columns, rows } =
       climateGridDimensions(spanW, spanH);
     let configured = currentClimateSlotConfig(tab);
@@ -12767,8 +12731,6 @@ function maybeFillTitleFromMedia(tab) {
         resolvedKinds = climateResolvedEditorKinds(tab);
       }
     }
-    const placementConfig = climatePlacementConfig(
-      configured, resolvedKinds);
     const stored = currentClimateGeometry(tab);
     const items = stored.map(entry =>
       clampClimateGeometryItem(entry, columns, rows));
@@ -12783,12 +12745,13 @@ function maybeFillTitleFromMedia(tab) {
 
     const occupied = Array(columns * rows).fill(false);
     const accepted = [];
-    for (let index = 0; index < 6; ++index) {
+    const fits = candidate => !accepted.some(other =>
+      climateGeometryOverlaps(candidate, other.geometry));
+    for (const index of climatePlacementOrder(tab, stored)) {
       const item = document.getElementById(
         tab + '_climate_slot_row_' + index);
       const kind = Number(configured[index]) || 0;
       const active =
-        index < capacity &&
         kind !== CLIMATE_TILE_CONTENT.EMPTY &&
         resolvedKinds[index] !== null;
       if (!item) continue;
@@ -12796,13 +12759,23 @@ function maybeFillTitleFromMedia(tab) {
       if (!active) continue;
 
       let geometry = items[index];
-      if (accepted.some(other =>
-            climateGeometryOverlaps(
-              geometry, other.geometry))) {
-        const free = firstFreeClimatePlacement(
-          items, placementConfig, capacity,
-          columns, rows, index,
-          geometry.spanW, geometry.spanH);
+      if (!fits(geometry)) {
+        let free = null;
+        for (let row = 0;
+             row + geometry.spanH <= rows && !free; ++row) {
+          for (let col = 0;
+               col + geometry.spanW <= columns; ++col) {
+            const candidate = {
+              col, row,
+              spanW: geometry.spanW,
+              spanH: geometry.spanH
+            };
+            if (fits(candidate)) {
+              free = candidate;
+              break;
+            }
+          }
+        }
         if (!free) {
           item.classList.add('hidden');
           continue;
@@ -12883,10 +12856,9 @@ function maybeFillTitleFromMedia(tab) {
           tab + '_climate_cell_' + directCell);
         const index = configured.findIndex(
           (value, candidate) =>
-            candidate < capacity &&
-            (Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
-             (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
-              resolvedKinds[candidate] === null)));
+            Number(value) === CLIMATE_TILE_CONTENT.EMPTY ||
+            (Number(value) === CLIMATE_TILE_CONTENT.AUTO &&
+             resolvedKinds[candidate] === null));
         if (cell &&
             !cell.classList.contains('hidden') &&
             !cell.classList.contains('occupied') &&
@@ -13290,8 +13262,10 @@ function maybeFillTitleFromMedia(tab) {
       }
     };
 
+    // Every configured item takes part, not only the first cells-many item
+    // numbers; what does not fit is dropped during placement below.
     const explicitlyConfigured = new Set();
-    configured.slice(0, capacity).forEach(selection => {
+    configured.forEach(selection => {
       const kind = Number(selection) || 0;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO &&
           kind !== CLIMATE_TILE_CONTENT.EMPTY) {
@@ -13301,7 +13275,7 @@ function maybeFillTitleFromMedia(tab) {
 
     const slots = [];
     let automaticCursor = 0;
-    for (let index = 0; index < capacity; ++index) {
+    for (let index = 0; index < 6; ++index) {
       const selection = Number(configured[index]) || 0;
       if (selection === CLIMATE_TILE_CONTENT.EMPTY) continue;
       let kind = selection;
@@ -13331,6 +13305,9 @@ function maybeFillTitleFromMedia(tab) {
     const hasStoredGeometry =
       Array.isArray(geometryConfig) ||
       /^CLG[12]:/i.test(String(geometryConfig || '').trim());
+    const order = climatePlacementOrderFor(geometry, hasStoredGeometry);
+    slots.sort((a, b) =>
+      order.indexOf(a.itemIndex) - order.indexOf(b.itemIndex));
     const placedSlots = [];
     slots.forEach(slot => {
       let candidate = {

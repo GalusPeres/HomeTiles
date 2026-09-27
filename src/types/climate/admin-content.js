@@ -148,16 +148,14 @@
     return kinds;
   }
 
+  // Every configured item takes part, not only the first cells-many item
+  // numbers: after a resize the items that still fit stay, whatever their
+  // number (build_slot_kinds on the device).
   function climateResolvedEditorKinds(tab) {
     const configured = currentClimateSlotConfig(tab);
     const automatic = climateAutomaticEditorKinds(tab);
-    const capacity = climateSlotCapacity(
-      document.getElementById(
-        tab + '_tile_span_w')?.value || 1,
-      document.getElementById(
-        tab + '_tile_span_h')?.value || 1);
     const explicit = new Set();
-    configured.slice(0, capacity).forEach(selection => {
+    configured.forEach(selection => {
       const kind = Number(selection) || 0;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO &&
           kind !== CLIMATE_TILE_CONTENT.EMPTY) {
@@ -165,12 +163,9 @@
       }
     });
     let cursor = 0;
-    return configured.map((selection, index) => {
+    return configured.map(selection => {
       const kind = Number(selection) || 0;
-      if (index >= capacity ||
-          kind === CLIMATE_TILE_CONTENT.EMPTY) {
-        return null;
-      }
+      if (kind === CLIMATE_TILE_CONTENT.EMPTY) return null;
       if (kind !== CLIMATE_TILE_CONTENT.AUTO) return kind;
       while (cursor < automatic.length) {
         const candidate = automatic[cursor++];
@@ -199,20 +194,12 @@
     }
   }
 
-  function climatePlacementConfig(
-      configured, resolvedKinds) {
-    return configured.map((selection, index) =>
-      resolvedKinds[index] === null
-        ? CLIMATE_TILE_CONTENT.EMPTY
-        : selection);
-  }
-
   function climateTargetCaption(state, kind) {
     if (state?.available === false) return CLIMATE_I18N.unavailable;
     const entityState = String(state?.mode || '').toLowerCase();
     if (entityState === 'unknown') return CLIMATE_I18N.unknown;
     if (kind === CLIMATE_TILE_CONTENT.TARGET_HUMIDITY) {
-      return CLIMATE_I18N.targetHumidity;
+      return CLIMATE_I18N.humidityCaption;
     }
     if (kind === CLIMATE_TILE_CONTENT.TARGET_TEMPERATURE_LOW) {
       return CLIMATE_I18N.heat;

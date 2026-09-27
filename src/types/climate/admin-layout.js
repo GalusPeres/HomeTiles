@@ -73,11 +73,11 @@
     });
   }
 
-  function climateActiveGridIndices(tab, capacity) {
+  function climateActiveGridIndices(tab) {
     const configured = currentClimateSlotConfig(tab);
     const resolved = climateResolvedEditorKinds(tab);
     const active = new Set();
-    for (let index = 0; index < capacity; ++index) {
+    for (let index = 0; index < 6; ++index) {
       // Count only items that are actually placed: syncClimateSlotFields hides
       // slots without free space, and their stored geometry must not block drag
       // and resize as a phantom occupancy.

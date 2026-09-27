@@ -316,7 +316,7 @@ String climate_slot_caption(
     ClimateTileSlotKind kind, const ClimateState& state) {
   const char* language = configManager.getConfig().language;
   if (kind == ClimateTileSlotKind::TARGET_HUMIDITY) {
-    return i18n::climate_target_humidity_label(language);
+    return i18n::climate_humidity_caption_label(language);
   }
   if (kind == ClimateTileSlotKind::TARGET_TEMPERATURE_LOW) {
     return i18n::climate_target_heat_label(language);
@@ -479,9 +479,12 @@ uint8_t build_slot_kinds(
       build_automatic_slot_kinds(
           tile, state, automatic, slot_capacity);
 
+  // Every configured item takes part, not only the first cells-many item
+  // numbers: after a resize the items that still fit stay, whatever their
+  // number (same as the Web editor and preview).
   bool explicitly_configured[
       static_cast<uint8_t>(ClimateTileSlotKind::HVAC_MODE) + 1] = {};
-  for (uint8_t slot = 0; slot < slot_capacity; ++slot) {
+  for (uint8_t slot = 0; slot < CLIMATE_TILE_MAX_CONTENT_SLOTS; ++slot) {
     const ClimateTileContent configured =
         getClimateTileSlotContent(tile, slot);
     if (configured == CLIMATE_TILE_CONTENT_AUTO ||
@@ -494,15 +497,13 @@ uint8_t build_slot_kinds(
     }
   }
 
-  bool occupied[
-      CLIMATE_TILE_MAX_GRID_ROWS][
-      CLIMATE_TILE_MAX_GRID_COLUMNS] = {};
-  uint64_t stored_geometry = 0;
-  const bool has_stored_geometry =
-      parseClimateTileGeometry(tile, stored_geometry);
-  uint8_t count = 0;
+  // Automatic items resolve in item order, as before.
+  ClimateTileSlotKind kinds[CLIMATE_TILE_MAX_CONTENT_SLOTS] = {};
+  ClimateTileItemGeometry stored[CLIMATE_TILE_MAX_CONTENT_SLOTS] = {};
+  uint8_t order[CLIMATE_TILE_MAX_CONTENT_SLOTS] = {};
+  uint8_t candidates = 0;
   uint8_t automatic_cursor = 0;
-  for (uint8_t slot = 0; slot < slot_capacity; ++slot) {
+  for (uint8_t slot = 0; slot < CLIMATE_TILE_MAX_CONTENT_SLOTS; ++slot) {
     const ClimateTileContent configured =
         getClimateTileSlotContent(tile, slot);
     if (configured == CLIMATE_TILE_CONTENT_EMPTY) continue;
@@ -522,9 +523,43 @@ uint8_t build_slot_kinds(
       kind = configured_slot_kind(configured);
     }
     if (kind == ClimateTileSlotKind::NONE) continue;
+    kinds[slot] = kind;
+    stored[slot] = getClimateTileItemGeometry(tile, slot);
+    order[candidates++] = slot;
+  }
+  // Place the top-left items first (row, column, then item number), so a
+  // smaller tile keeps what it can still show and drops only the rest.
+  std::stable_sort(order, order + candidates,
+                   [&](uint8_t a, uint8_t b) {
+                     if (stored[a].row != stored[b].row) {
+                       return stored[a].row < stored[b].row;
+                     }
+                     return stored[a].col < stored[b].col;
+                   });
 
-    ClimateTileItemGeometry geometry =
-        getClimateTileItemGeometry(tile, slot);
+  bool occupied[
+      CLIMATE_TILE_MAX_GRID_ROWS][
+      CLIMATE_TILE_MAX_GRID_COLUMNS] = {};
+  uint64_t stored_geometry = 0;
+  const bool has_stored_geometry =
+      parseClimateTileGeometry(tile, stored_geometry);
+  uint8_t count = 0;
+  for (uint8_t position = 0;
+       position < candidates && count < slot_capacity; ++position) {
+    const uint8_t slot = order[position];
+    const ClimateTileSlotKind kind = kinds[slot];
+    const ClimateTileContent configured =
+        getClimateTileSlotContent(tile, slot);
+
+    // Clamp into the current grid like the Web editor: an item below the
+    // last row moves up, and spans shrink to what is left.
+    ClimateTileItemGeometry geometry = stored[slot];
+    if (geometry.col >= columns) geometry.col = columns - 1;
+    if (geometry.row >= rows) geometry.row = rows - 1;
+    geometry.span_w = static_cast<uint8_t>(std::max<int>(
+        1, std::min<int>(geometry.span_w, columns - geometry.col)));
+    geometry.span_h = static_cast<uint8_t>(std::max<int>(
+        1, std::min<int>(geometry.span_h, rows - geometry.row)));
     if (!has_stored_geometry && slot_is_adjustable(kind) &&
         geometry.span_w == 1 && geometry.span_h == 1) {
       const ClimateTileTargetLayout requested =
@@ -1127,7 +1162,7 @@ lv_obj_t* create_climate_slot(
   create_adjust_button(1);
 
   lv_obj_t* caption = lv_label_create(root);
-  set_label_style(caption, lv_color_hex(0xE0E0E0), FONT_TITLE);
+  set_label_style(caption, lv_color_white(), FONT_TITLE);
   lv_obj_set_style_text_align(caption, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(caption, LV_LABEL_LONG_DOT);
   lv_label_set_text(caption, "");

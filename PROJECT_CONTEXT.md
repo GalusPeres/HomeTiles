@@ -111,7 +111,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## v0.7.0 release prep
 
 - PR #52, CI 36325726234 (`e6c7772`): 17 builds pass; BINs `build/ci-pr52-e6c7772/`.
-- Bridge v0.7.0 released (`1c12eda`, 267 pass/1 skip). Firmware release needs separate OK.
+- Bridge v0.7.0 released (`1c12eda`, 267 pass/1 skip); firmware tag `609550a` building.
 - Cache b73 frees drained queues. V2: 76 cached switches, final 124 KiB. Maintainer: all five CI devices stable, including S3.
 - S3 b61 dump: Web Admin file open failed to allocate a 92-byte internal mutex; not the new CI build.
 - CI 152 pass/21 skips; local 173 pass. Firmware version/notes/README prepared; Tab5 custom.

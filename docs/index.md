@@ -122,14 +122,15 @@ Match the exact hardware revision before flashing. [Open online flasher](install
 
 <script src="javascripts/device-status.js?v=3" defer></script>
 
-## New In v0.6.12
+## New In v0.7.0
 
-- **Faster Guition UI:** PPA hardware rotation now handles larger ordinary interface updates on JC8012P4A1 V1 and V2. The improvement is confirmed on V2; V1 hardware feedback is pending.
-- **Aligned Weather forecasts:** both Guition revisions now use the same forecast position as Waveshare 8-inch and 10.1-inch.
-- **Correct daily temperatures:** partial hourly forecasts preserve the provider's full-day minimum and maximum.
-- **Bridge:** use v0.6.44 or newer through HACS. Camera remains experimental and ESP32-P4-only.
+- **Flexible layouts:** move and resize tiles in half steps, including Settings and Back tiles down to 1×0.5.
+- **Your dashboard's look:** adjustable corners, icon circles, tile colors and rules that follow entity values or states.
+- **Built-in cameras:** compatible ESP32-P4 displays share snapshots and live video with Home Assistant or another display. Camera support remains experimental and off by default.
+- **Smoother editing and folder navigation:** corrected Settings selection and restoration, fitting copy/paste, and released update buffers that leave more memory for cached folders.
+- **Before updating:** install Bridge **v0.7.0** through HACS and restart Home Assistant, then **export your dashboard**. Read the [update and downgrade guidance](updating.md).
 
-[Read the v0.6.12 release notes](releases/v0.6.12.md)
+[Read the v0.7.0 release notes](releases/v0.7.0.md)
 
 ## How It Works
 

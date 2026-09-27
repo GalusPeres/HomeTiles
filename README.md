@@ -8,11 +8,11 @@
 Touch dashboards for Home Assistant on ESP32 displays.<br>
 Lights, climate, sensors, energy, weather and more on a 4 to 10.1 inch touch screen.
 
-<a href="https://galusperes.github.io/"><img src="docs/images/readme-link-docs.png" alt="Documentation" height="48"></a>
-<a href="https://galusperes.github.io/installer/"><img src="docs/images/readme-link-flasher.png" alt="Online flasher" height="48"></a>
-<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-link-release.png" alt="Latest release" height="48"></a>
-<a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-link-coffee.png" alt="Buy Me a Coffee" height="48"></a>
-<a href="LICENSE"><img src="docs/images/readme-link-license.png" alt="MIT License" height="48"></a>
+<a href="https://galusperes.github.io/"><img src="docs/images/readme-nav-docs.png" alt="Documentation" height="42"></a>
+<a href="https://galusperes.github.io/installer/"><img src="docs/images/readme-nav-flasher.png" alt="Online flasher" height="42"></a>
+<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-nav-release.png" alt="Latest release" height="42"></a>
+<a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-nav-coffee.png" alt="Buy Me a Coffee" height="42"></a>
+<a href="LICENSE"><img src="docs/images/readme-nav-license.png" alt="MIT License" height="42"></a>
 <br>
 <img src="docs/images/readme-hero-home.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%"><br>
 Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors.

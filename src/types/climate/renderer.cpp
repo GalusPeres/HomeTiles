@@ -44,9 +44,9 @@ struct ClimateAdjustEventData {
 constexpr uint32_t kMiniTargetRemoteBlockMs = 2200;
 constexpr uint32_t kMiniTargetDebounceMs = 1000;
 // The control pill and its pressed buttons are white overlays, a lighter step
-// of whatever the tile shows (global, own color or a rules tint). On the
-// default 0x222222 tile they give the former 0x3A3A3A pill and 0x4A4A4A
-// pressed button.
+// of whatever the tile shows (global, own color or a rules tint). On a
+// 0x222222 tile they give the former 0x3A3A3A pill and 0x4A4A4A pressed
+// button.
 constexpr lv_opa_t kSlotSurfaceOpa = 28;
 constexpr lv_opa_t kSlotPressedOpa = 21;
 

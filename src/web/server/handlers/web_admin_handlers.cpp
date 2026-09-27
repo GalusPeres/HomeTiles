@@ -32,7 +32,7 @@ void WebAdminServer::handleSaveMQTT() {
     strncpy(cfg.mqtt_base_topic, "hometiles", CONFIG_MQTT_BASE_MAX - 1);
     strncpy(cfg.ha_prefix, "ha/statestream", CONFIG_HA_PREFIX_MAX - 1);
     cfg.tile_borders = true;
-    cfg.tile_radius = tile_radius::kMinimum;
+    cfg.tile_radius = tile_radius::kDefault;
     cfg.icon_discs = true;
     cfg.icon_glow = icon_glow::kDefault;
     cfg.default_tile_color = tile_color::kDefault;

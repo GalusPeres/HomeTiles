@@ -15,6 +15,9 @@ constexpr int maximum(int cell_height, int gap) {
 }
 constexpr int kMaximum = maximum(Device::kGridCellH, Device::kGridGap);
 static_assert(kMaximum >= kMinimum, "Half-tile radius must cover the current radius");
+// New devices and updates without a stored radius start with round half-height
+// tiles (the HomeTiles look); kMinimum stays the lower slider limit.
+constexpr int kDefault = kMaximum;
 constexpr int clamp(int value) {
   return value < kMinimum ? kMinimum : value > kMaximum ? kMaximum : value;
 }

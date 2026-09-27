@@ -83,7 +83,7 @@ struct DeviceConfig {
   // One visible percentage for every device. Device::backlightRawFromPercent()
   // converts it to the range of the respective driver.
   uint8_t screensaver_brightness_pct;  // 1-100
-  uint16_t tile_radius = tile_radius::kMinimum;
+  uint16_t tile_radius = tile_radius::kDefault;
   bool tile_borders;           // Thin borders around normal dashboard tiles.
   bool icon_discs = true;      // Background discs behind tile icons.
   // Glow strength of colored icon discs in percent (icon_glow.h).

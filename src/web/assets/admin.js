@@ -5353,6 +5353,19 @@ function syncTileRadiusControls(tabEl) {
         opacityInput.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);
       }
       updateTileType(tab);
+      // New tiles start in the HomeTiles look: a type with icon colors tints
+      // the tile with the color its icon shows at 20 % (Tile color "From
+      // icon"). Existing tiles and the screensaver keep their own style.
+      if (previousType === 0 && nextType !== 0 && !isScreensaverTileTab(tab) &&
+          typeof tileTypeHasIconColors === 'function' &&
+          tileTypeHasIconColors(String(nextType))) {
+        const strength = document.getElementById(tab + '_tile_icon_fill_strength');
+        if (strength) strength.value = '20';
+        const fill = document.getElementById(tab + '_tile_icon_fill');
+        if (fill) fill.checked = true;
+        syncTileColorMode(tab);
+        if (typeof syncIconColorFields === 'function') syncIconColorFields(tab);
+      }
       normalizeLayoutInputs(tab);
       updateLayoutFromInputs(tab);
       updateTilePreview(tab);
@@ -7039,7 +7052,7 @@ function syncTileRadiusControls(tabEl) {
         : null;
       if (choice) {
         const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-        tileElem.style.background = tileTintBackground(base || '#222222', choice.color, choice.percent);
+        tileElem.style.background = tileTintBackground(base || '#1A1A1A', choice.color, choice.percent);
       } else if (tileElem.dataset.baseBg !== undefined) {
         tileElem.style.background = tileElem.dataset.baseBg;
       }
@@ -7086,9 +7099,10 @@ function syncTileRadiusControls(tabEl) {
   // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
   // default grey (stored explicitly by older editors) follow the global
   // default tile color; every other stored color is kept.
-  // Built-in default greys: tile_color::kDefault and kLegacyDefault.
+  // Built-in default greys: tile_color::kDefault, kLegacyDefault and
+  // kPreviousDefault.
   function isDefaultTileGrey(rgb) {
-    return rgb === 0x222222 || rgb === 0x2A2A2A;
+    return rgb === 0x1A1A1A || rgb === 0x2A2A2A || rgb === 0x222222;
   }
   function tileBgFollowsDefault(value) {
     const num = Number(value);
@@ -7139,7 +7153,7 @@ function syncTileRadiusControls(tabEl) {
       input.dataset.bgColorDefault = '0';
     } else {
       const type = document.getElementById(tab + '_tile_type')?.value || '0';
-      input.value = getTileTypeMeta(type).defaultBg || '#222222';
+      input.value = getTileTypeMeta(type).defaultBg || '#1A1A1A';
       input.dataset.bgColorDefault = '1';
     }
     syncTileColorMode(tab);
@@ -7215,7 +7229,7 @@ function syncTileRadiusControls(tabEl) {
     el.dataset.ruleTint = tint ? '1' : '0';
     if (!tint) return;
     const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-    el.style.background = tileTintBackground(base || '#222222', tint.color, tint.percent);
+    el.style.background = tileTintBackground(base || '#1A1A1A', tint.color, tint.percent);
   }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1' ||

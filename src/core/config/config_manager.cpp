@@ -227,7 +227,7 @@ ConfigManager::ConfigManager() {
   config.display_brightness = 200;
   config.screensaver_brightness_pct = kScreensaverBrightnessPctDefault;
   config.tile_borders = true;
-  config.tile_radius = tile_radius::kMinimum;
+  config.tile_radius = tile_radius::kDefault;
   config.icon_discs = true;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;
@@ -361,7 +361,7 @@ bool ConfigManager::load() {
   config.screensaver_brightness_pct =
       prefs.getUChar("ss_bright", kScreensaverBrightnessPctDefault);
   config.tile_borders = prefs.getBool("tile_border", true);
-  config.tile_radius = tile_radius::clamp(prefs.getUShort("tile_radius", tile_radius::kMinimum));
+  config.tile_radius = tile_radius::clamp(prefs.getUShort("tile_radius", tile_radius::kDefault));
   config.icon_discs = prefs.getBool("icon_disc", true);
   config.icon_glow = icon_glow::clamp(prefs.getUChar("icon_glow", icon_glow::kDefault));
   config.default_tile_color =
@@ -1056,7 +1056,7 @@ void ConfigManager::clear() {
   config.display_brightness = 200;
   config.screensaver_brightness_pct = kScreensaverBrightnessPctDefault;
   config.tile_borders = true;
-  config.tile_radius = tile_radius::kMinimum;
+  config.tile_radius = tile_radius::kDefault;
   config.icon_discs = true;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;

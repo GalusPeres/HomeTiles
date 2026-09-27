@@ -86,7 +86,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Radius and half-grid
 
-- NVS radius: existing minimum; maximum = rounded `(profile cell height - gap) / 4`. Shared cached tiles, Climate, popups/Settings, artwork and live Web previews.
+- NVS radius: old radius to `(cell h - gap)/4`, unset = max; tile color `#1A1A1A`; new icon tiles "From icon" 20 %. Used by tiles, Climate, popups, previews.
 - Radius/close-highlight V2 accepted; reboot pending. Evidence: `build/global-radius-guition-v2-corrections/`.
 - Half-grid: Sensor/Binary/Energy height 0.5, width >=1 in half steps; original 2x1. Whole layouts/V7 size unchanged; header bits store fractions. Fractional-layout downgrade unsupported.
 - Device/Web: concentric icon radius, original title font, smaller default value font; explicit sizes respected; text gap 0. Masking declined.

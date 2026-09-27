@@ -12,9 +12,10 @@ const header = read('src/core/config/config_manager.h');
 assert.match(header, /bool icon_discs = true;/);
 assert.match(header, /uint32_t default_tile_color = tile_color::kDefault;/);
 const tileColor = read('src/core/config/tile_color.h');
-assert.match(tileColor, /constexpr uint32_t kDefault = 0x222222;/, 'The built-in default is slightly darker');
+assert.match(tileColor, /constexpr uint32_t kDefault = 0x1A1A1A;/, 'The built-in default is the HomeTiles dark grey');
+assert.match(tileColor, /constexpr uint32_t kPreviousDefault = 0x222222;/, 'Tiles stored with the test-build default still follow the global color');
 assert.match(tileColor, /constexpr uint32_t kLegacyDefault = 0x2A2A2A;/);
-assert.match(tileColor, /return normalize\(rgb\) == kDefault \|\| normalize\(rgb\) == kLegacyDefault;/);
+assert.match(tileColor, /return normalize\(rgb\) == kDefault \|\| normalize\(rgb\) == kLegacyDefault \|\|\s*normalize\(rgb\) == kPreviousDefault;/);
 for (const marker of [
   'a.icon_discs == b.icon_discs &&',
   'a.default_tile_color == b.default_tile_color &&',
@@ -190,11 +191,11 @@ const gridPreview = read('src/web/admin/tiles/grid-preview.js');
 const follows = new Function(`${extractFunction('isDefaultTileGrey', gridPreview)}
 ${extractFunction('tileBgFollowsDefault', gridPreview)}; return tileBgFollowsDefault;`)();
 for (const [value, expected] of [[0, true], [undefined, true], [0x2A2A2A, true], [0x012A2A2A, true],
-                                 [0x01222222, true], [0x01353535, false], [0x01000000, false], [0x01FF0000, false]]) {
+                                 [0x01222222, true], [0x011A1A1A, true], [0x01353535, false], [0x01000000, false], [0x01FF0000, false]]) {
   assert.equal(follows(value), expected, `preview follows the global color for ${value}`);
 }
-const firmwareFollows = stored => stored === 0 || [0x222222, 0x2A2A2A].includes(stored & 0xFFFFFF);
-for (const value of [0, 0x012A2A2A, 0x01222222, 0x01353535, 0x01000000]) assert.equal(follows(value), firmwareFollows(value));
+const firmwareFollows = stored => stored === 0 || [0x1A1A1A, 0x222222, 0x2A2A2A].includes(stored & 0xFFFFFF);
+for (const value of [0, 0x012A2A2A, 0x01222222, 0x011A1A1A, 0x01353535, 0x01000000]) assert.equal(follows(value), firmwareFollows(value));
 
 // Tile color is one choice (Global | Custom | From icon color) and replaces
 // the tile color reset button: Global follows the global color (default

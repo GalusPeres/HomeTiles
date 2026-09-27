@@ -29,6 +29,15 @@
 #define FW_VERSION "v0.6.12b73"
 #endif
 
+#if defined(HOMETILES_TEST_BETA) && \
+    (defined(DEVICE_GUITION_ESP32_4848S040) || \
+     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || \
+     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B))
+// Keep the base below v0.7.0 so System Update offers the published OTA target.
+#undef FW_VERSION
+#define FW_VERSION "v0.6.12b74"
+#endif
+
 #ifndef FW_VERSION
 #error "FW_VERSION is missing in version.txt"
 #endif

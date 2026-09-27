@@ -110,11 +110,11 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## v0.7.0 release
 
-- Firmware v0.7.0 (`609550a`): CI 36329510982, 17 builds/34 images; PR #52 merged.
+- v0.7.0 (`609550a`): Draft restored after Guition b74 OTA passed. Assets unchanged.
 - Bridge v0.7.0 released first (`1c12eda`, 267 pass/1 skip). Evidence: `build/release-v0.7.0/`.
 - Cache b73 frees drained queues. V2: 76 cached switches, final 124 KiB. Maintainer: all five CI devices stable, including S3.
-- S3 b61 dump: Web Admin file open failed to allocate a 92-byte internal mutex; not the new CI build.
-- CI 152 pass/21 skips; local 173 pass. Notes/README include export/downgrade; overview corrected.
+- b74 PSRAM-first OTA TLS: Guition passed 11 ranges first try, v0.7.0 boot/MQTT OK. Other S3: GitHub CI/HW pending.
+- CI 152 pass/21 skips; local 173 pass. Docs/README: export/downgrade included.
 - User OK needed for issues #36 #31 #25 #43 #47 #45 #34. v0.7.1: #39, PR #51 Polish, French, #26 S3-4B shift (PCLK 16 vs 10 MHz).
 
 ## Maintenance

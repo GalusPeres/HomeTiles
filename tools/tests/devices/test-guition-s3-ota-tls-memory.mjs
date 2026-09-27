@@ -69,6 +69,7 @@ constexpr uint32_t kConnectTimeoutMs=10000,kReadTimeoutMs=20000,kReadPaceMs=2;
 constexpr int SOL_SOCKET=1,SO_RCVBUF=2;
 std::vector<String> responses; size_t connection_index=0;
 bool force_connect_failure=false;
+size_t network_bytes_during_tls=0;
 class NetworkClientSecure {
   std::vector<void*> blocks; String response; size_t pos=0; bool online=false;
  public:
@@ -80,6 +81,12 @@ class NetworkClientSecure {
     // These sizes exercise the allocation contract, not a measured TLS transcript.
     for(size_t bytes:{size_t(16384),size_t(16384),size_t(20000)}) {
       void* p=tls_calloc(1,bytes); if(!p){stop();return false;} blocks.push_back(p);
+    }
+    // Native Wi-Fi still needs internal memory while TLS owns its buffers.
+    // This models a concurrent network allocation, not the device's TLS trace.
+    if(network_bytes_during_tls) {
+      void* p=heap_caps_calloc(1,network_bytes_during_tls,MALLOC_CAP_INTERNAL);
+      if(!p){stop();return false;} blocks.push_back(p);
     }
     assert(connection_index<responses.size()); response=responses[connection_index++]; online=true; return true;
   }
@@ -101,6 +108,7 @@ bool collect(const uint8_t* p,size_t n,void* ctx){static_cast<std::string*>(ctx)
 void reset(size_t free,size_t largest,size_t external=4*1024*1024) {
   assert(allocations.empty()); internal_free=free;largest_internal=largest;external_free=external;
   external_allocations=0;connection_index=0;force_connect_failure=false;diagnostics="";
+  network_bytes_during_tls=0;
   responses={"HTTP/1.1 302 Found\r\nLocation: https://release-assets.githubusercontent.com/image\r\n\r\n",
     "HTTP/1.1 206 Partial Content\r\nContent-Length: 4\r\nContent-Range: bytes 0-3/400\r\n\r\nDATA"};
 }
@@ -110,7 +118,15 @@ bool transfer(String& error){uint8_t buf[4];size_t total=0;std::string body;Stri
   assert(allocations.empty()); assert(tls_calloc==coreCalloc||tls_calloc==checkTlsInternalCalloc);return ok;
 }
 int main(){String error;
-  reset(128*1024,64*1024); assert(transfer(error));assert(external_allocations==0);
+  reset(128*1024,64*1024); assert(transfer(error));
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  // Post-failure readings show about 37 KiB free / 17 KiB largest internally.
+  // Successful TLS allocation alone is insufficient if it starves the network.
+  reset(37*1024,17*1024);network_bytes_during_tls=8*1024;
+  assert(transfer(error));assert(internal_free==37*1024);
+#else
+  assert(external_allocations==0);
+#endif
   reset(48*1024,30*1024);
 #if defined(DEVICE_ESP32_S3_RGB_480)
   assert(transfer(error));assert(external_allocations>0);assert(internal_free==48*1024);
@@ -123,6 +139,18 @@ int main(){String error;
   assert(diagnostics.find("-32512")!=String::npos);
 #endif
   reset(128*1024,64*1024);responses={"HTTP/1.1 404 Not Found\r\n\r\n"};assert(!transfer(error));assert(error=="HTTP 404");
+  reset(128*1024,64*1024,0);assert(transfer(error));assert(external_allocations==0);
+  // Release discovery retains its existing internal-first S3 policy.
+  reset(128*1024,64*1024);
+  { ScopedCheckTlsAllocator allocator;void* p=tls_calloc(1,16384);assert(p);
+#if defined(DEVICE_ESP32_S3_RGB_480)
+    assert(!allocations.at(p).external);
+#else
+    assert(allocations.at(p).external);
+#endif
+    tls_free(p);
+  }
+  assert(allocations.empty());assert(tls_calloc==checkTlsInternalCalloc);
   for(int i=0;i<20;++i){reset(128*1024,64*1024);assert(transfer(error));}
   std::cout<<"OTA range allocation, redirects, pressure, exhaustion, cleanup and HTTP errors passed\n";
 }

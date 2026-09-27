@@ -150,11 +150,22 @@ void checkTlsHeapFree(void* ptr) {
   heap_caps_free(ptr);
 }
 
+#if defined(DEVICE_ESP32_S3_RGB_480)
+void* installTlsPreferredCalloc(size_t count, size_t size) {
+  // Rolling OTA retains the flash writer while reconnecting. Leave internal
+  // memory for native Wi-Fi instead of consuming it before the PSRAM fallback.
+  // Release discovery keeps its separate internal-first display policy.
+  void* ptr = heap_caps_calloc(count, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  return ptr ? ptr : checkTlsInternalCalloc(count, size);
+}
+#endif
+
 class ScopedCheckTlsAllocator {
  public:
-  ScopedCheckTlsAllocator()
-      : active_(mbedtls_platform_set_calloc_free(checkTlsPreferredCalloc,
-                                                 checkTlsHeapFree) == 0) {}
+  explicit ScopedCheckTlsAllocator(
+      void* (*calloc_fn)(size_t, size_t) = checkTlsPreferredCalloc)
+      : active_(mbedtls_platform_set_calloc_free(calloc_fn,
+                                                checkTlsHeapFree) == 0) {}
 
   ~ScopedCheckTlsAllocator() {
     if (active_) {
@@ -424,10 +435,8 @@ bool fetchHttpRange(const String& start_url, size_t from, size_t to,
   }
 
 #if defined(DEVICE_ESP32_S3_RGB_480)
-  // OTA preparation releases mostly PSRAM on these boards. Keep the same TLS
-  // fallback as the update check when internal RAM cannot fit a handshake.
-  // All redirect/range clients must release their blocks before restoration.
-  ScopedCheckTlsAllocator tls_allocator;
+  ScopedCheckTlsAllocator tls_allocator(installTlsPreferredCalloc);
+  constexpr const char* allocator_name = "PSRAM/internal";
 #endif
   String url = start_url;
   for (int redirect = 0; redirect < 5; ++redirect) {
@@ -448,7 +457,7 @@ bool fetchHttpRange(const String& start_url, size_t from, size_t to,
       char detail[224];
       snprintf(detail, sizeof(detail), "HTTPS host=%s tls=%d (%s) allocator=%s",
                parsed.host.c_str(), tls_code, tls_error,
-               tls_allocator.active() ? "internal/PSRAM" : "core default");
+               tls_allocator.active() ? allocator_name : "core default");
       Serial.printf("[Update/Diag] %s\n", detail);
       installDiagLine(String(detail) + " | " + memSnapshotLine());
 #endif

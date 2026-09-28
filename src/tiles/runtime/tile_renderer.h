@@ -35,8 +35,8 @@ struct TileWidgetCache {
   MediaTileWidgets media[TILES_PER_GRID];
 };
 
-// Allocate the large, cold renderer bookkeeping arrays. On ESP32-P4 these
-// live in PSRAM; non-P4 profiles keep their established static storage.
+// Allocate the large, cold renderer bookkeeping arrays (Weather, Media) in
+// PSRAM. Every chip uses this storage; internal RAM is scarce on P4 and S3.
 bool tile_renderer_init_cold_storage();
 
 // Renders a complete tile grid.

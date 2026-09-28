@@ -17,7 +17,7 @@ extern SwitchTileWidgets g_tab1_switches[];
 extern SwitchTileWidgets g_tab2_switches[];
 extern SwitchTileWidgets g_screensaver_switches[];
 
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
+// PSRAM storage, valid after tile_renderer_init_cold_storage().
 extern WeatherTileWidgets* g_tab0_weather;
 extern WeatherTileWidgets* g_tab1_weather;
 extern WeatherTileWidgets* g_tab2_weather;
@@ -26,16 +26,6 @@ extern MediaTileWidgets* g_tab0_media;
 extern MediaTileWidgets* g_tab1_media;
 extern MediaTileWidgets* g_tab2_media;
 extern MediaTileWidgets* g_screensaver_media;
-#else
-extern WeatherTileWidgets g_tab0_weather[];
-extern WeatherTileWidgets g_tab1_weather[];
-extern WeatherTileWidgets g_tab2_weather[];
-
-extern MediaTileWidgets g_tab0_media[];
-extern MediaTileWidgets g_tab1_media[];
-extern MediaTileWidgets g_tab2_media[];
-extern MediaTileWidgets g_screensaver_media[];
-#endif
 
 extern SwitchState g_tab0_switch_states[];
 extern SwitchState g_tab1_switch_states[];

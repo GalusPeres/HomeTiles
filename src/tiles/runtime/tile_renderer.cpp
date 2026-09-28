@@ -89,7 +89,8 @@ static void advance_switch_layout_generation(GridType grid_type) {
 static void invalidate_queued_switch_slot(GridType grid_type,
                                           uint8_t grid_index);
 
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
+// Weather and Media widget state lives in PSRAM on every chip; accesses are
+// rare state changes, and internal RAM is scarce on both P4 and S3.
 WeatherTileWidgets* g_tab0_weather = nullptr;
 WeatherTileWidgets* g_tab1_weather = nullptr;
 WeatherTileWidgets* g_tab2_weather = nullptr;
@@ -99,16 +100,6 @@ MediaTileWidgets* g_tab1_media = nullptr;
 MediaTileWidgets* g_tab2_media = nullptr;
 MediaTileWidgets* g_screensaver_media = nullptr;
 static bool g_cold_state_init_attempted = false;
-#else
-WeatherTileWidgets g_tab0_weather[TILES_PER_GRID];
-WeatherTileWidgets g_tab1_weather[TILES_PER_GRID];
-WeatherTileWidgets g_tab2_weather[TILES_PER_GRID];
-
-MediaTileWidgets g_tab0_media[TILES_PER_GRID];
-MediaTileWidgets g_tab1_media[TILES_PER_GRID];
-MediaTileWidgets g_tab2_media[TILES_PER_GRID];
-MediaTileWidgets g_screensaver_media[TILES_PER_GRID];
-#endif
 
 SwitchState g_tab0_switch_states[TILES_PER_GRID];
 SwitchState g_tab1_switch_states[TILES_PER_GRID];
@@ -168,7 +159,6 @@ static ClimateState* allocate_climate_states(const char* grid_name) {
 }
 
 bool tile_renderer_init_cold_storage() {
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
   if (g_tab0_weather && g_tab0_media) return true;
   if (g_cold_state_init_attempted) return false;
   g_cold_state_init_attempted = true;
@@ -214,7 +204,6 @@ bool tile_renderer_init_cold_storage() {
       "[Tiles/Mem] Weather=%u bytes Media=%u bytes in PSRAM\n",
       static_cast<unsigned>(sizeof(WeatherTileWidgets) * kWeatherCount),
       static_cast<unsigned>(sizeof(MediaTileWidgets) * kMediaCount));
-#endif
   return true;
 }
 
@@ -252,6 +241,7 @@ void tile_renderer_forget_media_widgets(const MediaCoverRef* ref) {
   MediaTileWidgets* const grids[] = {
       g_tab0_media, g_tab1_media, g_tab2_media, g_screensaver_media};
   for (MediaTileWidgets* grid : grids) {
+    if (!grid) continue;
     for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
       if (grid[i].cover_ref == ref) {
         // Every lv_obj pointer in this slot belongs to the same card and is
@@ -3560,6 +3550,7 @@ static const MediaCoverRef* find_decoded_media_cover_sibling(const MediaCoverRef
   MediaTileWidgets* const grids[] = {
       g_tab0_media, g_tab1_media, g_tab2_media, g_screensaver_media};
   for (MediaTileWidgets* grid : grids) {
+    if (!grid) continue;
     for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
       const MediaCoverRef* ref = grid[i].cover_ref;
       if (!ref || ref == self) continue;

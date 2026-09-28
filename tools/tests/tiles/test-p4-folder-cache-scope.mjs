@@ -29,13 +29,28 @@ for (const [label, source] of [
   if (source.includes('DEVICE_WAVESHARE_TOUCH_LCD_8')) {
     throw new Error(`${label} still limits the shared P4 cache to Waveshare 8`);
   }
+}
+for (const [label, source] of [
+  ['renderer', renderer],
+  ['folder cache', folders],
+]) {
   requireMarker(source, 'CONFIG_IDF_TARGET_ESP32P4', label);
 }
 
+// Weather/Media widget state and the entity cache live in PSRAM on every chip.
+if (rendererShared.includes('CONFIG_IDF_TARGET_ESP32P4')) {
+  throw new Error('renderer shared declarations must not split Weather/Media storage by chip');
+}
+requireMarker(rendererShared, 'extern WeatherTileWidgets* g_tab0_weather;', 'renderer shared declarations');
+requireMarker(rendererShared, 'extern MediaTileWidgets* g_screensaver_media;', 'renderer shared declarations');
 requireMarker(
   rendererHeader,
-  'On ESP32-P4 these\n// live in PSRAM; non-P4 profiles keep their established static storage.',
+  'in\n// PSRAM. Every chip uses this storage; internal RAM is scarce on P4 and S3.',
   'renderer storage contract');
+if (/static EntityCacheEntry g_entity_cache\[/.test(folders) ||
+    !folders.includes('static EntityCacheEntry* g_entity_cache = nullptr;')) {
+  throw new Error('the entity cache must use PSRAM on every chip');
+}
 
 if (!/#if defined\(CONFIG_IDF_TARGET_ESP32P4\)[\s\S]*?kMaxResidentFolderUiCaches = 6;[\s\S]*?#else[\s\S]*?kMaxResidentFolderUiCaches = 4;/.test(folders)) {
   throw new Error('P4 must use six folder-cache slots and non-P4 must retain four');

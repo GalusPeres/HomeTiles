@@ -45,11 +45,29 @@ export class Transport {
   async disconnect() { fixture.events.push('flash-close'); }
 }
 export class ESPLoader {
-  constructor({ terminal }) { this.terminal = terminal; }
-  async main() { this.chip = { CHIP_NAME: fixture.wrongChip ? 'ESP32-P4' : 'ESP32-S3' }; return this.chip.CHIP_NAME; }
+  constructor({ terminal }) {
+    this.terminal = terminal;
+    this.DEFAULT_TIMEOUT = 3000;
+    // Like the real stub, READ_FLASH ends with a 16-byte MD5 frame; a command
+    // sent before that frame is read gets no answer on USB-UART bridges.
+    this.pendingDigest = false;
+    this.transport = {
+      read: async () => {
+        if (!this.pendingDigest) throw new Error('No serial data received.');
+        this.pendingDigest = false;
+        return new Uint8Array(16);
+      }
+    };
+  }
+  assertIdle() {
+    if (this.pendingDigest) throw new Error('Command sent before the READ_FLASH digest was read');
+  }
+  async main() { this.IS_STUB = true; this.chip = { CHIP_NAME: fixture.wrongChip ? 'ESP32-P4' : 'ESP32-S3' }; return this.chip.CHIP_NAME; }
   async flashId() {}
   async detectFlashSize() { return '16MB'; }
   async readFlash(offset) {
+    this.assertIdle();
+    this.pendingDigest = true;
     if (offset === PARTITION_TABLE.offset) {
       const bytes = new Uint8Array(PARTITION_TABLE.size).fill(255);
       const view = new DataView(bytes.buffer);
@@ -66,6 +84,7 @@ export class ESPLoader {
     return ota.slice();
   }
   async writeFlash({ fileArray, reportProgress }) {
+    this.assertIdle();
     fixture.writes++;
     const file = fileArray[0];
     this.terminal.writeLine('Simulated flash write');

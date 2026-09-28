@@ -1,6 +1,5 @@
-import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.6.1/bundle.js";
-import { ESP32P4ROM } from "https://unpkg.com/esptool-js@0.6.1/lib/targets/esp32p4.js";
-import { ESP32S3ROM } from "https://unpkg.com/esptool-js@0.6.1/lib/targets/esp32s3.js";
+import * as esptool from "https://unpkg.com/esptool-js@0.7.0/bundle.js";
+import { defineHomeTilesEsptool } from "./installer-esptool.mjs?v=installer-ui-18";
 import { retainPageComponent } from "./retained-page-component.mjs?v=serial-navigation-2";
 import { serialAccess } from "./serial-access.mjs?v=serial-navigation-2";
 import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-3";
@@ -18,11 +17,10 @@ import {
   buildFlashPlan,
   buildSafeOtaUpdatePlan,
   parseEspIdfPartitionTable,
-  parseEspRomChipIdentity,
   releaseAssetNames,
   resolveSameOriginAsset,
   validateFirmwareDescriptor,
-} from "./installer-contract.mjs?v=installer-ui-15";
+} from "./installer-contract.mjs?v=installer-ui-18";
 
 const LAST_RUN_STORAGE_KEY = "hometiles.webInstaller.lastRun.v1";
 const LOG_MAX_LINES = 300;
@@ -30,28 +28,14 @@ const LOG_MAX_CHARACTERS = 64 * 1024;
 const LOG_MAX_LINE_CHARACTERS = 4096;
 const GUITION_S3_DEVICE_KEY = "guition_esp32_4848s040";
 const GUITION_S3_NORMAL_BOOT_RESET_SEQUENCE = "D0|R1|W100|R0|W100|D0";
-const ESP_GET_SECURITY_INFO = 0x14;
 
-class HomeTilesESPLoader extends ESPLoader {
-  async detectChip(mode = "default_reset") {
-    await this.connect(mode, 7, false);
-    this.info("Detecting chip type... ", false);
-
-    const securityInfo = await this.checkCommand(
-      "read ESP ROM chip identity",
-      ESP_GET_SECURITY_INFO,
-      new Uint8Array(0),
-      0,
-      20,
-    );
-    const identity = parseEspRomChipIdentity(securityInfo);
-    this.chip = identity.chipFamily === "ESP32-P4" ? new ESP32P4ROM() : new ESP32S3ROM();
-    this.info(this.chip.CHIP_NAME);
-  }
-}
+// The bundle provides every chip class, including the ESP32-P4 class whose
+// postConnect() powers on the flash of v3.1/v3.2 silicon.
+const { HomeTilesESPLoader, HomeTilesTransport } = defineHomeTilesEsptool(esptool);
 
 export function mountInstaller(root) {
   const elements = {
+    clearLog: root.querySelector("#installer-clear-log"),
     copyLog: root.querySelector("#installer-copy-log"),
     device: root.querySelector("#installer-device"),
     deviceDetails: root.querySelector("#installer-device-details"),
@@ -259,6 +243,13 @@ export function mountInstaller(root) {
     }
   }
 
+  // A running flash keeps its log; clearing is only offered between runs.
+  function clearFlashLog() {
+    if (state.busy) return;
+    resetLog();
+    setLogActionStatus("Log cleared.");
+  }
+
   function selectedMode() {
     return root.querySelector('input[name="installer-mode"]:checked')?.value || "update";
   }
@@ -450,6 +441,7 @@ export function mountInstaller(root) {
     });
     elements.exactHardware.disabled = state.busy;
     elements.factoryConfirmation.disabled = state.busy;
+    elements.clearLog.disabled = state.busy;
     const retrying =
       state.lastRun?.recoveryRequired === true &&
       state.lastRun.deviceKey === elements.device.value &&
@@ -646,11 +638,14 @@ export function mountInstaller(root) {
     try {
       if (esploader && shouldReset) {
         if (device?.key === GUITION_S3_DEVICE_KEY) {
-          // esptool-js 0.6.1 hard_reset only releases RTS. This CH340 board
+          // esptool-js 0.7.0 hard_reset only releases RTS. This CH340 board
           // needs an explicit EN pulse with GPIO0 released to boot the app.
           await esploader.after("custom_reset", undefined, GUITION_S3_NORMAL_BOOT_RESET_SEQUENCE);
         } else {
-          await esploader.after("hard_reset");
+          // Keep the 0.6.1 UART hard_reset. Without an explicit value 0.7.0
+          // first reads chip registers to detect USB-OTG, which fails on a
+          // device that stopped answering and would skip the reset signal.
+          await esploader.after("hard_reset", false);
         }
         resetSignalSent = true;
       }
@@ -689,7 +684,7 @@ export function mountInstaller(root) {
     let outcome = null;
     try {
       const port = await serialAccess.requestInstallerPort(navigator.serial);
-      transport = new Transport(port);
+      transport = new HomeTilesTransport(port);
       esploader = new HomeTilesESPLoader({
         transport,
         baudrate: INSTALLER_BAUD_RATE,
@@ -698,6 +693,10 @@ export function mountInstaller(root) {
       });
       showActivity("Connecting", "Connecting and detecting the ESP chip…", { progress: 0 });
       const chipName = await esploader.main();
+      if (!esploader.IS_STUB) {
+        // Update relies on stub writes that erase only the written 4 KB sectors.
+        throw new Error("The esptool-js flasher stub did not start on the connected device.");
+      }
       await esploader.flashId();
       const detectedFamily = esploader.chip?.CHIP_NAME || chipName;
       if (detectedFamily !== device.chipFamily) {
@@ -720,6 +719,12 @@ export function mountInstaller(root) {
 
       const detectedFlashSize = await esploader.detectFlashSize();
       const expectedFlashSize = `${device.flashSize / (1024 * 1024)}MB`;
+      if (!detectedFlashSize) {
+        // esptool-js 0.7.0 no longer falls back to 4MB for an unknown flash ID.
+        throw new Error(
+          `Flash-size check failed: the connected device did not report a known flash size; ${device.label} requires ${expectedFlashSize}.`,
+        );
+      }
       if (detectedFlashSize !== expectedFlashSize) {
         throw new Error(
           `Flash-size mismatch: connected device reports ${detectedFlashSize}; ${device.label} requires ${expectedFlashSize}.`,
@@ -864,6 +869,7 @@ export function mountInstaller(root) {
   elements.factoryConfirmation.addEventListener("change", formChanged);
   elements.flash.addEventListener("click", flashSelectedFirmware);
   elements.copyLog.addEventListener("click", copyFlashLog);
+  elements.clearLog.addEventListener("click", clearFlashLog);
   elements.logOutput.addEventListener("scroll", () => {
     const distanceFromBottom =
       elements.logOutput.scrollHeight - elements.logOutput.scrollTop - elements.logOutput.clientHeight;

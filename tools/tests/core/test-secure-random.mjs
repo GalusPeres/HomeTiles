@@ -30,6 +30,7 @@ const securitySources = [
   'src/network/secure/command_channel_core.h',
   'src/web/server/auth/web_admin_auth.cpp',
   'src/web/server/auth/web_admin_auth_core.h',
+  'src/core/security/x25519.cpp',
 ];
 for (const file of securitySources) {
   const source = maskCpp(readRepoFile(file));
@@ -37,10 +38,14 @@ for (const file of securitySources) {
     `${file} uses secure_random::fill instead of the raw RNG`);
 }
 const channel = maskCpp(readRepoFile('src/network/secure/command_channel.cpp'));
-for (const buffer of ['nonce', 'challenge', 'random']) {
-  assert.match(channel, new RegExp(`secure_random::fill\\(${buffer}, sizeof\\(${buffer}\\)\\);`),
+for (const buffer of ['nonce', 'challenge', 'id', 'g_attempt->secret', 'g_attempt->n_p']) {
+  const name = buffer.replace('->', '\\->');
+  assert.match(channel, new RegExp(`secure_random::fill\\(${name}, sizeof\\(${name}\\)\\);`),
     `the command channel ${buffer} comes from secure_random::fill`);
 }
+assert.match(maskCpp(readRepoFile('src/core/security/x25519.cpp')),
+  /int randomBytes\(void\*, unsigned char\* out, size_t length\) \{\s*secure_random::fill\(out, length\);/,
+  'the mbedTLS blinding random comes from secure_random::fill');
 const auth = maskCpp(readRepoFile('src/web/server/auth/web_admin_auth.cpp'));
 assert.match(auth, /void fillRandom\(uint8_t\* out, size_t length\) \{\s*secure_random::fill\(out, length\);\s*\}/,
   'Web Admin nonces, sessions and CSRF tokens come from secure_random::fill');

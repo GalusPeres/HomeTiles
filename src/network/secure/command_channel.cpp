@@ -7,6 +7,7 @@
 
 #include "src/core/config/batched_nvs_write.h"
 #include "src/core/security/secure_random.h"
+#include "src/core/security/x25519.h"
 #include "src/devices/device.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
@@ -23,18 +24,25 @@ constexpr const char* kRecordKey = "cmd_pairing";
 constexpr const char* kPanelLeaf = "/secure/panel";
 constexpr const char* kBridgeLeaf = "/secure/bridge";
 constexpr const char* kStatusLeaf = "/stat/secure";
+constexpr const char* kPairPanelLeaf = "/pair/panel";
+constexpr const char* kPairBridgeLeaf = "/pair/bridge";
 constexpr uint32_t kHelloMinIntervalMs = 3000;
 // Without an answer the hello is repeated after 10 s, 30 s, 60 s and then
 // every five minutes, so an old Bridge sees very little extra traffic.
 constexpr uint32_t kHelloRetryMs[] = {10000, 30000, 60000, 300000};
 constexpr uint32_t kHoldMs = 5000;
 constexpr uint32_t kLogIntervalMs = 30000;
+// Pairing: an old Bridge never answers; every attempt ends after 120 s; a
+// confirmation is repeated until the other side's arrives (QoS 0).
+constexpr uint32_t kPairNoAnswerMs = 15000;
+constexpr uint32_t kPairTimeoutMs = 120000;
+constexpr uint32_t kPairConfirmRepeatMs = 2000;
+constexpr size_t kMaxBaseLength = 128;
 
-// Session and pairing state. It exists only while pairing is set up and lives
-// in PSRAM, so a panel without pairing keeps its internal RAM.
+// Session and pairing state. It exists only while the panel is paired and
+// lives in PSRAM, so a panel without pairing keeps its internal RAM.
 struct State {
   PairingState pairing;
-  char code[kCodeLength + 1];
   Keys keys;
   bool has_session;
   uint8_t session[kSessionSize];
@@ -55,7 +63,34 @@ struct State {
   uint32_t last_rekey_log_ms;
 };
 
+// One number-comparison pairing attempt (contract v2), also in PSRAM. Every
+// attempt uses a fresh key pair, nonce and id.
+struct Attempt {
+  PairingPhase phase;
+  char id[kPairIdHexSize];
+  char base[kMaxBaseLength + 1];
+  uint8_t secret[x25519::kKeySize];
+  uint8_t pk_p[kPairKeySize];
+  uint8_t n_p[kPairNonceSize];
+  bool have_commit;
+  uint8_t pk_b[kPairKeySize];
+  uint8_t commit[ht_crypto::kSha256Size];
+  bool have_number;
+  uint32_t number;
+  uint8_t transcript[ht_crypto::kSha256Size];
+  uint8_t key[kPairKeySize];
+  uint8_t confirm_panel[ht_crypto::kSha256Size];
+  uint8_t confirm_bridge[ht_crypto::kSha256Size];
+  bool local_confirmed;
+  bool peer_confirmed;
+  bool start_sent;
+  uint32_t started_ms;
+  uint32_t last_confirm_ms;
+  uint32_t last_log_ms;
+};
+
 State* g_state = nullptr;
+Attempt* g_attempt = nullptr;
 TaskHandle_t g_owner = nullptr;
 bool g_loaded = false;
 bool g_clear_status = false;
@@ -131,13 +166,6 @@ bool writeRecord(const PairingRecord* record) {
   return written && committed;
 }
 
-bool persist(PairingState pairing) {
-  PairingRecord record = makeRecord(pairing, g_state->code);
-  const bool saved = writeRecord(&record);
-  ht_crypto::secureZero(&record, sizeof(record));
-  return saved;
-}
-
 String topicFor(const char* leaf) {
   return mqttTopics.deviceBase() + leaf;
 }
@@ -152,8 +180,7 @@ void publishStatus() {
     return;
   }
   char payload[80];
-  snprintf(payload, sizeof(payload), "{\"v\":1,\"state\":\"%s\",\"kid\":\"%s\"}",
-           g_state->pairing == PairingState::Active ? "active" : "pending",
+  snprintf(payload, sizeof(payload), "{\"v\":1,\"state\":\"active\",\"kid\":\"%s\"}",
            g_state->keys.key_id);
   if (networkManager.mqttEnqueuePublish(topic.c_str(), payload, true)) {
     g_state->status_dirty = false;
@@ -259,13 +286,6 @@ void handleSession(const Header& header) {
   g_state->bridge_window = ReplayWindow();
   g_state->challenge_pending = false;
   g_state->hello_attempts = 0;
-  if (g_state->pairing != PairingState::Active) {
-    g_state->pairing = PairingState::Active;
-    if (!persist(PairingState::Active)) {
-      Serial.println("[SecureCmd] Could not store the active pairing");
-    }
-    Serial.println("[SecureCmd] Pairing confirmed by the Bridge; commands are encrypted");
-  }
   g_state->status_dirty = true;
   publishStatus();
   Serial.println("[SecureCmd] Bridge session established");
@@ -325,10 +345,10 @@ bool turnOff(bool tell_bridge, bool* bridge_notified) {
   if (!tell_bridge) {
     Serial.println("[SecureCmd] Pairing removed by the Bridge; commands are unencrypted again");
   } else if (notified) {
-    Serial.println("[SecureCmd] Command encryption turned off; the Bridge removes its code too");
+    Serial.println("[SecureCmd] Pairing removed; the Bridge removes it too");
   } else {
-    Serial.println("[SecureCmd] Command encryption turned off; no Bridge session, "
-                   "remove the code in the Bridge as well");
+    Serial.println("[SecureCmd] Pairing removed; no Bridge session, "
+                   "remove it in Home Assistant as well");
   }
   return true;
 }
@@ -352,6 +372,211 @@ void handleData(const Header& header, const uint8_t* body, size_t length) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Number-comparison pairing (contract v2)
+
+bool attemptRunning() {
+  return g_attempt && (g_attempt->phase == PairingPhase::Asking ||
+                       g_attempt->phase == PairingPhase::Compare ||
+                       g_attempt->phase == PairingPhase::Confirmed);
+}
+
+void wipeAttemptSecrets() {
+  if (!g_attempt) return;
+  ht_crypto::secureZero(g_attempt->secret, sizeof(g_attempt->secret));
+  ht_crypto::secureZero(g_attempt->key, sizeof(g_attempt->key));
+}
+
+void releaseAttempt() {
+  if (!g_attempt) return;
+  ht_crypto::secureZero(g_attempt, sizeof(*g_attempt));
+  heap_caps_free(g_attempt);
+  g_attempt = nullptr;
+}
+
+String pairTopic(const char* leaf) {
+  return String(g_attempt->base) + leaf;
+}
+
+bool publishPair(const char* type, const char* field, const uint8_t* bytes,
+                 size_t bytes_length, const char* text) {
+  if (!g_attempt || !networkManager.isMqttConnected()) return false;
+  char message[kMaxPairMessageLength + 1];
+  const size_t length = buildPairMessage(type, g_attempt->id, field, bytes,
+                                         bytes_length, text, message, sizeof(message));
+  if (!length) return false;
+  return networkManager.mqttEnqueuePublishPriority(pairTopic(kPairPanelLeaf).c_str(),
+                                                   message, false);
+}
+
+// Ends a running attempt with a result for the Security view. The reason, if
+// any, tells the Bridge why (it is unauthenticated and only for display).
+void endAttempt(PairingPhase phase, const char* reason) {
+  if (!g_attempt) return;
+  if (reason) publishPair("abort", "r", nullptr, 0, reason);
+  g_attempt->phase = phase;
+  wipeAttemptSecrets();
+}
+
+void completePairing() {
+  PairingRecord record = makeRecord(g_attempt->key);
+  const bool saved = writeRecord(&record);
+  ht_crypto::secureZero(&record, sizeof(record));
+  if (!saved || !ensureState()) {
+    Serial.println("[SecureCmd] Pairing: could not store the key");
+    endAttempt(PairingPhase::Failed, "error");
+    return;
+  }
+  deriveKeys(g_attempt->key, g_state->keys);
+  g_state->pairing = PairingState::Active;
+  resetSession();
+  g_state->status_dirty = true;
+  g_clear_status = false;
+  // Stays until 120 s after start to answer a repeated confirmation.
+  g_attempt->phase = PairingPhase::Done;
+  wipeAttemptSecrets();
+  if (networkManager.isMqttConnected()) {
+    networkManager.mqttEnqueueSubscribe(topicFor(kBridgeLeaf).c_str());
+    publishStatus();
+    // The retained announcement is signed from now on.
+    networkManager.publishBridgeConfig();
+  }
+  Serial.printf("[SecureCmd] Paired with the Bridge (key %s); commands are encrypted\n",
+                g_state->keys.key_id);
+}
+
+void handlePairMessage(const uint8_t* payload, size_t length) {
+  if (!g_attempt || !payload) return;
+  PairMessage message;
+  // Malformed messages and other attempts are ignored without a trace.
+  if (!parsePairMessage(reinterpret_cast<const char*>(payload), length, message) ||
+      strcmp(message.id, g_attempt->id) != 0) {
+    return;
+  }
+  Attempt& attempt = *g_attempt;
+  switch (message.type) {
+    case PairType::Commit:
+      // Only the first commit of an attempt counts.
+      if (attempt.phase != PairingPhase::Asking || attempt.have_commit) return;
+      memcpy(attempt.pk_b, message.pk, sizeof(attempt.pk_b));
+      memcpy(attempt.commit, message.c, sizeof(attempt.commit));
+      attempt.have_commit = true;
+      publishPair("nonce", "n", attempt.n_p, sizeof(attempt.n_p), nullptr);
+      Serial.println("[SecureCmd] Pairing: the Bridge answered");
+      break;
+    case PairType::Nonce: {
+      if (attempt.phase != PairingPhase::Asking || !attempt.have_commit ||
+          attempt.have_number) {
+        return;
+      }
+      uint8_t expected[ht_crypto::kSha256Size];
+      pairingCommit(attempt.pk_b, attempt.pk_p, message.n, expected);
+      if (!ht_crypto::equalConstantTime(expected, attempt.commit, sizeof(expected))) {
+        // Another sender, or a nonce the Bridge did not commit to.
+        if (logDue(&attempt.last_log_ms)) {
+          Serial.println("[SecureCmd] Pairing: nonce does not match the commitment; ignored");
+        }
+        return;
+      }
+      uint8_t shared[kPairKeySize];
+      if (!x25519::sharedSecret(attempt.secret, attempt.pk_b, shared) ||
+          !pairingTranscript(attempt.base, attempt.pk_p, attempt.pk_b, attempt.n_p,
+                             message.n, attempt.transcript)) {
+        ht_crypto::secureZero(shared, sizeof(shared));
+        Serial.println("[SecureCmd] Pairing: key agreement failed");
+        endAttempt(PairingPhase::Failed, "error");
+        return;
+      }
+      pairingKey(shared, attempt.transcript, attempt.key);
+      ht_crypto::secureZero(shared, sizeof(shared));
+      ht_crypto::secureZero(attempt.secret, sizeof(attempt.secret));
+      pairingConfirmation(attempt.key, attempt.transcript, true, attempt.confirm_panel);
+      pairingConfirmation(attempt.key, attempt.transcript, false, attempt.confirm_bridge);
+      attempt.number = pairingNumber(attempt.transcript);
+      attempt.have_number = true;
+      attempt.phase = PairingPhase::Compare;
+      Serial.println("[SecureCmd] Pairing: compare the number on the panel and in Home Assistant");
+      break;
+    }
+    case PairType::Confirm:
+      if (!attempt.have_number) return;
+      if (!ht_crypto::equalConstantTime(message.m, attempt.confirm_bridge,
+                                        sizeof(attempt.confirm_bridge))) {
+        if (logDue(&attempt.last_log_ms)) {
+          Serial.println("[SecureCmd] Pairing: invalid confirmation ignored");
+        }
+        return;
+      }
+      if (attempt.phase == PairingPhase::Done) {
+        // The Bridge missed ours; repeat it until the attempt window ends.
+        publishPair("confirm", "m", attempt.confirm_panel,
+                    sizeof(attempt.confirm_panel), nullptr);
+        return;
+      }
+      if (attempt.phase != PairingPhase::Compare &&
+          attempt.phase != PairingPhase::Confirmed) {
+        return;
+      }
+      attempt.peer_confirmed = true;
+      if (attempt.local_confirmed) completePairing();
+      break;
+    case PairType::Abort:
+      // Unauthenticated: it ends a running attempt but never undoes a pairing.
+      if (!attemptRunning()) return;
+      if (strcmp(message.reason, "paired") == 0) {
+        endAttempt(PairingPhase::AlreadyPaired, nullptr);
+      } else if (strcmp(message.reason, "busy") == 0 ||
+                 strcmp(message.reason, "rate") == 0) {
+        endAttempt(PairingPhase::Busy, nullptr);
+      } else if (strcmp(message.reason, "rejected") == 0) {
+        endAttempt(PairingPhase::Rejected, nullptr);
+      } else {
+        endAttempt(PairingPhase::Failed, nullptr);
+      }
+      Serial.printf("[SecureCmd] Pairing ended by the Bridge (%s)\n",
+                    message.reason[0] ? message.reason : "no reason");
+      break;
+    case PairType::Start:
+      // Only the panel starts an attempt.
+      break;
+  }
+}
+
+void servicePairing() {
+  if (!g_attempt) return;
+  Attempt& attempt = *g_attempt;
+  const uint32_t now = millis();
+  const uint32_t age = static_cast<uint32_t>(now - attempt.started_ms);
+  if (attempt.phase == PairingPhase::Done) {
+    if (age >= kPairTimeoutMs) releaseAttempt();
+    return;
+  }
+  if (!attemptRunning()) return;  // A result waits for the Security view.
+  // The start goes out once; a repeated start would look like a second attempt.
+  if (!attempt.start_sent && networkManager.isMqttConnected()) {
+    attempt.start_sent = publishPair("start", "pk", attempt.pk_p,
+                                     sizeof(attempt.pk_p), nullptr);
+  }
+  if (attempt.phase == PairingPhase::Asking && !attempt.have_commit &&
+      age >= kPairNoAnswerMs) {
+    Serial.println("[SecureCmd] Pairing: no answer from the Bridge; "
+                   "update the HomeTiles Bridge to encrypt");
+    endAttempt(PairingPhase::NoAnswer, "timeout");
+    return;
+  }
+  if (age >= kPairTimeoutMs) {
+    Serial.println("[SecureCmd] Pairing timed out");
+    endAttempt(PairingPhase::Failed, "timeout");
+    return;
+  }
+  if (attempt.phase == PairingPhase::Confirmed &&
+      static_cast<uint32_t>(now - attempt.last_confirm_ms) >= kPairConfirmRepeatMs) {
+    publishPair("confirm", "m", attempt.confirm_panel, sizeof(attempt.confirm_panel),
+                nullptr);
+    attempt.last_confirm_ms = now ? now : 1;
+  }
+}
+
 }  // namespace
 
 void SealedPublish::reset(char* block, size_t topic_length, size_t payload_length) {
@@ -371,28 +596,33 @@ void begin() {
   g_owner = xTaskGetCurrentTaskHandle();
   Preferences prefs;
   if (!prefs.begin(kNamespace, true)) return;
+  const size_t stored = prefs.getBytesLength(kRecordKey);
   PairingRecord record{};
-  const bool read =
-      prefs.getBytesLength(kRecordKey) == sizeof(record) &&
-      prefs.getBytes(kRecordKey, &record, sizeof(record)) == sizeof(record);
+  const bool read = stored == sizeof(record) &&
+                    prefs.getBytes(kRecordKey, &record, sizeof(record)) == sizeof(record);
   prefs.end();
+  if (stored == kLegacyRecordSize) {
+    // A typed pairing code from a v1 beta: drop it and run unencrypted.
+    writeRecord(nullptr);
+    g_clear_status = true;
+    Serial.println("[SecureCmd] Old pairing code discarded; pair the panel again");
+    return;
+  }
   if (!read) return;
-  PairingState pairing = PairingState::Off;
-  char code[kCodeLength + 1];
-  if (!applyRecord(record, pairing, code) || !ensureState()) {
+  uint8_t key[kPairKeySize];
+  if (!applyRecord(record, key) || !ensureState()) {
     ht_crypto::secureZero(&record, sizeof(record));
+    ht_crypto::secureZero(key, sizeof(key));
     Serial.println("[SecureCmd] Stored pairing is invalid; encryption stays off");
     return;
   }
   ht_crypto::secureZero(&record, sizeof(record));
-  memcpy(g_state->code, code, sizeof(g_state->code));
-  deriveKeys(g_state->code, g_state->keys);
-  g_state->pairing = pairing;
+  deriveKeys(key, g_state->keys);
+  ht_crypto::secureZero(key, sizeof(key));
+  g_state->pairing = PairingState::Active;
   resetSession();
   g_state->status_dirty = true;
-  Serial.printf("[SecureCmd] Pairing %s (key %s)\n",
-                pairing == PairingState::Active ? "active" : "pending",
-                g_state->keys.key_id);
+  Serial.printf("[SecureCmd] Pairing active (key %s)\n", g_state->keys.key_id);
 }
 
 PairingState state() {
@@ -403,44 +633,86 @@ bool sessionReady() {
   return g_state && g_state->has_session;
 }
 
-bool createCode() {
+bool startPairing() {
   begin();
-  uint8_t random[kCodeLength];
-  secure_random::fill(random, sizeof(random));
-  char code[kCodeLength + 1];
-  generateCode(random, code);
-  ht_crypto::secureZero(random, sizeof(random));
-  const bool had_state = g_state != nullptr;
-  if (!ensureState()) return false;
-  State previous;
-  if (had_state) memcpy(&previous, g_state, sizeof(previous));
-  dropHeld();
-  memcpy(g_state->code, code, sizeof(g_state->code));
-  g_state->pairing = PairingState::Pending;
-  if (!persist(PairingState::Pending)) {
-    if (had_state) {
-      memcpy(g_state, &previous, sizeof(previous));
-      g_state->held = nullptr;
-    } else {
-      releaseState();
-    }
-    ht_crypto::secureZero(&previous, sizeof(previous));
-    Serial.println("[SecureCmd] Could not store the new pairing code");
+  if (g_state) return false;  // Unpair first.
+  if (attemptRunning()) return true;
+  releaseAttempt();
+  const String& base = mqttTopics.deviceBase();
+  if (base.length() == 0 || base.length() > kMaxBaseLength) {
+    Serial.println("[SecureCmd] Pairing: unusable base topic");
     return false;
   }
-  ht_crypto::secureZero(&previous, sizeof(previous));
-  deriveKeys(g_state->code, g_state->keys);
-  resetSession();
-  g_state->status_dirty = true;
-  if (networkManager.isMqttConnected()) {
-    networkManager.mqttEnqueueSubscribe(topicFor(kBridgeLeaf).c_str());
-    publishStatus();
-    // The retained announcement is signed with the new code from now on.
-    networkManager.publishBridgeConfig();
+  if (!x25519::selfTest()) {
+    Serial.println("[SecureCmd] Pairing: X25519 self-test failed");
+    return false;
   }
-  Serial.printf("[SecureCmd] New pairing code created (key %s)\n",
-                g_state->keys.key_id);
+  g_attempt = static_cast<Attempt*>(allocPreferPsram(sizeof(Attempt)));
+  if (!g_attempt) {
+    Serial.println("[SecureCmd] Could not allocate the pairing attempt");
+    return false;
+  }
+  memset(g_attempt, 0, sizeof(*g_attempt));
+  secure_random::fill(g_attempt->secret, sizeof(g_attempt->secret));
+  secure_random::fill(g_attempt->n_p, sizeof(g_attempt->n_p));
+  uint8_t id[kPairIdSize];
+  secure_random::fill(id, sizeof(id));
+  ht_crypto::hexEncode(id, sizeof(id), g_attempt->id, sizeof(g_attempt->id));
+  if (!x25519::publicKey(g_attempt->secret, g_attempt->pk_p)) {
+    releaseAttempt();
+    Serial.println("[SecureCmd] Pairing: could not create a key pair");
+    return false;
+  }
+  memcpy(g_attempt->base, base.c_str(), base.length() + 1);
+  g_attempt->phase = PairingPhase::Asking;
+  const uint32_t now = millis();
+  g_attempt->started_ms = now ? now : 1;
+  if (networkManager.isMqttConnected()) {
+    networkManager.mqttEnqueueSubscribe(pairTopic(kPairBridgeLeaf).c_str());
+    g_attempt->start_sent = publishPair("start", "pk", g_attempt->pk_p,
+                                        sizeof(g_attempt->pk_p), nullptr);
+  }
+  Serial.println("[SecureCmd] Pairing started");
   return true;
+}
+
+PairingPhase pairingPhase() {
+  return g_attempt ? g_attempt->phase : PairingPhase::Idle;
+}
+
+bool pairingNumber(char out[kPairNumberDisplaySize]) {
+  if (!out) return false;
+  out[0] = '\0';
+  if (!g_attempt || !g_attempt->have_number ||
+      (g_attempt->phase != PairingPhase::Compare &&
+       g_attempt->phase != PairingPhase::Confirmed)) {
+    return false;
+  }
+  formatPairingNumber(g_attempt->number, out);
+  return true;
+}
+
+void confirmPairing() {
+  if (!g_attempt || g_attempt->phase != PairingPhase::Compare) return;
+  g_attempt->local_confirmed = true;
+  g_attempt->phase = PairingPhase::Confirmed;
+  publishPair("confirm", "m", g_attempt->confirm_panel,
+              sizeof(g_attempt->confirm_panel), nullptr);
+  const uint32_t now = millis();
+  g_attempt->last_confirm_ms = now ? now : 1;
+  Serial.println("[SecureCmd] Pairing: number confirmed on the panel");
+  if (g_attempt->peer_confirmed) completePairing();
+}
+
+void endPairing() {
+  if (!g_attempt) return;
+  if (attemptRunning()) {
+    Serial.println("[SecureCmd] Pairing cancelled on the panel");
+    endAttempt(PairingPhase::Failed, "cancel");
+  }
+  // A finished pairing keeps answering repeated confirmations until its
+  // window ends; everything else is cleared now.
+  if (g_attempt->phase != PairingPhase::Done) releaseAttempt();
 }
 
 bool disable(bool* bridge_notified) {
@@ -464,16 +736,11 @@ char* signAnnouncement(const char* topic, const char* payload, size_t length) {
   return out;
 }
 
-bool displayCode(char out[kCodeDisplaySize]) {
-  if (!out) return false;
-  out[0] = '\0';
-  if (!g_state) return false;
-  formatCode(g_state->code, out);
-  return true;
-}
-
 void onMqttConnected() {
   begin();
+  if (attemptRunning()) {
+    networkManager.mqttEnqueueSubscribe(pairTopic(kPairBridgeLeaf).c_str());
+  }
   if (!g_state) {
     if (g_clear_status) publishStatus();
     return;
@@ -487,6 +754,7 @@ void onMqttConnected() {
 }
 
 void service() {
+  servicePairing();
   if (!g_state) return;
   const uint32_t now = millis();
   if (g_state->held &&
@@ -511,6 +779,10 @@ void service() {
 
 bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length) {
   if (!topic) return false;
+  if (g_attempt && strcmp(topic, pairTopic(kPairBridgeLeaf).c_str()) == 0) {
+    handlePairMessage(payload, length);
+    return true;
+  }
   const String bridge_topic = topicFor(kBridgeLeaf);
   if (strcmp(topic, bridge_topic.c_str()) != 0) return false;
   if (!g_state || !payload || length == 0) return true;
@@ -528,7 +800,7 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
   if (result != OpenResult::Ok) {
     if (logDue(&g_state->last_log_ms)) {
       Serial.printf("[SecureCmd] Bridge message ignored (%s)\n",
-                    result == OpenResult::OtherKey ? "other pairing code"
+                    result == OpenResult::OtherKey ? "other pairing key"
                     : result == OpenResult::Rejected ? "authentication failed"
                                                      : "malformed");
     }

@@ -4,14 +4,44 @@
 // docs-dev/command-encryption.md. The fixed vector at the end is shared with
 // HomeTiles Bridge tests/test_command_channel.py.
 import assert from 'node:assert/strict';
-import {createCipheriv, createDecipheriv, createHmac, hkdfSync} from 'node:crypto';
+import {createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync} from 'node:crypto';
 
 import {compileAndRun} from '../../lib/cpp-host.mjs';
 
-const CODE = 'ABCDE-FGHJK-MNPQR-STVWX-YZ012';
-const CANONICAL = CODE.replaceAll('-', '');
-const SALT = 'HomeTiles command pairing v1';
-const derive = info => Buffer.from(hkdfSync('sha256', Buffer.from(CANONICAL), Buffer.from(SALT), Buffer.from(info), info === 'key-id' ? 8 : 32));
+// Shared number-comparison pairing vector (contract v2). X25519 runs in
+// mbedTLS on the panel; the host checks everything around it.
+const PAIR = {
+  base: 'hometiles/test',
+  pk_p: 'c306fb0ef2bf8b7f93bad98155fa37daec74db0c4cbeda6c6f1dba9d36558252',
+  pk_b: 'db48257e1237976a74ad8cfedca00213408fe89ac6251f1b930245f242b5c31a',
+  n_p: 'c3'.repeat(16),
+  n_b: 'd4'.repeat(16),
+  s: '9502af7a4b678841b839429623a09a23f6cc551836e48a52c0e4faf4b9d3b06e',
+  c: '3262f80a0dcdf8b757e44596ed47c05afdc9a16405a915c710ab33443f8af112',
+  T: '2d4cd2f1d56b383880cc9e27ec65419c1ee1bf1df99bbe5dd115e65d3c613e9f',
+  number: '061 806',
+  K: 'b925def556256ead767b0f1d14879e50d6bddbd0bb44dc0d2435e4af011b3e19',
+  m_panel: 'a2bbe3db083e9884b39df9d41eac55ed94b652e364c636157423f773bc35516b',
+  m_bridge: 'ce6193e03597bf02204ee8dd3a1f05d38675088c497a6f5ae35718acf78ef456',
+};
+const hexBuf = value => Buffer.from(value, 'hex');
+const sha = (...parts) => createHash('sha256').update(Buffer.concat(parts)).digest();
+{
+  // Independent Node derivation of the whole chain from the raw vector.
+  const base = Buffer.from(PAIR.base);
+  const length = Buffer.from([base.length >> 8, base.length & 0xff]);
+  assert.equal(sha(Buffer.from('HomeTiles pairing commit v2'), hexBuf(PAIR.pk_b), hexBuf(PAIR.pk_p), hexBuf(PAIR.n_b)).toString('hex'), PAIR.c);
+  const T = sha(Buffer.from('HomeTiles pairing v2'), length, base, hexBuf(PAIR.pk_p), hexBuf(PAIR.pk_b), hexBuf(PAIR.n_p), hexBuf(PAIR.n_b));
+  assert.equal(T.toString('hex'), PAIR.T);
+  const number = sha(Buffer.from('HomeTiles pairing number v2'), T).readUInt32BE(0) % 1000000;
+  const digits = String(number).padStart(6, '0');
+  assert.equal(`${digits.slice(0, 3)} ${digits.slice(3)}`, PAIR.number);
+  assert.equal(Buffer.from(hkdfSync('sha256', hexBuf(PAIR.s), T, 'pairing key', 32)).toString('hex'), PAIR.K);
+  assert.equal(createHmac('sha256', hexBuf(PAIR.K)).update(Buffer.concat([Buffer.from('confirm panel'), T])).digest('hex'), PAIR.m_panel);
+  assert.equal(createHmac('sha256', hexBuf(PAIR.K)).update(Buffer.concat([Buffer.from('confirm bridge'), T])).digest('hex'), PAIR.m_bridge);
+}
+const SALT = 'HomeTiles command pairing v2';
+const derive = info => Buffer.from(hkdfSync('sha256', hexBuf(PAIR.K), Buffer.from(SALT), Buffer.from(info), info === 'key-id' ? 8 : 32));
 const panelKey = derive('panel-to-bridge');
 const bridgeKey = derive('bridge-to-panel');
 const keyId = derive('key-id').toString('hex');
@@ -46,8 +76,8 @@ const wrongKey = seal(panelKey, TOPIC_BRIDGE, Buffer.from(`data ${SESSION} 9 cam
 // Shared unpair vectors (docs-dev/command-encryption.md, Bridge tests).
 const UNPAIR_NONCE = Buffer.from('000102030405060708090a0b', 'hex');
 const UNPAIR_PLAINTEXT = Buffer.from('unpair 0123456789abcdef0123456789abcdef 1 -\n');
-const PANEL_UNPAIR = '{"v":1,"k":"8982fb24a78d94e1","n":"000102030405060708090a0b","d":"57bf95048efe6d21a8392023d835128bca899f957700cb026d090ecb5c811a72707dfb8b90c495763ea5ab124daac7347b8d1d772ea4ace283bbb02a"}';
-const BRIDGE_UNPAIR = '{"v":1,"k":"8982fb24a78d94e1","n":"000102030405060708090a0b","d":"f0304f27341f5bebe38670e0476e55fefa34e2b11a21a4224f5e66be62a63afaa85712b16a9618140eb3fecc7d8cb5b0b9332900c520448e4f1e7977"}';
+const PANEL_UNPAIR = '{"v":1,"k":"20a8108ed11215c5","n":"000102030405060708090a0b","d":"11a6abad551643a47b5deb36c6616860a1b94678af75e8ac6bfee025bc2f3e4c190eac833e0cb381557d3e5bda1967f7f79b5700e0ab459406d83fef"}';
+const BRIDGE_UNPAIR = '{"v":1,"k":"20a8108ed11215c5","n":"000102030405060708090a0b","d":"2df48e85bda4d37632843fde4a78d178089f741c47e3291ce1d451a60cc7473dd4676251129cc80d9219d7433ce992181d00bc712a5ce6e994abb98f"}';
 assert.equal(seal(panelKey, TOPIC_PANEL, UNPAIR_PLAINTEXT, UNPAIR_NONCE), PANEL_UNPAIR, 'panel unpair vector');
 assert.equal(seal(bridgeKey, TOPIC_BRIDGE, UNPAIR_PLAINTEXT, UNPAIR_NONCE), BRIDGE_UNPAIR, 'Bridge unpair vector');
 
@@ -64,26 +94,70 @@ using namespace command_channel;
 static std::string line() { std::string s; std::getline(std::cin, s); return s; }
 
 int main() {
-  // Pairing code generation, formatting and tolerant input.
-  uint8_t random[kCodeLength];
-  for (size_t i = 0; i < kCodeLength; ++i) random[i] = static_cast<uint8_t>(i * 37 + 200);
-  char code[kCodeLength + 1];
-  generateCode(random, code);
-  for (size_t i = 0; i < kCodeLength; ++i) CHECK(std::strchr(kAlphabet, code[i]) != nullptr);
-  char shown[kCodeDisplaySize];
-  formatCode(code, shown);
-  CHECK(std::strlen(shown) == 29 && shown[5] == '-' && shown[23] == '-');
-  char canonical[kCodeLength + 1];
-  CHECK(normalizeCode("abcde fghjk-mnpqr stvwx yzo12", canonical));
-  CHECK(std::strcmp(canonical, "ABCDEFGHJKMNPQRSTVWXYZ012") == 0);
-  CHECK(normalizeCode("ABCDE-FGHJK-MNPQR-STVWX-YZ0I2", canonical) && canonical[23] == '1');
-  CHECK(!normalizeCode("ABCDE-FGHJK-MNPQR-STVWX-YZ01", canonical));
-  CHECK(!normalizeCode("ABCDE-FGHJK-MNPQR-STVWX-YZ0123", canonical));
-  CHECK(!normalizeCode("ABCDE-FGHJK-MNPQR-STVWX-YZ01U", canonical));
+  // Number-comparison pairing (shared v2 vector). X25519 runs in mbedTLS on
+  // the panel; its shared secret s is part of the vector.
+  auto bytes = [](const char* text, uint8_t* out, size_t size) {
+    return ht_crypto::hexDecode(text, std::strlen(text), out, size);
+  };
+  uint8_t pk_p[kPairKeySize], pk_b[kPairKeySize], n_p[kPairNonceSize], n_b[kPairNonceSize], shared[kPairKeySize];
+  CHECK(bytes("${PAIR.pk_p}", pk_p, sizeof(pk_p)) && bytes("${PAIR.pk_b}", pk_b, sizeof(pk_b)));
+  CHECK(bytes("${PAIR.n_p}", n_p, sizeof(n_p)) && bytes("${PAIR.n_b}", n_b, sizeof(n_b)));
+  CHECK(bytes("${PAIR.s}", shared, sizeof(shared)));
+  char hex[65];
+  auto show = [&](const char* tag, const uint8_t* data, size_t size) {
+    ht_crypto::hexEncode(data, size, hex, sizeof(hex));
+    std::printf("%s %s\n", tag, hex);
+  };
+  uint8_t commit[32], transcript[32], pairing_key[kPairKeySize], confirm_panel[32], confirm_bridge[32];
+  pairingCommit(pk_b, pk_p, n_b, commit);
+  show("commit", commit, 32);
+  CHECK(!pairingTranscript("", pk_p, pk_b, n_p, n_b, transcript));
+  CHECK(!pairingTranscript(nullptr, pk_p, pk_b, n_p, n_b, transcript));
+  CHECK(pairingTranscript("${PAIR.base}", pk_p, pk_b, n_p, n_b, transcript));
+  show("transcript", transcript, 32);
+  char number[kPairNumberDisplaySize];
+  formatPairingNumber(pairingNumber(transcript), number);
+  std::printf("number %s\n", number);
+  formatPairingNumber(7, number);
+  CHECK(std::strcmp(number, "000 007") == 0);
+  pairingKey(shared, transcript, pairing_key);
+  show("K", pairing_key, 32);
+  pairingConfirmation(pairing_key, transcript, true, confirm_panel);
+  pairingConfirmation(pairing_key, transcript, false, confirm_bridge);
+  show("m_panel", confirm_panel, 32);
+  show("m_bridge", confirm_bridge, 32);
+  // Another base topic gives another transcript, so another number and key.
+  uint8_t other_transcript[32];
+  CHECK(pairingTranscript("hometiles/other", pk_p, pk_b, n_p, n_b, other_transcript));
+  CHECK(std::memcmp(other_transcript, transcript, 32) != 0);
+
+  // Pairing messages: built exactly, parsed strictly.
+  char message[kMaxPairMessageLength + 1];
+  CHECK(buildPairMessage("start", "0123456789abcdef", "pk", pk_p, sizeof(pk_p), nullptr, message, sizeof(message)) > 0);
+  std::printf("start %s\n", message);
+  CHECK(buildPairMessage("abort", "0123456789abcdef", "r", nullptr, 0, "cancel", message, sizeof(message)) > 0);
+  CHECK(std::strcmp(message, "{\"v\":2,\"t\":\"abort\",\"id\":\"0123456789abcdef\",\"r\":\"cancel\"}") == 0);
+  CHECK(buildPairMessage("confirm", "0123456789abcdef", "m", confirm_panel, 32, nullptr, message, 40) == 0);
+  PairMessage pair;
+  auto parse_pair = [&](const char* text) { return parsePairMessage(text, std::strlen(text), pair); };
+  CHECK(parse_pair("{\"v\":2,\"t\":\"commit\",\"id\":\"0123456789abcdef\",\"pk\":\"${PAIR.pk_b}\",\"c\":\"${PAIR.c}\",\"x\":\"ignored\"}"));
+  CHECK(pair.type == PairType::Commit && pair.has_pk && pair.has_c && !pair.has_n);
+  CHECK(std::strcmp(pair.id, "0123456789abcdef") == 0);
+  CHECK(std::memcmp(pair.pk, pk_b, 32) == 0 && std::memcmp(pair.c, commit, 32) == 0);
+  CHECK(parse_pair("{\"v\":2,\"t\":\"nonce\",\"id\":\"0123456789abcdef\",\"n\":\"${PAIR.n_b}\"}") && pair.type == PairType::Nonce && pair.has_n);
+  CHECK(parse_pair("{\"v\":2,\"t\":\"abort\",\"id\":\"0123456789abcdef\",\"r\":\"paired\"}") && pair.type == PairType::Abort);
+  CHECK(std::strcmp(pair.reason, "paired") == 0);
+  CHECK(parse_pair("{\"v\":2,\"t\":\"abort\",\"id\":\"0123456789abcdef\"}") && pair.reason[0] == '\0');
+  CHECK(!parse_pair("{\"v\":1,\"t\":\"abort\",\"id\":\"0123456789abcdef\"}"));
+  CHECK(!parse_pair("{\"v\":22,\"t\":\"abort\",\"id\":\"0123456789abcdef\"}"));
+  CHECK(!parse_pair("{\"v\":2,\"t\":\"abort\",\"id\":\"0123456789ABCDEF\"}"));
+  CHECK(!parse_pair("{\"v\":2,\"t\":\"abort\",\"id\":\"0123456789abcde\"}"));
+  CHECK(!parse_pair("{\"v\":2,\"t\":\"launch\",\"id\":\"0123456789abcdef\"}"));
+  CHECK(!parse_pair("{\"v\":2,\"t\":\"nonce\",\"id\":\"0123456789abcdef\",\"n\":\"C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3\"}"));
+  CHECK(!parse_pair("{\"v\":2,\"t\":\"commit\",\"id\":\"0123456789abcdef\",\"c\":\"${PAIR.c}\"}"));
 
   Keys keys;
-  CHECK(deriveKeys("ABCDE-FGHJK-MNPQR-STVWX-YZ012", keys));
-  char hex[65];
+  deriveKeys(pairing_key, keys);
   ht_crypto::hexEncode(keys.panel_to_bridge, 32, hex, sizeof(hex));
   std::printf("pb %s\n", hex);
   ht_crypto::hexEncode(keys.bridge_to_panel, 32, hex, sizeof(hex));
@@ -196,7 +270,9 @@ int main() {
   CHECK(openEnvelope(keys.panel_to_bridge, keys.key_id, "hometiles/secure/panel", tampered.c_str(), tampered.size(), scratch, opened, &opened_length) == OpenResult::Rejected);
   CHECK(openEnvelope(keys.panel_to_bridge, keys.key_id, "hometiles/secure/panel", envelope, envelope_length, scratch, opened, &opened_length) == OpenResult::Ok);
   Keys other;
-  CHECK(deriveKeys("ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ", other));
+  uint8_t other_key[kPairKeySize];
+  std::memset(other_key, 0x5a, sizeof(other_key));
+  deriveKeys(other_key, other);
   CHECK(openEnvelope(other.panel_to_bridge, other.key_id, "hometiles/secure/panel", envelope, envelope_length, scratch, opened, &opened_length) == OpenResult::OtherKey);
   CHECK(openEnvelope(keys.panel_to_bridge, keys.key_id, "hometiles/secure/panel", "{\"v\":1}", 7, scratch, opened, &opened_length) == OpenResult::Malformed);
   CHECK(openEnvelope(keys.panel_to_bridge, keys.key_id, "hometiles/secure/panel", "not json", 8, scratch, opened, &opened_length) == OpenResult::Malformed);
@@ -230,19 +306,21 @@ int main() {
   CHECK(!acceptSequence(window, 5));
   CHECK(acceptSequence(window, 1000) && acceptSequence(window, 999) && !acceptSequence(window, 1000));
 
-  // Stored pairing record.
-  PairingRecord record = makeRecord(PairingState::Active, "ABCDEFGHJKMNPQRSTVWXYZ012");
-  PairingState state;
-  char restored[kCodeLength + 1];
-  CHECK(applyRecord(record, state, restored) && state == PairingState::Active && std::strcmp(restored, "ABCDEFGHJKMNPQRSTVWXYZ012") == 0);
-  record.code[3] = 'U';
-  record.checksum = recordChecksum(record);
-  CHECK(!applyRecord(record, state, restored));
-  record = makeRecord(PairingState::Off, "ABCDEFGHJKMNPQRSTVWXYZ012");
-  CHECK(!applyRecord(record, state, restored));
-  record = makeRecord(PairingState::Pending, "ABCDEFGHJKMNPQRSTVWXYZ012");
+  // Stored pairing record v2 holds K; a v1 record (typed code) has another size.
+  PairingRecord record = makeRecord(pairing_key);
+  uint8_t restored[kPairKeySize];
+  CHECK(applyRecord(record, restored) && std::memcmp(restored, pairing_key, kPairKeySize) == 0);
   record.checksum ^= 1;
-  CHECK(!applyRecord(record, state, restored));
+  CHECK(!applyRecord(record, restored));
+  record = makeRecord(pairing_key);
+  record.version = 1;
+  record.checksum = recordChecksum(record);
+  CHECK(!applyRecord(record, restored));
+  record = makeRecord(pairing_key);
+  record.state = static_cast<uint8_t>(PairingState::Off);
+  record.checksum = recordChecksum(record);
+  CHECK(!applyRecord(record, restored));
+  CHECK(kLegacyRecordSize != sizeof(PairingRecord));
 
   // Only the Bridge command leaves under this panel's base topic are sealed.
   CHECK(std::strcmp(sealedCommandLeaf("hometiles/cmnd/light", "hometiles", 9), "light") == 0);
@@ -266,7 +344,14 @@ if (stdout !== null) {
   const lines = stdout.trim().split('\n');
   assert.equal(lines.at(-1), 'ok', stdout);
   const value = tag => lines.find(entry => entry.startsWith(tag + ' '))?.slice(tag.length + 1);
-  assert.equal(value('pb'), panelKey.toString('hex'), 'panel-to-bridge key = HKDF(code, salt, "panel-to-bridge")');
+  assert.equal(value('commit'), PAIR.c, 'commitment');
+  assert.equal(value('transcript'), PAIR.T, 'the transcript binds the base topic');
+  assert.equal(value('number'), PAIR.number, 'six digits with a leading zero');
+  assert.equal(value('K'), PAIR.K);
+  assert.equal(value('m_panel'), PAIR.m_panel);
+  assert.equal(value('m_bridge'), PAIR.m_bridge);
+  assert.deepEqual(JSON.parse(value('start')), {v: 2, t: 'start', id: '0123456789abcdef', pk: PAIR.pk_p});
+  assert.equal(value('pb'), panelKey.toString('hex'), 'panel-to-bridge key = HKDF(K, salt v2, "panel-to-bridge")');
   assert.equal(value('bp'), bridgeKey.toString('hex'));
   assert.equal(value('kid'), keyId);
   const command = open(panelKey, TOPIC_PANEL, value('cmd'));
@@ -288,9 +373,9 @@ if (stdout !== null) {
   assert.deepEqual(JSON.parse(value('announce')), {...JSON.parse(unsignedAnnouncement), sig: signature});
   // Shared vectors with the Python Bridge (tests/test_command_channel.py and
   // tests/test_announcement_guard.py).
-  assert.equal(announceKey.toString('hex'), '73fcf8b4dfdb0ea67138ebc100e63e0e25f93c342b1cbc4df27b76df17e0d321');
-  assert.equal(signature, '8d87186d122e8b1d8e04b428db076c6ca09bffb81748a99e55abafdd974eb34c');
-  assert.equal(keyId, '8982fb24a78d94e1');
-  assert.equal(value('cmd'), '{"v":1,"k":"8982fb24a78d94e1","n":"0102030405060708090a0b0c","d":"7832dd1bd249db728b0a50bc7f872a71128e0ceb9914732336b5052b125d2e15b17d8e61b37b8088f840f1bf08fff2509452d86153ead2e27de853dc2e18ceb8216139e4dd9f2ca29ecc3c75b9e87b874ff98daef024584a856613fa5f1d52fbb43bb25a9350ab84ebf6299d"}');
+  assert.equal(announceKey.toString('hex'), '318f1b1153aed588afc39a727b1f7a56659c9104b8f4d2eac4b8ee08eb71563e');
+  assert.equal(signature, 'be8539d3139c63fe108fafd4a9ffc736c7ec51fbdfc51a067f9c4d45578b68b9');
+  assert.equal(keyId, '20a8108ed11215c5');
+  assert.equal(value('cmd'), '{"v":1,"k":"20a8108ed11215c5","n":"0102030405060708090a0b0c","d":"d6897ddce5bea6e0aa22053a5ef1bd4bfde4f4955a583f8114a4389b1d8763a81913cd4023b4686a4f505a521561c61f493950b10c113309dfcdf4e97cdb40c2355f680ae55b1a36c7740244160c7facdae9637913ba13e9598e1f05642507bc34fa264f166e670e20a04aab"}');
   console.log('Command channel core: keys, envelopes, headers, replay window and records passed');
 }

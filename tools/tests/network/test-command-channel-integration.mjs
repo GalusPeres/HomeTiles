@@ -52,8 +52,8 @@ const sendUnpair = channel.slice(channel.indexOf('bool sendUnpair()'), channel.i
 assert.match(sendUnpair, /!g_state->has_session/, 'unpair needs a session');
 assert.match(sendUnpair, /header\.seq = g_state->next_seq\+\+;/, 'unpair is numbered like a command');
 assert.match(channel, /bool disable\(bool\* bridge_notified\) \{\s*begin\(\);\s*return turnOff\(true, bridge_notified\);/);
-assert.match(readRepoFile('src/ui/tabs/settings/tab_settings.cpp'), /command_channel::disable\(&bridge_notified\)[\s\S]{0,200}bridge_notified \? "" : tr\(\)\.security_encryption_off_hint/,
-  'the hint to remove the code in the Bridge appears only when the Bridge could not be told');
+assert.match(readRepoFile('src/ui/tabs/settings/tab_settings.cpp'), /command_channel::disable\(&bridge_notified\)[\s\S]{0,400}bridge_notified \? nullptr : tr\(\)\.security_unpaired_offline/,
+  'the hint to remove the pairing in Home Assistant appears only when the Bridge could not be told');
 assert.match(channel, /case MessageType::Rekey:[\s\S]{0,300}g_state->hello_requested = true;\s*g_state->hello_attempts = 0;/,
   'a rekey restarts the hello backoff');
 
@@ -71,15 +71,40 @@ const camera = readRepoFile('src/video/local_camera/local_camera.cpp');
 assert.match(camera, /bool handleMqttMessage\(const char\* topic, const uint8_t\* payload, size_t length\) \{\s*if \(!isCommandTopic\(topic\)\) return false;\s*handleCommandPayload\(payload, length\);\s*return true;\s*\}/);
 
 const settings = readRepoFile('src/ui/tabs/settings/tab_settings.cpp');
-assert.match(settings, /pairing == command_channel::PairingState::Pending &&\s*command_channel::displayCode\(code\)/,
-  'the code is shown only until the Bridge confirms it');
+assert.match(settings, /const bool has_number = command_channel::pairingNumber\(number\);/,
+  'the number is shown only while the attempt has one');
 assert.match(settings, /if \(security_refresh_timer\) \{\s*lv_timer_del\(security_refresh_timer\);\s*security_refresh_timer = nullptr;\s*\}\s*if \(networkTransport\.isWifiDriverActive\(\)\) WiFi\.scanDelete\(\);/,
   'closing the popup deletes the refresh timer');
-for (const key of ['security_bridge_encryption', 'security_encryption_waiting', 'security_encryption_setup',
-  'security_encryption_new_code', 'security_encryption_turn_off', 'security_encryption_code_hint',
-  'security_encryption_active_hint', 'security_encryption_off_hint']) {
+for (const key of ['system_updates_btn', 'system_install_btn', 'security_status_paired', 'security_status_plain',
+  'security_value_paired', 'security_value_plain', 'security_hint_pair', 'security_hint_unpair',
+  'security_pair_short', 'security_pair_long', 'security_unpair_short', 'security_unpair_long',
+  'security_password_btn', 'security_unpair_question', 'security_unpair_question_hint',
+  'security_password_question', 'security_password_question_hint', 'security_remove', 'security_cancel',
+  'security_confirm', 'security_close', 'security_unpaired_offline', 'pairing_title', 'pairing_asking',
+  'pairing_compare', 'pairing_compare_hint', 'pairing_waiting', 'pairing_no_answer', 'pairing_no_answer_hint',
+  'pairing_already_paired', 'pairing_busy', 'pairing_rejected', 'pairing_failed', 'web_auth_section',
+  'security_btn', 'restart_button']) {
   assert.match(settings, new RegExp(`tr\\(\\)\\.${key}`), `${key} comes from i18n`);
 }
+// System popup: every view keeps exactly two button rows and the branding.
+const systemPopup = settings.slice(settings.indexOf('static void build_system_popup('),
+  settings.indexOf('static const char* popup_title_for_kind('));
+assert.equal((systemPopup.match(/= create_system_button_row\(box\);|create_system_button_row\(box\);/g) || []).length, 3,
+  'Updates/Restart, the Security actions and GitHub/Security');
+assert.match(systemPopup, /create_system_icon_button\(system_action_row, "magnify"[\s\S]*create_system_icon_button\(system_action_row, "restart"/);
+assert.match(systemPopup, /create_system_icon_button\(link_row, "github"[\s\S]*create_system_icon_button\(link_row, "shield-lock"/);
+assert.match(systemPopup, /lv_obj_set_style_pad_top\(box, popup_layout::scale\(20\), 0\);/, 'the branding sits just below the header');
+assert.doesNotMatch(systemPopup, /system_pair_btn|"Pairing"/, 'pairing lives in the Security view');
+const applyView = settings.slice(settings.indexOf('static void system_apply_view() {'), settings.indexOf('static void system_set_view('));
+assert.match(applyView, /system_set_hidden\(system_action_row, !main\);\s*system_set_hidden\(security_action_row, !security\);/,
+  'the first button row belongs to the current view');
+assert.doesNotMatch(applyView, /system_brand/, 'the branding stays in every view');
+assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 0x424242, "lock-open-variant",\s*tr\(\)\.security_remove, 0xC62828\);/,
+  'removing the password asks first and is red');
+assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 0x424242, "link-variant-off",\s*tr\(\)\.security_unpair_short, 0xC62828\);/,
+  'unpairing asks first and is red');
+assert.match(settings, /full \? tr\(\)\.security_pair_long : tr\(\)\.security_pair_short/,
+  'the Pair button spells out Home Assistant when it has the full width');
 // The retained announcement is signed while a code exists and republished
 // whenever the code changes; without pairing it stays byte-identical.
 const announce = network.slice(network.indexOf('void HomeTilesNetworkManager::publishBridgeConfig() {'),
@@ -93,14 +118,60 @@ const signer = channel.slice(channel.indexOf('char* signAnnouncement(const char*
 assert.match(signer, /if \(!g_state \|\| !topic \|\| !payload \|\|\s*xTaskGetCurrentTaskHandle\(\) != g_owner\) \{\s*return nullptr;/,
   'no pairing (or a foreign task) leaves the announcement unsigned');
 assert.match(signer, /allocPreferPsram\(size\)/);
-const create = channel.slice(channel.indexOf('bool createCode() {'), channel.indexOf('bool disable(bool* bridge_notified) {'));
+const complete = channel.slice(channel.indexOf('void completePairing() {'), channel.indexOf('void handlePairMessage('));
 // Turning off (on the display or by the Bridge) republishes the unsigned announcement.
 const off = channel.slice(channel.indexOf('bool turnOff('), channel.indexOf('void handleUnpair('));
-assert.match(create, /networkManager\.publishBridgeConfig\(\);/);
+assert.match(complete, /networkManager\.publishBridgeConfig\(\);/);
 assert.match(off, /releaseState\(\);[\s\S]*networkManager\.publishBridgeConfig\(\);/);
 
+// Number-comparison pairing (contract v2).
+const start = channel.slice(channel.indexOf('bool startPairing() {'), channel.indexOf('PairingPhase pairingPhase() {'));
+assert.match(start, /if \(g_state\) return false;/, 'a paired panel unpairs first');
+assert.ok(start.indexOf('x25519::selfTest()') < start.indexOf('allocPreferPsram(sizeof(Attempt))'),
+  'the RFC 7748 self-test runs before every attempt');
+for (const field of ['secret', 'n_p']) {
+  assert.match(start, new RegExp(`secure_random::fill\\(g_attempt->${field}, sizeof\\(g_attempt->${field}\\)\\);`),
+    `every attempt has a fresh ${field}`);
+}
+assert.match(start, /secure_random::fill\(id, sizeof\(id\)\);/, 'every attempt has a fresh id');
+const pairHandler = channel.slice(channel.indexOf('void handlePairMessage('), channel.indexOf('void servicePairing() {'));
+assert.match(pairHandler, /strcmp\(message\.id, g_attempt->id\) != 0\) \{\s*return;/, 'other attempts are ignored');
+assert.match(pairHandler, /if \(attempt\.phase != PairingPhase::Asking \|\| attempt\.have_commit\) return;/,
+  'only the first commit counts');
+assert.match(pairHandler, /pairingCommit\(attempt\.pk_b, attempt\.pk_p, message\.n, expected\);\s*if \(!ht_crypto::equalConstantTime\(expected, attempt\.commit/,
+  'the Bridge nonce must open its commitment, compared in constant time');
+assert.match(pairHandler, /pairingTranscript\(attempt\.base,/, 'the transcript binds the base topic');
+assert.match(pairHandler, /equalConstantTime\(message\.m, attempt\.confirm_bridge/, 'the Bridge confirmation is checked in constant time');
+assert.match(pairHandler, /if \(attempt\.local_confirmed\) completePairing\(\);/, 'pairing needs both confirmations');
+assert.match(pairHandler, /case PairType::Abort:[\s\S]{0,200}if \(!attemptRunning\(\)\) return;/,
+  'an abort never undoes a finished pairing');
+const confirm = channel.slice(channel.indexOf('void confirmPairing() {'), channel.indexOf('void endPairing() {'));
+assert.match(confirm, /if \(g_attempt->peer_confirmed\) completePairing\(\);/);
+const servicePair = channel.slice(channel.indexOf('void servicePairing() {'), channel.indexOf('}  // namespace\n'));
+assert.match(servicePair, /if \(!attempt\.start_sent && networkManager\.isMqttConnected\(\)\)/, 'start goes out once');
+assert.match(servicePair, /age >= kPairNoAnswerMs\) \{[\s\S]{0,200}endAttempt\(PairingPhase::NoAnswer, "timeout"\);/);
+assert.match(servicePair, /if \(age >= kPairTimeoutMs\) \{[\s\S]{0,120}endAttempt\(PairingPhase::Failed, "timeout"\);/);
+assert.match(servicePair, /now - attempt\.last_confirm_ms\) >= kPairConfirmRepeatMs\) \{\s*publishPair\("confirm"/,
+  'the confirmation repeats until the Bridge confirms (QoS 0)');
+assert.match(channel, /constexpr uint32_t kPairNoAnswerMs = 15000;\s*constexpr uint32_t kPairTimeoutMs = 120000;\s*constexpr uint32_t kPairConfirmRepeatMs = 2000;/);
+for (const match of channel.matchAll(/Serial\.printf?\(([^;]*)\);/g)) {
+  const argumentsOnly = match[1].replace(/"(?:\\.|[^"\\])*"/g, '""');
+  assert.doesNotMatch(argumentsOnly, /secret|->key\b|\.key\b|transcript|confirm_(?:panel|bridge)|number|n_p|\.n\b/,
+    `pairing secrets and the number are never logged: ${match[1]}`);
+}
+const begin = channel.slice(channel.indexOf('void begin() {'), channel.indexOf('PairingState state() {'));
+assert.match(begin, /if \(stored == kLegacyRecordSize\) \{[\s\S]{0,200}writeRecord\(nullptr\);\s*g_clear_status = true;/,
+  'a v1 record with a typed code is discarded');
+const x25519 = readRepoFile('src/core/security/x25519.cpp');
+assert.match(x25519, /#include <mbedtls\/ecp\.h>/);
+assert.match(x25519, /#error/, 'a build without Curve25519 fails loudly');
+assert.match(x25519, /MBEDTLS_ECP_DP_CURVE25519/);
+assert.match(x25519, /mbedtls_ecp_mul\(/, 'the curve arithmetic stays in mbedTLS');
+assert.match(x25519, /0x4a, 0x5d, 0x9d, 0x5b/, 'the self-test uses the RFC 7748 section 6.1 shared secret');
+
 const doc = readRepoFile('docs-dev/command-encryption.md');
-for (const marker of ['secure/panel', 'secure/bridge', 'stat/secure', 'HomeTiles command pairing v1',
+for (const marker of ['secure/panel', 'secure/bridge', 'stat/secure', 'HomeTiles command pairing v2',
+  'pair/panel', 'pair/bridge', 'HomeTiles pairing commit v2', 'HomeTiles pairing number v2',
   'panel-to-bridge', 'bridge-to-panel', 'key-id', 'announce', '"sig"', 'ChaCha20-Poly1305', 'replay']) {
   assert.ok(doc.includes(marker), `protocol document covers ${marker}`);
 }

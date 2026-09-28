@@ -82,11 +82,11 @@ Enable the electricity, gas, or water categories you need. Each requires the cor
 
 Optional. Anyone who can publish on your MQTT broker could otherwise send commands in the display's name. With encryption, the Bridge runs only commands that the paired display encrypted and signed, each at most once, and camera stream tokens travel encrypted as well. Entity states, weather, history and camera images stay unencrypted.
 
-1. On the display, open **Settings → System → Security** and tap **Set up encryption**. A code such as `ABCDE-FGHJK-MNPQR-STVWX-YZ012` appears.
-2. In Home Assistant, open **HomeTiles Bridge → Configure → Security**, enter the code, and submit. The Bridge checks it against the display and restarts the entry.
-3. The display then shows that commands are encrypted.
+1. On the display, open **Settings → System → Security** and tap **Pair**.
+2. The display and Home Assistant show the same six-digit number. Confirm only if both numbers match, on the display and in Home Assistant.
+3. The System menu then shows a green shield: commands are encrypted.
 
-To turn it off, tap **Turn off** on the display and tick **Remove pairing** in the Bridge. A display without a code, and older firmware or Bridge versions, keep working unencrypted. Protocol details: [command-encryption.md](https://github.com/GalusPeres/HomeTiles/blob/main/docs-dev/command-encryption.md).
+To unpair, tap **Unpair** on the display or use **Remove pairing** in the Bridge; the other side follows. A display that was never paired, and older firmware or Bridge versions, keep working unencrypted; with an older Bridge the display asks for a Bridge update. Protocol details: [command-encryption.md](https://github.com/GalusPeres/HomeTiles/blob/main/docs-dev/command-encryption.md).
 
 ## Local Hardware Entities { data-toc-label="Local I/O" }
 

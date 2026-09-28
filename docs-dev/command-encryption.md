@@ -22,8 +22,9 @@ when either one drifts.
 
 Anyone on the MQTT broker can read and publish every HomeTiles topic; anyone on
 the LAN can reach the panel's Web Admin on port 80. There are no certificates:
-trust comes from a secret the user carries from the display to Home Assistant,
-as with the ESPHome API encryption key.
+trust comes from the user, who confirms the same six-digit number on the
+display and in Home Assistant when pairing (numeric comparison, as in
+Bluetooth LE Secure Connections).
 
 Protected:
 
@@ -101,16 +102,71 @@ bytes `5c`:
 
 ## Command channel
 
-### Pairing code and keys
+### Pairing (contract v2)
 
-The display creates the code (Settings → System → Security → Set up
-encryption): 25 symbols of the Crockford Base32 alphabet
-`0123456789ABCDEFGHJKMNPQRSTVWXYZ`, 125 random bits, shown as
-`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`. Input is case-insensitive, ignores spaces and
-dashes and maps `O`→`0`, `I`/`L`→`1`.
+The user starts pairing on the display (Settings → System → Security → Pair).
+Panel and Bridge run an X25519 exchange (RFC 7748; mbedTLS on the panel,
+`cryptography` in the Bridge) and both show a six-digit number; the user
+confirms it on both sides. A commitment keeps either side from steering the
+number, so an attacker in the middle has one chance in 10^6 per attempt, and
+every attempt needs a tap on the display.
 
-Keys use HKDF-SHA256 (RFC 5869) with salt `HomeTiles command pairing v1`, the
-25 canonical ASCII symbols as input key material, and these `info` labels:
+Messages are plain JSON on `{base}/pair/panel` (panel → Bridge) and
+`{base}/pair/bridge` (Bridge → panel), QoS 0, never retained. `v` must be 2,
+bytes are lowercase hex of exact length, `id` is 16 hex (new per attempt), and
+unknown fields are ignored. Each side uses a fresh key pair and fresh nonces
+per attempt.
+
+1. Panel: `{"v":2,"t":"start","id":…,"pk":<pk_p>}`
+2. Bridge: `{"v":2,"t":"commit","id":…,"pk":<pk_b>,"c":<c>}` with
+   `c = SHA-256("HomeTiles pairing commit v2" || pk_b || pk_p || n_b)` and
+   `n_b` 16 random bytes
+3. Panel: `{"v":2,"t":"nonce","id":…,"n":<n_p>}`
+4. Bridge: `{"v":2,"t":"nonce","id":…,"n":<n_b>}`; the panel checks that `n_b`
+   opens `c`
+
+Then both compute:
+
+```text
+s      = X25519(own private key, peer public key)   (all-zero is refused)
+T      = SHA-256("HomeTiles pairing v2" || u16be(len(base)) || base
+                 || pk_p || pk_b || n_p || n_b)
+number = uint32_be(SHA-256("HomeTiles pairing number v2" || T)[0..4]) mod 10^6
+K      = HKDF-SHA256(salt = T, ikm = s, info = "pairing key", 32 bytes)
+```
+
+`base` is the UTF-8 base topic of `{base}/pair/panel`, so a start cannot be
+answered for another panel. The number is always shown with six digits,
+grouped as `061 806`.
+
+5. After the user confirmed locally, each side sends
+   `{"v":2,"t":"confirm","id":…,"m":<m>}` with
+   `m = HMAC-SHA256(K, "confirm panel" || T)` (panel) or
+   `"confirm bridge" || T` (Bridge) and repeats it every 2 s until the other
+   side's valid `m` arrives. A side is paired only with its own confirmation
+   and the other side's valid `m`; it then stores `K`. A finished side answers
+   a repeated valid confirm of the same id until 120 s after the start.
+6. `{"v":2,"t":"abort","id":…,"r":<reason>}` ends a running attempt on cancel,
+   rejection or timeout. It is unauthenticated, only for display (`busy`,
+   `rate`, `paired`, `rejected`, `timeout`, `cancel`; anything else is a
+   general abort) and never undoes a finished pairing.
+
+Rules: one attempt per panel at a time, at most 120 s. The panel takes only
+the first commit of an attempt and ignores a nonce that does not open it (a
+second Bridge on the broker then cannot break the attempt); the Bridge takes
+only the first `n_p`. `c` and `m` are compared in constant time. The Bridge
+answers at most three starts per panel in ten minutes, at least 10 s apart
+(`abort` `rate`), never replaces a running attempt (`busy`) and refuses a start
+while it is paired with that panel, also while removing (`paired`, no prompt
+in Home Assistant). Re-pairing therefore needs Unpair on the display or Remove
+pairing in Home Assistant first. The panel shows "Update the HomeTiles
+Bridge" only when nothing at all arrives within 15 s, and runs the X25519
+vector of RFC 7748 section 6.1 before every attempt.
+
+### Keys
+
+Keys use HKDF-SHA256 (RFC 5869) with salt `HomeTiles command pairing v2`, the
+32-byte `K` as input key material, and these `info` labels:
 
 | Label | Length | Use |
 | --- | --- | --- |
@@ -120,10 +176,29 @@ Keys use HKDF-SHA256 (RFC 5869) with salt `HomeTiles command pairing v1`, the
 | `key-id` | 8 | Public key identifier, lowercase hex |
 
 Separate keys per direction make a reflected message undecryptable. The panel
-stores the code (to show it again) and the state in NVS `tab5_config/cmd_pairing`;
-the Bridge stores the code in its config entry (`command_pairing_code`, like an
-ESPHome encryption key). Neither side logs the code or a key; the key id is
-public.
+stores `K` in NVS `tab5_config/cmd_pairing` (record v2); the Bridge stores it in
+its config entry. Neither side logs `K`, a key, a private key, a nonce or the
+number; the key id is public.
+
+Shared pairing vector (base `hometiles/test`, private keys as 32 raw bytes
+`a1`×32 and `b2`×32, `n_p` = `c3`×16, `n_b` = `d4`×16):
+
+- `pk_p` `c306fb0ef2bf8b7f93bad98155fa37daec74db0c4cbeda6c6f1dba9d36558252`
+- `pk_b` `db48257e1237976a74ad8cfedca00213408fe89ac6251f1b930245f242b5c31a`
+- `c` `3262f80a0dcdf8b757e44596ed47c05afdc9a16405a915c710ab33443f8af112`
+- `s` `9502af7a4b678841b839429623a09a23f6cc551836e48a52c0e4faf4b9d3b06e`
+- `T` `2d4cd2f1d56b383880cc9e27ec65419c1ee1bf1df99bbe5dd115e65d3c613e9f`
+- number `061 806`
+- `K` `b925def556256ead767b0f1d14879e50d6bddbd0bb44dc0d2435e4af011b3e19`
+- `m` panel `a2bbe3db083e9884b39df9d41eac55ed94b652e364c636157423f773bc35516b`
+- `m` Bridge `ce6193e03597bf02204ee8dd3a1f05d38675088c497a6f5ae35718acf78ef456`
+- `panel-to-bridge` `3ce896914535a84f25b6bcbb18bae3e2e0bbdefa5b03712b2fbaf16e51d084de`
+- `bridge-to-panel` `5631cdca5a6fbae0a0fdfc738926f75254f40065c9e64322430aba78be18278d`
+- `announce` `318f1b1153aed588afc39a727b1f7a56659c9104b8f4d2eac4b8ee08eb71563e`
+- `key-id` `20a8108ed11215c5`
+- `hello - 0 00112233445566778899aabbccddeeff\n` sealed with `panel-to-bridge`
+  on `hometiles/test/secure/panel`, nonce `000102030405060708090a0b`:
+  `d` = `0cadb7a053444eb47a4fe832c2666d6aabeb102ffe25b8aa6dfbeb29b0206815420dad833e0db0c4023b193d8e4881cacf43b23f7beced790a8ef3`
 
 ### Topics
 
@@ -131,9 +206,11 @@ public.
 | --- | --- | --- |
 | `{base}/secure/panel` | panel → Bridge | Sealed `hello`, `cmd` and `unpair` messages, QoS 0, not retained |
 | `{base}/secure/bridge` | Bridge → panel | Sealed `session`, `rekey`, `data` and `unpair` messages, QoS 0, not retained |
-| `{base}/stat/secure` | panel → Bridge | Retained plain status `{"v":1,"state":"pending"\|"active","kid":"<16 hex>"}`; empty when off |
+| `{base}/stat/secure` | panel → Bridge | Retained plain status `{"v":1,"state":"active","kid":"<16 hex>"}` once `K` is stored; empty when off, also during pairing |
+| `{base}/pair/panel` | panel → Bridge | Plain pairing messages `start`, `nonce`, `confirm`, `abort` |
+| `{base}/pair/bridge` | Bridge → panel | Plain pairing messages `commit`, `nonce`, `confirm`, `abort` |
 
-The status only helps the Bridge check an entered code; it grants nothing.
+The status only tells the Bridge which key the panel holds; it grants nothing.
 
 ### Envelope
 
@@ -189,14 +266,12 @@ and then sends it sealed; after that it drops it.
 ### Activation and compatibility
 
 - **Off** (default): nothing is published or subscribed except an empty
-  retained `{base}/stat/secure` after a pairing was removed.
-- **Pending**: the code exists on the panel; commands stay plain; the panel
-  requests a session. Entering the code in the Bridge (Configure → Security)
-  checks it against the retained key id, stores it and sends `rekey`.
-- **Active**: after the first valid `session` the panel stores the state and
-  from then on sends every command sealed only. It also ignores plain
+  retained `{base}/stat/secure` after a pairing was removed. A pairing attempt
+  subscribes to `{base}/pair/bridge` only while it runs; commands stay plain.
+- **Active**: once both sides confirmed, the panel stores `K`, sends `hello`
+  and from then on sends every command sealed only. It also ignores plain
   `{base}/stat/camera` and `{base}/cmnd/local_camera`.
-- A Bridge with a stored code ignores the plain command topics of that panel
+- A Bridge with a stored key ignores the plain command topics of that panel
   and sends camera replies and built-in camera requests only sealed. It keeps
   doing so if the panel later reports `off` or another key id (an attacker
   could forge that status) and asks the user, with a persistent notification,
@@ -209,12 +284,12 @@ Removing the pairing on one side removes it on the other side too, with an
 like `cmd`/`data`, so it cannot be forged or replayed; the unauthenticated
 status never turns anything off.
 
-- **On the display** (Settings → System → Security → Turn off): the panel
-  sends `unpair` while it still has the keys, then deletes the code, publishes
-  the empty retained status and the unsigned announcement. On a valid `unpair`
-  the Bridge deletes its code, reloads the entry unpaired and shows a
-  notification. Without a session the panel still turns off and tells the
-  user to remove the code in the Bridge as well.
+- **On the display** (Settings → System → Security → Unpair, after a
+  confirmation): the panel sends `unpair` while it still has the keys, then
+  deletes `K`, publishes the empty retained status and the unsigned
+  announcement. On a valid `unpair` the Bridge deletes its key, reloads the
+  entry unpaired and shows a notification. Without a session the panel still
+  turns off and tells the user to remove the pairing in Home Assistant as well.
 - **In the Bridge** (Configure → Security → Remove pairing): the entry keeps the
   key in a removing state, accepts plain commands again, runs no sealed ones,
   keeps `{base}/secure/panel` subscribed and sends `rekey`. It answers the
@@ -223,18 +298,21 @@ status never turns anything off.
   panel turns off exactly as above. The Bridge drops the key once the
   retained status is empty or shows another key id.
 
-Shared vectors (code `ABCDE-FGHJK-MNPQR-STVWX-YZ012`, key id
-`8982fb24a78d94e1`, nonce `000102030405060708090a0b`, plaintext
+Shared vectors (`K` of the pairing vector, key id `20a8108ed11215c5`, nonce
+`000102030405060708090a0b`, plaintext
 `unpair 0123456789abcdef0123456789abcdef 1 -\n`):
 
 - panel → Bridge on `hometiles/secure/panel`: `d` =
-  `57bf95048efe6d21a8392023d835128bca899f957700cb026d090ecb5c811a72707dfb8b90c495763ea5ab124daac7347b8d1d772ea4ace283bbb02a`
+  `11a6abad551643a47b5deb36c6616860a1b94678af75e8ac6bfee025bc2f3e4c190eac833e0cb381557d3e5bda1967f7f79b5700e0ab459406d83fef`
 - Bridge → panel on `hometiles/secure/bridge`: `d` =
-  `f0304f27341f5bebe38670e0476e55fefa34e2b11a21a4224f5e66be62a63afaa85712b16a9618140eb3fecc7d8cb5b0b9332900c520448e4f1e7977`
+  `2df48e85bda4d37632843fde4a78d178089f741c47e3291ce1d451a60cc7473dd4676251129cc80d9219d7433ce992181d00bc712a5ce6e994abb98f`
 
-Old firmware never shows a code, so its Bridge entry cannot be paired. Old
-Bridges never answer `hello`, so a new panel stays pending and keeps sending
-plain commands.
+Old firmware never sends `start`, so its Bridge entry stays unpaired. Old
+Bridges never answer `start`; the panel then shows that the Bridge needs an
+update and keeps sending plain commands. The Bridge betas b1/b2 and the
+matching firmware betas used a typed 25-symbol code (contract v1): both sides
+discard a stored v1 code at start with a log line and run unencrypted until
+the panel is paired again.
 
 ## Announcements, discovery and history requests
 
@@ -247,8 +325,8 @@ the broker can publish there too, so the Bridge applies these rules:
   dropped.
 - An announcement for an existing entry must carry that entry's base topic;
   otherwise it cannot change the entry's entities or selections.
-- While a pairing code exists (pending or active), the panel signs the
-  announcement and republishes it whenever the code is created or removed:
+- While the panel is paired, it signs the announcement and republishes it
+  whenever a pairing is completed or removed:
 
   ```text
   sig = HMAC-SHA256(announce key, topic "\n" unsigned payload)
@@ -256,7 +334,7 @@ the broker can publish there too, so the Bridge applies these rules:
   ```
 
   The Bridge verifies the exact received bytes, so no JSON re-serialisation is
-  involved. An entry with a stored code accepts only announcements with a
+  involved. An entry with a stored key accepts only announcements with a
   valid signature. An old signed announcement can be replayed, but it only
   repeats what the panel itself once announced.
 - A new panel never creates an entry by itself: it gets a discovery card. At

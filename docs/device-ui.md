@@ -111,8 +111,7 @@ View the firmware version and device name, or use the maintenance actions:
 <figcaption>System information and firmware update</figcaption>
 </figure>
 
-- **Check for updates:** find and install a new release; see [Firmware Updates](updating.md).
+- **Updates:** find and install a new release; see [Firmware Updates](updating.md).
 - **Restart:** reboot the display.
-- **Pairing:** reconnect MQTT and announce the display to Home Assistant again.
-- **Security:** remove a forgotten [Web Admin password](web-admin.md#web-admin-password), and set up [encrypted Bridge commands](bridge.md#encrypted-commands): **Set up encryption** shows a pairing code, **New code** replaces it, **Turn off** returns to unencrypted commands.
 - **GitHub:** show a QR code for the project.
+- **Security:** [encrypted Bridge commands](bridge.md#encrypted-commands) and the [Web Admin password](web-admin.md#web-admin-password). **Pair** pairs the display with Home Assistant by a six-digit number, **Unpair** removes the pairing on both sides, and **Password** removes a forgotten Web Admin password. Both ask before they act. A green shield in the System menu shows that commands are encrypted.

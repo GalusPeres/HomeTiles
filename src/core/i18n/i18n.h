@@ -607,16 +607,43 @@ struct Strings {
   const char* secret_hidden_placeholder;
   const char* web_auth_secrets_note;
   const char* ap_wifi_keep_password_hint;
-  // Encrypted commands to the HomeTiles Bridge (Security view of the System
-  // popup): state, pairing code actions and hints.
-  const char* security_bridge_encryption;
-  const char* security_encryption_waiting;
-  const char* security_encryption_setup;
-  const char* security_encryption_new_code;
-  const char* security_encryption_turn_off;
-  const char* security_encryption_code_hint;
-  const char* security_encryption_active_hint;
-  const char* security_encryption_off_hint;
+  // System popup buttons: short labels that fit a half-width button; the
+  // status line above them carries the details.
+  const char* system_updates_btn;
+  const char* system_install_btn;
+  // Security view of the System popup: pairing with Home Assistant (the
+  // panel and Home Assistant show the same number) and the Web Admin password.
+  const char* security_status_paired;
+  const char* security_status_plain;
+  const char* security_value_paired;
+  const char* security_value_plain;
+  const char* security_hint_pair;
+  const char* security_hint_unpair;
+  const char* security_pair_short;
+  const char* security_pair_long;
+  const char* security_unpair_short;
+  const char* security_unpair_long;
+  const char* security_password_btn;
+  const char* security_unpair_question;
+  const char* security_unpair_question_hint;
+  const char* security_password_question;
+  const char* security_password_question_hint;
+  const char* security_remove;
+  const char* security_cancel;
+  const char* security_confirm;
+  const char* security_close;
+  const char* security_unpaired_offline;
+  const char* pairing_title;
+  const char* pairing_asking;
+  const char* pairing_compare;
+  const char* pairing_compare_hint;
+  const char* pairing_waiting;
+  const char* pairing_no_answer;
+  const char* pairing_no_answer_hint;
+  const char* pairing_already_paired;
+  const char* pairing_busy;
+  const char* pairing_rejected;
+  const char* pairing_failed;
   // Web Admin header badge: whether a Web Admin password protects the page.
   const char* web_auth_badge_on;
   const char* web_auth_badge_off;

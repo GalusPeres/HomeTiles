@@ -2,8 +2,8 @@
 
 // Encrypted, authenticated commands between a panel and the HomeTiles Bridge.
 // The full protocol is described in docs-dev/command-encryption.md. This
-// header holds the platform-independent parts (pairing code, key derivation,
-// envelope, message header and replay window), so the host tests in
+// header holds the platform-independent parts (pairing messages and numbers,
+// key derivation, envelope, message header and replay window), so the host tests in
 // tools/tests/network/ run this exact code against the Python Bridge format.
 
 #include <stddef.h>
@@ -15,13 +15,22 @@
 
 namespace command_channel {
 
-// Pairing code: 25 Crockford Base32 symbols (125 random bits), shown as five
-// groups of five. The Bridge accepts either case, spaces and dashes, and the
-// usual O/0 and I/L/1 confusions.
-constexpr size_t kCodeLength = 25;
-constexpr size_t kCodeDisplaySize = kCodeLength + 4 + 1;
-constexpr char kAlphabet[] = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-constexpr char kKdfSalt[] = "HomeTiles command pairing v1";
+// Contract v2: the pairing key K comes from an X25519 exchange that the user
+// confirms by comparing a six-digit number on the panel and in Home Assistant
+// (numeric comparison with a commitment, as in Bluetooth LE). X25519 itself
+// runs in src/core/security/x25519.*; everything here is portable.
+constexpr char kKdfSalt[] = "HomeTiles command pairing v2";
+constexpr size_t kPairKeySize = 32;  // X25519 keys, shared secret and K
+constexpr size_t kPairNonceSize = 16;
+constexpr size_t kPairIdSize = 8;
+constexpr size_t kPairIdHexSize = kPairIdSize * 2 + 1;
+constexpr uint32_t kPairNumberModulus = 1000000;
+// "123 456" and NUL.
+constexpr size_t kPairNumberDisplaySize = 8;
+constexpr size_t kPairReasonSize = 16;
+// A commit with both hex fields is about 190 bytes; unknown fields are
+// ignored, so leave room for a few.
+constexpr size_t kMaxPairMessageLength = 512;
 
 constexpr size_t kKeySize = ht_crypto::kAeadKeySize;
 constexpr size_t kKeyIdSize = 8;
@@ -49,54 +58,105 @@ struct Keys {
   char key_id[kKeyIdHexSize];
 };
 
-inline void generateCode(const uint8_t random[kCodeLength],
-                         char code[kCodeLength + 1]) {
-  for (size_t i = 0; i < kCodeLength; ++i) code[i] = kAlphabet[random[i] & 31];
-  code[kCodeLength] = '\0';
+// c = SHA-256("HomeTiles pairing commit v2" || pk_b || pk_p || n_b). The
+// Bridge commits to its nonce before it sees the panel's, so neither side can
+// steer the number.
+inline void pairingCommit(const uint8_t pk_b[kPairKeySize],
+                          const uint8_t pk_p[kPairKeySize],
+                          const uint8_t n_b[kPairNonceSize],
+                          uint8_t out[ht_crypto::kSha256Size]) {
+  static const char kLabel[] = "HomeTiles pairing commit v2";
+  ht_crypto::Sha256 ctx;
+  ht_crypto::sha256Init(ctx);
+  ht_crypto::sha256Update(ctx, kLabel, sizeof(kLabel) - 1);
+  ht_crypto::sha256Update(ctx, pk_b, kPairKeySize);
+  ht_crypto::sha256Update(ctx, pk_p, kPairKeySize);
+  ht_crypto::sha256Update(ctx, n_b, kPairNonceSize);
+  ht_crypto::sha256Final(ctx, out);
 }
 
-inline int symbolValue(char c) {
-  if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
-  if (c == 'O') c = '0';
-  if (c == 'I' || c == 'L') c = '1';
-  for (int i = 0; i < 32; ++i) {
-    if (kAlphabet[i] == c) return i;
-  }
-  return -1;
+// T = SHA-256("HomeTiles pairing v2" || u16be(len(base)) || base || pk_p ||
+// pk_b || n_p || n_b). Binding the base topic stops a start of one panel
+// from being answered for another.
+inline bool pairingTranscript(const char* base, const uint8_t pk_p[kPairKeySize],
+                              const uint8_t pk_b[kPairKeySize],
+                              const uint8_t n_p[kPairNonceSize],
+                              const uint8_t n_b[kPairNonceSize],
+                              uint8_t out[ht_crypto::kSha256Size]) {
+  const size_t base_length = base ? strlen(base) : 0;
+  if (base_length == 0 || base_length > 0xffff) return false;
+  static const char kLabel[] = "HomeTiles pairing v2";
+  const uint8_t length_be[2] = {static_cast<uint8_t>(base_length >> 8),
+                                static_cast<uint8_t>(base_length & 0xff)};
+  ht_crypto::Sha256 ctx;
+  ht_crypto::sha256Init(ctx);
+  ht_crypto::sha256Update(ctx, kLabel, sizeof(kLabel) - 1);
+  ht_crypto::sha256Update(ctx, length_be, sizeof(length_be));
+  ht_crypto::sha256Update(ctx, base, base_length);
+  ht_crypto::sha256Update(ctx, pk_p, kPairKeySize);
+  ht_crypto::sha256Update(ctx, pk_b, kPairKeySize);
+  ht_crypto::sha256Update(ctx, n_p, kPairNonceSize);
+  ht_crypto::sha256Update(ctx, n_b, kPairNonceSize);
+  ht_crypto::sha256Final(ctx, out);
+  return true;
 }
 
-// Canonical form: 25 upper-case alphabet symbols. Separators are dropped.
-inline bool normalizeCode(const char* input, char out[kCodeLength + 1]) {
-  if (!input) return false;
-  size_t length = 0;
-  for (const char* p = input; *p; ++p) {
-    if (*p == '-' || *p == ' ' || *p == '\t') continue;
-    const int value = symbolValue(*p);
-    if (value < 0 || length >= kCodeLength) return false;
-    out[length++] = kAlphabet[value];
-  }
-  out[length] = '\0';
-  return length == kCodeLength;
+// The six-digit number both sides show: the first four bytes of
+// SHA-256("HomeTiles pairing number v2" || T), big-endian, modulo 10^6.
+inline uint32_t pairingNumber(const uint8_t transcript[ht_crypto::kSha256Size]) {
+  static const char kLabel[] = "HomeTiles pairing number v2";
+  uint8_t digest[ht_crypto::kSha256Size];
+  ht_crypto::Sha256 ctx;
+  ht_crypto::sha256Init(ctx);
+  ht_crypto::sha256Update(ctx, kLabel, sizeof(kLabel) - 1);
+  ht_crypto::sha256Update(ctx, transcript, ht_crypto::kSha256Size);
+  ht_crypto::sha256Final(ctx, digest);
+  const uint32_t value = (static_cast<uint32_t>(digest[0]) << 24) |
+                         (static_cast<uint32_t>(digest[1]) << 16) |
+                         (static_cast<uint32_t>(digest[2]) << 8) |
+                         static_cast<uint32_t>(digest[3]);
+  return value % kPairNumberModulus;
 }
 
-inline void formatCode(const char code[kCodeLength + 1],
-                       char out[kCodeDisplaySize]) {
-  size_t o = 0;
-  for (size_t i = 0; i < kCodeLength; ++i) {
-    if (i && i % 5 == 0) out[o++] = '-';
-    out[o++] = code[i];
-  }
-  out[o] = '\0';
+// Always six digits with leading zeros, grouped as "061 806".
+inline void formatPairingNumber(uint32_t number, char out[kPairNumberDisplaySize]) {
+  number %= kPairNumberModulus;
+  snprintf(out, kPairNumberDisplaySize, "%03lu %03lu",
+           static_cast<unsigned long>(number / 1000),
+           static_cast<unsigned long>(number % 1000));
 }
 
-// HKDF-SHA256 with the fixed salt; each key has its own info label.
-inline bool deriveKeys(const char code[kCodeLength + 1], Keys& keys) {
-  char canonical[kCodeLength + 1];
-  if (!normalizeCode(code, canonical)) return false;
+// K = HKDF-SHA256(salt = T, ikm = X25519 shared secret, info "pairing key").
+inline void pairingKey(const uint8_t shared[kPairKeySize],
+                       const uint8_t transcript[ht_crypto::kSha256Size],
+                       uint8_t key[kPairKeySize]) {
+  static const char kInfo[] = "pairing key";
+  ht_crypto::hkdfSha256(transcript, ht_crypto::kSha256Size, shared, kPairKeySize,
+                        reinterpret_cast<const uint8_t*>(kInfo), sizeof(kInfo) - 1,
+                        key, kPairKeySize);
+}
+
+// m = HMAC-SHA256(K, "confirm panel" || T) or "confirm bridge" || T: proves
+// the same key and that the user confirmed on that side.
+inline void pairingConfirmation(const uint8_t key[kPairKeySize],
+                                const uint8_t transcript[ht_crypto::kSha256Size],
+                                bool from_panel,
+                                uint8_t out[ht_crypto::kSha256Size]) {
+  const char* label = from_panel ? "confirm panel" : "confirm bridge";
+  ht_crypto::HmacSha256 mac;
+  ht_crypto::hmacSha256Init(mac, key, kPairKeySize);
+  ht_crypto::hmacSha256Update(mac, label, strlen(label));
+  ht_crypto::hmacSha256Update(mac, transcript, ht_crypto::kSha256Size);
+  ht_crypto::hmacSha256Final(mac, out);
+  ht_crypto::secureZero(&mac, sizeof(mac));
+}
+
+// HKDF-SHA256 with the fixed salt and K as input; each key has its own info
+// label. Everything after pairing uses these keys exactly as before.
+inline void deriveKeys(const uint8_t pairing_key[kPairKeySize], Keys& keys) {
   const uint8_t* salt = reinterpret_cast<const uint8_t*>(kKdfSalt);
-  const uint8_t* ikm = reinterpret_cast<const uint8_t*>(canonical);
   auto expand = [&](const char* info, uint8_t* out, size_t length) {
-    ht_crypto::hkdfSha256(salt, sizeof(kKdfSalt) - 1, ikm, kCodeLength,
+    ht_crypto::hkdfSha256(salt, sizeof(kKdfSalt) - 1, pairing_key, kPairKeySize,
                           reinterpret_cast<const uint8_t*>(info), strlen(info),
                           out, length);
   };
@@ -106,8 +166,168 @@ inline bool deriveKeys(const char code[kCodeLength + 1], Keys& keys) {
   uint8_t key_id[kKeyIdSize];
   expand("key-id", key_id, sizeof(key_id));
   ht_crypto::hexEncode(key_id, sizeof(key_id), keys.key_id, sizeof(keys.key_id));
-  ht_crypto::secureZero(canonical, sizeof(canonical));
+}
+
+// Plain pairing messages on {base}/pair/panel and {base}/pair/bridge: a flat
+// JSON object with "v":2, a type "t", the attempt "id" and hex or text fields.
+enum class PairType : uint8_t { Start, Commit, Nonce, Confirm, Abort };
+
+struct PairMessage {
+  PairType type = PairType::Abort;
+  char id[kPairIdHexSize] = {};
+  bool has_pk = false;
+  uint8_t pk[kPairKeySize] = {};
+  bool has_c = false;
+  uint8_t c[ht_crypto::kSha256Size] = {};
+  bool has_n = false;
+  uint8_t n[kPairNonceSize] = {};
+  bool has_m = false;
+  uint8_t m[ht_crypto::kSha256Size] = {};
+  // Abort reason for display only: busy, rate, paired, rejected, timeout,
+  // cancel, or anything else (a general abort).
+  char reason[kPairReasonSize] = {};
+};
+
+// Finds "key": and returns its raw value: a quoted string of [a-z0-9_] or a
+// run of digits. Every other character in a value is refused.
+inline bool pairField(const char* json, size_t length, const char* key,
+                      const char** value, size_t* value_length, bool* quoted) {
+  const size_t key_length = strlen(key);
+  for (size_t i = 0; i + key_length + 3 < length; ++i) {
+    if (json[i] != '"' || memcmp(json + i + 1, key, key_length) != 0 ||
+        json[i + 1 + key_length] != '"') {
+      continue;
+    }
+    size_t p = i + key_length + 2;
+    while (p < length && (json[p] == ' ' || json[p] == '\t')) ++p;
+    if (p >= length || json[p] != ':') continue;
+    ++p;
+    while (p < length && (json[p] == ' ' || json[p] == '\t')) ++p;
+    if (p >= length) return false;
+    const bool is_string = json[p] == '"';
+    if (is_string) ++p;
+    const size_t start = p;
+    while (p < length) {
+      const char c = json[p];
+      const bool digit = c >= '0' && c <= '9';
+      const bool word = (c >= 'a' && c <= 'z') || c == '_';
+      if (!(digit || (is_string && word))) break;
+      ++p;
+    }
+    if (is_string && (p >= length || json[p] != '"')) return false;
+    if (p == start) return false;
+    *value = json + start;
+    *value_length = p - start;
+    *quoted = is_string;
+    return true;
+  }
+  return false;
+}
+
+// Lowercase hex of exactly out_size bytes.
+inline bool pairHexField(const char* json, size_t length, const char* key,
+                         uint8_t* out, size_t out_size) {
+  const char* value = nullptr;
+  size_t value_length = 0;
+  bool quoted = false;
+  if (!pairField(json, length, key, &value, &value_length, &quoted) || !quoted ||
+      value_length != 2 * out_size) {
+    return false;
+  }
+  for (size_t i = 0; i < value_length; ++i) {
+    const char c = value[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+  }
+  return ht_crypto::hexDecode(value, value_length, out, out_size);
+}
+
+inline bool parsePairMessage(const char* json, size_t length, PairMessage& message) {
+  if (!json || length < 2 || length > kMaxPairMessageLength || json[0] != '{' ||
+      json[length - 1] != '}') {
+    return false;
+  }
+  const char* value = nullptr;
+  size_t value_length = 0;
+  bool quoted = false;
+  if (!pairField(json, length, "v", &value, &value_length, &quoted) || quoted ||
+      value_length != 1 || value[0] != '2') {
+    return false;
+  }
+  if (!pairField(json, length, "t", &value, &value_length, &quoted) || !quoted) {
+    return false;
+  }
+  PairMessage parsed;
+  auto is = [&](const char* name) {
+    return value_length == strlen(name) && memcmp(value, name, value_length) == 0;
+  };
+  if (is("start")) parsed.type = PairType::Start;
+  else if (is("commit")) parsed.type = PairType::Commit;
+  else if (is("nonce")) parsed.type = PairType::Nonce;
+  else if (is("confirm")) parsed.type = PairType::Confirm;
+  else if (is("abort")) parsed.type = PairType::Abort;
+  else return false;
+  uint8_t id[kPairIdSize];
+  if (!pairHexField(json, length, "id", id, sizeof(id))) return false;
+  ht_crypto::hexEncode(id, sizeof(id), parsed.id, sizeof(parsed.id));
+  parsed.has_pk = pairHexField(json, length, "pk", parsed.pk, sizeof(parsed.pk));
+  parsed.has_c = pairHexField(json, length, "c", parsed.c, sizeof(parsed.c));
+  parsed.has_n = pairHexField(json, length, "n", parsed.n, sizeof(parsed.n));
+  parsed.has_m = pairHexField(json, length, "m", parsed.m, sizeof(parsed.m));
+  if (pairField(json, length, "r", &value, &value_length, &quoted) && quoted &&
+      value_length < sizeof(parsed.reason)) {
+    memcpy(parsed.reason, value, value_length);
+    parsed.reason[value_length] = '\0';
+  }
+  switch (parsed.type) {
+    case PairType::Start:
+      if (!parsed.has_pk) return false;
+      break;
+    case PairType::Commit:
+      if (!parsed.has_pk || !parsed.has_c) return false;
+      break;
+    case PairType::Nonce:
+      if (!parsed.has_n) return false;
+      break;
+    case PairType::Confirm:
+      if (!parsed.has_m) return false;
+      break;
+    case PairType::Abort:
+      break;
+  }
+  message = parsed;
   return true;
+}
+
+// Builds {"v":2,"t":"<type>","id":"<id>"[,"<field>":"<hex or text>"]}.
+// Returns the length, or 0 when out is too small.
+inline size_t buildPairMessage(const char* type, const char* id, const char* field,
+                               const uint8_t* bytes, size_t bytes_length,
+                               const char* text, char* out, size_t out_size) {
+  if (!type || !id || !out) return 0;
+  int written = snprintf(out, out_size, "{\"v\":2,\"t\":\"%s\",\"id\":\"%s\"", type, id);
+  if (written <= 0 || static_cast<size_t>(written) >= out_size) return 0;
+  size_t offset = static_cast<size_t>(written);
+  if (field && (bytes || text)) {
+    written = snprintf(out + offset, out_size - offset, ",\"%s\":\"", field);
+    if (written <= 0 || offset + written >= out_size) return 0;
+    offset += static_cast<size_t>(written);
+    if (bytes) {
+      if (offset + 2 * bytes_length + 1 > out_size) return 0;
+      ht_crypto::hexEncode(bytes, bytes_length, out + offset, out_size - offset);
+      offset += 2 * bytes_length;
+    } else {
+      const size_t text_length = strlen(text);
+      if (offset + text_length + 1 > out_size) return 0;
+      memcpy(out + offset, text, text_length);
+      offset += text_length;
+    }
+    if (offset + 1 >= out_size) return 0;
+    out[offset++] = '"';
+  }
+  if (offset + 2 > out_size) return 0;
+  out[offset++] = '}';
+  out[offset] = '\0';
+  return offset;
 }
 
 // Unpair ends the pairing on both sides: whichever side removes it tells the
@@ -374,23 +594,24 @@ inline bool acceptSequence(ReplayWindow& window, uint32_t seq) {
   return true;
 }
 
-// Stored pairing: the code (so the display can show it) and the state. The
-// keys are derived again at boot.
-enum class PairingState : uint8_t { Off = 0, Pending = 1, Active = 2 };
+// Stored pairing: K, from which the keys are derived again at boot. Pairing
+// is either off (no record) or active; a v1 record (40 bytes, a typed code)
+// is discarded and the panel runs unencrypted until it is paired again.
+enum class PairingState : uint8_t { Off = 0, Active = 2 };
 
 struct __attribute__((packed)) PairingRecord {
   uint32_t magic;
   uint8_t version;
   uint8_t state;
   uint8_t reserved[2];
-  char code[kCodeLength + 1];
-  uint8_t padding[2];
+  uint8_t key[kPairKeySize];
   uint32_t checksum;
 };
-static_assert(sizeof(PairingRecord) == 40, "Pairing record size");
+static_assert(sizeof(PairingRecord) == 44, "Pairing record size");
 
 constexpr uint32_t kRecordMagic = 0x43435448;  // "HTCC" little-endian
-constexpr uint8_t kRecordVersion = 1;
+constexpr uint8_t kRecordVersion = 2;
+constexpr size_t kLegacyRecordSize = 40;
 
 inline uint32_t recordChecksum(const PairingRecord& record) {
   const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&record);
@@ -401,30 +622,24 @@ inline uint32_t recordChecksum(const PairingRecord& record) {
   return hash;
 }
 
-inline PairingRecord makeRecord(PairingState state, const char code[kCodeLength + 1]) {
+inline PairingRecord makeRecord(const uint8_t key[kPairKeySize]) {
   PairingRecord record;
   memset(&record, 0, sizeof(record));
   record.magic = kRecordMagic;
   record.version = kRecordVersion;
-  record.state = static_cast<uint8_t>(state);
-  memcpy(record.code, code, kCodeLength);
+  record.state = static_cast<uint8_t>(PairingState::Active);
+  memcpy(record.key, key, kPairKeySize);
   record.checksum = recordChecksum(record);
   return record;
 }
 
-inline bool applyRecord(const PairingRecord& record, PairingState& state,
-                        char code[kCodeLength + 1]) {
+inline bool applyRecord(const PairingRecord& record, uint8_t key[kPairKeySize]) {
   if (record.magic != kRecordMagic || record.version != kRecordVersion ||
       record.checksum != recordChecksum(record) ||
-      (record.state != static_cast<uint8_t>(PairingState::Pending) &&
-       record.state != static_cast<uint8_t>(PairingState::Active))) {
+      record.state != static_cast<uint8_t>(PairingState::Active)) {
     return false;
   }
-  char stored[kCodeLength + 1];
-  memcpy(stored, record.code, kCodeLength);
-  stored[kCodeLength] = '\0';
-  if (!normalizeCode(stored, code) || strcmp(stored, code) != 0) return false;
-  state = static_cast<PairingState>(record.state);
+  memcpy(key, record.key, kPairKeySize);
   return true;
 }
 

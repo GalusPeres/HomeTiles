@@ -526,6 +526,11 @@ struct TileGridConfig {
   Tile tiles[TILES_PER_GRID];
 };
 
+// Allocates a default TileGridConfig for a grid that lives as long as the
+// firmware: PSRAM first, internal RAM as fallback. Aborts when neither has
+// room, because the caller cannot run without its grid.
+TileGridConfig* allocateTileGridStorage(const char* name);
+
 static constexpr uint32_t TILE_BG_COLOR_RGB_MASK = 0x00FFFFFFu;
 static constexpr uint32_t TILE_BG_COLOR_EXPLICIT = 0x01000000u;
 
@@ -626,8 +631,8 @@ public:
   bool setActiveFolder(uint16_t folder_id);
   bool setActiveFolderCached(uint16_t folder_id, const TileGridConfig& grid);
   uint16_t getActiveFolderId() const { return active_folder_id; }
-  const TileGridConfig& getActiveGrid() const { return active_grid; }
-  TileGridConfig& getActiveGrid() { return active_grid; }
+  const TileGridConfig& getActiveGrid() const { return activeGrid(); }
+  TileGridConfig& getActiveGrid() { return activeGrid(); }
 
   const FolderEntry* getFolder(uint16_t folder_id) const;
   uint16_t getFolderParent(uint16_t folder_id) const;
@@ -652,7 +657,10 @@ private:
   static constexpr uint16_t kRootFolderId = 0;
   static constexpr uint16_t kInvalidFolderId = 0xFFFF;
 
-  TileGridConfig active_grid;
+  // PSRAM, allocated on first use (load() in setup()) because PSRAM is not
+  // ready while the global constructors run. Never freed.
+  mutable TileGridConfig* active_grid_ = nullptr;
+  TileGridConfig& activeGrid() const;
   uint16_t active_folder_id = kRootFolderId;
   std::vector<FolderEntry> folders;
 

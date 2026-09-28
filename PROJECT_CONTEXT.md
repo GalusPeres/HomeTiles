@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-09-27
+Last reviewed: 2026-09-28
 
 ## Sources of truth
 
@@ -16,7 +16,6 @@ Last reviewed: 2026-09-27
 
 - v0.6.12: `9605b6a`, CI `34353664113`, 15 profiles / 30 images; 102 tests pass. Guition V1/V2 PPA and Weather fixes; V2 confirmed, V1 hardware pending.
 - Stabilization: display/MQTT guards, Light coalescing, incremental Weather (`e3de63c`-`33b4e06`).
-- S3 TLS fallback: 87 tests/three builds pass; Guition OTA passed, Waveshare S3 pending. Earlier watchdogs unproven: `build/s3-ota-release-v0.6.10/`.
 - Guition S3 XIP/`-O2` reverted in `5279456` (risk, no measured gain); do not retry without evidence.
 
 ## Hardware validation
@@ -51,9 +50,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Reporter: JC8012P4A1 V2, SKU10153001-V2 (2632), `_I_W_Y`; #18 tested SKU10153002-V2 (2627), `_I_W_Y1`. Maintainer received JC8012P4A1C_I_W_Y1, SKU10153002-V2. Labels alone do not establish another panel variant.
 - V2 fixes committed in `e1a9297`: touch bounds, internal I2C atomic-state allocation, slot-aware SD cleanup; exact-V2 only. Beta `HOMETILES_ISSUE38_BETA` reports v0.6.12b1; release version stays v0.6.12.
-- SD (open in #55): 40 MHz card-init failure, 20 MHz retry timeout, then Hosted slot-1 assertion; V2 keeps default host flags without DEINIT_ARG (as V1), leaving slot 1 untouched; causes open. Beta SD diagnostic passes (~8 GB). Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`, `build/guition-v2-v0.6.12b1/VERIFICATION.md`.
+- SD: reporter card-init failure (40/20 MHz), then Hosted slot-1 assertion. V2 dropped DEINIT_ARG from default host flags like V1; maintainer SD diagnostic passes (~8 GB). Assertion and card failure causes open (#55). Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`.
 - Touch: maintainer confirms rapid-tap raw-bounds fix works. BIN/ELF: `build/guition-v2-touch/`.
-- Interrupt-WDT dump matches touch ELF SHA256 `af562d1cea4dc3d8096ec17cd631e45cc6d82ab1ea6fb0037c03e8638c234a67`: IDLE1 waits for an interrupt while setup uploads touch firmware; the I2C atomic-state object (`0x483e96bc`) was in PSRAM. Backport `37758ef327f9` forces internal allocation (caps 0x804). Exposure proven, WDT causality unproven (no timestamp). Evidence: `build/guition-v2-crash-20260911/`.
+- Interrupt-WDT dump (touch ELF): I2C atomic-state object was in PSRAM; backport `37758ef327f9` forces internal allocation. Exposure proven, WDT causality unproven. Evidence/hash: `build/guition-v2-crash-20260911/`.
 - Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. Released firmware v0.6.12 preserves daily extrema (24 C daily versus partial hourly 11 C).
 
 ## Sensor history
@@ -116,11 +115,16 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
 - CI `36334088502`: 17 builds, 152 tests/21 skips; local 173 pass. Six S3 BINs verified.
 - v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44) incl. installer stub crash; French.
-- Issues answered 09-27: closed #25 #31 #36 #42 #43 #47, PRs #28/#29; tests pending #7 #11 #27 #34 #45; #38 closed, V2 SD restart now #55.
+- Tests pending #7 #11 #27 #34 #45; V2 SD restart #55.
 
 ## Maintenance
 
-- Docs: `docs/`, `mkdocs.yml`, `overrides/`; gh-pages. Installer esptool-js 0.7.0; HW pending P4 <v3/v3.x, CH340 S3.
+- Docs: `docs/`, `mkdocs.yml`, `overrides/`; gh-pages. Installer esptool-js 0.7.0 (#57) passed Update on five owned devices; P4 v3.x pending (#41/#44).
+
+## Flash and RAM (PR #62)
+
+- `-fno-exceptions` via a `compiler.cpp.flags` override (CI and local): about -300 KiB per image, Tab5 428 KiB OTA headroom. Unused LVGL widgets/formats off: -49 KiB, IRAM -21 KiB.
+- Renderer slot state, Binary Sensor queue and active/screensaver grids live in PSRAM, allocated in `setup()` (PSRAM is not ready in global constructors). Static DRAM V2 136,632 -> 64,984 B, S3 139,576 -> 80,376 B. V2/S3 b75 passed.
 
 ## View control and telemetry
 

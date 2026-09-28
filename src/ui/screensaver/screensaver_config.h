@@ -53,20 +53,25 @@ class ScreensaverConfigStore {
   const ScreensaverConfigData& get() const { return data_; }
   ScreensaverConfigData& mutableData() { return data_; }
 
-  const TileGridConfig& tileGrid() const { return tile_grid_; }
-  TileGridConfig& mutableTileGrid() { return tile_grid_; }
+  const TileGridConfig& tileGrid() const { return gridStorage(); }
+  TileGridConfig& mutableTileGrid() { return gridStorage(); }
   bool replaceTileGrid(const TileGridConfig& grid);
   const Tile* tile(size_t index) const;
 
  private:
   ScreensaverConfigData data_;
-  TileGridConfig tile_grid_;
+  // PSRAM, allocated with transparent defaults on first use (load() in
+  // setup()) because PSRAM is not ready while the global constructors run.
+  // Never freed.
+  mutable TileGridConfig* tile_grid_ = nullptr;
+  TileGridConfig& gridStorage() const;
   Tile legacy_tiles_[GRID_COLS];
   size_t legacy_slot_count_ = 0;
   bool legacy_slots_loaded_ = false;
 
   void resetDefaults();
-  void resetGrid(TileGridConfig& grid, bool transparent_defaults);
+  void resetSettings();
+  static void resetGrid(TileGridConfig& grid, bool transparent_defaults);
   void normalize();
   void normalizeTileGrid(TileGridConfig& grid);
   bool loadPath(const char* path);

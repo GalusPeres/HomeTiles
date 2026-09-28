@@ -45,7 +45,7 @@ requireMarker(rendererShared, 'extern WeatherTileWidgets* g_tab0_weather;', 'ren
 requireMarker(rendererShared, 'extern MediaTileWidgets* g_screensaver_media;', 'renderer shared declarations');
 requireMarker(
   rendererHeader,
-  'in\n// PSRAM. Every chip uses this storage; internal RAM is scarce on P4 and S3.',
+  'PSRAM. Every chip uses this storage',
   'renderer storage contract');
 if (/static EntityCacheEntry g_entity_cache\[/.test(folders) ||
     !folders.includes('static EntityCacheEntry* g_entity_cache = nullptr;')) {

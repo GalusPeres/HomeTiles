@@ -681,6 +681,13 @@ void setup() {
   log_memory_status("after-nvs");
   Serial.flush();
 
+  // Tile renderer state lives in PSRAM (PSRAM is ready only after the global
+  // constructors) and must exist before the UI task and the MQTT worker.
+  if (!tile_renderer_init_cold_storage()) {
+    Serial.println("[Setup] Tile state storage FAILED!");
+    while(1) delay(1000);
+  }
+
   Serial.println("[Setup] Loading configs...");
   Serial.flush();
   bool has_config = configManager.load();

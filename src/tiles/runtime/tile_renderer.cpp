@@ -159,7 +159,7 @@ static ClimateState* allocate_climate_states(const char* grid_name) {
 }
 
 bool tile_renderer_init_cold_storage() {
-  if (g_tab0_weather && g_tab0_media) return true;
+  if (g_tab0_weather && g_tab0_media) return binary_sensor_init_storage();
   if (g_cold_state_init_attempted) return false;
   g_cold_state_init_attempted = true;
 
@@ -204,7 +204,7 @@ bool tile_renderer_init_cold_storage() {
       "[Tiles/Mem] Weather=%u bytes Media=%u bytes in PSRAM\n",
       static_cast<unsigned>(sizeof(WeatherTileWidgets) * kWeatherCount),
       static_cast<unsigned>(sizeof(MediaTileWidgets) * kMediaCount));
-  return true;
+  return binary_sensor_init_storage();
 }
 
 SensorTileWidgets* tile_renderer_get_sensor_widgets(GridType grid_type) {

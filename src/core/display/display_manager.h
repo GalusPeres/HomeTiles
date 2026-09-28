@@ -65,4 +65,9 @@ private:
 
 extern DisplayManager displayManager;
 
+// TEMPORARY diagnostic (b88): while enabled (screensaver visible), the touch
+// callback logs finger down/up and tracks the longest gap between two reads.
+void display_touch_diag_enable(bool enabled);
+uint32_t display_touch_diag_take_max_gap_ms();
+
 #endif // DISPLAY_MANAGER_H

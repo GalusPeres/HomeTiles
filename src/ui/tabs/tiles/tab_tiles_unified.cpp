@@ -70,10 +70,11 @@ static constexpr uint32_t kFolderCacheInitialEstimatedCost = 8UL * 1024UL;
 #else
 static constexpr size_t kMaxResidentFolderUiCaches = 4;
 // Guition S3 logs (b85): a 16-tile folder grid costs 1-2 KB internal RAM,
-// since LVGL objects live in PSRAM; runtime free internal RAM is 44-48 KB.
+// since LVGL objects live in PSRAM; runtime free internal RAM is 43-48 KB
+// (b87: 43 KB at the first growth check, so the floor sits a little lower).
 // The former 112/72 KB floor dated from internal LVGL memory and kept every
 // S3 at three grids, rebuilding a fourth folder on each visit.
-static constexpr uint32_t kFolderCacheGrowMinInternalFreeBytes = 44UL * 1024UL;
+static constexpr uint32_t kFolderCacheGrowMinInternalFreeBytes = 40UL * 1024UL;
 static constexpr uint32_t kFolderCacheGrowMinLargestInternalBytes = 24UL * 1024UL;
 #endif
 

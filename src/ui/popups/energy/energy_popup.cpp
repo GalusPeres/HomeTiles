@@ -1240,6 +1240,10 @@ static void finish_energy_popup_open() {
     refresh_from_cache(g_energy_popup_ctx);
     g_energy_popup_ctx->body_ready = true;
     energy_request_period("day", true);
+    // Load 7D in the background, so switching shows cached bars at once
+    // instead of waiting for the Bridge (250-600 ms). The popup ignores
+    // responses for the other period; the request is throttled.
+    energy_request_period("week", false);
   }
 }
 
@@ -1333,6 +1337,7 @@ void process_energy_popup_queue() {
     if (popup_visible(g_energy_popup_ctx)) {
       refresh_from_cache(g_energy_popup_ctx);
       energy_request_period("day", true);
+      energy_request_period("week", false);  // background, see above
     }
     return;
   }

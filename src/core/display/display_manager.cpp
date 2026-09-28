@@ -25,6 +25,45 @@ lv_color_t* DisplayManager::buf2 = nullptr;
 uint32_t DisplayManager::last_activity_time = 0;
 uint8_t DisplayManager::rotation = 0;
 static bool g_ignore_touch_until_release = false;
+
+// TEMPORARY diagnostic (b88): screensaver tap handling.
+static bool g_touch_diag = false;
+static bool g_touch_diag_down = false;
+static uint32_t g_touch_diag_down_ms = 0;
+static uint32_t g_touch_diag_last_read_ms = 0;
+static uint32_t g_touch_diag_max_gap_ms = 0;
+
+void display_touch_diag_enable(bool enabled) {
+  g_touch_diag = enabled;
+  g_touch_diag_down = false;
+  g_touch_diag_last_read_ms = 0;
+  g_touch_diag_max_gap_ms = 0;
+}
+
+uint32_t display_touch_diag_take_max_gap_ms() {
+  const uint32_t gap = g_touch_diag_max_gap_ms;
+  g_touch_diag_max_gap_ms = 0;
+  return gap;
+}
+
+static void touch_diag_read(bool pressed, int16_t x, int16_t y) {
+  if (!g_touch_diag) return;
+  const uint32_t now = millis();
+  if (g_touch_diag_last_read_ms) {
+    const uint32_t gap = now - g_touch_diag_last_read_ms;
+    if (gap > g_touch_diag_max_gap_ms) g_touch_diag_max_gap_ms = gap;
+  }
+  g_touch_diag_last_read_ms = now;
+  if (pressed == g_touch_diag_down) return;
+  g_touch_diag_down = pressed;
+  if (pressed) {
+    g_touch_diag_down_ms = now;
+    Serial.printf("[SaverTouch] down x=%d y=%d\n", x, y);
+  } else {
+    Serial.printf("[SaverTouch] up after %lu ms\n",
+                  static_cast<unsigned long>(now - g_touch_diag_down_ms));
+  }
+}
 static bool g_input_enabled = true;
 static volatile uint16_t g_flush_log_budget = 0;
 static size_t g_buffer_lines = 0;
@@ -822,8 +861,10 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
     // Reset the activity timer and wake the power manager.
     last_activity_time = millis();
     powerManager.setHighPerformance(true);
+    touch_diag_read(true, mapped_x, mapped_y);
   } else {
     data->state = LV_INDEV_STATE_RELEASED;
+    touch_diag_read(false, 0, 0);
   }
 }
 

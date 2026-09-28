@@ -130,8 +130,10 @@ ClimateTileWidgets g_tab2_climate[TILES_PER_GRID];
 static ClimateState* g_tab0_climate_states = nullptr;
 static ClimateState* g_tab1_climate_states = nullptr;
 static ClimateState* g_tab2_climate_states = nullptr;
-static ClimateState g_climate_emergency_states[TILES_PER_GRID];
+static uint32_t g_climate_state_alloc_failures = 0;
 
+// Returns nullptr when neither PSRAM nor internal RAM has room. Callers then
+// skip the Climate state; the next access retries the allocation.
 static ClimateState* allocate_climate_states(const char* grid_name) {
   void* memory = heap_caps_malloc(
       sizeof(ClimateState) * TILES_PER_GRID,
@@ -144,10 +146,13 @@ static ClimateState* allocate_climate_states(const char* grid_name) {
     internal_fallback = memory != nullptr;
   }
   if (!memory) {
-    Serial.printf(
-        "[Climate] WARN: No state storage for %s, using emergency buffer\n",
-        grid_name ? grid_name : "?");
-    return g_climate_emergency_states;
+    if ((g_climate_state_alloc_failures++ % 50) == 0) {
+      Serial.printf("[Climate] ERROR: No state storage for %s (%u bytes)\n",
+                    grid_name ? grid_name : "?",
+                    static_cast<unsigned>(sizeof(ClimateState) *
+                                          TILES_PER_GRID));
+    }
+    return nullptr;
   }
   ClimateState* states = static_cast<ClimateState*>(memory);
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
@@ -416,7 +421,7 @@ void reset_climate_widget(GridType grid_type, uint8_t grid_index) {
   ClimateTileWidgets* widgets = tile_renderer_get_climate_widgets(grid_type);
   ClimateState* states = tile_renderer_get_climate_states(grid_type);
   widgets[grid_index] = {};
-  states[grid_index] = {};
+  if (states) states[grid_index] = {};
 }
 
 void reset_climate_widgets(GridType grid_type) {
@@ -424,7 +429,7 @@ void reset_climate_widgets(GridType grid_type) {
   ClimateState* states = tile_renderer_get_climate_states(grid_type);
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     widgets[i] = {};
-    states[i] = {};
+    if (states) states[i] = {};
   }
 }
 
@@ -488,7 +493,11 @@ void tile_renderer_snapshot_tab0(TileWidgetCache* out) {
   memcpy(out->switch_states, g_tab0_switch_states,
          sizeof(out->switch_states));
   memcpy(out->climate, g_tab0_climate, sizeof(out->climate));
-  memcpy(out->climate_states, climate_states, sizeof(out->climate_states));
+  if (climate_states) {
+    memcpy(out->climate_states, climate_states, sizeof(out->climate_states));
+  } else {
+    for (ClimateState& state : out->climate_states) state = ClimateState{};
+  }
   memcpy(out->covers, g_tab0_covers, sizeof(out->covers));
   memcpy(out->cover_states, g_tab0_cover_states,
          sizeof(out->cover_states));
@@ -512,7 +521,9 @@ void tile_renderer_restore_tab0(const TileWidgetCache* in) {
   memcpy(g_tab0_switch_states, in->switch_states,
          sizeof(in->switch_states));
   memcpy(g_tab0_climate, in->climate, sizeof(in->climate));
-  memcpy(climate_states, in->climate_states, sizeof(in->climate_states));
+  if (climate_states) {
+    memcpy(climate_states, in->climate_states, sizeof(in->climate_states));
+  }
   memcpy(g_tab0_covers, in->covers, sizeof(in->covers));
   memcpy(g_tab0_cover_states, in->cover_states,
          sizeof(in->cover_states));
@@ -2402,6 +2413,7 @@ static void update_climate_tile_state(
   if (grid_index >= TILES_PER_GRID || !payload) return;
   ClimateTileWidgets* widgets = tile_renderer_get_climate_widgets(grid_type);
   ClimateState* states = tile_renderer_get_climate_states(grid_type);
+  if (!states) return;
   ClimateTileWidgets& widget = widgets[grid_index];
 
   const uint32_t payload_hash = fnv1a_hash(payload);

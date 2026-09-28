@@ -3519,10 +3519,15 @@ bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
   applyIconColorsFromSd(folder_id, grid);
 
   // Retired tile types become empty without renumbering the persisted enum.
+  // Empty tiles saved before deletion cleared them still carry the deleted
+  // tile's entity and options; they are dropped here, the file keeps them
+  // until the grid is saved again.
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     if (isRetiredTileType(grid.tiles[i].type)) {
       grid.tiles[i] = Tile{};
       changed = true;
+    } else if (grid.tiles[i].type == TILE_EMPTY) {
+      clearEmptyTileFields(grid.tiles[i]);
     }
   }
 
@@ -3561,6 +3566,8 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
     working.tiles[i].title = hometiles_title::normalize(working.tiles[i].title.c_str()).c_str();
     if (isRetiredTileType(working.tiles[i].type)) {
       working.tiles[i] = Tile{};
+    } else if (working.tiles[i].type == TILE_EMPTY) {
+      clearEmptyTileFields(working.tiles[i]);
     }
     working.tiles[i].icon_colors = normalizeTileIconColors(
         working.tiles[i].type, working.tiles[i].icon_colors.c_str());

@@ -64,6 +64,76 @@ static void touch_diag_read(bool pressed, int16_t x, int16_t y) {
                   static_cast<unsigned long>(now - g_touch_diag_down_ms));
   }
 }
+
+// TEMPORARY diagnostic (b94): dragging on S3 lags more and more behind the
+// finger. While a finger moves, one line per second: frames drawn, their
+// average and longest duration, the longest gap between touch reads, the
+// longest touch read and how often the point moved. Taps log nothing.
+struct DragDiag {
+  uint32_t window_ms = 0, refr_start_ms = 0, last_read_ms = 0;
+  uint32_t frames = 0, refr_sum_ms = 0, refr_max_ms = 0;
+  uint32_t read_gap_max_ms = 0, read_max_us = 0, moves = 0;
+  int16_t last_x = 0, last_y = 0;
+  bool pressed = false;
+};
+static DragDiag g_drag;
+
+static void drag_diag_refr(lv_event_t* e) {
+  const uint32_t now = millis();
+  if (lv_event_get_code(e) == LV_EVENT_REFR_START) {
+    g_drag.refr_start_ms = now;
+    return;
+  }
+  if (!g_drag.pressed) return;
+  const uint32_t duration = now - g_drag.refr_start_ms;
+  ++g_drag.frames;
+  g_drag.refr_sum_ms += duration;
+  if (duration > g_drag.refr_max_ms) g_drag.refr_max_ms = duration;
+}
+
+static void drag_diag_read(bool pressed, int16_t x, int16_t y, uint32_t read_us) {
+  const uint32_t now = millis();
+  if (!g_drag.pressed) {
+    if (!pressed) return;
+    g_drag = DragDiag{};
+    g_drag.pressed = true;
+    g_drag.window_ms = g_drag.last_read_ms = now;
+    g_drag.last_x = x;
+    g_drag.last_y = y;
+    return;
+  }
+  const uint32_t gap = now - g_drag.last_read_ms;
+  if (gap > g_drag.read_gap_max_ms) g_drag.read_gap_max_ms = gap;
+  if (read_us > g_drag.read_max_us) g_drag.read_max_us = read_us;
+  g_drag.last_read_ms = now;
+  if (pressed && (x != g_drag.last_x || y != g_drag.last_y)) {
+    ++g_drag.moves;
+    g_drag.last_x = x;
+    g_drag.last_y = y;
+  }
+  if (pressed && now - g_drag.window_ms < 1000) return;
+  if (g_drag.moves) {
+    Serial.printf("[DragPerf] frames=%lu refr_avg=%lu ms refr_max=%lu ms read_gap_max=%lu ms "
+                  "read_max=%lu us moves=%lu\n",
+                  static_cast<unsigned long>(g_drag.frames),
+                  static_cast<unsigned long>(g_drag.frames ? g_drag.refr_sum_ms / g_drag.frames : 0),
+                  static_cast<unsigned long>(g_drag.refr_max_ms),
+                  static_cast<unsigned long>(g_drag.read_gap_max_ms),
+                  static_cast<unsigned long>(g_drag.read_max_us),
+                  static_cast<unsigned long>(g_drag.moves));
+  }
+  if (!pressed) {
+    g_drag.pressed = false;
+    return;
+  }
+  const int16_t last_x = g_drag.last_x, last_y = g_drag.last_y;
+  g_drag = DragDiag{};
+  g_drag.pressed = true;
+  g_drag.window_ms = g_drag.last_read_ms = now;
+  g_drag.last_x = last_x;
+  g_drag.last_y = last_y;
+}
+
 static bool g_input_enabled = true;
 static volatile uint16_t g_flush_log_budget = 0;
 static size_t g_buffer_lines = 0;
@@ -827,7 +897,10 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
   }
 
   BoardHAL::TouchPoint tp;
-  if (BoardHAL::getTouch(&tp)) {
+  const uint32_t read_started_us = micros();
+  const bool touched = BoardHAL::getTouch(&tp);
+  const uint32_t read_us = micros() - read_started_us;
+  if (touched) {
     int16_t mapped_x = tp.x;
     int16_t mapped_y = tp.y;
 #if !defined(DEVICE_M5STACKS_TAB5) && \
@@ -862,9 +935,11 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
     last_activity_time = millis();
     powerManager.setHighPerformance(true);
     touch_diag_read(true, mapped_x, mapped_y);
+    drag_diag_read(true, mapped_x, mapped_y, read_us);
   } else {
     data->state = LV_INDEV_STATE_RELEASED;
     touch_diag_read(false, 0, 0);
+    drag_diag_read(false, 0, 0, read_us);
   }
 }
 
@@ -961,6 +1036,9 @@ bool DisplayManager::init() {
   lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(indev, touch_cb);
   lv_indev_set_display(indev, disp);
+  // TEMPORARY diagnostic (b94), see drag_diag_read().
+  lv_display_add_event_cb(disp, drag_diag_refr, LV_EVENT_REFR_START, nullptr);
+  lv_display_add_event_cb(disp, drag_diag_refr, LV_EVENT_REFR_READY, nullptr);
 #if defined(HOMETILES_POPUP_TIMING)
   popup_timing::attach(disp, indev);
 #endif

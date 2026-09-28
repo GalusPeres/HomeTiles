@@ -686,6 +686,8 @@ void WebAdminServer::handleSaveTiles() {
     // Enforce the plain value mode for old imports and direct API callers too.
     tile.sensor_display_mode = 0;
   }
+  // Deletion: the old entity and options must not come back with a new tile.
+  if (tile.type == TILE_EMPTY) clearEmptyTileFields(tile);
 
   if (deleting_folder) {
     const uint16_t target_id = getNavigateTargetId(previous_tile);

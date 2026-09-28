@@ -2641,7 +2641,9 @@ function syncTileRadiusControls(tabEl) {
     if (!Array.isArray(tiles) || index < 0) return;
 
     const prev = tiles[index] || {};
-    const tile = Object.assign({}, prev);
+    // A deleted (empty) tile starts from nothing: merged over the previous
+    // data, its entity and options returned with the next tile in the slot.
+    const tile = Number(snapshot?.type) === 0 ? {} : Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
     const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
 

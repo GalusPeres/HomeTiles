@@ -163,6 +163,17 @@ struct Tile {
         image_slideshow_sec(10) {}
 };
 
+// A deleted (empty) tile keeps only its slot geometry. Its entity, texts and
+// options must not return when a new tile is placed in the same slot.
+static inline void clearEmptyTileFields(Tile& tile) {
+  Tile empty;
+  empty.col = tile.col;
+  empty.row = tile.row;
+  empty.span_w = tile.span_w;
+  empty.span_h = tile.span_h;
+  tile = empty;
+}
+
 enum TileIconDiscMode : uint8_t {
   TILE_ICON_DISC_GLOBAL = 0,
   TILE_ICON_DISC_ON = 1,

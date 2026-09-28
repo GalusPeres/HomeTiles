@@ -139,7 +139,17 @@ bool replace_file_atomically(fs::FS& fs) {
 ScreensaverConfigStore screensaverConfig;
 
 ScreensaverConfigStore::ScreensaverConfigStore() {
-  resetDefaults();
+  // The tile grid is created with its defaults on first use; see
+  // gridStorage().
+  resetSettings();
+}
+
+TileGridConfig& ScreensaverConfigStore::gridStorage() const {
+  if (!tile_grid_) {
+    tile_grid_ = allocateTileGridStorage("screensaver");
+    resetGrid(*tile_grid_, true);
+  }
+  return *tile_grid_;
 }
 
 void ScreensaverConfigStore::resetGrid(TileGridConfig& grid,
@@ -154,12 +164,16 @@ void ScreensaverConfigStore::resetGrid(TileGridConfig& grid,
   }
 }
 
-void ScreensaverConfigStore::resetDefaults() {
+void ScreensaverConfigStore::resetSettings() {
   data_ = ScreensaverConfigData{};
-  resetGrid(tile_grid_, true);
   for (size_t i = 0; i < GRID_COLS; ++i) legacy_tiles_[i] = Tile{};
   legacy_slot_count_ = 0;
   legacy_slots_loaded_ = false;
+}
+
+void ScreensaverConfigStore::resetDefaults() {
+  resetSettings();
+  resetGrid(gridStorage(), true);
 }
 
 void ScreensaverConfigStore::normalize() {
@@ -326,23 +340,23 @@ bool ScreensaverConfigStore::load() {
     Serial.println("[ScreensaverConfig] No configuration, defaults active");
   }
 
-  const bool grid_ok = tileConfig.loadScreensaverGrid(tile_grid_);
-  normalizeTileGrid(tile_grid_);
+  const bool grid_ok = tileConfig.loadScreensaverGrid(gridStorage());
+  normalizeTileGrid(gridStorage());
 
   bool grid_has_tiles = false;
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    if (tile_grid_.tiles[i].type != TILE_EMPTY) {
+    if (gridStorage().tiles[i].type != TILE_EMPTY) {
       grid_has_tiles = true;
       break;
     }
   }
   if (!grid_has_tiles && legacy_slots_loaded_) {
-    resetGrid(tile_grid_, true);
+    resetGrid(gridStorage(), true);
     for (size_t i = 0; i < legacy_slot_count_ && i < GRID_COLS; ++i) {
-      tile_grid_.tiles[i] = legacy_tiles_[i];
+      gridStorage().tiles[i] = legacy_tiles_[i];
     }
-    normalizeTileGrid(tile_grid_);
-    if (tileConfig.saveScreensaverGrid(tile_grid_)) {
+    normalizeTileGrid(gridStorage());
+    if (tileConfig.saveScreensaverGrid(gridStorage())) {
       // One-time migration from the discarded JSON slot format.
       config_needs_migration = true;
       Serial.println("[ScreensaverConfig] Migrated legacy JSON slots into TileGrid");
@@ -515,12 +529,12 @@ bool ScreensaverConfigStore::replaceTileGrid(const TileGridConfig& grid) {
   if (!candidate) return false;
   normalizeTileGrid(*candidate);
   const bool saved = tileConfig.saveScreensaverGrid(*candidate);
-  if (saved) tile_grid_ = *candidate;
+  if (saved) gridStorage() = *candidate;
   delete candidate;
   return saved;
 }
 
 const Tile* ScreensaverConfigStore::tile(size_t index) const {
   if (index >= TILES_PER_GRID) return nullptr;
-  return &tile_grid_.tiles[index];
+  return &gridStorage().tiles[index];
 }

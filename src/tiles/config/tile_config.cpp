@@ -325,6 +325,33 @@ TileConfig tileConfig;
 
 TileConfig::TileConfig() = default;
 
+TileGridConfig* allocateTileGridStorage(const char* name) {
+  void* memory = heap_caps_malloc(sizeof(TileGridConfig),
+                                  MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (!memory) {
+    memory = heap_caps_malloc(sizeof(TileGridConfig),
+                              MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (memory) {
+      Serial.printf("[TileConfig] WARN: %s grid uses %u bytes of internal RAM\n",
+                    name ? name : "?",
+                    static_cast<unsigned>(sizeof(TileGridConfig)));
+    }
+  }
+  if (!memory) {
+    Serial.printf("[TileConfig] ERROR: No storage for the %s grid (%u bytes)\n",
+                  name ? name : "?",
+                  static_cast<unsigned>(sizeof(TileGridConfig)));
+    Serial.flush();
+    abort();
+  }
+  return new (memory) TileGridConfig();
+}
+
+TileGridConfig& TileConfig::activeGrid() const {
+  if (!active_grid_) active_grid_ = allocateTileGridStorage("active");
+  return *active_grid_;
+}
+
 uint32_t tileDefaultBgColor() {
   return tile_color::normalize(configManager.getConfig().default_tile_color);
 }
@@ -2557,14 +2584,14 @@ bool TileConfig::load() {
   loadFolderAccess();
 
   active_folder_id = kRootFolderId;
-  return loadGrid(active_folder_id, active_grid);
+  return loadGrid(active_folder_id, activeGrid());
 }
 
 bool TileConfig::loadFolderGrid(uint16_t folder_id, TileGridConfig& out) {
   if (!folderExists(folder_id)) return false;
   bool ok = loadGrid(folder_id, out);
   if (ok && folder_id == active_folder_id) {
-    active_grid = out;
+    activeGrid() = out;
   }
   return ok;
 }
@@ -2785,16 +2812,16 @@ bool TileConfig::saveFolderGrid(uint16_t folder_id, TileGridConfig& grid) {
     // Keep the runtime cache identical to the policy-normalized grid that was
     // written. Normalize the existing member in place so this storage call
     // does not add another full TileGridConfig to the WebServer task stack.
-    active_grid = grid;
+    activeGrid() = grid;
     for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-      if (isRetiredTileType(active_grid.tiles[i].type)) {
-        active_grid.tiles[i] = Tile{};
+      if (isRetiredTileType(activeGrid().tiles[i].type)) {
+        activeGrid().tiles[i] = Tile{};
       }
     }
     if (folder_id == kRootFolderId) {
-      applySettingsTilePolicy(active_grid);
+      applySettingsTilePolicy(activeGrid());
     } else {
-      ensureBackTile(folder_id, active_grid);
+      ensureBackTile(folder_id, activeGrid());
     }
   }
   return ok;
@@ -2807,9 +2834,9 @@ bool TileConfig::saveScreensaverGrid(const TileGridConfig& grid) {
 bool TileConfig::setActiveFolder(uint16_t folder_id) {
   if (!folderExists(folder_id)) return false;
   const uint16_t previous_folder_id = active_folder_id;
-  if (!loadGrid(folder_id, active_grid)) {
+  if (!loadGrid(folder_id, activeGrid())) {
     if (previous_folder_id != folder_id && folderExists(previous_folder_id)) {
-      loadGrid(previous_folder_id, active_grid);
+      loadGrid(previous_folder_id, activeGrid());
     }
     return false;
   }
@@ -2820,7 +2847,7 @@ bool TileConfig::setActiveFolder(uint16_t folder_id) {
 bool TileConfig::setActiveFolderCached(uint16_t folder_id, const TileGridConfig& grid) {
   if (!folderExists(folder_id)) return false;
   active_folder_id = folder_id;
-  active_grid = grid;
+  activeGrid() = grid;
   return true;
 }
 
@@ -3310,7 +3337,7 @@ SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
   if (changed && !saveGridInPlace(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
   }
-  if (active_folder_id == kRootFolderId) active_grid = grid;
+  if (active_folder_id == kRootFolderId) activeGrid() = grid;
   return SettingsTileVisibilityResult::Success;
 }
 

@@ -174,8 +174,8 @@ const saveFolderGridEnd = tileSource.indexOf(
   'bool TileConfig::saveScreensaverGrid', saveFolderGridStart);
 const saveFolderGrid = tileSource.slice(saveFolderGridStart, saveFolderGridEnd);
 for (const marker of [
-  'active_grid = grid;',
-  'applySettingsTilePolicy(active_grid);',
+  'activeGrid() = grid;',
+  'applySettingsTilePolicy(activeGrid());',
 ]) requireMarker(saveFolderGrid, marker, 'Canonical active Settings grid cache');
 if (/TileGridConfig\s+\w+\s*=\s*grid/.test(saveFolderGrid)) {
   throw new Error(

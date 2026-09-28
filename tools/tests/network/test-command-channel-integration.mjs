@@ -93,7 +93,12 @@ assert.equal((systemPopup.match(/= create_system_button_row\(box\);|create_syste
   'Updates/Restart, the Security actions and GitHub/Security');
 assert.match(systemPopup, /create_system_icon_button\(system_action_row, "magnify"[\s\S]*create_system_icon_button\(system_action_row, "restart"/);
 assert.match(systemPopup, /create_system_icon_button\(link_row, "github"[\s\S]*create_system_icon_button\(link_row, "shield-lock"/);
-assert.match(systemPopup, /lv_obj_set_style_pad_top\(box, popup_layout::scale\(20\), 0\);/, 'the branding sits just below the header');
+assert.match(systemPopup, /constexpr bool kCompactSystem = SCREEN_HEIGHT < popup_layout::scale\(780\);\s*if \(kCompactSystem\) lv_obj_set_style_pad_top\(parent, 0, 0\);\s*lv_obj_set_style_pad_top\(box, kCompactSystem \? 0 : popup_layout::scale\(20\), 0\);/,
+  'the branding sits just below the header, right at it on displays lower than 800 layout pixels');
+// 1280x800 keeps the spacing; 480x480 (2/3 scale), 1024x600 (5/6) and the
+// 720-high layouts are compact.
+const compact = (height, scale) => height < Math.round(780 * scale);
+assert.ok(!compact(800, 1) && compact(720, 1) && compact(480, 2 / 3) && compact(600, 5 / 6));
 assert.doesNotMatch(systemPopup, /system_pair_btn|"Pairing"/, 'pairing lives in the Security view');
 const applyView = settings.slice(settings.indexOf('static void system_apply_view() {'), settings.indexOf('static void system_set_view('));
 assert.match(applyView, /system_set_hidden\(system_action_row, !main\);\s*system_set_hidden\(security_action_row, !security\);/,

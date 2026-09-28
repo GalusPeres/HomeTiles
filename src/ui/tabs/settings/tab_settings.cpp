@@ -3252,8 +3252,12 @@ static void build_system_popup(lv_obj_t* parent) {
   lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  // The branding sits just below the header on every display.
-  lv_obj_set_style_pad_top(box, popup_layout::scale(20), 0);
+  // The branding sits just below the header. Displays lower than 800 layout
+  // pixels (480x480, 1024x600, 720x720, 1280x720) move it right up to the
+  // header, so a two-line update message still fits above the buttons.
+  constexpr bool kCompactSystem = SCREEN_HEIGHT < popup_layout::scale(780);
+  if (kCompactSystem) lv_obj_set_style_pad_top(parent, 0, 0);
+  lv_obj_set_style_pad_top(box, kCompactSystem ? 0 : popup_layout::scale(20), 0);
   lv_obj_set_style_pad_row(box, popup_layout::scale(18), 0);
 
   // Branding at the top: icon on the left, product name beside it and

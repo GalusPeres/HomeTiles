@@ -687,7 +687,8 @@ for (const heading of ["Browser installer", "Manual flashing", "Troubleshooting"
 assert.match(installerDocs, /Device list\]\(index\.md#device-support\)/);
 assert.match(installerDocs, /write-flash --erase-all 0x0/);
 assert.match(installerDocs, /chip-id/);
-assert.match(installerDocs, /v3\.2 and newer are unsupported/);
+assert.match(installerDocs, /10\.1 `_rev3` image is for v3\.1 and newer/);
+assert.match(installerDocs, /7B boards with v3\.2 or newer are not supported yet/);
 assert.doesNotMatch(installerDocs, /Local test before publication|Update safety and partition details/);
 assert.doesNotMatch(installerDocs, /manual flashing guide\]\(flashing\.md\)/);
 

@@ -1507,71 +1507,9 @@ void refresh_live_background_and_clock(ScreensaverState* st,
   if (st->clock_box) lv_obj_move_foreground(st->clock_box);
 }
 
-// TEMPORARY diagnostic (b88): why a short tap does not always end the
-// screensaver. Logs the overlay's input events, and once per second the
-// longest refresh and the longest gap between two touch reads when either
-// exceeds 50 ms.
-uint32_t g_saver_refr_start_ms = 0;
-uint32_t g_saver_refr_max_ms = 0;
-uint32_t g_saver_frames = 0;
-
-void saver_diag_refr(lv_event_t* e) {
-  const lv_event_code_t code = lv_event_get_code(e);
-  if (code == LV_EVENT_REFR_START) {
-    g_saver_refr_start_ms = millis();
-  } else if (code == LV_EVENT_REFR_READY) {
-    const uint32_t duration = millis() - g_saver_refr_start_ms;
-    if (duration > g_saver_refr_max_ms) g_saver_refr_max_ms = duration;
-    ++g_saver_frames;
-  }
-}
-
-void saver_diag_input(lv_event_t* e) {
-  const lv_event_code_t code = lv_event_get_code(e);
-  const char* name = code == LV_EVENT_PRESSED        ? "pressed"
-                     : code == LV_EVENT_RELEASED     ? "released"
-                     : code == LV_EVENT_CLICKED      ? "clicked"
-                     : code == LV_EVENT_PRESS_LOST   ? "press-lost"
-                     : code == LV_EVENT_LONG_PRESSED ? "long-pressed"
-                                                     : nullptr;
-  if (!name) return;
-  const bool on_overlay = g_state && lv_event_get_target(e) == g_state->overlay;
-  Serial.printf("[SaverInput] %s target=%s\n", name, on_overlay ? "overlay" : "child");
-}
-
-void saver_diag_begin(ScreensaverState* st) {
-  display_touch_diag_enable(true);
-  g_saver_refr_max_ms = 0;
-  g_saver_frames = 0;
-  if (lv_display_t* display = lv_display_get_default()) {
-    lv_display_add_event_cb(display, saver_diag_refr, LV_EVENT_ALL, nullptr);
-  }
-  if (st && st->overlay) lv_obj_add_event_cb(st->overlay, saver_diag_input, LV_EVENT_ALL, nullptr);
-}
-
-void saver_diag_end() {
-  display_touch_diag_enable(false);
-  if (lv_display_t* display = lv_display_get_default()) {
-    lv_display_remove_event_cb_with_user_data(display, saver_diag_refr, nullptr);
-  }
-}
-
-void saver_diag_second() {
-  const uint32_t gap = display_touch_diag_take_max_gap_ms();
-  if (gap >= 50 || g_saver_refr_max_ms >= 50) {
-    Serial.printf("[SaverPerf] frames=%lu refr_max=%lu ms touch_gap_max=%lu ms\n",
-                  static_cast<unsigned long>(g_saver_frames),
-                  static_cast<unsigned long>(g_saver_refr_max_ms),
-                  static_cast<unsigned long>(gap));
-  }
-  g_saver_refr_max_ms = 0;
-  g_saver_frames = 0;
-}
-
 void global_screensaver_timer_cb(lv_timer_t* timer) {
   ScreensaverState* st = static_cast<ScreensaverState*>(lv_timer_get_user_data(timer));
   if (!st || st != g_state) return;
-  saver_diag_second();
   if (g_live_config_refresh_requested) {
     g_live_config_refresh_requested = false;
     String preview = g_live_preview_wallpaper;
@@ -1635,7 +1573,6 @@ void on_global_overlay_delete(lv_event_t* e) {
     reset_binary_sensor_widgets(GridType::SCREENSAVER);
     reset_media_widgets(GridType::SCREENSAVER);
     g_state = nullptr;
-    saver_diag_end();
     restore_configured_display_brightness();
   }
   if (st->timer) lv_timer_delete(st->timer);
@@ -1736,7 +1673,6 @@ void show_image_screensaver() {
 #endif
   st->next_slot_refresh_ms = millis() + 1000U;
   st->timer = lv_timer_create(global_screensaver_timer_cb, 1000, st);
-  saver_diag_begin(st);
   apply_configured_screensaver_brightness();
 #if defined(DEVICE_ESP32_S3_RGB_480)
   if (atomic_show) lv_obj_invalidate(lv_screen_active());
@@ -1748,8 +1684,6 @@ void show_image_screensaver() {
 void hide_image_screensaver() {
   ScreensaverState* st = g_state;
   if (!st) return;
-  saver_diag_end();
-  Serial.println("[SaverInput] screensaver hidden");
 #if defined(DEVICE_ESP32_S3_RGB_480)
   DeviceImpl::displayBeginAtomicFrame("screensaver-exit");
 #endif

@@ -1,7 +1,4 @@
 #include "src/ui/popups/popup_shell.h"
-#if defined(ARDUINO)
-#include <Arduino.h>
-#endif
 #include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/shared/title_label.h"
@@ -398,20 +395,6 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
     lv_obj_clear_flag(shell.overlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(shell.overlay);
     lv_obj_move_foreground(shell.header);
-#if defined(ARDUINO)
-    {
-      // TEMPORARY diagnostic (b85): log when the shared frame changes size.
-      static int32_t last_w = 0, last_h = 0;
-      const int32_t w = lv_obj_get_style_width(body, LV_PART_MAIN);
-      const int32_t h = lv_obj_get_style_height(body, LV_PART_MAIN);
-      if (w != last_w || h != last_h) {
-        Serial.printf("[PopupPerf] shell %ldx%ld -> %ldx%ld\n", static_cast<long>(last_w),
-                      static_cast<long>(last_h), static_cast<long>(w), static_cast<long>(h));
-        last_w = w;
-        last_h = h;
-      }
-    }
-#endif
     for (auto* object : {shell.frame, shell.header}) {
       lv_obj_set_size(object, lv_obj_get_style_width(body, LV_PART_MAIN),
                        lv_obj_get_style_height(body, LV_PART_MAIN));

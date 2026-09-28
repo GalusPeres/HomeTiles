@@ -25,150 +25,6 @@ lv_color_t* DisplayManager::buf2 = nullptr;
 uint32_t DisplayManager::last_activity_time = 0;
 uint8_t DisplayManager::rotation = 0;
 static bool g_ignore_touch_until_release = false;
-
-// TEMPORARY diagnostic (b88): screensaver tap handling.
-static bool g_touch_diag = false;
-static bool g_touch_diag_down = false;
-static uint32_t g_touch_diag_down_ms = 0;
-static uint32_t g_touch_diag_last_read_ms = 0;
-static uint32_t g_touch_diag_max_gap_ms = 0;
-
-void display_touch_diag_enable(bool enabled) {
-  g_touch_diag = enabled;
-  g_touch_diag_down = false;
-  g_touch_diag_last_read_ms = 0;
-  g_touch_diag_max_gap_ms = 0;
-}
-
-uint32_t display_touch_diag_take_max_gap_ms() {
-  const uint32_t gap = g_touch_diag_max_gap_ms;
-  g_touch_diag_max_gap_ms = 0;
-  return gap;
-}
-
-static void touch_diag_read(bool pressed, int16_t x, int16_t y) {
-  if (!g_touch_diag) return;
-  const uint32_t now = millis();
-  if (g_touch_diag_last_read_ms) {
-    const uint32_t gap = now - g_touch_diag_last_read_ms;
-    if (gap > g_touch_diag_max_gap_ms) g_touch_diag_max_gap_ms = gap;
-  }
-  g_touch_diag_last_read_ms = now;
-  if (pressed == g_touch_diag_down) return;
-  g_touch_diag_down = pressed;
-  if (pressed) {
-    g_touch_diag_down_ms = now;
-    Serial.printf("[SaverTouch] down x=%d y=%d\n", x, y);
-  } else {
-    Serial.printf("[SaverTouch] up after %lu ms\n",
-                  static_cast<unsigned long>(now - g_touch_diag_down_ms));
-  }
-}
-
-// TEMPORARY diagnostic (b94): dragging on S3 lags more and more behind the
-// finger. While a finger moves, one line per second: frames drawn, their
-// average and longest duration, the longest gap between touch reads, the
-// longest touch read and how often the point moved. Taps log nothing.
-struct DragDiag {
-  uint32_t window_ms = 0, refr_start_ms = 0, last_read_ms = 0;
-  uint32_t frames = 0, refr_sum_ms = 0, refr_max_ms = 0;
-  uint32_t read_gap_max_ms = 0, read_max_us = 0, moves = 0;
-  // b95: main loop passes, summed per part in microseconds.
-  uint32_t loops = 0, loop_max_us = 0;
-  uint32_t head_us = 0, queues_us = 0, lvgl_us = 0, web_us = 0, net_us = 0;
-  uint32_t queue_ms[7] = {};
-  int16_t last_x = 0, last_y = 0;
-  bool pressed = false;
-};
-static DragDiag g_drag;
-
-void drag_diag_note_loop(uint32_t head_us, uint32_t queues_us, uint32_t lvgl_us,
-                         uint32_t web_us, uint32_t net_us, const uint32_t (&queue_ms)[7]) {
-  if (!g_drag.pressed) return;
-  ++g_drag.loops;
-  const uint32_t total = head_us + queues_us + lvgl_us + web_us + net_us;
-  if (total > g_drag.loop_max_us) g_drag.loop_max_us = total;
-  g_drag.head_us += head_us;
-  g_drag.queues_us += queues_us;
-  g_drag.lvgl_us += lvgl_us;
-  g_drag.web_us += web_us;
-  g_drag.net_us += net_us;
-  for (size_t i = 0; i < 7; ++i) g_drag.queue_ms[i] += queue_ms[i];
-}
-
-static void drag_diag_refr(lv_event_t* e) {
-  const uint32_t now = millis();
-  if (lv_event_get_code(e) == LV_EVENT_REFR_START) {
-    g_drag.refr_start_ms = now;
-    return;
-  }
-  if (!g_drag.pressed) return;
-  const uint32_t duration = now - g_drag.refr_start_ms;
-  ++g_drag.frames;
-  g_drag.refr_sum_ms += duration;
-  if (duration > g_drag.refr_max_ms) g_drag.refr_max_ms = duration;
-}
-
-static void drag_diag_read(bool pressed, int16_t x, int16_t y, uint32_t read_us) {
-  const uint32_t now = millis();
-  if (!g_drag.pressed) {
-    if (!pressed) return;
-    g_drag = DragDiag{};
-    g_drag.pressed = true;
-    g_drag.window_ms = g_drag.last_read_ms = now;
-    g_drag.last_x = x;
-    g_drag.last_y = y;
-    return;
-  }
-  const uint32_t gap = now - g_drag.last_read_ms;
-  if (gap > g_drag.read_gap_max_ms) g_drag.read_gap_max_ms = gap;
-  if (read_us > g_drag.read_max_us) g_drag.read_max_us = read_us;
-  g_drag.last_read_ms = now;
-  if (pressed && (x != g_drag.last_x || y != g_drag.last_y)) {
-    ++g_drag.moves;
-    g_drag.last_x = x;
-    g_drag.last_y = y;
-  }
-  if (pressed && now - g_drag.window_ms < 1000) return;
-  if (g_drag.moves) {
-    Serial.printf("[DragPerf] frames=%lu refr_avg=%lu ms refr_max=%lu ms read_gap_max=%lu ms "
-                  "read_max=%lu us moves=%lu\n",
-                  static_cast<unsigned long>(g_drag.frames),
-                  static_cast<unsigned long>(g_drag.frames ? g_drag.refr_sum_ms / g_drag.frames : 0),
-                  static_cast<unsigned long>(g_drag.refr_max_ms),
-                  static_cast<unsigned long>(g_drag.read_gap_max_ms),
-                  static_cast<unsigned long>(g_drag.read_max_us),
-                  static_cast<unsigned long>(g_drag.moves));
-    // Sums over the same window, in ms; queue parts as named in [LoopGap].
-    Serial.printf("[DragLoop] loops=%lu max=%lu ms head=%lu queues=%lu lvgl=%lu web=%lu net=%lu | "
-                  "bg=%lu bridge=%lu visible=%lu local=%lu popup=%lu update=%lu reload=%lu\n",
-                  static_cast<unsigned long>(g_drag.loops),
-                  static_cast<unsigned long>(g_drag.loop_max_us / 1000),
-                  static_cast<unsigned long>(g_drag.head_us / 1000),
-                  static_cast<unsigned long>(g_drag.queues_us / 1000),
-                  static_cast<unsigned long>(g_drag.lvgl_us / 1000),
-                  static_cast<unsigned long>(g_drag.web_us / 1000),
-                  static_cast<unsigned long>(g_drag.net_us / 1000),
-                  static_cast<unsigned long>(g_drag.queue_ms[0]),
-                  static_cast<unsigned long>(g_drag.queue_ms[1]),
-                  static_cast<unsigned long>(g_drag.queue_ms[2]),
-                  static_cast<unsigned long>(g_drag.queue_ms[3]),
-                  static_cast<unsigned long>(g_drag.queue_ms[4]),
-                  static_cast<unsigned long>(g_drag.queue_ms[5]),
-                  static_cast<unsigned long>(g_drag.queue_ms[6]));
-  }
-  if (!pressed) {
-    g_drag.pressed = false;
-    return;
-  }
-  const int16_t last_x = g_drag.last_x, last_y = g_drag.last_y;
-  g_drag = DragDiag{};
-  g_drag.pressed = true;
-  g_drag.window_ms = g_drag.last_read_ms = now;
-  g_drag.last_x = last_x;
-  g_drag.last_y = last_y;
-}
-
 static bool g_input_enabled = true;
 static volatile uint16_t g_flush_log_budget = 0;
 static size_t g_buffer_lines = 0;
@@ -932,10 +788,7 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
   }
 
   BoardHAL::TouchPoint tp;
-  const uint32_t read_started_us = micros();
-  const bool touched = BoardHAL::getTouch(&tp);
-  const uint32_t read_us = micros() - read_started_us;
-  if (touched) {
+  if (BoardHAL::getTouch(&tp)) {
     int16_t mapped_x = tp.x;
     int16_t mapped_y = tp.y;
 #if !defined(DEVICE_M5STACKS_TAB5) && \
@@ -969,12 +822,8 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
     // Reset the activity timer and wake the power manager.
     last_activity_time = millis();
     powerManager.setHighPerformance(true);
-    touch_diag_read(true, mapped_x, mapped_y);
-    drag_diag_read(true, mapped_x, mapped_y, read_us);
   } else {
     data->state = LV_INDEV_STATE_RELEASED;
-    touch_diag_read(false, 0, 0);
-    drag_diag_read(false, 0, 0, read_us);
   }
 }
 
@@ -1071,9 +920,6 @@ bool DisplayManager::init() {
   lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(indev, touch_cb);
   lv_indev_set_display(indev, disp);
-  // TEMPORARY diagnostic (b94), see drag_diag_read().
-  lv_display_add_event_cb(disp, drag_diag_refr, LV_EVENT_REFR_START, nullptr);
-  lv_display_add_event_cb(disp, drag_diag_refr, LV_EVENT_REFR_READY, nullptr);
 #if defined(HOMETILES_POPUP_TIMING)
   popup_timing::attach(disp, indev);
 #endif

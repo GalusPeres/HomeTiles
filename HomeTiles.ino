@@ -974,7 +974,6 @@ void loop() {
 
   if (first_run) Serial.println("[Loop] millis()...");
   uint32_t now = millis();
-  const uint32_t drag_loop_started_us = micros();  // TEMPORARY (b95), see drag_diag_note_loop()
 
   if (first_run) Serial.println("[Loop] lv_tick_inc()...");
   lv_tick_inc(now - g_lvgl_tick_last_ms);
@@ -1234,7 +1233,6 @@ void loop() {
   // of "found one cost, animation still hitches" -- this covers the whole gap
   // in one pass). Only prints if the total exceeds 80ms.
   uint32_t t_loop0 = millis();
-  const uint32_t drag_active_started_us = micros();
 #if HOMETILES_GUITION_S3_DIAGNOSTICS_ACTIVE
   const uint32_t s3_loop_started_us = micros();
 #endif
@@ -1322,11 +1320,9 @@ void loop() {
   const uint32_t s3_pre_lvgl_us = micros() - s3_loop_started_us;
   const uint32_t s3_lvgl_started_us = micros();
 #endif
-  const uint32_t drag_lvgl_started_us = micros();
   yield();  // Yield so the watchdog can be serviced.
   sync_popup_shell();
   lv_timer_handler();
-  const uint32_t drag_lvgl_done_us = micros();
 #if HOMETILES_GUITION_S3_DIAGNOSTICS_ACTIVE
   GuitionS3Diagnostics::noteUiLoop(
       s3_pre_lvgl_us, micros() - s3_lvgl_started_us);
@@ -1344,7 +1340,6 @@ void loop() {
 
   if (first_run) Serial.println("[Loop] webAdminServer.handle()...");
   if (webAdminServer.isRunning()) webAdminServer.handle();
-  const uint32_t drag_web_done_us = micros();
 
   if (first_run) Serial.println("[Loop] Network check...");
   if (configManager.isConfigured()) {
@@ -1422,20 +1417,6 @@ void loop() {
       }
       uiManager.updateStatusbar();
     }
-  }
-
-  {
-    // TEMPORARY diagnostic (b95): where a loop pass goes while a finger drags.
-    const uint32_t queue_ms[7] = {
-        t_bg_refresh - t_wake,           t_bridge_cache - t_bg_refresh,
-        t_visible_cache - t_bridge_cache, t_local_sensors - t_visible_cache,
-        t_popup_queues - t_local_sensors, t_update_queues - t_popup_queues,
-        t_reload_requests - t_update_queues};
-    drag_diag_note_loop(drag_active_started_us - drag_loop_started_us,
-                        drag_lvgl_started_us - drag_active_started_us,
-                        drag_lvgl_done_us - drag_lvgl_started_us,
-                        drag_web_done_us - drag_lvgl_done_us,
-                        micros() - drag_web_done_us, queue_ms);
   }
 
   if (first_run) {

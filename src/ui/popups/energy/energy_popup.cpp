@@ -1512,7 +1512,6 @@ void process_energy_popup_queue() {
   if (g_energy_popup_ctx->shown_slots &&
       energy_find_entry(g_energy_popup_ctx->entity_id, period.c_str(), entry) &&
       same_chart_data(g_energy_popup_ctx->shown_entry, entry)) {
-    Serial.printf("[EnergyPopup] %s data unchanged, chart kept\n", period.c_str());
     return;
   }
   const uint32_t started_ms = millis();

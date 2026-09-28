@@ -89,8 +89,13 @@ int main() {
   CHECK(!parseSessionCookie("ht_session=", parsed));
   CHECK(!parseSessionCookie(nullptr, parsed));
 
-  // Idle and absolute session lifetime.
-  CHECK(checkAccess(credential, tables, now + 30 + kSessionIdleMs, session, nullptr, false) == AccessResult::Unauthenticated);
+  // No idle timeout; a session ends after 30 days. Only the id hash is kept.
+  uint8_t id_hash[ht_crypto::kSha256Size];
+  ht_crypto::sha256(session, kTokenSize, id_hash);
+  CHECK(std::memcmp(tables.sessions[0].id_hash, id_hash, sizeof(id_hash)) == 0);
+  CHECK(std::memcmp(tables.sessions[0].id_hash, session, kTokenSize) != 0);
+  CHECK(checkAccess(credential, tables, now + 30 + 7UL * 24UL * 3600UL * 1000UL, session, nullptr, false) == AccessResult::Allowed);
+  CHECK(checkAccess(credential, tables, now + 30 + kSessionMaxMs, session, nullptr, false) == AccessResult::Unauthenticated);
 
   // Expired nonce (60 s) is rejected and not counted as a guess.
   issueNonce(tables, now, fake_random, nonce);
@@ -141,6 +146,30 @@ int main() {
   CHECK(checkAccess(credential, tables, t + 200, sessions[4], nullptr, false) == AccessResult::Allowed);
   CHECK(endSession(tables, sessions[4]));
   CHECK(checkAccess(credential, tables, t + 201, sessions[4], nullptr, false) == AccessResult::Unauthenticated);
+
+  // Stored sessions survive a restart: only sessions with a wall-clock expiry
+  // are written, and a restored one ends by the clock.
+  const uint32_t epoch = 1800000000u;
+  findSession(tables, t + 202, sessions[3])->expires_epoch = epoch + kSessionMaxSeconds;
+  findSession(tables, t + 202, sessions[2])->expires_epoch = epoch + 10;
+  SessionRecord stored = makeSessionRecord(tables);
+  CHECK(stored.count == 2);
+  CHECK(sizeof(SessionRecord) == 220);
+  Tables rebooted;
+  clearTables(rebooted);
+  CHECK(applySessionRecord(stored, rebooted, 5, 0) == 2);  // clock not set yet
+  CHECK(checkAccess(credential, rebooted, 6, sessions[3], nullptr, false) == AccessResult::Allowed);
+  CHECK(checkAccess(credential, rebooted, 6, sessions[1], nullptr, false) == AccessResult::Unauthenticated);
+  CHECK(expireSessions(rebooted, epoch + 10));
+  CHECK(checkAccess(credential, rebooted, 7, sessions[2], nullptr, false) == AccessResult::Unauthenticated);
+  CHECK(checkAccess(credential, rebooted, 7, sessions[3], nullptr, false) == AccessResult::Allowed);
+  clearTables(rebooted);
+  CHECK(applySessionRecord(stored, rebooted, 5, epoch + kSessionMaxSeconds) == 0);  // all expired
+  clearTables(rebooted);
+  CHECK(applySessionRecord(stored, rebooted, 5, epoch - 5) == 1);  // more than 30 days ahead
+  stored.entries[0].csrf[0] ^= 1;
+  clearTables(rebooted);
+  CHECK(applySessionRecord(stored, rebooted, 5, 0) == 0);  // checksum
 
   // Disabled protection: everything is allowed, login reports Disabled.
   Credential off;
@@ -239,7 +268,9 @@ assert.match(routes, /"Cookie",\s*\n\s*"X-HomeTiles-CSRF"/, 'cookie and CSRF hea
 assert.match(routes, /getLoginPage\(\)/, 'the root page falls back to the login page');
 
 const handlers = readRepoFile('src/web/server/handlers/web_admin_auth_handlers.cpp');
-assert.match(handlers, /Path=\/; HttpOnly; SameSite=Strict/, 'session cookie flags');
+assert.match(handlers, /cookie \+= "; Path=\/; Max-Age=";\s*cookie \+= String\(web_admin_auth::kSessionMaxSeconds\);\s*cookie \+= "; HttpOnly; SameSite=Lax";/,
+  'the session cookie lasts 30 days and survives a link from Home Assistant');
+assert.doesNotMatch(handlers, /SameSite=Strict/);
 assert.match(handlers, /"Retry-After"/, 'lockout reports Retry-After');
 assert.ok(handlers.includes('json += "\\",\\"iter\\":";\n  json += iterations;'),
   'the challenge returns the stored PBKDF2 iterations');
@@ -275,8 +306,21 @@ const brandLinks = adminHtml.slice(adminHtml.indexOf('<div class="brand-links">'
   adminHtml.indexOf('<!-- Tab Navigation -->'));
 assert.match(brandLinks, /appendWebAdminPasswordBadgeHtml\(html, tr\);/);
 assert.match(brandLinks, /href="https:\/\/buymeacoffee\.com\/galusperes"/);
-// GitHub has no direct star link; the repository page has the Star button.
-assert.match(brandLinks, /class="brand-link brand-star" href="https:\/\/github\.com\/GalusPeres\/HomeTiles"/);
+// A small support line under the links: "Support me with Stars or Buy Me a
+// Coffee", with translated words around the two links.
+const support = adminHtml.slice(adminHtml.indexOf('<div class="brand-support">'),
+  adminHtml.indexOf('<!-- Tab Navigation -->'));
+for (const key of ['web_support_prefix', 'web_support_stars', 'web_support_or']) {
+  assert.match(support, new RegExp(`appendHtmlEscaped\\(html, String\\(tr\\.${key}\\)\\);`), `${key} comes from i18n`);
+}
+assert.match(support, /class="brand-star" href="https:\/\/github\.com\/GalusPeres\/HomeTiles"[^>]*><i class="mdi mdi-star">/);
+assert.match(support, /class="brand-coffee" href="https:\/\/buymeacoffee\.com\/galusperes"/);
+const i18nSource = readRepoFile('src/core/i18n/i18n.cpp');
+assert.match(i18nSource, /"Kein Passwort",\s*"Unterstütze mich mit",\s*"Stars",\s*"oder"\};/);
+assert.match(i18nSource, /"No password",\s*"Support me with",\s*"Stars",\s*"or"\};/);
+assert.match(i18nSource, /"Aucun mot de passe",\s*"Soutenez-moi avec",\s*"des étoiles",\s*"ou"\};/);
+assert.match(readRepoFile('src/web/assets/admin.css'), /\.brand-support \{[^}]*font-size:12px;/,
+  'the support line stays small');
 const badge = section.slice(section.indexOf('void appendWebAdminPasswordBadgeHtml('));
 assert.match(badge, /enabled \? "is-on" : "is-off"/);
 assert.match(badge, /mdi-shield-lock/);

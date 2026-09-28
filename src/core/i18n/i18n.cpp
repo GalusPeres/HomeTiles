@@ -557,9 +557,8 @@ static const Strings kStringsDe = {
     "Das gespeicherte Passwort ist verborgen. Feld leer lassen, um es zu behalten.",
     "Updates",
     "Installieren",
-    "Mit Home Assistant verbunden, verschlüsselt",
-    "Mit Home Assistant verbunden, nicht verschlüsselt",
-    "Verbunden",
+    "Verbunden, verschlüsselt",
+    "Verbunden, unverschlüsselt",
     "Nicht verbunden",
     "Verschlüsseln schützt jeden Befehl an Home Assistant.",
     "Schaltet die Verschlüsselung auch in Home Assistant aus.",
@@ -589,7 +588,10 @@ static const Strings kStringsDe = {
     "In Home Assistant abgelehnt",
     "Fehlgeschlagen. Erneut versuchen.",
     "Passwort gesetzt",
-    "Kein Passwort"};
+    "Kein Passwort",
+    "Unterstütze mich mit",
+    "Stars",
+    "oder"};
 
 static const Strings kStringsEn = {
     "en",
@@ -1141,9 +1143,8 @@ static const Strings kStringsEn = {
     "The saved password is hidden. Leave the field empty to keep it.",
     "Updates",
     "Install",
-    "Connected to Home Assistant, encrypted",
-    "Connected to Home Assistant, not encrypted",
-    "Connected",
+    "Connected, encrypted",
+    "Connected, not encrypted",
     "Not connected",
     "Encryption protects every command to Home Assistant.",
     "Also turns off encryption in Home Assistant.",
@@ -1173,7 +1174,10 @@ static const Strings kStringsEn = {
     "Rejected in Home Assistant",
     "Failed. Try again.",
     "Password set",
-    "No password"};
+    "No password",
+    "Support me with",
+    "Stars",
+    "or"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1725,9 +1729,8 @@ static const Strings kStringsFr = {
     "Le mot de passe enregistré est masqué. Laissez le champ vide pour le conserver.",
     "Mises à jour",
     "Installer",
-    "Connecté à Home Assistant, chiffré",
-    "Connecté à Home Assistant, non chiffré",
-    "Connecté",
+    "Connecté, chiffré",
+    "Connecté, non chiffré",
     "Non connecté",
     "Le chiffrement protège chaque commande vers Home Assistant.",
     "Désactive aussi le chiffrement dans Home Assistant.",
@@ -1757,7 +1760,10 @@ static const Strings kStringsFr = {
     "Refusé dans Home Assistant",
     "Échec. Réessayez.",
     "Mot de passe défini",
-    "Aucun mot de passe"};
+    "Aucun mot de passe",
+    "Soutenez-moi avec",
+    "des étoiles",
+    "ou"};
 
 static const LocaleProfile kLocaleDe = {
     "de",

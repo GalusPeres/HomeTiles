@@ -1539,13 +1539,23 @@ String WebAdminServer::getAdminPage() {
   html += admin_heading_subtitle;
   html += R"html(</div>
         </div>
+        <div class="brand-side">
         <div class="brand-links">)html";
   appendWebAdminPasswordBadgeHtml(html, tr);
   html += R"html(
           <a class="brand-link" href="https://galusperes.github.io/HomeTiles/" target="_blank" rel="noopener"><i class="mdi mdi-book-open-variant"></i>Docs</a>
           <a class="brand-link" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-github"></i>GitHub</a>
-          <a class="brand-link brand-star" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-star"></i>Star</a>
-          <a class="brand-link brand-coffee" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener"><i class="mdi mdi-coffee"></i>Buy Me a Coffee</a>
+        </div>)html";
+  // Small support line: a GitHub star (GitHub has no direct star URL, the
+  // repository page has the button) or a coffee.
+  html += R"html(
+        <div class="brand-support">)html";
+  appendHtmlEscaped(html, String(tr.web_support_prefix));
+  html += R"html( <a class="brand-star" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-star"></i>)html";
+  appendHtmlEscaped(html, String(tr.web_support_stars));
+  html += R"html(</a> )html";
+  appendHtmlEscaped(html, String(tr.web_support_or));
+  html += R"html( <a class="brand-coffee" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener"><i class="mdi mdi-coffee"></i>Buy Me a Coffee</a></div>
         </div>
       </div>
       

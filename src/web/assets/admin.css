@@ -97,7 +97,8 @@
     .brand svg { flex-shrink:0; }
     .brand h1 { margin:0; font-size:24px; font-weight:700; color:#ffffff; letter-spacing:-0.01em; }
     .brand .device { color:var(--text-3); font-size:13px; margin-top:3px; }
-    .brand-links { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .brand-side { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:8px; min-width:0; }
+    .brand-links { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
     .brand-link {
       display:inline-flex;
       align-items:center;
@@ -116,6 +117,11 @@
     .brand-link .mdi { font-size:17px; line-height:1; }
     .brand-security.is-on, .brand-security.is-on:hover { color:#51cf66; border-color:rgba(81,207,102,0.45); }
     .brand-security.is-off, .brand-security.is-off:hover { color:#ff6b6b; border-color:rgba(255,107,107,0.45); }
+    /* Small support line under the links: a GitHub star or a coffee. */
+    .brand-support { display:flex; align-items:center; justify-content:flex-end; gap:5px; flex-wrap:wrap; color:var(--text-3); font-size:12px; }
+    .brand-support a { display:inline-flex; align-items:center; gap:3px; color:var(--text-2); font-weight:600; text-decoration:none; }
+    .brand-support a:hover { color:var(--text); }
+    .brand-support .mdi { font-size:14px; line-height:1; }
     .brand-star .mdi { color:#f5c518; }
     .brand-coffee .mdi { color:#ffdd00; }
     h1 { margin:0 0 8px; font-size:28px; color:var(--text); }

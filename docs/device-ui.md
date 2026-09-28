@@ -114,4 +114,6 @@ View the firmware version and device name, or use the maintenance actions:
 - **Updates:** find and install a new release; see [Firmware Updates](updating.md).
 - **Restart:** reboot the display.
 - **GitHub:** show a QR code for the project.
-- **Security:** the Home Assistant connection, [encrypted Bridge commands](bridge.md#encrypted-commands) and the [Web Admin password](web-admin.md#web-admin-password). A check shows that the display is connected, and a green shield shows that commands are encrypted. **Encrypt** sets up encryption with Home Assistant by a six-digit number, **Turn off** switches it off on both sides, and **Password** removes a forgotten Web Admin password. Both ask before they act.
+- **Security:** [encrypted Bridge commands](bridge.md#encrypted-commands) and the [Web Admin password](web-admin.md#web-admin-password). **Encrypt** sets up encryption with Home Assistant by a six-digit number, **Turn off** switches it off on both sides, and **Password** removes a forgotten Web Admin password. Both ask before they act.
+
+Below the version, System lists the device, the Home Assistant connection and the Web Admin password. A check shows that the display is connected, and a green shield shows that commands are encrypted or the password is set. GitHub and Security are colored while their view is open; tap them again to return.

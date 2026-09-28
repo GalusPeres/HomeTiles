@@ -613,9 +613,10 @@ struct Strings {
   const char* system_install_btn;
   // Security view of the System popup: pairing with Home Assistant (the
   // panel and Home Assistant show the same number) and the Web Admin password.
-  const char* security_status_paired;
-  const char* security_status_plain;
-  const char* security_value_connected;
+  // Home Assistant row in System: connected and encrypted, connected only,
+  // or offline.
+  const char* security_value_encrypted;
+  const char* security_value_plain;
   const char* security_value_offline;
   const char* security_hint_pair;
   const char* security_hint_unpair;
@@ -647,6 +648,10 @@ struct Strings {
   // Web Admin header badge: whether a Web Admin password protects the page.
   const char* web_auth_badge_on;
   const char* web_auth_badge_off;
+  // Web Admin header: "<prefix> <stars> <or> Buy Me a Coffee"; both are links.
+  const char* web_support_prefix;
+  const char* web_support_stars;
+  const char* web_support_or;
 };
 
 // Locale-specific display rules and short runtime strings shared by

@@ -141,7 +141,12 @@ void WebAdminServer::handleAuthLogin() {
       String cookie = web_admin_auth::kSessionCookieName;
       cookie += "=";
       cookie += session_hex;
-      cookie += "; Path=/; HttpOnly; SameSite=Strict";
+      // Kept for the 30 days of the session, also when the browser closes.
+      // Lax lets a link from Home Assistant open Web Admin signed in; every
+      // change still needs the CSRF header.
+      cookie += "; Path=/; Max-Age=";
+      cookie += String(web_admin_auth::kSessionMaxSeconds);
+      cookie += "; HttpOnly; SameSite=Lax";
       server.sendHeader("Set-Cookie", cookie);
       server.sendHeader("Cache-Control", "no-store");
       String json = "{\"csrf\":\"";
@@ -189,7 +194,7 @@ void WebAdminServer::handleAuthLogout() {
   const String cookie = server.header("Cookie");
   web_admin_auth::logout(cookie.c_str());
   String expired = web_admin_auth::kSessionCookieName;
-  expired += "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict";
+  expired += "=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax";
   server.sendHeader("Set-Cookie", expired);
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", "{\"ok\":true}");
@@ -215,7 +220,7 @@ void WebAdminServer::handleAuthPassword() {
       return;
     }
     String expired = web_admin_auth::kSessionCookieName;
-    expired += "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict";
+    expired += "=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax";
     server.sendHeader("Set-Cookie", expired);
     server.sendHeader("Cache-Control", "no-store");
     server.send(200, "application/json", "{\"ok\":true,\"enabled\":false}");

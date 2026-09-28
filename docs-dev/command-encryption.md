@@ -65,7 +65,7 @@ Login:
    `{"nonce":"…","proof":"<64 hex>"}`.
 3. The panel compares in constant time and consumes the nonce whatever the
    result (single use, 60 s lifetime, at most four outstanding).
-4. Success: `Set-Cookie: ht_session=<32 hex>; Path=/; HttpOnly; SameSite=Strict`
+4. Success: `Set-Cookie: ht_session=<32 hex>; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax`
    and `{"csrf":"<32 hex>","server_proof":"<64 hex>"}` with
    `server_proof = HMAC-SHA256(key, "HomeTiles-Web-Admin-server-v1" || nonce || proof)`.
    A client that knows the password verifies it to recognise the real panel.
@@ -76,8 +76,11 @@ Every other page and endpoint then needs the session cookie; every request
 other than GET/HEAD also needs the `X-HomeTiles-CSRF` header. Missing sessions
 get 401 with `X-HomeTiles-Auth: required`, a wrong CSRF token 403 with
 `X-HomeTiles-Auth: csrf`. Upload chunks of an unauthenticated request are
-discarded before they reach a writer. Sessions end after 1 h idle or 12 h,
-with a new password, or with a reboot (they live in PSRAM only).
+discarded before they reach a writer. Sessions last 30 days, also across
+restarts: the panel keeps SHA-256(session id), the CSRF token and the
+wall-clock expiry, and writes them to NVS on login, logout and password
+changes only. A new password, **Sign out** or removing the password ends them.
+At most four sessions exist; a login replaces the least recently used one.
 
 `POST /api/auth/password` with
 `{"salt":"<32 hex>","iter":<integer>,"key":"<64 hex>"}` sets or changes the

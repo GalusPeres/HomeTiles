@@ -8,8 +8,8 @@
 //   client: key   = PBKDF2-HMAC-SHA256(UTF-8 password, salt_bytes, iter, 32 B)
 //           proof = HMAC-SHA256(key, nonce_bytes)
 //   POST /api/auth/login {"nonce":<hex>,"proof":<hex>}
-//        -> {"csrf":<hex>,"server_proof":<hex>} and an HttpOnly, SameSite=Strict
-//           session cookie. server_proof = HMAC-SHA256(key, label || nonce ||
+//        -> {"csrf":<hex>,"server_proof":<hex>} and an HttpOnly, SameSite=Lax
+//           session cookie that lasts 30 days. server_proof = HMAC-SHA256(key, label || nonce ||
 //           proof) lets a client that knows the password recognise the real
 //           panel before it sends anything sensitive (the Bridge pairing push).
 // The device stores only salt, iteration count and key; it never derives a key
@@ -38,8 +38,11 @@ constexpr size_t kTokenHexSize = kTokenSize * 2 + 1;
 constexpr size_t kMaxNonces = 4;
 constexpr size_t kMaxSessions = 4;
 constexpr uint32_t kNonceLifetimeMs = 60UL * 1000UL;
-constexpr uint32_t kSessionIdleMs = 60UL * 60UL * 1000UL;
-constexpr uint32_t kSessionMaxMs = 12UL * 60UL * 60UL * 1000UL;
+// A session lasts 30 days, also across restarts (see SessionRecord).
+constexpr uint32_t kSessionMaxSeconds = 30UL * 24UL * 60UL * 60UL;
+constexpr uint32_t kSessionMaxMs = kSessionMaxSeconds * 1000UL;
+// Wall-clock seconds below this mean the clock is not set yet.
+constexpr uint32_t kMinValidEpoch = 1700000000UL;
 // Failed attempts before the first lockout; the delay then doubles from 1 s
 // up to five minutes.
 constexpr uint8_t kFreeFailures = 3;
@@ -71,11 +74,14 @@ struct NonceSlot {
   bool used;
 };
 
+// The panel keeps only the SHA-256 of a session id, so neither RAM nor the
+// stored record holds a usable cookie.
 struct SessionSlot {
-  uint8_t id[kTokenSize];
+  uint8_t id_hash[ht_crypto::kSha256Size];
   uint8_t csrf[kTokenSize];
   uint32_t created_ms;
   uint32_t last_seen_ms;
+  uint32_t expires_epoch;  // 0 while the clock was not set at login
   bool used;
 };
 
@@ -244,12 +250,13 @@ inline LoginResult login(const Credential& credential, Tables& tables,
   tables.failures = 0;
   tables.locked = false;
   SessionSlot& session = allocateSession(tables, now);
-  random(session.id, kTokenSize);
+  random(session_id_out, kTokenSize);
+  ht_crypto::sha256(session_id_out, kTokenSize, session.id_hash);
   random(session.csrf, kTokenSize);
   session.created_ms = now;
   session.last_seen_ms = now;
+  session.expires_epoch = 0;
   session.used = true;
-  memcpy(session_id_out, session.id, kTokenSize);
   memcpy(csrf_out, session.csrf, kTokenSize);
   computeServerProof(credential, nonce, proof, server_proof_out);
   return LoginResult::Success;
@@ -257,19 +264,36 @@ inline LoginResult login(const Credential& credential, Tables& tables,
 
 inline SessionSlot* findSession(Tables& tables, uint32_t now,
                                 const uint8_t session_id[kTokenSize]) {
+  uint8_t hash[ht_crypto::kSha256Size];
+  ht_crypto::sha256(session_id, kTokenSize, hash);
   SessionSlot* match = nullptr;
   for (SessionSlot& slot : tables.sessions) {
     if (!slot.used) continue;
-    if (elapsedAtLeast(now, slot.last_seen_ms, kSessionIdleMs) ||
-        elapsedAtLeast(now, slot.created_ms, kSessionMaxMs)) {
+    if (elapsedAtLeast(now, slot.created_ms, kSessionMaxMs)) {
       ht_crypto::secureZero(&slot, sizeof(slot));
       continue;
     }
-    if (ht_crypto::equalConstantTime(slot.id, session_id, kTokenSize)) {
+    if (ht_crypto::equalConstantTime(slot.id_hash, hash, sizeof(hash))) {
       match = &slot;
     }
   }
+  ht_crypto::secureZero(hash, sizeof(hash));
   return match;
+}
+
+// Ends sessions whose 30 days have passed by the wall clock. That also bounds
+// a session restored after a restart, whose uptime count starts again.
+// Returns true when one ended.
+inline bool expireSessions(Tables& tables, uint32_t epoch_now) {
+  if (epoch_now < kMinValidEpoch) return false;
+  bool ended = false;
+  for (SessionSlot& slot : tables.sessions) {
+    if (slot.used && slot.expires_epoch && epoch_now >= slot.expires_epoch) {
+      ht_crypto::secureZero(&slot, sizeof(slot));
+      ended = true;
+    }
+  }
+  return ended;
 }
 
 // A request that changes anything (every method except GET and HEAD) must
@@ -290,14 +314,16 @@ inline AccessResult checkAccess(const Credential& credential, Tables& tables,
 }
 
 inline bool endSession(Tables& tables, const uint8_t session_id[kTokenSize]) {
+  uint8_t hash[ht_crypto::kSha256Size];
+  ht_crypto::sha256(session_id, kTokenSize, hash);
   bool ended = false;
   for (SessionSlot& slot : tables.sessions) {
-    if (slot.used &&
-        ht_crypto::equalConstantTime(slot.id, session_id, kTokenSize)) {
+    if (slot.used && ht_crypto::equalConstantTime(slot.id_hash, hash, sizeof(hash))) {
       ht_crypto::secureZero(&slot, sizeof(slot));
       ended = true;
     }
   }
+  ht_crypto::secureZero(hash, sizeof(hash));
   return ended;
 }
 
@@ -468,6 +494,83 @@ inline bool applyRecord(const CredentialRecord& record, Credential& out) {
   memcpy(out.key, record.key, kKeySize);
   out.iterations = record.iterations;
   return true;
+}
+
+// Stored sessions, so a restart does not sign the browser out: the id hash,
+// the CSRF token and the wall-clock expiry of each session that has one.
+// Written only on login, logout and password changes.
+struct __attribute__((packed)) SessionRecordEntry {
+  uint8_t id_hash[ht_crypto::kSha256Size];
+  uint8_t csrf[kTokenSize];
+  uint32_t expires_epoch;
+};
+
+struct __attribute__((packed)) SessionRecord {
+  uint32_t magic;
+  uint8_t version;
+  uint8_t count;
+  uint8_t reserved[2];
+  SessionRecordEntry entries[kMaxSessions];
+  uint32_t checksum;
+};
+static_assert(sizeof(SessionRecord) == 220, "Web Admin session record size");
+
+constexpr uint32_t kSessionRecordMagic = 0x53575448;  // "HTWS" little-endian
+constexpr uint8_t kSessionRecordVersion = 1;
+
+inline uint32_t sessionRecordChecksum(const SessionRecord& record) {
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&record);
+  uint32_t hash = 2166136261UL;
+  for (size_t i = 0; i < sizeof(record) - sizeof(record.checksum); ++i) {
+    hash = (hash ^ bytes[i]) * 16777619UL;
+  }
+  return hash;
+}
+
+// Sessions from a login without a set clock have no expiry and stay in RAM.
+inline SessionRecord makeSessionRecord(const Tables& tables) {
+  SessionRecord record;
+  memset(&record, 0, sizeof(record));
+  record.magic = kSessionRecordMagic;
+  record.version = kSessionRecordVersion;
+  for (const SessionSlot& slot : tables.sessions) {
+    if (!slot.used || !slot.expires_epoch) continue;
+    SessionRecordEntry& entry = record.entries[record.count++];
+    memcpy(entry.id_hash, slot.id_hash, sizeof(entry.id_hash));
+    memcpy(entry.csrf, slot.csrf, kTokenSize);
+    entry.expires_epoch = slot.expires_epoch;
+  }
+  record.checksum = sessionRecordChecksum(record);
+  return record;
+}
+
+// Restores the stored sessions into empty tables. epoch_now is 0 while the
+// clock is not set; expireSessions() drops outdated ones once it is.
+inline size_t applySessionRecord(const SessionRecord& record, Tables& tables,
+                                 uint32_t now, uint32_t epoch_now) {
+  if (record.magic != kSessionRecordMagic ||
+      record.version != kSessionRecordVersion || record.count > kMaxSessions ||
+      record.checksum != sessionRecordChecksum(record)) {
+    return 0;
+  }
+  const bool clock_set = epoch_now >= kMinValidEpoch;
+  size_t restored = 0;
+  for (size_t i = 0; i < record.count && restored < kMaxSessions; ++i) {
+    const SessionRecordEntry& entry = record.entries[i];
+    if (entry.expires_epoch < kMinValidEpoch) continue;
+    if (clock_set && (epoch_now >= entry.expires_epoch ||
+                      entry.expires_epoch - epoch_now > kSessionMaxSeconds)) {
+      continue;
+    }
+    SessionSlot& slot = tables.sessions[restored++];
+    memcpy(slot.id_hash, entry.id_hash, sizeof(slot.id_hash));
+    memcpy(slot.csrf, entry.csrf, kTokenSize);
+    slot.created_ms = now;
+    slot.last_seen_ms = now;
+    slot.expires_epoch = entry.expires_epoch;
+    slot.used = true;
+  }
+  return restored;
 }
 
 }  // namespace web_admin_auth

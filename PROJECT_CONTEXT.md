@@ -138,5 +138,5 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Security branch (unreleased)
 
-- Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, PSRAM sessions, CSRF; device reset; hides secrets.
+- Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, 30-day NVS sessions, CSRF; device reset; hides secrets.
 - Command channel (optional): pairing v2 (X25519 via mbedTLS, 6-digit number confirmed on panel and HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; see `docs-dev/command-encryption.md`. P4 random: SAR ADC. HW/HA pending.

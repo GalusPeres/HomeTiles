@@ -272,19 +272,74 @@ void handleSession(const Header& header) {
   flushHeld();
 }
 
-void handleData(const Header& header, const uint8_t* body, size_t length) {
+// Session and replay check shared by every numbered Bridge message.
+bool acceptInSession(const Header& header) {
   if (!g_state->has_session || !header.has_session ||
       !ht_crypto::equalConstantTime(header.session, g_state->session,
                                     kSessionSize)) {
     g_state->hello_requested = true;
-    return;
+    return false;
   }
   if (!acceptSequence(g_state->bridge_window, header.seq)) {
     if (logDue(&g_state->last_log_ms)) {
       Serial.println("[SecureCmd] Repeated Bridge message ignored");
     }
-    return;
+    return false;
   }
+  return true;
+}
+
+// Tells the Bridge that this panel removes the pairing. Needs the current
+// session, so the message is numbered and cannot be replayed.
+bool sendUnpair() {
+  if (!g_state || !g_state->has_session || !networkManager.isMqttConnected()) {
+    return false;
+  }
+  Header header;
+  header.type = MessageType::Unpair;
+  header.has_session = true;
+  memcpy(header.session, g_state->session, kSessionSize);
+  header.seq = g_state->next_seq++;
+  size_t topic_length = 0, envelope_length = 0;
+  char* block = sealForBridge(header, nullptr, 0, &topic_length, &envelope_length);
+  if (!block) return false;
+  const bool queued = networkManager.mqttEnqueuePublishPriority(
+      block, block + topic_length + 1, false);
+  heap_caps_free(block);
+  return queued;
+}
+
+bool turnOff(bool tell_bridge, bool* bridge_notified) {
+  if (bridge_notified) *bridge_notified = false;
+  if (!writeRecord(nullptr)) {
+    Serial.println("[SecureCmd] Could not remove the pairing");
+    return false;
+  }
+  const bool notified = tell_bridge && sendUnpair();
+  if (bridge_notified) *bridge_notified = notified;
+  releaseState();
+  g_clear_status = true;
+  publishStatus();
+  // Replace the signed retained announcement with an unsigned one.
+  if (networkManager.isMqttConnected()) networkManager.publishBridgeConfig();
+  if (!tell_bridge) {
+    Serial.println("[SecureCmd] Pairing removed by the Bridge; commands are unencrypted again");
+  } else if (notified) {
+    Serial.println("[SecureCmd] Command encryption turned off; the Bridge removes its code too");
+  } else {
+    Serial.println("[SecureCmd] Command encryption turned off; no Bridge session, "
+                   "remove the code in the Bridge as well");
+  }
+  return true;
+}
+
+void handleUnpair(const Header& header) {
+  if (!acceptInSession(header)) return;
+  turnOff(false, nullptr);
+}
+
+void handleData(const Header& header, const uint8_t* body, size_t length) {
+  if (!acceptInSession(header)) return;
   if (strcmp(header.name, "camera") == 0) {
     char* text = static_cast<char*>(allocPreferPsram(length + 1));
     if (!text) return;
@@ -388,19 +443,9 @@ bool createCode() {
   return true;
 }
 
-bool disable() {
+bool disable(bool* bridge_notified) {
   begin();
-  if (!writeRecord(nullptr)) {
-    Serial.println("[SecureCmd] Could not remove the pairing");
-    return false;
-  }
-  releaseState();
-  g_clear_status = true;
-  publishStatus();
-  // Replace the signed retained announcement with an unsigned one.
-  if (networkManager.isMqttConnected()) networkManager.publishBridgeConfig();
-  Serial.println("[SecureCmd] Command encryption turned off");
-  return true;
+  return turnOff(true, bridge_notified);
 }
 
 char* signAnnouncement(const char* topic, const char* payload, size_t length) {
@@ -500,13 +545,19 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
         handleSession(header);
         break;
       case MessageType::Rekey:
+        // The Bridge is listening now; restart the backoff so a hello lost
+        // during its restart is repeated after 10 s instead of minutes.
         g_state->hello_requested = true;
+        g_state->hello_attempts = 0;
         if (logDue(&g_state->last_rekey_log_ms)) {
           Serial.println("[SecureCmd] Bridge asked for a new session");
         }
         break;
       case MessageType::Data:
         handleData(header, body, body_length);
+        break;
+      case MessageType::Unpair:
+        handleUnpair(header);
         break;
       default:
         break;

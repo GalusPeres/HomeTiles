@@ -22,7 +22,10 @@ bool sessionReady();
 
 // Device Settings: create a new code (state Pending) or turn pairing off.
 bool createCode();
-bool disable();
+// Turning off tells the Bridge through the current session, so it removes
+// its copy of the code as well. bridge_notified is false without a session;
+// the code must then also be removed in the Bridge.
+bool disable(bool* bridge_notified = nullptr);
 // The current code as five groups of five; false while pairing is off.
 bool displayCode(char out[kCodeDisplaySize]);
 

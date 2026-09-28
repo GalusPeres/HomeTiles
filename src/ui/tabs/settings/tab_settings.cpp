@@ -2708,8 +2708,12 @@ static void on_security_pair_clicked(lv_event_t*) {
 }
 
 static void on_security_unpair_clicked(lv_event_t*) {
-  if (command_channel::disable()) {
-    security_show_status(tr().security_encryption_off_hint, 0xC8C8C8);
+  bool bridge_notified = false;
+  if (command_channel::disable(&bridge_notified)) {
+    // The Bridge removes its code by itself when it was told; otherwise the
+    // user has to remove it there as well.
+    security_show_status(bridge_notified ? "" : tr().security_encryption_off_hint,
+                         0xC8C8C8);
   } else {
     security_show_status(tr().save_failed, 0xFF6B6B);
   }

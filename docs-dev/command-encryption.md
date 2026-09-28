@@ -129,8 +129,8 @@ public.
 
 | Topic | Direction | Content |
 | --- | --- | --- |
-| `{base}/secure/panel` | panel → Bridge | Sealed `hello` and `cmd` messages, QoS 0, not retained |
-| `{base}/secure/bridge` | Bridge → panel | Sealed `session`, `rekey` and `data` messages, QoS 0, not retained |
+| `{base}/secure/panel` | panel → Bridge | Sealed `hello`, `cmd` and `unpair` messages, QoS 0, not retained |
+| `{base}/secure/bridge` | Bridge → panel | Sealed `session`, `rekey`, `data` and `unpair` messages, QoS 0, not retained |
 | `{base}/stat/secure` | panel → Bridge | Retained plain status `{"v":1,"state":"pending"\|"active","kid":"<16 hex>"}`; empty when off |
 
 The status only helps the Bridge check an entered code; it grants nothing.
@@ -160,6 +160,7 @@ Plaintext:
 | `rekey` | Bridge → panel | `-` | 0 | `-` | empty |
 | `cmd` | panel → Bridge | current session | 1, 2, … | `scene`, `light`, `switch`, `media`, `climate`, `cover`, `camera`, `value` | the unchanged plain command payload |
 | `data` | Bridge → panel | current session | 1, 2, … | `camera` or `local_camera` | the unchanged plain payload of `{base}/stat/camera` or `{base}/cmnd/local_camera` |
+| `unpair` | both | current session | next number of the sender (continues `cmd`/`data`) | `-` | empty |
 
 ### Session and replay protection
 
@@ -170,7 +171,7 @@ Plaintext:
    challenge. The panel accepts it only for its current challenge, so an old
    recorded `session` message is useless. The Bridge creates at most one
    session per 2 s per panel.
-3. Each direction numbers its `cmd`/`data` messages from 1 within the session.
+3. Each direction numbers its `cmd`/`data`/`unpair` messages from 1 within the session.
    The receiver keeps the highest number and a 64-message window (reordering
    between the panel's normal and priority MQTT lanes) and accepts every number
    once. A replayed message is dropped; a message from an older session never
@@ -178,7 +179,9 @@ Plaintext:
 4. A Bridge that receives a command for an unknown session, or must send
    `data` without a session, sends `rekey` (at most every 5 s). It also sends
    `rekey` after its own start and when the retained status shows its key id
-   while it has no session.
+   while it has no session, in each case only once it is subscribed to
+   `{base}/secure/panel`. A `rekey` restarts the panel's hello backoff, so a
+   hello lost during a Bridge restart is repeated after 10 s.
 
 The panel holds at most one command for up to 5 s while it waits for a session
 and then sends it sealed; after that it drops it.
@@ -196,7 +199,38 @@ and then sends it sealed; after that it drops it.
 - A Bridge with a stored code ignores the plain command topics of that panel
   and sends camera replies and built-in camera requests only sealed. It keeps
   doing so if the panel later reports `off` or another key id (an attacker
-  could forge that status); the user removes the code in the Bridge.
+  could forge that status) and asks the user, with a persistent notification,
+  to remove the pairing under Configure → Security.
+
+### Removing the pairing
+
+Removing the pairing on one side removes it on the other side too, with an
+`unpair` message in the current session. It is authenticated and numbered
+like `cmd`/`data`, so it cannot be forged or replayed; the unauthenticated
+status never turns anything off.
+
+- **On the display** (Settings → System → Security → Turn off): the panel
+  sends `unpair` while it still has the keys, then deletes the code, publishes
+  the empty retained status and the unsigned announcement. On a valid `unpair`
+  the Bridge deletes its code, reloads the entry unpaired and shows a
+  notification. Without a session the panel still turns off and tells the
+  user to remove the code in the Bridge as well.
+- **In the Bridge** (Configure → Security → Remove pairing): the entry keeps the
+  key in a removing state, accepts plain commands again, runs no sealed ones,
+  keeps `{base}/secure/panel` subscribed and sends `rekey`. It answers the
+  next `hello` with `session` followed by `unpair` (its number 1), so an
+  offline panel is turned off after its next connect. On a valid `unpair` the
+  panel turns off exactly as above. The Bridge drops the key once the
+  retained status is empty or shows another key id.
+
+Shared vectors (code `ABCDE-FGHJK-MNPQR-STVWX-YZ012`, key id
+`8982fb24a78d94e1`, nonce `000102030405060708090a0b`, plaintext
+`unpair 0123456789abcdef0123456789abcdef 1 -\n`):
+
+- panel → Bridge on `hometiles/secure/panel`: `d` =
+  `57bf95048efe6d21a8392023d835128bca899f957700cb026d090ecb5c811a72707dfb8b90c495763ea5ab124daac7347b8d1d772ea4ace283bbb02a`
+- Bridge → panel on `hometiles/secure/bridge`: `d` =
+  `f0304f27341f5bebe38670e0476e55fefa34e2b11a21a4224f5e66be62a63afaa85712b16a9618140eb3fecc7d8cb5b0b9332900c520448e4f1e7977`
 
 Old firmware never shows a code, so its Bridge entry cannot be paired. Old
 Bridges never answer `hello`, so a new panel stays pending and keeps sending

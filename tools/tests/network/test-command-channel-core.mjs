@@ -43,6 +43,13 @@ const bridgeSession = seal(bridgeKey, TOPIC_BRIDGE, Buffer.from(`session ${SESSI
 const bridgeData = seal(bridgeKey, TOPIC_BRIDGE, Buffer.from(`data ${SESSION} 7 camera\n{"status":"ready","url":"tcp://h:1/t0k3n"}`));
 const wrongTopic = seal(bridgeKey, 'other/secure/bridge', Buffer.from(`data ${SESSION} 8 camera\n{}`));
 const wrongKey = seal(panelKey, TOPIC_BRIDGE, Buffer.from(`data ${SESSION} 9 camera\n{}`));
+// Shared unpair vectors (docs-dev/command-encryption.md, Bridge tests).
+const UNPAIR_NONCE = Buffer.from('000102030405060708090a0b', 'hex');
+const UNPAIR_PLAINTEXT = Buffer.from('unpair 0123456789abcdef0123456789abcdef 1 -\n');
+const PANEL_UNPAIR = '{"v":1,"k":"8982fb24a78d94e1","n":"000102030405060708090a0b","d":"57bf95048efe6d21a8392023d835128bca899f957700cb026d090ecb5c811a72707dfb8b90c495763ea5ab124daac7347b8d1d772ea4ace283bbb02a"}';
+const BRIDGE_UNPAIR = '{"v":1,"k":"8982fb24a78d94e1","n":"000102030405060708090a0b","d":"f0304f27341f5bebe38670e0476e55fefa34e2b11a21a4224f5e66be62a63afaa85712b16a9618140eb3fecc7d8cb5b0b9332900c520448e4f1e7977"}';
+assert.equal(seal(panelKey, TOPIC_PANEL, UNPAIR_PLAINTEXT, UNPAIR_NONCE), PANEL_UNPAIR, 'panel unpair vector');
+assert.equal(seal(bridgeKey, TOPIC_BRIDGE, UNPAIR_PLAINTEXT, UNPAIR_NONCE), BRIDGE_UNPAIR, 'Bridge unpair vector');
 
 const harness = String.raw`
 #include <cstdio>
@@ -121,6 +128,23 @@ int main() {
   CHECK(envelope_length == std::strlen(envelope));
   std::printf("cmd %s\n", envelope);
 
+  // Unpair from the panel: numbered in the current session, empty body.
+  {
+    Header unpair;
+    unpair.type = MessageType::Unpair;
+    unpair.has_session = true;
+    ht_crypto::hexDecode("0123456789abcdef0123456789abcdef", 32, unpair.session, kSessionSize);
+    unpair.seq = 1;
+    length = buildPlaintext(unpair, nullptr, 0, plaintext, sizeof(plaintext));
+    CHECK(length == std::strlen("unpair 0123456789abcdef0123456789abcdef 1 -\n"));
+    CHECK(std::memcmp(plaintext, "unpair 0123456789abcdef0123456789abcdef 1 -\n", length) == 0);
+    const uint8_t shared_nonce[12] = {0,1,2,3,4,5,6,7,8,9,10,11};
+    static char unpair_envelope[kMaxEnvelopeLength + 1];
+    CHECK(sealEnvelope(keys.panel_to_bridge, keys.key_id, shared_nonce, "hometiles/secure/panel", plaintext, length,
+                       scratch, unpair_envelope, sizeof(unpair_envelope)) > 0);
+    std::printf("unpair %s\n", unpair_envelope);
+  }
+
   // Hello without a session.
   Header hello;
   hello.type = MessageType::Hello;
@@ -149,6 +173,23 @@ int main() {
       CHECK(result == OpenResult::Rejected);
     }
   }
+  // The Bridge's unpair (shared vector): opens and parses as a numbered
+  // message of the current session.
+  {
+    const std::string input = line();
+    CHECK(openEnvelope(keys.bridge_to_panel, keys.key_id, "hometiles/secure/bridge", input.c_str(), input.size(),
+                       scratch, opened, &opened_length) == OpenResult::Ok);
+    Header parsed;
+    const uint8_t* parsed_body = nullptr;
+    size_t body_length = 0;
+    CHECK(parsePlaintext(opened, opened_length, parsed, &parsed_body, &body_length));
+    CHECK(parsed.type == MessageType::Unpair && parsed.has_session && parsed.seq == 1 &&
+          parsed.name[0] == '\0' && body_length == 0);
+    char session_hex[kSessionHexSize];
+    ht_crypto::hexEncode(parsed.session, kSessionSize, session_hex, sizeof(session_hex));
+    CHECK(std::strcmp(session_hex, "0123456789abcdef0123456789abcdef") == 0);
+  }
+
   // Tampering, a foreign key id and garbage are rejected.
   std::string tampered = envelope;
   tampered[tampered.size() - 5] = tampered[tampered.size() - 5] == '0' ? '1' : '0';
@@ -168,6 +209,9 @@ int main() {
     return parsePlaintext(reinterpret_cast<const uint8_t*>(text), std::strlen(text), parsed, &parsed_body, &body_length);
   };
   CHECK(parse("rekey - 0 -\n") && parsed.type == MessageType::Rekey && !parsed.has_session && body_length == 0);
+  CHECK(parse("unpair 00112233445566778899aabbccddeeff 3 -\n") && parsed.type == MessageType::Unpair &&
+        parsed.has_session && parsed.seq == 3);
+  CHECK(std::strcmp(typeName(MessageType::Unpair), "unpair") == 0);
   CHECK(!parse("rekey - 0 -"));
   CHECK(!parse("launch - 0 -\n"));
   CHECK(!parse("cmd 0011 1 light\n"));
@@ -216,7 +260,7 @@ const stdout = compileAndRun({
   label: 'Command channel core harness',
   harness,
   sources: ['src/core/security/ht_crypto.cpp'],
-  input: [bridgeSession, bridgeData, wrongTopic, wrongKey].join('\n') + '\n'
+  input: [bridgeSession, bridgeData, wrongTopic, wrongKey, BRIDGE_UNPAIR].join('\n') + '\n'
 });
 if (stdout !== null) {
   const lines = stdout.trim().split('\n');
@@ -229,6 +273,7 @@ if (stdout !== null) {
   assert.equal(command.toString(),
     `cmd ${SESSION} 42 light\n{"entity_id":"light.kitchen","state":"toggle"}`);
   assert.equal(value('cmd'), seal(panelKey, TOPIC_PANEL, command), 'byte-identical envelope');
+  assert.equal(value('unpair'), PANEL_UNPAIR, 'the panel seals the shared unpair vector byte for byte');
   const opened = lines.filter(entry => entry.startsWith('open '));
   assert.deepEqual(opened, [
     'open session 0 ffeeddccbbaa99887766554433221100 ',

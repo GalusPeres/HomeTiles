@@ -39,6 +39,24 @@ for (const match of channel.matchAll(/Serial\.printf?\(([^;]*)\);/g)) {
 }
 assert.match(channel, /strcmp\(header\.name, g_state->challenge\) != 0/, 'a session must answer the current challenge');
 assert.match(channel, /acceptSequence\(g_state->bridge_window, header\.seq\)/, 'Bridge data is replay-checked');
+// Removing the pairing on either side turns it off on the other side too.
+assert.match(channel, /case MessageType::Unpair:\s*handleUnpair\(header\);/);
+const handleUnpair = channel.slice(channel.indexOf('void handleUnpair('), channel.indexOf('void handleData('));
+assert.match(handleUnpair, /if \(!acceptInSession\(header\)\) return;\s*turnOff\(false, nullptr\);/,
+  'a Bridge unpair counts only inside the current session and replay window');
+const turnOff = channel.slice(channel.indexOf('bool turnOff('), channel.indexOf('void handleUnpair('));
+assert.ok(turnOff.indexOf('writeRecord(nullptr)') < turnOff.indexOf('sendUnpair()') &&
+  turnOff.indexOf('sendUnpair()') < turnOff.indexOf('releaseState()'),
+  'the stored pairing is removed first, the Bridge is told while the keys still exist, then the keys go');
+const sendUnpair = channel.slice(channel.indexOf('bool sendUnpair()'), channel.indexOf('bool turnOff('));
+assert.match(sendUnpair, /!g_state->has_session/, 'unpair needs a session');
+assert.match(sendUnpair, /header\.seq = g_state->next_seq\+\+;/, 'unpair is numbered like a command');
+assert.match(channel, /bool disable\(bool\* bridge_notified\) \{\s*begin\(\);\s*return turnOff\(true, bridge_notified\);/);
+assert.match(readRepoFile('src/ui/tabs/settings/tab_settings.cpp'), /command_channel::disable\(&bridge_notified\)[\s\S]{0,200}bridge_notified \? "" : tr\(\)\.security_encryption_off_hint/,
+  'the hint to remove the code in the Bridge appears only when the Bridge could not be told');
+assert.match(channel, /case MessageType::Rekey:[\s\S]{0,300}g_state->hello_requested = true;\s*g_state->hello_attempts = 0;/,
+  'a rekey restarts the hello backoff');
+
 // Every Bridge message that authenticates but is not used leaves a
 // rate-limited trace, so a stuck pairing can be diagnosed from the panel log.
 for (const line of ['Session answer for an old request ignored', 'Bridge asked for a new session',
@@ -75,10 +93,11 @@ const signer = channel.slice(channel.indexOf('char* signAnnouncement(const char*
 assert.match(signer, /if \(!g_state \|\| !topic \|\| !payload \|\|\s*xTaskGetCurrentTaskHandle\(\) != g_owner\) \{\s*return nullptr;/,
   'no pairing (or a foreign task) leaves the announcement unsigned');
 assert.match(signer, /allocPreferPsram\(size\)/);
-const create = channel.slice(channel.indexOf('bool createCode() {'), channel.indexOf('bool disable() {'));
-const disable = channel.slice(channel.indexOf('bool disable() {'), channel.indexOf('char* signAnnouncement('));
+const create = channel.slice(channel.indexOf('bool createCode() {'), channel.indexOf('bool disable(bool* bridge_notified) {'));
+// Turning off (on the display or by the Bridge) republishes the unsigned announcement.
+const off = channel.slice(channel.indexOf('bool turnOff('), channel.indexOf('void handleUnpair('));
 assert.match(create, /networkManager\.publishBridgeConfig\(\);/);
-assert.match(disable, /releaseState\(\);[\s\S]*networkManager\.publishBridgeConfig\(\);/);
+assert.match(off, /releaseState\(\);[\s\S]*networkManager\.publishBridgeConfig\(\);/);
 
 const doc = readRepoFile('docs-dev/command-encryption.md');
 for (const marker of ['secure/panel', 'secure/bridge', 'stat/secure', 'HomeTiles command pairing v1',

@@ -110,7 +110,9 @@ inline bool deriveKeys(const char code[kCodeLength + 1], Keys& keys) {
   return true;
 }
 
-enum class MessageType : uint8_t { Hello, Session, Rekey, Command, Data };
+// Unpair ends the pairing on both sides: whichever side removes it tells the
+// other one inside the current session, numbered like cmd/data.
+enum class MessageType : uint8_t { Hello, Session, Rekey, Command, Data, Unpair };
 
 inline const char* typeName(MessageType type) {
   switch (type) {
@@ -119,6 +121,7 @@ inline const char* typeName(MessageType type) {
     case MessageType::Rekey: return "rekey";
     case MessageType::Command: return "cmd";
     case MessageType::Data: return "data";
+    case MessageType::Unpair: return "unpair";
   }
   return "";
 }
@@ -198,6 +201,7 @@ inline bool parsePlaintext(const uint8_t* plaintext, size_t length,
   else if (strcmp(fields[0], "rekey") == 0) parsed.type = MessageType::Rekey;
   else if (strcmp(fields[0], "cmd") == 0) parsed.type = MessageType::Command;
   else if (strcmp(fields[0], "data") == 0) parsed.type = MessageType::Data;
+  else if (strcmp(fields[0], "unpair") == 0) parsed.type = MessageType::Unpair;
   else return false;
 
   if (strcmp(fields[1], "-") != 0) {

@@ -365,12 +365,24 @@ jobs:
           if [ "${profile}" = "guition_jc8012p4a1" ]; then
             elf_flags="-Wl,--wrap=esp_hosted_get_default_sdio_config"
           fi
+          # The SDK flag file enables -fexceptions for all C++ code, but
+          # HomeTiles never throws or catches; the unwind tables only cost
+          # flash. compiler.cpp.extra_flags precedes that flag file in
+          # recipe.cpp.o.pattern, so repeat the platform.txt line and append
+          # -fno-exceptions after it. A new core must update both lines.
+          platform_cpp_flags='-MMD -c "@{compiler.sdk.path}/flags/cpp_flags" {compiler.warning_flags} {compiler.optimization_flags} {compiler.common_werror_flags}'
+          platform_txt="$HOME/.arduino15/packages/esp32/hardware/esp32/${ARDUINO_CORE_VERSION}/platform.txt"
+          if ! grep -Fqx "compiler.cpp.flags=${platform_cpp_flags}" "${platform_txt}"; then
+            echo "::error::compiler.cpp.flags in ${platform_txt} changed; update the -fno-exceptions override."
+            exit 1
+          fi
           arduino-cli compile \
             --fqbn "${fqbn}" \
             --export-binaries \
             --output-dir "build/ci/${{ matrix.key }}" \
             --build-property "compiler.c.extra_flags=-DHOMETILES_CI_TARGET -D${{ matrix.define }} $common_flags" \
             --build-property "compiler.cpp.extra_flags=-DHOMETILES_CI_TARGET -D${{ matrix.define }} $common_flags" \
+            --build-property "compiler.cpp.flags=${platform_cpp_flags} -fno-exceptions" \
             --build-property "compiler.c.elf.extra_flags=${elf_flags}"
 
           restore_sketch_profiles

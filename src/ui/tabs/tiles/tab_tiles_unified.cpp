@@ -342,16 +342,12 @@ struct EntityCacheEntry {
 };
 
 static constexpr size_t kEntityCacheSize = TILES_PER_GRID * 8;
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
+// PSRAM on every chip; allocated on first use.
 static EntityCacheEntry* g_entity_cache = nullptr;
 static bool g_entity_cache_init_attempted = false;
-#else
-static EntityCacheEntry g_entity_cache[kEntityCacheSize];
-#endif
 static size_t g_entity_cache_cursor = 0;
 
 static bool ensure_entity_cache_storage() {
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
   if (g_entity_cache) return true;
   if (g_entity_cache_init_attempted) return false;
   g_entity_cache_init_attempted = true;
@@ -372,7 +368,6 @@ static bool ensure_entity_cache_storage() {
   Serial.printf("[Tiles/Mem] Entity cache=%u bytes in PSRAM\n",
                 static_cast<unsigned>(sizeof(EntityCacheEntry) *
                                       kEntityCacheSize));
-#endif
   return true;
 }
 

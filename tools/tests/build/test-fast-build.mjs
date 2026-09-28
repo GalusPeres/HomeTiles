@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {depFiles, regenerateInoCpp, sketchCopyContent, splitCommand} from '../../fast-build.mjs';
+import {depFiles, firstOutOfDate, regenerateInoCpp, sketchCopyContent, splitCommand} from '../../fast-build.mjs';
 
 const bs = '\\';
 assert.deepEqual(
@@ -45,6 +45,30 @@ try {
   // A renamed function cannot be re-anchored: fall back to arduino-cli.
   fs.writeFileSync(ino, fs.readFileSync(ino, 'utf8').replace('void helper() {}', 'void helper2() {}'));
   assert.equal(regenerateInoCpp(ino, generated), null);
+
+  // Library objects that include a newer repository header (lv_conf.h) are
+  // stale; the fast build must not relink them.
+  const lib = path.join(dir, 'libraries', 'lvgl');
+  fs.mkdirSync(lib, {recursive: true});
+  const conf = path.join(dir, 'lv_conf.h');
+  const libSource = path.join(lib, 'lv_obj.c');
+  const libObj = path.join(lib, 'lv_obj.c.o');
+  for (const file of [conf, libSource, libObj]) fs.writeFileSync(file, '');
+  fs.writeFileSync(libObj.replace(/\.o$/, '.d'), `${libObj}: ${libSource} ${conf}\n`);
+  const older = new Date(Date.now() - 60_000);
+  const newer = new Date();
+  fs.utimesSync(libSource, older, older);
+  fs.utimesSync(libObj, older, new Date(older.getTime() + 1000));
+  fs.utimesSync(conf, newer, newer);
+  const libEntry = {directory: dir, file: libSource, obj: libObj};
+  const freshSource = path.join(lib, 'lv_label.c');
+  const freshObj = path.join(lib, 'lv_label.c.o');
+  for (const file of [freshSource, freshObj]) fs.writeFileSync(file, '');
+  fs.writeFileSync(freshObj.replace(/\.o$/, '.d'), `${freshObj}: ${freshSource}\n`);
+  fs.utimesSync(freshSource, older, older);
+  const freshEntry = {directory: dir, file: freshSource, obj: freshObj};
+  assert.equal(firstOutOfDate([freshEntry]), undefined, 'up-to-date library objects are reused');
+  assert.equal(firstOutOfDate([freshEntry, libEntry]), libEntry, 'a newer lv_conf.h makes LVGL objects stale');
 } finally {
   fs.rmSync(dir, {recursive: true, force: true});
 }

@@ -35,8 +35,11 @@ struct TileWidgetCache {
   MediaTileWidgets media[TILES_PER_GRID];
 };
 
-// Allocate the large, cold renderer bookkeeping arrays. On ESP32-P4 these
-// live in PSRAM; non-P4 profiles keep their established static storage.
+// Allocate the per-slot renderer bookkeeping of every grid (Sensor, Switch,
+// Cover, Climate, Weather, Media and Binary Sensor widgets and states) in
+// PSRAM. Every chip uses this storage; internal RAM is scarce on P4 and S3.
+// setup() calls it before the UI task and the MQTT worker start; the storage
+// is never freed.
 bool tile_renderer_init_cold_storage();
 
 // Renders a complete tile grid.
@@ -104,6 +107,8 @@ void queue_cover_tile_update(GridType grid_type, uint8_t grid_index,
                              const char* payload);
 void process_cover_update_queue(uint8_t max_updates = 0);
 
+// Part of tile_renderer_init_cold_storage(); true once the storage exists.
+bool binary_sensor_init_storage();
 BinarySensorTileWidgets* tile_renderer_get_binary_sensor_widgets(
     GridType grid_type);
 BinarySensorState* tile_renderer_get_binary_sensor_states(GridType grid_type);

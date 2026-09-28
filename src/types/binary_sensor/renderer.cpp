@@ -8,6 +8,8 @@
 #include <ArduinoJson.h>
 #include <cmath>
 #include <cstring>
+#include <esp_heap_caps.h>
+#include <new>
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -80,10 +82,16 @@ constexpr uint8_t kQueueSize = 32;
 static_assert(TILES_PER_GRID <= 64,
               "Binary sensor update masks require at most 64 tile slots");
 
-BinarySensorTileWidgets g_widgets[kGridCount][TILES_PER_GRID];
-BinarySensorState g_states[kGridCount][TILES_PER_GRID];
+struct BinarySensorStorage {
+  BinarySensorTileWidgets widgets[kGridCount][TILES_PER_GRID];
+  BinarySensorState states[kGridCount][TILES_PER_GRID];
+  BinarySensorUpdate queue[kQueueSize];
+};
+
+// PSRAM. binary_sensor_init_storage() allocates it during setup(), before
+// the UI task and the MQTT worker start, and it is never freed.
+BinarySensorStorage* g_storage = nullptr;
 uint32_t g_layout_generation[kGridCount] = {1, 1, 1, 1};
-BinarySensorUpdate g_queue[kQueueSize];
 volatile uint8_t g_queue_head = 0;
 volatile uint8_t g_queue_tail = 0;
 uint32_t g_queue_overflow_count = 0;
@@ -240,7 +248,7 @@ void invalidate_queued_slot(GridType grid_type, uint8_t index) {
   const uint64_t bit = uint64_t{1} << index;
   uint8_t cursor = g_queue_tail;
   while (cursor != g_queue_head) {
-    BinarySensorUpdate& pending = g_queue[cursor];
+    BinarySensorUpdate& pending = g_storage->queue[cursor];
     if (pending.valid && pending.grid_type == grid_type) {
       pending.grid_indices &= ~bit;
     }
@@ -275,7 +283,7 @@ void enqueue_update(GridType grid_type, uint64_t indices,
 
   uint8_t cursor = g_queue_tail;
   while (cursor != g_queue_head) {
-    BinarySensorUpdate& pending = g_queue[cursor];
+    BinarySensorUpdate& pending = g_storage->queue[cursor];
     const bool same_target =
         pending.require_entity_match == require_entity_match &&
         (require_entity_match
@@ -301,7 +309,7 @@ void enqueue_update(GridType grid_type, uint64_t indices,
     g_queue_tail = (g_queue_tail + 1) % kQueueSize;
   }
 
-  BinarySensorUpdate& update = g_queue[g_queue_head];
+  BinarySensorUpdate& update = g_storage->queue[g_queue_head];
   update.grid_type = grid_type;
   update.grid_indices = indices;
   update.entity_id = entity_id;
@@ -449,13 +457,30 @@ uint32_t binary_sensor_visual_color(const BinarySensorState& state) {
              : 0x9E9E9E;
 }
 
+bool binary_sensor_init_storage() {
+  if (g_storage) return true;
+  void* memory = heap_caps_malloc(sizeof(BinarySensorStorage),
+                                  MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (!memory) {
+    Serial.printf(
+        "[Tiles/Mem] ERROR: Binary sensor state (%u bytes) not allocated in "
+        "PSRAM\n",
+        static_cast<unsigned>(sizeof(BinarySensorStorage)));
+    return false;
+  }
+  g_storage = new (memory) BinarySensorStorage();
+  Serial.printf("[Tiles/Mem] Binary sensor state=%u bytes in PSRAM\n",
+                static_cast<unsigned>(sizeof(BinarySensorStorage)));
+  return true;
+}
+
 BinarySensorTileWidgets* tile_renderer_get_binary_sensor_widgets(
     GridType grid_type) {
-  return g_widgets[grid_index(grid_type)];
+  return g_storage->widgets[grid_index(grid_type)];
 }
 
 BinarySensorState* tile_renderer_get_binary_sensor_states(GridType grid_type) {
-  return g_states[grid_index(grid_type)];
+  return g_storage->states[grid_index(grid_type)];
 }
 
 void reset_binary_sensor_widget(GridType grid_type, uint8_t grid_index_value) {
@@ -646,7 +671,7 @@ void process_binary_sensor_update_queue(uint8_t max_updates) {
   while (g_queue_tail != g_queue_head) {
     if (max_updates != 0 && processed >= max_updates) return;
 
-    BinarySensorUpdate& update = g_queue[g_queue_tail];
+    BinarySensorUpdate& update = g_storage->queue[g_queue_tail];
     if (!update.valid) {
       g_queue_tail = (g_queue_tail + 1) % kQueueSize;
       continue;

@@ -213,6 +213,45 @@ for (const [options, pattern] of [
   assert.equal(writes.filter(({ address }) => address === P4_LP_SYSTEM_REG_ANA_XPD_PAD_GROUP_REG).length, 1);
 }
 
+// READ_FLASH: the stub follows the data with a 16-byte MD5 frame. HomeTiles reads
+// it before returning, so the next command cannot overtake it on USB-UART
+// bridges (OTA-data read timeouts on CH340/CH343, 2026-09-28).
+function readFlashLoader(LoaderClass, frames) {
+  const transport = new HomeTilesTransport(new FakeSerialPort());
+  const queue = [...frames];
+  const acks = [];
+  transport.read = async () => {
+    if (!queue.length) throw new Error("No serial data received.");
+    return queue.shift();
+  };
+  transport.write = async (bytes) => {
+    acks.push(bytes);
+  };
+  const loader = new LoaderClass({ transport, baudrate: 460800, terminal: silentTerminal });
+  loader.checkCommand = async () => 0;
+  return { loader, queue, acks };
+}
+{
+  const data = new Uint8Array(0x2000).map((_, index) => index & 0xff);
+  const frames = () => [data.slice(0, 0x1000), data.slice(0x1000), new Uint8Array(16).fill(0xab)];
+
+  const { loader, queue, acks } = readFlashLoader(HomeTilesESPLoader, frames());
+  assert.deepEqual(await loader.readFlash(0xd000, 0x2000), data);
+  assert.equal(acks.length, 2, "Every data packet is acknowledged.");
+  assert.equal(queue.length, 0, "The digest frame must be read before the next command.");
+
+  const upstream = readFlashLoader(esptool.ESPLoader, frames());
+  await upstream.loader.readFlash(0xd000, 0x2000);
+  assert.equal(
+    upstream.queue.length,
+    1,
+    "Upstream esptool-js now reads the READ_FLASH digest; the HomeTiles readFlash override can be removed.",
+  );
+
+  const truncated = readFlashLoader(HomeTilesESPLoader, [data.slice(0, 0x1000), data.slice(0x1000), new Uint8Array(4)]);
+  await assert.rejects(truncated.loader.readFlash(0xd000, 0x2000), /expected 16-byte digest/);
+}
+
 // UART bridges: ClassicReset (connect) followed by hard_reset must release
 // GPIO0 like 0.6.1. Upstream 0.7.0 replays a stale DTR=true in setRTS().
 async function hardResetAfterConnect(TransportClass) {

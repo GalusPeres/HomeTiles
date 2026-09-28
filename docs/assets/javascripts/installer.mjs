@@ -1,5 +1,5 @@
 import * as esptool from "https://unpkg.com/esptool-js@0.7.0/bundle.js";
-import { defineHomeTilesEsptool } from "./installer-esptool.mjs?v=installer-ui-16";
+import { defineHomeTilesEsptool } from "./installer-esptool.mjs?v=installer-ui-17";
 import { retainPageComponent } from "./retained-page-component.mjs?v=serial-navigation-2";
 import { serialAccess } from "./serial-access.mjs?v=serial-navigation-2";
 import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-3";
@@ -20,7 +20,7 @@ import {
   releaseAssetNames,
   resolveSameOriginAsset,
   validateFirmwareDescriptor,
-} from "./installer-contract.mjs?v=installer-ui-16";
+} from "./installer-contract.mjs?v=installer-ui-17";
 
 const LAST_RUN_STORAGE_KEY = "hometiles.webInstaller.lastRun.v1";
 const LOG_MAX_LINES = 300;

@@ -148,6 +148,11 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
  lv_obj_send_event(shell.active->close,LV_EVENT_RELEASED,nullptr);assert(settings_closed==0&&!lv_obj_has_flag(wifi_entry_view,LV_OBJ_FLAG_HIDDEN));
  lv_obj_send_event(button,LV_EVENT_CLICKED,nullptr);assert(settings_closed==0&&lv_obj_has_flag(wifi_entry_view,LV_OBJ_FLAG_HIDDEN));
  lv_obj_send_event(button,LV_EVENT_CLICKED,nullptr);assert(settings_closed==1&&!shell.active);assert(allocations==2);
+ // The next tile popup after the full-screen Settings card resizes the shared
+ // frame; that must not repaint the tiles outside the new frame (P4 ~100 ms).
+ lv_refr_now(d);outside_draws=0;show(a,"After Settings",true);lv_refr_now(d);process_popup_open();lv_refr_now(d);
+ if(SCREEN_WIDTH>SCREEN_HEIGHT)assert(outside_draws==0&&"A popup after Settings must not repaint tiles outside its frame");
+ lv_obj_update_layout(shell.overlay);assert(lv_obj_get_width(shell.frame)==lv_obj_get_width(a.body));hide_popup_shell(a.body);lv_refr_now(d);
 
  show(a,"Screen replacement");auto*old=lv_screen_active();auto*next=lv_obj_create(nullptr);lv_screen_load(next);lv_obj_delete(old);assert(!shell.overlay&&!PopupFirstFrame::any_pending());assert(lv_obj_is_valid(a.body)&&lv_obj_get_parent(a.body)==a.owner);
  show(a,"Owner deletion");lv_obj_delete(a.owner);assert(!shell.active&&!PopupFirstFrame::any_pending());assert(allocations==1);lv_obj_delete(b.owner);assert(allocations==0);

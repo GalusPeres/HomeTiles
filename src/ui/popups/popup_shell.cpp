@@ -395,6 +395,12 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
                        lv_obj_get_style_height(body, LV_PART_MAIN));
       lv_obj_center(object);
       lv_obj_set_style_pad_all(object, lv_obj_get_style_pad_top(body, LV_PART_MAIN), 0);
+      // Apply a new size now, while invalidation is off. Left to the next
+      // layout pass, a switch from the full-screen Settings card to a tile
+      // popup repainted the whole old area (every tile behind it, ~100 ms on
+      // P4) although the hidden shell had already left it.
+      lv_obj_refr_size(object);
+      lv_obj_refr_pos(object);
     }
     lv_obj_set_style_border_width(shell.header, binding->border_width, 0);
     lv_obj_set_style_border_opa(shell.header, LV_OPA_TRANSP, 0);

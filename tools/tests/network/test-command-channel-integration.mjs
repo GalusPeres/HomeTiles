@@ -125,6 +125,8 @@ assert.match(rows, /system_set_row\(security_encryption_value, security_encrypti
 assert.match(rows, /if \(state == system_rows_state\) return;/, 'the timer redraws the rows only on a change');
 assert.match(systemPopup, /system_device_name = lv_label_create\(head\);\s*lv_label_set_text\(system_device_name, Device::displayName\(\)\);/);
 assert.match(systemPopup, /lv_obj_set_flex_grow\(system_middle, 1\);/);
+assert.match(systemPopup, /if \(kCompactSystem\) lv_obj_set_style_pad_bottom\(system_middle, popup_layout::scale\(24\), 0\);/,
+  'lower displays center the rows a little higher');
 for (const parent of ['system_info_rows', 'security_prompt_box', 'security_pair_box']) {
   assert.match(systemPopup, new RegExp(`${parent} = create_centered_column\\(system_middle, system_line_gap\\(\\)\\);`),
     `${parent} shares the middle area and the line gap`);

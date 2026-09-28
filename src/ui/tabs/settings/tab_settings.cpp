@@ -3314,6 +3314,8 @@ static void build_system_popup(lv_obj_t* parent) {
   lv_obj_set_flex_flow(system_middle, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(system_middle, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
+  // Lower displays center the lines a little higher, closer to the branding.
+  if (kCompactSystem) lv_obj_set_style_pad_bottom(system_middle, popup_layout::scale(24), 0);
 
   // One fact per row: Home Assistant connected (check), Encryption and Web
   // Admin password on (shield). "Home Assistant" is a product name and stays

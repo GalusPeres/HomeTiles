@@ -60,15 +60,18 @@
 /* === Layout constants === */
 
 /* === Global update state === */
-SensorTileWidgets g_tab0_sensors[TILES_PER_GRID];
-SensorTileWidgets g_tab1_sensors[TILES_PER_GRID];
-SensorTileWidgets g_tab2_sensors[TILES_PER_GRID];
-SensorTileWidgets g_screensaver_sensors[TILES_PER_GRID];
+// Per-slot renderer bookkeeping of every grid lives in one PSRAM block
+// (TileRendererStorage below); these names point into it once
+// tile_renderer_init_cold_storage() ran in setup().
+SensorTileWidgets* g_tab0_sensors = nullptr;
+SensorTileWidgets* g_tab1_sensors = nullptr;
+SensorTileWidgets* g_tab2_sensors = nullptr;
+SensorTileWidgets* g_screensaver_sensors = nullptr;
 
-SwitchTileWidgets g_tab0_switches[TILES_PER_GRID];
-SwitchTileWidgets g_tab1_switches[TILES_PER_GRID];
-SwitchTileWidgets g_tab2_switches[TILES_PER_GRID];
-SwitchTileWidgets g_screensaver_switches[TILES_PER_GRID];
+SwitchTileWidgets* g_tab0_switches = nullptr;
+SwitchTileWidgets* g_tab1_switches = nullptr;
+SwitchTileWidgets* g_tab2_switches = nullptr;
+SwitchTileWidgets* g_screensaver_switches = nullptr;
 
 static constexpr uint8_t SWITCH_GRID_COUNT = 4;
 static uint32_t g_switch_layout_generation[SWITCH_GRID_COUNT] = {1, 1, 1, 1};
@@ -89,8 +92,6 @@ static void advance_switch_layout_generation(GridType grid_type) {
 static void invalidate_queued_switch_slot(GridType grid_type,
                                           uint8_t grid_index);
 
-// Weather and Media widget state lives in PSRAM on every chip; accesses are
-// rare state changes, and internal RAM is scarce on both P4 and S3.
 WeatherTileWidgets* g_tab0_weather = nullptr;
 WeatherTileWidgets* g_tab1_weather = nullptr;
 WeatherTileWidgets* g_tab2_weather = nullptr;
@@ -99,25 +100,41 @@ MediaTileWidgets* g_tab0_media = nullptr;
 MediaTileWidgets* g_tab1_media = nullptr;
 MediaTileWidgets* g_tab2_media = nullptr;
 MediaTileWidgets* g_screensaver_media = nullptr;
+
+SwitchState* g_tab0_switch_states = nullptr;
+SwitchState* g_tab1_switch_states = nullptr;
+SwitchState* g_tab2_switch_states = nullptr;
+SwitchState* g_screensaver_switch_states = nullptr;
+
+CoverTileWidgets* g_tab0_covers = nullptr;
+CoverTileWidgets* g_tab1_covers = nullptr;
+CoverTileWidgets* g_tab2_covers = nullptr;
+CoverTileWidgets* g_screensaver_covers = nullptr;
+CoverState* g_tab0_cover_states = nullptr;
+CoverState* g_tab1_cover_states = nullptr;
+CoverState* g_tab2_cover_states = nullptr;
+CoverState* g_screensaver_cover_states = nullptr;
+
+ClimateTileWidgets* g_tab0_climate = nullptr;
+ClimateTileWidgets* g_tab1_climate = nullptr;
+ClimateTileWidgets* g_tab2_climate = nullptr;
+
+// The slot state changes only with tile state updates, so PSRAM is fast
+// enough, and internal RAM is scarce on both P4 and S3. Index 3 is the
+// screensaver grid; Weather and Climate exist only on the three tab grids.
+struct TileRendererStorage {
+  SensorTileWidgets sensors[4][TILES_PER_GRID];
+  SwitchTileWidgets switches[4][TILES_PER_GRID];
+  SwitchState switch_states[4][TILES_PER_GRID];
+  CoverTileWidgets covers[4][TILES_PER_GRID];
+  CoverState cover_states[4][TILES_PER_GRID];
+  ClimateTileWidgets climate[3][TILES_PER_GRID];
+  WeatherTileWidgets weather[3][TILES_PER_GRID];
+  MediaTileWidgets media[4][TILES_PER_GRID];
+};
+static TileRendererStorage* g_renderer_storage = nullptr;
 static bool g_cold_state_init_attempted = false;
 
-SwitchState g_tab0_switch_states[TILES_PER_GRID];
-SwitchState g_tab1_switch_states[TILES_PER_GRID];
-SwitchState g_tab2_switch_states[TILES_PER_GRID];
-SwitchState g_screensaver_switch_states[TILES_PER_GRID];
-
-CoverTileWidgets g_tab0_covers[TILES_PER_GRID];
-CoverTileWidgets g_tab1_covers[TILES_PER_GRID];
-CoverTileWidgets g_tab2_covers[TILES_PER_GRID];
-CoverTileWidgets g_screensaver_covers[TILES_PER_GRID];
-CoverState g_tab0_cover_states[TILES_PER_GRID];
-CoverState g_tab1_cover_states[TILES_PER_GRID];
-CoverState g_tab2_cover_states[TILES_PER_GRID];
-CoverState g_screensaver_cover_states[TILES_PER_GRID];
-
-ClimateTileWidgets g_tab0_climate[TILES_PER_GRID];
-ClimateTileWidgets g_tab1_climate[TILES_PER_GRID];
-ClimateTileWidgets g_tab2_climate[TILES_PER_GRID];
 static ClimateState* g_tab0_climate_states = nullptr;
 static ClimateState* g_tab1_climate_states = nullptr;
 static ClimateState* g_tab2_climate_states = nullptr;
@@ -159,51 +176,53 @@ static ClimateState* allocate_climate_states(const char* grid_name) {
 }
 
 bool tile_renderer_init_cold_storage() {
-  if (g_tab0_weather && g_tab0_media) return binary_sensor_init_storage();
+  if (g_renderer_storage) return binary_sensor_init_storage();
   if (g_cold_state_init_attempted) return false;
   g_cold_state_init_attempted = true;
 
-  constexpr size_t kWeatherCount = TILES_PER_GRID * 3U;
-  constexpr size_t kMediaCount = TILES_PER_GRID * 4U;
-  auto* weather = static_cast<WeatherTileWidgets*>(heap_caps_malloc(
-      sizeof(WeatherTileWidgets) * kWeatherCount,
-      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-  if (!weather) {
+  void* memory = heap_caps_malloc(sizeof(TileRendererStorage),
+                                  MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (!memory) {
     Serial.printf(
-        "[Tiles/Mem] ERROR: Weather state (%u bytes) not allocated in PSRAM\n",
-        static_cast<unsigned>(sizeof(WeatherTileWidgets) * kWeatherCount));
+        "[Tiles/Mem] ERROR: Renderer state (%u bytes) not allocated in PSRAM\n",
+        static_cast<unsigned>(sizeof(TileRendererStorage)));
     return false;
   }
-  for (size_t i = 0; i < kWeatherCount; ++i) {
-    new (&weather[i]) WeatherTileWidgets();
-  }
+  auto* storage = new (memory) TileRendererStorage();
 
-  auto* media = static_cast<MediaTileWidgets*>(heap_caps_malloc(
-      sizeof(MediaTileWidgets) * kMediaCount,
-      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-  if (!media) {
-    Serial.printf(
-        "[Tiles/Mem] ERROR: Media state (%u bytes) not allocated in PSRAM\n",
-        static_cast<unsigned>(sizeof(MediaTileWidgets) * kMediaCount));
-    for (size_t i = 0; i < kWeatherCount; ++i) weather[i].~WeatherTileWidgets();
-    heap_caps_free(weather);
-    return false;
-  }
-  for (size_t i = 0; i < kMediaCount; ++i) {
-    new (&media[i]) MediaTileWidgets();
-  }
-
-  g_tab0_weather = weather;
-  g_tab1_weather = weather + TILES_PER_GRID;
-  g_tab2_weather = weather + TILES_PER_GRID * 2U;
-  g_tab0_media = media;
-  g_tab1_media = media + TILES_PER_GRID;
-  g_tab2_media = media + TILES_PER_GRID * 2U;
-  g_screensaver_media = media + TILES_PER_GRID * 3U;
-  Serial.printf(
-      "[Tiles/Mem] Weather=%u bytes Media=%u bytes in PSRAM\n",
-      static_cast<unsigned>(sizeof(WeatherTileWidgets) * kWeatherCount),
-      static_cast<unsigned>(sizeof(MediaTileWidgets) * kMediaCount));
+  g_tab0_sensors = storage->sensors[0];
+  g_tab1_sensors = storage->sensors[1];
+  g_tab2_sensors = storage->sensors[2];
+  g_screensaver_sensors = storage->sensors[3];
+  g_tab0_switches = storage->switches[0];
+  g_tab1_switches = storage->switches[1];
+  g_tab2_switches = storage->switches[2];
+  g_screensaver_switches = storage->switches[3];
+  g_tab0_switch_states = storage->switch_states[0];
+  g_tab1_switch_states = storage->switch_states[1];
+  g_tab2_switch_states = storage->switch_states[2];
+  g_screensaver_switch_states = storage->switch_states[3];
+  g_tab0_covers = storage->covers[0];
+  g_tab1_covers = storage->covers[1];
+  g_tab2_covers = storage->covers[2];
+  g_screensaver_covers = storage->covers[3];
+  g_tab0_cover_states = storage->cover_states[0];
+  g_tab1_cover_states = storage->cover_states[1];
+  g_tab2_cover_states = storage->cover_states[2];
+  g_screensaver_cover_states = storage->cover_states[3];
+  g_tab0_climate = storage->climate[0];
+  g_tab1_climate = storage->climate[1];
+  g_tab2_climate = storage->climate[2];
+  g_tab0_weather = storage->weather[0];
+  g_tab1_weather = storage->weather[1];
+  g_tab2_weather = storage->weather[2];
+  g_tab0_media = storage->media[0];
+  g_tab1_media = storage->media[1];
+  g_tab2_media = storage->media[2];
+  g_screensaver_media = storage->media[3];
+  g_renderer_storage = storage;
+  Serial.printf("[Tiles/Mem] Renderer state=%u bytes in PSRAM\n",
+                static_cast<unsigned>(sizeof(TileRendererStorage)));
   return binary_sensor_init_storage();
 }
 

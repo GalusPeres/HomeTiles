@@ -35,10 +35,11 @@ struct TileWidgetCache {
   MediaTileWidgets media[TILES_PER_GRID];
 };
 
-// Allocate the large, cold renderer bookkeeping arrays (Weather, Media,
-// Binary Sensor) in PSRAM. Every chip uses this storage; internal RAM is
-// scarce on P4 and S3. setup() calls it before the UI task and the MQTT
-// worker start; the storage is never freed.
+// Allocate the per-slot renderer bookkeeping of every grid (Sensor, Switch,
+// Cover, Climate, Weather, Media and Binary Sensor widgets and states) in
+// PSRAM. Every chip uses this storage; internal RAM is scarce on P4 and S3.
+// setup() calls it before the UI task and the MQTT worker start; the storage
+// is never freed.
 bool tile_renderer_init_cold_storage();
 
 // Renders a complete tile grid.

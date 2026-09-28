@@ -214,7 +214,10 @@ the broker can publish there too, so the Bridge applies these rules:
 
 History requests (`tab5_lvgl/config/{id}/history/request`) are answered only
 for configured entities, never when retained, at most two at a time and 30
-per minute per panel. The numeric graph reads the Recorder newest first in
-pages of 1,000 rows and at most 20,160 rows (one change per 30 s for a week);
-beyond that the oldest buckets stay empty. State, binary and editable
-histories keep their existing paged limit of 8,192 changes.
+per minute per panel; further requests wait in line (at most 32) instead of
+being dropped. The numeric graph uses the Recorder statistics for buckets of
+5 minutes or more when the sensor has them; otherwise it reads state changes
+in pages of 5,000 rows, newest time range first, at most 60,480 rows (one
+change per 10 s for a week); beyond that the oldest buckets stay empty. State,
+binary and editable histories keep their existing paged limit of 8,192
+changes.

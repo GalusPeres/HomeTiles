@@ -2,9 +2,9 @@
 
 #include <Preferences.h>
 #include <esp_heap_caps.h>
-#include <esp_random.h>
 
 #include "src/core/config/batched_nvs_write.h"
+#include "src/core/security/secure_random.h"
 #include "src/devices/device.h"
 
 namespace web_admin_auth {
@@ -22,7 +22,7 @@ Credential g_credential;
 Tables* g_tables = nullptr;
 
 void fillRandom(uint8_t* out, size_t length) {
-  esp_fill_random(out, length);
+  secure_random::fill(out, length);
 }
 
 Tables* tables() {

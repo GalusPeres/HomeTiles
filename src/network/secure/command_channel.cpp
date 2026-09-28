@@ -2,11 +2,11 @@
 
 #include <Preferences.h>
 #include <esp_heap_caps.h>
-#include <esp_random.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 #include "src/core/config/batched_nvs_write.h"
+#include "src/core/security/secure_random.h"
 #include "src/devices/device.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
@@ -179,7 +179,7 @@ char* sealForBridge(const Header& header, const uint8_t* body, size_t body_lengt
   const size_t plaintext_length =
       buildPlaintext(header, body, body_length, plaintext, kMaxPlaintextLength);
   uint8_t nonce[ht_crypto::kAeadNonceSize];
-  esp_fill_random(nonce, sizeof(nonce));
+  secure_random::fill(nonce, sizeof(nonce));
   memcpy(block, topic.c_str(), topic.length() + 1);
   const size_t sealed_length =
       plaintext_length
@@ -207,7 +207,7 @@ void sendHello() {
     return;
   }
   uint8_t challenge[kChallengeSize];
-  esp_fill_random(challenge, sizeof(challenge));
+  secure_random::fill(challenge, sizeof(challenge));
   ht_crypto::hexEncode(challenge, sizeof(challenge), g_state->challenge,
                        sizeof(g_state->challenge));
   Header header;
@@ -347,7 +347,7 @@ bool sessionReady() {
 bool createCode() {
   begin();
   uint8_t random[kCodeLength];
-  esp_fill_random(random, sizeof(random));
+  secure_random::fill(random, sizeof(random));
   char code[kCodeLength + 1];
   generateCode(random, code);
   ht_crypto::secureZero(random, sizeof(random));

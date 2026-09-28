@@ -136,6 +136,17 @@ assert.match(settings, /lv_obj_t\* row = create_system_line\(parent, true\);/, '
 assert.match(applyView, /system_set_hidden\(system_middle, qr\);\s*system_set_hidden\(system_spacer, !qr\);/,
   'the QR view keeps its place under the branding');
 assert.match(applyView, /system_set_hidden\(system_info_rows, !\(main \|\| list\)\);/);
+// The status area always keeps two lines (messages, the Security hint or the
+// download progress), so neither a message nor another view moves the rows.
+assert.match(systemPopup, /lv_obj_set_height\(system_status_row,\s*2 \* lv_font_get_line_height\(popup_layout::font24\(\)\)\);/);
+assert.match(systemPopup, /security_hint_label = create_centered_label\(system_status_row,/);
+assert.match(systemPopup, /system_progress_bar = lv_bar_create\(system_status_row\);/);
+// While pairing, the title and the number replace the rows; the instruction
+// and its hint use the status area, so the number fits on 480x480.
+assert.match(systemPopup, /security_pair_text = create_centered_label\(system_status_row,/);
+assert.match(systemPopup, /security_pair_hint = create_centered_label\(system_status_row,/);
+assert.match(applyView, /system_set_hidden\(security_pair_text, !pairing\);\s*system_set_hidden\(security_pair_hint, !pairing \|\| !pair_hint \|\| !pair_hint\[0\]\);/);
+assert.match(applyView, /system_set_hidden\(system_status_row, qr\);\s*system_set_hidden\(system_status_label, !main\);\s*system_set_hidden\(security_hint_label, !list\);/);
 assert.match(applyView, /system_set_toggle\(system_github_btn, &system_github_color, qr\);\s*system_set_toggle\(system_security_btn, &system_security_color, security\);/,
   'GitHub and Security are colored while their view is open');
 assert.doesNotMatch(settings, /system_status_icon|system_show_pairing_status|link-variant-off/,

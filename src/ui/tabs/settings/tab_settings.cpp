@@ -2740,8 +2740,13 @@ static void system_apply_view() {
   system_set_hidden(system_info_rows, !(main || list));
   system_set_hidden(security_prompt_box, !prompt);
   system_set_hidden(security_pair_box, !pairing);
-  system_set_hidden(system_status_row, !main);
+  // The status area keeps its room in every view but the QR code.
+  system_set_hidden(system_status_row, qr);
+  system_set_hidden(system_status_label, !main);
   system_set_hidden(security_hint_label, !list);
+  const char* pair_hint = security_pair_hint ? lv_label_get_text(security_pair_hint) : nullptr;
+  system_set_hidden(security_pair_text, !pairing);
+  system_set_hidden(security_pair_hint, !pairing || !pair_hint || !pair_hint[0]);
   if (!main) system_set_hidden(system_progress_bar, true);
   system_set_hidden(system_action_row, !main);
   system_set_hidden(security_action_row, !security);
@@ -2866,8 +2871,6 @@ static void security_show_pairing(command_channel::PairingPhase phase) {
   }
   if (security_pair_hint) {
     lv_label_set_text(security_pair_hint, hint);
-    // The hint sits in its own line; hide the whole line.
-    system_set_hidden(lv_obj_get_parent(security_pair_hint), hint[0] == '\0');
   }
   security_set_buttons("close", finished ? tr().security_close : tr().security_cancel,
                        0x424242, "check", can_confirm ? tr().security_confirm : nullptr,
@@ -3347,8 +3350,6 @@ static void build_system_popup(lv_obj_t* parent) {
   lv_obj_t* pair_title = create_system_text_line(security_pair_box, popup_layout::font24(), 0xA8A8A8);
   lv_label_set_text(pair_title, tr().pairing_title);
   security_pair_number = create_centered_label(security_pair_box, popup_layout::font48(), 0xFFFFFF);
-  security_pair_text = create_system_text_line(security_pair_box, popup_layout::font24(), 0xFFFFFF);
-  security_pair_hint = create_system_text_line(security_pair_box, popup_layout::font24(), 0xA8A8A8);
 
 #if LV_USE_QRCODE
   system_qr = lv_qrcode_create(box);
@@ -3375,12 +3376,19 @@ static void build_system_popup(lv_obj_t* parent) {
   // Push the status and the buttons downward.
   system_spacer = create_flex_spacer(box);
 
-  // Status line: update and error messages only.
+  // Status area above the buttons: update and error messages, the Security
+  // hint or the download progress. It always keeps room for two lines, so a
+  // message or another view never moves the lines above.
   system_status_row = lv_obj_create(box);
   style_plain_container(system_status_row);
   lv_obj_clear_flag(system_status_row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_width(system_status_row, LV_PCT(100));
-  lv_obj_set_height(system_status_row, LV_SIZE_CONTENT);
+  lv_obj_set_height(system_status_row,
+                    2 * lv_font_get_line_height(popup_layout::font24()));
+  lv_obj_set_flex_flow(system_status_row, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(system_status_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(system_status_row, popup_layout::scale(6), 0);
   system_status_label = lv_label_create(system_status_row);
   lv_obj_set_width(system_status_label, LV_PCT(100));
   lv_label_set_long_mode(system_status_label, LV_LABEL_LONG_WRAP);
@@ -3393,10 +3401,12 @@ static void build_system_popup(lv_obj_t* parent) {
     system_clear_status();
   }
 
-  // Hint of the Security overview in the same place.
-  security_hint_label = create_centered_label(box, popup_layout::font24(), 0xA8A8A8);
+  security_hint_label = create_centered_label(system_status_row, popup_layout::font24(), 0xA8A8A8);
+  // While pairing, the instruction and its hint sit here, under the number.
+  security_pair_text = create_centered_label(system_status_row, popup_layout::font24(), 0xFFFFFF);
+  security_pair_hint = create_centered_label(system_status_row, popup_layout::font24(), 0xA8A8A8);
 
-  system_progress_bar = lv_bar_create(box);
+  system_progress_bar = lv_bar_create(system_status_row);
   lv_obj_set_size(system_progress_bar, LV_PCT(100),
                   popup_layout::scale(18));
   lv_obj_set_style_bg_color(system_progress_bar, lv_color_hex(0x1E1E1E), LV_PART_MAIN);

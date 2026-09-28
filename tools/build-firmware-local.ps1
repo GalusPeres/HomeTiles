@@ -135,6 +135,21 @@ $cppFlags = "-DHOMETILES_CI_TARGET -D$($buildProfile.define) $($extraDefineFlags
 $cFlags = $cppFlags
 $elfFlags = $buildProfile.elfFlags
 
+# The SDK flag file enables -fexceptions for all C++ code, but HomeTiles never
+# throws or catches; the unwind tables only cost flash. compiler.cpp.extra_flags
+# precedes that flag file in recipe.cpp.o.pattern, so repeat the platform.txt
+# line and append -fno-exceptions after it (same override as the CI workflow).
+$platformCppFlags = '-MMD -c "@{compiler.sdk.path}/flags/cpp_flags" {compiler.warning_flags} {compiler.optimization_flags} {compiler.common_werror_flags}'
+$platformTxt = Join-Path $env:LOCALAPPDATA 'Arduino15\packages\esp32\hardware\esp32\3.3.7\platform.txt'
+if (-not (Get-Content -LiteralPath $platformTxt | Where-Object { $_ -ceq "compiler.cpp.flags=$platformCppFlags" })) {
+    throw "compiler.cpp.flags in $platformTxt changed; update the -fno-exceptions override."
+}
+$noExceptionsFlag = '-fno-exceptions'
+# Windows PowerShell and legacy argument passing hand embedded quotes to native
+# programs unescaped; escape them so arduino-cli receives the literal quotes.
+$nativeQuote = if ($PSNativeCommandArgumentPassing -in @('Standard', 'Windows')) { '"' } else { '\"' }
+$cppCompileFlags = "$($platformCppFlags.Replace('"', $nativeQuote)) $noExceptionsFlag"
+
 Move-Item -LiteralPath $sketchProfiles -Destination $hiddenSketchProfiles
 try {
     $buildArgs = @(
@@ -143,6 +158,7 @@ try {
         '--libraries', $repoLibraries,
         '--build-property', "compiler.c.extra_flags=$cFlags",
         '--build-property', "compiler.cpp.extra_flags=$cppFlags",
+        '--build-property', "compiler.cpp.flags=$cppCompileFlags",
         '--build-property', "compiler.c.elf.extra_flags=$elfFlags")
     $fastDone = $false
     if ($Fast -and -not $Clean) {
@@ -162,7 +178,7 @@ try {
         }
         & $node.Source (Join-Path $PSScriptRoot 'fast-build.mjs') `
             --build-path $BuildPath --repo $repoRoot --props $propsFile `
-            --output-dir $OutputDirectory --expect-flags $cppFlags --fqbn $fqbn
+            --output-dir $OutputDirectory --expect-flags "$cppFlags $noExceptionsFlag" --fqbn $fqbn
         if ($LASTEXITCODE -eq 0) {
             $fastDone = $true
         } elseif ($LASTEXITCODE -eq 3) {

@@ -76,7 +76,7 @@ assert.match(settings, /const bool has_number = command_channel::pairingNumber\(
 assert.match(settings, /if \(security_refresh_timer\) \{\s*lv_timer_del\(security_refresh_timer\);\s*security_refresh_timer = nullptr;\s*\}\s*if \(networkTransport\.isWifiDriverActive\(\)\) WiFi\.scanDelete\(\);/,
   'closing the popup deletes the refresh timer');
 for (const key of ['system_updates_btn', 'system_install_btn', 'security_status_paired', 'security_status_plain',
-  'security_value_paired', 'security_value_plain', 'security_hint_pair', 'security_hint_unpair',
+  'security_value_connected', 'security_value_offline', 'security_hint_pair', 'security_hint_unpair',
   'security_pair_short', 'security_pair_long', 'security_unpair_short', 'security_unpair_long',
   'security_password_btn', 'security_unpair_question', 'security_unpair_question_hint',
   'security_password_question', 'security_password_question_hint', 'security_remove', 'security_cancel',
@@ -101,10 +101,22 @@ assert.match(applyView, /system_set_hidden\(system_action_row, !main\);\s*system
 assert.doesNotMatch(applyView, /system_brand/, 'the branding stays in every view');
 assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 0x424242, "lock-open-variant",\s*tr\(\)\.security_remove, 0xC62828\);/,
   'removing the password asks first and is red');
-assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 0x424242, "link-variant-off",\s*tr\(\)\.security_unpair_short, 0xC62828\);/,
-  'unpairing asks first and is red');
+assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 0x424242, "shield-off",\s*tr\(\)\.security_unpair_short, 0xC62828\);/,
+  'turning encryption off asks first and is red');
 assert.match(settings, /full \? tr\(\)\.security_pair_long : tr\(\)\.security_pair_short/,
-  'the Pair button spells out Home Assistant when it has the full width');
+  'the Encrypt button uses the long label when it has the full width');
+// The Home Assistant row shows the connection with a check; only the shield
+// shows encryption, so an unencrypted panel still reads as connected.
+const refresh = settings.slice(settings.indexOf('static void security_refresh() {'),
+  settings.indexOf('static void security_set_message('));
+assert.match(refresh, /connected \? tr\(\)\.security_value_connected : tr\(\)\.security_value_offline/);
+assert.match(refresh, /system_set_hidden\(security_ha_check, !connected\);/);
+assert.match(refresh, /lv_color_hex\(paired \? 0x51CF66 : 0xA8A8A8\)/, 'a green shield means encrypted');
+assert.doesNotMatch(refresh, /link-variant-off|"home-assistant"/, 'the buttons use the Security shields');
+const pairingStatus = settings.slice(settings.indexOf('static void system_show_pairing_status() {'),
+  settings.indexOf('static void system_show_status('));
+assert.ok(pairingStatus.indexOf('isMqttConnected()') < pairingStatus.indexOf('security_status_paired'),
+  'the status line claims a connection only while MQTT is up');
 // The retained announcement is signed while a code exists and republished
 // whenever the code changes; without pairing it stays byte-identical.
 const announce = network.slice(network.indexOf('void HomeTilesNetworkManager::publishBridgeConfig() {'),

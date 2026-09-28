@@ -1544,7 +1544,7 @@ String WebAdminServer::getAdminPage() {
   html += R"html(
           <a class="brand-link" href="https://galusperes.github.io/HomeTiles/" target="_blank" rel="noopener"><i class="mdi mdi-book-open-variant"></i>Docs</a>
           <a class="brand-link" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-github"></i>GitHub</a>
-          <a class="brand-link brand-star" href="https://github.com/GalusPeres/HomeTiles/stargazers" target="_blank" rel="noopener"><i class="mdi mdi-star"></i>Star</a>
+          <a class="brand-link brand-star" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-star"></i>Star</a>
           <a class="brand-link brand-coffee" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener"><i class="mdi mdi-coffee"></i>Buy Me a Coffee</a>
         </div>
       </div>

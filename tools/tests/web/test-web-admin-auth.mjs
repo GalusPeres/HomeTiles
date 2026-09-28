@@ -275,7 +275,8 @@ const brandLinks = adminHtml.slice(adminHtml.indexOf('<div class="brand-links">'
   adminHtml.indexOf('<!-- Tab Navigation -->'));
 assert.match(brandLinks, /appendWebAdminPasswordBadgeHtml\(html, tr\);/);
 assert.match(brandLinks, /href="https:\/\/buymeacoffee\.com\/galusperes"/);
-assert.match(brandLinks, /href="https:\/\/github\.com\/GalusPeres\/HomeTiles\/stargazers"/);
+// GitHub has no direct star link; the repository page has the Star button.
+assert.match(brandLinks, /class="brand-link brand-star" href="https:\/\/github\.com\/GalusPeres\/HomeTiles"/);
 const badge = section.slice(section.indexOf('void appendWebAdminPasswordBadgeHtml('));
 assert.match(badge, /enabled \? "is-on" : "is-off"/);
 assert.match(badge, /mdi-shield-lock/);

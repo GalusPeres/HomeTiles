@@ -153,6 +153,7 @@ static lv_obj_t *system_security_btn = nullptr;
 static lv_obj_t *security_rows = nullptr;
 static lv_obj_t *security_ha_value = nullptr;
 static lv_obj_t *security_ha_icon = nullptr;
+static lv_obj_t *security_ha_check = nullptr;  // Shown while connected
 static lv_obj_t *security_password_value = nullptr;
 static lv_obj_t *security_password_icon = nullptr;
 static lv_obj_t *security_prompt_box = nullptr;  // Confirmation questions
@@ -1082,6 +1083,7 @@ static void reset_popup_refs() {
   security_rows = nullptr;
   security_ha_value = nullptr;
   security_ha_icon = nullptr;
+  security_ha_check = nullptr;
   security_password_value = nullptr;
   security_password_icon = nullptr;
   security_prompt_box = nullptr;
@@ -2597,12 +2599,12 @@ static void system_status_text(const char* text, uint32_t color, bool shield) {
 // Shown whenever no update or error message is pending.
 static void system_show_pairing_status() {
   system_status_message = false;
-  if (command_channel::state() == command_channel::PairingState::Active) {
-    system_status_text(tr().security_status_paired, 0x51CF66, true);
-  } else if (networkManager.isMqttConnected()) {
-    system_status_text(tr().security_status_plain, 0xA8A8A8, false);
-  } else {
+  if (!networkManager.isMqttConnected()) {
     system_status_text("", 0xA8A8A8, false);
+  } else if (command_channel::state() == command_channel::PairingState::Active) {
+    system_status_text(tr().security_status_paired, 0x51CF66, true);
+  } else {
+    system_status_text(tr().security_status_plain, 0xA8A8A8, false);
   }
 }
 
@@ -2825,9 +2827,14 @@ static void security_refresh() {
       (security_step == SecurityStep::ConfirmUnpair && !paired)) {
     security_step = SecurityStep::List;
   }
-  security_set_value(security_ha_value, security_ha_icon,
-                     paired ? tr().security_value_paired : tr().security_value_plain,
-                     paired);
+  const bool connected = networkManager.isMqttConnected();
+  security_set_value(security_ha_value, security_ha_check,
+                     connected ? tr().security_value_connected : tr().security_value_offline,
+                     connected);
+  system_set_hidden(security_ha_check, !connected);
+  if (security_ha_icon) {
+    lv_obj_set_style_text_color(security_ha_icon, lv_color_hex(paired ? 0x51CF66 : 0xA8A8A8), 0);
+  }
   security_set_value(security_password_value, security_password_icon,
                      password_on ? tr().security_state_on : tr().security_state_off,
                      password_on);
@@ -2836,12 +2843,12 @@ static void security_refresh() {
       // One button takes the full width with the long label.
       const bool full = !password_on;
       if (paired) {
-        security_set_buttons("link-variant-off",
+        security_set_buttons("shield-off",
                              full ? tr().security_unpair_long : tr().security_unpair_short,
                              0x424242, "lock-open-variant",
                              password_on ? tr().security_password_btn : nullptr, 0x424242);
       } else {
-        security_set_buttons("home-assistant",
+        security_set_buttons("shield-lock",
                              full ? tr().security_pair_long : tr().security_pair_short,
                              0x1E88E5, "lock-open-variant",
                              password_on ? tr().security_password_btn : nullptr, 0x424242);
@@ -2865,9 +2872,9 @@ static void security_refresh() {
                            tr().security_remove, 0xC62828);
       break;
     case SecurityStep::ConfirmUnpair:
-      security_show_prompt("link-variant-off", tr().security_unpair_question,
+      security_show_prompt("shield-off", tr().security_unpair_question,
                            tr().security_unpair_question_hint);
-      security_set_buttons("close", tr().security_cancel, 0x424242, "link-variant-off",
+      security_set_buttons("close", tr().security_cancel, 0x424242, "shield-off",
                            tr().security_unpair_short, 0xC62828);
       break;
     case SecurityStep::Pairing:
@@ -3063,7 +3070,8 @@ static lv_obj_t* create_system_icon_button(lv_obj_t* parent, const char* icon,
 }
 
 static lv_obj_t* create_security_row(lv_obj_t* parent, const char* title,
-                                     lv_obj_t** value_out, lv_obj_t** icon_out) {
+                                     lv_obj_t** value_out, lv_obj_t** icon_out,
+                                     lv_obj_t** check_out = nullptr) {
   lv_obj_t* row = lv_obj_create(parent);
   style_plain_container(row);
   lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
@@ -3079,7 +3087,7 @@ static lv_obj_t* create_security_row(lv_obj_t* parent, const char* title,
   lv_obj_set_flex_grow(label, 1);
   lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
   lv_obj_set_style_text_color(label, lv_color_white(), 0);
-  // State text with the Security shield to its right.
+  // Optional check, state text, and the Security shield to its right.
   lv_obj_t* state = lv_obj_create(row);
   style_plain_container(state);
   lv_obj_clear_flag(state, LV_OBJ_FLAG_SCROLLABLE);
@@ -3088,6 +3096,14 @@ static lv_obj_t* create_security_row(lv_obj_t* parent, const char* title,
   lv_obj_set_flex_align(state, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(state, popup_layout::scale(10), 0);
+  if (check_out) {
+    lv_obj_t* check = lv_label_create(state);
+    lv_label_set_text(check, getMdiChar("check").c_str());
+    if (FONT_MDI_ICONS) lv_obj_set_style_text_font(check, FONT_MDI_ICONS, 0);
+    popup_layout::applyIconScale(check);
+    lv_obj_add_flag(check, LV_OBJ_FLAG_HIDDEN);
+    *check_out = check;
+  }
   lv_obj_t* value = lv_label_create(state);
   lv_label_set_text(value, "");
   lv_obj_set_style_text_font(value, popup_layout::font24(), 0);
@@ -3202,12 +3218,13 @@ static void build_system_popup(lv_obj_t* parent) {
   lv_obj_add_flag(system_qr, LV_OBJ_FLAG_HIDDEN);
 #endif
 
-  // Security overview: pairing state and Web Admin password, each with the
-  // Security shield. "Home Assistant" is a product name and stays untranslated.
+  // Security overview: the Home Assistant connection (check) and encryption
+  // (shield), and the Web Admin password. "Home Assistant" is a product name
+  // and stays untranslated.
   security_rows = create_centered_column(box, popup_layout::scale(10));
   lv_obj_set_style_margin_top(security_rows, popup_layout::scale(16), 0);
   create_security_row(security_rows, "Home Assistant", &security_ha_value,
-                      &security_ha_icon);
+                      &security_ha_icon, &security_ha_check);
   create_security_row(security_rows, tr().web_auth_section, &security_password_value,
                       &security_password_icon);
 

@@ -615,8 +615,8 @@ struct Strings {
   // panel and Home Assistant show the same number) and the Web Admin password.
   const char* security_status_paired;
   const char* security_status_plain;
-  const char* security_value_paired;
-  const char* security_value_plain;
+  const char* security_value_connected;
+  const char* security_value_offline;
   const char* security_hint_pair;
   const char* security_hint_unpair;
   const char* security_pair_short;

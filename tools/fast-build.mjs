@@ -120,6 +120,10 @@ export function depFiles(depPath) {
   return body.split(/(?<!\\)\s+/).map(t => t.replace(/\\ /g, ' ')).filter(t => t && t !== '\\');
 }
 
+export function firstOutOfDate(entries) {
+  return entries.find(entry => isOutOfDate(entry));
+}
+
 function isOutOfDate(entry) {
   const objTime = mtime(entry.obj);
   if (objTime < 0) return true;
@@ -312,13 +316,20 @@ async function main() {
   const commands = JSON.parse(fs.readFileSync(ccPath, 'utf8'));
   const sketchPrefix = sketchDir.toLowerCase() + path.sep;
   const sketchEntries = [];
+  const otherEntries = [];
   for (const c of commands) {
-    if (!c.file.toLowerCase().startsWith(sketchPrefix)) continue;
     const o = c.arguments.indexOf('-o');
     if (o < 0) fallback('compile command without -o');
-    sketchEntries.push({ ...c, obj: c.arguments[o + 1] });
+    const entry = { ...c, obj: c.arguments[o + 1] };
+    if (c.file.toLowerCase().startsWith(sketchPrefix)) sketchEntries.push(entry);
+    else otherEntries.push(entry);
   }
   if (!sketchEntries.length) fallback('no sketch compile commands');
+  // Only arduino-cli rebuilds library and core objects. They also depend on
+  // repository headers (lv_conf.h), so a changed dependency needs the full
+  // build; relinking the cached objects would mix two configurations.
+  const staleOther = firstOutOfDate(otherEntries);
+  if (staleOther) fallback(`${path.relative(bp, staleOther.obj)} is out of date`);
   if (args.expectFlags) {
     const sample = sketchEntries.find(e => e.file.endsWith('.cpp')).arguments;
     const expected = new Set(splitCommand(args.expectFlags));

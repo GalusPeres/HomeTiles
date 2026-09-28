@@ -36,6 +36,9 @@ export function compileAndRun({label, harness, files = {}, sources = [], input =
     const output = path.join(tempRoot, process.platform === 'win32' ? 'harness.exe' : 'harness');
     const compile = spawnSync(compiler, [
       '-std=c++17', '-O1', '-Wall', '-Wextra', '-Werror',
+      // The Windows C runtime deprecates strcpy and friends; the firmware's
+      // newlib does not, and the production code validates lengths first.
+      ...(process.platform === 'win32' ? ['-D_CRT_SECURE_NO_WARNINGS'] : []),
       '-I', tempRoot, '-I', repoRoot,
       path.join(tempRoot, 'harness.cpp'),
       ...sources.map(source => path.join(repoRoot, source)),
@@ -45,7 +48,8 @@ export function compileAndRun({label, harness, files = {}, sources = [], input =
       `${label} did not compile:\n${compile.stdout}${compile.stderr}`);
     const run = spawnSync(output, [], {encoding: 'utf8', input, maxBuffer: 64 * 1024 * 1024});
     assert.equal(run.status, 0, `${label} failed:\n${run.stdout}${run.stderr}`);
-    return run.stdout;
+    // Windows writes text-mode stdout with CRLF line endings.
+    return run.stdout.replace(/\r\n/g, '\n');
   } finally {
     assert.ok(path.resolve(tempRoot).startsWith(path.resolve(buildRoot) + path.sep));
     fs.rmSync(tempRoot, {recursive: true, force: true});

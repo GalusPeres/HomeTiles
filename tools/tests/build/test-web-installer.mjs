@@ -22,7 +22,8 @@ import {
 import { selectDevicesForPublication } from "../../../release-helper/prepare-web-installer.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-const read = (relativePath) => fs.readFileSync(path.join(repositoryRoot, relativePath), "utf8");
+const read = (relativePath) =>
+  fs.readFileSync(path.join(repositoryRoot, relativePath), "utf8").replace(/\r\n/g, "\n");
 
 function fixtureRelease(tag = "v0.6.5") {
   const assets = [];

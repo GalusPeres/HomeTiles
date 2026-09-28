@@ -10,8 +10,9 @@ import {parse} from 'acorn';
 export const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
+// Windows checkouts use CRLF; structural assertions match LF source.
 export function readRepoFile(...segments) {
-  return fs.readFileSync(path.join(repoRoot, ...segments), 'utf8');
+  return fs.readFileSync(path.join(repoRoot, ...segments), 'utf8').replace(/\r\n/g, '\n');
 }
 
 export const adminSource = readRepoFile('src', 'web', 'assets', 'admin.js');

@@ -94,6 +94,7 @@ int settings_built=0,settings_closed=0;
 void reset_popup_refs(){}
 const char* popup_icon_for_kind(SettingsPopupKind){return "wifi";}
 const char* popup_title_for_kind(SettingsPopupKind){return "Wi-Fi";}
+uint32_t settings_tile_color(){return 0x2A2A2A;}  // The global tile color in production.
 void style_plain_container(lv_obj_t*o){lv_obj_remove_style_all(o);lv_obj_remove_flag(o,LV_OBJ_FLAG_SCROLLABLE);}
 void build_popup_content(SettingsPopupKind,lv_obj_t*parent){++settings_built;wifi_entry_view=lv_obj_create(parent);lv_obj_set_size(wifi_entry_view,100,100);}
 void close_settings_popup(){++settings_closed;hide_popup_shell(settings_popup_card);lv_obj_delete(settings_popup_overlay);settings_popup_overlay=nullptr;settings_popup_card=nullptr;settings_popup_content=nullptr;wifi_entry_view=nullptr;}

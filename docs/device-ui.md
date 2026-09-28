@@ -116,4 +116,6 @@ View the firmware version and device name, or use the maintenance actions:
 - **GitHub:** show a QR code for the project.
 - **Security:** [encrypted Bridge commands](bridge.md#encrypted-commands) and the [Web Admin password](web-admin.md#web-admin-password). **Encrypt** sets up encryption with Home Assistant by a six-digit number, **Turn off** switches it off on both sides, and **Password** removes a forgotten Web Admin password. Both ask before they act.
 
-Below the version, System lists the device, the Home Assistant connection and the Web Admin password. A check shows that the display is connected, and a green shield shows that commands are encrypted or the password is set. GitHub and Security are colored while their view is open; tap them again to return.
+Below the version and device name, System shows three rows: **Home Assistant** with a check while the display is connected, and **Encryption** and **Web Admin password** with a green shield while they are on. GitHub and Security are colored while their view is open; tap them again to return.
+
+The Settings tiles, the Back button and the Settings popups use the tile color from the [global settings](web-admin.md#global-settings).

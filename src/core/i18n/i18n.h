@@ -613,10 +613,10 @@ struct Strings {
   const char* system_install_btn;
   // Security view of the System popup: pairing with Home Assistant (the
   // panel and Home Assistant show the same number) and the Web Admin password.
-  // Home Assistant row in System: connected and encrypted, connected only,
-  // or offline.
-  const char* security_value_encrypted;
-  const char* security_value_plain;
+  // System rows: Home Assistant connected or offline, and the Encryption
+  // row label (its value is security_state_on/off).
+  const char* security_value_connected;
+  const char* security_encryption_label;
   const char* security_value_offline;
   const char* security_hint_pair;
   const char* security_hint_unpair;

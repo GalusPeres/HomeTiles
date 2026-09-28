@@ -75,8 +75,8 @@ assert.match(settings, /const bool has_number = command_channel::pairingNumber\(
   'the number is shown only while the attempt has one');
 assert.match(settings, /if \(security_refresh_timer\) \{\s*lv_timer_del\(security_refresh_timer\);\s*security_refresh_timer = nullptr;\s*\}\s*if \(networkTransport\.isWifiDriverActive\(\)\) WiFi\.scanDelete\(\);/,
   'closing the popup deletes the refresh timer');
-for (const key of ['system_updates_btn', 'system_install_btn', 'security_value_encrypted', 'security_value_plain',
-  'security_value_offline', 'system_device_label', 'security_hint_pair', 'security_hint_unpair',
+for (const key of ['system_updates_btn', 'system_install_btn', 'security_value_connected', 'security_encryption_label',
+  'security_value_offline', 'security_hint_pair', 'security_hint_unpair',
   'security_pair_short', 'security_pair_long', 'security_unpair_short', 'security_unpair_long',
   'security_password_btn', 'security_unpair_question', 'security_unpair_question_hint',
   'security_password_question', 'security_password_question_hint', 'security_remove', 'security_cancel',
@@ -105,19 +105,29 @@ assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 
   'turning encryption off asks first and is red');
 assert.match(settings, /full \? tr\(\)\.security_pair_long : tr\(\)\.security_pair_short/,
   'the Encrypt button uses the long label when it has the full width');
-// Device, Home Assistant and Web Admin password rows sit under the branding in
-// the main and Security views. The check shows the connection, the shield
-// encryption; a question or the pairing number takes the rows' place.
+// The device name stays under the branding. One row per fact (Home Assistant
+// connected with a check, Encryption and Web Admin password with a shield)
+// sits centered in the middle area, which only takes the free space, so the
+// buttons never move; a question or the pairing number takes the rows' place
+// with the same line height and gap.
 const rows = settings.slice(settings.indexOf('static void system_refresh_rows() {'),
   settings.indexOf('static constexpr uint32_t kSystemToggleActive'));
-assert.match(rows, /!connected \? tr\(\)\.security_value_offline\s*: encrypted \? tr\(\)\.security_value_encrypted\s*: tr\(\)\.security_value_plain/);
-assert.match(rows, /system_set_hidden\(security_ha_check, !connected\);/);
-assert.match(rows, /system_set_label_color\(security_ha_icon, encrypted \? 0x51CF66 : 0xA8A8A8\);/, 'a green shield means encrypted');
+assert.match(rows, /connected \? tr\(\)\.security_value_connected : tr\(\)\.security_value_offline/);
+assert.match(rows, /lv_obj_set_style_text_opa\(security_ha_check, connected \? LV_OPA_COVER : LV_OPA_TRANSP, 0\);/,
+  'the check keeps its place while offline, so the texts stay aligned');
+assert.match(rows, /system_set_row\(security_encryption_value, security_encryption_icon,\s*encrypted \? tr\(\)\.security_state_on : tr\(\)\.security_state_off, encrypted\);/,
+  'a green shield means encrypted');
 assert.match(rows, /if \(state == system_rows_state\) return;/, 'the timer redraws the rows only on a change');
-assert.ok(systemPopup.indexOf('system_info_rows = create_centered_column') < systemPopup.indexOf('security_prompt_box = ') &&
-  systemPopup.indexOf('security_pair_box = ') < systemPopup.indexOf('system_spacer = create_flex_spacer(box);'),
-  'rows, questions and the number sit under the branding, above the spacer');
-assert.match(systemPopup, /create_security_row\(system_info_rows, tr\(\)\.system_device_label, &device_value, nullptr\);/);
+assert.match(systemPopup, /system_device_name = lv_label_create\(head\);\s*lv_label_set_text\(system_device_name, Device::displayName\(\)\);/);
+assert.match(systemPopup, /lv_obj_set_flex_grow\(system_middle, 1\);/);
+for (const parent of ['system_info_rows', 'security_prompt_box', 'security_pair_box']) {
+  assert.match(systemPopup, new RegExp(`${parent} = create_centered_column\\(system_middle, system_line_gap\\(\\)\\);`),
+    `${parent} shares the middle area and the line gap`);
+}
+assert.match(systemPopup, /create_security_row\(system_info_rows, tr\(\)\.security_encryption_label,/);
+assert.match(settings, /lv_obj_t\* row = create_system_line\(parent, true\);/, 'every row is one line high');
+assert.match(applyView, /system_set_hidden\(system_middle, qr\);\s*system_set_hidden\(system_spacer, !qr\);/,
+  'the QR view keeps its place under the branding');
 assert.match(applyView, /system_set_hidden\(system_info_rows, !\(main \|\| list\)\);/);
 assert.match(applyView, /system_set_toggle\(system_github_btn, &system_github_color, qr\);\s*system_set_toggle\(system_security_btn, &system_security_color, security\);/,
   'GitHub and Security are colored while their view is open');

@@ -90,6 +90,7 @@ void begin() {
   // knows. The password can be removed in the device Settings.
   g_credential.enabled = true;
   fillRandom(g_credential.salt, kSaltSize);
+  g_credential.iterations = kMinIterations;
   fillRandom(g_credential.key, kKeySize);
   Serial.println("[WebAuth] Stored password record is invalid; Web Admin stays "
                  "locked until the password is reset on the device");
@@ -100,12 +101,14 @@ bool enabled() {
   return g_credential.enabled;
 }
 
-bool setCredential(const uint8_t salt[kSaltSize], const uint8_t key[kKeySize]) {
+bool setCredential(const uint8_t salt[kSaltSize], uint32_t iterations,
+                   const uint8_t key[kKeySize]) {
   begin();
-  if (!salt || !key) return false;
+  if (!salt || !key || !validIterations(iterations)) return false;
   Credential updated;
   updated.enabled = true;
   memcpy(updated.salt, salt, kSaltSize);
+  updated.iterations = iterations;
   memcpy(updated.key, key, kKeySize);
   const bool saved = writeRecord(&updated);
   if (saved) {
@@ -132,13 +135,15 @@ bool clearCredential() {
   return true;
 }
 
-bool challenge(uint8_t nonce_out[kNonceSize], uint8_t salt_out[kSaltSize]) {
+bool challenge(uint8_t nonce_out[kNonceSize], uint8_t salt_out[kSaltSize],
+               uint32_t* iterations_out) {
   begin();
-  if (!g_credential.enabled) return false;
+  if (!g_credential.enabled || !iterations_out) return false;
   Tables* state = tables();
   if (!state) return false;
   issueNonce(*state, millis(), fillRandom, nonce_out);
   memcpy(salt_out, g_credential.salt, kSaltSize);
+  *iterations_out = g_credential.iterations;
   return true;
 }
 

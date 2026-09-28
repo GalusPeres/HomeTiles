@@ -2,14 +2,14 @@
 // (src/web/server/auth/web_admin_auth_core.h) on the host and checks that every
 // route is registered behind the password gate.
 import assert from 'node:assert/strict';
-import {createHash, createHmac} from 'node:crypto';
+import {createHmac, pbkdf2Sync} from 'node:crypto';
 
 import {readRepoFile} from '../../lib/admin-source.mjs';
 import {compileAndRun} from '../../lib/cpp-host.mjs';
 
 const salt = Buffer.from('00112233445566778899aabbccddeeff', 'hex');
 const password = 'correct horse battery';
-const key = createHash('sha256').update(Buffer.concat([salt, Buffer.from(password, 'utf8')])).digest();
+const key = pbkdf2Sync(Buffer.from(password, 'utf8'), salt, 10000, 32, 'sha256');
 const cArray = bytes => `{${Array.from(bytes).join(',')}}`;
 
 const harness = String.raw`
@@ -43,6 +43,7 @@ int main() {
   const uint8_t salt[kSaltSize] = SALT;
   const uint8_t key[kKeySize] = KEY;
   std::memcpy(credential.salt, salt, kSaltSize);
+  credential.iterations = 10000;
   std::memcpy(credential.key, key, kKeySize);
   static Tables tables;
   clearTables(tables);
@@ -153,17 +154,40 @@ int main() {
   CHECK(!jsonStringField("{\"nonce\":12}", "nonce", field, sizeof(field)));
   CHECK(jsonTrueField("{\"disable\": true}", "disable"));
   CHECK(!jsonTrueField("{\"disable\": false}", "disable"));
+  uint32_t number = 0;
+  CHECK(jsonUintField("{\"salt\":\"ab\",\"iter\" : 300000,\"key\":\"cd\"}", "iter", &number) && number == 300000);
+  CHECK(jsonUintField("{\"iter\":4294967295}", "iter", &number) && number == 4294967295u);
+  CHECK(jsonUintField("{\"iter\":0}", "iter", &number) && number == 0);
+  CHECK(!jsonUintField("{\"iter\":4294967296}", "iter", &number));
+  CHECK(!jsonUintField("{\"iter\":12345678901}", "iter", &number));
+  CHECK(!jsonUintField("{\"iter\":0300000}", "iter", &number));
+  CHECK(!jsonUintField("{\"iter\":-1}", "iter", &number));
+  CHECK(!jsonUintField("{\"iter\":1e5}", "iter", &number));
+  CHECK(!jsonUintField("{\"iter\":1.5}", "iter", &number));
+  CHECK(!jsonUintField("{\"iter\":\"300000\"}", "iter", &number));
+  CHECK(!jsonUintField("{\"v\":12abc}", "v", &number));
+  CHECK(!jsonUintField("{\"key\":\"ab\"}", "iter", &number));
+  CHECK(!validIterations(9999) && validIterations(10000) && validIterations(1000000) && !validIterations(1000001));
 
-  // Stored record: round trip, checksum and version validation.
+  // Stored record: round trip, checksum, version and iteration validation.
+  CHECK(sizeof(CredentialRecord) == 64);
   CredentialRecord record = makeRecord(credential);
   Credential restored;
-  CHECK(applyRecord(record, restored) && restored.enabled && std::memcmp(restored.key, key, kKeySize) == 0);
+  CHECK(applyRecord(record, restored) && restored.enabled && restored.iterations == 10000 &&
+        std::memcmp(restored.key, key, kKeySize) == 0);
   record.key[5] ^= 1;
   CHECK(!applyRecord(record, restored));
   record = makeRecord(credential);
-  record.version = 2;
+  record.version = 1;  // The former single SHA-256 record.
   record.checksum = recordChecksum(record);
   CHECK(!applyRecord(record, restored));
+  const uint32_t out_of_range[] = {0u, 9999u, 1000001u};
+  for (uint32_t iterations : out_of_range) {
+    Credential odd = credential;
+    odd.iterations = iterations;
+    record = makeRecord(odd);
+    CHECK(!applyRecord(record, restored));
+  }
   std::printf("ok\n");
   return 0;
 }
@@ -181,7 +205,7 @@ if (stdout !== null) {
   assert.ok(stdout.trim().endsWith('ok'), stdout);
   const nonce = Buffer.from(values.nonce, 'hex');
   const proof = createHmac('sha256', key).update(nonce).digest();
-  assert.equal(values.proof, proof.toString('hex'), 'proof = HMAC-SHA256(SHA-256(salt || password), nonce)');
+  assert.equal(values.proof, proof.toString('hex'), 'proof = HMAC-SHA256(PBKDF2(password, salt, iter), nonce)');
   const serverProof = createHmac('sha256', key)
     .update(Buffer.concat([Buffer.from('HomeTiles-Web-Admin-server-v1'), nonce, proof])).digest('hex');
   assert.equal(values.server, serverProof, 'server proof binds label, nonce and client proof');
@@ -217,6 +241,10 @@ assert.match(routes, /getLoginPage\(\)/, 'the root page falls back to the login 
 const handlers = readRepoFile('src/web/server/handlers/web_admin_auth_handlers.cpp');
 assert.match(handlers, /Path=\/; HttpOnly; SameSite=Strict/, 'session cookie flags');
 assert.match(handlers, /"Retry-After"/, 'lockout reports Retry-After');
+assert.ok(handlers.includes('json += "\\",\\"iter\\":";\n  json += iterations;'),
+  'the challenge returns the stored PBKDF2 iterations');
+assert.match(handlers, /readUintArg\(server, body, "iter", &iterations\) \|\|\s*!web_admin_auth::validIterations\(iterations\)\) \{\s*ht_crypto::secureZero\(key, sizeof\(key\)\);\s*sendJsonError\(server, 400/,
+  'setting a password requires an iteration count in range');
 assert.doesNotMatch(handlers, /Serial\.printf?\([^;]*(proof|key|session_hex|csrf_hex)/,
   'secrets are never logged');
 const module = readRepoFile('src/web/server/auth/web_admin_auth.cpp');

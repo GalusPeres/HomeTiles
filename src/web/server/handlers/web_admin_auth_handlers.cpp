@@ -42,6 +42,15 @@ bool readHexArg(WebServer& server, const String& body, const char* key,
   return found && ht_crypto::hexDecode(text, strlen(text), out, out_length);
 }
 
+// Reads an unsigned number from a JSON body or, for form posts, the form field.
+bool readUintArg(WebServer& server, const String& body, const char* key,
+                 uint32_t* out) {
+  if (web_admin_auth::jsonUintField(body.c_str(), key, out)) return true;
+  if (!server.hasArg(key)) return false;
+  const String wrapped = String("{\"v\":") + server.arg(key) + "}";
+  return web_admin_auth::jsonUintField(wrapped.c_str(), "v", out);
+}
+
 }  // namespace
 
 bool WebAdminServer::authorizeRequest() {
@@ -85,7 +94,8 @@ void WebAdminServer::handleAuthChallenge() {
   server.sendHeader("Cache-Control", "no-store");
   uint8_t nonce[web_admin_auth::kNonceSize];
   uint8_t salt[web_admin_auth::kSaltSize];
-  if (!web_admin_auth::challenge(nonce, salt)) {
+  uint32_t iterations = 0;
+  if (!web_admin_auth::challenge(nonce, salt, &iterations)) {
     server.send(200, "application/json", "{\"enabled\":false}");
     return;
   }
@@ -97,7 +107,9 @@ void WebAdminServer::handleAuthChallenge() {
   json += salt_hex;
   json += "\",\"nonce\":\"";
   json += nonce_hex;
-  json += "\"}";
+  json += "\",\"iter\":";
+  json += iterations;
+  json += "}";
   server.send(200, "application/json", json);
 }
 
@@ -212,12 +224,16 @@ void WebAdminServer::handleAuthPassword() {
 
   uint8_t salt[web_admin_auth::kSaltSize];
   uint8_t key[web_admin_auth::kKeySize];
+  uint32_t iterations = 0;
   if (!readHexArg(server, body, "salt", salt, sizeof(salt)) ||
-      !readHexArg(server, body, "key", key, sizeof(key))) {
+      !readHexArg(server, body, "key", key, sizeof(key)) ||
+      !readUintArg(server, body, "iter", &iterations) ||
+      !web_admin_auth::validIterations(iterations)) {
+    ht_crypto::secureZero(key, sizeof(key));
     sendJsonError(server, 400, "Invalid password data");
     return;
   }
-  const bool saved = web_admin_auth::setCredential(salt, key);
+  const bool saved = web_admin_auth::setCredential(salt, iterations, key);
   ht_crypto::secureZero(key, sizeof(key));
   if (!saved) {
     sendJsonError(server, 500, "Could not save the password");

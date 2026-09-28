@@ -13,15 +13,18 @@ namespace web_admin_auth {
 void begin();
 bool enabled();
 
-// Stores a new salt/key pair (enabling or changing the password). Every
-// existing session and pending login challenge ends.
-bool setCredential(const uint8_t salt[kSaltSize], const uint8_t key[kKeySize]);
+// Stores a new salt, PBKDF2 iteration count and key (enabling or changing the
+// password). Every existing session and pending login challenge ends. Counts
+// outside kMinIterations..kMaxIterations are refused.
+bool setCredential(const uint8_t salt[kSaltSize], uint32_t iterations,
+                   const uint8_t key[kKeySize]);
 
 // Removes the password, from Web Admin or from the device Settings.
 bool clearCredential();
 
-// Issues a single-use login nonce and returns the stored salt.
-bool challenge(uint8_t nonce_out[kNonceSize], uint8_t salt_out[kSaltSize]);
+// Issues a single-use login nonce and returns the stored salt and iterations.
+bool challenge(uint8_t nonce_out[kNonceSize], uint8_t salt_out[kSaltSize],
+               uint32_t* iterations_out);
 
 LoginResult attemptLogin(const uint8_t nonce[kNonceSize],
                          const uint8_t proof[kProofSize],

@@ -43,14 +43,22 @@ brightness. MQTT broker credentials remain the first line of defence.
 
 ## Web Admin password
 
-Stored on the panel: a 16-byte random salt and
-`key = SHA-256(salt || UTF-8 password)` (NVS `tab5_config/web_auth`, checksummed
-record). The password itself never reaches the panel; the browser derives the
-key with its built-in SHA-256, because WebCrypto is unavailable on `http://`.
+Stored on the panel: a 16-byte random salt, the iteration count `iter` and
+`key = PBKDF2-HMAC-SHA256(UTF-8 password, salt, iter, 32 bytes)` (NVS
+`tab5_config/web_auth`, checksummed record version 2). The password never
+reaches the panel, and the panel never derives a key: the browser runs PBKDF2
+in JavaScript, because WebCrypto is unavailable on `http://`, and the Bridge
+uses `hashlib.pbkdf2_hmac`. The slow derivation makes a login sniffed on the
+LAN expensive to brute-force offline. New passwords use 300,000 iterations.
+Clients accept 10,000 to 1,000,000 and refuse any other challenge, so a fake
+panel cannot stall them. A record of the earlier single SHA-256 scheme
+(version 1, never released) keeps Web Admin locked until the password is
+removed on the device and set again.
 
 Login:
 
-1. `GET /api/auth/challenge` → `{"enabled":true,"salt":"<32 hex>","nonce":"<64 hex>"}`,
+1. `GET /api/auth/challenge` →
+   `{"enabled":true,"salt":"<32 hex>","nonce":"<64 hex>","iter":<integer>}`,
    or `{"enabled":false}` without a password. Older firmware answers 404.
 2. `proof = HMAC-SHA256(key, nonce)`; `POST /api/auth/login`
    `{"nonce":"…","proof":"<64 hex>"}`.
@@ -70,7 +78,9 @@ get 401 with `X-HomeTiles-Auth: required`, a wrong CSRF token 403 with
 discarded before they reach a writer. Sessions end after 1 h idle or 12 h,
 with a new password, or with a reboot (they live in PSRAM only).
 
-`POST /api/auth/password` with `{"salt","key"}` sets or changes the password,
+`POST /api/auth/password` with
+`{"salt":"<32 hex>","iter":<integer>,"key":"<64 hex>"}` sets or changes the
+password (400 for an iteration count outside 10,000 to 1,000,000),
 `{"disable":true}` removes it (session and CSRF required while one is set, the
 CSRF header alone otherwise). The display removes it under Settings → System →
 Security. While a password is set, stored Wi-Fi/MQTT passwords and PINs are
@@ -79,6 +89,15 @@ never sent to a browser.
 The Bridge's pairing dialog accepts the password once to send `POST /mqtt` and
 `/restart`; it verifies `server_proof` before it sends any MQTT credential and
 never stores or logs the password.
+
+Shared test vector (browser test `tools/tests/web/test-web-admin-auth-browser.mjs`,
+Bridge `tests/test_panel_auth.py`): password `Pässwort-123` (UTF-8
+`50c3a47373776f72742d313233`), salt 16 bytes `a1`, `iter` 100000, nonce 32
+bytes `5c`:
+
+- key `1ca04c9ba257bbc2be95d76f4ee7385ad79143f23050d4c5c56ec3e3fd5fddc0`
+- proof `028c2df33691a772cb260751e39bcda9716901c5bb6650ac66970e4513fe5afe`
+- server_proof `5f38e5560475a83b44fa1014b30cb16f703442a6aab247dcf692795a23875007`
 
 ## Command channel
 

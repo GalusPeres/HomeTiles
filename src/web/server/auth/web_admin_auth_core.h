@@ -3,16 +3,19 @@
 // Platform-independent part of the optional Web Admin password.
 //
 // Protocol (see also docs-dev/command-encryption.md for the Bridge side):
-//   GET  /api/auth/challenge -> {"enabled":true,"salt":<hex 16 B>,"nonce":<hex 32 B>}
-//   client: key   = SHA-256(salt_bytes || UTF-8 password)
+//   GET  /api/auth/challenge -> {"enabled":true,"salt":<hex 16 B>,"nonce":<hex 32 B>,
+//                                "iter":<PBKDF2 iterations>}
+//   client: key   = PBKDF2-HMAC-SHA256(UTF-8 password, salt_bytes, iter, 32 B)
 //           proof = HMAC-SHA256(key, nonce_bytes)
 //   POST /api/auth/login {"nonce":<hex>,"proof":<hex>}
 //        -> {"csrf":<hex>,"server_proof":<hex>} and an HttpOnly, SameSite=Strict
 //           session cookie. server_proof = HMAC-SHA256(key, label || nonce ||
 //           proof) lets a client that knows the password recognise the real
 //           panel before it sends anything sensitive (the Bridge pairing push).
-// The device stores only salt and key. A nonce is random, single use and valid
-// for 60 s. Consecutive failures lock the login with a growing delay.
+// The device stores only salt, iteration count and key; it never derives a key
+// itself, so the slow PBKDF2 runs only in the browser or the Bridge. A nonce is
+// random, single use and valid for 60 s. Consecutive failures lock the login
+// with a growing delay.
 //
 // Everything here takes the current time and a random source as parameters,
 // so the host tests in tools/tests/web/ exercise this exact code.
@@ -44,12 +47,21 @@ constexpr uint32_t kFirstLockoutMs = 1000UL;
 constexpr uint32_t kMaxLockoutMs = 5UL * 60UL * 1000UL;
 constexpr char kSessionCookieName[] = "ht_session";
 constexpr char kServerProofLabel[] = "HomeTiles-Web-Admin-server-v1";
+// PBKDF2 iteration counts a client may choose when it sets the password. The
+// Bridge refuses challenges outside this range, so a fake panel cannot stall it.
+constexpr uint32_t kMinIterations = 10000;
+constexpr uint32_t kMaxIterations = 1000000;
 
 using RandomFill = void (*)(uint8_t* out, size_t length);
+
+inline bool validIterations(uint32_t iterations) {
+  return iterations >= kMinIterations && iterations <= kMaxIterations;
+}
 
 struct Credential {
   bool enabled = false;
   uint8_t salt[kSaltSize] = {};
+  uint32_t iterations = 0;
   uint8_t key[kKeySize] = {};
 };
 
@@ -369,7 +381,43 @@ inline bool jsonTrueField(const char* json, const char* key) {
   return false;
 }
 
-// Stored NVS record: magic, version, flags, salt, key and an FNV-1a checksum.
+// Reads an unsigned JSON number of at most 10 digits without sign, fraction,
+// exponent or leading zeros, such as "iter":300000.
+inline bool jsonUintField(const char* json, const char* key, uint32_t* out) {
+  if (!json || !key || !out) return false;
+  const size_t key_length = strlen(key);
+  for (const char* p = json; *p; ++p) {
+    if (*p != '"' || strncmp(p + 1, key, key_length) != 0 ||
+        p[1 + key_length] != '"') {
+      continue;
+    }
+    const char* q = p + key_length + 2;
+    while (*q == ' ' || *q == '\t' || *q == '\r' || *q == '\n') ++q;
+    if (*q != ':') continue;
+    ++q;
+    while (*q == ' ' || *q == '\t' || *q == '\r' || *q == '\n') ++q;
+    size_t digits = 0;
+    uint64_t value = 0;
+    while (q[digits] >= '0' && q[digits] <= '9') {
+      if (digits == 10) return false;
+      value = value * 10 + static_cast<uint64_t>(q[digits] - '0');
+      ++digits;
+    }
+    const char next = q[digits];
+    if (digits == 0 || (digits > 1 && q[0] == '0') || value > 0xffffffffULL ||
+        !(next == ',' || next == '}' || next == ' ' || next == '\t' ||
+          next == '\r' || next == '\n' || next == '\0')) {
+      return false;
+    }
+    *out = static_cast<uint32_t>(value);
+    return true;
+  }
+  return false;
+}
+
+// Stored NVS record: magic, version, flags, salt, key, PBKDF2 iterations and
+// an FNV-1a checksum. Version 1 (a single SHA-256) is not accepted: its panels
+// stay locked until the password is removed on the device and set again.
 struct __attribute__((packed)) CredentialRecord {
   uint32_t magic;
   uint8_t version;
@@ -377,12 +425,13 @@ struct __attribute__((packed)) CredentialRecord {
   uint8_t reserved[2];
   uint8_t salt[kSaltSize];
   uint8_t key[kKeySize];
+  uint32_t iterations;
   uint32_t checksum;
 };
-static_assert(sizeof(CredentialRecord) == 60, "Web Admin credential record size");
+static_assert(sizeof(CredentialRecord) == 64, "Web Admin credential record size");
 
 constexpr uint32_t kRecordMagic = 0x41575448;  // "HTWA" little-endian
-constexpr uint8_t kRecordVersion = 1;
+constexpr uint8_t kRecordVersion = 2;
 constexpr uint8_t kRecordEnabled = 1U << 0;
 
 inline uint32_t recordChecksum(const CredentialRecord& record) {
@@ -402,6 +451,7 @@ inline CredentialRecord makeRecord(const Credential& credential) {
   record.flags = credential.enabled ? kRecordEnabled : 0;
   memcpy(record.salt, credential.salt, kSaltSize);
   memcpy(record.key, credential.key, kKeySize);
+  record.iterations = credential.iterations;
   record.checksum = recordChecksum(record);
   return record;
 }
@@ -409,12 +459,14 @@ inline CredentialRecord makeRecord(const Credential& credential) {
 inline bool applyRecord(const CredentialRecord& record, Credential& out) {
   if (record.magic != kRecordMagic || record.version != kRecordVersion ||
       record.checksum != recordChecksum(record) ||
-      (record.flags & kRecordEnabled) == 0) {
+      (record.flags & kRecordEnabled) == 0 ||
+      !validIterations(record.iterations)) {
     return false;
   }
   out.enabled = true;
   memcpy(out.salt, record.salt, kSaltSize);
   memcpy(out.key, record.key, kKeySize);
+  out.iterations = record.iterations;
   return true;
 }
 

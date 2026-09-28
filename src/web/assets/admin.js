@@ -883,8 +883,8 @@ function syncTileRadiusControls(tabEl) {
     });
   }
   // Optional Web Admin password section (Settings tab). The password never
-  // leaves the browser: auth.js derives SHA-256(salt || password) and the
-  // panel stores only salt and key.
+  // leaves the browser: auth.js derives a PBKDF2-HMAC-SHA256 key and the
+  // panel stores only salt, iteration count and key.
   function initWebAdminPasswordSettings() {
     const section = document.getElementById('web_auth_section');
     const auth = window.HomeTilesAuth;

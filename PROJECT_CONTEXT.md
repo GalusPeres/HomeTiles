@@ -111,9 +111,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - v0.7.0 (`609550a`): public, S3 assets from `c3e0a673`; P4 unchanged. Existing S3 v0.7.0 needs Web Admin update.
 - Bridge v0.7.0 (`1c12eda`): 267 pass/1 skip. Evidence: `build/release-v0.7.0/`.
-- Cache b73 frees queues; V2: 76 cached switches, final 124 KiB. Five owned devices stable.
+- Cache b73 frees queues. Five owned devices stable.
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
-- CI `36334088502`: 17 builds, 152 tests/21 skips; local 173 pass. Six S3 BINs verified.
+- CI `36334088502`: 17 builds, 152 tests/21 skips; six S3 BINs verified.
 - v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44) incl. installer stub crash; French.
 - Tests pending #7 #11 #27 #34 #45; V2 SD restart #55.
 
@@ -138,5 +138,5 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Security branch (unreleased)
 
-- Web Admin password (optional): salt/key, HMAC login, PSRAM sessions, CSRF; reset on device; hides stored secrets; Bridge: pairing only.
-- Command channel (optional): pairing code, sealed commands/stream tokens, replay window, signed announcement; Bridge binds announcements to topic/base, confirms linking, bounds cards/history (`docs-dev/command-encryption.md`). HW/HA pending.
+- Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, PSRAM sessions, CSRF; device reset; hides secrets.
+- Command channel (optional): pairing code, sealed commands/stream tokens, replay window, signed announcement; Bridge binds announcements to topic/base, confirms linking, bounds cards/history (`docs-dev/command-encryption.md`). P4 random: SAR ADC entropy. HW/HA pending.

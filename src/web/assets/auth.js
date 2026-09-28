@@ -1,11 +1,13 @@
 // HomeTiles Web Admin password helpers.
 //
 // Browsers expose WebCrypto only in secure contexts, and the panel is reached
-// over plain http://, so SHA-256 and HMAC-SHA256 are implemented here. The
-// protocol (firmware: src/web/server/auth/web_admin_auth_core.h):
-//   key   = SHA-256(salt || UTF-8 password)
+// over plain http://, so SHA-256, HMAC-SHA256 and PBKDF2 are implemented here.
+// The protocol (firmware: src/web/server/auth/web_admin_auth_core.h):
+//   key   = PBKDF2-HMAC-SHA256(UTF-8 password, salt, iter, 32 bytes)
 //   proof = HMAC-SHA256(key, nonce)
 //   server_proof = HMAC-SHA256(key, label || nonce || proof)
+// The slow key derivation makes a sniffed login expensive to brute-force; the
+// panel only stores salt, iter and key and never derives a key itself.
 // This file is served without a session (the login page needs it) and holds
 // no device data. On the admin page it also adds the X-HomeTiles-CSRF header
 // to every request that changes something.
@@ -13,6 +15,13 @@
   'use strict';
 
   const SERVER_PROOF_LABEL = 'HomeTiles-Web-Admin-server-v1';
+  // About 0.2 s on a desktop and well under a second on a phone. The panel
+  // stores the count, so it can be raised later without a protocol change.
+  const DEFAULT_ITERATIONS = 300000;
+  const MIN_ITERATIONS = 10000;
+  const MAX_ITERATIONS = 1000000;
+  const IV = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
   const K = new Uint32Array([
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
     0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
@@ -31,6 +40,51 @@
     return (value >>> bits) | (value << (32 - bits));
   }
 
+  // One SHA-256 compression: the block in w[0..15] updates the eight state
+  // words in place; w[16..63] is the message schedule.
+  function compress(state, w) {
+    for (let i = 16; i < 64; i++) {
+      const x = w[i - 15];
+      const y = w[i - 2];
+      const s0 = rotr(x, 7) ^ rotr(x, 18) ^ (x >>> 3);
+      const s1 = rotr(y, 17) ^ rotr(y, 19) ^ (y >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let a = state[0], b = state[1], c = state[2], d = state[3];
+    let e = state[4], f = state[5], g = state[6], h = state[7];
+    for (let i = 0; i < 64; i++) {
+      const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const choice = (e & f) ^ (~e & g);
+      const t1 = (h + s1 + choice + K[i] + w[i]) | 0;
+      const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const majority = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (s0 + majority) | 0;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + t1) | 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (t1 + t2) | 0;
+    }
+    state[0] = (state[0] + a) | 0;
+    state[1] = (state[1] + b) | 0;
+    state[2] = (state[2] + c) | 0;
+    state[3] = (state[3] + d) | 0;
+    state[4] = (state[4] + e) | 0;
+    state[5] = (state[5] + f) | 0;
+    state[6] = (state[6] + g) | 0;
+    state[7] = (state[7] + h) | 0;
+  }
+
+  function stateBytes(state) {
+    const out = new Uint8Array(32);
+    const view = new DataView(out.buffer);
+    for (let i = 0; i < 8; i++) view.setUint32(i * 4, state[i] >>> 0);
+    return out;
+  }
+
   function sha256(data) {
     const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
     const length = bytes.length;
@@ -41,46 +95,13 @@
     view.setUint32(padded.length - 8, Math.floor(length / 0x20000000));
     view.setUint32(padded.length - 4, (length * 8) >>> 0);
 
-    const hash = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
-    const w = new Uint32Array(64);
+    const state = Int32Array.from(IV);
+    const w = new Int32Array(64);
     for (let offset = 0; offset < padded.length; offset += 64) {
-      for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4);
-      for (let i = 16; i < 64; i++) {
-        const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
-        const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
-        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
-      }
-      let [a, b, c, d, e, f, g, h] = hash;
-      for (let i = 0; i < 64; i++) {
-        const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
-        const choice = (e & f) ^ (~e & g);
-        const t1 = (h + s1 + choice + K[i] + w[i]) | 0;
-        const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
-        const majority = (a & b) ^ (a & c) ^ (b & c);
-        const t2 = (s0 + majority) | 0;
-        h = g;
-        g = f;
-        f = e;
-        e = (d + t1) | 0;
-        d = c;
-        c = b;
-        b = a;
-        a = (t1 + t2) | 0;
-      }
-      hash[0] = (hash[0] + a) | 0;
-      hash[1] = (hash[1] + b) | 0;
-      hash[2] = (hash[2] + c) | 0;
-      hash[3] = (hash[3] + d) | 0;
-      hash[4] = (hash[4] + e) | 0;
-      hash[5] = (hash[5] + f) | 0;
-      hash[6] = (hash[6] + g) | 0;
-      hash[7] = (hash[7] + h) | 0;
+      for (let i = 0; i < 16; i++) w[i] = view.getInt32(offset + i * 4);
+      compress(state, w);
     }
-    const out = new Uint8Array(32);
-    const outView = new DataView(out.buffer);
-    hash.forEach((value, index) => outView.setUint32(index * 4, value >>> 0));
-    return out;
+    return stateBytes(state);
   }
 
   function concat(...parts) {
@@ -131,9 +152,56 @@
     return cryptoApi.getRandomValues(new Uint8Array(length));
   }
 
-  function deriveKey(salt, password) {
-    return sha256(concat(salt, utf8(password)));
+  function validIterations(iterations) {
+    return Number.isInteger(iterations) && iterations >= MIN_ITERATIONS &&
+      iterations <= MAX_ITERATIONS;
   }
+
+  // PBKDF2-HMAC-SHA256 with one 32-byte output block. The HMAC inner and
+  // outer states are computed once; each further iteration then costs two
+  // compressions, because U(i-1) and the inner hash each fit one padded block.
+  function pbkdf2Sha256(password, salt, iterations) {
+    let key = password instanceof Uint8Array ? password : new Uint8Array(password);
+    if (key.length > 64) key = sha256(key);
+    const w = new Int32Array(64);
+    const keyWords = new Int32Array(16);
+    for (let i = 0; i < key.length; i++) keyWords[i >> 2] |= key[i] << (24 - 8 * (i & 3));
+    const innerStart = Int32Array.from(IV);
+    const outerStart = Int32Array.from(IV);
+    for (let i = 0; i < 16; i++) w[i] = keyWords[i] ^ 0x36363636;
+    compress(innerStart, w);
+    for (let i = 0; i < 16; i++) w[i] = keyWords[i] ^ 0x5c5c5c5c;
+    compress(outerStart, w);
+
+    const first = hmacSha256(key, concat(salt, new Uint8Array([0, 0, 0, 1])));
+    const firstView = new DataView(first.buffer, first.byteOffset, first.byteLength);
+    const u = new Int32Array(8);
+    for (let i = 0; i < 8; i++) u[i] = firstView.getInt32(i * 4);
+    const result = Int32Array.from(u);
+    const inner = new Int32Array(8);
+    // Padding of a 32-byte message after the 64-byte key block: 768 bits.
+    w[8] = 0x80000000 | 0;
+    for (let i = 9; i < 15; i++) w[i] = 0;
+    w[15] = 768;
+    for (let n = 1; n < iterations; n++) {
+      for (let i = 0; i < 8; i++) w[i] = u[i];
+      inner.set(innerStart);
+      compress(inner, w);
+      for (let i = 0; i < 8; i++) w[i] = inner[i];
+      u.set(outerStart);
+      compress(u, w);
+      for (let i = 0; i < 8; i++) result[i] ^= u[i];
+    }
+    return stateBytes(result);
+  }
+
+  function deriveKey(salt, password, iterations) {
+    return pbkdf2Sha256(utf8(password), salt, iterations);
+  }
+
+  // Setting a password is followed by a login with the same password; the key
+  // derived for it is reused once instead of running PBKDF2 a second time.
+  let justSet = null;
 
   function csrfToken() {
     const meta = document.querySelector('meta[name="hometiles-csrf"]');
@@ -145,9 +213,18 @@
     const challengeResponse = await fetch('/api/auth/challenge',
       {cache: 'no-store', credentials: 'same-origin'});
     const challenge = await challengeResponse.json();
+    const reuse = justSet;
+    justSet = null;
     if (!challenge || challenge.enabled !== true) return {ok: true, disabled: true};
+    const iterations = challenge.iter;
+    if (!validIterations(iterations)) {
+      return {ok: false, status: challengeResponse.status, error: 'iterations'};
+    }
     const nonce = fromHex(challenge.nonce);
-    const key = deriveKey(fromHex(challenge.salt), password);
+    const key = reuse && reuse.salt === challenge.salt &&
+      reuse.iterations === iterations && reuse.password === password
+      ? reuse.key
+      : deriveKey(fromHex(challenge.salt), password, iterations);
     const proof = hmacSha256(key, nonce);
     const response = await fetch('/api/auth/login', {
       method: 'POST',
@@ -172,8 +249,10 @@
   }
 
   async function setPassword(password) {
+    justSet = null;
     const salt = randomBytes(16);
-    const key = deriveKey(salt, password);
+    const iterations = DEFAULT_ITERATIONS;
+    const key = deriveKey(salt, password, iterations);
     const response = await fetch('/api/auth/password', {
       method: 'POST',
       credentials: 'same-origin',
@@ -183,8 +262,9 @@
         // the request as coming from this page (see handleAuthPassword).
         'X-HomeTiles-CSRF': csrfToken() || 'setup'
       },
-      body: JSON.stringify({salt: toHex(salt), key: toHex(key)})
+      body: JSON.stringify({salt: toHex(salt), iter: iterations, key: toHex(key)})
     });
+    if (response.ok) justSet = {salt: toHex(salt), iterations, password, key};
     return response.ok;
   }
 
@@ -207,7 +287,7 @@
   }
 
   window.HomeTilesAuth = {
-    sha256, hmacSha256, toHex, fromHex, utf8, deriveKey, csrfToken,
+    sha256, hmacSha256, pbkdf2Sha256, toHex, fromHex, utf8, deriveKey, csrfToken,
     login, setPassword, removePassword, logout
   };
 

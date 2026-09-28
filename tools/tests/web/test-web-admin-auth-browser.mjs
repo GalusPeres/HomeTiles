@@ -1,9 +1,9 @@
 // Runs the delivered auth.js (login page and Web Admin password helpers) with
-// a stubbed browser: SHA-256/HMAC must match OpenSSL, the login must produce
-// the proof the panel expects and verify the panel's server proof, and a
-// protected admin page must add the CSRF header to every changing request.
+// a stubbed browser: SHA-256/HMAC/PBKDF2 must match OpenSSL, the login must
+// produce the proof the panel expects and verify the panel's server proof, and
+// a protected admin page must add the CSRF header to every changing request.
 import assert from 'node:assert/strict';
-import {createHash, createHmac, webcrypto} from 'node:crypto';
+import {createHash, createHmac, pbkdf2Sync, webcrypto} from 'node:crypto';
 import vm from 'node:vm';
 import {gunzipSync} from 'node:zlib';
 
@@ -82,35 +82,64 @@ const json = (body, status = 200, headers = {}) =>
   }
   assert.equal(auth.toHex(auth.utf8('ä€')), 'c3a4e282ac');
   assert.throws(() => auth.fromHex('0g'));
+  // PBKDF2: passwords around the 64-byte HMAC block size, short salts, and the
+  // first iterations where the fast two-compression path takes over.
+  for (const length of [0, 1, 31, 63, 64, 65, 100]) {
+    for (const iterations of [1, 2, 3, 1000]) {
+      for (const saltLength of [16, 5]) {
+        const secret = Buffer.from(Array.from({length}, (_, i) => (i * 37 + 11) & 0xff));
+        const pbkdfSalt = Buffer.from(Array.from({length: saltLength}, (_, i) => i * 3));
+        assert.equal(auth.toHex(auth.pbkdf2Sha256(new Uint8Array(secret), new Uint8Array(pbkdfSalt), iterations)),
+          pbkdf2Sync(secret, pbkdfSalt, iterations, 32, 'sha256').toString('hex'),
+          `PBKDF2 password ${length} B, ${iterations} iterations, salt ${saltLength} B`);
+      }
+    }
+  }
 }
 
 // 2. Login: proof and server proof exactly as the firmware computes them.
 const salt = Buffer.from('a1'.repeat(16), 'hex');
 const nonce = Buffer.from('5c'.repeat(32), 'hex');
 const password = 'Pässwort-123';
-const key = createHash('sha256').update(Buffer.concat([salt, Buffer.from(password, 'utf8')])).digest();
+const iterations = 100000;
+const key = pbkdf2Sync(Buffer.from(password, 'utf8'), salt, iterations, 32, 'sha256');
 const proof = createHmac('sha256', key).update(nonce).digest();
 const serverProof = createHmac('sha256', key)
   .update(Buffer.concat([Buffer.from('HomeTiles-Web-Admin-server-v1'), nonce, proof])).digest('hex');
-// Shared with HomeTiles Bridge tests/test_panel_auth.py (Python hashlib/hmac).
-assert.equal(key.toString('hex'), '1a1168e2a2b908f40f849a0828d7dc2120d5e3355a33cb614f66600d2a7ca954');
-assert.equal(proof.toString('hex'), 'a4b17028d639885824c1cd3e586a1203edb2648daafad81c14c4f203e92f32f9');
-assert.equal(serverProof, '1ead99615ad5e76301fc20b5f87d4410bccd52b7df60f7464ea1b38160e8abe5');
+// Shared with HomeTiles Bridge tests/test_panel_auth.py (Python hashlib/hmac)
+// and docs-dev/command-encryption.md.
+assert.equal(key.toString('hex'), '1ca04c9ba257bbc2be95d76f4ee7385ad79143f23050d4c5c56ec3e3fd5fddc0');
+assert.equal(proof.toString('hex'), '028c2df33691a772cb260751e39bcda9716901c5bb6650ac66970e4513fe5afe');
+assert.equal(serverProof, '5f38e5560475a83b44fa1014b30cb16f703442a6aab247dcf692795a23875007');
+{
+  const {window} = createBrowser({fetchImpl: async () => json({})});
+  const auth = window.HomeTilesAuth;
+  assert.equal(auth.toHex(auth.deriveKey(new Uint8Array(salt), password, iterations)), key.toString('hex'),
+    'auth.js derives the shared vector key');
+}
+const doc = readRepoFile('docs-dev/command-encryption.md');
+for (const value of [key.toString('hex'), proof.toString('hex'), serverProof]) {
+  assert.ok(doc.includes(value), `the protocol document lists the shared vector ${value.slice(0, 8)}...`);
+}
 
-function panel({loginStatus = 200, loginBody = null} = {}) {
-  return async (url, init) => {
+function panel({loginStatus = 200, loginBody = null, iter = iterations, challengeSalt = salt} = {}) {
+  let logins = 0;
+  const handler = async (url, init) => {
     if (url === '/api/auth/challenge') {
-      return json({enabled: true, salt: salt.toString('hex'), nonce: nonce.toString('hex')});
+      return json({enabled: true, salt: challengeSalt.toString('hex'), nonce: nonce.toString('hex'), iter});
     }
     if (url === '/api/auth/login') {
+      logins++;
       const body = JSON.parse(init.body);
       assert.equal(body.nonce, nonce.toString('hex'));
-      assert.equal(body.proof, proof.toString('hex'), 'proof = HMAC(SHA-256(salt || password), nonce)');
+      assert.equal(body.proof, proof.toString('hex'), 'proof = HMAC(PBKDF2(password, salt, iter), nonce)');
       return json(loginBody || {csrf: 'c'.repeat(32), server_proof: serverProof}, loginStatus);
     }
     if (url === '/api/auth/password') return json({ok: true});
     return json({});
   };
+  handler.logins = () => logins;
+  return handler;
 }
 
 {
@@ -135,20 +164,40 @@ function panel({loginStatus = 200, loginBody = null} = {}) {
     ? json({enabled: false}) : json({})});
   assert.equal((await window.HomeTilesAuth.login(password)).disabled, true);
 }
+// A challenge outside 10,000..1,000,000 iterations (a fake or broken panel)
+// is refused before any key derivation or login request.
+for (const iter of [9999, 1000001, '300000', 1e4 + 0.5, null]) {
+  const fetchImpl = panel({iter});
+  const {window} = createBrowser({fetchImpl});
+  const result = await window.HomeTilesAuth.login(password);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'iterations', `iter ${iter} is refused`);
+  assert.equal(fetchImpl.logins(), 0, `no login request for iter ${iter}`);
+}
 
-// 3. Setting a password sends only salt and SHA-256(salt || password).
+// 3. Setting a password sends only salt, iterations and the PBKDF2 key.
 {
   const {window, calls} = createBrowser({fetchImpl: panel()});
   assert.equal(await window.HomeTilesAuth.setPassword(password), true);
   const request = calls.find(call => call.url === '/api/auth/password');
   const body = JSON.parse(request.init.body);
-  assert.deepEqual(Object.keys(body).sort(), ['key', 'salt']);
+  assert.deepEqual(Object.keys(body).sort(), ['iter', 'key', 'salt']);
   assert.equal(body.salt.length, 32);
-  const expected = createHash('sha256')
-    .update(Buffer.concat([Buffer.from(body.salt, 'hex'), Buffer.from(password, 'utf8')])).digest('hex');
+  assert.equal(body.iter, 300000, 'new passwords use 300,000 iterations');
+  const expected = pbkdf2Sync(Buffer.from(password, 'utf8'), Buffer.from(body.salt, 'hex'),
+    body.iter, 32, 'sha256').toString('hex');
   assert.equal(body.key, expected);
   assert.doesNotMatch(request.init.body, /Pässwort/);
   assert.equal(new Headers(request.init.headers).get('X-HomeTiles-CSRF'), 'setup');
+}
+// The login right after setting the password reuses the derived key once; a
+// later login derives it again.
+{
+  const source = readRepoFile('src/web/assets/auth.js');
+  const login = source.slice(source.indexOf('async function login('), source.indexOf('async function setPassword('));
+  assert.match(login, /const reuse = justSet;\s*justSet = null;/, 'the remembered key is used at most once');
+  assert.match(login, /reuse\.salt === challenge\.salt &&\s*reuse\.iterations === iterations && reuse\.password === password\s*\?\s*reuse\.key/,
+    'it is reused only for the same salt, iterations and password');
 }
 
 // 4. Protected admin page: CSRF header on changes, login page on expiry.

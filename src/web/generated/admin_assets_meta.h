@@ -26,13 +26,13 @@ inline constexpr size_t kAdminJsSourceSize = 444318;
 inline constexpr size_t kAdminJsGzipSize = 97256;
 
 inline constexpr char kAdminAuthJsPath[] =
-    "/assets/auth.e15a0fd13a33.js";
+    "/assets/auth.a4e17d575dea.js";
 inline constexpr char kAdminAuthJsEtag[] =
-    "\"fb37d67a8cd9d1bf4055dbd1fe4a0b9543117b99bad17845075943b6f2ce5451\"";
+    "\"deccc7264222e5726cb5a8dbac36f66322bddcbd4c4441350671df305ab08c8e\"";
 inline constexpr char kAdminAuthJsContentType[] =
     "application/javascript; charset=utf-8";
-inline constexpr size_t kAdminAuthJsSourceSize = 8866;
-inline constexpr size_t kAdminAuthJsGzipSize = 3507;
+inline constexpr size_t kAdminAuthJsSourceSize = 10800;
+inline constexpr size_t kAdminAuthJsGzipSize = 4066;
 
 }  // namespace web_admin_assets_generated
 

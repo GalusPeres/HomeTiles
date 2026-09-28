@@ -15,6 +15,15 @@ assert.equal(prefetches.length, 2, 'both opening paths load 7D in the background
 assert.match(popup, /if \(!g_energy_popup_ctx->period\.equalsIgnoreCase\(period\)\) return;/,
   'a response for the other period only fills the cache');
 
+// b88: a switch still took 235 ms (P4) to 410 ms (S3) on the UI task, and
+// the fresh answer redrew the same bars for another 170-330 ms.
+assert.doesNotMatch(maskCpp(popup), /lv_obj_update_layout\(/,
+  'labels are measured from their font, without layout passes over the whole screen');
+assert.match(popup, /g_energy_popup_ctx->shown_slots &&\s*energy_find_entry\([^;]*\) &&\s*same_chart_data\(g_energy_popup_ctx->shown_entry, entry\)\) \{/,
+  'an answer that repeats the shown data keeps the chart');
+assert.match(popup, /void clear_chart\(EnergyPopupContext\* ctx\) \{\s*if \([^)]*\) return;\s*ctx->shown_slots = 0;/,
+  'a cleared chart is never taken for the shown data');
+
 const data = maskCpp(readRepoFile('src/types/energy/energy_data.cpp'));
 assert.match(data, /if \(!force && request\.last_attempt_ms != 0 &&\s*\(uint32_t\)\(now - request\.last_attempt_ms\) < kEnergyRequestThrottleMs\) \{\s*return true;/,
   'a background request is throttled per period');

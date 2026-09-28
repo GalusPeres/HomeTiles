@@ -116,19 +116,24 @@ struct ClockShadowSet {
   lv_coord_t text_height = 0;
   lv_obj_t* labels[kClockShadowCopies] = {};
 
-  void set_text(const char* text) {
-    if (main_label) lv_label_set_text(main_label, text ? text : "");
+  // Returns false for unchanged text. The clock ticks every second but shows
+  // minutes; rewriting the same text redrew it and its nine shadow copies
+  // each second (screensaver b88: 120 ms S3, 265 ms V2 per second).
+  bool set_text(const char* text) {
+    if (!text) text = "";
+    if (main_label && strcmp(lv_label_get_text(main_label), text) == 0) return false;
+    if (main_label) lv_label_set_text(main_label, text);
     for (lv_obj_t* label : labels) {
-      if (label) lv_label_set_text(label, text ? text : "");
+      if (label) lv_label_set_text(label, text);
     }
-    if (!line || !font) return;
+    if (!line || !font) return true;
 
     lv_point_t text_size{};
     lv_text_get_size(&text_size, text ? text : "", font, 0, 0,
                      LV_COORD_MAX, LV_TEXT_FLAG_NONE);
     text_width = text_size.x > 0 ? text_size.x : 1;
     text_height = text_size.y > 0 ? text_size.y : font->line_height;
-    if (fill_parent) return;
+    if (fill_parent) return true;
 
     // Reset to the actual text width before recalculating, then give both
     // clock lines the width of the longer one.
@@ -139,6 +144,7 @@ struct ClockShadowSet {
         if (label) lv_obj_set_size(label, text_width, text_height);
       }
     }
+    return true;
   }
 
   void set_box_width(lv_coord_t width) {
@@ -197,6 +203,7 @@ static void update_clock_labels(ClockTileData* data) {
   if (!data) return;
   struct tm timeinfo;
   if (getLocalTime(&timeinfo, 0)) {
+    bool changed = false;
     if (data->time_label) {
       char buf[16];
       if (data->time_format == clock_tile::TIME_FORMAT_12H) {
@@ -206,7 +213,7 @@ static void update_clock_labels(ClockTileData* data) {
       } else {
         snprintf(buf, sizeof(buf), "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
       }
-      data->time_shadows.set_text(buf);
+      changed |= data->time_shadows.set_text(buf);
     }
     if (data->date_label) {
       char date_buf[16] = "";
@@ -243,9 +250,9 @@ static void update_clock_labels(ClockTileData* data) {
       } else {
         snprintf(buf, sizeof(buf), "%s", weekday[0] ? weekday : date_buf);
       }
-      data->date_shadows.set_text(buf);
+      changed |= data->date_shadows.set_text(buf);
     }
-    apply_clock_line_alignment(data);
+    if (changed) apply_clock_line_alignment(data);
   }
 }
 

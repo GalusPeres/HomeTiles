@@ -166,7 +166,7 @@ assert.match(code(fn(energy, 'apply_entry_to_chart')), /ctx->plot_w = plot_w;\s*
 // The marker's dot sits above the plot, outside chart_wrap's own box.
 assert.match(energyUi, /lv_obj_add_event_cb\(chart_wrap, on_energy_cursor_ext_draw, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr\);\s*lv_obj_refresh_ext_draw_size\(chart_wrap\);/);
 assert.match(code(fn(energy, 'show_energy_slot')),
-  /ctx->readout_line_bottom =\s*bar && !lv_obj_has_flag\(bar, LV_OBJ_FLAG_HIDDEN\) \? lv_obj_get_y\(bar\) : ctx->zero_y;/);
+  /ctx->readout_line_bottom =\s*bar && !lv_obj_has_flag\(bar, LV_OBJ_FLAG_HIDDEN\) \? lv_obj_get_style_y\(bar, LV_PART_MAIN\) : ctx->zero_y;/);
 // The time axis holds a full line of its labels on every layout.
 assert.match(code(fn(energy, 'time_axis_height')), /lv_font_get_line_height\(popup_layout::font20\(\)\)/);
 assert.doesNotMatch(code(energy).replace(/constexpr int kTimeAxisHeight[^\n]*/g, '').replace(/return line > kTimeAxisHeight \? line : kTimeAxisHeight;/, ''),
@@ -290,6 +290,13 @@ int main(){
  // Opening reads the newest bar.
  assert(ctx->shown_slots==24&&ctx->plot_w>0&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label));
  assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0&&strcmp(ctx->readout_value_text,"5.75 kWh")==0);
+ // 7D sits left of the day button, which names today instead of 24H.
+ {lv_area_t week,day;lv_obj_get_coords(ctx->week_btn,&week);lv_obj_get_coords(ctx->day_btn,&day);
+  assert(week.x2<day.x1&&strcmp(lv_label_get_text(ctx->day_label),"Today")==0&&"7D sits left of Today");}
+ // A response that repeats the shown data keeps the chart as it is.
+ lv_obj_add_flag(ctx->bars[0],LV_OBJ_FLAG_HIDDEN);queue_energy_popup_refresh("day");process_energy_popup_queue();
+ assert(!g_pending_refresh.valid&&!shown(ctx->bars[0])&&"Identical data is not redrawn");
+ lv_obj_remove_flag(ctx->bars[0],LV_OBJ_FLAG_HIDDEN);
  lv_area_t wrap,chart,axis,nav;lv_obj_get_coords(ctx->chart_wrap,&wrap);lv_obj_get_coords(ctx->chart,&chart);lv_obj_get_coords(ctx->x_axis,&axis);lv_obj_get_coords(ctx->range_row,&nav);
  // Hour labels keep their full line inside the axis and above the buttons.
  int axis_labels=0;

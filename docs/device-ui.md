@@ -24,7 +24,7 @@ A protected folder asks for its PIN first; see [Folder](tiles.md#folder).
 
 For tiles with detail controls, choose a tap or long press as the popup trigger in the Web Admin. Popups take on the look of their tile: the header shows the tile's icon and circle, and most popups use the tile's color.
 
-History popups have **24H** and **7D** views; the previous data stays visible until the new period arrives. To read an earlier value, touch a graph and move your finger along it, or tap an Energy bar. The time and value appear above the graph, and the marker stays where you let go.
+History popups have **7D** and **24H** views (Energy: **7D** and **Today**); the previous data stays visible until the new period arrives. To read an earlier value, touch a graph and move your finger along it, or tap an Energy bar. The time and value appear above the graph, and the marker stays where you let go.
 
 Each type's popup is shown with its tile:
 

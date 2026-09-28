@@ -3427,8 +3427,9 @@ static void build_popup_body(SensorPopupContext* ctx) {
     return btn;
   };
 
-  ctx->range_day_btn = make_range_button("24H");
+  // 7D sits left of 24H: the longer range reaches further into the past.
   ctx->range_week_btn = make_range_button("7D");
+  ctx->range_day_btn = make_range_button("24H");
   lv_obj_add_event_cb(ctx->range_day_btn, on_range_click, LV_EVENT_CLICKED, ctx);
   lv_obj_add_event_cb(ctx->range_week_btn, on_range_click, LV_EVENT_CLICKED, ctx);
   update_range_buttons(ctx);

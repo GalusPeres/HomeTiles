@@ -122,14 +122,17 @@ constexpr lv_opa_t kFooterIndicatorOpa = LV_OPA_20;
 constexpr int kDetailNavButtonSize = kFooterButtonHeight;
 constexpr int kFooterNextButtonX = -kFooterInsetX;
 constexpr int kFooterPrevButtonX = -(kFooterInsetX + kDetailNavButtonSize + kFooterButtonGap);
-constexpr int kFooterWeekButtonX =
+// Two action slots sit left of the day navigation: 7D in the outer slot and
+// Today in the inner one, since the longer range reaches further into the
+// past. Without a Today button, 7D moves into the inner slot.
+constexpr int kFooterInnerActionX =
     -(kFooterInsetX + (kDetailNavButtonSize * 2) + (kFooterButtonGap * 2));
-constexpr int kFooterTodayButtonX =
+constexpr int kFooterOuterActionX =
     -(kFooterInsetX + (kDetailNavButtonSize * 2) + (kFooterButtonGap * 3) +
       kFooterActionButtonWidth);
 constexpr int kFooterContentWidth = kCardWidth - (kCardPad * 2);
 constexpr int kFooterDatePillWidth =
-    kFooterContentWidth + kFooterTodayButtonX - kFooterActionButtonWidth -
+    kFooterContentWidth + kFooterOuterActionX - kFooterActionButtonWidth -
     kFooterButtonGap - kFooterInsetX;
 constexpr float kDetailNowCollisionHours = 3.0f;
 constexpr int kDetailNowGuideWidth = 1;
@@ -1382,6 +1385,10 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
       lv_label_set_text(label, "7D");
     }
     style_header_action_button(ctx, ctx->header_week_btn, ctx->view_mode == WeatherPopupViewMode::Week);
+    const int week_x = today_day >= 0 ? kFooterOuterActionX : kFooterInnerActionX;
+    if (lv_obj_get_style_x(ctx->header_week_btn, LV_PART_MAIN) != week_x) {
+      lv_obj_align(ctx->header_week_btn, LV_ALIGN_BOTTOM_RIGHT, week_x, kFooterOffsetY);
+    }
     lv_obj_clear_flag(ctx->header_week_btn, LV_OBJ_FLAG_HIDDEN);
   }
   const bool show_detail_nav = ctx->view_mode == WeatherPopupViewMode::Day;
@@ -3085,9 +3092,9 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     return btn;
   };
 
-  ctx->header_week_btn = make_header_action_button("7D", kFooterWeekButtonX, FONT_UNIT);
+  ctx->header_week_btn = make_header_action_button("7D", kFooterOuterActionX, FONT_UNIT);
   ctx->header_today_btn =
-      make_header_action_button(weather_today_button_text(), kFooterTodayButtonX, FONT_UNIT);
+      make_header_action_button(weather_today_button_text(), kFooterInnerActionX, FONT_UNIT);
 
   lv_obj_align(icon, LV_ALIGN_TOP_LEFT, 8, 0);
 

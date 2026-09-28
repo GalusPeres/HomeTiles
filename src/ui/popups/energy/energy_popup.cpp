@@ -197,11 +197,41 @@ void style_period_button(lv_obj_t* btn, lv_obj_t* label, bool active) {
   lv_obj_set_style_text_color(label, active ? active_text_color : lv_color_white(), LV_STATE_PRESSED);
 }
 
+int text_width(const char* text, const lv_font_t* font) {
+  lv_point_t size{};
+  lv_text_get_size(&size, text ? text : "", font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  return size.x;
+}
+
+// Energy counts from midnight, so the day button says Today (display language)
+// instead of 24H. The label keeps the 24 px font where it fits, steps down to
+// 20 px, and only then widens its button (French on 480x480).
+void fit_today_button(EnergyPopupContext* ctx) {
+  if (!ctx || !ctx->day_btn || !ctx->day_label) return;
+  const char* text = today_label();
+  if (strcmp(lv_label_get_text(ctx->day_label), text) != 0) lv_label_set_text(ctx->day_label, text);
+  const int inset = popup_layout::scale(16);
+  const lv_font_t* font = popup_layout::font24();
+  int width = text_width(text, font);
+  if (width + inset > kRangeButtonWidth) {
+    font = popup_layout::font20();
+    width = text_width(text, font);
+  }
+  lv_obj_set_style_text_font(ctx->day_label, font, 0);
+  lv_obj_set_style_text_font(ctx->day_label, font, LV_STATE_PRESSED);
+  const int button_w = width + inset > kRangeButtonWidth ? width + inset : kRangeButtonWidth;
+  if (lv_obj_get_style_width(ctx->day_btn, LV_PART_MAIN) != button_w) {
+    lv_obj_set_width(ctx->day_btn, button_w);
+    if (ctx->range_row) lv_obj_set_width(ctx->range_row, kRangeButtonWidth + kRangeButtonGap + button_w);
+  }
+}
+
 void update_period_buttons(EnergyPopupContext* ctx) {
   if (!ctx) return;
   const bool day = ctx->period == "day";
   style_period_button(ctx->day_btn, ctx->day_label, day);
   style_period_button(ctx->week_btn, ctx->week_label, !day);
+  fit_today_button(ctx);
 }
 
 }  // namespace
@@ -218,13 +248,28 @@ void energy_popup_follow_tile_color(uint32_t color) {
 
 namespace {
 
+// A label's content width, computed from its font. lv_obj_update_layout()
+// runs a layout pass over the whole screen (the grid and every cached folder
+// behind the popup), and a 24H/7D switch asked for it about 20 times.
 lv_coord_t measure_label_text_width(lv_obj_t* label) {
   if (!label) return 0;
   const char* txt = lv_label_get_text(label);
   if (!txt || !*txt) return 0;
   lv_obj_set_width(label, LV_SIZE_CONTENT);
-  lv_obj_update_layout(label);
-  return lv_obj_get_width(label);
+  lv_point_t size{};
+  lv_text_get_size(&size, txt, lv_obj_get_style_text_font(label, LV_PART_MAIN),
+                   lv_obj_get_style_text_letter_space(label, LV_PART_MAIN), 0,
+                   LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  return size.x + lv_obj_get_style_pad_left(label, LV_PART_MAIN) +
+         lv_obj_get_style_pad_right(label, LV_PART_MAIN);
+}
+
+// Height of a one-line label, from its font (see above).
+lv_coord_t measure_label_line_height(lv_obj_t* label) {
+  if (!label) return 0;
+  return lv_font_get_line_height(lv_obj_get_style_text_font(label, LV_PART_MAIN)) +
+         lv_obj_get_style_pad_top(label, LV_PART_MAIN) +
+         lv_obj_get_style_pad_bottom(label, LV_PART_MAIN);
 }
 
 String format_axis_value(float value, const String& unit, uint8_t decimals) {
@@ -250,6 +295,7 @@ uint8_t slot_count_for_entry(const EnergyEntryData& entry) {
 
 void clear_chart(EnergyPopupContext* ctx) {
   if (!ctx || !ctx->chart || !ctx->series) return;
+  ctx->shown_slots = 0;
   lv_chart_set_point_count(ctx->chart, kDaySlotCount);
   lv_chart_set_all_value(ctx->chart, ctx->series, LV_CHART_POINT_NONE);
   lv_chart_set_range(ctx->chart, LV_CHART_AXIS_PRIMARY_Y, 0, 1);
@@ -321,9 +367,7 @@ String day_marker_label(uint8_t hour) {
 
 int clamped_label_x(lv_obj_t* label, int center_x, int avail_w) {
   if (!label) return center_x;
-  lv_obj_set_width(label, LV_SIZE_CONTENT);
-  lv_obj_update_layout(label);
-  lv_coord_t label_w = lv_obj_get_width(label);
+  const lv_coord_t label_w = measure_label_text_width(label);
   int x = center_x - (label_w / 2);
   if (x < 0) x = 0;
   int max_x = avail_w - label_w;
@@ -584,10 +628,12 @@ void show_energy_slot(EnergyPopupContext* ctx, int slot) {
   const int slot_r = ctx->plot_left + static_cast<int>(lroundf(
       (static_cast<float>(slot + 1) / static_cast<float>(slots)) * static_cast<float>(ctx->plot_w)));
   ctx->readout_x = slot_l + (slot_r - slot_l) / 2;
-  // Negative bars start at the zero line; empty slots have no bar.
+  // Negative bars start at the zero line; empty slots have no bar. The style
+  // position is current before LVGL's next layout pass; the bars are
+  // top-left aligned in chart_wrap, so it equals lv_obj_get_y() afterwards.
   lv_obj_t* bar = slot < ENERGY_VALUES_MAX ? ctx->bars[slot] : nullptr;
   ctx->readout_line_bottom =
-      bar && !lv_obj_has_flag(bar, LV_OBJ_FLAG_HIDDEN) ? lv_obj_get_y(bar) : ctx->zero_y;
+      bar && !lv_obj_has_flag(bar, LV_OBJ_FLAG_HIDDEN) ? lv_obj_get_style_y(bar, LV_PART_MAIN) : ctx->zero_y;
   invalidate_energy_cursor(ctx);
 
   format_energy_slot_time(ctx, slot);
@@ -826,8 +872,7 @@ void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry)
       lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
       return;
     }
-    lv_obj_update_layout(label);
-    int h = lv_obj_get_height(label);
+    const int h = measure_label_line_height(label);
     int y = line_y - (h / 2);
     if (y < 0) y = 0;
     const int max_y = kLabelOverhang + kChartHeight + time_axis_height() - h;
@@ -921,6 +966,19 @@ void refresh_from_cache(EnergyPopupContext* ctx) {
     return;
   }
   apply_entry_to_chart(ctx, entry);
+}
+
+// True when an entry would draw the same bars, axis and header.
+bool same_chart_data(const EnergyEntryData& a, const EnergyEntryData& b) {
+  if (a.period != b.period || a.start != b.start || a.unit != b.unit ||
+      a.total != b.total || a.value_count != b.value_count) {
+    return false;
+  }
+  for (uint8_t i = 0; i < a.value_count && i < ENERGY_VALUES_MAX; ++i) {
+    if (a.value_valid[i] != b.value_valid[i]) return false;
+    if (a.value_valid[i] && a.values[i] != b.values[i]) return false;
+  }
+  return true;
 }
 
 void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init,
@@ -1075,8 +1133,9 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
   lv_obj_set_style_pad_column(period_row, kRangeButtonGap, 0);
   lv_obj_clear_flag(period_row, LV_OBJ_FLAG_CLICKABLE);
 
-  ctx->day_btn = make_button_label(period_row, "24H", &ctx->day_label);
+  // 7D sits left of Today: the longer range reaches further into the past.
   ctx->week_btn = make_button_label(period_row, "7D", &ctx->week_label);
+  ctx->day_btn = make_button_label(period_row, today_label(), &ctx->day_label);
   lv_obj_add_event_cb(ctx->day_btn, on_period_click, LV_EVENT_CLICKED, ctx);
   lv_obj_add_event_cb(ctx->week_btn, on_period_click, LV_EVENT_CLICKED, ctx);
 
@@ -1349,6 +1408,15 @@ void process_energy_popup_queue() {
   g_pending_refresh.valid = false;
   if (!popup_visible(g_energy_popup_ctx)) return;
   if (!g_energy_popup_ctx->period.equalsIgnoreCase(period)) return;
+  // Every period switch asks the Bridge again, and its answer usually repeats
+  // the cached bars just drawn; redrawing them took 170-330 ms (P4/S3 b88).
+  EnergyEntryData entry;
+  if (g_energy_popup_ctx->shown_slots &&
+      energy_find_entry(g_energy_popup_ctx->entity_id, period.c_str(), entry) &&
+      same_chart_data(g_energy_popup_ctx->shown_entry, entry)) {
+    Serial.printf("[EnergyPopup] %s data unchanged, chart kept\n", period.c_str());
+    return;
+  }
   const uint32_t started_ms = millis();
   refresh_from_cache(g_energy_popup_ctx);
   Serial.printf("[EnergyPopup] New %s data shown in %lu ms\n", period.c_str(),

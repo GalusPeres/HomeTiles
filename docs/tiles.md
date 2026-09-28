@@ -39,7 +39,7 @@ Shows a numeric or text-valued `sensor.*` entity. Configure the unit, decimals, 
 </figure>
 </div>
 
-**Popup:** the current value in the header and a **24H** or **7D** history: a graph for numbers, or a timeline and Activity list for text states. Touch the graph and move your finger to read an earlier value; the time and value appear above the graph, and the marker stays where you let go.
+**Popup:** the current value in the header and a **7D** or **24H** history: a graph for numbers, or a timeline and Activity list for text states. Touch the graph and move your finger to read an earlier value; the time and value appear above the graph, and the marker stays where you let go.
 
 A local [DS18B20 input](hardware-io.md) can also supply the value without Home Assistant; local inputs have no Home Assistant history popup.
 
@@ -60,7 +60,7 @@ Shows a `binary_sensor.*` entity with the matching state and icon, such as Open/
 </figure>
 </div>
 
-**Popup:** a **24H** or **7D** state timeline and Activity list.
+**Popup:** a **7D** or **24H** state timeline and Activity list.
 
 ### Number
 
@@ -83,7 +83,7 @@ Changes a `number.*` or `input_number.*` entity. The tile shows its current valu
 - Temperatures use **− / value / +**, like the Climate target control.
 - Other box-mode values use a bounded roller or step buttons, depending on their range.
 
-**Popup:** the control above a numeric history graph and Activity for **24H** or **7D**. History requires the entity to be recorded by Home Assistant.
+**Popup:** the control above a numeric history graph and Activity for **7D** or **24H**. History requires the entity to be recorded by Home Assistant.
 
 ### Select
 
@@ -102,7 +102,7 @@ Changes a `select.*` or `input_select.*` entity using its current Home Assistant
 </figure>
 </div>
 
-**Popup:** the dropdown above a compact timeline and Activity for **24H** or **7D**. An unavailable entity or incomplete option list disables selection. To operate another display's view, select that display's [View entity](bridge.md#control-the-displayed-view) in the Bridge first.
+**Popup:** the dropdown above a compact timeline and Activity for **7D** or **24H**. An unavailable entity or incomplete option list disables selection. To operate another display's view, select that display's [View entity](bridge.md#control-the-displayed-view) in the Bridge first.
 
 ### Date/Time
 
@@ -123,7 +123,7 @@ Changes `time.*`, `date.*`, `datetime.*`, or `input_datetime.*` entities. Availa
 
 Time uses a single visible row of large, swipeable **hh / mm / ss** values, with wraparound between 23 and 00 or 59 and 00. Date fields use step controls without a keyboard.
 
-**Popup:** the controls above Activity for **24H** or **7D**. Home Assistant's time zone is used for date/time commands.
+**Popup:** the controls above Activity for **7D** or **24H**. Home Assistant's time zone is used for date/time commands.
 
 Number, Select, and Date/Time need HomeTiles **v0.6.10** and Bridge **v0.6.44 or newer**. Add them in [Bridge Entity Configuration](bridge.md#entity-configuration), then choose their entity, value size, and popup trigger in the Web Admin. Slider edits are sent on release; step and time edits are grouped after a short pause, and the display keeps your edit while a slow device confirms it. Unavailable entities cannot be changed.
 
@@ -145,7 +145,7 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot ht-popup">
 <img style="width:475px" src="../images/8in-energy-24h.png" alt="Energy day view with a read bar" width="792" height="792" loading="lazy">
-<figcaption>Popup, 24 hours</figcaption>
+<figcaption>Popup, today</figcaption>
 </figure>
 <figure class="ht-screenshot ht-popup">
 <img style="width:475px" src="../images/8in-energy-7d.png" alt="Energy week view with a read bar" width="792" height="792" loading="lazy">

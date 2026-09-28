@@ -73,9 +73,11 @@ static constexpr size_t kMaxResidentFolderUiCaches = 4;
 // since LVGL objects live in PSRAM; runtime free internal RAM is 43-48 KB
 // (b87: 43 KB at the first growth check, so the floor sits a little lower).
 // The former 112/72 KB floor dated from internal LVGL memory and kept every
-// S3 at three grids, rebuilding a fourth folder on each visit.
+// S3 at three grids, rebuilding a fourth folder on each visit. The largest
+// free block sits at 20 KB whether 2 or 3 grids are resident (b88), since a
+// grid only makes small allocations, so its floor stays below that.
 static constexpr uint32_t kFolderCacheGrowMinInternalFreeBytes = 40UL * 1024UL;
-static constexpr uint32_t kFolderCacheGrowMinLargestInternalBytes = 24UL * 1024UL;
+static constexpr uint32_t kFolderCacheGrowMinLargestInternalBytes = 16UL * 1024UL;
 #endif
 
 struct FolderCacheEntry {

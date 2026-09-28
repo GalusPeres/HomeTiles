@@ -52,6 +52,7 @@ struct State {
   size_t held_length;
   uint32_t held_ms;
   uint32_t last_log_ms;
+  uint32_t last_rekey_log_ms;
 };
 
 State* g_state = nullptr;
@@ -247,6 +248,9 @@ void handleSession(const Header& header) {
   if (!g_state->challenge_pending || !header.has_session ||
       strcmp(header.name, g_state->challenge) != 0) {
     // A session answer to another or an old request (possibly replayed).
+    if (logDue(&g_state->last_log_ms)) {
+      Serial.println("[SecureCmd] Session answer for an old request ignored");
+    }
     return;
   }
   memcpy(g_state->session, header.session, kSessionSize);
@@ -497,6 +501,9 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
         break;
       case MessageType::Rekey:
         g_state->hello_requested = true;
+        if (logDue(&g_state->last_rekey_log_ms)) {
+          Serial.println("[SecureCmd] Bridge asked for a new session");
+        }
         break;
       case MessageType::Data:
         handleData(header, body, body_length);
@@ -504,6 +511,8 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
       default:
         break;
     }
+  } else if (logDue(&g_state->last_log_ms)) {
+    Serial.println("[SecureCmd] Bridge message ignored (unreadable header)");
   }
   ht_crypto::secureZero(work, work_size);
   heap_caps_free(work);

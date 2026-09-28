@@ -39,6 +39,15 @@ for (const match of channel.matchAll(/Serial\.printf?\(([^;]*)\);/g)) {
 }
 assert.match(channel, /strcmp\(header\.name, g_state->challenge\) != 0/, 'a session must answer the current challenge');
 assert.match(channel, /acceptSequence\(g_state->bridge_window, header\.seq\)/, 'Bridge data is replay-checked');
+// Every Bridge message that authenticates but is not used leaves a
+// rate-limited trace, so a stuck pairing can be diagnosed from the panel log.
+for (const line of ['Session answer for an old request ignored', 'Bridge asked for a new session',
+  'Bridge message ignored (unreadable header)']) {
+  const index = channel.indexOf(`Serial.println("[SecureCmd] ${line}")`);
+  assert.ok(index > 0, `the panel logs "${line}"`);
+  assert.match(channel.slice(Math.max(0, index - 80), index), /if \(logDue\(&g_state->last_(?:rekey_)?log_ms\)\) \{\s*$|\} else if \(logDue\(&g_state->last_log_ms\)\) \{\s*$/,
+    `"${line}" is rate-limited`);
+}
 
 const camera = readRepoFile('src/video/local_camera/local_camera.cpp');
 assert.match(camera, /bool handleMqttMessage\(const char\* topic, const uint8_t\* payload, size_t length\) \{\s*if \(!isCommandTopic\(topic\)\) return false;\s*handleCommandPayload\(payload, length\);\s*return true;\s*\}/);

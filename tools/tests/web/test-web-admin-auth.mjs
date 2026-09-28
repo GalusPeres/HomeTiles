@@ -263,4 +263,24 @@ for (const key of ['web_auth_login_title', 'web_auth_password_label', 'web_auth_
   'web_auth_wrong_password', 'web_auth_wait_fmt', 'web_auth_forgot', 'web_auth_section']) {
   assert.match(section, new RegExp(`tr\\.${key}`), `${key} is rendered from i18n`);
 }
+// The password section opens the Settings form, above the network settings,
+// and the header badge shows in red or green whether a password is set.
+const adminHtml = readRepoFile('src/web/server/render/web_admin_html.cpp');
+const settingsForm = adminHtml.slice(adminHtml.indexOf('<form id="admin_settings_form"'));
+assert.ok(settingsForm.indexOf('appendWebAdminPasswordSettingsHtml(html, tr);') <
+  settingsForm.indexOf('tr.admin_settings_wifi'), 'the password section comes before Wi-Fi');
+assert.equal((adminHtml.match(/appendWebAdminPasswordSettingsHtml\(html, tr\);/g) || []).length, 1,
+  'the password section is rendered once');
+const brandLinks = adminHtml.slice(adminHtml.indexOf('<div class="brand-links">'),
+  adminHtml.indexOf('<!-- Tab Navigation -->'));
+assert.match(brandLinks, /appendWebAdminPasswordBadgeHtml\(html, tr\);/);
+assert.match(brandLinks, /href="https:\/\/buymeacoffee\.com\/galusperes"/);
+assert.match(brandLinks, /href="https:\/\/github\.com\/GalusPeres\/HomeTiles\/stargazers"/);
+const badge = section.slice(section.indexOf('void appendWebAdminPasswordBadgeHtml('));
+assert.match(badge, /enabled \? "is-on" : "is-off"/);
+assert.match(badge, /mdi-shield-lock/);
+assert.match(badge, /enabled \? tr\.web_auth_badge_on : tr\.web_auth_badge_off/);
+const adminCss = readRepoFile('src/web/assets/admin.css');
+assert.match(adminCss, /\.brand-security\.is-on[^{]*\{ color:#51cf66;/);
+assert.match(adminCss, /\.brand-security\.is-off[^{]*\{ color:#ff6b6b;/);
 console.log('Web Admin route gate, cookie flags and settings markup passed');

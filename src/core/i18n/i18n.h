@@ -617,6 +617,9 @@ struct Strings {
   const char* security_encryption_code_hint;
   const char* security_encryption_active_hint;
   const char* security_encryption_off_hint;
+  // Web Admin header badge: whether a Web Admin password protects the page.
+  const char* web_auth_badge_on;
+  const char* web_auth_badge_off;
 };
 
 // Locale-specific display rules and short runtime strings shared by

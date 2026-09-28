@@ -1539,9 +1539,13 @@ String WebAdminServer::getAdminPage() {
   html += admin_heading_subtitle;
   html += R"html(</div>
         </div>
-        <div class="brand-links">
+        <div class="brand-links">)html";
+  appendWebAdminPasswordBadgeHtml(html, tr);
+  html += R"html(
           <a class="brand-link" href="https://galusperes.github.io/HomeTiles/" target="_blank" rel="noopener"><i class="mdi mdi-book-open-variant"></i>Docs</a>
           <a class="brand-link" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-github"></i>GitHub</a>
+          <a class="brand-link brand-star" href="https://github.com/GalusPeres/HomeTiles/stargazers" target="_blank" rel="noopener"><i class="mdi mdi-star"></i>Star</a>
+          <a class="brand-link brand-coffee" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener"><i class="mdi mdi-coffee"></i>Buy Me a Coffee</a>
         </div>
       </div>
       
@@ -1634,7 +1638,10 @@ String WebAdminServer::getAdminPage() {
 
       <!-- Tab 3: Settings (Network/MQTT Configuration) -->
       <div id="tab-network" class="tab-content">
-        <form id="admin_settings_form" action="/mqtt" method="POST" autocomplete="on">
+        <form id="admin_settings_form" action="/mqtt" method="POST" autocomplete="on">)html";
+  // The Web Admin password comes first, above the network settings.
+  appendWebAdminPasswordSettingsHtml(html, tr);
+  html += R"html(
           <div class="settings-section">
             <div class="section-title-row">
               <div class="section-title">)html";
@@ -1908,7 +1915,6 @@ String WebAdminServer::getAdminPage() {
           </div>
 
 )html";
-  appendWebAdminPasswordSettingsHtml(html, tr);
   appendLocalCameraSettingsHtml(html, tr);
   html += R"html(
           <div class="settings-section">

@@ -146,6 +146,19 @@ void appendWebAdminPasswordSettingsHtml(String& html, const i18n::Strings& tr) {
 )html";
 }
 
+// Header badge: a green shield while a Web Admin password is set, a red one
+// otherwise. It opens the Settings tab at the password section; setting or
+// removing the password reloads the page, so the server-side state is current.
+void appendWebAdminPasswordBadgeHtml(String& html, const i18n::Strings& tr) {
+  const bool enabled = web_admin_auth::enabled();
+  html += R"html(
+          <a class="brand-link brand-security )html";
+  html += enabled ? "is-on" : "is-off";
+  html += R"html(" id="web_auth_badge" href="#web_auth_section" onclick="switchTab('tab-network');document.getElementById('web_auth_section')?.scrollIntoView({behavior:'smooth'});return false;"><i class="mdi mdi-shield-lock"></i>)html";
+  appendHtmlEscaped(html, String(enabled ? tr.web_auth_badge_on : tr.web_auth_badge_off));
+  html += "</a>";
+}
+
 void appendStoredSecretValue(String& html, const char* secret,
                              const i18n::Strings& tr) {
   if (!web_admin_auth::storedSecretsHidden()) {

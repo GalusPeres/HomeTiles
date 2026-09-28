@@ -562,7 +562,9 @@ static const Strings kStringsDe = {
     "Ausschalten",
     "Diesen Kopplungscode in Home Assistant unter HomeTiles Bridge > Konfigurieren > Sicherheit eintragen.",
     "Befehle an Home Assistant werden verschlüsselt und signiert.",
-    "Den Kopplungscode auch in der HomeTiles Bridge entfernen."};
+    "Den Kopplungscode auch in der HomeTiles Bridge entfernen.",
+    "Passwort gesetzt",
+    "Kein Passwort"};
 
 static const Strings kStringsEn = {
     "en",
@@ -1119,7 +1121,9 @@ static const Strings kStringsEn = {
     "Turn off",
     "Enter this pairing code in Home Assistant under HomeTiles Bridge > Configure > Security.",
     "Commands to Home Assistant are encrypted and signed.",
-    "Also remove the pairing code in the HomeTiles Bridge."};
+    "Also remove the pairing code in the HomeTiles Bridge.",
+    "Password set",
+    "No password"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1676,7 +1680,9 @@ static const Strings kStringsFr = {
     "Désactiver",
     "Saisissez ce code d'appairage dans Home Assistant sous HomeTiles Bridge > Configurer > Sécurité.",
     "Les commandes vers Home Assistant sont chiffrées et signées.",
-    "Supprimez aussi le code d'appairage dans le Bridge HomeTiles."};
+    "Supprimez aussi le code d'appairage dans le Bridge HomeTiles.",
+    "Mot de passe défini",
+    "Aucun mot de passe"};
 
 static const LocaleProfile kLocaleDe = {
     "de",

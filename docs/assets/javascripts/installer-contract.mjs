@@ -9,20 +9,20 @@ export const ESP_ROM_CHIP_FAMILIES = Object.freeze({
   18: "ESP32-P4",
 });
 
-export function parseEspRomChipIdentity(rawSecurityInfo) {
-  const bytes =
-    rawSecurityInfo instanceof Uint8Array
-      ? rawSecurityInfo
-      : new Uint8Array(rawSecurityInfo);
-  if (bytes.byteLength < 20) {
-    throw new Error("The ESP ROM returned incomplete security information.");
-  }
-
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const chipId = view.getUint32(12, true);
+// esptool-js 0.7.0 selects its chip class from the GET_SECURITY_INFO chip ID.
+// The installer accepts only HomeTiles chip families whose class matches that
+// ROM identity, and rejects Secure Download Mode, where register reads, the
+// flasher stub and the ESP32-P4 flash power-on sequence are unavailable.
+export function assertSupportedEspRomChip({ chipId, chipName, secureDownloadMode }) {
   const chipFamily = ESP_ROM_CHIP_FAMILIES[chipId];
   if (!chipFamily) {
     throw new Error(`Unsupported ESP ROM chip ID ${chipId}.`);
+  }
+  if (chipName !== chipFamily) {
+    throw new Error(`The ESP ROM reports ${chipFamily}, but esptool-js selected ${chipName || "no chip"}.`);
+  }
+  if (secureDownloadMode) {
+    throw new Error(`The connected ${chipFamily} is in Secure Download Mode; the web installer cannot flash it.`);
   }
   return { chipId, chipFamily };
 }
@@ -246,7 +246,7 @@ export function buildSafeOtaUpdatePlan(firmwareBytes, otaDataBytes) {
   const bootSelectionWrite = buildOtaBootSelectionUpdate(otaDataBytes, targetSlotIndex);
 
   // The caller must finish and verify appWrite before performing bootSelectionWrite.
-  // esptool-js v0.6.1's main() guarantees that its stub is running; a separate
+  // The installer requires the esptool-js stub to run after main(); a separate
   // writeFlash call for the 32-byte entry erases only this aligned 4KB sector.
   return Object.freeze({
     eraseFirst: false,

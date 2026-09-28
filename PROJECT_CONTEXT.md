@@ -17,7 +17,7 @@ Last reviewed: 2026-09-27
 - v0.6.12: `9605b6a`, CI `34353664113`, 15 profiles / 30 images; 102 tests pass. Guition V1/V2 PPA and Weather fixes; V2 confirmed, V1 hardware pending.
 - Stabilization: display/MQTT guards, Light coalescing, incremental Weather (`e3de63c`-`33b4e06`).
 - S3 TLS fallback: 87 tests/three builds pass; Guition OTA passed, Waveshare S3 pending. Earlier watchdogs unproven: `build/s3-ota-release-v0.6.10/`.
-- Guition S3 XIP/`-O2` reverted in `5279456` (more risk, no measured gain); reintroduce only with evidence.
+- Guition S3 XIP/`-O2` reverted in `5279456` (risk, no measured gain); do not retry without evidence.
 
 ## Hardware validation
 
@@ -120,7 +120,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Maintenance
 
-- Docs: `docs/`, `mkdocs.yml`, `overrides/`; published via gh-pages. USB installer tests are simulated.
+- Docs: `docs/`, `mkdocs.yml`, `overrides/`; gh-pages. Installer esptool-js 0.7.0; HW pending P4 <v3/v3.x, CH340 S3.
 
 ## View control and telemetry
 
@@ -134,5 +134,5 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Security branch (unreleased)
 
-- Web Admin password (optional): salt/key, HMAC login, PSRAM sessions, CSRF; reset on device; hides stored secrets; Bridge uses it only to pair.
+- Web Admin password (optional): salt/key, HMAC login, PSRAM sessions, CSRF; reset on device; hides stored secrets; Bridge: pairing only.
 - Command channel (optional): pairing code, sealed commands/stream tokens, replay window, signed announcement; Bridge binds announcements to topic/base, confirms linking, bounds cards/history (`docs-dev/command-encryption.md`). HW/HA pending.

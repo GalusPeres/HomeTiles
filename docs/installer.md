@@ -93,6 +93,7 @@ Use desktop Chrome or Edge and a USB data cable.
         <div class="ht-installer-log-header">
           <strong>Flash log</strong>
           <button id="installer-copy-log" type="button" aria-label="Copy flash log to clipboard">Copy log</button>
+          <button id="installer-clear-log" type="button">Clear log</button>
           <span id="installer-log-action-status" role="status" aria-live="polite"></span>
         </div>
         <pre id="installer-log-output" role="log" aria-label="Installer flash log" aria-live="off" tabindex="0"></pre>
@@ -120,7 +121,7 @@ If the browser installer is unavailable, use [Espressif's Flash Download Tool](h
 
 3. Wait until verification finishes, then restart the display.
 
-**ESP32-P4 revision check:** standard P4 images require pre-v3 silicon (revisions 1–199). The experimental Waveshare 7B `_rev3_1` image is for **exact v3.1 only**. Check the `chip-id` output before a manual write; v3.2 and newer are unsupported. esptool does not enforce HomeTiles' narrower revision checks.
+**ESP32-P4 revision check:** standard P4 images require pre-v3 silicon (revisions 1 to 199). The experimental Waveshare 10.1 `_rev3` image is for v3.1 and newer. The experimental Waveshare 7B `_rev3_1` image is for **exact v3.1 only**; 7B boards with v3.2 or newer are not supported yet. Check the `chip-id` output before a manual write. esptool does not enforce HomeTiles' narrower revision checks.
 
 Never write a plain update `.bin` at `0x0`. To preserve settings, use the browser's **Update** mode or [Firmware Updates](updating.md).
 

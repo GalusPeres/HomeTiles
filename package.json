@@ -3,6 +3,7 @@
   "private": true,
   "devDependencies": {
     "acorn": "8.18.0",
+    "esptool-js": "0.7.0",
     "terser": "5.51.2"
   }
 }

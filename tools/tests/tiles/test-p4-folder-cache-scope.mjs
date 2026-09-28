@@ -56,6 +56,13 @@ if (!/#if defined\(CONFIG_IDF_TARGET_ESP32P4\)[\s\S]*?kMaxResidentFolderUiCaches
   throw new Error('P4 must use six folder-cache slots and non-P4 must retain four');
 }
 
+// S3 (b85 logs): a folder grid costs 1-2 KB internal RAM and 44-48 KB stay
+// free at runtime, so the fourth grid must be admissible there.
+const s3Floor = /kFolderCacheGrowMinInternalFreeBytes = (\d+)UL \* 1024UL;[\s\S]*?kFolderCacheGrowMinLargestInternalBytes = (\d+)UL \* 1024UL;/.exec(folders);
+if (!s3Floor || Number(s3Floor[1]) > 44 || Number(s3Floor[2]) > 30) {
+  throw new Error('the S3 folder cache must be able to grow at 44 KB free internal RAM');
+}
+
 const p4Profiles = [
   'tab5',
   'waveshare_b4',

@@ -73,10 +73,28 @@ struct DragDiag {
   uint32_t window_ms = 0, refr_start_ms = 0, last_read_ms = 0;
   uint32_t frames = 0, refr_sum_ms = 0, refr_max_ms = 0;
   uint32_t read_gap_max_ms = 0, read_max_us = 0, moves = 0;
+  // b95: main loop passes, summed per part in microseconds.
+  uint32_t loops = 0, loop_max_us = 0;
+  uint32_t head_us = 0, queues_us = 0, lvgl_us = 0, web_us = 0, net_us = 0;
+  uint32_t queue_ms[7] = {};
   int16_t last_x = 0, last_y = 0;
   bool pressed = false;
 };
 static DragDiag g_drag;
+
+void drag_diag_note_loop(uint32_t head_us, uint32_t queues_us, uint32_t lvgl_us,
+                         uint32_t web_us, uint32_t net_us, const uint32_t (&queue_ms)[7]) {
+  if (!g_drag.pressed) return;
+  ++g_drag.loops;
+  const uint32_t total = head_us + queues_us + lvgl_us + web_us + net_us;
+  if (total > g_drag.loop_max_us) g_drag.loop_max_us = total;
+  g_drag.head_us += head_us;
+  g_drag.queues_us += queues_us;
+  g_drag.lvgl_us += lvgl_us;
+  g_drag.web_us += web_us;
+  g_drag.net_us += net_us;
+  for (size_t i = 0; i < 7; ++i) g_drag.queue_ms[i] += queue_ms[i];
+}
 
 static void drag_diag_refr(lv_event_t* e) {
   const uint32_t now = millis();
@@ -121,6 +139,23 @@ static void drag_diag_read(bool pressed, int16_t x, int16_t y, uint32_t read_us)
                   static_cast<unsigned long>(g_drag.read_gap_max_ms),
                   static_cast<unsigned long>(g_drag.read_max_us),
                   static_cast<unsigned long>(g_drag.moves));
+    // Sums over the same window, in ms; queue parts as named in [LoopGap].
+    Serial.printf("[DragLoop] loops=%lu max=%lu ms head=%lu queues=%lu lvgl=%lu web=%lu net=%lu | "
+                  "bg=%lu bridge=%lu visible=%lu local=%lu popup=%lu update=%lu reload=%lu\n",
+                  static_cast<unsigned long>(g_drag.loops),
+                  static_cast<unsigned long>(g_drag.loop_max_us / 1000),
+                  static_cast<unsigned long>(g_drag.head_us / 1000),
+                  static_cast<unsigned long>(g_drag.queues_us / 1000),
+                  static_cast<unsigned long>(g_drag.lvgl_us / 1000),
+                  static_cast<unsigned long>(g_drag.web_us / 1000),
+                  static_cast<unsigned long>(g_drag.net_us / 1000),
+                  static_cast<unsigned long>(g_drag.queue_ms[0]),
+                  static_cast<unsigned long>(g_drag.queue_ms[1]),
+                  static_cast<unsigned long>(g_drag.queue_ms[2]),
+                  static_cast<unsigned long>(g_drag.queue_ms[3]),
+                  static_cast<unsigned long>(g_drag.queue_ms[4]),
+                  static_cast<unsigned long>(g_drag.queue_ms[5]),
+                  static_cast<unsigned long>(g_drag.queue_ms[6]));
   }
   if (!pressed) {
     g_drag.pressed = false;

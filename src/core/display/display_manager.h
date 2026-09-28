@@ -70,4 +70,11 @@ extern DisplayManager displayManager;
 void display_touch_diag_enable(bool enabled);
 uint32_t display_touch_diag_take_max_gap_ms();
 
+// TEMPORARY diagnostic (b95): one main loop pass while a finger drags, split
+// into the part before the active UI work, the queue segments (bg_refresh,
+// bridge_cache, visible_cache, local_sensors, popup_queues, update_queues,
+// reload_requests in ms), LVGL, Web Admin and the network part.
+void drag_diag_note_loop(uint32_t head_us, uint32_t queues_us, uint32_t lvgl_us,
+                         uint32_t web_us, uint32_t net_us, const uint32_t (&queue_ms)[7]);
+
 #endif // DISPLAY_MANAGER_H

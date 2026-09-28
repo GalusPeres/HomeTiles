@@ -92,9 +92,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Hidden Climate reset crashed on fractional Sensor width; Climate-only integer guard fixes it; browser regression covers switching/autosave.
 - Binary Sensor now shares Sensor value sizes (20/24/32/40); default preserves old layout. Stored in existing V7 field; editor, import and previews retain it.
 - HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
-
-- Popup-overlapped buttons briefly appear square; deferred by user.
-
+- Tapped edge tile flashed square (drew before popup); b93 fix, HW pending
 - Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it.
 - Open: cross-grid import clamps whole tiles to half steps (HTTP 400), snapshot type accepts halves, value fonts 32/40 clip in half tiles.
 

@@ -8,6 +8,7 @@
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include <esp_heap_caps.h>
+#include <lvgl_private.h>
 #include <algorithm>
 #include <new>
 #include <cstring>
@@ -67,6 +68,27 @@ void invalidate_shell() {
   if (lv_obj_get_style_bg_opa(shell.overlay, LV_PART_MAIN) != LV_OPA_TRANSP)
     lv_obj_invalidate(shell.overlay);
   else lv_obj_invalidate(shell.frame);
+}
+
+// LVGL draws dirty areas in the order they were marked. The tapped tile marks
+// itself on release, before its popup opens, so its area was drawn first: the
+// part under the popup showed a flat, popup-colored square until the popup's
+// own area reached it (V2 draws 28-line bands top to bottom; video of b92).
+// Moving the popup area to the front draws the popup first and leaves the
+// tile's area only its release, without drawing more pixels.
+void draw_shell_first() {
+  lv_display_t* display = lv_obj_get_display(shell.frame);
+  if (!display || display->inv_p < 2) return;
+  lv_area_t frame;
+  lv_obj_get_coords(shell.frame, &frame);
+  if (lv_area_is_in(&frame, &display->inv_areas[0], 0)) return;
+  for (uint32_t i = 1; i < display->inv_p; ++i) {
+    if (!lv_area_is_in(&frame, &display->inv_areas[i], 0)) continue;
+    const lv_area_t area = display->inv_areas[i];
+    for (uint32_t j = i; j > 0; --j) display->inv_areas[j] = display->inv_areas[j - 1];
+    display->inv_areas[0] = area;
+    return;
+  }
 }
 
 void draw_popup_background(lv_event_t* event) {
@@ -415,6 +437,7 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
     sync_popup_shell();
   }
   invalidate_shell();
+  draw_shell_first();
 }
 
 bool popup_shell_active() { return shell.active != nullptr; }

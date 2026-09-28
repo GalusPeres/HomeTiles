@@ -27,6 +27,7 @@ const source = path.join(out, 'test.cpp');
 // real title owners and style/size events. Only hardware and config are adapted.
 fs.writeFileSync(source, String.raw`
 #include <lvgl.h>
+#include <lvgl_private.h>
 #include <cassert>
 #include <cstdlib>
 #include <cstring>

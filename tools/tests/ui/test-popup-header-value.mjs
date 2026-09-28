@@ -105,6 +105,7 @@ const out = path.join(root, 'build/tests/popup-header-value');
 fs.mkdirSync(out, {recursive: true});
 const cpp = String.raw`
 #include <lvgl.h>
+#include <lvgl_private.h>
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>

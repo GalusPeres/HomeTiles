@@ -189,6 +189,7 @@ fs.mkdirSync(out, {recursive: true});
 const energyData = read('src/types/energy/energy_data.h');
 const cpp = String.raw`
 #include <lvgl.h>
+#include <lvgl_private.h>
 #include <algorithm>
 #include <cassert>
 #include <cmath>

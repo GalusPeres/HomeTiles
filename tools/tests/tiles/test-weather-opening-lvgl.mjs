@@ -19,6 +19,7 @@ fs.writeFileSync(path.join(out, 'Arduino.h'), '#pragma once\n#include <cstdint>\
 fs.writeFileSync(path.join(out, 'FS.h'), '#pragma once\nnamespace fs { class FS {}; }\n');
 const cpp = String.raw`
 #include <lvgl.h>
+#include <lvgl_private.h>
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>

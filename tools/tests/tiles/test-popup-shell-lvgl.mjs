@@ -15,6 +15,7 @@ const out=path.join(root,'build/tests/popup-shell-lvgl');fs.mkdirSync(out,{recur
 const withoutIncludes=s=>s.replace(/^#include.*$/gm,'').replaceAll('#pragma once','');
 const cpp=String.raw`
 #include <lvgl.h>
+#include <lvgl_private.h>
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
@@ -59,7 +60,7 @@ Popup make(){
 Popup* disposable=nullptr;int dismissed=0;
 void dismiss_form(){++dismissed;hide_popup_shell(disposable->body);lv_obj_delete(disposable->owner);}
 void wire(Popup&p){lv_obj_add_event_cb(p.close,[](lv_event_t*e){auto*p=static_cast<Popup*>(lv_event_get_user_data(e));if(p->back){p->back=false;lv_label_set_text(lv_obj_get_child(p->close,0),"X");return;}if(!p->allow_close)return;++p->closed;hide_popup_shell(p->body);lv_obj_add_flag(p->body,LV_OBJ_FLAG_HIDDEN);},LV_EVENT_CLICKED,&p);}
-struct Init{Popup*p;std::string value;};int applied=0,flushed=0;
+struct Init{Popup*p;std::string value;};int applied=0,flushed=0,first_flush_y=-2;
 void apply(const Init&i){assert(flushed>0);++applied;assert(!lv_obj_has_flag(i.p->content,LV_OBJ_FLAG_HIDDEN));}
 void show(Popup&p,const char*title,bool cached=false){hometiles_title::set(p.title,title);lv_obj_remove_flag(p.body,LV_OBJ_FLAG_HIDDEN);assert(defer_popup_body(p.body,p.title,p.icon,p.close,Init{&p,title},apply,cached));show_popup_shell(p.owner,p.body,p.title,p.icon,p.close);}
 // Execute Weather's actual deferred opener with the shared shell. Transport
@@ -102,7 +103,7 @@ void hide_settings_popup(){if(settings_popup_overlay)close_settings_popup();}
 void wifi_show_list_view(){lv_obj_add_flag(wifi_entry_view,LV_OBJ_FLAG_HIDDEN);lv_label_set_text(settings_popup_close_icon,"X");}
 ${['on_settings_popup_close_clicked','finish_settings_popup_open','open_settings_popup'].map(name=>cppFunctionDefinitions(read('src/ui/tabs/settings/tab_settings.cpp')).find(f=>f.name===name).source).join('\n')}
 void save_frame(const std::string&path,const std::vector<uint32_t>&pixels){std::ofstream f(path,std::ios::binary);f<<"P6\n"<<SCREEN_WIDTH<<" "<<SCREEN_HEIGHT<<"\n255\n";for(auto p:pixels){const char rgb[]={char(p>>16),char(p>>8),char(p)};f.write(rgb,3);}}
-int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t>pixels(SCREEN_WIDTH*SCREEN_HEIGHT),band(SCREEN_WIDTH*16);lv_display_set_color_format(d,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(d,band.data(),nullptr,band.size()*4,LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_user_data(d,&pixels);lv_display_set_flush_cb(d,[](lv_display_t*d,const lv_area_t*area,uint8_t*data){++flushed;auto&pixels=*static_cast<std::vector<uint32_t>*>(lv_display_get_user_data(d));auto*source=reinterpret_cast<uint32_t*>(data);for(int y=area->y1;y<=area->y2;++y)for(int x=area->x1;x<=area->x2;++x)pixels[y*SCREEN_WIDTH+x]=*source++;lv_display_flush_ready(d);});
+int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t>pixels(SCREEN_WIDTH*SCREEN_HEIGHT),band(SCREEN_WIDTH*16);lv_display_set_color_format(d,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(d,band.data(),nullptr,band.size()*4,LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_user_data(d,&pixels);lv_display_set_flush_cb(d,[](lv_display_t*d,const lv_area_t*area,uint8_t*data){++flushed;if(first_flush_y==-1)first_flush_y=area->y1;auto&pixels=*static_cast<std::vector<uint32_t>*>(lv_display_get_user_data(d));auto*source=reinterpret_cast<uint32_t*>(data);for(int y=area->y1;y<=area->y2;++y)for(int x=area->x1;x<=area->x2;++x)pixels[y*SCREEN_WIDTH+x]=*source++;lv_display_flush_ready(d);});
  int outside_draws=0;auto*outside=lv_obj_create(lv_screen_active());lv_obj_set_size(outside,100,100);lv_obj_set_pos(outside,30,30);lv_obj_add_event_cb(outside,[](lv_event_t*e){++*static_cast<int*>(lv_event_get_user_data(e));},LV_EVENT_DRAW_MAIN,&outside_draws);
  auto a=make(),b=make();wire(a);wire(b);
  show(a,"Number\nLiving room");auto*frame=shell.frame;auto*header=shell.header;auto*button=shell.close;
@@ -154,6 +155,14 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
  if(SCREEN_WIDTH>SCREEN_HEIGHT)assert(outside_draws==0&&"A popup after Settings must not repaint tiles outside its frame");
  lv_obj_update_layout(shell.overlay);assert(lv_obj_get_width(shell.frame)==lv_obj_get_width(a.body));hide_popup_shell(a.body);lv_refr_now(d);
 
+ // A tapped tile under the popup's edge marks itself on release, before its
+ // popup opens. The popup's area is drawn first; drawn first, the tile's area
+ // showed a flat, popup-colored square until the popup reached it (V2 video).
+ {auto*tile=lv_obj_create(lv_screen_active());lv_obj_set_size(tile,160,120);
+  lv_obj_set_pos(tile,(SCREEN_WIDTH+popup_layout::kCardWidth)/2-60,SCREEN_HEIGHT/2);lv_refr_now(d);
+  lv_obj_invalidate(tile);show(a,"Tapped edge tile",true);first_flush_y=-1;lv_refr_now(d);
+  assert(first_flush_y>=0&&first_flush_y<SCREEN_HEIGHT/2&&"The popup is drawn before the tapped tile");
+  process_popup_open();hide_popup_shell(a.body);lv_obj_delete(tile);lv_refr_now(d);}
  show(a,"Screen replacement");auto*old=lv_screen_active();auto*next=lv_obj_create(nullptr);lv_screen_load(next);lv_obj_delete(old);assert(!shell.overlay&&!PopupFirstFrame::any_pending());assert(lv_obj_is_valid(a.body)&&lv_obj_get_parent(a.body)==a.owner);
  show(a,"Owner deletion");lv_obj_delete(a.owner);assert(!shell.active&&!PopupFirstFrame::any_pending());assert(allocations==1);lv_obj_delete(b.owner);assert(allocations==0);
  lv_deinit();assert(allocations==0&&!PopupFirstFrame::any_pending());std::cout<<"Shared frame identity, header, cache reuse, no redraw on unchanged sync, first-frame gate, close/back/PIN, cancellation, screen/owner deletion and allocation failure passed\n";

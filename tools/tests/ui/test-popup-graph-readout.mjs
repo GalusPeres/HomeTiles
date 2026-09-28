@@ -151,7 +151,7 @@ assert.doesNotMatch(sensor, /readout\.attach\((?:ctx->)?(?:range_|binary_activit
 
 // ---- Energy ----------------------------------------------------------------
 const energy = read('src/ui/popups/energy/energy_popup.cpp');
-const energyUi = code(fn(energy, 'build_popup_ui'));
+const energyUi = code(fn(energy, 'build_popup_ui')) + code(fn(energy, 'build_chart_view'));
 for (const marker of ['ctx->readout.attach(chart_wrap);', 'lv_obj_remove_flag(x_axis, LV_OBJ_FLAG_CLICKABLE);',
   'popup_graph_readout::create_band_label(\n      value_box, popup_layout::font20(), ctx->readout_time_text);',
   'popup_graph_readout::create_band_label(\n      value_box, value_font(), ctx->readout_value_text);'])
@@ -162,7 +162,7 @@ for (const name of ['apply_energy_readout', 'show_energy_slot', 'on_energy_curso
 assert.ok(energyUi.includes('lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_MAIN, ctx);'));
 assert.match(code(fn(energy, 'on_energy_readout_end')),
   /if \(keep && ctx->readout_slot >= 0\) \{\s*ctx->readout_pin_slot = ctx->readout_slot;\s*ctx->readout_latest = ctx->readout_slot == latest_energy_slot\(ctx\);/);
-assert.match(code(fn(energy, 'apply_entry_to_chart')), /ctx->plot_w = plot_w;\s*ctx->zero_y = zero_y;\s*refresh_energy_readout\(ctx\);\s*\}$/);
+assert.match(code(fn(energy, 'apply_entry_to_chart')), /ctx->plot_w = plot_w;\s*ctx->zero_y = zero_y;\s*if \(shown\) refresh_energy_readout\(ctx\);\s*\}$/);
 // The marker's dot sits above the plot, outside chart_wrap's own box.
 assert.match(energyUi, /lv_obj_add_event_cb\(chart_wrap, on_energy_cursor_ext_draw, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr\);\s*lv_obj_refresh_ext_draw_size\(chart_wrap\);/);
 assert.match(code(fn(energy, 'show_energy_slot')),
@@ -175,7 +175,7 @@ for (const name of ['on_close_click', 'on_overlay_delete', 'on_period_click', 'h
   'show_energy_popup', 'apply_entry_to_chart'])
   assert.ok(code(fn(energy, name)).includes('readout.cancel();'), `Energy ${name} ends the readout`);
 assert.match(code(fn(energy, 'process_energy_popup_queue')),
-  /if \(!g_pending_refresh\.valid\) return;\s*if \(g_energy_popup_ctx->readout\.active\(\)\) return;/,
+  /if \(!g_pending_refresh\.day && !g_pending_refresh\.week\) return;\s*if \(g_energy_popup_ctx->readout\.active\(\)\) return;/,
   'Energy data waits while a finger reads a bar');
 
 // ---- Real LVGL: Energy popup ------------------------------------------------
@@ -295,7 +295,7 @@ int main(){
   assert(week.x2<day.x1&&strcmp(lv_label_get_text(ctx->day_label),"Today")==0&&"7D sits left of Today");}
  // A response that repeats the shown data keeps the chart as it is.
  lv_obj_add_flag(ctx->bars[0],LV_OBJ_FLAG_HIDDEN);queue_energy_popup_refresh("day");process_energy_popup_queue();
- assert(!g_pending_refresh.valid&&!shown(ctx->bars[0])&&"Identical data is not redrawn");
+ assert(!g_pending_refresh.day&&!shown(ctx->bars[0])&&"Identical data is not redrawn");
  lv_obj_remove_flag(ctx->bars[0],LV_OBJ_FLAG_HIDDEN);
  lv_area_t wrap,chart,axis,nav;lv_obj_get_coords(ctx->chart_wrap,&wrap);lv_obj_get_coords(ctx->chart,&chart);lv_obj_get_coords(ctx->x_axis,&axis);lv_obj_get_coords(ctx->range_row,&nav);
  // Hour labels keep their full line inside the axis and above the buttons.
@@ -343,11 +343,11 @@ int main(){
  touch_at(SCREEN_WIDTH-1,SCREEN_HEIGHT-1);lv_refr_now(display);assert(ctx->readout.active()&&ctx->readout_slot==23);
  // New chart data waits for the release.
  cache[0].values[23]=9.0f;queue_energy_popup_refresh("day");process_energy_popup_queue();
- assert(g_pending_refresh.valid&&ctx->shown_entry.values[23]!=9.0f&&"Bars stay unchanged while touched");
+ assert(g_pending_refresh.day&&ctx->shown_entry.values[23]!=9.0f&&"Bars stay unchanged while touched");
  touch_release();
  assert(!ctx->readout.active()&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label)&&"Release keeps the read bar");
  assert(lv_display_get_event_count(display)==display_events&&"The refresh hook exists only while a finger is down");
- process_energy_popup_queue();assert(!g_pending_refresh.valid&&ctx->shown_entry.values[23]==9.0f);
+ process_energy_popup_queue();assert(!g_pending_refresh.day&&ctx->shown_entry.values[23]==9.0f);
  assert(ctx->readout_slot==23&&strcmp(ctx->readout_value_text,"9.00 kWh")==0&&"The newest bar follows new data");
  lv_refr_now(display);assert(white_at(wrap.x1+ctx->readout_x,chart.y1+2)&&"New bars keep the line");
  // Axis labels belong to the chart surface. A bar the finger left stays.
@@ -359,7 +359,10 @@ int main(){
  touch_at(bar_x(3,24),y);touch_release();assert(ctx->readout_slot==3&&shown(ctx->readout_value_label)&&strcmp(ctx->readout_time_text,"03:00 \xE2\x80\x93 04:00")==0);
  lv_refr_now(display);
  // A period change starts at its newest bar; the header keeps today's value.
+ // The hidden 7D chart is filled from the cache; the switch only swaps charts.
+ process_energy_popup_queue();assert(ctx->spare.week&&ctx->spare.shown_slots==7&&!g_pending_refresh.week&&"7D is prepared");
  lv_obj_send_event(ctx->week_btn,LV_EVENT_CLICKED,nullptr);settle(display);assert(ctx->period=="week"&&ctx->shown_slots==7);
+ assert(ctx->week&&shown(ctx->chart_wrap)&&!shown(ctx->spare.chart_wrap)&&ctx->spare.shown_slots==24&&"The 24H chart waits hidden");
  assert(ctx->readout_slot==6&&ctx->readout_latest&&strcmp(ctx->readout_time_text,"Sunday")==0);
  touch_at(bar_x(2,7),y);lv_refr_now(display);
  assert(strcmp(ctx->readout_time_text,"Wednesday")==0&&strcmp(ctx->readout_value_text,"3.00 kWh")==0);

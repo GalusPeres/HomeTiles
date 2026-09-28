@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <utility>
 
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
@@ -61,16 +62,12 @@ constexpr int kReadoutDotSize = popup_layout::scale(12);
 // From the plot's top edge up to the dot's center.
 constexpr int kReadoutDotLift = popup_layout::scale(14);
 
-struct EnergyPopupContext {
-  bool body_ready = false;
-  lv_obj_t* overlay = nullptr;
-  lv_obj_t* card = nullptr;
-  lv_obj_t* title_label = nullptr;
-  lv_obj_t* icon_label = nullptr;
-  lv_obj_t* close_button = nullptr;
-  lv_obj_t* value_label = nullptr;
-  lv_obj_t* subtitle_label = nullptr;
-  lv_obj_t* range_row = nullptr;
+// One chart per period. Both are built with the popup and filled from the
+// cache, so a 24H/7D switch swaps two finished charts instead of redrawing
+// every bar, line and label (155-410 ms on V2/S3 in b88-b90). The context
+// holds the shown chart; `spare` holds the other one, hidden.
+struct EnergyChartView {
+  bool week = false;
   lv_obj_t* chart_wrap = nullptr;
   lv_obj_t* chart = nullptr;
   lv_chart_series_t* series = nullptr;
@@ -84,6 +81,24 @@ struct EnergyPopupContext {
   lv_obj_t* y_zero_line = nullptr;
   lv_obj_t* y_min_line = nullptr;
   lv_obj_t* bars[ENERGY_VALUES_MAX] = {};
+  EnergyEntryData shown_entry;
+  uint8_t shown_slots = 0;
+  int plot_left = 0;
+  int plot_w = 0;
+  int zero_y = 0;  // zero line of the shown bars, relative to chart_wrap
+};
+
+struct EnergyPopupContext : EnergyChartView {
+  EnergyChartView spare;
+  bool body_ready = false;
+  lv_obj_t* overlay = nullptr;
+  lv_obj_t* card = nullptr;
+  lv_obj_t* title_label = nullptr;
+  lv_obj_t* icon_label = nullptr;
+  lv_obj_t* close_button = nullptr;
+  lv_obj_t* value_label = nullptr;
+  lv_obj_t* subtitle_label = nullptr;
+  lv_obj_t* range_row = nullptr;
   lv_obj_t* day_btn = nullptr;
   lv_obj_t* week_btn = nullptr;
   lv_obj_t* day_label = nullptr;
@@ -100,23 +115,19 @@ struct EnergyPopupContext {
   PopupGraphScrub readout;
   lv_obj_t* readout_time_label = nullptr;
   lv_obj_t* readout_value_label = nullptr;
-  EnergyEntryData shown_entry;
-  uint8_t shown_slots = 0;
-  int plot_left = 0;
-  int plot_w = 0;
   int readout_slot = -1;
   int readout_x = 0;  // marker, relative to chart_wrap
   int readout_line_bottom = 0;  // top edge of the read bar, relative to chart_wrap
-  int zero_y = 0;  // zero line of the shown bars, relative to chart_wrap
   int readout_pin_slot = -1;
   bool readout_latest = true;
   char readout_time_text[72] = "";
   char readout_value_text[96] = "";
 };
 
+// New cache data per period; the shown chart is refreshed first.
 struct PendingPopupRefresh {
-  String period;
-  bool valid = false;
+  bool day = false;
+  bool week = false;
 };
 
 EnergyPopupContext* g_energy_popup_ctx = nullptr;
@@ -293,9 +304,13 @@ uint8_t slot_count_for_entry(const EnergyEntryData& entry) {
   return entry.value_count > 0 ? entry.value_count : 1;
 }
 
-void clear_chart(EnergyPopupContext* ctx) {
+void clear_chart(EnergyChartView* ctx) {
   if (!ctx || !ctx->chart || !ctx->series) return;
   ctx->shown_slots = 0;
+  // One dirty area for the whole chart: its bars, lines and labels alone
+  // exceed LVGL's 32 areas, and LVGL then redraws the whole screen, every
+  // tile behind the popup included (244 ms frames on V2 b90).
+  if (ctx->chart_wrap) lv_obj_invalidate(ctx->chart_wrap);
   lv_chart_set_point_count(ctx->chart, kDaySlotCount);
   lv_chart_set_all_value(ctx->chart, ctx->series, LV_CHART_POINT_NONE);
   lv_chart_set_range(ctx->chart, LV_CHART_AXIS_PRIMARY_Y, 0, 1);
@@ -691,15 +706,22 @@ void refresh_energy_readout(EnergyPopupContext* ctx) {
   show_energy_slot(ctx, ctx->readout_latest ? latest_energy_slot(ctx) : ctx->readout_pin_slot);
 }
 
-void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry) {
+// `shown` is false while the hidden chart of the other period is filled: the
+// readout and the header belong to the shown chart.
+void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry,
+                          bool shown = true) {
   if (!ctx || !ctx->chart || !ctx->series) return;
 
+  // One dirty area for the whole chart, see clear_chart().
+  if (ctx->chart_wrap) lv_obj_invalidate(ctx->chart_wrap);
   // New bars replace what a finger may be reading; a kept readout returns
   // with refresh_energy_readout() below.
-  if (ctx->readout.active()) ctx->readout.cancel();
-  clear_energy_readout(ctx);
+  if (shown) {
+    if (ctx->readout.active()) ctx->readout.cancel();
+    clear_energy_readout(ctx);
+    update_header_value(ctx, entry);
+  }
   ctx->shown_slots = 0;
-  update_header_value(ctx, entry);
 
   const uint8_t slot_count = slot_count_for_entry(entry);
   if (slot_count == 0) {
@@ -942,7 +964,7 @@ void apply_entry_to_chart(EnergyPopupContext* ctx, const EnergyEntryData& entry)
   ctx->plot_left = plot_left;
   ctx->plot_w = plot_w;
   ctx->zero_y = zero_y;
-  refresh_energy_readout(ctx);
+  if (shown) refresh_energy_readout(ctx);
 }
 
 void show_empty_chart(EnergyPopupContext* ctx) {
@@ -958,19 +980,9 @@ void show_empty_chart(EnergyPopupContext* ctx) {
   update_loading_header(ctx);
 }
 
-void refresh_from_cache(EnergyPopupContext* ctx) {
-  if (!ctx || !popup_visible(ctx)) return;
-  EnergyEntryData entry;
-  if (!energy_find_entry(ctx->entity_id, ctx->period.c_str(), entry)) {
-    show_empty_chart(ctx);
-    return;
-  }
-  apply_entry_to_chart(ctx, entry);
-}
-
 // True when an entry would draw the same bars, axis and header.
 bool same_chart_data(const EnergyEntryData& a, const EnergyEntryData& b) {
-  if (a.period != b.period || a.start != b.start || a.unit != b.unit ||
+  if (a.id != b.id || a.period != b.period || a.start != b.start || a.unit != b.unit ||
       a.total != b.total || a.value_count != b.value_count) {
     return false;
   }
@@ -979,6 +991,47 @@ bool same_chart_data(const EnergyEntryData& a, const EnergyEntryData& b) {
     if (a.value_valid[i] && a.values[i] != b.values[i]) return false;
   }
   return true;
+}
+
+void swap_chart_views(EnergyPopupContext* ctx) {
+  std::swap(static_cast<EnergyChartView&>(*ctx), ctx->spare);
+}
+
+// Shows the chart of ctx->period and hides the other one.
+void show_period_view(EnergyPopupContext* ctx) {
+  if (ctx->week != (ctx->period == "week")) swap_chart_views(ctx);
+  if (ctx->spare.chart_wrap) lv_obj_add_flag(ctx->spare.chart_wrap, LV_OBJ_FLAG_HIDDEN);
+  if (ctx->chart_wrap) lv_obj_remove_flag(ctx->chart_wrap, LV_OBJ_FLAG_HIDDEN);
+}
+
+void refresh_from_cache(EnergyPopupContext* ctx) {
+  if (!ctx || !popup_visible(ctx)) return;
+  EnergyEntryData entry;
+  if (!energy_find_entry(ctx->entity_id, ctx->period.c_str(), entry)) {
+    show_empty_chart(ctx);
+    return;
+  }
+  // A prepared chart that already shows this entry only needs its readout.
+  if (ctx->shown_slots && same_chart_data(ctx->shown_entry, entry)) {
+    update_header_value(ctx, entry);
+    refresh_energy_readout(ctx);
+    return;
+  }
+  apply_entry_to_chart(ctx, entry);
+}
+
+// Fills the hidden chart of the other period from the cache.
+void refresh_spare_from_cache(EnergyPopupContext* ctx) {
+  if (!ctx || !ctx->spare.chart) return;
+  EnergyEntryData entry;
+  if (!energy_find_entry(ctx->entity_id, ctx->spare.week ? "week" : "day", entry)) {
+    if (ctx->spare.shown_slots) clear_chart(&ctx->spare);
+    return;
+  }
+  if (ctx->spare.shown_slots && same_chart_data(ctx->spare.shown_entry, entry)) return;
+  swap_chart_views(ctx);
+  apply_entry_to_chart(ctx, entry, false);
+  swap_chart_views(ctx);
 }
 
 void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init,
@@ -990,6 +1043,7 @@ void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init,
   ctx->decimals = init.decimals > 6 ? 6 : init.decimals;
   ctx->bg_color = init.bg_color ? init.bg_color : 0x2A2A2A;
   ctx->period = "day";
+  show_period_view(ctx);
 
   if (ctx->card) {
     lv_obj_set_style_bg_color(ctx->card, lv_color_hex(ctx->bg_color), 0);
@@ -1017,7 +1071,10 @@ void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init,
   }
   popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
   update_period_buttons(ctx);
-  if (reset_body) clear_chart(ctx);
+  if (reset_body) {
+    clear_chart(ctx);
+    clear_chart(&ctx->spare);
+  }
   // The header value is part of the first frame, before the deferred body.
   update_loading_header(ctx);
 }
@@ -1066,17 +1123,22 @@ void on_period_click(lv_event_t* e) {
   String next = (target == ctx->week_btn) ? "week" : "day";
   if (ctx->period == next) return;
   const uint32_t started_ms = millis();
+  // One dirty area for the old chart, see clear_chart().
+  if (ctx->chart_wrap) lv_obj_invalidate(ctx->chart_wrap);
   ctx->readout.cancel();
   ctx->period = next;
   update_period_buttons(ctx);
-  clear_chart(ctx);
   update_loading_header(ctx);
-  energy_request_period(ctx->period.c_str(), true);
+  // The prepared chart of the other period takes over; it is only redrawn
+  // when the cache holds newer data than it shows.
+  show_period_view(ctx);
+  const bool prepared = ctx->shown_slots != 0;
   refresh_from_cache(ctx);
-  // One line per tap: whether cached bars were shown at once, and how long
-  // the switch took on the UI task. The response line follows in energy_data.
+  energy_request_period(ctx->period.c_str(), true);
+  // One line per tap: whether the prepared chart was shown, and how long the
+  // switch took on the UI task. The response line follows in energy_data.
   Serial.printf("[EnergyPopup] Period %s: %s in %lu ms\n", ctx->period.c_str(),
-                ctx->shown_entry.value_count ? "cached bars shown" : "no cached data",
+                prepared ? "prepared chart shown" : "chart built",
                 static_cast<unsigned long>(millis() - started_ms));
 }
 
@@ -1106,80 +1168,8 @@ lv_obj_t* make_button_label(lv_obj_t* parent, const char* text, lv_obj_t** out_l
   return btn;
 }
 
-void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
-  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : 0x2A2A2A);
-  ctx->overlay = parts.overlay;
-  ctx->card = parts.card;
-  ctx->title_label = parts.title;
-  ctx->icon_label = parts.icon;
-  ctx->close_button = parts.close;
-  lv_obj_t* overlay = parts.overlay;
-  lv_obj_t* card = parts.card;
-  lv_obj_t* title = parts.title;
-  lv_obj_t* icon = parts.icon;
-  lv_obj_t* close_btn = parts.close;
-
-  disable_pressed_button_animation(close_btn);
-
-  lv_obj_t* period_row = lv_obj_create(card);
-  ctx->range_row = period_row;
-  lv_obj_remove_style_all(period_row);
-  lv_obj_set_size(period_row, (kRangeButtonWidth * 2) + kRangeButtonGap, popup_layout::kNavHeight);
-  lv_obj_align(period_row, LV_ALIGN_BOTTOM_MID, 0, -popup_layout::kNavBottomInset);
-  lv_obj_set_style_bg_opa(period_row, LV_OPA_TRANSP, 0);
-  lv_obj_set_layout(period_row, LV_LAYOUT_FLEX);
-  lv_obj_set_flex_flow(period_row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(period_row, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(period_row, kRangeButtonGap, 0);
-  lv_obj_clear_flag(period_row, LV_OBJ_FLAG_CLICKABLE);
-
-  // 7D sits left of Today: the longer range reaches further into the past.
-  ctx->week_btn = make_button_label(period_row, "7D", &ctx->week_label);
-  ctx->day_btn = make_button_label(period_row, today_label(), &ctx->day_label);
-  lv_obj_add_event_cb(ctx->day_btn, on_period_click, LV_EVENT_CLICKED, ctx);
-  lv_obj_add_event_cb(ctx->week_btn, on_period_click, LV_EVENT_CLICKED, ctx);
-
-  lv_obj_t* value_box = lv_obj_create(card);
-  lv_obj_remove_style_all(value_box);
-  lv_obj_set_size(value_box, LV_PCT(100), popup_layout::kValueHeight);
-  lv_obj_align(
-      value_box, LV_ALIGN_TOP_MID, 0,
-      popup_layout::kValueY - kContentLiftY);
-  lv_obj_set_style_bg_opa(value_box, LV_OPA_TRANSP, 0);
-  lv_obj_clear_flag(value_box, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_clear_flag(value_box, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(value_box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-
-  // The shared header shows the current value from this hidden label. The old
-  // value row below is the bar readout: time above, value below, centered.
-  ctx->value_label = lv_label_create(card);
-  lv_label_set_text(ctx->value_label, "");
-  lv_obj_add_flag(ctx->value_label, LV_OBJ_FLAG_HIDDEN);
-  ctx->readout_time_label = popup_graph_readout::create_band_label(
-      value_box, popup_layout::font20(), ctx->readout_time_text);
-  ctx->readout_value_label = popup_graph_readout::create_band_label(
-      value_box, value_font(), ctx->readout_value_text);
-  popup_graph_readout::align_band_labels(ctx->readout_time_label, ctx->readout_value_label);
-
-  lv_obj_t* subtitle = lv_label_create(value_box);
-  ctx->subtitle_label = subtitle;
-  set_label_style(subtitle, lv_color_hex(0xD9D9D9),
-                  popup_layout::font20());
-  lv_obj_set_style_text_align(subtitle, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_width(subtitle, LV_PCT(100));
-  lv_obj_add_flag(subtitle, LV_OBJ_FLAG_HIDDEN);
-
-  lv_obj_t* body_box = lv_obj_create(card);
-  lv_obj_remove_style_all(body_box);
-  lv_obj_set_size(body_box, LV_PCT(100), popup_layout::kBodyHeight);
-  lv_obj_align(
-      body_box, LV_ALIGN_TOP_MID, 0,
-      popup_layout::kBodyY - kContentLiftY);
-  lv_obj_set_style_bg_opa(body_box, LV_OPA_TRANSP, 0);
-  lv_obj_add_flag(body_box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-  lv_obj_clear_flag(body_box, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_clear_flag(body_box, LV_OBJ_FLAG_SCROLLABLE);
-
+// Builds one chart into the context's shown view.
+void build_chart_view(EnergyPopupContext* ctx, lv_obj_t* body_box) {
   lv_obj_t* chart_wrap = lv_obj_create(body_box);
   ctx->chart_wrap = chart_wrap;
   lv_obj_remove_style_all(chart_wrap);
@@ -1273,11 +1263,94 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
     lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
   }
 
-  ctx->readout.init(ctx, on_energy_readout_apply, on_energy_readout_end);
   ctx->readout.attach(chart_wrap);
   lv_obj_add_event_cb(chart_wrap, on_energy_cursor_draw, LV_EVENT_DRAW_MAIN, ctx);
   lv_obj_add_event_cb(chart_wrap, on_energy_cursor_ext_draw, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr);
   lv_obj_refresh_ext_draw_size(chart_wrap);
+}
+
+void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
+  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : 0x2A2A2A);
+  ctx->overlay = parts.overlay;
+  ctx->card = parts.card;
+  ctx->title_label = parts.title;
+  ctx->icon_label = parts.icon;
+  ctx->close_button = parts.close;
+  lv_obj_t* overlay = parts.overlay;
+  lv_obj_t* card = parts.card;
+  lv_obj_t* title = parts.title;
+  lv_obj_t* icon = parts.icon;
+  lv_obj_t* close_btn = parts.close;
+
+  disable_pressed_button_animation(close_btn);
+
+  lv_obj_t* period_row = lv_obj_create(card);
+  ctx->range_row = period_row;
+  lv_obj_remove_style_all(period_row);
+  lv_obj_set_size(period_row, (kRangeButtonWidth * 2) + kRangeButtonGap, popup_layout::kNavHeight);
+  lv_obj_align(period_row, LV_ALIGN_BOTTOM_MID, 0, -popup_layout::kNavBottomInset);
+  lv_obj_set_style_bg_opa(period_row, LV_OPA_TRANSP, 0);
+  lv_obj_set_layout(period_row, LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(period_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(period_row, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(period_row, kRangeButtonGap, 0);
+  lv_obj_clear_flag(period_row, LV_OBJ_FLAG_CLICKABLE);
+
+  // 7D sits left of Today: the longer range reaches further into the past.
+  ctx->week_btn = make_button_label(period_row, "7D", &ctx->week_label);
+  ctx->day_btn = make_button_label(period_row, today_label(), &ctx->day_label);
+  lv_obj_add_event_cb(ctx->day_btn, on_period_click, LV_EVENT_CLICKED, ctx);
+  lv_obj_add_event_cb(ctx->week_btn, on_period_click, LV_EVENT_CLICKED, ctx);
+
+  lv_obj_t* value_box = lv_obj_create(card);
+  lv_obj_remove_style_all(value_box);
+  lv_obj_set_size(value_box, LV_PCT(100), popup_layout::kValueHeight);
+  lv_obj_align(
+      value_box, LV_ALIGN_TOP_MID, 0,
+      popup_layout::kValueY - kContentLiftY);
+  lv_obj_set_style_bg_opa(value_box, LV_OPA_TRANSP, 0);
+  lv_obj_clear_flag(value_box, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_clear_flag(value_box, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(value_box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+
+  // The shared header shows the current value from this hidden label. The old
+  // value row below is the bar readout: time above, value below, centered.
+  ctx->value_label = lv_label_create(card);
+  lv_label_set_text(ctx->value_label, "");
+  lv_obj_add_flag(ctx->value_label, LV_OBJ_FLAG_HIDDEN);
+  ctx->readout_time_label = popup_graph_readout::create_band_label(
+      value_box, popup_layout::font20(), ctx->readout_time_text);
+  ctx->readout_value_label = popup_graph_readout::create_band_label(
+      value_box, value_font(), ctx->readout_value_text);
+  popup_graph_readout::align_band_labels(ctx->readout_time_label, ctx->readout_value_label);
+
+  lv_obj_t* subtitle = lv_label_create(value_box);
+  ctx->subtitle_label = subtitle;
+  set_label_style(subtitle, lv_color_hex(0xD9D9D9),
+                  popup_layout::font20());
+  lv_obj_set_style_text_align(subtitle, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_width(subtitle, LV_PCT(100));
+  lv_obj_add_flag(subtitle, LV_OBJ_FLAG_HIDDEN);
+
+  lv_obj_t* body_box = lv_obj_create(card);
+  lv_obj_remove_style_all(body_box);
+  lv_obj_set_size(body_box, LV_PCT(100), popup_layout::kBodyHeight);
+  lv_obj_align(
+      body_box, LV_ALIGN_TOP_MID, 0,
+      popup_layout::kBodyY - kContentLiftY);
+  lv_obj_set_style_bg_opa(body_box, LV_OPA_TRANSP, 0);
+  lv_obj_add_flag(body_box, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  lv_obj_clear_flag(body_box, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_clear_flag(body_box, LV_OBJ_FLAG_SCROLLABLE);
+
+  // Both periods get a chart (EnergyChartView). The 7D one is built first and
+  // waits hidden in ctx->spare; show_period_view() swaps them.
+  ctx->readout.init(ctx, on_energy_readout_apply, on_energy_readout_end);
+  build_chart_view(ctx, body_box);
+  ctx->week = true;
+  swap_chart_views(ctx);
+  build_chart_view(ctx, body_box);
+  lv_obj_add_flag(ctx->spare.chart_wrap, LV_OBJ_FLAG_HIDDEN);
 
   apply_init_to_context(ctx, init);
   lv_obj_move_foreground(icon);
@@ -1300,9 +1373,11 @@ static void finish_energy_popup_open() {
     g_energy_popup_ctx->body_ready = true;
     energy_request_period("day", true);
     // Load 7D in the background, so switching shows cached bars at once
-    // instead of waiting for the Bridge (250-600 ms). The popup ignores
-    // responses for the other period; the request is throttled.
+    // instead of waiting for the Bridge (250-600 ms). Its answer fills the
+    // hidden 7D chart; the request is throttled.
     energy_request_period("week", false);
+    // The hidden chart is filled from the cache in the next loop pass.
+    queue_energy_popup_refresh(g_energy_popup_ctx->spare.week ? "week" : "day");
   }
 }
 
@@ -1380,13 +1455,16 @@ void hide_energy_popup() {
 }
 
 void queue_energy_popup_refresh(const char* period) {
-  g_pending_refresh.period = (period && *period) ? period : "day";
-  g_pending_refresh.valid = true;
+  if (period && strcmp(period, "week") == 0) {
+    g_pending_refresh.week = true;
+  } else {
+    g_pending_refresh.day = true;
+  }
 }
 
 void process_energy_popup_queue() {
   if (!g_energy_popup_ctx || !g_energy_popup_ctx->card) {
-    g_pending_refresh.valid = false;
+    g_pending_refresh = PendingPopupRefresh{};
     return;
   }
   if (PopupFirstFrame::any_pending()) return;
@@ -1397,17 +1475,28 @@ void process_energy_popup_queue() {
       refresh_from_cache(g_energy_popup_ctx);
       energy_request_period("day", true);
       energy_request_period("week", false);  // background, see above
+      queue_energy_popup_refresh(g_energy_popup_ctx->spare.week ? "week" : "day");
     }
     return;
   }
-  if (!g_pending_refresh.valid) return;
+  if (!g_pending_refresh.day && !g_pending_refresh.week) return;
   // Chart data waits while a finger reads a bar, so only the readout changes.
   if (g_energy_popup_ctx->readout.active()) return;
+  if (!popup_visible(g_energy_popup_ctx)) {
+    g_pending_refresh = PendingPopupRefresh{};
+    return;
+  }
 
-  String period = g_pending_refresh.period;
-  g_pending_refresh.valid = false;
-  if (!popup_visible(g_energy_popup_ctx)) return;
-  if (!g_energy_popup_ctx->period.equalsIgnoreCase(period)) return;
+  // One chart per loop pass: the shown one first, then the hidden one.
+  const bool shown_week = g_energy_popup_ctx->week;
+  bool& shown_pending = shown_week ? g_pending_refresh.week : g_pending_refresh.day;
+  if (!shown_pending) {
+    (shown_week ? g_pending_refresh.day : g_pending_refresh.week) = false;
+    refresh_spare_from_cache(g_energy_popup_ctx);
+    return;
+  }
+  shown_pending = false;
+  const String period = g_energy_popup_ctx->period;
   // Every period switch asks the Bridge again, and its answer usually repeats
   // the cached bars just drawn; redrawing them took 170-330 ms (P4/S3 b88).
   EnergyEntryData entry;

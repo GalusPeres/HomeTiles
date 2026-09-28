@@ -15,8 +15,10 @@ const prefetches = popup.match(
 assert.equal(prefetches.length, 2, 'both opening paths load 7D in the background');
 assert.match(popup, /struct EnergyPopupContext : EnergyChartView \{\s*EnergyChartView spare;/,
   'the context shows one chart and keeps the other period hidden');
-assert.match(popup, /queue_energy_popup_refresh\(g_energy_popup_ctx->spare\.week \? "week" : "day"\);/,
-  'opening fills the hidden chart from the cache');
+assert.match(popup, /static void queue_spare_after_frame\(EnergyPopupContext\* ctx\) \{\s*queue_energy_popup_refresh\(ctx->spare\.week \? "week" : "day"\);\s*ctx->spare_frame\.begin\(\);/,
+  'opening fills the hidden chart from the cache after the content frame');
+assert.equal((popup.match(/queue_spare_after_frame\(g_energy_popup_ctx\);/g) || []).length, 2,
+  'both opening paths prepare the hidden chart');
 assert.match(popup, /if \(!shown_pending\) \{[\s\S]*?refresh_spare_from_cache\(g_energy_popup_ctx\);/,
   'an answer for the other period fills the hidden chart');
 const click = /void on_period_click\([\s\S]*?\n\}/.exec(popup)[0];

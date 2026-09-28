@@ -286,7 +286,11 @@ int main(){
  // The first frame already shows the current value in the shared header.
  assert(lv_obj_has_flag(ctx->value_label,LV_OBJ_FLAG_HIDDEN)&&strcmp(lv_label_get_text(ctx->value_label),"12.34 kWh")==0);
  sync_popup_shell();assert(shown(shell.value)&&strcmp(hometiles_title::text(shell.value),"12.34 kWh")==0);
- settle(display);
+ // settle() with a queue pass between the content and the next frame: the
+ // hidden 7D chart waits until the content frame is drawn.
+ lv_refr_now(display);process_popup_open();sync_popup_shell();
+ process_energy_popup_queue();assert(ctx->spare.shown_slots==0&&g_pending_refresh.week&&"7D waits for the content frame");
+ lv_refr_now(display);
  // Opening reads the newest bar.
  assert(ctx->shown_slots==24&&ctx->plot_w>0&&ctx->readout_slot==23&&ctx->readout_latest&&shown(ctx->readout_time_label)&&shown(ctx->readout_value_label));
  assert(strcmp(ctx->readout_time_text,"23:00 \xE2\x80\x93 00:00")==0&&strcmp(ctx->readout_value_text,"5.75 kWh")==0);

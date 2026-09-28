@@ -113,6 +113,8 @@ struct EnergyPopupContext : EnergyChartView {
   // dragging allocates nothing. It opens on the newest bar, stays where the
   // finger leaves it and follows the newest bar while it shows that bar.
   PopupGraphScrub readout;
+  // Holds the popup queues until the opening's content frame is drawn.
+  PopupFirstFrame spare_frame;
   lv_obj_t* readout_time_label = nullptr;
   lv_obj_t* readout_value_label = nullptr;
   int readout_slot = -1;
@@ -1364,6 +1366,14 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
 
 }  // namespace
 
+// The hidden chart is filled from the cache after the content frame. Filled
+// in the same loop pass, it delayed that frame (content frame 142-169 ms in
+// b91 against 72-123 ms in b90).
+static void queue_spare_after_frame(EnergyPopupContext* ctx) {
+  queue_energy_popup_refresh(ctx->spare.week ? "week" : "day");
+  ctx->spare_frame.begin();
+}
+
 static void finish_energy_popup_open() {
   if (!g_energy_popup_ctx || !g_energy_open_pending) return;
   g_energy_open_pending = false;
@@ -1376,8 +1386,7 @@ static void finish_energy_popup_open() {
     // instead of waiting for the Bridge (250-600 ms). Its answer fills the
     // hidden 7D chart; the request is throttled.
     energy_request_period("week", false);
-    // The hidden chart is filled from the cache in the next loop pass.
-    queue_energy_popup_refresh(g_energy_popup_ctx->spare.week ? "week" : "day");
+    queue_spare_after_frame(g_energy_popup_ctx);
   }
 }
 
@@ -1475,7 +1484,7 @@ void process_energy_popup_queue() {
       refresh_from_cache(g_energy_popup_ctx);
       energy_request_period("day", true);
       energy_request_period("week", false);  // background, see above
-      queue_energy_popup_refresh(g_energy_popup_ctx->spare.week ? "week" : "day");
+      queue_spare_after_frame(g_energy_popup_ctx);
     }
     return;
   }

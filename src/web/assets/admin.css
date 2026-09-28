@@ -160,6 +160,17 @@
     .edit-icon:hover { opacity:1; }
     .tab-content { display:none; }
     .tab-content.active { display:block; }
+    /* Tile tabs scroll inside the card when the grid and Global settings are
+       taller than the window (for example 100 % zoom on a laptop) instead of
+       being cut off. The Tile settings panel keeps its size and stays in
+       view (sticky). */
+    .tab-content.tile-tab.active {
+      flex:1 1 auto;
+      min-height:0;
+      overflow-x:hidden;
+      overflow-y:auto;
+      overscroll-behavior:contain;
+    }
     /* Settings stays below the tab bar and scrolls internally there instead
        of growing the browser viewport with long configuration forms. */
     #tab-network.active,
@@ -1229,8 +1240,10 @@
       border:1px solid #232323;
       border-radius:18px;
       padding:20px;
+      /* Sticks to the top of the scrolling tile tab; its max-height is set
+         to the visible space by updateTileSettingsMaxHeight(). */
       position:sticky;
-      top:20px;
+      top:0;
       max-height:calc(100vh - 40px);
       overflow:hidden;
     }
@@ -1451,6 +1464,7 @@
       .wrapper { height:auto; padding:16px; }
       .card { height:auto; min-height:calc(100vh - 32px); }
       #tab-network.active { flex:none; overflow:visible; }
+      .tab-content.tile-tab.active { flex:none; overflow:visible; }
       #tab-hardware.active {
         flex:1 1 auto;
         min-height:420px;

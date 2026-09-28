@@ -178,6 +178,7 @@ try {
   assert.equal(await evaluate("document.querySelector('.ht-serial-status').textContent"), "Flashing · 48%");
   assert.equal(await headerVisible(), true, "Active flash progress must be visible");
   assert.deepEqual(await evaluate("fixture.events.slice(0, 5)"), ["log-open", "log-cancel", "log-cancelled", "log-close", "flash-open"]);
+  assert.equal(await evaluate("document.querySelector('#installer-clear-log').disabled"), true, "A running flash must keep its log");
   await navigate("device-logs/");
   assert.equal(await evaluate("document.querySelector('[data-log-connect]').disabled"), true, "Logger competed with active flashing");
   await navigate("faq/");
@@ -189,6 +190,10 @@ try {
   assert.equal(await evaluate("fixture.writes"), 2, "Expected inactive app and OTA selection writes only");
   assert.equal(await evaluate("fixture.events.at(-1)"), "flash-close");
   assert.equal(await evaluate("localStorage.getItem('hometiles.webInstaller.lastRun.v1')"), null, "A successful flash must clear its persistent checkpoint");
+  assert.equal(await evaluate("document.querySelector('#installer-clear-log').disabled"), false);
+  await click("#installer-clear-log");
+  await until("document.querySelector('#installer-log-output').textContent === ''", "Clear log empties the flash log");
+  assert.equal(await evaluate("document.querySelector('#installer-log-action-status').textContent"), "Log cleared.");
   const completedFlash = JSON.stringify({ version: 1, deviceKey: device.key, mode: "update",
     busy: false, mutationStarted: true, recoveryRequired: false, progress: 100,
     phase: "Complete", message: "Update complete. Settings were preserved. Please restart the device manually.", kind: "success" });

@@ -93,6 +93,7 @@ Use desktop Chrome or Edge and a USB data cable.
         <div class="ht-installer-log-header">
           <strong>Flash log</strong>
           <button id="installer-copy-log" type="button" aria-label="Copy flash log to clipboard">Copy log</button>
+          <button id="installer-clear-log" type="button">Clear log</button>
           <span id="installer-log-action-status" role="status" aria-live="polite"></span>
         </div>
         <pre id="installer-log-output" role="log" aria-label="Installer flash log" aria-live="off" tabindex="0"></pre>

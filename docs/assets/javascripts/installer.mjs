@@ -1,5 +1,5 @@
 import * as esptool from "https://unpkg.com/esptool-js@0.7.0/bundle.js";
-import { defineHomeTilesEsptool } from "./installer-esptool.mjs?v=installer-ui-17";
+import { defineHomeTilesEsptool } from "./installer-esptool.mjs?v=installer-ui-18";
 import { retainPageComponent } from "./retained-page-component.mjs?v=serial-navigation-2";
 import { serialAccess } from "./serial-access.mjs?v=serial-navigation-2";
 import { serialActivity } from "./serial-activity.mjs?v=serial-navigation-3";
@@ -20,7 +20,7 @@ import {
   releaseAssetNames,
   resolveSameOriginAsset,
   validateFirmwareDescriptor,
-} from "./installer-contract.mjs?v=installer-ui-17";
+} from "./installer-contract.mjs?v=installer-ui-18";
 
 const LAST_RUN_STORAGE_KEY = "hometiles.webInstaller.lastRun.v1";
 const LOG_MAX_LINES = 300;
@@ -35,6 +35,7 @@ const { HomeTilesESPLoader, HomeTilesTransport } = defineHomeTilesEsptool(esptoo
 
 export function mountInstaller(root) {
   const elements = {
+    clearLog: root.querySelector("#installer-clear-log"),
     copyLog: root.querySelector("#installer-copy-log"),
     device: root.querySelector("#installer-device"),
     deviceDetails: root.querySelector("#installer-device-details"),
@@ -242,6 +243,13 @@ export function mountInstaller(root) {
     }
   }
 
+  // A running flash keeps its log; clearing is only offered between runs.
+  function clearFlashLog() {
+    if (state.busy) return;
+    resetLog();
+    setLogActionStatus("Log cleared.");
+  }
+
   function selectedMode() {
     return root.querySelector('input[name="installer-mode"]:checked')?.value || "update";
   }
@@ -433,6 +441,7 @@ export function mountInstaller(root) {
     });
     elements.exactHardware.disabled = state.busy;
     elements.factoryConfirmation.disabled = state.busy;
+    elements.clearLog.disabled = state.busy;
     const retrying =
       state.lastRun?.recoveryRequired === true &&
       state.lastRun.deviceKey === elements.device.value &&
@@ -860,6 +869,7 @@ export function mountInstaller(root) {
   elements.factoryConfirmation.addEventListener("change", formChanged);
   elements.flash.addEventListener("click", flashSelectedFirmware);
   elements.copyLog.addEventListener("click", copyFlashLog);
+  elements.clearLog.addEventListener("click", clearFlashLog);
   elements.logOutput.addEventListener("scroll", () => {
     const distanceFromBottom =
       elements.logOutput.scrollHeight - elements.logOutput.scrollTop - elements.logOutput.clientHeight;

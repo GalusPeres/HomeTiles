@@ -1,4 +1,5 @@
 #include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/navigation/view_navigation.h"
@@ -1296,66 +1297,22 @@ static bool next_json_object_in_array(const String& array, int& cursor, String& 
 
 static void style_mode_button(lv_obj_t* btn, bool active) {
   if (!btn) return;
-  lv_color_t active_text_color = lv_color_hex(0x2A2A2A);
+  lv_color_t popup = lv_color_hex(0x2A2A2A);
   lv_obj_t* row = lv_obj_get_parent(btn);
   lv_obj_t* card = row ? lv_obj_get_parent(row) : nullptr;
-  if (card) {
-    active_text_color = lv_obj_get_style_bg_color(card, LV_PART_MAIN);
-  }
-
-  auto apply_selector = [&](lv_style_selector_t selector) {
-    lv_obj_set_style_bg_color(btn, lv_color_white(), selector);
-    lv_obj_set_style_bg_opa(btn, active ? LV_OPA_COVER : LV_OPA_TRANSP, selector);
-    lv_obj_set_style_border_color(btn, lv_color_white(), selector);
-    lv_obj_set_style_border_width(btn, 2, selector);
-    lv_obj_set_style_outline_opa(btn, LV_OPA_TRANSP, selector);
-    lv_obj_set_style_shadow_opa(btn, LV_OPA_TRANSP, selector);
-    lv_obj_set_style_transform_width(btn, 0, selector);
-    lv_obj_set_style_transform_height(btn, 0, selector);
-    lv_obj_set_style_translate_y(btn, 0, selector);
-  };
-
-  apply_selector(0);
-  apply_selector(LV_STATE_PRESSED);
-
-  lv_obj_t* label = lv_obj_get_child(btn, 0);
-  if (label) {
-    lv_obj_set_style_text_color(label, active ? active_text_color : lv_color_white(), 0);
-    lv_obj_set_style_text_color(label, active ? active_text_color : lv_color_white(), LV_STATE_PRESSED);
-  }
+  if (card) popup = lv_obj_get_style_bg_color(card, LV_PART_MAIN);
+  popup_nav_style::style_toggle(btn, lv_obj_get_child(btn, 0), popup, active);
 }
 
 static void style_header_action_button(WeatherPopupContext* ctx, lv_obj_t* btn, bool active) {
   if (!ctx || !btn) return;
-  lv_color_t active_text_color = lv_color_hex(0x2A2A2A);
-  if (ctx->card) {
-    active_text_color = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
-  }
-
-  auto apply_selector = [&](lv_style_selector_t selector) {
-    const bool pressed = selector == LV_STATE_PRESSED;
-    lv_obj_set_style_bg_color(btn, lv_color_white(), selector);
-    const lv_opa_t bg_opa = active ? LV_OPA_COVER : (pressed ? kFooterIndicatorOpa : LV_OPA_TRANSP);
-    lv_obj_set_style_bg_opa(btn, bg_opa, selector);
-    lv_obj_set_style_border_color(btn, lv_color_white(), selector);
-    lv_obj_set_style_border_width(btn, 0, selector);
-    lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, selector);
-    lv_obj_set_style_outline_opa(btn, LV_OPA_TRANSP, selector);
-    lv_obj_set_style_shadow_opa(btn, LV_OPA_TRANSP, selector);
-    lv_obj_set_style_transform_width(btn, 0, selector);
-    lv_obj_set_style_transform_height(btn, 0, selector);
-    lv_obj_set_style_translate_y(btn, 0, selector);
-  };
-
-  apply_selector(0);
-  apply_selector(LV_STATE_PRESSED);
-
+  const lv_color_t popup =
+      ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(0x2A2A2A);
   lv_obj_t* label = lv_obj_get_child(btn, 0);
+  popup_nav_style::style_toggle(btn, label, popup, active);
   if (label) {
     lv_obj_set_style_text_font(label, FONT_UNIT, 0);
     lv_obj_set_style_text_font(label, FONT_UNIT, LV_STATE_PRESSED);
-    lv_obj_set_style_text_color(label, active ? active_text_color : lv_color_white(), 0);
-    lv_obj_set_style_text_color(label, active ? active_text_color : lv_color_white(), LV_STATE_PRESSED);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_set_style_text_outline_stroke_opa(label, LV_OPA_TRANSP, 0);
@@ -2863,12 +2820,10 @@ static void apply_card_color(WeatherPopupContext* ctx, uint32_t bg_color) {
     lv_obj_set_style_bg_color(ctx->detail_now_temp_value_label, lv_color_hex(color), 0);
   if (ctx->detail_now_temp_unit_label)
     lv_obj_set_style_bg_color(ctx->detail_now_temp_unit_label, lv_color_hex(color), 0);
-  // The white week-range and day-title pills cut their text out in the card
-  // color; the resident popup reopens with other tile colors and tints.
-  if (ctx->week_range_label)
-    lv_obj_set_style_text_color(ctx->week_range_label, lv_color_hex(color), 0);
-  if (ctx->detail_title_label)
-    lv_obj_set_style_text_color(ctx->detail_title_label, lv_color_hex(color), 0);
+  // The week-range and day-title pills follow the card color; the resident
+  // popup reopens with other tile colors and tints.
+  popup_nav_style::style_pill(ctx->week_range_pill, ctx->week_range_label, lv_color_hex(color));
+  popup_nav_style::style_pill(ctx->detail_title_pill, ctx->detail_title_label, lv_color_hex(color));
   for (int i = 0; i < ctx->detail_disabled_separator_count; ++i) {
     if (ctx->detail_disabled_separators[i]) {
       lv_obj_set_style_bg_color(ctx->detail_disabled_separators[i], lv_color_hex(color), 0);
@@ -2903,6 +2858,8 @@ void weather_popup_follow_tile_color(uint32_t color) {
   WeatherPopupContext* ctx = g_weather_popup_ctx;
   if (!ctx || !ctx->card || lv_obj_has_flag(ctx->card, LV_OBJ_FLAG_HIDDEN) || ctx->bg_color == color) return;
   apply_card_color(ctx, color);
+  // The footer controls take their fill from the card color.
+  update_mode_buttons(ctx);
 }
 
 namespace {

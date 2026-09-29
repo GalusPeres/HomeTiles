@@ -201,6 +201,7 @@ const cpp = String.raw`
 #include <string>
 #include <vector>
 #include "src/ui/shared/title_label.h"
+#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_body.h"
 #include "src/ui/popups/popup_graph_readout.h"

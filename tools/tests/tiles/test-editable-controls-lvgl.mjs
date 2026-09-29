@@ -29,6 +29,8 @@ const cpp = `
 #include <lvgl.h>
 #include "src/types/value/value_colors.h"
 #include "src/ui/shared/title_label.h"
+#include "src/ui/popups/popup_nav_style.h"
+bool popup_shell_tinted_controls(){return false;}
 #include "src/ui/popups/popup_first_frame.h"
 PopupFirstFrame g_sensor_first_frame;
 void hide_popup_shell(lv_obj_t*){} void cancel_popup_open(lv_obj_t*){}

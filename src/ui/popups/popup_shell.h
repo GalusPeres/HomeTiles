@@ -36,6 +36,9 @@ void popup_shell_follow_tile_color(uint32_t color);
 // the tile's disc. The next show_popup_shell() takes them; popups opened
 // without a tile keep the default disc (tinted by a colored icon, shown).
 void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow);
+// True when the tile that opens (or opened) the popup has "Circle in icon
+// color": footer controls then take the popup hue (popup_nav_style.h).
+bool popup_shell_tinted_controls();
 
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.

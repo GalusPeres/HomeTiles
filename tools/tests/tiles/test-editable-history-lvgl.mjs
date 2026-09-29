@@ -46,6 +46,8 @@ void hide_popup_shell(lv_obj_t*){}
 lv_obj_t* header_value_source=nullptr;
 void show_popup_shell(lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,void(*)()=nullptr,lv_obj_t* value=nullptr){header_value_source=value;}
 #include "src/ui/shared/title_label.h"
+#include "src/ui/popups/popup_nav_style.h"
+bool popup_shell_tinted_controls(){return false;}
 #include <algorithm>
 #include <cassert>
 #include <cmath>

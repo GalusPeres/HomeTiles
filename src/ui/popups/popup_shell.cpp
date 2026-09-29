@@ -435,6 +435,12 @@ void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow) {
   g_next_disc.glow = glow;
 }
 
+bool popup_shell_tinted_controls() {
+  // A popup styles its controls before show_popup_shell() takes the options.
+  const HeaderDisc& disc = g_next_disc.from_tile ? g_next_disc : shell.disc;
+  return disc.from_tile && disc.glow;
+}
+
 void popup_shell_follow_tile_color(uint32_t color) {
   if (!shell.active || !shell.active->body) return;
   const lv_color_t value = lv_color_hex(color);

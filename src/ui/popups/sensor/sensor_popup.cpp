@@ -1,4 +1,5 @@
 #include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/popup_open.h"
 #include "src/types/value/value_control.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -463,36 +464,16 @@ static String sensor_value_display(const String& value, const String& unit,
 
 static void style_range_button(lv_obj_t* btn, bool active) {
   if (!btn) return;
-  lv_color_t active_text_color = lv_color_hex(0x2A2A2A);
+  lv_color_t popup = lv_color_hex(0x2A2A2A);
   lv_obj_t* row = lv_obj_get_parent(btn);
   lv_obj_t* card = row ? lv_obj_get_parent(row) : nullptr;
-  if (card) {
-    active_text_color = lv_obj_get_style_bg_color(card, LV_PART_MAIN);
-  }
-  auto apply_selector = [&](lv_style_selector_t selector) {
-    const bool pressed = selector == LV_STATE_PRESSED;
-    lv_obj_set_style_bg_color(btn, lv_color_white(), selector);
-    lv_obj_set_style_bg_opa(btn, active ? LV_OPA_COVER : (pressed ? LV_OPA_20 : LV_OPA_TRANSP), selector);
-    lv_obj_set_style_border_color(btn, lv_color_white(), selector);
-    lv_obj_set_style_border_width(btn, 0, selector);
-    lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, selector);
-    lv_obj_set_style_outline_opa(btn, LV_OPA_TRANSP, selector);
-    lv_obj_set_style_shadow_opa(btn, LV_OPA_TRANSP, selector);
-    lv_obj_set_style_transform_width(btn, 0, selector);
-    lv_obj_set_style_transform_height(btn, 0, selector);
-    lv_obj_set_style_translate_y(btn, 0, selector);
-  };
-
-  apply_selector(0);
-  apply_selector(LV_STATE_PRESSED);
-
+  if (card) popup = lv_obj_get_style_bg_color(card, LV_PART_MAIN);
   lv_obj_t* label = lv_obj_get_child(btn, 0);
   if (label) {
     lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
     lv_obj_set_style_text_font(label, popup_layout::font24(), LV_STATE_PRESSED);
-    lv_obj_set_style_text_color(label, active ? active_text_color : lv_color_white(), 0);
-    lv_obj_set_style_text_color(label, active ? active_text_color : lv_color_white(), LV_STATE_PRESSED);
   }
+  popup_nav_style::style_toggle(btn, label, popup, active);
 }
 
 static void update_range_buttons(SensorPopupContext* ctx) {

@@ -7,8 +7,8 @@
 // the icon color in fixed steps of perceived lightness (OKLCH L), like the
 // tonal systems of Material 3, Radix Colors and Adobe Leonardo:
 // - the circle and every control sit a fixed step above the card, in the
-//   icon's hue with part of its chroma (white icons: a neutral step), so
-//   every color gets the same visible circle;
+//   icon's hue with part of its chroma (white icons: the tile's own color,
+//   lighter), so every color gets the same visible circle;
 // - the icon keeps the color it was given while it is at least kIconMinStep
 //   above the circle; a darker icon only gets lighter, in the same hue.
 // Circles and controls are drawn with an opacity over the card (the global
@@ -112,11 +112,14 @@ inline uint32_t blend(uint32_t under, uint32_t over, uint8_t opa) {
   return out;
 }
 
-// The card lifted by `step` in the icon's hue (white icons: neutral).
+// The card lifted by `step`: in the icon's hue when tinted, else in the
+// card's own color (a lighter red on a red tile, like a white veil; a
+// neutral grey only on a grey tile).
 inline uint32_t lifted(uint32_t card, uint32_t icon, bool tinted, float step) {
   const Oklch base = from_rgb(card);
+  if (!tinted) return to_rgb(base.L + step, base.C, base.h);
   const Oklch seed = from_rgb(icon);
-  return to_rgb(base.L + step, tinted ? seed.C * kCircleChroma : 0.0f, seed.h);
+  return to_rgb(base.L + step, seed.C * kCircleChroma, seed.h);
 }
 
 inline uint8_t disc_opa(uint8_t percent) {

@@ -6,6 +6,7 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/ui/shared/tone_color.h"
 
 namespace {
 
@@ -102,6 +103,16 @@ void appendPreviewScaleVars(String& html) {
   html += "--icon-glow-pct:";
   html += String(glow);
   html += ";";
+  {
+    // The neutral circle over the global tile color, for tiles the script
+    // does not tint (the parked Settings tile); transparent at 0 %.
+    const tone_color::Fill fill = tone_color::fill(tileDefaultBgColor(), 0xFFFFFF, false, glow);
+    char disc[48];
+    snprintf(disc, sizeof(disc), "--icon-disc-bg:rgba(%u,%u,%u,%.3f);",
+             static_cast<unsigned>((fill.color >> 16) & 0xFF), static_cast<unsigned>((fill.color >> 8) & 0xFF),
+             static_cast<unsigned>(fill.color & 0xFF), fill.disc_opa / 255.0f);
+    html += disc;
+  }
   emit_exact("compact-text-gap", compact_sensor_layout::text_gap());
   emit_exact("compact-title-font", compact_sensor_layout::title_size());
   emit_exact("compact-title-line", compact_sensor_layout::title_font()->line_height);

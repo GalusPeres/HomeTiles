@@ -58,7 +58,8 @@
   }
   // Mirrors src/ui/shared/tone_color.h: the circle and the controls sit a
   // fixed step of perceived lightness (OKLCH L) above the card in the icon's
-  // hue (white icons: neutral); a dark icon is shown lighter in its own hue.
+  // hue (white icons: the tile's own color, lighter); a dark icon is shown
+  // lighter in its own hue.
   function toneToLinear(v) {
     v /= 255;
     return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
@@ -107,7 +108,7 @@
     const controlOpa = Math.max(discOpa, 32);
     const step = discOpa > 32 ? percent * 0.0024 : 0.03;
     const base = toneOklch(card), seed = toneOklch(icon);
-    const target = toneRgb(base.L + step, tinted ? seed.C * 0.55 : 0, seed.h);
+    const target = tinted ? toneRgb(base.L + step, seed.C * 0.55, seed.h) : toneRgb(base.L + step, base.C, base.h);
     const color = card.map((under, i) => {
       const delta = (target[i] - under) * 255;
       return Math.min(255, Math.max(0, under + Math.trunc((delta + (delta >= 0 ? 1 : -1) * Math.floor(controlOpa / 2)) / controlOpa)));

@@ -66,6 +66,19 @@ for (const icon of icons) {
     previous = shownL;
   }
 }
+// Without the icon color the circle is the tile's own color a step lighter,
+// never a grey patch on a colored tile (regression b109: MISC, Sonos, PC).
+for (const tile of [[0xA3, 0x3B, 0x3B], [0x6B, 0x5F, 0x2B], [0x3D, 0x22, 0x55], [0x7A, 0x24, 0x10]]) {
+  const fill = js.toneFill(tile, [255, 255, 255], false, 25);
+  const a = js.toneOklch(tile), b = js.toneOklch(fill.disc);
+  const hue = Math.abs(Math.atan2(Math.sin(a.h - b.h), Math.cos(a.h - b.h)));
+  assert.ok(hue < 0.12 && b.C >= a.C * 0.8, `neutral circle keeps the tile hue: ${tile} -> ${fill.disc}`);
+  assert.ok(Math.abs(b.L - a.L - 0.06) <= 0.006, 'neutral circle: the same step');
+}
+// Tiles the script does not tint (the parked Settings tile) take the neutral
+// circle of the global tile color from the page, transparent at 0 %.
+assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes(
+  'const tone_color::Fill fill = tone_color::fill(tileDefaultBgColor(), 0xFFFFFF, false, glow);'));
 // Below 12.5 % the circle fades while the controls keep their minimum.
 {
   const fill = js.toneFill([34, 34, 34], [255, 255, 255], false, 0);

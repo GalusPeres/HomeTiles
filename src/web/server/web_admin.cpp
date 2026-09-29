@@ -3,6 +3,7 @@
 #include "src/web/server/assets/web_admin_fonts.h"
 #include "src/web/server/web_admin_utils.h"
 #include "src/web/server/auth/web_admin_auth.h"
+#include "src/core/diagnostics/loop_stall.h"
 #include "src/network/transport/network_transport.h"
 #include "src/video/local_camera/local_camera.h"
 
@@ -73,6 +74,19 @@ bool WebAdminServer::start() {
     };
     server.collectHeaders(request_headers,
                           sizeof(request_headers) / sizeof(request_headers[0]));
+#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+    // Names the request whose handler runs in the loop stall diagnostics.
+    server.addMiddleware([](WebServer& web, Middleware::Callback next) {
+      const HTTPMethod method = web.method();
+      loop_stall::webRequestBegin(method == HTTP_GET    ? "GET"
+                                  : method == HTTP_POST ? "POST"
+                                                        : "OTHER",
+                                  web.uri().c_str());
+      const bool handled = next();
+      loop_stall::webRequestEnd();
+      return handled;
+    });
+#endif
 
     // Every route except the login page, the login endpoints and static
     // assets passes the optional password check first. Without a password
@@ -87,8 +101,11 @@ bool WebAdminServer::start() {
     // unless the request carries a valid session and CSRF token.
     auto guardedUpload = [this](auto handler) {
       return [this, handler]() {
-        if (!this->authorizeUploadChunk(this->server.upload().status ==
-                                        UPLOAD_FILE_START)) {
+        const bool first_chunk = this->server.upload().status == UPLOAD_FILE_START;
+#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+        if (first_chunk) loop_stall::webUploadBegin(this->server.uri().c_str());
+#endif
+        if (!this->authorizeUploadChunk(first_chunk)) {
           return;
         }
         handler();
@@ -96,7 +113,11 @@ bool WebAdminServer::start() {
     };
     auto guardedRaw = [this](auto handler) {
       return [this, handler]() {
-        if (!this->authorizeUploadChunk(this->server.raw().status == RAW_START)) {
+        const bool first_chunk = this->server.raw().status == RAW_START;
+#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+        if (first_chunk) loop_stall::webUploadBegin(this->server.uri().c_str());
+#endif
+        if (!this->authorizeUploadChunk(first_chunk)) {
           return;
         }
         handler();
@@ -262,6 +283,7 @@ void WebAdminServer::stop() {
 void WebAdminServer::handle() {
   if (!running) return;
   server.handleClient();
+  loop_stall::webIdle();
   webAdminServiceOta();
 }
 

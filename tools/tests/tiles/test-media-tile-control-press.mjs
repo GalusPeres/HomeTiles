@@ -1,8 +1,8 @@
-// Media tile previous and next press like the popup controls: the icon color
-// only with tile color "From icon" and "Circle in icon color", else the
-// neutral fill of a white icon, at the disc opacity of the tile's contrast
-// step and never below the popup minimum; play keeps its white circle. Runs
-// the production refresh_controls() with the real disc tags and shared styles.
+// Media tile previous and next press like the popup controls: exactly the
+// circle's color (tone_color::fill; the icon hue with "Circle in icon color",
+// else neutral) at the shared control opacity, never below its minimum, with
+// no theme darkening; play keeps its white circle. Runs the production
+// refresh_controls() with the real disc tags and shared styles.
 import {radiusPolicyHost, surfaceStyleHost} from '../../lib/surface-style-host.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -24,11 +24,10 @@ const fn = name => {
 // Every icon color, tint and circle change reaches the buttons through the
 // disc hook; the tile and popup controls share one minimum opacity.
 assert.match(fn('on_icon_color'), /^void on_icon_color\(lv_obj_t\* disc\) \{\s*refresh_controls\(lv_obj_get_parent\(disc\)\);/);
-assert.match(read('src/core/config/icon_glow.h'), /inline constexpr uint8_t kControlMinOpa = 24;/);
-assert.match(read('src/ui/popups/popup_layout.h'), /constexpr int kControlFillMinOpa = 24;/);
+assert.match(read('src/ui/shared/tone_color.h'), /inline constexpr uint8_t kControlMinOpa = 32;/);
 assert.match(read('src/ui/shared/ui_surface_style.cpp'),
-  /lv_style_set_bg_opa\(&entry\.style, control_fill_opa\(key\)\);\s*lv_obj_report_style_change\(&entry\.style\);/,
-  'a Glow strength change updates the shared press opacity');
+  /lv_style_set_bg_opa\(&g_control_style\.style, control_fill_opa\(\)\);\s*lv_obj_report_style_change\(&g_control_style\.style\);/,
+  'a Circle strength change updates the shared press opacity');
 
 const host = await lvglHost(root);
 if (!host) {
@@ -90,10 +89,11 @@ int main() {
     opa = lv_obj_get_style_bg_opa(obj, LV_PART_MAIN);
     lv_obj_remove_state(obj, LV_STATE_PRESSED);
   };
+  // The controls follow the circle in every tile color mode.
   struct Case { const char* what; uint32_t card, icon; bool glow; uint8_t fill; bool tinted; };
   const Case cases[] = {
-    {"Global or Custom", 0x1B1B1B, 0xC62828, true, 0, false},
-    {"Custom in the icon's hue", 0x3E1717, 0xC62828, true, 0, false},
+    {"Global with the circle color", 0x1B1B1B, 0xC62828, true, 0, true},
+    {"Custom in the icon's hue", 0x3E1717, 0xC62828, true, 0, true},
     {"From icon with the circle color", 0x482F10, 0xEF8402, true, 20, true},
     {"From icon without the circle color", 0x482F10, 0xEF8402, false, 20, false},
     {"From icon with a white icon", 0x303030, 0xFFFFFF, true, 20, false},
@@ -106,15 +106,18 @@ int main() {
     tile_icon_source::refresh_controls(card);
     uint32_t color; lv_opa_t opa;
     pressed(previous, color, opa);
-    const uint8_t step = tile_icon_disc::contrast_step_for(c.card);
-    const int full = c.tinted ? icon_glow::disc_opa(icon_glow::kDefault) : icon_glow::neutral_opa(icon_glow::kDefault);
-    int expected = tile_icon_disc::scaled_opa(static_cast<lv_opa_t>(full), step);
-    if (expected < icon_glow::kControlMinOpa) expected = icon_glow::kControlMinOpa;
-    if (color != (c.tinted ? c.icon : 0xFFFFFFu) || opa != expected) {
+    const tone_color::Fill expected = tone_color::fill(c.card, c.icon, c.tinted, icon_glow::kDefault);
+    if (color != expected.color || opa != expected.control_opa) {
       std::printf("FAIL %s: #%06X @%d, expected #%06X @%d\n", c.what, (unsigned)color, opa,
-                  (unsigned)(c.tinted ? c.icon : 0xFFFFFFu), expected);
+                  (unsigned)expected.color, expected.control_opa);
       return 1;
     }
+    // On screen the press shows the control color over the card.
+    const uint32_t shown = tone_color::blend(c.card, color, opa);
+    if (shown != expected.control) { std::printf("FAIL %s shown #%06X\n", c.what, (unsigned)shown); return 1; }
+    { lv_style_value_t v;
+      assert(lv_obj_get_local_style_prop(previous, LV_STYLE_COLOR_FILTER_OPA, &v, LV_PART_MAIN | LV_STATE_PRESSED) ==
+             LV_STYLE_RES_FOUND && v.num == LV_OPA_TRANSP && "No theme darkening on press"); }
   }
   // A resting surface (the Climate target pill) takes the fill at rest, and
   // its nested - and + buttons take it while pressed.
@@ -129,21 +132,22 @@ int main() {
   tile_icon_disc::set_tag(disc, tile_icon_disc::Mode::On, true);
   tile_icon_source::set_icon_fill_marker(card, 20);
   tile_icon_source::refresh_controls(card);
-  if (rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) != 0xEF8402 ||
-      lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) < icon_glow::kControlMinOpa) {
+  const uint32_t pill_color = tone_color::fill(0x482F10, 0xEF8402, true, icon_glow::kDefault).color;
+  if (rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) != pill_color ||
+      lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) < tone_color::kControlMinOpa) {
     std::printf("FAIL resting surface: #%06X @%d\n", (unsigned)rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)),
                 lv_obj_get_style_bg_opa(pill, LV_PART_MAIN));
     return 1;
   }
   { uint32_t color; lv_opa_t opa; pressed(plus, color, opa);
-    if (color != 0xEF8402u) { std::printf("FAIL nested press: #%06X\n", (unsigned)color); return 1; } }
+    if (color != pill_color) { std::printf("FAIL nested press: #%06X\n", (unsigned)color); return 1; } }
   // Play is not touched.
   { lv_style_value_t v; assert(lv_obj_get_local_style_prop(play, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN | LV_STATE_PRESSED) != LV_STYLE_RES_FOUND); }
-  // A Glow strength of 0 keeps the press visible at the minimum.
+  // A Circle strength of 0 keeps the press visible at the minimum.
   configManager.cfg.icon_glow = 0;
   ui_surface_style::request_icon_disc_refresh();
   ui_surface_style::process_pending_updates();
-  { uint32_t color; lv_opa_t opa; pressed(previous, color, opa); assert(opa == icon_glow::kControlMinOpa); }
+  { uint32_t color; lv_opa_t opa; pressed(previous, color, opa); assert(opa == tone_color::kControlMinOpa); }
   std::printf("OK\n");
   return 0;
 }

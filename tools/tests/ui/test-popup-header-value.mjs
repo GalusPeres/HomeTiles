@@ -10,6 +10,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
+import {toneColorHost} from '../../lib/surface-style-host.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
@@ -134,9 +135,10 @@ extern "C" {LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECL
 #endif
 std::string getMdiChar(const char*){return "\xF3\xB0\x96\xAD";}
 // Surface styles are covered by the shell tests; this test needs geometry only.
+${toneColorHost(root)}
 namespace ui_surface_style {
 template<class T> void apply_radius(lv_obj_t* obj,T radius,lv_style_selector_t selector){lv_obj_set_style_radius(obj,static_cast<int32_t>(radius),selector);}
-inline void apply_global_tile_border(lv_obj_t*){}inline void apply_popup_border(lv_obj_t*,lv_color_t,lv_opa_t){}inline lv_opa_t icon_glow_opa(){return 64;}inline lv_opa_t icon_neutral_opa(){return 38;}inline bool icon_discs_shown(){return true;}
+inline void apply_global_tile_border(lv_obj_t*){}inline void apply_popup_border(lv_obj_t*,lv_color_t,lv_opa_t){}inline uint8_t icon_glow_percent(){return 25;}inline bool icon_discs_shown(){return true;}
 inline lv_color_t border_hint(lv_color_t c){return lv_color_mix(lv_color_white(),c,128);}
 }
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
@@ -214,16 +216,18 @@ int main(){
  lv_obj_set_style_text_color(light.parts.icon,lv_color_hex(0xFFC107),0);hide_popup_shell(sensor.parts.card);
  auto disc_opa=[]{return lv_obj_get_style_bg_opa(shell.icon_disc,LV_PART_MAIN);};
  auto disc_rgb=[]{return lv_color_to_u32(lv_obj_get_style_bg_color(shell.icon_disc,LV_PART_MAIN))&0xFFFFFFu;};
- show(light);render(display);assert(disc_rgb()==0xFFC107u&&disc_opa()>0&&"Without a tile a colored icon tints the disc");
+ // The circle color over the card (tone_color::fill), tinted or neutral.
+ auto expected=[](bool tinted){return tone_color::fill(lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN))&0xFFFFFFu,0xFFC107u,tinted,25).color;};
+ show(light);render(display);assert(disc_rgb()==expected(true)&&disc_opa()>0&&"Without a tile a colored icon tints the disc");
  hide_popup_shell(light.parts.card);popup_shell_use_tile_disc(false,true,false);show(light);render(display);
- assert(disc_rgb()==0xFFFFFFu&&disc_opa()>0&&"Without Circle in icon color the disc stays white");
- sync_popup_shell();assert(disc_rgb()==0xFFFFFFu&&"A re-sync keeps the tile options");
+ assert(disc_rgb()==expected(false)&&disc_opa()>0&&"Without Circle in icon color the disc stays neutral");
+ sync_popup_shell();assert(disc_rgb()==expected(false)&&"A re-sync keeps the tile options");
  hide_popup_shell(light.parts.card);popup_shell_use_tile_disc(true,false,true);show(light);render(display);
  assert(disc_opa()==LV_OPA_TRANSP&&"A tile with its circle off shows no disc");
  hide_popup_shell(light.parts.card);popup_shell_use_tile_disc(false,false,true);show(light);render(display);
- assert(disc_rgb()==0xFFC107u&&disc_opa()>0&&"Circle in icon color tints the disc");
+ assert(disc_rgb()==expected(true)&&disc_opa()>0&&"Circle in icon color tints the disc");
  hide_popup_shell(light.parts.card);show(light);render(display);
- assert(disc_rgb()==0xFFC107u&&disc_opa()>0&&"A popup without a tile returns to the default disc");
+ assert(disc_rgb()==expected(true)&&disc_opa()>0&&"A popup without a tile returns to the default disc");
  hide_popup_shell(light.parts.card);lv_obj_delete(sensor.parts.overlay);lv_obj_delete(light.parts.overlay);
  lv_deinit();std::cout<<SCREEN_WIDTH<<"x"<<SCREEN_HEIGHT<<": header value passed\n";
 }

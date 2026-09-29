@@ -1,8 +1,7 @@
 // The Climate tile's control pill and its pressed +/- buttons follow the
-// popup control rule (tile_icon_source::refresh_controls): the icon color only
-// with Tile color "From icon" and "Circle in icon color", else white, at the
-// disc opacity of the tile, instead of a fixed white overlay that ignored the
-// icon. The Web Admin preview uses the same rule.
+// popup control rule (tile_icon_source::refresh_controls): the circle's color
+// (tone_color::fill) at the control opacity, instead of a fixed white overlay
+// that ignored the icon. The Web Admin preview uses the same rule.
 import assert from 'node:assert/strict';
 import {readRepoFile} from '../../lib/admin-source.mjs';
 
@@ -31,5 +30,6 @@ const css = read('src/web/assets/admin.css');
 assert.match(css, /\.tile\.climate \.climate-slot-control \{[^}]*background:var\(--control-fill, rgba\(255,255,255,0\.094\)\);/,
   'Preview pill uses the control fill');
 const preview = read('src/web/admin/tiles/grid-preview.js');
-assert.match(preview, /const controlTinted = fill > 0 && tinted && !!iconRgb;\s*const controlOpa = Math\.max\(24, scaled\(controlTinted \? glowOpa : neutralOpa\)\) \/ 255;/);
+assert.ok(preview.includes("tileElem.style.setProperty('--control-fill', rgba(tone.controlOpa));"),
+  'Preview pill takes the circle color at the control opacity');
 console.log('Climate tile pill follows the popup control rule');

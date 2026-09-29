@@ -25,7 +25,7 @@ Every tile has these settings:
 
 - **Title:** optional label; press **Enter** for a second line. Both lines are centered together, and each line ends in `...` if it exceeds the available width. The display, popup header, and live preview follow the tile's size.
 - **Icon (MDI):** a [Material Design Icon](https://pictogrammers.com/library/mdi/) name. **Show icon list** opens the catalog.
-- **Icon color:** the icon's color; Reset restores the type's default. **Circle in icon color** tints the circle behind the icon. With **Tile color** set to **From icon**, it also tints the pressed close button and the **7D**, **24H** and **Today** buttons of the popup, in the Media popup the pressed previous, next and volume buttons and the filled part of the sliders, and on the Media tile the pressed previous and next buttons. With **Global** or **Custom**, without the option, and in the Climate, Light and Cover popups (they keep the global background), these stay neutral glass.
+- **Icon color:** the icon's color; Reset restores the type's default. **Circle in icon color** tints the circle behind the icon. The buttons take the circle's color: the pressed close button, **7D**, **24H** and **Today**, the fields of Number, Select and Date/Time, the PIN keys, in the Media popup the pressed previous, next and volume buttons and the sliders, and on the Media and Climate tiles their buttons. Without the option, circle and buttons stay neutral glass. Circle and buttons sit the same visible step above the tile for every color; an icon too dark to read on its circle is shown a little lighter in the same hue.
 - **Tile color:** **Global** uses the [global tile color](#global-settings), **Custom** your own color, and **From icon** tints the tile with the icon color. **Strength** sets how strongly.
 - **Column, Row, Width, Height:** grid position and size in half steps.
 
@@ -78,7 +78,7 @@ The **Global settings** below the preview apply to every tile on the display.
 | **Tile borders** | Draws a thin border around the tiles. Clock, Text, and Back tiles can switch it off individually. |
 | **Tile radius** | Corner radius of tiles, popups, and previews. The maximum makes half-height tiles fully round. |
 | **Icon circles** | Shows a circle behind every icon. A tile can switch its own circle off. |
-| **Circle strength** | Opacity of the icon circles, from 0 to 100 %. |
+| **Circle strength** | How far the icon circles and the buttons stand out from the tile, from 0 to 100 %. |
 | **Tile color** | Background of every tile whose tile color is **Global**. |
 
 New displays start with the maximum radius and the tile color `#1A1A1A`.

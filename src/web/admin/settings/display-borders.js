@@ -38,6 +38,8 @@ function applyIconDiscsPreview(enabled) {
   document.querySelectorAll('.global-icon-disc-toggle').forEach(input => {
     input.checked = !!enabled;
   });
+  // A dark icon is lifted against its circle or, without one, the tile.
+  document.querySelectorAll('.tile').forEach(tile => applyIconDiscTint(tile));
 }
 async function saveIconDiscs(enabled) {
   const wanted = !!enabled;

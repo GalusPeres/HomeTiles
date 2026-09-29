@@ -11,8 +11,15 @@ export function radiusPolicyHost(root, cellHeight = '145', gap = '16') {
     .replaceAll('Device::kGridCellH', cellHeight).replaceAll('Device::kGridGap', gap);
 }
 
+// The shared circle and control colors (tone_color.h), guarded so a harness
+// can take it more than once.
+export function toneColorHost(root) {
+  return '#include <math.h>\n#ifndef HOMETILES_TONE_COLOR_HOST\n#define HOMETILES_TONE_COLOR_HOST\n' +
+    strip(read(root, 'src/ui/shared/tone_color.h')) + '\n#endif\n';
+}
+
 export function surfaceStyleHost(root) {
-  return `void image_screensaver_config_changed() {}\n` +
+  return toneColorHost(root) + `void image_screensaver_config_changed() {}\n` +
     strip(read(root, 'src/ui/shared/ui_surface_style.h')) + '\n' +
     strip(read(root, 'src/ui/shared/ui_surface_style.cpp'));
 }

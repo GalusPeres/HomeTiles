@@ -160,10 +160,10 @@ lv_obj_t* find_disc(lv_obj_t* card) {
   return nullptr;
 }
 
-// The color the icon of a disc shows; white without an icon.
+// The color the icon of a disc was given; white without an icon.
 uint32_t disc_icon_rgb(lv_obj_t* disc) {
   lv_obj_t* icon = disc ? tile_icon_disc::icon_of(disc) : nullptr;
-  return icon ? lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF : 0xFFFFFF;
+  return icon ? tile_icon_disc::icon_color(icon) : 0xFFFFFF;
 }
 
 // Shows the tint tile_tint::choose() picked, or the card's own color.
@@ -317,9 +317,8 @@ void apply_initial(lv_obj_t* icon, const Tile& tile) {
   if (!icon) return;
   uint32_t fixed = 0xFFFFFF;
   if (tile.icon_colors.length()) tile_icon_colors::resolve(tile.icon_colors.c_str(), "", nullptr, fixed);
-  const lv_color_t value = lv_color_hex(fixed);
-  if (!lv_color_eq(lv_obj_get_style_text_color(icon, LV_PART_MAIN), value)) {
-    tile_icon_disc::set_icon_color(icon, value);
+  if (tile_icon_disc::icon_color(icon) != (fixed & 0xFFFFFF)) {
+    tile_icon_disc::set_icon_color(icon, lv_color_hex(fixed));
   }
 }
 
@@ -334,39 +333,27 @@ lv_obj_t* card_icon(lv_obj_t* card) {
 }
 
 namespace {
-// Tile color "From icon" of the card `obj` belongs to (`obj` or up to three
-// of its parents).
-bool tile_color_from_icon(lv_obj_t* obj) {
-  uint8_t marker = 0;
-  for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
-    if (icon_fill_marker(obj, marker)) return marker > 0;
-  }
-  return false;
-}
-
 // Hands the opening tile's circle options to the popup header. `obj` is the
-// tile card or its icon label. The popup's controls take the icon color only
-// when the popup shows the tile color and that is "From icon" (popup_shell.cpp
-// control_fill); popups with the global background pass false.
-void pass_popup_disc(lv_obj_t* obj, bool popup_shows_tile_color) {
+// tile card or its icon label. The popup's controls take the circle's color
+// (popup_shell.cpp control_fill).
+void pass_popup_disc(lv_obj_t* obj) {
   lv_obj_t* disc = obj ? tile_icon_disc::disc_of(obj) : nullptr;
   if (!disc && obj) disc = find_disc(obj);
   if (!disc) return;
   const tile_icon_disc::Mode mode = tile_icon_disc::mode_of(disc);
   popup_shell_use_tile_disc(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,
-                            tile_icon_disc::glow_of(disc),
-                            popup_shows_tile_color && tile_color_from_icon(obj));
+                            tile_icon_disc::glow_of(disc));
 }
 }  // namespace
 
 void forget_popup_source(lv_obj_t* obj) {
   remember_popup_source(nullptr);
-  pass_popup_disc(obj, false);
+  pass_popup_disc(obj);
 }
 
 uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
   remember_popup_source(obj);
-  pass_popup_disc(obj, true);
+  pass_popup_disc(obj);
   for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
     lv_style_value_t value;
     if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, kTintStore) != LV_STYLE_RES_FOUND) continue;
@@ -382,32 +369,24 @@ uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
 void refresh_controls(lv_obj_t* card) {
   if (!card) return;
   bool known = false;
-  bool tinted = false;
-  uint32_t rgb = 0xFFFFFF;
-  uint8_t step = 3;
+  lv_color_t color = lv_color_white();
   // Controls sit on the card or one level deeper (Climate - and + inside
   // their target pill).
   auto style = [&](lv_obj_t* obj) {
     const bool press = tile_icon_disc::is_control(obj);
     if (!press && !tile_icon_disc::is_surface(obj)) return;
     if (!known) {
+      // The controls take the circle's color: tinted exactly when the circle
+      // is (tone_color::fill).
       known = true;
       lv_obj_t* disc = find_disc(card);
-      uint8_t marker = 0;
-      rgb = disc_icon_rgb(disc);
-      tinted = disc && tile_icon_disc::glow_of(disc) && icon_fill_marker(card, marker) && marker > 0 &&
-               tile_icon_disc::icon_color_tints(rgb);
-      step = tile_icon_disc::contrast_step_for(lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) &
-                                               0xFFFFFF);
+      const uint32_t rgb = disc_icon_rgb(disc);
+      const bool tinted = disc && tile_icon_disc::glow_of(disc) && tile_icon_disc::icon_color_tints(rgb);
+      const uint32_t background = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
+      color = lv_color_hex(
+          tone_color::fill(background, rgb, tinted, ui_surface_style::icon_glow_percent()).color);
     }
-    const lv_style_selector_t selector = press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN;
-    const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
-    lv_style_value_t value;
-    if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, selector) != LV_STYLE_RES_FOUND ||
-        !lv_color_eq(value.color, color)) {
-      lv_obj_set_style_bg_color(obj, color, selector);
-    }
-    ui_surface_style::apply_control_fill(obj, tinted, step, selector);
+    ui_surface_style::apply_control_fill(obj, color, press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN);
   };
   const uint32_t count = lv_obj_get_child_count(card);
   for (uint32_t i = 0; i < count; ++i) {

@@ -45,9 +45,9 @@ assert.doesNotMatch(colorBody + discHandler.slice(0, discHandler.indexOf('\n}\n'
 // Device: discs use one shared opacity style that follows the option, so
 // cached and hidden grids update without a rebuild.
 const surface = read('src/ui/shared/ui_surface_style.cpp');
-assert.match(surface, /if \(follows_global && !configManager\.getConfig\(\)\.icon_discs\) return LV_OPA_TRANSP;/);
+assert.match(surface, /if \(key == kIconDiscGlobalKey && !configManager\.getConfig\(\)\.icon_discs\) return LV_OPA_TRANSP;/);
 assert.match(surface, /g_icon_disc_refresh_pending\.exchange\(false\)[\s\S]*lv_obj_report_style_change\(&entry\.style\);/);
-assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('ui_surface_style::apply_icon_disc(disc, false, 3, false, true);'));
+assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('ui_surface_style::apply_icon_disc(disc, false, true);'));
 
 // Device: every tile without its own color uses the global default color.
 assert.match(read('src/tiles/config/tile_config.cpp'), /uint32_t tileDefaultBgColor\(\) \{\s*return tile_color::normalize\(configManager\.getConfig\(\)\.default_tile_color\);/);
@@ -147,11 +147,10 @@ assert.doesNotMatch(css, /global-settings-rows|global-settings-label|global-sett
 // neutral hairline), and previewed live through --icon-glow-pct.
 const glow = read('src/core/config/icon_glow.h');
 for (const marker of ['inline constexpr uint8_t kMinimum = 0;', 'inline constexpr uint8_t kMaximum = 100;',
-  'return static_cast<uint8_t>((kNeutralOpa * clamp(percent) + kDefault / 2) / kDefault);',
-  'inline constexpr uint8_t kStep = 5;', 'inline constexpr uint8_t kDefault = 25;',
-  'return static_cast<uint8_t>((percent * 255 + 50) / 100);',
-  'inline uint8_t disc_opa(int percent) { return to_opa(clamp(percent)); }'])
+  'inline constexpr uint8_t kStep = 5;', 'inline constexpr uint8_t kDefault = 25;'])
   assert.ok(glow.includes(marker), `icon_glow.h: ${marker}`);
+// The percent is the shared circle opacity (tone_color.h).
+assert.ok(read('src/ui/shared/tone_color.h').includes('return static_cast<uint8_t>((percent * 255 + 50) / 100);'));
 assert.doesNotMatch(glow, /kBorderExtra|border_opa/, 'Borders take no glow');
 const configCpp = read('src/core/config/config_manager.cpp');
 for (const marker of ['config.icon_glow = icon_glow::clamp(prefs.getUChar("icon_glow", icon_glow::kDefault));',
@@ -163,7 +162,7 @@ const glowHandlers = read('src/web/server/handlers/web_admin_handlers.cpp');
 assert.match(glowHandlers, /void WebAdminServer::handleSaveIconGlow\(\) \{[\s\S]*?percent < icon_glow::kMinimum \|\| percent > icon_glow::kMaximum[\s\S]*?tiles_request_reload_all\(\);/);
 assert.ok(read('src/web/server/web_admin.cpp').includes('server.on("/api/display/icon-glow", HTTP_POST,'));
 const glowSurface = read('src/ui/shared/ui_surface_style.cpp');
-assert.ok(glowSurface.includes('return icon_glow::disc_opa(configManager.getConfig().icon_glow);'));
+assert.ok(glowSurface.includes('return tone_color::disc_opa(configManager.getConfig().icon_glow);'));
 assert.ok(!glowSurface.includes('icon_glow_border_opa'), 'No glow border opacity');
 const toOpa = p => Math.floor((p * 255 + 50) / 100);
 assert.deepEqual([toOpa(25), toOpa(45), toOpa(10), toOpa(80)], [64, 115, 26, 204], 'Default glow is minimally stronger (20 -> 25 %)');
@@ -174,9 +173,9 @@ for (const marker of ["document.documentElement.style.setProperty('--icon-glow-p
   "tabEl.querySelectorAll('.global-icon-glow').forEach(input => { input.value = String(glow); });"])
   assert.ok(displayJs.includes(marker), `display JS: ${marker}`);
 const glowTint = read('src/web/admin/tiles/grid-preview.js');
-assert.ok(glowTint.includes("const glowOpa = Math.floor((glowPct * 255 + 50) / 100);") &&
+assert.ok(glowTint.includes('const discOpa = Math.floor((Math.min(100, Math.max(0, percent)) * 255 + 50) / 100);') &&
   !glowTint.includes('glowBorderOpa'), 'Preview uses the device formula');
-assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes('html += "%;--icon-glow-pct:";'));
+assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes('html += "--icon-glow-pct:";'));
 
 // A stored built-in default grey (older editors saved it explicitly) follows
 // the global default tile color like an unset color, on the device and in

@@ -44,10 +44,11 @@ assert.ok(!shell.includes('ui_surface_style::apply_global_tile_border(parts.card
 // Preview: the same hint through --tile-border-tint at 20 %.
 const preview = read('src/web/admin/tiles/grid-preview.js');
 assert.ok(preview.includes("tileElem.style.setProperty('--tile-border-tint', 'rgba(' + hint.join(',') + ',0.20)');"));
-assert.ok(preview.includes('const hint = iconRgb.map(v => Math.floor(((255 * 128 + v * 127) * 0x8081) / 0x800000));'));
+assert.ok(preview.includes('const hint = given.map(v => Math.floor(((255 * 128 + v * 127) * 0x8081) / 0x800000));'));
 const css = read('src/web/assets/admin.css');
 assert.ok(css.includes('outline:1px solid var(--tile-border-tint, rgba(255,255,255,0.20));'));
-assert.equal((css.match(/background:rgba\(255,255,255,var\(--icon-disc-opa, 0\.149\)\);/g) || []).length, 2, 'Neutral discs are white');
+assert.equal((css.match(/background:var\(--icon-disc-bg, rgba\(255,255,255,0\.149\)\);/g) || []).length, 2,
+  'Discs take the circle color per tile, neutral by default');
 // LVGL mix == preview hint.
 const mix = (c1, c2, m) => Math.floor(((c1 * m + c2 * (255 - m)) * 0x8081) / 0x800000);
 for (const v of [0, 67, 128, 255]) {

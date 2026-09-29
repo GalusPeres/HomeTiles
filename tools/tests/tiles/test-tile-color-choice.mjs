@@ -119,10 +119,10 @@ expect('From icon ignores Tint tile', ([icon, rule, choice]) => icon === '#D63B3
 for (const marker of [
   "el.dataset.ruleTint = tint ? '1' : '0';",
   'if (fill) el.dataset.iconFill = String(fill);',
-  "tileTintChoice(false, '', 0, fill, '#' + iconRgb.map(v => v.toString(16).padStart(2, '0')).join(''))",
+  "tileTintChoice(false, '', 0, fill, givenHex)",
   'tileElem.style.background = tileTintBackground(base || \'#1A1A1A\', choice.color, choice.percent);',
   'tileElem.style.background = tileElem.dataset.baseBg;',
-  "if (input && input.dataset.unset === '1' && shown) {",
+  "if (input && input.dataset.unset === '1' && given) input.value = givenHex;",
 ]) assert.ok(grid.includes(marker), 'grid-preview: ' + marker);
 assert.ok(read('src/web/admin/tiles/icon-colors.js').includes("return tileTintChoice(true, color, layer.tile, 0, '');") &&
   read('src/web/admin/tiles/icon-colors.js').includes('if (parseIconColorRecord(record).fill) return null;'),

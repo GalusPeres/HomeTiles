@@ -35,15 +35,14 @@ void popup_shell_follow_tile_color(uint32_t color);
 // Off/Global/On and "Circle in icon color"), so the header disc looks like
 // the tile's disc. The next show_popup_shell() takes them; popups opened
 // without a tile keep the default disc (tinted by a colored icon, shown).
-// `from_icon`: the popup shows the tile color and that is "From icon".
-void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon = false);
+void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow);
 // The fill of the controls around the header for a popup (card) and icon
 // color, with the options of the tile that opens (or opened) the popup: the
-// icon color only with tile color "From icon" and "Circle in icon color",
-// else the neutral fill of a white icon, at least
-// popup_layout::kControlFillMinOpa. The pressed close button and the footer
-// controls (popup_nav_style.h) use it.
-void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa);
+// circle's color (tone_color::fill; the icon hue with "Circle in icon color",
+// else neutral) and its control opacity. The pressed close button, the footer
+// controls (popup_nav_style.h), the editors and the PIN keys use it.
+void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa,
+                              bool* tinted = nullptr);
 
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.

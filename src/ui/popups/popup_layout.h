@@ -194,25 +194,10 @@ constexpr int kCloseButtonClickArea = 8;
 constexpr int kHeaderIconDiscSize = scale(72);
 constexpr int kHeaderIconDiscGap = scale(16);
 constexpr int kHeaderIconDiscOpa = 38;
-// A colored header icon tints its disc like tile glow, with the global Glow
-// strength (ui_surface_style::icon_glow_opa, scaled). The card hairline is
-// the plain white 20 % tile border.
+// A colored header icon tints its disc like the tile's circle
+// (tone_color::fill, popup_shell.cpp header_fill). The card hairline is the
+// plain white 20 % tile border.
 constexpr int kPopupBorderOpa = 51;
-// Same contrast rule as tile_icon_disc::contrast_step_for/scaled_opa: the disc
-// is subtler on dark cards (8 % instead of 15 % at luma <= 0.08).
-inline uint8_t headerDiscContrastStep(uint32_t rgb) {
-  const float luma = (0.2126f * ((rgb >> 16) & 0xFF) + 0.7152f * ((rgb >> 8) & 0xFF) +
-                      0.0722f * (rgb & 0xFF)) / 255.0f;
-  float t = (luma - 0.08f) / 0.17f;
-  if (t < 0.0f) t = 0.0f;
-  if (t > 1.0f) t = 1.0f;
-  return static_cast<uint8_t>(t * 3.0f + 0.5f);
-}
-inline int headerDiscScaledOpa(int full, uint8_t step) { return (full * (24 + 7 * step) + 22) / 45; }
-// The controls around the header (pressed close, footer toggles, pills and
-// arrows) keep a press and a selection visible with the Glow strength near
-// zero (popup_shell.cpp control_fill).
-constexpr int kControlFillMinOpa = 24;
 constexpr int kHeaderIconX = 0;
 constexpr int kHeaderTitleX = kHeaderIconDiscSize + kHeaderIconDiscGap;
 

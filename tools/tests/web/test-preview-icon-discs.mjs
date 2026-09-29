@@ -18,7 +18,7 @@ assert.match(html, /if \(tile\.type == TILE_SCENE && !iconName\.length\(\) &&[\s
 assert.match(html, /tile_icon_disc::icon_color_tints\(binary_sensor_visual_color\(binary_sensor_state\)\)/);
 
 const page = `<!doctype html><html lang="en"><head><style>${readRepoFile('src/web/assets/admin.css')}
-:root{--icon-size:24px;--icon-disc-round:30px;--icon-disc-corner:34px;--compact-inset:2px;--tile-radius:11px;--icon-disc-opa:0.149;--icon-disc-glow:20%;--preview-cell-w:84px;--preview-cell-h:72px;--preview-gap:5px;}
+:root{--icon-size:24px;--icon-disc-round:30px;--icon-disc-corner:34px;--compact-inset:2px;--tile-radius:11px;--preview-cell-w:84px;--preview-cell-h:72px;--preview-gap:5px;}
 </style></head><body>
 <div id="tab-tiles-test" class="tile-tab"><div class="tile-grid">
 <div class="tile" id="test-tile-0" data-index="0" style="width:84px;height:72px"></div>
@@ -60,8 +60,10 @@ try{
  check(document.querySelector('#test-tile-3 .tile-icon.mdi-television'),'Half-height scene tiles show the entity icon too');
  const icon=scene.querySelector('.tile-icon').getBoundingClientRect();
  check(Math.abs(icon.width/2-parseFloat(disc(scene).left))<0.6,'Disc is centered on the icon');
- const white=c=>c.startsWith('rgba(255, 255, 255, 0.')&&parseFloat(c.split(',')[3])>=0.075&&parseFloat(c.split(',')[3])<=0.155;
- check(white(disc(scene).backgroundColor),'White icon keeps the white disc at the device opacity (8..15 % by tile luma)');
+ // A neutral circle (tone_color::fill): a grey at the Circle strength (25 %
+ // = opacity 64) over the tile, like the device.
+ const white=c=>{const v=c.slice(c.indexOf('(')+1,c.indexOf(')')).split(',').map(Number);return v.length===4&&v[0]===v[1]&&v[1]===v[2]&&Math.abs(v[3]-64/255)<0.01;};
+ check(white(disc(scene).backgroundColor),'White icon keeps a neutral disc at the device opacity: '+disc(scene).backgroundColor);
  // A colored icon tints its disc; glow off keeps it white.
  renderTileFromData('test',1,{type:1,title:'T',sensor_entity:'sensor.t',icon_name:'thermometer'},meta);
  const sensor=document.getElementById('test-tile-1');

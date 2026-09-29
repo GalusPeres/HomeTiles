@@ -1,7 +1,9 @@
 // Footer controls of the history popups (7D/24H/Today, date and day pills)
 // and the pressed close button share one control fill: the selected control
-// has exactly that fill (the icon color with tile color "From icon" and
-// "Circle in icon color", else white), the info pill and the slider track the same (regression: a half fill looked darker than 7D), and all labels stay white
+// has exactly that fill (the circle's color, tone_color::fill), a press shows
+// that same color without theme darkening, the info pill and the slider
+// track the same (regression: a half fill looked darker than 7D), and all
+// labels stay white
 // (regression: solid white pills brighter than the disc, and a white pill with
 // text cut out in the popup color). test-popup-shell-lvgl.mjs runs the fill.
 import assert from 'node:assert/strict';
@@ -44,8 +46,9 @@ assert.match(fn(energy, 'energy_popup_follow_tile_color'), /update_period_button
 // One control fill for the footer controls and the pressed close button.
 const shell = read('src/ui/popups/popup_shell.cpp');
 const tint = fn(shell, 'apply_header_disc_tint');
-assert.match(tint, /control_fill\(options, card, rgb, press_color, press_opa\);/);
-assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, press_color, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, press_opa, LV_STATE_PRESSED\);/);
+assert.match(tint, /const tone_color::Fill fill = header_fill\(options, card, rgb\);/);
+assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, color, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, fill\.control_opa, LV_STATE_PRESSED\);\s*lv_obj_set_style_color_filter_opa\(shell\.close, LV_OPA_TRANSP, LV_STATE_PRESSED\);/);
+assert.match(fn(shell, 'control_fill'), /const tone_color::Fill fill = header_fill\(options, card, rgb\);\s*color = lv_color_hex\(fill\.color\);\s*opa = fill\.control_opa;/);
 assert.match(fn(shell, 'popup_shell_control_fill'),
   /g_next_disc\.from_tile \? g_next_disc : shell\.disc;\s*control_fill\(options,/);
 // Media: previous, next and volume take the fill while pressed, both sliders
@@ -75,8 +78,10 @@ const cpp = String.raw`
 static lv_color_t g_disc_color = lv_color_white();
 static lv_opa_t g_disc_opa = 40;
 static uint32_t g_card = 0, g_icon = 0;
-void popup_shell_control_fill(uint32_t card, uint32_t icon, lv_color_t& color, lv_opa_t& opa) {
+static bool g_tinted = true;
+void popup_shell_control_fill(uint32_t card, uint32_t icon, lv_color_t& color, lv_opa_t& opa, bool* tinted) {
   g_card = card; g_icon = icon; color = g_disc_color; opa = g_disc_opa;
+  if (tinted) *tinted = g_tinted;
 }
 ${strip(read('src/ui/popups/popup_nav_style.h'))}
 using namespace popup_nav_style;
@@ -109,6 +114,7 @@ int main() {
         (rgb(lv_obj_get_style_text_color(label, LV_PART_MAIN)) == 0xFFFFFF), "unselected text white");
   lv_obj_add_state(btn, LV_STATE_PRESSED);
   check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == 54, "pressed shows the disc fill");
+  check(lv_obj_get_style_color_filter_opa(btn, LV_PART_MAIN) == LV_OPA_TRANSP, "pressed is not darkened");
   lv_obj_remove_state(btn, LV_STATE_PRESSED);
   // Info pill: the same fill as a selected toggle, white text.
   lv_obj_t* pill = lv_obj_create(lv_screen_active());
@@ -127,8 +133,10 @@ int main() {
   check(local(media_btn, LV_STYLE_BG_OPA, LV_PART_MAIN | LV_STATE_PRESSED) && v.num == 54, "media press opacity");
   check(local(media_btn, LV_STYLE_BG_COLOR, LV_PART_MAIN | LV_STATE_PRESSED) && rgb(v.color) == 0xFFB224,
         "media press color");
-  // Media sliders: the unused track like a pill, the used part in the
-  // control color, the knob untouched.
+  check(local(media_btn, LV_STYLE_COLOR_FILTER_OPA, LV_PART_MAIN | LV_STATE_PRESSED) && v.num == LV_OPA_TRANSP,
+        "media press is not darkened");
+  // Media sliders: the unused track like a pill, the used part in the icon
+  // color while the controls take its hue (else white), the knob untouched.
   lv_obj_t* slider = lv_slider_create(lv_screen_active());
   lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
   style_slider(slider, gold, sun);
@@ -137,7 +145,7 @@ int main() {
   check(local(slider, LV_STYLE_BG_OPA, LV_PART_INDICATOR) && v.num == LV_OPA_COVER, "slider used part opaque");
   check(local(slider, LV_STYLE_BG_COLOR, LV_PART_INDICATOR) && rgb(v.color) == 0xFFB224, "slider used part icon color");
   check(local(slider, LV_STYLE_BG_COLOR, LV_PART_KNOB) && rgb(v.color) == 0xFFFFFF, "slider knob stays white");
-  g_disc_color = lv_color_white(); g_disc_opa = 24;
+  g_disc_color = lv_color_white(); g_disc_opa = 24; g_tinted = false;
   style_slider(slider, gold, sun);
   check(local(slider, LV_STYLE_BG_OPA, LV_PART_MAIN) && v.num == 24, "neutral track has the toggle fill");
   check(local(slider, LV_STYLE_BG_COLOR, LV_PART_INDICATOR) && rgb(v.color) == 0xFFFFFF, "neutral used part white");

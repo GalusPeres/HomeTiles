@@ -42,13 +42,12 @@ lv_obj_t* card_icon(lv_obj_t* card);
 // discs that follow the background. Skips unchanged values.
 void refresh_card(lv_obj_t* card, const Tile& tile);
 
-// The control fill of a card's controls by the popup control rule: pressed
-// buttons (tile_icon_disc::mark_control; Media previous and next, Climate -
-// and +) and resting surfaces (mark_surface; the Climate target pill) take
-// the icon color only with tile color "From icon" and "Circle in icon color",
-// else the neutral fill of a white icon, at the disc opacity of the card's
-// contrast step. Every icon color, tint and circle change reaches it through
-// the discs.
+// The control fill of a card's controls: pressed buttons
+// (tile_icon_disc::mark_control; Media previous and next, Climate - and +)
+// and resting surfaces (mark_surface; the Climate target pill) take the
+// circle's color (tone_color::fill: the icon hue with "Circle in icon
+// color", else neutral) at the shared control opacity. Every icon color,
+// tint and circle change reaches it through the discs.
 void refresh_controls(lv_obj_t* card);
 
 // The background a popup inherits from its tile: the rules' tint when the

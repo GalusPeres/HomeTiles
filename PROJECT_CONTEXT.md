@@ -70,7 +70,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Bridge v0.6.44 (`148dec4`): stale icon cache fixed, overrides kept. v0.6.10 has `84511da` plus title/color fixes.
 - Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
-- Editable surfaces: popup control fill, white text; list = card, selection = surface; S3 arrow 20px.
+- Editable surfaces: control fill, white text; Select list = card + hairline, gap, inset selection.
 - Wi-Fi idle/reconnect gaps remain unfixed; findings/probes: `build/wifi-power-audit/VERIFICATION.md`.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
 - S3 froze adding Number to active screensaver: Web responded, save persisted; manual reboot. Older dump, cause unknown.
@@ -80,8 +80,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - v0.6.11: `3b534ab` shared frame/header/close with cached bodies; matching content stays visible, cold content waits for first frame. Close/switch/delete cancel work; PIN retained. Settings forms disposable, Camera preloaded.
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings in PSRAM, no extra framebuffers.
-- Popup/title fixes accepted on 8-inch, Guition S3, 4B and Tab5; native tests cover 17 profiles.
-- PIN popup title fixed (Tab5). Pending: artwork/controls, sleep/wake, camera/Hosted soak, memory minima.
+- Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
+- Colors: `tone_color.h` OKLCH steps (circle +0.06 L at 25 %), controls = circle, dark icons lifted; HW b109.
 
 ## Radius and half-grid
 

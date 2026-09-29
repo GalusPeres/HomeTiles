@@ -2,6 +2,7 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/config/icon_glow.h"
+#include "src/ui/shared/tone_color.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include <atomic>
 
@@ -26,41 +27,32 @@ constexpr int kRadiusStyleCount = 64;
 lv_style_t g_radius_styles[kRadiusStyleCount]{};
 bool g_radius_style_initialized[kRadiusStyleCount]{};
 
-// One shared opacity style per (white or glowing disc, contrast step 0..3,
-// follows the global disc option), plus the transparent Off style. The
-// opacity is computed from the global Glow strength and the global disc
-// option, so a change of either only updates these 17 styles
+// The shared opacities of the discs: always shown, following the global disc
+// option, Off. Discs carry their own color (tone_color::fill), so a change of
+// the Circle strength or the global option only updates these styles
 // (request_icon_disc_refresh) and every disc follows, also in cached grids.
 struct IconDiscStyle {
   lv_style_t style;
   bool initialized = false;
 };
-constexpr uint8_t kIconDiscGlowKey = 8;
-constexpr uint8_t kIconDiscOffKey = 16;
-constexpr int kIconDiscStyleCount = kIconDiscOffKey + 1;
+constexpr uint8_t kIconDiscShownKey = 0;
+constexpr uint8_t kIconDiscGlobalKey = 1;
+constexpr uint8_t kIconDiscOffKey = 2;
+constexpr int kIconDiscStyleCount = 3;
 IconDiscStyle g_icon_disc_styles[kIconDiscStyleCount]{};
-// The control fill opacity of tile controls per (tinted 4, contrast step
-// 0..3), updated with the disc styles.
-constexpr uint8_t kControlTintedKey = 4;
-IconDiscStyle g_control_styles[8]{};
+// The control opacity of tile controls, updated with the disc styles.
+IconDiscStyle g_control_style{};
 std::atomic<bool> g_icon_disc_refresh_pending{false};
 
 lv_opa_t icon_disc_opa(uint8_t key) {
   if (key == kIconDiscOffKey) return LV_OPA_TRANSP;
-  const bool follows_global = (key & 1) != 0;
-  if (follows_global && !configManager.getConfig().icon_discs) return LV_OPA_TRANSP;
-  const uint8_t glow = configManager.getConfig().icon_glow;
-  const unsigned full = (key & kIconDiscGlowKey) ? icon_glow::disc_opa(glow) : icon_glow::neutral_opa(glow);
-  const unsigned step = (key >> 1) & 3;
-  // tile_icon_disc::scaled_opa(): subtler on dark tiles.
-  return static_cast<lv_opa_t>((full * (24 + 7 * step) + 22) / 45);
+  if (key == kIconDiscGlobalKey && !configManager.getConfig().icon_discs) return LV_OPA_TRANSP;
+  return tone_color::disc_opa(configManager.getConfig().icon_glow);
 }
 
-lv_opa_t control_fill_opa(uint8_t key) {
-  const uint8_t glow = configManager.getConfig().icon_glow;
-  const unsigned full = (key & kControlTintedKey) ? icon_glow::disc_opa(glow) : icon_glow::neutral_opa(glow);
-  const unsigned opa = (full * (24 + 7 * (key & 3)) + 22) / 45;
-  return static_cast<lv_opa_t>(opa < icon_glow::kControlMinOpa ? icon_glow::kControlMinOpa : opa);
+lv_opa_t control_fill_opa() {
+  const uint8_t opa = tone_color::disc_opa(configManager.getConfig().icon_glow);
+  return opa > tone_color::kControlMinOpa ? opa : tone_color::kControlMinOpa;
 }
 
 void apply_style(lv_obj_t* obj, bool enabled) {
@@ -198,12 +190,8 @@ void apply_global_tile_border(lv_obj_t* obj) {
   apply_style(obj, configManager.getConfig().tile_borders);
 }
 
-lv_opa_t icon_glow_opa() {
-  return icon_glow::disc_opa(configManager.getConfig().icon_glow);
-}
-
-lv_opa_t icon_neutral_opa() {
-  return icon_glow::neutral_opa(configManager.getConfig().icon_glow);
+uint8_t icon_glow_percent() {
+  return icon_glow::clamp(configManager.getConfig().icon_glow);
 }
 
 bool icon_discs_shown() { return configManager.getConfig().icon_discs; }
@@ -225,11 +213,9 @@ void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {
     lv_obj_set_style_outline_opa(obj, target, 0);
 }
 
-void apply_icon_disc(lv_obj_t* obj, bool glow, uint8_t step, bool off, bool follows_global) {
+void apply_icon_disc(lv_obj_t* obj, bool off, bool follows_global) {
   if (!obj) return;
-  const uint8_t key = off ? kIconDiscOffKey
-                          : static_cast<uint8_t>((glow ? kIconDiscGlowKey : 0) | ((step & 3) << 1) |
-                                                 (follows_global ? 1 : 0));
+  const uint8_t key = off ? kIconDiscOffKey : follows_global ? kIconDiscGlobalKey : kIconDiscShownKey;
   IconDiscStyle& target = g_icon_disc_styles[key];
   if (!target.initialized) {
     lv_style_init(&target.style);
@@ -246,19 +232,26 @@ void apply_icon_disc(lv_obj_t* obj, bool glow, uint8_t step, bool off, bool foll
   lv_obj_add_style(obj, &target.style, 0);
 }
 
-void apply_control_fill(lv_obj_t* obj, bool tinted, uint8_t step, lv_style_selector_t selector) {
+void apply_control_fill(lv_obj_t* obj, lv_color_t color, lv_style_selector_t selector) {
   if (!obj) return;
-  const uint8_t key = static_cast<uint8_t>((tinted ? kControlTintedKey : 0) | (step & 3));
-  IconDiscStyle& target = g_control_styles[key];
-  if (!target.initialized) {
-    lv_style_init(&target.style);
-    lv_style_set_bg_opa(&target.style, control_fill_opa(key));
-    target.initialized = true;
+  if (!g_control_style.initialized) {
+    lv_style_init(&g_control_style.style);
+    lv_style_set_bg_opa(&g_control_style.style, control_fill_opa());
+    g_control_style.initialized = true;
   }
-  for (IconDiscStyle& entry : g_control_styles) {
-    if (entry.initialized && &entry != &target) lv_obj_remove_style(obj, &entry.style, selector);
+  lv_style_value_t value;
+  if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, selector) != LV_STYLE_RES_FOUND ||
+      !lv_color_eq(value.color, color)) {
+    lv_obj_set_style_bg_color(obj, color, selector);
   }
-  lv_obj_add_style(obj, &target.style, selector);
+  // The pressed fill is exactly the control color: no theme darkening.
+  if ((selector & LV_STATE_PRESSED) &&
+      (lv_obj_get_local_style_prop(obj, LV_STYLE_COLOR_FILTER_OPA, &value, selector) != LV_STYLE_RES_FOUND ||
+       value.num != LV_OPA_TRANSP)) {
+    lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, selector);
+  }
+  // LVGL replaces an existing identical style/selector when adding it again.
+  lv_obj_add_style(obj, &g_control_style.style, selector);
 }
 
 void request_global_tile_border_refresh() {
@@ -292,11 +285,9 @@ void process_pending_updates() {
       lv_style_set_bg_opa(&entry.style, icon_disc_opa(static_cast<uint8_t>(key)));
       lv_obj_report_style_change(&entry.style);
     }
-    for (uint8_t key = 0; key < 8; ++key) {
-      IconDiscStyle& entry = g_control_styles[key];
-      if (!entry.initialized) continue;
-      lv_style_set_bg_opa(&entry.style, control_fill_opa(key));
-      lv_obj_report_style_change(&entry.style);
+    if (g_control_style.initialized) {
+      lv_style_set_bg_opa(&g_control_style.style, control_fill_opa());
+      lv_obj_report_style_change(&g_control_style.style);
     }
   }
   if (!g_global_tile_border_refresh_pending) return;

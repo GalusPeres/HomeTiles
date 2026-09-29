@@ -96,14 +96,10 @@ void appendPreviewScaleVars(String& html) {
   html += "  <style>:root{";
   emit_exact("compact-inset", compact_sensor_layout::inset());
   emit_exact("icon-disc-round", tile_icon_disc::round_diameter());
-  // Disc opacities shared with the device (the global Glow strength, which
-  // applyIconDiscTint reads from --icon-glow-pct).
+  // The global Circle strength; applyIconDiscTint derives every circle
+  // from it like the device (tone_color.h).
   const uint8_t glow = icon_glow::clamp(configManager.getConfig().icon_glow);
-  html += "--icon-disc-opa:";
-  html += String(icon_glow::neutral_opa(glow) / 255.0f, 3);
-  html += ";--icon-disc-glow:";
-  html += String(icon_glow::disc_opa(glow) * 100.0f / 255.0f, 1);
-  html += "%;--icon-glow-pct:";
+  html += "--icon-glow-pct:";
   html += String(glow);
   html += ";";
   emit_exact("compact-text-gap", compact_sensor_layout::text_gap());

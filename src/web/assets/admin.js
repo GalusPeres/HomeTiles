@@ -68,6 +68,8 @@ function applyIconDiscsPreview(enabled) {
   document.querySelectorAll('.global-icon-disc-toggle').forEach(input => {
     input.checked = !!enabled;
   });
+  // A dark icon is lifted against its circle or, without one, the tile.
+  document.querySelectorAll('.tile').forEach(tile => applyIconDiscTint(tile));
 }
 async function saveIconDiscs(enabled) {
   const wanted = !!enabled;
@@ -7079,20 +7081,93 @@ function syncTileRadiusControls(tabEl) {
       return Math.max(0, Math.min(255, Math.round(v)));
     });
   }
+  // Mirrors src/ui/shared/tone_color.h: the circle and the controls sit a
+  // fixed step of perceived lightness (OKLCH L) above the card in the icon's
+  // hue (white icons: neutral); a dark icon is shown lighter in its own hue.
+  function toneToLinear(v) {
+    v /= 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  }
+  function toneToSrgb(v) {
+    if (v <= 0) return 0;
+    if (v >= 1) return 255;
+    return Math.floor((v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) * 255 + 0.5);
+  }
+  function toneOklch(rgb) {
+    const [r, g, b] = rgb.map(toneToLinear);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    const A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+    const B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+    return { L: 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, C: Math.hypot(A, B), h: Math.atan2(B, A) };
+  }
+  function toneLinear(L, C, h) {
+    const A = C * Math.cos(h), B = C * Math.sin(h);
+    const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+    const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+    const s = (L - 0.0894841775 * A - 1.2914855480 * B) ** 3;
+    return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+  }
+  function toneRgb(L, C, h) {
+    L = Math.min(1, Math.max(0, L));
+    const fits = c => toneLinear(L, c, h).every(v => v >= -0.0005 && v <= 1.0005);
+    if (!fits(C)) {
+      let lo = 0, hi = C;
+      for (let i = 0; i < 16; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+      C = lo;
+    }
+    return toneLinear(L, C, h).map(toneToSrgb);
+  }
+  function toneBlend(under, over, opa) {
+    return under.map((v, i) => Math.floor((v * (255 - opa) + over[i] * opa + 127) / 255));
+  }
+  // tone_color::fill(): the color drawn at the circle and control opacities.
+  // 0.06 L at the default 25 %; controls at least 0.03 (opacity 32); the
+  // circle keeps 55 % of the icon's chroma.
+  function toneFill(card, icon, tinted, percent) {
+    const discOpa = Math.floor((Math.min(100, Math.max(0, percent)) * 255 + 50) / 100);
+    const controlOpa = Math.max(discOpa, 32);
+    const step = discOpa > 32 ? percent * 0.0024 : 0.03;
+    const base = toneOklch(card), seed = toneOklch(icon);
+    const target = toneRgb(base.L + step, tinted ? seed.C * 0.55 : 0, seed.h);
+    const color = card.map((under, i) => {
+      const delta = (target[i] - under) * 255;
+      return Math.min(255, Math.max(0, under + Math.trunc((delta + (delta >= 0 ? 1 : -1) * Math.floor(controlOpa / 2)) / controlOpa)));
+    });
+    return { color, discOpa, controlOpa, disc: toneBlend(card, color, discOpa), tinted };
+  }
+  // tone_color::readable_icon(): unchanged while at least 0.22 L above the
+  // circle, else lighter in its own hue.
+  function toneReadableIcon(icon, circle) {
+    const seed = toneOklch(icon);
+    const minimum = toneOklch(circle).L + 0.22;
+    return seed.L >= minimum ? icon : toneRgb(minimum, seed.C, seed.h);
+  }
+  function toneHex(rgb) {
+    return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
+  }
   function applyIconDiscTint(tileElem) {
     const icon = tileElem?.querySelector(':scope > .tile-icon');
     if (!icon) return;
     const glow = tileElem.dataset.iconGlow !== '0';
+    // The color the icon was given (tile_icon_disc::icon_color): a shown
+    // readability lift is remembered, a new color from the editor replaces it.
+    const current = cssColorChannels(getComputedStyle(icon).color);
+    const currentHex = current ? toneHex(current) : '';
+    const given = icon.dataset.toneShown && icon.dataset.toneShown === currentHex && icon.dataset.toneGiven
+      ? icon.dataset.toneGiven.slice(1).match(/../g).map(v => parseInt(v, 16))
+      : current;
+    const givenHex = given ? toneHex(given) : '';
     // Mirrors tile_icon_source.cpp on_icon_color(): with Tile color "From
-    // icon color" the tile takes the color the icon shows; grey and white
+    // icon color" the tile takes the color the icon was given; grey and white
     // icons (off, default) keep the untinted background (tile_tint::choose).
     const fill = Number(tileElem.dataset.iconFill || 0);
     if (fill && tileElem.dataset.ruleTint !== '1' && typeof tileTintBackground === 'function' &&
         typeof tileTintChoice === 'function') {
-      const iconRgb = cssColorChannels(getComputedStyle(icon).color);
-      const choice = iconRgb
-        ? tileTintChoice(false, '', 0, fill, '#' + iconRgb.map(v => v.toString(16).padStart(2, '0')).join(''))
-        : null;
+      const choice = given ? tileTintChoice(false, '', 0, fill, givenHex) : null;
       if (choice) {
         const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
         tileElem.style.background = tileTintBackground(base || '#1A1A1A', choice.color, choice.percent);
@@ -7105,47 +7180,47 @@ function syncTileRadiusControls(tabEl) {
     // sensor); only picking a color stores a fixed one.
     if (typeof currentTileTab === 'string' && tileElem.id === currentTileTab + '-tile-' + currentTileIndex) {
       const input = document.getElementById(currentTileTab + '_tile_icon_color');
-      const shown = cssColorChannels(getComputedStyle(icon).color);
-      if (input && input.dataset.unset === '1' && shown) {
-        input.value = '#' + shown.map(v => v.toString(16).padStart(2, '0')).join('');
-      }
+      if (input && input.dataset.unset === '1' && given) input.value = givenHex;
     }
-    // Mirrors tile_icon_disc::contrast_step_for()/scaled_opa(): discs are
-    // subtler on dark tiles (8 % instead of 15 % at luma <= 0.08) in 4 steps.
-    const bg = cssColorChannels(getComputedStyle(tileElem).backgroundColor);
-    const iconRgb = cssColorChannels(getComputedStyle(icon).color);
-    const tinted = glow && iconDiscTinted(getComputedStyle(icon).color);
+    const tinted = glow && !!given && iconDiscTinted('rgb(' + given.join(',') + ')');
     icon.classList.toggle('tile-icon-tinted', tinted);
     // Mirrors ui_surface_style::border_hint(): a glowing icon gives the tile
     // outline its hue halfway to white (lv_color_mix(white, icon, 128)) at the
     // hairline's 20 %, mostly the tile with a hint of the icon.
-    if (tinted && iconRgb) {
-      const hint = iconRgb.map(v => Math.floor(((255 * 128 + v * 127) * 0x8081) / 0x800000));
+    if (tinted) {
+      const hint = given.map(v => Math.floor(((255 * 128 + v * 127) * 0x8081) / 0x800000));
       tileElem.style.setProperty('--tile-border-tint', 'rgba(' + hint.join(',') + ',0.20)');
     } else {
       tileElem.style.removeProperty('--tile-border-tint');
     }
-    const luma = bg ? (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255 : 1;
-    const step = Math.floor(Math.min(1, Math.max(0, (luma - 0.08) / 0.17)) * 3 + 0.5);
-    const scaled = full => Math.floor((full * (24 + 7 * step) + 22) / 45);
-    // Global Glow strength (icon_glow.h, 0..100 %): the glowing disc at that
-    // percentage and the white disc scaled with it (38 at 25 %), both scaled
-    // like the device.
+    // Global Circle strength (icon_glow.h, 0..100 %).
     const glowRaw = String(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct')).trim();
     const glowValue = glowRaw === '' ? 25 : Number(glowRaw);
     const glowPct = Math.min(100, Math.max(0, Number.isFinite(glowValue) ? glowValue : 25));
-    const neutralOpa = Math.floor((38 * glowPct + 12) / 25);
-    tileElem.style.setProperty('--icon-disc-opa', (scaled(neutralOpa) / 255).toFixed(3));
-    const glowOpa = Math.floor((glowPct * 255 + 50) / 100);
-    tileElem.style.setProperty('--icon-disc-glow', (scaled(glowOpa) * 100 / 255).toFixed(1) + '%');
+    const card = cssColorChannels(getComputedStyle(tileElem).backgroundColor) || [0, 0, 0];
+    const tone = toneFill(card, given || [255, 255, 255], tinted, glowPct);
+    const rgba = opa => 'rgba(' + tone.color.join(',') + ',' + (opa / 255).toFixed(3) + ')';
+    tileElem.style.setProperty('--icon-disc-bg', rgba(tone.discOpa));
     // Mirrors tile_icon_source::refresh_controls(): tile controls (the
-    // Climate target pill) take the icon color only with Tile color "From
-    // icon" and "Circle in icon color", else white, at the disc opacity and
-    // at least icon_glow::kControlMinOpa (24).
-    const controlTinted = fill > 0 && tinted && !!iconRgb;
-    const controlOpa = Math.max(24, scaled(controlTinted ? glowOpa : neutralOpa)) / 255;
-    tileElem.style.setProperty('--control-fill', 'rgba(' + (controlTinted ? iconRgb.join(',') : '255,255,255') +
-      ',' + controlOpa.toFixed(3) + ')');
+    // Climate target pill) take the circle's color at the control opacity.
+    tileElem.style.setProperty('--control-fill', rgba(tone.controlOpa));
+    // The icon, readable on its circle (or on the tile without one).
+    if (!given) return;
+    const mode = tileElem.dataset.iconDisc || '0';
+    const shown = mode === '1' || (mode === '0' && !tileElem.closest('.icon-discs-off'));
+    const readable = toneReadableIcon(given, shown && tone.discOpa ? tone.disc : card);
+    const readableHex = toneHex(readable);
+    if (readableHex === givenHex) {
+      if (icon.dataset.toneShown) {
+        delete icon.dataset.toneShown;
+        delete icon.dataset.toneGiven;
+        icon.style.color = givenHex;
+      }
+    } else {
+      icon.dataset.toneGiven = givenHex;
+      icon.dataset.toneShown = readableHex;
+      icon.style.color = readableHex;
+    }
   }
   // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
   // default grey (stored explicitly by older editors) follow the global

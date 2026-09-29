@@ -618,8 +618,11 @@ void WebAdminServer::handleSaveIconDiscs() {
     return;
   }
   // Shared disc styles update every grid, including cached and screensaver
-  // tiles, on the next safe UI pass. This handler does not touch LVGL.
+  // tiles, on the next safe UI pass; the icon refresh shows dark icons
+  // readable on the tile or their circle again. This handler does not touch
+  // LVGL.
   ui_surface_style::request_icon_disc_refresh();
+  tiles_request_icon_refresh();
   server.send(200, "application/json",
               enabled ? "{\"success\":true,\"enabled\":true}"
                       : "{\"success\":true,\"enabled\":false}");

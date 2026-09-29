@@ -1389,10 +1389,8 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
     lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, LV_STATE_PRESSED);
     lv_obj_t* icon = lv_obj_get_child(btn, 0);
     if (icon) {
-      // Enabled arrows are dimmed like the unselected footer controls.
       lv_obj_set_style_text_color(icon, enabled ? lv_color_white() : nav_inactive_color, 0);
       lv_obj_set_style_text_color(icon, enabled ? lv_color_white() : nav_inactive_color, LV_STATE_PRESSED);
-      lv_obj_set_style_text_opa(icon, enabled ? popup_nav_style::kDimTextOpa : LV_OPA_COVER, 0);
     }
     lv_color_t pressed_color;
     lv_opa_t pressed_opa;

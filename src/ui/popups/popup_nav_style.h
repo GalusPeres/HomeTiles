@@ -9,12 +9,9 @@ void popup_shell_disc_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& col
 // Footer controls of the history popups (7D/24H/Today and the date and day
 // pills) match the header icon disc: the selected control has exactly its
 // fill (white, or the icon color with "Circle in icon color", at the Glow
-// strength), an info pill half of it. Only the selected control has full
-// white text; the others are dimmed.
+// strength), an info pill half of it. All their text is white.
 namespace popup_nav_style {
 
-inline constexpr lv_opa_t kDimTextOpa = 178;   // 70 %
-inline constexpr lv_opa_t kPillTextOpa = 200;  // 78 %
 // Keeps the selection visible with the Glow strength near zero.
 inline constexpr lv_opa_t kMinSelectedOpa = 24;
 
@@ -23,8 +20,8 @@ inline void fill(lv_color_t popup, lv_color_t icon, lv_color_t& color, lv_opa_t&
   if (opa < kMinSelectedOpa) opa = kMinSelectedOpa;
 }
 
-// A toggle (7D, 24H, Today): the selected one has the disc fill and white
-// text, the others only their dimmed label; pressing shows the disc fill.
+// A toggle (7D, 24H, Today): the selected one has the disc fill, the others
+// only their white label; pressing shows the disc fill.
 inline void style_toggle(lv_obj_t* btn, lv_obj_t* label, lv_color_t popup, lv_color_t icon, bool selected) {
   if (!btn) return;
   lv_color_t color;
@@ -43,14 +40,13 @@ inline void style_toggle(lv_obj_t* btn, lv_obj_t* label, lv_color_t popup, lv_co
     lv_obj_set_style_transform_height(btn, 0, selector);
     lv_obj_set_style_translate_y(btn, 0, selector);
   }
-  // Only the button gets the pressed state, so its label keeps one style.
   if (label) {
     lv_obj_set_style_text_color(label, lv_color_white(), 0);
-    lv_obj_set_style_text_opa(label, selected ? LV_OPA_COVER : kDimTextOpa, 0);
+    lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
   }
 }
 
-// An info pill (date range, day title): half the disc fill, softer text.
+// An info pill (date range, day title): half the disc fill, white text.
 inline void style_pill(lv_obj_t* pill, lv_obj_t* label, lv_color_t popup, lv_color_t icon) {
   lv_color_t color;
   lv_opa_t opa;
@@ -61,7 +57,7 @@ inline void style_pill(lv_obj_t* pill, lv_obj_t* label, lv_color_t popup, lv_col
   }
   if (label) {
     lv_obj_set_style_text_color(label, lv_color_white(), 0);
-    lv_obj_set_style_text_opa(label, kPillTextOpa, 0);
+    lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
   }
 }
 

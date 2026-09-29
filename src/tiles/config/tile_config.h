@@ -220,6 +220,12 @@ static inline bool tileBorderEnabled(const Tile& tile) {
          tile.sensor_display_mode != 1;
 }
 
+// Weather uses the same byte for its icons: 0 draws filled, colored weather
+// icons, 1 the white MDI outlines.
+static inline bool weatherColoredIcons(const Tile& tile) {
+  return tile.type != TILE_WEATHER || tile.sensor_display_mode != 1;
+}
+
 // Climate tile content is packed into sensor_gauge_min. Climate tiles do not
 // use the sensor gauge range, so this preserves the existing V7 storage layout
 // while allowing six independently configurable 4-bit slots.

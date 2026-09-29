@@ -347,7 +347,27 @@ struct WeatherPopupContext {
   ForecastWidgets forecast[kCols];
   ForecastData forecast_data[kCols];
   HourlyForecastData hourly[kHourlyForecastMax];
+  // Weather setting "Colored weather icons", and whether a rule forces the
+  // tile icon color (the header icon then shows that color on all layers).
+  bool colored_icons = true;
+  bool icon_forced = false;
+  uint8_t rendered_icon_key = 0;
+  // Sunrise and sunset of the current payload for night icons.
+  weather_icons::SunTimes sun;
 };
+
+static uint8_t icon_style_key(bool colored, bool forced) {
+  return static_cast<uint8_t>((colored ? 1 : 0) | (forced ? 2 : 0));
+}
+
+static weather_icons::Style forecast_icon_style(const WeatherPopupContext* ctx) {
+  return ctx->colored_icons ? weather_icons::Style::Colored : weather_icons::Style::Outline;
+}
+
+static weather_icons::Style header_icon_style(const WeatherPopupContext* ctx) {
+  if (!ctx->colored_icons) return weather_icons::Style::Outline;
+  return ctx->icon_forced ? weather_icons::Style::Single : weather_icons::Style::Colored;
+}
 
 struct PendingWeatherUpdate {
   String entity_id;
@@ -866,7 +886,7 @@ static void update_forecast_graph(WeatherPopupContext* ctx) {
 
     if (fw.icon_label) {
       if (data.active && data.icon.length()) {
-        String icon_char = weather_icons::text(data.icon);
+        String icon_char = weather_icons::text(data.icon, forecast_icon_style(ctx));
         if (icon_char.length()) {
           lv_label_set_text(fw.icon_label, icon_char.c_str());
           lv_obj_clear_flag(fw.icon_label, LV_OBJ_FLAG_HIDDEN);
@@ -2068,7 +2088,7 @@ static bool update_detail_view(WeatherPopupContext* ctx, int day_index) {
   }
   String now_marker_icon_char;
   const bool now_marker_has_renderable_icon =
-      now_marker_has_icon && (now_marker_icon_char = weather_icons::text(now_marker_icon)).length();
+      now_marker_has_icon && (now_marker_icon_char = weather_icons::text(now_marker_icon, forecast_icon_style(ctx))).length();
   bool hide_marker_time_for_now[kDetailMarkerCount] = {};
   bool hide_marker_icon_for_now[kDetailMarkerCount] = {};
   bool hide_marker_temp_for_now[kDetailMarkerCount] = {};
@@ -2166,7 +2186,7 @@ static bool update_detail_view(WeatherPopupContext* ctx, int day_index) {
         lv_label_set_text(ctx->detail_icon_labels[marker], "");
         lv_obj_add_flag(ctx->detail_icon_labels[marker], LV_OBJ_FLAG_HIDDEN);
       } else if (marker_has_icon[marker]) {
-        String icon_char = weather_icons::text(marker_icon[marker]);
+        String icon_char = weather_icons::text(marker_icon[marker], forecast_icon_style(ctx));
         if (icon_char.length()) {
           lv_label_set_text(ctx->detail_icon_labels[marker], icon_char.c_str());
           lv_obj_set_pos(ctx->detail_icon_labels[marker],
@@ -2504,6 +2524,10 @@ static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
   String condition;
   String icon_name;
   resolve_weather_visual_fields(json, condition, icon_name);
+  // Home Assistant reports partly cloudy and sunny at night too; the bridge
+  // sun times switch them (and the hourly icons) to their night icons.
+  weather_icons::parse_sun(json.c_str(), ctx->sun);
+  icon_name = weather_icons::for_now(icon_name, ctx->sun);
 
   float temperature = 0.0f;
   bool has_temp = extract_json_number_or_string_field(json, "temperature", temperature);
@@ -2535,7 +2559,7 @@ static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
 
   if (ctx->icon_label) {
     if (icon_name.length()) {
-      String iconChar = weather_icons::text(icon_name);
+      String iconChar = weather_icons::text(icon_name, header_icon_style(ctx));
       if (iconChar.length()) {
         lv_label_set_text(ctx->icon_label, iconChar.c_str());
         lv_obj_clear_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
@@ -2748,6 +2772,9 @@ static bool parse_hourly_weather_object(WeatherPopupContext* ctx,
   hour.date_local = h_date_local;
   hour.hour_local = static_cast<int>(lroundf(h_hour_local));
   hour.icon = h_icon;
+  if (weather_icons::is_night(ctx->sun, hour.date_local.c_str(), hour.hour_local * 60 + 30)) {
+    hour.icon = weather_icons::at_night(hour.icon);
+  }
   hour.has_temp =
       extract_json_number_or_string_field(obj, "temperature", h_temp) ||
       extract_json_number_or_string_field(obj, "t", h_temp);
@@ -2856,6 +2883,8 @@ static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupIn
   apply_card_color(ctx, init.bg_color);
   // The header icon takes the tile icon's color; the shell tints its disc.
   if (ctx->icon_label) lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);
+  ctx->colored_icons = init.colored_icons;
+  ctx->icon_forced = init.icon_forced;
   if (ctx->location_label) {
     String title = ctx->title;
     title.trim();
@@ -3982,9 +4011,12 @@ static void finish_weather_popup_open() {
 
   bool same_rendered_entity = false;
   if (g_weather_popup_ctx && g_weather_popup_ctx->overlay && g_weather_popup_ctx->card) {
+    // Changed icon settings rebuild the content like another entity.
     same_rendered_entity =
         g_weather_popup_ctx->has_rendered_data &&
-        g_weather_popup_ctx->rendered_entity_id.equalsIgnoreCase(init.entity_id);
+        g_weather_popup_ctx->rendered_entity_id.equalsIgnoreCase(init.entity_id) &&
+        g_weather_popup_ctx->rendered_icon_key ==
+            icon_style_key(init.colored_icons, init.icon_forced);
     if (!same_rendered_entity) {
       // Clear the many child widgets while their parent is hidden. This avoids
       // exposing stale data from another entity and suppresses invalidation.
@@ -4318,6 +4350,8 @@ void process_weather_popup_queue() {
       g_weather_popup_ctx->has_rendered_data = true;
       g_weather_popup_ctx->rendered_language =
           i18n::normalize_language_code(configManager.getConfig().language);
+      g_weather_popup_ctx->rendered_icon_key = icon_style_key(
+          g_weather_popup_ctx->colored_icons, g_weather_popup_ctx->icon_forced);
       Serial.printf("[WeatherPopup] UI built in %u ms (%s)\n",
                     static_cast<unsigned>(millis() - started_ms),
                     is_popup_visible(g_weather_popup_ctx) ? "visible"
@@ -4376,5 +4410,7 @@ void weather_popup_refresh_language() {
   }
   build_weather_ui(g_weather_popup_ctx, selected_date, previous_mode);
   g_weather_popup_ctx->rendered_language = language;
+  g_weather_popup_ctx->rendered_icon_key = icon_style_key(
+      g_weather_popup_ctx->colored_icons, g_weather_popup_ctx->icon_forced);
   lv_obj_invalidate(g_weather_popup_ctx->card);
 }

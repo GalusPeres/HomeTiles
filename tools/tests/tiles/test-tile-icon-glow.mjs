@@ -35,12 +35,12 @@ for (const marker of [
 ]) assert.ok(disc.includes(marker), `tile_icon_disc: ${marker}`);
 assert.ok(read('src/tiles/runtime/tile_renderer.cpp').includes(
   'tile_icon_disc::apply_tile_options(tile_obj, tile.icon_disc_mode, tile.icon_glow);'));
-// Runtime icon color changes (light/switch, climate, binary sensor, cover)
+// Runtime icon color changes (light/switch, climate, weather, binary sensor, cover)
 // go through set_icon_color; nothing recolors a tile icon directly. The
 // binary sensor state color reaches it through the per-tile icon color rules
 // (tile_icon_color_rules::apply), which call set_icon_color.
 assert.ok(code(read('src/tiles/runtime/tile_icon_color_rules.h')).includes('tile_icon_disc::set_icon_color(icon, color);'));
-for (const [file, count] of [['src/tiles/runtime/tile_renderer.cpp', 2],
+for (const [file, count] of [['src/tiles/runtime/tile_renderer.cpp', 3],
                              ['src/types/binary_sensor/renderer.cpp', 1],
                              ['src/types/cover/renderer.cpp', 1]]) {
   const source = code(read(file));

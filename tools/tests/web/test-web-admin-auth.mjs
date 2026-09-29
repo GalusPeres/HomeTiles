@@ -316,9 +316,9 @@ for (const key of ['web_support_prefix', 'web_support_stars', 'web_support_or'])
 assert.match(support, /class="brand-star" href="https:\/\/github\.com\/GalusPeres\/HomeTiles"[^>]*><i class="mdi mdi-star">/);
 assert.match(support, /class="brand-coffee" href="https:\/\/buymeacoffee\.com\/galusperes"/);
 const i18nSource = readRepoFile('src/core/i18n/i18n.cpp');
-assert.match(i18nSource, /"Kein Passwort",\s*"Unterstütze mich mit",\s*"Stars",\s*"oder"\};/);
-assert.match(i18nSource, /"No password",\s*"Support me with",\s*"Stars",\s*"or"\};/);
-assert.match(i18nSource, /"Aucun mot de passe",\s*"Soutenez-moi avec",\s*"des étoiles",\s*"ou"\};/);
+assert.match(i18nSource, /"Kein Passwort",\s*"Unterstütze mich mit",\s*"Stars",\s*"oder"[,}]/);
+assert.match(i18nSource, /"No password",\s*"Support me with",\s*"Stars",\s*"or"[,}]/);
+assert.match(i18nSource, /"Aucun mot de passe",\s*"Soutenez-moi avec",\s*"des étoiles",\s*"ou"[,}]/);
 assert.match(readRepoFile('src/web/assets/admin.css'), /\.brand-support \{[^}]*font-size:12px;/,
   'the support line stays small');
 const badge = section.slice(section.indexOf('void appendWebAdminPasswordBadgeHtml('));

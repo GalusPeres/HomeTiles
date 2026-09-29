@@ -66,8 +66,9 @@ void show(Popup&p,const char*title,bool cached=false){hometiles_title::set(p.tit
 // Execute Weather's actual deferred opener with the shared shell. Transport
 // and forecast parsing are injected; temporary body hiding and ownership are real.
 struct String:std::string{using std::string::string;using std::string::operator=;String()=default;String(const std::string&s):std::string(s){}bool equalsIgnoreCase(const String&s)const{return *this==s;}void remove(size_t i){erase(i);}};
-struct WeatherPopupInit{String entity_id;};
-struct WeatherPopupContext{lv_obj_t*overlay=nullptr,*card=nullptr;bool has_rendered_data=false;String rendered_entity_id,rendered_language;uint32_t rendered_payload_hash=0;size_t rendered_payload_length=0;};
+struct WeatherPopupInit{String entity_id;bool colored_icons=true,icon_forced=false;};
+struct WeatherPopupContext{lv_obj_t*overlay=nullptr,*card=nullptr;bool has_rendered_data=false;String rendered_entity_id,rendered_language;uint32_t rendered_payload_hash=0;size_t rendered_payload_length=0;uint8_t rendered_icon_key=1;};
+uint8_t icon_style_key(bool colored,bool forced){return (colored?1:0)|(forced?2:0);}
 WeatherPopupContext*g_weather_popup_ctx=nullptr;bool g_weather_open_pending=false;WeatherPopupInit g_pending_weather_init;PopupBody g_weather_body;
 struct WeatherPending{bool valid=false,parse_hourly_pending=false,build_ui_pending=false;String entity_id,build_entity_id;int pending_day_nav=-1;}g_pending_weather;
 struct Logger{template<class...T>void printf(const char*,T...){}}Serial;

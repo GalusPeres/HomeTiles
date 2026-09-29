@@ -12,7 +12,13 @@ void apply_weather_fields_from_request(WebServer& server, Tile& tile) {
                      : TILE_POPUP_OPEN_LONG_PRESS;
   }
   setTilePopupOpenMode(tile, popup_mode);
-  tile.sensor_display_mode = 0;
+  // 0 draws filled, colored weather icons, 1 the white MDI outlines
+  // (weatherColoredIcons); a request without the field keeps the choice.
+  if (server.hasArg("weather_colored_icons")) {
+    tile.sensor_display_mode = server.arg("weather_colored_icons").toInt() == 0 ? 1 : 0;
+  } else if (tile.sensor_display_mode != 1) {
+    tile.sensor_display_mode = 0;
+  }
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;
 }

@@ -121,6 +121,12 @@ export const ICONS = {
     { color: COLORS.sun, paths: PARTLY_SUN.map((d) => P(d)) },
     { color: COLORS.cloud, paths: PARTLY_CLOUD.map((d) => P(d)) },
   ],
+  // Night variant of partly cloudy (weather-night-partly-cloudy): the filled
+  // weather-night crescent, scaled into the upper right, behind the cloud.
+  'weather-night-partly-cloudy': [
+    { color: COLORS.moon, paths: [P(MOON, { s: 0.62, dx: 8.26, dy: -1.05 })] },
+    { color: COLORS.cloudGray, paths: PARTLY_CLOUD.map((d) => P(d)) },
+  ],
   'weather-cloudy': [
     { color: COLORS.cloudBack, paths: [P(CLOUD_FULL, { s: 0.62, dx: 8.88, dy: -0.1 })] },
     { color: COLORS.cloudGray, paths: [P(CLOUD_FULL, { s: 1, dx: 0, dy: 1.5 })] },
@@ -171,4 +177,28 @@ export const ICONS = {
     { color: COLORS.wind, paths: [P(WIND_LINES[2])] },
   ],
   'alert-circle-outline': [{ color: COLORS.alert, paths: [P(ALERT_CIRCLE)] }],
+};
+
+// Weather color of each icon: the label color of a colored weather icon, so
+// Tile color "From icon" and the icon disc follow the weather. Five base
+// tones like the sky (sun gold, cloud grey, rain blue, cold ice blue, storm
+// purple, plus wind teal and night grey blue); a mixed condition takes the
+// midpoint of its parts, and heavier weather a deeper tone.
+export const TINTS = {
+  'weather-sunny': '#FFB224',
+  'weather-night': '#5E7092',
+  'weather-partly-cloudy': '#CCAB6B',       // sun + cloud
+  'weather-night-partly-cloudy': '#7C8AA2', // night + cloud
+  'weather-cloudy': '#9AA4B2',
+  'weather-fog': '#B8BEC6',
+  'weather-rainy': '#4A7FC0',
+  'weather-pouring': '#2F5FB0',
+  'weather-snowy': '#7CC4F0',
+  'weather-snowy-rainy': '#63A2D8',         // rain + snow
+  'weather-hail': '#5FB4D8',
+  'weather-lightning': '#8B5CF6',
+  'weather-lightning-rainy': '#6B6EDB',     // storm + rain
+  'weather-windy': '#4FB8B0',
+  'weather-windy-variant': '#75AEB1',       // wind + cloud
+  'alert-circle-outline': '#E5533D',
 };

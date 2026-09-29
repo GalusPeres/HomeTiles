@@ -163,6 +163,7 @@
       const graphHeightInput = document.getElementById(prefix + '_sensor_graph_height');
       const weatherSelect = document.getElementById(prefix + '_weather_entity');
       const weatherPopupModeSelect = document.getElementById(prefix + '_weather_popup_open_mode');
+      const weatherColoredIconsCheck = document.getElementById(prefix + '_weather_colored_icons');
       const energySelect = document.getElementById(prefix + '_energy_entity');
       const energyUnitInput = document.getElementById(prefix + '_energy_unit');
       const energyDecimalsInput = document.getElementById(prefix + '_energy_decimals');
@@ -302,6 +303,7 @@
     });
     bindLive(weatherSelect, 'change', 'weatherEntity', () => { maybeFillTitleFromWeather(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(weatherPopupModeSelect, 'change', 'weatherPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(weatherColoredIconsCheck, 'change', 'weatherColoredIcons', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energySelect, 'change', 'energyEntity', () => {
       energySelect.dataset.configuredValue = energySelect.value || '';
       maybeFillTitleFromEnergy(tab);

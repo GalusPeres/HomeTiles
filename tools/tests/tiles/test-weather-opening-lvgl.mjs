@@ -71,6 +71,7 @@ struct Logger{void println(const char*){}}Serial;
 struct Bridge{String findSensorName(const String&){return "Home";}String findEntityIcon(const String&){return "weather-sunny";}String findSensorUnit(const String&){return "";}String findSensorInitialValue(const String&){return "98";}String findSensorStateKind(const String&){return "number";}String findEditableValue(const String&){return "";}}haBridgeConfig;
 uint32_t tileDefaultBgColor(){return 0x2A2A2A;}uint32_t tileBgColorOrDefault(const Tile&,uint32_t c){return c;}
 bool isMdiIconDisabled(const String&){return false;}String normalizeMdiIconName(const String&s){return s;}
+bool getLocalTime(struct tm*,uint32_t){return false;}bool weatherColoredIcons(const Tile&t){return t.sensor_display_mode!=1;}
 ${strip(read('src/types/weather/weather_icon_table.h'))}
 ${strip(read('src/types/weather/weather_icons.h'))}
 ${strip(read('src/types/weather/weather_icons.cpp'))}

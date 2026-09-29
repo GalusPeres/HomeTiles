@@ -9,6 +9,10 @@ struct WeatherPopupInit {
   uint32_t bg_color = 0;
   // The tile icon's current color: the header icon and its disc glow take it.
   uint32_t icon_color = 0xFFFFFF;
+  // Weather setting "Colored weather icons"; a rule forcing the tile icon
+  // color draws the header icon in that color.
+  bool colored_icons = true;
+  bool icon_forced = false;
 };
 
 void show_weather_popup(const WeatherPopupInit& init);

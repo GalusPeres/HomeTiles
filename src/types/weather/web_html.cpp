@@ -34,6 +34,12 @@ void append_weather_fields_html(String& html, const String& tab_id, const std::v
               </select>
 )html";
   if (tab_id != "screensaver") {
+    html += R"html(              <label class="inline-checkbox"><input type="checkbox" id=")html";
+    html += tab_id;
+    html += R"html(_weather_colored_icons" checked>)html";
+    html += tr.weather_colored_icons;
+    html += R"html(</label>
+)html";
     html += R"html(              <label>)html";
     html += tr.popup_open;
     html += R"html(</label>

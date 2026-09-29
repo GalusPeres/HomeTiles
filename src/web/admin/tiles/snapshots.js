@@ -195,6 +195,9 @@
     if ([8,9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
     }
+    if (Number(tile.type) === 12 && snapshot?.weather_colored_icons !== undefined) {
+      tile.sensor_display_mode = ['0','false'].includes(String(snapshot.weather_colored_icons)) ? 1 : 0;
+    }
     tiles[index] = tile;
     tilesData[tab] = tiles;
   }

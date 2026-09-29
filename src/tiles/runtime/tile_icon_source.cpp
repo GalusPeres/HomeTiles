@@ -8,6 +8,7 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/tiles/config/tile_tint.h"
+#include "src/types/weather/weather_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/types/binary_sensor/renderer.h"
@@ -380,6 +381,10 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
       tile_icon_disc::force_icon_color(icon, lv_color_hex(fixed));
     } else {
       tile_icon_disc::release_icon_color(icon);
+    }
+    // A colored weather icon shows a forced color on all its layers.
+    if (tile.type == TILE_WEATHER && weatherColoredIcons(tile)) {
+      weather_icons::follow_icon_color(icon, (colored && layer.icon) || force_fixed);
     }
   }
   // Tile color "From icon" (fill) follows the color the icon shows, rules

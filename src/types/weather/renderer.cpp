@@ -18,6 +18,7 @@ struct WeatherEventData {
   String title;
   lv_obj_t* location_label = nullptr;
   uint32_t bg_color = 0;
+  bool colored_icons = true;
 };
 
 namespace {
@@ -137,7 +138,13 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   }
   String iconChar;
   if (!icon_disabled && icon_name.length() && FONT_MDI_ICONS != nullptr) {
-    iconChar = weather_icons::text(icon_name);
+    iconChar = weather_icons::text(icon_name, weatherColoredIcons(tile)
+                                                  ? weather_icons::Style::Colored
+                                                  : weather_icons::Style::Outline);
+    // A colored icon carries its weather color (Tile color "From icon").
+    if (weatherColoredIcons(tile) && weather_icons::tint(icon_name)) {
+      lv_obj_set_style_text_color(icon_label, lv_color_hex(weather_icons::tint(icon_name)), 0);
+    }
   }
   if (icon_label) {
     if (iconChar.length()) {
@@ -322,7 +329,8 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
       tile.sensor_entity,
       location,
       location_label,
-      card_color
+      card_color,
+      weatherColoredIcons(tile)
     };
 
     const lv_event_code_t popup_event =
@@ -350,7 +358,10 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
       // The popup header icon shows the tile icon's current color.
       if (lv_obj_t* icon = tile_icon_source::card_icon(static_cast<lv_obj_t*>(lv_event_get_current_target(e)))) {
         init.icon_color = lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFF;
+        lv_color_t forced;
+        init.icon_forced = tile_icon_disc::forced_color(icon, forced);
       }
+      init.colored_icons = data->colored_icons;
       finish_press_before_popup(e);
       show_weather_popup(init);
     };

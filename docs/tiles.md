@@ -281,6 +281,8 @@ Shows current conditions and the next days from a `weather` entity.
 
 **Popup:** temperatures, precipitation, and rain probability. Use the arrows to browse the available forecast.
 
+**Icons:** weather icons are filled and colored (sun gold, clouds grey, rain blue, snow ice blue, thunderstorms purple, wind teal, night grey blue). Turn off **Colored weather icons** in the tile settings to keep the white outlines. With **Tile color: From icon**, the tile takes the color of the current weather; an icon color you set yourself draws the whole icon in that color. When the bridge sends sunrise and sunset, partly cloudy and clear hours after sunset show the moon.
+
 ### Media
 
 Shows cover art, title, and playback controls for a `media_player` entity. Media tiles need at least 2×2 cells.

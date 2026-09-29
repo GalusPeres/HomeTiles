@@ -2719,6 +2719,9 @@ function syncTileRadiusControls(tabEl) {
     if ([8,9,10].includes(Number(tile.type)) && snapshot?.tile_border !== undefined) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
     }
+    if (Number(tile.type) === 12 && snapshot?.weather_colored_icons !== undefined) {
+      tile.sensor_display_mode = ['0','false'].includes(String(snapshot.weather_colored_icons)) ? 1 : 0;
+    }
     tiles[index] = tile;
     tilesData[tab] = tiles;
   }
@@ -5332,6 +5335,7 @@ function syncTileRadiusControls(tabEl) {
       const graphHeightInput = document.getElementById(prefix + '_sensor_graph_height');
       const weatherSelect = document.getElementById(prefix + '_weather_entity');
       const weatherPopupModeSelect = document.getElementById(prefix + '_weather_popup_open_mode');
+      const weatherColoredIconsCheck = document.getElementById(prefix + '_weather_colored_icons');
       const energySelect = document.getElementById(prefix + '_energy_entity');
       const energyUnitInput = document.getElementById(prefix + '_energy_unit');
       const energyDecimalsInput = document.getElementById(prefix + '_energy_decimals');
@@ -5471,6 +5475,7 @@ function syncTileRadiusControls(tabEl) {
     });
     bindLive(weatherSelect, 'change', 'weatherEntity', () => { maybeFillTitleFromWeather(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(weatherPopupModeSelect, 'change', 'weatherPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(weatherColoredIconsCheck, 'change', 'weatherColoredIcons', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energySelect, 'change', 'energyEntity', () => {
       energySelect.dataset.configuredValue = energySelect.value || '';
       maybeFillTitleFromEnergy(tab);
@@ -6977,6 +6982,7 @@ function syncTileRadiusControls(tabEl) {
       fd.append('clock_date_format', (tile.sensor_gauge_max !== undefined && tile.sensor_gauge_max !== null) ? tile.sensor_gauge_max : 0);
     } else if (safeType === 12) {
       fd.append('weather_entity', tile.sensor_entity || tile.weather_entity || '');
+      fd.append('weather_colored_icons', Number(tile.sensor_display_mode) === 1 ? '0' : '1');
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
@@ -10393,6 +10399,8 @@ function maybeFillTitleFromWeather(tab) {
     if (el) el.value = data.sensor_entity || data.weather_entity || '';
     const popupModeEl = document.getElementById(prefix + '_weather_popup_open_mode');
     if (popupModeEl) popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
+    const colored = document.getElementById(prefix + '_weather_colored_icons');
+    if (colored) colored.checked = data?.weather_colored_icons !== undefined ? !['0', 'false'].includes(String(data.weather_colored_icons)) : Number(data?.sensor_display_mode) !== 1;
     maybeFillTitleFromWeather(tab);
   }
 
@@ -10401,6 +10409,8 @@ function maybeFillTitleFromWeather(tab) {
     const prefix = tab;
     formData.append('weather_entity', document.getElementById(prefix + '_weather_entity')?.value || '');
     formData.append('popup_open_mode', document.getElementById(prefix + '_weather_popup_open_mode')?.value || '1');
+    const colored = document.getElementById(prefix + '_weather_colored_icons');
+    if (colored) formData.append('weather_colored_icons', colored.checked ? '1' : '0');
   }
 
   function resetWeatherFields(tab) {
@@ -10410,6 +10420,8 @@ function maybeFillTitleFromWeather(tab) {
     if (el) el.value = '';
     const popupModeEl = document.getElementById(prefix + '_weather_popup_open_mode');
     if (popupModeEl) popupModeEl.value = '1';
+    const colored = document.getElementById(prefix + '_weather_colored_icons');
+    if (colored) colored.checked = true;
   }
 
 function maybeFillTitleFromScene(tab) {

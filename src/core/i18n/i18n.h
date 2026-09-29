@@ -652,6 +652,8 @@ struct Strings {
   const char* web_support_prefix;
   const char* web_support_stars;
   const char* web_support_or;
+  // Weather tile setting: filled, colored weather icons (off: white outlines).
+  const char* weather_colored_icons;
 };
 
 // Locale-specific display rules and short runtime strings shared by

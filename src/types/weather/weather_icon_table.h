@@ -6,34 +6,89 @@
 
 namespace weather_icon_table {
 
-// Label text per MDI weather icon name for the weather icon font with label
-// recoloring: every "#RRGGBB <glyph>#" draws one icon layer. Layer glyphs have
-// no advance, so all layers share one position; the closing spacer glyph gives
-// the icon the MDI advance width.
+// Per MDI weather icon name, for the weather icon font with label recoloring:
+// - text: every "#RRGGBB <glyph>#" draws one icon layer in its color. Layer
+//   glyphs have no advance, so all layers share one position; the closing
+//   spacer glyph gives the icon the MDI advance width.
+// - plain: the same layers without colors, drawn in the label color (an icon
+//   color the user chose).
+// - tint: the weather color, the label color of a colored icon, so Tile color
+//   "From icon" and the icon disc follow the weather.
 struct Entry {
   const char* name;
   const char* text;
+  const char* plain;
+  uint32_t tint;
 };
 
 inline constexpr uint32_t kFirstCodepoint = 0xE000;
-inline constexpr uint32_t kLastCodepoint = 0xE017;
+inline constexpr uint32_t kLastCodepoint = 0xE018;
 
 inline constexpr Entry kEntries[] = {
-    {"weather-sunny", "#FFC53D " "\xEE\x80\x81" "#" "\xEE\x80\x80"},
-    {"weather-night", "#FFE08A " "\xEE\x80\x82" "#" "#FFFFFF " "\xEE\x80\x83" "#" "\xEE\x80\x80"},
-    {"weather-partly-cloudy", "#FFC53D " "\xEE\x80\x84" "#" "#EEF2F7 " "\xEE\x80\x85" "#" "\xEE\x80\x80"},
-    {"weather-cloudy", "#8E9BB0 " "\xEE\x80\x86" "#" "#C3CCD8 " "\xEE\x80\x87" "#" "\xEE\x80\x80"},
-    {"weather-fog", "#C3CCD8 " "\xEE\x80\x88" "#" "#8E9BB0 " "\xEE\x80\x89" "#" "\xEE\x80\x80"},
-    {"weather-rainy", "#EEF2F7 " "\xEE\x80\x8A" "#" "#4DA3FF " "\xEE\x80\x8B" "#" "\xEE\x80\x80"},
-    {"weather-pouring", "#C3CCD8 " "\xEE\x80\x8A" "#" "#4DA3FF " "\xEE\x80\x8C" "#" "\xEE\x80\x80"},
-    {"weather-snowy", "#EEF2F7 " "\xEE\x80\x8A" "#" "#CFE8FF " "\xEE\x80\x8D" "#" "\xEE\x80\x80"},
-    {"weather-snowy-rainy", "#EEF2F7 " "\xEE\x80\x8A" "#" "#CFE8FF " "\xEE\x80\x8E" "#" "#4DA3FF " "\xEE\x80\x8F" "#" "\xEE\x80\x80"},
-    {"weather-hail", "#C3CCD8 " "\xEE\x80\x8A" "#" "#CFE8FF " "\xEE\x80\x90" "#" "\xEE\x80\x80"},
-    {"weather-lightning", "#9EAABA " "\xEE\x80\x8A" "#" "#FFC53D " "\xEE\x80\x91" "#" "\xEE\x80\x80"},
-    {"weather-lightning-rainy", "#9EAABA " "\xEE\x80\x8A" "#" "#FFC53D " "\xEE\x80\x92" "#" "#4DA3FF " "\xEE\x80\x93" "#" "\xEE\x80\x80"},
-    {"weather-windy", "#A9C7E8 " "\xEE\x80\x94" "#" "\xEE\x80\x80"},
-    {"weather-windy-variant", "#C3CCD8 " "\xEE\x80\x95" "#" "#A9C7E8 " "\xEE\x80\x96" "#" "\xEE\x80\x80"},
-    {"alert-circle-outline", "#FFB020 " "\xEE\x80\x97" "#" "\xEE\x80\x80"},
+    {"weather-sunny",
+     "#FFC53D " "\xEE\x80\x81" "#" "\xEE\x80\x80",
+     "\xEE\x80\x81" "\xEE\x80\x80",
+     0xFFB224},
+    {"weather-night",
+     "#FFE08A " "\xEE\x80\x82" "#" "#FFFFFF " "\xEE\x80\x83" "#" "\xEE\x80\x80",
+     "\xEE\x80\x82" "\xEE\x80\x83" "\xEE\x80\x80",
+     0x5E7092},
+    {"weather-partly-cloudy",
+     "#FFC53D " "\xEE\x80\x84" "#" "#EEF2F7 " "\xEE\x80\x85" "#" "\xEE\x80\x80",
+     "\xEE\x80\x84" "\xEE\x80\x85" "\xEE\x80\x80",
+     0xCCAB6B},
+    {"weather-night-partly-cloudy",
+     "#FFE08A " "\xEE\x80\x86" "#" "#C3CCD8 " "\xEE\x80\x85" "#" "\xEE\x80\x80",
+     "\xEE\x80\x86" "\xEE\x80\x85" "\xEE\x80\x80",
+     0x7C8AA2},
+    {"weather-cloudy",
+     "#8E9BB0 " "\xEE\x80\x87" "#" "#C3CCD8 " "\xEE\x80\x88" "#" "\xEE\x80\x80",
+     "\xEE\x80\x87" "\xEE\x80\x88" "\xEE\x80\x80",
+     0x9AA4B2},
+    {"weather-fog",
+     "#C3CCD8 " "\xEE\x80\x89" "#" "#8E9BB0 " "\xEE\x80\x8A" "#" "\xEE\x80\x80",
+     "\xEE\x80\x89" "\xEE\x80\x8A" "\xEE\x80\x80",
+     0xB8BEC6},
+    {"weather-rainy",
+     "#EEF2F7 " "\xEE\x80\x8B" "#" "#4DA3FF " "\xEE\x80\x8C" "#" "\xEE\x80\x80",
+     "\xEE\x80\x8B" "\xEE\x80\x8C" "\xEE\x80\x80",
+     0x4A7FC0},
+    {"weather-pouring",
+     "#C3CCD8 " "\xEE\x80\x8B" "#" "#4DA3FF " "\xEE\x80\x8D" "#" "\xEE\x80\x80",
+     "\xEE\x80\x8B" "\xEE\x80\x8D" "\xEE\x80\x80",
+     0x2F5FB0},
+    {"weather-snowy",
+     "#EEF2F7 " "\xEE\x80\x8B" "#" "#CFE8FF " "\xEE\x80\x8E" "#" "\xEE\x80\x80",
+     "\xEE\x80\x8B" "\xEE\x80\x8E" "\xEE\x80\x80",
+     0x7CC4F0},
+    {"weather-snowy-rainy",
+     "#EEF2F7 " "\xEE\x80\x8B" "#" "#CFE8FF " "\xEE\x80\x8F" "#" "#4DA3FF " "\xEE\x80\x90" "#" "\xEE\x80\x80",
+     "\xEE\x80\x8B" "\xEE\x80\x8F" "\xEE\x80\x90" "\xEE\x80\x80",
+     0x63A2D8},
+    {"weather-hail",
+     "#C3CCD8 " "\xEE\x80\x8B" "#" "#CFE8FF " "\xEE\x80\x91" "#" "\xEE\x80\x80",
+     "\xEE\x80\x8B" "\xEE\x80\x91" "\xEE\x80\x80",
+     0x5FB4D8},
+    {"weather-lightning",
+     "#9EAABA " "\xEE\x80\x8B" "#" "#FFC53D " "\xEE\x80\x92" "#" "\xEE\x80\x80",
+     "\xEE\x80\x8B" "\xEE\x80\x92" "\xEE\x80\x80",
+     0x8B5CF6},
+    {"weather-lightning-rainy",
+     "#9EAABA " "\xEE\x80\x8B" "#" "#FFC53D " "\xEE\x80\x93" "#" "#4DA3FF " "\xEE\x80\x94" "#" "\xEE\x80\x80",
+     "\xEE\x80\x8B" "\xEE\x80\x93" "\xEE\x80\x94" "\xEE\x80\x80",
+     0x6B6EDB},
+    {"weather-windy",
+     "#A9C7E8 " "\xEE\x80\x95" "#" "\xEE\x80\x80",
+     "\xEE\x80\x95" "\xEE\x80\x80",
+     0x4FB8B0},
+    {"weather-windy-variant",
+     "#C3CCD8 " "\xEE\x80\x96" "#" "#A9C7E8 " "\xEE\x80\x97" "#" "\xEE\x80\x80",
+     "\xEE\x80\x96" "\xEE\x80\x97" "\xEE\x80\x80",
+     0x75AEB1},
+    {"alert-circle-outline",
+     "#FFB020 " "\xEE\x80\x98" "#" "\xEE\x80\x80",
+     "\xEE\x80\x98" "\xEE\x80\x80",
+     0xE5533D},
 };
 
 }  // namespace weather_icon_table

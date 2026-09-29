@@ -2586,6 +2586,15 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   if (!icon_name.length() && condition.length()) {
     icon_name = weather_icon_from_condition(condition);
   }
+  // Home Assistant reports partly cloudy and sunny at night too; the bridge
+  // sun times switch them to their night icons.
+  weather_icons::SunTimes sun;
+  weather_icons::parse_sun(json.c_str(), sun);
+  icon_name = weather_icons::for_now(icon_name, sun);
+
+  const TileGridConfig& grid = tileConfig.getActiveGrid();
+  const Tile& tile = grid.tiles[grid_index];
+  const bool colored_icons = weatherColoredIcons(tile);
 
   float temperature = 0.0f;
   bool has_temp = extract_json_number_or_string_field(json, "temperature", temperature);
@@ -2602,9 +2611,21 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   if (widgets.icon_label) {
     // The icon disc follows the icon; an empty disc never shows.
     if (icon_name.length()) {
-      String iconChar = weather_icons::text(icon_name);
+      // A rule's icon color draws the layers in that color; otherwise the
+      // icon carries its weather color, which Tile color "From icon" and the
+      // icon disc follow.
+      lv_color_t forced;
+      const bool icon_forced = tile_icon_disc::forced_color(widgets.icon_label, forced);
+      String iconChar = weather_icons::text(
+          icon_name, !colored_icons ? weather_icons::Style::Outline
+                     : icon_forced  ? weather_icons::Style::Single
+                                    : weather_icons::Style::Colored);
       if (iconChar.length()) {
         lv_label_set_text(widgets.icon_label, iconChar.c_str());
+        if (colored_icons) {
+          const uint32_t tint = weather_icons::tint(icon_name);
+          tile_icon_disc::set_icon_color(widgets.icon_label, lv_color_hex(tint ? tint : 0xFFFFFF));
+        }
         tile_icon_disc::set_icon_hidden(widgets.icon_label, false);
       } else {
         tile_icon_disc::set_icon_hidden(widgets.icon_label, true);
@@ -2616,8 +2637,6 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
 
   String condition_text = weather_condition_display_label(condition);
 
-  const TileGridConfig& grid = tileConfig.getActiveGrid();
-  const Tile& tile = grid.tiles[grid_index];
   const bool has_condition_text = condition_text.length() && condition_text != "--";
   const lv_coord_t card_w = tile_geometry::extent(
       tile.col, tile.span_w < 1 ? 1.0f : tile.span_w, GRID_CELL_W, GRID_GAP);
@@ -2822,7 +2841,8 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
     }
     if (fw.icon_label) {
       if (slot.has_data && slot.icon_name.length()) {
-        String icon_char = weather_icons::text(slot.icon_name);
+        String icon_char = weather_icons::text(
+            slot.icon_name, colored_icons ? weather_icons::Style::Colored : weather_icons::Style::Outline);
         if (icon_char.length()) {
           lv_label_set_text(fw.icon_label, icon_char.c_str());
           lv_obj_set_style_text_color(fw.icon_label, forecast_active_color, 0);

@@ -41,7 +41,9 @@ for (const marker of [
   'getMdiChar("check-bold")',
   // The prompt or the error, and one dot per typed digit, never a digit.
   'lv_label_set_text(ctx->prompt_label, ctx->show_error ? tr.pin_popup_incorrect : tr.pin_popup_enter);',
-  'lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= ctx->length);',
+  'lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= circles);',
+  'lv_obj_set_style_bg_opa(ctx->dots[i], i < ctx->length ? LV_OPA_COVER : LV_OPA_TRANSP, 0);',
+  'const int size_limit = popup_layout::kCardHeight * kKeyHeightPermille / 1000;',
   'lv_obj_align(ctx->dots_row, LV_ALIGN_TOP_MID, 0, g.dots_y);',
   // Header: the tile's name and the state "Locked" through the shared header.
   'lv_label_set_text(ctx->state_label, tr.pin_popup_locked);',

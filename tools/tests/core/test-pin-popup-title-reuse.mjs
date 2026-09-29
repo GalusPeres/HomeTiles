@@ -140,16 +140,24 @@ void check_layout(const char* layout) {
 void check_prompt(const i18n::Strings& tr) {
   auto shown = [](lv_obj_t* obj) { return !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN); };
   auto click = [](int key) { lv_obj_send_event(g_ctx->key_buttons[key], LV_EVENT_CLICKED, nullptr); };
+  // Filled circles: one per typed digit; empty ones fill up to at least the
+  // shortest PIN.
   auto dots = []() {
+    int count = 0;
+    for (lv_obj_t* dot : g_ctx->dots)
+      count += !lv_obj_has_flag(dot, LV_OBJ_FLAG_HIDDEN) && lv_obj_get_style_bg_opa(dot, LV_PART_MAIN) == LV_OPA_COVER;
+    return count;
+  };
+  auto circles = []() {
     int count = 0;
     for (lv_obj_t* dot : g_ctx->dots) count += !lv_obj_has_flag(dot, LV_OBJ_FLAG_HIDDEN);
     return count;
   };
-  assert(shown(g_ctx->prompt_label) && dots() == 0);
+  assert(shown(g_ctx->prompt_label) && dots() == 0 && circles() == 4);
   assert(!strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_enter));
   click(0); click(1);
   assert(shown(g_ctx->prompt_label) && !strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_enter));
-  assert(dots() == 2 && "One dot per digit right away, no digit shown");
+  assert(dots() == 2 && circles() == 4 && "One filled circle per digit right away, no digit shown");
   // No child of the dots line shows text.
   for (uint32_t i = 0; i < lv_obj_get_child_count(g_ctx->dots_row); ++i) {
     assert(!lv_obj_check_type(lv_obj_get_child(g_ctx->dots_row, static_cast<int32_t>(i)), &lv_label_class));
@@ -157,9 +165,10 @@ void check_prompt(const i18n::Strings& tr) {
   click(kBackspaceKey);
   assert(dots() == 1);
   for (int i = 0; i < 12; ++i) click(kZeroKey);
-  assert(g_ctx->length == pin_access::kInputMaxDigits && dots() == static_cast<int>(pin_access::kInputMaxDigits));
+  assert(g_ctx->length == pin_access::kInputMaxDigits && dots() == static_cast<int>(pin_access::kInputMaxDigits) &&
+         circles() == static_cast<int>(pin_access::kInputMaxDigits));
   click(kConfirmKey);
-  assert(dots() == 0 && !strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_incorrect));
+  assert(dots() == 0 && circles() == 4 && !strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_incorrect));
   click(3);
   assert(dots() == 1 && g_ctx->length == 1 && !strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_enter));
 }

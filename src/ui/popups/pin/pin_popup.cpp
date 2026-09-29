@@ -37,7 +37,10 @@ constexpr int kPromptGapPct = 20;     // prompt to the dots line
 constexpr int kDotsGapPct = 26;       // dots line to the keys
 constexpr int kMarginPct = 8;         // at least this above and below the block
 constexpr int kKeyWidthPct = 130;     // keys are a bit wider than tall
-constexpr int kDotPct = 55;           // dot diameter, share of the dots line
+// Keys stay at most this share of the card height (per mille), the size of
+// the agreed design; the block is centered in the remaining space.
+constexpr int kKeyHeightPermille = 125;
+constexpr int kDotPct = 22;           // dot diameter, share of the key height
 // Keys are a bit rounder than the close button and follow the global tile
 // radius like it (ui_surface_style::apply_radius).
 constexpr int kKeyRadius = popup_layout::kCloseButtonRadius + popup_layout::kCloseButtonRadius / 2;
@@ -116,6 +119,8 @@ KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* prompt_font) {
   g.key_h = (available - 2 * g.prompt_h) * 100 / height_pct;
   const int width_limit = content_w * 100 / width_pct;
   if (width_limit < g.key_h) g.key_h = width_limit;
+  const int size_limit = popup_layout::kCardHeight * kKeyHeightPermille / 1000;
+  if (size_limit < g.key_h) g.key_h = size_limit;
   if (g.key_h < 1) g.key_h = 1;
   g.key_w = g.key_h * kKeyWidthPct / 100;
   g.gap = g.key_h * kKeyGapPct / 100;
@@ -126,7 +131,8 @@ KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* prompt_font) {
   g.dots_y = g.prompt_y + g.prompt_h + prompt_gap;
   g.keys_y = g.dots_y + g.prompt_h + dots_gap;
   g.keys_x = (content_w - (3 * g.key_w + 2 * g.gap)) / 2;
-  g.dot = g.prompt_h * kDotPct / 100;
+  g.dot = g.key_h * kDotPct / 100;
+  if (g.dot > g.prompt_h) g.dot = g.prompt_h;
   return g;
 }
 
@@ -171,15 +177,18 @@ void clear_input(PinPopupContext* ctx) {
 }
 
 // The prompt: "Enter PIN", or the error in red after a wrong PIN. Below it
-// one dot per typed digit; a digit is never shown.
+// empty circles that fill one per typed digit (at least as many as the
+// shortest PIN); a digit is never shown.
 void update_value(PinPopupContext* ctx) {
   if (!ctx || !ctx->prompt_label || !ctx->dots_row) return;
   const auto& tr = i18n::strings(configManager.getConfig().language);
   lv_label_set_text(ctx->prompt_label, ctx->show_error ? tr.pin_popup_incorrect : tr.pin_popup_enter);
   lv_obj_set_style_text_color(ctx->prompt_label,
                               ctx->show_error ? lv_color_hex(kErrorColor) : lv_color_white(), 0);
+  const size_t circles = ctx->length > pin_access::kUserPinMinDigits ? ctx->length : pin_access::kUserPinMinDigits;
   for (size_t i = 0; i < pin_access::kInputMaxDigits; ++i) {
-    lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= ctx->length);
+    lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= circles);
+    lv_obj_set_style_bg_opa(ctx->dots[i], i < ctx->length ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
   }
 }
 
@@ -360,7 +369,9 @@ void build_keypad(PinPopupContext* ctx) {
     lv_obj_set_size(dot, g.dot, g.dot);
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(dot, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_color(dot, lv_color_white(), 0);
+    lv_obj_set_style_border_width(dot, g.dot / 9 > 2 ? g.dot / 9 : 2, 0);
     lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
     ctx->dots[i] = dot;
   }

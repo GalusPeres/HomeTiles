@@ -30,7 +30,7 @@ const cpp = `
 #include "src/types/value/value_colors.h"
 #include "src/ui/shared/title_label.h"
 #include "src/ui/popups/popup_nav_style.h"
-void popup_shell_disc_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o){c=lv_color_white();o=40;}
+void popup_shell_control_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o){c=lv_color_white();o=40;}
 #include "src/ui/popups/popup_first_frame.h"
 PopupFirstFrame g_sensor_first_frame;
 void hide_popup_shell(lv_obj_t*){} void cancel_popup_open(lv_obj_t*){}

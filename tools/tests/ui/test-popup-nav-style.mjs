@@ -1,9 +1,9 @@
 // Footer controls of the history popups (7D/24H/Today, date and day pills)
-// and the pressed close button match the header icon disc: the selected
-// control has exactly the disc fill (white, or the icon color with "Circle in
-// icon color", at the Glow strength), the info pill half of it, and all
-// labels stay white (regression: solid white pills brighter than the disc,
-// and a white pill with text cut out in the popup color).
+// and the pressed close button share one control fill: the selected control
+// has exactly that fill (the header disc fill while the card shares the icon's
+// hue, else white), the info pill half of it, and all labels stay white
+// (regression: solid white pills brighter than the disc, and a white pill with
+// text cut out in the popup color). test-popup-shell-lvgl.mjs runs the fill.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -41,13 +41,13 @@ assert.match(fn(weather, 'weather_popup_follow_tile_color'), /apply_card_color\(
 assert.match(fn(sensor, 'apply_popup_icon_color'), /lv_obj_set_style_text_color\(ctx->icon_label, color, 0\);\s*[^}]*update_range_buttons\(ctx\);/);
 assert.match(fn(sensor, 'sensor_popup_follow_tile_color'), /update_range_buttons\(ctx\);/);
 assert.match(fn(energy, 'energy_popup_follow_tile_color'), /update_period_buttons\(ctx\);/);
-// One disc fill for the header disc, the footer controls and the close button.
+// One control fill for the footer controls and the pressed close button.
 const shell = read('src/ui/popups/popup_shell.cpp');
 const tint = fn(shell, 'apply_header_disc_tint');
-assert.match(tint, /disc_fill\(options, card, rgb, color, fill_opa\);/);
-assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, color, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, fill_opa, LV_STATE_PRESSED\);/);
-assert.match(fn(shell, 'popup_shell_disc_fill'),
-  /g_next_disc\.from_tile \? g_next_disc : shell\.disc;\s*disc_fill\(options,/);
+assert.match(tint, /control_fill\(options, card, rgb, press_color, press_opa\);/);
+assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, press_color, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, press_opa, LV_STATE_PRESSED\);/);
+assert.match(fn(shell, 'popup_shell_control_fill'),
+  /g_next_disc\.from_tile \? g_next_disc : shell\.disc;\s*control_fill\(options,/);
 
 const host = await lvglHost(root);
 if (!host) {
@@ -65,7 +65,7 @@ const cpp = String.raw`
 static lv_color_t g_disc_color = lv_color_white();
 static lv_opa_t g_disc_opa = 40;
 static uint32_t g_card = 0, g_icon = 0;
-void popup_shell_disc_fill(uint32_t card, uint32_t icon, lv_color_t& color, lv_opa_t& opa) {
+void popup_shell_control_fill(uint32_t card, uint32_t icon, lv_color_t& color, lv_opa_t& opa) {
   g_card = card; g_icon = icon; color = g_disc_color; opa = g_disc_opa;
 }
 ${strip(read('src/ui/popups/popup_nav_style.h'))}
@@ -84,7 +84,7 @@ int main() {
   lv_obj_t* label = lv_label_create(btn);
   // Selected: exactly the disc fill of this card and icon, full white text.
   style_toggle(btn, label, gold, sun, true);
-  check(g_card == 0x45391B && g_icon == 0xFFB224, "asks for the disc of this card and icon");
+  check(g_card == 0x45391B && g_icon == 0xFFB224, "asks for the control fill of this card and icon");
   check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == 40 && rgb(lv_obj_get_style_bg_color(btn, LV_PART_MAIN)) == 0xFFFFFF,
         "selected has the neutral disc fill");
   check(lv_obj_get_style_text_opa(label, LV_PART_MAIN) == LV_OPA_COVER, "selected text full white");
@@ -107,10 +107,6 @@ int main() {
   check(lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) == 27 && rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) == 0xFFB224,
         "pill has half the disc fill");
   check(lv_obj_get_style_text_opa(pill_label, LV_PART_MAIN) == LV_OPA_COVER, "pill text white");
-  // A Glow strength near zero keeps the selection visible.
-  g_disc_opa = 0;
-  style_toggle(btn, label, gold, sun, true);
-  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == kMinSelectedOpa, "minimum selection fill");
   std::printf("%s\n", ok ? "OK" : "FAILED");
   return ok ? 0 : 1;
 }
@@ -122,4 +118,4 @@ let result = spawnSync(host.cxx, [...host.flags, '-std=c++17', source, host.arch
 assert.equal(result.status, 0, result.stdout + result.stderr);
 result = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(result.status, 0, result.stdout + result.stderr);
-console.log('Popup footer controls and the close button match the header icon disc.');
+console.log('Popup footer controls take the shared control fill.');

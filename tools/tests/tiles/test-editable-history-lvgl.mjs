@@ -47,7 +47,7 @@ lv_obj_t* header_value_source=nullptr;
 void show_popup_shell(lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,void(*)()=nullptr,lv_obj_t* value=nullptr){header_value_source=value;}
 #include "src/ui/shared/title_label.h"
 #include "src/ui/popups/popup_nav_style.h"
-void popup_shell_disc_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o){c=lv_color_white();o=40;}
+void popup_shell_control_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o){c=lv_color_white();o=40;}
 #include <algorithm>
 #include <cassert>
 #include <cmath>

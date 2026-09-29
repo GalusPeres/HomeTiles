@@ -3,21 +3,18 @@
 #include <lvgl.h>
 #include <stdint.h>
 
-// popup_shell.h: the header icon disc fill for a popup and icon color.
-void popup_shell_disc_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa);
+// popup_shell.h: the fill of the controls around a popup's header.
+void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa);
 
 // Footer controls of the history popups (7D/24H/Today and the date and day
-// pills) match the header icon disc: the selected control has exactly its
-// fill (white, or the icon color with "Circle in icon color", at the Glow
-// strength), an info pill half of it. All their text is white.
+// pills) look like the pressed close button: the selected control has exactly
+// the control fill (the icon color with "Circle in icon color" while the card
+// shares its hue, else white, at the Glow strength), an info pill half of it.
+// All their text is white.
 namespace popup_nav_style {
 
-// Keeps the selection visible with the Glow strength near zero.
-inline constexpr lv_opa_t kMinSelectedOpa = 24;
-
 inline void fill(lv_color_t popup, lv_color_t icon, lv_color_t& color, lv_opa_t& opa) {
-  popup_shell_disc_fill(lv_color_to_u32(popup) & 0xFFFFFF, lv_color_to_u32(icon) & 0xFFFFFF, color, opa);
-  if (opa < kMinSelectedOpa) opa = kMinSelectedOpa;
+  popup_shell_control_fill(lv_color_to_u32(popup) & 0xFFFFFF, lv_color_to_u32(icon) & 0xFFFFFF, color, opa);
 }
 
 // A toggle (7D, 24H, Today): the selected one has the disc fill, the others

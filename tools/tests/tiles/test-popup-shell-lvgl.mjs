@@ -23,6 +23,7 @@ const cpp=String.raw`
 #include <vector>
 #include <new>
 #include <algorithm>
+#include <tuple>
 #include <iostream>
 #include <fstream>
 #include "src/ui/shared/title_label.h"
@@ -128,6 +129,28 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
  lv_obj_remove_state(button,LV_STATE_PRESSED);
  ui_surface_style::request_global_radius_refresh();ui_surface_style::process_pending_updates();
  lv_obj_update_layout(shell.overlay);assert(lv_obj_get_width(shell.frame)==lv_obj_get_width(a.body));assert(strcmp(hometiles_title::text(shell.title),"Number\nLiving room")==0);
+ // The controls take the icon color only on a card of a similar hue (From
+ // icon or a matching custom color); a grey or unrelated card keeps white.
+ assert(!popup_layout::cardMatchesIconHue(0x1B1B1B,0xC62828)&&"grey card, red icon");
+ assert(popup_layout::cardMatchesIconHue(0x482F10,0xEF8402)&&"From icon card");
+ assert(!popup_layout::cardMatchesIconHue(0x35224A,0xF5C518)&&"purple card, yellow icon");
+ assert(popup_layout::cardMatchesIconHue(0x3E1717,0xC62828)&&"matching custom card");
+ assert(popup_layout::cardMatchesIconHue(0x3A1320,0xE53935)&&"hues across 0 degrees");
+ assert(!popup_layout::cardMatchesIconHue(0x0A0A0A,0x26A69A)&&"near black card");
+ assert(!popup_layout::cardMatchesIconHue(0x482F10,0xFFFFFF)&&"white icon");
+ auto close_press=[&](uint32_t&rgb,lv_opa_t&opa){lv_style_value_t v;
+   assert(lv_obj_get_local_style_prop(button,LV_STYLE_BG_COLOR,&v,LV_STATE_PRESSED)==LV_STYLE_RES_FOUND);rgb=lv_color_to_u32(v.color)&0xFFFFFF;
+   assert(lv_obj_get_local_style_prop(button,LV_STYLE_BG_OPA,&v,LV_STATE_PRESSED)==LV_STYLE_RES_FOUND);opa=static_cast<lv_opa_t>(v.num);};
+ auto footer_fill=[&](uint32_t card,uint32_t icon,uint32_t&rgb,lv_opa_t&opa){lv_color_t c;popup_shell_control_fill(card,icon,c,opa);rgb=lv_color_to_u32(c)&0xFFFFFF;};
+ for(const auto&[card,icon,tinted]:std::vector<std::tuple<uint32_t,uint32_t,bool>>{{0x1B1B1B,0xC62828,false},{0x482F10,0xEF8402,true},{0x0A0A0A,0x26A69A,false}}){
+   lv_obj_set_style_bg_color(b.body,lv_color_hex(card),0);lv_obj_set_style_text_color(b.icon,lv_color_hex(icon),0);show(b,"Sonos");sync_popup_shell();
+   uint32_t close_rgb,footer_rgb;lv_opa_t close_opa,footer_opa;close_press(close_rgb,close_opa);footer_fill(card,icon,footer_rgb,footer_opa);
+   assert(close_rgb==(tinted?icon:0xFFFFFFu)&&"close press: icon color only on a matching card");
+   assert(close_rgb==footer_rgb&&close_opa==footer_opa&&"close press and footer controls look the same");
+   assert(close_opa>=popup_layout::kControlFillMinOpa);hide_popup_shell(b.body);
+ }
+ configManager.cfg.icon_glow=0;{uint32_t rgb;lv_opa_t opa;footer_fill(0x482F10,0xEF8402,rgb,opa);assert(opa==popup_layout::kControlFillMinOpa&&"Glow 0 keeps presses visible");}
+ configManager.cfg.icon_glow=icon_glow::kDefault;
  lv_obj_set_style_bg_color(b.body,lv_color_hex(0x885522),0);lv_obj_set_style_text_color(b.icon,lv_color_hex(0x00FF00),0);show(b,"Weather");assert(lv_color_eq(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN),lv_color_hex(0x885522)));assert(lv_color_eq(lv_obj_get_style_text_color(shell.icon,LV_PART_MAIN),lv_color_hex(0x00FF00)));assert(shell.frame==frame&&shell.header==header&&shell.close==button);assert(lv_obj_get_parent(a.body)==a.owner);assert(lv_obj_has_flag(a.body,LV_OBJ_FLAG_HIDDEN));assert(strcmp(hometiles_title::text(shell.title),"Weather")==0);
  hometiles_title::set(a.title,"Hidden background update");lv_obj_set_style_bg_color(a.body,lv_color_hex(0xEE0000),0);sync_popup_shell();assert(lv_color_eq(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN),lv_color_hex(0x885522)));assert(strcmp(hometiles_title::text(shell.title),"Weather")==0);
  lv_obj_send_event(button,LV_EVENT_CLICKED,nullptr);assert(b.closed==1&&!PopupFirstFrame::any_pending());process_popup_open();assert(applied==2);

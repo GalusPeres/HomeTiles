@@ -209,6 +209,35 @@ inline uint8_t headerDiscContrastStep(uint32_t rgb) {
   return static_cast<uint8_t>(t * 3.0f + 0.5f);
 }
 inline int headerDiscScaledOpa(int full, uint8_t step) { return (full * (24 + 7 * step) + 22) / 45; }
+// The controls around the header (pressed close, footer toggles, pills and
+// arrows) take the icon color only while the card shares its hue: a tile
+// color From icon or a matching custom color. A faint icon hue over a grey or
+// unrelated card reads as a muddy block, so those keep the neutral fill.
+// Match: card saturation (max - min) / max above 0.2 and hues within 35°.
+constexpr int kControlHueTolerance = 35;
+inline int hueDegrees(uint32_t rgb, int& chroma, int& max) {
+  const int r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+  max = r > g ? (r > b ? r : b) : (g > b ? g : b);
+  const int min = r < g ? (r < b ? r : b) : (g < b ? g : b);
+  chroma = max - min;
+  if (chroma == 0) return 0;
+  int hue;
+  if (max == r) hue = 60 * (g - b) / chroma;
+  else if (max == g) hue = 120 + 60 * (b - r) / chroma;
+  else hue = 240 + 60 * (r - g) / chroma;
+  return hue < 0 ? hue + 360 : hue;
+}
+inline bool cardMatchesIconHue(uint32_t card, uint32_t icon) {
+  int card_chroma, card_max, icon_chroma, icon_max;
+  const int card_hue = hueDegrees(card, card_chroma, card_max);
+  const int icon_hue = hueDegrees(icon, icon_chroma, icon_max);
+  if (icon_chroma == 0 || card_chroma * 5 <= card_max) return false;
+  int diff = card_hue > icon_hue ? card_hue - icon_hue : icon_hue - card_hue;
+  if (diff > 180) diff = 360 - diff;
+  return diff <= kControlHueTolerance;
+}
+// Keeps a press and a selection visible with the Glow strength near zero.
+constexpr int kControlFillMinOpa = 24;
 constexpr int kHeaderIconX = 0;
 constexpr int kHeaderTitleX = kHeaderIconDiscSize + kHeaderIconDiscGap;
 

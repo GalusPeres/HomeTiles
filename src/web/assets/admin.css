@@ -361,13 +361,15 @@
     .hardware-io-save-state.saving { color:var(--accent-link); }
     .hardware-io-save-state.saved { color:var(--ok); }
     .hardware-io-save-state.error { color:var(--err); }
+    /* Like the I/O list: the scrollbar stays inside the tab. A negative
+       margin pushed it past #tab-network, whose overflow:hidden cut it off. */
     #admin_settings_form {
       flex:1 1 auto;
       min-height:0;
       overflow-y:auto;
       overscroll-behavior:contain;
-      margin:0 -12px 0 0;
-      padding-right:12px;
+      margin:0;
+      padding-right:4px;
       padding-bottom:16px;
     }
 

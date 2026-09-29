@@ -198,6 +198,14 @@ constexpr int kHeaderIconDiscOpa = 38;
 // (tone_color::fill, popup_shell.cpp header_fill). The card hairline is the
 // plain white 20 % tile border.
 constexpr int kPopupBorderOpa = 51;
+// Keypad keys (PIN) at most this share of the card height, per mille. On
+// panels of 7 inches and more they would otherwise be physically about twice
+// the size of the 4" and 5" boards; smaller boards fill the space.
+#if defined(DEVICE_LARGE_PANEL)
+constexpr int kKeypadKeyMaxPermille = 100;
+#else
+constexpr int kKeypadKeyMaxPermille = 1000;
+#endif
 constexpr int kHeaderIconX = 0;
 constexpr int kHeaderTitleX = kHeaderIconDiscSize + kHeaderIconDiscGap;
 

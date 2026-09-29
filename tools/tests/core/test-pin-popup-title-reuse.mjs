@@ -125,6 +125,9 @@ void check_layout(const char* layout) {
   assert(dots.y1 > prompt.y2 && first.y1 > dots.y2 && "Prompt, dots line and keys stack in order");
   assert(first.x1 >= card.x1 + pad && last.x2 <= card.x2 - pad && below >= 0 && "Keys stay inside the card");
   assert(key_w > key_h && key_h >= popup_layout::scale(56) && "Keys are wider than tall and easy to hit");
+#if defined(DEVICE_LARGE_PANEL)
+  assert(key_h <= popup_layout::kCardHeight / 10 && "Large panels keep the keys at a tenth of the card");
+#endif
   assert(std::abs(above - below) <= 2 && "The block is centered below the header");
   for (int i = 0; i < kKeyCount; ++i) {
     lv_area_t a; lv_obj_get_coords(g_ctx->key_buttons[i], &a);
@@ -236,15 +239,16 @@ int main() {
   std::cout << "PIN preload, cached Radio/Settings titles, state header, prompt line, layout, DE/EN/FR, callback ownership and cleanup passed\n";
 }
 `);
-// Every popup layout (as in test-editable-history-lvgl.mjs).
+// Every popup layout (as in test-editable-history-lvgl.mjs). The 7" and
+// larger panels (DEVICE_LARGE_PANEL: 1024x600, 1280x800) keep smaller keys.
 for (const [name, width, height, define] of [
-  ['square', 480, 480, 'DEVICE_LAYOUT_480X480'], ['wide', 1024, 600, 'DEVICE_LAYOUT_1024X600'],
-  ['ws8', 1280, 800, ''], ['portrait', 720, 1280, ''], ['base', 720, 720, ''], ['landscape', 1280, 720, ''],
+  ['square', 480, 480, 'DEVICE_LAYOUT_480X480'], ['wide', 1024, 600, 'DEVICE_LAYOUT_1024X600 -DDEVICE_LARGE_PANEL'],
+  ['ws8', 1280, 800, 'DEVICE_LARGE_PANEL'], ['portrait', 720, 1280, ''], ['base', 720, 720, ''], ['landscape', 1280, 720, ''],
   ['compact-wide', 800, 480, 'DEVICE_LAYOUT_480X480'], ['tall', 480, 800, 'DEVICE_LAYOUT_480X480'],
 ]) {
   const binary = path.join(out, name + (process.platform === 'win32' ? '.exe' : ''));
   let result = spawnSync(host.cxx, [...host.flags, '-std=c++17', `-DSCREEN_WIDTH=${width}`, `-DSCREEN_HEIGHT=${height}`, `-DLAYOUT_NAME="${name}"`,
-    ...(define ? ['-D' + define] : []), source, host.archive, '-o', binary], {encoding: 'utf8'});
+    ...(define ? define.split(' -D').map(d => '-D' + d) : []), source, host.archive, '-o', binary], {encoding: 'utf8'});
   assert.equal(result.status, 0, result.stdout + result.stderr);
   result = spawnSync(binary, [], {encoding: 'utf8'});
   fs.writeFileSync(path.join(out, name + '.log'), result.stdout + result.stderr);

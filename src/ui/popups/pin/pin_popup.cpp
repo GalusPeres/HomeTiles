@@ -37,9 +37,6 @@ constexpr int kPromptGapPct = 20;     // prompt to the dots line
 constexpr int kDotsGapPct = 26;       // dots line to the keys
 constexpr int kMarginPct = 8;         // at least this above and below the block
 constexpr int kKeyWidthPct = 130;     // keys are a bit wider than tall
-// Keys stay at most this share of the card height (per mille), the size of
-// the agreed design; the block is centered in the remaining space.
-constexpr int kKeyHeightPermille = 125;
 constexpr int kDotPct = 22;           // dot diameter, share of the key height
 // Keys are a bit rounder than the close button and follow the global tile
 // radius like it (ui_surface_style::apply_radius).
@@ -119,7 +116,8 @@ KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* prompt_font) {
   g.key_h = (available - 2 * g.prompt_h) * 100 / height_pct;
   const int width_limit = content_w * 100 / width_pct;
   if (width_limit < g.key_h) g.key_h = width_limit;
-  const int size_limit = popup_layout::kCardHeight * kKeyHeightPermille / 1000;
+  // Large panels keep the keys at the physical size of the small boards.
+  const int size_limit = popup_layout::kCardHeight * popup_layout::kKeypadKeyMaxPermille / 1000;
   if (size_limit < g.key_h) g.key_h = size_limit;
   if (g.key_h < 1) g.key_h = 1;
   g.key_w = g.key_h * kKeyWidthPct / 100;

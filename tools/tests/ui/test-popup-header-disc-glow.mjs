@@ -14,18 +14,21 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 const shell = read('src/ui/popups/popup_shell.cpp');
 
-const tint = shell.slice(shell.indexOf('void apply_header_disc_tint('));
-assert.ok(tint.startsWith('void apply_header_disc_tint('), 'Header tint helper exists');
+// disc_fill() computes the fill (shared with the footer controls and the
+// close button); apply_header_disc_tint() follows it.
+const tint = shell.slice(shell.indexOf('void disc_fill('));
+assert.ok(tint.startsWith('void disc_fill('), 'Header disc fill helper exists');
+assert.ok(tint.includes('void apply_header_disc_tint('), 'Header tint helper exists');
 for (const marker of [
   'const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);',
   '(!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));',
-  'const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();',
+  'color = tinted ? lv_color_hex(rgb) : lv_color_white();',
   'ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),',
   'static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));',
   'popup_layout::headerDiscContrastStep(',
   'tinted ? ui_surface_style::icon_glow_opa()',
   ': ui_surface_style::icon_neutral_opa(),',
-  ': LV_OPA_TRANSP;',
+  'shown ? fill_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);',
 ]) assert.ok(tint.includes(marker), `header tint: ${marker}`);
 // A newly shown popup takes the options its tile passed (or the default).
 assert.match(shell, /if \(shell\.active != binding \|\| g_next_disc\.from_tile\) shell\.disc = g_next_disc;\s*g_next_disc = \{\};/);

@@ -263,6 +263,18 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
 
 }
 
+// The disc fill for a card and icon color: the icon color with "Circle in
+// icon color" (or without a tile) when the icon is colored, else white; at
+// the Glow strength, subtler on dark cards.
+void disc_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb, lv_color_t& color, lv_opa_t& opa) {
+  const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+  const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);
+  color = tinted ? lv_color_hex(rgb) : lv_color_white();
+  opa = static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
+      tinted ? ui_surface_style::icon_glow_opa() : ui_surface_style::icon_neutral_opa(),
+      popup_layout::headerDiscContrastStep(card)));
+}
+
 // The header disc looks like the opening tile's disc: shown or hidden by its
 // Icon circle mode, and with "Circle in icon color" a colored icon (binary
 // on, light color, climate mode, ...) tints it; white and grey icons keep the
@@ -274,21 +286,26 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon) {
   const uint32_t rgb =
       lv_color_to_u32(lv_obj_get_style_text_color(icon, LV_PART_MAIN)) & 0xFFFFFFu;
   const uint32_t card = lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame, LV_PART_MAIN)) & 0xFFFFFFu;
-  const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
   const HeaderDisc& options = shell.disc;
-  const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);
   const bool shown = !options.from_tile ||
                      (!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));
-  const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
-  const uint8_t step = popup_layout::headerDiscContrastStep(card);
-  const lv_opa_t opa = shown ? static_cast<lv_opa_t>(popup_layout::headerDiscScaledOpa(
-                                   tinted ? ui_surface_style::icon_glow_opa()
-                                          : ui_surface_style::icon_neutral_opa(),
-                                   step))
-                             : LV_OPA_TRANSP;
+  lv_color_t color;
+  lv_opa_t fill_opa;
+  disc_fill(options, card, rgb, color, fill_opa);
+  const lv_opa_t opa = shown ? fill_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
+  // The pressed close button shows the same fill as the disc, like the
+  // popup's footer controls (popup_nav_style.h). Only a change restyles it.
+  static lv_color_t close_color = lv_color_white();
+  static lv_opa_t close_opa = LV_OPA_20;
+  if (shell.close && (!lv_color_eq(close_color, color) || close_opa != fill_opa)) {
+    close_color = color;
+    close_opa = fill_opa;
+    lv_obj_set_style_bg_color(shell.close, color, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(shell.close, fill_opa, LV_STATE_PRESSED);
+  }
   // The card hairline is the plain lighter tile border. It never follows the
   // icon color: a hairline change redraws the whole popup, and a Light popup
   // changes its icon color on every step of a dragged color or Kelvin value.
@@ -435,10 +452,10 @@ void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow) {
   g_next_disc.glow = glow;
 }
 
-bool popup_shell_tinted_controls() {
+void popup_shell_disc_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa) {
   // A popup styles its controls before show_popup_shell() takes the options.
-  const HeaderDisc& disc = g_next_disc.from_tile ? g_next_disc : shell.disc;
-  return disc.from_tile && disc.glow;
+  const HeaderDisc& options = g_next_disc.from_tile ? g_next_disc : shell.disc;
+  disc_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu, color, opa);
 }
 
 void popup_shell_follow_tile_color(uint32_t color) {

@@ -1295,26 +1295,29 @@ static bool next_json_object_in_array(const String& array, int& cursor, String& 
   return true;
 }
 
-static void style_mode_button(lv_obj_t* btn, bool active) {
-  if (!btn) return;
-  lv_color_t popup = lv_color_hex(0x2A2A2A);
-  lv_obj_t* row = lv_obj_get_parent(btn);
-  lv_obj_t* card = row ? lv_obj_get_parent(row) : nullptr;
-  if (card) popup = lv_obj_get_style_bg_color(card, LV_PART_MAIN);
-  popup_nav_style::style_toggle(btn, lv_obj_get_child(btn, 0), popup, active);
+// Footer controls match the header disc, which follows card and icon color.
+static lv_color_t card_color(const WeatherPopupContext* ctx) {
+  return ctx && ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(0x2A2A2A);
+}
+
+static lv_color_t header_icon_color(const WeatherPopupContext* ctx) {
+  return ctx && ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN)
+                                : lv_color_white();
+}
+
+static void style_mode_button(WeatherPopupContext* ctx, lv_obj_t* btn, bool active) {
+  if (!ctx || !btn) return;
+  popup_nav_style::style_toggle(btn, lv_obj_get_child(btn, 0), card_color(ctx), header_icon_color(ctx),
+                                active);
 }
 
 static void style_header_action_button(WeatherPopupContext* ctx, lv_obj_t* btn, bool active) {
   if (!ctx || !btn) return;
-  const lv_color_t popup =
-      ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(0x2A2A2A);
   lv_obj_t* label = lv_obj_get_child(btn, 0);
-  popup_nav_style::style_toggle(btn, label, popup, active);
+  popup_nav_style::style_toggle(btn, label, card_color(ctx), header_icon_color(ctx), active);
   if (label) {
     lv_obj_set_style_text_font(label, FONT_UNIT, 0);
     lv_obj_set_style_text_font(label, FONT_UNIT, LV_STATE_PRESSED);
-    lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_opa(label, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_set_style_text_outline_stroke_opa(label, LV_OPA_TRANSP, 0);
     lv_obj_set_style_text_outline_stroke_opa(label, LV_OPA_TRANSP, LV_STATE_PRESSED);
     lv_obj_set_style_text_outline_stroke_width(label, 0, 0);
@@ -1330,7 +1333,7 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
       set_label_style(label, lv_color_white(), FONT_MDI_ICONS);
       lv_label_set_text(label, getMdiChar("arrow-left").c_str());
     }
-    style_mode_button(ctx->mode_week_btn, true);
+    style_mode_button(ctx, ctx->mode_week_btn, true);
   }
   if (ctx->mode_row) {
     lv_obj_add_flag(ctx->mode_row, LV_OBJ_FLAG_HIDDEN);
@@ -1386,9 +1389,16 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
     lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, LV_STATE_PRESSED);
     lv_obj_t* icon = lv_obj_get_child(btn, 0);
     if (icon) {
+      // Enabled arrows are dimmed like the unselected footer controls.
       lv_obj_set_style_text_color(icon, enabled ? lv_color_white() : nav_inactive_color, 0);
       lv_obj_set_style_text_color(icon, enabled ? lv_color_white() : nav_inactive_color, LV_STATE_PRESSED);
+      lv_obj_set_style_text_opa(icon, enabled ? popup_nav_style::kDimTextOpa : LV_OPA_COVER, 0);
     }
+    lv_color_t pressed_color;
+    lv_opa_t pressed_opa;
+    popup_nav_style::fill(card_color(ctx), header_icon_color(ctx), pressed_color, pressed_opa);
+    lv_obj_set_style_bg_color(btn, pressed_color, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(btn, pressed_opa, LV_STATE_PRESSED);
     if (enabled) {
       lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
     } else {
@@ -2822,8 +2832,10 @@ static void apply_card_color(WeatherPopupContext* ctx, uint32_t bg_color) {
     lv_obj_set_style_bg_color(ctx->detail_now_temp_unit_label, lv_color_hex(color), 0);
   // The week-range and day-title pills follow the card color; the resident
   // popup reopens with other tile colors and tints.
-  popup_nav_style::style_pill(ctx->week_range_pill, ctx->week_range_label, lv_color_hex(color));
-  popup_nav_style::style_pill(ctx->detail_title_pill, ctx->detail_title_label, lv_color_hex(color));
+  popup_nav_style::style_pill(ctx->week_range_pill, ctx->week_range_label, lv_color_hex(color),
+                              header_icon_color(ctx));
+  popup_nav_style::style_pill(ctx->detail_title_pill, ctx->detail_title_label, lv_color_hex(color),
+                              header_icon_color(ctx));
   for (int i = 0; i < ctx->detail_disabled_separator_count; ++i) {
     if (ctx->detail_disabled_separators[i]) {
       lv_obj_set_style_bg_color(ctx->detail_disabled_separators[i], lv_color_hex(color), 0);
@@ -2835,9 +2847,10 @@ static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupIn
   if (!ctx) return;
   ctx->entity_id = init.entity_id;
   ctx->title = init.title;
-  apply_card_color(ctx, init.bg_color);
-  // The header icon takes the tile icon's color; the shell tints its disc.
+  // The header icon takes the tile icon's color; the shell tints its disc,
+  // and the footer controls (styled by apply_card_color) match that disc.
   if (ctx->icon_label) lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);
+  apply_card_color(ctx, init.bg_color);
   ctx->colored_icons = init.colored_icons;
   ctx->icon_forced = init.icon_forced;
   if (ctx->location_label) {

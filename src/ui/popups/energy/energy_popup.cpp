@@ -179,15 +179,15 @@ int time_axis_height() {
   return line > kTimeAxisHeight ? line : kTimeAxisHeight;
 }
 
-void style_period_button(lv_obj_t* btn, lv_obj_t* label, bool active) {
-  if (!btn || !label) return;
-  lv_color_t popup = lv_color_hex(0x2A2A2A);
-  lv_obj_t* row = lv_obj_get_parent(btn);
-  lv_obj_t* card = row ? lv_obj_get_parent(row) : nullptr;
-  if (card) popup = lv_obj_get_style_bg_color(card, LV_PART_MAIN);
+void style_period_button(EnergyPopupContext* ctx, lv_obj_t* btn, lv_obj_t* label, bool active) {
+  if (!ctx || !btn || !label) return;
+  const lv_color_t popup =
+      ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(0x2A2A2A);
+  const lv_color_t icon =
+      ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN) : lv_color_white();
   lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
   lv_obj_set_style_text_font(label, popup_layout::font24(), LV_STATE_PRESSED);
-  popup_nav_style::style_toggle(btn, label, popup, active);
+  popup_nav_style::style_toggle(btn, label, popup, icon, active);
 }
 
 int text_width(const char* text, const lv_font_t* font) {
@@ -222,8 +222,8 @@ void fit_today_button(EnergyPopupContext* ctx) {
 void update_period_buttons(EnergyPopupContext* ctx) {
   if (!ctx) return;
   const bool day = ctx->period == "day";
-  style_period_button(ctx->day_btn, ctx->day_label, day);
-  style_period_button(ctx->week_btn, ctx->week_label, !day);
+  style_period_button(ctx, ctx->day_btn, ctx->day_label, day);
+  style_period_button(ctx, ctx->week_btn, ctx->week_label, !day);
   fit_today_button(ctx);
 }
 

@@ -394,6 +394,8 @@ static bool popup_icon_state_known(const String& raw) {
          state != "none" && state != "null";
 }
 
+static void update_range_buttons(SensorPopupContext* ctx);
+
 static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const char* state,
                                    const char* display, lv_color_t fallback) {
   if (!ctx || !ctx->icon_label) return;
@@ -407,6 +409,8 @@ static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const ch
                              display, lv_color_to_u32(fallback) & 0xFFFFFF));
   if (!lv_color_eq(lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN), color)) {
     lv_obj_set_style_text_color(ctx->icon_label, color, 0);
+    // The range buttons share the header disc fill, which follows the icon.
+    update_range_buttons(ctx);
   }
 }
 
@@ -462,25 +466,25 @@ static String sensor_value_display(const String& value, const String& unit,
   return display;
 }
 
-static void style_range_button(lv_obj_t* btn, bool active) {
-  if (!btn) return;
-  lv_color_t popup = lv_color_hex(0x2A2A2A);
-  lv_obj_t* row = lv_obj_get_parent(btn);
-  lv_obj_t* card = row ? lv_obj_get_parent(row) : nullptr;
-  if (card) popup = lv_obj_get_style_bg_color(card, LV_PART_MAIN);
+static void style_range_button(SensorPopupContext* ctx, lv_obj_t* btn, bool active) {
+  if (!ctx || !btn) return;
+  const lv_color_t popup =
+      ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(0x2A2A2A);
+  const lv_color_t icon =
+      ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN) : lv_color_white();
   lv_obj_t* label = lv_obj_get_child(btn, 0);
   if (label) {
     lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
     lv_obj_set_style_text_font(label, popup_layout::font24(), LV_STATE_PRESSED);
   }
-  popup_nav_style::style_toggle(btn, label, popup, active);
+  popup_nav_style::style_toggle(btn, label, popup, icon, active);
 }
 
 static void update_range_buttons(SensorPopupContext* ctx) {
   if (!ctx) return;
   const auto selected = ctx->editable ? ctx->editable_requested_range : ctx->history_range;
-  style_range_button(ctx->range_day_btn, selected == SensorHistoryRange::Day24);
-  style_range_button(ctx->range_week_btn, selected == SensorHistoryRange::Day7);
+  style_range_button(ctx, ctx->range_day_btn, selected == SensorHistoryRange::Day24);
+  style_range_button(ctx, ctx->range_week_btn, selected == SensorHistoryRange::Day7);
 }
 
 }  // namespace

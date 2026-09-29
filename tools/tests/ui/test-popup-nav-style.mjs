@@ -1,7 +1,9 @@
-// Footer controls of the history popups (7D/24H/Today, date and day pills):
-// glass without the opening tile's "Circle in icon color", the popup hue made
-// lighter with it; white text stays readable (regression: solid white pills
-// with text cut out in the popup color in every popup).
+// Footer controls of the history popups (7D/24H/Today, date and day pills)
+// and the pressed close button match the header icon disc: the selected
+// control has exactly the disc fill (white, or the icon color with "Circle in
+// icon color", at the Glow strength), the info pill half of it, and only the
+// selected label is full white (regression: solid white pills brighter than
+// the disc, and a white pill with text cut out in the popup color).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,29 +20,38 @@ const fn = (source, name) => {
   return found.source;
 };
 
-// Every history popup styles its toggles and pills through popup_nav_style.
+// Every history popup styles its toggles and pills through popup_nav_style
+// with its card and header icon color.
 const sensor = read('src/ui/popups/sensor/sensor_popup.cpp');
 const energy = read('src/ui/popups/energy/energy_popup.cpp');
 const weather = read('src/ui/popups/weather/weather_popup.cpp');
 for (const [source, name] of [[sensor, 'style_range_button'], [energy, 'style_period_button'],
   [weather, 'style_mode_button'], [weather, 'style_header_action_button']]) {
   const body = fn(source, name);
-  assert.match(body, /popup_nav_style::style_toggle\(btn, /, name);
-  assert.doesNotMatch(body, /lv_color_white\(\), selector/, `${name} has no white fill`);
+  assert.match(body, /popup_nav_style::style_toggle\(btn, [^;]*icon[^;]*\)/, name);
+  assert.doesNotMatch(body, /lv_color_white\(\), selector|LV_OPA_COVER, 0\)/, `${name} has no own fill`);
 }
 const cardColor = fn(weather, 'apply_card_color');
-assert.match(cardColor, /popup_nav_style::style_pill\(ctx->week_range_pill, ctx->week_range_label/);
-assert.match(cardColor, /popup_nav_style::style_pill\(ctx->detail_title_pill, ctx->detail_title_label/);
+assert.match(cardColor, /popup_nav_style::style_pill\(ctx->week_range_pill, ctx->week_range_label, [^;]*header_icon_color\(ctx\)\)/);
+assert.match(cardColor, /popup_nav_style::style_pill\(ctx->detail_title_pill, ctx->detail_title_label, [^;]*header_icon_color\(ctx\)\)/);
+// The weather header icon color is set before the pills are styled.
+assert.match(fn(weather, 'apply_init_to_context'),
+  /lv_obj_set_style_text_color\(ctx->icon_label, lv_color_hex\(init\.icon_color\), 0\);\s*apply_card_color\(ctx, init\.bg_color\);/);
 assert.match(fn(weather, 'weather_popup_follow_tile_color'), /apply_card_color\(ctx, color\);\s*[^}]*update_mode_buttons\(ctx\);/);
+assert.match(fn(sensor, 'apply_popup_icon_color'), /lv_obj_set_style_text_color\(ctx->icon_label, color, 0\);\s*[^}]*update_range_buttons\(ctx\);/);
 assert.match(fn(sensor, 'sensor_popup_follow_tile_color'), /update_range_buttons\(ctx\);/);
 assert.match(fn(energy, 'energy_popup_follow_tile_color'), /update_period_buttons\(ctx\);/);
-// The tile that opens the popup decides, before and after the shell took over.
-assert.match(fn(read('src/ui/popups/popup_shell.cpp'), 'popup_shell_tinted_controls'),
-  /g_next_disc\.from_tile \? g_next_disc : shell\.disc;\s*return disc\.from_tile && disc\.glow;/);
+// One disc fill for the header disc, the footer controls and the close button.
+const shell = read('src/ui/popups/popup_shell.cpp');
+const tint = fn(shell, 'apply_header_disc_tint');
+assert.match(tint, /disc_fill\(options, card, rgb, color, fill_opa\);/);
+assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, color, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, fill_opa, LV_STATE_PRESSED\);/);
+assert.match(fn(shell, 'popup_shell_disc_fill'),
+  /g_next_disc\.from_tile \? g_next_disc : shell\.disc;\s*disc_fill\(options,/);
 
 const host = await lvglHost(root);
 if (!host) {
-  console.log('Popup footer controls use popup_nav_style; SKIP: rendering needs LVGL and a host compiler');
+  console.log('Popup footer controls match the icon disc; SKIP: rendering needs LVGL and a host compiler');
   process.exit(0);
 }
 
@@ -49,73 +60,56 @@ const out = path.join(root, 'build/tests/popup-nav-style');
 fs.mkdirSync(out, {recursive: true});
 const cpp = String.raw`
 #include <lvgl.h>
-#include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <vector>
-${strip(read('src/tiles/config/tile_tint.h'))}
-static bool g_tinted = false;
-bool popup_shell_tinted_controls() { return g_tinted; }
+static lv_color_t g_disc_color = lv_color_white();
+static lv_opa_t g_disc_opa = 40;
+static uint32_t g_card = 0, g_icon = 0;
+void popup_shell_disc_fill(uint32_t card, uint32_t icon, lv_color_t& color, lv_opa_t& opa) {
+  g_card = card; g_icon = icon; color = g_disc_color; opa = g_disc_opa;
+}
 ${strip(read('src/ui/popups/popup_nav_style.h'))}
 using namespace popup_nav_style;
-static void hsl(uint32_t c, double& h, double& s, double& l) {
-  const double r = ((c >> 16) & 255) / 255.0, g = ((c >> 8) & 255) / 255.0, b = (c & 255) / 255.0;
-  const double hi = std::fmax(r, std::fmax(g, b)), lo = std::fmin(r, std::fmin(g, b));
-  l = (hi + lo) / 2; h = 0; s = 0;
-  if (hi > lo) {
-    const double d = hi - lo;
-    s = l > 0.5 ? d / (2 - hi - lo) : d / (hi + lo);
-    h = hi == r ? (g - b) / d + (g < b ? 6 : 0) : hi == g ? (b - r) / d + 2 : (r - g) / d + 4;
-    h *= 60;
-  }
-}
+static uint32_t rgb(lv_color_t c) { return lv_color_to_u32(c) & 0xFFFFFF; }
 int main() {
   lv_init();
-  std::vector<uint32_t> px(64 * 64);
+  static uint32_t px[64 * 64];
   lv_display_t* display = lv_display_create(64, 64);
   lv_display_set_color_format(display, LV_COLOR_FORMAT_XRGB8888);
-  lv_display_set_buffers(display, px.data(), nullptr, px.size() * 4, LV_DISPLAY_RENDER_MODE_FULL);
-  lv_display_set_flush_cb(display, [](lv_display_t* d, const lv_area_t*, uint8_t*) { lv_display_flush_ready(d); });
+  lv_display_set_buffers(display, px, nullptr, sizeof(px), LV_DISPLAY_RENDER_MODE_FULL);
   int ok = 1;
   auto check = [&](bool v, const char* what) { if (!v) { std::printf("FAIL %s\n", what); ok = 0; } };
-  // Glass: white mixed into the popup color; the selected fill is brighter.
-  check(glass(0x1C1C1C, Fill::Info) == tile_tint::mix(0x1C1C1C, 0xFFFFFF, 14), "glass info is 14 % white");
-  check(glass(0x1C1C1C, Fill::Selected) == tile_tint::mix(0x1C1C1C, 0xFFFFFF, 30), "glass selected is 30 % white");
-  // Hue: the popup hue, lighter; grey stays grey.
-  const uint32_t gold = 0x45391B;
-  double h0, s0, l0, h1, s1, l1, h2, s2, l2;
-  hsl(gold, h0, s0, l0); hsl(hue_lighter(gold, Fill::Info), h1, s1, l1); hsl(hue_lighter(gold, Fill::Selected), h2, s2, l2);
-  check(std::fabs(h1 - h0) < 3 && std::fabs(h2 - h0) < 3, "hue kept");
-  check(l1 > l0 + 0.07 && l2 > l1 + 0.12, "info and selected get lighter");
-  check(s1 >= s0 - 0.01, "saturation kept");
-  const uint32_t grey = hue_lighter(0x1C1C1C, Fill::Selected);
-  check(((grey >> 16) & 255) == ((grey >> 8) & 255) && ((grey >> 8) & 255) == (grey & 255), "grey stays grey");
-  // White text stays readable on light popup colors.
-  for (uint32_t base : {0xFFD700u, 0xF4F4EFu, 0x8BC34Au}) {
-    check(tile_tint::white_contrast(fill_rgb(base, false, Fill::Selected)) >= 3.0, "readable glass");
-    check(tile_tint::white_contrast(fill_rgb(base, true, Fill::Selected)) >= 3.0, "readable hue");
-  }
-  // A real toggle: selected is filled, unselected only shows its label, and
-  // "Circle in icon color" switches glass to the popup hue.
+  const lv_color_t gold = lv_color_hex(0x45391B), sun = lv_color_hex(0xFFB224);
   lv_obj_t* btn = lv_button_create(lv_screen_active());
   lv_obj_t* label = lv_label_create(btn);
-  style_toggle(btn, label, lv_color_hex(gold), true);
-  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == LV_OPA_COVER, "selected filled");
-  check((lv_color_to_u32(lv_obj_get_style_bg_color(btn, LV_PART_MAIN)) & 0xFFFFFF) == fill_rgb(gold, false, Fill::Selected), "glass fill");
-  check((lv_color_to_u32(lv_obj_get_style_text_color(label, LV_PART_MAIN)) & 0xFFFFFF) == 0xFFFFFF, "white text");
-  g_tinted = true;
-  style_toggle(btn, label, lv_color_hex(gold), true);
-  check((lv_color_to_u32(lv_obj_get_style_bg_color(btn, LV_PART_MAIN)) & 0xFFFFFF) == fill_rgb(gold, true, Fill::Selected), "hue fill");
-  style_toggle(btn, label, lv_color_hex(gold), false);
-  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == LV_OPA_TRANSP, "unselected transparent");
+  // Selected: exactly the disc fill of this card and icon, full white text.
+  style_toggle(btn, label, gold, sun, true);
+  check(g_card == 0x45391B && g_icon == 0xFFB224, "asks for the disc of this card and icon");
+  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == 40 && rgb(lv_obj_get_style_bg_color(btn, LV_PART_MAIN)) == 0xFFFFFF,
+        "selected has the neutral disc fill");
+  check(lv_obj_get_style_text_opa(label, LV_PART_MAIN) == LV_OPA_COVER, "selected text full white");
+  g_disc_color = sun; g_disc_opa = 54;
+  style_toggle(btn, label, gold, sun, true);
+  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == 54 && rgb(lv_obj_get_style_bg_color(btn, LV_PART_MAIN)) == 0xFFB224,
+        "selected has the tinted disc fill");
+  // Unselected: no fill, dimmed label; pressing shows the disc fill.
+  style_toggle(btn, label, gold, sun, false);
+  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == LV_OPA_TRANSP, "unselected has no fill");
+  check(lv_obj_get_style_text_opa(label, LV_PART_MAIN) == kDimTextOpa, "unselected text dimmed");
   lv_obj_add_state(btn, LV_STATE_PRESSED);
-  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == LV_OPA_COVER &&
-        (lv_color_to_u32(lv_obj_get_style_bg_color(btn, LV_PART_MAIN)) & 0xFFFFFF) == fill_rgb(gold, true, Fill::Info), "pressed shows info fill");
+  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == 54, "pressed shows the disc fill");
+  lv_obj_remove_state(btn, LV_STATE_PRESSED);
+  // Info pill: half the disc fill, softer text.
   lv_obj_t* pill = lv_obj_create(lv_screen_active());
   lv_obj_t* pill_label = lv_label_create(pill);
-  g_tinted = false;
-  style_pill(pill, pill_label, lv_color_hex(gold));
-  check((lv_color_to_u32(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) & 0xFFFFFF) == fill_rgb(gold, false, Fill::Info), "pill info fill");
+  style_pill(pill, pill_label, gold, sun);
+  check(lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) == 27 && rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) == 0xFFB224,
+        "pill has half the disc fill");
+  check(lv_obj_get_style_text_opa(pill_label, LV_PART_MAIN) == kPillTextOpa, "pill text softer");
+  // A Glow strength near zero keeps the selection visible.
+  g_disc_opa = 0;
+  style_toggle(btn, label, gold, sun, true);
+  check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == kMinSelectedOpa, "minimum selection fill");
   std::printf("%s\n", ok ? "OK" : "FAILED");
   return ok ? 0 : 1;
 }
@@ -127,4 +121,4 @@ let result = spawnSync(host.cxx, [...host.flags, '-std=c++17', source, host.arch
 assert.equal(result.status, 0, result.stdout + result.stderr);
 result = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(result.status, 0, result.stdout + result.stderr);
-console.log('Popup footer controls: glass without, popup hue with "Circle in icon color"; white text readable.');
+console.log('Popup footer controls and the close button match the header icon disc.');

@@ -30,7 +30,7 @@ const cpp = `
 #include "src/types/value/value_colors.h"
 #include "src/ui/shared/title_label.h"
 #include "src/ui/popups/popup_nav_style.h"
-bool popup_shell_tinted_controls(){return false;}
+void popup_shell_disc_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o){c=lv_color_white();o=40;}
 #include "src/ui/popups/popup_first_frame.h"
 PopupFirstFrame g_sensor_first_frame;
 void hide_popup_shell(lv_obj_t*){} void cancel_popup_open(lv_obj_t*){}
@@ -243,16 +243,16 @@ int main(int argc,char**argv){
  ctx.range_day_btn=lv_button_create(card);ctx.range_week_btn=lv_button_create(card);
  for(auto*button:{ctx.range_day_btn,ctx.range_week_btn}){lv_obj_add_event_cb(button,on_range_click,LV_EVENT_CLICKED,&ctx);lv_obj_add_flag(button,LV_OBJ_FLAG_HIDDEN);}
  ctx.history_range=SensorHistoryRange::Day24;ctx.editable_requested_range=SensorHistoryRange::Day24;
- update_range_buttons(&ctx);assert(lv_obj_get_style_bg_opa(ctx.range_day_btn,LV_PART_MAIN)==LV_OPA_COVER);
+ update_range_buttons(&ctx);assert(lv_obj_get_style_bg_opa(ctx.range_day_btn,LV_PART_MAIN)==40);
  auto old_height=lv_obj_get_height(ctx.body_box);String old_date=lv_label_get_text(ctx.binary_activity_date);
  lv_obj_send_event(ctx.range_week_btn,LV_EVENT_CLICKED,nullptr);assert(history_requests==1&&history_clears==0&&ctx.history_range==SensorHistoryRange::Day24);
- assert(lv_obj_get_style_bg_opa(ctx.range_week_btn,LV_PART_MAIN)==LV_OPA_COVER&&lv_obj_get_style_bg_opa(ctx.range_day_btn,LV_PART_MAIN)==LV_OPA_TRANSP);
+ assert(lv_obj_get_style_bg_opa(ctx.range_week_btn,LV_PART_MAIN)==40&&lv_obj_get_style_bg_opa(ctx.range_day_btn,LV_PART_MAIN)==LV_OPA_TRANSP);
  assert(lv_obj_get_height(ctx.body_box)==old_height&&old_date==lv_label_get_text(ctx.binary_activity_date));
  DynamicJsonDocument reply(512);reply["request_id"]="old";reply["hours"]=168;assert(!accept_editable_history_range(&ctx,reply));
  reply["request_id"]=ctx.editable_history_id.c_str();reply["hours"]=24;assert(!accept_editable_history_range(&ctx,reply));
  reply["hours"]=168;assert(accept_editable_history_range(&ctx,reply)&&ctx.history_range==SensorHistoryRange::Day7);
  lv_obj_send_event(ctx.range_day_btn,LV_EVENT_CLICKED,nullptr);assert(ctx.history_range==SensorHistoryRange::Day7&&!accept_editable_history_range(&ctx,reply));
- assert(lv_obj_get_style_bg_opa(ctx.range_day_btn,LV_PART_MAIN)==LV_OPA_COVER&&lv_obj_get_style_bg_opa(ctx.range_week_btn,LV_PART_MAIN)==LV_OPA_TRANSP);
+ assert(lv_obj_get_style_bg_opa(ctx.range_day_btn,LV_PART_MAIN)==40&&lv_obj_get_style_bg_opa(ctx.range_week_btn,LV_PART_MAIN)==LV_OPA_TRANSP);
  reply["request_id"]=ctx.editable_history_id.c_str();reply["hours"]=24;assert(accept_editable_history_range(&ctx,reply)&&ctx.history_range==SensorHistoryRange::Day24);
  for(auto*button:{ctx.range_day_btn,ctx.range_week_btn})lv_obj_delete(button);
  assert(editable_control_height("number")==editable_control_height("select"));assert(editable_control_height("time")>editable_control_height("select"));

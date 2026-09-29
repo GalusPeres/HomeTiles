@@ -1,29 +1,35 @@
-// The Climate tile's control pill and its pressed +/- buttons are white
-// overlays, a lighter step of whatever the tile shows (global color, own
-// color or a rules tint), instead of a fixed grey that stood out on colored
-// tiles. On the default 0x222222 tile they keep the former 0x3A3A3A pill and
-// 0x4A4A4A pressed button. The Web Admin preview uses the same overlay.
+// The Climate tile's control pill and its pressed +/- buttons follow the
+// popup control rule (tile_icon_source::refresh_controls): the icon color only
+// with Tile color "From icon" and "Circle in icon color", else white, at the
+// disc opacity of the tile, instead of a fixed white overlay that ignored the
+// icon. The Web Admin preview uses the same rule.
 import assert from 'node:assert/strict';
 import {readRepoFile} from '../../lib/admin-source.mjs';
 
 const read = file => readRepoFile(file).replace(/\r\n?/g, '\n');
 const renderer = read('src/types/climate/renderer.cpp');
 for (const marker of [
-  'constexpr lv_opa_t kSlotSurfaceOpa = 28;',
-  'constexpr lv_opa_t kSlotPressedOpa = 21;',
-  'lv_obj_set_style_bg_color(root, lv_color_white(), LV_PART_MAIN);',
-  'root, interactive_control ? kSlotSurfaceOpa : LV_OPA_TRANSP,',
-  'button, kSlotPressedOpa,',
-  ': kSlotPressedOpa,',
+  // The pill is a resting surface, - and + are press fills.
+  'tile_icon_disc::mark_surface(root);',
+  'tile_icon_disc::mark_control(button);',
+  // The shared fill shows while the slot is interactive; compact layouts press
+  // without a fill; the rule is applied once the card is built.
+  'lv_obj_remove_local_style_prop(root, LV_STYLE_BG_OPA, LV_PART_MAIN);',
+  'lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_PRESSED);',
+  'lv_obj_remove_local_style_prop(button, LV_STYLE_BG_OPA, LV_PART_MAIN | LV_STATE_PRESSED);',
+  'tile_icon_source::refresh_controls(card);',
 ]) assert.ok(renderer.includes(marker), `climate renderer: ${marker}`);
-assert.doesNotMatch(renderer, /0x3A3A3A\)|0x5A5A5A\)/, 'No fixed grey pill');
+assert.doesNotMatch(renderer, /0x3A3A3A\)|0x5A5A5A\)|kSlotSurfaceOpa|kSlotPressedOpa/, 'No fixed pill overlay');
 
-// Overlay math on the default tile (LVGL blends white at opa/255).
-const over = (base, opa) => Math.round(base + (255 - base) * opa / 255);
-assert.equal(over(0x22, 28), 0x3A, 'Pill on the default tile');
-assert.equal(over(over(0x22, 28), 21), 0x4A, 'Pressed button on the pill');
+// refresh_controls styles controls on the card and one level deeper.
+const source = read('src/tiles/runtime/tile_icon_source.cpp');
+assert.match(source, /const bool press = tile_icon_disc::is_control\(obj\);\s*if \(!press && !tile_icon_disc::is_surface\(obj\)\) return;/);
+assert.match(source, /for \(uint32_t j = 0; j < inner; \+\+j\) style\(lv_obj_get_child\(child, static_cast<int32_t>\(j\)\)\);/);
 
+// Preview: the pill takes --control-fill, set per tile with the same rule.
 const css = read('src/web/assets/admin.css');
-assert.match(css, /\.tile\.climate \.climate-slot-control \{[^}]*background:rgba\(255,255,255,0\.11\);/,
-  'Preview pill is the same overlay');
-console.log('Climate tile pill follows the tile color');
+assert.match(css, /\.tile\.climate \.climate-slot-control \{[^}]*background:var\(--control-fill, rgba\(255,255,255,0\.094\)\);/,
+  'Preview pill uses the control fill');
+const preview = read('src/web/admin/tiles/grid-preview.js');
+assert.match(preview, /const controlTinted = fill > 0 && tinted && !!iconRgb;\s*const controlOpa = Math\.max\(24, scaled\(controlTinted \? glowOpa : neutralOpa\)\) \/ 255;/);
+console.log('Climate tile pill follows the popup control rule');

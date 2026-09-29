@@ -56,14 +56,20 @@ inline uintptr_t tag_index(lv_obj_t* disc) {
 inline Mode mode_of(lv_obj_t* disc) { return static_cast<Mode>(tag_index(disc) / 2); }
 inline bool glow_of(lv_obj_t* disc) { return (tag_index(disc) % 2) != 0; }
 
-// Buttons on a tile card with a press fill (Media previous and next) carry
-// this address as user data; tile_icon_source::refresh_controls gives them
-// the popup control fill.
-inline constexpr char kControlTag = 0;
+// Tile controls carry one of these addresses as user data, and
+// tile_icon_source::refresh_controls gives them the popup control fill:
+// [0] a press fill (Media previous and next, Climate - and +), [1] a resting
+// surface (the Climate target pill). Their owner keeps deciding with a local
+// opacity where a control shows no fill.
+inline constexpr char kControlTags[2] = {};
 inline void mark_control(lv_obj_t* btn) {
-  if (btn) lv_obj_set_user_data(btn, const_cast<char*>(&kControlTag));
+  if (btn) lv_obj_set_user_data(btn, const_cast<char*>(&kControlTags[0]));
 }
-inline bool is_control(lv_obj_t* obj) { return obj && lv_obj_get_user_data(obj) == &kControlTag; }
+inline void mark_surface(lv_obj_t* obj) {
+  if (obj) lv_obj_set_user_data(obj, const_cast<char*>(&kControlTags[1]));
+}
+inline bool is_control(lv_obj_t* obj) { return obj && lv_obj_get_user_data(obj) == &kControlTags[0]; }
+inline bool is_surface(lv_obj_t* obj) { return obj && lv_obj_get_user_data(obj) == &kControlTags[1]; }
 
 inline void set_tag(lv_obj_t* disc, Mode mode, bool glow) {
   lv_obj_set_user_data(

@@ -43,10 +43,11 @@ void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa);
 // Gives a disc the shared opacity style of its kind (glowing or white), the
 // tile's contrast step (0..3, tile_icon_disc::contrast_step) and its mode.
 void apply_icon_disc(lv_obj_t* obj, bool glow, uint8_t step, bool off, bool follows_global);
-// Gives a tile button (Media previous and next) the shared press opacity of
-// a tinted or white fill at the tile's contrast step: the disc opacity, at
-// least icon_glow::kControlMinOpa, following the Glow strength.
-void apply_control_press(lv_obj_t* obj, bool tinted, uint8_t step);
+// Gives a tile control the shared opacity of a tinted or white control fill
+// at the tile's contrast step for `selector` (pressed for buttons, the main
+// part for surfaces): the disc opacity, at least icon_glow::kControlMinOpa,
+// following the Glow strength. Local opacities of the owner still win.
+void apply_control_fill(lv_obj_t* obj, bool tinted, uint8_t step, lv_style_selector_t selector);
 
 // Safe to call from the Web handler: only sets a flag. Apply the actual
 // LVGL update later during the safe UI service pass.

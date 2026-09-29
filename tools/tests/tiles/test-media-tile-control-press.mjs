@@ -27,7 +27,7 @@ assert.match(fn('on_icon_color'), /^void on_icon_color\(lv_obj_t\* disc\) \{\s*r
 assert.match(read('src/core/config/icon_glow.h'), /inline constexpr uint8_t kControlMinOpa = 24;/);
 assert.match(read('src/ui/popups/popup_layout.h'), /constexpr int kControlFillMinOpa = 24;/);
 assert.match(read('src/ui/shared/ui_surface_style.cpp'),
-  /lv_style_set_bg_opa\(&entry\.style, control_press_opa\(key\)\);\s*lv_obj_report_style_change\(&entry\.style\);/,
+  /lv_style_set_bg_opa\(&entry\.style, control_fill_opa\(key\)\);\s*lv_obj_report_style_change\(&entry\.style\);/,
   'a Glow strength change updates the shared press opacity');
 
 const host = await lvglHost(root);
@@ -116,6 +116,27 @@ int main() {
       return 1;
     }
   }
+  // A resting surface (the Climate target pill) takes the fill at rest, and
+  // its nested - and + buttons take it while pressed.
+  lv_obj_t* pill = lv_obj_create(card);
+  lv_obj_remove_style_all(pill);
+  tile_icon_disc::mark_surface(pill);
+  lv_obj_t* plus = lv_obj_create(pill);
+  lv_obj_remove_style_all(plus);
+  tile_icon_disc::mark_control(plus);
+  lv_obj_set_style_bg_color(card, lv_color_hex(0x482F10), 0);
+  lv_obj_set_style_text_color(icon, lv_color_hex(0xEF8402), 0);
+  tile_icon_disc::set_tag(disc, tile_icon_disc::Mode::On, true);
+  tile_icon_source::set_icon_fill_marker(card, 20);
+  tile_icon_source::refresh_controls(card);
+  if (rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) != 0xEF8402 ||
+      lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) < icon_glow::kControlMinOpa) {
+    std::printf("FAIL resting surface: #%06X @%d\n", (unsigned)rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)),
+                lv_obj_get_style_bg_opa(pill, LV_PART_MAIN));
+    return 1;
+  }
+  { uint32_t color; lv_opa_t opa; pressed(plus, color, opa);
+    if (color != 0xEF8402u) { std::printf("FAIL nested press: #%06X\n", (unsigned)color); return 1; } }
   // Play is not touched.
   { lv_style_value_t v; assert(lv_obj_get_local_style_prop(play, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN | LV_STATE_PRESSED) != LV_STYLE_RES_FOUND); }
   // A Glow strength of 0 keeps the press visible at the minimum.

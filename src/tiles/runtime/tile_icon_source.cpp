@@ -385,10 +385,11 @@ void refresh_controls(lv_obj_t* card) {
   bool tinted = false;
   uint32_t rgb = 0xFFFFFF;
   uint8_t step = 3;
-  const uint32_t count = lv_obj_get_child_count(card);
-  for (uint32_t i = 0; i < count; ++i) {
-    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
-    if (!tile_icon_disc::is_control(child)) continue;
+  // Controls sit on the card or one level deeper (Climate - and + inside
+  // their target pill).
+  auto style = [&](lv_obj_t* obj) {
+    const bool press = tile_icon_disc::is_control(obj);
+    if (!press && !tile_icon_disc::is_surface(obj)) return;
     if (!known) {
       known = true;
       lv_obj_t* disc = find_disc(card);
@@ -399,14 +400,21 @@ void refresh_controls(lv_obj_t* card) {
       step = tile_icon_disc::contrast_step_for(lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) &
                                                0xFFFFFF);
     }
+    const lv_style_selector_t selector = press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN;
     const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
     lv_style_value_t value;
-    if (lv_obj_get_local_style_prop(child, LV_STYLE_BG_COLOR, &value, LV_PART_MAIN | LV_STATE_PRESSED) !=
-            LV_STYLE_RES_FOUND ||
+    if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, selector) != LV_STYLE_RES_FOUND ||
         !lv_color_eq(value.color, color)) {
-      lv_obj_set_style_bg_color(child, color, LV_PART_MAIN | LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(obj, color, selector);
     }
-    ui_surface_style::apply_control_press(child, tinted, step);
+    ui_surface_style::apply_control_fill(obj, tinted, step, selector);
+  };
+  const uint32_t count = lv_obj_get_child_count(card);
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
+    style(child);
+    const uint32_t inner = lv_obj_get_child_count(child);
+    for (uint32_t j = 0; j < inner; ++j) style(lv_obj_get_child(child, static_cast<int32_t>(j)));
   }
 }
 

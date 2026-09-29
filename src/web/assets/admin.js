@@ -7138,6 +7138,14 @@ function syncTileRadiusControls(tabEl) {
     tileElem.style.setProperty('--icon-disc-opa', (scaled(neutralOpa) / 255).toFixed(3));
     const glowOpa = Math.floor((glowPct * 255 + 50) / 100);
     tileElem.style.setProperty('--icon-disc-glow', (scaled(glowOpa) * 100 / 255).toFixed(1) + '%');
+    // Mirrors tile_icon_source::refresh_controls(): tile controls (the
+    // Climate target pill) take the icon color only with Tile color "From
+    // icon" and "Circle in icon color", else white, at the disc opacity and
+    // at least icon_glow::kControlMinOpa (24).
+    const controlTinted = fill > 0 && tinted && !!iconRgb;
+    const controlOpa = Math.max(24, scaled(controlTinted ? glowOpa : neutralOpa)) / 255;
+    tileElem.style.setProperty('--control-fill', 'rgba(' + (controlTinted ? iconRgb.join(',') : '255,255,255') +
+      ',' + controlOpa.toFixed(3) + ')');
   }
   // Mirrors tileBgColorFollowsDefault(): an unset color and the built-in
   // default grey (stored explicitly by older editors) follow the global

@@ -1799,8 +1799,9 @@
       border:0;
       /* 11 px outer radius - 3 px effective inset = 8 px. */
       border-radius:var(--climate-control-radius, 8px);
-      /* A lighter step of the tile like the device (kSlotSurfaceOpa 28/255). */
-      background:rgba(255,255,255,0.11);
+      /* The control fill like the device (tile_icon_source::refresh_controls),
+         set per tile by applyIconDiscTint. */
+      background:var(--control-fill, rgba(255,255,255,0.094));
     }
     .tile.climate .climate-slot-control span {
       font-size:var(--fs24, 12px);

@@ -43,12 +43,9 @@ struct ClimateAdjustEventData {
 
 constexpr uint32_t kMiniTargetRemoteBlockMs = 2200;
 constexpr uint32_t kMiniTargetDebounceMs = 1000;
-// The control pill and its pressed buttons are white overlays, a lighter step
-// of whatever the tile shows (global, own color or a rules tint). On a
-// 0x222222 tile they give the former 0x3A3A3A pill and 0x4A4A4A pressed
-// button.
-constexpr lv_opa_t kSlotSurfaceOpa = 28;
-constexpr lv_opa_t kSlotPressedOpa = 21;
+// The control pill and its pressed buttons take the popup control fill
+// (tile_icon_source::refresh_controls): the icon color only with tile color
+// "From icon" and "Circle in icon color", else white, at the disc opacity.
 
 enum class ClimateMiniTargetCommand : uint8_t {
   NONE = 0,
@@ -768,13 +765,13 @@ void layout_climate_slots(
         compact_target, horizontal_target,
         vertical_target](lv_obj_t* button) {
       if (!button) return;
-      lv_obj_set_style_bg_opa(
-          button,
-          (compact_target || horizontal_target ||
-           vertical_target)
-              ? LV_OPA_TRANSP
-              : kSlotPressedOpa,
-          LV_PART_MAIN | LV_STATE_PRESSED);
+      // Compact layouts press without a fill; the others take the shared
+      // control fill opacity.
+      if (compact_target || horizontal_target || vertical_target) {
+        lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_PRESSED);
+      } else {
+        lv_obj_remove_local_style_prop(button, LV_STYLE_BG_OPA, LV_PART_MAIN | LV_STATE_PRESSED);
+      }
     };
     auto layout_adjust_symbol = [
         compact_target, horizontal_target,
@@ -1102,7 +1099,7 @@ lv_obj_t* create_climate_slot(
     lv_obj_t* card, GridType grid_type, uint8_t index,
     uint8_t slot_index) {
   lv_obj_t* root = lv_obj_create(card);
-  lv_obj_set_style_bg_color(root, lv_color_white(), LV_PART_MAIN);
+  tile_icon_disc::mark_surface(root);
   lv_obj_set_style_bg_opa(root, LV_OPA_TRANSP, LV_PART_MAIN);
   lv_obj_set_style_border_width(root, 0, 0);
   lv_obj_set_style_shadow_width(root, 0, 0);
@@ -1115,14 +1112,9 @@ lv_obj_t* create_climate_slot(
 
   auto create_adjust_button = [&](int8_t direction) {
     lv_obj_t* button = lv_button_create(root);
+    tile_icon_disc::mark_control(button);
     lv_obj_set_style_bg_opa(
         button, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(
-        button, lv_color_white(),
-        LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(
-        button, kSlotPressedOpa,
-        LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_border_width(button, 0, 0);
     lv_obj_set_style_shadow_width(button, 0, 0);
     lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
@@ -1320,9 +1312,12 @@ void refresh_climate_tile_content(
     widget.slot_geometry[i] = geometry[i];
     const bool adjustable = slot_is_adjustable(kind);
     const bool interactive_control = slot_is_interactive(kind, state);
-    lv_obj_set_style_bg_opa(
-        root, interactive_control ? kSlotSurfaceOpa : LV_OPA_TRANSP,
-        LV_PART_MAIN);
+    // The shared control fill shows while the slot is interactive.
+    if (interactive_control) {
+      lv_obj_remove_local_style_prop(root, LV_STYLE_BG_OPA, LV_PART_MAIN);
+    } else {
+      lv_obj_set_style_bg_opa(root, LV_OPA_TRANSP, LV_PART_MAIN);
+    }
     lv_obj_set_style_border_width(root, 0, LV_PART_MAIN);
 
     lv_obj_t* minus = lv_obj_get_child(root, 0);
@@ -1481,6 +1476,7 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
         states ? states[index] : ClimateState{};
     refresh_climate_tile_content(
         grid_type, index, initial_state);
+    tile_icon_source::refresh_controls(card);
   }
 
   if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {

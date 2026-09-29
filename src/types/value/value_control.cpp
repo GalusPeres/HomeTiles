@@ -451,11 +451,45 @@ void style_open_options(EditableControl* c) {
   // LVGL reapplies its theme when opening a list, just as in Settings.
   ui_control_style::valueDropdownList(list);
   editable_colors::dropdownList(list, c->colors);
+  // The list has the field's corners and hangs a small gap below it. LVGL
+  // positions the list after this event, so the gap is a translation; the
+  // height bound below keeps the list opening downwards.
+  ui_surface_style::apply_radius(list, popup_layout::scale(18), LV_PART_MAIN);
+  const int gap = popup_layout::scale(8);
+  lv_obj_set_style_translate_y(list, gap, LV_PART_MAIN);
   // The Settings list already owns font, spacing and positioning. Only bound
   // its height to the popup body; do not synchronously relayout on opening.
   const int available = popup_layout::kNavY - 2 * popup_layout::kCardPad -
-                        lv_obj_get_y(c->row) - editable_control_height("select") - popup_layout::scale(12);
+                        lv_obj_get_y(c->row) - editable_control_height("select") - popup_layout::scale(12) - gap;
   lv_obj_set_style_max_height(list, available, 0);
+}
+// LVGL draws its selection box over the full list width, so the list keeps
+// it transparent (editable_colors::dropdownList) and the selected option is
+// drawn here, inset from the list edge with concentric corners, in the
+// control fill over the card like a selected 7D/24H. The option labels are
+// drawn after this (children), the selected one again by LVGL on top.
+void draw_selected_option(lv_event_t* event) {
+  auto* c = static_cast<EditableControl*>(lv_event_get_user_data(event));
+  auto* list = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
+  lv_obj_t* label = list ? lv_obj_get_child(list, 0) : nullptr;
+  if (!c || !c->dropdown || !label || !c->colors_initialized) return;
+  const lv_font_t* font = lv_obj_get_style_text_font(list, LV_PART_SELECTED);
+  const int32_t line_space = lv_obj_get_style_text_line_space(list, LV_PART_SELECTED);
+  const int32_t line = lv_font_get_line_height(font) + line_space;
+  const int32_t inset = popup_layout::scale(6);
+  lv_area_t label_area, list_area, area;
+  lv_obj_get_coords(label, &label_area);
+  lv_obj_get_coords(list, &list_area);
+  area.x1 = list_area.x1 + inset;
+  area.x2 = list_area.x2 - inset;
+  area.y1 = label_area.y1 + static_cast<int32_t>(lv_dropdown_get_selected(c->dropdown)) * line - line_space / 2;
+  area.y2 = area.y1 + line - 1;
+  lv_draw_rect_dsc_t dsc;
+  lv_draw_rect_dsc_init(&dsc);
+  dsc.bg_color = c->colors.fill;
+  dsc.bg_opa = c->colors.opa;
+  dsc.radius = std::max<int32_t>(0, lv_obj_get_style_radius(list, LV_PART_MAIN) - inset);
+  lv_draw_rect(lv_event_get_layer(event), &dsc, &area);
 }
 void input_event(lv_event_t* event) {
   auto* c = static_cast<EditableControl*>(lv_event_get_user_data(event));
@@ -634,10 +668,10 @@ void apply_control_colors(EditableControl* c) {
     lv_obj_set_style_text_color(c->apply, base, 0);
     lv_obj_set_style_bg_color(c->apply, lv_color_mix(base, lv_color_white(), 81), LV_STATE_PRESSED);
   }
-  editable_colors::surface(c->number_box, c->colors.raised);
-  editable_colors::surface(c->clock_box, c->colors.raised);
+  editable_colors::surface(c->number_box, c->colors);
+  editable_colors::surface(c->clock_box, c->colors);
   for (auto& field : c->fields) {
-    if (field.spinbox) editable_colors::surface(lv_obj_get_parent(field.spinbox), c->colors.field);
+    if (field.spinbox) editable_colors::surface(lv_obj_get_parent(field.spinbox), c->colors);
   }
 }
 
@@ -664,8 +698,8 @@ void layout_controls(EditableControl* c) {
   const int number_height = slider ? value_height : std::max(48, popup_layout::scale(70));
   const int step_width = number_width / 2;
   lv_obj_set_size(c->number_box, number_width, number_height);
-  lv_obj_set_style_bg_color(c->number_box, c->colors.raised, 0);
-  lv_obj_set_style_bg_opa(c->number_box, slider ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(c->number_box, c->colors.fill, 0);
+  lv_obj_set_style_bg_opa(c->number_box, slider ? static_cast<lv_opa_t>(LV_OPA_TRANSP) : c->colors.opa, 0);
   ui_surface_style::apply_radius(c->number_box, climate_layout::kControlRadius, 0);
   lv_obj_align(c->number_box, LV_ALIGN_CENTER, 0, slider ? -(knob_height + value_gap) / 2 : 0);
   lv_obj_set_style_text_font(c->field, slider ? popup_layout::headerTitleFont() : popup_layout::font28(), 0);
@@ -806,6 +840,8 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t
 #endif
   lv_obj_add_event_cb(lv_dropdown_get_list(c->dropdown), dropdown_cover_check,
                       LV_EVENT_COVER_CHECK, nullptr);
+  lv_obj_add_event_cb(lv_dropdown_get_list(c->dropdown), draw_selected_option,
+                      LV_EVENT_DRAW_MAIN_END, c);
   c->status = lv_label_create(row); lv_obj_set_width(c->status, LV_PCT(58));
   lv_label_set_long_mode(c->status, LV_LABEL_LONG_DOT);
   lv_obj_set_style_text_font(c->status, popup_layout::font20(), 0);

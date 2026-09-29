@@ -1,7 +1,6 @@
 #pragma once
 
 #include <lvgl.h>
-#include <math.h>
 #include <initializer_list>
 
 // Only the Number, Select and Date/Time popup editors use this palette.
@@ -14,73 +13,67 @@ inline lv_color_t blend(lv_color_t base, lv_color_t tint, unsigned amount) {
                        channel(base.blue, tint.blue));
 }
 
-inline float luminance(lv_color_t color) {
-  auto linear = [](uint8_t channel) {
-    const float value = channel / 255.0f;
-    return value <= 0.04045f ? value / 12.92f : powf((value + 0.055f) / 1.055f, 2.4f);
-  };
-  return 0.2126f * linear(color.red) + 0.7152f * linear(color.green) +
-         0.0722f * linear(color.blue);
-}
-
-inline lv_color_t readable_surface(lv_color_t color) {
-  // Preserve the existing white control text even for very light tile colors.
-  // Only the surface darkens; its hue and the typography remain unchanged.
-  for (unsigned i = 0; i < 32 && luminance(color) > 0.175f; ++i)
-    color = blend(color, lv_color_black(), 12);
-  return color;
-}
-
+// The editors are popup controls (popup_nav_style.h): the number and clock
+// pills, the date fields, the Select field and its selected option draw the
+// control fill (`fill` at `opa`, the circle's color, tone_color::fill) over
+// the card, exactly like a selected 7D/24H; a press shows that same color.
+// The open option list is the card with the popup hairline. White text.
 struct Palette {
-  lv_color_t base, fill, surface, pressed, raised, field, list, border;
+  lv_color_t base, fill, surface, list;
   lv_opa_t opa;
 };
 
-// The editors follow the popup control rule (popup_nav_style.h): the number
-// and clock pills, the date fields, the Select field and its selected option
-// have the control fill of a selected 7D/24H over the card (`fill` at `opa`:
-// the icon color with tile color "From icon" and "Circle in icon color", else
-// white); the open option list is the card itself. White text stays readable.
 inline Palette from(lv_color_t base, lv_color_t fill, lv_opa_t opa) {
   Palette p{};
   p.base = base;
   p.fill = fill;
   p.opa = opa;
-  p.surface = readable_surface(blend(base, fill, opa));
-  p.pressed = readable_surface(blend(p.surface, lv_color_white(), 9));
-  p.raised = p.surface;
-  p.field = p.surface;
-  p.list = readable_surface(base);
-  // The popup card hairline (white 20 %) around the field and the list.
-  p.border = blend(p.surface, lv_color_white(), 51);
+  // What the fill shows over the card.
+  p.surface = blend(base, fill, opa);
+  p.list = base;
   return p;
 }
 
-inline void surface(lv_obj_t* obj, lv_color_t background) {
+// The popup card hairline (popup_layout::kPopupBorderOpa).
+inline constexpr lv_opa_t kHairlineOpa = 51;
+
+inline void surface(lv_obj_t* obj, const Palette& p) {
   if (!obj) return;
   for (lv_style_selector_t state : {LV_STATE_DEFAULT, LV_STATE_DISABLED}) {
-    lv_obj_set_style_bg_color(obj, background, LV_PART_MAIN | state);
+    lv_obj_set_style_bg_color(obj, p.fill, LV_PART_MAIN | state);
+    lv_obj_set_style_bg_opa(obj, p.opa, LV_PART_MAIN | state);
     lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN | state);
     lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN | state);
   }
 }
 
+// The Select field: the control fill in every state, no outline.
 inline void dropdown(lv_obj_t* obj, const Palette& p) {
   for (lv_style_selector_t state : std::initializer_list<lv_style_selector_t>{LV_STATE_DEFAULT, LV_STATE_PRESSED,
        LV_STATE_CHECKED, LV_STATE_PRESSED | LV_STATE_CHECKED, LV_STATE_DISABLED}) {
-    lv_obj_set_style_bg_color(obj, state & LV_STATE_PRESSED ? p.pressed : p.surface,
-                              LV_PART_MAIN | state);
-    lv_obj_set_style_border_color(obj, p.border, LV_PART_MAIN | state);
+    lv_obj_set_style_bg_color(obj, p.fill, LV_PART_MAIN | state);
+    lv_obj_set_style_bg_opa(obj, p.opa, LV_PART_MAIN | state);
+    lv_obj_set_style_border_width(obj, 0, LV_PART_MAIN | state);
   }
 }
 
+// The open list: the card with the popup hairline drawn above the options.
+// LVGL's own selection box spans the full list width, so it stays
+// transparent; value_control.cpp draws the selected option inset.
 inline void dropdownList(lv_obj_t* obj, const Palette& p) {
-  surface(obj, p.list);
-  lv_obj_set_style_border_color(obj, p.border, LV_PART_MAIN);
-  lv_obj_set_style_bg_color(obj, p.border, LV_PART_SCROLLBAR);
+  if (!obj) return;
+  lv_obj_set_style_bg_color(obj, p.list, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_color(obj, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_border_opa(obj, kHairlineOpa, LV_PART_MAIN);
+  lv_obj_set_style_border_width(obj, 1, LV_PART_MAIN);
+  lv_obj_set_style_border_post(obj, true, LV_PART_MAIN);
+  lv_obj_set_style_bg_color(obj, p.surface, LV_PART_SCROLLBAR);
   for (lv_style_selector_t state : std::initializer_list<lv_style_selector_t>{LV_STATE_DEFAULT, LV_STATE_CHECKED,
        LV_STATE_PRESSED, LV_STATE_CHECKED | LV_STATE_PRESSED}) {
-    lv_obj_set_style_bg_color(obj, p.surface, LV_PART_SELECTED | state);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_SELECTED | state);
     lv_obj_set_style_text_color(obj, lv_color_white(), LV_PART_SELECTED | state);
   }
 }

@@ -57,10 +57,10 @@
       accent-color:#26a69a;
       color-scheme:dark;
     }
-    * { scrollbar-width:thin; scrollbar-color:#333333 transparent; }
+    * { scrollbar-width:thin; scrollbar-color:#555555 transparent; }
     ::selection { background:rgba(38,166,154,0.35); color:#ffffff; }
     ::-webkit-scrollbar { width:10px; height:10px; }
-    ::-webkit-scrollbar-thumb { background:#333333; border-radius:999px; border:2px solid transparent; background-clip:padding-box; }
+    ::-webkit-scrollbar-thumb { background:#555555; border-radius:999px; border:2px solid transparent; background-clip:padding-box; }
     ::-webkit-scrollbar-track { background:transparent; }
 
     body {
@@ -135,55 +135,37 @@
     .wifi-inline-dot.off { background:var(--err); }
 
     /* Tab Navigation */
-    .tab-nav { display:flex; gap:6px; margin-bottom:24px; flex-wrap:wrap; }
-    /* Every top tab has the same width, so a folder name on the Folders
-       button never shifts the others; a long name ends with an ellipsis. */
-    .tab-nav > .tab-btn, .tab-nav .folder-menu-btn { flex:0 0 176px; width:176px; min-width:0; }
-    .tab-nav > .tab-btn span, .tab-nav .folder-menu-btn span {
-      min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-    }
+    /* Home alone on the left, a divider, the folders (as wide as Home,
+       wrapping into more rows), a divider, then Screensaver, I/O and
+       Settings. Each tab is a small tile with its icon in a circle. */
+    .tab-nav { --tab-page-width:112px; display:flex; align-items:flex-start; gap:12px; margin-bottom:24px; }
+    .tab-sep { flex:0 0 1px; align-self:stretch; background:#3a3a3a; }
+    .tab-folders { flex:1 1 0; min-width:var(--tab-page-width); display:flex; flex-wrap:wrap; gap:6px; }
+    .tab-system { flex:0 0 auto; display:flex; gap:6px; }
+    /* Without folders only Home and the right group remain. */
+    .tab-folders:empty, .tab-folders:empty + .tab-sep { display:none; }
+    .tab-nav:has(> .tab-folders:empty) { justify-content:space-between; }
+    .tab-nav:has(> .tab-folders:empty) > .tab-sep { display:none; }
     .tab-btn {
-      padding:10px 18px;
-      border:1px solid transparent;
-      border-radius:999px;
-      background:transparent;
-      color:var(--text-3);
-      font-size:15px;
-      font-weight:600;
-      font-family:inherit;
-      cursor:pointer;
-      transition:background 0.15s, color 0.15s, border-color 0.15s;
-      display:flex;
-      flex-direction:row;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
+      display:inline-flex; align-items:center; gap:7px; height:34px; padding:0 12px;
+      border:1px solid #333333; border-radius:10px; background:#1a1a1a;
+      color:#e0e0e0; font-family:inherit; font-size:13px; font-weight:600; white-space:nowrap;
+      cursor:pointer; transition:background 0.15s, border-color 0.15s, color 0.15s;
     }
-    .tab-btn:hover { color:var(--text); background:#232323; }
-    .tab-btn.active { color:#ffffff; background:var(--accent); }
-    .tab-btn.active:hover { background:var(--accent-hover); }
-    /* Folders menu: every folder besides Home, nested by depth. The button
-       shows the open folder while one is active. */
-    .folder-menu { position:relative; display:flex; }
-    .folder-menu[hidden] { display:none; }
-    .folder-menu-chevron { font-size:18px; line-height:1; margin-left:-2px; transition:transform 0.15s; }
-    .folder-menu-btn.open .folder-menu-chevron { transform:rotate(180deg); }
-    .folder-menu-btn.open:not(.active) { color:var(--text); background:#232323; }
-    .folder-menu-list {
-      position:absolute; top:calc(100% + 6px); left:0; z-index:50;
-      min-width:240px; max-width:min(360px, 90vw); max-height:min(60vh, 440px); overflow-y:auto;
-      display:flex; flex-direction:column; gap:2px; padding:6px;
-      background:#1f1f1f; border:1px solid var(--line-strong); border-radius:16px;
-      box-shadow:0 18px 40px rgba(0,0,0,0.6);
+    .tab-nav > .tab-btn, .tab-folders .tab-btn { flex:0 0 var(--tab-page-width); width:var(--tab-page-width); min-width:0; }
+    .tab-disc { flex:0 0 auto; display:flex; align-items:center; justify-content:center; transition:color 0.15s; }
+    .tab-disc .mdi { font-size:17px; line-height:1; }
+    .tab-label { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    .tab-btn:hover { background:#202020; border-color:#444444; color:#ffffff; }
+    .tab-btn:focus-visible { outline:none; box-shadow:0 0 0 3px var(--accent-ring); }
+    .tab-btn.active { border-color:var(--accent); background:#1d2524; color:#ffffff; }
+    .tab-btn.active .tab-disc { color:var(--accent); }
+    /* Narrow windows: Home and the right group on top, the folders below. */
+    @media (max-width:760px) {
+      .tab-nav { flex-wrap:wrap; justify-content:space-between; }
+      .tab-sep { display:none; }
+      .tab-folders { order:3; flex:1 1 100%; }
     }
-    .folder-menu-list[hidden] { display:none; }
-    .folder-menu-list .tab-btn {
-      justify-content:flex-start; border-radius:10px; white-space:nowrap; padding:8px 12px;
-    }
-    .folder-menu-list .tab-btn:hover { background:#2a2a2a; color:var(--text); }
-    .folder-menu-list .tab-btn.active { background:var(--accent-soft); color:#ffffff; }
-    .folder-menu-list .tab-btn .mdi { font-size:20px !important; }
-    .folder-menu-list .tab-btn span { overflow:hidden; text-overflow:ellipsis; }
     .edit-icon { font-size:12px; margin-left:6px; opacity:0.6; cursor:pointer; transition:opacity 0.2s; }
     .edit-icon:hover { opacity:1; }
     .tab-content { display:none; }
@@ -797,7 +779,7 @@
        preview keeps its size, the Settings slot and its hint stand beside it,
        and the footer with Global settings spans the column below. */
     .compact-grid .tile-editor-main {
-      flex:1 1 auto; display:grid; grid-template-columns:max-content minmax(0, 1fr);
+      flex:1 1 0; min-width:0; display:grid; grid-template-columns:max-content minmax(0, 1fr);
       column-gap:24px; row-gap:14px; align-items:start; align-content:start;
     }
     .compact-grid .tile-editor-main > * { grid-column:1 / -1; }
@@ -924,6 +906,8 @@
        empty) above the tile editing hint. */
     .settings-parking-texts { display:flex; flex-direction:column; gap:6px; min-width:0; max-width:440px; }
     .settings-parking-texts .hint { margin:0; font-size:14px; line-height:1.35; }
+    /* A folder: the editing hint with Delete Folder below it. */
+    .folder-side .settings-parking-texts { align-items:flex-start; gap:12px; }
     .settings-hidden-slot.drop-target .settings-hidden-tile {
       border:3px dashed #26a69a;
       background:rgba(38,166,154,0.12) !important;
@@ -1278,8 +1262,10 @@
 
     /* Settings panel: sticky on the right, scrolls internally on long content
        (capped at the viewport height) instead of stretching the whole page. */
+    /* The same width on every device; only narrow windows stack it below
+       the grid (media query further down). */
     .tile-settings {
-      flex:0 1 var(--settings-panel-width, 390px);
+      flex:0 0 var(--settings-panel-width, 390px);
       width:var(--settings-panel-width, 390px);
       min-width:300px;
       max-width:var(--settings-panel-width, 390px);

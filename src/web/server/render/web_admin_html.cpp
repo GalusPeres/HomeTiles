@@ -817,6 +817,17 @@ static void appendTileTabHTML(
     html += "</div><p class=\"hint\">";
     html += tr.admin_tile_hint;
     html += "</p></div></div>";
+  } else if (!screensaver_mode) {
+    // A folder shows the editing hint and Delete Folder where Home keeps its
+    // Settings parking slot: beside the grid on four-column devices, below
+    // it on the others.
+    html += "<div class=\"settings-hidden-parking folder-side\"><div class=\"settings-parking-texts\"><p class=\"hint\">";
+    html += tr.admin_tile_hint;
+    html += "</p><button type=\"button\" class=\"btn btn-danger btn-delete-folder\" onclick=\"deleteFolder('";
+    html += tab_id;
+    html += "')\">";
+    html += tr.admin_delete_folder_tab;
+    html += "</button></div></div>";
   }
   html += R"html(          <div class="folder-footer">
 )html";
@@ -889,8 +900,6 @@ static void appendTileTabHTML(
             "onclick=\"saveDefaultTileColor('";
     html += factory_color_hex;
     html += "')\"><i class=\"mdi mdi-restore\"></i></button></div></div></div></section>\n";
-    // The root grid shows this hint beside the Settings parking slot.
-    if (folder_id != 0) html += R"html(            <p class="hint">)html";
   } else {
     html += R"html(            <div class="folder-footer-options">
               <label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";
@@ -912,18 +921,6 @@ static void appendTileTabHTML(
   if (screensaver_mode) {
     html += tr.screensaver_hint;
     html += R"html(</p>
-)html";
-  } else if (folder_id != 0) {
-    html += tr.admin_tile_hint;
-    html += R"html(</p>
-)html";
-  }
-  if (!screensaver_mode && folder_id != 0) {
-    html += R"html(            <button type="button" class="btn btn-danger btn-delete-folder" onclick="deleteFolder(')html";
-    html += tab_id;
-    html += R"html(')">)html";
-    html += tr.admin_delete_folder_tab;
-    html += R"html(</button>
 )html";
   }
   html += R"html(          </div>
@@ -1330,18 +1327,13 @@ static String buildFolderTabButtonHtml(const FolderEntry& entry) {
   html += R"html(" data-tab-target="tab-tiles-)html";
   html += tab_id;
   html += R"html(" type="button")html";
-  if (entry.id != 0) html += R"html( role="menuitem")html";
   html += R"html( onclick="switchTab('tab-tiles-)html";
   html += tab_id;
-  html += R"html(')">)html";
-  if (icon.length()) {
-    html += R"html(
-          <i class="mdi mdi-)html";
-    html += icon;
-    html += R"html(" style="font-size:24px;"></i>)html";
-  }
-  html += R"html(
-          <span style="font-size:14px;font-weight:600;">)html";
+  html += R"html(')">
+          <span class="tab-disc"><i class="mdi mdi-)html";
+  html += icon.length() ? icon : String(entry.id == 0 ? "home" : "folder");
+  html += R"html("></i></span>
+          <span class="tab-label">)html";
   appendHtmlEscaped(html, name);
   html += R"html(</span>
         </button>
@@ -1588,29 +1580,19 @@ String WebAdminServer::getAdminPage() {
       <div class="tab-nav">
 )html";
 
-  // Home, then one Folders menu with every other folder, each after its
-  // parent, all at the same indent. The folder buttons keep their classes and data, so switching,
-  // renaming and lazily added folders work as before (folders/navigation.js).
-  bool has_folders = false;
+  // Home stands alone on the left. A divider separates it from the folders,
+  // which follow in tree order, all as wide as Home, and wrap into more rows.
+  // A second divider separates Screensaver, I/O and Settings on the right. The
+  // folder buttons keep their classes and data, so switching, renaming and
+  // lazily added folders work as before (folders/navigation.js).
   for (const auto& entry : folders) {
     if (entry.id == 0) html += buildFolderTabButtonHtml(entry);
-    else has_folders = true;
   }
   html += R"html(
-        <div class="folder-menu" id="folderMenu")html";
-  if (!has_folders) html += " hidden";
-  html += R"html(>
-          <button class="tab-btn folder-menu-btn" id="folderMenuButton" type="button" aria-haspopup="menu"
-                  aria-expanded="false" aria-controls="folderMenuList" data-default-label=")html";
+        <span class="tab-sep" aria-hidden="true"></span>
+        <div class="tab-folders" id="folderTabs" role="group" aria-label=")html";
   appendHtmlEscaped(html, String(tr.admin_folders));
-  html += R"html(" onclick="toggleFolderMenu()">
-            <i class="mdi mdi-folder-multiple folder-menu-icon" style="font-size:24px;"></i>
-            <span class="folder-menu-label" style="font-size:14px;font-weight:600;">)html";
-  appendHtmlEscaped(html, String(tr.admin_folders));
-  html += R"html(</span>
-            <i class="mdi mdi-chevron-down folder-menu-chevron"></i>
-          </button>
-          <div class="folder-menu-list" id="folderMenuList" role="menu" hidden>)html";
+  html += R"html(">)html";
   auto append_children = [&](auto&& self, uint16_t parent, int depth) -> void {
     if (depth > 8) return;
     for (const auto& entry : folders) {
@@ -1620,34 +1602,35 @@ String WebAdminServer::getAdminPage() {
     }
   };
   append_children(append_children, 0, 0);
-  // A folder whose parent no longer exists still gets its entry.
+  // A folder whose parent no longer exists still gets its button.
   for (const auto& entry : folders) {
     if (entry.id != 0 && entry.parent_id != 0 && !tileConfig.getFolder(entry.parent_id)) {
       html += buildFolderTabButtonHtml(entry);
     }
   }
-  html += R"html(
-          </div>
-        </div>
+  html += R"html(</div>
+        <span class="tab-sep" aria-hidden="true"></span>
+        <div class="tab-system">
         <button class="tab-btn" type="button" data-tab-target="tab-tiles-screensaver"
                 onclick="switchTab('tab-tiles-screensaver')">
-          <i class="mdi mdi-monitor" style="font-size:24px;"></i>
-          <span style="font-size:14px;font-weight:600;">Screensaver</span>
+          <span class="tab-disc"><i class="mdi mdi-monitor"></i></span>
+          <span class="tab-label">Screensaver</span>
         </button>
         <button class="tab-btn" type="button" data-tab-target="tab-hardware"
                 onclick="switchTab('tab-hardware')">
-          <i class="mdi mdi-electric-switch" style="font-size:24px;"></i>
-          <span style="font-size:14px;font-weight:600;">)html";
+          <span class="tab-disc"><i class="mdi mdi-electric-switch"></i></span>
+          <span class="tab-label">)html";
   html += tr.admin_io;
   html += R"html(</span>
         </button>
         <button class="tab-btn" type="button" data-tab-target="tab-network"
                 onclick="switchTab('tab-network')">
-          <i class="mdi mdi-cog" style="font-size:24px;"></i>
-          <span style="font-size:14px;font-weight:600;">)html";
+          <span class="tab-disc"><i class="mdi mdi-cog"></i></span>
+          <span class="tab-label">)html";
   html += tr.tile_type_settings;
   html += R"html(</span>
         </button>
+        </div>
       </div>
 )html";
 

@@ -20,47 +20,8 @@
       active.classList.add('active');
       active.setAttribute('aria-current', 'page');
     }
-    syncFolderMenuButton(active || null);
   }
 
-  // Every folder besides Home sits in the Folders menu. Its button stands for
-  // the open folder (icon and name, marked active), else it shows its own
-  // label; picking a folder closes the menu.
-  function syncFolderMenuButton(active) {
-    const menuButton = document.getElementById('folderMenuButton');
-    if (!menuButton) return;
-    const inMenu = !!active && !!active.closest('.folder-menu-list');
-    menuButton.classList.toggle('active', inMenu);
-    const label = menuButton.querySelector('.folder-menu-label');
-    if (label) {
-      label.textContent = inMenu
-        ? (active.dataset.folderName || active.textContent.trim())
-        : (menuButton.dataset.defaultLabel || '');
-    }
-    const icon = menuButton.querySelector('.folder-menu-icon');
-    if (icon) {
-      const name = inMenu && active.dataset.folderIcon ? active.dataset.folderIcon : 'folder-multiple';
-      icon.className = 'mdi folder-menu-icon mdi-' + name;
-    }
-    toggleFolderMenu(false);
-  }
-
-  function toggleFolderMenu(open) {
-    const list = document.getElementById('folderMenuList');
-    const button = document.getElementById('folderMenuButton');
-    if (!list || !button) return;
-    const show = open === undefined ? list.hidden : !!open;
-    list.hidden = !show;
-    button.setAttribute('aria-expanded', show ? 'true' : 'false');
-    button.classList.toggle('open', show);
-  }
-
-  document.addEventListener('click', event => {
-    if (!event.target.closest || !event.target.closest('.folder-menu')) toggleFolderMenu(false);
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') toggleFolderMenu(false);
-  });
 
   async function switchTab(tabName) {
     const sequence = ++tabSwitchSequence;

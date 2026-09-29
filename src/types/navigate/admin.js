@@ -30,26 +30,11 @@ function normalizeIconName(value) {
       if (btn) {
         btn.dataset.folderName = label;
         btn.dataset.folderIcon = iconName;
-        const labelEl = btn.querySelector('span');
+        const labelEl = btn.querySelector('.tab-label');
         if (labelEl) labelEl.textContent = label;
-        let iconEl = btn.querySelector('i.mdi');
-        if (iconName) {
-          if (!iconEl) {
-            iconEl = document.createElement('i');
-            iconEl.className = 'mdi';
-            iconEl.style.fontSize = '24px';
-            if (labelEl) btn.insertBefore(iconEl, labelEl);
-            else btn.appendChild(iconEl);
-          }
-          iconEl.className = 'mdi mdi-' + iconName;
-          iconEl.style.fontSize = '24px';
-        } else if (iconEl) {
-          iconEl.remove();
-        }
-        // The Folders menu button shows the open folder's new name and icon.
-        if (btn.classList.contains('active') && typeof syncFolderMenuButton === 'function') {
-          syncFolderMenuButton(btn);
-        }
+        // The circle always holds an icon; without one the folder icon.
+        const iconEl = btn.querySelector('.tab-disc i.mdi');
+        if (iconEl) iconEl.className = 'mdi mdi-' + (iconName || (folderNum === 0 ? 'home' : 'folder'));
       }
     }
     document.querySelectorAll('select[id$="_navigate_target"]').forEach(select => {

@@ -36,10 +36,13 @@ const tab = cppFunctionDefinitions(html).find((f) => f.name === 'appendTileTabHT
 assert.ok(tab, 'appendTileTabHTML');
 assert.match(tab.source, /<div class=\\"settings-parking-texts\\"><div id=\\"settingsHiddenHint\\"[\s\S]{0,260}html \+= "<\/div><p class=\\"hint\\">";\s*html \+= tr\.admin_tile_hint;/,
   'the tile editing hint sits beside the Settings parking');
-assert.match(tab.source, /\/\/ The root grid shows this hint beside the Settings parking slot\.\s*if \(folder_id != 0\) html \+= R"html\(\s*<p class="hint">\)html";/,
-  'the root footer has no second copy of the hint');
-assert.match(tab.source, /\} else if \(folder_id != 0\) \{\s*html \+= tr\.admin_tile_hint;/,
-  'folders keep the hint in their footer');
+// A folder shows the hint and Delete Folder where Home keeps its parking
+// slot; no footer carries them.
+assert.match(tab.source, /\} else if \(!screensaver_mode\) \{[\s\S]{0,400}settings-hidden-parking folder-side[\s\S]{0,200}html \+= tr\.admin_tile_hint;[\s\S]{0,200}btn-delete-folder[\s\S]{0,200}tr\.admin_delete_folder_tab;/,
+  'folders show the hint and Delete Folder beside or below the grid');
+assert.equal((tab.source.match(/tr\.admin_tile_hint/g) || []).length, 2,
+  'the hint appears once for Home and once for folders, never in a footer');
+assert.equal((tab.source.match(/btn-delete-folder/g) || []).length, 1, 'one Delete Folder button');
 
 // Real layout on the smallest grid (S3 480x480, 4x4 cells of 116 px): the
 // parking row is only as wide as the grid, so the long hint must wrap beside

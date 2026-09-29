@@ -109,7 +109,7 @@
       .map(button => {
         const folderId = Number(button.dataset.folderId);
         if (!Number.isInteger(folderId) || folderId <= 0) return null;
-        const buttonLabel = button.querySelector('span')?.textContent || '';
+        const buttonLabel = button.querySelector('.tab-label')?.textContent || '';
         return {
           value: String(folderId),
           label: String(button.dataset.folderName || buttonLabel ||
@@ -157,20 +157,8 @@
       buttonTpl.innerHTML = String(data.button_html || '').trim();
       buttonEl = buttonTpl.content.firstElementChild;
       if (!buttonEl) return false;
-      // Folders besides Home go into the Folders menu, which shows once it
-      // has one.
-      const menuList = document.getElementById('folderMenuList');
-      if (menuList && folderNum !== 0) {
-        menuList.appendChild(buttonEl);
-        document.getElementById('folderMenu')?.removeAttribute('hidden');
-      } else {
-        const navButtons = Array.from(nav.querySelectorAll('.tab-btn'));
-        const fixedBtn = document.getElementById('folderMenu') ||
-          navButtons.find(btn => btn.dataset.tabTarget === 'tab-tiles-screensaver') ||
-          navButtons.find(btn => btn.dataset.tabTarget === 'tab-network');
-        if (fixedBtn) nav.insertBefore(buttonEl, fixedBtn);
-        else nav.appendChild(buttonEl);
-      }
+      // Folders go after the others in the folder row.
+      (document.getElementById('folderTabs') || nav).appendChild(buttonEl);
     }
 
     const expectedTabId = String(

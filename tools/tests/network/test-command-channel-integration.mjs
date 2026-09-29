@@ -208,6 +208,20 @@ for (const match of channel.matchAll(/Serial\.printf?\(([^;]*)\);/g)) {
 const begin = channel.slice(channel.indexOf('void begin() {'), channel.indexOf('PairingState state() {'));
 assert.match(begin, /if \(stored == kLegacyRecordSize\) \{[\s\S]{0,200}writeRecord\(nullptr\);\s*g_clear_status = true;/,
   'a v1 record with a typed code is discarded');
+// Turning encryption off must reach the Bridge even when the connection
+// drops: the clear repeats until it is queued and goes out on every connect.
+const publishStatus = channel.slice(channel.indexOf('void publishStatus() {'), channel.indexOf('// Seals header + body'));
+assert.match(publishStatus, /if \(networkManager\.mqttEnqueuePublish\(topic\.c_str\(\), "", true\)\) g_clear_status = false;/,
+  'only a queued clear ends the retry');
+const connected = channel.slice(channel.indexOf('void onMqttConnected() {'), channel.indexOf('void service() {'));
+assert.match(connected, /if \(!g_state\) \{[\s\S]{0,400}publishStatus\(\);\s*return;\s*\}/,
+  'an unpaired panel clears its status on every connect');
+assert.doesNotMatch(connected, /if \(g_clear_status\) publishStatus\(\);/,
+  'the clear on connect no longer depends on a flag that a lost publish reset');
+const serviceFn = channel.slice(channel.indexOf('void service() {'));
+assert.match(serviceFn, /if \(!g_state\) \{[\s\S]{0,300}if \(g_clear_status && networkManager\.isMqttConnected\(\) &&\s*static_cast<uint32_t>\(now - last_clear_ms\) >= kClearRetryMs\) \{\s*last_clear_ms = now;\s*publishStatus\(\);/,
+  'a clear that could not be queued is retried every 5 s');
+assert.match(channel, /constexpr uint32_t kClearRetryMs = 5000;/);
 const x25519 = readRepoFile('src/core/security/x25519.cpp');
 assert.match(x25519, /#include <mbedtls\/ecp\.h>/);
 assert.match(x25519, /#error/, 'a build without Curve25519 fails loudly');

@@ -37,6 +37,7 @@ constexpr uint32_t kLogIntervalMs = 30000;
 constexpr uint32_t kPairNoAnswerMs = 15000;
 constexpr uint32_t kPairTimeoutMs = 120000;
 constexpr uint32_t kPairConfirmRepeatMs = 2000;
+constexpr uint32_t kClearRetryMs = 5000;
 constexpr size_t kMaxBaseLength = 128;
 
 // Session and pairing state. It exists only while the panel is paired and
@@ -175,8 +176,8 @@ void publishStatus() {
   const String topic = topicFor(kStatusLeaf);
   if (!g_state) {
     // An empty retained message removes an earlier status and stores nothing.
-    networkManager.mqttEnqueuePublish(topic.c_str(), "", true);
-    g_clear_status = false;
+    // Only a queued clear counts; otherwise service() tries again.
+    if (networkManager.mqttEnqueuePublish(topic.c_str(), "", true)) g_clear_status = false;
     return;
   }
   char payload[80];
@@ -742,7 +743,11 @@ void onMqttConnected() {
     networkManager.mqttEnqueueSubscribe(pairTopic(kPairBridgeLeaf).c_str());
   }
   if (!g_state) {
-    if (g_clear_status) publishStatus();
+    // Clear the status on every connect: a clear lost with the connection
+    // (QoS 0) would leave "active" retained, and a Bridge whose encryption
+    // is being turned off would then wait for this panel forever and refuse
+    // a new pairing.
+    publishStatus();
     return;
   }
   networkManager.mqttEnqueueSubscribe(topicFor(kBridgeLeaf).c_str());
@@ -755,7 +760,17 @@ void onMqttConnected() {
 
 void service() {
   servicePairing();
-  if (!g_state) return;
+  if (!g_state) {
+    // A full MQTT queue drops the clear (and logs it): retry every 5 s.
+    static uint32_t last_clear_ms = 0;
+    const uint32_t now = millis();
+    if (g_clear_status && networkManager.isMqttConnected() &&
+        static_cast<uint32_t>(now - last_clear_ms) >= kClearRetryMs) {
+      last_clear_ms = now;
+      publishStatus();
+    }
+    return;
+  }
   const uint32_t now = millis();
   if (g_state->held &&
       static_cast<uint32_t>(now - g_state->held_ms) >= kHoldMs) {

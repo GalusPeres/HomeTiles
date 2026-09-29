@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-09-29
+Last reviewed: 2026-09-30
 
 ## Sources of truth
 
@@ -71,7 +71,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
 - Editable surfaces: control fill, white text; Select list = card + hairline, gap, inset selection.
-- Wi-Fi idle/reconnect gaps remain unfixed; findings/probes: `build/wifi-power-audit/VERIFICATION.md`.
+- Wi-Fi gaps unfixed (`build/wifi-power-audit/VERIFICATION.md`); S3 hang 29.09: cold start fixed.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
 - S3 froze adding Number to active screensaver: Web responded, save persisted; manual reboot. Older dump, cause unknown.
 
@@ -137,4 +137,4 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Security branch (unreleased)
 
 - Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, 30-day NVS sessions, CSRF; device reset; hides secrets.
-- Command channel (optional): pairing v2 (X25519 via mbedTLS, 6-digit number confirmed on panel and HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; see `docs-dev/command-encryption.md`. P4 random: SAR ADC. HW/HA pending.
+- Command channel (optional): pairing v2 (X25519/mbedTLS, 6-digit number on panel and HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; see `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested; off re-clears status.

@@ -1616,6 +1616,9 @@ void build_tiles_tab(lv_obj_t *parent, GridType grid_type, scene_publish_cb_t sc
 
 /* === Reload layout (unified) === */
 void tiles_reload_layout(GridType grid_type) {
+  // The visible popup's tile, reopened from its new tile at the end.
+  const uint16_t reopen_popup_tile =
+      grid_type == GridType::TAB0 ? viewNavigationVisiblePopupTile() : 0;
   // A light popup is bound to a concrete grid slot. Close it before replacing
   // that slot so later entity updates cannot target a stale widget binding.
   hide_light_popup();
@@ -1723,6 +1726,9 @@ void tiles_reload_layout(GridType grid_type) {
     g_active_cache->last_used_ms = millis();
   }
   Serial.printf("[%s] Layout reloaded\n", getGridName(grid_type));
+  // A popup opened from a replaced tile reads the tile's new colors and
+  // options (regression: they appeared only after closing and reopening).
+  viewNavigationReopenPopup(reopen_popup_tile);
   schedule_preview_load(grid_type);
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   if (grid_type == GridType::TAB0 && g_active_cache) {
@@ -2196,6 +2202,9 @@ static void rebuild_tile_at_index(GridType grid_type, uint8_t index) {
   float span_h = 1;
   if (!get_tile_layout(tile, col, row, span_w, span_h)) return;
 
+  // A popup opened from this tile reopens from the new tile (tiles_reload_layout).
+  const uint16_t visible_popup_tile = grid_type == GridType::TAB0 ? viewNavigationVisiblePopupTile() : 0;
+  const uint16_t reopen_popup_tile = visible_popup_tile == tile.view_id ? visible_popup_tile : 0;
   if (g_tiles_objs[idx][index]) {
     lv_obj_del(g_tiles_objs[idx][index]);
     g_tiles_objs[idx][index] = nullptr;
@@ -2215,6 +2224,7 @@ static void rebuild_tile_at_index(GridType grid_type, uint8_t index) {
   g_tiles_objs[idx][index] = render_tile(g_tiles_grids[idx], col, row, layout_tile, index, grid_type, g_tiles_scene_cbs[idx]);
 
   apply_cached_state_for_index(grid_type, config, index);
+  viewNavigationReopenPopup(reopen_popup_tile);
 }
 
 static void tiles_refresh_icons_for_grid(GridType grid_type) {
@@ -2452,8 +2462,11 @@ bool tiles_open_view_popup(uint16_t view_id) {
     const Tile& tile = grid.tiles[i];
     if (tile.view_id != view_id || !g_tiles_objs[0][i]) continue;
     lv_obj_t* object = g_tiles_objs[0][i];
+    // Media and Camera open on a tap; Weather follows its popup mode like the
+    // other types (types/weather/renderer.cpp), so a long-press Weather tile
+    // gets a long press.
     const lv_event_code_t event =
-        tile.type == TILE_MEDIA || tile.type == TILE_CAMERA || tile.type == TILE_WEATHER ||
+        tile.type == TILE_MEDIA || tile.type == TILE_CAMERA ||
         getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS
             ? LV_EVENT_SHORT_CLICKED : LV_EVENT_LONG_PRESSED;
     // Deliver the same popup-only release gesture as a local user. Switches

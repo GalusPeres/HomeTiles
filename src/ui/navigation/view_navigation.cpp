@@ -306,6 +306,24 @@ void viewNavigationSource(lv_obj_t* source) {
   popup_source = tiles_view_id_for_object(source);
 }
 
+uint16_t viewNavigationVisiblePopupTile() {
+  if (!popup_source || !popup_card || lv_obj_has_flag(popup_card, LV_OBJ_FLAG_HIDDEN)) return 0;
+  return popup_source;
+}
+
+void viewNavigationReopenPopup(uint16_t view_id) {
+  if (!view_id) return;
+  for (const Tile& tile : tileConfig.getActiveGrid().tiles) {
+    if (tile.view_id != view_id) continue;
+    // Only a tile that still shows the same entity reopens its popup. Camera
+    // keeps its open stream: reopening would restart it on every save.
+    if (popupSupported(tile) && tile.type != TILE_CAMERA && tile.sensor_entity == popup_entity) {
+      tiles_open_view_popup(view_id);
+    }
+    return;
+  }
+}
+
 void viewNavigationPopupShown(lv_obj_t* card, const char* entity) {
   if (popup_card != card) {
     if (popup_card) lv_obj_remove_event_cb(popup_card, forgetPopup);

@@ -15,6 +15,9 @@ inline constexpr uint8_t kStep = 5;
 inline constexpr uint8_t kDefault = 25;
 // The white disc opacity at the default strength (tile_icon_disc::kOpa).
 inline constexpr uint8_t kNeutralOpa = 38;
+// Keeps the press fill of tile buttons (Media previous and next) visible with
+// the strength near zero; the same value as popup_layout::kControlFillMinOpa.
+inline constexpr uint8_t kControlMinOpa = 24;
 
 inline uint8_t clamp(int percent) {
   if (percent < static_cast<int>(kMinimum)) return kMinimum;

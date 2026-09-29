@@ -243,8 +243,15 @@ static lv_obj_t* create_media_control_button(lv_obj_t* parent,
   lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, x_ofs, kMediaControlBottomOffset);
   lv_obj_set_style_bg_color(btn, primary ? lv_color_white() : lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_opa(btn, primary ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
-  lv_obj_set_style_bg_color(btn, primary ? lv_color_hex(0xD8D8D8) : lv_color_white(), LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(btn, primary ? LV_OPA_COVER : LV_OPA_30, LV_PART_MAIN | LV_STATE_PRESSED);
+  if (primary) {
+    // Play keeps its white circle.
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0xD8D8D8), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
+  } else {
+    // Previous and next press like the popup controls
+    // (tile_icon_source::refresh_controls, called once the card is built).
+    tile_icon_disc::mark_control(btn);
+  }
   lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);
@@ -503,6 +510,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
                                              media_title,
                                              subtitle,
                                              false);
+    tile_icon_source::refresh_controls(card);
   }
 
   MediaTileWidgets* target = tile_renderer_get_media_widgets(grid_type);

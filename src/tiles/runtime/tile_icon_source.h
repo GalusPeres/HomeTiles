@@ -42,6 +42,13 @@ lv_obj_t* card_icon(lv_obj_t* card);
 // discs that follow the background. Skips unchanged values.
 void refresh_card(lv_obj_t* card, const Tile& tile);
 
+// The press fill of a card's buttons (tile_icon_disc::mark_control; Media
+// previous and next) by the popup control rule: the icon color only with tile
+// color "From icon" and "Circle in icon color", else the neutral fill of a
+// white icon, at the disc opacity of the card's contrast step. Every icon
+// color, tint and circle change reaches it through the discs.
+void refresh_controls(lv_obj_t* card);
+
 // The background a popup inherits from its tile: the rules' tint when the
 // card (`obj` or up to three of its parents) is tinted, else `fallback`.
 // Every opener calls it, so it also remembers the opening tile: while that

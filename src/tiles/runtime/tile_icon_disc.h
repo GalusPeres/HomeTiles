@@ -56,6 +56,15 @@ inline uintptr_t tag_index(lv_obj_t* disc) {
 inline Mode mode_of(lv_obj_t* disc) { return static_cast<Mode>(tag_index(disc) / 2); }
 inline bool glow_of(lv_obj_t* disc) { return (tag_index(disc) % 2) != 0; }
 
+// Buttons on a tile card with a press fill (Media previous and next) carry
+// this address as user data; tile_icon_source::refresh_controls gives them
+// the popup control fill.
+inline constexpr char kControlTag = 0;
+inline void mark_control(lv_obj_t* btn) {
+  if (btn) lv_obj_set_user_data(btn, const_cast<char*>(&kControlTag));
+}
+inline bool is_control(lv_obj_t* obj) { return obj && lv_obj_get_user_data(obj) == &kControlTag; }
+
 inline void set_tag(lv_obj_t* disc, Mode mode, bool glow) {
   lv_obj_set_user_data(
       disc, const_cast<char*>(&kTags[static_cast<uint8_t>(mode) * 2 + (glow ? 1 : 0)]));

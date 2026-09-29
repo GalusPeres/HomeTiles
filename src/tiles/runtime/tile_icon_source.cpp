@@ -184,8 +184,11 @@ void refresh_discs(lv_obj_t* card) {
 }
 
 // tile_icon_disc::g_icon_color_hook: an icon color change retints a card with
-// Tile color "From icon": the tile always follows its icon.
+// Tile color "From icon": the tile always follows its icon. The card's
+// buttons take the new press fill first; a retint reaches them again through
+// refresh_discs with the new contrast step.
 void on_icon_color(lv_obj_t* disc) {
+  refresh_controls(lv_obj_get_parent(disc));
   lv_obj_t* card = lv_obj_get_parent(disc);
   uint8_t marker = 0;
   for (int depth = 0; card && depth < 3 && !icon_fill_marker(card, marker); ++depth) {
@@ -374,6 +377,37 @@ uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
     return lv_color_to_u32(value.color) & 0xFFFFFF;
   }
   return fallback;
+}
+
+void refresh_controls(lv_obj_t* card) {
+  if (!card) return;
+  bool known = false;
+  bool tinted = false;
+  uint32_t rgb = 0xFFFFFF;
+  uint8_t step = 3;
+  const uint32_t count = lv_obj_get_child_count(card);
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
+    if (!tile_icon_disc::is_control(child)) continue;
+    if (!known) {
+      known = true;
+      lv_obj_t* disc = find_disc(card);
+      uint8_t marker = 0;
+      rgb = disc_icon_rgb(disc);
+      tinted = disc && tile_icon_disc::glow_of(disc) && icon_fill_marker(card, marker) && marker > 0 &&
+               tile_icon_disc::icon_color_tints(rgb);
+      step = tile_icon_disc::contrast_step_for(lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) &
+                                               0xFFFFFF);
+    }
+    const lv_color_t color = tinted ? lv_color_hex(rgb) : lv_color_white();
+    lv_style_value_t value;
+    if (lv_obj_get_local_style_prop(child, LV_STYLE_BG_COLOR, &value, LV_PART_MAIN | LV_STATE_PRESSED) !=
+            LV_STYLE_RES_FOUND ||
+        !lv_color_eq(value.color, color)) {
+      lv_obj_set_style_bg_color(child, color, LV_PART_MAIN | LV_STATE_PRESSED);
+    }
+    ui_surface_style::apply_control_press(child, tinted, step);
+  }
 }
 
 void refresh_card(lv_obj_t* card, const Tile& tile) {

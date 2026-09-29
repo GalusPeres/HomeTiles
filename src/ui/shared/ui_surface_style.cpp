@@ -39,6 +39,10 @@ constexpr uint8_t kIconDiscGlowKey = 8;
 constexpr uint8_t kIconDiscOffKey = 16;
 constexpr int kIconDiscStyleCount = kIconDiscOffKey + 1;
 IconDiscStyle g_icon_disc_styles[kIconDiscStyleCount]{};
+// The press opacity of tile buttons per (tinted 4, contrast step 0..3),
+// updated with the disc styles.
+constexpr uint8_t kControlTintedKey = 4;
+IconDiscStyle g_control_styles[8]{};
 std::atomic<bool> g_icon_disc_refresh_pending{false};
 
 lv_opa_t icon_disc_opa(uint8_t key) {
@@ -50,6 +54,13 @@ lv_opa_t icon_disc_opa(uint8_t key) {
   const unsigned step = (key >> 1) & 3;
   // tile_icon_disc::scaled_opa(): subtler on dark tiles.
   return static_cast<lv_opa_t>((full * (24 + 7 * step) + 22) / 45);
+}
+
+lv_opa_t control_press_opa(uint8_t key) {
+  const uint8_t glow = configManager.getConfig().icon_glow;
+  const unsigned full = (key & kControlTintedKey) ? icon_glow::disc_opa(glow) : icon_glow::neutral_opa(glow);
+  const unsigned opa = (full * (24 + 7 * (key & 3)) + 22) / 45;
+  return static_cast<lv_opa_t>(opa < icon_glow::kControlMinOpa ? icon_glow::kControlMinOpa : opa);
 }
 
 void apply_style(lv_obj_t* obj, bool enabled) {
@@ -235,6 +246,22 @@ void apply_icon_disc(lv_obj_t* obj, bool glow, uint8_t step, bool off, bool foll
   lv_obj_add_style(obj, &target.style, 0);
 }
 
+void apply_control_press(lv_obj_t* obj, bool tinted, uint8_t step) {
+  if (!obj) return;
+  const uint8_t key = static_cast<uint8_t>((tinted ? kControlTintedKey : 0) | (step & 3));
+  IconDiscStyle& target = g_control_styles[key];
+  if (!target.initialized) {
+    lv_style_init(&target.style);
+    lv_style_set_bg_opa(&target.style, control_press_opa(key));
+    target.initialized = true;
+  }
+  for (IconDiscStyle& entry : g_control_styles) {
+    if (entry.initialized && &entry != &target) lv_obj_remove_style(obj, &entry.style, LV_STATE_PRESSED);
+  }
+  lv_obj_remove_local_style_prop(obj, LV_STYLE_BG_OPA, LV_STATE_PRESSED);
+  lv_obj_add_style(obj, &target.style, LV_STATE_PRESSED);
+}
+
 void request_global_tile_border_refresh() {
   g_global_tile_border_refresh_pending = true;
 }
@@ -264,6 +291,12 @@ void process_pending_updates() {
       IconDiscStyle& entry = g_icon_disc_styles[key];
       if (!entry.initialized) continue;
       lv_style_set_bg_opa(&entry.style, icon_disc_opa(static_cast<uint8_t>(key)));
+      lv_obj_report_style_change(&entry.style);
+    }
+    for (uint8_t key = 0; key < 8; ++key) {
+      IconDiscStyle& entry = g_control_styles[key];
+      if (!entry.initialized) continue;
+      lv_style_set_bg_opa(&entry.style, control_press_opa(key));
       lv_obj_report_style_change(&entry.style);
     }
   }

@@ -157,12 +157,20 @@
       buttonTpl.innerHTML = String(data.button_html || '').trim();
       buttonEl = buttonTpl.content.firstElementChild;
       if (!buttonEl) return false;
-      const navButtons = Array.from(nav.querySelectorAll('.tab-btn'));
-      const fixedBtn = navButtons.find(
-        btn => btn.dataset.tabTarget === 'tab-tiles-screensaver') ||
-        navButtons.find(btn => btn.dataset.tabTarget === 'tab-network');
-      if (fixedBtn) nav.insertBefore(buttonEl, fixedBtn);
-      else nav.appendChild(buttonEl);
+      // Folders besides Home go into the Folders menu, which shows once it
+      // has one.
+      const menuList = document.getElementById('folderMenuList');
+      if (menuList && folderNum !== 0) {
+        menuList.appendChild(buttonEl);
+        document.getElementById('folderMenu')?.removeAttribute('hidden');
+      } else {
+        const navButtons = Array.from(nav.querySelectorAll('.tab-btn'));
+        const fixedBtn = document.getElementById('folderMenu') ||
+          navButtons.find(btn => btn.dataset.tabTarget === 'tab-tiles-screensaver') ||
+          navButtons.find(btn => btn.dataset.tabTarget === 'tab-network');
+        if (fixedBtn) nav.insertBefore(buttonEl, fixedBtn);
+        else nav.appendChild(buttonEl);
+      }
     }
 
     const expectedTabId = String(

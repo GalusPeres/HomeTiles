@@ -156,6 +156,29 @@
     .tab-btn:hover { color:var(--text); background:#232323; }
     .tab-btn.active { color:#ffffff; background:var(--accent); }
     .tab-btn.active:hover { background:var(--accent-hover); }
+    /* Folders menu: every folder besides Home, nested by depth. The button
+       shows the open folder while one is active. */
+    .folder-menu { position:relative; display:flex; }
+    .folder-menu[hidden] { display:none; }
+    .folder-menu-chevron { font-size:18px; line-height:1; margin-left:-2px; transition:transform 0.15s; }
+    .folder-menu-btn.open .folder-menu-chevron { transform:rotate(180deg); }
+    .folder-menu-btn.open:not(.active) { color:var(--text); background:#232323; }
+    .folder-menu-list {
+      position:absolute; top:calc(100% + 6px); left:0; z-index:50;
+      min-width:240px; max-width:min(360px, 90vw); max-height:min(60vh, 440px); overflow-y:auto;
+      display:flex; flex-direction:column; gap:2px; padding:6px;
+      background:#1f1f1f; border:1px solid var(--line-strong); border-radius:16px;
+      box-shadow:0 18px 40px rgba(0,0,0,0.6);
+    }
+    .folder-menu-list[hidden] { display:none; }
+    .folder-menu-list .tab-btn {
+      justify-content:flex-start; border-radius:10px; white-space:nowrap;
+      padding:8px 12px 8px calc(12px + var(--folder-depth, 0) * 22px);
+    }
+    .folder-menu-list .tab-btn:hover { background:#2a2a2a; color:var(--text); }
+    .folder-menu-list .tab-btn.active { background:var(--accent-soft); color:#ffffff; }
+    .folder-menu-list .tab-btn .mdi { font-size:20px !important; }
+    .folder-menu-list .tab-btn span { overflow:hidden; text-overflow:ellipsis; }
     .edit-icon { font-size:12px; margin-left:6px; opacity:0.6; cursor:pointer; transition:opacity 0.2s; }
     .edit-icon:hover { opacity:1; }
     .tab-content { display:none; }

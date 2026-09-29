@@ -656,6 +656,8 @@ struct Strings {
   const char* web_support_or;
   // Weather tile setting: filled, colored weather icons (off: white outlines).
   const char* weather_colored_icons;
+  // Web Admin navigation: the menu with every folder besides Home.
+  const char* admin_folders;
 };
 
 // Locale-specific display rules and short runtime strings shared by

@@ -11,6 +11,11 @@
 namespace {
 
 constexpr int kPreviewTargetHeight = 430;
+// Four-column grids (Guition S3, Waveshare 4B, portrait JC4880) fill the
+// preview column of the 1200 px page like the wider devices, no taller than
+// this.
+constexpr int kCompactPreviewTargetWidth = 680;
+constexpr int kCompactPreviewMaxHeight = 700;
 constexpr int kWideFourRowPreviewTargetHeight = 390;
 constexpr int kPreviewPad = 12;
 constexpr int kPreviewGap = 10;
@@ -36,15 +41,23 @@ int settings_panel_target_width_px() {
 }
 
 int admin_wrapper_target_width_px() {
-  // On the compact B4, fit the desktop container to the preview, gap and
-  // settings panel. Wide devices retain the existing 1200 px layout.
-  return (GRID_COLS <= 4) ? 952 : 1200;
+  // Every device gets the same 1200 px page; four-column previews grow into
+  // the wider column instead (preview_cell_h_px).
+  return 1200;
 }
 
 int preview_cell_h_px() {
   const int pad = preview_pad_px();
   const int gap = preview_gap_px();
   int cell = (preview_target_height_px() - (2 * pad) - (gap * (GRID_ROWS - 1))) / GRID_ROWS;
+  if (GRID_COLS <= 4) {
+    // The grid (plus its 1 px border) fills the preview column; a tall
+    // portrait grid stops at the height limit.
+    const int by_width = ((kCompactPreviewTargetWidth - 2 * pad - 2 - gap * (GRID_COLS - 1)) / GRID_COLS) *
+                         GRID_CELL_H / GRID_CELL_W;
+    const int by_height = (kCompactPreviewMaxHeight - 2 * pad - gap * (GRID_ROWS - 1)) / GRID_ROWS;
+    cell = by_width < by_height ? by_width : by_height;
+  }
   return (cell < 40) ? 40 : cell;
 }
 

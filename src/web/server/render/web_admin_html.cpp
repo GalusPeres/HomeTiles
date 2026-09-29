@@ -1301,6 +1301,20 @@ static void appendTileTabHTML(
 )html";
 }
 
+// How deep a folder sits below Home (0 directly in Home), for its indent in
+// the Folders menu. Bounded against a broken parent chain.
+static int folderMenuDepth(const FolderEntry& entry) {
+  int depth = 0;
+  uint16_t parent = entry.parent_id;
+  while (parent != 0 && depth < 8) {
+    const FolderEntry* up = tileConfig.getFolder(parent);
+    if (!up) break;
+    parent = up->parent_id;
+    ++depth;
+  }
+  return depth;
+}
+
 static String buildFolderTabButtonHtml(const FolderEntry& entry) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
   String tab_id = "folder" + String(entry.id);
@@ -1329,7 +1343,13 @@ static String buildFolderTabButtonHtml(const FolderEntry& entry) {
   html += tab_id;
   html += R"html(" data-tab-target="tab-tiles-)html";
   html += tab_id;
-  html += R"html(" type="button" onclick="switchTab('tab-tiles-)html";
+  html += R"html(" type="button")html";
+  if (entry.id != 0) {
+    html += R"html( role="menuitem" style="--folder-depth:)html";
+    html += String(folderMenuDepth(entry));
+    html += R"html(")html";
+  }
+  html += R"html( onclick="switchTab('tab-tiles-)html";
   html += tab_id;
   html += R"html(')">)html";
   if (icon.length()) {
@@ -1582,11 +1602,47 @@ String WebAdminServer::getAdminPage() {
       <div class="tab-nav">
 )html";
 
+  // Home, then one Folders menu with every other folder, each below its
+  // parent. The folder buttons keep their classes and data, so switching,
+  // renaming and lazily added folders work as before (folders/navigation.js).
+  bool has_folders = false;
   for (const auto& entry : folders) {
-    html += buildFolderTabButtonHtml(entry);
+    if (entry.id == 0) html += buildFolderTabButtonHtml(entry);
+    else has_folders = true;
   }
-
   html += R"html(
+        <div class="folder-menu" id="folderMenu")html";
+  if (!has_folders) html += " hidden";
+  html += R"html(>
+          <button class="tab-btn folder-menu-btn" id="folderMenuButton" type="button" aria-haspopup="menu"
+                  aria-expanded="false" aria-controls="folderMenuList" data-default-label=")html";
+  appendHtmlEscaped(html, String(tr.admin_folders));
+  html += R"html(" onclick="toggleFolderMenu()">
+            <i class="mdi mdi-folder-multiple folder-menu-icon" style="font-size:24px;"></i>
+            <span class="folder-menu-label" style="font-size:14px;font-weight:600;">)html";
+  appendHtmlEscaped(html, String(tr.admin_folders));
+  html += R"html(</span>
+            <i class="mdi mdi-chevron-down folder-menu-chevron"></i>
+          </button>
+          <div class="folder-menu-list" id="folderMenuList" role="menu" hidden>)html";
+  auto append_children = [&](auto&& self, uint16_t parent, int depth) -> void {
+    if (depth > 8) return;
+    for (const auto& entry : folders) {
+      if (entry.id == 0 || entry.parent_id != parent) continue;
+      html += buildFolderTabButtonHtml(entry);
+      self(self, entry.id, depth + 1);
+    }
+  };
+  append_children(append_children, 0, 0);
+  // A folder whose parent no longer exists still gets its entry.
+  for (const auto& entry : folders) {
+    if (entry.id != 0 && entry.parent_id != 0 && !tileConfig.getFolder(entry.parent_id)) {
+      html += buildFolderTabButtonHtml(entry);
+    }
+  }
+  html += R"html(
+          </div>
+        </div>
         <button class="tab-btn" type="button" data-tab-target="tab-tiles-screensaver"
                 onclick="switchTab('tab-tiles-screensaver')">
           <i class="mdi mdi-monitor" style="font-size:24px;"></i>

@@ -46,6 +46,10 @@ function normalizeIconName(value) {
         } else if (iconEl) {
           iconEl.remove();
         }
+        // The Folders menu button shows the open folder's new name and icon.
+        if (btn.classList.contains('active') && typeof syncFolderMenuButton === 'function') {
+          syncFolderMenuButton(btn);
+        }
       }
     }
     document.querySelectorAll('select[id$="_navigate_target"]').forEach(select => {

@@ -592,7 +592,8 @@ static const Strings kStringsDe = {
     "Unterstütze mich mit",
     "Stars",
     "oder",
-    "Farbige Wetter-Icons"};
+    "Farbige Wetter-Icons",
+    "Ordner"};
 
 static const Strings kStringsEn = {
     "en",
@@ -1179,7 +1180,8 @@ static const Strings kStringsEn = {
     "Support me with",
     "Stars",
     "or",
-    "Colored weather icons"};
+    "Colored weather icons",
+    "Folders"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1766,7 +1768,8 @@ static const Strings kStringsFr = {
     "Soutenez-moi avec",
     "des étoiles",
     "ou",
-    "Icônes météo en couleur"};
+    "Icônes météo en couleur",
+    "Dossiers"};
 
 static const LocaleProfile kLocaleDe = {
     "de",

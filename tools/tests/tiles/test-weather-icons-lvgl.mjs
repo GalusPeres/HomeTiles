@@ -242,6 +242,13 @@ int main() {
   const bool polar = weather_icons::is_night(sun_times, "2026-12-21", 12 * 60) &&
                      !weather_icons::is_night(sun_times, "2026-06-21", 0);
   const bool unknown_day = !weather_icons::is_night(sun_times, "2026-10-01", 0);
+  // The bridge writes json.dumps separators (spaces after ':' and ',').
+  weather_icons::SunTimes bridge;
+  const bool bridge_format = weather_icons::parse_sun(
+      R"({"forecast": [{"date_local": "2026-09-29"}], "forecast_hourly": [], "sun": [{"d": "2026-09-29", "r": 432, "s": 1145}, {"d": "2026-12-21", "up": false}, {"d": "2026-06-21", "r": 0, "s": 1440}]})",
+      bridge) && bridge.count == 3 &&
+      weather_icons::is_night(bridge, "2026-09-29", 1200) && !weather_icons::is_night(bridge, "2026-09-29", 600) &&
+      weather_icons::is_night(bridge, "2026-12-21", 600) && !weather_icons::is_night(bridge, "2026-06-21", 1439);
   weather_icons::SunTimes none;
   const bool no_sun = !weather_icons::parse_sun(R"({"state":"sunny","icon":"mdi:weather-sunny"})", none);
   g_now.tm_year = 126; g_now.tm_mon = 8; g_now.tm_mday = 29; g_now.tm_hour = 22; g_now.tm_min = 5;
@@ -259,13 +266,13 @@ int main() {
               "\"homeLit\":%d,\"homeDiff\":%d,\"singleColored\":%d,\"singleLit\":%d,"
               "\"singleText\":%d,\"coloredAgain\":%d,\"parsed\":%d,\"day\":%d,\"beforeRise\":%d,"
               "\"atSet\":%d,\"polar\":%d,\"unknownDay\":%d,\"noSun\":%d,\"nightNow\":%d,\"dayNow\":%d,"
-              "\"outlineStyle\":%d,\"tints\":%d}\n",
+              "\"outlineStyle\":%d,\"tints\":%d,\"bridgeFormat\":%d}\n",
               (int)lv_obj_get_width(partly), (int)lv_font_get_glyph_width(&mdi_icons_48, 0xF0599, 0),
               (int)lv_obj_get_height(partly), (int)lv_font_get_line_height(&mdi_icons_48),
               a.sun, a.cloud, sun.x1 - 100, sun.y1, sun.x2 - 100, sun.y2,
               outline.x1 - 200, outline.y1, outline.x2 - 200, outline.y2, sun.sun, home_box.lit, home_diff,
               single.colored, single.lit, single_text, colored_again, parsed, day, before_rise, at_set,
-              polar, unknown_day, no_sun, night_now, day_now, outline_style, tints);
+              polar, unknown_day, no_sun, night_now, day_now, outline_style, tints, bridge_format);
   return 0;
 }
 `;
@@ -287,7 +294,7 @@ assert(run.homeLit > 100 && run.homeDiff === 0, 'other icons render unchanged th
 assert(run.singleLit > 400 && run.singleColored === 0 && run.singleText, 'a forced color draws all layers in it');
 assert(run.coloredAgain, 'releasing the rule color restores the weather colors');
 for (const key of ['parsed', 'day', 'beforeRise', 'atSet', 'polar', 'unknownDay', 'noSun', 'nightNow', 'dayNow',
-  'outlineStyle', 'tints']) {
+  'outlineStyle', 'tints', 'bridgeFormat']) {
   assert.equal(run[key], 1, key);
 }
 console.log(`Weather icons: ${Object.keys(ICONS).length} colored icons, ${layers} layers; render ${JSON.stringify(run)}`);

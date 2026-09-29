@@ -21,29 +21,28 @@ const power = read('src/core/power/power_manager.cpp');
 const screensaver = read('src/ui/screensaver/image_screensaver.cpp');
 
 // The agreed Unlock layout (test-pin-popup-title-reuse.mjs renders it on every
-// popup layout): header name and state, the lock, the prompt line that turns
-// into one dot per digit, a 3 x 4 keypad computed from the space below the
-// header in fixed shares of the key height.
+// popup layout): header name and state, "Enter PIN" where the lock was, a
+// dots line with one dot per digit, a 3 x 4 keypad computed from the space
+// below the header in fixed shares of the key height.
 for (const marker of [
   'constexpr uint32_t kAutoCloseMs = 60000;',
-  'constexpr uint32_t kLastDigitRevealMs = 600;',
   'constexpr int kKeyGapPct = 16;',
   'constexpr int kKeyWidthPct = 130;',
-  'KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* lock_font, const lv_font_t* prompt_font) {',
+  'KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* prompt_font) {',
   'const int top = popup_layout::kHeaderCenterY - pad + popup_layout::kHeaderIconDiscSize / 2;',
   'if (width_limit < g.key_h) g.key_h = width_limit;',
-  'g.lock_y = top + (available - block) / 2;',
+  'g.prompt_y = top + (available - block) / 2;',
+  'g.dots_y = g.prompt_y + g.prompt_h + prompt_gap;',
   'constexpr int kKeyRadius = popup_layout::kCloseButtonRadius + popup_layout::kCloseButtonRadius / 2;',
   'ui_surface_style::apply_radius(button, kKeyRadius, 0);',
   'for (uint8_t digit = 1; digit <= 9; ++digit)',
   'getMdiChar("backspace")',
   'create_key(grid, "0", digits, g, &zero);',
   'getMdiChar("check-bold")',
-  'lv_label_set_text(ctx->lock_label, getMdiChar("lock").c_str());',
-  // Prompt line: prompt or error, else dots with the latest digit revealed.
+  // The prompt or the error, and one dot per typed digit, never a digit.
   'lv_label_set_text(ctx->prompt_label, ctx->show_error ? tr.pin_popup_incorrect : tr.pin_popup_enter);',
-  'const size_t dots = reveal ? ctx->length - 1 : ctx->length;',
-  'char digit[2] = {reveal ? ctx->input[ctx->length - 1] : \'\\0\', \'\\0\'};',
+  'lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= ctx->length);',
+  'lv_obj_align(ctx->dots_row, LV_ALIGN_TOP_MID, 0, g.dots_y);',
   // Header: the tile's name and the state "Locked" through the shared header.
   'lv_label_set_text(ctx->state_label, tr.pin_popup_locked);',
   'nullptr, g_ctx->state_label);',
@@ -61,10 +60,7 @@ for (const marker of [
   'arm_auto_close_timer(g_ctx);',
   'lv_timer_pause(g_ctx->auto_close_timer);',
   'lv_timer_delete(ctx->auto_close_timer);',
-  'lv_timer_create(',
-  'last_digit_reveal_timer_cb, kLastDigitRevealMs, ctx);',
-  'lv_timer_delete(ctx->last_digit_reveal_timer);',
-  'cancel_last_digit_reveal(ctx);',
+  'popup_nav_style::no_press_filter(key, LV_PART_MAIN | LV_STATE_PRESSED);',
   'place(ctx->key_buttons[kBackspaceKey], 0, 3);',
   'place(ctx->key_buttons[kZeroKey], 1, 3);',
   'place(ctx->key_buttons[kConfirmKey], 2, 3);',
@@ -78,6 +74,10 @@ requireMarker(popupHeader, 'resume_pin_popup_after_failed_success();',
 if ((popup.match(/apply_header\((?:g_)?ctx, init\);/g) || []).length < 2 ||
     !popup.includes('lv_label_set_text(ctx->icon_label, popup_icon_glyph(init.icon_name).c_str());')) {
   throw new Error('PIN popup must update the source tile icon on create and reuse');
+}
+// No lock glyph and no digit shown, not even briefly.
+for (const gone of ['lock_label', 'reveal', 'getMdiChar("lock")']) {
+  if (popup.includes(gone)) throw new Error(`PIN popup must not contain ${gone}`);
 }
 if (popup.includes('lv_obj_t* bottom = lv_obj_create')) {
   throw new Error('PIN popup must use one continuous 3x4 keypad grid');
@@ -321,35 +321,10 @@ for (const file of popupFiles) {
                 `${file} mutual exclusion`);
 }
 
-// Only the latest digit may be revealed briefly, every other digit is a dot.
-const simulateMasking = digits => {
-  const input = [];
-  const frames = [];
-  for (const digit of digits) {
-    input.push(digit);
-    frames.push(`${'•'.repeat(input.length - 1)}${digit}`);
-    frames.push('•'.repeat(input.length));
-  }
-  return frames;
-};
-
-const maskingFrames = simulateMasking(['1', '2', '3']);
-if (maskingFrames.join(',') !== '1,•,•2,••,••3,•••') {
-  throw new Error('Only the latest PIN digit may be revealed briefly');
-}
-
 const clearInputStart = popup.indexOf('void clear_input(PinPopupContext* ctx)');
 const clearInputEnd = popup.indexOf('\nvoid update_value', clearInputStart);
 const clearInputBlock = popup.slice(clearInputStart, clearInputEnd);
-for (const marker of [
-  'cancel_last_digit_reveal(ctx);',
-  'pin_access::secureClear(ctx->input, sizeof(ctx->input));',
-]) requireMarker(clearInputBlock, marker, 'PIN plaintext cleanup');
-
-const confirmStart = popup.indexOf('cancel_last_digit_reveal(ctx);\n        update_value(ctx);');
-if (confirmStart < 0 || confirmStart > popup.indexOf('const bool accepted = ctx->verify')) {
-  throw new Error('PIN confirmation must mask the latest digit before verification');
-}
+requireMarker(clearInputBlock, 'pin_access::secureClear(ctx->input, sizeof(ctx->input));', 'PIN plaintext cleanup');
 
 const edgeSwipeMatches = (edge, start, end, width = 1280, height = 800) => {
   const zone = 56;

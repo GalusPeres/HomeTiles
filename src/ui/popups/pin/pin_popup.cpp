@@ -27,17 +27,17 @@ namespace {
 
 constexpr uint32_t kErrorColor = 0xFF6B6B;
 constexpr uint32_t kAutoCloseMs = 60000;
-constexpr uint32_t kLastDigitRevealMs = 600;
 // The keypad layout, shared by every screen size: all distances are fixed
 // shares of the key height (percent), so a small and a large display look
-// the same. From top to bottom below the header: the lock glyph, the prompt
-// line ("Enter PIN", then one dot per digit), four key rows.
+// the same. From top to bottom below the header: the prompt ("Enter PIN" or
+// the error), the dots line (one dot per digit, never a digit), four key
+// rows.
 constexpr int kKeyGapPct = 16;        // between keys
-constexpr int kLockGapPct = 20;       // lock glyph to the prompt line
-constexpr int kPromptGapPct = 26;     // prompt line to the keys
+constexpr int kPromptGapPct = 20;     // prompt to the dots line
+constexpr int kDotsGapPct = 26;       // dots line to the keys
 constexpr int kMarginPct = 8;         // at least this above and below the block
 constexpr int kKeyWidthPct = 130;     // keys are a bit wider than tall
-constexpr int kDotPct = 55;           // dot diameter, share of the prompt line
+constexpr int kDotPct = 55;           // dot diameter, share of the dots line
 // Keys are a bit rounder than the close button and follow the global tile
 // radius like it (ui_surface_style::apply_radius).
 constexpr int kKeyRadius = popup_layout::kCloseButtonRadius + popup_layout::kCloseButtonRadius / 2;
@@ -68,12 +68,10 @@ struct PinPopupContext {
   lv_obj_t* icon_label = nullptr;
   // Hidden header value ("Locked"), shown by the shared header.
   lv_obj_t* state_label = nullptr;
-  lv_obj_t* lock_label = nullptr;
-  // The prompt line: the prompt or the error text, else the dots.
+  // "Enter PIN" or the error text, above the dots line.
   lv_obj_t* prompt_label = nullptr;
   lv_obj_t* dots_row = nullptr;
   lv_obj_t* dots[pin_access::kInputMaxDigits] = {};
-  lv_obj_t* reveal_label = nullptr;
   lv_obj_t* key_buttons[kKeyCount] = {};
   char input[pin_access::kInputMaxDigits + 1] = {};
   size_t length = 0;
@@ -84,8 +82,6 @@ struct PinPopupContext {
   PinPopupSuccessCallback success = nullptr;
   void* callback_context = nullptr;
   lv_timer_t* auto_close_timer = nullptr;
-  lv_timer_t* last_digit_reveal_timer = nullptr;
-  bool reveal_last_digit = false;
   PinKeyData keys[kKeyCount]{};
 };
 
@@ -96,39 +92,39 @@ struct KeypadGeometry {
   int key_w = 0;
   int key_h = 0;
   int gap = 0;
-  int lock_y = 0;
   int prompt_y = 0;
   int prompt_h = 0;
+  int dots_y = 0;
   int keys_x = 0;
   int keys_y = 0;
   int dot = 0;
 };
 
-KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* lock_font, const lv_font_t* prompt_font) {
+KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* prompt_font) {
   KeypadGeometry g;
   const int pad = lv_obj_get_style_pad_top(card, LV_PART_MAIN);
   const int content_w = popup_layout::kContentWidth;
   const int content_h = popup_layout::kCardHeight - 2 * pad;
   const int top = popup_layout::kHeaderCenterY - pad + popup_layout::kHeaderIconDiscSize / 2;
-  const int lock_h = lv_font_get_line_height(lock_font);
+  // The prompt and the dots line are one text line high each.
   g.prompt_h = lv_font_get_line_height(prompt_font);
   const int available = content_h - top;
-  // Height: lock, prompt and the key-height shares fill the space below the
-  // header; width: three keys and two gaps fit the content width.
-  const int height_pct = 400 + 3 * kKeyGapPct + kLockGapPct + kPromptGapPct + 2 * kMarginPct;
+  // Height: prompt, dots line and the key-height shares fill the space below
+  // the header; width: three keys and two gaps fit the content width.
+  const int height_pct = 400 + 3 * kKeyGapPct + kPromptGapPct + kDotsGapPct + 2 * kMarginPct;
   const int width_pct = 3 * kKeyWidthPct + 2 * kKeyGapPct;
-  g.key_h = (available - lock_h - g.prompt_h) * 100 / height_pct;
+  g.key_h = (available - 2 * g.prompt_h) * 100 / height_pct;
   const int width_limit = content_w * 100 / width_pct;
   if (width_limit < g.key_h) g.key_h = width_limit;
   if (g.key_h < 1) g.key_h = 1;
   g.key_w = g.key_h * kKeyWidthPct / 100;
   g.gap = g.key_h * kKeyGapPct / 100;
-  const int lock_gap = g.key_h * kLockGapPct / 100;
   const int prompt_gap = g.key_h * kPromptGapPct / 100;
-  const int block = lock_h + lock_gap + g.prompt_h + prompt_gap + 4 * g.key_h + 3 * g.gap;
-  g.lock_y = top + (available - block) / 2;
-  g.prompt_y = g.lock_y + lock_h + lock_gap;
-  g.keys_y = g.prompt_y + g.prompt_h + prompt_gap;
+  const int dots_gap = g.key_h * kDotsGapPct / 100;
+  const int block = 2 * g.prompt_h + prompt_gap + dots_gap + 4 * g.key_h + 3 * g.gap;
+  g.prompt_y = top + (available - block) / 2;
+  g.dots_y = g.prompt_y + g.prompt_h + prompt_gap;
+  g.keys_y = g.dots_y + g.prompt_h + dots_gap;
   g.keys_x = (content_w - (3 * g.key_w + 2 * g.gap)) / 2;
   g.dot = g.prompt_h * kDotPct / 100;
   return g;
@@ -142,36 +138,6 @@ const lv_font_t* digit_font(int key_h) {
 }
 
 void update_value(PinPopupContext* ctx);
-
-void cancel_last_digit_reveal(PinPopupContext* ctx) {
-  if (!ctx) return;
-  ctx->reveal_last_digit = false;
-  if (ctx->last_digit_reveal_timer) {
-    lv_timer_pause(ctx->last_digit_reveal_timer);
-  }
-}
-
-void last_digit_reveal_timer_cb(lv_timer_t* timer) {
-  PinPopupContext* ctx = static_cast<PinPopupContext*>(
-      lv_timer_get_user_data(timer));
-  lv_timer_pause(timer);
-  if (!ctx || ctx != g_ctx || timer != ctx->last_digit_reveal_timer) return;
-  ctx->reveal_last_digit = false;
-  update_value(ctx);
-}
-
-void arm_last_digit_reveal_timer(PinPopupContext* ctx) {
-  if (!ctx) return;
-  ctx->reveal_last_digit = true;
-  if (!ctx->last_digit_reveal_timer) {
-    ctx->last_digit_reveal_timer = lv_timer_create(
-        last_digit_reveal_timer_cb, kLastDigitRevealMs, ctx);
-    return;
-  }
-  lv_timer_set_period(ctx->last_digit_reveal_timer, kLastDigitRevealMs);
-  lv_timer_reset(ctx->last_digit_reveal_timer);
-  lv_timer_resume(ctx->last_digit_reveal_timer);
-}
 
 void auto_close_timer_cb(lv_timer_t* timer) {
   PinPopupContext* ctx = static_cast<PinPopupContext*>(
@@ -199,40 +165,29 @@ void arm_auto_close_timer(PinPopupContext* ctx) {
 
 void clear_input(PinPopupContext* ctx) {
   if (!ctx) return;
-  cancel_last_digit_reveal(ctx);
   pin_access::secureClear(ctx->input, sizeof(ctx->input));
   ctx->length = 0;
   ctx->show_error = false;
 }
 
-// The prompt line: "Enter PIN" while empty, the error after a wrong PIN, else
-// one dot per digit, the latest digit shown briefly instead of its dot.
+// The prompt: "Enter PIN", or the error in red after a wrong PIN. Below it
+// one dot per typed digit; a digit is never shown.
 void update_value(PinPopupContext* ctx) {
   if (!ctx || !ctx->prompt_label || !ctx->dots_row) return;
   const auto& tr = i18n::strings(configManager.getConfig().language);
-  const bool prompt = ctx->show_error || ctx->length == 0;
-  lv_obj_set_flag(ctx->prompt_label, LV_OBJ_FLAG_HIDDEN, !prompt);
-  lv_obj_set_flag(ctx->dots_row, LV_OBJ_FLAG_HIDDEN, prompt);
-  if (prompt) {
-    lv_label_set_text(ctx->prompt_label, ctx->show_error ? tr.pin_popup_incorrect : tr.pin_popup_enter);
-    lv_obj_set_style_text_color(ctx->prompt_label,
-                                ctx->show_error ? lv_color_hex(kErrorColor) : lv_color_white(), 0);
-    return;
-  }
-  const bool reveal = ctx->reveal_last_digit;
-  const size_t dots = reveal ? ctx->length - 1 : ctx->length;
+  lv_label_set_text(ctx->prompt_label, ctx->show_error ? tr.pin_popup_incorrect : tr.pin_popup_enter);
+  lv_obj_set_style_text_color(ctx->prompt_label,
+                              ctx->show_error ? lv_color_hex(kErrorColor) : lv_color_white(), 0);
   for (size_t i = 0; i < pin_access::kInputMaxDigits; ++i) {
-    lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= dots);
+    lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= ctx->length);
   }
-  char digit[2] = {reveal ? ctx->input[ctx->length - 1] : '\0', '\0'};
-  lv_label_set_text(ctx->reveal_label, digit);
-  lv_obj_set_flag(ctx->reveal_label, LV_OBJ_FLAG_HIDDEN, !reveal);
 }
 
 // Keys take the popup control fill (popup_nav_style.h) of the card and the
 // header icon; a pressed key lights up with twice its opacity. Backspace sits
 // halfway between the keys and the card; confirm is white with the check in
-// the card color, like Play in the Media popup. The lock takes the icon color.
+// the card color, like Play in the Media popup. A press shows exactly these
+// colors (no theme darkening).
 void style_keypad(PinPopupContext* ctx) {
   if (!ctx || !ctx->card || !ctx->icon_label) return;
   const lv_color_t card = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
@@ -247,6 +202,7 @@ void style_keypad(PinPopupContext* ctx) {
     if (i == kConfirmKey) {
       popup_nav_style::set_bg(key, lv_color_white(), LV_OPA_COVER, LV_PART_MAIN);
       popup_nav_style::set_bg(key, lv_color_hex(0xD8D8D8), LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
+      popup_nav_style::no_press_filter(key, LV_PART_MAIN | LV_STATE_PRESSED);
       lv_obj_t* label = lv_obj_get_child(key, 0);
       if (label && !lv_color_eq(lv_obj_get_style_text_color(label, LV_PART_MAIN), card)) {
         lv_obj_set_style_text_color(label, card, 0);
@@ -256,9 +212,7 @@ void style_keypad(PinPopupContext* ctx) {
     const bool backspace = i == kBackspaceKey;
     popup_nav_style::set_bg(key, fill, backspace ? static_cast<lv_opa_t>(opa / 2) : opa, LV_PART_MAIN);
     popup_nav_style::set_bg(key, fill, backspace ? opa : pressed, LV_PART_MAIN | LV_STATE_PRESSED);
-  }
-  if (ctx->lock_label && !lv_color_eq(lv_obj_get_style_text_color(ctx->lock_label, LV_PART_MAIN), icon)) {
-    lv_obj_set_style_text_color(ctx->lock_label, icon, 0);
+    popup_nav_style::no_press_filter(key, LV_PART_MAIN | LV_STATE_PRESSED);
   }
 }
 
@@ -301,13 +255,11 @@ lv_obj_t* create_key(lv_obj_t* parent, const char* text, const lv_font_t* font,
           if (ctx->length < pin_access::kInputMaxDigits) {
             ctx->input[ctx->length++] = static_cast<char>('0' + key->digit);
             ctx->input[ctx->length] = '\0';
-            arm_last_digit_reveal_timer(ctx);
           }
           update_value(ctx);
           return;
         }
         if (key->action == PinKeyAction::Backspace) {
-          cancel_last_digit_reveal(ctx);
           if (ctx->length > 0) {
             ctx->input[--ctx->length] = '\0';
           }
@@ -315,7 +267,6 @@ lv_obj_t* create_key(lv_obj_t* parent, const char* text, const lv_font_t* font,
           return;
         }
 
-        cancel_last_digit_reveal(ctx);
         update_value(ctx);
         const bool accepted = ctx->verify &&
                               ctx->verify(ctx->input,
@@ -370,10 +321,6 @@ void on_delete(lv_event_t* event) {
     lv_timer_delete(ctx->auto_close_timer);
     ctx->auto_close_timer = nullptr;
   }
-  if (ctx && ctx->last_digit_reveal_timer) {
-    lv_timer_delete(ctx->last_digit_reveal_timer);
-    ctx->last_digit_reveal_timer = nullptr;
-  }
   clear_input(ctx);
   delete ctx;
 }
@@ -386,17 +333,11 @@ String popup_icon_glyph(const String& icon_name) {
   return glyph;
 }
 
-// Builds the lock, the prompt line and the 3 x 4 keypad below the header.
+// Builds the prompt, the dots line and the 3 x 4 keypad below the header.
 void build_keypad(PinPopupContext* ctx) {
   lv_obj_t* card = ctx->card;
   const lv_font_t* prompt_font = popup_layout::font24();
-  const KeypadGeometry g = keypad_geometry(card, FONT_MDI_ICONS, prompt_font);
-
-  ctx->lock_label = lv_label_create(card);
-  lv_obj_set_style_text_font(ctx->lock_label, FONT_MDI_ICONS, 0);
-  popup_layout::applyIconScale(ctx->lock_label);
-  lv_label_set_text(ctx->lock_label, getMdiChar("lock").c_str());
-  lv_obj_align(ctx->lock_label, LV_ALIGN_TOP_MID, 0, g.lock_y);
+  const KeypadGeometry g = keypad_geometry(card, prompt_font);
 
   ctx->prompt_label = lv_label_create(card);
   lv_obj_set_style_text_font(ctx->prompt_label, prompt_font, 0);
@@ -408,7 +349,7 @@ void build_keypad(PinPopupContext* ctx) {
   ctx->dots_row = lv_obj_create(card);
   lv_obj_remove_style_all(ctx->dots_row);
   lv_obj_set_size(ctx->dots_row, LV_PCT(100), g.prompt_h);
-  lv_obj_align(ctx->dots_row, LV_ALIGN_TOP_MID, 0, g.prompt_y);
+  lv_obj_align(ctx->dots_row, LV_ALIGN_TOP_MID, 0, g.dots_y);
   lv_obj_set_flex_flow(ctx->dots_row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(ctx->dots_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(ctx->dots_row, g.dot, 0);
@@ -423,11 +364,6 @@ void build_keypad(PinPopupContext* ctx) {
     lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
     ctx->dots[i] = dot;
   }
-  // The latest digit, shown briefly after the dots (flex order).
-  ctx->reveal_label = lv_label_create(ctx->dots_row);
-  lv_obj_set_style_text_font(ctx->reveal_label, prompt_font, 0);
-  lv_obj_set_style_text_color(ctx->reveal_label, lv_color_white(), 0);
-  lv_label_set_text(ctx->reveal_label, "");
 
   lv_obj_t* grid = lv_obj_create(card);
   lv_obj_remove_style_all(grid);

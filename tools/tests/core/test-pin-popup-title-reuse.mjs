@@ -105,7 +105,7 @@ using namespace pin_test;
 bool verify_test(const char*, void*) { return false; }
 void success_test(void*) {}
 
-// The agreed Unlock layout on every screen: the lock, the prompt line and the
+// The agreed Unlock layout on every screen: the prompt, the dots line and the
 // keys sit below the header, inside the card, centered with the same margin
 // above and below; keys are a bit wider than tall and large enough to hit.
 void check_layout(const char* layout) {
@@ -113,16 +113,16 @@ void check_layout(const char* layout) {
   lv_area_t card; lv_obj_get_coords(g_ctx->card, &card);
   const int pad = lv_obj_get_style_pad_top(g_ctx->card, LV_PART_MAIN);
   const int header_bottom = card.y1 + popup_layout::kHeaderCenterY + popup_layout::kHeaderIconDiscSize / 2;
-  lv_area_t lock, prompt, first, last;
-  lv_obj_get_coords(g_ctx->lock_label, &lock);
+  lv_area_t prompt, dots, first, last;
   lv_obj_get_coords(g_ctx->prompt_label, &prompt);
+  lv_obj_get_coords(g_ctx->dots_row, &dots);
   lv_obj_get_coords(g_ctx->key_buttons[0], &first);
   lv_obj_get_coords(g_ctx->key_buttons[kConfirmKey], &last);
   const int key_w = lv_obj_get_width(g_ctx->key_buttons[0]), key_h = lv_obj_get_height(g_ctx->key_buttons[0]);
-  const int above = lock.y1 - header_bottom, below = card.y2 - pad - last.y2;
+  const int above = prompt.y1 - header_bottom, below = card.y2 - pad - last.y2;
   std::cout << layout << ": keys " << key_w << "x" << key_h << ", above " << above << ", below " << below << "\n";
-  assert(above >= 0 && "The lock sits below the header");
-  assert(prompt.y1 > lock.y2 && first.y1 > prompt.y2 && "Lock, prompt line and keys stack in order");
+  assert(above >= 0 && "The prompt sits below the header");
+  assert(dots.y1 > prompt.y2 && first.y1 > dots.y2 && "Prompt, dots line and keys stack in order");
   assert(first.x1 >= card.x1 + pad && last.x2 <= card.x2 - pad && below >= 0 && "Keys stay inside the card");
   assert(key_w > key_h && key_h >= popup_layout::scale(56) && "Keys are wider than tall and easy to hit");
   assert(std::abs(above - below) <= 2 && "The block is centered below the header");
@@ -135,29 +135,33 @@ void check_layout(const char* layout) {
   }
 }
 
-// The prompt line: "Enter PIN" while empty, one dot per digit (the latest
-// digit briefly shown instead of its dot), the error after a wrong PIN.
+// "Enter PIN" always stays; below it one dot per typed digit, never a
+// digit; the error replaces the prompt after a wrong PIN until the next key.
 void check_prompt(const i18n::Strings& tr) {
   auto shown = [](lv_obj_t* obj) { return !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN); };
   auto click = [](int key) { lv_obj_send_event(g_ctx->key_buttons[key], LV_EVENT_CLICKED, nullptr); };
-  assert(shown(g_ctx->prompt_label) && !shown(g_ctx->dots_row));
+  auto dots = []() {
+    int count = 0;
+    for (lv_obj_t* dot : g_ctx->dots) count += !lv_obj_has_flag(dot, LV_OBJ_FLAG_HIDDEN);
+    return count;
+  };
+  assert(shown(g_ctx->prompt_label) && dots() == 0);
   assert(!strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_enter));
   click(0); click(1);
-  assert(!shown(g_ctx->prompt_label) && shown(g_ctx->dots_row));
-  assert(shown(g_ctx->dots[0]) && !shown(g_ctx->dots[1]) && shown(g_ctx->reveal_label) &&
-         !strcmp(lv_label_get_text(g_ctx->reveal_label), "2"));
-  g_ctx->reveal_last_digit = false; update_value(g_ctx);
-  assert(shown(g_ctx->dots[1]) && !shown(g_ctx->dots[2]) && !shown(g_ctx->reveal_label));
+  assert(shown(g_ctx->prompt_label) && !strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_enter));
+  assert(dots() == 2 && "One dot per digit right away, no digit shown");
+  // No child of the dots line shows text.
+  for (uint32_t i = 0; i < lv_obj_get_child_count(g_ctx->dots_row); ++i) {
+    assert(!lv_obj_check_type(lv_obj_get_child(g_ctx->dots_row, static_cast<int32_t>(i)), &lv_label_class));
+  }
   click(kBackspaceKey);
-  assert(shown(g_ctx->dots[0]) && !shown(g_ctx->dots[1]));
+  assert(dots() == 1);
   for (int i = 0; i < 12; ++i) click(kZeroKey);
-  g_ctx->reveal_last_digit = false; update_value(g_ctx);
-  assert(g_ctx->length == pin_access::kInputMaxDigits && shown(g_ctx->dots[pin_access::kInputMaxDigits - 1]));
+  assert(g_ctx->length == pin_access::kInputMaxDigits && dots() == static_cast<int>(pin_access::kInputMaxDigits));
   click(kConfirmKey);
-  assert(shown(g_ctx->prompt_label) && !shown(g_ctx->dots_row) &&
-         !strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_incorrect));
+  assert(dots() == 0 && !strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_incorrect));
   click(3);
-  assert(!shown(g_ctx->prompt_label) && g_ctx->length == 1);
+  assert(dots() == 1 && g_ctx->length == 1 && !strcmp(lv_label_get_text(g_ctx->prompt_label), tr.pin_popup_enter));
 }
 
 void check_title(const String& expected) {

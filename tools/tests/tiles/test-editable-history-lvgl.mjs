@@ -122,7 +122,7 @@ bool readout_12h=false;
 bool readout_twelve_hour(){return readout_12h;}
 char readout_decimal_separator(){return '.';}
 const char* get_weekday_abbrev(uint8_t day){static const char* names[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};return names[day%7];}
-void editable_control_close(EditableControl*){}void editable_control_open(EditableControl*,const String&){}
+void editable_control_close(EditableControl*){}void editable_control_open(EditableControl*,const String&){}void editable_control_follow_colors(EditableControl*){}
 bool isMdiIconDisabled(const String&){return false;}String getMdiChar(const String&){return "";}
 
 void update_binary_state(SensorPopupContext*,const String&,bool,const String&,uint64_t,const String&){assert(false);}

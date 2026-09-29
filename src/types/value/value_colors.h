@@ -32,17 +32,27 @@ inline lv_color_t readable_surface(lv_color_t color) {
 }
 
 struct Palette {
-  lv_color_t base, surface, pressed, raised, field, border;
+  lv_color_t base, fill, surface, pressed, raised, field, list, border;
+  lv_opa_t opa;
 };
 
-inline Palette from(lv_color_t base) {
+// The editors follow the popup control rule (popup_nav_style.h): the number
+// and clock pills, the date fields, the Select field and its selected option
+// have the control fill of a selected 7D/24H over the card (`fill` at `opa`:
+// the icon color with tile color "From icon" and "Circle in icon color", else
+// white); the open option list is the card itself. White text stays readable.
+inline Palette from(lv_color_t base, lv_color_t fill, lv_opa_t opa) {
   Palette p{};
   p.base = base;
-  p.surface = readable_surface(blend(base, lv_color_black(), 91));
+  p.fill = fill;
+  p.opa = opa;
+  p.surface = readable_surface(blend(base, fill, opa));
   p.pressed = readable_surface(blend(p.surface, lv_color_white(), 9));
-  p.raised = readable_surface(blend(base, lv_color_white(), 19));
-  p.field = readable_surface(blend(base, lv_color_white(), 11));
-  p.border = blend(p.surface, lv_color_white(), 65);
+  p.raised = p.surface;
+  p.field = p.surface;
+  p.list = readable_surface(base);
+  // The popup card hairline (white 20 %) around the field and the list.
+  p.border = blend(p.surface, lv_color_white(), 51);
   return p;
 }
 
@@ -65,13 +75,13 @@ inline void dropdown(lv_obj_t* obj, const Palette& p) {
 }
 
 inline void dropdownList(lv_obj_t* obj, const Palette& p) {
-  surface(obj, p.surface);
+  surface(obj, p.list);
   lv_obj_set_style_border_color(obj, p.border, LV_PART_MAIN);
   lv_obj_set_style_bg_color(obj, p.border, LV_PART_SCROLLBAR);
   for (lv_style_selector_t state : std::initializer_list<lv_style_selector_t>{LV_STATE_DEFAULT, LV_STATE_CHECKED,
        LV_STATE_PRESSED, LV_STATE_CHECKED | LV_STATE_PRESSED}) {
-    lv_obj_set_style_bg_color(obj, lv_color_white(), LV_PART_SELECTED | state);
-    lv_obj_set_style_text_color(obj, p.surface, LV_PART_SELECTED | state);
+    lv_obj_set_style_bg_color(obj, p.surface, LV_PART_SELECTED | state);
+    lv_obj_set_style_text_color(obj, lv_color_white(), LV_PART_SELECTED | state);
   }
 }
 }  // namespace editable_colors

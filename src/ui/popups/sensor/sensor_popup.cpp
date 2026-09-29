@@ -409,8 +409,10 @@ static void apply_popup_icon_color(SensorPopupContext* ctx, bool known, const ch
                              display, lv_color_to_u32(fallback) & 0xFFFFFF));
   if (!lv_color_eq(lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN), color)) {
     lv_obj_set_style_text_color(ctx->icon_label, color, 0);
-    // The range buttons share the header disc fill, which follows the icon.
+    // The range buttons and the editor surfaces take the control fill, which
+    // follows the icon.
     update_range_buttons(ctx);
+    editable_control_follow_colors(ctx->control);
   }
 }
 
@@ -497,6 +499,7 @@ void sensor_popup_follow_tile_color(uint32_t color) {
   ctx->bg_color = color;
   lv_obj_set_style_bg_color(ctx->card, lv_color_hex(color), 0);
   update_range_buttons(ctx);
+  editable_control_follow_colors(ctx->control);
 }
 
 namespace {
@@ -3439,7 +3442,7 @@ static void build_popup_body(SensorPopupContext* ctx) {
   lv_obj_align(ctx->control_row, LV_ALIGN_TOP_MID, 0, popup_layout::kValueY);
   lv_obj_remove_flag(ctx->control_row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(ctx->control_row, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-  ctx->control = editable_control_create(ctx->control_row, card);
+  ctx->control = editable_control_create(ctx->control_row, card, ctx->icon_label);
 
   lv_obj_t* body_box = lv_obj_create(card);
   ctx->body_box = body_box;

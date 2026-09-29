@@ -15,6 +15,7 @@
 #include "src/network/network_manager.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/shared/ui_control_style.h"
 #include "src/types/value/value_editor_model.h"
 #include "src/types/value/value_colors.h"
@@ -214,7 +215,7 @@ struct EditableControl {
     lv_obj_t *box = nullptr, *spinbox = nullptr, *up = nullptr, *down = nullptr, *roller = nullptr;
     bool unknown_options = false;
   } fields[6];
-  lv_obj_t *row = nullptr, *card = nullptr, *slider = nullptr, *field = nullptr,
+  lv_obj_t *row = nullptr, *card = nullptr, *icon = nullptr, *slider = nullptr, *field = nullptr,
            *number_box = nullptr, *number_roller = nullptr, *up = nullptr, *down = nullptr, *dropdown = nullptr,
            *apply = nullptr, *status = nullptr, *pressed = nullptr, *clock_box = nullptr, *separators[2] = {};
   EditableValue value;
@@ -609,10 +610,24 @@ void style_roller(lv_obj_t* roller) {
 
 void apply_control_colors(EditableControl* c) {
   const lv_color_t base = lv_obj_get_style_bg_color(c->card, LV_PART_MAIN);
-  if (c->colors_initialized && lv_color_eq(base, c->colors.base)) return;
-  c->colors = editable_colors::from(base);
+  const lv_color_t icon = c->icon ? lv_obj_get_style_text_color(c->icon, LV_PART_MAIN) : lv_color_white();
+  lv_color_t fill;
+  lv_opa_t opa;
+  popup_nav_style::fill(base, icon, fill, opa);
+  if (c->colors_initialized && lv_color_eq(base, c->colors.base) && lv_color_eq(fill, c->colors.fill) &&
+      opa == c->colors.opa) {
+    return;
+  }
+  c->colors = editable_colors::from(base, fill, opa);
   c->colors_initialized = true;
   editable_colors::dropdown(c->dropdown, c->colors);
+  // The Number slider looks like the Media sliders; the date arrows press
+  // like the popup controls.
+  popup_nav_style::style_slider(c->slider, base, icon);
+  for (auto& field : c->fields) {
+    popup_nav_style::style_press(field.up, base, icon);
+    popup_nav_style::style_press(field.down, base, icon);
+  }
   // The white Apply button cuts its label out in the card color; pressed is
   // the white mixed toward the card (0xBBBBBB on the default 0x2A2A2A card).
   if (c->apply) {
@@ -712,8 +727,8 @@ void layout_controls(EditableControl* c) {
 }
 }
 
-EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card) {
-  auto* c = new EditableControl; c->row = row; c->card = card;
+EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t* icon) {
+  auto* c = new EditableControl; c->row = row; c->card = card; c->icon = icon;
   c->slider = lv_slider_create(row); lv_slider_set_range(c->slider, 0, 10000);
   ui_control_style::mediaSlider(c->slider);
   c->number_box = lv_obj_create(row); style_panel(c->number_box);
@@ -809,6 +824,10 @@ void editable_control_open(EditableControl* c, const String& entity) {
   c->payload = "\x01"; c->generation = 0;
   apply_control_colors(c);
   visible(c->row, true); editable_control_refresh(c);
+}
+
+void editable_control_follow_colors(EditableControl* c) {
+  if (c && c->active) apply_control_colors(c);
 }
 
 void editable_control_refresh(EditableControl* c) {

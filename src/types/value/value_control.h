@@ -27,7 +27,11 @@ bool editable_handle_ack(const char* topic, const char* payload, size_t length);
 
 // The Sensor popup owns the reused controls and their event data.
 struct EditableControl;
-EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card);
+// `icon`: the popup's header icon, whose color the control surfaces follow
+// (popup_nav_style.h).
+EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t* icon = nullptr);
+// Restyles the surfaces after the card or header icon color changed.
+void editable_control_follow_colors(EditableControl*);
 void editable_control_open(EditableControl*, const String& entity);
 void editable_control_refresh(EditableControl*);
 void editable_control_close(EditableControl*);

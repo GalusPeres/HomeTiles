@@ -70,7 +70,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Bridge v0.6.44 (`148dec4`): stale icon cache fixed, overrides kept. v0.6.10 has `84511da` plus title/color fixes.
 - Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
-- Editable surfaces follow tile color, white text unchanged; selection white with surface-colored text; S3 arrow 20px.
+- Editable surfaces: popup control fill, white text; list = card, selection = surface; S3 arrow 20px.
 - Wi-Fi idle/reconnect gaps remain unfixed; findings/probes: `build/wifi-power-audit/VERIFICATION.md`.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
 - S3 froze adding Number to active screensaver: Web responded, save persisted; manual reboot. Older dump, cause unknown.

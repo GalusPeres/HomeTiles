@@ -166,7 +166,7 @@ int main(int argc,char**argv){
  auto* title=text(card,"L10s Ultra Volume");lv_obj_set_style_text_font(title,popup_layout::headerTitleFont(),0);lv_obj_set_width(title,LV_PCT(38));
  auto* close=popup_layout::createCloseButton(card,[](lv_event_t*){},nullptr);
  auto* header_icon=text(card,getMdiChar("clock-end").c_str());lv_obj_set_style_text_font(header_icon,FONT_MDI_ICONS,0);popup_layout::applyIconScale(header_icon);popup_layout::alignHeader(card,title,header_icon);
- auto* row=box(card);lv_obj_set_pos(row,0,popup_layout::kValueY);lv_obj_add_flag(row,LV_OBJ_FLAG_OVERFLOW_VISIBLE);auto* c=editable_control_create(row,card);
+ auto* row=box(card);lv_obj_set_pos(row,0,popup_layout::kValueY);lv_obj_add_flag(row,LV_OBJ_FLAG_OVERFLOW_VISIBLE);auto* c=editable_control_create(row,card,nullptr);
 #if defined(DEVICE_GUITION_ESP32_4848S040)
  assert(lv_obj_get_style_text_font(c->dropdown,LV_PART_INDICATOR)==&ui_symbols_20);
 #else
@@ -228,7 +228,7 @@ int main(int argc,char**argv){
     auto* control_widget=strcmp(kind,"time")==0?c->clock_box:strcmp(kind,"select")==0?c->dropdown:c->number_box;
     control_bounds((String(argv[1])+"-"+kind+".bounds").c_str(),control_widget);
     if(strcmp(kind,"select")==0||strcmp(kind,"time")==0){lv_area_t area;lv_obj_get_coords(control_widget,&area);auto pixel=rendered_pixel(pixels,(area.y1+popup_layout::scale(12))*SCREEN_WIDTH+area.x1+popup_layout::scale(24));int r=(pixel>>16)&255,g=(pixel>>8)&255,b=pixel&255;assert(abs(r-g)<=2&&abs(g-b)<=2&&"The rendered RGB565 surface must be neutral");}}
-  if(strcmp(kind,"select")==0){for(int cycle=0;cycle<3;++cycle){lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);auto* list=lv_dropdown_get_list(c->dropdown);assert(lv_obj_get_style_text_font(list,LV_PART_MAIN)==popup_layout::headerTitleFont());assert(lv_obj_get_style_clip_corner(list,LV_PART_MAIN));auto selected=lv_obj_get_style_bg_color(list,LV_PART_SELECTED);assert(selected.red==255&&selected.green==255&&selected.blue==255);lv_area_t a;lv_obj_get_coords(list,&a);assert(a.x1>=0&&a.x2<SCREEN_WIDTH);if(argc>1&&cycle==0){lv_obj_invalidate(lv_screen_active());lv_tick_inc(200);lv_timer_handler();lv_refr_now(display);image((String(argv[1])+"-options.bmp").c_str(),pixels);}lv_dropdown_close(c->dropdown);}}
+  if(strcmp(kind,"select")==0){for(int cycle=0;cycle<3;++cycle){lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);auto* list=lv_dropdown_get_list(c->dropdown);assert(lv_obj_get_style_text_font(list,LV_PART_MAIN)==popup_layout::headerTitleFont());assert(lv_obj_get_style_clip_corner(list,LV_PART_MAIN));auto selected=lv_obj_get_style_bg_color(list,LV_PART_SELECTED);assert(selected.red==c->colors.surface.red&&selected.green==c->colors.surface.green&&selected.blue==c->colors.surface.blue);lv_area_t a;lv_obj_get_coords(list,&a);assert(a.x1>=0&&a.x2<SCREEN_WIDTH);if(argc>1&&cycle==0){lv_obj_invalidate(lv_screen_active());lv_tick_inc(200);lv_timer_handler();lv_refr_now(display);image((String(argv[1])+"-options.bmp").c_str(),pixels);}lv_dropdown_close(c->dropdown);}}
  }
  if(argc>1){lv_refr_now(display);for(auto* icon:{header_icon,lv_obj_get_child(close,0)}){lv_area_t area;lv_obj_get_coords(icon,&area);int bright=0;for(int y=area.y1;y<=area.y2;++y)for(int x=area.x1;x<=area.x2;++x){auto pixel=rendered_pixel(pixels,y*SCREEN_WIDTH+x);if((pixel&255)>200&&((pixel>>8)&255)>200&&((pixel>>16)&255)>200)++bright;}assert(bright>10);}}
  // Exercise delayed metadata while the existing popup remains open.
@@ -360,7 +360,7 @@ int main(int argc,char**argv){
  click(c->up);editable_control_close(c);settle(c);assert(networkManager.commands.size()==offline_pending);
  load(c,"date","2024-02-29");click(c->fields[0].up);assert(c->calendar.values[0]==2025&&c->calendar.values[2]==28);
  for(const char* language:{"en","de","fr"}){
-    configManager.cfg.language=language;auto* translated_row=box(card);auto* translated=editable_control_create(translated_row,card);
+    configManager.cfg.language=language;auto* translated_row=box(card);auto* translated=editable_control_create(translated_row,card,nullptr);
     for(int i=0;i<6;++i)assert(std::string(lv_label_get_text(lv_obj_get_child(translated->fields[i].box,0)))==label(13+i));
     assert(std::string(lv_label_get_text(lv_obj_get_child(translated->apply,0)))==label(6));
     load(translated,"number","20.5",",\\"min\\":16,\\"max\\":30,\\"step\\":0.5,\\"mode\\":\\"auto\\",\\"unit\\":\\"°C\\"");
@@ -400,8 +400,8 @@ int main(int argc,char**argv){
  assert(lv_obj_has_state(c->dropdown,LV_STATE_PRESSED));
  assert(!lv_obj_has_state(close,LV_STATE_PRESSED));
  const auto pressed_background=feedback_frame("pressed");
-  for(int shift:{0,8,16}){const int base=(resting_background>>shift)&255,pressed=(pressed_background>>shift)&255;assert(base<30&&pressed>base&&pressed-base<=10&&"Press feedback must be subtle on a dark Settings surface");}
-  const auto border=lv_obj_get_style_border_color(c->dropdown,LV_PART_MAIN);assert(border.red==0x55&&border.green==0x55&&border.blue==0x55&&"Press feedback must preserve the Settings gray border");
+  for(int shift:{0,8,16}){const int base=(resting_background>>shift)&255,pressed=(pressed_background>>shift)&255;assert(pressed>base&&pressed-base<=10&&"Press feedback must be subtle on the control fill surface");}
+  const auto border=lv_obj_get_style_border_color(c->dropdown,LV_PART_MAIN);assert(border.red==c->colors.border.red&&border.green==c->colors.border.green&&border.blue==c->colors.border.blue&&"Press feedback must keep the hairline border");
  touch.state=LV_INDEV_STATE_RELEASED;lv_indev_read(pointer);
  assert(lv_dropdown_is_open(c->dropdown)&&lv_obj_has_state(c->dropdown,LV_STATE_CHECKED));
  assert(feedback_frame("open")==resting_background&&"An expanded dropdown must not retain press feedback");
@@ -409,7 +409,9 @@ int main(int argc,char**argv){
  const int selected_pixel=(feedback_list_area.y1+lv_obj_get_style_pad_top(feedback_list,LV_PART_MAIN)+lv_font_get_line_height(popup_layout::headerTitleFont())/2)*SCREEN_WIDTH+feedback_list_area.x2-popup_layout::scale(24);
  const uint32_t selected_color=rendered_pixel(pixels,selected_pixel);
  const int selected_r=(selected_color>>16)&255,selected_g=(selected_color>>8)&255,selected_b=selected_color&255;
- assert(selected_r==255&&selected_g==255&&selected_b==255&&"Editable dropdown selection must be white on every tile color");
+ // Within RGB565 rounding on 16-bit profiles.
+ auto near=[](int a,int b){return std::abs(a-b)<=7;};
+ assert(near(selected_r,c->colors.surface.red)&&near(selected_g,c->colors.surface.green)&&near(selected_b,c->colors.surface.blue)&&"The selected option shows the control fill");
  JsonDocument unavailable;deserializeJson(unavailable,haBridgeConfig.payload);
  unavailable["state"]="unavailable";unavailable["available"]=false;unavailable["writable"]=false;
  ArduinoJson::serializeJson(unavailable,static_cast<std::string&>(haBridgeConfig.payload));
@@ -436,10 +438,12 @@ int main(int argc,char**argv){
  auto luminance=[](lv_color_t c){auto linear=[](int x){double v=x/255.0;return v<=0.04045?v/12.92:pow((v+0.055)/1.055,2.4);};return .2126*linear(c.red)+.7152*linear(c.green)+.0722*linear(c.blue);};
  auto contrast=[&](lv_color_t a,lv_color_t b){double x=luminance(a)+.05,y=luminance(b)+.05;return std::max(x,y)/std::min(x,y);};
  for(int r=0;r<=255;r+=17)for(int g=0;g<=255;g+=17)for(int b=0;b<=255;b+=17){
-  const auto p=editable_colors::from(lv_color_make(r,g,b));
-  assert(contrast(p.surface,lv_color_white())>=4.5);
+  // Neutral and icon colored control fills keep white text readable.
+  for(const auto p:{editable_colors::from(lv_color_make(r,g,b),lv_color_white(),40),editable_colors::from(lv_color_make(r,g,b),lv_color_make(255-r,g,b),64)}){
+  assert(contrast(p.surface,lv_color_white())>=4.5&&contrast(p.list,lv_color_white())>=4.5);
   assert(contrast(p.pressed,lv_color_white())>=4.5&&contrast(p.raised,lv_color_white())>=4.5);
   assert(contrast(p.field,lv_color_white())>=4.5);
+  }
  }
  const auto commands_before_colors=networkManager.commands.size();
  for(uint32_t rgb:{0x2A2A2Au,0x184A78u,0x8A283Cu,0x237053u,0xEBDCB8u,0xFFFFFFu,0x010101u}){
@@ -457,10 +461,12 @@ int main(int argc,char**argv){
     const char* options=lv_dropdown_get_options(c->dropdown);apply_control_colors(c);
     assert(options==lv_dropdown_get_options(c->dropdown));
     lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);auto* list=lv_dropdown_get_list(c->dropdown);
-    assert(same(lv_obj_get_style_bg_color(list,LV_PART_MAIN),c->colors.surface));
+    // The open list is the card; the selected option has the control fill
+    // of a selected 7D/24H with white text (popup_nav_style.h).
+    assert(same(lv_obj_get_style_bg_color(list,LV_PART_MAIN),c->colors.list));
     assert(same(lv_obj_get_style_text_color(list,LV_PART_MAIN),lv_color_white()));
-    assert(same(lv_obj_get_style_bg_color(list,LV_PART_SELECTED),lv_color_white()));
-    assert(same(lv_obj_get_style_text_color(list,LV_PART_SELECTED),c->colors.surface));
+    assert(same(lv_obj_get_style_bg_color(list,LV_PART_SELECTED),c->colors.surface));
+    assert(same(lv_obj_get_style_text_color(list,LV_PART_SELECTED),lv_color_white()));
     lv_dropdown_close(c->dropdown);
     lv_obj_add_state(c->dropdown,LV_STATE_DISABLED);
     assert(same(lv_obj_get_style_bg_color(c->dropdown,LV_PART_MAIN),c->colors.surface));
@@ -475,7 +481,7 @@ int main(int argc,char**argv){
  }
  assert(networkManager.commands.size()==commands_before_colors);
  lv_obj_set_style_bg_color(card,lv_color_hex(0x2A2A2A),0);
- std::cout<<"Editable palette: 4096 colors, reused controls, white selection, loading text and contrast passed\\n";
+ std::cout<<"Editable palette: 4096 colors, reused controls, control fill selection, loading text and contrast passed\\n";
 
  // Use the actual popup visibility path with partial rendering, as on the
  // device. An opaque dropdown must not redraw covered grid tiles.
@@ -488,8 +494,7 @@ int main(int argc,char**argv){
  lv_dropdown_open(c->dropdown);lv_obj_update_layout(card);
  for(auto state:{LV_STATE_CHECKED,static_cast<lv_state_t>(LV_STATE_CHECKED|LV_STATE_PRESSED)}){
   lv_obj_add_state(c->dropdown,state);lv_tick_inc(300);lv_timer_handler();auto color=lv_obj_get_style_bg_color(c->dropdown,LV_PART_MAIN);
-  const uint8_t expected=(state&LV_STATE_PRESSED)?0x23:0x1b;
-  assert(color.red==expected&&color.green==expected&&color.blue==expected);
+  assert(same(color,(state&LV_STATE_PRESSED)?c->colors.pressed:c->colors.surface));
   auto arrow=lv_obj_get_style_text_color(c->dropdown,LV_PART_INDICATOR);assert(arrow.red==255&&arrow.green==255&&arrow.blue==255);
   lv_obj_remove_state(c->dropdown,LV_STATE_PRESSED);
  }

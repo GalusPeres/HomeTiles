@@ -88,8 +88,13 @@ assert.match(read('src/tiles/config/tile_config.h'),
   /weatherColoredIcons\(const Tile& tile\) \{\s*return tile\.type != TILE_WEATHER \|\| tile\.sensor_display_mode != 1;/);
 const handler = read('src/types/weather/web_handler.cpp');
 assert.match(handler, /server\.arg\("weather_colored_icons"\)\.toInt\(\) == 0 \? 1 : 0/);
-const html = read('src/types/weather/web_html.cpp');
-assert.match(html, /if \(tab_id != "screensaver"\) \{\s*html \+= R"html\(\s*<label class="inline-checkbox"><input type="checkbox" id="\)html";\s*html \+= tab_id;\s*html \+= R"html\(_weather_colored_icons" checked>\)html";\s*html \+= tr\.weather_colored_icons;/);
+// The setting sits in the icon section (weather only), not between the
+// weather fields.
+const html = read('src/web/server/render/web_admin_html.cpp');
+assert.doesNotMatch(read('src/types/weather/web_html.cpp'), /weather_colored_icons/);
+assert.match(html, /_tile_icon_glow" checked> \)html";[\s\S]{0,200}if \(!screensaver_mode\) \{\s*html \+= R"html\(\s*<label class="inline-checkbox hidden" id="\)html";\s*html \+= tab_id;\s*html \+= R"html\(_weather_colored_icons_row"><input type="checkbox" id="\)html";\s*html \+= tab_id;\s*html \+= R"html\(_weather_colored_icons" checked> \)html";\s*appendHtmlEscaped\(html, tr\.weather_colored_icons\);/);
+assert.match(read('src/web/admin/tiles/snapshots.js'),
+  /getElementById\(tab \+ '_weather_colored_icons_row'\)\?\.classList\.toggle\('hidden', !weather\)/);
 const i18n = read('src/core/i18n/i18n.cpp');
 for (const label of ['"Farbige Wetter-Icons"', '"Colored weather icons"', '"Icônes météo en couleur"']) {
   assert(i18n.includes(label), `translation ${label}`);

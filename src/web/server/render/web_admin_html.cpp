@@ -1130,7 +1130,19 @@ static void appendTileTabHTML(
   html += R"html(_tile_icon_glow" checked> )html";
   appendHtmlEscaped(html, tr.icon_glow);
   html += R"html(</label>
-            </div>
+)html";
+  // Weather only: filled, colored weather icons or the white outlines.
+  if (!screensaver_mode) {
+    html += R"html(              <label class="inline-checkbox hidden" id=")html";
+    html += tab_id;
+    html += R"html(_weather_colored_icons_row"><input type="checkbox" id=")html";
+    html += tab_id;
+    html += R"html(_weather_colored_icons" checked> )html";
+    appendHtmlEscaped(html, tr.weather_colored_icons);
+    html += R"html(</label>
+)html";
+  }
+  html += R"html(            </div>
 
             <div class="tile-settings-group">)html";
   appendHtmlEscaped(html, tr.tile_group_tile);

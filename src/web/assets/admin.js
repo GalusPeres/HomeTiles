@@ -2572,10 +2572,12 @@ function syncTileRadiusControls(tabEl) {
     const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
     const discToggle = tileTypeHasDiscToggle(typeValue);
     const colored = tileTypeHasColoredIcon(typeValue);
+    const weather = typeValue === '12';
     document.getElementById(tab + '_tile_icon_disc_fields')
-      ?.classList.toggle('hidden', !tileTypeHasIcon(typeValue) || (!discToggle && !colored));
+      ?.classList.toggle('hidden', !tileTypeHasIcon(typeValue) || (!discToggle && !colored && !weather));
     document.getElementById(tab + '_tile_icon_disc_row')?.classList.toggle('hidden', !discToggle);
     document.getElementById(tab + '_tile_icon_glow_row')?.classList.toggle('hidden', !colored);
+    document.getElementById(tab + '_weather_colored_icons_row')?.classList.toggle('hidden', !weather);
   }
 
   function collectTypeFieldValues(tab) {

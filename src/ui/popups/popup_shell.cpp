@@ -248,6 +248,9 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
                                    : lv_obj_get_style_text_font(source, LV_PART_MAIN);
   if (font != lv_obj_get_style_text_font(target, LV_PART_MAIN))
     lv_obj_set_style_text_font(target, font, 0);
+  // Colored icons (weather) draw their layers with recolor commands.
+  if (!title && lv_label_get_recolor(source) != lv_label_get_recolor(target))
+    lv_label_set_recolor(target, lv_label_get_recolor(source));
   const char* text = title ? hometiles_title::text(source) : lv_label_get_text(source);
   const char* current = title ? hometiles_title::text(target) : lv_label_get_text(target);
   if (strcmp(text, current) != 0) {

@@ -71,6 +71,9 @@ struct Logger{void println(const char*){}}Serial;
 struct Bridge{String findSensorName(const String&){return "Home";}String findEntityIcon(const String&){return "weather-sunny";}String findSensorUnit(const String&){return "";}String findSensorInitialValue(const String&){return "98";}String findSensorStateKind(const String&){return "number";}String findEditableValue(const String&){return "";}}haBridgeConfig;
 uint32_t tileDefaultBgColor(){return 0x2A2A2A;}uint32_t tileBgColorOrDefault(const Tile&,uint32_t c){return c;}
 bool isMdiIconDisabled(const String&){return false;}String normalizeMdiIconName(const String&s){return s;}
+${strip(read('src/types/weather/weather_icon_table.h'))}
+${strip(read('src/types/weather/weather_icons.h'))}
+${strip(read('src/types/weather/weather_icons.cpp'))}
 void set_label_style(lv_obj_t*o,lv_color_t c,const lv_font_t*f){lv_obj_set_style_text_color(o,c,0);lv_obj_set_style_text_font(o,f,0);}
 void set_tile_grid_cell(lv_obj_t*o,int col,int row,int w,int h){lv_obj_set_size(o,w*GRID_CELL_W+(w-1)*GRID_GAP,h*GRID_CELL_H+(h-1)*GRID_GAP);lv_obj_set_pos(o,Device::kGridPad+col*(GRID_CELL_W+GRID_GAP),Device::kGridPad+row*(GRID_CELL_H+GRID_GAP));}
 WeatherTileWidgets widgets[TILES_PER_GRID];WeatherTileWidgets* tile_renderer_get_weather_widgets(GridType){return widgets;}

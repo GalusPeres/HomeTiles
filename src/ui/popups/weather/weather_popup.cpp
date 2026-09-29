@@ -17,6 +17,7 @@
 #include "src/core/power/power_manager.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/types/weather/weather_icons.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer.h"
@@ -865,7 +866,7 @@ static void update_forecast_graph(WeatherPopupContext* ctx) {
 
     if (fw.icon_label) {
       if (data.active && data.icon.length()) {
-        String icon_char = getMdiChar(data.icon);
+        String icon_char = weather_icons::text(data.icon);
         if (icon_char.length()) {
           lv_label_set_text(fw.icon_label, icon_char.c_str());
           lv_obj_clear_flag(fw.icon_label, LV_OBJ_FLAG_HIDDEN);
@@ -2067,7 +2068,7 @@ static bool update_detail_view(WeatherPopupContext* ctx, int day_index) {
   }
   String now_marker_icon_char;
   const bool now_marker_has_renderable_icon =
-      now_marker_has_icon && (now_marker_icon_char = getMdiChar(now_marker_icon)).length();
+      now_marker_has_icon && (now_marker_icon_char = weather_icons::text(now_marker_icon)).length();
   bool hide_marker_time_for_now[kDetailMarkerCount] = {};
   bool hide_marker_icon_for_now[kDetailMarkerCount] = {};
   bool hide_marker_temp_for_now[kDetailMarkerCount] = {};
@@ -2165,7 +2166,7 @@ static bool update_detail_view(WeatherPopupContext* ctx, int day_index) {
         lv_label_set_text(ctx->detail_icon_labels[marker], "");
         lv_obj_add_flag(ctx->detail_icon_labels[marker], LV_OBJ_FLAG_HIDDEN);
       } else if (marker_has_icon[marker]) {
-        String icon_char = getMdiChar(marker_icon[marker]);
+        String icon_char = weather_icons::text(marker_icon[marker]);
         if (icon_char.length()) {
           lv_label_set_text(ctx->detail_icon_labels[marker], icon_char.c_str());
           lv_obj_set_pos(ctx->detail_icon_labels[marker],
@@ -2534,7 +2535,7 @@ static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
 
   if (ctx->icon_label) {
     if (icon_name.length()) {
-      String iconChar = getMdiChar(icon_name);
+      String iconChar = weather_icons::text(icon_name);
       if (iconChar.length()) {
         lv_label_set_text(ctx->icon_label, iconChar.c_str());
         lv_obj_clear_flag(ctx->icon_label, LV_OBJ_FLAG_HIDDEN);
@@ -3048,6 +3049,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   ctx->card = parts.card;
   ctx->location_label = parts.title;
   ctx->icon_label = parts.icon;
+  weather_icons::style_label(parts.icon);
   ctx->close_button = parts.close;
   lv_obj_t* overlay = parts.overlay;
   lv_obj_t* card = parts.card;
@@ -3329,6 +3331,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
     lv_obj_t* icon_day = lv_label_create(col);
     set_label_style(icon_day, lv_color_white(), FONT_MDI_ICONS);
+    weather_icons::style_label(icon_day);
     lv_label_set_text(icon_day, "");
     lv_obj_add_flag(icon_day, LV_OBJ_FLAG_HIDDEN);
     lv_obj_align(icon_day, LV_ALIGN_TOP_MID, 0, kForecastIconTop);
@@ -3627,6 +3630,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
     lv_obj_t* ilbl = lv_label_create(chart_wrap);
     set_label_style(ilbl, lv_color_white(), FONT_MDI_ICONS);
+    weather_icons::style_label(ilbl);
     lv_obj_set_style_text_align(ilbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(ilbl, "");
     lv_obj_set_pos(ilbl, 0, kDetailIconY);
@@ -3784,6 +3788,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   lv_obj_t* now_icon = lv_label_create(chart_wrap);
   ctx->detail_now_icon_label = now_icon;
   set_label_style(now_icon, lv_color_white(), FONT_MDI_ICONS);
+  weather_icons::style_label(now_icon);
   lv_obj_set_style_text_align(now_icon, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_text(now_icon, "");
   lv_obj_set_pos(now_icon, 0, kDetailIconY);

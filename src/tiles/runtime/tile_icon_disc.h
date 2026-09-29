@@ -347,7 +347,9 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
   // The icon label sizes to its content: one glyph wide, one line high.
   const lv_font_t* font = lv_obj_get_style_text_font(icon, LV_PART_MAIN);
   lv_point_t icon_size{};
-  lv_text_get_size(&icon_size, lv_label_get_text(icon), font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  // Colored weather icons carry recolor commands that take no space.
+  lv_text_get_size(&icon_size, lv_label_get_text(icon), font, 0, 0, LV_COORD_MAX,
+                   lv_label_get_recolor(icon) ? LV_TEXT_FLAG_RECOLOR : LV_TEXT_FLAG_NONE);
   if (icon_size.x <= 0) icon_size.x = lv_font_get_glyph_width(font, kMdiReferenceGlyph, 0);
   icon_size.y = lv_font_get_line_height(font);
   lv_obj_t* disc = create(card, Shape::Round);

@@ -1,6 +1,7 @@
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/weather/renderer.h"
+#include "src/types/weather/weather_icons.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
@@ -112,6 +113,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
 
   lv_obj_t* icon_label = lv_label_create(card);
   set_label_style(icon_label, lv_color_white(), FONT_MDI_ICONS);
+  weather_icons::style_label(icon_label);
   lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
                tile_layout::scale_480(-8),
                tile_layout::scale_480(-8));
@@ -135,7 +137,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   }
   String iconChar;
   if (!icon_disabled && icon_name.length() && FONT_MDI_ICONS != nullptr) {
-    iconChar = getMdiChar(icon_name);
+    iconChar = weather_icons::text(icon_name);
   }
   if (icon_label) {
     if (iconChar.length()) {
@@ -268,6 +270,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
 
         lv_obj_t* icon = lv_label_create(col);
         set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
+        weather_icons::style_label(icon);
         lv_obj_set_width(icon, LV_PCT(100));
         lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
         lv_label_set_text(icon, "");

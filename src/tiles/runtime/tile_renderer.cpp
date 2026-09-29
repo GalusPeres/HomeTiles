@@ -10,6 +10,7 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/types/climate/visuals.h"
+#include "src/types/weather/weather_icons.h"
 #include "src/types/climate/renderer.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/ui/ui_manager.h"
@@ -2601,7 +2602,7 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   if (widgets.icon_label) {
     // The icon disc follows the icon; an empty disc never shows.
     if (icon_name.length()) {
-      String iconChar = getMdiChar(icon_name);
+      String iconChar = weather_icons::text(icon_name);
       if (iconChar.length()) {
         lv_label_set_text(widgets.icon_label, iconChar.c_str());
         tile_icon_disc::set_icon_hidden(widgets.icon_label, false);
@@ -2821,7 +2822,7 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
     }
     if (fw.icon_label) {
       if (slot.has_data && slot.icon_name.length()) {
-        String icon_char = getMdiChar(slot.icon_name);
+        String icon_char = weather_icons::text(slot.icon_name);
         if (icon_char.length()) {
           lv_label_set_text(fw.icon_label, icon_char.c_str());
           lv_obj_set_style_text_color(fw.icon_label, forecast_active_color, 0);

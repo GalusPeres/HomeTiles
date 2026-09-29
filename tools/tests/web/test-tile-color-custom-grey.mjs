@@ -5,6 +5,17 @@
 // picker opened in the top left corner of the page).
 import {readAdminDeliverySource, readRepoFile, inlineScriptSafe} from '../../lib/admin-source.mjs';
 import {runDomHarness} from '../../lib/headless-dom.mjs';
+import assert from 'node:assert/strict';
+
+// Chrome anchors showPicker() to the box from the last layout. The color row
+// was display:none until this click, so the input must be laid out first or
+// the picker opens in the top left corner of the window (a script cannot see
+// a pending layout, so the order is checked in the source).
+const gridPreview = readRepoFile('src/web/admin/tiles/grid-preview.js');
+const setMode = gridPreview.slice(gridPreview.indexOf('function setTileColorMode('));
+assert.match(setMode.slice(0, setMode.indexOf('\n  }\n')),
+  /syncTileColorMode\(tab\);[\s\S]*input\.getBoundingClientRect\(\);\s*if \(typeof input\.showPicker === 'function'\) input\.showPicker\(\);/,
+  'the first Custom lays the shown color row out before opening the picker');
 
 const html = `<!doctype html><html lang="de"><head><style>${readRepoFile('src/web/assets/admin.css')}</style></head><body>
 <div id="tab-tiles-test" class="tab-content tile-tab active"><div class="tile-editor"><div class="tile-editor-main"><div class="tile-grid tiles-bordered"><div class="tile weather" id="test-tile-0" data-index="0"></div></div></div>

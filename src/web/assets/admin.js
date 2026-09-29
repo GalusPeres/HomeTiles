@@ -7205,9 +7205,14 @@ function syncTileRadiusControls(tabEl) {
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
-    // A first Custom opens the color picker right away.
+    // A first Custom opens the color picker right away. The color row was
+    // display:none until syncTileColorMode above, and Chrome anchors the
+    // picker to the input's box from the last layout without running one:
+    // with no box yet it opened in the top left corner of the window. Reading
+    // the input's rect lays the row out first.
     if (mode === 'custom' && before !== 'custom' && !remembered) {
       try {
+        input.getBoundingClientRect();
         if (typeof input.showPicker === 'function') input.showPicker();
       } catch (_) {}
     }

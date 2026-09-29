@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 
 import {readRepoFile} from '../../lib/admin-source.mjs';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
+import {runDomHarness} from '../../lib/headless-dom.mjs';
 
 const css = readRepoFile('src/web/assets/admin.css');
 const wide = /@media \(min-width: 1181px\) \{([\s\S]*?)\n    \}\n/.exec(css);
@@ -39,5 +40,43 @@ assert.match(tab.source, /\/\/ The root grid shows this hint beside the Settings
   'the root footer has no second copy of the hint');
 assert.match(tab.source, /\} else if \(folder_id != 0\) \{\s*html \+= tr\.admin_tile_hint;/,
   'folders keep the hint in their footer');
+
+// Real layout on the smallest grid (S3 480x480, 4x4 cells of 116 px): the
+// parking row is only as wide as the grid, so the long hint must wrap beside
+// the slot instead of squeezing it (regression: the slot shrank to about half
+// a cell and the Settings tile covered the hint).
+const cells = '<div class="tile"></div>'.repeat(16);
+const parkingHtml = (slotState, hiddenHint, wide) => `<!doctype html><html><head><style>${css}
+:root{--grid-cols:4;--grid-rows:4;--preview-cell-w:116px;--preview-cell-h:116px;--preview-gap:14px;--preview-pad:14px}</style></head>
+<body><div class="wrapper"><div class="card"><div class="tab-content tile-tab active"><div class="tile-editor"><div class="tile-editor-main" id="main">
+<div class="tile-grid-scroll"><div class="tile-grid" id="grid">${cells}</div></div>
+<div class="settings-hidden-parking"><div id="slot" class="tile-grid settings-hidden-slot ${slotState}"><div id="tile" class="tile settings-hidden-tile"></div></div>
+<div class="settings-parking-texts" id="texts"><div class="settings-hidden-hint ${hiddenHint}">Settings hier ablegen, um sie auszublenden</div>
+<p class="hint">Klicke auf eine Kachel, um sie zu bearbeiten. Kacheln lassen sich per Drag &amp; Drop verschieben und am Eckgriff vergrößern oder verkleinern. Wähle den Typ und passe die Einstellungen an.</p></div></div>
+<div class="folder-footer"></div></div><div class="tile-settings"></div></div></div></div></div>
+<pre id="result"></pre><script>
+const box = (id) => document.getElementById(id).getBoundingClientRect();
+const slot = box('slot'), tile = box('tile'), texts = box('texts'), grid = box('grid'), main = box('main');
+const problems = [];
+if (tile.width < 115) problems.push('tile ' + tile.width);
+if (slot.width < tile.width) problems.push('slot ' + slot.width + ' narrower than its tile ' + tile.width);
+if (texts.left < slot.right) problems.push('hint starts at ' + texts.left + ' under the slot ending at ' + slot.right);
+if (texts.right > main.right + 1) problems.push('hint ends at ' + texts.right + ' past its column at ' + main.right);
+// Wide windows: the column stays as wide as the grid, so the Tile settings
+// panel beside it keeps its room.
+if (${wide} && main.right > grid.right + 1) problems.push('column ends at ' + main.right + ' past the grid at ' + grid.right);
+document.body.dataset.result = problems.length ? 'fail' : 'pass';
+document.getElementById('result').textContent = problems.join('; ');
+</script></body></html>`;
+for (const width of [1500, 1000]) {
+  for (const [slotState, hiddenHint] of [['has-tile', 'is-hidden'], ['', '']]) {
+    runDomHarness({
+      label: `Settings parking at ${width} px (${slotState || 'empty slot'})`,
+      html: parkingHtml(slotState, hiddenHint, width >= 1181),
+      tmpPrefix: 'hometiles-parking-',
+      extraArgs: [`--window-size=${width},1100`]
+    });
+  }
+}
 
 console.log('Tile tab: fixed preview, scrolling Global settings, hint beside the parking');

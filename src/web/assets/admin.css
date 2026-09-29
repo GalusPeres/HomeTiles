@@ -842,7 +842,9 @@
       width:0;
       min-width:100%;
     }
+    /* The slot keeps its cell size; only the hint beside it may shrink. */
     .tile-grid.settings-hidden-slot {
+      flex:none;
       grid-template-columns:var(--preview-cell-w);
       grid-template-rows:var(--preview-cell-h);
       width:fit-content;

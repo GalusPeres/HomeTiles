@@ -5827,15 +5827,13 @@ function syncTileRadiusControls(tabEl) {
 
     const defaultBg = meta.defaultBg || '#353535';
     // Tiles without their own color (or with the stored default grey) show
-    // and keep following the global default tile color.
+    // the global default tile color. Only the Tile color buttons change the
+    // choice: a Custom color that is still a default grey (Custom was just
+    // selected and nothing picked yet) stays Custom instead of switching back
+    // to Global and hiding the color field.
     const isDefaultBg = tileColorInputIsDefault(tab);
-    if (isDefaultBg) {
-      const colorInput = document.getElementById(prefix + '_tile_color');
-      if (colorInput) {
-        colorInput.value = defaultBg;
-        colorInput.dataset.bgColorDefault = '1';
-      }
-    }
+    const colorInput = document.getElementById(prefix + '_tile_color');
+    if (colorInput?.dataset.bgColorDefault === '1') colorInput.value = defaultBg;
     syncTileColorMode(tab);
     const tileBg = tileBackgroundCss(meta, isDefaultBg,
       isDefaultBg ? defaultBg : (color || defaultBg));
@@ -7207,15 +7205,11 @@ function syncTileRadiusControls(tabEl) {
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
-    // A first Custom opens the color picker right away, one frame later: the
-    // color row was display:none until now, and a picker opened before it is
-    // laid out appears in the top left corner of the page.
+    // A first Custom opens the color picker right away.
     if (mode === 'custom' && before !== 'custom' && !remembered) {
-      requestAnimationFrame(() => {
-        try {
-          if (input.offsetParent && typeof input.showPicker === 'function') input.showPicker();
-        } catch (_) {}
-      });
+      try {
+        if (typeof input.showPicker === 'function') input.showPicker();
+      } catch (_) {}
     }
   }
   // State the firmware compares with the per-tile icon color rules, or null

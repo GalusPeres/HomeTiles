@@ -225,8 +225,12 @@ assert.ok(i18n.includes('"Tile color",') && i18n.includes('"Kachelfarbe",') && i
 assert.ok(gridPreview.includes('const isDefaultBg = tileBgFollowsDefault(tile.bg_color);'));
 assert.ok(gridPreview.includes("input.dataset.bgColorDefault === '1' || tileColorHexIsDefaultGrey(input.value)"));
 assert.ok(read('src/web/admin/settings/access.js').includes(': tileBgFollowsDefault(bgValue);'));
-assert.match(read('src/web/admin/tiles/live-preview.js'),
-  /const isDefaultBg = tileColorInputIsDefault\(tab\);\s*if \(isDefaultBg\) \{[\s\S]*?colorInput\.dataset\.bgColorDefault = '1';/,
-  'The live preview decides before replacing the input with the global color');
+// The live preview paints a default grey with the global color, but only the
+// Tile color buttons change the choice (a just selected Custom keeps it).
+const livePreview = read('src/web/admin/tiles/live-preview.js');
+assert.match(livePreview,
+  /const isDefaultBg = tileColorInputIsDefault\(tab\);\s*const colorInput = document\.getElementById\(prefix \+ '_tile_color'\);\s*if \(colorInput\?\.dataset\.bgColorDefault === '1'\) colorInput\.value = defaultBg;/,
+  'The live preview keeps a Global input on the global color');
+assert.doesNotMatch(livePreview, /bgColorDefault = '1'/, 'The live preview never switches Custom back to Global');
 
 console.log('Global icon discs and default tile color: config, endpoints, live apply, translations and preview pass');

@@ -832,12 +832,15 @@
       width:fit-content;
       height:fit-content;
     }
+    /* width:0 + min-width:100% like .folder-footer: the row follows the grid
+       width, and the hint beside the slot wraps instead of widening the
+       column (and pushing the Tile settings panel out of the card). */
     .settings-hidden-parking {
       display:flex;
       align-items:center;
       gap:14px;
-      width:fit-content;
-      max-width:100%;
+      width:0;
+      min-width:100%;
     }
     .tile-grid.settings-hidden-slot {
       grid-template-columns:var(--preview-cell-w);

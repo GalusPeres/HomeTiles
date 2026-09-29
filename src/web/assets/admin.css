@@ -136,6 +136,12 @@
 
     /* Tab Navigation */
     .tab-nav { display:flex; gap:6px; margin-bottom:24px; flex-wrap:wrap; }
+    /* Every top tab has the same width, so a folder name on the Folders
+       button never shifts the others; a long name ends with an ellipsis. */
+    .tab-nav > .tab-btn, .tab-nav .folder-menu-btn { flex:0 0 176px; width:176px; min-width:0; }
+    .tab-nav > .tab-btn span, .tab-nav .folder-menu-btn span {
+      min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
     .tab-btn {
       padding:10px 18px;
       border:1px solid transparent;
@@ -172,8 +178,7 @@
     }
     .folder-menu-list[hidden] { display:none; }
     .folder-menu-list .tab-btn {
-      justify-content:flex-start; border-radius:10px; white-space:nowrap;
-      padding:8px 12px 8px calc(12px + var(--folder-depth, 0) * 22px);
+      justify-content:flex-start; border-radius:10px; white-space:nowrap; padding:8px 12px;
     }
     .folder-menu-list .tab-btn:hover { background:#2a2a2a; color:var(--text); }
     .folder-menu-list .tab-btn.active { background:var(--accent-soft); color:#ffffff; }
@@ -788,6 +793,20 @@
 
     /* Tile Editor */
     .tile-editor { display:flex; align-items:flex-start; gap:24px; }
+    /* Four-column devices (Guition S3, Waveshare 4B) on the 1200 px page: the
+       preview keeps its size, the Settings slot and its hint stand beside it,
+       and the footer with Global settings spans the column below. */
+    .compact-grid .tile-editor-main {
+      flex:1 1 auto; display:grid; grid-template-columns:max-content minmax(0, 1fr);
+      column-gap:24px; row-gap:14px; align-items:start; align-content:start;
+    }
+    .compact-grid .tile-editor-main > * { grid-column:1 / -1; }
+    .compact-grid .tile-editor-main > .tile-grid-scroll { grid-column:1; }
+    .compact-grid .tile-editor-main > .settings-hidden-parking {
+      grid-column:2; grid-row:1; width:auto; min-width:0;
+      flex-direction:column; align-items:flex-start;
+    }
+    @media (max-width: 780px) { .compact-grid .tile-editor-main { display:flex; } }
     /* The preview always keeps its device-specific size; the settings panel
        only uses the remaining desktop space. */
     .tile-editor-main { flex:0 0 auto; min-width:0; display:flex; flex-direction:column; gap:14px; }

@@ -1301,20 +1301,6 @@ static void appendTileTabHTML(
 )html";
 }
 
-// How deep a folder sits below Home (0 directly in Home), for its indent in
-// the Folders menu. Bounded against a broken parent chain.
-static int folderMenuDepth(const FolderEntry& entry) {
-  int depth = 0;
-  uint16_t parent = entry.parent_id;
-  while (parent != 0 && depth < 8) {
-    const FolderEntry* up = tileConfig.getFolder(parent);
-    if (!up) break;
-    parent = up->parent_id;
-    ++depth;
-  }
-  return depth;
-}
-
 static String buildFolderTabButtonHtml(const FolderEntry& entry) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
   String tab_id = "folder" + String(entry.id);
@@ -1344,11 +1330,7 @@ static String buildFolderTabButtonHtml(const FolderEntry& entry) {
   html += R"html(" data-tab-target="tab-tiles-)html";
   html += tab_id;
   html += R"html(" type="button")html";
-  if (entry.id != 0) {
-    html += R"html( role="menuitem" style="--folder-depth:)html";
-    html += String(folderMenuDepth(entry));
-    html += R"html(")html";
-  }
+  if (entry.id != 0) html += R"html( role="menuitem")html";
   html += R"html( onclick="switchTab('tab-tiles-)html";
   html += tab_id;
   html += R"html(')">)html";
@@ -1561,7 +1543,11 @@ String WebAdminServer::getAdminPage() {
   html += R"html(
 </head>
 <body>
-  <div class="wrapper">
+  <div class="wrapper)html";
+  // Four-column devices keep their preview size on the wide page; the
+  // Settings slot moves beside it (admin.css .compact-grid).
+  if (GRID_COLS <= 4) html += " compact-grid";
+  html += R"html(">
     <div class="card">
       <div class="brand">
         <svg width="44" height="44" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1602,8 +1588,8 @@ String WebAdminServer::getAdminPage() {
       <div class="tab-nav">
 )html";
 
-  // Home, then one Folders menu with every other folder, each below its
-  // parent. The folder buttons keep their classes and data, so switching,
+  // Home, then one Folders menu with every other folder, each after its
+  // parent, all at the same indent. The folder buttons keep their classes and data, so switching,
   // renaming and lazily added folders work as before (folders/navigation.js).
   bool has_folders = false;
   for (const auto& entry : folders) {

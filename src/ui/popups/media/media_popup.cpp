@@ -25,6 +25,7 @@
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
 
@@ -352,6 +353,22 @@ static void media_progress_timer_cb(lv_timer_t* timer) {
   set_seek_widgets(ctx, current_media_position(ctx), true);
 }
 
+// Previous, next and the volume button (pressed) and both sliders follow the
+// popup control rule (popup_nav_style.h), with the card and header icon
+// color; play stays white.
+static void apply_control_colors(MediaPopupContext* ctx) {
+  if (!ctx || !ctx->card) return;
+  const lv_color_t popup = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
+  const lv_color_t icon =
+      ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN) : lv_color_white();
+  lv_obj_t* const labels[] = {ctx->previous_label, ctx->next_label, ctx->volume_icon_label};
+  for (lv_obj_t* label : labels) {
+    if (label) popup_nav_style::style_press(lv_obj_get_parent(label), popup, icon);
+  }
+  popup_nav_style::style_slider(ctx->seek_slider, popup, icon);
+  popup_nav_style::style_slider(ctx->volume_slider, popup, icon);
+}
+
 static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& init) {
   if (!ctx) return;
   ctx->entity_id = init.entity_id;
@@ -417,6 +434,7 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
   update_seek(ctx, init);
   update_volume(ctx, init);
   update_cover(ctx, init.cover_dsc, init.cover_hash);
+  apply_control_colors(ctx);
 }
 
 static void on_close_click(lv_event_t* e) {

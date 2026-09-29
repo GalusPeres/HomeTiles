@@ -43,6 +43,43 @@ inline void style_toggle(lv_obj_t* btn, lv_obj_t* label, lv_color_t popup, lv_co
   }
 }
 
+// Sets a background only when it changes (the Media popup restyles on every
+// state update).
+inline void set_bg(lv_obj_t* obj, lv_color_t color, lv_opa_t opa, lv_style_selector_t selector) {
+  lv_style_value_t value;
+  if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, selector) != LV_STYLE_RES_FOUND ||
+      !lv_color_eq(value.color, color)) {
+    lv_obj_set_style_bg_color(obj, color, selector);
+  }
+  if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_OPA, &value, selector) != LV_STYLE_RES_FOUND ||
+      value.num != opa) {
+    lv_obj_set_style_bg_opa(obj, opa, selector);
+  }
+}
+
+// A button with a fill only while pressed (Media previous, next and volume):
+// the control fill, like the pressed close button.
+inline void style_press(lv_obj_t* btn, lv_color_t popup, lv_color_t icon) {
+  if (!btn) return;
+  lv_color_t color;
+  lv_opa_t opa;
+  fill(popup, icon, color, opa);
+  set_bg(btn, color, opa, LV_PART_MAIN | LV_STATE_PRESSED);
+}
+
+// A slider (Media volume and position): the unused track like an info pill
+// (half the control fill), the used part in the control color at full
+// opacity (the icon color with tile color "From icon" and "Circle in icon
+// color", else white). The knob stays white.
+inline void style_slider(lv_obj_t* slider, lv_color_t popup, lv_color_t icon) {
+  if (!slider) return;
+  lv_color_t color;
+  lv_opa_t opa;
+  fill(popup, icon, color, opa);
+  set_bg(slider, color, static_cast<lv_opa_t>(opa / 2), LV_PART_MAIN);
+  set_bg(slider, color, LV_OPA_COVER, LV_PART_INDICATOR);
+}
+
 // An info pill (date range, day title): half the disc fill, white text.
 inline void style_pill(lv_obj_t* pill, lv_obj_t* label, lv_color_t popup, lv_color_t icon) {
   lv_color_t color;

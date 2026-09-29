@@ -381,7 +381,7 @@ Opens a sub-page with its own grid and an automatic back tile. See [Folders](web
 
 A folder tile can follow an entity inside it: with [rules](web-admin.md#colors-and-rules) and **Entity color**, a Climate folder turns orange while heating and blue while cooling. The [back tile](web-admin.md#back-tile) has its own icon, color, border, and size.
 
-A protected folder asks for its PIN before it opens. The PIN pad takes the folder tile's color.
+A protected folder asks for its PIN before it opens. The PIN pad takes the folder tile's color and shows the folder's name with the state **Locked**; below the lock, **Enter PIN** turns into one dot per digit. The PIN has 4 to 8 digits.
 
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>

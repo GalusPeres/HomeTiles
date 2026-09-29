@@ -1,7 +1,7 @@
 // Sensor, Number, Select, Date/Time, Binary Sensor and Energy popups show the
 // entity's current value in the shared header: a smaller white title above
-// the white value, both next to the icon disc. Every other popup keeps the
-// classic header. The value is copied from a hidden holder label, so live
+// the white value, both next to the icon disc; the PIN popup shows the state
+// "Locked" there. Every other popup keeps the classic header. The value is copied from a hidden holder label, so live
 // updates repaint only the header line and an unchanged header never redraws.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -58,7 +58,14 @@ for (const file of ['src/ui/popups/sensor/sensor_popup.cpp', 'src/ui/popups/ener
   for (const call of calls)
     assert.ok(call.count === 7 && /nullptr, g_\w+_popup_ctx->value_label$/.test(call.args), `${file} passes its value holder`);
 }
-for (const popup of ['light', 'climate', 'cover', 'media', 'camera', 'pin', 'weather']) {
+// The PIN popup shows the protected tile's state ("Locked") the same way.
+{
+  const calls = shellCalls('src/ui/popups/pin/pin_popup.cpp');
+  assert.ok(calls.length === 2, 'PIN popup create and reuse');
+  for (const call of calls)
+    assert.ok(call.count === 7 && /nullptr, g_ctx->state_label$/.test(call.args), 'PIN popup passes its state holder');
+}
+for (const popup of ['light', 'climate', 'cover', 'media', 'camera', 'weather']) {
   const file = `src/ui/popups/${popup}/${popup}_popup.cpp`;
   for (const call of shellCalls(file)) assert.ok(call.count <= 6, `${popup} keeps the classic header`);
 }

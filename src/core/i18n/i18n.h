@@ -520,9 +520,11 @@ struct Strings {
   const char* folder_pin_saved;
   const char* folder_pin_save_failed;
   const char* folder_pin_create_first;
-  const char* pin_popup_settings_title;
+  // PIN popup: the header state of a protected folder or Settings, and the
+  // prompt shown below the lock until the first digit.
+  const char* pin_popup_locked;
   const char* pin_popup_incorrect;
-  const char* pin_popup_unlock_format;
+  const char* pin_popup_enter;
   const char* settings_tile_parking;
   // Built-in camera opt-in (Web Admin Settings, camera profiles only).
   const char* local_camera_section;

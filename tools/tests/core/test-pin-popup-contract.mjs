@@ -20,26 +20,40 @@ const i18nSource = read('src/core/i18n/i18n.cpp');
 const power = read('src/core/power/power_manager.cpp');
 const screensaver = read('src/ui/screensaver/image_screensaver.cpp');
 
+// The agreed Unlock layout (test-pin-popup-title-reuse.mjs renders it on every
+// popup layout): header name and state, the lock, the prompt line that turns
+// into one dot per digit, a 3 x 4 keypad computed from the space below the
+// header in fixed shares of the key height.
 for (const marker of [
-  'constexpr int kKeySize = popup_layout::scale(92);',
   'constexpr uint32_t kAutoCloseMs = 60000;',
-  'constexpr int kDigitGridExtent = popup_layout::contentScale(340);',
-  'constexpr int kKeypadHeight =',
-  'constexpr int kKeypadTop = kBottomRowTop - kKeypadHeight + kKeySize;',
-  'kKeypadTop - kDigitGap - popup_layout::kValueHeight;',
   'constexpr uint32_t kLastDigitRevealMs = 600;',
-  'constexpr int keypad_row_y(uint8_t row)',
-  'return row * (kKeySize + kDigitGap);',
+  'constexpr int kKeyGapPct = 16;',
+  'constexpr int kKeyWidthPct = 130;',
+  'KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* lock_font, const lv_font_t* prompt_font) {',
+  'const int top = popup_layout::kHeaderCenterY - pad + popup_layout::kHeaderIconDiscSize / 2;',
+  'if (width_limit < g.key_h) g.key_h = width_limit;',
+  'g.lock_y = top + (available - block) / 2;',
+  'constexpr int kKeyRadius = popup_layout::kCloseButtonRadius + popup_layout::kCloseButtonRadius / 2;',
+  'ui_surface_style::apply_radius(button, kKeyRadius, 0);',
   'for (uint8_t digit = 1; digit <= 9; ++digit)',
-  'getMdiChar("backspace-outline")',
-  'grid, "0", popup_layout::font32()',
+  'getMdiChar("backspace")',
+  'create_key(grid, "0", digits, g, &zero);',
   'getMdiChar("check-bold")',
-  "masked[i] = '*'",
-  'masked[ctx->length - 1] = ctx->input[ctx->length - 1];',
-  'tr.pin_popup_incorrect',
+  'lv_label_set_text(ctx->lock_label, getMdiChar("lock").c_str());',
+  // Prompt line: prompt or error, else dots with the latest digit revealed.
+  'lv_label_set_text(ctx->prompt_label, ctx->show_error ? tr.pin_popup_incorrect : tr.pin_popup_enter);',
+  'const size_t dots = reveal ? ctx->length - 1 : ctx->length;',
+  'char digit[2] = {reveal ? ctx->input[ctx->length - 1] : \'\\0\', \'\\0\'};',
+  // Header: the tile's name and the state "Locked" through the shared header.
+  'lv_label_set_text(ctx->state_label, tr.pin_popup_locked);',
+  'nullptr, g_ctx->state_label);',
+  // Colors: the popup control rule; backspace halfway, confirm white.
+  'popup_nav_style::fill(card, icon, fill, opa);',
+  'popup_nav_style::set_bg(key, fill, backspace ? static_cast<lv_opa_t>(opa / 2) : opa, LV_PART_MAIN);',
+  'popup_nav_style::set_bg(key, lv_color_white(), LV_OPA_COVER, LV_PART_MAIN);',
   'pin_access::secureClear(ctx->input, sizeof(ctx->input))',
   'LV_EVENT_CLICKED',
-  'lv_obj_set_style_bg_color(g_ctx->card, lv_color_hex(init.bg_color), 0);',
+  'lv_obj_set_style_bg_color(ctx->card, lv_color_hex(init.bg_color), 0);',
   'create_popup_body(on_close, ctx, init.bg_color);',
   'popup_icon_glyph(init.icon_name)',
   'lv_timer_create(auto_close_timer_cb, kAutoCloseMs, ctx)',
@@ -51,9 +65,9 @@ for (const marker of [
   'last_digit_reveal_timer_cb, kLastDigitRevealMs, ctx);',
   'lv_timer_delete(ctx->last_digit_reveal_timer);',
   'cancel_last_digit_reveal(ctx);',
-  'lv_obj_set_pos(backspace_button, 0, keypad_row_y(3));',
-  'lv_obj_set_pos(zero_button, kKeySize + kDigitGap, keypad_row_y(3));',
-  '2 * (kKeySize + kDigitGap)',
+  'place(ctx->key_buttons[kBackspaceKey], 0, 3);',
+  'place(ctx->key_buttons[kZeroKey], 1, 3);',
+  'place(ctx->key_buttons[kConfirmKey], 2, 3);',
 ]) requireMarker(popup, marker, 'PIN popup');
 
 requireMarker(popupHeader, 'String icon_name;', 'PIN popup tile icon');
@@ -61,7 +75,8 @@ requireMarker(popupHeader, 'bool hide_on_success = true;',
               'PIN popup success-close policy');
 requireMarker(popupHeader, 'resume_pin_popup_after_failed_success();',
               'PIN popup failed-switch recovery');
-if ((popup.match(/popup_icon_glyph\(init\.icon_name\)/g) || []).length < 2) {
+if ((popup.match(/apply_header\((?:g_)?ctx, init\);/g) || []).length < 2 ||
+    !popup.includes('lv_label_set_text(ctx->icon_label, popup_icon_glyph(init.icon_name).c_str());')) {
   throw new Error('PIN popup must update the source tile icon on create and reuse');
 }
 if (popup.includes('lv_obj_t* bottom = lv_obj_create')) {
@@ -280,14 +295,18 @@ requireMarker(renderer,
               'Folder navigation gate');
 requireMarker(renderer, 'data->icon_name,', 'Folder navigation icon');
 for (const marker of [
-  'const char* pin_popup_unlock_format;',
+  'const char* pin_popup_locked;',
+  'const char* pin_popup_enter;',
   'const char* settings_tile_parking;',
 ]) requireMarker(i18nHeader, marker, 'Central PIN popup translations');
 for (const marker of [
-  '"%s entsperren"',
-  '"Unlock %s"',
-  '"Déverrouiller %s"',
-]) requireMarker(i18nSource, marker, 'Localized source-tile unlock title');
+  '"Gesperrt"', '"PIN eingeben"',
+  '"Locked"', '"Enter PIN"',
+  '"Verrouillé"', '"Saisir le code PIN"',
+]) requireMarker(i18nSource, marker, 'Localized PIN state and prompt');
+// The header title is the protected tile's own name.
+requireMarker(manager, 'init.title = source_title;', 'PIN popup title');
+if (manager.includes('make_unlock_title')) throw new Error('The PIN title is the tile name, not "Unlock %s"');
 requireMarker(power, 'uiManager.lockProtectedAccess();', 'Sleep PIN reset');
 requireMarker(screensaver, 'uiManager.lockProtectedAccess();',
               'Screensaver PIN reset');
@@ -302,74 +321,20 @@ for (const file of popupFiles) {
                 `${file} mutual exclusion`);
 }
 
-const layouts = [
-  {name: '480x480', height: 480, compact: '480', scale: value => Math.trunc((value * 2 + 1) / 3), content: value => Math.trunc((value * 2 + 1) / 3)},
-  {name: '1024x600', height: 600, compact: '1024', scale: value => Math.trunc((value * 5 + 3) / 6), content: value => Math.trunc((value * 3 + 2) / 4)},
-  {name: '720x720', height: 720, compact: '', scale: value => value, content: value => value},
-  {name: '1280x720', height: 720, compact: '', scale: value => value, content: value => value},
-  {name: '1280x800', height: 800, compact: '', scale: value => value, content: value => value},
-];
-for (const layout of layouts) {
-  const key = layout.scale(92);
-  const extent = layout.content(340);
-  const gap = Math.max(0, Math.trunc((extent - 3 * key) / 2));
-  if (3 * key + 2 * gap > extent) {
-    throw new Error(`${layout.name} PIN digit grid overflows its body`);
-  }
-  const margin = layout.compact === '480' ? 3 : 4;
-  const cardHeight = layout.height - 2 * margin;
-  const cardPad = layout.scale(20);
-  const navInset = layout.scale(6);
-  let bodyY;
-  let extraHeight = 0;
-  if (layout.compact === '480') bodyY = layout.scale(178) - 12;
-  else if (layout.compact === '1024') bodyY = layout.scale(178);
-  else {
-    extraHeight = Math.max(0, cardHeight - (720 - 2 * margin));
-    const compactLift = extraHeight === 0 ? 28 : 0;
-    bodyY = 186 - compactLift + Math.trunc(Math.trunc(extraHeight / 2) / 2);
-  }
-  const bottomRow = cardHeight - 2 * cardPad - navInset - key;
-  const keypadHeight = 4 * key + 3 * gap;
-  const keypadTop = bottomRow - keypadHeight + key;
-  const valueHeight = layout.scale(74);
-  const pinValueY = keypadTop - gap - valueHeight;
-  const rows = [0, 1, 2, 3].map(row =>
-    keypadTop + row * (key + gap));
-  if (rows[3] !== bottomRow) {
-    throw new Error(`${layout.name} PIN keypad misses the navigation anchor`);
-  }
-  if (keypadTop < bodyY) {
-    throw new Error(`${layout.name} PIN keypad overlaps the value area`);
-  }
-  if (pinValueY >= keypadTop) {
-    throw new Error(`${layout.name} masked PIN value overlaps the keypad`);
-  }
-  if (keypadTop - (pinValueY + valueHeight) !== gap) {
-    throw new Error(
-      `${layout.name} masked PIN value must use the keypad row gap`);
-  }
-  const clearances = rows.slice(1).map((row, index) =>
-    row - rows[index] - key);
-  if (clearances.some(clearance => clearance !== gap)) {
-    throw new Error(
-      `${layout.name} PIN keypad vertical gaps must match horizontal gaps`);
-  }
-}
-
+// Only the latest digit may be revealed briefly, every other digit is a dot.
 const simulateMasking = digits => {
   const input = [];
   const frames = [];
   for (const digit of digits) {
     input.push(digit);
-    frames.push(`${'*'.repeat(input.length - 1)}${digit}`);
-    frames.push('*'.repeat(input.length));
+    frames.push(`${'•'.repeat(input.length - 1)}${digit}`);
+    frames.push('•'.repeat(input.length));
   }
   return frames;
 };
 
 const maskingFrames = simulateMasking(['1', '2', '3']);
-if (maskingFrames.join(',') !== '1,*,*2,**,**3,***') {
+if (maskingFrames.join(',') !== '1,•,•2,••,••3,•••') {
   throw new Error('Only the latest PIN digit may be revealed briefly');
 }
 

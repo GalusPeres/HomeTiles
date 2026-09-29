@@ -46,8 +46,8 @@ assert.ok(camera.includes('lv_obj_t* icon = tile_icon_source::card_icon(static_c
 assert.ok(read('src/ui/popups/camera/camera_popup.cpp').includes('lv_obj_set_style_text_color(g_camera_popup->icon_label, lv_color_hex(init.icon_color), 0);'));
 // A protected Folder's PIN popup shows the icon in the tile's current color.
 const pin = read('src/ui/popups/pin/pin_popup.cpp');
-assert.ok(pin.includes('lv_obj_set_style_text_color(g_ctx->icon_label, lv_color_hex(init.icon_color), 0);') &&
-  pin.includes('lv_obj_set_style_text_color(parts.icon, lv_color_hex(init.icon_color), 0);'),
+assert.ok(pin.includes('lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);') &&
+  (pin.match(/apply_header\((?:g_)?ctx, init\);/g) || []).length === 2,
   'PIN popup icon color on first build and on reuse');
 assert.ok(read('src/ui/ui_manager.cpp').includes('init.icon_color = icon_color;'));
 const navigateSource = read('src/types/navigate/renderer.cpp');

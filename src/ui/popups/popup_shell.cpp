@@ -32,6 +32,8 @@ struct HeaderDisc {
   bool off = false;
   bool follows_global = false;
   bool glow = true;
+  // The popup shows the tile color "From icon" (control_fill).
+  bool from_icon = false;
 };
 HeaderDisc g_next_disc;
 struct Shell {
@@ -276,11 +278,13 @@ void disc_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb, lv_color_
 }
 
 // The fill of the controls around the header (pressed close, footer toggles,
-// pills and arrows): the disc fill while the card shares the icon's hue
-// (popup_layout::cardMatchesIconHue), else the neutral white disc fill, with
-// one minimum, so all controls of a popup look the same.
+// pills and arrows), one fixed rule: the icon color only while the popup
+// shows the tile color "From icon" and the tile has "Circle in icon color".
+// Global and Custom tile colors, popups with the global background (Climate,
+// Light, Cover) and popups without a tile keep the neutral fill, as for a
+// white icon. One minimum for all, so the controls of a popup look the same.
 void control_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb, lv_color_t& color, lv_opa_t& opa) {
-  disc_fill(options, card, popup_layout::cardMatchesIconHue(card, rgb) ? rgb : 0xFFFFFFu, color, opa);
+  disc_fill(options, card, options.from_tile && options.from_icon ? rgb : 0xFFFFFFu, color, opa);
   if (opa < popup_layout::kControlFillMinOpa) opa = static_cast<lv_opa_t>(popup_layout::kControlFillMinOpa);
 }
 
@@ -457,11 +461,12 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 
 bool popup_shell_active() { return shell.active != nullptr; }
 
-void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow) {
+void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon) {
   g_next_disc.from_tile = true;
   g_next_disc.off = off;
   g_next_disc.follows_global = follows_global;
   g_next_disc.glow = glow;
+  g_next_disc.from_icon = from_icon;
 }
 
 void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa) {

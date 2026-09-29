@@ -25,7 +25,7 @@ Every tile has these settings:
 
 - **Title:** optional label; press **Enter** for a second line. Both lines are centered together, and each line ends in `...` if it exceeds the available width. The display, popup header, and live preview follow the tile's size.
 - **Icon (MDI):** a [Material Design Icon](https://pictogrammers.com/library/mdi/) name. **Show icon list** opens the catalog.
-- **Icon color:** the icon's color; Reset restores the type's default. **Circle in icon color** tints the circle behind the icon. In popups it also tints the pressed close button and the **7D**, **24H** and **Today** buttons, as long as the tile color has a similar hue (**From icon** or a matching custom color); on a grey or different tile color, and without the option, they stay neutral glass.
+- **Icon color:** the icon's color; Reset restores the type's default. **Circle in icon color** tints the circle behind the icon. With **Tile color** set to **From icon**, it also tints the pressed close button and the **7D**, **24H** and **Today** buttons of the popup. With **Global** or **Custom**, without the option, and in the Climate, Light and Cover popups (they keep the global background), these stay neutral glass.
 - **Tile color:** **Global** uses the [global tile color](#global-settings), **Custom** your own color, and **From icon** tints the tile with the icon color. **Strength** sets how strongly.
 - **Column, Row, Width, Height:** grid position and size in half steps.
 

@@ -35,9 +35,14 @@ assert.match(shell, /if \(shell\.active != binding \|\| g_next_disc\.from_tile\)
 // Every opener passes its tile's disc: popup_background() and, for Climate,
 // Light and Cover (global background), forget_popup_source(card).
 const source = read('src/tiles/runtime/tile_icon_source.cpp');
-assert.match(source, /void forget_popup_source\(lv_obj_t\* obj\) \{\s*remember_popup_source\(nullptr\);\s*pass_popup_disc\(obj\);/);
-assert.match(source, /uint32_t popup_background\(lv_obj_t\* obj, uint32_t fallback\) \{\s*remember_popup_source\(obj\);\s*pass_popup_disc\(obj\);/);
+// Only a popup that shows the tile color passes its "From icon" color mode,
+// which lets the pressed close button and the footer controls take the icon
+// color (popup_shell.cpp control_fill; test-popup-shell-lvgl.mjs runs it).
+assert.match(source, /void forget_popup_source\(lv_obj_t\* obj\) \{\s*remember_popup_source\(nullptr\);\s*pass_popup_disc\(obj, false\);/);
+assert.match(source, /uint32_t popup_background\(lv_obj_t\* obj, uint32_t fallback\) \{\s*remember_popup_source\(obj\);\s*pass_popup_disc\(obj, true\);/);
 assert.ok(source.includes('popup_shell_use_tile_disc(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,'));
+assert.match(source, /tile_icon_disc::glow_of\(disc\),\s*popup_shows_tile_color && tile_color_from_icon\(obj\)\);/);
+assert.match(source, /bool tile_color_from_icon\(lv_obj_t\* obj\) \{[\s\S]*?if \(icon_fill_marker\(obj, marker\)\) return marker > 0;/);
 for (const [file, event] of [['src/types/climate/renderer.cpp', 'event'], ['src/types/cover/renderer.cpp', 'event'],
   ['src/types/switch/renderer.cpp', 'e']]) {
   assert.ok(read(file).includes(`tile_icon_source::forget_popup_source(static_cast<lv_obj_t*>(lv_event_get_current_target(${event})));`),

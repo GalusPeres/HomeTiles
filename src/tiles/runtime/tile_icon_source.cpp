@@ -331,26 +331,39 @@ lv_obj_t* card_icon(lv_obj_t* card) {
 }
 
 namespace {
+// Tile color "From icon" of the card `obj` belongs to (`obj` or up to three
+// of its parents).
+bool tile_color_from_icon(lv_obj_t* obj) {
+  uint8_t marker = 0;
+  for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
+    if (icon_fill_marker(obj, marker)) return marker > 0;
+  }
+  return false;
+}
+
 // Hands the opening tile's circle options to the popup header. `obj` is the
-// tile card or its icon label.
-void pass_popup_disc(lv_obj_t* obj) {
+// tile card or its icon label. The popup's controls take the icon color only
+// when the popup shows the tile color and that is "From icon" (popup_shell.cpp
+// control_fill); popups with the global background pass false.
+void pass_popup_disc(lv_obj_t* obj, bool popup_shows_tile_color) {
   lv_obj_t* disc = obj ? tile_icon_disc::disc_of(obj) : nullptr;
   if (!disc && obj) disc = find_disc(obj);
   if (!disc) return;
   const tile_icon_disc::Mode mode = tile_icon_disc::mode_of(disc);
   popup_shell_use_tile_disc(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,
-                            tile_icon_disc::glow_of(disc));
+                            tile_icon_disc::glow_of(disc),
+                            popup_shows_tile_color && tile_color_from_icon(obj));
 }
 }  // namespace
 
 void forget_popup_source(lv_obj_t* obj) {
   remember_popup_source(nullptr);
-  pass_popup_disc(obj);
+  pass_popup_disc(obj, false);
 }
 
 uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
   remember_popup_source(obj);
-  pass_popup_disc(obj);
+  pass_popup_disc(obj, true);
   for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
     lv_style_value_t value;
     if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, kTintStore) != LV_STYLE_RES_FOUND) continue;

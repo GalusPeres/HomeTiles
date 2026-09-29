@@ -1,7 +1,7 @@
 // Footer controls of the history popups (7D/24H/Today, date and day pills)
 // and the pressed close button share one control fill: the selected control
-// has exactly that fill (the header disc fill while the card shares the icon's
-// hue, else white), the info pill half of it, and all labels stay white
+// has exactly that fill (the icon color with tile color "From icon" and
+// "Circle in icon color", else white), the info pill half of it, and all labels stay white
 // (regression: solid white pills brighter than the disc, and a white pill with
 // text cut out in the popup color). test-popup-shell-lvgl.mjs runs the fill.
 import assert from 'node:assert/strict';

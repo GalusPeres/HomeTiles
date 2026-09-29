@@ -8,8 +8,8 @@ void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& 
 
 // Footer controls of the history popups (7D/24H/Today and the date and day
 // pills) look like the pressed close button: the selected control has exactly
-// the control fill (the icon color with "Circle in icon color" while the card
-// shares its hue, else white, at the Glow strength), an info pill half of it.
+// the control fill (the icon color with tile color "From icon" and "Circle in
+// icon color", else white, at the Glow strength), an info pill half of it.
 // All their text is white.
 namespace popup_nav_style {
 

@@ -10,6 +10,15 @@ import {lvglHost} from '../../lib/lvgl-host.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
 const control = read('src/types/value/value_control.cpp'), popup = read('src/ui/popups/sensor/sensor_popup.cpp');
+// The selected option is a child of the list, so its rounded corners clip it
+// like the Settings lists; it floats, because as a sized child it widened the
+// content-sized list and resized itself without end (b110 hang).
+for (const marker of [
+  'c->option_highlight = lv_obj_create(lv_dropdown_get_list(c->dropdown));',
+  'lv_obj_add_flag(c->option_highlight, LV_OBJ_FLAG_FLOATING);',
+  'const int32_t y = selected * line - line_space / 2 - lv_obj_get_scroll_y(list);',
+  'if (lv_obj_get_width(h) != width || lv_obj_get_height(h) != line) lv_obj_set_size(h, width, line);',
+]) assert.ok(control.includes(marker), `Select highlight: ${marker}`);
 const fn = (source, name) => { const f = cppFunctionDefinitions(source).find(f => f.name === name); assert(f, name); return f.source; };
 assert(!control.includes('ui_keyboard') && !control.includes('lv_keyboard_'));
 const host = await lvglHost(root);

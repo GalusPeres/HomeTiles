@@ -31,6 +31,15 @@ The hotspot password is `12345678`, also shown with a QR code. It switches off a
 
 The display keeps running and reconnects automatically when the broker returns. Entity states resync after reconnection.
 
+<a id="states-arrive-but-commands-or-updates-fail"></a>
+
+**States arrive, but commands or updates fail**
+
+New values still appear, but lights do not react, the Web Admin does not load, or an OTA update stops partway. The Wi-Fi connection is stuck, and a restart from the menu may not clear it:
+
+1. Unplug the display for 10 seconds, then power it on again.
+2. If that does not help, restart the Wi-Fi router.
+
 ## Tiles & camera
 
 <a id="the-camera-tile-asks-for-a-newer-bridge-or-never-shows-video"></a>

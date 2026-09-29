@@ -7201,8 +7201,11 @@ function syncTileRadiusControls(tabEl) {
     const rgba = opa => 'rgba(' + tone.color.join(',') + ',' + (opa / 255).toFixed(3) + ')';
     tileElem.style.setProperty('--icon-disc-bg', rgba(tone.discOpa));
     // Mirrors tile_icon_source::refresh_controls(): tile controls (the
-    // Climate target pill) take the circle's color at the control opacity.
-    tileElem.style.setProperty('--control-fill', rgba(tone.controlOpa));
+    // Climate target pill) take the circle's color only with tile color From
+    // icon, else the neutral step, at the control opacity.
+    const controls = fill > 0 && tinted ? tone : toneFill(card, given || [255, 255, 255], false, glowPct);
+    tileElem.style.setProperty('--control-fill',
+      'rgba(' + controls.color.join(',') + ',' + (controls.controlOpa / 255).toFixed(3) + ')');
     // The icon, readable on its circle (or on the tile without one).
     if (!given) return;
     const mode = tileElem.dataset.iconDisc || '0';

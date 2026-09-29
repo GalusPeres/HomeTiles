@@ -47,8 +47,16 @@ assert.match(fn(energy, 'energy_popup_follow_tile_color'), /update_period_button
 const shell = read('src/ui/popups/popup_shell.cpp');
 const tint = fn(shell, 'apply_header_disc_tint');
 assert.match(tint, /const tone_color::Fill fill = header_fill\(options, card, rgb\);/);
-assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, color, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, fill\.control_opa, LV_STATE_PRESSED\);\s*lv_obj_set_style_color_filter_opa\(shell\.close, LV_OPA_TRANSP, LV_STATE_PRESSED\);/);
-assert.match(fn(shell, 'control_fill'), /const tone_color::Fill fill = header_fill\(options, card, rgb\);\s*color = lv_color_hex\(fill\.color\);\s*opa = fill\.control_opa;/);
+assert.match(tint, /const tone_color::Fill controls = controls_fill\(options, card, rgb\);/);
+assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, press, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, controls\.control_opa, LV_STATE_PRESSED\);\s*lv_obj_set_style_color_filter_opa\(shell\.close, LV_OPA_TRANSP, LV_STATE_PRESSED\);/);
+assert.match(fn(shell, 'control_fill'), /const tone_color::Fill fill = controls_fill\(options, card, rgb\);\s*color = lv_color_hex\(fill\.color\);\s*opa = fill\.control_opa;/);
+// The agreed table: the controls take the circle color only when the popup
+// shows the tile color "From icon"; the Climate, Light and Cover popups
+// (forget_popup_source) keep neutral controls.
+assert.match(fn(shell, 'controls_fill'), /const bool tinted = options\.from_tile && options\.from_icon && header_fill\(options, card, rgb\)\.tinted;/);
+const iconSource = read('src/tiles/runtime/tile_icon_source.cpp');
+assert.match(fn(iconSource, 'forget_popup_source'), /pass_popup_disc\(obj, false\);/);
+assert.match(fn(iconSource, 'popup_background'), /pass_popup_disc\(obj, true\);/);
 assert.match(fn(shell, 'popup_shell_control_fill'),
   /g_next_disc\.from_tile \? g_next_disc : shell\.disc;\s*control_fill\(options,/);
 // Media: previous, next and volume take the fill while pressed, both sliders

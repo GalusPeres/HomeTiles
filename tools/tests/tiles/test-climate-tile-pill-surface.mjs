@@ -30,6 +30,9 @@ const css = read('src/web/assets/admin.css');
 assert.match(css, /\.tile\.climate \.climate-slot-control \{[^}]*background:var\(--control-fill, rgba\(255,255,255,0\.094\)\);/,
   'Preview pill uses the control fill');
 const preview = read('src/web/admin/tiles/grid-preview.js');
-assert.ok(preview.includes("tileElem.style.setProperty('--control-fill', rgba(tone.controlOpa));"),
-  'Preview pill takes the circle color at the control opacity');
+assert.ok(preview.includes("const controls = fill > 0 && tinted ? tone : toneFill(card, given || [255, 255, 255], false, glowPct);"),
+  'Preview pill takes the circle color only with tile color From icon');
+assert.ok(preview.includes("(controls.controlOpa / 255).toFixed(3)"), 'at the control opacity');
+assert.match(source, /icon_fill_marker\(card, marker\) &&\s*marker > 0 && tile_icon_disc::icon_color_tints\(rgb\)/,
+  'Device pill: tinted only with tile color From icon');
 console.log('Climate tile pill follows the popup control rule');

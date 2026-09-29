@@ -35,10 +35,11 @@ assert.match(shell, /if \(shell\.active != binding \|\| g_next_disc\.from_tile\)
 // Every opener passes its tile's disc: popup_background() and, for Climate,
 // Light and Cover (global background), forget_popup_source(card).
 const source = read('src/tiles/runtime/tile_icon_source.cpp');
-assert.match(source, /void forget_popup_source\(lv_obj_t\* obj\) \{\s*remember_popup_source\(nullptr\);\s*pass_popup_disc\(obj\);/);
-assert.match(source, /uint32_t popup_background\(lv_obj_t\* obj, uint32_t fallback\) \{\s*remember_popup_source\(obj\);\s*pass_popup_disc\(obj\);/);
-assert.match(source, /popup_shell_use_tile_disc\(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,\s*tile_icon_disc::glow_of\(disc\)\);/);
-assert.ok(!source.includes('tile_color_from_icon'), 'The controls follow the circle, not the tile color mode');
+assert.match(source, /void forget_popup_source\(lv_obj_t\* obj\) \{\s*remember_popup_source\(nullptr\);\s*pass_popup_disc\(obj, false\);/);
+assert.match(source, /uint32_t popup_background\(lv_obj_t\* obj, uint32_t fallback\) \{\s*remember_popup_source\(obj\);\s*pass_popup_disc\(obj, true\);/);
+// The controls take the circle color only when the popup shows the tile
+// color "From icon"; Climate, Light and Cover keep neutral controls.
+assert.match(source, /popup_shell_use_tile_disc\(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,\s*tile_icon_disc::glow_of\(disc\),\s*popup_shows_tile_color && tile_color_from_icon\(obj\)\);/);
 for (const [file, event] of [['src/types/climate/renderer.cpp', 'event'], ['src/types/cover/renderer.cpp', 'event'],
   ['src/types/switch/renderer.cpp', 'e']]) {
   assert.ok(read(file).includes(`tile_icon_source::forget_popup_source(static_cast<lv_obj_t*>(lv_event_get_current_target(${event})));`),

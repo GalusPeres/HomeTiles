@@ -89,11 +89,12 @@ int main() {
     opa = lv_obj_get_style_bg_opa(obj, LV_PART_MAIN);
     lv_obj_remove_state(obj, LV_STATE_PRESSED);
   };
-  // The controls follow the circle in every tile color mode.
+  // The controls take the circle color only with tile color From icon; with
+  // Global or Custom they take the neutral step.
   struct Case { const char* what; uint32_t card, icon; bool glow; uint8_t fill; bool tinted; };
   const Case cases[] = {
-    {"Global with the circle color", 0x1B1B1B, 0xC62828, true, 0, true},
-    {"Custom in the icon's hue", 0x3E1717, 0xC62828, true, 0, true},
+    {"Global with the circle color", 0x1B1B1B, 0xC62828, true, 0, false},
+    {"Custom in the icon's hue", 0x3E1717, 0xC62828, true, 0, false},
     {"From icon with the circle color", 0x482F10, 0xEF8402, true, 20, true},
     {"From icon without the circle color", 0x482F10, 0xEF8402, false, 20, false},
     {"From icon with a white icon", 0x303030, 0xFFFFFF, true, 20, false},

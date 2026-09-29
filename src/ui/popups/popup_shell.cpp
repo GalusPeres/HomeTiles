@@ -33,6 +33,8 @@ struct HeaderDisc {
   bool off = false;
   bool follows_global = false;
   bool glow = true;
+  // The popup shows the tile color "From icon" (controls_fill).
+  bool from_icon = false;
 };
 HeaderDisc g_next_disc;
 struct Shell {
@@ -264,20 +266,27 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
     lv_obj_set_style_text_color(target, color, 0);
 }
 
-// The header circle and the controls around it for a card and icon color
-// (tone_color::fill): the icon hue with "Circle in icon color" (or without a
-// tile) when the icon is colored, else neutral. The controls (pressed close,
-// footer toggles, pills, arrows, editors, keys) always take the circle's
-// color, so they switch with it; the Climate, Light and Cover popups count
-// like every other popup.
+// The header circle for a card and icon color (tone_color::fill): the icon
+// hue with "Circle in icon color" (or without a tile) when the icon is
+// colored, else neutral.
 tone_color::Fill header_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb) {
   const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
   const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);
   return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent());
 }
 
+// The controls around it (pressed close, footer toggles, pills, arrows,
+// editors, keys) take the circle's color only when the popup shows the tile
+// color "From icon" and the circle is tinted. With Global or Custom, in the
+// Climate, Light and Cover popups (global background) and without a tile they
+// take the neutral step.
+tone_color::Fill controls_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb) {
+  const bool tinted = options.from_tile && options.from_icon && header_fill(options, card, rgb).tinted;
+  return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent());
+}
+
 void control_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb, lv_color_t& color, lv_opa_t& opa) {
-  const tone_color::Fill fill = header_fill(options, card, rgb);
+  const tone_color::Fill fill = controls_fill(options, card, rgb);
   color = lv_color_hex(fill.color);
   opa = fill.control_opa;
 }
@@ -306,14 +315,16 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   if (!lv_color_eq(lv_obj_get_style_text_color(icon, LV_PART_MAIN), readable))
     lv_obj_set_style_text_color(icon, readable, 0);
   // The pressed close button has exactly the control color of the popup
-  // (popup_nav_style.h). Only a change restyles it.
+  // (controls_fill, popup_nav_style.h). Only a change restyles it.
   static lv_color_t close_color = lv_color_white();
   static lv_opa_t close_opa = LV_OPA_20;
-  if (shell.close && (!lv_color_eq(close_color, color) || close_opa != fill.control_opa)) {
-    close_color = color;
-    close_opa = fill.control_opa;
-    lv_obj_set_style_bg_color(shell.close, color, LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(shell.close, fill.control_opa, LV_STATE_PRESSED);
+  const tone_color::Fill controls = controls_fill(options, card, rgb);
+  const lv_color_t press = lv_color_hex(controls.color);
+  if (shell.close && (!lv_color_eq(close_color, press) || close_opa != controls.control_opa)) {
+    close_color = press;
+    close_opa = controls.control_opa;
+    lv_obj_set_style_bg_color(shell.close, press, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(shell.close, controls.control_opa, LV_STATE_PRESSED);
     lv_obj_set_style_color_filter_opa(shell.close, LV_OPA_TRANSP, LV_STATE_PRESSED);
   }
   // The card hairline is the plain lighter tile border. It never follows the
@@ -455,11 +466,12 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 
 bool popup_shell_active() { return shell.active != nullptr; }
 
-void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow) {
+void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon) {
   g_next_disc.from_tile = true;
   g_next_disc.off = off;
   g_next_disc.follows_global = follows_global;
   g_next_disc.glow = glow;
+  g_next_disc.from_icon = from_icon;
 }
 
 void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa,
@@ -467,7 +479,7 @@ void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& 
   // A popup styles its controls before show_popup_shell() takes the options.
   const HeaderDisc& options = g_next_disc.from_tile ? g_next_disc : shell.disc;
   control_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu, color, opa);
-  if (tinted) *tinted = header_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu).tinted;
+  if (tinted) *tinted = controls_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu).tinted;
 }
 
 void popup_shell_follow_tile_color(uint32_t color) {

@@ -873,6 +873,10 @@
       font-size:14px;
       line-height:1.35;
     }
+    /* Beside the Settings parking slot: its drop hint (while the slot is
+       empty) above the tile editing hint. */
+    .settings-parking-texts { display:flex; flex-direction:column; gap:6px; min-width:0; max-width:440px; }
+    .settings-parking-texts .hint { margin:0; font-size:14px; line-height:1.35; }
     .settings-hidden-slot.drop-target .settings-hidden-tile {
       border:3px dashed #26a69a;
       background:rgba(38,166,154,0.12) !important;
@@ -1452,6 +1456,26 @@
     .screensaver-two-fields input, .screensaver-two-fields select { margin-top:5px; margin-bottom:0; }
     .screensaver-save-state { min-height:20px; margin-top:12px; color:var(--text-2); font-size:12px; }
 
+    /* Wide windows: the grid preview and the Settings parking stay in place;
+       only the footer with Global settings scrolls when the window is too
+       low, with its scrollbar right beside it. The Tile settings panel keeps
+       its own height (updateTileSettingsMaxHeight). Below the footer's
+       minimum height the whole tab scrolls again instead of cutting it off. */
+    @media (min-width: 1181px) {
+      .tab-content.tile-tab.active { display:flex; flex-direction:column; }
+      .tab-content.tile-tab.active > .tile-editor { flex:1 1 auto; min-height:0; }
+      .tab-content.tile-tab.active .tile-editor-main { align-self:stretch; min-height:0; }
+      .tab-content.tile-tab.active .tile-grid-scroll,
+      .tab-content.tile-tab.active .settings-hidden-parking { flex:0 0 auto; }
+      .tab-content.tile-tab.active .tile-settings { max-height:100%; }
+      .tab-content.tile-tab.active .folder-footer {
+        flex:1 1 auto;
+        min-height:90px;
+        overflow-y:auto;
+        overscroll-behavior:contain;
+        align-content:flex-start;
+      }
+    }
     /* Narrow window: the settings panel moves below the grid preview and the
        grid itself scrolls horizontally when needed (.tile-grid-scroll). */
     @media (max-width: 1180px) {

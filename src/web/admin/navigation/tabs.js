@@ -105,38 +105,15 @@
     }
   }
 
-  // Caps the tile settings panel at exactly the space below header and tabs so
-  // that it scrolls internally instead of stretching the page.
+  // The Tile settings panel takes the height of the tile editor row, which
+  // fills the card on wide windows (admin.css); narrow windows stack it below
+  // the grid. Only an inline cap from an earlier layout is cleared here.
   function updateTileSettingsMaxHeight() {
-    document.querySelectorAll('.tile-settings').forEach(panel => {
-      panel.style.maxHeight = '';
-      if (window.innerWidth <= 1180) return;
-      const tab = panel.closest('.tab-content');
-      if (!tab || !tab.classList.contains('active')) return;
-      const top = panel.getBoundingClientRect().top + window.scrollY;
-      // Only card padding and wrapper spacing sit below the panel. Read those
-      // from the styles instead of measuring scrollHeight: on large windows
-      // scrollHeight is at least the viewport height and would cap the panel
-      // far too small.
-      let below = 24;
-      const card = panel.closest('.card');
-      if (card) {
-        const ccs = getComputedStyle(card);
-        below = (parseFloat(ccs.paddingBottom) || 0) + (parseFloat(ccs.borderBottomWidth) || 0);
-        const wrapper = card.parentElement;
-        if (wrapper) {
-          const wcs = getComputedStyle(wrapper);
-          below += (parseFloat(wcs.paddingBottom) || 0) + (parseFloat(wcs.marginBottom) || 0);
-        }
-      }
-      const h = window.innerHeight - top - below;
-      if (h > 240) panel.style.maxHeight = h + 'px';
-    });
+    document.querySelectorAll('.tile-settings').forEach(panel => { panel.style.maxHeight = ''; });
   }
-  // Resize fires many times per second while a window is dragged, and both
-  // handlers below are expensive: one forces a layout and reads computed styles
-  // per panel, the other re-renders the whole screensaver editor. Coalescing to
-  // one call per frame keeps that work off every single event.
+  // Resize fires many times per second while a window is dragged, and the
+  // screensaver handler below re-renders the whole screensaver editor.
+  // Coalescing to one call per frame keeps that work off every single event.
   function perFrame(callback) {
     let frame = 0;
     return () => {

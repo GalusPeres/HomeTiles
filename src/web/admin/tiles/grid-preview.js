@@ -182,11 +182,15 @@
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
-    // A first Custom opens the color picker right away.
+    // A first Custom opens the color picker right away, one frame later: the
+    // color row was display:none until now, and a picker opened before it is
+    // laid out appears in the top left corner of the page.
     if (mode === 'custom' && before !== 'custom' && !remembered) {
-      try {
-        if (typeof input.showPicker === 'function') input.showPicker();
-      } catch (_) {}
+      requestAnimationFrame(() => {
+        try {
+          if (input.offsetParent && typeof input.showPicker === 'function') input.showPicker();
+        } catch (_) {}
+      });
     }
   }
   // State the firmware compares with the per-tile icon color rules, or null

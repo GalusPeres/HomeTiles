@@ -808,11 +808,15 @@ static void appendTileTabHTML(
     } else {
       html += "><i class=\"mdi mdi-tray-arrow-down tile-icon\"></i>";
     }
-    html += "</div></div><div id=\"settingsHiddenHint\" class=\"settings-hidden-hint";
+    // Beside the slot: its drop hint while it is empty, and the tile editing
+    // hint the other grids show in their footer.
+    html += "</div></div><div class=\"settings-parking-texts\"><div id=\"settingsHiddenHint\" class=\"settings-hidden-hint";
     if (hidden) html += " is-hidden";
     html += "\">";
     appendHtmlEscaped(html, tr.settings_tile_parking);
-    html += "</div></div>";
+    html += "</div><p class=\"hint\">";
+    html += tr.admin_tile_hint;
+    html += "</p></div></div>";
   }
   html += R"html(          <div class="folder-footer">
 )html";
@@ -885,7 +889,8 @@ static void appendTileTabHTML(
             "onclick=\"saveDefaultTileColor('";
     html += factory_color_hex;
     html += "')\"><i class=\"mdi mdi-restore\"></i></button></div></div></div></section>\n";
-    html += R"html(            <p class="hint">)html";
+    // The root grid shows this hint beside the Settings parking slot.
+    if (folder_id != 0) html += R"html(            <p class="hint">)html";
   } else {
     html += R"html(            <div class="folder-footer-options">
               <label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";
@@ -906,11 +911,13 @@ static void appendTileTabHTML(
   }
   if (screensaver_mode) {
     html += tr.screensaver_hint;
-  } else {
-    html += tr.admin_tile_hint;
-  }
-  html += R"html(</p>
+    html += R"html(</p>
 )html";
+  } else if (folder_id != 0) {
+    html += tr.admin_tile_hint;
+    html += R"html(</p>
+)html";
+  }
   if (!screensaver_mode && folder_id != 0) {
     html += R"html(            <button type="button" class="btn btn-danger btn-delete-folder" onclick="deleteFolder(')html";
     html += tab_id;

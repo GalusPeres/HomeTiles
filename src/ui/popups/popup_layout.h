@@ -198,14 +198,6 @@ constexpr int kHeaderIconDiscOpa = 38;
 // (tone_color::fill, popup_shell.cpp header_fill). The card hairline is the
 // plain white 20 % tile border.
 constexpr int kPopupBorderOpa = 51;
-// Keypad keys (PIN) at most this share of the card height, per mille. On
-// panels of 7 inches and more they would otherwise be physically about twice
-// the size of the 4" and 5" boards; smaller boards fill the space.
-#if defined(DEVICE_LARGE_PANEL)
-constexpr int kKeypadKeyMaxPermille = 100;
-#else
-constexpr int kKeypadKeyMaxPermille = 1000;
-#endif
 constexpr int kHeaderIconX = 0;
 constexpr int kHeaderTitleX = kHeaderIconDiscSize + kHeaderIconDiscGap;
 
@@ -221,6 +213,17 @@ constexpr int kCardWidth =
         ? (SCREEN_HEIGHT - (kCardMargin * 2))
         : (SCREEN_WIDTH - (kCardMargin * 2));
 constexpr int kCardHeight = SCREEN_HEIGHT - (kCardMargin * 2);
+// PIN keypad keys at most this share of the card height, per mille. On the
+// panels of 7 inches and more (1024x600 7", 1280x800 8" and 10.1") filling
+// the card would make them physically about twice the size of the 4" and 5"
+// boards, which fill the space (Tab5 included, 1280x720 at 5").
+#if defined(DEVICE_LAYOUT_1024X600) || defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || \
+    defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) || defined(DEVICE_GUITION_JC8012P4A1) || \
+    defined(DEVICE_GUITION_JC8012P4A1_V2)
+constexpr int kKeypadKeyMaxPermille = 125;
+#else
+constexpr int kKeypadKeyMaxPermille = 1000;
+#endif
 constexpr int kCardPad = scale(20);
 constexpr int kContentWidth = kCardWidth - (kCardPad * 2);
 

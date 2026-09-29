@@ -116,7 +116,6 @@ KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* prompt_font) {
   g.key_h = (available - 2 * g.prompt_h) * 100 / height_pct;
   const int width_limit = content_w * 100 / width_pct;
   if (width_limit < g.key_h) g.key_h = width_limit;
-  // Large panels keep the keys at the physical size of the small boards.
   const int size_limit = popup_layout::kCardHeight * popup_layout::kKeypadKeyMaxPermille / 1000;
   if (size_limit < g.key_h) g.key_h = size_limit;
   if (g.key_h < 1) g.key_h = 1;
@@ -125,12 +124,20 @@ KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* prompt_font) {
   const int prompt_gap = g.key_h * kPromptGapPct / 100;
   const int dots_gap = g.key_h * kDotsGapPct / 100;
   const int block = 2 * g.prompt_h + prompt_gap + dots_gap + 4 * g.key_h + 3 * g.gap;
-  g.prompt_y = top + (available - block) / 2;
-  g.dots_y = g.prompt_y + g.prompt_h + prompt_gap;
-  g.keys_y = g.dots_y + g.prompt_h + dots_gap;
   g.keys_x = (content_w - (3 * g.key_w + 2 * g.gap)) / 2;
   g.dot = g.key_h * kDotPct / 100;
   if (g.dot > g.prompt_h) g.dot = g.prompt_h;
+  // The keys stay where the centered block puts them. Above them the prompt
+  // and the dots split the room into three equal visible gaps: header to the
+  // prompt's capitals, prompt baseline to the dots, dots to the keys.
+  g.keys_y = top + (available - block) / 2 + 2 * g.prompt_h + prompt_gap + dots_gap;
+  const int baseline = g.prompt_h - prompt_font->base_line;  // from the label top
+  int cap_top = 0;
+  lv_font_glyph_dsc_t cap;
+  if (lv_font_get_glyph_dsc(prompt_font, &cap, 'E', 0)) cap_top = baseline - cap.box_h - cap.ofs_y;
+  const int even = (g.keys_y - top - (baseline - cap_top) - g.dot) / 3;
+  g.prompt_y = top + even - cap_top;
+  g.dots_y = g.prompt_y + baseline + even - (g.prompt_h - g.dot) / 2;
   return g;
 }
 

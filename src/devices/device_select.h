@@ -191,15 +191,3 @@
     defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)
 #define DEVICE_WAVESHARE_TOUCH_LCD_1280X800
 #endif
-
-// Panels of 7 inches and more (1024x600 7", 1280x800 8" and 10.1"). Popup
-// controls that grow with the pixels, such as the PIN keys, would be
-// physically about twice their size on the 4" and 5" boards there, so they
-// keep a smaller share of the card (pin_popup.cpp).
-#if defined(DEVICE_LAYOUT_1024X600) || \
-    defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || \
-    defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) || \
-    defined(DEVICE_GUITION_JC8012P4A1) || \
-    defined(DEVICE_GUITION_JC8012P4A1_V2)
-#define DEVICE_LARGE_PANEL
-#endif

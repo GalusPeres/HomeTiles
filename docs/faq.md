@@ -67,6 +67,12 @@ Configure Home Assistant's Energy Dashboard and enable the matching electricity,
 
 ## Display behavior
 
+<a id="forgot-the-settings-or-folder-pin"></a>
+
+**Forgot the Settings or folder PIN**
+
+Enter the factory PIN **466384537** (HOMETILES on a phone keypad). It unlocks Settings and every protected folder; then change the PIN in the Web Admin. See [Settings access](web-admin.md#settings-tile-and-access).
+
 <a id="the-esp32-s3-screen-briefly-goes-black-while-saving"></a>
 
 **ESP32-S3 briefly goes black while saving**

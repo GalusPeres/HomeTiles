@@ -9,7 +9,7 @@ void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& 
 // Footer controls of the history popups (7D/24H/Today and the date and day
 // pills) look like the pressed close button: the selected control has exactly
 // the control fill (the icon color with tile color "From icon" and "Circle in
-// icon color", else white, at the Glow strength), an info pill half of it.
+// icon color", else white, at the Glow strength), an info pill the same.
 // All their text is white.
 namespace popup_nav_style {
 
@@ -68,7 +68,7 @@ inline void style_press(lv_obj_t* btn, lv_color_t popup, lv_color_t icon) {
 }
 
 // A slider (Media volume and position): the unused track like an info pill
-// (half the control fill), the used part in the control color at full
+// (the control fill), the used part in the control color at full
 // opacity (the icon color with tile color "From icon" and "Circle in icon
 // color", else white). The knob stays white.
 inline void style_slider(lv_obj_t* slider, lv_color_t popup, lv_color_t icon) {
@@ -76,18 +76,19 @@ inline void style_slider(lv_obj_t* slider, lv_color_t popup, lv_color_t icon) {
   lv_color_t color;
   lv_opa_t opa;
   fill(popup, icon, color, opa);
-  set_bg(slider, color, static_cast<lv_opa_t>(opa / 2), LV_PART_MAIN);
+  set_bg(slider, color, opa, LV_PART_MAIN);
   set_bg(slider, color, LV_OPA_COVER, LV_PART_INDICATOR);
 }
 
-// An info pill (date range, day title): half the disc fill, white text.
+// An info pill (date range, day title): the control fill like a selected
+// toggle, white text.
 inline void style_pill(lv_obj_t* pill, lv_obj_t* label, lv_color_t popup, lv_color_t icon) {
   lv_color_t color;
   lv_opa_t opa;
   fill(popup, icon, color, opa);
   if (pill) {
     lv_obj_set_style_bg_color(pill, color, 0);
-    lv_obj_set_style_bg_opa(pill, static_cast<lv_opa_t>(opa / 2), 0);
+    lv_obj_set_style_bg_opa(pill, opa, 0);
   }
   if (label) {
     lv_obj_set_style_text_color(label, lv_color_white(), 0);

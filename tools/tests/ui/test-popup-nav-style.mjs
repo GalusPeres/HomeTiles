@@ -1,7 +1,7 @@
 // Footer controls of the history popups (7D/24H/Today, date and day pills)
 // and the pressed close button share one control fill: the selected control
 // has exactly that fill (the icon color with tile color "From icon" and
-// "Circle in icon color", else white), the info pill half of it, and all labels stay white
+// "Circle in icon color", else white), the info pill and the slider track the same (regression: a half fill looked darker than 7D), and all labels stay white
 // (regression: solid white pills brighter than the disc, and a white pill with
 // text cut out in the popup color). test-popup-shell-lvgl.mjs runs the fill.
 import assert from 'node:assert/strict';
@@ -110,12 +110,12 @@ int main() {
   lv_obj_add_state(btn, LV_STATE_PRESSED);
   check(lv_obj_get_style_bg_opa(btn, LV_PART_MAIN) == 54, "pressed shows the disc fill");
   lv_obj_remove_state(btn, LV_STATE_PRESSED);
-  // Info pill: half the disc fill, white text.
+  // Info pill: the same fill as a selected toggle, white text.
   lv_obj_t* pill = lv_obj_create(lv_screen_active());
   lv_obj_t* pill_label = lv_label_create(pill);
   style_pill(pill, pill_label, gold, sun);
-  check(lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) == 27 && rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) == 0xFFB224,
-        "pill has half the disc fill");
+  check(lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) == 54 && rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) == 0xFFB224,
+        "pill has the toggle fill");
   check(lv_obj_get_style_text_opa(pill_label, LV_PART_MAIN) == LV_OPA_COVER, "pill text white");
   // Media previous, next and volume: the control fill only while pressed.
   lv_style_value_t v;
@@ -132,14 +132,14 @@ int main() {
   lv_obj_t* slider = lv_slider_create(lv_screen_active());
   lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
   style_slider(slider, gold, sun);
-  check(local(slider, LV_STYLE_BG_OPA, LV_PART_MAIN) && v.num == 27, "slider track half the fill");
+  check(local(slider, LV_STYLE_BG_OPA, LV_PART_MAIN) && v.num == 54, "slider track has the toggle fill");
   check(local(slider, LV_STYLE_BG_COLOR, LV_PART_MAIN) && rgb(v.color) == 0xFFB224, "slider track color");
   check(local(slider, LV_STYLE_BG_OPA, LV_PART_INDICATOR) && v.num == LV_OPA_COVER, "slider used part opaque");
   check(local(slider, LV_STYLE_BG_COLOR, LV_PART_INDICATOR) && rgb(v.color) == 0xFFB224, "slider used part icon color");
   check(local(slider, LV_STYLE_BG_COLOR, LV_PART_KNOB) && rgb(v.color) == 0xFFFFFF, "slider knob stays white");
   g_disc_color = lv_color_white(); g_disc_opa = 24;
   style_slider(slider, gold, sun);
-  check(local(slider, LV_STYLE_BG_OPA, LV_PART_MAIN) && v.num == 12, "neutral track half the fill");
+  check(local(slider, LV_STYLE_BG_OPA, LV_PART_MAIN) && v.num == 24, "neutral track has the toggle fill");
   check(local(slider, LV_STYLE_BG_COLOR, LV_PART_INDICATOR) && rgb(v.color) == 0xFFFFFF, "neutral used part white");
   std::printf("%s\n", ok ? "OK" : "FAILED");
   return ok ? 0 : 1;

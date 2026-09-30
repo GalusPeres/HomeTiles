@@ -52,6 +52,9 @@ struct CameraPopupContext {
   bool draw_buffer_restore_pending = false;
   uint32_t draw_buffer_restore_retry_at_ms = 0;
   uint32_t bridge_response_deadline_ms = 0;
+  // Frame rate of the pending "open"; lowered once when an older Bridge
+  // rejects camera_geometry::kFps.
+  uint8_t requested_fps = camera_geometry::kFps;
   bool waiting_for_bridge = false;
   bool visible = false;
 };
@@ -238,7 +241,9 @@ void preload_camera_popup() {
 static void finish_camera_popup_open(const CameraPopupInit& init) {
   if (!g_camera_popup || !g_camera_popup->visible) return;
   g_camera_popup->bridge_response_deadline_ms = millis() + kBridgeResponseTimeoutMs;
-  mqttPublishCameraCommand(init.entity_id.c_str(), "open");
+  g_camera_popup->requested_fps = camera_geometry::kFps;
+  mqttPublishCameraCommand(init.entity_id.c_str(), "open",
+                           g_camera_popup->requested_fps);
 }
 
 void show_camera_popup(const CameraPopupInit& init) {
@@ -445,9 +450,23 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     return;
   }
   if (strcmp(status, "error") == 0) {
-    Serial.printf("[Camera] Bridge error: %s\n",
-                  static_cast<const char*>(doc["error"] | ""));
-    camera_popup_set_status(localize_camera_error(doc["error"] | ""), true);
+    const char* error = doc["error"] | "";
+    if (strcmp(error, "camera_invalid_stream_request") == 0 &&
+        g_camera_popup->requested_fps > camera_geometry::kFallbackFps) {
+      // Bridges before v0.7.1b9 accept at most 24 FPS: ask once more at 24.
+      Serial.printf("[Camera] Bridge rejected %u FPS; asking again at %u\n",
+                    static_cast<unsigned>(g_camera_popup->requested_fps),
+                    static_cast<unsigned>(camera_geometry::kFallbackFps));
+      g_camera_popup->requested_fps = camera_geometry::kFallbackFps;
+      g_camera_popup->waiting_for_bridge = true;
+      g_camera_popup->bridge_response_deadline_ms =
+          millis() + kBridgeResponseTimeoutMs;
+      mqttPublishCameraCommand(g_camera_popup->entity_id.c_str(), "open",
+                               g_camera_popup->requested_fps);
+      return;
+    }
+    Serial.printf("[Camera] Bridge error: %s\n", error);
+    camera_popup_set_status(localize_camera_error(error), true);
     return;
   }
   if (strcmp(status, "stopped") == 0) {

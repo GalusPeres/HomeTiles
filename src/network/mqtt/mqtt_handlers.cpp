@@ -2736,7 +2736,8 @@ void mqttServicePostConnect() {
   networkManager.publishBridgeConfig();
 }
 
-void mqttPublishCameraCommand(const char* entity_id, const char* command) {
+void mqttPublishCameraCommand(const char* entity_id, const char* command,
+                              uint8_t fps) {
   if (!entity_id || !*entity_id) return;
   const auto& text = i18n::strings(configManager.getConfig().language);
   if (!networkManager.isMqttConnected()) {
@@ -2760,7 +2761,7 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command) {
              entity_id, action,
              camera_geometry::kWidth,
              camera_geometry::kHeight,
-             camera_geometry::kFps);
+             fps ? fps : camera_geometry::kFps);
   } else {
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\"}",

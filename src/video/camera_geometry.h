@@ -20,10 +20,14 @@ inline constexpr uint16_t kHeight = evenCeil(
     static_cast<uint32_t>(kWidth) * 9U, 16U);
 inline constexpr uint16_t kCornerRadius =
     static_cast<uint16_t>(popup_layout::scale480(18));
-// Target for the bounded low-latency camera path. 24 FPS leaves enough time
-// for JPEG decode plus the synchronized PPA/DSI presentation while MQTT keeps
-// running on the other core.
-inline constexpr uint8_t kFps = 24;
+// Target for the bounded low-latency camera path. The PPA rotation takes
+// about 17 ms per frame on the 800x1280 panels; since the UI loop no longer
+// waits for the panel refresh after each swap, 30 FPS keeps about the loop
+// share 24 FPS had before.
+inline constexpr uint8_t kFps = 30;
+// Bridges before v0.7.1b9 reject more than 24 FPS; the popup then asks again
+// at this rate.
+inline constexpr uint8_t kFallbackFps = 24;
 
 // ESP32-P4's JPEG hardware decoder writes in 16-pixel-aligned dimensions.
 // LVGL still receives the visible width/height and the aligned row stride.

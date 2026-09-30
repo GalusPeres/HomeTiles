@@ -182,15 +182,20 @@ void Presenter::markMirrorDirty(int32_t x, int32_t y, int32_t w, int32_t h) {
 
 bool Presenter::noteUiWrite(int32_t x, int32_t y, int32_t w, int32_t h,
                             bool ppa_writer) {
-  uint16_t* active = activeFramebuffer();
-  if (!active ||
+  const bool hidden = uiSwapActive();
+  uint16_t* target = hidden ? inactiveFramebuffer() : activeFramebuffer();
+  if (!target ||
       !rectInside(x, y, w, h, config_.panel_width, config_.panel_height)) {
     return false;
   }
-  if (ppa_writer && !syncFramebufferSpan(active, x, y, w, h, true)) {
+  if (ppa_writer && !syncFramebufferSpan(target, x, y, w, h, true)) {
     return false;
   }
-  markMirrorDirty(x, y, w, h);
+  if (hidden) {
+    markUiFrameDirty(x, y, w, h);
+  } else {
+    markMirrorDirty(x, y, w, h);
+  }
   return true;
 }
 
@@ -334,6 +339,10 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
     return false;
   }
 
+  // A UI frame still waiting for its swap is shown first; the camera path
+  // then starts from a complete copy of it in begin().
+  if (uiSwapActive() && (!commitUi() || !finishUiSwap())) return false;
+
   Dma2dArbiterGuard dma2d_guard(kDma2dLockTimeoutMs);
   if (!dma2d_guard.locked()) return false;
   if (!begin() || !syncUiToInactive()) {
@@ -441,9 +450,208 @@ void Presenter::end() {
   if (!double_buffer_active_) return;
   double_buffer_active_ = false;
   resetMirrorDirty();
+  // The hidden framebuffer misses the last camera frame and the UI writes
+  // since then; UI frame swap resumes from a complete copy.
+  if (ui_frame_swap_) ui_full_sync_ = true;
   Serial.printf("[CameraDisplay/%s] DSI double buffering ended; fb%u remains active\n",
                 config_.device_name ? config_.device_name : "P4",
                 static_cast<unsigned>(active_index_));
+}
+
+void Presenter::enableUiFrameSwap() {
+  if (!ready_ || ui_frame_swap_) return;
+  ui_frame_swap_ = true;
+  ui_swap_pending_ = false;
+  ui_full_sync_ = true;
+  ui_full_sync_after_commit_ = false;
+  resetUiFrameDirty();
+  Serial.printf("[Display/%s] UI frame swap enabled\n",
+                config_.device_name ? config_.device_name : "P4");
+}
+
+void Presenter::disableUiFrameSwap(const char* reason) {
+  // Falls back to drawing into the shown framebuffer like every other board.
+  ui_frame_swap_ = false;
+  ui_swap_pending_ = false;
+  ui_full_sync_ = false;
+  ui_full_sync_after_commit_ = false;
+  resetUiFrameDirty();
+  Serial.printf("[Display/%s] UI frame swap disabled: %s\n",
+                config_.device_name ? config_.device_name : "P4",
+                reason ? reason : "unknown");
+}
+
+void Presenter::resetUiFrameDirty() {
+  ui_frame_dirty_ = false;
+  ui_x1_ = 0;
+  ui_y1_ = 0;
+  ui_x2_ = 0;
+  ui_y2_ = 0;
+}
+
+void Presenter::markUiFrameDirty(int32_t x, int32_t y, int32_t w, int32_t h) {
+  if (w <= 0 || h <= 0) return;
+  const int32_t x2 = x + w - 1;
+  const int32_t y2 = y + h - 1;
+  if (!ui_frame_dirty_) {
+    ui_x1_ = x;
+    ui_y1_ = y;
+    ui_x2_ = x2;
+    ui_y2_ = y2;
+    ui_frame_dirty_ = true;
+    return;
+  }
+  if (x < ui_x1_) ui_x1_ = x;
+  if (y < ui_y1_) ui_y1_ = y;
+  if (x2 > ui_x2_) ui_x2_ = x2;
+  if (y2 > ui_y2_) ui_y2_ = y2;
+}
+
+void Presenter::noteUiTiming(uint32_t wait_us, uint32_t sync_us,
+                             size_t sync_bytes) {
+  ui_wait_total_us_ += wait_us;
+  if (wait_us > ui_wait_max_us_) ui_wait_max_us_ = wait_us;
+  ui_sync_total_us_ += sync_us;
+  if (sync_us > ui_sync_max_us_) ui_sync_max_us_ = sync_us;
+  ui_sync_kb_ += static_cast<uint32_t>(sync_bytes / 1024U);
+}
+
+bool Presenter::finishUiSwap() {
+  if (!ui_swap_pending_) return true;
+  ui_swap_pending_ = false;
+  const uint32_t started_us = micros();
+  const bool refreshed = waitRefreshDone();
+  noteUiTiming(micros() - started_us, 0, 0);
+  if (refreshed) return true;
+  // Without a refresh after the swap the hidden framebuffer may still be
+  // scanned. The driver has taken the new one; keep drawing there directly.
+  disableUiFrameSwap("no panel refresh after swap");
+  return false;
+}
+
+bool Presenter::prepareUiFrame() {
+  if (!finishUiSwap()) return false;
+  if (!ui_full_sync_) return true;
+  uint16_t* shown = activeFramebuffer();
+  uint16_t* hidden = inactiveFramebuffer();
+  const uint32_t started_us = micros();
+  if (!shown || !hidden ||
+      !syncFramebufferSpan(shown, 0, 0, config_.panel_width,
+                           config_.panel_height, true)) {
+    disableUiFrameSwap("full sync failed");
+    return false;
+  }
+  std::memcpy(hidden, shown, framebufferBytes());
+  if (!syncCache(hidden, framebufferBytes(), false)) {
+    disableUiFrameSwap("full sync failed");
+    return false;
+  }
+  ui_full_sync_ = false;
+  noteUiTiming(0, micros() - started_us, framebufferBytes());
+  return true;
+}
+
+uint16_t* Presenter::uiFramebuffer() {
+  if (!ready_) return nullptr;
+  if (!uiSwapActive() || !prepareUiFrame()) return activeFramebuffer();
+  return inactiveFramebuffer();
+}
+
+void Presenter::syncUiArea(int32_t x, int32_t y, int32_t w, int32_t h) {
+  if (!ready_ || !uiSwapActive()) return;
+  if (x < 0) {
+    w += x;
+    x = 0;
+  }
+  if (y < 0) {
+    h += y;
+    y = 0;
+  }
+  if (x + w > config_.panel_width) w = config_.panel_width - x;
+  if (y + h > config_.panel_height) h = config_.panel_height - y;
+  if (w <= 0 || h <= 0) return;
+  // A pending full sync copies this area as well.
+  const bool full_sync = ui_full_sync_;
+  if (!prepareUiFrame() || full_sync) return;
+  uint16_t* shown = activeFramebuffer();
+  uint16_t* hidden = inactiveFramebuffer();
+  const uint32_t started_us = micros();
+  const size_t row_bytes = static_cast<size_t>(w) * sizeof(uint16_t);
+  for (int32_t row = 0; row < h; ++row) {
+    const size_t offset =
+        static_cast<size_t>(y + row) * config_.panel_width + x;
+    std::memcpy(hidden + offset, shown + offset, row_bytes);
+  }
+  if (!flushFramebufferRect(hidden, x, y, w, h)) {
+    disableUiFrameSwap("area sync failed");
+    return;
+  }
+  noteUiTiming(0, micros() - started_us, row_bytes * static_cast<size_t>(h));
+}
+
+void Presenter::syncAllAfterCommit() {
+  if (uiSwapActive()) ui_full_sync_after_commit_ = true;
+}
+
+bool Presenter::commitUi() {
+  if (!uiSwapActive() || !ui_frame_dirty_) return true;
+  uint16_t* frame = inactiveFramebuffer();
+  const int32_t x = ui_x1_;
+  const int32_t y = ui_y1_;
+  const int32_t w = ui_x2_ - ui_x1_ + 1;
+  const int32_t h = ui_y2_ - ui_y1_ + 1;
+  resetUiFrameDirty();
+  // The IDF DPI driver takes one of its own framebuffers without copying and
+  // scans it from the next frame on (see present()).
+  const esp_err_t err =
+      esp_lcd_panel_draw_bitmap(panel_, x, y, x + w, y + h, frame);
+  if (err != ESP_OK) {
+    // Show the frame the old way, directly in the shown framebuffer.
+    uint16_t* shown = activeFramebuffer();
+    const size_t row_bytes = static_cast<size_t>(w) * sizeof(uint16_t);
+    for (int32_t row = 0; row < h; ++row) {
+      const size_t offset =
+          static_cast<size_t>(y + row) * config_.panel_width + x;
+      std::memcpy(shown + offset, frame + offset, row_bytes);
+    }
+    flushFramebufferRect(shown, x, y, w, h);
+    disableUiFrameSwap("framebuffer swap failed");
+    return false;
+  }
+  // Only a refresh after this point confirms the new framebuffer; the next
+  // UI write waits for it (finishUiSwap).
+  drainRefreshSignal();
+  active_index_ ^= 1U;
+  ui_swap_pending_ = true;
+  if (ui_full_sync_after_commit_) {
+    ui_full_sync_after_commit_ = false;
+    ui_full_sync_ = true;
+  }
+
+  ++ui_frames_;
+  const uint32_t now_ms = millis();
+  if (!ui_stats_started_ms_) {
+    ui_stats_started_ms_ = now_ms ? now_ms : 1;
+  } else if (now_ms - ui_stats_started_ms_ >= 30000U) {
+    Serial.printf(
+        "[Display/%s] UI frame swap: frames=%lu wait avg=%lu max=%lu us, "
+        "sync avg=%lu max=%lu us, %lu KB\n",
+        config_.device_name ? config_.device_name : "P4",
+        static_cast<unsigned long>(ui_frames_),
+        static_cast<unsigned long>(ui_wait_total_us_ / ui_frames_),
+        static_cast<unsigned long>(ui_wait_max_us_),
+        static_cast<unsigned long>(ui_sync_total_us_ / ui_frames_),
+        static_cast<unsigned long>(ui_sync_max_us_),
+        static_cast<unsigned long>(ui_sync_kb_));
+    ui_stats_started_ms_ = now_ms ? now_ms : 1;
+    ui_frames_ = 0;
+    ui_wait_total_us_ = 0;
+    ui_wait_max_us_ = 0;
+    ui_sync_total_us_ = 0;
+    ui_sync_max_us_ = 0;
+    ui_sync_kb_ = 0;
+  }
+  return true;
 }
 
 }  // namespace p4_dsi_camera_presenter

@@ -134,7 +134,7 @@ Result Client::rotate(p4_dsi_camera_presenter::Presenter& presenter,
         w >= kPpaMinRotateWidth && h >= kPpaMinRotateHeight)) {
     return Result::CpuFallback;
   }
-  uint16_t* framebuffer = presenter.activeFramebuffer();
+  uint16_t* framebuffer = presenter.uiFramebuffer();
   if (!framebuffer) return Result::CpuFallback;
 
   const uintptr_t start = reinterpret_cast<uintptr_t>(data);

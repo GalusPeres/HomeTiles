@@ -52,6 +52,10 @@ constexpr uint8_t kTouchReleaseDebounceReads = 0;
 constexpr int32_t kTouchJitterThresholdPx = 2;
 constexpr uint8_t kTouchSamplePointCount = 2;
 constexpr uint8_t kInvalidTouchTrackId = 0xFF;
+// LVGL draws into the hidden panel framebuffer and each finished frame is
+// shown at a panel refresh (p4_dsi_camera_presenter UI frame swap), so
+// redraws no longer build up band by band. false restores direct drawing.
+constexpr bool kUiFrameSwap = true;
 
 esp_lcd_dsi_bus_handle_t g_dsi_bus = nullptr;
 esp_lcd_panel_io_handle_t g_panel_io = nullptr;
@@ -237,7 +241,7 @@ size_t panel_frame_bytes() {
 }
 
 uint16_t* panel_fb() {
-  return g_panel_fb_ready ? g_camera_presenter.activeFramebuffer() : nullptr;
+  return g_panel_fb_ready ? g_camera_presenter.uiFramebuffer() : nullptr;
 }
 
 void clear_panel_framebuffer(uint16_t color) {
@@ -702,6 +706,7 @@ bool init_display() {
   log_step("Panel display on OK");
 
   g_ui_ppa.init();
+  if (kUiFrameSwap && g_panel_fb_ready) g_camera_presenter.enableUiFrameSwap();
 
   return true;
 }
@@ -806,6 +811,28 @@ void DeviceGuitionJC8012P4A1V2::displayEndFullFramePreview() {
 void DeviceGuitionJC8012P4A1V2::displayWaitDMA() {
 }
 
+void DeviceGuitionJC8012P4A1V2::displayCommit() {
+  g_camera_presenter.commitUi();
+}
+
+void DeviceGuitionJC8012P4A1V2::displaySyncArea(int32_t x, int32_t y,
+                                                int32_t w, int32_t h) {
+  if (!g_panel_fb_ready || w <= 0 || h <= 0) return;
+  // The same landscape-to-panel mapping as draw_landscape_area().
+  const int32_t logical_w = display_cfg.height;
+  const int32_t logical_h = display_cfg.width;
+  int32_t dst_x = 0;
+  int32_t dst_y = 0;
+  if (g_rotation & 0x02) {
+    dst_x = y;
+    dst_y = logical_w - x - w;
+  } else {
+    dst_x = logical_h - y - h;
+    dst_y = x;
+  }
+  g_camera_presenter.syncUiArea(dst_x, dst_y, h, w);
+}
+
 void DeviceGuitionJC8012P4A1V2::displayFillScreen(uint16_t color) {
   if (!g_panel) {
     return;
@@ -821,6 +848,9 @@ void DeviceGuitionJC8012P4A1V2::displayFillScreen(uint16_t color) {
       flush_cache_for_dma(buf, panel_frame_bytes());
       g_camera_presenter.noteUiWrite(
           0, 0, display_cfg.width, display_cfg.height, false);
+      // With frame swap the fill becomes visible with the next LVGL frame;
+      // LVGL does not know it, so the other framebuffer then copies it all.
+      g_camera_presenter.syncAllAfterCommit();
     }
 
     reset_dirty_rect();

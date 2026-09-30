@@ -165,6 +165,10 @@ constexpr uint32_t kRgbPclkHz = 10000000;
 // with network/OTA traffic. Six MHz leaves substantial PSRAM/GDMA headroom
 // while the synchronous version check is active.
 constexpr uint32_t kUpdateCheckRgbPclkHz = 6000000;
+// LVGL draws every frame into the hidden framebuffer and the panel switches
+// to it at a frame boundary (GuitionAtomicRgbDisplay::openFrame), so redraws
+// no longer build up band by band. false restores direct drawing.
+constexpr bool kUiFrameSwap = true;
 constexpr size_t kRgbBounceBufferPixels =
     480 * HOMETILES_GUITION_S3_RGB_BOUNCE_ROWS;
 constexpr uint32_t kRgbHorizontalTotal = 480 + 10 + 8 + 50;
@@ -397,8 +401,119 @@ class GuitionAtomicRgbDisplay final : public Arduino_RGB_Display {
     atomic_reason_ = "none";
   }
 
+  // UI frame swap (display_manager.cpp HOMETILES_UI_FRAME_SWAP): every LVGL
+  // frame is drawn into the hidden framebuffer and shown with one switch,
+  // like the atomic frames above but without redrawing the whole screen:
+  // the hidden framebuffer copies the rows LVGL reports as missing.
+  void enableFrameSwap() {
+    if (!panel_handle_ || !framebuffers_[0] || !framebuffers_[1]) return;
+    frame_swap_ = true;
+    frame_open_ = false;
+    swap_pending_ = false;
+    full_sync_ = true;
+    Serial.println("[Display/S3] UI frame swap enabled");
+  }
+
+  bool frameSwapEnabled() const { return frame_swap_; }
+
+  // Before an LVGL band is drawn: the first band of a frame switches the
+  // drawing to the hidden framebuffer.
+  void openFrame() {
+    if (!frame_swap_ || frame_open_) return;
+    if (storage_transition_) {
+      // Storage keeps drawing in the shown framebuffer (canonical fb0).
+      full_sync_ = true;
+      return;
+    }
+    if (!prepareHidden()) return;
+    pending_index_ = active_index_ ^ 1U;
+    if (pending_index_ == 0) canonical_fb0_valid_ = false;
+    _framebuffer = framebuffers_[pending_index_];
+    frame_open_ = true;
+  }
+
+  // After the last band: shows the frame from the next panel frame on. The
+  // old framebuffer is written again only after finishSwap().
+  void commitFrame() {
+    if (!frame_open_) return;
+    frame_open_ = false;
+    const esp_err_t err = esp_lcd_panel_draw_bitmap(
+        panel_handle_, 0, 0, _fb_width, _fb_height,
+        framebuffers_[pending_index_]);
+    if (err != ESP_OK) {
+      // Show the frame the old way and keep drawing directly.
+      memcpy(framebuffers_[active_index_], framebuffers_[pending_index_],
+             _framebuffer_size);
+      Cache_WriteBack_Addr(
+          reinterpret_cast<uint32_t>(framebuffers_[active_index_]),
+          _framebuffer_size);
+      canonical_fb0_valid_ = active_index_ == 0;
+      _framebuffer = framebuffers_[active_index_];
+      disableFrameSwap("framebuffer swap failed");
+      return;
+    }
+    // Counted from after the switch: an earlier frame end must not count.
+    swap_eof_start_ = frame_complete_count_;
+    active_index_ = pending_index_;
+    canonical_fb0_valid_ = active_index_ == 0;
+    _framebuffer = framebuffers_[active_index_];
+    swap_pending_ = true;
+    noteFrame();
+  }
+
+  // Copies the panel rows that hold an LVGL area from the shown framebuffer
+  // into the hidden one (whole rows: one contiguous copy per area).
+  void syncArea(int32_t x, int32_t y, int32_t w, int32_t h) {
+    if (!frame_swap_ || w <= 0 || h <= 0) return;
+    if (storage_transition_) {
+      // LVGL forgets this area now; copy everything once storage is done.
+      full_sync_ = true;
+      return;
+    }
+    const bool full = full_sync_;
+    if (!prepareHidden() || full) return;
+    int32_t first = y;
+    int32_t count = h;
+    switch (_rotation) {
+      case 1:
+        first = x;
+        count = w;
+        break;
+      case 2:
+        first = HEIGHT - y - h;
+        break;
+      case 3:
+        first = HEIGHT - x - w;
+        count = w;
+        break;
+      default:
+        break;
+    }
+    if (first < 0) {
+      count += first;
+      first = 0;
+    }
+    if (first + count > _fb_height) count = _fb_height - first;
+    if (count > 0) copyRows(first, count);
+  }
+
+  // A fill outside LVGL (boot, Settings) goes into both framebuffers.
+  void fillBoth(uint16_t color) {
+    if (frame_swap_ && !storage_transition_ && finishSwap()) {
+      _framebuffer = framebuffers_[active_index_ ^ 1U];
+      fillScreen(color);
+      full_sync_ = false;
+    }
+    _framebuffer = framebuffers_[active_index_];
+    fillScreen(color);
+    if (frame_open_) _framebuffer = framebuffers_[pending_index_];
+  }
+
   bool canonicalizeForStorage() {
     if (!panel_handle_) return false;
+    // A shown frame must be complete before fb0 is made canonical.
+    commitFrame();
+    finishSwap();
     storage_transition_ = true;
     if (atomic_pending_) {
       commitAtomicFrame();
@@ -563,6 +678,84 @@ class GuitionAtomicRgbDisplay final : public Arduino_RGB_Display {
     return static_cast<uint32_t>(frame_complete_count_ - start) >= count;
   }
 
+  // IDF may still send one more frame from the old framebuffer (DMA
+  // prefetch, see commitAtomicFrame); after two frame ends it is no longer
+  // read and the next frame can be drawn into it.
+  bool finishSwap() {
+    if (!swap_pending_) return true;
+    swap_pending_ = false;
+    const uint32_t started_us = micros();
+    const bool done = waitForFrameCompletions(swap_eof_start_, 2,
+                                              kRgbFramePeriodMs * 4U + 20U);
+    const uint32_t waited_us = micros() - started_us;
+    wait_total_us_ += waited_us;
+    if (waited_us > wait_max_us_) wait_max_us_ = waited_us;
+    if (done) return true;
+    disableFrameSwap("no frame end after swap");
+    return false;
+  }
+
+  bool prepareHidden() {
+    if (!finishSwap()) return false;
+    if (full_sync_) {
+      copyRows(0, _fb_height);
+      full_sync_ = false;
+    }
+    return true;
+  }
+
+  void copyRows(int32_t first, int32_t count) {
+    const uint32_t started_us = micros();
+    const size_t offset = static_cast<size_t>(first) * _fb_width;
+    const size_t bytes =
+        static_cast<size_t>(count) * _fb_width * sizeof(uint16_t);
+    uint16_t* hidden = framebuffers_[active_index_ ^ 1U] + offset;
+    memcpy(hidden, framebuffers_[active_index_] + offset, bytes);
+    Cache_WriteBack_Addr(reinterpret_cast<uint32_t>(hidden), bytes);
+    const uint32_t copied_us = micros() - started_us;
+    sync_total_us_ += copied_us;
+    if (copied_us > sync_max_us_) sync_max_us_ = copied_us;
+    sync_kb_ += static_cast<uint32_t>(bytes / 1024U);
+  }
+
+  void disableFrameSwap(const char* reason) {
+    // Back to drawing into the shown framebuffer (the previous behavior).
+    frame_swap_ = false;
+    frame_open_ = false;
+    swap_pending_ = false;
+    full_sync_ = false;
+    _framebuffer = framebuffers_[active_index_];
+    Serial.printf("[Display/S3] UI frame swap disabled: %s\n",
+                  reason ? reason : "unknown");
+  }
+
+  // Aggregated timings, logged at most every 30 seconds.
+  void noteFrame() {
+    ++frames_;
+    const uint32_t now_ms = millis();
+    if (!stats_started_ms_) {
+      stats_started_ms_ = now_ms ? now_ms : 1;
+      return;
+    }
+    if (now_ms - stats_started_ms_ < 30000U) return;
+    Serial.printf(
+        "[Display/S3] UI frame swap: frames=%lu wait avg=%lu max=%lu us, "
+        "sync avg=%lu max=%lu us, %lu KB\n",
+        static_cast<unsigned long>(frames_),
+        static_cast<unsigned long>(wait_total_us_ / frames_),
+        static_cast<unsigned long>(wait_max_us_),
+        static_cast<unsigned long>(sync_total_us_ / frames_),
+        static_cast<unsigned long>(sync_max_us_),
+        static_cast<unsigned long>(sync_kb_));
+    stats_started_ms_ = now_ms ? now_ms : 1;
+    frames_ = 0;
+    wait_total_us_ = 0;
+    wait_max_us_ = 0;
+    sync_total_us_ = 0;
+    sync_max_us_ = 0;
+    sync_kb_ = 0;
+  }
+
   esp_lcd_panel_handle_t panel_handle_ = nullptr;
   uint16_t* framebuffers_[2] = {nullptr, nullptr};
   uint8_t active_index_ = 0;
@@ -576,6 +769,18 @@ class GuitionAtomicRgbDisplay final : public Arduino_RGB_Display {
   volatile bool restart_one_shot_armed_ = false;
   volatile bool restart_vsync_seen_ = false;
   volatile uint32_t restart_eof_baseline_ = 0;
+  bool frame_swap_ = false;
+  bool frame_open_ = false;
+  bool swap_pending_ = false;
+  bool full_sync_ = false;
+  uint32_t swap_eof_start_ = 0;
+  uint32_t stats_started_ms_ = 0;
+  uint32_t frames_ = 0;
+  uint32_t wait_total_us_ = 0;
+  uint32_t wait_max_us_ = 0;
+  uint32_t sync_total_us_ = 0;
+  uint32_t sync_max_us_ = 0;
+  uint32_t sync_kb_ = 0;
 };
 
 Arduino_DataBus* g_panel_bus = nullptr;
@@ -735,6 +940,7 @@ bool initDisplay() {
   }
 
   g_gfx->fillScreen(0x0000);
+  if (kUiFrameSwap) g_gfx->enableFrameSwap();
   g_display_ready = true;
   Serial.printf(
       "[Device/GUITION ESP32-4848S040] Display ready, test=%s, "
@@ -922,6 +1128,7 @@ void DeviceGuitionESP324848S040::update() {
 void DeviceGuitionESP324848S040::displayPushPixels(
     int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* data) {
   if (!g_display_ready || !g_gfx || !data || w <= 0 || h <= 0) return;
+  g_gfx->openFrame();
   g_gfx->draw16bitRGBBitmap(
       static_cast<int16_t>(x), static_cast<int16_t>(y),
       const_cast<uint16_t*>(data), static_cast<int16_t>(w),
@@ -950,7 +1157,15 @@ bool DeviceGuitionESP324848S040::displayTryFullFramePreview(
 
 bool DeviceGuitionESP324848S040::displayBeginAtomicFrame(
     const char* reason) {
+  // With UI frame swap every frame is shown whole; callers then keep their
+  // normal, smaller invalidation.
+  if (g_gfx && g_gfx->frameSwapEnabled()) return false;
   return g_display_ready && g_gfx && g_gfx->beginAtomicFrame(reason);
+}
+
+void DeviceGuitionESP324848S040::displaySyncArea(int32_t x, int32_t y,
+                                                 int32_t w, int32_t h) {
+  if (g_display_ready && g_gfx) g_gfx->syncArea(x, y, w, h);
 }
 
 void DeviceGuitionESP324848S040::displayUpdateCheckGuardBegin() {
@@ -997,7 +1212,7 @@ void DeviceGuitionESP324848S040::displayUpdateCheckGuardEnd() {
 void DeviceGuitionESP324848S040::displayWaitDMA() {}
 
 void DeviceGuitionESP324848S040::displayFillScreen(uint16_t color) {
-  if (g_display_ready && g_gfx) g_gfx->fillScreen(color);
+  if (g_display_ready && g_gfx) g_gfx->fillBoth(color);
 }
 
 void DeviceGuitionESP324848S040::displaySetRotation(uint8_t rotation) {
@@ -1132,7 +1347,12 @@ void DeviceGuitionESP324848S040::displayPowerSaveOff() {
 }
 
 void DeviceGuitionESP324848S040::displayWaitDisplay() {
-  if (g_display_ready && g_gfx) g_gfx->commitAtomicFrame();
+  if (!g_display_ready || !g_gfx) return;
+  if (g_gfx->frameSwapEnabled()) {
+    g_gfx->commitFrame();
+  } else {
+    g_gfx->commitAtomicFrame();
+  }
 }
 
 void DeviceGuitionESP324848S040::prepareForRestart() {

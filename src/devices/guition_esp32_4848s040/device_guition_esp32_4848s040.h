@@ -42,8 +42,11 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
                                 const uint16_t* data, size_t data_size,
                                 bool byte_swap);
 // Prepare the inactive RGB framebuffer for one tear-free full-screen redraw.
-// Normal partial UI updates continue to use the active framebuffer directly.
+// With UI frame swap every frame is already shown whole; this returns false.
 bool displayBeginAtomicFrame(const char* reason);
+// UI frame swap: copies the panel rows of an area LVGL reports as missing in
+// the hidden framebuffer (LVGL coordinates) before it draws the next frame.
+void displaySyncArea(int32_t x, int32_t y, int32_t w, int32_t h);
 // Temporarily reduce RGB scanout bandwidth around the HTTPS version check.
 void displayUpdateCheckGuardBegin();
 void displayUpdateCheckGuardEnd();

@@ -4,8 +4,17 @@
 #include "src/devices/device_select.h"
 #include "src/devices/guition_esp32_4848s040/s3_diagnostics.h"
 #include "src/core/diagnostics/popup_timing.h"
+// Boards that draw every LVGL frame into a hidden framebuffer and show it at
+// a panel frame boundary, so a redraw never appears band by band. LVGL's
+// sync callback reports the areas the hidden framebuffer misses before each
+// frame (the areas of the previous frame it does not redraw).
+#if defined(DEVICE_GUITION_JC8012P4A1_V2) || \
+    defined(DEVICE_GUITION_ESP32_4848S040)
+#define HOMETILES_UI_FRAME_SWAP 1
+#endif
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
-    defined(DEVICE_GUITION_JC1060P470C_FAMILY)
+    defined(DEVICE_GUITION_JC1060P470C_FAMILY) || \
+    defined(HOMETILES_UI_FRAME_SWAP)
 #include "src/devices/active_device.h"
 #endif
 #include "esp_heap_caps.h"
@@ -171,7 +180,8 @@ static constexpr size_t kLargeDrawPsramReserveBytes = 8 * 1024 * 1024;
 
 static inline void commit_display_if_last(lv_display_t* lv_disp) {
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
-    defined(DEVICE_GUITION_JC1060P470C_FAMILY)
+    defined(DEVICE_GUITION_JC1060P470C_FAMILY) || \
+    defined(DEVICE_GUITION_JC8012P4A1_V2)
   if (lv_display_flush_is_last(lv_disp)) {
     DeviceImpl::displayCommit();
   }
@@ -751,6 +761,17 @@ void IRAM_ATTR DisplayManager::flush_cb(lv_display_t *lv_disp, const lv_area_t *
   lv_display_flush_ready(lv_disp);
 }
 
+#if defined(HOMETILES_UI_FRAME_SWAP)
+// Called before LVGL draws a frame, once per area of the previous frame that
+// this frame does not redraw: the hidden framebuffer copies it from the
+// shown one, so the next swap shows a complete picture.
+void DisplayManager::sync_cb(lv_display_t* lv_disp, const lv_area_t* area) {
+  DeviceImpl::displaySyncArea(area->x1, area->y1, area->x2 - area->x1 + 1,
+                              area->y2 - area->y1 + 1);
+  lv_display_sync_ready(lv_disp);
+}
+#endif
+
 // ========== Touch Callback ==========
 // IRAM_ATTR keeps frequent touch polling in internal RAM for responsive input.
 void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *data) {
@@ -872,6 +893,9 @@ bool DisplayManager::init() {
   }
 
   lv_display_set_flush_cb(disp, flush_cb);
+#if defined(HOMETILES_UI_FRAME_SWAP)
+  lv_display_set_sync_cb(disp, sync_cb);
+#endif
 
 #if defined(DEVICE_M5STACKS_TAB5)
   lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565_SWAPPED);

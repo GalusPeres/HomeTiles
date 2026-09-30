@@ -159,7 +159,7 @@ inline bool framebuffer_ready = true, mirror_ok = true;
 inline int mirror_writes = 0, cpu_writes = 0, dirty_marks = 0;
 struct Timeout {};
 namespace p4_dsi_camera_presenter {
-uint16_t* Presenter::activeFramebuffer() const {
+uint16_t* Presenter::uiFramebuffer() {
   return framebuffer_ready ? framebuffer.data() : nullptr;
 }
 bool Presenter::noteUiWrite(int32_t x, int32_t y, int32_t w, int32_t h, bool ppa) {

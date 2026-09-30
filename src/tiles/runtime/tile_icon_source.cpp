@@ -455,22 +455,19 @@ uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
 }
 
 namespace {
-// Styles a card's controls. `surfaces_only` recolors just the resting
-// surfaces for the card's current state (a card press): the buttons are not
-// pressed then, and adding their shared style again would restyle their
-// subtree.
-void style_controls(lv_obj_t* card, bool surfaces_only) {
+// Styles a card's controls from its resting and pressed color.
+void style_controls(lv_obj_t* card) {
   bool known = false;
   bool see_through = false;
   lv_color_t color = lv_color_white();
   lv_color_t raised = lv_color_white();
+  uint32_t surface_pressed = 0;
   // Controls sit on the card or one level deeper (Climate - and + inside
   // their target pill); a button on a surface presses one control step above
   // it (tone_color::Fill::raised_color).
   auto style = [&](lv_obj_t* obj) {
     const bool press = tile_icon_disc::is_control(obj);
     if (!press && !tile_icon_disc::is_surface(obj)) return;
-    if (press && surfaces_only) return;
     if (!known) {
       // The controls take the circle's color only with tile color "From
       // icon"; with Global or Custom they take the neutral step.
@@ -484,22 +481,23 @@ void style_controls(lv_obj_t* card, bool surfaces_only) {
                            (cover_tints(card) && tile_icon_disc::icon_color_tints(rgb));
       const bool tinted = disc && tile_icon_disc::glow_of(disc) && follows;
       see_through = tile_icon_disc::see_through(card);
-      const tone_color::Fill fill = tone_color::fill(tile_icon_disc::state_color(card), rgb, tinted,
-                                                     ui_surface_style::icon_glow_percent(), see_through);
+      const uint8_t percent = ui_surface_style::icon_glow_percent();
+      const tone_color::Fill fill =
+          tone_color::fill(tile_icon_disc::card_state_color(card, false), rgb, tinted, percent, see_through);
       color = lv_color_hex(fill.control_color);
       raised = lv_color_hex(fill.raised_color);
-    }
-    if (surfaces_only) {
-      lv_style_value_t value;
-      if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, LV_PART_MAIN) != LV_STYLE_RES_FOUND ||
-          !lv_color_eq(value.color, color)) {
-        lv_obj_set_style_bg_color(obj, color, LV_PART_MAIN);
-      }
-      return;
+      // A resting surface keeps its step above the pressed card too.
+      surface_pressed =
+          tone_color::fill(tile_icon_disc::card_state_color(card, true), rgb, tinted, percent, see_through)
+              .control_color;
     }
     const bool on_surface = press && tile_icon_disc::is_surface(lv_obj_get_parent(obj));
     ui_surface_style::apply_control_fill(obj, on_surface ? raised : color,
                                          press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN, see_through);
+    if (!press) {
+      tile_icon_disc::set_fill_colors(obj, lv_color_to_u32(color) & 0xFFFFFF, surface_pressed);
+      tile_icon_disc::fade_with_card(obj);
+    }
   };
   const uint32_t count = lv_obj_get_child_count(card);
   for (uint32_t i = 0; i < count; ++i) {
@@ -510,16 +508,29 @@ void style_controls(lv_obj_t* card, bool surfaces_only) {
   }
 }
 
-// tile_icon_disc::g_card_state_hook: a pressed card's resting controls (the
-// Climate target pill) keep their step above its pressed color, like the
-// circles.
+// tile_icon_disc::g_card_state_hook: a card's resting controls (the Climate
+// target pill) take its pressed state and fade with it like the circles
+// (tile_icon_disc::fade_with_card); the buttons keep their own presses.
 void follow_card_press(lv_obj_t* card) {
-  if (card) style_controls(card, true);
+  if (!card) return;
+  const bool pressed = lv_obj_has_state(card, LV_STATE_PRESSED);
+  auto follow = [pressed](lv_obj_t* obj) {
+    if (tile_icon_disc::is_surface(obj) && lv_obj_has_state(obj, LV_STATE_PRESSED) != pressed) {
+      lv_obj_set_state(obj, LV_STATE_PRESSED, pressed);
+    }
+  };
+  const uint32_t count = lv_obj_get_child_count(card);
+  for (uint32_t i = 0; i < count; ++i) {
+    lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
+    follow(child);
+    const uint32_t inner = lv_obj_get_child_count(child);
+    for (uint32_t j = 0; j < inner; ++j) follow(lv_obj_get_child(child, static_cast<int32_t>(j)));
+  }
 }
 }  // namespace
 
 void refresh_controls(lv_obj_t* card) {
-  if (card) style_controls(card, false);
+  if (card) style_controls(card);
 }
 
 void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb) {

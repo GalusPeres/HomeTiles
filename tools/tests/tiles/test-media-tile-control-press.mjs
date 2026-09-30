@@ -180,33 +180,51 @@ int main() {
            rgb(v.color) == raised && "The press fades from the same resting color"); }
   // Play is not touched.
   { lv_style_value_t v; assert(lv_obj_get_local_style_prop(play, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN | LV_STATE_PRESSED) != LV_STYLE_RES_FOUND); }
-  // A pressed card (6 % lighter) takes the circle and the resting pill along,
-  // so both keep their step above it; the buttons stay as they are; release
-  // restores them.
+  // A pressed card (6 % lighter) takes the circle and the resting pill along
+  // with the theme's press timing: they fade with the card instead of jumping
+  // ahead of it (b127-b130: the circle flashed bright on press and dark on
+  // release), keep their step above it, and the buttons stay as they are.
   {
     const uint32_t pressed_card = 0x583F20;
+    lv_display_set_flush_cb(display, [](lv_display_t* d, const lv_area_t*, uint8_t*) { lv_display_flush_ready(d); });
+    lv_obj_set_size(card, 64, 64);
+    lv_obj_set_size(disc, 20, 20);
+    lv_obj_set_size(pill, 40, 20);
+    lv_obj_set_pos(pill, 0, 30);
     lv_obj_set_style_bg_color(card, lv_color_hex(pressed_card), LV_PART_MAIN | LV_STATE_PRESSED);
+    tile_icon_disc::fade_with_card(disc);  // as tile_icon_disc::create() does
     tile_icon_disc::apply_fill(disc);
+    tile_icon_source::refresh_controls(card);
     tile_icon_disc::follow_card_states(card);
     tile_icon_disc::follow_card_states(card);
     tile_icon_disc::g_card_state_hook = &tile_icon_source::follow_card_press;
+    lv_refr_now(display);  // rendered widgets run their transitions
     const uint32_t events = lv_obj_get_event_count(card);
-    const uint32_t rest_disc = rgb(lv_obj_get_style_bg_color(disc, LV_PART_MAIN));
+    auto now = [&](lv_obj_t* obj) { return rgb(lv_obj_get_style_bg_color(obj, LV_PART_MAIN)); };
+    auto step = [&](int ms) { for (int t = 0; t < ms; t += 10) { lv_tick_inc(10); lv_timer_handler(); } };
+    const uint32_t rest_disc = now(disc);
+    const tone_color::Fill up = tone_color::fill(0x482F10, 0xEF8402, true, icon_glow::kDefault);
+    const tone_color::Fill down = tone_color::fill(pressed_card, 0xEF8402, true, icon_glow::kDefault);
+    assert(rest_disc == up.disc_color && now(pill) == pill_color);
     uint32_t plus_color; lv_opa_t plus_opa; pressed(plus, plus_color, plus_opa);
     lv_obj_add_state(card, LV_STATE_PRESSED);
-    const tone_color::Fill down = tone_color::fill(pressed_card, 0xEF8402, true, icon_glow::kDefault);
-    if (rgb(lv_obj_get_style_bg_color(disc, LV_PART_MAIN)) != down.disc_color ||
-        rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) != down.control_color) {
-      std::printf("FAIL card press: disc #%06X pill #%06X\n", (unsigned)rgb(lv_obj_get_style_bg_color(disc, LV_PART_MAIN)),
-                  (unsigned)rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)));
+    step(10);
+    assert(now(disc) != down.disc_color && "The circle fades with the card, it does not jump ahead");
+    step(200);
+    if (now(disc) != down.disc_color || now(pill) != down.control_color) {
+      std::printf("FAIL card press: disc #%06X pill #%06X\n", (unsigned)now(disc), (unsigned)now(pill));
       return 1;
     }
     { lv_style_value_t v;
       assert(lv_obj_get_local_style_prop(plus, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN | LV_STATE_PRESSED) == LV_STYLE_RES_FOUND &&
              rgb(v.color) == plus_color && "A card press leaves the buttons alone"); }
     lv_obj_remove_state(card, LV_STATE_PRESSED);
-    assert(rgb(lv_obj_get_style_bg_color(disc, LV_PART_MAIN)) == rest_disc && "Release restores the circle");
-    assert(rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) == pill_color && "Release restores the pill");
+    step(50);
+    assert(now(disc) == down.disc_color && now(pill) == down.control_color &&
+           "Like the card, they wait for the theme's release delay");
+    step(250);
+    assert(now(disc) == rest_disc && "Release restores the circle");
+    assert(now(pill) == pill_color && "Release restores the pill");
     assert(events == 1 && "The card follows its state once");
     tile_icon_disc::g_card_state_hook = nullptr;
   }

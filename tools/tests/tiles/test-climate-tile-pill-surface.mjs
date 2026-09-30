@@ -36,8 +36,11 @@ assert.ok(preview.includes("tileElem.style.setProperty('--control-fill', rgba(co
   'at the control opacity');
 assert.match(source, /icon_fill_marker\(card, marker\) &&\s*marker > 0 && tile_icon_disc::icon_color_tints\(rgb\)/,
   'Device pill: tinted only with tile color From icon');
-// A card press recolors the resting pill for the pressed card, so it keeps
-// its step like the opaque circle; the buttons are left alone.
-assert.match(source, /if \(press && surfaces_only\) return;/);
+// A card press takes the resting pill along with the theme's press fade
+// (its pressed color keeps the step above the pressed card); the buttons
+// keep their own presses.
+assert.ok(source.includes('tile_icon_disc::set_fill_colors(obj, lv_color_to_u32(color) & 0xFFFFFF, surface_pressed);'));
+assert.ok(source.includes('tile_icon_disc::fade_with_card(obj);'));
+assert.match(source, /if \(tile_icon_disc::is_surface\(obj\) && lv_obj_has_state\(obj, LV_STATE_PRESSED\) != pressed\)/);
 assert.ok(source.includes('tile_icon_disc::g_card_state_hook = &follow_card_press;'));
 console.log('Climate tile pill follows the popup control rule');

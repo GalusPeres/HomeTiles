@@ -86,18 +86,59 @@ inline bool icon_color_tints(uint32_t rgb) {
   return r != g || g != b;
 }
 
-// A card's color in its current state: the pressed color the renderers set
-// while it is pressed (not a running transition toward it), else its resting
-// color.
-inline uint32_t state_color(lv_obj_t* card) {
+// A card's color at rest (`pressed` false) or pressed: the colors the
+// renderers and tints set for those states (not a running transition), else
+// its current color.
+inline uint32_t card_state_color(lv_obj_t* card, bool pressed) {
   if (!card) return 0x000000;
-  const lv_style_selector_t selector =
-      LV_PART_MAIN | (lv_obj_has_state(card, LV_STATE_PRESSED) ? LV_STATE_PRESSED : LV_STATE_DEFAULT);
   lv_style_value_t value;
-  if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &value, selector) == LV_STYLE_RES_FOUND) {
+  if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &value, LV_PART_MAIN | LV_STATE_DEFAULT) ==
+      LV_STYLE_RES_FOUND) {
+    lv_style_value_t down;
+    if (pressed && lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &down, LV_PART_MAIN | LV_STATE_PRESSED) ==
+                       LV_STYLE_RES_FOUND) {
+      return lv_color_to_u32(down.color) & 0xFFFFFF;
+    }
     return lv_color_to_u32(value.color) & 0xFFFFFF;
   }
   return lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
+}
+
+// A pressed tile fades to its lighter pressed color with the theme's press
+// transition. Circles and resting controls take the card's pressed state
+// (follow_card_state) with the same timing (LV_THEME_DEFAULT_TRANSITION_TIME,
+// back after the theme's 70 ms delay), so they keep their step above the card
+// during the whole fade; an instant recolor ran ahead of the card and flashed.
+inline void fade_with_card(lv_obj_t* obj) {
+  if (!obj) return;
+  static const lv_style_prop_t kProps[] = {LV_STYLE_BG_COLOR, static_cast<lv_style_prop_t>(0)};
+  static lv_style_transition_dsc_t down, back;
+  static bool ready = false;
+  if (!ready) {
+    lv_style_transition_dsc_init(&down, kProps, lv_anim_path_linear, LV_THEME_DEFAULT_TRANSITION_TIME, 0, nullptr);
+    lv_style_transition_dsc_init(&back, kProps, lv_anim_path_linear, LV_THEME_DEFAULT_TRANSITION_TIME, 70, nullptr);
+    ready = true;
+  }
+  lv_style_value_t value;
+  if (lv_obj_get_local_style_prop(obj, LV_STYLE_TRANSITION, &value, LV_PART_MAIN | LV_STATE_PRESSED) !=
+      LV_STYLE_RES_FOUND) {
+    lv_obj_set_style_transition(obj, &back, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_transition(obj, &down, LV_PART_MAIN | LV_STATE_PRESSED);
+  }
+}
+
+// Sets the resting and pressed fill of a circle or resting control; only a
+// change touches the styles.
+inline void set_fill_colors(lv_obj_t* obj, uint32_t rest, uint32_t pressed) {
+  const lv_style_selector_t selectors[] = {LV_PART_MAIN | LV_STATE_DEFAULT, LV_PART_MAIN | LV_STATE_PRESSED};
+  const uint32_t colors[] = {rest, pressed};
+  for (int i = 0; i < 2; ++i) {
+    lv_style_value_t value;
+    if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, selectors[i]) != LV_STYLE_RES_FOUND ||
+        (lv_color_to_u32(value.color) & 0xFFFFFF) != colors[i]) {
+      lv_obj_set_style_bg_color(obj, lv_color_hex(colors[i]), selectors[i]);
+    }
+  }
 }
 
 // Whether a card lets the background through (screensaver tiles below full
@@ -116,8 +157,9 @@ inline lv_obj_t* card_of(lv_obj_t* obj) {
   return host;
 }
 
-// The color of the nearest opaque background behind `obj` (the tile card).
-inline uint32_t card_color(lv_obj_t* obj) { return state_color(card_of(obj)); }
+// The resting color of the nearest opaque background behind `obj` (the tile
+// card).
+inline uint32_t card_color(lv_obj_t* obj) { return card_state_color(card_of(obj), false); }
 
 // An icon too dark to read on its circle is shown lighter in its own hue
 // (tone_color::readable_icon). The color it was given stays in these unused
@@ -172,60 +214,54 @@ inline lv_obj_t* icon_of(lv_obj_t* disc) {
 // follows the icon. Stays null in host tests.
 inline void (*g_icon_color_hook)(lv_obj_t* disc) = nullptr;
 
-// The fill of a disc for the card behind it and its icon's color
-// (tone_color::fill); `card` and `see_through_card` report that card.
-inline tone_color::Fill disc_fill(lv_obj_t* disc, uint32_t& card, bool& see_through_card) {
+// The fill of a disc for the card behind it (at rest or pressed) and its
+// icon's color (tone_color::fill); `card` and `see_through_card` report that
+// card.
+inline tone_color::Fill disc_fill(lv_obj_t* disc, bool pressed, uint32_t& card, bool& see_through_card) {
   lv_obj_t* icon = icon_of(disc);
   const uint32_t rgb = icon ? icon_color(icon) : 0xFFFFFF;
   const bool tinted = glow_of(disc) && icon_color_tints(rgb);
   lv_obj_t* host = card_of(disc);
-  card = state_color(host);
+  card = card_state_color(host, pressed);
   see_through_card = see_through(host);
   return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent(), see_through_card);
 }
 
-inline void set_disc_color(lv_obj_t* disc, uint32_t rgb) {
-  const lv_color_t color = lv_color_hex(rgb);
-  if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color)) {
-    lv_obj_set_style_bg_color(disc, color, 0);
-  }
-}
-
-// Color and opacity of a disc from its mode, glow option, the card and the
-// icon's color (tone_color::fill). Global discs follow the global option
-// through the shared style, On discs always show, Off discs stay
-// transparent. The icon is shown readable on what is behind it.
+// Color and opacity of a disc from its mode, glow option, the card (at rest
+// and pressed) and the icon's color (tone_color::fill). Global discs follow
+// the global option through the shared style, On discs always show, Off
+// discs stay transparent. The icon is shown readable on the resting circle.
 inline void apply_fill(lv_obj_t* disc) {
   if (!is_disc(disc)) return;
   const Mode mode = mode_of(disc);
   lv_obj_t* icon = icon_of(disc);
   const uint32_t rgb = icon ? icon_color(icon) : 0xFFFFFF;
-  uint32_t card = 0;
+  uint32_t card = 0, card_pressed = 0;
   bool see_through_card = false;
-  const tone_color::Fill fill = disc_fill(disc, card, see_through_card);
-  set_disc_color(disc, fill.disc_color);
+  const tone_color::Fill fill = disc_fill(disc, false, card, see_through_card);
+  const tone_color::Fill pressed = disc_fill(disc, true, card_pressed, see_through_card);
+  set_fill_colors(disc, fill.disc_color, pressed.disc_color);
   ui_surface_style::apply_icon_disc(disc, mode == Mode::Off, mode == Mode::Global, see_through_card);
   const bool shown = mode == Mode::On || (mode == Mode::Global && ui_surface_style::icon_discs_shown());
   show_readable(icon, rgb, shown && fill.disc_opa ? fill.disc : card);
   if (g_icon_color_hook) g_icon_color_hook(disc);
 }
 
-// A pressed tile shows its lighter pressed color. Opaque circles follow the
-// card's state so they keep their step above it while the finger is down,
-// and so do its resting controls (g_card_state_hook, tile_icon_source). Only
-// fills change: the icon keeps its color, so a press never restyles a label.
+// The card's pressed state reaches its discs (fade_with_card) and, through
+// g_card_state_hook (tile_icon_source), its resting controls. Only fills
+// change with it; the icon inside a half-height disc keeps its color.
 inline void (*g_card_state_hook)(lv_obj_t* card) = nullptr;
 
 inline void follow_card_state(lv_event_t* event) {
   lv_obj_t* card = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
   if (!card) return;
+  const bool pressed = lv_obj_has_state(card, LV_STATE_PRESSED);
   const uint32_t count = lv_obj_get_child_count(card);
   for (uint32_t i = 0; i < count; ++i) {
     lv_obj_t* child = lv_obj_get_child(card, static_cast<int32_t>(i));
-    if (!is_disc(child)) continue;
-    uint32_t card_rgb = 0;
-    bool see_through_card = false;
-    set_disc_color(child, disc_fill(child, card_rgb, see_through_card).disc_color);
+    if (is_disc(child) && lv_obj_has_state(child, LV_STATE_PRESSED) != pressed) {
+      lv_obj_set_state(child, LV_STATE_PRESSED, pressed);
+    }
   }
   if (g_card_state_hook) g_card_state_hook(card);
 }
@@ -339,6 +375,7 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
   // New discs follow the global option until the tile's own mode is applied.
   ui_surface_style::apply_icon_disc(disc, false, true);
+  fade_with_card(disc);
   return disc;
 }
 

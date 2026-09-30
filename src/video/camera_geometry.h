@@ -6,17 +6,22 @@
 
 namespace camera_geometry {
 
-constexpr uint16_t evenCeil(uint32_t numerator, uint32_t denominator) {
-  const uint32_t rounded = (numerator + denominator - 1U) / denominator;
-  return static_cast<uint16_t>((rounded + 1U) & ~1U);
+// Nearest even value of numerator / denominator.
+constexpr uint16_t evenRound(uint32_t numerator, uint32_t denominator) {
+  return static_cast<uint16_t>(
+      (numerator + denominator) / (2U * denominator) * 2U);
 }
 
-// The camera frame always fills the popup width. A 16:9 height is rounded up
-// to an even value so FFmpeg can produce yuv420 JPEG frames without padding
-// the visible image differently on each display profile.
+// The camera frame fills the popup width, rounded down to a multiple of 8:
+// the ESP32-P4 JPEG decoder rejects frames whose width * height is not
+// divisible by 8 (IDF jpeg_parse_marker.c), which hit the 1024x600 layout
+// (558x314, issue #63). The 16:9 height is the nearest even value so FFmpeg
+// can produce yuv420 frames and the Bridge's 16:9 check (|w*9 - h*16| <= 16)
+// accepts it. 1280x800 752x424, 1280x720 672x378 and 480x480 448x252 are
+// unchanged; 1024x600 is 552x310, centred in its 558 px content width.
 inline constexpr uint16_t kWidth =
-    static_cast<uint16_t>(popup_layout::kContentWidth & ~1);
-inline constexpr uint16_t kHeight = evenCeil(
+    static_cast<uint16_t>(popup_layout::kContentWidth & ~7);
+inline constexpr uint16_t kHeight = evenRound(
     static_cast<uint32_t>(kWidth) * 9U, 16U);
 inline constexpr uint16_t kCornerRadius =
     static_cast<uint16_t>(popup_layout::scale480(18));
@@ -38,5 +43,11 @@ static_assert(kWidth >= 320 && kWidth <= 752,
               "Camera popup width is outside the supported P4 range");
 static_assert(kHeight >= 180 && kHeight <= 424,
               "Camera popup height is outside the supported P4 range");
+static_assert((static_cast<uint32_t>(kWidth) * kHeight) % 8U == 0U,
+              "The P4 JPEG decoder needs width * height divisible by 8");
+static_assert(kHeight % 2U == 0U, "yuv420 JPEG frames need an even height");
+static_assert(static_cast<int32_t>(kWidth) * 9 - static_cast<int32_t>(kHeight) * 16 <= 16 &&
+                  static_cast<int32_t>(kHeight) * 16 - static_cast<int32_t>(kWidth) * 9 <= 16,
+              "The Bridge accepts 16:9 frames within 16 of w*9 == h*16");
 
 }  // namespace camera_geometry

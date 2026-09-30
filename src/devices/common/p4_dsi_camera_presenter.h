@@ -91,6 +91,7 @@ class Presenter {
                             int32_t y, int32_t w, int32_t h) const;
   void drainRefreshSignal() const;
   bool waitRefreshDone() const;
+  void finishPendingSwap();
   [[noreturn]] void restartAfterTimeout(int32_t x, int32_t y, int32_t w,
                                         int32_t h, int32_t source_stride,
                                         uint8_t rotation) const;
@@ -102,6 +103,10 @@ class Presenter {
   uint8_t active_index_ = 0;
   bool ready_ = false;
   bool double_buffer_active_ = false;
+  // A swap was requested but the panel may still scan the previous (now
+  // inactive) framebuffer until its next refresh. Nothing writes into the
+  // inactive framebuffer before finishPendingSwap() confirmed that refresh.
+  bool refresh_pending_ = false;
   bool mirror_dirty_ = false;
   int32_t dirty_x1_ = 0;
   int32_t dirty_y1_ = 0;

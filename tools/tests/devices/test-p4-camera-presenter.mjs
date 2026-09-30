@@ -79,10 +79,57 @@ requireMarker(
 );
 const swapIndex = presenterSource.indexOf('const esp_err_t swap_err');
 const refreshDrainIndex = presenterSource.indexOf('drainRefreshSignal();', swapIndex);
-const refreshWaitIndex = presenterSource.indexOf('if (!waitRefreshDone())', swapIndex);
+const pendingIndex = presenterSource.indexOf('refresh_pending_ = true;', swapIndex);
 assert.ok(
-  swapIndex >= 0 && refreshDrainIndex > swapIndex && refreshWaitIndex > refreshDrainIndex,
-  'continuous VSYNC semaphore must be drained after the accepted draw and before waiting',
+  swapIndex >= 0 && refreshDrainIndex > swapIndex && pendingIndex > refreshDrainIndex,
+  'continuous VSYNC semaphore must be drained after the accepted draw, then the refresh stays pending',
+);
+
+// The UI loop no longer waits up to one panel refresh after every camera
+// swap (about 6 ms per frame on average at 68.6 Hz). The wait moved to the
+// next write into the then inactive framebuffer, which the panel may still
+// scan until that refresh: the start of the next present(), begin() and end().
+const presentBody = presenterSource.slice(
+  presenterSource.indexOf('bool Presenter::present('),
+  presenterSource.indexOf('void Presenter::end()'),
+);
+assert.ok(
+  presentBody.indexOf('finishPendingSwap();') >= 0 &&
+    presentBody.indexOf('finishPendingSwap();') < presentBody.indexOf('Dma2dArbiterGuard dma2d_guard') &&
+    presentBody.indexOf('finishPendingSwap();') < presentBody.indexOf('syncUiToInactive()'),
+  'present() must confirm the previous swap before it writes the inactive framebuffer',
+);
+assert.ok(
+  !presentBody.slice(presentBody.indexOf('const esp_err_t swap_err')).includes('waitRefreshDone'),
+  'present() must not wait for the refresh after its own swap',
+);
+const finishBody = presenterSource.slice(
+  presenterSource.indexOf('void Presenter::finishPendingSwap()'),
+  presenterSource.indexOf('\n}\n', presenterSource.indexOf('void Presenter::finishPendingSwap()')),
+);
+requireMarker(finishBody, 'if (!refresh_pending_) return;', 'pending swap guard');
+requireMarker(finishBody, 'if (!waitRefreshDone())', 'deferred DSI swap confirmation');
+requireMarker(finishBody, 'restartAfterDisplayTimeout(', 'deferred fail-closed refresh timeout');
+requireMarker(finishBody, 'refresh_pending_ = false;', 'pending swap reset');
+const beginBody = presenterSource.slice(
+  presenterSource.indexOf('bool Presenter::begin()'),
+  presenterSource.indexOf('bool Presenter::syncUiToInactive()'),
+);
+assert.ok(
+  beginBody.indexOf('finishPendingSwap();') >= 0 &&
+    beginBody.indexOf('finishPendingSwap();') < beginBody.indexOf('std::memcpy(inactive'),
+  'begin() must confirm a pending swap before it copies into the inactive framebuffer',
+);
+const endBody = presenterSource.slice(presenterSource.indexOf('void Presenter::end()'));
+assert.ok(
+  endBody.indexOf('finishPendingSwap();') >= 0 &&
+    endBody.indexOf('finishPendingSwap();') < endBody.indexOf('double_buffer_active_ = false;'),
+  'end() must confirm a pending swap before the UI owns both framebuffers again',
+);
+assert.match(
+  presenterSource,
+  /refresh_pending_ = false;\s*fault_cooldown_until_ms_ = 0;/,
+  'init resets the pending swap',
 );
 requireMarker(deviceSelect, '#define DEVICE_P4_IDF_DSI', 'shared DSI profile group');
 assert.match(

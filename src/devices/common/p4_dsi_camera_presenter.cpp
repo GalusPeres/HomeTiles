@@ -28,13 +28,13 @@ bool rectInside(int32_t x, int32_t y, int32_t w, int32_t h,
 // TEMPORARY (b133): split the camera presentation time into its steps to see
 // whether 30 FPS fits into the UI loop. Remove after the measurement.
 enum PresentStep : uint8_t {
+  kStepVsync,  // the previous frame's pending refresh, see finishPendingSwap()
   kStepLock,
   kStepSyncUi,
   kStepSourceCache,
   kStepPpa,
   kStepOutputCache,
   kStepSwap,
-  kStepVsync,
   kStepCount,
 };
 
@@ -136,6 +136,7 @@ bool Presenter::init(const Config& config, esp_lcd_panel_handle_t panel,
   framebuffers_[1] = framebuffer1;
   active_index_ = 0;
   double_buffer_active_ = false;
+  refresh_pending_ = false;
   fault_cooldown_until_ms_ = 0;
   resetMirrorDirty();
   ready_ = panel_ && refresh_done_ && framebuffers_[0] && framebuffers_[1] &&
@@ -249,6 +250,7 @@ bool Presenter::noteUiWrite(int32_t x, int32_t y, int32_t w, int32_t h,
 
 bool Presenter::begin() {
   if (double_buffer_active_) return true;
+  finishPendingSwap();
   uint16_t* active = activeFramebuffer();
   uint16_t* inactive = inactiveFramebuffer();
   if (!active || !inactive ||
@@ -325,6 +327,23 @@ bool Presenter::waitRefreshDone() const {
   return false;
 }
 
+void Presenter::finishPendingSwap() {
+  if (!refresh_pending_) return;
+  // The refresh after the swap request is usually long over by the next
+  // camera frame, so this rarely waits. It keeps the rule that nothing
+  // writes into a framebuffer the panel may still scan.
+  if (!waitRefreshDone()) {
+    // The driver accepted the swap but did not confirm which framebuffer is
+    // now scanned. Writing into the guessed inactive one could tear the live
+    // picture, so restart with the pipeline quarantined.
+    restartAfterDisplayTimeout(
+        config_.device_name, "DSI framebuffer refresh", 0, 0,
+        config_.panel_width, config_.panel_height, config_.panel_width, 0,
+        kRefreshTimeoutMs);
+  }
+  refresh_pending_ = false;
+}
+
 [[noreturn]] void Presenter::restartAfterTimeout(
     int32_t x, int32_t y, int32_t w, int32_t h, int32_t source_stride,
     uint8_t rotation) const {
@@ -389,6 +408,10 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
 
   uint32_t marks[kStepCount + 1] = {};  // TEMPORARY (b133) present split
   marks[0] = micros();
+  // The previous frame's swap must be scanned before the now inactive
+  // framebuffer is written again.
+  finishPendingSwap();
+  marks[kStepVsync + 1] = micros();
   Dma2dArbiterGuard dma2d_guard(kDma2dLockTimeoutMs);
   if (!dma2d_guard.locked()) return false;
   marks[kStepLock + 1] = micros();
@@ -480,28 +503,23 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   }
   // The IDF refresh callback is a continuous VSYNC/frame-end signal, not a
   // one-shot completion owned by draw_bitmap(). Discard every boundary that
-  // happened before or during the draw call, then wait for the next one after
-  // the driver accepted the new framebuffer selection.
+  // happened before or during the draw call; the next one after this point
+  // confirms the new framebuffer. The UI loop does not wait for it here (up
+  // to one refresh, about 15 ms at 68.6 Hz): UI writes go to the new
+  // framebuffer at once, which the panel shows from that refresh on, and the
+  // next present() or end() waits before the old one is written again.
   drainRefreshSignal();
-  marks[kStepSwap + 1] = micros();
-  if (!waitRefreshDone()) {
-    // The driver accepted the swap but did not confirm which framebuffer is
-    // now scanned. Continuing with a guessed active index can make UI and PPA
-    // write into the live scanout buffer concurrently.
-    dma2d_guard.detach();
-    restartAfterDisplayTimeout(
-        config_.device_name, "DSI framebuffer refresh", dst_x, dst_y, dst_w,
-        dst_h, config_.panel_width, rotation, kRefreshTimeoutMs);
-  }
   active_index_ ^= 1U;
+  refresh_pending_ = true;
   noteSuccess(runtime);
-  marks[kStepVsync + 1] = micros();
+  marks[kStepSwap + 1] = micros();
   notePresentSplit(config_.device_name, marks);
   return true;
 }
 
 void Presenter::end() {
   if (!double_buffer_active_) return;
+  finishPendingSwap();
   double_buffer_active_ = false;
   resetMirrorDirty();
   Serial.printf("[CameraDisplay/%s] DSI double buffering ended; fb%u remains active\n",

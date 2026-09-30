@@ -334,82 +334,6 @@ void apply_cover(lv_obj_t* card) {
   refresh_controls(card);
 }
 
-// Song change: a visible "From cover" card fades from the old to the new
-// cover color instead of switching at once. Every step writes the in-between
-// color to the cover store and runs apply_cover, so tile, icon, discs,
-// controls and an open popup show what the rules give that color; the last
-// step writes the new color itself. Only between two real colors; every other
-// change applies at once.
-constexpr uint32_t kCoverFadeMs = 350;
-constexpr int32_t kCoverFadeEnd = 256;
-constexpr int kCoverFadeSlots = 8;
-
-struct CoverFade {
-  lv_obj_t* card = nullptr;  // only compared; LVGL ends the fade with the card
-  uint32_t from = 0;
-  uint32_t to = 0;
-};
-CoverFade g_cover_fades[kCoverFadeSlots];
-
-// The running fade of a card; nullptr finds a free slot.
-CoverFade* cover_fade(lv_obj_t* card) {
-  for (CoverFade& fade : g_cover_fades) {
-    if (fade.card == card) return &fade;
-  }
-  return nullptr;
-}
-
-uint32_t blend_rgb(uint32_t from, uint32_t to, int32_t step) {
-  uint32_t out = 0;
-  for (int shift = 16; shift >= 0; shift -= 8) {
-    const int32_t a = static_cast<int32_t>((from >> shift) & 0xFF);
-    const int32_t b = static_cast<int32_t>((to >> shift) & 0xFF);
-    out |= static_cast<uint32_t>(a + (b - a) * step / kCoverFadeEnd) << shift;
-  }
-  return out;
-}
-
-void cover_fade_step(void* var, int32_t step) {
-  lv_obj_t* card = static_cast<lv_obj_t*>(var);
-  const CoverFade* fade = cover_fade(card);
-  if (!fade) return;
-  const uint32_t rgb = step >= kCoverFadeEnd ? fade->to : blend_rgb(fade->from, fade->to, step);
-  uint32_t shown = 0;
-  // A grey in-between color would read as "no cover color" for one frame.
-  if (!tile_tint::has_hue(rgb) || (cover_color(card, shown) && shown == rgb)) return;
-  lv_obj_set_style_bg_color(card, lv_color_hex(rgb), kCoverStore);
-  apply_cover(card);
-}
-
-// The last step always shows the new color itself, whatever the path rounds.
-void cover_fade_completed(lv_anim_t* anim) { cover_fade_step(anim->var, kCoverFadeEnd); }
-
-void cover_fade_deleted(lv_anim_t* anim) {
-  if (CoverFade* fade = cover_fade(static_cast<lv_obj_t*>(anim->var))) *fade = CoverFade{};
-}
-
-bool start_cover_fade(lv_obj_t* card, uint32_t from, uint32_t to) {
-  if (!tile_tint::has_hue(from) || !tile_tint::has_hue(to)) return false;
-  if ((!cover_icon(card) && !cover_tile(card)) || !lv_obj_is_visible(card)) return false;
-  CoverFade* fade = cover_fade(nullptr);
-  if (!fade) return false;
-  fade->card = card;
-  fade->from = from;
-  fade->to = to;
-  lv_anim_t anim;
-  lv_anim_init(&anim);
-  lv_anim_set_var(&anim, card);
-  lv_anim_set_exec_cb(&anim, cover_fade_step);
-  lv_anim_set_values(&anim, 0, kCoverFadeEnd);
-  lv_anim_set_duration(&anim, kCoverFadeMs);
-  lv_anim_set_path_cb(&anim, lv_anim_path_ease_in_out);
-  lv_anim_set_completed_cb(&anim, cover_fade_completed);
-  lv_anim_set_deleted_cb(&anim, cover_fade_deleted);
-  if (lv_anim_start(&anim)) return true;
-  *fade = CoverFade{};
-  return false;
-}
-
 String layer_entity(const Tile& tile, const tile_icon_colors::Source& layer) {
   if (layer.mode == tile_icon_colors::SourceMode::None || !layer.enabled) return String();
   if (layer.self) return tile.sensor_entity;
@@ -603,12 +527,7 @@ void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb) {
   uint32_t stored = 0;
   const bool had = cover_color(card, stored);
   rgb &= 0xFFFFFF;
-  // A running fade compares with the color it heads for.
-  const CoverFade* fade = cover_fade(card);
-  if (had == known && (!known || (fade ? fade->to : stored) == rgb)) return;
-  // Stopping a fade keeps its in-between color, the next fade starts there.
-  if (fade) lv_anim_delete(card, cover_fade_step);
-  if (known && had && start_cover_fade(card, stored, rgb)) return;
+  if (had == known && (!known || stored == rgb)) return;
   if (known) lv_obj_set_style_bg_color(card, lv_color_hex(rgb), kCoverStore);
   else lv_obj_remove_local_style_prop(card, LV_STYLE_BG_COLOR, kCoverStore);
   apply_cover(card);

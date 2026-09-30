@@ -37,7 +37,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Version RPC `0x15e` also occurs on the stable 8-inch; not the cascade cause.
 - SDIO schematics: V1 5.1-kohm pull-ups/no series termination; 8-inch 51-kohm; Tab5 5.1-kohm/22-ohm series/switched WLAN power. Signal margin unproven.
 - Original `JC8012P4A1_C6.bin`/HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 needs CN5 and a 3.3 V UART.
-- Fix b6 passed reporter tests (two cameras 15-20 FPS, Web OTA); confirmed v0.6.9b1, shipped v0.6.10. Exact V1 keeps 1-bit/40 MHz, splits large RX into 512-byte CMD53 reads; other P4 profiles unchanged, S3 unaffected. Lower camera quality/FPS only as labeled diagnostic A/B.
+- Fix b6 passed reporter tests (two cameras 15-20 FPS, Web OTA); confirmed v0.6.9b1, shipped v0.6.10. Exact V1 keeps 1-bit/40 MHz, splits large RX into 512-byte CMD53 reads; other profiles unchanged. Lower camera quality/FPS only as labeled diagnostic A/B.
 
 ## ESP32-P4 network history
 
@@ -71,7 +71,6 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
 - Editable surfaces: control fill, white text; Select list = card + hairline, gap, inset selection.
-- S3 stalls/MQTT loss: far AP (-71 vs -47 dBm) at 11 dBm. b118: strongest AP, full power; HW pending.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
 - S3 froze adding Number to active screensaver (Web ok, manual reboot); cause unknown.
 
@@ -82,6 +81,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings in PSRAM, no extra framebuffers.
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
 - Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted. Media "From cover" b119 S3 ok.
+- LVGL 9.5 walks all objects per visible invalidate (S3 cover recolor 230 ms); fixed in 9.6.0 (lvgl#10306), upgrade planned.
 
 ## Radius and half-grid
 

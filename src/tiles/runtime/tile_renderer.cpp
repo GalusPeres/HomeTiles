@@ -3884,10 +3884,18 @@ static bool media_widgets_are_visible(const MediaTileWidgets& widgets) {
          media_obj_is_visible(widgets.play_pause_label);
 }
 
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
-// Guition S3 measurement: a cover change blocked the loop for about 400 ms
-// (under 80 ms before). update_media_tile_state logs where the time goes;
-// these sum the cover color's pick and apply within one state update.
+// Media cover timing: the Guition S3 diagnostics build, where a cover change
+// blocked the loop for about 400 ms (under 80 ms before), and the Guition V2
+// for comparison. Logging only.
+#if HOMETILES_LOOP_STALL_DIAGNOSTICS || defined(DEVICE_GUITION_JC8012P4A1_V2)
+#define HOMETILES_MEDIA_TIMING 1
+#else
+#define HOMETILES_MEDIA_TIMING 0
+#endif
+
+#if HOMETILES_MEDIA_TIMING
+// update_media_tile_state logs where the time goes; these sum the cover
+// color's pick and apply within one state update.
 static uint32_t g_media_timing_pick_us = 0;
 static uint32_t g_media_timing_color_us = 0;
 #endif
@@ -3898,7 +3906,7 @@ static uint32_t g_media_timing_color_us = 0;
 static void report_media_cover_color(MediaTileWidgets& widgets, bool visible) {
   lv_obj_t* card = widgets.cover_clip ? lv_obj_get_parent(widgets.cover_clip) : nullptr;
   if (!card) return;
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+#if HOMETILES_MEDIA_TIMING
   const uint32_t pick_started_us = micros();
 #endif
   uint32_t rgb = 0;
@@ -3913,12 +3921,12 @@ static void report_media_cover_color(MediaTileWidgets& widgets, bool visible) {
       known = media_cover_color::pick(dsc->data, dsc->header.w, dsc->header.h, stride, rgb);
     }
   }
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+#if HOMETILES_MEDIA_TIMING
   const uint32_t color_started_us = micros();
   g_media_timing_pick_us += color_started_us - pick_started_us;
 #endif
   tile_icon_source::set_cover_color(card, known, rgb);
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+#if HOMETILES_MEDIA_TIMING
   g_media_timing_color_us += micros() - color_started_us;
 #endif
 }
@@ -4388,7 +4396,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   const uint32_t payload_hash = fnv1a_hash(payload_start);
   if (widgets.last_payload_hash == payload_hash) return;
   widgets.last_payload_hash = payload_hash;
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+#if HOMETILES_MEDIA_TIMING
   const uint32_t timing_started_us = micros();
   uint32_t timing_fields_us = timing_started_us;
   uint32_t timing_read_us = timing_started_us;
@@ -4526,7 +4534,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   }
 
   if (should_update_cover) {
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+#if HOMETILES_MEDIA_TIMING
     timing_fields_us = micros();
 #endif
     String cover_url;
@@ -4537,7 +4545,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     media_artwork::read_string(payload_start, "entity_picture_data", cover_data);
     decode_basic_json_escapes(cover_url);
     decode_basic_json_escapes(cover_data);
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+#if HOMETILES_MEDIA_TIMING
     timing_read_us = micros();
 #endif
 
@@ -4546,13 +4554,13 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     } else {
       update_media_cover(grid_type, grid_index, widgets, cover_url);
     }
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+#if HOMETILES_MEDIA_TIMING
     timing_cover_us = micros();
 #endif
   }
 
   update_media_popup_from_widgets(grid_type, grid_index, widgets, state);
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS
+#if HOMETILES_MEDIA_TIMING
   // One line per cover change: fields = JSON fields and title labels, read =
   // cover fields out of the payload, cover = decode, scale and cover color
   // (pick and apply in microseconds), popup = Media popup sync.

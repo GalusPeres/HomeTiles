@@ -71,12 +71,13 @@ assert.match(web, /#if HOMETILES_LOOP_STALL_DIAGNOSTICS\n    \/\/ Names the requ
 assert.equal(web.match(/#if HOMETILES_LOOP_STALL_DIAGNOSTICS\n        if \(first_chunk\) loop_stall::webUploadBegin\(this->server\.uri\(\)\.c_str\(\)\);\n#endif/g)?.length, 2);
 assert.match(web, /server\.handleClient\(\);\n  loop_stall::webIdle\(\);/);
 
-// Media cover changes log where their time goes, only on the S3 build: the
+// Media cover changes log where their time goes, only on the S3 and V2: the
 // timing lines sit in guarded blocks and the cover path stays unchanged.
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(renderer.includes('#include "src/core/diagnostics/loop_stall.h"'));
-assert.match(renderer, /#if HOMETILES_LOOP_STALL_DIAGNOSTICS\n(?:  \/\/[^\n]*\n)*  if \(should_update_cover\) \{\n    const uint32_t now_us = micros\(\);\n    Serial\.printf\("\[MediaTiming\] total=/);
-for (const block of renderer.matchAll(/#if HOMETILES_LOOP_STALL_DIAGNOSTICS\n([\s\S]*?)#endif/g)) {
+assert.match(renderer, /#if HOMETILES_LOOP_STALL_DIAGNOSTICS \|\| defined\(DEVICE_GUITION_JC8012P4A1_V2\)\n#define HOMETILES_MEDIA_TIMING 1\n#else\n#define HOMETILES_MEDIA_TIMING 0\n#endif/);
+assert.match(renderer, /#if HOMETILES_MEDIA_TIMING\n(?:  \/\/[^\n]*\n)*  if \(should_update_cover\) \{\n    const uint32_t now_us = micros\(\);\n    Serial\.printf\("\[MediaTiming\] total=/);
+for (const block of renderer.matchAll(/#if HOMETILES_MEDIA_TIMING\n([\s\S]*?)#endif/g)) {
   assert.ok(!/set_cover_color|update_media_cover|update_media_popup_from_widgets/.test(block[1]),
     'the measurement only reads clocks');
 }

@@ -25,7 +25,7 @@
 #include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/media/cover_color.h"
-#include "src/core/diagnostics/loop_stall.h"
+#include "src/core/diagnostics/media_timing.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/i18n/i18n.h"
@@ -3884,18 +3884,9 @@ static bool media_widgets_are_visible(const MediaTileWidgets& widgets) {
          media_obj_is_visible(widgets.play_pause_label);
 }
 
-// Media cover timing: the Guition S3 diagnostics build, where a cover change
-// blocked the loop for about 400 ms (under 80 ms before), and the Guition V2
-// for comparison. Logging only.
-#if HOMETILES_LOOP_STALL_DIAGNOSTICS || defined(DEVICE_GUITION_JC8012P4A1_V2)
-#define HOMETILES_MEDIA_TIMING 1
-#else
-#define HOMETILES_MEDIA_TIMING 0
-#endif
-
 #if HOMETILES_MEDIA_TIMING
-// update_media_tile_state logs where the time goes; these sum the cover
-// color's pick and apply within one state update.
+// Media cover timing (media_timing.h): update_media_tile_state logs where the
+// time goes; these sum the cover color's pick and apply within one update.
 static uint32_t g_media_timing_pick_us = 0;
 static uint32_t g_media_timing_color_us = 0;
 #endif

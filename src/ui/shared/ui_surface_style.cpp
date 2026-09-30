@@ -2,9 +2,19 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/config/icon_glow.h"
+#include "src/core/diagnostics/media_timing.h"
 #include "src/ui/shared/tone_color.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include <atomic>
+
+#if HOMETILES_MEDIA_TIMING
+namespace media_timing {
+uint32_t disc_style_us = 0;
+uint32_t control_fill_us = 0;
+uint32_t add_style_us = 0;
+uint32_t control_fills = 0;
+}  // namespace media_timing
+#endif
 
 namespace ui_surface_style {
 namespace {
@@ -215,6 +225,12 @@ void apply_popup_border(lv_obj_t* obj, lv_color_t color, lv_opa_t opa) {
 
 void apply_icon_disc(lv_obj_t* obj, bool off, bool follows_global) {
   if (!obj) return;
+#if HOMETILES_MEDIA_TIMING
+  struct Timer {
+    uint32_t started = micros();
+    ~Timer() { media_timing::disc_style_us += micros() - started; }
+  } timer;
+#endif
   const uint8_t key = off ? kIconDiscOffKey : follows_global ? kIconDiscGlobalKey : kIconDiscShownKey;
   IconDiscStyle& target = g_icon_disc_styles[key];
   if (!target.initialized) {
@@ -234,6 +250,9 @@ void apply_icon_disc(lv_obj_t* obj, bool off, bool follows_global) {
 
 void apply_control_fill(lv_obj_t* obj, lv_color_t color, lv_style_selector_t selector) {
   if (!obj) return;
+#if HOMETILES_MEDIA_TIMING
+  const uint32_t started_us = micros();
+#endif
   if (!g_control_style.initialized) {
     lv_style_init(&g_control_style.style);
     lv_style_set_bg_opa(&g_control_style.style, control_fill_opa());
@@ -251,7 +270,16 @@ void apply_control_fill(lv_obj_t* obj, lv_color_t color, lv_style_selector_t sel
     lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, selector);
   }
   // LVGL replaces an existing identical style/selector when adding it again.
+#if HOMETILES_MEDIA_TIMING
+  const uint32_t add_started_us = micros();
+#endif
   lv_obj_add_style(obj, &g_control_style.style, selector);
+#if HOMETILES_MEDIA_TIMING
+  const uint32_t now_us = micros();
+  media_timing::add_style_us += now_us - add_started_us;
+  media_timing::control_fill_us += now_us - started_us;
+  ++media_timing::control_fills;
+#endif
 }
 
 void request_global_tile_border_refresh() {

@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 
 #include "src/core/config/config_manager.h"
+#include "src/core/diagnostics/media_timing.h"
 #include "src/core/i18n/i18n.h"
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/tiles/config/tile_config.h"
@@ -310,10 +311,76 @@ void clear_tile_tint(lv_obj_t* card) {
 }
 
 
+#if HOMETILES_MEDIA_TIMING
+// Media cover timing (media_timing.h): the time of each step of one "From
+// cover" recolor, the invalidations LVGL records meanwhile (a display event)
+// and the shared style helpers' share. Logged once per recolor of 1 ms or
+// more; logging only.
+bool g_cover_counting = false;
+uint32_t g_cover_invalidations = 0;
+uint32_t g_cover_invalidated_px = 0;
+
+void count_cover_invalidation(lv_event_t* e) {
+  if (!g_cover_counting) return;
+  ++g_cover_invalidations;
+  if (const auto* area = static_cast<const lv_area_t*>(lv_event_get_param(e))) {
+    g_cover_invalidated_px += lv_area_get_size(area);
+  }
+}
+
+struct CoverTiming {
+  enum Step { Icon, Tint, Popup, Discs, Controls, Count };
+  uint32_t started = micros();
+  uint32_t mark = started;
+  uint32_t steps[Count] = {};
+
+  CoverTiming() {
+    static bool registered = false;
+    if (!registered) {
+      if (lv_display_t* display = lv_display_get_default()) {
+        lv_display_add_event_cb(display, count_cover_invalidation, LV_EVENT_INVALIDATE_AREA, nullptr);
+        registered = true;
+      }
+    }
+    g_cover_invalidations = 0;
+    g_cover_invalidated_px = 0;
+    media_timing::disc_style_us = 0;
+    media_timing::control_fill_us = 0;
+    media_timing::add_style_us = 0;
+    media_timing::control_fills = 0;
+    g_cover_counting = true;
+  }
+  void lap(Step step) {
+    const uint32_t now = micros();
+    steps[step] = now - mark;
+    mark = now;
+  }
+  ~CoverTiming() {
+    g_cover_counting = false;
+    const uint32_t total = micros() - started;
+    if (total < 1000) return;
+    Serial.printf("[CoverColor] total=%u us icon=%u tint=%u popup=%u (open=%d) discs=%u controls=%u | "
+                  "invalidations=%u px=%u | disc_style=%u us control_fill=%u us (add_style=%u us, n=%u)\n",
+                  static_cast<unsigned>(total), static_cast<unsigned>(steps[Icon]),
+                  static_cast<unsigned>(steps[Tint]), static_cast<unsigned>(steps[Popup]),
+                  popup_shell_active() ? 1 : 0, static_cast<unsigned>(steps[Discs]),
+                  static_cast<unsigned>(steps[Controls]), static_cast<unsigned>(g_cover_invalidations),
+                  static_cast<unsigned>(g_cover_invalidated_px),
+                  static_cast<unsigned>(media_timing::disc_style_us),
+                  static_cast<unsigned>(media_timing::control_fill_us),
+                  static_cast<unsigned>(media_timing::add_style_us),
+                  static_cast<unsigned>(media_timing::control_fills));
+  }
+};
+#endif
+
 // Applies "From cover" as refresh_card allowed it: the icon takes the cover
 // color (without one its default color), the tile the cover tint (without
 // one its own color). Grey, white and black covers give no color.
 void apply_cover(lv_obj_t* card) {
+#if HOMETILES_MEDIA_TIMING
+  CoverTiming timing;
+#endif
   uint32_t rgb = 0;
   const bool known = cover_color(card, rgb) && tile_tint::has_hue(rgb);
   if (cover_icon(card)) {
@@ -322,16 +389,31 @@ void apply_cover(lv_obj_t* card) {
       else tile_icon_disc::release_icon_color(icon);
     }
   }
+#if HOMETILES_MEDIA_TIMING
+  timing.lap(CoverTiming::Icon);
+#endif
   const uint8_t tile = cover_tile(card);
   if (!tile) return;
   const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
   if (known) set_tile_tint(card, rgb, tile);
   else clear_tile_tint(card);
+#if HOMETILES_MEDIA_TIMING
+  timing.lap(CoverTiming::Tint);
+#endif
   if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) != before) {
     follow_open_popup(card);
   }
+#if HOMETILES_MEDIA_TIMING
+  timing.lap(CoverTiming::Popup);
+#endif
   refresh_discs(card);
+#if HOMETILES_MEDIA_TIMING
+  timing.lap(CoverTiming::Discs);
+#endif
   refresh_controls(card);
+#if HOMETILES_MEDIA_TIMING
+  timing.lap(CoverTiming::Controls);
+#endif
 }
 
 String layer_entity(const Tile& tile, const tile_icon_colors::Source& layer) {

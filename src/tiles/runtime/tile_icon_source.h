@@ -44,8 +44,9 @@ void refresh_card(lv_obj_t* card, const Tile& tile);
 
 // The Media renderer reports the color of the cover a card shows (`known`
 // false without a cover or without a clear color, media/cover_color.h). A
-// card with "From cover" (icon color and/or tile color) follows it right
-// away; other cards only keep the value. Skips unchanged values.
+// card with "From cover" (icon color and/or tile color) follows it, from one
+// real color to another in a short fade while visible, otherwise right away;
+// other cards only keep the value. Skips unchanged values.
 void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb);
 
 // The control fill of a card's controls: pressed buttons

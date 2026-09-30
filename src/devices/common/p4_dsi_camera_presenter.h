@@ -73,25 +73,6 @@ class Presenter {
 
   void end();
 
-  // UI frame swap (opt-in per board): the UI draws into the hidden
-  // framebuffer and commitUi() shows the finished frame at the next panel
-  // refresh, so a redraw never appears band by band. While the camera path
-  // above is active it keeps its own double buffering and UI writes go to
-  // the shown framebuffer as before.
-  void enableUiFrameSwap();
-  // The framebuffer UI writes go to: the hidden one during frame swap,
-  // first brought up to date with the shown one; else the shown one.
-  uint16_t* uiFramebuffer();
-  // Copies a panel rectangle the hidden framebuffer misses from the shown
-  // one (the areas LVGL's sync callback reports before it draws).
-  void syncUiArea(int32_t x, int32_t y, int32_t w, int32_t h);
-  // For a write LVGL does not know about (a full fill): after the next
-  // commit the hidden framebuffer is copied from the shown one completely.
-  void syncAllAfterCommit();
-  // Shows the frame drawn since the last commit at the next panel refresh.
-  // The wait for that refresh happens before the next UI write.
-  bool commitUi();
-
  private:
   bool begin();
   bool syncUiToInactive();
@@ -113,13 +94,6 @@ class Presenter {
   [[noreturn]] void restartAfterTimeout(int32_t x, int32_t y, int32_t w,
                                         int32_t h, int32_t source_stride,
                                         uint8_t rotation) const;
-  bool uiSwapActive() const { return ui_frame_swap_ && !double_buffer_active_; }
-  bool finishUiSwap();
-  bool prepareUiFrame();
-  void disableUiFrameSwap(const char* reason);
-  void resetUiFrameDirty();
-  void markUiFrameDirty(int32_t x, int32_t y, int32_t w, int32_t h);
-  void noteUiTiming(uint32_t wait_us, uint32_t sync_us, size_t sync_bytes);
 
   Config config_{};
   esp_lcd_panel_handle_t panel_ = nullptr;
@@ -134,24 +108,6 @@ class Presenter {
   int32_t dirty_x2_ = 0;
   int32_t dirty_y2_ = 0;
   uint32_t fault_cooldown_until_ms_ = 0;
-
-  bool ui_frame_swap_ = false;
-  bool ui_swap_pending_ = false;
-  bool ui_full_sync_ = false;
-  bool ui_full_sync_after_commit_ = false;
-  bool ui_frame_dirty_ = false;
-  int32_t ui_x1_ = 0;
-  int32_t ui_y1_ = 0;
-  int32_t ui_x2_ = 0;
-  int32_t ui_y2_ = 0;
-  // Aggregated frame swap timings, logged at most every 30 seconds.
-  uint32_t ui_stats_started_ms_ = 0;
-  uint32_t ui_frames_ = 0;
-  uint32_t ui_wait_total_us_ = 0;
-  uint32_t ui_wait_max_us_ = 0;
-  uint32_t ui_sync_total_us_ = 0;
-  uint32_t ui_sync_max_us_ = 0;
-  uint32_t ui_sync_kb_ = 0;
 };
 
 }  // namespace p4_dsi_camera_presenter

@@ -39,7 +39,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## ESP32-P4 network history
 
-- Backported: ESP-Hosted allocation/PSRAM fixes, synchronous RPC UID routing, Espressif's `a8204f9` dropped-RX recovery, sparse diagnostics. Patches, variants, hashes, limits: `tools/esp-hosted-3.3.7-rx-fix/README.md`.
+- Backported: ESP-Hosted allocation/PSRAM fixes, synchronous RPC UID routing, Espressif's `a8204f9` dropped-RX recovery, sparse diagnostics. Patches, variants, hashes, limits: `tools/esp-hosted-3.3.7-rx-fix/README.md`; do not duplicate.
 - `repo-a8204` is the release-safe baseline; the short-tail variant was experimental.
 - Failed P4 OTA approaches: throttling, PSRAM staging, TLS-to-flash streaming, Hosted restart, permanent SDIO buffers; retry only with new evidence.
 - Network wedge safeguards are recovery, not a transport fix.
@@ -80,7 +80,6 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
 - Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); circles/controls opaque (16-bit blending lost the translucent step), veil only on see-through screensaver tiles; controls tint only From icon/cover; dark icons lifted. Presses: theme recolor off, same resting color (no teal fade), PIN/pill buttons one step higher (b129, HW pending).
 - LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; own lib, caches `hometiles-lvgl96-*`.
-- b128 frame swap (V2, Guition S3): hidden frame, swap at panel frame end (sync_cb); `kUiFrameSwap`; b126 fade; HW pending.
 
 ## Radius and half-grid
 
@@ -88,8 +87,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Half-grid: Sensor/Binary/Energy height 0.5, width >=1 by 0.5; original 2x1. Whole layouts/V7 size unchanged; header fraction bits. Make every tile whole before 0.6.x (`docs/updating.md`).
 - Device/Web: concentric icon radius, original title font, smaller default value font; explicit sizes respected; text gap 0. Masking declined.
 - Reflow/drafts/rollback keep positions; stale GETs preserve edits. Empty 1x1 slots scan both axes by 0.5, no overlaps. Settings/Back: 1x0.5; Settings v4 bits 1-4 store snapshot fractions.
-- Hidden Climate reset crash (fractional Sensor width): Climate-only integer guard.
-- Binary Sensor shares Sensor value sizes (20/24/32/40); default preserves old layout. Stored in existing V7 field; editor, import and previews retain it.
+- Hidden Climate reset crash (fractional Sensor width): Climate-only integer guard; browser test.
+- Binary Sensor now shares Sensor value sizes (20/24/32/40); default preserves old layout. Stored in existing V7 field; editor, import and previews retain it.
 - HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
 - Weather icons (`tools/generate-weather-icon-fonts.mjs`): colored, toggle, icon tint; night: bridge `sun`; b98 HW
 - Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it.
@@ -121,7 +120,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Flash and RAM (PR #62)
 
 - `-fno-exceptions` (`compiler.cpp.flags`, CI and local): about -300 KiB per image, Tab5 428 KiB OTA headroom. Unused LVGL widgets/formats off: -49 KiB, IRAM -21 KiB.
-- Renderer slot state, Binary Sensor queue and active/screensaver grids live in PSRAM, allocated in `setup()` (not constructors). Static DRAM V2 136,632 -> 64,984 B, S3 139,576 -> 80,376 B. V2/S3 b75 passed.
+- Renderer slot state, Binary Sensor queue and active/screensaver grids live in PSRAM, allocated in `setup()` (not in global constructors). Static DRAM V2 136,632 -> 64,984 B, S3 139,576 -> 80,376 B. V2/S3 b75 passed.
 
 ## View control and telemetry
 
@@ -136,4 +135,4 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Security branch (unreleased)
 
 - Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, 30-day NVS sessions, CSRF; device reset; hides secrets.
-- Command channel (optional): pairing v2 (X25519, 6-digit code on panel/HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested. b125 rekey resets a stale session; HW pending.
+- Command channel (optional): pairing v2 (X25519, 6-digit code on panel/HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested. b125: rekey drops a stale session (HA reload blocked commands); HW pending.

@@ -53,8 +53,6 @@ private:
   static uint8_t rotation;
 
   static void flush_cb(lv_display_t* lv_disp, const lv_area_t* area, uint8_t* px_map);
-  // UI frame swap boards only (display_manager.cpp).
-  static void sync_cb(lv_display_t* lv_disp, const lv_area_t* area);
   static void touch_cb(lv_indev_t* indev_drv, lv_indev_data_t* data);
 
   // Allocates LVGL draw buffers, preferring a small fast internal-SRAM band and

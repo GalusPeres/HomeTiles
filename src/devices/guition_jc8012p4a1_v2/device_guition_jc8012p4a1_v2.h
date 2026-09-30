@@ -42,11 +42,6 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
                                 bool byte_swap);
 void displayEndFullFramePreview();
 void displayWaitDMA();
-// UI frame swap: shows the LVGL frame drawn since the last call (last
-// flush), and copies an area LVGL reports as missing in the hidden
-// framebuffer (LVGL coordinates) before it draws the next frame.
-void displayCommit();
-void displaySyncArea(int32_t x, int32_t y, int32_t w, int32_t h);
 void displayFillScreen(uint16_t color);
 void displaySetRotation(uint8_t rotation);
 

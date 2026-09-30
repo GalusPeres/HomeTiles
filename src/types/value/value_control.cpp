@@ -667,12 +667,12 @@ void apply_control_colors(EditableControl* c) {
   c->colors = editable_colors::from(base, fill, opa);
   c->colors_initialized = true;
   editable_colors::dropdown(c->dropdown, c->colors);
-  // The Number slider looks like the Media sliders; the date arrows press
-  // like the popup controls.
+  // The Number slider looks like the Media sliders; the date arrows sit on
+  // their field (the control fill) and press one control step above it.
   popup_nav_style::style_slider(c->slider, base, icon);
   for (auto& field : c->fields) {
-    popup_nav_style::style_press(field.up, base, icon);
-    popup_nav_style::style_press(field.down, base, icon);
+    popup_nav_style::style_press_raised(field.up, base, icon);
+    popup_nav_style::style_press_raised(field.down, base, icon);
   }
   // The white Apply button cuts its label out in the card color; pressed is
   // the white mixed toward the card (0xBBBBBB on the default 0x2A2A2A card).

@@ -253,11 +253,24 @@ void apply_control_fill(lv_obj_t* obj, lv_color_t color, lv_style_selector_t sel
       !lv_color_eq(value.color, color)) {
     lv_obj_set_style_bg_color(obj, color, selector);
   }
-  // The pressed fill is exactly the control color: no theme darkening.
-  if ((selector & LV_STATE_PRESSED) &&
-      (lv_obj_get_local_style_prop(obj, LV_STYLE_COLOR_FILTER_OPA, &value, selector) != LV_STYLE_RES_FOUND ||
-       value.num != LV_OPA_TRANSP)) {
-    lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, selector);
+  if (selector & LV_STATE_PRESSED) {
+    // A pressed button rests in the same color (transparent), so the theme's
+    // press fade runs from the card to its fill, not through the theme or
+    // black resting color.
+    if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, LV_PART_MAIN) != LV_STYLE_RES_FOUND ||
+        !lv_color_eq(value.color, color)) {
+      lv_obj_set_style_bg_color(obj, color, LV_PART_MAIN);
+    }
+    // The pressed fill is exactly the control color: no theme darkening (a
+    // black recolor in the default theme, a color filter in older ones).
+    if (lv_obj_get_local_style_prop(obj, LV_STYLE_COLOR_FILTER_OPA, &value, selector) != LV_STYLE_RES_FOUND ||
+        value.num != LV_OPA_TRANSP) {
+      lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, selector);
+    }
+    if (lv_obj_get_local_style_prop(obj, LV_STYLE_RECOLOR_OPA, &value, selector) != LV_STYLE_RES_FOUND ||
+        value.num != LV_OPA_TRANSP) {
+      lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, selector);
+    }
   }
   // LVGL replaces an existing identical style/selector when adding it again.
   lv_obj_add_style(obj, &target.style, selector);

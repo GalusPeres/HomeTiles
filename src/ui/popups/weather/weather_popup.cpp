@@ -1392,11 +1392,7 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
       lv_obj_set_style_text_color(icon, enabled ? lv_color_white() : nav_inactive_color, 0);
       lv_obj_set_style_text_color(icon, enabled ? lv_color_white() : nav_inactive_color, LV_STATE_PRESSED);
     }
-    lv_color_t pressed_color;
-    lv_opa_t pressed_opa;
-    popup_nav_style::fill(card_color(ctx), header_icon_color(ctx), pressed_color, pressed_opa);
-    lv_obj_set_style_bg_color(btn, pressed_color, LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(btn, pressed_opa, LV_STATE_PRESSED);
+    popup_nav_style::style_press(btn, card_color(ctx), header_icon_color(ctx));
     if (enabled) {
       lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
     } else {

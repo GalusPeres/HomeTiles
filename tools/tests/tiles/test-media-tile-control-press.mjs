@@ -139,7 +139,11 @@ int main() {
     if (shown != expected.control) { std::printf("FAIL %s shown #%06X\n", c.what, (unsigned)shown); return 1; }
     { lv_style_value_t v;
       assert(lv_obj_get_local_style_prop(previous, LV_STYLE_COLOR_FILTER_OPA, &v, LV_PART_MAIN | LV_STATE_PRESSED) ==
-             LV_STYLE_RES_FOUND && v.num == LV_OPA_TRANSP && "No theme darkening on press"); }
+             LV_STYLE_RES_FOUND && v.num == LV_OPA_TRANSP && "No theme darkening on press");
+      assert(lv_obj_get_local_style_prop(previous, LV_STYLE_RECOLOR_OPA, &v, LV_PART_MAIN | LV_STATE_PRESSED) ==
+             LV_STYLE_RES_FOUND && v.num == LV_OPA_TRANSP && "No theme recolor on press");
+      assert(lv_obj_get_local_style_prop(previous, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN) == LV_STYLE_RES_FOUND &&
+             rgb(v.color) == color && "The press fades from the same resting color, not black"); }
   }
   // A resting surface (the Climate target pill) takes the fill at rest, and
   // its nested - and + buttons take it while pressed.
@@ -163,8 +167,17 @@ int main() {
                 lv_obj_get_style_bg_opa(pill, LV_PART_MAIN));
     return 1;
   }
+  // The nested buttons press one control step above the pill, so the press
+  // shows on it (the same color as the pill made the press invisible).
   { uint32_t color; lv_opa_t opa; pressed(plus, color, opa);
-    if (color != pill_color) { std::printf("FAIL nested press: #%06X\n", (unsigned)color); return 1; } }
+    const uint32_t raised = tone_color::fill(0x482F10, 0xEF8402, true, icon_glow::kDefault).raised_color;
+    if (color != raised || raised == pill_color || opa != LV_OPA_COVER) {
+      std::printf("FAIL nested press: #%06X\n", (unsigned)color); return 1; }
+    lv_style_value_t v;
+    assert(lv_obj_get_local_style_prop(plus, LV_STYLE_RECOLOR_OPA, &v, LV_PART_MAIN | LV_STATE_PRESSED) ==
+           LV_STYLE_RES_FOUND && v.num == LV_OPA_TRANSP && "No theme recolor on press");
+    assert(lv_obj_get_local_style_prop(plus, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN) == LV_STYLE_RES_FOUND &&
+           rgb(v.color) == raised && "The press fades from the same resting color"); }
   // Play is not touched.
   { lv_style_value_t v; assert(lv_obj_get_local_style_prop(play, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN | LV_STATE_PRESSED) != LV_STYLE_RES_FOUND); }
   // A pressed card (6 % lighter) takes the circle and the resting pill along,

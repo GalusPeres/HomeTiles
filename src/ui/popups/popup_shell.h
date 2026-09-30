@@ -45,6 +45,9 @@ void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool fr
 // controls (popup_nav_style.h), the editors and the PIN keys use it.
 void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa,
                               bool* tinted = nullptr);
+// A control pressed on a control surface (a pressed PIN key, the date arrows
+// on their field): one more control step (tone_color::Fill::raised_color).
+void popup_shell_control_raised_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa);
 
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.

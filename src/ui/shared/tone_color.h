@@ -154,6 +154,10 @@ struct Fill {
   // The opaque colors they show over the card.
   uint32_t disc;
   uint32_t control;
+  // A control pressed on a control surface (a PIN key, a button on a pill):
+  // one more control step, drawn at `control_opa` (a veil stacks by itself).
+  uint32_t raised_color;
+  uint32_t raised;
   // Whether they take the icon's hue.
   bool tinted;
 };
@@ -185,10 +189,13 @@ inline Fill fill(uint32_t card, uint32_t icon, bool tinted, uint8_t percent, boo
   const bool full_step = disc_step >= kControlMinStep;
   if (!see_through) {
     // Opaque: exactly the steps.
-    result.control = lifted(card, icon, tinted, full_step ? disc_step : kControlMinStep);
+    const float control_step = full_step ? disc_step : kControlMinStep;
+    result.control = lifted(card, icon, tinted, control_step);
     result.disc = !percent ? card : full_step ? result.control : lifted(card, icon, tinted, disc_step);
+    result.raised = lifted(card, icon, tinted, 2.0f * control_step);
     result.disc_color = result.disc;
     result.control_color = result.control;
+    result.raised_color = result.raised;
   } else {
     // Veil: the color that lands on the step at the control opacity; the
     // circle shows it at its own, lower opacity below 12.5 %.
@@ -204,8 +211,10 @@ inline Fill fill(uint32_t card, uint32_t icon, bool tinted, uint8_t percent, boo
     }
     result.disc_color = color;
     result.control_color = color;
+    result.raised_color = color;
     result.control = blend(card, color, result.control_opa);
     result.disc = blend(card, color, result.disc_opa);
+    result.raised = blend(result.control, color, result.control_opa);
   }
   Entry& slot = cache[next];
   next = static_cast<uint8_t>((next + 1) % 4);

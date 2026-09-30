@@ -315,7 +315,9 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   if (!lv_color_eq(lv_obj_get_style_text_color(icon, LV_PART_MAIN), readable))
     lv_obj_set_style_text_color(icon, readable, 0);
   // The pressed close button has exactly the control color of the popup
-  // (controls_fill, popup_nav_style.h). Only a change restyles it.
+  // (controls_fill, popup_nav_style.h): the same color at rest (transparent),
+  // so the press fades from the card to it, and no theme darkening. Only a
+  // change restyles it.
   static lv_color_t close_color = lv_color_white();
   static lv_opa_t close_opa = LV_OPA_20;
   const tone_color::Fill controls = controls_fill(options, card, rgb);
@@ -323,9 +325,11 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   if (shell.close && (!lv_color_eq(close_color, press) || close_opa != controls.control_opa)) {
     close_color = press;
     close_opa = controls.control_opa;
+    lv_obj_set_style_bg_color(shell.close, press, 0);
     lv_obj_set_style_bg_color(shell.close, press, LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(shell.close, controls.control_opa, LV_STATE_PRESSED);
     lv_obj_set_style_color_filter_opa(shell.close, LV_OPA_TRANSP, LV_STATE_PRESSED);
+    lv_obj_set_style_recolor_opa(shell.close, LV_OPA_TRANSP, LV_STATE_PRESSED);
   }
   // The card hairline is the plain lighter tile border. It never follows the
   // icon color: a hairline change redraws the whole popup, and a Light popup
@@ -480,6 +484,13 @@ void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& 
   const HeaderDisc& options = g_next_disc.from_tile ? g_next_disc : shell.disc;
   control_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu, color, opa);
   if (tinted) *tinted = controls_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu).tinted;
+}
+
+void popup_shell_control_raised_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa) {
+  const HeaderDisc& options = g_next_disc.from_tile ? g_next_disc : shell.disc;
+  const tone_color::Fill fill = controls_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu);
+  color = lv_color_hex(fill.raised_color);
+  opa = fill.control_opa;
 }
 
 void popup_shell_follow_tile_color(uint32_t color) {

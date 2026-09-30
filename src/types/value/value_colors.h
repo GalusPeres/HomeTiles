@@ -47,13 +47,15 @@ inline void surface(lv_obj_t* obj, const Palette& p) {
   }
 }
 
-// The Select field: the control fill in every state, no outline.
+// The Select field: the control fill in every state, no outline and no theme
+// darkening (the default theme's black recolor on press).
 inline void dropdown(lv_obj_t* obj, const Palette& p) {
   for (lv_style_selector_t state : std::initializer_list<lv_style_selector_t>{LV_STATE_DEFAULT, LV_STATE_PRESSED,
        LV_STATE_CHECKED, LV_STATE_PRESSED | LV_STATE_CHECKED, LV_STATE_DISABLED}) {
     lv_obj_set_style_bg_color(obj, p.fill, LV_PART_MAIN | state);
     lv_obj_set_style_bg_opa(obj, p.opa, LV_PART_MAIN | state);
     lv_obj_set_style_border_width(obj, 0, LV_PART_MAIN | state);
+    if (state & LV_STATE_PRESSED) lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN | state);
   }
 }
 

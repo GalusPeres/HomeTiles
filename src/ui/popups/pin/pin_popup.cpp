@@ -198,10 +198,10 @@ void update_value(PinPopupContext* ctx) {
 }
 
 // Keys take the popup control fill (popup_nav_style.h) of the card and the
-// header icon; a pressed key lights up with twice its opacity. Backspace sits
-// halfway between the keys and the card; confirm is white with the check in
-// the card color, like Play in the Media popup. A press shows exactly these
-// colors (no theme darkening).
+// header icon; a pressed key lights up one more control step (the raised
+// fill). Backspace sits halfway between the keys and the card and lights up
+// to a key; confirm is white with the check in the card color, like Play in
+// the Media popup. A press shows exactly these colors (no theme darkening).
 void style_keypad(PinPopupContext* ctx) {
   if (!ctx || !ctx->card || !ctx->icon_label) return;
   const lv_color_t card = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
@@ -209,7 +209,9 @@ void style_keypad(PinPopupContext* ctx) {
   lv_color_t fill;
   lv_opa_t opa;
   popup_nav_style::fill(card, icon, fill, opa);
-  const lv_opa_t pressed = opa > LV_OPA_COVER / 2 ? LV_OPA_COVER : static_cast<lv_opa_t>(opa * 2);
+  lv_color_t raised;
+  lv_opa_t pressed;
+  popup_nav_style::fill_raised(card, icon, raised, pressed);
   for (int i = 0; i < kKeyCount; ++i) {
     lv_obj_t* key = ctx->key_buttons[i];
     if (!key) continue;
@@ -225,7 +227,8 @@ void style_keypad(PinPopupContext* ctx) {
     }
     const bool backspace = i == kBackspaceKey;
     popup_nav_style::set_bg(key, fill, backspace ? static_cast<lv_opa_t>(opa / 2) : opa, LV_PART_MAIN);
-    popup_nav_style::set_bg(key, fill, backspace ? opa : pressed, LV_PART_MAIN | LV_STATE_PRESSED);
+    if (backspace) popup_nav_style::set_bg(key, fill, opa, LV_PART_MAIN | LV_STATE_PRESSED);
+    else popup_nav_style::set_bg(key, raised, pressed, LV_PART_MAIN | LV_STATE_PRESSED);
     popup_nav_style::no_press_filter(key, LV_PART_MAIN | LV_STATE_PRESSED);
   }
 }

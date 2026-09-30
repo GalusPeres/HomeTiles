@@ -539,8 +539,10 @@ void style_controls(lv_obj_t* card, bool surfaces_only) {
   bool known = false;
   bool see_through = false;
   lv_color_t color = lv_color_white();
+  lv_color_t raised = lv_color_white();
   // Controls sit on the card or one level deeper (Climate - and + inside
-  // their target pill).
+  // their target pill); a button on a surface presses one control step above
+  // it (tone_color::Fill::raised_color).
   auto style = [&](lv_obj_t* obj) {
     const bool press = tile_icon_disc::is_control(obj);
     if (!press && !tile_icon_disc::is_surface(obj)) return;
@@ -558,9 +560,10 @@ void style_controls(lv_obj_t* card, bool surfaces_only) {
                            (cover_tints(card) && tile_icon_disc::icon_color_tints(rgb));
       const bool tinted = disc && tile_icon_disc::glow_of(disc) && follows;
       see_through = tile_icon_disc::see_through(card);
-      color = lv_color_hex(tone_color::fill(tile_icon_disc::state_color(card), rgb, tinted,
-                                            ui_surface_style::icon_glow_percent(), see_through)
-                               .control_color);
+      const tone_color::Fill fill = tone_color::fill(tile_icon_disc::state_color(card), rgb, tinted,
+                                                     ui_surface_style::icon_glow_percent(), see_through);
+      color = lv_color_hex(fill.control_color);
+      raised = lv_color_hex(fill.raised_color);
     }
     if (surfaces_only) {
       lv_style_value_t value;
@@ -570,8 +573,9 @@ void style_controls(lv_obj_t* card, bool surfaces_only) {
       }
       return;
     }
-    ui_surface_style::apply_control_fill(obj, color, press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN,
-                                         see_through);
+    const bool on_surface = press && tile_icon_disc::is_surface(lv_obj_get_parent(obj));
+    ui_surface_style::apply_control_fill(obj, on_surface ? raised : color,
+                                         press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN, see_through);
   };
   const uint32_t count = lv_obj_get_child_count(card);
   for (uint32_t i = 0; i < count; ++i) {

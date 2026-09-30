@@ -7,6 +7,7 @@
 // `tinted` whether it takes the icon's hue.
 void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa,
                               bool* tinted);
+void popup_shell_control_raised_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa);
 
 // Footer controls of the history popups (7D/24H/Today and the date and day
 // pills) look like the pressed close button: the selected control has exactly
@@ -19,12 +20,25 @@ inline void fill(lv_color_t popup, lv_color_t icon, lv_color_t& color, lv_opa_t&
                            tinted);
 }
 
-// A press shows exactly the control color: no theme darkening. Set once.
+// A control pressed on a control surface (a PIN key, the date arrows on their
+// field): one more control step, so the press shows on the surface.
+inline void fill_raised(lv_color_t popup, lv_color_t icon, lv_color_t& color, lv_opa_t& opa) {
+  popup_shell_control_raised_fill(lv_color_to_u32(popup) & 0xFFFFFF, lv_color_to_u32(icon) & 0xFFFFFF, color,
+                                  opa);
+}
+
+// A press shows exactly the control color: no theme darkening. The default
+// theme darkens a pressed button with a black recolor (and older themes with
+// a color filter); both stay off. Set once.
 inline void no_press_filter(lv_obj_t* obj, lv_style_selector_t selector) {
   lv_style_value_t value;
   if (lv_obj_get_local_style_prop(obj, LV_STYLE_COLOR_FILTER_OPA, &value, selector) != LV_STYLE_RES_FOUND ||
       value.num != LV_OPA_TRANSP) {
     lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, selector);
+  }
+  if (lv_obj_get_local_style_prop(obj, LV_STYLE_RECOLOR_OPA, &value, selector) != LV_STYLE_RES_FOUND ||
+      value.num != LV_OPA_TRANSP) {
+    lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, selector);
   }
 }
 
@@ -69,15 +83,36 @@ inline void set_bg(lv_obj_t* obj, lv_color_t color, lv_opa_t opa, lv_style_selec
   }
 }
 
-// A button with a fill only while pressed (Media previous, next and volume):
-// the control fill, like the pressed close button.
-inline void style_press(lv_obj_t* btn, lv_color_t popup, lv_color_t icon) {
+// A button with a fill only while pressed: `color` at `opa`. Its resting
+// color is the same (at its own, transparent opacity), so the theme's press
+// fade runs from the card to that color instead of through the theme color.
+inline void style_press_fill(lv_obj_t* btn, lv_color_t color, lv_opa_t opa) {
   if (!btn) return;
+  lv_style_value_t value;
+  if (lv_obj_get_local_style_prop(btn, LV_STYLE_BG_COLOR, &value, LV_PART_MAIN) != LV_STYLE_RES_FOUND ||
+      !lv_color_eq(value.color, color)) {
+    lv_obj_set_style_bg_color(btn, color, LV_PART_MAIN);
+  }
+  set_bg(btn, color, opa, LV_PART_MAIN | LV_STATE_PRESSED);
+  no_press_filter(btn, LV_PART_MAIN | LV_STATE_PRESSED);
+}
+
+// Media previous, next and volume: the control fill, like the pressed close
+// button.
+inline void style_press(lv_obj_t* btn, lv_color_t popup, lv_color_t icon) {
   lv_color_t color;
   lv_opa_t opa;
   fill(popup, icon, color, opa);
-  set_bg(btn, color, opa, LV_PART_MAIN | LV_STATE_PRESSED);
-  no_press_filter(btn, LV_PART_MAIN | LV_STATE_PRESSED);
+  style_press_fill(btn, color, opa);
+}
+
+// A button on a control surface (the date arrows on their field): one more
+// control step while pressed.
+inline void style_press_raised(lv_obj_t* btn, lv_color_t popup, lv_color_t icon) {
+  lv_color_t color;
+  lv_opa_t opa;
+  fill_raised(popup, icon, color, opa);
+  style_press_fill(btn, color, opa);
 }
 
 // A slider (Media volume and position): the unused track like an info pill

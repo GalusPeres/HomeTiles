@@ -48,6 +48,7 @@ void show_popup_shell(lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,lv_obj_t*,void(*)(
 #include "src/ui/shared/title_label.h"
 #include "src/ui/popups/popup_nav_style.h"
 void popup_shell_control_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o,bool*t){c=lv_color_white();o=40;if(t)*t=false;}
+void popup_shell_control_raised_fill(uint32_t,uint32_t,lv_color_t&c,lv_opa_t&o){c=lv_color_white();o=80;}
 #include <algorithm>
 #include <cassert>
 #include <cmath>

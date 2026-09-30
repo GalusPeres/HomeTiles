@@ -33,6 +33,8 @@ void append_button(String& html, const char* css, const char* role, const char* 
 
 // The fixed icon color sits with the icon fields (Icon group); its own
 // tile-icon-color-fields wrapper keeps the delegated editor events working.
+// Media tiles also offer "From cover" (the hidden checkbox, "cover icon" in
+// the record) next to their own color, like the tile color choice.
 void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
   html += R"html(            <div class="tile-icon-color-fields tile-icon-color-fixed hidden" id=")html";
@@ -41,7 +43,18 @@ void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
   html += tab_id;
   html += "\">\n";
   append_label_row(html, tr.tile_icon_color);
-  html += R"html(              <div class="tile-color-row">
+  html += R"html(              <div class="icon-color-segmented tile-icon-color-modes hidden" role="group" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_color_modes">)html";
+  append_button(html, "", "icon-color-mode", "data-mode", "own", tr.tile_color_mode_custom);
+  append_button(html, "", "icon-color-mode", "data-mode", "cover", tr.tile_color_mode_from_cover);
+  html += R"html(</div>
+              <input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_cover" hidden>
+              <div class="tile-color-row" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_color_row">
                 <input type="color" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_color" value="#FFFFFF" data-unset="1" data-icon-color="color">
@@ -57,6 +70,8 @@ void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
 // color the icon shows ("fill NN" in the record, tile_icon_colors.h). The Tile
 // color choice (setTileColorMode) sets the hidden checkbox; its own
 // tile-icon-color-fields wrapper keeps the delegated editor events working.
+// Media's "From cover" ("cover tile=NN") has its own checkbox and uses the
+// same strength slider.
 void append_tile_color_from_icon_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
   html += R"html(            <div class="tile-icon-color-fields icon-color-fill hidden" id=")html";
@@ -67,6 +82,9 @@ void append_tile_color_from_icon_html(String& html, const String& tab_id) {
               <input type="checkbox" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_fill" hidden>
+              <input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_cover_fill" hidden>
               <div class="icon-color-strength" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_fill_strength_row"><label for=")html";

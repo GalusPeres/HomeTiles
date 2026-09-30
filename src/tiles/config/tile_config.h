@@ -189,13 +189,14 @@ static inline uint8_t normalizeTileIconDiscMode(int mode) {
 // Canonical icon color record for a type: numeric types keep only the color
 // bar, text types only the state lines, Sensor keeps both; icon-and-title
 // tiles keep the fixed color and a source entity (with the bar and state
-// lines for a "rules" source); types without icon colors keep none.
+// lines for a "rules" source); Media keeps "From cover"; types without icon
+// colors keep none.
 static inline String normalizeTileIconColors(int type, const char* record) {
   if (!tileTypeHasIconColors(type) || !record || !*record) return String();
   char out[tile_icon_colors::kMaxRecordBytes + 1];
   const size_t length = tile_icon_colors::normalize(
       record, out, sizeof(out), tileTypeIconColorsByValue(type), tileTypeIconColorsByState(type),
-      true, tileTypeRulesUseOwnEntity(type));
+      true, tileTypeRulesUseOwnEntity(type), type == TILE_MEDIA);
   return length ? String(out) : String();
 }
 

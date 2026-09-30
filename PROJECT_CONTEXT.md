@@ -73,7 +73,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Editable surfaces: control fill, white text; Select list = card + hairline, gap, inset selection.
 - S3 stalls/MQTT loss: far AP (-71 vs -47 dBm) at 11 dBm. b118: strongest AP, full power; HW pending.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
-- S3 froze adding Number to active screensaver: Web responded, save persisted; manual reboot. Older dump, cause unknown.
+- S3 froze adding Number to active screensaver (Web ok, manual reboot); cause unknown.
 
 ## Shared-popup/artwork baseline
 
@@ -81,7 +81,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings in PSRAM, no extra framebuffers.
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
-- Colors: `tone_color.h` OKLCH steps (+0.06 L at 25 %); controls tint only From icon; dark icons lifted.
+- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted. Media "From cover": b119 HW.
 
 ## Radius and half-grid
 

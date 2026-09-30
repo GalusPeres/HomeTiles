@@ -42,6 +42,12 @@ lv_obj_t* card_icon(lv_obj_t* card);
 // discs that follow the background. Skips unchanged values.
 void refresh_card(lv_obj_t* card, const Tile& tile);
 
+// The Media renderer reports the color of the cover a card shows (`known`
+// false without a cover or without a clear color, media/cover_color.h). A
+// card with "From cover" (icon color and/or tile color) follows it right
+// away; other cards only keep the value. Skips unchanged values.
+void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb);
+
 // The control fill of a card's controls: pressed buttons
 // (tile_icon_disc::mark_control; Media previous and next, Climate - and +)
 // and resting surfaces (mark_surface; the Climate target pill) take the

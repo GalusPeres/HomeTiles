@@ -224,6 +224,7 @@
   // colors offer From icon color. Nothing else switches the choice.
   function tileColorMode(tab) {
     if (document.getElementById(tab + '_tile_icon_fill')?.checked) return 'icon';
+    if (document.getElementById(tab + '_tile_cover_fill')?.checked) return 'cover';
     return document.getElementById(tab + '_tile_color')?.dataset.bgColorDefault === '0' ? 'custom' : 'global';
   }
   function syncTileColorMode(tab) {
@@ -231,15 +232,20 @@
     const iconOffered = typeof tileTypeHasIconColors === 'function' && tileTypeHasIconColors(typeValue);
     const fill = document.getElementById(tab + '_tile_icon_fill');
     if (fill?.checked && !iconOffered) fill.checked = false;
+    // Media tiles also offer "From cover" (the album cover's color).
+    const coverOffered = String(typeValue) === '15';
+    const coverFill = document.getElementById(tab + '_tile_cover_fill');
+    if (coverFill?.checked && !coverOffered) coverFill.checked = false;
     const mode = tileColorMode(tab);
     document.getElementById(tab + '_tile_color_modes')?.querySelectorAll('[data-tile-color-mode]').forEach(button => {
       const active = button.dataset.tileColorMode === mode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
       if (button.dataset.tileColorMode === 'icon') button.classList.toggle('hidden', !iconOffered);
+      if (button.dataset.tileColorMode === 'cover') button.classList.toggle('hidden', !coverOffered);
     });
     document.getElementById(tab + '_tile_color_row')?.classList.toggle('color-hidden', mode !== 'custom');
-    document.getElementById(tab + '_tile_icon_fill_row')?.classList.toggle('hidden', mode !== 'icon');
+    document.getElementById(tab + '_tile_icon_fill_row')?.classList.toggle('hidden', mode !== 'icon' && mode !== 'cover');
     const strength = document.getElementById(tab + '_tile_icon_fill_strength');
     const output = document.getElementById(tab + '_tile_icon_fill_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
@@ -252,6 +258,8 @@
     if (before === 'custom' && mode !== 'custom') input.dataset.customColor = input.value;
     const fill = document.getElementById(tab + '_tile_icon_fill');
     if (fill) fill.checked = mode === 'icon';
+    const coverFill = document.getElementById(tab + '_tile_cover_fill');
+    if (coverFill) coverFill.checked = mode === 'cover';
     const remembered = input.dataset.customColor || '';
     if (mode === 'custom') {
       if (before !== 'custom' && remembered) input.value = remembered;

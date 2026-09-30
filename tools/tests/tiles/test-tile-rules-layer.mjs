@@ -26,7 +26,7 @@ for (const marker of [
 const policy = read('src/types/tile_type_policy.h');
 assert.match(policy, /static constexpr bool tileTypeRulesUseOwnEntity\(int type\) \{\s*return type == TILE_SENSOR \|\| type == TILE_SWITCH \|\| type == TILE_WEATHER \|\|/);
 assert.match(read('src/tiles/config/tile_config.h'),
-  /tileTypeIconColorsByState\(type\),\s*true, tileTypeRulesUseOwnEntity\(type\)\);/);
+  /tileTypeIconColorsByState\(type\),\s*true, tileTypeRulesUseOwnEntity\(type\), type == TILE_MEDIA\);/);
 
 // Tint: mixed with the rule color, darkened until white text reads 4.5:1.
 const tint = read('src/tiles/config/tile_tint.h');

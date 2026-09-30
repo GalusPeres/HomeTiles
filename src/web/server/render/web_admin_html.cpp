@@ -1165,14 +1165,16 @@ static void appendTileTabHTML(
             <div class="icon-color-segmented tile-color-modes" role="group" id=")html";
   html += tab_id;
   html += R"html(_tile_color_modes">)html";
-  // Tile color is one choice: the global tile color, an own color, or a tint
-  // that follows the icon color (only for tiles with icon colors).
+  // Tile color is one choice: the global tile color, an own color, a tint
+  // that follows the icon color (only for tiles with icon colors) or, on
+  // Media tiles, a tint from the album cover.
   const struct {
     const char* mode;
     const char* label;
   } tile_color_modes[] = {{"global", tr.tile_color_mode_global},
                           {"custom", tr.tile_color_mode_custom},
-                          {"icon", tr.tile_color_mode_from_icon}};
+                          {"icon", tr.tile_color_mode_from_icon},
+                          {"cover", tr.tile_color_mode_from_cover}};
   for (const auto& entry : tile_color_modes) {
     html += R"html(<button type="button" id=")html";
     html += tab_id;

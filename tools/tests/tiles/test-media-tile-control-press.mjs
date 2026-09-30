@@ -39,6 +39,7 @@ fs.mkdirSync(out, {recursive: true});
 const fonts = read('src/tiles/runtime/tile_renderer_fonts.h').replace(/^#include.*$/gm, '')
   .replace('#pragma once', '').replaceAll('constexpr lv_coord_t', 'constexpr long');
 const tintStore = source.match(/constexpr lv_style_selector_t kTintStore = [^;]*;/)[0];
+const coverStore = source.match(/constexpr lv_style_selector_t kCoverStore = [^;]*;/)[0];
 const cpp = String.raw`
 #include <lvgl.h>
 #include <atomic>
@@ -55,8 +56,13 @@ struct Config{bool tile_borders=true;bool icon_discs=true;uint8_t icon_glow=icon
 ${surfaceStyleHost(root)}
 constexpr int GRID_CELL_H=CELL_H,GRID_GAP=GAP;
 ${read('src/tiles/runtime/tile_icon_disc.h').replace(/^#.*$/gm, '')}
+#include "src/tiles/config/tile_tint.h"
 namespace tile_icon_source {
 ${tintStore}
+${coverStore}
+${fn('cover_color')}
+${fn('cover_tile')}
+${fn('cover_tints')}
 ${fn('icon_fill_marker')}
 ${fn('set_icon_fill_marker')}
 ${fn('find_disc')}
@@ -91,19 +97,31 @@ int main() {
   };
   // The controls take the circle color only with tile color From icon; with
   // Global or Custom they take the neutral step.
-  struct Case { const char* what; uint32_t card, icon; bool glow; uint8_t fill; bool tinted; };
+  // Media "From cover" (a cover tint with a cover color) tints them like
+  // From icon; without a cover color or with a grey cover they stay neutral.
+  struct Case { const char* what; uint32_t card, icon; bool glow; uint8_t fill; bool tinted;
+                uint8_t cover_tile; bool cover_known; uint32_t cover; };
   const Case cases[] = {
     {"Global with the circle color", 0x1B1B1B, 0xC62828, true, 0, false},
     {"Custom in the icon's hue", 0x3E1717, 0xC62828, true, 0, false},
     {"From icon with the circle color", 0x482F10, 0xEF8402, true, 20, true},
     {"From icon without the circle color", 0x482F10, 0xEF8402, false, 20, false},
     {"From icon with a white icon", 0x303030, 0xFFFFFF, true, 20, false},
+    {"From cover, icon from cover", 0x4A2A1F, 0xF2672E, true, 0, true, 20, true, 0xF2672E},
+    {"From cover, white icon", 0x4A2A1F, 0xFFFFFF, true, 0, false, 20, true, 0xF2672E},
+    {"From cover without a cover color", 0x1B1B1B, 0xF2672E, true, 0, false, 20, false, 0},
+    {"From cover with a grey cover", 0x1B1B1B, 0xF2672E, true, 0, false, 20, true, 0x808080},
+    {"Cover color without From cover", 0x1B1B1B, 0xF2672E, true, 0, false, 0, true, 0xF2672E},
   };
   for (const Case& c : cases) {
     lv_obj_set_style_bg_color(card, lv_color_hex(c.card), 0);
     lv_obj_set_style_text_color(icon, lv_color_hex(c.icon), 0);
     tile_icon_disc::set_tag(disc, tile_icon_disc::Mode::On, c.glow);
     tile_icon_source::set_icon_fill_marker(card, c.fill);
+    if (c.cover_tile) lv_obj_set_style_bg_opa(card, c.cover_tile, tile_icon_source::kCoverStore);
+    else lv_obj_remove_local_style_prop(card, LV_STYLE_BG_OPA, tile_icon_source::kCoverStore);
+    if (c.cover_known) lv_obj_set_style_bg_color(card, lv_color_hex(c.cover), tile_icon_source::kCoverStore);
+    else lv_obj_remove_local_style_prop(card, LV_STYLE_BG_COLOR, tile_icon_source::kCoverStore);
     tile_icon_source::refresh_controls(card);
     uint32_t color; lv_opa_t opa;
     pressed(previous, color, opa);
@@ -128,6 +146,8 @@ int main() {
   lv_obj_t* plus = lv_obj_create(pill);
   lv_obj_remove_style_all(plus);
   tile_icon_disc::mark_control(plus);
+  lv_obj_remove_local_style_prop(card, LV_STYLE_BG_OPA, tile_icon_source::kCoverStore);
+  lv_obj_remove_local_style_prop(card, LV_STYLE_BG_COLOR, tile_icon_source::kCoverStore);
   lv_obj_set_style_bg_color(card, lv_color_hex(0x482F10), 0);
   lv_obj_set_style_text_color(icon, lv_color_hex(0xEF8402), 0);
   tile_icon_disc::set_tag(disc, tile_icon_disc::Mode::On, true);

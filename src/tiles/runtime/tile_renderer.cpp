@@ -24,6 +24,7 @@
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/types/media/cover_color.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/i18n/i18n.h"
@@ -3882,6 +3883,27 @@ static bool media_widgets_are_visible(const MediaTileWidgets& widgets) {
          media_obj_is_visible(widgets.play_pause_label);
 }
 
+// "From cover" (icon color and tile color): reports the color of the cover a
+// Media card shows, or no color when it hides the cover. Sampled once per
+// cover change, at most 32 x 32 pixels (media/cover_color.h).
+static void report_media_cover_color(MediaTileWidgets& widgets, bool visible) {
+  lv_obj_t* card = widgets.cover_clip ? lv_obj_get_parent(widgets.cover_clip) : nullptr;
+  if (!card) return;
+  uint32_t rgb = 0;
+  bool known = false;
+  const void* src = visible && widgets.cover_image ? lv_image_get_src(widgets.cover_image) : nullptr;
+  if (src && lv_image_src_get_type(src) == LV_IMAGE_SRC_VARIABLE) {
+    const lv_image_dsc_t* dsc = static_cast<const lv_image_dsc_t*>(src);
+    const uint32_t stride = dsc->header.stride ? dsc->header.stride : dsc->header.w * 2U;
+    if (dsc->data && dsc->header.cf == LV_COLOR_FORMAT_RGB565_SWAPPED && dsc->header.w && dsc->header.h &&
+        stride >= dsc->header.w * 2U &&
+        dsc->data_size >= stride * (dsc->header.h - 1U) + dsc->header.w * 2U) {
+      known = media_cover_color::pick(dsc->data, dsc->header.w, dsc->header.h, stride, rgb);
+    }
+  }
+  tile_icon_source::set_cover_color(card, known, rgb);
+}
+
 static bool set_media_cover_visible(MediaTileWidgets& widgets, bool visible) {
   bool changed = false;
   if (widgets.cover_clip) {
@@ -3904,6 +3926,7 @@ static bool set_media_cover_visible(MediaTileWidgets& widgets, bool visible) {
       changed = true;
     }
   }
+  report_media_cover_color(widgets, visible);
   return changed;
 }
 

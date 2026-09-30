@@ -30,6 +30,7 @@ const cpp = String.raw`
 #include "src/core/json_scan.h"
 #include "src/types/media/update_schedule.h"
 #include "src/types/media/cover_geometry.h"
+#include "src/types/media/cover_color.h"
 extern "C" { LV_FONT_DECLARE(ui_font_12);LV_FONT_DECLARE(ui_font_14);LV_FONT_DECLARE(ui_font_16);LV_FONT_DECLARE(ui_font_20);LV_FONT_DECLARE(ui_font_24);LV_FONT_DECLARE(ui_font_28);LV_FONT_DECLARE(ui_font_32);LV_FONT_DECLARE(ui_font_40); }
 ${read('src/tiles/runtime/tile_renderer_fonts.h').replace(/^#include.*$/gm,'').replace('#pragma once','')}
 class String : public std::string {public:
@@ -63,6 +64,9 @@ enum class GridType{TAB0,TAB1,TAB2,SCREENSAVER};constexpr int TILES_PER_GRID=4;
 MediaTileWidgets g_tab0_media[4],g_tab1_media[4],g_tab2_media[4],g_screensaver_media[4];
 MediaTileWidgets* tile_renderer_get_media_widgets(GridType grid){return grid==GridType::TAB0?g_tab0_media:grid==GridType::TAB1?g_tab1_media:grid==GridType::TAB2?g_tab2_media:g_screensaver_media;}
 ${fn('find_decoded_media_cover_sibling')}
+// "From cover": every cover change reports its color to the card.
+namespace tile_icon_source{int cover_reports=0;void set_cover_color(lv_obj_t*,bool,uint32_t){++cover_reports;}}
+${fn('report_media_cover_color')}
 ${fn('set_media_cover_visible')}
 ${fn('media_cover_has_hidden_ancestor')}
 // Only decoding/network I/O are injected. Use actual layout and the exact

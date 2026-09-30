@@ -2768,6 +2768,8 @@ function syncTileRadiusControls(tabEl) {
   const ICON_COLOR_TYPES = ICON_COLOR_OWN_TYPES.concat(ICON_COLOR_FIXED_TYPES);
   const ICON_COLOR_BAR_TYPES = ['1', '14', '21'];
   const ICON_COLOR_ROW_TYPES = ['1', '20', '22', '23'];
+  // Media: icon color and tile color "From cover" (the "cover" line).
+  const ICON_COLOR_MEDIA_TYPE = '15';
   const ICON_COLOR_MAX_STOPS = 6;
   const ICON_COLOR_MAX_ROWS = 6;
   const ICON_COLOR_MAX_VALUE_BYTES = 32;
@@ -3061,7 +3063,8 @@ function syncTileRadiusControls(tabEl) {
 
   // normalize(): any record (editor, import, b39) in the canonical v2 form;
   // numeric types keep only the bar, text types only the state lines.
-  function normalizeIconColorRecord(record, allowBar, allowRows, allowSource = false, allowSelf = false) {
+  function normalizeIconColorRecord(record, allowBar, allowRows, allowSource = false, allowSelf = false,
+    allowCover = false) {
     const text = String(record ?? '');
     const v2 = iconColorIsV2(text);
     let source = allowSource ? iconColorRecordSource(text) : null;
@@ -3092,6 +3095,9 @@ function syncTileRadiusControls(tabEl) {
     let out = 'v2\n' + (fixed === null ? '' : iconColorHex(fixed));
     const fill = v2 ? iconColorFillOf(body) : 0;
     if (fill) out += '\nfill ' + fill;
+    const cover = allowCover && v2 ? iconColorCoverOf(body) : { icon: false, tile: 0 };
+    const hasCover = cover.icon || cover.tile > 0;
+    if (hasCover) out += '\ncover' + (cover.icon ? ' icon' : '') + (cover.tile ? ' tile=' + cover.tile : '');
     if (emitLayer) {
       out += '\nsrc ' + source.mode + ' ' + (source.self ? 'self' : source.entity) +
         (source.tile ? ' tile=' + source.tile : '') + (source.icon ? '' : ' noicon') + (source.enabled ? '' : ' off');
@@ -3105,7 +3111,7 @@ function syncTileRadiusControls(tabEl) {
       let legacyRules = 0;
       for (const line of body) {
         if (rows >= ICON_COLOR_MAX_ROWS) break;
-        if (v2 && (line.startsWith('bar ') || line.startsWith('src '))) continue;
+        if (v2 && (line.startsWith('bar ') || line.startsWith('src ') || line.startsWith('cover'))) continue;
         const rule = iconColorParseRule(line);
         if (!rule) continue;
         const textRule = rule.op === 'is' || rule.op === 'has';
@@ -3125,7 +3131,7 @@ function syncTileRadiusControls(tabEl) {
         rows++;
       }
     }
-    return fixed === null && !fill && !emitLayer && !bar && rows === 0 ? '' : out;
+    return fixed === null && !fill && !hasCover && !emitLayer && !bar && rows === 0 ? '' : out;
   }
 
   // tile_icon_colors::fill_of(): the "fill NN" tint of the fixed color in
@@ -3138,9 +3144,26 @@ function syncTileRadiusControls(tabEl) {
     return Math.min(50, Math.max(10, Number(text)));
   }
 
+  // tile_icon_colors::cover_of(): "From cover" of a Media tile, the first
+  // "cover [icon] [tile=NN]" line; an unknown token makes it invalid.
+  function iconColorCoverOf(lines) {
+    const none = { icon: false, tile: 0 };
+    const line = lines.find(candidate => candidate.startsWith('cover'));
+    if (line === undefined) return none;
+    const tokens = line.split(/[ \t\r]+/).filter(Boolean);
+    if (tokens[0] !== 'cover') return none;
+    const out = { icon: false, tile: 0 };
+    for (const token of tokens.slice(1)) {
+      if (token === 'icon') out.icon = true;
+      else if (/^tile=[0-9]{1,2}$/.test(token)) out.tile = Math.min(50, Math.max(10, Number(token.slice(5))));
+      else return none;
+    }
+    return out;
+  }
+
   // Editor view of a record: fixed color, bar and state rows.
   function parseIconColorRecord(record) {
-    const lines = normalizeIconColorRecord(record, true, true, true, true).split('\n');
+    const lines = normalizeIconColorRecord(record, true, true, true, true, true).split('\n');
     const fixed = iconColorParseHex(lines[1] ?? '');
     let bar = null;
     const rows = [];
@@ -3150,7 +3173,8 @@ function syncTileRadiusControls(tabEl) {
       if (rule) rows.push({ has: rule.op === 'has', color: '#' + iconColorHex(rule.color), value: rule.value });
     }
     return { color: fixed === null ? '' : '#' + iconColorHex(fixed), bar, rows,
-      fill: iconColorFillOf(lines.slice(2)), source: iconColorRecordSource(lines.join('\n')) };
+      fill: iconColorFillOf(lines.slice(2)), cover: iconColorCoverOf(lines.slice(2)),
+      source: iconColorRecordSource(lines.join('\n')) };
   }
 
   // ---- Source entity (icon-and-title tiles), mirrors tile_icon_source.cpp ----
@@ -3570,10 +3594,18 @@ function syncTileRadiusControls(tabEl) {
   function collectIconColorRecord(tab) {
     const type = iconColorTypeOf(tab);
     const input = iconColorEl(tab, '_tile_icon_color');
-    const fixed = input && input.dataset.unset !== '1' ? normalizeIconColorHex(input.value).slice(1) : '';
+    // Media "From cover": the icon takes the cover color instead of its own.
+    const media = type === ICON_COLOR_MEDIA_TYPE;
+    const coverIcon = media && !!iconColorEl(tab, '_tile_icon_cover')?.checked;
+    const coverTile = media && !!iconColorEl(tab, '_tile_cover_fill')?.checked;
+    const fixed = input && input.dataset.unset !== '1' && !coverIcon ? normalizeIconColorHex(input.value).slice(1) : '';
     const lines = ['v2', fixed];
     if (iconColorEl(tab, '_tile_icon_fill')?.checked) {
       lines.push('fill ' + (iconColorEl(tab, '_tile_icon_fill_strength')?.value || '20'));
+    }
+    if (coverIcon || coverTile) {
+      lines.push('cover' + (coverIcon ? ' icon' : '') +
+        (coverTile ? ' tile=' + (iconColorEl(tab, '_tile_icon_fill_strength')?.value || '20') : ''));
     }
     const layer = ICON_COLOR_TYPES.includes(type) ? readIconColorSource(tab) : null;
     const bar = readIconColorBar(tab);
@@ -3601,7 +3633,7 @@ function syncTileRadiusControls(tabEl) {
         (layer.tile ? ' tile=' + layer.tile : '') + (layer.icon ? '' : ' noicon') + (layer.enabled ? '' : ' off'));
     }
     return normalizeIconColorRecord(lines.join('\n'), ICON_COLOR_BAR_TYPES.includes(type),
-      ICON_COLOR_ROW_TYPES.includes(type), true, ICON_COLOR_OWN_TYPES.includes(type));
+      ICON_COLOR_ROW_TYPES.includes(type), true, ICON_COLOR_OWN_TYPES.includes(type), media);
   }
 
   // States can be numbers or text: the current state picks the bar or the
@@ -3631,6 +3663,18 @@ function syncTileRadiusControls(tabEl) {
     if (typeof syncTileColorMode === 'function') syncTileColorMode(tab);
     block.classList.toggle('hidden', !visible);
     iconColorEl(tab, '_tile_icon_color_fixed')?.classList.toggle('hidden', !visible);
+    // Media offers the icon color "From cover" next to its own color.
+    const media = type === ICON_COLOR_MEDIA_TYPE;
+    const coverIconBox = iconColorEl(tab, '_tile_icon_cover');
+    if (coverIconBox && !media) coverIconBox.checked = false;
+    const coverIcon = media && !!coverIconBox?.checked;
+    iconColorEl(tab, '_tile_icon_color_modes')?.classList.toggle('hidden', !media);
+    iconColorEl(tab, '_tile_icon_color_row')?.classList.toggle('hidden', coverIcon);
+    iconColorEl(tab, '_tile_icon_color_modes')?.querySelectorAll('[data-icon-color="icon-color-mode"]').forEach(button => {
+      const active = button.dataset.mode === (coverIcon ? 'cover' : 'own');
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
     if (!visible) return;
     const own = ICON_COLOR_OWN_TYPES.includes(type);
     const kindInput = iconColorEl(tab, '_tile_icon_source_kind');
@@ -3705,8 +3749,13 @@ function syncTileRadiusControls(tabEl) {
     setIconColorInput(tab, parsed.color);
     const fill = iconColorEl(tab, '_tile_icon_fill');
     if (fill) fill.checked = parsed.fill > 0;
+    const media = type === ICON_COLOR_MEDIA_TYPE;
+    const coverIcon = iconColorEl(tab, '_tile_icon_cover');
+    if (coverIcon) coverIcon.checked = media && parsed.cover.icon;
+    const coverFill = iconColorEl(tab, '_tile_cover_fill');
+    if (coverFill) coverFill.checked = media && parsed.cover.tile > 0 && !parsed.fill;
     const fillStrength = iconColorEl(tab, '_tile_icon_fill_strength');
-    if (fillStrength) fillStrength.value = String(parsed.fill || 20);
+    if (fillStrength) fillStrength.value = String(parsed.fill || (media && parsed.cover.tile) || 20);
     const barInput = iconColorEl(tab, '_tile_icon_bar');
     if (barInput) barInput.dataset.last = '';
     writeIconColorBar(tab, parsed.bar ? parsed.bar.mode : 'off', parsed.bar ? parsed.bar.stops : []);
@@ -3832,6 +3881,9 @@ function syncTileRadiusControls(tabEl) {
     }
     if (role === 'clear') {
       setIconColorInput(tab, '');
+    } else if (role === 'icon-color-mode') {
+      const cover = iconColorEl(tab, '_tile_icon_cover');
+      if (cover) cover.checked = button.dataset.mode === 'cover';
     } else if (role === 'source-mode') {
       const mode = iconColorEl(tab, '_tile_icon_source_mode');
       if (mode) mode.value = button.dataset.mode === 'rules' ? 'rules' : 'auto';
@@ -7247,6 +7299,7 @@ function syncTileRadiusControls(tabEl) {
   // colors offer From icon color. Nothing else switches the choice.
   function tileColorMode(tab) {
     if (document.getElementById(tab + '_tile_icon_fill')?.checked) return 'icon';
+    if (document.getElementById(tab + '_tile_cover_fill')?.checked) return 'cover';
     return document.getElementById(tab + '_tile_color')?.dataset.bgColorDefault === '0' ? 'custom' : 'global';
   }
   function syncTileColorMode(tab) {
@@ -7254,15 +7307,20 @@ function syncTileRadiusControls(tabEl) {
     const iconOffered = typeof tileTypeHasIconColors === 'function' && tileTypeHasIconColors(typeValue);
     const fill = document.getElementById(tab + '_tile_icon_fill');
     if (fill?.checked && !iconOffered) fill.checked = false;
+    // Media tiles also offer "From cover" (the album cover's color).
+    const coverOffered = String(typeValue) === '15';
+    const coverFill = document.getElementById(tab + '_tile_cover_fill');
+    if (coverFill?.checked && !coverOffered) coverFill.checked = false;
     const mode = tileColorMode(tab);
     document.getElementById(tab + '_tile_color_modes')?.querySelectorAll('[data-tile-color-mode]').forEach(button => {
       const active = button.dataset.tileColorMode === mode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
       if (button.dataset.tileColorMode === 'icon') button.classList.toggle('hidden', !iconOffered);
+      if (button.dataset.tileColorMode === 'cover') button.classList.toggle('hidden', !coverOffered);
     });
     document.getElementById(tab + '_tile_color_row')?.classList.toggle('color-hidden', mode !== 'custom');
-    document.getElementById(tab + '_tile_icon_fill_row')?.classList.toggle('hidden', mode !== 'icon');
+    document.getElementById(tab + '_tile_icon_fill_row')?.classList.toggle('hidden', mode !== 'icon' && mode !== 'cover');
     const strength = document.getElementById(tab + '_tile_icon_fill_strength');
     const output = document.getElementById(tab + '_tile_icon_fill_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
@@ -7275,6 +7333,8 @@ function syncTileRadiusControls(tabEl) {
     if (before === 'custom' && mode !== 'custom') input.dataset.customColor = input.value;
     const fill = document.getElementById(tab + '_tile_icon_fill');
     if (fill) fill.checked = mode === 'icon';
+    const coverFill = document.getElementById(tab + '_tile_cover_fill');
+    if (coverFill) coverFill.checked = mode === 'cover';
     const remembered = input.dataset.customColor || '';
     if (mode === 'custom') {
       if (before !== 'custom' && remembered) input.value = remembered;

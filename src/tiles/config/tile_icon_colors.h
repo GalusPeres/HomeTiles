@@ -19,6 +19,11 @@
 //            color its icon shows (the fixed color or the entity's own
 //            color); the "Tint tile" option of the icon color, below an
 //            active rule tint (tile_icon_source.cpp)
+//   then, on Media tiles only, optionally "cover [icon] [tile=NN]": "From
+//            cover" takes the color of the album cover (media/cover_color.h)
+//            for the icon ("icon") and/or tints the tile at NN percent
+//            ("tile=NN"), below an active rule; without a cover color the
+//            icon keeps its default and the tile its own color
 //   then at most one rule layer ("Rules" in the Web Admin):
 //            "src <auto|rules> <self|entity_id> [tile=NN] [noicon] [off]"
 //            auto takes the entity's own icon color (light color, on/off,
@@ -76,9 +81,11 @@ inline constexpr uint8_t kTintDefault = 20;
 inline constexpr size_t kMaxSourceBytes = 1 + 3 + 1 + 5 + 1 + kMaxEntityBytes + 8 + 7 + 4;
 // "\nfill 50".
 inline constexpr size_t kMaxFillBytes = 8;
-// "v2\nRRGGBB", the fill, the source, the bar and the state lines.
-inline constexpr size_t kMaxRecordBytes =
-    2 + 1 + 6 + kMaxFillBytes + kMaxSourceBytes + kMaxBarBytes + kMaxRows * kMaxRowBytes;
+// "\ncover icon tile=50".
+inline constexpr size_t kMaxCoverBytes = 19;
+// "v2\nRRGGBB", the fill, the cover, the source, the bar and the state lines.
+inline constexpr size_t kMaxRecordBytes = 2 + 1 + 6 + kMaxFillBytes + kMaxCoverBytes + kMaxSourceBytes +
+                                          kMaxBarBytes + kMaxRows * kMaxRowBytes;
 
 enum class Op : uint8_t { None, Ge, Le, Eq, Is, Has };
 enum class BarMode : uint8_t { Smooth, Steps };
@@ -452,6 +459,55 @@ inline uint8_t fill_of(const char* record) {
   return 0;
 }
 
+// "From cover" of a Media tile (the "cover" line).
+struct Cover {
+  bool icon = false;  // the icon takes the cover color
+  uint8_t tile = 0;   // tile tint in percent, 0 = no tint
+};
+
+// Parses "cover [icon] [tile=NN]" spanning [begin, end); unknown tokens make
+// the line invalid.
+inline bool parse_cover_line(const char* begin, const char* end, Cover& out) {
+  Cover parsed;
+  const char* p = begin;
+  const char* token = nullptr;
+  const char* stop = nullptr;
+  if (!next_token(p, end, token, stop) || !token_is(token, stop, "cover")) return false;
+  while (next_token(p, end, token, stop)) {
+    const size_t length = static_cast<size_t>(stop - token);
+    if (token_is(token, stop, "icon")) {
+      parsed.icon = true;
+    } else if (length >= 6 && length <= 7 && memcmp(token, "tile=", 5) == 0) {
+      unsigned percent = 0;
+      for (const char* d = token + 5; d < stop; ++d) {
+        if (*d < '0' || *d > '9') return false;
+        percent = percent * 10 + static_cast<unsigned>(*d - '0');
+      }
+      parsed.tile = clamp_tint(percent);
+    } else {
+      return false;
+    }
+  }
+  out = parsed;
+  return true;
+}
+
+// The "From cover" settings of a v2 record (the first "cover" line, if valid).
+inline Cover cover_of(const char* record) {
+  Cover out;
+  if (!record || !is_v2(record)) return out;
+  for (const char* p = line_end(second_line(record)); *p == '\n';) {
+    const char* begin = p + 1;
+    const char* end = line_end(begin);
+    p = end;
+    if (!starts_with(begin, end, "cover")) continue;
+    Cover parsed;
+    if (parse_cover_line(begin, end, parsed)) out = parsed;
+    return out;
+  }
+  return out;
+}
+
 // Parses "src <auto|rules> <self|entity_id> [tile=NN] [noicon] [off]"
 // spanning [begin, end); options may come in any order, unknown tokens make
 // the line invalid.
@@ -725,12 +781,12 @@ inline bool append_row(const Rule& rule, char* out, size_t& n) {
 // the canonical v2 form: uppercase colors, one valid source entity when
 // `allow_source`, one valid bar with sorted stops when `allow_bar`, up to six
 // non-empty state lines when `allow_rows`, values trimmed and clipped to
-// kMaxValueBytes. A "rules" source allows the bar and the state lines, an
-// "auto" source takes the entity's own color and drops them. Invalid lines
-// are dropped. Returns the length written to `out` (0 = no icon colors);
-// `out` is always terminated.
+// kMaxValueBytes, and the "cover" line when `allow_cover` (Media). A "rules"
+// source allows the bar and the state lines, an "auto" source takes the
+// entity's own color and drops them. Invalid lines are dropped. Returns the
+// length written to `out` (0 = no icon colors); `out` is always terminated.
 inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_bar, bool allow_rows,
-                        bool allow_source = false, bool allow_self = false) {
+                        bool allow_source = false, bool allow_self = false, bool allow_cover = false) {
   if (!out || out_size == 0) return 0;
   out[0] = '\0';
   if (!in || out_size < kMaxRecordBytes + 1) return 0;
@@ -783,6 +839,13 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
   if (has_fixed) append_hex(out, n, fixed);
   const uint8_t fill = v2 ? fill_of(in) : 0;
   if (fill) n += static_cast<size_t>(snprintf(out + n, out_size - n, "\nfill %u", static_cast<unsigned>(fill)));
+  const Cover cover = allow_cover && v2 ? cover_of(in) : Cover{};
+  const bool has_cover = cover.icon || cover.tile;
+  if (has_cover) {
+    append_text(out, n, "\ncover");
+    if (cover.icon) append_text(out, n, " icon");
+    if (cover.tile) n += static_cast<size_t>(snprintf(out + n, out_size - n, " tile=%u", static_cast<unsigned>(cover.tile)));
+  }
   if (emit_layer) {
     append_text(out, n, layer.mode == SourceMode::Auto ? "\nsrc auto " : "\nsrc rules ");
     if (layer.self) {
@@ -815,7 +878,10 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
       const char* begin = p + 1;
       const char* end = line_end(begin);
       p = end;
-      if (v2 && (starts_with(begin, end, "bar ") || starts_with(begin, end, "src "))) continue;
+      if (v2 && (starts_with(begin, end, "bar ") || starts_with(begin, end, "src ") ||
+                 starts_with(begin, end, "cover"))) {
+        continue;
+      }
       Rule rule;
       if (!parse_rule(begin, end, rule)) continue;
       if (!v2) {
@@ -831,7 +897,7 @@ inline size_t normalize(const char* in, char* out, size_t out_size, bool allow_b
       if (append_row(rule, out, n)) ++rows;
     }
   }
-  if (!has_fixed && !fill && !emit_layer && !has_bar && rows == 0) n = 0;
+  if (!has_fixed && !fill && !has_cover && !emit_layer && !has_bar && rows == 0) n = 0;
   out[n] = '\0';
   return n;
 }

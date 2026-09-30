@@ -106,6 +106,13 @@ bool type_applies_fixed_icon_color(int type) {
 
 constexpr lv_style_selector_t kTintStore = LV_PART_MAIN | LV_STATE_USER_4;
 
+// "From cover" of a Media card (tile_icon_colors.h "cover" line), kept in an
+// unused state selector of the card like the tint store: the cover color the
+// Media renderer found (bg color; absent without one) and what refresh_card
+// lets it color right now (bg opa: the tile tint percent; border opa: 1 for
+// the icon). Cards without "From cover" never carry these values.
+constexpr lv_style_selector_t kCoverStore = LV_PART_MAIN | LV_STATE_USER_3;
+
 // The opener object of the popup opened last and its parents. Only compared
 // with cards, never dereferenced, so a deleted card cannot be touched.
 constexpr int kPopupSourceDepth = 5;
@@ -140,6 +147,48 @@ void set_icon_fill_marker(lv_obj_t* card, uint8_t marker) {
     return;
   }
   if (!found || current != marker) lv_obj_set_style_bg_opa(card, marker, kTintStore);
+}
+
+bool cover_color(lv_obj_t* card, uint32_t& rgb) {
+  lv_style_value_t value;
+  if (!card || lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &value, kCoverStore) != LV_STYLE_RES_FOUND) {
+    return false;
+  }
+  rgb = lv_color_to_u32(value.color) & 0xFFFFFF;
+  return true;
+}
+
+uint8_t cover_tile(lv_obj_t* card) {
+  lv_style_value_t value;
+  if (!card || lv_obj_get_local_style_prop(card, LV_STYLE_BG_OPA, &value, kCoverStore) != LV_STYLE_RES_FOUND) {
+    return 0;
+  }
+  return static_cast<uint8_t>(value.num);
+}
+
+bool cover_icon(lv_obj_t* card) {
+  lv_style_value_t value;
+  return card && lv_obj_get_local_style_prop(card, LV_STYLE_BORDER_OPA, &value, kCoverStore) == LV_STYLE_RES_FOUND;
+}
+
+// A card tinted "From cover" with a cover color: its controls and its popup's
+// controls take the circle's color like "From icon".
+bool cover_tints(lv_obj_t* card) {
+  uint32_t rgb = 0;
+  return cover_tile(card) && cover_color(card, rgb) && tile_tint::has_hue(rgb);
+}
+
+// What "From cover" may color now (refresh_card): the icon unless an active
+// rule colors it, the tile unless "From icon" or an active rule tints it.
+void set_cover_permissions(lv_obj_t* card, bool icon, uint8_t tile) {
+  if (cover_icon(card) != icon) {
+    if (icon) lv_obj_set_style_border_opa(card, 1, kCoverStore);
+    else lv_obj_remove_local_style_prop(card, LV_STYLE_BORDER_OPA, kCoverStore);
+  }
+  if (cover_tile(card) != tile) {
+    if (tile) lv_obj_set_style_bg_opa(card, tile, kCoverStore);
+    else lv_obj_remove_local_style_prop(card, LV_STYLE_BG_OPA, kCoverStore);
+  }
 }
 
 // The first icon disc of a card, directly or in a content container.
@@ -261,6 +310,30 @@ void clear_tile_tint(lv_obj_t* card) {
 }
 
 
+// Applies "From cover" as refresh_card allowed it: the icon takes the cover
+// color (without one its default color), the tile the cover tint (without
+// one its own color). Grey, white and black covers give no color.
+void apply_cover(lv_obj_t* card) {
+  uint32_t rgb = 0;
+  const bool known = cover_color(card, rgb) && tile_tint::has_hue(rgb);
+  if (cover_icon(card)) {
+    if (lv_obj_t* icon = card_icon(card)) {
+      if (known) tile_icon_disc::force_icon_color(icon, lv_color_hex(rgb));
+      else tile_icon_disc::release_icon_color(icon);
+    }
+  }
+  const uint8_t tile = cover_tile(card);
+  if (!tile) return;
+  const uint32_t before = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
+  if (known) set_tile_tint(card, rgb, tile);
+  else clear_tile_tint(card);
+  if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) != before) {
+    follow_open_popup(card);
+  }
+  refresh_discs(card);
+  refresh_controls(card);
+}
+
 String layer_entity(const Tile& tile, const tile_icon_colors::Source& layer) {
   if (layer.mode == tile_icon_colors::SourceMode::None || !layer.enabled) return String();
   if (layer.self) return tile.sensor_entity;
@@ -339,6 +412,8 @@ bool tile_color_from_icon(lv_obj_t* obj) {
   uint8_t marker = 0;
   for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
     if (icon_fill_marker(obj, marker)) return marker > 0;
+    // "From cover" tints like "From icon".
+    if (cover_tints(obj)) return true;
   }
   return false;
 }
@@ -395,8 +470,11 @@ void refresh_controls(lv_obj_t* card) {
       lv_obj_t* disc = find_disc(card);
       const uint32_t rgb = disc_icon_rgb(disc);
       uint8_t marker = 0;
-      const bool tinted = disc && tile_icon_disc::glow_of(disc) && icon_fill_marker(card, marker) &&
-                          marker > 0 && tile_icon_disc::icon_color_tints(rgb);
+      // "From cover" tints them like "From icon".
+      const bool follows = (icon_fill_marker(card, marker) &&
+                            marker > 0 && tile_icon_disc::icon_color_tints(rgb)) ||
+                           (cover_tints(card) && tile_icon_disc::icon_color_tints(rgb));
+      const bool tinted = disc && tile_icon_disc::glow_of(disc) && follows;
       const uint32_t background = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
       color = lv_color_hex(
           tone_color::fill(background, rgb, tinted, ui_surface_style::icon_glow_percent()).color);
@@ -412,6 +490,17 @@ void refresh_controls(lv_obj_t* card) {
   }
 }
 
+void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb) {
+  if (!card) return;
+  uint32_t stored = 0;
+  const bool had = cover_color(card, stored);
+  rgb &= 0xFFFFFF;
+  if (had == known && (!known || stored == rgb)) return;
+  if (known) lv_obj_set_style_bg_color(card, lv_color_hex(rgb), kCoverStore);
+  else lv_obj_remove_local_style_prop(card, LV_STYLE_BG_COLOR, kCoverStore);
+  apply_cover(card);
+}
+
 void refresh_card(lv_obj_t* card, const Tile& tile) {
   tile_icon_disc::g_icon_color_hook = &on_icon_color;
   if (!card || !tileTypeHasIconColors(tile.type)) return;
@@ -420,12 +509,17 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
   bool active = false;
   const bool colored = layer.mode != tile_icon_colors::SourceMode::None && layer.enabled &&
                        rule_color(tile, rgb, &active);
+  // "From cover" exists on Media tiles only; every other type keeps its path.
+  const tile_icon_colors::Cover cover =
+      tile.type == TILE_MEDIA ? tile_icon_colors::cover_of(tile.icon_colors.c_str()) : tile_icon_colors::Cover{};
   if (lv_obj_t* icon = card_icon(card)) {
     uint32_t fixed = 0;
     const bool force_fixed = !type_applies_fixed_icon_color(tile.type) && tile.icon_colors.length() &&
                              tile_icon_colors::resolve(tile.icon_colors.c_str(), "", nullptr, fixed);
     if (colored && layer.icon) {
       tile_icon_disc::force_icon_color(icon, lv_color_hex(rgb));
+    } else if (cover.icon) {
+      // "From cover": apply_cover below shows the cover color or the default.
     } else if (force_fixed) {
       tile_icon_disc::force_icon_color(icon, lv_color_hex(fixed));
     } else {
@@ -445,7 +539,11 @@ void refresh_card(lv_obj_t* card, const Tile& tile) {
   const tile_tint::Choice choice =
       tile_tint::choose(colored && active, rgb, layer.tile, fill, disc_icon_rgb(find_disc(card)));
   set_icon_fill_marker(card, fill);
-  apply_tint_choice(card, choice);
+  // "From cover" tints below an active rule and never with "From icon".
+  const uint8_t cover_tint = cover.tile && !choice.percent ? cover.tile : 0;
+  if (tile.type == TILE_MEDIA) set_cover_permissions(card, cover.icon && !(colored && layer.icon), cover_tint);
+  if (!cover_tint) apply_tint_choice(card, choice);
+  if (tile.type == TILE_MEDIA) apply_cover(card);
   if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) != before) {
     follow_open_popup(card);
   }

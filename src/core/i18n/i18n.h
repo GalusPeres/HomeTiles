@@ -295,6 +295,9 @@ struct Strings {
   const char* tile_color_mode_global;
   const char* tile_color_mode_custom;
   const char* tile_color_mode_from_icon;
+  // Media tiles: "From cover", the color of the album cover, offered as tile
+  // color and as icon color.
+  const char* tile_color_mode_from_cover;
   // Web Admin tile editor: per-tile icon disc override.
   const char* icon_disc_label;
   const char* icon_disc_global;

@@ -173,7 +173,7 @@ const policy = read('src/types/tile_type_policy.h');
 assert.match(policy, /tileTypeIconColorsByValue\(int type\) \{\s*return type == TILE_SENSOR \|\| type == TILE_ENERGY \|\| type == TILE_NUMBER;/);
 assert.match(policy, /tileTypeIconColorsByState\(int type\) \{\s*return type == TILE_SENSOR \|\| type == TILE_BINARY_SENSOR \|\| type == TILE_SELECT \|\|\s*type == TILE_DATETIME;/);
 assert.match(read('src/tiles/config/tile_config.h'),
-  /tile_icon_colors::normalize\(\s*record, out, sizeof\(out\), tileTypeIconColorsByValue\(type\), tileTypeIconColorsByState\(type\),\s*true, tileTypeRulesUseOwnEntity\(type\)\);/);
+  /tile_icon_colors::normalize\(\s*record, out, sizeof\(out\), tileTypeIconColorsByValue\(type\), tileTypeIconColorsByState\(type\),\s*true, tileTypeRulesUseOwnEntity\(type\), type == TILE_MEDIA\);/);
 
 const rules = code(read('src/tiles/runtime/tile_icon_color_rules.h'));
 assert.ok(rules.includes('tile_icon_disc::set_icon_color(icon, color);'), 'Colors go through the disc glow path');
@@ -343,9 +343,10 @@ int main(){
  assert(own_state_colors_icon("v2\n\nhas F44336 6")&&!own_state_colors_icon("v2\n\nsrc rules self off")&&!own_state_colors_icon("v2\n\nsrc rules sensor.x"));
  uint32_t rgb=0;assert(!resolve("","on",nullptr,rgb)&&!resolve(nullptr,"on",nullptr,rgb)&&!resolve("v2\n\nis FFC107 on",nullptr,nullptr,rgb));
  // Worst case (source, bar and six states) fits the sidecar limit.
- std::string worst="v2\nFFFFFF\nfill 50\nsrc rules a."+std::string(126,'b')+" tile=50 noicon off\nbar smooth -12345678901 999999999999 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000";
+ std::string worst="v2\nFFFFFF\nfill 50\ncover icon tile=50\nsrc rules a."+std::string(126,'b')+" tile=50 noicon off\nbar smooth -12345678901 999999999999 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000 1000:000000";
  for(int i=0;i<6;++i){worst+="\nhas FFFFFF ";worst+=std::string(64,'w');}
- {char out[kMaxRecordBytes+1];assert(normalize(worst.c_str(),out,sizeof(out),false,false,true)==kMaxRecordBytes);}
+ // The Media "cover" line counts too (allow_cover).
+ {char out[kMaxRecordBytes+1];assert(normalize(worst.c_str(),out,sizeof(out),false,false,true,false,true)==kMaxRecordBytes);}
  // Icon-and-title tiles: a source entity; "rules" keeps the bar and states,
  // "auto" drops them; other types never keep a source line.
  assert(normalizeTileIconColors(TILE_FOLDER,"v2\nff0000\nsrc rules sensor.waste\nhas f44336 6\nbar steps 0 10 0:000000 1000:FFFFFF")=="v2\nFF0000\nsrc rules sensor.waste\nbar steps 0 10 0:000000 1000:FFFFFF\nhas F44336 6");

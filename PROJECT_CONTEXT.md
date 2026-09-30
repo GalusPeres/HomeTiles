@@ -81,7 +81,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings in PSRAM, no extra framebuffers.
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
 - Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted. Media "From cover" b119 S3 ok.
-- LVGL 9.5 invalidate walk (S3 recolor 230 ms) fixed in 9.6.0 (lvgl#10306): branch `lvgl-9.6`, own lib folder, caches `hometiles-lvgl96-*`.
+- LVGL 9.5 invalidate walk (S3 recolor 230 ms) fixed in 9.6.0 (lvgl#10306): security-firmware, own lib folder, caches `hometiles-lvgl96-*`.
 
 ## Radius and half-grid
 

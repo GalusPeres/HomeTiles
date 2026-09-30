@@ -32,7 +32,8 @@ inline void input_event(lv_event_t* event) {
     sample.height = lv_obj_get_height(source);
     const auto state = lv_obj_get_state(source);
     sample.press_layout = lv_obj_style_state_compare(
-        source, state, static_cast<lv_state_t>(state | LV_STATE_PRESSED)) == LV_STYLE_STATE_CMP_DIFF_LAYOUT;
+        source, state, static_cast<lv_state_t>(state | LV_STATE_PRESSED), nullptr) ==
+        LV_STYLE_STATE_CMP_DIFF_LAYOUT;
   } else if (sample.active && code == LV_EVENT_RELEASED) {
     sample.released = now;
   } else if (sample.active &&

@@ -33,9 +33,20 @@ $hiddenSketchProfiles = Join-Path $repoRoot 'sketch.yaml.hometiles-local-build'
 $arduinoCli = Join-Path $env:LOCALAPPDATA 'Programs\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe'
 $libraries = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Arduino\libraries'
 $repoLibraries = Join-Path $repoRoot 'third_party'
+# LVGL 9.6.0 lives in its own folder so the shared sketchbook copy (LVGL 9.5.0,
+# used by the other branches) stays untouched. arduino-cli ranks a --library
+# folder above the sketchbook libraries. Install it once with
+# `arduino-cli lib download lvgl@9.6.0` and unpack the zip into this folder.
+$lvglVersion = '9.6.0'
+$lvglLibrary = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "Arduino\lvgl-$lvglVersion\lvgl"
 
 if (-not (Test-Path -LiteralPath $arduinoCli)) {
     throw "Arduino CLI was not found: $arduinoCli"
+}
+$lvglProperties = Join-Path $lvglLibrary 'library.properties'
+if (-not (Test-Path -LiteralPath $lvglProperties) -or
+    -not (Get-Content -LiteralPath $lvglProperties | Where-Object { $_ -ceq "version=$lvglVersion" })) {
+    throw "LVGL $lvglVersion was not found: $lvglLibrary"
 }
 if (-not (Test-Path -LiteralPath $sketchProfiles)) {
     throw "Sketch profiles were not found: $sketchProfiles"
@@ -74,8 +85,23 @@ if (-not $BuildPath) {
         $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($defineKey))
         $suffix = '-' + (($hash[0..3] | ForEach-Object { $_.ToString('x2') }) -join '')
     }
-    $BuildPath = Join-Path $env:LOCALAPPDATA "arduino\sketches\hometiles-$Profile$suffix"
+    $BuildPath = Join-Path $env:LOCALAPPDATA "arduino\sketches\hometiles-lvgl96-$Profile$suffix"
 }
+# Never reuse a build folder that holds an LVGL 9.5 build: sketch objects keep
+# compiling against the old headers, and the warm caches of the other branches
+# would be lost. The marker is rewritten after arduino-cli ran because a
+# changed option set makes it wipe the folder.
+$lvglMarker = Join-Path $BuildPath 'hometiles-lvgl-version.txt'
+if ((Test-Path -LiteralPath (Join-Path $BuildPath 'build.options.json')) -and
+    -not ((Test-Path -LiteralPath $lvglMarker) -and
+          (Get-Content -LiteralPath $lvglMarker -Raw).Trim() -eq $lvglVersion)) {
+    throw "Build cache $BuildPath was not built with LVGL $lvglVersion; use a separate -BuildPath."
+}
+function Write-LvglMarker {
+    New-Item -ItemType Directory -Path $BuildPath -Force | Out-Null
+    Set-Content -LiteralPath $lvglMarker -Value $lvglVersion -NoNewline -Encoding ascii
+}
+Write-LvglMarker
 Write-Host "Build cache: $BuildPath"
 
 $isNativeS3 = $buildProfile.chipFamily -eq 'ESP32-S3'
@@ -156,6 +182,7 @@ try {
         '--fqbn', $fqbn,
         '--build-path', $BuildPath,
         '--libraries', $repoLibraries,
+        '--library', $lvglLibrary,
         '--build-property', "compiler.c.extra_flags=$cFlags",
         '--build-property', "compiler.cpp.extra_flags=$cppFlags",
         '--build-property', "compiler.cpp.flags=$cppCompileFlags",
@@ -205,6 +232,7 @@ finally {
     if (Test-Path -LiteralPath $hiddenSketchProfiles) {
         Move-Item -LiteralPath $hiddenSketchProfiles -Destination $sketchProfiles
     }
+    Write-LvglMarker
 }
 
 $firmwareBin = Join-Path $OutputDirectory 'HomeTiles.ino.bin'

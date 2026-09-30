@@ -4,15 +4,16 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import {spawn, spawnSync} from 'node:child_process';
 
-// Optional real LVGL software rendering, using the same installed library as Arduino.
+// Optional real LVGL software rendering, using the same LVGL 9.6.0 folder as the
+// local firmware build (tools/build-firmware-local.ps1).
 export async function lvglHost(root) {
-  const library = [process.env.LVGL_INCLUDE, path.join(os.homedir(), 'Documents/Arduino/libraries/lvgl')]
+  const library = [process.env.LVGL_INCLUDE, path.join(os.homedir(), 'Documents/Arduino/lvgl-9.6.0/lvgl')]
     .filter(Boolean).find(p => fs.existsSync(path.join(p, 'lvgl.h')));
   const cc = ['clang', 'gcc'].find(c => spawnSync(c, ['--version']).status === 0);
   const cxx = ['clang++', 'g++'].find(c => spawnSync(c, ['--version']).status === 0);
   const ar = ['llvm-ar', 'ar'].find(c => spawnSync(c, ['--version']).status === 0);
   if (!library || !cc || !cxx || !ar) return null;
-  const flags = ['-DLV_CONF_SKIP', '-DLV_FONT_FMT_TXT_LARGE=1', '-DLV_USE_FONT_COMPRESSED=1', '-DLV_COLOR_DEPTH=32', '-DLV_MEM_SIZE=33554432', '-I', library, '-I', root, '-DMDI_ICONS_32=1', '-DMDI_ICONS_40=1', '-DMDI_ICONS_48=1', '-DWEATHER_ICONS_32=1', '-DWEATHER_ICONS_40=1', '-DWEATHER_ICONS_48=1', '-DUI_FONT_12=1', '-DUI_FONT_32=1', '-DUI_FONT_40=1', '-DUI_FONT_14=1', '-DUI_FONT_CYRILLIC_14=1'];
+  const flags = ['-DLV_CONF_SKIP', '-DLV_FONT_FMT_TXT_LARGE=1', '-DLV_USE_FONT_COMPRESSED=1', '-DLV_COLOR_FORMAT_DEFAULT=LV_COLOR_FORMAT_XRGB8888', '-DLV_USE_ASSERT=1', '-DLV_USE_ASSERT_NULL=1', '-DLV_USE_ASSERT_MALLOC=1', '-DLV_MEM_SIZE=33554432', '-I', library, '-I', root, '-DMDI_ICONS_32=1', '-DMDI_ICONS_40=1', '-DMDI_ICONS_48=1', '-DWEATHER_ICONS_32=1', '-DWEATHER_ICONS_40=1', '-DWEATHER_ICONS_48=1', '-DUI_FONT_12=1', '-DUI_FONT_32=1', '-DUI_FONT_40=1', '-DUI_FONT_14=1', '-DUI_FONT_CYRILLIC_14=1'];
   const walk = p => fs.readdirSync(p, {withFileTypes: true}).flatMap(e => e.isDirectory() ? walk(path.join(p, e.name)) : [path.join(p, e.name)]);
   const sources = walk(path.join(library, 'src'));
   const signature = crypto.createHash('sha256').update(JSON.stringify(flags));

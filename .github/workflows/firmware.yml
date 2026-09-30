@@ -25,7 +25,7 @@ concurrency:
 
 env:
   ARDUINO_CORE_VERSION: "3.3.7"
-  ARDUINO_CACHE_KEY: arduino-esp32-3.3.7-libs-v3
+  ARDUINO_CACHE_KEY: arduino-esp32-3.3.7-libs-v4-lvgl-9.6.0
 
 jobs:
   toolchain:
@@ -96,7 +96,7 @@ jobs:
           retry 5 arduino-cli lib install "ArduinoJson@7.4.3"
           retry 5 arduino-cli lib install "DallasTemperature@4.0.6"
           retry 5 arduino-cli lib install "GFX Library for Arduino@1.6.5"
-          retry 5 arduino-cli lib install "lvgl@9.5.0"
+          retry 5 arduino-cli lib install "lvgl@9.6.0"
           retry 5 arduino-cli lib install "M5GFX@0.2.25"
           retry 5 arduino-cli lib install "M5Unified@0.2.14"
           retry 5 arduino-cli lib install "OneWire@2.3.8"

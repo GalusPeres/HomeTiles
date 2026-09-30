@@ -192,6 +192,16 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
   lv_obj_invalidate(tile);show(a,"Tapped edge tile",true);first_flush_y=-1;lv_refr_now(d);
   assert(first_flush_y>=0&&first_flush_y<SCREEN_HEIGHT/2&&"The popup is drawn before the tapped tile");
   process_popup_open();hide_popup_shell(a.body);lv_obj_delete(tile);lv_refr_now(d);}
+ // A cover or icon change recolors that tile first and the open popup follows.
+ // Drawn in marking order, the tile's part under the popup showed a flat
+ // square in the new color until the popup's bands reached it (V2 video).
+ {auto*tile=lv_obj_create(lv_screen_active());lv_obj_set_size(tile,160,120);
+  lv_obj_set_pos(tile,(SCREEN_WIDTH+popup_layout::kCardWidth)/2-60,SCREEN_HEIGHT/2);
+  show(a,"Recolored edge tile",true);process_popup_open();lv_refr_now(d);
+  lv_obj_set_style_bg_color(tile,lv_color_hex(0x3355AA),0);popup_shell_follow_tile_color(0x3355AA);sync_popup_shell();
+  first_flush_y=-1;lv_refr_now(d);
+  assert(first_flush_y>=0&&first_flush_y<SCREEN_HEIGHT/2&&"The recolored popup is drawn before its tile");
+  hide_popup_shell(a.body);lv_obj_delete(tile);lv_refr_now(d);}
  show(a,"Screen replacement");auto*old=lv_screen_active();auto*next=lv_obj_create(nullptr);lv_screen_load(next);lv_obj_delete(old);assert(!shell.overlay&&!PopupFirstFrame::any_pending());assert(lv_obj_is_valid(a.body)&&lv_obj_get_parent(a.body)==a.owner);
  show(a,"Owner deletion");lv_obj_delete(a.owner);assert(!shell.active&&!PopupFirstFrame::any_pending());assert(allocations==1);lv_obj_delete(b.owner);assert(allocations==0);
  lv_deinit();assert(allocations==0&&!PopupFirstFrame::any_pending());std::cout<<"Shared frame identity, header, cache reuse, no redraw on unchanged sync, first-frame gate, close/back/PIN, cancellation, screen/owner deletion and allocation failure passed\n";

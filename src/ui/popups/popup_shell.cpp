@@ -485,8 +485,15 @@ void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& 
 void popup_shell_follow_tile_color(uint32_t color) {
   if (!shell.active || !shell.active->body) return;
   const lv_color_t value = lv_color_hex(color);
-  if (!lv_color_eq(lv_obj_get_style_bg_color(shell.active->body, LV_PART_MAIN), value))
-    lv_obj_set_style_bg_color(shell.active->body, value, 0);
+  if (lv_color_eq(lv_obj_get_style_bg_color(shell.active->body, LV_PART_MAIN), value)) return;
+  lv_obj_set_style_bg_color(shell.active->body, value, 0);
+  // The tile behind the popup was recolored and marked first, and the frame
+  // takes the color only on the next sync. Drawn in that order, the tile's
+  // part under the popup showed a flat square in the new color until the
+  // popup's bands reached it (V2 video, cover change). As on opening, the
+  // frame is marked now and drawn first.
+  lv_obj_invalidate(shell.frame);
+  draw_shell_first();
 }
 
 void hide_popup_shell(lv_obj_t* body) {

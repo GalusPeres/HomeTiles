@@ -8,8 +8,7 @@ Last reviewed: 2026-09-30
 - Device support and validation: `docs/index.md` (device status notes)
 - ESP32-P4/ESP-Hosted patches: `tools/esp-hosted-3.3.7-rx-fix/README.md`
 - Release procedure: `RELEASING.md`
-- Live bug status: the current GitHub issue and its newest comments; recheck
-  online before changing an issue status
+- Live bug status: newest GitHub issue comments; recheck online before changing an issue status
 - Bridge publishing requires separate authorization.
 
 ## Firmware baseline
@@ -20,12 +19,11 @@ Last reviewed: 2026-09-30
 
 ## Hardware validation
 
-- Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 Tested, PPA/SD confirmed; V1 hardware pending.
+- Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 Tested, PPA/SD confirmed.
 - v0.6.9 Binary/Text-State Sensor UI passed hardware tests on 4B, 8-inch and S3.
 - Other revisions need community validation; compiling is not support.
-- P4 code is shared; panel/touch initialization, timings, revision and firmware images remain profile-specific.
-- LCD-4 Rev 4.0 has contributor-tested display/touch/Wi-Fi/MQTT/Web OTA;
-  older revisions and SD access are unsupported. See `docs/index.md` for validation.
+- P4 code is shared; panel/touch init, timings, revision and images stay profile-specific.
+- LCD-4 Rev 4.0: contributor-tested display/touch/Wi-Fi/MQTT/Web OTA; older revisions and SD unsupported (`docs/index.md`).
 - JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups, tall popups.
 - WS 10.1 v3 (PR #48, memooox3): separate `waveshare_10_1_rev3`, post_v3 301-399; pre-v3 image unchanged. Chip-id/CI image test pending.
 
@@ -37,28 +35,28 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Version RPC `0x15e` also on the stable 8-inch; not the cause.
 - SDIO schematics: V1 5.1-kohm pull-ups/no series termination; 8-inch 51-kohm; Tab5 5.1-kohm/22-ohm series/switched WLAN power. Signal margin unproven.
 - Original `JC8012P4A1_C6.bin`/HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 needs CN5 and a 3.3 V UART.
-- Fix b6 passed reporter tests (two cameras 15-20 FPS, Web OTA); confirmed v0.6.9b1, shipped v0.6.10. Exact V1 keeps 1-bit/40 MHz, splits large RX into 512-byte CMD53 reads; other profiles unchanged. Lower camera quality/FPS only as labeled diagnostic A/B.
+- Fix b6 passed reporter tests (two cameras 15-20 FPS, Web OTA); confirmed v0.6.9b1, shipped v0.6.10. Exact V1 keeps 1-bit/40 MHz, splits large RX into 512-byte CMD53 reads. Lower camera quality/FPS only as labeled diagnostic A/B.
 
 ## ESP32-P4 network history
 
 - Backported: ESP-Hosted allocation/PSRAM fixes, synchronous RPC UID routing, Espressif's `a8204f9` dropped-RX recovery, sparse diagnostics. Patches, variants, hashes, limits: `tools/esp-hosted-3.3.7-rx-fix/README.md`; do not duplicate.
-- `repo-a8204` is the release-safe baseline; the short-tail receive variant was experimental, not a universal fix.
+- `repo-a8204` is the release-safe baseline; the short-tail variant was experimental.
 - Failed P4 OTA approaches: throttling, PSRAM staging, TLS-to-flash streaming, Hosted restart, permanent SDIO buffers; retry only with new evidence.
 - Network wedge safeguards are recovery, not a transport fix.
 
 ## Issue #38
 
-- Reporter: JC8012P4A1 V2, SKU10153001-V2 (2632), `_I_W_Y`; #18 tested SKU10153002-V2 (2627), `_I_W_Y1`. Maintainer received JC8012P4A1C_I_W_Y1, SKU10153002-V2. Labels alone do not establish another panel variant.
+- Reporter: JC8012P4A1 V2, SKU10153001-V2 (2632), `_I_W_Y`; #18 tested SKU10153002-V2 (2627), `_I_W_Y1`. Maintainer received JC8012P4A1C_I_W_Y1, SKU10153002-V2. Labels alone prove no other panel.
 - V2 fixes committed in `e1a9297`: touch bounds, internal I2C atomic-state allocation, slot-aware SD cleanup; exact-V2 only. Beta `HOMETILES_ISSUE38_BETA` reports v0.6.12b1; release version stays v0.6.12.
 - SD: reporter card-init failure (40/20 MHz), then Hosted slot-1 assertion. V2 dropped DEINIT_ARG from default host flags like V1; maintainer SD diagnostic passes (~8 GB). Assertion and card failure causes open (#55). Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`.
 - Touch: maintainer confirms rapid-tap raw-bounds fix works. BIN/ELF: `build/guition-v2-touch/`.
 - Interrupt-WDT dump (touch ELF): I2C atomic-state object was in PSRAM; backport `37758ef327f9` forces internal allocation. Exposure proven, WDT causality unproven. Evidence/hash: `build/guition-v2-crash-20260911/`.
-- Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. Released firmware v0.6.12 preserves daily extrema (24 C daily versus partial hourly 11 C).
+- Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. v0.6.12 keeps daily extrema (24 C daily vs partial hourly 11 C).
 
 ## Sensor history
 
 - Binary Sensor (20): V7-compatible; localized icons/previews and history shipped.
-- Textual states use timeline/Activity; numeric sensors retain graphs. Missing, unknown and unavailable remain distinct.
+- Textual states use timeline/Activity; numeric keep graphs. Missing/unknown/unavailable stay distinct.
 - Bridge v0.6.40 (`581150b`): bounded Recorder paging, categorical history, legacy compatibility.
 
 ## Editable tiles
@@ -80,7 +78,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123); no extra framebuffers.
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
-- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted. b126 cover fade 350 ms, HW pending.
+- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); circles/controls opaque (16-bit blending lost the translucent step), veil only on see-through screensaver tiles; controls tint only From icon/cover; dark icons lifted. b126 cover fade 350 ms, HW pending.
 - LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; own lib, caches `hometiles-lvgl96-*`.
 
 ## Radius and half-grid
@@ -121,8 +119,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Flash and RAM (PR #62)
 
-- `-fno-exceptions` via a `compiler.cpp.flags` override (CI and local): about -300 KiB per image, Tab5 428 KiB OTA headroom. Unused LVGL widgets/formats off: -49 KiB, IRAM -21 KiB.
-- Renderer slot state, Binary Sensor queue and active/screensaver grids live in PSRAM, allocated in `setup()` (PSRAM is not ready in global constructors). Static DRAM V2 136,632 -> 64,984 B, S3 139,576 -> 80,376 B. V2/S3 b75 passed.
+- `-fno-exceptions` (`compiler.cpp.flags`, CI and local): about -300 KiB per image, Tab5 428 KiB OTA headroom. Unused LVGL widgets/formats off: -49 KiB, IRAM -21 KiB.
+- Renderer slot state, Binary Sensor queue and active/screensaver grids live in PSRAM, allocated in `setup()` (not in global constructors). Static DRAM V2 136,632 -> 64,984 B, S3 139,576 -> 80,376 B. V2/S3 b75 passed.
 
 ## View control and telemetry
 
@@ -132,7 +130,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
 - Commands validate targets/availability/features; ignore retained commands. Battery is a stub; unsupported probes stay unregistered.
 - View/editable controls confirmed on 8-inch/S3. HA migration, legacy firmware and lifecycle coverage pending.
-- Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; local reception grows to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending; maintainer saw no unplanned MQTT loss in ~8 h.
+- Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; reception up to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending; no unplanned MQTT loss in ~8 h.
 
 ## Security branch (unreleased)
 

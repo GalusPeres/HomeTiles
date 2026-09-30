@@ -117,6 +117,9 @@ function previewDefaultTileColor(value) {
   document.documentElement.style.setProperty('--tile-default-bg', color);
   Object.values(typeof TILE_TYPE_REGISTRY === 'object' ? TILE_TYPE_REGISTRY : {})
     .forEach(meta => { if (meta && meta.sharedBg) meta.defaultBg = color; });
+  // Circles are opaque steps above their tile (tone_color.h): recompute them
+  // for the new background.
+  if (typeof applyIconDiscTint === 'function') document.querySelectorAll('.tile').forEach(tile => applyIconDiscTint(tile));
   document.querySelectorAll('.global-tile-color').forEach(input => { input.value = color; });
   // Open editors of tiles without their own color show the new default.
   document.querySelectorAll('input[type="color"][id$="_tile_color"]').forEach(input => {

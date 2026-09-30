@@ -1,7 +1,8 @@
 // Media tile previous and next press like the popup controls: exactly the
 // circle's color (tone_color::fill; the icon hue with "Circle in icon color",
-// else neutral) at the shared control opacity, never below its minimum, with
-// no theme darkening; play keeps its white circle. Runs the production
+// else neutral), opaque, never below the minimum step, with no theme
+// darkening; play keeps its white circle. A card press recolors the circle
+// and the resting pill for the pressed card. Runs the production
 // refresh_controls() with the real disc tags and shared styles.
 import {radiusPolicyHost, surfaceStyleHost} from '../../lib/surface-style-host.mjs';
 import assert from 'node:assert/strict';
@@ -26,7 +27,7 @@ const fn = name => {
 assert.match(fn('on_icon_color'), /^void on_icon_color\(lv_obj_t\* disc\) \{\s*refresh_controls\(lv_obj_get_parent\(disc\)\);/);
 assert.match(read('src/ui/shared/tone_color.h'), /inline constexpr uint8_t kControlMinOpa = 32;/);
 assert.match(read('src/ui/shared/ui_surface_style.cpp'),
-  /lv_style_set_bg_opa\(&g_control_style\.style, control_fill_opa\(\)\);\s*lv_obj_report_style_change\(&g_control_style\.style\);/,
+  /lv_style_set_bg_opa\(&entry\.style, control_fill_opa\(i == 1\)\);\s*lv_obj_report_style_change\(&entry\.style\);/,
   'a Circle strength change updates the shared press opacity');
 
 const host = await lvglHost(root);
@@ -67,6 +68,8 @@ ${fn('icon_fill_marker')}
 ${fn('set_icon_fill_marker')}
 ${fn('find_disc')}
 ${fn('disc_icon_rgb')}
+${fn('style_controls')}
+${fn('follow_card_press')}
 ${fn('refresh_controls')}
 }
 static uint32_t rgb(lv_color_t c) { return lv_color_to_u32(c) & 0xFFFFFF; }
@@ -126,9 +129,9 @@ int main() {
     uint32_t color; lv_opa_t opa;
     pressed(previous, color, opa);
     const tone_color::Fill expected = tone_color::fill(c.card, c.icon, c.tinted, icon_glow::kDefault);
-    if (color != expected.color || opa != expected.control_opa) {
+    if (color != expected.control_color || opa != expected.control_opa || opa != LV_OPA_COVER) {
       std::printf("FAIL %s: #%06X @%d, expected #%06X @%d\n", c.what, (unsigned)color, opa,
-                  (unsigned)expected.color, expected.control_opa);
+                  (unsigned)expected.control_color, expected.control_opa);
       return 1;
     }
     // On screen the press shows the control color over the card.
@@ -153,9 +156,9 @@ int main() {
   tile_icon_disc::set_tag(disc, tile_icon_disc::Mode::On, true);
   tile_icon_source::set_icon_fill_marker(card, 20);
   tile_icon_source::refresh_controls(card);
-  const uint32_t pill_color = tone_color::fill(0x482F10, 0xEF8402, true, icon_glow::kDefault).color;
+  const uint32_t pill_color = tone_color::fill(0x482F10, 0xEF8402, true, icon_glow::kDefault).control_color;
   if (rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) != pill_color ||
-      lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) < tone_color::kControlMinOpa) {
+      lv_obj_get_style_bg_opa(pill, LV_PART_MAIN) != LV_OPA_COVER) {
     std::printf("FAIL resting surface: #%06X @%d\n", (unsigned)rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)),
                 lv_obj_get_style_bg_opa(pill, LV_PART_MAIN));
     return 1;
@@ -164,11 +167,43 @@ int main() {
     if (color != pill_color) { std::printf("FAIL nested press: #%06X\n", (unsigned)color); return 1; } }
   // Play is not touched.
   { lv_style_value_t v; assert(lv_obj_get_local_style_prop(play, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN | LV_STATE_PRESSED) != LV_STYLE_RES_FOUND); }
-  // A Circle strength of 0 keeps the press visible at the minimum.
+  // A pressed card (6 % lighter) takes the circle and the resting pill along,
+  // so both keep their step above it; the buttons stay as they are; release
+  // restores them.
+  {
+    const uint32_t pressed_card = 0x583F20;
+    lv_obj_set_style_bg_color(card, lv_color_hex(pressed_card), LV_PART_MAIN | LV_STATE_PRESSED);
+    tile_icon_disc::apply_fill(disc);
+    tile_icon_disc::follow_card_states(card);
+    tile_icon_disc::follow_card_states(card);
+    tile_icon_disc::g_card_state_hook = &tile_icon_source::follow_card_press;
+    const uint32_t events = lv_obj_get_event_count(card);
+    const uint32_t rest_disc = rgb(lv_obj_get_style_bg_color(disc, LV_PART_MAIN));
+    uint32_t plus_color; lv_opa_t plus_opa; pressed(plus, plus_color, plus_opa);
+    lv_obj_add_state(card, LV_STATE_PRESSED);
+    const tone_color::Fill down = tone_color::fill(pressed_card, 0xEF8402, true, icon_glow::kDefault);
+    if (rgb(lv_obj_get_style_bg_color(disc, LV_PART_MAIN)) != down.disc_color ||
+        rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) != down.control_color) {
+      std::printf("FAIL card press: disc #%06X pill #%06X\n", (unsigned)rgb(lv_obj_get_style_bg_color(disc, LV_PART_MAIN)),
+                  (unsigned)rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)));
+      return 1;
+    }
+    { lv_style_value_t v;
+      assert(lv_obj_get_local_style_prop(plus, LV_STYLE_BG_COLOR, &v, LV_PART_MAIN | LV_STATE_PRESSED) == LV_STYLE_RES_FOUND &&
+             rgb(v.color) == plus_color && "A card press leaves the buttons alone"); }
+    lv_obj_remove_state(card, LV_STATE_PRESSED);
+    assert(rgb(lv_obj_get_style_bg_color(disc, LV_PART_MAIN)) == rest_disc && "Release restores the circle");
+    assert(rgb(lv_obj_get_style_bg_color(pill, LV_PART_MAIN)) == pill_color && "Release restores the pill");
+    assert(events == 1 && "The card follows its state once");
+    tile_icon_disc::g_card_state_hook = nullptr;
+  }
+  // A Circle strength of 0 keeps the press visible at the minimum step.
   configManager.cfg.icon_glow = 0;
   ui_surface_style::request_icon_disc_refresh();
   ui_surface_style::process_pending_updates();
-  { uint32_t color; lv_opa_t opa; pressed(previous, color, opa); assert(opa == tone_color::kControlMinOpa); }
+  tile_icon_source::refresh_controls(card);
+  { uint32_t color; lv_opa_t opa; pressed(previous, color, opa);
+    assert(opa == LV_OPA_COVER && color == tone_color::fill(0x482F10, 0xEF8402, true, 0).control_color); }
   std::printf("OK\n");
   return 0;
 }

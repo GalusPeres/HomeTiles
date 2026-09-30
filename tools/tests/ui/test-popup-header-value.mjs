@@ -217,7 +217,7 @@ int main(){
  auto disc_opa=[]{return lv_obj_get_style_bg_opa(shell.icon_disc,LV_PART_MAIN);};
  auto disc_rgb=[]{return lv_color_to_u32(lv_obj_get_style_bg_color(shell.icon_disc,LV_PART_MAIN))&0xFFFFFFu;};
  // The circle color over the card (tone_color::fill), tinted or neutral.
- auto expected=[](bool tinted){return tone_color::fill(lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN))&0xFFFFFFu,0xFFC107u,tinted,25).color;};
+ auto expected=[](bool tinted){return tone_color::fill(lv_color_to_u32(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN))&0xFFFFFFu,0xFFC107u,tinted,25).disc_color;};
  show(light);render(display);assert(disc_rgb()==expected(true)&&disc_opa()>0&&"Without a tile a colored icon tints the disc");
  hide_popup_shell(light.parts.card);popup_shell_use_tile_disc(false,true,false);show(light);render(display);
  assert(disc_rgb()==expected(false)&&disc_opa()>0&&"Without Circle in icon color the disc stays neutral");

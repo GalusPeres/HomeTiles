@@ -27,9 +27,10 @@ for (const marker of [
   'inline constexpr char kTags[6] = {};',
   'return r != g || g != b;',
   'const bool tinted = glow_of(disc) && icon_color_tints(rgb);',
-  'tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent());',
-  'ui_surface_style::apply_icon_disc(disc, mode == Mode::Off, mode == Mode::Global);',
-  'show_readable(icon, rgb, shown ? fill.disc : card);',
+  'return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent(), see_through_card);',
+  'set_disc_color(disc, fill.disc_color);',
+  'ui_surface_style::apply_icon_disc(disc, mode == Mode::Off, mode == Mode::Global, see_through_card);',
+  'show_readable(icon, rgb, shown && fill.disc_opa ? fill.disc : card);',
   'inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {',
   'if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);',
   'set_tag(child, disc_mode, glow);',
@@ -62,11 +63,17 @@ for (const rgb of [0xFFFFFF, 0xB0B0B0, 0x000000, 0xFFD54F, 0x3B82F6, 0xFF7043, 0
 }
 // Computed colors: rgb(), transparent and the color(srgb ...) form of
 // translucent screensaver tiles (the b47 preview misread it and lost glows).
-const cssColorChannels = new Function(`${extractDeliveredFunction('cssColorChannels')}; return cssColorChannels;`)();
+const cssColorMatch = extractDeliveredFunction('cssColorMatch');
+const cssColorChannels = new Function(`${cssColorMatch}; ${extractDeliveredFunction('cssColorChannels')}; return cssColorChannels;`)();
 assert.deepEqual(cssColorChannels('rgb(34, 34, 34)'), [34, 34, 34]);
 assert.deepEqual(cssColorChannels('color(srgb 0.133333 0.133333 0.133333 / 0.7)'), [34, 34, 34]);
 assert.equal(cssColorChannels('rgba(0, 0, 0, 0)'), null);
 assert.equal(cssColorChannels('transparent'), null);
+// Their alpha decides between the opaque circle and the see-through veil.
+const cssColorAlpha = new Function(`${cssColorMatch}; ${extractDeliveredFunction('cssColorAlpha')}; return cssColorAlpha;`)();
+assert.equal(cssColorAlpha('rgb(34, 34, 34)'), 1);
+assert.equal(cssColorAlpha('color(srgb 0.133333 0.133333 0.133333 / 0.7)'), 0.7);
+assert.equal(cssColorAlpha('rgba(0, 0, 0, 0)'), 0);
 assert.ok(read('src/web/admin/tiles/grid-preview.js').includes("icon.classList.toggle('tile-icon-tinted', tinted);"));
 const css = read('src/web/assets/admin.css');
 assert.match(css, /\.tile\.sensor-compact > \.tile-icon\.tile-icon-tinted \{\s*background:var\(--icon-disc-bg, color-mix\(in srgb, currentColor 25%, transparent\)\);/);

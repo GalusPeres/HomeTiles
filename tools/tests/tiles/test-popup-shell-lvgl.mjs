@@ -147,14 +147,14 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
    lv_obj_set_style_bg_color(b.body,lv_color_hex(c.card),0);lv_obj_set_style_text_color(b.icon,lv_color_hex(c.icon),0);show(b,"Sonos");sync_popup_shell();
    uint32_t close_rgb,footer_rgb;lv_opa_t close_opa,footer_opa;close_press(close_rgb,close_opa);footer_fill(c.card,c.icon,footer_rgb,footer_opa);
    const tone_color::Fill expected=tone_color::fill(c.card,c.icon,c.tinted,configManager.cfg.icon_glow);
-   if(close_rgb!=expected.color)std::cerr<<"close press color: "<<c.what<<"\n";
-   assert(close_rgb==expected.color&&close_opa==expected.control_opa&&"close press: the circle's color");
+   if(close_rgb!=expected.control_color)std::cerr<<"close press color: "<<c.what<<"\n";
+   assert(close_rgb==expected.control_color&&close_opa==expected.control_opa&&close_opa==LV_OPA_COVER&&"close press: the circle's color, opaque");
    assert(close_rgb==footer_rgb&&close_opa==footer_opa&&"close press and footer controls look the same");
    {lv_style_value_t v;assert(lv_obj_get_local_style_prop(button,LV_STYLE_COLOR_FILTER_OPA,&v,LV_STATE_PRESSED)==LV_STYLE_RES_FOUND&&v.num==LV_OPA_TRANSP&&"no theme darkening");}
-   assert(close_opa>=tone_color::kControlMinOpa);hide_popup_shell(b.body);
+   hide_popup_shell(b.body);
  }
  configManager.cfg.icon_glow=0;popup_shell_use_tile_disc(false,false,true,true);
- {uint32_t rgb;lv_opa_t opa;footer_fill(0x482F10,0xEF8402,rgb,opa);assert(opa==tone_color::kControlMinOpa&&"Circle strength 0 keeps presses visible");}
+ {uint32_t rgb;lv_opa_t opa;footer_fill(0x482F10,0xEF8402,rgb,opa);assert(opa==LV_OPA_COVER&&rgb==tone_color::fill(0x482F10,0xEF8402,true,0).control_color&&"Circle strength 0 keeps presses visible");}
  configManager.cfg.icon_glow=icon_glow::kDefault;g_next_disc={};
  lv_obj_set_style_bg_color(b.body,lv_color_hex(0x885522),0);lv_obj_set_style_text_color(b.icon,lv_color_hex(0x00FF00),0);show(b,"Weather");assert(lv_color_eq(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN),lv_color_hex(0x885522)));assert(lv_color_eq(lv_obj_get_style_text_color(shell.icon,LV_PART_MAIN),lv_color_hex(0x00FF00)));assert(shell.frame==frame&&shell.header==header&&shell.close==button);assert(lv_obj_get_parent(a.body)==a.owner);assert(lv_obj_has_flag(a.body,LV_OBJ_FLAG_HIDDEN));assert(strcmp(hometiles_title::text(shell.title),"Weather")==0);
  hometiles_title::set(a.title,"Hidden background update");lv_obj_set_style_bg_color(a.body,lv_color_hex(0xEE0000),0);sync_popup_shell();assert(lv_color_eq(lv_obj_get_style_bg_color(shell.frame,LV_PART_MAIN),lv_color_hex(0x885522)));assert(strcmp(hometiles_title::text(shell.title),"Weather")==0);

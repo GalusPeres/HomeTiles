@@ -287,7 +287,7 @@ tone_color::Fill controls_fill(const HeaderDisc& options, uint32_t card, uint32_
 
 void control_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb, lv_color_t& color, lv_opa_t& opa) {
   const tone_color::Fill fill = controls_fill(options, card, rgb);
-  color = lv_color_hex(fill.color);
+  color = lv_color_hex(fill.control_color);
   opa = fill.control_opa;
 }
 
@@ -305,7 +305,7 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   const bool shown = !options.from_tile ||
                      (!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));
   const tone_color::Fill fill = header_fill(options, card, rgb);
-  const lv_color_t color = lv_color_hex(fill.color);
+  const lv_color_t color = lv_color_hex(fill.disc_color);
   const lv_opa_t opa = shown ? fill.disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
@@ -319,7 +319,7 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   static lv_color_t close_color = lv_color_white();
   static lv_opa_t close_opa = LV_OPA_20;
   const tone_color::Fill controls = controls_fill(options, card, rgb);
-  const lv_color_t press = lv_color_hex(controls.color);
+  const lv_color_t press = lv_color_hex(controls.control_color);
   if (shell.close && (!lv_color_eq(close_color, press) || close_opa != controls.control_opa)) {
     close_color = press;
     close_opa = controls.control_opa;

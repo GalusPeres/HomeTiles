@@ -49,7 +49,7 @@ const tint = fn(shell, 'apply_header_disc_tint');
 assert.match(tint, /const tone_color::Fill fill = header_fill\(options, card, rgb\);/);
 assert.match(tint, /const tone_color::Fill controls = controls_fill\(options, card, rgb\);/);
 assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, press, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, controls\.control_opa, LV_STATE_PRESSED\);\s*lv_obj_set_style_color_filter_opa\(shell\.close, LV_OPA_TRANSP, LV_STATE_PRESSED\);/);
-assert.match(fn(shell, 'control_fill'), /const tone_color::Fill fill = controls_fill\(options, card, rgb\);\s*color = lv_color_hex\(fill\.color\);\s*opa = fill\.control_opa;/);
+assert.match(fn(shell, 'control_fill'), /const tone_color::Fill fill = controls_fill\(options, card, rgb\);\s*color = lv_color_hex\(fill\.control_color\);\s*opa = fill\.control_opa;/);
 // The agreed table: the controls take the circle color only when the popup
 // shows the tile color "From icon"; the Climate, Light and Cover popups
 // (forget_popup_source) keep neutral controls.

@@ -60,10 +60,13 @@ try{
  check(document.querySelector('#test-tile-3 .tile-icon.mdi-television'),'Half-height scene tiles show the entity icon too');
  const icon=scene.querySelector('.tile-icon').getBoundingClientRect();
  check(Math.abs(icon.width/2-parseFloat(disc(scene).left))<0.6,'Disc is centered on the icon');
- // A neutral circle (tone_color::fill): a grey at the Circle strength (25 %
- // = opacity 64) over the tile, like the device.
- const white=c=>{const v=c.slice(c.indexOf('(')+1,c.indexOf(')')).split(',').map(Number);return v.length===4&&v[0]===v[1]&&v[1]===v[2]&&Math.abs(v[3]-64/255)<0.01;};
- check(white(disc(scene).backgroundColor),'White icon keeps a neutral disc at the device opacity: '+disc(scene).backgroundColor);
+ // A neutral circle (tone_color::fill): an opaque grey a fixed step above the
+ // tile, like the device.
+ const channels=c=>c.slice(c.indexOf('(')+1,c.indexOf(')')).split(',').map(Number);
+ const white=c=>{const v=channels(c);return (v.length===3||Math.abs(v[3]-1)<0.01)&&v[0]===v[1]&&v[1]===v[2];};
+ check(white(disc(scene).backgroundColor),'White icon keeps an opaque neutral disc: '+disc(scene).backgroundColor);
+ const lighter=(el,c)=>channels(c)[0]>channels(getComputedStyle(el).backgroundColor)[0];
+ check(lighter(scene,disc(scene).backgroundColor),'The neutral disc is lighter than its tile');
  // A colored icon tints its disc; glow off keeps it white.
  renderTileFromData('test',1,{type:1,title:'T',sensor_entity:'sensor.t',icon_name:'thermometer'},meta);
  const sensor=document.getElementById('test-tile-1');
@@ -82,15 +85,17 @@ try{
  check(disc(sensor).display!=='none','Per-tile On keeps the disc with the global option off');
  document.documentElement.classList.remove('icon-discs-off');
  // Tiles with the stored default grey follow a global tile color change live,
- // and their discs stay translucent white over the new background.
+ // and their opaque discs follow the new background.
  renderTileFromData('test',3,{type:1,title:'Half',sensor_entity:'sensor.t',icon_name:'thermometer',span_w:1,span_h:0.5,bg_color:0x012A2A2A},meta);
  renderTileFromData('test',0,{type:2,title:'TV',scene_alias:'tv',icon_name:'',bg_color:0x012A2A2A},meta);
  previewDefaultTileColor('#101010');
  const half=document.getElementById('test-tile-3');
  check(half.classList.contains('sensor-compact'),'Half-height tile uses the compact disc');
  for(const el of [scene,half]) check(getComputedStyle(el).backgroundColor==='rgb(16, 16, 16)','Default-grey tile follows the global color live');
- check(white(disc(scene).backgroundColor),'Taller disc stays translucent white over the new color');
- check(white(getComputedStyle(half.querySelector('.tile-icon')).backgroundColor),'Half-height disc stays translucent white over the new color');
+ check(white(disc(scene).backgroundColor)&&lighter(scene,disc(scene).backgroundColor)&&channels(disc(scene).backgroundColor)[0]<40,
+  'Taller disc follows the new color: '+disc(scene).backgroundColor);
+ const halfDisc=getComputedStyle(half.querySelector('.tile-icon')).backgroundColor;
+ check(white(halfDisc)&&lighter(half,halfDisc)&&channels(halfDisc)[0]<40,'Half-height disc follows the new color: '+halfDisc);
  renderTileFromData('test',0,{type:2,title:'TV',scene_alias:'tv',icon_name:'',bg_color:0x01FF0000},meta);
  check(getComputedStyle(scene).backgroundColor==='rgb(255, 0, 0)','Other stored colors are kept');
  // Per-tile icon colors (icon-colors.js): first matching rule, else the fixed

@@ -11,15 +11,20 @@
 //   lighter), so every color gets the same visible circle;
 // - the icon keeps the color it was given while it is at least kIconMinStep
 //   above the circle; a darker icon only gets lighter, in the same hue.
-// Circles and controls are drawn with an opacity over the card (the global
-// Circle strength scales one shared opacity), so the color is calibrated to
-// land exactly on the step at the current strength. The Web Admin preview
-// (grid-preview.js toneFill) uses the same formulas.
+// Circles and controls are drawn opaque in exactly these colors. A
+// translucent fill calibrated to land on them missed on the panels: their
+// 16-bit framebuffers blend with 32 opacity levels and truncate, so a grey
+// circle kept about half its step and turned greenish, and a dark saturated
+// circle over a grey tile could not drop below a grey floor. Only cards that
+// let the background through (screensaver tiles below full Tile opacity)
+// keep the translucent veil, so the wallpaper still shows through. The Web
+// Admin preview (grid-preview.js toneFill) uses the same formulas.
 namespace tone_color {
 
 // 0.06 L at the default 25 % Circle strength.
 inline constexpr float kStepPerPercent = 0.0024f;
-// Controls stay visible below 12.5 %: at least this step, opacity 32.
+// Controls stay visible below 12.5 %: at least this step (a veil: opacity
+// 32).
 inline constexpr float kControlMinStep = 0.03f;
 inline constexpr uint8_t kControlMinOpa = 32;
 // The icon stays at least this far above the circle.
@@ -122,16 +127,28 @@ inline uint32_t lifted(uint32_t card, uint32_t icon, bool tinted, float step) {
   return to_rgb(base.L + step, seed.C * kCircleChroma, seed.h);
 }
 
-inline uint8_t disc_opa(uint8_t percent) {
+// The opacity a circle is drawn with at the Circle strength: opaque, none at
+// 0 %; on a see-through card the veil opacity of the strength.
+inline uint8_t disc_opa(uint8_t percent, bool see_through = false) {
   if (percent > 100) percent = 100;
+  if (!see_through) return percent ? 255 : 0;
   return static_cast<uint8_t>((percent * 255 + 50) / 100);
 }
 
-// What a circle and the controls draw over `card`: `color` at `disc_opa`
-// for the circle and at `control_opa` for the controls. At 12.5 % and more
-// both are the same color on screen.
+// The opacity of the controls: opaque; a veil of at least kControlMinOpa on a
+// see-through card.
+inline uint8_t control_opa(uint8_t percent, bool see_through = false) {
+  if (!see_through) return 255;
+  const uint8_t opa = disc_opa(percent, true);
+  return opa > kControlMinOpa ? opa : kControlMinOpa;
+}
+
+// What a circle and the controls draw over `card`: `disc_color` at
+// `disc_opa` for the circle and `control_color` at `control_opa` for the
+// controls. At 12.5 % and more both show the same color.
 struct Fill {
-  uint32_t color;
+  uint32_t disc_color;
+  uint32_t control_color;
   uint8_t disc_opa;
   uint8_t control_opa;
   // The opaque colors they show over the card.
@@ -141,44 +158,58 @@ struct Fill {
   bool tinted;
 };
 
-inline Fill fill(uint32_t card, uint32_t icon, bool tinted, uint8_t percent) {
+inline Fill fill(uint32_t card, uint32_t icon, bool tinted, uint8_t percent, bool see_through = false) {
   card &= 0xFFFFFF;
   icon &= 0xFFFFFF;
+  if (percent > 100) percent = 100;
   // Popups restyle on every sync: keep the last few results.
   struct Entry {
     uint32_t card, icon;
     uint8_t percent;
-    bool tinted, used;
+    bool tinted, see_through, used;
     Fill fill;
   };
   static Entry cache[4] = {};
   static uint8_t next = 0;
   for (const Entry& entry : cache) {
     if (entry.used && entry.card == card && entry.icon == icon && entry.percent == percent &&
-        entry.tinted == tinted) {
+        entry.tinted == tinted && entry.see_through == see_through) {
       return entry.fill;
     }
   }
   Fill result{};
   result.tinted = tinted;
-  result.disc_opa = disc_opa(percent);
-  result.control_opa = result.disc_opa > kControlMinOpa ? result.disc_opa : kControlMinOpa;
-  const float step = result.disc_opa > kControlMinOpa ? percent * kStepPerPercent : kControlMinStep;
-  const uint32_t target = lifted(card, icon, tinted, step);
-  // The color that lands on `target` at the control opacity.
-  for (int shift = 16; shift >= 0; shift -= 8) {
-    const int under = (card >> shift) & 0xFF, want = (target >> shift) & 0xFF;
-    int value = under + ((want - under) * 255 + (want >= under ? result.control_opa / 2 : -result.control_opa / 2)) /
-                            result.control_opa;
-    if (value < 0) value = 0;
-    if (value > 255) value = 255;
-    result.color |= static_cast<uint32_t>(value) << shift;
+  result.disc_opa = disc_opa(percent, see_through);
+  result.control_opa = control_opa(percent, see_through);
+  const float disc_step = percent * kStepPerPercent;
+  const bool full_step = disc_step >= kControlMinStep;
+  if (!see_through) {
+    // Opaque: exactly the steps.
+    result.control = lifted(card, icon, tinted, full_step ? disc_step : kControlMinStep);
+    result.disc = !percent ? card : full_step ? result.control : lifted(card, icon, tinted, disc_step);
+    result.disc_color = result.disc;
+    result.control_color = result.control;
+  } else {
+    // Veil: the color that lands on the step at the control opacity; the
+    // circle shows it at its own, lower opacity below 12.5 %.
+    const uint32_t target = lifted(card, icon, tinted, result.disc_opa > kControlMinOpa ? disc_step : kControlMinStep);
+    uint32_t color = 0;
+    for (int shift = 16; shift >= 0; shift -= 8) {
+      const int under = (card >> shift) & 0xFF, want = (target >> shift) & 0xFF;
+      int value = under + ((want - under) * 255 + (want >= under ? result.control_opa / 2 : -result.control_opa / 2)) /
+                              result.control_opa;
+      if (value < 0) value = 0;
+      if (value > 255) value = 255;
+      color |= static_cast<uint32_t>(value) << shift;
+    }
+    result.disc_color = color;
+    result.control_color = color;
+    result.control = blend(card, color, result.control_opa);
+    result.disc = blend(card, color, result.disc_opa);
   }
-  result.control = blend(card, result.color, result.control_opa);
-  result.disc = blend(card, result.color, result.disc_opa);
   Entry& slot = cache[next];
   next = static_cast<uint8_t>((next + 1) % 4);
-  slot = {card, icon, percent, tinted, true, result};
+  slot = {card, icon, percent, tinted, see_through, true, result};
   return result;
 }
 

@@ -530,15 +530,21 @@ uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
   return fallback;
 }
 
-void refresh_controls(lv_obj_t* card) {
-  if (!card) return;
+namespace {
+// Styles a card's controls. `surfaces_only` recolors just the resting
+// surfaces for the card's current state (a card press): the buttons are not
+// pressed then, and adding their shared style again would restyle their
+// subtree.
+void style_controls(lv_obj_t* card, bool surfaces_only) {
   bool known = false;
+  bool see_through = false;
   lv_color_t color = lv_color_white();
   // Controls sit on the card or one level deeper (Climate - and + inside
   // their target pill).
   auto style = [&](lv_obj_t* obj) {
     const bool press = tile_icon_disc::is_control(obj);
     if (!press && !tile_icon_disc::is_surface(obj)) return;
+    if (press && surfaces_only) return;
     if (!known) {
       // The controls take the circle's color only with tile color "From
       // icon"; with Global or Custom they take the neutral step.
@@ -551,11 +557,21 @@ void refresh_controls(lv_obj_t* card) {
                             marker > 0 && tile_icon_disc::icon_color_tints(rgb)) ||
                            (cover_tints(card) && tile_icon_disc::icon_color_tints(rgb));
       const bool tinted = disc && tile_icon_disc::glow_of(disc) && follows;
-      const uint32_t background = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
-      color = lv_color_hex(
-          tone_color::fill(background, rgb, tinted, ui_surface_style::icon_glow_percent()).color);
+      see_through = tile_icon_disc::see_through(card);
+      color = lv_color_hex(tone_color::fill(tile_icon_disc::state_color(card), rgb, tinted,
+                                            ui_surface_style::icon_glow_percent(), see_through)
+                               .control_color);
     }
-    ui_surface_style::apply_control_fill(obj, color, press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN);
+    if (surfaces_only) {
+      lv_style_value_t value;
+      if (lv_obj_get_local_style_prop(obj, LV_STYLE_BG_COLOR, &value, LV_PART_MAIN) != LV_STYLE_RES_FOUND ||
+          !lv_color_eq(value.color, color)) {
+        lv_obj_set_style_bg_color(obj, color, LV_PART_MAIN);
+      }
+      return;
+    }
+    ui_surface_style::apply_control_fill(obj, color, press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN,
+                                         see_through);
   };
   const uint32_t count = lv_obj_get_child_count(card);
   for (uint32_t i = 0; i < count; ++i) {
@@ -564,6 +580,18 @@ void refresh_controls(lv_obj_t* card) {
     const uint32_t inner = lv_obj_get_child_count(child);
     for (uint32_t j = 0; j < inner; ++j) style(lv_obj_get_child(child, static_cast<int32_t>(j)));
   }
+}
+
+// tile_icon_disc::g_card_state_hook: a pressed card's resting controls (the
+// Climate target pill) keep their step above its pressed color, like the
+// circles.
+void follow_card_press(lv_obj_t* card) {
+  if (card) style_controls(card, true);
+}
+}  // namespace
+
+void refresh_controls(lv_obj_t* card) {
+  if (card) style_controls(card, false);
 }
 
 void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb) {
@@ -584,6 +612,7 @@ void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb) {
 
 void refresh_card(lv_obj_t* card, const Tile& tile) {
   tile_icon_disc::g_icon_color_hook = &on_icon_color;
+  tile_icon_disc::g_card_state_hook = &follow_card_press;
   if (!card || !tileTypeHasIconColors(tile.type)) return;
   const tile_icon_colors::Source layer = tile_icon_colors::source_of(tile.icon_colors.c_str());
   uint32_t rgb = 0;

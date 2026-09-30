@@ -42,7 +42,7 @@ const disc = read('src/tiles/runtime/tile_icon_disc.h');
 for (const marker of [
   'enum class Mode : uint8_t { Global = 0, On = 1, Off = 2 };',
   'inline constexpr char kTags[6] = {};',
-  'mode == Mode::Global);',
+  'mode == Mode::Global, see_through_card);',
   'set_tag(child, disc_mode, glow);',
 ]) assert.ok(disc.includes(marker), `tile_icon_disc: ${marker}`);
 

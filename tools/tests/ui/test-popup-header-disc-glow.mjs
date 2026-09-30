@@ -55,7 +55,9 @@ assert.match(tint, /if \(!lv_color_eq\(lv_obj_get_style_text_color\(icon, LV_PAR
 // Same rule and formulas as the tile disc (popup code is compiled without it).
 const tileDisc = read('src/tiles/runtime/tile_icon_disc.h');
 assert.ok(tileDisc.includes('return r != g || g != b;'), 'Tiles use the same tint rule');
-assert.ok(tileDisc.includes('tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent());'));
+assert.ok(tileDisc.includes('tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent(), see_through_card);'));
+// Popup cards are opaque: the header circle draws exactly its color.
+assert.ok(tint.includes('const lv_color_t color = lv_color_hex(fill.disc_color);'));
 assert.doesNotMatch(tint, /icon_glow_border_opa/, 'The hairline never takes the icon hue');
 assert.doesNotMatch(read('src/ui/popups/popup_layout.h'), /kHeaderIconDiscGlowOpa|kPopupBorderGlowOpa|headerDiscScaledOpa/);
 console.log('Popup header disc follows the tile circle options and the icon hue');

@@ -147,6 +147,9 @@ function previewDefaultTileColor(value) {
   document.documentElement.style.setProperty('--tile-default-bg', color);
   Object.values(typeof TILE_TYPE_REGISTRY === 'object' ? TILE_TYPE_REGISTRY : {})
     .forEach(meta => { if (meta && meta.sharedBg) meta.defaultBg = color; });
+  // Circles are opaque steps above their tile (tone_color.h): recompute them
+  // for the new background.
+  if (typeof applyIconDiscTint === 'function') document.querySelectorAll('.tile').forEach(tile => applyIconDiscTint(tile));
   document.querySelectorAll('.global-tile-color').forEach(input => { input.value = color; });
   // Open editors of tiles without their own color show the new default.
   document.querySelectorAll('input[type="color"][id$="_tile_color"]').forEach(input => {
@@ -7117,7 +7120,7 @@ function syncTileRadiusControls(tabEl) {
   // Channels (0..255) of a computed CSS color, or null when it is fully
   // transparent or unknown. Chrome reports color-mix() backgrounds (screensaver
   // tiles with an opacity) as color(srgb r g b / a) with 0..1 channels.
-  function cssColorChannels(value) {
+  function cssColorMatch(value) {
     const text = String(value || '').trim();
     const srgb = text.match(/^color\(srgb\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)(?:\s*\/\s*([\d.]+%?))?/);
     const rgb = text.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?/);
@@ -7125,11 +7128,20 @@ function syncTileRadiusControls(tabEl) {
     if (!match) return null;
     const alpha = match[4] === undefined ? 1
       : match[4].endsWith('%') ? Number(match[4].slice(0, -1)) / 100 : Number(match[4]);
-    if (!(alpha > 0)) return null;
+    return { match, srgb: !!srgb, alpha };
+  }
+  function cssColorChannels(value) {
+    const parsed = cssColorMatch(value);
+    if (!parsed || !(parsed.alpha > 0)) return null;
     return [1, 2, 3].map(i => {
-      const v = Number(match[i]) * (srgb ? 255 : 1);
+      const v = Number(parsed.match[i]) * (parsed.srgb ? 255 : 1);
       return Math.max(0, Math.min(255, Math.round(v)));
     });
+  }
+  // The alpha (0..1) of a computed CSS color; 0 when unknown.
+  function cssColorAlpha(value) {
+    const parsed = cssColorMatch(value);
+    return parsed && parsed.alpha > 0 ? Math.min(1, parsed.alpha) : 0;
   }
   // Mirrors src/ui/shared/tone_color.h: the circle and the controls sit a
   // fixed step of perceived lightness (OKLCH L) above the card in the icon's
@@ -7175,20 +7187,32 @@ function syncTileRadiusControls(tabEl) {
   function toneBlend(under, over, opa) {
     return under.map((v, i) => Math.floor((v * (255 - opa) + over[i] * opa + 127) / 255));
   }
-  // tone_color::fill(): the color drawn at the circle and control opacities.
-  // 0.06 L at the default 25 %; controls at least 0.03 (opacity 32); the
-  // circle keeps 55 % of the icon's chroma.
-  function toneFill(card, icon, tinted, percent) {
-    const discOpa = Math.floor((Math.min(100, Math.max(0, percent)) * 255 + 50) / 100);
-    const controlOpa = Math.max(discOpa, 32);
-    const step = discOpa > 32 ? percent * 0.0024 : 0.03;
+  // tone_color::fill(): what the circle and the controls draw. Opaque in
+  // exactly their steps: 0.06 L at the default 25 %, controls at least 0.03;
+  // the circle keeps 55 % of the icon's chroma. On a see-through card
+  // (screensaver tiles below full Tile opacity) a veil calibrated to land on
+  // the step, the controls at least opacity 32.
+  function toneFill(card, icon, tinted, percent, seeThrough) {
+    percent = Math.min(100, Math.max(0, percent));
     const base = toneOklch(card), seed = toneOklch(icon);
-    const target = tinted ? toneRgb(base.L + step, seed.C * 0.55, seed.h) : toneRgb(base.L + step, base.C, base.h);
+    const lift = step => tinted ? toneRgb(base.L + step, seed.C * 0.55, seed.h) : toneRgb(base.L + step, base.C, base.h);
+    const discStep = percent * 0.0024;
+    if (!seeThrough) {
+      const control = lift(Math.max(discStep, 0.03));
+      const disc = !percent ? card.slice() : discStep >= 0.03 ? control : lift(discStep);
+      return { discColor: disc, controlColor: control, discOpa: percent ? 255 : 0, controlOpa: 255, disc, control, tinted };
+    }
+    const discOpa = Math.floor((percent * 255 + 50) / 100);
+    const controlOpa = Math.max(discOpa, 32);
+    const target = lift(discOpa > 32 ? discStep : 0.03);
     const color = card.map((under, i) => {
       const delta = (target[i] - under) * 255;
       return Math.min(255, Math.max(0, under + Math.trunc((delta + (delta >= 0 ? 1 : -1) * Math.floor(controlOpa / 2)) / controlOpa)));
     });
-    return { color, discOpa, controlOpa, disc: toneBlend(card, color, discOpa), tinted };
+    return {
+      discColor: color, controlColor: color, discOpa, controlOpa,
+      disc: toneBlend(card, color, discOpa), control: toneBlend(card, color, controlOpa), tinted,
+    };
   }
   // tone_color::readable_icon(): unchanged while at least 0.22 L above the
   // circle, else lighter in its own hue.
@@ -7248,16 +7272,18 @@ function syncTileRadiusControls(tabEl) {
     const glowRaw = String(getComputedStyle(document.documentElement).getPropertyValue('--icon-glow-pct')).trim();
     const glowValue = glowRaw === '' ? 25 : Number(glowRaw);
     const glowPct = Math.min(100, Math.max(0, Number.isFinite(glowValue) ? glowValue : 25));
-    const card = cssColorChannels(getComputedStyle(tileElem).backgroundColor) || [0, 0, 0];
-    const tone = toneFill(card, given || [255, 255, 255], tinted, glowPct);
-    const rgba = opa => 'rgba(' + tone.color.join(',') + ',' + (opa / 255).toFixed(3) + ')';
-    tileElem.style.setProperty('--icon-disc-bg', rgba(tone.discOpa));
+    const background = getComputedStyle(tileElem).backgroundColor;
+    const card = cssColorChannels(background) || [0, 0, 0];
+    // Screensaver tiles below full Tile opacity let the wallpaper through.
+    const seeThrough = cssColorAlpha(background) < 1;
+    const tone = toneFill(card, given || [255, 255, 255], tinted, glowPct, seeThrough);
+    const rgba = (color, opa) => 'rgba(' + color.join(',') + ',' + (opa / 255).toFixed(3) + ')';
+    tileElem.style.setProperty('--icon-disc-bg', rgba(tone.discColor, tone.discOpa));
     // Mirrors tile_icon_source::refresh_controls(): tile controls (the
     // Climate target pill) take the circle's color only with tile color From
-    // icon, else the neutral step, at the control opacity.
-    const controls = fill > 0 && tinted ? tone : toneFill(card, given || [255, 255, 255], false, glowPct);
-    tileElem.style.setProperty('--control-fill',
-      'rgba(' + controls.color.join(',') + ',' + (controls.controlOpa / 255).toFixed(3) + ')');
+    // icon, else the neutral step.
+    const controls = fill > 0 && tinted ? tone : toneFill(card, given || [255, 255, 255], false, glowPct, seeThrough);
+    tileElem.style.setProperty('--control-fill', rgba(controls.controlColor, controls.controlOpa));
     // The icon, readable on its circle (or on the tile without one).
     if (!given) return;
     const mode = tileElem.dataset.iconDisc || '0';

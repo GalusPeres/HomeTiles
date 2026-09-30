@@ -33,6 +33,7 @@
 #include "src/types/energy/energy_data.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/core/config/tile_radius.h"
@@ -1421,6 +1422,12 @@ void rebuild_slot_grid(ScreensaverState* st) {
                             LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(tile_obj, opacity,
                             LV_PART_MAIN | LV_STATE_PRESSED);
+    // Circles and controls of a see-through tile stay a veil over the
+    // wallpaper (tone_color.h); the tile was built opaque.
+    if (opacity < LV_OPA_COVER) {
+      tile_icon_disc::refresh_fills(tile_obj);
+      tile_icon_source::refresh_controls(tile_obj);
+    }
     lv_obj_remove_flag(tile_obj, LV_OBJ_FLAG_EVENT_BUBBLE);
   }
 

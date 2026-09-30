@@ -109,8 +109,8 @@ void appendPreviewScaleVars(String& html) {
     const tone_color::Fill fill = tone_color::fill(tileDefaultBgColor(), 0xFFFFFF, false, glow);
     char disc[48];
     snprintf(disc, sizeof(disc), "--icon-disc-bg:rgba(%u,%u,%u,%.3f);",
-             static_cast<unsigned>((fill.color >> 16) & 0xFF), static_cast<unsigned>((fill.color >> 8) & 0xFF),
-             static_cast<unsigned>(fill.color & 0xFF), fill.disc_opa / 255.0f);
+             static_cast<unsigned>((fill.disc_color >> 16) & 0xFF), static_cast<unsigned>((fill.disc_color >> 8) & 0xFF),
+             static_cast<unsigned>(fill.disc_color & 0xFF), fill.disc_opa / 255.0f);
     html += disc;
   }
   emit_exact("compact-text-gap", compact_sensor_layout::text_gap());

@@ -53,8 +53,9 @@ void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb);
 // (tile_icon_disc::mark_control; Media previous and next, Climate - and +)
 // and resting surfaces (mark_surface; the Climate target pill) take the
 // circle's color (tone_color::fill: the icon hue with "Circle in icon
-// color", else neutral) at the shared control opacity. Every icon color,
-// tint and circle change reaches it through the discs.
+// color", else neutral), opaque (a veil on see-through screensaver tiles).
+// Every icon color, tint and circle change reaches it through the discs; a
+// card press recolors the resting surfaces for the pressed card.
 void refresh_controls(lv_obj_t* card);
 
 // The background a popup inherits from its tile: the rules' tint when the

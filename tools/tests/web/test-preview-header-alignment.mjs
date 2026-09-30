@@ -8,7 +8,7 @@ const helpers = [
   'isEditablePreview', 'normalizeSensorValueFont', 'getSensorValueFontClass',
   'resolveIconName', 'normalizeMdiIconName', 'isExplicitlyDisabledValue',
   'tileColorInputIsDefault', 'tileBgToHex', 'tileBgValueIsSet', 'tileBackgroundCss',
-  'applyIconDiscTint', 'iconDiscTinted', 'cssColorChannels', 'toneToLinear', 'toneToSrgb', 'toneOklch',
+  'applyIconDiscTint', 'iconDiscTinted', 'cssColorMatch', 'cssColorChannels', 'cssColorAlpha', 'toneToLinear', 'toneToSrgb', 'toneOklch',
   'toneLinear', 'toneRgb', 'toneBlend', 'toneFill', 'toneReadableIcon', 'toneHex',
   'tileBgFollowsDefault', 'tileColorHexIsDefaultGrey',
   'isDefaultTileGrey', 'tileColorMode', 'syncTileColorMode', 'previewIconColor', 'iconColorRuleState',

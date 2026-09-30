@@ -4,7 +4,11 @@
 // Indigo nearly invisible and Yellow loud; the controls show exactly the
 // circle's color; an icon keeps its color while readable and a darker one is
 // raised continuously in its own hue (a circle flipping above the icon was
-// rejected as abrupt). The Web Admin preview computes the same colors.
+// rejected as abrupt). Circles and controls are drawn opaque in exactly these
+// colors: a translucent fill lost half the step on the panels' 16-bit
+// blending and could not reach dark saturated circles over grey; only
+// see-through screensaver tiles keep the veil. The Web Admin preview computes
+// the same colors.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -49,7 +53,10 @@ for (const icon of icons) {
   const fill = js.toneFill(c, rgb(icon), tinted, 25);
   const lift = js.toneOklch(fill.disc).L - js.toneOklch(c).L;
   assert.ok(Math.abs(lift - 0.06) <= 0.006, `#${icon.toString(16)}: circle step ${lift.toFixed(3)}`);
-  assert.equal(fill.controlOpa, fill.discOpa, 'at 25 % the controls show the circle color');
+  assert.equal(fill.discOpa, 255, 'the circle is opaque');
+  assert.equal(fill.controlOpa, 255, 'the controls are opaque');
+  assert.deepEqual(fill.discColor, fill.disc, 'the circle draws exactly its color');
+  assert.deepEqual(fill.controlColor, fill.disc, 'at 25 % the controls show the circle color');
   const shown = js.toneReadableIcon(rgb(icon), fill.disc);
   const seed = js.toneOklch(rgb(icon));
   if (seed.L >= js.toneOklch(fill.disc).L + 0.22) assert.deepEqual(shown, rgb(icon), 'a readable icon keeps its color');
@@ -79,11 +86,44 @@ for (const tile of [[0xA3, 0x3B, 0x3B], [0x6B, 0x5F, 0x2B], [0x3D, 0x22, 0x55], 
 // circle of the global tile color from the page, transparent at 0 %.
 assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes(
   'const tone_color::Fill fill = tone_color::fill(tileDefaultBgColor(), 0xFFFFFF, false, glow);'));
-// Below 12.5 % the circle fades while the controls keep their minimum.
+// Over the global grey a colored circle keeps the icon's hue and exactly its
+// step (regression: the translucent fill kept a grey floor, an orange circle
+// #4D1F00 showed as red-brown #4D1F11).
+for (const icon of icons.filter(i => i !== 0xFFFFFF)) {
+  const grey = [26, 26, 26];
+  const fill = js.toneFill(grey, rgb(icon), true, 35);
+  const want = js.toneOklch(rgb(icon)).h, got = js.toneOklch(fill.disc);
+  if (got.C > 0.04) {
+    assert.ok(Math.abs(Math.atan2(Math.sin(want - got.h), Math.cos(want - got.h))) < 0.06,
+      `#${icon.toString(16)} over grey: circle hue`);
+  }
+  assert.ok(Math.abs(got.L - js.toneOklch(grey).L - 0.084) <= 0.006, `#${icon.toString(16)} over grey: step`);
+}
+assert.deepEqual(js.toneFill([26, 26, 26], [0xFF, 0x8A, 0x3D], true, 35).disc, [0x4D, 0x1F, 0x00]);
+// The neutral circle over the global grey is exactly its step (#282828).
+assert.deepEqual(js.toneFill([26, 26, 26], [255, 255, 255], false, 25).disc, [40, 40, 40]);
+// Below 12.5 % the circle keeps its smaller step while the controls keep
+// their minimum; at 0 % there is no circle.
 {
   const fill = js.toneFill([34, 34, 34], [255, 255, 255], false, 0);
   assert.equal(fill.discOpa, 0);
-  assert.equal(fill.controlOpa, 32);
+  assert.equal(fill.controlOpa, 255);
+  assert.ok(Math.abs(js.toneOklch(fill.control).L - js.toneOklch([34, 34, 34]).L - 0.03) <= 0.004);
+  const low = js.toneFill([34, 34, 34], [255, 255, 255], false, 5);
+  assert.ok(Math.abs(js.toneOklch(low.disc).L - js.toneOklch([34, 34, 34]).L - 0.012) <= 0.004, 'circle at 5 %');
+  assert.deepEqual(low.control, fill.control, 'controls keep their minimum step');
+}
+// See-through cards (screensaver tiles below full Tile opacity) keep the
+// veil: the circle at the strength's opacity, the controls at least 32.
+{
+  const veil = js.toneFill([34, 34, 34], [255, 255, 255], false, 25, true);
+  assert.equal(veil.discOpa, 64);
+  assert.equal(veil.controlOpa, 64);
+  assert.deepEqual(veil.discColor, veil.controlColor);
+  assert.ok(Math.abs(js.toneOklch(veil.disc).L - js.toneOklch([34, 34, 34]).L - 0.06) <= 0.006, 'veil step');
+  const faint = js.toneFill([34, 34, 34], [255, 255, 255], false, 0, true);
+  assert.equal(faint.discOpa, 0);
+  assert.equal(faint.controlOpa, 32);
 }
 
 const host = await lvglHost(root);
@@ -96,16 +136,23 @@ if (!host) {
 const out = path.join(root, 'build/tests/tone-color');
 fs.mkdirSync(out, {recursive: true});
 const cases = [];
-for (const icon of icons) for (const percent of [0, 5, 25, 60, 100]) cases.push([hex(card(rgb(icon))), icon, icon !== 0xFFFFFF, percent]);
+for (const icon of icons) {
+  for (const percent of [0, 5, 25, 60, 100]) {
+    for (const seeThrough of [false, true]) cases.push([hex(card(rgb(icon))), icon, icon !== 0xFFFFFF, percent, seeThrough]);
+  }
+  cases.push([0x1A1A1A, icon, icon !== 0xFFFFFF, 35, false]);
+}
 const cpp = `#include <cstdio>
 #include "src/ui/shared/tone_color.h"
 int main() {
-  const struct { unsigned card, icon; bool tinted; unsigned percent; } cases[] = {
-${cases.map(([c, i, t, p]) => `    {${c}u, ${i}u, ${t}, ${p}u},`).join('\n')}
+  const struct { unsigned card, icon; bool tinted; unsigned percent; bool see_through; } cases[] = {
+${cases.map(([c, i, t, p, s]) => `    {${c}u, ${i}u, ${t}, ${p}u, ${s}},`).join('\n')}
   };
   for (const auto& c : cases) {
-    const tone_color::Fill f = tone_color::fill(c.card, c.icon, c.tinted, static_cast<uint8_t>(c.percent));
-    std::printf("%u %u %u %u %u\\n", f.color, f.disc_opa, f.control_opa, f.disc, tone_color::readable_icon(c.icon, f.disc));
+    const tone_color::Fill f =
+        tone_color::fill(c.card, c.icon, c.tinted, static_cast<uint8_t>(c.percent), c.see_through);
+    std::printf("%u %u %u %u %u %u %u\\n", f.disc_color, f.control_color, f.disc_opa, f.control_opa, f.disc,
+                f.control, tone_color::readable_icon(c.icon, f.disc));
   }
   return 0;
 }
@@ -119,13 +166,15 @@ result = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(result.status, 0, result.stderr);
 const near = (a, b) => rgb(a).every((v, i) => Math.abs(v - rgb(b)[i]) <= 1);
 result.stdout.trim().split(/\r?\n/).forEach((line, index) => {
-  const [color, discOpa, controlOpa, disc, shown] = line.split(' ').map(Number);
-  const [c, i, t, p] = cases[index];
-  const fill = js.toneFill(rgb(c), rgb(i), t, p);
-  const what = `#${c.toString(16)} / #${i.toString(16)} @ ${p} %`;
+  const [discColor, controlColor, discOpa, controlOpa, disc, control, shown] = line.split(' ').map(Number);
+  const [c, i, t, p, s] = cases[index];
+  const fill = js.toneFill(rgb(c), rgb(i), t, p, s);
+  const what = `#${c.toString(16)} / #${i.toString(16)} @ ${p} %${s ? ' see-through' : ''}`;
   assert.equal(discOpa, fill.discOpa, what);
   assert.equal(controlOpa, fill.controlOpa, what);
-  assert.ok(near(color, hex(fill.color)) && near(disc, hex(fill.disc)), `${what}: device #${color.toString(16)} preview #${hex(fill.color).toString(16)}`);
+  assert.ok(near(discColor, hex(fill.discColor)) && near(controlColor, hex(fill.controlColor)) &&
+    near(disc, hex(fill.disc)) && near(control, hex(fill.control)),
+    `${what}: device #${discColor.toString(16)} preview #${hex(fill.discColor).toString(16)}`);
   assert.ok(near(shown, hex(js.toneReadableIcon(rgb(i), fill.disc))), `${what}: readable icon`);
 });
-console.log('Tone colors: same circle step for every hue, controls = circle, smooth icon lift, device == preview');
+console.log('Tone colors: same opaque circle step for every hue, controls = circle, veil on see-through tiles, smooth icon lift, device == preview');

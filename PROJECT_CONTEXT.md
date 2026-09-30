@@ -78,7 +78,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123); no extra framebuffers.
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
-- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); circles/controls opaque (16-bit blending lost the translucent step), veil only on see-through screensaver tiles; controls tint only From icon/cover; dark icons lifted. Presses: no theme recolor or teal fade, PIN/pill buttons a step up, circles fade with the tile (b131, HW pending).
+- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); circles/controls opaque (16-bit blending lost the step), veil only on see-through screensaver tiles; controls tint only From icon/cover; dark icons lifted. Presses: no theme recolor (tiles too) or teal fade, PIN/pill buttons a step up, circles fade with tiles (b132, HW pending).
 - LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; own lib, caches `hometiles-lvgl96-*`.
 - Reverted: b126 cover fade (RGB565: few dark-tint steps), b128 UI frame swap (input lag). Next: measure V2 tile redraw.
 

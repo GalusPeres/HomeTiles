@@ -4931,6 +4931,7 @@ lv_obj_t* render_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint
     // discs take the icon color and the background.
     tile_icon_source::refresh_card(tile_obj, tile);
     tile_icon_disc::apply_tile_options(tile_obj, tile.icon_disc_mode, tile.icon_glow);
+    disable_pressed_recolor(tile_obj);
     if (!tileBorderEnabled(tile)) ui_surface_style::disable_tile_border(tile_obj);
     // Normal grids use the global display option. The screensaver has its
     // own setting and applies it after rendering in image_screensaver.cpp.

@@ -80,6 +80,17 @@ static inline void disable_pressed_button_animation(lv_obj_t* obj) {
   // layout even when its value is zero. The theme does not translate buttons.
 }
 
+// Every tile presses the same way: its own lighter pressed color, with the
+// circles fading along (tile_icon_disc::fade_with_card). The default theme
+// also darkens a pressed button with a black recolor over its whole content,
+// except inline-colored text such as the colored weather icons, and not at
+// all on tiles that are no buttons (Switch with its toggle). It stays off, so
+// icons never change on press.
+static inline void disable_pressed_recolor(lv_obj_t* obj) {
+  if (!obj) return;
+  lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_PRESSED);
+}
+
 // Release the source and let the regular refresh draw the complete popup.
 // A nested refresh here redraws the old page before the new card can appear.
 static inline void finish_press_before_popup(lv_event_t* event) {

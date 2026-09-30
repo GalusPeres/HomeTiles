@@ -19,6 +19,22 @@ assert.doesNotMatch(setter.slice(0, force), /#if/, 'on every target, not only th
 assert.ok(force < setter.indexOf('if (wifi_ps_state_known && wifi_ps_enabled == enable)'),
   'before the mode is applied');
 
+// Full power from the start of every Wi-Fi connection, not from the first
+// active/idle change of the power manager.
+const update = cppFunctionDefinitions(read('src/network/network_manager.cpp'))
+  .find(f => f.name === 'HomeTilesNetworkManager::update').source;
+assert.match(update, /if \(!was_connected && networkTransport\.isWifiConnected\(\)\) \{[\s\S]*?setWifiPowerSaving\(false\);/,
+  'full power on every new Wi-Fi connection');
+assert.match(update, /\[Network\] Wi-Fi access point %s, channel %d, RSSI %d dBm/, 'the joined AP is logged');
+
+// Join the strongest access point with the SSID instead of the first found.
+const connect = cppFunctionDefinitions(read('src/network/network_manager.cpp'))
+  .find(f => f.name === 'HomeTilesNetworkManager::connectWifi').source;
+assert.match(connect, /WiFi\.setScanMethod\(WIFI_ALL_CHANNEL_SCAN\);\n    WiFi\.setSortMethod\(WIFI_CONNECT_AP_BY_SIGNAL\);\n    WiFi\.begin\(cfg\.wifi_ssid, cfg\.wifi_pass\);/);
+const sources = fs.readdirSync(path.join(root, 'src'), {recursive: true})
+  .filter(f => /\.(cpp|h)$/.test(f)).map(f => read(path.join('src', f)));
+assert.equal(sources.join('\n').match(/WiFi\.begin\([^)]/g).length, 1, 'no other station connect path');
+
 // The power manager still requests saving on idle; the setter answers with full power.
 const power = read('src/core/power/power_manager.cpp');
 assert.match(power, /applyCpuFrequency\(CPU_FREQ_LOW\);\n    networkManager\.setWifiPowerSaving\(true\);/);

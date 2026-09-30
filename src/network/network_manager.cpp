@@ -790,6 +790,13 @@ void HomeTilesNetworkManager::connectWifi() {
     }
     Serial.printf("WiFi: Connecting to %s\n", cfg.wifi_ssid);
     applyWifiAddressing(cfg);
+    // Join the strongest access point with this SSID. The Arduino default
+    // (fast scan) joins the first one found, and the station never roams:
+    // the Guition S3 stayed at -71 dBm on the far one of two UniFi APs while
+    // the near one gave the P4 panels beside it -47 dBm. The full scan adds
+    // about one to two seconds per connection attempt.
+    WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+    WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
     WiFi.begin(cfg.wifi_ssid, cfg.wifi_pass);
 
     // A slow call can signal a stuck transport even without a formal error.
@@ -2136,6 +2143,17 @@ void HomeTilesNetworkManager::update() {
 
     if (!was_connected) {
       logNetworkHeap(networkTransport.activeName());
+    }
+
+    if (!was_connected && networkTransport.isWifiConnected()) {
+      // Full power from the start of every Wi-Fi connection. The power
+      // manager calls the setter only on an active/idle change, so the
+      // driver default (modem sleep) stayed until the first idle change,
+      // about 20 s after boot.
+      setWifiPowerSaving(false);
+      Serial.printf("[Network] Wi-Fi access point %s, channel %d, RSSI %d dBm\n",
+                    WiFi.BSSIDstr().c_str(), static_cast<int>(WiFi.channel()),
+                    static_cast<int>(WiFi.RSSI()));
     }
 
     // Start Web Admin on connection.

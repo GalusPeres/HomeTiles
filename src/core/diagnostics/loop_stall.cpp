@@ -56,6 +56,8 @@ volatile bool g_request_upload = false;
 
 volatile bool g_wifi_connected = false;
 volatile int8_t g_rssi = 0;
+volatile uint8_t g_channel = 0;
+uint8_t g_bssid[6] = {};
 volatile uint8_t g_ps = 0xFF;
 volatile int8_t g_tx_quarter_dbm = 0;
 volatile uint32_t g_beacon_timeouts = 0;
@@ -283,7 +285,12 @@ void sampleNetwork() {
   const bool connected = WiFi.status() == WL_CONNECTED;
   g_wifi_connected = connected;
   if (connected) {
-    g_rssi = static_cast<int8_t>(WiFi.RSSI());
+    wifi_ap_record_t ap = {};
+    if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+      g_rssi = ap.rssi;
+      g_channel = ap.primary;
+      memcpy(g_bssid, ap.bssid, sizeof(g_bssid));
+    }
     wifi_ps_type_t ps;
     if (esp_wifi_get_ps(&ps) == ESP_OK) g_ps = static_cast<uint8_t>(ps);
     int8_t tx = 0;
@@ -293,9 +300,11 @@ void sampleNetwork() {
   if (now - last_log_ms >= kWifiLogMs) {
     last_log_ms = now;
     const int tx = g_tx_quarter_dbm;
-    Serial.printf("[WiFiDiag] %s rssi=%d dBm ps=%s tx=%d.%02d dBm beacon-timeouts=%u "
-                  "disconnects=%u\n",
-                  connected ? "connected" : "disconnected", static_cast<int>(g_rssi),
+    Serial.printf("[WiFiDiag] %s ap=%02x:%02x:%02x:%02x:%02x:%02x ch=%u rssi=%d dBm "
+                  "ps=%s tx=%d.%02d dBm beacon-timeouts=%u disconnects=%u\n",
+                  connected ? "connected" : "disconnected", g_bssid[0], g_bssid[1],
+                  g_bssid[2], g_bssid[3], g_bssid[4], g_bssid[5],
+                  static_cast<unsigned>(g_channel), static_cast<int>(g_rssi),
                   psName(g_ps), tx / 4, (tx % 4) * 25,
                   static_cast<unsigned>(g_beacon_timeouts),
                   static_cast<unsigned>(g_disconnects));

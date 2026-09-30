@@ -69,8 +69,8 @@ void webUploadBegin(const char* uri);
 // when an upload ended without reaching its handler.
 void webIdle();
 
-// Samples RSSI, power save mode and TX power every two seconds and logs them
-// once a minute. Called from the loop.
+// Samples the access point, RSSI, power save mode and TX power every two
+// seconds and logs them once a minute. Called from the loop.
 void sampleNetwork();
 
 #else

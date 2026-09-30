@@ -81,7 +81,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings in PSRAM, no extra framebuffers.
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
-- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted. Media "From cover": b119 HW.
+- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted. Media "From cover" b119 S3 ok.
 
 ## Radius and half-grid
 

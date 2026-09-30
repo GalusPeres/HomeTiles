@@ -2177,11 +2177,14 @@ void HomeTilesNetworkManager::setWifiPowerSaving(bool enable) {
     return;
   }
 
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
-  // ESP32-P4 uses an SDIO/esp-hosted WiFi transport. Modem sleep can trigger
-  // transport TX asserts under WebUI, MQTT, or media-cover traffic.
+  // Every panel keeps the radio awake at full power. On the ESP32-P4 (SDIO/
+  // esp-hosted transport) modem sleep triggered transport TX asserts under
+  // WebUI, MQTT or media-cover traffic. On the Guition S3 the idle saving
+  // (modem sleep, 11 dBm, signal about -72 dBm) came with Web Admin pages
+  // holding the loop for 2.5 s and link drops of 20 s and more (MQTT lost,
+  // loop stalled up to 44 s). The saving dates from the battery Tab5 and
+  // brought hardly any gain; display dimming and sleep stay unchanged.
   enable = false;
-#endif
 
   if (wifi_ps_state_known && wifi_ps_enabled == enable) {
     return;

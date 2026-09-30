@@ -71,7 +71,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
 - Editable surfaces: control fill, white text; Select list = card + hairline, gap, inset selection.
-- Wi-Fi gaps (`build/wifi-power-audit`). S3 stalls 16-44 s, MQTT lost (b114); b116 logs `[LoopStall]`.
+- S3 stalls 16-44 s, MQTT lost (b114): b116 `[LoopStall]`; b117 Wi-Fi always full power, HW pending.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
 - S3 froze adding Number to active screensaver: Web responded, save persisted; manual reboot. Older dump, cause unknown.
 

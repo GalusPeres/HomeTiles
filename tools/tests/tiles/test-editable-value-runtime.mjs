@@ -15,6 +15,7 @@ const compiler=[process.env.CXX,'clang++','g++'].filter(Boolean).find(c=>spawnSy
 const jsonInclude=[process.env.ARDUINOJSON_INCLUDE,path.join(os.homedir(),'Documents/Arduino/libraries/ArduinoJson/src'),path.join(root,'third_party/ArduinoJson/src')].filter(Boolean).find(p=>fs.existsSync(path.join(p,'ArduinoJson.h')));
 if(!compiler||!jsonInclude){console.log('SKIP: Editable runtime tests need a host C++ compiler and ArduinoJson headers');process.exit(0)}
 const out=path.join(root,'build/tests/editable-runtime');fs.mkdirSync(out,{recursive:true});
+fs.writeFileSync(path.join(out,'esp_heap_caps.h'),'#pragma once\n#include <cstdlib>\n#define MALLOC_CAP_SPIRAM 1\n#define MALLOC_CAP_8BIT 2\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void heap_caps_free(void*p){free(p);}\n');
 let geometry=read('src/ui/popups/popup_layout.h');
 geometry=geometry.slice(geometry.indexOf('namespace popup_layout {'),geometry.indexOf('// Standard popup close button.'));
 for(const f of cppFunctionDefinitions(geometry).reverse()) if(f.name.startsWith('font')||['headerTitleFont','applyIconScale','alignHeader'].includes(f.name)) geometry=geometry.slice(0,f.start)+geometry.slice(f.end);
@@ -32,6 +33,7 @@ const source=`
 #include <ArduinoJson.h>
 #include "src/types/tile_type_policy.h"
 #include "src/types/value/value_editor_model.h"
+#include "src/core/memory/psram_allocator.h"
 class String: public std::string {
 public:
  using std::string::string; using std::string::operator=;
@@ -166,7 +168,7 @@ int main(){
 const cpp=path.join(out,'test.cpp');fs.writeFileSync(cpp,source);
 for(const [profile,width,height,define] of [['square',480,480,'DEVICE_LAYOUT_480X480'],['wide',1024,600,'DEVICE_LAYOUT_1024X600'],['ws8',1280,800,''],['portrait',720,1280,''],['base',720,720,'']]){
  const binary=path.join(out,profile+(process.platform==='win32'?'.exe':''));
- const args=['-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),cpp,'-o',binary];
+ const args=['-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-I',out,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),cpp,'-o',binary];
  let result=spawnSync(compiler,args,{encoding:'utf8'});assert.equal(result.status,0,result.stdout+result.stderr);
  result=spawnSync(binary,[],{encoding:'utf8'});assert.equal(result.status,0,profile+': '+result.stdout+result.stderr);
 }

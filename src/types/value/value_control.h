@@ -2,13 +2,16 @@
 #include <Arduino.h>
 #include <lvgl.h>
 #include <vector>
+#include "src/core/memory/psram_allocator.h"
 #include "src/types/tile_type_policy.h"
 #include "src/tiles/runtime/tile_renderer.h"
 
 constexpr size_t EDITABLE_PAYLOAD_MAX = 24576;
 struct EditableValue {
   String kind, state, unit, mode, session, revision;
-  std::vector<String> options;
+  // Up to 64 Select options stay with the open control; PSRAM keeps the list
+  // buffer out of the S3's internal heap.
+  PsVector<String> options;
   double minimum = 0, maximum = 0, step = 0;
   uint64_t last_changed = 0;
   bool valid = false, available = false, writable = false, has_state = false;

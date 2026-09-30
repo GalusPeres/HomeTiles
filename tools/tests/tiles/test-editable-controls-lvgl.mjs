@@ -25,6 +25,7 @@ const host = await lvglHost(root);
 const jsonInclude = [process.env.ARDUINOJSON_INCLUDE, path.join(os.homedir(), 'Documents/Arduino/libraries/ArduinoJson/src')].filter(Boolean).find(p => fs.existsSync(path.join(p, 'ArduinoJson.h')));
 if (!host || !jsonInclude) { console.log('SKIP: Editable visual regression needs LVGL, ArduinoJson and a host C/C++ toolchain'); process.exit(0); }
 const out = path.join(root, 'build/tests/editable-controls-lvgl'); fs.mkdirSync(out, {recursive: true});
+fs.writeFileSync(path.join(out,'esp_heap_caps.h'),'#pragma once\n#include <cstdlib>\n#define MALLOC_CAP_SPIRAM 1\n#define MALLOC_CAP_8BIT 2\ninline void* heap_caps_malloc(size_t n,int){return malloc(n);}\ninline void heap_caps_free(void*p){free(p);}\n');
 let geometry = read('src/ui/popups/popup_layout.h');
 geometry = geometry.slice(geometry.indexOf('namespace popup_layout {'), geometry.indexOf('// Standard popup close button.'));
 geometry += fn(read('src/ui/popups/popup_layout.h'), 'createCloseButton') + '}';
@@ -81,6 +82,7 @@ const Profile& locale(const char* language){static Profile de{",",{${catalog[0]}
 const char* binary_sensor_state_label(const char*,const char* state,const char*){return strcmp(state,"unknown")==0?"Unknown":"Unavailable";}
 }
 constexpr size_t EDITABLE_PAYLOAD_MAX=24576;
+#include "src/core/memory/psram_allocator.h"
 ${read('src/types/value/value_control.h').match(/struct EditableValue \{[\s\S]*?\n};/)[0]}
 ${['label','finite_json','parse_editable_value','editable_display_value'].map(n=>fn(control,n)).join('\n')}
 ${geometry}
@@ -577,7 +579,7 @@ int main(int argc,char**argv){
 const source = path.join(out, 'test.cpp'); fs.writeFileSync(source, cpp);
 for (const [profile,width,height,define] of [['square',480,480,'DEVICE_LAYOUT_480X480'],['wide',1024,600,'DEVICE_LAYOUT_1024X600'],['ws8',1280,800,''],['portrait',720,1280,''],['base',720,720,''],['landscape',1280,720,''],['compact-wide',800,480,'DEVICE_LAYOUT_480X480']]) {
   const binary=path.join(out,profile+(process.platform==='win32'?'.exe':''));
-  let result=spawnSync(host.cxx,[...host.flags,'-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),...(profile==='square'?['-DDEVICE_GUITION_ESP32_4848S040']:[]),source,host.archive,'-o',binary],{encoding:'utf8'});
+  let result=spawnSync(host.cxx,[...host.flags,'-std=c++17','-Wno-deprecated-declarations','-I',root,'-I',jsonInclude,'-I',out,'-DSCREEN_WIDTH='+width,'-DSCREEN_HEIGHT='+height,...(define?['-D'+define]:[]),...(profile==='square'?['-DDEVICE_GUITION_ESP32_4848S040']:[]),source,host.archive,'-o',binary],{encoding:'utf8'});
   assert.equal(result.status,0,result.stdout+result.stderr);
   result=spawnSync(binary,[path.join(out,profile)],{encoding:'utf8',timeout:45000});assert.equal(result.status,0,profile+': '+result.stdout+result.stderr);
   fs.writeFileSync(path.join(out,profile+'.log'),result.stdout+result.stderr);

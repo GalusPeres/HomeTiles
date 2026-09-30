@@ -104,6 +104,7 @@ constexpr int kTimeAxisHeight=24;
 constexpr int kTimeAxisHeight=20;
 #endif
 constexpr size_t kBinaryMaxActivityEntries=96,kBinaryMaxSegments=96,kBinaryMaxTimelineBins=768,kStateHistoryMaxPaletteEntries=16;
+#include "src/core/memory/psram_allocator.h"
 struct EditableControl;
 ${popup.match(/struct HistoryRangeConfig \{[\s\S]*?\n};/)[0]}
 ${popup.match(/struct SensorPopupContext \{[\s\S]*?\n};/)[0]}

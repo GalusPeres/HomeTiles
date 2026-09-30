@@ -78,10 +78,10 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - v0.6.11: `3b534ab` shared frame/header/close with cached bodies; matching content stays visible, cold content waits for first frame. Close/switch/delete cancel work; PIN retained. Settings forms disposable, Camera preloaded.
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
-- Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings in PSRAM, no extra framebuffers.
+- Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123, S3 was 46->33 KB); no extra framebuffers.
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
-- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted. Media "From cover" b119 S3 ok.
-- LVGL 9.5 invalidate walk (S3 recolor 230 ms) fixed in 9.6.0 (lvgl#10306): security-firmware, own lib folder, caches `hometiles-lvgl96-*`.
+- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted.
+- LVGL 9.6.0 (lvgl#10306): S3 "From cover" recolor 230->5 ms; own lib folder, caches `hometiles-lvgl96-*`.
 
 ## Radius and half-grid
 

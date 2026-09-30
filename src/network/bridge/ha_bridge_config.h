@@ -7,37 +7,9 @@
 #include <string>
 #include <utility>
 #include <esp_heap_caps.h>
-
-// Allocator that puts everything into PSRAM (MALLOC_CAP_SPIRAM). The default
-// malloc ALWAYS routes small allocations into the internal heap, so the
-// std::map nodes and string buffers of the entity index would otherwise consume
-// the scarce ~236KB of internal SRAM reserved for the UI render band and WiFi.
-template <typename T>
-struct PsramAllocator {
-  using value_type = T;
-  PsramAllocator() noexcept = default;
-  template <typename U>
-  PsramAllocator(const PsramAllocator<U>&) noexcept {}
-  T* allocate(size_t n) {
-    void* p = heap_caps_malloc(n * sizeof(T), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    // Last resort, the internal heap: an allocator must never return nullptr
-    // because the container would then write to address 0.
-    if (!p) p = heap_caps_malloc(n * sizeof(T), MALLOC_CAP_8BIT);
-    if (!p) abort();
-    return static_cast<T*>(p);
-  }
-  void deallocate(T* p, size_t) noexcept { heap_caps_free(p); }
-  template <typename U>
-  bool operator==(const PsramAllocator<U>&) const noexcept { return true; }
-  template <typename U>
-  bool operator!=(const PsramAllocator<U>&) const noexcept { return false; }
-};
-
-// std::string with the PSRAM allocator: short values (<=15 characters, SSO)
-// live directly in the map node, which is itself in PSRAM, and the allocator
-// takes longer buffers from PSRAM as well. Arduino String cannot do this; its
-// buffers always come from the internal heap.
-using PsString = std::basic_string<char, std::char_traits<char>, PsramAllocator<char>>;
+// PsramAllocator/PsString keep the entity index (std::map nodes and string
+// buffers) out of the scarce internal SRAM.
+#include "src/core/memory/psram_allocator.h"
 
 // Case-insensitive ordered map for entity keys. The text blob maps below match
 // keys with strncasecmp/equalsIgnoreCase everywhere, so the index has to behave

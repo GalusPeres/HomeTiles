@@ -18,6 +18,7 @@
 #include "src/ui/popups/popup_graph_readout.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
+#include "src/core/memory/psram_allocator.h"
 #include "src/core/i18n/i18n.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/io/hardware_io.h"
@@ -194,22 +195,25 @@ struct SensorPopupContext {
   uint64_t binary_range_end = 0;
   uint32_t state_history_last_request_ms = 0;
   bool state_history_refresh_pending = false;
+  // The history stays with the resident popup until the next response, so its
+  // buffers (up to 96 segments and 96 activity rows, several KB) live in PSRAM:
+  // in the internal heap they fragmented the S3's 44 KB after a few openings.
   struct BinarySegment {
     uint64_t start = 0;
     uint64_t end = 0;
     uint8_t state = 2;
     String value;
   };
-  std::vector<BinarySegment> binary_segments;
-  std::vector<uint8_t> binary_timeline_bins;
-  std::vector<String> state_history_palette;
+  PsVector<BinarySegment> binary_segments;
+  PsVector<uint8_t> binary_timeline_bins;
+  PsVector<String> state_history_palette;
   bool state_history_palette_complete = true;
   struct BinaryActivityEntry {
     uint64_t timestamp = 0;
     uint8_t state = 2;
     String value;
   };
-  std::vector<BinaryActivityEntry> binary_activity;
+  PsVector<BinaryActivityEntry> binary_activity;
   size_t binary_activity_first_row = kBinaryMaxActivityEntries;
   size_t binary_activity_row_indices[kBinaryActivityPoolRows] = {};
   uint32_t binary_activity_date_key = 0;
@@ -259,7 +263,9 @@ struct PendingValueUpdate {
 
 struct PendingHistoryUpdate {
   String entity_id;
-  String payload;
+  // Kept until the next response; an Arduino String would hold its buffer
+  // (several KB) in the internal heap.
+  PsString payload;
   bool valid = false;
 };
 
@@ -2029,7 +2035,7 @@ static void apply_timeline_readout(SensorPopupContext* ctx, const lv_point_t& po
   const String& unknown_state = binary_state_identifier_text(2);
   const String& unavailable_state = binary_state_identifier_text(3);
   if (!ctx->binary_timeline_bins.empty()) {
-    const std::vector<uint8_t>& bins = ctx->binary_timeline_bins;
+    const auto& bins = ctx->binary_timeline_bins;
     const size_t count = bins.size();
     size_t first = static_cast<size_t>(x) * count / static_cast<size_t>(width);
     size_t last = (static_cast<size_t>(x + 1) * count + static_cast<size_t>(width) - 1U) /
@@ -2455,7 +2461,7 @@ static int binary_timeline_hex_nibble(char value) {
 static bool decode_binary_timeline(JsonVariantConst points_value,
                                    JsonVariantConst encoding_value,
                                    JsonVariantConst data_value,
-                                   std::vector<uint8_t>& output) {
+                                   PsVector<uint8_t>& output) {
   output.clear();
   if (!points_value.is<uint16_t>() || !encoding_value.is<const char*>() ||
       !data_value.is<const char*>()) {
@@ -2491,8 +2497,8 @@ static bool decode_binary_timeline(JsonVariantConst points_value,
 static bool decode_state_timeline(JsonVariantConst points_value,
                                   JsonVariantConst encoding_value,
                                   JsonVariantConst data_value,
-                                  const std::vector<String>& palette,
-                                  std::vector<uint8_t>& output) {
+                                  const PsVector<String>& palette,
+                                  PsVector<uint8_t>& output) {
   output.clear();
   if (!points_value.is<uint16_t>() || !encoding_value.is<const char*>() ||
       !data_value.is<const char*>() || palette.empty() ||
@@ -3756,7 +3762,7 @@ void queue_sensor_popup_history(const char* entity_id, const char* payload, size
   }
 
   g_pending_history.entity_id = incoming_entity;
-  g_pending_history.payload = payload_text;
+  g_pending_history.payload.assign(payload_text.c_str(), payload_text.length());
   g_pending_history.valid = true;
 }
 

@@ -78,10 +78,10 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - v0.6.11: `3b534ab` shared frame/header/close with cached bodies; matching content stays visible, cold content waits for first frame. Close/switch/delete cancel work; PIN retained. Settings forms disposable, Camera preloaded.
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
-- Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123, S3 was 46->33 KB); no extra framebuffers.
+- Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123); no extra framebuffers.
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
 - Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); controls tint only From icon/cover; dark icons lifted.
-- LVGL 9.6.0 (lvgl#10306): S3 "From cover" recolor 230->5 ms; own lib folder, caches `hometiles-lvgl96-*`.
+- LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; own lib, caches `hometiles-lvgl96-*`.
 
 ## Radius and half-grid
 
@@ -137,4 +137,4 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Security branch (unreleased)
 
 - Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, 30-day NVS sessions, CSRF; device reset; hides secrets.
-- Command channel (optional): pairing v2 (X25519/mbedTLS, 6-digit number on panel and HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; see `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested; off re-clears status.
+- Command channel (optional): pairing v2 (X25519, 6-digit code on panel/HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested. b125: rekey drops a stale session (HA reload blocked commands); HW pending.

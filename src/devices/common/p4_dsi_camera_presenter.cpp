@@ -25,6 +25,59 @@ bool rectInside(int32_t x, int32_t y, int32_t w, int32_t h,
          y <= bounds_h - h;
 }
 
+// TEMPORARY (b133): split the camera presentation time into its steps to see
+// whether 30 FPS fits into the UI loop. Remove after the measurement.
+enum PresentStep : uint8_t {
+  kStepLock,
+  kStepSyncUi,
+  kStepSourceCache,
+  kStepPpa,
+  kStepOutputCache,
+  kStepSwap,
+  kStepVsync,
+  kStepCount,
+};
+
+struct PresentSplit {
+  uint64_t step_us[kStepCount] = {};
+  uint32_t max_vsync_us = 0;
+  uint32_t max_total_us = 0;
+  uint32_t count = 0;
+  uint32_t started_ms = 0;
+};
+
+PresentSplit g_present_split;
+
+void notePresentSplit(const char* device, const uint32_t (&marks)[kStepCount + 1]) {
+  PresentSplit& split = g_present_split;
+  if (!split.count) split.started_ms = millis();
+  for (uint8_t step = 0; step < kStepCount; ++step) {
+    split.step_us[step] += marks[step + 1] - marks[step];
+  }
+  const uint32_t vsync_us = marks[kStepVsync + 1] - marks[kStepVsync];
+  const uint32_t total_us = marks[kStepCount] - marks[0];
+  if (vsync_us > split.max_vsync_us) split.max_vsync_us = vsync_us;
+  if (total_us > split.max_total_us) split.max_total_us = total_us;
+  ++split.count;
+  const uint32_t elapsed_ms = millis() - split.started_ms;
+  if (elapsed_ms < 2000) return;
+  const float n = static_cast<float>(split.count) * 1000.0f;
+  uint64_t sum_us = 0;
+  for (uint64_t step_us : split.step_us) sum_us += step_us;
+  Serial.printf(
+      "[CameraDisplay/%s] Present split avg ms: lock=%.1f sync_ui=%.1f "
+      "src_cache=%.1f ppa=%.1f out_cache=%.1f swap=%.1f vsync=%.1f "
+      "total=%.1f | max vsync=%.1f total=%.1f | %.1f FPS, loop share %.0f%%\n",
+      device ? device : "P4", split.step_us[kStepLock] / n,
+      split.step_us[kStepSyncUi] / n, split.step_us[kStepSourceCache] / n,
+      split.step_us[kStepPpa] / n, split.step_us[kStepOutputCache] / n,
+      split.step_us[kStepSwap] / n, split.step_us[kStepVsync] / n,
+      sum_us / n, split.max_vsync_us / 1000.0f, split.max_total_us / 1000.0f,
+      split.count * 1000.0f / elapsed_ms,
+      sum_us / 10.0f / elapsed_ms);
+  split = PresentSplit{};
+}
+
 }  // namespace
 
 [[noreturn]] void restartAfterPpaTimeout(
@@ -334,8 +387,11 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
     return false;
   }
 
+  uint32_t marks[kStepCount + 1] = {};  // TEMPORARY (b133) present split
+  marks[0] = micros();
   Dma2dArbiterGuard dma2d_guard(kDma2dLockTimeoutMs);
   if (!dma2d_guard.locked()) return false;
+  marks[kStepLock + 1] = micros();
   if (!begin() || !syncUiToInactive()) {
     Serial.printf("[CameraDisplay/%s] Framebuffer synchronization failed\n",
                   config_.device_name ? config_.device_name : "P4");
@@ -343,6 +399,7 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
     return false;
   }
 
+  marks[kStepSyncUi + 1] = micros();
   uint16_t* destination = inactiveFramebuffer();
   if (!destination || !syncCache(data, required_bytes, false)) {
     Serial.printf("[CameraDisplay/%s] PPA source cache sync failed\n",
@@ -350,6 +407,7 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
     noteFault(runtime);
     return false;
   }
+  marks[kStepSourceCache + 1] = micros();
 
   ppa_srm_oper_config_t oper = {};
   oper.in.buffer = data;
@@ -401,6 +459,7 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
     dma2d_guard.detach();
     restartAfterTimeout(x, y, w, h, source_stride, rotation);
   }
+  marks[kStepPpa + 1] = micros();
 
   if (!syncFramebufferSpan(destination, dst_x, dst_y, dst_w, dst_h, true)) {
     Serial.printf("[CameraDisplay/%s] PPA output cache sync failed\n",
@@ -408,6 +467,7 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
     noteFault(runtime);
     return false;
   }
+  marks[kStepOutputCache + 1] = micros();
 
   const esp_err_t swap_err = esp_lcd_panel_draw_bitmap(
       panel_, dst_x, dst_y, dst_x + dst_w, dst_y + dst_h, destination);
@@ -423,6 +483,7 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   // happened before or during the draw call, then wait for the next one after
   // the driver accepted the new framebuffer selection.
   drainRefreshSignal();
+  marks[kStepSwap + 1] = micros();
   if (!waitRefreshDone()) {
     // The driver accepted the swap but did not confirm which framebuffer is
     // now scanned. Continuing with a guessed active index can make UI and PPA
@@ -434,6 +495,8 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   }
   active_index_ ^= 1U;
   noteSuccess(runtime);
+  marks[kStepVsync + 1] = micros();
+  notePresentSplit(config_.device_name, marks);
   return true;
 }
 

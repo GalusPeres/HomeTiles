@@ -54,8 +54,16 @@ assert.match(sendUnpair, /header\.seq = g_state->next_seq\+\+;/, 'unpair is numb
 assert.match(channel, /bool disable\(bool\* bridge_notified\) \{\s*begin\(\);\s*return turnOff\(true, bridge_notified\);/);
 assert.match(readRepoFile('src/ui/tabs/settings/tab_settings.cpp'), /command_channel::disable\(&bridge_notified\)[\s\S]{0,400}bridge_notified \? nullptr : tr\(\)\.security_unpaired_offline/,
   'the hint to remove the pairing in Home Assistant appears only when the Bridge could not be told');
-assert.match(channel, /case MessageType::Rekey:[\s\S]{0,300}g_state->hello_requested = true;\s*g_state->hello_attempts = 0;/,
-  'a rekey restarts the hello backoff');
+// A rekey means the Bridge does not know the session (restart, reload). The
+// panel kept its old session, so service() never sent a hello and the Bridge
+// refused every command (V2 camera: "No camera response").
+assert.match(channel, /case MessageType::Rekey:(?:\s*\/\/[^\n]*)*\s*resetSession\(\);/,
+  'a rekey drops the old session');
+const resetSession = channel.slice(channel.indexOf('void resetSession() {'), channel.indexOf('bool writeRecord('));
+for (const line of ['g_state->has_session = false;', 'g_state->hello_attempts = 0;', 'g_state->hello_requested = true;'])
+  assert.ok(resetSession.includes(line), `resetSession: ${line}`);
+assert.match(channel, /if \(g_state->has_session\) return;[\s\S]{0,700}if \(g_state->hello_requested \|\| retry_due\) sendHello\(\);/,
+  'without a session service() sends the hello');
 
 // Every Bridge message that authenticates but is not used leaves a
 // rate-limited trace, so a stuck pairing can be diagnosed from the panel log.

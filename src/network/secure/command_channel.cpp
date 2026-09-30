@@ -832,10 +832,13 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
         handleSession(header);
         break;
       case MessageType::Rekey:
-        // The Bridge is listening now; restart the backoff so a hello lost
-        // during its restart is repeated after 10 s instead of minutes.
-        g_state->hello_requested = true;
-        g_state->hello_attempts = 0;
+        // The Bridge does not know this session (after its restart or a
+        // reload of the integration) or is listening now. The old session is
+        // dropped so service() sends a hello: kept, it stopped every hello,
+        // and the Bridge refused each command with another rekey (V2 camera:
+        // "No camera response"). resetSession() also restarts the backoff,
+        // so a hello lost during the restart is repeated after 10 s.
+        resetSession();
         if (logDue(&g_state->last_rekey_log_ms)) {
           Serial.println("[SecureCmd] Bridge asked for a new session");
         }

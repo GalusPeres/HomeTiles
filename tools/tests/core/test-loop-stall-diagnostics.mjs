@@ -71,28 +71,4 @@ assert.match(web, /#if HOMETILES_LOOP_STALL_DIAGNOSTICS\n    \/\/ Names the requ
 assert.equal(web.match(/#if HOMETILES_LOOP_STALL_DIAGNOSTICS\n        if \(first_chunk\) loop_stall::webUploadBegin\(this->server\.uri\(\)\.c_str\(\)\);\n#endif/g)?.length, 2);
 assert.match(web, /server\.handleClient\(\);\n  loop_stall::webIdle\(\);/);
 
-// Media cover changes log where their time goes, only on the S3 and V2: the
-// timing lines sit in guarded blocks and the cover path stays unchanged.
-assert.match(read('src/core/diagnostics/media_timing.h'),
-  /#if HOMETILES_LOOP_STALL_DIAGNOSTICS \|\| defined\(DEVICE_GUITION_JC8012P4A1_V2\)\n#define HOMETILES_MEDIA_TIMING 1\n#else\n#define HOMETILES_MEDIA_TIMING 0\n#endif/);
-const renderer = read('src/tiles/runtime/tile_renderer.cpp');
-const iconSource = read('src/tiles/runtime/tile_icon_source.cpp');
-const surface = read('src/ui/shared/ui_surface_style.cpp');
-for (const text of [renderer, iconSource, surface]) {
-  assert.ok(text.includes('#include "src/core/diagnostics/media_timing.h"'));
-  for (const block of text.matchAll(/#if HOMETILES_MEDIA_TIMING\n([\s\S]*?)#endif/g)) {
-    assert.ok(!/set_cover_color\(|update_media_cover|update_media_popup_from_widgets|set_tile_tint\(|refresh_discs\(|refresh_controls\(|follow_open_popup\(|force_icon_color|lv_obj_add_style|lv_obj_set_style/.test(block[1]),
-      'the measurement only reads clocks and counts');
-  }
-}
-assert.match(renderer, /#if HOMETILES_MEDIA_TIMING\n(?:  \/\/[^\n]*\n)*  if \(should_update_cover\) \{\n    const uint32_t now_us = micros\(\);\n    Serial\.printf\("\[MediaTiming\] total=/);
-assert.match(renderer, /g_media_timing_pick_us \+= color_started_us - pick_started_us;\n#endif\n  tile_icon_source::set_cover_color\(card, known, rgb\);/);
-// Each step of one "From cover" recolor, and LVGL's invalidations meanwhile.
-assert.match(iconSource, /Serial\.printf\("\[CoverColor\] total=%u us icon=%u tint=%u popup=%u \(open=%d\) discs=%u controls=%u \| "/);
-assert.match(iconSource, /lv_display_add_event_cb\(display, count_cover_invalidation, LV_EVENT_INVALIDATE_AREA, nullptr\);/);
-const apply = iconSource.slice(iconSource.indexOf('void apply_cover(lv_obj_t* card) {'));
-for (const step of ['Icon', 'Tint', 'Popup', 'Discs', 'Controls'])
-  assert.ok(apply.includes(`#if HOMETILES_MEDIA_TIMING\n  timing.lap(CoverTiming::${step});\n#endif`), step);
-assert.match(surface, /lv_obj_add_style\(obj, &g_control_style\.style, selector\);\n#if HOMETILES_MEDIA_TIMING\n  const uint32_t now_us = micros\(\);/);
-
 console.log('The S3 loop names every step; stalls are reported with the Web request and backtraces.');

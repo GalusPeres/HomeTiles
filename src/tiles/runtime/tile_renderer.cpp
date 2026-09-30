@@ -25,7 +25,6 @@
 #include "src/tiles/runtime/tile_icon_color_rules.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/media/cover_color.h"
-#include "src/core/diagnostics/media_timing.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/i18n/i18n.h"
@@ -3884,22 +3883,12 @@ static bool media_widgets_are_visible(const MediaTileWidgets& widgets) {
          media_obj_is_visible(widgets.play_pause_label);
 }
 
-#if HOMETILES_MEDIA_TIMING
-// Media cover timing (media_timing.h): update_media_tile_state logs where the
-// time goes; these sum the cover color's pick and apply within one update.
-static uint32_t g_media_timing_pick_us = 0;
-static uint32_t g_media_timing_color_us = 0;
-#endif
-
 // "From cover" (icon color and tile color): reports the color of the cover a
 // Media card shows, or no color when it hides the cover. Sampled once per
 // cover change, at most 32 x 32 pixels (media/cover_color.h).
 static void report_media_cover_color(MediaTileWidgets& widgets, bool visible) {
   lv_obj_t* card = widgets.cover_clip ? lv_obj_get_parent(widgets.cover_clip) : nullptr;
   if (!card) return;
-#if HOMETILES_MEDIA_TIMING
-  const uint32_t pick_started_us = micros();
-#endif
   uint32_t rgb = 0;
   bool known = false;
   const void* src = visible && widgets.cover_image ? lv_image_get_src(widgets.cover_image) : nullptr;
@@ -3912,14 +3901,7 @@ static void report_media_cover_color(MediaTileWidgets& widgets, bool visible) {
       known = media_cover_color::pick(dsc->data, dsc->header.w, dsc->header.h, stride, rgb);
     }
   }
-#if HOMETILES_MEDIA_TIMING
-  const uint32_t color_started_us = micros();
-  g_media_timing_pick_us += color_started_us - pick_started_us;
-#endif
   tile_icon_source::set_cover_color(card, known, rgb);
-#if HOMETILES_MEDIA_TIMING
-  g_media_timing_color_us += micros() - color_started_us;
-#endif
 }
 
 static bool set_media_cover_visible(MediaTileWidgets& widgets, bool visible) {
@@ -4387,14 +4369,6 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   const uint32_t payload_hash = fnv1a_hash(payload_start);
   if (widgets.last_payload_hash == payload_hash) return;
   widgets.last_payload_hash = payload_hash;
-#if HOMETILES_MEDIA_TIMING
-  const uint32_t timing_started_us = micros();
-  uint32_t timing_fields_us = timing_started_us;
-  uint32_t timing_read_us = timing_started_us;
-  uint32_t timing_cover_us = timing_started_us;
-  g_media_timing_pick_us = 0;
-  g_media_timing_color_us = 0;
-#endif
 
   String state;
   String title;
@@ -4525,9 +4499,6 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   }
 
   if (should_update_cover) {
-#if HOMETILES_MEDIA_TIMING
-    timing_fields_us = micros();
-#endif
     String cover_url;
     String cover_data;
     if (!media_artwork::read_string(payload_start, "entity_picture", cover_url)) {
@@ -4536,36 +4507,15 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     media_artwork::read_string(payload_start, "entity_picture_data", cover_data);
     decode_basic_json_escapes(cover_url);
     decode_basic_json_escapes(cover_data);
-#if HOMETILES_MEDIA_TIMING
-    timing_read_us = micros();
-#endif
 
     if (cover_data.length()) {
       update_media_cover_from_base64(widgets, cover_data, cover_url);
     } else {
       update_media_cover(grid_type, grid_index, widgets, cover_url);
     }
-#if HOMETILES_MEDIA_TIMING
-    timing_cover_us = micros();
-#endif
   }
 
   update_media_popup_from_widgets(grid_type, grid_index, widgets, state);
-#if HOMETILES_MEDIA_TIMING
-  // One line per cover change: fields = JSON fields and title labels, read =
-  // cover fields out of the payload, cover = decode, scale and cover color
-  // (pick and apply in microseconds), popup = Media popup sync.
-  if (should_update_cover) {
-    const uint32_t now_us = micros();
-    Serial.printf("[MediaTiming] total=%u ms fields=%u ms read=%u ms cover=%u ms (pick=%u us color=%u us) popup=%u ms\n",
-                  static_cast<unsigned>((now_us - timing_started_us) / 1000U),
-                  static_cast<unsigned>((timing_fields_us - timing_started_us) / 1000U),
-                  static_cast<unsigned>((timing_read_us - timing_fields_us) / 1000U),
-                  static_cast<unsigned>((timing_cover_us - timing_read_us) / 1000U),
-                  static_cast<unsigned>(g_media_timing_pick_us), static_cast<unsigned>(g_media_timing_color_us),
-                  static_cast<unsigned>((now_us - timing_cover_us) / 1000U));
-  }
-#endif
 }
 
 void queue_media_tile_update(GridType grid_type, uint8_t grid_index, const char* payload) {

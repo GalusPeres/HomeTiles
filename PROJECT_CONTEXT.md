@@ -103,14 +103,13 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Advanced: `lcam_rot` (180 = flip, odd = `rotate` 90), `lcam_rbswap` (Bayer, next start).
 - HW pending: b30 CSI/ISP, q10; b31 gain, q10-90; b32 screenshot; b33 Wi-Fi/AP, kbd, #43; b34 rotation, boards; b35 sleep stream/indicator wake, Tab5 1% wake, S3 150Hz.
 - Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
+- Popup stream: Bridge b8 thins before area scaling, `2a714a9` shares FFmpeg per camera; P4 b134 30 FPS, no refresh wait; #63 1024x600 552x310 (b135).
 
 ## v0.7.0 release
 
 - v0.7.0 (`609550a`): public, S3 assets from `c3e0a673`; P4 unchanged. Existing S3 v0.7.0 needs Web Admin update.
-- Bridge v0.7.0 (`1c12eda`): 267 pass/1 skip. Evidence: `build/release-v0.7.0/`.
-- Cache b73 frees queues. Five owned devices stable.
+- Bridge v0.7.0 `1c12eda`; evidence `build/release-v0.7.0/`.
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
-- CI `36334088502`: 17 builds, 152 tests/21 skips; six S3 BINs verified.
 - v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44) incl. installer stub crash; French.
 - Tests pending #7 #11 #27 #34 #45; V2 SD restart #55.
 

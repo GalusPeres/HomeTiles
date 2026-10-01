@@ -11297,8 +11297,37 @@ function maybeFillTitleFromSwitch(tab) {
     }
     const symbol = bar.querySelector('.tile-switch-symbol');
     if (symbol) symbol.className = 'mdi ' + (on ? 'mdi-power' : 'mdi-circle-outline') + ' tile-switch-symbol';
-    const fill = bar.querySelector('.tile-switch-fill');
-    if (!fill) return;
+    bar.__switchFill = {kind, level};
+    drawSwitchPreviewFill(bar);
+    // The fill is measured in pixels, but the grid gives the tile its size
+    // only after the render (layoutTiles), and a hidden tab measures 0: the
+    // fill used the one-cell bar. It is drawn again whenever the bar's size
+    // changes.
+    if (switchBarObserver && !bar.__switchObserved) {
+      bar.__switchObserved = true;
+      switchBarObserver.observe(bar);
+    }
+  }
+
+  const switchBarObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const bar = entry.target;
+        if (!bar.isConnected) {
+          switchBarObserver.unobserve(bar);
+          bar.__switchObserved = false;
+          continue;
+        }
+        drawSwitchPreviewFill(bar);
+      }
+    })
+    : null;
+
+  function drawSwitchPreviewFill(bar) {
+    const fill = bar?.querySelector('.tile-switch-fill');
+    const drawn = bar?.__switchFill;
+    if (!fill || !drawn) return;
+    const {kind, level} = drawn;
     const width = bar.clientWidth;
     const height = bar.clientHeight;
     const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, height / 2);

@@ -184,6 +184,10 @@ const dragResize = readRepoFile('src/web/admin/tiles/drag-resize.js');
 assert.ok(dragResize.includes('if (isSwitch) prepareSwitchResizePreview(preview, data, layout);') &&
           dragResize.includes('if (isSwitch) finishSwitchResizePreview(preview, data);'));
 assert.ok(admin.includes('function prepareSwitchResizePreview(preview, data, layout) {'));
+// b150 regression: the grid measured the dimmer fill before layoutTiles gave
+// the tile its span, so wider tiles kept the one-cell fill; the fill is drawn
+// again whenever the bar's size changes.
+assert.ok(admin.includes('switchBarObserver.observe(bar);') && admin.includes('function drawSwitchPreviewFill(bar) {'));
 const css = readRepoFile('src/web/assets/admin.css');
 assert.ok(css.includes('height:calc(var(--switch-bar-height, 30px) + var(--switch-bar-grow, 0px));'));
 assert.ok(css.includes('.switch-choices button.hidden { display:none; }'));

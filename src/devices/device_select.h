@@ -22,6 +22,7 @@
 // #define DEVICE_GUITION_JC1060P470C_V2
 // #define DEVICE_GUITION_JC4880P443_PORTRAIT
 // #define DEVICE_GUITION_ESP32_4848S040
+// #define DEVICE_ADAFRUIT_QUALIA_S3_720
 #endif
 //
 // If nothing is selected, the project defaults to Waveshare 4B.
@@ -50,7 +51,8 @@
      defined(DEVICE_GUITION_JC1060P470C) + \
      defined(DEVICE_GUITION_JC1060P470C_V2) + \
      defined(DEVICE_GUITION_JC4880P443_PORTRAIT) + \
-     defined(DEVICE_GUITION_ESP32_4848S040)) > 1
+     defined(DEVICE_GUITION_ESP32_4848S040) + \
+     defined(DEVICE_ADAFRUIT_QUALIA_S3_720)) > 1
 #error "Select only one device target."
 #endif
 
@@ -71,6 +73,7 @@
     !defined(DEVICE_GUITION_JC1060P470C_V2) && \
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
+    !defined(DEVICE_ADAFRUIT_QUALIA_S3_720) && \
     defined(HOMETILES_CI_TARGET)
 #error "HOMETILES_CI_TARGET requires one DEVICE_* build flag."
 #endif
@@ -92,6 +95,7 @@
     !defined(DEVICE_GUITION_JC1060P470C_V2) && \
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
+    !defined(DEVICE_ADAFRUIT_QUALIA_S3_720) && \
     !defined(HOMETILES_CI_TARGET)
 #define DEVICE_WAVESHARE_4B
 #endif
@@ -162,11 +166,14 @@
 #define DEVICE_P4_IDF_DSI
 #endif
 
-// The 480x480 ESP32-S3 RGB boards share only proven S3 framebuffer,
-// storage and OTA lifecycle handling. Panel wiring and init remain separate.
+// The ESP32-S3 RGB boards share only proven S3 framebuffer, storage and OTA
+// lifecycle handling. Panel wiring and init remain separate. The name is
+// historical: the 720x720 Qualia joins this family for the S3 lifecycle but
+// uses the native 720x720 layout, not DEVICE_LAYOUT_480X480.
 #if defined(DEVICE_GUITION_ESP32_4848S040) || \
     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || \
-    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
+    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B) || \
+    defined(DEVICE_ADAFRUIT_QUALIA_S3_720)
 #define DEVICE_ESP32_S3_RGB_480
 #endif
 

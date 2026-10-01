@@ -430,7 +430,8 @@ static GithubUpdate::CheckResult perform_fw_check() {
     Device::storageWriteBegin();
     Device::storageWriteEnd();
   }
-#elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4)
+#elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || \
+    defined(DEVICE_ADAFRUIT_QUALIA_S3_720)
   if (s3_rgb_network_active) {
     Serial.println("[Display/S3] Resynchronizing RGB scanout after update check");
     Device::storageWriteBegin();

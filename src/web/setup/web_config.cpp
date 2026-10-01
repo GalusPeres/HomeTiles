@@ -35,6 +35,8 @@ const char* apSsidForDevice() {
   return "Waveshare_S3_4_Config";
 #elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
   return "Waveshare_S3_4B_Config";
+#elif defined(DEVICE_ADAFRUIT_QUALIA_S3_720)
+  return "Qualia_S3_720_Config";
 #elif defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3)
   return "Waveshare_LCD4_3_Config";
 #elif defined(DEVICE_WAVESHARE_TOUCH_LCD_7)

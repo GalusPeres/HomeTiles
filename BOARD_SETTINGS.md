@@ -502,3 +502,45 @@ Arduino IDE:
 - Upload Mode: `UART0 / Hardware CDC`
 - Upload Speed: `921600`
 - USB Mode: `Hardware CDC and JTAG`
+
+## Adafruit Qualia ESP32-S3 720x720
+
+Used for:
+- `src/devices/adafruit_qualia_s3_720`
+- build profile `adafruit_qualia_s3_720` (local-only; not in the release
+  matrix or web installer)
+
+Important:
+- Only the Adafruit Qualia ESP32-S3 for RGB-666 displays (product 5800) with
+  the 4" square 720x720 TL040HDS20 capacitive panel (product 5794).
+- First boot confirmed display, touch and Wi-Fi; the remaining checks are
+  listed in the device README. The profile stays local-only until then.
+- ESP32-S3 with `16MB` flash and `8MB` octal PSRAM.
+- The panel is RGB-only and needs no init table: 16-bit RGB bus on DE 2,
+  VSYNC 42, HSYNC 41, PCLK 1, B(40,39,38,0,45), G(48,47,21,14,13,12),
+  R(11,10,9,46,3), 12MHz pixel clock with Adafruit's square40 timings.
+- Panel reset and backlight enable use a TCA9554 expander at `0x3F` on
+  SDA 8 / SCL 18. The backlight is on/off only; any non-zero brightness is on.
+- Capacitive touch is FT6336 at `0x48` (not the usual `0x38`) on that bus.
+- No microSD interface. Runtime files use LittleFS, and Camera tiles are
+  unavailable on this ESP32-S3 profile.
+- Uses the native 720x720 HomeTiles layout (same grid as Waveshare B4).
+- Details: [device README](src/devices/adafruit_qualia_s3_720/README.md).
+- Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
+
+Arduino IDE:
+- Board: `ESP32S3 Dev Module`
+- USB CDC On Boot: `Enabled`
+- CPU Frequency: `240MHz (WiFi)`
+- Core Debug Level: `None`
+- USB DFU On Boot: `Disabled`
+- Erase All Flash Before Sketch Upload: `Disabled`
+- Flash Mode: `QIO 80MHz`
+- Flash Size: `16MB (128Mb)`
+- JTAG Adapter: `Disabled`
+- USB Firmware MSC On Boot: `Disabled`
+- Partition Scheme: `Custom`
+- PSRAM: `OPI PSRAM`
+- Upload Mode: `UART0 / Hardware CDC`
+- Upload Speed: `921600`
+- USB Mode: `Hardware CDC and JTAG`

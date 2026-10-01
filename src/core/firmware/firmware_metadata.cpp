@@ -31,6 +31,9 @@
 #elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
 #define FW_META_TARGET_DEVICE_KEY "waveshare_s3_touch_lcd_4b"
 #define FW_META_TARGET_DISPLAY_NAME "Waveshare ESP32-S3 Touch LCD 4B"
+#elif defined(DEVICE_ADAFRUIT_QUALIA_S3_720)
+#define FW_META_TARGET_DEVICE_KEY "adafruit_qualia_s3_720"
+#define FW_META_TARGET_DISPLAY_NAME "Adafruit Qualia S3 720x720"
 #elif defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3)
 #define FW_META_TARGET_DEVICE_KEY "waveshare_touch_lcd_4_3"
 #define FW_META_TARGET_DISPLAY_NAME "Waveshare Touch LCD 4.3"

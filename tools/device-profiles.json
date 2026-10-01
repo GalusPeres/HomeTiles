@@ -407,6 +407,20 @@
       "publish": false
     },
     {
+      "buildProfile": "adafruit_qualia_s3_720",
+      "key": "adafruit_qualia_s3_720",
+      "metadataDeviceKey": "adafruit_qualia_s3_720",
+      "define": "DEVICE_ADAFRUIT_QUALIA_S3_720",
+      "chipFamily": "ESP32-S3",
+      "flashSize": 16777216,
+      "siliconVariant": "default",
+      "minimumRevision": 0,
+      "maximumRevision": 65535,
+      "rxVariant": "native-s3",
+      "elfFlags": "",
+      "publish": false
+    },
+    {
       "buildProfile": "layout_test_480x480",
       "key": "layout_test_480x480",
       "metadataDeviceKey": "layout_test_480x480",

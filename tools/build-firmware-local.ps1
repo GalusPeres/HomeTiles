@@ -147,6 +147,9 @@ if ($resolvedEspHostedRxVariant -eq 'repo-guition-jc8012-rx-single-block' -and
 if (-not $isNativeS3) {
     & (Join-Path $PSScriptRoot 'apply-esp-hosted-3.3.7-fixes-local.ps1') `
         -EspHostedRxVariant $resolvedEspHostedRxVariant
+    # The panel keeps refreshing during flash writes (no blue flash):
+    # tools/esp-idf-3.3.7-p4-cache-safe/README.md.
+    & (Join-Path $PSScriptRoot 'apply-p4-cache-safe-local.ps1')
 }
 
 $commonFlags = "-DLV_CONF_INCLUDE_SIMPLE -I$repoRoot -I$libraries"
@@ -303,6 +306,11 @@ if (-not $isNativeS3) {
         Select-String -SimpleMatch 'PKT_LEN reg all-ones (bus read error); dropping read'
     if ($obsoletePktLenDrop) {
         throw "Obsolete masked PKT_LEN drop path found in $firmwareBin"
+    }
+    $cacheSafeDisplayMarker = $firmwareStrings |
+        Select-String -SimpleMatch 'on_full_trans_done not in IRAM'
+    if (-not $cacheSafeDisplayMarker) {
+        throw "Cache-safe P4 display/camera DMA objects missing from $firmwareBin"
     }
 
     $firmwareMap = Join-Path $OutputDirectory 'HomeTiles.ino.map'

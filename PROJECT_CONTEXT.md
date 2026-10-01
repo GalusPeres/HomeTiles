@@ -43,6 +43,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - `repo-a8204` is the release-safe baseline; the short-tail variant was experimental.
 - Failed P4 OTA approaches: throttling, PSRAM staging, TLS-to-flash streaming, Hosted restart, permanent SDIO buffers; retry only with new evidence.
 - Network wedge safeguards are recovery, not a transport fix.
+- Flash-write blue flash: cache-safe DSI/DMA/CSI objects (`tools/esp-idf-3.3.7-p4-cache-safe`), V2 b137 ok.
 
 ## Issue #38
 
@@ -76,11 +77,11 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - v0.6.11: `3b534ab` shared frame/header/close with cached bodies; matching content stays visible, cold content waits for first frame. Close/switch/delete cancel work; PIN retained. Settings forms disposable, Camera preloaded.
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
-- Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123); no extra framebuffers.
+- Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123).
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
 - Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); circles/controls opaque (16-bit blending lost the step), veil only on see-through screensaver tiles; controls tint only From icon/cover; dark icons lifted. Presses: no theme recolor (tiles too) or teal fade, PIN/pill buttons a step up, circles fade with tiles (b132, HW pending).
-- LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; own lib, caches `hometiles-lvgl96-*`.
-- Reverted: b126 cover fade (RGB565: few dark-tint steps), b128 UI frame swap (input lag). Next: measure V2 tile redraw.
+- LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; caches `hometiles-lvgl96-*`.
+- Reverted: b126 cover fade, b128 UI frame swap (lag).
 
 ## Radius and half-grid
 
@@ -135,4 +136,4 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Security branch (unreleased)
 
 - Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, 30-day NVS sessions, CSRF; device reset; hides secrets.
-- Command channel (optional): pairing v2 (X25519, 6-digit code on panel/HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested. b125 rekey resets a stale session; HW pending.
+- Command channel (optional): pairing v2 (X25519, 6-digit code on panel/HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested. b125 rekey resets stale sessions.

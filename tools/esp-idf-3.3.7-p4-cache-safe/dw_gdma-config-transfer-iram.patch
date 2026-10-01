@@ -1,0 +1,22 @@
+--- a/components/esp_hw_support/dma/dw_gdma.c
++++ b/components/esp_hw_support/dma/dw_gdma.c
+@@ -477,12 +477,14 @@
+     return ESP_OK;
+ }
+ 
+-esp_err_t dw_gdma_channel_config_transfer(dw_gdma_channel_handle_t chan, const dw_gdma_block_transfer_config_t *config)
++/* HomeTiles: the CSI DMA done callback (IRAM) calls this while the cache may
++ * be disabled (flash writes), so it lives in IRAM with ISR-safe checks. */
++IRAM_ATTR esp_err_t dw_gdma_channel_config_transfer(dw_gdma_channel_handle_t chan, const dw_gdma_block_transfer_config_t *config)
+ {
+-    ESP_RETURN_ON_FALSE(chan && config, ESP_ERR_INVALID_ARG, TAG, "invalid argument");
+-    ESP_RETURN_ON_FALSE(chan->src_transfer_type != DW_GDMA_BLOCK_TRANSFER_LIST &&
+-                        chan->dst_transfer_type != DW_GDMA_BLOCK_TRANSFER_LIST,
+-                        ESP_ERR_INVALID_STATE, TAG, "invalid transfer type");
++    ESP_RETURN_ON_FALSE_ISR(chan && config, ESP_ERR_INVALID_ARG, TAG, "invalid argument");
++    ESP_RETURN_ON_FALSE_ISR(chan->src_transfer_type != DW_GDMA_BLOCK_TRANSFER_LIST &&
++                            chan->dst_transfer_type != DW_GDMA_BLOCK_TRANSFER_LIST,
++                            ESP_ERR_INVALID_STATE, TAG, "invalid transfer type");
+     dw_gdma_hal_context_t *hal = &chan->group->hal;
+     int chan_id = chan->chan_id;
+ 

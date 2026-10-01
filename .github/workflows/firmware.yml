@@ -310,6 +310,39 @@ jobs:
             done
           done
 
+      # The panel keeps refreshing during flash writes (no blue flash):
+      # tools/esp-idf-3.3.7-p4-cache-safe/README.md.
+      - name: Apply cache-safe P4 display and camera DMA objects
+        if: matrix.rx_variant != 'native-s3' && !inputs.repair_s3_release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ar_bin="$(find "$HOME/.arduino15/packages/esp32/tools" -type f -path '*/bin/riscv32-esp-elf-ar' -print -quit)"
+          test -x "$ar_bin"
+
+          for variant in esp32p4-libs esp32p4_es-libs; do
+            lib_dir="$HOME/.arduino15/packages/esp32/tools/${variant}/${ARDUINO_CORE_VERSION}/lib"
+            for pair in esp_lcd_panel_dpi.c.obj:libesp_lcd.a dw_gdma.c.obj:libesp_hw_support.a esp_cam_ctlr_csi.c.obj:libesp_driver_cam.a; do
+              object_name="${pair%%:*}"
+              archive="${lib_dir}/${pair##*:}"
+              fixed_object="$GITHUB_WORKSPACE/tools/esp-idf-3.3.7-p4-cache-safe/${variant}/${object_name}"
+              test -f "$archive"
+              test -f "$fixed_object"
+
+              work_dir="$(mktemp -d)"
+              cp "$fixed_object" "$work_dir/$object_name"
+              "$ar_bin" rs "$archive" "$work_dir/$object_name"
+              (
+                cd "$work_dir"
+                rm "$object_name"
+                "$ar_bin" x "$archive" "$object_name"
+                cmp "$object_name" "$fixed_object"
+              )
+              rm -rf "$work_dir"
+            done
+          done
+
       - name: Verify release tag matches firmware version
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
@@ -401,6 +434,8 @@ jobs:
             done
             grep -a -F -q "HomeTiles RPC sync serialization active" "${firmware_bin}"
             grep -a -F -q "HomeTiles SDIO RX recovery active (a8204f9 raw PKT_LEN + pending drain)" "${firmware_bin}"
+            # Only the cache-safe DW-GDMA object checks callbacks for IRAM.
+            grep -a -F -q "on_full_trans_done not in IRAM" "${firmware_bin}"
 
             short_tail_marker="HomeTiles SDIO RX 512-byte padding disabled (CMD53 short tail, 4-byte aligned)"
             if grep -a -F -q "${short_tail_marker}" "${firmware_bin}"; then

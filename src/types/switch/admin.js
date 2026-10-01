@@ -20,6 +20,32 @@ function maybeFillTitleFromSwitch(tab) {
     return ['3', '4', '5'].includes(v) ? '5' : '0';
   }
 
+  // The segmented choices of the Switch fields (like Tile color). The hidden
+  // select of each keeps the value; a button sets it and fires its change
+  // event, so the existing preview, draft and autosave bindings run.
+  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode'];
+
+  function syncSwitchChoices(tab) {
+    for (const field of SWITCH_CHOICE_FIELDS) {
+      const select = document.getElementById(tab + '_' + field);
+      const group = document.getElementById(tab + '_' + field + '_choices');
+      if (!select || !group?.querySelectorAll) continue;
+      for (const button of group.querySelectorAll('button[data-value]')) {
+        button.classList.toggle('active', button.dataset.value === String(select.value));
+      }
+    }
+  }
+
+  function setSwitchChoice(tab, field, value) {
+    const select = document.getElementById(tab + '_' + field);
+    if (!select) return;
+    if (String(select.value) !== String(value)) {
+      select.value = String(value);
+      if (typeof select.dispatchEvent === 'function') select.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+    syncSwitchChoices(tab);
+  }
+
   function switchLayoutValue(value) {
     const layout = Number(value);
     return [0, 1, 2, 3].includes(layout) ? layout : 0;
@@ -380,6 +406,7 @@ function maybeFillTitleFromSwitch(tab) {
     if (popupModeEl) {
       popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
     }
+    syncSwitchChoices(tab);
     maybeFillTitleFromSwitch(tab);
   }
 
@@ -404,4 +431,5 @@ function maybeFillTitleFromSwitch(tab) {
     if (fontEl) fontEl.value = '0';
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
     if (popupModeEl) popupModeEl.value = '1';
+    syncSwitchChoices(tab);
   }

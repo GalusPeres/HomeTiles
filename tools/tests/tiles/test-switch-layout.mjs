@@ -133,7 +133,7 @@ for (const marker of [
 }
 // Value size like the half-height Sensor: editor field, save and load.
 const html = readRepoFile('src/types/switch/web_html.cpp');
-assert.ok(html.includes('_switch_value_font'));
+assert.ok(html.includes('append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 3);'));
 assert.ok(admin.includes("formData.append('sensor_value_font', switchValueFont("));
 assert.ok(admin.includes('fontEl.value = switchValueFont(data.sensor_value_font);'));
 assert.match(handler, /tile\.sensor_value_font =\s*font >= 1 && font <= SENSOR_VALUE_FONT_MAX/);

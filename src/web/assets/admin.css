@@ -2615,6 +2615,18 @@
   cursor:pointer;
 }
 .icon-color-segmented button.active { background:var(--accent-soft); color:#5fd4c7; }
+/* Switch fields like Tile color: the label on its own row, then one line of
+   choices across the panel (types/switch/web_html.cpp); every button keeps
+   its text on one line and takes the space its text needs. */
+.type-fields.show > .switch-choice-label { grid-column:1 / -1; }
+.type-fields.show > .switch-choices {
+  display:grid;
+  grid-auto-columns:auto;
+  width:100%;
+  margin:0;
+  box-sizing:border-box;
+}
+.switch-choices button { padding:6px 8px; white-space:nowrap; }
 .icon-color-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
 .icon-color-chip {
   padding:4px 10px;

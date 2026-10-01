@@ -20,6 +20,9 @@ function definition(source, signature) {
 }
 const mqtt = read('src/network/mqtt/mqtt_handlers.cpp');
 const renderer = read('src/types/switch/renderer.cpp');
+const switchHtml = read('src/types/switch/web_html.cpp');
+const switchChoiceStart = switchHtml.indexOf('struct SwitchChoice {');
+const switchChoiceStruct = switchHtml.slice(switchChoiceStart, switchHtml.indexOf('};', switchChoiceStart) + 2);
 const strings = read('src/core/i18n/i18n.cpp');
 const tables = [...strings.matchAll(/static const Strings kStrings(?:De|En|Fr) = \{[\s\S]*?\};/g)].map(match => match[0]);
 assert.equal(tables.length, 3);
@@ -69,7 +72,9 @@ struct ConfigManager { const Config& getConfig()const{return config;} } configMa
 struct SceneOption { String alias,entity; };
 String humanizeIdentifier(const String& value,bool){return value;}
 void appendHtmlEscaped(String& output,const String& value) {output+=value;}
-${definition(read('src/types/switch/web_html.cpp'), 'void append_switch_fields_html(')}
+${switchChoiceStruct}
+${definition(switchHtml, 'void append_switch_choice(')}
+${definition(switchHtml, 'void append_switch_fields_html(')}
 ${definition(read('src/types/scene/web_html.cpp'), 'void append_scene_fields_html(')}
 int main(){
   for(const char* domain:{"light","switch","input_boolean","automation","fan","humidifier","remote","siren"}){
@@ -118,6 +123,11 @@ int main(){
     assert(html.find(tr.switch_light)!=std::string::npos&&html.find(tr.scene_label)!=std::string::npos);
     assert(html.find("folder3_switch_entity")!=std::string::npos&&html.find("folder3_scene_alias")!=std::string::npos);
     assert(html.find("automation.desk")!=std::string::npos&&html.find("input_button.desk")!=std::string::npos);
+    // Layout, value size and popup as one line of choices like Tile color.
+    for(const char* field:{"folder3_switch_style_choices","folder3_switch_value_font_choices","folder3_switch_popup_open_mode_choices"})
+      assert(html.find(field)!=std::string::npos);
+    for(const char* label:{tr.switch_layout_automatic,tr.switch_layout_dimmer,tr.switch_layout_switch,tr.switch_icon_button,tr.short_press,tr.long_press})
+      assert(html.find(std::string(">")+label+"</button>")!=std::string::npos);
   }
 }
 `;

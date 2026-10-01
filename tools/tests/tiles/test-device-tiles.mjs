@@ -48,14 +48,31 @@ for (const marker of [
   'popup_shell_pulse_icon(pop.card',
   'viewNavigationPopupShown(pop.card',
   'hide_camera_popup();',
+  // An open code entry follows its device (header, keys) and pulses while
+  // its code waits for the answer.
+  'init.context = &g_code;',
+  'if (is_pin_popup_for(&g_code) && (entity == "*" || g_code.target.entity == entity)) {',
+  'pin_popup_pulse_icon(true);',
 ]) assert.ok(popup.includes(marker), `device_popup: ${marker}`);
+const pin = read('src/ui/popups/pin/pin_popup.cpp');
+assert.match(pin, /void pin_popup_set_state\([^)]*\) \{[\s\S]*?style_keypad\(g_ctx\);\s*sync_popup_shell\(\);/);
+assert.match(pin, /void resume_pin_popup_after_failed_success\(\) \{[\s\S]*?popup_shell_pulse_icon\(g_ctx->card, false\);/);
 
 // The MQTT routes: the additive detail topic and the Bridge's answers.
 const mqtt = read('src/network/mqtt/mqtt_handlers.cpp');
 assert.match(mqtt, /tileTypeIsDeviceControl\(slot\.type\) \? "detail"/);
 assert.match(mqtt, /route\.topic\.endsWith\("\/detail"\)\) \{\s*device_control::queue_detail/);
-assert.match(mqtt, /\{TopicKey::LOCK_STAT, handleLockResult, false\}/);
-assert.match(mqtt, /\{TopicKey::ALARM_STAT, handleAlarmResult, false\}/);
+// The answers are read into the large buffer: the Bridge's answer for the
+// sim alarm panel (V2, 02.10.) outgrew the small one, was cut off and the
+// code entry waited for "No answer" although the alarm had armed.
+assert.match(mqtt, /\{TopicKey::LOCK_STAT, handleLockResult, true\}/);
+assert.match(mqtt, /\{TopicKey::ALARM_STAT, handleAlarmResult, true\}/);
+const smallBuf = Number(mqtt.match(/SMALL_BUF = (\d+);/)[1]);
+const largeBuf = Number(mqtt.match(/LARGE_BUF = (\d+);/)[1]);
+const answer = entity => JSON.stringify({entity_id: entity, id: '0123456789abcdef', status: 'locked_out', retry_after: 3600});
+assert.ok(answer('alarm_control_panel.hometiles_sim_alarmanlage').length >= smallBuf, 'the reported answer needs more than SMALL_BUF');
+assert.ok(answer(`alarm_control_panel.${'x'.repeat(235)}`).length < Math.min(largeBuf, 512), 'the longest answer fits');
+assert.ok(control.includes('[Device] Malformed Bridge answer ignored'), 'a dropped answer is logged');
 assert.match(read('src/network/mqtt/mqtt_topics.cpp'), /\{TopicKey::LOCK_STAT, TopicDomain::State, "lock"\}/);
 
 // Every other popup hides the device popup; the lifecycle knows it.

@@ -184,10 +184,20 @@ void queue_detail(const String& entity, const char* payload, size_t length) {
 void queue_result(TileType type, const char* payload, size_t length) {
   if (!payload || length > 512) return;
   StaticJsonDocument<384> doc;
-  if (deserializeJson(doc, payload, length)) return;
-  const char* id = doc["id"] | "";
-  const char* status = doc["status"] | "";
-  if (!*id || !*status || std::strlen(status) >= sizeof(Answer::status)) return;
+  const char* id = "";
+  const char* status = "";
+  if (!deserializeJson(doc, payload, length)) {
+    id = doc["id"] | "";
+    status = doc["status"] | "";
+  }
+  if (!*id || !*status || std::strlen(status) >= sizeof(Answer::status)) {
+    static uint32_t last_log_ms = 0;
+    if (!last_log_ms || millis() - last_log_ms > 5000) {
+      last_log_ms = millis();
+      Serial.printf("[Device] Malformed Bridge answer ignored (%u bytes)\n", static_cast<unsigned>(length));
+    }
+    return;
+  }
   // Only answers to this panel's own commands: the in-flight list knows them.
   for (InFlight& flight : g_in_flight) {
     if (!flight.id.length() || flight.id != id) continue;

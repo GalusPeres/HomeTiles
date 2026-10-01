@@ -39,3 +39,13 @@ bool is_pin_popup_visible();
 // after too many wrong codes; `show` shows it (red) until the next key,
 // false returns to the prompt.
 void pin_popup_set_error(const char* text, bool show);
+// True while the popup shows the code entry opened with this `context`.
+bool is_pin_popup_for(const void* context);
+// The device behind a code entry changed while it is open: the header icon,
+// its color and the state follow, and the keys take the card's current
+// color (the card follows the opening tile, tile_icon_source), so the popup
+// keeps its three tones.
+void pin_popup_set_state(const String& icon_name, uint32_t icon_color, const String& state);
+// The header icon pulses while a sent code waits for its answer (Home
+// Assistant's running-command pulse); a failed answer stops it.
+void pin_popup_pulse_icon(bool on);

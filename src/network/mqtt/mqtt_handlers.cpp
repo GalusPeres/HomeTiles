@@ -1261,8 +1261,11 @@ static const TopicRoute kRoutes[] = {
   {TopicKey::SLEEP_MAINS_CMND, handleSleepMainsCommand, false},
   {TopicKey::SLEEP_BAT_CMND, handleSleepBatteryCommand, false},
   {TopicKey::CAMERA_STAT, handleCameraStatus, true},
-  {TopicKey::LOCK_STAT, handleLockResult, false},
-  {TopicKey::ALARM_STAT, handleAlarmResult, false},
+  // The answers carry the entity id (up to 255 bytes): an alarm panel's
+  // answer outgrew SMALL_BUF, was cut off, failed to parse and the code entry
+  // waited for "No answer" although the command had run.
+  {TopicKey::LOCK_STAT, handleLockResult, true},
+  {TopicKey::ALARM_STAT, handleAlarmResult, true},
 };
 
 static String buildHaStatestreamTopic(const String& entity_id, const char* suffix) {

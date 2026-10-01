@@ -490,6 +490,7 @@ void resume_pin_popup_after_failed_success() {
     return;
   }
   g_ctx->waiting_for_success_completion = false;
+  popup_shell_pulse_icon(g_ctx->card, false);
   clear_input(g_ctx);
   update_value(g_ctx);
   arm_auto_close_timer(g_ctx);
@@ -500,6 +501,23 @@ void pin_popup_set_error(const char* text, bool show) {
   g_ctx->error = text;
   g_ctx->show_error = show;
   update_value(g_ctx);
+}
+
+bool is_pin_popup_for(const void* context) {
+  return context && is_pin_popup_visible() && g_ctx->callback_context == context;
+}
+
+void pin_popup_set_state(const String& icon_name, uint32_t icon_color, const String& state) {
+  if (!g_ctx || !g_ctx->card || !g_ctx->icon_label || !g_ctx->state_label) return;
+  lv_label_set_text(g_ctx->icon_label, popup_icon_glyph(icon_name).c_str());
+  lv_obj_set_style_text_color(g_ctx->icon_label, lv_color_hex(icon_color), 0);
+  lv_label_set_text(g_ctx->state_label, state.c_str());
+  style_keypad(g_ctx);
+  sync_popup_shell();
+}
+
+void pin_popup_pulse_icon(bool on) {
+  if (g_ctx && g_ctx->card) popup_shell_pulse_icon(g_ctx->card, on);
 }
 
 bool is_pin_popup_visible() {

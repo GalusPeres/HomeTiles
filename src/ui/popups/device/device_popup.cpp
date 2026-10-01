@@ -1124,6 +1124,7 @@ void send_code(void*) {
   }
   g_code.command_id = id;
   g_code.in_flight = true;
+  pin_popup_pulse_icon(true);
   if (std::strcmp(g_code.action, "open") == 0) {
     pop.open_done_until = millis() + kOpenDoneMs;
   }
@@ -1163,6 +1164,8 @@ void ask_code(const DevicePopupTarget& target, const char* action, bool from_til
   init.state = v.label;
   init.back = !from_tile;
   init.dismissed = code_dismissed;
+  // Marks the entry as this device's (device_popup_refresh follows it).
+  init.context = &g_code;
   pop.open = false;
   show_pin_popup(init);
   if (locked_out()) {
@@ -1291,6 +1294,14 @@ void device_popup_follow_tile_color(uint32_t color) {
 }
 
 void device_popup_refresh(const String& entity) {
+  // An open code entry follows its device: the card already took the tile's
+  // new color, the header and the keys follow here (V2: the card turned
+  // orange behind grey keys and the old state while the alarm armed).
+  if (is_pin_popup_for(&g_code) && (entity == "*" || g_code.target.entity == entity)) {
+    const Detail d = device_control::detail(g_code.target.entity);
+    const Visual v = device_visual::visual(g_code.target.type, d);
+    pin_popup_set_state(g_code.target.icon_name.length() ? g_code.target.icon_name : String(v.icon), v.color, v.label);
+  }
   if (!pop.open || (entity != "*" && pop.target.entity != entity)) return;
   refresh(false);
 }

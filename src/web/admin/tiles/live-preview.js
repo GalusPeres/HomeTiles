@@ -32,7 +32,8 @@
       syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
-      : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font' : '_sensor_value_font'))?.value || '0');
+      : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font'
+        : (type === '5' ? '_switch_value_font' : '_sensor_value_font')))?.value || '0');
     const previewKind = meta.preview || 'none';
     const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
       ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);

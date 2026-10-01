@@ -175,7 +175,7 @@ void toggle_switch_tile(const SwitchEventData* data) {
 // ---------------------------------------------------------------------------
 // State line
 
-const lv_font_t* fitting_state_font(const char* text, int width) {
+const lv_font_t* fitting_state_font(const char* text, int width, const lv_font_t* largest) {
   // 12 and 14 px exist only in the 480x480 layout (ui_fonts.h).
   static const lv_font_t* const kSizes[] = {&ui_font_40, &ui_font_32, &ui_font_28, &ui_font_24,
                                             &ui_font_20, &ui_font_16,
@@ -183,7 +183,7 @@ const lv_font_t* fitting_state_font(const char* text, int width) {
                                             &ui_font_14, &ui_font_12,
 #endif
   };
-  const int32_t start = lv_font_get_line_height(FONT_VALUE);
+  const int32_t start = lv_font_get_line_height(largest);
   const lv_font_t* last = kSizes[sizeof(kSizes) / sizeof(kSizes[0]) - 1];
   for (const lv_font_t* font : kSizes) {
     if (lv_font_get_line_height(font) > start) continue;
@@ -197,12 +197,13 @@ const lv_font_t* fitting_state_font(const char* text, int width) {
 }
 
 // Translated states never shorten: the font steps down until the text fits
-// (the Sensor value size is the largest).
+// (the chosen half-height Sensor value size is the largest).
 void set_state_text(SwitchBarView* view, const char* text) {
   if (!view || !view->state_label || !text) return;
   if (strcmp(lv_label_get_text(view->state_label), text) == 0) return;
   if (!view->compact) {
-    const lv_font_t* font = fitting_state_font(text, view->state_width);
+    const lv_font_t* font = fitting_state_font(text, view->state_width,
+                                               compact_sensor_layout::value_font(view->value_choice));
     if (lv_obj_get_style_text_font(view->state_label, LV_PART_MAIN) != font) {
       lv_obj_set_style_text_font(view->state_label, font, 0);
     }
@@ -241,6 +242,15 @@ void show_state_text(SwitchBarView* view, const SwitchState& state, bool dimmabl
 uint32_t accent_color(const SwitchBarView* view) {
   if (view->icon) return lv_color_to_u32(lv_obj_get_style_text_color(view->icon, LV_PART_MAIN)) & 0xFFFFFF;
   return view->fill_rgb;
+}
+
+// lv_area_intersect is private in LVGL 9.6.
+bool intersect(const lv_area_t& a, const lv_area_t& b, lv_area_t& out) {
+  out.x1 = std::max(a.x1, b.x1);
+  out.y1 = std::max(a.y1, b.y1);
+  out.x2 = std::min(a.x2, b.x2);
+  out.y2 = std::min(a.y2, b.y2);
+  return out.x1 <= out.x2 && out.y1 <= out.y2;
 }
 
 void draw_rect(lv_layer_t* layer, const lv_area_t& area, lv_color_t color, int32_t radius) {
@@ -307,15 +317,26 @@ void bar_draw_cb(lv_event_t* e) {
     if (view->level == 0) return;
     switch_layout::Dimmer geometry{width, height, radius};
     const int32_t fill = geometry.fill_width(view->level);
-    // The round start is the bar's own end; the second piece in the same
-    // color ends slightly rounded at the handle. Same color over same color,
-    // so the overlap leaves no seam.
-    const lv_area_t start = {area.x1, area.y1, area.x1 + geometry.min_fill() - 1, area.y2};
-    draw_rect(layer, start, accent, radius);
-    if (fill > geometry.min_fill()) {
-      const lv_area_t body = {area.x1 + radius, area.y1, area.x1 + fill - 1, area.y2};
-      draw_rect(layer, body, accent, geometry.end_radius());
+    const int32_t end = geometry.end_radius_for(fill);
+    // The fill stays inside the bar's shape without a clip layer: up to where
+    // its end rounding starts it is the bar's own rounded rect, clipped to
+    // that range; the end is a rect with the end rounding, clipped to the
+    // rest. Both pieces meet at a full-height column, so there is no seam
+    // (switch_layout::Dimmer keeps the end inside the bar's round end).
+    const lv_area_t clip_ori = layer->_clip_area;
+    const lv_area_t start_range = {area.x1, area.y1, area.x1 + fill - end - 1, area.y2};
+    lv_area_t clip;
+    if (intersect(clip_ori, start_range, clip)) {
+      layer->_clip_area = clip;
+      draw_rect(layer, area, accent, radius);
     }
+    const lv_area_t end_range = {area.x1 + fill - end, area.y1, area.x1 + fill - 1, area.y2};
+    if (intersect(clip_ori, end_range, clip)) {
+      layer->_clip_area = clip;
+      const lv_area_t end_piece = {area.x1 + fill - 2 * end, area.y1, area.x1 + fill - 1, area.y2};
+      draw_rect(layer, end_piece, accent, end);
+    }
+    layer->_clip_area = clip_ori;
     const int32_t handle_w = geometry.handle_width();
     const int32_t handle_h = geometry.handle_height();
     const int32_t handle_x = area.x1 + geometry.handle_x(view->level) - handle_w / 2;
@@ -542,9 +563,9 @@ lv_obj_t* create_bar(lv_obj_t* card, const Tile& tile) {
   lv_obj_t* bar = lv_obj_create(card);
   if (!bar) return nullptr;
   // The control fill of the card (tile_icon_source::refresh_controls), like
-  // the Climate target pill.
+  // the Climate target pill. Its shared style sets color and opacity; a local
+  // bg_opa would outrank it and hide the bar's track.
   tile_icon_disc::mark_surface(bar);
-  lv_obj_set_style_bg_opa(bar, LV_OPA_TRANSP, LV_PART_MAIN);
   lv_obj_set_style_border_width(bar, 0, 0);
   lv_obj_set_style_shadow_width(bar, 0, 0);
   lv_obj_set_style_pad_all(bar, 0, 0);
@@ -558,6 +579,11 @@ lv_obj_t* create_bar(lv_obj_t* card, const Tile& tile) {
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLL_CHAIN_VER);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_GESTURE_BUBBLE);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+  // Touch area up to the card edges (left, right, bottom) and the same
+  // distance up towards the disc (approved touch zones, 2026-10-01): a touch
+  // just beside the bar still reaches the bar, never the card's toggle or
+  // popup.
+  lv_obj_set_ext_click_area(bar, climate_layout::kOuterInset);
   lv_obj_set_size(bar, bar_w, bar_h);
   // Positions are inside the card's content box (Sensor paddings).
   lv_obj_set_pos(bar, climate_layout::kOuterInset - tile_layout::scale_480(20),
@@ -693,45 +719,56 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     view->icon = icon_lbl;
     view->layout = static_cast<uint8_t>(layout);
     view->compact = compact;
+    view->value_choice = tile.sensor_value_font;
     // Before any state: the likely bar, an empty dimmer for lights.
     const bool light = is_light_entity_id(tile.sensor_entity);
     view->bar_kind = static_cast<uint8_t>(switch_layout::bar_for(layout, compact, light));
 
-    // The Sensor header: icon in the corner disc, title top right; the state
-    // line sits under the title and the pair is centered where the Sensor
-    // title alone sits.
+    // The Sensor corner disc; title and state left-aligned beside it like the
+    // half-height tiles (compact_sensor_layout::apply_content: two insets
+    // from the disc, the block centered on it, no gap between the lines),
+    // the state at the half-height Sensor value size (title size by default,
+    // 24 or 28 when chosen). Explicit positions, so the corner disc
+    // (add_round) does not move them.
     if (icon_lbl) {
       lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT, tile_layout::scale_480(-8), tile_layout::scale_480(-8));
     }
-    const int content_w =
-        tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP) -
-        2 * tile_layout::scale_480(20);
-    const int text_w = content_w * 70 / 100;
-    const int title_h = lv_font_get_line_height(tile_layout::header_title_font());
-    const int state_h = lv_font_get_line_height(FONT_VALUE);
-    const int title_y = tile_layout::scale_480(4) - (compact ? 0 : state_h / 2);
+    const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
+    const int inset = tile_icon_disc::inset();
+    const int icon_width =
+        FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
+    const int disc = tile_icon_disc::header_diameter(icon_width);
+    const int text_x = inset + disc + 2 * inset;
+    const int text_w = std::max(1, card_w - text_x - 2 * inset);
+    const int title_h = lv_font_get_line_height(compact_sensor_layout::title_font());
+    const lv_font_t* state_font = compact_sensor_layout::value_font(tile.sensor_value_font);
+    const int state_h = lv_font_get_line_height(state_font);
+    const int block = (has_title ? title_h : 0) + state_h;
+    const int text_y = inset + disc / 2 - block / 2;
+    // Label positions are inside the card's content box (Sensor paddings).
+    const int pad_x = tile_layout::scale_480(20);
+    const int pad_y = tile_layout::scale_480(24);
     if (has_title) {
       title_lbl = lv_label_create(container);
       if (title_lbl) {
-        set_label_style(title_lbl, lv_color_white(), tile_layout::header_title_font());
+        set_label_style(title_lbl, lv_color_white(), compact_sensor_layout::title_font());
         lv_label_set_long_mode(title_lbl, LV_LABEL_LONG_DOT);
         lv_obj_set_width(title_lbl, text_w);
-        lv_obj_set_style_text_align(title_lbl, LV_TEXT_ALIGN_RIGHT, 0);
         hometiles_title::tile(title_lbl, tile.title.c_str(), true);
         // One title line: the state line takes the second.
         if (auto* title_state = hometiles_title::state_for(title_lbl)) title_state->single_line = true;
-        lv_obj_align(title_lbl, LV_ALIGN_TOP_RIGHT, tile_layout::scale_480(4), title_y);
+        lv_obj_set_style_text_align(title_lbl, LV_TEXT_ALIGN_LEFT, 0);
+        lv_obj_set_pos(title_lbl, text_x - pad_x, text_y - pad_y);
       }
     }
     view->state_label = lv_label_create(container);
     if (view->state_label) {
-      set_label_style(view->state_label, lv_color_white(), FONT_VALUE);
+      set_label_style(view->state_label, lv_color_white(), state_font);
       lv_label_set_long_mode(view->state_label, LV_LABEL_LONG_DOT);
       lv_obj_set_width(view->state_label, text_w);
-      lv_obj_set_style_text_align(view->state_label, LV_TEXT_ALIGN_RIGHT, 0);
+      lv_obj_set_style_text_align(view->state_label, LV_TEXT_ALIGN_LEFT, 0);
       lv_label_set_text(view->state_label, "--");
-      lv_obj_align(view->state_label, LV_ALIGN_TOP_RIGHT, tile_layout::scale_480(4),
-                   title_y + (has_title ? title_h : state_h / 2));
+      lv_obj_set_pos(view->state_label, text_x - pad_x, text_y + (has_title ? title_h : 0) - pad_y);
       lv_obj_clear_flag(view->state_label, LV_OBJ_FLAG_CLICKABLE);
     }
     view->state_width = static_cast<int16_t>(text_w);
@@ -739,7 +776,6 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     if (compact) {
       compact_sensor_layout::apply(container, icon_lbl, title_lbl, view->state_label, tile);
     } else {
-      // After the header labels exist, so the corner disc moves them along.
       if (icon_lbl) tile_icon_disc::add_round(container, icon_lbl);
       view->bar = create_bar(container, tile);
     }

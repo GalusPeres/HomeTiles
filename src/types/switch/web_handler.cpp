@@ -18,7 +18,12 @@ void apply_switch_fields_from_request(WebServer& server, Tile& tile) {
   }
   tile.sensor_decimals = style;
   setTilePopupOpenMode(tile, popup_mode);
-  tile.sensor_value_font = 0;
+  // State size like a half-height Sensor value (compact_sensor_layout).
+  if (server.hasArg("sensor_value_font")) {
+    const int font = server.arg("sensor_value_font").toInt();
+    tile.sensor_value_font =
+        font >= 1 && font <= SENSOR_VALUE_FONT_MAX ? static_cast<uint8_t>(font) : 0;
+  }
   tile.sensor_display_mode = 0;
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;

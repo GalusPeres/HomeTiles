@@ -39,6 +39,9 @@ int main() {
     std::printf("fill %d %d %d\n", value, v2.handle_x(static_cast<uint8_t>(value)),
                 v2.fill_width(static_cast<uint8_t>(value)));
   }
+  for (int fill = v2.min_fill(); fill <= 156; ++fill) {
+    std::printf("end %d %d\n", fill, v2.end_radius_for(fill));
+  }
   return 0;
 }
 `;
@@ -64,15 +67,18 @@ if (output !== null) {
   assert.equal(bars.get('301'), 2);
 
   const [[margin, endRadius, handleWidth, handleHeight, low, high]] = pick('geometry');
-  assert.deepEqual([margin, endRadius, handleWidth, handleHeight], [12, 6, 4, 25]);
-  assert.equal(low, 2 * 26 - 12);
-  assert.equal(high, 156 - 12);
+  // Smallest piece = bar radius + end rounding (tangential), handle in its
+  // middle (approved mockup switch-tiles-left).
+  assert.deepEqual([endRadius, handleWidth, handleHeight], [15, 4, 25]);
+  assert.equal(margin, Math.floor((26 + 15) / 2));
+  assert.equal(low, 26 + 15 - margin);
+  assert.equal(high, 156 - margin);
 
   const values = new Map(pick('value').map(([x, value]) => [x, value]));
-  // Off only one radius beyond the 1 % position; 1 % up to it; 100 % at the
-  // end; monotonic in between.
-  assert.equal(values.get(low - 26 - 1), 0);
-  assert.equal(values.get(low - 26), 1);
+  // Off only beyond the bar's start (like the popup slider's end); 1 % up to
+  // the smallest piece's handle; 100 % at the end; monotonic in between.
+  assert.equal(values.get(-1), 0);
+  assert.equal(values.get(0), 1);
   assert.equal(values.get(low), 1);
   assert.equal(values.get(high), 100);
   assert.equal(values.get(170), 100);
@@ -84,8 +90,22 @@ if (output !== null) {
 
   const fills = pick('fill');
   assert.deepEqual(fills[0], [0, low, 0], 'off: no fill');
-  assert.deepEqual(fills[1], [1, low, 2 * 26], '1 % fills the round start');
+  assert.deepEqual(fills[1], [1, low, 26 + 15], '1 %: bar radius + end rounding');
   assert.deepEqual(fills[100], [100, high, 156], '100 % fills the bar');
+  // The handle sits exactly in the middle of the smallest piece.
+  assert.ok(Math.abs(fills[1][1] - (26 + 15) / 2) <= 0.5, 'handle centered at 1 %');
+  // The end rounding is fixed in the middle and becomes the bar radius at
+  // the full end, growing monotonically, never shrinking.
+  const ends = pick('end');
+  const endAt = new Map(ends.map(([fill, end]) => [fill, end]));
+  assert.equal(endAt.get(26 + 15), 15);
+  assert.equal(endAt.get(100), 15);
+  assert.equal(endAt.get(156), 26);
+  let lastEnd = 0;
+  for (const [fill, end] of ends) {
+    assert.ok(end >= lastEnd && end >= 15 && end <= 26, `end rounding at ${fill}`);
+    lastEnd = end;
+  }
   for (let value = 1; value <= 100; ++value) {
     // The handle round-trips through value_at.
     assert.equal(values.get(fills[value][1]), value, `round trip ${value}`);
@@ -102,19 +122,41 @@ const layoutJs = readRepoFile('src/web/admin/tiles/layout.js');
 assert.match(layoutJs, /\[2, 4, 5, 7, 8, 9, 18\]\.includes\(Number\(type\)\)/);
 const admin = readRepoFile('src/types/switch/admin.js');
 for (const marker of [
-  'const margin = Math.floor(height / 5);',
-  'const minFill = Math.min(2 * radius, width);',
+  'const endRadius = Math.floor(height / 4);',
+  'const minFill = Math.min(radius + endRadius, width);',
+  'const margin = Math.floor(minFill / 2);',
+  'endRadiusFor(fill) {',
   "const SWITCH_LAYOUT_NEW_TILE = '3';",
   'SWITCH_I18N'
 ]) {
   assert.ok(admin.includes(marker), `Web dimmer mirror: ${marker}`);
 }
+// Value size like the half-height Sensor: editor field, save and load.
+const html = readRepoFile('src/types/switch/web_html.cpp');
+assert.ok(html.includes('_switch_value_font'));
+assert.ok(admin.includes("formData.append('sensor_value_font', switchValueFont("));
+assert.ok(admin.includes('fontEl.value = switchValueFont(data.sensor_value_font);'));
+assert.match(handler, /tile\.sensor_value_font =\s*font >= 1 && font <= SENSOR_VALUE_FONT_MAX/);
 const renderer = readRepoFile('src/types/switch/renderer.cpp');
 // The bar draws itself: no LVGL switch/slider widgets, no clip_corner.
 for (const forbidden of ['lv_switch_create', 'lv_slider_create', 'set_style_clip_corner']) {
   assert.ok(!renderer.includes(forbidden), `Switch renderer must not use ${forbidden}`);
 }
 assert.ok(renderer.includes('tile_icon_disc::mark_surface(bar);'));
+// Approved touch zones: the bar takes touches up to the card edges.
+assert.ok(renderer.includes('lv_obj_set_ext_click_area(bar, climate_layout::kOuterInset);'));
+// The fill stays inside the bar's shape through narrowed clip areas, no layer.
+assert.ok(renderer.includes('layer->_clip_area = clip_ori;'));
+// Title and state left-aligned beside the disc like the half-height tiles.
+assert.ok(renderer.includes('const int text_x = inset + disc + 2 * inset;'));
+assert.ok(renderer.includes('compact_sensor_layout::value_font(tile.sensor_value_font)'));
+// b143 regression: a local bg_opa on the bar outranked the shared control
+// fill style (ui_surface_style::apply_control_fill), so the track never showed.
+const createBar = renderer.slice(renderer.indexOf('lv_obj_t* create_bar('),
+                                 renderer.indexOf('void switch_tile_show_state('));
+assert.ok(createBar.length > 0, 'create_bar must exist');
+assert.ok(!/lv_obj_set_style_bg_opa\(bar,/.test(createBar),
+          'The bar track opacity must come from the control fill style');
 assert.ok(renderer.includes('lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLL_CHAIN_VER);'));
 
 console.log('Switch layout tests passed.');

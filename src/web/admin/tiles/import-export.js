@@ -540,6 +540,7 @@
         ? tile.switch_style
         : (tile.sensor_decimals === 1 ? 1 : 0);
       fd.append('switch_style', style);
+      fd.append('sensor_value_font', tile.sensor_value_font ?? 0);
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }

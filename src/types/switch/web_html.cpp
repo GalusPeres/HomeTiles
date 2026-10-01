@@ -53,6 +53,15 @@ void append_switch_fields_html(String& html, const String& tab_id, const std::ve
   html += R"html(</option>
               </select>
 )html";
+  // The state line takes the half-height Sensor value sizes
+  // (compact_sensor_layout::value_font): Default (title size), 24, 28.
+  html += "<label>";
+  html += tr.sensor_value_size;
+  html += "</label><select id=\"";
+  html += tab_id;
+  html += "_switch_value_font\"><option value=\"0\">";
+  html += tr.sensor_value_size_default;
+  html += "</option><option value=\"2\">24</option><option value=\"5\">28</option></select>\n";
   if (tab_id != "screensaver") {
     html += R"html(              <label>)html";
     html += tr.popup_open;

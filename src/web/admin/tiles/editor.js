@@ -297,6 +297,7 @@
       scheduleAutoSave(tab);
     });
     bindLive(document.getElementById(prefix + '_binary_sensor_value_font'), 'change', 'binarySensorValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(document.getElementById(prefix + '_switch_value_font'), 'change', 'switchValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(binarySensorPopupModeSelect, 'change', 'binarySensorPopupMode', () => {
       updateDraft(tab);
       scheduleAutoSave(tab);

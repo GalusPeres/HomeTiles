@@ -1699,29 +1699,49 @@
        the card's bottom. Positions compensate the 3 px selection border. */
     .tile.switch.switch-bar { display:block; }
     .tile.switch.switch-bar > .tile-icon { margin:0; }
-    .tile.switch.switch-bar > .tile-title {
-      top:calc(var(--switch-title-top, 6px) - 3px);
-      width:calc((100% + 6px - 2 * var(--tile-pad-h, 10px)) * .7);
-      text-align:right;
+    /* Title and state left-aligned beside the corner disc like the
+       half-height tiles (compact_sensor_layout): two insets from the disc,
+       the block centered on it, the state at the half-height value size. */
+    .tile.switch.switch-bar {
+      --switch-text-left:calc(3 * var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) - 3px);
+      --switch-text-top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
+        - (var(--compact-title-line, 12px) + var(--compact-value-line, 12px)) / 2);
+    }
+    .tile.switch.switch-bar > .tile-title,
+    .tile.switch.switch-bar > .tile-switch-state {
+      position:absolute;
+      left:var(--switch-text-left);
+      right:calc(2 * var(--compact-inset, 3px) - 3px);
+      width:auto;
+      max-width:none;
       margin:0;
+      padding:0;
+      transform:none;
+      text-align:left;
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
+    }
+    .tile.switch.switch-bar > .tile-title {
+      top:var(--switch-text-top);
+      font-size:var(--compact-title-font, 10px);
+      line-height:var(--compact-title-line, 12px);
     }
     .tile.switch.switch-bar > .tile-switch-state {
-      top:calc(var(--switch-state-top, 18px) - 3px);
-      right:calc(var(--tile-header-title-right, 8px) - 3px);
-      left:auto;
-      width:calc((100% + 6px - 2 * var(--tile-pad-h, 10px)) * .7);
-      transform:none;
-      text-align:right;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      line-height:1.2;
+      top:calc(var(--switch-text-top) + var(--compact-title-line, 12px));
+      bottom:auto;
+      font-size:var(--compact-value-font, 10px);
+      line-height:var(--compact-value-line, 12px);
     }
     .tile.switch.switch-bar:not(:has(> .tile-title)) > .tile-switch-state {
-      top:calc(var(--switch-state-top-alone, 12px) - 3px);
+      top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
+        - var(--compact-value-line, 12px) / 2);
+    }
+    .tile.switch.switch-bar.compact-value-24 {
+      --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
+    }
+    .tile.switch.switch-bar.compact-value-28 {
+      --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
     }
     .tile.switch.switch-bar > .tile-switch {
       position:absolute;
@@ -1733,13 +1753,14 @@
       background:var(--control-fill, rgba(255,255,255,0.12));
       overflow:hidden;
     }
-    /* Dimmer: the fill in the icon's color, clipped by the bar's round
-       start, ending slightly rounded at its handle line. */
+    /* Dimmer: the fill in the icon's color inside the bar's shape (overflow
+       hidden); its end has the end rounding (switch_layout::Dimmer), its
+       start reaches past the bar so only the bar's round start shows. */
     .tile-switch .tile-switch-fill {
       display:none;
-      position:absolute; left:0; top:0; bottom:0; width:0;
+      position:absolute; left:calc(-1 * var(--switch-end-radius, 3px)); top:0; bottom:0; width:0;
       background:var(--switch-accent, #FFD54F);
-      border-radius:0 var(--switch-end-radius, 3px) var(--switch-end-radius, 3px) 0;
+      border-radius:var(--switch-end-radius, 3px);
     }
     .tile-switch[data-bar="dimmer"] .tile-switch-fill { display:block; }
     .tile-switch .tile-switch-handle {

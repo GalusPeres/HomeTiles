@@ -62,7 +62,9 @@
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
     el.classList.toggle('compact-title-only', compactIconTitle);
-    const valueSize = compact && !compactIconTitle ? compactValueSize(valueFont) : 20;
+    // Switch header layouts show their state at the half-height value sizes.
+    const switchHeader = Number(type) === 5 && el.classList.contains('switch-bar');
+    const valueSize = (compact && !compactIconTitle) || switchHeader ? compactValueSize(valueFont) : 20;
     el.classList.toggle('compact-value-24', valueSize === 24);
     el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);

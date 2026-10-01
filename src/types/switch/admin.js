@@ -12,6 +12,14 @@ function maybeFillTitleFromSwitch(tab) {
   // Mirrors parse_switch_payload() (tile_renderer.cpp).
   const SWITCH_DIMMING_MODES = ['brightness', 'color_temp', 'hs', 'rgb', 'xy', 'rgbw', 'rgbww'];
 
+  // The half-height Sensor value choices (compact_sensor_layout::value_step):
+  // 0 title size, 2 = 24, 5 = 28; 3 and 4 look like 28, 1 like the default.
+  function switchValueFont(value) {
+    const v = String(value ?? '0');
+    if (v === '2') return '2';
+    return ['3', '4', '5'].includes(v) ? '5' : '0';
+  }
+
   function switchLayoutValue(value) {
     const layout = Number(value);
     return [0, 1, 2, 3].includes(layout) ? layout : 0;
@@ -52,18 +60,20 @@ function maybeFillTitleFromSwitch(tab) {
     tileElem.classList.toggle('switch-bar', switchUsesHeader(style, halfHeight) && !halfHeight);
   }
 
-  // switch_layout::Dimmer: the fill starts with the bar's own round end
-  // (1 % fills it), the handle line sits a fifth of the height inside the
-  // fill end; 100 % fills the bar.
+  // switch_layout::Dimmer: the fill stays inside the bar's shape; its end
+  // has a quarter of the bar height as rounding, growing into the bar's
+  // radius only near the full end. The smallest piece is the bar radius plus
+  // that rounding wide (tangential, no edge) with the handle in its middle.
   function switchDimmerGeometry(width, height, radius) {
-    const margin = Math.floor(height / 5);
-    const minFill = Math.min(2 * radius, width);
+    const endRadius = Math.floor(height / 4);
+    const minFill = Math.min(radius + endRadius, width);
+    const margin = Math.floor(minFill / 2);
     const low = minFill - margin;
     const high = width - margin;
     return {
       margin,
       minFill,
-      endRadius: Math.floor(height * 11 / 100),
+      endRadius,
       handleWidth: Math.max(3, Math.floor(height * 7 / 100)),
       handleHeight: Math.floor(height * 42 / 100),
       handleX(value) {
@@ -74,6 +84,22 @@ function maybeFillTitleFromSwitch(tab) {
       fillWidth(value) {
         if (!value) return 0;
         return Math.min(width, this.handleX(value) + margin);
+      },
+      endRadiusFor(fill) {
+        if (fill <= width - radius || endRadius >= radius) return endRadius;
+        const corner = width - radius;
+        for (let end = endRadius; end < radius; end++) {
+          let inside = true;
+          for (let x = fill - end; x <= fill && inside; x++) {
+            const dxEnd = x - (fill - end);
+            const endTop = end - Math.sqrt(Math.max(0, end * end - dxEnd * dxEnd));
+            const dxBar = x - corner;
+            const barTop = dxBar <= 0 ? 0 : radius - Math.sqrt(Math.max(0, radius * radius - dxBar * dxBar));
+            if (endTop + 0.01 < barTop) inside = false;
+          }
+          if (inside) return end;
+        }
+        return radius;
       }
     };
   }
@@ -308,8 +334,12 @@ function maybeFillTitleFromSwitch(tab) {
     const height = bar.clientHeight;
     const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, height / 2);
     const geometry = switchDimmerGeometry(width, height, radius);
-    fill.style.width = (kind === 'dimmer' ? geometry.fillWidth(level) : 0) + 'px';
-    bar.style.setProperty('--switch-end-radius', geometry.endRadius + 'px');
+    const fillWidth = kind === 'dimmer' ? geometry.fillWidth(level) : 0;
+    const endRadius = geometry.endRadiusFor(fillWidth);
+    // The fill element starts one end radius left of the bar, so only the
+    // bar's round start shows (overflow hidden).
+    fill.style.width = (fillWidth ? fillWidth + endRadius : 0) + 'px';
+    bar.style.setProperty('--switch-end-radius', endRadius + 'px');
     bar.style.setProperty('--switch-handle-margin', geometry.margin + 'px');
     bar.style.setProperty('--switch-handle-w', geometry.handleWidth + 'px');
     bar.style.setProperty('--switch-handle-h', geometry.handleHeight + 'px');
@@ -344,6 +374,8 @@ function maybeFillTitleFromSwitch(tab) {
       styleEl.value = (data.switch_style !== undefined && data.switch_style !== null)
         ? String(switchLayoutValue(data.switch_style)) : '0';
     }
+    const fontEl = document.getElementById(prefix + '_switch_value_font');
+    if (fontEl) fontEl.value = switchValueFont(data.sensor_value_font);
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
     if (popupModeEl) {
       popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
@@ -357,6 +389,7 @@ function maybeFillTitleFromSwitch(tab) {
     formData.append('switch_entity', document.getElementById(prefix + '_switch_entity')?.value || '');
     const styleEl = document.getElementById(prefix + '_switch_style');
     formData.append('switch_style', styleEl ? String(switchLayoutValue(styleEl.value)) : '0');
+    formData.append('sensor_value_font', switchValueFont(document.getElementById(prefix + '_switch_value_font')?.value));
     formData.append('popup_open_mode', document.getElementById(prefix + '_switch_popup_open_mode')?.value || '1');
   }
 
@@ -367,6 +400,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (entityEl) entityEl.value = '';
     const styleEl = document.getElementById(prefix + '_switch_style');
     if (styleEl) styleEl.value = SWITCH_LAYOUT_NEW_TILE;
+    const fontEl = document.getElementById(prefix + '_switch_value_font');
+    if (fontEl) fontEl.value = '0';
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
     if (popupModeEl) popupModeEl.value = '1';
   }

@@ -64,6 +64,8 @@ struct DimmerDrag {
   bool moved = false;
   uint8_t value = 0;
   uint32_t block_until = 0;
+  // A dimmer holds its level; a toggled tile only its on/off (value 0 or 1).
+  bool hold_level = true;
 };
 
 DimmerDrag g_drag;
@@ -73,6 +75,28 @@ lv_timer_t* g_live_timer = nullptr;
 // reported (a reply skipped during the hold, or no reply at all).
 lv_timer_t* g_release_timer = nullptr;
 void release_timer_cb(lv_timer_t*);
+
+// Holds the tile's own state against Home Assistant echoes of earlier
+// commands for kRemoteBlockMs; release_timer_cb then shows the last
+// reported state.
+void start_hold() {
+  g_drag.dragging = false;
+  g_drag.block_until = millis() + kRemoteBlockMs;
+  if (g_release_timer) lv_timer_delete(g_release_timer);
+  g_release_timer = lv_timer_create(release_timer_cb, kRemoteBlockMs, nullptr);
+  if (g_release_timer) lv_timer_set_repeat_count(g_release_timer, 1);
+}
+
+// The tile's own value while it holds: a dimmer the finger holds or released
+// moments ago (`level` true: its level), or a tile toggled moments ago (on/off
+// only).
+bool held_value(const SwitchBarView* view, uint8_t& value, bool& level) {
+  if (!view || !g_drag.data || g_drag.data->view != view) return false;
+  if (!g_drag.dragging && static_cast<int32_t>(g_drag.block_until - millis()) <= 0) return false;
+  value = g_drag.value;
+  level = g_drag.hold_level;
+  return true;
+}
 lv_timer_t* g_final_timer = nullptr;
 String g_final_entity;
 uint8_t g_final_value = 0;
@@ -156,7 +180,24 @@ void commit_level(const String& entity_id, uint8_t value) {
   }
 }
 
-void toggle_switch_tile(const SwitchEventData* data) {
+// Echoes of earlier commands must not flip a toggled tile back for a moment
+// (off showed the light color): it holds its on/off like a released dimmer.
+// A released dimmer level still waiting for its paced send would undo the
+// switch (switched off, the light came back on), so it is dropped.
+void hold_toggle(SwitchEventData* data, bool on) {
+  if (g_final_timer && g_final_entity.equalsIgnoreCase(data->entity_id)) {
+    lv_timer_delete(g_final_timer);
+    g_final_timer = nullptr;
+  }
+  cancel_live_timer();
+  g_drag = DimmerDrag{};
+  g_drag.data = data;
+  g_drag.hold_level = false;
+  g_drag.value = on ? 1 : 0;
+  start_hold();
+}
+
+void toggle_switch_tile(SwitchEventData* data) {
   if (!data || !data->entity_id.length()) return;
   const SwitchState current = get_switch_state(data->grid_type, data->index);
   if (!current.available) return;
@@ -164,6 +205,7 @@ void toggle_switch_tile(const SwitchEventData* data) {
   // former LVGL switch; the icon button keeps sending "toggle".
   if (data->view && current.has_state) {
     const bool next_on = !current.is_on;
+    hold_toggle(data, next_on);
     update_switch_tile_state(data->grid_type, data->index, next_on ? "on" : "off");
     mqttPublishSwitchCommand(data->entity_id.c_str(), next_on ? "on" : "off");
     return;
@@ -441,6 +483,7 @@ void dimmer_event(SwitchEventData* data, lv_event_code_t code) {
     g_drag.press = point;
     g_drag.dragging = true;
     g_drag.moved = false;
+    g_drag.hold_level = true;
     g_pacer.begin_gesture();
   }
   if (g_drag.data != data || !g_drag.dragging) return;
@@ -454,11 +497,7 @@ void dimmer_event(SwitchEventData* data, lv_event_code_t code) {
   g_drag.value = value;
   if (changed) show_local_level(data, value);
   if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
-    g_drag.dragging = false;
-    g_drag.block_until = millis() + kRemoteBlockMs;
-    if (g_release_timer) lv_timer_delete(g_release_timer);
-    g_release_timer = lv_timer_create(release_timer_cb, kRemoteBlockMs, nullptr);
-    if (g_release_timer) lv_timer_set_repeat_count(g_release_timer, 1);
+    start_hold();
     // Keep the tile state, other duplicates and an open popup in step, like
     // the popup's sync_bound_tile_from_popup.
     char payload[48];
@@ -582,6 +621,27 @@ lv_obj_t* create_icon(lv_obj_t* card, const Tile& tile) {
 // (climate_layout.h: kOuterInset to the edges, kControlRadius) one Climate
 // gap below the corner disc, as high as in a one-row tile and anchored to the
 // card's bottom on taller tiles.
+// LVGL marks a touched object pressed before its own callbacks run. The bar
+// is a resting surface that shows the pressed step only with its card
+// (tile_icon_source follow_card_press); its own touch left the card
+// unpressed, so the track lit up under the finger. Its pressed color is its
+// resting color until the release restores the card's pressed step.
+void bar_press_cb(lv_event_t* e) {
+  lv_obj_t* bar = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  lv_style_value_t rest;
+  if (lv_obj_get_local_style_prop(bar, LV_STYLE_BG_COLOR, &rest, LV_PART_MAIN | LV_STATE_DEFAULT) !=
+      LV_STYLE_RES_FOUND) {
+    return;
+  }
+  const uint32_t rgb = lv_color_to_u32(rest.color) & 0xFFFFFF;
+  tile_icon_disc::set_fill_colors(bar, rgb, rgb);
+}
+
+void bar_release_cb(lv_event_t* e) {
+  lv_obj_t* bar = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  tile_icon_source::refresh_controls(lv_obj_get_parent(bar));
+}
+
 lv_obj_t* create_bar(lv_obj_t* card, const Tile& tile) {
   const int tile_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
   const int tile_h = tile_geometry::extent(tile.row, std::max(1.0f, tile.span_h), GRID_CELL_H, GRID_GAP);
@@ -618,6 +678,10 @@ lv_obj_t* create_bar(lv_obj_t* card, const Tile& tile) {
   // just beside the bar still reaches the bar, never the card's toggle or
   // popup.
   lv_obj_set_ext_click_area(bar, climate_layout::kOuterInset);
+  lv_obj_add_event_cb(bar, bar_press_cb,
+                      static_cast<lv_event_code_t>(LV_EVENT_PRESSED | LV_EVENT_PREPROCESS), nullptr);
+  lv_obj_add_event_cb(bar, bar_release_cb, LV_EVENT_RELEASED, nullptr);
+  lv_obj_add_event_cb(bar, bar_release_cb, LV_EVENT_PRESS_LOST, nullptr);
   lv_obj_set_size(bar, bar_w, bar_h);
   // Positions are inside the card's content box (Sensor paddings).
   lv_obj_set_pos(bar, climate_layout::kOuterInset - tile_layout::scale_480(20),
@@ -641,12 +705,20 @@ void show_view_state(SwitchBarView* view, const Tile& tile, const SwitchState& s
   if (!state.available) on = false;
 
   // A dimmer the finger holds, or released moments ago, keeps its own value
-  // until Home Assistant reports it (Light popup kRemoteBlockMs).
-  const bool held = g_drag.data && g_drag.data->view == view &&
-                    (g_drag.dragging || static_cast<int32_t>(g_drag.block_until - millis()) > 0);
-  if (held && state.available && level != g_drag.value) {
-    level = g_drag.value;
-    on = level > 0;
+  // until Home Assistant reports it (Light popup kRemoteBlockMs); a tile
+  // toggled moments ago keeps its on/off.
+  uint8_t held = 0;
+  bool level_held = false;
+  if (state.available && held_value(view, held, level_held)) {
+    if (level_held) {
+      if (level != held) {
+        level = held;
+        on = level > 0;
+      }
+    } else if (on != (held > 0)) {
+      on = held > 0;
+      level = on ? 100 : 0;
+    }
   }
 
   const bool redraw = view->bar_kind != static_cast<uint8_t>(kind) || view->level != level ||
@@ -667,10 +739,20 @@ void release_timer_cb(lv_timer_t*) {
   SwitchTileWidgets* widgets = tile_renderer_get_switch_widgets(data->grid_type);
   const Tile* tile = tile_renderer_get_tile_config(data->grid_type, data->index);
   if (!widgets || !tile || data->index >= TILES_PER_GRID || widgets[data->index].view != data->view) return;
-  show_view_state(data->view, *tile, get_switch_state(data->grid_type, data->index));
+  // Icon, circle and tile tint too: they kept the held on/off.
+  const SwitchState state = get_switch_state(data->grid_type, data->index);
+  switch_tile_show_state(widgets[data->index], *tile, state, switch_state_icon_color(state));
 }
 
 }  // namespace
+
+bool switch_tile_held_on(const SwitchTileWidgets& widgets, bool& on) {
+  uint8_t value = 0;
+  bool level = false;
+  if (!held_value(widgets.view, value, level)) return false;
+  on = value > 0;
+  return true;
+}
 
 void switch_tile_show_state(SwitchTileWidgets& widgets, const Tile& tile, const SwitchState& state,
                             uint32_t icon_rgb) {

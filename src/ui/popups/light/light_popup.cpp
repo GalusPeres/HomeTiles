@@ -73,6 +73,10 @@ constexpr lv_opa_t kControlButtonActiveIndicatorOpa = kControlButtonIndicatorOpa
 // White share of the card for the off switch thumb: 0x8D8D8D on the default
 // card, the neutral match for the former fixed blue-grey thumb.
 constexpr lv_opa_t kSwitchThumbOffStep = 119;
+// The brightness and switch track: the light color over the card at this
+// share, drawn opaque. The header circle takes exactly this color when the
+// tile color is "From icon" (popup_shell_disc_track).
+constexpr lv_opa_t kAccentTrackShare = LV_OPA_30;
 constexpr uint32_t kTempWarmColor = 0xFFD27D;
 constexpr uint32_t kTempCoolColor = 0xF7F1E8;
 constexpr float kPi = 3.14159265358979323846f;
@@ -603,6 +607,12 @@ static void update_live_accent_visuals(LightPopupContext* ctx,
   }
 }
 
+// Opaque and premixed, so the header circle can show the identical color:
+// LVGL's 16-bit blending of a translucent track landed a few steps off.
+static lv_color_t accent_track_color(const LightPopupContext* ctx, uint32_t icon_rgb) {
+  return lv_color_mix(lv_color_hex(icon_rgb), popup_surface::card(ctx->card_bg), kAccentTrackShare);
+}
+
 static void update_switch_slider_visuals(LightPopupContext* ctx, uint32_t icon_rgb, bool invalidate) {
   if (!ctx || !ctx->val_slider || !ctx->val_cap) return;
 
@@ -612,8 +622,8 @@ static void update_switch_slider_visuals(LightPopupContext* ctx, uint32_t icon_r
   const lv_color_t thumb_color =
       ctx->is_on ? accent_color : popup_surface::lighter(ctx->card_bg, kSwitchThumbOffStep);
 
-  lv_obj_set_style_bg_color(ctx->val_slider, accent_color, LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_30, LV_PART_MAIN);
+  lv_obj_set_style_bg_color(ctx->val_slider, accent_track_color(ctx, icon_rgb), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_border_width(ctx->val_slider, 0, LV_PART_MAIN);
 
   if (ctx->val_fill) {
@@ -649,9 +659,8 @@ static void update_brightness_slider_visuals(LightPopupContext* ctx, uint32_t ic
     update_switch_slider_visuals(ctx, icon_rgb, invalidate);
     return;
   }
-  lv_color_t base_color = lv_color_hex(icon_rgb);
-  lv_obj_set_style_bg_color(ctx->val_slider, base_color, LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_30, LV_PART_MAIN);
+  lv_obj_set_style_bg_color(ctx->val_slider, accent_track_color(ctx, icon_rgb), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_border_width(ctx->val_slider, 0, LV_PART_MAIN);
   ctx->brightness_draw_color = icon_rgb;
   if (ctx->val_fill) {
@@ -2361,6 +2370,9 @@ void show_light_popup(const LightPopupInit& init) {
 
   if (g_light_popup_ctx && g_light_popup_ctx->card) viewNavigationPopupShown(g_light_popup_ctx->card, init.entity_id.c_str());
   show_popup_shell(g_light_popup_ctx->overlay, g_light_popup_ctx->card, g_light_popup_ctx->title_label, g_light_popup_ctx->icon_label, g_light_popup_ctx->close_button);
+  // The card stays neutral: with the tile color "From icon" the header
+  // circle takes the track color instead (popup_shell_disc_track).
+  popup_shell_disc_track(g_light_popup_ctx->card, kAccentTrackShare);
 }
 
 // State updates never recolor the card: the popup keeps the background of

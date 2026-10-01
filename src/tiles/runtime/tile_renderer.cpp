@@ -1746,7 +1746,7 @@ static bool switch_state_has_update(const SwitchState& state) {
 // The Switch tile's icon color for a state: the light color (or the Kelvin
 // color of CCT-only lights, else amber) while on, grey while off or
 // unavailable.
-static uint32_t switch_state_icon_color(const SwitchState& state) {
+uint32_t switch_state_icon_color(const SwitchState& state) {
   if (!state.available || (state.has_state && !state.is_on)) return 0xB0B0B0;
   if (state.supports_temperature && !state.supports_color && state.has_color_temp) {
     return lv_color_to_u32(light_color_from_temperature_kelvin(state.color_temp_kelvin)) & 0xFFFFFF;
@@ -1840,8 +1840,15 @@ static void apply_switch_tile_state(GridType grid_type, uint8_t grid_index,
   if (!widgets.icon_label && !widgets.title_label && !widgets.view) return;
 
   // CCT-only lights use the same Kelvin color as the popup instead of the
-  // fixed yellow default used for simple on/off lights.
-  switch_tile_show_state(widgets, tile, state, switch_state_icon_color(state));
+  // fixed yellow default used for simple on/off lights. A held tile colors
+  // its icon for its own on/off, like its bar.
+  SwitchState shown = state;
+  bool held_on = false;
+  if (state.available && switch_tile_held_on(widgets, held_on)) {
+    shown.has_state = true;
+    shown.is_on = held_on;
+  }
+  switch_tile_show_state(widgets, tile, state, switch_state_icon_color(shown));
 }
 
 void update_switch_tile_state(GridType grid_type, uint8_t grid_index,

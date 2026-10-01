@@ -38,8 +38,10 @@ assert.match(source, /icon_fill_marker\(card, marker\) &&\s*marker > 0 && tile_i
   'Device pill: tinted only with tile color From icon');
 // A card press takes the resting pill along with the theme's press fade
 // (its pressed color keeps the step above the pressed card); the buttons
-// keep their own presses.
-assert.ok(source.includes('tile_icon_disc::set_fill_colors(obj, lv_color_to_u32(color) & 0xFFFFFF, surface_pressed);'));
+// keep their own presses. A surface touched itself (the Switch bar) keeps
+// its resting color.
+assert.ok(source.includes('tile_icon_disc::set_fill_colors(obj, rest, own_press ? rest : surface_pressed);'));
+assert.ok(source.includes('const bool own_press = lv_obj_has_state(obj, LV_STATE_PRESSED) && !lv_obj_has_state(card, LV_STATE_PRESSED);'));
 assert.ok(source.includes('tile_icon_disc::fade_with_card(obj);'));
 assert.match(source, /if \(tile_icon_disc::is_surface\(obj\) && lv_obj_has_state\(obj, LV_STATE_PRESSED\) != pressed\)/);
 assert.ok(source.includes('tile_icon_disc::g_card_state_hook = &follow_card_press;'));

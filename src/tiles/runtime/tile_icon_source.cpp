@@ -431,9 +431,10 @@ void pass_popup_disc(lv_obj_t* obj, bool popup_shows_tile_color) {
   if (!disc && obj) disc = find_disc(obj);
   if (!disc) return;
   const tile_icon_disc::Mode mode = tile_icon_disc::mode_of(disc);
+  const bool from_icon = tile_color_from_icon(obj);
   popup_shell_use_tile_disc(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,
-                            tile_icon_disc::glow_of(disc),
-                            popup_shows_tile_color && tile_color_from_icon(obj));
+                            tile_icon_disc::glow_of(disc), popup_shows_tile_color && from_icon,
+                            from_icon);
 }
 }  // namespace
 
@@ -498,7 +499,11 @@ void style_controls(lv_obj_t* card) {
     ui_surface_style::apply_control_fill(obj, on_surface ? raised : color,
                                          press ? LV_PART_MAIN | LV_STATE_PRESSED : LV_PART_MAIN, see_through);
     if (!press) {
-      tile_icon_disc::set_fill_colors(obj, lv_color_to_u32(color) & 0xFFFFFF, surface_pressed);
+      // A surface touched itself (the Switch bar) keeps its resting color;
+      // only its card's press shows the pressed step.
+      const uint32_t rest = lv_color_to_u32(color) & 0xFFFFFF;
+      const bool own_press = lv_obj_has_state(obj, LV_STATE_PRESSED) && !lv_obj_has_state(card, LV_STATE_PRESSED);
+      tile_icon_disc::set_fill_colors(obj, rest, own_press ? rest : surface_pressed);
       tile_icon_disc::fade_with_card(obj);
     }
   };

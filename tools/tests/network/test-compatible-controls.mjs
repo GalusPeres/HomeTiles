@@ -61,6 +61,7 @@ struct SwitchBarView {};SwitchBarView bar_view;
 struct SwitchEventData {String entity_id;GridType grid_type=ROOT;uint8_t index=0;SwitchBarView* view=nullptr;};
 SwitchState get_switch_state(GridType,uint8_t){return state;}
 void update_switch_tile_state(GridType,uint8_t,const char* value){state.is_on=std::strcmp(value,"on")==0;}
+void hold_toggle(SwitchEventData*,bool){}
 ${definition(renderer, 'void toggle_switch_tile(')}
 namespace i18n {
 ${definition(read('src/core/i18n/i18n.h'), 'struct Strings')} ;

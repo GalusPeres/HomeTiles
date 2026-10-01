@@ -25,8 +25,10 @@ for (const marker of [
   'const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);',
   'return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent());',
   '(!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));',
-  'const lv_opa_t opa = shown ? fill.disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);',
-  'lv_color_hex(tone_color::readable_icon(rgb, shown && fill.disc_opa ? fill.disc : card));',
+  'const lv_opa_t opa = shown ? disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);',
+  'lv_color_hex(tone_color::readable_icon(rgb, shown && disc_opa ? disc_rgb : card));',
+  // Light popup, tile color "From icon": the circle takes the track color.
+  'if (track && options.from_tile && options.tile_from_icon && fill.tinted) {',
   'ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),',
   'static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));',
 ]) assert.ok(tint.includes(marker), `header tint: ${marker}`);
@@ -39,7 +41,9 @@ assert.match(source, /void forget_popup_source\(lv_obj_t\* obj\) \{\s*remember_p
 assert.match(source, /uint32_t popup_background\(lv_obj_t\* obj, uint32_t fallback\) \{\s*remember_popup_source\(obj\);\s*pass_popup_disc\(obj, true\);/);
 // The controls take the circle color only when the popup shows the tile
 // color "From icon"; Climate, Light and Cover keep neutral controls.
-assert.match(source, /popup_shell_use_tile_disc\(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,\s*tile_icon_disc::glow_of\(disc\),\s*popup_shows_tile_color && tile_color_from_icon\(obj\)\);/);
+// The tile color "From icon" passes on also when the popup does not show it
+// (the Light popup's header circle then takes its track color).
+assert.match(source, /const bool from_icon = tile_color_from_icon\(obj\);\s*popup_shell_use_tile_disc\(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,\s*tile_icon_disc::glow_of\(disc\), popup_shows_tile_color && from_icon,\s*from_icon\);/);
 for (const [file, event] of [['src/types/climate/renderer.cpp', 'event'], ['src/types/cover/renderer.cpp', 'event'],
   ['src/types/switch/renderer.cpp', 'e']]) {
   assert.ok(read(file).includes(`tile_icon_source::forget_popup_source(static_cast<lv_obj_t*>(lv_event_get_current_target(${event})));`),
@@ -57,7 +61,7 @@ const tileDisc = read('src/tiles/runtime/tile_icon_disc.h');
 assert.ok(tileDisc.includes('return r != g || g != b;'), 'Tiles use the same tint rule');
 assert.ok(tileDisc.includes('tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent(), see_through_card);'));
 // Popup cards are opaque: the header circle draws exactly its color.
-assert.ok(tint.includes('const lv_color_t color = lv_color_hex(fill.disc_color);'));
+assert.ok(tint.includes('lv_color_t color = lv_color_hex(fill.disc_color);'));
 assert.doesNotMatch(tint, /icon_glow_border_opa/, 'The hairline never takes the icon hue');
 assert.doesNotMatch(read('src/ui/popups/popup_layout.h'), /kHeaderIconDiscGlowOpa|kPopupBorderGlowOpa|headerDiscScaledOpa/);
 console.log('Popup header disc follows the tile circle options and the icon hue');

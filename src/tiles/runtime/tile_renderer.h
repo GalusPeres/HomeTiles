@@ -97,6 +97,8 @@ uint32_t climate_visual_color(const ClimateState& state);
 // show them; false while the payload has no available state. `active` (when
 // given) tells whether the entity is on or running rather than off.
 bool switch_payload_icon_color(const char* payload, uint32_t& rgb, bool* active = nullptr);
+// The Switch tile's icon color for a state (grey while off or unavailable).
+uint32_t switch_state_icon_color(const SwitchState& state);
 bool climate_payload_icon_color(const char* payload, uint32_t& rgb, bool* active = nullptr);
 
 CoverTileWidgets* tile_renderer_get_cover_widgets(GridType grid_type);

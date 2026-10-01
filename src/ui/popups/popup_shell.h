@@ -36,8 +36,16 @@ void popup_shell_follow_tile_color(uint32_t color);
 // the tile's disc. The next show_popup_shell() takes them; popups opened
 // without a tile keep the default disc (tinted by a colored icon, shown).
 // `from_icon`: the popup shows the tile color and that is "From icon"; only
-// then do its controls take the circle's color.
-void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon = false);
+// then do its controls take the circle's color. `tile_from_icon`: the tile
+// color is "From icon", whether the popup shows it or not.
+void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon = false,
+                               bool tile_from_icon = false);
+// A popup that keeps a neutral card but shows a colored track (the Light
+// popup's brightness slider: the icon color over the card at `share`,
+// opaque): when its tile color is "From icon" and the circle is tinted, the
+// header circle takes exactly that track color instead of the tone step.
+// Set once after the popup's first show_popup_shell(); 0 turns it off.
+void popup_shell_disc_track(lv_obj_t* body, lv_opa_t share);
 // The fill of the controls around the header for a popup (card) and icon
 // color, with the options of the tile that opens (or opened) the popup: the
 // circle's color when the tile color is "From icon" and the circle is tinted,

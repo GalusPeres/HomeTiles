@@ -175,4 +175,41 @@ assert.ok(localLevel.includes('invalidate_level_change(view, old_level, value);'
           'Drag steps must not redraw the whole bar');
 assert.ok(renderer.includes('lv_obj_invalidate_area(view->bar, &dirty);'));
 
+// b146 regressions on the V2: the track lit up under the finger (LVGL
+// pressed the bar, not its card), and a light switched off sometimes showed
+// its color (echoes of earlier commands, or a paced level sent after a tap).
+assert.ok(renderer.includes('static_cast<lv_event_code_t>(LV_EVENT_PRESSED | LV_EVENT_PREPROCESS)') &&
+          renderer.includes('tile_icon_disc::set_fill_colors(bar, rgb, rgb);') &&
+          renderer.includes('tile_icon_source::refresh_controls(lv_obj_get_parent(bar));'),
+          'A touch on the bar keeps its resting color');
+const iconSource = readRepoFile('src/tiles/runtime/tile_icon_source.cpp');
+assert.ok(iconSource.includes('own_press ? rest : surface_pressed'),
+          'A refresh while the bar is touched keeps its resting color');
+const toggle = renderer.slice(renderer.indexOf('void toggle_switch_tile('),
+                              renderer.indexOf('// State line'));
+const holdToggle = renderer.slice(renderer.indexOf('void hold_toggle('), renderer.indexOf('void toggle_switch_tile('));
+assert.ok(toggle.includes('hold_toggle(data, next_on);') &&
+          holdToggle.includes('g_final_entity.equalsIgnoreCase(data->entity_id)') &&
+          holdToggle.includes('g_drag.hold_level = false;') && holdToggle.includes('start_hold();'),
+          'A toggle cancels a pending dimmer level and holds its on/off');
+const tileRenderer = readRepoFile('src/tiles/runtime/tile_renderer.cpp');
+assert.ok(tileRenderer.includes('switch_tile_held_on(widgets, held_on)') &&
+          tileRenderer.includes('switch_tile_show_state(widgets, tile, state, switch_state_icon_color(shown));'),
+          'The icon color follows the held on/off like the bar');
+assert.ok(renderer.includes('switch_tile_show_state(widgets[data->index], *tile, state, switch_state_icon_color(state));'),
+          'The end of a hold restores the reported icon color');
+
+// Light popup with tile color "From icon": the header circle takes exactly
+// the opaque brightness track color (the card stays neutral on purpose).
+const lightPopup = readRepoFile('src/ui/popups/light/light_popup.cpp');
+assert.ok(lightPopup.includes('popup_shell_disc_track(g_light_popup_ctx->card, kAccentTrackShare);'));
+assert.ok(!lightPopup.includes('lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_30'),
+          'The brightness track is opaque and premixed');
+assert.equal((lightPopup.match(/accent_track_color\(ctx, icon_rgb\), LV_PART_MAIN\)/g) || []).length, 2);
+const shell = readRepoFile('src/ui/popups/popup_shell.cpp');
+assert.ok(shell.includes('if (track && options.from_tile && options.tile_from_icon && fill.tinted) {') &&
+          shell.includes('color = lv_color_mix(lv_color_hex(rgb), lv_color_hex(card), track);'));
+assert.ok(iconSource.includes('tile_icon_disc::glow_of(disc), popup_shows_tile_color && from_icon,\n                            from_icon);') ||
+          /popup_shows_tile_color && from_icon,\s+from_icon\);/.test(iconSource));
+
 console.log('Switch layout tests passed.');

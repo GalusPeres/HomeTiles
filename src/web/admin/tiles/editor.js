@@ -367,6 +367,12 @@
       scheduleAutoSave(tab);
     });
     bindLive(climatePopupModeSelect, 'change', 'climatePopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
+    // Layout "with value" drops the current temperature from the automatic
+    // mini fields (climateAutomaticEditorKinds).
+    bindLive(document.getElementById(prefix + '_climate_view'), 'change', 'climateView', () => {
+      syncClimateSlotFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+    });
+    bindLive(document.getElementById(prefix + '_cover_value_font'), 'change', 'coverValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(coverSelect, 'change', 'coverEntity', () => {
       if (coverSelect.value) {
         coverSelect.dataset.configuredValue = coverSelect.value;

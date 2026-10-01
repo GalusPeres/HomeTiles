@@ -177,6 +177,13 @@ assert.ok(tallRenderer.includes('const uint8_t unreported_level = dimmable ? vie
 const popup = readRepoFile('src/ui/popups/light/light_popup.cpp');
 assert.ok(popup.includes('dash_dsc.bg_color = brightness_dash_color(ctx);') &&
           popup.includes('switch_tile_card_color(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, rgb)'));
+// b149 regression: the resize preview copied the tile at its old size, so a
+// Switch kept its bar at half height and lost it (icon button look) at one
+// row; it now takes the parts of the new size.
+const dragResize = readRepoFile('src/web/admin/tiles/drag-resize.js');
+assert.ok(dragResize.includes('if (isSwitch) prepareSwitchResizePreview(preview, data, layout);') &&
+          dragResize.includes('if (isSwitch) finishSwitchResizePreview(preview, data);'));
+assert.ok(admin.includes('function prepareSwitchResizePreview(preview, data, layout) {'));
 const css = readRepoFile('src/web/assets/admin.css');
 assert.ok(css.includes('height:calc(var(--switch-bar-height, 30px) + var(--switch-bar-grow, 0px));'));
 assert.ok(css.includes('.switch-choices button.hidden { display:none; }'));

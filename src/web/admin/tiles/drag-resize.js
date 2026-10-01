@@ -84,8 +84,12 @@
       if (slots && html) slots.outerHTML = html;
     }
     const data = getTilesData(tab)?.[resizeState?.index];
+    // A Switch tile gains or loses its bar between half and full height.
+    const isSwitch = Number(data?.type) === 5;
+    if (isSwitch) prepareSwitchResizePreview(preview, data, layout);
     applyCompactSensorPreview(preview, data?.type, layout, data?.sensor_display_mode, data?.sensor_value_font);
     placeholder.replaceChildren(preview);
+    if (isSwitch) finishSwitchResizePreview(preview, data);
   }
 
   function updateResizePlaceholder(tab, layout, valid) {

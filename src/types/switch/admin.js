@@ -305,6 +305,36 @@ function maybeFillTitleFromSwitch(tab) {
     return out;
   }
 
+  // Resize preview (drag-resize.js): the copy of a Switch tile at its old
+  // size takes the parts of the new size like the device: no bar at half
+  // height, the header and bar of the layout from one row. Before the
+  // compact classes, so the tall look follows too.
+  function prepareSwitchResizePreview(preview, data, layout) {
+    if (!preview || !data) return;
+    const half = Number(layout?.span_h) === 0.5;
+    const oldState = Array.from(preview.children).find(el => el.classList.contains('tile-switch-state'));
+    preview.dataset.switchStateText = oldState ? oldState.textContent : '';
+    for (const el of Array.from(preview.children)) {
+      if (el.classList.contains('tile-switch-state') || el.classList.contains('tile-switch')) el.remove();
+    }
+    preview.insertAdjacentHTML('beforeend', switchPreviewExtraHtml(data.switch_style, half));
+    applySwitchPreviewLayout(preview, data.switch_style, half);
+  }
+
+  // Once the copy is in the grid (the bar measures itself): the state from
+  // the entity cache, else the text the tile showed.
+  function finishSwitchResizePreview(preview, data) {
+    if (!preview || !data) return;
+    const entity = data.sensor_entity || '';
+    const values = (typeof sensorMetaCache === 'object' && sensorMetaCache?.values) || {};
+    if (entity && values[entity] !== undefined) {
+      applySwitchPreviewState(preview, parseSwitchPayload(values[entity]), entity);
+      return;
+    }
+    const label = Array.from(preview.children).find(el => el.classList.contains('tile-switch-state'));
+    if (label && preview.dataset.switchStateText) label.textContent = preview.dataset.switchStateText;
+  }
+
   function applySwitchPreviewState(tileElem, state, entity) {
     if (!tileElem) return;
     applySwitchPreviewColors(tileElem, state);

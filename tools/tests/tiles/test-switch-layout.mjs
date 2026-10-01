@@ -159,4 +159,20 @@ assert.ok(!/lv_obj_set_style_bg_opa\(bar,/.test(createBar),
           'The bar track opacity must come from the control fill style');
 assert.ok(renderer.includes('lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLL_CHAIN_VER);'));
 
+// b144 regressions on the V2: dragging from off showed a grey 1 % piece
+// until Home Assistant replied (the fill takes the icon color), and a later
+// icon color change did not redraw the bar.
+const localLevel = renderer.slice(renderer.indexOf('void show_local_level('),
+                                  renderer.indexOf('void dimmer_event('));
+assert.ok(localLevel.includes('if ((value > 0) != was_on) {') &&
+          localLevel.includes('update_switch_tile_state(data->grid_type, data->index, payload);'),
+          'Crossing off/on while dragging switches the tile at once');
+assert.ok(renderer.includes('if (view->bar && view->fill_rgb != icon_rgb) lv_obj_invalidate(view->bar);'),
+          'A new icon color redraws the bar');
+// Smoothness: a drag step redraws only the changed columns, like the popup.
+assert.ok(localLevel.includes('invalidate_level_change(view, old_level, value);') &&
+          !localLevel.includes('lv_obj_invalidate(view->bar)'),
+          'Drag steps must not redraw the whole bar');
+assert.ok(renderer.includes('lv_obj_invalidate_area(view->bar, &dirty);'));
+
 console.log('Switch layout tests passed.');

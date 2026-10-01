@@ -382,15 +382,49 @@ uint8_t level_at(const SwitchBarView* view, const lv_point_t& point) {
   return geometry.value_at(point.x - area.x1);
 }
 
+// Redraws only the columns a level change touches, like the Light popup's
+// invalidate_brightness_change: between the old and new fill end, plus the
+// end rounding and the handle line before it. The card corners, the tile
+// border and the bar's round start stay untouched while dragging.
+void invalidate_level_change(const SwitchBarView* view, uint8_t old_level, uint8_t new_level) {
+  lv_area_t area;
+  lv_obj_get_coords(view->bar, &area);
+  const int32_t width = lv_area_get_width(&area);
+  const int32_t height = lv_area_get_height(&area);
+  const int32_t radius =
+      std::min<int32_t>(lv_obj_get_style_radius(view->bar, LV_PART_MAIN), height / 2);
+  const switch_layout::Dimmer geometry{width, height, radius};
+  const int32_t old_fill = geometry.fill_width(old_level);
+  const int32_t new_fill = geometry.fill_width(new_level);
+  const int32_t reach = std::max<int32_t>(radius, geometry.handle_margin() + geometry.handle_width()) + 1;
+  const int32_t from = std::max<int32_t>(0, std::min(old_fill, new_fill) - reach);
+  const int32_t to = std::min<int32_t>(width, std::max(old_fill, new_fill) + 1);
+  lv_area_t dirty = {area.x1 + from, area.y1, area.x1 + to - 1, area.y2};
+  lv_obj_invalidate_area(view->bar, &dirty);
+}
+
 void show_local_level(SwitchEventData* data, uint8_t value) {
   SwitchBarView* view = data->view;
   if (!view) return;
+  const SwitchState current = get_switch_state(data->grid_type, data->index);
+  const bool was_on = current.has_state ? current.is_on : (current.has_brightness && current.brightness_pct > 0);
+  if ((value > 0) != was_on) {
+    // Off to on (or back) switches the tile at once, like the toggle: icon,
+    // circle, tile tint and fill color follow before Home Assistant replies.
+    // Once per crossing, not per drag step; the held level stays local.
+    char payload[48];
+    snprintf(payload, sizeof(payload), "{\"state\":\"%s\",\"brightness_pct\":%u}",
+             value ? "on" : "off", static_cast<unsigned>(value));
+    update_switch_tile_state(data->grid_type, data->index, payload);
+    return;
+  }
   if (view->level != value || view->on != (value > 0)) {
+    const uint8_t old_level = view->level;
     view->level = value;
     view->on = value > 0;
-    lv_obj_invalidate(view->bar);
+    invalidate_level_change(view, old_level, value);
   }
-  SwitchState shown = get_switch_state(data->grid_type, data->index);
+  SwitchState shown = current;
   shown.has_state = true;
   shown.unknown = false;
   show_state_text(view, shown, true, value, value > 0);
@@ -648,6 +682,9 @@ void switch_tile_show_state(SwitchTileWidgets& widgets, const Tile& tile, const 
     lv_obj_set_style_text_color(widgets.title_label, icon_color, 0);
   }
   if (!view) return;
+  // The bar draws its fill and thumb in the icon's color: a new color needs
+  // a redraw even when the level stays.
+  if (view->bar && view->fill_rgb != icon_rgb) lv_obj_invalidate(view->bar);
   view->fill_rgb = icon_rgb;
   show_view_state(view, tile, state);
 }

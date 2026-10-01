@@ -663,9 +663,8 @@ BarBox bar_box(const Tile& tile) {
   const int tile_h = tile_geometry::extent(tile.row, std::max(1.0f, tile.span_h), GRID_CELL_H, GRID_GAP);
   const int icon_width =
       FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
-  const int top = std::max<int>(
-      tile_icon_disc::inset() + tile_icon_disc::header_diameter(icon_width) + climate_layout::kGap,
-      climate_layout::kContentTop);
+  const int top =
+      climate_layout::content_top(tile_icon_disc::header_diameter(icon_width), tile_icon_disc::inset());
   BarBox box;
   box.width = tile_w - climate_layout::kOuterInset * 2;
   box.base = GRID_CELL_H - climate_layout::kOuterInset - top;

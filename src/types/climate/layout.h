@@ -30,14 +30,15 @@ inline constexpr int kControlRadius = 16;
 inline constexpr int kContentTop = 69;
 #endif
 
-// Top of the mini-grid in the card: below the corner header disc
-// (tile_icon_disc::corner_header) with the disc's inset as the gap, never
-// above kContentTop. Taller cells (Tab5, 4B, S3) have a larger disc that
-// would otherwise reach into the first mini tile. Device and Web preview
-// (--climate-slots-top) use the same value.
+// Top of the mini-grid in the card: one Climate gap below the corner header
+// disc (tile_icon_disc::corner_header), never above kContentTop, the same
+// rule as the Switch tile's bar (user 2026-10-01: with the disc's inset as
+// the gap the target pill sat 4 px under the disc on the V2). Taller cells
+// (Tab5, 4B, S3) have a larger disc. Device and Web preview
+// (--climate-slots-top, --switch-bar-height) use the same value.
 inline constexpr int content_top(int header_disc, int disc_inset) {
-  return disc_inset * 2 + header_disc > kContentTop
-             ? disc_inset * 2 + header_disc
+  return disc_inset + header_disc + kGap > kContentTop
+             ? disc_inset + header_disc + kGap
              : kContentTop;
 }
 

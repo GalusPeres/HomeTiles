@@ -275,10 +275,9 @@ void appendPreviewScaleVars(String& html) {
     // Switch tile header layouts (types/switch/renderer.cpp): the control bar
     // one Climate gap below the corner disc, as high as in a one-row tile,
     // at the card's bottom. Title and state use the compact variables.
-    const int bar_top = tile_icon_disc::inset() + header.disc + climate_layout::kGap;
     emit_exact("switch-bar-height",
                GRID_CELL_H - climate_layout::kOuterInset -
-                   (bar_top > climate_layout::kContentTop ? bar_top : climate_layout::kContentTop));
+                   climate_layout::content_top(header.disc, tile_icon_disc::inset()));
   }
   html += "--settings-panel-width:";
   html += String(settings_panel_target_width_px());

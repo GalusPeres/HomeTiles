@@ -38,7 +38,11 @@ assert.match(automatic, /if \(rows <= 3\) return count;/);
 
 // ---- Device and preview: the mini-grid starts below the header disc -------
 const layout = code(read('src/types/climate/layout.h'));
-assert.match(layout, /inline constexpr int content_top\(int header_disc, int disc_inset\) \{\s*return disc_inset \* 2 \+ header_disc > kContentTop\s*\? disc_inset \* 2 \+ header_disc\s*: kContentTop;/);
+// One Climate gap below the disc like the Switch bar (user 2026-10-01).
+assert.match(layout, /inline constexpr int content_top\(int header_disc, int disc_inset\) \{\s*return disc_inset \+ header_disc \+ kGap > kContentTop\s*\? disc_inset \+ header_disc \+ kGap\s*: kContentTop;/);
+assert.ok(read('src/types/switch/renderer.cpp').includes(
+  'climate_layout::content_top(tile_icon_disc::header_diameter(icon_width), tile_icon_disc::inset());'),
+  'The Switch bar and the Climate mini grid share one top');
 const slots = code(fn(renderer, 'layout_climate_slots'));
 assert.match(slots, /climate_layout::content_top\(tile_icon_disc::header_diameter\(icon_width\),\s*tile_icon_disc::inset\(\)\) -\s*climate_layout::kCardPaddingVertical/);
 assert.match(slots, /lv_font_get_glyph_width\(FONT_MDI_ICONS,\s*tile_icon_disc::kMdiReferenceGlyph, 0\)/,

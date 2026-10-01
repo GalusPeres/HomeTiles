@@ -29,6 +29,7 @@ const context = vm.createContext({
   },
   firstAllowedGridRow: () => 0,
   isCompactSensorType: type => [1, 14, 20].includes(Number(type)),
+  isEditableValueType: type => [21, 22, 23].includes(Number(type)),
   document: {getElementById: () => ({value: '0'})},
   t: key => key,
   showNotification: (text, ok) => calls.push(['notify', text, ok]),
@@ -56,8 +57,8 @@ for (const index of [0, 1, 4, 5]) {
 }
 assert.deepEqual(paste(2, climate2x1), ['notify:pasteNoSpace'],
   'a 2x1 tile does not go into the 1x0.5 gap between Back and the 2x1 tile');
-assert.deepEqual(paste(2, {type: '17', span_w: '1', span_h: '0.5'}), ['notify:pasteNoSpace'],
-  'Climate has no half-height size');
+assert.deepEqual(paste(2, {type: '10', span_w: '1', span_h: '0.5'}), ['notify:pasteNoSpace'],
+  'Text has no half-height size');
 assert.deepEqual(paste(2, sensorHalf), ['apply', 'preview', 'draft', 'save', 'notify:tilePasted']);
 assert.deepEqual(paste(3, climate2x1), ['apply', 'preview', 'draft', 'save', 'notify:tilePasted'],
   'a 2x1 tile fits into the free space at 4/1');

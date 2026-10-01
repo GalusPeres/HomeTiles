@@ -21,8 +21,11 @@ function definition(source, signature) {
 const mqtt = read('src/network/mqtt/mqtt_handlers.cpp');
 const renderer = read('src/types/switch/renderer.cpp');
 const switchHtml = read('src/types/switch/web_html.cpp');
-const switchChoiceStart = switchHtml.indexOf('struct SwitchChoice {');
-const switchChoiceStruct = switchHtml.slice(switchChoiceStart, switchHtml.indexOf('};', switchChoiceStart) + 2);
+// The Climate and Cover editors share the segmented choice (web_html.h).
+const switchHtmlHeader = read('src/types/switch/web_html.h');
+const switchChoiceStart = switchHtmlHeader.indexOf('struct SwitchChoice {');
+assert(switchChoiceStart >= 0, 'struct SwitchChoice');
+const switchChoiceStruct = switchHtmlHeader.slice(switchChoiceStart, switchHtmlHeader.indexOf('};', switchChoiceStart) + 2);
 const strings = read('src/core/i18n/i18n.cpp');
 const tables = [...strings.matchAll(/static const Strings kStrings(?:De|En|Fr) = \{[\s\S]*?\};/g)].map(match => match[0]);
 assert.equal(tables.length, 3);

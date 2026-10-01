@@ -7344,7 +7344,9 @@ function syncTileRadiusControls(tabEl) {
     // Mirrors ui_surface_style::border_hint(): a glowing icon gives the tile
     // outline its hue halfway to white (lv_color_mix(white, icon, 128)) at the
     // hairline's 20 %, mostly the tile with a hint of the icon.
-    if (tinted) {
+    // Only a card in the tile color From icon (tile_icon_disc
+    // apply_tile_options); Global and Custom keep the neutral hairline.
+    if (tinted && fill > 0) {
       const hint = given.map(v => Math.floor(((255 * 128 + v * 127) * 0x8081) / 0x800000));
       tileElem.style.setProperty('--tile-border-tint', 'rgba(' + hint.join(',') + ',0.20)');
     } else {

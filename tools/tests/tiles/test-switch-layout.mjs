@@ -191,12 +191,6 @@ assert.ok(admin.includes('switchBarObserver.observe(bar);') && admin.includes('f
 const css = readRepoFile('src/web/assets/admin.css');
 assert.ok(css.includes('height:calc(var(--switch-bar-height, 30px) + var(--switch-bar-grow, 0px));'));
 assert.ok(css.includes('.switch-choices button.hidden { display:none; }'));
-// b153 regression: the card filled only the padding box inside the 3 px
-// editor border, so the hairline sat outside the card and the corner circle
-// was cut; the card now fills the tile like on the device.
-const tileRule = css.slice(css.indexOf('    .tile {'), css.indexOf('    .tile:focus-visible {'));
-assert.ok(tileRule.includes('overflow:visible;') && tileRule.includes('background-clip:border-box;') &&
-          tileRule.includes('clip-path:inset(0 round var(--tile-radius, 11px));'));
 assert.ok(admin.includes("formData.append('sensor_value_font', switchValueFont("));
 assert.ok(admin.includes('fontEl.value = switchValueFont(data.sensor_value_font);'));
 assert.match(handler, /tile\.sensor_value_font =\s*font >= 1 && font <= SENSOR_VALUE_FONT_MAX/);

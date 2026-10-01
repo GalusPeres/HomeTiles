@@ -32,8 +32,12 @@ assert.doesNotMatch(style + header, /icon_glow_border_opa|surface_hue|surface_ac
 const disc = read('src/tiles/runtime/tile_icon_disc.h');
 const applyFill = disc.slice(disc.indexOf('inline void apply_fill(lv_obj_t* disc) {'), disc.indexOf('// A wrapped icon'));
 assert.doesNotMatch(applyFill, /set_tile_border_tint|clear_tile_border_tint/, 'Icon color changes never touch the border');
-assert.match(disc, /if \(glow && disc_mode != Mode::Off && icon_color_tints\(rgb\)\) \{\s*ui_surface_style::set_tile_border_tint\(card, lv_color_hex\(rgb\)\);\s*\} else \{\s*ui_surface_style::clear_tile_border_tint\(card\);/,
+// Only on a card in the tile color From icon (user 2026-10-01: a red hint
+// on a Global tile was wrong); Global and Custom keep the neutral hairline.
+assert.match(disc, /if \(glow && disc_mode != Mode::Off && icon_color_tints\(rgb\) && card_follows_icon\(card\)\) \{\s*ui_surface_style::set_tile_border_tint\(card, lv_color_hex\(rgb\)\);\s*\} else \{\s*ui_surface_style::clear_tile_border_tint\(card\);/,
   'The border hint is set when the tile is built');
+assert.ok(read('src/web/admin/tiles/grid-preview.js').includes('if (tinted && fill > 0) {'),
+  'The preview hairline takes the hint only with From icon');
 
 // The popup hairline is the plain white border and never follows the icon.
 const shell = read('src/ui/popups/popup_shell.cpp');

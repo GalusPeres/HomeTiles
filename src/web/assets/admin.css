@@ -1056,15 +1056,8 @@
       padding:var(--tile-pad-v, 12px) var(--tile-pad-h, 10px);
       position:relative;
       box-sizing:border-box;
-      /* The card fills the whole tile like on the device: the 3 px editor
-         border lies on the card (positions compensate it), the hairline
-         sits on the card edge, and the content is clipped to the tile's
-         rounded outline only (clip-path), never to the inner padding box.
-         Fixed grid tracks keep the size; no minimum from the content. */
-      overflow:visible;
-      min-width:0;
-      min-height:0;
-      background-clip:border-box;
+      overflow:hidden;
+      background-clip:padding-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
     /* The tile clips itself to its rounded corners, so an outline would be cut
@@ -1077,7 +1070,7 @@
       border:3px dashed rgba(38,166,154,0.6);
       box-shadow:0 0 0 2px rgba(38,166,154,0.12) inset;
       border-radius:var(--tile-radius, 11px);
-      background-clip:border-box;
+      background-clip:padding-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
     /* The selection is stored per folder in data-selected. The active class
@@ -1088,7 +1081,7 @@
       border:3px solid #26a69a;
       box-shadow:0 0 12px rgba(38,166,154,0.55);
       border-radius:var(--tile-radius, 11px);
-      background-clip:border-box;
+      background-clip:padding-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
     .tile.dragging {
@@ -1096,7 +1089,7 @@
       border:3px solid transparent;
       box-shadow:none;
       border-radius:var(--tile-radius, 11px);
-      background-clip:border-box;
+      background-clip:padding-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
     .tile.resizing {

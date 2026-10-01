@@ -433,12 +433,13 @@ inline void apply_tile_options(lv_obj_t* card, uint8_t mode, bool glow) {
     set_tag(child, disc_mode, glow);
     apply_fill(child);
     // The tile border takes a hint of a glowing icon's hue when the tile is
-    // built: mostly the tile, slightly lighter. Icon color changes do not
-    // touch it: a border change redraws the whole tile and any popup above
-    // it, which made a dragged Light color or Kelvin value stutter.
+    // built, only on a card in the tile color "From icon": a Global or
+    // Custom card keeps the neutral hairline (user 2026-10-01). Icon color
+    // changes do not touch it: a border change redraws the whole tile and
+    // any popup above it, which made a dragged Light color stutter.
     lv_obj_t* icon = icon_of(child);
     const uint32_t rgb = icon ? icon_color(icon) : 0xFFFFFF;
-    if (glow && disc_mode != Mode::Off && icon_color_tints(rgb)) {
+    if (glow && disc_mode != Mode::Off && icon_color_tints(rgb) && card_follows_icon(card)) {
       ui_surface_style::set_tile_border_tint(card, lv_color_hex(rgb));
     } else {
       ui_surface_style::clear_tile_border_tint(card);

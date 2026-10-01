@@ -96,6 +96,11 @@ struct Popup {
   uint8_t fan_drag = 0;
   uint8_t fan_hold = 0;
   uint32_t fan_hold_until = 0;
+  // Three tones like the Light popup (user 02.10.): the card, the circle fill
+  // for the rail and the unlit speeds, the state color for what is lit.
+  lv_color_t fan_accent = lv_color_hex(0x00BCD4);
+  lv_color_t fan_rest = lv_color_hex(0x3A3A3A);
+  lv_opa_t fan_rest_opa = LV_OPA_COVER;
   // Fan menus (the Climate popup's control menu).
   FanPill pills[3];
   lv_obj_t* pill_objects[3] = {};
@@ -354,12 +359,17 @@ void build_lock(const Detail& d, const Visual& v) {
     const bool sent = *target && std::strcmp(target, d.state) != 0;
     const bool up = sent ? std::strcmp(target, "locked") == 0 : device_visual::lock_on(d);
     const uint32_t color = sent ? device_visual::kOrange : v.color;
+    lv_color_t rest;
+    lv_opa_t rest_opa;
+    control_fill(rest, rest_opa);
+    // The rail in the circle fill like the Light popup's switch: card, circle
+    // fill and state color, three tones of one color (user 02.10.).
     lv_obj_t* track = make_box(pop.body);
     lv_obj_set_size(track, w, h);
     lv_obj_set_pos(track, (content_w - w) / 2, track_y);
     lv_obj_set_style_radius(track, track_radius(), 0);
-    lv_obj_set_style_bg_color(track, lv_color_hex(color), 0);
-    lv_obj_set_style_bg_opa(track, LV_OPA_30, 0);
+    lv_obj_set_style_bg_color(track, rest, 0);
+    lv_obj_set_style_bg_opa(track, rest_opa, 0);
     lv_obj_t* thumb = make_box(track);
     lv_obj_set_size(thumb, w, h / 2);
     lv_obj_set_pos(thumb, 0, up ? 0 : h - h / 2);
@@ -452,8 +462,9 @@ void build_alarm(const Detail& d, const Visual& v) {
     lv_obj_set_size(circle, diameter, diameter);
     lv_obj_set_pos(circle, (content_w - diameter) / 2, (top + bottom - diameter) / 2);
     lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(circle, lv_color_hex(color), 0);
-    lv_obj_set_style_bg_opa(circle, LV_OPA_30, 0);
+    // The circle fill like the keys; only the symbol takes the state color.
+    lv_obj_set_style_bg_color(circle, fill, 0);
+    lv_obj_set_style_bg_opa(circle, opa, 0);
     lv_obj_t* symbol = make_icon(circle, lv_color_hex(color), sent ? "shield" : v.icon);
     lv_obj_center(symbol);
     pulse(symbol);
@@ -538,7 +549,9 @@ void set_fan_fill(const Detail& d, int percentage) {
   if (pop.fan_segment_count) {
     const int speed = device_detail::fan_speed_of(d, percentage);
     for (uint8_t i = 0; i < pop.fan_segment_count; ++i) {
-      lv_obj_set_style_bg_opa(pop.fan_segments[i], i < speed ? LV_OPA_COVER : LV_OPA_30, 0);
+      const bool lit = i < speed;
+      lv_obj_set_style_bg_color(pop.fan_segments[i], lit ? pop.fan_accent : pop.fan_rest, 0);
+      lv_obj_set_style_bg_opa(pop.fan_segments[i], lit ? LV_OPA_COVER : pop.fan_rest_opa, 0);
     }
     return;
   }
@@ -597,11 +610,10 @@ void on_fan_track(lv_event_t* e) {
     pop.fan_moved = false;
     pop.fan_press = point;
     g_pacer.begin_gesture();
-    // A press on an off fan shows it in the fan color right away.
-    const lv_color_t on = lv_color_hex(device_visual::kCyan);
-    lv_obj_set_style_bg_color(track, on, 0);
-    if (pop.fan_fill) lv_obj_set_style_bg_color(pop.fan_fill, on, 0);
-    for (uint8_t i = 0; i < pop.fan_segment_count; ++i) lv_obj_set_style_bg_color(pop.fan_segments[i], on, 0);
+    // A press on an off fan shows it in the fan color right away; the rail
+    // keeps the circle fill.
+    pop.fan_accent = lv_color_hex(device_visual::kCyan);
+    if (pop.fan_fill) lv_obj_set_style_bg_color(pop.fan_fill, pop.fan_accent, 0);
   }
   if (!pop.fan_dragging) return;
   if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING) {
@@ -801,6 +813,8 @@ void build_fan(const Detail& d) {
   // Light popup.
   const lv_color_t accent = lv_color_hex(on && usable ? device_visual::kCyan : device_visual::kGrey);
   pop.fan_segment_count = 0;
+  pop.fan_accent = accent;
+  control_fill(pop.fan_rest, pop.fan_rest_opa);
   pop.fan_value = value_label(fan_value_text(d, on, percentage).c_str());
   // Speed slider (the Light popup's vertical slider), segments for up to four
   // fixed speeds, or the Light popup's simple switch for a fan without speeds.
@@ -819,8 +833,9 @@ void build_fan(const Detail& d) {
   lv_obj_set_size(pop.fan_track, w, h);
   lv_obj_set_pos(pop.fan_track, (content_w - w) / 2, track_y);
   lv_obj_set_style_radius(pop.fan_track, radius, 0);
-  lv_obj_set_style_bg_color(pop.fan_track, accent, 0);
-  lv_obj_set_style_bg_opa(pop.fan_track, LV_OPA_30, 0);
+  // The rail in the circle fill like the Light popup's slider.
+  lv_obj_set_style_bg_color(pop.fan_track, pop.fan_rest, 0);
+  lv_obj_set_style_bg_opa(pop.fan_track, pop.fan_rest_opa, 0);
   lv_obj_set_style_clip_corner(pop.fan_track, true, 0);
   if (!usable) {
     lv_obj_set_style_opa(pop.fan_track, LV_OPA_30, 0);
@@ -847,7 +862,6 @@ void build_fan(const Detail& d) {
       lv_obj_set_size(segment, w, segment_h);
       lv_obj_set_pos(segment, 0, h - (i + 1) * segment_h - i * gap);
       lv_obj_set_style_radius(segment, popup_layout::contentScale(24), 0);
-      lv_obj_set_style_bg_color(segment, accent, 0);
       pop.fan_segments[i] = segment;
     }
     pop.fan_segment_count = static_cast<uint8_t>(count);
@@ -866,8 +880,9 @@ void build_fan(const Detail& d) {
   } else {
     lv_obj_set_size(pop.fan_fill, w, h / 2);
     lv_obj_set_y(pop.fan_fill, on ? 0 : h / 2);
+    // Off: the Light popup switch's off thumb, one step above the rail.
     lv_obj_set_style_bg_color(pop.fan_fill,
-                              on ? accent : lv_color_hex(tone_color::switch_thumb_off(pop.card_rgb)), 0);
+                              on ? accent : lv_color_hex(tone_color::switch_thumb_off(lv_color_to_u32(pop.fan_rest) & 0xFFFFFF)), 0);
     lv_obj_t* symbol = make_icon(pop.fan_fill, on ? lv_color_hex(pop.card_rgb) : lv_color_hex(tone_color::kOffIcon),
                                  on ? "fan" : "fan-off");
     lv_obj_center(symbol);

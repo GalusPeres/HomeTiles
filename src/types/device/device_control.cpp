@@ -191,6 +191,7 @@ void queue_result(TileType type, const char* payload, size_t length) {
   // Only answers to this panel's own commands: the in-flight list knows them.
   for (InFlight& flight : g_in_flight) {
     if (!flight.id.length() || flight.id != id) continue;
+    Serial.printf("[Device] Bridge answer for %s (id %s): %s\n", flight.entity.c_str(), id, status);
     if (std::strcmp(status, "invalid") == 0) {
       Serial.printf("[Device] Bridge rejected a %s command as invalid\n", type == TILE_LOCK ? "lock" : "alarm");
     }
@@ -206,6 +207,7 @@ void queue_result(TileType type, const char* payload, size_t length) {
     flight = InFlight{};
     return;
   }
+  Serial.printf("[Device] Bridge answer %s for a command this panel no longer waits for (id %s)\n", status, id);
 }
 
 void process(uint8_t budget) {
@@ -227,6 +229,8 @@ void process(uint8_t budget) {
     answer.entity = flight.entity;
     answer.id = flight.id;
     strlcpy(answer.status, "no_answer", sizeof(answer.status));
+    Serial.printf("[Device] No Bridge answer for %s (id %s) within %u s\n", flight.entity.c_str(),
+                  flight.id.c_str(), static_cast<unsigned>(kAnswerMs / 1000));
     flight = InFlight{};
     deliver(answer);
   }
@@ -316,6 +320,12 @@ String send_access(TileType type, const String& entity, const char* action, cons
   serializeJson(doc, body);
   doc.clear();
   publish(type == TILE_LOCK ? "lock" : "alarm", body);
+  // Never the code itself.
+  Serial.printf("[Device] %s %s sent for %s (id %s, %s, %u bytes, paired %d, session %d)\n",
+                type == TILE_LOCK ? "Lock" : "Alarm", action, entity.c_str(), id.c_str(),
+                code && *code ? "with code" : "without code", static_cast<unsigned>(body.length()),
+                command_channel::state() == command_channel::PairingState::Active ? 1 : 0,
+                command_channel::sessionReady() ? 1 : 0);
   // The plaintext body held the code.
   for (size_t i = 0; i < body.length(); ++i) body.setCharAt(i, '\0');
   slot->id = id;

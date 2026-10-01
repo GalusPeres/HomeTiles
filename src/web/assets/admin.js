@@ -4615,11 +4615,16 @@ function syncTileRadiusControls(tabEl) {
     return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.round(number * 2) / 2)) : fallback;
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
+  // Number, Select and Date/Time render through the Sensor tile
+  // (tile_geometry::editable).
+  function isEditableValueType(type) { return [21, 22, 23].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
   // Scene, Folder, Settings, Back and Camera show only an icon and a title;
   // Switch and Cover show their state (tile_geometry::compact_switch,
   // compact_cover).
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 5, 7, 8, 9, 17, 18, 19].includes(Number(type)); }
+  function supportsHalfSize(type) {
+    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 17, 18, 19].includes(Number(type));
+  }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
@@ -4655,6 +4660,23 @@ function syncTileRadiusControls(tabEl) {
     else if (halfHeight && (value === '3' || value === '4')) select.value = '5';
     else if (!halfHeight && value === '5') select.value = '0';
   }
+  // Number, Select and Date/Time value sizes (1 = 20, 2 = 24, 0 = 28, 3 = 32,
+  // 4 = 40): half-height tiles offer 20, 24 and 28 (editable_display_tile).
+  function syncEditableValueFontOptions(select, halfHeight) {
+    if (!select?.options) return;
+    for (const option of Array.from(select.options)) {
+      const hidden = halfHeight && (option.value === '3' || option.value === '4');
+      option.hidden = hidden;
+      option.disabled = hidden;
+    }
+    if (halfHeight && (select.value === '3' || select.value === '4')) select.value = '0';
+  }
+  // The Sensor value size choice that matches a Number, Select or Date/Time
+  // size at half height (editable_display_tile).
+  function editableCompactValueFont(choice) {
+    const value = String(choice ?? '2');
+    return value === '1' ? '0' : value === '2' ? '2' : '5';
+  }
   function applyCompactSensorPreview(el, type, layout, mode = 0, valueFont = 0) {
     const halfHeight = layout?.span_w >= 1 && layout.span_h === 0.5;
     // A half-height icon-and-title tile (Scene, Folder, Settings, Back, Camera) uses the
@@ -4663,7 +4685,10 @@ function syncTileRadiusControls(tabEl) {
     const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     // Half-height Switch: icon, title and state like a compact Sensor.
     const compactSwitch = [5, 17, 19].includes(Number(type)) && halfHeight;
-    const compact = (isCompactSensorType(type) || compactIconTitle || compactSwitch) && halfHeight;
+    // Number, Select and Date/Time like a compact Sensor.
+    const compactEditable = isEditableValueType(type) && halfHeight;
+    if (compactEditable) valueFont = editableCompactValueFont(valueFont);
+    const compact = (isCompactSensorType(type) || compactIconTitle || compactSwitch || compactEditable) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
     el.classList.toggle('compact-title-only', compactIconTitle);
@@ -5867,6 +5892,8 @@ function syncTileRadiusControls(tabEl) {
     const halfHeight = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) === 0.5;
     for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
       syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
+    for (const kind of ['number', 'select', 'datetime'])
+      syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
     if (type === '5') {
       // The state beside the disc takes the half-height sizes, the large
       // state of a tall tile the full-size ones.
@@ -5882,13 +5909,15 @@ function syncTileRadiusControls(tabEl) {
       syncCompactValueFontOptions(document.getElementById(prefix + '_cover_value_font'), !(spanH > 1));
       syncSwitchChoices(tab);
     }
-    const sensorValueFont = isEnergyType
+    const previewKind = meta.preview || 'none';
+    // Number, Select and Date/Time keep their own value size field.
+    const sensorValueFont = isEditablePreview(previewKind)
+      ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2')
+      : isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font'
         : (type === '5' ? '_switch_value_font' : (type === '19' ? '_cover_value_font' : '_sensor_value_font'))))?.value || '0');
-    const previewKind = meta.preview || 'none';
-    const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
-      ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);
+    const sensorValueClass = getSensorValueFontClass(sensorValueFont);
     const sensorEntity = document.getElementById(prefix + '_sensor_entity')?.value || '';
     const binarySensorEntity = document.getElementById(
       prefix + '_binary_sensor_entity')?.value || '';

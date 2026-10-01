@@ -13,10 +13,12 @@ inline bool sensor(int type) { return type == TILE_SENSOR || type == TILE_BINARY
 inline bool icon_title(int type) {
   return type == TILE_SCENE || type == TILE_FOLDER || type == TILE_BACK || type == TILE_CAMERA || type == TILE_SETTINGS;
 }
+// Number, Select and Date/Time render through the Sensor tile.
+inline bool editable(int type) { return type == TILE_NUMBER || type == TILE_SELECT || type == TILE_DATETIME; }
 // Types that may use half-cell sizes (mirrors supportsHalfSize in layout.js).
 inline bool half_size(int type) {
   return sensor(type) || type == TILE_CLOCK || icon_title(type) || type == TILE_SWITCH || type == TILE_COVER ||
-         type == TILE_CLIMATE;
+         type == TILE_CLIMATE || editable(type);
 }
 inline bool fractional(float value) { return value != std::floor(value); }
 // Every type resizes in half steps from 1x1; only half-size types may be half
@@ -43,6 +45,11 @@ inline bool compact_cover(int type, float w, float h) {
 // "Cooling · 20.5 °C"), without mini fields; a tap opens the popup.
 inline bool compact_climate(int type, float w, float h) {
   return type == TILE_CLIMATE && w >= 1 && h == 0.5f;
+}
+// A half-height Number, Select or Date/Time tile: the Sensor compact layout
+// (icon, title, value).
+inline bool compact_editable(int type, float w, float h) {
+  return editable(type) && w >= 1 && h == 0.5f;
 }
 inline bool compact_clock(int type, float w, float h) {
   return type == TILE_CLOCK && w >= 1 && h == 0.5f;

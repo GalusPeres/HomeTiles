@@ -20,6 +20,8 @@ EditableValue parse_editable_value(const String& payload);
 bool editable_entity_matches(TileType type, const String& entity);
 String editable_display_value(const EditableValue& value);
 void append_editable_translations(String& html, const char* name);
+// The Sensor tile that shows a Number, Select or Date/Time value.
+Tile editable_display_tile(const Tile& tile);
 void refresh_editable_tile(GridType grid, uint8_t index);
 void queue_editable_value(const String& entity, const char* payload);
 void process_editable_updates(uint8_t budget = 4);

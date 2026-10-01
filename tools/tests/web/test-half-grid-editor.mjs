@@ -8,7 +8,7 @@ const noteParts=Array.from(noteSourceLine.matchAll(/"(?:\\.|[^"\\])*"/g),match=>
 assert.equal(noteParts.length,2);
 const noteOpening=noteParts[0]+'test'+noteParts[1];
 const helpers=[
- 'clampInt','clampHalf','isCompactSensorType','supportedTileLayout','compactValueSize','syncCompactValueFontOptions','applyCompactSensorPreview','supportsHalfSize','markOccupied','slotFits','firstFreeSlot','fitCompactClockPreview',
+ 'clampInt','clampHalf','isCompactSensorType','isEditableValueType','editableCompactValueFont','syncEditableValueFontOptions','supportedTileLayout','compactValueSize','syncCompactValueFontOptions','applyCompactSensorPreview','supportsHalfSize','markOccupied','slotFits','firstFreeSlot','fitCompactClockPreview',
  'normalizeLayoutForTileType','normalizeTileLayout','constrainLayoutToTab','setGridItemPosition','setTileGridPosition',
  'getTileElementLayout','layoutTiles','normalizeLayoutInputs','applyLayoutInputsFromLayout','updateLayoutFromInputs',
  'rectsOverlap','canPlaceGridLayout','canPlaceTileLayout','cloneLayout','simulateGridReorderLayouts','manhattanDistance','buildGridPlacementCandidates',

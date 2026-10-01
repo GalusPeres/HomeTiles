@@ -22,6 +22,7 @@
 #include "src/types/climate/layout.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/tiles/config/tile_geometry.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 
 namespace {
@@ -136,6 +137,18 @@ void append_editable_translations(String& html, const char* name) {
   html += "<script>const "; html += name; html += "=Object.freeze("; html += json; html += ");</script>";
 }
 
+Tile editable_display_tile(const Tile& tile) {
+  Tile display = tile;
+  display.sensor_display_mode = 0;
+  display.sensor_decimals = 0xFF;
+  // Half height uses the Sensor compact sizes (compact_sensor_layout): the
+  // editable choices 20 and 24 stay, 28 (0), 32 and 40 become 28.
+  if (tile_geometry::compact_editable(tile.type, tile.span_w, tile.span_h)) {
+    display.sensor_value_font = tile.sensor_value_font == 1 ? 0 : tile.sensor_value_font == 2 ? 2 : 5;
+  }
+  return display;
+}
+
 void refresh_editable_tile(GridType grid, uint8_t index) {
   const Tile* tile = tile_renderer_get_tile_config(grid, index);
   if (!tile || !tileTypeIsEditableValue(tile->type)) return;
@@ -143,8 +156,12 @@ void refresh_editable_tile(GridType grid, uint8_t index) {
   if (!widgets || !widgets[index].value_label) return;
   const EditableValue value = parse_editable_value(haBridgeConfig.findEditableValue(tile->sensor_entity));
   const String display = editable_display_value(value);
-  lv_label_set_long_mode(widgets[index].value_label, LV_LABEL_LONG_DOT);
-  lv_label_set_text(widgets[index].value_label, display.c_str());
+  // One line: a long value (a Select option) ends in dots instead of
+  // wrapping into the title.
+  lv_obj_t* label = widgets[index].value_label;
+  lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+  lv_obj_set_height(label, lv_font_get_line_height(lv_obj_get_style_text_font(label, LV_PART_MAIN)));
+  lv_label_set_text(label, display.c_str());
   // Per-tile icon colors: Number uses the color bar on the raw number; Select
   // and Date/Time state colors match the raw state or its displayed text.
   if (widgets[index].icon_label && tile->icon_colors.length()) {

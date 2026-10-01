@@ -30,6 +30,8 @@
     const halfHeight = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) === 0.5;
     for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
       syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
+    for (const kind of ['number', 'select', 'datetime'])
+      syncEditableValueFontOptions(document.getElementById(prefix + '_' + kind + '_value_font'), halfHeight);
     if (type === '5') {
       // The state beside the disc takes the half-height sizes, the large
       // state of a tall tile the full-size ones.
@@ -45,13 +47,15 @@
       syncCompactValueFontOptions(document.getElementById(prefix + '_cover_value_font'), !(spanH > 1));
       syncSwitchChoices(tab);
     }
-    const sensorValueFont = isEnergyType
+    const previewKind = meta.preview || 'none';
+    // Number, Select and Date/Time keep their own value size field.
+    const sensorValueFont = isEditablePreview(previewKind)
+      ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2')
+      : isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font'
         : (type === '5' ? '_switch_value_font' : (type === '19' ? '_cover_value_font' : '_sensor_value_font'))))?.value || '0');
-    const previewKind = meta.preview || 'none';
-    const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
-      ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);
+    const sensorValueClass = getSensorValueFontClass(sensorValueFont);
     const sensorEntity = document.getElementById(prefix + '_sensor_entity')?.value || '';
     const binarySensorEntity = document.getElementById(
       prefix + '_binary_sensor_entity')?.value || '';

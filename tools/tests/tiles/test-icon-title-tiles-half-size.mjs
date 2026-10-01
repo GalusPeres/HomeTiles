@@ -11,13 +11,14 @@ const read = file => readRepoFile(file).replace(/\r\n?/g, '\n');
 // Firmware geometry.
 const geometry = read('src/tiles/config/tile_geometry.h');
 assert.match(geometry, /inline bool icon_title\(int type\) \{\s*return type == TILE_SCENE \|\| type == TILE_FOLDER \|\| type == TILE_BACK \|\| type == TILE_CAMERA \|\| type == TILE_SETTINGS;/);
-assert.match(geometry, /inline bool half_size\(int type\) \{\s*return sensor\(type\) \|\| type == TILE_CLOCK \|\| icon_title\(type\) \|\| type == TILE_SWITCH \|\| type == TILE_COVER \|\|\s*type == TILE_CLIMATE;\s*\}/);
+assert.match(geometry, /inline bool half_size\(int type\) \{\s*return sensor\(type\) \|\| type == TILE_CLOCK \|\| icon_title\(type\) \|\| type == TILE_SWITCH \|\| type == TILE_COVER \|\|\s*type == TILE_CLIMATE \|\| editable\(type\);\s*\}/);
 assert.doesNotMatch(geometry, /type == TILE_BACK\) &&\s*\(fractional/, 'Back may use half steps');
 assert.match(geometry, /inline bool compact_icon_title\(int type, float w, float h\) \{\s*return icon_title\(type\) && w >= 1 && h == 0\.5f;/);
 assert.doesNotMatch(geometry, /compact_back/);
 
 // Editor geometry mirrors the firmware.
-const helpers = ['isCompactSensorType', 'supportsHalfSize', 'supportedTileLayout'].map(extractDeliveredFunction).join('\n');
+const helpers = ['isCompactSensorType', 'isEditableValueType', 'supportsHalfSize', 'supportedTileLayout']
+  .map(extractDeliveredFunction).join('\n');
 const {supportsHalfSize, supportedTileLayout} = new Function(`${helpers}; return {supportsHalfSize, supportedTileLayout};`)();
 for (const type of [2, 4, 7, 8, 18]) {
   assert.ok(supportsHalfSize(type) && supportsHalfSize(String(type)), `type ${type} may be half a row high`);

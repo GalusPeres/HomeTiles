@@ -59,6 +59,9 @@ const productionFunctions = [
   extractDeliveredFunction('compactValueSize'),
   extractDeliveredFunction('syncCompactValueFontOptions'),
   extractDeliveredFunction('isCompactSensorType'),
+  extractDeliveredFunction('isEditableValueType'),
+  extractDeliveredFunction('editableCompactValueFont'),
+  extractDeliveredFunction('syncEditableValueFontOptions'),
   extractDeliveredFunction('tileTypeHasDiscToggle'),
   extractDeliveredFunction('tileTypeHasColoredIcon'),
   extractDeliveredFunction('renderTileFromData')

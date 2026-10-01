@@ -15,7 +15,8 @@ const helpers = [
   'tileTypeHasDiscToggle', 'tileTypeHasColoredIcon',
   'rgbToHex', 'applyTileAriaLabel',
   'resolveUnitValue', 'isScreensaverTileTab', 'getTileResizeHandlesHtml',
-  'applyCompactSensorPreview', 'compactValueSize', 'syncCompactValueFontOptions', 'isCompactSensorType', 'renderTileFromData', 'updateTilePreview'
+  'applyCompactSensorPreview', 'compactValueSize', 'syncCompactValueFontOptions', 'isCompactSensorType', 'isEditableValueType', 'editableCompactValueFont',
+  'syncEditableValueFontOptions', 'renderTileFromData', 'updateTilePreview'
 ].map(extractDeliveredFunction).join('\n');
 const html = `<!doctype html><html><head><style>
 ${readRepoFile('src/web/assets/admin.css')}

@@ -259,7 +259,9 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
                  tile_layout::scale(28) + value_y_offset);
   }
 
-  if (tile_geometry::compact(tile.type, tile.span_w, tile.span_h) && display_mode == 0) {
+  if ((tile_geometry::compact(tile.type, tile.span_w, tile.span_h) ||
+       tile_geometry::compact_editable(tile.type, tile.span_w, tile.span_h)) &&
+      display_mode == 0) {
     compact_sensor_layout::apply(card, icon_lbl, title_label, v, tile);
   } else {
     tile_icon_disc::add_round(card, icon_lbl);

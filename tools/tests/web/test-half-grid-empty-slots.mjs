@@ -4,7 +4,7 @@ import {runDomHarness} from '../../lib/headless-dom.mjs';
 
 // One free slot (1x1, or 1x0.5 where no whole cell fits) is centred under the pointer in half-cell steps; a new
 // tile grows when a type needs more room. Other empty tiles stay hidden.
-const helpers=['clampInt','clampHalf','isCompactSensorType','supportsHalfSize','supportedTileLayout',
+const helpers=['clampInt','clampHalf','isCompactSensorType','isEditableValueType','supportsHalfSize','supportedTileLayout',
   'normalizeLayoutForTileType','normalizeTileLayout','constrainLayoutToTab','setGridItemPosition',
   'setTileGridPosition','layoutTiles','markOccupied','slotFits','freeSlotNear','pointerGridPoint','firstFreeSlot',
   'occupiedFromGrid','freeSlotElement','enableFreeSlotHover','getTileElementLayout',

@@ -135,6 +135,7 @@ class String : public std::string {
 struct lv_obj_t;
 struct lv_chart_series_t;
 struct lv_image_dsc_t;
+struct lv_font_t;
 using lv_coord_t = int;
 `);
   write('src/devices/device.h', `#pragma once

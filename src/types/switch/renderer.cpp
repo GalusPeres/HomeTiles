@@ -243,11 +243,13 @@ const lv_font_t* fitting_state_font(const char* text, int width, const lv_font_t
 void set_state_text(SwitchBarView* view, const char* text) {
   if (!view || !view->state_label || !text) return;
   if (strcmp(lv_label_get_text(view->state_label), text) == 0) return;
-  if (!view->compact) {
-    const lv_font_t* font = fitting_state_font(text, view->state_width,
-                                               compact_sensor_layout::value_font(view->value_choice));
+  if (!view->compact && view->state_font) {
+    const lv_font_t* font = fitting_state_font(text, view->state_width, view->state_font);
     if (lv_obj_get_style_text_font(view->state_label, LV_PART_MAIN) != font) {
       lv_obj_set_style_text_font(view->state_label, font, 0);
+      if (view->state_center >= 0) {
+        lv_obj_set_y(view->state_label, view->state_center - lv_font_get_line_height(font) / 2);
+      }
     }
   }
   lv_label_set_text(view->state_label, text);
@@ -642,7 +644,17 @@ void bar_release_cb(lv_event_t* e) {
   tile_icon_source::refresh_controls(lv_obj_get_parent(bar));
 }
 
-lv_obj_t* create_bar(lv_obj_t* card, const Tile& tile) {
+// The bar's box in the card: the Climate target pill's box, one Climate gap
+// below the corner disc as high as in a one-row tile, anchored at the card's
+// bottom; taller tiles add a third of their extra height
+// (switch_layout::bar_growth).
+struct BarBox {
+  int width = 0;
+  int height = 0;
+  int top = 0;
+};
+
+BarBox bar_box(const Tile& tile) {
   const int tile_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
   const int tile_h = tile_geometry::extent(tile.row, std::max(1.0f, tile.span_h), GRID_CELL_H, GRID_GAP);
   const int icon_width =
@@ -650,8 +662,17 @@ lv_obj_t* create_bar(lv_obj_t* card, const Tile& tile) {
   const int top = std::max<int>(
       tile_icon_disc::inset() + tile_icon_disc::header_diameter(icon_width) + climate_layout::kGap,
       climate_layout::kContentTop);
-  const int bar_h = GRID_CELL_H - climate_layout::kOuterInset - top;
-  const int bar_w = tile_w - climate_layout::kOuterInset * 2;
+  BarBox box;
+  box.width = tile_w - climate_layout::kOuterInset * 2;
+  box.height = GRID_CELL_H - climate_layout::kOuterInset - top + switch_layout::bar_growth(tile_h, GRID_CELL_H);
+  box.top = tile_h - climate_layout::kOuterInset - box.height;
+  return box;
+}
+
+lv_obj_t* create_bar(lv_obj_t* card, const Tile& tile) {
+  const BarBox box = bar_box(tile);
+  const int bar_h = box.height;
+  const int bar_w = box.width;
   if (bar_h < 8 || bar_w < 8) return nullptr;
 
   lv_obj_t* bar = lv_obj_create(card);
@@ -685,7 +706,7 @@ lv_obj_t* create_bar(lv_obj_t* card, const Tile& tile) {
   lv_obj_set_size(bar, bar_w, bar_h);
   // Positions are inside the card's content box (Sensor paddings).
   lv_obj_set_pos(bar, climate_layout::kOuterInset - tile_layout::scale_480(20),
-                 tile_h - climate_layout::kOuterInset - bar_h - tile_layout::scale_480(24));
+                 box.top - tile_layout::scale_480(24));
   return bar;
 }
 
@@ -838,13 +859,12 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     view->icon = icon_lbl;
     view->layout = static_cast<uint8_t>(layout);
     view->compact = compact;
-    view->value_choice = tile.sensor_value_font;
     // Before any state: the likely bar, an empty dimmer for lights.
     const bool light = is_light_entity_id(tile.sensor_entity);
     view->bar_kind = static_cast<uint8_t>(switch_layout::bar_for(layout, compact, light));
 
-    // The Sensor corner disc; title and state left-aligned beside it like the
-    // half-height tiles (compact_sensor_layout::apply_content: two insets
+    // One row high: the Sensor corner disc; title and state left-aligned
+    // beside it like the half-height tiles (compact_sensor_layout::apply_content: two insets
     // from the disc, the block centered on it, no gap between the lines),
     // the state at the half-height Sensor value size (title size by default,
     // 24 or 28 when chosen). Explicit positions, so the corner disc
@@ -860,14 +880,45 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     const int text_x = inset + disc + 2 * inset;
     const int text_w = std::max(1, card_w - text_x - 2 * inset);
     const int title_h = lv_font_get_line_height(compact_sensor_layout::title_font());
-    const lv_font_t* state_font = compact_sensor_layout::value_font(tile.sensor_value_font);
+    const bool tall = switch_layout::sensor_look(layout, tile.span_h);
+    const lv_font_t* state_font = tall ? tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE)
+                                       : compact_sensor_layout::value_font(tile.sensor_value_font);
+    view->state_font = state_font;
     const int state_h = lv_font_get_line_height(state_font);
     const int block = (has_title ? title_h : 0) + state_h;
     const int text_y = inset + disc / 2 - block / 2;
     // Label positions are inside the card's content box (Sensor paddings).
     const int pad_x = tile_layout::scale_480(20);
     const int pad_y = tile_layout::scale_480(24);
-    if (has_title) {
+    if (tall) {
+      // From 1.5 rows: the Sensor tile's title, top right (add_round moves
+      // it with the corner disc), and its value size, the state centered
+      // between the disc and the bar.
+      if (has_title) {
+        title_lbl = lv_label_create(container);
+        if (title_lbl) {
+          set_label_style(title_lbl, lv_color_white(), tile_layout::header_title_font());
+          lv_label_set_long_mode(title_lbl, LV_LABEL_LONG_DOT);
+          lv_obj_set_width(title_lbl, LV_PCT(70));
+          lv_obj_set_style_text_align(title_lbl, LV_TEXT_ALIGN_RIGHT, 0);
+          hometiles_title::tile(title_lbl, tile.title.c_str(), true);
+          lv_obj_align(title_lbl, LV_ALIGN_TOP_RIGHT, tile_layout::scale_480(4), tile_layout::scale_480(4));
+        }
+      }
+      const int content_w = std::max(1, card_w - 2 * pad_x);
+      view->state_center = static_cast<int16_t>((inset + disc + bar_box(tile).top) / 2 - pad_y);
+      view->state_label = lv_label_create(container);
+      if (view->state_label) {
+        set_label_style(view->state_label, lv_color_white(), state_font);
+        lv_label_set_long_mode(view->state_label, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(view->state_label, content_w);
+        lv_obj_set_style_text_align(view->state_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_text(view->state_label, "--");
+        lv_obj_set_pos(view->state_label, 0, view->state_center - state_h / 2);
+        lv_obj_clear_flag(view->state_label, LV_OBJ_FLAG_CLICKABLE);
+      }
+      view->state_width = static_cast<int16_t>(content_w);
+    } else if (has_title) {
       title_lbl = lv_label_create(container);
       if (title_lbl) {
         set_label_style(title_lbl, lv_color_white(), compact_sensor_layout::title_font());
@@ -880,17 +931,19 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
         lv_obj_set_pos(title_lbl, text_x - pad_x, text_y - pad_y);
       }
     }
-    view->state_label = lv_label_create(container);
-    if (view->state_label) {
-      set_label_style(view->state_label, lv_color_white(), state_font);
-      lv_label_set_long_mode(view->state_label, LV_LABEL_LONG_DOT);
-      lv_obj_set_width(view->state_label, text_w);
-      lv_obj_set_style_text_align(view->state_label, LV_TEXT_ALIGN_LEFT, 0);
-      lv_label_set_text(view->state_label, "--");
-      lv_obj_set_pos(view->state_label, text_x - pad_x, text_y + (has_title ? title_h : 0) - pad_y);
-      lv_obj_clear_flag(view->state_label, LV_OBJ_FLAG_CLICKABLE);
+    if (!tall) {
+      view->state_label = lv_label_create(container);
+      if (view->state_label) {
+        set_label_style(view->state_label, lv_color_white(), state_font);
+        lv_label_set_long_mode(view->state_label, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(view->state_label, text_w);
+        lv_obj_set_style_text_align(view->state_label, LV_TEXT_ALIGN_LEFT, 0);
+        lv_label_set_text(view->state_label, "--");
+        lv_obj_set_pos(view->state_label, text_x - pad_x, text_y + (has_title ? title_h : 0) - pad_y);
+        lv_obj_clear_flag(view->state_label, LV_OBJ_FLAG_CLICKABLE);
+      }
+      view->state_width = static_cast<int16_t>(text_w);
     }
-    view->state_width = static_cast<int16_t>(text_w);
 
     if (compact) {
       compact_sensor_layout::apply(container, icon_lbl, title_lbl, view->state_label, tile);

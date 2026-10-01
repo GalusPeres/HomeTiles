@@ -1743,12 +1743,43 @@
     .tile.switch.switch-bar.compact-value-28 {
       --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
     }
+    /* From 1.5 rows (switch_layout::sensor_look): the Sensor title top
+       right, the state at a Sensor value size centered between the disc and
+       the bar, the bar a third of the extra height higher. */
+    .tile.switch.switch-bar.switch-tall {
+      --switch-bar-grow:calc((var(--switch-span-h, 1) - 1) * (var(--preview-cell-h, 73px) + var(--preview-gap, 10px)) / 3);
+      --switch-tall-font:var(--fs28, 14px);
+    }
+    .tile.switch.switch-bar.switch-tall.switch-value-20 { --switch-tall-font:var(--fs20, 10px); }
+    .tile.switch.switch-bar.switch-tall.switch-value-24 { --switch-tall-font:var(--fs24, 12px); }
+    .tile.switch.switch-bar.switch-tall.switch-value-32 { --switch-tall-font:var(--fs32, 16px); }
+    .tile.switch.switch-bar.switch-tall.switch-value-40 { --switch-tall-font:var(--fs40, 20px); }
+    .tile.switch.switch-bar.switch-tall > .tile-title {
+      left:auto;
+      top:calc(var(--tile-header-title-top, 14px) - 3px);
+      right:calc(var(--tile-header-title-right, 8px) - 3px);
+      width:calc((100% + 6px - 2 * var(--tile-pad-h, 10px)) * .7);
+      font-size:var(--fs20, 10px);
+      line-height:1.35;
+      text-align:right;
+      overflow:visible;
+    }
+    .tile.switch.switch-bar.switch-tall > .tile-switch-state {
+      left:calc(var(--tile-pad-h, 10px) - 3px);
+      right:calc(var(--tile-pad-h, 10px) - 3px);
+      top:calc((var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) + 100% + 6px
+        - var(--climate-slots-bottom, 3px) - var(--switch-bar-height, 30px) - var(--switch-bar-grow, 0px)) / 2 - 3px);
+      transform:translateY(-50%);
+      font-size:var(--switch-tall-font);
+      line-height:1.21;
+      text-align:center;
+    }
     .tile.switch.switch-bar > .tile-switch {
       position:absolute;
       left:calc(var(--climate-margin-x, 5px) - 3px);
       right:calc(var(--climate-margin-x, 5px) - 3px);
       bottom:calc(var(--climate-slots-bottom, 3px) - 3px);
-      height:var(--switch-bar-height, 30px);
+      height:calc(var(--switch-bar-height, 30px) + var(--switch-bar-grow, 0px));
       border-radius:var(--climate-control-radius, 8px);
       background:var(--control-fill, rgba(255,255,255,0.12));
       overflow:hidden;
@@ -2627,6 +2658,8 @@
   box-sizing:border-box;
 }
 .switch-choices button { padding:6px 8px; white-space:nowrap; }
+/* Value sizes the tile size does not offer (syncSwitchChoices). */
+.switch-choices button.hidden { display:none; }
 .icon-color-presets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
 .icon-color-chip {
   padding:4px 10px;

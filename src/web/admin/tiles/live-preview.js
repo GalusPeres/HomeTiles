@@ -30,6 +30,14 @@
     const halfHeight = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) === 0.5;
     for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
       syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
+    if (type === '5') {
+      // The state beside the disc takes the half-height sizes, the large
+      // state of a tall tile the full-size ones.
+      const spanH = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1);
+      syncCompactValueFontOptions(document.getElementById(prefix + '_switch_value_font'),
+                                  !switchSensorLook(switchStyle, spanH));
+      syncSwitchChoices(tab);
+    }
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font'

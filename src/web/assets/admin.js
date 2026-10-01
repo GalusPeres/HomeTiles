@@ -4666,9 +4666,18 @@ function syncTileRadiusControls(tabEl) {
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
     el.classList.toggle('compact-title-only', compactIconTitle);
-    // Switch header layouts show their state at the half-height value sizes.
+    // Switch header layouts show their state beside the disc at the
+    // half-height value sizes; from 1.5 rows like a Sensor tile at its value
+    // sizes, the bar a third of the extra height higher
+    // (switch_layout::sensor_look).
     const switchHeader = Number(type) === 5 && el.classList.contains('switch-bar');
-    const valueSize = (compact && !compactIconTitle) || switchHeader ? compactValueSize(valueFont) : 20;
+    const switchTall = switchHeader && Number(layout?.span_h) > 1;
+    el.classList.toggle('switch-tall', switchTall);
+    if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
+    else el.style?.removeProperty?.('--switch-span-h');
+    const tallSize = switchTall ? ({1: 20, 2: 24, 3: 32, 4: 40}[Number(valueFont)] || 28) : 0;
+    for (const size of [20, 24, 32, 40]) el.classList.toggle('switch-value-' + size, tallSize === size);
+    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) ? compactValueSize(valueFont) : 20;
     el.classList.toggle('compact-value-24', valueSize === 24);
     el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);
@@ -5850,6 +5859,14 @@ function syncTileRadiusControls(tabEl) {
     const halfHeight = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) === 0.5;
     for (const id of ['_sensor_value_font', '_binary_sensor_value_font', '_energy_value_font'])
       syncCompactValueFontOptions(document.getElementById(prefix + id), halfHeight);
+    if (type === '5') {
+      // The state beside the disc takes the half-height sizes, the large
+      // state of a tall tile the full-size ones.
+      const spanH = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1);
+      syncCompactValueFontOptions(document.getElementById(prefix + '_switch_value_font'),
+                                  !switchSensorLook(switchStyle, spanH));
+      syncSwitchChoices(tab);
+    }
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font'
@@ -10889,12 +10906,19 @@ function maybeFillTitleFromSwitch(tab) {
   // Mirrors parse_switch_payload() (tile_renderer.cpp).
   const SWITCH_DIMMING_MODES = ['brightness', 'color_temp', 'hs', 'rgb', 'xy', 'rgbw', 'rgbww'];
 
-  // The half-height Sensor value choices (compact_sensor_layout::value_step):
-  // 0 title size, 2 = 24, 5 = 28; 3 and 4 look like 28, 1 like the default.
+  // The Sensor value size choices (Tile::sensor_value_font 0..5). One row
+  // high the state shows the half-height sizes (compact_sensor_layout::
+  // value_step), from 1.5 rows the full-size ones; the editor offers the
+  // fitting ones (syncCompactValueFontOptions).
   function switchValueFont(value) {
     const v = String(value ?? '0');
-    if (v === '2') return '2';
-    return ['3', '4', '5'].includes(v) ? '5' : '0';
+    return ['1', '2', '3', '4', '5'].includes(v) ? v : '0';
+  }
+
+  // switch_layout::sensor_look: from 1.5 rows a header layout looks like a
+  // Sensor tile with the bar below.
+  function switchSensorLook(style, spanH) {
+    return switchLayoutValue(style) !== 0 && Number(spanH) > 1;
   }
 
   // The segmented choices of the Switch fields (like Tile color). The hidden
@@ -10907,8 +10931,12 @@ function maybeFillTitleFromSwitch(tab) {
       const select = document.getElementById(tab + '_' + field);
       const group = document.getElementById(tab + '_' + field + '_choices');
       if (!select || !group?.querySelectorAll) continue;
+      const options = select.options ? Array.from(select.options) : [];
       for (const button of group.querySelectorAll('button[data-value]')) {
         button.classList.toggle('active', button.dataset.value === String(select.value));
+        // Value sizes this tile size does not offer stay hidden.
+        const option = options.find(o => o.value === button.dataset.value);
+        button.classList.toggle('hidden', !!option?.hidden);
       }
     }
   }

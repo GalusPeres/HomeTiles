@@ -22,9 +22,13 @@ struct SwitchBarView {
   bool compact = false;
   // Width the state line may use before its font steps down (full tiles).
   int16_t state_width = 0;
-  // Chosen state size (Tile::sensor_value_font), one of the half-height
-  // Sensor value sizes (compact_sensor_layout::value_font).
-  uint8_t value_choice = 0;
+  // The chosen state size (Tile::sensor_value_font): a half-height Sensor
+  // value size beside the disc, a Sensor value size in the middle of a tall
+  // tile. A longer state steps down from it until it fits.
+  const lv_font_t* state_font = nullptr;
+  // Tall tiles: the state's vertical center in the card's content box, kept
+  // when the font steps down; -1 beside the disc.
+  int16_t state_center = -1;
   // Fill and thumb color when the tile has no icon to read it from.
   uint32_t fill_rgb = 0xFFD54F;
   // Off thumb color cache: one OKLCH step above the bar color.

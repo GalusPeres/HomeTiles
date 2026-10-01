@@ -12,12 +12,19 @@ function maybeFillTitleFromSwitch(tab) {
   // Mirrors parse_switch_payload() (tile_renderer.cpp).
   const SWITCH_DIMMING_MODES = ['brightness', 'color_temp', 'hs', 'rgb', 'xy', 'rgbw', 'rgbww'];
 
-  // The half-height Sensor value choices (compact_sensor_layout::value_step):
-  // 0 title size, 2 = 24, 5 = 28; 3 and 4 look like 28, 1 like the default.
+  // The Sensor value size choices (Tile::sensor_value_font 0..5). One row
+  // high the state shows the half-height sizes (compact_sensor_layout::
+  // value_step), from 1.5 rows the full-size ones; the editor offers the
+  // fitting ones (syncCompactValueFontOptions).
   function switchValueFont(value) {
     const v = String(value ?? '0');
-    if (v === '2') return '2';
-    return ['3', '4', '5'].includes(v) ? '5' : '0';
+    return ['1', '2', '3', '4', '5'].includes(v) ? v : '0';
+  }
+
+  // switch_layout::sensor_look: from 1.5 rows a header layout looks like a
+  // Sensor tile with the bar below.
+  function switchSensorLook(style, spanH) {
+    return switchLayoutValue(style) !== 0 && Number(spanH) > 1;
   }
 
   // The segmented choices of the Switch fields (like Tile color). The hidden
@@ -30,8 +37,12 @@ function maybeFillTitleFromSwitch(tab) {
       const select = document.getElementById(tab + '_' + field);
       const group = document.getElementById(tab + '_' + field + '_choices');
       if (!select || !group?.querySelectorAll) continue;
+      const options = select.options ? Array.from(select.options) : [];
       for (const button of group.querySelectorAll('button[data-value]')) {
         button.classList.toggle('active', button.dataset.value === String(select.value));
+        // Value sizes this tile size does not offer stay hidden.
+        const option = options.find(o => o.value === button.dataset.value);
+        button.classList.toggle('hidden', !!option?.hidden);
       }
     }
   }

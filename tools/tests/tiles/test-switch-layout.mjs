@@ -42,6 +42,13 @@ int main() {
   for (int fill = v2.min_fill(); fill <= 156; ++fill) {
     std::printf("end %d %d\n", fill, v2.end_radius_for(fill));
   }
+  // Sensor look from 1.5 rows; the bar grows by a third of the extra height
+  // (Guition V2: cell 145, gap 16).
+  for (const float span : {0.5f, 1.0f, 1.5f, 2.0f}) {
+    std::printf("look %d %d %d\n", static_cast<int>(span * 2), sensor_look(Layout::Dimmer, span) ? 1 : 0,
+                sensor_look(Layout::IconButton, span) ? 1 : 0);
+  }
+  std::printf("grow %d %d %d\n", bar_growth(145, 145), bar_growth(226, 145), bar_growth(306, 145));
   return 0;
 }
 `;
@@ -110,6 +117,10 @@ if (output !== null) {
     // The handle round-trips through value_at.
     assert.equal(values.get(fills[value][1]), value, `round trip ${value}`);
   }
+  // Approved mockup switch-tall (2026-10-01): Sensor look from 1.5 rows for
+  // the header layouts only, the bar + 1/3 of the extra height.
+  assert.deepEqual(pick('look'), [[1, 0, 0], [2, 0, 0], [3, 1, 0], [4, 1, 0]]);
+  assert.deepEqual(pick('grow'), [[0, 27, 53]]);
 }
 
 // Policy, save path and Web mirror.
@@ -133,7 +144,24 @@ for (const marker of [
 }
 // Value size like the half-height Sensor: editor field, save and load.
 const html = readRepoFile('src/types/switch/web_html.cpp');
-assert.ok(html.includes('append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 3);'));
+assert.ok(html.includes('append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 6);'));
+// Tall tiles: the Sensor value sizes and title, the state centered between
+// the disc and the bar, kept centered when a long state steps down.
+const tallRenderer = readRepoFile('src/types/switch/renderer.cpp');
+assert.ok(tallRenderer.includes('const bool tall = switch_layout::sensor_look(layout, tile.span_h);') &&
+          tallRenderer.includes('tall ? tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE)'));
+assert.ok(tallRenderer.includes('view->state_center = static_cast<int16_t>((inset + disc + bar_box(tile).top) / 2 - pad_y);') &&
+          tallRenderer.includes('lv_obj_set_y(view->state_label, view->state_center - lv_font_get_line_height(font) / 2);'));
+assert.ok(tallRenderer.includes('switch_layout::bar_growth(tile_h, GRID_CELL_H)'));
+const layoutJsTall = readRepoFile('src/web/admin/tiles/layout.js');
+assert.ok(layoutJsTall.includes('const switchTall = switchHeader && Number(layout?.span_h) > 1;'));
+assert.ok(admin.includes('function switchSensorLook(style, spanH) {'));
+const livePreview = readRepoFile('src/web/admin/tiles/live-preview.js');
+assert.ok(livePreview.includes('!switchSensorLook(switchStyle, spanH));'),
+          'The editor offers the value sizes of the tile size');
+const css = readRepoFile('src/web/assets/admin.css');
+assert.ok(css.includes('height:calc(var(--switch-bar-height, 30px) + var(--switch-bar-grow, 0px));'));
+assert.ok(css.includes('.switch-choices button.hidden { display:none; }'));
 assert.ok(admin.includes("formData.append('sensor_value_font', switchValueFont("));
 assert.ok(admin.includes('fontEl.value = switchValueFont(data.sensor_value_font);'));
 assert.match(handler, /tile\.sensor_value_font =\s*font >= 1 && font <= SENSOR_VALUE_FONT_MAX/);

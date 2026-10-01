@@ -93,10 +93,13 @@ void append_switch_fields_html(String& html, const String& tab_id, const std::ve
                                   {"1", tr.switch_layout_switch},
                                   {"0", tr.switch_icon_button}};
   append_switch_choice(html, tab_id, "switch_style", tr.switch_display, layouts, 4);
-  // The state line takes the half-height Sensor value sizes
-  // (compact_sensor_layout::value_font): Default (title size), 24, 28.
-  const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"2", "24"}, {"5", "28"}};
-  append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 3);
+  // The Sensor value sizes. One row high, the state beside the disc offers
+  // the half-height ones (Default = title size, 24, 28); from 1.5 rows the
+  // large state offers the full-size ones (Default = 28, 20, 24, 32, 40).
+  // The editor hides the others (syncCompactValueFontOptions).
+  const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
+                                {"5", "28"}, {"3", "32"}, {"4", "40"}};
+  append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 6);
   if (tab_id != "screensaver") {
     const SwitchChoice presses[] = {{"0", tr.long_press}, {"1", tr.short_press}};
     append_switch_choice(html, tab_id, "switch_popup_open_mode", tr.popup_open, presses, 2);

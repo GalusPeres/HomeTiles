@@ -62,9 +62,18 @@
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
     el.classList.toggle('compact-title-only', compactIconTitle);
-    // Switch header layouts show their state at the half-height value sizes.
+    // Switch header layouts show their state beside the disc at the
+    // half-height value sizes; from 1.5 rows like a Sensor tile at its value
+    // sizes, the bar a third of the extra height higher
+    // (switch_layout::sensor_look).
     const switchHeader = Number(type) === 5 && el.classList.contains('switch-bar');
-    const valueSize = (compact && !compactIconTitle) || switchHeader ? compactValueSize(valueFont) : 20;
+    const switchTall = switchHeader && Number(layout?.span_h) > 1;
+    el.classList.toggle('switch-tall', switchTall);
+    if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
+    else el.style?.removeProperty?.('--switch-span-h');
+    const tallSize = switchTall ? ({1: 20, 2: 24, 3: 32, 4: 40}[Number(valueFont)] || 28) : 0;
+    for (const size of [20, 24, 32, 40]) el.classList.toggle('switch-value-' + size, tallSize === size);
+    const valueSize = (compact && !compactIconTitle) || (switchHeader && !switchTall) ? compactValueSize(valueFont) : 20;
     el.classList.toggle('compact-value-24', valueSize === 24);
     el.classList.toggle('compact-value-28', valueSize === 28);
     el.classList.toggle('clock-compact', Number(type) === 9 && halfHeight);

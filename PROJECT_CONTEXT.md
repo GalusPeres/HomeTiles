@@ -96,11 +96,11 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it.
 - Open: cross-grid import clamps whole tiles to half steps (HTTP 400), snapshot type accepts halves, value fonts 32/40 clip in half tiles.
 
-## Switch tile and slider pacing (b147, HW pending)
+## Switch tile and slider pacing (b148, HW pending)
 
-- Layout = `sensor_decimals`: 0 icon button, 1 switch, 2 dimmer, 3 automatic. Header like 1x0.5; bar = Climate pill, self-drawn, touch to card edges.
-- 3 s hold after drag/toggle keeps bar, icon, tint local. Light popup "From icon": circle = opaque 30 % track.
-- `command_pacer.h`: HA slider timing, Light popup/dimmer (#11, DALI DT8): tap = one command, >=500 ms apart, paced final; reporter test pending.
+- Layout = `sensor_decimals`: 0 icon button, 1 switch, 2 dimmer, 3 automatic. Header like 1x0.5, from 1.5 rows like Sensor (bar +1/3); bar = Climate pill, touch to card edges.
+- 3 s hold after drag/toggle keeps bar, icon, tint local. Light popup "From icon": circle = 30 % track.
+- `command_pacer.h`: HA slider timing, Light popup/dimmer (#11): tap = one command, >=500 ms apart, paced final; reporter test pending.
 
 ## Local camera
 

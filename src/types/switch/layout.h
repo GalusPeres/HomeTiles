@@ -34,6 +34,16 @@ inline Layout from_stored(uint8_t value) {
 
 inline bool horizontal(Layout layout) { return layout != Layout::IconButton; }
 
+// From 1.5 rows a header layout looks like a Sensor tile: the title top
+// right, the state large and centered between the corner disc and the bar
+// (the Sensor value sizes), and the bar grows by a third of the height above
+// one row (approved mockup switch-tall, 2026-10-01). One row high (1x1, 2x1)
+// keeps the header beside the disc.
+inline bool sensor_look(Layout layout, float span_h) { return horizontal(layout) && span_h > 1.0f; }
+inline int bar_growth(int tile_height, int cell_height) {
+  return tile_height > cell_height ? (tile_height - cell_height) / 3 : 0;
+}
+
 enum class Bar : uint8_t {
   None,
   Toggle,

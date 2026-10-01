@@ -568,8 +568,12 @@ uint32_t aeTarget() {
   return adjustedAeTarget(g_pipe.ae_target, currentImageSettings().brightness);
 }
 
-bool onGetNewTransaction(esp_cam_ctlr_handle_t, esp_cam_ctlr_trans_t* trans,
-                         void*) {
+// The CSI driver calls both callbacks from its DMA interrupt, which is
+// cache-safe on P4 (it shares the line with the display refresh and keeps
+// running during flash writes): they stay in IRAM and touch only internal RAM
+// (g_isr and its queue).
+IRAM_ATTR bool onGetNewTransaction(esp_cam_ctlr_handle_t, esp_cam_ctlr_trans_t* trans,
+                                   void*) {
   int8_t next;
   if (g_isr.frozen >= 0) {
     next = static_cast<int8_t>(1 - g_isr.frozen);
@@ -582,8 +586,8 @@ bool onGetNewTransaction(esp_cam_ctlr_handle_t, esp_cam_ctlr_trans_t* trans,
   return false;
 }
 
-bool onTransactionFinished(esp_cam_ctlr_handle_t, esp_cam_ctlr_trans_t* trans,
-                           void*) {
+IRAM_ATTR bool onTransactionFinished(esp_cam_ctlr_handle_t, esp_cam_ctlr_trans_t* trans,
+                                     void*) {
   int8_t index = -1;
   if (trans->buffer == g_isr.buffers[0]) index = 0;
   else if (trans->buffer == g_isr.buffers[1]) index = 1;

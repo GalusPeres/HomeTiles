@@ -104,6 +104,11 @@ static FolderCacheEntry* g_active_cache = nullptr;
 // Set from the web-server task, drained in the render loop: dropping cached
 // folder grids and LVGL is not safe to do off the loop thread.
 static volatile bool g_folder_cache_invalidate_requested = false;
+// Folders whose own grid changed (tiles_invalidate_folder_only); more than
+// fit falls back to dropping every hidden cache.
+static constexpr size_t kMaxFolderOnlyInvalidations = 8;
+static uint16_t g_folder_only_invalidations[kMaxFolderOnlyInvalidations] = {};
+static size_t g_folder_only_invalidation_count = 0;
 static TileWidgetCache* g_cache_build_saved_widgets = nullptr;
 static bool g_folder_switch_pending = false;
 static uint16_t g_pending_folder_id = kInvalidFolderId;
@@ -1866,10 +1871,48 @@ void tiles_invalidate_folder(uint16_t folder_id) {
   g_folder_cache_invalidate_requested = true;
 }
 
+void tiles_invalidate_folder_only(uint16_t folder_id) {
+  for (size_t i = 0; i < g_folder_only_invalidation_count; ++i) {
+    if (g_folder_only_invalidations[i] == folder_id) return;
+  }
+  if (g_folder_only_invalidation_count >= kMaxFolderOnlyInvalidations) {
+    g_folder_cache_invalidate_requested = true;
+    return;
+  }
+  g_folder_only_invalidations[g_folder_only_invalidation_count++] = folder_id;
+}
+
+bool tiles_show_active_layout_now() {
+  const uint8_t idx = static_cast<uint8_t>(GridType::TAB0);
+  if (!g_active_cache || !g_active_cache->grid || !g_tiles_loaded[idx] ||
+      g_active_cache->folder_id != tileConfig.getActiveFolderId()) {
+    return false;
+  }
+  tiles_reload_layout(GridType::TAB0);
+  g_tiles_reload_requested[idx] = false;
+  return true;
+}
+
 // Loop-only: actually drop the cached folder grids so they rebuild from NVS.
 static void process_folder_cache_invalidation() {
-  if (!g_folder_cache_invalidate_requested) return;
+  if (!g_folder_cache_invalidate_requested) {
+    // Only the hidden caches of the changed folders; the visible one was
+    // refreshed by the caller.
+    for (size_t n = 0; n < g_folder_only_invalidation_count; ++n) {
+      for (size_t i = 0; i < g_folder_cache_slot_count; ++i) {
+        FolderCacheEntry& entry = g_folder_cache[i];
+        if (&entry == g_active_cache ||
+            entry.folder_id != g_folder_only_invalidations[n]) {
+          continue;
+        }
+        reset_cache_entry(entry);
+      }
+    }
+    g_folder_only_invalidation_count = 0;
+    return;
+  }
   g_folder_cache_invalidate_requested = false;
+  g_folder_only_invalidation_count = 0;
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   clear_navigation_preload_plan();
 #endif

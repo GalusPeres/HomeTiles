@@ -643,6 +643,10 @@ public:
   bool getFolderEntitiesCached(uint16_t folder_id, FolderEntitySlotView* out, size_t count);
   void invalidateFolderEntityCache();
   bool saveFolderGrid(uint16_t folder_id, TileGridConfig& grid);
+  // A Web Admin reorder shows the active folder's new grid before its flash
+  // write; saveFolderGrid() then stores and keeps the same grid. False for
+  // any other folder.
+  bool previewActiveFolderGrid(uint16_t folder_id, const TileGridConfig& grid);
   uint32_t viewRevision() const { return view_revision_; }
   bool saveScreensaverGrid(const TileGridConfig& grid);
 
@@ -679,6 +683,7 @@ private:
   // ready while the global constructors run. Never freed.
   mutable TileGridConfig* active_grid_ = nullptr;
   TileGridConfig& activeGrid() const;
+  void adoptActiveGrid(uint16_t folder_id, const TileGridConfig& grid);
   uint16_t active_folder_id = kRootFolderId;
   std::vector<FolderEntry> folders;
 

@@ -42,5 +42,13 @@ bool tiles_folder_switch_pending();
 void tiles_switch_to_folder(uint16_t folder_id);
 void tiles_cancel_folder_switch(uint16_t folder_id);
 void tiles_invalidate_folder(uint16_t folder_id);
+// Only this folder's grid changed (a reorder): its hidden page caches are
+// dropped, every other prepared folder stays. The visible folder is refreshed
+// by the caller (tiles_show_active_layout_now() or a reload request).
+void tiles_invalidate_folder_only(uint16_t folder_id);
+// Rebuilds the visible folder from the active grid right away instead of
+// waiting for the deferred reload (which waits for a quiet Web Admin). Loop
+// task only, outside LVGL callbacks. False when nothing is shown.
+bool tiles_show_active_layout_now();
 
 #endif // TAB_TILES_UNIFIED_H

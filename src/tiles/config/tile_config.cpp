@@ -2810,21 +2810,33 @@ bool TileConfig::saveFolderGrid(uint16_t folder_id, TileGridConfig& grid) {
   bool ok = saveGridInPlace(folder_id, grid);
   if (ok && folder_id == active_folder_id) {
     // Keep the runtime cache identical to the policy-normalized grid that was
-    // written. Normalize the existing member in place so this storage call
-    // does not add another full TileGridConfig to the WebServer task stack.
-    activeGrid() = grid;
-    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-      if (isRetiredTileType(activeGrid().tiles[i].type)) {
-        activeGrid().tiles[i] = Tile{};
-      }
-    }
-    if (folder_id == kRootFolderId) {
-      applySettingsTilePolicy(activeGrid());
-    } else {
-      ensureBackTile(folder_id, activeGrid());
-    }
+    // written.
+    adoptActiveGrid(folder_id, grid);
   }
   return ok;
+}
+
+bool TileConfig::previewActiveFolderGrid(uint16_t folder_id,
+                                         const TileGridConfig& grid) {
+  if (folder_id != active_folder_id || !folderExists(folder_id)) return false;
+  adoptActiveGrid(folder_id, grid);
+  return true;
+}
+
+// Normalizes the existing member in place, so no further full TileGridConfig
+// lands on the WebServer/loop task stack.
+void TileConfig::adoptActiveGrid(uint16_t folder_id, const TileGridConfig& grid) {
+  activeGrid() = grid;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    if (isRetiredTileType(activeGrid().tiles[i].type)) {
+      activeGrid().tiles[i] = Tile{};
+    }
+  }
+  if (folder_id == kRootFolderId) {
+    applySettingsTilePolicy(activeGrid());
+  } else {
+    ensureBackTile(folder_id, activeGrid());
+  }
 }
 
 bool TileConfig::saveScreensaverGrid(const TileGridConfig& grid) {
@@ -3619,6 +3631,8 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
 #endif
 
   ScopedStorageWriteDisplayGuard storage_write_guard;
+  // Save timing (one log line per save) shows where a reorder spends time.
+  const uint32_t sidecars_started_ms = millis();
   for (size_t grid_idx = 0; grid_idx < TILES_PER_GRID; ++grid_idx) {
     const Tile& tile = working.tiles[grid_idx];
     if (!writeLongTitleSd(folder_id, grid_idx, tile.type == TILE_EMPTY ? String() : tile.title)) {
@@ -3650,6 +3664,8 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
     }
   }
 
+  const uint32_t grid_started_ms = millis();
+  const uint32_t sidecars_ms = grid_started_ms - sidecars_started_ms;
   if (!writeGridSd(folder_id, packed, QUARTERS_PER_GRID)) {
     Serial.printf("[TileConfig] Error saving grid %u (storage write failed)\n",
                   static_cast<unsigned>(folder_id));
@@ -3673,9 +3689,12 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
     }
   }
 
-  Serial.printf("[TileConfig] Grid %u saved (storage, %u x %u bytes)\n",
+  Serial.printf("[TileConfig] Grid %u saved (storage, %u x %u bytes) "
+                "sidecars=%lu ms grid=%lu ms\n",
                 static_cast<unsigned>(folder_id),
                 static_cast<unsigned>(QUARTERS_PER_GRID),
-                static_cast<unsigned>(sizeof(PackedQuarterGridV7)));
+                static_cast<unsigned>(sizeof(PackedQuarterGridV7)),
+                static_cast<unsigned long>(sidecars_ms),
+                static_cast<unsigned long>(millis() - grid_started_ms));
   return true;
 }

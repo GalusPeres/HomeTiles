@@ -8,6 +8,7 @@
 #include "src/network/bridge/device_entities.h"
 #include "src/io/hardware_io.h"
 #include "src/network/mqtt/mqtt_handlers.h"
+#include "src/core/power/power_manager.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/ui/screensaver/image_screensaver.h"
@@ -836,13 +837,22 @@ void WebAdminServer::handleReorderTiles() {
     return;
   }
 
+  // The visible folder shows the new order before the flash write (about a
+  // second) instead of after it and a quiet Web Admin.
+  const uint32_t show_started_ms = millis();
+  const bool shown_now = !screensaver_grid && !powerManager.isInSleep() &&
+                         tileConfig.previewActiveFolderGrid(folder_id, grid) &&
+                         tiles_show_active_layout_now();
+  const uint32_t save_started_ms = millis();
   bool success = screensaver_grid
                      ? screensaverConfig.replaceTileGrid(grid)
                      : tileConfig.saveFolderGrid(folder_id, grid);
+  const uint32_t saved_ms = millis();
   if (success) {
     if (!screensaver_grid) {
-      tiles_invalidate_folder(folder_id);
-      if (tileConfig.getActiveFolderId() == folder_id) {
+      // Only this folder changed; the other prepared folders stay cached.
+      tiles_invalidate_folder_only(folder_id);
+      if (!shown_now && tileConfig.getActiveFolderId() == folder_id) {
         tiles_request_reload_if_loaded(GridType::TAB0);
       }
     } else {
@@ -850,8 +860,16 @@ void WebAdminServer::handleReorderTiles() {
     }
     server.send(200, "application/json", "{\"success\":true}");
   } else {
+    if (shown_now && tileConfig.setActiveFolder(folder_id)) {
+      // Back to the stored order the failed save left.
+      tiles_request_reload(GridType::TAB0);
+    }
     server.send(500, "application/json", "{\"success\":false,\"error\":\"Save failed\"}");
   }
+  Serial.printf("[WebAdmin] Reorder folder=%u shown=%u show=%lu ms save=%lu ms\n",
+                static_cast<unsigned>(folder_id), shown_now ? 1U : 0U,
+                static_cast<unsigned long>(save_started_ms - show_started_ms),
+                static_cast<unsigned long>(saved_ms - save_started_ms));
 }
 
 void WebAdminServer::handleGetSensorValues() {

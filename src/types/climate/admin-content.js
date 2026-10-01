@@ -76,6 +76,7 @@
 
   function climateAutomaticEditorKinds(tab) {
     const state = climateEditorState(tab);
+    const header = document.getElementById(tab + '_climate_view')?.value === '1';
     const spanW = Math.max(1, Math.floor(Number(
       document.getElementById(
         tab + '_tile_span_w')?.value) || 1));
@@ -104,18 +105,18 @@
     };
 
     if (spanW === 1 && rows === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
     } else if (spanW >= 2 && rows === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
     } else if (spanW === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
@@ -127,7 +128,7 @@
         add(CLIMATE_TILE_CONTENT.TARGET_HUMIDITY);
       }
     } else {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       if (state.currentHumidity !== null) {

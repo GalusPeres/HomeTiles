@@ -67,11 +67,12 @@ int main(){
  PackedQuarterGridV7 legacy;Tile full{TILE_SENSOR,1,1,2,1};packGeometry(full,legacy,0);
  assert(legacy.reserved[0]==0 && legacy.reserved[1]==0);unpackGeometry(legacy,0,full);
  assert(full.col==1 && full.row==1 && full.span_w==2 && full.span_h==1);
- // Switch may be half a row high since its header layouts (compact, no bar);
- // Media and Climate may not.
+ // Switch, Cover and Climate may be half a row high (compact, no bar or
+ // mini fields); Media may not.
  assert(tile_geometry::supported(TILE_SWITCH,0,0,2,0.5));
  assert(!tile_geometry::supported(TILE_MEDIA,0,0,2,0.5));
- assert(!tile_geometry::supported(TILE_CLIMATE,0,0,2,0.5));
+ assert(tile_geometry::supported(TILE_CLIMATE,0,0,2,0.5));
+ assert(tile_geometry::supported(TILE_COVER,0,0,1,0.5));
  assert(tile_geometry::supported(TILE_SENSOR,0,0,1,0.5));
  assert(!tile_geometry::supported(TILE_SENSOR,0,0,.5f,.5f));
  for(float width=1;width<=GRID_COLS;width+=.5f)assert(tile_geometry::supported(TILE_SENSOR,0,0,width,.5f));

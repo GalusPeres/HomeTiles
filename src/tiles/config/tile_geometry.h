@@ -15,7 +15,8 @@ inline bool icon_title(int type) {
 }
 // Types that may use half-cell sizes (mirrors supportsHalfSize in layout.js).
 inline bool half_size(int type) {
-  return sensor(type) || type == TILE_CLOCK || icon_title(type) || type == TILE_SWITCH || type == TILE_COVER;
+  return sensor(type) || type == TILE_CLOCK || icon_title(type) || type == TILE_SWITCH || type == TILE_COVER ||
+         type == TILE_CLIMATE;
 }
 inline bool fractional(float value) { return value != std::floor(value); }
 // Every type resizes in half steps from 1x1; only half-size types may be half
@@ -37,6 +38,11 @@ inline bool compact_switch(int type, float w, float h) {
 // and position), without the position bar.
 inline bool compact_cover(int type, float w, float h) {
   return type == TILE_COVER && w >= 1 && h == 0.5f;
+}
+// A half-height Climate tile: the Sensor compact layout (icon, title,
+// "Cooling · 20.5 °C"), without mini fields; a tap opens the popup.
+inline bool compact_climate(int type, float w, float h) {
+  return type == TILE_CLIMATE && w >= 1 && h == 0.5f;
 }
 inline bool compact_clock(int type, float w, float h) {
   return type == TILE_CLOCK && w >= 1 && h == 0.5f;

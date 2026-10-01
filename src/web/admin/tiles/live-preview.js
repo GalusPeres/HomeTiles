@@ -198,11 +198,23 @@
         prefix + '_tile_span_w')?.value || 1;
       const climateSpanH = document.getElementById(
         prefix + '_tile_span_h')?.value || 1;
-      html += climatePreviewSlots(
-        climatePreviewState, climateSpanW, climateSpanH,
-        currentClimateSlotConfig(tab),
-        currentClimateTargetLayouts(tab),
-        currentClimateGeometry(tab));
+      // Layout "with value" and half height: the value pair beside the
+      // disc; half height has no mini fields.
+      const climateHalf = Number(climateSpanH) === 0.5;
+      const climateValue = document.getElementById(prefix + '_climate_view')?.value === '1';
+      tileElem.classList.toggle('climate-header', climateValue && !climateHalf);
+      if (climateHalf || climateValue) {
+        html += '<div class="tile-value tile-switch-state">' +
+          escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+      }
+      if (!climateHalf) {
+        html += climatePreviewSlots(
+          climatePreviewState, climateSpanW, climateSpanH,
+          currentClimateSlotConfig(tab),
+          currentClimateTargetLayouts(tab),
+          currentClimateGeometry(tab),
+          climateValue);
+      }
     }
     if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, halfHeight);
     if (previewKind === 'binary_sensor') {
@@ -273,6 +285,7 @@
       span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
       document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
     if (previewKind === 'climate' &&
+        Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) !== 0.5 &&
         typeof mountClimateMiniEditor === 'function') {
       mountClimateMiniEditor(tab);
       syncClimateSlotFields(tab);

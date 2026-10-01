@@ -590,13 +590,25 @@
           '</div>';
       }
       if (previewKind === 'climate') {
-        html += climatePreviewSlots(
-          climatePreviewState,
-          tile.span_w || 1,
-          tile.span_h || 1,
-          decodeClimateSlotConfig(tile.sensor_gauge_min || 0),
-          decodeClimateTargetLayouts(tile.sensor_gauge_max || 0),
-          tile.climate_geometry || tile.scene_alias || '');
+        // Layout "with value" and half height: the value pair beside the
+        // disc; half height has no mini fields.
+        const climateHalf = Number(tile.span_h) === 0.5;
+        const climateValue = Number(tile.sensor_display_mode) === 1;
+        el.classList.toggle('climate-header', climateValue && !climateHalf);
+        if (climateHalf || climateValue) {
+          html += '<div class="tile-value tile-switch-state">' +
+            escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+        }
+        if (!climateHalf) {
+          html += climatePreviewSlots(
+            climatePreviewState,
+            tile.span_w || 1,
+            tile.span_h || 1,
+            decodeClimateSlotConfig(tile.sensor_gauge_min || 0),
+            decodeClimateTargetLayouts(tile.sensor_gauge_max || 0),
+            tile.climate_geometry || tile.scene_alias || '',
+            climateValue);
+        }
       }
       if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, Number(tile.span_h) === 0.5);
       if (previewKind === 'binary_sensor') {

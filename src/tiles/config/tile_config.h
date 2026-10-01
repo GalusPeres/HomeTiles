@@ -251,6 +251,14 @@ static constexpr uint8_t CLIMATE_TILE_MAX_GRID_CELLS =
     static_cast<uint8_t>(
         CLIMATE_TILE_MAX_GRID_COLUMNS * CLIMATE_TILE_MAX_GRID_ROWS);
 
+// Climate tile "Layout" (Web Admin): 0 = title only (the title top right,
+// the current temperature as a mini field), 1 = with value (title and
+// "Cooling · 20.5 °C" left beside the disc, like the Switch header). Stored
+// in sensor_display_mode, which the Climate tile does not use otherwise.
+static inline bool climateTileShowsValue(const Tile& tile) {
+  return tile.type == TILE_CLIMATE && tile.sensor_display_mode == 1;
+}
+
 static inline uint8_t climateTileGridColumns(const Tile& tile) {
   const uint8_t span_w = tile.span_w < 1 ? 1 : tile.span_w;
   return span_w > CLIMATE_TILE_MAX_GRID_COLUMNS

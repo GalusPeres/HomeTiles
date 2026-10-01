@@ -51,7 +51,7 @@ assert.ok(renderer.includes('lv_obj_remove_flag(widget.bar, LV_OBJ_FLAG_CLICKABL
 assert.match(renderer, /if \(g_drag\.data == data\) \{\s*cancel_live_timer\(\);[\s\S]*?g_drag = CoverDrag\{\};\s*\}\s*delete data;/);
 
 // Web Admin: half-size type, compact classes and the Switch preview's bar.
-assert.match(read('src/web/admin/tiles/layout.js'), /\[2, 4, 5, 7, 8, 9, 18, 19\]\.includes\(Number\(type\)\)/);
+assert.match(read('src/web/admin/tiles/layout.js'), /\[2, 4, 5, 7, 8, 9, 17, 18, 19\]\.includes\(Number\(type\)\)/);
 assert.ok(read('src/web/server/render/web_admin_html.cpp').includes('tile_geometry::compact_cover(tile.type, span_w, span_h)'));
 const admin = read('src/types/cover/admin.js');
 assert.ok(admin.includes("bar.style.setProperty('--switch-accent', COVER_PREVIEW_ACTIVE);") &&

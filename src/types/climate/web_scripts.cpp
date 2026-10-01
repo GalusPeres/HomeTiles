@@ -62,6 +62,14 @@ void append_climate_scripts(String& html) {
       "heatCool",
       i18n::climate_state_label(language, "heat_cool", ""));
   append_i18n("autoMode", i18n::climate_state_label(language, "auto", ""));
+  // The action half of the header value pair (climate_header_text).
+  append_i18n("heating", i18n::climate_state_label(language, "", "heating"));
+  append_i18n("preheating", i18n::climate_state_label(language, "", "preheating"));
+  append_i18n("cooling", i18n::climate_state_label(language, "", "cooling"));
+  append_i18n("drying", i18n::climate_state_label(language, "", "drying"));
+  append_i18n("fan", i18n::climate_state_label(language, "", "fan"));
+  append_i18n("defrosting", i18n::climate_state_label(language, "", "defrosting"));
+  append_i18n("idle", i18n::climate_state_label(language, "", "idle"));
   append_i18n("dry", i18n::climate_state_label(language, "dry", ""));
   append_i18n(
       "fanOnly",

@@ -9,6 +9,9 @@
       document.getElementById(tab + '_climate_entity')?.value || '');
     formData.append('popup_open_mode',
       document.getElementById(tab + '_climate_popup_open_mode')?.value || '1');
+    const view = document.getElementById(tab + '_climate_view')?.value === '1' ? '1' : '0';
+    formData.append('climate_view', view);
+    formData.append('sensor_display_mode', view);
     formData.append('climate_slots_packed', String(packed));
     formData.append('climate_layouts_packed', String(packedLayouts));
     formData.append('climate_geometry', geometry);
@@ -30,6 +33,9 @@
     }
     const popup = document.getElementById(tab + '_climate_popup_open_mode');
     if (popup) popup.value = '1';
+    const view = document.getElementById(tab + '_climate_view');
+    if (view) view.value = '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     const geometry = document.getElementById(
       tab + '_climate_geometry');
     if (geometry) geometry.value = '';

@@ -134,7 +134,10 @@ struct String {
   }
 };
 
+#define TILE_CLIMATE 17
 struct Tile {
+  int type = TILE_CLIMATE;
+  uint8_t sensor_display_mode = 0;  // Layout "title only"
   float span_w = 1;
   float span_h = 1;
   int32_t sensor_gauge_min = 0;

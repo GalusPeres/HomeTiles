@@ -1,4 +1,5 @@
 #include "src/types/climate/web_html.h"
+#include "src/types/switch/web_html.h"
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -35,6 +36,9 @@ void append_climate_fields_html(String& html,
   html += "</option><option value=\"0\">";
   html += tr.long_press;
   html += "</option></select>";
+  // Layout like the Switch tile (climateTileShowsValue, sensor_display_mode).
+  const SwitchChoice layouts[] = {{"0", tr.climate_layout_title_only}, {"1", tr.climate_layout_with_value}};
+  append_switch_choice(html, tab_id, "climate_view", tr.switch_display, layouts, 2);
 
   html += "<div class=\"climate-content-config hidden\"><input type=\"hidden\" id=\"";
   html += tab_id;

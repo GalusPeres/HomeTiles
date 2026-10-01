@@ -169,6 +169,8 @@ inline String climateHorizontalSwingModesCsv(uint8_t mask) {
 struct ClimateTileWidgets {
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* value_label = nullptr;
+  // Layout "with value" and half height: "Cooling · 20.5 °C" beside the disc.
+  lv_obj_t* state_label = nullptr;
   static constexpr uint8_t kMaxSlots = 6;
   lv_obj_t* slot_roots[kMaxSlots] = {};
   uint8_t slot_kinds[kMaxSlots] = {};

@@ -1705,7 +1705,8 @@
        half-height tiles (compact_sensor_layout): two insets from the disc,
        the block centered on it, the state at the half-height value size. */
     .tile.switch.switch-bar,
-    .tile.cover.switch-bar {
+    .tile.cover.switch-bar,
+    .tile.climate.climate-header {
       --switch-text-left:calc(3 * var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) - 3px);
       --switch-text-top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
         - (var(--compact-title-line, 12px) + var(--compact-value-line, 12px)) / 2);
@@ -1713,7 +1714,9 @@
     .tile.switch.switch-bar > .tile-title,
     .tile.cover.switch-bar > .tile-title,
     .tile.switch.switch-bar > .tile-switch-state,
-    .tile.cover.switch-bar > .tile-switch-state {
+    .tile.cover.switch-bar > .tile-switch-state,
+    .tile.climate.climate-header > .tile-title,
+    .tile.climate.climate-header > .tile-switch-state {
       position:absolute;
       left:var(--switch-text-left);
       right:calc(2 * var(--compact-inset, 3px) - 3px);
@@ -1728,20 +1731,23 @@
       text-overflow:ellipsis;
     }
     .tile.switch.switch-bar > .tile-title,
-    .tile.cover.switch-bar > .tile-title {
+    .tile.cover.switch-bar > .tile-title,
+    .tile.climate.climate-header > .tile-title {
       top:var(--switch-text-top);
       font-size:var(--compact-title-font, 10px);
       line-height:var(--compact-title-line, 12px);
     }
     .tile.switch.switch-bar > .tile-switch-state,
-    .tile.cover.switch-bar > .tile-switch-state {
+    .tile.cover.switch-bar > .tile-switch-state,
+    .tile.climate.climate-header > .tile-switch-state {
       top:calc(var(--switch-text-top) + var(--compact-title-line, 12px));
       bottom:auto;
       font-size:var(--compact-value-font, 10px);
       line-height:var(--compact-value-line, 12px);
     }
     .tile.switch.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
-    .tile.cover.switch-bar:not(:has(> .tile-title)) > .tile-switch-state {
+    .tile.cover.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
+    .tile.climate.climate-header:not(:has(> .tile-title)) > .tile-switch-state {
       top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
         - var(--compact-value-line, 12px) / 2);
     }

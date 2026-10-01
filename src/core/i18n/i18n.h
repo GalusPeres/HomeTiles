@@ -172,6 +172,10 @@ struct Strings {
   const char* switch_layout_switch;
   const char* switch_layout_dimmer;
   const char* switch_layout_automatic;
+  // Climate tile Layout field: the title only (the title top right) or with
+  // the value pair beside the disc (climateTileShowsValue).
+  const char* climate_layout_title_only;
+  const char* climate_layout_with_value;
   const char* media_entity;
   const char* show_time;
   const char* show_date;

@@ -14,7 +14,12 @@ void apply_climate_fields_from_request(WebServer& server, Tile& tile) {
   tile.sensor_unit = "";
   tile.sensor_decimals = 1;
   tile.sensor_value_font = 0;
-  tile.sensor_display_mode = 0;
+  // Layout (climateTileShowsValue): a request without the field keeps it.
+  if (server.hasArg("climate_view")) {
+    tile.sensor_display_mode = server.arg("climate_view").toInt() == 1 ? 1 : 0;
+  } else if (tile.sensor_display_mode != 1) {
+    tile.sensor_display_mode = 0;
+  }
   const String packed_slots =
       server.hasArg("climate_slots_packed")
           ? server.arg("climate_slots_packed")

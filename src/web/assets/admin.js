@@ -4619,7 +4619,7 @@ function syncTileRadiusControls(tabEl) {
   // Scene, Folder, Settings, Back and Camera show only an icon and a title;
   // Switch and Cover show their state (tile_geometry::compact_switch,
   // compact_cover).
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 5, 7, 8, 9, 18, 19].includes(Number(type)); }
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 5, 7, 8, 9, 17, 18, 19].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
@@ -4662,7 +4662,7 @@ function syncTileRadiusControls(tabEl) {
     // (if any) centered beside it.
     const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     // Half-height Switch: icon, title and state like a compact Sensor.
-    const compactSwitch = (Number(type) === 5 || Number(type) === 19) && halfHeight;
+    const compactSwitch = [5, 17, 19].includes(Number(type)) && halfHeight;
     const compact = (isCompactSensorType(type) || compactIconTitle || compactSwitch) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
@@ -6028,11 +6028,23 @@ function syncTileRadiusControls(tabEl) {
         prefix + '_tile_span_w')?.value || 1;
       const climateSpanH = document.getElementById(
         prefix + '_tile_span_h')?.value || 1;
-      html += climatePreviewSlots(
-        climatePreviewState, climateSpanW, climateSpanH,
-        currentClimateSlotConfig(tab),
-        currentClimateTargetLayouts(tab),
-        currentClimateGeometry(tab));
+      // Layout "with value" and half height: the value pair beside the
+      // disc; half height has no mini fields.
+      const climateHalf = Number(climateSpanH) === 0.5;
+      const climateValue = document.getElementById(prefix + '_climate_view')?.value === '1';
+      tileElem.classList.toggle('climate-header', climateValue && !climateHalf);
+      if (climateHalf || climateValue) {
+        html += '<div class="tile-value tile-switch-state">' +
+          escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+      }
+      if (!climateHalf) {
+        html += climatePreviewSlots(
+          climatePreviewState, climateSpanW, climateSpanH,
+          currentClimateSlotConfig(tab),
+          currentClimateTargetLayouts(tab),
+          currentClimateGeometry(tab),
+          climateValue);
+      }
     }
     if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, halfHeight);
     if (previewKind === 'binary_sensor') {
@@ -6103,6 +6115,7 @@ function syncTileRadiusControls(tabEl) {
       span_h:Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)},
       document.getElementById(prefix + '_sensor_display_mode')?.value || 0, sensorValueFont);
     if (previewKind === 'climate' &&
+        Number(document.getElementById(prefix + '_tile_span_h')?.value || 1) !== 0.5 &&
         typeof mountClimateMiniEditor === 'function') {
       mountClimateMiniEditor(tab);
       syncClimateSlotFields(tab);
@@ -7743,13 +7756,25 @@ function syncTileRadiusControls(tabEl) {
           '</div>';
       }
       if (previewKind === 'climate') {
-        html += climatePreviewSlots(
-          climatePreviewState,
-          tile.span_w || 1,
-          tile.span_h || 1,
-          decodeClimateSlotConfig(tile.sensor_gauge_min || 0),
-          decodeClimateTargetLayouts(tile.sensor_gauge_max || 0),
-          tile.climate_geometry || tile.scene_alias || '');
+        // Layout "with value" and half height: the value pair beside the
+        // disc; half height has no mini fields.
+        const climateHalf = Number(tile.span_h) === 0.5;
+        const climateValue = Number(tile.sensor_display_mode) === 1;
+        el.classList.toggle('climate-header', climateValue && !climateHalf);
+        if (climateHalf || climateValue) {
+          html += '<div class="tile-value tile-switch-state">' +
+            escapeHtml(climatePreviewHeaderText(climatePreviewState)) + '</div>';
+        }
+        if (!climateHalf) {
+          html += climatePreviewSlots(
+            climatePreviewState,
+            tile.span_w || 1,
+            tile.span_h || 1,
+            decodeClimateSlotConfig(tile.sensor_gauge_min || 0),
+            decodeClimateTargetLayouts(tile.sensor_gauge_max || 0),
+            tile.climate_geometry || tile.scene_alias || '',
+            climateValue);
+        }
       }
       if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, Number(tile.span_h) === 0.5);
       if (previewKind === 'binary_sensor') {
@@ -10941,7 +10966,8 @@ function maybeFillTitleFromSwitch(tab) {
   // The segmented choices of the Switch fields (like Tile color). The hidden
   // select of each keeps the value; a button sets it and fires its change
   // event, so the existing preview, draft and autosave bindings run.
-  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode'];
+  // The Climate tile's Layout uses the same segmented choice.
+  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view'];
 
   function syncSwitchChoices(tab) {
     for (const field of SWITCH_CHOICE_FIELDS) {
@@ -12142,7 +12168,8 @@ function maybeFillTitleFromMedia(tab) {
       spanH,
       configured,
       state.layouts,
-      state.geometry);
+      state.geometry,
+      document.getElementById(tab + '_climate_view')?.value === '1');
   }
 
   function requestClimatePreviewSelection(
@@ -12406,6 +12433,7 @@ function maybeFillTitleFromMedia(tab) {
 
   function climateAutomaticEditorKinds(tab) {
     const state = climateEditorState(tab);
+    const header = document.getElementById(tab + '_climate_view')?.value === '1';
     const spanW = Math.max(1, Math.floor(Number(
       document.getElementById(
         tab + '_tile_span_w')?.value) || 1));
@@ -12434,18 +12462,18 @@ function maybeFillTitleFromMedia(tab) {
     };
 
     if (spanW === 1 && rows === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
     } else if (spanW >= 2 && rows === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
     } else if (spanW === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
@@ -12457,7 +12485,7 @@ function maybeFillTitleFromMedia(tab) {
         add(CLIMATE_TILE_CONTENT.TARGET_HUMIDITY);
       }
     } else {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         add(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       if (state.currentHumidity !== null) {
@@ -13618,6 +13646,9 @@ function maybeFillTitleFromMedia(tab) {
     const popup = document.getElementById(tab + '_climate_popup_open_mode');
     if (popup) popup.value = (data.popup_open_mode !== undefined)
       ? String(data.popup_open_mode) : '1';
+    const view = document.getElementById(tab + '_climate_view');
+    if (view) view.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     const slots = decodeClimateSlotConfig(
       data.climate_slots_packed ?? data.sensor_gauge_min ?? 0);
     slots.forEach((value, index) => {
@@ -13784,9 +13815,27 @@ function maybeFillTitleFromMedia(tab) {
     return '#ffffff';
   }
 
+  // The header value pair of the Layout "with value" and half height
+  // (climate_header_text): the action or mode and the current temperature.
+  function climatePreviewHeaderText(state) {
+    if (!state?.valid) return '--';
+    const actions = {
+      heating: CLIMATE_I18N.heating, preheating: CLIMATE_I18N.preheating, cooling: CLIMATE_I18N.cooling,
+      drying: CLIMATE_I18N.drying, fan: CLIMATE_I18N.fan, defrosting: CLIMATE_I18N.defrosting,
+      idle: CLIMATE_I18N.idle
+    };
+    const action = String(state.action || '').toLowerCase();
+    const label = state.available !== false && actions[action] ? actions[action] : climateModeText(state);
+    if (state.available === false || state.current === '--') return label;
+    return label + ' \u00B7 ' + state.current + ' ' + state.unit;
+  }
+
+  // `header`: the Layout "with value" shows the current temperature in the
+  // header, so the automatic fields start with the target
+  // (build_automatic_slot_kinds).
   function climatePreviewSlots(
       state, spanW, spanH, slotConfig = null,
-      targetLayoutConfig = null, geometryConfig = null) {
+      targetLayoutConfig = null, geometryConfig = null, header = false) {
     // Layout variants follow whole cells in width and mini-grid rows in
     // height (half steps add a row), like build_automatic_slot_kinds.
     const w = Math.max(1, Math.floor(Number(spanW) || 1));
@@ -13840,18 +13889,18 @@ function maybeFillTitleFromMedia(tab) {
         entityState === 'unknown') {
       addAutomatic(CLIMATE_TILE_CONTENT.HVAC_MODE);
     } else if (w === 1 && rows === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       } else {
         addPrimaryTarget();
       }
     } else if (w >= 2 && rows === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
     } else if (w === 1) {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       addPrimaryTarget();
@@ -13863,7 +13912,7 @@ function maybeFillTitleFromMedia(tab) {
         addAutomatic(CLIMATE_TILE_CONTENT.TARGET_HUMIDITY);
       }
     } else {
-      if (!state.valid || state.current !== '--') {
+      if (!header && (!state.valid || state.current !== '--')) {
         addAutomatic(CLIMATE_TILE_CONTENT.CURRENT_TEMPERATURE);
       }
       if (state.currentHumidity !== null) {
@@ -14154,6 +14203,9 @@ function maybeFillTitleFromMedia(tab) {
       document.getElementById(tab + '_climate_entity')?.value || '');
     formData.append('popup_open_mode',
       document.getElementById(tab + '_climate_popup_open_mode')?.value || '1');
+    const view = document.getElementById(tab + '_climate_view')?.value === '1' ? '1' : '0';
+    formData.append('climate_view', view);
+    formData.append('sensor_display_mode', view);
     formData.append('climate_slots_packed', String(packed));
     formData.append('climate_layouts_packed', String(packedLayouts));
     formData.append('climate_geometry', geometry);
@@ -14175,6 +14227,9 @@ function maybeFillTitleFromMedia(tab) {
     }
     const popup = document.getElementById(tab + '_climate_popup_open_mode');
     if (popup) popup.value = '1';
+    const view = document.getElementById(tab + '_climate_view');
+    if (view) view.value = '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     const geometry = document.getElementById(
       tab + '_climate_geometry');
     if (geometry) geometry.value = '';

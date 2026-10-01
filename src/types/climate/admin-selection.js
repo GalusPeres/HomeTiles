@@ -148,7 +148,8 @@
       spanH,
       configured,
       state.layouts,
-      state.geometry);
+      state.geometry,
+      document.getElementById(tab + '_climate_view')?.value === '1');
   }
 
   function requestClimatePreviewSelection(

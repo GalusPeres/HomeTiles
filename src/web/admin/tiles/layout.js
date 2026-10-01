@@ -15,7 +15,7 @@
   // Scene, Folder, Settings, Back and Camera show only an icon and a title;
   // Switch and Cover show their state (tile_geometry::compact_switch,
   // compact_cover).
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 5, 7, 8, 9, 18, 19].includes(Number(type)); }
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 5, 7, 8, 9, 17, 18, 19].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
@@ -58,7 +58,7 @@
     // (if any) centered beside it.
     const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     // Half-height Switch: icon, title and state like a compact Sensor.
-    const compactSwitch = (Number(type) === 5 || Number(type) === 19) && halfHeight;
+    const compactSwitch = [5, 17, 19].includes(Number(type)) && halfHeight;
     const compact = (isCompactSensorType(type) || compactIconTitle || compactSwitch) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);

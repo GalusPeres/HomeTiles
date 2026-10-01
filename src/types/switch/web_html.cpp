@@ -2,13 +2,6 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 
-namespace {
-
-struct SwitchChoice {
-  const char* value;
-  const char* label;
-};
-
 // One choice like Tile color: the label on its own row, then one line of
 // segmented buttons (setSwitchChoice in types/switch/admin.js). The hidden
 // select keeps the value, so loading, saving, drafts and previews use the
@@ -53,8 +46,6 @@ void append_switch_choice(String& html, const String& tab_id, const char* field,
   }
   html += "</div>\n";
 }
-
-}  // namespace
 
 void append_switch_fields_html(String& html, const String& tab_id, const std::vector<String>& switchOptions) {
   const auto& tr = i18n::strings(configManager.getConfig().language);

@@ -565,8 +565,9 @@ static void control_fill(const LightPopupContext* ctx, uint32_t icon_rgb, lv_col
   popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(header_icon_rgb(ctx, icon_rgb)), color, opa);
 }
 
-// A dragged color or Kelvin value moves the circle color: the mode buttons
-// follow it. Only a change touches their style.
+// The mode buttons follow the circle color whenever the icon color changes:
+// on/off (blue-grey to grey and back), a state update, a dragged color or
+// Kelvin value. Only a change touches their style.
 static void follow_mode_button_fill(LightPopupContext* ctx, uint32_t icon_rgb) {
   lv_color_t color;
   lv_opa_t opa;
@@ -610,6 +611,7 @@ static void update_header_and_power_visuals(LightPopupContext* ctx, uint32_t ico
       popup_nav_style::style_press_fill(ctx->power_button, fill, fill_opa);
       popup_nav_style::set_bg(ctx->power_button, fill, LV_OPA_TRANSP, LV_PART_MAIN);
     }
+    follow_mode_button_fill(ctx, icon_rgb);
     lv_obj_set_style_border_width(ctx->power_button, 0, 0);
     lv_obj_set_style_border_width(ctx->power_button, 0, LV_STATE_PRESSED);
     lv_obj_set_style_border_opa(ctx->power_button, LV_OPA_TRANSP, 0);
@@ -1863,6 +1865,8 @@ static void apply_init_to_context(LightPopupContext* ctx, const LightPopupInit& 
   if (!apply_content) {
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(
         ctx->keep_icon_white && ctx->available ? 0xFFFFFF : get_preview_icon_rgb(ctx)), 0);
+    // The reused buttons show this light's circle color in the first frame.
+    follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
     ctx->suppress_events = false;
     return;
   }

@@ -108,7 +108,16 @@ assert.ok(popup.includes('const lv_opa_t bg_opa = enabled && (active || pressed)
   'Selected and pressed mode buttons show the control fill without theme darkening');
 assert.ok(popup.includes('popup_nav_style::style_press_fill(ctx->power_button, fill, fill_opa);'),
   'The off power button presses in the control fill');
-assert.ok(popup.includes('follow_mode_button_fill(ctx, icon_rgb);'), 'A dragged color moves the mode button fill');
+// Regression b156 (user 2026-10-01): switching the light on or off moved the
+// header circle between blue-grey and grey, but the mode buttons kept the
+// old color until another mode was picked.
+const slice = (from, to) => popup.slice(popup.indexOf(from), popup.indexOf(to, popup.indexOf(from)));
+assert.ok(slice('static void update_header_and_power_visuals(', 'static void update_live_accent_visuals(')
+  .includes('follow_mode_button_fill(ctx, icon_rgb);'), 'On/off and state updates recolor the mode buttons');
+assert.ok(slice('static void update_live_accent_visuals(', 'static lv_color_t brightness_dash_color(')
+  .includes('follow_mode_button_fill(ctx, icon_rgb);'), 'A dragged color moves the mode button fill');
+assert.ok(popup.includes('follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));'),
+  'A reused popup shows the button color of the new light in its first frame');
 for (const gone of ['kAccentTrackShare', 'accent_track_color', 'kSwitchThumbOffStep', 'popup_shell_disc_track',
   'kControlButtonIndicator']) {
   assert.ok(!popup.includes(gone), `Light popup still contains ${gone}`);

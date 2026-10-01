@@ -167,11 +167,12 @@ bool horizontal_cover(const CoverPopupContext* ctx) {
          ctx->device_class == "door" || ctx->device_class == "gate";
 }
 
+// Like the tile (cover renderer cover_icon_active): closed stays in the
+// active color, only unknown and unavailable turn grey.
 bool cover_icon_is_active(const CoverState& state) {
   return state.valid && state.available &&
          strcmp(state.state, "unknown") != 0 &&
-         strcmp(state.state, "unavailable") != 0 &&
-         strcmp(state.state, "closed") != 0;
+         strcmp(state.state, "unavailable") != 0;
 }
 
 void set_hidden(lv_obj_t* obj, bool hidden) {

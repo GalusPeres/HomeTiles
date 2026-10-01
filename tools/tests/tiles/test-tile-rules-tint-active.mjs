@@ -32,9 +32,12 @@ const renderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.ok(renderer.includes('if (active) *active = state.is_on;'), 'Switch activity is the on state');
 assert.ok(renderer.includes('if (active) *active = climate_visuals::state_active(state.hvac_mode, state.hvac_action);'),
   'Climate activity comes from climate_visuals');
-assert.match(read('src/types/cover/renderer.cpp'),
-  /if \(active\) \*active = strcmp\(state\.state, "unknown"\) != 0 && strcmp\(state\.state, "unavailable"\) != 0 &&\s*strcmp\(state\.state, "closed"\) != 0;/,
+// Closed stays active (user 2026-10-01): only unknown and unavailable are grey.
+const coverRenderer = read('src/types/cover/renderer.cpp');
+assert.ok(coverRenderer.includes('if (active) *active = cover_icon_active(state);') &&
+  coverRenderer.includes('return cover_icon_active(state) ? 0x926BC7 : 0x9E9E9E;'),
   'Cover activity matches cover_icon_color()');
+assert.match(coverRenderer, /bool cover_icon_active\(const CoverState& state\) \{\s*return state\.valid && state\.available && strcmp\(state\.state, "unknown"\) != 0 &&\s*strcmp\(state\.state, "unavailable"\) != 0;\s*\}/);
 
 // ---------------------------------------------------------------------------
 // Web Admin preview mirror.

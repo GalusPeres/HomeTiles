@@ -240,17 +240,17 @@ bool is_standard_cover_icon(const String& icon_name) {
   return false;
 }
 
+// Every known, available state, closed included, uses Home Assistant's
+// --state-cover-active-color (#926bc7) like the position bar: the icon itself
+// already shows open or closed (user 2026-10-01). Unknown and unavailable
+// Covers use --state-inactive-color (#9e9e9e).
+bool cover_icon_active(const CoverState& state) {
+  return state.valid && state.available && strcmp(state.state, "unknown") != 0 &&
+         strcmp(state.state, "unavailable") != 0;
+}
+
 uint32_t cover_icon_color(const CoverState& state) {
-  // Home Assistant's default theme uses --state-cover-active-color
-  // (#926bc7) for every available Cover state except "closed". Unknown,
-  // unavailable and closed Covers use --state-inactive-color (#9e9e9e).
-  if (!state.valid || !state.available ||
-      strcmp(state.state, "unknown") == 0 ||
-      strcmp(state.state, "unavailable") == 0 ||
-      strcmp(state.state, "closed") == 0) {
-    return 0x9E9E9E;
-  }
-  return 0x926BC7;
+  return cover_icon_active(state) ? 0x926BC7 : 0x9E9E9E;
 }
 
 String cover_value_text(const CoverState& state) {
@@ -806,7 +806,6 @@ bool cover_payload_icon_color(const char* payload, uint32_t& rgb, bool* active) 
   if (!state.valid || !state.available) return false;
   rgb = cover_icon_color(state);
   // Active exactly when cover_icon_color() shows the active color.
-  if (active) *active = strcmp(state.state, "unknown") != 0 && strcmp(state.state, "unavailable") != 0 &&
-                        strcmp(state.state, "closed") != 0;
+  if (active) *active = cover_icon_active(state);
   return true;
 }

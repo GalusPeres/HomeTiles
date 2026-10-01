@@ -89,10 +89,10 @@
       'arrow-down-box', 'arrow-up-box');
   }
 
+  // Closed keeps the active color like the tile (cover_icon_active).
   function coverPreviewColor(state) {
     const value = String(state?.state || 'unknown').toLowerCase();
-    if (state?.available === false ||
-        value === 'closed' || value === 'unknown' || value === 'unavailable') {
+    if (state?.available === false || value === 'unknown' || value === 'unavailable') {
       return '#9e9e9e';
     }
     return '#926bc7';

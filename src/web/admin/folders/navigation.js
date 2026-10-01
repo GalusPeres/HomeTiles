@@ -252,3 +252,60 @@
       delete folderTabLoadPromises[folderNum];
     }
   }
+
+  // Folder tabs not opened yet are prefetched one at a time while the Web
+  // Admin is idle, so a later click opens them at once. The device answers
+  // from its UI loop, so requests are spaced out, wait for a quiet editor and
+  // stop at the first failure.
+  const FOLDER_TAB_PREFETCH_IDLE_MS = 2500;
+  let folderTabPrefetchTimer = null;
+  let folderTabPrefetchStopped = false;
+  let lastAdminInteractionMs = Date.now();
+
+  function noteAdminInteraction() {
+    lastAdminInteractionMs = Date.now();
+  }
+
+  function scheduleFolderTabPrefetch() {
+    if (folderTabPrefetchStopped || folderTabPrefetchTimer) return;
+    folderTabPrefetchTimer = window.setTimeout(
+      runFolderTabPrefetch, FOLDER_TAB_PREFETCH_IDLE_MS);
+  }
+
+  function nextFolderTabToPrefetch() {
+    for (const key of Object.keys(tabByFolder)) {
+      const folderId = Number(key);
+      if (!Number.isInteger(folderId) || folderId <= 0) continue;
+      const tab = tabByFolder[folderId];
+      if (!document.getElementById('tab-tiles-' + tab)) {
+        return { folderId, tab, step: 'tab' };
+      }
+      if (!tileDataLoadedTabs.has(tab)) return { folderId, tab, step: 'tiles' };
+    }
+    return null;
+  }
+
+  async function runFolderTabPrefetch() {
+    folderTabPrefetchTimer = null;
+    if (folderTabPrefetchStopped) return;
+    if (document.hidden || dragSource || resizeState || fileManagerUploadBusy ||
+        Date.now() - lastAdminInteractionMs < FOLDER_TAB_PREFETCH_IDLE_MS) {
+      scheduleFolderTabPrefetch();
+      return;
+    }
+    const next = nextFolderTabToPrefetch();
+    if (!next) return;
+    let ok = false;
+    try {
+      ok = next.step === 'tab'
+        ? await ensureFolderTabUi(next.folderId)
+        : Array.isArray(await fetchTileGridData(next.tab, false));
+    } catch (error) {
+      ok = false;
+    }
+    if (!ok) {
+      folderTabPrefetchStopped = true;
+      return;
+    }
+    scheduleFolderTabPrefetch();
+  }

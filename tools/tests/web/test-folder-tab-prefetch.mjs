@@ -1,7 +1,9 @@
 // Opening a Web Admin folder tab for the first time waited about a second for
 // the device. Folder tabs are now prefetched in the background while the
 // editor is idle: one request at a time, tab HTML first, then the tile grid,
-// the Home tab (folder 0) never, and nothing after the first failure.
+// the Home tab (folder 0) never, and nothing after the first failure. After
+// the first idle wait the steps follow each other closely; waiting 2.5 s
+// between every step left most folders unloaded for half a minute.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 
@@ -21,12 +23,13 @@ assert.ok(admin.includes('function runFolderTabPrefetch()'), 'generated admin.js
 function run({failTabFor = null, busy = false} = {}) {
   const log = [];
   const timers = [];
+  const delays = [];
   let now = 100000;
   const installed = new Set(['tab-tiles-home']);
   const context = {
     console,
     Date: {now: () => now},
-    window: {setTimeout: (fn) => { timers.push(fn); return timers.length; }},
+    window: {setTimeout: (fn, delay) => { timers.push(fn); delays.push(delay); return timers.length; }},
     document: {hidden: false, getElementById: id => (installed.has(id) ? {} : null)},
     tabByFolder: {0: 'home', 3: 'folder3', 5: 'folder5'},
     tileDataLoadedTabs: new Set(['home']),
@@ -53,14 +56,15 @@ function run({failTabFor = null, busy = false} = {}) {
       await timers.shift()();
     }
   };
-  return {context, log, timers, flush, setNow: value => { now = value; }};
+  return {context, log, timers, delays, flush, setNow: value => { now = value; }};
 }
 
 {
-  const {context, log, flush} = run();
+  const {context, log, delays, flush} = run();
   context.api.scheduleFolderTabPrefetch();
   await flush();
   assert.deepEqual(log, ['tab3', 'tiles:folder3', 'tab5', 'tiles:folder5'], 'one step at a time, Home skipped');
+  assert.deepEqual(delays, [2500, 150, 150, 150, 150], 'one idle wait, then short gaps between steps');
 }
 {
   const {context, log, flush} = run({failTabFor: 3});
@@ -81,6 +85,7 @@ function run({failTabFor = null, busy = false} = {}) {
   context.api.noteAdminInteraction();
   await timers.shift()();
   assert.deepEqual(log, [], 'fresh editing postpones the prefetch');
+  assert.equal(timers.length, 1, 'and waits for the editor to be quiet again');
 }
 
 console.log('Folder tab prefetch: idle-only, one request at a time, Home skipped, stops on failure.');

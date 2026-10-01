@@ -149,6 +149,8 @@ void appendAdminScripts(String& html) {
   html += "  };\n";
   html += "  const GRID_COLS = " + String(GRID_COLS) + ";\n";
   html += "  const GRID_ROWS = " + String(GRID_ROWS) + ";\n";
+  html += "  const TILES_PER_GRID = " +
+          String(static_cast<unsigned>(TILES_PER_GRID)) + ";\n";
   html += "  const ADMIN_WEB_SESSION_TOKEN = " +
           String(adminWebSessionToken()) + ";\n";
   html += "  const MEDIA_TILE_TYPE = " +

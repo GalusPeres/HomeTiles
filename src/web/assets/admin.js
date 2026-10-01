@@ -4275,9 +4275,10 @@ function syncTileRadiusControls(tabEl) {
 
   // Folder tabs not opened yet are prefetched one at a time while the Web
   // Admin is idle, so a later click opens them at once. The device answers
-  // from its UI loop, so requests are spaced out, wait for a quiet editor and
-  // stop at the first failure.
+  // from its UI loop, so the prefetch waits for a quiet editor, leaves a short
+  // gap between requests and stops at the first failure.
   const FOLDER_TAB_PREFETCH_IDLE_MS = 2500;
+  const FOLDER_TAB_PREFETCH_STEP_MS = 150;
   let folderTabPrefetchTimer = null;
   let folderTabPrefetchStopped = false;
   let lastAdminInteractionMs = Date.now();
@@ -4286,10 +4287,9 @@ function syncTileRadiusControls(tabEl) {
     lastAdminInteractionMs = Date.now();
   }
 
-  function scheduleFolderTabPrefetch() {
+  function scheduleFolderTabPrefetch(delayMs = FOLDER_TAB_PREFETCH_IDLE_MS) {
     if (folderTabPrefetchStopped || folderTabPrefetchTimer) return;
-    folderTabPrefetchTimer = window.setTimeout(
-      runFolderTabPrefetch, FOLDER_TAB_PREFETCH_IDLE_MS);
+    folderTabPrefetchTimer = window.setTimeout(runFolderTabPrefetch, delayMs);
   }
 
   function nextFolderTabToPrefetch() {
@@ -4308,9 +4308,11 @@ function syncTileRadiusControls(tabEl) {
   async function runFolderTabPrefetch() {
     folderTabPrefetchTimer = null;
     if (folderTabPrefetchStopped) return;
+    const idleMs = Date.now() - lastAdminInteractionMs;
     if (document.hidden || dragSource || resizeState || fileManagerUploadBusy ||
-        Date.now() - lastAdminInteractionMs < FOLDER_TAB_PREFETCH_IDLE_MS) {
-      scheduleFolderTabPrefetch();
+        idleMs < FOLDER_TAB_PREFETCH_IDLE_MS) {
+      scheduleFolderTabPrefetch(Math.max(
+        FOLDER_TAB_PREFETCH_STEP_MS, FOLDER_TAB_PREFETCH_IDLE_MS - idleMs));
       return;
     }
     const next = nextFolderTabToPrefetch();
@@ -4327,12 +4329,16 @@ function syncTileRadiusControls(tabEl) {
       folderTabPrefetchStopped = true;
       return;
     }
-    scheduleFolderTabPrefetch();
+    scheduleFolderTabPrefetch(FOLDER_TAB_PREFETCH_STEP_MS);
   }
 
+  // Folder tab markup is kept in localStorage, so a second browser tab or a
+  // new window opens folders without asking the device again. The namespace
+  // carries the per-boot token, so nothing survives a reboot or OTA; the tile
+  // data itself is always fetched fresh and re-rendered over the markup.
   const FOLDER_TAB_SESSION_CACHE_PREFIX = 'hometilesAdminFolderTabs:';
   const FOLDER_TAB_SESSION_CACHE_VERSION = 2;
-  const FOLDER_TAB_SESSION_CACHE_LIMIT = 4;
+  const FOLDER_TAB_SESSION_CACHE_LIMIT = 8;
 
   function folderTabSessionCacheNamespace() {
     return FOLDER_TAB_SESSION_CACHE_PREFIX + 'v' +
@@ -4351,7 +4357,7 @@ function syncTileRadiusControls(tabEl) {
 
   function readFolderTabSessionIndex() {
     try {
-      const raw = sessionStorage.getItem(folderTabSessionIndexKey());
+      const raw = localStorage.getItem(folderTabSessionIndexKey());
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (parsed?.version !== FOLDER_TAB_SESSION_CACHE_VERSION ||
@@ -4364,7 +4370,7 @@ function syncTileRadiusControls(tabEl) {
 
   function writeFolderTabSessionIndex(entries) {
     try {
-      sessionStorage.setItem(folderTabSessionIndexKey(), JSON.stringify({
+      localStorage.setItem(folderTabSessionIndexKey(), JSON.stringify({
         version: FOLDER_TAB_SESSION_CACHE_VERSION,
         entries: entries.slice(0, FOLDER_TAB_SESSION_CACHE_LIMIT)
       }));
@@ -4384,14 +4390,14 @@ function syncTileRadiusControls(tabEl) {
     let stored = false;
     while (!stored) {
       try {
-        sessionStorage.setItem(
+        localStorage.setItem(
           folderTabSessionEntryKey(folderId), String(data.tab_html));
         stored = true;
       } catch (error) {
         const evicted = entries.pop();
         if (!evicted) break;
         try {
-          sessionStorage.removeItem(
+          localStorage.removeItem(
             folderTabSessionEntryKey(evicted.folder_id));
         } catch (removeError) {}
       }
@@ -4402,7 +4408,7 @@ function syncTileRadiusControls(tabEl) {
     while (nextEntries.length > FOLDER_TAB_SESSION_CACHE_LIMIT) {
       const evicted = nextEntries.pop();
       try {
-        sessionStorage.removeItem(
+        localStorage.removeItem(
           folderTabSessionEntryKey(evicted.folder_id));
       } catch (error) {}
     }
@@ -4422,7 +4428,7 @@ function syncTileRadiusControls(tabEl) {
   function forgetFolderTabSessionFragment(folderId) {
     const folderNum = Number(folderId);
     try {
-      sessionStorage.removeItem(folderTabSessionEntryKey(folderNum));
+      localStorage.removeItem(folderTabSessionEntryKey(folderNum));
     } catch (error) {}
     writeFolderTabSessionIndex(readFolderTabSessionIndex().filter(
       entry => Number(entry?.folder_id) !== folderNum));
@@ -4440,7 +4446,7 @@ function syncTileRadiusControls(tabEl) {
       return null;
     }
     try {
-      const tabHtml = sessionStorage.getItem(
+      const tabHtml = localStorage.getItem(
         folderTabSessionEntryKey(folderNum));
       if (!tabHtml) {
         forgetFolderTabSessionFragment(folderNum);
@@ -4460,14 +4466,14 @@ function syncTileRadiusControls(tabEl) {
     const namespace = folderTabSessionCacheNamespace();
     const storageKeys = [];
     try {
-      for (let index = 0; index < sessionStorage.length; index += 1) {
-        const key = sessionStorage.key(index) || '';
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index) || '';
         storageKeys.push(key);
       }
       storageKeys.filter(key =>
         key.startsWith(FOLDER_TAB_SESSION_CACHE_PREFIX) &&
         !key.startsWith(namespace + ':'))
-        .forEach(key => sessionStorage.removeItem(key));
+        .forEach(key => localStorage.removeItem(key));
     } catch (error) {}
 
     const availableEntryKeys = new Set(storageKeys.filter(key =>
@@ -4495,7 +4501,7 @@ function syncTileRadiusControls(tabEl) {
       folderTabSessionEntryKey(entry.folder_id)));
     availableEntryKeys.forEach(key => {
       if (!validEntryKeys.has(key)) {
-        try { sessionStorage.removeItem(key); } catch (error) {}
+        try { localStorage.removeItem(key); } catch (error) {}
       }
     });
     writeFolderTabSessionIndex(validEntries);

@@ -255,9 +255,10 @@
 
   // Folder tabs not opened yet are prefetched one at a time while the Web
   // Admin is idle, so a later click opens them at once. The device answers
-  // from its UI loop, so requests are spaced out, wait for a quiet editor and
-  // stop at the first failure.
+  // from its UI loop, so the prefetch waits for a quiet editor, leaves a short
+  // gap between requests and stops at the first failure.
   const FOLDER_TAB_PREFETCH_IDLE_MS = 2500;
+  const FOLDER_TAB_PREFETCH_STEP_MS = 150;
   let folderTabPrefetchTimer = null;
   let folderTabPrefetchStopped = false;
   let lastAdminInteractionMs = Date.now();
@@ -266,10 +267,9 @@
     lastAdminInteractionMs = Date.now();
   }
 
-  function scheduleFolderTabPrefetch() {
+  function scheduleFolderTabPrefetch(delayMs = FOLDER_TAB_PREFETCH_IDLE_MS) {
     if (folderTabPrefetchStopped || folderTabPrefetchTimer) return;
-    folderTabPrefetchTimer = window.setTimeout(
-      runFolderTabPrefetch, FOLDER_TAB_PREFETCH_IDLE_MS);
+    folderTabPrefetchTimer = window.setTimeout(runFolderTabPrefetch, delayMs);
   }
 
   function nextFolderTabToPrefetch() {
@@ -288,9 +288,11 @@
   async function runFolderTabPrefetch() {
     folderTabPrefetchTimer = null;
     if (folderTabPrefetchStopped) return;
+    const idleMs = Date.now() - lastAdminInteractionMs;
     if (document.hidden || dragSource || resizeState || fileManagerUploadBusy ||
-        Date.now() - lastAdminInteractionMs < FOLDER_TAB_PREFETCH_IDLE_MS) {
-      scheduleFolderTabPrefetch();
+        idleMs < FOLDER_TAB_PREFETCH_IDLE_MS) {
+      scheduleFolderTabPrefetch(Math.max(
+        FOLDER_TAB_PREFETCH_STEP_MS, FOLDER_TAB_PREFETCH_IDLE_MS - idleMs));
       return;
     }
     const next = nextFolderTabToPrefetch();
@@ -307,5 +309,5 @@
       folderTabPrefetchStopped = true;
       return;
     }
-    scheduleFolderTabPrefetch();
+    scheduleFolderTabPrefetch(FOLDER_TAB_PREFETCH_STEP_MS);
   }

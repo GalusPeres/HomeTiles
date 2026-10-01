@@ -11,7 +11,9 @@
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/popup_surface.h"
+#include "src/ui/shared/tone_color.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -67,16 +69,6 @@ constexpr uint32_t kRemoteBlockMs = 3000;
 // Home Assistant starts a slider drag after 10 px (ha-control-slider Pan
 // threshold); below it a press is a tap and sends nothing live.
 constexpr int kDragThreshold = popup_layout::scale(10);
-constexpr uint32_t kControlButtonIndicatorBg = 0xFFFFFF;
-constexpr lv_opa_t kControlButtonIndicatorOpa = LV_OPA_20;
-constexpr lv_opa_t kControlButtonActiveIndicatorOpa = kControlButtonIndicatorOpa;
-// White share of the card for the off switch thumb: 0x8D8D8D on the default
-// card, the neutral match for the former fixed blue-grey thumb.
-constexpr lv_opa_t kSwitchThumbOffStep = 119;
-// The brightness and switch track: the light color over the card at this
-// share, drawn opaque. The header circle takes exactly this color when the
-// tile color is "From icon" (popup_shell_disc_track).
-constexpr lv_opa_t kAccentTrackShare = LV_OPA_30;
 constexpr uint32_t kTempWarmColor = 0xFFD27D;
 constexpr uint32_t kTempCoolColor = 0xF7F1E8;
 constexpr float kPi = 3.14159265358979323846f;
@@ -549,7 +541,7 @@ static bool is_visible_obj(lv_obj_t* obj) {
 }
 
 static uint32_t get_preview_icon_rgb(const LightPopupContext* ctx) {
-  if (!ctx || !ctx->available || !ctx->is_on) return 0xB0B0B0;
+  if (!ctx || !ctx->available || !ctx->is_on) return tone_color::kOffIcon;
   if (ctx->supports_temperature && ctx->use_color_temperature) {
     return lv_color_to_u32(color_from_temperature_kelvin(ctx->color_temp_kelvin)) & 0xFFFFFF;
   }
@@ -557,6 +549,39 @@ static uint32_t get_preview_icon_rgb(const LightPopupContext* ctx) {
     return color_from_hsv(ctx->hue, ctx->sat, 100);
   }
   return kDefaultColor;
+}
+
+// The color the header icon shows, the one its circle is computed for.
+static uint32_t header_icon_rgb(const LightPopupContext* ctx, uint32_t icon_rgb) {
+  return ctx->keep_icon_white && ctx->available ? 0xFFFFFF : icon_rgb;
+}
+
+// The popup's controls look like the tile's (user 2026-10-01): the
+// brightness and switch track, the selected mode button and every press show
+// the header circle's color (popup_shell_control_fill), the neutral step for
+// an off light or a white icon. The card stays neutral: tinting it restyled
+// the whole popup on every step of a dragged color.
+static void control_fill(const LightPopupContext* ctx, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa) {
+  popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(header_icon_rgb(ctx, icon_rgb)), color, opa);
+}
+
+// A dragged color or Kelvin value moves the circle color: the mode buttons
+// follow it. Only a change touches their style.
+static void follow_mode_button_fill(LightPopupContext* ctx, uint32_t icon_rgb) {
+  lv_color_t color;
+  lv_opa_t opa;
+  control_fill(ctx, icon_rgb, color, opa);
+  for (lv_obj_t* button : {ctx->brightness_button, ctx->color_button, ctx->temperature_button}) {
+    if (!button) continue;
+    for (const lv_style_selector_t selector : {static_cast<lv_style_selector_t>(LV_PART_MAIN),
+                                               static_cast<lv_style_selector_t>(LV_PART_MAIN | LV_STATE_PRESSED)}) {
+      lv_style_value_t value;
+      if (lv_obj_get_local_style_prop(button, LV_STYLE_BG_COLOR, &value, selector) != LV_STYLE_RES_FOUND ||
+          !lv_color_eq(value.color, color)) {
+        lv_obj_set_style_bg_color(button, color, selector);
+      }
+    }
+  }
 }
 
 static void update_header_and_power_visuals(LightPopupContext* ctx, uint32_t icon_rgb) {
@@ -570,15 +595,21 @@ static void update_header_and_power_visuals(LightPopupContext* ctx, uint32_t ico
         0);
   }
   if (ctx->power_button) {
-    const lv_color_t power_color = lv_color_hex(icon_rgb);
-    lv_obj_set_style_bg_color(ctx->power_button,
-                              visual_on ? power_color : lv_color_hex(0xFFFFFF),
-                              0);
-    lv_obj_set_style_bg_color(ctx->power_button,
-                              visual_on ? power_color : lv_color_hex(0xFFFFFF),
-                              LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(ctx->power_button, visual_on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_opa(ctx->power_button, visual_on ? LV_OPA_COVER : LV_OPA_20, LV_STATE_PRESSED);
+    if (visual_on) {
+      // On: the light color; the theme's press darkening stays.
+      const lv_color_t power_color = lv_color_hex(icon_rgb);
+      popup_nav_style::set_bg(ctx->power_button, power_color, LV_OPA_COVER, LV_PART_MAIN);
+      popup_nav_style::set_bg(ctx->power_button, power_color, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
+      lv_obj_remove_local_style_prop(ctx->power_button, LV_STYLE_COLOR_FILTER_OPA, LV_PART_MAIN | LV_STATE_PRESSED);
+      lv_obj_remove_local_style_prop(ctx->power_button, LV_STYLE_RECOLOR_OPA, LV_PART_MAIN | LV_STATE_PRESSED);
+    } else {
+      // Off: only a press shows, in the control fill.
+      lv_color_t fill;
+      lv_opa_t fill_opa;
+      control_fill(ctx, icon_rgb, fill, fill_opa);
+      popup_nav_style::style_press_fill(ctx->power_button, fill, fill_opa);
+      popup_nav_style::set_bg(ctx->power_button, fill, LV_OPA_TRANSP, LV_PART_MAIN);
+    }
     lv_obj_set_style_border_width(ctx->power_button, 0, 0);
     lv_obj_set_style_border_width(ctx->power_button, 0, LV_STATE_PRESSED);
     lv_obj_set_style_border_opa(ctx->power_button, LV_OPA_TRANSP, 0);
@@ -605,25 +636,29 @@ static void update_live_accent_visuals(LightPopupContext* ctx,
     lv_obj_set_style_bg_color(
         ctx->power_button, power_color, LV_STATE_PRESSED);
   }
+  follow_mode_button_fill(ctx, icon_rgb);
 }
 
-// Opaque and premixed, so the header circle can show the identical color:
-// LVGL's 16-bit blending of a translucent track landed a few steps off.
-static lv_color_t accent_track_color(const LightPopupContext* ctx, uint32_t icon_rgb) {
-  return lv_color_mix(lv_color_hex(icon_rgb), popup_surface::card(ctx->card_bg), kAccentTrackShare);
-}
+static lv_color_t brightness_dash_color(const LightPopupContext* ctx);
 
+// The switch like the Switch tile's bar: the track in the control fill; on,
+// the thumb in the light color with the power symbol in the tile's card
+// color; off, the thumb one step above the track with the symbol in the grey
+// of an off icon (tone_color::switch_thumb_off, kOffIcon).
 static void update_switch_slider_visuals(LightPopupContext* ctx, uint32_t icon_rgb, bool invalidate) {
   if (!ctx || !ctx->val_slider || !ctx->val_cap) return;
 
   ctx->brightness_draw_active = false;
   ctx->brightness_draw_center_y = -1;
-  const lv_color_t accent_color = lv_color_hex(icon_rgb);
+  lv_color_t track;
+  lv_opa_t track_opa;
+  control_fill(ctx, icon_rgb, track, track_opa);
   const lv_color_t thumb_color =
-      ctx->is_on ? accent_color : popup_surface::lighter(ctx->card_bg, kSwitchThumbOffStep);
+      ctx->is_on ? lv_color_hex(icon_rgb)
+                 : lv_color_hex(tone_color::switch_thumb_off(lv_color_to_u32(track) & 0xFFFFFF));
 
-  lv_obj_set_style_bg_color(ctx->val_slider, accent_track_color(ctx, icon_rgb), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_bg_color(ctx->val_slider, track, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(ctx->val_slider, track_opa, LV_PART_MAIN);
   lv_obj_set_style_border_width(ctx->val_slider, 0, LV_PART_MAIN);
 
   if (ctx->val_fill) {
@@ -644,7 +679,8 @@ static void update_switch_slider_visuals(LightPopupContext* ctx, uint32_t icon_r
 
   if (ctx->val_switch_icon) {
     lv_obj_clear_flag(ctx->val_switch_icon, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_style_text_color(ctx->val_switch_icon, popup_surface::card(ctx->card_bg), 0);
+    lv_obj_set_style_text_color(ctx->val_switch_icon,
+                                ctx->is_on ? brightness_dash_color(ctx) : lv_color_hex(tone_color::kOffIcon), 0);
     lv_label_set_text(ctx->val_switch_icon, getMdiChar(get_switch_slider_icon_name(ctx)).c_str());
     lv_obj_center(ctx->val_switch_icon);
   }
@@ -659,8 +695,13 @@ static void update_brightness_slider_visuals(LightPopupContext* ctx, uint32_t ic
     update_switch_slider_visuals(ctx, icon_rgb, invalidate);
     return;
   }
-  lv_obj_set_style_bg_color(ctx->val_slider, accent_track_color(ctx, icon_rgb), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_COVER, LV_PART_MAIN);
+  // The track like the Switch tile's bar (control_fill), the fill in the
+  // light color.
+  lv_color_t track;
+  lv_opa_t track_opa;
+  control_fill(ctx, icon_rgb, track, track_opa);
+  lv_obj_set_style_bg_color(ctx->val_slider, track, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(ctx->val_slider, track_opa, LV_PART_MAIN);
   lv_obj_set_style_border_width(ctx->val_slider, 0, LV_PART_MAIN);
   ctx->brightness_draw_color = icon_rgb;
   if (ctx->val_fill) {
@@ -924,21 +965,20 @@ static void set_control_disabled(lv_obj_t* object, bool disabled) {
   }
 }
 
+// A mode button: the selected one and a press show the control fill
+// (control_fill) without the theme's darkening.
 static void style_control_button(lv_obj_t* button,
                                  lv_obj_t* icon,
                                  bool active,
                                  bool enabled,
                                  uint32_t card,
-                                 lv_color_t accent = lv_color_white()) {
+                                 lv_color_t fill,
+                                 lv_opa_t fill_opa) {
   if (!button) return;
   auto apply_selector = [&](lv_style_selector_t selector, bool pressed) {
-    const lv_opa_t bg_opa = !enabled
-                                ? LV_OPA_TRANSP
-                                : (active
-                                       ? kControlButtonActiveIndicatorOpa
-                                       : (pressed ? kControlButtonIndicatorOpa : LV_OPA_TRANSP));
-    lv_obj_set_style_bg_color(button, lv_color_hex(kControlButtonIndicatorBg), selector);
-    lv_obj_set_style_bg_opa(button, bg_opa, selector);
+    const lv_opa_t bg_opa = enabled && (active || pressed) ? fill_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);
+    popup_nav_style::set_bg(button, fill, bg_opa, selector);
+    popup_nav_style::no_press_filter(button, selector);
     lv_obj_set_style_border_width(button, 0, selector);
     lv_obj_set_style_border_opa(button, LV_OPA_TRANSP, selector);
     lv_obj_set_style_outline_width(button, 0, selector);
@@ -1027,24 +1067,27 @@ static void apply_mode_visibility(LightPopupContext* ctx) {
     }
   }
 
+  lv_color_t fill;
+  lv_opa_t fill_opa;
+  control_fill(ctx, get_preview_icon_rgb(ctx), fill, fill_opa);
   style_control_button(ctx->brightness_button,
                        ctx->brightness_button_icon,
                        ctx->mode == LightPopupMode::Brightness,
                        ctx->available && ctx->is_light &&
                            ctx->supports_brightness,
-                       ctx->card_bg);
+                       ctx->card_bg, fill, fill_opa);
   style_control_button(ctx->color_button,
                        ctx->color_button_icon,
                        ctx->mode == LightPopupMode::Color,
                        ctx->available && ctx->is_light &&
                            ctx->supports_color,
-                       ctx->card_bg);
+                       ctx->card_bg, fill, fill_opa);
   style_control_button(ctx->temperature_button,
                        ctx->temperature_button_icon,
                        ctx->mode == LightPopupMode::Temperature,
                        ctx->available && ctx->is_light &&
                            ctx->supports_temperature,
-                       ctx->card_bg);
+                       ctx->card_bg, fill, fill_opa);
   set_control_disabled(ctx->power_button, !ctx->available);
   set_control_disabled(
       ctx->brightness_button,
@@ -1653,10 +1696,10 @@ static lv_obj_t* create_control_icon_button(lv_obj_t* parent, const char* icon_n
   lv_obj_t* btn = lv_button_create(parent);
   lv_obj_set_size(btn, kControlButtonSize, kControlButtonSize);
   lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(kControlButtonIndicatorBg), 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(kControlButtonIndicatorBg), LV_STATE_PRESSED);
+  // The fill follows the circle color (style_control_button,
+  // update_header_and_power_visuals).
   lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_opa(btn, kControlButtonIndicatorOpa, LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, LV_STATE_PRESSED);
   lv_obj_set_style_border_width(btn, 0, 0);
   lv_obj_set_style_border_width(btn, 0, LV_STATE_PRESSED);
   lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, 0);
@@ -2381,9 +2424,6 @@ void show_light_popup(const LightPopupInit& init) {
 
   if (g_light_popup_ctx && g_light_popup_ctx->card) viewNavigationPopupShown(g_light_popup_ctx->card, init.entity_id.c_str());
   show_popup_shell(g_light_popup_ctx->overlay, g_light_popup_ctx->card, g_light_popup_ctx->title_label, g_light_popup_ctx->icon_label, g_light_popup_ctx->close_button);
-  // The card stays neutral: with the tile color "From icon" the header
-  // circle takes the track color instead (popup_shell_disc_track).
-  popup_shell_disc_track(g_light_popup_ctx->card, kAccentTrackShare);
 }
 
 // State updates never recolor the card: the popup keeps the background of

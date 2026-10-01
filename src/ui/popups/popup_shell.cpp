@@ -22,9 +22,6 @@ struct Binding {
   // Optional hidden label holding the current value for the header.
   lv_obj_t* value = nullptr;
   int32_t border_width = 0, shadow_width = 0, shadow_spread = 0;
-  // popup_shell_disc_track: the share of the icon color in the popup's
-  // colored track (0 = the header circle keeps its tone step).
-  lv_opa_t disc_track = LV_OPA_TRANSP;
   lv_color_t border_color{}, shadow_color{};
   void (*dismiss)() = nullptr;
   bool owner_deleting = false;
@@ -36,11 +33,11 @@ struct HeaderDisc {
   bool off = false;
   bool follows_global = false;
   bool glow = true;
-  // The popup shows the tile color "From icon" (controls_fill).
+  // The popup shows the tile color "From icon" (header_fill).
   bool from_icon = false;
-  // The tile color is "From icon", shown by the popup or not
-  // (popup_shell_disc_track).
-  bool tile_from_icon = false;
+  // The strength of the tile's color "From icon", 0 for another tile color
+  // (header_fill).
+  uint8_t tile_tint = 0;
 };
 HeaderDisc g_next_disc;
 struct Shell {
@@ -280,9 +277,12 @@ tone_color::Fill header_fill(const HeaderDisc& options, uint32_t card, uint32_t 
   const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);
   // The circle of the tile color "From icon" like on the tiles
   // (tile_icon_disc::circle_card): only a popup that shows that tile color
-  // computes it for its own card.
-  const uint32_t circle_card =
-      tinted && !options.from_icon && tone_color::g_from_icon_card ? tone_color::g_from_icon_card(rgb, false) : card;
+  // computes it for its own card; every other one for the card "From icon"
+  // gives at the opening tile's strength (its default for another tile
+  // color), exactly the tile's circle.
+  const uint32_t circle_card = tinted && !options.from_icon && tone_color::g_from_icon_card
+                                   ? tone_color::g_from_icon_card(rgb, false, options.tile_tint)
+                                   : card;
   return tone_color::fill(circle_card, rgb, tinted, ui_surface_style::icon_glow_percent());
 }
 
@@ -313,20 +313,8 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   const bool shown = !options.from_tile ||
                      (!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));
   const tone_color::Fill fill = header_fill(options, card, rgb);
-  lv_color_t color = lv_color_hex(fill.disc_color);
-  lv_opa_t disc_opa = fill.disc_opa;
-  uint32_t disc_rgb = fill.disc;
-  // A popup with a neutral card and a colored track (Light) opened from a
-  // tile with the tile color "From icon" and a tinted circle: the circle
-  // takes exactly the track's color, so both match.
-  const lv_opa_t track = shell.active ? shell.active->disc_track : static_cast<lv_opa_t>(LV_OPA_TRANSP);
-  const bool on_track = track && options.from_tile && options.tile_from_icon && fill.tinted;
-  if (on_track) {
-    color = lv_color_mix(lv_color_hex(rgb), lv_color_hex(card), track);
-    disc_opa = LV_OPA_COVER;
-    disc_rgb = lv_color_to_u32(color) & 0xFFFFFFu;
-  }
-  const lv_opa_t opa = shown ? disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);
+  const lv_color_t color = lv_color_hex(fill.disc_color);
+  const lv_opa_t opa = shown ? fill.disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);
   if (!lv_color_eq(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), color))
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
@@ -341,9 +329,8 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   static lv_color_t close_color = lv_color_white();
   static lv_opa_t close_opa = LV_OPA_20;
   const tone_color::Fill controls = controls_fill(options, card, rgb);
-  // With the circle on the colored track (Light) the press takes it too.
-  const lv_color_t press = on_track ? color : lv_color_hex(controls.control_color);
-  const lv_opa_t press_opa = on_track ? static_cast<lv_opa_t>(LV_OPA_COVER) : controls.control_opa;
+  const lv_color_t press = lv_color_hex(controls.control_color);
+  const lv_opa_t press_opa = controls.control_opa;
   if (shell.close && (!lv_color_eq(close_color, press) || close_opa != press_opa)) {
     close_color = press;
     close_opa = press_opa;
@@ -492,27 +479,13 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 
 bool popup_shell_active() { return shell.active != nullptr; }
 
-void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon,
-                               bool tile_from_icon) {
+void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon, uint8_t tile_tint) {
   g_next_disc.from_tile = true;
   g_next_disc.off = off;
   g_next_disc.follows_global = follows_global;
   g_next_disc.glow = glow;
   g_next_disc.from_icon = from_icon;
-  g_next_disc.tile_from_icon = tile_from_icon;
-}
-
-void popup_shell_disc_track(lv_obj_t* body, lv_opa_t share) {
-  if (!body) return;
-  for (uint32_t i = 0; i < lv_obj_get_event_count(body); ++i) {
-    auto* event = lv_obj_get_event_dsc(body, i);
-    if (lv_event_dsc_get_cb(event) != body_deleted) continue;
-    auto* binding = static_cast<Binding*>(lv_event_dsc_get_user_data(event));
-    if (binding->disc_track == share) return;
-    binding->disc_track = share;
-    if (shell.active == binding) sync_popup_shell();
-    return;
-  }
+  g_next_disc.tile_tint = tile_tint;
 }
 
 void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa,

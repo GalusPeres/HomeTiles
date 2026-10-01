@@ -256,17 +256,13 @@ assert.ok(tileRenderer.includes('switch_tile_held_on(widgets, held_on)') &&
 assert.ok(renderer.includes('switch_tile_show_state(widgets[data->index], *tile, state, switch_state_icon_color(state));'),
           'The end of a hold restores the reported icon color');
 
-// Light popup with tile color "From icon": the header circle takes exactly
-// the opaque brightness track color (the card stays neutral on purpose).
+// The Light popup looks like the tile: circle, track and buttons in the
+// tile's circle color, no Light exception in the shell
+// (test-light-popup-matches-tile.mjs).
 const lightPopup = readRepoFile('src/ui/popups/light/light_popup.cpp');
-assert.ok(lightPopup.includes('popup_shell_disc_track(g_light_popup_ctx->card, kAccentTrackShare);'));
 assert.ok(!lightPopup.includes('lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_30'),
-          'The brightness track is opaque and premixed');
-assert.equal((lightPopup.match(/accent_track_color\(ctx, icon_rgb\), LV_PART_MAIN\)/g) || []).length, 2);
-const shell = readRepoFile('src/ui/popups/popup_shell.cpp');
-assert.ok(shell.includes('const bool on_track = track && options.from_tile && options.tile_from_icon && fill.tinted;') &&
-          shell.includes('color = lv_color_mix(lv_color_hex(rgb), lv_color_hex(card), track);'));
-assert.ok(iconSource.includes('tile_icon_disc::glow_of(disc), popup_shows_tile_color && from_icon,\n                            from_icon);') ||
-          /popup_shows_tile_color && from_icon,\s+from_icon\);/.test(iconSource));
+          'The brightness track is opaque');
+assert.ok(!readRepoFile('src/ui/popups/popup_shell.cpp').includes('disc_track'), 'No Light track exception');
+assert.match(iconSource, /popup_shows_tile_color && from_icon > 0,\s+from_icon\);/);
 
 console.log('Switch layout tests passed.');

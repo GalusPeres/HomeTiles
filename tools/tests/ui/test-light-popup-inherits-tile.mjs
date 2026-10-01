@@ -73,20 +73,17 @@ for (const [name, body] of [['update_light_popup', update], ['apply_init_to_cont
 // Neutral surfaces derive from the current card.
 for (const marker of [
   'visual_on ? popup_surface::card(ctx->card_bg) : lv_color_white();',
-  'ctx->is_on ? accent_color : popup_surface::lighter(ctx->card_bg, kSwitchThumbOffStep);',
-  'lv_obj_set_style_text_color(ctx->val_switch_icon, popup_surface::card(ctx->card_bg), 0);',
+  ': lv_color_hex(tone_color::switch_thumb_off(lv_color_to_u32(track) & 0xFFFFFF));',
+  'ctx->is_on ? brightness_dash_color(ctx) : lv_color_hex(tone_color::kOffIcon), 0);',
   'dash_dsc.bg_color = brightness_dash_color(ctx);',
   'return popup_surface::card(ctx->card_bg);',
   'const lv_color_t disabled_color = popup_surface::lighter(card, popup_surface::kDisabled);',
 ]) assert.ok(popup.includes(marker), `derived surface: ${marker}`);
-assert.equal((popup.match(/ctx->supports_(?:brightness|color|temperature),\n\s*ctx->card_bg\);/g) || []).length, 3,
+assert.equal((popup.match(/ctx->supports_(?:brightness|color|temperature),\n\s*ctx->card_bg, fill, fill_opa\);/g) || []).length, 3,
   'Every mode button derives its disabled icon from the card');
 
-// The off thumb step reproduces a neutral 0x8D8D8D on the default card
-// (lv_color_mix with LV_COLOR_MIX_ROUND_OFS 0).
-const udiv255 = value => Number((BigInt(value) * 0x8081n) >> 23n);
-const step = Number(popup.match(/constexpr lv_opa_t kSwitchThumbOffStep = (\d+);/)[1]);
-assert.equal(udiv255(255 * step + 0x2A * (255 - step)), 0x8D);
+// The off thumb sits one circle step above the track like the tile's
+// (test-light-popup-matches-tile.mjs).
 
 // The former fixed greys and card constants are gone.
 for (const gone of ['kControlButtonBg', 'kControlButtonDisabled', 'kControlBarBg',

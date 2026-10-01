@@ -251,7 +251,7 @@ inline bool card_follows_icon(lv_obj_t* card) {
 inline uint32_t circle_card(lv_obj_t* host, uint32_t card, uint32_t rgb, bool tinted, bool pressed,
                             bool see_through_card) {
   if (!tinted || see_through_card || !tone_color::g_from_icon_card || card_follows_icon(host)) return card;
-  return tone_color::g_from_icon_card(rgb, pressed);
+  return tone_color::g_from_icon_card(rgb, pressed, 0);
 }
 
 // The fill of a disc for the card behind it (at rest or pressed) and its

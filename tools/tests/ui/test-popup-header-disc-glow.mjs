@@ -25,10 +25,8 @@ for (const marker of [
   'const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);',
   'return tone_color::fill(circle_card, rgb, tinted, ui_surface_style::icon_glow_percent());',
   '(!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));',
-  'const lv_opa_t opa = shown ? disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);',
+  'const lv_opa_t opa = shown ? fill.disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);',
   'lv_color_hex(tone_color::readable_icon(rgb));',
-  // Light popup, tile color "From icon": the circle takes the track color.
-  'const bool on_track = track && options.from_tile && options.tile_from_icon && fill.tinted;',
   'ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),',
   'static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));',
 ]) assert.ok(tint.includes(marker), `header tint: ${marker}`);
@@ -39,11 +37,10 @@ assert.match(shell, /if \(shell\.active != binding \|\| g_next_disc\.from_tile\)
 const source = read('src/tiles/runtime/tile_icon_source.cpp');
 assert.match(source, /void forget_popup_source\(lv_obj_t\* obj\) \{\s*remember_popup_source\(nullptr\);\s*pass_popup_disc\(obj, false\);/);
 assert.match(source, /uint32_t popup_background\(lv_obj_t\* obj, uint32_t fallback\) \{\s*remember_popup_source\(obj\);\s*pass_popup_disc\(obj, true\);/);
-// The controls take the circle color only when the popup shows the tile
-// color "From icon"; Climate, Light and Cover keep neutral controls.
-// The tile color "From icon" passes on also when the popup does not show it
-// (the Light popup's header circle then takes its track color).
-assert.match(source, /const bool from_icon = tile_color_from_icon\(obj\);\s*popup_shell_use_tile_disc\(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,\s*tile_icon_disc::glow_of\(disc\), popup_shows_tile_color && from_icon,\s*from_icon\);/);
+// A popup that shows the tile color "From icon" computes the circle for its
+// own card; every other one gets the tile's From icon strength, so its circle
+// is the tile's (Climate, Light and Cover keep the global card).
+assert.match(source, /const uint8_t from_icon = tile_color_from_icon\(obj\);\s*popup_shell_use_tile_disc\(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,\s*tile_icon_disc::glow_of\(disc\), popup_shows_tile_color && from_icon > 0,\s*from_icon\);/);
 for (const [file, event] of [['src/types/climate/renderer.cpp', 'event'], ['src/types/cover/renderer.cpp', 'event'],
   ['src/types/switch/renderer.cpp', 'e']]) {
   assert.ok(read(file).includes(`tile_icon_source::forget_popup_source(static_cast<lv_obj_t*>(lv_event_get_current_target(${event})));`),

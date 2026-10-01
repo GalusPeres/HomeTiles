@@ -1802,14 +1802,15 @@
       background:var(--switch-card, #1A1A1A);
     }
     /* Switch: a half-width thumb flush with the bar like the Light popup
-       switch, the power symbol on it. */
+       switch, the power symbol on it; off in the grey of an off icon
+       (tone_color::kOffIcon). */
     .tile-switch .tile-switch-knob {
       display:none;
       position:absolute; top:0; bottom:0; left:0; width:50%;
       align-items:center; justify-content:center;
       border-radius:inherit;
       background:var(--switch-thumb-off, #555);
-      color:#fff;
+      color:#B0B0B0;
     }
     .tile-switch[data-bar="toggle"] .tile-switch-knob { display:flex; }
     .tile-switch.is-on .tile-switch-knob {

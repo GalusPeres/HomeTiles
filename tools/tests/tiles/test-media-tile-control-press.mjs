@@ -76,7 +76,7 @@ static uint32_t rgb(lv_color_t c) { return lv_color_to_u32(c) & 0xFFFFFF; }
 int main() {
   lv_init();
   // tile_icon_source registers the From icon card at startup.
-  tone_color::g_from_icon_card = [](uint32_t icon, bool pressed) -> uint32_t {
+  tone_color::g_from_icon_card = [](uint32_t icon, bool pressed, uint8_t) -> uint32_t {
     const uint32_t card = tile_tint::background(0x1A1A1A, icon, 20);
     return pressed ? card + 0x101010 : card;
   };
@@ -135,7 +135,7 @@ int main() {
     tile_icon_source::refresh_controls(card);
     uint32_t color; lv_opa_t opa;
     pressed(previous, color, opa);
-    const uint32_t circle_card = c.family ? tone_color::g_from_icon_card(c.icon, false) : c.card;
+    const uint32_t circle_card = c.family ? tone_color::g_from_icon_card(c.icon, false, 0) : c.card;
     const tone_color::Fill expected = tone_color::fill(circle_card, c.icon, c.tinted, icon_glow::kDefault);
     if (color != expected.control_color || opa != expected.control_opa || opa != LV_OPA_COVER) {
       std::printf("FAIL %s: #%06X @%d, expected #%06X @%d\n", c.what, (unsigned)color, opa,

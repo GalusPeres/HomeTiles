@@ -79,7 +79,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements keep covers; URL/content pairing avoids S3 redownloads.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123).
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
-- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); opaque circles/controls, veil only on see-through tiles; dark icons lifted; tinted circle and controls = From icon circle on every tile color and popup (b153). Presses: no theme recolor or teal fade, PIN/pill buttons a step up, circles fade with tiles.
+- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); opaque circles/controls, veil only on see-through tiles; dark icons lifted vs. defaults only (b156); tinted circle and controls = From icon circle everywhere (b153). Presses: no theme recolor or teal fade, PIN/pill buttons a step up, circles fade with tiles.
 - LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; caches `hometiles-lvgl96-*`.
 - Reverted: b126 cover fade, b128 UI frame swap (lag).
 
@@ -92,14 +92,14 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Hidden Climate reset crash (fractional Sensor width): Climate-only integer guard.
 - Binary Sensor shares Sensor value sizes (20/24/32/40); default preserves old layout. Stored in existing V7 field; editor, import and previews retain it.
 - HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
-- Weather icons (`tools/generate-weather-icon-fonts.mjs`): colored, toggle, icon tint; night: bridge `sun`; b98 HW
+- Weather icons (`tools/generate-weather-icon-fonts.mjs`): colored, toggle, icon tint; night: bridge `sun`.
 - Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it.
 - Open: cross-grid import clamps whole tiles to half steps (HTTP 400), snapshot type accepts halves, value fonts 32/40 clip in half tiles.
 
-## Switch tile and slider pacing (b148, HW pending)
+## Switch tile and slider pacing (HW pending)
 
 - Layout = `sensor_decimals`: 0 icon button, 1 switch, 2 dimmer, 3 automatic. Header like 1x0.5, from 1.5 rows like Sensor (bar +1/3); bar = Climate pill, touch to card edges.
-- 3 s hold after drag/toggle keeps bar, icon, tint local. Light popup "From icon": circle = 30 % track.
+- 3 s hold after drag/toggle keeps bar, icon, tint local. Light popup = tile: circle, track, buttons, off thumb, #B0B0B0 symbol (b156).
 - `command_pacer.h`: HA slider timing, Light popup/dimmer (#11): tap = one command, >=500 ms apart, paced final; reporter test pending.
 
 ## Local camera

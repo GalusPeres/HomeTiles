@@ -139,18 +139,22 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
  // Controls take the circle color whenever it is tinted (user 2026-10-01);
  // only a popup showing the tile color From icon computes it for its own
  // card, every other one for the From icon card (tone_color::g_from_icon_card).
- tone_color::g_from_icon_card=[](uint32_t,bool)->uint32_t{return 0x2B1A10;};
- struct ControlCase{bool tile,glow,from_icon;uint32_t card,icon;bool tinted,family;const char*what;};
+ // A tile with "From icon" at 40 % passes its strength (the Light popup).
+ tone_color::g_from_icon_card=[](uint32_t,bool,uint8_t percent)->uint32_t{return percent==40?0x3A2410:0x2B1A10;};
+ struct ControlCase{bool tile,glow,from_icon;uint32_t card,icon;bool tinted,family;const char*what;uint8_t strength=0;};
  for(const ControlCase&c:std::vector<ControlCase>{
      {false,true,false,0x482F10,0xEF8402,true,true,"no tile"},
      {true,true,false,0x1B1B1B,0xC62828,true,true,"Global with the circle color"},
      {true,true,false,0x3E1717,0xC62828,true,true,"Custom in the icon's hue"},
      {true,true,true,0x482F10,0xEF8402,true,false,"From icon with the circle color"},
-     {true,false,true,0x482F10,0xEF8402,false,false,"From icon without the circle color"}}){
-   if(c.tile)popup_shell_use_tile_disc(false,false,c.glow,c.from_icon);
+     {true,false,true,0x482F10,0xEF8402,false,false,"From icon without the circle color"},
+     {true,true,false,0x1B1B1B,0xEF8402,true,true,"Global card, From icon tile at 40 %",40}}){
+   if(c.tile)popup_shell_use_tile_disc(false,false,c.glow,c.from_icon,c.strength);
    lv_obj_set_style_bg_color(b.body,lv_color_hex(c.card),0);lv_obj_set_style_text_color(b.icon,lv_color_hex(c.icon),0);show(b,"Sonos");sync_popup_shell();
    uint32_t close_rgb,footer_rgb;lv_opa_t close_opa,footer_opa;close_press(close_rgb,close_opa);footer_fill(c.card,c.icon,footer_rgb,footer_opa);
-   const tone_color::Fill expected=tone_color::fill(c.family?0x2B1A10:c.card,c.icon,c.tinted,configManager.cfg.icon_glow);
+   const tone_color::Fill expected=tone_color::fill(c.family?(c.strength==40?0x3A2410:0x2B1A10):c.card,c.icon,c.tinted,configManager.cfg.icon_glow);
+   if(!lv_color_eq(lv_obj_get_style_bg_color(shell.icon_disc,LV_PART_MAIN),lv_color_hex(expected.disc_color)))std::cerr<<"header circle: "<<c.what<<"\n";
+   assert(lv_color_eq(lv_obj_get_style_bg_color(shell.icon_disc,LV_PART_MAIN),lv_color_hex(expected.disc_color))&&"header circle = the tile's circle");
    if(close_rgb!=expected.control_color)std::cerr<<"close press color: "<<c.what<<"\n";
    assert(close_rgb==expected.control_color&&close_opa==expected.control_opa&&close_opa==LV_OPA_COVER&&"close press: the circle's color, opaque");
    assert(close_rgb==footer_rgb&&close_opa==footer_opa&&"close press and footer controls look the same");

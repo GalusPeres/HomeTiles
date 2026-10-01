@@ -107,9 +107,11 @@ bool type_applies_fixed_icon_color(int type) {
 constexpr lv_style_selector_t kTintStore = tile_icon_disc::kCardTintStore;
 
 // tone_color::g_from_icon_card: the card set_tile_tint gives "From icon" at
-// its default strength, pressed like apply_card_background (0x10 lighter).
-uint32_t from_icon_card(uint32_t icon, bool pressed) {
-  const uint32_t card = tile_tint::background(tileDefaultBgColor(), icon, tile_icon_colors::kTintDefault);
+// `percent` (0 = its default strength), pressed like apply_card_background
+// (0x10 lighter).
+uint32_t from_icon_card(uint32_t icon, bool pressed, uint8_t percent) {
+  const uint32_t card =
+      tile_tint::background(tileDefaultBgColor(), icon, percent ? percent : tile_icon_colors::kTintDefault);
   return pressed ? brighten_rgb_color(card, 0x10) : card;
 }
 [[maybe_unused]] const bool g_from_icon_card_registered = (tone_color::g_from_icon_card = &from_icon_card, true);
@@ -417,31 +419,32 @@ lv_obj_t* card_icon(lv_obj_t* card) {
 }
 
 namespace {
-// Tile color "From icon" of the card `obj` belongs to (`obj` or up to three
-// of its parents).
-bool tile_color_from_icon(lv_obj_t* obj) {
+// The strength of the tile color "From icon" of the card `obj` belongs to
+// (`obj` or up to three of its parents), 0 without it.
+uint8_t tile_color_from_icon(lv_obj_t* obj) {
   uint8_t marker = 0;
   for (int depth = 0; obj && depth < 4; ++depth, obj = lv_obj_get_parent(obj)) {
-    if (icon_fill_marker(obj, marker)) return marker > 0;
+    if (icon_fill_marker(obj, marker)) return marker;
     // "From cover" tints like "From icon".
-    if (cover_tints(obj)) return true;
+    if (cover_tints(obj)) return cover_tile(obj);
   }
-  return false;
+  return 0;
 }
 
 // Hands the opening tile's circle options to the popup header. `obj` is the
-// tile card or its icon label. The popup's controls take the circle's color
-// only when the popup shows the tile color and that is "From icon"
-// (popup_shell.cpp control_fill); popups with the global background (Climate,
-// Light, Cover) pass false and keep neutral controls.
+// tile card or its icon label. A popup that shows the tile color "From icon"
+// computes the circle for its own card; every other one (Global, Custom, and
+// Climate, Light and Cover with the global background) for the card "From
+// icon" gives at the tile's strength, so header circle and controls are
+// exactly the tile's (popup_shell.cpp header_fill).
 void pass_popup_disc(lv_obj_t* obj, bool popup_shows_tile_color) {
   lv_obj_t* disc = obj ? tile_icon_disc::disc_of(obj) : nullptr;
   if (!disc && obj) disc = find_disc(obj);
   if (!disc) return;
   const tile_icon_disc::Mode mode = tile_icon_disc::mode_of(disc);
-  const bool from_icon = tile_color_from_icon(obj);
+  const uint8_t from_icon = tile_color_from_icon(obj);
   popup_shell_use_tile_disc(mode == tile_icon_disc::Mode::Off, mode == tile_icon_disc::Mode::Global,
-                            tile_icon_disc::glow_of(disc), popup_shows_tile_color && from_icon,
+                            tile_icon_disc::glow_of(disc), popup_shows_tile_color && from_icon > 0,
                             from_icon);
 }
 }  // namespace

@@ -152,13 +152,15 @@ inline uint8_t control_opa(uint8_t percent, bool see_through = false) {
 // What a circle and the controls draw over `card`: `disc_color` at
 // `disc_opa` for the circle and `control_color` at `control_opa` for the
 // controls. At 12.5 % and more both show the same color.
-// The card the tile color "From icon" gives an icon color (its default
-// strength over the default tile color), at rest or pressed; tile_icon_source
-// registers it at startup. "Circle in icon color" is computed for this card
-// on Global and Custom cards and in popups too (tile_icon_disc::circle_card),
-// so card, circle and icon stay one family. Null (host tests): a circle keeps
-// its own card.
-inline uint32_t (*g_from_icon_card)(uint32_t icon, bool pressed) = nullptr;
+// The card the tile color "From icon" gives an icon color at `percent` (0 =
+// its default strength) over the global default tile color, at rest or
+// pressed; tile_icon_source registers it at startup. "Circle in icon color"
+// is computed for this card on Global and Custom cards and in popups too
+// (tile_icon_disc::circle_card), so card, circle and icon stay one family. A
+// popup opened from a "From icon" tile passes that tile's strength, so its
+// circle is exactly the tile's. Null (host tests): a circle keeps its own
+// card.
+inline uint32_t (*g_from_icon_card)(uint32_t icon, bool pressed, uint8_t percent) = nullptr;
 
 struct Fill {
   uint32_t disc_color;
@@ -239,6 +241,14 @@ inline Fill fill(uint32_t card, uint32_t icon, bool tinted, uint8_t percent, boo
 // The tile color "From icon" at its default strength
 // (tile_icon_colors::kTintDefault).
 inline constexpr uint8_t kReferenceTint = 20;
+
+// A switch (the Switch tile bar, the Light popup switch, the Web Admin
+// preview): its track is the control fill; off, the thumb is one circle step
+// above the track in the track's own color and its symbol has the grey of an
+// off icon.
+inline constexpr uint32_t kOffIcon = 0xB0B0B0;
+inline constexpr float kThumbStep = 0.06f;
+inline uint32_t switch_thumb_off(uint32_t track) { return lifted(track, track, false, kThumbStep); }
 
 // The icon as shown: unchanged while it is at least kIconMinStep above the
 // circle it gets with the default settings (the default tile color, tile

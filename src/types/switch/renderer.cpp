@@ -27,7 +27,7 @@ using switch_layout::Layout;
 
 namespace {
 
-constexpr uint32_t kIconOff = 0xB0B0B0;
+constexpr uint32_t kIconOff = tone_color::kOffIcon;
 // Remote brightness echoes stay out of a dimmer the finger just released,
 // like the Light popup (kRemoteBlockMs).
 constexpr uint32_t kRemoteBlockMs = 3000;
@@ -400,14 +400,15 @@ void bar_draw_cb(lv_event_t* e) {
   lv_color_t thumb_color = accent;
   lv_color_t symbol_color = card;
   if (!view->on) {
-    // One OKLCH step above the bar, computed once per bar color.
+    // One circle step above the bar, computed once per bar color; the symbol
+    // in the grey of an off icon, like the Light popup switch.
     const uint32_t base = lv_color_to_u32(lv_obj_get_style_bg_color(view->bar, LV_PART_MAIN)) & 0xFFFFFF;
     if (base != view->thumb_base || !view->thumb_off) {
       view->thumb_base = base;
-      view->thumb_off = tone_color::lifted(base, base, false, 0.06f);
+      view->thumb_off = tone_color::switch_thumb_off(base);
     }
     thumb_color = lv_color_hex(view->thumb_off);
-    symbol_color = lv_color_white();
+    symbol_color = lv_color_hex(kIconOff);
   }
   draw_rect(layer, thumb, thumb_color, radius);
   draw_power_symbol(layer, thumb, symbol_color, view->on, view->bar_base);

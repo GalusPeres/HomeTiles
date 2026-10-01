@@ -269,12 +269,27 @@ vm.runInContext(`
   });
   updateTilePreview('folder1');
 `, sandbox);
+// A Cover with a position: the header with "Open · 40 %" and the position
+// bar (user 2026-10-01, like the Switch dimmer).
 const previewHtml = elements['folder1-tile-3'].innerHTML;
-if (!previewHtml.includes('tile-value tile-cover-value') ||
-    !previewHtml.includes('Offen<br>40%') ||
+if (!previewHtml.includes('tile-value tile-switch-state') ||
+    !previewHtml.includes('Offen · 40 %') ||
+    !previewHtml.includes('<div class="tile-switch" data-bar="dimmer">') ||
     !previewHtml.includes('style="color:#926bc7"') ||
     previewHtml.includes('tile-cover-state')) {
-  throw new Error('Cover preview did not render through the real WebUI path');
+  throw new Error('Cover preview did not render through the real WebUI path: ' + previewHtml);
+}
+// Without a position control: the centered state and position.
+vm.runInContext(`
+  sensorMetaCache.values['cover.test'] = JSON.stringify({
+    state: 'open', available: true, current_position: 40, supported_features: 11
+  });
+  updateTilePreview('folder1');
+`, sandbox);
+const plainHtml = elements['folder1-tile-3'].innerHTML;
+if (!plainHtml.includes('tile-value tile-cover-value') || !plainHtml.includes('Offen<br>40%') ||
+    plainHtml.includes('tile-switch')) {
+  throw new Error('A Cover without a position keeps the centered value: ' + plainHtml);
 }
 
 const localizedCoverStates = vm.runInContext(`[

@@ -598,14 +598,7 @@
           decodeClimateTargetLayouts(tile.sensor_gauge_max || 0),
           tile.climate_geometry || tile.scene_alias || '');
       }
-      if (previewKind === 'cover') {
-        const value = coverPreviewState?.position !== null &&
-                      coverPreviewState?.position !== undefined
-          ? String(coverPreviewState.position) + '%' : '--%';
-        html += '<div class="tile-value tile-cover-value">' +
-          escapeHtml(coverPreviewStateText(coverPreviewState)) +
-          '<br>' + escapeHtml(value) + '</div>';
-      }
+      if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, Number(tile.span_h) === 0.5);
       if (previewKind === 'binary_sensor') {
         html += '<div class="tile-value tile-binary-sensor-value ' + (Number(tile.sensor_value_font) ? sensorValueClass : '') + '" id="' +
           tab + '-tile-' + index + '-value">' +
@@ -637,6 +630,7 @@
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
       }
       applyIconDiscTint(el);
+      if (previewKind === 'cover') applyCoverPreview(el, coverPreviewState, Number(tile.span_h) === 0.5);
       if (typeValue === '9') fitCompactClockPreview(el);
     }
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');

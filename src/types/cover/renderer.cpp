@@ -7,19 +7,29 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/network/bridge/ha_bridge_config.h"
+#include "src/network/mqtt/mqtt_handlers.h"
+#include "src/tiles/config/tile_geometry.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/compact_sensor_layout.h"
+#include "src/tiles/runtime/level_bar.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/shared/command_pacer.h"
 
 namespace {
 
 struct CoverEventData {
   GridType grid_type = GridType::TAB0;
   uint8_t index = 0;
+  String entity_id;
 };
+
+// Home Assistant's --state-cover-active-color: the position fill, like the
+// Cover popup's sliders, whether the Cover is open or closed.
+constexpr uint32_t kCoverActive = 0x926BC7;
 
 struct CoverUpdate {
   GridType grid_type = GridType::TAB0;
@@ -254,6 +264,206 @@ String cover_value_text(const CoverState& state) {
   return text;
 }
 
+// The header's state line, like Home Assistant's tile card: "Open · 58 %".
+String cover_state_line(const CoverState& state, bool has_position, uint8_t position) {
+  if (!state.valid) return "--";
+  const String display_state = state.available ? String(state.state) : String("unavailable");
+  String text = i18n::cover_state_label(configManager.getConfig().language, display_state);
+  if (state.available && has_position) {
+    text += " \xC2\xB7 ";
+    text += String(position);
+    text += " %";
+  }
+  return text;
+}
+
+// ---------------------------------------------------------------------------
+// Position bar: the Switch dimmer's logic (level_bar.h for the box, drawing
+// and touch mapping; command_pacer.h for Home Assistant's slider timing):
+// the press jumps to the finger, pressing follows, live commands at most
+// every pacer interval, the final value paced on release, and the tile holds
+// its own value for kRemoteBlockMs against echoes of earlier commands.
+
+constexpr uint32_t kRemoteBlockMs = 3000;
+// Home Assistant starts a slider drag after 10 px (ha-control-slider);
+// below it a press is a tap: one command on release.
+constexpr int kDragThreshold = tile_layout::scale(10);
+
+struct CoverDrag {
+  CoverEventData* data = nullptr;
+  lv_point_t press = {0, 0};
+  bool dragging = false;
+  bool moved = false;
+  uint8_t value = 0;
+  uint32_t block_until = 0;
+};
+
+CoverDrag g_drag;
+command_pacer::Pacer g_pacer;
+lv_timer_t* g_live_timer = nullptr;
+lv_timer_t* g_final_timer = nullptr;
+lv_timer_t* g_release_timer = nullptr;
+String g_final_entity;
+uint8_t g_final_value = 0;
+
+void show_view(GridType grid_type, uint8_t index);
+
+// The tile's own position while the finger holds the bar or released it
+// moments ago.
+bool held_value(GridType grid_type, uint8_t index, uint8_t& value) {
+  if (!g_drag.data || g_drag.data->grid_type != grid_type || g_drag.data->index != index) return false;
+  if (!g_drag.dragging && static_cast<int32_t>(g_drag.block_until - millis()) <= 0) return false;
+  value = g_drag.value;
+  return true;
+}
+
+void release_timer_cb(lv_timer_t*) {
+  g_release_timer = nullptr;
+  CoverEventData* data = g_drag.data;
+  if (!data || g_drag.dragging) return;
+  g_drag.block_until = millis();
+  show_view(data->grid_type, data->index);
+}
+
+void start_hold() {
+  g_drag.dragging = false;
+  g_drag.block_until = millis() + kRemoteBlockMs;
+  if (g_release_timer) lv_timer_delete(g_release_timer);
+  g_release_timer = lv_timer_create(release_timer_cb, kRemoteBlockMs, nullptr);
+  if (g_release_timer) lv_timer_set_repeat_count(g_release_timer, 1);
+}
+
+void send_position(const String& entity_id, uint8_t value) {
+  if (entity_id.length()) mqttPublishCoverCommand(entity_id.c_str(), "set_cover_position", value);
+  g_pacer.sent(millis(), value);
+}
+
+void cancel_live_timer() {
+  if (g_live_timer) {
+    lv_timer_delete(g_live_timer);
+    g_live_timer = nullptr;
+  }
+}
+
+void live_timer_cb(lv_timer_t*) {
+  g_live_timer = nullptr;
+  if (!g_drag.dragging || !g_drag.data || !g_drag.moved) return;
+  send_position(g_drag.data->entity_id, g_drag.value);
+}
+
+void final_timer_cb(lv_timer_t*) {
+  g_final_timer = nullptr;
+  send_position(g_final_entity, g_final_value);
+}
+
+void schedule_live() {
+  if (!g_drag.data || g_live_timer) return;
+  const uint32_t wait = g_pacer.wait(millis());
+  if (wait == 0) {
+    send_position(g_drag.data->entity_id, g_drag.value);
+    return;
+  }
+  g_live_timer = lv_timer_create(live_timer_cb, wait, nullptr);
+  if (g_live_timer) lv_timer_set_repeat_count(g_live_timer, 1);
+}
+
+// Release: the final value always goes out, paced, and is skipped when the
+// gesture already sent exactly it.
+void commit_position(const String& entity_id, uint8_t value) {
+  cancel_live_timer();
+  const bool repeat = g_pacer.final_redundant(value);
+  g_pacer.end_gesture();
+  if (repeat) return;
+  if (g_final_timer && !g_final_entity.equalsIgnoreCase(entity_id)) {
+    lv_timer_delete(g_final_timer);
+    g_final_timer = nullptr;
+    send_position(g_final_entity, g_final_value);
+  }
+  const uint32_t wait = g_pacer.wait(millis());
+  if (wait == 0) {
+    if (g_final_timer) {
+      lv_timer_delete(g_final_timer);
+      g_final_timer = nullptr;
+    }
+    send_position(entity_id, value);
+    return;
+  }
+  g_final_entity = entity_id;
+  g_final_value = value;
+  if (g_final_timer) return;
+  g_final_timer = lv_timer_create(final_timer_cb, wait, nullptr);
+  if (g_final_timer) {
+    lv_timer_set_repeat_count(g_final_timer, 1);
+  } else {
+    send_position(entity_id, value);
+  }
+}
+
+void bar_draw_cb(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) return;
+  CoverTileWidgets* widget = static_cast<CoverTileWidgets*>(lv_event_get_user_data(e));
+  if (!widget || !widget->bar || !widget->available) return;
+  const lv_color_t card = lv_obj_get_style_bg_color(lv_obj_get_parent(widget->bar), LV_PART_MAIN);
+  level_bar::draw_fill(lv_event_get_layer(e), widget->bar, widget->level, widget->bar_base,
+                       lv_color_hex(kCoverActive), card);
+}
+
+// A drag step: the bar and the state line follow the finger; only the
+// changed columns redraw (level_bar::invalidate_change).
+void show_local_position(CoverEventData* data, CoverTileWidgets& widget, uint8_t value) {
+  if (widget.level != value) {
+    const uint8_t old_level = widget.level;
+    widget.level = value;
+    level_bar::invalidate_change(widget.bar, widget.bar_base, old_level, value);
+  }
+  if (widget.state_label) {
+    const CoverState& state = tile_renderer_get_cover_states(data->grid_type)[data->index];
+    const String line = cover_state_line(state, true, value);
+    if (strcmp(lv_label_get_text(widget.state_label), line.c_str()) != 0) {
+      lv_label_set_text(widget.state_label, line.c_str());
+    }
+  }
+}
+
+void bar_event_cb(lv_event_t* e) {
+  CoverEventData* data = static_cast<CoverEventData*>(lv_event_get_user_data(e));
+  if (!data || !data->entity_id.length() || data->index >= TILES_PER_GRID) return;
+  CoverTileWidgets& widget = tile_renderer_get_cover_widgets(data->grid_type)[data->index];
+  if (!widget.bar) return;
+  const lv_event_code_t code = lv_event_get_code(e);
+  if (!widget.available) {
+    if (g_drag.data == data) g_drag.dragging = false;
+    return;
+  }
+  lv_indev_t* indev = lv_indev_get_act();
+  lv_point_t point = g_drag.press;
+  if (indev) lv_indev_get_point(indev, &point);
+  if (code == LV_EVENT_PRESSED) {
+    cancel_live_timer();
+    g_drag.data = data;
+    g_drag.press = point;
+    g_drag.dragging = true;
+    g_drag.moved = false;
+    g_pacer.begin_gesture();
+  }
+  if (g_drag.data != data || !g_drag.dragging) return;
+  if (!g_drag.moved) {
+    const int dx = point.x - g_drag.press.x;
+    const int dy = point.y - g_drag.press.y;
+    g_drag.moved = dx * dx + dy * dy >= kDragThreshold * kDragThreshold;
+  }
+  const uint8_t value = level_bar::value_at(widget.bar, widget.bar_base, point);
+  const bool changed = value != g_drag.value || code == LV_EVENT_PRESSED;
+  g_drag.value = value;
+  if (changed) show_local_position(data, widget, value);
+  if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    start_hold();
+    commit_position(data->entity_id, value);
+    return;
+  }
+  if (changed && g_drag.moved) schedule_live();
+}
+
 CoverPopupInit popup_init(GridType grid_type, uint8_t index) {
   CoverPopupInit init;
   const Tile* tile = tile_renderer_get_tile_config(grid_type, index);
@@ -279,10 +489,7 @@ void apply_state(GridType grid_type, uint8_t index, const char* payload) {
   widget.last_payload_hash = hash;
   states[index] = state;
 
-  if (widget.value_label) {
-    const String value = cover_value_text(state);
-    lv_label_set_text(widget.value_label, value.c_str());
-  }
+  show_view(grid_type, index);
   if (widget.icon_label) {
     tile_icon_disc::set_icon_color(
         widget.icon_label, lv_color_hex(cover_icon_color(state)));
@@ -292,6 +499,43 @@ void apply_state(GridType grid_type, uint8_t index, const char* payload) {
     }
   }
   update_cover_popup(popup_init(grid_type, index));
+}
+
+// Value text, state line and position bar for the reported state; a bar the
+// finger holds (or released moments ago) keeps its own position.
+void show_view(GridType grid_type, uint8_t index) {
+  if (index >= TILES_PER_GRID) return;
+  CoverTileWidgets& widget = tile_renderer_get_cover_widgets(grid_type)[index];
+  const CoverState& state = tile_renderer_get_cover_states(grid_type)[index];
+  if (widget.value_label) {
+    const String value = cover_value_text(state);
+    lv_label_set_text(widget.value_label, value.c_str());
+  }
+  uint8_t level = state.available && state.has_position ? state.position : 0;
+  bool has_position = state.has_position;
+  uint8_t held = 0;
+  if (state.available && held_value(grid_type, index, held)) {
+    level = held;
+    has_position = true;
+  }
+  if (widget.state_label) {
+    const String line = cover_state_line(state, has_position, level);
+    if (strcmp(lv_label_get_text(widget.state_label), line.c_str()) != 0) {
+      lv_label_set_text(widget.state_label, line.c_str());
+    }
+  }
+  if (!widget.bar) return;
+  // A Cover that reports no position control keeps the header without a bar.
+  const bool positionable = !state.valid || (state.supported_features & COVER_FEATURE_SET_POSITION);
+  if (lv_obj_has_flag(widget.bar, LV_OBJ_FLAG_HIDDEN) == positionable) {
+    if (positionable) lv_obj_remove_flag(widget.bar, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(widget.bar, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (widget.level != level || widget.available != state.available) {
+    widget.level = level;
+    widget.available = state.available;
+    lv_obj_invalidate(widget.bar);
+  }
 }
 
 }  // namespace
@@ -353,6 +597,19 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
   CoverState& state = tile_renderer_get_cover_states(grid_type)[index];
   widget = {};
 
+  // Half height: the Sensor compact layout. A full tile of a Cover with a
+  // position (or not reported yet): the header with the state line and the
+  // position bar below (user 2026-10-01, like Home Assistant's tile card
+  // with the cover position feature). A Cover without a position keeps the
+  // centered state and position.
+  const bool compact = tile_geometry::compact_cover(tile.type, tile.span_w, tile.span_h);
+  const String initial = tile.sensor_entity.length()
+                             ? haBridgeConfig.findSensorInitialValue(tile.sensor_entity)
+                             : String();
+  const CoverState reported = initial.length() ? parse_cover_payload(initial.c_str()) : CoverState{};
+  const bool positionable = !reported.valid || (reported.supported_features & COVER_FEATURE_SET_POSITION);
+  const bool header = compact || positionable;
+
   const bool icon_visible = !isMdiIconDisabled(tile.icon_name);
   String configured_icon =
       cover_resolve_icon(tile, state, &widget.dynamic_icon);
@@ -368,7 +625,72 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
                  tile_layout::scale_480(-8));
   }
 
-  if (tile.title.length()) {
+  CoverEventData* data = nullptr;
+  if (tile.sensor_entity.length()) {
+    data = new CoverEventData{grid_type, index, tile.sensor_entity};
+  }
+
+  if (header) {
+    // Title and state left-aligned beside the corner disc like the Switch
+    // header (compact_sensor_layout: two insets from the disc, the block
+    // centered on it). Positions are inside the card's content box.
+    const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
+    const int inset = tile_icon_disc::inset();
+    const int icon_width =
+        FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
+    const int disc = tile_icon_disc::header_diameter(icon_width);
+    const int text_x = inset + disc + 2 * inset;
+    const int text_w = std::max(1, card_w - text_x - 2 * inset);
+    const bool has_title = tile.title.length() > 0;
+    const int title_h = lv_font_get_line_height(compact_sensor_layout::title_font());
+    const lv_font_t* state_font = compact_sensor_layout::value_font(tile.sensor_value_font);
+    const int block = (has_title ? title_h : 0) + lv_font_get_line_height(state_font);
+    const int text_y = inset + disc / 2 - block / 2;
+    const int pad_x = tile_layout::scale_480(20);
+    const int pad_y = tile_layout::scale_480(24);
+    if (has_title) {
+      widget.title_label = lv_label_create(card);
+      set_label_style(widget.title_label, lv_color_white(), compact_sensor_layout::title_font());
+      lv_label_set_long_mode(widget.title_label, LV_LABEL_LONG_DOT);
+      lv_obj_set_width(widget.title_label, text_w);
+      hometiles_title::tile(widget.title_label, tile.title.c_str(), true);
+      // One title line: the state line takes the second.
+      if (auto* title_state = hometiles_title::state_for(widget.title_label)) title_state->single_line = true;
+      lv_obj_set_style_text_align(widget.title_label, LV_TEXT_ALIGN_LEFT, 0);
+      lv_obj_set_pos(widget.title_label, text_x - pad_x, text_y - pad_y);
+    }
+    widget.state_label = lv_label_create(card);
+    set_label_style(widget.state_label, lv_color_white(), state_font);
+    lv_label_set_long_mode(widget.state_label, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(widget.state_label, text_w);
+    lv_obj_set_style_text_align(widget.state_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_text(widget.state_label, "--");
+    lv_obj_set_pos(widget.state_label, text_x - pad_x, text_y + (has_title ? title_h : 0) - pad_y);
+    lv_obj_clear_flag(widget.state_label, LV_OBJ_FLAG_CLICKABLE);
+    if (compact) {
+      compact_sensor_layout::apply(card, widget.icon_label, widget.title_label, widget.state_label, tile);
+    } else {
+      if (widget.icon_label) tile_icon_disc::add_round(card, widget.icon_label);
+      widget.bar = level_bar::create(card, tile);
+      widget.bar_base = static_cast<int16_t>(level_bar::box(tile).base);
+      if (widget.bar) {
+        lv_obj_add_event_cb(widget.bar, bar_draw_cb, LV_EVENT_DRAW_MAIN, &widget);
+        if (data && grid_type != GridType::SCREENSAVER) {
+          // Only these codes: the bar's own DELETE comes after the card freed
+          // the event data.
+          for (const lv_event_code_t code : {LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED,
+                                             LV_EVENT_PRESS_LOST}) {
+            lv_obj_add_event_cb(widget.bar, bar_event_cb, code, data);
+          }
+        } else {
+          lv_obj_remove_flag(widget.bar, LV_OBJ_FLAG_CLICKABLE);
+        }
+        tile_icon_source::refresh_controls(card);
+      }
+    }
+  }
+
+  if (!header && tile.title.length()) {
     widget.title_label = lv_label_create(card);
     set_label_style(widget.title_label, lv_color_white(),
                     tile_layout::header_title_font());
@@ -380,30 +702,28 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
                  tile_layout::scale_480(4),
                  tile_layout::scale_480(4));
   }
-  // After the title exists, so the disc can lift the whole header.
-  if (widget.icon_label) tile_icon_disc::add_round(card, widget.icon_label);
+  if (!header) {
+    // After the title exists, so the disc can lift the whole header.
+    if (widget.icon_label) tile_icon_disc::add_round(card, widget.icon_label);
 
-  // Same value block as a Sensor tile, but with the HA Cover state and
-  // position on two lines (for example "Open\n40%").
-  widget.value_label = lv_label_create(card);
-  set_label_style(widget.value_label, lv_color_white(),
-                  tile_layout::header_title_font());
-  lv_label_set_long_mode(widget.value_label, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(widget.value_label, LV_PCT(100));
-  lv_obj_set_style_text_align(widget.value_label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_line_space(widget.value_label, 8, 0);
-  const String initial_value = cover_value_text(state);
-  lv_label_set_text(widget.value_label, initial_value.c_str());
-  lv_obj_align(widget.value_label, LV_ALIGN_CENTER, 0,
-               tile_layout::scale(28));
-
-  if (tile.sensor_entity.length()) {
-    String initial = haBridgeConfig.findSensorInitialValue(tile.sensor_entity);
-    if (initial.length()) apply_state(grid_type, index, initial.c_str());
+    // Same value block as a Sensor tile, but with the HA Cover state and
+    // position on two lines (for example "Open\n40%").
+    widget.value_label = lv_label_create(card);
+    set_label_style(widget.value_label, lv_color_white(),
+                    tile_layout::header_title_font());
+    lv_label_set_long_mode(widget.value_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(widget.value_label, LV_PCT(100));
+    lv_obj_set_style_text_align(widget.value_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_line_space(widget.value_label, 8, 0);
+    const String initial_value = cover_value_text(state);
+    lv_label_set_text(widget.value_label, initial_value.c_str());
+    lv_obj_align(widget.value_label, LV_ALIGN_CENTER, 0,
+                 tile_layout::scale(28));
   }
 
-  if (grid_type != GridType::SCREENSAVER && tile.sensor_entity.length()) {
-    CoverEventData* data = new CoverEventData{grid_type, index};
+  if (initial.length()) apply_state(grid_type, index, initial.c_str());
+
+  if (data && grid_type != GridType::SCREENSAVER) {
     const lv_event_code_t event_code =
         getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS
             ? LV_EVENT_SHORT_CLICKED
@@ -428,12 +748,22 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
           show_cover_popup(init);
         },
         event_code, data);
+  }
+  if (data) {
     lv_obj_add_event_cb(
         card,
         [](lv_event_t* event) {
-          if (lv_event_get_code(event) == LV_EVENT_DELETE) {
-            delete static_cast<CoverEventData*>(lv_event_get_user_data(event));
+          if (lv_event_get_code(event) != LV_EVENT_DELETE) return;
+          CoverEventData* data = static_cast<CoverEventData*>(lv_event_get_user_data(event));
+          if (g_drag.data == data) {
+            cancel_live_timer();
+            if (g_release_timer) {
+              lv_timer_delete(g_release_timer);
+              g_release_timer = nullptr;
+            }
+            g_drag = CoverDrag{};
           }
+          delete data;
         },
         LV_EVENT_DELETE, data);
   }

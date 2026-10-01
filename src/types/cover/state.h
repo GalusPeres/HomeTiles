@@ -30,8 +30,17 @@ struct CoverState {
 struct CoverTileWidgets {
   lv_obj_t* icon_label = nullptr;
   lv_obj_t* title_label = nullptr;
+  // Header layouts (half height, or a full tile of a Cover with a position):
+  // "Open · 58 %" beside the disc.
   lv_obj_t* state_label = nullptr;
+  // The former centered layout of a Cover without a position.
   lv_obj_t* value_label = nullptr;
+  // Full header tiles: the position bar below the header (level_bar.h), the
+  // level it draws, its one-row height and whether the Cover is available.
+  lv_obj_t* bar = nullptr;
+  int16_t bar_base = 0;
+  uint8_t level = 0;
+  bool available = false;
   uint32_t last_payload_hash = 0;
   bool dynamic_icon = true;
 };

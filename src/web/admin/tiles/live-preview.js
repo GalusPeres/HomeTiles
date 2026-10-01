@@ -204,14 +204,7 @@
         currentClimateTargetLayouts(tab),
         currentClimateGeometry(tab));
     }
-    if (previewKind === 'cover') {
-      const value = coverPreviewState?.position !== null &&
-                    coverPreviewState?.position !== undefined
-        ? String(coverPreviewState.position) + '%' : '--%';
-      html += '<div class="tile-value tile-cover-value">' +
-        escapeHtml(coverPreviewStateText(coverPreviewState)) +
-        '<br>' + escapeHtml(value) + '</div>';
-    }
+    if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, halfHeight);
     if (previewKind === 'binary_sensor') {
       html += '<div class="tile-value tile-binary-sensor-value ' + (Number(sensorValueFont) ? sensorValueClass : '') + '" id="' +
         tileId + '-value">' +
@@ -267,6 +260,7 @@
       applyTileRulesTint(tileElem, type, collectIconColorRecord(prefix), iconColorOwnEntity(prefix, String(type)), sensorMetaCache);
     }
     applyIconDiscTint(tileElem);
+    if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');

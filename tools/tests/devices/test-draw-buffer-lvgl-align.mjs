@@ -47,7 +47,25 @@ const reshapeFits = (dataSize, areaWidth) => {
   return rows > 0 && roundUp(stride * rows) <= dataSize;
 };
 assert.ok(!reshapeFits(720 * 2 * 51, 720), 'the 4B band of b132-b164 was 32 bytes short');
-for (const width of [480, 720, 800, 1024, 1280]) {
+
+// Every device profile (src/devices/**: `Profile kProfile{key, name,
+// width, height, ...}`), so a new panel width is covered without editing
+// this test.
+const profileWidths = new Map();
+const walk = dir => {
+  for (const entry of fs.readdirSync(path.join(root, dir), {withFileTypes: true})) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(file);
+    else if (entry.name.endsWith('.h')) {
+      const match = read(file).match(/Profile kProfile\s*=?\s*\{\s*"([^"]+)",\s*"[^"]*",\s*(\d+),\s*(\d+),/);
+      if (match) profileWidths.set(match[1], Number(match[2]));
+    }
+  }
+};
+walk('src/devices');
+assert.ok(profileWidths.size >= 15, `device profiles found: ${profileWidths.size}`);
+assert.equal(profileWidths.get('waveshare_4b'), 720);
+for (const width of new Set(profileWidths.values())) {
   for (let lines = 1; lines <= 120; ++lines) {
     const dataSize = roundUp(width * 2 * lines);
     for (const areaWidth of [width, 1, 7, 100, 333, Math.floor(width / 2)]) {

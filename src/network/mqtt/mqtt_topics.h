@@ -39,6 +39,9 @@ enum class TopicKey : uint8_t {
   // Built-in camera snapshots (exact camera profiles only subscribe).
   LOCAL_CAMERA_CMND,
   LOCAL_CAMERA_STAT,
+  // The Bridge's answers to Lock and Alarm commands.
+  LOCK_STAT,
+  ALARM_STAT,
   COUNT
 };
 

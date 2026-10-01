@@ -29,6 +29,7 @@
       return { values: {}, units: {}, icons: {}, names: {}, sceneEntities: {}, loaded: false };
     }
     const hasMeta = Object.prototype.hasOwnProperty.call(payload, 'editable_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'device_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'units') ||
                     Object.prototype.hasOwnProperty.call(payload, 'icons') ||
@@ -49,6 +50,8 @@
         payload.climate_values || {}
       ),
       editableValues: payload.editable_values || payload.editableValues || {},
+      // Lock, Alarm panel and Fan detail states (types/device).
+      deviceValues: payload.device_values || payload.deviceValues || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},

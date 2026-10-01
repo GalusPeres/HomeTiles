@@ -12,6 +12,7 @@
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/popups/device/device_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/popups/popup_first_frame.h"
@@ -3659,6 +3660,7 @@ void show_sensor_popup(const SensorPopupInit& init) {
   hide_weather_popup();
   hide_energy_popup();
   hide_media_popup();
+  hide_device_popup();
 
   if (!g_sensor_popup_ctx) {
     g_sensor_popup_ctx = new SensorPopupContext();

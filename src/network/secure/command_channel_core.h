@@ -684,8 +684,10 @@ inline size_t signAnnouncement(const uint8_t key[kKeySize], const char* topic,
 // {base}/cmnd/<leaf>. Returns the leaf, or nullptr for any other topic.
 inline const char* sealedCommandLeaf(const char* topic, const char* base,
                                      size_t base_length) {
-  static const char* const kLeaves[] = {"scene", "light", "switch", "media",
-                                        "climate", "cover", "camera", "value"};
+  // Lock and Alarm commands are accepted by the Bridge only sealed; Fan
+  // follows the other controls (plain while unpaired).
+  static const char* const kLeaves[] = {"scene", "light", "switch", "media", "climate", "cover",
+                                        "camera", "value", "fan", "lock", "alarm"};
   if (!topic || !base || strncmp(topic, base, base_length) != 0 ||
       strncmp(topic + base_length, "/cmnd/", 6) != 0) {
     return nullptr;

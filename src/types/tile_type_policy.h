@@ -6,13 +6,20 @@ static constexpr bool tileTypeIsEditableValue(int type) {
   return type == TILE_NUMBER || type == TILE_SELECT || type == TILE_DATETIME;
 }
 
+// Lock, Alarm panel and Fan read the Bridge's additive `detail` state topic
+// (src/types/device/device_state.h) instead of the plain state.
+static constexpr bool tileTypeIsDeviceControl(int type) {
+  return type == TILE_LOCK || type == TILE_ALARM || type == TILE_FAN;
+}
+
 // Persistence, runtime state, and editor policies are deliberately separate.
 // For example, Camera stores an entity but does not consume cached tile state.
 static constexpr bool entityTileStoresSensorEntity(TileType type) {
   return type == TILE_SENSOR || type == TILE_SWITCH || type == TILE_WEATHER ||
          type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||
          type == TILE_CAMERA || type == TILE_COVER ||
-         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
+         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
+         tileTypeIsDeviceControl(type);
 }
 
 static constexpr bool tileTypeUsesCachedEntityState(TileType type) {
@@ -24,14 +31,16 @@ static constexpr bool tileTypeUsesCachedEntityState(TileType type) {
 static constexpr bool tileTypeStoresPopupMode(TileType type) {
   return type == TILE_SENSOR || type == TILE_WEATHER || type == TILE_ENERGY ||
          type == TILE_SWITCH || type == TILE_CLIMATE || type == TILE_COVER ||
-         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
+         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
+         tileTypeIsDeviceControl(type);
 }
 
 // Switch preserves its legacy popup choice in key_code instead.
 static constexpr bool tileTypeStoresPopupModeDirectly(TileType type) {
   return type == TILE_SENSOR || type == TILE_WEATHER || type == TILE_ENERGY ||
          type == TILE_CLIMATE || type == TILE_COVER ||
-         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
+         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
+         tileTypeIsDeviceControl(type);
 }
 
 // Preserve the existing edit-triggered reload policy, including its Energy
@@ -39,14 +48,16 @@ static constexpr bool tileTypeStoresPopupModeDirectly(TileType type) {
 static constexpr bool tileTypeHasDynamicMqttRoute(TileType type) {
   return type == TILE_SENSOR || tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
          type == TILE_SWITCH || type == TILE_MEDIA || type == TILE_WEATHER ||
-         type == TILE_CLIMATE || type == TILE_COVER;
+         type == TILE_CLIMATE || type == TILE_COVER ||
+         tileTypeIsDeviceControl(type);
 }
 
 // Weather uses a separate weather-topic subscription path.
 static constexpr bool tileTypeSubscribesDynamicState(TileType type) {
   return type == TILE_SENSOR || type == TILE_ENERGY || type == TILE_SWITCH ||
          type == TILE_MEDIA || type == TILE_CLIMATE || type == TILE_COVER ||
-         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR;
+         tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
+         tileTypeIsDeviceControl(type);
 }
 
 static constexpr bool tileTypeSubscribesScreensaverState(TileType type) {
@@ -75,7 +86,8 @@ static constexpr bool tileTypeHasFixedIconColorOnly(int type) {
 static constexpr bool tileTypeRulesUseOwnEntity(int type) {
   return type == TILE_SENSOR || type == TILE_SWITCH || type == TILE_WEATHER ||
          type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||
-         type == TILE_COVER || type == TILE_BINARY_SENSOR || tileTypeIsEditableValue(type);
+         type == TILE_COVER || type == TILE_BINARY_SENSOR || tileTypeIsEditableValue(type) ||
+         tileTypeIsDeviceControl(type);
 }
 
 // Per-tile icon colors and rules (tile_icon_colors.h): every tile type with

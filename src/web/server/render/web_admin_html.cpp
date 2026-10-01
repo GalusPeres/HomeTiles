@@ -558,6 +558,7 @@ static void appendTileTabHTML(
     }
     if (tile_geometry::compact_switch(tile.type, span_w, span_h) ||
         tile_geometry::compact_cover(tile.type, span_w, span_h) ||
+        tile_geometry::compact_device_control(tile.type, span_w, span_h) ||
         tile_geometry::compact_climate(tile.type, span_w, span_h) ||
         tile_geometry::compact_editable(tile.type, span_w, span_h)) {
       cssClass += " sensor-compact sensor-half";

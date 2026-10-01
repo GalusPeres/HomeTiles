@@ -1,6 +1,7 @@
 #include "src/ui/popups/popup_shell.h"
 #include "src/ui/popups/popup_open.h"
 #include "src/ui/popups/pin/pin_popup.h"
+#include "src/ui/popups/pin/pin_keypad_geometry.h"
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -10,6 +11,7 @@
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/popups/device/device_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
@@ -25,22 +27,10 @@
 
 namespace {
 
+using namespace pin_keypad;
+
 constexpr uint32_t kErrorColor = 0xFF6B6B;
 constexpr uint32_t kAutoCloseMs = 60000;
-// The keypad layout, shared by every screen size: all distances are fixed
-// shares of the key height (percent), so a small and a large display look
-// the same. From top to bottom below the header: the prompt ("Enter PIN" or
-// the error), the dots line (one dot per digit, never a digit), four key
-// rows.
-constexpr int kKeyGapPct = 16;        // between keys
-constexpr int kPromptGapPct = 20;     // prompt to the dots line
-constexpr int kDotsGapPct = 26;       // dots line to the keys
-constexpr int kMarginPct = 8;         // at least this above and below the block
-constexpr int kKeyWidthPct = 130;     // keys are a bit wider than tall
-constexpr int kDotPct = 22;           // dot diameter, share of the key height
-// Keys are a bit rounder than the close button and follow the global tile
-// radius like it (ui_surface_style::apply_radius).
-constexpr int kKeyRadius = popup_layout::kCloseButtonRadius + popup_layout::kCloseButtonRadius / 2;
 constexpr int kKeyCount = 12;
 constexpr int kBackspaceKey = 9;
 constexpr int kZeroKey = 10;
@@ -80,66 +70,16 @@ struct PinPopupContext {
   bool waiting_for_success_completion = false;
   PinPopupVerifyCallback verify = nullptr;
   PinPopupSuccessCallback success = nullptr;
+  PinPopupDismissedCallback dismissed = nullptr;
   void* callback_context = nullptr;
+  // Device code texts; empty keeps the PIN texts.
+  String prompt;
+  String error;
   lv_timer_t* auto_close_timer = nullptr;
   PinKeyData keys[kKeyCount]{};
 };
 
 PinPopupContext* g_ctx = nullptr;
-
-// Positions below the header, in the card's content coordinates.
-struct KeypadGeometry {
-  int key_w = 0;
-  int key_h = 0;
-  int gap = 0;
-  int prompt_y = 0;
-  int prompt_h = 0;
-  int dots_y = 0;
-  int keys_x = 0;
-  int keys_y = 0;
-  int dot = 0;
-};
-
-KeypadGeometry keypad_geometry(lv_obj_t* card, const lv_font_t* prompt_font) {
-  KeypadGeometry g;
-  const int pad = lv_obj_get_style_pad_top(card, LV_PART_MAIN);
-  const int content_w = popup_layout::kContentWidth;
-  const int content_h = popup_layout::kCardHeight - 2 * pad;
-  const int top = popup_layout::kHeaderCenterY - pad + popup_layout::kHeaderIconDiscSize / 2;
-  // The prompt and the dots line are one text line high each.
-  g.prompt_h = lv_font_get_line_height(prompt_font);
-  const int available = content_h - top;
-  // Height: prompt, dots line and the key-height shares fill the space below
-  // the header; width: three keys and two gaps fit the content width.
-  const int height_pct = 400 + 3 * kKeyGapPct + kPromptGapPct + kDotsGapPct + 2 * kMarginPct;
-  const int width_pct = 3 * kKeyWidthPct + 2 * kKeyGapPct;
-  g.key_h = (available - 2 * g.prompt_h) * 100 / height_pct;
-  const int width_limit = content_w * 100 / width_pct;
-  if (width_limit < g.key_h) g.key_h = width_limit;
-  const int size_limit = popup_layout::kCardHeight * popup_layout::kKeypadKeyMaxPermille / 1000;
-  if (size_limit < g.key_h) g.key_h = size_limit;
-  if (g.key_h < 1) g.key_h = 1;
-  g.key_w = g.key_h * kKeyWidthPct / 100;
-  g.gap = g.key_h * kKeyGapPct / 100;
-  const int prompt_gap = g.key_h * kPromptGapPct / 100;
-  const int dots_gap = g.key_h * kDotsGapPct / 100;
-  const int block = 2 * g.prompt_h + prompt_gap + dots_gap + 4 * g.key_h + 3 * g.gap;
-  g.keys_x = (content_w - (3 * g.key_w + 2 * g.gap)) / 2;
-  g.dot = g.key_h * kDotPct / 100;
-  if (g.dot > g.prompt_h) g.dot = g.prompt_h;
-  // The keys stay where the centered block puts them. Above them the prompt
-  // and the dots split the room into three equal visible gaps: header to the
-  // prompt's capitals, prompt baseline to the dots, dots to the keys.
-  g.keys_y = top + (available - block) / 2 + 2 * g.prompt_h + prompt_gap + dots_gap;
-  const int baseline = g.prompt_h - prompt_font->base_line;  // from the label top
-  int cap_top = 0;
-  lv_font_glyph_dsc_t cap;
-  if (lv_font_get_glyph_dsc(prompt_font, &cap, 'E', 0)) cap_top = baseline - cap.box_h - cap.ofs_y;
-  const int even = (g.keys_y - top - (baseline - cap_top) - g.dot) / 3;
-  g.prompt_y = top + even - cap_top;
-  g.dots_y = g.prompt_y + baseline + even - (g.prompt_h - g.dot) / 2;
-  return g;
-}
 
 // Digits in a font that fills the key like the design.
 const lv_font_t* digit_font(int key_h) {
@@ -159,7 +99,10 @@ void auto_close_timer_cb(lv_timer_t* timer) {
   }
   lv_timer_pause(timer);
   if (ctx->waiting_for_success_completion) return;
+  PinPopupDismissedCallback dismissed = ctx->dismissed;
+  void* context = ctx->callback_context;
   hide_pin_popup();
+  if (dismissed) dismissed(context);
 }
 
 void arm_auto_close_timer(PinPopupContext* ctx) {
@@ -187,7 +130,9 @@ void clear_input(PinPopupContext* ctx) {
 void update_value(PinPopupContext* ctx) {
   if (!ctx || !ctx->prompt_label || !ctx->dots_row) return;
   const auto& tr = i18n::strings(configManager.getConfig().language);
-  lv_label_set_text(ctx->prompt_label, ctx->show_error ? tr.pin_popup_incorrect : tr.pin_popup_enter);
+  const char* prompt = ctx->prompt.length() ? ctx->prompt.c_str() : tr.pin_popup_enter;
+  const char* error = ctx->error.length() ? ctx->error.c_str() : tr.pin_popup_incorrect;
+  lv_label_set_text(ctx->prompt_label, ctx->show_error ? error : prompt);
   lv_obj_set_style_text_color(ctx->prompt_label,
                               ctx->show_error ? lv_color_hex(kErrorColor) : lv_color_white(), 0);
   const size_t circles = ctx->length > pin_access::kUserPinMinDigits ? ctx->length : pin_access::kUserPinMinDigits;
@@ -326,7 +271,10 @@ void on_close(lv_event_t* event) {
   PinPopupContext* ctx = static_cast<PinPopupContext*>(
       lv_event_get_user_data(event));
   if (ctx && ctx->waiting_for_success_completion) return;
+  PinPopupDismissedCallback dismissed = ctx ? ctx->dismissed : nullptr;
+  void* context = ctx ? ctx->callback_context : nullptr;
   hide_pin_popup();
+  if (dismissed) dismissed(context);
 }
 
 void on_delete(lv_event_t* event) {
@@ -431,13 +379,21 @@ void apply_header(PinPopupContext* ctx, const PinPopupInit& init) {
   hometiles_title::set(ctx->title_label, init.title.c_str());
   lv_label_set_text(ctx->icon_label, popup_icon_glyph(init.icon_name).c_str());
   lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);
-  lv_label_set_text(ctx->state_label, tr.pin_popup_locked);
+  lv_label_set_text(ctx->state_label, init.state.length() ? init.state.c_str() : tr.pin_popup_locked);
+  // A code asked from a popup goes back to it (arrow), any other closes (X).
+  if (lv_obj_t* glyph = lv_obj_get_child(ctx->close_button, 0)) {
+    lv_label_set_text(glyph, getMdiChar(init.back ? "arrow-left" : "window-close").c_str());
+  }
+  ctx->prompt = init.prompt;
+  ctx->error = init.error;
+  ctx->dismissed = init.dismissed;
   popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
 }
 
 }  // namespace
 
 void show_pin_popup(const PinPopupInit& init) {
+  hide_device_popup();
   hide_light_popup();
   hide_climate_popup();
   hide_cover_popup();
@@ -519,6 +475,7 @@ void hide_pin_popup() {
   clear_input(g_ctx);
   g_ctx->verify = nullptr;
   g_ctx->success = nullptr;
+  g_ctx->dismissed = nullptr;
   g_ctx->callback_context = nullptr;
   update_value(g_ctx);
   hide_popup_shell(g_ctx->card);
@@ -536,6 +493,13 @@ void resume_pin_popup_after_failed_success() {
   clear_input(g_ctx);
   update_value(g_ctx);
   arm_auto_close_timer(g_ctx);
+}
+
+void pin_popup_set_error(const char* text, bool show) {
+  if (!g_ctx || !g_ctx->card || !text) return;
+  g_ctx->error = text;
+  g_ctx->show_error = show;
+  update_value(g_ctx);
 }
 
 bool is_pin_popup_visible() {

@@ -11,6 +11,7 @@
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
+#include "src/ui/popups/device/device_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
@@ -1269,6 +1270,7 @@ void show_cover_popup(const CoverPopupInit& init) {
   hide_weather_popup();
   hide_energy_popup();
   hide_media_popup();
+  hide_device_popup();
   hide_camera_popup();
 
   if (g_ctx && g_ctx->overlay && g_ctx->card) {

@@ -140,7 +140,19 @@ void create_header(lv_obj_t* parent, lv_obj_t*& title, lv_obj_t*& icon,
   popup_layout::alignHeader(parent, title, icon, disc);
 }
 
+// popup_shell_pulse_icon: opacity 1 -> 0 -> 1 in 1 s (state-control-styles).
+void icon_pulse_exec(void* obj, int32_t value) {
+  lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value), 0);
+}
+
+void stop_icon_pulse() {
+  if (!shell.icon || !lv_anim_get(shell.icon, icon_pulse_exec)) return;
+  lv_anim_delete(shell.icon, icon_pulse_exec);
+  lv_obj_set_style_opa(shell.icon, LV_OPA_COVER, 0);
+}
+
 void detach() {
+  stop_icon_pulse();
   auto* binding = shell.active;
   shell.active = nullptr;
   if (!binding) return;
@@ -480,6 +492,26 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 }
 
 bool popup_shell_active() { return shell.active != nullptr; }
+
+void popup_shell_pulse_icon(lv_obj_t* body, bool on) {
+  if (!shell.active || shell.active->body != body || !shell.icon) return;
+  if (!on) {
+    stop_icon_pulse();
+    return;
+  }
+  // A refresh keeps a running pulse instead of restarting it.
+  if (lv_anim_get(shell.icon, icon_pulse_exec)) return;
+  lv_anim_t anim;
+  lv_anim_init(&anim);
+  lv_anim_set_var(&anim, shell.icon);
+  lv_anim_set_exec_cb(&anim, icon_pulse_exec);
+  lv_anim_set_values(&anim, LV_OPA_COVER, LV_OPA_TRANSP);
+  lv_anim_set_duration(&anim, 500);
+  lv_anim_set_reverse_duration(&anim, 500);
+  lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
+  lv_anim_set_path_cb(&anim, lv_anim_path_ease_in_out);
+  lv_anim_start(&anim);
+}
 
 void popup_shell_hold_close_fill(bool hold) { g_hold_close_fill = hold; }
 

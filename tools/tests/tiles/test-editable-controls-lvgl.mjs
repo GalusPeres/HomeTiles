@@ -29,7 +29,8 @@ fs.writeFileSync(path.join(out,'esp_heap_caps.h'),'#pragma once\n#include <cstdl
 let geometry = read('src/ui/popups/popup_layout.h');
 geometry = geometry.slice(geometry.indexOf('namespace popup_layout {'), geometry.indexOf('// Standard popup close button.'));
 geometry += fn(read('src/ui/popups/popup_layout.h'), 'createCloseButton') + '}';
-const catalog = [...read('src/core/i18n/i18n.cpp').matchAll(/\{("(?:Zahl|Number|Nombre)"[^\n]+?)\}\};/g)].map(m => m[1]);
+// The editable labels row ends the locale table or precedes the device labels.
+const catalog = [...read('src/core/i18n/i18n.cpp').matchAll(/\{("(?:Zahl|Number|Nombre)"[^\n]+?)\}(?:\};|,\n)/g)].map(m => m[1]);
 assert.equal(catalog.length, 3); for (const labels of catalog) assert.equal(JSON.parse('[' + labels + ']').length, 19);
 const styles = read('src/ui/shared/ui_control_style.h').replace(/^#.*$/gm, '');
 const mdi = read('src/tiles/icons/mdi_icons.cpp');

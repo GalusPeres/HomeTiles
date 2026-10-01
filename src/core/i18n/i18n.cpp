@@ -1866,7 +1866,31 @@ static const LocaleProfile kLocaleDe = {
      "Strom erkannt", "Kein Strom", "Zuhause", "Abwesend", "Problem",
      "OK", "Läuft", "Läuft nicht", "Unsicher", "Sicher",
      "Update verfügbar", "Aktuell", "Nicht verfügbar", "Unbekannt"},
-    {"Zahl", "Auswahl", "Datum/Uhrzeit", "Zahlen-Entity", "Auswahl-Entity", "Datum-/Uhrzeit-Entity", "Übernehmen", "Ungültiger Wert", "Wird übernommen…", "Änderung fehlgeschlagen", "JJJJ-MM-TT", "HH:MM:SS", "JJJJ-MM-TT HH:MM:SS", "Jahr", "Monat", "Tag", "hh", "mm", "ss"}};
+    {"Zahl", "Auswahl", "Datum/Uhrzeit", "Zahlen-Entity", "Auswahl-Entity", "Datum-/Uhrzeit-Entity", "Übernehmen", "Ungültiger Wert", "Wird übernommen…", "Änderung fehlgeschlagen", "JJJJ-MM-TT", "HH:MM:SS", "JJJJ-MM-TT HH:MM:SS", "Jahr", "Monat", "Tag", "hh", "mm", "ss"},
+    {"Schloss", "Alarmanlage", "Ventilator", "Schloss-Entity", "Alarmanlagen-Entity", "Ventilator-Entity",
+     "Tür öffnen", "Wirklich öffnen?", "Tür offen", "Entriegeln", "Verriegeln", "Unscharf schalten",
+     "Zuhause", "Abwesend", "Nacht", "Urlaub", "Eigene",
+     "Modus", "Kein", "Schwenken", "Richtung", "Vorwärts", "Rückwärts", "Stufe %u",
+     "Code eingeben", "Falscher Code", "Zu viele falsche Codes · %u s",
+     "Zum Bedienen: Panel mit Home Assistant koppeln und ein Web-Admin-Passwort setzen.",
+     "Zum Bedienen: Panel mit Home Assistant koppeln.",
+     "Zum Bedienen: ein Web-Admin-Passwort setzen.",
+     "Entriegeln am Panel ist aus. In den Optionen der HomeTiles Bridge erlauben.",
+     "Unscharf schalten am Panel ist aus. In den Optionen der HomeTiles Bridge erlauben.",
+     "Dieses Gerät braucht einen Text-Code. Bitte in Home Assistant bedienen.",
+     "Das ist am Panel nicht erlaubt.",
+     "Ein anderer Befehl läuft noch. Gleich noch einmal versuchen.",
+     "Das Gerät unterstützt das nicht.",
+     "Das Gerät ist nicht erreichbar.",
+     "Befehl abgelaufen. Bitte erneut versuchen.",
+     "Keine Antwort von Home Assistant.",
+     "Home Assistant konnte den Befehl nicht ausführen.",
+     "Die Uhrzeit des Panels ist noch nicht gestellt."},
+    {"Verriegelt", "Entriegelt", "Verriegelt…", "Entriegelt…", "Offen", "Öffnet…", "Blockiert",
+     "Nicht verfügbar", "Unbekannt"},
+    {"Unscharf", "Scharf zu Hause", "Scharf abwesend", "Scharf Nacht", "Scharf Urlaub",
+     "Scharf benutzerdefiniert", "Ausstehend", "Wird scharf", "Wird unscharf", "Ausgelöst",
+     "Nicht verfügbar", "Unbekannt"}};
 
 static const LocaleProfile kLocaleEn = {
     "en",
@@ -1946,7 +1970,29 @@ static const LocaleProfile kLocaleEn = {
      "Home", "Away", "Problem", "OK", "Running", "Not running",
      "Unsafe", "Safe", "Update available", "Up to date", "Unavailable",
      "Unknown"},
-    {"Number", "Select", "Date/time", "Number entity", "Select entity", "Date/time entity", "Apply", "Invalid value", "Applying…", "Change failed", "YYYY-MM-DD", "HH:MM:SS", "YYYY-MM-DD HH:MM:SS", "Year", "Month", "Day", "hh", "mm", "ss"}};
+    {"Number", "Select", "Date/time", "Number entity", "Select entity", "Date/time entity", "Apply", "Invalid value", "Applying…", "Change failed", "YYYY-MM-DD", "HH:MM:SS", "YYYY-MM-DD HH:MM:SS", "Year", "Month", "Day", "hh", "mm", "ss"},
+    {"Lock", "Alarm panel", "Fan", "Lock entity", "Alarm panel entity", "Fan entity",
+     "Open door", "Really open?", "Door open", "Unlock", "Lock", "Disarm",
+     "Home", "Away", "Night", "Vacation", "Custom",
+     "Preset", "None", "Oscillate", "Direction", "Forward", "Reverse", "Speed %u",
+     "Enter code", "Wrong code", "Too many wrong codes · %u s",
+     "To use it here, pair this panel with Home Assistant and set a Web Admin password.",
+     "To use it here, pair this panel with Home Assistant.",
+     "To use it here, set a Web Admin password.",
+     "Unlocking from this panel is off. Allow it in the HomeTiles Bridge options.",
+     "Disarming from this panel is off. Allow it in the HomeTiles Bridge options.",
+     "This device needs a text code. Please use Home Assistant.",
+     "This is not allowed from the panel.",
+     "Another command is still running. Try again in a moment.",
+     "The device does not support this.",
+     "The device is unavailable.",
+     "The command expired. Please try again.",
+     "No answer from Home Assistant.",
+     "Home Assistant could not run the command.",
+     "The panel's clock is not set yet."},
+    {"Locked", "Unlocked", "Locking", "Unlocking", "Open", "Opening", "Jammed", "Unavailable", "Unknown"},
+    {"Disarmed", "Armed home", "Armed away", "Armed night", "Armed vacation", "Armed custom bypass",
+     "Pending", "Arming", "Disarming", "Triggered", "Unavailable", "Unknown"}};
 
 static const LocaleProfile kLocaleFr = {
     "fr",
@@ -2028,7 +2074,31 @@ static const LocaleProfile kLocaleFr = {
      "Débranché", "Alimentation détectée", "Aucune alimentation", "Présent",
      "Absent", "Problème", "OK", "En cours", "À l’arrêt", "Dangereux",
      "Sûr", "Mise à jour disponible", "À jour", "Indisponible", "Inconnu"},
-    {"Nombre", "Sélection", "Date/heure", "Entité numérique", "Entité de sélection", "Entité de date/heure", "Appliquer", "Valeur invalide", "Application…", "Échec de la modification", "AAAA-MM-JJ", "HH:MM:SS", "AAAA-MM-JJ HH:MM:SS", "Année", "Mois", "Jour", "hh", "mm", "ss"}};
+    {"Nombre", "Sélection", "Date/heure", "Entité numérique", "Entité de sélection", "Entité de date/heure", "Appliquer", "Valeur invalide", "Application…", "Échec de la modification", "AAAA-MM-JJ", "HH:MM:SS", "AAAA-MM-JJ HH:MM:SS", "Année", "Mois", "Jour", "hh", "mm", "ss"},
+    {"Serrure", "Alarme", "Ventilateur", "Entité de serrure", "Entité d’alarme", "Entité de ventilateur",
+     "Ouvrir la porte", "Vraiment ouvrir ?", "Porte ouverte", "Déverrouiller", "Verrouiller", "Désarmer",
+     "Domicile", "Absent", "Nuit", "Vacances", "Personnalisé",
+     "Préréglage", "Aucun", "Oscillation", "Sens", "Avant", "Arrière", "Vitesse %u",
+     "Saisir le code", "Code incorrect", "Trop de codes incorrects · %u s",
+     "Pour l’utiliser ici, associez ce panneau à Home Assistant et définissez un mot de passe Web Admin.",
+     "Pour l’utiliser ici, associez ce panneau à Home Assistant.",
+     "Pour l’utiliser ici, définissez un mot de passe Web Admin.",
+     "Le déverrouillage depuis ce panneau est désactivé. Autorisez-le dans les options de HomeTiles Bridge.",
+     "Le désarmement depuis ce panneau est désactivé. Autorisez-le dans les options de HomeTiles Bridge.",
+     "Cet appareil demande un code texte. Utilisez Home Assistant.",
+     "Ce n’est pas autorisé depuis le panneau.",
+     "Une autre commande est en cours. Réessayez dans un instant.",
+     "L’appareil ne prend pas cela en charge.",
+     "L’appareil est indisponible.",
+     "La commande a expiré. Veuillez réessayer.",
+     "Pas de réponse de Home Assistant.",
+     "Home Assistant n’a pas pu exécuter la commande.",
+     "L’heure du panneau n’est pas encore réglée."},
+    {"Verrouillé", "Déverrouillé", "Verrouillage…", "Déverrouillage…", "Ouvert", "Ouverture…", "Bloqué",
+     "Indisponible", "Inconnu"},
+    {"Désarmé", "Armé (domicile)", "Armé (absent)", "Armé (nuit)", "Armé (vacances)",
+     "Armé (personnalisé)", "En attente", "Armement", "Désarmement", "Déclenché",
+     "Indisponible", "Inconnu"}};
 
 // Codes and groups match LocaleProfile::timezone_labels and
 // timezone_group_labels (see i18n.h).
@@ -2397,6 +2467,33 @@ const char* cover_state_label(const char* language_code,
     if (state == kStates[index]) return profile.cover_states[index];
   }
   return profile.cover_states[5];
+}
+
+const char* device_label(const char* language_code, DeviceLabel label) {
+  const auto index = static_cast<size_t>(label);
+  if (index >= static_cast<size_t>(DeviceLabel::Count)) return "";
+  return locale(language_code).device_labels[index];
+}
+
+const char* lock_state_label(const char* language_code, const char* state) {
+  static const char* const kStates[] = {"locked", "unlocked", "locking", "unlocking", "open",
+                                        "opening", "jammed", "unavailable", "unknown"};
+  const LocaleProfile& profile = locale(language_code);
+  for (uint8_t index = 0; state && index < 9; ++index) {
+    if (strcmp(state, kStates[index]) == 0) return profile.lock_states[index];
+  }
+  return profile.lock_states[8];
+}
+
+const char* alarm_state_label(const char* language_code, const char* state) {
+  static const char* const kStates[] = {"disarmed", "armed_home", "armed_away", "armed_night",
+                                        "armed_vacation", "armed_custom_bypass", "pending", "arming",
+                                        "disarming", "triggered", "unavailable", "unknown"};
+  const LocaleProfile& profile = locale(language_code);
+  for (uint8_t index = 0; state && index < 12; ++index) {
+    if (strcmp(state, kStates[index]) == 0) return profile.alarm_states[index];
+  }
+  return profile.alarm_states[11];
 }
 
 const char* binary_sensor_label(const char* language_code, uint8_t index) {

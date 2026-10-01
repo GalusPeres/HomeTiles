@@ -40,11 +40,13 @@
                                   !switchSensorLook(switchStyle, spanH));
       syncSwitchChoices(tab);
     }
-    if (type === '19') {
+    const deviceKind = typeof devicePreviewKind === 'function' ? devicePreviewKind(type) : '';
+    if (type === '19' || deviceKind) {
       // Like the Switch: beside the disc the half-height sizes, from 1.5 rows
       // the full-size ones (tile_header.h).
       const spanH = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1);
-      syncCompactValueFontOptions(document.getElementById(prefix + '_cover_value_font'), !(spanH > 1));
+      syncCompactValueFontOptions(document.getElementById(prefix + (deviceKind ? '_' + deviceKind : '_cover') +
+        '_value_font'), !(spanH > 1));
       syncSwitchChoices(tab);
     }
     const previewKind = meta.preview || 'none';
@@ -54,7 +56,8 @@
       : isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font'
-        : (type === '5' ? '_switch_value_font' : (type === '19' ? '_cover_value_font' : '_sensor_value_font'))))?.value || '0');
+        : (type === '5' ? '_switch_value_font' : (type === '19' ? '_cover_value_font'
+          : (deviceKind ? '_' + deviceKind + '_value_font' : '_sensor_value_font')))))?.value || '0');
     const sensorValueClass = getSensorValueFontClass(sensorValueFont);
     const sensorEntity = document.getElementById(prefix + '_sensor_entity')?.value || '';
     const binarySensorEntity = document.getElementById(
@@ -82,6 +85,7 @@
                 ? coverEntity
                 : (previewKind === 'camera' ? cameraEntity : '')))))));
     if (isEditablePreview(previewKind)) iconEntity = document.getElementById(prefix + '_' + previewKind + '_entity')?.value || '';
+    if (deviceKind) iconEntity = document.getElementById(prefix + '_' + deviceKind + '_entity')?.value || '';
     if (type === '2') {
       const alias = document.getElementById(prefix + '_scene_alias')?.value || '';
       iconEntity = sensorMetaCache.sceneEntities?.[alias] || '';
@@ -111,6 +115,13 @@
       if (!normalizeMdiIconName(rawIcon) &&
           !isExplicitlyDisabledValue(rawIcon)) {
         iconName = coverPreviewIcon(coverPreviewState, iconName);
+      }
+    }
+    let devicePreviewState = null;
+    if (deviceKind) {
+      devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(iconEntity));
+      if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
+        iconName = devicePreviewIcon(deviceKind, devicePreviewState);
       }
     }
     let binarySensorPreviewState = null;
@@ -180,9 +191,11 @@
           ? climatePreviewColor(climatePreviewState)
           : (previewKind === 'cover'
             ? coverPreviewColor(coverPreviewState)
-            : (previewKind === 'binary_sensor'
-              ? binarySensorPreviewColor(binarySensorPreviewState)
-              : '')));
+            : (deviceKind
+              ? devicePreviewColor(deviceKind, devicePreviewState)
+              : (previewKind === 'binary_sensor'
+                ? binarySensorPreviewColor(binarySensorPreviewState)
+                : ''))));
       const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
       html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
     }
@@ -228,6 +241,7 @@
       }
     }
     if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, halfHeight);
+    if (deviceKind) html += devicePreviewExtraHtml(deviceKind, devicePreviewState, halfHeight);
     if (previewKind === 'binary_sensor') {
       html += '<div class="tile-value tile-binary-sensor-value ' + (Number(sensorValueFont) ? sensorValueClass : '') + '" id="' +
         tileId + '-value">' +
@@ -284,6 +298,7 @@
     }
     applyIconDiscTint(tileElem);
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
+    if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight);
     if (wasActive) tileElem.classList.add('active');
     if (typeWas !== type && wasActive) {
       tileElem.classList.add('active');

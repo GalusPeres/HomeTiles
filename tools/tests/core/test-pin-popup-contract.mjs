@@ -9,7 +9,8 @@ const requireMarker = (source, marker, label) => {
   if (!source.includes(marker)) throw new Error(`${label} is missing: ${marker}`);
 };
 
-const popup = read('src/ui/popups/pin/pin_popup.cpp');
+// The keypad geometry lives in its own header, shared with the Alarm popup.
+const popup = read('src/ui/popups/pin/pin_popup.cpp') + read('src/ui/popups/pin/pin_keypad_geometry.h');
 const manager = read('src/ui/ui_manager.cpp');
 const renderer = read('src/types/navigate/renderer.cpp');
 const tiles = read('src/ui/tabs/tiles/tab_tiles_unified.cpp');
@@ -41,13 +42,16 @@ for (const marker of [
   'create_key(grid, "0", digits, g, &zero);',
   'getMdiChar("check-bold")',
   // The prompt or the error, and one dot per typed digit, never a digit.
-  'lv_label_set_text(ctx->prompt_label, ctx->show_error ? tr.pin_popup_incorrect : tr.pin_popup_enter);',
+  // A device code (Lock, Alarm panel) brings its own prompt and error texts.
+  'const char* prompt = ctx->prompt.length() ? ctx->prompt.c_str() : tr.pin_popup_enter;',
+  'const char* error = ctx->error.length() ? ctx->error.c_str() : tr.pin_popup_incorrect;',
+  'lv_label_set_text(ctx->prompt_label, ctx->show_error ? error : prompt);',
   'lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= circles);',
   'lv_obj_set_style_bg_opa(ctx->dots[i], i < ctx->length ? LV_OPA_COVER : LV_OPA_TRANSP, 0);',
   'const int size_limit = popup_layout::kCardHeight * popup_layout::kKeypadKeyMaxPermille / 1000;',
   'lv_obj_align(ctx->dots_row, LV_ALIGN_TOP_MID, 0, g.dots_y);',
   // Header: the tile's name and the state "Locked" through the shared header.
-  'lv_label_set_text(ctx->state_label, tr.pin_popup_locked);',
+  'lv_label_set_text(ctx->state_label, init.state.length() ? init.state.c_str() : tr.pin_popup_locked);',
   'nullptr, g_ctx->state_label);',
   // Colors: the popup control rule; backspace halfway, confirm white.
   'popup_nav_style::fill(card, icon, fill, opa);',

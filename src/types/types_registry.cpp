@@ -101,6 +101,9 @@
 #include "src/types/pixelanim/web_styles.h"
 #include "src/types/settings/web_styles.h"
 
+#include "src/types/device/device_tile.h"
+#include "src/types/device/web.h"
+
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/web/server/web_admin_utils.h"
@@ -278,6 +281,26 @@ lv_obj_t* render_cover_wrapper(lv_obj_t* parent,
                                scene_publish_cb_t) {
   return render_cover_tile(parent, col, row, tile, index, grid_type);
 }
+
+// Lock, Alarm panel and Fan share one renderer and field set (types/device).
+lv_obj_t* render_device_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index,
+                                GridType grid_type, scene_publish_cb_t) {
+  return render_device_tile(parent, col, row, tile, index, grid_type);
+}
+bool apply_device_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
+  return apply_device_fields_from_request(server, tile);
+}
+void append_lock_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_device_fields_html(html, safeString(ctx.tab_id), TILE_LOCK);
+}
+void append_alarm_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_device_fields_html(html, safeString(ctx.tab_id), TILE_ALARM);
+}
+void append_fan_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_device_fields_html(html, safeString(ctx.tab_id), TILE_FAN);
+}
+// DEVICE_I18N once for the three types.
+void append_no_scripts(String&) {}
 
 lv_obj_t* render_camera_wrapper(lv_obj_t* parent,
                                 int col,
@@ -701,6 +724,60 @@ const TileTypeDescriptor kTileTypes[] = {
     append_cover_styles,
     append_cover_scripts
   },
+  {
+    TILE_LOCK,
+    "Schloss",
+    "device",
+    "lock",
+    "device",
+    nullptr,
+    "loadLockFields",
+    "saveLockFields",
+    "resetLockFields",
+    0x2A2A2A,
+    false,
+    render_device_wrapper,
+    apply_device_wrapper,
+    append_lock_fields_wrapper,
+    append_device_styles,
+    append_device_scripts
+  },
+  {
+    TILE_ALARM,
+    "Alarmanlage",
+    "device",
+    "alarm",
+    "device",
+    nullptr,
+    "loadAlarmFields",
+    "saveAlarmFields",
+    "resetAlarmFields",
+    0x2A2A2A,
+    false,
+    render_device_wrapper,
+    apply_device_wrapper,
+    append_alarm_fields_wrapper,
+    append_no_scripts,
+    append_no_scripts
+  },
+  {
+    TILE_FAN,
+    "Ventilator",
+    "device",
+    "fan",
+    "device",
+    nullptr,
+    "loadFanFields",
+    "saveFanFields",
+    "resetFanFields",
+    0x2A2A2A,
+    false,
+    render_device_wrapper,
+    apply_device_wrapper,
+    append_fan_fields_wrapper,
+    append_no_scripts,
+    append_no_scripts
+  },
 #if !defined(DEVICE_ESP32_S3_RGB_480)
   {
     TILE_CAMERA,
@@ -904,6 +981,9 @@ static const char* localized_tile_type_label(const TileTypeDescriptor& entry) {
     case TILE_SWITCH: return tr.tile_type_switch;
     case TILE_MEDIA: return tr.tile_type_media;
     case TILE_COVER: return i18n::cover_label(language, 0);
+    case TILE_LOCK: return i18n::device_label(language, i18n::DeviceLabel::TypeLock);
+    case TILE_ALARM: return i18n::device_label(language, i18n::DeviceLabel::TypeAlarm);
+    case TILE_FAN: return i18n::device_label(language, i18n::DeviceLabel::TypeFan);
     case TILE_CAMERA: return tr.camera_tile_type;
     case TILE_CLIMATE: return i18n::climate_tile_type_label(language);
     case TILE_CLOCK: return tr.tile_type_clock;

@@ -60,6 +60,11 @@ void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& 
 // on their field): one more control step (tone_color::Fill::raised_color).
 void popup_shell_control_raised_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa);
 
+// Home Assistant pulses the state icon while a command runs or the device
+// needs attention (Lock, Alarm panel): the shared header icon, while the
+// popup showing `body` is the active one. Another popup stops it.
+void popup_shell_pulse_icon(lv_obj_t* body, bool on);
+
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.
 void register_popup_background(lv_obj_t* root);

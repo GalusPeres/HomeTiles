@@ -508,7 +508,7 @@
                           previewKind === 'switch' ||
                           previewKind === 'weather' || previewKind === 'media' ||
                           previewKind === 'climate' || previewKind === 'cover' ||
-                          previewKind === 'camera')
+                          previewKind === 'device' || previewKind === 'camera')
         ? (tile.sensor_entity || '')
         : (typeValue === '2' ? (sensorMeta?.sceneEntities?.[tile.scene_alias] || '') : '');
       const rawIcon = tile.icon_name || '';
@@ -538,6 +538,14 @@
           iconName = coverPreviewIcon(coverPreviewState, iconName);
         }
       }
+      const deviceKind = previewKind === 'device' ? devicePreviewKind(typeValue) : '';
+      let devicePreviewState = null;
+      if (deviceKind) {
+        devicePreviewState = parseDevicePreviewPayload(deviceDetailPayload(tile.sensor_entity || '', sensorMeta));
+        if (!normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
+          iconName = devicePreviewIcon(deviceKind, devicePreviewState);
+        }
+      }
       let binarySensorPreviewState = null;
       if (previewKind === 'binary_sensor') {
         binarySensorPreviewState = parseBinarySensorPreviewPayload(
@@ -555,9 +563,11 @@
             ? climatePreviewColor(climatePreviewState)
             : (previewKind === 'cover'
               ? coverPreviewColor(coverPreviewState)
-              : (previewKind === 'binary_sensor'
-                ? binarySensorPreviewColor(binarySensorPreviewState)
-                : '')));
+              : (deviceKind
+                ? devicePreviewColor(deviceKind, devicePreviewState)
+                : (previewKind === 'binary_sensor'
+                  ? binarySensorPreviewColor(binarySensorPreviewState)
+                  : ''))));
         const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
         html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
       }
@@ -611,6 +621,7 @@
         }
       }
       if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, Number(tile.span_h) === 0.5);
+      if (deviceKind) html += devicePreviewExtraHtml(deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
       if (previewKind === 'binary_sensor') {
         html += '<div class="tile-value tile-binary-sensor-value ' + (Number(tile.sensor_value_font) ? sensorValueClass : '') + '" id="' +
           tab + '-tile-' + index + '-value">' +
@@ -645,6 +656,10 @@
       if (previewKind === 'cover') {
         applyCoverPreview(el, coverPreviewState, Number(tile.span_h) === 0.5);
         // The header classes need the bar class set above (switch-tall).
+        applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
+      }
+      if (deviceKind) {
+        applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
       if (typeValue === '9') fitCompactClockPreview(el);

@@ -950,6 +950,21 @@ void WebAdminServer::handleGetSensorValues() {
   }
   json += "}";
 
+  // Lock, Alarm panel and Fan previews read the retained detail state.
+  json += ",\"device_values\":{";
+  bool first_device_value = true;
+  for (const String* list : {&ha.locks_text, &ha.alarm_panels_text, &ha.fans_text}) {
+    for (const auto& id : parseSensorList(*list)) {
+      const String payload = haBridgeConfig.findDetailValue(id);
+      if (!payload.length()) continue;
+      if (!first_device_value) json += ',';
+      first_device_value = false;
+      json += '\"'; appendJsonEscaped(json, id); json += "\":\"";
+      appendJsonEscaped(json, payload); json += '\"';
+    }
+  }
+  json += "}";
+
   // Climate states include HVAC mode, action and unit alongside temperature.
   // Keep the complete JSON payload from the central entity cache because the
   // Web editor also uses it to derive the dynamic icon.
@@ -1119,6 +1134,12 @@ void WebAdminServer::handleGetEntityOptions() {
   appendHumanizedList(json, "climates", parseSensorList(ha.climates_text));
   json += ",";
   appendHumanizedList(json, "covers", parseSensorList(ha.covers_text));
+  json += ",";
+  appendHumanizedList(json, "locks", parseSensorList(ha.locks_text));
+  json += ",";
+  appendHumanizedList(json, "alarm_panels", parseSensorList(ha.alarm_panels_text));
+  json += ",";
+  appendHumanizedList(json, "fans", parseSensorList(ha.fans_text));
   json += ",\"cameras\":[";
   {
     bool first = true;

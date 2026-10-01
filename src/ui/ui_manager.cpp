@@ -10,6 +10,7 @@
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/popups/device/device_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/core/display/display_manager.h"
@@ -143,6 +144,7 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   preload_media_popup();
   preload_climate_popup();
   preload_cover_popup();
+  preload_device_popup();
   preload_pin_popup();
   preload_camera_popup();
 

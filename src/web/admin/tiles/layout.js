@@ -19,7 +19,7 @@
   // Switch and Cover show their state (tile_geometry::compact_switch,
   // compact_cover).
   function supportsHalfSize(type) {
-    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 17, 18, 19].includes(Number(type));
+    return isCompactSensorType(type) || isEditableValueType(type) || [2, 4, 5, 7, 8, 9, 17, 18, 19, 24, 25, 26].includes(Number(type));
   }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high (mirrors tile_geometry::supported).
@@ -80,7 +80,7 @@
     // (if any) centered beside it.
     const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
     // Half-height Switch: icon, title and state like a compact Sensor.
-    const compactSwitch = [5, 17, 19].includes(Number(type)) && halfHeight;
+    const compactSwitch = [5, 17, 19, 24, 25, 26].includes(Number(type)) && halfHeight;
     // Number, Select and Date/Time like a compact Sensor.
     const compactEditable = isEditableValueType(type) && halfHeight;
     if (compactEditable) valueFont = editableCompactValueFont(valueFont);
@@ -93,7 +93,8 @@
     // sizes, the bar a third of the extra height higher
     // (switch_layout::sensor_look).
     // The Cover position bar uses the same header (tile_header.h).
-    const switchHeader = [5, 19].includes(Number(type)) && el.classList.contains('switch-bar');
+    // Lock, Alarm panel and Fan too (types/device).
+    const switchHeader = [5, 19, 24, 25, 26].includes(Number(type)) && el.classList.contains('switch-bar');
     const switchTall = switchHeader && Number(layout?.span_h) > 1;
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));

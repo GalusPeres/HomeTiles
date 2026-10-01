@@ -388,6 +388,25 @@
       updateDraft(tab);
       scheduleAutoSave(tab);
     });
+    // Lock, Alarm panel and Fan: entity, state size and popup gesture.
+    for (const kind of ['lock', 'alarm', 'fan']) {
+      const select = document.getElementById(prefix + '_' + kind + '_entity');
+      bindLive(document.getElementById(prefix + '_' + kind + '_value_font'), 'change', kind + 'ValueFont', () => {
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+      bindLive(select, 'change', kind + 'Entity', () => {
+        if (select.value) select.dataset.configuredValue = select.value;
+        else delete select.dataset.configuredValue;
+        maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
+        updateTilePreview(tab);
+        updateDraft(tab);
+        scheduleAutoSave(tab);
+      });
+      bindLive(document.getElementById(prefix + '_' + kind + '_popup_open_mode'), 'change', kind + 'PopupMode', () => {
+        updateDraft(tab);
+        scheduleAutoSave(tab);
+      });
+    }
     bindLive(cameraSelect, 'change', 'cameraEntity', () => {
       if (cameraSelect.value) {
         cameraSelect.dataset.configuredValue = cameraSelect.value;

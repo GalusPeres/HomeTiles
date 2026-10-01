@@ -11,6 +11,7 @@
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/popups/device/device_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/network/mqtt/mqtt_handlers.h"
@@ -4059,6 +4060,7 @@ void show_weather_popup(const WeatherPopupInit& init) {
   hide_sensor_popup();
   hide_energy_popup();
   hide_media_popup();
+  hide_device_popup();
   if (!g_weather_popup_ctx) {
     g_weather_popup_ctx = new WeatherPopupContext();
     build_popup_ui(g_weather_popup_ctx, init);

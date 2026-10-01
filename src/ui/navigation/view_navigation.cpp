@@ -11,6 +11,7 @@
 #include "src/ui/popups/media/media_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/popups/device/device_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/core/power/power_manager.h"
@@ -69,7 +70,8 @@ bool popupSupported(const Tile& tile) {
     case TILE_NUMBER: case TILE_SELECT: case TILE_DATETIME:
     case TILE_SENSOR: case TILE_BINARY_SENSOR: case TILE_SWITCH:
     case TILE_WEATHER: case TILE_ENERGY: case TILE_MEDIA:
-    case TILE_CLIMATE: case TILE_COVER: case TILE_CAMERA: return true;
+    case TILE_CLIMATE: case TILE_COVER: case TILE_CAMERA:
+    case TILE_LOCK: case TILE_ALARM: case TILE_FAN: return true;
     default: return false;
   }
 }
@@ -299,6 +301,7 @@ void viewNavigationClosePopups() {
   hide_media_popup();
   hide_climate_popup();
   hide_cover_popup();
+  hide_device_popup();
 }
 
 void viewNavigationSource(lv_obj_t* source) {

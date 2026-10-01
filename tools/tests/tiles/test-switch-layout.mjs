@@ -135,7 +135,7 @@ assert.match(geometry, /inline bool compact_switch\(int type, float w, float h\)
 const handler = readRepoFile('src/types/switch/web_handler.cpp');
 assert.match(handler, /raw >= 0 && raw <= switch_layout::kLayoutMax/);
 const layoutJs = readRepoFile('src/web/admin/tiles/layout.js');
-assert.match(layoutJs, /\[2, 4, 5, 7, 8, 9, 17, 18, 19\]\.includes\(Number\(type\)\)/);
+assert.match(layoutJs, /\[2, 4, 5, 7, 8, 9, 17, 18, 19, 24, 25, 26\]\.includes\(Number\(type\)\)/);
 const admin = readRepoFile('src/types/switch/admin.js');
 for (const marker of [
   'const endRadius = Math.floor(reference / 4);',

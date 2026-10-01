@@ -1618,11 +1618,12 @@
     body.tile-resize-active { user-select:none; cursor:default; }
   
 .tile.sensor,
-    .tile.cover { display:grid; grid-template-rows:auto 1fr; grid-template-columns:1fr; }
+    .tile.cover,
+    .tile.device { display:grid; grid-template-rows:auto 1fr; grid-template-columns:1fr; }
     /* These renderers share the Sensor header on the device. Scale its
        coordinates once and compensate the preview's 3 px selection border. */
     .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-             .cover, .energy, .weather, .media, .climate, .switch-bar) > .tile-title {
+             .cover, .device, .energy, .weather, .media, .climate, .switch-bar) > .tile-title {
       position:absolute;
       top:calc(var(--tile-header-title-top, 14px) - 3px);
       right:calc(var(--tile-header-title-right, 8px) - 3px);
@@ -1631,7 +1632,7 @@
       text-align:right;
     }
     .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-             .cover, .energy, .weather, .media, .climate, .switch-bar) > .tile-icon {
+             .cover, .device, .energy, .weather, .media, .climate, .switch-bar) > .tile-icon {
       position:absolute;
       top:calc(var(--tile-header-icon-top, 8px) - 3px);
       left:calc(var(--tile-header-icon-left, 6px) - 3px);
@@ -1698,14 +1699,17 @@
        title alone sits) and the control bar with the Climate pill's box at
        the card's bottom. Positions compensate the 3 px selection border. */
     .tile.switch.switch-bar,
-    .tile.cover.switch-bar { display:block; }
+    .tile.cover.switch-bar,
+    .tile.device.switch-bar { display:block; }
     .tile.switch.switch-bar > .tile-icon,
-    .tile.cover.switch-bar > .tile-icon { margin:0; }
+    .tile.cover.switch-bar > .tile-icon,
+    .tile.device.switch-bar > .tile-icon { margin:0; }
     /* Title and state left-aligned beside the corner disc like the
        half-height tiles (compact_sensor_layout): two insets from the disc,
        the block centered on it, the state at the half-height value size. */
     .tile.switch.switch-bar,
     .tile.cover.switch-bar,
+    .tile.device.switch-bar,
     .tile.climate.climate-header {
       --switch-text-left:calc(3 * var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) - 3px);
       --switch-text-top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
@@ -1713,8 +1717,10 @@
     }
     .tile.switch.switch-bar > .tile-title,
     .tile.cover.switch-bar > .tile-title,
+    .tile.device.switch-bar > .tile-title,
     .tile.switch.switch-bar > .tile-switch-state,
     .tile.cover.switch-bar > .tile-switch-state,
+    .tile.device.switch-bar > .tile-switch-state,
     .tile.climate.climate-header > .tile-title,
     .tile.climate.climate-header > .tile-switch-state {
       position:absolute;
@@ -1732,6 +1738,7 @@
     }
     .tile.switch.switch-bar > .tile-title,
     .tile.cover.switch-bar > .tile-title,
+    .tile.device.switch-bar > .tile-title,
     .tile.climate.climate-header > .tile-title {
       top:var(--switch-text-top);
       font-size:var(--compact-title-font, 10px);
@@ -1739,6 +1746,7 @@
     }
     .tile.switch.switch-bar > .tile-switch-state,
     .tile.cover.switch-bar > .tile-switch-state,
+    .tile.device.switch-bar > .tile-switch-state,
     .tile.climate.climate-header > .tile-switch-state {
       top:calc(var(--switch-text-top) + var(--compact-title-line, 12px));
       bottom:auto;
@@ -1747,36 +1755,45 @@
     }
     .tile.switch.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.cover.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
+    .tile.device.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.climate.climate-header:not(:has(> .tile-title)) > .tile-switch-state {
       top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
         - var(--compact-value-line, 12px) / 2);
     }
     .tile.switch.switch-bar.compact-value-24,
-    .tile.cover.switch-bar.compact-value-24 {
+    .tile.cover.switch-bar.compact-value-24,
+    .tile.device.switch-bar.compact-value-24 {
       --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
     }
     .tile.switch.switch-bar.compact-value-28,
-    .tile.cover.switch-bar.compact-value-28 {
+    .tile.cover.switch-bar.compact-value-28,
+    .tile.device.switch-bar.compact-value-28 {
       --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
     }
     /* From 1.5 rows (switch_layout::sensor_look): the Sensor title top
        right, the state at a Sensor value size centered between the disc and
        the bar, the bar a third of the extra height higher. */
     .tile.switch.switch-bar.switch-tall,
-    .tile.cover.switch-bar.switch-tall {
+    .tile.cover.switch-bar.switch-tall,
+    .tile.device.switch-bar.switch-tall {
       --switch-bar-grow:calc((var(--switch-span-h, 1) - 1) * (var(--preview-cell-h, 73px) + var(--preview-gap, 10px)) / 3);
       --switch-tall-font:var(--fs28, 14px);
     }
     .tile.switch.switch-bar.switch-tall.switch-value-20,
-    .tile.cover.switch-bar.switch-tall.switch-value-20 { --switch-tall-font:var(--fs20, 10px); }
+    .tile.cover.switch-bar.switch-tall.switch-value-20,
+    .tile.device.switch-bar.switch-tall.switch-value-20 { --switch-tall-font:var(--fs20, 10px); }
     .tile.switch.switch-bar.switch-tall.switch-value-24,
-    .tile.cover.switch-bar.switch-tall.switch-value-24 { --switch-tall-font:var(--fs24, 12px); }
+    .tile.cover.switch-bar.switch-tall.switch-value-24,
+    .tile.device.switch-bar.switch-tall.switch-value-24 { --switch-tall-font:var(--fs24, 12px); }
     .tile.switch.switch-bar.switch-tall.switch-value-32,
-    .tile.cover.switch-bar.switch-tall.switch-value-32 { --switch-tall-font:var(--fs32, 16px); }
+    .tile.cover.switch-bar.switch-tall.switch-value-32,
+    .tile.device.switch-bar.switch-tall.switch-value-32 { --switch-tall-font:var(--fs32, 16px); }
     .tile.switch.switch-bar.switch-tall.switch-value-40,
-    .tile.cover.switch-bar.switch-tall.switch-value-40 { --switch-tall-font:var(--fs40, 20px); }
+    .tile.cover.switch-bar.switch-tall.switch-value-40,
+    .tile.device.switch-bar.switch-tall.switch-value-40 { --switch-tall-font:var(--fs40, 20px); }
     .tile.switch.switch-bar.switch-tall > .tile-title,
-    .tile.cover.switch-bar.switch-tall > .tile-title {
+    .tile.cover.switch-bar.switch-tall > .tile-title,
+    .tile.device.switch-bar.switch-tall > .tile-title {
       left:auto;
       top:calc(var(--tile-header-title-top, 14px) - 3px);
       right:calc(var(--tile-header-title-right, 8px) - 3px);
@@ -1787,7 +1804,8 @@
       overflow:visible;
     }
     .tile.switch.switch-bar.switch-tall > .tile-switch-state,
-    .tile.cover.switch-bar.switch-tall > .tile-switch-state {
+    .tile.cover.switch-bar.switch-tall > .tile-switch-state,
+    .tile.device.switch-bar.switch-tall > .tile-switch-state {
       left:calc(var(--tile-pad-h, 10px) - 3px);
       right:calc(var(--tile-pad-h, 10px) - 3px);
       top:calc((var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) + 100% + 6px
@@ -1798,7 +1816,8 @@
       text-align:center;
     }
     .tile.switch.switch-bar > .tile-switch,
-    .tile.cover.switch-bar > .tile-switch {
+    .tile.cover.switch-bar > .tile-switch,
+    .tile.device.switch-bar > .tile-switch {
       position:absolute;
       left:calc(var(--climate-margin-x, 5px) - 3px);
       right:calc(var(--climate-margin-x, 5px) - 3px);
@@ -1843,6 +1862,24 @@
       color:var(--switch-card, #1A1A1A);
     }
     .tile-switch .tile-switch-symbol { font-size:calc(var(--switch-bar-height, 30px) * .55); line-height:1; }
+    /* Lock: the thumb in the state color on both sides, its symbol in the
+       card color (types/device/device_tile.cpp). */
+    .tile-switch.knob-accent .tile-switch-knob {
+      background:var(--switch-accent, #9E9E9E);
+      color:var(--switch-card, #1A1A1A);
+    }
+    /* Lock and Alarm buttons, Alarm modes and Fan speeds: parts side by side
+       (with the bar's gap for buttons and speeds), the current one lit. */
+    .tile-switch .tile-device-parts { display:none; position:absolute; inset:0; }
+    .tile-switch[data-bar="parts"] .tile-device-parts { display:flex; }
+    .tile-device-parts.gapped { gap:calc(var(--climate-margin-x, 5px)); }
+    .tile-device-part {
+      flex:1 1 0; display:flex; align-items:center; justify-content:center;
+      border-radius:var(--climate-control-radius, 8px);
+      color:#fff; font-size:calc(var(--switch-bar-height, 30px) * .45); line-height:1;
+    }
+    .tile-device-part.button { background:var(--device-button, rgba(255,255,255,0.18)); }
+    .tile-device-part.lit { background:var(--switch-accent, #9E9E9E); color:var(--switch-card, #1A1A1A); }
     .tile-switch.is-unavailable > * { display:none !important; }
 
 .tile.cover .tile-cover-value {
@@ -2559,7 +2596,7 @@
    Centered icons above a title (Folder, Scene, Camera, Switch) use the same
    size (tile_icon_disc::header_diameter). */
 .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-         .cover, .energy, .weather, .media, .climate, .switch-bar):not(.empty):not(.sensor-compact) > .tile-icon::after,
+         .cover, .device, .energy, .weather, .media, .climate, .switch-bar):not(.empty):not(.sensor-compact) > .tile-icon::after,
 .tile:is(.scene, .navigate, .camera, .switch:not(.switch-bar)):not(.empty):not(.sensor-compact) > .tile-icon::after {
   width:var(--icon-disc-corner, var(--icon-disc-round, 30px));
   height:var(--icon-disc-corner, var(--icon-disc-round, 30px));

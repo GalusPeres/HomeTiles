@@ -330,7 +330,7 @@ if (JSON.stringify(officialCoverIcons) !== JSON.stringify(expectedCoverIcons)) {
 
 const adminCss = readText(
   new URL('../../../src/web/assets/admin.css', import.meta.url));
-if (!/\.tile\.sensor,\s*\.tile\.cover\s*\{/.test(adminCss) ||
+if (!/\.tile\.sensor,\s*\.tile\.cover,\s*\.tile\.device\s*\{/.test(adminCss) ||
     !/\.tile:is\(\.sensor,[^)]*\.cover[^)]*\) > \.tile-title\s*\{/.test(adminCss) ||
     !/\.tile:is\(\.sensor,[^)]*\.cover[^)]*\) > \.tile-icon\s*\{/.test(adminCss)) {
   throw new Error('Cover preview no longer shares the Sensor tile layout');

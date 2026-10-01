@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-09-30
+Last reviewed: 2026-10-02
 
 ## Sources of truth
 
@@ -31,11 +31,10 @@ Last reviewed: 2026-09-30
 
 Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
-- External Guition `JC8012P4A1C_I_W_Y` V1, Foscam via HA Generic Camera; OTA failed, USB worked. SDIO cascade (CMD53 `0x109`, timeout `0x107`, raw `0xcccccccc`, invalid RX length, `rst:0xc`), also without cameras; restarts leave no panic dump. First DCRC `0x80` on 11-/14-block C6-to-P4 reads. Repeated a8204 markers, 20 MHz (b3, also Issue #167), 1-bit alone (b5) and the 2.9.3 rollback are not fixes; do not retry.
-- Version RPC `0x15e` also occurs on the stable 8-inch; not the cascade cause.
-- SDIO schematics: V1 5.1-kohm pull-ups/no series termination; 8-inch 51-kohm; Tab5 5.1-kohm/22-ohm series/switched WLAN power. Signal margin unproven.
+- Guition V1 (`JC8012P4A1C_I_W_Y`), Foscam cameras: OTA failed, USB worked; SDIO cascade (CMD53 `0x109`/`0x107`, `rst:0xc`), also without cameras, first DCRC on 11-/14-block reads. Not fixes, do not retry: a8204 markers, 20 MHz (b3), 1-bit alone (b5), 2.9.3 rollback.
+- Version RPC `0x15e` (also on the stable 8-inch) is not the cause. SDIO pull-ups: V1 5.1 kohm, 8-inch 51 kohm, Tab5 5.1 kohm + 22 ohm; margin unproven.
 - Original `JC8012P4A1_C6.bin`/HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 needs CN5 and a 3.3 V UART.
-- Fix b6 passed reporter tests (two cameras 15-20 FPS, Web OTA); confirmed v0.6.9b1, shipped v0.6.10. Exact V1 keeps 1-bit/40 MHz, splits large RX into 512-byte CMD53 reads. Lower camera quality/FPS only as labeled A/B.
+- Fix b6 (shipped v0.6.10): exact V1 keeps 1-bit/40 MHz and splits large RX into 512-byte CMD53 reads; reporter OK (two cameras, Web OTA).
 
 ## ESP32-P4 network history
 
@@ -123,12 +122,12 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Maintenance
 
-- Docs: `docs/`, `mkdocs.yml`, `overrides/`; gh-pages. Installer esptool-js 0.7.0 (#57) passed Update on five owned devices; P4 v3.x pending (#41/#44).
+- Docs: `docs/`, `mkdocs.yml`, `overrides/` (gh-pages). Installer esptool-js 0.7.0 (#57) OK on five devices; P4 v3.x pending (#41/#44).
 
 ## Flash and RAM (PR #62)
 
-- `-fno-exceptions` (`compiler.cpp.flags`, CI and local): about -300 KiB per image, Tab5 428 KiB OTA headroom. Unused LVGL widgets/formats off: -49 KiB, IRAM -21 KiB.
-- Renderer slot state, Binary Sensor queue and active/screensaver grids live in PSRAM, allocated in `setup()`. Static DRAM V2 136,632 -> 64,984 B, S3 139,576 -> 80,376 B. V2/S3 b75 passed.
+- `-fno-exceptions` (CI and local): -300 KiB per image, Tab5 428 KiB OTA headroom; unused LVGL widgets off: -49 KiB, IRAM -21 KiB.
+- Renderer slot state, Binary Sensor queue and grids in PSRAM (`setup()`): static DRAM V2 137 -> 65 KB, S3 140 -> 80 KB; b75 passed.
 
 ## View control and telemetry
 
@@ -144,3 +143,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, 30-day NVS sessions, CSRF; device reset; hides secrets.
 - Command channel (optional): pairing v2 (X25519, 6-digit code on panel/HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested. b125 rekey resets stale sessions.
+
+## Lock, Alarm panel and Fan tiles (b167, HW pending)
+
+- IDs 24-26 share `src/types/device/` and `src/ui/popups/device/`; design and Bridge contract: `build/ha-dummy-sim/`.
+- Retained `.../detail` state; views live on their cards, found by entity. Lock/Alarm: pairing + Web Admin password, sealed with id, 15 s deadline, `web_auth`; answers `{base}/stat/lock|alarm`; code via PIN popup (back arrow); no screensaver.

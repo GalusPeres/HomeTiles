@@ -23,6 +23,7 @@
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/popups/device/device_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/popups/popup_nav_style.h"
@@ -619,6 +620,7 @@ static void prepare_media_popup_open(const MediaPopupInit& init) {
 void show_media_popup(const MediaPopupInit& init) {
   hide_pin_popup();
   hide_camera_popup();
+  hide_device_popup();
   hide_climate_popup();
   hide_cover_popup();
   if (!init.entity_id.length()) return;

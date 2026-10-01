@@ -128,7 +128,7 @@ void editable_control_close(EditableControl*){}void editable_control_open(Editab
 bool isMdiIconDisabled(const String&){return false;}String getMdiChar(const String&){return "";}
 
 void update_binary_state(SensorPopupContext*,const String&,bool,const String&,uint64_t,const String&){assert(false);}
-void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_weather_popup(){}void hide_energy_popup(){}void hide_media_popup(){}
+void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_weather_popup(){}void hide_energy_popup(){}void hide_media_popup(){}void hide_device_popup(){}
 void viewNavigationPopupShown(lv_obj_t*,const char*){}
 HistoryRangeConfig get_history_range_config(SensorHistoryRange r){return r==SensorHistoryRange::Day7?HistoryRangeConfig{168,35,288}:HistoryRangeConfig{24,5,288};}
 ${fn(control, 'editable_control_height')}

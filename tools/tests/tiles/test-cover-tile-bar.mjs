@@ -58,10 +58,11 @@ assert.ok(renderer.includes('lv_obj_remove_flag(widget.bar, LV_OBJ_FLAG_CLICKABL
 assert.match(renderer, /if \(g_drag\.data == data\) \{\s*cancel_live_timer\(\);[\s\S]*?g_drag = CoverDrag\{\};\s*\}\s*delete data;/);
 
 // Web Admin: half-size type, compact classes and the Switch preview's bar.
-assert.match(read('src/web/admin/tiles/layout.js'), /\[2, 4, 5, 7, 8, 9, 17, 18, 19\]\.includes\(Number\(type\)\)/);
+assert.match(read('src/web/admin/tiles/layout.js'), /\[2, 4, 5, 7, 8, 9, 17, 18, 19, 24, 25, 26\]\.includes\(Number\(type\)\)/);
 assert.ok(read('src/web/server/render/web_admin_html.cpp').includes('tile_geometry::compact_cover(tile.type, span_w, span_h)'));
 const admin = read('src/types/cover/admin.js');
 assert.ok(admin.includes("bar.style.setProperty('--switch-accent', COVER_PREVIEW_ACTIVE);") &&
   admin.includes('drawSwitchPreviewFill(bar);') && admin.includes("const COVER_PREVIEW_ACTIVE = '#926BC7';"));
-assert.ok(read('src/web/assets/admin.css').includes('.tile.cover.switch-bar > .tile-switch {'));
+// The Lock, Alarm panel and Fan bars share the rule (.tile.device.switch-bar).
+assert.match(read('src/web/assets/admin.css'), /\.tile\.cover\.switch-bar > \.tile-switch,\s*\.tile\.device\.switch-bar > \.tile-switch \{/);
 console.log('Cover tile: compact half height, header with the position bar like the Switch dimmer');

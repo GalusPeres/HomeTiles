@@ -50,6 +50,10 @@ struct HaBridgeConfigData {
   String media_players_text;
   String climates_text;
   String covers_text;
+  // Lock, Alarm panel and Fan tiles (Bridge keys locks, alarm_panels, fans).
+  String locks_text;
+  String alarm_panels_text;
+  String fans_text;
   String cameras_text;
   String scene_alias_text;
   String sensor_slots[HA_SENSOR_SLOT_COUNT];
@@ -94,6 +98,10 @@ public:
   // Update live sensor value (for web interface)
   String findEditableValue(const String& entity_id) const;
   void updateEditableValue(const String& entity_id, const String& payload);
+  // The Bridge's retained `detail` state of a Lock, Alarm panel or Fan
+  // (src/types/device/device_state.h); empty while none arrived.
+  String findDetailValue(const String& entity_id) const;
+  void updateDetailValue(const String& entity_id, const String& payload);
   void updateSensorValue(const String& entity_id, const String& value);
   void registerSensorMeta(const String& entity_id, const String& name, const String& unit);
   void updateEntityMeta(const String& entity_id, const String& name, const String& unit, const String& icon);
@@ -119,6 +127,7 @@ private:
   HaEntityKeyMap names_index_;
   HaEntityKeyMap values_index_;
   HaEntityKeyMap editable_values_index_;
+  HaEntityKeyMap detail_values_index_;
   HaEntityKeyMap state_kinds_index_;
   HaEntityKeyMap icons_index_;
   // Call after every complete blob swap (load/save/applyJson). The single-value

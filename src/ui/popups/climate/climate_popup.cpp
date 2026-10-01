@@ -18,6 +18,7 @@
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
+#include "src/ui/popups/device/device_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 
 #include <ctype.h>
@@ -2432,6 +2433,7 @@ void show_climate_popup(const ClimatePopupInit& init) {
   hide_weather_popup();
   hide_energy_popup();
   hide_media_popup();
+  hide_device_popup();
 
   if (g_climate_popup && g_climate_popup->overlay &&
       g_climate_popup->card) {

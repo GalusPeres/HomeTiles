@@ -1,4 +1,5 @@
 #include "src/types/value/value_control.h"
+#include "src/types/device/device_control.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/network/secure/command_channel.h"
@@ -1238,6 +1239,15 @@ static void handleCameraStatus(const char* payload, size_t) {
   camera_popup_handle_mqtt_status(payload);
 }
 
+// The Bridge's answers to Lock and Alarm commands (bridge-contract.md).
+static void handleLockResult(const char* payload, size_t length) {
+  device_control::queue_result(TILE_LOCK, payload, length);
+}
+
+static void handleAlarmResult(const char* payload, size_t length) {
+  device_control::queue_result(TILE_ALARM, payload, length);
+}
+
 static const TopicRoute kRoutes[] = {
   {TopicKey::SENSOR_OUT, handleOutside, false},
   {TopicKey::SENSOR_IN, handleInside, false},
@@ -1251,6 +1261,8 @@ static const TopicRoute kRoutes[] = {
   {TopicKey::SLEEP_MAINS_CMND, handleSleepMainsCommand, false},
   {TopicKey::SLEEP_BAT_CMND, handleSleepBatteryCommand, false},
   {TopicKey::CAMERA_STAT, handleCameraStatus, true},
+  {TopicKey::LOCK_STAT, handleLockResult, false},
+  {TopicKey::ALARM_STAT, handleAlarmResult, false},
 };
 
 static String buildHaStatestreamTopic(const String& entity_id, const char* suffix) {
@@ -1331,7 +1343,11 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
       if (slot.rule_entity[0]) add_route(String(slot.rule_entity), -1, "state");
       if (tileTypeSubscribesDynamicState(slot.type) &&
           slot.entity[0]) {
-        add_route(String(slot.entity), -1, tileTypeIsEditableValue(slot.type) ? "control" : "state");
+        // Lock, Alarm panel and Fan read the additive detail state.
+        add_route(String(slot.entity), -1,
+                  tileTypeIsEditableValue(slot.type) ? "control"
+                  : tileTypeIsDeviceControl(slot.type) ? "detail"
+                                                       : "state");
         if (tileTypeIsEditableValue(slot.type)) has_media_tiles = true;
         if (slot.type == TILE_MEDIA) {
           has_media_tiles = true;
@@ -1463,6 +1479,10 @@ static bool tryHandleDynamicSensor(const char* topic, const char* payload,
     if (route.topic == topic) {
       if (route.topic.endsWith("/control")) {
         if (payload_len <= EDITABLE_PAYLOAD_MAX) queue_editable_value(route.entity_id, payload);
+        return true;
+      }
+      if (route.topic.endsWith("/detail")) {
+        device_control::queue_detail(route.entity_id, payload, payload_len);
         return true;
       }
       if (route.entity_id.startsWith("binary_sensor.") &&

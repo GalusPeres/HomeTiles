@@ -325,6 +325,9 @@ int main() {
   // Only the Bridge command leaves under this panel's base topic are sealed.
   CHECK(std::strcmp(sealedCommandLeaf("hometiles/cmnd/light", "hometiles", 9), "light") == 0);
   CHECK(std::strcmp(sealedCommandLeaf("hometiles/cmnd/value", "hometiles", 9), "value") == 0);
+  CHECK(std::strcmp(sealedCommandLeaf("hometiles/cmnd/fan", "hometiles", 9), "fan") == 0);
+  CHECK(std::strcmp(sealedCommandLeaf("hometiles/cmnd/lock", "hometiles", 9), "lock") == 0);
+  CHECK(std::strcmp(sealedCommandLeaf("hometiles/cmnd/alarm", "hometiles", 9), "alarm") == 0);
   CHECK(sealedCommandLeaf("hometiles/cmnd/view", "hometiles", 9) == nullptr);
   CHECK(sealedCommandLeaf("hometiles/cmnd/light/x", "hometiles", 9) == nullptr);
   CHECK(sealedCommandLeaf("hometiles2/cmnd/light", "hometiles", 9) == nullptr);

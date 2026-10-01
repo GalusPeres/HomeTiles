@@ -48,7 +48,8 @@ String operator+(const String& a,const String& b){return String(std::string(a)+s
 String operator+(const String& a,const char* b){return String(std::string(a)+b);}
 String operator+(const char* a,const String& b){return String(a+std::string(b));}
 enum TileType { TILE_EMPTY, TILE_NUMBER, TILE_SELECT, TILE_DATETIME, TILE_SENSOR, TILE_BINARY_SENSOR, TILE_SWITCH,
-  TILE_WEATHER, TILE_ENERGY, TILE_MEDIA, TILE_CLIMATE, TILE_COVER, TILE_CAMERA, TILE_SCENE };
+  TILE_WEATHER, TILE_ENERGY, TILE_MEDIA, TILE_CLIMATE, TILE_COVER, TILE_CAMERA, TILE_SCENE,
+  TILE_LOCK, TILE_ALARM, TILE_FAN };
 constexpr size_t TILES_PER_GRID = 6;
 struct Tile { TileType type = TILE_EMPTY; uint16_t view_id = 0; String sensor_entity; int popup = 0; };
 struct TileGridConfig { Tile tiles[TILES_PER_GRID]; };
@@ -118,6 +119,7 @@ void hide_energy_popup(){card.hidden=true;}
 void hide_media_popup(){card.hidden=true;}
 void hide_climate_popup(){card.hidden=true;}
 void hide_cover_popup(){card.hidden=true;}
+void hide_device_popup(){card.hidden=true;}
 void viewNavigationSource(lv_obj_t*);
 void viewNavigationPopupShown(lv_obj_t*,const char*);
 void lv_obj_send_event(lv_obj_t* obj,int event,void*){
@@ -229,7 +231,7 @@ int main(){
   assert(!pending.active&&opens==1);connected=true;
   prepare(2,id,{0,2});viewNavigationSource(&object);assert(!pending.active);
   prepare(2,id,{0,2});servicePending(61000);assert(!pending.active);
-  for(auto type:{TILE_CAMERA,TILE_MEDIA,TILE_WEATHER,TILE_SENSOR,TILE_SWITCH,TILE_CLIMATE,TILE_COVER,TILE_ENERGY,TILE_BINARY_SENSOR,TILE_NUMBER,TILE_SELECT,TILE_DATETIME}){
+  for(auto type:{TILE_CAMERA,TILE_MEDIA,TILE_WEATHER,TILE_SENSOR,TILE_SWITCH,TILE_CLIMATE,TILE_COVER,TILE_ENERGY,TILE_BINARY_SENSOR,TILE_NUMBER,TILE_SELECT,TILE_DATETIME,TILE_LOCK,TILE_ALARM,TILE_FAN}){
     tileConfig.grid.tiles[0].type=type;
     for(int mode:{0,1}){tileConfig.grid.tiles[0].popup=mode;assert(tiles_open_view_popup(id));}
   }

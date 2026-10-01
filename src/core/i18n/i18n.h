@@ -742,7 +742,65 @@ struct LocaleProfile {
 
   // Types, entity labels, apply, invalid value, pending, failed, input formats.
   const char* editable_labels[19];
+
+  // Lock, Alarm panel and Fan tiles and their popups, indexed by
+  // i18n::DeviceLabel.
+  const char* device_labels[41];
+  // Lock states: locked, unlocked, locking, unlocking, open, opening,
+  // jammed, unavailable, unknown.
+  const char* lock_states[9];
+  // Alarm panel states: disarmed, armed_home, armed_away, armed_night,
+  // armed_vacation, armed_custom_bypass, pending, arming, disarming,
+  // triggered, unavailable, unknown.
+  const char* alarm_states[12];
 };
+
+// Index into LocaleProfile::device_labels.
+enum class DeviceLabel : uint8_t {
+  TypeLock,
+  TypeAlarm,
+  TypeFan,
+  EntityLock,
+  EntityAlarm,
+  EntityFan,
+  OpenDoor,
+  ReallyOpen,
+  DoorOpen,
+  Unlock,
+  Lock,
+  Disarm,
+  ModeHome,
+  ModeAway,
+  ModeNight,
+  ModeVacation,
+  ModeCustom,
+  FanPreset,
+  FanNone,
+  FanOscillate,
+  FanDirection,
+  FanForward,
+  FanReverse,
+  FanSpeed,  // printf pattern with one %u
+  EnterCode,
+  WrongCode,
+  TooManyCodes,  // printf pattern with one %u (seconds)
+  NeedPairAndPassword,
+  NeedPair,
+  NeedPassword,
+  UnlockOff,
+  DisarmOff,
+  TextCodeUnsupported,
+  ResultNotAllowed,
+  ResultBusy,
+  ResultUnsupported,
+  ResultUnavailable,
+  ResultExpired,
+  ResultNoAnswer,
+  ResultFailed,
+  ClockNotSet,
+  Count
+};
+static_assert(static_cast<int>(DeviceLabel::Count) == 41, "LocaleProfile::device_labels size");
 
 // Locale-independent timezone catalog with codes and group assignments.
 // LocaleProfile::timezone_labels supplies display names in the same order.
@@ -805,6 +863,12 @@ const char* binary_sensor_label(const char* language_code, uint8_t index);
 const char* binary_sensor_state_label(const char* language_code,
                                       const String& state,
                                       const String& device_class);
+// Lock, Alarm panel and Fan texts (DeviceLabel) and the translated Home
+// Assistant lock and alarm panel states (raw states stay English; an unknown
+// raw state shows as Unknown).
+const char* device_label(const char* language_code, DeviceLabel label);
+const char* lock_state_label(const char* language_code, const char* state);
+const char* alarm_state_label(const char* language_code, const char* state);
 
 }  // namespace i18n
 

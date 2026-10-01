@@ -113,6 +113,9 @@
         rebuildEntitySelect(tab + '_media_entity', data.media);
         rebuildEntitySelect(tab + '_climate_entity', data.climates);
         rebuildEntitySelect(tab + '_cover_entity', data.covers);
+        rebuildEntitySelect(tab + '_lock_entity', data.locks);
+        rebuildEntitySelect(tab + '_alarm_entity', data.alarm_panels);
+        rebuildEntitySelect(tab + '_fan_entity', data.fans);
         rebuildEntitySelect(tab + '_camera_entity', data.cameras);
         rebuildEntitySelect(tab + '_scene_alias', data.scenes);
         if (typeof iconColorSourceEntries === 'function') {

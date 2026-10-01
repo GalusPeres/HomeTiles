@@ -109,10 +109,29 @@ constexpr lv_style_selector_t kTintStore = tile_icon_disc::kCardTintStore;
 // tone_color::g_from_icon_card: the card set_tile_tint gives "From icon" at
 // `percent` (0 = its default strength), pressed like apply_card_background
 // (0x10 lighter).
+// The popup header asks on every loop pass, twice: the last few cards are
+// kept (tile_tint::background runs double math in software on the panels).
 uint32_t from_icon_card(uint32_t icon, bool pressed, uint8_t percent) {
-  const uint32_t card =
-      tile_tint::background(tileDefaultBgColor(), icon, percent ? percent : tile_icon_colors::kTintDefault);
-  return pressed ? brighten_rgb_color(card, 0x10) : card;
+  if (!percent) percent = tile_icon_colors::kTintDefault;
+  const uint32_t base = tileDefaultBgColor();
+  struct Entry {
+    uint32_t base, icon, card;
+    uint8_t percent;
+    bool used;
+  };
+  static Entry cache[4] = {};
+  static uint8_t next = 0;
+  const Entry* found = nullptr;
+  for (const Entry& entry : cache) {
+    if (entry.used && entry.base == base && entry.icon == icon && entry.percent == percent) found = &entry;
+  }
+  if (!found) {
+    Entry& slot = cache[next];
+    next = static_cast<uint8_t>((next + 1) % 4);
+    slot = {base, icon, tile_tint::background(base, icon, percent), percent, true};
+    found = &slot;
+  }
+  return pressed ? brighten_rgb_color(found->card, 0x10) : found->card;
 }
 [[maybe_unused]] const bool g_from_icon_card_registered = (tone_color::g_from_icon_card = &from_icon_card, true);
 

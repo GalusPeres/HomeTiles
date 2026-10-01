@@ -114,8 +114,26 @@ assert.ok(popup.includes('popup_nav_style::style_press_fill(ctx->power_button, f
 const slice = (from, to) => popup.slice(popup.indexOf(from), popup.indexOf(to, popup.indexOf(from)));
 assert.ok(slice('static void update_header_and_power_visuals(', 'static void update_live_accent_visuals(')
   .includes('follow_mode_button_fill(ctx, icon_rgb);'), 'On/off and state updates recolor the mode buttons');
+// Regression b157 (user 2026-10-01): restyling all three mode buttons in
+// both states on every step made the color wheel stutter (three more dirty
+// areas per step). A step recolors only the visible selected button live;
+// the rest follows once the finger lifts.
 assert.ok(slice('static void update_live_accent_visuals(', 'static lv_color_t brightness_dash_color(')
-  .includes('follow_mode_button_fill(ctx, icon_rgb);'), 'A dragged color moves the mode button fill');
+  .includes('follow_mode_button_fill(ctx, icon_rgb, true);'), 'The selected button follows a drag live');
+const follow = slice('static void follow_mode_button_fill(', 'static void update_header_and_power_visuals(');
+assert.ok(follow.includes('if (!button || (live && button != selected)) continue;') &&
+  follow.includes('if (live && selector != LV_PART_MAIN) continue;'), 'Live: only the selected resting fill');
+for (const handler of ['static void on_temp_track_event(', 'static void on_color_field_event(']) {
+  const body = slice(handler, 'static void apply_');
+  assert.equal((body.match(/follow_mode_button_fill\(ctx, get_preview_icon_rgb\(ctx\)\);/g) || []).length, 2,
+    `${handler} recolors all mode buttons on release`);
+  assert.ok(body.includes('start_drag_timing(ctx->card);') && body.includes('note_drag_step(step_us);'),
+    `${handler} measures the drag`);
+}
+assert.ok(popup.includes('Serial.printf("[LightPopup] %s drag: %lums, steps=%lu (avg %luus, max %luus), frames=%lu (avg %luus, max %luus), "'),
+  'One English diagnostic line per drag');
+assert.match(iconSource, /static Entry cache\[4\] = \{\};[\s\S]*tile_tint::background\(base, icon, percent\)/,
+  'The From icon card is cached, not recomputed on every loop pass');
 assert.ok(popup.includes('follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));'),
   'A reused popup shows the button color of the new light in its first frame');
 for (const gone of ['kAccentTrackShare', 'accent_track_color', 'kSwitchThumbOffStep', 'popup_shell_disc_track',

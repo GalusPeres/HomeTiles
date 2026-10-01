@@ -24,6 +24,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/shared/command_pacer.h"
 #include "esp_heap_caps.h"
+#include <lvgl_private.h>
 #include <math.h>
 
 namespace {
@@ -567,15 +568,24 @@ static void control_fill(const LightPopupContext* ctx, uint32_t icon_rgb, lv_col
 
 // The mode buttons follow the circle color whenever the icon color changes:
 // on/off (blue-grey to grey and back), a state update, a dragged color or
-// Kelvin value. Only a change touches their style.
-static void follow_mode_button_fill(LightPopupContext* ctx, uint32_t icon_rgb) {
+// Kelvin value. A drag step (`live`) recolors only the visible fill of the
+// selected button: the others rest transparent and a pressed color is not
+// visible, and every restyled button is one more area the panel redraws per
+// step (b157 restyled all three in both states and the color wheel
+// stuttered). The rest follows once the finger lifts. Only a change touches
+// their style.
+static void follow_mode_button_fill(LightPopupContext* ctx, uint32_t icon_rgb, bool live = false) {
   lv_color_t color;
   lv_opa_t opa;
   control_fill(ctx, icon_rgb, color, opa);
+  lv_obj_t* selected = ctx->mode == LightPopupMode::Color         ? ctx->color_button
+                       : ctx->mode == LightPopupMode::Temperature ? ctx->temperature_button
+                                                                  : ctx->brightness_button;
   for (lv_obj_t* button : {ctx->brightness_button, ctx->color_button, ctx->temperature_button}) {
-    if (!button) continue;
+    if (!button || (live && button != selected)) continue;
     for (const lv_style_selector_t selector : {static_cast<lv_style_selector_t>(LV_PART_MAIN),
                                                static_cast<lv_style_selector_t>(LV_PART_MAIN | LV_STATE_PRESSED)}) {
+      if (live && selector != LV_PART_MAIN) continue;
       lv_style_value_t value;
       if (lv_obj_get_local_style_prop(button, LV_STYLE_BG_COLOR, &value, selector) != LV_STYLE_RES_FOUND ||
           !lv_color_eq(value.color, color)) {
@@ -638,7 +648,7 @@ static void update_live_accent_visuals(LightPopupContext* ctx,
     lv_obj_set_style_bg_color(
         ctx->power_button, power_color, LV_STATE_PRESSED);
   }
-  follow_mode_button_fill(ctx, icon_rgb);
+  follow_mode_button_fill(ctx, icon_rgb, true);
 }
 
 static lv_color_t brightness_dash_color(const LightPopupContext* ctx);
@@ -2014,6 +2024,71 @@ static void apply_brightness_point(LightPopupContext* ctx, const lv_point_t& poi
   else maybe_live_publish_brightness(ctx);
 }
 
+// Diagnostics for the color wheel and the Kelvin slider: one line per drag
+// when the finger lifts, with the handler time per step and LVGL's frames
+// (render time and dirty areas), so a stutter shows where the time goes.
+struct DragTiming {
+  lv_display_t* display = nullptr;
+  uint32_t start_ms = 0, steps = 0, handler_us = 0, handler_max_us = 0;
+  uint32_t frame_start_us = 0, frame_areas = 0, frames = 0, render_us = 0, render_max_us = 0;
+  uint32_t areas = 0, areas_max = 0;
+};
+static DragTiming g_drag_timing;
+
+static void drag_render_event(lv_event_t* e) {
+  DragTiming& timing = g_drag_timing;
+  if (!timing.display) return;
+  const lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_REFR_START) {
+    timing.frame_start_us = micros();
+    timing.frame_areas = timing.display->inv_p;
+  } else if (code == LV_EVENT_REFR_READY && timing.frame_areas) {
+    const uint32_t elapsed = micros() - timing.frame_start_us;
+    ++timing.frames;
+    timing.render_us += elapsed;
+    if (elapsed > timing.render_max_us) timing.render_max_us = elapsed;
+    timing.areas += timing.frame_areas;
+    if (timing.frame_areas > timing.areas_max) timing.areas_max = timing.frame_areas;
+    timing.frame_areas = 0;
+  }
+}
+
+static void start_drag_timing(lv_obj_t* obj) {
+  DragTiming& timing = g_drag_timing;
+  if (timing.display) lv_display_remove_event_cb_with_user_data(timing.display, drag_render_event, &timing);
+  timing = {};
+  timing.display = obj ? lv_obj_get_display(obj) : nullptr;
+  if (!timing.display) return;
+  timing.start_ms = millis();
+  lv_display_add_event_cb(timing.display, drag_render_event, LV_EVENT_ALL, &timing);
+}
+
+static void note_drag_step(uint32_t started_us) {
+  DragTiming& timing = g_drag_timing;
+  if (!timing.display) return;
+  const uint32_t elapsed = micros() - started_us;
+  ++timing.steps;
+  timing.handler_us += elapsed;
+  if (elapsed > timing.handler_max_us) timing.handler_max_us = elapsed;
+}
+
+static void finish_drag_timing(const char* what) {
+  DragTiming& timing = g_drag_timing;
+  if (!timing.display) return;
+  lv_display_remove_event_cb_with_user_data(timing.display, drag_render_event, &timing);
+  const uint32_t steps = timing.steps ? timing.steps : 1;
+  const uint32_t frames = timing.frames ? timing.frames : 1;
+  const uint32_t areas10 = timing.areas * 10 / frames;
+  Serial.printf("[LightPopup] %s drag: %lums, steps=%lu (avg %luus, max %luus), frames=%lu (avg %luus, max %luus), "
+                "areas avg %lu.%lu max %lu\n",
+                what, static_cast<unsigned long>(millis() - timing.start_ms), static_cast<unsigned long>(timing.steps),
+                static_cast<unsigned long>(timing.handler_us / steps), static_cast<unsigned long>(timing.handler_max_us),
+                static_cast<unsigned long>(timing.frames), static_cast<unsigned long>(timing.render_us / frames),
+                static_cast<unsigned long>(timing.render_max_us), static_cast<unsigned long>(areas10 / 10),
+                static_cast<unsigned long>(areas10 % 10), static_cast<unsigned long>(timing.areas_max));
+  timing = {};
+}
+
 // A slider press: remember where it started; live commands wait for a
 // drag (kDragThreshold), so a tap sends one command on release.
 static void begin_slider_gesture(LightPopupContext* ctx) {
@@ -2112,10 +2187,12 @@ static void on_temp_track_event(lv_event_t* e) {
     return;
   }
   const lv_event_code_t code = lv_event_get_code(e);
+  const bool release = code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST;
 
   if (code == LV_EVENT_PRESSED) {
     begin_slider_gesture(ctx);
-  } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    start_drag_timing(ctx->card);
+  } else if (release) {
     ctx->user_dragging = false;
   } else if (code != LV_EVENT_PRESSING) {
     return;
@@ -2123,8 +2200,10 @@ static void on_temp_track_event(lv_event_t* e) {
 
   lv_indev_t* indev = lv_indev_get_act();
   if (!indev) {
-    if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    if (release) {
       commit_color_temperature(ctx);
+      follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
+      finish_drag_timing("Kelvin");
     }
     return;
   }
@@ -2132,7 +2211,14 @@ static void on_temp_track_event(lv_event_t* e) {
   lv_point_t point;
   lv_indev_get_point(indev, &point);
   note_slider_movement(ctx, point);
-  apply_temperature_point(ctx, point, code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST);
+  const uint32_t step_us = micros();
+  apply_temperature_point(ctx, point, release);
+  if (!release) {
+    note_drag_step(step_us);
+  } else {
+    follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
+    finish_drag_timing("Kelvin");
+  }
 }
 
 static void apply_color_field_point(LightPopupContext* ctx,
@@ -2217,9 +2303,11 @@ static void on_color_field_event(lv_event_t* e) {
     return;
   }
   lv_event_code_t code = lv_event_get_code(e);
+  const bool release = code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST;
   if (code == LV_EVENT_PRESSED) {
     begin_slider_gesture(ctx);
-  } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    start_drag_timing(ctx->card);
+  } else if (release) {
     ctx->user_dragging = false;
   } else if (code != LV_EVENT_PRESSING) {
     return;
@@ -2227,8 +2315,10 @@ static void on_color_field_event(lv_event_t* e) {
 
   lv_indev_t* indev = lv_indev_get_act();
   if (!indev) {
-    if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    if (release) {
       commit_color(ctx);
+      follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
+      finish_drag_timing("Color");
     }
     return;
   }
@@ -2236,7 +2326,14 @@ static void on_color_field_event(lv_event_t* e) {
   lv_indev_get_point(indev, &point);
   lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
   note_slider_movement(ctx, point);
-  apply_color_field_point(ctx, target, point, code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST);
+  const uint32_t step_us = micros();
+  apply_color_field_point(ctx, target, point, release);
+  if (!release) {
+    note_drag_step(step_us);
+  } else {
+    follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
+    finish_drag_timing("Color");
+  }
 }
 
 static void on_overlay_delete(lv_event_t* e) {

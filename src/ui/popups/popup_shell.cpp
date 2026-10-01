@@ -287,13 +287,10 @@ tone_color::Fill header_fill(const HeaderDisc& options, uint32_t card, uint32_t 
 }
 
 // The controls around it (pressed close, footer toggles, pills, arrows,
-// editors, keys) take the circle's color only when the popup shows the tile
-// color "From icon" and the circle is tinted. With Global or Custom, in the
-// Climate, Light and Cover popups (global background) and without a tile they
-// take the neutral step.
+// editors, keys) take the circle's color whenever the circle is tinted, in
+// every tile color and popup (user 2026-10-01); else the neutral step.
 tone_color::Fill controls_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb) {
-  const bool tinted = options.from_tile && options.from_icon && header_fill(options, card, rgb).tinted;
-  return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent());
+  return header_fill(options, card, rgb);
 }
 
 void control_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb, lv_color_t& color, lv_opa_t& opa) {
@@ -323,7 +320,8 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   // tile with the tile color "From icon" and a tinted circle: the circle
   // takes exactly the track's color, so both match.
   const lv_opa_t track = shell.active ? shell.active->disc_track : static_cast<lv_opa_t>(LV_OPA_TRANSP);
-  if (track && options.from_tile && options.tile_from_icon && fill.tinted) {
+  const bool on_track = track && options.from_tile && options.tile_from_icon && fill.tinted;
+  if (on_track) {
     color = lv_color_mix(lv_color_hex(rgb), lv_color_hex(card), track);
     disc_opa = LV_OPA_COVER;
     disc_rgb = lv_color_to_u32(color) & 0xFFFFFFu;
@@ -343,13 +341,15 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   static lv_color_t close_color = lv_color_white();
   static lv_opa_t close_opa = LV_OPA_20;
   const tone_color::Fill controls = controls_fill(options, card, rgb);
-  const lv_color_t press = lv_color_hex(controls.control_color);
-  if (shell.close && (!lv_color_eq(close_color, press) || close_opa != controls.control_opa)) {
+  // With the circle on the colored track (Light) the press takes it too.
+  const lv_color_t press = on_track ? color : lv_color_hex(controls.control_color);
+  const lv_opa_t press_opa = on_track ? static_cast<lv_opa_t>(LV_OPA_COVER) : controls.control_opa;
+  if (shell.close && (!lv_color_eq(close_color, press) || close_opa != press_opa)) {
     close_color = press;
-    close_opa = controls.control_opa;
+    close_opa = press_opa;
     lv_obj_set_style_bg_color(shell.close, press, 0);
     lv_obj_set_style_bg_color(shell.close, press, LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(shell.close, controls.control_opa, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(shell.close, press_opa, LV_STATE_PRESSED);
     lv_obj_set_style_color_filter_opa(shell.close, LV_OPA_TRANSP, LV_STATE_PRESSED);
     lv_obj_set_style_recolor_opa(shell.close, LV_OPA_TRANSP, LV_STATE_PRESSED);
   }

@@ -75,6 +75,11 @@ ${fn('refresh_controls')}
 static uint32_t rgb(lv_color_t c) { return lv_color_to_u32(c) & 0xFFFFFF; }
 int main() {
   lv_init();
+  // tile_icon_source registers the From icon card at startup.
+  tone_color::g_from_icon_card = [](uint32_t icon, bool pressed) -> uint32_t {
+    const uint32_t card = tile_tint::background(0x1A1A1A, icon, 20);
+    return pressed ? card + 0x101010 : card;
+  };
   static uint32_t px[64 * 64];
   lv_display_t* display = lv_display_create(64, 64);
   lv_display_set_color_format(display, LV_COLOR_FORMAT_XRGB8888);
@@ -98,23 +103,25 @@ int main() {
     opa = lv_obj_get_style_bg_opa(obj, LV_PART_MAIN);
     lv_obj_remove_state(obj, LV_STATE_PRESSED);
   };
-  // The controls take the circle color only with tile color From icon; with
-  // Global or Custom they take the neutral step.
-  // Media "From cover" (a cover tint with a cover color) tints them like
-  // From icon; without a cover color or with a grey cover they stay neutral.
-  struct Case { const char* what; uint32_t card, icon; bool glow; uint8_t fill; bool tinted;
+  // The controls take the circle color whenever "Circle in icon color"
+  // tints it, in every tile color (user 2026-10-01). A card that follows the
+  // icon (From icon, or From cover with a colored cover) is the circle's card;
+  // on any other card (Global, Custom, From cover without a usable cover) the
+  // circle is the From icon circle (family, tile_icon_disc::circle_card).
+  // White icons and the option off keep the neutral step.
+  struct Case { const char* what; uint32_t card, icon; bool glow; uint8_t fill; bool tinted; bool family;
                 uint8_t cover_tile; bool cover_known; uint32_t cover; };
   const Case cases[] = {
-    {"Global with the circle color", 0x1B1B1B, 0xC62828, true, 0, false},
-    {"Custom in the icon's hue", 0x3E1717, 0xC62828, true, 0, false},
-    {"From icon with the circle color", 0x482F10, 0xEF8402, true, 20, true},
-    {"From icon without the circle color", 0x482F10, 0xEF8402, false, 20, false},
-    {"From icon with a white icon", 0x303030, 0xFFFFFF, true, 20, false},
-    {"From cover, icon from cover", 0x4A2A1F, 0xF2672E, true, 0, true, 20, true, 0xF2672E},
-    {"From cover, white icon", 0x4A2A1F, 0xFFFFFF, true, 0, false, 20, true, 0xF2672E},
-    {"From cover without a cover color", 0x1B1B1B, 0xF2672E, true, 0, false, 20, false, 0},
-    {"From cover with a grey cover", 0x1B1B1B, 0xF2672E, true, 0, false, 20, true, 0x808080},
-    {"Cover color without From cover", 0x1B1B1B, 0xF2672E, true, 0, false, 0, true, 0xF2672E},
+    {"Global with the circle color", 0x1B1B1B, 0xC62828, true, 0, true, true},
+    {"Custom in the icon's hue", 0x3E1717, 0xC62828, true, 0, true, true},
+    {"From icon with the circle color", 0x482F10, 0xEF8402, true, 20, true, false},
+    {"From icon without the circle color", 0x482F10, 0xEF8402, false, 20, false, false},
+    {"From icon with a white icon", 0x303030, 0xFFFFFF, true, 20, false, false},
+    {"From cover, icon from cover", 0x4A2A1F, 0xF2672E, true, 0, true, false, 20, true, 0xF2672E},
+    {"From cover, white icon", 0x4A2A1F, 0xFFFFFF, true, 0, false, false, 20, true, 0xF2672E},
+    {"From cover without a cover color", 0x1B1B1B, 0xF2672E, true, 0, true, true, 20, false, 0},
+    {"From cover with a grey cover", 0x1B1B1B, 0xF2672E, true, 0, true, true, 20, true, 0x808080},
+    {"Cover color without From cover", 0x1B1B1B, 0xF2672E, true, 0, true, true, 0, true, 0xF2672E},
   };
   for (const Case& c : cases) {
     lv_obj_set_style_bg_color(card, lv_color_hex(c.card), 0);
@@ -128,7 +135,8 @@ int main() {
     tile_icon_source::refresh_controls(card);
     uint32_t color; lv_opa_t opa;
     pressed(previous, color, opa);
-    const tone_color::Fill expected = tone_color::fill(c.card, c.icon, c.tinted, icon_glow::kDefault);
+    const uint32_t circle_card = c.family ? tone_color::g_from_icon_card(c.icon, false) : c.card;
+    const tone_color::Fill expected = tone_color::fill(circle_card, c.icon, c.tinted, icon_glow::kDefault);
     if (color != expected.control_color || opa != expected.control_opa || opa != LV_OPA_COVER) {
       std::printf("FAIL %s: #%06X @%d, expected #%06X @%d\n", c.what, (unsigned)color, opa,
                   (unsigned)expected.control_color, expected.control_opa);

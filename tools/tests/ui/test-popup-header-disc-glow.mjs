@@ -28,7 +28,7 @@ for (const marker of [
   'const lv_opa_t opa = shown ? disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);',
   'lv_color_hex(tone_color::readable_icon(rgb, shown && disc_opa ? disc_rgb : card));',
   // Light popup, tile color "From icon": the circle takes the track color.
-  'if (track && options.from_tile && options.tile_from_icon && fill.tinted) {',
+  'const bool on_track = track && options.from_tile && options.tile_from_icon && fill.tinted;',
   'ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),',
   'static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));',
 ]) assert.ok(tint.includes(marker), `header tint: ${marker}`);

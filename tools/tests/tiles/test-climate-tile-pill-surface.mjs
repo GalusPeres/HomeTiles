@@ -30,12 +30,15 @@ const css = read('src/web/assets/admin.css');
 assert.match(css, /\.tile\.climate \.climate-slot-control \{[^}]*background:var\(--control-fill, rgba\(255,255,255,0\.094\)\);/,
   'Preview pill uses the control fill');
 const preview = read('src/web/admin/tiles/grid-preview.js');
-assert.ok(preview.includes("const controls = fill > 0 && tinted ? tone : toneFill(card, given || [255, 255, 255], false, glowPct, seeThrough);"),
-  'Preview pill takes the circle color only with tile color From icon');
+// Since b153 (user 2026-10-01) the controls take the circle color in every
+// tile color whenever the circle is tinted.
+assert.ok(preview.includes("const controls = tinted ? tone : toneFill(card, given || [255, 255, 255], false, glowPct, seeThrough);"),
+  'Preview pill takes the circle color whenever it is tinted');
 assert.ok(preview.includes("tileElem.style.setProperty('--control-fill', rgba(controls.controlColor, controls.controlOpa));"),
   'at the control opacity');
-assert.match(source, /icon_fill_marker\(card, marker\) &&\s*marker > 0 && tile_icon_disc::icon_color_tints\(rgb\)/,
-  'Device pill: tinted only with tile color From icon');
+assert.ok(source.includes('const bool tinted = disc && tile_icon_disc::glow_of(disc) && tile_icon_disc::icon_color_tints(rgb);') &&
+  source.includes('tile_icon_disc::circle_card(card, rest_card, rgb, tinted, false, see_through)'),
+  'Device pill: the circle color in every tile color');
 // A card press takes the resting pill along with the theme's press fade
 // (its pressed color keeps the step above the pressed card); the buttons
 // keep their own presses. A surface touched itself (the Switch bar) keeps

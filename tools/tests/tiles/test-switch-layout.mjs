@@ -264,7 +264,7 @@ assert.ok(!lightPopup.includes('lv_obj_set_style_bg_opa(ctx->val_slider, LV_OPA_
           'The brightness track is opaque and premixed');
 assert.equal((lightPopup.match(/accent_track_color\(ctx, icon_rgb\), LV_PART_MAIN\)/g) || []).length, 2);
 const shell = readRepoFile('src/ui/popups/popup_shell.cpp');
-assert.ok(shell.includes('if (track && options.from_tile && options.tile_from_icon && fill.tinted) {') &&
+assert.ok(shell.includes('const bool on_track = track && options.from_tile && options.tile_from_icon && fill.tinted;') &&
           shell.includes('color = lv_color_mix(lv_color_hex(rgb), lv_color_hex(card), track);'));
 assert.ok(iconSource.includes('tile_icon_disc::glow_of(disc), popup_shows_tile_color && from_icon,\n                            from_icon);') ||
           /popup_shows_tile_color && from_icon,\s+from_icon\);/.test(iconSource));

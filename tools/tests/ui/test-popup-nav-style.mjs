@@ -48,12 +48,13 @@ const shell = read('src/ui/popups/popup_shell.cpp');
 const tint = fn(shell, 'apply_header_disc_tint');
 assert.match(tint, /const tone_color::Fill fill = header_fill\(options, card, rgb\);/);
 assert.match(tint, /const tone_color::Fill controls = controls_fill\(options, card, rgb\);/);
-assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, press, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, controls\.control_opa, LV_STATE_PRESSED\);\s*lv_obj_set_style_color_filter_opa\(shell\.close, LV_OPA_TRANSP, LV_STATE_PRESSED\);/);
+assert.match(tint, /lv_obj_set_style_bg_color\(shell\.close, press, LV_STATE_PRESSED\);\s*lv_obj_set_style_bg_opa\(shell\.close, press_opa, LV_STATE_PRESSED\);\s*lv_obj_set_style_color_filter_opa\(shell\.close, LV_OPA_TRANSP, LV_STATE_PRESSED\);/);
 assert.match(fn(shell, 'control_fill'), /const tone_color::Fill fill = controls_fill\(options, card, rgb\);\s*color = lv_color_hex\(fill\.control_color\);\s*opa = fill\.control_opa;/);
 // The agreed table: the controls take the circle color only when the popup
 // shows the tile color "From icon"; the Climate, Light and Cover popups
 // (forget_popup_source) keep neutral controls.
-assert.match(fn(shell, 'controls_fill'), /const bool tinted = options\.from_tile && options\.from_icon && header_fill\(options, card, rgb\)\.tinted;/);
+// Controls take the circle color whenever it is tinted (user 2026-10-01).
+assert.match(fn(shell, 'controls_fill'), /return header_fill\(options, card, rgb\);/);
 const iconSource = read('src/tiles/runtime/tile_icon_source.cpp');
 assert.match(fn(iconSource, 'forget_popup_source'), /pass_popup_disc\(obj, false\);/);
 assert.match(fn(iconSource, 'popup_background'), /pass_popup_disc\(obj, true\);/);

@@ -481,27 +481,27 @@ void style_controls(lv_obj_t* card) {
     const bool press = tile_icon_disc::is_control(obj);
     if (!press && !tile_icon_disc::is_surface(obj)) return;
     if (!known) {
-      // The controls take the circle's color only with tile color "From
-      // icon"; with Global or Custom they take the neutral step.
+      // The controls take the circle's color whenever "Circle in icon color"
+      // tints it, in every tile color (user 2026-10-01): on Global and Custom
+      // cards the From icon circle (tile_icon_disc::circle_card). Without
+      // the option, or with a white, grey or black icon, the neutral step.
       known = true;
       lv_obj_t* disc = find_disc(card);
       const uint32_t rgb = disc_icon_rgb(disc);
-      uint8_t marker = 0;
-      // "From cover" tints them like "From icon".
-      const bool follows = (icon_fill_marker(card, marker) &&
-                            marker > 0 && tile_icon_disc::icon_color_tints(rgb)) ||
-                           (cover_tints(card) && tile_icon_disc::icon_color_tints(rgb));
-      const bool tinted = disc && tile_icon_disc::glow_of(disc) && follows;
+      const bool tinted = disc && tile_icon_disc::glow_of(disc) && tile_icon_disc::icon_color_tints(rgb);
       see_through = tile_icon_disc::see_through(card);
       const uint8_t percent = ui_surface_style::icon_glow_percent();
-      const tone_color::Fill fill =
-          tone_color::fill(tile_icon_disc::card_state_color(card, false), rgb, tinted, percent, see_through);
+      const uint32_t rest_card = tile_icon_disc::card_state_color(card, false);
+      const uint32_t down_card = tile_icon_disc::card_state_color(card, true);
+      const tone_color::Fill fill = tone_color::fill(
+          tile_icon_disc::circle_card(card, rest_card, rgb, tinted, false, see_through), rgb, tinted, percent,
+          see_through);
       color = lv_color_hex(fill.control_color);
       raised = lv_color_hex(fill.raised_color);
       // A resting surface keeps its step above the pressed card too.
-      surface_pressed =
-          tone_color::fill(tile_icon_disc::card_state_color(card, true), rgb, tinted, percent, see_through)
-              .control_color;
+      surface_pressed = tone_color::fill(tile_icon_disc::circle_card(card, down_card, rgb, tinted, true, see_through),
+                                         rgb, tinted, percent, see_through)
+                            .control_color;
     }
     const bool on_surface = press && tile_icon_disc::is_surface(lv_obj_get_parent(obj));
     ui_surface_style::apply_control_fill(obj, on_surface ? raised : color,

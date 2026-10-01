@@ -716,11 +716,26 @@ void WebAdminServer::handleSaveTiles() {
     }
   }
 
+  // The visible folder shows the edit right away instead of after a quiet Web
+  // Admin: an edit that keeps the tile type (color, text, size, entity) before
+  // the flash write; a new or changed type right after it, once the saved
+  // grid carries its view ID.
+  const bool display_awake = !powerManager.isInSleep();
+  const bool shown_before_save =
+      !screensaver_grid && !deleting_folder && display_awake &&
+      previous_tile.type == tile.type &&
+      tileConfig.previewActiveFolderGrid(folder_id, *grid) &&
+      tiles_show_active_layout_now();
+  const uint32_t save_started_ms = millis();
   bool success = screensaver_grid
                      ? screensaverConfig.replaceTileGrid(*grid)
                      : tileConfig.saveFolderGrid(folder_id, *grid);
+  const uint32_t save_ms = millis() - save_started_ms;
   if (success) {
-    Serial.printf("[WebAdmin] Tile in folder %u[%d] saved - type: %d\n", static_cast<unsigned>(folder_id), index, type);
+    Serial.printf("[WebAdmin] Tile in folder %u[%d] saved - type: %d shown=%u save=%lu ms\n",
+                  static_cast<unsigned>(folder_id), index, type,
+                  shown_before_save ? 1U : 0U,
+                  static_cast<unsigned long>(save_ms));
 
     const bool routes_changed =
         deleting_folder || tileChangeAffectsDynamicMqttRoutes(previous_tile, tile);
@@ -735,8 +750,14 @@ void WebAdminServer::handleSaveTiles() {
     }
 
     if (!screensaver_grid) {
-      tiles_invalidate_folder(folder_id);
-      if (tileConfig.getActiveFolderId() == folder_id) {
+      if (deleting_folder) {
+        tiles_invalidate_folder(folder_id);
+      } else {
+        // Only this folder changed; the other prepared folders stay cached.
+        tiles_invalidate_folder_only(folder_id);
+      }
+      if (!shown_before_save && tileConfig.getActiveFolderId() == folder_id &&
+          !(display_awake && tiles_show_active_layout_now())) {
         tiles_request_reload_if_loaded(GridType::TAB0);
       }
     } else {
@@ -764,6 +785,10 @@ void WebAdminServer::handleSaveTiles() {
     sendChunkedResponse(server, 200, "application/json", response);
   } else {
     Serial.printf("[WebAdmin] Failed to save tile in folder %u[%d]\n", static_cast<unsigned>(folder_id), index);
+    if (shown_before_save && tileConfig.setActiveFolder(folder_id)) {
+      // Back to the stored tile the failed save left.
+      tiles_request_reload(GridType::TAB0);
+    }
     server.send(500, "application/json", "{\"success\":false,\"error\":\"Save failed\"}");
   }
 }

@@ -1,8 +1,8 @@
-// Moving a tile in the Web Admin felt slow on the panel: the new order only
-// appeared after the flash write, then waited for a quiet Web Admin, and
-// every other prepared folder was rebuilt as well. The panel now shows the
-// active folder's new order before saving, and only the changed folder's
-// hidden cache is dropped.
+// Moving, resizing or restyling a tile in the Web Admin felt slow on the
+// panel: the change only appeared after the flash write, then waited for a
+// quiet Web Admin, and every other prepared folder was rebuilt as well. The
+// panel now shows the active folder's change before saving (or right after it
+// for a new tile type), and only the changed folder's hidden cache is dropped.
 import assert from 'node:assert/strict';
 
 import {readRepoFile} from '../../lib/admin-source.mjs';
@@ -24,6 +24,17 @@ assert.match(handler, /tiles_invalidate_folder_only\(folder_id\);\n      if \(!s
 assert.doesNotMatch(handler, /tiles_invalidate_folder\(folder_id\)/, 'a reorder no longer drops every folder cache');
 assert.match(handler, /if \(shown_now && tileConfig\.setActiveFolder\(folder_id\)\) \{\n      \/\/ Back to the stored order the failed save left\.\n      tiles_request_reload\(GridType::TAB0\);/);
 
+const saveTiles = fn(read('src/web/server/handlers/web_admin_tiles.cpp'), 'WebAdminServer::handleSaveTiles');
+const preview = saveTiles.indexOf('tileConfig.previewActiveFolderGrid(folder_id, *grid) &&\n      tiles_show_active_layout_now();');
+assert.ok(preview > 0 && saveTiles.indexOf('tileConfig.saveFolderGrid(folder_id, *grid)') > preview,
+  'a tile edit is shown before the flash write');
+assert.match(saveTiles, /!screensaver_grid && !deleting_folder && display_awake &&\n      previous_tile\.type == tile\.type &&/,
+  'only edits that keep the tile type are shown before saving (new tiles get their view ID first)');
+assert.match(saveTiles, /if \(deleting_folder\) \{\n        tiles_invalidate_folder\(folder_id\);\n      \} else \{\n[^\n]*\n        tiles_invalidate_folder_only\(folder_id\);/);
+assert.match(saveTiles, /if \(!shown_before_save && tileConfig\.getActiveFolderId\(\) == folder_id &&\n          !\(display_awake && tiles_show_active_layout_now\(\)\)\) \{\n        tiles_request_reload_if_loaded\(GridType::TAB0\);/,
+  'other edits are shown right after the save, not after a quiet Web Admin');
+assert.match(saveTiles, /if \(shown_before_save && tileConfig\.setActiveFolder\(folder_id\)\) \{\n      \/\/ Back to the stored tile the failed save left\.\n      tiles_request_reload\(GridType::TAB0\);/);
+
 const config = read('src/tiles/config/tile_config.cpp');
 assert.match(fn(config, 'TileConfig::previewActiveFolderGrid'),
   /if \(folder_id != active_folder_id \|\| !folderExists\(folder_id\)\) return false;\n  adoptActiveGrid\(folder_id, grid\);/);
@@ -39,4 +50,4 @@ assert.match(invalidation, /if \(&entry == g_active_cache \|\|\n            entr
 assert.match(fn(tiles, 'tiles_invalidate_folder_only'),
   /if \(g_folder_only_invalidation_count >= kMaxFolderOnlyInvalidations\) \{\n    g_folder_cache_invalidate_requested = true;/, 'overflow falls back to every cache');
 
-console.log('Reorder: shown before the save, only the changed folder cache dropped, failed save restored.');
+console.log('Web Admin moves and tile edits: shown before/after the save, only the changed folder cache dropped, failed save restored.');

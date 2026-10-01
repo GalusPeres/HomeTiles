@@ -1,4 +1,4 @@
-import { assertSupportedEspRomChip } from "./installer-contract.mjs?v=installer-ui-18";
+import { assertSupportedEspRomChip } from "./installer-contract.mjs?v=installer-ui-19";
 
 const READ_FLASH_DIGEST_LENGTH = 16;
 

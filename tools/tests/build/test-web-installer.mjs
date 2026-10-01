@@ -591,7 +591,9 @@ assert.match(installerSource, /new HomeTilesESPLoader\(/);
 assert.doesNotMatch(installerSource, /romBaudrate/, "The ROM baud rate stays at the esptool-js default of 115200.");
 assert.match(installerSource, /if \(!esploader\.IS_STUB\)/);
 assert.match(installerSource, /if \(!detectedFlashSize\)/);
-assert.match(installerSource, /esploader\.after\("hard_reset", false\)/);
+// esptool-js 0.7.0 hard_reset never pulls EN low: the explicit pulse boots the
+// new app on every board (Waveshare 4B stayed in the stub, 2026-10-01).
+assert.doesNotMatch(installerSource, /esploader\.after\("hard_reset"/);
 assert.doesNotMatch(installerSource, /github\.com\/GalusPeres\/HomeTiles\/releases\/download/);
 assert.match(installerSource, /resolveSameOriginAsset/);
 assert.match(installerSource, /verifyExistingLayout/);
@@ -612,20 +614,17 @@ assert.match(
   /const safeToReset = completed \|\| !flashMutationStarted \|\| mode === "update";/,
   "An interrupted inactive-slot Update may reboot the preserved selected slot.",
 );
-assert.match(installerSource, /const GUITION_S3_DEVICE_KEY = "guition_esp32_4848s040"/);
+assert.doesNotMatch(installerSource, /GUITION_S3_DEVICE_KEY|device\?\.key === /, "Every board gets the same reset.");
+assert.match(installerSource, /const NORMAL_BOOT_RESET_SEQUENCE = "D0\|R1\|W100\|R0\|W100\|D0"/);
 assert.match(
   installerSource,
-  /const GUITION_S3_NORMAL_BOOT_RESET_SEQUENCE = "D0\|R1\|W100\|R0\|W100\|D0"/,
+  /esploader\.after\("custom_reset", undefined, NORMAL_BOOT_RESET_SEQUENCE\)/,
 );
-assert.match(installerSource, /device\?\.key === GUITION_S3_DEVICE_KEY/);
-assert.match(
-  installerSource,
-  /esploader\.after\("custom_reset", undefined, GUITION_S3_NORMAL_BOOT_RESET_SEQUENCE\)/,
-);
-assert.match(installerSource, /resetAndDisconnect\(esploader, transport, safeToReset, device\)/);
+assert.match(installerSource, /const restarted = await resetAndDisconnect\(esploader, transport, safeToReset\)/);
 assert.doesNotMatch(installerSource, /display is restarting/);
-assert.match(installerSource, /Update complete\. Settings were preserved\. Please restart the device manually\./);
-assert.match(installerSource, /Factory reset complete\. Local settings were erased\. Please restart the device manually\./);
+assert.match(installerSource, /\? "The device restarts now; if the screen stays dark, unplug it briefly\."\s*: "Please restart the device manually\."/);
+assert.match(installerSource, /`Update complete\. Settings were preserved\. \$\{restartHint\}`/);
+assert.match(installerSource, /`Factory reset complete\. Local settings were erased\. \$\{restartHint\}`/);
 assert.doesNotMatch(installerSource, /reset signal was sent|Power-cycle once if/);
 assert.match(installerSource, /LAST_RUN_STORAGE_KEY = "hometiles\.webInstaller\.lastRun\.v1"/);
 assert.match(installerSource, /function restoreLastRun\(\)/);

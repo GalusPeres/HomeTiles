@@ -284,8 +284,8 @@ async function hardResetAfterConnect(TransportClass) {
   );
 }
 
-// Guition ESP32-4848S040 (CH340): the custom normal-boot sequence stays an EN
-// pulse with GPIO0 released.
+// Every board after flashing: the normal-boot sequence is an EN pulse (RTS)
+// with GPIO0 (DTR) released, which upstream hard_reset above never sends.
 {
   const port = new FakeSerialPort();
   const transport = new HomeTilesTransport(port);
@@ -293,7 +293,7 @@ async function hardResetAfterConnect(TransportClass) {
   await new esptool.ClassicReset(transport, 1).reset();
   port.calls.length = 0;
   const sequence = read("docs/assets/javascripts/installer.mjs")
-    .match(/GUITION_S3_NORMAL_BOOT_RESET_SEQUENCE = "([^"]+)"/)?.[1];
+    .match(/NORMAL_BOOT_RESET_SEQUENCE = "([^"]+)"/)?.[1];
   assert.equal(sequence, "D0|R1|W100|R0|W100|D0");
   await loader.after("custom_reset", undefined, sequence);
   assert.deepEqual(port.calls, [

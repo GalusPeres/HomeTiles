@@ -289,15 +289,18 @@ void apply_card_background(lv_obj_t* card, uint32_t rgb) {
 // Tints a tile card for its rules (tile_tint.h). The tint replaces the card's
 // own color and always starts from the global default tile color, so an own
 // tile color never mixes with the rule color. The first tint keeps the card's
-// own color in an unused state selector; clear restores it.
+// own resting color in an unused state selector; clear restores it. A tap on
+// a Light tile tints while the card is still pressed or fading back, so the
+// shown color is the lighter press color: storing that made the tile one
+// press step lighter after every on/off.
 void set_tile_tint(lv_obj_t* card, uint32_t color, uint8_t percent) {
   if (!card) return;
   lv_style_value_t stored;
   if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &stored, kTintStore) != LV_STYLE_RES_FOUND) {
-    lv_obj_set_style_bg_color(card, lv_obj_get_style_bg_color(card, LV_PART_MAIN), kTintStore);
+    lv_obj_set_style_bg_color(card, lv_color_hex(tile_icon_disc::card_state_color(card, false)), kTintStore);
   }
   const uint32_t tint = tile_tint::background(tileDefaultBgColor(), color, percent);
-  if ((lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF) == tint) return;
+  if (tile_icon_disc::card_state_color(card, false) == tint) return;
   apply_card_background(card, tint);
 }
 

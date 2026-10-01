@@ -161,6 +161,15 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
    {lv_style_value_t v;assert(lv_obj_get_local_style_prop(button,LV_STYLE_COLOR_FILTER_OPA,&v,LV_STATE_PRESSED)==LV_STYLE_RES_FOUND&&v.num==LV_OPA_TRANSP&&"no theme darkening");}
    hide_popup_shell(b.body);
  }
+ // A drag (Light popup color wheel) holds the invisible close press color;
+ // it follows once the finger lifts, so a drag step draws no extra area.
+ {lv_obj_set_style_bg_color(b.body,lv_color_hex(0x1B1B1B),0);lv_obj_set_style_text_color(b.icon,lv_color_hex(0xC62828),0);show(b,"Hold");sync_popup_shell();
+  uint32_t before,after;lv_opa_t o;close_press(before,o);popup_shell_hold_close_fill(true);
+  lv_obj_set_style_text_color(b.icon,lv_color_hex(0x2E7D32),0);sync_popup_shell();close_press(after,o);
+  assert(after==before&&"close press color held during a drag");
+  popup_shell_hold_close_fill(false);sync_popup_shell();close_press(after,o);
+  assert(after!=before&&after==tone_color::fill(0x2B1A10,0x2E7D32,true,configManager.cfg.icon_glow).control_color&&"close press color follows on release");
+  hide_popup_shell(b.body);}
  tone_color::g_from_icon_card=nullptr;
  configManager.cfg.icon_glow=0;popup_shell_use_tile_disc(false,false,true,true);
  {uint32_t rgb;lv_opa_t opa;footer_fill(0x482F10,0xEF8402,rgb,opa);assert(opa==LV_OPA_COVER&&rgb==tone_color::fill(0x482F10,0xEF8402,true,0).control_color&&"Circle strength 0 keeps presses visible");}

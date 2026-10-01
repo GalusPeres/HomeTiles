@@ -42,6 +42,12 @@ void popup_shell_follow_tile_color(uint32_t color);
 // controls are exactly the tile's.
 void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon = false,
                                uint8_t tile_tint = 0);
+// While a control is dragged (the Light popup's color wheel and Kelvin
+// slider), the close button keeps its press color: it only shows while the
+// close button is pressed, and restyling it on every step drew one more area
+// per frame. It takes the current color once the drag ends (false) and when
+// the popup closes.
+void popup_shell_hold_close_fill(bool hold);
 // The fill of the controls around the header for a popup (card) and icon
 // color, with the options of the tile that opens (or opened) the popup: the
 // circle's color whenever the circle is tinted, else the neutral step

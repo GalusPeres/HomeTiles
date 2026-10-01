@@ -40,6 +40,8 @@ struct HeaderDisc {
   uint8_t tile_tint = 0;
 };
 HeaderDisc g_next_disc;
+// popup_shell_hold_close_fill: a drag holds the close button's press color.
+bool g_hold_close_fill = false;
 struct Shell {
   HeaderDisc disc;
   lv_obj_t* overlay = nullptr;
@@ -325,13 +327,13 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   // The pressed close button has exactly the control color of the popup
   // (controls_fill, popup_nav_style.h): the same color at rest (transparent),
   // so the press fades from the card to it, and no theme darkening. Only a
-  // change restyles it.
+  // change restyles it, and not during a drag (popup_shell_hold_close_fill).
   static lv_color_t close_color = lv_color_white();
   static lv_opa_t close_opa = LV_OPA_20;
   const tone_color::Fill controls = controls_fill(options, card, rgb);
   const lv_color_t press = lv_color_hex(controls.control_color);
   const lv_opa_t press_opa = controls.control_opa;
-  if (shell.close && (!lv_color_eq(close_color, press) || close_opa != press_opa)) {
+  if (shell.close && !g_hold_close_fill && (!lv_color_eq(close_color, press) || close_opa != press_opa)) {
     close_color = press;
     close_opa = press_opa;
     lv_obj_set_style_bg_color(shell.close, press, 0);
@@ -479,6 +481,8 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
 
 bool popup_shell_active() { return shell.active != nullptr; }
 
+void popup_shell_hold_close_fill(bool hold) { g_hold_close_fill = hold; }
+
 void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon, uint8_t tile_tint) {
   g_next_disc.from_tile = true;
   g_next_disc.off = off;
@@ -519,6 +523,7 @@ void popup_shell_follow_tile_color(uint32_t color) {
 
 void hide_popup_shell(lv_obj_t* body) {
   if (!shell.active || shell.active->body != body) return;
+  g_hold_close_fill = false;
   invalidate_shell();
   SceneChange change;
   detach();

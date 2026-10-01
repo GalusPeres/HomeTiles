@@ -67,6 +67,11 @@ constexpr int kBrightnessOffDragThreshold = kVerticalSliderRadius;
 constexpr uint32_t kDefaultColor = 0xFFD54F;
 constexpr uint32_t kSwitchOnColor = 0x3B82F6;
 constexpr uint32_t kRemoteBlockMs = 3000;
+// A color or Kelvin drag recolors the accents (header icon and circle, power
+// button, selected mode button) at most this often: only the cursor moves on
+// every frame, each recolored control is one more area to draw. The release
+// shows the exact color at once.
+constexpr uint32_t kAccentDragMs = 100;
 // Home Assistant starts a slider drag after 10 px (ha-control-slider Pan
 // threshold); below it a press is a tap and sends nothing live.
 constexpr int kDragThreshold = popup_layout::scale(10);
@@ -147,6 +152,7 @@ struct LightPopupContext {
   uint8_t tile_grid = 0;
   uint8_t tile_index = 0;
   bool user_dragging = false;
+  uint32_t accent_ms = 0;
   // A slider gesture counts as a drag only after kDragThreshold.
   bool drag_moved = false;
   lv_point_t press_point = {0, 0};
@@ -639,6 +645,11 @@ static void update_header_and_power_visuals(LightPopupContext* ctx, uint32_t ico
 static void update_live_accent_visuals(LightPopupContext* ctx,
                                        uint32_t icon_rgb) {
   if (!ctx || !ctx->available) return;
+  if (ctx->user_dragging) {
+    const uint32_t now = millis();
+    if (ctx->accent_ms && now - ctx->accent_ms < kAccentDragMs) return;
+    ctx->accent_ms = now;
+  }
   if (ctx->icon_label && !ctx->keep_icon_white) {
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(icon_rgb), 0);
   }
@@ -2198,9 +2209,12 @@ static void on_temp_track_event(lv_event_t* e) {
 
   if (code == LV_EVENT_PRESSED) {
     begin_slider_gesture(ctx);
+    ctx->accent_ms = 0;
     start_drag_timing(ctx->card);
+    popup_shell_hold_close_fill(true);
   } else if (release) {
     ctx->user_dragging = false;
+    popup_shell_hold_close_fill(false);
   } else if (code != LV_EVENT_PRESSING) {
     return;
   }
@@ -2209,6 +2223,7 @@ static void on_temp_track_event(lv_event_t* e) {
   if (!indev) {
     if (release) {
       commit_color_temperature(ctx);
+      update_live_accent_visuals(ctx, get_preview_icon_rgb(ctx));
       follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
       finish_drag_timing("Kelvin");
     }
@@ -2223,6 +2238,7 @@ static void on_temp_track_event(lv_event_t* e) {
   if (!release) {
     note_drag_step(step_us);
   } else {
+    update_live_accent_visuals(ctx, get_preview_icon_rgb(ctx));
     follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
     finish_drag_timing("Kelvin");
   }
@@ -2313,9 +2329,12 @@ static void on_color_field_event(lv_event_t* e) {
   const bool release = code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST;
   if (code == LV_EVENT_PRESSED) {
     begin_slider_gesture(ctx);
+    ctx->accent_ms = 0;
     start_drag_timing(ctx->card);
+    popup_shell_hold_close_fill(true);
   } else if (release) {
     ctx->user_dragging = false;
+    popup_shell_hold_close_fill(false);
   } else if (code != LV_EVENT_PRESSING) {
     return;
   }
@@ -2324,6 +2343,7 @@ static void on_color_field_event(lv_event_t* e) {
   if (!indev) {
     if (release) {
       commit_color(ctx);
+      update_live_accent_visuals(ctx, get_preview_icon_rgb(ctx));
       follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
       finish_drag_timing("Color");
     }
@@ -2338,6 +2358,7 @@ static void on_color_field_event(lv_event_t* e) {
   if (!release) {
     note_drag_step(step_us);
   } else {
+    update_live_accent_visuals(ctx, get_preview_icon_rgb(ctx));
     follow_mode_button_fill(ctx, get_preview_icon_rgb(ctx));
     finish_drag_timing("Color");
   }

@@ -129,6 +129,9 @@ for (const handler of ['static void on_temp_track_event(', 'static void on_color
     `${handler} recolors all mode buttons on release`);
   assert.ok(body.includes('start_drag_timing(ctx->card);') && body.includes('note_drag_step(step_us);'),
     `${handler} measures the drag`);
+  // The invisible close press color waits for the release too (b159).
+  assert.ok(body.includes('popup_shell_hold_close_fill(true);') && body.includes('popup_shell_hold_close_fill(false);'),
+    `${handler} holds the close press color while dragging`);
 }
 assert.ok(popup.includes('Serial.printf("[LightPopup] %s drag: %lums, steps=%lu (avg %luus, max %luus), frames=%lu (avg %luus, max %luus), "'),
   'One English diagnostic line per drag');

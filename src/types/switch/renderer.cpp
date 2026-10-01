@@ -309,8 +309,10 @@ void draw_rect(lv_layer_t* layer, const lv_area_t& area, lv_color_t color, int32
 }
 
 // The power symbol (on) or a ring (off), centered in `area`.
-void draw_power_symbol(lv_layer_t* layer, const lv_area_t& area, lv_color_t color, bool on) {
-  const int32_t side = std::min(lv_area_get_width(&area), lv_area_get_height(&area));
+// `max_side`: the symbol keeps the one-row bar's size on a taller bar.
+void draw_power_symbol(lv_layer_t* layer, const lv_area_t& area, lv_color_t color, bool on, int32_t max_side) {
+  int32_t side = std::min(lv_area_get_width(&area), lv_area_get_height(&area));
+  if (max_side > 0) side = std::min(side, max_side);
   const int32_t radius = side * 21 / 100;
   const int32_t width = std::max<int32_t>(2, side / 16);
   if (radius < 3) return;
@@ -359,7 +361,7 @@ void bar_draw_cb(lv_event_t* e) {
 
   if (view->bar_kind == static_cast<uint8_t>(Bar::Dimmer)) {
     if (view->level == 0) return;
-    switch_layout::Dimmer geometry{width, height, radius};
+    switch_layout::Dimmer geometry{width, height, radius, view->bar_base};
     const int32_t fill = geometry.fill_width(view->level);
     const int32_t end = geometry.end_radius_for(fill);
     // The fill stays inside the bar's shape without a clip layer: up to where
@@ -408,7 +410,7 @@ void bar_draw_cb(lv_event_t* e) {
     symbol_color = lv_color_white();
   }
   draw_rect(layer, thumb, thumb_color, radius);
-  draw_power_symbol(layer, thumb, symbol_color, view->on);
+  draw_power_symbol(layer, thumb, symbol_color, view->on, view->bar_base);
 }
 
 // ---------------------------------------------------------------------------
@@ -422,7 +424,7 @@ uint8_t level_at(const SwitchBarView* view, const lv_point_t& point) {
   const int32_t height = lv_area_get_height(&area);
   const int32_t radius =
       std::min<int32_t>(lv_obj_get_style_radius(view->bar, LV_PART_MAIN), height / 2);
-  switch_layout::Dimmer geometry{lv_area_get_width(&area), height, radius};
+  switch_layout::Dimmer geometry{lv_area_get_width(&area), height, radius, view->bar_base};
   return geometry.value_at(point.x - area.x1);
 }
 
@@ -437,7 +439,7 @@ void invalidate_level_change(const SwitchBarView* view, uint8_t old_level, uint8
   const int32_t height = lv_area_get_height(&area);
   const int32_t radius =
       std::min<int32_t>(lv_obj_get_style_radius(view->bar, LV_PART_MAIN), height / 2);
-  const switch_layout::Dimmer geometry{width, height, radius};
+  const switch_layout::Dimmer geometry{width, height, radius, view->bar_base};
   const int32_t old_fill = geometry.fill_width(old_level);
   const int32_t new_fill = geometry.fill_width(new_level);
   const int32_t reach = std::max<int32_t>(radius, geometry.handle_margin() + geometry.handle_width()) + 1;
@@ -652,6 +654,7 @@ struct BarBox {
   int width = 0;
   int height = 0;
   int top = 0;
+  int base = 0;  // the one-row height
 };
 
 BarBox bar_box(const Tile& tile) {
@@ -664,7 +667,8 @@ BarBox bar_box(const Tile& tile) {
       climate_layout::kContentTop);
   BarBox box;
   box.width = tile_w - climate_layout::kOuterInset * 2;
-  box.height = GRID_CELL_H - climate_layout::kOuterInset - top + switch_layout::bar_growth(tile_h, GRID_CELL_H);
+  box.base = GRID_CELL_H - climate_layout::kOuterInset - top;
+  box.height = box.base + switch_layout::bar_growth(tile_h, GRID_CELL_H);
   box.top = tile_h - climate_layout::kOuterInset - box.height;
   return box;
 }
@@ -719,9 +723,13 @@ void show_view_state(SwitchBarView* view, const Tile& tile, const SwitchState& s
   const bool dimmable = is_light_entity_id(tile.sensor_entity) && state.supports_brightness;
   const Bar kind = switch_layout::bar_for(static_cast<Layout>(view->layout), view->compact, dimmable);
   bool on = state.has_state ? state.is_on : (state.has_brightness && state.brightness_pct > 0);
+  // A dimmable light switched on before Home Assistant reports its
+  // brightness (a toggle) shows its last level instead of 100 % that jumps
+  // back; never seen on, it shows On without a level until the reply.
+  const uint8_t unreported_level = dimmable ? view->last_on_level : 100;
   uint8_t level = 0;
   if (state.available && on) {
-    level = state.has_brightness ? std::max<uint8_t>(1, state.brightness_pct) : 100;
+    level = state.has_brightness ? std::max<uint8_t>(1, state.brightness_pct) : unreported_level;
   }
   if (!state.available) on = false;
 
@@ -738,9 +746,10 @@ void show_view_state(SwitchBarView* view, const Tile& tile, const SwitchState& s
       }
     } else if (on != (held > 0)) {
       on = held > 0;
-      level = on ? 100 : 0;
+      level = on ? unreported_level : 0;
     }
   }
+  if (dimmable && on && level > 0) view->last_on_level = level;
 
   const bool redraw = view->bar_kind != static_cast<uint8_t>(kind) || view->level != level ||
                       view->on != on || view->available != state.available;
@@ -749,7 +758,7 @@ void show_view_state(SwitchBarView* view, const Tile& tile, const SwitchState& s
   view->on = on;
   view->available = state.available;
   if (redraw && view->bar) lv_obj_invalidate(view->bar);
-  show_state_text(view, state, dimmable, level, on);
+  show_state_text(view, state, dimmable && level > 0, level, on);
 }
 
 void release_timer_cb(lv_timer_t*) {
@@ -766,6 +775,16 @@ void release_timer_cb(lv_timer_t*) {
 }
 
 }  // namespace
+
+bool switch_tile_card_color(GridType grid_type, uint8_t index, uint32_t& rgb) {
+  SwitchTileWidgets* widgets = tile_renderer_get_switch_widgets(grid_type);
+  if (!widgets || index >= TILES_PER_GRID) return false;
+  lv_obj_t* card = widgets[index].view ? widgets[index].view->card : nullptr;
+  if (!card && widgets[index].icon_label) card = lv_obj_get_parent(widgets[index].icon_label);
+  if (!card) return false;
+  rgb = lv_color_to_u32(lv_obj_get_style_bg_color(card, LV_PART_MAIN)) & 0xFFFFFF;
+  return true;
+}
 
 bool switch_tile_held_on(const SwitchTileWidgets& widgets, bool& on) {
   uint8_t value = 0;
@@ -950,6 +969,7 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     } else {
       if (icon_lbl) tile_icon_disc::add_round(container, icon_lbl);
       view->bar = create_bar(container, tile);
+      view->bar_base = static_cast<int16_t>(bar_box(tile).base);
     }
   }
 

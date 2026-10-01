@@ -70,8 +70,13 @@ struct Dimmer {
   int width = 0;
   int height = 0;
   int radius = 0;
+  // The one-row bar height (0 = `height`). A taller bar (sensor_look) keeps
+  // the end rounding and handle width of the one-row bar; only the handle
+  // line grows with the bar's height.
+  int base_height = 0;
 
-  int end_radius() const { return height / 4; }
+  int reference_height() const { return base_height > 0 ? base_height : height; }
+  int end_radius() const { return reference_height() / 4; }
   int min_fill() const {
     const int fill = radius + end_radius();
     return fill < width ? fill : width;
@@ -80,7 +85,7 @@ struct Dimmer {
   // smallest piece.
   int handle_margin() const { return min_fill() / 2; }
   int handle_width() const {
-    const int w = height * 7 / 100;
+    const int w = reference_height() * 7 / 100;
     return w < 3 ? 3 : w;
   }
   int handle_height() const { return height * 42 / 100; }

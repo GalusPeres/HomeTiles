@@ -10995,8 +10995,11 @@ function maybeFillTitleFromSwitch(tab) {
   // has a quarter of the bar height as rounding, growing into the bar's
   // radius only near the full end. The smallest piece is the bar radius plus
   // that rounding wide (tangential, no edge) with the handle in its middle.
-  function switchDimmerGeometry(width, height, radius) {
-    const endRadius = Math.floor(height / 4);
+  // `baseHeight`: the one-row bar height; a taller bar keeps its end
+  // rounding and handle width, only the handle grows in height.
+  function switchDimmerGeometry(width, height, radius, baseHeight = 0) {
+    const reference = baseHeight > 0 ? baseHeight : height;
+    const endRadius = Math.floor(reference / 4);
     const minFill = Math.min(radius + endRadius, width);
     const margin = Math.floor(minFill / 2);
     const low = minFill - margin;
@@ -11005,7 +11008,7 @@ function maybeFillTitleFromSwitch(tab) {
       margin,
       minFill,
       endRadius,
-      handleWidth: Math.max(3, Math.floor(height * 7 / 100)),
+      handleWidth: Math.max(3, Math.floor(reference * 7 / 100)),
       handleHeight: Math.floor(height * 42 / 100),
       handleX(value) {
         if (value <= 1 || high <= low) return low;
@@ -11239,8 +11242,9 @@ function maybeFillTitleFromSwitch(tab) {
     const available = state.available !== false;
     let on = state.hasState ? !!state.isOn : (!!state.hasBrightness && state.brightness > 0);
     if (!available) on = false;
-    const level = on ? (state.hasBrightness ? Math.max(1, state.brightness) : 100) : 0;
-    if (label) label.textContent = switchPreviewStateText(state, dimmable, level, on);
+    // A dimmable light on without a reported brightness: On without a level.
+    const level = on ? (state.hasBrightness ? Math.max(1, state.brightness) : (dimmable ? 0 : 100)) : 0;
+    if (label) label.textContent = switchPreviewStateText(state, dimmable && level > 0, level, on);
     if (!bar) return;
     const kind = switchBarKind(style, halfHeight, dimmable);
     bar.dataset.bar = kind;
@@ -11264,7 +11268,8 @@ function maybeFillTitleFromSwitch(tab) {
     const width = bar.clientWidth;
     const height = bar.clientHeight;
     const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, height / 2);
-    const geometry = switchDimmerGeometry(width, height, radius);
+    const base = parseFloat(getComputedStyle(bar).getPropertyValue('--switch-bar-height')) || height;
+    const geometry = switchDimmerGeometry(width, height, radius, Math.min(base, height));
     const fillWidth = kind === 'dimmer' ? geometry.fillWidth(level) : 0;
     const endRadius = geometry.endRadiusFor(fillWidth);
     // The fill element starts one end radius left of the bar, so only the

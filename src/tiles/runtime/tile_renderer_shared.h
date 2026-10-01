@@ -54,6 +54,9 @@ void tile_renderer_set_build_grid(const TileGridConfig* grid);
 
 bool is_light_entity_id(const String& entity_id);
 void update_switch_tile_state(GridType grid_type, uint8_t grid_index, const char* payload);
+// A Switch tile's current card color: the color of its dimmer handle line,
+// which the Light popup's brightness handle takes (types/switch/renderer.cpp).
+bool switch_tile_card_color(GridType grid_type, uint8_t index, uint32_t& rgb);
 void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char* payload);
 
 // Call when a media card is destroyed (LV_EVENT_DELETE): clears every widget

@@ -75,7 +75,8 @@ for (const marker of [
   'visual_on ? popup_surface::card(ctx->card_bg) : lv_color_white();',
   'ctx->is_on ? accent_color : popup_surface::lighter(ctx->card_bg, kSwitchThumbOffStep);',
   'lv_obj_set_style_text_color(ctx->val_switch_icon, popup_surface::card(ctx->card_bg), 0);',
-  'dash_dsc.bg_color = popup_surface::card(ctx->card_bg);',
+  'dash_dsc.bg_color = brightness_dash_color(ctx);',
+  'return popup_surface::card(ctx->card_bg);',
   'const lv_color_t disabled_color = popup_surface::lighter(card, popup_surface::kDisabled);',
 ]) assert.ok(popup.includes(marker), `derived surface: ${marker}`);
 assert.equal((popup.match(/ctx->supports_(?:brightness|color|temperature),\n\s*ctx->card_bg\);/g) || []).length, 3,

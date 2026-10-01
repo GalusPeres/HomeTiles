@@ -29,6 +29,12 @@ struct SwitchBarView {
   // Tall tiles: the state's vertical center in the card's content box, kept
   // when the font steps down; -1 beside the disc.
   int16_t state_center = -1;
+  // The one-row bar height (switch_layout::Dimmer::base_height): a taller
+  // bar keeps its end rounding, handle width and power symbol size.
+  int16_t bar_base = 0;
+  // The last level shown while on, for a light switched on before Home
+  // Assistant reports its brightness (0 = not seen on yet).
+  uint8_t last_on_level = 0;
   // Fill and thumb color when the tile has no icon to read it from.
   uint32_t fill_rgb = 0xFFD54F;
   // Off thumb color cache: one OKLCH step above the bar color.

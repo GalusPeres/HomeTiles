@@ -49,6 +49,10 @@ int main() {
                 sensor_look(Layout::IconButton, span) ? 1 : 0);
   }
   std::printf("grow %d %d %d\n", bar_growth(145, 145), bar_growth(226, 145), bar_growth(306, 145));
+  // A taller bar (V2 1x1.5: 88 px) keeps the one-row end rounding and handle
+  // width; only the handle grows in height.
+  const Dimmer tall{156, 88, 26, 61};
+  std::printf("tall %d %d %d %d\n", tall.end_radius(), tall.handle_width(), tall.handle_height(), tall.min_fill());
   return 0;
 }
 `;
@@ -121,6 +125,7 @@ if (output !== null) {
   // the header layouts only, the bar + 1/3 of the extra height.
   assert.deepEqual(pick('look'), [[1, 0, 0], [2, 0, 0], [3, 1, 0], [4, 1, 0]]);
   assert.deepEqual(pick('grow'), [[0, 27, 53]]);
+  assert.deepEqual(pick('tall'), [[15, 4, 36, 41]], 'Only the handle height grows');
 }
 
 // Policy, save path and Web mirror.
@@ -133,7 +138,8 @@ const layoutJs = readRepoFile('src/web/admin/tiles/layout.js');
 assert.match(layoutJs, /\[2, 4, 5, 7, 8, 9, 18\]\.includes\(Number\(type\)\)/);
 const admin = readRepoFile('src/types/switch/admin.js');
 for (const marker of [
-  'const endRadius = Math.floor(height / 4);',
+  'const endRadius = Math.floor(reference / 4);',
+  'handleWidth: Math.max(3, Math.floor(reference * 7 / 100)),',
   'const minFill = Math.min(radius + endRadius, width);',
   'const margin = Math.floor(minFill / 2);',
   'endRadiusFor(fill) {',
@@ -159,6 +165,18 @@ assert.ok(admin.includes('function switchSensorLook(style, spanH) {'));
 const livePreview = readRepoFile('src/web/admin/tiles/live-preview.js');
 assert.ok(livePreview.includes('!switchSensorLook(switchStyle, spanH));'),
           'The editor offers the value sizes of the tile size');
+assert.ok(tallRenderer.includes('switch_layout::Dimmer geometry{width, height, radius, view->bar_base};') &&
+          tallRenderer.includes('draw_power_symbol(layer, thumb, symbol_color, view->on, view->bar_base);'),
+          'A taller bar keeps its handle width, roundings and symbol size');
+// b148 regression: switching a dimmable light on showed 100 % until Home
+// Assistant reported its brightness.
+assert.ok(tallRenderer.includes('const uint8_t unreported_level = dimmable ? view->last_on_level : 100;') &&
+          tallRenderer.includes('if (dimmable && on && level > 0) view->last_on_level = level;') &&
+          tallRenderer.includes('show_state_text(view, state, dimmable && level > 0, level, on);'));
+// The Light popup's brightness handle takes the tile's handle color.
+const popup = readRepoFile('src/ui/popups/light/light_popup.cpp');
+assert.ok(popup.includes('dash_dsc.bg_color = brightness_dash_color(ctx);') &&
+          popup.includes('switch_tile_card_color(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, rgb)'));
 const css = readRepoFile('src/web/assets/admin.css');
 assert.ok(css.includes('height:calc(var(--switch-bar-height, 30px) + var(--switch-bar-grow, 0px));'));
 assert.ok(css.includes('.switch-choices button.hidden { display:none; }'));

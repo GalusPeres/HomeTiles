@@ -755,6 +755,17 @@ static void update_brightness_fill(LightPopupContext* ctx) {
       ctx, old_active, old_center_y, new_active, new_center_y);
 }
 
+// The brightness handle line has the color of the bound tile's own handle
+// line (its card, tinted with the tile color "From icon"), read at draw
+// time; without a tile the card's.
+static lv_color_t brightness_dash_color(const LightPopupContext* ctx) {
+  uint32_t rgb = 0;
+  if (ctx->has_tile_ref && switch_tile_card_color(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, rgb)) {
+    return lv_color_hex(rgb);
+  }
+  return popup_surface::card(ctx->card_bg);
+}
+
 static void on_brightness_slider_draw(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) return;
   LightPopupContext* ctx =
@@ -818,7 +829,7 @@ static void on_brightness_slider_draw(lv_event_t* e) {
   lv_draw_rect_dsc_init(&dash_dsc);
   dash_dsc.base.layer = layer;
   // The notch is read at draw time, so a new card color needs no rebuild.
-  dash_dsc.bg_color = popup_surface::card(ctx->card_bg);
+  dash_dsc.bg_color = brightness_dash_color(ctx);
   dash_dsc.bg_opa = LV_OPA_COVER;
   dash_dsc.border_opa = LV_OPA_TRANSP;
   dash_dsc.radius = LV_RADIUS_CIRCLE;

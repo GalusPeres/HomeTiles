@@ -6,6 +6,7 @@
 
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/config/tile_geometry.h"
+#include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/climate/layout.h"

@@ -40,7 +40,7 @@ assert.match(automatic, /if \(rows <= 3\) return count;/);
 const layout = code(read('src/types/climate/layout.h'));
 // One Climate gap below the disc like the Switch bar (user 2026-10-01).
 assert.match(layout, /inline constexpr int content_top\(int header_disc, int disc_inset\) \{\s*return disc_inset \+ header_disc \+ kGap > kContentTop\s*\? disc_inset \+ header_disc \+ kGap\s*: kContentTop;/);
-assert.ok(read('src/types/switch/renderer.cpp').includes(
+assert.ok(read('src/tiles/runtime/level_bar.h').includes(
   'climate_layout::content_top(tile_icon_disc::header_diameter(icon_width), tile_icon_disc::inset());'),
   'The Switch bar and the Climate mini grid share one top');
 const slots = code(fn(renderer, 'layout_climate_slots'));

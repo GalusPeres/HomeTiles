@@ -153,7 +153,9 @@ const html = readRepoFile('src/types/switch/web_html.cpp');
 assert.ok(html.includes('append_switch_choice(html, tab_id, "switch_value_font", tr.sensor_value_size, sizes, 6);'));
 // Tall tiles: the Sensor value sizes and title, the state centered between
 // the disc and the bar, kept centered when a long state steps down.
-const tallRenderer = readRepoFile('src/types/switch/renderer.cpp');
+// The bar's box, drawing and touch mapping live in the shared level bar.
+const levelBar = readRepoFile('src/tiles/runtime/level_bar.h');
+const tallRenderer = readRepoFile('src/types/switch/renderer.cpp') + levelBar;
 assert.ok(tallRenderer.includes('const bool tall = switch_layout::sensor_look(layout, tile.span_h);') &&
           tallRenderer.includes('tall ? tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE)'));
 assert.ok(tallRenderer.includes('view->state_center = static_cast<int16_t>((inset + disc + bar_box(tile).top) / 2 - pad_y);') &&
@@ -165,7 +167,8 @@ assert.ok(admin.includes('function switchSensorLook(style, spanH) {'));
 const livePreview = readRepoFile('src/web/admin/tiles/live-preview.js');
 assert.ok(livePreview.includes('!switchSensorLook(switchStyle, spanH));'),
           'The editor offers the value sizes of the tile size');
-assert.ok(tallRenderer.includes('switch_layout::Dimmer geometry{width, height, radius, view->bar_base};') &&
+assert.ok(tallRenderer.includes('switch_layout::Dimmer geometry{width, height, radius, base};') &&
+          tallRenderer.includes('level_bar::draw_fill(layer, view->bar, view->level, view->bar_base, accent, card);') &&
           tallRenderer.includes('draw_power_symbol(layer, thumb, symbol_color, view->on, view->bar_base);'),
           'A taller bar keeps its handle width, roundings and symbol size');
 // b148 regression: switching a dimmable light on showed 100 % until Home
@@ -194,7 +197,7 @@ assert.ok(css.includes('.switch-choices button.hidden { display:none; }'));
 assert.ok(admin.includes("formData.append('sensor_value_font', switchValueFont("));
 assert.ok(admin.includes('fontEl.value = switchValueFont(data.sensor_value_font);'));
 assert.match(handler, /tile\.sensor_value_font =\s*font >= 1 && font <= SENSOR_VALUE_FONT_MAX/);
-const renderer = readRepoFile('src/types/switch/renderer.cpp');
+const renderer = readRepoFile('src/types/switch/renderer.cpp') + levelBar;
 // The bar draws itself: no LVGL switch/slider widgets, no clip_corner.
 for (const forbidden of ['lv_switch_create', 'lv_slider_create', 'set_style_clip_corner']) {
   assert.ok(!renderer.includes(forbidden), `Switch renderer must not use ${forbidden}`);
@@ -209,8 +212,8 @@ assert.ok(renderer.includes('const int text_x = inset + disc + 2 * inset;'));
 assert.ok(renderer.includes('compact_sensor_layout::value_font(tile.sensor_value_font)'));
 // b143 regression: a local bg_opa on the bar outranked the shared control
 // fill style (ui_surface_style::apply_control_fill), so the track never showed.
-const createBar = renderer.slice(renderer.indexOf('lv_obj_t* create_bar('),
-                                 renderer.indexOf('void switch_tile_show_state('));
+const createBar = levelBar.slice(levelBar.indexOf('inline lv_obj_t* create('),
+                                 levelBar.indexOf('inline bool intersect('));
 assert.ok(createBar.length > 0, 'create_bar must exist');
 assert.ok(!/lv_obj_set_style_bg_opa\(bar,/.test(createBar),
           'The bar track opacity must come from the control fill style');
@@ -230,7 +233,7 @@ assert.ok(renderer.includes('if (view->bar && view->fill_rgb != icon_rgb) lv_obj
 assert.ok(localLevel.includes('invalidate_level_change(view, old_level, value);') &&
           !localLevel.includes('lv_obj_invalidate(view->bar)'),
           'Drag steps must not redraw the whole bar');
-assert.ok(renderer.includes('lv_obj_invalidate_area(view->bar, &dirty);'));
+assert.ok(levelBar.includes('lv_obj_invalidate_area(bar, &dirty);'));
 
 // b146 regressions on the V2: the track lit up under the finger (LVGL
 // pressed the bar, not its card), and a light switched off sometimes showed

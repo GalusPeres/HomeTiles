@@ -165,9 +165,13 @@ struct Strings {
   const char* weather_entity;
   const char* energy_entity;
   const char* switch_light;
+  // Switch tile Layout field and its options (switch_layout::Layout):
+  // icon button, switch, dimmer, automatic.
   const char* switch_display;
   const char* switch_icon_button;
-  const char* switch_lvgl_switch;
+  const char* switch_layout_switch;
+  const char* switch_layout_dimmer;
+  const char* switch_layout_automatic;
   const char* media_entity;
   const char* show_time;
   const char* show_date;

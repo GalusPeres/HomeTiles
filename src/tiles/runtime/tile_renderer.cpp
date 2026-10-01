@@ -13,6 +13,7 @@
 #include "src/types/weather/weather_icons.h"
 #include "src/types/climate/renderer.h"
 #include "src/types/binary_sensor/renderer.h"
+#include "src/types/switch/renderer.h"
 #include "src/ui/ui_manager.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
@@ -384,7 +385,7 @@ static void clear_switch_widgets(GridType grid_type) {
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     target[i].icon_label = nullptr;
     target[i].title_label = nullptr;
-    target[i].switch_obj = nullptr;
+    target[i].view = nullptr;
     state_target[i] = {};
   }
 }
@@ -1278,10 +1279,6 @@ static bool is_color_mode(const String& mode) {
          mode == "rgbww";
 }
 
-static bool is_switch_widget_style(const Tile& tile) {
-  return tile.sensor_decimals == 1;
-}
-
 static LightPopupInit build_popup_init_from_state(
     GridType grid_type,
     uint8_t tile_index,
@@ -1299,7 +1296,7 @@ static LightPopupInit build_popup_init_from_state(
   init.icon_name = icon_name;
   init.is_light = is_light_entity_id(tile.sensor_entity);
   init.available = state.available;
-  init.keep_icon_white = is_switch_widget_style(tile);
+  init.keep_icon_white = false;
   init.has_tile_ref = true;
   init.tile_grid = static_cast<uint8_t>(grid_type);
   init.tile_index = tile_index;
@@ -1452,6 +1449,8 @@ static SwitchState parse_switch_payload(const char* payload) {
       if (normalized_state == "unavailable") {
         state_unavailable = true;
         out.available = false;
+      } else if (normalized_state == "unknown") {
+        out.unknown = true;
       } else {
         out.has_state = parse_on_off(state, out.is_on);
       }
@@ -1734,11 +1733,12 @@ static bool switch_tile_visual_state_equal(const SwitchState& left,
          left.supports_brightness == right.supports_brightness &&
          left.supports_temperature == right.supports_temperature &&
          left.supported_modes_known == right.supported_modes_known &&
-         left.supported_onoff_only == right.supported_onoff_only;
+         left.supported_onoff_only == right.supported_onoff_only &&
+         left.unknown == right.unknown;
 }
 
 static bool switch_state_has_update(const SwitchState& state) {
-  return !state.available || state.has_state || state.has_color ||
+  return !state.available || state.has_state || state.unknown || state.has_color ||
          state.has_brightness || state.has_color_temp || state.supports_color ||
          state.supports_brightness || state.supports_temperature;
 }
@@ -1812,7 +1812,6 @@ static void apply_switch_tile_state(GridType grid_type, uint8_t grid_index,
   const Tile& tile = *tile_ptr;
   const String& entity_id = tile.sensor_entity;
   const bool is_light_entity = is_light_entity_id(entity_id);
-  const bool use_switch_widget = is_switch_widget_style(tile);
   if (is_light_entity) {
     if (state.supported_modes_known && state.supported_onoff_only) {
       state.supports_color = false;
@@ -1821,11 +1820,16 @@ static void apply_switch_tile_state(GridType grid_type, uint8_t grid_index,
     }
   }
 
-  // Brightness-only state echoes do not alter the visible tile. This matters
+  // Brightness-only state echoes do not alter an icon button. This matters
   // when the same entity is present several times: keep every state cache and
   // the bound popup current, but do not invalidate every duplicate tile.
+  // Header layouts show the brightness in their state line and dimmer.
+  SwitchTileWidgets& widgets = target[grid_index];
+  const bool shows_level = widgets.view != nullptr;
   const bool tile_visual_unchanged =
-      switch_tile_visual_state_equal(prev, state);
+      switch_tile_visual_state_equal(prev, state) &&
+      (!shows_level || (prev.has_brightness == state.has_brightness &&
+                        (!state.has_brightness || prev.brightness_pct == state.brightness_pct)));
   state_target[grid_index] = state;
 
   if (tile.sensor_entity.length()) {
@@ -1833,53 +1837,11 @@ static void apply_switch_tile_state(GridType grid_type, uint8_t grid_index,
     update_light_popup(init);
   }
   if (tile_visual_unchanged) return;
+  if (!widgets.icon_label && !widgets.title_label && !widgets.view) return;
 
-  SwitchTileWidgets& widgets = target[grid_index];
-  if (!widgets.icon_label && !widgets.title_label && !widgets.switch_obj) return;
-
-  static const uint32_t kIconOff = 0xB0B0B0;
-  static const uint32_t kIconNeutral = 0xFFFFFF;
-  static const uint32_t kSwitchOff = 0xFFFFFF;
-  static const uint32_t kSwitchOn = 0x3B82F6;
-
-  const bool control_unavailable = !state.available;
   // CCT-only lights use the same Kelvin color as the popup instead of the
   // fixed yellow default used for simple on/off lights.
-  const uint32_t icon_color = switch_state_icon_color(state);
-
-  uint32_t label_color =
-      control_unavailable
-          ? kIconOff
-          : (use_switch_widget ? kIconNeutral : icon_color);
-  lv_color_t lv_color = lv_color_hex(label_color);
-  if (widgets.icon_label) {
-    tile_icon_disc::set_icon_color(widgets.icon_label, lv_color);
-  } else if (widgets.title_label) {
-    lv_obj_set_style_text_color(widgets.title_label, lv_color, 0);
-  }
-
-  if (widgets.switch_obj) {
-    if (control_unavailable) {
-      lv_obj_remove_state(widgets.switch_obj, LV_STATE_CHECKED);
-      lv_obj_add_state(widgets.switch_obj, LV_STATE_DISABLED);
-    } else if (!state.has_state || state.is_on) {
-      lv_obj_add_state(widgets.switch_obj, LV_STATE_CHECKED);
-      lv_obj_clear_state(widgets.switch_obj, LV_STATE_DISABLED);
-    } else {
-      lv_obj_remove_state(widgets.switch_obj, LV_STATE_CHECKED);
-      lv_obj_clear_state(widgets.switch_obj, LV_STATE_DISABLED);
-    }
-    uint32_t tile_color = tileBgColorOrDefault(tile, tileDefaultBgColor());
-    lv_obj_set_style_bg_color(widgets.switch_obj, lv_color_hex(tile_color), LV_PART_KNOB);
-    lv_obj_set_style_bg_color(
-        widgets.switch_obj,
-        lv_color_hex(use_switch_widget ? kSwitchOff : kIconOff),
-        LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(
-        widgets.switch_obj,
-        lv_color_hex(use_switch_widget ? kSwitchOn : icon_color),
-        LV_PART_INDICATOR | LV_STATE_CHECKED);
-  }
+  switch_tile_show_state(widgets, tile, state, switch_state_icon_color(state));
 }
 
 void update_switch_tile_state(GridType grid_type, uint8_t grid_index,

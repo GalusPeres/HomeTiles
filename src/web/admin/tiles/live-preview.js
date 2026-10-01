@@ -105,7 +105,7 @@
 
     tileElem.className = 'tile';
     if (meta.css) tileElem.classList.add(meta.css);
-    if (type === '5' && switchStyle === '1') tileElem.classList.add('switch-toggle');
+    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
     tileElem.style.background = '';
     tileElem.dataset.type = type;
     tileElem.dataset.iconDisc = tileTypeHasDiscToggle(type)
@@ -149,12 +149,6 @@
         isDefaultBg ? defaultBg : (color || defaultBg), opacity);
     } else {
       tileElem.style.background = tileBg;
-    }
-    tileElem.style.removeProperty('--switch-knob-color');
-    tileElem.style.removeProperty('--switch-on-color');
-    if (type === '5' && switchStyle === '1') {
-      tileElem.style.setProperty('--switch-knob-color', tileBg);
-      tileElem.style.setProperty('--switch-on-color', '#3B82F6');
     }
 
     let html = '';
@@ -255,9 +249,7 @@
       }
     }
 
-    if (previewKind === 'switch' && switchStyle === '1') {
-      html += '<div class="tile-switch" id="' + tileId + '-switch"><div class="tile-switch-knob"></div></div>';
-    }
+    if (previewKind === 'switch') html += switchPreviewExtraHtml(switchStyle, halfHeight);
 
     html += getTileResizeHandlesHtml(type);
     tileElem.innerHTML = html;

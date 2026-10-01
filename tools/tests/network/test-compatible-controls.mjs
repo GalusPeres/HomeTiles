@@ -54,10 +54,11 @@ ${definition(mqtt, 'void mqttPublishSwitchCommand(')}
 enum GridType {ROOT};
 struct SwitchState {bool available=true,has_state=false,is_on=false;};
 SwitchState state;
-struct SwitchEventData {String entity_id;GridType grid_type=ROOT;uint8_t index=0;bool use_switch_widget=false;};
+struct SwitchBarView {};SwitchBarView bar_view;
+struct SwitchEventData {String entity_id;GridType grid_type=ROOT;uint8_t index=0;SwitchBarView* view=nullptr;};
 SwitchState get_switch_state(GridType,uint8_t){return state;}
 void update_switch_tile_state(GridType,uint8_t,const char* value){state.is_on=std::strcmp(value,"on")==0;}
-${definition(renderer, 'static void toggle_switch_tile(')}
+${definition(renderer, 'void toggle_switch_tile(')}
 namespace i18n {
 ${definition(read('src/core/i18n/i18n.h'), 'struct Strings')} ;
 ${tables.join('\n')}
@@ -76,7 +77,9 @@ int main(){
     assert(ha_control::supportsSwitchTile(entity.c_str()));
     SwitchEventData data;data.entity_id=entity;
     for(bool widget:{false,true}){
-      data.use_switch_widget=widget;state={true,true,false};
+      // Header layouts (with a bar view) switch optimistically; the icon
+      // button sends toggle. Both send exactly one command.
+      data.view=widget?&bar_view:nullptr;state={true,true,false};
       const size_t before=networkManager.messages.size();
       toggle_switch_tile(&data);
       assert(networkManager.messages.size()==before+1);

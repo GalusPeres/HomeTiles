@@ -4616,8 +4616,9 @@ function syncTileRadiusControls(tabEl) {
   }
   function isCompactSensorType(type) { return [1, 14, 20].includes(Number(type)); }
   // Types that may use half-cell sizes (mirrors tile_geometry::half_size).
-  // Scene, Folder, Settings, Back and Camera show only an icon and a title.
-  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 7, 8, 9, 18].includes(Number(type)); }
+  // Scene, Folder, Settings, Back and Camera show only an icon and a title;
+  // Switch shows its state (tile_geometry::compact_switch).
+  function supportsHalfSize(type) { return isCompactSensorType(type) || [2, 4, 5, 7, 8, 9, 18].includes(Number(type)); }
   // Every type resizes in half steps from 1x1; only half-size types may be half
   // a row high (mirrors tile_geometry::supported).
   function supportedTileLayout(type, layout) {
@@ -4659,7 +4660,9 @@ function syncTileRadiusControls(tabEl) {
     // half-height Sensor header: the icon in the corner disc and the title
     // (if any) centered beside it.
     const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;
-    const compact = (isCompactSensorType(type) || compactIconTitle) && halfHeight;
+    // Half-height Switch: icon, title and state like a compact Sensor.
+    const compactSwitch = Number(type) === 5 && halfHeight;
+    const compact = (isCompactSensorType(type) || compactIconTitle || compactSwitch) && halfHeight;
     el.classList.toggle('sensor-compact', compact);
     el.classList.toggle('sensor-half', compact);
     el.classList.toggle('compact-title-only', compactIconTitle);
@@ -5919,7 +5922,7 @@ function syncTileRadiusControls(tabEl) {
 
     tileElem.className = 'tile';
     if (meta.css) tileElem.classList.add(meta.css);
-    if (type === '5' && switchStyle === '1') tileElem.classList.add('switch-toggle');
+    if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
     tileElem.style.background = '';
     tileElem.dataset.type = type;
     tileElem.dataset.iconDisc = tileTypeHasDiscToggle(type)
@@ -5963,12 +5966,6 @@ function syncTileRadiusControls(tabEl) {
         isDefaultBg ? defaultBg : (color || defaultBg), opacity);
     } else {
       tileElem.style.background = tileBg;
-    }
-    tileElem.style.removeProperty('--switch-knob-color');
-    tileElem.style.removeProperty('--switch-on-color');
-    if (type === '5' && switchStyle === '1') {
-      tileElem.style.setProperty('--switch-knob-color', tileBg);
-      tileElem.style.setProperty('--switch-on-color', '#3B82F6');
     }
 
     let html = '';
@@ -6069,9 +6066,7 @@ function syncTileRadiusControls(tabEl) {
       }
     }
 
-    if (previewKind === 'switch' && switchStyle === '1') {
-      html += '<div class="tile-switch" id="' + tileId + '-switch"><div class="tile-switch-knob"></div></div>';
-    }
+    if (previewKind === 'switch') html += switchPreviewExtraHtml(switchStyle, halfHeight);
 
     html += getTileResizeHandlesHtml(type);
     tileElem.innerHTML = html;
@@ -7589,9 +7584,9 @@ function syncTileRadiusControls(tabEl) {
     }
     let cls = ['tile'];
     if (meta.css) cls.push(meta.css);
-    if (typeValue === '5' && tile.switch_style === 1) cls.push('switch-toggle');
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     el.className = cls.join(' ');
+    if (typeValue === '5') applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5);
     el.dataset.type = typeValue;
     el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
     el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
@@ -7611,12 +7606,6 @@ function syncTileRadiusControls(tabEl) {
           tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
       } else {
         el.style.background = bg;
-      }
-      el.style.removeProperty('--switch-knob-color');
-      el.style.removeProperty('--switch-on-color');
-      if (typeValue === '5' && tile.switch_style === 1) {
-        el.style.setProperty('--switch-knob-color', bg);
-        el.style.setProperty('--switch-on-color', '#3B82F6');
       }
     }
     const sensorValueClass = getSensorValueFontClass(tile.sensor_value_font);
@@ -7753,9 +7742,7 @@ function syncTileRadiusControls(tabEl) {
             escapeHtml(textValue) + '</div>';
         }
       }
-      if (previewKind === 'switch' && tile.switch_style === 1) {
-        html += '<div class="tile-switch" id="' + tab + '-tile-' + index + '-switch"><div class="tile-switch-knob"></div></div>';
-      }
+      if (previewKind === 'switch') html += switchPreviewExtraHtml(tile.switch_style, Number(tile.span_h) === 0.5);
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
       if (typeof applyTileRulesTint === 'function') {
@@ -7767,7 +7754,7 @@ function syncTileRadiusControls(tabEl) {
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');
     if (typeValue === '5' && tile.sensor_entity) {
       const state = parseSwitchPayload(metaValues[tile.sensor_entity] ?? '');
-      applySwitchPreviewState(el, state);
+      applySwitchPreviewState(el, state, tile.sensor_entity);
     }
   }
 
@@ -10888,20 +10875,79 @@ function maybeFillTitleFromSwitch(tab) {
     maybeFillTitleFromEntity(tab, '_switch_entity');
   }
 
-  const SWITCH_TOGGLE_ON = '#3B82F6';
   const SWITCH_ICON_ON = '#FFD54F';
   const SWITCH_ICON_OFF = '#B0B0B0';
-  const SWITCH_ICON_NEUTRAL = '#FFFFFF';
+  // Layouts (src/types/switch/layout.h): 0 icon button, 1 switch, 2 dimmer,
+  // 3 automatic. New tiles start with Automatic.
+  const SWITCH_LAYOUT_NEW_TILE = '3';
+  // Home Assistant color modes that dim (every mode except onoff).
+  // Mirrors parse_switch_payload() (tile_renderer.cpp).
+  const SWITCH_DIMMING_MODES = ['brightness', 'color_temp', 'hs', 'rgb', 'xy', 'rgbw', 'rgbww'];
 
-  function syncSwitchPreviewPalette(tileElem) {
-    if (!tileElem) return;
-    const switchEl = tileElem.querySelector('.tile-switch');
-    if (!switchEl) return;
-    const bg = tileElem.style.background || window.getComputedStyle(tileElem).backgroundColor || '#353535';
-    switchEl.style.setProperty('--switch-knob-color', bg);
-    if (tileElem.classList.contains('switch-toggle')) {
-      switchEl.style.setProperty('--switch-on-color', SWITCH_TOGGLE_ON);
+  function switchLayoutValue(value) {
+    const layout = Number(value);
+    return [0, 1, 2, 3].includes(layout) ? layout : 0;
+  }
+
+  // Header layouts (Switch, Dimmer, Automatic) and every half-height Switch
+  // tile use the Sensor header; only a full-size icon button does not.
+  function switchUsesHeader(style, halfHeight) {
+    return !!halfHeight || switchLayoutValue(style) !== 0;
+  }
+
+  // switch_layout::bar_for(): no bar at half height or for the icon button.
+  function switchBarKind(style, halfHeight, dimmable) {
+    const layout = switchLayoutValue(style);
+    if (halfHeight || layout === 0) return 'none';
+    if (layout === 1) return 'toggle';
+    return dimmable ? 'dimmer' : 'toggle';
+  }
+
+  // Markup after the icon and title of a header layout: the state line and,
+  // at full height, the control bar.
+  function switchPreviewExtraHtml(style, halfHeight) {
+    if (!switchUsesHeader(style, halfHeight)) return '';
+    let html = '<div class="tile-value tile-switch-state">--</div>';
+    if (!halfHeight) {
+      html += '<div class="tile-switch" data-bar="none">' +
+        '<div class="tile-switch-fill"><span class="tile-switch-handle"></span></div>' +
+        '<div class="tile-switch-knob"><i class="mdi mdi-power tile-switch-symbol"></i></div>' +
+        '</div>';
     }
+    return html;
+  }
+
+  // The tile classes and layout of a Switch preview (live and cached grid).
+  function applySwitchPreviewLayout(tileElem, style, halfHeight) {
+    if (!tileElem) return;
+    tileElem.dataset.switchLayout = String(switchLayoutValue(style));
+    tileElem.classList.toggle('switch-bar', switchUsesHeader(style, halfHeight) && !halfHeight);
+  }
+
+  // switch_layout::Dimmer: the fill starts with the bar's own round end
+  // (1 % fills it), the handle line sits a fifth of the height inside the
+  // fill end; 100 % fills the bar.
+  function switchDimmerGeometry(width, height, radius) {
+    const margin = Math.floor(height / 5);
+    const minFill = Math.min(2 * radius, width);
+    const low = minFill - margin;
+    const high = width - margin;
+    return {
+      margin,
+      minFill,
+      endRadius: Math.floor(height * 11 / 100),
+      handleWidth: Math.max(3, Math.floor(height * 7 / 100)),
+      handleHeight: Math.floor(height * 42 / 100),
+      handleX(value) {
+        if (value <= 1 || high <= low) return low;
+        if (value >= 100) return high;
+        return low + Math.floor(((value - 1) * (high - low) + 49) / 99);
+      },
+      fillWidth(value) {
+        if (!value) return 0;
+        return Math.min(width, this.handleX(value) + margin);
+      }
+    };
   }
 
   function parseOnOff(text) {
@@ -10958,8 +11004,12 @@ function maybeFillTitleFromSwitch(tab) {
       available: true,
       hasState: false,
       isOn: false,
+      unknown: false,
       hasColor: false,
-      color: null
+      color: null,
+      hasBrightness: false,
+      brightness: 0,
+      supportsBrightness: false
     };
     if (value === undefined || value === null) return out;
     const text = String(value).trim();
@@ -10976,6 +11026,8 @@ function maybeFillTitleFromSwitch(tab) {
             const normalizedState = String(obj.state).trim().toLowerCase();
             if (normalizedState === 'unavailable') {
               out.available = false;
+            } else if (normalizedState === 'unknown') {
+              out.unknown = true;
             } else {
               const on = parseOnOff(obj.state);
               if (on !== null) {
@@ -11002,12 +11054,32 @@ function maybeFillTitleFromSwitch(tab) {
             out.hasColor = true;
             out.color = hsToRgb(Number(obj.hs_color[0]), Number(obj.hs_color[1]));
           }
+          // Like parse_switch_payload(): brightness_pct, else brightness 0..255.
+          const pct = Number(obj.brightness_pct);
+          const raw = Number(obj.brightness);
+          if (obj.brightness_pct !== undefined && obj.brightness_pct !== null && Number.isFinite(pct)) {
+            out.hasBrightness = true;
+            out.brightness = Math.max(0, Math.min(100, Math.round(pct)));
+          } else if (obj.brightness !== undefined && obj.brightness !== null && Number.isFinite(raw)) {
+            out.hasBrightness = true;
+            out.brightness = Math.max(0, Math.min(100, Math.round(raw / 255 * 100)));
+          }
+          // supported_color_modes decides; color_mode only when it is absent.
+          if (Array.isArray(obj.supported_color_modes)) {
+            out.supportsBrightness = obj.supported_color_modes.some(mode =>
+              SWITCH_DIMMING_MODES.includes(String(mode).toLowerCase()));
+          } else if (obj.color_mode) {
+            out.supportsBrightness = SWITCH_DIMMING_MODES.includes(String(obj.color_mode).toLowerCase());
+          }
         }
       } catch (e) {}
     }
 
     if (text.toLowerCase() === 'unavailable') {
       out.available = false;
+    }
+    if (text.toLowerCase() === 'unknown') {
+      out.unknown = true;
     }
 
     if (!out.hasState) {
@@ -11039,49 +11111,80 @@ function maybeFillTitleFromSwitch(tab) {
     return out;
   }
 
-  function applySwitchPreviewState(tileElem, state) {
+  function applySwitchPreviewState(tileElem, state, entity) {
     if (!tileElem) return;
     applySwitchPreviewColors(tileElem, state);
-    // The icon disc follows the state color like on the device.
+    // The disc and the control fill follow the state color like the device.
     applyIconDiscTint(tileElem);
+    applySwitchPreviewBar(tileElem, state, entity);
   }
 
   function applySwitchPreviewColors(tileElem, state) {
     const iconEl = tileElem.querySelector('.tile-icon');
-    const switchEl = tileElem.querySelector('.tile-switch');
-    const isToggleStyle = tileElem.classList.contains('switch-toggle');
-    syncSwitchPreviewPalette(tileElem);
+    if (!iconEl) return;
     if (state.available === false) {
-      if (iconEl) iconEl.style.color = SWITCH_ICON_OFF;
-      if (switchEl) {
-        switchEl.classList.remove('is-on');
-        if (isToggleStyle) {
-          switchEl.style.setProperty('--switch-on-color', SWITCH_TOGGLE_ON);
-        } else {
-          switchEl.style.removeProperty('--switch-on-color');
-        }
-      }
+      iconEl.style.color = SWITCH_ICON_OFF;
       return;
     }
-    if (!state.hasState && !state.hasColor) {
-      if (iconEl && isToggleStyle) iconEl.style.color = SWITCH_ICON_NEUTRAL;
-      return;
+    if (!state.hasState && !state.hasColor) return;
+    const isOn = state.hasState ? state.isOn : state.hasColor;
+    iconEl.style.color = isOn ? (state.hasColor ? state.color : SWITCH_ICON_ON) : SWITCH_ICON_OFF;
+  }
+
+  // show_state_text(): the same words as the device, from the central
+  // translations (SWITCH_I18N, types/switch/web_scripts.cpp).
+  function switchPreviewStateText(state, dimmable, level, on) {
+    const i18n = typeof SWITCH_I18N === 'object' ? SWITCH_I18N : {};
+    if (state.available === false) return i18n.unavailable || 'Unavailable';
+    if (state.unknown) return i18n.unknown || 'Unknown';
+    if (!state.hasState && !state.hasBrightness) return '--';
+    if (!on) return i18n.off || 'Off';
+    if (dimmable) return level + ' %';
+    return i18n.on || 'On';
+  }
+
+  function applySwitchPreviewBar(tileElem, state, entity) {
+    // Each appears once per tile, directly in it.
+    const label = tileElem.querySelector('.tile-switch-state');
+    const bar = tileElem.querySelector('.tile-switch');
+    if (!label && !bar) return;
+    const halfHeight = tileElem.classList.contains('sensor-half');
+    const style = tileElem.dataset.switchLayout || '0';
+    const dimmable = String(entity || '').startsWith('light.') && !!state.supportsBrightness;
+    const available = state.available !== false;
+    let on = state.hasState ? !!state.isOn : (!!state.hasBrightness && state.brightness > 0);
+    if (!available) on = false;
+    const level = on ? (state.hasBrightness ? Math.max(1, state.brightness) : 100) : 0;
+    if (label) label.textContent = switchPreviewStateText(state, dimmable, level, on);
+    if (!bar) return;
+    const kind = switchBarKind(style, halfHeight, dimmable);
+    bar.dataset.bar = kind;
+    bar.classList.toggle('is-on', on);
+    bar.classList.toggle('is-unavailable', !available);
+    // Accent = the color the icon shows, card = the tile, thumb off = one
+    // OKLCH step above the control fill (tone_color::lifted).
+    const iconEl = tileElem.querySelector('.tile-icon');
+    const accent = iconEl ? getComputedStyle(iconEl).color : (state.hasColor ? state.color : SWITCH_ICON_ON);
+    bar.style.setProperty('--switch-accent', accent);
+    bar.style.setProperty('--switch-card', getComputedStyle(tileElem).backgroundColor);
+    const control = cssColorChannels(getComputedStyle(bar).backgroundColor);
+    if (control) {
+      const base = toneOklch(control);
+      bar.style.setProperty('--switch-thumb-off', toneHex(toneRgb(base.L + 0.06, base.C, base.h)));
     }
-    let isOn = state.hasState ? state.isOn : state.hasColor;
-    let color = SWITCH_ICON_OFF;
-    if (isOn) color = state.hasColor ? state.color : SWITCH_ICON_ON;
-    if (iconEl) iconEl.style.color = isToggleStyle ? SWITCH_ICON_NEUTRAL : color;
-    if (switchEl) {
-      if (isOn) switchEl.classList.add('is-on');
-      else switchEl.classList.remove('is-on');
-      if (isToggleStyle) {
-        switchEl.style.setProperty('--switch-on-color', SWITCH_TOGGLE_ON);
-      } else if (isOn && state.hasColor) {
-        switchEl.style.setProperty('--switch-on-color', state.color);
-      } else {
-        switchEl.style.removeProperty('--switch-on-color');
-      }
-    }
+    const symbol = bar.querySelector('.tile-switch-symbol');
+    if (symbol) symbol.className = 'mdi ' + (on ? 'mdi-power' : 'mdi-circle-outline') + ' tile-switch-symbol';
+    const fill = bar.querySelector('.tile-switch-fill');
+    if (!fill) return;
+    const width = bar.clientWidth;
+    const height = bar.clientHeight;
+    const radius = Math.min(parseFloat(getComputedStyle(bar).borderTopLeftRadius) || 0, height / 2);
+    const geometry = switchDimmerGeometry(width, height, radius);
+    fill.style.width = (kind === 'dimmer' ? geometry.fillWidth(level) : 0) + 'px';
+    bar.style.setProperty('--switch-end-radius', geometry.endRadius + 'px');
+    bar.style.setProperty('--switch-handle-margin', geometry.margin + 'px');
+    bar.style.setProperty('--switch-handle-w', geometry.handleWidth + 'px');
+    bar.style.setProperty('--switch-handle-h', geometry.handleHeight + 'px');
   }
 
   function updateSwitchValuePreview(tab) {
@@ -11092,11 +11195,10 @@ function maybeFillTitleFromSwitch(tab) {
     const entity = entitySelect.value;
     const tileElem = document.getElementById(tab + '-tile-' + currentTileIndex);
     if (!entity || !tileElem) return;
-    syncSwitchPreviewPalette(tileElem);
     const applyMeta = (meta) => {
       const values = (meta && meta.values) || {};
       const state = parseSwitchPayload(values[entity] ?? '');
-      applySwitchPreviewState(tileElem, state);
+      applySwitchPreviewState(tileElem, state, entity);
     };
     const metaPromise = isSensorMetaCacheLoaded() ? Promise.resolve(sensorMetaCache) : fetchSensorMetaCache();
     metaPromise
@@ -11111,7 +11213,8 @@ function maybeFillTitleFromSwitch(tab) {
     if (entityEl) entityEl.value = data.sensor_entity || data.switch_entity || '';
     const styleEl = document.getElementById(prefix + '_switch_style');
     if (styleEl) {
-      styleEl.value = (data.switch_style !== undefined && data.switch_style !== null) ? String(data.switch_style) : '0';
+      styleEl.value = (data.switch_style !== undefined && data.switch_style !== null)
+        ? String(switchLayoutValue(data.switch_style)) : '0';
     }
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
     if (popupModeEl) {
@@ -11125,7 +11228,7 @@ function maybeFillTitleFromSwitch(tab) {
     const prefix = tab;
     formData.append('switch_entity', document.getElementById(prefix + '_switch_entity')?.value || '');
     const styleEl = document.getElementById(prefix + '_switch_style');
-    formData.append('switch_style', styleEl ? styleEl.value : '0');
+    formData.append('switch_style', styleEl ? String(switchLayoutValue(styleEl.value)) : '0');
     formData.append('popup_open_mode', document.getElementById(prefix + '_switch_popup_open_mode')?.value || '1');
   }
 
@@ -11135,7 +11238,7 @@ function maybeFillTitleFromSwitch(tab) {
     const entityEl = document.getElementById(prefix + '_switch_entity');
     if (entityEl) entityEl.value = '';
     const styleEl = document.getElementById(prefix + '_switch_style');
-    if (styleEl) styleEl.value = '0';
+    if (styleEl) styleEl.value = SWITCH_LAYOUT_NEW_TILE;
     const popupModeEl = document.getElementById(prefix + '_switch_popup_open_mode');
     if (popupModeEl) popupModeEl.value = '1';
   }

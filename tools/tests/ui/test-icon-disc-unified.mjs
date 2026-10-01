@@ -92,7 +92,7 @@ for (const marker of [
   'emit_exact("tile-header-icon-left", tile_layout::scale_480(20) + header.icon_side);',
 ]) assert.ok(styles.includes(marker), `web styles: ${marker}`);
 assert.ok(read('src/web/assets/admin.css').includes(
-  '.tile:is(.scene, .navigate, .camera, .switch:not(.switch-toggle)):not(.empty):not(.sensor-compact) > .tile-icon::after {'),
+  '.tile:is(.scene, .navigate, .camera, .switch:not(.switch-bar)):not(.empty):not(.sensor-compact) > .tile-icon::after {'),
   'Centered preview icons use the corner disc size');
 assert.ok(read('src/web/assets/admin.css').includes('width:var(--icon-disc-corner, var(--icon-disc-round, 30px));'));
 

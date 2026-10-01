@@ -20,6 +20,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
+#include "src/ui/shared/command_pacer.h"
 #include "esp_heap_caps.h"
 #include <math.h>
 
@@ -63,7 +64,9 @@ constexpr int kBrightnessOffDragThreshold = kVerticalSliderRadius;
 constexpr uint32_t kDefaultColor = 0xFFD54F;
 constexpr uint32_t kSwitchOnColor = 0x3B82F6;
 constexpr uint32_t kRemoteBlockMs = 3000;
-constexpr uint32_t kLivePublishIntervalMs = 500;
+// Home Assistant starts a slider drag after 10 px (ha-control-slider Pan
+// threshold); below it a press is a tap and sends nothing live.
+constexpr int kDragThreshold = popup_layout::scale(10);
 constexpr uint32_t kControlButtonIndicatorBg = 0xFFFFFF;
 constexpr lv_opa_t kControlButtonIndicatorOpa = LV_OPA_20;
 constexpr lv_opa_t kControlButtonActiveIndicatorOpa = kControlButtonIndicatorOpa;
@@ -78,6 +81,15 @@ enum class LightPopupMode : uint8_t {
   Brightness,
   Color,
   Temperature,
+};
+
+// What one paced command publishes. State is the whole popup state (power
+// button, switch slider) and carries brightness, color and temperature.
+enum class LightPublishKind : uint8_t {
+  Brightness,
+  Color,
+  Temperature,
+  State,
 };
 
 struct LightPopupContext {
@@ -138,12 +150,18 @@ struct LightPopupContext {
   uint8_t tile_grid = 0;
   uint8_t tile_index = 0;
   bool user_dragging = false;
+  // A slider gesture counts as a drag only after kDragThreshold.
+  bool drag_moved = false;
+  lv_point_t press_point = {0, 0};
   uint32_t last_user_action_ms = 0;
   uint32_t block_remote_until_ms = 0;
-  uint32_t last_live_publish_ms = 0;
+  command_pacer::Pacer pacer;
   lv_timer_t* live_publish_timer = nullptr;
   LightPopupMode pending_live_publish_mode = LightPopupMode::Brightness;
   bool live_publish_pending = false;
+  lv_timer_t* final_publish_timer = nullptr;
+  LightPublishKind final_publish_kind = LightPublishKind::State;
+  bool final_publish_pending = false;
   bool suppress_events = false;
   bool color_field_ready = false;
   bool use_color_temperature = false;
@@ -171,6 +189,8 @@ static void maybe_live_publish_color(LightPopupContext* ctx);
 static void commit_color_temperature(LightPopupContext* ctx);
 static void maybe_live_publish_color_temperature(LightPopupContext* ctx);
 static void cancel_pending_live_publish(LightPopupContext* ctx);
+static void cancel_pending_final_publish(LightPopupContext* ctx);
+static void flush_pending_final_publish(LightPopupContext* ctx);
 static void on_overlay_click(lv_event_t* e);
 
 static void on_close_click(lv_event_t* e) {
@@ -180,6 +200,7 @@ static void on_close_click(lv_event_t* e) {
   if (!ctx || !ctx->overlay || !ctx->card) return;
   ctx->user_dragging = false;
   cancel_pending_live_publish(ctx);
+  flush_pending_final_publish(ctx);
   hide_popup_shell(ctx->card);
   cancel_popup_open(ctx->card);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
@@ -1081,18 +1102,9 @@ static void sync_bound_tile_from_popup(LightPopupContext* ctx) {
   update_switch_tile_state(static_cast<GridType>(ctx->tile_grid), ctx->tile_index, payload.c_str());
 }
 
-static void commit_popup_state(LightPopupContext* ctx) {
-  if (!ctx) return;
-  if (!ctx->available) return;
-  cancel_pending_live_publish(ctx);
-  sync_bound_tile_from_popup(ctx);
-  publish_light_popup(ctx);
-  ctx->last_live_publish_ms = millis();
-}
-
 static bool can_live_publish(const LightPopupContext* ctx) {
-  if (!ctx || !ctx->available || !ctx->user_dragging || !ctx->is_light ||
-      !ctx->entity_id.length()) {
+  if (!ctx || !ctx->available || !ctx->user_dragging || !ctx->drag_moved ||
+      !ctx->is_light || !ctx->entity_id.length()) {
     return false;
   }
   return !ctx->card || !lv_obj_has_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
@@ -1102,18 +1114,55 @@ static void publish_brightness(LightPopupContext* ctx);
 static void publish_color(LightPopupContext* ctx);
 static void publish_color_temperature(LightPopupContext* ctx);
 
-static void publish_live_value(LightPopupContext* ctx, LightPopupMode mode) {
+static LightPublishKind publish_kind_for(LightPopupMode mode) {
   switch (mode) {
     case LightPopupMode::Brightness:
+      return LightPublishKind::Brightness;
+    case LightPopupMode::Color:
+      return LightPublishKind::Color;
+    case LightPopupMode::Temperature:
+      return LightPublishKind::Temperature;
+  }
+  return LightPublishKind::State;
+}
+
+static void publish_kind(LightPopupContext* ctx, LightPublishKind kind) {
+  switch (kind) {
+    case LightPublishKind::Brightness:
       publish_brightness(ctx);
       break;
-    case LightPopupMode::Color:
+    case LightPublishKind::Color:
       publish_color(ctx);
       break;
-    case LightPopupMode::Temperature:
+    case LightPublishKind::Temperature:
       publish_color_temperature(ctx);
       break;
+    case LightPublishKind::State:
+      publish_light_popup(ctx);
+      break;
   }
+}
+
+// One number per sent slider value, so a release can skip repeating the
+// value its gesture already sent. State is never treated as a repeat.
+static uint32_t publish_signature(const LightPopupContext* ctx,
+                                  LightPublishKind kind) {
+  switch (kind) {
+    case LightPublishKind::Brightness:
+      return 0x10000000u | (ctx->is_on ? ctx->val : 0u);
+    case LightPublishKind::Color:
+      return 0x20000000u | (static_cast<uint32_t>(ctx->hue) << 8) | ctx->sat;
+    case LightPublishKind::Temperature:
+      return 0x30000000u | ctx->color_temp_kelvin;
+    case LightPublishKind::State:
+      break;
+  }
+  return 0;
+}
+
+static void send_paced(LightPopupContext* ctx, LightPublishKind kind) {
+  publish_kind(ctx, kind);
+  ctx->pacer.sent(millis(), publish_signature(ctx, kind));
 }
 
 static void cancel_pending_live_publish(LightPopupContext* ctx) {
@@ -1123,6 +1172,78 @@ static void cancel_pending_live_publish(LightPopupContext* ctx) {
     ctx->live_publish_timer = nullptr;
   }
   ctx->live_publish_pending = false;
+}
+
+static void cancel_pending_final_publish(LightPopupContext* ctx) {
+  if (!ctx) return;
+  if (ctx->final_publish_timer) {
+    lv_timer_delete(ctx->final_publish_timer);
+    ctx->final_publish_timer = nullptr;
+  }
+  ctx->final_publish_pending = false;
+}
+
+// A final value waiting for its command gap goes out at once when the popup
+// closes or switches entity; it is never dropped.
+static void flush_pending_final_publish(LightPopupContext* ctx) {
+  if (!ctx) return;
+  const bool pending = ctx->final_publish_pending;
+  const LightPublishKind kind = ctx->final_publish_kind;
+  cancel_pending_final_publish(ctx);
+  if (pending) send_paced(ctx, kind);
+}
+
+static void final_publish_timer_cb(lv_timer_t* timer) {
+  LightPopupContext* ctx =
+      static_cast<LightPopupContext*>(lv_timer_get_user_data(timer));
+  if (!ctx) return;
+  if (ctx->final_publish_timer == timer) {
+    ctx->final_publish_timer = nullptr;
+  }
+  if (!ctx->final_publish_pending) return;
+  ctx->final_publish_pending = false;
+  send_paced(ctx, ctx->final_publish_kind);
+}
+
+// Release, tap and button path (GitHub issue #11): the final value always
+// goes out, at least one pacer interval after the previous command, and is
+// skipped when the gesture already sent exactly this value.
+static void commit_paced(LightPopupContext* ctx, LightPublishKind kind) {
+  if (!ctx) return;
+  cancel_pending_live_publish(ctx);
+  sync_bound_tile_from_popup(ctx);
+  const bool repeat = kind != LightPublishKind::State &&
+                      ctx->pacer.final_redundant(publish_signature(ctx, kind));
+  ctx->pacer.end_gesture();
+  if (repeat) return;
+
+  // A different kind already waiting: one State command carries both.
+  if (ctx->final_publish_pending && ctx->final_publish_kind != kind) {
+    kind = LightPublishKind::State;
+  }
+  const uint32_t wait = ctx->pacer.wait(millis());
+  if (wait == 0) {
+    cancel_pending_final_publish(ctx);
+    send_paced(ctx, kind);
+    return;
+  }
+  ctx->final_publish_kind = kind;
+  ctx->final_publish_pending = true;
+  if (ctx->final_publish_timer) return;
+  ctx->final_publish_timer = lv_timer_create(final_publish_timer_cb, wait, ctx);
+  if (ctx->final_publish_timer) {
+    lv_timer_set_repeat_count(ctx->final_publish_timer, 1);
+    return;
+  }
+  // LVGL timer allocation failed: send now rather than lose the value.
+  ctx->final_publish_pending = false;
+  send_paced(ctx, kind);
+}
+
+static void commit_popup_state(LightPopupContext* ctx) {
+  if (!ctx) return;
+  if (!ctx->available) return;
+  commit_paced(ctx, LightPublishKind::State);
 }
 
 static void live_publish_timer_cb(lv_timer_t* timer) {
@@ -1138,42 +1259,36 @@ static void live_publish_timer_cb(lv_timer_t* timer) {
   ctx->live_publish_pending = false;
   if (!can_live_publish(ctx)) return;
 
-  publish_live_value(ctx, mode);
-  ctx->last_live_publish_ms = millis();
+  send_paced(ctx, publish_kind_for(mode));
 }
 
 static void schedule_live_publish(LightPopupContext* ctx,
                                   LightPopupMode mode) {
   if (!can_live_publish(ctx)) return;
-  const uint32_t now = millis();
-  const uint32_t elapsed = now - ctx->last_live_publish_ms;
-  if (ctx->last_live_publish_ms == 0 || elapsed >= kLivePublishIntervalMs) {
+  const uint32_t wait = ctx->pacer.wait(millis());
+  if (wait == 0) {
     cancel_pending_live_publish(ctx);
-    publish_live_value(ctx, mode);
-    ctx->last_live_publish_ms = now;
+    send_paced(ctx, publish_kind_for(mode));
     return;
   }
 
-  // Preserve the newest value instead of dropping it inside the throttle
+  // Preserve the newest value instead of dropping it inside the pacing
   // window. The one-shot timer publishes the current context value at the
   // next allowed instant, even when the finger has stopped at an endpoint.
   ctx->pending_live_publish_mode = mode;
   ctx->live_publish_pending = true;
   if (ctx->live_publish_timer) return;
 
-  const uint32_t remaining = kLivePublishIntervalMs - elapsed;
   ctx->live_publish_timer =
-      lv_timer_create(live_publish_timer_cb, remaining, ctx);
+      lv_timer_create(live_publish_timer_cb, wait, ctx);
   if (ctx->live_publish_timer) {
     lv_timer_set_repeat_count(ctx->live_publish_timer, 1);
     return;
   }
 
-  // Extremely unlikely LVGL timer-allocation failure: keep the live control
-  // responsive and rely on the regular final publish on release as backup.
+  // Extremely unlikely LVGL timer-allocation failure: skip this live value;
+  // the paced final publish on release still sends the current value.
   ctx->live_publish_pending = false;
-  publish_live_value(ctx, mode);
-  ctx->last_live_publish_ms = now;
 }
 
 static void publish_brightness(LightPopupContext* ctx) {
@@ -1192,11 +1307,7 @@ static void publish_brightness(LightPopupContext* ctx) {
 }
 
 static void commit_brightness(LightPopupContext* ctx) {
-  if (!ctx) return;
-  cancel_pending_live_publish(ctx);
-  sync_bound_tile_from_popup(ctx);
-  publish_brightness(ctx);
-  ctx->last_live_publish_ms = millis();
+  commit_paced(ctx, LightPublishKind::Brightness);
 }
 
 static void maybe_live_publish_brightness(LightPopupContext* ctx) {
@@ -1218,11 +1329,7 @@ static void publish_color(LightPopupContext* ctx) {
 }
 
 static void commit_color(LightPopupContext* ctx) {
-  if (!ctx) return;
-  cancel_pending_live_publish(ctx);
-  sync_bound_tile_from_popup(ctx);
-  publish_color(ctx);
-  ctx->last_live_publish_ms = millis();
+  commit_paced(ctx, LightPublishKind::Color);
 }
 
 static void maybe_live_publish_color(LightPopupContext* ctx) {
@@ -1245,11 +1352,7 @@ static void publish_color_temperature(LightPopupContext* ctx) {
 }
 
 static void commit_color_temperature(LightPopupContext* ctx) {
-  if (!ctx) return;
-  cancel_pending_live_publish(ctx);
-  sync_bound_tile_from_popup(ctx);
-  publish_color_temperature(ctx);
-  ctx->last_live_publish_ms = millis();
+  commit_paced(ctx, LightPublishKind::Temperature);
 }
 
 static void maybe_live_publish_color_temperature(LightPopupContext* ctx) {
@@ -1614,7 +1717,8 @@ static void apply_init_to_context(LightPopupContext* ctx, const LightPopupInit& 
   if (!ctx->entity_id.equalsIgnoreCase(init.entity_id)) {
     ctx->body_ready = false;
     cancel_pending_live_publish(ctx);
-    ctx->last_live_publish_ms = 0;
+    flush_pending_final_publish(ctx);
+    ctx->pacer.end_gesture();
   }
   ctx->suppress_events = true;
   if (apply_content) update_popup_language(ctx);
@@ -1624,6 +1728,7 @@ static void apply_init_to_context(LightPopupContext* ctx, const LightPopupInit& 
   if (!ctx->available) {
     ctx->user_dragging = false;
     cancel_pending_live_publish(ctx);
+    cancel_pending_final_publish(ctx);
     ctx->last_user_action_ms = 0;
     ctx->block_remote_until_ms = 0;
   }
@@ -1768,6 +1873,7 @@ static void on_switch_slider_event(lv_event_t* e) {
   if (code == LV_EVENT_PRESSED) {
     ctx->user_dragging = true;
     ctx->switch_drag_dirty = false;
+    ctx->pacer.begin_gesture();
   } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
     ctx->user_dragging = false;
   } else if (code != LV_EVENT_PRESSING) {
@@ -1784,6 +1890,8 @@ static void on_switch_slider_event(lv_event_t* e) {
   if ((code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) && ctx->switch_drag_dirty) {
     commit_popup_state(ctx);
     ctx->switch_drag_dirty = false;
+  } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    ctx->pacer.end_gesture();
   }
 }
 
@@ -1839,6 +1947,23 @@ static void apply_brightness_point(LightPopupContext* ctx, const lv_point_t& poi
   else maybe_live_publish_brightness(ctx);
 }
 
+// A slider press: remember where it started; live commands wait for a
+// drag (kDragThreshold), so a tap sends one command on release.
+static void begin_slider_gesture(LightPopupContext* ctx) {
+  ctx->user_dragging = true;
+  ctx->drag_moved = false;
+  ctx->pacer.begin_gesture();
+  lv_indev_t* indev = lv_indev_get_act();
+  if (indev) lv_indev_get_point(indev, &ctx->press_point);
+}
+
+static void note_slider_movement(LightPopupContext* ctx, const lv_point_t& point) {
+  if (ctx->drag_moved || !ctx->user_dragging) return;
+  const int dx = point.x - ctx->press_point.x;
+  const int dy = point.y - ctx->press_point.y;
+  if (dx * dx + dy * dy >= kDragThreshold * kDragThreshold) ctx->drag_moved = true;
+}
+
 static void on_brightness_track_event(lv_event_t* e) {
   LightPopupContext* ctx = static_cast<LightPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || ctx->suppress_events || !ctx->available ||
@@ -1848,7 +1973,7 @@ static void on_brightness_track_event(lv_event_t* e) {
 
   const lv_event_code_t code = lv_event_get_code(e);
   if (code == LV_EVENT_PRESSED) {
-    ctx->user_dragging = true;
+    begin_slider_gesture(ctx);
   } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
     ctx->user_dragging = false;
   } else if (code != LV_EVENT_PRESSING) {
@@ -1865,6 +1990,7 @@ static void on_brightness_track_event(lv_event_t* e) {
 
   lv_point_t point;
   lv_indev_get_point(indev, &point);
+  note_slider_movement(ctx, point);
   apply_brightness_point(ctx, point, code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST);
 }
 
@@ -1921,7 +2047,7 @@ static void on_temp_track_event(lv_event_t* e) {
   const lv_event_code_t code = lv_event_get_code(e);
 
   if (code == LV_EVENT_PRESSED) {
-    ctx->user_dragging = true;
+    begin_slider_gesture(ctx);
   } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
     ctx->user_dragging = false;
   } else if (code != LV_EVENT_PRESSING) {
@@ -1938,6 +2064,7 @@ static void on_temp_track_event(lv_event_t* e) {
 
   lv_point_t point;
   lv_indev_get_point(indev, &point);
+  note_slider_movement(ctx, point);
   apply_temperature_point(ctx, point, code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST);
 }
 
@@ -2023,9 +2150,13 @@ static void on_color_field_event(lv_event_t* e) {
     return;
   }
   lv_event_code_t code = lv_event_get_code(e);
-  if (code == LV_EVENT_PRESSED) ctx->user_dragging = true;
-  else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) ctx->user_dragging = false;
-  else if (code != LV_EVENT_PRESSING) return;
+  if (code == LV_EVENT_PRESSED) {
+    begin_slider_gesture(ctx);
+  } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    ctx->user_dragging = false;
+  } else if (code != LV_EVENT_PRESSING) {
+    return;
+  }
 
   lv_indev_t* indev = lv_indev_get_act();
   if (!indev) {
@@ -2037,6 +2168,7 @@ static void on_color_field_event(lv_event_t* e) {
   lv_point_t point;
   lv_indev_get_point(indev, &point);
   lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  note_slider_movement(ctx, point);
   apply_color_field_point(ctx, target, point, code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST);
 }
 
@@ -2045,6 +2177,7 @@ static void on_overlay_delete(lv_event_t* e) {
   LightPopupContext* ctx = static_cast<LightPopupContext*>(lv_event_get_user_data(e));
   if (!ctx) return;
   cancel_pending_live_publish(ctx);
+  flush_pending_final_publish(ctx);
   if (ctx->color_field_buf) {
     heap_caps_free(ctx->color_field_buf);
     ctx->color_field_buf = nullptr;
@@ -2287,6 +2420,7 @@ void hide_light_popup() {
   if (!g_light_popup_ctx || !g_light_popup_ctx->card || !g_light_popup_ctx->overlay) return;
   g_light_popup_ctx->user_dragging = false;
   cancel_pending_live_publish(g_light_popup_ctx);
+  flush_pending_final_publish(g_light_popup_ctx);
   hide_popup_shell(g_light_popup_ctx->card);
   cancel_popup_open(g_light_popup_ctx->card);
   lv_obj_add_flag(g_light_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);

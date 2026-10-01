@@ -53,11 +53,14 @@ try{
  check(visibleEmpty().filter(el=>el!==slotEl).length===1,'Another free slot remains for the next new tile');
  // A new 1x0.5 tile grows for types that need a whole cell, or blocks them.
  newTileSpot={tab:'test',index:picked,layout:{col:0,row:1,span_w:1,span_h:.5}};
- const grown=grownNewTileLayout('test',5);
- check(grown && grown.col===0 && grown.row===1 && grown.span_h===1,'A switch grows the new tile downwards to 1x1');
+ // Text needs a whole cell height; Switch may be half a row high since its
+ // header layouts (tile_geometry::compact_switch).
+ const grown=grownNewTileLayout('test',10);
+ check(grown && grown.col===0 && grown.row===1 && grown.span_h===1,'A text tile grows the new tile downwards to 1x1');
+ check(grownNewTileLayout('test',5).span_h===.5,'A switch keeps the half height');
  check(grownNewTileLayout('test',1).span_h===.5,'A sensor keeps the half height');
  newTileSpot.layout={col:1.5,row:.5,span_w:1,span_h:.5};
- check(grownNewTileLayout('test',5)===null,'Without room a larger type cannot be chosen');
+ check(grownNewTileLayout('test',10)===null,'Without room a larger type cannot be chosen');
  currentTileIndex=-1;newTileSpot=null;
  // A selected new tile still of type Empty does not block the free slot; the
  // slot may lie half a cell over it and takes the click.
@@ -78,7 +81,8 @@ try{
  check(blocked.col===1 && blocked.row===2,'Once a type is chosen the selected tile blocks the free slot '+JSON.stringify(blocked));
  typeSel.remove();delete chosen.dataset.selected;chosen.classList.remove('active');chosen.style.display='none';
  check(supportedTileLayout(9,{col:0,row:0,span_w:1,span_h:.5}),'Clocks accept the half-height size');
- check(!supportedTileLayout(5,{col:0,row:0,span_w:1,span_h:.5}),'Switches still need a whole cell height');
+ check(supportedTileLayout(5,{col:0,row:0,span_w:1,span_h:.5}),'Switches accept the half-height size');
+ check(!supportedTileLayout(10,{col:0,row:0,span_w:1,span_h:.5}),'Text still needs a whole cell height');
  check(supportedTileLayout(5,{col:.5,row:0,span_w:1.5,span_h:1}) && supportedTileLayout(12,{col:0,row:0,span_w:2.5,span_h:1.5}),'Every type resizes in half steps');
  check(supportedTileLayout(7,{col:0,row:0,span_w:1.5,span_h:1}),'Settings supports half-step widths');
  document.querySelectorAll('.tile-grid > .tile').forEach(el=>{el.className='tile empty';el.dataset.type='0';delete el.dataset.selected;});

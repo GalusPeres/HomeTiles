@@ -36,12 +36,20 @@ void append_switch_fields_html(String& html, const String& tab_id, const std::ve
   html += R"html(</label>
               <select id=")html";
   html += tab_id;
+  // Values are switch_layout::Layout; Automatic first, the default of new
+  // tiles.
   html += R"html(_switch_style">
-                <option value="0">)html";
-  html += tr.switch_icon_button;
+                <option value="3">)html";
+  html += tr.switch_layout_automatic;
+  html += R"html(</option>
+                <option value="2">)html";
+  html += tr.switch_layout_dimmer;
   html += R"html(</option>
                 <option value="1">)html";
-  html += tr.switch_lvgl_switch;
+  html += tr.switch_layout_switch;
+  html += R"html(</option>
+                <option value="0">)html";
+  html += tr.switch_icon_button;
   html += R"html(</option>
               </select>
 )html";

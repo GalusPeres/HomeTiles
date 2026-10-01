@@ -435,7 +435,7 @@ void WebAdminServer::handleGetTiles() {
     out += ",\"popup_open_mode\":";
     out += String(getTilePopupOpenMode(tile));
     out += ",\"switch_style\":";
-    out += String((tile.type == TILE_SWITCH && tile.sensor_decimals == 1) ? 1 : 0);
+    out += String((tile.type == TILE_SWITCH && tile.sensor_decimals <= 3) ? tile.sensor_decimals : 0);
     out += ",\"navigate_target\":";
     out += String((tile.type == TILE_FOLDER) ? getNavigateTargetId(tile) : 0);
     // The editor prevents type changes for nonempty folders to keep their

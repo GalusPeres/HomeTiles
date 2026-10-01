@@ -22,7 +22,8 @@ const visualCheck = updateBody.indexOf('switch_tile_visual_state_equal(prev, sta
 const cacheWrite = updateBody.indexOf('state_target[grid_index] = state;');
 const popupUpdate = updateBody.indexOf('update_light_popup(init);');
 const visualReturn = updateBody.indexOf('if (tile_visual_unchanged) return;');
-const firstStyleWrite = updateBody.indexOf('lv_obj_set_style_text_color');
+// The Switch renderer draws the state (switch_tile_show_state).
+const firstStyleWrite = updateBody.indexOf('switch_tile_show_state(');
 assert.ok(visualCheck >= 0 && cacheWrite > visualCheck &&
           popupUpdate > cacheWrite && visualReturn > popupUpdate &&
           firstStyleWrite > visualReturn,

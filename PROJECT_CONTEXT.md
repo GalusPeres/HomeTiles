@@ -62,12 +62,12 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Editable tiles
 
-- IDs 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups and five fonts; preview preserves `editableValues`, `PackedTileV7` unchanged.
-- Number/input_number uses the centered Media slider/value, Climate +/- pill or bounded roller, with graph/Activity. Select/input_select uses Settings dropdowns, timeline and Activity.
-- Date/Time: single-row hh/mm/ss rollers, popup-colored pill, no arrows, native 23/00 and 59/00 wrap; date spinboxes without keyboard; HA timezone/DST validation.
+- IDs 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups; `PackedTileV7` unchanged.
+- Number: Media slider, Climate +/- pill or roller, graph/Activity; Select: Settings dropdown, timeline/Activity.
+- Date/Time: hh/mm/ss rollers in a pill, 23/00 and 59/00 wrap; date spinboxes; HA timezone/DST validation.
 - Additive `/control` preserves legacy clients; sessions/revisions/deadlines reject stale commands.
-- Bridge v0.6.44 (`148dec4`): stale icon cache fixed, overrides kept. v0.6.10 has `84511da` plus title/color fixes.
-- Controls clear wrapped titles/close area; Number/Select equal height, Time taller. Select has compact history/earlier Activity; status in header. Range changes retain data; offline closes dropdowns.
+- Bridge v0.6.44 (`148dec4`) fixed the stale icon cache.
+- Controls clear titles/close area; Select status in header; range changes retain data; offline closes dropdowns.
 - Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
 - Editable surfaces: control fill, white text; Select list = card + hairline, gap, inset selection.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
@@ -75,8 +75,8 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Shared-popup/artwork baseline
 
-- v0.6.11: `3b534ab` shared frame/header/close with cached bodies; matching content stays visible, cold content waits for first frame. Close/switch/delete cancel work; PIN retained. Settings forms disposable, Camera preloaded.
-- Artwork: URL-only `state_fast` precedes MQTT; failed replacements retain covers. URL/content pairing prevents S3 redownloads/stale results; deferred Media resolves current descriptors.
+- v0.6.11 `3b534ab`: shared popup frame/header/close, cached bodies; cold content waits for first frame; close/switch/delete cancel work.
+- Artwork: URL-only `state_fast` precedes MQTT; failed replacements keep covers; URL/content pairing avoids S3 redownloads.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123).
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
 - Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); circles/controls opaque (16-bit blending lost the step), veil only on see-through screensaver tiles; controls tint only From icon/cover; dark icons lifted. Presses: no theme recolor (tiles too) or teal fade, PIN/pill buttons a step up, circles fade with tiles (b132, HW pending).
@@ -86,7 +86,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Radius and half-grid
 
 - NVS radius: old radius to `(cell h - gap)/4`, unset = max; tile color `#1A1A1A`; new icon tiles "From icon" 20 %. Used by tiles, Climate, popups, previews.
-- Half-grid: Sensor/Binary/Energy height 0.5, width >=1 by 0.5; original 2x1. Whole layouts/V7 size unchanged; header fraction bits. Make every tile whole before 0.6.x (`docs/updating.md`).
+- Half-grid: Sensor/Binary/Energy/Switch height 0.5, width >=1 by 0.5; original 2x1. Whole layouts/V7 size unchanged; header fraction bits. Make every tile whole before 0.6.x (`docs/updating.md`).
 - Device/Web: concentric icon radius, original title font, smaller default value font; explicit sizes respected; text gap 0. Masking declined.
 - Reflow/drafts/rollback keep positions; stale GETs preserve edits. Empty 1x1 slots scan both axes by 0.5, no overlaps. Settings/Back: 1x0.5; Settings v4 bits 1-4 store snapshot fractions.
 - Hidden Climate reset crash (fractional Sensor width): Climate-only integer guard.
@@ -95,6 +95,11 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Weather icons (`tools/generate-weather-icon-fonts.mjs`): colored, toggle, icon tint; night: bridge `sun`; b98 HW
 - Clock/Text per-tile border: V7 display-mode byte 1=hidden; global/screensaver toggles respect it.
 - Open: cross-grid import clamps whole tiles to half steps (HTTP 400), snapshot type accepts halves, value fonts 32/40 clip in half tiles.
+
+## Switch tile and slider pacing (b143, HW pending)
+
+- Layout = `sensor_decimals`: 0 icon button, 1 switch bar (was LVGL switch), 2 dimmer, 3 automatic (dims if `supported_color_modes` can; new tiles). Sensor header + state line; bar = Climate pill box, one self-drawn object; 1x0.5 compact.
+- `command_pacer.h` = HA slider timing for Light popup and dimmer (#11, DALI DT8): tap = one command, >=500 ms apart, paced final. Bridge unchanged; reporter test pending.
 
 ## Local camera
 

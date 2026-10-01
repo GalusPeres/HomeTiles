@@ -6,6 +6,7 @@ const tileRenderer = read('../../../src/tiles/runtime/tile_renderer.cpp');
 const lightHeader = read('../../../src/ui/popups/light/light_popup.h');
 const lightPopup = read('../../../src/ui/popups/light/light_popup.cpp');
 const switchRenderer = read('../../../src/types/switch/renderer.cpp');
+const pacer = read('../../../src/ui/shared/command_pacer.h');
 
 if (!/struct SwitchState \{\s*bool available = true;/s.test(switchStateHeader) ||
     !lightHeader.includes('bool available = true;')) {
@@ -15,8 +16,9 @@ for (const marker of [
   'if (normalized_state == "unavailable")',
   'out.available = false;',
   'init.available = state.available;',
-  'const bool control_unavailable =',
-  'lv_obj_add_state(widgets.switch_obj, LV_STATE_DISABLED);'
+  'lv_color_hex(state.available ? icon_rgb : kIconOff)',
+  'view->available = state.available;',
+  'if (!view->available) {'
 ]) {
   if (!tileRenderer.includes(marker) && !switchRenderer.includes(marker)) {
     throw new Error(`Light tile availability contract is missing: ${marker}`);
@@ -24,8 +26,8 @@ for (const marker of [
 }
 
 const directToggle = switchRenderer.slice(
-  switchRenderer.indexOf('static void toggle_switch_tile('),
-  switchRenderer.indexOf('static LightPopupInit build_light_popup_init(')
+  switchRenderer.indexOf('void toggle_switch_tile('),
+  switchRenderer.indexOf('LightPopupInit build_light_popup_init(')
 );
 if (!directToggle.includes('if (!current.available) return;')) {
   throw new Error('Unavailable Light still reaches the direct tile toggle path');
@@ -62,9 +64,28 @@ const temperatureCommit = lightPopup.slice(
   lightPopup.lastIndexOf('static void commit_color_temperature('),
   lightPopup.lastIndexOf('static void maybe_live_publish_color_temperature(')
 );
-if (!temperatureCommit.includes('cancel_pending_live_publish(ctx);') ||
-    !temperatureCommit.includes('publish_color_temperature(ctx);')) {
+const pacedCommit = lightPopup.slice(
+  lightPopup.indexOf('static void commit_paced('),
+  lightPopup.lastIndexOf('static void commit_popup_state(')
+);
+if (!temperatureCommit.includes('commit_paced(ctx, LightPublishKind::Temperature);') ||
+    !pacedCommit.includes('cancel_pending_live_publish(ctx);') ||
+    !pacedCommit.includes('send_paced(ctx, kind);')) {
   throw new Error('Light CCT release does not replace the throttled pending value');
+}
+// GitHub issue #11: Home Assistant's slider timing (command_pacer.h). A
+// press alone sends nothing, live values need a real drag, and a waiting
+// final value is sent rather than dropped when the popup closes.
+for (const marker of ['kIntervalMs = 500', 'bool final_redundant(', 'uint32_t wait(']) {
+  if (!pacer.includes(marker)) throw new Error(`Command pacer is missing: ${marker}`);
+}
+for (const marker of [
+  '!ctx->user_dragging || !ctx->drag_moved',
+  'constexpr int kDragThreshold = popup_layout::scale(10);',
+  'flush_pending_final_publish(ctx);',
+  'flush_pending_final_publish(g_light_popup_ctx);'
+]) {
+  if (!lightPopup.includes(marker)) throw new Error(`Light popup pacing is missing: ${marker}`);
 }
 for (const marker of [
   'ctx->min_color_temp_kelvin = init.min_color_temp_kelvin;',

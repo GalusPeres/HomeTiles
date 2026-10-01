@@ -271,6 +271,23 @@ void appendPreviewScaleVars(String& html) {
       GRID_CELL_W - climate_layout::kOuterInset * 2);
   emit_exact("climate-control-v-pad-top", tile_layout::scale_480(5));
   emit_exact("climate-control-v-pad-bottom", tile_layout::scale_480(5));
+  {
+    // Switch tile header layouts (types/switch/renderer.cpp): the state line
+    // under the title, the pair centered where the Sensor title alone sits,
+    // and the control bar one Climate gap below the corner disc, as high as
+    // in a one-row tile, at the card's bottom.
+    const int value_line = lv_font_get_line_height(FONT_VALUE);
+    const int title_line = lv_font_get_line_height(tile_layout::header_title_font());
+    const int title_top =
+        tile_layout::scale_480(24) + tile_layout::scale_480(4) - value_line / 2 + header.shift;
+    emit_exact("switch-title-top", title_top);
+    emit_exact("switch-state-top", title_top + title_line);
+    emit_exact("switch-state-top-alone", title_top + value_line / 2);
+    const int bar_top = tile_icon_disc::inset() + header.disc + climate_layout::kGap;
+    emit_exact("switch-bar-height",
+               GRID_CELL_H - climate_layout::kOuterInset -
+                   (bar_top > climate_layout::kContentTop ? bar_top : climate_layout::kContentTop));
+  }
   html += "--settings-panel-width:";
   html += String(settings_panel_target_width_px());
   html += "px;";

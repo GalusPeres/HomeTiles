@@ -112,7 +112,7 @@ void legacy_tile_from_json(JsonObjectConst in, Tile& tile, size_t index) {
   tile.scene_alias = String(in["scene_alias"] | "");
   if (tile.type == TILE_SWITCH) {
     tile.sensor_decimals = static_cast<uint8_t>(
-        constrain(in["switch_style"] | 0, 0, 1));
+        constrain(in["switch_style"] | 0, 0, 3));
   }
   setTilePopupOpenMode(tile, static_cast<uint8_t>(
       in["popup_open_mode"] | TILE_POPUP_OPEN_LONG_PRESS));

@@ -448,9 +448,9 @@
     }
     let cls = ['tile'];
     if (meta.css) cls.push(meta.css);
-    if (typeValue === '5' && tile.switch_style === 1) cls.push('switch-toggle');
     if (typeValue === '0' && (!meta.css || meta.css !== 'empty')) cls.push('empty');
     el.className = cls.join(' ');
+    if (typeValue === '5') applySwitchPreviewLayout(el, tile.switch_style, Number(tile.span_h) === 0.5);
     el.dataset.type = typeValue;
     el.dataset.iconDisc = ['1', '2'].includes(String(tile?.icon_disc)) ? String(tile.icon_disc) : '0';
     el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
@@ -470,12 +470,6 @@
           tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
       } else {
         el.style.background = bg;
-      }
-      el.style.removeProperty('--switch-knob-color');
-      el.style.removeProperty('--switch-on-color');
-      if (typeValue === '5' && tile.switch_style === 1) {
-        el.style.setProperty('--switch-knob-color', bg);
-        el.style.setProperty('--switch-on-color', '#3B82F6');
       }
     }
     const sensorValueClass = getSensorValueFontClass(tile.sensor_value_font);
@@ -612,9 +606,7 @@
             escapeHtml(textValue) + '</div>';
         }
       }
-      if (previewKind === 'switch' && tile.switch_style === 1) {
-        html += '<div class="tile-switch" id="' + tab + '-tile-' + index + '-switch"><div class="tile-switch-knob"></div></div>';
-      }
+      if (previewKind === 'switch') html += switchPreviewExtraHtml(tile.switch_style, Number(tile.span_h) === 0.5);
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
       if (typeof applyTileRulesTint === 'function') {
@@ -626,7 +618,7 @@
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');
     if (typeValue === '5' && tile.sensor_entity) {
       const state = parseSwitchPayload(metaValues[tile.sensor_entity] ?? '');
-      applySwitchPreviewState(el, state);
+      applySwitchPreviewState(el, state, tile.sensor_entity);
     }
   }
 

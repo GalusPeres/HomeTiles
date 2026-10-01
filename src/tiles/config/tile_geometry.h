@@ -14,7 +14,9 @@ inline bool icon_title(int type) {
   return type == TILE_SCENE || type == TILE_FOLDER || type == TILE_BACK || type == TILE_CAMERA || type == TILE_SETTINGS;
 }
 // Types that may use half-cell sizes (mirrors supportsHalfSize in layout.js).
-inline bool half_size(int type) { return sensor(type) || type == TILE_CLOCK || icon_title(type); }
+inline bool half_size(int type) {
+  return sensor(type) || type == TILE_CLOCK || icon_title(type) || type == TILE_SWITCH;
+}
 inline bool fractional(float value) { return value != std::floor(value); }
 // Every type resizes in half steps from 1x1; only half-size types may be half
 // a row high (mirrors supportedTileLayout in layout.js).
@@ -25,6 +27,11 @@ inline bool supported(int type, float col, float row, float w, float h) {
 }
 inline bool compact(int type, float w, float h) {
   return sensor(type) && w >= 1 && h == 0.5f;
+}
+// A half-height Switch tile: the Sensor compact layout (icon, title, state),
+// without a control bar, for every Switch layout.
+inline bool compact_switch(int type, float w, float h) {
+  return type == TILE_SWITCH && w >= 1 && h == 0.5f;
 }
 inline bool compact_clock(int type, float w, float h) {
   return type == TILE_CLOCK && w >= 1 && h == 0.5f;

@@ -19,7 +19,7 @@ const html=`<!doctype html><html><head><style>${readRepoFile('src/web/assets/adm
 :root{--grid-cols:7;--grid-rows:5;--preview-cell-w:168px;--preview-cell-h:145px;--preview-gap:16px;--preview-pad:4px;--tile-radius:32px;--compact-inset:4px;--compact-title-font:20px;--compact-title-line:26px;--compact-value-line:31px;--compact-value-font:24px;--compact-text-gap:2px;--compact-icon-font:48px;--compact-value-font-24:25px;--compact-value-line-step-24:32px;--compact-value-font-28:28px;--compact-value-line-step-28:36px;}
 </style></head><body><section id="tab-tiles-test"><div class="tile-grid">
 ${[0,1,2,3].map(i=>`<div class="tile sensor" id="test-tile-${i}" data-index="${i}" data-type="1"><i class="tile-icon">i</i><div class="tile-title"><span class="tile-title-lines"><span class="tile-title-line">Room</span><span class="tile-title-line">Upstairs</span></span></div><div class="tile-value">22.5 C</div></div>`).join('')}
-</div></section><select id="test_tile_type"><option value="1">Sensor</option><option value="20">Binary</option><option value="14">Energy</option><option value="5">Switch</option><option value="7">Settings</option><option value="0">Empty</option></select>
+</div></section><select id="test_tile_type"><option value="1">Sensor</option><option value="20">Binary</option><option value="14">Energy</option><option value="5">Switch</option><option value="10">Text</option><option value="7">Settings</option><option value="0">Empty</option></select>
 ${['col','row','span_w','span_h'].map(n=>`<input type="number" id="test_tile_${n}" value="1">`).join('')}
 ${noteOpening}Hint</p><pre id="result"></pre><script>
 ${inlineScriptSafe(helpers)}
@@ -73,13 +73,14 @@ try {
  const snapshot=normalizeSnapshotLayout({type:1,col:'1.5',row:'2.5',span_w:'2',span_h:'0.5'},0,'test');
  check(snapshot.col===.5&&snapshot.row===1.5&&snapshot.span_h===.5,'draft reload retains half steps');
  for(const width of [1,1.5,2,2.5,3]) check(supportedTileLayout(14,{...snapshot,span_w:width}),'Energy compact widths');
- check(!supportedTileLayout(5,snapshot)&&supportedTileLayout(20,snapshot),'type policy');
+ check(!supportedTileLayout(10,snapshot)&&supportedTileLayout(20,snapshot)&&supportedTileLayout(5,snapshot),'type policy');
  check(supportedTileLayout(1,{...snapshot,span_w:1}),'minimum 1x0.5 size is supported');
  check(!supportedTileLayout(1,{...snapshot,span_w:.5}),'width below one cell is rejected');
  for(const width of [1,1.5,2,2.5,3]) check(supportedTileLayout(1,{...snapshot,span_w:width}),'compact width expands in half steps');
  check(supportedTileLayout(1,{...snapshot,span_w:1.5}) && supportedTileLayout(20,{...snapshot,span_w:1.5}),'1.5x0.5 supported for both sensor types');
  applyLayoutInputsFromLayout('test',tiles[0],false);syncTileSizePolicy('test');
- check(document.querySelector('#test_tile_type option[value="5"]').disabled,'incompatible type is disabled');
+ check(document.querySelector('#test_tile_type option[value="10"]').disabled,'incompatible type is disabled');
+ check(!document.querySelector('#test_tile_type option[value="5"]').disabled,'switch stays selectable at half height');
  check(!document.querySelector('#test_tile_type option[value="20"]').disabled,'binary sensor stays selectable');
  check(!document.querySelector('#test_tile_type option[value="14"]').disabled,'Energy stays selectable');
  check(!document.getElementById('test_tile_size_note').hidden,'type hint visible');

@@ -8,22 +8,22 @@ namespace web_admin_assets_generated {
 // The readable Admin JS bundle is formatted only during host generation.
 
 inline constexpr char kAdminCssPath[] =
-    "/assets/admin.c40927ca0219.css";
+    "/assets/admin.f48fca2a2907.css";
 inline constexpr char kAdminCssEtag[] =
-    "\"6fbe7faf4a3b075986a82591f8842d5966dd77366870ad009f48517707e54db3\"";
+    "\"846905ff3841ec03067a6b3db041d056f6f7aea781ddfa0e17a9e7918bd45572\"";
 inline constexpr char kAdminCssContentType[] =
     "text/css; charset=utf-8";
-inline constexpr size_t kAdminCssSourceSize = 104424;
-inline constexpr size_t kAdminCssGzipSize = 20259;
+inline constexpr size_t kAdminCssSourceSize = 106626;
+inline constexpr size_t kAdminCssGzipSize = 20748;
 
 inline constexpr char kAdminJsPath[] =
-    "/assets/admin.38db7e039bad.js";
+    "/assets/admin.554208bf0d29.js";
 inline constexpr char kAdminJsEtag[] =
-    "\"9c5bf31c5aa1784ed37a86a7454a86d21b93811a847bcb3717f32f20a3d5442c\"";
+    "\"a344867a8733473a415306ead3254a14d6ecaec9aa94a07a75083b537cada047\"";
 inline constexpr char kAdminJsContentType[] =
     "application/javascript; charset=utf-8";
-inline constexpr size_t kAdminJsSourceSize = 452232;
-inline constexpr size_t kAdminJsGzipSize = 99569;
+inline constexpr size_t kAdminJsSourceSize = 455520;
+inline constexpr size_t kAdminJsGzipSize = 100606;
 
 inline constexpr char kAdminAuthJsPath[] =
     "/assets/auth.a4e17d575dea.js";

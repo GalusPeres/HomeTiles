@@ -43,7 +43,8 @@ assert.ok(read('src/tiles/runtime/tile_renderer.cpp').includes(
 // binary sensor state color reaches it through the per-tile icon color rules
 // (tile_icon_color_rules::apply), which call set_icon_color.
 assert.ok(code(read('src/tiles/runtime/tile_icon_color_rules.h')).includes('tile_icon_disc::set_icon_color(icon, color);'));
-for (const [file, count] of [['src/tiles/runtime/tile_renderer.cpp', 3],
+for (const [file, count] of [['src/tiles/runtime/tile_renderer.cpp', 2],
+                             ['src/types/switch/renderer.cpp', 1],
                              ['src/types/binary_sensor/renderer.cpp', 1],
                              ['src/types/cover/renderer.cpp', 1]]) {
   const source = code(read(file));

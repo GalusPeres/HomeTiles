@@ -2031,7 +2031,8 @@ struct DragTiming {
   lv_display_t* display = nullptr;
   uint32_t start_ms = 0, steps = 0, handler_us = 0, handler_max_us = 0;
   uint32_t frame_start_us = 0, frame_areas = 0, frames = 0, render_us = 0, render_max_us = 0;
-  uint32_t areas = 0, areas_max = 0;
+  // The longest gap between two frames: time the loop spent elsewhere.
+  uint32_t areas = 0, areas_max = 0, last_ready_us = 0, gap_max_us = 0;
 };
 static DragTiming g_drag_timing;
 
@@ -2042,6 +2043,10 @@ static void drag_render_event(lv_event_t* e) {
   if (code == LV_EVENT_REFR_START) {
     timing.frame_start_us = micros();
     timing.frame_areas = timing.display->inv_p;
+    if (timing.frame_areas && timing.last_ready_us) {
+      const uint32_t gap = timing.frame_start_us - timing.last_ready_us;
+      if (gap > timing.gap_max_us) timing.gap_max_us = gap;
+    }
   } else if (code == LV_EVENT_REFR_READY && timing.frame_areas) {
     const uint32_t elapsed = micros() - timing.frame_start_us;
     ++timing.frames;
@@ -2050,6 +2055,7 @@ static void drag_render_event(lv_event_t* e) {
     timing.areas += timing.frame_areas;
     if (timing.frame_areas > timing.areas_max) timing.areas_max = timing.frame_areas;
     timing.frame_areas = 0;
+    timing.last_ready_us = micros();
   }
 }
 
@@ -2080,12 +2086,13 @@ static void finish_drag_timing(const char* what) {
   const uint32_t frames = timing.frames ? timing.frames : 1;
   const uint32_t areas10 = timing.areas * 10 / frames;
   Serial.printf("[LightPopup] %s drag: %lums, steps=%lu (avg %luus, max %luus), frames=%lu (avg %luus, max %luus), "
-                "areas avg %lu.%lu max %lu\n",
+                "areas avg %lu.%lu max %lu, gap max %luus\n",
                 what, static_cast<unsigned long>(millis() - timing.start_ms), static_cast<unsigned long>(timing.steps),
                 static_cast<unsigned long>(timing.handler_us / steps), static_cast<unsigned long>(timing.handler_max_us),
                 static_cast<unsigned long>(timing.frames), static_cast<unsigned long>(timing.render_us / frames),
                 static_cast<unsigned long>(timing.render_max_us), static_cast<unsigned long>(areas10 / 10),
-                static_cast<unsigned long>(areas10 % 10), static_cast<unsigned long>(timing.areas_max));
+                static_cast<unsigned long>(areas10 % 10), static_cast<unsigned long>(timing.areas_max),
+                static_cast<unsigned long>(timing.gap_max_us));
   timing = {};
 }
 

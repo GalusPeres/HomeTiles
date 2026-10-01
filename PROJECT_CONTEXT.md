@@ -35,7 +35,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Version RPC `0x15e` also occurs on the stable 8-inch; not the cascade cause.
 - SDIO schematics: V1 5.1-kohm pull-ups/no series termination; 8-inch 51-kohm; Tab5 5.1-kohm/22-ohm series/switched WLAN power. Signal margin unproven.
 - Original `JC8012P4A1_C6.bin`/HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 needs CN5 and a 3.3 V UART.
-- Fix b6 passed reporter tests (two cameras 15-20 FPS, Web OTA); confirmed v0.6.9b1, shipped v0.6.10. Exact V1 keeps 1-bit/40 MHz, splits large RX into 512-byte CMD53 reads. Lower camera quality/FPS only as labeled diagnostic A/B.
+- Fix b6 passed reporter tests (two cameras 15-20 FPS, Web OTA); confirmed v0.6.9b1, shipped v0.6.10. Exact V1 keeps 1-bit/40 MHz, splits large RX into 512-byte CMD53 reads. Lower camera quality/FPS only as labeled A/B.
 
 ## ESP32-P4 network history
 
@@ -49,9 +49,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Reporter: JC8012P4A1 V2, SKU10153001-V2 (2632), `_I_W_Y`; #18 tested SKU10153002-V2 (2627), `_I_W_Y1`. Maintainer received JC8012P4A1C_I_W_Y1, SKU10153002-V2. Labels alone prove no other panel.
 - V2 fixes committed in `e1a9297`: touch bounds, internal I2C atomic-state allocation, slot-aware SD cleanup; exact-V2 only. Beta `HOMETILES_ISSUE38_BETA` reports v0.6.12b1; release version stays v0.6.12.
-- SD: reporter card-init failure (40/20 MHz), then Hosted slot-1 assertion. V2 dropped DEINIT_ARG from default host flags like V1; maintainer SD diagnostic passes (~8 GB). Assertion and card failure causes open (#55). Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`.
+- SD: reporter card-init failure (40/20 MHz), then Hosted slot-1 assertion. V2 dropped DEINIT_ARG from default host flags like V1; maintainer SD diagnostic passes (~8 GB). Both causes open (#55). Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`.
 - Touch: maintainer confirms rapid-tap raw-bounds fix works. BIN/ELF: `build/guition-v2-touch/`.
-- Interrupt-WDT dump (touch ELF): I2C atomic-state object was in PSRAM; backport `37758ef327f9` forces internal allocation. Exposure proven, WDT causality unproven. Evidence/hash: `build/guition-v2-crash-20260911/`.
+- Interrupt-WDT dump (touch ELF): I2C atomic-state object was in PSRAM; backport `37758ef327f9` forces internal allocation. Exposure proven, WDT cause unproven; evidence `build/guition-v2-crash-20260911/`.
 - Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. v0.6.12 keeps daily extrema (24 C daily vs partial hourly 11 C).
 
 ## Sensor history
@@ -79,8 +79,9 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements keep covers; URL/content pairing avoids S3 redownloads.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123).
 - Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
-- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); opaque circles/controls, veil only on see-through tiles; dark icons lifted vs. defaults only (b156); tinted circle and controls = From icon circle everywhere (b153). Presses: no theme recolor or teal fade, PIN/pill buttons a step up, circles fade with tiles.
+- Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); opaque circles/controls, veil only on see-through tiles; dark icons lifted vs. defaults (b156); tinted circle/controls = From icon circle (b153). Presses: no theme recolor/teal fade, PIN/pill a step up.
 - LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; caches `hometiles-lvgl96-*`.
+- LVGL 9.6 rounds draw bands to 64 B: 4B (720 px) hung at splash b132-b164; buffers rounded up (77e6a695), b166 HW ok.
 - Reverted: b126 cover fade, b128 UI frame swap (lag).
 
 ## Radius and half-grid
@@ -127,7 +128,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## Flash and RAM (PR #62)
 
 - `-fno-exceptions` (`compiler.cpp.flags`, CI and local): about -300 KiB per image, Tab5 428 KiB OTA headroom. Unused LVGL widgets/formats off: -49 KiB, IRAM -21 KiB.
-- Renderer slot state, Binary Sensor queue and active/screensaver grids live in PSRAM, allocated in `setup()` (not constructors). Static DRAM V2 136,632 -> 64,984 B, S3 139,576 -> 80,376 B. V2/S3 b75 passed.
+- Renderer slot state, Binary Sensor queue and active/screensaver grids live in PSRAM, allocated in `setup()`. Static DRAM V2 136,632 -> 64,984 B, S3 139,576 -> 80,376 B. V2/S3 b75 passed.
 
 ## View control and telemetry
 

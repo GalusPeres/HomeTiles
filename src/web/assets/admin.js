@@ -4671,7 +4671,8 @@ function syncTileRadiusControls(tabEl) {
     // half-height value sizes; from 1.5 rows like a Sensor tile at its value
     // sizes, the bar a third of the extra height higher
     // (switch_layout::sensor_look).
-    const switchHeader = Number(type) === 5 && el.classList.contains('switch-bar');
+    // The Cover position bar uses the same header (tile_header.h).
+    const switchHeader = [5, 19].includes(Number(type)) && el.classList.contains('switch-bar');
     const switchTall = switchHeader && Number(layout?.span_h) > 1;
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));
@@ -5868,10 +5869,17 @@ function syncTileRadiusControls(tabEl) {
                                   !switchSensorLook(switchStyle, spanH));
       syncSwitchChoices(tab);
     }
+    if (type === '19') {
+      // Like the Switch: beside the disc the half-height sizes, from 1.5 rows
+      // the full-size ones (tile_header.h).
+      const spanH = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1);
+      syncCompactValueFontOptions(document.getElementById(prefix + '_cover_value_font'), !(spanH > 1));
+      syncSwitchChoices(tab);
+    }
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font'
-        : (type === '5' ? '_switch_value_font' : '_sensor_value_font')))?.value || '0');
+        : (type === '5' ? '_switch_value_font' : (type === '19' ? '_cover_value_font' : '_sensor_value_font'))))?.value || '0');
     const previewKind = meta.preview || 'none';
     const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
       ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);
@@ -7808,7 +7816,11 @@ function syncTileRadiusControls(tabEl) {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
       }
       applyIconDiscTint(el);
-      if (previewKind === 'cover') applyCoverPreview(el, coverPreviewState, Number(tile.span_h) === 0.5);
+      if (previewKind === 'cover') {
+        applyCoverPreview(el, coverPreviewState, Number(tile.span_h) === 0.5);
+        // The header classes need the bar class set above (switch-tall).
+        applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
+      }
       if (typeValue === '9') fitCompactClockPreview(el);
     }
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');
@@ -10967,7 +10979,8 @@ function maybeFillTitleFromSwitch(tab) {
   // select of each keeps the value; a button sets it and fires its change
   // event, so the existing preview, draft and autosave bindings run.
   // The Climate tile's Layout uses the same segmented choice.
-  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view'];
+  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view',
+    'cover_value_font'];
 
   function syncSwitchChoices(tab) {
     for (const field of SWITCH_CHOICE_FIELDS) {
@@ -11594,7 +11607,10 @@ function maybeFillTitleFromSwitch(tab) {
     const bar = tileElem.querySelector('.tile-switch');
     if (!bar) return;
     const available = state?.available !== false && !!state?.reported;
-    const level = available && state.position !== null ? state.position : 0;
+    // The closed part like Home Assistant's cover position feature (and the
+    // popup's shutter): 75 % open fills a quarter; fully open keeps the
+    // smallest piece with the handle (cover renderer cover_fill_level).
+    const level = available && state.position !== null ? Math.max(1, 100 - state.position) : 0;
     bar.dataset.bar = 'dimmer';
     bar.classList.toggle('is-unavailable', !available);
     bar.style.setProperty('--switch-accent', COVER_PREVIEW_ACTIVE);
@@ -11639,11 +11655,15 @@ function maybeFillTitleFromSwitch(tab) {
       }
       entity.value = configured;
     }
+    // State size like the Switch tile (Tile::sensor_value_font).
+    const font = document.getElementById(tab + '_cover_value_font');
+    if (font) font.value = switchValueFont(data.sensor_value_font);
     const popup = document.getElementById(tab + '_cover_popup_open_mode');
     if (popup) {
       popup.value = data.popup_open_mode !== undefined
         ? String(data.popup_open_mode) : '1';
     }
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_cover_entity');
   }
 
@@ -11652,6 +11672,7 @@ function maybeFillTitleFromSwitch(tab) {
     const entity = document.getElementById(tab + '_cover_entity')?.value || '';
     formData.append('cover_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('sensor_value_font', switchValueFont(document.getElementById(tab + '_cover_value_font')?.value));
     const popup = document.getElementById(tab + '_cover_popup_open_mode');
     if (popup) formData.append('popup_open_mode', popup.value || '1');
   }
@@ -11663,8 +11684,11 @@ function maybeFillTitleFromSwitch(tab) {
       entity.value = '';
       delete entity.dataset.configuredValue;
     }
+    const font = document.getElementById(tab + '_cover_value_font');
+    if (font) font.value = '0';
     const popup = document.getElementById(tab + '_cover_popup_open_mode');
     if (popup) popup.value = '1';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
 function maybeFillTitleFromMedia(tab) {

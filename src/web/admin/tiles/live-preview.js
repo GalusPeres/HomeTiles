@@ -38,10 +38,17 @@
                                   !switchSensorLook(switchStyle, spanH));
       syncSwitchChoices(tab);
     }
+    if (type === '19') {
+      // Like the Switch: beside the disc the half-height sizes, from 1.5 rows
+      // the full-size ones (tile_header.h).
+      const spanH = Number(document.getElementById(prefix + '_tile_span_h')?.value || 1);
+      syncCompactValueFontOptions(document.getElementById(prefix + '_cover_value_font'), !(spanH > 1));
+      syncSwitchChoices(tab);
+    }
     const sensorValueFont = isEnergyType
       ? (document.getElementById(prefix + '_energy_value_font')?.value || '0')
       : (document.getElementById(prefix + (type === '20' ? '_binary_sensor_value_font'
-        : (type === '5' ? '_switch_value_font' : '_sensor_value_font')))?.value || '0');
+        : (type === '5' ? '_switch_value_font' : (type === '19' ? '_cover_value_font' : '_sensor_value_font'))))?.value || '0');
     const previewKind = meta.preview || 'none';
     const sensorValueClass = getSensorValueFontClass(isEditablePreview(previewKind)
       ? (document.getElementById(prefix + '_' + previewKind + '_value_font')?.value ?? '2') : sensorValueFont);

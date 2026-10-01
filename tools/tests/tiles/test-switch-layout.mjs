@@ -155,11 +155,14 @@ assert.ok(html.includes('append_switch_choice(html, tab_id, "switch_value_font",
 // the disc and the bar, kept centered when a long state steps down.
 // The bar's box, drawing and touch mapping live in the shared level bar.
 const levelBar = readRepoFile('src/tiles/runtime/level_bar.h');
-const tallRenderer = readRepoFile('src/types/switch/renderer.cpp') + levelBar;
+// The header (title, state line, tall look) lives in the shared tile header.
+const tileHeader = readRepoFile('src/tiles/runtime/tile_header.h');
+const tallRenderer = readRepoFile('src/types/switch/renderer.cpp') + levelBar + tileHeader;
 assert.ok(tallRenderer.includes('const bool tall = switch_layout::sensor_look(layout, tile.span_h);') &&
           tallRenderer.includes('tall ? tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE)'));
-assert.ok(tallRenderer.includes('view->state_center = static_cast<int16_t>((inset + disc + bar_box(tile).top) / 2 - pad_y);') &&
-          tallRenderer.includes('lv_obj_set_y(view->state_label, view->state_center - lv_font_get_line_height(font) / 2);'));
+assert.ok(tallRenderer.includes('tile_header::create(container, tile, tall, bar_box(tile).top);') &&
+          tallRenderer.includes('header.state_center = static_cast<int16_t>((inset + disc + bar_top) / 2 - pad_y);') &&
+          tallRenderer.includes('if (center >= 0) lv_obj_set_y(label, center - lv_font_get_line_height(font) / 2);'));
 assert.ok(tallRenderer.includes('switch_layout::bar_growth(tile_h, GRID_CELL_H)'));
 const layoutJsTall = readRepoFile('src/web/admin/tiles/layout.js');
 assert.ok(layoutJsTall.includes('const switchTall = switchHeader && Number(layout?.span_h) > 1;'));
@@ -197,7 +200,7 @@ assert.ok(css.includes('.switch-choices button.hidden { display:none; }'));
 assert.ok(admin.includes("formData.append('sensor_value_font', switchValueFont("));
 assert.ok(admin.includes('fontEl.value = switchValueFont(data.sensor_value_font);'));
 assert.match(handler, /tile\.sensor_value_font =\s*font >= 1 && font <= SENSOR_VALUE_FONT_MAX/);
-const renderer = readRepoFile('src/types/switch/renderer.cpp') + levelBar;
+const renderer = readRepoFile('src/types/switch/renderer.cpp') + levelBar + tileHeader;
 // The bar draws itself: no LVGL switch/slider widgets, no clip_corner.
 for (const forbidden of ['lv_switch_create', 'lv_slider_create', 'set_style_clip_corner']) {
   assert.ok(!renderer.includes(forbidden), `Switch renderer must not use ${forbidden}`);

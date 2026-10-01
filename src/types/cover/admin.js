@@ -147,7 +147,10 @@
     const bar = tileElem.querySelector('.tile-switch');
     if (!bar) return;
     const available = state?.available !== false && !!state?.reported;
-    const level = available && state.position !== null ? state.position : 0;
+    // The closed part like Home Assistant's cover position feature (and the
+    // popup's shutter): 75 % open fills a quarter; fully open keeps the
+    // smallest piece with the handle (cover renderer cover_fill_level).
+    const level = available && state.position !== null ? Math.max(1, 100 - state.position) : 0;
     bar.dataset.bar = 'dimmer';
     bar.classList.toggle('is-unavailable', !available);
     bar.style.setProperty('--switch-accent', COVER_PREVIEW_ACTIVE);
@@ -192,11 +195,15 @@
       }
       entity.value = configured;
     }
+    // State size like the Switch tile (Tile::sensor_value_font).
+    const font = document.getElementById(tab + '_cover_value_font');
+    if (font) font.value = switchValueFont(data.sensor_value_font);
     const popup = document.getElementById(tab + '_cover_popup_open_mode');
     if (popup) {
       popup.value = data.popup_open_mode !== undefined
         ? String(data.popup_open_mode) : '1';
     }
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromEntity(tab, '_cover_entity');
   }
 
@@ -205,6 +212,7 @@
     const entity = document.getElementById(tab + '_cover_entity')?.value || '';
     formData.append('cover_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('sensor_value_font', switchValueFont(document.getElementById(tab + '_cover_value_font')?.value));
     const popup = document.getElementById(tab + '_cover_popup_open_mode');
     if (popup) formData.append('popup_open_mode', popup.value || '1');
   }
@@ -216,6 +224,9 @@
       entity.value = '';
       delete entity.dataset.configuredValue;
     }
+    const font = document.getElementById(tab + '_cover_value_font');
+    if (font) font.value = '0';
     const popup = document.getElementById(tab + '_cover_popup_open_mode');
     if (popup) popup.value = '1';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }

@@ -12,6 +12,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/compact_sensor_layout.h"
 #include "src/tiles/runtime/level_bar.h"
+#include "src/tiles/runtime/tile_header.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
@@ -277,6 +278,22 @@ String cover_state_line(const CoverState& state, bool has_position, uint8_t posi
   return text;
 }
 
+// The bar shows the closed part like Home Assistant's cover position feature
+// and the popup's shutter (user 2026-10-01): 75 % open fills a quarter, fully
+// closed fills the bar, fully open keeps the smallest piece with the handle.
+uint8_t cover_fill_level(uint8_t position) { return position >= 99 ? 1 : static_cast<uint8_t>(100 - position); }
+
+// The position under a touch point: the far left (level 0 or 1) is fully
+// open.
+uint8_t cover_position_at(uint8_t level) { return level <= 1 ? 100 : static_cast<uint8_t>(100 - level); }
+
+// The state line through the shared header (tile_header::set_state): full
+// tiles step the font down instead of shortening the text.
+void set_state_line(CoverTileWidgets& widget, const String& line) {
+  tile_header::set_state(widget.state_label, line.c_str(), widget.compact ? nullptr : widget.state_font,
+                         widget.state_width, widget.state_center);
+}
+
 // ---------------------------------------------------------------------------
 // Position bar: the Switch dimmer's logic (level_bar.h for the box, drawing
 // and touch mapping; command_pacer.h for Home Assistant's slider timing):
@@ -411,17 +428,15 @@ void bar_draw_cb(lv_event_t* e) {
 // A drag step: the bar and the state line follow the finger; only the
 // changed columns redraw (level_bar::invalidate_change).
 void show_local_position(CoverEventData* data, CoverTileWidgets& widget, uint8_t value) {
-  if (widget.level != value) {
+  const uint8_t fill = cover_fill_level(value);
+  if (widget.level != fill) {
     const uint8_t old_level = widget.level;
-    widget.level = value;
-    level_bar::invalidate_change(widget.bar, widget.bar_base, old_level, value);
+    widget.level = fill;
+    level_bar::invalidate_change(widget.bar, widget.bar_base, old_level, fill);
   }
   if (widget.state_label) {
     const CoverState& state = tile_renderer_get_cover_states(data->grid_type)[data->index];
-    const String line = cover_state_line(state, true, value);
-    if (strcmp(lv_label_get_text(widget.state_label), line.c_str()) != 0) {
-      lv_label_set_text(widget.state_label, line.c_str());
-    }
+    set_state_line(widget, cover_state_line(state, true, value));
   }
 }
 
@@ -452,7 +467,7 @@ void bar_event_cb(lv_event_t* e) {
     const int dy = point.y - g_drag.press.y;
     g_drag.moved = dx * dx + dy * dy >= kDragThreshold * kDragThreshold;
   }
-  const uint8_t value = level_bar::value_at(widget.bar, widget.bar_base, point);
+  const uint8_t value = cover_position_at(level_bar::value_at(widget.bar, widget.bar_base, point));
   const bool changed = value != g_drag.value || code == LV_EVENT_PRESSED;
   g_drag.value = value;
   if (changed) show_local_position(data, widget, value);
@@ -511,19 +526,15 @@ void show_view(GridType grid_type, uint8_t index) {
     const String value = cover_value_text(state);
     lv_label_set_text(widget.value_label, value.c_str());
   }
-  uint8_t level = state.available && state.has_position ? state.position : 0;
+  uint8_t position = state.position;
   bool has_position = state.has_position;
   uint8_t held = 0;
   if (state.available && held_value(grid_type, index, held)) {
-    level = held;
+    position = held;
     has_position = true;
   }
-  if (widget.state_label) {
-    const String line = cover_state_line(state, has_position, level);
-    if (strcmp(lv_label_get_text(widget.state_label), line.c_str()) != 0) {
-      lv_label_set_text(widget.state_label, line.c_str());
-    }
-  }
+  const uint8_t level = state.available && has_position ? cover_fill_level(position) : 0;
+  if (widget.state_label) set_state_line(widget, cover_state_line(state, has_position, position));
   if (!widget.bar) return;
   // A Cover that reports no position control keeps the header without a bar.
   const bool positionable = !state.valid || (state.supported_features & COVER_FEATURE_SET_POSITION);
@@ -631,42 +642,17 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
   }
 
   if (header) {
-    // Title and state left-aligned beside the corner disc like the Switch
-    // header (compact_sensor_layout: two insets from the disc, the block
-    // centered on it). Positions are inside the card's content box.
-    const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
-    const int inset = tile_icon_disc::inset();
-    const int icon_width =
-        FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
-    const int disc = tile_icon_disc::header_diameter(icon_width);
-    const int text_x = inset + disc + 2 * inset;
-    const int text_w = std::max(1, card_w - text_x - 2 * inset);
-    const bool has_title = tile.title.length() > 0;
-    const int title_h = lv_font_get_line_height(compact_sensor_layout::title_font());
-    const lv_font_t* state_font = compact_sensor_layout::value_font(tile.sensor_value_font);
-    const int block = (has_title ? title_h : 0) + lv_font_get_line_height(state_font);
-    const int text_y = inset + disc / 2 - block / 2;
-    const int pad_x = tile_layout::scale_480(20);
-    const int pad_y = tile_layout::scale_480(24);
-    if (has_title) {
-      widget.title_label = lv_label_create(card);
-      set_label_style(widget.title_label, lv_color_white(), compact_sensor_layout::title_font());
-      lv_label_set_long_mode(widget.title_label, LV_LABEL_LONG_DOT);
-      lv_obj_set_width(widget.title_label, text_w);
-      hometiles_title::tile(widget.title_label, tile.title.c_str(), true);
-      // One title line: the state line takes the second.
-      if (auto* title_state = hometiles_title::state_for(widget.title_label)) title_state->single_line = true;
-      lv_obj_set_style_text_align(widget.title_label, LV_TEXT_ALIGN_LEFT, 0);
-      lv_obj_set_pos(widget.title_label, text_x - pad_x, text_y - pad_y);
-    }
-    widget.state_label = lv_label_create(card);
-    set_label_style(widget.state_label, lv_color_white(), state_font);
-    lv_label_set_long_mode(widget.state_label, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(widget.state_label, text_w);
-    lv_obj_set_style_text_align(widget.state_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_text(widget.state_label, "--");
-    lv_obj_set_pos(widget.state_label, text_x - pad_x, text_y + (has_title ? title_h : 0) - pad_y);
-    lv_obj_clear_flag(widget.state_label, LV_OBJ_FLAG_CLICKABLE);
+    // The shared header (tile_header.h) like the Switch tile: title and
+    // state beside the disc; from 1.5 rows the title top right and the state
+    // at the chosen Sensor value size centered between the disc and the bar.
+    const bool tall = !compact && tile.span_h > 1.0f;
+    const tile_header::Header text = tile_header::create(card, tile, tall, level_bar::box(tile).top);
+    widget.title_label = text.title;
+    widget.state_label = text.state;
+    widget.state_font = text.state_font;
+    widget.state_width = text.state_width;
+    widget.state_center = text.state_center;
+    widget.compact = compact;
     if (compact) {
       compact_sensor_layout::apply(card, widget.icon_label, widget.title_label, widget.state_label, tile);
     } else {

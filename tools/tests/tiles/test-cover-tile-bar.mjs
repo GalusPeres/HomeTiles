@@ -27,8 +27,15 @@ for (const marker of [
   'widget.bar_base = static_cast<int16_t>(level_bar::box(tile).base);',
   'level_bar::draw_fill(lv_event_get_layer(e), widget->bar, widget->level, widget->bar_base,',
   'lv_color_hex(kCoverActive), card);',
-  'const uint8_t value = level_bar::value_at(widget.bar, widget.bar_base, point);',
-  'level_bar::invalidate_change(widget.bar, widget.bar_base, old_level, value);',
+  'const uint8_t value = cover_position_at(level_bar::value_at(widget.bar, widget.bar_base, point));',
+  // The closed part like Home Assistant (75 % open fills a quarter); fully
+  // open keeps the smallest piece with the handle.
+  'uint8_t cover_fill_level(uint8_t position) { return position >= 99 ? 1 : static_cast<uint8_t>(100 - position); }',
+  'uint8_t cover_position_at(uint8_t level) { return level <= 1 ? 100 : static_cast<uint8_t>(100 - level); }',
+  // The shared header with the tall look from 1.5 rows and the value size.
+  'const tile_header::Header text = tile_header::create(card, tile, tall, level_bar::box(tile).top);',
+  'tile_header::set_state(widget.state_label, line.c_str(), widget.compact ? nullptr : widget.state_font,',
+  'level_bar::invalidate_change(widget.bar, widget.bar_base, old_level, fill);',
   // Commands: Home Assistant's slider timing and the final value on release.
   'mqttPublishCoverCommand(entity_id.c_str(), "set_cover_position", value);',
   'const uint32_t wait = g_pacer.wait(millis());',

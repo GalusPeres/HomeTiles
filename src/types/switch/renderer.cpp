@@ -8,6 +8,7 @@
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/level_bar.h"
+#include "src/tiles/runtime/tile_header.h"
 #include "src/tiles/config/tile_geometry.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/network/mqtt/mqtt_handlers.h"
@@ -218,42 +219,13 @@ void toggle_switch_tile(SwitchEventData* data) {
 // ---------------------------------------------------------------------------
 // State line
 
-const lv_font_t* fitting_state_font(const char* text, int width, const lv_font_t* largest) {
-  // 12 and 14 px exist only in the 480x480 layout (ui_fonts.h).
-  static const lv_font_t* const kSizes[] = {&ui_font_40, &ui_font_32, &ui_font_28, &ui_font_24,
-                                            &ui_font_20, &ui_font_16,
-#if defined(DEVICE_LAYOUT_480X480)
-                                            &ui_font_14, &ui_font_12,
-#endif
-  };
-  const int32_t start = lv_font_get_line_height(largest);
-  const lv_font_t* last = kSizes[sizeof(kSizes) / sizeof(kSizes[0]) - 1];
-  for (const lv_font_t* font : kSizes) {
-    if (lv_font_get_line_height(font) > start) continue;
-    last = font;
-    if (width <= 0) return font;
-    lv_point_t size;
-    lv_text_get_size(&size, text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    if (size.x <= width) return font;
-  }
-  return last;
-}
-
 // Translated states never shorten: the font steps down until the text fits
-// (the chosen half-height Sensor value size is the largest).
+// (tile_header::set_state; the chosen half-height Sensor value size is the
+// largest).
 void set_state_text(SwitchBarView* view, const char* text) {
-  if (!view || !view->state_label || !text) return;
-  if (strcmp(lv_label_get_text(view->state_label), text) == 0) return;
-  if (!view->compact && view->state_font) {
-    const lv_font_t* font = fitting_state_font(text, view->state_width, view->state_font);
-    if (lv_obj_get_style_text_font(view->state_label, LV_PART_MAIN) != font) {
-      lv_obj_set_style_text_font(view->state_label, font, 0);
-      if (view->state_center >= 0) {
-        lv_obj_set_y(view->state_label, view->state_center - lv_font_get_line_height(font) / 2);
-      }
-    }
-  }
-  lv_label_set_text(view->state_label, text);
+  if (!view) return;
+  tile_header::set_state(view->state_label, text, view->compact ? nullptr : view->state_font, view->state_width,
+                         view->state_center);
 }
 
 void show_state_text(SwitchBarView* view, const SwitchState& state, bool dimmable, uint8_t level, bool on) {
@@ -730,87 +702,19 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     const bool light = is_light_entity_id(tile.sensor_entity);
     view->bar_kind = static_cast<uint8_t>(switch_layout::bar_for(layout, compact, light));
 
-    // One row high: the Sensor corner disc; title and state left-aligned
-    // beside it like the half-height tiles (compact_sensor_layout::apply_content: two insets
-    // from the disc, the block centered on it, no gap between the lines),
-    // the state at the half-height Sensor value size (title size by default,
-    // 24 or 28 when chosen). Explicit positions, so the corner disc
-    // (add_round) does not move them.
+    // The shared header (tile_header.h): one row high, title and state
+    // left-aligned beside the corner disc; from 1.5 rows the Sensor tile's
+    // title top right and the state centered between the disc and the bar.
     if (icon_lbl) {
       lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT, tile_layout::scale_480(-8), tile_layout::scale_480(-8));
     }
-    const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
-    const int inset = tile_icon_disc::inset();
-    const int icon_width =
-        FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
-    const int disc = tile_icon_disc::header_diameter(icon_width);
-    const int text_x = inset + disc + 2 * inset;
-    const int text_w = std::max(1, card_w - text_x - 2 * inset);
-    const int title_h = lv_font_get_line_height(compact_sensor_layout::title_font());
     const bool tall = switch_layout::sensor_look(layout, tile.span_h);
-    const lv_font_t* state_font = tall ? tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE)
-                                       : compact_sensor_layout::value_font(tile.sensor_value_font);
-    view->state_font = state_font;
-    const int state_h = lv_font_get_line_height(state_font);
-    const int block = (has_title ? title_h : 0) + state_h;
-    const int text_y = inset + disc / 2 - block / 2;
-    // Label positions are inside the card's content box (Sensor paddings).
-    const int pad_x = tile_layout::scale_480(20);
-    const int pad_y = tile_layout::scale_480(24);
-    if (tall) {
-      // From 1.5 rows: the Sensor tile's title, top right (add_round moves
-      // it with the corner disc), and its value size, the state centered
-      // between the disc and the bar.
-      if (has_title) {
-        title_lbl = lv_label_create(container);
-        if (title_lbl) {
-          set_label_style(title_lbl, lv_color_white(), tile_layout::header_title_font());
-          lv_label_set_long_mode(title_lbl, LV_LABEL_LONG_DOT);
-          lv_obj_set_width(title_lbl, LV_PCT(70));
-          lv_obj_set_style_text_align(title_lbl, LV_TEXT_ALIGN_RIGHT, 0);
-          hometiles_title::tile(title_lbl, tile.title.c_str(), true);
-          lv_obj_align(title_lbl, LV_ALIGN_TOP_RIGHT, tile_layout::scale_480(4), tile_layout::scale_480(4));
-        }
-      }
-      const int content_w = std::max(1, card_w - 2 * pad_x);
-      view->state_center = static_cast<int16_t>((inset + disc + bar_box(tile).top) / 2 - pad_y);
-      view->state_label = lv_label_create(container);
-      if (view->state_label) {
-        set_label_style(view->state_label, lv_color_white(), state_font);
-        lv_label_set_long_mode(view->state_label, LV_LABEL_LONG_DOT);
-        lv_obj_set_width(view->state_label, content_w);
-        lv_obj_set_style_text_align(view->state_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_label_set_text(view->state_label, "--");
-        lv_obj_set_pos(view->state_label, 0, view->state_center - state_h / 2);
-        lv_obj_clear_flag(view->state_label, LV_OBJ_FLAG_CLICKABLE);
-      }
-      view->state_width = static_cast<int16_t>(content_w);
-    } else if (has_title) {
-      title_lbl = lv_label_create(container);
-      if (title_lbl) {
-        set_label_style(title_lbl, lv_color_white(), compact_sensor_layout::title_font());
-        lv_label_set_long_mode(title_lbl, LV_LABEL_LONG_DOT);
-        lv_obj_set_width(title_lbl, text_w);
-        hometiles_title::tile(title_lbl, tile.title.c_str(), true);
-        // One title line: the state line takes the second.
-        if (auto* title_state = hometiles_title::state_for(title_lbl)) title_state->single_line = true;
-        lv_obj_set_style_text_align(title_lbl, LV_TEXT_ALIGN_LEFT, 0);
-        lv_obj_set_pos(title_lbl, text_x - pad_x, text_y - pad_y);
-      }
-    }
-    if (!tall) {
-      view->state_label = lv_label_create(container);
-      if (view->state_label) {
-        set_label_style(view->state_label, lv_color_white(), state_font);
-        lv_label_set_long_mode(view->state_label, LV_LABEL_LONG_DOT);
-        lv_obj_set_width(view->state_label, text_w);
-        lv_obj_set_style_text_align(view->state_label, LV_TEXT_ALIGN_LEFT, 0);
-        lv_label_set_text(view->state_label, "--");
-        lv_obj_set_pos(view->state_label, text_x - pad_x, text_y + (has_title ? title_h : 0) - pad_y);
-        lv_obj_clear_flag(view->state_label, LV_OBJ_FLAG_CLICKABLE);
-      }
-      view->state_width = static_cast<int16_t>(text_w);
-    }
+    const tile_header::Header text = tile_header::create(container, tile, tall, bar_box(tile).top);
+    title_lbl = text.title;
+    view->state_label = text.state;
+    view->state_font = text.state_font;
+    view->state_center = text.state_center;
+    view->state_width = text.state_width;
 
     if (compact) {
       compact_sensor_layout::apply(container, icon_lbl, title_lbl, view->state_label, tile);

@@ -33,6 +33,11 @@ struct CoverTileWidgets {
   // Header layouts (half height, or a full tile of a Cover with a position):
   // "Open · 58 %" beside the disc.
   lv_obj_t* state_label = nullptr;
+  // The state's largest font, width and tall center (tile_header::Header).
+  const lv_font_t* state_font = nullptr;
+  int16_t state_width = 0;
+  int16_t state_center = -1;
+  bool compact = false;
   // The former centered layout of a Cover without a position.
   lv_obj_t* value_label = nullptr;
   // Full header tiles: the position bar below the header (level_bar.h), the

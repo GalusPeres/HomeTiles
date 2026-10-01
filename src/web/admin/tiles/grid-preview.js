@@ -642,7 +642,11 @@
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
       }
       applyIconDiscTint(el);
-      if (previewKind === 'cover') applyCoverPreview(el, coverPreviewState, Number(tile.span_h) === 0.5);
+      if (previewKind === 'cover') {
+        applyCoverPreview(el, coverPreviewState, Number(tile.span_h) === 0.5);
+        // The header classes need the bar class set above (switch-tall).
+        applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
+      }
       if (typeValue === '9') fitCompactClockPreview(el);
     }
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');

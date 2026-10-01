@@ -1,4 +1,5 @@
 #include "src/types/cover/web_html.h"
+#include "src/types/switch/web_html.h"
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -25,6 +26,11 @@ void append_cover_fields_html(String& html, const String& tab_id,
     html += "</option>";
   }
   html += "</select>";
+  // The state size like the Switch tile (tile_header.h): the half-height
+  // Sensor value sizes beside the disc, the Sensor value sizes from 1.5 rows.
+  const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},
+                                {"5", "28"}, {"3", "32"}, {"4", "40"}};
+  append_switch_choice(html, tab_id, "cover_value_font", tr.sensor_value_size, sizes, 6);
   if (tab_id != "screensaver") {
     html += "<label>";
     html += tr.popup_open;

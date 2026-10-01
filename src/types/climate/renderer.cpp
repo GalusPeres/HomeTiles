@@ -11,6 +11,7 @@
 #include "src/tiles/config/tile_geometry.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/compact_sensor_layout.h"
+#include "src/tiles/runtime/tile_header.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
@@ -1281,9 +1282,7 @@ void refresh_climate_tile_content(
   ClimateTileWidgets& widget = widgets[index];
   if (widget.state_label) {
     const String text = climate_header_text(state);
-    if (strcmp(lv_label_get_text(widget.state_label), text.c_str()) != 0) {
-      lv_label_set_text(widget.state_label, text.c_str());
-    }
+    tile_header::set_state(widget.state_label, text.c_str(), widget.state_font, widget.state_width, -1);
   }
   const bool has_slot_layout = widget.slot_roots[0] != nullptr;
   ClimateTileSlotKind kinds[ClimateTileWidgets::kMaxSlots] = {};
@@ -1452,41 +1451,16 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
   const bool with_value = compact || climateTileShowsValue(tile);
   lv_obj_t* title = nullptr;
   lv_obj_t* state_label = nullptr;
+  const lv_font_t* state_font = nullptr;
+  int16_t state_width = 0;
   if (with_value) {
-    const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
-    const int inset = tile_icon_disc::inset();
-    const int icon_width =
-        FONT_MDI_ICONS ? lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0) : 0;
-    const int disc = tile_icon_disc::header_diameter(icon_width);
-    const int text_x = inset + disc + 2 * inset;
-    const int text_w = std::max(1, card_w - text_x - 2 * inset);
-    const bool has_title = tile.title.length() > 0;
-    const int title_h = lv_font_get_line_height(compact_sensor_layout::title_font());
-    const lv_font_t* state_font = compact_sensor_layout::value_font(0);
-    const int block = (has_title ? title_h : 0) + lv_font_get_line_height(state_font);
-    const int text_y = inset + disc / 2 - block / 2;
-    // Positions are inside the card's content box (the Climate paddings).
-    const int pad_x = climate_layout::kCardPaddingHorizontal;
-    const int pad_y = climate_layout::kCardPaddingVertical;
-    if (has_title) {
-      title = lv_label_create(card);
-      set_label_style(title, lv_color_white(), compact_sensor_layout::title_font());
-      lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
-      lv_obj_set_width(title, text_w);
-      hometiles_title::tile(title, tile.title.c_str(), true);
-      // One title line: the value pair takes the second.
-      if (auto* title_state = hometiles_title::state_for(title)) title_state->single_line = true;
-      lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_LEFT, 0);
-      lv_obj_set_pos(title, text_x - pad_x, text_y - pad_y);
-    }
-    state_label = lv_label_create(card);
-    set_label_style(state_label, lv_color_white(), state_font);
-    lv_label_set_long_mode(state_label, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(state_label, text_w);
-    lv_obj_set_style_text_align(state_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_label_set_text(state_label, "--");
-    lv_obj_set_pos(state_label, text_x - pad_x, text_y + (has_title ? title_h : 0) - pad_y);
-    lv_obj_clear_flag(state_label, LV_OBJ_FLAG_CLICKABLE);
+    // The shared header (tile_header.h) like the Switch tile; the mini
+    // fields below leave no room for its tall look.
+    const tile_header::Header text = tile_header::create(card, tile, false, 0);
+    title = text.title;
+    state_label = text.state;
+    state_font = compact ? nullptr : text.state_font;
+    state_width = text.state_width;
     if (compact) {
       compact_sensor_layout::apply(card, icon_label, title, state_label, tile);
     } else if (icon_label) {
@@ -1519,6 +1493,8 @@ lv_obj_t* render_climate_tile(lv_obj_t* parent,
     widget = ClimateTileWidgets{};
     widget.icon_label = icon_label;
     widget.state_label = state_label;
+    widget.state_font = state_font;
+    widget.state_width = state_width;
     widget.dynamic_icon = dynamic_icon;
     // A newly created card must accept the next state payload even when the
     // same entity/value was rendered by a previous cached card instance.

@@ -67,7 +67,8 @@
     // half-height value sizes; from 1.5 rows like a Sensor tile at its value
     // sizes, the bar a third of the extra height higher
     // (switch_layout::sensor_look).
-    const switchHeader = Number(type) === 5 && el.classList.contains('switch-bar');
+    // The Cover position bar uses the same header (tile_header.h).
+    const switchHeader = [5, 19].includes(Number(type)) && el.classList.contains('switch-bar');
     const switchTall = switchHeader && Number(layout?.span_h) > 1;
     el.classList.toggle('switch-tall', switchTall);
     if (switchTall) el.style?.setProperty?.('--switch-span-h', String(Number(layout.span_h)));

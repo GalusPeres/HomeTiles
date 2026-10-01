@@ -12,7 +12,12 @@ void apply_cover_fields_from_request(WebServer& server, Tile& tile) {
   setTilePopupOpenMode(tile, popup_mode);
   tile.sensor_unit = "";
   tile.sensor_decimals = 0xFF;
-  tile.sensor_value_font = 0;
+  // State size like the Switch tile (tile_header.h).
+  if (server.hasArg("sensor_value_font")) {
+    const int font = server.arg("sensor_value_font").toInt();
+    tile.sensor_value_font =
+        font >= 1 && font <= SENSOR_VALUE_FONT_MAX ? static_cast<uint8_t>(font) : 0;
+  }
   tile.sensor_display_mode = 0;
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;

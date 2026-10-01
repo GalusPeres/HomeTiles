@@ -641,6 +641,39 @@ void unregister(View* view) {
   }
 }
 
+// The card's other gesture (the one that does not open the popup) switches,
+// like the Switch tile (user 02.10.): a Fan on and off, a Lock locked and
+// unlocked (asking for the code when Home Assistant needs one). A Lock
+// without a toggle position (unknown, jammed) opens the popup instead. The
+// Alarm panel has no obvious other action, so it has none.
+void on_card_toggle(lv_event_t* e) {
+  View* view = static_cast<View*>(lv_event_get_user_data(e));
+  const lv_event_code_t code = lv_event_get_code(e);
+  if (!view || !view->entity.length() || (code != LV_EVENT_SHORT_CLICKED && code != LV_EVENT_LONG_PRESSED)) return;
+  const Detail d = device_control::detail(view->entity);
+  if (!d.valid || !d.available) return;
+  if (view->type == TILE_FAN) {
+    uint8_t held = 0;
+    const bool on = held_value(view, held) ? held > 0 : device_visual::fan_on(d);
+    if (!(d.features & (on ? device_detail::kFanTurnOff : device_detail::kFanTurnOn))) return;
+    start_hold(view, on ? 0 : (d.has_percentage && d.percentage ? d.percentage : 100));
+    device_control::fan_action(view->entity, on ? "turn_off" : "turn_on");
+    show(view);
+    return;
+  }
+  if (view->type != TILE_LOCK) return;
+  if (device_visual::lock_buttons(d)) {
+    finish_press_before_popup(e);
+    show_device_popup(popup_target(view));
+    return;
+  }
+  // The side the tile shows (a sent command's target first).
+  const char* target = device_control::pending_target(view->entity);
+  const bool locked = *target && std::strcmp(target, d.state) != 0 ? std::strcmp(target, "locked") == 0
+                                                                    : device_visual::lock_on(d);
+  device_request(popup_target(view), locked ? "unlock" : "lock", true);
+}
+
 void on_card_event(lv_event_t* e) {
   View* view = static_cast<View*>(lv_event_get_user_data(e));
   if (!view) return;
@@ -765,6 +798,10 @@ lv_obj_t* render_device_tile(lv_obj_t* parent, int col, int row, const Tile& til
     const lv_event_code_t popup_event =
         getTilePopupOpenMode(tile) == TILE_POPUP_OPEN_SHORT_PRESS ? LV_EVENT_SHORT_CLICKED : LV_EVENT_LONG_PRESSED;
     lv_obj_add_event_cb(card, on_card_event, popup_event, view);
+    if (view->type != TILE_ALARM) {
+      lv_obj_add_event_cb(card, on_card_toggle,
+                          popup_event == LV_EVENT_SHORT_CLICKED ? LV_EVENT_LONG_PRESSED : LV_EVENT_SHORT_CLICKED, view);
+    }
   }
   lv_obj_add_event_cb(card, on_card_event, LV_EVENT_DELETE, view);
   return card;

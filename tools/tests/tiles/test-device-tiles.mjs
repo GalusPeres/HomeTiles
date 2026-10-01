@@ -68,6 +68,12 @@ assert.match(read('src/ui/ui_manager.cpp'), /preload_device_popup\(\);/);
 assert.match(read('src/tiles/runtime/tile_icon_source.cpp'), /device_popup_follow_tile_color\(color\);/);
 assert.match(read('src/tiles/runtime/tile_update_service.h'), /process_device_updates\(drain_all \? 0 : 4\);/);
 
+// The card's other gesture switches a Fan or a Lock like the Switch tile;
+// the Alarm panel has none (user 02.10.).
+const tile = read('src/types/device/device_tile.cpp');
+assert.match(tile, /if \(view->type != TILE_ALARM\) \{\s*lv_obj_add_event_cb\(card, on_card_toggle,\s*popup_event == LV_EVENT_SHORT_CLICKED \? LV_EVENT_LONG_PRESSED : LV_EVENT_SHORT_CLICKED/);
+assert.match(tile, /device_request\(popup_target\(view\), locked \? "unlock" : "lock", true\);/);
+
 // Registry and Web Admin.
 const registry = read('src/types/types_registry.cpp');
 for (const [type, prefix] of [['LOCK', 'Lock'], ['ALARM', 'Alarm'], ['FAN', 'Fan']]) {

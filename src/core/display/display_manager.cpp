@@ -36,6 +36,17 @@ static size_t g_reverse_buf_width = 0;
 static constexpr size_t kReverseStripeWidth = 16;
 static constexpr bool kEnableReverseFlushEffect = true;
 static constexpr uintptr_t kCacheLineSize = 64;
+
+// Bytes of a draw buffer band of `lines` rows. LVGL 9.6 rounds the size a
+// band needs up to LV_DRAW_BUF_ALIGN (lv_draw_buf_reshape); a buffer of
+// exactly `lines` rows is then too small whenever a row is not a multiple of
+// it (720 px RGB565 = 1440 bytes on the Waveshare 4B), the first refresh
+// failed LVGL's assert and the boot hung silently. Bands are allocated and
+// reported to LVGL rounded up.
+static size_t draw_buffer_bytes(size_t lines) {
+  const size_t bytes = static_cast<size_t>(SCREEN_WIDTH) * lines * g_bytes_per_pixel;
+  return (bytes + LV_DRAW_BUF_ALIGN - 1) / LV_DRAW_BUF_ALIGN * LV_DRAW_BUF_ALIGN;
+}
 static bool g_reverse_flush_once = false;
 static volatile uint32_t g_fullscreen_flush_seq = 0;
 static size_t g_requested_buffer_lines = 0;
@@ -310,7 +321,7 @@ bool DisplayManager::allocDrawBuffers(size_t requested_lines, lv_display_render_
   size_t sram_lines = cap_bytes / line_bytes;
   if (sram_lines > requested_lines) sram_lines = requested_lines;
   if (sram_lines >= kInternalDrawMinLines) {
-    nb1 = (lv_color_t*)heap_caps_aligned_alloc(64, line_bytes * sram_lines,
+    nb1 = (lv_color_t*)heap_caps_aligned_alloc(64, draw_buffer_bytes(sram_lines),
                                                MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     if (nb1) {
       use_lines = sram_lines;
@@ -332,7 +343,7 @@ bool DisplayManager::allocDrawBuffers(size_t requested_lines, lv_display_render_
 
   // 2) Fallback: PSRAM double buffer at the requested size (previous behaviour).
   if (!nb1) {
-    const size_t bytes = line_bytes * requested_lines;
+    const size_t bytes = draw_buffer_bytes(requested_lines);
     nb1 = (lv_color_t*)heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
     nb2 = (lv_color_t*)heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
     if (nb1 && nb2) {
@@ -353,7 +364,7 @@ bool DisplayManager::allocDrawBuffers(size_t requested_lines, lv_display_render_
     single = false;
   }
 
-  const size_t buf_bytes = line_bytes * use_lines;
+  const size_t buf_bytes = draw_buffer_bytes(use_lines);
   lv_display_set_buffers(disp, nb1, nb2, buf_bytes, mode);
 
   if (buf1) heap_caps_free(buf1);
@@ -400,8 +411,7 @@ bool DisplayManager::setSinglePsramBufferLines(size_t lines) {
     if (g_bytes_per_pixel == 0) g_bytes_per_pixel = 2;
   }
 
-  const size_t bytes =
-      static_cast<size_t>(SCREEN_WIDTH) * lines * g_bytes_per_pixel;
+  const size_t bytes = draw_buffer_bytes(lines);
   // On ESP32-P4 the PPA can read cache-synchronised external RAM, but the
   // generic heap does not advertise PSRAM as MALLOC_CAP_DMA. Requiring both
   // capabilities therefore reports zero available bytes and silently kept the
@@ -481,9 +491,7 @@ bool DisplayManager::restoreDrawBufferAfterSinglePsram() {
 
   lv_color_t* temporary_buf1 = buf1;
   lv_color_t* temporary_buf2 = buf2;
-  const size_t restored_bytes =
-      static_cast<size_t>(SCREEN_WIDTH) * g_preserved_buffer_lines *
-      g_bytes_per_pixel;
+  const size_t restored_bytes = draw_buffer_bytes(g_preserved_buffer_lines);
   lv_display_set_buffers(disp, g_preserved_buf1, g_preserved_buf2,
                          restored_bytes, g_preserved_render_mode);
 
@@ -551,7 +559,7 @@ bool DisplayManager::setBufferLines(size_t lines, lv_display_render_mode_t rende
   lv_refr_now(disp);
 
   if (g_requested_buffer_lines == lines && g_render_mode != render_mode && buf1) {
-    const size_t bytes = (size_t)SCREEN_WIDTH * g_buffer_lines * g_bytes_per_pixel;
+    const size_t bytes = draw_buffer_bytes(g_buffer_lines);
     lv_display_set_buffers(disp, buf1, buf2, bytes, render_mode);
     g_render_mode = render_mode;
     Serial.printf("[Display] Render mode changed: %d (lines=%d)\n", (int)render_mode, (int)g_buffer_lines);

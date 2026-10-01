@@ -23,7 +23,7 @@ assert.ok(tint.includes('void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* i
   'Header tint helper exists');
 for (const marker of [
   'const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);',
-  'return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent());',
+  'return tone_color::fill(circle_card, rgb, tinted, ui_surface_style::icon_glow_percent());',
   '(!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));',
   'const lv_opa_t opa = shown ? disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);',
   'lv_color_hex(tone_color::readable_icon(rgb, shown && disc_opa ? disc_rgb : card));',
@@ -59,7 +59,7 @@ assert.match(tint, /if \(!lv_color_eq\(lv_obj_get_style_text_color\(icon, LV_PAR
 // Same rule and formulas as the tile disc (popup code is compiled without it).
 const tileDisc = read('src/tiles/runtime/tile_icon_disc.h');
 assert.ok(tileDisc.includes('return r != g || g != b;'), 'Tiles use the same tint rule');
-assert.ok(tileDisc.includes('tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent(), see_through_card);'));
+assert.ok(tileDisc.includes('tone_color::fill(circle_card(host, card, rgb, tinted, pressed, see_through_card), rgb, tinted,'));
 // Popup cards are opaque: the header circle draws exactly its color.
 assert.ok(tint.includes('lv_color_t color = lv_color_hex(fill.disc_color);'));
 assert.doesNotMatch(tint, /icon_glow_border_opa/, 'The hairline never takes the icon hue');

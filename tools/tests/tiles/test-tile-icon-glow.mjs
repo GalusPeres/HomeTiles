@@ -27,7 +27,7 @@ for (const marker of [
   'inline constexpr char kTags[6] = {};',
   'return r != g || g != b;',
   'const bool tinted = glow_of(disc) && icon_color_tints(rgb);',
-  'return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent(), see_through_card);',
+  'return tone_color::fill(circle_card(host, card, rgb, tinted, pressed, see_through_card), rgb, tinted,',
   'set_fill_colors(disc, fill.disc_color, pressed.disc_color);',
   'fade_with_card(disc);',
   'ui_surface_style::apply_icon_disc(disc, mode == Mode::Off, mode == Mode::Global, see_through_card);',

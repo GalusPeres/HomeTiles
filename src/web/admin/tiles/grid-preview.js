@@ -146,6 +146,8 @@
   function toneHex(rgb) {
     return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
   }
+  // Default tile color "From icon" strength (tile_icon_colors::kTintDefault).
+  const ICON_FILL_DEFAULT = 20;
   function applyIconDiscTint(tileElem) {
     const icon = tileElem?.querySelector(':scope > .tile-icon');
     if (!icon) return;
@@ -198,7 +200,16 @@
     const card = cssColorChannels(background) || [0, 0, 0];
     // Screensaver tiles below full Tile opacity let the wallpaper through.
     const seeThrough = cssColorAlpha(background) < 1;
-    const tone = toneFill(card, given || [255, 255, 255], tinted, glowPct, seeThrough);
+    // "Circle in icon color" shows the circle of the tile color "From icon"
+    // on a Global or Custom tile too (tile_icon_disc::circle_card): computed
+    // for the card From icon would give at its default strength.
+    let circleCard = card;
+    if (tinted && !(fill > 0) && !seeThrough && typeof tileTintBackground === 'function') {
+      const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
+      const familyHex = tileTintBackground(base || '#1A1A1A', givenHex, ICON_FILL_DEFAULT);
+      circleCard = [1, 3, 5].map(i => parseInt(familyHex.slice(i, i + 2), 16));
+    }
+    const tone = toneFill(circleCard, given || [255, 255, 255], tinted, glowPct, seeThrough);
     const rgba = (color, opa) => 'rgba(' + color.join(',') + ',' + (opa / 255).toFixed(3) + ')';
     tileElem.style.setProperty('--icon-disc-bg', rgba(tone.discColor, tone.discOpa));
     // Mirrors tile_icon_source::refresh_controls(): tile controls (the

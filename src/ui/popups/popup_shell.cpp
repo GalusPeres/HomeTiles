@@ -278,7 +278,12 @@ void copy_label(lv_obj_t* target, lv_obj_t* source, bool title,
 tone_color::Fill header_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb) {
   const uint8_t r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
   const bool tinted = (r != g || g != b) && (!options.from_tile || options.glow);
-  return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent());
+  // The circle of the tile color "From icon" like on the tiles
+  // (tile_icon_disc::circle_card): only a popup that shows that tile color
+  // computes it for its own card.
+  const uint32_t circle_card =
+      tinted && !options.from_icon && tone_color::g_from_icon_card ? tone_color::g_from_icon_card(rgb, false) : card;
+  return tone_color::fill(circle_card, rgb, tinted, ui_surface_style::icon_glow_percent());
 }
 
 // The controls around it (pressed close, footer toggles, pills, arrows,

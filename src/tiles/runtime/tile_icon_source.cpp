@@ -104,14 +104,22 @@ bool type_applies_fixed_icon_color(int type) {
          tileTypeIsEditableValue(type) || tileTypeHasFixedIconColorOnly(type);
 }
 
-constexpr lv_style_selector_t kTintStore = LV_PART_MAIN | LV_STATE_USER_4;
+constexpr lv_style_selector_t kTintStore = tile_icon_disc::kCardTintStore;
+
+// tone_color::g_from_icon_card: the card set_tile_tint gives "From icon" at
+// its default strength, pressed like apply_card_background (0x10 lighter).
+uint32_t from_icon_card(uint32_t icon, bool pressed) {
+  const uint32_t card = tile_tint::background(tileDefaultBgColor(), icon, tile_icon_colors::kTintDefault);
+  return pressed ? brighten_rgb_color(card, 0x10) : card;
+}
+[[maybe_unused]] const bool g_from_icon_card_registered = (tone_color::g_from_icon_card = &from_icon_card, true);
 
 // "From cover" of a Media card (tile_icon_colors.h "cover" line), kept in an
 // unused state selector of the card like the tint store: the cover color the
 // Media renderer found (bg color; absent without one) and what refresh_card
 // lets it color right now (bg opa: the tile tint percent; border opa: 1 for
 // the icon). Cards without "From cover" never carry these values.
-constexpr lv_style_selector_t kCoverStore = LV_PART_MAIN | LV_STATE_USER_3;
+constexpr lv_style_selector_t kCoverStore = tile_icon_disc::kCardCoverStore;
 
 // The opener object of the popup opened last and its parents. Only compared
 // with cards, never dereferenced, so a deleted card cannot be touched.

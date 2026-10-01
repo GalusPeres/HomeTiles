@@ -146,6 +146,14 @@ inline uint8_t control_opa(uint8_t percent, bool see_through = false) {
 // What a circle and the controls draw over `card`: `disc_color` at
 // `disc_opa` for the circle and `control_color` at `control_opa` for the
 // controls. At 12.5 % and more both show the same color.
+// The card the tile color "From icon" gives an icon color (its default
+// strength over the default tile color), at rest or pressed; tile_icon_source
+// registers it at startup. "Circle in icon color" is computed for this card
+// on Global and Custom cards and in popups too (tile_icon_disc::circle_card),
+// so card, circle and icon stay one family. Null (host tests): a circle keeps
+// its own card.
+inline uint32_t (*g_from_icon_card)(uint32_t icon, bool pressed) = nullptr;
+
 struct Fill {
   uint32_t disc_color;
   uint32_t control_color;

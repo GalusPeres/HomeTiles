@@ -214,9 +214,47 @@ inline lv_obj_t* icon_of(lv_obj_t* disc) {
 // follows the icon. Stays null in host tests.
 inline void (*g_icon_color_hook)(lv_obj_t* disc) = nullptr;
 
+// tile_icon_source keeps a card's tile color "From icon" strength (BG_OPA)
+// in this unused selector, and "From cover" (Media) its permission (BG_OPA)
+// and the cover color (BG_COLOR) in the next.
+inline constexpr lv_style_selector_t kCardTintStore = LV_PART_MAIN | LV_STATE_USER_4;
+inline constexpr lv_style_selector_t kCardCoverStore = LV_PART_MAIN | LV_STATE_USER_3;
+
+// Whether a card shows the tile color "From icon" (or "From cover"): it then
+// already is the card its circle belongs to.
+inline bool card_follows_icon(lv_obj_t* card) {
+  for (int depth = 0; card && depth < 3; ++depth, card = lv_obj_get_parent(card)) {
+    lv_style_value_t value;
+    if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_OPA, &value, kCardTintStore) == LV_STYLE_RES_FOUND) {
+      return value.num > 0;
+    }
+    lv_style_value_t cover;
+    if (lv_obj_get_local_style_prop(card, LV_STYLE_BG_OPA, &value, kCardCoverStore) == LV_STYLE_RES_FOUND &&
+        value.num > 0 &&
+        lv_obj_get_local_style_prop(card, LV_STYLE_BG_COLOR, &cover, kCardCoverStore) == LV_STYLE_RES_FOUND &&
+        icon_color_tints(lv_color_to_u32(cover.color) & 0xFFFFFF)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// "Circle in icon color" always shows the circle of the tile color "From
+// icon" (user 2026-10-01): card, circle and icon stay one family of colors.
+// On a card in its own Global or Custom color the circle is computed for the
+// card "From icon" would give instead of mixing the icon's hue into that
+// card's lightness; a card that follows the icon already is that card.
+// Untinted circles (white, grey, black icons, option off) and see-through
+// screensaver tiles keep their own card.
+inline uint32_t circle_card(lv_obj_t* host, uint32_t card, uint32_t rgb, bool tinted, bool pressed,
+                            bool see_through_card) {
+  if (!tinted || see_through_card || !tone_color::g_from_icon_card || card_follows_icon(host)) return card;
+  return tone_color::g_from_icon_card(rgb, pressed);
+}
+
 // The fill of a disc for the card behind it (at rest or pressed) and its
-// icon's color (tone_color::fill); `card` and `see_through_card` report that
-// card.
+// icon's color (tone_color::fill, circle_card); `card` and
+// `see_through_card` report that card.
 inline tone_color::Fill disc_fill(lv_obj_t* disc, bool pressed, uint32_t& card, bool& see_through_card) {
   lv_obj_t* icon = icon_of(disc);
   const uint32_t rgb = icon ? icon_color(icon) : 0xFFFFFF;
@@ -224,7 +262,8 @@ inline tone_color::Fill disc_fill(lv_obj_t* disc, bool pressed, uint32_t& card, 
   lv_obj_t* host = card_of(disc);
   card = card_state_color(host, pressed);
   see_through_card = see_through(host);
-  return tone_color::fill(card, rgb, tinted, ui_surface_style::icon_glow_percent(), see_through_card);
+  return tone_color::fill(circle_card(host, card, rgb, tinted, pressed, see_through_card), rgb, tinted,
+                          ui_surface_style::icon_glow_percent(), see_through_card);
 }
 
 // Color and opacity of a disc from its mode, glow option, the card (at rest

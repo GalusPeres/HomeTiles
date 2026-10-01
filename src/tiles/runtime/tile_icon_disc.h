@@ -162,7 +162,9 @@ inline lv_obj_t* card_of(lv_obj_t* obj) {
 inline uint32_t card_color(lv_obj_t* obj) { return card_state_color(card_of(obj), false); }
 
 // An icon too dark to read on its circle is shown lighter in its own hue
-// (tone_color::readable_icon). The color it was given stays in these unused
+// (tone_color::readable_icon, measured against the default settings, so the
+// global tile color and the Circle strength never change it). The color it
+// was given stays in these unused
 // state selectors next to the shown one, so every reader gets the given
 // color and a direct write of a new color is recognized.
 inline constexpr lv_style_selector_t kIconGiven = LV_PART_MAIN | LV_STATE_USER_1;
@@ -181,10 +183,10 @@ inline uint32_t icon_color(lv_obj_t* icon) {
   return lv_color_to_u32(text) & 0xFFFFFF;
 }
 
-// Shows `given` on `circle`, lighter only where it would be hard to read.
-inline void show_readable(lv_obj_t* icon, uint32_t given, uint32_t circle) {
+// Shows `given`, lighter only where it would be hard to read.
+inline void show_readable(lv_obj_t* icon, uint32_t given) {
   if (!icon) return;
-  const uint32_t shown = tone_color::readable_icon(given, circle);
+  const uint32_t shown = tone_color::readable_icon(given);
   auto store = [icon](lv_style_selector_t selector, uint32_t rgb, bool keep) {
     lv_style_value_t value;
     const bool found =
@@ -269,7 +271,7 @@ inline tone_color::Fill disc_fill(lv_obj_t* disc, bool pressed, uint32_t& card, 
 // Color and opacity of a disc from its mode, glow option, the card (at rest
 // and pressed) and the icon's color (tone_color::fill). Global discs follow
 // the global option through the shared style, On discs always show, Off
-// discs stay transparent. The icon is shown readable on the resting circle.
+// discs stay transparent. The icon is shown readable (show_readable).
 inline void apply_fill(lv_obj_t* disc) {
   if (!is_disc(disc)) return;
   const Mode mode = mode_of(disc);
@@ -281,8 +283,7 @@ inline void apply_fill(lv_obj_t* disc) {
   const tone_color::Fill pressed = disc_fill(disc, true, card_pressed, see_through_card);
   set_fill_colors(disc, fill.disc_color, pressed.disc_color);
   ui_surface_style::apply_icon_disc(disc, mode == Mode::Off, mode == Mode::Global, see_through_card);
-  const bool shown = mode == Mode::On || (mode == Mode::Global && ui_surface_style::icon_discs_shown());
-  show_readable(icon, rgb, shown && fill.disc_opa ? fill.disc : card);
+  show_readable(icon, rgb);
   if (g_icon_color_hook) g_icon_color_hook(disc);
 }
 

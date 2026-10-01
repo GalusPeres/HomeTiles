@@ -303,7 +303,7 @@ void control_fill(const HeaderDisc& options, uint32_t card, uint32_t rgb, lv_col
 // Icon circle mode, tinted like it (header_fill) at the Circle strength.
 // Popups opened without a tile tint by a colored icon and always show the
 // disc. The header icon shows the source icon's color, lighter only where it
-// would be hard to read on the circle (tone_color::readable_icon).
+// would be hard to read, like on the tile (tone_color::readable_icon).
 void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   if (!disc || !icon || !source) return;
   const uint32_t rgb =
@@ -331,7 +331,7 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
     lv_obj_set_style_bg_color(disc, color, 0);
   if (lv_obj_get_style_bg_opa(disc, LV_PART_MAIN) != opa) lv_obj_set_style_bg_opa(disc, opa, 0);
   const lv_color_t readable =
-      lv_color_hex(tone_color::readable_icon(rgb, shown && disc_opa ? disc_rgb : card));
+      lv_color_hex(tone_color::readable_icon(rgb));
   if (!lv_color_eq(lv_obj_get_style_text_color(icon, LV_PART_MAIN), readable))
     lv_obj_set_style_text_color(icon, readable, 0);
   // The pressed close button has exactly the control color of the popup

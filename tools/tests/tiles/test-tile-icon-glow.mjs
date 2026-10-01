@@ -31,7 +31,7 @@ for (const marker of [
   'set_fill_colors(disc, fill.disc_color, pressed.disc_color);',
   'fade_with_card(disc);',
   'ui_surface_style::apply_icon_disc(disc, mode == Mode::Off, mode == Mode::Global, see_through_card);',
-  'show_readable(icon, rgb, shown && fill.disc_opa ? fill.disc : card);',
+  'show_readable(icon, rgb);',
   'inline void set_icon_color(lv_obj_t* icon, lv_color_t color) {',
   'if (lv_obj_t* disc = disc_of(icon)) apply_fill(disc);',
   'set_tag(child, disc_mode, glow);',

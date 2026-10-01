@@ -3,6 +3,10 @@
 #include <math.h>
 #include <stdint.h>
 
+#include "src/core/config/icon_glow.h"
+#include "src/core/config/tile_color.h"
+#include "src/tiles/config/tile_tint.h"
+
 // Colors of the icon circle, the controls and the icon itself, derived from
 // the icon color in fixed steps of perceived lightness (OKLCH L), like the
 // tonal systems of Material 3, Radix Colors and Adobe Leonardo:
@@ -10,7 +14,9 @@
 //   icon's hue with part of its chroma (white icons: the tile's own color,
 //   lighter), so every color gets the same visible circle;
 // - the icon keeps the color it was given while it is at least kIconMinStep
-//   above the circle; a darker icon only gets lighter, in the same hue.
+//   above the circle it has with the default settings; a darker icon only
+//   gets lighter, in the same hue. The global tile color and the Circle
+//   strength never change an icon's color.
 // Circles and controls are drawn opaque in exactly these colors. A
 // translucent fill calibrated to land on them missed on the panels: their
 // 16-bit framebuffers blend with 32 opacity levels and truncate, so a grey
@@ -230,14 +236,38 @@ inline Fill fill(uint32_t card, uint32_t icon, bool tinted, uint8_t percent, boo
   return result;
 }
 
-// The icon as shown on `circle`: unchanged while it is light enough,
-// otherwise raised to the minimum step in its own hue.
-inline uint32_t readable_icon(uint32_t icon, uint32_t circle) {
+// The tile color "From icon" at its default strength
+// (tile_icon_colors::kTintDefault).
+inline constexpr uint8_t kReferenceTint = 20;
+
+// The icon as shown: unchanged while it is at least kIconMinStep above the
+// circle it gets with the default settings (the default tile color, tile
+// color "From icon" at its default strength, the default Circle strength),
+// otherwise raised to that step in its own hue. Measured against these fixed
+// defaults, the global tile color, the Circle strength and the circle options
+// never change an icon's color (user 2026-10-01: a lighter global tile color
+// and a stronger circle lifted red, green and blue icons towards pastel);
+// a dark icon is lifted the same everywhere.
+inline uint32_t readable_icon(uint32_t icon) {
   icon &= 0xFFFFFF;
+  // Tiles and popups restyle often: keep the last few results.
+  static uint32_t cached_icon[4] = {}, cached_shown[4] = {};
+  static uint8_t used = 0, next = 0;
+  for (uint8_t i = 0; i < used; ++i) {
+    if (cached_icon[i] == icon) return cached_shown[i];
+  }
+  const bool tinted = tile_tint::has_hue(icon);
+  const uint32_t card =
+      tinted ? tile_tint::background(tile_color::kDefault, icon, kReferenceTint) : tile_color::kDefault;
+  const uint32_t circle = lifted(card, icon, tinted, icon_glow::kDefault * kStepPerPercent);
   const Oklch seed = from_rgb(icon);
-  const float minimum = from_rgb(circle & 0xFFFFFF).L + kIconMinStep;
-  if (seed.L >= minimum) return icon;
-  return to_rgb(minimum, seed.C, seed.h);
+  const float minimum = from_rgb(circle).L + kIconMinStep;
+  const uint32_t shown = seed.L >= minimum ? icon : to_rgb(minimum, seed.C, seed.h);
+  cached_icon[next] = icon;
+  cached_shown[next] = shown;
+  next = static_cast<uint8_t>((next + 1) % 4);
+  if (used < 4) ++used;
+  return shown;
 }
 
 }  // namespace tone_color

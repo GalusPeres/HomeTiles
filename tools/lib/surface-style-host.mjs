@@ -12,9 +12,11 @@ export function radiusPolicyHost(root, cellHeight = '145', gap = '16') {
 }
 
 // The shared circle and control colors (tone_color.h), guarded so a harness
-// can take it more than once.
+// can take it more than once. Its dependency-free config headers stay real
+// includes (#pragma once), so a harness may include them itself too.
 export function toneColorHost(root) {
-  return '#include <math.h>\n#ifndef HOMETILES_TONE_COLOR_HOST\n#define HOMETILES_TONE_COLOR_HOST\n' +
+  return '#include <math.h>\n#include "src/core/config/icon_glow.h"\n#include "src/core/config/tile_color.h"\n' +
+    '#include "src/tiles/config/tile_tint.h"\n#ifndef HOMETILES_TONE_COLOR_HOST\n#define HOMETILES_TONE_COLOR_HOST\n' +
     strip(read(root, 'src/ui/shared/tone_color.h')) + '\n#endif\n';
 }
 

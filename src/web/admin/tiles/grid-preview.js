@@ -137,9 +137,21 @@
     };
   }
   // tone_color::readable_icon(): unchanged while at least 0.22 L above the
-  // circle, else lighter in its own hue.
-  function toneReadableIcon(icon, circle) {
-    const seed = toneOklch(icon);
+  // circle the icon gets with the default settings (tile color #1A1A1A, tile
+  // color From icon 20 % like tile_tint::background, Circle strength 25 %),
+  // else lighter in its own hue. The global tile color and the Circle
+  // strength never change an icon's color.
+  function toneReadableIcon(icon) {
+    const tinted = icon[0] !== icon[1] || icon[1] !== icon[2];
+    const linear = v => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const contrast = c => 1.05 / (0.2126 * linear(c[0]) + 0.7152 * linear(c[1]) + 0.0722 * linear(c[2]) + 0.05);
+    let card = [26, 26, 26];
+    if (tinted) {
+      card = card.map((v, i) => Math.floor((v * 80 + icon[i] * 20 + 50) / 100));
+      for (let i = 0; i < 40 && contrast(card) < 4.5; i++) card = card.map(v => Math.floor((v * 95 + 50) / 100));
+    }
+    const base = toneOklch(card), seed = toneOklch(icon);
+    const circle = tinted ? toneRgb(base.L + 0.06, seed.C * 0.55, seed.h) : toneRgb(base.L + 0.06, base.C, base.h);
     const minimum = toneOklch(circle).L + 0.22;
     return seed.L >= minimum ? icon : toneRgb(minimum, seed.C, seed.h);
   }
@@ -219,11 +231,10 @@
     // color whenever it is tinted, in every tile color; else the neutral step.
     const controls = tinted ? tone : toneFill(card, given || [255, 255, 255], false, glowPct, seeThrough);
     tileElem.style.setProperty('--control-fill', rgba(controls.controlColor, controls.controlOpa));
-    // The icon, readable on its circle (or on the tile without one).
+    // The icon, readable like on the device (the same with every tile color,
+    // Circle strength and circle option).
     if (!given) return;
-    const mode = tileElem.dataset.iconDisc || '0';
-    const shown = mode === '1' || (mode === '0' && !tileElem.closest('.icon-discs-off'));
-    const readable = toneReadableIcon(given, shown && tone.discOpa ? tone.disc : card);
+    const readable = toneReadableIcon(given);
     const readableHex = toneHex(readable);
     if (readableHex === givenHex) {
       if (icon.dataset.toneShown) {

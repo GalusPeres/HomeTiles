@@ -57,22 +57,37 @@ for (const icon of icons) {
   assert.equal(fill.controlOpa, 255, 'the controls are opaque');
   assert.deepEqual(fill.discColor, fill.disc, 'the circle draws exactly its color');
   assert.deepEqual(fill.controlColor, fill.disc, 'at 25 % the controls show the circle color');
-  const shown = js.toneReadableIcon(rgb(icon), fill.disc);
+  // With the default settings the icon is measured against exactly this
+  // circle.
+  const shown = js.toneReadableIcon(rgb(icon));
   const seed = js.toneOklch(rgb(icon));
   if (seed.L >= js.toneOklch(fill.disc).L + 0.22) assert.deepEqual(shown, rgb(icon), 'a readable icon keeps its color');
   else assert.ok(js.toneOklch(shown).L >= js.toneOklch(fill.disc).L + 0.215, 'a dark icon reaches the minimum step');
 }
 // Continuous: raising an icon's lightness never makes the shown icon jump.
 {
-  const c = card([0x28, 0x33, 0x71]);
-  const fill = js.toneFill(c, [0x28, 0x33, 0x71], true, 25);
   let previous = null;
-  for (let v = 0; v <= 255; v += 3) {
-    const shownL = js.toneOklch(js.toneReadableIcon([Math.round(v * 0.35), Math.round(v * 0.45), v], fill.disc)).L;
+  for (let v = 12; v <= 255; v += 3) {
+    const shownL = js.toneOklch(js.toneReadableIcon([Math.round(v * 0.35), Math.round(v * 0.45), v])).L;
     if (previous !== null) assert.ok(shownL >= previous - 0.004 && shownL - previous < 0.03, 'the icon lightness moves smoothly');
     previous = shownL;
   }
 }
+// Regression (user 2026-10-01): a lighter global tile color and a stronger
+// circle lifted red, green, blue and orange icons towards pastel. An icon's
+// shown color depends only on the icon color: device and preview measure it
+// against the circle of the default settings, never the circle on screen.
+assert.ok(tone.includes('inline uint32_t readable_icon(uint32_t icon) {') &&
+  tone.includes('tinted ? tile_tint::background(tile_color::kDefault, icon, kReferenceTint) : tile_color::kDefault;') &&
+  tone.includes('lifted(card, icon, tinted, icon_glow::kDefault * kStepPerPercent);'));
+assert.match(read('src/tiles/config/tile_icon_colors.h'), /inline constexpr uint8_t kTintDefault = 20;/);
+assert.ok(tone.includes('inline constexpr uint8_t kReferenceTint = 20;'), 'reference = From icon default strength');
+assert.ok(read('src/web/admin/tiles/grid-preview.js').includes('const readable = toneReadableIcon(given);'));
+for (const icon of [0xF44336, 0x4CAF50, 0x2196F3, 0xFF9800, 0xFFD54F, 0x00BCD4, 0xFFFFFF, 0xB0B0B0]) {
+  assert.deepEqual(js.toneReadableIcon(rgb(icon)), rgb(icon), `#${icon.toString(16)} keeps its color`);
+}
+assert.deepEqual(js.toneReadableIcon(rgb(0x9C27B0)), [0xA8, 0x35, 0xBC], 'a dark purple is lifted like before');
+
 // Without the icon color the circle is the tile's own color a step lighter,
 // never a grey patch on a colored tile (regression b109: MISC, Sonos, PC).
 for (const tile of [[0xA3, 0x3B, 0x3B], [0x6B, 0x5F, 0x2B], [0x3D, 0x22, 0x55], [0x7A, 0x24, 0x10]]) {
@@ -152,7 +167,7 @@ ${cases.map(([c, i, t, p, s]) => `    {${c}u, ${i}u, ${t}, ${p}u, ${s}},`).join(
     const tone_color::Fill f =
         tone_color::fill(c.card, c.icon, c.tinted, static_cast<uint8_t>(c.percent), c.see_through);
     std::printf("%u %u %u %u %u %u %u\\n", f.disc_color, f.control_color, f.disc_opa, f.control_opa, f.disc,
-                f.control, tone_color::readable_icon(c.icon, f.disc));
+                f.control, tone_color::readable_icon(c.icon));
   }
   return 0;
 }
@@ -175,6 +190,6 @@ result.stdout.trim().split(/\r?\n/).forEach((line, index) => {
   assert.ok(near(discColor, hex(fill.discColor)) && near(controlColor, hex(fill.controlColor)) &&
     near(disc, hex(fill.disc)) && near(control, hex(fill.control)),
     `${what}: device #${discColor.toString(16)} preview #${hex(fill.discColor).toString(16)}`);
-  assert.ok(near(shown, hex(js.toneReadableIcon(rgb(i), fill.disc))), `${what}: readable icon`);
+  assert.ok(near(shown, hex(js.toneReadableIcon(rgb(i)))), `${what}: readable icon`);
 });
 console.log('Tone colors: same opaque circle step for every hue, controls = circle, veil on see-through tiles, smooth icon lift, device == preview');

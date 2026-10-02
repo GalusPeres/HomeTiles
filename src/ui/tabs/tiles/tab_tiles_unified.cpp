@@ -19,6 +19,7 @@
 #include "src/types/cover/renderer.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/energy/energy_data.h"
+#include "src/types/media/artwork_payload.h"
 #include "src/web/server/web_admin.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -404,12 +405,15 @@ static void refresh_entity_payload_signature(EntityCacheEntry& entry) {
 // entry outright would discard embedded artwork, leaving covers empty
 // after a grid reload/Web Admin save until the next track change.
 // Bridge appends the three entity_picture_* fields as one block at the
-// end of the JSON; carry that block into the new payload.
+// end of the JSON; carry that block into the new payload. A player without
+// artwork gets an explicit empty picture; carrying the old block then would
+// bring the old cover back after a grid reload.
 static bool merge_cached_cover_fields(const String& old_payload, String& new_payload) {
   // Require length > 2: inserting ",..." into empty "{}" would be invalid.
   if (new_payload.length() <= 2 || new_payload[0] != '{' ||
       new_payload[new_payload.length() - 1] != '}') return false;
   if (new_payload.indexOf("\"entity_picture_data\"") >= 0) return false;
+  if (media_artwork::clears_cover(new_payload.c_str())) return false;
   const int cover_start = old_payload.indexOf("\"entity_picture_data\"");
   if (cover_start < 1) return false;
   const int cover_end = old_payload.lastIndexOf('}');

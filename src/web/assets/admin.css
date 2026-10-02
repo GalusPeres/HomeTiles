@@ -1060,6 +1060,9 @@
     .screensaver-tile-grid > .tile-resize-placeholder {
       z-index:2;
     }
+    /* The resized card lies below its target card, as on the other pages
+       (.tile.resizing alone lifted it to 24, above the target at 2). */
+    .screensaver-tile-grid > .tile.resizing { z-index:1; }
     /* The optional tile shadow: like the device a card shadow only
        (screensaver_tile_shadow.h), never one behind the text and icons, cast
        without the rounded clip-path, which would cut it off. Selection and
@@ -1291,8 +1294,10 @@
       border-radius:6px;
       cursor:nwse-resize;
     }
-    .tile.active:hover,
-    .tile[data-selected="1"]:hover { opacity:1; filter:none; }
+    /* Not while resizing: shrinking keeps the pointer over the old card,
+       which then came back in full (user 2026-10-02). */
+    .tile.active:hover:not(.resizing),
+    .tile[data-selected="1"]:hover:not(.resizing) { opacity:1; filter:none; }
     .tile.empty { background:transparent !important; border:3px solid transparent; }
     .tile.empty.active,
     .tile.empty[data-selected="1"] { border:3px solid #26a69a; box-shadow:0 0 12px rgba(38,166,154,0.55); }

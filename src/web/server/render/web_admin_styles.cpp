@@ -13,16 +13,6 @@ namespace {
 
 constexpr int kPreviewTargetHeight = 430;
 constexpr int kWideFourRowPreviewTargetHeight = 390;
-constexpr int kPreviewPad = 12;
-constexpr int kPreviewGap = 10;
-
-int preview_pad_px() {
-  return kPreviewPad;
-}
-
-int preview_gap_px() {
-  return kPreviewGap;
-}
 
 int preview_target_height_px() {
   // At equal height, the Tab5 (7x4) preview would be wider than the 8-inch
@@ -42,17 +32,16 @@ int admin_wrapper_target_width_px() {
   return 1200;
 }
 
+// The preview is the panel's screen scaled down exactly: cells, gaps and
+// margins keep the device proportions, so every tile, half-height tile and
+// span has the device's shape (user 2026-10-02: the fixed 10 px editor gap
+// and 12 px margin made half-height tiles a pixel lower and wide tiles wider
+// than on the panel). The cell height stays a whole pixel; every other
+// length follows its scale.
 int preview_cell_h_px() {
-  const int pad = preview_pad_px();
-  const int gap = preview_gap_px();
-  int cell = (preview_target_height_px() - (2 * pad) - (gap * (GRID_ROWS - 1))) / GRID_ROWS;
+  const int cell = (preview_target_height_px() * GRID_CELL_H + Device::kScreenHeight / 2) /
+                   Device::kScreenHeight;
   return (cell < 40) ? 40 : cell;
-}
-
-int preview_cell_w_px() {
-  const int cell_h = preview_cell_h_px();
-  int cell_w = (GRID_CELL_W * cell_h + (GRID_CELL_H / 2)) / GRID_CELL_H;
-  return (cell_w < 40) ? 40 : cell_w;
 }
 
 int preview_scaled_exact_px(int lvgl_px) {
@@ -159,15 +148,18 @@ void appendPreviewScaleVars(String& html) {
   // glyphs; LVGL puts the baseline base_line above the line bottom, as
   // --ldyNN). Rounded values left the 28 px value about 4 display px low
   // (user 2026-10-02).
+  // The page measures the browser baseline and replaces each shift
+  // (text-baseline.js); the LVGL baseline below the line top is the base.
   auto emit_compact_line = [&emit_scaled](const char* font_name, const char* line_name, const char* dy_name,
-                                          const lv_font_t* font, int size) {
+                                          const char* base_name, const lv_font_t* font, int size) {
     emit_scaled(font_name, size);
     emit_scaled(line_name, font->line_height);
     emit_scaled(dy_name, font->line_height / 2.0f - font->base_line - 0.364f * size);
+    emit_scaled(base_name, font->line_height - font->base_line);
   };
-  emit_compact_line("compact-title-font", "compact-title-line", "compact-title-dy",
+  emit_compact_line("compact-title-font", "compact-title-line", "compact-title-dy", "compact-title-base",
                     compact_sensor_layout::title_font(), compact_sensor_layout::title_size());
-  emit_compact_line("compact-value-font", "compact-value-line", "compact-value-dy",
+  emit_compact_line("compact-value-font", "compact-value-line", "compact-value-dy", "compact-value-base",
                     compact_sensor_layout::value_font(), compact_sensor_layout::value_size());
   emit_exact("compact-value-line-20", tile_layout::content_font_20()->line_height);
   emit_exact("compact-value-line-24", tile_layout::content_font_24()->line_height);
@@ -175,9 +167,23 @@ void appendPreviewScaleVars(String& html) {
   emit_exact("compact-value-line-40", tile_layout::content_font_40()->line_height);
   // Chosen half-height value sizes (compact_sensor_layout::value_font).
   emit_compact_line("compact-value-font-24", "compact-value-line-step-24", "compact-value-dy-24",
-                    compact_sensor_layout::value_font(2), compact_sensor_layout::value_size(2));
+                    "compact-value-base-24", compact_sensor_layout::value_font(2),
+                    compact_sensor_layout::value_size(2));
   emit_compact_line("compact-value-font-28", "compact-value-line-step-28", "compact-value-dy-28",
-                    compact_sensor_layout::value_font(5), compact_sensor_layout::value_size(5));
+                    "compact-value-base-28", compact_sensor_layout::value_font(5),
+                    compact_sensor_layout::value_size(5));
+  // The line tops as compact_sensor_layout places them (whole device pixels).
+  auto emit_compact_tops = [&emit_scaled](const char* title_name, const char* value_name, uint8_t choice) {
+    const int top = compact_sensor_layout::text_top(true, choice);
+    emit_scaled(title_name, top);
+    emit_scaled(value_name, top + compact_sensor_layout::title_font()->line_height +
+                                compact_sensor_layout::text_gap());
+  };
+  emit_compact_tops("compact-title-top", "compact-value-top", 0);
+  emit_compact_tops("compact-title-top-24", "compact-value-top-24", 2);
+  emit_compact_tops("compact-title-top-28", "compact-value-top-28", 5);
+  emit_scaled("compact-title-only-top", compact_sensor_layout::text_top(false));
+  emit_scaled("compact-row", compact_sensor_layout::header_height());
 
   for (const PreviewFontSize& size : kPreviewFontSizes) {
     char name[24];
@@ -218,11 +224,17 @@ void appendPreviewScaleVars(String& html) {
     emit_scaled(name, font->line_height);
     snprintf(name, sizeof(name), "ldy%u", static_cast<unsigned>(size.nominal));
     emit_scaled(name, shift);
+    // The LVGL baseline below the line top; text-baseline.js measures the
+    // browser one and replaces --ldy with the exact difference.
+    snprintf(name, sizeof(name), "lb%u", static_cast<unsigned>(size.nominal));
+    emit_scaled(name, font->line_height - font->base_line);
     if (size.nominal < 20) continue;
     snprintf(name, sizeof(name), "screensaver-lh%u", static_cast<unsigned>(size.nominal));
     emit_device_px(name, font->line_height);
     snprintf(name, sizeof(name), "screensaver-ldy%u", static_cast<unsigned>(size.nominal));
     emit_fraction(name, shift);
+    snprintf(name, sizeof(name), "screensaver-lb%u", static_cast<unsigned>(size.nominal));
+    emit_device_px(name, font->line_height - font->base_line);
   }
   emit("tile-pad-v", climate_layout::kCardPaddingVertical);
   emit("tile-pad-h", climate_layout::kCardPaddingHorizontal);
@@ -328,25 +340,27 @@ void appendPreviewScaleVars(String& html) {
   html += String(GRID_COLS);
   html += ";--grid-rows:";
   html += String(GRID_ROWS);
-  html += ";--preview-cell-w:";
-  html += String(preview_cell_w_px());
-  html += "px;--preview-cell-h:";
+  html += ";--preview-cell-h:";
   html += String(preview_cell_h_px());
-  html += "px;--preview-gap:";
-  html += String(preview_gap_px());
-  html += "px;--preview-pad:";
-  html += String(preview_pad_px());
   html += "px;";
-  const int image_bleed = preview_scaled_exact_px(4);
-  const int image_inset = preview_pad_px() > image_bleed
-                              ? preview_pad_px() - image_bleed
-                              : 0;
-  html += "--screensaver-image-inset:";
-  html += String(image_inset);
-  html += "px;--screensaver-image-radius:";
-  html += "calc(var(--tile-radius) + ";
-  html += String(image_bleed);
-  html += "px);";
+  emit_scaled("preview-cell-w", GRID_CELL_W);
+  emit_scaled("preview-gap", GRID_GAP);
+  emit_scaled("preview-pad", GRID_PAD);
+  // The tracks rarely fill the screen exactly; the rest sits in the margins
+  // (tile_config.h GRID_PAD_*).
+  emit_scaled("preview-pad-left", GRID_PAD_LEFT);
+  emit_scaled("preview-pad-right", GRID_PAD_RIGHT);
+  emit_scaled("preview-pad-top", GRID_PAD_TOP);
+  emit_scaled("preview-pad-bottom", GRID_PAD_BOTTOM);
+  {
+    // The wallpaper fills the whole screen with corners of the tile radius
+    // plus the margin up to 4 px (image_screensaver image_radius()).
+    char radius[96];
+    snprintf(radius, sizeof(radius),
+             "--screensaver-image-inset:0px;--screensaver-image-radius:calc(var(--tile-radius) + %.2fpx);",
+             static_cast<double>((GRID_PAD < 4 ? GRID_PAD : 4) * preview_cell_h_px()) / GRID_CELL_H);
+    html += radius;
+  }
   html += "}</style>\n";
 }
 

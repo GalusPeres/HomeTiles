@@ -147,6 +147,8 @@ void check_energy_layout() {
 }
 #include "src/types/climate/layout.h"
 constexpr int GRID_COLS=Device::kGridCols,GRID_ROWS=Device::kGridRows;
+constexpr int GRID_PAD=Device::kGridPad;
+${read('src/tiles/config/tile_config.h').match(/static constexpr int GRID_EXTRA_X =[^]*?GRID_PAD_BOTTOM = [^;]+;/)[0]}
 ${fn(read('src/fonts/ui_fonts.h'),'ui_font_for_size')}
 ${strip(read('src/ui/screensaver/screensaver_tile_shadow.h'))}
 ${strip(read('src/web/server/render/web_admin_styles.cpp').split('void appendAdminStyles(')[0])}

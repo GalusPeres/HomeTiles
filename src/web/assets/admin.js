@@ -2454,6 +2454,78 @@ function syncTileRadiusControls(tabEl) {
     return '<span class="tile-title-lines">' + normalizeTileTitle(value).split('\n')
       .map(line => '<span class="tile-title-line">' + escapeHtml(line) + '</span>').join('') + '</span>';
   }
+  // Preview text sits on its LVGL baseline. LVGL draws the baseline base_line
+  // above the bottom of a label's line box; the browser puts it where the
+  // font's rounded ascent and descent and the half-leading put it, which
+  // depends on the size and the display scale (Chrome snaps it to whole
+  // device pixels, so one shift from the server was up to a pixel off; user
+  // 2026-10-02). The page measures the browser baseline per size and zoom and
+  // moves each text by the difference to the LVGL baseline (--lb*, --*-base).
+  const previewBaselineCache = new Map();
+  let previewBaselineProbe = null;
+
+  function previewCssBaseline(fontPx, linePx) {
+    const key = fontPx.toFixed(3) + '/' + linePx.toFixed(3) + '@' + (window.devicePixelRatio || 1);
+    if (previewBaselineCache.has(key)) return previewBaselineCache.get(key);
+    if (!previewBaselineProbe) {
+      previewBaselineProbe = document.createElement('div');
+      previewBaselineProbe.setAttribute('aria-hidden', 'true');
+      previewBaselineProbe.style.cssText =
+        'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;font-weight:400;';
+      const mark = document.createElement('span');
+      mark.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline;';
+      previewBaselineProbe.append('0', mark);
+    }
+    if (!previewBaselineProbe.isConnected) document.body.appendChild(previewBaselineProbe);
+    previewBaselineProbe.style.fontSize = fontPx + 'px';
+    previewBaselineProbe.style.lineHeight = linePx + 'px';
+    const value = previewBaselineProbe.lastChild.getBoundingClientRect().top -
+      previewBaselineProbe.getBoundingClientRect().top;
+    previewBaselineCache.set(key, value);
+    return value;
+  }
+
+  // The shift that moves the browser baseline of a line box onto the LVGL
+  // baseline lvglBasePx below its top.
+  function previewBaselineShift(fontPx, linePx, lvglBasePx) {
+    return lvglBasePx - previewCssBaseline(fontPx, linePx);
+  }
+
+  // Sets every emitted shift (--ldyNN for Clock and Text lines, the
+  // half-height title and value) from the measured browser baselines.
+  function calibratePreviewBaselines() {
+    const root = document.documentElement;
+    const style = getComputedStyle(root);
+    const px = name => parseFloat(style.getPropertyValue(name));
+    const set = (shiftName, fontPx, linePx, basePx) => {
+      if (!(fontPx > 0) || !(linePx > 0) || !Number.isFinite(basePx)) return;
+      root.style.setProperty(shiftName, previewBaselineShift(fontPx, linePx, basePx).toFixed(3) + 'px');
+    };
+    for (const size of [16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96]) {
+      set('--ldy' + size, px('--fs' + size), px('--lh' + size), px('--lb' + size));
+    }
+    for (const [shift, font, line, base] of [
+      ['--compact-title-dy', '--compact-title-font', '--compact-title-line', '--compact-title-base'],
+      ['--compact-value-dy', '--compact-value-font', '--compact-value-line', '--compact-value-base'],
+      ['--compact-value-dy-24', '--compact-value-font-24', '--compact-value-line-step-24', '--compact-value-base-24'],
+      ['--compact-value-dy-28', '--compact-value-font-28', '--compact-value-line-step-28', '--compact-value-base-28'],
+    ]) set(shift, px(font), px(line), px(base));
+  }
+
+  function bindPreviewBaselines() {
+    const calibrate = () => {
+      calibratePreviewBaselines();
+      // The screensaver clock places its lines in script.
+      if (typeof screensaverDraft !== 'undefined' && screensaverDraft &&
+          typeof renderScreensaverEditor === 'function') {
+        renderScreensaverEditor();
+      }
+    };
+    calibrate();
+    if (document.fonts?.ready) document.fonts.ready.then(calibrate);
+    // Browser zoom changes the device pixel ratio and with it the rounding.
+    window.addEventListener('resize', perFrame(calibrate));
+  }
 
   function getTileTypeMeta(typeValue) {
     const key = String(typeValue ?? '0');
@@ -9878,10 +9950,14 @@ function syncTileRadiusControls(tabEl) {
       const fontPx = deviceClockFontPx(raw, fallback) * scale;
       // Tiny previews keep a readable font; the line box grows with it.
       const lineScale = fontPx < minPx ? minPx / fontPx : 1;
-      const shift = parseFloat(rootStyles.getPropertyValue('--screensaver-ldy' + size));
-      el.style.lineHeight = (devicePx('--screensaver-lh' + size, size * 1.21) * scale * lineScale) + 'px';
+      const linePx = devicePx('--screensaver-lh' + size, size * 1.21) * scale * lineScale;
+      // The glyphs on the LVGL baseline, measured in this browser and zoom
+      // (text-baseline.js).
+      const base = parseFloat(rootStyles.getPropertyValue('--screensaver-lb' + size));
+      el.style.lineHeight = linePx + 'px';
       el.style.position = 'relative';
-      el.style.top = (Number.isFinite(shift) ? shift * scale : 0) + 'px';
+      el.style.top = (Number.isFinite(base)
+        ? previewBaselineShift(Math.max(minPx, fontPx), linePx, base * scale * lineScale) : 0) + 'px';
     };
     applyClockLine(time, d.time_font_size, 48, 10);
     applyClockLine(date, d.date_font_size, 28, 8);
@@ -10553,6 +10629,7 @@ function syncTileRadiusControls(tabEl) {
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    bindPreviewBaselines();
     toggleStaticNetworkFields();
     toggleNetworkSettings();
     toggleSettingsAccessFields();
@@ -11266,6 +11343,21 @@ function maybeFillTitleFromWeather(tab) {
   // Fills a rendered weather preview tile: the header icon, condition |
   // temperature and the forecast columns. iconName is the tile's initial icon
   // (before a state arrives), forcedColor an icon color of the user or a rule.
+  // A text's width in display pixels as LVGL lays it out: whole-pixel glyph
+  // advances plus kerning (WEATHER_TILE_LAYOUT adv/kern, lv_text_get_size);
+  // null when the table lacks a glyph.
+  function weatherDeviceTextWidth(text, font) {
+    if (!font?.adv) return null;
+    const chars = [...String(text)];
+    let width = 0;
+    for (let i = 0; i < chars.length; ++i) {
+      const advance = font.adv[chars[i]];
+      if (advance === undefined) return null;
+      width += advance + ((i + 1 < chars.length && font.kern?.[chars[i] + chars[i + 1]]) || 0);
+    }
+    return width;
+  }
+
   function applyWeatherPreview(el, state, tile, iconName, forcedColor) {
     if (!el || typeof WEATHER_TILE_LAYOUT === 'undefined') return;
     const L = WEATHER_TILE_LAYOUT;
@@ -11312,12 +11404,16 @@ function maybeFillTitleFromWeather(tab) {
     const height = cellH > 0 ? Math.max(1, Number(tile?.span_h) || 1) * (cellH + previewGap) - previewGap
       : el.offsetHeight;
     const px = value => (value * scale).toFixed(2) + 'px';
-    const font = f => ({
-      size: Math.max(6, Math.round(f.px * scale)),
-      line: f.line * scale,
-      shift: (f.line / 2 - f.base - 0.364 * f.px) * scale
-    });
-    const fontCss = f => 'font-size:' + f.size + 'px;line-height:' + f.line.toFixed(2) + 'px;';
+    // Unrounded sizes, the glyphs on the LVGL baseline as this browser draws
+    // them (text-baseline.js).
+    const font = f => {
+      const size = Math.max(6, f.px * scale);
+      const line = f.line * scale;
+      return {size, line, shift: typeof previewBaselineShift === 'function'
+        ? previewBaselineShift(size, line, (f.line - f.base) * scale)
+        : (f.line / 2 - f.base - 0.364 * f.px) * scale};
+    };
+    const fontCss = f => 'font-size:' + f.size.toFixed(2) + 'px;line-height:' + f.line.toFixed(2) + 'px;';
     const family = getComputedStyle(el).fontFamily || 'sans-serif';
     const measure = (text, f) => {
       const context = (weatherPreviewMeasure.context ||= document.createElement('canvas').getContext('2d'));
@@ -11425,11 +11521,25 @@ function maybeFillTitleFromWeather(tab) {
         for (const [value, top] of [[slot.high, L.tempTop], [slot.low, L.lowTop]]) {
           if (value === null) continue;
           const text = weatherPreviewTemp(value);
-          const valueWidth = measure(text, tempFont);
-          const total = valueWidth + measure(unitText, unitFont);
-          let x = contentW / 2 - total / 2;
-          if (x < 0) x = 0;
-          if (x + total > contentW) x = contentW - total;
+          let valueWidth = measure(text, tempFont);
+          let x;
+          const valueDevice = weatherDeviceTextWidth(text, L.temp);
+          const unitDevice = weatherDeviceTextWidth(unitText, L.unit);
+          if (valueDevice !== null && unitDevice !== null) {
+            // The device's whole-pixel layout (position_tile_value_unit_centered).
+            const contentDevice = L.colW - 2 * L.padH;
+            const total = valueDevice + unitDevice;
+            let xDevice = Math.trunc(contentDevice / 2) - Math.trunc(total / 2);
+            if (xDevice < 0) xDevice = 0;
+            if (xDevice + total > contentDevice) xDevice = contentDevice - total;
+            x = xDevice * scale;
+            valueWidth = valueDevice * scale;
+          } else {
+            const total = valueWidth + measure(unitText, unitFont);
+            x = contentW / 2 - total / 2;
+            if (x < 0) x = 0;
+            if (x + total > contentW) x = contentW - total;
+          }
           const y = contentTop + top * scale;
           html += '<div class="weather-preview-temp-value" style="' + at(left + x, y + tempFont.shift) + fontCss(tempFont) + '">' +
             escapeHtml(text) + '</div>';
@@ -12890,12 +13000,16 @@ function maybeFillTitleFromMedia(tab) {
     const cardH = Math.round((cellH > 0 ? spanH * (cellH + previewGap) - previewGap : el.offsetHeight) / scale);
     const width = cardW - 2 * L.padH;
     const height = cardH - 2 * L.padV;
-    const font = f => ({
-      size: Math.max(6, Math.round(f.px * scale)),
-      line: f.line * scale,
-      shift: (f.line / 2 - f.base - 0.364 * f.px) * scale
-    });
-    const fontCss = f => 'font-size:' + f.size + 'px;line-height:' + f.line.toFixed(2) + 'px;';
+    // Unrounded sizes, the glyphs on the LVGL baseline as this browser draws
+    // them (text-baseline.js).
+    const font = f => {
+      const size = Math.max(6, f.px * scale);
+      const line = f.line * scale;
+      return {size, line, shift: typeof previewBaselineShift === 'function'
+        ? previewBaselineShift(size, line, (f.line - f.base) * scale)
+        : (f.line / 2 - f.base - 0.364 * f.px) * scale};
+    };
+    const fontCss = f => 'font-size:' + f.size.toFixed(2) + 'px;line-height:' + f.line.toFixed(2) + 'px;';
     // Display pixels in the content area to the preview's absolute position
     // inside the 3 px editor border.
     const at = (x, y) => 'left:' + ((L.padH + x) * scale - 3).toFixed(2) + 'px;top:' +

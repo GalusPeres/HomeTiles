@@ -128,6 +128,7 @@ const source = path.join(out, 'test.cpp');
 fs.writeFileSync(source, cpp);
 
 const preview = [
+  read('src/web/admin/tiles/text-baseline.js'),
   read('src/types/media/admin.js'),
   ...['escapeHtml'].map(name => extractFunction(name, read('src/web/admin/tiles/state.js'))),
   `function tileTitleHtml(text) { return escapeHtml(text); }`,

@@ -165,6 +165,8 @@ ${strip(read('src/types/weather/renderer.cpp'))}
 ${runtimeFns}
 #include "src/types/climate/layout.h"
 constexpr int GRID_COLS=Device::kGridCols,GRID_ROWS=Device::kGridRows;
+constexpr int GRID_PAD=Device::kGridPad;
+${read('src/tiles/config/tile_config.h').match(/static constexpr int GRID_EXTRA_X =[^]*?GRID_PAD_BOTTOM = [^;]+;/)[0]}
 ${fn(read('src/fonts/ui_fonts.h'),'ui_font_for_size')}
 ${strip(read('src/ui/screensaver/screensaver_tile_shadow.h'))}
 ${strip(read('src/web/server/render/web_admin_styles.cpp').split('void appendAdminStyles(')[0])}
@@ -175,7 +177,11 @@ static void box(std::ostream&o,const char*name,lv_obj_t*obj,lv_obj_t*card,bool&f
  std::string text=lv_obj_check_type(obj,&lv_label_class)?lv_label_get_text(obj):"";
  // Text widths: what LVGL lays out, not the label box of a fixed-width label.
  lv_point_t size{};if(!text.empty()&&lv_obj_check_type(obj,&lv_label_class))lv_text_get_size(&size,text.c_str(),lv_obj_get_style_text_font(obj,LV_PART_MAIN),0,0,LV_COORD_MAX,LV_TEXT_FLAG_NONE);
- o<<(first?"":",")<<"\""<<name<<"\":{\"x\":"<<a.x1-c.x1<<",\"y\":"<<a.y1-c.y1<<",\"w\":"<<lv_area_get_width(&a)<<",\"h\":"<<lv_area_get_height(&a)<<",\"textW\":"<<size.x<<"}";first=false;
+ // Text labels: the glyph baseline, base_line above the bottom of the line.
+ const lv_font_t*f=lv_obj_check_type(obj,&lv_label_class)?lv_obj_get_style_text_font(obj,LV_PART_MAIN):nullptr;
+ o<<(first?"":",")<<"\""<<name<<"\":{\"x\":"<<a.x1-c.x1<<",\"y\":"<<a.y1-c.y1<<",\"w\":"<<lv_area_get_width(&a)<<",\"h\":"<<lv_area_get_height(&a)<<",\"textW\":"<<size.x;
+ if(f)o<<",\"baseline\":"<<(a.y1-c.y1)+f->line_height-f->base_line;
+ o<<"}";first=false;
 }
 int main(int argc,char**argv){
  lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);(void)d;
@@ -213,6 +219,7 @@ const source = path.join(out, 'test.cpp');
 fs.writeFileSync(source, cpp);
 
 const preview = [
+  read('src/web/admin/tiles/text-baseline.js'),
   read('src/types/weather/admin-icons.js'),
   read('src/types/weather/admin.js'),
   extractFunction('escapeHtml', read('src/web/admin/tiles/state.js')),
@@ -274,8 +281,17 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
       if (!node) return;
       const r = node.getBoundingClientRect();
       const range = document.createRange(); range.selectNodeContents(textNode);
-      boxes[name] = {x: r.left - card.left, y: r.top - card.top, w: r.width, h: r.height,
-                     textW: range.getBoundingClientRect().width};
+      const textW = range.getBoundingClientRect().width;
+      // The browser baseline of a text, from an empty inline-block on it.
+      let baseline;
+      if (!/icon/.test(name) && textNode.nodeType === 1) {
+        const mark = document.createElement('span');
+        mark.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline';
+        textNode.appendChild(mark);
+        baseline = mark.getBoundingClientRect().top - card.top;
+        mark.remove();
+      }
+      boxes[name] = {x: r.left - card.left, y: r.top - card.top, w: r.width, h: r.height, textW, baseline};
     };
     const row = el.querySelector('.weather-preview-row');
     rect('condition', row.querySelector('.weather-preview-condition'));
@@ -324,19 +340,21 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
       Object.keys(device.boxes).filter(name => name !== 'icon' || browserTile.boxes.icon).sort(), `${label} labels`);
     // Positions: the device label boxes scaled to the preview. Text widths
     // differ by renderer (LVGL vs. Chrome), so a centered or right-aligned
-    // text is compared by its center, every box by its top and height.
+    // text is compared by its center; texts by their baseline (the preview
+    // moves the box so the glyphs sit on the LVGL baseline), icons by their top.
     for (const [name, deviceBox] of Object.entries(device.boxes)) {
       const shown = browserTile.boxes[name];
       if (!shown) continue;
-      const expectTop = deviceBox.y * scale;
-      const dy = shown.y - expectTop;
+      const byBaseline = deviceBox.baseline !== undefined && shown.baseline !== undefined;
+      const expectTop = (byBaseline ? deviceBox.baseline : deviceBox.y) * scale;
+      const dy = (byBaseline ? shown.baseline : shown.y) - expectTop;
       const centered = /day|icon/.test(name);
       const expectX = centered ? (deviceBox.x + deviceBox.w / 2) * scale : deviceBox.x * scale;
       const shownX = centered ? shown.x + shown.w / 2 : shown.x;
       const dx = shownX - expectX;
       report.push(`${label} ${name}: dx=${dx.toFixed(1)} dy=${dy.toFixed(1)}`);
       // Within 1 preview px (about 2 display px) of the device position.
-      if (Math.abs(dy) > 1) failures.push(`${label} ${name} top ${shown.y.toFixed(2)} vs device ${expectTop.toFixed(2)}`);
+      if (Math.abs(dy) > 1) failures.push(`${label} ${name} ${byBaseline ? "baseline" : "top"} ${(expectTop + dy).toFixed(2)} vs device ${expectTop.toFixed(2)}`);
       if (Math.abs(dx) > 1) {
         failures.push(`${label} ${name} x ${shownX.toFixed(2)} vs device ${expectX.toFixed(2)}`);
       }

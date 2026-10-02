@@ -32,12 +32,37 @@ int weather_font_px(const lv_font_t* font) {
 
 // {px, line, base}: a label is as tall as the line height, its baseline
 // base_line above the bottom.
+// adv/kern: the whole-pixel glyph advances and kerning of a temperature's
+// characters as LVGL lays them out (lv_text_get_size), so the preview
+// places a unit exactly behind its value (position_tile_value_unit_centered).
 void append_weather_font(String& html, const char* key, const lv_font_t* font) {
   char text[96];
-  snprintf(text, sizeof(text), "    %s: {px: %d, line: %d, base: %d},\n", key,
+  snprintf(text, sizeof(text), "    %s: {px: %d, line: %d, base: %d, adv: {", key,
            weather_font_px(font), static_cast<int>(font->line_height),
            static_cast<int>(font->base_line));
   html += text;
+  static constexpr uint32_t kChars[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ',', '-',
+                                        0x2212, 0x00B0, 'C', 'F', 'K', ' ', 0x2009};
+  for (uint32_t c : kChars) {
+    const uint32_t width = lv_font_get_glyph_width(font, c, 0);
+    // A glyph the font lacks stays out; the preview then measures the text.
+    if (!width) continue;
+    snprintf(text, sizeof(text), "'\\u%04X': %u, ", static_cast<unsigned>(c), static_cast<unsigned>(width));
+    html += text;
+  }
+  html += "}, kern: {";
+  for (uint32_t a : kChars) {
+    const int32_t alone = lv_font_get_glyph_width(font, a, 0);
+    if (!alone) continue;
+    for (uint32_t b : kChars) {
+      const int32_t kern = static_cast<int32_t>(lv_font_get_glyph_width(font, a, b)) - alone;
+      if (!kern) continue;
+      snprintf(text, sizeof(text), "'\\u%04X\\u%04X': %d, ", static_cast<unsigned>(a),
+               static_cast<unsigned>(b), static_cast<int>(kern));
+      html += text;
+    }
+  }
+  html += "}},\n";
 }
 
 void append_weather_js_string(String& html, const String& value) {

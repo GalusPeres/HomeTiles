@@ -353,10 +353,14 @@
       const fontPx = deviceClockFontPx(raw, fallback) * scale;
       // Tiny previews keep a readable font; the line box grows with it.
       const lineScale = fontPx < minPx ? minPx / fontPx : 1;
-      const shift = parseFloat(rootStyles.getPropertyValue('--screensaver-ldy' + size));
-      el.style.lineHeight = (devicePx('--screensaver-lh' + size, size * 1.21) * scale * lineScale) + 'px';
+      const linePx = devicePx('--screensaver-lh' + size, size * 1.21) * scale * lineScale;
+      // The glyphs on the LVGL baseline, measured in this browser and zoom
+      // (text-baseline.js).
+      const base = parseFloat(rootStyles.getPropertyValue('--screensaver-lb' + size));
+      el.style.lineHeight = linePx + 'px';
       el.style.position = 'relative';
-      el.style.top = (Number.isFinite(shift) ? shift * scale : 0) + 'px';
+      el.style.top = (Number.isFinite(base)
+        ? previewBaselineShift(Math.max(minPx, fontPx), linePx, base * scale * lineScale) : 0) + 'px';
     };
     applyClockLine(time, d.time_font_size, 48, 10);
     applyClockLine(date, d.date_font_size, 28, 8);

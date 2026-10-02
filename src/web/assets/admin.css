@@ -853,7 +853,8 @@
       grid-template-columns:repeat(var(--grid-cols), var(--preview-cell-w));
       grid-template-rows:repeat(var(--grid-rows), var(--preview-cell-h));
       gap:var(--preview-gap);
-      padding:var(--preview-pad);
+      padding:var(--preview-pad-top, var(--preview-pad)) var(--preview-pad-right, var(--preview-pad))
+        var(--preview-pad-bottom, var(--preview-pad)) var(--preview-pad-left, var(--preview-pad));
 
       background:#000000;
       border:1px solid var(--line);
@@ -2704,8 +2705,8 @@
 /* Fractional placement preserves the existing cell pitch and gutter. */
 .tile-grid > .fractional-tile {
   position:absolute;
-  left:calc(var(--preview-pad) + var(--tile-col) * (var(--preview-cell-w) + var(--preview-gap)));
-  top:calc(var(--preview-pad) + var(--tile-row) * (var(--preview-cell-h) + var(--preview-gap)));
+  left:calc(var(--preview-pad-left, var(--preview-pad)) + var(--tile-col) * (var(--preview-cell-w) + var(--preview-gap)));
+  top:calc(var(--preview-pad-top, var(--preview-pad)) + var(--tile-row) * (var(--preview-cell-h) + var(--preview-gap)));
   width:calc(var(--tile-w) * (var(--preview-cell-w) + var(--preview-gap)) - var(--preview-gap));
   height:calc(var(--tile-h) * (var(--preview-cell-h) + var(--preview-gap)) - var(--preview-gap));
   box-sizing:border-box;
@@ -2713,7 +2714,9 @@
 .tile.sensor-compact {
   display:block;
   padding:0;
-  --compact-h:calc((var(--preview-cell-h) - var(--preview-gap)) / 2);
+  /* The disc row as the panel lays it out (tile_icon_disc::row_height, whole
+     device pixels). */
+  --compact-h:var(--compact-row, calc((var(--preview-cell-h) - var(--preview-gap)) / 2));
   --compact-icon:calc(var(--compact-h) - 2 * var(--compact-inset));
 }
 .tile.sensor-compact > .tile-icon {
@@ -2804,11 +2807,11 @@
 /* Each line box as compact_sensor_layout places it, the glyphs moved onto
    the LVGL baseline (--compact-*-dy). */
 .tile.sensor-compact > .tile-title {
-  top:calc(max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-dy, 0px));
+  top:calc(var(--compact-title-top, max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2)) + var(--compact-title-dy, 0px));
   font-size:var(--compact-title-font); line-height:var(--compact-title-line);
 }
 .tile.sensor-compact > .tile-value {
-  top:calc(max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-line) + var(--compact-text-gap) + var(--compact-value-dy, 0px)); bottom:auto;
+  top:calc(var(--compact-value-top, max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-line) + var(--compact-text-gap)) + var(--compact-value-dy, 0px)); bottom:auto;
   font-size:var(--compact-value-font); line-height:var(--compact-value-line);
 }
 .tile.sensor-compact .tile-unit { font-size:inherit; }
@@ -2817,14 +2820,16 @@
 .tile.sensor-compact.compact-value-24 {
   --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
   --compact-value-dy:var(--compact-value-dy-24);
+  --compact-title-top:var(--compact-title-top-24); --compact-value-top:var(--compact-value-top-24);
 }
 .tile.sensor-compact.compact-value-28 {
   --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
   --compact-value-dy:var(--compact-value-dy-28);
+  --compact-title-top:var(--compact-title-top-28); --compact-value-top:var(--compact-value-top-28);
 }
 /* Half-height Back: the title alone is centered on the disc row. */
 .tile.sensor-compact.compact-title-only > .tile-title {
-  top:calc(max(0px, (var(--compact-h) - var(--compact-title-line)) / 2) + var(--compact-title-dy, 0px));
+  top:calc(var(--compact-title-only-top, max(0px, (var(--compact-h) - var(--compact-title-line)) / 2)) + var(--compact-title-dy, 0px));
 }
 .tile.sensor-half .tile-gauge, .tile.sensor-half .tile-graph { display:none; }
 

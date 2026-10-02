@@ -1,5 +1,6 @@
 
   document.addEventListener('DOMContentLoaded', () => {
+    bindPreviewBaselines();
     toggleStaticNetworkFields();
     toggleNetworkSettings();
     toggleSettingsAccessFields();

@@ -150,12 +150,16 @@ function maybeFillTitleFromMedia(tab) {
     const cardH = Math.round((cellH > 0 ? spanH * (cellH + previewGap) - previewGap : el.offsetHeight) / scale);
     const width = cardW - 2 * L.padH;
     const height = cardH - 2 * L.padV;
-    const font = f => ({
-      size: Math.max(6, Math.round(f.px * scale)),
-      line: f.line * scale,
-      shift: (f.line / 2 - f.base - 0.364 * f.px) * scale
-    });
-    const fontCss = f => 'font-size:' + f.size + 'px;line-height:' + f.line.toFixed(2) + 'px;';
+    // Unrounded sizes, the glyphs on the LVGL baseline as this browser draws
+    // them (text-baseline.js).
+    const font = f => {
+      const size = Math.max(6, f.px * scale);
+      const line = f.line * scale;
+      return {size, line, shift: typeof previewBaselineShift === 'function'
+        ? previewBaselineShift(size, line, (f.line - f.base) * scale)
+        : (f.line / 2 - f.base - 0.364 * f.px) * scale};
+    };
+    const fontCss = f => 'font-size:' + f.size.toFixed(2) + 'px;line-height:' + f.line.toFixed(2) + 'px;';
     // Display pixels in the content area to the preview's absolute position
     // inside the 3 px editor border.
     const at = (x, y) => 'left:' + ((L.padH + x) * scale - 3).toFixed(2) + 'px;top:' +

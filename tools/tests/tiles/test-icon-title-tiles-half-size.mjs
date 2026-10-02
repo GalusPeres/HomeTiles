@@ -87,7 +87,8 @@ for (const [file, names] of [['src/types/scene/admin.js', 'Scene'], ['src/types/
   }
 }
 assert.ok(read('src/tiles/runtime/compact_sensor_layout.h').includes(
-  'const int block = title_font()->line_height + (value ? value_face->line_height + gap : 0);'),
+  '(with_value ? value_font(value_choice)->line_height + text_gap() : 0);') &&
+  read('src/tiles/runtime/compact_sensor_layout.h').includes('text_top(value != nullptr, value_choice)'),
   'Without a value the title is centered on the disc row');
 
 // Per-tile border: the Clock/Text flag path.
@@ -113,5 +114,8 @@ const serverPreview = read('src/web/server/render/web_admin_html.cpp');
 assert.ok(serverPreview.includes('if (tile_geometry::compact_icon_title(tile.type, span_w, span_h)) {') &&
   serverPreview.includes('cssClass += " sensor-compact sensor-half compact-title-only";'));
 assert.ok(read('src/web/admin/tiles/layout.js').includes("const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;"));
-assert.match(read('src/web/assets/admin.css'), /\.tile\.sensor-compact\.compact-title-only > \.tile-title \{\s*top:calc\(max\(0px, \(var\(--compact-h\) - var\(--compact-title-line\)\) \/ 2\) \+ var\(--compact-title-dy, 0px\)\);/);
+// The device's own top (compact_sensor_layout::text_top), the old centering
+// only as a fallback.
+assert.match(read('src/web/assets/admin.css'), /\.tile\.sensor-compact\.compact-title-only > \.tile-title \{\s*top:calc\(var\(--compact-title-only-top, max\(0px, \(var\(--compact-h\) - var\(--compact-title-line\)\) \/ 2\)\) \+ var\(--compact-title-dy, 0px\)\);/);
+assert.match(read('src/web/server/render/web_admin_styles.cpp'), /emit_scaled\("compact-title-only-top", compact_sensor_layout::text_top\(false\)\);/);
 console.log('Icon-and-title tiles: 1x0.5 compact header, fixed icon color with glow, Back border and preview pass');

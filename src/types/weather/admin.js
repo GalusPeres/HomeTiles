@@ -170,6 +170,21 @@ function maybeFillTitleFromWeather(tab) {
   // Fills a rendered weather preview tile: the header icon, condition |
   // temperature and the forecast columns. iconName is the tile's initial icon
   // (before a state arrives), forcedColor an icon color of the user or a rule.
+  // A text's width in display pixels as LVGL lays it out: whole-pixel glyph
+  // advances plus kerning (WEATHER_TILE_LAYOUT adv/kern, lv_text_get_size);
+  // null when the table lacks a glyph.
+  function weatherDeviceTextWidth(text, font) {
+    if (!font?.adv) return null;
+    const chars = [...String(text)];
+    let width = 0;
+    for (let i = 0; i < chars.length; ++i) {
+      const advance = font.adv[chars[i]];
+      if (advance === undefined) return null;
+      width += advance + ((i + 1 < chars.length && font.kern?.[chars[i] + chars[i + 1]]) || 0);
+    }
+    return width;
+  }
+
   function applyWeatherPreview(el, state, tile, iconName, forcedColor) {
     if (!el || typeof WEATHER_TILE_LAYOUT === 'undefined') return;
     const L = WEATHER_TILE_LAYOUT;
@@ -216,12 +231,16 @@ function maybeFillTitleFromWeather(tab) {
     const height = cellH > 0 ? Math.max(1, Number(tile?.span_h) || 1) * (cellH + previewGap) - previewGap
       : el.offsetHeight;
     const px = value => (value * scale).toFixed(2) + 'px';
-    const font = f => ({
-      size: Math.max(6, Math.round(f.px * scale)),
-      line: f.line * scale,
-      shift: (f.line / 2 - f.base - 0.364 * f.px) * scale
-    });
-    const fontCss = f => 'font-size:' + f.size + 'px;line-height:' + f.line.toFixed(2) + 'px;';
+    // Unrounded sizes, the glyphs on the LVGL baseline as this browser draws
+    // them (text-baseline.js).
+    const font = f => {
+      const size = Math.max(6, f.px * scale);
+      const line = f.line * scale;
+      return {size, line, shift: typeof previewBaselineShift === 'function'
+        ? previewBaselineShift(size, line, (f.line - f.base) * scale)
+        : (f.line / 2 - f.base - 0.364 * f.px) * scale};
+    };
+    const fontCss = f => 'font-size:' + f.size.toFixed(2) + 'px;line-height:' + f.line.toFixed(2) + 'px;';
     const family = getComputedStyle(el).fontFamily || 'sans-serif';
     const measure = (text, f) => {
       const context = (weatherPreviewMeasure.context ||= document.createElement('canvas').getContext('2d'));
@@ -329,11 +348,25 @@ function maybeFillTitleFromWeather(tab) {
         for (const [value, top] of [[slot.high, L.tempTop], [slot.low, L.lowTop]]) {
           if (value === null) continue;
           const text = weatherPreviewTemp(value);
-          const valueWidth = measure(text, tempFont);
-          const total = valueWidth + measure(unitText, unitFont);
-          let x = contentW / 2 - total / 2;
-          if (x < 0) x = 0;
-          if (x + total > contentW) x = contentW - total;
+          let valueWidth = measure(text, tempFont);
+          let x;
+          const valueDevice = weatherDeviceTextWidth(text, L.temp);
+          const unitDevice = weatherDeviceTextWidth(unitText, L.unit);
+          if (valueDevice !== null && unitDevice !== null) {
+            // The device's whole-pixel layout (position_tile_value_unit_centered).
+            const contentDevice = L.colW - 2 * L.padH;
+            const total = valueDevice + unitDevice;
+            let xDevice = Math.trunc(contentDevice / 2) - Math.trunc(total / 2);
+            if (xDevice < 0) xDevice = 0;
+            if (xDevice + total > contentDevice) xDevice = contentDevice - total;
+            x = xDevice * scale;
+            valueWidth = valueDevice * scale;
+          } else {
+            const total = valueWidth + measure(unitText, unitFont);
+            x = contentW / 2 - total / 2;
+            if (x < 0) x = 0;
+            if (x + total > contentW) x = contentW - total;
+          }
           const y = contentTop + top * scale;
           html += '<div class="weather-preview-temp-value" style="' + at(left + x, y + tempFont.shift) + fontCss(tempFont) + '">' +
             escapeHtml(text) + '</div>';

@@ -67,6 +67,8 @@ ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 uint32_t tileDefaultBgColor(){return 0x1A1A1A;}
 constexpr int GRID_COLS=Device::kGridCols,GRID_ROWS=Device::kGridRows;
+constexpr int GRID_PAD=Device::kGridPad;
+${read('src/tiles/config/tile_config.h').match(/static constexpr int GRID_EXTRA_X =[^]*?GRID_PAD_BOTTOM = [^;]+;/)[0]}
 #include "src/types/climate/layout.h"
 ${fn(read('src/fonts/ui_fonts.h'),'ui_font_for_size')}
 ${strip(read('src/ui/screensaver/screensaver_tile_shadow.h'))}
@@ -134,14 +136,15 @@ for (const profile of ['guition_jc8012p4a1_v2', 'guition_esp32_4848s040', 'waves
 :root{${vars}}
 body{margin:0;background:#000} #host .tile{position:absolute;left:20px;top:20px}
 </style></head><body><div id="host"></div><pre id="result"></pre><script>
+${readRepoFile('src/web/admin/tiles/text-baseline.js')}
 document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
+  // The page's own baseline measurement, as the Web Admin runs it.
+  calibratePreviewBaselines();
   const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--radius-preview-scale'));
-  // The preview grid at exactly the device proportions (as the editor would
-  // need for a 1:1 match), so tile sizes are the scaled device cards.
-  const rootStyle = document.documentElement.style;
-  rootStyle.setProperty('--preview-cell-w', ${cellW} * scale + 'px');
-  rootStyle.setProperty('--preview-cell-h', ${cellH} * scale + 'px');
-  rootStyle.setProperty('--preview-gap', ${gap} * scale + 'px');
+  // The grid as the server emits it: exactly the device proportions (user
+  // 2026-10-02), so the half-height row is the scaled device row.
+  const rootStyle = getComputedStyle(document.documentElement);
+  const geometry = ['--preview-cell-w', '--preview-cell-h', '--preview-gap'].map(name => parseFloat(rootStyle.getPropertyValue(name)));
   const results = [];
   for (const device of ${JSON.stringify(tiles)}) {
     const el = document.createElement('div');
@@ -169,7 +172,7 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
     }
     results.push({lines, cardH: card.height});
   }
-  document.getElementById('result').textContent = JSON.stringify({scale, results});
+  document.getElementById('result').textContent = JSON.stringify({scale, geometry, results});
 });
 </script></body></html>`;
   const page = path.join(out, profile + '.html');
@@ -179,7 +182,11 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
   assert.equal(run.status, 0, run.stderr);
   const match = /<pre id="result">([^<]*)<\/pre>/.exec(run.stdout);
   assert(match && match[1], profile + ': the preview harness did not finish\n' + run.stdout.slice(-2000));
-  const {scale, results} = JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+  const {scale, geometry, results} = JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+  // Cell width and gap follow the device within a hundredth of a pixel.
+  for (const [i, device] of [[0, cellW], [1, cellH], [2, gap]].map(([i, v]) => [i, v])) {
+    if (Math.abs(geometry[i] - device * scale) > 0.01) failures.push(profile + ' grid ' + ['cell width', 'cell height', 'gap'][i] + ' ' + geometry[i] + ' vs ' + device * scale);
+  }
   tiles.forEach((device, index) => {
     const shown = results[index];
     const label = `${profile} ${device.spanW}x0.5 font choice ${device.choice}${device.value ? '' : ' title only'}`;
@@ -190,10 +197,10 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
       const dX = preview.x - line.x * scale;
       const dFont = preview.font - line.font * scale;
       report.push(`${label} ${name}: baseline ${dBase.toFixed(2)} x ${dX.toFixed(2)} font ${dFont.toFixed(2)}`);
-      // Chrome rounds font ascent and descent to whole pixels, which moves a
-      // baseline by up to about half a pixel; less than one display pixel.
-      if (Math.abs(dBase) > 0.65) failures.push(`${label} ${name} baseline ${preview.baseline.toFixed(2)} vs device ${(line.baseline * scale).toFixed(2)}`);
-      if (Math.abs(dX) > 0.5) failures.push(`${label} ${name} x ${preview.x.toFixed(2)} vs device ${(line.x * scale).toFixed(2)}`);
+      // The page measures the browser baseline (text-baseline.js) and takes the
+      // device line tops, so every line sits on the device baseline.
+      if (Math.abs(dBase) > 0.1) failures.push(`${label} ${name} baseline ${preview.baseline.toFixed(2)} vs device ${(line.baseline * scale).toFixed(2)}`);
+      if (Math.abs(dX) > 0.1) failures.push(`${label} ${name} x ${preview.x.toFixed(2)} vs device ${(line.x * scale).toFixed(2)}`);
       if (Math.abs(dFont) > 0.25) failures.push(`${label} ${name} font ${preview.font.toFixed(2)} vs device ${(line.font * scale).toFixed(2)}`);
       ++checked;
     }

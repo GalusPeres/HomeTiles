@@ -12,6 +12,7 @@
     "src/web/admin/files/manager.js",
     "src/web/admin/firmware/ota.js",
     "src/web/admin/tiles/state.js",
+    "src/web/admin/tiles/text-baseline.js",
     "src/web/admin/tiles/registry.js",
     "src/web/admin/tiles/snapshots.js",
     "src/web/admin/tiles/icon-colors.js",

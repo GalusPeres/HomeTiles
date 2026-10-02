@@ -46,6 +46,15 @@ inline const lv_font_t* value_font(uint8_t choice = 0) {
   }
 }
 inline int header_height() { return tile_icon_disc::row_height(); }
+// Top of the title line, the title and value block centered on the disc row;
+// without a value line (half-height Back) the title alone is centered. The
+// value follows one title line and the gap lower. The Web Admin preview takes
+// the same tops (--compact-*-top).
+inline int text_top(bool with_value, uint8_t value_choice = 0) {
+  const int block = title_font()->line_height +
+                    (with_value ? value_font(value_choice)->line_height + text_gap() : 0);
+  return std::max<int>(0, (header_height() - block) / 2);
+}
 // Half-height tile content (icon disc, title and value lines) on a card of the
 // given width. Overlays that look like a half-height tile use it directly.
 inline void apply_content(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, lv_obj_t* value, int width,
@@ -70,13 +79,9 @@ inline void apply_content(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, lv_ob
   if (title) {
     if (auto* state = hometiles_title::state_for(title)) state->single_line = true;
   }
-  const lv_font_t* value_face = value_font(value_choice);
-  const int gap = text_gap();
-  // Without a value line (half-height Back) the title alone is centered.
-  const int block = title_font()->line_height + (value ? value_face->line_height + gap : 0);
-  const int text_y = std::max<int>(0, (height - block) / 2);
+  const int text_y = text_top(value != nullptr, value_choice);
   text(title, title_font(), text_y);
-  text(value, value_face, text_y + title_font()->line_height + gap);
+  text(value, value_font(value_choice), text_y + title_font()->line_height + text_gap());
 }
 inline void apply(lv_obj_t* card, lv_obj_t* icon, lv_obj_t* title, lv_obj_t* value, const Tile& tile) {
   apply_fractional_tile_geometry(card, tile);

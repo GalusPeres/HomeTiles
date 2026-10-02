@@ -62,6 +62,12 @@ assert.match(pin, /void resume_pin_popup_after_failed_success\(\) \{[\s\S]*?popu
 const mqtt = read('src/network/mqtt/mqtt_handlers.cpp');
 assert.match(mqtt, /tileTypeIsDeviceControl\(slot\.type\) \? "detail"/);
 assert.match(mqtt, /route\.topic\.endsWith\("\/detail"\)\) \{\s*device_control::queue_detail/);
+// Like Number/Select/Date, every offered Lock, Alarm panel and Fan keeps its
+// detail subscribed, not only those on a tile (a newly chosen one showed
+// its state only seconds after the save).
+for (const list of ['locks_text', 'alarm_panels_text', 'fans_text']) {
+  assert.ok(mqtt.includes(`{&cfg.${list}, "detail"}`), `${list} detail is subscribed up front`);
+}
 // The answers are read into the large buffer: the Bridge's answer for the
 // sim alarm panel (V2, 02.10.) outgrew the small one, was cut off and the
 // code entry waited for "No answer" although the alarm had armed.

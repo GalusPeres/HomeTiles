@@ -1321,12 +1321,23 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   };
 
   const HaBridgeConfigData& cfg = haBridgeConfig.get();
-  for (const String* list : {&cfg.numbers_text, &cfg.selects_text, &cfg.datetimes_text}) {
+  // Every entity the Bridge offers keeps its additive topic subscribed, not
+  // only those on a tile: a newly chosen Number or Lock shows its state at
+  // once instead of after the save and the retained message (the Lock,
+  // Alarm panel and Fan detail only followed their tiles and took seconds).
+  const struct {
+    const String* list;
+    const char* suffix;
+  } offered[] = {{&cfg.numbers_text, "control"}, {&cfg.selects_text, "control"},
+                 {&cfg.datetimes_text, "control"}, {&cfg.locks_text, "detail"},
+                 {&cfg.alarm_panels_text, "detail"}, {&cfg.fans_text, "detail"}};
+  for (const auto& entry : offered) {
+    const String& list = *entry.list;
     int start = 0;
-    while (start < static_cast<int>(list->length())) {
-      int end = list->indexOf('\n', start);
-      if (end < 0) end = list->length();
-      add_route(list->substring(start, end), -1, "control");
+    while (start < static_cast<int>(list.length())) {
+      int end = list.indexOf('\n', start);
+      if (end < 0) end = list.length();
+      add_route(list.substring(start, end), -1, entry.suffix);
       start = end + 1;
     }
   }

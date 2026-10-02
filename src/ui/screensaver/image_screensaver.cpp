@@ -1513,8 +1513,18 @@ bool update_slot_grid(ScreensaverState* st) {
     apply_slot_card_shadow(card, shadows);
     ui_surface_style::apply_tile_border(card, borders);
     // Slot order, as after a full rebuild: a later card's shadow lies over
-    // its neighbours.
+    // its neighbours. lv_obj_move_to_index invalidates the parent, here the
+    // full-screen grid: one edit redrew the whole screen with the wallpaper,
+    // clock and every shadow (b196 log: 1.08 M pixels, 730 ms). Only the card
+    // is drawn again.
+    lv_display_t* display = lv_obj_get_display(card);
+    const bool invalidation = display && lv_display_is_invalidation_enabled(display);
+    if (invalidation) lv_display_enable_invalidation(display, false);
     lv_obj_move_to_index(card, static_cast<int32_t>(position++));
+    if (invalidation) {
+      lv_display_enable_invalidation(display, true);
+      lv_obj_invalidate(card);
+    }
   }
   remember_shown_grid(st);
   if (rebuilt) refresh_slot_values(st);

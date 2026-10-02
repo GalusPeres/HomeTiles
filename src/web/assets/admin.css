@@ -853,12 +853,15 @@
       grid-template-columns:repeat(var(--grid-cols), var(--preview-cell-w));
       grid-template-rows:repeat(var(--grid-rows), var(--preview-cell-h));
       gap:var(--preview-gap);
-      padding:var(--preview-pad-top, var(--preview-pad)) var(--preview-pad-right, var(--preview-pad))
-        var(--preview-pad-bottom, var(--preview-pad)) var(--preview-pad-left, var(--preview-pad));
+      /* The scaled screen inside a black bezel (--preview-frame). */
+      padding:calc(var(--preview-frame, 0px) + var(--preview-pad-top, var(--preview-pad)))
+        calc(var(--preview-frame, 0px) + var(--preview-pad-right, var(--preview-pad)))
+        calc(var(--preview-frame, 0px) + var(--preview-pad-bottom, var(--preview-pad)))
+        calc(var(--preview-frame, 0px) + var(--preview-pad-left, var(--preview-pad)));
 
       background:#000000;
       border:1px solid var(--line);
-      border-radius:calc(var(--tile-radius, 11px) + var(--preview-pad) + 1px);
+      border-radius:calc(var(--tile-radius, 11px) + var(--preview-pad) + var(--preview-frame, 0px) + 1px);
       width:fit-content;
       height:fit-content;
     }
@@ -2700,8 +2703,8 @@
 /* Fractional placement preserves the existing cell pitch and gutter. */
 .tile-grid > .fractional-tile {
   position:absolute;
-  left:calc(var(--preview-pad-left, var(--preview-pad)) + var(--tile-col) * (var(--preview-cell-w) + var(--preview-gap)));
-  top:calc(var(--preview-pad-top, var(--preview-pad)) + var(--tile-row) * (var(--preview-cell-h) + var(--preview-gap)));
+  left:calc(var(--preview-frame, 0px) + var(--preview-pad-left, var(--preview-pad)) + var(--tile-col) * (var(--preview-cell-w) + var(--preview-gap)));
+  top:calc(var(--preview-frame, 0px) + var(--preview-pad-top, var(--preview-pad)) + var(--tile-row) * (var(--preview-cell-h) + var(--preview-gap)));
   width:calc(var(--tile-w) * (var(--preview-cell-w) + var(--preview-gap)) - var(--preview-gap));
   height:calc(var(--tile-h) * (var(--preview-cell-h) + var(--preview-gap)) - var(--preview-gap));
   box-sizing:border-box;

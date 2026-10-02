@@ -79,6 +79,10 @@ for (const reset of ['sensor', 'switch', 'cover', 'binary_sensor', 'media']) {
   assert.ok(update.includes('reset_' + reset + '_widget(GridType::SCREENSAVER, slot);'), 'a rebuilt slot drops its ' + reset + ' widgets');
 }
 assert.match(update, /lv_obj_move_to_index\(card, static_cast<int32_t>\(position\+\+\)\);/, 'rebuilt cards keep the slot order');
+// Reordering must not redraw the full-screen grid (b196: 1.08 M pixels and
+// 730 ms per edit): invalidation stays off for the move, then only the card.
+assert.match(update, /if \(invalidation\) lv_display_enable_invalidation\(display, false\);\n\s*lv_obj_move_to_index\(card, static_cast<int32_t>\(position\+\+\)\);\n\s*if \(invalidation\) \{\n\s*lv_display_enable_invalidation\(display, true\);\n\s*lv_obj_invalidate\(card\);/,
+  'the slot order change redraws only the card');
 assert.match(update, /if \(cards != lv_obj_get_child_count\(st->slot_grid\)\) return false;/, 'an unexpected grid rebuilds');
 assert.match(fn(screensaver, 'rebuild_slot_grid'), /apply_slot_tile_borders\(st\);\n  remember_shown_grid\(st\);/);
 assert.match(fn(screensaver, 'image_screensaver_show_tiles_now'),

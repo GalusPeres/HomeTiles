@@ -13,6 +13,9 @@ namespace {
 
 constexpr int kPreviewTargetHeight = 430;
 constexpr int kWideFourRowPreviewTargetHeight = 390;
+// A black bezel around the scaled screen; not part of the device geometry
+// (user 2026-10-02: keep the black frame of the former 12 px margin).
+constexpr int kPreviewFramePx = 10;
 
 int preview_target_height_px() {
   // At equal height, the Tab5 (7x4) preview would be wider than the 8-inch
@@ -355,9 +358,11 @@ void appendPreviewScaleVars(String& html) {
   {
     // The wallpaper fills the whole screen with corners of the tile radius
     // plus the margin up to 4 px (image_screensaver image_radius()).
-    char radius[96];
+    char radius[160];
     snprintf(radius, sizeof(radius),
-             "--screensaver-image-inset:0px;--screensaver-image-radius:calc(var(--tile-radius) + %.2fpx);",
+             "--preview-frame:%dpx;--screensaver-image-inset:%dpx;"
+             "--screensaver-image-radius:calc(var(--tile-radius) + %.2fpx);",
+             kPreviewFramePx, kPreviewFramePx,
              static_cast<double>((GRID_PAD < 4 ? GRID_PAD : 4) * preview_cell_h_px()) / GRID_CELL_H);
     html += radius;
   }

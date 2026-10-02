@@ -1886,33 +1886,29 @@ void tiles_invalidate_folder_only(uint16_t folder_id) {
 
 static void rebuild_tile_at_index(GridType grid_type, uint8_t index);
 
-// A reorder only moves tiles, and parking only adds or removes the Settings
-// tile: the visible tiles then take their new cells instead of the whole grid
-// being rebuilt (tiles_reload_layout, about 340 ms on the V2; user
-// 2026-10-02). False, with nothing changed, when anything else differs; the
-// caller then rebuilds as before.
-static bool move_active_layout() {
+// A Web Admin edit changes a few tiles: unchanged tiles stay, moved tiles take
+// their new cells, and only changed, new or removed tiles are built or deleted
+// (rebuild_tile_at_index), instead of the whole grid being rebuilt
+// (tiles_reload_layout, about 340 ms on the V2; user 2026-10-02: moving,
+// resizing and recoloring must all be fast). False, with nothing changed,
+// when the grid holds anything unexpected; the caller then rebuilds as before.
+static bool update_active_layout() {
   const uint8_t idx = static_cast<uint8_t>(GridType::TAB0);
   lv_obj_t* grid = g_tiles_grids[idx];
   if (!grid || !g_active_cache || !g_active_cache->grid_loaded) return false;
   const TileGridConfig& shown = g_active_cache->grid_config;
   const TileGridConfig& next = tileConfig.getActiveGrid();
 
-  // Same tiles in the same slots; only the Settings tile may come or go.
   float col = 0;
   float row = 0;
   float span_w = 1;
   float span_h = 1;
+  bool rebuilds = false;
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    const Tile& before = shown.tiles[i];
     const Tile& after = next.tiles[i];
     if (after.type != TILE_EMPTY && !get_tile_layout(after, col, row, span_w, span_h)) return false;
-    if (before.type == TILE_EMPTY && after.type == TILE_EMPTY) continue;
-    if ((before.type == TILE_EMPTY && after.type == TILE_SETTINGS) ||
-        (before.type == TILE_SETTINGS && after.type == TILE_EMPTY)) {
-      continue;
-    }
-    if (!tileContentEquals(before, after) || !g_tiles_objs[idx][i]) return false;
+    if (shown.tiles[i].type == TILE_EMPTY && after.type == TILE_EMPTY) continue;
+    if (!tileContentEquals(shown.tiles[i], after) || !g_tiles_objs[idx][i]) rebuilds = true;
   }
   // Only tiles and the empty cell placeholders (render_empty_tile) live in
   // the grid; anything else rebuilds.
@@ -1929,23 +1925,40 @@ static bool move_active_layout() {
   }
 
   const uint32_t started_ms = millis();
+  // A light popup is bound to a grid slot (tiles_reload_layout).
+  if (rebuilds) hide_light_popup();
   lv_display_t* disp = lv_obj_get_display(grid);
   if (disp) lv_display_enable_invalidation(disp, false);
   for (size_t p = 0; p < placeholder_count; ++p) lv_obj_delete(placeholders[p]);
   bool occupied[GRID_ROWS][GRID_COLS] = {};
   unsigned moved = 0;
+  unsigned rebuilt = 0;
+  bool folders_changed = false;
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& before = shown.tiles[i];
     const Tile& after = next.tiles[i];
-    if (before.type == TILE_SETTINGS && after.type == TILE_EMPTY) {
-      lv_obj_delete(g_tiles_objs[idx][i]);
+    if (before.type == TILE_EMPTY && after.type == TILE_EMPTY) continue;
+    if (before.type == TILE_FOLDER || after.type == TILE_FOLDER) {
+      folders_changed = folders_changed || !tileContentEquals(before, after);
+    }
+    if (after.type == TILE_EMPTY) {
+      // Removed: its widgets go with it, as in rebuild_tile_at_index.
+      if (g_tiles_objs[idx][i]) lv_obj_delete(g_tiles_objs[idx][i]);
       g_tiles_objs[idx][i] = nullptr;
+      reset_sensor_widget(GridType::TAB0, static_cast<uint8_t>(i));
+      reset_switch_widget(GridType::TAB0, static_cast<uint8_t>(i));
+      reset_climate_widget(GridType::TAB0, static_cast<uint8_t>(i));
+      reset_cover_widget(GridType::TAB0, static_cast<uint8_t>(i));
+      reset_binary_sensor_widget(GridType::TAB0, static_cast<uint8_t>(i));
+      reset_weather_widget(GridType::TAB0, static_cast<uint8_t>(i));
+      ++rebuilt;
       continue;
     }
-    if (after.type == TILE_EMPTY || !get_tile_layout(after, col, row, span_w, span_h)) continue;
+    if (!get_tile_layout(after, col, row, span_w, span_h)) continue;
     mark_occupied(occupied, col, row, span_w, span_h);
-    if (before.type == TILE_EMPTY) {
+    if (!tileContentEquals(before, after) || !g_tiles_objs[idx][i]) {
       rebuild_tile_at_index(GridType::TAB0, static_cast<uint8_t>(i));
+      ++rebuilt;
       continue;
     }
     if (before.col == after.col && before.row == after.row) continue;
@@ -1976,8 +1989,13 @@ static bool move_active_layout() {
   memcpy(g_active_cache->tile_objs, g_tiles_objs[idx], sizeof(g_active_cache->tile_objs));
   tile_renderer_snapshot_tab0(&g_active_cache->widgets);
   g_active_cache->last_used_ms = millis();
-  Serial.printf("[%s] Layout moved: %u tiles in %lu ms\n", getGridName(GridType::TAB0), moved,
-                static_cast<unsigned long>(millis() - started_ms));
+  Serial.printf("[%s] Layout updated: %u moved, %u rebuilt in %lu ms\n", getGridName(GridType::TAB0),
+                moved, rebuilt, static_cast<unsigned long>(millis() - started_ms));
+  if (rebuilt) schedule_preview_load(GridType::TAB0);
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  // New or changed Folder tiles warm their targets, as after a rebuild.
+  if (folders_changed) schedule_navigation_preload(g_active_cache->folder_id, next);
+#endif
   return true;
 }
 
@@ -1987,7 +2005,7 @@ bool tiles_show_active_layout_now() {
       g_active_cache->folder_id != tileConfig.getActiveFolderId()) {
     return false;
   }
-  if (!move_active_layout()) tiles_reload_layout(GridType::TAB0);
+  if (!update_active_layout()) tiles_reload_layout(GridType::TAB0);
   g_tiles_reload_requested[idx] = false;
   return true;
 }

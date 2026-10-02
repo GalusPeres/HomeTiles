@@ -57,21 +57,27 @@ ${fields.filter(field => field.name !== 'col' && field.name !== 'row').map(field
 const output = compileAndRun({label: 'Tile move fast path', harness});
 if (output !== null) assert.match(output, /pass/);
 
-// The panel tries the move before a rebuild, and only for the same tiles in
-// the same slots; the Settings tile alone may come or go.
+// The panel updates the visible grid before a full rebuild: unchanged tiles
+// stay, moved tiles take their new cells, changed, new or removed tiles are
+// built or deleted one by one (user 2026-10-02: moving, resizing and
+// recoloring must all be fast).
 const tab = readRepoFile('src/ui/tabs/tiles/tab_tiles_unified.cpp').replace(/\r\n?/g, '\n');
 const show = tab.slice(tab.indexOf('bool tiles_show_active_layout_now() {'));
-assert.ok(show.slice(0, 500).includes('if (!move_active_layout()) tiles_reload_layout(GridType::TAB0);'));
-const move = tab.slice(tab.indexOf('static bool move_active_layout() {'), tab.indexOf('bool tiles_show_active_layout_now() {'));
-assert.ok(move.includes('if (!tileContentEquals(before, after) || !g_tiles_objs[idx][i]) return false;'));
-assert.ok(move.includes('(before.type == TILE_EMPTY && after.type == TILE_SETTINGS) ||') &&
-  move.includes('(before.type == TILE_SETTINGS && after.type == TILE_EMPTY)'));
+assert.ok(show.slice(0, 500).includes('if (!update_active_layout()) tiles_reload_layout(GridType::TAB0);'));
+const update = tab.slice(tab.indexOf('static bool update_active_layout() {'), tab.indexOf('bool tiles_show_active_layout_now() {'));
+assert.ok(/if \(!tileContentEquals\(before, after\) \|\| !g_tiles_objs\[idx\]\[i\]\) \{\s+rebuild_tile_at_index\(GridType::TAB0, static_cast<uint8_t>\(i\)\);/.test(update),
+  'a changed tile is rebuilt alone');
+const removal = update.slice(update.indexOf('if (after.type == TILE_EMPTY) {'), update.indexOf('++rebuilt;'));
+for (const kind of ['sensor', 'switch', 'climate', 'cover', 'binary_sensor', 'weather']) {
+  assert.ok(removal.includes(`reset_${kind}_widget(GridType::TAB0, static_cast<uint8_t>(i));`), `removed tile drops its ${kind} widget`);
+}
+assert.ok(update.includes('if (rebuilds) hide_light_popup();'), 'a light popup bound to a slot closes like a rebuild');
 // Anything but tiles and empty-cell placeholders in the grid rebuilds; the
 // checks run before anything changes.
-assert.ok(move.indexOf('if (lv_obj_get_child_count(child) != 0') < move.indexOf('lv_display_enable_invalidation(disp, false)'));
-assert.ok(move.includes('place_tile_card(g_tiles_objs[idx][i]') && move.includes('lv_obj_remove_flag(g_tiles_objs[idx][i], LV_OBJ_FLAG_IGNORE_LAYOUT);'));
-assert.ok(move.includes('lv_obj_move_to_index(render_empty_tile(grid, c, r), 0);'));
-assert.ok(move.includes('rebuild_tile_at_index(GridType::TAB0, static_cast<uint8_t>(i));'));
-assert.ok(move.includes('g_active_cache->grid_config = next;'));
+assert.ok(update.indexOf('if (lv_obj_get_child_count(child) != 0') < update.indexOf('lv_display_enable_invalidation(disp, false)'));
+assert.ok(update.includes('place_tile_card(g_tiles_objs[idx][i]') && update.includes('lv_obj_remove_flag(g_tiles_objs[idx][i], LV_OBJ_FLAG_IGNORE_LAYOUT);'));
+assert.ok(update.includes('lv_obj_move_to_index(render_empty_tile(grid, c, r), 0);'));
+assert.ok(update.includes('g_active_cache->grid_config = next;') && update.includes('tile_renderer_snapshot_tab0(&g_active_cache->widgets);'));
+assert.ok(update.includes('if (folders_changed) schedule_navigation_preload(g_active_cache->folder_id, next);'));
 
-console.log('Tile move: positions-only changes move the visible tiles, everything else rebuilds');
+console.log('Tile updates: moved tiles move, changed tiles rebuild alone, the rest stays');

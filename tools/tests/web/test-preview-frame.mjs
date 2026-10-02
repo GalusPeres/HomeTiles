@@ -34,3 +34,7 @@ try{
 try { runDomHarness({label:'Preview bezel', html, tmpPrefix:'hometiles-preview-frame-'}); }
 catch(error) { throw new Error(error.message.match(/<pre id="result">([\s\S]*?)<\/pre>/)?.[1] || error.message.slice(0,400)); }
 assert.match(readRepoFile('src/web/server/render/web_admin_styles.cpp'), /constexpr int kPreviewFramePx = 10;/);
+// The screen fills the target height inside the bezel: the preview keeps its
+// former size, and the settings panel beside it is not cut (user 2026-10-02).
+assert.match(readRepoFile('src/web/server/render/web_admin_styles.cpp').replace(/\r\n/g, '\n'),
+  /const int screen_h = preview_target_height_px\(\) - 2 \* kPreviewFramePx;/);

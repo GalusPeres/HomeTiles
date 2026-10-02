@@ -53,3 +53,10 @@ assert.match(editor, /bind\('screensaverTileOpacity', 'change', el => \{ screens
 const i18n = read('src/core/i18n/i18n.cpp');
 for (const label of ['"Kachel-Deckkraft",', '"Tile opacity",', '"Opacité des tuiles",']) assert.ok(i18n.includes(label), label);
 console.log('Screensaver tile opacity: one global value, taken over from the tiles, used by panel and previews');
+
+// The footer (user 2026-10-02): checkboxes in one column, the sliders with
+// aligned labels and values in the next.
+assert.match(html, /<div class="folder-footer-options screensaver-tile-options">/);
+const css = read('src/web/assets/admin.css');
+assert.match(css, /\.folder-footer-options\.screensaver-tile-options \{\n\s*display:grid;\n\s*grid-template-columns:max-content max-content minmax\(120px, 220px\) max-content;/);
+assert.match(css, /\.screensaver-tile-options > \.tile-radius-control \{ display:contents; \}/);

@@ -837,6 +837,19 @@
     .global-radius-field input[type="range"]:focus { outline:none; box-shadow:none; }
     .global-radius-field input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     .folder-footer-options .inline-checkbox { margin:0; }
+    /* Screensaver tile options: the checkboxes in one column, the sliders
+       with their labels and values aligned in the next (user 2026-10-02). */
+    .folder-footer-options.screensaver-tile-options {
+      display:grid;
+      grid-template-columns:max-content max-content minmax(120px, 220px) max-content;
+      justify-content:start;
+      align-items:center;
+      gap:10px 12px;
+    }
+    .screensaver-tile-options > .inline-checkbox { margin-right:28px; }
+    .screensaver-tile-options > .tile-radius-control { display:contents; }
+    .screensaver-tile-options > .tile-radius-control > input[type="range"] { width:100%; }
+    .screensaver-tile-options > .tile-radius-control > output { min-width:4.5ch; text-align:left; }
     .folder-footer .hint { margin:0; }
     .btn-delete-folder { padding:8px 16px; font-size:13px; flex:0 0 auto; }
     .tile-actions { display:flex; gap:8px; margin-top:8px; }

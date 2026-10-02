@@ -952,7 +952,7 @@ static void appendTileTabHTML(
     html += factory_color_hex;
     html += "')\"><i class=\"mdi mdi-restore\"></i></button></div></div></div></section>\n";
   } else {
-    html += R"html(            <div class="folder-footer-options">
+    html += R"html(            <div class="folder-footer-options screensaver-tile-options">
               <label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";
     html += tr.screensaver_tile_border;
     html += R"html(</label>

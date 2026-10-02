@@ -42,8 +42,10 @@ int admin_wrapper_target_width_px() {
 // than on the panel). The cell height stays a whole pixel; every other
 // length follows its scale.
 int preview_cell_h_px() {
-  const int cell = (preview_target_height_px() * GRID_CELL_H + Device::kScreenHeight / 2) /
-                   Device::kScreenHeight;
+  // The screen fills the target height inside the bezel, so the preview
+  // keeps its former size and the settings panel beside it fits.
+  const int screen_h = preview_target_height_px() - 2 * kPreviewFramePx;
+  const int cell = (screen_h * GRID_CELL_H + Device::kScreenHeight / 2) / Device::kScreenHeight;
   return (cell < 40) ? 40 : cell;
 }
 

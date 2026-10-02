@@ -679,8 +679,11 @@ public:
   bool getSettingsTile(Tile& out);
   SettingsTileVisibilityResult validateSettingsTileVisible(
       bool visible, float target_col = -1, float target_row = -1);
+  // `show`, when given, gets the changed Home grid before it is written to
+  // flash, so the visible grid can show it at once like a reorder.
   SettingsTileVisibilityResult setSettingsTileVisible(
-      bool visible, float target_col = -1, float target_row = -1);
+      bool visible, float target_col = -1, float target_row = -1,
+      void (*show)(const TileGridConfig&) = nullptr);
 
 private:
   volatile uint32_t view_revision_ = 1;

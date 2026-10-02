@@ -18,8 +18,28 @@
 #include <stdlib.h>
 #include <string.h>
 #include "src/web/server/handlers/web_admin_handler_utils.h"
+#include "src/core/power/power_manager.h"
 
 using namespace web_admin_handlers;
+
+namespace {
+
+constexpr uint16_t kHomeFolderId = 0;
+// Whether show_settings_tile_now drew the Home grid during the current
+// access save (WebServer handlers run in the loop task).
+bool g_settings_tile_shown_now = false;
+
+// Shows the Home grid with the Settings tile parked or restored before it is
+// written to flash, like a tile reorder (user 2026-10-02: the panel showed
+// the move only after the flash writes and a rebuild of every grid).
+void show_settings_tile_now(const TileGridConfig& grid) {
+  g_settings_tile_shown_now =
+      !powerManager.isInSleep() &&
+      tileConfig.previewActiveFolderGrid(kHomeFolderId, grid) &&
+      tiles_show_active_layout_now();
+}
+
+}  // namespace
 
 void WebAdminServer::handleSaveMQTT() {
   const bool ajax_save =
@@ -359,6 +379,7 @@ void WebAdminServer::handleSaveMQTT() {
   bool settings_config_rolled_back = false;
   SettingsTileVisibilityResult settings_visibility_reconcile =
       SettingsTileVisibilityResult::Success;
+  g_settings_tile_shown_now = false;
   auto commit_settings = [&]() {
     settings_config_saved = configManager.save(cfg);
     if (!settings_config_saved || !settings_visibility_commit_needed) return;
@@ -366,7 +387,7 @@ void WebAdminServer::handleSaveMQTT() {
     const SettingsTileVisibilityResult visibility =
         tileConfig.setSettingsTileVisible(
             !cfg.settings_tile_hidden, settings_tile_target_col,
-            settings_tile_target_row);
+            settings_tile_target_row, show_settings_tile_now);
     if (visibility == SettingsTileVisibilityResult::Success) return;
 
     settings_visibility_commit_failed = true;
@@ -407,10 +428,17 @@ void WebAdminServer::handleSaveMQTT() {
       uiManager.scheduleNtpSync(0);
       // Reload grids in the loop, never inside the WebServer callback.
       tiles_request_reload_all();
-    } else if (settings_visibility_commit_needed ||
-               cfg.settings_pin_enabled != previous_cfg.settings_pin_enabled) {
+    } else if (cfg.settings_pin_enabled != previous_cfg.settings_pin_enabled) {
       // A Settings PIN shows a lock on the Settings tile (navigate renderer).
       tiles_request_reload_all();
+    } else if (settings_visibility_commit_needed) {
+      // Only the Home grid changed, like a reorder: drop its hidden caches and
+      // rebuild it only when show_settings_tile_now could not draw it.
+      tiles_invalidate_folder_only(kHomeFolderId);
+      if (!g_settings_tile_shown_now &&
+          tileConfig.getActiveFolderId() == kHomeFolderId) {
+        tiles_request_reload_if_loaded(GridType::TAB0);
+      }
     }
     if (settings_gesture_changed) {
       // Web Admin access-only saves run in the main loop. Apply the new edge

@@ -3321,7 +3321,8 @@ bool TileConfig::getSettingsTile(Tile& out) {
 }
 
 SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
-    bool visible, float target_col, float target_row) {
+    bool visible, float target_col, float target_row,
+    void (*show)(const TileGridConfig&)) {
   TileGridConfig grid{};
   if (!loadGrid(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
@@ -3346,6 +3347,7 @@ SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
     changed = removeSettingsTiles(grid);
   }
 
+  if (changed && show) show(grid);
   if (changed && !saveGridInPlace(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
   }

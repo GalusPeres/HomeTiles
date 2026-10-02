@@ -120,7 +120,10 @@ const expectedConstants = new Map([
   ['kBacklightResolution', '10'],
   ['kTouchSda', '47'],
   ['kTouchScl', '48'],
-  ['kRgbPclkHz', '16000000'],
+  // Direct PSRAM scanout (no bounce buffers on the stock SDK): 10 MHz like
+  // the other ST7701 S3 profiles, not the BSP's 16 MHz, or the image drifts
+  // sideways (issue #26).
+  ['kRgbPclkHz', '10000000'],
   ['kRgbHsyncPulseWidth', '10'],
   ['kRgbHsyncBackPorch', '10'],
   ['kRgbHsyncFrontPorch', '20'],

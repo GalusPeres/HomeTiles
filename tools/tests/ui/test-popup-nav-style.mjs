@@ -69,7 +69,7 @@ assert.match(mediaColors, /lv_obj_t\* const labels\[\] = \{ctx->previous_label, 
 assert.match(mediaColors, /popup_nav_style::style_press\(lv_obj_get_parent\(label\), popup, icon\);/);
 assert.match(mediaColors, /popup_nav_style::style_slider\(ctx->seek_slider, popup, icon\);\s*popup_nav_style::style_slider\(ctx->volume_slider, popup, icon\);/);
 assert.doesNotMatch(mediaColors, /play_pause/);
-assert.match(fn(media, 'apply_init_to_context'), /update_cover\(ctx, init\.cover_dsc, init\.cover_hash\);\s*apply_control_colors\(ctx\);\s*\}$/);
+assert.match(fn(media, 'apply_init_to_context'), /update_cover\(ctx, init\.cover_dsc, init\.cover_hash\);\s*apply_control_colors\(ctx\);\s*apply_availability\(ctx\);\s*\}$/);
 
 const host = await lvglHost(root);
 if (!host) {

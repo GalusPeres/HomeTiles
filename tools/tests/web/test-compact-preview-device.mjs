@@ -13,6 +13,7 @@ import {lvglHost} from '../../lib/lvgl-host.mjs';
 import {radiusPolicyHost, surfaceStyleHost} from '../../lib/surface-style-host.mjs';
 import {readRepoFile} from '../../lib/admin-source.mjs';
 import {findBrowser} from '../../lib/headless-dom.mjs';
+import {decodePng} from '../../lib/png-decode.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -91,6 +92,10 @@ int main(){
  const auto header=tile_icon_disc::corner_header(tile_layout::scale_480(24),tile_layout::scale_480(20),tile_layout::scale_480(-8),
    lv_font_get_glyph_width(FONT_MDI_ICONS,tile_icon_disc::kMdiReferenceGlyph,0),lv_font_get_line_height(FONT_MDI_ICONS));
  std::cout<<"DISC "<<tile_icon_disc::inset()<<" "<<header.disc<<"\n";
+ // The tile radius slider ends and what the preview gets for them; the card
+ // and the disc take the radius with the half-height rule (radius()).
+ std::cout<<"RADII "<<tile_radius::kMinimum<<" "<<tile_radius::kMaximum<<" "<<preview_scaled_exact_px(tile_radius::kMinimum)
+  <<" "<<preview_scaled_exact_px(tile_radius::kMaximum)<<" "<<tile_radius::kMinimum-tile_layout::scale_480(22)<<"\n";
  for(float span_w:{1.f,1.5f,2.f})for(int choice:{0,2,3,5})for(int with_value:{1,0}){
   if(!with_value&&choice)continue;
   Tile tile;tile.span_w=span_w;tile.sensor_value_font=static_cast<uint8_t>(choice);
@@ -122,6 +127,89 @@ const css = readRepoFile('src/web/assets/admin.css').replace(/\r\n/g, '\n')
 const compactValueSize = choice => choice === 2 ? 24 : [3, 4, 5].includes(choice) ? 28 : 20;
 
 const failures = [];
+let discsChecked = 0;
+
+// The corner disc of every taller tile type and size as the browser paints
+// it (user 2026-10-02: from 1x1 up the card corner cut the disc on V2, S3
+// and 4B, the pills were right). Chrome renders each tile's top-left corner
+// at 4x; along the disc's middle row and column and along the corner
+// diagonal the gap from the card edge to the disc must be the device's:
+// the inset straight, and concentric with the card corner diagonally. A
+// disc too close to the corner or cut by the card edge fails.
+function checkCornerDiscPixels(profile, vars, scale, cellW, cellH, gap, inset, disc, radii) {
+  const [minRadius, maxRadius, minPreview, maxPreview, radiusDistance] = radii;
+  const types = ['sensor', 'binary_sensor', 'number', 'select', 'datetime', 'cover', 'device', 'energy',
+                 'weather', 'media', 'climate', 'switch switch-bar', 'cover switch-bar', 'device switch-bar'];
+  const cases = [];
+  for (const [radius, previewRadius] of [[minRadius, minPreview], [maxRadius, maxPreview]]) {
+    for (const [w, h] of [[1, 1], [1.5, 1], [2, 1], [2, 2], [3, 2]]) cases.push({type: 'sensor', w, h, radius, previewRadius});
+    for (const type of types.slice(1)) cases.push({type, w: 2, h: 2, radius, previewRadius});
+  }
+  const slot = 80, origin = 8, dpr = 4, perRow = 8;
+  const tilesHtml = cases.map((c, i) => {
+    const width = (c.w * cellW + (Math.ceil(c.w) - 1) * gap) * scale;
+    const height = (c.h * cellH + (Math.ceil(c.h) - 1) * gap) * scale;
+    // Pure colors: the card blue, the disc red, no glyph or text.
+    return `<div style="position:absolute;left:${(i % perRow) * slot}px;top:${Math.floor(i / perRow) * slot}px;width:${slot}px;height:${slot}px;overflow:hidden">` +
+      `<div class="tile ${c.type}" style="position:absolute;left:${origin}px;top:${origin}px;width:${width}px;height:${height}px;` +
+      `background:rgb(0,0,255);--tile-radius:${c.previewRadius}px;--icon-disc-bg:rgb(255,0,0)">` +
+      `<i class="mdi tile-icon" style="color:transparent"></i></div></div>`;
+  }).join('');
+  const page = path.join(out, profile + '-discs.html');
+  // The icon box as the MDI webfont makes it: one em square (the page has no
+  // network for the font itself).
+  fs.writeFileSync(page, `<!doctype html><html><head><meta charset="utf-8"><style>${css}
+:root{${vars}} body{margin:0;background:#000} .tile-icon::before{content:"";display:block;width:1em;height:1em}</style></head><body>${tilesHtml}</body></html>`);
+  const shot = path.join(out, profile + '-discs.png');
+  fs.rmSync(shot, {force: true});
+  const run = spawnSync(browser, ['--headless=new', '--disable-gpu', '--no-first-run', '--hide-scrollbars',
+    `--force-device-scale-factor=${dpr}`, `--window-size=${perRow * slot},${Math.ceil(cases.length / perRow) * slot}`,
+    '--virtual-time-budget=3000', `--screenshot=${shot}`, pathToFileURL(page).href], {encoding: 'utf8', timeout: 60000});
+  assert(fs.existsSync(shot), profile + ': no disc screenshot\n' + run.stderr);
+  const {width, pixels} = decodePng(fs.readFileSync(shot));
+  const at = (x, y, channel) => pixels[(y * width + x) * 4 + channel] / 255;
+  // Where a coverage ramp crosses one half, in device pixels from the scan
+  // start (pixel centers; box filtering makes this the exact edge).
+  const crossing = samples => {
+    for (let k = 1; k < samples.length; ++k) {
+      if (samples[k - 1] < 0.5 && samples[k] >= 0.5) return k - 1 + (0.5 - samples[k - 1]) / (samples[k] - samples[k - 1]) + 0.5;
+    }
+    return NaN;
+  };
+  const insetPx = inset * scale, discPx = disc * scale;
+  cases.forEach((c, i) => {
+    const x0 = ((i % perRow) * slot + origin) * dpr, y0 = (Math.floor(i / perRow) * slot + origin) * dpr;
+    const span = Math.ceil((insetPx + discPx + 2) * dpr);
+    const middle = Math.floor((insetPx + discPx / 2) * dpr);
+    const scan = (dx, dy, fx, fy) => {
+      const card = [], red = [];
+      for (let k = -4; k < span; ++k) {
+        const x = x0 + fx * k + dx, y = y0 + fy * k + dy;
+        card.push(Math.max(at(x, y, 0), at(x, y, 2)));
+        red.push(at(x, y, 0));
+      }
+      return [crossing(card) - 4, crossing(red) - 4];
+    };
+    const [rowCard, rowDisc] = scan(0, middle, 1, 0);
+    const [colCard, colDisc] = scan(middle, 0, 0, 1);
+    const [diagCard, diagDisc] = scan(0, 0, 1, 1);
+    // The device geometry at the preview scale: card radius, disc radius
+    // (radius() with the half-height rule, at most half the disc).
+    const cardRadius = (c.radius - radiusDistance) * scale;
+    const discRadius = Math.min(Math.max(0, cardRadius - insetPx), discPx / 2);
+    const diagonal = (insetPx + discRadius - discRadius / Math.SQRT2 - (cardRadius - cardRadius / Math.SQRT2)) * Math.SQRT2;
+    const label = `${profile} ${c.type} ${c.w}x${c.h} radius ${c.radius}`;
+    for (const [name, shown, device, tolerance] of [
+      ['left gap', (rowDisc - rowCard) / dpr, insetPx, 0.15],
+      ['top gap', (colDisc - colCard) / dpr, insetPx, 0.15],
+      // The preview card radius is rounded to whole pixels (emit_exact).
+      ['corner gap', (diagDisc - diagCard) * Math.SQRT2 / dpr, diagonal, 0.3]]) {
+      report.push(`${label} disc ${name}: ${shown.toFixed(2)} (device ${device.toFixed(2)})`);
+      if (!(Math.abs(shown - device) <= tolerance)) failures.push(`${label} disc ${name} ${shown.toFixed(2)} vs device ${device.toFixed(2)}`);
+    }
+    ++discsChecked;
+  });
+}
 const report = [];
 let checked = 0;
 // PREVIEW_DEVICE_PROFILES=all checks every device profile (a sweep before a
@@ -238,7 +326,10 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
       ++checked;
     }
   });
+  checkCornerDiscPixels(profile, vars, scale, cellW, cellH, gap, discInset, discSize,
+                        lines.find(l => l.startsWith('RADII ')).slice(6).split(' ').map(Number));
 }
 fs.writeFileSync(path.join(out, 'report.log'), report.join('\n') + '\n');
 assert.deepEqual(failures, [], 'half-height texts away from their device positions');
-console.log(`Half-height tiles match the device: ${checked} text lines (baseline, left edge, size) on V2, 480x480 and 1024x600`);
+console.log(`Half-height tiles match the device: ${checked} text lines (baseline, left edge, size) and ${discsChecked} corner discs ` +
+            `(gap left, top and in the corner, as painted) on ${previewProfiles.length} device profiles`);

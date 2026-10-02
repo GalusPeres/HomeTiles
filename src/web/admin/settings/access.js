@@ -142,10 +142,14 @@
       ? tileBackgroundCss(getTileTypeMeta('7'), true,
           getTileTypeMeta('7').defaultBg || '#2A2A2A')
       : snapshot.color;
-    const iconName = normalizeMdiIconName(snapshot.icon);
+    // The Settings PIN shows its lock here too (previewTileLocked); without
+    // an icon the lock is the icon.
+    const locked = typeof previewTileLocked === 'function' && previewTileLocked('7', tile);
+    const iconName = normalizeMdiIconName(snapshot.icon) || (locked ? 'lock' : '');
     if (iconName) {
       const icon = document.createElement('i');
       icon.className = 'mdi mdi-' + iconName + ' tile-icon';
+      if (locked && iconName !== 'lock') icon.innerHTML = PREVIEW_LOCK_MARK;
       tile.appendChild(icon);
     }
     if (snapshot.title) {
@@ -157,6 +161,24 @@
     if (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX &&
         currentTileTab === 'folder0') {
       tile.classList.add('active');
+    }
+  }
+
+  // The Settings tile shows a lock while the Settings PIN is on
+  // (previewTileLocked): redraw it, in the grid or parked, once the PIN is
+  // set or cleared.
+  function refreshSettingsTileLock() {
+    const editing = currentTileTab === 'folder0' &&
+      (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX ||
+       document.getElementById('folder0-tile-' + currentTileIndex)?.dataset.type === '7');
+    if (editing && typeof updateTilePreview === 'function') {
+      updateTilePreview('folder0');
+    } else if (document.getElementById('settingsHiddenTile')?.dataset.hidden === '1') {
+      renderSettingsHiddenSlot(true);
+    } else {
+      const tiles = getTilesData('folder0');
+      const index = tiles.findIndex(item => Number(item?.type || 0) === 7);
+      if (index >= 0) renderTileFromData('folder0', index, tiles[index], sensorMetaCache);
     }
   }
 
@@ -249,6 +271,7 @@
       }
     }
 
+    const lockedBefore = pinToggle.dataset.pinConfigured === '1';
     if (pinApply && hasNewPin) pinApply.disabled = true;
     try {
       const response = await fetch('/mqtt', {
@@ -284,6 +307,7 @@
         setSettingsPinStatus(false);
       }
       toggleSettingsAccessFields();
+      if ((pinToggle.dataset.pinConfigured === '1') !== lockedBefore) refreshSettingsTileLock();
       const savedState = {
         ...requested,
         pinEnabled: persistPinEnabled,

@@ -99,6 +99,16 @@ const server = read('src/web/server/render/web_admin_html.cpp');
 assert.ok(server.includes('html += "\\" data-folder-pin-enabled=\\"";') &&
   server.includes('if (lock_is_icon) iconName = "lock";') &&
   server.includes('<span class=\\"tile-icon-lock mdi mdi-lock\\" aria-hidden=\\"true\\"></span>'));
+// The parked Settings tile (Home parking slot) shows the lock too, from the
+// server and after a browser redraw; a Settings PIN change redraws it.
+assert.ok(server.includes('const bool hidden_locked = cfg.settings_pin_enabled;') &&
+  server.includes('if (hidden_locked && hidden_icon != "lock") {'));
+const access = read('src/web/admin/settings/access.js');
+const parked = between(access, '  function renderSettingsHiddenSlot(', '\n  }\n');
+assert.ok(parked.includes("previewTileLocked('7', tile)") &&
+  parked.includes("if (locked && iconName !== 'lock') icon.innerHTML = PREVIEW_LOCK_MARK;"));
+assert.ok(access.includes("if ((pinToggle.dataset.pinConfigured === '1') !== lockedBefore) refreshSettingsTileLock();"));
+assert.ok(between(access, '  function refreshSettingsTileLock(', '\n  }\n').includes('renderSettingsHiddenSlot(true);'));
 const css = read('src/web/assets/admin.css');
 const rule = between(css, '.tile-icon > .tile-icon-lock {', '}');
 assert.ok(rule.includes('font-size:0.46em;') && rule.includes('margin-left:0.037em; margin-top:-0.088em;') &&

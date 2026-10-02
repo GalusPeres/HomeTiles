@@ -821,9 +821,17 @@ static void appendTileTabHTML(
             "\" style=\"background:" +
             String(hidden ? hidden_color_hex : "transparent") + "\"";
     if (hidden) {
+      // A parked Settings tile shows the lock of the Settings PIN too
+      // (previewTileLocked in the browser); without an icon the lock is it.
+      const bool hidden_locked = cfg.settings_pin_enabled;
+      if (hidden_locked && !hidden_icon.length()) hidden_icon = "lock";
       html += "><i class=\"mdi mdi-";
       appendHtmlEscaped(html, hidden_icon);
-      html += " tile-icon\"></i><div class=\"tile-title\">";
+      html += " tile-icon\">";
+      if (hidden_locked && hidden_icon != "lock") {
+        html += "<span class=\"tile-icon-lock mdi mdi-lock\" aria-hidden=\"true\"></span>";
+      }
+      html += "</i><div class=\"tile-title\">";
       appendTileTitleHtml(html, hidden_title);
       html += "</div>";
     } else {

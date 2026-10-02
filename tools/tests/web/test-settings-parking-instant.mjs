@@ -90,6 +90,16 @@ const previewFn = tileConfig.slice(tileConfig.indexOf('bool TileConfig::previewS
 assert.ok(previewFn.slice(0, 400).includes('TileGridConfig& grid = activeGrid();') &&
   previewFn.slice(0, 400).includes('? ensureSettingsTile(grid, target_col, target_row)') &&
   previewFn.slice(0, 400).includes(': removeSettingsTiles(grid);'));
+// Nothing is read from flash before the move shows (each Home grid load took
+// about 350 ms on the V2: "parse=718 ms"), and a restored tile takes its
+// navigation ID in its own write instead of a second grid write.
+for (const name of ['bool TileConfig::getSettingsTile(', 'SettingsTileVisibilityResult TileConfig::validateSettingsTileVisible(']) {
+  const body = tileConfig.slice(tileConfig.indexOf(name), tileConfig.indexOf(name) + 700);
+  assert.ok(/if \(active_folder_id == kRootFolderId\) \{\s+grid = activeGrid\(\);\s+\} else if \(!loadGrid\(kRootFolderId, grid, false\)\)/.test(body), name);
+}
+const setVisible = tileConfig.slice(tileConfig.indexOf('SettingsTileVisibilityResult TileConfig::setSettingsTileVisible('));
+assert.ok(setVisible.indexOf('if (changed && !ensureNavigationIds(grid, changed)) {') > 0 &&
+  setVisible.indexOf('if (changed && !ensureNavigationIds(grid, changed)) {') < setVisible.indexOf('saveGridInPlace(kRootFolderId, grid, false)'));
 const handlers = read('src/web/server/handlers/web_admin_handlers.cpp');
 const shown = handlers.indexOf('settings_tile_previewed && tiles_show_active_layout_now();');
 assert.ok(handlers.includes('tileConfig.previewSettingsTileVisible(!cfg.settings_tile_hidden,') && shown >= 0);

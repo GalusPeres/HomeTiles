@@ -3310,8 +3310,15 @@ bool TileConfig::getFolderPin(uint16_t folder_id, String& out) const {
 }
 
 bool TileConfig::getSettingsTile(Tile& out) {
+  // The visible Home grid is the stored one: no flash read, which took about
+  // 350 ms on the V2 before a Settings parking move could show (user
+  // 2026-10-02, "[WebAdmin] Settings tile ... parse=").
   TileGridConfig grid{};
-  if (!loadGrid(kRootFolderId, grid, false)) return false;
+  if (active_folder_id == kRootFolderId) {
+    grid = activeGrid();
+  } else if (!loadGrid(kRootFolderId, grid, false)) {
+    return false;
+  }
   for (const auto& tile : grid.tiles) {
     if (tile.type != TILE_SETTINGS) continue;
     out = tile;
@@ -3354,6 +3361,11 @@ SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
     changed = removeSettingsTiles(grid);
   }
 
+  // A restored Settings tile takes its navigation ID in this write; without
+  // it the next grid load assigned one and wrote the whole grid again.
+  if (changed && !ensureNavigationIds(grid, changed)) {
+    return SettingsTileVisibilityResult::StorageError;
+  }
   if (changed && !saveGridInPlace(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
   }
@@ -3363,8 +3375,12 @@ SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
 
 SettingsTileVisibilityResult TileConfig::validateSettingsTileVisible(
     bool visible, float target_col, float target_row) {
+  // Checked against the visible Home grid, which is the stored one (see
+  // getSettingsTile): no flash read before the move shows.
   TileGridConfig grid{};
-  if (!loadGrid(kRootFolderId, grid, false)) {
+  if (active_folder_id == kRootFolderId) {
+    grid = activeGrid();
+  } else if (!loadGrid(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
   }
   if (!visible) return SettingsTileVisibilityResult::Success;

@@ -218,7 +218,9 @@ function previewTileRadius(value) {
     tileRadiusConfirmed = Number(getComputedStyle(root).getPropertyValue('--tile-radius-device'));
   }
   const scale = Number(getComputedStyle(root).getPropertyValue('--radius-preview-scale'));
-  root.style.setProperty('--tile-radius', Math.max(1, Math.round(radius * scale)) + 'px');
+  // Unrounded like the server's --tile-radius: the corner disc is concentric
+  // with the card corner only at the exact device radius.
+  root.style.setProperty('--tile-radius', (radius * scale).toFixed(2) + 'px');
   root.style.setProperty('--tile-radius-device', String(radius));
   document.querySelectorAll('.global-tile-radius').forEach(control => { control.value = radius; });
   document.querySelectorAll('.global-tile-radius-value').forEach(output => { output.textContent = radius; });

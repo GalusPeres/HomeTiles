@@ -308,7 +308,10 @@ void appendPreviewScaleVars(String& html) {
     html += color_hex;
     html += ";";
   }
-  emit_exact("tile-radius", configManager.getConfig().tile_radius);
+  // Unrounded: the corner disc (tile radius minus the inset) is concentric
+  // with the card corner only at the exact device radius; a whole-pixel
+  // radius moved the corner gap up to 0.23 px (user 2026-10-02).
+  emit_scaled("tile-radius", configManager.getConfig().tile_radius);
   html += "--radius-preview-scale:";
   html += String(static_cast<double>(preview_cell_h_px()) / GRID_CELL_H, 8);
   html += ";--tile-radius-device:";

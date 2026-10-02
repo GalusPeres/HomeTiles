@@ -94,8 +94,9 @@ int main(){
  std::cout<<"DISC "<<tile_icon_disc::inset()<<" "<<header.disc<<"\n";
  // The tile radius slider ends and what the preview gets for them; the card
  // and the disc take the radius with the half-height rule (radius()).
- std::cout<<"RADII "<<tile_radius::kMinimum<<" "<<tile_radius::kMaximum<<" "<<preview_scaled_exact_px(tile_radius::kMinimum)
-  <<" "<<preview_scaled_exact_px(tile_radius::kMaximum)<<" "<<tile_radius::kMinimum-tile_layout::scale_480(22)<<"\n";
+ // (unrounded, like emit_scaled).
+ std::cout<<"RADII "<<tile_radius::kMinimum<<" "<<tile_radius::kMaximum<<" "<<tile_radius::kMinimum*preview_cell_h_px()/double(GRID_CELL_H)
+  <<" "<<tile_radius::kMaximum*preview_cell_h_px()/double(GRID_CELL_H)<<" "<<tile_radius::kMinimum-tile_layout::scale_480(22)<<"\n";
  for(float span_w:{1.f,1.5f,2.f})for(int choice:{0,2,3,5})for(int with_value:{1,0}){
   if(!with_value&&choice)continue;
   Tile tile;tile.span_w=span_w;tile.sensor_value_font=static_cast<uint8_t>(choice);
@@ -202,7 +203,9 @@ function checkCornerDiscPixels(profile, vars, scale, cellW, cellH, gap, inset, d
     for (const [name, shown, device, tolerance] of [
       ['left gap', (rowDisc - rowCard) / dpr, insetPx, 0.15],
       ['top gap', (colDisc - colCard) / dpr, insetPx, 0.15],
-      // The preview card radius is rounded to whole pixels (emit_exact).
+      // Chrome rasterizes the card's rounded clip and the disc's curve with
+      // up to 0.23 px between them on the diagonal; a cut or shifted disc
+      // is off by far more (b198: 0.73 instead of 2.17 px on the 4B).
       ['corner gap', (diagDisc - diagCard) * Math.SQRT2 / dpr, diagonal, 0.3]]) {
       report.push(`${label} disc ${name}: ${shown.toFixed(2)} (device ${device.toFixed(2)})`);
       if (!(Math.abs(shown - device) <= tolerance)) failures.push(`${label} disc ${name} ${shown.toFixed(2)} vs device ${device.toFixed(2)}`);

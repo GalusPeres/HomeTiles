@@ -5,6 +5,7 @@
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/shared/tone_color.h"
 #include "src/ui/shared/ui_pulse.h"
+#include "src/ui/shared/icon_lock_mark.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include <esp_heap_caps.h>
 #include <lvgl_private.h>
@@ -153,8 +154,37 @@ void stop_icon_pulse() {
   lv_obj_set_style_opa(shell.icon, LV_OPA_COVER, 0);
 }
 
+// popup_shell_icon_lock: the header icon of a PIN-protected Folder or
+// Settings carries the lock of its tile (icon_lock_mark.h); the rim takes the
+// header disc over the popup card.
+void header_lock_event_cb(lv_event_t* event) {
+  lv_obj_t* icon = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
+  if (lv_event_get_code(event) == LV_EVENT_REFR_EXT_DRAW_SIZE) {
+    icon_lock_mark::ext_draw_size(event, icon);
+    return;
+  }
+  if (lv_event_get_code(event) != LV_EVENT_DRAW_POST || !shell.active) return;
+  const lv_color_t under = lv_obj_get_style_bg_color(shell.active->body, LV_PART_MAIN);
+  icon_lock_mark::draw(lv_event_get_layer(event), icon, icon_lock_mark::behind(shell.icon_disc, under));
+}
+
+void set_header_lock(bool on) {
+  if (!shell.icon) return;
+  bool had = false;
+  while (lv_obj_remove_event_cb(shell.icon, header_lock_event_cb)) had = true;
+  if (!on && !had) return;
+  lv_obj_invalidate(shell.icon);
+  if (on) {
+    lv_obj_add_event_cb(shell.icon, header_lock_event_cb, LV_EVENT_DRAW_POST, nullptr);
+    lv_obj_add_event_cb(shell.icon, header_lock_event_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr);
+  }
+  lv_obj_refresh_ext_draw_size(shell.icon);
+  lv_obj_invalidate(shell.icon);
+}
+
 void detach() {
   stop_icon_pulse();
+  set_header_lock(false);
   auto* binding = shell.active;
   shell.active = nullptr;
   if (!binding) return;
@@ -504,6 +534,11 @@ void popup_shell_pulse_icon(lv_obj_t* body, bool on) {
   // A refresh keeps a running pulse instead of restarting it.
   if (lv_anim_get(shell.icon, icon_pulse_exec)) return;
   ui_pulse::start(shell.icon, icon_pulse_exec);
+}
+
+void popup_shell_icon_lock(lv_obj_t* body, bool on) {
+  if (!shell.active || shell.active->body != body) return;
+  set_header_lock(on);
 }
 
 void popup_shell_hold_close_fill(bool hold) { g_hold_close_fill = hold; }

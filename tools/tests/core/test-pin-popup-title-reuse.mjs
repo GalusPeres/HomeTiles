@@ -88,6 +88,8 @@ ${stripIncludes(read('src/ui/popups/popup_open.h'))}
 ${stripIncludes(read('src/ui/popups/popup_shell.h'))}
 ${stripIncludes(read('src/ui/popups/popup_open.cpp'))}
 ${stripIncludes(read('src/ui/shared/ui_pulse.h'))}
+${stripIncludes(read('src/tiles/icons/mdi_bar_icons.h'))}
+${stripIncludes(read('src/ui/shared/icon_lock_mark.h'))}
 ${stripIncludes(read('src/ui/popups/popup_shell.cpp'))}
 ${stripIncludes(read('src/ui/popups/popup_nav_style.h'))}
 ${stripIncludes(read('src/core/config/pin_access.h'))}

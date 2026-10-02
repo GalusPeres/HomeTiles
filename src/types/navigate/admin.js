@@ -171,6 +171,8 @@ function normalizeIconName(value) {
         tile.folder_pin = storedPin;
       }
       if (tileEl) tileEl.dataset.folderPinEnabled = enabled ? '1' : '0';
+      // The tile shows the lock of a protected Folder (previewTileLocked).
+      if (typeof updateTilePreview === 'function') updateTilePreview(tab);
       syncFolderPinControls(tab);
       if (status) status.textContent = navigateText('folderPinSaved');
       showNotification(navigateText('folderPinSaved'));

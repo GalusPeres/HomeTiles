@@ -28,6 +28,9 @@ struct PinPopupInit {
   // more-info dialog.
   bool back = false;
   PinPopupDismissedCallback dismissed = nullptr;
+  // A PIN-protected Folder or Settings: the header icon carries the lock of
+  // its tile (popup_shell_icon_lock).
+  bool lock_mark = false;
 };
 
 void show_pin_popup(const PinPopupInit& init);

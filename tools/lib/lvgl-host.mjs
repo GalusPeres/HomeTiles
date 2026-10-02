@@ -21,7 +21,7 @@ export async function lvglHost(root) {
   signature.update(spawnSync(cc, ['--version']).stdout);
   const out = path.join(root, 'build/tests/lvgl-host', signature.digest('hex').slice(0, 16));
   fs.mkdirSync(out, {recursive: true});
-  const fonts = walk(path.join(root, 'src/fonts')).filter(p => /(?:ui_(font_(12|14|16|20|24|28|32|40|cyrillic_12|cyrillic_14|cyrillic_16|cyrillic_20|cyrillic_24)|symbols_(20|24))|mdi_icons_(32|40|48)|mdi_bar_icons_(22|26|34)|weather_icons_(32|40|48))\.c$/.test(p));
+  const fonts = walk(path.join(root, 'src/fonts')).filter(p => /(?:ui_(font_(12|14|16|20|24|28|32|40|cyrillic_12|cyrillic_14|cyrillic_16|cyrillic_20|cyrillic_24)|symbols_(20|24))|mdi_icons_(32|40|48)|mdi_bar_icons_(18|22|26|34)|weather_icons_(32|40|48))\.c$/.test(p));
   const objects = [], pending = [];
   for (const file of [...sources.filter(p => p.endsWith('.c')), ...fonts]) {
     const digest = crypto.createHash('sha256').update(file).update(fs.readFileSync(file)).digest('hex');

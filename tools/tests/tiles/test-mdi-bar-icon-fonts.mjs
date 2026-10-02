@@ -11,7 +11,7 @@ import {BAR_ICONS, SIZES, barIconCodepoints, rangeText} from '../../generate-mdi
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 
-assert.deepEqual(SIZES, [22, 26, 34]);
+assert.deepEqual(SIZES, [18, 22, 26, 34]);
 for (const name of ['lock', 'lock-open-variant', 'lock-clock', 'home', 'moon-waning-crescent', 'airplane',
   'shield', 'shield-off', 'fan', 'fan-off']) {
   assert.ok(BAR_ICONS.includes(name), `bar icon ${name}`);
@@ -32,8 +32,8 @@ for (const size of SIZES) {
 }
 
 const header = read('src/tiles/icons/mdi_bar_icons.h');
-assert.match(header, /extern "C" \{\s*#endif\s*LV_FONT_DECLARE\(mdi_bar_icons_22\);\s*LV_FONT_DECLARE\(mdi_bar_icons_26\);\s*LV_FONT_DECLARE\(mdi_bar_icons_34\);/);
+assert.match(header, /extern "C" \{\s*#endif\s*LV_FONT_DECLARE\(mdi_bar_icons_18\);\s*LV_FONT_DECLARE\(mdi_bar_icons_22\);\s*LV_FONT_DECLARE\(mdi_bar_icons_26\);\s*LV_FONT_DECLARE\(mdi_bar_icons_34\);/);
 assert.match(header, /inline const lv_font_t\* for_bar\(int base\)/);
 assert.match(header, /const int want = base \* 45 \/ 100;/);
-assert.match(read('tools/lib/lvgl-host.mjs'), /mdi_bar_icons_\(22\|26\|34\)/);
-console.log('Bar icon fonts: exactly the bar icons at 22/26/34 px, declared with C linkage');
+assert.match(read('tools/lib/lvgl-host.mjs'), /mdi_bar_icons_\(18\|22\|26\|34\)/);
+console.log('Bar icon fonts: exactly the bar icons at 18/22/26/34 px, declared with C linkage');

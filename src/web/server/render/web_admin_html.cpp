@@ -581,9 +581,16 @@ static void appendTileTabHTML(
     html += String(tile.icon_disc_mode);
     html += "\" data-icon-glow=\"";
     html += tile.icon_glow ? "1" : "0";
+    // A PIN-protected Folder or Settings tile shows a lock in its icon
+    // (navigate renderer, previewTileLocked in the browser).
+    const bool tile_locked =
+        (tile.type == TILE_SETTINGS && configManager.getConfig().settings_pin_enabled) ||
+        (tile.type == TILE_FOLDER && tileConfig.isFolderPinEnabled(getNavigateTargetId(tile)));
     if (tile.type == TILE_FOLDER) {
       html += "\" data-navigate-target=\"";
       html += String(getNavigateTargetId(tile));
+      html += "\" data-folder-pin-enabled=\"";
+      html += tile_locked ? "1" : "0";
     }
     html += "\" draggable=\"true\" id=\"";
     html += tab_id;
@@ -634,6 +641,9 @@ static void appendTileTabHTML(
         }
       }
 
+      // Without an own icon a protected tile shows the lock as its icon.
+      const bool lock_is_icon = tile_locked && !iconName.length();
+      if (lock_is_icon) iconName = "lock";
       bool hasIcon = iconName.length() > 0;
 
       if (hasIcon) {
@@ -654,7 +664,11 @@ static void appendTileTabHTML(
           html += color_hex;
           html += "\"";
         }
-        html += "></i>";
+        html += ">";
+        if (tile_locked && !lock_is_icon) {
+          html += "<span class=\"tile-icon-lock mdi mdi-lock\" aria-hidden=\"true\"></span>";
+        }
+        html += "</i>";
       }
 
       // Show a title only when one is configured.

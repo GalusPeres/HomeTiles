@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // Generates the small MDI icon fonts of the tile bars:
-//   src/fonts/mdi_bar_icons_<22|26|34>.c
+//   src/fonts/mdi_bar_icons_<18|22|26|34>.c
 // The bars of the Lock, Alarm and Fan tiles show a few fixed icons at about
 // 45 % of the one-row bar height, much smaller than the tile's own icon
 // (FONT_MDI_ICONS, one size per layout). Scaling a label with an LVGL
 // transform draws it through a layer on every frame, so these fonts carry
 // only the bar icons at the sizes the bars need: 22 (S3 bar 53 px), 26 (V2
-// and the 1024x600 panels, 61-62 px) and 34 (Tab5 and 4B, 79 px). Same
+// and the 1024x600 panels, 61-62 px) and 34 (Tab5 and 4B, 79 px). The lock
+// of PIN-protected folders and Settings (icon_lock_mark.h) takes about 56 %
+// of the tile icon: 18 for the 32 px icons of the 480x480 panels, 22 for 40
+// and 26 for 48. Same
 // converter and MDI release as generate-mdi-fonts.ps1 (lv_font_conv 1.5.3,
 // @mdi/font 7.4.47).
 import fs from 'node:fs';
@@ -25,7 +28,7 @@ export const BAR_ICONS = [
   'home', 'lock', 'moon-waning-crescent', 'airplane', 'shield', 'shield-off',
   'fan', 'fan-off',
 ].filter((name, i, all) => all.indexOf(name) === i);
-export const SIZES = [22, 26, 34];
+export const SIZES = [18, 22, 26, 34];
 
 // The codepoints of BAR_ICONS from the firmware's own MDI name table.
 export function barIconCodepoints() {

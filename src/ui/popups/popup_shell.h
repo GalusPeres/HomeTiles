@@ -65,6 +65,11 @@ void popup_shell_control_raised_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_co
 // popup showing `body` is the active one. Another popup stops it.
 void popup_shell_pulse_icon(lv_obj_t* body, bool on);
 
+// A PIN-protected Folder or Settings: the shared header icon carries the lock
+// of its tile (icon_lock_mark.h) while the popup showing `body` is the active
+// one. Another popup removes it.
+void popup_shell_icon_lock(lv_obj_t* body, bool on);
+
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.
 void register_popup_background(lv_obj_t* root);

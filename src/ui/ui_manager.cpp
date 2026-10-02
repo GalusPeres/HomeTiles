@@ -446,6 +446,7 @@ void UIManager::requestSettingsAccess(const String& title,
   init.title = source_title;
   init.icon_name = icon_name.length() ? icon_name : String("cog");
   init.bg_color = bg_color;
+  init.lock_mark = true;
   init.verify = verify_pending_access;
   init.success = complete_pending_access;
   init.context = this;
@@ -470,6 +471,7 @@ void UIManager::requestFolderAccess(uint16_t folder_id, const String& title,
   init.icon_name = icon_name.length() ? icon_name : String("folder");
   init.bg_color = bg_color;
   init.icon_color = icon_color;
+  init.lock_mark = true;
   init.hide_on_success = false;
   init.verify = verify_pending_access;
   init.success = complete_pending_access;

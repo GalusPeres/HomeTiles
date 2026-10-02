@@ -419,6 +419,7 @@ void show_pin_popup(const PinPopupInit& init) {
     arm_auto_close_timer(g_ctx);
     show_popup_shell(g_ctx->overlay, g_ctx->card, g_ctx->title_label, g_ctx->icon_label, g_ctx->close_button,
                      nullptr, g_ctx->state_label);
+    popup_shell_icon_lock(g_ctx->card, init.lock_mark);
     return;
   }
 
@@ -455,6 +456,7 @@ void show_pin_popup(const PinPopupInit& init) {
   arm_auto_close_timer(ctx);
   show_popup_shell(g_ctx->overlay, g_ctx->card, g_ctx->title_label, g_ctx->icon_label, g_ctx->close_button,
                    nullptr, g_ctx->state_label);
+  popup_shell_icon_lock(g_ctx->card, init.lock_mark);
 }
 
 void preload_pin_popup() {

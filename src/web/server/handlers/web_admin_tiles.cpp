@@ -1299,6 +1299,7 @@ void WebAdminServer::handleSaveFolderAccess() {
   }
 
   const uint16_t folder_id = static_cast<uint16_t>(requested_id);
+  const bool was_enabled = tileConfig.isFolderPinEnabled(folder_id);
   const bool enable = server.hasArg("enabled") &&
                       server.arg("enabled") != "0";
   bool success = false;
@@ -1323,6 +1324,9 @@ void WebAdminServer::handleSaveFolderAccess() {
     sendError(500, tr.folder_pin_save_failed);
     return;
   }
+  // The Folder tiles show a lock while the PIN is on (navigate renderer);
+  // rebuild them in the loop, never inside the WebServer callback.
+  if (tileConfig.isFolderPinEnabled(folder_id) != was_enabled) tiles_request_reload_all();
   String json = "{\"success\":true,\"pin_enabled\":";
   json += tileConfig.isFolderPinEnabled(folder_id) ? "true" : "false";
   json += ",\"folder_pin\":\"";

@@ -183,6 +183,9 @@
     }
 
     let html = '';
+    const locked = typeof previewTileLocked === 'function' && previewTileLocked(type, tileElem);
+    const lockIsIcon = locked && !iconName;
+    if (lockIsIcon) iconName = 'lock';
 
     if (iconName) {
       const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
@@ -197,7 +200,8 @@
                 ? binarySensorPreviewColor(binarySensorPreviewState)
                 : ''))));
       const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
-      html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
+      html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
+        (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';
     }
 
     let displayTitle = title;

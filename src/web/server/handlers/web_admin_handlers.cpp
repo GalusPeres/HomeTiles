@@ -407,7 +407,9 @@ void WebAdminServer::handleSaveMQTT() {
       uiManager.scheduleNtpSync(0);
       // Reload grids in the loop, never inside the WebServer callback.
       tiles_request_reload_all();
-    } else if (settings_visibility_commit_needed) {
+    } else if (settings_visibility_commit_needed ||
+               cfg.settings_pin_enabled != previous_cfg.settings_pin_enabled) {
+      // A Settings PIN shows a lock on the Settings tile (navigate renderer).
       tiles_request_reload_all();
     }
     if (settings_gesture_changed) {

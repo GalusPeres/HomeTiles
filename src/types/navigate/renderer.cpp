@@ -8,6 +8,8 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/ui/ui_manager.h"
+#include "src/ui/shared/icon_lock_mark.h"
+#include "src/core/config/config_manager.h"
 #include <Arduino.h>
 
 struct NavigateEventData {
@@ -20,6 +22,27 @@ struct NavigateEventData {
 
 static uint16_t navFolderIdFromTile(const Tile& tile) {
   return static_cast<uint16_t>((static_cast<uint16_t>(tile.key_modifier) << 8) | tile.key_code);
+}
+
+// A PIN-protected Folder or Settings tile shows a lock in its icon
+// (icon_lock_mark.h, user 2026-10-02); the rim takes the icon's disc over the
+// tile card. Half-height icons sit inside their disc, taller ones above it.
+static void lock_mark_event_cb(lv_event_t* event) {
+  lv_obj_t* icon = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
+  if (lv_event_get_code(event) == LV_EVENT_REFR_EXT_DRAW_SIZE) {
+    icon_lock_mark::ext_draw_size(event, icon);
+    return;
+  }
+  if (lv_event_get_code(event) != LV_EVENT_DRAW_POST) return;
+  lv_obj_t* disc = tile_icon_disc::disc_of(icon);
+  lv_obj_t* card = lv_obj_get_parent(disc ? disc : icon);
+  const lv_color_t under = card ? lv_obj_get_style_bg_color(card, LV_PART_MAIN) : lv_color_black();
+  icon_lock_mark::draw(lv_event_get_layer(event), icon, icon_lock_mark::behind(disc, under));
+}
+
+static bool navigate_tile_locked(const Tile& tile) {
+  if (tile.type == TILE_SETTINGS) return configManager.getConfig().settings_pin_enabled;
+  return tile.type == TILE_FOLDER && tileConfig.isFolderPinEnabled(navFolderIdFromTile(tile));
 }
 
 lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index) {
@@ -67,6 +90,13 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
     iconChar = getMdiChar(tile.icon_name);
   }
   bool has_icon = iconChar.length() > 0;
+  // Without an own icon a protected tile shows the lock as its icon.
+  const bool locked = navigate_tile_locked(tile);
+  const bool lock_is_icon = locked && !has_icon && FONT_MDI_ICONS != nullptr;
+  if (lock_is_icon) {
+    iconChar = getMdiChar("lock");
+    has_icon = iconChar.length() > 0;
+  }
   bool has_title = tile.title.length() > 0;
   // A half-height navigation tile uses the half-height Sensor header: the
   // icon in the concentric corner disc and the title, if any, beside it.
@@ -112,6 +142,11 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
     }
   }
   if (compact) compact_sensor_layout::apply(btn, icon_lbl, title_lbl, nullptr, tile);
+  if (locked && !lock_is_icon && icon_lbl) {
+    lv_obj_add_event_cb(icon_lbl, lock_mark_event_cb, LV_EVENT_DRAW_POST, nullptr);
+    lv_obj_add_event_cb(icon_lbl, lock_mark_event_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr);
+    lv_obj_refresh_ext_draw_size(icon_lbl);
+  }
 
   // Event handler for tab navigation.
   static constexpr uint8_t NAV_KIND_FOLDER = 0;

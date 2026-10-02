@@ -6075,6 +6075,9 @@ function syncTileRadiusControls(tabEl) {
     }
 
     let html = '';
+    const locked = typeof previewTileLocked === 'function' && previewTileLocked(type, tileElem);
+    const lockIsIcon = locked && !iconName;
+    if (lockIsIcon) iconName = 'lock';
 
     if (iconName) {
       const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
@@ -6089,7 +6092,8 @@ function syncTileRadiusControls(tabEl) {
                 ? binarySensorPreviewColor(binarySensorPreviewState)
                 : ''))));
       const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
-      html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
+      html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
+        (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';
     }
 
     let displayTitle = title;
@@ -7420,6 +7424,18 @@ function syncTileRadiusControls(tabEl) {
   }
   // Default tile color "From icon" strength (tile_icon_colors::kTintDefault).
   const ICON_FILL_DEFAULT = 20;
+  // A PIN-protected Folder or Settings tile shows a lock in its icon
+  // (navigate renderer, icon_lock_mark.h); without an own icon the lock is
+  // the icon. Folders follow their target's stored PIN (data-folder-pin-enabled),
+  // Settings the stored Settings PIN.
+  function previewTileLocked(typeValue, tileElem) {
+    if (String(typeValue) === '7') {
+      return document.getElementById('folder0_settings_pin_enabled')?.dataset.pinConfigured === '1';
+    }
+    return String(typeValue) === '4' && tileElem?.dataset.folderPinEnabled === '1';
+  }
+  const PREVIEW_LOCK_MARK = '<span class="tile-icon-lock mdi mdi-lock" aria-hidden="true"></span>';
+
   function applyIconDiscTint(tileElem) {
     const icon = tileElem?.querySelector(':scope > .tile-icon');
     if (!icon) return;
@@ -7486,6 +7502,13 @@ function syncTileRadiusControls(tabEl) {
     const tone = toneFill(circleCard, given || [255, 255, 255], tinted, glowPct, seeThrough);
     const rgba = (color, opa) => 'rgba(' + color.join(',') + ',' + (opa / 255).toFixed(3) + ')';
     tileElem.style.setProperty('--icon-disc-bg', rgba(tone.discColor, tone.discOpa));
+    // Mirrors icon_lock_mark::behind(): the lock's rim takes the circle over
+    // the card, or the card when the circle is off.
+    const discShown = tileElem.dataset.iconDisc === '1' ||
+      (tileElem.dataset.iconDisc !== '2' && !tileElem.closest('.icon-discs-off'));
+    const discAlpha = discShown ? tone.discOpa / 255 : 0;
+    const lockRim = card.map((c, i) => Math.round(c * (1 - discAlpha) + tone.discColor[i] * discAlpha));
+    tileElem.style.setProperty('--icon-lock-rim', 'rgb(' + lockRim.join(',') + ')');
     // Mirrors tile_icon_source::refresh_controls(): tile controls (the
     // Climate target pill, Media buttons, the Switch bar) take the circle's
     // color whenever it is tinted, in every tile color; else the neutral step.
@@ -7740,8 +7763,13 @@ function syncTileRadiusControls(tabEl) {
     el.dataset.iconGlow = ['0', 'false'].includes(String(tile?.icon_glow)) ? '0' : '1';
     el.classList.toggle('tile-border-hidden', ['8','9','10'].includes(typeValue) && Number(tile.sensor_display_mode) === 1);
     applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
-    if (typeValue === '4') el.dataset.navigateTarget = String(tile.navigate_target || 0);
-    else delete el.dataset.navigateTarget;
+    if (typeValue === '4') {
+      el.dataset.navigateTarget = String(tile.navigate_target || 0);
+      el.dataset.folderPinEnabled = tile.folder_pin_enabled === true ? '1' : '0';
+    } else {
+      delete el.dataset.navigateTarget;
+      delete el.dataset.folderPinEnabled;
+    }
     if (typeValue === '0') el.style.background = 'transparent';
     else {
       const isDefaultBg = tileBgFollowsDefault(tile.bg_color);
@@ -7816,6 +7844,9 @@ function syncTileRadiusControls(tabEl) {
       }
 
       let html = '';
+      const locked = typeof previewTileLocked === 'function' && previewTileLocked(typeValue, el);
+      const lockIsIcon = locked && !iconName;
+      if (lockIsIcon) iconName = 'lock';
 
       if (iconName) {
         const iconColor = previewIconColor(typeValue, tile.icon_colors, tile.sensor_entity || '',
@@ -7829,7 +7860,8 @@ function syncTileRadiusControls(tabEl) {
                   ? binarySensorPreviewColor(binarySensorPreviewState)
                   : ''))));
         const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
-        html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '></i>';
+        html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
+          (locked && !lockIsIcon ? PREVIEW_LOCK_MARK : '') + '</i>';
       }
 
       let displayTitle = tile.title || '';
@@ -11016,6 +11048,8 @@ function normalizeIconName(value) {
         tile.folder_pin = storedPin;
       }
       if (tileEl) tileEl.dataset.folderPinEnabled = enabled ? '1' : '0';
+      // The tile shows the lock of a protected Folder (previewTileLocked).
+      if (typeof updateTilePreview === 'function') updateTilePreview(tab);
       syncFolderPinControls(tab);
       if (status) status.textContent = navigateText('folderPinSaved');
       showNotification(navigateText('folderPinSaved'));

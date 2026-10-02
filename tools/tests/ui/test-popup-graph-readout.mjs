@@ -263,6 +263,8 @@ ${strip(read('src/ui/popups/popup_open.h'))}
 ${strip(read('src/ui/popups/popup_shell.h'))}
 ${strip(read('src/ui/popups/popup_open.cpp'))}
 ${strip(read('src/ui/shared/ui_pulse.h'))}
+${strip(read('src/tiles/icons/mdi_bar_icons.h'))}
+${strip(read('src/ui/shared/icon_lock_mark.h'))}
 ${strip(read('src/ui/popups/popup_shell.cpp'))}
 ${strip(read('src/ui/popups/energy/energy_popup.h'))}
 ${strip(read('src/ui/popups/energy/energy_popup.cpp'))}

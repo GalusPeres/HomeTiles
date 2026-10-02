@@ -80,21 +80,25 @@ assert.ok(flush.includes('clearDraft(tab,index);') && !flush.includes('saveTile(
 const load = extractDeliveredFunction('loadSensorValues');
 assert.equal(load.split('dragSource||resizeState||settingsTileTransfersInFlight').length - 1, 2);
 
-// The panel shows a parked or restored Settings tile before the flash write,
-// like a tile reorder, and then rebuilds only the Home grid's hidden caches
-// instead of every grid.
+// The panel shows a parked or restored Settings tile before any flash write
+// (NVS and grid file), like a tile reorder, and then rebuilds only the Home
+// grid's hidden caches instead of every grid. A failed config save draws the
+// stored Home grid back.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 const tileConfig = read('src/tiles/config/tile_config.cpp');
-const visible = tileConfig.slice(tileConfig.indexOf('SettingsTileVisibilityResult TileConfig::setSettingsTileVisible('));
-assert.ok(visible.indexOf('if (changed && show) show(grid);') >= 0 &&
-  visible.indexOf('if (changed && show) show(grid);') < visible.indexOf('saveGridInPlace(kRootFolderId, grid, false)'));
+const previewFn = tileConfig.slice(tileConfig.indexOf('bool TileConfig::previewSettingsTileVisible('));
+assert.ok(previewFn.slice(0, 400).includes('TileGridConfig& grid = activeGrid();') &&
+  previewFn.slice(0, 400).includes('? ensureSettingsTile(grid, target_col, target_row)') &&
+  previewFn.slice(0, 400).includes(': removeSettingsTiles(grid);'));
 const handlers = read('src/web/server/handlers/web_admin_handlers.cpp');
-assert.ok(handlers.includes('tileConfig.previewActiveFolderGrid(kHomeFolderId, grid) &&\n      tiles_show_active_layout_now();'));
-assert.ok(handlers.includes('settings_tile_target_row, show_settings_tile_now);'));
+const shown = handlers.indexOf('settings_tile_previewed && tiles_show_active_layout_now();');
+assert.ok(handlers.includes('tileConfig.previewSettingsTileVisible(!cfg.settings_tile_hidden,') && shown >= 0);
+assert.ok(shown < handlers.indexOf('settings_config_saved = configManager.save(cfg);'), 'shown before the NVS write');
 const after = handlers.slice(handlers.indexOf('} else if (settings_visibility_commit_needed) {'));
 assert.ok(after.startsWith('} else if (settings_visibility_commit_needed) {') &&
   after.slice(0, 500).includes('tiles_invalidate_folder_only(kHomeFolderId);') &&
-  after.slice(0, 500).includes('if (!g_settings_tile_shown_now &&') &&
+  after.slice(0, 500).includes('if (!settings_tile_shown_now &&') &&
   !after.slice(0, 500).includes('tiles_request_reload_all();'));
+assert.ok(/if \(settings_tile_previewed\) \{[^}]*tileConfig\.setSettingsTileVisible\(!previous_cfg\.settings_tile_hidden\);\s+tiles_request_reload\(GridType::TAB0\);/.test(handlers));
 
 console.log('Settings parking: moves show at once, queue, and the device state follows');

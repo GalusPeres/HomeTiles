@@ -3320,9 +3320,16 @@ bool TileConfig::getSettingsTile(Tile& out) {
   return false;
 }
 
+bool TileConfig::previewSettingsTileVisible(bool visible, float target_col,
+                                            float target_row) {
+  if (active_folder_id != kRootFolderId) return false;
+  TileGridConfig& grid = activeGrid();
+  return visible ? ensureSettingsTile(grid, target_col, target_row)
+                 : removeSettingsTiles(grid);
+}
+
 SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
-    bool visible, float target_col, float target_row,
-    void (*show)(const TileGridConfig&)) {
+    bool visible, float target_col, float target_row) {
   TileGridConfig grid{};
   if (!loadGrid(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
@@ -3347,7 +3354,6 @@ SettingsTileVisibilityResult TileConfig::setSettingsTileVisible(
     changed = removeSettingsTiles(grid);
   }
 
-  if (changed && show) show(grid);
   if (changed && !saveGridInPlace(kRootFolderId, grid, false)) {
     return SettingsTileVisibilityResult::StorageError;
   }

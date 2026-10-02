@@ -25,23 +25,11 @@ using namespace web_admin_handlers;
 namespace {
 
 constexpr uint16_t kHomeFolderId = 0;
-// Whether show_settings_tile_now drew the Home grid during the current
-// access save (WebServer handlers run in the loop task).
-bool g_settings_tile_shown_now = false;
-
-// Shows the Home grid with the Settings tile parked or restored before it is
-// written to flash, like a tile reorder (user 2026-10-02: the panel showed
-// the move only after the flash writes and a rebuild of every grid).
-void show_settings_tile_now(const TileGridConfig& grid) {
-  g_settings_tile_shown_now =
-      !powerManager.isInSleep() &&
-      tileConfig.previewActiveFolderGrid(kHomeFolderId, grid) &&
-      tiles_show_active_layout_now();
-}
 
 }  // namespace
 
 void WebAdminServer::handleSaveMQTT() {
+  const uint32_t request_started_ms = millis();
   const bool ajax_save =
       server.hasArg("_ajax") && server.arg("_ajax") == "1";
   const bool access_only =
@@ -379,7 +367,19 @@ void WebAdminServer::handleSaveMQTT() {
   bool settings_config_rolled_back = false;
   SettingsTileVisibilityResult settings_visibility_reconcile =
       SettingsTileVisibilityResult::Success;
-  g_settings_tile_shown_now = false;
+  // Like a tile reorder, the visible Home grid shows the parked or restored
+  // Settings tile before any flash write; NVS and the grid file follow (user
+  // 2026-10-02: the panel showed it only after both writes and a rebuild of
+  // every grid).
+  const uint32_t show_started_ms = millis();
+  const bool settings_tile_previewed =
+      settings_visibility_commit_needed && !powerManager.isInSleep() &&
+      tileConfig.previewSettingsTileVisible(!cfg.settings_tile_hidden,
+                                            settings_tile_target_col,
+                                            settings_tile_target_row);
+  const bool settings_tile_shown_now =
+      settings_tile_previewed && tiles_show_active_layout_now();
+  const uint32_t save_started_ms = millis();
   auto commit_settings = [&]() {
     settings_config_saved = configManager.save(cfg);
     if (!settings_config_saved || !settings_visibility_commit_needed) return;
@@ -387,7 +387,7 @@ void WebAdminServer::handleSaveMQTT() {
     const SettingsTileVisibilityResult visibility =
         tileConfig.setSettingsTileVisible(
             !cfg.settings_tile_hidden, settings_tile_target_col,
-            settings_tile_target_row, show_settings_tile_now);
+            settings_tile_target_row);
     if (visibility == SettingsTileVisibilityResult::Success) return;
 
     settings_visibility_commit_failed = true;
@@ -410,6 +410,16 @@ void WebAdminServer::handleSaveMQTT() {
 #else
   commit_settings();
 #endif
+  if (settings_visibility_commit_needed) {
+    // Like the reorder log: where a Settings parking move spends its time.
+    const uint32_t saved_ms = millis();
+    Serial.printf("[WebAdmin] Settings tile %s shown=%u parse=%lu ms show=%lu ms save=%lu ms\n",
+                  cfg.settings_tile_hidden ? "parked" : "restored",
+                  settings_tile_shown_now ? 1U : 0U,
+                  static_cast<unsigned long>(show_started_ms - request_started_ms),
+                  static_cast<unsigned long>(save_started_ms - show_started_ms),
+                  static_cast<unsigned long>(saved_ms - save_started_ms));
+  }
 
   if (settings_config_saved) {
     if (settings_visibility_commit_failed) {
@@ -433,9 +443,9 @@ void WebAdminServer::handleSaveMQTT() {
       tiles_request_reload_all();
     } else if (settings_visibility_commit_needed) {
       // Only the Home grid changed, like a reorder: drop its hidden caches and
-      // rebuild it only when show_settings_tile_now could not draw it.
+      // rebuild it only when it could not be shown before the writes.
       tiles_invalidate_folder_only(kHomeFolderId);
-      if (!g_settings_tile_shown_now &&
+      if (!settings_tile_shown_now &&
           tileConfig.getActiveFolderId() == kHomeFolderId) {
         tiles_request_reload_if_loaded(GridType::TAB0);
       }
@@ -466,6 +476,11 @@ void WebAdminServer::handleSaveMQTT() {
     // browser response or restarting the device.
     if (!access_only) networkManager.requestMqttReconfigure();
   } else {
+    if (settings_tile_previewed) {
+      // Nothing was written: the Home grid goes back to the stored one.
+      tileConfig.setSettingsTileVisible(!previous_cfg.settings_tile_hidden);
+      tiles_request_reload(GridType::TAB0);
+    }
     const auto& tr = i18n::strings(cfg.language);
     if (ajax_save) {
       sendSaveError(500, tr.save_failed);

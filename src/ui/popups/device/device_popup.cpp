@@ -200,6 +200,21 @@ void control_fill(lv_color_t& fill, lv_opa_t& opa) {
   popup_nav_style::fill(lv_color_hex(pop.card_rgb), lv_color_hex(pop.icon_rgb), fill, opa);
 }
 
+// A pressed control: one control step up, like the PIN keys (user 02.10.:
+// the keys, pills and the switch showed no press at all). A lit control
+// presses a step lighter in its own color.
+void control_pressed(lv_obj_t* obj, bool lit, lv_color_t lit_color) {
+  lv_color_t raised;
+  lv_opa_t opa;
+  popup_nav_style::fill_raised(lv_color_hex(pop.card_rgb), lv_color_hex(pop.icon_rgb), raised, opa);
+  if (lit) {
+    raised = lv_color_hex(brighten_rgb_color(lv_color_to_u32(lit_color) & 0xFFFFFF, 0x10));
+    opa = LV_OPA_COVER;
+  }
+  popup_nav_style::set_bg(obj, raised, opa, LV_PART_MAIN | LV_STATE_PRESSED);
+  popup_nav_style::no_press_filter(obj, LV_PART_MAIN | LV_STATE_PRESSED);
+}
+
 // Opacity 1 -> 0 -> 1 in 1 s for a control's symbol while a command runs,
 // in step with the header icon although a refresh rebuilds the symbol
 // (ui_pulse.h).
@@ -220,8 +235,7 @@ lv_obj_t* pill(int x, int y, int w, int h, const char* icon, const char* label, 
   lv_obj_t* button = make_button(pop.body, x, y, w, h, h / 2);
   lv_obj_set_style_radius(button, h / 2, 0);
   popup_nav_style::set_bg(button, bg, lit ? LV_OPA_COVER : opa, LV_PART_MAIN);
-  popup_nav_style::set_bg(button, bg, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
-  popup_nav_style::no_press_filter(button, LV_PART_MAIN | LV_STATE_PRESSED);
+  control_pressed(button, lit, bg);
   lv_obj_set_flex_flow(button, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(button, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(button, popup_layout::scale(10), 0);
@@ -376,8 +390,10 @@ void build_lock(const Detail& d, const Visual& v) {
     if (!usable) {
       lv_obj_set_style_opa(track, LV_OPA_30, 0);
     } else if (!moving && !sent) {
-      // A tap switches to the other side, like Home Assistant's toggle.
+      // A tap switches to the other side, like Home Assistant's toggle; the
+      // rail shows the press.
       lv_obj_add_flag(track, LV_OBJ_FLAG_CLICKABLE);
+      control_pressed(track, false, rest);
       lv_obj_add_event_cb(track, lock_toggle_tapped, LV_EVENT_CLICKED, nullptr);
     }
   }
@@ -481,8 +497,7 @@ void build_alarm(const Detail& d, const Visual& v) {
     lv_obj_t* key = make_button(pop.body, x, y, wide ? block_w : kw, kh, key_radius);
     const lv_color_t bg = selected ? lv_color_hex(lit) : fill;
     popup_nav_style::set_bg(key, bg, selected ? LV_OPA_COVER : opa, LV_PART_MAIN);
-    popup_nav_style::set_bg(key, bg, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
-    popup_nav_style::no_press_filter(key, LV_PART_MAIN | LV_STATE_PRESSED);
+    control_pressed(key, selected, bg);
     lv_obj_set_flex_flow(key, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(key, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(key, kh / 16, 0);
@@ -930,8 +945,7 @@ void build_fan(const Detail& d) {
   lv_obj_t* power = make_button(pop.body, x, y, nav, nav, nav / 2);
   lv_obj_set_style_radius(power, LV_RADIUS_CIRCLE, 0);
   popup_nav_style::set_bg(power, on ? accent : fill, on ? LV_OPA_COVER : opa, LV_PART_MAIN);
-  popup_nav_style::set_bg(power, on ? accent : fill, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
-  popup_nav_style::no_press_filter(power, LV_PART_MAIN | LV_STATE_PRESSED);
+  control_pressed(power, on, accent);
   lv_obj_t* power_icon = make_icon(power, on ? lv_color_hex(pop.card_rgb) : lv_color_white(), "power");
   lv_obj_center(power_icon);
   const uint32_t power_feature = on ? device_detail::kFanTurnOff : device_detail::kFanTurnOn;
@@ -947,8 +961,7 @@ void build_fan(const Detail& d) {
     // One color for every pill (user 01.10.): the circle fill; the state is
     // only in the value text, and only Power lights up.
     popup_nav_style::set_bg(item, fill, opa, LV_PART_MAIN);
-    popup_nav_style::set_bg(item, fill, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
-    popup_nav_style::no_press_filter(item, LV_PART_MAIN | LV_STATE_PRESSED);
+    control_pressed(item, false, fill);
     lv_obj_set_flex_flow(item, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(item, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     pill_texts(item, pop.pills[i].caption, pop.pills[i].value.c_str(), lv_color_white());

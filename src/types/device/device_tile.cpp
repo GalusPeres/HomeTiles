@@ -61,6 +61,9 @@ struct View {
   const char* button_icons[2] = {"", ""};
   int8_t slots[6] = {};  // Slots: -1 Disarm, else the alarm mode index
   int8_t active = -1;    // Slots: the lit slot
+  // The part under the finger, one control step up while pressed (Buttons,
+  // Slots: its index; the lock's switch: 0); -1 when none.
+  int8_t pressed_part = -1;
   bool bar_pulse = false;
   lv_opa_t pulse_opa = LV_OPA_COVER;
   uint32_t thumb_base = 0;
@@ -168,6 +171,8 @@ uint32_t accent_rgb(const View* view) {
 }
 
 uint32_t button_rgb(uint32_t base) { return tone_color::lifted(base, base, false, 0.04f); }
+// A pressed button: one more control step, like a pressed PIN key.
+uint32_t pressed_button_rgb(uint32_t base) { return tone_color::lifted(base, base, false, 0.08f); }
 
 void bar_draw_cb(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) return;
@@ -193,6 +198,8 @@ void bar_draw_cb(lv_event_t* e) {
                                        : lv_area_t{area.x1, area.y1, area.x1 + half - 1, area.y2};
       lv_color_t thumb_color = accent;
       lv_color_t symbol = card;
+      // A pressed lock switch: the rail one control step up.
+      if (view->pressed_part == 0) level_bar::draw_rect(layer, area, lv_color_hex(button_rgb(base)), radius);
       if (view->thumb_off_look) {
         if (base != view->thumb_base || !view->thumb_off) {
           view->thumb_base = base;
@@ -214,7 +221,9 @@ void bar_draw_cb(lv_event_t* e) {
       for (int32_t i = 0; i < n; ++i) {
         const lv_area_t button = {area.x1 + i * (step + gap), area.y1, area.x1 + i * (step + gap) + step - 1,
                                   area.y2};
-        level_bar::draw_rect(layer, button, lv_color_hex(button_rgb(base)), radius);
+        level_bar::draw_rect(layer, button,
+                             lv_color_hex(i == view->pressed_part ? pressed_button_rgb(base) : button_rgb(base)),
+                             radius);
         draw_glyph(layer, button, view->button_icons[i < 2 ? i : 1], lv_color_white(), LV_OPA_COVER,
                    view->bar_base);
       }
@@ -229,6 +238,8 @@ void bar_draw_cb(lv_event_t* e) {
         const bool lit = i == view->active;
         if (lit) {
           level_bar::draw_rect(layer, slot, accent, radius);
+        } else if (i == view->pressed_part) {
+          level_bar::draw_rect(layer, slot, lv_color_hex(button_rgb(base)), radius);
         }
         const int8_t mode = view->slots[i];
         const char* icon = mode < 0 ? "shield-off" : device_control::alarm_mode(static_cast<size_t>(mode)).icon;
@@ -555,6 +566,25 @@ int32_t bar_x(lv_obj_t* bar, int32_t& width) {
   return std::max<int32_t>(0, std::min<int32_t>(width - 1, point.x - area.x1));
 }
 
+// The part a press on the bar lands on, -1 when the press does nothing there
+// (the lit alarm mode, a mode or the lock while a sent command waits) or the
+// bar shows the touch itself (the Fan's segments and switch move at once).
+int8_t pressed_part_at(const View* view) {
+  if (view->kind != BarKind::Buttons && view->kind != BarKind::Slots &&
+      !(view->kind == BarKind::Toggle && view->type == TILE_LOCK)) {
+    return -1;
+  }
+  const char* target = device_control::pending_target(view->entity);
+  const bool waiting = *target && std::strcmp(target, device_control::detail(view->entity).state) != 0;
+  if (view->kind == BarKind::Toggle) return waiting ? -1 : 0;
+  int32_t width = 1;
+  const int32_t x = bar_x(view->bar, width);
+  const int n = std::max<int>(1, view->count);
+  const int part = std::min(n - 1, static_cast<int>(x * n / std::max<int32_t>(1, width)));
+  if (view->kind == BarKind::Slots && (part == view->active || (waiting && view->slots[part] >= 0))) return -1;
+  return static_cast<int8_t>(part);
+}
+
 void bar_event_cb(lv_event_t* e) {
   View* view = static_cast<View*>(lv_event_get_user_data(e));
   if (!view || !view->bar) return;
@@ -567,7 +597,16 @@ void bar_event_cb(lv_event_t* e) {
     if (code != LV_EVENT_CLICKED) dimmer_event(view, code);
     return;
   }
-  if (code != LV_EVENT_CLICKED) return;
+  // The part under the finger shows the press like a PIN key (user 02.10.:
+  // the bars showed no press); only that part redraws.
+  if (code != LV_EVENT_CLICKED) {
+    const int8_t part = code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING ? pressed_part_at(view) : -1;
+    if (part != view->pressed_part) {
+      view->pressed_part = part;
+      lv_obj_invalidate(view->bar);
+    }
+    return;
+  }
   int32_t width = 1;
   const int32_t x = bar_x(view->bar, width);
   const Detail d = device_control::detail(view->entity);

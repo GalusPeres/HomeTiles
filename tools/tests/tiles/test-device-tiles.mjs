@@ -103,6 +103,19 @@ assert.match(tile, /if \(\*target && std::strcmp\(target, d\.state\) != 0\) retu
 // the icon pulsing; a target that runs out unanswered says so in the popup.
 assert.ok(!tile.includes('thumb_sent'), 'the tile bar draws no sent target');
 assert.ok(!tile.includes('slot_sent'), 'the alarm bar lights no sent mode');
+
+// Every key, pill and switch shows a press one control step up, like the PIN
+// keys (user 02.10.: none showed a press).
+assert.match(popup, /void control_pressed\(lv_obj_t\* obj, bool lit, lv_color_t lit_color\) \{[\s\S]*?popup_nav_style::fill_raised\(/);
+for (const call of ['control_pressed(button, lit, bg);', 'control_pressed(key, selected, bg);',
+                    'control_pressed(power, on, accent);', 'control_pressed(item, false, fill);',
+                    'control_pressed(track, false, rest);']) {
+  assert.ok(popup.includes(call), `device_popup: ${call}`);
+}
+assert.ok(!/set_bg\((?:button|key|power|item), [^;]*LV_STATE_PRESSED\)/.test(popup), 'no press in the rest color');
+assert.match(tile, /int8_t pressed_part_at\(const View\* view\)/);
+assert.match(tile, /i == view->pressed_part \? pressed_button_rgb\(base\) : button_rgb\(base\)/);
+assert.match(tile, /if \(view->pressed_part == 0\) level_bar::draw_rect\(layer, area, lv_color_hex\(button_rgb\(base\)\), radius\);/);
 assert.match(popup, /const char\* shown = d\.state;\s*const uint32_t lit = v\.color;/);
 assert.match(popup, /const bool busy = device_visual::alarm_disarm_only\(d\) \|\| device_detail::is\(d, "disarming"\);/);
 assert.match(popup, /const bool up = device_visual::lock_on\(d\);\s*const uint32_t color = v\.color;/);

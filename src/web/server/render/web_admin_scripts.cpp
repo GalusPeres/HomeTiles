@@ -75,6 +75,9 @@ void appendAdminScripts(String& html) {
   appendJsEntry("importFailed", tr.js_import_failed);
   appendJsEntry("importRunning", tr.js_import_running);
   appendJsEntry("importComplete", tr.js_import_complete);
+  appendJsEntry("importConflict", tr.js_import_conflict);
+  appendJsEntry("importStopped", tr.js_import_stopped);
+  appendJsEntry("importScreensaver", tr.js_import_screensaver);
   appendJsEntry("tileDoesNotFit", tr.js_tile_does_not_fit);
   appendJsEntry("noLayoutFound", tr.js_no_layout_found);
   appendJsEntry("tilesMovedSaved", tr.js_tiles_moved_saved);

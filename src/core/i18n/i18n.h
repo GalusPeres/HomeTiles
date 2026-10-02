@@ -213,6 +213,10 @@ struct Strings {
   const char* js_import_failed;
   const char* js_import_running;
   const char* js_import_complete;
+  // Import checks: {tile} and {folder} are filled in by the page.
+  const char* js_import_conflict;
+  const char* js_import_stopped;
+  const char* js_import_screensaver;
   const char* js_tile_does_not_fit;
   const char* js_no_layout_found;
   const char* js_tiles_moved_saved;

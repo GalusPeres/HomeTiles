@@ -313,13 +313,21 @@ void check_value_alignment(lv_display_t* display) {
  assert(disc.x1-sensor_area.x1==tile_icon_disc::inset()&&"Left gap equals the half-height inset");
  assert(disc.y1-sensor_area.y1==tile_icon_disc::inset()&&"Top gap equals the half-height inset");
  assert(std::abs((disc.x1+disc.x2)-(icon.x1+icon.x2))<=1&&std::abs((disc.y1+disc.y2)-(icon.y1+icon.y2))<=1);
- assert(css.find("--icon-disc-corner:"+std::to_string(preview_scaled_exact_px(lv_area_get_width(&disc)))+"px;")!=std::string::npos&&
-        "The preview header disc has the device size");
+ {
+  // Unrounded, like every corner disc length (the disc sits at the inset).
+  char want[64];snprintf(want,sizeof want,"--icon-disc-corner:%.2fpx;",
+    static_cast<double>(lv_area_get_width(&disc))*preview_cell_h_px()/GRID_CELL_H);
+  assert(css.find(want)!=std::string::npos&&"The preview header disc has the device size");
+ }
  for(const auto& item:std::vector<std::pair<const char*,int>>{
      {"title-top",title.y1-sensor_area.y1},{"title-right",sensor_area.x2-title.x2},
      {"icon-top",icon.y1-sensor_area.y1},{"icon-left",icon.x1-sensor_area.x1}}) {
+  // The icon position is unrounded like the disc; the title stays in whole
+  // preview pixels.
+  const bool icon_item=std::string(item.first).rfind("icon",0)==0;
+  char fraction[32];snprintf(fraction,sizeof fraction,"%.2f",static_cast<double>(item.second)*preview_cell_h_px()/GRID_CELL_H);
   const auto property=std::string("--tile-header-")+item.first+":"+
-      std::to_string(preview_scaled_exact_px(item.second))+"px;";
+      (icon_item?std::string(fraction):std::to_string(preview_scaled_exact_px(item.second)))+"px;";
   assert(css.find(property)!=std::string::npos&&"Preview scale must come from the actual Sensor header");
  }
  for (int width=1;width<=Device::kGridCols;++width) {

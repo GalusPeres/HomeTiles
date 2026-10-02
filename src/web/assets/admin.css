@@ -2762,6 +2762,15 @@
   width:var(--icon-disc-corner, var(--icon-disc-round, 30px));
   height:var(--icon-disc-corner, var(--icon-disc-round, 30px));
 }
+/* The corner disc sits at the half-height inset from the card corner, as
+   tile_icon_disc::add_round places it, not centered on the icon box, whose
+   position and size are rounded to pixels. */
+.tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
+         .cover, .device, .energy, .weather, .media, .climate, .switch-bar):not(.empty):not(.sensor-compact) > .tile-icon::after {
+  left:calc(var(--compact-inset, 2px) - var(--tile-header-icon-left, 6px));
+  top:calc(var(--compact-inset, 2px) - var(--tile-header-icon-top, 8px));
+  transform:none;
+}
 .tile:not(.sensor-compact) > .tile-icon.tile-icon-tinted::after {
   background:var(--icon-disc-bg, color-mix(in srgb, currentColor 25%, transparent));
 }

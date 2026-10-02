@@ -86,10 +86,10 @@ assert.match(addRound, /icon_size\.y, size\)/);
 const styles = read('src/web/server/render/web_admin_styles.cpp');
 for (const marker of [
   'const tile_icon_disc::CornerHeader header = tile_icon_disc::corner_header(',
-  'emit_exact("icon-disc-corner", header.disc);',
+  'emit_scaled("icon-disc-corner", header.disc);',
   'tile_layout::scale_480(24) + tile_layout::scale_480(4) + header.shift);',
-  'emit_exact("tile-header-icon-top", tile_layout::scale_480(24) + header.icon_top);',
-  'emit_exact("tile-header-icon-left", tile_layout::scale_480(20) + header.icon_side);',
+  'emit_scaled("tile-header-icon-top", tile_layout::scale_480(24) + header.icon_top);',
+  'emit_scaled("tile-header-icon-left", tile_layout::scale_480(20) + header.icon_side);',
 ]) assert.ok(styles.includes(marker), `web styles: ${marker}`);
 assert.ok(read('src/web/assets/admin.css').includes(
   '.tile:is(.scene, .navigate, .camera, .switch:not(.switch-bar)):not(.empty):not(.sensor-compact) > .tile-icon::after {'),

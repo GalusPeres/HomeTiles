@@ -232,7 +232,12 @@ const css = readRepoFile('src/web/assets/admin.css').replace(/\r\n/g, '\n')
 
 let checked = 0;
 const failures = [];
-for (const profile of ['guition_jc8012p4a1_v2', 'guition_esp32_4848s040', 'waveshare_7']) {
+// PREVIEW_DEVICE_PROFILES=all checks every device profile (a sweep before a
+// release or after a layout change); the suite runs one per layout.
+const previewProfiles = process.env.PREVIEW_DEVICE_PROFILES === 'all'
+  ? JSON.parse(read('tools/device-profiles.json')).profiles.map(p => p.buildProfile)
+  : ['guition_jc8012p4a1_v2', 'guition_esp32_4848s040', 'waveshare_7'];
+for (const profile of previewProfiles) {
   const define = JSON.parse(read('tools/device-profiles.json')).profiles.find(p => p.buildProfile === profile).define;
   const binary = path.join(out, profile + (process.platform === 'win32' ? '.exe' : ''));
   let run = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-I', out, '-DHOMETILES_CI_TARGET', `-D${define}`,

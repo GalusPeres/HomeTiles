@@ -86,6 +86,11 @@ int main(){
  String css;appendPreviewScaleVars(css);
  std::cout<<"CSS "<<css.substr(css.find('{')+1,css.rfind('}')-css.find('{')-1)<<"\n";
  std::cout<<"GRID "<<GRID_CELL_W<<" "<<GRID_CELL_H<<" "<<GRID_GAP<<"\n";
+ // The corner disc of taller tiles (tile_icon_disc::add_round): at the inset
+ // from the card corner, header.disc wide.
+ const auto header=tile_icon_disc::corner_header(tile_layout::scale_480(24),tile_layout::scale_480(20),tile_layout::scale_480(-8),
+   lv_font_get_glyph_width(FONT_MDI_ICONS,tile_icon_disc::kMdiReferenceGlyph,0),lv_font_get_line_height(FONT_MDI_ICONS));
+ std::cout<<"DISC "<<tile_icon_disc::inset()<<" "<<header.disc<<"\n";
  for(float span_w:{1.f,1.5f,2.f})for(int choice:{0,2,3,5})for(int with_value:{1,0}){
   if(!with_value&&choice)continue;
   Tile tile;tile.span_w=span_w;tile.sensor_value_font=static_cast<uint8_t>(choice);
@@ -119,7 +124,12 @@ const compactValueSize = choice => choice === 2 ? 24 : [3, 4, 5].includes(choice
 const failures = [];
 const report = [];
 let checked = 0;
-for (const profile of ['guition_jc8012p4a1_v2', 'guition_esp32_4848s040', 'waveshare_7']) {
+// PREVIEW_DEVICE_PROFILES=all checks every device profile (a sweep before a
+// release or after a layout change); the suite runs one per layout.
+const previewProfiles = process.env.PREVIEW_DEVICE_PROFILES === 'all'
+  ? JSON.parse(read('tools/device-profiles.json')).profiles.map(p => p.buildProfile)
+  : ['guition_jc8012p4a1_v2', 'guition_esp32_4848s040', 'waveshare_7'];
+for (const profile of previewProfiles) {
   const define = JSON.parse(read('tools/device-profiles.json')).profiles.find(p => p.buildProfile === profile).define;
   const binary = path.join(out, profile + (process.platform === 'win32' ? '.exe' : ''));
   let run = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-I', out, '-DHOMETILES_CI_TARGET', `-D${define}`,
@@ -172,7 +182,22 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
     }
     results.push({lines, cardH: card.height});
   }
-  document.getElementById('result').textContent = JSON.stringify({scale, geometry, results});
+  // A 1x1 Sensor tile's corner disc (the ::after of its icon), in the card's
+  // border box.
+  const sensor = document.createElement('div');
+  sensor.className = 'tile sensor';
+  sensor.style.width = ${cellW} * scale + 'px';
+  sensor.style.height = ${cellH} * scale + 'px';
+  sensor.innerHTML = '<i class="mdi mdi-thermometer tile-icon"></i><div class="tile-title">Upstairs</div>';
+  document.getElementById('host').replaceChildren(sensor);
+  const sensorBox = sensor.getBoundingClientRect();
+  const icon = sensor.querySelector('.tile-icon');
+  const iconBox = icon.getBoundingClientRect();
+  const after = getComputedStyle(icon, '::after');
+  const disc = {left: iconBox.left - sensorBox.left + parseFloat(after.left),
+                top: iconBox.top - sensorBox.top + parseFloat(after.top),
+                width: parseFloat(after.width), height: parseFloat(after.height)};
+  document.getElementById('result').textContent = JSON.stringify({scale, geometry, results, disc});
 });
 </script></body></html>`;
   const page = path.join(out, profile + '.html');
@@ -182,7 +207,15 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
   assert.equal(run.status, 0, run.stderr);
   const match = /<pre id="result">([^<]*)<\/pre>/.exec(run.stdout);
   assert(match && match[1], profile + ': the preview harness did not finish\n' + run.stdout.slice(-2000));
-  const {scale, geometry, results} = JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+  const {scale, geometry, results, disc} = JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+  // The corner disc of a taller tile at the device's inset and size (user
+  // 2026-10-02: cut by the card corner on the S3 and 4B).
+  const [discInset, discSize] = lines.find(l => l.startsWith('DISC ')).slice(5).split(' ').map(Number);
+  for (const [name, shown, device] of [['left', disc.left, discInset], ['top', disc.top, discInset],
+                                       ['width', disc.width, discSize], ['height', disc.height, discSize]]) {
+    report.push(`${profile} corner disc ${name}: ${(shown - device * scale).toFixed(2)}`);
+    if (Math.abs(shown - device * scale) > 0.1) failures.push(`${profile} corner disc ${name} ${shown.toFixed(2)} vs device ${(device * scale).toFixed(2)}`);
+  }
   // Cell width and gap follow the device within a hundredth of a pixel.
   for (const [i, device] of [[0, cellW], [1, cellH], [2, gap]].map(([i, v]) => [i, v])) {
     if (Math.abs(geometry[i] - device * scale) > 0.01) failures.push(profile + ' grid ' + ['cell width', 'cell height', 'gap'][i] + ' ' + geometry[i] + ' vs ' + device * scale);

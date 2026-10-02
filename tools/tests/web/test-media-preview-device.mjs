@@ -95,7 +95,13 @@ ${strip(read('src/types/media/web_scripts.cpp'))}
 static void box(std::ostream&o,const char*name,lv_obj_t*obj,lv_obj_t*card,bool&first){
  if(!obj||lv_obj_has_flag(obj,LV_OBJ_FLAG_HIDDEN))return;
  lv_area_t a,c;lv_obj_get_coords(obj,&a);lv_obj_get_coords(card,&c);
- o<<(first?"":",")<<"\""<<name<<"\":{\"x\":"<<a.x1-c.x1<<",\"y\":"<<a.y1-c.y1<<",\"w\":"<<lv_area_get_width(&a)<<",\"h\":"<<lv_area_get_height(&a)<<"}";first=false;
+ o<<(first?"":",")<<"\""<<name<<"\":{\"x\":"<<a.x1-c.x1<<",\"y\":"<<a.y1-c.y1<<",\"w\":"<<lv_area_get_width(&a)<<",\"h\":"<<lv_area_get_height(&a);
+ // Text labels: the glyph baseline, base_line above the bottom of the line.
+ if(lv_obj_check_type(obj,&lv_label_class)&&std::string(name).find("Icon")==std::string::npos){
+  const lv_font_t*f=lv_obj_get_style_text_font(obj,LV_PART_MAIN);
+  o<<",\"baseline\":"<<(a.y1-c.y1)+f->line_height-f->base_line;
+ }
+ o<<"}";first=false;
 }
 int main(){
  lv_init();lv_display_create(Device::kScreenWidth,Device::kScreenHeight);
@@ -140,7 +146,12 @@ const pixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAA
 
 let checked = 0;
 const failures = [];
-for (const profile of ['guition_jc8012p4a1_v2', 'guition_esp32_4848s040', 'waveshare_s3_touch_lcd_4b', 'waveshare_7']) {
+// PREVIEW_DEVICE_PROFILES=all checks every device profile (a sweep before a
+// release or after a layout change); the suite runs one per layout.
+const previewProfiles = process.env.PREVIEW_DEVICE_PROFILES === 'all'
+  ? JSON.parse(read('tools/device-profiles.json')).profiles.map(p => p.buildProfile)
+  : ['guition_jc8012p4a1_v2', 'guition_esp32_4848s040', 'waveshare_s3_touch_lcd_4b', 'waveshare_7'];
+for (const profile of previewProfiles) {
   const define = JSON.parse(read('tools/device-profiles.json')).profiles.find(p => p.buildProfile === profile).define;
   const binary = path.join(out, profile + (process.platform === 'win32' ? '.exe' : ''));
   let run = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-I', out, '-DHOMETILES_CI_TARGET', `-D${define}`,
@@ -195,6 +206,14 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
       if (!node || node.hidden) return;
       const r = node.getBoundingClientRect();
       boxes[name] = {x: r.left - card.left, y: r.top - card.top, w: r.width, h: r.height};
+      // Texts: the browser baseline, from an empty inline-block on it.
+      if (/title/.test(name)) {
+        const mark = document.createElement('span');
+        mark.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline';
+        node.appendChild(mark);
+        boxes[name].baseline = mark.getBoundingClientRect().top - card.top;
+        mark.remove();
+      }
     };
     rect('title', el.querySelector('.media-preview-title'));
     rect('subtitle', el.querySelector('.media-preview-subtitle'));
@@ -233,7 +252,12 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
       const expectX = iconPart ? (deviceBox.x + deviceBox.w / 2) * scale : deviceBox.x * scale;
       const shownX = iconPart ? shown.x + shown.w / 2 : shown.x;
       const dx = shownX - expectX;
-      const dy = iconPart ? 0 : shown.y - deviceBox.y * scale;
+      // Texts by their baseline (the preview moves the box so the glyphs sit
+      // on the LVGL baseline), other parts by their top.
+      const dy = iconPart ? 0
+        : deviceBox.baseline !== undefined && shown.baseline !== undefined
+          ? shown.baseline - deviceBox.baseline * scale
+          : shown.y - deviceBox.y * scale;
       const dw = /title|subtitle|Icon/.test(name) ? 0 : shown.w - deviceBox.w * scale;
       report.push(`${label} ${name}: dx=${dx.toFixed(1)} dy=${dy.toFixed(1)} dw=${dw.toFixed(1)}`);
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1 || Math.abs(dw) > 1) {

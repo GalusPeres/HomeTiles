@@ -281,12 +281,16 @@ void appendPreviewScaleVars(String& html) {
       tile_layout::scale_480(24), tile_layout::scale_480(20), tile_layout::scale_480(-8),
       lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0),
       lv_font_get_line_height(FONT_MDI_ICONS));
-  emit_exact("icon-disc-corner", header.disc);
+  // Unrounded: the disc sits at the half-height inset from the corner like
+  // on the device; rounded sizes and icon positions put it up to 1.5 px too
+  // close to the corner on the S3 and 4B, cut by the card corner (user
+  // 2026-10-02).
+  emit_scaled("icon-disc-corner", header.disc);
   emit_exact("tile-header-title-top",
              tile_layout::scale_480(24) + tile_layout::scale_480(4) + header.shift);
   emit_exact("tile-header-title-right", tile_layout::scale_480(20) - tile_layout::scale_480(4));
-  emit_exact("tile-header-icon-top", tile_layout::scale_480(24) + header.icon_top);
-  emit_exact("tile-header-icon-left", tile_layout::scale_480(20) + header.icon_side);
+  emit_scaled("tile-header-icon-top", tile_layout::scale_480(24) + header.icon_top);
+  emit_scaled("tile-header-icon-left", tile_layout::scale_480(20) + header.icon_side);
 #if defined(DEVICE_LAYOUT_1024X600)
   emit("value-dy", 23);
 #elif defined(DEVICE_LAYOUT_480X480)

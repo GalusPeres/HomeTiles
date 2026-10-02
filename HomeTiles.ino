@@ -20,6 +20,7 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/diagnostics/crash_log.h"
 #include "src/core/diagnostics/loop_stall.h"
+#include "src/core/diagnostics/text_fit_probe.h"
 #include "src/core/firmware/firmware_version.h"
 #include "src/core/firmware/github_update.h"
 #include "src/core/display/lvgl_tick_service.h"
@@ -842,6 +843,9 @@ void setup() {
   Serial.println("[Setup] UI built");
   Serial.flush();
   preload_image_screensaver();
+#if defined(HOMETILES_TEXT_FIT_PROBE)
+  text_fit_probe::start();
+#endif
 
   uiManager.updateStatusbar();
   Serial.println("[Setup] Statusbar updated");

@@ -2763,8 +2763,10 @@ static const LanguageEntry kLanguages[] = {
     {&kStringsEn, &kLocaleEn},
     {&kStringsDe, &kLocaleDe},
     // The French strings stay compiled and maintained, but are intentionally
-    // hidden until the language pass is complete. Define this flag to test it.
-#if defined(HOMETILES_ENABLE_FRENCH)
+    // hidden until the language pass is complete. Define this flag to test it;
+    // beta builds offer it for the text fit check on the device.
+#if defined(HOMETILES_ENABLE_FRENCH) || defined(HOMETILES_TEST_BETA) || \
+    defined(HOMETILES_ISSUE38_BETA) || defined(HOMETILES_CAMERA_BETA)
     {&kStringsFr, &kLocaleFr},
 #endif
     {&kStringsPl, &kLocalePl},

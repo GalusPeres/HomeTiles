@@ -76,6 +76,12 @@ assert.ok(css.includes('.tile:not(.empty):hover:not(.active):not([data-selected=
 assert.ok(css.includes('.tile.empty.free-slot-hover:not(.active):not([data-selected="1"]) { ' + hoverRing + ' }'));
 assert.doesNotMatch(css, /\.tile\.sensor-compact[^{]*:hover[^{]*::after \{[^}]*border/, 'pills use the shared hover ring');
 assert.doesNotMatch(css, /\.tile\.empty:hover:not\(\.active\)[^{]*\{ border-color/);
+// Resizing (user 2026-10-02): no faded old card or shadow, a solid ring on
+// the target card without tint or inner line, no hover marks on the way.
+assert.match(rule('    .tile.resizing'), /opacity:0;\s*box-shadow:none;/);
+assert.match(rule('    .tile-resize-placeholder::after'), /border:3px solid #26a69a;/);
+assert.doesNotMatch(rule('    .tile-resize-placeholder::after'), /dashed|background|box-shadow/);
+assert.match(css, /body\.tile-resize-active \.tile:not\(\.empty\):hover:not\(\.active\):not\(\[data-selected="1"\]\)::after,\n\s*body\.tile-resize-active \.tile\.empty:is\(:hover, \.free-slot-hover\):not\(\.active\):not\(\[data-selected="1"\]\) \{\n\s*border-color:transparent;/);
 // Climate mini controls: the parent's ring is the ::after overlay too.
 assert.match(css, /\.tile\.climate\.climate-mini-selection-active:is\(\.active, \[data-selected="1"\]\)::after,\n\s*\.tile\.climate\.climate-child-hover:hover:not\(\.active\):not\(\[data-selected="1"\]\)::after \{\n\s*border-color:transparent;/);
 assert.ok(css.includes('.tile.climate.climate-mini-selection-active.climate-parent-hover::after {\n      ' + hoverRing));

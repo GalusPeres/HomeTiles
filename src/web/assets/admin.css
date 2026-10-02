@@ -1155,10 +1155,17 @@
       background-clip:border-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
+    /* Resizing shows only the target card (.tile-resize-placeholder): the old
+       card leaves no faded copy or shadow behind (user 2026-10-02). */
     .tile.resizing {
       z-index:24;
-      opacity:.20;
-      box-shadow:0 0 0 2px rgba(38,166,154,0.25) inset, 0 0 18px rgba(38,166,154,0.18);
+      opacity:0;
+      box-shadow:none;
+    }
+    /* No hover rings or free-slot marks under the pointer while resizing. */
+    body.tile-resize-active .tile:not(.empty):hover:not(.active):not([data-selected="1"])::after,
+    body.tile-resize-active .tile.empty:is(:hover, .free-slot-hover):not(.active):not([data-selected="1"]) {
+      border-color:transparent;
     }
     .tile.resize-invalid {
       box-shadow:0 0 0 2px rgba(239,68,68,0.22) inset, 0 0 18px rgba(239,68,68,0.2);
@@ -1211,16 +1218,16 @@
       z-index:26;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
+    /* The target card carries the selection ring: a solid line, no tint and
+       no inner line (user 2026-10-02: the dashed ring read as hover). */
     .tile-resize-placeholder::after {
       content:"";
       position:absolute;
       z-index:3;
       inset:0;
       box-sizing:border-box;
-      border:3px dashed #26a69a;
+      border:3px solid #26a69a;
       border-radius:var(--tile-radius, 11px);
-      background:rgba(38,166,154,0.08);
-      box-shadow:0 0 0 2px rgba(38,166,154,0.16) inset;
       pointer-events:none;
     }
     .tile-resize-preview-card {
@@ -1236,7 +1243,6 @@
     .tile-resize-placeholder.invalid::after {
       border-color:#ef4444;
       background:rgba(239,68,68,0.16);
-      box-shadow:0 0 0 2px rgba(239,68,68,0.18) inset;
     }
     .tile-resize-handle {
       position:absolute;

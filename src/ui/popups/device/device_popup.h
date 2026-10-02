@@ -36,3 +36,6 @@ void device_request(const DevicePopupTarget& target, const char* action, bool fr
 // The Bridge's answer to a Lock or Alarm command (device_control).
 void device_popup_on_result(TileType type, const String& entity, const String& id, const char* status,
                             int retry_after);
+// A sent command's target passed without any new state of `entity`: Home
+// Assistant ran it, but the device did not move (device_control).
+void device_popup_on_no_reaction(const String& entity);

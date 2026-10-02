@@ -95,7 +95,20 @@ assert.match(read('src/tiles/runtime/tile_update_service.h'), /process_device_up
 // the Alarm panel has none (user 02.10.).
 const tile = read('src/types/device/device_tile.cpp');
 assert.match(tile, /if \(view->type != TILE_ALARM\) \{\s*lv_obj_add_event_cb\(card, on_card_toggle,\s*popup_event == LV_EVENT_SHORT_CLICKED \? LV_EVENT_LONG_PRESSED : LV_EVENT_SHORT_CLICKED/);
-assert.match(tile, /device_request\(popup_target\(view\), locked \? "unlock" : "lock", true\);/);
+assert.match(tile, /if \(\*target && std::strcmp\(target, d\.state\) != 0\) return;\s*device_request\(popup_target\(view\), device_visual::lock_on\(d\) \? "unlock" : "lock", true\);/);
+
+// The lock shows only reported states (user 02.10.: a code the lock itself
+// rejected, answered ok by Home Assistant, left an orange thumb on the
+// target over the red lock as if it had worked). A sent command waits with
+// the icon pulsing; a target that runs out unanswered says so in the popup.
+assert.ok(!tile.includes('thumb_sent'), 'the tile bar draws no sent target');
+assert.ok(!tile.includes('slot_sent'), 'the alarm bar lights no sent mode');
+assert.match(popup, /const char\* shown = d\.state;\s*const uint32_t lit = v\.color;/);
+assert.match(popup, /const bool busy = device_visual::alarm_disarm_only\(d\) \|\| device_detail::is\(d, "disarming"\);/);
+assert.match(popup, /const bool up = device_visual::lock_on\(d\);\s*const uint32_t color = v\.color;/);
+assert.match(popup, /make_icon\(thumb, lv_color_hex\(pop\.card_rgb\), v\.icon\);\s*lv_obj_center\(symbol\);\s*if \(moving\) pulse\(symbol\);/);
+assert.match(control, /pending = Pending\{\};\s*device_popup_on_no_reaction\(entity\);/);
+assert.match(popup, /void device_popup_on_no_reaction\(const String& entity\) \{[\s\S]*?set_notice\(text\(DeviceLabel::NoReaction\)\);/);
 
 // Every pulse reads one clock (user 02.10.: the popup's middle and its
 // header pulsed apart): none keeps an eased animation of its own.

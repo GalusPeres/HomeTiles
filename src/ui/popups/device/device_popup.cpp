@@ -345,12 +345,14 @@ void build_lock(const Detail& d, const Visual& v) {
          reinterpret_cast<void*>(1));
   } else {
     // The Light popup's vertical switch: up = locked (Home Assistant's lock
-    // toggle); a sent command shows its target in orange with the symbol
-    // pulsing until the lock reports.
+    // toggle). It shows only what the lock reports: a sent command waits
+    // with the header icon pulsing and moves nothing (user 02.10.: a code the
+    // lock itself rejected, which Home Assistant answers with ok, left the
+    // thumb in orange on the target over the red lock as if it had worked).
     const char* target = device_control::pending_target(pop.target.entity);
     const bool sent = *target && std::strcmp(target, d.state) != 0;
-    const bool up = sent ? std::strcmp(target, "locked") == 0 : device_visual::lock_on(d);
-    const uint32_t color = sent ? device_visual::kOrange : v.color;
+    const bool up = device_visual::lock_on(d);
+    const uint32_t color = v.color;
     lv_color_t rest;
     lv_opa_t rest_opa;
     control_fill(rest, rest_opa);
@@ -368,9 +370,9 @@ void build_lock(const Detail& d, const Visual& v) {
     lv_obj_set_style_radius(thumb, track_radius(), 0);
     lv_obj_set_style_bg_color(thumb, lv_color_hex(color), 0);
     lv_obj_set_style_bg_opa(thumb, LV_OPA_COVER, 0);
-    lv_obj_t* symbol = make_icon(thumb, lv_color_hex(pop.card_rgb), sent ? "lock-clock" : v.icon);
+    lv_obj_t* symbol = make_icon(thumb, lv_color_hex(pop.card_rgb), v.icon);
     lv_obj_center(symbol);
-    if (sent || moving) pulse(symbol);
+    if (moving) pulse(symbol);
     if (!usable) {
       lv_obj_set_style_opa(track, LV_OPA_30, 0);
     } else if (!moving && !sent) {
@@ -403,10 +405,12 @@ void alarm_key_tapped(lv_event_t* e) {
 
 // The supported modes as keys in two columns filling the PIN keypad's block
 // (its width, gap and corner rounding in proportion), Disarm below over the
-// full width; the current mode lit in the state color (a just sent mode in
-// orange). Arming, disarming, pending, triggered and a just sent command: the
-// mode keys give way to the state symbol pulsing in a circle, only the
-// Disarm key stays at its place (user 01.10.).
+// full width; the current mode lit in the state color. Arming, disarming,
+// pending and triggered: the mode keys give way to the state symbol pulsing
+// in a circle, only the Disarm key stays at its place (user 01.10.). Only
+// reported states show: a sent mode waits with the header icon pulsing and
+// lights nothing (user 02.10.: a code the panel itself rejected, answered ok
+// by Home Assistant, showed the arming look over the old state).
 void build_alarm(const Detail& d, const Visual& v) {
   const int content_w = content_width();
   const bool usable = d.valid && d.available && device_control::panel_secured();
@@ -438,14 +442,14 @@ void build_alarm(const Detail& d, const Visual& v) {
   const int y0 = area_top + (area_h - block) / 2;
   const char* target = device_control::pending_target(pop.target.entity);
   const bool sent = *target && std::strcmp(target, d.state) != 0;
-  const char* shown = sent ? target : d.state;
-  const uint32_t lit = sent ? device_visual::kOrange : v.color;
+  const char* shown = d.state;
+  const uint32_t lit = v.color;
   lv_color_t fill;
   lv_opa_t opa;
   control_fill(fill, opa);
-  const bool busy = device_visual::alarm_disarm_only(d) || device_detail::is(d, "disarming") || sent;
+  const bool busy = device_visual::alarm_disarm_only(d) || device_detail::is(d, "disarming");
   if (busy) {
-    const uint32_t color = sent ? device_visual::kOrange : v.color;
+    const uint32_t color = v.color;
     const int top = y0;
     const int bottom = y0 + (rows - 1) * (kh + g.gap) - g.gap;
     const int diameter = std::min(track_w(), bottom - top);
@@ -457,13 +461,13 @@ void build_alarm(const Detail& d, const Visual& v) {
     // The circle fill like the keys; only the symbol takes the state color.
     lv_obj_set_style_bg_color(circle, fill, 0);
     lv_obj_set_style_bg_opa(circle, opa, 0);
-    lv_obj_t* symbol = make_icon(circle, lv_color_hex(color), sent ? "shield" : v.icon);
+    lv_obj_t* symbol = make_icon(circle, lv_color_hex(color), v.icon);
     lv_obj_center(symbol);
     pulse(symbol);
     }
   }
-  // A running mode command greys the other modes; Disarm stays possible (it
-  // aborts arming in Home Assistant).
+  // A sent command greys the other modes until the panel reports; Disarm
+  // stays possible (it aborts arming in Home Assistant).
   const bool modes_locked = sent || device_visual::alarm_disarm_only(d);
   for (int i = 0; i < count; ++i) {
     const int mode = entries[i];
@@ -1244,6 +1248,16 @@ void device_popup_on_result(TileType type, const String& entity, const String& i
   set_notice(result_text(type, status));
   open_for(g_last.target);
   (void)entity;
+}
+
+void device_popup_on_no_reaction(const String& entity) {
+  // Lock and Alarm show only reported states, so this line is all that
+  // tells a code the device rejected (Home Assistant answered ok) apart.
+  if (!pop.open || (pop.target.type != TILE_LOCK && pop.target.type != TILE_ALARM) ||
+      pop.target.entity != entity) {
+    return;
+  }
+  set_notice(text(DeviceLabel::NoReaction));
 }
 
 void show_device_popup(const DevicePopupTarget& target) {

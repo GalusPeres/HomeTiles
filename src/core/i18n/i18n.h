@@ -745,7 +745,7 @@ struct LocaleProfile {
 
   // Lock, Alarm panel and Fan tiles and their popups, indexed by
   // i18n::DeviceLabel.
-  const char* device_labels[41];
+  const char* device_labels[42];
   // Lock states: locked, unlocked, locking, unlocking, open, opening,
   // jammed, unavailable, unknown.
   const char* lock_states[9];
@@ -798,9 +798,10 @@ enum class DeviceLabel : uint8_t {
   ResultNoAnswer,
   ResultFailed,
   ClockNotSet,
+  NoReaction,  // a sent Lock command the lock never answered with a state
   Count
 };
-static_assert(static_cast<int>(DeviceLabel::Count) == 41, "LocaleProfile::device_labels size");
+static_assert(static_cast<int>(DeviceLabel::Count) == 42, "LocaleProfile::device_labels size");
 
 // Locale-independent timezone catalog with codes and group assignments.
 // LocaleProfile::timezone_labels supplies display names in the same order.

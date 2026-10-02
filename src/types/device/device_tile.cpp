@@ -54,7 +54,6 @@ struct View {
   BarKind kind = BarKind::None;
   bool on = false;             // Toggle: thumb on the right
   bool thumb_off_look = false;  // Toggle: the grey off thumb (a Fan that is off)
-  bool thumb_sent = false;     // Toggle: a sent command's target (orange)
   const char* thumb_icon = "";
   uint8_t level = 0;  // Dimmer: 1..100; Segments: filled count
   uint8_t count = 0;  // Buttons, Slots, Segments
@@ -62,7 +61,6 @@ struct View {
   const char* button_icons[2] = {"", ""};
   int8_t slots[6] = {};  // Slots: -1 Disarm, else the alarm mode index
   int8_t active = -1;    // Slots: the lit slot
-  bool slot_sent = false;
   bool bar_pulse = false;
   lv_opa_t pulse_opa = LV_OPA_COVER;
   uint32_t thumb_base = 0;
@@ -193,7 +191,7 @@ void bar_draw_cb(lv_event_t* e) {
       const int32_t half = width / 2;
       const lv_area_t thumb = view->on ? lv_area_t{area.x2 - half + 1, area.y1, area.x2, area.y2}
                                        : lv_area_t{area.x1, area.y1, area.x1 + half - 1, area.y2};
-      lv_color_t thumb_color = view->thumb_sent ? lv_color_hex(device_visual::kOrange) : accent;
+      lv_color_t thumb_color = accent;
       lv_color_t symbol = card;
       if (view->thumb_off_look) {
         if (base != view->thumb_base || !view->thumb_off) {
@@ -230,7 +228,7 @@ void bar_draw_cb(lv_event_t* e) {
         const lv_area_t slot = {area.x1 + i * width / n, area.y1, area.x1 + (i + 1) * width / n - 1, area.y2};
         const bool lit = i == view->active;
         if (lit) {
-          level_bar::draw_rect(layer, slot, view->slot_sent ? lv_color_hex(device_visual::kOrange) : accent, radius);
+          level_bar::draw_rect(layer, slot, accent, radius);
         }
         const int8_t mode = view->slots[i];
         const char* icon = mode < 0 ? "shield-off" : device_control::alarm_mode(static_cast<size_t>(mode)).icon;
@@ -438,26 +436,18 @@ void alarm_slots(View* view, const Detail& d) {
 
 void bar_model(View* view, const Detail& d, const device_visual::Visual& v) {
   view->available = d.valid && d.available;
-  view->thumb_sent = false;
   view->thumb_off_look = false;
-  view->slot_sent = false;
   bool pulse = false;
-  const char* target = device_control::pending_target(view->entity);
   if (view->type == TILE_LOCK) {
     if (device_visual::lock_buttons(d)) {
       view->kind = BarKind::Buttons;
       view->count = 2;
       view->button_icons[0] = "lock-open-variant";
       view->button_icons[1] = "lock";
-    } else if (*target && std::strcmp(target, d.state) != 0) {
-      // A sent command moves the thumb right away in the transition look
-      // until the lock reports.
-      view->kind = BarKind::Toggle;
-      view->on = std::strcmp(target, "locked") == 0;
-      view->thumb_sent = true;
-      view->thumb_icon = "lock-clock";
-      pulse = true;
     } else {
+      // The thumb shows only what the lock reports; a sent command waits
+      // with the icon pulsing (show()) and moves nothing, so a code the lock
+      // itself rejected no longer looks as if it had worked (user 02.10.).
       view->kind = BarKind::Toggle;
       view->on = device_visual::lock_on(d);
       view->thumb_icon = v.icon;
@@ -471,9 +461,9 @@ void bar_model(View* view, const Detail& d, const device_visual::Visual& v) {
     } else {
       view->kind = BarKind::Slots;
       alarm_slots(view, d);
-      // A chosen mode shows right away (Home Assistant's _currentMode).
-      const char* shown = *target ? target : d.state;
-      view->slot_sent = *target != '\0';
+      // Only the reported mode lights; a sent one waits with the icon
+      // pulsing (show()), so a rejected code looks like nothing happened.
+      const char* shown = d.state;
       view->active = -1;
       for (uint8_t i = 0; i < view->count; ++i) {
         const int8_t mode = view->slots[i];
@@ -603,7 +593,10 @@ void bar_event_cb(lv_event_t* e) {
     if (view->kind == BarKind::Buttons) {
       action = x < width / 2 ? "unlock" : "lock";
     } else {
-      // The side the thumb shows (a sent command's target first).
+      // While a sent command waits the switch does nothing, like the
+      // popup's; then it switches from the side the lock reports.
+      const char* target = device_control::pending_target(view->entity);
+      if (*target && std::strcmp(target, d.state) != 0) return;
       action = view->on ? "unlock" : "lock";
     }
   } else if (view->type == TILE_ALARM) {
@@ -612,9 +605,12 @@ void bar_event_cb(lv_event_t* e) {
     } else {
       const int n = std::max<int>(1, view->count);
       const int slot = std::min(n - 1, static_cast<int>(x * n / std::max<int32_t>(1, width)));
-      // Home Assistant ignores a tap on the current mode.
+      // Home Assistant ignores a tap on the current mode; while a sent
+      // command waits only Disarm goes, like in the popup.
       if (slot == view->active) return;
       const int8_t mode = view->slots[slot];
+      const char* target = device_control::pending_target(view->entity);
+      if (mode >= 0 && *target && std::strcmp(target, d.state) != 0) return;
       action = mode < 0 ? "disarm" : device_control::alarm_mode(static_cast<size_t>(mode)).action;
     }
   }
@@ -656,11 +652,11 @@ void on_card_toggle(lv_event_t* e) {
     show_device_popup(popup_target(view));
     return;
   }
-  // The side the tile shows (a sent command's target first).
+  // While a sent command waits the gesture does nothing, like the popup's
+  // switch; then it switches from the side the lock reports.
   const char* target = device_control::pending_target(view->entity);
-  const bool locked = *target && std::strcmp(target, d.state) != 0 ? std::strcmp(target, "locked") == 0
-                                                                    : device_visual::lock_on(d);
-  device_request(popup_target(view), locked ? "unlock" : "lock", true);
+  if (*target && std::strcmp(target, d.state) != 0) return;
+  device_request(popup_target(view), device_visual::lock_on(d) ? "unlock" : "lock", true);
 }
 
 void on_card_event(lv_event_t* e) {

@@ -246,8 +246,12 @@ void process(uint8_t budget) {
   }
   for (Pending& pending : g_pending) {
     if (pending.entity.length() && static_cast<int32_t>(now - pending.until_ms) >= 0) {
+      // A new state or a failed answer clears the target earlier; reaching
+      // its end means the device never reacted (e.g. a lock that rejected
+      // the code itself, which Home Assistant cannot report).
       const String entity = pending.entity;
       pending = Pending{};
+      device_popup_on_no_reaction(entity);
       mark_changed(entity);
     }
   }

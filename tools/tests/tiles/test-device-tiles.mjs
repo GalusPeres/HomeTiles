@@ -112,6 +112,11 @@ for (const fn of ['Lock', 'Alarm', 'Fan']) {
   for (const verb of ['load', 'save', 'reset']) assert.match(admin, new RegExp(`function ${verb}${fn}Fields\\(`));
 }
 assert.match(read('src/web/admin/bundle.json'), /"src\/types\/device\/admin\.js"/);
+// The preview counts the alarm slots again when the bar's width changes
+// (V2 02.10.: a 2x1 tile kept the three slots of 1x1 and lit none).
+assert.match(admin, /onResize = \(\) => \{\s*if \(fitNow\(\) !== fit\) applyDevicePreview\(tileElem, kind, d, halfHeight\);/);
+assert.match(admin, /bar\.__onResize = onResize;/);
+assert.match(read('src/types/switch/admin.js'), /if \(typeof bar\.__onResize === 'function'\) bar\.__onResize\(\);\s*drawSwitchPreviewFill\(bar\);/);
 assert.match(read('src/web/server/handlers/web_admin_tiles.cpp'), /\\"device_values\\"/);
 assert.match(read('src/web/admin/tiles/registry.js'), /_lock_entity', data\.locks/);
 

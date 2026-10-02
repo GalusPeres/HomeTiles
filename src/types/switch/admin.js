@@ -422,6 +422,9 @@ function maybeFillTitleFromSwitch(tab) {
           bar.__switchObserved = false;
           continue;
         }
+        // A bar whose content depends on its width (the Alarm panel's
+        // mode slots) rebuilds itself first.
+        if (typeof bar.__onResize === 'function') bar.__onResize();
         drawSwitchPreviewFill(bar);
       }
     })

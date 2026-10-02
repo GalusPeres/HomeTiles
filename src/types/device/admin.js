@@ -172,6 +172,7 @@
     const parts = bar.querySelector('.tile-device-parts');
     const symbol = bar.querySelector('.tile-switch-symbol');
     let barKind = 'none';
+    let onResize = null;
     let partsHtml = '';
     let gapped = false;
     let level = 0;
@@ -195,7 +196,14 @@
         barKind = 'parts';
         // alarm_slots(): Disarm first, then the supported modes in reverse.
         const iconWidth = parseFloat(getComputedStyle(tileElem).getPropertyValue('--icon-size')) || 24;
-        const fit = Math.max(2, Math.min(6, Math.floor((bar.clientWidth || 60) / iconWidth)));
+        const fitNow = () => Math.max(2, Math.min(6, Math.floor((bar.clientWidth || 60) / iconWidth)));
+        const fit = fitNow();
+        // The device counts the slots for the tile's size; here they follow
+        // the bar's width, also when the tile is resized or laid out later
+        // (a 2x1 tile kept the three slots of 1x1 and lit none).
+        onResize = () => {
+          if (fitNow() !== fit) applyDevicePreview(tileElem, kind, d, halfHeight);
+        };
         const modes = DEVICE_ALARM_MODES.filter(mode => d.features & mode[1]).slice(0, fit - 1);
         const slots = [['disarmed', 0, 'shield-off'], ...modes.reverse()];
         partsHtml = slots.map(slot => devicePart(slot[2], slot[0] === d.state ? 'lit' : '')).join('');
@@ -224,6 +232,7 @@
       parts.innerHTML = partsHtml;
     }
     bar.__switchFill = {kind: barKind === 'dimmer' ? 'dimmer' : 'none', level};
+    bar.__onResize = onResize;
     drawSwitchPreviewFill(bar);
     if (switchBarObserver && !bar.__switchObserved) {
       bar.__switchObserved = true;

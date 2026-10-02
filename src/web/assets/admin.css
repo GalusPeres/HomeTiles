@@ -401,7 +401,9 @@
       box-shadow:0 0 0 1000px var(--well) inset;
       transition:background-color 9999s ease-out 0s;
     }
-    input:not([type="checkbox"]):not([type="radio"]):focus,
+    /* Not sliders: the field ring drew a box around a clicked slider (user
+       2026-10-02: the screensaver tile opacity); they keep a keyboard ring. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
     select:focus, textarea:focus {
       outline:none;
       border-color:var(--accent);
@@ -457,7 +459,8 @@
       box-shadow:none;
     }
     input[type="range"] { padding:0; border:none; background:transparent; height:32px; box-shadow:none; cursor:pointer; }
-    input[type="range"]:focus { box-shadow:none; }
+    input[type="range"]:focus { box-shadow:none; outline:none; }
+    input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     input[type="color"] { padding:5px 8px; height:44px; cursor:pointer; }
     input[type="file"] { padding:9px 12px; }
 
@@ -1165,7 +1168,15 @@
       opacity:0;
       box-shadow:none;
     }
-    /* No hover rings or free-slot marks under the pointer while resizing. */
+    /* No hover rings or free-slot marks under the pointer while resizing,
+       nor the screensaver image or clock marks the pointer passes over. */
+    body.tile-resize-active .screensaver-tile-grid .screensaver-grid-image-frame:hover,
+    body.tile-resize-active .screensaver-tile-grid .screensaver-grid-clock:hover {
+      outline:none;
+    }
+    body.tile-resize-active .screensaver-grid-clock:hover .screensaver-clock-resize-handle {
+      opacity:0;
+    }
     body.tile-resize-active .tile:not(.empty):hover:not(.active):not([data-selected="1"])::after,
     body.tile-resize-active .tile.empty:is(:hover, .free-slot-hover):not(.active):not([data-selected="1"]) {
       border-color:transparent;
@@ -1839,7 +1850,8 @@
     .tile.cover.switch-bar > .tile-title,
     .tile.device.switch-bar > .tile-title,
     .tile.climate.climate-header > .tile-title {
-      top:var(--switch-text-top);
+      /* On the LVGL baseline like the half-height tiles (--compact-*-dy). */
+      top:calc(var(--switch-text-top) + var(--compact-title-dy, 0px));
       font-size:var(--compact-title-font, 10px);
       line-height:var(--compact-title-line, 12px);
     }
@@ -1847,7 +1859,7 @@
     .tile.cover.switch-bar > .tile-switch-state,
     .tile.device.switch-bar > .tile-switch-state,
     .tile.climate.climate-header > .tile-switch-state {
-      top:calc(var(--switch-text-top) + var(--compact-title-line, 12px));
+      top:calc(var(--switch-text-top) + var(--compact-title-line, 12px) + var(--compact-value-dy, 0px));
       bottom:auto;
       font-size:var(--compact-value-font, 10px);
       line-height:var(--compact-value-line, 12px);
@@ -1857,17 +1869,19 @@
     .tile.device.switch-bar:not(:has(> .tile-title)) > .tile-switch-state,
     .tile.climate.climate-header:not(:has(> .tile-title)) > .tile-switch-state {
       top:calc(var(--compact-inset, 3px) + var(--icon-disc-corner, 30px) / 2 - 3px
-        - var(--compact-value-line, 12px) / 2);
+        - var(--compact-value-line, 12px) / 2 + var(--compact-value-dy, 0px));
     }
     .tile.switch.switch-bar.compact-value-24,
     .tile.cover.switch-bar.compact-value-24,
     .tile.device.switch-bar.compact-value-24 {
       --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
+      --compact-value-dy:var(--compact-value-dy-24);
     }
     .tile.switch.switch-bar.compact-value-28,
     .tile.cover.switch-bar.compact-value-28,
     .tile.device.switch-bar.compact-value-28 {
       --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
+      --compact-value-dy:var(--compact-value-dy-28);
     }
     /* From 1.5 rows (switch_layout::sensor_look): the Sensor title top
        right, the state at a Sensor value size centered between the disc and
@@ -2787,12 +2801,14 @@
   transform:none; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   height:auto; min-height:0; display:block; line-height:1;
 }
+/* Each line box as compact_sensor_layout places it, the glyphs moved onto
+   the LVGL baseline (--compact-*-dy). */
 .tile.sensor-compact > .tile-title {
-  top:max(0px, calc((var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2));
+  top:calc(max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-dy, 0px));
   font-size:var(--compact-title-font); line-height:var(--compact-title-line);
 }
 .tile.sensor-compact > .tile-value {
-  top:calc(max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-line) + var(--compact-text-gap)); bottom:auto;
+  top:calc(max(0px, (var(--compact-h) - var(--compact-title-line) - var(--compact-value-line) - var(--compact-text-gap)) / 2) + var(--compact-title-line) + var(--compact-text-gap) + var(--compact-value-dy, 0px)); bottom:auto;
   font-size:var(--compact-value-font); line-height:var(--compact-value-line);
 }
 .tile.sensor-compact .tile-unit { font-size:inherit; }
@@ -2800,13 +2816,15 @@
    and value both use the value line to center their block. */
 .tile.sensor-compact.compact-value-24 {
   --compact-value-font:var(--compact-value-font-24); --compact-value-line:var(--compact-value-line-step-24);
+  --compact-value-dy:var(--compact-value-dy-24);
 }
 .tile.sensor-compact.compact-value-28 {
   --compact-value-font:var(--compact-value-font-28); --compact-value-line:var(--compact-value-line-step-28);
+  --compact-value-dy:var(--compact-value-dy-28);
 }
 /* Half-height Back: the title alone is centered on the disc row. */
 .tile.sensor-compact.compact-title-only > .tile-title {
-  top:max(0px, calc((var(--compact-h) - var(--compact-title-line)) / 2));
+  top:calc(max(0px, (var(--compact-h) - var(--compact-title-line)) / 2) + var(--compact-title-dy, 0px));
 }
 .tile.sensor-half .tile-gauge, .tile.sensor-half .tile-graph { display:none; }
 

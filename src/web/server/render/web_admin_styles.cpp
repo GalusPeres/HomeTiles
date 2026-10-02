@@ -133,7 +133,7 @@ void appendPreviewScaleVars(String& html) {
     emit_fraction(name, lvgl_px * preview_cell_h_px() / GRID_CELL_H);
   };
   html += "  <style>:root{";
-  emit_exact("compact-inset", compact_sensor_layout::inset());
+  emit_scaled("compact-inset", compact_sensor_layout::inset());
   emit_exact("icon-disc-round", tile_icon_disc::round_diameter());
   // The global Circle strength; applyIconDiscTint derives every circle
   // from it like the device (tone_color.h).
@@ -151,20 +151,33 @@ void appendPreviewScaleVars(String& html) {
              static_cast<unsigned>(fill.disc_color & 0xFF), fill.disc_opa / 255.0f);
     html += disc;
   }
-  emit_exact("compact-text-gap", compact_sensor_layout::text_gap());
-  emit_exact("compact-title-font", compact_sensor_layout::title_size());
-  emit_exact("compact-title-line", compact_sensor_layout::title_font()->line_height);
-  emit_exact("compact-value-font", compact_sensor_layout::value_size());
-  emit_exact("compact-value-line", compact_sensor_layout::value_font()->line_height);
+  // Unrounded: emit_exact never goes below 1 px, which split a 0 px device
+  // gap into half a pixel up for the title and down for the value.
+  emit_scaled("compact-text-gap", compact_sensor_layout::text_gap());
+  // Half-height texts: unrounded sizes and line boxes, and the shift that
+  // puts each glyph baseline where LVGL draws it (the line box centers the
+  // glyphs; LVGL puts the baseline base_line above the line bottom, as
+  // --ldyNN). Rounded values left the 28 px value about 4 display px low
+  // (user 2026-10-02).
+  auto emit_compact_line = [&emit_scaled](const char* font_name, const char* line_name, const char* dy_name,
+                                          const lv_font_t* font, int size) {
+    emit_scaled(font_name, size);
+    emit_scaled(line_name, font->line_height);
+    emit_scaled(dy_name, font->line_height / 2.0f - font->base_line - 0.364f * size);
+  };
+  emit_compact_line("compact-title-font", "compact-title-line", "compact-title-dy",
+                    compact_sensor_layout::title_font(), compact_sensor_layout::title_size());
+  emit_compact_line("compact-value-font", "compact-value-line", "compact-value-dy",
+                    compact_sensor_layout::value_font(), compact_sensor_layout::value_size());
   emit_exact("compact-value-line-20", tile_layout::content_font_20()->line_height);
   emit_exact("compact-value-line-24", tile_layout::content_font_24()->line_height);
   emit_exact("compact-value-line-32", tile_layout::content_font_32()->line_height);
   emit_exact("compact-value-line-40", tile_layout::content_font_40()->line_height);
   // Chosen half-height value sizes (compact_sensor_layout::value_font).
-  emit_exact("compact-value-font-24", compact_sensor_layout::value_size(2));
-  emit_exact("compact-value-line-step-24", compact_sensor_layout::value_font(2)->line_height);
-  emit_exact("compact-value-font-28", compact_sensor_layout::value_size(5));
-  emit_exact("compact-value-line-step-28", compact_sensor_layout::value_font(5)->line_height);
+  emit_compact_line("compact-value-font-24", "compact-value-line-step-24", "compact-value-dy-24",
+                    compact_sensor_layout::value_font(2), compact_sensor_layout::value_size(2));
+  emit_compact_line("compact-value-font-28", "compact-value-line-step-28", "compact-value-dy-28",
+                    compact_sensor_layout::value_font(5), compact_sensor_layout::value_size(5));
 
   for (const PreviewFontSize& size : kPreviewFontSizes) {
     char name[24];

@@ -192,8 +192,7 @@
         typeof tileTintChoice === 'function') {
       const choice = given ? tileTintChoice(false, '', 0, fill, givenHex) : null;
       if (choice) {
-        const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-        tileElem.style.background = tileTintBackground(base || '#1A1A1A', choice.color, choice.percent);
+        setTileTintBackground(tileElem, choice.color, choice.percent);
       } else if (tileElem.dataset.baseBg !== undefined) {
         tileElem.style.background = tileElem.dataset.baseBg;
       }
@@ -412,8 +411,7 @@
       ? iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta) : null;
     el.dataset.ruleTint = tint ? '1' : '0';
     if (!tint) return;
-    const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-    el.style.background = tileTintBackground(base || '#1A1A1A', tint.color, tint.percent);
+    setTileTintBackground(el, tint.color, tint.percent);
   }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1' ||
@@ -506,6 +504,7 @@
       delete el.dataset.navigateTarget;
       delete el.dataset.folderPinEnabled;
     }
+    delete el.dataset.bgOpacity;
     if (typeValue === '0') el.style.background = 'transparent';
     else {
       const isDefaultBg = tileBgFollowsDefault(tile.bg_color);
@@ -516,6 +515,7 @@
                                  SCREENSAVER_TILE_DEFAULT_OPACITY);
         el.style.background = tileBackgroundCss(meta, isDefaultBg,
           tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
+        el.dataset.bgOpacity = String(opacity);
         // A fully transparent card casts no shadow (apply_slot_tile_shadows).
         el.classList.toggle('screensaver-bg-clear', opacity === 0);
       } else {

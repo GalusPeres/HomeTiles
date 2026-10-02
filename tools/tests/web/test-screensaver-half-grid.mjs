@@ -49,6 +49,9 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  const y=metrics.rect.top+metrics.padTop+(metrics.cellH+metrics.gapY)*4.1;
  const handle=card.querySelector('.tile-resize-handle-se');
  handle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,clientX:x,clientY:y,pointerId:1}));
+ // Grabbing alone shows the target card: the hidden tile must not leave a gap.
+ const grabbed=document.querySelector('#screensaverGrid > .tile-resize-placeholder.show');
+ check(grabbed && grabbed.querySelector('.tile-resize-preview-card'),'The target card shows on grab, before any move');
  window.dispatchEvent(new PointerEvent('pointermove',{clientX:x,clientY:y,pointerId:1}));
  check(resizeState?.lastValidLayout.span_w===1.5 && resizeState.lastValidLayout.span_h===.5,'Corner resize goes directly from 2x1 to 1.5x0.5');
  window.dispatchEvent(new PointerEvent('pointerup',{clientX:x,clientY:y,pointerId:1}));

@@ -3421,6 +3421,16 @@ function syncTileRadiusControls(tabEl) {
     for (let i = 0; i < 40 && contrast(out) < 4.5; i++) out = out.map(v => Math.floor((v * 95 + 50) / 100));
     return '#' + out.map(v => v.toString(16).toUpperCase().padStart(2, '0')).join('');
   }
+  // Tints a preview card from the global tile color. A screensaver card keeps
+  // its own opacity (data-bg-opacity): the panel sets bg_opa after the tint
+  // (image_screensaver build_slot_tile); the opaque tint hid the wallpaper
+  // in the preview (user 2026-10-02).
+  function setTileTintBackground(el, color, percent) {
+    const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
+    const hex = tileTintBackground(base || '#1A1A1A', color, percent);
+    const opacity = el.dataset.bgOpacity;
+    el.style.background = opacity === undefined ? hex : hex + Number(opacity).toString(16).padStart(2, '0');
+  }
 
   // Entities offered as a source: the states the Bridge publishes to tiles.
   function iconColorSourceEntries(data) {
@@ -6098,6 +6108,7 @@ function syncTileRadiusControls(tabEl) {
     if (meta.css) tileElem.classList.add(meta.css);
     if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
     tileElem.style.background = '';
+    delete tileElem.dataset.bgOpacity;
     tileElem.dataset.type = type;
     tileElem.dataset.iconDisc = tileTypeHasDiscToggle(type)
       && document.getElementById(prefix + '_tile_icon_disc')?.checked === false ? '2' : '0';
@@ -6138,6 +6149,7 @@ function syncTileRadiusControls(tabEl) {
         0, 255, 0);
       tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
         isDefaultBg ? defaultBg : (color || defaultBg), opacity);
+      tileElem.dataset.bgOpacity = String(opacity);
       // A fully transparent card casts no shadow (apply_slot_tile_shadows).
       tileElem.classList.toggle('screensaver-bg-clear', opacity === 0);
     } else {
@@ -7543,8 +7555,7 @@ function syncTileRadiusControls(tabEl) {
         typeof tileTintChoice === 'function') {
       const choice = given ? tileTintChoice(false, '', 0, fill, givenHex) : null;
       if (choice) {
-        const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-        tileElem.style.background = tileTintBackground(base || '#1A1A1A', choice.color, choice.percent);
+        setTileTintBackground(tileElem, choice.color, choice.percent);
       } else if (tileElem.dataset.baseBg !== undefined) {
         tileElem.style.background = tileElem.dataset.baseBg;
       }
@@ -7763,8 +7774,7 @@ function syncTileRadiusControls(tabEl) {
       ? iconColorTilePreviewTint(String(typeValue ?? '0'), record, ownEntity, meta) : null;
     el.dataset.ruleTint = tint ? '1' : '0';
     if (!tint) return;
-    const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-    el.style.background = tileTintBackground(base || '#1A1A1A', tint.color, tint.percent);
+    setTileTintBackground(el, tint.color, tint.percent);
   }
   function snapshotBgColorIsDefault(snapshot) {
     return String(snapshot?.bg_color_default || '0') === '1' ||
@@ -7857,6 +7867,7 @@ function syncTileRadiusControls(tabEl) {
       delete el.dataset.navigateTarget;
       delete el.dataset.folderPinEnabled;
     }
+    delete el.dataset.bgOpacity;
     if (typeValue === '0') el.style.background = 'transparent';
     else {
       const isDefaultBg = tileBgFollowsDefault(tile.bg_color);
@@ -7867,6 +7878,7 @@ function syncTileRadiusControls(tabEl) {
                                  SCREENSAVER_TILE_DEFAULT_OPACITY);
         el.style.background = tileBackgroundCss(meta, isDefaultBg,
           tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
+        el.dataset.bgOpacity = String(opacity);
         // A fully transparent card casts no shadow (apply_slot_tile_shadows).
         el.classList.toggle('screensaver-bg-clear', opacity === 0);
       } else {
@@ -8923,6 +8935,9 @@ function syncTileRadiusControls(tabEl) {
     tile.classList.add('resizing');
     tile.draggable = false;
     document.body.classList.add('tile-resize-active');
+    // The hidden card's target shows at once: before the first pointer move
+    // the tile was simply gone (user 2026-10-02).
+    updateResizePlaceholder(tab, layout, true);
     window.addEventListener('pointermove', handleTileResizeMove);
     window.addEventListener('pointerup', handleTileResizeEnd);
     window.addEventListener('pointercancel', handleTileResizeCancel);
@@ -12822,9 +12837,8 @@ function maybeFillTitleFromMedia(tab) {
       const icon = el.querySelector(':scope > .tile-icon');
       if (icon) icon.style.color = coverColor;
     }
-    if (cover.tile && !parsed.fill && el.dataset.ruleTint !== '1' && typeof tileTintBackground === 'function') {
-      const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-      el.style.background = tileTintBackground(base || '#1A1A1A', coverColor, cover.tile);
+    if (cover.tile && !parsed.fill && el.dataset.ruleTint !== '1' && typeof setTileTintBackground === 'function') {
+      setTileTintBackground(el, coverColor, cover.tile);
     }
   }
 

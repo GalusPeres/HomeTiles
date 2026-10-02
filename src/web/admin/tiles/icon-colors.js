@@ -601,6 +601,16 @@
     for (let i = 0; i < 40 && contrast(out) < 4.5; i++) out = out.map(v => Math.floor((v * 95 + 50) / 100));
     return '#' + out.map(v => v.toString(16).toUpperCase().padStart(2, '0')).join('');
   }
+  // Tints a preview card from the global tile color. A screensaver card keeps
+  // its own opacity (data-bg-opacity): the panel sets bg_opa after the tint
+  // (image_screensaver build_slot_tile); the opaque tint hid the wallpaper
+  // in the preview (user 2026-10-02).
+  function setTileTintBackground(el, color, percent) {
+    const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
+    const hex = tileTintBackground(base || '#1A1A1A', color, percent);
+    const opacity = el.dataset.bgOpacity;
+    el.style.background = opacity === undefined ? hex : hex + Number(opacity).toString(16).padStart(2, '0');
+  }
 
   // Entities offered as a source: the states the Bridge publishes to tiles.
   function iconColorSourceEntries(data) {

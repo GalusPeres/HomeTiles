@@ -20,7 +20,11 @@ try{
  }
  const z=id=>Number(style(id).zIndex);
  check(z('saverTarget')>z('saver'),'Screensaver target card above the old card: '+z('saverTarget')+' vs '+z('saver'));
- const clock=document.createElement('div');clock.className='screensaver-grid-clock';document.querySelector('.screensaver-tile-grid').appendChild(clock);
+ const clock=document.createElement('div');clock.className='screensaver-grid-clock fake-hover';document.querySelector('.screensaver-tile-grid').appendChild(clock);
+ // The slideshow image and the clock under the pointer show no hover mark.
+ const frame=document.createElement('div');frame.className='screensaver-grid-image-frame fake-hover';document.querySelector('.screensaver-tile-grid').prepend(frame);
+ check(getComputedStyle(frame).outlineStyle==='none','No slideshow hover while resizing: '+getComputedStyle(frame).outlineStyle);
+ check(getComputedStyle(clock).outlineStyle==='none','No clock hover while resizing');
  check(Number(getComputedStyle(clock).zIndex)>z('saverTarget'),'The screensaver clock stays above the tiles');
  document.body.dataset.result='pass';document.getElementById('result').textContent='Resizing hides the old card under the pointer on every page';
 }catch(error){document.body.dataset.result='fail';document.getElementById('result').textContent=error.stack;}

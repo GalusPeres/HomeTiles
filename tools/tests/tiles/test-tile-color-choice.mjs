@@ -120,7 +120,7 @@ for (const marker of [
   "el.dataset.ruleTint = tint ? '1' : '0';",
   'if (fill) el.dataset.iconFill = String(fill);',
   "tileTintChoice(false, '', 0, fill, givenHex)",
-  'tileElem.style.background = tileTintBackground(base || \'#1A1A1A\', choice.color, choice.percent);',
+  'setTileTintBackground(tileElem, choice.color, choice.percent);',
   'tileElem.style.background = tileElem.dataset.baseBg;',
   "if (input && input.dataset.unset === '1' && given) input.value = givenHex;",
 ]) assert.ok(grid.includes(marker), 'grid-preview: ' + marker);

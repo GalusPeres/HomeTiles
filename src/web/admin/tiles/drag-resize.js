@@ -255,6 +255,9 @@
     tile.classList.add('resizing');
     tile.draggable = false;
     document.body.classList.add('tile-resize-active');
+    // The hidden card's target shows at once: before the first pointer move
+    // the tile was simply gone (user 2026-10-02).
+    updateResizePlaceholder(tab, layout, true);
     window.addEventListener('pointermove', handleTileResizeMove);
     window.addEventListener('pointerup', handleTileResizeEnd);
     window.addEventListener('pointercancel', handleTileResizeCancel);

@@ -138,6 +138,7 @@
     if (meta.css) tileElem.classList.add(meta.css);
     if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
     tileElem.style.background = '';
+    delete tileElem.dataset.bgOpacity;
     tileElem.dataset.type = type;
     tileElem.dataset.iconDisc = tileTypeHasDiscToggle(type)
       && document.getElementById(prefix + '_tile_icon_disc')?.checked === false ? '2' : '0';
@@ -178,6 +179,7 @@
         0, 255, 0);
       tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
         isDefaultBg ? defaultBg : (color || defaultBg), opacity);
+      tileElem.dataset.bgOpacity = String(opacity);
       // A fully transparent card casts no shadow (apply_slot_tile_shadows).
       tileElem.classList.toggle('screensaver-bg-clear', opacity === 0);
     } else {

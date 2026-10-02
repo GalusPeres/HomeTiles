@@ -113,5 +113,5 @@ const serverPreview = read('src/web/server/render/web_admin_html.cpp');
 assert.ok(serverPreview.includes('if (tile_geometry::compact_icon_title(tile.type, span_w, span_h)) {') &&
   serverPreview.includes('cssClass += " sensor-compact sensor-half compact-title-only";'));
 assert.ok(read('src/web/admin/tiles/layout.js').includes("const compactIconTitle = [2, 4, 7, 8, 18].includes(Number(type)) && halfHeight;"));
-assert.match(read('src/web/assets/admin.css'), /\.tile\.sensor-compact\.compact-title-only > \.tile-title \{\s*top:max\(0px, calc\(\(var\(--compact-h\) - var\(--compact-title-line\)\) \/ 2\)\);/);
+assert.match(read('src/web/assets/admin.css'), /\.tile\.sensor-compact\.compact-title-only > \.tile-title \{\s*top:calc\(max\(0px, \(var\(--compact-h\) - var\(--compact-title-line\)\) \/ 2\) \+ var\(--compact-title-dy, 0px\)\);/);
 console.log('Icon-and-title tiles: 1x0.5 compact header, fixed icon color with glow, Back border and preview pass');

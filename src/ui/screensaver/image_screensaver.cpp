@@ -7,6 +7,7 @@
 #include <FS.h>
 #include <esp_heap_caps.h>
 #include <lvgl.h>
+#include <lvgl_private.h>
 #include <libs/tjpgd/tjpgd.h>
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
 #include <driver/jpeg_decode.h>
@@ -1857,13 +1858,26 @@ void image_screensaver_tiles_changed() {
 bool image_screensaver_show_tiles_now() {
   ScreensaverState* st = g_state;
   if (!st || g_opening || !st->slot_grid) return false;
+  const uint32_t started_ms = millis();
   if (!update_slot_grid(st)) {
     rebuild_slot_grid(st);
     refresh_slot_values(st);
   }
   if (st->clock_box) lv_obj_move_foreground(st->clock_box);
   if (lv_display_t* display = lv_obj_get_display(st->slot_grid)) {
+    // One line per edit: what the frame redraws and how long it takes
+    // (user 2026-10-02: show=780 ms for one rebuilt tile in 11 ms).
+    uint32_t pixels = 0;
+    for (uint32_t i = 0; i < display->inv_p; ++i) {
+      if (!display->inv_area_joined[i]) pixels += lv_area_get_size(&display->inv_areas[i]);
+    }
+    const uint16_t areas = display->inv_p;
+    const uint32_t draw_started_ms = millis();
     lv_refr_now(display);
+    Serial.printf("[Screensaver] Shown: build=%lu ms draw=%lu ms areas=%u pixels=%lu\n",
+                  static_cast<unsigned long>(draw_started_ms - started_ms),
+                  static_cast<unsigned long>(millis() - draw_started_ms),
+                  static_cast<unsigned>(areas), static_cast<unsigned long>(pixels));
   }
   return true;
 }

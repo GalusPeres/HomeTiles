@@ -97,9 +97,8 @@ function maybeFillTitleFromMedia(tab) {
       const icon = el.querySelector(':scope > .tile-icon');
       if (icon) icon.style.color = coverColor;
     }
-    if (cover.tile && !parsed.fill && el.dataset.ruleTint !== '1' && typeof tileTintBackground === 'function') {
-      const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
-      el.style.background = tileTintBackground(base || '#1A1A1A', coverColor, cover.tile);
+    if (cover.tile && !parsed.fill && el.dataset.ruleTint !== '1' && typeof setTileTintBackground === 'function') {
+      setTileTintBackground(el, coverColor, cover.tile);
     }
   }
 

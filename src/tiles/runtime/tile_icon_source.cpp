@@ -573,6 +573,13 @@ void refresh_controls(lv_obj_t* card) {
   if (card) style_controls(card);
 }
 
+bool card_cover_color(lv_obj_t* card, uint32_t& rgb) {
+  uint32_t stored = 0;
+  if (!cover_color(card, stored) || !tile_tint::has_hue(stored)) return false;
+  rgb = stored;
+  return true;
+}
+
 void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb) {
   if (!card) return;
   uint32_t stored = 0;

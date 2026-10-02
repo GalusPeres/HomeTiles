@@ -247,16 +247,27 @@ ${inlineScriptSafe(script)}
 ${inlineScriptSafe(preview)}
 document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
   const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--radius-preview-scale'));
+  // The preview grid at exactly the device proportions, so the tile sizes the
+  // grid gives match the scaled device cards.
+  const root = document.documentElement.style;
+  root.setProperty('--preview-cell-w', WEATHER_TILE_LAYOUT.cellW * scale + 'px');
+  root.setProperty('--preview-cell-h', WEATHER_TILE_LAYOUT.cellH * scale + 'px');
+  root.setProperty('--preview-gap', WEATHER_TILE_LAYOUT.gap * scale + 'px');
   const results = [];
   for (const device of ${JSON.stringify(tiles)}) {
     const el = document.createElement('div');
     el.className = 'tile weather';
-    el.style.width = device.cardW * scale + 'px';
-    el.style.height = device.cardH * scale + 'px';
+    // A re-rendered tile at a half position is filled before the grid places
+    // it (user 2026-10-02: the forecast squeezed into the top left): render
+    // it in a wrong size, then give it its grid size.
+    el.style.width = '120px';
+    el.style.height = '60px';
     el.innerHTML = '<i class="mdi mdi-weather-cloudy tile-icon"></i><div class="tile-title">Weather<br>Munich</div>';
     document.getElementById('host').replaceChildren(el);
     const tile = {col: 0, span_w: device.spanW, span_h: device.spanH, sensor_display_mode: 0};
     applyWeatherPreview(el, parseWeatherPreviewPayload(${JSON.stringify(payload)}), tile, 'weather-cloudy', '');
+    el.style.width = device.cardW * scale + 'px';
+    el.style.height = device.cardH * scale + 'px';
     const card = el.getBoundingClientRect();
     const boxes = {}, texts = {};
     const rect = (name, node, textNode = node) => {

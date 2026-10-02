@@ -57,6 +57,8 @@
       // Weather and media tile states, the payloads their tiles draw.
       weatherValues: payload.weather_values || payload.weatherValues || {},
       mediaValues: payload.media_values || payload.mediaValues || {},
+      // "From cover": the color each shown media card sampled from its cover.
+      mediaCoverColors: payload.media_cover_colors || payload.mediaCoverColors || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},

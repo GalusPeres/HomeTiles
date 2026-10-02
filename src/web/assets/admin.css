@@ -1061,13 +1061,12 @@
       z-index:2;
     }
     /* The optional tile shadow: like the device a card shadow only
-       (screensaver_tile_shadow.h), never one behind the text and icons. The
-       card casts it from its visible edge, 3px inside the editor border, and
+       (screensaver_tile_shadow.h), never one behind the text and icons, cast
        without the rounded clip-path, which would cut it off. Selection and
        hover keep their own shadows in front of it. */
     .screensaver-tile-grid.tiles-shadowed > .tile:not(.empty):not(.screensaver-bg-clear) {
       --screensaver-card-shadow:0 0 var(--screensaver-tile-shadow-blur, 8px)
-        calc(var(--screensaver-tile-shadow-spread, 1.5px) - 3px)
+        var(--screensaver-tile-shadow-spread, 1.5px)
         rgba(0,0,0,var(--screensaver-tile-shadow-opa, 0.6));
       clip-path:none;
       box-shadow:var(--screensaver-card-shadow);
@@ -1088,6 +1087,10 @@
 
     /* Display-like tiles (50% scaling) */
     /* Display: Title=TOP_LEFT, Value=CENTER(-30,18), Unit=RIGHT_MID */
+    /* The card fills the whole tile like the device card, which every content
+       position assumes; the 3 px editor border (hover, selection) lies on its
+       edge. A card inside the border was 3 px smaller per side, so corner
+       discs touched or crossed its rounded edge. */
     .tile {
       background:#2A2A2A;
       border-radius:var(--tile-radius, 11px);
@@ -1097,7 +1100,7 @@
       position:relative;
       box-sizing:border-box;
       overflow:hidden;
-      background-clip:padding-box;
+      background-clip:border-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
     /* The tile clips itself to its rounded corners, so an outline would be cut
@@ -1110,7 +1113,7 @@
       border:3px dashed rgba(38,166,154,0.6);
       box-shadow:0 0 0 2px rgba(38,166,154,0.12) inset;
       border-radius:var(--tile-radius, 11px);
-      background-clip:padding-box;
+      background-clip:border-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
     /* The selection is stored per folder in data-selected. The active class
@@ -1121,7 +1124,7 @@
       border:3px solid #26a69a;
       box-shadow:0 0 12px rgba(38,166,154,0.55);
       border-radius:var(--tile-radius, 11px);
-      background-clip:padding-box;
+      background-clip:border-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
     .tile.dragging {
@@ -1129,7 +1132,7 @@
       border:3px solid transparent;
       box-shadow:none;
       border-radius:var(--tile-radius, 11px);
-      background-clip:padding-box;
+      background-clip:border-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
     .tile.resizing {
@@ -1150,7 +1153,7 @@
        background:rgba(38,166,154,0.12);
        box-shadow:0 0 0 2px rgba(38,166,154,0.2) inset;
        border-radius:var(--tile-radius, 11px);
-       background-clip:padding-box;
+       background-clip:border-box;
        clip-path:inset(0 round var(--tile-radius, 11px));
     }
     .tile.empty.drop-target {
@@ -2782,6 +2785,11 @@
 .tile.sensor-compact:hover:not(.active) { box-shadow:inset 0 0 0 2px rgba(38,166,154,.6); }
 .tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { box-shadow:inset 0 0 0 3px #26a69a, 0 0 12px rgba(38,166,154,.55); }
 .tile.sensor-compact:focus-visible { box-shadow:inset 0 0 0 3px #64d8cb, 0 0 12px rgba(38,166,154,.55); }
+/* A pill is lower than the side handle and its text runs to the bottom
+   handle: the handles fit its height and show only under the pointer, so a
+   selected pill shows no second rounded edge inside its ring. */
+.tile.sensor-compact > .tile-resize-handle-e { height:min(34px, 55%); }
+.tile.sensor-compact:is(.active, [data-selected="1"]):not(:hover):not(.resizing) > .tile-resize-handle { opacity:0; }
 
 /* Per-tile icon colors in the tile editor: the fixed icon color and the
    Binary On/Off colors use the tile color row; the color bar has a mode

@@ -2331,6 +2331,8 @@ function syncTileRadiusControls(tabEl) {
       // Weather and media tile states, the payloads their tiles draw.
       weatherValues: payload.weather_values || payload.weatherValues || {},
       mediaValues: payload.media_values || payload.mediaValues || {},
+      // "From cover": the color each shown media card sampled from its cover.
+      mediaCoverColors: payload.media_cover_colors || payload.mediaCoverColors || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},
@@ -6274,6 +6276,9 @@ function syncTileRadiusControls(tabEl) {
         typeof iconColorOwnEntity === 'function') {
       applyTileRulesTint(tileElem, type, collectIconColorRecord(prefix), iconColorOwnEntity(prefix, String(type)), sensorMetaCache);
     }
+    if (previewKind === 'media' && typeof collectIconColorRecord === 'function') {
+      applyMediaCoverTint(tileElem, collectIconColorRecord(prefix), sensorMetaCache.mediaCoverColors?.[mediaEntity] || '');
+    }
     applyIconDiscTint(tileElem);
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
     if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight);
@@ -8031,6 +8036,9 @@ function syncTileRadiusControls(tabEl) {
       }
       if (typeof applyTileRulesTint === 'function') {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
+      }
+      if (previewKind === 'media') {
+        applyMediaCoverTint(el, tile.icon_colors, sensorMeta?.mediaCoverColors?.[tile.sensor_entity || ''] || '');
       }
       applyIconDiscTint(el);
       if (previewKind === 'cover') {
@@ -11261,8 +11269,12 @@ function maybeFillTitleFromWeather(tab) {
     const cellW = parseFloat(rootStyle.getPropertyValue('--preview-cell-w'));
     const cellH = parseFloat(rootStyle.getPropertyValue('--preview-cell-h'));
     const previewGap = parseFloat(rootStyle.getPropertyValue('--preview-gap')) || 0;
-    const width = el.offsetWidth || (spanW * (cellW + previewGap) - previewGap);
-    const height = el.offsetHeight || (spanH * (cellH + previewGap) - previewGap);
+    // The tile's size like the grid gives it (.fractional-tile), never
+    // measured: a re-rendered tile at a half position is placed only after
+    // it is filled.
+    const width = cellW > 0 ? spanW * (cellW + previewGap) - previewGap : el.offsetWidth;
+    const height = cellH > 0 ? Math.max(1, Number(tile?.span_h) || 1) * (cellH + previewGap) - previewGap
+      : el.offsetHeight;
     const px = value => (value * scale).toFixed(2) + 'px';
     const font = f => ({
       size: Math.max(6, Math.round(f.px * scale)),
@@ -12776,6 +12788,25 @@ function maybeFillTitleFromMedia(tab) {
             subtitleY: titleY + titleHeight + gap};
   }
 
+  // "From cover" (tile_icon_source.cpp apply_cover): the icon color and the
+  // tile tint take the color the panel sampled from the cover it shows. A
+  // rule's tile tint and "From icon" win over the cover tint, a rule's icon
+  // color over the cover icon color.
+  function applyMediaCoverTint(el, record, coverColor) {
+    if (!el || !coverColor || typeof parseIconColorRecord !== 'function') return;
+    const parsed = parseIconColorRecord(record || '');
+    const cover = parsed.cover || {icon: false, tile: 0};
+    const layer = typeof iconColorRecordSource === 'function' ? iconColorRecordSource(record || '') : null;
+    if (cover.icon && !(layer && layer.enabled && layer.icon)) {
+      const icon = el.querySelector(':scope > .tile-icon');
+      if (icon) icon.style.color = coverColor;
+    }
+    if (cover.tile && !parsed.fill && el.dataset.ruleTint !== '1' && typeof tileTintBackground === 'function') {
+      const base = String(getComputedStyle(document.documentElement).getPropertyValue('--tile-default-bg') || '').trim();
+      el.style.background = tileTintBackground(base || '#1A1A1A', coverColor, cover.tile);
+    }
+  }
+
   // An artwork loaded: the texts move beside it like on the device.
   function mediaPreviewCoverLoaded(image) {
     const tile = image?.closest('.tile');
@@ -12817,9 +12848,11 @@ function maybeFillTitleFromMedia(tab) {
     const cellW = parseFloat(rootStyle.getPropertyValue('--preview-cell-w'));
     const cellH = parseFloat(rootStyle.getPropertyValue('--preview-cell-h'));
     const previewGap = parseFloat(rootStyle.getPropertyValue('--preview-gap')) || 0;
-    // The card in display pixels, from the preview tile (its border box).
-    const cardW = Math.round((el.offsetWidth || (spanW * (cellW + previewGap) - previewGap)) / scale);
-    const cardH = Math.round((el.offsetHeight || (spanH * (cellH + previewGap) - previewGap)) / scale);
+    // The card in display pixels, from the preview tile's size like the grid
+    // gives it (.fractional-tile), never measured: a re-rendered tile at a
+    // half position is placed only after it is filled.
+    const cardW = Math.round((cellW > 0 ? spanW * (cellW + previewGap) - previewGap : el.offsetWidth) / scale);
+    const cardH = Math.round((cellH > 0 ? spanH * (cellH + previewGap) - previewGap : el.offsetHeight) / scale);
     const width = cardW - 2 * L.padH;
     const height = cardH - 2 * L.padV;
     const font = f => ({

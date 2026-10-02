@@ -209,8 +209,12 @@ function maybeFillTitleFromWeather(tab) {
     const cellW = parseFloat(rootStyle.getPropertyValue('--preview-cell-w'));
     const cellH = parseFloat(rootStyle.getPropertyValue('--preview-cell-h'));
     const previewGap = parseFloat(rootStyle.getPropertyValue('--preview-gap')) || 0;
-    const width = el.offsetWidth || (spanW * (cellW + previewGap) - previewGap);
-    const height = el.offsetHeight || (spanH * (cellH + previewGap) - previewGap);
+    // The tile's size like the grid gives it (.fractional-tile), never
+    // measured: a re-rendered tile at a half position is placed only after
+    // it is filled.
+    const width = cellW > 0 ? spanW * (cellW + previewGap) - previewGap : el.offsetWidth;
+    const height = cellH > 0 ? Math.max(1, Number(tile?.span_h) || 1) * (cellH + previewGap) - previewGap
+      : el.offsetHeight;
     const px = value => (value * scale).toFixed(2) + 'px';
     const font = f => ({
       size: Math.max(6, Math.round(f.px * scale)),

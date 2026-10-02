@@ -61,4 +61,18 @@ const handler = readRepoFile('src/web/server/handlers/web_admin_tiles.cpp').repl
 assert.match(handler, /for \(const char\* heavy : \{"forecast_hourly", "entity_picture_data"\}\)/);
 assert.match(handler, /append_preview_payloads\("weather_values", ha\.weathers_text\);/);
 assert.match(handler, /append_preview_payloads\("media_values", ha\.media_players_text\);/);
-console.log('Preview payloads: hourly forecast and artwork data cut out, the rest valid and unchanged');
+// "From cover" (user 2026-10-02: the media preview stayed grey while the
+// panel tinted the tile from the album cover): the panel reports the color
+// each shown media card sampled, and the preview tints after the rules and
+// before the circles, like tile_icon_source.cpp apply_cover.
+assert.match(handler, /json \+= ",\\"media_cover_colors\\":\{";[\s\S]*?tile_renderer_media_cover_color\(id, rgb\)/);
+const iconSource = readRepoFile('src/tiles/runtime/tile_icon_source.cpp').replace(/\r\n/g, '\n');
+assert.match(iconSource, /bool card_cover_color\(lv_obj_t\* card, uint32_t& rgb\) \{\s*uint32_t stored = 0;\s*if \(!cover_color\(card, stored\) \|\| !tile_tint::has_hue\(stored\)\) return false;/);
+const runtime = readRepoFile('src/tiles/runtime/tile_renderer.cpp').replace(/\r\n/g, '\n');
+assert.match(runtime, /bool tile_renderer_media_cover_color\(const String& entity_id, uint32_t& rgb\) \{[\s\S]*?lv_obj_has_flag\(clip, LV_OBJ_FLAG_HIDDEN\)[\s\S]*?tile_icon_source::card_cover_color\(lv_obj_get_parent\(clip\), rgb\)/);
+assert.match(readRepoFile('src/web/admin/tiles/state.js'), /mediaCoverColors: payload\.media_cover_colors/);
+assert.match(readRepoFile('src/web/admin/tiles/grid-preview.js').replace(/\r\n/g, '\n'),
+  /applyTileRulesTint\(el,[^\n]*\n\s*\}\s*if \(previewKind === 'media'\) \{\s*applyMediaCoverTint\(el, tile\.icon_colors, sensorMeta\?\.mediaCoverColors\?\.\[tile\.sensor_entity \|\| ''\] \|\| ''\);\s*\}\s*applyIconDiscTint\(el\);/);
+const media = readRepoFile('src/types/media/admin.js').replace(/\r\n/g, '\n');
+assert.match(media, /if \(cover\.tile && !parsed\.fill && el\.dataset\.ruleTint !== '1' && typeof tileTintBackground === 'function'\)/);
+console.log('Preview payloads: hourly forecast and artwork data cut out, the rest valid and unchanged; cover colors reported');

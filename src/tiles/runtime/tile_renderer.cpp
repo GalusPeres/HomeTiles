@@ -3086,6 +3086,21 @@ const lv_image_dsc_t* tile_renderer_find_media_cover(const String& entity_id, ui
   return nullptr;
 }
 
+bool tile_renderer_media_cover_color(const String& entity_id, uint32_t& rgb) {
+  const GridType types[] = {GridType::TAB0, GridType::TAB1, GridType::TAB2, GridType::SCREENSAVER};
+  MediaTileWidgets* const grids[] = {g_tab0_media, g_tab1_media, g_tab2_media, g_screensaver_media};
+  for (size_t grid = 0; grid < 4; ++grid) {
+    if (!grids[grid]) continue;
+    for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
+      lv_obj_t* clip = grids[grid][i].cover_clip;
+      if (!clip || lv_obj_has_flag(clip, LV_OBJ_FLAG_HIDDEN)) continue;
+      if (!media_entity_for_grid_index(types[grid], i).equalsIgnoreCase(entity_id)) continue;
+      if (tile_icon_source::card_cover_color(lv_obj_get_parent(clip), rgb)) return true;
+    }
+  }
+  return false;
+}
+
 static void update_media_popup_from_widgets(GridType grid_type,
                                             uint8_t grid_index,
                                             MediaTileWidgets& widgets,

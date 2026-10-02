@@ -47,6 +47,8 @@ void refresh_card(lv_obj_t* card, const Tile& tile);
 // card with "From cover" (icon color and/or tile color) follows it right
 // away; other cards only keep the value. Skips unchanged values.
 void set_cover_color(lv_obj_t* card, bool known, uint32_t rgb);
+// The cover color a card last reported, when it has a hue (a cover that tints).
+bool card_cover_color(lv_obj_t* card, uint32_t& rgb);
 
 // The control fill of a card's controls: pressed buttons
 // (tile_icon_disc::mark_control; Media previous and next, Climate - and +)

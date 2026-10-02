@@ -163,13 +163,19 @@ const layout = MEDIA_TILE_LAYOUT;
 const scale = ${cellPreview} / layout.cellH;
 document.documentElement.style.setProperty('--radius-preview-scale', String(scale));
 document.documentElement.style.setProperty('--icon-size', Math.max(6, Math.round(layout.iconPx * scale)) + 'px');
+// The preview grid at exactly the device proportions.
+document.documentElement.style.setProperty('--preview-cell-w', layout.cellW * scale + 'px');
+document.documentElement.style.setProperty('--preview-cell-h', layout.cellH * scale + 'px');
+document.documentElement.style.setProperty('--preview-gap', layout.gap * scale + 'px');
 document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
   const results = [];
   for (const device of ${JSON.stringify(tiles)}) {
     const el = document.createElement('div');
     el.className = 'tile media';
-    el.style.width = device.cardW * scale + 'px';
-    el.style.height = device.cardH * scale + 'px';
+    // Filled before the grid places it (a tile at a half position), then
+    // given its grid size.
+    el.style.width = '120px';
+    el.style.height = '60px';
     el.style.background = '#1A1A1A';
     el.innerHTML = '<i class="mdi mdi-speaker tile-icon"></i><div class="tile-title">Player</div>';
     document.getElementById('host').replaceChildren(el);
@@ -177,6 +183,8 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
                    album: '', app: '', source: '', channel: '', cover: device.cover ? ${JSON.stringify(pixel)} : ''};
     applyMediaPreview(el, state, {sensor_entity: 'media_player.test', span_w: device.spanW, span_h: device.spanH},
                       'speaker', 'Player');
+    el.style.width = device.cardW * scale + 'px';
+    el.style.height = device.cardH * scale + 'px';
     // The artwork's place does not depend on its pixels: show it as loaded.
     const image = el.querySelector('.media-preview-cover img');
     if (image) mediaPreviewCoverLoaded(image);

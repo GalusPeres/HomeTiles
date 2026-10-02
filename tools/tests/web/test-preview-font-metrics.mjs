@@ -47,4 +47,13 @@ assert.doesNotMatch(css, /tiles-shadowed > \.tile:not\(\.empty\) \{\s*filter:dro
 assert.match(readRepoFile('src/ui/screensaver/image_screensaver.cpp'),
   /lv_obj_set_style_shadow_width\(card, screensaver_tile_shadow::kWidth, 0\);/);
 assert.match(styles, /emit_scaled\("screensaver-tile-shadow-blur", screensaver_tile_shadow::kWidth \/ 2\.0f\);/);
-console.log('Preview fonts: Inter Regular, LVGL line heights per size, text padding, card-only screensaver shadow');
+// The card fills the whole tile like the device card (user 2026-10-02: the
+// corner disc of taller tiles was cut at the card's rounded corner, the card
+// sat 3 px inside the editor border); no tile state shrinks it again.
+assert.match(rule('    .tile'), /background-clip:border-box;/);
+assert.doesNotMatch(css.replace(/::-webkit-scrollbar-thumb[^\n]*/, ''), /background-clip:padding-box/);
+// A selected pill shows no handle shapes inside its ring (user 2026-10-02:
+// the side handle was taller than the pill); they appear under the pointer.
+assert.match(css, /\.tile\.sensor-compact > \.tile-resize-handle-e \{ height:min\(34px, 55%\); \}/);
+assert.match(css, /\.tile\.sensor-compact:is\(\.active, \[data-selected="1"\]\):not\(:hover\):not\(\.resizing\) > \.tile-resize-handle \{ opacity:0; \}/);
+console.log('Preview fonts: Inter Regular, LVGL line heights per size, text padding, card-only screensaver shadow; full-size cards, quiet pill handles');

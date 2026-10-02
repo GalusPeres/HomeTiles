@@ -316,6 +316,9 @@
         typeof iconColorOwnEntity === 'function') {
       applyTileRulesTint(tileElem, type, collectIconColorRecord(prefix), iconColorOwnEntity(prefix, String(type)), sensorMetaCache);
     }
+    if (previewKind === 'media' && typeof collectIconColorRecord === 'function') {
+      applyMediaCoverTint(tileElem, collectIconColorRecord(prefix), sensorMetaCache.mediaCoverColors?.[mediaEntity] || '');
+    }
     applyIconDiscTint(tileElem);
     if (previewKind === 'cover') applyCoverPreview(tileElem, coverPreviewState, halfHeight);
     if (deviceKind) applyDevicePreview(tileElem, deviceKind, devicePreviewState, halfHeight);

@@ -11,6 +11,7 @@
 #include "src/core/power/power_manager.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
+#include "src/tiles/runtime/tile_renderer.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/web/server/web_admin_utils.h"
 #include "src/web/server/handlers/web_admin_tile_helpers.h"
@@ -1023,6 +1024,23 @@ void WebAdminServer::handleGetSensorValues() {
   };
   append_preview_payloads("weather_values", ha.weathers_text);
   append_preview_payloads("media_values", ha.media_players_text);
+  // "From cover": the color a shown media card sampled from its cover.
+  json += ",\"media_cover_colors\":{";
+  bool first_cover_color = true;
+  for (const auto& id : parseSensorList(ha.media_players_text)) {
+    uint32_t rgb = 0;
+    if (!tile_renderer_media_cover_color(id, rgb)) continue;
+    char color[10];
+    snprintf(color, sizeof(color), "#%06X", static_cast<unsigned>(rgb & 0xFFFFFF));
+    if (!first_cover_color) json += ',';
+    first_cover_color = false;
+    json += '"';
+    appendJsonEscaped(json, id);
+    json += "\":\"";
+    json += color;
+    json += '"';
+  }
+  json += "}";
 
   // Aggregated energy sources such as solar_total are not Home Assistant
   // entities and are absent from the general sensor cache. Supply their

@@ -686,6 +686,9 @@
       if (typeof applyTileRulesTint === 'function') {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
       }
+      if (previewKind === 'media') {
+        applyMediaCoverTint(el, tile.icon_colors, sensorMeta?.mediaCoverColors?.[tile.sensor_entity || ''] || '');
+      }
       applyIconDiscTint(el);
       if (previewKind === 'cover') {
         applyCoverPreview(el, coverPreviewState, Number(tile.span_h) === 0.5);

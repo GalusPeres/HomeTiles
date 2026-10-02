@@ -488,7 +488,7 @@
         const layout = getTileElementLayout(tab, tileIndex) ||
                        getTileLayoutFromData(tab, tileIndex);
         const anchorCell = getDragAnchorCell(tab, layout, e.clientX, e.clientY);
-        const grabOffset = getDragAnchorOffset(tab, layout, anchorCell.col, anchorCell.row, tile.getBoundingClientRect());
+        const grabOffset = getDragGrabOffset(tile.getBoundingClientRect(), e.clientX, e.clientY);
         dragSource = {
           kind: 'grid-tile',
           tab,
@@ -659,13 +659,19 @@
       }
       const spanW = clampHalf(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
       const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, GRID_ROWS, 1);
+      // The slot shows one cell: the grabbed half of it anchors the drop like
+      // a grid tile, and the drag image stays where the pointer took it.
+      const rect = hiddenTile.getBoundingClientRect();
+      const grabOffset = getDragGrabOffset(rect, event.clientX, event.clientY);
+      const grabCellCol = spanW > 0.5 && grabOffset.x >= rect.width / 2 ? 0.5 : 0;
+      const grabCellRow = spanH > 0.5 && grabOffset.y >= rect.height / 2 ? 0.5 : 0;
       dragSource = {
         kind: 'hidden-settings',
         tab: 'folder0',
         index: -1,
         layout: {col: 0, row: 0, span_w: spanW, span_h: spanH},
-        grabCellCol: 0,
-        grabCellRow: 0,
+        grabCellCol,
+        grabCellRow,
         baseLayouts: null,
         dropCommitted: false,
         hiddenTarget: null
@@ -674,8 +680,7 @@
       hiddenTile.classList.add('dragging');
       if (event.dataTransfer.setDragImage) {
         dragPreview = createDragPreview(hiddenTile);
-        event.dataTransfer.setDragImage(
-          dragPreview, hiddenTile.offsetWidth / 2, hiddenTile.offsetHeight / 2);
+        event.dataTransfer.setDragImage(dragPreview, grabOffset.x, grabOffset.y);
       }
     });
     hiddenTile.addEventListener('dragend', () => {

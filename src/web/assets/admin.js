@@ -595,10 +595,14 @@ function syncTileRadiusControls(tabEl) {
       ? tileBackgroundCss(getTileTypeMeta('7'), true,
           getTileTypeMeta('7').defaultBg || '#2A2A2A')
       : snapshot.color;
-    const iconName = normalizeMdiIconName(snapshot.icon);
+    // The Settings PIN shows its lock here too (previewTileLocked); without
+    // an icon the lock is the icon.
+    const locked = typeof previewTileLocked === 'function' && previewTileLocked('7', tile);
+    const iconName = normalizeMdiIconName(snapshot.icon) || (locked ? 'lock' : '');
     if (iconName) {
       const icon = document.createElement('i');
       icon.className = 'mdi mdi-' + iconName + ' tile-icon';
+      if (locked && iconName !== 'lock') icon.innerHTML = PREVIEW_LOCK_MARK;
       tile.appendChild(icon);
     }
     if (snapshot.title) {
@@ -610,6 +614,24 @@ function syncTileRadiusControls(tabEl) {
     if (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX &&
         currentTileTab === 'folder0') {
       tile.classList.add('active');
+    }
+  }
+
+  // The Settings tile shows a lock while the Settings PIN is on
+  // (previewTileLocked): redraw it, in the grid or parked, once the PIN is
+  // set or cleared.
+  function refreshSettingsTileLock() {
+    const editing = currentTileTab === 'folder0' &&
+      (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX ||
+       document.getElementById('folder0-tile-' + currentTileIndex)?.dataset.type === '7');
+    if (editing && typeof updateTilePreview === 'function') {
+      updateTilePreview('folder0');
+    } else if (document.getElementById('settingsHiddenTile')?.dataset.hidden === '1') {
+      renderSettingsHiddenSlot(true);
+    } else {
+      const tiles = getTilesData('folder0');
+      const index = tiles.findIndex(item => Number(item?.type || 0) === 7);
+      if (index >= 0) renderTileFromData('folder0', index, tiles[index], sensorMetaCache);
     }
   }
 
@@ -702,6 +724,7 @@ function syncTileRadiusControls(tabEl) {
       }
     }
 
+    const lockedBefore = pinToggle.dataset.pinConfigured === '1';
     if (pinApply && hasNewPin) pinApply.disabled = true;
     try {
       const response = await fetch('/mqtt', {
@@ -737,6 +760,7 @@ function syncTileRadiusControls(tabEl) {
         setSettingsPinStatus(false);
       }
       toggleSettingsAccessFields();
+      if ((pinToggle.dataset.pinConfigured === '1') !== lockedBefore) refreshSettingsTileLock();
       const savedState = {
         ...requested,
         pinEnabled: persistPinEnabled,
@@ -8222,23 +8246,14 @@ function syncTileRadiusControls(tabEl) {
     return { col, row };
   }
 
-  function getDragAnchorOffset(tab, layout, grabCellCol, grabCellRow, tileRect) {
-    const metrics = getTileGridMetrics(tab);
-    const rect = tileRect || { width: 0, height: 0 };
-    if (!layout || !metrics) {
-      return {
-        x: Math.max(0, (rect.width / 2) || 0),
-        y: Math.max(0, (rect.height / 2) || 0)
-      };
-    }
-    const unit = 0.5;
-    const x = (grabCellCol * (metrics.cellW + metrics.gapX)) + ((metrics.cellW + metrics.gapX) * unit - metrics.gapX) / 2;
-    const y = (grabCellRow * (metrics.cellH + metrics.gapY)) + ((metrics.cellH + metrics.gapY) * unit - metrics.gapY) / 2;
-    const maxX = Math.max(0, rect.width - 1);
-    const maxY = Math.max(0, rect.height - 1);
+  // Where the pointer took the tile: the drag image stays exactly under the
+  // pointer. Centering it on the grabbed half cell moved it by up to a quarter
+  // tile (user 2026-10-02: a dragged tile sat slightly off).
+  function getDragGrabOffset(tileRect, clientX, clientY) {
+    const rect = tileRect || { left: 0, top: 0, width: 0, height: 0 };
     return {
-      x: Math.max(0, Math.min(maxX, x)),
-      y: Math.max(0, Math.min(maxY, y))
+      x: Math.max(0, Math.min(Math.max(0, rect.width - 1), clientX - rect.left)),
+      y: Math.max(0, Math.min(Math.max(0, rect.height - 1), clientY - rect.top))
     };
   }
 
@@ -9028,7 +9043,7 @@ function syncTileRadiusControls(tabEl) {
         const layout = getTileElementLayout(tab, tileIndex) ||
                        getTileLayoutFromData(tab, tileIndex);
         const anchorCell = getDragAnchorCell(tab, layout, e.clientX, e.clientY);
-        const grabOffset = getDragAnchorOffset(tab, layout, anchorCell.col, anchorCell.row, tile.getBoundingClientRect());
+        const grabOffset = getDragGrabOffset(tile.getBoundingClientRect(), e.clientX, e.clientY);
         dragSource = {
           kind: 'grid-tile',
           tab,
@@ -9199,13 +9214,19 @@ function syncTileRadiusControls(tabEl) {
       }
       const spanW = clampHalf(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
       const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, GRID_ROWS, 1);
+      // The slot shows one cell: the grabbed half of it anchors the drop like
+      // a grid tile, and the drag image stays where the pointer took it.
+      const rect = hiddenTile.getBoundingClientRect();
+      const grabOffset = getDragGrabOffset(rect, event.clientX, event.clientY);
+      const grabCellCol = spanW > 0.5 && grabOffset.x >= rect.width / 2 ? 0.5 : 0;
+      const grabCellRow = spanH > 0.5 && grabOffset.y >= rect.height / 2 ? 0.5 : 0;
       dragSource = {
         kind: 'hidden-settings',
         tab: 'folder0',
         index: -1,
         layout: {col: 0, row: 0, span_w: spanW, span_h: spanH},
-        grabCellCol: 0,
-        grabCellRow: 0,
+        grabCellCol,
+        grabCellRow,
         baseLayouts: null,
         dropCommitted: false,
         hiddenTarget: null
@@ -9214,8 +9235,7 @@ function syncTileRadiusControls(tabEl) {
       hiddenTile.classList.add('dragging');
       if (event.dataTransfer.setDragImage) {
         dragPreview = createDragPreview(hiddenTile);
-        event.dataTransfer.setDragImage(
-          dragPreview, hiddenTile.offsetWidth / 2, hiddenTile.offsetHeight / 2);
+        event.dataTransfer.setDragImage(dragPreview, grabOffset.x, grabOffset.y);
       }
     });
     hiddenTile.addEventListener('dragend', () => {

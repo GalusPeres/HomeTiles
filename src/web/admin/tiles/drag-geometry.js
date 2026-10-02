@@ -180,23 +180,14 @@
     return { col, row };
   }
 
-  function getDragAnchorOffset(tab, layout, grabCellCol, grabCellRow, tileRect) {
-    const metrics = getTileGridMetrics(tab);
-    const rect = tileRect || { width: 0, height: 0 };
-    if (!layout || !metrics) {
-      return {
-        x: Math.max(0, (rect.width / 2) || 0),
-        y: Math.max(0, (rect.height / 2) || 0)
-      };
-    }
-    const unit = 0.5;
-    const x = (grabCellCol * (metrics.cellW + metrics.gapX)) + ((metrics.cellW + metrics.gapX) * unit - metrics.gapX) / 2;
-    const y = (grabCellRow * (metrics.cellH + metrics.gapY)) + ((metrics.cellH + metrics.gapY) * unit - metrics.gapY) / 2;
-    const maxX = Math.max(0, rect.width - 1);
-    const maxY = Math.max(0, rect.height - 1);
+  // Where the pointer took the tile: the drag image stays exactly under the
+  // pointer. Centering it on the grabbed half cell moved it by up to a quarter
+  // tile (user 2026-10-02: a dragged tile sat slightly off).
+  function getDragGrabOffset(tileRect, clientX, clientY) {
+    const rect = tileRect || { left: 0, top: 0, width: 0, height: 0 };
     return {
-      x: Math.max(0, Math.min(maxX, x)),
-      y: Math.max(0, Math.min(maxY, y))
+      x: Math.max(0, Math.min(Math.max(0, rect.width - 1), clientX - rect.left)),
+      y: Math.max(0, Math.min(Math.max(0, rect.height - 1), clientY - rect.top))
     };
   }
 

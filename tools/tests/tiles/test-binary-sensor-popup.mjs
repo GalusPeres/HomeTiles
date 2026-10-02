@@ -168,12 +168,13 @@ assert.ok(
     i18nHeader.includes('binary_sensor_states[36]'),
   'Binary popup and state strings must live in the central locale schema',
 );
-for (const locale of ['kLocaleDe', 'kLocaleEn', 'kLocaleFr']) {
+const locales = ['kLocaleDe', 'kLocaleEn', 'kLocaleFr', 'kLocalePl'];
+for (const locale of locales) {
   assert.ok(i18n.includes(locale), `Missing central locale: ${locale}`);
 }
 assert.equal(
   (i18n.match(/"24H", "7D"/g) || []).length,
-  3,
+  locales.length,
   'All locales must use the exact Sensor-popup range abbreviations',
 );
 for (const deviceClass of [

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <string.h>
 #include <lvgl.h>
 
 enum CoverFeature : uint8_t {
@@ -26,6 +27,14 @@ struct CoverState {
   char state[12] = {};
   char device_class[12] = {};
 };
+
+// Opening or closing: Home Assistant shows the arrow icon; the tile and the
+// popup header pulse it like a Lock or Alarm panel waiting for its device
+// (ui_pulse.h). A tilt that turns changes no state, so it shows nothing.
+inline bool cover_state_moving(const CoverState& state) {
+  return state.valid && state.available &&
+         (strcmp(state.state, "opening") == 0 || strcmp(state.state, "closing") == 0);
+}
 
 struct CoverTileWidgets {
   lv_obj_t* icon_label = nullptr;

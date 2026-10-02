@@ -19,6 +19,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/shared/command_pacer.h"
+#include "src/ui/shared/ui_pulse.h"
 
 namespace {
 
@@ -444,6 +445,21 @@ void bar_event_cb(lv_event_t* e) {
   }
 }
 
+// The arrow icon pulses while the Cover moves (cover_state_moving), in step
+// with the popup header and the Lock and Alarm panel tiles (ui_pulse.h).
+void icon_pulse_exec(void* obj, int32_t) {
+  lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), ui_pulse::opa_now(), 0);
+}
+
+void set_icon_pulse(lv_obj_t* icon, bool on) {
+  if (!icon) return;
+  // A refresh keeps a running pulse instead of restarting it.
+  if (on == (lv_anim_get(icon, icon_pulse_exec) != nullptr)) return;
+  lv_anim_delete(icon, icon_pulse_exec);
+  lv_obj_set_style_opa(icon, LV_OPA_COVER, 0);
+  if (on) ui_pulse::start(icon, icon_pulse_exec);
+}
+
 CoverPopupInit popup_init(GridType grid_type, uint8_t index) {
   CoverPopupInit init;
   const Tile* tile = tile_renderer_get_tile_config(grid_type, index);
@@ -477,6 +493,7 @@ void apply_state(GridType grid_type, uint8_t index, const char* payload) {
       lv_label_set_text(
           widget.icon_label, getMdiChar(fallback_icon(state)).c_str());
     }
+    set_icon_pulse(widget.icon_label, cover_state_moving(state));
   }
   update_cover_popup(popup_init(grid_type, index));
 }

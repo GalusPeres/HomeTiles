@@ -600,6 +600,9 @@ void refresh_popup(CoverPopupContext* ctx) {
   if (ctx->icon_label) {
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ctx->accent), 0);
   }
+  // The header's arrow pulses while the Cover moves, like the tile; before
+  // the shell shows (an opening) the show paths call it again.
+  popup_shell_pulse_icon(ctx->card, cover_state_moving(ctx->state));
 }
 
 void apply_init(CoverPopupContext* ctx, const CoverPopupInit& init) {
@@ -1235,6 +1238,7 @@ void show_cover_popup(const CoverPopupInit& init) {
 
     if (g_ctx && g_ctx->card) viewNavigationPopupShown(g_ctx->card, init.entity_id.c_str());
     show_popup_shell(g_ctx->overlay, g_ctx->card, g_ctx->title_label, g_ctx->icon_label, g_ctx->close_button);
+    popup_shell_pulse_icon(g_ctx->card, cover_state_moving(init.state));
     return;
   }
 
@@ -1370,6 +1374,7 @@ void show_cover_popup(const CoverPopupInit& init) {
 
   if (g_ctx && g_ctx->card) viewNavigationPopupShown(g_ctx->card, init.entity_id.c_str());
   show_popup_shell(g_ctx->overlay, g_ctx->card, g_ctx->title_label, g_ctx->icon_label, g_ctx->close_button);
+  popup_shell_pulse_icon(g_ctx->card, cover_state_moving(init.state));
 }
 
 void update_cover_popup(const CoverPopupInit& init) {

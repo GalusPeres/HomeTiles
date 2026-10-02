@@ -841,7 +841,7 @@
        with their labels and values aligned in the next (user 2026-10-02). */
     .folder-footer-options.screensaver-tile-options {
       display:grid;
-      grid-template-columns:max-content max-content minmax(120px, 220px) max-content;
+      grid-template-columns:max-content max-content 120px max-content;
       justify-content:start;
       align-items:center;
       gap:10px 12px;

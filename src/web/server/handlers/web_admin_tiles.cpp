@@ -321,6 +321,24 @@ static bool parseFolderIdArg(WebServer& server, uint16_t& out) {
 
 }  // namespace
 
+// An open screensaver shows a tile edit or move before the flash write, like
+// the visible folder (user 2026-10-02: screensaver edits were slow).
+static bool showScreensaverGridBeforeSave(const TileGridConfig& grid) {
+  if (!is_image_screensaver_visible()) return false;
+  screensaverConfig.previewTileGrid(grid);
+  return image_screensaver_show_tiles_now();
+}
+
+// A failed save takes the open screensaver back to the stored grid.
+static void restoreScreensaverGridAfterFailedSave() {
+  TileGridConfig* stored = new (std::nothrow) TileGridConfig();
+  if (stored && tileConfig.loadScreensaverGrid(*stored)) {
+    screensaverConfig.previewTileGrid(*stored);
+  }
+  delete stored;
+  image_screensaver_tiles_changed();
+}
+
 // Ignore Back tiles when checking folder contents. Treat read failures
 // as nonempty so a type change cannot orphan existing content.
 static bool folderHasContent(uint16_t folder_id) {
@@ -724,10 +742,12 @@ void WebAdminServer::handleSaveTiles() {
   // grid carries its view ID.
   const bool display_awake = !powerManager.isInSleep();
   const bool shown_before_save =
-      !screensaver_grid && !deleting_folder && display_awake &&
-      previous_tile.type == tile.type &&
-      tileConfig.previewActiveFolderGrid(folder_id, *grid) &&
-      tiles_show_active_layout_now();
+      screensaver_grid
+          ? display_awake && showScreensaverGridBeforeSave(*grid)
+          : !deleting_folder && display_awake &&
+                previous_tile.type == tile.type &&
+                tileConfig.previewActiveFolderGrid(folder_id, *grid) &&
+                tiles_show_active_layout_now();
   const uint32_t save_started_ms = millis();
   bool success = screensaver_grid
                      ? screensaverConfig.replaceTileGrid(*grid)
@@ -762,7 +782,7 @@ void WebAdminServer::handleSaveTiles() {
           !(display_awake && tiles_show_active_layout_now())) {
         tiles_request_reload_if_loaded(GridType::TAB0);
       }
-    } else {
+    } else if (!shown_before_save) {
       image_screensaver_tiles_changed();
     }
 
@@ -787,7 +807,9 @@ void WebAdminServer::handleSaveTiles() {
     sendChunkedResponse(server, 200, "application/json", response);
   } else {
     Serial.printf("[WebAdmin] Failed to save tile in folder %u[%d]\n", static_cast<unsigned>(folder_id), index);
-    if (shown_before_save && tileConfig.setActiveFolder(folder_id)) {
+    if (screensaver_grid) {
+      if (shown_before_save) restoreScreensaverGridAfterFailedSave();
+    } else if (shown_before_save && tileConfig.setActiveFolder(folder_id)) {
       // Back to the stored tile the failed save left.
       tiles_request_reload(GridType::TAB0);
     }
@@ -867,9 +889,11 @@ void WebAdminServer::handleReorderTiles() {
   // The visible folder shows the new order before the flash write (about a
   // second) instead of after it and a quiet Web Admin.
   const uint32_t show_started_ms = millis();
-  const bool shown_now = !screensaver_grid && !powerManager.isInSleep() &&
-                         tileConfig.previewActiveFolderGrid(folder_id, grid) &&
-                         tiles_show_active_layout_now();
+  const bool shown_now =
+      !powerManager.isInSleep() &&
+      (screensaver_grid ? showScreensaverGridBeforeSave(grid)
+                        : tileConfig.previewActiveFolderGrid(folder_id, grid) &&
+                              tiles_show_active_layout_now());
   const uint32_t save_started_ms = millis();
   bool success = screensaver_grid
                      ? screensaverConfig.replaceTileGrid(grid)
@@ -882,12 +906,14 @@ void WebAdminServer::handleReorderTiles() {
       if (!shown_now && tileConfig.getActiveFolderId() == folder_id) {
         tiles_request_reload_if_loaded(GridType::TAB0);
       }
-    } else {
+    } else if (!shown_now) {
       image_screensaver_tiles_changed();
     }
     server.send(200, "application/json", "{\"success\":true}");
   } else {
-    if (shown_now && tileConfig.setActiveFolder(folder_id)) {
+    if (screensaver_grid) {
+      if (shown_now) restoreScreensaverGridAfterFailedSave();
+    } else if (shown_now && tileConfig.setActiveFolder(folder_id)) {
       // Back to the stored order the failed save left.
       tiles_request_reload(GridType::TAB0);
     }

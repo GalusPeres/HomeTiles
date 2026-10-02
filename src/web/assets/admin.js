@@ -9531,6 +9531,24 @@ function syncTileRadiusControls(tabEl) {
     return Math.max(min, Math.min(max, Number.isFinite(n) ? n : min));
   }
 
+  // The image frame stands for the panel's screen: its box in the grid's
+  // padding box (where the clock is positioned) and on the page.
+  function ssPreviewScreenRect(preview) {
+    const frame = preview.querySelector('.screensaver-grid-image-frame');
+    return (frame || preview).getBoundingClientRect();
+  }
+
+  function ssPreviewScreen(preview) {
+    const frame = preview.querySelector('.screensaver-grid-image-frame');
+    const rect = ssPreviewScreenRect(preview);
+    return {
+      left: frame ? frame.offsetLeft : 0,
+      top: frame ? frame.offsetTop : 0,
+      width: rect.width || 800,
+      height: rect.height || 500
+    };
+  }
+
   function ssNearestClockFont(value, dateLine = false) {
     const wanted = Number(value) || 20;
     const sizes = dateLine ? screensaverDateFontSizes : screensaverTimeFontSizes;
@@ -9790,8 +9808,11 @@ function syncTileRadiusControls(tabEl) {
     if (!preview || !image || !clock) return;
     preview.classList.toggle('selected-background', screensaverSelected.kind === 'background');
     clock.classList.toggle('selected-clock', screensaverSelected.kind === 'clock');
-    const width = preview.getBoundingClientRect().width || 800;
-    const scale = width / Number(d.screen_width || 1280);
+    // The image frame is the panel's screen. The grid around it is wider
+    // (editor padding and gaps), so the clock is placed and scaled on the
+    // frame; on the grid it sat about 10 px up and right, against the edge.
+    const screen = ssPreviewScreen(preview);
+    const scale = screen.width / Number(d.screen_width || 1280);
     const rootStyles = getComputedStyle(document.documentElement);
     const devicePx = (name, fallback) => {
       const value = parseFloat(rootStyles.getPropertyValue(name));
@@ -9825,8 +9846,8 @@ function syncTileRadiusControls(tabEl) {
       image.removeAttribute('src');
       delete image.dataset.src;
     }
-    clock.style.left = (d.clock_x / 10) + '%';
-    clock.style.top = (d.clock_y / 10) + '%';
+    clock.style.left = (screen.left + d.clock_x * screen.width / 1000) + 'px';
+    clock.style.top = (screen.top + d.clock_y * screen.height / 1000) + 'px';
     const time = document.getElementById('screensaverClockTime');
     const date = document.getElementById('screensaverClockDate');
     time.hidden = !d.show_time;
@@ -9947,7 +9968,7 @@ function syncTileRadiusControls(tabEl) {
     });
     clock.addEventListener('pointermove', e => {
       if (!clockDrag || clockDrag.id !== e.pointerId) return;
-      const rect = preview.getBoundingClientRect();
+      const rect = ssPreviewScreenRect(preview);
       const centerX = e.clientX - clockDrag.offsetX;
       const centerY = e.clientY - clockDrag.offsetY;
       screensaverDraft.clock_x = Math.round(ssClamp((centerX - rect.left) * 1000 / rect.width, 0, 1000));

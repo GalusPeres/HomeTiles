@@ -56,6 +56,9 @@ class ScreensaverConfigStore {
   const TileGridConfig& tileGrid() const { return gridStorage(); }
   TileGridConfig& mutableTileGrid() { return gridStorage(); }
   bool replaceTileGrid(const TileGridConfig& grid);
+  // Sets only the RAM grid, normalized like a save, so an open screensaver
+  // shows an edit before its flash write (replaceTileGrid follows).
+  void previewTileGrid(const TileGridConfig& grid);
   const Tile* tile(size_t index) const;
 
  private:

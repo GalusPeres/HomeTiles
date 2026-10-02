@@ -28,9 +28,15 @@ void service_image_screensaver_auto(uint32_t last_activity_ms);
 void image_screensaver_config_changed(
     const String& preview_wallpaper = String());
 
-// Separate live refresh for tile saves/drag-and-drop. Rebuild only the
-// small screensaver grid, preserving the image and clock.
+// Separate live refresh for settings that restyle every tile (default
+// color, icon glow) or a failed save. Rebuild only the small screensaver
+// grid, preserving the image and clock.
 void image_screensaver_tiles_changed();
+
+// A Web Admin tile edit or move (loopTask, like LVGL): an open screensaver
+// rebuilds only the changed slots and draws them at once, before the flash
+// write. False when no screensaver is open.
+bool image_screensaver_show_tiles_now();
 
 // Scenes in the bottom row use the same existing publish function as
 // normal tiles.

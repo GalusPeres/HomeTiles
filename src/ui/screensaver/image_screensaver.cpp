@@ -86,6 +86,10 @@ struct ScreensaverState {
   lv_obj_t* slot_objs[TILES_PER_GRID] = {};
   // Last rule entity payload per slot (the rules reapply on changes only).
   String slot_rule_payloads[TILES_PER_GRID];
+  // The grid the slot cards were built from, so an edit rebuilds only the
+  // slots that differ (update_slot_grid).
+  TileGridConfig* shown_grid = nullptr;
+  ~ScreensaverState() { delete shown_grid; }
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   // Prepare a complete LVGL frame for smooth slide transitions: wallpaper,
   // clock, tiles and any open popup are rendered off-screen in PSRAM, then
@@ -1326,24 +1330,27 @@ void refresh_slot_values(ScreensaverState* st) {
 // Apply the global shadow option to existing screensaver tiles so a
 // live save needs no grid rebuild. Fully transparent tiles retain no
 // shadow, which would otherwise frame an invisible surface.
+void apply_slot_card_shadow(lv_obj_t* card, bool enabled) {
+  if (!card) return;
+  const bool visible_bg =
+      lv_obj_get_style_bg_opa(card, LV_PART_MAIN) != LV_OPA_TRANSP;
+  if (enabled && visible_bg) {
+    lv_obj_set_style_shadow_width(card, screensaver_tile_shadow::kWidth, 0);
+    lv_obj_set_style_shadow_color(card, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_shadow_opa(card, screensaver_tile_shadow::kOpa, 0);
+    lv_obj_set_style_shadow_spread(card, screensaver_tile_shadow::kSpread, 0);
+  } else {
+    lv_obj_set_style_shadow_width(card, 0, 0);
+    lv_obj_set_style_shadow_opa(card, LV_OPA_TRANSP, 0);
+  }
+}
+
 void apply_slot_tile_shadows(ScreensaverState* st) {
   if (!st || !st->slot_grid) return;
   const bool enabled = screensaverConfig.get().tile_shadow;
   const uint32_t count = lv_obj_get_child_count(st->slot_grid);
   for (uint32_t i = 0; i < count; ++i) {
-    lv_obj_t* card = lv_obj_get_child(st->slot_grid, i);
-    if (!card) continue;
-    const bool visible_bg =
-        lv_obj_get_style_bg_opa(card, LV_PART_MAIN) != LV_OPA_TRANSP;
-    if (enabled && visible_bg) {
-      lv_obj_set_style_shadow_width(card, screensaver_tile_shadow::kWidth, 0);
-      lv_obj_set_style_shadow_color(card, lv_color_hex(0x000000), 0);
-      lv_obj_set_style_shadow_opa(card, screensaver_tile_shadow::kOpa, 0);
-      lv_obj_set_style_shadow_spread(card, screensaver_tile_shadow::kSpread, 0);
-    } else {
-      lv_obj_set_style_shadow_width(card, 0, 0);
-      lv_obj_set_style_shadow_opa(card, LV_OPA_TRANSP, 0);
-    }
+    apply_slot_card_shadow(lv_obj_get_child(st->slot_grid, i), enabled);
   }
 }
 
@@ -1356,6 +1363,34 @@ void apply_slot_tile_borders(ScreensaverState* st) {
     if (!card) continue;
     ui_surface_style::apply_tile_border(card, enabled);
   }
+}
+
+// One slot card as the screensaver shows it: see-through background, veiled
+// circles and controls; the caller adds the global shadow and border.
+lv_obj_t* build_slot_tile(ScreensaverState* st, size_t i, const Tile& tile) {
+  lv_obj_t* tile_obj = render_tile(st->slot_grid, tile.col, tile.row, tile,
+                                   static_cast<uint8_t>(i),
+                                   GridType::SCREENSAVER, g_scene_callback);
+  if (!tile_obj) return nullptr;
+  st->slot_objs[i] = tile_obj;
+  const lv_opa_t opacity = tile.background_opacity;
+  lv_obj_set_style_bg_opa(tile_obj, opacity,
+                          LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(tile_obj, opacity,
+                          LV_PART_MAIN | LV_STATE_PRESSED);
+  // Circles and controls of a see-through tile stay a veil over the
+  // wallpaper (tone_color.h); the tile was built opaque.
+  if (opacity < LV_OPA_COVER) {
+    tile_icon_disc::refresh_fills(tile_obj);
+    tile_icon_source::refresh_controls(tile_obj);
+  }
+  lv_obj_remove_flag(tile_obj, LV_OBJ_FLAG_EVENT_BUBBLE);
+  return tile_obj;
+}
+
+void remember_shown_grid(ScreensaverState* st) {
+  if (!st->shown_grid) st->shown_grid = new (std::nothrow) TileGridConfig();
+  if (st->shown_grid) *st->shown_grid = screensaverConfig.tileGrid();
 }
 
 void rebuild_slot_grid(ScreensaverState* st) {
@@ -1411,32 +1446,76 @@ void rebuild_slot_grid(ScreensaverState* st) {
 
   const TileGridConfig& tile_grid = screensaverConfig.tileGrid();
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    Tile tile = tile_grid.tiles[i];
-    if (tile.type == TILE_EMPTY) continue;
-    lv_obj_t* tile_obj = render_tile(st->slot_grid, tile.col, tile.row, tile,
-                                     static_cast<uint8_t>(i),
-                                     GridType::SCREENSAVER, g_scene_callback);
-    if (!tile_obj) continue;
-    st->slot_objs[i] = tile_obj;
-    const lv_opa_t opacity = tile.background_opacity;
-    lv_obj_set_style_bg_opa(tile_obj, opacity,
-                            LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(tile_obj, opacity,
-                            LV_PART_MAIN | LV_STATE_PRESSED);
-    // Circles and controls of a see-through tile stay a veil over the
-    // wallpaper (tone_color.h); the tile was built opaque.
-    if (opacity < LV_OPA_COVER) {
-      tile_icon_disc::refresh_fills(tile_obj);
-      tile_icon_source::refresh_controls(tile_obj);
-    }
-    lv_obj_remove_flag(tile_obj, LV_OBJ_FLAG_EVENT_BUBBLE);
+    if (tile_grid.tiles[i].type == TILE_EMPTY) continue;
+    build_slot_tile(st, i, tile_grid.tiles[i]);
   }
 
   apply_slot_tile_shadows(st);
   apply_slot_tile_borders(st);
+  remember_shown_grid(st);
 
   // Match the Web preview: tiles at z=2, freely positioned clock at z=3.
   if (st->clock_box) lv_obj_move_foreground(st->clock_box);
+}
+
+// A Web Admin edit changes one or a few tiles: only changed, moved, new or
+// removed slots are built again. Rebuilding every card and redrawing all of
+// them with their shadows over the wallpaper made each screensaver edit slow
+// (user 2026-10-02), as on the Home grid before b187. False, with nothing
+// changed, when the shown grid is unknown; the caller then rebuilds.
+bool update_slot_grid(ScreensaverState* st) {
+  if (!st || !st->slot_grid || !st->shown_grid) return false;
+  uint32_t cards = 0;
+  for (lv_obj_t* obj : st->slot_objs) {
+    if (obj) ++cards;
+  }
+  // Only the slot cards live in the grid.
+  if (cards != lv_obj_get_child_count(st->slot_grid)) return false;
+
+  const uint32_t started_ms = millis();
+  const TileGridConfig& next = screensaverConfig.tileGrid();
+  const TileGridConfig& shown = *st->shown_grid;
+  const bool shadows = screensaverConfig.get().tile_shadow;
+  const bool borders = screensaverConfig.get().tile_border;
+  unsigned rebuilt = 0;
+  uint32_t position = 0;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& before = shown.tiles[i];
+    const Tile& after = next.tiles[i];
+    if (before.type == TILE_EMPTY && after.type == TILE_EMPTY) continue;
+    if (after.type != TILE_EMPTY && st->slot_objs[i] &&
+        tileContentEquals(before, after) && before.col == after.col &&
+        before.row == after.row) {
+      ++position;
+      continue;
+    }
+    // Deleting a card marks its old area, shadow included, for the redraw.
+    if (st->slot_objs[i]) lv_obj_delete(st->slot_objs[i]);
+    st->slot_objs[i] = nullptr;
+    const uint8_t slot = static_cast<uint8_t>(i);
+    reset_sensor_widget(GridType::SCREENSAVER, slot);
+    reset_switch_widget(GridType::SCREENSAVER, slot);
+    reset_cover_widget(GridType::SCREENSAVER, slot);
+    reset_binary_sensor_widget(GridType::SCREENSAVER, slot);
+    reset_media_widget(GridType::SCREENSAVER, slot);
+    st->slot_payloads[i] = String();
+    st->slot_units[i] = String();
+    st->slot_rule_payloads[i] = String();
+    ++rebuilt;
+    if (after.type == TILE_EMPTY) continue;
+    lv_obj_t* card = build_slot_tile(st, i, after);
+    if (!card) continue;
+    apply_slot_card_shadow(card, shadows);
+    ui_surface_style::apply_tile_border(card, borders);
+    // Slot order, as after a full rebuild: a later card's shadow lies over
+    // its neighbours.
+    lv_obj_move_to_index(card, static_cast<int32_t>(position++));
+  }
+  remember_shown_grid(st);
+  if (rebuilt) refresh_slot_values(st);
+  Serial.printf("[Screensaver] Tiles updated: %u rebuilt in %lu ms\n", rebuilt,
+                static_cast<unsigned long>(millis() - started_ms));
+  return true;
 }
 
 int find_config_wallpaper(const String& name, bool enabled_only) {
@@ -1773,6 +1852,20 @@ void image_screensaver_tiles_changed() {
   if (!g_state) return;
   g_live_grid_refresh_requested = true;
   if (g_state->timer) lv_timer_ready(g_state->timer);
+}
+
+bool image_screensaver_show_tiles_now() {
+  ScreensaverState* st = g_state;
+  if (!st || g_opening || !st->slot_grid) return false;
+  if (!update_slot_grid(st)) {
+    rebuild_slot_grid(st);
+    refresh_slot_values(st);
+  }
+  if (st->clock_box) lv_obj_move_foreground(st->clock_box);
+  if (lv_display_t* display = lv_obj_get_display(st->slot_grid)) {
+    lv_refr_now(display);
+  }
+  return true;
 }
 
 void image_screensaver_set_scene_callback(void (*callback)(const char*)) {

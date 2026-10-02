@@ -534,6 +534,12 @@ bool ScreensaverConfigStore::replaceTileGrid(const TileGridConfig& grid) {
   return saved;
 }
 
+void ScreensaverConfigStore::previewTileGrid(const TileGridConfig& grid) {
+  TileGridConfig& storage = gridStorage();
+  storage = grid;
+  normalizeTileGrid(storage);
+}
+
 const Tile* ScreensaverConfigStore::tile(size_t index) const {
   if (index >= TILES_PER_GRID) return nullptr;
   return &gridStorage().tiles[index];

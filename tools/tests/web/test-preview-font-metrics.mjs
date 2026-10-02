@@ -69,4 +69,14 @@ assert.doesNotMatch(css, /\.tile\.sensor-compact\.active, \.tile\.sensor-compact
 // line inside it.
 assert.doesNotMatch(css, /(^|\n)\s*\.tile\.[\w-]+ \{[^}]*overflow:hidden/);
 assert.doesNotMatch(css, /0 0 0 2px rgba\(38,166,154,0\.12\) inset/);
+// Every tile hovers alike (user 2026-10-02: large tiles dashed, a free slot
+// thick and solid, a pill thin and solid): the same 3 px dashed ring.
+const hoverRing = 'border:3px dashed rgba(38,166,154,0.6);';
+assert.ok(css.includes('.tile:not(.empty):hover:not(.active):not([data-selected="1"])::after { ' + hoverRing + ' }'));
+assert.ok(css.includes('.tile.empty.free-slot-hover:not(.active):not([data-selected="1"]) { ' + hoverRing + ' }'));
+assert.doesNotMatch(css, /\.tile\.sensor-compact[^{]*:hover[^{]*::after \{[^}]*border/, 'pills use the shared hover ring');
+assert.doesNotMatch(css, /\.tile\.empty:hover:not\(\.active\)[^{]*\{ border-color/);
+// Climate mini controls: the parent's ring is the ::after overlay too.
+assert.match(css, /\.tile\.climate\.climate-mini-selection-active:is\(\.active, \[data-selected="1"\]\)::after,\n\s*\.tile\.climate\.climate-child-hover:hover:not\(\.active\):not\(\[data-selected="1"\]\)::after \{\n\s*border-color:transparent;/);
+assert.ok(css.includes('.tile.climate.climate-mini-selection-active.climate-parent-hover::after {\n      ' + hoverRing));
 console.log('Preview fonts: Inter Regular, LVGL line heights per size, text padding, card-only screensaver shadow; full-size cards cut at their edge, rings above the disc, quiet pill handles');

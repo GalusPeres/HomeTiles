@@ -2311,7 +2311,9 @@ function syncTileRadiusControls(tabEl) {
                     Object.prototype.hasOwnProperty.call(payload, 'binary_sensor_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'energy_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'energy_units') ||
-                    Object.prototype.hasOwnProperty.call(payload, 'climate_values');
+                    Object.prototype.hasOwnProperty.call(payload, 'climate_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'weather_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'media_values');
     if (!hasMeta) {
       return { values: payload || {}, units: {}, icons: {}, names: {}, sceneEntities: {}, loaded: true };
     }
@@ -2326,6 +2328,9 @@ function syncTileRadiusControls(tabEl) {
       editableValues: payload.editable_values || payload.editableValues || {},
       // Lock, Alarm panel and Fan detail states (types/device).
       deviceValues: payload.device_values || payload.deviceValues || {},
+      // Weather and media tile states, the payloads their tiles draw.
+      weatherValues: payload.weather_values || payload.weatherValues || {},
+      mediaValues: payload.media_values || payload.mediaValues || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},
@@ -6131,6 +6136,8 @@ function syncTileRadiusControls(tabEl) {
         0, 255, 0);
       tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
         isDefaultBg ? defaultBg : (color || defaultBg), opacity);
+      // A fully transparent card casts no shadow (apply_slot_tile_shadows).
+      tileElem.classList.toggle('screensaver-bg-clear', opacity === 0);
     } else {
       tileElem.style.background = tileBg;
     }
@@ -6168,12 +6175,6 @@ function syncTileRadiusControls(tabEl) {
     }
     applyTileAriaLabel(tileElem, displayTitle, type);
 
-    if (previewKind === 'weather') {
-      html += '<div class="tile-ghost-icon"><i class="mdi mdi-weather-partly-cloudy"></i></div>';
-    }
-    if (previewKind === 'media') {
-      html += '<div class="tile-ghost-icon"><i class="mdi mdi-music"></i></div>';
-    }
     if (previewKind === 'climate') {
       const climateSpanW = document.getElementById(
         prefix + '_tile_span_w')?.value || 1;
@@ -6232,7 +6233,7 @@ function syncTileRadiusControls(tabEl) {
       const clockTimeFormat = document.getElementById(prefix + '_clock_time_format')?.value || '0';
       const clockDateFormat = document.getElementById(prefix + '_clock_date_format')?.value || '0';
       if (flags & 1) html += '<div class="tile-clock-time" ' + getClockPreviewTextStyle(clockTimeFont, 40, '#fff') + '>' + getClockPreviewTime(clockTimeFormat) + '</div>';
-      if (flags & 2) html += '<div class="tile-clock-date" ' + getClockPreviewTextStyle(clockDateFont, 24, '#fff') + '>' + getClockPreviewDate(clockDateFormat) + '</div>';
+      if (flags & 2) html += '<div class="tile-clock-date" ' + getClockPreviewTextStyle(clockDateFont, 20, '#fff') + '>' + getClockPreviewDate(clockDateFormat) + '</div>';
     }
 
     if (previewKind === 'text') {
@@ -6248,7 +6249,27 @@ function syncTileRadiusControls(tabEl) {
     if (previewKind === 'switch') html += switchPreviewExtraHtml(switchStyle, halfHeight);
 
     html += getTileResizeHandlesHtml(type);
+    // A title or icon moves the clock down (clock/renderer.cpp).
+    if (type === '9') tileElem.classList.toggle('clock-has-header', !!(displayTitle || iconName));
     tileElem.innerHTML = html;
+    if (previewKind === 'weather') {
+      const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
+      applyWeatherPreview(tileElem, parseWeatherPreviewPayload(
+        weatherEntity ? (sensorMetaCache.weatherValues?.[weatherEntity] ?? '') : ''), {
+        col: Number(tileElem.dataset.col || 0),
+        span_w: Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
+        span_h: Number(document.getElementById(prefix + '_tile_span_h')?.value || 1),
+        sensor_display_mode: document.getElementById(prefix + '_weather_colored_icons')?.checked === false ? 1 : 0
+      }, iconName, previewIconColor(type, iconRecord, weatherEntity, sensorMetaCache, null, ''));
+    }
+    if (previewKind === 'media') {
+      applyMediaPreview(tileElem, parseMediaPreviewPayload(
+        mediaEntity ? (sensorMetaCache.mediaValues?.[mediaEntity] ?? '') : ''), {
+        sensor_entity: mediaEntity,
+        span_w: Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
+        span_h: Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)
+      }, iconName, mediaEntity ? (sensorMetaCache.names?.[mediaEntity] || '') : '');
+    }
     if (typeof applyTileRulesTint === 'function' && typeof collectIconColorRecord === 'function' &&
         typeof iconColorOwnEntity === 'function') {
       applyTileRulesTint(tileElem, type, collectIconColorRecord(prefix), iconColorOwnEntity(prefix, String(type)), sensorMetaCache);
@@ -7841,6 +7862,8 @@ function syncTileRadiusControls(tabEl) {
                                  SCREENSAVER_TILE_DEFAULT_OPACITY);
         el.style.background = tileBackgroundCss(meta, isDefaultBg,
           tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
+        // A fully transparent card casts no shadow (apply_slot_tile_shadows).
+        el.classList.toggle('screensaver-bg-clear', opacity === 0);
       } else {
         el.style.background = bg;
       }
@@ -7936,12 +7959,6 @@ function syncTileRadiusControls(tabEl) {
       }
       applyTileAriaLabel(el, displayTitle, typeValue);
 
-      if (previewKind === 'weather') {
-        html += '<div class="tile-ghost-icon"><i class="mdi mdi-weather-partly-cloudy"></i></div>';
-      }
-      if (previewKind === 'media') {
-        html += '<div class="tile-ghost-icon"><i class="mdi mdi-music"></i></div>';
-      }
 
       if (previewKind === 'sensor') {
         let value = '--';
@@ -7989,7 +8006,7 @@ function syncTileRadiusControls(tabEl) {
         const clockTimeFormat = (tile.sensor_gauge_min !== undefined) ? tile.sensor_gauge_min : 0;
         const clockDateFormat = (tile.sensor_gauge_max !== undefined) ? tile.sensor_gauge_max : 0;
         if (flags & 1) html += '<div class="tile-clock-time" ' + getClockPreviewTextStyle(clockTimeFont, 40, '#fff') + '>' + getClockPreviewTime(clockTimeFormat) + '</div>';
-        if (flags & 2) html += '<div class="tile-clock-date" ' + getClockPreviewTextStyle(clockDateFont, 24, '#fff') + '>' + getClockPreviewDate(clockDateFormat) + '</div>';
+        if (flags & 2) html += '<div class="tile-clock-date" ' + getClockPreviewTextStyle(clockDateFont, 20, '#fff') + '>' + getClockPreviewDate(clockDateFormat) + '</div>';
       }
       if (previewKind === 'text') {
         const textValue = tile.text_value || tile.scene_alias || tile.key_macro || '';
@@ -8002,6 +8019,16 @@ function syncTileRadiusControls(tabEl) {
       if (previewKind === 'switch') html += switchPreviewExtraHtml(tile.switch_style, Number(tile.span_h) === 0.5);
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
+      if (previewKind === 'weather') {
+        applyWeatherPreview(el, parseWeatherPreviewPayload(
+          tile.sensor_entity ? (sensorMeta?.weatherValues?.[tile.sensor_entity] ?? '') : ''),
+          tile, iconName, previewIconColor(typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta, null, ''));
+      }
+      if (previewKind === 'media') {
+        applyMediaPreview(el, parseMediaPreviewPayload(
+          tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''),
+          tile, iconName, tile.sensor_entity ? (metaNames[tile.sensor_entity] || '') : '');
+      }
       if (typeof applyTileRulesTint === 'function') {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
       }
@@ -8015,7 +8042,11 @@ function syncTileRadiusControls(tabEl) {
         applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
-      if (typeValue === '9') fitCompactClockPreview(el);
+      if (typeValue === '9') {
+        // A title or icon moves the clock down (clock/renderer.cpp).
+        el.classList.toggle('clock-has-header', !!(displayTitle || iconName));
+        fitCompactClockPreview(el);
+      }
     }
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');
     if (typeValue === '5' && tile.sensor_entity) {
@@ -9796,6 +9827,22 @@ function syncTileRadiusControls(tabEl) {
       Math.max(10, deviceClockFontPx(d.time_font_size, 48) * scale) + 'px';
     date.style.fontSize =
       Math.max(8, deviceClockFontPx(d.date_font_size, 28) * scale) + 'px';
+    // Each line is as tall as its LVGL font's line height, the glyphs on the
+    // LVGL baseline, with the device gap between the lines (clock/renderer.cpp).
+    const applyClockLine = (el, raw, fallback, minPx) => {
+      const size = Number(raw || fallback);
+      const fontPx = deviceClockFontPx(raw, fallback) * scale;
+      // Tiny previews keep a readable font; the line box grows with it.
+      const lineScale = fontPx < minPx ? minPx / fontPx : 1;
+      const shift = parseFloat(rootStyles.getPropertyValue('--screensaver-ldy' + size));
+      el.style.lineHeight = (devicePx('--screensaver-lh' + size, size * 1.21) * scale * lineScale) + 'px';
+      el.style.position = 'relative';
+      el.style.top = (Number.isFinite(shift) ? shift * scale : 0) + 'px';
+    };
+    applyClockLine(time, d.time_font_size, 48, 10);
+    applyClockLine(date, d.date_font_size, 28, 8);
+    date.style.marginTop = !time.hidden && !date.hidden
+      ? devicePx('--screensaver-clock-gap', 6) * scale + 'px' : '0px';
     time.textContent = getClockPreviewTime(d.time_format);
     date.textContent = getScreensaverClockPreviewDate(d);
     time.style.width = 'auto';
@@ -10954,6 +11001,55 @@ function maybeFillTitleFromEnergy(tab) {
     const valueYOffsetEl = document.getElementById(prefix + '_energy_value_y_offset');
     if (valueYOffsetEl) valueYOffsetEl.value = '';
   }
+// Generated by tools/generate-weather-icon-fonts.mjs from
+// tools/weather-icons/parts.mjs. Do not edit by hand.
+// The device's filled, multi-color weather icons (weather_icon_table.h) as SVG
+// for the Web Admin preview: shared layer paths in the 24-unit MDI grid, and
+// per icon its weather color and its layers bottom to top.
+  const WEATHER_ICON_LAYER_PATHS = Object.freeze([
+    '<path d="M12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7Z"/><path d="M12,2L14.39,5.42C13.65,5.15 12.84,5 12,5C11.16,5 10.35,5.15 9.61,5.42L12,2Z"/><path d="M3.34,7L7.5,6.65C6.9,7.16 6.36,7.78 5.94,8.5C5.5,9.24 5.25,10 5.11,10.79L3.34,7Z"/><path d="M3.36,17L5.12,13.23C5.26,14 5.53,14.78 5.95,15.5C6.37,16.24 6.91,16.86 7.5,17.37L3.36,17Z"/><path d="M20.65,7L18.88,10.79C18.74,10 18.47,9.23 18.05,8.5C17.63,7.78 17.1,7.15 16.5,6.64L20.65,7Z"/><path d="M20.64,17L16.5,17.36C17.09,16.85 17.62,16.22 18.04,15.5C18.46,14.77 18.73,14 18.87,13.21L20.64,17Z"/><path d="M12,22L9.59,18.56C10.33,18.83 11.14,19 12,19C12.82,19 13.63,18.83 14.37,18.56L12,22Z"/>',
+    '<path d="M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95Z"/>',
+    '<path d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09Z"/><path d="M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11Z"/>',
+    '<path d="M5,10.5A5.5,5.5 0 1,1 16,10.5A5.5,5.5 0 1,1 5,10.5Z"/><path d="M13.55,3.64C13,3.4 12.45,3.23 11.88,3.12L14.37,1.82L15.27,4.71C14.76,4.29 14.19,3.93 13.55,3.64Z"/><path d="M6.09,4.44C5.6,4.79 5.17,5.19 4.8,5.63L4.91,2.82L7.87,3.5C7.25,3.71 6.65,4.03 6.09,4.44Z"/><path d="M18,9.71C17.91,9.12 17.78,8.55 17.59,8L19.97,9.5L17.92,11.73C18.03,11.08 18.05,10.4 18,9.71Z"/><path d="M3.04,11.3C3.11,11.9 3.24,12.47 3.43,13L1.06,11.5L3.1,9.28C3,9.93 2.97,10.61 3.04,11.3Z"/>',
+    '<path d="M6,16A6,6 0 1,1 18,16A6,6 0 1,1 6,16Z"/><path d="M2,18A4,4 0 1,1 10,18A4,4 0 1,1 2,18Z"/><path d="M16,19A3,3 0 1,1 22,19A3,3 0 1,1 16,19Z"/><path d="M6,18H12V22H6Z"/><path d="M12,16H19V22H12Z"/>',
+    '<path d="M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95Z" transform="translate(8.26 -1.05) scale(0.62)"/>',
+    '<path d="M6,19A5,5 0 0,1 1,14A5,5 0 0,1 6,9C7,6.65 9.3,5 12,5C15.43,5 18.24,7.66 18.5,11.03L19,11A4,4 0 0,1 23,15A4,4 0 0,1 19,19H6Z" transform="translate(8.88 -0.1) scale(0.62)"/>',
+    '<path d="M6,19A5,5 0 0,1 1,14A5,5 0 0,1 6,9C7,6.65 9.3,5 12,5C15.43,5 18.24,7.66 18.5,11.03L19,11A4,4 0 0,1 23,15A4,4 0 0,1 19,19H6Z" transform="translate(0 1.5) scale(1)"/>',
+    '<path d="M1,12A5,5 0 0,1 6,7C7,4.65 9.3,3 12,3C15.43,3 18.24,5.66 18.5,9.03L19,9C21.19,9 22.97,10.76 23,13H1.1L1,12Z"/>',
+    '<path d="M3,15H13A1,1 0 0,1 14,16A1,1 0 0,1 13,17H3A1,1 0 0,1 2,16A1,1 0 0,1 3,15Z"/><path d="M16,15H21A1,1 0 0,1 22,16A1,1 0 0,1 21,17H16A1,1 0 0,1 15,16A1,1 0 0,1 16,15Z"/><path d="M3,19H5A1,1 0 0,1 6,20A1,1 0 0,1 5,21H3A1,1 0 0,1 2,20A1,1 0 0,1 3,19Z"/><path d="M8,19H21A1,1 0 0,1 22,20A1,1 0 0,1 21,21H8A1,1 0 0,1 7,20A1,1 0 0,1 8,19Z"/>',
+    '<path d="M6,16A5,5 0 0,1 1,11A5,5 0 0,1 6,6C7,3.65 9.3,2 12,2C15.43,2 18.24,4.66 18.5,8.03L19,8A4,4 0 0,1 23,12A4,4 0 0,1 19,16H6Z" transform="translate(1.68 0.28) scale(0.86)"/>',
+    '<path d="M18.5,18.67C18.5,19.96 17.5,21 16.25,21C15,21 14,19.96 14,18.67C14,17.12 16.25,14.5 16.25,14.5C16.25,14.5 18.5,17.12 18.5,18.67Z" transform="translate(-8.25 1.2) scale(1)"/><path d="M18.5,18.67C18.5,19.96 17.5,21 16.25,21C15,21 14,19.96 14,18.67C14,17.12 16.25,14.5 16.25,14.5C16.25,14.5 18.5,17.12 18.5,18.67Z" transform="translate(-2.25 1.2) scale(1)"/>',
+    '<path d="M7.683,15.95L6.483,20.35A0.95,0.95 0 0,0 8.317,20.85L9.517,16.45A0.95,0.95 0 0,0 7.683,15.95Z"/><path d="M11.682,15.955L10.082,21.955A0.95,0.95 0 0,0 11.918,22.445L13.518,16.445A0.95,0.95 0 0,0 11.682,15.955Z"/><path d="M15.683,15.95L14.483,20.35A0.95,0.95 0 0,0 16.317,20.85L17.517,16.45A0.95,0.95 0 0,0 15.683,15.95Z"/>',
+    '<path d="M7.88,18.07L10.07,17.5L8.46,15.88C8.07,15.5 8.07,14.86 8.46,14.46C8.85,14.07 9.5,14.07 9.88,14.46L11.5,16.07L12.07,13.88C12.21,13.34 12.76,13.03 13.29,13.17C13.83,13.31 14.14,13.86 14,14.4L13.41,16.59L15.6,16C16.14,15.86 16.69,16.17 16.83,16.71C16.97,17.24 16.66,17.79 16.12,17.93L13.93,18.5L15.54,20.12C15.93,20.5 15.93,21.15 15.54,21.54C15.15,21.93 14.5,21.93 14.12,21.54L12.5,19.93L11.93,22.12C11.79,22.66 11.24,22.97 10.71,22.83C10.17,22.69 9.86,22.14 10,21.6L10.59,19.41L8.4,20C7.86,20.14 7.31,19.83 7.17,19.29C7.03,18.76 7.34,18.21 7.88,18.07Z" transform="translate(3.36 6.04) scale(0.72)"/>',
+    '<path d="M7.88,18.07L10.07,17.5L8.46,15.88C8.07,15.5 8.07,14.86 8.46,14.46C8.85,14.07 9.5,14.07 9.88,14.46L11.5,16.07L12.07,13.88C12.21,13.34 12.76,13.03 13.29,13.17C13.83,13.31 14.14,13.86 14,14.4L13.41,16.59L15.6,16C16.14,15.86 16.69,16.17 16.83,16.71C16.97,17.24 16.66,17.79 16.12,17.93L13.93,18.5L15.54,20.12C15.93,20.5 15.93,21.15 15.54,21.54C15.15,21.93 14.5,21.93 14.12,21.54L12.5,19.93L11.93,22.12C11.79,22.66 11.24,22.97 10.71,22.83C10.17,22.69 9.86,22.14 10,21.6L10.59,19.41L8.4,20C7.86,20.14 7.31,19.83 7.17,19.29C7.03,18.76 7.34,18.21 7.88,18.07Z" transform="translate(1.36 8.04) scale(0.62)"/>',
+    '<path d="M18.5,18.67C18.5,19.96 17.5,21 16.25,21C15,21 14,19.96 14,18.67C14,17.12 16.25,14.5 16.25,14.5C16.25,14.5 18.5,17.12 18.5,18.67Z" transform="translate(-1 1.2) scale(1)"/>',
+    '<path d="M6.8,19.8A1.7,1.7 0 1,1 10.2,19.8A1.7,1.7 0 1,1 6.8,19.8Z"/><path d="M10.5,17.4A1.5,1.5 0 1,1 13.5,17.4A1.5,1.5 0 1,1 10.5,17.4Z"/><path d="M13.8,19.8A1.7,1.7 0 1,1 17.2,19.8A1.7,1.7 0 1,1 13.8,19.8Z"/>',
+    '<path d="M12,11H15L13,15H15L11.25,22L12,17H9.5L12,11Z" transform="translate(0 1) scale(1)"/>',
+    '<path d="M12,11H15L13,15H15L11.25,22L12,17H9.5L12,11Z" transform="translate(-2.5 1) scale(1)"/>',
+    '<path d="M18.5,18.67C18.5,19.96 17.5,21 16.25,21C15,21 14,19.96 14,18.67C14,17.12 16.25,14.5 16.25,14.5C16.25,14.5 18.5,17.12 18.5,18.67Z" transform="translate(-0.5 1.2) scale(1)"/>',
+    '<path d="M4,10A1,1 0 0,1 3,9A1,1 0 0,1 4,8H12A2,2 0 0,0 14,6A2,2 0 0,0 12,4C11.45,4 10.95,4.22 10.59,4.59C10.2,5 9.56,5 9.17,4.59C8.78,4.2 8.78,3.56 9.17,3.17C9.9,2.45 10.9,2 12,2A4,4 0 0,1 16,6A4,4 0 0,1 12,10H4Z"/><path d="M19,12A1,1 0 0,0 20,11A1,1 0 0,0 19,10C18.72,10 18.47,10.11 18.29,10.29C17.9,10.68 17.27,10.68 16.88,10.29C16.5,9.9 16.5,9.27 16.88,8.88C17.42,8.34 18.17,8 19,8A3,3 0 0,1 22,11A3,3 0 0,1 19,14H5A1,1 0 0,1 4,13A1,1 0 0,1 5,12H19Z"/><path d="M18,18H4A1,1 0 0,1 3,17A1,1 0 0,1 4,16H18A3,3 0 0,1 21,19A3,3 0 0,1 18,22C17.17,22 16.42,21.66 15.88,21.12C15.5,20.73 15.5,20.1 15.88,19.71C16.27,19.32 16.9,19.32 17.29,19.71C17.47,19.89 17.72,20 18,20A1,1 0 0,0 19,19A1,1 0 0,0 18,18Z"/>',
+    '<path d="M6,6L6.69,6.06C7.32,3.72 9.46,2 12,2A5.5,5.5 0 0,1 17.5,7.5L17.42,8.45C17.88,8.16 18.42,8 19,8A3,3 0 0,1 22,11A3,3 0 0,1 19,14H6A4,4 0 0,1 2,10A4,4 0 0,1 6,6Z"/>',
+    '<path d="M18,18H4A1,1 0 0,1 3,17A1,1 0 0,1 4,16H18A3,3 0 0,1 21,19A3,3 0 0,1 18,22C17.17,22 16.42,21.66 15.88,21.12C15.5,20.73 15.5,20.1 15.88,19.71C16.27,19.32 16.9,19.32 17.29,19.71C17.47,19.89 17.72,20 18,20A1,1 0 0,0 19,19A1,1 0 0,0 18,18Z"/>',
+    '<path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>',
+  ]);
+  const WEATHER_ICONS = Object.freeze({
+    'weather-sunny': {tint: '#FFB224', layers: [['#FFC53D', 0]]},
+    'weather-night': {tint: '#5E7092', layers: [['#FFE08A', 1], ['#FFFFFF', 2]]},
+    'weather-partly-cloudy': {tint: '#CCAB6B', layers: [['#FFC53D', 3], ['#EEF2F7', 4]]},
+    'weather-night-partly-cloudy': {tint: '#7C8AA2', layers: [['#FFE08A', 5], ['#C3CCD8', 4]]},
+    'weather-cloudy': {tint: '#9AA4B2', layers: [['#8E9BB0', 6], ['#C3CCD8', 7]]},
+    'weather-fog': {tint: '#B8BEC6', layers: [['#C3CCD8', 8], ['#8E9BB0', 9]]},
+    'weather-rainy': {tint: '#4A7FC0', layers: [['#EEF2F7', 10], ['#4DA3FF', 11]]},
+    'weather-pouring': {tint: '#2F5FB0', layers: [['#C3CCD8', 10], ['#4DA3FF', 12]]},
+    'weather-snowy': {tint: '#7CC4F0', layers: [['#EEF2F7', 10], ['#CFE8FF', 13]]},
+    'weather-snowy-rainy': {tint: '#63A2D8', layers: [['#EEF2F7', 10], ['#CFE8FF', 14], ['#4DA3FF', 15]]},
+    'weather-hail': {tint: '#5FB4D8', layers: [['#C3CCD8', 10], ['#CFE8FF', 16]]},
+    'weather-lightning': {tint: '#8B5CF6', layers: [['#9EAABA', 10], ['#FFC53D', 17]]},
+    'weather-lightning-rainy': {tint: '#6B6EDB', layers: [['#9EAABA', 10], ['#FFC53D', 18], ['#4DA3FF', 19]]},
+    'weather-windy': {tint: '#4FB8B0', layers: [['#A9C7E8', 20]]},
+    'weather-windy-variant': {tint: '#75AEB1', layers: [['#C3CCD8', 21], ['#A9C7E8', 22]]},
+    'alert-circle-outline': {tint: '#E5533D', layers: [['#FFB020', 23]]},
+  });
 
 function maybeFillTitleFromWeather(tab) {
     maybeFillTitleFromEntity(tab, '_weather_entity');
@@ -10990,6 +11086,319 @@ function maybeFillTitleFromWeather(tab) {
     const colored = document.getElementById(prefix + '_weather_colored_icons');
     if (colored) colored.checked = true;
   }
+
+  // --- Tile preview -------------------------------------------------------
+  // What types/weather/renderer.cpp builds and update_weather_tile_state()
+  // (tiles/runtime/tile_renderer.cpp) fills from the cached payload, at the
+  // device positions (WEATHER_TILE_LAYOUT, display pixels).
+  const WEATHER_CONDITION_ICONS = Object.freeze({
+    'clear-night': 'weather-night', cloudy: 'weather-cloudy', exceptional: 'alert-circle-outline',
+    fog: 'weather-fog', hail: 'weather-hail', lightning: 'weather-lightning',
+    'lightning-rainy': 'weather-lightning-rainy', partlycloudy: 'weather-partly-cloudy',
+    pouring: 'weather-pouring', rainy: 'weather-rainy', snowy: 'weather-snowy',
+    'snowy-rainy': 'weather-snowy-rainy', sunny: 'weather-sunny', windy: 'weather-windy',
+    'windy-variant': 'weather-windy-variant'
+  });
+
+  // A number or a numeric string (extract_json_number_or_string_field).
+  function weatherPreviewNumber(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    const text = String(value ?? '').trim().replace(',', '.');
+    const number = text ? parseFloat(text) : NaN;
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function weatherPreviewString(value) {
+    return typeof value === 'string' ? value : '';
+  }
+
+  function weatherIsoParts(iso) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    if (!match) return null;
+    const [y, m, d] = match.slice(1).map(Number);
+    return y > 0 && m >= 1 && m <= 12 && d >= 1 && d <= 31 ? Date.UTC(y, m - 1, d) : null;
+  }
+
+  function weatherIsoDate(utcMs) {
+    const date = new Date(utcMs);
+    return date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(date.getUTCDate()).padStart(2, '0');
+  }
+
+  function weatherLocalToday(now) {
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+  }
+
+  // i18n::weather_weekday_short: the first ten characters as a date.
+  function weatherWeekdayShort(iso) {
+    const day = weatherIsoParts(iso);
+    return day === null ? '' : (WEATHER_I18N.weekdaysShort[new Date(day).getUTCDay()] || '');
+  }
+
+  // i18n::weather_condition_label.
+  function weatherConditionLabel(condition) {
+    const key = String(condition || '').trim().toLowerCase();
+    if (!key) return '--';
+    if (WEATHER_I18N.conditions[key]) return WEATHER_I18N.conditions[key];
+    const text = String(condition).replaceAll('-', ' ').replaceAll('_', ' ').trim();
+    return text || '--';
+  }
+
+  // weather_icons::for_now: partly cloudy and sunny turn into their night
+  // icons between the bridge's sunset and sunrise of today.
+  function weatherIconForNow(name, sun, now) {
+    if (!Array.isArray(sun)) return name;
+    const today = weatherLocalToday(now);
+    const minute = now.getHours() * 60 + now.getMinutes();
+    const days = sun.filter(day => day && typeof day.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day.d) &&
+      (day.up !== undefined || (Number.isInteger(day.r) && Number.isInteger(day.s) &&
+                                day.r >= 0 && day.r < day.s && day.s <= 1440))).slice(0, 8);
+    const day = days.find(entry => entry.d === today);
+    if (!day) return name;
+    const night = day.up !== undefined ? day.up !== true : (minute < day.r || minute >= day.s);
+    if (!night) return name;
+    if (name === 'weather-partly-cloudy') return 'weather-night-partly-cloudy';
+    if (name === 'weather-sunny') return 'weather-night';
+    return name;
+  }
+
+  function parseWeatherPreviewPayload(raw) {
+    let data = raw;
+    if (typeof raw === 'string') {
+      if (!raw.trim()) return null;
+      try { data = JSON.parse(raw); } catch (_) { return null; }
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    // An empty state falls back to the condition (extract_json_string_field).
+    const condition = weatherPreviewString(data.state).trim() || weatherPreviewString(data.condition).trim();
+    let icon = normalizeMdiIconName(weatherPreviewString(data.icon));
+    if (!icon) icon = WEATHER_CONDITION_ICONS[condition.trim().toLowerCase()] || '';
+    const units = data.units && typeof data.units === 'object' ? data.units : null;
+    return {
+      condition,
+      icon: icon ? weatherIconForNow(icon, data.sun, new Date()) : '',
+      temperature: weatherPreviewNumber(data.temperature),
+      unit: units ? weatherPreviewString(units.temperature) : weatherPreviewString(data.temperature_unit),
+      forecast: Array.isArray(data.forecast) ? data.forecast.filter(entry => entry && typeof entry === 'object') : []
+    };
+  }
+
+  function weatherPreviewTemp(value) {
+    return formatLocalizedNumber(value, 1, true);
+  }
+
+  // The device's filled weather icon as SVG layers (admin-icons.js); single
+  // draws every layer in the label color (an icon color the user chose).
+  function weatherIconSvg(name, single) {
+    const entry = WEATHER_ICONS[name];
+    if (!entry) return '';
+    return '<svg class="weather-icon-svg" viewBox="0 0 24 24" aria-hidden="true">' +
+      entry.layers.map(([color, index]) => '<g fill="' + (single ? 'currentColor' : color) + '">' +
+        WEATHER_ICON_LAYER_PATHS[index] + '</g>').join('') + '</svg>';
+  }
+
+  // weather_forecast_count(): days per whole width; a half step shows as many
+  // days as fit at the density of the next whole width.
+  function weatherForecastCount(spanW, cardW, nextW) {
+    const whole = Math.floor(Math.max(0, spanW));
+    const count = span => {
+      const w = Math.floor(Math.max(0, span));
+      return [0, 1, 2, 4, 5, 6, 8][Math.min(w, 6)] ?? 8;
+    };
+    const fixed = count(spanW);
+    if (spanW < 1 || spanW === whole || nextW <= 0) return fixed;
+    const next = count(spanW + 0.5);
+    const fits = Math.trunc(cardW * next / nextW);
+    return fits <= fixed ? fixed : Math.min(fits, next);
+  }
+
+  // tile_geometry::extent in display pixels.
+  function weatherExtent(position, span, cell, gap) {
+    const edge = value => Math.round(value * (cell + gap));
+    return edge(position + span) - edge(position) - gap;
+  }
+
+  // Fills a rendered weather preview tile: the header icon, condition |
+  // temperature and the forecast columns. iconName is the tile's initial icon
+  // (before a state arrives), forcedColor an icon color of the user or a rule.
+  function applyWeatherPreview(el, state, tile, iconName, forcedColor) {
+    if (!el || typeof WEATHER_TILE_LAYOUT === 'undefined') return;
+    const L = WEATHER_TILE_LAYOUT;
+    const rootStyle = getComputedStyle(document.documentElement);
+    const scale = parseFloat(rootStyle.getPropertyValue('--radius-preview-scale')) || 0.5;
+    const colored = Number(tile?.sensor_display_mode) !== 1;
+    const now = new Date();
+
+    // Header icon: the current weather icon, colored in its layers with the
+    // weather color as the label color (disc and Tile color From icon).
+    let icon = el.querySelector(':scope > .tile-icon');
+    const name = state ? state.icon : normalizeMdiIconName(iconName);
+    // A state shows its icon even when the tile's own icon is off.
+    if (!icon && name) {
+      el.insertAdjacentHTML('afterbegin', '<i class="mdi tile-icon"></i>');
+      icon = el.querySelector(':scope > .tile-icon');
+    }
+    if (icon && !name) icon.remove();
+    else if (icon) {
+      const entry = WEATHER_ICONS[name];
+      if (colored && entry) {
+        icon.className = 'mdi tile-icon tile-weather-icon';
+        icon.innerHTML = weatherIconSvg(name, !!forcedColor);
+        icon.style.color = forcedColor || entry.tint;
+      } else {
+        icon.className = 'mdi mdi-' + name + ' tile-icon';
+        icon.innerHTML = '';
+        icon.style.color = forcedColor || '';
+      }
+    }
+
+    // Display pixels of the card and the preview's (border box) size.
+    const col = Number(tile?.col) || 0;
+    const spanW = Math.max(1, Number(tile?.span_w) || 1);
+    const spanH = Math.max(1, Number(tile?.span_h) || 1);
+    const cardW = weatherExtent(col, spanW, L.cellW, L.gap);
+    const cellW = parseFloat(rootStyle.getPropertyValue('--preview-cell-w'));
+    const cellH = parseFloat(rootStyle.getPropertyValue('--preview-cell-h'));
+    const previewGap = parseFloat(rootStyle.getPropertyValue('--preview-gap')) || 0;
+    const width = el.offsetWidth || (spanW * (cellW + previewGap) - previewGap);
+    const height = el.offsetHeight || (spanH * (cellH + previewGap) - previewGap);
+    const px = value => (value * scale).toFixed(2) + 'px';
+    const font = f => ({
+      size: Math.max(6, Math.round(f.px * scale)),
+      line: f.line * scale,
+      shift: (f.line / 2 - f.base - 0.364 * f.px) * scale
+    });
+    const fontCss = f => 'font-size:' + f.size + 'px;line-height:' + f.line.toFixed(2) + 'px;';
+    const family = getComputedStyle(el).fontFamily || 'sans-serif';
+    const measure = (text, f) => {
+      const context = (weatherPreviewMeasure.context ||= document.createElement('canvas').getContext('2d'));
+      if (!context) return 0;
+      context.font = '400 ' + f.size + 'px ' + family;
+      return context.measureText(text).width;
+    };
+    // Positions below are in the border box; absolute children start inside
+    // the 3 px editor border.
+    const at = (left, top) => 'left:' + (left - 3).toFixed(2) + 'px;top:' + (top - 3).toFixed(2) + 'px;';
+
+    // Condition | temperature.
+    const valueFont = font(L.value);
+    const hasTemp = !!state && state.temperature !== null;
+    const tempText = hasTemp ? weatherPreviewTemp(state.temperature) + (state.unit ? ' ' + state.unit : '') : '--';
+    const conditionText = state ? weatherConditionLabel(state.condition) : '--';
+    let showCondition = spanW > 1 && conditionText !== '--';
+    let room = 0;
+    if (showCondition) {
+      const gap = L.valueGap * scale;
+      room = width - 2 * L.padH * scale - measure(tempText, valueFont) - measure('|', valueFont) - 2 * gap;
+      const conditionWidth = measure(conditionText, valueFont);
+      if (spanW < 2 ? conditionWidth > room : room < L.minConditionRoom * scale) showCondition = false;
+    }
+    const showForecast = Math.floor(Number(tile?.span_h) || 1) >= 2;
+    const rowCenter = showForecast ? (L.cellH / 2 + L.valueDy) * scale : height / 2 + L.valueDy * scale;
+    const textSpan = (cls, text, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
+      'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + escapeHtml(text) + '</span>';
+    let html = '<div class="weather-preview-row" style="top:' + (rowCenter - valueFont.line / 2 - 3).toFixed(2) +
+      'px;height:' + valueFont.line.toFixed(2) + 'px;gap:' + px(L.valueGap) + '">';
+    if (showCondition) {
+      html += textSpan('weather-preview-condition', conditionText, valueFont, 'max-width:' + Math.max(0, room).toFixed(2) + 'px;');
+      if (hasTemp) html += textSpan('weather-preview-separator', '|', valueFont);
+    }
+    html += textSpan('weather-preview-temp', tempText, valueFont) + '</div>';
+
+    // Forecast columns, spread evenly over the card, the row anchored to the
+    // card's bottom like on the device.
+    const count = showForecast
+      ? weatherForecastCount(spanW, cardW, weatherExtent(col, spanW + 0.5, L.cellW, L.gap)) : 0;
+    if (count > 0) {
+      const today = weatherLocalToday(now);
+      const slots = Array.from({length: count}, () => null);
+      let base = today;
+      let fallback = 0;
+      for (const entry of state ? state.forecast : []) {
+        const datetime = weatherPreviewString(entry.datetime);
+        let dateLocal = weatherPreviewString(entry.date_local);
+        if (!dateLocal && datetime.length >= 10) dateLocal = datetime.slice(0, 10);
+        const low = ['templow', 'temperature_low', 'temp_low', 'low']
+          .map(key => weatherPreviewNumber(entry[key])).find(value => value !== null) ?? null;
+        const conditionIcon = WEATHER_CONDITION_ICONS[weatherPreviewString(entry.condition).trim().toLowerCase()] || '';
+        const slot = {
+          dateLocal,
+          day: datetime ? weatherWeekdayShort(datetime) : '',
+          icon: normalizeMdiIconName(weatherPreviewString(entry.icon)) || conditionIcon,
+          high: weatherPreviewNumber(entry.temperature),
+          low
+        };
+        let index = -1;
+        const baseDay = weatherIsoParts(base);
+        const day = weatherIsoParts(dateLocal);
+        if (baseDay !== null && day !== null) {
+          const offset = Math.round((day - baseDay) / 86400000);
+          if (offset >= 0 && offset < count) index = offset;
+        }
+        if (index < 0) {
+          while (fallback < count && slots[fallback]) ++fallback;
+          if (fallback < count) index = fallback++;
+        }
+        if (index >= 0) slots[index] = slot;
+      }
+
+      const colW = L.colW * scale;
+      // In display pixels with the device's integer division, so the columns
+      // do not drift apart from the device's.
+      const spacing = Math.trunc((Math.round(width / scale) - count * L.colW) / (count + 1)) * scale;
+      const rowTop = height - (L.cellH + L.headroom - L.yOffset) * scale;
+      const contentTop = rowTop + L.padV * scale;
+      const contentW = (L.colW - 2 * L.padH) * scale;
+      const dayFont = font(L.day);
+      const tempFont = font(L.temp);
+      const unitFont = font(L.unit);
+      const unitText = L.unitGap + (state?.unit || '°C');
+      const baseDay = weatherIsoParts(base);
+      for (let i = 0; i < count; ++i) {
+        const slot = slots[i];
+        const left = spacing + i * (colW + spacing) + L.padH * scale;
+        const displayDate = slot?.dateLocal || (baseDay !== null ? weatherIsoDate(baseDay + i * 86400000) : '');
+        let dayText = slot?.day || '';
+        if ((i === 0 && (slot || displayDate)) || displayDate === today) dayText = WEATHER_I18N.today;
+        else if (!dayText && displayDate) dayText = weatherWeekdayShort(displayDate);
+        // Until a first state arrives the device shows white placeholders.
+        if (!state) dayText = '';
+        html += '<div class="weather-preview-day" style="' + at(left, contentTop + L.dayTop * scale + dayFont.shift) +
+          'width:' + contentW.toFixed(2) + 'px;' + fontCss(dayFont) +
+          'color:' + (slot || !state ? '#FFFFFF' : '#7F8BAA') + '">' + escapeHtml(dayText || '--') + '</div>';
+        if (!slot) continue;
+        if (slot.icon) {
+          const svg = colored ? weatherIconSvg(slot.icon, false) : '';
+          html += '<div class="weather-preview-icon" style="' +
+            at(left, contentTop + (L.iconTop + L.iconEmDy) * scale) + 'width:' + contentW.toFixed(2) + 'px;">' +
+            (svg || '<i class="mdi mdi-' + escapeHtml(slot.icon) + '"></i>') + '</div>';
+        }
+        for (const [value, top] of [[slot.high, L.tempTop], [slot.low, L.lowTop]]) {
+          if (value === null) continue;
+          const text = weatherPreviewTemp(value);
+          const valueWidth = measure(text, tempFont);
+          const total = valueWidth + measure(unitText, unitFont);
+          let x = contentW / 2 - total / 2;
+          if (x < 0) x = 0;
+          if (x + total > contentW) x = contentW - total;
+          const y = contentTop + top * scale;
+          html += '<div class="weather-preview-temp-value" style="' + at(left + x, y + tempFont.shift) + fontCss(tempFont) + '">' +
+            escapeHtml(text) + '</div>';
+          html += '<div class="weather-preview-temp-unit" style="' +
+            at(left + x + valueWidth, y + L.unitDy * scale + unitFont.shift) + fontCss(unitFont) + '">' +
+            escapeHtml(unitText) + '</div>';
+        }
+      }
+    }
+    el.querySelectorAll(':scope > .weather-preview-row, :scope > .weather-preview-day, ' +
+      ':scope > .weather-preview-icon, :scope > .weather-preview-temp-value, ' +
+      ':scope > .weather-preview-temp-unit').forEach(node => node.remove());
+    const handles = el.querySelector(':scope > .tile-resize-handle');
+    if (handles) handles.insertAdjacentHTML('beforebegin', html);
+    else el.insertAdjacentHTML('beforeend', html);
+  }
+  const weatherPreviewMeasure = {context: null};
 
 function maybeFillTitleFromScene(tab) {
     const prefix = tab;
@@ -12287,8 +12696,8 @@ function maybeFillTitleFromMedia(tab) {
   }
 
   function updateMediaValuePreview(tab) {
-    // Media tiles stay intentionally simple in the WebUI preview:
-    // only icon and configured tile title are shown.
+    // The tile preview renders the media state with the tile
+    // (applyMediaPreview in updateTilePreview); nothing to refresh here.
   }
 
   function loadMediaFields(tab, data) {
@@ -12313,6 +12722,168 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = '';
+  }
+
+  // --- Tile preview -------------------------------------------------------
+  // What types/media/renderer.cpp builds and update_media_tile_state()
+  // (tiles/runtime/tile_renderer.cpp) fills from the cached payload, placed
+  // by set_media_cover_text_layout() (content_layout.cpp) in display pixels
+  // (MEDIA_TILE_LAYOUT).
+
+  // sanitize_media_display_text().
+  function mediaPreviewText(value) {
+    return typeof value === 'string'
+      ? value.replaceAll('`', "'").replace(/[\r\n]/g, ' ').trim() : '';
+  }
+
+  function parseMediaPreviewPayload(raw) {
+    const text = String(raw ?? '').trim();
+    if (!text) return null;
+    if (!text.startsWith('{')) return {state: text};
+    let data;
+    try { data = JSON.parse(text); } catch (_) { return null; }
+    if (!data || typeof data !== 'object') return null;
+    const field = key => mediaPreviewText(data[key]);
+    return {
+      state: field('state'), title: field('media_title'), artist: field('media_artist'),
+      album: field('media_album_name'), app: field('app_name'), source: field('source'),
+      channel: field('media_channel'),
+      cover: field('entity_picture') || field('media_image_url')
+    };
+  }
+
+  // media_empty_title_label(): like Home Assistant, "Unavailable" and
+  // "Unknown", else the player state or "No playback".
+  function mediaPreviewEmptyTitle(state) {
+    const key = String(state || '').trim().toLowerCase();
+    const labels = {unavailable: 'unavailable', unknown: 'unknown', playing: 'playing', paused: 'paused',
+                    idle: 'idle', standby: 'standby', off: 'off'};
+    return MEDIA_I18N[labels[key]] || MEDIA_I18N.noPlayback;
+  }
+
+  // Positions the title and subtitle like set_media_cover_text_layout().
+  function mediaPreviewTextLayout(L, width, height, large, coverVisible, hasSubtitle) {
+    const top = large ? L.coverTop : L.coverTopSmall;
+    const footer = L.button - L.buttonBottom + L.footerGap;
+    const side = Math.max(1, Math.min(L.maxCover, Math.trunc(width * 42 / 100), height - top - footer));
+    const textX = coverVisible ? side + L.textAfterCover : L.textLeft;
+    const titleHeight = (large ? L.title : L.titleSmall).line;
+    const gap = hasSubtitle ? L.subtitleGap : 0;
+    const block = titleHeight + gap + (hasSubtitle ? L.subtitle.line : 0);
+    const center = coverVisible ? top + Math.trunc(side / 2) : Math.trunc((top + height - footer) / 2);
+    const titleY = Math.max(top, Math.min(center - Math.trunc(block / 2), height - footer - block));
+    return {side, top, textX, textWidth: Math.max(1, width - textX - L.textRight), titleY,
+            subtitleY: titleY + titleHeight + gap};
+  }
+
+  // An artwork loaded: the texts move beside it like on the device.
+  function mediaPreviewCoverLoaded(image) {
+    const tile = image?.closest('.tile');
+    const cover = image?.parentElement;
+    if (!tile || !cover) return;
+    cover.hidden = false;
+    tile.querySelectorAll(':scope > [data-cover-style]').forEach(node => {
+      node.setAttribute('style', node.dataset.coverStyle);
+    });
+  }
+
+  // Fills a rendered media preview tile: header fallbacks, title, subtitle,
+  // artwork and the three controls. iconName is the tile's resolved icon,
+  // displayName the entity's name for a tile without its own title.
+  function applyMediaPreview(el, state, tile, iconName, displayName) {
+    if (!el || typeof MEDIA_TILE_LAYOUT === 'undefined') return;
+    const L = MEDIA_TILE_LAYOUT;
+    const rootStyle = getComputedStyle(document.documentElement);
+    const scale = parseFloat(rootStyle.getPropertyValue('--radius-preview-scale')) || 0.5;
+    const entity = String(tile?.sensor_entity || '');
+
+    // Header: the television icon and the entity's name stand in like on
+    // the device.
+    if (!iconName && !el.querySelector(':scope > .tile-icon')) {
+      el.insertAdjacentHTML('afterbegin', '<i class="mdi mdi-television tile-icon"></i>');
+    }
+    if (!el.querySelector(':scope > .tile-title')) {
+      const name = displayName || (entity && typeof titleFromEntity === 'function' ? titleFromEntity(entity) : '') ||
+        'Media';
+      const icon = el.querySelector(':scope > .tile-icon');
+      const title = '<div class="tile-title">' + tileTitleHtml(name) + '</div>';
+      if (icon) icon.insertAdjacentHTML('afterend', title);
+      else el.insertAdjacentHTML('afterbegin', title);
+    }
+
+    const spanW = Math.max(1, Number(tile?.span_w) || 1);
+    const spanH = Math.max(1, Number(tile?.span_h) || 1);
+    const large = spanW > 1 || spanH > 1;
+    const cellW = parseFloat(rootStyle.getPropertyValue('--preview-cell-w'));
+    const cellH = parseFloat(rootStyle.getPropertyValue('--preview-cell-h'));
+    const previewGap = parseFloat(rootStyle.getPropertyValue('--preview-gap')) || 0;
+    // The card in display pixels, from the preview tile (its border box).
+    const cardW = Math.round((el.offsetWidth || (spanW * (cellW + previewGap) - previewGap)) / scale);
+    const cardH = Math.round((el.offsetHeight || (spanH * (cellH + previewGap) - previewGap)) / scale);
+    const width = cardW - 2 * L.padH;
+    const height = cardH - 2 * L.padV;
+    const font = f => ({
+      size: Math.max(6, Math.round(f.px * scale)),
+      line: f.line * scale,
+      shift: (f.line / 2 - f.base - 0.364 * f.px) * scale
+    });
+    const fontCss = f => 'font-size:' + f.size + 'px;line-height:' + f.line.toFixed(2) + 'px;';
+    // Display pixels in the content area to the preview's absolute position
+    // inside the 3 px editor border.
+    const at = (x, y) => 'left:' + ((L.padH + x) * scale - 3).toFixed(2) + 'px;top:' +
+      ((L.padV + y) * scale - 3).toFixed(2) + 'px;';
+
+    const titleText = state ? (state.title || state.channel) : '';
+    const mainText = titleText || mediaPreviewEmptyTitle(state?.state);
+    let subtitle = state ? (state.artist || state.album || state.app || state.source) : '';
+    if (subtitle && subtitle.toLowerCase() === mainText.trim().toLowerCase()) subtitle = '';
+    const titleFont = font(large ? L.title : L.titleSmall);
+    const subtitleFont = font(L.subtitle);
+    const plain = mediaPreviewTextLayout(L, width, height, large, false, !!subtitle);
+    const covered = mediaPreviewTextLayout(L, width, height, large, true, !!subtitle);
+    const textStyle = (layout, y, f) => at(layout.textX, y) + 'width:' + (layout.textWidth * scale).toFixed(2) + 'px;' +
+      fontCss(f) + 'margin-top:' + f.shift.toFixed(2) + 'px;';
+
+    let html = '';
+    if (state?.cover && /^(https?:|data:image\/)/i.test(state.cover)) {
+      const side = (plain.side * scale).toFixed(2) + 'px';
+      html += '<div class="media-preview-cover" hidden style="' + at(L.coverLeft, plain.top) + 'width:' + side +
+        ';height:' + side + ';border-radius:' + (L.coverRadius * scale).toFixed(2) + 'px">' +
+        '<img src="' + escapeHtml(state.cover) + '" alt="" referrerpolicy="no-referrer" ' +
+        'onload="mediaPreviewCoverLoaded(this)" onerror="this.parentElement.remove()"></div>';
+    }
+    html += '<div class="media-preview-title' + (titleText ? '' : ' media-preview-state') + '" style="' +
+      textStyle(plain, plain.titleY, titleFont) + '" data-cover-style="' +
+      escapeHtml(textStyle(covered, covered.titleY, titleFont)) + '">' + escapeHtml(mainText) + '</div>';
+    if (subtitle) {
+      html += '<div class="media-preview-subtitle" style="' + textStyle(plain, plain.subtitleY, subtitleFont) +
+        '" data-cover-style="' + escapeHtml(textStyle(covered, covered.subtitleY, subtitleFont)) + '">' +
+        escapeHtml(subtitle) + '</div>';
+    }
+
+    // Previous, play/pause and next at the bottom middle; an unavailable
+    // player dims them. Play is a white circle with the icon in the tile color.
+    if (entity) {
+      const unavailable = String(state?.state || '').trim().toLowerCase() === 'unavailable';
+      const playing = String(state?.state || '').trim().toLowerCase() === 'playing';
+      const cardColor = el.style.background || 'var(--tile-default-bg, #1A1A1A)';
+      const buttonY = height - L.button + L.buttonBottom;
+      const iconTop = (Math.trunc((L.button - L.iconLine) / 2) + L.iconEmDy) * scale;
+      for (const [offset, icon, primary] of [[-L.buttonSide, 'skip-previous', false],
+        [0, playing ? 'pause' : 'play', true], [L.buttonSide, 'skip-next', false]]) {
+        const x = Math.trunc((width - L.button) / 2) + offset;
+        html += '<div class="media-preview-control' + (primary ? ' media-preview-play' : '') +
+          (unavailable ? ' media-preview-disabled' : '') + '" style="' + at(x, buttonY) +
+          'width:' + (L.button * scale).toFixed(2) + 'px;height:' + (L.button * scale).toFixed(2) + 'px;' +
+          (primary ? 'color:' + escapeHtml(cardColor) + ';' : '') + '">' +
+          '<i class="mdi mdi-' + icon + '" style="top:' + iconTop.toFixed(2) + 'px"></i></div>';
+      }
+    }
+    el.querySelectorAll(':scope > :is(.media-preview-cover, .media-preview-title, .media-preview-subtitle, ' +
+      '.media-preview-control)').forEach(node => node.remove());
+    const handles = el.querySelector(':scope > .tile-resize-handle');
+    if (handles) handles.insertAdjacentHTML('beforebegin', html);
+    else el.insertAdjacentHTML('beforeend', html);
   }
 
   const CLIMATE_TILE_CONTENT = Object.freeze({
@@ -15041,20 +15612,32 @@ function getClockPreviewLanguage() {
     return (v > 0) ? v : Math.round(n / 2);
   }
 
-  function getClockPreviewTextStyle(raw, fallback, color) {
-    const size = getClockPreviewCssPx(raw, fallback);
-    const safeColor = color || '#fff';
-    return 'data-clock-font="' + normalizeClockPreviewFont(raw, fallback) +
-      '" style="font-size:' + size + 'px; line-height:1; color:' + safeColor + ';"';
+  // Each clock line is as tall as its LVGL font's line height, with the
+  // glyphs on the LVGL baseline (--lh/--ldy, web_admin_styles.cpp).
+  function clockPreviewLineCss(size) {
+    return 'line-height:var(--lh' + size + '); top:var(--ldy' + size + ', 0px);';
   }
 
-  function applyClockPreviewTextStyle(el, raw, fallback, color, lineHeight) {
-    if (!el) return;
+  function applyClockPreviewLine(el, size, px) {
+    el.style.fontSize = px + 'px';
+    el.style.lineHeight = 'var(--lh' + size + ')';
+    el.style.top = 'var(--ldy' + size + ', 0px)';
+  }
+
+  function getClockPreviewTextStyle(raw, fallback, color) {
+    const font = normalizeClockPreviewFont(raw, fallback);
     const size = getClockPreviewCssPx(raw, fallback);
-    el.dataset.clockFont = String(normalizeClockPreviewFont(raw, fallback));
-    el.style.fontSize = size + 'px';
+    const safeColor = color || '#fff';
+    return 'data-clock-font="' + font + '" style="font-size:' + size + 'px; ' +
+      clockPreviewLineCss(font) + ' color:' + safeColor + ';"';
+  }
+
+  function applyClockPreviewTextStyle(el, raw, fallback, color) {
+    if (!el) return;
+    const font = normalizeClockPreviewFont(raw, fallback);
+    el.dataset.clockFont = String(font);
+    applyClockPreviewLine(el, font, getClockPreviewCssPx(raw, fallback));
     el.style.color = color || '#fff';
-    el.style.lineHeight = lineHeight || '1';
   }
 
   function normalizeClockFlags(raw) {
@@ -15156,11 +15739,11 @@ function getClockPreviewLanguage() {
 
     if (timeEl) {
       timeEl.textContent = getClockPreviewTime(timeFormat);
-      applyClockPreviewTextStyle(timeEl, timeFont, 40, '#fff', '1');
+      applyClockPreviewTextStyle(timeEl, timeFont, 40, '#fff');
     }
     if (dateEl) {
       dateEl.textContent = getClockPreviewDate(dateFormat);
-      applyClockPreviewTextStyle(dateEl, dateFont, 24, '#fff', '1.1');
+      applyClockPreviewTextStyle(dateEl, dateFont, 20, '#fff');
     }
     fitCompactClockPreview(tileElem);
   }
@@ -15193,7 +15776,8 @@ function getClockPreviewLanguage() {
     lines.forEach(el => {
       if (!el) return;
       el.hidden = false;
-      el.style.fontSize = getClockPreviewCssPx(el.dataset.clockFont, 40) + 'px';
+      const font = normalizeClockPreviewFont(el.dataset.clockFont, 40);
+      applyClockPreviewLine(el, font, getClockPreviewCssPx(font, 40));
     });
     if (!tileElem.classList.contains('clock-compact')) return;
     const style = getComputedStyle(tileElem);
@@ -15219,15 +15803,15 @@ function getClockPreviewLanguage() {
         const px = getClockPreviewCssPx(size, size);
         if (size > Number(el.dataset.clockFont || 40) || px > capPx) continue;
         const width = measureClockPreviewText(el, sample, px);
-        if (usedW + width <= availW) return { px, width };
+        if (usedW + width <= availW) return { size, px, width };
       }
       return null;
     };
-    const first = fit(primary, maxPx, 0) || { px: getClockPreviewCssPx(20, 20), width: 0 };
-    primary.style.fontSize = first.px + 'px';
+    const first = fit(primary, maxPx, 0) || { size: 20, px: getClockPreviewCssPx(20, 20), width: 0 };
+    applyClockPreviewLine(primary, first.size, first.px);
     if (!secondary) return;
     const second = fit(secondary, first.px, first.width + gap);
-    if (second) secondary.style.fontSize = second.px + 'px';
+    if (second) applyClockPreviewLine(secondary, second.size, second.px);
     else secondary.hidden = true;
   }
 

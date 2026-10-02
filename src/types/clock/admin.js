@@ -77,20 +77,32 @@ function getClockPreviewLanguage() {
     return (v > 0) ? v : Math.round(n / 2);
   }
 
-  function getClockPreviewTextStyle(raw, fallback, color) {
-    const size = getClockPreviewCssPx(raw, fallback);
-    const safeColor = color || '#fff';
-    return 'data-clock-font="' + normalizeClockPreviewFont(raw, fallback) +
-      '" style="font-size:' + size + 'px; line-height:1; color:' + safeColor + ';"';
+  // Each clock line is as tall as its LVGL font's line height, with the
+  // glyphs on the LVGL baseline (--lh/--ldy, web_admin_styles.cpp).
+  function clockPreviewLineCss(size) {
+    return 'line-height:var(--lh' + size + '); top:var(--ldy' + size + ', 0px);';
   }
 
-  function applyClockPreviewTextStyle(el, raw, fallback, color, lineHeight) {
-    if (!el) return;
+  function applyClockPreviewLine(el, size, px) {
+    el.style.fontSize = px + 'px';
+    el.style.lineHeight = 'var(--lh' + size + ')';
+    el.style.top = 'var(--ldy' + size + ', 0px)';
+  }
+
+  function getClockPreviewTextStyle(raw, fallback, color) {
+    const font = normalizeClockPreviewFont(raw, fallback);
     const size = getClockPreviewCssPx(raw, fallback);
-    el.dataset.clockFont = String(normalizeClockPreviewFont(raw, fallback));
-    el.style.fontSize = size + 'px';
+    const safeColor = color || '#fff';
+    return 'data-clock-font="' + font + '" style="font-size:' + size + 'px; ' +
+      clockPreviewLineCss(font) + ' color:' + safeColor + ';"';
+  }
+
+  function applyClockPreviewTextStyle(el, raw, fallback, color) {
+    if (!el) return;
+    const font = normalizeClockPreviewFont(raw, fallback);
+    el.dataset.clockFont = String(font);
+    applyClockPreviewLine(el, font, getClockPreviewCssPx(raw, fallback));
     el.style.color = color || '#fff';
-    el.style.lineHeight = lineHeight || '1';
   }
 
   function normalizeClockFlags(raw) {
@@ -192,11 +204,11 @@ function getClockPreviewLanguage() {
 
     if (timeEl) {
       timeEl.textContent = getClockPreviewTime(timeFormat);
-      applyClockPreviewTextStyle(timeEl, timeFont, 40, '#fff', '1');
+      applyClockPreviewTextStyle(timeEl, timeFont, 40, '#fff');
     }
     if (dateEl) {
       dateEl.textContent = getClockPreviewDate(dateFormat);
-      applyClockPreviewTextStyle(dateEl, dateFont, 24, '#fff', '1.1');
+      applyClockPreviewTextStyle(dateEl, dateFont, 20, '#fff');
     }
     fitCompactClockPreview(tileElem);
   }
@@ -229,7 +241,8 @@ function getClockPreviewLanguage() {
     lines.forEach(el => {
       if (!el) return;
       el.hidden = false;
-      el.style.fontSize = getClockPreviewCssPx(el.dataset.clockFont, 40) + 'px';
+      const font = normalizeClockPreviewFont(el.dataset.clockFont, 40);
+      applyClockPreviewLine(el, font, getClockPreviewCssPx(font, 40));
     });
     if (!tileElem.classList.contains('clock-compact')) return;
     const style = getComputedStyle(tileElem);
@@ -255,15 +268,15 @@ function getClockPreviewLanguage() {
         const px = getClockPreviewCssPx(size, size);
         if (size > Number(el.dataset.clockFont || 40) || px > capPx) continue;
         const width = measureClockPreviewText(el, sample, px);
-        if (usedW + width <= availW) return { px, width };
+        if (usedW + width <= availW) return { size, px, width };
       }
       return null;
     };
-    const first = fit(primary, maxPx, 0) || { px: getClockPreviewCssPx(20, 20), width: 0 };
-    primary.style.fontSize = first.px + 'px';
+    const first = fit(primary, maxPx, 0) || { size: 20, px: getClockPreviewCssPx(20, 20), width: 0 };
+    applyClockPreviewLine(primary, first.size, first.px);
     if (!secondary) return;
     const second = fit(secondary, first.px, first.width + gap);
-    if (second) secondary.style.fontSize = second.px + 'px';
+    if (second) applyClockPreviewLine(secondary, second.size, second.px);
     else secondary.hidden = true;
   }
 

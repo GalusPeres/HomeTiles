@@ -71,6 +71,7 @@ ${fn('set_media_cover_visible')}
 ${fn('media_cover_has_hidden_ancestor')}
 // Only decoding/network I/O are injected. Use actual layout and the exact
 // profile's HTTPS policy so state_fast/full updates expose cover flicker.
+${read('src/types/media/tile_layout.h').replace(/^#include.*$/gm,'').replace('#pragma once','')}
 ${read('src/types/media/content_layout.cpp').replace(/^#include.*$/gm,'')}
 uint32_t fnv1a_hash(const char*s){uint32_t h=2166136261u;while(*s){h^=uint8_t(*s++);h*=16777619u;}return h;}
 lv_image_dsc_t* source_image(int w=240,int h=240,int stride=0){if(!stride)stride=w*2;auto*d=static_cast<lv_image_dsc_t*>(tracked_malloc(sizeof(lv_image_dsc_t)));assert(d);*d={};d->header.magic=LV_IMAGE_HEADER_MAGIC;d->header.cf=LV_COLOR_FORMAT_RGB565_SWAPPED;d->header.w=w;d->header.h=h;d->header.stride=stride;d->data_size=stride*h;d->data=static_cast<uint8_t*>(heap_caps_malloc(d->data_size,3));assert(d->data);for(int y=0;y<h;++y)for(int x=0;x<w;++x){uint16_t v=y*w+x;memcpy(const_cast<uint8_t*>(d->data)+y*stride+2*x,&v,2);}return d;}

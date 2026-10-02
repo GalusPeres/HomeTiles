@@ -2,6 +2,7 @@
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/media/renderer.h"
 #include "src/types/media/content_layout.h"
+#include "src/types/media/tile_layout.h"
 
 #include <Arduino.h>
 
@@ -25,24 +26,9 @@
 
 namespace {
 
-#if defined(DEVICE_WAVESHARE_4B)
-static constexpr lv_coord_t kMediaControlButtonSize = 76;
-static constexpr lv_coord_t kMediaControlSideOffset = 96;
-static constexpr lv_coord_t kMediaControlBottomOffset = -8;
-static constexpr lv_coord_t kMediaContentYOffset = 8;
-#elif defined(DEVICE_LAYOUT_480X480)
-static constexpr lv_coord_t kMediaControlButtonSize = 51;
-static constexpr lv_coord_t kMediaControlSideOffset = 64;
-static constexpr lv_coord_t kMediaControlBottomOffset = -5;
-static constexpr lv_coord_t kMediaContentYOffset = 5;
-#else
-static constexpr lv_coord_t kMediaControlButtonSize =
-    tile_layout::scale(56);
-static constexpr lv_coord_t kMediaControlSideOffset =
-    tile_layout::scale(76);
-static constexpr lv_coord_t kMediaControlBottomOffset = 0;
-static constexpr lv_coord_t kMediaContentYOffset = 0;
-#endif
+static constexpr lv_coord_t kMediaControlButtonSize = media_tile::kControlButtonSize;
+static constexpr lv_coord_t kMediaControlSideOffset = media_tile::kControlSideOffset;
+static constexpr lv_coord_t kMediaControlBottomOffset = media_tile::kControlBottomOffset;
 
 struct MediaEventData {
   String entity_id;
@@ -351,15 +337,13 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     lv_obj_set_size(cover_clip, cover_size, cover_size);
     lv_obj_align(cover_clip,
                  LV_ALIGN_TOP_LEFT,
-                 tile_layout::scale(-2),
-                 tile_layout::scale(
-                     (tile.span_w > 1 || tile.span_h > 1) ? 58 : 42) +
-                     kMediaContentYOffset);
+                 media_tile::kCoverLeft,
+                 media_tile::cover_top(tile.span_w > 1 || tile.span_h > 1));
     lv_obj_set_style_bg_opa(cover_clip, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(cover_clip, 0, 0);
     lv_obj_set_style_shadow_width(cover_clip, 0, 0);
     lv_obj_set_style_pad_all(cover_clip, 0, 0);
-    ui_surface_style::apply_radius(cover_clip, tile_layout::scale(12), 0);
+    ui_surface_style::apply_radius(cover_clip, media_tile::kCoverRadius, 0);
     lv_obj_set_style_clip_corner(cover_clip, true, 0);
     lv_obj_remove_flag(cover_clip, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(cover_clip, LV_OBJ_FLAG_CLICKABLE);
@@ -434,20 +418,8 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
   // After the title exists, so the disc can lift the whole header.
   if (icon_label) tile_icon_disc::add_round(card, icon_label);
 
-#if defined(DEVICE_WAVESHARE_4B)
-  const lv_font_t* media_font = (tile.span_w > 1 || tile.span_h > 1) ? &ui_font_28 : &ui_font_24;
-  const lv_font_t* media_subtitle_font = &ui_font_20;
-#elif defined(DEVICE_LAYOUT_480X480)
-  const lv_font_t* media_font =
-      (tile.span_w > 1 || tile.span_h > 1) ? &ui_font_20 : &ui_font_16;
-  const lv_font_t* media_subtitle_font = &ui_font_14;
-#else
-  const lv_font_t* media_font =
-      (tile.span_w > 1 || tile.span_h > 1)
-          ? tile_layout::content_font_24()
-          : tile_layout::content_font_20();
-  const lv_font_t* media_subtitle_font = FONT_SMALL;
-#endif
+  const lv_font_t* media_font = media_tile::title_font(tile.span_w > 1 || tile.span_h > 1);
+  const lv_font_t* media_subtitle_font = media_tile::subtitle_font();
 
   lv_obj_t* media_title = lv_label_create(card);
   if (media_title) {
@@ -460,7 +432,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
         media_title,
         i18n::strings(configManager.getConfig().language).media_no_playback);
     lv_obj_align(media_title, LV_ALIGN_TOP_LEFT, tile_layout::scale(20),
-                 tile_layout::scale(108) + kMediaContentYOffset);
+                 tile_layout::scale(108) + media_tile::kContentYOffset);
     enable_event_bubble(media_title);
   }
 
@@ -473,7 +445,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     lv_obj_set_style_text_align(subtitle, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(subtitle, "");
     lv_obj_align(subtitle, LV_ALIGN_LEFT_MID, tile_layout::scale(20),
-                 tile_layout::scale(34) + kMediaContentYOffset);
+                 tile_layout::scale(34) + media_tile::kContentYOffset);
     lv_obj_add_flag(subtitle, LV_OBJ_FLAG_HIDDEN);
     enable_event_bubble(subtitle);
   }

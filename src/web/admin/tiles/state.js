@@ -37,7 +37,9 @@
                     Object.prototype.hasOwnProperty.call(payload, 'binary_sensor_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'energy_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'energy_units') ||
-                    Object.prototype.hasOwnProperty.call(payload, 'climate_values');
+                    Object.prototype.hasOwnProperty.call(payload, 'climate_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'weather_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'media_values');
     if (!hasMeta) {
       return { values: payload || {}, units: {}, icons: {}, names: {}, sceneEntities: {}, loaded: true };
     }
@@ -52,6 +54,9 @@
       editableValues: payload.editable_values || payload.editableValues || {},
       // Lock, Alarm panel and Fan detail states (types/device).
       deviceValues: payload.device_values || payload.deviceValues || {},
+      // Weather and media tile states, the payloads their tiles draw.
+      weatherValues: payload.weather_values || payload.weatherValues || {},
+      mediaValues: payload.media_values || payload.mediaValues || {},
       units: Object.assign({}, payload.units || {}, payload.energy_units || {}),
       icons: payload.icons || {},
       names: payload.names || {},

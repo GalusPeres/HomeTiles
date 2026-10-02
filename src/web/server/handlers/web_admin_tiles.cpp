@@ -14,6 +14,7 @@
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/web/server/web_admin_utils.h"
 #include "src/web/server/handlers/web_admin_tile_helpers.h"
+#include "src/web/server/handlers/preview_payload.h"
 #include "src/types/types_registry.h"
 #include "src/types/energy/energy_data.h"
 #include <algorithm>
@@ -987,6 +988,41 @@ void WebAdminServer::handleGetSensorValues() {
     json += '"';
   }
   json += "}";
+
+  // Weather and media previews draw what their tiles draw: the cached payload
+  // of each configured entity, else the retained bridge value, without the
+  // hourly forecast (popup only) and the embedded artwork, which the preview
+  // loads from its URL like the device without data.
+  auto append_preview_payloads = [&](const char* key, const String& entities) {
+    json += ",\"";
+    json += key;
+    json += "\":{";
+    bool first = true;
+    for (const auto& id : parseSensorList(entities)) {
+      String payload;
+      if (!tiles_get_cached_entity_payload(id.c_str(), payload)) {
+        payload = haBridgeConfig.findSensorInitialValue(id);
+      }
+      payload.trim();
+      if (!payload.length()) continue;
+      for (const char* heavy : {"forecast_hourly", "entity_picture_data"}) {
+        int from = 0, to = 0;
+        if (preview_payload::member_span(payload.c_str(), payload.length(), heavy, &from, &to)) {
+          payload.remove(from, to - from);
+        }
+      }
+      if (!first) json += ',';
+      first = false;
+      json += '"';
+      appendJsonEscaped(json, id);
+      json += "\":\"";
+      appendJsonEscaped(json, payload);
+      json += '"';
+    }
+    json += "}";
+  };
+  append_preview_payloads("weather_values", ha.weathers_text);
+  append_preview_payloads("media_values", ha.media_players_text);
 
   // Aggregated energy sources such as solar_total are not Home Assistant
   // entities and are absent from the general sensor cache. Supply their

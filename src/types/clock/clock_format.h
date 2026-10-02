@@ -40,6 +40,32 @@ inline uint8_t normalize_date_format(int raw) {
   }
 }
 
+// Clock font sizes the tile stores (key_code: time, key_modifier: date);
+// anything else falls back. The date line stops at 72.
+inline uint8_t normalize_font_size(uint8_t raw, uint8_t fallback) {
+  switch (raw) {
+    case 20:
+    case 24:
+    case 28:
+    case 32:
+    case 40:
+    case 48:
+    case 56:
+    case 64:
+    case 72:
+    case 80:
+    case 96:
+      return raw;
+    default:
+      return fallback;
+  }
+}
+
+inline uint8_t normalize_date_font_size(uint8_t raw, uint8_t fallback) {
+  const uint8_t normalized = normalize_font_size(raw, fallback);
+  return normalized > 72 ? 72 : normalized;
+}
+
 inline uint8_t default_time_format_for_language(const char* language_code) {
   return i18n::locale(language_code).default_time_format;
 }

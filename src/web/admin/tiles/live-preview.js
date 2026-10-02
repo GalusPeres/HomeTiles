@@ -178,6 +178,8 @@
         0, 255, 0);
       tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
         isDefaultBg ? defaultBg : (color || defaultBg), opacity);
+      // A fully transparent card casts no shadow (apply_slot_tile_shadows).
+      tileElem.classList.toggle('screensaver-bg-clear', opacity === 0);
     } else {
       tileElem.style.background = tileBg;
     }
@@ -215,12 +217,6 @@
     }
     applyTileAriaLabel(tileElem, displayTitle, type);
 
-    if (previewKind === 'weather') {
-      html += '<div class="tile-ghost-icon"><i class="mdi mdi-weather-partly-cloudy"></i></div>';
-    }
-    if (previewKind === 'media') {
-      html += '<div class="tile-ghost-icon"><i class="mdi mdi-music"></i></div>';
-    }
     if (previewKind === 'climate') {
       const climateSpanW = document.getElementById(
         prefix + '_tile_span_w')?.value || 1;
@@ -279,7 +275,7 @@
       const clockTimeFormat = document.getElementById(prefix + '_clock_time_format')?.value || '0';
       const clockDateFormat = document.getElementById(prefix + '_clock_date_format')?.value || '0';
       if (flags & 1) html += '<div class="tile-clock-time" ' + getClockPreviewTextStyle(clockTimeFont, 40, '#fff') + '>' + getClockPreviewTime(clockTimeFormat) + '</div>';
-      if (flags & 2) html += '<div class="tile-clock-date" ' + getClockPreviewTextStyle(clockDateFont, 24, '#fff') + '>' + getClockPreviewDate(clockDateFormat) + '</div>';
+      if (flags & 2) html += '<div class="tile-clock-date" ' + getClockPreviewTextStyle(clockDateFont, 20, '#fff') + '>' + getClockPreviewDate(clockDateFormat) + '</div>';
     }
 
     if (previewKind === 'text') {
@@ -295,7 +291,27 @@
     if (previewKind === 'switch') html += switchPreviewExtraHtml(switchStyle, halfHeight);
 
     html += getTileResizeHandlesHtml(type);
+    // A title or icon moves the clock down (clock/renderer.cpp).
+    if (type === '9') tileElem.classList.toggle('clock-has-header', !!(displayTitle || iconName));
     tileElem.innerHTML = html;
+    if (previewKind === 'weather') {
+      const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
+      applyWeatherPreview(tileElem, parseWeatherPreviewPayload(
+        weatherEntity ? (sensorMetaCache.weatherValues?.[weatherEntity] ?? '') : ''), {
+        col: Number(tileElem.dataset.col || 0),
+        span_w: Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
+        span_h: Number(document.getElementById(prefix + '_tile_span_h')?.value || 1),
+        sensor_display_mode: document.getElementById(prefix + '_weather_colored_icons')?.checked === false ? 1 : 0
+      }, iconName, previewIconColor(type, iconRecord, weatherEntity, sensorMetaCache, null, ''));
+    }
+    if (previewKind === 'media') {
+      applyMediaPreview(tileElem, parseMediaPreviewPayload(
+        mediaEntity ? (sensorMetaCache.mediaValues?.[mediaEntity] ?? '') : ''), {
+        sensor_entity: mediaEntity,
+        span_w: Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
+        span_h: Number(document.getElementById(prefix + '_tile_span_h')?.value || 1)
+      }, iconName, mediaEntity ? (sensorMetaCache.names?.[mediaEntity] || '') : '');
+    }
     if (typeof applyTileRulesTint === 'function' && typeof collectIconColorRecord === 'function' &&
         typeof iconColorOwnEntity === 'function') {
       applyTileRulesTint(tileElem, type, collectIconColorRecord(prefix), iconColorOwnEntity(prefix, String(type)), sensorMetaCache);

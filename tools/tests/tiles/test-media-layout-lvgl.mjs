@@ -38,8 +38,9 @@ ${fonts}
 #endif
 class String:public std::string{public:using std::string::string;using std::string::operator=;String()=default;String(const std::string&s):std::string(s){}void trim(){auto a=find_first_not_of(" \r\n");if(a==npos){clear();return;}*this=substr(a,find_last_not_of(" \r\n")-a+1);}};
 ${read('src/types/media/widgets.h').replace(/^#.*$/gm,'')}
+${read('src/types/media/tile_layout.h').replace(/^#include.*$/gm,'').replace('#pragma once','')}
 ${read('src/types/media/content_layout.cpp').replace(/^#include.*$/gm,'')}
-${renderer.slice(renderer.indexOf('#if defined(DEVICE_WAVESHARE_4B)'),renderer.indexOf('struct MediaEventData'))}
+${renderer.slice(renderer.indexOf('static constexpr lv_coord_t kMediaControlButtonSize'),renderer.indexOf('struct MediaEventData'))}
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=16;
 using TileType=int;constexpr int TILE_MEDIA=7,GRID_COLS=4,GRID_ROWS=4;
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t MEDIA_TILE_MIN_SPAN[^]*?(?=\/\/ A media tile must)/)[0]}

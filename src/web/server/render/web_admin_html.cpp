@@ -540,6 +540,11 @@ static void appendTileTabHTML(
         row < (GRID_ROWS > 1 ? GRID_ROWS - 2 : 0)) {
       tileStyle += "display:none;";
     }
+    // A fully transparent screensaver card casts no shadow
+    // (apply_slot_tile_shadows).
+    if (screensaver_mode && tile.type != TILE_EMPTY && tile.background_opacity == 0) {
+      cssClass += " screensaver-bg-clear";
+    }
 
     if (tile_geometry::fraction_bits(col, row, span_w, span_h)) {
       cssClass += " fractional-tile";
@@ -552,7 +557,13 @@ static void appendTileTabHTML(
       cssClass += " sensor-compact";
       if (span_h == 0.5f) cssClass += " sensor-half";
     }
-    if (tile_geometry::compact_clock(tile.type, span_w, span_h)) cssClass += " clock-compact";
+    if (tile_geometry::compact_clock(tile.type, span_w, span_h)) {
+      cssClass += " clock-compact";
+    } else if (tile.type == TILE_CLOCK &&
+               (tile.title.length() || normalizeMdiIconName(tile.icon_name).length())) {
+      // A title or icon moves the clock down (clock/renderer.cpp).
+      cssClass += " clock-has-header";
+    }
     if (tile_geometry::compact_icon_title(tile.type, span_w, span_h)) {
       cssClass += " sensor-compact sensor-half compact-title-only";
     }
@@ -683,12 +694,8 @@ static void appendTileTabHTML(
       }
     }
 
-    if (preview_kind && strcmp(preview_kind, "weather") == 0) {
-      html += "<div class=\"tile-ghost-icon\"><i class=\"mdi mdi-weather-partly-cloudy\"></i></div>";
-    }
-    if (preview_kind && strcmp(preview_kind, "media") == 0) {
-      html += "<div class=\"tile-ghost-icon\"><i class=\"mdi mdi-music\"></i></div>";
-    }
+    // Weather and media tiles get their state from the preview script
+    // (applyWeatherPreview, applyMediaPreview) once the values arrive.
     if (preview_kind && strcmp(preview_kind, "sensor") == 0) {
       html += "<div class=\"tile-value\" id=\"";
       html += tab_id;
@@ -751,11 +758,25 @@ static void appendTileTabHTML(
       if (flags == 0xFF) flags = 1;
       flags &= 0x03;
       if (flags == 0) flags = 1;
+      // Each line in its stored size with the LVGL line height
+      // (getClockPreviewTextStyle in the browser).
+      auto append_line = [&html](const char* css_class, uint8_t size, const char* placeholder) {
+        char attributes[200];
+        snprintf(attributes, sizeof(attributes),
+                 "<div class=\"%s\" data-clock-font=\"%u\" style=\"font-size:var(--fs%u);"
+                 "line-height:var(--lh%u);top:var(--ldy%u, 0px)\">",
+                 css_class, static_cast<unsigned>(size), static_cast<unsigned>(size),
+                 static_cast<unsigned>(size), static_cast<unsigned>(size));
+        html += attributes;
+        html += placeholder;
+        html += "</div>";
+      };
       if (flags & 1) {
-        html += "<div class=\"tile-clock-time\">--:--</div>";
+        append_line("tile-clock-time", clock_tile::normalize_font_size(tile.key_code, 40), "--:--");
       }
       if (flags & 2) {
-        html += "<div class=\"tile-clock-date\">--.--.----</div>";
+        append_line("tile-clock-date", clock_tile::normalize_date_font_size(tile.key_modifier, 20),
+                    "--.--.----");
       }
     }
 

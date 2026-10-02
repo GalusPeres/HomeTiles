@@ -516,6 +516,8 @@
                                  SCREENSAVER_TILE_DEFAULT_OPACITY);
         el.style.background = tileBackgroundCss(meta, isDefaultBg,
           tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
+        // A fully transparent card casts no shadow (apply_slot_tile_shadows).
+        el.classList.toggle('screensaver-bg-clear', opacity === 0);
       } else {
         el.style.background = bg;
       }
@@ -611,12 +613,6 @@
       }
       applyTileAriaLabel(el, displayTitle, typeValue);
 
-      if (previewKind === 'weather') {
-        html += '<div class="tile-ghost-icon"><i class="mdi mdi-weather-partly-cloudy"></i></div>';
-      }
-      if (previewKind === 'media') {
-        html += '<div class="tile-ghost-icon"><i class="mdi mdi-music"></i></div>';
-      }
 
       if (previewKind === 'sensor') {
         let value = '--';
@@ -664,7 +660,7 @@
         const clockTimeFormat = (tile.sensor_gauge_min !== undefined) ? tile.sensor_gauge_min : 0;
         const clockDateFormat = (tile.sensor_gauge_max !== undefined) ? tile.sensor_gauge_max : 0;
         if (flags & 1) html += '<div class="tile-clock-time" ' + getClockPreviewTextStyle(clockTimeFont, 40, '#fff') + '>' + getClockPreviewTime(clockTimeFormat) + '</div>';
-        if (flags & 2) html += '<div class="tile-clock-date" ' + getClockPreviewTextStyle(clockDateFont, 24, '#fff') + '>' + getClockPreviewDate(clockDateFormat) + '</div>';
+        if (flags & 2) html += '<div class="tile-clock-date" ' + getClockPreviewTextStyle(clockDateFont, 20, '#fff') + '>' + getClockPreviewDate(clockDateFormat) + '</div>';
       }
       if (previewKind === 'text') {
         const textValue = tile.text_value || tile.scene_alias || tile.key_macro || '';
@@ -677,6 +673,16 @@
       if (previewKind === 'switch') html += switchPreviewExtraHtml(tile.switch_style, Number(tile.span_h) === 0.5);
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
+      if (previewKind === 'weather') {
+        applyWeatherPreview(el, parseWeatherPreviewPayload(
+          tile.sensor_entity ? (sensorMeta?.weatherValues?.[tile.sensor_entity] ?? '') : ''),
+          tile, iconName, previewIconColor(typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta, null, ''));
+      }
+      if (previewKind === 'media') {
+        applyMediaPreview(el, parseMediaPreviewPayload(
+          tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''),
+          tile, iconName, tile.sensor_entity ? (metaNames[tile.sensor_entity] || '') : '');
+      }
       if (typeof applyTileRulesTint === 'function') {
         applyTileRulesTint(el, typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta);
       }
@@ -690,7 +696,11 @@
         applyDevicePreview(el, deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
         applyCompactSensorPreview(el, typeValue, tile, tile.sensor_display_mode, tile.sensor_value_font);
       }
-      if (typeValue === '9') fitCompactClockPreview(el);
+      if (typeValue === '9') {
+        // A title or icon moves the clock down (clock/renderer.cpp).
+        el.classList.toggle('clock-has-header', !!(displayTitle || iconName));
+        fitCompactClockPreview(el);
+      }
     }
     if (currentTileTab === tab && currentTileIndex === index) el.classList.add('active');
     if (typeValue === '5' && tile.sensor_entity) {

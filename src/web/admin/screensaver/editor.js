@@ -325,6 +325,22 @@
       Math.max(10, deviceClockFontPx(d.time_font_size, 48) * scale) + 'px';
     date.style.fontSize =
       Math.max(8, deviceClockFontPx(d.date_font_size, 28) * scale) + 'px';
+    // Each line is as tall as its LVGL font's line height, the glyphs on the
+    // LVGL baseline, with the device gap between the lines (clock/renderer.cpp).
+    const applyClockLine = (el, raw, fallback, minPx) => {
+      const size = Number(raw || fallback);
+      const fontPx = deviceClockFontPx(raw, fallback) * scale;
+      // Tiny previews keep a readable font; the line box grows with it.
+      const lineScale = fontPx < minPx ? minPx / fontPx : 1;
+      const shift = parseFloat(rootStyles.getPropertyValue('--screensaver-ldy' + size));
+      el.style.lineHeight = (devicePx('--screensaver-lh' + size, size * 1.21) * scale * lineScale) + 'px';
+      el.style.position = 'relative';
+      el.style.top = (Number.isFinite(shift) ? shift * scale : 0) + 'px';
+    };
+    applyClockLine(time, d.time_font_size, 48, 10);
+    applyClockLine(date, d.date_font_size, 28, 8);
+    date.style.marginTop = !time.hidden && !date.hidden
+      ? devicePx('--screensaver-clock-gap', 6) * scale + 'px' : '0px';
     time.textContent = getClockPreviewTime(d.time_format);
     date.textContent = getScreensaverClockPreviewDate(d);
     time.style.width = 'auto';

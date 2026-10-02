@@ -14,31 +14,6 @@
 #include <new>
 #include <time.h>
 
-static uint8_t normalize_clock_font_size(uint8_t raw, uint8_t fallback) {
-  switch (raw) {
-    case 20:
-    case 24:
-    case 28:
-    case 32:
-    case 40:
-    case 48:
-    case 56:
-    case 64:
-    case 72:
-    case 80:
-    case 96:
-      return raw;
-    default:
-      return fallback;
-  }
-}
-
-static uint8_t normalize_clock_date_font_size(uint8_t raw,
-                                              uint8_t fallback) {
-  const uint8_t normalized = normalize_clock_font_size(raw, fallback);
-  return normalized > 72 ? 72 : normalized;
-}
-
 static uint8_t layout_clock_font_size(uint8_t size) {
 #if defined(DEVICE_LAYOUT_1024X600)
   switch (size) {
@@ -272,8 +247,8 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
                                    uint8_t alignment,
                                    ClockShadowSet* shadow_out) {
   const uint8_t font_size = layout_clock_font_size(
-      date_line ? normalize_clock_date_font_size(raw_font_size, fallback)
-                : normalize_clock_font_size(raw_font_size, fallback));
+      date_line ? clock_tile::normalize_date_font_size(raw_font_size, fallback)
+                : clock_tile::normalize_font_size(raw_font_size, fallback));
   const lv_font_t* font = ui_font_for_size(font_size);
   if (!config.text_shadow) {
     lv_obj_t* label = lv_label_create(stack);
@@ -557,9 +532,9 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   widget_config.show_time = show_time;
   widget_config.show_date = show_date;
   widget_config.fill_parent = true;
-  widget_config.time_font_size = normalize_clock_font_size(tile.key_code, 40);
+  widget_config.time_font_size = clock_tile::normalize_font_size(tile.key_code, 40);
   widget_config.date_font_size =
-      normalize_clock_date_font_size(tile.key_modifier, 20);
+      clock_tile::normalize_date_font_size(tile.key_modifier, 20);
   widget_config.time_format = resolve_clock_time_format(tile);
   widget_config.date_format = resolve_clock_date_format(tile);
   if (compact) {

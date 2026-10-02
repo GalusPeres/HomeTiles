@@ -11,6 +11,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/types/climate/visuals.h"
 #include "src/types/weather/weather_icons.h"
+#include "src/types/weather/tile_layout.h"
 #include "src/types/climate/renderer.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/switch/renderer.h"
@@ -1017,17 +1018,9 @@ static void position_tile_value_unit_centered(
   if (x < 0) x = 0;
   if (x + total_w > wrap_w) x = wrap_w - total_w;
   lv_obj_set_pos(val_label, x, y);
-#if defined(DEVICE_LAYOUT_1024X600)
-  const lv_coord_t unit_y_offset = 0;
-#elif defined(DEVICE_LAYOUT_480X480)
-  // The compact unit font must share the value's top edge. A baseline-style
-  // offset makes the value/unit pair look low and no longer centered below
-  // the day icon.
-  const lv_coord_t unit_y_offset = 0;
-#else
-  const lv_coord_t unit_y_offset = 5;
-#endif
-  lv_obj_set_pos(unit_label, x + val_w, y + unit_y_offset);
+  // The compact unit fonts share the value's top edge; a baseline-style
+  // offset made the 480x480 pair look low below the day icon.
+  lv_obj_set_pos(unit_label, x + val_w, y + weather_tile::kUnitYOffset);
 }
 
 static void decode_basic_json_escapes(String& text) {
@@ -2827,10 +2820,8 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
       }
     }
     if (fw.temp_high_label) {
-      constexpr lv_coord_t kTileForecastTempTop =
-          tile_layout::scale(52 + 54);
-      constexpr lv_coord_t kTileForecastLowTop =
-          kTileForecastTempTop + tile_layout::scale(30);
+      constexpr lv_coord_t kTileForecastTempTop = weather_tile::kForecastTempTop;
+      constexpr lv_coord_t kTileForecastLowTop = weather_tile::kForecastLowTop;
       constexpr lv_coord_t kTileColContentW =
           WEATHER_FORECAST_COL_W -
           (2 * tile_layout::scale_480(20));

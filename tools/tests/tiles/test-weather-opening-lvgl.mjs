@@ -62,6 +62,7 @@ ${strip(read('src/tiles/icons/mdi_bar_icons.h'))}
 ${strip(read('src/ui/shared/icon_lock_mark.h'))}
 ${strip(read('src/ui/popups/popup_shell.cpp'))}
 ${strip(read('src/types/weather/widgets.h'))}
+${strip(read('src/types/weather/tile_layout.h'))}
 ${strip(read('src/ui/popups/weather/weather_popup.h'))}
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=1,GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device::kGridCellH,GRID_GAP=Device::kGridGap;
 #include "src/tiles/config/tile_icon_colors.h"
@@ -146,6 +147,8 @@ void check_energy_layout() {
 }
 #include "src/types/climate/layout.h"
 constexpr int GRID_COLS=Device::kGridCols,GRID_ROWS=Device::kGridRows;
+${fn(read('src/fonts/ui_fonts.h'),'ui_font_for_size')}
+${strip(read('src/ui/screensaver/screensaver_tile_shadow.h'))}
 ${strip(read('src/web/server/render/web_admin_styles.cpp').split('void appendAdminStyles(')[0])}
 bool pressed=false;lv_point_t pointer{};bool measuring=false;int covered_draws=0;uint64_t flushed_pixels=0;
 int tile_draws=0, tile_style_changes=0;

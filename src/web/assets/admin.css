@@ -1060,10 +1060,24 @@
     .screensaver-tile-grid > .tile-resize-placeholder {
       z-index:2;
     }
-    /* Preview of the optional tile shadow on the device. drop-shadow instead
-       of box-shadow so selection and hover shadows stay untouched. */
-    .screensaver-tile-grid.tiles-shadowed > .tile:not(.empty) {
-      filter:drop-shadow(0 2px 8px rgba(0,0,0,0.65));
+    /* The optional tile shadow: like the device a card shadow only
+       (screensaver_tile_shadow.h), never one behind the text and icons. The
+       card casts it from its visible edge, 3px inside the editor border, and
+       without the rounded clip-path, which would cut it off. Selection and
+       hover keep their own shadows in front of it. */
+    .screensaver-tile-grid.tiles-shadowed > .tile:not(.empty):not(.screensaver-bg-clear) {
+      --screensaver-card-shadow:0 0 var(--screensaver-tile-shadow-blur, 8px)
+        calc(var(--screensaver-tile-shadow-spread, 1.5px) - 3px)
+        rgba(0,0,0,var(--screensaver-tile-shadow-opa, 0.6));
+      clip-path:none;
+      box-shadow:var(--screensaver-card-shadow);
+    }
+    .screensaver-tile-grid.tiles-shadowed > .tile:not(.empty):not(.screensaver-bg-clear):hover:not(.active) {
+      clip-path:none;
+      box-shadow:0 0 0 2px rgba(38,166,154,0.12) inset, var(--screensaver-card-shadow);
+    }
+    .screensaver-tile-grid.tiles-shadowed > .tile:not(.empty):not(.screensaver-bg-clear):is(.active, [data-selected="1"]) {
+      box-shadow:0 0 12px rgba(38,166,154,0.55), var(--screensaver-card-shadow);
     }
     /* The hairline sits on the outer card edge. A child overlay would be
        visibly indented by the transparent 3px editor border. */
@@ -1276,17 +1290,6 @@
       /* Anchor for the round icon disc; header icons stay absolute. */
       position:relative;
     }
-    /* Centered ghost hint for tiles without a live preview (weather/media) */
-    .tile-ghost-icon {
-      position:absolute;
-      inset:0;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      pointer-events:none;
-      color:rgba(255,255,255,0.35);
-    }
-    .tile-ghost-icon .mdi { font-size:var(--icon-size, 24px); line-height:1; }
 
     /* Settings panel: sticky on the right, scrolls internally on long content
        (capped at the viewport height) instead of stretching the whole page. */
@@ -1698,6 +1701,41 @@
 .tile.energy { display:grid; grid-template-rows:auto 1fr; grid-template-columns:1fr; }
 
 .tile.weather { position:relative; }
+    /* Weather tile preview (applyWeatherPreview): the device labels at their
+       positions, each as tall as its LVGL line height. */
+    .tile.weather > .weather-preview-row {
+      position:absolute; left:0; right:0; display:flex; justify-content:center; align-items:center;
+      color:#fff; white-space:nowrap; pointer-events:none;
+    }
+    .tile.weather > .weather-preview-row > span { position:relative; display:block; white-space:nowrap; }
+    .tile.weather > .weather-preview-row > .weather-preview-condition { overflow:hidden; text-overflow:ellipsis; min-width:0; }
+    .tile.weather > .weather-preview-row > .weather-preview-separator { color:#B0B0B0; }
+    .tile.weather > :is(.weather-preview-day, .weather-preview-icon, .weather-preview-temp-value, .weather-preview-temp-unit) {
+      position:absolute; color:#fff; white-space:nowrap; pointer-events:none;
+    }
+    .tile.weather > .weather-preview-day { text-align:center; overflow:hidden; text-overflow:ellipsis; }
+    .tile.weather > .weather-preview-icon { display:flex; justify-content:center; font-size:var(--icon-size, 24px); line-height:1; }
+    .tile.weather > .weather-preview-icon > .mdi { line-height:1; }
+    :is(.tile-weather-icon, .weather-preview-icon) > .weather-icon-svg { display:block; width:1em; height:1em; }
+    /* Media tile preview (applyMediaPreview): title, subtitle, artwork and
+       controls at the device positions. The title scrolls on the device; the
+       preview shows its start. */
+    .tile.media > :is(.media-preview-title, .media-preview-subtitle, .media-preview-control, .media-preview-cover) {
+      position:absolute; pointer-events:none;
+    }
+    .tile.media > :is(.media-preview-title, .media-preview-subtitle) { white-space:nowrap; overflow:hidden; text-overflow:clip; }
+    .tile.media > .media-preview-title { color:#fff; }
+    .tile.media > .media-preview-title.media-preview-state { text-overflow:ellipsis; }
+    .tile.media > .media-preview-subtitle { color:#D8DEE9; }
+    .tile.media > .media-preview-control { border-radius:50%; color:#fff; }
+    .tile.media > .media-preview-control.media-preview-play { background:#fff; }
+    .tile.media > .media-preview-control.media-preview-disabled { opacity:.3; }
+    .tile.media > .media-preview-control > .mdi {
+      position:absolute; left:0; right:0; display:block; text-align:center;
+      font-size:var(--icon-size, 24px); line-height:1;
+    }
+    .tile.media > .media-preview-cover { overflow:hidden; }
+    .tile.media > .media-preview-cover > img { display:block; width:100%; height:100%; object-fit:cover; }
 
 .tile.scene { display:flex; flex-direction:column; align-items:center; justify-content:center; }
     .tile.scene .tile-title { text-align:center; align-self:auto; width:100%; margin-top:4px; }
@@ -2467,59 +2505,89 @@
 .tile.animation { background:#000; }
     .tile.animation .tile-title { text-align:left; align-self:start; width:100%; }
 
-.tile.clock { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+/* Clock tile (types/clock/renderer.cpp): Inter Regular lines as tall as their
+   LVGL fonts' line heights, centered with the device gap; a title or icon
+   moves the clock down. */
+.tile.clock { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--clock-gap, 3px); }
+    .tile.clock.clock-has-header { padding-top:calc(var(--tile-pad-v, 12px) + 2 * var(--clock-header-shift, 9px)); }
+    /* Header: title top left, icon top right (web_admin_styles.cpp
+       emit_right_header), inside the 3 px editor border. */
     .tile.clock .tile-title {
       position:absolute;
-      top:8px;
-      left:8px;
+      top:calc(var(--clock-header-title-top, 8px) - 3px);
+      left:calc(var(--clock-header-pad-h, 10px) - 3px);
       text-align:left;
       width:auto;
       margin:0;
     }
     .tile.clock .tile-icon {
       position:absolute;
-      top:8px;
-      right:8px;
+      top:calc(var(--clock-header-icon-top, 8px) - 3px);
+      right:calc(var(--clock-header-icon-right, 8px) - 3px);
       margin:0;
     }
     .tile-clock-time {
+      position:relative;
+      top:var(--ldy40, 0px);
       color:#fff;
       font-size:var(--fs40, 20px);
-      font-weight:600;
-      line-height:1;
+      font-weight:400;
+      line-height:var(--lh40, 1.27);
     }
     .tile-clock-date {
+      position:relative;
+      top:var(--ldy20, 0px);
       color:#fff;
       font-size:var(--fs20, 10px);
-      font-weight:500;
-      line-height:1.1;
+      font-weight:400;
+      line-height:var(--lh20, 1.35);
     }
     /* Half-height clock: one row, no title or icon (clock/renderer.cpp). */
-    .tile.clock.clock-compact { flex-direction:row; gap:6px; padding:0 8px; }
+    .tile.clock.clock-compact { flex-direction:row; gap:var(--clock-gap, 3px); padding:0 var(--clock-compact-pad, 4px); }
     .tile.clock.clock-compact .tile-title,
     .tile.clock.clock-compact .tile-icon { display:none; }
     .tile.clock.clock-compact .tile-clock-time,
-    .tile.clock.clock-compact .tile-clock-date { white-space:nowrap; line-height:1; }
+    .tile.clock.clock-compact .tile-clock-date { white-space:nowrap; }
 
-.tile.text { display:grid; grid-template-rows:auto 1fr; grid-template-columns:1fr; }
-    .tile.text .tile-title { text-align:left; align-self:start; width:100%; }
+/* Text tile (types/text/renderer.cpp): its own card padding, the title top
+   left and the icon top right like the Clock, the text wrapped over the
+   content width and centered in the card, 12 px lower below a header, its
+   lines as tall as the LVGL font's line height. */
+.tile.text { padding:var(--text-header-pad-v, 8px) var(--text-header-pad-h, 9px); }
+    .tile.text .tile-title {
+      position:absolute;
+      top:calc(var(--text-header-title-top, 8px) - 3px);
+      left:calc(var(--text-header-pad-h, 9px) - 3px);
+      right:calc(var(--text-header-pad-h, 9px) - 3px);
+      width:auto;
+      text-align:left;
+    }
     .tile.text .tile-text {
+      position:absolute;
+      left:calc(var(--text-header-pad-h, 9px) - 3px);
+      right:calc(var(--text-header-pad-h, 9px) - 3px);
+      top:50%;
+      transform:translateY(-50%);
       color:#fff;
       font-size:var(--fs28, 14px);
+      line-height:var(--lh28, 1.32);
       text-align:center;
       white-space:pre-wrap;
-      line-height:1.2;
-      align-self:center;
-      justify-self:center;
-      padding:0 8px;
-      overflow:hidden;
+      overflow-wrap:anywhere;
     }
-    .tile.text .tile-text.sensor-value-size-default { font-size:var(--fs28, 14px); }
-    .tile.text .tile-text.sensor-value-size-40 { font-size:var(--fs40, 20px); }
-    .tile.text .tile-text.sensor-value-size-32 { font-size:var(--fs32, 16px); }
-    .tile.text .tile-text.sensor-value-size-24 { font-size:var(--fs24, 12px); }
-    .tile.text .tile-text.sensor-value-size-20 { font-size:var(--fs20, 10px); }
-    .tile.text .tile-icon { position:absolute; top:10px; right:8px; }
+    .tile.text:has(> .tile-title, > .tile-icon) .tile-text {
+      transform:translateY(calc(-50% + var(--text-header-shift, 6px)));
+    }
+    .tile.text .tile-text.sensor-value-size-default { font-size:var(--fs28, 14px); line-height:var(--lh28, 1.32); }
+    .tile.text .tile-text.sensor-value-size-40 { font-size:var(--fs40, 20px); line-height:var(--lh40, 1.27); }
+    .tile.text .tile-text.sensor-value-size-32 { font-size:var(--fs32, 16px); line-height:var(--lh32, 1.31); }
+    .tile.text .tile-text.sensor-value-size-24 { font-size:var(--fs24, 12px); line-height:var(--lh24, 1.29); }
+    .tile.text .tile-text.sensor-value-size-20 { font-size:var(--fs20, 10px); line-height:var(--lh20, 1.35); }
+    .tile.text .tile-icon {
+      position:absolute;
+      top:calc(var(--text-header-icon-top, 8px) - 3px);
+      right:calc(var(--text-header-icon-right, 8px) - 3px);
+    }
     .tile-settings textarea {
       font-size:14px;
     }
@@ -2564,9 +2632,10 @@
       text-overflow:ellipsis;
     }
     textarea.tile-title-input { resize:none; line-height:1.4; }
-    .tile.clock .tile-title { width:calc(100% - 16px); }
+    .tile.clock .tile-title { width:calc(100% + 6px - 2 * var(--clock-header-pad-h, 10px)); }
     .tile.clock:has(.tile-icon) .tile-title,
-    .tile.text:has(.tile-icon) .tile-title { max-width:70%; }
+    .tile.text:has(.tile-icon) .tile-title { max-width:calc((100% + 6px - 2 * var(--text-header-pad-h, 9px)) * .7); }
+    .tile.clock:has(.tile-icon) .tile-title { max-width:calc((100% + 6px - 2 * var(--clock-header-pad-h, 10px)) * .7); }
 
     .tile-radius-control { display:flex; align-items:center; gap:8px; margin:0; }
     .tile-radius-control input[type="range"] { width:120px; height:18px; margin:0; accent-color:var(--accent); }

@@ -1,4 +1,5 @@
 #include "src/ui/screensaver/image_screensaver.h"
+#include "src/ui/screensaver/screensaver_tile_shadow.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/ui_manager.h"
 
@@ -1335,10 +1336,10 @@ void apply_slot_tile_shadows(ScreensaverState* st) {
     const bool visible_bg =
         lv_obj_get_style_bg_opa(card, LV_PART_MAIN) != LV_OPA_TRANSP;
     if (enabled && visible_bg) {
-      lv_obj_set_style_shadow_width(card, 32, 0);
+      lv_obj_set_style_shadow_width(card, screensaver_tile_shadow::kWidth, 0);
       lv_obj_set_style_shadow_color(card, lv_color_hex(0x000000), 0);
-      lv_obj_set_style_shadow_opa(card, LV_OPA_60, 0);
-      lv_obj_set_style_shadow_spread(card, 3, 0);
+      lv_obj_set_style_shadow_opa(card, screensaver_tile_shadow::kOpa, 0);
+      lv_obj_set_style_shadow_spread(card, screensaver_tile_shadow::kSpread, 0);
     } else {
       lv_obj_set_style_shadow_width(card, 0, 0);
       lv_obj_set_style_shadow_opa(card, LV_OPA_TRANSP, 0);

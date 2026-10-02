@@ -7,6 +7,7 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/shared/tone_color.h"
+#include "src/ui/screensaver/screensaver_tile_shadow.h"
 
 namespace {
 
@@ -64,6 +65,34 @@ int preview_scaled_exact_px(int lvgl_px) {
 
 namespace {
 
+// Nominal UI font sizes and the LVGL font each layout renders for them. The
+// preview variables describe the rendered font, not the requested size.
+struct PreviewFontSize {
+  uint8_t nominal;
+  uint8_t rendered;
+};
+#if defined(DEVICE_LAYOUT_1024X600)
+// The compact layout's real LVGL font substitutions.
+constexpr PreviewFontSize kPreviewFontSizes[] = {
+    {16, 16}, {20, 16}, {24, 20}, {28, 24}, {32, 28}, {40, 32},
+    {48, 40}, {56, 48}, {64, 56}, {72, 56}, {80, 64}, {96, 80}};
+constexpr int kPreviewIconSize = 40;
+constexpr int kScreensaverClockShadow[] = {2, 3, 5};
+#elif defined(DEVICE_LAYOUT_480X480)
+// Native 2/3 font and icon assets used by the 480x480 target.
+constexpr PreviewFontSize kPreviewFontSizes[] = {
+    {16, 12}, {20, 14}, {24, 16}, {28, 20}, {32, 20}, {40, 28},
+    {48, 32}, {56, 40}, {64, 40}, {72, 48}, {80, 56}, {96, 64}};
+constexpr int kPreviewIconSize = 32;
+constexpr int kScreensaverClockShadow[] = {1, 3, 4};
+#else
+constexpr PreviewFontSize kPreviewFontSizes[] = {
+    {16, 16}, {20, 20}, {24, 24}, {28, 28}, {32, 32}, {40, 40},
+    {48, 48}, {56, 56}, {64, 64}, {72, 72}, {80, 80}, {96, 96}};
+constexpr int kPreviewIconSize = 48;  // FONT_MDI_ICONS = mdi_icons_48
+constexpr int kScreensaverClockShadow[] = {2, 4, 6};
+#endif
+
 // Scale LVGL pixels by the ratio of preview cell height to display cell
 // height so preview fonts match the display geometry.
 int preview_scaled_px(int lvgl_px) {
@@ -93,6 +122,15 @@ void appendPreviewScaleVars(String& html) {
     html += ":";
     html += String(device_px);
     html += "px;";
+  };
+  // Fractional pixels, for line boxes and offsets that rounding would move.
+  auto emit_fraction = [&html](const char* name, float px) {
+    char value[48];
+    snprintf(value, sizeof(value), "--%s:%.2fpx;", name, static_cast<double>(px));
+    html += value;
+  };
+  auto emit_scaled = [&emit_fraction](const char* name, float lvgl_px) {
+    emit_fraction(name, lvgl_px * preview_cell_h_px() / GRID_CELL_H);
   };
   html += "  <style>:root{";
   emit_exact("compact-inset", compact_sensor_layout::inset());
@@ -128,96 +166,84 @@ void appendPreviewScaleVars(String& html) {
   emit_exact("compact-value-font-28", compact_sensor_layout::value_size(5));
   emit_exact("compact-value-line-step-28", compact_sensor_layout::value_font(5)->line_height);
 
-#if defined(DEVICE_LAYOUT_1024X600)
-  // Match the compact layout's real LVGL font substitutions. The preview
-  // variables describe the rendered font, not the originally requested size.
-  emit("fs16", 16);
-  emit("fs20", 16);
-  emit("fs24", 20);
-  emit("fs28", 24);
-  emit("fs32", 28);
-  emit("fs40", 32);
-  emit("fs48", 40);
-  emit("fs56", 48);
-  emit("fs64", 56);
-  emit("fs72", 56);
-  emit("fs80", 64);
-  emit("fs96", 80);
-  emit("icon-size", 40);
-  emit_device_px("screensaver-fs20", 16);
-  emit_device_px("screensaver-fs24", 20);
-  emit_device_px("screensaver-fs28", 24);
-  emit_device_px("screensaver-fs32", 28);
-  emit_device_px("screensaver-fs40", 32);
-  emit_device_px("screensaver-fs48", 40);
-  emit_device_px("screensaver-fs56", 48);
-  emit_device_px("screensaver-fs64", 56);
-  emit_device_px("screensaver-fs72", 56);
-  emit_device_px("screensaver-fs80", 64);
-  emit_device_px("screensaver-fs96", 80);
-  emit_device_px("screensaver-shadow-2", 2);
-  emit_device_px("screensaver-shadow-4", 3);
-  emit_device_px("screensaver-shadow-6", 5);
-#elif defined(DEVICE_LAYOUT_480X480)
-  // Native 2/3 font and icon assets used by the 480x480 target.
-  emit("fs16", 12);
-  emit("fs20", 14);
-  emit("fs24", 16);
-  emit("fs28", 20);
-  emit("fs32", 20);
-  emit("fs40", 28);
-  emit("fs48", 32);
-  emit("fs56", 40);
-  emit("fs64", 40);
-  emit("fs72", 48);
-  emit("fs80", 56);
-  emit("fs96", 64);
-  emit("icon-size", 32);
-  emit_device_px("screensaver-fs20", 14);
-  emit_device_px("screensaver-fs24", 16);
-  emit_device_px("screensaver-fs28", 20);
-  emit_device_px("screensaver-fs32", 20);
-  emit_device_px("screensaver-fs40", 28);
-  emit_device_px("screensaver-fs48", 32);
-  emit_device_px("screensaver-fs56", 40);
-  emit_device_px("screensaver-fs64", 40);
-  emit_device_px("screensaver-fs72", 48);
-  emit_device_px("screensaver-fs80", 56);
-  emit_device_px("screensaver-fs96", 64);
-  emit_device_px("screensaver-shadow-2", 1);
-  emit_device_px("screensaver-shadow-4", 3);
-  emit_device_px("screensaver-shadow-6", 4);
-#else
-  emit("fs16", 16);
-  emit("fs20", 20);
-  emit("fs24", 24);
-  emit("fs28", 28);
-  emit("fs32", 32);
-  emit("fs40", 40);
-  emit("fs48", 48);
-  emit("fs56", 56);
-  emit("fs64", 64);
-  emit("fs72", 72);
-  emit("fs80", 80);
-  emit("fs96", 96);
-  emit("icon-size", 48);      // FONT_MDI_ICONS = mdi_icons_48
-  emit_device_px("screensaver-fs20", 20);
-  emit_device_px("screensaver-fs24", 24);
-  emit_device_px("screensaver-fs28", 28);
-  emit_device_px("screensaver-fs32", 32);
-  emit_device_px("screensaver-fs40", 40);
-  emit_device_px("screensaver-fs48", 48);
-  emit_device_px("screensaver-fs56", 56);
-  emit_device_px("screensaver-fs64", 64);
-  emit_device_px("screensaver-fs72", 72);
-  emit_device_px("screensaver-fs80", 80);
-  emit_device_px("screensaver-fs96", 96);
-  emit_device_px("screensaver-shadow-2", 2);
-  emit_device_px("screensaver-shadow-4", 4);
-  emit_device_px("screensaver-shadow-6", 6);
-#endif
+  for (const PreviewFontSize& size : kPreviewFontSizes) {
+    char name[24];
+    snprintf(name, sizeof(name), "fs%u", static_cast<unsigned>(size.nominal));
+    emit(name, size.rendered);
+  }
+  emit("icon-size", kPreviewIconSize);
+  for (const PreviewFontSize& size : kPreviewFontSizes) {
+    if (size.nominal < 20) continue;
+    char name[32];
+    snprintf(name, sizeof(name), "screensaver-fs%u", static_cast<unsigned>(size.nominal));
+    emit_device_px(name, size.rendered);
+  }
+  emit_device_px("screensaver-clock-gap", tile_layout::scale(6));
+  // The screensaver tile shadow: LVGL blurs over the shadow width, CSS over
+  // twice its blur radius.
+  emit_scaled("screensaver-tile-shadow-blur", screensaver_tile_shadow::kWidth / 2.0f);
+  emit_scaled("screensaver-tile-shadow-spread", screensaver_tile_shadow::kSpread);
+  {
+    char opacity[48];
+    snprintf(opacity, sizeof(opacity), "--screensaver-tile-shadow-opa:%.3f;",
+             screensaver_tile_shadow::kOpa / 255.0);
+    html += opacity;
+  }
+  emit_device_px("screensaver-shadow-2", kScreensaverClockShadow[0]);
+  emit_device_px("screensaver-shadow-4", kScreensaverClockShadow[1]);
+  emit_device_px("screensaver-shadow-6", kScreensaverClockShadow[2]);
+  // A label is as tall as its font's line height. CSS centers the glyphs in a
+  // line box of that height; --ldy moves them onto the LVGL baseline. Inter's
+  // CSS baseline lies 0.364 em below the box middle (ascent 0.969 em, content
+  // 1.210 em, measured in Chrome), so only the digit-only 80 and 96 fonts with
+  // their short line heights are off by more than a device pixel.
+  for (const PreviewFontSize& size : kPreviewFontSizes) {
+    const lv_font_t* font = ui_font_for_size(size.rendered);
+    const float shift = font->line_height / 2.0f - font->base_line - 0.364f * size.rendered;
+    char name[32];
+    snprintf(name, sizeof(name), "lh%u", static_cast<unsigned>(size.nominal));
+    emit_scaled(name, font->line_height);
+    snprintf(name, sizeof(name), "ldy%u", static_cast<unsigned>(size.nominal));
+    emit_scaled(name, shift);
+    if (size.nominal < 20) continue;
+    snprintf(name, sizeof(name), "screensaver-lh%u", static_cast<unsigned>(size.nominal));
+    emit_device_px(name, font->line_height);
+    snprintf(name, sizeof(name), "screensaver-ldy%u", static_cast<unsigned>(size.nominal));
+    emit_fraction(name, shift);
+  }
   emit("tile-pad-v", climate_layout::kCardPaddingVertical);
   emit("tile-pad-h", climate_layout::kCardPaddingHorizontal);
+  // Clock tile (types/clock/renderer.cpp): the gap between its lines, the
+  // shift of the clock below a title or icon and the half-height side pad.
+  emit_scaled("clock-gap", tile_layout::scale(6));
+  emit_scaled("clock-header-shift", tile_layout::scale(18));
+  emit_scaled("clock-compact-pad", tile_layout::scale_480(8));
+  // Clock and Text headers: the title top left, the icon top right with its
+  // disc, which lifts the header until its top and side gaps match
+  // (tile_icon_disc::add_round). Text cards use their own padding and center
+  // the text 12 px lower below a header (types/text/renderer.cpp).
+  auto emit_right_header = [&](const char* prefix, int pad_top, int pad_side) {
+    const int icon_x = tile_layout::scale_480(4);
+    const int icon_y = tile_layout::scale_480(-8);
+    const int lift = tile_icon_disc::corner_lift(
+        pad_top, pad_side, -icon_x, icon_y,
+        lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0),
+        lv_font_get_line_height(FONT_MDI_ICONS), tile_icon_disc::round_diameter());
+    char name[48];
+    snprintf(name, sizeof(name), "%s-icon-top", prefix);
+    emit_scaled(name, pad_top + icon_y - lift);
+    snprintf(name, sizeof(name), "%s-icon-right", prefix);
+    emit_scaled(name, pad_side - icon_x);
+    snprintf(name, sizeof(name), "%s-title-top", prefix);
+    emit_scaled(name, pad_top + tile_layout::scale_480(4) - lift);
+    snprintf(name, sizeof(name), "%s-pad-v", prefix);
+    emit_scaled(name, pad_top);
+    snprintf(name, sizeof(name), "%s-pad-h", prefix);
+    emit_scaled(name, pad_side);
+  };
+  emit_right_header("clock-header", tile_layout::scale_480(24), tile_layout::scale_480(20));
+  emit_right_header("text-header", tile_layout::scale_480(16), tile_layout::scale_480(18));
+  emit_scaled("text-header-shift", tile_layout::scale(12));
   // The device places a corner header's disc in the tile corner like the
   // half-height disc and centers the icon in it; the header labels move with
   // the icon (tile_icon_disc::corner_header). The preview header follows.

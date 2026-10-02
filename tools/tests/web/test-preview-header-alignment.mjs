@@ -16,7 +16,8 @@ const helpers = [
   'rgbToHex', 'applyTileAriaLabel',
   'resolveUnitValue', 'isScreensaverTileTab', 'getTileResizeHandlesHtml',
   'applyCompactSensorPreview', 'compactValueSize', 'syncCompactValueFontOptions', 'isCompactSensorType', 'isEditableValueType', 'editableCompactValueFont',
-  'syncEditableValueFontOptions', 'renderTileFromData', 'updateTilePreview'
+  'syncEditableValueFontOptions', 'renderTileFromData', 'updateTilePreview',
+  'parseWeatherPreviewPayload', 'applyWeatherPreview', 'parseMediaPreviewPayload', 'applyMediaPreview'
 ].map(extractDeliveredFunction).join('\n');
 const html = `<!doctype html><html><head><style>
 ${readRepoFile('src/web/assets/admin.css')}

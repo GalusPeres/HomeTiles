@@ -64,4 +64,9 @@ assert.match(css, /\.tile:not\(\.empty\):is\(\.active, \[data-selected="1"\], :h
 assert.match(css, /\.tile:not\(\.empty\):is\(\.active, \[data-selected="1"\]\)::after \{ border:3px solid #26a69a; \}/);
 assert.match(css, /\.tile\.sensor-compact:not\(\.empty\)::after \{ inset:0; \}/);
 assert.doesNotMatch(css, /\.tile\.sensor-compact\.active, \.tile\.sensor-compact\[data-selected="1"\] \{ box-shadow:inset/);
+// No tile type brings back its own overflow clip (the media tile did: no
+// rings, cut disc), and hover draws only the dashed ring, no faint inset
+// line inside it.
+assert.doesNotMatch(css, /(^|\n)\s*\.tile\.[\w-]+ \{[^}]*overflow:hidden/);
+assert.doesNotMatch(css, /0 0 0 2px rgba\(38,166,154,0\.12\) inset/);
 console.log('Preview fonts: Inter Regular, LVGL line heights per size, text padding, card-only screensaver shadow; full-size cards cut at their edge, rings above the disc, quiet pill handles');

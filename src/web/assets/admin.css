@@ -1073,7 +1073,7 @@
     }
     .screensaver-tile-grid.tiles-shadowed > .tile:not(.empty):not(.screensaver-bg-clear):hover:not(.active) {
       clip-path:none;
-      box-shadow:0 0 0 2px rgba(38,166,154,0.12) inset, var(--screensaver-card-shadow);
+      box-shadow:var(--screensaver-card-shadow);
     }
     .screensaver-tile-grid.tiles-shadowed > .tile:not(.empty):not(.screensaver-bg-clear):is(.active, [data-selected="1"]) {
       box-shadow:0 0 12px rgba(38,166,154,0.55), var(--screensaver-card-shadow);
@@ -1131,7 +1131,7 @@
     }
     .tile:hover:not(.active) {
       border:3px solid transparent;
-      box-shadow:0 0 0 2px rgba(38,166,154,0.12) inset;
+      box-shadow:none;
       border-radius:var(--tile-radius, 11px);
       background-clip:border-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
@@ -1975,7 +1975,7 @@
       white-space:normal;
     }
 
-.tile.media { position:relative; overflow:hidden; }
+.tile.media { position:relative; }
     .tile.media .tile-media-title,
     .tile.media .tile-media-subtitle,
     .tile.media .tile-media-state {

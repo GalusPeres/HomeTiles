@@ -37,5 +37,8 @@ struct MediaTileWidgets {
   bool has_media_volume = false;
   float media_volume_level = 0.0f;
   bool media_is_muted = false;
+  // False while Home Assistant reports the player unavailable: the controls
+  // on the tile and in the popup are disabled, like in Home Assistant.
+  bool available = true;
   bool dynamic_icon = true;
 };

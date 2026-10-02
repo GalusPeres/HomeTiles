@@ -17,6 +17,10 @@ inline uint32_t mode_foreground_color(const char* mode) {
   if (equals(mode, "auto")) return 0x4CAF50;
   if (equals(mode, "heat_cool")) return 0xFFC107;
   if (equals(mode, "off")) return 0x808080;
+  // Home Assistant's --state-inactive-color: a state it does not know yet
+  // (a template after a restart) is inactive, like the Cover (user
+  // 2026-10-02: the icon and popup ring were white).
+  if (equals(mode, "unknown")) return 0x9E9E9E;
   return 0xFFFFFF;
 }
 

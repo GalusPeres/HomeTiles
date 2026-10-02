@@ -2955,6 +2955,10 @@ static String media_empty_title_label(String state) {
   state.trim();
   state.toLowerCase();
   const auto& tr = i18n::strings(configManager.getConfig().language);
+  // Like Home Assistant: "Unavailable" and "Unknown", not "No playback".
+  if (state == "unavailable" || state == "unknown") {
+    return i18n::entity_state_label(configManager.getConfig().language, state);
+  }
   if (state == "playing") return tr.media_state_playing;
   if (state == "paused") return tr.media_state_paused;
   if (state == "idle") return tr.media_state_idle;
@@ -3124,6 +3128,7 @@ static void update_media_popup_from_widgets(GridType grid_type,
   init.has_volume = widgets.has_media_volume;
   init.volume_level = widgets.media_volume_level;
   init.is_muted = widgets.media_is_muted;
+  init.available = widgets.available;
   const bool cover_visible = widgets.cover_ref &&
                              widgets.cover_ref->dsc &&
                              widgets.cover_clip &&
@@ -4426,6 +4431,14 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   // Artwork is independent of title/state. Lightweight payloads omit it;
   // explicit empty/null fields clear it, and URL changes must always apply.
   const bool should_update_cover = is_json_payload && media_artwork::has_fields(payload_start);
+  // Home Assistant disables the controls of an unavailable player.
+  widgets.available = !state.equalsIgnoreCase("unavailable");
+  for (lv_obj_t* label : {widgets.previous_label, widgets.play_pause_label, widgets.next_label}) {
+    lv_obj_t* button = label ? lv_obj_get_parent(label) : nullptr;
+    if (!button || lv_obj_has_state(button, LV_STATE_DISABLED) == !widgets.available) continue;
+    if (widgets.available) lv_obj_remove_state(button, LV_STATE_DISABLED);
+    else lv_obj_add_state(button, LV_STATE_DISABLED);
+  }
   if (widgets.play_pause_label) {
     String icon = getMdiChar(media_icon_for_state(state));
     if (icon.length()) {

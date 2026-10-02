@@ -120,6 +120,7 @@ static void media_command_event_cb(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_SHORT_CLICKED) return;
   MediaEventData* data = static_cast<MediaEventData*>(lv_event_get_user_data(e));
   if (!data || !data->entity_id.length()) return;
+  if (lv_obj_has_state(static_cast<lv_obj_t*>(lv_event_get_current_target(e)), LV_STATE_DISABLED)) return;
   if (data->reset_text_scroll) {
     reset_media_label_scroll(data->media_title_label);
     reset_media_label_scroll(data->media_subtitle_label);
@@ -241,6 +242,9 @@ static lv_obj_t* create_media_control_button(lv_obj_t* parent,
   if (!btn) return nullptr;
   lv_obj_set_size(btn, kMediaControlButtonSize, kMediaControlButtonSize);
   lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, x_ofs, kMediaControlBottomOffset);
+  // An unavailable player disables the controls; they dim like the Cover
+  // popup's disabled sliders.
+  lv_obj_set_style_opa(btn, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
   lv_obj_set_style_bg_color(btn, primary ? lv_color_white() : lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_opa(btn, primary ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
   if (primary) {

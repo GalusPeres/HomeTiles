@@ -14229,7 +14229,8 @@ function maybeFillTitleFromMedia(tab) {
   function climatePreviewColor(state) {
     const action = String(state?.action || '').toLowerCase();
     const mode = String(state?.mode || '').toLowerCase();
-    if (state?.available === false || mode === 'unavailable') {
+    // Unknown is inactive like unavailable (climate_visuals: 0x9E9E9E).
+    if (state?.available === false || mode === 'unavailable' || mode === 'unknown') {
       return '#9e9e9e';
     }
     if (action === 'heating' || action === 'preheating') return '#ff8a3d';

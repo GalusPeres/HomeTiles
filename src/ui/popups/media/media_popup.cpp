@@ -94,6 +94,7 @@ struct MediaPopupContext {
   uint32_t bg_color = 0x2A2A2A;
   bool has_media_position = false;
   bool is_playing = false;
+  bool available = true;
   bool seek_dragging = false;
   bool updating_seek = false;
   float media_position = 0.0f;
@@ -370,9 +371,27 @@ static void apply_control_colors(MediaPopupContext* ctx) {
   popup_nav_style::style_slider(ctx->volume_slider, popup, icon);
 }
 
+// Home Assistant disables the controls of an unavailable player; the buttons
+// dim like the Cover popup's disabled sliders (LV_OPA_30, set at creation).
+// The sliders already follow the reported volume and position (an
+// unavailable player reports neither), and their handlers check `available`.
+static void set_control_enabled(lv_obj_t* obj, bool enabled) {
+  if (!obj || lv_obj_has_state(obj, LV_STATE_DISABLED) == !enabled) return;
+  if (enabled) lv_obj_remove_state(obj, LV_STATE_DISABLED);
+  else lv_obj_add_state(obj, LV_STATE_DISABLED);
+}
+
+static void apply_availability(MediaPopupContext* ctx) {
+  for (lv_obj_t* label : {ctx->previous_label, ctx->play_pause_label, ctx->next_label, ctx->volume_icon_label}) {
+    set_control_enabled(label ? lv_obj_get_parent(label) : nullptr, ctx->available);
+  }
+}
+
 static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& init) {
   if (!ctx) return;
   ctx->entity_id = init.entity_id;
+  ctx->available = init.available;
+  if (!ctx->available) ctx->seek_dragging = false;
   ctx->bg_color = init.bg_color != 0 ? init.bg_color : 0x2A2A2A;
 
   if (ctx->card) {
@@ -436,6 +455,7 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
   update_volume(ctx, init);
   update_cover(ctx, init.cover_dsc, init.cover_hash);
   apply_control_colors(ctx);
+  apply_availability(ctx);
 }
 
 static void on_close_click(lv_event_t* e) {
@@ -471,7 +491,7 @@ static void on_overlay_delete(lv_event_t* e) {
 static void on_media_command(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
   MediaCommandData* data = static_cast<MediaCommandData*>(lv_event_get_user_data(e));
-  if (!data || !data->ctx || !data->ctx->entity_id.length()) return;
+  if (!data || !data->ctx || !data->ctx->entity_id.length() || !data->ctx->available) return;
   const char* command = data->command ? data->command : "play_pause";
 
   // Play/pause is safe to reflect immediately. HA remains authoritative and
@@ -503,7 +523,7 @@ static void on_volume_slider_event(lv_event_t* e) {
   const bool released = code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST;
   if (code != LV_EVENT_VALUE_CHANGED && !released) return;
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
-  if (!ctx || !ctx->volume_slider || !ctx->has_volume) return;
+  if (!ctx || !ctx->volume_slider || !ctx->has_volume || !ctx->available) return;
 
   int32_t raw = lv_slider_get_value(ctx->volume_slider);
   if (raw < 0) raw = 0;
@@ -521,8 +541,8 @@ static void on_seek_slider_event(lv_event_t* e) {
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->seek_slider || ctx->updating_seek) return;
   // End the gesture even if playback became unavailable while dragging.
-  ctx->seek_dragging = !released && ctx->has_media_position;
-  if (!ctx->has_media_position) return;
+  ctx->seek_dragging = !released && ctx->has_media_position && ctx->available;
+  if (!ctx->has_media_position || !ctx->available) return;
 
   int32_t raw = lv_slider_get_value(ctx->seek_slider);
   if (raw < 0) raw = 0;
@@ -540,7 +560,7 @@ static void on_seek_slider_event(lv_event_t* e) {
 static void on_volume_mute_click(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
-  if (!ctx || !ctx->entity_id.length() || !ctx->volume_slider) return;
+  if (!ctx || !ctx->entity_id.length() || !ctx->volume_slider || !ctx->available) return;
   int32_t current = lv_slider_get_value(ctx->volume_slider);
   if (current < 0) current = 0;
   if (current > 100) current = 100;
@@ -561,6 +581,7 @@ static lv_obj_t* create_control_button(lv_obj_t* parent,
   lv_obj_t* btn = lv_button_create(parent);
   lv_obj_set_size(btn, kControlButtonSize, kControlButtonSize);
   lv_obj_align(btn, LV_ALIGN_TOP_MID, x_ofs, kControlsTop);
+  lv_obj_set_style_opa(btn, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
   lv_obj_set_style_bg_color(btn, primary ? lv_color_white() : lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_opa(btn, primary ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_color(btn, primary ? lv_color_hex(0xD8D8D8) : lv_color_white(), LV_PART_MAIN | LV_STATE_PRESSED);
@@ -748,6 +769,7 @@ void show_media_popup(const MediaPopupInit& init) {
 
   lv_obj_t* volume_btn = lv_button_create(ctx->volume_row);
   lv_obj_set_size(volume_btn, kControlButtonSize, kControlButtonSize);
+  lv_obj_set_style_opa(volume_btn, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
   lv_obj_align(volume_btn, LV_ALIGN_CENTER, -kVolumeSideOffset, 0);
   lv_obj_set_style_bg_color(volume_btn, lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_opa(volume_btn, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);

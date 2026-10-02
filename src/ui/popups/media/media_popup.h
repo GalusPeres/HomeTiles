@@ -18,6 +18,8 @@ struct MediaPopupInit {
   bool has_volume = false;
   float volume_level = 0.0f;
   bool is_muted = false;
+  // False while the player is unavailable: the controls are disabled.
+  bool available = true;
   uint32_t bg_color = 0;
   // The tile icon's current color: the header icon and its disc glow take it.
   uint32_t icon_color = 0xFFFFFF;

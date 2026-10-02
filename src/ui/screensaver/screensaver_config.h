@@ -24,6 +24,9 @@ struct ScreensaverConfigData {
   bool shuffle = false;
   bool tile_shadow = false;
   bool tile_border = true;
+  // One background opacity for every screensaver tile (user 2026-10-02:
+  // set beside borders, radius and shadows instead of per tile).
+  uint8_t tile_opacity = kScreensaverDefaultTileOpacity;
   bool show_time = true;
   bool show_date = true;
   bool show_weekday = false;
@@ -71,6 +74,8 @@ class ScreensaverConfigStore {
   Tile legacy_tiles_[GRID_COLS];
   size_t legacy_slot_count_ = 0;
   bool legacy_slots_loaded_ = false;
+  // The last loaded file carried tile_opacity; older files kept it per tile.
+  bool tile_opacity_stored_ = false;
 
   void resetDefaults();
   void resetSettings();

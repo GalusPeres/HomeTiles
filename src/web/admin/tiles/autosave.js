@@ -59,10 +59,6 @@
     document.getElementById(prefix + '_tile_title').value = '';
     document.getElementById(prefix + '_tile_icon').value = '';
     setTileColorInputFromStored(tab, 0, '#2A2A2A');
-    if (isScreensaverTileTab(tab)) {
-      const opacity = document.getElementById('screensaver_tile_opacity');
-      if (opacity) opacity.value = '0';
-    }
     resetAllTypeFields(tab);
     syncGaugeUi(tab);
     updateTileType(tab);

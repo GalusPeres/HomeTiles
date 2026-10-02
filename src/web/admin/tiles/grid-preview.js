@@ -461,10 +461,6 @@
     const fill = document.getElementById(tab + '_tile_icon_fill');
     if (fill) fill.checked = false;
     syncTileColorMode(tab);
-    if (isScreensaverTileTab(tab)) {
-      const opacity = document.getElementById('screensaver_tile_opacity');
-      if (opacity) opacity.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);
-    }
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
@@ -511,8 +507,8 @@
       const bg = tileBackgroundCss(meta, isDefaultBg,
         tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'));
       if (isScreensaverTileTab(tab)) {
-        const opacity = clampInt(tile.background_opacity, 0, 255,
-                                 SCREENSAVER_TILE_DEFAULT_OPACITY);
+        // One opacity for every screensaver tile (screensaver footer).
+        const opacity = screensaverTileOpacity();
         el.style.background = tileBackgroundCss(meta, isDefaultBg,
           tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
         el.dataset.bgOpacity = String(opacity);

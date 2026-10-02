@@ -2754,9 +2754,6 @@ function syncTileRadiusControls(tabEl) {
       span_w: document.getElementById(prefix + '_tile_span_w')?.value || '1',
       span_h: document.getElementById(prefix + '_tile_span_h')?.value || '1'
     };
-    if (isScreensaverTileTab(tab)) {
-      snapshot.background_opacity = document.getElementById('screensaver_tile_opacity')?.value || '0';
-    }
     Object.assign(snapshot, collectTypeFieldValues(tab));
     return snapshot;
   }
@@ -5319,9 +5316,6 @@ function syncTileRadiusControls(tabEl) {
       span_h: document.getElementById(prefix + '_tile_span_h')?.value || '1'
     };
     if (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX) d.type = '7';
-    if (isScreensaverTileTab(tab)) {
-      d.background_opacity = document.getElementById('screensaver_tile_opacity')?.value || '0';
-    }
     Object.assign(d, collectTypeFieldValues(tab));
     d._dirty = true;
     d._rev = (prevDraft && prevDraft._rev) ? (prevDraft._rev + 1) : 1;
@@ -5340,10 +5334,6 @@ function syncTileRadiusControls(tabEl) {
     document.getElementById(prefix + '_tile_title').value = d.title || '';
     document.getElementById(prefix + '_tile_icon').value = d.icon || '';
     setTileColorInputFromSnapshot(tab, d);
-    if (isScreensaverTileTab(tab)) {
-      const opacity = document.getElementById('screensaver_tile_opacity');
-      if (opacity) opacity.value = String(d.background_opacity ?? 0);
-    }
     const colEl = document.getElementById(prefix + '_tile_col');
     if (colEl) colEl.value = d.col || '1';
     const rowEl = document.getElementById(prefix + '_tile_row');
@@ -5385,9 +5375,6 @@ function syncTileRadiusControls(tabEl) {
       span_w: document.getElementById(prefix + '_tile_span_w')?.value || '1',
       span_h: document.getElementById(prefix + '_tile_span_h')?.value || '1'
     };
-    if (isScreensaverTileTab(tab)) {
-      data.background_opacity = document.getElementById('screensaver_tile_opacity')?.value || '0';
-    }
     Object.assign(data, collectTypeFieldValues(tab));
     return data;
   }
@@ -5406,10 +5393,6 @@ function syncTileRadiusControls(tabEl) {
     const iconEl = document.getElementById(prefix + '_tile_icon');
     if (iconEl) iconEl.value = data.icon || '';
     setTileColorInputFromSnapshot(tab, data);
-    if (isScreensaverTileTab(tab)) {
-      const opacity = document.getElementById('screensaver_tile_opacity');
-      if (opacity) opacity.value = String(data.background_opacity ?? 0);
-    }
     const spanWEl = document.getElementById(prefix + '_tile_span_w');
     if (spanWEl) spanWEl.value = data.span_w || '1';
     const spanHEl = document.getElementById(prefix + '_tile_span_h');
@@ -5613,8 +5596,6 @@ function syncTileRadiusControls(tabEl) {
     const spanWInput = document.getElementById(prefix + '_tile_span_w');
     const spanHInput = document.getElementById(prefix + '_tile_span_h');
     const typeSelect = document.getElementById(prefix + '_tile_type');
-    const opacityInput = isScreensaverTileTab(tab)
-      ? document.getElementById('screensaver_tile_opacity') : null;
     const entitySelect = document.getElementById(prefix + '_sensor_entity');
     const binarySensorSelect = document.getElementById(
       prefix + '_binary_sensor_entity');
@@ -5685,8 +5666,6 @@ function syncTileRadiusControls(tabEl) {
     bindLive(document.getElementById(prefix + '_tile_icon_disc'), 'change', 'tileIconDisc', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(document.getElementById(prefix + '_tile_icon_glow'), 'change', 'tileIconGlow', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(colorInput, 'input', 'tileColor', () => { markTileColorInputExplicit(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
-    bindLive(opacityInput, 'input', 'tileOpacity', () => { updateTilePreview(tab); updateDraft(tab); });
-    bindLive(opacityInput, 'change', 'tileOpacitySave', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(colInput, 'input', 'tileCol', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(rowInput, 'input', 'tileRow', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(spanWInput, 'input', 'tileSpanW', () => { syncClimateSlotFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
@@ -5715,10 +5694,6 @@ function syncTileRadiusControls(tabEl) {
         const nextMeta = getTileTypeMeta(typeSelect.value);
         setTileColorInputFromStored(
           tab, 0, nextMeta.defaultBg || '#2A2A2A');
-      }
-      if (isScreensaverTileTab(tab) && previousType === 0 &&
-          nextType !== 0 && opacityInput) {
-        opacityInput.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);
       }
       updateTileType(tab);
       // New tiles start in the HomeTiles look: a type with icon colors tints
@@ -6216,9 +6191,8 @@ function syncTileRadiusControls(tabEl) {
     const tileBg = tileBackgroundCss(meta, isDefaultBg,
       isDefaultBg ? defaultBg : (color || defaultBg));
     if (isScreensaverTileTab(tab)) {
-      const opacity = clampInt(
-        document.getElementById('screensaver_tile_opacity')?.value,
-        0, 255, 0);
+      // One opacity for every screensaver tile (screensaver footer).
+      const opacity = screensaverTileOpacity();
       tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
         isDefaultBg ? defaultBg : (color || defaultBg), opacity);
       tileElem.dataset.bgOpacity = String(opacity);
@@ -6403,10 +6377,6 @@ function syncTileRadiusControls(tabEl) {
         document.getElementById(prefix + '_tile_icon').value = data.icon_name || '';
         const colorMeta = getTileTypeMeta(data.type || 0);
         setTileColorInputFromStored(tab, data.bg_color, colorMeta.defaultBg || '#2A2A2A');
-        if (isScreensaverTileTab(tab)) {
-          const opacity = document.getElementById('screensaver_tile_opacity');
-          if (opacity) opacity.value = String(data.background_opacity ?? 0);
-        }
         const colEl = document.getElementById(prefix + '_tile_col');
         const rowEl = document.getElementById(prefix + '_tile_row');
         const spanWEl = document.getElementById(prefix + '_tile_span_w');
@@ -6631,10 +6601,6 @@ function syncTileRadiusControls(tabEl) {
     document.getElementById(prefix + '_tile_title').value = '';
     document.getElementById(prefix + '_tile_icon').value = '';
     setTileColorInputFromStored(tab, 0, '#2A2A2A');
-    if (isScreensaverTileTab(tab)) {
-      const opacity = document.getElementById('screensaver_tile_opacity');
-      if (opacity) opacity.value = '0';
-    }
     resetAllTypeFields(tab);
     syncGaugeUi(tab);
     updateTileType(tab);
@@ -7896,10 +7862,6 @@ function syncTileRadiusControls(tabEl) {
     const fill = document.getElementById(tab + '_tile_icon_fill');
     if (fill) fill.checked = false;
     syncTileColorMode(tab);
-    if (isScreensaverTileTab(tab)) {
-      const opacity = document.getElementById('screensaver_tile_opacity');
-      if (opacity) opacity.value = String(SCREENSAVER_TILE_DEFAULT_OPACITY);
-    }
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
@@ -7946,8 +7908,8 @@ function syncTileRadiusControls(tabEl) {
       const bg = tileBackgroundCss(meta, isDefaultBg,
         tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'));
       if (isScreensaverTileTab(tab)) {
-        const opacity = clampInt(tile.background_opacity, 0, 255,
-                                 SCREENSAVER_TILE_DEFAULT_OPACITY);
+        // One opacity for every screensaver tile (screensaver footer).
+        const opacity = screensaverTileOpacity();
         el.style.background = tileBackgroundCss(meta, isDefaultBg,
           tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
         el.dataset.bgOpacity = String(opacity);
@@ -9625,6 +9587,28 @@ function syncTileRadiusControls(tabEl) {
     return (frame || preview).getBoundingClientRect();
   }
 
+  // One background opacity for every screensaver tile (tile_opacity, set in
+  // the screensaver footer): the draft once loaded, else the server-rendered
+  // slider.
+  function screensaverTileOpacity() {
+    const value = screensaverDraft?.tile_opacity ??
+      document.getElementById('screensaverTileOpacity')?.value;
+    return Math.round(ssClamp(value ?? SCREENSAVER_TILE_DEFAULT_OPACITY, 0, 255));
+  }
+
+  // The new opacity on every screensaver tile preview and in the footer.
+  function refreshScreensaverTileOpacity() {
+    const value = screensaverTileOpacity();
+    const output = document.getElementById('screensaverTileOpacityValue');
+    if (output) output.textContent = Math.round(value * 100 / 255) + ' %';
+    const tiles = tilesData.screensaver || [];
+    tiles.forEach((tile, index) => {
+      if (tile && Number(tile.type)) renderTileFromData('screensaver', index, tile, sensorMetaCache);
+    });
+    layoutTiles('screensaver', tiles);
+    if (currentTileTab === 'screensaver' && currentTileIndex >= 0) updateTilePreview('screensaver');
+  }
+
   function ssPreviewScreen(preview) {
     const frame = preview.querySelector('.screensaver-grid-image-frame');
     const rect = ssPreviewScreenRect(preview);
@@ -9747,6 +9731,7 @@ function syncTileRadiusControls(tabEl) {
       shuffle: !!d.shuffle,
       tile_shadow: !!d.tile_shadow,
       tile_border: d.tile_border !== false,
+      tile_opacity: Math.round(ssClamp(d.tile_opacity ?? SCREENSAVER_TILE_DEFAULT_OPACITY, 0, 255)),
       show_time: !!d.show_time,
       show_date: !!d.show_date,
       show_weekday: !!d.show_weekday,
@@ -9985,6 +9970,8 @@ function syncTileRadiusControls(tabEl) {
     document.getElementById('screensaverShuffle').checked = !!d.shuffle;
     document.getElementById('screensaverTileShadow').checked = !!d.tile_shadow;
     document.getElementById('screensaverTileBorder').checked = d.tile_border !== false;
+    const opacityInput = document.getElementById('screensaverTileOpacity');
+    if (opacityInput) opacityInput.value = String(screensaverTileOpacity());
     document.getElementById('screensaverShowTime').checked = !!d.show_time;
     document.getElementById('screensaverShowDate').checked = !!d.show_date;
     document.getElementById('screensaverShowWeekday').checked = !!d.show_weekday;
@@ -10125,6 +10112,11 @@ function syncTileRadiusControls(tabEl) {
     bind('screensaverShuffle', 'change', el => { screensaverDraft.shuffle = el.checked; });
     bind('screensaverTileShadow', 'change', el => { screensaverDraft.tile_shadow = el.checked; });
     bind('screensaverTileBorder', 'change', el => { screensaverDraft.tile_border = el.checked; });
+    bind('screensaverTileOpacity', 'input', el => {
+      screensaverDraft.tile_opacity = Number(el.value);
+      refreshScreensaverTileOpacity();
+    }, false);
+    bind('screensaverTileOpacity', 'change', el => { screensaverDraft.tile_opacity = Number(el.value); });
     bind('screensaverShowTime', 'change', el => { screensaverDraft.show_time = el.checked; });
     bind('screensaverShowDate', 'change', el => { screensaverDraft.show_date = el.checked; });
     bind('screensaverShowWeekday', 'change', el => { screensaverDraft.show_weekday = el.checked; });

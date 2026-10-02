@@ -22,9 +22,6 @@
       span_w: document.getElementById(prefix + '_tile_span_w')?.value || '1',
       span_h: document.getElementById(prefix + '_tile_span_h')?.value || '1'
     };
-    if (isScreensaverTileTab(tab)) {
-      data.background_opacity = document.getElementById('screensaver_tile_opacity')?.value || '0';
-    }
     Object.assign(data, collectTypeFieldValues(tab));
     return data;
   }
@@ -43,10 +40,6 @@
     const iconEl = document.getElementById(prefix + '_tile_icon');
     if (iconEl) iconEl.value = data.icon || '';
     setTileColorInputFromSnapshot(tab, data);
-    if (isScreensaverTileTab(tab)) {
-      const opacity = document.getElementById('screensaver_tile_opacity');
-      if (opacity) opacity.value = String(data.background_opacity ?? 0);
-    }
     const spanWEl = document.getElementById(prefix + '_tile_span_w');
     if (spanWEl) spanWEl.value = data.span_w || '1';
     const spanHEl = document.getElementById(prefix + '_tile_span_h');

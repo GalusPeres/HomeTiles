@@ -28,6 +28,28 @@
     return (frame || preview).getBoundingClientRect();
   }
 
+  // One background opacity for every screensaver tile (tile_opacity, set in
+  // the screensaver footer): the draft once loaded, else the server-rendered
+  // slider.
+  function screensaverTileOpacity() {
+    const value = screensaverDraft?.tile_opacity ??
+      document.getElementById('screensaverTileOpacity')?.value;
+    return Math.round(ssClamp(value ?? SCREENSAVER_TILE_DEFAULT_OPACITY, 0, 255));
+  }
+
+  // The new opacity on every screensaver tile preview and in the footer.
+  function refreshScreensaverTileOpacity() {
+    const value = screensaverTileOpacity();
+    const output = document.getElementById('screensaverTileOpacityValue');
+    if (output) output.textContent = Math.round(value * 100 / 255) + ' %';
+    const tiles = tilesData.screensaver || [];
+    tiles.forEach((tile, index) => {
+      if (tile && Number(tile.type)) renderTileFromData('screensaver', index, tile, sensorMetaCache);
+    });
+    layoutTiles('screensaver', tiles);
+    if (currentTileTab === 'screensaver' && currentTileIndex >= 0) updateTilePreview('screensaver');
+  }
+
   function ssPreviewScreen(preview) {
     const frame = preview.querySelector('.screensaver-grid-image-frame');
     const rect = ssPreviewScreenRect(preview);
@@ -150,6 +172,7 @@
       shuffle: !!d.shuffle,
       tile_shadow: !!d.tile_shadow,
       tile_border: d.tile_border !== false,
+      tile_opacity: Math.round(ssClamp(d.tile_opacity ?? SCREENSAVER_TILE_DEFAULT_OPACITY, 0, 255)),
       show_time: !!d.show_time,
       show_date: !!d.show_date,
       show_weekday: !!d.show_weekday,
@@ -388,6 +411,8 @@
     document.getElementById('screensaverShuffle').checked = !!d.shuffle;
     document.getElementById('screensaverTileShadow').checked = !!d.tile_shadow;
     document.getElementById('screensaverTileBorder').checked = d.tile_border !== false;
+    const opacityInput = document.getElementById('screensaverTileOpacity');
+    if (opacityInput) opacityInput.value = String(screensaverTileOpacity());
     document.getElementById('screensaverShowTime').checked = !!d.show_time;
     document.getElementById('screensaverShowDate').checked = !!d.show_date;
     document.getElementById('screensaverShowWeekday').checked = !!d.show_weekday;
@@ -528,6 +553,11 @@
     bind('screensaverShuffle', 'change', el => { screensaverDraft.shuffle = el.checked; });
     bind('screensaverTileShadow', 'change', el => { screensaverDraft.tile_shadow = el.checked; });
     bind('screensaverTileBorder', 'change', el => { screensaverDraft.tile_border = el.checked; });
+    bind('screensaverTileOpacity', 'input', el => {
+      screensaverDraft.tile_opacity = Number(el.value);
+      refreshScreensaverTileOpacity();
+    }, false);
+    bind('screensaverTileOpacity', 'change', el => { screensaverDraft.tile_opacity = Number(el.value); });
     bind('screensaverShowTime', 'change', el => { screensaverDraft.show_time = el.checked; });
     bind('screensaverShowDate', 'change', el => { screensaverDraft.show_date = el.checked; });
     bind('screensaverShowWeekday', 'change', el => { screensaverDraft.show_weekday = el.checked; });

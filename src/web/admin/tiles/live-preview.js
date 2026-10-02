@@ -174,9 +174,8 @@
     const tileBg = tileBackgroundCss(meta, isDefaultBg,
       isDefaultBg ? defaultBg : (color || defaultBg));
     if (isScreensaverTileTab(tab)) {
-      const opacity = clampInt(
-        document.getElementById('screensaver_tile_opacity')?.value,
-        0, 255, 0);
+      // One opacity for every screensaver tile (screensaver footer).
+      const opacity = screensaverTileOpacity();
       tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
         isDefaultBg ? defaultBg : (color || defaultBg), opacity);
       tileElem.dataset.bgOpacity = String(opacity);

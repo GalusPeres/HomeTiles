@@ -15,6 +15,7 @@ const context = vm.createContext({
   screensaverLoaded: false, screensaverLoading: false,
   screensaverTimeFontSizes: [20, 24, 28, 32, 40, 48, 56, 64, 72, 80, 96],
   screensaverDateFontSizes: [20, 24, 28, 32, 40, 48, 56, 64, 72],
+  SCREENSAVER_TILE_DEFAULT_OPACITY: 217,
   fetch: async (url, options) => {
     assert.equal(url, '/api/screensaver');
     if (options?.method === 'POST') {

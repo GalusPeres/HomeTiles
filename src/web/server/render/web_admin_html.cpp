@@ -505,7 +505,7 @@ static void appendTileTabHTML(
       // through one CSS variable, so the preview repaints them live.
       if (screensaver_mode) {
         tileStyle = "background:color-mix(in srgb,var(--tile-default-bg) ";
-        tileStyle += String(tile.background_opacity * 100.0f / 255.0f, 2);
+        tileStyle += String(screensaverConfig.get().tile_opacity * 100.0f / 255.0f, 2);
         tileStyle += "%,transparent)";
       } else {
         tileStyle = "background:var(--tile-default-bg)";
@@ -517,9 +517,10 @@ static void appendTileTabHTML(
       if (bg_color == 0) bg_color = 0x353535;
       char colorHex[10];
       if (screensaver_mode) {
+        // One opacity for every screensaver tile (ScreensaverConfigData).
         snprintf(colorHex, sizeof(colorHex), "#%06X%02X",
                  (unsigned int)bg_color,
-                 static_cast<unsigned int>(tile.background_opacity));
+                 static_cast<unsigned int>(screensaverConfig.get().tile_opacity));
       } else {
         snprintf(colorHex, sizeof(colorHex), "#%06X", (unsigned int)bg_color);
       }
@@ -542,7 +543,7 @@ static void appendTileTabHTML(
     }
     // A fully transparent screensaver card casts no shadow
     // (apply_slot_tile_shadows).
-    if (screensaver_mode && tile.type != TILE_EMPTY && tile.background_opacity == 0) {
+    if (screensaver_mode && tile.type != TILE_EMPTY && screensaverConfig.get().tile_opacity == 0) {
       cssClass += " screensaver-bg-clear";
     }
 
@@ -965,6 +966,15 @@ static void appendTileTabHTML(
     html += tr.screensaver_tile_shadow;
     html += R"html(</label>
 )html";
+    // One opacity for every screensaver tile, beside its other tile options.
+    const uint8_t tile_opacity = screensaverConfig.get().tile_opacity;
+    html += "<label class=\"tile-radius-control\"><span>";
+    appendHtmlEscaped(html, tr.screensaver_background_opacity);
+    html += "</span><input id=\"screensaverTileOpacity\" type=\"range\" min=\"0\" max=\"255\" step=\"1\" value=\"";
+    html += String(tile_opacity);
+    html += "\"><output id=\"screensaverTileOpacityValue\" class=\"global-tile-opacity-value\">";
+    html += String((tile_opacity * 100 + 127) / 255);
+    html += " %</output></label>";
     html += R"html(            </div>
             <p class="hint">)html";
   }
@@ -1201,17 +1211,9 @@ static void appendTileTabHTML(
             <div class="tile-settings-group">)html";
   appendHtmlEscaped(html, tr.tile_group_tile);
   html += R"html(</div>
-            <div class="tile-color-label-row no-reset)html";
-  if (screensaver_mode) html += " has-opacity";
-  html += R"html("><span>)html";
+            <div class="tile-color-label-row no-reset"><span>)html";
   html += tr.admin_color;
-  html += R"html(</span>)html";
-  if (screensaver_mode) {
-    html += R"html(<span>)html";
-    html += tr.screensaver_background_opacity;
-    html += R"html(</span>)html";
-  }
-  html += R"html(</div>
+  html += R"html(</span></div>
             <div class="icon-color-segmented tile-color-modes" role="group" id=")html";
   html += tab_id;
   html += R"html(_tile_color_modes">)html";
@@ -1241,19 +1243,14 @@ static void appendTileTabHTML(
     html += "</button>";
   }
   html += R"html(</div>
-            <div class="tile-color-row no-reset)html";
-  if (screensaver_mode) html += " has-opacity";
-  html += R"html(" id=")html";
+            <div class="tile-color-row no-reset" id=")html";
   html += tab_id;
   html += R"html(_tile_color_row">
             <input type="color" id=")html";
   html += tab_id;
   html += R"html(_tile_color" value="#2A2A2A">
 )html";
-  if (screensaver_mode) {
-    html += R"html(              <input type="range" id="screensaver_tile_opacity" min="0" max="255" step="1" value="0">
-)html";
-  }
+  // Screensaver tiles share one opacity (screensaver footer, tile_opacity).
   html += R"html(            </div>
 )html";
   append_tile_color_from_icon_html(html, tab_id);

@@ -204,7 +204,7 @@ for (const value of [0, 0x012A2A2A, 0x01222222, 0x011A1A1A, 0x01353535, 0x010000
 // marker), picking a color selects Custom. The behavior runs in
 // test-tile-color-choice.mjs.
 for (const marker of [
-  '<div class="tile-color-row no-reset)html";',
+  '<div class="tile-color-row no-reset" id=")html";',
   '_tile_color_modes">)html";',
   '{{"global", tr.tile_color_mode_global},',
   'html += R"html(" onclick="setTileColorMode(\')html";',

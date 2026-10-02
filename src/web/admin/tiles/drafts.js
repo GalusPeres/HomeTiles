@@ -43,9 +43,6 @@
       span_h: document.getElementById(prefix + '_tile_span_h')?.value || '1'
     };
     if (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX) d.type = '7';
-    if (isScreensaverTileTab(tab)) {
-      d.background_opacity = document.getElementById('screensaver_tile_opacity')?.value || '0';
-    }
     Object.assign(d, collectTypeFieldValues(tab));
     d._dirty = true;
     d._rev = (prevDraft && prevDraft._rev) ? (prevDraft._rev + 1) : 1;
@@ -64,10 +61,6 @@
     document.getElementById(prefix + '_tile_title').value = d.title || '';
     document.getElementById(prefix + '_tile_icon').value = d.icon || '';
     setTileColorInputFromSnapshot(tab, d);
-    if (isScreensaverTileTab(tab)) {
-      const opacity = document.getElementById('screensaver_tile_opacity');
-      if (opacity) opacity.value = String(d.background_opacity ?? 0);
-    }
     const colEl = document.getElementById(prefix + '_tile_col');
     if (colEl) colEl.value = d.col || '1';
     const rowEl = document.getElementById(prefix + '_tile_row');

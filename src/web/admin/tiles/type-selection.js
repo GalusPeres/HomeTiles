@@ -17,10 +17,6 @@
         document.getElementById(prefix + '_tile_icon').value = data.icon_name || '';
         const colorMeta = getTileTypeMeta(data.type || 0);
         setTileColorInputFromStored(tab, data.bg_color, colorMeta.defaultBg || '#2A2A2A');
-        if (isScreensaverTileTab(tab)) {
-          const opacity = document.getElementById('screensaver_tile_opacity');
-          if (opacity) opacity.value = String(data.background_opacity ?? 0);
-        }
         const colEl = document.getElementById(prefix + '_tile_col');
         const rowEl = document.getElementById(prefix + '_tile_row');
         const spanWEl = document.getElementById(prefix + '_tile_span_w');

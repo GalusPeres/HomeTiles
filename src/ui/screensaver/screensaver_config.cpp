@@ -254,6 +254,12 @@ bool ScreensaverConfigStore::loadPath(const char* path) {
   loaded.shuffle = doc["shuffle"] | false;
   loaded.tile_shadow = doc["tile_shadow"] | false;
   loaded.tile_border = doc["tile_border"] | true;
+  // A file without the global opacity keeps the current one until load()
+  // takes the tiles' former per-tile value.
+  tile_opacity_stored_ = doc["tile_opacity"].is<int>();
+  loaded.tile_opacity = tile_opacity_stored_
+                            ? static_cast<uint8_t>(constrain(doc["tile_opacity"].as<int>(), 0, 255))
+                            : data_.tile_opacity;
   loaded.show_time = doc["show_time"] | true;
   loaded.show_date = doc["show_date"] | true;
   loaded.show_weekday = doc["show_weekday"] | false;
@@ -362,6 +368,22 @@ bool ScreensaverConfigStore::load() {
       Serial.println("[ScreensaverConfig] Migrated legacy JSON slots into TileGrid");
     }
   }
+  if (!tile_opacity_stored_) {
+    // Older configurations kept an opacity per tile: the most common one
+    // becomes the global value, so the screensaver looks as before.
+    uint16_t counts[256] = {};
+    uint16_t best = 0;
+    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+      const Tile& tile = gridStorage().tiles[i];
+      if (tile.type == TILE_EMPTY) continue;
+      const uint16_t count = ++counts[tile.background_opacity];
+      if (count > best) {
+        best = count;
+        data_.tile_opacity = tile.background_opacity;
+      }
+    }
+    if (best && config_ok) config_needs_migration = true;
+  }
   if (config_ok && config_needs_migration) {
     if (save()) {
       Serial.println("[ScreensaverConfig] Configuration migrated to v2");
@@ -379,6 +401,7 @@ String ScreensaverConfigStore::toJson(bool include_device_meta) const {
   doc["shuffle"] = data_.shuffle;
   doc["tile_shadow"] = data_.tile_shadow;
   doc["tile_border"] = data_.tile_border;
+  doc["tile_opacity"] = data_.tile_opacity;
   doc["show_time"] = data_.show_time;
   doc["show_date"] = data_.show_date;
   doc["show_weekday"] = data_.show_weekday;

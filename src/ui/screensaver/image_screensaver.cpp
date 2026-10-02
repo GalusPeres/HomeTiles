@@ -90,6 +90,8 @@ struct ScreensaverState {
   // The grid the slot cards were built from, so an edit rebuilds only the
   // slots that differ (update_slot_grid).
   TileGridConfig* shown_grid = nullptr;
+  // The global tile opacity the cards were built with.
+  uint8_t built_opacity = 0;
   ~ScreensaverState() { delete shown_grid; }
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   // Prepare a complete LVGL frame for smooth slide transitions: wallpaper,
@@ -1374,7 +1376,8 @@ lv_obj_t* build_slot_tile(ScreensaverState* st, size_t i, const Tile& tile) {
                                    GridType::SCREENSAVER, g_scene_callback);
   if (!tile_obj) return nullptr;
   st->slot_objs[i] = tile_obj;
-  const lv_opa_t opacity = tile.background_opacity;
+  // One opacity for all screensaver tiles (ScreensaverConfigData).
+  const lv_opa_t opacity = screensaverConfig.get().tile_opacity;
   lv_obj_set_style_bg_opa(tile_obj, opacity,
                           LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_opa(tile_obj, opacity,
@@ -1392,6 +1395,7 @@ lv_obj_t* build_slot_tile(ScreensaverState* st, size_t i, const Tile& tile) {
 void remember_shown_grid(ScreensaverState* st) {
   if (!st->shown_grid) st->shown_grid = new (std::nothrow) TileGridConfig();
   if (st->shown_grid) *st->shown_grid = screensaverConfig.tileGrid();
+  st->built_opacity = screensaverConfig.get().tile_opacity;
 }
 
 void rebuild_slot_grid(ScreensaverState* st) {
@@ -1548,6 +1552,12 @@ void refresh_live_background_and_clock(ScreensaverState* st,
                                        const String& preview_wallpaper) {
   if (!st) return;
   rebuild_global_clock(st);
+  // A new tile opacity rebuilds the cards: their circles and controls are a
+  // veil only on see-through cards (build_slot_tile).
+  if (st->built_opacity != screensaverConfig.get().tile_opacity) {
+    rebuild_slot_grid(st);
+    refresh_slot_values(st);
+  }
   apply_slot_tile_shadows(st);
   apply_slot_tile_borders(st);
 

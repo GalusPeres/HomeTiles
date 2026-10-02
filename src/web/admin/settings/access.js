@@ -182,6 +182,34 @@
     }
   }
 
+  // Shows a Settings move between the grid and the parking slot at once,
+  // before the device has saved it (user 2026-10-02: the tile jumped back and
+  // took long to move). The grid data stays the device's: the reload after
+  // the save (reconcileSettingsTileUi) draws the stored state, and a failed
+  // save draws it back. Restoring takes the first empty index like
+  // TileConfig::ensureSettingsTile.
+  function previewSettingsTileTransfer(hidden, snapshot, target = null) {
+    const tiles = getTilesData('folder0').slice();
+    const isSettings = tile => Number(tile?.type || 0) === 7;
+    const index = hidden
+      ? tiles.findIndex(isSettings)
+      : (tiles.some(isSettings) || !target ? -1 : tiles.findIndex(tile => !Number(tile?.type || 0)));
+    if (index < 0) return;
+    tiles[index] = hidden ? {type: 0} : {
+      type: 7,
+      title: snapshot.title,
+      icon_name: snapshot.icon,
+      bg_color: snapshot.bg_color,
+      col: target.col,
+      row: target.row,
+      span_w: snapshot.span_w,
+      span_h: snapshot.span_h
+    };
+    renderTileFromData('folder0', index, tiles[index], sensorMetaCache);
+    layoutTiles('folder0', tiles);
+    renderSettingsHiddenSlot(hidden, snapshot);
+  }
+
   function currentGridSettingsSnapshot() {
     const tile = (getTilesData('folder0') || []).find(
       item => Number(item?.type || 0) === 7);

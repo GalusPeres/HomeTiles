@@ -729,7 +729,9 @@
 
   function loadSensorValues(
       refreshTiles = false, forceMetaFetch = false, tabsOverride = null) {
-    if (dragSource || resizeState) {
+    // A Settings move to or from the parking slot shows ahead of the device
+    // (previewSettingsTileTransfer); stored tile data would draw it back.
+    if (dragSource || resizeState || settingsTileTransferInFlight) {
       queueDeferredSensorRefresh(refreshTiles);
       return Promise.resolve(false);
     }
@@ -751,7 +753,7 @@
       // A refresh may have started shortly before the drag and only arrive
       // during it. In that case it must not overwrite the local preview with the
       // old device state.
-      if (dragSource || resizeState) {
+      if (dragSource || resizeState || settingsTileTransferInFlight) {
         queueDeferredSensorRefresh(refreshTiles);
         return;
       }

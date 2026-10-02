@@ -552,11 +552,15 @@
   async function flushSettingsTileSaveBeforeHide(tab, index) {
     if (index < 0) return true;
     const timerKey = tab + ':' + index;
+    // Only a pending edit needs its own save first; the parking save carries
+    // the tile's snapshot anyway, and an extra save made the device write and
+    // rebuild its grid twice.
+    const pending = !!autoSaveTimers[timerKey] || !!drafts?.[tab]?.[index]?._dirty;
     if (autoSaveTimers[timerKey]) {
       clearTimeout(autoSaveTimers[timerKey]);
       delete autoSaveTimers[timerKey];
     }
-    saveTile(tab, true, index);
+    if (pending) saveTile(tab, true, index);
     const saveKey = getTileSaveKey(tab, index);
     const deadline = Date.now() + 8000;
     while (Date.now() < deadline) {
@@ -585,7 +589,9 @@
       const snapshot = normalizeHiddenSettingsSnapshot(
         getTileSnapshotForSave('folder0', settingsTile) ||
         currentGridSettingsSnapshot());
+      previewSettingsTileTransfer(true, snapshot);
       if (!(await flushSettingsTileSaveBeforeHide('folder0', settingsTile))) {
+        await reconcileSettingsTileUi(false);
         return false;
       }
       hidden.checked = true;
@@ -593,10 +599,14 @@
       toggleSettingsAccessFields();
       const saved = await queueSettingsAccessSave(
         null, null, snapshot, false);
-      if (!saved) return false;
+      if (!saved) {
+        await reconcileSettingsTileUi(false);
+        return false;
+      }
       return await reconcileSettingsTileUi(true, snapshot);
     } finally {
       settingsTileTransferInFlight = false;
+      flushDeferredSensorRefresh();
     }
   }
 
@@ -606,14 +616,19 @@
     const snapshot = normalizeHiddenSettingsSnapshot();
     settingsTileTransferInFlight = true;
     try {
+      previewSettingsTileTransfer(false, snapshot, {col, row});
       hidden.checked = false;
       toggleSettingsAccessFields();
       const saved = await queueSettingsAccessSave(
         null, {col, row}, null, false);
-      if (!saved) return false;
+      if (!saved) {
+        await reconcileSettingsTileUi(true, snapshot);
+        return false;
+      }
       return await reconcileSettingsTileUi(false, snapshot, true);
     } finally {
       settingsTileTransferInFlight = false;
+      flushDeferredSensorRefresh();
     }
   }
 

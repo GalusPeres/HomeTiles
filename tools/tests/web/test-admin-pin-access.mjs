@@ -244,8 +244,18 @@ for (const [label, block, queueMarker, reconcileMarker] of [
 ]) {
   requireMarker(block, queueMarker, `${label} immutable transfer`);
   requireMarker(block, reconcileMarker, `${label} final reconciliation`);
-  if ((block.match(/reconcileSettingsTileUi\(/g) || []).length !== 1) {
-    throw new Error(`${label} must expose the destination only after one reconciliation`);
+  // The move shows at once (previewSettingsTileTransfer, user 2026-10-02);
+  // a successful save reconciles with the device once, a failed one draws
+  // the stored state back.
+  if ((block.match(/return await reconcileSettingsTileUi\(/g) || []).length !== 1) {
+    throw new Error(`${label} must reconcile a successful transfer exactly once`);
+  }
+  if (!(block.indexOf('previewSettingsTileTransfer(') >= 0 &&
+        block.indexOf('previewSettingsTileTransfer(') < block.indexOf(queueMarker))) {
+    throw new Error(`${label} must show the move before the device saves it`);
+  }
+  if (!/if \(!saved\) \{\s+await reconcileSettingsTileUi\(/.test(block)) {
+    throw new Error(`${label} must draw the stored state back after a failed save`);
   }
   if (block.includes('location.reload')) {
     throw new Error(`${label} must not reload the page`);

@@ -635,6 +635,34 @@ function syncTileRadiusControls(tabEl) {
     }
   }
 
+  // Shows a Settings move between the grid and the parking slot at once,
+  // before the device has saved it (user 2026-10-02: the tile jumped back and
+  // took long to move). The grid data stays the device's: the reload after
+  // the save (reconcileSettingsTileUi) draws the stored state, and a failed
+  // save draws it back. Restoring takes the first empty index like
+  // TileConfig::ensureSettingsTile.
+  function previewSettingsTileTransfer(hidden, snapshot, target = null) {
+    const tiles = getTilesData('folder0').slice();
+    const isSettings = tile => Number(tile?.type || 0) === 7;
+    const index = hidden
+      ? tiles.findIndex(isSettings)
+      : (tiles.some(isSettings) || !target ? -1 : tiles.findIndex(tile => !Number(tile?.type || 0)));
+    if (index < 0) return;
+    tiles[index] = hidden ? {type: 0} : {
+      type: 7,
+      title: snapshot.title,
+      icon_name: snapshot.icon,
+      bg_color: snapshot.bg_color,
+      col: target.col,
+      row: target.row,
+      span_w: snapshot.span_w,
+      span_h: snapshot.span_h
+    };
+    renderTileFromData('folder0', index, tiles[index], sensorMetaCache);
+    layoutTiles('folder0', tiles);
+    renderSettingsHiddenSlot(hidden, snapshot);
+  }
+
   function currentGridSettingsSnapshot() {
     const tile = (getTilesData('folder0') || []).find(
       item => Number(item?.type || 0) === 7);
@@ -8017,7 +8045,9 @@ function syncTileRadiusControls(tabEl) {
 
   function loadSensorValues(
       refreshTiles = false, forceMetaFetch = false, tabsOverride = null) {
-    if (dragSource || resizeState) {
+    // A Settings move to or from the parking slot shows ahead of the device
+    // (previewSettingsTileTransfer); stored tile data would draw it back.
+    if (dragSource || resizeState || settingsTileTransferInFlight) {
       queueDeferredSensorRefresh(refreshTiles);
       return Promise.resolve(false);
     }
@@ -8039,7 +8069,7 @@ function syncTileRadiusControls(tabEl) {
       // A refresh may have started shortly before the drag and only arrive
       // during it. In that case it must not overwrite the local preview with the
       // old device state.
-      if (dragSource || resizeState) {
+      if (dragSource || resizeState || settingsTileTransferInFlight) {
         queueDeferredSensorRefresh(refreshTiles);
         return;
       }
@@ -9107,11 +9137,15 @@ function syncTileRadiusControls(tabEl) {
   async function flushSettingsTileSaveBeforeHide(tab, index) {
     if (index < 0) return true;
     const timerKey = tab + ':' + index;
+    // Only a pending edit needs its own save first; the parking save carries
+    // the tile's snapshot anyway, and an extra save made the device write and
+    // rebuild its grid twice.
+    const pending = !!autoSaveTimers[timerKey] || !!drafts?.[tab]?.[index]?._dirty;
     if (autoSaveTimers[timerKey]) {
       clearTimeout(autoSaveTimers[timerKey]);
       delete autoSaveTimers[timerKey];
     }
-    saveTile(tab, true, index);
+    if (pending) saveTile(tab, true, index);
     const saveKey = getTileSaveKey(tab, index);
     const deadline = Date.now() + 8000;
     while (Date.now() < deadline) {
@@ -9140,7 +9174,9 @@ function syncTileRadiusControls(tabEl) {
       const snapshot = normalizeHiddenSettingsSnapshot(
         getTileSnapshotForSave('folder0', settingsTile) ||
         currentGridSettingsSnapshot());
+      previewSettingsTileTransfer(true, snapshot);
       if (!(await flushSettingsTileSaveBeforeHide('folder0', settingsTile))) {
+        await reconcileSettingsTileUi(false);
         return false;
       }
       hidden.checked = true;
@@ -9148,10 +9184,14 @@ function syncTileRadiusControls(tabEl) {
       toggleSettingsAccessFields();
       const saved = await queueSettingsAccessSave(
         null, null, snapshot, false);
-      if (!saved) return false;
+      if (!saved) {
+        await reconcileSettingsTileUi(false);
+        return false;
+      }
       return await reconcileSettingsTileUi(true, snapshot);
     } finally {
       settingsTileTransferInFlight = false;
+      flushDeferredSensorRefresh();
     }
   }
 
@@ -9161,14 +9201,19 @@ function syncTileRadiusControls(tabEl) {
     const snapshot = normalizeHiddenSettingsSnapshot();
     settingsTileTransferInFlight = true;
     try {
+      previewSettingsTileTransfer(false, snapshot, {col, row});
       hidden.checked = false;
       toggleSettingsAccessFields();
       const saved = await queueSettingsAccessSave(
         null, {col, row}, null, false);
-      if (!saved) return false;
+      if (!saved) {
+        await reconcileSettingsTileUi(true, snapshot);
+        return false;
+      }
       return await reconcileSettingsTileUi(false, snapshot, true);
     } finally {
       settingsTileTransferInFlight = false;
+      flushDeferredSensorRefresh();
     }
   }
 

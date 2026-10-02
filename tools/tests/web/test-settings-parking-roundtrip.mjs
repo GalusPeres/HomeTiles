@@ -47,6 +47,7 @@ device[0] = {type:4,title:'Folder',navigate_target:1,col:0,row:0,span_w:1,span_h
 device[1] = {type:7,title:'Settings',icon_name:'cog',col:2,row:0,span_w:1,span_h:1};
 let saveDelay = 30;
 const log = [];
+let gridReads = 0;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 window.fetch = async (url, options) => {
   if (options?.method === 'POST') {
@@ -61,11 +62,13 @@ window.fetch = async (url, options) => {
         device[free] = {type:7,title:'Settings',icon_name:'cog',col:Number(body.settings_tile_target_col),
           row:Number(body.settings_tile_target_row),span_w:1,span_h:1};
       }
-      return {ok:true, json:async()=>({ok:true,reload:false,settings_pin:''})};
+      return {ok:true, json:async()=>({ok:true,reload:false,settings_pin:'',
+        settings_tile_index:device.findIndex(tile => tile.type === 7)})};
     }
     return {ok:true, json:async()=>({ok:true,success:true})};
   }
   if (String(url).startsWith('/api/tiles?folder=0')) {
+    ++gridReads;
     await wait(10);
     return {ok:true, json:async()=>JSON.parse(JSON.stringify(device))};
   }
@@ -186,6 +189,19 @@ ${inlineScriptSafe(readAdminDeliverySource())}
   await wait(1200);
   check(parked.dataset.hidden === '1' && device.every(tile => tile.type !== 7),
         'The device ends parked like the preview');
+  // No move above reloaded the Home grid: the device put the tile where the
+  // preview showed it (each reload made the panel read every linked folder).
+  check(gridReads === 0, 'Matching moves reload nothing: ' + gridReads);
+
+  // The device puts it elsewhere (a tile the page does not know yet): the
+  // page reloads once and shows the device's grid.
+  saveDelay = 30;
+  device[1] = {type:4,title:'Other',navigate_target:2,col:1,row:0,span_w:1,span_h:1};
+  await unpark(4, 2);
+  await settle();
+  check(gridReads === 1 && settingsElement()?.id === 'folder0-tile-2' &&
+        document.getElementById('folder0-tile-1').dataset.type === '4',
+        'A different device slot reloads once and shows it: ' + gridReads + ' ' + settingsElement()?.id);
   document.body.dataset.result = 'pass';
 } catch (error) {
   document.body.dataset.result = 'fail'; document.getElementById('result').textContent = error.stack;

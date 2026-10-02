@@ -645,13 +645,14 @@ function syncTileRadiusControls(tabEl) {
   // right away; the reload after the save (reconcileSettingsTileUi) draws the
   // stored state, and a failed save draws it back. Restoring takes the first
   // empty index like TileConfig::ensureSettingsTile.
+  // Returns the slot it showed the tile in, -1 when parked or not shown.
   function previewSettingsTileTransfer(hidden, snapshot, target = null) {
     const tiles = getTilesData('folder0');
     const isSettings = tile => Number(tile?.type || 0) === 7;
     const index = hidden
       ? tiles.findIndex(isSettings)
       : (tiles.some(isSettings) || !target ? -1 : tiles.findIndex(tile => !Number(tile?.type || 0)));
-    if (index < 0) return;
+    if (index < 0) return -1;
     tiles[index] = hidden ? {type: 0} : {
       type: 7,
       title: snapshot.title,
@@ -667,6 +668,7 @@ function syncTileRadiusControls(tabEl) {
     renderSettingsHiddenSlot(hidden, snapshot);
     if (hidden) selectHiddenSettingsTile();
     else selectTile(index, 'folder0');
+    return hidden ? -1 : index;
   }
 
   function currentGridSettingsSnapshot() {
@@ -808,7 +810,8 @@ function syncTileRadiusControls(tabEl) {
                  requested.tileHidden) {
         renderSettingsHiddenSlot(true, tileSnapshot);
       }
-      return true;
+      // The device's answer (truthy): a Settings move reads settings_tile_index.
+      return result;
     } catch (error) {
       if (!hasNewPin &&
           settingsAccessStatesEqual(readSettingsAccessState(), requested)) {
@@ -9204,7 +9207,13 @@ function syncTileRadiusControls(tabEl) {
   // Moves of the Settings tile between the grid and the parking slot show at
   // once and queue their saves (queueSettingsAccessSave keeps the order), so
   // a move made while the device still saves the previous one is not lost
-  // (user 2026-10-02). Only the latest move reconciles with the device.
+  // (user 2026-10-02). Only the latest move reconciles with the device, and
+  // only when the device put the tile elsewhere than the preview: reloading
+  // the Home grid made the panel read every folder it links to.
+  function settingsTransferMatches(saved, index) {
+    return saved && Number(saved.settings_tile_index) === index;
+  }
+
   async function hideSettingsTileFromGrid() {
     const hidden = settingsAccessElement('settings_tile_hidden');
     const swipe = settingsAccessElement('settings_swipe_enabled');
@@ -9235,6 +9244,7 @@ function syncTileRadiusControls(tabEl) {
         await reconcileSettingsTileUi(false);
         return false;
       }
+      if (settingsTransferMatches(saved, -1)) return true;
       return await reconcileSettingsTileUi(true, snapshot);
     } finally {
       settingsTileTransfersInFlight--;
@@ -9251,9 +9261,9 @@ function syncTileRadiusControls(tabEl) {
     try {
       // The Settings checkbox restores without a drop spot; the device then
       // picks the spot and the reload shows it.
-      if (Number.isFinite(col) && Number.isFinite(row)) {
-        previewSettingsTileTransfer(false, snapshot, {col, row});
-      }
+      const shownAt = Number.isFinite(col) && Number.isFinite(row)
+        ? previewSettingsTileTransfer(false, snapshot, {col, row})
+        : -1;
       hidden.checked = false;
       toggleSettingsAccessFields();
       const saved = await queueSettingsAccessSave(
@@ -9263,6 +9273,7 @@ function syncTileRadiusControls(tabEl) {
         await reconcileSettingsTileUi(true, snapshot);
         return false;
       }
+      if (shownAt >= 0 && settingsTransferMatches(saved, shownAt)) return true;
       return await reconcileSettingsTileUi(false, snapshot, true);
     } finally {
       settingsTileTransfersInFlight--;

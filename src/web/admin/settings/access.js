@@ -192,13 +192,14 @@
   // right away; the reload after the save (reconcileSettingsTileUi) draws the
   // stored state, and a failed save draws it back. Restoring takes the first
   // empty index like TileConfig::ensureSettingsTile.
+  // Returns the slot it showed the tile in, -1 when parked or not shown.
   function previewSettingsTileTransfer(hidden, snapshot, target = null) {
     const tiles = getTilesData('folder0');
     const isSettings = tile => Number(tile?.type || 0) === 7;
     const index = hidden
       ? tiles.findIndex(isSettings)
       : (tiles.some(isSettings) || !target ? -1 : tiles.findIndex(tile => !Number(tile?.type || 0)));
-    if (index < 0) return;
+    if (index < 0) return -1;
     tiles[index] = hidden ? {type: 0} : {
       type: 7,
       title: snapshot.title,
@@ -214,6 +215,7 @@
     renderSettingsHiddenSlot(hidden, snapshot);
     if (hidden) selectHiddenSettingsTile();
     else selectTile(index, 'folder0');
+    return hidden ? -1 : index;
   }
 
   function currentGridSettingsSnapshot() {
@@ -355,7 +357,8 @@
                  requested.tileHidden) {
         renderSettingsHiddenSlot(true, tileSnapshot);
       }
-      return true;
+      // The device's answer (truthy): a Settings move reads settings_tile_index.
+      return result;
     } catch (error) {
       if (!hasNewPin &&
           settingsAccessStatesEqual(readSettingsAccessState(), requested)) {

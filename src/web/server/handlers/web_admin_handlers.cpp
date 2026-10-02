@@ -458,6 +458,12 @@ void WebAdminServer::handleSaveMQTT() {
     if (ajax_save) {
       String response = "{\"ok\":true,\"reload\":";
       response += access_changed && !access_only ? "true" : "false";
+      if (settings_visibility_commit_needed) {
+        // Where the Settings tile went: the Web Admin needs no grid reload
+        // when it matches its own preview.
+        response += ",\"settings_tile_index\":";
+        response += String(tileConfig.settingsTileIndex());
+      }
       response += ",\"settings_pin\":\"";
       String stored_pin;
       if (!web_admin_auth::storedSecretsHidden() &&

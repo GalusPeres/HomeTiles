@@ -14,6 +14,7 @@ import {extractDeliveredFunction} from '../../lib/admin-source.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 const preview = extractDeliveredFunction('previewSettingsTileTransfer');
+let lastShownAt = null;
 function run(tiles, hidden, target) {
   const calls = [];
   const context = {
@@ -28,7 +29,7 @@ function run(tiles, hidden, target) {
     target,
     snapshot: {title: 'Settings', icon: 'cog', bg_color: 0, span_w: '1', span_h: '1', col: '6', row: '1'}
   };
-  vm.runInNewContext(`${preview}; previewSettingsTileTransfer(hidden, snapshot, target)`, context);
+  lastShownAt = vm.runInNewContext(`${preview}; previewSettingsTileTransfer(hidden, snapshot, target)`, context);
   return calls;
 }
 
@@ -36,6 +37,7 @@ function run(tiles, hidden, target) {
 // takes the selection, at once.
 const grid = [{type: 4}, {type: 7, col: 5, row: 0}, {type: 0}, {type: 0}];
 let calls = run(grid, true, null);
+assert.equal(lastShownAt, -1, 'parked: no grid slot');
 assert.deepEqual(calls, [['tile', 'folder0', 1, {type: 0}], ['layout', 'folder0', [4, 0, 0, 0]],
   ['slot', true, 'Settings'], ['select', 'parked']]);
 assert.deepEqual(grid.map(tile => tile.type), [4, 0, 0, 0], 'the grid data follows the move');
@@ -44,6 +46,7 @@ assert.deepEqual(grid.map(tile => tile.type), [4, 0, 0, 0], 'the grid data follo
 // tile at the drop target and the selection, and the slot empties.
 const parked = [{type: 4}, {type: 0}, {type: 0}];
 calls = run(parked, false, {col: 2, row: 1.5});
+assert.equal(lastShownAt, 1, 'restored: the slot it shows');
 assert.deepEqual(calls[0], ['tile', 'folder0', 1, {type: 7, title: 'Settings', icon_name: 'cog', bg_color: 0,
   col: 2, row: 1.5, span_w: '1', span_h: '1'}]);
 assert.deepEqual(calls.slice(1), [['layout', 'folder0', [4, 7, 0]], ['slot', false, 'Settings'],
@@ -70,6 +73,15 @@ assert.ok(at(hide, 'previewSettingsTileTransfer(true,') < at(hide, 'flushSetting
 assert.ok(at(restore, 'previewSettingsTileTransfer(false,') < at(restore, 'queueSettingsAccessSave('));
 assert.ok(hide.includes('if(!saved){await reconcileSettingsTileUi(false);return false}'));
 assert.ok(restore.includes('if(!saved){await reconcileSettingsTileUi(true,snapshot);return false}'));
+
+// The device answers where it put the tile; a match with the preview needs
+// no reload of the Home grid (it made the panel read every linked folder).
+const matches = extractDeliveredFunction('settingsTransferMatches');
+assert.ok(matches.includes('return saved&&Number(saved.settings_tile_index)===index'));
+assert.ok(hide.includes('if(settingsTransferMatches(saved,-1))return true;') &&
+  hide.indexOf('if(settingsTransferMatches(saved,-1))return true;') < hide.indexOf('return await reconcileSettingsTileUi(true,snapshot)'));
+assert.ok(restore.includes('if(shownAt>=0&&settingsTransferMatches(saved,shownAt))return true;'));
+assert.ok(extractDeliveredFunction('saveSettingsAccess').includes('return result}'));
 
 // No extra tile save before parking: the parking save carries the snapshot,
 // and a second save made the device write and rebuild twice.
@@ -109,6 +121,8 @@ assert.ok(after.startsWith('} else if (settings_visibility_commit_needed) {') &&
   after.slice(0, 500).includes('tiles_invalidate_folder_only(kHomeFolderId);') &&
   after.slice(0, 500).includes('if (!settings_tile_shown_now &&') &&
   !after.slice(0, 500).includes('tiles_request_reload_all();'));
+assert.ok(handlers.includes('response += ",\\"settings_tile_index\\":";') &&
+  handlers.includes('response += String(tileConfig.settingsTileIndex());'));
 assert.ok(/if \(settings_tile_previewed\) \{[^}]*tileConfig\.setSettingsTileVisible\(!previous_cfg\.settings_tile_hidden\);\s+tiles_request_reload\(GridType::TAB0\);/.test(handlers));
 
 console.log('Settings parking: moves show at once, queue, and the device state follows');

@@ -461,6 +461,14 @@ for (const marker of [
     throw new Error(`Cover popup deferred-update contract is missing: ${marker}`);
   }
 }
+// A preset only sends (user 2026-10-02): the slider shows the reported
+// position on the cover's way instead of jumping to the preset and back.
+const coverPreset = coverPopupSource.slice(coverPopupSource.indexOf('void on_preset(lv_event_t* event) {'),
+  coverPopupSource.indexOf('void on_action(lv_event_t* event) {'));
+if (/set_channel_value|update_position_fill|update_tilt_handle|update_preset_group/.test(coverPreset) ||
+    !/publish_action\(ctx,[\s\S]*?kPresetValues\[i\]\);/.test(coverPreset)) {
+  throw new Error('Cover presets must only send and keep the reported position on the slider');
+}
 // Sliders send once, on release, like Home Assistant's cover sliders: a
 // template Cover answered every live command at once with the target state.
 if (/live_publish|kLivePublish/.test(coverPopupSource) ||

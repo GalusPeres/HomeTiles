@@ -738,23 +738,15 @@ void on_preset(lv_event_t* event) {
       return;
     }
 
-    const uint8_t value = kPresetValues[i];
-    set_channel_value(ctx, channel, value);
-    update_top_value(ctx);
-    if (channel == CoverChannel::Position) {
-      update_position_fill(ctx);
-    } else {
-      update_tilt_handle(ctx);
-    }
-    update_preset_group(
-        channel == CoverChannel::Position ? ctx->position_presets
-                                          : ctx->tilt_presets,
-        true, true, value, ctx->card_color, ctx->accent);
+    // A preset only sends, like the open and close buttons: the slider keeps
+    // showing the reported position and follows the cover on its way, like
+    // Home Assistant. Only a slider the finger moves shows its own value
+    // (user 2026-10-02: the slider jumped to the preset and back).
     publish_action(ctx,
                    channel == CoverChannel::Position
                        ? "set_cover_position"
                        : "set_cover_tilt_position",
-                   value, channel);
+                   kPresetValues[i]);
     return;
   }
 }

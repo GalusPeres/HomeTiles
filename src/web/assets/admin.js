@@ -8123,6 +8123,10 @@ function syncTileRadiusControls(tabEl) {
   function createDragPreview(tile) {
     const clone = tile.cloneNode(true);
     const rect = tile.getBoundingClientRect();
+    // The tile's own display: a forced block dropped the flex centering of
+    // Folder, Settings and Switch tiles, so the drag image showed icon and
+    // disc at the top left (user 2026-10-02).
+    const display = getComputedStyle(tile).display;
     clone.style.position = 'absolute';
     clone.style.top = '-9999px';
     clone.style.left = '-9999px';
@@ -8133,7 +8137,7 @@ function syncTileRadiusControls(tabEl) {
     clone.style.boxShadow = '0 10px 30px rgba(0,0,0,0.35)';
     clone.style.backgroundClip = 'padding-box';
     clone.style.clipPath = 'inset(0 round 11px)';
-    clone.style.display = 'block';
+    clone.style.display = display === 'none' ? 'block' : display;
     document.body.appendChild(clone);
     return clone;
   }

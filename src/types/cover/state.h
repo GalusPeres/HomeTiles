@@ -46,6 +46,9 @@ struct CoverTileWidgets {
   int16_t bar_base = 0;
   uint8_t level = 0;
   bool available = false;
+  // The fill's state color (cover_icon_color): the cover color, or the
+  // inactive grey for unknown and unavailable.
+  uint32_t fill_color = 0x926BC7;
   uint32_t last_payload_hash = 0;
   bool dynamic_icon = true;
 };

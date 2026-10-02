@@ -52,6 +52,9 @@ struct CoverPopupContext {
   CoverPopupMode mode = CoverPopupMode::Position;
   // Card color of the last opening; state updates never change it.
   uint32_t card_color = popup_surface::kDefaultCard;
+  // The state color of icon, sliders and buttons (cover_accent): the cover
+  // color (kHaCoverActive) or the inactive grey.
+  uint32_t accent = 0x926BC7;
   CoverChannel dragging_channel = CoverChannel::None;
   CoverChannel protected_channel = CoverChannel::None;
   lv_obj_t* overlay = nullptr;
@@ -169,6 +172,13 @@ bool cover_icon_is_active(const CoverState& state) {
   return state.valid && state.available &&
          strcmp(state.state, "unknown") != 0 &&
          strcmp(state.state, "unavailable") != 0;
+}
+
+// Home Assistant colors the whole Cover by its state (stateColorCss: icon,
+// sliders and buttons alike): the cover color for every known state, the
+// inactive grey for unknown and unavailable, like the tile's icon and bar.
+uint32_t cover_accent(const CoverState& state) {
+  return cover_icon_is_active(state) ? kHaCoverActive : kHaCoverInactive;
 }
 
 void set_hidden(lv_obj_t* obj, bool hidden) {
@@ -364,20 +374,21 @@ void update_tilt_handle(CoverPopupContext* ctx) {
                  center_y - kVerticalSliderRadius);
 }
 
-// The buttons follow the sliders (user 2026-10-01): always the circle step
-// of the cover color, whether the cover is open or closed
-// (popup_nav_style::fill with kHaCoverActive, the tile's circle options).
-void cover_fill(uint32_t card_color, lv_color_t& color, lv_opa_t& opa) {
-  popup_nav_style::fill(popup_surface::card(card_color), lv_color_hex(kHaCoverActive), color, opa);
+// The buttons follow the sliders (user 2026-10-01): the circle step of the
+// state color, whether the cover is open or closed (popup_nav_style::fill
+// with cover_accent, the tile's circle options).
+void cover_fill(uint32_t card_color, uint32_t accent, lv_color_t& color, lv_opa_t& opa) {
+  popup_nav_style::fill(popup_surface::card(card_color), lv_color_hex(accent), color, opa);
 }
 
 // The selected position chip and a pressed one show the cover fill.
 void update_preset_group(lv_obj_t* const* buttons, bool enabled,
-                         bool has_value, uint8_t value, uint32_t card_color) {
+                         bool has_value, uint8_t value, uint32_t card_color,
+                         uint32_t accent) {
   if (!buttons) return;
   lv_color_t fill;
   lv_opa_t opa;
-  cover_fill(card_color, fill, opa);
+  cover_fill(card_color, accent, fill, opa);
   for (size_t i = 0; i < kPresetCount; ++i) {
     lv_obj_t* button = buttons[i];
     if (!button) continue;
@@ -410,10 +421,10 @@ void update_position_ui(CoverPopupContext* ctx) {
   update_position_fill(ctx);
   update_tilt_handle(ctx);
   update_preset_group(ctx->position_presets, enabled && show_position,
-                      ctx->state.has_position, ctx->state.position, ctx->card_color);
+                      ctx->state.has_position, ctx->state.position, ctx->card_color, ctx->accent);
   update_preset_group(ctx->tilt_presets, enabled && show_tilt,
                       ctx->state.has_tilt_position,
-                      ctx->state.tilt_position, ctx->card_color);
+                      ctx->state.tilt_position, ctx->card_color, ctx->accent);
 }
 
 void update_controls_ui(CoverPopupContext* ctx) {
@@ -492,11 +503,11 @@ void update_controls_ui(CoverPopupContext* ctx) {
 
 // The selected mode button and a pressed one show the cover fill.
 void style_mode_button(lv_obj_t* button, lv_obj_t* icon, bool active,
-                       bool enabled, uint32_t card_color) {
+                       bool enabled, uint32_t card_color, uint32_t accent) {
   if (!button) return;
   lv_color_t fill;
   lv_opa_t opa;
-  cover_fill(card_color, fill, opa);
+  cover_fill(card_color, accent, fill, opa);
   popup_nav_style::set_bg(button, fill, enabled && active ? opa : static_cast<lv_opa_t>(LV_OPA_TRANSP),
                           LV_PART_MAIN);
   popup_nav_style::set_bg(button, fill, enabled ? opa : static_cast<lv_opa_t>(LV_OPA_TRANSP),
@@ -518,11 +529,11 @@ void style_mode_buttons(CoverPopupContext* ctx) {
   style_mode_button(ctx->position_mode_button, ctx->position_mode_icon,
                     ctx->mode == CoverPopupMode::Position &&
                         position_available,
-                    position_available, ctx->card_color);
+                    position_available, ctx->card_color, ctx->accent);
   style_mode_button(ctx->controls_mode_button, ctx->controls_mode_icon,
                     ctx->mode == CoverPopupMode::Controls &&
                         controls_available,
-                    controls_available, ctx->card_color);
+                    controls_available, ctx->card_color, ctx->accent);
 }
 
 // Arrows and stop rest on the cover fill; a press shows one more step
@@ -531,8 +542,8 @@ void style_action_buttons(CoverPopupContext* ctx) {
   if (!ctx) return;
   lv_color_t fill, raised;
   lv_opa_t opa, raised_opa;
-  cover_fill(ctx->card_color, fill, opa);
-  popup_nav_style::fill_raised(popup_surface::card(ctx->card_color), lv_color_hex(kHaCoverActive), raised,
+  cover_fill(ctx->card_color, ctx->accent, fill, opa);
+  popup_nav_style::fill_raised(popup_surface::card(ctx->card_color), lv_color_hex(ctx->accent), raised,
                                raised_opa);
   for (lv_obj_t* button : {ctx->main_open_button, ctx->main_close_button, ctx->tilt_close_button,
                            ctx->tilt_open_button, ctx->stop_button}) {
@@ -567,19 +578,27 @@ void update_mode_visibility(CoverPopupContext* ctx) {
   style_action_buttons(ctx);
 }
 
+// The tracks are created once in the cover color; a state color change
+// recolors them and the buttons (preset chips follow in update_position_ui).
+void apply_accent(CoverPopupContext* ctx, uint32_t accent) {
+  if (!ctx || ctx->accent == accent) return;
+  ctx->accent = accent;
+  for (lv_obj_t* track : {ctx->position_slider.track, ctx->tilt_slider.track}) {
+    if (track) lv_obj_set_style_bg_color(track, lv_color_hex(accent), 0);
+  }
+  style_mode_buttons(ctx);
+  style_action_buttons(ctx);
+}
+
 void refresh_popup(CoverPopupContext* ctx) {
   if (!ctx) return;
+  apply_accent(ctx, cover_accent(ctx->state));
   update_top_value(ctx);
   update_position_ui(ctx);
   update_controls_ui(ctx);
   update_mode_visibility(ctx);
   if (ctx->icon_label) {
-    lv_obj_set_style_text_color(
-        ctx->icon_label,
-        lv_color_hex(cover_icon_is_active(ctx->state)
-                         ? kHaCoverActive
-                         : kHaCoverInactive),
-        0);
+    lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ctx->accent), 0);
   }
 }
 
@@ -730,7 +749,7 @@ void on_preset(lv_event_t* event) {
     update_preset_group(
         channel == CoverChannel::Position ? ctx->position_presets
                                           : ctx->tilt_presets,
-        true, true, value, ctx->card_color);
+        true, true, value, ctx->card_color, ctx->accent);
     publish_action(ctx,
                    channel == CoverChannel::Position
                        ? "set_cover_position"
@@ -786,7 +805,7 @@ void apply_slider_point(CoverPopupContext* ctx, CoverChannel channel,
     update_preset_group(
         channel == CoverChannel::Position ? ctx->position_presets
                                           : ctx->tilt_presets,
-        true, true, value, ctx->card_color);
+        true, true, value, ctx->card_color, ctx->accent);
   }
 }
 
@@ -800,7 +819,7 @@ void commit_slider(CoverPopupContext* ctx, CoverChannel channel) {
   update_preset_group(
       channel == CoverChannel::Position ? ctx->position_presets
                                         : ctx->tilt_presets,
-      true, channel_has_value(ctx, channel), channel_value(ctx, channel), ctx->card_color);
+      true, channel_has_value(ctx, channel), channel_value(ctx, channel), ctx->card_color, ctx->accent);
   publish_channel_value(ctx, channel);
 }
 
@@ -859,7 +878,7 @@ void on_position_slider_draw(lv_event_t* event) {
   lv_draw_rect_dsc_t fill;
   lv_draw_rect_dsc_init(&fill);
   fill.base.layer = layer;
-  fill.bg_color = lv_color_hex(kHaCoverActive);
+  fill.bg_color = lv_color_hex(ctx->accent);
   fill.bg_opa = LV_OPA_COVER;
   fill.border_opa = LV_OPA_TRANSP;
   fill.radius = kVerticalSliderRadius;
@@ -1192,8 +1211,8 @@ static void prepare_cover_popup_open(const CoverPopupInit& init) {
   hometiles_title::set(ctx->title_label, init.title.c_str());
   set_hidden(ctx->icon_label, !init.icon_visible);
   lv_label_set_text(ctx->icon_label, getMdiChar(init.icon_name).c_str());
-  lv_obj_set_style_text_color(ctx->icon_label,
-      lv_color_hex(cover_icon_is_active(init.state) ? kHaCoverActive : kHaCoverInactive), 0);
+  apply_accent(ctx, cover_accent(init.state));
+  lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ctx->accent), 0);
   if (!defer_popup_body(ctx->card, ctx->title_label, ctx->icon_label,
                         ctx->close_button, init, finish_cover_popup_open,
                         ctx->entity_id == init.entity_id))

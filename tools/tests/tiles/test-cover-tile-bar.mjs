@@ -27,7 +27,7 @@ for (const marker of [
   'widget.bar = level_bar::create(card, tile);',
   'widget.bar_base = static_cast<int16_t>(level_bar::box(tile).base);',
   'level_bar::draw_fill(lv_event_get_layer(e), widget->bar, widget->level, widget->bar_base,',
-  'lv_color_hex(kCoverActive), card);',
+  'lv_color_hex(widget->fill_color), card);',
   'const uint8_t value = cover_position_at(level_bar::value_at(widget.bar, widget.bar_base, point));',
   // The closed part like Home Assistant (75 % open fills a quarter); fully
   // open keeps the smallest piece with the handle.
@@ -62,8 +62,8 @@ assert.match(renderer, /if \(g_drag\.data == data\) \{[\s\S]*?g_drag = CoverDrag
 assert.match(read('src/web/admin/tiles/layout.js'), /\[2, 4, 5, 7, 8, 9, 17, 18, 19, 24, 25, 26\]\.includes\(Number\(type\)\)/);
 assert.ok(read('src/web/server/render/web_admin_html.cpp').includes('tile_geometry::compact_cover(tile.type, span_w, span_h)'));
 const admin = read('src/types/cover/admin.js');
-assert.ok(admin.includes("bar.style.setProperty('--switch-accent', COVER_PREVIEW_ACTIVE);") &&
-  admin.includes('drawSwitchPreviewFill(bar);') && admin.includes("const COVER_PREVIEW_ACTIVE = '#926BC7';"));
+assert.ok(admin.includes("bar.style.setProperty('--switch-accent', coverPreviewColor(state));") &&
+  admin.includes('drawSwitchPreviewFill(bar);'));
 // The Lock, Alarm panel and Fan bars share the rule (.tile.device.switch-bar).
 assert.match(read('src/web/assets/admin.css'), /\.tile\.cover\.switch-bar > \.tile-switch,\s*\.tile\.device\.switch-bar > \.tile-switch \{/);
 console.log('Cover tile: compact half height, header with the position bar like the Switch dimmer');

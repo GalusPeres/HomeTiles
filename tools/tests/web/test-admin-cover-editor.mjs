@@ -441,7 +441,7 @@ for (const marker of [
   // Selected chip, mode button and the arrows take the cover color's circle
   // step, open or closed (user 2026-10-01).
   'active ? opa : static_cast<lv_opa_t>(LV_OPA_TRANSP)',
-  'popup_nav_style::fill(popup_surface::card(card_color), lv_color_hex(kHaCoverActive), color, opa);',
+  'popup_nav_style::fill(popup_surface::card(card_color), lv_color_hex(accent), color, opa);',
   'popup_nav_style::set_bg(button, raised, raised_opa, LV_PART_MAIN | LV_STATE_PRESSED);',
   'style_action_buttons(ctx);',
   'lv_obj_set_style_text_font(label, popup_layout::font24(), 0)',

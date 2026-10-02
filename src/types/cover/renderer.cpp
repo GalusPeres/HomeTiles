@@ -28,9 +28,12 @@ struct CoverEventData {
   String entity_id;
 };
 
-// Home Assistant's --state-cover-active-color: the position fill, like the
-// Cover popup's sliders, whether the Cover is open or closed.
+// Home Assistant's --state-cover-active-color and --state-inactive-color:
+// icon and position fill take the first for every known state, closed
+// included, and the second for unknown and unavailable (stateColorCss), like
+// the Cover popup's sliders.
 constexpr uint32_t kCoverActive = 0x926BC7;
+constexpr uint32_t kCoverInactive = 0x9E9E9E;
 
 struct CoverUpdate {
   GridType grid_type = GridType::TAB0;
@@ -250,7 +253,7 @@ bool cover_icon_active(const CoverState& state) {
 }
 
 uint32_t cover_icon_color(const CoverState& state) {
-  return cover_icon_active(state) ? 0x926BC7 : 0x9E9E9E;
+  return cover_icon_active(state) ? kCoverActive : kCoverInactive;
 }
 
 String cover_value_text(const CoverState& state) {
@@ -394,7 +397,7 @@ void bar_draw_cb(lv_event_t* e) {
   if (!widget || !widget->bar || !widget->available) return;
   const lv_color_t card = lv_obj_get_style_bg_color(lv_obj_get_parent(widget->bar), LV_PART_MAIN);
   level_bar::draw_fill(lv_event_get_layer(e), widget->bar, widget->level, widget->bar_base,
-                       lv_color_hex(kCoverActive), card);
+                       lv_color_hex(widget->fill_color), card);
 }
 
 // A drag step: the bar and the state line follow the finger; only the
@@ -504,9 +507,11 @@ void show_view(GridType grid_type, uint8_t index) {
     if (positionable) lv_obj_remove_flag(widget.bar, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(widget.bar, LV_OBJ_FLAG_HIDDEN);
   }
-  if (widget.level != level || widget.available != state.available) {
+  const uint32_t fill_color = cover_icon_color(state);
+  if (widget.level != level || widget.available != state.available || widget.fill_color != fill_color) {
     widget.level = level;
     widget.available = state.available;
+    widget.fill_color = fill_color;
     lv_obj_invalidate(widget.bar);
   }
 }

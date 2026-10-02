@@ -97,7 +97,7 @@ assert.ok(popup.includes('view.handle_dash = dash;') &&
 assert.ok(body(popup, 'void style_mode_button(', 'mode button')
   .includes(': popup_surface::lighter(card_color, popup_surface::kDisabled),'));
 assert.match(body(popup, 'void style_mode_buttons(CoverPopupContext* ctx)', 'mode buttons'),
-  /position_available, ctx->card_color\);[\s\S]*controls_available, ctx->card_color\);/);
+  /position_available, ctx->card_color, ctx->accent\);[\s\S]*controls_available, ctx->card_color, ctx->accent\);/);
 
 // The former fixed greys are gone; the HA Cover accents stay.
 for (const gone of ['kPanelBg', '0x2A2A2A', '0x6B6B6B', 'constexpr uint32_t kDisabled',

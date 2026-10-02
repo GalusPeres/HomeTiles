@@ -89,7 +89,9 @@
       'arrow-down-box', 'arrow-up-box');
   }
 
-  // Closed keeps the active color like the tile (cover_icon_active).
+  // The state color of icon and position fill (cover renderer
+  // cover_icon_color): closed keeps the active color, unknown and
+  // unavailable take the inactive grey.
   function coverPreviewColor(state) {
     const value = String(state?.state || 'unknown').toLowerCase();
     if (state?.available === false || value === 'unknown' || value === 'unavailable') {
@@ -97,10 +99,6 @@
     }
     return '#926bc7';
   }
-
-  // Home Assistant's --state-cover-active-color: the position fill
-  // (cover renderer kCoverActive).
-  const COVER_PREVIEW_ACTIVE = '#926BC7';
 
   // A full tile of a Cover with a position (or not reported yet) shows the
   // header and the position bar (cover renderer show_view); without
@@ -139,7 +137,7 @@
   }
 
   // The header layout class and the position fill, drawn like the Switch
-  // dimmer (drawSwitchPreviewFill) in the cover color with the handle in the
+  // dimmer (drawSwitchPreviewFill) in the state color with the handle in the
   // tile color.
   function applyCoverPreview(tileElem, state, halfHeight) {
     if (!tileElem) return;
@@ -153,7 +151,7 @@
     const level = available && state.position !== null ? Math.max(1, 100 - state.position) : 0;
     bar.dataset.bar = 'dimmer';
     bar.classList.toggle('is-unavailable', !available);
-    bar.style.setProperty('--switch-accent', COVER_PREVIEW_ACTIVE);
+    bar.style.setProperty('--switch-accent', coverPreviewColor(state));
     bar.style.setProperty('--switch-card', getComputedStyle(tileElem).backgroundColor);
     bar.__switchFill = {kind: 'dimmer', level};
     drawSwitchPreviewFill(bar);

@@ -82,7 +82,8 @@ ${inlineScriptSafe(readAdminDeliverySource())}
   const cell = el => el.getBoundingClientRect();
   const at = (el, dx = 20, dy = 20) => ({clientX: cell(el).left + dx, clientY: cell(el).top + dy});
   const settingsElement = () => [...grid.children].find(el => el.dataset.type === '7');
-  const activeIds = () => [...document.querySelectorAll('.tile.active')].map(el => el.id).join(',');
+  const placeholder = () => grid.querySelector('.tile-drop-placeholder.show');
+  const activeIds = () => [...document.querySelectorAll('.tile.active')].filter(el => el !== dragPreview).map(el => el.id).join(',');
   folderByTab.folder0 = 0;
   tileDataLoadedTabs.add('folder0');
   tilesData.folder0 = JSON.parse(JSON.stringify(device));
@@ -97,8 +98,13 @@ ${inlineScriptSafe(readAdminDeliverySource())}
     check(tile, 'Settings is in the grid before parking');
     const transfer = new DataTransfer();
     tile.dispatchEvent(new DragEvent('dragstart', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(tile)}));
+    grid.dispatchEvent(new DragEvent('dragover', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(tile)}));
+    check(placeholder(), 'Over the grid the teal placeholder shows in the grid');
     slot.dispatchEvent(new DragEvent('dragover', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(slot)}));
     check(slot.classList.contains('drop-target'), 'The parking slot shows its drop target');
+    check(!placeholder(), 'Over the slot the grid placeholder goes, like moving between grid cells');
+    check(getComputedStyle(parked).borderTopStyle === 'dashed' &&
+          getComputedStyle(parked).borderTopColor === 'rgb(38, 166, 154)', 'The slot target is the teal placeholder');
     slot.dispatchEvent(new DragEvent('drop', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(slot)}));
     tile.dispatchEvent(new DragEvent('dragend', {bubbles:true,dataTransfer:transfer}));
   };
@@ -124,6 +130,34 @@ ${inlineScriptSafe(readAdminDeliverySource())}
   check(activeIds() === 'settingsHiddenTile', 'The selection moves to the slot at once: ' + activeIds());
   await settle();
   check(parked.dataset.hidden === '1' && hint.classList.contains('is-hidden'), 'Parked after the save');
+
+  // Taking the parked tile works like taking a grid tile: it is selected (the
+  // drag image carries the teal selection), the slot it left looks empty, and
+  // the teal placeholder follows the pointer between the slot and the grid.
+  // Dropped back on the slot it stays parked without a save.
+  {
+    selectTile(0, 'folder0');
+    const posts = log.length;
+    const transfer = new DataTransfer();
+    parked.dispatchEvent(new DragEvent('dragstart', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(parked)}));
+    check(activeIds() === 'settingsHiddenTile' && dragPreview?.classList.contains('active'),
+          'Taking the parked tile selects it: ' + activeIds());
+    check(slot.classList.contains('lifting') && getComputedStyle(parked.querySelector('.tile-icon')).visibility === 'hidden',
+          'The slot looks empty while its tile is dragged');
+    slot.dispatchEvent(new DragEvent('dragover', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(parked)}));
+    check(slot.classList.contains('drop-target') && getComputedStyle(parked).opacity === '1' &&
+          getComputedStyle(parked).borderTopColor === 'rgb(38, 166, 154)', 'Over the slot the teal placeholder shows there');
+    slot.dispatchEvent(new DragEvent('dragleave', {bubbles:true,relatedTarget:grid,dataTransfer:transfer}));
+    grid.dispatchEvent(new DragEvent('dragover', {bubbles:true,cancelable:true,dataTransfer:transfer,...cellPoint(4, 2)}));
+    check(placeholder() && !slot.classList.contains('drop-target'), 'Over the grid the placeholder moves into the grid');
+    slot.dispatchEvent(new DragEvent('dragover', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(parked)}));
+    check(!placeholder() && slot.classList.contains('drop-target'), 'Back over the slot the grid placeholder goes');
+    slot.dispatchEvent(new DragEvent('drop', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(parked)}));
+    parked.dispatchEvent(new DragEvent('dragend', {bubbles:true,dataTransfer:transfer}));
+    await settle();
+    check(parked.dataset.hidden === '1' && !slot.classList.contains('lifting') && log.length === posts,
+          'Dropped back on the slot it stays parked without a save');
+  }
 
   // Restore to an empty cell: grid tile and selection at once, the slot empty
   // with its hint.

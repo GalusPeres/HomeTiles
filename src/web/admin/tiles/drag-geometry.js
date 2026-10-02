@@ -26,6 +26,8 @@
 
   function createDragPreview(tile) {
     const clone = tile.cloneNode(true);
+    // No second element with the tile's id (getElementById, selection).
+    clone.removeAttribute('id');
     const rect = tile.getBoundingClientRect();
     // The tile's own display: a forced block dropped the flex centering of
     // Folder, Settings and Switch tiles, so the drag image showed icon and

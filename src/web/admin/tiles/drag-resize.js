@@ -657,10 +657,20 @@
       const tile = getTilesData('folder0')?.[dragSource.index];
       return Number(dragSource.type || tile?.type || 0) === 7;
     };
+    // The slot is one more drop cell of the Settings tile and works like a
+    // grid cell (user 2026-10-02): with the pointer over it the teal
+    // placeholder shows in the slot and the grid's placeholder and reflow
+    // preview go back; a parked tile dropped on it stays parked.
+    const draggingSettings = () => acceptsGridSettings() ||
+      (dragSource?.kind === 'hidden-settings' && dragSource.tab === 'folder0');
     slot.addEventListener('dragover', event => {
-      if (!acceptsGridSettings()) return;
+      if (!draggingSettings()) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
+      if (slot.classList.contains('drop-target')) return;
+      restoreDragPreview('folder0');
+      clearDragPlaceholder();
+      if (dragSource.kind === 'hidden-settings') dragSource.hiddenTarget = null;
       slot.classList.add('drop-target');
     });
     slot.addEventListener('dragleave', event => {
@@ -669,13 +679,14 @@
       slot.classList.remove('drop-target');
     });
     slot.addEventListener('drop', event => {
-      if (!acceptsGridSettings()) return;
+      if (!draggingSettings()) return;
       event.preventDefault();
       event.stopPropagation();
       slot.classList.remove('drop-target');
       restoreDragPreview('folder0');
       clearDragPlaceholder();
-      if (dragSource) dragSource.dropCommitted = true;
+      if (dragSource.kind === 'hidden-settings') return;
+      dragSource.dropCommitted = true;
       hideSettingsTileFromGrid();
     });
 
@@ -683,6 +694,11 @@
       if (hiddenTile.dataset.hidden !== '1') {
         event.preventDefault();
         return;
+      }
+      // Taking the parked tile selects it like a grid tile, so the drag image
+      // carries the teal selection.
+      if (currentTileTab !== 'folder0' || currentTileIndex !== HIDDEN_SETTINGS_TILE_INDEX) {
+        selectHiddenSettingsTile();
       }
       const spanW = clampHalf(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
       const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, GRID_ROWS, 1);
@@ -710,10 +726,12 @@
         dragPreview = createDragPreview(hiddenTile);
         event.dataTransfer.setDragImage(dragPreview, grabOffset.x, grabOffset.y);
       }
+      // The slot it left looks empty like a grid cell a tile left.
+      slot.classList.add('lifting');
     });
     hiddenTile.addEventListener('dragend', () => {
       hiddenTile.classList.remove('dragging');
-      slot.classList.remove('drop-target', 'invalid');
+      slot.classList.remove('drop-target', 'invalid', 'lifting');
       clearDragPlaceholder();
       if (dragPreview && dragPreview.parentNode) dragPreview.parentNode.removeChild(dragPreview);
       dragPreview = null;

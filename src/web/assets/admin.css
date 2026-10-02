@@ -910,11 +910,17 @@
     .settings-parking-texts .hint { margin:0; font-size:14px; line-height:1.35; }
     /* A folder: the editing hint with Delete Folder below it. */
     .folder-side .settings-parking-texts { align-items:flex-start; gap:12px; }
+    /* The slot's drop target is the grid's teal placeholder
+       (.tile-drop-placeholder); a parked tile lifted out leaves the slot
+       empty like a grid cell. */
     .settings-hidden-slot.drop-target .settings-hidden-tile {
-      border:3px dashed #26a69a;
-      background:rgba(38,166,154,0.12) !important;
+      border:3px dashed #26a69a !important;
+      background:rgba(38,166,154,0.18) !important;
       box-shadow:0 0 0 2px rgba(38,166,154,0.2) inset;
     }
+    .settings-hidden-slot.lifting.drop-target .settings-hidden-tile { opacity:1; }
+    .settings-hidden-slot.drop-target .settings-hidden-tile > *,
+    .settings-hidden-slot.lifting .settings-hidden-tile > * { visibility:hidden; }
     .settings-hidden-slot.invalid .settings-hidden-tile {
       border-color:#ef4444;
     }

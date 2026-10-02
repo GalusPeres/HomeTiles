@@ -313,13 +313,17 @@ constexpr size_t TILES_PER_GRID=4;
 const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors";
 bool g_sidecar_index_built=false;
 std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys;
+// The PSRAM sidecar text cache (tile_config.cpp) with std containers, no lock.
+using PsString=std::string;struct SidecarText{uint32_t key;PsString text;};using SidecarTexts=std::vector<SidecarText>;
+SidecarTexts g_image_sidecar_texts,g_entity_sidecar_texts,g_title_sidecar_texts,g_icon_color_sidecar_texts;
+struct SidecarTextsGuard{SidecarTextsGuard(){}~SidecarTextsGuard(){}};
 struct Tile {TileType type=TILE_EMPTY;String icon_colors;};struct TileGridConfig{Tile tiles[TILES_PER_GRID];};
 ${normalizeTile}
-` + ['sidecarKey', 'sidecarKeyPresent', 'sidecarKeyAdd', 'sidecarKeyRemove', 'scanSidecarDir', 'ensureSidecarIndexBuilt',
+` + ['sidecarKey', 'sidecarKeyPresent', 'sidecarKeyAdd', 'sidecarTextCached', 'sidecarTextStore', 'sidecarTextForget', 'sidecarTextsFor', 'sidecarKeyRemove', 'scanSidecarDir', 'ensureSidecarIndexBuilt',
     'tmpPathFor', 'backupPathFor', 'replaceFileWithPreparedTmp', 'iconColorPathFile', 'readIconColorsSd',
     'writeIconColorsSd', 'applyIconColorsFromSd'].map(fn).join('\n') + String.raw`
 std::string norm(const char* in,bool bar,bool rows){char out[tile_icon_colors::kMaxRecordBytes+1];tile_icon_colors::normalize(in,out,sizeof(out),bar,rows);return out;}
-void reboot(){g_sidecar_index_built=false;g_icon_color_sidecar_keys.clear();}
+void reboot(){g_sidecar_index_built=false;g_icon_color_sidecar_keys.clear();g_image_sidecar_texts.clear();g_entity_sidecar_texts.clear();g_title_sidecar_texts.clear();g_icon_color_sidecar_texts.clear();}
 int main(){
  using namespace tile_icon_colors;
  struct N{const char* in;bool bar;bool rows;};

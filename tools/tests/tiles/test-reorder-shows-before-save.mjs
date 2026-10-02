@@ -43,7 +43,9 @@ assert.match(fn(config, 'TileConfig::saveFolderGrid'), /if \(ok && folder_id == 
 
 const tiles = read('src/ui/tabs/tiles/tab_tiles_unified.cpp');
 assert.match(fn(tiles, 'tiles_show_active_layout_now'),
-  /g_active_cache->folder_id != tileConfig\.getActiveFolderId\(\)\) \{\n    return false;\n  \}\n  tiles_reload_layout\(GridType::TAB0\);\n  g_tiles_reload_requested\[idx\] = false;/);
+  // A reorder moves the visible tiles (test-tile-move-fast-path.mjs); anything
+  // else rebuilds the grid as before.
+  /g_active_cache->folder_id != tileConfig\.getActiveFolderId\(\)\) \{\n    return false;\n  \}\n  if \(!move_active_layout\(\)\) tiles_reload_layout\(GridType::TAB0\);\n  g_tiles_reload_requested\[idx\] = false;/);
 const invalidation = fn(tiles, 'process_folder_cache_invalidation');
 assert.match(invalidation, /if \(&entry == g_active_cache \|\|\n            entry\.folder_id != g_folder_only_invalidations\[n\]\) \{\n          continue;\n        \}\n        reset_cache_entry\(entry\);/,
   'only the changed folder\'s hidden cache is dropped');

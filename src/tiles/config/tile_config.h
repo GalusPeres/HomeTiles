@@ -91,6 +91,7 @@ enum SwitchPopupOpenModeStorage : uint8_t {
 // the 1280x800 layouts). Half-height tiles show at most 28.
 static constexpr uint8_t SENSOR_VALUE_FONT_MAX = 5;
 
+// A new field also belongs in tileContentEquals() below.
 struct Tile {
   TileType type;
   // Stable navigation identity, stored in the two unused V7 reserved bytes.
@@ -162,6 +163,32 @@ struct Tile {
         key_modifier(0),
         image_slideshow_sec(10) {}
 };
+
+// Everything a tile shows, all fields but its cell (col, row): equal tiles
+// can move to another cell without being rebuilt (tiles_show_active_layout_now).
+static inline bool tileContentEquals(const Tile& a, const Tile& b) {
+  return a.type == b.type && a.view_id == b.view_id && a.title == b.title &&
+         a.icon_name == b.icon_name && a.bg_color == b.bg_color &&
+         a.background_opacity == b.background_opacity &&
+         a.span_w == b.span_w && a.span_h == b.span_h &&
+         a.sensor_entity == b.sensor_entity && a.sensor_unit == b.sensor_unit &&
+         a.sensor_decimals == b.sensor_decimals &&
+         a.sensor_value_font == b.sensor_value_font &&
+         a.sensor_display_mode == b.sensor_display_mode &&
+         a.sensor_gauge_min == b.sensor_gauge_min &&
+         a.sensor_gauge_max == b.sensor_gauge_max &&
+         a.sensor_gauge_arc == b.sensor_gauge_arc &&
+         a.sensor_gauge_size == b.sensor_gauge_size &&
+         a.sensor_gauge_y_offset == b.sensor_gauge_y_offset &&
+         a.sensor_value_y_offset == b.sensor_value_y_offset &&
+         a.sensor_graph_height == b.sensor_graph_height &&
+         a.popup_open_mode == b.popup_open_mode && a.scene_alias == b.scene_alias &&
+         a.key_macro == b.key_macro && a.key_code == b.key_code &&
+         a.key_modifier == b.key_modifier && a.image_path == b.image_path &&
+         a.image_slideshow_sec == b.image_slideshow_sec &&
+         a.icon_disc_mode == b.icon_disc_mode && a.icon_glow == b.icon_glow &&
+         a.icon_colors == b.icon_colors;
+}
 
 // A deleted (empty) tile keeps only its slot geometry. Its entity, texts and
 // options must not return when a new tile is placed in the same slot.
@@ -686,6 +713,8 @@ public:
   // that follows stores the same grid. False when nothing changed.
   bool previewSettingsTileVisible(bool visible, float target_col,
                                   float target_row);
+  // Slot of the Settings tile in the Home grid, -1 while it is hidden.
+  int settingsTileIndex();
 
 private:
   volatile uint32_t view_revision_ = 1;

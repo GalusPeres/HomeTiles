@@ -1621,6 +1621,7 @@ void build_tiles_tab(lv_obj_t *parent, GridType grid_type, scene_publish_cb_t sc
 
 /* === Reload layout (unified) === */
 void tiles_reload_layout(GridType grid_type) {
+  const uint32_t reload_started_ms = millis();
   // The visible popup's tile, reopened from its new tile at the end.
   const uint16_t reopen_popup_tile =
       grid_type == GridType::TAB0 ? viewNavigationVisiblePopupTile() : 0;
@@ -1730,7 +1731,8 @@ void tiles_reload_layout(GridType grid_type) {
     g_active_cache->icon_generation = g_tiles_icon_generation;
     g_active_cache->last_used_ms = millis();
   }
-  Serial.printf("[%s] Layout reloaded\n", getGridName(grid_type));
+  Serial.printf("[%s] Layout reloaded in %lu ms\n", getGridName(grid_type),
+                static_cast<unsigned long>(millis() - reload_started_ms));
   // A popup opened from a replaced tile reads the tile's new colors and
   // options (regression: they appeared only after closing and reopening).
   viewNavigationReopenPopup(reopen_popup_tile);
@@ -1882,13 +1884,110 @@ void tiles_invalidate_folder_only(uint16_t folder_id) {
   g_folder_only_invalidations[g_folder_only_invalidation_count++] = folder_id;
 }
 
+static void rebuild_tile_at_index(GridType grid_type, uint8_t index);
+
+// A reorder only moves tiles, and parking only adds or removes the Settings
+// tile: the visible tiles then take their new cells instead of the whole grid
+// being rebuilt (tiles_reload_layout, about 340 ms on the V2; user
+// 2026-10-02). False, with nothing changed, when anything else differs; the
+// caller then rebuilds as before.
+static bool move_active_layout() {
+  const uint8_t idx = static_cast<uint8_t>(GridType::TAB0);
+  lv_obj_t* grid = g_tiles_grids[idx];
+  if (!grid || !g_active_cache || !g_active_cache->grid_loaded) return false;
+  const TileGridConfig& shown = g_active_cache->grid_config;
+  const TileGridConfig& next = tileConfig.getActiveGrid();
+
+  // Same tiles in the same slots; only the Settings tile may come or go.
+  float col = 0;
+  float row = 0;
+  float span_w = 1;
+  float span_h = 1;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& before = shown.tiles[i];
+    const Tile& after = next.tiles[i];
+    if (after.type != TILE_EMPTY && !get_tile_layout(after, col, row, span_w, span_h)) return false;
+    if (before.type == TILE_EMPTY && after.type == TILE_EMPTY) continue;
+    if ((before.type == TILE_EMPTY && after.type == TILE_SETTINGS) ||
+        (before.type == TILE_SETTINGS && after.type == TILE_EMPTY)) {
+      continue;
+    }
+    if (!tileContentEquals(before, after) || !g_tiles_objs[idx][i]) return false;
+  }
+  // Only tiles and the empty cell placeholders (render_empty_tile) live in
+  // the grid; anything else rebuilds.
+  lv_obj_t* placeholders[GRID_ROWS * GRID_COLS] = {};
+  size_t placeholder_count = 0;
+  const uint32_t child_count = lv_obj_get_child_count(grid);
+  for (uint32_t c = 0; c < child_count; ++c) {
+    lv_obj_t* child = lv_obj_get_child(grid, static_cast<int32_t>(c));
+    bool is_tile = false;
+    for (size_t i = 0; i < TILES_PER_GRID && !is_tile; ++i) is_tile = g_tiles_objs[idx][i] == child;
+    if (is_tile) continue;
+    if (lv_obj_get_child_count(child) != 0 || placeholder_count >= GRID_ROWS * GRID_COLS) return false;
+    placeholders[placeholder_count++] = child;
+  }
+
+  const uint32_t started_ms = millis();
+  lv_display_t* disp = lv_obj_get_display(grid);
+  if (disp) lv_display_enable_invalidation(disp, false);
+  for (size_t p = 0; p < placeholder_count; ++p) lv_obj_delete(placeholders[p]);
+  bool occupied[GRID_ROWS][GRID_COLS] = {};
+  unsigned moved = 0;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& before = shown.tiles[i];
+    const Tile& after = next.tiles[i];
+    if (before.type == TILE_SETTINGS && after.type == TILE_EMPTY) {
+      lv_obj_delete(g_tiles_objs[idx][i]);
+      g_tiles_objs[idx][i] = nullptr;
+      continue;
+    }
+    if (after.type == TILE_EMPTY || !get_tile_layout(after, col, row, span_w, span_h)) continue;
+    mark_occupied(occupied, col, row, span_w, span_h);
+    if (before.type == TILE_EMPTY) {
+      rebuild_tile_at_index(GridType::TAB0, static_cast<uint8_t>(i));
+      continue;
+    }
+    if (before.col == after.col && before.row == after.row) continue;
+    Tile layout_tile = after;
+    layout_tile.col = col;
+    layout_tile.row = row;
+    layout_tile.span_w = span_w;
+    layout_tile.span_h = span_h;
+    // Whole cells follow the grid layout, half steps sit at a fixed position
+    // (place_tile_card, as render_tile placed them).
+    lv_obj_remove_flag(g_tiles_objs[idx][i], LV_OBJ_FLAG_IGNORE_LAYOUT);
+    place_tile_card(g_tiles_objs[idx][i], static_cast<int>(col), static_cast<int>(row), layout_tile);
+    ++moved;
+  }
+  for (uint8_t r = 0; r < GRID_ROWS; ++r) {
+    for (uint8_t c = 0; c < GRID_COLS; ++c) {
+      if (occupied[r][c]) continue;
+      // Behind the tiles, as tiles_reload_layout creates them first.
+      lv_obj_move_to_index(render_empty_tile(grid, c, r), 0);
+    }
+  }
+  if (disp) {
+    lv_display_enable_invalidation(disp, true);
+    lv_obj_invalidate(grid);
+    lv_refr_now(disp);
+  }
+  g_active_cache->grid_config = next;
+  memcpy(g_active_cache->tile_objs, g_tiles_objs[idx], sizeof(g_active_cache->tile_objs));
+  tile_renderer_snapshot_tab0(&g_active_cache->widgets);
+  g_active_cache->last_used_ms = millis();
+  Serial.printf("[%s] Layout moved: %u tiles in %lu ms\n", getGridName(GridType::TAB0), moved,
+                static_cast<unsigned long>(millis() - started_ms));
+  return true;
+}
+
 bool tiles_show_active_layout_now() {
   const uint8_t idx = static_cast<uint8_t>(GridType::TAB0);
   if (!g_active_cache || !g_active_cache->grid || !g_tiles_loaded[idx] ||
       g_active_cache->folder_id != tileConfig.getActiveFolderId()) {
     return false;
   }
-  tiles_reload_layout(GridType::TAB0);
+  if (!move_active_layout()) tiles_reload_layout(GridType::TAB0);
   g_tiles_reload_requested[idx] = false;
   return true;
 }

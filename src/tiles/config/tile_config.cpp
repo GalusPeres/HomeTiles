@@ -12,6 +12,7 @@
 #include <memory>
 #include <new>
 #include <esp_heap_caps.h>
+#include "src/core/memory/psram_allocator.h"
 
 static const char* PREF_NAMESPACE = "tab5_tiles";
 static constexpr uint8_t PACKED_GRID_VERSION = 7;
@@ -587,8 +588,77 @@ static void sidecarKeyAdd(std::vector<uint32_t>& keys, uint32_t key) {
   if (!sidecarKeyPresent(keys, key)) keys.push_back(key);
 }
 
+// The text of every sidecar file read or written so far, by key, in PSRAM.
+// All sidecar changes go through the write functions below and
+// sidecarKeyRemove(), so a cached text is the file's content: grid loads and
+// unchanged saves skip the file system, which took about 300 ms per Home grid
+// load or save on the V2, one open per file (user 2026-10-02). The texts are
+// small (titles, icon color records, long entity IDs, image paths).
+struct SidecarText {
+  uint32_t key;
+  PsString text;
+};
+using SidecarTexts = std::vector<SidecarText, PsramAllocator<SidecarText>>;
+static SidecarTexts g_image_sidecar_texts;
+static SidecarTexts g_entity_sidecar_texts;
+static SidecarTexts g_title_sidecar_texts;
+static SidecarTexts g_icon_color_sidecar_texts;
+
+static SemaphoreHandle_t sidecarTextsLock() {
+  static SemaphoreHandle_t lock = xSemaphoreCreateMutex();
+  return lock;
+}
+
+class SidecarTextsGuard {
+ public:
+  SidecarTextsGuard() : lock_(sidecarTextsLock()) {
+    if (lock_) xSemaphoreTake(lock_, portMAX_DELAY);
+  }
+  ~SidecarTextsGuard() {
+    if (lock_) xSemaphoreGive(lock_);
+  }
+
+ private:
+  SemaphoreHandle_t lock_;
+};
+
+static bool sidecarTextCached(const SidecarTexts& texts, uint32_t key, String& out) {
+  SidecarTextsGuard guard;
+  for (const SidecarText& entry : texts) {
+    if (entry.key != key) continue;
+    out = entry.text.c_str();
+    return true;
+  }
+  return false;
+}
+
+static void sidecarTextStore(SidecarTexts& texts, uint32_t key, const String& text) {
+  SidecarTextsGuard guard;
+  for (SidecarText& entry : texts) {
+    if (entry.key != key) continue;
+    entry.text.assign(text.c_str(), text.length());
+    return;
+  }
+  texts.push_back(SidecarText{key, PsString(text.c_str(), text.length())});
+}
+
+static void sidecarTextForget(SidecarTexts& texts, uint32_t key) {
+  SidecarTextsGuard guard;
+  texts.erase(std::remove_if(texts.begin(), texts.end(),
+                             [key](const SidecarText& entry) { return entry.key == key; }),
+              texts.end());
+}
+
+static SidecarTexts& sidecarTextsFor(const std::vector<uint32_t>& keys) {
+  if (&keys == &g_image_sidecar_keys) return g_image_sidecar_texts;
+  if (&keys == &g_entity_sidecar_keys) return g_entity_sidecar_texts;
+  if (&keys == &g_title_sidecar_keys) return g_title_sidecar_texts;
+  return g_icon_color_sidecar_texts;
+}
+
 static void sidecarKeyRemove(std::vector<uint32_t>& keys, uint32_t key) {
   keys.erase(std::remove(keys.begin(), keys.end(), key), keys.end());
+  sidecarTextForget(sidecarTextsFor(keys), key);
 }
 
 static void scanSidecarDir(const char* dir, std::vector<uint32_t>& out) {
@@ -820,22 +890,32 @@ static bool writeImagePathSd(uint16_t folder_id, size_t index, const String& pat
   }
 
   if (has_sidecar) {
-    File current_file = storageFS().open(filePath, FILE_READ);
-    if (current_file) {
-      String current = current_file.readString();
-      current_file.close();
-      current.trim();
+    String current;
+    if (sidecarTextCached(g_image_sidecar_texts, key, current)) {
       if (current == path) return true;
+    } else {
+      File current_file = storageFS().open(filePath, FILE_READ);
+      if (current_file) {
+        current = current_file.readString();
+        current_file.close();
+        current.trim();
+        if (current == path) {
+          sidecarTextStore(g_image_sidecar_texts, key, current);
+          return true;
+        }
+      }
     }
   }
 
   if (!ensureImagePathDir()) return false;
+  sidecarTextForget(g_image_sidecar_texts, key);
   if (has_sidecar && storageFS().exists(filePath)) storageFS().remove(filePath);
   File f = storageFS().open(filePath, FILE_WRITE);
   if (!f) return false;
   f.print(path);
   f.close();
   sidecarKeyAdd(g_image_sidecar_keys, key);
+  sidecarTextStore(g_image_sidecar_texts, key, path);
   return true;
 }
 
@@ -843,13 +923,18 @@ static bool readImagePathSd(uint16_t folder_id, size_t index, String& out) {
   out = "";
   if (!storageReady()) return false;
   ensureSidecarIndexBuilt();
-  if (sidecarKeyPresent(g_image_sidecar_keys, sidecarKey(folder_id, index))) {
+  const uint32_t key = sidecarKey(folder_id, index);
+  if (sidecarKeyPresent(g_image_sidecar_keys, key)) {
+    if (sidecarTextCached(g_image_sidecar_texts, key, out)) return out.length() > 0;
     File f = storageFS().open(imagePathFile(folder_id, index), FILE_READ);
     if (f) {
       out = f.readString();
       f.close();
       out.trim();
-      if (out.length() > 0) return true;
+      if (out.length() > 0) {
+        sidecarTextStore(g_image_sidecar_texts, key, out);
+        return true;
+      }
     }
   }
   if (folder_id == 0) {
@@ -881,22 +966,32 @@ static bool writeLongEntityIdSd(uint16_t folder_id, size_t index, const String& 
   }
 
   if (has_sidecar) {
-    File current_file = storageFS().open(filePath, FILE_READ);
-    if (current_file) {
-      String current = current_file.readString();
-      current_file.close();
-      current.trim();
+    String current;
+    if (sidecarTextCached(g_entity_sidecar_texts, key, current)) {
       if (current == entity) return true;
+    } else {
+      File current_file = storageFS().open(filePath, FILE_READ);
+      if (current_file) {
+        current = current_file.readString();
+        current_file.close();
+        current.trim();
+        if (current == entity) {
+          sidecarTextStore(g_entity_sidecar_texts, key, current);
+          return true;
+        }
+      }
     }
   }
 
   if (!ensureEntityPathDir()) return false;
+  sidecarTextForget(g_entity_sidecar_texts, key);
   if (has_sidecar && storageFS().exists(filePath)) storageFS().remove(filePath);
   File f = storageFS().open(filePath, FILE_WRITE);
   if (!f) return false;
   f.print(entity);
   f.close();
   sidecarKeyAdd(g_entity_sidecar_keys, key);
+  sidecarTextStore(g_entity_sidecar_texts, key, entity);
   return true;
 }
 
@@ -910,7 +1005,9 @@ static String titlePathFile(uint16_t folder_id, size_t index) {
 static bool readLongTitleSd(uint16_t folder_id, size_t index, String& out) {
   if (!storageReady()) return false;
   ensureSidecarIndexBuilt();
-  if (!sidecarKeyPresent(g_title_sidecar_keys, sidecarKey(folder_id, index))) return false;
+  const uint32_t key = sidecarKey(folder_id, index);
+  if (!sidecarKeyPresent(g_title_sidecar_keys, key)) return false;
+  if (sidecarTextCached(g_title_sidecar_texts, key, out)) return true;
   const String path = titlePathFile(folder_id, index);
   for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)}) {
     File file = storageFS().open(candidate, FILE_READ);
@@ -921,6 +1018,7 @@ static bool readLongTitleSd(uint16_t folder_id, size_t index, String& out) {
     file.close();
     if (value.length() != size) continue;
     out = value;
+    sidecarTextStore(g_title_sidecar_texts, key, value);
     return true;
   }
   return false;
@@ -943,6 +1041,7 @@ static bool writeLongTitleSd(uint16_t folder_id, size_t index, const String& tit
   String current;
   if (readLongTitleSd(folder_id, index, current) && current == title) return true;
   if (!storageFS().exists(kTitlePathDir) && !storageFS().mkdir(kTitlePathDir)) return false;
+  sidecarTextForget(g_title_sidecar_texts, key);
   const String temporary = tmpPathFor(path);
   if (storageFS().exists(temporary)) storageFS().remove(temporary);
   File file = storageFS().open(temporary, FILE_WRITE);
@@ -954,6 +1053,7 @@ static bool writeLongTitleSd(uint16_t folder_id, size_t index, const String& tit
     return false;
   }
   sidecarKeyAdd(g_title_sidecar_keys, key);
+  sidecarTextStore(g_title_sidecar_texts, key, title);
   return true;
 }
 
@@ -982,7 +1082,9 @@ static String iconColorPathFile(uint16_t folder_id, size_t index) {
 static bool readIconColorsSd(uint16_t folder_id, size_t index, String& out) {
   if (!storageReady()) return false;
   ensureSidecarIndexBuilt();
-  if (!sidecarKeyPresent(g_icon_color_sidecar_keys, sidecarKey(folder_id, index))) return false;
+  const uint32_t key = sidecarKey(folder_id, index);
+  if (!sidecarKeyPresent(g_icon_color_sidecar_keys, key)) return false;
+  if (sidecarTextCached(g_icon_color_sidecar_texts, key, out)) return true;
   const String path = iconColorPathFile(folder_id, index);
   for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)}) {
     File file = storageFS().open(candidate, FILE_READ);
@@ -993,6 +1095,7 @@ static bool readIconColorsSd(uint16_t folder_id, size_t index, String& out) {
     file.close();
     if (value.length() != size) continue;
     out = value;
+    sidecarTextStore(g_icon_color_sidecar_texts, key, value);
     return true;
   }
   return false;
@@ -1015,6 +1118,7 @@ static bool writeIconColorsSd(uint16_t folder_id, size_t index, const String& re
   String current;
   if (readIconColorsSd(folder_id, index, current) && current == record) return true;
   if (!storageFS().exists(kIconColorPathDir) && !storageFS().mkdir(kIconColorPathDir)) return false;
+  sidecarTextForget(g_icon_color_sidecar_texts, key);
   const String temporary = tmpPathFor(path);
   if (storageFS().exists(temporary)) storageFS().remove(temporary);
   File file = storageFS().open(temporary, FILE_WRITE);
@@ -1026,6 +1130,7 @@ static bool writeIconColorsSd(uint16_t folder_id, size_t index, const String& re
     return false;
   }
   sidecarKeyAdd(g_icon_color_sidecar_keys, key);
+  sidecarTextStore(g_icon_color_sidecar_texts, key, record);
   return true;
 }
 
@@ -1096,13 +1201,18 @@ static bool readLongEntityIdSd(uint16_t folder_id, size_t index, String& out) {
   out = "";
   if (!storageReady()) return false;
   ensureSidecarIndexBuilt();
-  if (sidecarKeyPresent(g_entity_sidecar_keys, sidecarKey(folder_id, index))) {
+  const uint32_t key = sidecarKey(folder_id, index);
+  if (sidecarKeyPresent(g_entity_sidecar_keys, key)) {
+    if (sidecarTextCached(g_entity_sidecar_texts, key, out)) return out.length() > 0;
     File f = storageFS().open(entityPathFile(folder_id, index), FILE_READ);
     if (f) {
       out = f.readString();
       f.close();
       out.trim();
-      if (out.length() > 0) return true;
+      if (out.length() > 0) {
+        sidecarTextStore(g_entity_sidecar_texts, key, out);
+        return true;
+      }
     }
   }
   if (folder_id == 0) {
@@ -3325,6 +3435,20 @@ bool TileConfig::getSettingsTile(Tile& out) {
     return true;
   }
   return false;
+}
+
+int TileConfig::settingsTileIndex() {
+  TileGridConfig loaded{};
+  const TileGridConfig* grid = &loaded;
+  if (active_folder_id == kRootFolderId) {
+    grid = &activeGrid();
+  } else if (!loadGrid(kRootFolderId, loaded, false)) {
+    return -1;
+  }
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    if (grid->tiles[i].type == TILE_SETTINGS) return static_cast<int>(i);
+  }
+  return -1;
 }
 
 bool TileConfig::previewSettingsTileVisible(bool visible, float target_col,

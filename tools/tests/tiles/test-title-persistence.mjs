@@ -46,10 +46,14 @@ FS& storageFS(){return filesystem;}bool storageReady(){return ready;}
 constexpr size_t TITLE_MAX=32,TILES_PER_GRID=4;constexpr int TILE_EMPTY=0;
 const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors";
 bool g_sidecar_index_built=false;std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys;
+// The PSRAM sidecar text cache (tile_config.cpp) with std containers, no lock.
+using PsString=std::string;struct SidecarText{uint32_t key;PsString text;};using SidecarTexts=std::vector<SidecarText>;
+SidecarTexts g_image_sidecar_texts,g_entity_sidecar_texts,g_title_sidecar_texts,g_icon_color_sidecar_texts;
+struct SidecarTextsGuard{SidecarTextsGuard(){}~SidecarTextsGuard(){}};
 struct Tile {int type=0;String title;};struct TileGridConfig{Tile tiles[TILES_PER_GRID];};
-`+['sidecarKey','sidecarKeyPresent','sidecarKeyAdd','sidecarKeyRemove','scanSidecarDir','ensureSidecarIndexBuilt',
+`+['sidecarKey','sidecarKeyPresent','sidecarKeyAdd','sidecarTextCached','sidecarTextStore','sidecarTextForget','sidecarTextsFor','sidecarKeyRemove','scanSidecarDir','ensureSidecarIndexBuilt',
  'tmpPathFor','backupPathFor','replaceFileWithPreparedTmp','titlePathFile','readLongTitleSd','writeLongTitleSd','applyLongTitlesFromSd'].map(fn).join('\n')+String.raw`
-void reboot(){g_sidecar_index_built=false;g_title_sidecar_keys.clear();}
+void reboot(){g_sidecar_index_built=false;g_title_sidecar_keys.clear();g_image_sidecar_texts.clear();g_entity_sidecar_texts.clear();g_title_sidecar_texts.clear();g_icon_color_sidecar_texts.clear();}
 int main(){
  String full="A deliberately long first line\nSecond title line with temperature ";full+="\xC2\xB0";full+="C";
  assert(hometiles_title::normalize("First\\nSecond\r\nThird")=="First\nSecond Third");

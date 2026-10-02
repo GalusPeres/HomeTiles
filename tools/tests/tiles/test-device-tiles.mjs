@@ -91,6 +91,16 @@ const tile = read('src/types/device/device_tile.cpp');
 assert.match(tile, /if \(view->type != TILE_ALARM\) \{\s*lv_obj_add_event_cb\(card, on_card_toggle,\s*popup_event == LV_EVENT_SHORT_CLICKED \? LV_EVENT_LONG_PRESSED : LV_EVENT_SHORT_CLICKED/);
 assert.match(tile, /device_request\(popup_target\(view\), locked \? "unlock" : "lock", true\);/);
 
+// Every pulse reads one clock (user 02.10.: the popup's middle and its
+// header pulsed apart): none keeps an eased animation of its own.
+for (const file of ['src/types/device/device_tile.cpp', 'src/ui/popups/device/device_popup.cpp',
+                    'src/ui/popups/popup_shell.cpp']) {
+  const text = read(file);
+  assert.ok(text.includes('ui_pulse::opa_now()'), `${file} pulses from the shared clock`);
+  assert.ok(!/lv_anim_set_values\(&\w+, LV_OPA_COVER, LV_OPA_TRANSP\)/.test(text), `${file} keeps no clock of its own`);
+}
+assert.match(read('src/ui/shared/ui_pulse.h'), /lv_tick_get\(\) % \(2 \* kHalfMs\)/);
+
 // Registry and Web Admin.
 const registry = read('src/types/types_registry.cpp');
 for (const [type, prefix] of [['LOCK', 'Lock'], ['ALARM', 'Alarm'], ['FAN', 'Fan']]) {

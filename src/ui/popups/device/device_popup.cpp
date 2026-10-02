@@ -33,6 +33,7 @@
 #include "src/ui/shared/command_pacer.h"
 #include "src/ui/shared/title_label.h"
 #include "src/ui/shared/tone_color.h"
+#include "src/ui/shared/ui_pulse.h"
 #include "src/ui/shared/ui_surface_style.h"
 
 namespace {
@@ -199,23 +200,14 @@ void control_fill(lv_color_t& fill, lv_opa_t& opa) {
   popup_nav_style::fill(lv_color_hex(pop.card_rgb), lv_color_hex(pop.icon_rgb), fill, opa);
 }
 
-// Opacity 1 -> 0 -> 1 in 1 s for a control's symbol while a command runs.
-void pulse_exec(void* obj, int32_t value) {
-  lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value), 0);
+// Opacity 1 -> 0 -> 1 in 1 s for a control's symbol while a command runs,
+// in step with the header icon although a refresh rebuilds the symbol
+// (ui_pulse.h).
+void pulse_exec(void* obj, int32_t) {
+  lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), ui_pulse::opa_now(), 0);
 }
 
-void pulse(lv_obj_t* obj) {
-  lv_anim_t anim;
-  lv_anim_init(&anim);
-  lv_anim_set_var(&anim, obj);
-  lv_anim_set_exec_cb(&anim, pulse_exec);
-  lv_anim_set_values(&anim, LV_OPA_COVER, LV_OPA_TRANSP);
-  lv_anim_set_duration(&anim, 500);
-  lv_anim_set_reverse_duration(&anim, 500);
-  lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
-  lv_anim_set_path_cb(&anim, lv_anim_path_ease_in_out);
-  lv_anim_start(&anim);
-}
+void pulse(lv_obj_t* obj) { ui_pulse::start(obj, pulse_exec); }
 
 // A pill in the bottom row (the Light popup's controls row): the circle fill;
 // `lit` in the state color (Open's confirm step).

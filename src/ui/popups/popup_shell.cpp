@@ -4,6 +4,7 @@
 #include "src/ui/shared/title_label.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/shared/tone_color.h"
+#include "src/ui/shared/ui_pulse.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include <esp_heap_caps.h>
 #include <lvgl_private.h>
@@ -140,9 +141,10 @@ void create_header(lv_obj_t* parent, lv_obj_t*& title, lv_obj_t*& icon,
   popup_layout::alignHeader(parent, title, icon, disc);
 }
 
-// popup_shell_pulse_icon: opacity 1 -> 0 -> 1 in 1 s (state-control-styles).
-void icon_pulse_exec(void* obj, int32_t value) {
-  lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value), 0);
+// popup_shell_pulse_icon: opacity 1 -> 0 -> 1 in 1 s (state-control-styles),
+// in step with the popup's control and the tile (ui_pulse.h).
+void icon_pulse_exec(void* obj, int32_t) {
+  lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), ui_pulse::opa_now(), 0);
 }
 
 void stop_icon_pulse() {
@@ -501,16 +503,7 @@ void popup_shell_pulse_icon(lv_obj_t* body, bool on) {
   }
   // A refresh keeps a running pulse instead of restarting it.
   if (lv_anim_get(shell.icon, icon_pulse_exec)) return;
-  lv_anim_t anim;
-  lv_anim_init(&anim);
-  lv_anim_set_var(&anim, shell.icon);
-  lv_anim_set_exec_cb(&anim, icon_pulse_exec);
-  lv_anim_set_values(&anim, LV_OPA_COVER, LV_OPA_TRANSP);
-  lv_anim_set_duration(&anim, 500);
-  lv_anim_set_reverse_duration(&anim, 500);
-  lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
-  lv_anim_set_path_cb(&anim, lv_anim_path_ease_in_out);
-  lv_anim_start(&anim);
+  ui_pulse::start(shell.icon, icon_pulse_exec);
 }
 
 void popup_shell_hold_close_fill(bool hold) { g_hold_close_fill = hold; }

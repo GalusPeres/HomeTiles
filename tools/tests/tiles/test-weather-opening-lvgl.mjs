@@ -57,6 +57,7 @@ ${strip(read('src/ui/popups/popup_layout.h'))}
 ${strip(read('src/ui/popups/popup_open.h'))}
 ${strip(read('src/ui/popups/popup_shell.h'))}
 ${strip(read('src/ui/popups/popup_open.cpp'))}
+${strip(read('src/ui/shared/ui_pulse.h'))}
 ${strip(read('src/ui/popups/popup_shell.cpp'))}
 ${strip(read('src/types/weather/widgets.h'))}
 ${strip(read('src/ui/popups/weather/weather_popup.h'))}

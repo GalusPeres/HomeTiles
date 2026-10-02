@@ -87,6 +87,7 @@ ${stripIncludes(read('src/ui/popups/popup_layout.h'))}
 ${stripIncludes(read('src/ui/popups/popup_open.h'))}
 ${stripIncludes(read('src/ui/popups/popup_shell.h'))}
 ${stripIncludes(read('src/ui/popups/popup_open.cpp'))}
+${stripIncludes(read('src/ui/shared/ui_pulse.h'))}
 ${stripIncludes(read('src/ui/popups/popup_shell.cpp'))}
 ${stripIncludes(read('src/ui/popups/popup_nav_style.h'))}
 ${stripIncludes(read('src/core/config/pin_access.h'))}

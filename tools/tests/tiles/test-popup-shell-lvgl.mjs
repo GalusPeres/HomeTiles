@@ -48,6 +48,7 @@ ${withoutIncludes(read('src/ui/popups/popup_layout.h'))}
 ${withoutIncludes(read('src/ui/popups/popup_open.h'))}
 ${withoutIncludes(read('src/ui/popups/popup_shell.h'))}
 ${withoutIncludes(read('src/ui/popups/popup_open.cpp'))}
+${withoutIncludes(read('src/ui/shared/ui_pulse.h'))}
 ${withoutIncludes(read('src/ui/popups/popup_shell.cpp'))}
 struct Popup{lv_obj_t*owner,*body,*title,*icon,*close,*content;bool allow_close=true,back=false;int closed=0;};
 Popup make(){

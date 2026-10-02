@@ -20,6 +20,7 @@
 #include "src/ui/popups/device/device_popup.h"
 #include "src/ui/shared/command_pacer.h"
 #include "src/ui/shared/tone_color.h"
+#include "src/ui/shared/ui_pulse.h"
 
 namespace {
 
@@ -72,23 +73,11 @@ View* g_views = nullptr;
 
 // ---------------------------------------------------------------------------
 // Pulse: Home Assistant's state-control-styles (opacity 1 -> 0 -> 1 in 1 s)
-// for a running command or a device that needs attention.
+// for a running command or a device that needs attention, in step with the
+// popup (ui_pulse.h).
 
-void icon_pulse_exec(void* obj, int32_t value) {
-  lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value), 0);
-}
-
-void start_pulse(void* var, lv_anim_exec_xcb_t exec) {
-  lv_anim_t anim;
-  lv_anim_init(&anim);
-  lv_anim_set_var(&anim, var);
-  lv_anim_set_exec_cb(&anim, exec);
-  lv_anim_set_values(&anim, LV_OPA_COVER, LV_OPA_TRANSP);
-  lv_anim_set_duration(&anim, 500);
-  lv_anim_set_reverse_duration(&anim, 500);
-  lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
-  lv_anim_set_path_cb(&anim, lv_anim_path_ease_in_out);
-  lv_anim_start(&anim);
+void icon_pulse_exec(void* obj, int32_t) {
+  lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), ui_pulse::opa_now(), 0);
 }
 
 void set_icon_pulse(lv_obj_t* icon, bool on) {
@@ -98,7 +87,7 @@ void set_icon_pulse(lv_obj_t* icon, bool on) {
   if (!on && !lv_anim_get(icon, icon_pulse_exec)) return;
   lv_anim_delete(icon, icon_pulse_exec);
   lv_obj_set_style_opa(icon, LV_OPA_COVER, 0);
-  if (on) start_pulse(icon, icon_pulse_exec);
+  if (on) ui_pulse::start(icon, icon_pulse_exec);
 }
 
 // The bar's thumb symbol pulses with the icon; only the thumb redraws.
@@ -114,9 +103,9 @@ lv_area_t thumb_area(const View* view) {
   return area;
 }
 
-void bar_pulse_exec(void* var, int32_t value) {
+void bar_pulse_exec(void* var, int32_t) {
   View* view = static_cast<View*>(var);
-  view->pulse_opa = static_cast<lv_opa_t>(value);
+  view->pulse_opa = ui_pulse::opa_now();
   if (!view->bar) return;
   lv_area_t area = thumb_area(view);
   lv_obj_invalidate_area(view->bar, &area);
@@ -127,7 +116,7 @@ void set_bar_pulse(View* view, bool on) {
   view->bar_pulse = on;
   lv_anim_delete(view, bar_pulse_exec);
   view->pulse_opa = LV_OPA_COVER;
-  if (on && view->bar) start_pulse(view, bar_pulse_exec);
+  if (on && view->bar) ui_pulse::start(view, bar_pulse_exec);
 }
 
 // ---------------------------------------------------------------------------

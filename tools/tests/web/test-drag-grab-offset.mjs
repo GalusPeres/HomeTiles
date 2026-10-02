@@ -31,5 +31,32 @@ assert.ok(parked.includes('getDragGrabOffset(rect, event.clientX, event.clientY)
 // The parked tile anchors the drop on the half it was taken by, like a grid tile.
 assert.ok(parked.includes('const grabCellCol = spanW > 0.5 && grabOffset.x >= rect.width / 2 ? 0.5 : 0;'));
 assert.ok(!grid.includes('getDragAnchorOffset') && !parked.includes('offsetWidth / 2'));
+// Both drags keep the grab point for the drop spot below.
+assert.ok(grid.includes('dropOffset: getDragLayoutOffset(tab, layout, e.clientX, e.clientY) || grabOffset,') &&
+  parked.includes('dropOffset: grabOffset,'));
 
-console.log('Drag: the drag image stays under the grab point');
+// The drop spot is the half cell nearest to the drag image's top-left corner
+// (user 2026-10-02: snapping the pointer's half cell put it up to a half cell
+// off the drag image). Grid: pad 6, cells 120 x 100, gap 10 -> half cells of
+// 65 x 55 px; 6 x 4 cells.
+const cellSource = extractDeliveredFunction('getGridCellFromPointer');
+const cellAt = (clientX, clientY, dropOffset, layout = {span_w: 1, span_h: 1}) => vm.runInNewContext(
+  `${cellSource}; getGridCellFromPointer('folder0', clientX, clientY)`, {
+    clientX, clientY, GRID_COLS: 6, GRID_ROWS: 4,
+    dragSource: {tab: 'folder0', dropOffset, layout},
+    getTileGridMetrics: () => ({rect: {left: 100, top: 50}, padLeft: 6, padTop: 6,
+      cellW: 120, cellH: 100, gapX: 10, gapY: 10}),
+    getDragSourceLayout: () => layout,
+    firstAllowedGridRow: () => 0,
+    getRawGridCellFromPointer: () => { throw new Error('pointer cell used'); },
+    clampHalf: (v) => v
+  });
+// The image's corner at (100 + 6 + 140, 50 + 6 + 30): 140/65 = 2.15 -> col 1,
+// 30/55 = 0.55 -> row 0.5; the pointer far inside the tile does not matter.
+assert.deepEqual({...cellAt(246 + 100, 86 + 80, {x: 100, y: 80})}, {col: 1, row: 0.5});
+assert.deepEqual({...cellAt(246 + 5, 86 + 5, {x: 5, y: 5})}, {col: 1, row: 0.5});
+// Past the edges the spot stays inside the grid with the whole tile.
+assert.deepEqual({...cellAt(90, 40, {x: 60, y: 60})}, {col: 0, row: 0});
+assert.deepEqual({...cellAt(2000, 2000, {x: 0, y: 0}, {span_w: 2, span_h: 1.5})}, {col: 4, row: 2.5});
+
+console.log('Drag: the drag image stays under the grab point, the drop spot under the image');

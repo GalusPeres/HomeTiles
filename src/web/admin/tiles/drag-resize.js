@@ -498,6 +498,7 @@
           baseLayouts: captureLayoutSnapshot(tab),
           grabCellCol: anchorCell.col,
           grabCellRow: anchorCell.row,
+          dropOffset: getDragLayoutOffset(tab, layout, e.clientX, e.clientY) || grabOffset,
           previewResult: null,
           appliedPreviewResult: null,
           previewKey: '',
@@ -687,6 +688,7 @@
         layout: {col: 0, row: 0, span_w: spanW, span_h: spanH},
         grabCellCol,
         grabCellRow,
+        dropOffset: grabOffset,
         baseLayouts: null,
         dropCommitted: false,
         hiddenTarget: null

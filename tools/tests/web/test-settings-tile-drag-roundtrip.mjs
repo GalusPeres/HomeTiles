@@ -56,6 +56,7 @@ const harness = `<!doctype html>
     }
     function getDragAnchorCell() { return {col: 0, row: 0}; }
     function getDragGrabOffset() { return {x: 4, y: 4}; }
+    function getDragLayoutOffset() { return {x: 4, y: 4}; }
     function captureLayoutSnapshot() { return []; }
     function createDragPreview(tile) {
       const preview = tile.cloneNode(true);

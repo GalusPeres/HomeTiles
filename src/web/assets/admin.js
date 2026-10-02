@@ -8243,6 +8243,24 @@ function syncTileRadiusControls(tabEl) {
   }
 
   function getGridCellFromPointer(tab, clientX, clientY) {
+    if (dragSource && dragSource.tab === tab && dragSource.dropOffset) {
+      // The drop spot is the half cell nearest to the drag image's top-left
+      // corner, so it always lies under the dragged tile; the half cell under
+      // the pointer put it up to a half cell off (user 2026-10-02).
+      const metrics = getTileGridMetrics(tab);
+      if (!metrics) return null;
+      const halfX = (metrics.cellW + metrics.gapX) / 2;
+      const halfY = (metrics.cellH + metrics.gapY) / 2;
+      const left = clientX - dragSource.dropOffset.x - metrics.rect.left - metrics.padLeft;
+      const top = clientY - dragSource.dropOffset.y - metrics.rect.top - metrics.padTop;
+      if (!isFinite(left) || !isFinite(top) || !(halfX > 0) || !(halfY > 0)) return null;
+      const layout = getDragSourceLayout();
+      return {
+        col: Math.max(0, Math.min(GRID_COLS - (layout?.span_w || 0.5), Math.round(left / halfX) / 2)),
+        row: Math.max(firstAllowedGridRow(tab),
+                      Math.min(GRID_ROWS - (layout?.span_h || 0.5), Math.round(top / halfY) / 2))
+      };
+    }
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
     if (!rawCell) return null;
     if (!dragSource || dragSource.tab !== tab) return rawCell;
@@ -8265,6 +8283,17 @@ function syncTileRadiusControls(tabEl) {
     return dragSource.layout ||
       getTileElementLayout(dragSource.tab, dragSource.index) ||
       getTileLayoutFromData(dragSource.tab, dragSource.index);
+  }
+
+  // The pointer's offset from the tile's grid corner, measured in the grid
+  // frame (getTileGridMetrics) that the drop spot is snapped in.
+  function getDragLayoutOffset(tab, layout, clientX, clientY) {
+    const metrics = getTileGridMetrics(tab);
+    if (!metrics || !layout) return null;
+    return {
+      x: clientX - metrics.rect.left - metrics.padLeft - layout.col * (metrics.cellW + metrics.gapX),
+      y: clientY - metrics.rect.top - metrics.padTop - layout.row * (metrics.cellH + metrics.gapY)
+    };
   }
 
   function getDragAnchorCell(tab, layout, clientX, clientY) {
@@ -9083,6 +9112,7 @@ function syncTileRadiusControls(tabEl) {
           baseLayouts: captureLayoutSnapshot(tab),
           grabCellCol: anchorCell.col,
           grabCellRow: anchorCell.row,
+          dropOffset: getDragLayoutOffset(tab, layout, e.clientX, e.clientY) || grabOffset,
           previewResult: null,
           appliedPreviewResult: null,
           previewKey: '',
@@ -9272,6 +9302,7 @@ function syncTileRadiusControls(tabEl) {
         layout: {col: 0, row: 0, span_w: spanW, span_h: spanH},
         grabCellCol,
         grabCellRow,
+        dropOffset: grabOffset,
         baseLayouts: null,
         dropCommitted: false,
         hiddenTarget: null

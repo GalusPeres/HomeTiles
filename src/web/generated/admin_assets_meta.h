@@ -17,13 +17,13 @@ inline constexpr size_t kAdminCssSourceSize = 115257;
 inline constexpr size_t kAdminCssGzipSize = 22335;
 
 inline constexpr char kAdminJsPath[] =
-    "/assets/admin.b38c501336e0.js";
+    "/assets/admin.6f89ce8346d7.js";
 inline constexpr char kAdminJsEtag[] =
-    "\"e478297dea0697436bb66e73d3ffffc2c6d85542231d99e9ea860a6c124f5d3a\"";
+    "\"4b3aa8efec8e4005760aa2a0cec3a2055520ae88b44e586a0bafe4cd780e71d0\"";
 inline constexpr char kAdminJsContentType[] =
     "application/javascript; charset=utf-8";
-inline constexpr size_t kAdminJsSourceSize = 482960;
-inline constexpr size_t kAdminJsGzipSize = 106585;
+inline constexpr size_t kAdminJsSourceSize = 484018;
+inline constexpr size_t kAdminJsGzipSize = 106784;
 
 inline constexpr char kAdminAuthJsPath[] =
     "/assets/auth.a4e17d575dea.js";

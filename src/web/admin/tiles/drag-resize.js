@@ -647,6 +647,7 @@
   function enableSettingsHiddenSlot() {
     const slot = document.getElementById('settingsHiddenSlot');
     const hiddenTile = document.getElementById('settingsHiddenTile');
+    const hint = document.getElementById('settingsHiddenHint');
     if (!slot || !hiddenTile || slot.dataset.bound === '1') return;
     slot.dataset.bound = '1';
     hiddenTile.addEventListener('click', () => selectHiddenSettingsTile());
@@ -726,12 +727,14 @@
         dragPreview = createDragPreview(hiddenTile);
         event.dataTransfer.setDragImage(dragPreview, grabOffset.x, grabOffset.y);
       }
-      // The slot it left looks empty like a grid cell a tile left.
+      // The slot it left is the empty slot at once: tray icon and hint.
       slot.classList.add('lifting');
+      hint?.classList.remove('is-hidden');
     });
     hiddenTile.addEventListener('dragend', () => {
       hiddenTile.classList.remove('dragging');
       slot.classList.remove('drop-target', 'invalid', 'lifting');
+      hint?.classList.toggle('is-hidden', hiddenTile.dataset.hidden === '1');
       clearDragPlaceholder();
       if (dragPreview && dragPreview.parentNode) dragPreview.parentNode.removeChild(dragPreview);
       dragPreview = null;

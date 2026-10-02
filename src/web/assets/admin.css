@@ -910,15 +910,35 @@
     .settings-parking-texts .hint { margin:0; font-size:14px; line-height:1.35; }
     /* A folder: the editing hint with Delete Folder below it. */
     .folder-side .settings-parking-texts { align-items:flex-start; gap:12px; }
+    /* A parked tile lifted out leaves the empty slot at once, with its tray
+       icon and hint (user 2026-10-02); the teal drop target below takes over
+       while the pointer is over the slot. */
+    .settings-hidden-slot.lifting .settings-hidden-tile {
+      opacity:1;
+      border:2px dashed var(--line) !important;
+      background:rgba(255,255,255,0.025) !important;
+      box-shadow:none;
+    }
+    .settings-hidden-slot.lifting:not(.drop-target) .settings-hidden-tile::after {
+      content:"\F0120";
+      font-family:"Material Design Icons";
+      font-size:var(--icon-size, 24px);
+      line-height:1;
+      color:var(--muted);
+      opacity:0.85;
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
     /* The slot's drop target is the grid's teal placeholder
-       (.tile-drop-placeholder); a parked tile lifted out leaves the slot
-       empty like a grid cell. */
+       (.tile-drop-placeholder). */
     .settings-hidden-slot.drop-target .settings-hidden-tile {
       border:3px dashed #26a69a !important;
       background:rgba(38,166,154,0.18) !important;
       box-shadow:0 0 0 2px rgba(38,166,154,0.2) inset;
     }
-    .settings-hidden-slot.lifting.drop-target .settings-hidden-tile { opacity:1; }
     .settings-hidden-slot.drop-target .settings-hidden-tile > *,
     .settings-hidden-slot.lifting .settings-hidden-tile > * { visibility:hidden; }
     .settings-hidden-slot.invalid .settings-hidden-tile {

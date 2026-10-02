@@ -144,6 +144,9 @@ ${inlineScriptSafe(readAdminDeliverySource())}
           'Taking the parked tile selects it: ' + activeIds());
     check(slot.classList.contains('lifting') && getComputedStyle(parked.querySelector('.tile-icon')).visibility === 'hidden',
           'The slot looks empty while its tile is dragged');
+    check(!hint.classList.contains('is-hidden') && getComputedStyle(parked, '::after').content === '"\\u{F0120}"' &&
+          getComputedStyle(parked).borderTopStyle === 'dashed' && getComputedStyle(parked).opacity === '1',
+          'The empty slot shows its tray icon and hint at once: ' + getComputedStyle(parked, '::after').content);
     slot.dispatchEvent(new DragEvent('dragover', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(parked)}));
     check(slot.classList.contains('drop-target') && getComputedStyle(parked).opacity === '1' &&
           getComputedStyle(parked).borderTopColor === 'rgb(38, 166, 154)', 'Over the slot the teal placeholder shows there');
@@ -155,8 +158,8 @@ ${inlineScriptSafe(readAdminDeliverySource())}
     slot.dispatchEvent(new DragEvent('drop', {bubbles:true,cancelable:true,dataTransfer:transfer,...at(parked)}));
     parked.dispatchEvent(new DragEvent('dragend', {bubbles:true,dataTransfer:transfer}));
     await settle();
-    check(parked.dataset.hidden === '1' && !slot.classList.contains('lifting') && log.length === posts,
-          'Dropped back on the slot it stays parked without a save');
+    check(parked.dataset.hidden === '1' && !slot.classList.contains('lifting') && log.length === posts &&
+          hint.classList.contains('is-hidden'), 'Dropped back on the slot it stays parked without a save');
   }
 
   // Restore to an empty cell: grid tile and selection at once, the slot empty

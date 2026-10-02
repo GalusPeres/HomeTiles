@@ -14,6 +14,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+LV_FONT_DECLARE(mdi_bar_icons_15);
 LV_FONT_DECLARE(mdi_bar_icons_18);
 LV_FONT_DECLARE(mdi_bar_icons_22);
 LV_FONT_DECLARE(mdi_bar_icons_26);

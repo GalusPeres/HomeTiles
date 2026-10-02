@@ -2611,38 +2611,39 @@
 .icon-discs-off .tile.sensor-compact:not([data-icon-disc="1"]) > .tile-icon,
 .tile.sensor-compact[data-icon-disc="2"] > .tile-icon { background:transparent; }
 /* A PIN-protected Folder or Settings: the lock in the icon (icon_lock_mark.h):
-   56 % of the icon, its right edge on the icon's box, on a rim of 9 % of the
-   icon in the color behind it (--icon-lock-rim, applyIconDiscTint). Offsets
-   in the lock's own em (icon em / 0.56). */
+   46 % of the icon, its right and bottom edge at 0.9 of the icon's box like
+   mdi:folder-lock, on a rim of 6 % of the icon in the color behind it
+   (--icon-lock-rim, applyIconDiscTint). Offsets in the lock's own em (icon
+   em / 0.46). */
 .tile-icon > .tile-icon-lock {
   position:absolute; left:50%; top:50%; width:1em; height:1em;
-  margin-left:0.063em; margin-top:-0.156em;
-  font-size:0.56em; line-height:1; pointer-events:none; color:inherit;
+  margin-left:0.037em; margin-top:-0.088em;
+  font-size:0.46em; line-height:1; pointer-events:none; color:inherit;
   text-shadow:
-    0.161em 0.000em 0 var(--icon-lock-rim, #2e2e2e),
-    0.148em 0.062em 0 var(--icon-lock-rim, #2e2e2e),
-    0.114em 0.114em 0 var(--icon-lock-rim, #2e2e2e),
-    0.062em 0.148em 0 var(--icon-lock-rim, #2e2e2e),
-    0.000em 0.161em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.062em 0.148em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.114em 0.114em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.148em 0.062em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.161em 0.000em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.148em -0.062em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.114em -0.114em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.062em -0.148em 0 var(--icon-lock-rim, #2e2e2e),
-    0.000em -0.161em 0 var(--icon-lock-rim, #2e2e2e),
-    0.062em -0.148em 0 var(--icon-lock-rim, #2e2e2e),
-    0.114em -0.114em 0 var(--icon-lock-rim, #2e2e2e),
-    0.148em -0.062em 0 var(--icon-lock-rim, #2e2e2e),
-    0.080em 0.000em 0 var(--icon-lock-rim, #2e2e2e),
-    0.057em 0.057em 0 var(--icon-lock-rim, #2e2e2e),
-    0.000em 0.080em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.057em 0.057em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.080em 0.000em 0 var(--icon-lock-rim, #2e2e2e),
-    -0.057em -0.057em 0 var(--icon-lock-rim, #2e2e2e),
-    0.000em -0.080em 0 var(--icon-lock-rim, #2e2e2e),
-    0.057em -0.057em 0 var(--icon-lock-rim, #2e2e2e);
+    0.130em 0.000em 0 var(--icon-lock-rim, #2e2e2e),
+    0.121em 0.050em 0 var(--icon-lock-rim, #2e2e2e),
+    0.092em 0.092em 0 var(--icon-lock-rim, #2e2e2e),
+    0.050em 0.121em 0 var(--icon-lock-rim, #2e2e2e),
+    0.000em 0.130em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.050em 0.121em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.092em 0.092em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.121em 0.050em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.130em 0.000em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.121em -0.050em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.092em -0.092em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.050em -0.121em 0 var(--icon-lock-rim, #2e2e2e),
+    0.000em -0.130em 0 var(--icon-lock-rim, #2e2e2e),
+    0.050em -0.121em 0 var(--icon-lock-rim, #2e2e2e),
+    0.092em -0.092em 0 var(--icon-lock-rim, #2e2e2e),
+    0.121em -0.050em 0 var(--icon-lock-rim, #2e2e2e),
+    0.065em 0.000em 0 var(--icon-lock-rim, #2e2e2e),
+    0.046em 0.046em 0 var(--icon-lock-rim, #2e2e2e),
+    0.000em 0.065em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.046em 0.046em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.065em 0.000em 0 var(--icon-lock-rim, #2e2e2e),
+    -0.046em -0.046em 0 var(--icon-lock-rim, #2e2e2e),
+    0.000em -0.065em 0 var(--icon-lock-rim, #2e2e2e),
+    0.046em -0.046em 0 var(--icon-lock-rim, #2e2e2e);
 }
 .tile-icon-disc-fields.hidden { display:none; }
 .tile-icon-disc-fields .inline-checkbox.hidden { display:none; }

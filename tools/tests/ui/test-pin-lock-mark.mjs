@@ -19,17 +19,23 @@ const between = (source, start, end) => {
   return source.slice(at, end ? source.indexOf(end, at) : source.indexOf('\n}\n', at));
 };
 
-// The shared mark: mdi:lock in UTF-8, about 56 % of the icon, a 9 % rim.
+// The shared mark: mdi:lock in UTF-8, about 46 % of the icon like
+// mdi:folder-lock (variant A), a 6 % rim.
 const mark = read('src/ui/shared/icon_lock_mark.h');
 const lockCode = Number.parseInt(read('src/tiles/icons/mdi_icons.cpp').match(/\{"lock", 0x([0-9A-Fa-f]+)\}/)[1], 16);
 assert.ok(mark.includes(`inline constexpr uint32_t kCodepoint = 0x${lockCode.toString(16).toUpperCase()};`));
 const utf8 = [...Buffer.from(String.fromCodePoint(lockCode), 'utf8')].map(b => '\\x' + b.toString(16).toUpperCase()).join('');
 assert.ok(mark.includes(`inline constexpr char kGlyph[] = "${utf8}";`), 'kGlyph is mdi:lock in UTF-8');
-assert.ok(mark.includes('const int32_t want = icon_line * 56 / 100;'));
-assert.ok(mark.includes('&mdi_bar_icons_18, &mdi_bar_icons_22, &mdi_bar_icons_26, &mdi_bar_icons_34'));
-assert.ok(mark.includes('inline int32_t rim_for(int32_t icon_line) { return LV_MAX(2, (icon_line * 9 + 50) / 100); }'));
+assert.ok(mark.includes('const int32_t want = icon_line * 46 / 100;'));
+assert.ok(mark.includes('&mdi_bar_icons_15, &mdi_bar_icons_18, &mdi_bar_icons_22, &mdi_bar_icons_26,'));
+assert.ok(mark.includes('inline int32_t rim_for(int32_t icon_line) { return LV_MAX(2, (icon_line * 6 + 50) / 100); }'));
 const draw = between(mark, 'inline void draw(lv_layer_t* layer');
-assert.ok(draw.includes('const int32_t x = box.x2 + 1 - lock_width * 83 / 100;') &&
+// Right and bottom edge at 0.9 of the icon: the rim leaves the top corner whole
+// and stays inside a round disc.
+// The glyph's own box (a wider header label centers the icon).
+assert.ok(draw.includes('lv_label_get_letter_pos(icon, 0, &at);') &&
+  draw.includes('const int32_t x = box.x1 + at.x + glyph_width * 90 / 100 - lock_width * 833 / 1000;') &&
+  draw.includes('const int32_t y = box.y1 + at.y + line * 90 / 100 - lock_line * 958 / 1000;') &&
   draw.includes('dsc.color = rim_color;') && draw.includes('lv_area_move(&shifted,') &&
   draw.includes('dsc.color = lv_obj_get_style_text_color(icon, LV_PART_MAIN);'));
 assert.ok(between(mark, 'inline lv_color_t behind(').includes('lv_color_mix(lv_obj_get_style_bg_color(disc, LV_PART_MAIN), under, opa)'));
@@ -95,7 +101,8 @@ assert.ok(server.includes('html += "\\" data-folder-pin-enabled=\\"";') &&
   server.includes('<span class=\\"tile-icon-lock mdi mdi-lock\\" aria-hidden=\\"true\\"></span>'));
 const css = read('src/web/assets/admin.css');
 const rule = between(css, '.tile-icon > .tile-icon-lock {', '}');
-assert.ok(rule.includes('font-size:0.56em;') && rule.includes('var(--icon-lock-rim, #2e2e2e)'));
+assert.ok(rule.includes('font-size:0.46em;') && rule.includes('margin-left:0.037em; margin-top:-0.088em;') &&
+  rule.includes('var(--icon-lock-rim, #2e2e2e)'));
 assert.equal((rule.match(/var\(--icon-lock-rim/g) || []).length, 24, 'a full ring and a half ring');
 
 console.log('PIN lock: tiles, PIN popup header and Web Admin previews show the lock in the icon');

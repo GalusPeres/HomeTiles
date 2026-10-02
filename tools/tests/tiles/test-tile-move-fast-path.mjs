@@ -67,11 +67,26 @@ assert.ok(show.slice(0, 500).includes('if (!update_active_layout()) tiles_reload
 const update = tab.slice(tab.indexOf('static bool update_active_layout() {'), tab.indexOf('bool tiles_show_active_layout_now() {'));
 assert.ok(/if \(!tileContentEquals\(before, after\) \|\| !g_tiles_objs\[idx\]\[i\]\) \{\s+rebuild_tile_at_index\(GridType::TAB0, static_cast<uint8_t>\(i\)\);/.test(update),
   'a changed tile is rebuilt alone');
-const removal = update.slice(update.indexOf('if (after.type == TILE_EMPTY) {'), update.indexOf('++rebuilt;'));
+const removalAt = update.indexOf('    if (after.type == TILE_EMPTY) {\n      // Removed');
+const removal = update.slice(removalAt, update.indexOf('note_rebuilt(i);', removalAt));
 for (const kind of ['sensor', 'switch', 'climate', 'cover', 'binary_sensor', 'weather']) {
   assert.ok(removal.includes(`reset_${kind}_widget(GridType::TAB0, static_cast<uint8_t>(i));`), `removed tile drops its ${kind} widget`);
 }
 assert.ok(update.includes('if (rebuilds) hide_light_popup();'), 'a light popup bound to a slot closes like a rebuild');
+// Rebuilt tiles take their cached values before the frame (user 2026-10-02:
+// the Weather tile showed empty for a moment), as after a full rebuild.
+const queues = update.slice(update.indexOf('if (rebuilt) {'), update.indexOf('lv_refr_now(disp);'));
+for (const kind of ['sensor', 'switch', 'climate', 'cover', 'binary_sensor', 'weather', 'media']) {
+  assert.ok(queues.includes(`process_${kind}_update_queue();`), `${kind} values reach a rebuilt tile before the frame`);
+}
+assert.ok(update.includes('Layout updated: %u moved, %u rebuilt%s in %lu ms'), 'the log names the rebuilt slots');
+// Only changed tiles are drawn again (the whole grid took about 140 ms even
+// when nothing changed): their old places are marked while invalidation still
+// works, their new places after the layout update, nothing when nothing changed.
+assert.ok(!update.includes('lv_obj_invalidate(grid)'), 'no whole-grid redraw');
+assert.ok(update.indexOf('if (obj) lv_obj_invalidate(obj);') < update.indexOf('lv_display_enable_invalidation(disp, false)'));
+assert.ok(update.indexOf('lv_obj_update_layout(grid);') < update.indexOf('if (g_tiles_objs[idx][i]) lv_obj_invalidate(g_tiles_objs[idx][i]);'));
+assert.ok(update.includes('if (changed) lv_refr_now(disp);'));
 // Anything but tiles and empty-cell placeholders in the grid rebuilds; the
 // checks run before anything changes.
 assert.ok(update.indexOf('if (lv_obj_get_child_count(child) != 0') < update.indexOf('lv_display_enable_invalidation(disp, false)'));

@@ -1925,6 +1925,24 @@ static bool update_active_layout() {
   }
 
   const uint32_t started_ms = millis();
+  // Only the tiles that move, change or go are drawn again, at their old and
+  // new places: redrawing the whole grid took about 140 ms on the V2 even when
+  // nothing changed (user 2026-10-02). Their old places are marked before
+  // anything changes, as a rebuilt tile's renderer may update the layout;
+  // LVGL keeps those marks until the next frame.
+  bool redraw[TILES_PER_GRID] = {};
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& before = shown.tiles[i];
+    const Tile& after = next.tiles[i];
+    if (before.type == TILE_EMPTY && after.type == TILE_EMPTY) continue;
+    lv_obj_t* obj = g_tiles_objs[idx][i];
+    const bool same = after.type != TILE_EMPTY && obj && tileContentEquals(before, after);
+    if (same && before.col == after.col && before.row == after.row) continue;
+    redraw[i] = true;
+    if (obj) lv_obj_invalidate(obj);
+  }
+  // A popup reopened from a rebuilt tile (rebuild_tile_at_index) is drawn whole.
+  const bool popup_open = viewNavigationVisiblePopupTile() != 0;
   // A light popup is bound to a grid slot (tiles_reload_layout).
   if (rebuilds) hide_light_popup();
   lv_display_t* disp = lv_obj_get_display(grid);
@@ -1933,6 +1951,16 @@ static bool update_active_layout() {
   bool occupied[GRID_ROWS][GRID_COLS] = {};
   unsigned moved = 0;
   unsigned rebuilt = 0;
+  // The rebuilt slots, for the log: an unchanged tile must never be among them.
+  char rebuilt_slots[48] = "";
+  auto note_rebuilt = [&](size_t slot) {
+    ++rebuilt;
+    const size_t used = strlen(rebuilt_slots);
+    if (used + 6 < sizeof(rebuilt_slots)) {
+      snprintf(rebuilt_slots + used, sizeof(rebuilt_slots) - used, used ? ",%u" : " (slots %u",
+               static_cast<unsigned>(slot));
+    }
+  };
   bool folders_changed = false;
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& before = shown.tiles[i];
@@ -1951,14 +1979,14 @@ static bool update_active_layout() {
       reset_cover_widget(GridType::TAB0, static_cast<uint8_t>(i));
       reset_binary_sensor_widget(GridType::TAB0, static_cast<uint8_t>(i));
       reset_weather_widget(GridType::TAB0, static_cast<uint8_t>(i));
-      ++rebuilt;
+      note_rebuilt(i);
       continue;
     }
     if (!get_tile_layout(after, col, row, span_w, span_h)) continue;
     mark_occupied(occupied, col, row, span_w, span_h);
     if (!tileContentEquals(before, after) || !g_tiles_objs[idx][i]) {
       rebuild_tile_at_index(GridType::TAB0, static_cast<uint8_t>(i));
-      ++rebuilt;
+      note_rebuilt(i);
       continue;
     }
     if (before.col == after.col && before.row == after.row) continue;
@@ -1980,17 +2008,40 @@ static bool update_active_layout() {
       lv_obj_move_to_index(render_empty_tile(grid, c, r), 0);
     }
   }
+  if (rebuilt_slots[0]) strncat(rebuilt_slots, ")", sizeof(rebuilt_slots) - strlen(rebuilt_slots) - 1);
+  if (rebuilt) {
+    // Rebuilt tiles take their cached values before the frame, as after
+    // tiles_reload_layout; otherwise they showed empty for a moment (user
+    // 2026-10-02: the Weather tile blinked).
+    process_sensor_update_queue();
+    process_switch_update_queue();
+    process_climate_update_queue();
+    process_cover_update_queue();
+    process_binary_sensor_update_queue();
+    process_weather_update_queue();
+    process_media_update_queue();
+  }
   if (disp) {
+    lv_obj_update_layout(grid);
     lv_display_enable_invalidation(disp, true);
-    lv_obj_invalidate(grid);
-    lv_refr_now(disp);
+    bool changed = false;
+    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+      if (!redraw[i]) continue;
+      changed = true;
+      if (g_tiles_objs[idx][i]) lv_obj_invalidate(g_tiles_objs[idx][i]);
+    }
+    if (popup_open && rebuilt) {
+      lv_obj_invalidate(lv_screen_active());
+      lv_obj_invalidate(lv_layer_top());
+    }
+    if (changed) lv_refr_now(disp);
   }
   g_active_cache->grid_config = next;
   memcpy(g_active_cache->tile_objs, g_tiles_objs[idx], sizeof(g_active_cache->tile_objs));
   tile_renderer_snapshot_tab0(&g_active_cache->widgets);
   g_active_cache->last_used_ms = millis();
-  Serial.printf("[%s] Layout updated: %u moved, %u rebuilt in %lu ms\n", getGridName(GridType::TAB0),
-                moved, rebuilt, static_cast<unsigned long>(millis() - started_ms));
+  Serial.printf("[%s] Layout updated: %u moved, %u rebuilt%s in %lu ms\n", getGridName(GridType::TAB0),
+                moved, rebuilt, rebuilt_slots, static_cast<unsigned long>(millis() - started_ms));
   if (rebuilt) schedule_preview_load(GridType::TAB0);
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   // New or changed Folder tiles warm their targets, as after a rebuild.

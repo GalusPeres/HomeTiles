@@ -21,14 +21,16 @@ assert.match(sleep,
   'Sleep must drain live tile state after inbound MQTT and before status updates');
 assert.doesNotMatch(sleep, /process_tile_graph_queue\(\);/,
   'Sleep must not start request/response graph processing');
+// Every loop, inside the camera gate: no idle two-second batch any more (a
+// moving Cover's steps arrive twice a second, user 2026-10-02).
 assert.match(active,
-  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{[\s\S]*bool idle = !powerManager\.isHighPerformance\(\);[\s\S]*if \(!idle \|\| \(millis\(\) - last_queue_ms >= 2000\)\)\s*\{[\s\S]*process_tile_update_queues<TileUpdateBudget::Active>\(\);[\s\S]*process_tile_graph_queue\(\);[\s\S]*if \(idle\) energy_service_periodic\(\);[\s\S]*last_queue_ms = millis\(\);/,
-  'Camera gating, idle interval, graph order, and energy scheduling must stay in loop()');
+  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{\s*process_tile_update_queues<TileUpdateBudget::Active>\(\);\s*process_tile_graph_queue\(\);\s*energy_service_periodic\(\);\s*\}/,
+  'Camera gating, graph order, and energy scheduling must stay in loop()');
+assert.doesNotMatch(active, /isHighPerformance|last_queue_ms|>= 2000|process_idle_media_updates/,
+  'Tile updates must not wait for an idle batch');
 assert.doesNotMatch(service,
   /process_tile_graph_queue|energy_service_periodic|millis\(|delay\(/,
   'The shared service must not own scheduling or request/response work');
-assert.match(active, /last_queue_ms = millis\(\);\s*\} else \{\s*process_idle_media_updates\(\);/,
-  'Fast media service belongs only between idle batches, inside the camera gate');
 assert.doesNotMatch(sleep, /process_idle_media_updates\(\);/,
   'The sleep path retains its existing drain policy');
 

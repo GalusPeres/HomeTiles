@@ -1291,21 +1291,16 @@ void loop() {
   process_camera_popup();
   uint32_t t_popup_queues = millis();
 
-  // In idle mode, retain the normal tile budgets and service pending media
-  // separately so artwork does not wait for the two-second background batch.
+  // Every loop applies each type's bounded batch before LVGL services the
+  // next frame. Idle mode used to batch them every two seconds; its CPU,
+  // frame rate and Wi-Fi savings are gone (power_manager.h,
+  // setWifiPowerSaving), and the batch only delayed states: a moving Cover's
+  // 5 % steps showed as 20 % jumps (user 2026-10-02). Energy keeps its own
+  // retry and one-minute timers.
   if (!camera_popup_busy && !PopupFirstFrame::any_pending()) {
-    static uint32_t last_queue_ms = 0;
-    bool idle = !powerManager.isHighPerformance();
-    if (!idle || (millis() - last_queue_ms >= 2000)) {
-      // Apply each type's bounded batch before LVGL services the next frame.
-      // Remaining idle work waits for the next two-second interval.
-      process_tile_update_queues<TileUpdateBudget::Active>();
-      process_tile_graph_queue();
-      if (idle) energy_service_periodic();
-      last_queue_ms = millis();
-    } else {
-      process_idle_media_updates();
-    }
+    process_tile_update_queues<TileUpdateBudget::Active>();
+    process_tile_graph_queue();
+    energy_service_periodic();
   }
   uint32_t t_update_queues = millis();
   // Retain navigation/layout/style reload flags while the camera covers them;

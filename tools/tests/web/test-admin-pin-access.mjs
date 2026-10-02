@@ -211,7 +211,7 @@ for (const marker of [
   "body.set('settings_tile_target_col'",
   "body.set('settings_tile_target_row'",
   'async function flushSettingsTileSaveBeforeHide',
-  'settingsTileTransferInFlight',
+  'settingsTileTransfersInFlight',
   "const swipe = settingsAccessElement('settings_swipe_enabled');",
   'if (swipe) swipe.checked = true;',
   'dragSource.hiddenTarget = null;',

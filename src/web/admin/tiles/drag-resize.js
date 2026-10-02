@@ -553,15 +553,14 @@
   async function flushSettingsTileSaveBeforeHide(tab, index) {
     if (index < 0) return true;
     const timerKey = tab + ':' + index;
-    // Only a pending edit needs its own save first; the parking save carries
-    // the tile's snapshot anyway, and an extra save made the device write and
-    // rebuild its grid twice.
-    const pending = !!autoSaveTimers[timerKey] || !!drafts?.[tab]?.[index]?._dirty;
+    // A pending edit needs no save of its own: the parking save carries the
+    // tile's snapshot with it, and an extra save made the device write and
+    // rebuild its grid twice. Only a save already on its way must land first.
     if (autoSaveTimers[timerKey]) {
       clearTimeout(autoSaveTimers[timerKey]);
       delete autoSaveTimers[timerKey];
     }
-    if (pending) saveTile(tab, true, index);
+    clearDraft(tab, index);
     const saveKey = getTileSaveKey(tab, index);
     const deadline = Date.now() + 8000;
     while (Date.now() < deadline) {
@@ -576,23 +575,28 @@
     return false;
   }
 
+  // Moves of the Settings tile between the grid and the parking slot show at
+  // once and queue their saves (queueSettingsAccessSave keeps the order), so
+  // a move made while the device still saves the previous one is not lost
+  // (user 2026-10-02). Only the latest move reconciles with the device.
   async function hideSettingsTileFromGrid() {
     const hidden = settingsAccessElement('settings_tile_hidden');
     const swipe = settingsAccessElement('settings_swipe_enabled');
-    if (!hidden || settingsTileTransferInFlight) return false;
-    settingsTileTransferInFlight = true;
+    if (!hidden) return false;
+    const settingsTile = (getTilesData('folder0') || []).findIndex(
+      tile => Number(tile?.type || 0) === 7);
+    if (settingsTile < 0) {
+      return false;
+    }
+    const snapshot = normalizeHiddenSettingsSnapshot(
+      getTileSnapshotForSave('folder0', settingsTile) ||
+      currentGridSettingsSnapshot());
+    const transfer = ++settingsTileTransferSeq;
+    settingsTileTransfersInFlight++;
     try {
-      const settingsTile = (getTilesData('folder0') || []).findIndex(
-        tile => Number(tile?.type || 0) === 7);
-      if (settingsTile < 0) {
-        return false;
-      }
-      const snapshot = normalizeHiddenSettingsSnapshot(
-        getTileSnapshotForSave('folder0', settingsTile) ||
-        currentGridSettingsSnapshot());
       previewSettingsTileTransfer(true, snapshot);
       if (!(await flushSettingsTileSaveBeforeHide('folder0', settingsTile))) {
-        await reconcileSettingsTileUi(false);
+        if (transfer === settingsTileTransferSeq) await reconcileSettingsTileUi(false);
         return false;
       }
       hidden.checked = true;
@@ -600,35 +604,42 @@
       toggleSettingsAccessFields();
       const saved = await queueSettingsAccessSave(
         null, null, snapshot, false);
+      if (transfer !== settingsTileTransferSeq) return saved;
       if (!saved) {
         await reconcileSettingsTileUi(false);
         return false;
       }
       return await reconcileSettingsTileUi(true, snapshot);
     } finally {
-      settingsTileTransferInFlight = false;
+      settingsTileTransfersInFlight--;
       flushDeferredSensorRefresh();
     }
   }
 
   async function restoreHiddenSettingsTile(col, row) {
     const hidden = settingsAccessElement('settings_tile_hidden');
-    if (!hidden || settingsTileTransferInFlight) return false;
+    if (!hidden) return false;
     const snapshot = normalizeHiddenSettingsSnapshot();
-    settingsTileTransferInFlight = true;
+    const transfer = ++settingsTileTransferSeq;
+    settingsTileTransfersInFlight++;
     try {
-      previewSettingsTileTransfer(false, snapshot, {col, row});
+      // The Settings checkbox restores without a drop spot; the device then
+      // picks the spot and the reload shows it.
+      if (Number.isFinite(col) && Number.isFinite(row)) {
+        previewSettingsTileTransfer(false, snapshot, {col, row});
+      }
       hidden.checked = false;
       toggleSettingsAccessFields();
       const saved = await queueSettingsAccessSave(
         null, {col, row}, null, false);
+      if (transfer !== settingsTileTransferSeq) return saved;
       if (!saved) {
         await reconcileSettingsTileUi(true, snapshot);
         return false;
       }
       return await reconcileSettingsTileUi(false, snapshot, true);
     } finally {
-      settingsTileTransferInFlight = false;
+      settingsTileTransfersInFlight--;
       flushDeferredSensorRefresh();
     }
   }

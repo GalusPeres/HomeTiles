@@ -25,7 +25,10 @@
 
   let settingsAccessSaveQueue = Promise.resolve();
   let settingsAccessCommittedState = null;
-  let settingsTileTransferInFlight = false;
+  // Settings moves between grid and parking slot still being saved, and the
+  // number of the latest one (hideSettingsTileFromGrid).
+  let settingsTileTransfersInFlight = 0;
+  let settingsTileTransferSeq = 0;
 
   function readSettingsAccessState() {
     const pinToggle = settingsAccessElement('settings_pin_enabled');
@@ -183,13 +186,14 @@
   }
 
   // Shows a Settings move between the grid and the parking slot at once,
-  // before the device has saved it (user 2026-10-02: the tile jumped back and
-  // took long to move). The grid data stays the device's: the reload after
-  // the save (reconcileSettingsTileUi) draws the stored state, and a failed
-  // save draws it back. Restoring takes the first empty index like
-  // TileConfig::ensureSettingsTile.
+  // before the device has saved it (user 2026-10-02: the tile jumped back,
+  // its teal selection lagged and it took long to move). The grid data, the
+  // selection and the editor follow at once, so the tile can be moved again
+  // right away; the reload after the save (reconcileSettingsTileUi) draws the
+  // stored state, and a failed save draws it back. Restoring takes the first
+  // empty index like TileConfig::ensureSettingsTile.
   function previewSettingsTileTransfer(hidden, snapshot, target = null) {
-    const tiles = getTilesData('folder0').slice();
+    const tiles = getTilesData('folder0');
     const isSettings = tile => Number(tile?.type || 0) === 7;
     const index = hidden
       ? tiles.findIndex(isSettings)
@@ -208,6 +212,8 @@
     renderTileFromData('folder0', index, tiles[index], sensorMetaCache);
     layoutTiles('folder0', tiles);
     renderSettingsHiddenSlot(hidden, snapshot);
+    if (hidden) selectHiddenSettingsTile();
+    else selectTile(index, 'folder0');
   }
 
   function currentGridSettingsSnapshot() {

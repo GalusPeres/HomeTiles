@@ -144,7 +144,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Web Admin password (optional): PBKDF2 key (300k iter) derived by browser/Bridge, panel stores it; HMAC login, 30-day NVS sessions, CSRF; device reset; hides secrets.
 - Command channel (optional): pairing v2 (X25519, 6-digit code on panel/HA), sealed commands/stream tokens, replay window, two-sided unpair, signed announcement; `docs-dev/command-encryption.md`. P4 random: SAR ADC. V2/S3 tested. b125 rekey resets stale sessions.
 
-## Lock, Alarm panel and Fan tiles (b173, HW pending)
+## Lock, Alarm panel and Fan tiles (HW tested by maintainer 2026-10-02)
 
 - IDs 24-26 share `src/types/device/` and `src/ui/popups/device/`; design/contract: `build/ha-dummy-sim/`.
 - Retained `.../detail` state; views on their cards, by entity. Lock/Alarm: pairing + Web Admin password, sealed (id, 15 s deadline, `web_auth`); answers `{base}/stat/lock|alarm` (large buffer); PIN popup code; only reported states show; no screensaver.

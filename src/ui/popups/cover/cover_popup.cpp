@@ -84,10 +84,6 @@ struct CoverPopupContext {
   lv_obj_t* controls_mode_icon = nullptr;
   bool suppress_events = false;
   bool user_dragging = false;
-  uint32_t last_live_publish_ms = 0;
-  lv_timer_t* live_publish_timer = nullptr;
-  CoverChannel pending_live_publish_channel = CoverChannel::None;
-  bool live_publish_pending = false;
   uint32_t block_remote_until_ms = 0;
   lv_timer_t* remote_apply_timer = nullptr;
   CoverPopupInit pending_remote_init;
@@ -125,7 +121,6 @@ constexpr int kActionButtonGapRaw =
 constexpr int kActionButtonGap =
     kActionButtonGapRaw > 0 ? kActionButtonGapRaw : 0;
 constexpr uint32_t kRemoteBlockMs = 1500;
-constexpr uint32_t kLivePublishIntervalMs = 500;
 constexpr uint32_t kHaCoverActive = 0x926BC7;
 constexpr uint32_t kHaCoverInactive = 0x9E9E9E;
 
@@ -692,22 +687,6 @@ void publish_action(CoverPopupContext* ctx, const char* command,
   }
 }
 
-void cancel_live_publish(CoverPopupContext* ctx) {
-  if (!ctx) return;
-  if (ctx->live_publish_timer) {
-    lv_timer_delete(ctx->live_publish_timer);
-    ctx->live_publish_timer = nullptr;
-  }
-  ctx->live_publish_pending = false;
-  ctx->pending_live_publish_channel = CoverChannel::None;
-}
-
-bool can_live_publish(const CoverPopupContext* ctx) {
-  return ctx && ctx->user_dragging && ctx->state.available &&
-         ctx->entity_id.length() && ctx->card &&
-         !lv_obj_has_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
-}
-
 void publish_channel_value(CoverPopupContext* ctx, CoverChannel channel) {
   if (!ctx || channel == CoverChannel::None) return;
   publish_action(ctx,
@@ -715,47 +694,6 @@ void publish_channel_value(CoverPopupContext* ctx, CoverChannel channel) {
                      ? "set_cover_position"
                      : "set_cover_tilt_position",
                  channel_value(ctx, channel), channel);
-}
-
-void live_publish_timer_cb(lv_timer_t* timer) {
-  CoverPopupContext* ctx =
-      static_cast<CoverPopupContext*>(lv_timer_get_user_data(timer));
-  if (!ctx) return;
-  if (ctx->live_publish_timer == timer) {
-    ctx->live_publish_timer = nullptr;
-  }
-  if (!ctx->live_publish_pending) return;
-  const CoverChannel channel = ctx->pending_live_publish_channel;
-  ctx->live_publish_pending = false;
-  ctx->pending_live_publish_channel = CoverChannel::None;
-  if (!can_live_publish(ctx)) return;
-  publish_channel_value(ctx, channel);
-  ctx->last_live_publish_ms = millis();
-}
-
-void schedule_live_publish(CoverPopupContext* ctx, CoverChannel channel) {
-  if (!can_live_publish(ctx) || channel == CoverChannel::None) return;
-  const uint32_t now = millis();
-  const uint32_t elapsed = now - ctx->last_live_publish_ms;
-  if (ctx->last_live_publish_ms == 0 ||
-      elapsed >= kLivePublishIntervalMs) {
-    cancel_live_publish(ctx);
-    publish_channel_value(ctx, channel);
-    ctx->last_live_publish_ms = now;
-    return;
-  }
-
-  ctx->pending_live_publish_channel = channel;
-  ctx->live_publish_pending = true;
-  if (ctx->live_publish_timer) return;
-  ctx->live_publish_timer = lv_timer_create(
-      live_publish_timer_cb, kLivePublishIntervalMs - elapsed, ctx);
-  if (ctx->live_publish_timer) {
-    lv_timer_set_repeat_count(ctx->live_publish_timer, 1);
-    return;
-  }
-  ctx->live_publish_pending = false;
-  ctx->pending_live_publish_channel = CoverChannel::None;
 }
 
 void on_preset(lv_event_t* event) {
@@ -850,18 +788,20 @@ void apply_slider_point(CoverPopupContext* ctx, CoverChannel channel,
                                           : ctx->tilt_presets,
         true, true, value, ctx->card_color);
   }
-  schedule_live_publish(ctx, channel);
 }
 
 void commit_slider(CoverPopupContext* ctx, CoverChannel channel) {
+  // The position or tilt goes out once, on release, like Home Assistant's
+  // cover sliders (ha-state-control-cover-position: value-changed only).
+  // Commands while dragging restart a motor every time, and a Cover that
+  // answers each command at once (a template without state) reported the
+  // target early.
   if (!ctx || channel == CoverChannel::None) return;
-  cancel_live_publish(ctx);
   update_preset_group(
       channel == CoverChannel::Position ? ctx->position_presets
                                         : ctx->tilt_presets,
       true, channel_has_value(ctx, channel), channel_value(ctx, channel), ctx->card_color);
   publish_channel_value(ctx, channel);
-  ctx->last_live_publish_ms = millis();
 }
 
 void on_slider_track(lv_event_t* event) {
@@ -1019,7 +959,6 @@ void on_delete(lv_event_t* event) {
   if (lv_event_get_code(event) != LV_EVENT_DELETE) return;
   CoverPopupContext* ctx = static_cast<CoverPopupContext*>(
       lv_event_get_user_data(event));
-  cancel_live_publish(ctx);
   cancel_deferred_remote_apply(ctx);
   if (g_ctx == ctx) g_ctx = nullptr;
   delete ctx;
@@ -1461,7 +1400,6 @@ void hide_cover_popup() {
   g_ctx->dragging_channel = CoverChannel::None;
   g_ctx->protected_channel = CoverChannel::None;
   g_ctx->block_remote_until_ms = 0;
-  cancel_live_publish(g_ctx);
   cancel_deferred_remote_apply(g_ctx);
   hide_popup_shell(g_ctx->card);
   cancel_popup_open(g_ctx->card);

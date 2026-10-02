@@ -454,15 +454,19 @@ for (const marker of [
   'lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0)',
   '"format-list-bulleted"',
   '"swap-vertical"',
-  'constexpr uint32_t kLivePublishIntervalMs = 500',
-  'schedule_live_publish(ctx, channel)',
-  'cancel_live_publish(ctx)',
   'lv_obj_invalidate_area(view.track, &dirty)',
   'lv_color_hex(kHaCoverActive)'
 ]) {
   if (!coverPopupSource.includes(marker)) {
     throw new Error(`Cover popup deferred-update contract is missing: ${marker}`);
   }
+}
+// Sliders send once, on release, like Home Assistant's cover sliders: a
+// template Cover answered every live command at once with the target state.
+if (/live_publish|kLivePublish/.test(coverPopupSource) ||
+    !/\n  publish_channel_value\(ctx, channel\);\n\}/.test(
+      coverPopupSource.slice(coverPopupSource.indexOf('void commit_slider(')))) {
+  throw new Error('Cover popup sliders must publish only on release');
 }
 if (coverPopupSource.includes('kAccent') ||
     !coverPopupSource.includes('constexpr uint32_t kHaCoverActive = 0x926BC7')) {

@@ -295,29 +295,29 @@ void set_state_line(CoverTileWidgets& widget, const String& line) {
 }
 
 // ---------------------------------------------------------------------------
-// Position bar: the Switch dimmer's logic (level_bar.h for the box, drawing
-// and touch mapping; command_pacer.h for Home Assistant's slider timing):
-// the press jumps to the finger, pressing follows, live commands at most
-// every pacer interval, the final value paced on release, and the tile holds
-// its own value for kRemoteBlockMs against echoes of earlier commands.
+// Position bar: the Switch dimmer's box, drawing and touch mapping
+// (level_bar.h): the press jumps to the finger and pressing follows. Unlike
+// the dimmer, the position goes out once, on release, like Home Assistant's
+// cover position slider (ha-state-control-cover-position: value-changed
+// only): commands while dragging restart a motor every time, and a Cover that
+// answers each command at once (a template without state) showed the target
+// as its state before it moved. Releases stay command_pacer::kIntervalMs
+// apart, and the tile holds its own bar value for kRemoteBlockMs against
+// echoes of earlier commands. State line and icon show only what Home
+// Assistant reports.
 
 constexpr uint32_t kRemoteBlockMs = 3000;
-// Home Assistant starts a slider drag after 10 px (ha-control-slider);
-// below it a press is a tap: one command on release.
-constexpr int kDragThreshold = tile_layout::scale(10);
 
 struct CoverDrag {
   CoverEventData* data = nullptr;
   lv_point_t press = {0, 0};
   bool dragging = false;
-  bool moved = false;
   uint8_t value = 0;
   uint32_t block_until = 0;
 };
 
 CoverDrag g_drag;
 command_pacer::Pacer g_pacer;
-lv_timer_t* g_live_timer = nullptr;
 lv_timer_t* g_final_timer = nullptr;
 lv_timer_t* g_release_timer = nullptr;
 String g_final_entity;
@@ -355,42 +355,14 @@ void send_position(const String& entity_id, uint8_t value) {
   g_pacer.sent(millis(), value);
 }
 
-void cancel_live_timer() {
-  if (g_live_timer) {
-    lv_timer_delete(g_live_timer);
-    g_live_timer = nullptr;
-  }
-}
-
-void live_timer_cb(lv_timer_t*) {
-  g_live_timer = nullptr;
-  if (!g_drag.dragging || !g_drag.data || !g_drag.moved) return;
-  send_position(g_drag.data->entity_id, g_drag.value);
-}
-
 void final_timer_cb(lv_timer_t*) {
   g_final_timer = nullptr;
   send_position(g_final_entity, g_final_value);
 }
 
-void schedule_live() {
-  if (!g_drag.data || g_live_timer) return;
-  const uint32_t wait = g_pacer.wait(millis());
-  if (wait == 0) {
-    send_position(g_drag.data->entity_id, g_drag.value);
-    return;
-  }
-  g_live_timer = lv_timer_create(live_timer_cb, wait, nullptr);
-  if (g_live_timer) lv_timer_set_repeat_count(g_live_timer, 1);
-}
-
-// Release: the final value always goes out, paced, and is skipped when the
-// gesture already sent exactly it.
+// Release: the one command of the gesture, at least one pacer interval after
+// the previous release.
 void commit_position(const String& entity_id, uint8_t value) {
-  cancel_live_timer();
-  const bool repeat = g_pacer.final_redundant(value);
-  g_pacer.end_gesture();
-  if (repeat) return;
   if (g_final_timer && !g_final_entity.equalsIgnoreCase(entity_id)) {
     lv_timer_delete(g_final_timer);
     g_final_timer = nullptr;
@@ -454,19 +426,11 @@ void bar_event_cb(lv_event_t* e) {
   lv_point_t point = g_drag.press;
   if (indev) lv_indev_get_point(indev, &point);
   if (code == LV_EVENT_PRESSED) {
-    cancel_live_timer();
     g_drag.data = data;
     g_drag.press = point;
     g_drag.dragging = true;
-    g_drag.moved = false;
-    g_pacer.begin_gesture();
   }
   if (g_drag.data != data || !g_drag.dragging) return;
-  if (!g_drag.moved) {
-    const int dx = point.x - g_drag.press.x;
-    const int dy = point.y - g_drag.press.y;
-    g_drag.moved = dx * dx + dy * dy >= kDragThreshold * kDragThreshold;
-  }
   const uint8_t value = cover_position_at(level_bar::value_at(widget.bar, widget.bar_base, point));
   const bool changed = value != g_drag.value || code == LV_EVENT_PRESSED;
   g_drag.value = value;
@@ -474,9 +438,7 @@ void bar_event_cb(lv_event_t* e) {
   if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
     start_hold();
     commit_position(data->entity_id, value);
-    return;
   }
-  if (changed && g_drag.moved) schedule_live();
 }
 
 CoverPopupInit popup_init(GridType grid_type, uint8_t index) {
@@ -742,7 +704,6 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
           if (lv_event_get_code(event) != LV_EVENT_DELETE) return;
           CoverEventData* data = static_cast<CoverEventData*>(lv_event_get_user_data(event));
           if (g_drag.data == data) {
-            cancel_live_timer();
             if (g_release_timer) {
               lv_timer_delete(g_release_timer);
               g_release_timer = nullptr;

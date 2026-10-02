@@ -2,9 +2,10 @@
 // position feature): half height shows the Sensor compact layout with
 // "Open · 58 %"; a full tile of a Cover with a position shows the header
 // (title and state left beside the disc) and the position bar with the
-// Switch dimmer's logic: the shared level bar (box, drawing, touch mapping),
-// Home Assistant's slider timing (command_pacer.h), a 3 s hold after the
-// release, set_cover_position commands. A Cover without a position keeps the
+// Switch dimmer's box: the shared level bar (box, drawing, touch mapping), a
+// 3 s hold after the release and one set_cover_position on release, like
+// Home Assistant's cover slider (live commands let a template Cover report
+// the target at once, user 2026-10-02). A Cover without a position keeps the
 // centered state and position.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -36,12 +37,10 @@ for (const marker of [
   'const tile_header::Header text = tile_header::create(card, tile, tall, level_bar::box(tile).top);',
   'tile_header::set_state(widget.state_label, line.c_str(), widget.compact ? nullptr : widget.state_font,',
   'level_bar::invalidate_change(widget.bar, widget.bar_base, old_level, fill);',
-  // Commands: Home Assistant's slider timing and the final value on release.
+  // Commands: one on release, releases a pacer interval apart.
   'mqttPublishCoverCommand(entity_id.c_str(), "set_cover_position", value);',
   'const uint32_t wait = g_pacer.wait(millis());',
-  'const bool repeat = g_pacer.final_redundant(value);',
-  'g_drag.moved = dx * dx + dy * dy >= kDragThreshold * kDragThreshold;',
-  'if (changed && g_drag.moved) schedule_live();',
+  'start_hold();\n    commit_position(data->entity_id, value);',
   // Hold: echoes of earlier commands do not move the released bar back.
   'constexpr uint32_t kRemoteBlockMs = 3000;',
   'if (state.available && held_value(grid_type, index, held)) {',
@@ -54,8 +53,10 @@ for (const marker of [
 assert.match(renderer, /constexpr uint32_t kCoverActive = 0x926BC7;/);
 // Screensaver tiles draw the bar but take no drag.
 assert.ok(renderer.includes('lv_obj_remove_flag(widget.bar, LV_OBJ_FLAG_CLICKABLE);'));
+// Nothing goes out while the finger moves: no live commands.
+assert.doesNotMatch(renderer, /schedule_live|g_live_timer|live_timer_cb/);
 // A deleted card ends a drag that points at it.
-assert.match(renderer, /if \(g_drag\.data == data\) \{\s*cancel_live_timer\(\);[\s\S]*?g_drag = CoverDrag\{\};\s*\}\s*delete data;/);
+assert.match(renderer, /if \(g_drag\.data == data\) \{[\s\S]*?g_drag = CoverDrag\{\};\s*\}\s*delete data;/);
 
 // Web Admin: half-size type, compact classes and the Switch preview's bar.
 assert.match(read('src/web/admin/tiles/layout.js'), /\[2, 4, 5, 7, 8, 9, 17, 18, 19, 24, 25, 26\]\.includes\(Number\(type\)\)/);

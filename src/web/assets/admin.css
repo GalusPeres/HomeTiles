@@ -1103,6 +1103,26 @@
       background-clip:border-box;
       clip-path:inset(0 round var(--tile-radius, 11px));
     }
+    /* Content is cut at the card edge like on the device, not at the inner
+       edge of the editor border: a corner disc 2 px inside the card (the
+       device's inset) was cut at the border's smaller inner corner. */
+    @supports (overflow-clip-margin:3px) {
+      .tile { overflow:clip; overflow-clip-margin:3px; }
+      .tile.sensor-compact { overflow-clip-margin:0px; }
+    }
+    /* The selection and hover rings lie above the content, so the icon disc
+       at the card edge never covers them. */
+    .tile:not(.empty):is(.active, [data-selected="1"], :hover)::after {
+      content:"";
+      position:absolute;
+      inset:-3px;
+      z-index:25;
+      pointer-events:none;
+      border-radius:var(--tile-radius, 11px);
+      box-sizing:border-box;
+    }
+    .tile:not(.empty):is(.active, [data-selected="1"])::after { border:3px solid #26a69a; }
+    .tile:not(.empty):hover:not(.active):not([data-selected="1"])::after { border:3px dashed rgba(38,166,154,0.6); }
     /* The tile clips itself to its rounded corners, so an outline would be cut
        off. An inset ring is the visible focus indicator instead. */
     .tile:focus-visible {
@@ -1110,7 +1130,7 @@
       box-shadow:inset 0 0 0 3px var(--accent);
     }
     .tile:hover:not(.active) {
-      border:3px dashed rgba(38,166,154,0.6);
+      border:3px solid transparent;
       box-shadow:0 0 0 2px rgba(38,166,154,0.12) inset;
       border-radius:var(--tile-radius, 11px);
       background-clip:border-box;
@@ -1121,7 +1141,7 @@
        marker must not depend on that. */
     .tile.active,
     .tile[data-selected="1"] {
-      border:3px solid #26a69a;
+      border:3px solid transparent;
       box-shadow:0 0 12px rgba(38,166,154,0.55);
       border-radius:var(--tile-radius, 11px);
       background-clip:border-box;
@@ -2782,8 +2802,11 @@
 /* Draw editor borders inward without shifting the concentric content. */
 .tile.sensor-compact, .tile.sensor-compact:hover,
 .tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { border-width:0; background-clip:border-box; }
-.tile.sensor-compact:hover:not(.active) { box-shadow:inset 0 0 0 2px rgba(38,166,154,.6); }
-.tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { box-shadow:inset 0 0 0 3px #26a69a, 0 0 12px rgba(38,166,154,.55); }
+.tile.sensor-compact:hover:not(.active) { box-shadow:none; }
+.tile.sensor-compact.active, .tile.sensor-compact[data-selected="1"] { box-shadow:0 0 12px rgba(38,166,154,.55); }
+/* Pills have no border: their rings lie on the card edge, over the disc. */
+.tile.sensor-compact:not(.empty)::after { inset:0; }
+.tile.sensor-compact:not(.empty):hover:not(.active):not([data-selected="1"])::after { border:2px solid rgba(38,166,154,.6); }
 .tile.sensor-compact:focus-visible { box-shadow:inset 0 0 0 3px #64d8cb, 0 0 12px rgba(38,166,154,.55); }
 /* A pill is lower than the side handle and its text runs to the bottom
    handle: the handles fit its height and show only under the pointer, so a

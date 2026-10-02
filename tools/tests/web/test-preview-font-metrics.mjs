@@ -56,4 +56,12 @@ assert.doesNotMatch(css.replace(/::-webkit-scrollbar-thumb[^\n]*/, ''), /backgro
 // the side handle was taller than the pill); they appear under the pointer.
 assert.match(css, /\.tile\.sensor-compact > \.tile-resize-handle-e \{ height:min\(34px, 55%\); \}/);
 assert.match(css, /\.tile\.sensor-compact:is\(\.active, \[data-selected="1"\]\):not\(:hover\):not\(\.resizing\) > \.tile-resize-handle \{ opacity:0; \}/);
-console.log('Preview fonts: Inter Regular, LVGL line heights per size, text padding, card-only screensaver shadow; full-size cards, quiet pill handles');
+// Content is cut at the card edge, not at the editor border's inner edge
+// (user 2026-10-02: the corner disc 2 px inside the card was cut top left),
+// and the selection and hover rings lie above the disc.
+assert.match(css, /@supports \(overflow-clip-margin:3px\) \{\s*\.tile \{ overflow:clip; overflow-clip-margin:3px; \}\s*\.tile\.sensor-compact \{ overflow-clip-margin:0px; \}/);
+assert.match(css, /\.tile:not\(\.empty\):is\(\.active, \[data-selected="1"\], :hover\)::after \{[^}]*z-index:25;/);
+assert.match(css, /\.tile:not\(\.empty\):is\(\.active, \[data-selected="1"\]\)::after \{ border:3px solid #26a69a; \}/);
+assert.match(css, /\.tile\.sensor-compact:not\(\.empty\)::after \{ inset:0; \}/);
+assert.doesNotMatch(css, /\.tile\.sensor-compact\.active, \.tile\.sensor-compact\[data-selected="1"\] \{ box-shadow:inset/);
+console.log('Preview fonts: Inter Regular, LVGL line heights per size, text padding, card-only screensaver shadow; full-size cards cut at their edge, rings above the disc, quiet pill handles');

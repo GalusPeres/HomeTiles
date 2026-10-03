@@ -71,9 +71,34 @@ static const char* const kMapUpperEn[] = {
     "_", "-", "Z", "X", "C", "V", "B", "N", "M", ".", ",", ":", "\n",
     LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
 
+// Polish keeps QWERTY, like Polish hardware keyboards, and adds a row of
+// the nine Polish letters on top, aligned with the a-l keys below (hidden
+// spacers of the "ABC" and Enter widths). Polish SSIDs and passwords may
+// need them. Rows 2-5 are the English rows.
+static const char* const kMapLowerPl[] = {
+    " ", "\xC4\x85", "\xC4\x87", "\xC4\x99", "\xC5\x82", "\xC5\x84", "\xC3\xB3", "\xC5\x9B", "\xC5\xBA", "\xC5\xBC", " ", "\n",
+    "1#", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", LV_SYMBOL_BACKSPACE, "\n",
+    "ABC", "a", "s", "d", "f", "g", "h", "j", "k", "l", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "z", "x", "c", "v", "b", "n", "m", ".", ",", ":", "\n",
+    LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
+
+static const lv_buttonmatrix_ctrl_t kCtrlPl[] = {
+    kCtrl(LV_BUTTONMATRIX_CTRL_HIDDEN | LV_BUTTONMATRIX_CTRL_DISABLED | 6), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kCtrl(LV_BUTTONMATRIX_CTRL_HIDDEN | LV_BUTTONMATRIX_CTRL_DISABLED | 7),
+    kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 5), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 7),
+    kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 6), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 7),
+    kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)),
+    kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 2), kCtrl(6), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 2), kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2)};
+
+static const char* const kMapUpperPl[] = {
+    " ", "\xC4\x84", "\xC4\x86", "\xC4\x98", "\xC5\x81", "\xC5\x83", "\xC3\x93", "\xC5\x9A", "\xC5\xB9", "\xC5\xBB", " ", "\n",
+    "1#", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", LV_SYMBOL_BACKSPACE, "\n",
+    "abc", "A", "S", "D", "F", "G", "H", "J", "K", "L", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "Z", "X", "C", "V", "B", "N", "M", ".", ",", ":", "\n",
+    LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
+
 // An explicit keyboard layout setting takes precedence; "Auto" follows
-// the UI language: German/QWERTZ for umlauts and sharp S, otherwise
-// English/QWERTY.
+// the UI language: German/QWERTZ for umlauts and sharp S, Polish/QWERTY
+// with the Polish letters, otherwise English/QWERTY.
 struct KeyboardLayout {
   const char* const* lower_map;
   const char* const* upper_map;
@@ -92,6 +117,10 @@ const KeyboardLayout* layout_for_config(uint8_t keyboard_layout, const char* lan
   if (german) {
     static const KeyboardLayout kDeLayout{kMapLowerDe, kMapUpperDe, kCtrlDe};
     return &kDeLayout;
+  }
+  if (keyboard_layout == 0 && lang_code && lang_code[0] == 'p' && lang_code[1] == 'l') {
+    static const KeyboardLayout kPlLayout{kMapLowerPl, kMapUpperPl, kCtrlPl};
+    return &kPlLayout;
   }
   static const KeyboardLayout kEnLayout{kMapLowerEn, kMapUpperEn, kCtrlEn};
   return &kEnLayout;

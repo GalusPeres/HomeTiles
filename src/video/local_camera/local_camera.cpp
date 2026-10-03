@@ -581,22 +581,51 @@ bool nearAeTarget(uint32_t mean_luma) {
   return mean_luma + band >= target && mean_luma <= target + band;
 }
 
+// The last AE evaluations outside the target band, with the exposure they
+// measured, for /api/local-camera ("ae_trace"): a capture that stays in the
+// band records nothing. Shows on the device what the host model predicts
+// (V2 2026-10-03: a stream ended at the minimum gain in a dark room).
+struct AeTraceEntry {
+  uint32_t ms = 0;
+  char where = 0;  // s = still image, b = stream start, t = running stream.
+  uint8_t luma = 0;
+  uint8_t target = 0;
+  uint8_t digital_step = 0;
+  uint16_t lines = 0;
+  uint16_t gain_x16 = 0;
+};
+constexpr size_t kAeTraceSize = 24;
+AeTraceEntry g_ae_trace[kAeTraceSize];
+size_t g_ae_trace_count = 0;
+portMUX_TYPE g_ae_trace_mux = portMUX_INITIALIZER_UNLOCKED;
+
+void traceAutoExposure(char where, uint32_t iteration, uint32_t elapsed_ms, uint32_t mean_luma) {
+  AeTraceEntry entry;
+  entry.ms = millis();
+  entry.where = where;
+  entry.luma = static_cast<uint8_t>(mean_luma > 255 ? 255 : mean_luma);
+  const uint32_t target = aeTarget();
+  entry.target = static_cast<uint8_t>(target > 255 ? 255 : target);
+  entry.digital_step = g_pipe.gamma_digital_step;
+  entry.lines = g_exposure.lines;
+  entry.gain_x16 = g_exposure.gain_x16;
+  portENTER_CRITICAL(&g_ae_trace_mux);
+  g_ae_trace[g_ae_trace_count % kAeTraceSize] = entry;
+  ++g_ae_trace_count;
+  portEXIT_CRITICAL(&g_ae_trace_mux);
 #if defined(HOMETILES_TEST_BETA) || defined(HOMETILES_ISSUE38_BETA) || \
     defined(HOMETILES_CAMERA_BETA)
-// Beta builds trace every AE evaluation after a light change (a capture that
-// starts in the band stays silent), to compare the device with the host model.
-void traceAutoExposure(const char* where, uint32_t iteration, uint32_t elapsed_ms,
-                       uint32_t mean_luma) {
-  Serial.printf("[LocalCam] AE %s %u: %u ms, luma %u/%u, lines %u, gain %u/16, digital %u, frame %u ms\n",
+  Serial.printf("[LocalCam] AE %c %u: %u ms, luma %u/%u, lines %u, gain %u/16, digital %u, frame %u ms\n",
                 where, static_cast<unsigned>(iteration), static_cast<unsigned>(elapsed_ms),
-                static_cast<unsigned>(mean_luma), static_cast<unsigned>(aeTarget()),
+                static_cast<unsigned>(mean_luma), static_cast<unsigned>(target),
                 static_cast<unsigned>(g_exposure.lines), static_cast<unsigned>(g_exposure.gain_x16),
                 static_cast<unsigned>(g_pipe.gamma_digital_step),
                 static_cast<unsigned>(currentFrameMs()));
-}
 #else
-void traceAutoExposure(const char*, uint32_t, uint32_t, uint32_t) {}
+  (void)iteration;
+  (void)elapsed_ms;
 #endif
+}
 
 // The CSI driver calls both callbacks from its DMA interrupt, which is
 // cache-safe on P4 (it shares the line with the display refresh and keeps
@@ -1447,7 +1476,7 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
       applyColorCorrection();
     }
     if (iteration > 0 || !step.converged) {
-      traceAutoExposure("snapshot", iteration, millis() - started_ms, stats->mean_luma);
+      traceAutoExposure('s', iteration, millis() - started_ms, stats->mean_luma);
     }
     publishExposure(stats->mean_luma);
     if (stepDigitalGain(stats->mean_luma, step.limited)) {
@@ -1816,7 +1845,7 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
       applyColorCorrection();
     }
     if (iteration > 0 || !step.converged) {
-      traceAutoExposure("stream", iteration, millis() - started_ms, run.mean_luma);
+      traceAutoExposure('b', iteration, millis() - started_ms, run.mean_luma);
     }
     publishExposure(run.mean_luma);
     if (stepDigitalGain(run.mean_luma, step.limited)) {
@@ -1878,6 +1907,7 @@ void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
   run.mean_luma = weightedMeanLuma(ae_result.luminance);
   const ExposureStep step =
       stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages, aeExponent());
+  if (!step.converged) traceAutoExposure('t', 0, 0, run.mean_luma);
   publishExposure(run.mean_luma);
   if (stepDigitalGain(run.mean_luma, step.limited)) return;
   if (!step.converged) setExposureIfChanged(step.next);
@@ -2790,6 +2820,27 @@ void appendStatusJson(String& json) {
              static_cast<unsigned>(g_report_digital_x100.load()),
              static_cast<unsigned>(g_report_luma.load()));
     json += exposure;
+  }
+  {
+    // [ms ago, source, luma, target, lines, gain_x16, digital step], oldest first.
+    AeTraceEntry trace[kAeTraceSize];
+    portENTER_CRITICAL(&g_ae_trace_mux);
+    const size_t count = g_ae_trace_count < kAeTraceSize ? g_ae_trace_count : kAeTraceSize;
+    const size_t first = g_ae_trace_count - count;
+    for (size_t i = 0; i < count; ++i) trace[i] = g_ae_trace[(first + i) % kAeTraceSize];
+    portEXIT_CRITICAL(&g_ae_trace_mux);
+    const uint32_t now = millis();
+    json += ",\"ae_trace\":[";
+    for (size_t i = 0; i < count; ++i) {
+      char item[64];
+      snprintf(item, sizeof(item), "%s[%u,\"%c\",%u,%u,%u,%u,%u]", i ? "," : "",
+               static_cast<unsigned>(now - trace[i].ms), trace[i].where,
+               static_cast<unsigned>(trace[i].luma), static_cast<unsigned>(trace[i].target),
+               static_cast<unsigned>(trace[i].lines), static_cast<unsigned>(trace[i].gain_x16),
+               static_cast<unsigned>(trace[i].digital_step));
+      json += item;
+    }
+    json += "]";
   }
 #endif
   json += ",\"captures\":";

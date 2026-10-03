@@ -1217,7 +1217,7 @@ static const Strings kStringsFr = {
     "Waveshare Admin",
     "Panneau d'admin Waveshare",
     "Configuration & aperçu",
-    "Clique sur une tuile pour la modifier. Les tuiles se déplacent par glisser-déposer et se redimensionnent par la poignée d'angle. Choisis le type (capteur/météo/scène/touche/dossier/réglages/interrupteur/média/image/horloge/texte) et ajuste les réglages.",
+    "Clique sur une tuile pour la modifier. Les tuiles se déplacent par glisser-déposer et se redimensionnent par la poignée d'angle. Choisis le type et ajuste ses réglages.",
     "Supprimer le dossier / l'onglet",
     "Réglages de la tuile",
     "Type",

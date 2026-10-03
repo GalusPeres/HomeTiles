@@ -16,10 +16,14 @@ import {lvglHost} from '../../lib/lvgl-host.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 
-// French: no plain space before : ; ! ? in any string.
+// French: no plain space before : ; ! ? in any string or locale text.
 const i18n = read('src/core/i18n/i18n.cpp');
-const french = i18n.slice(i18n.indexOf('static const Strings kStringsFr = {'),
-  i18n.indexOf('\n};', i18n.indexOf('static const Strings kStringsFr = {')));
+const table = head => {
+  const start = i18n.indexOf(head);
+  assert.ok(start >= 0, head);
+  return i18n.slice(start, i18n.indexOf('\nstatic const ', start + head.length));
+};
+const french = table('static const Strings kStringsFr = {') + table('static const LocaleProfile kLocaleFr = {');
 const literals = [...french.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
 assert.ok(literals.length > 300, 'French strings found');
 assert.deepEqual(literals.filter(text => / [:;!?]/.test(text)), [], 'French marks keep a no-break space');

@@ -440,6 +440,20 @@ void alarm_key_tapped(lv_event_t* e) {
 // reported states show: a sent mode waits with the header icon pulsing and
 // lights nothing (user 02.10.: a code the panel itself rejected, answered ok
 // by Home Assistant, showed the arming look over the old state).
+// A mode label keeps one line and its full word: it steps down from the
+// 28 px key font while less than 12 px stays free on either side (French
+// "Personnalisé" and Polish "Poza domem" touched the 7-inch and 480 keys).
+const lv_font_t* alarm_key_font(const char* label, int key_w) {
+  const lv_font_t* const sizes[] = {popup_layout::font28(), popup_layout::font24(), popup_layout::font20()};
+  const int room = key_w - 2 * popup_layout::scale(12);
+  for (const lv_font_t* font : sizes) {
+    lv_point_t size;
+    lv_text_get_size(&size, label, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    if (size.x <= room) return font;
+  }
+  return sizes[2];
+}
+
 void build_alarm(const Detail& d, const Visual& v) {
   const int content_w = content_width();
   const bool usable = d.valid && d.available && device_control::panel_secured();
@@ -523,7 +537,7 @@ void build_alarm(const Detail& d, const Visual& v) {
                                            device_control::alarm_mode(static_cast<size_t>(mode)).label))
         : selected ? i18n::alarm_state_label(device_visual::language(), "disarmed")
                    : text(DeviceLabel::Disarm);
-    make_label(key, fg, popup_layout::font28(), label);
+    make_label(key, fg, alarm_key_font(label, wide ? block_w : kw), label);
     const bool disarming = device_detail::is(d, "disarming");
     const bool enabled = usable && !selected && !disarming && (mode < 0 ? d.disarm_allowed : !modes_locked);
     if (!enabled) {

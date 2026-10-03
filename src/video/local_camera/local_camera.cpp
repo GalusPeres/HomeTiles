@@ -2127,8 +2127,7 @@ void streamDiagnostics(StreamRun& run, bool force) {
   }
   char timing[256];
   if (local_camera_stream::formatTimingJson(timing, sizeof(timing), run.window)) {
-    Serial.printf("[LocalCamStream] timing %s
-", timing);
+    Serial.printf("[LocalCamStream] timing %s\n", timing);
   }
   updateStreamStatus(makeStreamStatus(run, true, StopReason::None, true));
   run.window = StreamWindow{};

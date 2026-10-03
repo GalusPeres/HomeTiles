@@ -1872,6 +1872,12 @@ struct StreamRun {
   uint32_t live_previous_luma = 0;
   uint8_t live_confirmed = 0;
   uint16_t live_wait_results = 0;
+  uint32_t live_written_ms = 0;  // Last exposure write of the step (glide end).
+  // A sensor step glides over kSensorGlideFrames frames, one part per frame.
+  bool gliding = false;
+  uint8_t glide_done = 0;
+  ExposureSetting glide_from;
+  ExposureSetting glide_to;
   uint32_t sensor_fail_seen = 0;  // g_sensor_write_failures at the window start.
   bool awb_next = false;
   uint32_t mean_luma = 0;
@@ -2031,17 +2037,23 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
 // (3 %), and a narrow hold band. The b211/b212 stream stepped a quarter EV
 // within a +-20 % band and jumped at once when far off: visible steps and up
 // to a second too bright after uncovering (V2 recordings 2026-10-03).
-// A fixed settle time fits only one delay: b213/b214 waited 4-5 frames, but
-// the 8-inch stream showed a gain change only 0.6-0.8 s later (b214 log, one
-// AE result per frame). The AE stepped on stale luma, overshot and swung
-// between 76 and 164. A step now waits until it shows in the luma
-// (stepProgress) and two results in a row hold still: at least two frames
-// (the sensor latency), at most 1.5 s or 12 frames when nothing shows (a
-// limit, a failed write). Any sensor and delay settles without swinging.
-constexpr uint32_t kLiveMinSettleFrames = 2;
+// A fixed settle time fits only one delay: b213/b214 waited 4-5 frames while
+// the luma also moved on its own (a hand during the cover test), stepped on
+// luma that did not show the last step yet, overshot and swung between 76
+// and 164. A step now waits until it shows in the luma (stepProgress) and two
+// results in a row hold still. The b215 8-inch log measured the sensor
+// answer 2-3 frames after a write: at least three frames after the last
+// write, at most 0.6 s or six frames when nothing shows (a limit, a failed
+// write). Any sensor and delay settles without swinging.
+constexpr uint32_t kLiveMinSettleFrames = 3;
 constexpr uint8_t kLiveConfirmResults = 2;
-constexpr uint32_t kLiveMaxSettleMs = 1500;
-constexpr uint32_t kLiveMaxSettleFrames = 12;
+constexpr uint32_t kLiveMaxSettleMs = 600;
+constexpr uint32_t kLiveMaxSettleFrames = 6;
+// A sensor step in one write showed as a visible jump: five damped steps
+// from dark to the target looked like five brightness levels (b215 on the
+// 8-inch). It glides over four frames instead, one write per frame; the
+// stream digital gain glides at frame ends the same way.
+constexpr uint8_t kSensorGlideFrames = 4;
 // Results traced after a step (beta builds): how the luma follows a change.
 constexpr uint16_t kLiveTraceResults = 16;
 constexpr float kStreamRiseSpeed = 0.32f;
@@ -2081,9 +2093,44 @@ float streamExposureProduct() {
   return static_cast<float>(g_exposure.lines) * static_cast<float>(g_exposure.gain_x16) * digital;
 }
 
+// The exposure product a running glide ends at.
+float streamTargetProduct(const StreamRun& run) {
+  const ExposureSetting& sensor = run.gliding ? run.glide_to : g_exposure;
+  const float digital = g_stream_digital > 0.0f ? g_stream_digital : 1.0f;
+  return static_cast<float>(sensor.lines) * static_cast<float>(sensor.gain_x16) * digital;
+}
+
+// Writes the next part of a sensor glide: the exposure product moves by an
+// equal factor each frame, always split from the start setting, and the last
+// part writes the target exactly.
+void advanceSensorGlide(StreamRun& run, uint32_t now_ms) {
+  if (!run.gliding) return;
+  ++run.glide_done;
+  if (run.glide_done >= kSensorGlideFrames) {
+    setExposureIfChanged(run.glide_to);
+    run.gliding = false;
+  } else {
+    const float from = static_cast<float>(run.glide_from.lines) * run.glide_from.gain_x16;
+    const float to = static_cast<float>(run.glide_to.lines) * run.glide_to.gain_x16;
+    const float part = powf(to / from, static_cast<float>(run.glide_done) / kSensorGlideFrames);
+    setExposureIfChanged(scaleStagedExposure(run.glide_from, part, run.stages).next);
+  }
+  run.live_written_ms = now_ms;
+}
+
+// Starts a sensor glide toward next and writes its first part.
+void startSensorGlide(StreamRun& run, const ExposureSetting& next) {
+  run.glide_from = g_exposure;
+  run.glide_to = next;
+  run.glide_done = 0;
+  run.gliding = true;
+  advanceSensorGlide(run, millis());
+}
+
 // Waits for an exposure change by ratio to show in the luma.
 void startStepWait(StreamRun& run, uint32_t from_luma, float ratio, uint32_t now_ms) {
   run.live_changed_ms = now_ms;
+  run.live_written_ms = now_ms;
   run.live_wait_results = 0;
   run.live_waiting = ratio < 0.995f || ratio > 1.005f;
   if (!run.live_waiting) return;
@@ -2121,14 +2168,16 @@ bool liveStepSettled(StreamRun& run, uint32_t luma, uint32_t now_ms) {
   traceStepResult(run, waited_ms, luma);
   const bool steady = lumaSteady(run.live_previous_luma, luma);
   run.live_previous_luma = luma;
+  if (run.gliding) return false;
+  const uint32_t written_ms = now_ms - run.live_written_ms;
   const uint32_t frame_ms = currentFrameMs();
-  if (waited_ms < kLiveMinSettleFrames * frame_ms) return false;
+  if (written_ms < kLiveMinSettleFrames * frame_ms) return false;
   const StepProgress progress =
       stepProgress(run.live_from_luma, run.live_expected_luma, luma);
   run.live_confirmed =
       progress != StepProgress::Waiting && steady ? run.live_confirmed + 1 : 0;
   const bool shown = run.live_confirmed >= kLiveConfirmResults;
-  if (!shown && waited_ms < std::max(kLiveMaxSettleMs, kLiveMaxSettleFrames * frame_ms)) {
+  if (!shown && written_ms < std::max(kLiveMaxSettleMs, kLiveMaxSettleFrames * frame_ms)) {
     return false;
   }
   run.live_waiting = false;
@@ -2157,10 +2206,11 @@ bool applyStreamExposureStep(StreamRun& run, float ratio) {
   if (rest > 1.005f || rest < 0.995f) {
     const float before = static_cast<float>(g_exposure.lines) * g_exposure.gain_x16;
     const ExposureStep step = scaleStagedExposure(g_exposure, rest, run.stages);
-    if (setExposureIfChanged(step.next)) {
+    if (step.next.lines != g_exposure.lines || step.next.gain_x16 != g_exposure.gain_x16) {
       changed = true;
-      const float after = static_cast<float>(g_exposure.lines) * g_exposure.gain_x16;
+      const float after = static_cast<float>(step.next.lines) * step.next.gain_x16;
       if (after > 0.0f) rest = rest * before / after;
+      startSensorGlide(run, step.next);
     }
   }
   if (rest > 1.005f && g_stream_digital < digitalGainForStep(g_max_digital_step)) {
@@ -2211,8 +2261,11 @@ void streamAutoTuneLive(StreamRun& run) {
   run.live_ae_counted = ae_frames;
   if (ae_frames == run.live_ae_seen) return;
   run.live_ae_seen = ae_frames;
+  // One glide part per frame (one AE result per frame).
+  advanceSensorGlide(run, now_ms);
   const uint32_t luma = weightedMeanLuma(ae.luminance);
   if (run.live_waiting && !liveStepSettled(run, luma, now_ms)) return;
+  if (run.gliding) return;
   ++run.window.tune_ok;
   run.last_measured_ms = now_ms;
   run.mean_luma = luma;
@@ -2228,9 +2281,9 @@ void streamAutoTuneLive(StreamRun& run) {
   if (ratio < 1.0f && ratio > 1.0f - kStreamMinStep) ratio = 1.0f - kStreamMinStep;
   // Results and ms the last step took to show (or since it showed).
   traceAutoExposure('t', run.live_wait_results, now_ms - run.live_changed_ms, run.mean_luma);
-  const float before = streamExposureProduct();
+  const float before = streamTargetProduct(run);
   if (applyStreamExposureStep(run, ratio)) {
-    startStepWait(run, run.mean_luma, streamExposureProduct() / before, millis());
+    startStepWait(run, run.mean_luma, streamTargetProduct(run) / before, millis());
   }
 }
 

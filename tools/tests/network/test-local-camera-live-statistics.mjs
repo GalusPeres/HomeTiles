@@ -47,7 +47,7 @@ const live = body('streamAutoTuneLive');
 assert.doesNotMatch(live, /oneshot_statistics|vTaskDelay|xQueueReceive/, 'no waiting');
 assert.match(live, /if \(run\.live_waiting && !liveStepSettled\(run, luma, now_ms\)\) return;/,
   'only luma that shows the last step');
-assert.match(live, /if \(applyStreamExposureStep\(run, ratio\)\) \{\s*startStepWait\(run, run\.mean_luma, streamExposureProduct\(\) \/ before, millis\(\)\);/);
+assert.match(live, /if \(applyStreamExposureStep\(run, ratio\)\) \{\s*startStepWait\(run, run\.mean_luma, streamTargetProduct\(run\) \/ before, millis\(\)\);/);
 
 // A sender that falls behind lowers the quality too.
 const capture = body('streamCaptureFrame');

@@ -552,13 +552,15 @@ int main() {
   assert(nextDigitalGainStep(2, 255, 115, 12, kGammaExponent, false) == 0);
   // A stream limits the digital change to one step per evaluation.
   assert(nextDigitalGainStep(12, 200, 115, 24, kGammaExponent, false, kMaxDigitalGainStep, 1) == 11);
-  // Stream step progress (8-inch b214: the luma showed a gain change 0.6-0.8 s
-  // late). Waiting until most of the expected move shows, either direction.
+  // Stream step progress (8-inch b214/b215 logs). Waiting until half of the
+  // expected move shows, either direction.
   assert(stepProgress(122, 119.5f, 122) == StepProgress::Waiting);
   assert(stepProgress(122, 119.5f, 121) == StepProgress::Waiting);
   assert(stepProgress(122, 119.5f, 120) == StepProgress::Arrived);
-  assert(stepProgress(78, 110.0f, 100) == StepProgress::Waiting);
-  assert(stepProgress(78, 110.0f, 104) == StepProgress::Arrived);
+  assert(stepProgress(78, 110.0f, 93) == StepProgress::Waiting);
+  assert(stepProgress(78, 110.0f, 94) == StepProgress::Arrived);
+  // b215 8-inch: 154 -> 141 after a step that expected 136 (60-70 %).
+  assert(stepProgress(154, 136.0f, 141) == StepProgress::Arrived);
   assert(stepProgress(78, 110.0f, 160) == StepProgress::Arrived);
   // Clearly the other way: the scene changed, the wait ends.
   assert(stepProgress(78, 110.0f, 66) == StepProgress::Waiting);

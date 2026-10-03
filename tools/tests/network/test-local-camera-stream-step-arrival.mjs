@@ -30,22 +30,23 @@ const before = (text, first, second, message) => {
 
 // The rule itself (values: test-local-camera-contract.mjs).
 assert.match(contract, /enum class StepProgress : uint8_t \{ Waiting, Arrived, SceneChanged \};/);
-assert.match(contract, /constexpr float kStepArrivedFraction = 0\.8f;/);
+assert.match(contract, /constexpr float kStepArrivedFraction = 0\.5f;/);
 assert.ok(cppFunctionDefinitions(contract).some(f => f.name === 'stepProgress'));
 assert.ok(cppFunctionDefinitions(contract).some(f => f.name === 'lumaSteady'));
 
 // No fixed settle time is left in the stream.
 assert.doesNotMatch(core, /kLiveSettleFrames/);
-assert.match(core, /constexpr uint32_t kLiveMinSettleFrames = 2;/);
+// b215 8-inch log: the sensor answers 2-3 frames after a write.
+assert.match(core, /constexpr uint32_t kLiveMinSettleFrames = 3;/);
 assert.match(core, /constexpr uint8_t kLiveConfirmResults = 2;/);
-assert.match(core, /constexpr uint32_t kLiveMaxSettleMs = 1500;/);
+assert.match(core, /constexpr uint32_t kLiveMaxSettleMs = 600;/);
 
 const settled = body(core, 'liveStepSettled');
-before(settled, 'if (waited_ms < kLiveMinSettleFrames * frame_ms) return false;',
+before(settled, 'if (written_ms < kLiveMinSettleFrames * frame_ms) return false;',
   'stepProgress(run.live_from_luma, run.live_expected_luma, luma)', 'never before the sensor latency');
 assert.match(settled, /progress != StepProgress::Waiting && steady \? run\.live_confirmed \+ 1 : 0;/);
 assert.match(settled, /const bool shown = run\.live_confirmed >= kLiveConfirmResults;/);
-assert.match(settled, /waited_ms < std::max\(kLiveMaxSettleMs, kLiveMaxSettleFrames \* frame_ms\)/,
+assert.match(settled, /written_ms < std::max\(kLiveMaxSettleMs, kLiveMaxSettleFrames \* frame_ms\)/,
   'a step that never shows ends the wait');
 for (const counter of ['++window.settles;', '++window.settle_timeouts;', '++window.scene_changes;']) {
   assert.ok(settled.includes(counter), counter);
@@ -60,7 +61,7 @@ before(live, 'if (ae_frames == run.live_ae_seen) return;',
   'if (run.live_waiting && !liveStepSettled(run, luma, now_ms)) return;', 'every new result is checked');
 before(live, 'liveStepSettled(run, luma, now_ms)', 'applyStreamExposureStep(run, ratio)', 'no step while waiting');
 // The applied ratio, not the asked one: limits can cut a step short.
-assert.match(live, /const float before = streamExposureProduct\(\);\s*if \(applyStreamExposureStep\(run, ratio\)\)/);
+assert.match(live, /const float before = streamTargetProduct\(run\);\s*if \(applyStreamExposureStep\(run, ratio\)\)/);
 assert.match(live, /startStepWait\(run, run\.mean_luma, after \/ before, now_ms\);/, 'a Max. gain change waits too');
 assert.match(live, /if \(g_live_awb_running && !run\.live_waiting &&/, 'white balance waits for the exposure');
 

@@ -826,11 +826,14 @@ inline uint8_t nextDigitalGainStep(uint8_t step, uint32_t mean_luma, uint32_t ta
 // Whether a stream exposure step shows in the measured luma yet. A fixed
 // settle time fits only one delay: the 8-inch stream (b214) saw a gain change
 // 0.6-0.8 s later while it stepped every 0.2 s, overshot and swung between 76
-// and 164. The stream now waits until the luma moved most of the expected way
+// and 164. The stream now waits until the luma moved half the expected way
 // (Arrived) or clearly the other way (SceneChanged, e.g. a hand in front of
-// the lens), so any sensor and delay settles without swinging.
+// the lens), so any sensor and delay settles without swinging. Half, not
+// most: the b215 8-inch log showed a step 2-3 frames after the write, but
+// only 60-70 % as large as the gamma model expects in bright scenes; with
+// 80 % five of thirteen steps waited the full time.
 enum class StepProgress : uint8_t { Waiting, Arrived, SceneChanged };
-constexpr float kStepArrivedFraction = 0.8f;
+constexpr float kStepArrivedFraction = 0.5f;
 constexpr float kSceneChangeFraction = 0.2f;
 constexpr float kSceneChangeMinLuma = 12.0f;
 // From a clipped frame the expected luma is only a lower bound: leaving the

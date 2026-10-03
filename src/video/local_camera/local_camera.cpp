@@ -752,8 +752,16 @@ esp_err_t sensorStandby() {
   return err;
 }
 
-void applyColorCorrection() {
-  if (!g_pipe.isp) return;
+// While a stream runs, curve and colour changes wait for the next frame end:
+// written mid-frame, the ISP drew the top of the picture with the old curve
+// and the rest with the new one, a brighter top and a darker rest at every
+// digital gain step (V2 2026-10-03). streamCaptureFrame() applies them right
+// after it froze a frame, at the start of the vertical blanking.
+bool g_defer_isp_updates = false;
+bool g_gamma_pending = false;
+bool g_ccm_pending = false;
+
+void writeColorCorrection() {
   esp_isp_ccm_config_t ccm = {};
   buildImageCcm(kBaseCcm, g_gains, currentImageSettings(), ccm.matrix);
   ccm.saturation = true;
@@ -761,10 +769,29 @@ void applyColorCorrection() {
   esp_isp_ccm_configure(g_pipe.isp, &ccm);
 }
 
-// Loads the gamma curve for one contrast into all three channels. The IDF
-// allows esp_isp_gamma_configure() while gamma is enabled; each call latches
-// the new points through the gamma update bit, so no disable/enable (and no
-// linear frame in between) is needed.
+void applyColorCorrection() {
+  if (!g_pipe.isp) return;
+  if (g_defer_isp_updates) {
+    g_ccm_pending = true;
+    return;
+  }
+  writeColorCorrection();
+}
+
+// Writes the curve of the current g_gamma_curve_* values into all three
+// channels. The IDF allows esp_isp_gamma_configure() while gamma is enabled;
+// each call latches the new points through the gamma update bit, so no
+// disable/enable (and no linear frame in between) is needed.
+esp_err_t writeGammaCurve() {
+  isp_gamma_curve_points_t curve = {};
+  esp_err_t err = esp_isp_gamma_fill_curve_points(gammaCurve, &curve);
+  if (err == ESP_OK) err = esp_isp_gamma_configure(g_pipe.isp, COLOR_COMPONENT_R, &curve);
+  if (err == ESP_OK) err = esp_isp_gamma_configure(g_pipe.isp, COLOR_COMPONENT_G, &curve);
+  if (err == ESP_OK) err = esp_isp_gamma_configure(g_pipe.isp, COLOR_COMPONENT_B, &curve);
+  return err;
+}
+
+// Loads the gamma curve for one contrast and digital gain step.
 esp_err_t loadGammaCurve(int contrast, uint8_t digital_step) {
   g_gamma_curve_contrast = contrast;
   // Digital gain after the sensor limits and the user brightness, which
@@ -773,16 +800,27 @@ esp_err_t loadGammaCurve(int contrast, uint8_t digital_step) {
   g_gamma_curve_gain =
       digitalGainForStep(digital_step) * brightnessLinearGain(brightness, kGammaExponent);
   g_gamma_curve_brightness = static_cast<int8_t>(brightness);
-  isp_gamma_curve_points_t curve = {};
-  esp_err_t err = esp_isp_gamma_fill_curve_points(gammaCurve, &curve);
-  if (err == ESP_OK) err = esp_isp_gamma_configure(g_pipe.isp, COLOR_COMPONENT_R, &curve);
-  if (err == ESP_OK) err = esp_isp_gamma_configure(g_pipe.isp, COLOR_COMPONENT_G, &curve);
-  if (err == ESP_OK) err = esp_isp_gamma_configure(g_pipe.isp, COLOR_COMPONENT_B, &curve);
+  const esp_err_t err = g_defer_isp_updates ? ESP_OK : writeGammaCurve();
   if (err == ESP_OK) {
+    g_gamma_pending = g_defer_isp_updates;
     g_pipe.gamma_contrast = static_cast<int8_t>(contrast);
     g_pipe.gamma_digital_step = digital_step;
   }
   return err;
+}
+
+// Writes the curve and colour changes held back during a stream frame.
+void applyPendingIspUpdates() {
+  if (!g_pipe.isp) return;
+  if (g_gamma_pending) {
+    g_gamma_pending = false;
+    const esp_err_t err = writeGammaCurve();
+    if (err != ESP_OK) logCaptureError("Gamma update failed", err);
+  }
+  if (g_ccm_pending) {
+    g_ccm_pending = false;
+    writeColorCorrection();
+  }
 }
 
 // Worker: pushes changed user image settings to the running ISP before the
@@ -848,12 +886,13 @@ void publishExposure(uint32_t mean_luma) {
 // Digital gain after the sensor limits (nextDigitalGainStep). Returns true
 // when the curve changed; the caller then skips its sensor step, because the
 // statistics show the new curve only on a later frame.
-bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit) {
+bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit, uint32_t tolerance = 12,
+                     int max_jump = kMaxDigitalGainJump) {
   if (!g_pipe.ae_after_gamma) return false;
   const uint8_t current = g_pipe.gamma_digital_step;
   const uint32_t target = aeTarget();
-  const uint8_t next = nextDigitalGainStep(current, mean_luma, target, 12, kGammaExponent,
-                                           sensor_at_brighter_limit, g_max_digital_step);
+  const uint8_t next = nextDigitalGainStep(current, mean_luma, target, tolerance, kGammaExponent,
+                                           sensor_at_brighter_limit, g_max_digital_step, max_jump);
   if (next == current) return false;
   const esp_err_t err = loadGammaCurve(g_pipe.gamma_contrast, next);
   if (err != ESP_OK) {
@@ -918,6 +957,9 @@ bool applyOrientation(bool live) {
 void stopLiveStatistics();
 
 void releasePipeline() {
+  g_defer_isp_updates = false;
+  g_gamma_pending = false;
+  g_ccm_pending = false;
   if (g_pipe.csi && g_pipe.csi_running) {
     esp_cam_ctlr_stop(g_pipe.csi);
     g_pipe.csi_running = false;
@@ -1937,8 +1979,16 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
 }
 
 // Frames after an exposure or curve change before the statistics show it:
-// new sensor registers latch at a frame start.
-constexpr uint32_t kLiveSettleFrames = 3;
+// new sensor registers latch at a frame start, and a curve change waits for
+// the next frozen frame.
+constexpr uint32_t kLiveSettleFrames = 4;
+// The running stream keeps a wider band and moves gradually: with the
+// snapshot band (12) the digital gain hunted between steps every few hundred
+// ms, each change a visible jump (V2 2026-10-03). Far off (below half or
+// above one and a half times the target, a light switched) it still moves at
+// full speed.
+constexpr uint32_t kStreamAeTolerance = 24;
+constexpr float kStreamGentleRatio = 1.25f;
 
 // The running stream with continuous statistics: every kStreamTuneIntervalMs
 // one exposure step from the latest frame exposed after the last change, and
@@ -1976,11 +2026,15 @@ void streamAutoTuneLive(StreamRun& run) {
   ++run.window.tune_ok;
   run.last_measured_ms = now_ms;
   run.mean_luma = weightedMeanLuma(ae.luminance);
-  const ExposureStep step =
-      stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages, aeExponent());
+  const uint32_t target = aeTarget();
+  const bool far = run.mean_luma * 2 < target || run.mean_luma * 2 > target * 3;
+  const ExposureStep step = stepStagedExposure(
+      g_exposure, run.mean_luma, target, kStreamAeTolerance, run.stages, aeExponent(),
+      far ? kMaxExposureRatio : kStreamGentleRatio);
   if (!step.converged) traceAutoExposure('t', 0, 0, run.mean_luma);
   publishExposure(run.mean_luma);
-  if (stepDigitalGain(run.mean_luma, step.limited)) {
+  if (stepDigitalGain(run.mean_luma, step.limited, kStreamAeTolerance,
+                      far ? kMaxDigitalGainJump : 1)) {
     run.live_changed_at = ae_frames;
     return;
   }
@@ -2168,6 +2222,9 @@ void streamCaptureFrame(StreamRun& run) {
     return;
   }
   run.noframe_streak = 0;
+  // A frame just ended: held-back curve and colour changes land in the
+  // vertical blanking and reach the next frame whole.
+  applyPendingIspUpdates();
 
   // Only the JPEG encoder uses the 2D-DMA pool (no PPA pass): one short
   // hold per frame. When the display or the HA camera decoder has the pool,
@@ -2337,6 +2394,7 @@ uint32_t runStream() {
     if (reason != StopReason::None) break;
     // From here every frame is measured; the frame loop never waits for it.
     startLiveStatistics();
+    g_defer_isp_updates = true;
     portENTER_CRITICAL(&g_live_mux);
     run.live_ae_seen = g_live.ae_frames;
     run.live_awb_seen = g_live.awb_frames;
@@ -2421,6 +2479,8 @@ uint32_t runStream() {
   } while (false);
   // Snapshots use oneshot reads, which the driver refuses during continuous ones.
   stopLiveStatistics();
+  g_defer_isp_updates = false;
+  applyPendingIspUpdates();
 
   // Stop order: sender first (it may still read a slot), then the sensor and
   // the receiver, then the buffers.

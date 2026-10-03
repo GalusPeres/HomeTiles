@@ -268,6 +268,8 @@ int main() {
     const double expected = 1000.0 * pow(115.0 / 58.0, 1.0 / kGammaExponent);
     assert(fabs(gamma_step.next.lines - expected) <= 2.0);
     assert(stepAutoExposure(s, 58, 115, 12, wide).next.lines < gamma_step.next.lines);
+    // A running stream moves gently: the step stays within max_ratio.
+    assert(stepAutoExposure(s, 30, 115, 24, wide, kGammaExponent, 1.25f).next.lines == 1250);
     // A clipped frame carries no magnitude: one eighth per step, not a half.
     const ExposureStep clipped = stepAutoExposure(s, 255, 115, 12, wide, kGammaExponent);
     assert(clipped.next.lines == 125 && clipped.next.gain_x16 == 16);
@@ -548,6 +550,8 @@ int main() {
   assert(nextDigitalGainStep(5, 130, 115, 12, kGammaExponent, true) == 4);
   assert(nextDigitalGainStep(0, 250, 115, 12, kGammaExponent, false) == 0);
   assert(nextDigitalGainStep(2, 255, 115, 12, kGammaExponent, false) == 0);
+  // A stream limits the digital change to one step per evaluation.
+  assert(nextDigitalGainStep(12, 200, 115, 24, kGammaExponent, false, kMaxDigitalGainStep, 1) == 11);
   // A clipped frame drops the whole digital gain at once (night to day).
   assert(nextDigitalGainStep(kMaxDigitalGainStep, 255, 115, 12, kGammaExponent, false) == 0);
   assert(nextDigitalGainStep(kMaxDigitalGainStep, 250, 115, 12, kGammaExponent, true) == 0);

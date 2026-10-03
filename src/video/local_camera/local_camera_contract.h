@@ -403,7 +403,8 @@ inline ExposureStep stepAutoExposure(ExposureSetting current,
                                      uint32_t target_luma,
                                      uint32_t tolerance,
                                      const ExposureLimits& limits,
-                                     float exponent = 1.0f) {
+                                     float exponent = 1.0f,
+                                     float max_ratio = kMaxExposureRatio) {
   ExposureStep step;
   step.next = current;
   const uint32_t low = target_luma > tolerance ? target_luma - tolerance : 0;
@@ -428,8 +429,12 @@ inline ExposureStep stepAutoExposure(ExposureSetting current,
   const float mean = static_cast<float>(mean_luma ? mean_luma : 1);
   float ratio = powf(static_cast<float>(target_luma) / mean,
                      1.0f / (exponent > 0.05f ? exponent : 1.0f));
-  if (ratio < 1.0f / kMaxExposureRatio) ratio = 1.0f / kMaxExposureRatio;
-  if (ratio > kMaxExposureRatio) ratio = kMaxExposureRatio;
+  // max_ratio: a running stream moves in small steps while the image is
+  // roughly right, so the brightness changes gradually.
+  if (max_ratio < 1.0f) max_ratio = 1.0f;
+  if (max_ratio > kMaxExposureRatio) max_ratio = kMaxExposureRatio;
+  if (ratio < 1.0f / max_ratio) ratio = 1.0f / max_ratio;
+  if (ratio > max_ratio) ratio = max_ratio;
   if (mean_luma >= kSaturatedLuma && ratio > kSaturatedExposureRatio) {
     ratio = kSaturatedExposureRatio;
   }
@@ -478,7 +483,8 @@ struct ExposureStages {
 
 inline ExposureStep stepStagedExposure(ExposureSetting current, uint32_t mean_luma,
                                        uint32_t target_luma, uint32_t tolerance,
-                                       const ExposureStages& stages, float exponent = 1.0f) {
+                                       const ExposureStages& stages, float exponent = 1.0f,
+                                       float max_ratio = kMaxExposureRatio) {
   const ExposureLimits& normal = stages.normal;
   const uint16_t night_lines =
       stages.night_max_lines > normal.max_lines ? stages.night_max_lines : normal.max_lines;
@@ -498,15 +504,16 @@ inline ExposureStep stepStagedExposure(ExposureSetting current, uint32_t mean_lu
   } else if (available[1] && current.gain_x16 > normal.max_gain_x16) {
     stage = 1;
   }
-  ExposureStep step =
-      stepAutoExposure(current, mean_luma, target_luma, tolerance, limits[stage], exponent);
+  ExposureStep step = stepAutoExposure(current, mean_luma, target_luma, tolerance, limits[stage],
+                                       exponent, max_ratio);
   if (!step.limited) return step;
   const uint32_t low = target_luma > tolerance ? target_luma - tolerance : 0;
   const int direction = mean_luma < low ? 1 : -1;
   int next = stage + direction;
   while (next >= 0 && next <= 2 && !available[next]) next += direction;
   if (next < 0 || next > 2) return step;
-  return stepAutoExposure(current, mean_luma, target_luma, tolerance, limits[next], exponent);
+  return stepAutoExposure(current, mean_luma, target_luma, tolerance, limits[next], exponent,
+                          max_ratio);
 }
 
 // ---------------------------------------------------------------------------
@@ -761,7 +768,8 @@ inline float digitalGainForStep(uint8_t step) {
 inline uint8_t nextDigitalGainStep(uint8_t step, uint32_t mean_luma, uint32_t target_luma,
                                    uint32_t tolerance, float exponent,
                                    bool sensor_at_brighter_limit,
-                                   uint8_t max_step = kMaxDigitalGainStep) {
+                                   uint8_t max_step = kMaxDigitalGainStep,
+                                   int max_jump = kMaxDigitalGainJump) {
   if (max_step > kMaxDigitalGainStep) max_step = kMaxDigitalGainStep;
   if (step > max_step) return max_step;
   // A clipped frame drops the whole digital gain at once: it carries no
@@ -780,8 +788,9 @@ inline uint8_t nextDigitalGainStep(uint8_t step, uint32_t mean_luma, uint32_t ta
   int delta = static_cast<int>(lroundf(ev * static_cast<float>(kDigitalGainStepsPerEv)));
   if (too_dark && delta < 1) delta = 1;
   if (too_bright && delta > -1) delta = -1;
-  if (delta > kMaxDigitalGainJump) delta = kMaxDigitalGainJump;
-  if (delta < -kMaxDigitalGainJump) delta = -kMaxDigitalGainJump;
+  if (max_jump < 1) max_jump = 1;
+  if (delta > max_jump) delta = max_jump;
+  if (delta < -max_jump) delta = -max_jump;
   int next = static_cast<int>(step) + delta;
   if (next < 0) next = 0;
   if (next > max_step) next = max_step;

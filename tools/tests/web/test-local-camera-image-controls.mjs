@@ -138,10 +138,11 @@ const body = name => {
   assert.notEqual(start, -1, name);
   return service.slice(start, service.indexOf('\n}\n', start));
 };
-assert.match(body('void applyColorCorrection() {'), /buildImageCcm\(kBaseCcm, g_gains, currentImageSettings\(\), ccm\.matrix\);/);
+assert.match(body('void writeColorCorrection() {'), /buildImageCcm\(kBaseCcm, g_gains, currentImageSettings\(\), ccm\.matrix\);/);
 assert.match(body('uint32_t gammaCurve(uint32_t x) {'), /gammaLutValue\(x, kMode\.black_level, kGammaExponent, g_gamma_curve_contrast,\s*g_gamma_curve_gain\)/);
 assert.match(body('uint32_t aeTarget() {'), /adjustedAeTarget\(g_pipe\.ae_target, currentImageSettings\(\)\.brightness\)/);
-const loader = body('esp_err_t loadGammaCurve(int contrast, uint8_t digital_step) {');
+// The register writes live in writeGammaCurve(); loadGammaCurve() sets the curve values.
+const loader = body('esp_err_t writeGammaCurve() {');
 assert.doesNotMatch(loader, /esp_isp_gamma_disable/, 'Gamma is reconfigured while enabled (no linear frame)');
 for (const channel of ['R', 'G', 'B']) {
   assert.match(loader, new RegExp(`esp_isp_gamma_configure\\(g_pipe\\.isp, COLOR_COMPONENT_${channel}, &curve\\)`));
@@ -150,8 +151,10 @@ const applier = body('void applyImageSettingsIfChanged() {');
 assert.match(applier, /if \(generation == g_pipe\.image_generation\) return;/);
 assert.match(applier, /applyColorCorrection\(\);\s*if \(image\.contrast == g_pipe\.gamma_contrast &&\s*image\.brightness == g_gamma_curve_brightness\) \{\s*return;\s*\}\s*const esp_err_t err = loadGammaCurve\(image\.contrast, g_pipe\.gamma_digital_step\);/);
 assert.doesNotMatch(service, /g_pipe\.ae_target, 12/, 'Every AE step uses the brightness-adjusted target');
-assert.equal([...service.matchAll(/aeTarget\(\), 12/g)].length, 4,
-  'Snapshot, settle, live and oneshot stream AE use aeTarget()');
+assert.equal([...service.matchAll(/aeTarget\(\), 12/g)].length, 3,
+  'Snapshot, settle and oneshot stream AE use aeTarget()');
+assert.match(body('void streamAutoTuneLive(StreamRun& run) {'), /const uint32_t target = aeTarget\(\);/,
+  'The live stream AE uses aeTarget() too');
 assert.match(service, /g_pipe\.image_generation = g_image_generation\.load\(\);\s*const ImageSettings image = currentImageSettings\(\);[\s\S]*?buildImageCcm\(kBaseCcm, g_gains, image, ccm\.matrix\);[\s\S]*?err = loadGammaCurve\(image\.contrast, g_digital_step\);\s*if \(err == ESP_OK\) err = esp_isp_gamma_enable\(g_pipe\.isp\);/,
   'A new pipeline starts with the current settings');
 assert.match(body('ErrorCode captureJpeg('), /applyImageSettingsIfChanged\(\);\s*applyColorCorrection\(\);\s*g_sensor\.setExposure/,

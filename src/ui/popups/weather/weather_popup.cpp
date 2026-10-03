@@ -21,7 +21,6 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/types/weather/weather_icons.h"
 #include "src/tiles/config/tile_config.h"
-#include "src/tiles/runtime/tile_header.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/config/config_manager.h"
@@ -408,6 +407,26 @@ static bool get_local_now_parts(String& date_out, int& hour_out, int* minute_out
 static String iso_date_add_days(const String& iso, int day_offset);
 static int iso_date_day_offset(const String& base_iso, const String& target_iso);
 static String weekday_from_iso(const String& iso);
+
+// The largest popup day-name font up to `largest` that fits `text` into
+// `width`, so a name stays on one line; the smallest size otherwise.
+static const lv_font_t* fitting_day_font(const char* text, int width, const lv_font_t* largest) {
+  static const lv_font_t* const kSizes[] = {&ui_font_20, &ui_font_16,
+#if defined(DEVICE_LAYOUT_480X480)
+                                            &ui_font_14,
+#endif
+  };
+  const int32_t start = lv_font_get_line_height(largest);
+  const lv_font_t* last = largest;
+  for (const lv_font_t* font : kSizes) {
+    if (lv_font_get_line_height(font) > start) continue;
+    last = font;
+    lv_point_t size;
+    lv_text_get_size(&size, text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    if (size.x <= width) return font;
+  }
+  return last;
+}
 
 static void cancel_weather_refresh_work() {
   g_pending_weather.parse_hourly_pending = false;
@@ -887,7 +906,7 @@ static void update_forecast_graph(WeatherPopupContext* ctx) {
         // until it fits the column instead of wrapping inside the word. The
         // label keeps the full line height, so the icons below stay aligned.
         const lv_font_t* day_font =
-            tile_header::fitting_font(text.c_str(), col_w, popup_layout::font20());
+            fitting_day_font(text.c_str(), col_w, popup_layout::font20());
         if (lv_obj_get_style_text_font(fw.day_label, LV_PART_MAIN) != day_font) {
           const int32_t full_line = lv_font_get_line_height(popup_layout::font20());
           lv_obj_set_style_text_font(fw.day_label, day_font, 0);

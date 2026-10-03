@@ -42,7 +42,10 @@ assert.match(fit, /const int width = text_width\(text, popup_layout::font24\(\)\
 assert.match(fit, /const int button_w = width > kRangeButtonWidth \? width : kRangeButtonWidth;/);
 
 // 7D column header on one line.
-assert.match(weather, /const lv_font_t\* day_font =\s*tile_header::fitting_font\(text\.c_str\(\), col_w, popup_layout::font20\(\)\);/);
+assert.match(weather, /const lv_font_t\* day_font =\s*fitting_day_font\(text\.c_str\(\), col_w, popup_layout::font20\(\)\);/);
+// No tile header here: it brings tile_renderer_shared.h, whose global
+// set_label_style() made every call in this file ambiguous (b203 build).
+assert.doesNotMatch(weather, /#include "src\/tiles\/runtime\/tile_header\.h"/);
 assert.match(weather, /lv_obj_set_height\(fw\.day_label, full_line\);/, 'the icons below stay aligned');
 
 // Header condition like the tile: state first.

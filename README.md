@@ -21,7 +21,7 @@ Tap a tile for its popup, then slide through the history of sensors, energy and 
 
 ## New in v0.8.0
 
-- **Polished throughout:** much faster, above all on the ESP32-S3 (LVGL 9.6, about 300 KB less flash, more free RAM), quicker popups and screensaver, camera popups at up to 30 FPS, Web Admin edits that show on the display almost at once, a refined design and many fixes.
+- **Polished throughout:** faster, above all on the ESP32-S3 (LVGL 9.6, about 300 KB less flash, more free RAM), quicker popups and screensaver, camera popups at up to 30 FPS, Web Admin edits that show on the display almost at once, a refined design and many fixes.
 - **[Lock, Alarm Panel and Fan tiles](https://galusperes.github.io/tiles/#fan):** with their own popups and code entry.
 - **[Web Admin password](https://galusperes.github.io/web-admin/#web-admin-password)** and **[encrypted commands](https://galusperes.github.io/bridge/#encrypted-commands):** pair the display with Home Assistant by comparing a six-digit number.
 - **[Redesigned Switch tile](https://galusperes.github.io/tiles/#switch):** a dimmer or switch bar across the tile, also for Cover and Climate, and half height for almost every tile.

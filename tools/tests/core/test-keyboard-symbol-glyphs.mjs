@@ -25,10 +25,11 @@ const body = name => keyboard.match(new RegExp(`\\b${name}\\[\\] = \\{([\\s\\S]*
 const mapKeys = name => body(name).match(/"(?:\\.|[^"\\])*"|LV_SYMBOL_\w+/g);
 const ctrlCount = name => body(name).match(/\bk(?:Ctrl|Btn)\((?:[^()]|\([^()]*\))*\)/g).length;
 
-const layouts = [...keyboard.matchAll(/KeyboardLayout \w+\{(\w+), (\w+), (\w+)\}/g)];
+// {lower, upper, ctrl, alt lower, alt upper}; the alt maps share ctrl.
+const layouts = [...keyboard.matchAll(/KeyboardLayout \w+\{(\w+), (\w+), (\w+), (\w+), (\w+)\}/g)];
 assert.ok(layouts.length >= 2, 'German and English layouts');
-for (const [, lower, upper, ctrl] of layouts) {
-  for (const map of [lower, upper]) {
+for (const [, lower, upper, ctrl, altLower, altUpper] of layouts) {
+  for (const map of [lower, upper, altLower, altUpper].filter(m => m !== 'nullptr')) {
     const keys = mapKeys(map);
     assert.equal(keys.at(-1), '""', `${map} must end with ""`);
     assert.equal(keys.filter(k => k !== '"\\n"' && k !== '""').length, ctrlCount(ctrl),
@@ -42,7 +43,9 @@ for (const [, lower, upper, ctrl] of layouts) {
 }
 
 // English must install its own maps instead of keeping LVGL's defaults.
-assert.doesNotMatch(cppFunctionDefinitions(keyboard).find(f => f.name === 'layout_for_config').source, /nullptr/);
+// (Only the optional alt maps may be nullptr.)
+const pick = cppFunctionDefinitions(keyboard).find(f => f.name === 'layout_for_config').source;
+assert.doesNotMatch(pick, /return nullptr|KeyboardLayout \w+\{(?:\w+, ){0,2}nullptr/);
 assert.doesNotMatch(cppFunctionDefinitions(keyboard).find(f => f.name === 'ui_keyboard_create').source, /if \(layout\)/);
 
 console.log(`Keyboard maps (${layouts.length} layouts) use only symbols present in ui_symbols_20/24.`);

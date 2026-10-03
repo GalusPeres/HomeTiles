@@ -71,59 +71,116 @@ static const char* const kMapUpperEn[] = {
     "_", "-", "Z", "X", "C", "V", "B", "N", "M", ".", ",", ":", "\n",
     LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
 
-// Polish keeps QWERTY, like Polish hardware keyboards, and adds a row of
-// the nine Polish letters on top, aligned with the a-l keys below (hidden
-// spacers of the "ABC" and Enter widths). Polish SSIDs and passwords may
-// need them. Rows 2-5 are the English rows.
-static const char* const kMapLowerPl[] = {
-    " ", "\xC4\x85", "\xC4\x87", "\xC4\x99", "\xC5\x82", "\xC5\x84", "\xC3\xB3", "\xC5\x9B", "\xC5\xBA", "\xC5\xBC", " ", "\n",
-    "1#", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", LV_SYMBOL_BACKSPACE, "\n",
-    "ABC", "a", "s", "d", "f", "g", "h", "j", "k", "l", LV_SYMBOL_NEW_LINE, "\n",
-    "_", "-", "z", "x", "c", "v", "b", "n", "m", ".", ",", ":", "\n",
+// Polish keeps QWERTY, like Polish hardware keyboards ("Polski
+// programisty"), which type the Polish letters with AltGr. The keyboard key
+// (lower left) acts as AltGr: it swaps the letter maps for these, with each
+// Polish letter on its AltGr key (a, c, e, l, n, o, s, x, z).
+static const char* const kMapLowerPlAlt[] = {
+    "1#", "q", "w", "\xC4\x99", "r", "t", "y", "u", "i", "\xC3\xB3", "p", LV_SYMBOL_BACKSPACE, "\n",
+    "ABC", "\xC4\x85", "\xC5\x9B", "d", "f", "g", "h", "j", "k", "\xC5\x82", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "\xC5\xBC", "\xC5\xBA", "\xC4\x87", "v", "b", "\xC5\x84", "m", ".", ",", ":", "\n",
     LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
 
-static const lv_buttonmatrix_ctrl_t kCtrlPl[] = {
-    kCtrl(LV_BUTTONMATRIX_CTRL_HIDDEN | LV_BUTTONMATRIX_CTRL_DISABLED | 6), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kCtrl(LV_BUTTONMATRIX_CTRL_HIDDEN | LV_BUTTONMATRIX_CTRL_DISABLED | 7),
+static const char* const kMapUpperPlAlt[] = {
+    "1#", "Q", "W", "\xC4\x98", "R", "T", "Y", "U", "I", "\xC3\x93", "P", LV_SYMBOL_BACKSPACE, "\n",
+    "abc", "\xC4\x84", "\xC5\x9A", "D", "F", "G", "H", "J", "K", "\xC5\x81", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "\xC5\xBB", "\xC5\xB9", "\xC4\x86", "V", "B", "\xC5\x83", "M", ".", ",", ":", "\n",
+    LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
+
+// French uses AZERTY like French hardware keyboards: A/Q and Z/W swapped,
+// M beside L. The keyboard key swaps the letter rows for the French accents
+// and quotes, which sit on their own keys there.
+static const char* const kMapLowerFr[] = {
+    "1#", "a", "z", "e", "r", "t", "y", "u", "i", "o", "p", LV_SYMBOL_BACKSPACE, "\n",
+    "ABC", "q", "s", "d", "f", "g", "h", "j", "k", "l", "m", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "w", "x", "c", "v", "b", "n", ".", ",", ":", "\n",
+    LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
+
+static const lv_buttonmatrix_ctrl_t kCtrlFr[] = {
     kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 5), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kBtn(4), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 7),
-    kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 6), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 7),
-    kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)),
+    kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 6), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kBtn(3), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 7),
+    kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kBtn(1), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | kBtn(1)),
     kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 2), kCtrl(6), kCtrl(LV_BUTTONMATRIX_CTRL_CHECKED | 2), kCtrl(LV_KEYBOARD_CTRL_BUTTON_FLAGS | 2)};
 
-static const char* const kMapUpperPl[] = {
-    " ", "\xC4\x84", "\xC4\x86", "\xC4\x98", "\xC5\x81", "\xC5\x83", "\xC3\x93", "\xC5\x9A", "\xC5\xB9", "\xC5\xBB", " ", "\n",
-    "1#", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", LV_SYMBOL_BACKSPACE, "\n",
-    "abc", "A", "S", "D", "F", "G", "H", "J", "K", "L", LV_SYMBOL_NEW_LINE, "\n",
-    "_", "-", "Z", "X", "C", "V", "B", "N", "M", ".", ",", ":", "\n",
+static const char* const kMapUpperFr[] = {
+    "1#", "A", "Z", "E", "R", "T", "Y", "U", "I", "O", "P", LV_SYMBOL_BACKSPACE, "\n",
+    "abc", "Q", "S", "D", "F", "G", "H", "J", "K", "L", "M", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "W", "X", "C", "V", "B", "N", ".", ",", ":", "\n",
+    LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
+
+static const char* const kMapLowerFrAlt[] = {
+    "1#", "\xC3\xA0", "\xC3\xA2", "\xC3\xA6", "\xC3\xA9", "\xC3\xA8", "\xC3\xAA", "\xC3\xAB", "\xC3\xAE", "\xC3\xAF", "\xC3\xB4", LV_SYMBOL_BACKSPACE, "\n",
+    "ABC", "\xC3\xA7", "\xC5\x93", "\xC3\xB9", "\xC3\xBB", "\xC3\xBC", "\xC3\xBF", "\xC2\xAB", "\xC2\xBB", "\xE2\x80\x99", "\xE2\x82\xAC", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "w", "x", "c", "v", "b", "n", ".", ",", ":", "\n",
+    LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
+
+static const char* const kMapUpperFrAlt[] = {
+    "1#", "\xC3\x80", "\xC3\x82", "\xC3\x86", "\xC3\x89", "\xC3\x88", "\xC3\x8A", "\xC3\x8B", "\xC3\x8E", "\xC3\x8F", "\xC3\x94", LV_SYMBOL_BACKSPACE, "\n",
+    "abc", "\xC3\x87", "\xC5\x92", "\xC3\x99", "\xC3\x9B", "\xC3\x9C", "\xC5\xB8", "\xC2\xAB", "\xC2\xBB", "\xE2\x80\x99", "\xE2\x82\xAC", LV_SYMBOL_NEW_LINE, "\n",
+    "_", "-", "W", "X", "C", "V", "B", "N", ".", ",", ":", "\n",
     LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, LV_SYMBOL_OK, ""};
 
 // An explicit keyboard layout setting takes precedence; "Auto" follows
-// the UI language: German/QWERTZ for umlauts and sharp S, Polish/QWERTY
-// with the Polish letters, otherwise English/QWERTY.
+// the UI language: German/QWERTZ for umlauts and sharp S, Polish/QWERTY and
+// French/AZERTY with their letters behind the keyboard key, otherwise
+// English/QWERTY. alt maps share ctrl_map; nullptr when the layout has none.
 struct KeyboardLayout {
   const char* const* lower_map;
   const char* const* upper_map;
   const lv_buttonmatrix_ctrl_t* ctrl_map;
+  const char* const* alt_lower_map;
+  const char* const* alt_upper_map;
 };
 
 const KeyboardLayout* layout_for_config(uint8_t keyboard_layout, const char* lang_code) {
-  bool german;
-  if (keyboard_layout == 1) {
-    german = true;   // Force German (QWERTZ).
-  } else if (keyboard_layout == 2) {
-    german = false;  // Force English (QWERTY).
-  } else {
-    german = lang_code && lang_code[0] == 'd' && lang_code[1] == 'e';
-  }
-  if (german) {
-    static const KeyboardLayout kDeLayout{kMapLowerDe, kMapUpperDe, kCtrlDe};
+  const bool auto_layout = keyboard_layout != 1 && keyboard_layout != 2;
+  const auto lang = [lang_code](char a, char b) {
+    return lang_code && lang_code[0] == a && lang_code[1] == b;
+  };
+  if (keyboard_layout == 1 || (auto_layout && lang('d', 'e'))) {
+    static const KeyboardLayout kDeLayout{kMapLowerDe, kMapUpperDe, kCtrlDe, nullptr, nullptr};
     return &kDeLayout;
   }
-  if (keyboard_layout == 0 && lang_code && lang_code[0] == 'p' && lang_code[1] == 'l') {
-    static const KeyboardLayout kPlLayout{kMapLowerPl, kMapUpperPl, kCtrlPl};
+  if (auto_layout && lang('p', 'l')) {
+    static const KeyboardLayout kPlLayout{kMapLowerEn, kMapUpperEn, kCtrlEn, kMapLowerPlAlt, kMapUpperPlAlt};
     return &kPlLayout;
   }
-  static const KeyboardLayout kEnLayout{kMapLowerEn, kMapUpperEn, kCtrlEn};
+  if (auto_layout && lang('f', 'r')) {
+    static const KeyboardLayout kFrLayout{kMapLowerFr, kMapUpperFr, kCtrlFr, kMapLowerFrAlt, kMapUpperFrAlt};
+    return &kFrLayout;
+  }
+  static const KeyboardLayout kEnLayout{kMapLowerEn, kMapUpperEn, kCtrlEn, nullptr, nullptr};
   return &kEnLayout;
+}
+
+// The keyboard's layout and whether the keyboard key switched to its alt
+// letters. One keyboard exists at a time (the settings popup).
+const KeyboardLayout* g_layout = nullptr;
+bool g_alt_letters = false;
+
+void install_letter_maps(lv_obj_t* kb, bool alt) {
+  if (!g_layout) return;
+  g_alt_letters = alt && g_layout->alt_lower_map;
+  lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_TEXT_LOWER,
+                      g_alt_letters ? g_layout->alt_lower_map : g_layout->lower_map,
+                      g_layout->ctrl_map);
+  lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_TEXT_UPPER,
+                      g_alt_letters ? g_layout->alt_upper_map : g_layout->upper_map,
+                      g_layout->ctrl_map);
+}
+
+// LVGL's keyboard key sends LV_EVENT_CANCEL (collapse). On letter pages of a
+// layout with alt letters it switches them instead, and the collapse
+// handlers of the owner do not run; a tap outside the field still collapses.
+void kb_alt_letters_cb(lv_event_t* e) {
+  lv_obj_t* kb = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  const lv_keyboard_mode_t mode = lv_keyboard_get_mode(kb);
+  if (!g_layout || !g_layout->alt_lower_map ||
+      (mode != LV_KEYBOARD_MODE_TEXT_LOWER && mode != LV_KEYBOARD_MODE_TEXT_UPPER)) {
+    return;
+  }
+  install_letter_maps(kb, !g_alt_letters);
+  lv_event_stop_processing(e);
 }
 
 constexpr uint32_t kKeyBg = 0x3A3A3A;
@@ -196,6 +253,7 @@ void kb_draw_task_cb(lv_event_t* e) {
   if (!fill) return;
 
   const bool is_ok = txt && strcmp(txt, LV_SYMBOL_OK) == 0;
+  const bool alt_on = g_alt_letters && txt && strcmp(txt, LV_SYMBOL_KEYBOARD) == 0;
   const bool is_ctrl =
       lv_buttonmatrix_has_button_ctrl(kb, id, LV_BUTTONMATRIX_CTRL_CHECKED);
   const bool pressed = lv_obj_has_state(kb, LV_STATE_PRESSED) &&
@@ -204,7 +262,7 @@ void kb_draw_task_cb(lv_event_t* e) {
   uint32_t color;
   if (is_ok) {
     color = pressed ? kKeyBgOkPressed : kKeyBgOk;
-  } else if (pressed) {
+  } else if (pressed || alt_on) {
     color = kKeyBgPressed;
   } else if (is_ctrl) {
     color = kKeyBgCtrl;
@@ -248,9 +306,10 @@ lv_obj_t* ui_keyboard_create(lv_obj_t* parent) {
   // Always install both letter maps; LVGL's default uppercase map has a
   // glyph our symbol fonts lack.
   const DeviceConfig& kb_cfg = configManager.getConfig();
-  const KeyboardLayout* layout = layout_for_config(kb_cfg.keyboard_layout, kb_cfg.language);
-  lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_TEXT_LOWER, layout->lower_map, layout->ctrl_map);
-  lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_TEXT_UPPER, layout->upper_map, layout->ctrl_map);
+  g_layout = layout_for_config(kb_cfg.keyboard_layout, kb_cfg.language);
+  install_letter_maps(kb, false);
+  // Before the owner's handlers: the keyboard key may switch letters instead.
+  lv_obj_add_event_cb(kb, kb_alt_letters_cb, LV_EVENT_CANCEL, nullptr);
 
   lv_obj_set_style_bg_color(kb, lv_color_hex(kKeyBg), LV_PART_ITEMS);
   lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, LV_PART_ITEMS);
@@ -278,6 +337,8 @@ lv_obj_t* ui_keyboard_create(lv_obj_t* parent) {
 
 void ui_keyboard_set_target(lv_obj_t* kb, lv_obj_t* ta, lv_obj_t* prev) {
   if (!kb || !ta) return;
+  // Every field starts on the normal letters.
+  if (g_alt_letters) install_letter_maps(kb, false);
   lv_keyboard_set_textarea(kb, ta);
   // Set focus explicitly so the textarea shows its cursor even when the
   // user taps directly on the keyboard instead of the field.

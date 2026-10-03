@@ -2121,6 +2121,11 @@ static void create_popup_keyboard(lv_obj_t* content_parent) {
   settings_popup_kb_spacer = spacer;
 
   lv_obj_t* kb = ui_keyboard_create(settings_popup_card);
+  // The keys follow the global corner radius: concentric with the card
+  // corners, which the corner keys sit kKeyboardInset away from.
+  ui_surface_style::apply_radius(
+      kb, popup_layout::kCardRadius > kKeyboardInset ? popup_layout::kCardRadius - kKeyboardInset : 0,
+      LV_PART_ITEMS);
   lv_obj_add_flag(kb, LV_OBJ_FLAG_IGNORE_LAYOUT);
   const int kb_w = reserved_w + (kKeyboardBleed * 2);
   const int kb_h = reserved_h + kKeyboardBleed;

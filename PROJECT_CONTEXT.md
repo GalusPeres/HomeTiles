@@ -48,7 +48,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 - Reporter: JC8012P4A1 V2, SKU10153001-V2 (2632), `_I_W_Y`; #18 tested SKU10153002-V2 (2627), `_I_W_Y1`. Maintainer received JC8012P4A1C_I_W_Y1, SKU10153002-V2. Labels alone prove no other panel.
 - V2 fixes committed in `e1a9297`: touch bounds, internal I2C atomic-state allocation, slot-aware SD cleanup; exact-V2 only. Beta `HOMETILES_ISSUE38_BETA` reports v0.6.12b1; release version stays v0.6.12.
-- SD: reporter card-init failure (40/20 MHz), then Hosted slot-1 assertion. V2 dropped DEINIT_ARG from default host flags like V1; maintainer SD diagnostic passes (~8 GB). Both causes open (#55). Evidence: `build/issue-38/SD-LOG-ANALYSIS.md`.
+- SD (#55): reporter card-init fails (40/20 MHz); Web Admin remounts then hit a Hosted slot-1 assert. Failed V2 mount now final until restart (boot try before Wi-Fi); init cause open. `build/issue-38/SD-LOG-ANALYSIS.md`.
 - Touch: maintainer confirms rapid-tap raw-bounds fix works. BIN/ELF: `build/guition-v2-touch/`.
 - Interrupt-WDT dump (touch ELF): I2C atomic-state object was in PSRAM; backport `37758ef327f9` forces internal allocation. Exposure proven, WDT cause unproven; evidence `build/guition-v2-crash-20260911/`.
 - Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. v0.6.12 keeps daily extrema (24 C daily vs partial hourly 11 C).
@@ -118,7 +118,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Bridge v0.7.0 `1c12eda`; evidence `build/release-v0.7.0/`.
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
 - v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44) incl. installer stub crash; French.
-- Tests pending #7 #11 #27 #34 #45; V2 SD restart #55.
+- Tests pending #7 #11 #27 #34 #45; #55 reporter check.
 
 ## Maintenance
 

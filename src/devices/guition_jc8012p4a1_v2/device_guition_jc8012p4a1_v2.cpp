@@ -80,6 +80,14 @@ bool g_littlefs_ready = false;
 bool g_sd_available = false;
 bool g_sd_init_attempted = false;
 uint32_t g_sd_retry_tick_ms = 0;
+// A failed mount is not retried until the next restart (issue #55). The
+// card shares the SDMMC controller with the C6 Wi-Fi link on slot 1; a
+// failed mount's cleanup reset the controller under it, and the next Wi-Fi
+// transfer crashed the panel (Web Admin asked for the card every few
+// seconds). The boot attempt runs before Wi-Fi starts. Without a
+// card-detect pin a missing card and a failing one look the same, so a
+// card inserted later needs a restart.
+bool g_sd_mount_failed = false;
 uint8_t g_rotation = DeviceGuitionJC8012P4A1V2::kProfile.rotation_default;
 bool g_touch_active = false;
 uint8_t g_touch_release_reads = 0;
@@ -1015,6 +1023,9 @@ bool DeviceGuitionJC8012P4A1V2::initSDCard() {
   if (g_sd_available && GuitionSDMMC.cardType() != GUITION_CARD_NONE) {
     return true;
   }
+  if (g_sd_mount_failed) {
+    return false;
+  }
 
   const uint32_t now = millis();
   if (g_sd_init_attempted && (now - g_sd_retry_tick_ms) < 1500) {
@@ -1032,14 +1043,16 @@ bool DeviceGuitionJC8012P4A1V2::initSDCard() {
   }
   if (!mounted) {
     g_sd_available = false;
-    Serial.println("[Device/Guition JC8012P4A1 V2] SD card mount failed");
+    g_sd_mount_failed = true;
+    Serial.println("[Device/Guition JC8012P4A1 V2] SD card mount failed; SD stays unavailable until restart");
     return false;
   }
 
   const GuitionSdCardType card_type = GuitionSDMMC.cardType();
   if (card_type == GUITION_CARD_NONE) {
     g_sd_available = false;
-    Serial.println("[Device/Guition JC8012P4A1 V2] SD card absent after mount");
+    g_sd_mount_failed = true;
+    Serial.println("[Device/Guition JC8012P4A1 V2] SD card absent after mount; SD stays unavailable until restart");
     GuitionSDMMC.end();
     return false;
   }

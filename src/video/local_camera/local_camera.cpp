@@ -764,11 +764,15 @@ esp_err_t sensorStandby() {
 bool g_defer_isp_updates = false;
 bool g_gamma_pending = false;
 bool g_ccm_pending = false;
-// A gentle change glides: the curve gain moves at most kGammaRampPerFrame per
-// frame, so a quarter-EV digital step is no visible jump (V2 2026-10-03: the
-// steps showed even at frame ends). Other changes land in one frame.
+// A gentle change glides: the curve gain moves at most g_gamma_ramp_per_frame
+// per frame (setStreamDigital() spreads a step over up to three frames), so a
+// digital step is no visible jump (V2 2026-10-03: the steps showed even at
+// frame ends). Other changes land in one frame.
 bool g_gamma_gentle = false;
-constexpr float kGammaRampPerFrame = 1.05f;
+float g_gamma_ramp_per_frame = 1.05f;
+// The stream's stepless digital gain (setStreamDigital()); 0 outside a stream
+// with continuous statistics, where the quarter-EV step applies.
+float g_stream_digital = 0.0f;
 
 void writeColorCorrection() {
   esp_isp_ccm_config_t ccm = {};
@@ -807,8 +811,9 @@ esp_err_t loadGammaCurve(int contrast, uint8_t digital_step, bool gentle = false
   // Digital gain after the sensor limits and the user brightness, which
   // acts at once instead of waiting for the auto exposure.
   const int brightness = currentImageSettings().brightness;
-  g_gamma_curve_gain =
-      digitalGainForStep(digital_step) * brightnessLinearGain(brightness, kGammaExponent);
+  const float digital =
+      g_stream_digital > 0.0f ? g_stream_digital : digitalGainForStep(digital_step);
+  g_gamma_curve_gain = digital * brightnessLinearGain(brightness, kGammaExponent);
   g_gamma_curve_brightness = static_cast<int8_t>(brightness);
   if (!g_defer_isp_updates) g_gamma_applied_gain = g_gamma_curve_gain;
   const esp_err_t err = g_defer_isp_updates ? ESP_OK : writeGammaCurve();
@@ -828,8 +833,10 @@ void applyPendingIspUpdates() {
     float next = g_gamma_curve_gain;
     if (g_gamma_gentle && g_gamma_applied_gain > 0.0f) {
       const float ratio = g_gamma_curve_gain / g_gamma_applied_gain;
-      if (ratio > kGammaRampPerFrame) next = g_gamma_applied_gain * kGammaRampPerFrame;
-      if (ratio < 1.0f / kGammaRampPerFrame) next = g_gamma_applied_gain / kGammaRampPerFrame;
+      if (ratio > g_gamma_ramp_per_frame) next = g_gamma_applied_gain * g_gamma_ramp_per_frame;
+      if (ratio < 1.0f / g_gamma_ramp_per_frame) {
+        next = g_gamma_applied_gain / g_gamma_ramp_per_frame;
+      }
     }
     g_gamma_applied_gain = next;
     g_gamma_pending = next != g_gamma_curve_gain;
@@ -979,6 +986,7 @@ void releasePipeline() {
   g_defer_isp_updates = false;
   g_gamma_pending = false;
   g_ccm_pending = false;
+  g_stream_digital = 0.0f;
   if (g_pipe.csi && g_pipe.csi_running) {
     esp_cam_ctlr_stop(g_pipe.csi);
     g_pipe.csi_running = false;
@@ -1997,35 +2005,95 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
   return StopReason::None;
 }
 
-// Frames after an exposure or curve change before the statistics show it:
-// new sensor registers latch at a frame start, and a curve change waits for
-// the next frozen frame.
+// Espressif's AE tuning for the P4 camera sensors (esp_ipa "agc" in
+// esp_cam_sensor, e.g. sc202cs_default.json and gc2053_default.json): a new
+// step only frame_delay (3) frames after the last one, f_n0 (0.32) of the
+// way when brighter and f_m0 (0.42) when darker, no step below min_step
+// (3 %), and a narrow hold band. The b211/b212 stream stepped a quarter EV
+// within a +-20 % band and jumped at once when far off: visible steps and up
+// to a second too bright after uncovering (V2 recordings 2026-10-03).
+// One more settle frame than frame_delay: a curve change glides over up to
+// three frames from the next frame end.
 constexpr uint32_t kLiveSettleFrames = 4;
-// The running stream keeps a wider band and moves gradually: with the
-// snapshot band (12) the digital gain hunted between steps every few hundred
-// ms, each change a visible jump (V2 2026-10-03). Far off (below half or
-// above one and a half times the target, a light switched) it still moves at
-// full speed.
-constexpr uint32_t kStreamAeTolerance = 24;
-constexpr float kStreamGentleRatio = 1.12f;
+constexpr float kStreamRiseSpeed = 0.32f;
+constexpr float kStreamFallSpeed = 0.42f;
+constexpr float kStreamMinStep = 0.03f;
+constexpr uint32_t kStreamHoldPercent = 6;
+// libcamera's fastReduceThreshold (0.4): a frame that needs less than 60 %
+// of its exposure is corrected at once. Uncovered after a dark scene, the
+// damped steps kept the V2 and 8-inch streams far too bright for a second.
+constexpr float kStreamFastReduceRatio = 0.6f;
 
-// The running stream with continuous statistics: every kStreamTuneIntervalMs
-// one exposure step from the latest frame exposed after the last change, and
-// white balance at most once per second. Never waits.
+// The stream's digital gain, stepless: it scales the curve between the
+// quarter-EV steps the snapshots use. The nearest step stays recorded for
+// reports and the next snapshot. A change glides over at most three frames.
+void setStreamDigital(float digital) {
+  const float max_digital = digitalGainForStep(g_max_digital_step);
+  if (digital > max_digital) digital = max_digital;
+  if (digital < 1.0f) digital = 1.0f;
+  const float before = g_stream_digital > 0.0f ? g_stream_digital : 1.0f;
+  const float change = digital > before ? digital / before : before / digital;
+  g_gamma_ramp_per_frame = std::max(1.01f, cbrtf(change));
+  g_stream_digital = digital;
+  long step = lroundf(log2f(digital) * static_cast<float>(kDigitalGainStepsPerEv));
+  if (step < 0) step = 0;
+  if (step > g_max_digital_step) step = g_max_digital_step;
+  g_digital_step = static_cast<uint8_t>(step);
+  const esp_err_t err = loadGammaCurve(g_pipe.gamma_contrast, g_digital_step, true);
+  if (err != ESP_OK) logCaptureError("Digital gain update failed", err);
+}
+
+// One stream exposure step by ratio. Darker takes the digital gain down
+// first (it only adds noise), then the sensor; brighter raises the sensor
+// first, then the digital gain. Returns true when anything changed.
+bool applyStreamExposureStep(StreamRun& run, float ratio) {
+  bool changed = false;
+  float rest = ratio;
+  if (rest < 1.0f && g_stream_digital > 1.0f) {
+    const float before = g_stream_digital;
+    const float next = before * rest < 1.0f ? 1.0f : before * rest;
+    rest = rest * before / next;
+    setStreamDigital(next);
+    changed = true;
+  }
+  if (rest > 1.005f || rest < 0.995f) {
+    const float before = static_cast<float>(g_exposure.lines) * g_exposure.gain_x16;
+    const ExposureStep step = scaleStagedExposure(g_exposure, rest, run.stages);
+    if (setExposureIfChanged(step.next)) {
+      changed = true;
+      const float after = static_cast<float>(g_exposure.lines) * g_exposure.gain_x16;
+      if (after > 0.0f) rest = rest * before / after;
+    }
+  }
+  if (rest > 1.005f && g_stream_digital < digitalGainForStep(g_max_digital_step)) {
+    setStreamDigital(g_stream_digital * rest);
+    changed = true;
+  }
+  return changed;
+}
+
+// The running stream with continuous statistics: an exposure step from the
+// latest frame exposed after the last change, white balance at most once per
+// second. Never waits.
 void streamAutoTuneLive(StreamRun& run) {
   static isp_ae_result_t ae;
   static isp_awb_stat_result_t awb;
   const uint32_t now_ms = millis();
-  if (static_cast<uint32_t>(now_ms - run.last_tune_ms) < kStreamTuneIntervalMs) return;
-  run.last_tune_ms = now_ms;
-  // A Max. gain change applies within the running stream.
-  applyGainLimit(run.stages);
   portENTER_CRITICAL(&g_live_mux);
   ae = g_live.ae;
   const uint32_t ae_frames = g_live.ae_frames;
   awb = g_live.awb;
   const uint32_t awb_frames = g_live.awb_frames;
   portEXIT_CRITICAL(&g_live_mux);
+  if (static_cast<uint32_t>(now_ms - run.last_tune_ms) >= kStreamTuneIntervalMs) {
+    run.last_tune_ms = now_ms;
+    // A Max. gain change applies within the running stream.
+    applyGainLimit(run.stages);
+    if (g_stream_digital > digitalGainForStep(g_max_digital_step)) {
+      setStreamDigital(digitalGainForStep(g_max_digital_step));
+      run.live_changed_at = ae_frames;
+    }
+  }
   if (g_live_awb_running && awb_frames != run.live_awb_seen &&
       static_cast<uint32_t>(now_ms - run.last_awb_ms) >= kStreamAwbIntervalMs) {
     run.live_awb_seen = awb_frames;
@@ -2037,11 +2105,6 @@ void streamAutoTuneLive(StreamRun& run) {
       applyColorCorrection();
     }
   }
-  // A gliding curve is still on its way: measure once it arrived.
-  if (g_gamma_pending) {
-    run.live_changed_at = ae_frames;
-    return;
-  }
   if (ae_frames == run.live_ae_seen ||
       ae_frames - run.live_changed_at < kLiveSettleFrames) {
     return;
@@ -2050,19 +2113,18 @@ void streamAutoTuneLive(StreamRun& run) {
   ++run.window.tune_ok;
   run.last_measured_ms = now_ms;
   run.mean_luma = weightedMeanLuma(ae.luminance);
-  const uint32_t target = aeTarget();
-  const bool far = run.mean_luma * 2 < target || run.mean_luma * 2 > target * 3;
-  const ExposureStep step = stepStagedExposure(
-      g_exposure, run.mean_luma, target, kStreamAeTolerance, run.stages, aeExponent(),
-      far ? kMaxExposureRatio : kStreamGentleRatio);
-  if (!step.converged) traceAutoExposure('t', 0, 0, run.mean_luma);
   publishExposure(run.mean_luma);
-  if (stepDigitalGain(run.mean_luma, step.limited, kStreamAeTolerance,
-                      far ? kMaxDigitalGainJump : 1, !far)) {
-    run.live_changed_at = ae_frames;
-    return;
-  }
-  if (!step.converged && setExposureIfChanged(step.next)) run.live_changed_at = ae_frames;
+  const uint32_t target = aeTarget();
+  const uint32_t hold = target * kStreamHoldPercent / 100;
+  if (run.mean_luma + hold >= target && run.mean_luma <= target + hold) return;
+  const float needed = exposureRatioFor(run.mean_luma, target, aeExponent());
+  float ratio = needed < kStreamFastReduceRatio
+                    ? needed
+                    : powf(needed, needed > 1.0f ? kStreamRiseSpeed : kStreamFallSpeed);
+  if (ratio > 1.0f && ratio < 1.0f + kStreamMinStep) ratio = 1.0f + kStreamMinStep;
+  if (ratio < 1.0f && ratio > 1.0f - kStreamMinStep) ratio = 1.0f - kStreamMinStep;
+  traceAutoExposure('t', 0, 0, run.mean_luma);
+  if (applyStreamExposureStep(run, ratio)) run.live_changed_at = ae_frames;
 }
 
 // Counts one statistics read of the running stream and the time it took.
@@ -2419,6 +2481,7 @@ uint32_t runStream() {
     // From here every frame is measured; the frame loop never waits for it.
     startLiveStatistics();
     g_defer_isp_updates = true;
+    if (g_live_ae_running) g_stream_digital = digitalGainForStep(g_pipe.gamma_digital_step);
     portENTER_CRITICAL(&g_live_mux);
     run.live_ae_seen = g_live.ae_frames;
     run.live_awb_seen = g_live.awb_frames;
@@ -2506,6 +2569,11 @@ uint32_t runStream() {
   g_defer_isp_updates = false;
   g_gamma_gentle = false;  // The rest of a glide lands at once.
   applyPendingIspUpdates();
+  if (g_stream_digital > 0.0f) {
+    // Snapshots use the quarter-EV steps again, from the nearest one.
+    g_stream_digital = 0.0f;
+    if (g_pipe.isp) loadGammaCurve(g_pipe.gamma_contrast, g_digital_step);
+  }
 
   // Stop order: sender first (it may still read a slot), then the sensor and
   // the receiver, then the buffers.

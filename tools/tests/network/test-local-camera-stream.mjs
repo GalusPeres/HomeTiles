@@ -236,7 +236,8 @@ int main() {
     assert(bridge.acks.empty());                     // Every ACK was consumed.
     assert(report.chunks == 3 && report.bytes_acked == 20000);
     assert(io.yields == 3 && io.headroom_checks == 3);
-    assert(bridge.max_unread_acks == kChunkWindow - 1);
+    // All three chunks fit the window: two ACKs wait while the third goes out.
+    assert(bridge.max_unread_acks == std::min<size_t>(3, kChunkWindow) - 1);
     assert(bridge.wire.size() == 16 + 20000);
     assert(memcmp(bridge.wire.data(), "HTF1\x01\0\0\0\0\0\0\x2a\0\0\x4e\x20", 16) == 0);
     // Exact multiple of the chunk size and a single short chunk.

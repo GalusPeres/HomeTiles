@@ -424,10 +424,14 @@ constexpr size_t kUploadHandshakeMaxBytes = 256;
 constexpr uint32_t kHelloTimeoutMs = 5000;
 // Send of one chunk plus its ACK; the Bridge itself waits 5 s per chunk.
 constexpr uint32_t kChunkAckTimeoutMs = 2000;
-// TEST: chunks sent ahead of their ACK (sendJpegFrame()). One chunk per round
-// trip capped the upload at about 6.5 Mbit/s. Each extra chunk holds up to
-// 8 KB of network buffers in the internal RAM the SDIO link and the UI share.
-constexpr uint32_t kChunkWindow = 2;
+// Chunks sent ahead of their ACK (sendJpegFrame()). One chunk per round trip
+// capped the upload at about 6.5 Mbit/s, two at about 13 Mbit/s: bright,
+// noisy V2 frames of 100 KB then reached only 15 fps and the stream stalled
+// (2026-10-03, ACK 8 ms per 8 KB chunk). Each extra chunk holds up to 8 KB of
+// network buffers in the internal RAM the SDIO link and the UI share; the
+// stream kept 160 KB or more of DMA-capable RAM free (dma_min), and the DMA
+// headroom check before every chunk still stops at 24 KB.
+constexpr uint32_t kChunkWindow = 4;
 constexpr uint32_t kEndSendTimeoutMs = 100;
 // The Bridge closes after 10 s without a frame header; a flush keeps an idle
 // but healthy connection open.

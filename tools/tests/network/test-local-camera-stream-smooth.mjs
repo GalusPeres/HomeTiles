@@ -37,19 +37,33 @@ before(run, 'stopLiveStatistics();', 'g_defer_isp_updates = false;', 'released a
 before(run, 'g_defer_isp_updates = false;', 'applyPendingIspUpdates();', 'and flushed');
 assert.match(body('releasePipeline'), /g_defer_isp_updates = false;\s*g_gamma_pending = false;\s*g_ccm_pending = false;/);
 
-// Wider band and small steps in the running stream.
-assert.match(source, /constexpr uint32_t kStreamAeTolerance = 24;/);
-assert.match(source, /constexpr float kStreamGentleRatio = 1\.12f;/);
+// The running stream regulates like Espressif's esp_ipa tuning for the P4
+// sensors (b213, after the V2 and 8-inch recordings): a step 3 frames after
+// the last one (plus one for the glide), 32 % of the way brighter and 42 %
+// darker, no step below 3 %, a +-6 % hold band, and libcamera's fast reduce:
+// below 60 % of the needed exposure the correction lands at once.
+assert.match(source, /constexpr uint32_t kLiveSettleFrames = 4;/);
+assert.match(source, /constexpr float kStreamRiseSpeed = 0\.32f;/);
+assert.match(source, /constexpr float kStreamFallSpeed = 0\.42f;/);
+assert.match(source, /constexpr float kStreamMinStep = 0\.03f;/);
+assert.match(source, /constexpr uint32_t kStreamHoldPercent = 6;/);
+assert.match(source, /constexpr float kStreamFastReduceRatio = 0\.6f;/);
 const live = body('streamAutoTuneLive');
-assert.match(live, /const bool far = run\.mean_luma \* 2 < target \|\| run\.mean_luma \* 2 > target \* 3;/);
-assert.match(live, /far \? kMaxExposureRatio : kStreamGentleRatio/);
-assert.match(live, /stepDigitalGain\(run\.mean_luma, step\.limited, kStreamAeTolerance,\s*far \? kMaxDigitalGainJump : 1, !far\)/);
-// b211 still showed each quarter-EV step: the curve gain now glides, at most
-// 5 % per frame, and the next measurement waits until it arrived.
-assert.match(source, /constexpr float kGammaRampPerFrame = 1\.05f;/);
+assert.match(live, /if \(run\.mean_luma \+ hold >= target && run\.mean_luma <= target \+ hold\) return;/);
+assert.match(live, /float ratio = needed < kStreamFastReduceRatio\s*\? needed\s*: powf\(needed, needed > 1\.0f \? kStreamRiseSpeed : kStreamFallSpeed\);/);
+assert.match(live, /if \(ratio > 1\.0f && ratio < 1\.0f \+ kStreamMinStep\) ratio = 1\.0f \+ kStreamMinStep;/);
+assert.doesNotMatch(live, /stepDigitalGain/, 'the stream digital gain is stepless');
+// Darker: digital gain first; brighter: the sensor first, then the digital gain.
+const apply = body('applyStreamExposureStep');
+before(apply, 'if (rest < 1.0f && g_stream_digital > 1.0f)', 'scaleStagedExposure(g_exposure, rest, run.stages)',
+  'darker takes the digital gain down first');
+before(apply, 'scaleStagedExposure(g_exposure, rest, run.stages)', 'setStreamDigital(g_stream_digital * rest);',
+  'brighter raises the sensor first');
+// A digital change glides over at most three frames.
+assert.match(body('setStreamDigital'), /g_gamma_ramp_per_frame = std::max\(1\.01f, cbrtf\(change\)\);/);
 const ramp = body('applyPendingIspUpdates');
-assert.match(ramp, /if \(ratio > kGammaRampPerFrame\) next = g_gamma_applied_gain \* kGammaRampPerFrame;/);
+assert.match(ramp, /if \(ratio > g_gamma_ramp_per_frame\) next = g_gamma_applied_gain \* g_gamma_ramp_per_frame;/);
 assert.match(ramp, /g_gamma_pending = next != g_gamma_curve_gain;/);
-assert.match(live, /if \(g_gamma_pending\) \{\s*run\.live_changed_at = ae_frames;\s*return;\s*\}/);
 before(run, 'g_gamma_gentle = false;', 'applyPendingIspUpdates();', 'the rest of a glide lands at the stream end');
+before(run, 'applyPendingIspUpdates();', 'g_stream_digital = 0.0f;', 'snapshots use quarter-EV steps again');
 console.log('Local camera stream: curve changes at frame ends, gentle steps within a wider band');

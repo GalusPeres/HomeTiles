@@ -46,7 +46,7 @@ assert.match(body('streamAutoTune'), /if \(g_live_ae_running\) \{\s*streamAutoTu
 const live = body('streamAutoTuneLive');
 assert.doesNotMatch(live, /oneshot_statistics|vTaskDelay|xQueueReceive/, 'no waiting');
 assert.match(live, /ae_frames - run\.live_changed_at < kLiveSettleFrames/, 'only frames exposed after a change');
-assert.match(live, /if \(!step\.converged && setExposureIfChanged\(step\.next\)\) run\.live_changed_at = ae_frames;/);
+assert.match(live, /if \(applyStreamExposureStep\(run, ratio\)\) run\.live_changed_at = ae_frames;/);
 
 // A sender that falls behind lowers the quality too.
 const capture = body('streamCaptureFrame');

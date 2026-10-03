@@ -1701,6 +1701,8 @@ constexpr uint32_t kStreamAwbIntervalMs = 1000;
 constexpr uint32_t kStreamTuneForceMs = 2000;
 constexpr int kStreamStatisticsTimeoutMs = 40;
 constexpr int kStreamMinStatisticsWaitMs = 10;
+// A forced read waits one sensor frame plus this margin.
+constexpr int kStreamStatisticsMarginMs = 10;
 constexpr uint32_t kStreamArbiterTimeoutMs = 20;
 constexpr uint32_t kStreamSliceMs = 50;
 constexpr uint32_t kSenderStopWaitMs = 1000;
@@ -1714,6 +1716,7 @@ struct StreamRun {
   local_camera_stream::FramePacer pacer;
   uint32_t last_tune_ms = 0;
   uint32_t last_awb_ms = 0;
+  uint32_t last_measured_ms = 0;  // Last statistics read that succeeded.
   bool awb_next = false;
   uint32_t mean_luma = 0;
   StreamWindow window;
@@ -1861,12 +1864,20 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
   }
   run.last_tune_ms = millis();
   run.last_awb_ms = run.last_tune_ms;
+  run.last_measured_ms = run.last_tune_ms;
   return StopReason::None;
 }
 
 // At most one statistics read per kStreamTuneIntervalMs, alternating AE and
 // AWB (AWB at most once per second), and only in the time left before the
-// next deadline. Every exposure change writes the SCCB bus shared with touch.
+// next deadline. The statistics arrive with the end of the next sensor frame:
+// when that frame is about as long as the stream period (25 fps at 1331
+// lines: 39 ms frames, 40 ms period) or longer (15 fps: 66 ms), a wait cut to
+// the time left timed out every time. The running stream then never measured,
+// and a gain the Max. gain setting had lowered never came back up (V2
+// 2026-10-03). After kStreamTuneForceMs without a measurement one read waits
+// a whole frame; a failed read is retried as the same kind.
+// Every exposure change writes the SCCB bus shared with touch.
 void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
   static isp_ae_result_t ae_result;
   static isp_awb_stat_result_t awb_result;
@@ -1875,22 +1886,24 @@ void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
   if (since_ms < kStreamTuneIntervalMs) return;
   int timeout_ms = budget_ms > 3 ? static_cast<int>(budget_ms - 3) : 0;
   if (timeout_ms > kStreamStatisticsTimeoutMs) timeout_ms = kStreamStatisticsTimeoutMs;
-  if (timeout_ms < kStreamMinStatisticsWaitMs) {
-    if (since_ms < kStreamTuneForceMs) return;
-    timeout_ms = kStreamStatisticsTimeoutMs;
+  if (static_cast<uint32_t>(now_ms - run.last_measured_ms) >= kStreamTuneForceMs) {
+    timeout_ms = static_cast<int>(currentFrameMs()) + kStreamStatisticsMarginMs;
+  } else if (timeout_ms < kStreamMinStatisticsWaitMs) {
+    return;
   }
   run.last_tune_ms = now_ms;
   // A Max. gain change applies within the running stream.
   applyGainLimit(run.stages);
   const bool awb = run.awb_next &&
                    static_cast<uint32_t>(now_ms - run.last_awb_ms) >= kStreamAwbIntervalMs;
-  run.awb_next = !run.awb_next;
   if (awb) {
-    run.last_awb_ms = now_ms;
     if (esp_isp_awb_controller_get_oneshot_statistics(g_pipe.awb, timeout_ms, &awb_result) !=
         ESP_OK) {
       return;
     }
+    run.awb_next = false;
+    run.last_awb_ms = now_ms;
+    run.last_measured_ms = now_ms;
     const WhiteBalanceGains next = grayWorldGains(
         awb_result.sum_r, awb_result.sum_g, awb_result.sum_b,
         awb_result.white_patch_num, kMinAwbSamples, g_gains);
@@ -1904,6 +1917,8 @@ void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
       ESP_OK) {
     return;
   }
+  run.awb_next = true;
+  run.last_measured_ms = now_ms;
   run.mean_luma = weightedMeanLuma(ae_result.luminance);
   const ExposureStep step =
       stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages, aeExponent());

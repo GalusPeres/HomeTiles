@@ -404,7 +404,20 @@ void build_lock(const Detail& d, const Visual& v) {
   const char* label = done ? text(DeviceLabel::DoorOpen)
                     : confirm ? text(DeviceLabel::ReallyOpen)
                               : text(DeviceLabel::OpenDoor);
-  const int pw = popup_layout::scale(290);
+  // The pill fits the longest of its labels beside the icon, so nothing is
+  // cut and it keeps its width when the label changes (Polish "Na pewno
+  // otworzyć?" ran past both ends of the 290 px pill).
+  int pw = popup_layout::scale(290);
+  lv_point_t icon_size;
+  lv_text_get_size(&icon_size, getMdiChar("door-open").c_str(), FONT_MDI_ICONS, 0, 0,
+                   LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  for (const DeviceLabel id : {DeviceLabel::OpenDoor, DeviceLabel::ReallyOpen, DeviceLabel::DoorOpen}) {
+    lv_point_t size;
+    lv_text_get_size(&size, text(id), popup_layout::font24(), 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    pw = std::max(pw, static_cast<int>(icon_size.x + popup_layout::scale(10) + size.x +
+                                       2 * popup_layout::scale(16)));
+  }
+  pw = std::min(pw, content_w);
   pill((content_w - pw) / 2, content_height() - popup_layout::kNavBottomInset - nav, pw, nav,
        done ? "check" : "door-open", label, confirm,
        !done && usable && !moving && !at_open && d.unlock_allowed, lock_open_tapped, v.color);

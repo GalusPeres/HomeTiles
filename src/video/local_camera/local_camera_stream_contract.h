@@ -814,6 +814,14 @@ struct StreamWindow {
   uint32_t tune_ms_max = 0;
   uint32_t loop_ms_max = 0;   // Longest capture + encode + tune pass.
   uint32_t ae_results = 0;    // Continuous AE statistics results received.
+  // Exposure steps and how long each took to show in the measured luma:
+  // waits ended by a timeout or by a scene change, and failed sensor writes.
+  uint32_t settles = 0;
+  uint32_t settle_ms_total = 0;
+  uint32_t settle_ms_max = 0;
+  uint32_t settle_timeouts = 0;
+  uint32_t scene_changes = 0;
+  uint32_t sensor_fail = 0;
 };
 
 // Timing of one window as JSON (/api/local-camera "stream_timing") and as a
@@ -826,7 +834,8 @@ inline size_t formatTimingJson(char* out, size_t capacity, const StreamWindow& w
       "{\"sender_waits\":%u,\"sender_wait_ms\":%u,\"sender_wait_max\":%u,"
       "\"freezes\":%u,\"freeze_ms\":%u,\"freeze_max\":%u,"
       "\"tune_ok\":%u,\"tune_timeout\":%u,\"tune_forced\":%u,\"tune_ms\":%u,\"tune_max\":%u,"
-      "\"loop_max\":%u,\"ae_results\":%u}",
+      "\"loop_max\":%u,\"ae_results\":%u,\"settles\":%u,\"settle_ms\":%u,"
+      "\"settle_max\":%u,\"settle_timeouts\":%u,\"scene_changes\":%u,\"sensor_fail\":%u}",
       static_cast<unsigned>(w.sender_waits),
       static_cast<unsigned>(w.sender_waits ? w.sender_wait_ms_total / w.sender_waits : 0),
       static_cast<unsigned>(w.sender_wait_ms_max), static_cast<unsigned>(w.freezes),
@@ -835,7 +844,10 @@ inline size_t formatTimingJson(char* out, size_t capacity, const StreamWindow& w
       static_cast<unsigned>(w.tune_timeout), static_cast<unsigned>(w.tune_forced),
       static_cast<unsigned>(reads ? w.tune_ms_total / reads : 0),
       static_cast<unsigned>(w.tune_ms_max), static_cast<unsigned>(w.loop_ms_max),
-      static_cast<unsigned>(w.ae_results));
+      static_cast<unsigned>(w.ae_results), static_cast<unsigned>(w.settles),
+      static_cast<unsigned>(w.settles ? w.settle_ms_total / w.settles : 0),
+      static_cast<unsigned>(w.settle_ms_max), static_cast<unsigned>(w.settle_timeouts),
+      static_cast<unsigned>(w.scene_changes), static_cast<unsigned>(w.sensor_fail));
   if (written < 0 || static_cast<size_t>(written) >= capacity) {
     out[0] = '\0';
     return 0;

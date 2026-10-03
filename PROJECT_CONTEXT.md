@@ -109,7 +109,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - Camera builds pass; HW pending (#56): WS 7/10.1/7B/4.3/4B OV5647, V1/JC1060 V2 OV02C10, JC4880 quarter turn.
 - Advanced: `lcam_rot` (180 = flip, odd = `rotate` 90), `lcam_rbswap` (Bayer, next start).
 - HW pending: b30 CSI/ISP, q10; b31 gain, q10-90; b32 screenshot; b33 Wi-Fi/AP, kbd, #43; b34 rotation, boards; b35 sleep stream/indicator wake, Tab5 1% wake, S3 150Hz.
-- Open: int WDT fix HW test, TEST `kChunkWindow = 2`.
+- Open: int WDT HW; TEST `kChunkWindow = 4`; stream AE waits for a step to show (b215).
 - Popup stream: Bridge b8 thins before area scaling, `2a714a9` shares FFmpeg per camera; P4 b134 30 FPS, no refresh wait; #63 1024x600 552x310 (b135).
 
 ## v0.7.0 release

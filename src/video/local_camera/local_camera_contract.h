@@ -823,6 +823,44 @@ inline uint8_t nextDigitalGainStep(uint8_t step, uint32_t mean_luma, uint32_t ta
   return static_cast<uint8_t>(next);
 }
 
+// Whether a stream exposure step shows in the measured luma yet. A fixed
+// settle time fits only one delay: the 8-inch stream (b214) saw a gain change
+// 0.6-0.8 s later while it stepped every 0.2 s, overshot and swung between 76
+// and 164. The stream now waits until the luma moved most of the expected way
+// (Arrived) or clearly the other way (SceneChanged, e.g. a hand in front of
+// the lens), so any sensor and delay settles without swinging.
+enum class StepProgress : uint8_t { Waiting, Arrived, SceneChanged };
+constexpr float kStepArrivedFraction = 0.8f;
+constexpr float kSceneChangeFraction = 0.2f;
+constexpr float kSceneChangeMinLuma = 12.0f;
+// From a clipped frame the expected luma is only a lower bound: leaving the
+// clipped range by this fraction counts as arrived.
+constexpr float kClippedArrivedFraction = 0.3f;
+
+inline StepProgress stepProgress(uint32_t from_luma, float expected_luma, uint32_t luma) {
+  const float from = static_cast<float>(from_luma);
+  const float want = expected_luma - from;
+  const float moved = static_cast<float>(luma) - from;
+  float against = kSceneChangeFraction * from;
+  if (against < kSceneChangeMinLuma) against = kSceneChangeMinLuma;
+  if (want >= 0.0f ? moved <= -against : moved >= against) return StepProgress::SceneChanged;
+  float need = (want >= 0.0f ? want : -want) * kStepArrivedFraction;
+  if (from_luma >= kSaturatedLuma && want < 0.0f && need > kClippedArrivedFraction * from) {
+    need = kClippedArrivedFraction * from;
+  }
+  if (need < 1.0f) need = 1.0f;
+  if (want >= 0.0f ? moved >= need : moved <= -need) return StepProgress::Arrived;
+  return StepProgress::Waiting;
+}
+
+// Two results in a row this close: a change that ramps in (a curve glide)
+// has finished.
+inline bool lumaSteady(uint32_t previous, uint32_t luma) {
+  const uint32_t diff = luma > previous ? luma - previous : previous - luma;
+  const uint32_t allowed = luma * 3 / 100;
+  return diff <= (allowed > 2 ? allowed : 2);
+}
+
 // Limits of the Max. gain setting. 1x to the full amplification (sensor
 // maximum times the 8x digital gain) is mapped on a log scale, so every
 // percent changes the brightness by the same ratio. The sensor gain comes

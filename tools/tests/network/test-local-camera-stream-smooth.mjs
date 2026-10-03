@@ -38,13 +38,11 @@ before(run, 'g_defer_isp_updates = false;', 'applyPendingIspUpdates();', 'and fl
 assert.match(body('releasePipeline'), /g_defer_isp_updates = false;\s*g_gamma_pending = false;\s*g_ccm_pending = false;/);
 
 // The running stream regulates like Espressif's esp_ipa tuning for the P4
-// sensors (b213, after the V2 and 8-inch recordings): a step 3 frames after
-// the last one (plus one for the glide), 32 % of the way brighter and 42 %
-// darker, no step below 3 %, a +-6 % hold band, and libcamera's fast reduce:
-// below 60 % of the needed exposure the correction lands at once.
-assert.match(source, /constexpr uint32_t kLiveSettleFrames = 5;/);
-// Settled in frame times: the ISP reports several AE results per frame.
-assert.match(body('streamAutoTuneLive'), /static_cast<uint32_t>\(now_ms - run\.live_changed_ms\) < kLiveSettleFrames \* currentFrameMs\(\)/);
+// sensors (b213, after the V2 and 8-inch recordings): 32 % of the way
+// brighter and 42 % darker, no step below 3 %, a +-6 % hold band, and
+// libcamera's fast reduce: below 60 % of the needed exposure the correction
+// lands at once. A step follows once the last one shows in the luma
+// (test-local-camera-stream-step-arrival.mjs).
 assert.match(source, /constexpr float kStreamRiseSpeed = 0\.32f;/);
 assert.match(source, /constexpr float kStreamFallSpeed = 0\.42f;/);
 assert.match(source, /constexpr float kStreamMinStep = 0\.03f;/);

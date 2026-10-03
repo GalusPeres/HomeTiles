@@ -45,8 +45,9 @@ before(body('releasePipeline'), 'stopLiveStatistics();', 'esp_isp_ae_controller_
 assert.match(body('streamAutoTune'), /if \(g_live_ae_running\) \{\s*streamAutoTuneLive\(run\);\s*return;\s*\}/);
 const live = body('streamAutoTuneLive');
 assert.doesNotMatch(live, /oneshot_statistics|vTaskDelay|xQueueReceive/, 'no waiting');
-assert.match(live, /now_ms - run\.live_changed_ms\) < kLiveSettleFrames \* currentFrameMs\(\)/, 'only frames exposed after a change');
-assert.match(live, /if \(applyStreamExposureStep\(run, ratio\)\) run\.live_changed_ms = millis\(\);/);
+assert.match(live, /if \(run\.live_waiting && !liveStepSettled\(run, luma, now_ms\)\) return;/,
+  'only luma that shows the last step');
+assert.match(live, /if \(applyStreamExposureStep\(run, ratio\)\) \{\s*startStepWait\(run, run\.mean_luma, streamExposureProduct\(\) \/ before, millis\(\)\);/);
 
 // A sender that falls behind lowers the quality too.
 const capture = body('streamCaptureFrame');

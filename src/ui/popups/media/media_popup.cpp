@@ -870,11 +870,15 @@ void preload_media_popup() {
   }
 }
 
+bool media_popup_showing(const String& entity_id) {
+  if (!g_media_popup_ctx || !g_media_popup_ctx->overlay || !g_media_popup_ctx->card) return false;
+  if (!g_media_popup_ctx->entity_id.length()) return false;
+  if (!g_media_popup_ctx->entity_id.equalsIgnoreCase(entity_id)) return false;
+  return !lv_obj_has_flag(g_media_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
+}
+
 void update_media_popup(const MediaPopupInit& init) {
-  if (!g_media_popup_ctx || !g_media_popup_ctx->overlay || !g_media_popup_ctx->card) return;
-  if (!g_media_popup_ctx->entity_id.length()) return;
-  if (!g_media_popup_ctx->entity_id.equalsIgnoreCase(init.entity_id)) return;
-  if (lv_obj_has_flag(g_media_popup_ctx->card, LV_OBJ_FLAG_HIDDEN)) return;
+  if (!media_popup_showing(init.entity_id)) return;
   apply_init_to_context(g_media_popup_ctx, init);
 }
 

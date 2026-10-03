@@ -5,6 +5,9 @@
 // opener, and the open Settings card turned olive. The visible header also
 // kept the old language: the title went to the hidden body label with
 // lv_label_set_text, which neither hometiles_title nor the shell copy sees.
+// b203 still turned beige: every Media player update ran popup_background(),
+// which made the Media tile the opener again while Settings was open, so its
+// "From cover" retint on the reload recolored Settings anyway.
 import assert from 'node:assert/strict';
 
 import {readRepoFile} from '../../lib/admin-source.mjs';
@@ -14,6 +17,8 @@ const read = file => maskCpp(readRepoFile(file)).replace(/\r\n?/g, '\n');
 const iconSource = read('src/tiles/runtime/tile_icon_source.cpp');
 const shell = read('src/ui/popups/popup_shell.cpp');
 const settings = read('src/ui/tabs/settings/tab_settings.cpp');
+const renderer = read('src/tiles/runtime/tile_renderer.cpp');
+const media = read('src/ui/popups/media/media_popup.cpp');
 
 // A popup without a tile forgets the opener and the header disc options a
 // tile click left behind (a folder without a PIN opens no popup).
@@ -27,6 +32,16 @@ const forget = open.indexOf('tile_icon_source::open_popup_without_tile();');
 assert.ok(forget > 0, 'Settings forgets the last tile opener');
 assert.ok(forget < open.indexOf('create_popup_body(') && forget < open.indexOf('show_popup_shell('),
   'before the shell takes the disc options');
+
+// A player update reaches only an open Media popup of its entity and never
+// makes its tile the opener otherwise.
+const update = renderer.slice(renderer.indexOf('static void update_media_popup_from_widgets('));
+const showing = update.indexOf('if (!media_popup_showing(tile.sensor_entity)) return;');
+assert.ok(showing > 0, 'the update checks the open Media popup');
+assert.ok(showing < update.indexOf('tile_icon_source::popup_background('), 'before popup_background');
+assert.match(media, /bool media_popup_showing\(const String& entity_id\) \{[\s\S]*?return !lv_obj_has_flag\(g_media_popup_ctx->card, LV_OBJ_FLAG_HIDDEN\);\s*\}/);
+assert.match(media, /void update_media_popup\(const MediaPopupInit& init\) \{\s*if \(!media_popup_showing\(init\.entity_id\)\) return;/);
+assert.equal(renderer.split('tile_icon_source::popup_background(').length - 1, 1, 'no other renderer path sets the opener');
 
 // Every title change reaches the visible header.
 assert.match(settings, /static void set_settings_popup_title\(const char\* text\) \{\s*if \(!settings_popup_title\) return;\s*hometiles_title::set\(settings_popup_title, text\);\s*sync_popup_shell\(\);\s*\}/);

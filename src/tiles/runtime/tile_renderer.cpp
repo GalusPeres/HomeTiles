@@ -3112,6 +3112,11 @@ static void update_media_popup_from_widgets(GridType grid_type,
   if (!tile_ptr || tile_ptr->type != TILE_MEDIA ||
       !tile_ptr->sensor_entity.length()) return;
   const Tile& tile = *tile_ptr;
+  // Only an open Media popup of this entity takes the update. popup_background
+  // below also makes this tile the popup source: run on every player update,
+  // it let the next "From cover" retint recolor whatever popup was open, such
+  // as Settings after a language save (V2, 2026-10-03).
+  if (!media_popup_showing(tile.sensor_entity)) return;
 
   MediaPopupInit init;
   init.entity_id = tile.sensor_entity;

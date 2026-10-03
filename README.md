@@ -21,10 +21,10 @@ Tap a tile for its popup, then slide through the history of sensors, energy and 
 
 ## New in v0.8.0
 
+- **Polished, and now in Polish too:** smoother and faster everywhere, a refined design, many fixes, and the display speaks [Polish and French](https://galusperes.github.io/device-ui/#localization), with their letters on the keyboard.
 - **[Lock, Alarm Panel and Fan tiles](https://galusperes.github.io/tiles/#fan):** with their own popups and code entry.
 - **[Web Admin password](https://galusperes.github.io/web-admin/#web-admin-password)** and **[encrypted commands](https://galusperes.github.io/bridge/#encrypted-commands):** pair the display with Home Assistant by comparing a six-digit number.
 - **[Redesigned Switch tile](https://galusperes.github.io/tiles/#switch):** a dimmer or switch bar across the tile, also for Cover and Climate, and half height for almost every tile.
-- **[French and Polish](https://galusperes.github.io/device-ui/#localization):** two new languages, with their letters on the keyboard.
 - **New boards:** Guition JC8012P4A1 V3 and Waveshare 7B with ESP32-P4 v3.x.
 
 Before updating, update HomeTiles Bridge to **v0.8.0** and [export your dashboard](https://galusperes.github.io/updating/). [All changes](docs/releases/v0.8.0.md)

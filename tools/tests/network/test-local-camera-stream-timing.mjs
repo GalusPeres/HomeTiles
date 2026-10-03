@@ -33,4 +33,7 @@ assert.match(tune, /\+\+run\.window\.tune_forced;/);
 assert.match(body(core, 'runStream'), /if \(pass_ms > run\.window\.loop_ms_max\) run\.window\.loop_ms_max = pass_ms;/);
 assert.match(body(core, 'streamDiagnostics'), /formatTimingJson\(timing, sizeof\(timing\), run\.window\)/);
 assert.match(body(core, 'appendStatusJson'), /formatTimingJson\(stream_json, sizeof\(stream_json\), stream\.window\)/);
+// One line: a newline written into this literal broke the first b209 build.
+assert.ok(readRepoFile('src/video/local_camera/local_camera.cpp')
+  .includes('Serial.printf("[LocalCamStream] timing %s\\n", timing);'));
 console.log('Local camera stream: sender, frame and statistics waits are logged per window');

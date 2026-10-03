@@ -20,13 +20,14 @@ const body = name => {
 };
 const tune = body('streamAutoTune');
 
-assert.match(tune, /if \(static_cast<uint32_t>\(now_ms - run\.last_measured_ms\) >= kStreamTuneForceMs\) \{\s*timeout_ms = static_cast<int>\(currentFrameMs\(\)\) \+ kStreamStatisticsMarginMs;\s*\} else if \(timeout_ms < kStreamMinStatisticsWaitMs\) \{\s*return;\s*\}/,
+assert.match(tune, /const bool forced =\s*static_cast<uint32_t>\(now_ms - run\.last_measured_ms\) >= kStreamTuneForceMs;\s*if \(forced\) \{\s*timeout_ms = static_cast<int>\(currentFrameMs\(\)\) \+ kStreamStatisticsMarginMs;[\s\S]*?\} else if \(timeout_ms < kStreamMinStatisticsWaitMs\) \{\s*return;\s*\}/,
   'an overdue read waits a whole frame, whatever the budget');
 assert.doesNotMatch(tune, /run\.awb_next = !run\.awb_next;/, 'a failed read does not flip the kind');
 const awbOk = tune.indexOf('run.awb_next = false;');
 const aeOk = tune.indexOf('run.awb_next = true;');
 assert.ok(awbOk > tune.indexOf('esp_isp_awb_controller_get_oneshot_statistics('), 'AWB counts only after its read');
 assert.ok(aeOk > tune.indexOf('esp_isp_ae_controller_get_oneshot_statistics('), 'AE counts only after its read');
+assert.equal(tune.split('if (!read) return;').length - 1, 2, 'a failed read changes nothing');
 assert.equal(tune.split('run.last_measured_ms = now_ms;').length - 1, 2, 'both reads mark a measurement');
 assert.match(body('streamSettle'), /run\.last_measured_ms = run\.last_tune_ms;/);
 assert.match(source, /constexpr int kStreamStatisticsMarginMs = 10;/);

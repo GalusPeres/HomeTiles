@@ -1868,6 +1868,15 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
   return StopReason::None;
 }
 
+// Counts one statistics read of the running stream and the time it took.
+void noteStatisticsRead(StreamWindow& window, uint32_t started_ms, bool ok) {
+  const uint32_t took_ms = millis() - started_ms;
+  if (ok) ++window.tune_ok;
+  else ++window.tune_timeout;
+  window.tune_ms_total += took_ms;
+  if (took_ms > window.tune_ms_max) window.tune_ms_max = took_ms;
+}
+
 // At most one statistics read per kStreamTuneIntervalMs, alternating AE and
 // AWB (AWB at most once per second), and only in the time left before the
 // next deadline. The statistics arrive with the end of the next sensor frame:
@@ -1886,8 +1895,11 @@ void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
   if (since_ms < kStreamTuneIntervalMs) return;
   int timeout_ms = budget_ms > 3 ? static_cast<int>(budget_ms - 3) : 0;
   if (timeout_ms > kStreamStatisticsTimeoutMs) timeout_ms = kStreamStatisticsTimeoutMs;
-  if (static_cast<uint32_t>(now_ms - run.last_measured_ms) >= kStreamTuneForceMs) {
+  const bool forced =
+      static_cast<uint32_t>(now_ms - run.last_measured_ms) >= kStreamTuneForceMs;
+  if (forced) {
     timeout_ms = static_cast<int>(currentFrameMs()) + kStreamStatisticsMarginMs;
+    ++run.window.tune_forced;
   } else if (timeout_ms < kStreamMinStatisticsWaitMs) {
     return;
   }
@@ -1897,10 +1909,10 @@ void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
   const bool awb = run.awb_next &&
                    static_cast<uint32_t>(now_ms - run.last_awb_ms) >= kStreamAwbIntervalMs;
   if (awb) {
-    if (esp_isp_awb_controller_get_oneshot_statistics(g_pipe.awb, timeout_ms, &awb_result) !=
-        ESP_OK) {
-      return;
-    }
+    const bool read = esp_isp_awb_controller_get_oneshot_statistics(
+                          g_pipe.awb, timeout_ms, &awb_result) == ESP_OK;
+    noteStatisticsRead(run.window, now_ms, read);
+    if (!read) return;
     run.awb_next = false;
     run.last_awb_ms = now_ms;
     run.last_measured_ms = now_ms;
@@ -1913,10 +1925,10 @@ void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
     }
     return;
   }
-  if (esp_isp_ae_controller_get_oneshot_statistics(g_pipe.ae, timeout_ms, &ae_result) !=
-      ESP_OK) {
-    return;
-  }
+  const bool read =
+      esp_isp_ae_controller_get_oneshot_statistics(g_pipe.ae, timeout_ms, &ae_result) == ESP_OK;
+  noteStatisticsRead(run.window, now_ms, read);
+  if (!read) return;
   run.awb_next = true;
   run.last_measured_ms = now_ms;
   run.mean_luma = weightedMeanLuma(ae_result.luminance);
@@ -1994,6 +2006,10 @@ void streamCaptureFrame(StreamRun& run) {
            static_cast<uint32_t>(millis() - wait_started_ms) < frame_ms) {
       vTaskDelay(pdMS_TO_TICKS(2));
     }
+    const uint32_t waited_ms = millis() - wait_started_ms;
+    ++window.sender_waits;
+    window.sender_wait_ms_total += waited_ms;
+    if (waited_ms > window.sender_wait_ms_max) window.sender_wait_ms_max = waited_ms;
     if (local_camera_upload::framePending()) {
       noteUploadBusy(run);
       return;
@@ -2009,6 +2025,10 @@ void streamCaptureFrame(StreamRun& run) {
     xQueueReceive(g_isr.frames, &event, pdMS_TO_TICKS(frame_ms));
   }
   g_isr.armed = false;
+  const uint32_t freeze_ms = millis() - freeze_started_ms;
+  ++window.freezes;
+  window.freeze_ms_total += freeze_ms;
+  if (freeze_ms > window.freeze_ms_max) window.freeze_ms_max = freeze_ms;
   const int8_t frozen = g_isr.frozen;
   if (frozen < 0) {
     ++window.noframe;
@@ -2104,6 +2124,11 @@ void streamDiagnostics(StreamRun& run, bool force) {
   if (local_camera_stream::formatDiagLine(line, sizeof(line), run.settings, run.quality,
                                           run.window)) {
     Serial.println(line);
+  }
+  char timing[256];
+  if (local_camera_stream::formatTimingJson(timing, sizeof(timing), run.window)) {
+    Serial.printf("[LocalCamStream] timing %s
+", timing);
   }
   updateStreamStatus(makeStreamStatus(run, true, StopReason::None, true));
   run.window = StreamWindow{};
@@ -2236,6 +2261,7 @@ uint32_t runStream() {
         continue;
       }
       if (run.pacer.consume(now_us)) ++run.window.late;
+      const uint32_t pass_started_ms = millis();
       streamCaptureFrame(run);
       if (run.noframe_streak >= kNoFrameResetStreak) {
         reason = StopReason::Error;
@@ -2244,6 +2270,8 @@ uint32_t runStream() {
       }
       const uint64_t after_us = static_cast<uint64_t>(esp_timer_get_time());
       streamAutoTune(run, static_cast<uint32_t>(run.pacer.waitUs(after_us) / 1000u));
+      const uint32_t pass_ms = millis() - pass_started_ms;
+      if (pass_ms > run.window.loop_ms_max) run.window.loop_ms_max = pass_ms;
       reason = streamWait(0, &leftover);
       if (reason != StopReason::None) break;
     }
@@ -2905,6 +2933,11 @@ void appendStatusJson(String& json) {
   char stream_json[640];
   if (local_camera_stream::formatStatusJson(stream_json, sizeof(stream_json), stream)) {
     json += ",\"stream\":";
+    json += stream_json;
+  }
+  if (stream.has_window &&
+      local_camera_stream::formatTimingJson(stream_json, sizeof(stream_json), stream.window)) {
+    json += ",\"stream_timing\":";
     json += stream_json;
   }
 #endif

@@ -794,7 +794,48 @@ struct StreamWindow {
   uint32_t ack_ms_total = 0;
   uint32_t ack_ms_max = 0;
   uint32_t dma_min_bytes = UINT32_MAX;
+  // Where a frame interval goes (V2 2026-10-03: bright, noisy frames dropped
+  // the stream from 25 to 15 fps). Waits for the sender to take the previous
+  // frame, for a fresh CSI frame, and for exposure / white balance statistics.
+  uint32_t sender_waits = 0;
+  uint32_t sender_wait_ms_total = 0;
+  uint32_t sender_wait_ms_max = 0;
+  uint32_t freezes = 0;
+  uint32_t freeze_ms_total = 0;
+  uint32_t freeze_ms_max = 0;
+  uint32_t tune_ok = 0;       // Statistics reads that returned.
+  uint32_t tune_timeout = 0;  // Reads that timed out.
+  uint32_t tune_forced = 0;   // Reads that waited a whole frame (overdue).
+  uint32_t tune_ms_total = 0;
+  uint32_t tune_ms_max = 0;
+  uint32_t loop_ms_max = 0;   // Longest capture + encode + tune pass.
 };
+
+// Timing of one window as JSON (/api/local-camera "stream_timing") and as a
+// log line: averages per event and maxima in ms.
+inline size_t formatTimingJson(char* out, size_t capacity, const StreamWindow& w) {
+  if (!out || capacity == 0) return 0;
+  const uint32_t reads = w.tune_ok + w.tune_timeout;
+  const int written = snprintf(
+      out, capacity,
+      "{\"sender_waits\":%u,\"sender_wait_ms\":%u,\"sender_wait_max\":%u,"
+      "\"freezes\":%u,\"freeze_ms\":%u,\"freeze_max\":%u,"
+      "\"tune_ok\":%u,\"tune_timeout\":%u,\"tune_forced\":%u,\"tune_ms\":%u,\"tune_max\":%u,"
+      "\"loop_max\":%u}",
+      static_cast<unsigned>(w.sender_waits),
+      static_cast<unsigned>(w.sender_waits ? w.sender_wait_ms_total / w.sender_waits : 0),
+      static_cast<unsigned>(w.sender_wait_ms_max), static_cast<unsigned>(w.freezes),
+      static_cast<unsigned>(w.freezes ? w.freeze_ms_total / w.freezes : 0),
+      static_cast<unsigned>(w.freeze_ms_max), static_cast<unsigned>(w.tune_ok),
+      static_cast<unsigned>(w.tune_timeout), static_cast<unsigned>(w.tune_forced),
+      static_cast<unsigned>(reads ? w.tune_ms_total / reads : 0),
+      static_cast<unsigned>(w.tune_ms_max), static_cast<unsigned>(w.loop_ms_max));
+  if (written < 0 || static_cast<size_t>(written) >= capacity) {
+    out[0] = '\0';
+    return 0;
+  }
+  return static_cast<size_t>(written);
+}
 
 inline uint32_t windowSkipped(const StreamWindow& w) {
   return w.busy + w.big + w.dma + w.arb + w.late + w.noframe;

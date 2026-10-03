@@ -2180,7 +2180,8 @@ static lv_obj_t* wifi_create_entry_row(lv_obj_t* parent, const char* label_text,
 
   lv_obj_t* label = lv_label_create(row);
   lv_label_set_text_fmt(label, "%s:", label_text);
-  lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
+  // A label wider than its column wraps at a word instead of losing its end.
+  lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(label, popup_layout::scale(160));
   lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
   lv_obj_set_style_text_color(label, lv_color_hex(0xC8C8C8), 0);
@@ -2538,7 +2539,10 @@ static lv_obj_t* create_locale_dropdown_row(lv_obj_t* form, const char* label_te
   // one shared width keeps all dropdowns aligned.
   lv_obj_t* label = lv_label_create(row);
   lv_label_set_text(label, label_text);
-  lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
+  // A label wider than its column ("Format de l'heure :") wraps at a word
+  // instead of losing its colon; the French no-break space keeps the colon
+  // with the last word.
+  lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(label, popup_layout::scale(210));
   lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
   lv_obj_set_style_text_color(label, lv_color_white(), 0);

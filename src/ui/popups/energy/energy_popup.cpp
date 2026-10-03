@@ -151,6 +151,12 @@ const char* today_label() {
   return i18n::weather_today_label(configManager.getConfig().language);
 }
 
+// The round Today button: the standard short form where the word is long
+// (French "Auj."), like the Weather popup footer.
+const char* today_button_label() {
+  return i18n::weather_today_button_label(configManager.getConfig().language);
+}
+
 const char* loading_label() {
   return i18n::strings(configManager.getConfig().language).loading;
 }
@@ -198,22 +204,17 @@ int text_width(const char* text, const lv_font_t* font) {
 }
 
 // Energy counts from midnight, so the day button says Today (display language)
-// instead of 24H. The label keeps the 24 px font where it fits, steps down to
-// 20 px, and only then widens its button (French on 480x480).
+// instead of 24H. The label keeps the 24 px font of 7D; a longer word (French
+// "Aujourd'hui") lengthens the button into a pill instead of shrinking.
 void fit_today_button(EnergyPopupContext* ctx) {
   if (!ctx || !ctx->day_btn || !ctx->day_label) return;
-  const char* text = today_label();
+  const char* text = today_button_label();
   if (strcmp(lv_label_get_text(ctx->day_label), text) != 0) lv_label_set_text(ctx->day_label, text);
-  const int inset = popup_layout::scale(16);
-  const lv_font_t* font = popup_layout::font24();
-  int width = text_width(text, font);
-  if (width + inset > kRangeButtonWidth) {
-    font = popup_layout::font20();
-    width = text_width(text, font);
-  }
-  lv_obj_set_style_text_font(ctx->day_label, font, 0);
-  lv_obj_set_style_text_font(ctx->day_label, font, LV_STATE_PRESSED);
-  const int button_w = width + inset > kRangeButtonWidth ? width + inset : kRangeButtonWidth;
+  // Room for the round ends: a quarter of the button height on each side.
+  const int width = text_width(text, popup_layout::font24()) + kRangeButtonHeight / 2;
+  lv_obj_set_style_text_font(ctx->day_label, popup_layout::font24(), 0);
+  lv_obj_set_style_text_font(ctx->day_label, popup_layout::font24(), LV_STATE_PRESSED);
+  const int button_w = width > kRangeButtonWidth ? width : kRangeButtonWidth;
   if (lv_obj_get_style_width(ctx->day_btn, LV_PART_MAIN) != button_w) {
     lv_obj_set_width(ctx->day_btn, button_w);
     if (ctx->range_row) lv_obj_set_width(ctx->range_row, kRangeButtonWidth + kRangeButtonGap + button_w);
@@ -1281,7 +1282,7 @@ void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
 
   // 7D sits left of Today: the longer range reaches further into the past.
   ctx->week_btn = make_button_label(period_row, "7D", &ctx->week_label);
-  ctx->day_btn = make_button_label(period_row, today_label(), &ctx->day_label);
+  ctx->day_btn = make_button_label(period_row, today_button_label(), &ctx->day_label);
   lv_obj_add_event_cb(ctx->day_btn, on_period_click, LV_EVENT_CLICKED, ctx);
   lv_obj_add_event_cb(ctx->week_btn, on_period_click, LV_EVENT_CLICKED, ctx);
 

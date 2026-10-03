@@ -240,6 +240,7 @@ const LocaleProfile& locale(const char* language){
  static const LocaleProfile de{",","",{"Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"}};
  return strcmp(language,"de")==0?de:en;}
 const char* weather_today_label(const char*){return "Today";}
+const char* weather_today_button_label(const char*){return "Today";}
 struct Strings{const char* loading="Loading";};const Strings& strings(const char*){static Strings s;return s;}
 String format_number(const char* language,float value,uint8_t decimals,bool=false){if(!std::isfinite(value))return "--";char text[48];snprintf(text,sizeof(text),"%.*f",decimals>6?6:decimals,value);String result=text;if(locale(language).decimal_separator[0]==',')std::replace(result.begin(),result.end(),'.',',');return result;}
 String weather_weekday_short(const char*,const String& iso){return iso.substr(5);}

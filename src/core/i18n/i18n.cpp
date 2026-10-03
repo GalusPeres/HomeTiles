@@ -1801,6 +1801,7 @@ static const LocaleProfile kLocaleDe = {
     ",",
     "Heute",
     "Morgen",
+    "Heute",
     {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"},
     {"Jan.", "Feb.", "Mär.", "Apr.", "Mai", "Jun.",
      "Jul.", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."},
@@ -1908,6 +1909,7 @@ static const LocaleProfile kLocaleEn = {
     ".",
     "Today",
     "Tomorrow",
+    "Today",
     {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
     {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
@@ -2011,6 +2013,8 @@ static const LocaleProfile kLocaleFr = {
     ",",
     "Aujourd'hui",
     "Demain",
+    // Auj. is the standard abbreviation (OQLF list of common abbreviations).
+    "Auj.",
     {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"},
     {"janv.", "févr.", "mars", "avr.", "mai", "juin",
      "juil.", "août", "sept.", "oct.", "nov.", "déc."},
@@ -2717,6 +2721,7 @@ static const LocaleProfile kLocalePl = {
     ",",
     "Dziś",
     "Jutro",
+    "Dziś",
     {"Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "Sb"},
     {"sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"},
     {"Czysta noc", "Pochmurno", "Wyjątkowe", "Mgła", "Grad", "Burza", "Burza z deszczem", "Częściowo pochmurno", "Ulewny deszcz", "Deszcz", "Śnieg", "Deszcz ze śniegiem", "Słonecznie", "Wietrznie", "Porywisty wiatr"},
@@ -2944,6 +2949,10 @@ const char* weather_month_short(const char* language_code, int month) {
 
 const char* weather_today_label(const char* language_code) {
   return locale(language_code).weather_today;
+}
+
+const char* weather_today_button_label(const char* language_code) {
+  return locale(language_code).weather_today_button;
 }
 
 const char* weather_tomorrow_label(const char* language_code) {

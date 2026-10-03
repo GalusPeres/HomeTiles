@@ -21,6 +21,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/types/weather/weather_icons.h"
 #include "src/tiles/config/tile_config.h"
+#include "src/tiles/runtime/tile_header.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/config/config_manager.h"
@@ -401,6 +402,7 @@ static PendingWeatherUpdate g_pending_weather;
 static int find_active_day_index(const WeatherPopupContext* ctx, const String& date_local);
 static int find_prev_active_day_index(const WeatherPopupContext* ctx, int from_index);
 static int find_next_active_day_index(const WeatherPopupContext* ctx, int from_index);
+static const char* weather_today_text();
 static const char* weather_today_button_text();
 static bool get_local_now_parts(String& date_out, int& hour_out, int* minute_out = nullptr);
 static String iso_date_add_days(const String& iso, int day_offset);
@@ -869,12 +871,30 @@ static void update_forecast_graph(WeatherPopupContext* ctx) {
       if (slot_has_date) {
         String text;
         if (has_today && data.date_local == today_date) {
-          text = weather_today_button_text();
+          // Today in full where it fits the column, else the short form of
+          // the footer button (French "Aujourd'hui" -> "Auj.").
+          text = weather_today_text();
+          lv_point_t full{};
+          lv_text_get_size(&full, text.c_str(), popup_layout::font20(), 0, 0, LV_COORD_MAX,
+                           LV_TEXT_FLAG_NONE);
+          if (full.x > col_w) text = weather_today_button_text();
         } else {
           text = weekday_from_iso(data.date_local);
           if (!text.length()) text = data.day;
         }
         lv_label_set_text(fw.day_label, text.c_str());
+        // One line: a longer name (French "Aujourd'hui") steps its font down
+        // until it fits the column instead of wrapping inside the word. The
+        // label keeps the full line height, so the icons below stay aligned.
+        const lv_font_t* day_font =
+            tile_header::fitting_font(text.c_str(), col_w, popup_layout::font20());
+        if (lv_obj_get_style_text_font(fw.day_label, LV_PART_MAIN) != day_font) {
+          const int32_t full_line = lv_font_get_line_height(popup_layout::font20());
+          lv_obj_set_style_text_font(fw.day_label, day_font, 0);
+          lv_obj_set_height(fw.day_label, full_line);
+          lv_obj_set_style_pad_top(fw.day_label,
+                                   (full_line - lv_font_get_line_height(day_font)) / 2, 0);
+        }
         lv_obj_set_style_text_color(fw.day_label,
                                     data.active ? lv_color_white() : inactive_day_color,
                                     0);
@@ -1194,8 +1214,14 @@ static String format_weather_popup_date_from_iso(const String& iso) {
   return i18n::format_short_date(configManager.getConfig().language, d, month);
 }
 
-static const char* weather_today_button_text() {
+// Today in full (the date pill, a column with room) and on the round footer
+// button (the standard short form where the word is long, French "Auj.").
+static const char* weather_today_text() {
   return i18n::weather_today_label(configManager.getConfig().language);
+}
+
+static const char* weather_today_button_text() {
+  return i18n::weather_today_button_label(configManager.getConfig().language);
 }
 
 static String iso_date_part(const String& text) {
@@ -1230,7 +1256,7 @@ static String format_detail_day_title(const ForecastData& data) {
   const bool has_now = get_local_now_parts(today_date, today_hour);
   const bool is_today = has_now && data.date_local == today_date;
 
-  String title = is_today ? String(weather_today_button_text())
+  String title = is_today ? String(weather_today_text())
                           : weekday_from_iso(data.date_local);
   if (!title.length()) title = data.day;
   if (!data.date_local.length()) return title.length() ? title : String("--");
@@ -1326,6 +1352,24 @@ static void style_header_action_button(WeatherPopupContext* ctx, lv_obj_t* btn, 
   }
 }
 
+// The Today button keeps the unit font of 7D; a longer word (French
+// "Aujourd'hui") lengthens it into a pill to the left instead of being cut,
+// with a quarter of its height of room on each side for the round ends.
+static int footer_today_width() {
+  lv_point_t size;
+  lv_text_get_size(&size, weather_today_button_text(), FONT_UNIT, 0, 0, LV_COORD_MAX,
+                   LV_TEXT_FLAG_NONE);
+  const int width = size.x + kFooterButtonHeight / 2;
+  return width > kFooterActionButtonWidth ? width : kFooterActionButtonWidth;
+}
+
+// 7D and the date pills move left by the width the Today button gained.
+static void set_footer_pill_width(lv_obj_t* pill, lv_obj_t* label, int width) {
+  if (!pill || lv_obj_get_style_width(pill, LV_PART_MAIN) == width) return;
+  lv_obj_set_width(pill, width);
+  if (label) lv_obj_set_width(label, width - 24);
+}
+
 static void update_mode_buttons(WeatherPopupContext* ctx) {
   if (!ctx) return;
   if (ctx->mode_week_btn) {
@@ -1343,11 +1387,19 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
   int today_hour = 0;
   const int today_day =
       get_local_now_parts(today_date, today_hour) ? find_active_day_index(ctx, today_date) : -1;
+  const int today_w = footer_today_width();
+  const int today_extra = today_w - kFooterActionButtonWidth;
+  set_footer_pill_width(ctx->week_range_pill, ctx->week_range_label, kFooterDatePillWidth - today_extra);
+  set_footer_pill_width(ctx->detail_title_pill, ctx->detail_title_label,
+                        kFooterDatePillWidth - today_extra);
   if (ctx->header_today_btn) {
     lv_obj_t* label = lv_obj_get_child(ctx->header_today_btn, 0);
     if (label) {
       set_label_style(label, lv_color_white(), FONT_UNIT);
       lv_label_set_text(label, weather_today_button_text());
+    }
+    if (lv_obj_get_style_width(ctx->header_today_btn, LV_PART_MAIN) != today_w) {
+      lv_obj_set_width(ctx->header_today_btn, today_w);
     }
     style_header_action_button(ctx,
                                ctx->header_today_btn,
@@ -1367,7 +1419,7 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
       lv_label_set_text(label, "7D");
     }
     style_header_action_button(ctx, ctx->header_week_btn, ctx->view_mode == WeatherPopupViewMode::Week);
-    const int week_x = today_day >= 0 ? kFooterOuterActionX : kFooterInnerActionX;
+    const int week_x = today_day >= 0 ? kFooterOuterActionX - today_extra : kFooterInnerActionX;
     if (lv_obj_get_style_x(ctx->header_week_btn, LV_PART_MAIN) != week_x) {
       lv_obj_align(ctx->header_week_btn, LV_ALIGN_BOTTOM_RIGHT, week_x, kFooterOffsetY);
     }
@@ -2480,12 +2532,29 @@ static void request_weather_for_context(WeatherPopupContext* ctx) {
   mqttPublishWeatherRequest(ctx->entity_id.c_str());
 }
 
+// The current condition, read like the tile reads it: the entity state first.
+// Every forecast entry of the payload also carries "condition", and the
+// scanner takes the first key it finds, so "condition" first showed today's
+// forecast ("sunny") above a tile saying "partly cloudy".
+static void resolve_current_weather_fields(const String& json, String& condition_out,
+                                           String& icon_out) {
+  condition_out = "";
+  extract_weather_icon_field(json, icon_out);
+  if (!extract_json_string_field(json, "state", condition_out) &&
+      !extract_json_string_field(json, "condition", condition_out)) {
+    extract_json_string_field(json, "c", condition_out);
+  }
+  if (!icon_out.length() && condition_out.length()) {
+    icon_out = weather_icon_from_condition(condition_out);
+  }
+}
+
 static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
   if (!ctx || !json.length()) return;
 
   String condition;
   String icon_name;
-  resolve_weather_visual_fields(json, condition, icon_name);
+  resolve_current_weather_fields(json, condition, icon_name);
   // Home Assistant reports partly cloudy and sunny at night too; the bridge
   // sun times switch them (and the hourly icons) to their night icons.
   weather_icons::parse_sun(json.c_str(), ctx->sun);

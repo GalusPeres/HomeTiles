@@ -685,6 +685,9 @@ struct LocaleProfile {
 
   const char* weather_today;
   const char* weather_tomorrow;
+  // Today on the round footer buttons of the Weather and Energy popups, the
+  // standard short form where the word is long (French "Auj.").
+  const char* weather_today_button;
   const char* weather_weekdays_short[7];
   const char* weather_months_short[12];
   const char* weather_conditions[15];
@@ -838,6 +841,7 @@ String weather_condition_label(const char* language_code, const String& conditio
 String weather_weekday_short(const char* language_code, const String& iso);
 const char* weather_month_short(const char* language_code, int month);
 const char* weather_today_label(const char* language_code);
+const char* weather_today_button_label(const char* language_code);
 const char* weather_tomorrow_label(const char* language_code);
 const char* climate_tile_type_label(const char* language_code);
 const char* climate_entity_label(const char* language_code);

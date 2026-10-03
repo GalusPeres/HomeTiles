@@ -1,0 +1,56 @@
+.ht-device-state { display: inline-flex; align-items: center; gap: 3px; }
+.ht-device-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--md-default-fg-color--light);
+  background: transparent;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.ht-device-info svg { width: 15px; height: 15px; }
+.ht-device-info:hover, .ht-device-info[aria-expanded="true"] { color: var(--md-accent-fg-color); }
+.ht-device-info:focus-visible { outline: 2px solid var(--md-accent-fg-color); outline-offset: 1px; }
+.ht-device-note {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(350px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid #343b46;
+  border-radius: 8px;
+  background: #12171d;
+  color: var(--md-default-fg-color);
+  box-shadow: 0 6px 20px #0005;
+  font-family: var(--md-text-font), sans-serif;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ht-device-note::backdrop { background: transparent; }
+.md-typeset .ht-device-note p { margin: 8px 0 0; font-size: 14px; }
+.ht-device-note-title { padding-right: 22px; font-weight: 400; }
+.ht-device-note-close {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--md-default-fg-color--light);
+  font-size: 20px;
+  cursor: pointer;
+}
+.ht-device-note-close:focus-visible { outline: 2px solid var(--md-accent-fg-color); border-radius: 4px; }
+.ht-device-note-links { display: flex; flex-wrap: wrap; gap: 12px; }

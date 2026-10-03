@@ -33,7 +33,7 @@ Open **Settings → Devices & Services → HomeTiles Bridge → Configure**.
 
 ### Entity Configuration { data-toc-label="Entities" }
 
-Select the sensors, binary sensors, numbers, selects, date/time entities, weather, lights, switchable entities, covers, climate entities, media players, cameras, and scenes/scripts/buttons you want to use. Then assign them to tiles in the [Web Admin](web-admin.md).
+Select the sensors, binary sensors, numbers, selects, date/time entities, weather, lights, switchable entities, covers, fans, locks, alarm panels, climate entities, media players, cameras, and scenes/scripts/buttons you want to use. Then assign them to tiles in the [Web Admin](web-admin.md).
 
 Selections are shared across all displays. Action aliases are generated automatically and remain stable when selections are reordered; custom aliases use one `alias=entity_id` per line.
 
@@ -45,7 +45,9 @@ Older display configurations, entity selections, aliases, and MQTT topic names r
 
 **Numbers** accepts `number` and `input_number`; **Selects** accepts `select` and `input_select`; **Date/Time** accepts `time`, `date`, `datetime`, and `input_datetime`. Use their dedicated [editable tile types](tiles.md#number). State, writable limits, options, availability, and history come from Home Assistant. Recorder exclusions also apply to these history views.
 
-Bridge v0.7.0 remains compatible with older firmware and existing configurations. New features require the corresponding firmware; no reset or re-pairing is needed for a normal update.
+**Fans**, **Locks**, and **Alarm panels** feed the [Fan](tiles.md#fan), [Lock](tiles.md#lock), and [Alarm Panel](tiles.md#alarm-panel) tiles (Bridge v0.8.0). Locks and alarm panels can only be operated from a display with [encrypted commands](#encrypted-commands) and a Web Admin password. **Codes for locks and alarm panels** lets the Bridge check the codes of devices that ignore a wrong code; **Allow opening without a code** is only for devices without their own code. Fans also remain selectable as switchable entities.
+
+Bridge v0.8.0 remains compatible with older firmware and existing configurations. New features require the corresponding firmware; no reset or re-pairing is needed for a normal update.
 
 ## Control the Displayed View
 

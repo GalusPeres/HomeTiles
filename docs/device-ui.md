@@ -91,7 +91,9 @@ Select a network and enter its password. The connected network is checked, and i
 
 ### Localization
 
-Choose English or German, time zone, date/time formats, and keyboard layout. Tile titles also support Cyrillic characters.
+Choose English, German, French, or Polish, time zone, date/time formats, and keyboard layout. Tile titles also support Cyrillic characters.
+
+The keyboard follows the language when set to **Auto**: German uses QWERTZ with ä, ö, ü, and ß; French uses AZERTY; Polish and English use QWERTY. In French and Polish, the keyboard key at the bottom left switches to their letters: the Polish letters on their AltGr keys (ą on a, ł on l, ż on z, and so on), the French accents à, â, é, è, ê, ë, î, ï, ô, ç, œ, ù, û, ü, and ÿ. Press it again to return; a highlighted key shows that the letters are active.
 
 <figure class="ht-screenshot">
 <img src="../images/8in-localization-popup.png" alt="Localization settings" width="1272" height="792" loading="lazy">

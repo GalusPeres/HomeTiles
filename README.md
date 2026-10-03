@@ -19,34 +19,15 @@ Tap a tile for its popup, then slide through the history of sensors, energy and 
 
 </div>
 
-## New in v0.7.0
+## New in v0.8.0
 
-<p align="center">
-<img src="docs/images/readme-new-half.png" alt="Half-size tiles" width="48%">
-<img src="docs/images/readme-new-rules.png" alt="Color rules" width="48%"><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-caption-row1-dark.svg">
-  <img src="docs/images/readme-caption-row1-light.svg" alt="Half-size tiles · Color rules" width="97%">
-</picture>
-</p>
+- **[Lock, Alarm Panel and Fan tiles](https://galusperes.github.io/tiles/#fan):** with their own popups and code entry.
+- **[Web Admin password](https://galusperes.github.io/web-admin/#web-admin-password)** and **[encrypted commands](https://galusperes.github.io/bridge/#encrypted-commands):** pair the display with Home Assistant by comparing a six-digit number.
+- **[Redesigned Switch tile](https://galusperes.github.io/tiles/#switch):** a dimmer or switch bar across the tile, also for Cover and Climate, and half height for almost every tile.
+- **[French and Polish](https://galusperes.github.io/device-ui/#localization):** two new languages, with their letters on the keyboard.
+- **New boards:** Guition JC8012P4A1 V3 and Waveshare 7B with ESP32-P4 v3.x.
 
-<p align="center">
-<img src="docs/images/readme-new-lights.png" alt="Light tiles in the color of their light" width="48%">
-<img src="docs/images/readme-new-folders.png" alt="Climate and lighting folders colored by another entity" width="48%"><br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-caption-colors-dark.svg">
-  <img src="docs/images/readme-caption-colors-light.svg" alt="Entity color · Other entity" width="97%">
-</picture>
-</p>
-
-- **[Half-size tiles](https://galusperes.github.io/web-admin/#moving-resizing-copying):** place and size tiles in half steps.
-- **[Color rules per tile](https://galusperes.github.io/web-admin/#icon-color-by-state):** icon and tile change color by value or state, e.g. a waste tile turns red on collection day.
-- **[Entity color](https://galusperes.github.io/web-admin/#colors-and-rules):** a rule can show the entity's own color, like the color of a light.
-- **[Other entity](https://galusperes.github.io/web-admin/#colors-and-rules):** a rule can follow any entity, e.g. a climate folder turns orange while heating.
-- **[Graph readout](https://galusperes.github.io/tiles/#sensor):** slide through sensor and energy history.
-- **[Built-in cameras](https://galusperes.github.io/web-admin/#built-in-camera):** ESP32-P4 displays stream to Home Assistant.
-
-Before updating, update HomeTiles Bridge to **v0.7.0** and [export your dashboard](https://galusperes.github.io/updating/). [All changes](docs/releases/v0.7.0.md)
+Before updating, update HomeTiles Bridge to **v0.8.0** and [export your dashboard](https://galusperes.github.io/updating/). [All changes](docs/releases/v0.8.0.md)
 
 ## Get started
 

@@ -125,15 +125,16 @@ Match the exact hardware revision before flashing. [Open online flasher](install
 
 <script src="javascripts/device-status.js?v=3" defer></script>
 
-## New In v0.7.0
+## New In v0.8.0
 
-- **Flexible layouts:** move and resize tiles in half steps, including Settings and Back tiles down to 1×0.5.
-- **Your dashboard's look:** adjustable corners, icon circles, tile colors and rules that follow entity values or states.
-- **Built-in cameras:** compatible ESP32-P4 displays share snapshots and live video with Home Assistant or another display. Camera support remains experimental and off by default.
-- **Smoother editing and folder navigation:** corrected Settings selection and restoration, fitting copy/paste, and released update buffers that leave more memory for cached folders.
-- **Before updating:** install Bridge **v0.7.0** through HACS and restart Home Assistant, then **export your dashboard**. Read the [update and downgrade guidance](updating.md).
+- **Locks, alarm panels and fans:** new [Lock, Alarm Panel and Fan tiles](tiles.md#fan) with their own popups and code entry.
+- **Security:** an optional [Web Admin password](web-admin.md#web-admin-password) and [encrypted commands](bridge.md#encrypted-commands), paired by comparing a six-digit number.
+- **Redesigned Switch tile:** a dimmer or switch bar across the tile, also for Cover and Climate, and half-height layouts for almost every tile.
+- **French and Polish:** two new languages, with their letters on the keyboard.
+- **New boards:** Guition JC8012P4A1 V3 and Waveshare 7B with ESP32-P4 v3.x.
+- **Before updating:** install Bridge **v0.8.0** through HACS and restart Home Assistant, then **export your dashboard**. Read the [update and downgrade guidance](updating.md).
 
-[Read the v0.7.0 release notes](releases/v0.7.0.md)
+[Read the v0.8.0 release notes](releases/v0.8.0.md)
 
 ## How It Works
 

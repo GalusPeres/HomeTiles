@@ -10,7 +10,7 @@ All tiles share title, icon, color, size, and position settings. For types with 
 
 Press **Enter** in the title field for a second line. The two lines share the same vertical center as a single-line title; text that does not fit ends in `...`. The display, popup header, and Web Admin preview use the same title.
 
-**Sizes:** every tile resizes in half steps from 1×1. Sensor, Binary Sensor, Energy, Scene, Folder, Back, Clock, Camera, and Settings tiles can also be half a cell high; value tiles then show the title and value next to the icon.
+**Sizes:** every tile resizes in half steps from 1×1. All tiles except Weather, Media, Text, and Animation can also be half a cell high; they then show the title and state or value next to the icon, without a bar.
 
 **Colors:** each tile has an icon color, an icon circle, and a tile color (**Global**, **Custom**, or **From icon**). [Rules](web-admin.md#colors-and-rules) color the icon or tint the tile while an entity has a matching state, for example by temperature or by a text state.
 
@@ -164,7 +164,16 @@ In this example, Sensor tiles show current power at the top; Energy tiles show t
 
 ### Switch
 
-Toggles a compatible entity and reflects its state. Choose the entity, tile style, and popup trigger.
+Toggles a compatible entity and reflects its state. Choose the entity, **Layout**, and popup trigger.
+
+| Layout | Tile |
+| --- | --- |
+| **Automatic** | A dimmer bar for lights that can dim, otherwise the switch bar. Default for new tiles. |
+| **Dimmer** | A brightness bar across the tile: press or drag to set the level, like the popup's brightness slider. Lights without dimming get the switch bar. |
+| **Switch** | An on/off bar with a thumb, like the popup's switch. |
+| **Icon button** | No bar: tap the tile to toggle. |
+
+The tile shows the state (`On`, `Off`, or the brightness) under its title. Half-height tiles show the state only; tap toggles, and the other gesture opens the popup. Commands while dragging are paced like Home Assistant, and the last level is always sent.
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
@@ -190,7 +199,7 @@ Toggles a compatible entity and reflects its state. Choose the entity, tile styl
 
 The additional domains require Bridge v0.6.42 and the updated firmware. Select them under **Switches / switchable entities** in the Bridge; lights keep their own selector. Fan and Siren controls require both HA on/off feature flags. Missing, unavailable, or unsupported entities cannot be operated.
 
-An [automation switch](https://www.home-assistant.io/docs/automation/services/) enables/disables the automation; it does not run its actions immediately. Turning it off follows HA's default behavior and stops running actions. Advanced fan speed, humidity, remote commands/activities, and siren tones are outside this tile's on/off controls.
+An [automation switch](https://www.home-assistant.io/docs/automation/services/) enables/disables the automation; it does not run its actions immediately. Turning it off follows HA's default behavior and stops running actions. For fan speed, presets, and direction use the [Fan](#fan) tile; humidity, remote commands/activities, and siren tones are outside this tile's on/off controls.
 
 Local [outputs and relays](hardware-io.md) appear in the same selector and work without Home Assistant.
 
@@ -230,7 +239,9 @@ Controls a `cover` entity and shows its state and position when available.
 </figure>
 </div>
 
-**Popup:** separate position and tilt sliders, or open, close, and stop buttons. Controls depend on the cover's capabilities and availability.
+The tile shows the position as a bar, like the Switch dimmer; half-height tiles show the state only. While the cover opens or closes, its arrow pulses.
+
+**Popup:** separate position and tilt sliders, or open, close, and stop buttons. Controls depend on the cover's capabilities and availability. A slider sends its position once on release, like Home Assistant, and then follows the reported position.
 
 ### Scene
 
@@ -260,7 +271,7 @@ Runs a configured action with a tap; there is no popup. Choose the alias generat
 
 Buttons require Bridge v0.6.42 and the updated firmware. A never-pressed button remains usable even when HA reports an unknown timestamp. Missing or unavailable actions are ignored. Existing aliases remain stable when you reorder the selection or add entities with the same object name; custom aliases remain supported.
 
-Use an HA script with defaults when an action needs parameters. Read-only `binary_sensor` and `event` entities cannot be pressed or switched. Locks, alarms, vacuums, valves, and update entities have different actions and are not mapped to these tile types; Cover, Climate, and Media keep their dedicated tiles.
+Use an HA script with defaults when an action needs parameters. Read-only `binary_sensor` and `event` entities cannot be pressed or switched. Locks, alarm panels, and fans have their own tiles; vacuums, valves, and update entities have different actions and are not mapped to these tile types; Cover, Climate, and Media keep their dedicated tiles.
 
 ### Weather
 
@@ -321,6 +332,34 @@ Configure mini-tiles for temperatures, humidity, targets, and mode, or choose **
 <figcaption>Popup with all supported controls</figcaption>
 </figure>
 </div>
+
+### Fan
+
+Controls a `fan` entity. Select it under **Fans** in the [Bridge options](bridge.md#entity-configuration); requires Bridge v0.8.0.
+
+The tile shows the state and speed. Its bar sets the speed: stepless like the Switch dimmer, in segments for fans with only a few speeds, or as an on/off switch for fans without speed control. Tap or long press, whichever does not open the popup, switches the fan on or off.
+
+**Popup:** the speed above a large slider, and below it the power button and, when the fan supports them, preset, oscillation, and direction. Only the controls the fan reports appear.
+
+### Lock
+
+Controls a `lock` entity. Select it under **Locks** in the [Bridge options](bridge.md#entity-configuration); requires Bridge v0.8.0.
+
+The tile shows the state in Home Assistant's colors: green while locked, red while unlocked, open, or jammed, orange while locking or unlocking. Its bar locks and unlocks; when the state is unknown or jammed it shows separate **Unlock** and **Lock** buttons.
+
+**Popup:** a switch (up = locked) and, for locks that can open the door, **Open door** with a second tap to confirm. When Home Assistant needs a code, the code entry opens first.
+
+### Alarm Panel
+
+Controls an `alarm_control_panel` entity. Select it under **Alarm panels** in the [Bridge options](bridge.md#entity-configuration); requires Bridge v0.8.0.
+
+The tile shows the state in Home Assistant's colors: green while armed, orange while arming, pending, or disarming, red when triggered, grey while disarmed. Its bar holds **Disarm** and the arming modes that fit.
+
+**Popup:** the modes the panel supports (**Home**, **Away**, **Night**, **Vacation**, **Custom**) and **Disarm**. While the panel arms, waits, disarms, or is triggered, only **Disarm** remains. When Home Assistant needs a code, the code entry opens first.
+
+**Lock and Alarm Panel security:** both run commands only on a panel with [encrypted commands](bridge.md#encrypted-commands) and a [Web Admin password](web-admin.md#web-admin-password); otherwise the tile and popup say what is missing. Home Assistant checks every code as in its own UI; unlocking, opening, and disarming always need the entity's code. A device without its own code can only be unlocked, opened, or disarmed when it is listed under **Allow opening without a code** in the Bridge options. For devices that ignore a wrong code, enter their codes under **Codes for locks and alarm panels** so the Bridge checks them; after five wrong codes, code entry is blocked for a while. Numeric codes are supported; devices that need a text code must be operated in Home Assistant.
+
+Lock and Alarm Panel tiles show only states the device reports: a command waits with the icon pulsing, and the popup says so when the device does not answer. They are not available on the screensaver.
 
 ### Camera (experimental) { data-toc-label="Camera" }
 

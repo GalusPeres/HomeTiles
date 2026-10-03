@@ -552,6 +552,8 @@ void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool fr
   g_next_disc.tile_tint = tile_tint;
 }
 
+void popup_shell_use_no_tile_disc() { g_next_disc = {}; }
+
 void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa,
                               bool* tinted) {
   // A popup styles its controls before show_popup_shell() takes the options.

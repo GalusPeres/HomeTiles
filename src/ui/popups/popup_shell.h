@@ -42,6 +42,9 @@ void popup_shell_follow_tile_color(uint32_t color);
 // controls are exactly the tile's.
 void popup_shell_use_tile_disc(bool off, bool follows_global, bool glow, bool from_icon = false,
                                uint8_t tile_tint = 0);
+// A popup opened without a tile (Settings) drops options a tile click left
+// behind without opening a popup, for example a folder without a PIN.
+void popup_shell_use_no_tile_disc();
 // While a control is dragged (the Light popup's color wheel and Kelvin
 // slider), the close button keeps its press color: it only shows while the
 // close button is pressed, and restyling it on every step drew one more area

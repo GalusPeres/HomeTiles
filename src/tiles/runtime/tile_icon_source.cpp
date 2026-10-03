@@ -475,6 +475,11 @@ void forget_popup_source(lv_obj_t* obj) {
   pass_popup_disc(obj, false);
 }
 
+void open_popup_without_tile() {
+  remember_popup_source(nullptr);
+  popup_shell_use_no_tile_disc();
+}
+
 uint32_t popup_background(lv_obj_t* obj, uint32_t fallback) {
   remember_popup_source(obj);
   pass_popup_disc(obj, true);

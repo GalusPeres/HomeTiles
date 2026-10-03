@@ -12,6 +12,7 @@
 #include "src/network/transport/network_transport.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/config/tile_config.h"
+#include "src/tiles/runtime/tile_icon_source.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/ui_manager.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
@@ -898,6 +899,14 @@ static void style_plain_container(lv_obj_t* obj) {
   lv_obj_set_style_pad_all(obj, 0, 0);
 }
 
+// The visible popup header is the shell's copy of this title; a new text
+// reaches it only through hometiles_title and the next shell sync.
+static void set_settings_popup_title(const char* text) {
+  if (!settings_popup_title) return;
+  hometiles_title::set(settings_popup_title, text);
+  sync_popup_shell();
+}
+
 static void style_popup_textarea(lv_obj_t* ta) {
   lv_obj_set_height(ta, popup_layout::scale(48));
   lv_textarea_set_one_line(ta, true);
@@ -1781,7 +1790,7 @@ static void wifi_do_connect() {
     cfg.wifi_subnet[0] = '\0';
     cfg.wifi_dns[0] = '\0';
     if (!configManager.save(cfg)) {
-      if (settings_popup_title) lv_label_set_text(settings_popup_title, tr().wifi_save_failed);
+      set_settings_popup_title(tr().wifi_save_failed);
       return;
     }
   }
@@ -1831,7 +1840,7 @@ static void save_localization_popup() {
   cfg.keyboard_layout = (keyboard_layout > 2) ? 0 : keyboard_layout;
 
   if (!configManager.save(cfg)) {
-    if (settings_popup_title) lv_label_set_text(settings_popup_title, tr().save_failed);
+    set_settings_popup_title(tr().save_failed);
     return;
   }
 
@@ -3518,6 +3527,10 @@ static void open_settings_popup(SettingsPopupKind kind) {
   if (settings_popup_overlay) return;
   reset_popup_refs();
   settings_popup_kind = kind;
+  // Settings is not a tile popup: the tile that opened the last popup (a
+  // "From icon" or "From cover" Weather or Media tile) must not recolor it
+  // when its color changes, for example on the tile reload after a save.
+  tile_icon_source::open_popup_without_tile();
 
   const auto parts = create_popup_body(on_settings_popup_close_clicked, nullptr,
                                        settings_tile_color());
@@ -3918,7 +3931,7 @@ void settings_refresh_language() {
   if (settings_tile_wifi_title) lv_label_set_text(settings_tile_wifi_title, s.wifi_label);
   if (settings_tile_locale_title) lv_label_set_text(settings_tile_locale_title, s.admin_settings_language);
   if (settings_tile_firmware_title) lv_label_set_text(settings_tile_firmware_title, "System");
-  if (settings_popup_title) lv_label_set_text(settings_popup_title, popup_title_for_kind(settings_popup_kind));
+  set_settings_popup_title(popup_title_for_kind(settings_popup_kind));
   if (display_section_label) lv_label_set_text(display_section_label, s.display_label);
   if (brightness_title_label) lv_label_set_text(brightness_title_label, s.brightness_label);
   if (screensaver_brightness_title_label) {

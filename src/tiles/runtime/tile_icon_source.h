@@ -72,4 +72,9 @@ uint32_t popup_background(lv_obj_t* obj, uint32_t fallback);
 // follow a tile. Their header disc still takes the tile's circle options.
 void forget_popup_source(lv_obj_t* obj);
 
+// A popup no tile opened (Settings): forgets the last opener, so a color
+// change of that tile (a new cover, a tile reload) cannot recolor this popup,
+// and the header disc keeps its default.
+void open_popup_without_tile();
+
 }  // namespace tile_icon_source

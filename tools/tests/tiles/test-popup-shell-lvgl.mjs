@@ -105,6 +105,8 @@ void build_popup_content(SettingsPopupKind,lv_obj_t*parent){++settings_built;wif
 void close_settings_popup(){++settings_closed;hide_popup_shell(settings_popup_card);lv_obj_delete(settings_popup_overlay);settings_popup_overlay=nullptr;settings_popup_card=nullptr;settings_popup_content=nullptr;wifi_entry_view=nullptr;}
 void hide_settings_popup(){if(settings_popup_overlay)close_settings_popup();}
 void wifi_show_list_view(){lv_obj_add_flag(wifi_entry_view,LV_OBJ_FLAG_HIDDEN);lv_label_set_text(settings_popup_close_icon,"X");}
+// The production body also forgets the last tile opener (tile_icon_source.cpp).
+namespace tile_icon_source {int opened_without_tile=0;void open_popup_without_tile(){++opened_without_tile;popup_shell_use_no_tile_disc();}}
 ${['on_settings_popup_close_clicked','finish_settings_popup_open','open_settings_popup'].map(name=>cppFunctionDefinitions(read('src/ui/tabs/settings/tab_settings.cpp')).find(f=>f.name===name).source).join('\n')}
 void save_frame(const std::string&path,const std::vector<uint32_t>&pixels){std::ofstream f(path,std::ios::binary);f<<"P6\n"<<SCREEN_WIDTH<<" "<<SCREEN_HEIGHT<<"\n255\n";for(auto p:pixels){const char rgb[]={char(p>>16),char(p>>8),char(p)};f.write(rgb,3);}}
 int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t>pixels(SCREEN_WIDTH*SCREEN_HEIGHT),band(SCREEN_WIDTH*16);lv_display_set_color_format(d,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(d,band.data(),nullptr,band.size()*4,LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_user_data(d,&pixels);lv_display_set_flush_cb(d,[](lv_display_t*d,const lv_area_t*area,uint8_t*data){++flushed;if(first_flush_y==-1)first_flush_y=area->y1;auto&pixels=*static_cast<std::vector<uint32_t>*>(lv_display_get_user_data(d));auto*source=reinterpret_cast<uint32_t*>(data);for(int y=area->y1;y<=area->y2;++y)for(int x=area->x1;x<=area->x2;++x)pixels[y*SCREEN_WIDTH+x]=*source++;lv_display_flush_ready(d);});
@@ -192,7 +194,11 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
   assert(shell.active&&shell.active->body==b.body&&lv_obj_get_parent(b.body)==shell.overlay);assert(!lv_obj_has_flag(b.body,LV_OBJ_FLAG_HIDDEN));hide_popup_shell(b.body);
  }
  g_weather_popup_ctx=nullptr;
+ // A folder click without a PIN leaves tile disc options and opens no popup;
+ // Settings, no tile popup, must not take them (V2 2026-10-03).
+ popup_shell_use_tile_disc(true,false,false);
  open_settings_popup(SettingsPopupKind::Wifi);assert(settings_built==0);assert(shell.frame==frame&&shell.close==button);
+ assert(tile_icon_source::opened_without_tile==1&&!shell.disc.from_tile&&"Settings is no tile popup");
  auto*settings_card=settings_popup_card;lv_refr_now(d);process_popup_open();lv_obj_update_layout(shell.overlay);assert(settings_built==1);
  assert(lv_obj_get_width(shell.frame)==lv_obj_get_width(settings_card));assert(lv_obj_get_width(settings_card)>popup_layout::kCardWidth||SCREEN_WIDTH==SCREEN_HEIGHT);
  assert(lv_obj_has_flag(settings_popup_title,LV_OBJ_FLAG_IGNORE_LAYOUT));

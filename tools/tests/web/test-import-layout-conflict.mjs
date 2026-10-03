@@ -15,6 +15,12 @@ import {fileURLToPath} from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+// The reporter's export stays local (build/ is not committed: it holds a
+// third party's dashboard), so CI checkouts skip this replay.
+if (!fs.existsSync(path.join(root, 'build/issue-70/export.json'))) {
+  console.log('SKIP: replay needs the local #70 export build/issue-70/export.json');
+  process.exit(0);
+}
 const exported = JSON.parse(read('build/issue-70/export.json'));
 
 const COLS = 4, ROWS = 4, COUNT = COLS * ROWS;

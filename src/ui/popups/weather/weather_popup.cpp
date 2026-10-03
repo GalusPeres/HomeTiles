@@ -2568,6 +2568,23 @@ static void resolve_current_weather_fields(const String& json, String& condition
   }
 }
 
+// The condition takes the room the summary row leaves beside the separator
+// and the temperature, on one line. A fixed 250 px cap wrapped French
+// "Partiellement nuageux" into two lines with half the row free (V2,
+// 2026-10-03). Only a text wider than that room steps down to the unit font.
+static void fit_condition_label(WeatherPopupContext* ctx, const char* condition, const char* temp) {
+  const int gap = popup_layout::scale(14);
+  lv_point_t sep;
+  lv_point_t value;
+  lv_text_get_size(&sep, "|", FONT_VALUE, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  lv_text_get_size(&value, temp, FONT_VALUE, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  const int room = popup_layout::kContentWidth - 2 * gap - sep.x - value.x;
+  lv_point_t size;
+  lv_text_get_size(&size, condition, FONT_VALUE, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  lv_obj_set_style_text_font(ctx->condition_label, size.x <= room ? FONT_VALUE : FONT_UNIT, 0);
+  lv_obj_set_style_max_width(ctx->condition_label, room > 0 ? room : 0, 0);
+}
+
 static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
   if (!ctx || !json.length()) return;
 
@@ -2624,14 +2641,15 @@ static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
   String condition_text = weather_condition_display_label(condition);
   bool show_condition = (condition_text.length() && condition_text != "--");
 
+  const String temp_text = has_temp ? format_weather_temp(temperature, unit) : String("--");
   if (ctx->temp_label) {
-    String temp_text = has_temp ? format_weather_temp(temperature, unit) : String("--");
     lv_label_set_text(ctx->temp_label, temp_text.c_str());
     lv_obj_clear_flag(ctx->temp_label, LV_OBJ_FLAG_HIDDEN);
   }
 
   if (ctx->condition_label) {
     if (show_condition) {
+      fit_condition_label(ctx, condition_text.c_str(), temp_text.c_str());
       lv_label_set_text(ctx->condition_label, condition_text.c_str());
       lv_obj_clear_flag(ctx->condition_label, LV_OBJ_FLAG_HIDDEN);
     } else {
@@ -3239,8 +3257,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   set_label_style(condition_label, lv_color_white(), FONT_VALUE);
   lv_label_set_long_mode(condition_label, LV_LABEL_LONG_DOT);
   lv_obj_set_width(condition_label, LV_SIZE_CONTENT);
-  lv_obj_set_style_max_width(
-      condition_label, popup_layout::scale(250), 0);
+  // The width cap follows the text (fit_condition_label).
   lv_label_set_text(condition_label, "--");
   lv_obj_add_flag(condition_label, LV_OBJ_FLAG_HIDDEN);
 

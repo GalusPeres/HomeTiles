@@ -1430,7 +1430,11 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
     }
     ++report.ae_samples;
     stats->mean_luma = weightedMeanLuma(ae_result.luminance);
-    if (nearAeTarget(stats->mean_luma) &&
+    const ExposureStep step = stepStagedExposure(
+        g_exposure, stats->mean_luma, aeTarget(), 12, stages, aeExponent());
+    // At its limit the exposure gets no nearer: balance anyway (b205 skipped it
+    // in a dark room, so the image kept the green of unbalanced gains).
+    if ((step.converged || nearAeTarget(stats->mean_luma)) &&
         esp_isp_awb_controller_get_oneshot_statistics(
             g_pipe.awb, kStatisticsTimeoutMs, &awb_result) == ESP_OK) {
       ++report.awb_samples;
@@ -1442,8 +1446,6 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
       g_gains = next;
       applyColorCorrection();
     }
-    const ExposureStep step = stepStagedExposure(
-        g_exposure, stats->mean_luma, aeTarget(), 12, stages, aeExponent());
     if (iteration > 0 || !step.converged) {
       traceAutoExposure("snapshot", iteration, millis() - started_ms, stats->mean_luma);
     }
@@ -1800,7 +1802,10 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
       continue;
     }
     run.mean_luma = weightedMeanLuma(ae_result.luminance);
-    if (nearAeTarget(run.mean_luma) &&
+    const ExposureStep step =
+        stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages, aeExponent());
+    // At its limit the exposure gets no nearer: balance anyway.
+    if ((step.converged || nearAeTarget(run.mean_luma)) &&
         esp_isp_awb_controller_get_oneshot_statistics(
             g_pipe.awb, kStreamSettleStatisticsMs, &awb_result) == ESP_OK) {
       const WhiteBalanceGains next = grayWorldGains(
@@ -1810,8 +1815,6 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
       g_gains = next;
       applyColorCorrection();
     }
-    const ExposureStep step =
-        stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages, aeExponent());
     if (iteration > 0 || !step.converged) {
       traceAutoExposure("stream", iteration, millis() - started_ms, run.mean_luma);
     }

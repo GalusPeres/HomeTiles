@@ -2767,13 +2767,9 @@ struct LanguageEntry {
 static const LanguageEntry kLanguages[] = {
     {&kStringsEn, &kLocaleEn},
     {&kStringsDe, &kLocaleDe},
-    // The French strings stay compiled and maintained, but are intentionally
-    // hidden until the language pass is complete. Define this flag to test it;
-    // beta builds offer it for the text fit check on the device.
-#if defined(HOMETILES_ENABLE_FRENCH) || defined(HOMETILES_TEST_BETA) || \
-    defined(HOMETILES_ISSUE38_BETA) || defined(HOMETILES_CAMERA_BETA)
+    // French is selectable since v0.8.0, after the device fit pass of
+    // 2026-10-03 (beta [TextFit] probe and fixes on V2 and S3).
     {&kStringsFr, &kLocaleFr},
-#endif
     {&kStringsPl, &kLocalePl},
 };
 

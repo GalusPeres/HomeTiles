@@ -251,10 +251,44 @@ int main() {
   setting.gain_x16 = 248;
   step = stepAutoExposure(setting, 3, 115, 12, limits);
   assert(step.limited && step.converged);  // Nothing brighter is possible.
-  setting.lines = 100;
+  setting.lines = 50;
   setting.gain_x16 = 16;
   step = stepAutoExposure(setting, 0, 115, 12, limits);
-  assert(!step.converged && step.next.lines == 400 && step.next.gain_x16 == 16);  // x4 max
+  assert(!step.converged && step.next.lines == 800 && step.next.gain_x16 == 16);  // x16 max
+
+  // Statistics after the gamma curve (2026-10-03, all P4 cameras): the luma
+  // ratio goes back through the exponent, so one step lands in the band. The
+  // linear luma ratio stopped short at the tolerance edge (104 instead of 115).
+  {
+    const ExposureLimits wide{4, 4000, 16, 248};
+    ExposureSetting s;
+    s.lines = 1000;
+    s.gain_x16 = 16;
+    const ExposureStep gamma_step = stepAutoExposure(s, 58, 115, 12, wide, kGammaExponent);
+    const double expected = 1000.0 * pow(115.0 / 58.0, 1.0 / kGammaExponent);
+    assert(fabs(gamma_step.next.lines - expected) <= 2.0);
+    assert(stepAutoExposure(s, 58, 115, 12, wide).next.lines < gamma_step.next.lines);
+    // A clipped frame carries no magnitude: one eighth per step, not a half.
+    const ExposureStep clipped = stepAutoExposure(s, 255, 115, 12, wide, kGammaExponent);
+    assert(clipped.next.lines == 125 && clipped.next.gain_x16 == 16);
+    // Model luma = 255 * signal^gamma: one step from any unclipped start.
+    for (const double scene : {0.0004, 0.002, 0.01, 0.05, 0.3}) {
+      auto luma_of = [&](const ExposureSetting& e) {
+        double signal = scene * e.lines * e.gain_x16 / 16.0;
+        if (signal > 1.0) signal = 1.0;
+        return static_cast<uint32_t>(255.0 * pow(signal, kGammaExponent) + 0.5);
+      };
+      const uint32_t before = luma_of(s);
+      if (before >= kSaturatedLuma || before == 0) continue;
+      const ExposureStep one = stepAutoExposure(s, before, 115, 12, wide, kGammaExponent);
+      const uint32_t after = luma_of(one.next);
+      // Within 16x of the start the step lands in the band.
+      const double needed = pow(115.0 / before, 1.0 / kGammaExponent);
+      if (needed < kMaxExposureRatio && needed > 1.0 / kMaxExposureRatio && !one.limited) {
+        assert(after >= 103 && after <= 127);
+      }
+    }
+  }
 
   // Staged exposure: frame-interval exposure with analog gain, then sensor
   // digital gain, then the longer (night) exposure; back in reverse order.
@@ -514,6 +548,9 @@ int main() {
   assert(nextDigitalGainStep(5, 130, 115, 12, kGammaExponent, true) == 4);
   assert(nextDigitalGainStep(0, 250, 115, 12, kGammaExponent, false) == 0);
   assert(nextDigitalGainStep(2, 255, 115, 12, kGammaExponent, false) == 0);
+  // A clipped frame drops the whole digital gain at once (night to day).
+  assert(nextDigitalGainStep(kMaxDigitalGainStep, 255, 115, 12, kGammaExponent, false) == 0);
+  assert(nextDigitalGainStep(kMaxDigitalGainStep, 250, 115, 12, kGammaExponent, true) == 0);
   // Converges: repeated steps from a dark scene end inside the band or at 8x.
   {
     uint8_t step = 0;

@@ -568,6 +568,36 @@ uint32_t aeTarget() {
   return adjustedAeTarget(g_pipe.ae_target, currentImageSettings().brightness);
 }
 
+// Gamma between the sensor and the AE statistics (1 = statistics before the
+// gamma curve, linear); stepAutoExposure() takes the luma ratio back through it.
+float aeExponent() { return g_pipe.ae_after_gamma ? kGammaExponent : 1.0f; }
+
+// White balance statistics only once the exposure is near its target: far
+// off, the frame is too dark or clipped for gray world, and every read waits
+// for one more frame (139 ms at night).
+bool nearAeTarget(uint32_t mean_luma) {
+  const uint32_t target = aeTarget();
+  const uint32_t band = 3 * 12;
+  return mean_luma + band >= target && mean_luma <= target + band;
+}
+
+#if defined(HOMETILES_TEST_BETA) || defined(HOMETILES_ISSUE38_BETA) || \
+    defined(HOMETILES_CAMERA_BETA)
+// Beta builds trace every AE evaluation after a light change (a capture that
+// starts in the band stays silent), to compare the device with the host model.
+void traceAutoExposure(const char* where, uint32_t iteration, uint32_t elapsed_ms,
+                       uint32_t mean_luma) {
+  Serial.printf("[LocalCam] AE %s %u: %u ms, luma %u/%u, lines %u, gain %u/16, digital %u, frame %u ms\n",
+                where, static_cast<unsigned>(iteration), static_cast<unsigned>(elapsed_ms),
+                static_cast<unsigned>(mean_luma), static_cast<unsigned>(aeTarget()),
+                static_cast<unsigned>(g_exposure.lines), static_cast<unsigned>(g_exposure.gain_x16),
+                static_cast<unsigned>(g_pipe.gamma_digital_step),
+                static_cast<unsigned>(currentFrameMs()));
+}
+#else
+void traceAutoExposure(const char*, uint32_t, uint32_t, uint32_t) {}
+#endif
+
 // The CSI driver calls both callbacks from its DMA interrupt, which is
 // cache-safe on P4 (it shares the line with the display refresh and keeps
 // running during flash writes): they stay in IRAM and touch only internal RAM
@@ -1399,7 +1429,9 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
       continue;
     }
     ++report.ae_samples;
-    if (esp_isp_awb_controller_get_oneshot_statistics(
+    stats->mean_luma = weightedMeanLuma(ae_result.luminance);
+    if (nearAeTarget(stats->mean_luma) &&
+        esp_isp_awb_controller_get_oneshot_statistics(
             g_pipe.awb, kStatisticsTimeoutMs, &awb_result) == ESP_OK) {
       ++report.awb_samples;
       report.white_patches = awb_result.white_patch_num;
@@ -1410,9 +1442,11 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
       g_gains = next;
       applyColorCorrection();
     }
-    stats->mean_luma = weightedMeanLuma(ae_result.luminance);
     const ExposureStep step = stepStagedExposure(
-        g_exposure, stats->mean_luma, aeTarget(), 12, stages);
+        g_exposure, stats->mean_luma, aeTarget(), 12, stages, aeExponent());
+    if (iteration > 0 || !step.converged) {
+      traceAutoExposure("snapshot", iteration, millis() - started_ms, stats->mean_luma);
+    }
     publishExposure(stats->mean_luma);
     if (stepDigitalGain(stats->mean_luma, step.limited)) {
       // The new curve shows in the statistics of a later frame.
@@ -1765,7 +1799,9 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
             g_pipe.ae, kStreamSettleStatisticsMs, &ae_result) != ESP_OK) {
       continue;
     }
-    if (esp_isp_awb_controller_get_oneshot_statistics(
+    run.mean_luma = weightedMeanLuma(ae_result.luminance);
+    if (nearAeTarget(run.mean_luma) &&
+        esp_isp_awb_controller_get_oneshot_statistics(
             g_pipe.awb, kStreamSettleStatisticsMs, &awb_result) == ESP_OK) {
       const WhiteBalanceGains next = grayWorldGains(
           awb_result.sum_r, awb_result.sum_g, awb_result.sum_b,
@@ -1774,9 +1810,11 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
       g_gains = next;
       applyColorCorrection();
     }
-    run.mean_luma = weightedMeanLuma(ae_result.luminance);
     const ExposureStep step =
-        stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages);
+        stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages, aeExponent());
+    if (iteration > 0 || !step.converged) {
+      traceAutoExposure("stream", iteration, millis() - started_ms, run.mean_luma);
+    }
     publishExposure(run.mean_luma);
     if (stepDigitalGain(run.mean_luma, step.limited)) {
       exposure_done = false;
@@ -1836,7 +1874,7 @@ void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
   }
   run.mean_luma = weightedMeanLuma(ae_result.luminance);
   const ExposureStep step =
-      stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages);
+      stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages, aeExponent());
   publishExposure(run.mean_luma);
   if (stepDigitalGain(run.mean_luma, step.limited)) return;
   if (!step.converged) setExposureIfChanged(step.next);

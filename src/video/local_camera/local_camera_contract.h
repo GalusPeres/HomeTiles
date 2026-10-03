@@ -386,11 +386,24 @@ inline uint32_t weightedMeanLuma(const int luminance[5][5]) {
   return weight ? (sum + weight / 2) / weight : 0;
 }
 
+// A frame at or above kSaturatedLuma is clipped and carries no magnitude:
+// the exposure drops to kSaturatedExposureRatio of it per evaluation (a half
+// needed ten evaluations from night to day). Other steps are bounded to
+// 1/kMaxExposureRatio..kMaxExposureRatio per evaluation.
+constexpr uint32_t kSaturatedLuma = 250;
+constexpr float kSaturatedExposureRatio = 0.125f;
+constexpr float kMaxExposureRatio = 16.0f;
+
+// exponent: the gamma of the curve the AE statistics see (1 = linear). The
+// luma ratio goes back through it to the linear ratio of the signal; with the
+// luma ratio alone a step corrected only part of the way and stopped at the
+// tolerance edge (104 or 105 instead of 115 after the gamma curve).
 inline ExposureStep stepAutoExposure(ExposureSetting current,
                                      uint32_t mean_luma,
                                      uint32_t target_luma,
                                      uint32_t tolerance,
-                                     const ExposureLimits& limits) {
+                                     const ExposureLimits& limits,
+                                     float exponent = 1.0f) {
   ExposureStep step;
   step.next = current;
   const uint32_t low = target_luma > tolerance ? target_luma - tolerance : 0;
@@ -412,15 +425,16 @@ inline ExposureStep stepAutoExposure(ExposureSetting current,
   if (gain > limits.max_gain_x16) gain = limits.max_gain_x16;
   const uint64_t total = lines * gain;
 
-  // Ratio in 1/256 steps, bounded to 0.25x..4x per iteration. Saturated
-  // frames carry no magnitude information, so halve at least.
-  const uint32_t mean = mean_luma ? mean_luma : 1;
-  uint64_t ratio_q8 = (static_cast<uint64_t>(target_luma) * 256u + mean / 2) / mean;
-  if (ratio_q8 < 64) ratio_q8 = 64;
-  if (ratio_q8 > 1024) ratio_q8 = 1024;
-  if (mean_luma >= 250 && ratio_q8 > 128) ratio_q8 = 128;
+  const float mean = static_cast<float>(mean_luma ? mean_luma : 1);
+  float ratio = powf(static_cast<float>(target_luma) / mean,
+                     1.0f / (exponent > 0.05f ? exponent : 1.0f));
+  if (ratio < 1.0f / kMaxExposureRatio) ratio = 1.0f / kMaxExposureRatio;
+  if (ratio > kMaxExposureRatio) ratio = kMaxExposureRatio;
+  if (mean_luma >= kSaturatedLuma && ratio > kSaturatedExposureRatio) {
+    ratio = kSaturatedExposureRatio;
+  }
 
-  uint64_t wanted = (total * ratio_q8 + 128) / 256;
+  uint64_t wanted = static_cast<uint64_t>(static_cast<double>(total) * ratio + 0.5);
   if (wanted < min_total) wanted = min_total;
   if (wanted > max_total) wanted = max_total;
 
@@ -464,7 +478,7 @@ struct ExposureStages {
 
 inline ExposureStep stepStagedExposure(ExposureSetting current, uint32_t mean_luma,
                                        uint32_t target_luma, uint32_t tolerance,
-                                       const ExposureStages& stages) {
+                                       const ExposureStages& stages, float exponent = 1.0f) {
   const ExposureLimits& normal = stages.normal;
   const uint16_t night_lines =
       stages.night_max_lines > normal.max_lines ? stages.night_max_lines : normal.max_lines;
@@ -484,14 +498,15 @@ inline ExposureStep stepStagedExposure(ExposureSetting current, uint32_t mean_lu
   } else if (available[1] && current.gain_x16 > normal.max_gain_x16) {
     stage = 1;
   }
-  ExposureStep step = stepAutoExposure(current, mean_luma, target_luma, tolerance, limits[stage]);
+  ExposureStep step =
+      stepAutoExposure(current, mean_luma, target_luma, tolerance, limits[stage], exponent);
   if (!step.limited) return step;
   const uint32_t low = target_luma > tolerance ? target_luma - tolerance : 0;
   const int direction = mean_luma < low ? 1 : -1;
   int next = stage + direction;
   while (next >= 0 && next <= 2 && !available[next]) next += direction;
   if (next < 0 || next > 2) return step;
-  return stepAutoExposure(current, mean_luma, target_luma, tolerance, limits[next]);
+  return stepAutoExposure(current, mean_luma, target_luma, tolerance, limits[next], exponent);
 }
 
 // ---------------------------------------------------------------------------
@@ -749,6 +764,10 @@ inline uint8_t nextDigitalGainStep(uint8_t step, uint32_t mean_luma, uint32_t ta
                                    uint8_t max_step = kMaxDigitalGainStep) {
   if (max_step > kMaxDigitalGainStep) max_step = kMaxDigitalGainStep;
   if (step > max_step) return max_step;
+  // A clipped frame drops the whole digital gain at once: it carries no
+  // magnitude, and each step down costs another evaluation (139 ms frames at
+  // night, so the first snapshot from night to day stayed white).
+  if (mean_luma >= kSaturatedLuma) return 0;
   const uint32_t low = target_luma > tolerance ? target_luma - tolerance : 0;
   const uint32_t high = target_luma + tolerance;
   const bool too_bright = mean_luma > high;

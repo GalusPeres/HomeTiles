@@ -21,7 +21,8 @@ Tap a tile for its popup, then slide through the history of sensors, energy and 
 
 ## New in v0.8.0
 
-- **Polished, and now in Polish too:** smoother and faster everywhere, a refined design, many fixes, and the display speaks [Polish and French](https://galusperes.github.io/device-ui/#localization), with their letters on the keyboard.
+- **Polished, and now in Polish too:** a refined design and many fixes throughout, and the display speaks [Polish and French](https://galusperes.github.io/device-ui/#localization), with their letters on the keyboard.
+- **Faster everywhere:** LVGL 9.6, about 300 KB less flash and more free RAM, quicker popups and screensaver, camera popups at up to 30 FPS, and Web Admin edits that show on the display almost at once.
 - **[Lock, Alarm Panel and Fan tiles](https://galusperes.github.io/tiles/#fan):** with their own popups and code entry.
 - **[Web Admin password](https://galusperes.github.io/web-admin/#web-admin-password)** and **[encrypted commands](https://galusperes.github.io/bridge/#encrypted-commands):** pair the display with Home Assistant by comparing a six-digit number.
 - **[Redesigned Switch tile](https://galusperes.github.io/tiles/#switch):** a dimmer or switch bar across the tile, also for Cover and Climate, and half height for almost every tile.

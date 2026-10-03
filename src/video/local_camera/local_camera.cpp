@@ -1849,11 +1849,12 @@ struct StreamRun {
   uint32_t last_tune_ms = 0;
   uint32_t last_awb_ms = 0;
   uint32_t last_measured_ms = 0;  // Last statistics read that succeeded.
-  // Continuous statistics: frame counts already used, and the AE frame count
-  // at the last exposure or curve change.
+  // Continuous statistics: result counts already used, and the time of the
+  // last exposure or curve change.
   uint32_t live_ae_seen = 0;
   uint32_t live_awb_seen = 0;
-  uint32_t live_changed_at = 0;
+  uint32_t live_changed_ms = 0;
+  uint32_t live_ae_counted = 0;  // AE results already counted for the window.
   bool awb_next = false;
   uint32_t mean_luma = 0;
   StreamWindow window;
@@ -2012,9 +2013,12 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
 // (3 %), and a narrow hold band. The b211/b212 stream stepped a quarter EV
 // within a +-20 % band and jumped at once when far off: visible steps and up
 // to a second too bright after uncovering (V2 recordings 2026-10-03).
-// One more settle frame than frame_delay: a curve change glides over up to
-// three frames from the next frame end.
-constexpr uint32_t kLiveSettleFrames = 4;
+// Two more settle frames than frame_delay: a curve change starts at the next
+// frame end and glides over up to three frames. Counted in frame times: the ISP
+// reports several AE results per frame (b213 on the 8-inch: 165 steps in
+// 10 s at 25 fps), so counting results let the stream step before the last
+// change showed and the brightness pumped between 76 and 157.
+constexpr uint32_t kLiveSettleFrames = 5;
 constexpr float kStreamRiseSpeed = 0.32f;
 constexpr float kStreamFallSpeed = 0.42f;
 constexpr float kStreamMinStep = 0.03f;
@@ -2091,7 +2095,7 @@ void streamAutoTuneLive(StreamRun& run) {
     applyGainLimit(run.stages);
     if (g_stream_digital > digitalGainForStep(g_max_digital_step)) {
       setStreamDigital(digitalGainForStep(g_max_digital_step));
-      run.live_changed_at = ae_frames;
+      run.live_changed_ms = now_ms;
     }
   }
   if (g_live_awb_running && awb_frames != run.live_awb_seen &&
@@ -2105,8 +2109,10 @@ void streamAutoTuneLive(StreamRun& run) {
       applyColorCorrection();
     }
   }
+  run.window.ae_results += ae_frames - run.live_ae_counted;
+  run.live_ae_counted = ae_frames;
   if (ae_frames == run.live_ae_seen ||
-      ae_frames - run.live_changed_at < kLiveSettleFrames) {
+      static_cast<uint32_t>(now_ms - run.live_changed_ms) < kLiveSettleFrames * currentFrameMs()) {
     return;
   }
   run.live_ae_seen = ae_frames;
@@ -2124,7 +2130,7 @@ void streamAutoTuneLive(StreamRun& run) {
   if (ratio > 1.0f && ratio < 1.0f + kStreamMinStep) ratio = 1.0f + kStreamMinStep;
   if (ratio < 1.0f && ratio > 1.0f - kStreamMinStep) ratio = 1.0f - kStreamMinStep;
   traceAutoExposure('t', 0, 0, run.mean_luma);
-  if (applyStreamExposureStep(run, ratio)) run.live_changed_at = ae_frames;
+  if (applyStreamExposureStep(run, ratio)) run.live_changed_ms = millis();
 }
 
 // Counts one statistics read of the running stream and the time it took.
@@ -2486,7 +2492,8 @@ uint32_t runStream() {
     run.live_ae_seen = g_live.ae_frames;
     run.live_awb_seen = g_live.awb_frames;
     portEXIT_CRITICAL(&g_live_mux);
-    run.live_changed_at = run.live_ae_seen;
+    run.live_ae_counted = run.live_ae_seen;
+    run.live_changed_ms = millis();
     Serial.printf("[LocalCamStream] Live statistics: AE %s, AWB %s\n",
                   g_live_ae_running ? "on" : "off (oneshot reads)",
                   g_live_awb_running ? "on" : "off");

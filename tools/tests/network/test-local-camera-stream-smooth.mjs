@@ -42,7 +42,9 @@ assert.match(body('releasePipeline'), /g_defer_isp_updates = false;\s*g_gamma_pe
 // the last one (plus one for the glide), 32 % of the way brighter and 42 %
 // darker, no step below 3 %, a +-6 % hold band, and libcamera's fast reduce:
 // below 60 % of the needed exposure the correction lands at once.
-assert.match(source, /constexpr uint32_t kLiveSettleFrames = 4;/);
+assert.match(source, /constexpr uint32_t kLiveSettleFrames = 5;/);
+// Settled in frame times: the ISP reports several AE results per frame.
+assert.match(body('streamAutoTuneLive'), /static_cast<uint32_t>\(now_ms - run\.live_changed_ms\) < kLiveSettleFrames \* currentFrameMs\(\)/);
 assert.match(source, /constexpr float kStreamRiseSpeed = 0\.32f;/);
 assert.match(source, /constexpr float kStreamFallSpeed = 0\.42f;/);
 assert.match(source, /constexpr float kStreamMinStep = 0\.03f;/);

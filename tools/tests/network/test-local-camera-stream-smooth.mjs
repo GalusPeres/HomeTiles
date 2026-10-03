@@ -39,9 +39,17 @@ assert.match(body('releasePipeline'), /g_defer_isp_updates = false;\s*g_gamma_pe
 
 // Wider band and small steps in the running stream.
 assert.match(source, /constexpr uint32_t kStreamAeTolerance = 24;/);
-assert.match(source, /constexpr float kStreamGentleRatio = 1\.25f;/);
+assert.match(source, /constexpr float kStreamGentleRatio = 1\.12f;/);
 const live = body('streamAutoTuneLive');
 assert.match(live, /const bool far = run\.mean_luma \* 2 < target \|\| run\.mean_luma \* 2 > target \* 3;/);
 assert.match(live, /far \? kMaxExposureRatio : kStreamGentleRatio/);
-assert.match(live, /stepDigitalGain\(run\.mean_luma, step\.limited, kStreamAeTolerance,\s*far \? kMaxDigitalGainJump : 1\)/);
+assert.match(live, /stepDigitalGain\(run\.mean_luma, step\.limited, kStreamAeTolerance,\s*far \? kMaxDigitalGainJump : 1, !far\)/);
+// b211 still showed each quarter-EV step: the curve gain now glides, at most
+// 5 % per frame, and the next measurement waits until it arrived.
+assert.match(source, /constexpr float kGammaRampPerFrame = 1\.05f;/);
+const ramp = body('applyPendingIspUpdates');
+assert.match(ramp, /if \(ratio > kGammaRampPerFrame\) next = g_gamma_applied_gain \* kGammaRampPerFrame;/);
+assert.match(ramp, /g_gamma_pending = next != g_gamma_curve_gain;/);
+assert.match(live, /if \(g_gamma_pending\) \{\s*run\.live_changed_at = ae_frames;\s*return;\s*\}/);
+before(run, 'g_gamma_gentle = false;', 'applyPendingIspUpdates();', 'the rest of a glide lands at the stream end');
 console.log('Local camera stream: curve changes at frame ends, gentle steps within a wider band');

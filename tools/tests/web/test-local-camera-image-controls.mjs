@@ -139,7 +139,7 @@ const body = name => {
   return service.slice(start, service.indexOf('\n}\n', start));
 };
 assert.match(body('void writeColorCorrection() {'), /buildImageCcm\(kBaseCcm, g_gains, currentImageSettings\(\), ccm\.matrix\);/);
-assert.match(body('uint32_t gammaCurve(uint32_t x) {'), /gammaLutValue\(x, kMode\.black_level, kGammaExponent, g_gamma_curve_contrast,\s*g_gamma_curve_gain\)/);
+assert.match(body('uint32_t gammaCurve(uint32_t x) {'), /gammaLutValue\(x, kMode\.black_level, kGammaExponent, g_gamma_curve_contrast,\s*g_gamma_applied_gain\)/);
 assert.match(body('uint32_t aeTarget() {'), /adjustedAeTarget\(g_pipe\.ae_target, currentImageSettings\(\)\.brightness\)/);
 // The register writes live in writeGammaCurve(); loadGammaCurve() sets the curve values.
 const loader = body('esp_err_t writeGammaCurve() {');

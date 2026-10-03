@@ -541,7 +541,11 @@ uint32_t g_upload_log_ms = 0;
 // plain function pointer. Worker task only.
 int g_gamma_curve_contrast = 0;
 int8_t g_gamma_curve_brightness = 0;
+// Linear gain of the curve: the target (digital step times brightness) and
+// the gain written into the ISP, which glides toward the target during a
+// stream (applyPendingIspUpdates()).
 float g_gamma_curve_gain = 1.0f;
+float g_gamma_applied_gain = 1.0f;
 // Digital gain step kept across pipelines, so the next stream or snapshot
 // starts where the last one ended. Worker task only.
 uint8_t g_digital_step = 0;
@@ -560,7 +564,7 @@ std::atomic<uint16_t> g_report_luma{0};
 // contrast is an S-curve on top (identity at 0).
 uint32_t gammaCurve(uint32_t x) {
   return gammaLutValue(x, kMode.black_level, kGammaExponent, g_gamma_curve_contrast,
-                       g_gamma_curve_gain);
+                       g_gamma_applied_gain);
 }
 
 // Effective auto-exposure target: the base target scaled by the brightness.
@@ -760,6 +764,11 @@ esp_err_t sensorStandby() {
 bool g_defer_isp_updates = false;
 bool g_gamma_pending = false;
 bool g_ccm_pending = false;
+// A gentle change glides: the curve gain moves at most kGammaRampPerFrame per
+// frame, so a quarter-EV digital step is no visible jump (V2 2026-10-03: the
+// steps showed even at frame ends). Other changes land in one frame.
+bool g_gamma_gentle = false;
+constexpr float kGammaRampPerFrame = 1.05f;
 
 void writeColorCorrection() {
   esp_isp_ccm_config_t ccm = {};
@@ -778,8 +787,8 @@ void applyColorCorrection() {
   writeColorCorrection();
 }
 
-// Writes the curve of the current g_gamma_curve_* values into all three
-// channels. The IDF allows esp_isp_gamma_configure() while gamma is enabled;
+// Writes the curve of g_gamma_curve_contrast and g_gamma_applied_gain into
+// all three channels. The IDF allows esp_isp_gamma_configure() while gamma is enabled;
 // each call latches the new points through the gamma update bit, so no
 // disable/enable (and no linear frame in between) is needed.
 esp_err_t writeGammaCurve() {
@@ -791,8 +800,9 @@ esp_err_t writeGammaCurve() {
   return err;
 }
 
-// Loads the gamma curve for one contrast and digital gain step.
-esp_err_t loadGammaCurve(int contrast, uint8_t digital_step) {
+// Loads the gamma curve for one contrast and digital gain step. gentle: during
+// a stream the gain glides there instead of changing in one frame.
+esp_err_t loadGammaCurve(int contrast, uint8_t digital_step, bool gentle = false) {
   g_gamma_curve_contrast = contrast;
   // Digital gain after the sensor limits and the user brightness, which
   // acts at once instead of waiting for the auto exposure.
@@ -800,9 +810,11 @@ esp_err_t loadGammaCurve(int contrast, uint8_t digital_step) {
   g_gamma_curve_gain =
       digitalGainForStep(digital_step) * brightnessLinearGain(brightness, kGammaExponent);
   g_gamma_curve_brightness = static_cast<int8_t>(brightness);
+  if (!g_defer_isp_updates) g_gamma_applied_gain = g_gamma_curve_gain;
   const esp_err_t err = g_defer_isp_updates ? ESP_OK : writeGammaCurve();
   if (err == ESP_OK) {
     g_gamma_pending = g_defer_isp_updates;
+    g_gamma_gentle = g_defer_isp_updates && gentle;
     g_pipe.gamma_contrast = static_cast<int8_t>(contrast);
     g_pipe.gamma_digital_step = digital_step;
   }
@@ -813,7 +825,14 @@ esp_err_t loadGammaCurve(int contrast, uint8_t digital_step) {
 void applyPendingIspUpdates() {
   if (!g_pipe.isp) return;
   if (g_gamma_pending) {
-    g_gamma_pending = false;
+    float next = g_gamma_curve_gain;
+    if (g_gamma_gentle && g_gamma_applied_gain > 0.0f) {
+      const float ratio = g_gamma_curve_gain / g_gamma_applied_gain;
+      if (ratio > kGammaRampPerFrame) next = g_gamma_applied_gain * kGammaRampPerFrame;
+      if (ratio < 1.0f / kGammaRampPerFrame) next = g_gamma_applied_gain / kGammaRampPerFrame;
+    }
+    g_gamma_applied_gain = next;
+    g_gamma_pending = next != g_gamma_curve_gain;
     const esp_err_t err = writeGammaCurve();
     if (err != ESP_OK) logCaptureError("Gamma update failed", err);
   }
@@ -887,14 +906,14 @@ void publishExposure(uint32_t mean_luma) {
 // when the curve changed; the caller then skips its sensor step, because the
 // statistics show the new curve only on a later frame.
 bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit, uint32_t tolerance = 12,
-                     int max_jump = kMaxDigitalGainJump) {
+                     int max_jump = kMaxDigitalGainJump, bool gentle = false) {
   if (!g_pipe.ae_after_gamma) return false;
   const uint8_t current = g_pipe.gamma_digital_step;
   const uint32_t target = aeTarget();
   const uint8_t next = nextDigitalGainStep(current, mean_luma, target, tolerance, kGammaExponent,
                                            sensor_at_brighter_limit, g_max_digital_step, max_jump);
   if (next == current) return false;
-  const esp_err_t err = loadGammaCurve(g_pipe.gamma_contrast, next);
+  const esp_err_t err = loadGammaCurve(g_pipe.gamma_contrast, next, gentle);
   if (err != ESP_OK) {
     logCaptureError("Digital gain update failed", err);
     return false;
@@ -1988,7 +2007,7 @@ constexpr uint32_t kLiveSettleFrames = 4;
 // above one and a half times the target, a light switched) it still moves at
 // full speed.
 constexpr uint32_t kStreamAeTolerance = 24;
-constexpr float kStreamGentleRatio = 1.25f;
+constexpr float kStreamGentleRatio = 1.12f;
 
 // The running stream with continuous statistics: every kStreamTuneIntervalMs
 // one exposure step from the latest frame exposed after the last change, and
@@ -2018,6 +2037,11 @@ void streamAutoTuneLive(StreamRun& run) {
       applyColorCorrection();
     }
   }
+  // A gliding curve is still on its way: measure once it arrived.
+  if (g_gamma_pending) {
+    run.live_changed_at = ae_frames;
+    return;
+  }
   if (ae_frames == run.live_ae_seen ||
       ae_frames - run.live_changed_at < kLiveSettleFrames) {
     return;
@@ -2034,7 +2058,7 @@ void streamAutoTuneLive(StreamRun& run) {
   if (!step.converged) traceAutoExposure('t', 0, 0, run.mean_luma);
   publishExposure(run.mean_luma);
   if (stepDigitalGain(run.mean_luma, step.limited, kStreamAeTolerance,
-                      far ? kMaxDigitalGainJump : 1)) {
+                      far ? kMaxDigitalGainJump : 1, !far)) {
     run.live_changed_at = ae_frames;
     return;
   }
@@ -2480,6 +2504,7 @@ uint32_t runStream() {
   // Snapshots use oneshot reads, which the driver refuses during continuous ones.
   stopLiveStatistics();
   g_defer_isp_updates = false;
+  g_gamma_gentle = false;  // The rest of a glide lands at once.
   applyPendingIspUpdates();
 
   // Stop order: sender first (it may still read a slot), then the sensor and

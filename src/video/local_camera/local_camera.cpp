@@ -915,11 +915,14 @@ bool applyOrientation(bool live) {
   return true;
 }
 
+void stopLiveStatistics();
+
 void releasePipeline() {
   if (g_pipe.csi && g_pipe.csi_running) {
     esp_cam_ctlr_stop(g_pipe.csi);
     g_pipe.csi_running = false;
   }
+  stopLiveStatistics();
   if (g_pipe.ae) {
     esp_isp_ae_controller_disable(g_pipe.ae);
     esp_isp_del_ae_controller(g_pipe.ae);
@@ -1093,6 +1096,54 @@ bool ensureSensor(bool report_state) {
   return true;
 }
 
+// Statistics of every frame while a stream runs (continuous mode): the ISP
+// calls these after each frame, and the stream takes the latest values
+// without waiting. A oneshot read waits for the start and the end of the next
+// frame, up to 80 ms at 25 fps, and every wait cost the stream a frame (V2
+// 2026-10-03). Snapshots and the stream start keep the oneshot reads.
+struct LiveStatistics {
+  isp_ae_result_t ae = {};
+  uint32_t ae_frames = 0;
+  isp_awb_stat_result_t awb = {};
+  uint32_t awb_frames = 0;
+};
+LiveStatistics g_live;
+portMUX_TYPE g_live_mux = portMUX_INITIALIZER_UNLOCKED;
+bool g_live_ae_callback = false;   // Callbacks registered at controller creation.
+bool g_live_awb_callback = false;
+bool g_live_ae_running = false;    // Continuous statistics on.
+bool g_live_awb_running = false;
+
+bool onLiveAeStatistics(isp_ae_ctlr_t, const esp_isp_ae_env_detector_evt_data_t* edata, void*) {
+  portENTER_CRITICAL_ISR(&g_live_mux);
+  g_live.ae = edata->ae_result;
+  ++g_live.ae_frames;
+  portEXIT_CRITICAL_ISR(&g_live_mux);
+  return false;
+}
+
+bool onLiveAwbStatistics(isp_awb_ctlr_t, const esp_isp_awb_evt_data_t* edata, void*) {
+  portENTER_CRITICAL_ISR(&g_live_mux);
+  g_live.awb = edata->awb_result;
+  ++g_live.awb_frames;
+  portEXIT_CRITICAL_ISR(&g_live_mux);
+  return false;
+}
+
+void startLiveStatistics() {
+  g_live_ae_running = g_pipe.ae && g_live_ae_callback &&
+                      esp_isp_ae_controller_start_continuous_statistics(g_pipe.ae) == ESP_OK;
+  g_live_awb_running = g_pipe.awb && g_live_awb_callback &&
+                       esp_isp_awb_controller_start_continuous_statistics(g_pipe.awb) == ESP_OK;
+}
+
+void stopLiveStatistics() {
+  if (g_live_ae_running) esp_isp_ae_controller_stop_continuous_statistics(g_pipe.ae);
+  if (g_live_awb_running) esp_isp_awb_controller_stop_continuous_statistics(g_pipe.awb);
+  g_live_ae_running = false;
+  g_live_awb_running = false;
+}
+
 bool createAutoExposure(isp_ae_sample_point_t sample_point, uint32_t target) {
   esp_isp_ae_config_t config = {};
   config.sample_point = sample_point;
@@ -1105,6 +1156,12 @@ bool createAutoExposure(isp_ae_sample_point_t sample_point, uint32_t target) {
     g_pipe.ae = nullptr;
     return false;
   }
+  // Registered before enabling (the driver accepts it only then). Without it
+  // the stream keeps the oneshot reads.
+  esp_isp_ae_env_detector_evt_cbs_t callbacks = {};
+  callbacks.on_env_statistics_done = onLiveAeStatistics;
+  g_live_ae_callback =
+      esp_isp_ae_env_detector_register_event_callbacks(g_pipe.ae, &callbacks, nullptr) == ESP_OK;
   if (esp_isp_ae_controller_enable(g_pipe.ae) != ESP_OK) {
     esp_isp_del_ae_controller(g_pipe.ae);
     g_pipe.ae = nullptr;
@@ -1293,6 +1350,12 @@ bool ensurePipeline() {
     if (err != ESP_OK) {
       g_pipe.awb = nullptr;
       break;
+    }
+    {
+      esp_isp_awb_cbs_t callbacks = {};
+      callbacks.on_statistics_done = onLiveAwbStatistics;
+      g_live_awb_callback =
+          esp_isp_awb_register_event_callbacks(g_pipe.awb, &callbacks, nullptr) == ESP_OK;
     }
     err = esp_isp_awb_controller_enable(g_pipe.awb);
     if (err != ESP_OK) break;
@@ -1717,6 +1780,11 @@ struct StreamRun {
   uint32_t last_tune_ms = 0;
   uint32_t last_awb_ms = 0;
   uint32_t last_measured_ms = 0;  // Last statistics read that succeeded.
+  // Continuous statistics: frame counts already used, and the AE frame count
+  // at the last exposure or curve change.
+  uint32_t live_ae_seen = 0;
+  uint32_t live_awb_seen = 0;
+  uint32_t live_changed_at = 0;
   bool awb_next = false;
   uint32_t mean_luma = 0;
   StreamWindow window;
@@ -1868,6 +1936,57 @@ StopReason streamSettle(StreamRun& run, uint32_t* leftover) {
   return StopReason::None;
 }
 
+// Frames after an exposure or curve change before the statistics show it:
+// new sensor registers latch at a frame start.
+constexpr uint32_t kLiveSettleFrames = 3;
+
+// The running stream with continuous statistics: every kStreamTuneIntervalMs
+// one exposure step from the latest frame exposed after the last change, and
+// white balance at most once per second. Never waits.
+void streamAutoTuneLive(StreamRun& run) {
+  static isp_ae_result_t ae;
+  static isp_awb_stat_result_t awb;
+  const uint32_t now_ms = millis();
+  if (static_cast<uint32_t>(now_ms - run.last_tune_ms) < kStreamTuneIntervalMs) return;
+  run.last_tune_ms = now_ms;
+  // A Max. gain change applies within the running stream.
+  applyGainLimit(run.stages);
+  portENTER_CRITICAL(&g_live_mux);
+  ae = g_live.ae;
+  const uint32_t ae_frames = g_live.ae_frames;
+  awb = g_live.awb;
+  const uint32_t awb_frames = g_live.awb_frames;
+  portEXIT_CRITICAL(&g_live_mux);
+  if (g_live_awb_running && awb_frames != run.live_awb_seen &&
+      static_cast<uint32_t>(now_ms - run.last_awb_ms) >= kStreamAwbIntervalMs) {
+    run.live_awb_seen = awb_frames;
+    run.last_awb_ms = now_ms;
+    const WhiteBalanceGains next = grayWorldGains(awb.sum_r, awb.sum_g, awb.sum_b,
+                                                  awb.white_patch_num, kMinAwbSamples, g_gains);
+    if (!gainsSettled(next, g_gains)) {
+      g_gains = next;
+      applyColorCorrection();
+    }
+  }
+  if (ae_frames == run.live_ae_seen ||
+      ae_frames - run.live_changed_at < kLiveSettleFrames) {
+    return;
+  }
+  run.live_ae_seen = ae_frames;
+  ++run.window.tune_ok;
+  run.last_measured_ms = now_ms;
+  run.mean_luma = weightedMeanLuma(ae.luminance);
+  const ExposureStep step =
+      stepStagedExposure(g_exposure, run.mean_luma, aeTarget(), 12, run.stages, aeExponent());
+  if (!step.converged) traceAutoExposure('t', 0, 0, run.mean_luma);
+  publishExposure(run.mean_luma);
+  if (stepDigitalGain(run.mean_luma, step.limited)) {
+    run.live_changed_at = ae_frames;
+    return;
+  }
+  if (!step.converged && setExposureIfChanged(step.next)) run.live_changed_at = ae_frames;
+}
+
 // Counts one statistics read of the running stream and the time it took.
 void noteStatisticsRead(StreamWindow& window, uint32_t started_ms, bool ok) {
   const uint32_t took_ms = millis() - started_ms;
@@ -1888,6 +2007,10 @@ void noteStatisticsRead(StreamWindow& window, uint32_t started_ms, bool ok) {
 // a whole frame; a failed read is retried as the same kind.
 // Every exposure change writes the SCCB bus shared with touch.
 void streamAutoTune(StreamRun& run, uint32_t budget_ms) {
+  if (g_live_ae_running) {
+    streamAutoTuneLive(run);
+    return;
+  }
   static isp_ae_result_t ae_result;
   static isp_awb_stat_result_t awb_result;
   const uint32_t now_ms = millis();
@@ -1979,8 +2102,14 @@ void requestStreamStop(StopReason reason);
 
 // The upload cannot keep up (noisy low-light frames are much larger):
 // smaller frames instead of dropped ones.
-void noteUploadBusy(StreamRun& run) {
-  ++run.window.busy;
+// The upload falls behind: a frame replaced before it was sent (replaced),
+// or the sender still busy half a frame after the next one was due. Noisy
+// high-gain V2 frames grew to 100 KB and held the stream at 15 fps behind
+// the sender without ever replacing a frame, so only the first case lowered
+// the quality (2026-10-03). After kBusyFramesBeforeQualityDrop such frames
+// in a row the JPEG quality steps down.
+void noteUploadBusy(StreamRun& run, bool replaced = true) {
+  if (replaced) ++run.window.busy;
   run.calm_frames = 0;
   if (++run.busy_frames >= kBusyFramesBeforeQualityDrop &&
       run.quality > local_camera_stream::kMinQuality) {
@@ -1988,7 +2117,7 @@ void noteUploadBusy(StreamRun& run) {
     const uint8_t previous = run.quality;
     run.quality = local_camera_stream::reducedQuality(run.quality);
     if (logDue(&run.quality_log_ms, kErrorLogIntervalMs)) {
-      Serial.printf("[LocalCamStream] Upload busy, quality %u -> %u\n",
+      Serial.printf("[LocalCamStream] Upload %s, quality %u -> %u\n", replaced ? "busy" : "behind",
                     static_cast<unsigned>(previous), static_cast<unsigned>(run.quality));
     }
   }
@@ -1997,6 +2126,7 @@ void noteUploadBusy(StreamRun& run) {
 void streamCaptureFrame(StreamRun& run) {
   StreamWindow& window = run.window;
   const uint32_t frame_ms = currentFrameMs();
+  bool upload_behind = false;
   // The sender still has an unsent frame: encoding another one now would only
   // replace it, a wasted 2D-DMA hold the display needs for its rotation.
   // Wait up to one frame interval for the sender to take it.
@@ -2014,6 +2144,8 @@ void streamCaptureFrame(StreamRun& run) {
       noteUploadBusy(run);
       return;
     }
+    upload_behind = waited_ms * 2 >= frame_ms;
+    if (upload_behind) noteUploadBusy(run, false);
   }
   xQueueReset(g_isr.frames);
   g_isr.frozen = -1;
@@ -2089,6 +2221,8 @@ void streamCaptureFrame(StreamRun& run) {
     noteUploadBusy(run);
     return;
   }
+  // A frame the sender held back is no calm frame; the streak goes on.
+  if (upload_behind) return;
   run.busy_frames = 0;
   if (run.quality < run.settings.quality && ++run.calm_frames >= kCalmFramesBeforeQualityRise) {
     run.calm_frames = 0;
@@ -2201,6 +2335,16 @@ uint32_t runStream() {
     }
     reason = streamSettle(run, &leftover);
     if (reason != StopReason::None) break;
+    // From here every frame is measured; the frame loop never waits for it.
+    startLiveStatistics();
+    portENTER_CRITICAL(&g_live_mux);
+    run.live_ae_seen = g_live.ae_frames;
+    run.live_awb_seen = g_live.awb_frames;
+    portEXIT_CRITICAL(&g_live_mux);
+    run.live_changed_at = run.live_ae_seen;
+    Serial.printf("[LocalCamStream] Live statistics: AE %s, AWB %s\n",
+                  g_live_ae_running ? "on" : "off (oneshot reads)",
+                  g_live_awb_running ? "on" : "off");
 
     Serial.printf(
         "[LocalCamStream] Start mode=%u %ux%u@%u q=%u source=%s exp=%u gain=%u/16 "
@@ -2275,6 +2419,8 @@ uint32_t runStream() {
       if (reason != StopReason::None) break;
     }
   } while (false);
+  // Snapshots use oneshot reads, which the driver refuses during continuous ones.
+  stopLiveStatistics();
 
   // Stop order: sender first (it may still read a slot), then the sensor and
   // the receiver, then the buffers.

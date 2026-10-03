@@ -61,12 +61,15 @@ try {
   for (const [name, bytes] of before) assert.deepEqual(fs.readFileSync(path.join(output, name)), bytes,
     'A failed verification must preserve existing packaged firmware');
 
-  const rev3 = getReleaseProfile('waveshare_touch_lcd_7b_rev3_1');
+  const rev3 = getReleaseProfile('waveshare_touch_lcd_7b_rev3');
   const preV3 = getReleaseProfile('waveshare_touch_lcd_7b');
   assert.notEqual(run(rev3, fixture(rev3), fixture(preV3, 0x10000)).status, 0,
     'Factory silicon variant must match even when the metadata device key is shared');
+  const v3 = getReleaseProfile('guition_jc8012p4a1_v3');
+  assert.notEqual(run(v3, fixture(v3), fixture(getReleaseProfile('guition_jc8012p4a1_v2'), 0x10000)).status, 0,
+    'A V2 factory image must never be packaged as the V3 image');
   const corrupt = fixture(rev3, 0x10000);
-  corrupt.writeUInt16LE(399, 0x10000 + 388 + 6);
+  corrupt.writeUInt16LE(400, 0x10000 + 388 + 6);
   assert.notEqual(run(rev3, fixture(rev3), corrupt).status, 0);
   assert.throws(() => parseFirmwareMetadata(Buffer.alloc(10)), /too small/);
   const badHeader = fixture(profile); badHeader[0] = 0;

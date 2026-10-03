@@ -37,7 +37,12 @@ assert.match(workflow, /profile: waveshare_10_1\n            key: waveshare_touc
 assert.match(workflow, /profile: waveshare_10_1_rev3\n            key: waveshare_touch_lcd_10_1_rev3\n            metadata_key: waveshare_touch_lcd_10_1\n            define: DEVICE_WAVESHARE_TOUCH_LCD_10_1\n            silicon_variant: post_v3/);
 
 const metadata = read('src/core/firmware/firmware_metadata.cpp');
-const branch = metadata.indexOf('#elif CONFIG_ESP_REV_MIN_FULL >= 300 && defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)');
+const v3Profiles = metadata.slice(metadata.indexOf('#if defined(DEVICE_WAVESHARE_TOUCH_LCD_7B)'),
+  metadata.indexOf('#define FW_META_V3_PROFILE 1'));
+assert.match(v3Profiles, /defined\(DEVICE_WAVESHARE_TOUCH_LCD_10_1\)/, '10.1 must be a listed v3 profile');
+assert.doesNotMatch(v3Profiles, /TOUCH_LCD_8|TAB5|JC1060|JC4880|4_3|WAVESHARE_4B/,
+  'Profiles whose DSI clock is fixed to PLL_F20M must not build for v3');
+const branch = metadata.indexOf('#elif CONFIG_ESP_REV_MIN_FULL >= 300 && FW_META_V3_PROFILE');
 assert.ok(branch > 0, '10.1 v3 descriptor must be an exact-profile branch');
 const branchText = metadata.slice(branch, metadata.indexOf('#else', branch));
 for (const marker of ['#define FW_META_SILICON_VARIANT "post_v3"', '#define FW_META_SILICON_MIN_REV 301',

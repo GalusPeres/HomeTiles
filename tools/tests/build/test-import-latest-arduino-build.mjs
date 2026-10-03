@@ -45,7 +45,7 @@ const releaseTargets = new Map([
   }],
   ['DEVICE_GUITION_JC8012P4A1_V2', {
     key: 'guition_jc8012p4a1_v2',
-    siliconVariant: 'pre_v3',
+    siliconVariant: null,
   }],
   ['DEVICE_GUITION_JC1060P470C', {
     key: 'guition_jc1060p470c',
@@ -230,20 +230,29 @@ assert.throws(
       maximumRevision: 299,
     })),
   ),
-  /Unsafe Waveshare 7B pre-v3 revision range/,
+  /Unsafe DEVICE_WAVESHARE_TOUCH_LCD_7B pre_v3 revision range/,
 );
 
 const rev3Metadata = parseFirmwareMetadata(
   firmwareImage('waveshare_touch_lcd_7b', {
-    siliconVariant: 'rev3_1',
+    siliconVariant: 'post_v3',
     minimumRevision: 301,
-    maximumRevision: 301,
+    maximumRevision: 399,
   }),
 );
 assert.equal(
   resolveReleaseDevice(waveshare7BSelection, rev3Metadata).key,
-  'waveshare_touch_lcd_7b_rev3_1',
+  'waveshare_touch_lcd_7b_rev3',
 );
+
+// The JC8012 V3 is the V2 code built for ESP32-P4 v3 silicon (#44).
+const jc8012V2Selection = readManualDeviceSelection(selectorSource('DEVICE_GUITION_JC8012P4A1_V2'));
+assert.equal(resolveReleaseDevice(jc8012V2Selection, parseFirmwareMetadata(
+  firmwareImage('guition_jc8012p4a1_v2', { siliconVariant: 'pre_v3', minimumRevision: 1, maximumRevision: 199 }),
+)).key, 'guition_jc8012p4a1_v2', 'The V2 image keeps its release asset name.');
+assert.equal(resolveReleaseDevice(jc8012V2Selection, parseFirmwareMetadata(
+  firmwareImage('guition_jc8012p4a1_v2', { siliconVariant: 'post_v3', minimumRevision: 301, maximumRevision: 399 }),
+)).key, 'guition_jc8012p4a1_v3');
 
 const waveshare101Selection = readManualDeviceSelection(
   selectorSource('DEVICE_WAVESHARE_TOUCH_LCD_10_1'),
@@ -292,12 +301,23 @@ assert.throws(
   () => resolveReleaseDevice(
     waveshare7BSelection,
     parseFirmwareMetadata(firmwareImage('waveshare_touch_lcd_7b', {
-      siliconVariant: 'rev3_1',
+      siliconVariant: 'post_v3',
       minimumRevision: 301,
-      maximumRevision: 399,
+      maximumRevision: 301,
     })),
   ),
-  /Unsafe Waveshare 7B v3.1 revision range/,
+  /Unsafe DEVICE_WAVESHARE_TOUCH_LCD_7B post_v3 revision range/,
+);
+assert.throws(
+  () => resolveReleaseDevice(
+    waveshare7BSelection,
+    parseFirmwareMetadata(firmwareImage('waveshare_touch_lcd_7b', {
+      siliconVariant: 'rev3_1',
+      minimumRevision: 301,
+      maximumRevision: 301,
+    })),
+  ),
+  /Unsupported DEVICE_WAVESHARE_TOUCH_LCD_7B silicon variant/,
 );
 assert.throws(
   () => parseFirmwareMetadata(firmwareImage('waveshare_touch_lcd_7b', {

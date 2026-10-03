@@ -128,6 +128,20 @@ export const DEVICE_PROFILES = Object.freeze([
     "acceptsLegacyDescriptor": true
   }),
   Object.freeze({
+    "key": "guition_jc8012p4a1_v3",
+    "buildProfile": "guition_jc8012p4a1_v3",
+    "label": "Guition JC8012P4A1 V3 (experimental)",
+    "chipFamily": "ESP32-P4",
+    "flashSize": 16777216,
+    "status": "validation-pending",
+    "hardwareCheck": "The panel is a JC8012P4A1 V3 and esptool chip-id reports ESP32-P4 revision v3.1 or newer. V1 and V2 panels use their own images.",
+    "metadataDeviceKey": "guition_jc8012p4a1_v2",
+    "siliconVariant": "post_v3",
+    "minimumRevision": 301,
+    "maximumRevision": 399,
+    "acceptsLegacyDescriptor": false
+  }),
+  Object.freeze({
     "key": "guition_jc1060p470c",
     "buildProfile": "guition_jc1060p470c",
     "label": "Guition JC1060P470C_I_W_Y",
@@ -155,17 +169,17 @@ export const DEVICE_PROFILES = Object.freeze([
     "acceptsLegacyDescriptor": true
   }),
   Object.freeze({
-    "key": "waveshare_touch_lcd_7b_rev3_1",
-    "buildProfile": "waveshare_7b_rev3_1",
-    "label": "Waveshare Touch LCD 7B / 7B-C (ESP32-P4 v3.1 only, experimental)",
+    "key": "waveshare_touch_lcd_7b_rev3",
+    "buildProfile": "waveshare_7b_rev3",
+    "label": "Waveshare Touch LCD 7B / 7B-C (ESP32-P4 v3.1 or newer, experimental)",
     "chipFamily": "ESP32-P4",
     "flashSize": 33554432,
     "status": "validation-pending",
-    "hardwareCheck": "Experimental and not yet verified on exact 7B rev3.1 hardware: the rear label says ESP32-P4-WIFI6-Touch-LCD-7B or 7B-C and the ESP32-P4 chip revision is exactly v3.1. Revision v3.2 or newer is unsupported.",
+    "hardwareCheck": "The rear label says ESP32-P4-WIFI6-Touch-LCD-7B or 7B-C and esptool chip-id reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
     "metadataDeviceKey": "waveshare_touch_lcd_7b",
-    "siliconVariant": "rev3_1",
+    "siliconVariant": "post_v3",
     "minimumRevision": 301,
-    "maximumRevision": 301,
+    "maximumRevision": 399,
     "acceptsLegacyDescriptor": false
   }),
   Object.freeze({

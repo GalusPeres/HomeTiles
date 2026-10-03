@@ -121,7 +121,7 @@ If the browser installer is unavailable, use [Espressif's Flash Download Tool](h
 
 3. Wait until verification finishes, then restart the display.
 
-**ESP32-P4 revision check:** standard P4 images require pre-v3 silicon (revisions 1 to 199). The experimental Waveshare 10.1 `_rev3` image is for v3.1 and newer. The experimental Waveshare 7B `_rev3_1` image is for **exact v3.1 only**; 7B boards with v3.2 or newer are not supported yet. Check the `chip-id` output before a manual write. esptool does not enforce HomeTiles' narrower revision checks.
+**ESP32-P4 revision check:** standard P4 images require pre-v3 silicon (revisions 1 to 199). The experimental Waveshare 7B and 10.1 `_rev3` images and the Guition JC8012P4A1 V3 image are for v3.1 and newer, including v3.2. Check the `chip-id` output before a manual write. esptool does not enforce HomeTiles' narrower revision checks.
 
 Never write a plain update `.bin` at `0x0`. To preserve settings, use the browser's **Update** mode or [Firmware Updates](updating.md).
 

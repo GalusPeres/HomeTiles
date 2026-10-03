@@ -1,15 +1,26 @@
 #pragma once
 
 #include <FS.h>
+// CONFIG_ESP_REV_MIN_FULL names the V3 build; host tests have no sdkconfig.
+#if __has_include(<sdkconfig.h>)
+#include <sdkconfig.h>
+#endif
 
 #include "src/devices/device_types.h"
 #include "src/devices/guition_jc8012p4a1_v2/hardware_io_profile.h"
 
 namespace DeviceGuitionJC8012P4A1V2 {
 
+#if CONFIG_ESP_REV_MIN_FULL >= 300
+// The V3 board: the V2 hardware with ESP32-P4 v3 silicon.
+inline constexpr const char* kDisplayName = "Guition JC8012P4A1 V3";
+#else
+inline constexpr const char* kDisplayName = "Guition JC8012P4A1 V2";
+#endif
+
 inline constexpr Device::Profile kProfile{
     "guition_jc8012p4a1_v2",
-    "Guition JC8012P4A1 V2",
+    kDisplayName,
     1280,
     800,
     7,

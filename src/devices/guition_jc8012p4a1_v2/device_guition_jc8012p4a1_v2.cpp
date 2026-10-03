@@ -608,7 +608,15 @@ bool init_display() {
   esp_lcd_dsi_bus_config_t bus_cfg = {};
   bus_cfg.bus_id = 0;
   bus_cfg.num_data_lanes = kPanelLaneCount;
+#if CONFIG_ESP_REV_MIN_FULL >= 300
+  // The V3 board is this board with ESP32-P4 v3 silicon. v3.x builds accept
+  // XTAL/APLL/CPLL/SPLL/MPLL only; PLL_F20M aborts in the low-level MIPI DSI
+  // clock-source switch.
+  bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_DEFAULT;
+#else
+  // Pre-v3 builds accept PLL_F20M/RC_FAST/PLL_F25M only.
   bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M;
+#endif
   bus_cfg.lane_bit_rate_mbps = static_cast<float>(display_cfg.lane_bit_rate);
   Serial.printf("[Device/Guition JC8012P4A1 V2] DSI bus init start lane=%u Mbps\n",
                 static_cast<unsigned>(display_cfg.lane_bit_rate));

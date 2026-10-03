@@ -148,22 +148,6 @@ function resolveReleaseDevice(selection, metadata) {
       `Unsupported ${selection.define} silicon variant: ${metadata.silicon.variant || '(empty)'}`
     );
   }
-  if (
-    metadata.silicon.variant === 'pre_v3' &&
-    (metadata.silicon.minimumRevision !== 1 || metadata.silicon.maximumRevision !== 199)
-  ) {
-    throw new Error(
-      `Unsafe Waveshare 7B pre-v3 revision range: ${metadata.silicon.minimumRevision}-${metadata.silicon.maximumRevision}`
-    );
-  }
-  if (
-    metadata.silicon.variant === 'rev3_1' &&
-    (metadata.silicon.minimumRevision !== 301 || metadata.silicon.maximumRevision !== 301)
-  ) {
-    throw new Error(
-      `Unsafe Waveshare 7B v3.1 revision range: ${metadata.silicon.minimumRevision}-${metadata.silicon.maximumRevision}`
-    );
-  }
   // Every catalog variant carries its exact HomeTiles revision contract.
   if (
     metadata.silicon.minimumRevision !== variantTarget.minimumRevision ||

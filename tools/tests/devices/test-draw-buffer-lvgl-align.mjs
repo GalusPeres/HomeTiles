@@ -57,7 +57,7 @@ const walk = dir => {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(file);
     else if (entry.name.endsWith('.h')) {
-      const match = read(file).match(/Profile kProfile\s*=?\s*\{\s*"([^"]+)",\s*"[^"]*",\s*(\d+),\s*(\d+),/);
+      const match = read(file).match(/Profile kProfile\s*=?\s*\{\s*"([^"]+)",\s*(?:"[^"]*"|\w+),\s*(\d+),\s*(\d+),/);
       if (match) profileWidths.set(match[1], Number(match[2]));
     }
   }

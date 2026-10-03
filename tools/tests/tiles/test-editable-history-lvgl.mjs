@@ -417,7 +417,7 @@ const selection=read('src/devices/device_select.h');
 for(const device of deviceCatalog.profiles){
  const dir=`src/devices/${device.metadataDeviceKey}`;
  const header=fs.existsSync(path.join(root,dir,'profile.h'))?`${dir}/profile.h`:`${dir}/device_${device.metadataDeviceKey}.h`;
- const dimensions=read(header).match(/kProfile\s*\{\s*"[^"]*",\s*"[^"]*",\s*(\d+),\s*(\d+),/);
+ const dimensions=read(header).match(/kProfile\s*\{\s*"[^"]*",\s*(?:"[^"]*"|\w+),\s*(\d+),\s*(\d+),/);
  assert(dimensions,`${device.buildProfile}: profile dimensions must be checked`);
  const define=['DEVICE_LAYOUT_480X480','DEVICE_LAYOUT_1024X600'].find(name=>{
   const end=selection.indexOf(`#define ${name}\n`);

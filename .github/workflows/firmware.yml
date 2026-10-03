@@ -146,12 +146,12 @@ jobs:
             silicon_variant: pre_v3
             rx_variant: repo-a8204
             publish: true
-          - label: Waveshare 7B / 7B-C (ESP32-P4 rev 3.1 only, experimental)
-            profile: waveshare_7b_rev3_1
-            key: waveshare_touch_lcd_7b_rev3_1
+          - label: Waveshare 7B / 7B-C (ESP32-P4 v3.1 or newer, experimental)
+            profile: waveshare_7b_rev3
+            key: waveshare_touch_lcd_7b_rev3
             metadata_key: waveshare_touch_lcd_7b
             define: DEVICE_WAVESHARE_TOUCH_LCD_7B
-            silicon_variant: rev3_1
+            silicon_variant: post_v3
             rx_variant: repo-a8204
             publish: true
           - label: Waveshare 8 inch
@@ -226,6 +226,14 @@ jobs:
             key: waveshare_touch_lcd_10_1_rev3
             metadata_key: waveshare_touch_lcd_10_1
             define: DEVICE_WAVESHARE_TOUCH_LCD_10_1
+            silicon_variant: post_v3
+            rx_variant: repo-a8204
+            publish: true
+          - label: Guition JC8012P4A1 V3 (ESP32-P4 v3.1 or newer, experimental)
+            profile: guition_jc8012p4a1_v3
+            key: guition_jc8012p4a1_v3
+            metadata_key: guition_jc8012p4a1_v2
+            define: DEVICE_GUITION_JC8012P4A1_V2
             silicon_variant: post_v3
             rx_variant: repo-a8204
             publish: true

@@ -220,7 +220,7 @@ if (oldProfile.includes('waveshare_touch_lcd_7b') ||
 for (const marker of [
   'waveshare_7b:',
   'ChipVariant=prev3',
-  'waveshare_7b_rev3_1:',
+  'waveshare_7b_rev3:',
   'ChipVariant=postv3',
 ]) {
   requireMarker(sketchProfiles, marker, 'Waveshare 7B silicon build profiles');
@@ -228,9 +228,9 @@ for (const marker of [
 for (const marker of [
   'profile: waveshare_7b\n            key: waveshare_touch_lcd_7b',
   'silicon_variant: pre_v3',
-  'profile: waveshare_7b_rev3_1\n            key: waveshare_touch_lcd_7b_rev3_1',
+  'profile: waveshare_7b_rev3\n            key: waveshare_touch_lcd_7b_rev3',
   'metadata_key: waveshare_touch_lcd_7b',
-  'silicon_variant: rev3_1',
+  'silicon_variant: post_v3',
   '--silicon-variant "${{ matrix.silicon_variant || \'default\' }}"',
 ]) {
   requireMarker(firmwareWorkflow, marker, 'Waveshare 7B release matrix');
@@ -245,11 +245,12 @@ for (const marker of [
 for (const marker of [
   '#if defined(CONFIG_IDF_TARGET_ESP32P4)',
   '#if CONFIG_ESP_REV_MAX_FULL < 300',
-  '#elif CONFIG_ESP_REV_MIN_FULL >= 300',
+  '#if defined(DEVICE_WAVESHARE_TOUCH_LCD_7B) || defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) ||',
+  '#elif CONFIG_ESP_REV_MIN_FULL >= 300 && FW_META_V3_PROFILE',
   '#define FW_META_SILICON_VARIANT "pre_v3"',
-  '#define FW_META_SILICON_VARIANT "rev3_1"',
+  '#define FW_META_SILICON_VARIANT "post_v3"',
   '#define FW_META_SILICON_MIN_REV 301',
-  '#define FW_META_SILICON_MAX_REV 301',
+  '#define FW_META_SILICON_MAX_REV 399',
   '#error "Every ESP32-P4 build must target one unambiguous silicon generation"',
   'strcmp(current_variant, "pre_v3") == 0',
   'const uint16_t chip_revision = ESP.getChipRevision();',
@@ -261,7 +262,7 @@ for (const marker of [
 for (const marker of [
   '#if defined(CONFIG_IDF_TARGET_ESP32P4)',
   'const uint16_t chip_revision = ESP.getChipRevision();',
-  'key_out = "waveshare_touch_lcd_7b_rev3_1";',
+  'key_out = "waveshare_touch_lcd_7b_rev3";',
   '[Update] ESP32-P4 silicon revision=%u variant=%s asset=%s',
   'asset_device_key == Device::profile().key',
   'imageMatchesCurrentSiliconVariant(',
@@ -273,12 +274,13 @@ for (const marker of [
 requireMarker(webOta, 'imageMatchesCurrentSiliconVariant(',
               'Waveshare 7B manual Web OTA validation');
 const preV3Release = getReleaseProfile('waveshare_touch_lcd_7b');
-const rev3Release = getReleaseProfile('waveshare_touch_lcd_7b_rev3_1');
+const rev3Release = getReleaseProfile('waveshare_touch_lcd_7b_rev3');
 assert.equal(preV3Release.siliconVariant, 'pre_v3');
 assert.equal(rev3Release.metadataDeviceKey, 'waveshare_touch_lcd_7b');
-assert.equal(rev3Release.siliconVariant, 'rev3_1');
+// v3.1 and v3.2 boards share one v3 image, as on the 10.1 (#41).
+assert.equal(rev3Release.siliconVariant, 'post_v3');
 assert.equal(rev3Release.minimumRevision, 301);
-assert.equal(rev3Release.maximumRevision, 301);
-assert.equal(getBuildProfile('waveshare_7b_rev3_1').define, 'DEVICE_WAVESHARE_TOUCH_LCD_7B');
+assert.equal(rev3Release.maximumRevision, 399);
+assert.equal(getBuildProfile('waveshare_7b_rev3').define, 'DEVICE_WAVESHARE_TOUCH_LCD_7B');
 
 console.log('Waveshare Touch LCD 7B / 7B-C profile contract: PASS');

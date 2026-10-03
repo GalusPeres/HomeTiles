@@ -83,14 +83,15 @@ function firmwareFixture(deviceKey, appOffset = 0, silicon = null) {
   return bytes;
 }
 
-assert.equal(DEVICE_PROFILES.length, 17, "Every explicit firmware choice needs an installer profile.");
-assert.equal(new Set(DEVICE_PROFILES.map((device) => device.key)).size, 17);
+assert.equal(DEVICE_PROFILES.length, 18, "Every explicit firmware choice needs an installer profile.");
+assert.equal(new Set(DEVICE_PROFILES.map((device) => device.key)).size, 18);
 assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-S3").length, 3);
-assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-P4").length, 14);
+assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-P4").length, 15);
 for (const device of DEVICE_PROFILES.filter((candidate) => candidate.chipFamily === "ESP32-P4")) {
   const contract = {
-    waveshare_touch_lcd_7b_rev3_1: ["rev3_1", 301, 301],
+    waveshare_touch_lcd_7b_rev3: ["post_v3", 301, 399],
     waveshare_touch_lcd_10_1_rev3: ["post_v3", 301, 399],
+    guition_jc8012p4a1_v3: ["post_v3", 301, 399],
   }[device.key] || ["pre_v3", 1, 199];
   assert.equal(device.siliconVariant, contract[0]);
   assert.equal(device.minimumRevision, contract[1]);
@@ -107,7 +108,8 @@ assert.equal(
 for (const [key, chipFamily, flashSize, labelPattern, status = "validation-pending"] of [
   ["waveshare_touch_lcd_4_3", "ESP32-P4", 32 * 1024 * 1024, /4\.3 inch/],
   ["waveshare_touch_lcd_7b", "ESP32-P4", 32 * 1024 * 1024, /before v3\.0/],
-  ["waveshare_touch_lcd_7b_rev3_1", "ESP32-P4", 32 * 1024 * 1024, /v3\.1 only, experimental/],
+  ["waveshare_touch_lcd_7b_rev3", "ESP32-P4", 32 * 1024 * 1024, /7B-C \(ESP32-P4 v3\.1 or newer, experimental\)/],
+  ["guition_jc8012p4a1_v3", "ESP32-P4", 16 * 1024 * 1024, /JC8012P4A1 V3 \(experimental\)/],
   ["waveshare_touch_lcd_10_1_rev3", "ESP32-P4", 32 * 1024 * 1024, /10\.1 inch \(ESP32-P4 v3\.1 or newer, experimental\)/],
   ["guition_jc1060p470c_v2", "ESP32-P4", 16 * 1024 * 1024, /V2 \(New Panel\)/],
   ["guition_jc4880p443_portrait", "ESP32-P4", 16 * 1024 * 1024, /JC4880P443/],
@@ -157,7 +159,7 @@ assert.throws(
 
 const sketchProfiles = read("sketch.yaml");
 const releaseTargets = DEVICE_PROFILES;
-assert.equal(releaseTargets.length, 17, "The explicit 7B and 10.1 silicon choices need separate release builds.");
+assert.equal(releaseTargets.length, 18, "The explicit 7B, 10.1 and JC8012 silicon choices need separate release builds.");
 for (const target of releaseTargets) {
   const escapedProfile = target.buildProfile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = sketchProfiles.match(new RegExp(`^  ${escapedProfile}:\\r?\\n    fqbn: ([^\\r\\n]+)$`, "m"));
@@ -167,7 +169,9 @@ for (const target of releaseTargets) {
   assert.match(match[1], new RegExp(`FlashSize=${target.flashSize / (1024 * 1024)}M(?:,|$)`));
 }
 assert.match(sketchProfiles, /^  waveshare_7b:[\s\S]*?ChipVariant=prev3$/m);
-assert.match(sketchProfiles, /^  waveshare_7b_rev3_1:[\s\S]*?ChipVariant=postv3$/m);
+assert.match(sketchProfiles, /^  waveshare_7b_rev3:\r?\n    fqbn: [^\r\n]*ChipVariant=postv3\r?$/m);
+assert.match(sketchProfiles, /^  guition_jc8012p4a1_v2:\r?\n    fqbn: [^\r\n]*ChipVariant=prev3\r?$/m);
+assert.match(sketchProfiles, /^  guition_jc8012p4a1_v3:\r?\n    fqbn: [^\r\n]*ChipVariant=postv3\r?$/m);
 assert.match(sketchProfiles, /^  waveshare_10_1:\r?\n    fqbn: [^\r\n]*ChipVariant=prev3\r?$/m);
 assert.match(sketchProfiles, /^  waveshare_10_1_rev3:\r?\n    fqbn: [^\r\n]*ChipVariant=postv3\r?$/m);
 
@@ -202,7 +206,7 @@ assert.match(packageSource, /const otaSlotSize = 0x680000;/);
 
 const releaseIndex = buildReleaseIndex(fixtureRelease());
 assert.equal(releaseIndex.tag, "v0.6.5");
-assert.equal(releaseIndex.devices.length, 17);
+assert.equal(releaseIndex.devices.length, 18);
 for (const device of releaseIndex.devices) {
   const names = releaseAssetNames("v0.6.5", device.key);
   assert.equal(device.update.file, names.update);
@@ -214,10 +218,10 @@ const waveshare7bPre = releaseIndex.devices.find(
   (device) => device.key === "waveshare_touch_lcd_7b",
 );
 const waveshare7bRev3 = releaseIndex.devices.find(
-  (device) => device.key === "waveshare_touch_lcd_7b_rev3_1",
+  (device) => device.key === "waveshare_touch_lcd_7b_rev3",
 );
 assert.equal(waveshare7bPre.siliconVariant, "pre_v3");
-assert.equal(waveshare7bRev3.siliconVariant, "rev3_1");
+assert.equal(waveshare7bRev3.siliconVariant, "post_v3");
 assert.equal(waveshare7bPre.metadataDeviceKey, "waveshare_touch_lcd_7b");
 assert.equal(waveshare7bRev3.metadataDeviceKey, "waveshare_touch_lcd_7b");
 assert.equal("revisionVariants" in waveshare7bPre, false);
@@ -254,16 +258,33 @@ for (const revision of [301, 302, 399]) {
 for (const revision of [0, 200, 300, 400]) {
   assert.throws(() => assertFirmwareRevisionCompatible(waveshare101Rev3, revision), /does not match the selected/);
 }
-for (const unsupportedRevision of [0, 200, 300, 302, 399, 400]) {
+// The 7B v3 image covers v3.2 as well (#41).
+for (const revision of [301, 302, 399]) {
+  assert.equal(assertFirmwareRevisionCompatible(waveshare7bRev3, revision), true);
+}
+for (const unsupportedRevision of [0, 200, 300, 400]) {
   assert.throws(
     () => assertFirmwareRevisionCompatible(waveshare7bRev3, unsupportedRevision),
     /does not match the selected/,
   );
 }
+// The JC8012 V3 is the V2 board with v3 silicon (#44); each takes only its own chips.
+const jc8012V2 = releaseIndex.devices.find((device) => device.key === "guition_jc8012p4a1_v2");
+const jc8012V3 = releaseIndex.devices.find((device) => device.key === "guition_jc8012p4a1_v3");
+assert.equal(jc8012V3.metadataDeviceKey, "guition_jc8012p4a1_v2");
+assert.equal(jc8012V3.siliconVariant, "post_v3");
+for (const revision of [301, 302, 399]) {
+  assert.equal(assertFirmwareRevisionCompatible(jc8012V3, revision), true);
+  assert.throws(() => assertFirmwareRevisionCompatible(jc8012V2, revision), /does not match the selected/);
+}
+for (const revision of [1, 103, 199]) {
+  assert.equal(assertFirmwareRevisionCompatible(jc8012V2, revision), true);
+  assert.throws(() => assertFirmwareRevisionCompatible(jc8012V3, revision), /does not match the selected/);
+}
 
 const fullPublication = selectDevicesForPublication(releaseIndex);
 assert.equal(fullPublication.partial, false);
-assert.equal(fullPublication.devices.length, 17);
+assert.equal(fullPublication.devices.length, 18);
 const localPublication = selectDevicesForPublication(releaseIndex, "guition_esp32_4848s040");
 assert.equal(localPublication.partial, true);
 assert.deepEqual(localPublication.devices.map((device) => device.key), ["guition_esp32_4848s040"]);
@@ -282,28 +303,29 @@ assert.throws(
 );
 const legacy7bRelease = fixtureRelease("v0.6.7");
 legacy7bRelease.assets = legacy7bRelease.assets.filter(
-  (asset) => !asset.name.includes("_waveshare_touch_lcd_7b_rev3_1") &&
+  (asset) => !asset.name.includes("_waveshare_touch_lcd_7b_rev3") &&
     !asset.name.includes("_guition_jc4880p443_portrait"),
 );
-assert.throws(() => buildReleaseIndex(legacy7bRelease), /rev3_1/);
+assert.throws(() => buildReleaseIndex(legacy7bRelease), /waveshare_touch_lcd_7b_rev3/);
 const legacy7bIndex = buildReleaseIndex(legacy7bRelease, { allowMissingProfiles: true });
-assert.equal(legacy7bIndex.devices.length, 15);
+assert.equal(legacy7bIndex.devices.length, 16);
 assert.equal(
   legacy7bIndex.devices.some((device) => device.key === "waveshare_touch_lcd_7b"),
   true,
   "A legacy pre-v3 pair remains an explicit pre-v3 choice.",
 );
 assert.equal(
-  legacy7bIndex.devices.some((device) => device.key === "waveshare_touch_lcd_7b_rev3_1"),
+  legacy7bIndex.devices.some((device) => device.key === "waveshare_touch_lcd_7b_rev3"),
   false,
-  "A release without the rev3.1 pair must not expose the experimental rev3.1 choice.",
+  "A release without the v3 pair must not expose the experimental v3 choice.",
 );
 const previousRelease = fixtureRelease("v0.6.7");
 const pendingDeviceKeys = new Set([
   "waveshare_touch_lcd_4_3",
   "waveshare_touch_lcd_7b",
-  "waveshare_touch_lcd_7b_rev3_1",
+  "waveshare_touch_lcd_7b_rev3",
   "waveshare_touch_lcd_10_1_rev3",
+  "guition_jc8012p4a1_v3",
   "guition_jc1060p470c_v2",
   "guition_jc4880p443_portrait",
   "waveshare_s3_touch_lcd_4",
@@ -343,7 +365,7 @@ beforeLcd4Release.assets = beforeLcd4Release.assets.filter(
 const beforeLcd4Publication = selectDevicesForPublication(
   buildReleaseIndex(beforeLcd4Release, { allowMissingProfiles: true }),
 );
-assert.equal(beforeLcd4Publication.devices.length, 15);
+assert.equal(beforeLcd4Publication.devices.length, 16);
 assert.equal(beforeLcd4Publication.partial, true);
 assert.equal(beforeLcd4Publication.devices.some((device) => device.key === waveshareS3Lcd4.key), false);
 assert.throws(
@@ -429,9 +451,9 @@ const preV3Firmware = firmwareFixture("waveshare_touch_lcd_7b", 0, {
   maximumRevision: 199,
 });
 const rev3Firmware = firmwareFixture("waveshare_touch_lcd_7b", 0, {
-  key: "rev3_1",
+  key: "post_v3",
   minimumRevision: 301,
-  maximumRevision: 301,
+  maximumRevision: 399,
 });
 assert.equal(
   validateFirmwareDescriptor(preV3Firmware, "waveshare_touch_lcd_7b", 0, {
@@ -441,26 +463,64 @@ assert.equal(
 );
 assert.equal(
   validateFirmwareDescriptor(rev3Firmware, "waveshare_touch_lcd_7b", 0, {
-    siliconVariant: "rev3_1",
-    chipRevision: 301,
+    siliconVariant: "post_v3",
+    chipRevision: 302,
   }),
   "waveshare_touch_lcd_7b",
 );
-const narrowRev3Firmware = firmwareFixture("waveshare_touch_lcd_7b", 0, {
+// An image from the former exact-v3.1 build is no longer a valid 7B choice.
+const exactRev31Firmware = firmwareFixture("waveshare_touch_lcd_7b", 0, {
   key: "rev3_1",
+  minimumRevision: 301,
+  maximumRevision: 301,
+});
+assert.throws(
+  () => validateFirmwareDescriptor(exactRev31Firmware, "waveshare_touch_lcd_7b", 0, {
+    siliconVariant: "post_v3",
+    chipRevision: 301,
+  }),
+  /silicon variant is rev3_1/,
+);
+const broadRev3Firmware = firmwareFixture("waveshare_touch_lcd_7b", 0, {
+  key: "post_v3",
+  minimumRevision: 300,
+  maximumRevision: 399,
+});
+assert.throws(
+  () => validateFirmwareDescriptor(broadRev3Firmware, "waveshare_touch_lcd_7b", 0, {
+    siliconVariant: "post_v3",
+    chipRevision: 302,
+  }),
+  /silicon range 300-399 is unsafe/,
+);
+const narrowRev3Firmware = firmwareFixture("waveshare_touch_lcd_7b", 0, {
+  key: "post_v3",
   minimumRevision: 302,
   maximumRevision: 302,
 });
 assert.throws(
   () => validateFirmwareDescriptor(narrowRev3Firmware, "waveshare_touch_lcd_7b", 0, {
-    siliconVariant: "rev3_1",
+    siliconVariant: "post_v3",
     chipRevision: 301,
   }),
-  /silicon range 302-302 is unsafe/,
+  /does not support connected ESP32-P4 revision 301/,
 );
 assert.throws(
   () => validateFirmwareDescriptor(preV3Firmware, "waveshare_touch_lcd_7b", 0, {
-    siliconVariant: "rev3_1",
+    siliconVariant: "post_v3",
+  }),
+  /silicon variant is pre_v3/,
+);
+// A V2 image must never reach a V3 board, although both carry the V2 device key.
+const jc8012V2Firmware = firmwareFixture("guition_jc8012p4a1_v2", 0, {
+  key: "pre_v3",
+  minimumRevision: 1,
+  maximumRevision: 199,
+});
+assert.throws(
+  () => validateFirmwareDescriptor(jc8012V2Firmware, "guition_jc8012p4a1_v2", 0, {
+    siliconVariant: "post_v3",
+    chipRevision: 302,
   }),
   /silicon variant is pre_v3/,
 );
@@ -483,7 +543,7 @@ assert.throws(
 );
 assert.throws(
   () => validateFirmwareDescriptor(legacy7bFirmware, "waveshare_touch_lcd_7b", 0, {
-    siliconVariant: "rev3_1",
+    siliconVariant: "post_v3",
     allowLegacySilicon: true,
   }),
   /has no silicon metadata/,
@@ -687,8 +747,8 @@ for (const heading of ["Browser installer", "Manual flashing", "Troubleshooting"
 assert.match(installerDocs, /Device list\]\(index\.md#device-support\)/);
 assert.match(installerDocs, /write-flash --erase-all 0x0/);
 assert.match(installerDocs, /chip-id/);
-assert.match(installerDocs, /10\.1 `_rev3` image is for v3\.1 and newer/);
-assert.match(installerDocs, /7B boards with v3\.2 or newer are not supported yet/);
+assert.match(installerDocs, /7B and 10\.1 `_rev3` images and the Guition JC8012P4A1 V3 image are for v3\.1 and newer, including v3\.2/);
+assert.doesNotMatch(installerDocs, /exact v3\.1 only|v3\.2 or newer are not supported/);
 assert.doesNotMatch(installerDocs, /Local test before publication|Update safety and partition details/);
 assert.doesNotMatch(installerDocs, /manual flashing guide\]\(flashing\.md\)/);
 

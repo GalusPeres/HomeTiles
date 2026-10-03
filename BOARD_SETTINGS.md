@@ -9,8 +9,9 @@ Note:
 - The shared layout keeps both OTA app slots below `16MB`.
 - The normal ESP32-P4 profiles use the vendors' P4NRW32/pre-v3 modules and
   HomeTiles explicitly guards them to chip revisions 1–199. They are not
-  generic all-revision P4 builds. The only separate post-v3 profile is the
-  experimental, exact-v3.1 Waveshare 7B entry documented below.
+  generic all-revision P4 builds. Separate, experimental v3.1-or-newer
+  profiles exist for the Waveshare 7B and 10.1 and the Guition JC8012P4A1 V3,
+  documented below.
 
 ## M5Stacks Tab5
 
@@ -157,7 +158,7 @@ Arduino IDE:
 Used for:
 - `src/devices/waveshare_touch_lcd_7b`
 - build profile `waveshare_7b` for P4NRW32/pre-v3 revisions 1–199
-- build profile `waveshare_7b_rev3_1` for exact ESP32-P4 revision v3.1 (301)
+- build profile `waveshare_7b_rev3` for ESP32-P4 v3.1 or newer (301–399)
 
 Important:
 - This is the `1024x600` EK79007 7B/7B-C profile. It is not interchangeable
@@ -168,29 +169,25 @@ Important:
 - Touch uses SDA 7 and SCL 8. The panel reset is GPIO 33.
 - The microSD interface uses SDMMC slot 0 on GPIO39-44 and P4 LDO channel 4.
 - The browser installer shows two explicit device entries: **ESP32-P4 before
-  v3.0 (revisions 1–199)** and **exact ESP32-P4 v3.1**. The selected entry
+  v3.0 (revisions 1–199)** and **ESP32-P4 v3.1 or newer**. The selected entry
   determines the release asset. Revision detection rejects a mismatch before
   flashing; it does not change the selection automatically.
-- The exact-v3.1 entry is experimental and has not been validated on that
-  hardware. ESP32-P4 v3.2 or newer is unsupported with Arduino-ESP32 3.3.7 /
-  ESP-IDF 5.5.2 and must not be flashed.
-- HomeTiles browser, Web Admin, and OTA paths enforce exact revision metadata.
-  A direct Arduino IDE or `esptool` write bypasses that HomeTiles check. The
-  underlying ESP header from the Arduino `v3.00 or newer` choice can cover
-  revisions 301–399, so directly writing the v3.1 image to v3.2 or newer is
-  unsafe.
-- For an Arduino IDE build, use `esptool chip-id` first. Continue only for
-  revisions 1–199 or exact v3.1; stop for v3.2 or newer and do not guess.
-- Complete validation on both paths, especially exact v3.1 hardware, is still
-  pending in [issue #7](https://github.com/GalusPeres/HomeTiles/issues/7).
+- The v3 entry is experimental and has not been validated on 7B hardware. It
+  replaces the former exact-v3.1 image, which v3.2 boards could not use
+  ([issue #41](https://github.com/GalusPeres/HomeTiles/issues/41)). A panel
+  running that former image rejects the new one over OTA and needs one browser
+  installer Update.
+- HomeTiles browser, Web Admin, and OTA paths enforce the revision metadata.
+  For an Arduino IDE build, use `esptool chip-id` first.
+- Complete validation on both paths is still pending in
+  [issue #7](https://github.com/GalusPeres/HomeTiles/issues/7).
 - Use the repository's `partitions.csv`; HomeTiles needs two 6.5MB OTA slots.
 
 Arduino IDE:
 - Board: `ESP32P4 Dev Module`
 - USB CDC On Boot: `Disabled`
 - Chip Variant: `Before v3.00` for `waveshare_7b`, or `v3.00 or newer` for
-  `waveshare_7b_rev3_1`. HomeTiles v0.6.8 narrows the latter firmware contract
-  to exact v3.1 even though the Arduino/ESP image header remains 301–399.
+  `waveshare_7b_rev3`.
 - Core Debug Level: `None`
 - USB DFU On Boot: `Disabled`
 - Erase All Flash Before Sketch Upload: `Disabled`
@@ -262,6 +259,12 @@ Important:
   the browser log viewer shows only ESP-IDF system errors.
 - Physical release and OTA validation is tracked in
   [issue #18](https://github.com/GalusPeres/HomeTiles/issues/18).
+- The JC8012P4A1 V3 is this board with ESP32-P4 v3.2 silicon. It uses the V2
+  code and device key with build profile `guition_jc8012p4a1_v3` (Chip
+  Variant `v3.00 or newer`, revisions 301–399); the V2 image does not start
+  on v3 silicon. That build selects the MIPI DSI PHY clock that v3 accepts
+  instead of PLL_F20M. Experimental, hardware validation is pending in
+  [issue #44](https://github.com/GalusPeres/HomeTiles/issues/44).
 
 ## Guition JC1060P470C_I_W_Y
 

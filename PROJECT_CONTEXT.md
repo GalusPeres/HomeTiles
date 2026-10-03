@@ -25,7 +25,7 @@ Last reviewed: 2026-10-02
 - P4 code is shared; panel/touch init, timings, revision and images stay profile-specific.
 - LCD-4 Rev 4.0: contributor-tested display/touch/Wi-Fi/MQTT/Web OTA; older revisions and SD unsupported (`docs/index.md`).
 - JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups, tall popups.
-- WS 10.1 v3 (PR #48, memooox3): separate `waveshare_10_1_rev3`, post_v3 301-399; pre-v3 image unchanged. Chip-id/CI image test pending.
+- P4 v3 images (post_v3 301-399, v3 DSI clock): WS 10.1 (PR #48, tested v3.2), WS 7B (`_rev3`, replaces exact-v3.1, #41), JC8012 V3 = V2 code (#44); HW pending.
 
 ## Issue #30
 
@@ -117,12 +117,12 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 - v0.7.0 (`609550a`): public, S3 assets from `c3e0a673`; P4 unchanged. Existing S3 v0.7.0 needs Web Admin update.
 - Bridge v0.7.0 `1c12eda`; evidence `build/release-v0.7.0/`.
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
-- v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44) incl. installer stub crash; French.
+- v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44); French.
 - Tests pending #7 #11 #27 #34 #45; #55 reporter check.
 
 ## Maintenance
 
-- Docs: `docs/`, `mkdocs.yml`, `overrides/` (gh-pages). Installer esptool-js 0.7.0 (#57) OK on five devices; P4 v3.x pending (#41/#44).
+- Docs: `docs/`, `mkdocs.yml`, `overrides/` (gh-pages). Installer esptool-js 0.7.0 (#57) OK on five devices.
 
 ## Flash and RAM (PR #62)
 

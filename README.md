@@ -23,7 +23,7 @@ Every tile opens a popup with its controls and history.
 
 ### Popups
 
-<img src="docs/images/readme-popups-12.png" alt="Popups for lights, climate, fan, cover, media, weather, sensor history, energy, lock, binary sensor, alarm panel and PIN" width="100%">
+<img src="docs/images/readme-popups-12.png" alt="Popups for lights, climate, fan, cover, media, weather, sensor history, energy, lock, binary sensor, alarm panel and camera" width="100%">
 
 ### Tiles
 

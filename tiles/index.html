@@ -1,0 +1,2004 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Home Assistant touch dashboards for ESP32-P4 and ESP32-S3 displays. Install HomeTiles, connect the Bridge, and configure your tiles.">
+      
+      
+      
+        <link rel="canonical" href="https://galusperes.github.io/tiles/">
+      
+      
+        <link rel="prev" href="../device-ui/">
+      
+      
+        <link rel="next" href="../screensaver/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../images/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Tile Types - HomeTiles</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css?v=installer-ui-5">
+    
+      <link rel="stylesheet" href="../stylesheets/readability.css?v=20260927-toc1">
+    
+      <link rel="stylesheet" href="../stylesheets/device-status.css?v=2">
+    
+      <link rel="stylesheet" href="../stylesheets/device-logs.css?v=device-logs-2">
+    
+      <link rel="stylesheet" href="../stylesheets/serial-status.css?v=serial-navigation-3">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tile-types" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="HomeTiles" class="md-header__button md-logo" aria-label="HomeTiles" data-md-component="logo">
+      
+  <img src="../images/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HomeTiles
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tile Types
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="teal"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a class="ht-header-support" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener" aria-label="Buy Me a Coffee">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="116" height="32">
+</a>
+<a href="https://github.com/GalusPeres/HomeTiles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GalusPeres/HomeTiles
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="HomeTiles" class="md-nav__button md-logo" aria-label="HomeTiles" data-md-component="logo">
+      
+  <img src="../images/logo.svg" alt="logo">
+
+    </a>
+    HomeTiles
+  </label>
+  
+    <div class="md-nav__source">
+      <a class="ht-header-support" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener" aria-label="Buy Me a Coffee">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="116" height="32">
+</a>
+<a href="https://github.com/GalusPeres/HomeTiles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GalusPeres/HomeTiles
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Installation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flash firmware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home Assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bridge Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Dashboard
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../web-admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web Admin Panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On-Device UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tile Types
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tile Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#home-assistant-tiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Tiles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Home Assistant Tiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-sensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Sensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#number" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Number
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#select" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Select
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#datetime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Date/Time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#energy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Energy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#switch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Switch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scene
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weather" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#media" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Media
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#climate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Climate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fan
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alarm-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alarm Panel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#camera-experimental" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Camera
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-tiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local Tiles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Local Tiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#empty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Empty
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../screensaver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screensaver
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware-io/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Hardware I/O
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Help
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Help
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../updating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device-logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#home-assistant-tiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Tiles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Home Assistant Tiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#binary-sensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binary Sensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#number" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Number
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#select" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Select
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#datetime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Date/Time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#energy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Energy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#switch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Switch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scene
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weather" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weather
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#media" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Media
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#climate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Climate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fan
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alarm-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alarm Panel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#camera-experimental" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Camera
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-tiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local Tiles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Local Tiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#clock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Text
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#animation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Animation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#empty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Empty
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tile-types">Tile Types</h1>
+<p>Create and configure tiles in the <a href="../web-admin/#creating-a-tile">Web Admin</a>. Select Home Assistant entities in the <a href="../bridge/#entity-configuration">Bridge options</a> first.</p>
+<p><a id="create-a-tile"></a></p>
+<p><strong>Home Assistant tiles</strong> show entity data or control your devices. <strong>Local tiles</strong> provide clocks, text, folders, animations, and spacing.</p>
+<p>All tiles share title, icon, color, size, and position settings. For types with a popup, choose whether a tap or long press opens it; the popup takes on the tile's icon, circle, and color. See <a href="../device-ui/#popups">On-Device UI</a> for how popups behave.</p>
+<p>Press <strong>Enter</strong> in the title field for a second line. The two lines share the same vertical center as a single-line title; text that does not fit ends in <code>...</code>. The display, popup header, and Web Admin preview use the same title.</p>
+<p><strong>Sizes:</strong> every tile resizes in half steps from 1×1. All tiles except Weather, Media, Text, and Animation can also be half a cell high; they then show the title and state or value next to the icon, without a bar.</p>
+<p><strong>Colors:</strong> each tile has an icon color, an icon circle, and a tile color (<strong>Global</strong>, <strong>Custom</strong>, or <strong>From icon</strong>). <a href="../web-admin/#colors-and-rules">Rules</a> color the icon or tint the tile while an entity has a matching state, for example by temperature or by a text state.</p>
+<h2 id="home-assistant-tiles">Home Assistant Tiles</h2>
+<p>These types show or control a Home Assistant entity that you selected in the <a href="../bridge/#entity-configuration">Bridge options</a>.</p>
+<h3 id="sensor">Sensor</h3>
+<p>Shows a numeric or text-valued <code>sensor.*</code> entity. Configure the unit, decimals, value size, and an optional gauge with a minimum and maximum.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-sensor.png" alt="Sensor tile with a temperature" width="260" height="145" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-sensor-half.png" alt="Half-height sensor tile" width="168" height="64" loading="lazy">
+<figcaption>Half height</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-sensor-popup-7d.png" alt="Sensor history over seven days with a read value" width="792" height="792" loading="lazy">
+<figcaption>Popup, 7 days</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> the current value in the header and a <strong>7D</strong> or <strong>24H</strong> history: a graph for numbers, or a timeline and Activity list for text states. Touch the graph and move your finger to read an earlier value; the time and value appear above the graph, and the marker stays where you let go.</p>
+<p>A local <a href="../hardware-io/">DS18B20 input</a> can also supply the value without Home Assistant; local inputs have no Home Assistant history popup.</p>
+<h3 id="binary-sensor">Binary Sensor</h3>
+<p>Shows a <code>binary_sensor.*</code> entity with the matching state and icon, such as Open/Closed or Motion/Clear. Unknown and unavailable states are shown separately.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-binary-sensor.png" alt="Half-height binary sensor tile showing Detected" width="168" height="64" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-binary-sensor-popup.png" alt="Binary sensor timeline and Activity" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> a <strong>7D</strong> or <strong>24H</strong> state timeline and Activity list.</p>
+<h3 id="number">Number</h3>
+<p>Changes a <code>number.*</code> or <code>input_number.*</code> entity. The tile shows its current value and unit; the popup uses the minimum, maximum, step, and input mode supplied by Home Assistant.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-number.png" alt="Number tile with a temperature value" width="260" height="145" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-number-popup.png" alt="Number popup with a temperature stepper and history" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<ul>
+<li>Slider values use a centered slider with the value above it. Release the slider to send the final value.</li>
+<li>Temperatures use <strong>− / value / +</strong>, like the Climate target control.</li>
+<li>Other box-mode values use a bounded roller or step buttons, depending on their range.</li>
+</ul>
+<p><strong>Popup:</strong> the control above a numeric history graph and Activity for <strong>7D</strong> or <strong>24H</strong>. History requires the entity to be recorded by Home Assistant.</p>
+<h3 id="select">Select</h3>
+<p>Changes a <code>select.*</code> or <code>input_select.*</code> entity using its current Home Assistant options. The tile shows the selected value; the popup uses the same dropdown interaction as Settings.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-select.png" alt="Select tile showing the selected option" width="260" height="145" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-select-popup.png" alt="Select popup with dropdown, timeline and Activity" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> the dropdown above a compact timeline and Activity for <strong>7D</strong> or <strong>24H</strong>. An unavailable entity or incomplete option list disables selection. To operate another display's view, select that display's <a href="../bridge/#control-the-displayed-view">View entity</a> in the Bridge first.</p>
+<h3 id="datetime">Date/Time</h3>
+<p>Changes <code>time.*</code>, <code>date.*</code>, <code>datetime.*</code>, or <code>input_datetime.*</code> entities. Available controls follow whether the entity contains a time, a date, or both.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-datetime.png" alt="Date/Time tile showing a time" width="260" height="145" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-datetime-popup.png" alt="Date/Time popup with time rollers and Activity" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<p>Time uses a single visible row of large, swipeable <strong>hh / mm / ss</strong> values, with wraparound between 23 and 00 or 59 and 00. Date fields use step controls without a keyboard.</p>
+<p><strong>Popup:</strong> the controls above Activity for <strong>7D</strong> or <strong>24H</strong>. Home Assistant's time zone is used for date/time commands.</p>
+<p>Number, Select, and Date/Time need HomeTiles <strong>v0.6.10</strong> and Bridge <strong>v0.6.44 or newer</strong>. Add them in <a href="../bridge/#entity-configuration">Bridge Entity Configuration</a>, then choose their entity, value size, and popup trigger in the Web Admin. Slider edits are sent on release; step and time edits are grouped after a short pause, and the display keeps your edit while a slow device confirms it. Unavailable entities cannot be changed.</p>
+<h3 id="energy">Energy</h3>
+<p>Shows Home Assistant <strong>Energy Dashboard</strong> statistics for electricity, gas, water, or cost. Enable the matching <a href="../bridge/#energy-dashboard">Bridge energy category</a>. Configure the energy entity, unit, decimals, and value size.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-energy-yield.png" alt="Energy tile with today's solar yield" width="260" height="145" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-energy-yield-half.png" alt="Half-height energy tile with today's solar yield" width="168" height="64" loading="lazy">
+<figcaption>Half height</figcaption>
+</figure>
+</div>
+<div class="ht-type-shots">
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-energy-24h.png" alt="Energy day view with a read bar" width="792" height="792" loading="lazy">
+<figcaption>Popup, today</figcaption>
+</figure>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-energy-7d.png" alt="Energy week view with a read bar" width="792" height="792" loading="lazy">
+<figcaption>Popup, 7 days</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> hourly bars for the day and daily bars for the week. Tap a bar to read its time and value; a dot marks the bar you read.</p>
+<p>In this example, Sensor tiles show current power at the top; Energy tiles show today's totals at the bottom.</p>
+<figure class="ht-screenshot">
+<img src="../images/8in-folder-pv.png" alt="Sensor tiles on top, energy tiles at the bottom" width="1308" height="828" loading="lazy">
+<figcaption>Solar dashboard with sensor and energy tiles</figcaption>
+</figure>
+
+<h3 id="switch">Switch</h3>
+<p>Toggles a compatible entity and reflects its state. Choose the entity, <strong>Layout</strong>, and popup trigger.</p>
+<table>
+<thead>
+<tr>
+<th>Layout</th>
+<th>Tile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Automatic</strong></td>
+<td>A dimmer bar for lights that can dim, otherwise the switch bar. Default for new tiles.</td>
+</tr>
+<tr>
+<td><strong>Dimmer</strong></td>
+<td>A brightness bar across the tile: press or drag to set the level, like the popup's brightness slider. Lights without dimming get the switch bar.</td>
+</tr>
+<tr>
+<td><strong>Switch</strong></td>
+<td>An on/off bar with a thumb, like the popup's switch.</td>
+</tr>
+<tr>
+<td><strong>Icon button</strong></td>
+<td>No bar: tap the tile to toggle.</td>
+</tr>
+</tbody>
+</table>
+<p>The tile shows the state (<code>On</code>, <code>Off</code>, or the brightness) under its title. Half-height tiles show the state only; tap toggles, and the other gesture opens the popup. Commands while dragging are paced like Home Assistant, and the last level is always sent.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-light-couch.png" alt="Light tile with a dimmer bar in the light's color" width="260" height="145" loading="lazy">
+<figcaption>Dimmer</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-light-desk.png" alt="Second light tile with a dimmer bar" width="260" height="145" loading="lazy">
+<figcaption>Dimmer</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-switch-tv.png" alt="Switch tile as an icon button" width="168" height="145" loading="lazy">
+<figcaption>Icon button</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-light-switch.png" alt="Light tile with an on/off switch bar" width="260" height="145" loading="lazy">
+<figcaption>Switch</figcaption>
+</figure>
+</div>
+<table>
+<thead>
+<tr>
+<th>Home Assistant domain</th>
+<th>Tile action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>switch</code>, <code>light</code></td>
+<td>Turn on/off</td>
+</tr>
+<tr>
+<td><code>input_boolean</code></td>
+<td>Set a Toggle helper on/off</td>
+</tr>
+<tr>
+<td><code>automation</code></td>
+<td>Enable/disable the automation's triggers</td>
+</tr>
+<tr>
+<td><code>fan</code>, <code>humidifier</code>, <code>remote</code>, <code>siren</code></td>
+<td>Turn the entity on/off using its configured defaults</td>
+</tr>
+</tbody>
+</table>
+<p>The additional domains require Bridge v0.6.42 and the updated firmware. Select them under <strong>Switches / switchable entities</strong> in the Bridge; lights keep their own selector. Fan and Siren controls require both HA on/off feature flags. Missing, unavailable, or unsupported entities cannot be operated.</p>
+<p>An <a href="https://www.home-assistant.io/docs/automation/services/">automation switch</a> enables/disables the automation; it does not run its actions immediately. Turning it off follows HA's default behavior and stops running actions. For fan speed, presets, and direction use the <a href="#fan">Fan</a> tile; humidity, remote commands/activities, and siren tones are outside this tile's on/off controls.</p>
+<p>Local <a href="../hardware-io/">outputs and relays</a> appear in the same selector and work without Home Assistant.</p>
+<p><strong>Popup for lights:</strong> brightness, color, and color temperature; only the controls the light supports appear. The bottom icons switch views, and the power button toggles the light.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-light-brightness.png" alt="Brightness slider" width="792" height="792" loading="lazy">
+<figcaption>Brightness</figcaption>
+</figure>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-light-color.png" alt="Color wheel" width="792" height="792" loading="lazy">
+<figcaption>Color</figcaption>
+</figure>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-light-temperature.png" alt="Color temperature" width="792" height="792" loading="lazy">
+<figcaption>Color temperature</figcaption>
+</figure>
+</div>
+<p><strong>Popup for other compatible entities:</strong> the on/off slider in the same popup.</p>
+<h3 id="cover">Cover</h3>
+<p>Controls a <code>cover</code> entity and shows its state and position when available.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-cover.png" alt="Blinds tile showing Open and 52 percent" width="260" height="145" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-cover-popup.png" alt="Cover popup with position and tilt sliders" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<p>The tile shows the position as a bar, like the Switch dimmer; half-height tiles show the state only. While the cover opens or closes, its arrow pulses.</p>
+<p><strong>Popup:</strong> separate position and tilt sliders, or open, close, and stop buttons. Controls depend on the cover's capabilities and availability. A slider sends its position once on release, like Home Assistant, and then follows the reported position.</p>
+<h3 id="scene">Scene</h3>
+<p>Runs a configured action with a tap; there is no popup. Choose the alias generated for it in the <a href="../bridge/#entity-configuration">Bridge options</a>.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-scene-bright.png" alt="Scene tile Bright" width="168" height="145" loading="lazy">
+<figcaption>Scene</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-scene-reading.png" alt="Scene tile Reading" width="168" height="145" loading="lazy">
+<figcaption>Scene</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-scene-warm.png" alt="Scene tile Warm" width="168" height="145" loading="lazy">
+<figcaption>Scene</figcaption>
+</figure>
+</div>
+<table>
+<thead>
+<tr>
+<th>Home Assistant domain</th>
+<th>Tile action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scene</code></td>
+<td>Activate the scene (<code>scene.turn_on</code>)</td>
+</tr>
+<tr>
+<td><code>script</code></td>
+<td>Start the script without additional fields (<code>script.turn_on</code>)</td>
+</tr>
+<tr>
+<td><code>button</code></td>
+<td>Press the button once (<code>button.press</code>)</td>
+</tr>
+<tr>
+<td><code>input_button</code></td>
+<td>Press the Button helper once (<code>input_button.press</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Buttons require Bridge v0.6.42 and the updated firmware. A never-pressed button remains usable even when HA reports an unknown timestamp. Missing or unavailable actions are ignored. Existing aliases remain stable when you reorder the selection or add entities with the same object name; custom aliases remain supported.</p>
+<p>Use an HA script with defaults when an action needs parameters. Read-only <code>binary_sensor</code> and <code>event</code> entities cannot be pressed or switched. Locks, alarm panels, and fans have their own tiles; vacuums, valves, and update entities have different actions and are not mapped to these tile types; Cover, Climate, and Media keep their dedicated tiles.</p>
+<h3 id="weather">Weather</h3>
+<p>Shows current conditions and the next days from a <code>weather</code> entity.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:322px" src="../images/tile-weather.png" alt="Weather tile with current conditions and forecast" width="536" height="306" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-weather-popup.png" alt="Weather popup with the forecast for the next days" width="792" height="792" loading="lazy">
+<figcaption>Popup, next days</figcaption>
+</figure>
+</div>
+<div class="ht-type-shots">
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-weather-popup-today.png" alt="Weather popup with the hourly forecast for today" width="792" height="792" loading="lazy">
+<figcaption>Popup, today</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> temperatures, precipitation, and rain probability. Use the arrows to browse the available forecast.</p>
+<p><strong>Icons:</strong> weather icons are filled and colored (sun gold, clouds grey, rain blue, snow ice blue, thunderstorms purple, wind teal, night grey blue). Turn off <strong>Colored weather icons</strong> in the tile settings to keep the white outlines. With <strong>Tile color: From icon</strong>, the tile takes the color of the current weather; an icon color you set yourself draws the whole icon in that color. When the bridge sends sunrise and sunset, partly cloudy and clear hours after sunset show the moon.</p>
+<h3 id="media">Media</h3>
+<p>Shows cover art, title, and playback controls for a <code>media_player</code> entity. Media tiles need at least 2×2 cells.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-media.png" alt="Media tile with cover art and playback controls" width="352" height="306" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-media-popup.png" alt="Media popup" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> title and cover art with playback controls and volume.</p>
+<h3 id="climate">Climate</h3>
+<p>Controls a <code>climate</code> entity. The icon and accent indicate active heating, cooling, drying, or fan operation.</p>
+<p>Configure mini-tiles for temperatures, humidity, targets, and mode, or choose <strong>Automatic</strong>. Arrange them in the <a href="../web-admin/#editing-climate-mini-tiles">Climate mini-tile editor</a>. Wide target controls show the active mode, such as <strong>Heat</strong>, <strong>Cool</strong>, or <strong>Auto</strong>, and a humidity target is labeled <strong>Humidity</strong>.</p>
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-climate.png" alt="Climate tile while heating, with the target and plus/minus buttons" width="260" height="145" loading="lazy">
+<figcaption>Climate tile while heating</figcaption>
+</figure>
+
+<p><strong>Popup:</strong> adjust the target with the dial or plus/minus buttons. Available controls may include heating/cooling targets, humidity, mode, presets, fan, and swing; longer option lists scroll.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-climate-popup-1.png" alt="Climate popup with HVAC mode, humidity, preset, fan, and swing controls" width="792" height="792" loading="lazy">
+<figcaption>Popup with all supported controls</figcaption>
+</figure>
+</div>
+<h3 id="fan">Fan</h3>
+<p>Controls a <code>fan</code> entity. Select it under <strong>Fans</strong> in the <a href="../bridge/#entity-configuration">Bridge options</a>; requires Bridge v0.8.0.</p>
+<p>The tile shows the state and speed. Its bar sets the speed: stepless like the Switch dimmer, in segments for fans with only a few speeds, or as an on/off switch for fans without speed control. Tap or long press, whichever does not open the popup, switches the fan on or off.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-fan.png" alt="Fan tile at 69 percent with its speed bar" width="352" height="145" loading="lazy">
+<figcaption>On</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-fan-off.png" alt="Fan tile while off" width="352" height="145" loading="lazy">
+<figcaption>Off</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-fan-popup.png" alt="Fan popup with speed slider, preset, oscillation and direction" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> the speed above a large slider, and below it the power button and, when the fan supports them, preset, oscillation, and direction. Only the controls the fan reports appear.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-fan-presets.png" alt="Fan popup with the preset list open" width="792" height="792" loading="lazy">
+<figcaption>Presets</figcaption>
+</figure>
+</div>
+<h3 id="lock">Lock</h3>
+<p>Controls a <code>lock</code> entity. Select it under <strong>Locks</strong> in the <a href="../bridge/#entity-configuration">Bridge options</a>; requires Bridge v0.8.0.</p>
+<p>The tile shows the state in Home Assistant's colors: green while locked, red while unlocked, open, or jammed, orange while locking or unlocking. Its bar locks and unlocks; when the state is unknown or jammed it shows separate <strong>Unlock</strong> and <strong>Lock</strong> buttons.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-lock.png" alt="Lock tile, locked, in green" width="352" height="145" loading="lazy">
+<figcaption>Locked</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-lock-unlocked.png" alt="Lock tile, unlocked, in red" width="352" height="145" loading="lazy">
+<figcaption>Unlocked</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-lock-popup.png" alt="Lock popup with the lock switch and Open door" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> a switch (up = locked) and, for locks that can open the door, <strong>Open door</strong> with a second tap to confirm. When Home Assistant needs a code, the code entry opens first.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-lock-code.png" alt="Code entry for the lock" width="792" height="792" loading="lazy">
+<figcaption>Code entry</figcaption>
+</figure>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-lock-open-confirm.png" alt="Unlocked lock asking Really open?" width="792" height="792" loading="lazy">
+<figcaption>Open door, second tap</figcaption>
+</figure>
+</div>
+<h3 id="alarm-panel">Alarm Panel</h3>
+<p>Controls an <code>alarm_control_panel</code> entity. Select it under <strong>Alarm panels</strong> in the <a href="../bridge/#entity-configuration">Bridge options</a>; requires Bridge v0.8.0.</p>
+<p>The tile shows the state in Home Assistant's colors: green while armed, orange while arming, pending, or disarming, red when triggered, grey while disarmed. Its bar holds <strong>Disarm</strong> and the arming modes that fit.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-alarm-modes.png" alt="Alarm panel tile armed for vacation, with its mode bar" width="352" height="145" loading="lazy">
+<figcaption>Armed</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-alarm-pending.png" alt="Alarm panel tile while pending" width="352" height="145" loading="lazy">
+<figcaption>Pending</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-alarm-triggered.png" alt="Alarm panel tile while triggered" width="352" height="145" loading="lazy">
+<figcaption>Triggered</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-alarm-popup-modes.png" alt="Alarm panel popup with Home, Away, Night, Vacation and Disarm" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+<p><strong>Popup:</strong> the modes the panel supports (<strong>Home</strong>, <strong>Away</strong>, <strong>Night</strong>, <strong>Vacation</strong>, <strong>Custom</strong>) and <strong>Disarm</strong>. While the panel arms, waits, disarms, or is triggered, only <strong>Disarm</strong> remains. When Home Assistant needs a code, the code entry opens first.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-alarm-code.png" alt="Code entry for the alarm panel" width="792" height="792" loading="lazy">
+<figcaption>Code entry</figcaption>
+</figure>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-alarm-triggered.png" alt="Triggered alarm panel with only Disarm" width="792" height="792" loading="lazy">
+<figcaption>Triggered</figcaption>
+</figure>
+</div>
+<p><strong>Lock and Alarm Panel security:</strong> both run commands only on a panel with <a href="../bridge/#encrypted-commands">encrypted commands</a> and a <a href="../web-admin/#web-admin-password">Web Admin password</a>; otherwise the tile and popup say what is missing. Home Assistant checks every code as in its own UI; unlocking, opening, and disarming always need the entity's code. A device without its own code can only be unlocked, opened, or disarmed when it is listed under <strong>Allow opening without a code</strong> in the Bridge options. For devices that ignore a wrong code, enter their codes under <strong>Codes for locks and alarm panels</strong> so the Bridge checks them; after five wrong codes, code entry is blocked for a while. Numeric codes are supported; devices that need a text code must be operated in Home Assistant.</p>
+<p>Lock and Alarm Panel tiles show only states the device reports: a command waits with the icon pulsing, and the popup says so when the device does not answer. They are not available on the screensaver.</p>
+<h3 id="camera-experimental">Camera (experimental)</h3>
+<p>Opens a 16:9 video popup on ESP32-P4. Select the camera in the Bridge's <strong>Entity Configuration</strong>, then assign it to this tile. The camera can also be the <a href="../bridge/#built-in-camera">built-in camera</a> of another HomeTiles display.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-camera.png" alt="Camera tile" width="168" height="145" loading="lazy">
+<figcaption>Tile</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-camera-popup.png" alt="Camera popup showing the live image of another display's built-in camera" width="792" height="792" loading="lazy">
+<figcaption>Popup with a live image</figcaption>
+</figure>
+</div>
+<p>Allow local TCP access to the Home Assistant host on ports <code>8124</code>–<code>8131</code>. See <a href="../bridge/#experimental-camera-transport">Camera connection</a> for requirements and performance notes. Camera tiles are unavailable on ESP32-S3.</p>
+<h2 id="local-tiles">Local Tiles</h2>
+<p>These types work without Home Assistant.</p>
+<h3 id="clock">Clock</h3>
+<p>Shows time and date using the device's localization settings. You can override the formats and sizes for each tile and hide its border. Tap it to open the <a href="../screensaver/">screensaver</a>.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot">
+<img style="width:173px" src="../images/tile-clock.png" alt="Clock tile with time and date" width="289" height="157" loading="lazy">
+<figcaption>Clock without a border</figcaption>
+</figure>
+</div>
+<h3 id="text">Text</h3>
+<p>A static label with a selectable font size. Its border can be hidden per tile.</p>
+<h3 id="folder">Folder</h3>
+<p>Opens a sub-page with its own grid and an automatic back tile. See <a href="../web-admin/#folders">Folders</a> for setup and optional PIN protection.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-folder-pv.png" alt="Folder tile PV" width="168" height="145" loading="lazy">
+<figcaption>Folder</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-folder-climate.png" alt="Folder tile in the heating color of a climate entity" width="168" height="145" loading="lazy">
+<figcaption>Follows a climate entity</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-back.png" alt="Back tile" width="168" height="65" loading="lazy">
+<figcaption>Back tile</figcaption>
+</figure>
+</div>
+<p>A folder tile can follow an entity inside it: with <a href="../web-admin/#colors-and-rules">rules</a> and <strong>Entity color</strong>, a Climate folder turns orange while heating and blue while cooling. The <a href="../web-admin/#back-tile">back tile</a> has its own icon, color, border, and size.</p>
+<p>A protected folder asks for its PIN before it opens. The PIN pad takes the folder tile's color and shows the folder's name with the state <strong>Locked</strong>; below <strong>Enter PIN</strong>, one dot appears per typed digit. The PIN has 4 to 8 digits.</p>
+<div class="ht-type-shots ht-type-pair">
+<div class="ht-type-stack">
+<figure class="ht-screenshot">
+<img style="width:101px" src="../images/tile-folder-misc.png" alt="Protected folder tile MISC" width="168" height="145" loading="lazy">
+<figcaption>Protected folder</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-pin-popup.png" alt="PIN pad of a protected folder" width="792" height="792" loading="lazy">
+<figcaption>PIN entry</figcaption>
+</figure>
+</div>
+<h3 id="animation">Animation</h3>
+<p>Plays a <code>.panim</code> pixel animation from <code>/animations</code> on microSD. Configure frame rate, fit, and zoom.</p>
+<h3 id="empty">Empty</h3>
+<p>Leaves an empty cell for spacing.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../device-ui/" class="md-footer__link md-footer__link--prev" aria-label="Previous: On-Device UI">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                On-Device UI
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../screensaver/" class="md-footer__link md-footer__link--next" aria-label="Next: Screensaver">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Screensaver
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../assets/javascripts/docs-session.mjs?v=serial-navigation-7" type="module"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 2,
+  "tag": "v0.8.0",
+  "releaseUrl": "https://github.com/GalusPeres/HomeTiles/releases/tag/v0.8.0",
+  "generatedAt": "2026-10-04T09:35:56.520Z",
+  "devices": [
+    {
+      "key": "m5stacks_tab5",
+      "buildProfile": "tab5",
+      "label": "M5Stack Tab5",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "status": "supported",
+      "hardwareCheck": "The device is an M5Stack Tab5.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_m5stacks_tab5.bin",
+        "size": 6580592,
+        "sha256": "dcf0adff563a9c80e9bbfc1b66cafd9b46e1ffd59ef9efca4f6c4e9900b7de81"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_m5stacks_tab5_factory.bin",
+        "size": 16777216,
+        "sha256": "e3f5916e56e28e71d1874c6112abba90797f8be29c7ee204a750a75542bc8255"
+      }
+    },
+    {
+      "key": "waveshare_4b",
+      "buildProfile": "waveshare_b4",
+      "label": "Waveshare 4B / 86 Panel",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "status": "supported",
+      "hardwareCheck": "The label identifies an ESP32-P4-WIFI6-Touch-LCD-4B or ESP32-P4-86-Panel-ETH-2RO.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_4b.bin",
+        "size": 6518544,
+        "sha256": "248827dfb17456a5cb29a7cd60e8eacbf935ff7c46146c2a23589ef02b52b7ac"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_4b_factory.bin",
+        "size": 33554432,
+        "sha256": "9adc606c1cb77156c9bc9e860c014235a88af6c64667333197248c0a94f153c8"
+      }
+    },
+    {
+      "key": "waveshare_touch_lcd_4_3",
+      "buildProfile": "waveshare_4_3",
+      "label": "Waveshare Touch LCD 4.3 inch",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "status": "validation-pending",
+      "hardwareCheck": "The exact product is ESP32-P4-WIFI6-Touch-LCD-4.3 with a 480x800 ST7701 panel and an ESP32-P4 revision before v3.0.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_4_3.bin",
+        "size": 5783856,
+        "sha256": "2001b7f6eefd397d4b7000f59e08cbc9fa07ce5a266ea6ada99600b2650c1ca4"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_4_3_factory.bin",
+        "size": 33554432,
+        "sha256": "03ef91cd7faf4b09d81f6f97d05d9c10c0bb964979b634df7e1e4de5249684b1"
+      }
+    },
+    {
+      "key": "waveshare_touch_lcd_8",
+      "buildProfile": "waveshare_8",
+      "label": "Waveshare Touch LCD 8 inch",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "status": "supported",
+      "hardwareCheck": "The device is the 8-inch ESP32-P4-WIFI6-Touch-LCD model.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_8.bin",
+        "size": 6482048,
+        "sha256": "088379ff2002f6f4048e45f2d7b818f485c0656abe6a8b2c55a713aa0f3df628"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_8_factory.bin",
+        "size": 33554432,
+        "sha256": "6be397749a6c8989658bfe668c1124b0a6be2c66a05a10a7f8cb9efebfcde30a"
+      }
+    },
+    {
+      "key": "guition_jc8012p4a1",
+      "buildProfile": "guition_jc8012p4a1",
+      "label": "Guition JC8012P4A1 V1",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "status": "supported",
+      "hardwareCheck": "The panel is JC8012P4A1C_I_W_Y and its rear label does not contain V2.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_guition_jc8012p4a1.bin",
+        "size": 6519936,
+        "sha256": "41a672d2a4ba8bd128c985483e1a107ad3267d177965bb85e3ce45b87288d7f8"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_guition_jc8012p4a1_factory.bin",
+        "size": 16777216,
+        "sha256": "5b5961f18199f4c913dcbd39bcb8355e7ebb14acc052f06275043d36a2b094ff"
+      }
+    },
+    {
+      "key": "guition_esp32_4848s040",
+      "buildProfile": "guition_esp32_4848s040",
+      "label": "Guition ESP32-4848S040C_I",
+      "chipFamily": "ESP32-S3",
+      "flashSize": 16777216,
+      "status": "supported",
+      "hardwareCheck": "The exact model is ESP32-4848S040C_I (ESP32-S3).",
+      "update": {
+        "file": "hometiles_v0.8.0_guition_esp32_4848s040.bin",
+        "size": 5497728,
+        "sha256": "0b6ce4460e461205fde3164e903660e554a8bd28ae0b864342288f022b7a8018"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_guition_esp32_4848s040_factory.bin",
+        "size": 16777216,
+        "sha256": "4b86b97decbb77e7ca07dc957a4973ee06944cfcd3f64858b348520b843f820d"
+      }
+    },
+    {
+      "key": "waveshare_touch_lcd_7",
+      "buildProfile": "waveshare_7",
+      "label": "Waveshare Touch LCD 7 inch",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "status": "validation-pending",
+      "hardwareCheck": "The device is the 7-inch ESP32-P4-WIFI6-Touch-LCD model.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_7.bin",
+        "size": 6486080,
+        "sha256": "0f62f3cc97f080ee266bee22ecbd878c6abf671270d5eb866a075b27ecb2ad8d"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_7_factory.bin",
+        "size": 33554432,
+        "sha256": "b6014412ca7392fc69fb5205e8a1c0af87c823d56b2a285c1b78e483e3f76111"
+      }
+    },
+    {
+      "key": "waveshare_touch_lcd_10_1",
+      "buildProfile": "waveshare_10_1",
+      "label": "Waveshare Touch LCD 10.1 inch",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "status": "validation-pending",
+      "hardwareCheck": "The device is the 10.1-inch ESP32-P4-WIFI6-Touch-LCD model.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_10_1.bin",
+        "size": 6486432,
+        "sha256": "e970e291847eafb14db87a755c23a44712661d766487425e1839b773fc477d8b"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_10_1_factory.bin",
+        "size": 33554432,
+        "sha256": "e67bdd555ce1f255aecc600e0c2b7742cf6ae3bc78f83b13526a8a2a71773db8"
+      }
+    },
+    {
+      "key": "waveshare_touch_lcd_10_1_rev3",
+      "buildProfile": "waveshare_10_1_rev3",
+      "label": "Waveshare Touch LCD 10.1 inch (ESP32-P4 v3.1 or newer, experimental)",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "status": "validation-pending",
+      "hardwareCheck": "The device is the 10.1-inch ESP32-P4-WIFI6-Touch-LCD model and esptool chip-id reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
+      "metadataDeviceKey": "waveshare_touch_lcd_10_1",
+      "siliconVariant": "post_v3",
+      "minimumRevision": 301,
+      "maximumRevision": 399,
+      "acceptsLegacyDescriptor": false,
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_10_1_rev3.bin",
+        "size": 6488464,
+        "sha256": "b1b0e8cf0e5b5a5308d98a20cf41a12da0229c90f7478b84aa946b55711eb9fd"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_10_1_rev3_factory.bin",
+        "size": 33554432,
+        "sha256": "95605bf711eb4ed57aa15062d74fd5be0c7e92cede72727fa0662d0dcee5b895"
+      }
+    },
+    {
+      "key": "guition_jc8012p4a1_v2",
+      "buildProfile": "guition_jc8012p4a1_v2",
+      "label": "Guition JC8012P4A1 V2",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "status": "supported",
+      "hardwareCheck": "The rear label explicitly shows SKU:10153002-V2.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_guition_jc8012p4a1_v2.bin",
+        "size": 6512112,
+        "sha256": "e8251112b6d75f6b3d1ef72ca8a0a020bb0e23dfc01a88473619432a7ba73eed"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_guition_jc8012p4a1_v2_factory.bin",
+        "size": 16777216,
+        "sha256": "ee2f259d4bee17495eff4e362b0dd520dda97fe6e572fa7fae0b5134b88bc4a8"
+      }
+    },
+    {
+      "key": "guition_jc8012p4a1_v3",
+      "buildProfile": "guition_jc8012p4a1_v3",
+      "label": "Guition JC8012P4A1 V3 (experimental)",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "status": "validation-pending",
+      "hardwareCheck": "The panel is a JC8012P4A1 V3 and esptool chip-id reports ESP32-P4 revision v3.1 or newer. V1 and V2 panels use their own images.",
+      "metadataDeviceKey": "guition_jc8012p4a1_v2",
+      "siliconVariant": "post_v3",
+      "minimumRevision": 301,
+      "maximumRevision": 399,
+      "acceptsLegacyDescriptor": false,
+      "update": {
+        "file": "hometiles_v0.8.0_guition_jc8012p4a1_v3.bin",
+        "size": 6514144,
+        "sha256": "578ec0da6bbaefb4278403a266037ae333029cdce0b6411ee942b8ffd2e7fa0c"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_guition_jc8012p4a1_v3_factory.bin",
+        "size": 16777216,
+        "sha256": "5ecaa938828ac0b725948c1400904d35f261448f92405fd09519a932fe773b14"
+      }
+    },
+    {
+      "key": "guition_jc1060p470c",
+      "buildProfile": "guition_jc1060p470c",
+      "label": "Guition JC1060P470C_I_W_Y",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "status": "validation-pending",
+      "hardwareCheck": "The full model suffix is JC1060P470C_I_W_Y.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_guition_jc1060p470c.bin",
+        "size": 6096256,
+        "sha256": "4171817db979ae12eebd197e2beb2f4e0d24872c21ecbf1dc0391d92fe8df263"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_guition_jc1060p470c_factory.bin",
+        "size": 16777216,
+        "sha256": "c02534fc6106b1421572574fc86e1e42f7d21a71e3ab60f34b20cb059d4dc4f0"
+      }
+    },
+    {
+      "key": "waveshare_touch_lcd_7b",
+      "buildProfile": "waveshare_7b",
+      "label": "Waveshare Touch LCD 7B / 7B-C (ESP32-P4 before v3.0)",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "status": "validation-pending",
+      "hardwareCheck": "The rear label says ESP32-P4-WIFI6-Touch-LCD-7B or 7B-C and the ESP32-P4 revision is before v3.0.",
+      "metadataDeviceKey": "waveshare_touch_lcd_7b",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_7b.bin",
+        "size": 6181808,
+        "sha256": "8acdd473e32c0429115cc2f48beba41a950c935c77bde126b3b396a444592742"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_7b_factory.bin",
+        "size": 33554432,
+        "sha256": "2318d60b06857cec711dca59ec720793d41accd05dbece1539b5079b1ad3c35d"
+      }
+    },
+    {
+      "key": "waveshare_touch_lcd_7b_rev3",
+      "buildProfile": "waveshare_7b_rev3",
+      "label": "Waveshare Touch LCD 7B / 7B-C (ESP32-P4 v3.1 or newer, experimental)",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 33554432,
+      "status": "validation-pending",
+      "hardwareCheck": "The rear label says ESP32-P4-WIFI6-Touch-LCD-7B or 7B-C and esptool chip-id reports ESP32-P4 revision v3.1 or newer. Revision v3.0 is unsupported by the pinned toolchain.",
+      "metadataDeviceKey": "waveshare_touch_lcd_7b",
+      "siliconVariant": "post_v3",
+      "minimumRevision": 301,
+      "maximumRevision": 399,
+      "acceptsLegacyDescriptor": false,
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_7b_rev3.bin",
+        "size": 6183808,
+        "sha256": "9f6d5c67ca21ae7f870b45b5ca83acda2d8055808018f9945cbd20220540b6d9"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_touch_lcd_7b_rev3_factory.bin",
+        "size": 33554432,
+        "sha256": "b4c4a05e79c47ec618ae010200f8ef874077a223651fe637396fe69514ccdba6"
+      }
+    },
+    {
+      "key": "guition_jc1060p470c_v2",
+      "buildProfile": "guition_jc1060p470c_v2",
+      "label": "Guition JC1060P470C V2 (New Panel)",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "status": "validation-pending",
+      "hardwareCheck": "The device is the JC1060P470C V2 / New Panel variant.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_guition_jc1060p470c_v2.bin",
+        "size": 6188960,
+        "sha256": "61cd27f94c01c7659372c56f1c5d3af78b11943a1d143f67ac884420569d07c4"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_guition_jc1060p470c_v2_factory.bin",
+        "size": 16777216,
+        "sha256": "70c80141b794d44c8541037a4ad252e4d02e4141b2476af3340c5e4b67b13358"
+      }
+    },
+    {
+      "key": "guition_jc4880p443_portrait",
+      "buildProfile": "guition_jc4880p443_portrait",
+      "label": "Guition JC4880P443C_I_W",
+      "chipFamily": "ESP32-P4",
+      "flashSize": 16777216,
+      "status": "validation-pending",
+      "hardwareCheck": "The board is the 4.3-inch Guition JC4880P443 (JC-ESP32P4-M3 module) with a 480x800 ST7701S panel.",
+      "siliconVariant": "pre_v3",
+      "minimumRevision": 1,
+      "maximumRevision": 199,
+      "acceptsLegacyDescriptor": true,
+      "update": {
+        "file": "hometiles_v0.8.0_guition_jc4880p443_portrait.bin",
+        "size": 5776336,
+        "sha256": "e3fc43dbe841389ce4c2d451ac15227e92e7f718fa4f977c197270eea701602b"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_guition_jc4880p443_portrait_factory.bin",
+        "size": 16777216,
+        "sha256": "4260405fc6ac6ea40b9f973a8cddd7fe9f130af7963a086ac6ffd79fbe8709c6"
+      }
+    },
+    {
+      "key": "waveshare_s3_touch_lcd_4",
+      "buildProfile": "waveshare_s3_touch_lcd_4",
+      "label": "Waveshare ESP32-S3 Touch LCD 4 (Rev 4.0)",
+      "chipFamily": "ESP32-S3",
+      "flashSize": 16777216,
+      "status": "supported",
+      "hardwareCheck": "The board is ESP32-S3-Touch-LCD-4 revision 4.0 with the CH32V003 helper MCU. Earlier revisions and LCD-4B use different hardware.",
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_s3_touch_lcd_4.bin",
+        "size": 5454176,
+        "sha256": "c6ac334f9bb892b8fa9bb495db9fec8760aa20b067615819ce637588c49fd095"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_s3_touch_lcd_4_factory.bin",
+        "size": 16777216,
+        "sha256": "080fc1399d559417d30036aa99e4377e009c3b84bf43bf41291a87fd822dd960"
+      }
+    },
+    {
+      "key": "waveshare_s3_touch_lcd_4b",
+      "buildProfile": "waveshare_s3_touch_lcd_4b",
+      "label": "Waveshare ESP32-S3 Touch LCD 4B",
+      "chipFamily": "ESP32-S3",
+      "flashSize": 16777216,
+      "status": "validation-pending",
+      "hardwareCheck": "The rear label says ESP32-S3-Touch-LCD-4B.",
+      "update": {
+        "file": "hometiles_v0.8.0_waveshare_s3_touch_lcd_4b.bin",
+        "size": 5460496,
+        "sha256": "26b5ec2532a4fcb4a025896cc9acd639df33b49600cc0ee609598589070054de"
+      },
+      "factory": {
+        "file": "hometiles_v0.8.0_waveshare_s3_touch_lcd_4b_factory.bin",
+        "size": 16777216,
+        "sha256": "565ca038a88f7385dbe4e80495a611a0629face8ae2189f8e1e7a8ea0b29ed31"
+      }
+    }
+  ],
+  "partial": false
+}

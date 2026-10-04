@@ -20,7 +20,7 @@ Use this method for a local test build or when downloading directly on the displ
 3. Choose the file and start the upload. The screen may go black during installation; wait for the display to restart.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-firmware.png" alt="Firmware section in the web admin" width="1218" height="342" loading="lazy">
+<img src="../images/web-admin-firmware.png" alt="Firmware section in the web admin" width="1350" height="385" loading="lazy">
 <figcaption>Firmware update in the Web Admin</figcaption>
 </figure>
 

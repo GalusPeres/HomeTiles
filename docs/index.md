@@ -6,6 +6,11 @@ title: HomeTiles
 
 HomeTiles is free, open-source firmware that turns a supported touch display into a Home Assistant control panel. Use tiles to switch lights, adjust heating, control music, and see sensor or energy data at a glance.
 
+<figure class="ht-screenshot">
+<img src="images/8in-home-new.png" alt="HomeTiles dashboard" width="1308" height="828" loading="lazy">
+<figcaption>HomeTiles dashboard</figcaption>
+</figure>
+
 ## Get started
 
 1. [Flash the firmware](installer.md) using the online flasher. Choose your exact device and installation mode.
@@ -15,18 +20,24 @@ HomeTiles is free, open-source firmware that turns a supported touch display int
 
 ## Features
 
-- **Controls:** lights, switches, covers, heating, media, numbers, selections and date/time values.
+- **Controls:** lights, switches, covers, heating, fans, locks, alarm panels, media, numbers, selections and date/time values.
 - **Sensors & energy:** live values, state history, energy statistics and weather.
 - **Dashboard:** arrange tiles and folders in half steps with a live browser preview; open views from Home Assistant.
 - **Colors:** icon circles, tile colors from the icon, and rules that color tiles by an entity's state.
 - **Screensaver:** display a clock, photos and sensor tiles.
 - **Local hardware:** use supported GPIO outputs, relays and temperature sensors.
+- **Security:** an optional Web Admin password and encrypted commands to Home Assistant.
 - **Updates:** install firmware from the display or your browser.
 - **Camera:** live video on ESP32-P4 displays; supported displays share their built-in camera with Home Assistant.
 
 <figure class="ht-screenshot">
-<img src="images/8in-home-new.png" alt="HomeTiles dashboard" width="1308" height="828" loading="lazy">
-<figcaption>HomeTiles dashboard</figcaption>
+<img src="images/gallery-tiles.png" alt="Tiles for weather, media, alarm panel, lock, lights, fan, climate, sensors, folders and scenes" width="1904" height="708" loading="lazy">
+<figcaption>Tiles</figcaption>
+</figure>
+
+<figure class="ht-screenshot">
+<img src="images/readme-popups-v080.png" alt="Popups for lights, climate, fan, cover, media, weather, camera, history, select, date and time, lock, alarm panel and PIN" width="1962" height="1962" loading="lazy">
+<figcaption>Popups</figcaption>
 </figure>
 
 <figure class="ht-screenshot">

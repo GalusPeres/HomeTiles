@@ -133,11 +133,11 @@ Shows Home Assistant **Energy Dashboard** statistics for electricity, gas, water
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
-<img style="width:211px" src="../images/tile-energy-yield.png" alt="Energy tile with today's solar yield" width="352" height="145" loading="lazy">
+<img style="width:156px" src="../images/tile-energy-yield.png" alt="Energy tile with today's solar yield" width="260" height="145" loading="lazy">
 <figcaption>Tile</figcaption>
 </figure>
 <figure class="ht-screenshot">
-<img style="width:156px" src="../images/tile-energy-yield-half.png" alt="Half-height energy tile with today's solar yield" width="260" height="64" loading="lazy">
+<img style="width:101px" src="../images/tile-energy-yield-half.png" alt="Half-height energy tile with today's solar yield" width="168" height="64" loading="lazy">
 <figcaption>Half height</figcaption>
 </figure>
 </div>
@@ -177,16 +177,20 @@ The tile shows the state (`On`, `Off`, or the brightness) under its title. Half-
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
-<img style="width:101px" src="../images/tile-light-couch.png" alt="Light tile in the light's color" width="168" height="145" loading="lazy">
-<figcaption>Light</figcaption>
+<img style="width:156px" src="../images/tile-light-couch.png" alt="Light tile with a dimmer bar in the light's color" width="260" height="145" loading="lazy">
+<figcaption>Dimmer</figcaption>
 </figure>
 <figure class="ht-screenshot">
-<img style="width:101px" src="../images/tile-light-desk.png" alt="Second light tile" width="168" height="145" loading="lazy">
-<figcaption>Light</figcaption>
+<img style="width:156px" src="../images/tile-light-desk.png" alt="Second light tile with a dimmer bar" width="260" height="145" loading="lazy">
+<figcaption>Dimmer</figcaption>
 </figure>
 <figure class="ht-screenshot">
-<img style="width:101px" src="../images/tile-switch-tv.png" alt="Half-height switch tile" width="168" height="65" loading="lazy">
-<figcaption>Half height</figcaption>
+<img style="width:101px" src="../images/tile-switch-tv.png" alt="Switch tile as an icon button" width="168" height="145" loading="lazy">
+<figcaption>Icon button</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:156px" src="../images/tile-light-switch.png" alt="Light tile with an on/off switch bar" width="260" height="145" loading="lazy">
+<figcaption>Switch</figcaption>
 </figure>
 </div>
 
@@ -229,7 +233,7 @@ Controls a `cover` entity and shows its state and position when available.
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>
 <figure class="ht-screenshot">
-<img style="width:211px" src="../images/tile-cover.png" alt="Cover tile showing Open and 54 percent" width="352" height="145" loading="lazy">
+<img style="width:156px" src="../images/tile-cover.png" alt="Blinds tile showing Open and 52 percent" width="260" height="145" loading="lazy">
 <figcaption>Tile</figcaption>
 </figure>
 </div>
@@ -285,8 +289,15 @@ Shows current conditions and the next days from a `weather` entity.
 </figure>
 </div>
 <figure class="ht-screenshot ht-popup">
-<img style="width:475px" src="../images/8in-weather-popup.png" alt="Weather popup" width="792" height="792" loading="lazy">
-<figcaption>Popup</figcaption>
+<img style="width:475px" src="../images/8in-weather-popup.png" alt="Weather popup with the forecast for the next days" width="792" height="792" loading="lazy">
+<figcaption>Popup, next days</figcaption>
+</figure>
+</div>
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-weather-popup-today.png" alt="Weather popup with the hourly forecast for today" width="792" height="792" loading="lazy">
+<figcaption>Popup, today</figcaption>
 </figure>
 </div>
 
@@ -320,8 +331,8 @@ Controls a `climate` entity. The icon and accent indicate active heating, coolin
 Configure mini-tiles for temperatures, humidity, targets, and mode, or choose **Automatic**. Arrange them in the [Climate mini-tile editor](web-admin.md#editing-climate-mini-tiles). Wide target controls show the active mode, such as **Heat**, **Cool**, or **Auto**, and a humidity target is labeled **Humidity**.
 
 <figure class="ht-screenshot">
-<img style="width:653px" src="../images/8in-climate.png" alt="Climate tiles while heating, cooling, and in auto mode" width="1088" height="225" loading="lazy">
-<figcaption>Climate tiles while heating, cooling, and in auto mode</figcaption>
+<img style="width:156px" src="../images/tile-climate.png" alt="Climate tile while heating, with the target and plus/minus buttons" width="260" height="145" loading="lazy">
+<figcaption>Climate tile while heating</figcaption>
 </figure>
 
 **Popup:** adjust the target with the dial or plus/minus buttons. Available controls may include heating/cooling targets, humidity, mode, presets, fan, and swing; longer option lists scroll.
@@ -339,7 +350,31 @@ Controls a `fan` entity. Select it under **Fans** in the [Bridge options](bridge
 
 The tile shows the state and speed. Its bar sets the speed: stepless like the Switch dimmer, in segments for fans with only a few speeds, or as an on/off switch for fans without speed control. Tap or long press, whichever does not open the popup, switches the fan on or off.
 
+<div class="ht-type-shots ht-type-pair" markdown>
+<div class="ht-type-stack" markdown>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-fan.png" alt="Fan tile at 69 percent with its speed bar" width="352" height="145" loading="lazy">
+<figcaption>On</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-fan-off.png" alt="Fan tile while off" width="352" height="145" loading="lazy">
+<figcaption>Off</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-fan-popup.png" alt="Fan popup with speed slider, preset, oscillation and direction" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+
 **Popup:** the speed above a large slider, and below it the power button and, when the fan supports them, preset, oscillation, and direction. Only the controls the fan reports appear.
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-fan-presets.png" alt="Fan popup with the preset list open" width="792" height="792" loading="lazy">
+<figcaption>Presets</figcaption>
+</figure>
+</div>
 
 ### Lock
 
@@ -347,7 +382,35 @@ Controls a `lock` entity. Select it under **Locks** in the [Bridge options](brid
 
 The tile shows the state in Home Assistant's colors: green while locked, red while unlocked, open, or jammed, orange while locking or unlocking. Its bar locks and unlocks; when the state is unknown or jammed it shows separate **Unlock** and **Lock** buttons.
 
+<div class="ht-type-shots ht-type-pair" markdown>
+<div class="ht-type-stack" markdown>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-lock.png" alt="Lock tile, locked, in green" width="352" height="145" loading="lazy">
+<figcaption>Locked</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-lock-unlocked.png" alt="Lock tile, unlocked, in red" width="352" height="145" loading="lazy">
+<figcaption>Unlocked</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-lock-popup.png" alt="Lock popup with the lock switch and Open door" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+
 **Popup:** a switch (up = locked) and, for locks that can open the door, **Open door** with a second tap to confirm. When Home Assistant needs a code, the code entry opens first.
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-lock-code.png" alt="Code entry for the lock" width="792" height="792" loading="lazy">
+<figcaption>Code entry</figcaption>
+</figure>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-lock-open-confirm.png" alt="Unlocked lock asking Really open?" width="792" height="792" loading="lazy">
+<figcaption>Open door, second tap</figcaption>
+</figure>
+</div>
 
 ### Alarm Panel
 
@@ -355,7 +418,39 @@ Controls an `alarm_control_panel` entity. Select it under **Alarm panels** in th
 
 The tile shows the state in Home Assistant's colors: green while armed, orange while arming, pending, or disarming, red when triggered, grey while disarmed. Its bar holds **Disarm** and the arming modes that fit.
 
+<div class="ht-type-shots ht-type-pair" markdown>
+<div class="ht-type-stack" markdown>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-alarm-modes.png" alt="Alarm panel tile armed for vacation, with its mode bar" width="352" height="145" loading="lazy">
+<figcaption>Armed</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-alarm-pending.png" alt="Alarm panel tile while pending" width="352" height="145" loading="lazy">
+<figcaption>Pending</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:211px" src="../images/tile-alarm-triggered.png" alt="Alarm panel tile while triggered" width="352" height="145" loading="lazy">
+<figcaption>Triggered</figcaption>
+</figure>
+</div>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-alarm-popup-modes.png" alt="Alarm panel popup with Home, Away, Night, Vacation and Disarm" width="792" height="792" loading="lazy">
+<figcaption>Popup</figcaption>
+</figure>
+</div>
+
 **Popup:** the modes the panel supports (**Home**, **Away**, **Night**, **Vacation**, **Custom**) and **Disarm**. While the panel arms, waits, disarms, or is triggered, only **Disarm** remains. When Home Assistant needs a code, the code entry opens first.
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-alarm-code.png" alt="Code entry for the alarm panel" width="792" height="792" loading="lazy">
+<figcaption>Code entry</figcaption>
+</figure>
+<figure class="ht-screenshot ht-popup">
+<img style="width:475px" src="../images/8in-alarm-triggered.png" alt="Triggered alarm panel with only Disarm" width="792" height="792" loading="lazy">
+<figcaption>Triggered</figcaption>
+</figure>
+</div>
 
 **Lock and Alarm Panel security:** both run commands only on a panel with [encrypted commands](bridge.md#encrypted-commands) and a [Web Admin password](web-admin.md#web-admin-password); otherwise the tile and popup say what is missing. Home Assistant checks every code as in its own UI; unlocking, opening, and disarming always need the entity's code. A device without its own code can only be unlocked, opened, or disarmed when it is listed under **Allow opening without a code** in the Bridge options. For devices that ignore a wrong code, enter their codes under **Codes for locks and alarm panels** so the Bridge checks them; after five wrong codes, code entry is blocked for a while. Numeric codes are supported; devices that need a text code must be operated in Home Assistant.
 
@@ -390,7 +485,7 @@ Shows time and date using the device's localization settings. You can override t
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
-<img style="width:120px" src="../images/tile-clock.png" alt="Clock tile with time and date" width="200" height="126" loading="lazy">
+<img style="width:173px" src="../images/tile-clock.png" alt="Clock tile with time and date" width="289" height="157" loading="lazy">
 <figcaption>Clock without a border</figcaption>
 </figure>
 </div>
@@ -425,7 +520,7 @@ A protected folder asks for its PIN before it opens. The PIN pad takes the folde
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>
 <figure class="ht-screenshot">
-<img style="width:101px" src="../images/tile-folder-misc.png" alt="Protected folder tile MISC" width="168" height="146" loading="lazy">
+<img style="width:101px" src="../images/tile-folder-misc.png" alt="Protected folder tile MISC" width="168" height="145" loading="lazy">
 <figcaption>Protected folder</figcaption>
 </figure>
 </div>

@@ -3,7 +3,7 @@
 The [HomeTiles Bridge](https://github.com/GalusPeres/HomeTiles-Bridge) connects your displays to Home Assistant over MQTT. It shares entity data and sends tile actions back to Home Assistant, with each display listed as its own device.
 
 <figure class="ht-screenshot">
-<img src="../images/bridge-devices.png" alt="Bridge integration with three panels" width="1328" height="918" loading="lazy">
+<img src="../images/bridge-devices.png" alt="Bridge integration with three panels" width="1250" height="1245" loading="lazy">
 <figcaption>Displays in the HomeTiles Bridge integration</figcaption>
 </figure>
 
@@ -87,6 +87,21 @@ Optional. Anyone who can publish on your MQTT broker could otherwise send comman
 1. On the display, open **Settings → System → Security** and tap **Encrypt**.
 2. The display and Home Assistant show the same six-digit number. Confirm only if both numbers match, on the display and in Home Assistant.
 3. The shield turns green: commands are encrypted. The display stays the same Home Assistant device; nothing is added.
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot">
+<img style="width:245px" src="../images/ha-pairing-discovered.png" alt="Discovered card in Home Assistant with the six-digit number" width="408" height="230" loading="lazy">
+<figcaption>Home Assistant finds the display</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:435px" src="../images/ha-pairing-confirm.png" alt="Set up encryption dialog with the six-digit number" width="725" height="440" loading="lazy">
+<figcaption>Compare the number</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:435px" src="../images/ha-pairing-done.png" alt="Confirmed, now confirm on the display too" width="725" height="246" loading="lazy">
+<figcaption>Then confirm on the display</figcaption>
+</figure>
+</div>
 
 To switch encryption off, tap **Turn off** on the display or use **Security** in the Bridge options; the other side follows. A display that was never paired, and older firmware or Bridge versions, keep working unencrypted; with an older Bridge the display asks for a Bridge update. Protocol details: [command-encryption.md](https://github.com/GalusPeres/HomeTiles/blob/main/docs-dev/command-encryption.md).
 

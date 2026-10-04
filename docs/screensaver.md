@@ -44,7 +44,7 @@ If an image stays black, re-export it at the display's native size with these se
 In the Web Admin's **Screensaver** tab, click the background.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-screensaver.png" alt="Screensaver editor in the web admin" width="1305" height="790" loading="lazy">
+<img src="../images/web-admin-screensaver.png" alt="Screensaver editor in the web admin" width="1450" height="895" loading="lazy">
 <figcaption>Screensaver editor</figcaption>
 </figure>
 

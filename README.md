@@ -10,14 +10,24 @@ Lights, climate, sensors, energy, weather and more on a 4 to 10.1 inch touch scr
 
 <a href="https://galusperes.github.io/"><img src="docs/images/readme-nav-docs.png" alt="Documentation" height="42"></a>
 <a href="https://galusperes.github.io/installer/"><img src="docs/images/readme-nav-flasher.png" alt="Online flasher" height="42"></a>
-<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-nav-release.png" alt="Latest release" height="42"></a>
+<a href="https://github.com/GalusPeres/HomeTiles/releases/latest"><img src="docs/images/readme-nav-release-v080.png" alt="Latest release" height="42"></a>
 <a href="https://buymeacoffee.com/galusperes"><img src="docs/images/readme-nav-coffee.png" alt="Buy Me a Coffee" height="42"></a>
 <a href="LICENSE"><img src="docs/images/readme-nav-license.png" alt="MIT License" height="42"></a>
 <br>
-<img src="docs/images/readme-hero-home.png" alt="HomeTiles home screen with sensor, energy and binary sensor popups" width="100%"><br>
-Tap a tile for its popup, then slide through the history of sensors, energy and binary sensors.
+<img src="docs/images/readme-hero-v080.png" alt="HomeTiles home screen on a 10.1 inch display" width="100%"><br>
+Every tile opens a popup with its controls and history.
 
 </div>
+
+## Tiles and popups
+
+<img src="docs/images/readme-popups-v080.png" alt="Popups for lights, climate, fan, cover, media, weather, energy, sensor history, lock and alarm panel" width="100%">
+
+<img src="docs/images/gallery-tiles.png" alt="Tiles for weather, media, alarm panel, lock, lights, fan, climate, sensors, folders and scenes" width="100%">
+
+Build the dashboard in the browser; the Web Admin preview matches the display.
+
+<img src="docs/images/readme-webadmin-v080.png" alt="Web Admin with the live preview of the home screen and the tile settings" width="100%">
 
 ## New in v0.8.0
 

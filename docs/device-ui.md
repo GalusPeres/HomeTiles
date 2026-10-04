@@ -49,6 +49,11 @@ While Home Assistant uses the display's own [built-in camera](bridge.md#built-in
 <figcaption>The camera is in use by Home Assistant</figcaption>
 </figure>
 
+<figure class="ht-screenshot">
+<img src="../images/8in-home-camera-stripe.png" alt="Only the red line at the top of the dashboard" width="1308" height="828" loading="lazy">
+<figcaption>With the pill switched off, only the red line shows</figcaption>
+</figure>
+
 ## Settings
 
 The gear tile opens Settings.
@@ -117,6 +122,17 @@ View the firmware version and device name, or use the maintenance actions:
 - **Restart:** reboot the display.
 - **GitHub:** show a QR code for the project.
 - **Security:** [encrypted Bridge commands](bridge.md#encrypted-commands) and the [Web Admin password](web-admin.md#web-admin-password). **Encrypt** sets up encryption with Home Assistant by a six-digit number, **Turn off** switches it off on both sides, and **Password** removes a forgotten Web Admin password. Both ask before they act.
+
+<div class="ht-type-shots" markdown>
+<figure class="ht-screenshot">
+<img src="../images/8in-security-popup.png" alt="Security view with Turn off and Password" width="1272" height="792" loading="lazy">
+<figcaption>Security view</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img src="../images/8in-pairing-popup.png" alt="Encryption setup showing the six-digit number" width="1272" height="792" loading="lazy">
+<figcaption>Encryption setup with the six-digit number</figcaption>
+</figure>
+</div>
 
 Below the version and device name, System shows three rows: **Home Assistant** with a check while the display is connected, and **Encryption** and **Web Admin password** with a green shield while they are on. GitHub and Security are colored while their view is open; tap them again to return.
 

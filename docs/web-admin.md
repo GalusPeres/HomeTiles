@@ -35,7 +35,7 @@ See [Tile Types](tiles.md) to choose the right type.
 
 </div>
 <figure class="ht-screenshot ht-editor-detail">
-<img src="../images/web-admin-tile-types.png" alt="Tile type dropdown" width="439" height="1009" loading="lazy">
+<img src="../images/web-admin-tile-types.png" alt="Tile type dropdown" width="485" height="997" loading="lazy">
 <figcaption>Choose a tile type in the Web Admin</figcaption>
 </figure>
 </div>
@@ -59,7 +59,7 @@ Number, Select, and Date/Time also offer **Value size** with the same choices as
 
 </div>
 <figure class="ht-screenshot ht-editor-detail">
-<img src="../images/web-admin-tile-settings.png" alt="Tile settings for a sensor tile" width="439" height="978" loading="lazy">
+<img src="../images/web-admin-tile-settings.png" alt="Tile settings for a sensor tile" width="487" height="955" loading="lazy">
 <figcaption>Sensor tile settings</figcaption>
 </figure>
 </div>
@@ -69,7 +69,7 @@ Number, Select, and Date/Time also offer **Value size** with the same choices as
 The **Global settings** below the preview apply to every tile on the display.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-global-settings.png" alt="Global settings for tile borders, radius, icon circles and tile color" width="765" height="195" loading="lazy">
+<img src="../images/web-admin-global-settings.png" alt="Global settings for tile borders, radius, icon circles and tile color" width="842" height="213" loading="lazy">
 <figcaption>Global settings for all tiles</figcaption>
 </figure>
 
@@ -100,7 +100,7 @@ For Sensor, Energy, and Number tiles: a color bar between **Min** and **Max**. *
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
-<img src="../images/web-admin-rules.png" alt="Rules with a color bar from 15 to 25" width="408" height="784" loading="lazy">
+<img src="../images/web-admin-rules.png" alt="Rules with a color bar from 15 to 25" width="482" height="828" loading="lazy">
 <figcaption>A temperature from blue to red</figcaption>
 </figure>
 </div>
@@ -109,17 +109,17 @@ For Sensor, Energy, and Number tiles: a color bar between **Min** and **Max**. *
 
 For Sensor, Binary Sensor, Select, and Date/Time tiles: up to six states, each with a color. A row matches the exact state, or any state containing its text when **contains** is ticked; upper and lower case do not matter, and the first match wins. Binary sensors have one color for On and one for Off. Unavailable states keep the default color.
 
-In this example, a waste sensor says when to put the bin out, such as "Put out in 4 days". Its icon turns red while the state contains "today" and green while it contains "4". With **Tile color → From icon**, the circle and the tile follow the icon color.
+In this example, a waste sensor says when to put the bin out, such as "Put out in 11 days". Its icon turns red while the state contains "today" and turquoise while it contains "11". With **Tile color → From icon**, the circle and the tile follow the icon color.
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
-<img src="../images/web-admin-rules-state.png" alt="Icon color by state with two contains rules" width="408" height="609" loading="lazy">
+<img src="../images/web-admin-rules-state.png" alt="Icon color by state with two contains rules" width="482" height="725" loading="lazy">
 <figcaption>Two state rules</figcaption>
 </figure>
 <div class="ht-type-stack" markdown>
 <figure class="ht-screenshot">
-<img style="width:156px" src="../images/8in-waste-tile.png" alt="Waste tile with a green icon: put out in four days" width="260" height="145" loading="lazy">
-<figcaption>Contains "4": green</figcaption>
+<img style="width:156px" src="../images/8in-waste-tile.png" alt="Waste tile with a turquoise icon: put out in 11 days" width="260" height="145" loading="lazy">
+<figcaption>Contains "11": turquoise</figcaption>
 </figure>
 <figure class="ht-screenshot">
 <img style="width:156px" src="../images/8in-waste-tile-today.png" alt="Waste tile tinted red: put out today" width="260" height="145" loading="lazy">
@@ -137,7 +137,7 @@ Choose temperature, humidity, targets, or mode. **Automatic** chooses values sup
 Resizing the parent changes the available slots. Mini-tiles that still fit keep their place; only those without room are hidden until the tile grows again.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-climate.png" alt="Editing a Climate tile and its mini-tile content" width="1305" height="1218" loading="lazy">
+<img src="../images/web-admin-climate.png" alt="Editing a Climate tile and its mini-tile content" width="1450" height="1212" loading="lazy">
 <figcaption>Climate tile and mini-tile editor</figcaption>
 </figure>
 
@@ -156,10 +156,10 @@ Choose the **Folder** type to create a sub-page. It appears as a Web Admin tab a
 
 To protect a folder, select its tile, enable **Protect this folder with a PIN**, enter 4–8 digits, and press **Apply PIN**. The display then asks for the PIN before opening the folder. Folder PINs are stored only on that display and are excluded from exports.
 
-A folder tile can also show the state of what is inside. In this example, the **Climate** folder uses **Rules → On** with the climate entity and **Entity color**, **Color icon**, and **Tint tile**: it turns orange while heating and blue while cooling, and a PIN locks it.
+A folder tile can also show the state of what is inside: with **Rules → On**, the climate entity, and **Entity color**, **Color icon**, and **Tint tile**, a **Climate** folder turns orange while heating and blue while cooling. In this example, the **MISC** folder is locked with a PIN.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-folder.png" alt="Folder tile with a PIN and rules that follow a climate entity" width="1305" height="1218" loading="lazy">
+<img src="../images/web-admin-folder.png" alt="Folder tile MISC protected with a PIN" width="1450" height="1212" loading="lazy">
 <figcaption>Protected folder that takes the color of a climate entity</figcaption>
 </figure>
 
@@ -172,7 +172,7 @@ Select the back tile to change its icon, icon color, circle, and tile color. It 
 
 </div>
 <figure class="ht-screenshot ht-editor-detail">
-<img src="../images/web-admin-back-tile.png" alt="Back tile settings" width="439" height="978" loading="lazy">
+<img src="../images/web-admin-back-tile.png" alt="Back tile settings" width="487" height="955" loading="lazy">
 <figcaption>Back tile settings</figcaption>
 </figure>
 </div>
@@ -189,11 +189,11 @@ To show the tile again, drag it from the field below the preview back into a fre
 
 <div class="ht-type-shots" markdown>
 <figure class="ht-screenshot">
-<img src="../images/web-admin-settings-hidden.png" alt="Hidden Settings tile in the field below the preview" width="124" height="111" loading="lazy">
+<img src="../images/web-admin-settings-hidden.png" alt="Hidden Settings tile in the field below the preview" width="139" height="126" loading="lazy">
 <figcaption>Hidden Settings tile</figcaption>
 </figure>
 <figure class="ht-screenshot">
-<img src="../images/web-admin-settings-access.png" alt="PIN protection, Hide tile, Open by edge swipe and Swipe edge" width="406" height="287" loading="lazy">
+<img src="../images/web-admin-settings-access.png" alt="PIN protection, Hide tile, Open by edge swipe and Swipe edge" width="460" height="229" loading="lazy">
 <figcaption>Access settings of the Settings tile</figcaption>
 </figure>
 </div>
@@ -217,7 +217,7 @@ The **Settings** tab contains:
 - **Built-in camera:** on displays with a camera, see below.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-settings.png" alt="Settings tab with network and MQTT settings" width="1305" height="1218" loading="lazy">
+<img src="../images/web-admin-settings.png" alt="Settings tab with network and MQTT settings" width="1450" height="1212" loading="lazy">
 <figcaption>Device settings in the Web Admin</figcaption>
 </figure>
 
@@ -234,12 +234,22 @@ The Web Admin is open to everyone on your network by default. Enter a new passwo
 - Forgot the password? On the display, open **Settings → System → Security** and select **Remove password**.
 - When [pairing](home-assistant-setup.md) with the HomeTiles Bridge, enter the password in the Bridge setup dialog.
 
+<figure class="ht-screenshot">
+<img src="../images/web-admin-password.png" alt="Web Admin password section with Set password, Remove password and Sign out" width="1350" height="321" loading="lazy">
+<figcaption>Web Admin password in the Settings tab</figcaption>
+</figure>
+
+<figure class="ht-screenshot">
+<img style="width:300px" src="../images/web-admin-sign-in.png" alt="Web Admin sign-in page" width="500" height="472" loading="lazy">
+<figcaption>Sign-in page</figcaption>
+</figure>
+
 ### Built-in Camera
 
 Displays with a supported camera show this section. **Allow Home Assistant to use the built-in camera** is off by default. When enabled, the display captures still images or a live stream only while the [HomeTiles Bridge](bridge.md#built-in-camera) requests them.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-camera.png" alt="Built-in camera settings" width="1218" height="678" loading="lazy">
+<img src="../images/web-admin-camera.png" alt="Built-in camera settings" width="1350" height="763" loading="lazy">
 <figcaption>Built-in camera settings</figcaption>
 </figure>
 
@@ -257,7 +267,7 @@ Open **I/O** to configure outputs, relays, or DS18B20 sensors. Only pins availab
 **Export** saves folders, tiles, and the screensaver layout in one JSON file. It excludes local I/O assignments and PINs. Older files without screensaver data leave the current screensaver unchanged.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-import-export.png" alt="Import and export" width="1218" height="140" loading="lazy">
+<img src="../images/web-admin-import-export.png" alt="Import and export" width="1350" height="159" loading="lazy">
 <figcaption>Import and export settings</figcaption>
 </figure>
 
@@ -267,7 +277,7 @@ Open **I/O** to configure outputs, relays, or DS18B20 sensors. Only pins availab
 ## Screenshot & Diagnostics { data-toc-label="Diagnostics" }
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-diagnostics.png" alt="Screenshot and diagnostics buttons" width="1218" height="141" loading="lazy">
+<img src="../images/web-admin-diagnostics.png" alt="Screenshot and diagnostics buttons" width="1350" height="231" loading="lazy">
 <figcaption>Screenshot and diagnostics</figcaption>
 </figure>
 
@@ -283,7 +293,7 @@ See [Reporting a crash](faq.md#the-display-crashed-or-restarted-by-itself) for t
 Check for releases or upload the matching OTA `.bin` in the Firmware section. Follow [Firmware Updates](updating.md) for the steps.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-firmware.png" alt="Firmware update section" width="1218" height="342" loading="lazy">
+<img src="../images/web-admin-firmware.png" alt="Firmware update section" width="1350" height="385" loading="lazy">
 <figcaption>Firmware update</figcaption>
 </figure>
 
@@ -292,6 +302,6 @@ Check for releases or upload the matching OTA `.bin` in the Firmware section. Fo
 With a FAT32 microSD card inserted, use the file manager to upload, download, rename, or delete files and create folders. A card is optional for normal dashboard use.
 
 <figure class="ht-screenshot">
-<img src="../images/web-admin-file-manager.png" alt="File manager for the microSD card" width="1218" height="514" loading="lazy">
+<img src="../images/web-admin-file-manager.png" alt="File manager for the microSD card" width="1350" height="569" loading="lazy">
 <figcaption>microSD file manager</figcaption>
 </figure>

@@ -19,11 +19,17 @@ Every tile opens a popup with its controls and history.
 
 </div>
 
-## Tiles and popups
+## Screenshots
 
-<img src="docs/images/readme-popups-v080.png" alt="Popups for lights, climate, fan, cover, media, weather, energy, sensor history, lock and alarm panel" width="100%">
+### Popups
+
+<img src="docs/images/readme-popups-12.png" alt="Popups for lights, climate, fan, cover, media, weather, sensor history, energy, lock, binary sensor, alarm panel and PIN" width="100%">
+
+### Tiles
 
 <img src="docs/images/gallery-tiles.png" alt="Tiles for weather, media, alarm panel, lock, lights, fan, climate, sensors, folders and scenes" width="100%">
+
+### Web Admin
 
 Build the dashboard in the browser; the Web Admin preview matches the display.
 

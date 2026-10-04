@@ -31,7 +31,7 @@ HomeTiles is free, open-source firmware that turns a supported touch display int
 - **Camera:** live video on ESP32-P4 displays; supported displays share their built-in camera with Home Assistant.
 
 <figure class="ht-screenshot">
-<img src="images/readme-popups-12.png" alt="Popups for lights, climate, fan, cover, media, weather, sensor history, energy, lock, binary sensor, alarm panel and camera" width="1962" height="1485" loading="lazy">
+<img src="images/readme-popups-12.png" alt="Popups for lights, climate, fan, cover, media, weather, sensor history, energy, lock, PIN, alarm panel and camera" width="1962" height="1485" loading="lazy">
 <figcaption>Popups</figcaption>
 </figure>
 

@@ -33,7 +33,7 @@ Every tile opens a popup with its controls and history.
 
 Build the dashboard in the browser; the Web Admin preview matches the display.
 
-<img src="docs/images/readme-webadmin-v080.png" alt="Web Admin with the live preview of the home screen and the tile settings" width="100%">
+<img src="docs/images/readme-webadmin-v080.png" alt="Web Admin with the live preview and the rules that tint the Lighting folder in the desk light's color" width="100%">
 
 ## New in v0.8.0
 

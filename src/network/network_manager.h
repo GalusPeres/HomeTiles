@@ -236,6 +236,10 @@ private:
   // Worker only: hands the client its socket and the message callback.
   void installMessageCallback();
   void applyLinkTransport(const LinkTransportRequest& request);
+  // Worker only: deletes this panel's retained identity on the MQTT broker.
+  void clearMqttLeftovers();
+  // tab5_lvgl/config/<device id>/bridge, where the panel announces itself.
+  String bridgeConfigTopic() const;
 
   uint32_t wifi_retry_at = 0;
   uint32_t wired_ip_wait_until = 0;

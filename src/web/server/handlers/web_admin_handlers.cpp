@@ -125,6 +125,12 @@ void WebAdminServer::handleSaveMQTT() {
     copyToBuffer(cfg.mqtt_user, sizeof(cfg.mqtt_user), server.arg("mqtt_user"));
   }
   copyIfNonEmpty(cfg.mqtt_pass, sizeof(cfg.mqtt_pass), "mqtt_pass");
+  // The hidden password field cannot be emptied (empty keeps it). Without a
+  // broker host the credentials have no use: drop them with the host.
+  if (!cfg.mqtt_host[0]) {
+    cfg.mqtt_user[0] = '\0';
+    cfg.mqtt_pass[0] = '\0';
+  }
   if (server.hasArg("mqtt_client_id")) {
     String client_id = server.arg("mqtt_client_id");
     client_id.trim();
@@ -660,11 +666,13 @@ void WebAdminServer::handleLinkSetup() {
   // restart (a name clash with another panel); otherwise the link starts now.
   const bool topics_changed = base != cfg.mqtt_base_topic || prefix != cfg.ha_prefix;
   // The link replaces MQTT; without a broker host the panel is a new one if
-  // the link is removed later.
-  if (topics_changed || cfg.mqtt_host[0]) {
+  // the link is removed later. The broker credentials go with the host.
+  if (topics_changed || cfg.mqtt_host[0] || cfg.mqtt_user[0] || cfg.mqtt_pass[0]) {
     copyToBuffer(cfg.mqtt_base_topic, sizeof(cfg.mqtt_base_topic), base);
     copyToBuffer(cfg.ha_prefix, sizeof(cfg.ha_prefix), prefix);
     cfg.mqtt_host[0] = '\0';
+    cfg.mqtt_user[0] = '\0';
+    cfg.mqtt_pass[0] = '\0';
     if (!configManager.save(cfg)) {
       sendJsonError(server, 500, "Could not store the base topic");
       return;

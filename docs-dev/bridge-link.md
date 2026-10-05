@@ -62,6 +62,18 @@ topics over MQTT any more: the broker may still hold the panel's old retained
 messages (for example `0` on `{base}/stat/connected` from the moment it left
 MQTT), and they must not override the live state from the link.
 
+Leftovers are cleared from both sides. A panel that switches from MQTT to the
+link deletes its retained announcement (`tab5_lvgl/config/{id}/bridge`),
+`{base}/stat/connected` and `{base}/stat/ip` on the broker before a clean
+disconnect, and drops the broker host, user and password. A panel that left
+MQTT without this (reset, reflashed, older test firmware) cannot clear
+anything, so the Bridge does: a linked entry deletes the announcement on MQTT
+when it is set up, and a panel that announces itself over mDNS with `link=1`
+and without `pair=1` has neither MQTT nor the link, so an MQTT announcement of
+it from before the start is left over. It opens no card (the mDNS cache is
+checked, whichever discovery Home Assistant runs first) and is deleted. A
+live announcement means the panel is on MQTT again and still opens a card.
+
 ## Wire format
 
 Every frame is a 4-byte big-endian length `L` followed by `L` bytes. `L` is at

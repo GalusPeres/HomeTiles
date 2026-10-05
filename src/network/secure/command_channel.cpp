@@ -702,6 +702,9 @@ bool startPairing() {
     // No Bridge address yet: be discoverable for Home Assistant, which sends
     // its address when the panel is added (POST /api/link). The panel then
     // connects and pairs over the link (docs-dev/bridge-link.md, Setup).
+    // A finished attempt (kept for two minutes) would hide the window from
+    // pairingPhase(), and the view would fall back to the overview.
+    releaseAttempt();
     const uint32_t until = millis() + kLinkWindowMs;
     g_link_window_until = until ? until : 1;
     networkManager.setPairingAdvertised(true);

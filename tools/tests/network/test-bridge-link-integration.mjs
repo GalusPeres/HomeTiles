@@ -120,4 +120,28 @@ const sketch = readRepoFile('HomeTiles.ino');
 assert.match(sketch, /command_channel::begin\(\);[\s\S]{0,200}command_channel::setPairingPromptCallback\(settings_show_pairing\);/);
 assert.doesNotMatch(sketch, /setRestartCallback/);
 
+// Moving from MQTT to the link leaves no retained identity on the broker: its
+// old announcement made Home Assistant offer the panel as a new MQTT panel.
+const leave = slice('void HomeTilesNetworkManager::applyLinkTransport(', 'void HomeTilesNetworkManager::finishMqttConnect(');
+assert.match(leave, /drainOutboundQueues\(kMqttOutboundDrainNormal\);\s*[\s\S]*?if \(request\.enable && !mqtt_client\.linkMode\(\)\) clearMqttLeftovers\(\);\s*mqtt_client\.disconnect\(\);/,
+  'queued messages go first, then the leftovers are cleared, then a clean disconnect');
+const leftovers = slice('void HomeTilesNetworkManager::clearMqttLeftovers() {', 'String HomeTilesNetworkManager::bridgeConfigTopic() const {');
+for (const topic of ['announcement.c_str()', 'mqttTopics.topic(TopicKey::STAT_CONN)', 'mqttTopics.topic(TopicKey::STAT_IP)'])
+  assert.ok(leftovers.includes(topic), `clears ${topic}`);
+assert.match(leftovers, /mqtt_client\.publish\(topic, "", true\)/, 'empty retained messages delete them');
+const announce = slice('void HomeTilesNetworkManager::publishBridgeConfig() {', 'const char* HomeTilesNetworkManager::getBridgeApplyTopic()');
+assert.match(announce, /const String topic = bridgeConfigTopic\(\);/, 'announcing and clearing use the same topic');
+
+// Pair right after a finished pairing shows the window, not the overview.
+const pairStart = channel.slice(channel.indexOf('bool startPairing() {'), channel.indexOf('PairingPhase pairingPhase() {'));
+assert.match(pairStart, /if \(!networkManager\.linkConfigured\(\)\) \{[\s\S]*?releaseAttempt\(\);\s*const uint32_t until = millis\(\) \+ kLinkWindowMs;/,
+  'a kept, finished attempt no longer hides the pair window');
+
+// Broker credentials never outlive the broker host.
+const mqttSave = web.slice(web.indexOf('void WebAdminServer::handleSaveMQTT() {'), web.indexOf('if (server.hasArg("mqtt_client_id"))'));
+assert.match(mqttSave, /copyIfNonEmpty\(cfg\.mqtt_pass, sizeof\(cfg\.mqtt_pass\), "mqtt_pass"\);\s*[\s\S]*?if \(!cfg\.mqtt_host\[0\]\) \{\s*cfg\.mqtt_user\[0\] = '\\0';\s*cfg\.mqtt_pass\[0\] = '\\0';\s*\}/,
+  'an empty host drops the hidden password, which an empty field cannot clear');
+assert.match(setup, /if \(topics_changed \|\| cfg\.mqtt_host\[0\] \|\| cfg\.mqtt_user\[0\] \|\| cfg\.mqtt_pass\[0\]\) \{[\s\S]*?cfg\.mqtt_host\[0\] = '\\0';\s*cfg\.mqtt_user\[0\] = '\\0';\s*cfg\.mqtt_pass\[0\] = '\\0';/,
+  'the link setup drops host, user and password together');
+
 console.log('Direct Bridge link wiring: PASS');

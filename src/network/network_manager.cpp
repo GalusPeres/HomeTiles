@@ -1098,6 +1098,9 @@ void HomeTilesNetworkManager::installMessageCallback() {
 void HomeTilesNetworkManager::applyLinkTransport(const LinkTransportRequest& request) {
   if (mqtt_client.connected()) {
     drainOutboundQueues(kMqttOutboundDrainNormal);
+    // Leaving the broker for the link: the panel will not announce itself
+    // there again, so its retained identity would offer it as a new panel.
+    if (request.enable && !mqtt_client.linkMode()) clearMqttLeftovers();
     mqtt_client.disconnect();
   }
   purgeOutboundQueue();
@@ -1133,6 +1136,31 @@ void HomeTilesNetworkManager::applyLinkTransport(const LinkTransportRequest& req
   }
   Serial.printf("[Link] Direct Bridge link removed%s\n",
                 mqtt_enabled ? "; back to MQTT" : "; waiting for Pair");
+}
+
+// Worker only, while connected to the MQTT broker. Empty retained messages
+// delete the announcement, the connection state and the address; a clean
+// DISCONNECT then sends no last will. The Bridge also clears the
+// announcement for panels that left without this (reset, new firmware).
+void HomeTilesNetworkManager::clearMqttLeftovers() {
+  const String announcement = bridgeConfigTopic();
+  const char* topics[] = {announcement.c_str(), mqttTopics.topic(TopicKey::STAT_CONN),
+                          mqttTopics.topic(TopicKey::STAT_IP)};
+  uint8_t cleared = 0;
+  for (const char* topic : topics) {
+    if (topic && *topic && mqtt_client.publish(topic, "", true)) ++cleared;
+  }
+  Serial.printf("[Link] Cleared %u retained MQTT messages before leaving the broker\n",
+                static_cast<unsigned>(cleared));
+}
+
+String HomeTilesNetworkManager::bridgeConfigTopic() const {
+  char did[24];
+  buildDeviceId(did, sizeof(did));
+  String topic = "tab5_lvgl/config/";
+  topic += did;
+  topic += "/bridge";
+  return topic;
 }
 
 // Worker only: shared steps after either transport connected.
@@ -2042,9 +2070,7 @@ void HomeTilesNetworkManager::publishBridgeConfig() {
   String payload = haBridgeConfig.buildJsonPayload(did, cfg.mqtt_base_topic, cfg.ha_prefix);
   if (payload.isEmpty()) return;
 
-  String topic = "tab5_lvgl/config/";
-  topic += did;
-  topic += "/bridge";
+  const String topic = bridgeConfigTopic();
   // With a Bridge pairing code the announcement carries a signature, so a
   // paired Bridge ignores forged announcements for this panel.
   char* signed_payload =

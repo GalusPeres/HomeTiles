@@ -36,8 +36,11 @@ assert.match(search, /g_answer\.received = 0;\s*g_answer\.full = false;\s*g_answ
   'a new search forgets the previous "more matches"');
 const reportLimit = Number(search.match(/kMaxReportBytes = (\d+)/)?.[1]);
 assert.ok(reportLimit > 0 && reportLimit < maxBody, 'the report fits one sealed message');
-assert.match(search, /if \(!contains\(slot->released, id\) && !contains\(slot->ids, id\)\) slot->ids\.push_back\(id\);/,
-  'only entities beyond the released lists are reported');
+assert.match(search, /if \(\(reported \|\| !contains\(slot->released, id\)\) && !contains\(slot->ids, id\)\) slot->ids\.push_back\(id\);/,
+  'entities beyond the released lists are reported, and stay reported while a tile uses them');
+assert.match(search, /const bool reported = contains\(g_reported, String\(list\) \+ ':' \+ id\);/);
+assert.match(search, /publish\("tiles", body\);\s*g_last_report = body;\s*g_reported\.swap\(keys\);/,
+  'the Bridge lists a reported entity as released, which must not drop it from the next report (no loop)');
 assert.match(search, /screensaverConfig\.tileGrid\(\)/, 'screensaver tiles count too');
 assert.match(search, /if \(ready && !g_session_seen\) \{[\s\S]*?g_last_report = "";\s*scheduleTilesReport\(\);/,
   'every new session reports again (the Bridge keeps the extras in memory)');

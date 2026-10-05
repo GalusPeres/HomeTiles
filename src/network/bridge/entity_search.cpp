@@ -41,6 +41,8 @@ bool g_report_pending = true;
 uint32_t g_report_due_ms = 0;
 bool g_session_seen = false;
 String g_last_report;
+// "list:entity" of every entity in the last sent report.
+std::vector<String> g_reported;
 
 // Picker list -> tile type whose entity belongs to it.
 struct ListTile {
@@ -107,7 +109,12 @@ void publish(const char* leaf, const String& body) {
 }
 
 // {"lists":{list:[entity ids beyond the released ones]},"web_auth":bool}
-String buildTilesReport() {
+// The Bridge serves reported entities in its released lists, so an entity
+// once reported stays in the report while a tile uses it; otherwise the next
+// configuration would drop it from the report and the Bridge would remove it
+// again, over and over. `keys` receives "list:entity" of what is reported.
+String buildTilesReport(std::vector<String>& keys) {
+  keys.clear();
   struct Extra {
     const char* list;
     std::vector<String> ids;
@@ -126,7 +133,8 @@ String buildTilesReport() {
       slot = &extras.back();
     }
     const String id(entity);
-    if (!contains(slot->released, id) && !contains(slot->ids, id)) slot->ids.push_back(id);
+    const bool reported = contains(g_reported, String(list) + ':' + id);
+    if ((reported || !contains(slot->released, id)) && !contains(slot->ids, id)) slot->ids.push_back(id);
   };
   FolderEntitySlotView slots[TILES_PER_GRID];
   for (const FolderEntry& folder : tileConfig.getFolders()) {
@@ -153,6 +161,7 @@ String buildTilesReport() {
         continue;
       }
       array.add(id);
+      keys.push_back(String(item.list) + ':' + id);
     }
   }
   if (dropped) Serial.printf("[EntitySearch] %u tile entities not reported (size limit)\n", (unsigned)dropped);
@@ -248,10 +257,12 @@ void service() {
   if (!g_report_pending || !ready || !available()) return;
   if (static_cast<int32_t>(millis() - g_report_due_ms) < 0) return;
   g_report_pending = false;
-  const String body = buildTilesReport();
+  std::vector<String> keys;
+  const String body = buildTilesReport(keys);
   if (body == g_last_report) return;
   publish("tiles", body);
   g_last_report = body;
+  g_reported.swap(keys);
 }
 
 }  // namespace entity_search

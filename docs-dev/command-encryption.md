@@ -244,7 +244,7 @@ Plaintext:
 | `session` | Bridge → panel | new random session id | 0 | the challenge it answers | empty |
 | `rekey` | Bridge → panel | `-` | 0 | `-` | empty |
 | `cmd` | panel → Bridge | current session | 1, 2, … | `scene`, `light`, `switch`, `media`, `climate`, `cover`, `camera`, `value`, `fan`, `lock`, `alarm`, `entities`, `tiles` | the unchanged plain command payload |
-| `data` | Bridge → panel | current session | 1, 2, … | `camera`, `local_camera` or `entities` | the unchanged plain payload of `{base}/stat/camera` or `{base}/cmnd/local_camera`, or a search answer part |
+| `data` | Bridge → panel | current session | 1, 2, … | `camera`, `local_camera`, `entities` or `tiles` | the unchanged plain payload of `{base}/stat/camera` or `{base}/cmnd/local_camera`, a search answer part, or a declaration acknowledgement |
 | `unpair` | both | current session | next number of the sender (continues `cmd`/`data`) | `-` | empty |
 
 ### Session and replay protection
@@ -336,12 +336,29 @@ the Bridge. Both messages travel only sealed (`SEALED_ONLY_COMMANDS`):
   sealed `entities` data in at most six parts of up to 1,900 bytes
   (`{"id","p","n","full","more","r":[{v,t,i,a,d}]}`); the panel joins
   them and keeps only the newest search.
-- `tiles` (panel → Bridge): `{"lists":{"<list>":["entity_id",…]},"web_auth":…}` lists
-  the tiles' entities beyond the released lists. With the same rule the
-  Bridge adds them to that panel's tracked entities in memory; it validates
-  each domain against the list and keeps at most 200. The panel sends the
-  report again on every new session and whenever tiles, the Bridge lists or
-  the password change.
+- `tiles` (panel → Bridge): the declaration of every entity the panel's
+  tiles use (folder and screensaver tiles, and their icon color sources),
+  like an ESPHome device names the Home Assistant states it needs. Parts of
+  `{"v":version,"p":part,"n":parts,"lists":{"<list>":["entity_id",…]},
+  "web_auth":…}`, at most eight of up to 1,800 bytes and 300 entities. The
+  declaration is built from the tiles and the password alone, never from
+  what the Bridge serves, so the Bridge's answer cannot change the next one.
+  `version` is a hash of the content: the same tiles give the same version.
+  The panel declares on every new session and after every change, and
+  repeats the version every 15 seconds until the Bridge acknowledges it
+  with sealed `tiles` data `{"v":version}`.
+
+  The Bridge joins the parts of one version, leaves out entities outside
+  their list's domains, and replaces the panel's previous declaration. It
+  serves the declared entities like released ones only under the Lock/Alarm
+  rule (sealed, pairing not being removed, `web_auth` true in every part);
+  otherwise the declaration serves nothing. An unchanged result publishes
+  nothing. The Bridge keeps the last served declaration with the pairing's
+  key id (Home Assistant storage `tab5_lvgl.panel_entities.<entry>`), so a
+  restart serves the tiles from its first configuration; another pairing
+  ignores it, and removing the entry deletes it. `"entity_search": 2` in the
+  Bridge configuration announces declarations; Bridges with level 1 search
+  only, and the panel declares nothing to them.
 
 A plain (unpaired) panel never searches; its picker shows the released
 entities.

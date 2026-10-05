@@ -2,6 +2,7 @@
 
 #include <ArduinoJson.h>
 
+#include <algorithm>
 #include <cstring>
 #include <vector>
 
@@ -12,7 +13,6 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/web/server/auth/web_admin_auth.h"
-#include "src/web/server/web_admin_utils.h"
 
 namespace entity_search {
 namespace {
@@ -22,9 +22,13 @@ constexpr uint8_t kMaxParts = 6;
 constexpr size_t kMaxQuery = 64;
 // The picker loads further pages while scrolling (entity_search.py MAX_OFFSET).
 constexpr uint32_t kMaxOffset = 5000;
-// Below command_channel's sealed body limit with the JSON around the lists.
-constexpr size_t kMaxReportBytes = 1900;
+// A declaration part stays below command_channel's sealed body limit.
+constexpr size_t kMaxPartBytes = 1800;
+constexpr size_t kMaxDeclarationParts = 8;       // entity_search.py MAX_DECLARATION_PARTS
+constexpr size_t kMaxDeclaredEntities = 300;     // entity_search.py MAX_PANEL_ENTITIES
 constexpr uint32_t kReportDelayMs = 1500;
+// Without the Bridge's acknowledgement the declaration is sent again.
+constexpr uint32_t kDeclarationRetryMs = 15000;
 
 struct Answer {
   uint32_t id = 0;
@@ -40,9 +44,12 @@ uint32_t g_next_id = 1;
 bool g_report_pending = true;
 uint32_t g_report_due_ms = 0;
 bool g_session_seen = false;
-String g_last_report;
-// "list:entity" of every entity in the last sent report.
-std::vector<String> g_reported;
+// The declaration last sent and the one the Bridge acknowledged.
+bool g_sent = false;
+uint32_t g_sent_version = 0;
+uint32_t g_sent_ms = 0;
+bool g_acked = false;
+uint32_t g_acked_version = 0;
 
 // Picker list -> tile type whose entity belongs to it.
 struct ListTile {
@@ -71,31 +78,6 @@ bool knownList(const String& list) {
   return false;
 }
 
-// The Bridge's released entities of one list, as the panel stored them.
-std::vector<String> releasedOf(const char* list) {
-  const HaBridgeConfigData& ha = haBridgeConfig.get();
-  if (!strcmp(list, "switches")) {
-    std::vector<String> ids = parseSensorList(ha.lights_text);
-    for (const String& id : parseSensorList(ha.switches_text)) ids.push_back(id);
-    return ids;
-  }
-  const String* text = !strcmp(list, "sensors")          ? &ha.sensors_text
-                       : !strcmp(list, "binary_sensors") ? &ha.binary_sensors_text
-                       : !strcmp(list, "numbers")        ? &ha.numbers_text
-                       : !strcmp(list, "selects")        ? &ha.selects_text
-                       : !strcmp(list, "datetimes")      ? &ha.datetimes_text
-                       : !strcmp(list, "weathers")       ? &ha.weathers_text
-                       : !strcmp(list, "media")          ? &ha.media_players_text
-                       : !strcmp(list, "climates")       ? &ha.climates_text
-                       : !strcmp(list, "covers")         ? &ha.covers_text
-                       : !strcmp(list, "cameras")        ? &ha.cameras_text
-                       : !strcmp(list, "locks")          ? &ha.locks_text
-                       : !strcmp(list, "alarm_panels")   ? &ha.alarm_panels_text
-                       : !strcmp(list, "fans")           ? &ha.fans_text
-                                                         : nullptr;
-  return text ? parseSensorList(*text) : std::vector<String>();
-}
-
 bool contains(const std::vector<String>& ids, const String& id) {
   for (const String& item : ids) {
     if (item.equalsIgnoreCase(id)) return true;
@@ -108,66 +90,123 @@ void publish(const char* leaf, const String& body) {
   networkManager.mqttEnqueuePublish(topic.c_str(), body.c_str(), false);
 }
 
-// {"lists":{list:[entity ids beyond the released ones]},"web_auth":bool}
-// The Bridge serves reported entities in its released lists, so an entity
-// once reported stays in the report while a tile uses it; otherwise the next
-// configuration would drop it from the report and the Bridge would remove it
-// again, over and over. `keys` receives "list:entity" of what is reported.
-String buildTilesReport(std::vector<String>& keys) {
-  keys.clear();
-  struct Extra {
-    const char* list;
-    std::vector<String> ids;
-    std::vector<String> released;
-  };
-  std::vector<Extra> extras;
-  auto add = [&](TileType type, const char* entity) {
-    const char* list = listOfType(type);
-    if (!list || !entity || !entity[0]) return;
-    Extra* slot = nullptr;
-    for (Extra& item : extras) {
-      if (item.list == list) slot = &item;
+// Picker list of an icon color source entity (icon_sources in the Web Admin:
+// sensors, binary sensors, lights and switches, climates, covers).
+const char* listOfSource(const String& entity) {
+  if (entity.startsWith("sensor.")) return "sensors";
+  if (entity.startsWith("binary_sensor.")) return "binary_sensors";
+  if (entity.startsWith("climate.")) return "climates";
+  if (entity.startsWith("cover.")) return "covers";
+  return entity.indexOf('.') > 0 ? "switches" : nullptr;
+}
+
+struct Declared {
+  const char* list;
+  std::vector<String> ids;
+};
+
+void declare(std::vector<Declared>& lists, const char* list, const String& entity) {
+  if (!list || !entity.length()) return;
+  for (Declared& item : lists) {
+    if (item.list == list) {
+      if (!contains(item.ids, entity)) item.ids.push_back(entity);
+      return;
     }
-    if (!slot) {
-      extras.push_back({list, {}, releasedOf(list)});
-      slot = &extras.back();
-    }
-    const String id(entity);
-    const bool reported = contains(g_reported, String(list) + ':' + id);
-    if ((reported || !contains(slot->released, id)) && !contains(slot->ids, id)) slot->ids.push_back(id);
-  };
+  }
+  lists.push_back({list, {entity}});
+}
+
+// The declaration: every entity the tiles use, from the tiles alone. It never
+// reads what the Bridge serves, so the Bridge's answer to one declaration
+// cannot change the next one. Sorted, so the same tiles give the same
+// declaration and the same version.
+std::vector<Declared> collectDeclared() {
+  std::vector<Declared> lists;
   FolderEntitySlotView slots[TILES_PER_GRID];
   for (const FolderEntry& folder : tileConfig.getFolders()) {
     if (!tileConfig.getFolderEntitiesCached(folder.id, slots, TILES_PER_GRID)) continue;
-    for (size_t i = 0; i < TILES_PER_GRID; ++i) add(slots[i].type, slots[i].entity);
+    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+      declare(lists, listOfType(slots[i].type), String(slots[i].entity));
+      const String source(slots[i].rule_entity);
+      declare(lists, listOfSource(source), source);
+    }
   }
   const TileGridConfig& screensaver = screensaverConfig.tileGrid();
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    add(screensaver.tiles[i].type, screensaver.tiles[i].sensor_entity.c_str());
+    const Tile& tile = screensaver.tiles[i];
+    declare(lists, listOfType(tile.type), tile.sensor_entity);
+    const String source = tileIconSourceEntity(tile.type, tile.icon_colors);
+    declare(lists, listOfSource(source), source);
   }
+  std::sort(lists.begin(), lists.end(),
+            [](const Declared& a, const Declared& b) { return strcmp(a.list, b.list) < 0; });
+  size_t total = 0;
+  for (Declared& item : lists) {
+    std::sort(item.ids.begin(), item.ids.end());
+    if (total + item.ids.size() > kMaxDeclaredEntities) {
+      Serial.printf("[EntitySearch] %u tile entities not declared (limit %u)\n",
+                    (unsigned)(total + item.ids.size() - kMaxDeclaredEntities), (unsigned)kMaxDeclaredEntities);
+      item.ids.resize(kMaxDeclaredEntities - total);
+    }
+    total += item.ids.size();
+  }
+  return lists;
+}
 
-  JsonDocument doc;
-  JsonObject lists = doc["lists"].to<JsonObject>();
-  doc["web_auth"] = web_admin_auth::enabled();
+uint32_t fnv1a(uint32_t hash, const String& text) {
+  for (size_t i = 0; i < text.length(); ++i) {
+    hash ^= static_cast<uint8_t>(text[i]);
+    hash *= 16777619u;
+  }
+  return hash;
+}
+
+// {"v":version,"p":part,"n":parts,"lists":{list:[entity ids]},"web_auth":bool}
+// in sealed-size parts. The version is a hash of the declared lists and the
+// password claim, so an unchanged declaration keeps its version.
+std::vector<String> buildDeclaration(uint32_t& version) {
+  const std::vector<Declared> lists = collectDeclared();
+  const bool web_auth = web_admin_auth::enabled();
+  // Room for "v", "p", "n", "web_auth" and one list key with its brackets.
+  constexpr size_t kPartOverhead = 96;
+  version = fnv1a(2166136261u, web_auth ? "1" : "0");
+  std::vector<JsonDocument> parts(1);
   size_t dropped = 0;
-  for (const Extra& item : extras) {
-    if (item.ids.empty()) continue;
-    JsonArray array = lists[item.list].to<JsonArray>();
+  for (const Declared& item : lists) {
     for (const String& id : item.ids) {
-      // Keep the report one sealed message; a panel with that many extra
-      // entities keeps the first ones.
-      if (measureJson(doc) + id.length() + 4 > kMaxReportBytes) {
-        ++dropped;
+      const size_t added = strlen(item.list) + id.length() + kPartOverhead;
+      if (added > kMaxPartBytes) {
+        ++dropped;  // no Home Assistant entity id is this long
         continue;
       }
+      if (measureJson(parts.back()) + added > kMaxPartBytes) {
+        if (parts.size() == kMaxDeclarationParts) {
+          ++dropped;
+          continue;
+        }
+        parts.emplace_back();
+      }
+      JsonDocument& part = parts.back();
+      JsonArray array = part["lists"][item.list].as<JsonArray>();
+      if (array.isNull()) array = part["lists"][item.list].to<JsonArray>();
       array.add(id);
-      keys.push_back(String(item.list) + ':' + id);
+      version = fnv1a(version, String('|') + item.list + ',' + id);
     }
   }
-  if (dropped) Serial.printf("[EntitySearch] %u tile entities not reported (size limit)\n", (unsigned)dropped);
-  String body;
-  serializeJson(doc, body);
-  return body;
+  if (dropped) Serial.printf("[EntitySearch] %u tile entities not declared (size limit)\n", (unsigned)dropped);
+  std::vector<String> bodies;
+  for (size_t i = 0; i < parts.size(); ++i) {
+    JsonDocument& part = parts[i];
+    part["v"] = version;
+    part["p"] = i;
+    part["n"] = parts.size();
+    if (part["lists"].isNull()) part["lists"].to<JsonObject>();
+    part["web_auth"] = web_auth;
+    String body;
+    serializeJson(part, body);
+    bodies.push_back(body);
+  }
+  return bodies;
 }
 
 }  // namespace
@@ -176,6 +215,15 @@ bool available() {
   return command_channel::state() == command_channel::PairingState::Active &&
          haBridgeConfig.supportsEntitySearch();
 }
+
+namespace {
+
+bool declares() {
+  return command_channel::state() == command_channel::PairingState::Active &&
+         haBridgeConfig.supportsEntityDeclarations();
+}
+
+}  // namespace
 
 uint32_t start(const String& query, const String& list, uint32_t offset) {
   if (!available() || !knownList(list)) return 0;
@@ -245,24 +293,40 @@ void scheduleTilesReport() {
   g_report_due_ms = millis() + kReportDelayMs;
 }
 
+void handleDeclarationAck(const uint8_t* body, size_t length) {
+  JsonDocument doc;
+  if (deserializeJson(doc, body, length) != DeserializationError::Ok) return;
+  const uint32_t version = doc["v"] | 0u;
+  if (g_sent && version == g_sent_version) {
+    g_acked = true;
+    g_acked_version = version;
+  }
+}
+
 void service() {
   const bool ready = command_channel::sessionReady();
   if (ready && !g_session_seen) {
-    // A new session (also a restarted Bridge, which keeps the extras in
-    // memory only): report again.
-    g_last_report = "";
+    // A new session (also a restarted Bridge): declare again.
+    g_sent = false;
+    g_acked = false;
     scheduleTilesReport();
   }
   g_session_seen = ready;
-  if (!g_report_pending || !ready || !available()) return;
-  if (static_cast<int32_t>(millis() - g_report_due_ms) < 0) return;
+  if (!ready || !declares()) return;
+  const uint32_t now = millis();
+  const bool unconfirmed = g_sent && !(g_acked && g_acked_version == g_sent_version);
+  const bool retry = unconfirmed && now - g_sent_ms >= kDeclarationRetryMs;
+  const bool due = g_report_pending && static_cast<int32_t>(now - g_report_due_ms) >= 0;
+  if (!due && !retry) return;
   g_report_pending = false;
-  std::vector<String> keys;
-  const String body = buildTilesReport(keys);
-  if (body == g_last_report) return;
-  publish("tiles", body);
-  g_last_report = body;
-  g_reported.swap(keys);
+  uint32_t version = 0;
+  const std::vector<String> parts = buildDeclaration(version);
+  if (g_acked && version == g_acked_version) return;  // the Bridge has it
+  if (!retry && g_sent && version == g_sent_version) return;  // sent, waiting
+  for (const String& part : parts) publish("tiles", part);
+  g_sent = true;
+  g_sent_version = version;
+  g_sent_ms = now;
 }
 
 }  // namespace entity_search

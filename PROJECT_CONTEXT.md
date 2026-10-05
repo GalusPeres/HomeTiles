@@ -20,8 +20,8 @@ Last reviewed: 2026-10-05
 
 - Panel connects to the Bridge over TCP 8140 instead of MQTT; Bridge = broker (same topics/retained), frames sealed with pairing-K keys. Contract `docs-dev/bridge-link.md` (shared vectors).
 - Setup: Pair on panel (2 min, TXT `pair=1`) -> HA card (new or switch MQTT entry) -> `POST /api/link` (no password) -> number, no restart.
-- V2 b226 + Bridge b9 HW OK: new, switch, unpair, delete, quick Pair. Both clear MQTT leftovers; mDNS TXT in place + seq. New HA IP = new setup.
-- Entity picker (b227-b232, Bridge b10 icons/b11 search): sealed `entities`/`tiles`; all HA entities only paired + password, else released; 1st password needs panel tap (2 min). HW pending.
+- V2 b226 + Bridge b9 HW OK: new, switch, unpair, delete, quick Pair. Both clear MQTT leftovers. New HA IP = new setup.
+- Entity picker (b227-b236, Bridge b13): panel declares all tile entities (ESPHome-like, acked, kept); all HA entities only paired + password; 1st password: panel tap. Never from Bridge lists (b232-235 looped). HW pending.
 
 ## Hardware validation
 

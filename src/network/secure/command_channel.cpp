@@ -422,6 +422,8 @@ void handleData(const Header& header, const uint8_t* body, size_t length) {
     local_camera::handleCommandPayload(body, length);
   } else if (strcmp(header.name, "entities") == 0) {
     entity_search::handleAnswer(body, length);
+  } else if (strcmp(header.name, "tiles") == 0) {
+    entity_search::handleDeclarationAck(body, length);
   }
 }
 

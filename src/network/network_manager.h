@@ -345,6 +345,8 @@ private:
   // neither MQTT nor Web Admin, and on failure it is skipped silently instead of
   // blocking anything else.
   void startMdns();
+  // Loop task: sets or removes TXT pair=1 on the running advertisement.
+  void updateMdnsPairFlag();
 };
 
 // Shared instance.

@@ -2198,6 +2198,26 @@ void HomeTilesNetworkManager::startMdns() {
   logMdnsHeap("after-begin");
 }
 
+// Pair pressed, or its window ended: change the one TXT entry in place; the
+// mDNS component announces it at once, also while it still probes or
+// announces. A restart (goodbye, probe, announce) took seconds, and a second
+// change within them never reached Home Assistant (Unpair, then Pair at
+// once); each cycle also costs P4 DMA memory (see startMdns()).
+void HomeTilesNetworkManager::updateMdnsPairFlag() {
+  const esp_err_t err = pairing_advertised_
+                            ? mdns_service_txt_item_set("_hometiles", "_tcp", "pair", "1")
+                            : mdns_service_txt_item_remove("_hometiles", "_tcp", "pair");
+  if (err != ESP_OK) {
+    // startMdns() advertises the current flag on the same update.
+    Serial.printf("[mDNS] Pair flag update failed (%d); restarting the advertisement\n",
+                  static_cast<int>(err));
+    stopMdns();
+    return;
+  }
+  mdns_pair_flag_ = pairing_advertised_;
+  Serial.printf("[mDNS] Pair flag %s\n", pairing_advertised_ ? "announced" : "withdrawn");
+}
+
 // ========== Direct Bridge link ==========
 void HomeTilesNetworkManager::setLinkPairing(const uint8_t* pairing_key, const char* key_id) {
   const bool has_key = pairing_key != nullptr && key_id != nullptr && strlen(key_id) == 16;
@@ -2432,11 +2452,13 @@ void HomeTilesNetworkManager::update() {
     // fragmentation on every brief interruption.
     // A panel with a direct Bridge link needs no discovery either. Pair on
     // the panel announces it for two minutes (TXT pair=1), also with MQTT;
-    // the service restarts once when that flag changes.
+    // a running advertisement only changes that entry.
     const bool discoverable =
         pairing_advertised_ || (!configManager.hasMqttConfig() && !link_configured_);
-    if (mdns_active && (!discoverable || mdns_pair_flag_ != pairing_advertised_)) {
+    if (mdns_active && !discoverable) {
       stopMdns();
+    } else if (mdns_active && mdns_pair_flag_ != pairing_advertised_) {
+      updateMdnsPairFlag();
     }
     if (discoverable && webAdminServer.isRunning()) {
       startMdns();

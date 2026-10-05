@@ -137,6 +137,20 @@ const pairStart = channel.slice(channel.indexOf('bool startPairing() {'), channe
 assert.match(pairStart, /if \(!networkManager\.linkConfigured\(\)\) \{[\s\S]*?releaseAttempt\(\);\s*const uint32_t until = millis\(\) \+ kLinkWindowMs;/,
   'a kept, finished attempt no longer hides the pair window');
 
+// Pair changes one TXT entry of the running advertisement. A restart per change
+// (goodbye, probe, announce) lost the second of two quick changes: Unpair,
+// then Pair at once, and Home Assistant never saw pair=1.
+const mdnsLoop = slice('const bool discoverable =', 'if (discoverable && webAdminServer.isRunning()) {');
+assert.match(mdnsLoop, /if \(mdns_active && !discoverable\) \{\s*stopMdns\(\);\s*\} else if \(mdns_active && mdns_pair_flag_ != pairing_advertised_\) \{\s*updateMdnsPairFlag\(\);\s*\}/,
+  'only leaving discovery stops mDNS; the pair flag is updated in place');
+const pairFlag = slice('void HomeTilesNetworkManager::updateMdnsPairFlag() {', '// ========== Direct Bridge link ==========');
+assert.match(pairFlag, /mdns_service_txt_item_set\("_hometiles", "_tcp", "pair", "1"\)/);
+assert.match(pairFlag, /mdns_service_txt_item_remove\("_hometiles", "_tcp", "pair"\)/);
+assert.match(pairFlag, /if \(err != ESP_OK\) \{[\s\S]*?stopMdns\(\);\s*return;\s*\}\s*mdns_pair_flag_ = pairing_advertised_;/,
+  'a failed update falls back to a restart with the current flag');
+assert.match(network, /MDNS\.addService\("hometiles", "tcp", 80\);/,
+  'the Arduino wrapper registers the service as _hometiles._tcp');
+
 // Broker credentials never outlive the broker host.
 const mqttSave = web.slice(web.indexOf('void WebAdminServer::handleSaveMQTT() {'), web.indexOf('if (server.hasArg("mqtt_client_id"))'));
 assert.match(mqttSave, /copyIfNonEmpty\(cfg\.mqtt_pass, sizeof\(cfg\.mqtt_pass\), "mqtt_pass"\);\s*[\s\S]*?if \(!cfg\.mqtt_host\[0\]\) \{\s*cfg\.mqtt_user\[0\] = '\\0';\s*cfg\.mqtt_pass\[0\] = '\\0';\s*\}/,

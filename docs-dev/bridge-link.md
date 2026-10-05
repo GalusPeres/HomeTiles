@@ -26,6 +26,9 @@ changes.
    it advertises `_hometiles._tcp` over mDNS with the TXT records `link=1`
    and `pair=1`, also when it is still set up over MQTT. Firmware with link
    support always adds `link=1`; without `pair=1` the Bridge offers nothing.
+   A running advertisement only sets or removes `pair=1`, which mDNS
+   announces at once; restarting it took seconds, and a second change within
+   them (Unpair, then Pair at once) never reached Home Assistant.
 2. Home Assistant shows "Panel found" for a new panel, or "Switch to the
    direct connection" for a panel that already has an entry (over MQTT). The
    user clicks **Add** or **Submit**; no password is asked.

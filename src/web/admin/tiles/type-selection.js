@@ -149,6 +149,7 @@
     syncFolderPinControls(tab);
     syncTileSizePolicy(tab);
     syncIconDiscFields(tab);
+    placeTileEntityField(tab);
   }
 
   function syncTileSizePolicy(tab) {

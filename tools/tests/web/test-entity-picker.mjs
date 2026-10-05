@@ -126,11 +126,13 @@ const i18nKeys = ['entityPickerChoose', 'entityPickerSearch', 'entityPickerNoMat
   'entityPickerRetry', 'entityPickerClear', 'entityPickerNone'];
 const appI18n = Object.fromEntries(i18nKeys.map((key, index) => [key, de.labels[index]]));
 const page = `<!doctype html><html lang="de"><head><style>${read('src/web/assets/admin.css')}</style></head><body>
-<div class="tile-settings" style="width:420px">
-<div class="type-fields show" id="t_sensor_fields"><label for="t_sensor_entity_picker">Sensor</label><input type="hidden" id="t_sensor_entity" data-entity-picker="sensors"></div>
+<div class="tile-settings" id="tSettings" style="width:420px">
+<div class="tile-settings-head"><select id="t_tile_type"><option value="1">Sensor</option></select><div class="tile-entity-slot" id="t_tile_entity_slot"></div></div>
+<div class="tile-settings-body"><textarea id="t_tile_title"></textarea><input id="t_tile_icon"><input type="color" id="t_tile_icon_color" value="#FFFFFF" data-unset="1">
+<div class="type-fields show" id="t_sensor_fields"><label for="t_sensor_entity_picker">Sensor</label><input type="hidden" id="t_sensor_entity" data-entity-picker="sensors"><label>Einheit</label><input id="t_sensor_unit"></div>
 <div class="type-fields show" id="t_scene_fields"><label for="t_scene_alias_picker">Szene</label><input type="hidden" id="t_scene_alias" data-entity-picker="scenes"></div>
 <div id="later"></div>
-</div><pre id="result"></pre><script>
+</div></div><pre id="result"></pre><script>
 const loaded=[];const nativeListen=document.addEventListener.bind(document);
 document.addEventListener=(name,fn,...args)=>{if(name==='DOMContentLoaded')loaded.push(fn);else nativeListen(name,fn,...args);};
 const APP_I18N=${JSON.stringify(appI18n)};
@@ -154,6 +156,11 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  loaded.filter(fn=>String(fn).includes('setupEntityPickers(document)')).forEach(fn=>fn());
  const sensor=$('t_sensor_entity');const field=$('t_sensor_entity_picker');
  check(field&&field.closest('.entity-picker')===sensor.nextElementSibling,'The picker follows its input');
+ // The shown type's entity moves under Type, label first, unit stays.
+ placeTileEntityField('t');
+ const slot=$('t_tile_entity_slot');
+ check(slot.firstElementChild.tagName==='LABEL'&&slot.contains(sensor)&&slot.contains(field)&&!slot.contains($('t_sensor_unit')),'Entity under Type');
+ check($('t_sensor_fields').firstElementChild.textContent==='Einheit','The rest stays in the type fields');
  check(field.textContent.includes(${JSON.stringify(de.labels[0])}),'German placeholder: '+field.textContent);
  let changes=0;nativeListen('change',e=>{if(e.target===sensor)changes++;});
  // A value set by load code redraws the field, also before the list arrived.
@@ -182,11 +189,14 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  check(items.length===1&&items[0].querySelector('mark').textContent==='Str','Search filters and highlights');
  search.value='nichts';search.dispatchEvent(new Event('input',{bubbles:true}));
  check(pop.textContent.includes(${JSON.stringify(de.labels[2].replace('{query}', 'nichts'))}),'No match names the search: '+pop.textContent);
+ $('t_tile_title').value='Mein Titel';$('t_tile_icon').value='home';setIconColorInput('t','#FF0000');
  search.value='sensor';search.dispatchEvent(new Event('input',{bubbles:true}));
  search.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
  search.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
  check(sensor.value==='sensor.power'&&changes===1,'Arrow and Enter choose with one change event: '+sensor.value+' '+changes);
  check(!document.querySelector('.entity-picker-popover.open')&&field.textContent.includes('Strom'),'Closes and shows the choice');
+ check($('t_tile_title').value==='Strom'&&$('t_tile_icon').value===''&&$('t_tile_icon_color').dataset.unset==='1','A chosen entity brings name, icon and icon color');
+ $('t_tile_title').value='Eigener Titel';
  // Escape closes without a change, Clear empties with one.
  field.click();await tick();
  document.querySelector('.entity-picker-popover input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
@@ -195,12 +205,20 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  check(!clear.hidden&&clear.getAttribute('aria-label')===${JSON.stringify(de.labels[5])},'Clear button in German');
  clear.click();
  check(sensor.value===''&&changes===2&&field.textContent.includes(${JSON.stringify(de.labels[0])})&&clear.hidden,'Clear empties the field');
+ check($('t_tile_title').value==='Eigener Titel','Clearing keeps an edited title');
  // A click on an item chooses it; a click elsewhere closes.
  field.click();await tick();
  document.querySelector('.entity-picker-popover .entity-picker-item').click();
  check(sensor.value==='sensor.evil'&&changes===3,'A click chooses');
+ check($('t_tile_title').value.startsWith('<img'),'Another entity replaces the edited title');
+ $('t_tile_title').value='Bleibt';field.click();await tick();
+ document.querySelector('.entity-picker-popover .entity-picker-item.selected').click();
+ check($('t_tile_title').value==='Bleibt'&&changes===3,'The same entity again changes nothing');
  field.click();await tick();document.body.click();
  check(!document.querySelector('.entity-picker-popover.open'),'Outside click closes');
+ // Another type: its entity moves up, the sensor returns to its fields.
+ $('t_sensor_fields').classList.remove('show');placeTileEntityField('t');
+ check(slot.contains($('t_scene_alias'))&&$('t_sensor_fields').firstElementChild.getAttribute('for')==='t_sensor_entity_picker'&&$('t_sensor_fields').contains(field),'Type switch moves the entity');
  // Scenes keep the alias; kind and context come from the scene entity.
  const scene=$('t_scene_alias');scene.value='movie';
  const sceneField=$('t_scene_alias_picker');

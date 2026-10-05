@@ -3038,6 +3038,9 @@
    field shows the chosen entity as a row, the list opens below it (a sheet on
    phones) with a search. */
 .entity-picker { position:relative; width:100%; min-width:0; }
+/* The shown type's entity, under Type in the fixed head of the panel. */
+.tile-entity-slot { margin-top:10px; }
+.tile-entity-slot:empty { display:none; }
 input[data-entity-picker].hidden + .entity-picker { display:none; }
 .entity-picker-field {
   width:100%; min-width:0; display:flex; align-items:center; gap:10px; min-height:44px;

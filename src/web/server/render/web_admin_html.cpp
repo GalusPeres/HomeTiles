@@ -1134,7 +1134,12 @@ static void appendTileTabHTML(
   html += tab_id;
   html += R"html(_tile_type_hint">)html";
   html += tr.admin_folder_type_locked;
+  // The entity of the shown type moves here, under Type and outside the
+  // scrolling body (placeTileEntityField in tiles/entity-picker.js).
   html += R"html(</p>
+            <div class="tile-entity-slot" id=")html";
+  html += tab_id;
+  html += R"html(_tile_entity_slot"></div>
             </div>
             <div class="tile-settings-body">
 

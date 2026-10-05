@@ -2724,12 +2724,14 @@ function syncTileRadiusControls(tabEl) {
       control.className = 'entity-picker';
       input.insertAdjacentElement('afterend', control);
     }
-    // A folder tab restored from the session cache brings the markup back
-    // without listeners; the clicks are delegated, the markup is rebuilt.
-    control.innerHTML = '<button type="button" class="entity-picker-field" id="' + escapeHtml(input.id) +
-      '_picker" aria-haspopup="listbox" aria-expanded="false"></button>' +
-      '<button type="button" class="entity-picker-clear" aria-label="' + escapeHtml(t('entityPickerClear')) +
-      '" title="' + escapeHtml(t('entityPickerClear')) + '" hidden><i class="mdi mdi-close"></i></button>';
+    // Clicks are delegated, so markup restored from the session cache or
+    // moved under Type keeps working and is only redrawn.
+    if (!control.querySelector('.entity-picker-field')) {
+      control.innerHTML = '<button type="button" class="entity-picker-field" id="' + escapeHtml(input.id) +
+        '_picker" aria-haspopup="listbox" aria-expanded="false"></button>' +
+        '<button type="button" class="entity-picker-clear" aria-label="' + escapeHtml(t('entityPickerClear')) +
+        '" title="' + escapeHtml(t('entityPickerClear')) + '" hidden><i class="mdi mdi-close"></i></button>';
+    }
     if (entityPickerNativeValue && !Object.prototype.hasOwnProperty.call(input, 'value')) {
       Object.defineProperty(input, 'value', {
         configurable: true,
@@ -2754,10 +2756,49 @@ function syncTileRadiusControls(tabEl) {
     if (entityPickerOpen && entityPickerOpen.state !== 'ready') loadEntityPickerEntries();
   }
 
-  function chooseEntityPickerValue(input, value) {
+  // The tile tab of a tile's own entity field (it sits in the entity slot
+  // under Type); '' for other entity fields such as the icon color source.
+  function entityPickerTileTab(input) {
+    const slot = input?.closest?.('.tile-entity-slot');
+    return slot ? slot.id.replace(/_tile_entity_slot$/, '') : '';
+  }
+
+  // A tile takes the name, icon and icon color of every entity chosen for it;
+  // they stay editable until another entity is chosen.
+  function adoptEntityPickerEntry(tab, entry) {
+    const title = document.getElementById(tab + '_tile_title');
+    if (title) title.value = normalizeTileTitle(entry.name);
+    // An empty icon is the entity's own icon, also its state icons.
+    const icon = document.getElementById(tab + '_tile_icon');
+    if (icon) icon.value = '';
+    if (typeof setIconColorInput === 'function') setIconColorInput(tab, '');
+  }
+
+  function chooseEntityPickerValue(input, value, entry) {
     if (!input || input.value === value) return;
     input.value = value;
+    const tab = entry ? entityPickerTileTab(input) : '';
+    if (tab) adoptEntityPickerEntry(tab, entry);
     input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  // The entity of the shown tile type sits right under Type, outside the
+  // scrolling settings body, so it never needs scrolling to; it returns to
+  // the start of its own type fields when another type is shown.
+  function placeTileEntityField(tab) {
+    const slot = document.getElementById(tab + '_tile_entity_slot');
+    if (!slot) return;
+    const parts = input => [
+      document.querySelector('label[for="' + input.id + '_picker"]'), input, entityPickerControl(input)
+    ].filter(Boolean);
+    for (const input of slot.querySelectorAll('input[data-entity-picker]')) {
+      document.getElementById(input.dataset.entityHome || '')?.prepend(...parts(input));
+    }
+    const fields = document.querySelector('#' + tab + 'Settings .type-fields.show');
+    const input = fields?.querySelector(':scope > input[data-entity-picker]');
+    if (!input) return;
+    input.dataset.entityHome = fields.id;
+    slot.append(...parts(input));
   }
 
   // ---- Open list ----
@@ -2900,7 +2941,7 @@ function syncTileRadiusControls(tabEl) {
     const entry = open ? entityPickerMatches()[index] : null;
     if (!entry) return;
     closeEntityPicker(true);
-    chooseEntityPickerValue(open.input, entry.value);
+    chooseEntityPickerValue(open.input, entry.value, entry);
   }
 
   document.addEventListener('click', event => {
@@ -6788,6 +6829,7 @@ function syncTileRadiusControls(tabEl) {
     syncFolderPinControls(tab);
     syncTileSizePolicy(tab);
     syncIconDiscFields(tab);
+    placeTileEntityField(tab);
   }
 
   function syncTileSizePolicy(tab) {

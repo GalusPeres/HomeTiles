@@ -3035,7 +3035,7 @@
    phones) with a search. */
 .entity-picker { position:relative; width:100%; min-width:0; }
 /* The shown type's entity, under Type in the fixed head of the panel. */
-.tile-entity-slot { margin-top:10px; }
+.tile-entity-slot { margin-bottom:10px; }
 .tile-entity-slot:empty { display:none; }
 input[data-entity-picker].hidden + .entity-picker { display:none; }
 .entity-picker-field {
@@ -3102,12 +3102,13 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
   margin-left:auto; flex:0 0 auto; padding:4px 2px; border:0; background:none; color:var(--accent-link);
   font:inherit; font-weight:600; white-space:nowrap; cursor:pointer;
 }
-.entity-picker-more { padding:8px 10px 4px; text-align:center; font-size:12px; color:var(--text-3); }
+/* The next page of the Bridge's matches is loading. */
+.entity-picker-loading.entity-picker-more { padding:2px 0 6px; }
 @media (max-width:560px) { .entity-picker-kind { display:none; } }
 
-/* Tile head (web_admin_html.cpp): the heading with Type beside it, Title and
-   Icon side by side, then the entity. Top aligned, so a two-line title grows
-   downwards and Icon stays beside its first line. */
+/* Tile head (web_admin_html.cpp): the heading with Type beside it, the
+   entity, then Title and Icon side by side. Top aligned, so a two-line title
+   grows downwards and Icon stays beside its first line. */
 .tile-head-top { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
 .tile-head-top h3 { margin:0 !important; flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tile-settings .tile-head-top select { flex:0 0 44%; width:44%; margin:0; }

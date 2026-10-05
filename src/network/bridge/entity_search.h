@@ -15,9 +15,10 @@ namespace entity_search {
 // Paired with a Bridge that searches.
 bool available();
 
-// Sends a search for one picker list (/api/entity_options key) and returns
-// its id; 0 when not available or for an unknown list.
-uint32_t start(const String& query, const String& list);
+// Sends a search for one picker list (/api/entity_options key) from match
+// `offset` on (the picker's next page) and returns its id; 0 when not
+// available or for an unknown list.
+uint32_t start(const String& query, const String& list, uint32_t offset = 0);
 
 // The answer of `id` as {"full":bool,"more":bool,"r":[...]} once every part
 // arrived; false while pending, for an older id or after a newer search.

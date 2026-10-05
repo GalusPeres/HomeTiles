@@ -1132,11 +1132,15 @@ static void appendTileTabHTML(
   html += tab_id;
   html += R"html(_tile_type_hint">)html";
   html += tr.admin_folder_type_locked;
-  // Title and icon side by side, then the entity of the shown type
-  // (placeTileEntityField in tiles/entity-picker.js). The head stays while
-  // the body scrolls. The icon picker (tiles/tile-head.js) keeps the icon
-  // name in the hidden input: empty = the entity's icon, "none" = no icon.
+  // The entity of the shown type right under Type (placeTileEntityField in
+  // tiles/entity-picker.js), then title and icon side by side. The head
+  // stays while the body scrolls. The icon picker (tiles/tile-head.js) keeps
+  // the icon name in the hidden input: empty = the entity's icon, "none" =
+  // no icon.
   html += R"html(</p>
+            <div class="tile-entity-slot" id=")html";
+  html += tab_id;
+  html += R"html(_tile_entity_slot"></div>
             <div class="tile-head-row"><div><label for=")html";
   html += tab_id;
   html += R"html(_tile_title">)html";
@@ -1154,9 +1158,6 @@ static void appendTileTabHTML(
   html += R"html(_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_picker" aria-haspopup="listbox"></button></div></div>
-            <div class="tile-entity-slot" id=")html";
-  html += tab_id;
-  html += R"html(_tile_entity_slot"></div>
             </div>
             <div class="tile-settings-body">
 

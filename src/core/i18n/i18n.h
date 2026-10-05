@@ -764,7 +764,7 @@ struct LocaleProfile {
   // Shared Web Admin entity picker (tiles/entity-picker.js). Order: choose,
   // search, no match ({query}), load failed, try again, clear, none available,
   // released only (no Web Admin password), more matches.
-  const char* entity_picker_labels[9];
+  const char* entity_picker_labels[8];
   // Entity type shown on the right of a picker row, by Home Assistant
   // domain. Order: sensor, binary_sensor, light, switch/input_boolean, fan,
   // cover, climate, media_player, weather, camera, lock,

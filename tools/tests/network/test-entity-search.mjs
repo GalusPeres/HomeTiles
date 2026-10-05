@@ -25,12 +25,15 @@ const search = read('src/network/bridge/entity_search.cpp');
 assert.match(search, /bool available\(\) \{\s*return command_channel::state\(\) == command_channel::PairingState::Active &&\s*haBridgeConfig\.supportsEntitySearch\(\);/,
   'only paired with a Bridge that searches, never plain');
 assert.match(search, /if \(!available\(\) \|\| !knownList\(list\)\) return 0;/);
+assert.match(search, /if \(offset\) doc\["o"\] = offset;/, 'the picker\'s next page starts at its offset');
 assert.match(search, /doc\["web_auth"\] = web_admin_auth::enabled\(\);[\s\S]*publish\("entities", body\);/,
   'the search claims the password like Lock and Alarm');
 assert.match(search, /g_answer\.received != \(1u << g_answer\.parts\) - 1u/, 'an answer is complete only with every part');
 assert.match(search, /if \(!id \|\| id != g_answer\.id \|\| parts < 1 \|\| parts > kMaxParts \|\| part < 0 \|\| part >= parts\) return;/,
   'parts of older searches and invalid parts are ignored');
 assert.match(search, /constexpr uint8_t kMaxParts = 6;/);
+assert.match(search, /g_answer\.received = 0;\s*g_answer\.full = false;\s*g_answer\.more = false;/,
+  'a new search forgets the previous "more matches"');
 const reportLimit = Number(search.match(/kMaxReportBytes = (\d+)/)?.[1]);
 assert.ok(reportLimit > 0 && reportLimit < maxBody, 'the report fits one sealed message');
 assert.match(search, /if \(!contains\(slot->released, id\) && !contains\(slot->ids, id\)\) slot->ids\.push_back\(id\);/,

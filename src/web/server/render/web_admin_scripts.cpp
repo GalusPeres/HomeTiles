@@ -154,8 +154,7 @@ void appendAdminScripts(String& html) {
   const auto& loc = i18n::locale(configManager.getConfig().language);
   static const char* const kEntityPickerKeys[] = {
       "entityPickerChoose", "entityPickerSearch", "entityPickerNoMatch", "entityPickerLoadFailed",
-      "entityPickerRetry", "entityPickerClear", "entityPickerNone", "entityPickerReleased",
-      "entityPickerMore"};
+      "entityPickerRetry", "entityPickerClear", "entityPickerNone", "entityPickerReleased"};
   static_assert(sizeof(kEntityPickerKeys) / sizeof(kEntityPickerKeys[0]) ==
                     sizeof(i18n::LocaleProfile::entity_picker_labels) / sizeof(const char*),
                 "one key per entity picker label");

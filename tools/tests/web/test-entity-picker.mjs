@@ -71,14 +71,14 @@ assert.match(read('src/web/admin/tiles/editor.js'), /bindLive\(sceneInput, 'chan
 
 // ---- Translations: every language, the documented order ----
 const header = read('src/core/i18n/i18n.h');
-assert.match(header, /const char\* entity_picker_labels\[9\];/);
+assert.match(header, /const char\* entity_picker_labels\[8\];/);
 assert.match(header, /const char\* entity_kind_labels\[22\];/);
 const picker = read('src/web/admin/tiles/entity-picker.js');
 const domains = picker.slice(picker.indexOf('const ENTITY_KIND_DOMAINS = ['), picker.indexOf('];', picker.indexOf('const ENTITY_KIND_DOMAINS')));
 assert.equal((domains.match(/\[/g) || []).length - 1, 22, 'One domain group per entity_kind_labels entry');
 const scripts = read('src/web/server/render/web_admin_scripts.cpp');
 for (const key of ['entityPickerChoose', 'entityPickerSearch', 'entityPickerNoMatch', 'entityPickerLoadFailed',
-  'entityPickerRetry', 'entityPickerClear', 'entityPickerNone', 'entityPickerReleased', 'entityPickerMore']) {
+  'entityPickerRetry', 'entityPickerClear', 'entityPickerNone', 'entityPickerReleased']) {
   assert.ok(scripts.includes(`"${key}"`), key);
   assert.ok(picker.includes(`'${key}'`), `${key} is used`);
 }
@@ -112,7 +112,7 @@ const locales = {};
 for (const match of i18n.matchAll(/static const LocaleProfile kLocale(\w+) = \{/g)) {
   const [labels, kinds, icons] = lastArrays(match.index + match[0].length - 1);
   assert.equal(icons.length, 5, `${match[1]} icon picker labels`);
-  assert.equal(labels.length, 9, `${match[1]} picker labels`);
+  assert.equal(labels.length, 8, `${match[1]} picker labels`);
   assert.equal(kinds.length, 22, `${match[1]} entity kinds`);
   for (const text of [...labels, ...kinds]) assert.ok(text.trim().length, `${match[1]} has no empty label`);
   assert.ok(labels[2].includes('{query}'), `${match[1]} no-match text names the search`);
@@ -262,7 +262,7 @@ const remotePage = `<!doctype html><html lang="de"><head><style>${read('src/web/
 </div><div id="web_auth_section"></div><pre id="result"></pre><script>
 const loaded=[];const nativeListen=document.addEventListener.bind(document);
 document.addEventListener=(name,fn,...args)=>{if(name==='DOMContentLoaded')loaded.push(fn);else nativeListen(name,fn,...args);};
-const APP_I18N=${JSON.stringify(Object.assign({}, appI18n, {entityPickerReleased: de.labels[7], entityPickerMore: de.labels[8], webAuthSet: 'Passwort setzen'}))};
+const APP_I18N=${JSON.stringify(Object.assign({}, appI18n, {entityPickerReleased: de.labels[7], webAuthSet: 'Passwort setzen'}))};
 const ENTITY_KIND_LABELS=${JSON.stringify(de.kinds)};
 const CLIMATE_I18N={},BINARY_SENSOR_I18N={},GRID_COLS=7,GRID_ROWS=5,TILES_PER_GRID=35,ADMIN_WEB_SESSION_TOKEN='test';
 const TILE_TYPE_REGISTRY={0:{}};
@@ -272,14 +272,15 @@ const OPTIONS={success:true,sensors:[{v:'sensor.kitchen',t:'Temperatur Küche'}]
 const searches=[];let bridge=true;
 const ANSWERS={
   'switches|':{full:false,more:false,r:[{v:'light.desk',t:'Schreibtisch',i:'mdi:desk-lamp',a:'EG Büro',d:'Schreibtischlampe'}]},
-  'switches|desk':{full:true,more:true,r:[{v:'light.desk',t:'Schreibtisch',i:'mdi:desk-lamp',a:'EG Büro',d:'Schreibtischlampe'},{v:'light.desk_2',t:'Schreibtisch 2',a:'EG Büro'}]},
+  'switches|desk':{full:true,more:true,r:[{v:'light.desk',t:'Schreibtisch',i:'mdi:desk-lamp',a:'EG Büro',d:'Schreibtischlampe'}]},
+  'switches|desk|1':{full:true,more:false,r:[{v:'light.desk_2',t:'Schreibtisch 2 Licht',a:'EG Büro',d:'Schreibtisch 2'}]},
   'sensors|sensor.kitchen':{full:false,more:false,r:[{v:'sensor.kitchen',t:'Temperatur Küche',i:'mdi:thermometer',a:'OG Küche',d:'Heizung'}]}
 };
 let shown=false;document.getElementById('web_auth_section').scrollIntoView=()=>{shown=true;};
 window.fetch=async(url,init)=>{
   url=String(url);
   if(url==='/api/entity_search'&&init?.method==='POST'){
-    const body=new URLSearchParams(init.body);searches.push(body.get('list')+'|'+body.get('q'));
+    const body=new URLSearchParams(init.body);searches.push(body.get('list')+'|'+body.get('q')+(body.get('o')?'|'+body.get('o'):''));
     return {ok:true,json:async()=>bridge?{success:true,bridge:true,id:searches.length}:{success:true,bridge:false}};
   }
   if(url.startsWith('/api/entity_search?id=')){
@@ -305,15 +306,19 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  check(rows.length===2&&rows[0].textContent.includes('EG Büro ▸ Schreibtischlampe')&&rows[1].textContent.includes('Display'),'Bridge plus own: '+rows.map(r=>r.textContent).join(' | '));
  const foot=pop.querySelector('.entity-picker-foot');
  check(!foot.hidden&&foot.textContent.includes(${JSON.stringify(de.labels[7])}),'Without a password: the hint');
- // Typing searches the Bridge again after a pause; with the password every entity, and "more".
+ // Typing searches the Bridge again after a pause; with the password every
+ // entity, page by page while the list nears its end.
  const search=pop.querySelector('input');search.value='desk';search.dispatchEvent(new Event('input',{bubbles:true}));
  rows=[...pop.querySelectorAll('.entity-picker-item')];
  check(rows.length===0||rows.every(r=>!r.textContent.includes('Display')),'The own list filters right away');
  await wait(600);
  rows=[...pop.querySelectorAll('.entity-picker-item')];
  check(searches.filter(s=>s==='switches|desk').length===1,'One search after typing: '+searches.join());
- check(rows.length===2&&foot.hidden,'Full search, no hint');
- check(pop.querySelector('.entity-picker-more')?.textContent===${JSON.stringify(de.labels[8])},'More matches');
+ check(searches.includes('switches|desk|1'),'The next page from match 1: '+searches.join());
+ check(rows.length===2&&foot.hidden&&!pop.querySelector('.entity-picker-more'),'Full search, both pages, no hint');
+ // Like Home Assistant the list leaves out the device name in front.
+ check(rows[1].querySelector('.entity-picker-name').textContent==='Licht'&&
+   rows[1].querySelector('.entity-picker-context').textContent==='EG Büro ▸ Schreibtisch 2','Short name: '+rows[1].textContent);
  rows[1].click();
  check($('r_switch_entity').value==='light.desk_2'&&$('r_switch_entity_picker').textContent.includes('EG Büro'),'A Bridge entity is chosen with its area');
  // The hint opens the password section.

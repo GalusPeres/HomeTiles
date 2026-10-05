@@ -1277,7 +1277,8 @@ void WebAdminServer::handleGetMdiIcons() {
 // that searches: the picker keeps its own list), GET id polls the answer.
 void WebAdminServer::handleStartEntitySearch() {
   webAdminMarkActivity();
-  const uint32_t id = entity_search::start(server.arg("q"), server.arg("list"));
+  const uint32_t offset = static_cast<uint32_t>(strtoul(server.arg("o").c_str(), nullptr, 10));
+  const uint32_t id = entity_search::start(server.arg("q"), server.arg("list"), offset);
   String json = "{\"success\":true,\"bridge\":";
   json += id ? "true,\"id\":" + String(id) : String("false");
   json += "}";

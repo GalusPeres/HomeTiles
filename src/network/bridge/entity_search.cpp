@@ -20,6 +20,8 @@ namespace {
 // The Bridge answers in at most this many sealed parts (entity_search.py).
 constexpr uint8_t kMaxParts = 6;
 constexpr size_t kMaxQuery = 64;
+// The picker loads further pages while scrolling (entity_search.py MAX_OFFSET).
+constexpr uint32_t kMaxOffset = 5000;
 // Below command_channel's sealed body limit with the JSON around the lists.
 constexpr size_t kMaxReportBytes = 1900;
 constexpr uint32_t kReportDelayMs = 1500;
@@ -166,18 +168,22 @@ bool available() {
          haBridgeConfig.supportsEntitySearch();
 }
 
-uint32_t start(const String& query, const String& list) {
+uint32_t start(const String& query, const String& list, uint32_t offset) {
   if (!available() || !knownList(list)) return 0;
+  if (offset > kMaxOffset) offset = kMaxOffset;
   const uint32_t id = g_next_id++;
   if (!g_next_id) g_next_id = 1;
   g_answer.id = id;
   g_answer.parts = 0;
   g_answer.received = 0;
+  g_answer.full = false;
+  g_answer.more = false;
   for (String& part : g_answer.items) part = "";
   JsonDocument doc;
   doc["id"] = id;
   doc["q"] = query.length() > kMaxQuery ? query.substring(0, kMaxQuery) : query;
   doc["list"] = list;
+  if (offset) doc["o"] = offset;
   doc["web_auth"] = web_admin_auth::enabled();
   String body;
   serializeJson(doc, body);

@@ -22,8 +22,9 @@ for (const marker of ['<div class="tile-head-top"><h3>', '_tile_type" aria-label
   '<div class="tile-settings-body">']) {
   assert.ok(head.includes(marker), `Head markup: ${marker}`);
 }
-assert.ok(head.indexOf('tile-head-row') < head.indexOf('tile-entity-slot') &&
-  head.indexOf('tile-entity-slot') < head.indexOf('tile-settings-body'), 'Title and Icon, then the entity, then the body');
+assert.ok(head.indexOf('tile-head-top') < head.indexOf('tile-entity-slot') &&
+  head.indexOf('tile-entity-slot') < head.indexOf('tile-head-row') &&
+  head.indexOf('tile-head-row') < head.indexOf('tile-settings-body'), 'Type, the entity, then Title and Icon, then the body');
 assert.doesNotMatch(page, /pictogrammers\.com|admin_icon_label|admin_icon_list|<input type="text" id="\)html";\s*html \+= tab_id;\s*html \+= R"html\(_tile_icon"/,
   'The old icon text field and its link are gone');
 assert.match(read('src/tiles/icons/mdi_icons.cpp'), /size_t mdiIconCount\(\) \{ return ICON_COUNT; \}/);
@@ -97,8 +98,8 @@ const appI18n = {
 const html = `<!doctype html><html lang="de"><head><style>${read('src/web/assets/admin.css')}</style></head><body>
 <div class="tile-settings" id="tSettings" style="width:420px"><div class="tile-settings-head">
 <div class="tile-head-top"><h3>Kachel-Einstellungen</h3><select id="t_tile_type" aria-label="Typ"><option value="1">Sensor</option></select></div>
-<div class="tile-head-row"><div><label for="t_tile_title">Titel</label><textarea rows="1" class="tile-title-input" spellcheck="false" id="t_tile_title"></textarea></div><div><label for="t_tile_icon_picker">Icon</label><input type="hidden" id="t_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id="t_tile_icon_picker" aria-haspopup="listbox"></button></div></div>
-<div class="tile-entity-slot" id="t_tile_entity_slot"></div></div>
+<div class="tile-entity-slot" id="t_tile_entity_slot"></div>
+<div class="tile-head-row"><div><label for="t_tile_title">Titel</label><textarea rows="1" class="tile-title-input" spellcheck="false" id="t_tile_title"></textarea></div><div><label for="t_tile_icon_picker">Icon</label><input type="hidden" id="t_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id="t_tile_icon_picker" aria-haspopup="listbox"></button></div></div></div>
 <div class="tile-settings-body"><input type="color" id="t_tile_icon_color" value="#FFFFFF" data-unset="1">
 <div class="icon-color-segmented choice-row" id="t_tile_icon_color_modes"><button>Automatique</button><button>Personnalisée</button><button>De la pochette</button></div>
 <div class="icon-color-segmented choice-row" id="t_tile_color_modes"><button>Globale</button><button>Personnalisée</button><button>De l'icône</button><button>De la pochette</button></div>

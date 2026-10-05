@@ -167,9 +167,18 @@ public:
   void stopMdns();
 
   // --- Direct Bridge link (docs-dev/bridge-link.md) ---
-  // A stored Bridge address (link_config) replaces MQTT from init() on; a new
-  // address restarts the panel, so the transport never changes at runtime.
+  // A stored Bridge address (link_config) replaces MQTT. linkConfigured()
+  // follows switchToLink()/leaveLink() at once; the worker moves its client
+  // on its next pass, after the queued messages have left.
   bool linkConfigured() const { return link_configured_; }
+  // Loop task: use the direct link to this Bridge from now on, without a restart.
+  void switchToLink(const char* host, uint16_t port);
+  // Loop task: stop using the link (pairing removed); MQTT again if it is set
+  // up, otherwise nothing until Pair is pressed.
+  void leaveLink();
+  // Loop task: true once when the Bridge repeatedly refused the stored key
+  // because it no longer knows this panel (its entry was deleted).
+  bool consumeLinkForgotten();
   // Loop task: the pairing key K and its key id for session mode, or nullptr
   // after unpairing. Called by command_channel whenever the pairing changes.
   void setLinkPairing(const uint8_t* pairing_key, const char* key_id);
@@ -197,7 +206,18 @@ private:
     char key_id[17];
     bool pair_requested;
   };
-  bool link_configured_ = false;  // Fixed after init().
+  volatile bool link_configured_ = false;  // Written by the loop task only.
+  // A transport change for the worker (switchToLink/leaveLink), under link_mux_.
+  struct LinkTransportRequest {
+    bool pending;
+    bool enable;
+    char host[64];
+    uint16_t port;
+  };
+  LinkTransportRequest link_request_{};
+  // Worker: consecutive refusals with reason "unknown" in session mode.
+  uint8_t link_unknown_refusals_ = 0;
+  volatile bool link_forgotten_flag_ = false;  // Worker sets, loop consumes.
   // Loop task: Pair window open, and the pair flag of the running mDNS service.
   bool pairing_advertised_ = false;
   bool mdns_pair_flag_ = false;
@@ -213,6 +233,9 @@ private:
   bool connectLink();
   bool connectMqttBroker(const char* stat_topic);
   void finishMqttConnect(const char* stat_topic);
+  // Worker only: hands the client its socket and the message callback.
+  void installMessageCallback();
+  void applyLinkTransport(const LinkTransportRequest& request);
 
   uint32_t wifi_retry_at = 0;
   uint32_t wired_ip_wait_until = 0;

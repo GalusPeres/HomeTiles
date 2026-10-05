@@ -19,8 +19,8 @@ Last reviewed: 2026-10-05
 ## Direct Bridge link (`feature/direct-link` in both repos, unreleased)
 
 - Panel connects to the Bridge over TCP 8140 instead of MQTT; Bridge = broker (same topics/retained), frames sealed with pairing-K keys. Contract `docs-dev/bridge-link.md` (shared vectors).
-- Setup: Pair on panel (2 min, TXT `pair=1`) -> HA card (new or switch MQTT entry) -> `POST /api/link` (no password) -> restart -> number. V2 b220, Bridge 0.9.0b3.
-- V2 b219 linked OK on HW; stale MQTT retained `stat/connected` broke view/camera, fixed in b3. Next: entity rule. New HA IP = new setup.
+- Setup: Pair on panel (2 min, TXT `pair=1`) -> HA card (new or switch MQTT entry) -> `POST /api/link` (no password) -> number, no restart. V2 b222, Bridge 0.9.0b5.
+- V2 b219/b221 pairing + camera OK on HW. Unpair or deleted entry = new panel. Next: entity rule. New HA IP = new setup.
 
 ## Hardware validation
 

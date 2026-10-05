@@ -34,8 +34,11 @@ changes.
    own) and `ha_prefix`. The panel accepts it only while the two minutes
    run, which replaces the Web Admin password: whoever pressed Pair stands at
    the panel. Otherwise it answers 403. The panel stores the address, drops
-   an older pairing key, marks pairing as requested and restarts.
-4. After the restart the panel connects in pair mode, starts pairing v2
+   an older pairing key and the MQTT broker host, and switches its network
+   worker to the link without a restart. Only another base topic or prefix
+   (a name clash with another panel) restarts it, because the topics are
+   built at start.
+4. The panel connects in pair mode, starts pairing v2
    (`command-encryption.md`) and opens System > Security with the number.
    The pairing messages travel as publishes on `{base}/pair/panel` and
    `{base}/pair/bridge`; their content is unchanged.
@@ -45,9 +48,14 @@ changes.
    (`transport: link`, new key; area, names and entities stay), and the panel
    reconnects in session mode.
 
-Pairing again (after Unpair on the display) uses the stored Bridge address:
-**Pair** on the display connects in pair mode, and the Bridge shows the
-existing pairing card for that entry.
+Removing the pairing (on the display, or in Home Assistant, which sends an
+unpair) also forgets the Bridge address: without its key the link cannot
+connect. The panel leaves the link without a restart and is a new panel
+again; **Pair** sets it up as above, and an existing entry is kept. When the
+Bridge refuses the stored key three times in a row (`unknown`: the entry was
+deleted in Home Assistant), the panel does the same by itself. A single
+refusal can be the moment between pairing and the new entry, so the Bridge
+also accepts the key of a setup dialog that has just paired.
 
 Once an entry uses the link, the Bridge neither publishes nor subscribes its
 topics over MQTT any more: the broker may still hold the panel's old retained

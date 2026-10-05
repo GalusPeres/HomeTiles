@@ -61,9 +61,9 @@ void setPairingPromptCallback(void (*callback)());
 // the panel replaces the Web Admin password.
 bool linkWindowOpen();
 
-// Restarts the panel; the link forgets its Bridge when the pairing ends and
-// the panel starts again like a new one.
-void setRestartCallback(void (*callback)());
+// POST /api/link was accepted: switch to the direct link to this Bridge and
+// pair over it, without a restart.
+void acceptLinkSetup(const char* host, uint16_t port);
 
 // MQTT integration on the loop task.
 void onMqttConnected();

@@ -99,16 +99,24 @@ void (*g_pairing_prompt)() = nullptr;
 // value (0 = closed); see linkWindowOpen().
 constexpr uint32_t kLinkWindowMs = 120000;
 uint32_t g_link_window_until = 0;
-// After the pairing of a direct link ended, the panel restarts at this
-// millis() value (0 = none), once the unpair has left.
-constexpr uint32_t kLinkResetRestartMs = 2000;
-uint32_t g_restart_at = 0;
-void (*g_restart)() = nullptr;
+// Home Assistant sent its address: the link connects in pair mode, and the
+// view shows "asking" until the attempt starts (millis(), 0 = none).
+constexpr uint32_t kLinkSetupWaitMs = 60000;
+uint32_t g_link_setup_until = 0;
 
 void closeLinkWindow() {
   if (!g_link_window_until) return;
   g_link_window_until = 0;
   networkManager.setPairingAdvertised(false);
+}
+
+bool linkSetupWaiting() {
+  if (!g_link_setup_until) return false;
+  if (static_cast<int32_t>(millis() - g_link_setup_until) >= 0) {
+    g_link_setup_until = 0;
+    return false;
+  }
+  return true;
 }
 
 // Expires the window on the loop task.
@@ -368,14 +376,14 @@ bool turnOff(bool tell_bridge, bool* bridge_notified) {
   const bool notified = tell_bridge && sendUnpair();
   if (bridge_notified) *bridge_notified = notified;
   releaseState();
-  // A direct link stops after the queued unpair. Without its key the link is
-  // useless, so the panel forgets the Bridge and restarts like a new panel;
-  // Pair then sets it up again from Home Assistant.
+  // Without its key the direct link is useless: the panel forgets the Bridge
+  // and is a new panel again, without a restart; Pair sets it up again. The
+  // worker sends the queued unpair before it leaves the link.
   networkManager.setLinkPairing(nullptr, nullptr);
-  if (networkManager.linkConfigured() && link_config::clear()) {
-    const uint32_t at = millis() + kLinkResetRestartMs;
-    g_restart_at = at ? at : 1;
-    Serial.println("[SecureCmd] Direct link removed; restarting as a new panel");
+  if (networkManager.linkConfigured()) {
+    link_config::clear();
+    networkManager.leaveLink();
+    Serial.println("[SecureCmd] Direct link removed; the panel is new again");
   }
   g_clear_status = true;
   publishStatus();
@@ -693,7 +701,7 @@ bool startPairing() {
   if (!networkManager.linkConfigured()) {
     // No Bridge address yet: be discoverable for Home Assistant, which sends
     // its address when the panel is added (POST /api/link). The panel then
-    // restarts and pairs over the link (docs-dev/bridge-link.md, Setup).
+    // connects and pairs over the link (docs-dev/bridge-link.md, Setup).
     const uint32_t until = millis() + kLinkWindowMs;
     g_link_window_until = until ? until : 1;
     networkManager.setPairingAdvertised(true);
@@ -728,6 +736,7 @@ bool startPairing() {
   }
   memcpy(g_attempt->base, base.c_str(), base.length() + 1);
   g_attempt->phase = PairingPhase::Asking;
+  g_link_setup_until = 0;
   const uint32_t now = millis();
   g_attempt->started_ms = now ? now : 1;
   // A direct link connects in pair mode; the start goes out once it is up.
@@ -743,7 +752,18 @@ bool startPairing() {
 
 PairingPhase pairingPhase() {
   if (g_attempt) return g_attempt->phase;
+  // Between the Bridge address and the first pairing message.
+  if (linkSetupWaiting()) return PairingPhase::Asking;
   return linkWindowActive() ? PairingPhase::Discoverable : PairingPhase::Idle;
+}
+
+void acceptLinkSetup(const char* host, uint16_t port) {
+  closeLinkWindow();
+  const uint32_t until = millis() + kLinkSetupWaitMs;
+  g_link_setup_until = until ? until : 1;
+  networkManager.switchToLink(host, port);
+  networkManager.requestLinkPairing(true);
+  Serial.println("[SecureCmd] Bridge address accepted; pairing over the direct link");
 }
 
 bool linkWindowOpen() {
@@ -814,9 +834,6 @@ void setPairingPromptCallback(void (*callback)()) {
   g_pairing_prompt = callback;
 }
 
-void setRestartCallback(void (*callback)()) {
-  g_restart = callback;
-}
 
 void onMqttConnected() {
   begin();
@@ -846,9 +863,11 @@ void onMqttConnected() {
 }
 
 void service() {
-  if (g_restart_at && static_cast<int32_t>(millis() - g_restart_at) >= 0) {
-    g_restart_at = 0;
-    if (g_restart) g_restart();
+  // The Bridge refused the key three times: its entry was deleted in Home
+  // Assistant. Become a new panel, so Pair sets it up again.
+  if (networkManager.consumeLinkForgotten() && g_state) {
+    Serial.println("[SecureCmd] The Bridge no longer knows this panel; it is new again");
+    turnOff(false, nullptr);
   }
   linkWindowActive();
   servicePairing();

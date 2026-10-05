@@ -656,9 +656,12 @@ void WebAdminServer::handleLinkSetup() {
   }
 
   DeviceConfig cfg = configManager.getConfig();
-  // The link replaces MQTT; without a broker host the panel starts like a new
-  // one if the link is removed later.
-  if (base != cfg.mqtt_base_topic || prefix != cfg.ha_prefix || cfg.mqtt_host[0]) {
+  // The topics are built at start: only another base topic or prefix needs a
+  // restart (a name clash with another panel); otherwise the link starts now.
+  const bool topics_changed = base != cfg.mqtt_base_topic || prefix != cfg.ha_prefix;
+  // The link replaces MQTT; without a broker host the panel is a new one if
+  // the link is removed later.
+  if (topics_changed || cfg.mqtt_host[0]) {
     copyToBuffer(cfg.mqtt_base_topic, sizeof(cfg.mqtt_base_topic), base);
     copyToBuffer(cfg.ha_prefix, sizeof(cfg.ha_prefix), prefix);
     cfg.mqtt_host[0] = '\0';
@@ -680,10 +683,16 @@ void WebAdminServer::handleLinkSetup() {
     command_channel::disable(nullptr);
   }
   server.send(200, "application/json", "{\"ok\":true}");
-  Serial.printf("[Link] Bridge address %s:%ld received; restarting to pair\n", host.c_str(), port);
-  prepareDisplayForRestart();
-  delay(200);
-  BoardHAL::restart();
+  if (topics_changed) {
+    Serial.printf("[Link] Bridge address %s:%ld received; new base topic, restarting to pair\n",
+                  host.c_str(), port);
+    prepareDisplayForRestart();
+    delay(200);
+    BoardHAL::restart();
+    return;
+  }
+  Serial.printf("[Link] Bridge address %s:%ld received\n", host.c_str(), port);
+  command_channel::acceptLinkSetup(settings.host, settings.port);
 }
 
 void WebAdminServer::handleRestart() {

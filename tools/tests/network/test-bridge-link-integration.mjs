@@ -63,10 +63,14 @@ assert.ok(complete.indexOf('networkManager.setLinkPairing(g_attempt->key') < com
 const turnOff = channel.slice(channel.indexOf('bool turnOff('), channel.indexOf('void handleUnpair('));
 assert.ok(turnOff.indexOf('sendUnpair()') < turnOff.indexOf('networkManager.setLinkPairing(nullptr, nullptr)'),
   'the unpair is queued before the link loses its key');
-assert.ok(turnOff.indexOf('networkManager.setLinkPairing(nullptr, nullptr)') < turnOff.indexOf('link_config::clear()'),
-  'without its key the panel forgets the Bridge and starts again like a new panel');
-assert.match(channel, /if \(g_restart_at && static_cast<int32_t>\(millis\(\) - g_restart_at\) >= 0\) \{\s*g_restart_at = 0;\s*if \(g_restart\) g_restart\(\);/,
-  'the restart waits until the unpair has left');
+assert.ok(turnOff.indexOf('networkManager.setLinkPairing(nullptr, nullptr)') < turnOff.indexOf('link_config::clear()') &&
+  turnOff.indexOf('link_config::clear()') < turnOff.indexOf('networkManager.leaveLink()'),
+  'without its key the panel forgets the Bridge and is a new panel again');
+assert.doesNotMatch(channel, /g_restart|setRestartCallback/, 'removing the pairing does not restart the panel');
+assert.match(channel, /if \(networkManager\.consumeLinkForgotten\(\) && g_state\) \{[\s\S]{0,200}turnOff\(false, nullptr\);/,
+  'a panel the Bridge no longer knows becomes a new panel');
+assert.match(channel, /void acceptLinkSetup\(const char\* host, uint16_t port\) \{\s*closeLinkWindow\(\);[\s\S]*?networkManager\.switchToLink\(host, port\);\s*networkManager\.requestLinkPairing\(true\);/,
+  'an accepted Bridge address switches to the link without a restart');
 assert.match(channel, /void endAttempt\([^)]*\) \{[\s\S]*?linkPairingEnded\(\);\s*\}/, 'every ended attempt leaves pair mode');
 assert.match(channel, /if \(networkManager\.linkConfigured\(\)\) networkManager\.requestLinkPairing\(true\);/,
   'Pair on a linked display connects the link in pair mode');
@@ -98,9 +102,22 @@ assert.match(setup, /^\s*void WebAdminServer::handleLinkSetup\(\) \{\s*if \(!com
   'without Pair pressed on the panel nobody on the network can redirect it');
 assert.match(setup, /link_config::validHost\(host\.c_str\(\)\)/);
 assert.match(setup, /settings\.pair_requested = true;/);
-assert.ok(setup.indexOf('link_config::save(settings)') < setup.indexOf('BoardHAL::restart()'));
+assert.ok(setup.indexOf('link_config::save(settings)') < setup.indexOf('if (topics_changed) {'));
+assert.match(setup, /if \(topics_changed\) \{[\s\S]*?BoardHAL::restart\(\);\s*return;\s*\}[\s\S]*command_channel::acceptLinkSetup\(settings\.host, settings\.port\);/,
+  'only another base topic restarts; otherwise the link starts at once');
+
+const switchLink = slice('void HomeTilesNetworkManager::applyLinkTransport(', 'void HomeTilesNetworkManager::finishMqttConnect(');
+assert.ok(switchLink.indexOf('drainOutboundQueues(') < switchLink.indexOf('mqtt_client.disconnect()'),
+  'queued messages leave over the old connection before the transport changes');
+assert.match(switchLink, /mqtt_client\.useLink\(true\);\s*installMessageCallback\(\);\s*mqtt_client\.setServer\(link_host_, link_port_\);\s*mqtt_enabled = true;/);
+assert.match(network, /if \(request\.pending\) \{\s*applyLinkTransport\(request\);\s*return;\s*\}\s*\}\s*if \(!mqtt_enabled\) return;/,
+  'the transport change runs on the worker before the MQTT gate');
+const refusals = slice('bool HomeTilesNetworkManager::connectLink() {', 'void HomeTilesNetworkManager::installMessageCallback()');
+assert.match(refusals, /strcmp\(mqtt_client\.link\(\)\.refuseReason\(\), "unknown"\) == 0\) \{\s*if \(\+\+link_unknown_refusals_ >= 3\)/,
+  'only three refusals in a row count as a removed entry');
 
 const sketch = readRepoFile('HomeTiles.ino');
 assert.match(sketch, /command_channel::begin\(\);[\s\S]{0,200}command_channel::setPairingPromptCallback\(settings_show_pairing\);/);
+assert.doesNotMatch(sketch, /setRestartCallback/);
 
 console.log('Direct Bridge link wiring: PASS');

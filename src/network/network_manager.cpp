@@ -728,14 +728,7 @@ void HomeTilesNetworkManager::init() {
       mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
     }
     setMqttBufferSize(mqttNormalBufferSize(), "init");
-    mqtt_client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
-      // Receive growth happens inside readPacket, before the queue validates
-      // callback bounds. Publish its actual capacity before copying the data.
-      mqtt_buffer_size = mqtt_client.getBufferSize();
-      mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
-      if (dropRetainedLocalCameraCommand(mqtt_client, topic)) return;
-      mqttCallback(topic, payload, length);
-    });
+    installMessageCallback();
   } else {
     Serial.println("MQTT: No configuration available - skipping connection");
   }
@@ -1068,9 +1061,78 @@ bool HomeTilesNetworkManager::connectLink() {
   const bool ok = mqtt_client.link().connect(
       did, mqttTopics.deviceBase().c_str(), credentials.has_key ? credentials.key : nullptr,
       credentials.has_key ? credentials.key_id : nullptr);
-  ht_crypto::secureZero(&credentials, sizeof(credentials));
   link_pair_mode_flag = ok && mqtt_client.link().pairMode();
+  // The Bridge has no entry with this key any more (deleted in Home
+  // Assistant). After three refusals in a row the loop task starts the panel
+  // again like a new one, so Pair sets it up again. One refusal can be the
+  // moment between pairing and the new entry.
+  if (credentials.has_key && !ok && mqtt_client.link().state() == BridgeLinkClient::kRefused &&
+      strcmp(mqtt_client.link().refuseReason(), "unknown") == 0) {
+    if (++link_unknown_refusals_ >= 3) {
+      link_unknown_refusals_ = 0;
+      link_forgotten_flag_ = true;
+    }
+  } else if (ok) {
+    link_unknown_refusals_ = 0;
+  }
+  ht_crypto::secureZero(&credentials, sizeof(credentials));
   return ok;
+}
+
+// Worker only, after init(): the socket and the message callback of the
+// active client (MQTT or the link).
+void HomeTilesNetworkManager::installMessageCallback() {
+  mqtt_client.setClient(net_client);
+  mqtt_client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
+    // Receive growth happens inside readPacket, before the queue validates
+    // callback bounds. Publish its actual capacity before copying the data.
+    mqtt_buffer_size = mqtt_client.getBufferSize();
+    mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
+    if (dropRetainedLocalCameraCommand(mqtt_client, topic)) return;
+    mqttCallback(topic, payload, length);
+  });
+}
+
+// Worker only: moves the client to the link or away from it. Queued messages
+// (an unpair, a pairing abort) leave over the old connection first.
+void HomeTilesNetworkManager::applyLinkTransport(const LinkTransportRequest& request) {
+  if (mqtt_client.connected()) {
+    drainOutboundQueues(kMqttOutboundDrainNormal);
+    mqtt_client.disconnect();
+  }
+  purgeOutboundQueue();
+  failPendingStreamPublish("transport change");
+  mqtt_post_connect_pending = false;
+  mqtt_post_connect_ready_at = 0;
+  mqtt_large_until = 0;
+  mqtt_connected_flag = false;
+  link_pair_mode_flag = false;
+  link_changed_ = false;
+  link_unknown_refusals_ = 0;
+  mqtt_receive_buffer_floor = 0;
+  mqtt_retry_at = 0;
+  mqtt_connect_failures = 0;
+  if (request.enable) {
+    memcpy(link_host_, request.host, sizeof(link_host_));
+    link_host_[sizeof(link_host_) - 1] = '\0';
+    link_port_ = request.port;
+    mqtt_client.useLink(true);
+    installMessageCallback();
+    mqtt_client.setServer(link_host_, link_port_);
+    mqtt_enabled = true;
+    Serial.printf("[Link] Switched to the direct Bridge link at %s:%u\n", link_host_,
+                  static_cast<unsigned>(link_port_));
+    return;
+  }
+  mqtt_client.useLink(false);
+  mqtt_enabled = configManager.hasMqttConfig();
+  if (mqtt_enabled) {
+    const DeviceConfig& cfg = configManager.getConfig();
+    installMessageCallback();
+    mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
+  }
+  Serial.printf("[Link] Direct Bridge link removed%s\n",
+                mqtt_enabled ? "; back to MQTT" : "; waiting for Pair");
 }
 
 // Worker only: shared steps after either transport connected.
@@ -1216,21 +1278,16 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
 
     // With a direct link, MQTT settings saved in Web Admin are kept but not
     // used; the link only reconnects.
-    mqtt_enabled = link_configured_ || configManager.hasMqttConfig();
+    mqtt_enabled = mqtt_client.linkMode() || configManager.hasMqttConfig();
     if (mqtt_enabled) {
       const DeviceConfig& cfg = configManager.getConfig();
       mqtt_client.setClient(net_client);
-      if (link_configured_) {
+      if (mqtt_client.linkMode()) {
         mqtt_client.setServer(link_host_, link_port_);
       } else {
         mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
       }
-      mqtt_client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
-        mqtt_buffer_size = mqtt_client.getBufferSize();
-        mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
-        if (dropRetainedLocalCameraCommand(mqtt_client, topic)) return;
-        mqttCallback(topic, payload, length);
-      });
+      installMessageCallback();
       mqtt_retry_at = 0;  // Connect immediately on the next iteration.
       mqtt_connect_failures = 0;  // Fresh transport, fresh backoff.
       Serial.println("[MQTT] Reconfigure: new settings applied");
@@ -1241,6 +1298,21 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
   }
 
   if (mqtt_transport_recovery_requested) return;
+
+  // The panel was set up for the direct link or left it (switchToLink(),
+  // leaveLink()); handled before the gate because it changes mqtt_enabled.
+  {
+    LinkTransportRequest request;
+    portENTER_CRITICAL(&link_mux_);
+    request = link_request_;
+    link_request_.pending = false;
+    portEXIT_CRITICAL(&link_mux_);
+    if (request.pending) {
+      applyLinkTransport(request);
+      return;
+    }
+  }
+
   if (!mqtt_enabled) return;
 
   // The pairing changed (paired, unpaired, or a pairing was requested or
@@ -2127,6 +2199,34 @@ void HomeTilesNetworkManager::requestLinkPairing(bool requested) {
   // Only an unpaired panel connects in pair mode; a paired one stays as it is.
   if (changed && link_configured_ && !link_credentials_.has_key) link_changed_ = true;
   portEXIT_CRITICAL(&link_mux_);
+}
+
+void HomeTilesNetworkManager::switchToLink(const char* host, uint16_t port) {
+  if (!host || !*host || port == 0) return;
+  portENTER_CRITICAL(&link_mux_);
+  link_request_.pending = true;
+  link_request_.enable = true;
+  memset(link_request_.host, 0, sizeof(link_request_.host));
+  strncpy(link_request_.host, host, sizeof(link_request_.host) - 1);
+  link_request_.port = port;
+  portEXIT_CRITICAL(&link_mux_);
+  link_configured_ = true;
+}
+
+void HomeTilesNetworkManager::leaveLink() {
+  portENTER_CRITICAL(&link_mux_);
+  link_request_.pending = true;
+  link_request_.enable = false;
+  link_request_.port = 0;
+  link_credentials_.pair_requested = false;
+  portEXIT_CRITICAL(&link_mux_);
+  link_configured_ = false;
+}
+
+bool HomeTilesNetworkManager::consumeLinkForgotten() {
+  if (!link_forgotten_flag_) return false;
+  link_forgotten_flag_ = false;
+  return true;
 }
 
 bool HomeTilesNetworkManager::bridgeConnectionWanted() {

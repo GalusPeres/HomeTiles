@@ -139,8 +139,17 @@ console.log(result.stdout.trim());
 
 const manager=fs.readFileSync(path.join(root,'src/network/network_manager.cpp'),'utf8');
 const callbacks=manager.match(/setCallback\(\[this\][\s\S]*?\}\);/g);
-assert.equal(callbacks.length,2);
+// One shared callback (installMessageCallback) for start, reconfiguration and
+// the switch to or from the direct Bridge link.
+assert.equal(callbacks.length,1);
 for(const callback of callbacks)assert.match(callback,/mqtt_buffer_size = mqtt_client.getBufferSize\(\);[\s\S]*mqttCallback\(topic, payload, length\)/,
  'The callback queue must validate against the actual grown buffer, including reconfiguration');
+const bodyOf=(start,end)=>manager.slice(manager.indexOf(start),manager.indexOf(end,manager.indexOf(start)));
+assert.match(bodyOf('void HomeTilesNetworkManager::init() {','void HomeTilesNetworkManager::connectWifi()'),/installMessageCallback\(\);/,
+ 'Start installs the validated callback');
+assert.match(bodyOf('if (mqtt_reconfig_requested) {','if (mqtt_transport_recovery_requested) return;'),/installMessageCallback\(\);/,
+ 'Reconfiguration installs the validated callback');
+assert.equal((bodyOf('void HomeTilesNetworkManager::applyLinkTransport(','void HomeTilesNetworkManager::finishMqttConnect(').match(/installMessageCallback\(\);/g)||[]).length,2,
+ 'Both directions of the link switch install the validated callback');
 assert.match(manager,/mqtt_receive_buffer_floor > configured \? mqtt_receive_buffer_floor : configured/,
  'Buffer housekeeping must not shrink immediately after receive growth');

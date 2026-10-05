@@ -914,8 +914,6 @@ void setup() {
   // After the Bridge sent its link address, the panel pairs by itself and
   // shows the number in System > Security.
   command_channel::setPairingPromptCallback(settings_show_pairing);
-  // Removing the pairing of a direct link restarts the panel as a new one.
-  command_channel::setRestartCallback(request_system_reboot);
   Serial.flush();
 
   if (has_config) {

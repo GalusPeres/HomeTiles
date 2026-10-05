@@ -50,4 +50,8 @@ void settings_sync_display_rotation(bool rotated);
 // Update power status from the main loop.
 void settings_update_power_status();
 
+// Opens System > Security on the running pairing; used when the panel starts
+// pairing by itself after Home Assistant sent the Bridge address.
+void settings_show_pairing();
+
 #endif // TAB_SETTINGS_H

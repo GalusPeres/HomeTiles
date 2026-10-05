@@ -198,6 +198,9 @@ enum class SystemView : uint8_t { Main, Qr, Security };
 enum class SecurityStep : uint8_t { List, ConfirmPassword, ConfirmUnpair, Pairing };
 static SystemView system_view = SystemView::Main;
 static SecurityStep security_step = SecurityStep::List;
+// settings_show_pairing() opened the System popup for a pairing the panel
+// started by itself (direct Bridge link setup).
+static bool system_open_pairing_pending = false;
 // True while the status line shows an update or error message.
 static bool system_status_message = false;
 static bool system_qr_sized = false;
@@ -3481,6 +3484,25 @@ static void build_system_popup(lv_obj_t* parent) {
   if (!security_refresh_timer) {
     security_refresh_timer = lv_timer_create(on_security_refresh_timer, 500, nullptr);
   }
+  if (system_open_pairing_pending) {
+    system_open_pairing_pending = false;
+    security_step = SecurityStep::Pairing;
+    system_set_view(SystemView::Security);
+  }
+}
+
+void settings_show_pairing() {
+  if (settings_popup_overlay && settings_popup_kind == SettingsPopupKind::Firmware &&
+      system_security_btn) {
+    security_step = SecurityStep::Pairing;
+    system_set_view(SystemView::Security);
+    return;
+  }
+  if (settings_popup_overlay) close_settings_popup();
+  // The System popup builds its content after the first frame; it opens the
+  // pairing view at the end of build_system_popup().
+  system_open_pairing_pending = true;
+  open_settings_popup(SettingsPopupKind::Firmware);
 }
 
 static const char* popup_title_for_kind(SettingsPopupKind kind) {

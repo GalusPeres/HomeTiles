@@ -49,6 +49,10 @@ void endPairing();
 // pairing must then also be removed in Home Assistant.
 bool disable(bool* bridge_notified = nullptr);
 
+// Called when the panel starts pairing by itself after the Bridge sent its
+// address for the direct link (docs-dev/bridge-link.md); shows the number.
+void setPairingPromptCallback(void (*callback)());
+
 // MQTT integration on the loop task.
 void onMqttConnected();
 void service();

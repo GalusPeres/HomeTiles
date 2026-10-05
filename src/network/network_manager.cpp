@@ -1,5 +1,7 @@
 #include "src/network/network_manager.h"
 #include "src/network/secure/command_channel.h"
+#include "src/network/link/link_config.h"
+#include "src/core/security/ht_crypto.h"
 #include "src/network/transport/network_transport.h"
 #include "src/core/config/config_manager.h"
 #include "src/network/mqtt/mqtt_handlers.h"
@@ -410,7 +412,7 @@ static bool streamLogDue(uint32_t now_ms) {
 
 // Retained commands would replay a snapshot request after every reconnect.
 // The flag is only visible inside the client callback, so filter there.
-static bool dropRetainedLocalCameraCommand(PubSubClient& client,
+static bool dropRetainedLocalCameraCommand(BridgeTransportClient& client,
                                            const char* topic) {
   if (!client.lastPublishRetained() || !local_camera::isCommandTopic(topic)) {
     return false;
@@ -705,11 +707,26 @@ void HomeTilesNetworkManager::init() {
   energy_response_topic_ = base + "/energy/response";
   bridge_icons_topic_ = base + "/bridge/icons";
 
-  mqtt_enabled = configManager.hasMqttConfig();
+  // A stored Bridge address replaces MQTT (docs-dev/bridge-link.md).
+  link_configured_ = link_config::configured();
+  if (link_configured_) {
+    const link_config::Settings& link = link_config::current();
+    strncpy(link_host_, link.host, sizeof(link_host_) - 1);
+    link_port_ = link.port;
+    if (link.pair_requested) requestLinkPairing(true);
+    mqtt_client.useLink(true);
+  }
+  mqtt_enabled = link_configured_ || configManager.hasMqttConfig();
   if (mqtt_enabled) {
     // MQTT setup precedes worker startup, so direct client access is safe.
     mqtt_client.setClient(net_client);
-    mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
+    if (link_configured_) {
+      mqtt_client.setServer(link_host_, link_port_);
+      Serial.printf("[Link] Direct Bridge link to %s:%u; MQTT is not used\n",
+                    link_host_, static_cast<unsigned>(link_port_));
+    } else {
+      mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
+    }
     setMqttBufferSize(mqttNormalBufferSize(), "init");
     mqtt_client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
       // Receive growth happens inside readPacket, before the queue validates
@@ -968,6 +985,53 @@ void HomeTilesNetworkManager::connectMqtt() {
     return;
   }
 
+  const char* stat_topic = mqttTopics.topic(TopicKey::STAT_CONN);
+  if (!stat_topic || !*stat_topic) {
+    stat_topic = "tab5/stat/connected";
+  }
+
+  bool ok = false;
+  if (mqtt_client.linkMode()) {
+    if (!bridgeConnectionWanted()) {
+      // Unpaired and no pairing requested: nothing to connect to yet.
+      mqtt_retry_at = millis() + 1000UL;
+      return;
+    }
+    ok = connectLink();
+  } else {
+    ok = connectMqttBroker(stat_topic);
+  }
+
+  if (!ok) {
+    // Use exponential backoff for an unavailable broker or stuck Wi-Fi stack.
+    // Repeated blocking connects every 3 seconds consumed worker/loop time
+    // and internal RAM in the 2026-07-16 field test: continuous state=-2
+    // failures drove the heap minimum down to 33 KB.
+    if (mqtt_connect_failures < 255) ++mqtt_connect_failures;
+    const uint32_t shift =
+        mqtt_connect_failures < 5 ? mqtt_connect_failures : 5;
+    mqtt_retry_at = millis() + (3000UL << shift);  // 6s..96s
+    Serial.printf("%s: Connection failed, state=%d (retry in %lus)\n",
+                  mqtt_client.linkMode() ? "[Link]" : "MQTT",
+                  mqtt_client.state(),
+                  static_cast<unsigned long>((3000UL << shift) / 1000));
+    return;
+  }
+
+  mqtt_connect_failures = 0;
+  if (mqtt_client.linkMode()) {
+    Serial.printf("[Link] Connected to the Bridge%s\n",
+                  link_pair_mode_flag ? " in pair mode" : "");
+  } else {
+    Serial.println("✓ MQTT connected");
+  }
+  mqtt_connected_at = millis();
+  logNetworkHeap("after-MQTT-connect");
+  finishMqttConnect(stat_topic);
+}
+
+// Worker only: connects to the MQTT broker with the last will on stat_topic.
+bool HomeTilesNetworkManager::connectMqttBroker(const char* stat_topic) {
   const DeviceConfig& cfg = configManager.getConfig();
 
   char client_id[CONFIG_MQTT_CLIENT_ID_MAX];
@@ -980,40 +1044,37 @@ void HomeTilesNetworkManager::connectMqtt() {
 
   Serial.printf("MQTT: Connecting to %s:%u as %s\n", cfg.mqtt_host, cfg.mqtt_port, client_id);
 
-  const char* stat_topic = mqttTopics.topic(TopicKey::STAT_CONN);
-  if (!stat_topic || !*stat_topic) {
-    stat_topic = "tab5/stat/connected";
-  }
-
-  bool ok = false;
   if (cfg.mqtt_user && cfg.mqtt_user[0]) {
-    ok = mqtt_client.connect(client_id, cfg.mqtt_user, cfg.mqtt_pass,
-                             stat_topic, 0, true, "0");
-  } else {
-    ok = mqtt_client.connect(client_id, nullptr, nullptr,
-                             stat_topic, 0, true, "0");
+    return mqtt_client.mqtt().connect(client_id, cfg.mqtt_user, cfg.mqtt_pass,
+                                      stat_topic, 0, true, "0");
   }
+  return mqtt_client.mqtt().connect(client_id, nullptr, nullptr,
+                                    stat_topic, 0, true, "0");
+}
 
-  if (!ok) {
-    // Use exponential backoff for an unavailable broker or stuck Wi-Fi stack.
-    // Repeated blocking connects every 3 seconds consumed worker/loop time
-    // and internal RAM in the 2026-07-16 field test: continuous state=-2
-    // failures drove the heap minimum down to 33 KB.
-    if (mqtt_connect_failures < 255) ++mqtt_connect_failures;
-    const uint32_t shift =
-        mqtt_connect_failures < 5 ? mqtt_connect_failures : 5;
-    mqtt_retry_at = millis() + (3000UL << shift);  // 6s..96s
-    Serial.printf("MQTT: Connection failed, state=%d (retry in %lus)\n",
-                  mqtt_client.state(),
-                  static_cast<unsigned long>((3000UL << shift) / 1000));
-    return;
-  }
+// Worker only: connects to the Bridge in session mode with the pairing key,
+// or in pair mode while a pairing is requested (docs-dev/bridge-link.md).
+bool HomeTilesNetworkManager::connectLink() {
+  LinkCredentials credentials;
+  portENTER_CRITICAL(&link_mux_);
+  credentials = link_credentials_;
+  link_changed_ = false;
+  portEXIT_CRITICAL(&link_mux_);
+  char did[24];
+  buildDeviceId(did, sizeof(did));
+  Serial.printf("[Link] Connecting to the Bridge at %s:%u (%s)\n", link_host_,
+                static_cast<unsigned>(link_port_),
+                credentials.has_key ? "encrypted session" : "pair mode");
+  const bool ok = mqtt_client.link().connect(
+      did, mqttTopics.deviceBase().c_str(), credentials.has_key ? credentials.key : nullptr,
+      credentials.has_key ? credentials.key_id : nullptr);
+  ht_crypto::secureZero(&credentials, sizeof(credentials));
+  link_pair_mode_flag = ok && mqtt_client.link().pairMode();
+  return ok;
+}
 
-  mqtt_connect_failures = 0;
-  Serial.println("✓ MQTT connected");
-  mqtt_connected_at = millis();
-  logNetworkHeap("after-MQTT-connect");
-
+// Worker only: shared steps after either transport connected.
+void HomeTilesNetworkManager::finishMqttConnect(const char* stat_topic) {
   // Publish status and subscribe to reply topics directly. Client access
   // is safe because connectMqtt() runs only on the owning worker.
   mqtt_client.publish(stat_topic, "1", true);
@@ -1153,11 +1214,17 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
     }
     mqtt_connected_flag = false;
 
-    mqtt_enabled = configManager.hasMqttConfig();
+    // With a direct link, MQTT settings saved in Web Admin are kept but not
+    // used; the link only reconnects.
+    mqtt_enabled = link_configured_ || configManager.hasMqttConfig();
     if (mqtt_enabled) {
       const DeviceConfig& cfg = configManager.getConfig();
       mqtt_client.setClient(net_client);
-      mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
+      if (link_configured_) {
+        mqtt_client.setServer(link_host_, link_port_);
+      } else {
+        mqtt_client.setServer(cfg.mqtt_host, cfg.mqtt_port);
+      }
       mqtt_client.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
         mqtt_buffer_size = mqtt_client.getBufferSize();
         mqtt_receive_buffer_floor = mqtt_client.getReceiveBufferSize();
@@ -1175,6 +1242,27 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
 
   if (mqtt_transport_recovery_requested) return;
   if (!mqtt_enabled) return;
+
+  // The pairing changed (paired, unpaired, or a pairing was requested or
+  // ended): leave the current link session and connect again right away.
+  if (link_changed_ && mqtt_client.linkMode()) {
+    link_changed_ = false;
+    if (mqtt_client.connected()) {
+      // Send what is already queued first: an unpair or a pairing abort
+      // must still reach the Bridge over the old session.
+      drainOutboundQueues(kMqttOutboundDrainNormal);
+      mqtt_client.disconnect();
+      Serial.println("[Link] Reconnecting for the new pairing state");
+    }
+    purgeOutboundQueue();
+    mqtt_post_connect_pending = false;
+    mqtt_post_connect_ready_at = 0;
+    mqtt_connected_flag = false;
+    link_pair_mode_flag = false;
+    mqtt_retry_at = 0;
+    mqtt_connect_failures = 0;
+    return;
+  }
 
   // Process request flags even while suspended so restoreMqttBufferNormal()
   // can wake the worker after an aborted OTA.
@@ -1245,6 +1333,7 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
   serviceBufferHousekeeping(now_ms);
 
   if (!mqtt_client.connected()) {
+    link_pair_mode_flag = false;
     if (mqtt_connected_flag) {
       mqtt_connected_flag = false;
       Serial.println("[MQTT] Connection lost");
@@ -1272,6 +1361,7 @@ void HomeTilesNetworkManager::serviceMqttWorker() {
     Serial.printf("[MQTT] Connection lost in loop, state=%d\n",
                   mqtt_client.state());
     mqtt_connected_flag = false;
+    link_pair_mode_flag = false;
   }
 }
 
@@ -1994,8 +2084,49 @@ void HomeTilesNetworkManager::startMdns() {
   MDNS.addServiceTxt(svc_name, svc_proto, key_model, val_model);
   MDNS.addServiceTxt(svc_name, svc_proto, key_base_topic, val_base_topic);
   MDNS.addServiceTxt(svc_name, svc_proto, key_ha_prefix, val_ha_prefix);
+  // This firmware can be added without MQTT (docs-dev/bridge-link.md).
+  const char* key_link = "link";
+  const char* val_link = "1";
+  MDNS.addServiceTxt(svc_name, svc_proto, key_link, val_link);
   mdns_active = true;
   logMdnsHeap("after-begin");
+}
+
+// ========== Direct Bridge link ==========
+void HomeTilesNetworkManager::setLinkPairing(const uint8_t* pairing_key, const char* key_id) {
+  const bool has_key = pairing_key != nullptr && key_id != nullptr && strlen(key_id) == 16;
+  portENTER_CRITICAL(&link_mux_);
+  const bool changed =
+      link_credentials_.has_key != has_key ||
+      (has_key && memcmp(link_credentials_.key, pairing_key, sizeof(link_credentials_.key)) != 0);
+  link_credentials_.has_key = has_key;
+  if (has_key) {
+    memcpy(link_credentials_.key, pairing_key, sizeof(link_credentials_.key));
+    memcpy(link_credentials_.key_id, key_id, sizeof(link_credentials_.key_id) - 1);
+    link_credentials_.key_id[sizeof(link_credentials_.key_id) - 1] = '\0';
+  } else {
+    ht_crypto::secureZero(link_credentials_.key, sizeof(link_credentials_.key));
+    link_credentials_.key_id[0] = '\0';
+  }
+  if (changed && link_configured_) link_changed_ = true;
+  portEXIT_CRITICAL(&link_mux_);
+}
+
+void HomeTilesNetworkManager::requestLinkPairing(bool requested) {
+  portENTER_CRITICAL(&link_mux_);
+  const bool changed = link_credentials_.pair_requested != requested;
+  link_credentials_.pair_requested = requested;
+  // Only an unpaired panel connects in pair mode; a paired one stays as it is.
+  if (changed && link_configured_ && !link_credentials_.has_key) link_changed_ = true;
+  portEXIT_CRITICAL(&link_mux_);
+}
+
+bool HomeTilesNetworkManager::bridgeConnectionWanted() {
+  if (!mqtt_client.linkMode()) return true;
+  portENTER_CRITICAL(&link_mux_);
+  const bool wanted = link_credentials_.has_key || link_credentials_.pair_requested;
+  portEXIT_CRITICAL(&link_mux_);
+  return wanted;
 }
 
 void HomeTilesNetworkManager::stopMdns() {
@@ -2027,7 +2158,8 @@ void HomeTilesNetworkManager::update() {
   // timeout is evidence of an unresponsive C6.
   const bool wifi_claims_connected = networkTransport.isWifiConnected();
   if (mqtt_enabled && !mqtt_suspended && !wifi_manual_disconnect &&
-      wifi_claims_connected && !isMqttConnected() && !wifi_wedge_latched) {
+      wifi_claims_connected && !isMqttConnected() && !wifi_wedge_latched &&
+      bridgeConnectionWanted()) {
     if (wifi_mqtt_offline_since == 0) {
       wifi_mqtt_offline_since = now_ms;
       wifi_health_probe_at = now_ms + kWifiHealthProbeDelayMs;
@@ -2164,7 +2296,8 @@ void HomeTilesNetworkManager::update() {
     // mDNS serves initial pairing only. Once MQTT is configured, keep it off
     // even across broker reconnects to avoid begin/end cycles and DMA heap
     // fragmentation on every brief interruption.
-    if (configManager.hasMqttConfig()) {
+    // A panel with a direct Bridge link needs no discovery either.
+    if (configManager.hasMqttConfig() || link_configured_) {
       stopMdns();
     } else if (webAdminServer.isRunning()) {
       startMdns();

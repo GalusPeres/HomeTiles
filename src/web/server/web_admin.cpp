@@ -161,6 +161,8 @@ bool WebAdminServer::start() {
               guarded(withStorageHold([this]() { this->handleSaveBridge(); })));
     server.on("/restart", HTTP_POST,
               guarded([this]() { this->handleRestart(); }));
+    server.on("/api/link", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleLinkSetup(); })));
     server.on("/api/status", guarded([this]() { this->handleStatus(); }));
     server.on("/api/tiles", HTTP_GET,
               guarded([this]() { this->handleGetTiles(); }));

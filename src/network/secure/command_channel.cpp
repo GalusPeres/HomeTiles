@@ -9,6 +9,7 @@
 #include "src/core/security/secure_random.h"
 #include "src/core/security/x25519.h"
 #include "src/devices/device.h"
+#include "src/network/link/link_config.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
 #include "src/ui/popups/camera/camera_popup.h"
@@ -92,6 +93,8 @@ struct Attempt {
 
 State* g_state = nullptr;
 Attempt* g_attempt = nullptr;
+// Shows the pairing view when the panel pairs by itself after link setup.
+void (*g_pairing_prompt)() = nullptr;
 TaskHandle_t g_owner = nullptr;
 bool g_loaded = false;
 bool g_clear_status = false;
@@ -339,6 +342,8 @@ bool turnOff(bool tell_bridge, bool* bridge_notified) {
   const bool notified = tell_bridge && sendUnpair();
   if (bridge_notified) *bridge_notified = notified;
   releaseState();
+  // A direct link stops after the queued unpair; Pair connects it again.
+  networkManager.setLinkPairing(nullptr, nullptr);
   g_clear_status = true;
   publishStatus();
   // Replace the signed retained announcement with an unsigned one.
@@ -412,11 +417,20 @@ bool publishPair(const char* type, const char* field, const uint8_t* bytes,
 
 // Ends a running attempt with a result for the Security view. The reason, if
 // any, tells the Bridge why (it is unauthenticated and only for display).
+// The attempt ended (paired or not): a direct link leaves pair mode, and the
+// panel does not pair again by itself after its next start.
+void linkPairingEnded() {
+  if (!networkManager.linkConfigured()) return;
+  networkManager.requestLinkPairing(false);
+  link_config::setPairRequested(false);
+}
+
 void endAttempt(PairingPhase phase, const char* reason) {
   if (!g_attempt) return;
   if (reason) publishPair("abort", "r", nullptr, 0, reason);
   g_attempt->phase = phase;
   wipeAttemptSecrets();
+  linkPairingEnded();
 }
 
 void completePairing() {
@@ -429,6 +443,9 @@ void completePairing() {
     return;
   }
   deriveKeys(g_attempt->key, g_state->keys);
+  // A direct link reconnects encrypted with the new key.
+  networkManager.setLinkPairing(g_attempt->key, g_state->keys.key_id);
+  linkPairingEnded();
   g_state->pairing = PairingState::Active;
   resetSession();
   g_state->status_dirty = true;
@@ -619,6 +636,8 @@ void begin() {
   }
   ht_crypto::secureZero(&record, sizeof(record));
   deriveKeys(key, g_state->keys);
+  // The direct link needs K itself for its session keys.
+  networkManager.setLinkPairing(key, g_state->keys.key_id);
   ht_crypto::secureZero(key, sizeof(key));
   g_state->pairing = PairingState::Active;
   resetSession();
@@ -668,6 +687,8 @@ bool startPairing() {
   g_attempt->phase = PairingPhase::Asking;
   const uint32_t now = millis();
   g_attempt->started_ms = now ? now : 1;
+  // A direct link connects in pair mode; the start goes out once it is up.
+  if (networkManager.linkConfigured()) networkManager.requestLinkPairing(true);
   if (networkManager.isMqttConnected()) {
     networkManager.mqttEnqueueSubscribe(pairTopic(kPairBridgeLeaf).c_str());
     g_attempt->start_sent = publishPair("start", "pk", g_attempt->pk_p,
@@ -737,8 +758,18 @@ char* signAnnouncement(const char* topic, const char* payload, size_t length) {
   return out;
 }
 
+void setPairingPromptCallback(void (*callback)()) {
+  g_pairing_prompt = callback;
+}
+
 void onMqttConnected() {
   begin();
+  // The Bridge sent its address and the panel restarted: pair right away.
+  if (networkManager.linkPairMode() && !g_state && !attemptRunning() &&
+      link_config::current().pair_requested && startPairing()) {
+    Serial.println("[SecureCmd] Pairing with the Bridge started after link setup");
+    if (g_pairing_prompt) g_pairing_prompt();
+  }
   if (attemptRunning()) {
     networkManager.mqttEnqueueSubscribe(pairTopic(kPairBridgeLeaf).c_str());
   }

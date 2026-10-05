@@ -4,6 +4,8 @@
 #include "src/core/config/pin_access.h"
 #include "src/network/bridge/device_entities.h"
 #include "src/network/network_manager.h"
+#include "src/network/link/link_config.h"
+#include "src/network/secure/command_channel.h"
 #include "src/network/transport/network_transport.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/ui/tabs/settings/tab_settings.h"
@@ -616,6 +618,63 @@ void WebAdminServer::handleBridgeRefresh() {
 void WebAdminServer::handleStatus() {
   webAdminMarkActivity();
   sendChunkedResponse(server, 200, "application/json", getStatusJSON());
+}
+
+// A base topic or prefix the link hello can carry: printable ASCII without
+// spaces, quotes, backslashes or MQTT wildcards, no trailing slash.
+static bool linkTopicRootValid(const String& value, size_t max_length) {
+  if (value.isEmpty() || value.length() >= max_length || value.endsWith("/")) return false;
+  for (size_t i = 0; i < value.length(); ++i) {
+    const char c = value[i];
+    if (c <= 0x20 || c > 0x7E || c == '"' || c == '\\' || c == '+' || c == '#') return false;
+  }
+  return true;
+}
+
+// The HomeTiles Bridge sends its address while the panel is added in Home
+// Assistant. The panel stores it, drops an older pairing, restarts and then
+// pairs over the link; MQTT is no longer used.
+void WebAdminServer::handleLinkSetup() {
+  String host = server.arg("host");
+  host.trim();
+  const long port = server.arg("port").toInt();
+  String base = server.arg("base");
+  base.trim();
+  String prefix = server.arg("ha_prefix");
+  prefix.trim();
+  if (!configManager.isConfigured() || !link_config::validHost(host.c_str()) || port < 1 ||
+      port > 65535 || !linkTopicRootValid(base, CONFIG_MQTT_BASE_MAX) ||
+      !linkTopicRootValid(prefix, CONFIG_HA_PREFIX_MAX)) {
+    sendJsonError(server, 400, "Invalid link settings");
+    return;
+  }
+
+  DeviceConfig cfg = configManager.getConfig();
+  if (base != cfg.mqtt_base_topic || prefix != cfg.ha_prefix) {
+    copyToBuffer(cfg.mqtt_base_topic, sizeof(cfg.mqtt_base_topic), base);
+    copyToBuffer(cfg.ha_prefix, sizeof(cfg.ha_prefix), prefix);
+    if (!configManager.save(cfg)) {
+      sendJsonError(server, 500, "Could not store the base topic");
+      return;
+    }
+  }
+  link_config::Settings settings{};
+  strncpy(settings.host, host.c_str(), sizeof(settings.host) - 1);
+  settings.port = static_cast<uint16_t>(port);
+  settings.pair_requested = true;
+  if (!link_config::save(settings)) {
+    sendJsonError(server, 500, "Could not store the link settings");
+    return;
+  }
+  // The Bridge that sent its address pairs anew; an older key is useless.
+  if (command_channel::state() == command_channel::PairingState::Active) {
+    command_channel::disable(nullptr);
+  }
+  server.send(200, "application/json", "{\"ok\":true}");
+  Serial.printf("[Link] Bridge address %s:%ld received; restarting to pair\n", host.c_str(), port);
+  prepareDisplayForRestart();
+  delay(200);
+  BoardHAL::restart();
 }
 
 void WebAdminServer::handleRestart() {

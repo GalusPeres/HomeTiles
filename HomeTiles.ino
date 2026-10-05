@@ -911,6 +911,9 @@ void setup() {
   local_camera::begin();
   // Optional encrypted Bridge commands; loads the stored pairing, if any.
   command_channel::begin();
+  // After the Bridge sent its link address, the panel pairs by itself and
+  // shows the number in System > Security.
+  command_channel::setPairingPromptCallback(settings_show_pairing);
   Serial.flush();
 
   if (has_config) {

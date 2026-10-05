@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-05
 
 ## Sources of truth
 
@@ -13,9 +13,14 @@ Last reviewed: 2026-10-02
 
 ## Firmware baseline
 
-- v0.6.12: `9605b6a`, CI `34353664113`, 15 profiles / 30 images; 102 tests pass. Guition V1/V2 PPA and Weather fixes; V2 confirmed, V1 hardware pending.
-- Stabilization: display/MQTT guards, Light coalescing, incremental Weather (`e3de63c`-`33b4e06`).
+- v0.8.0: tag `2a7790a` (2026-10-03), Bridge v0.8.0 `dc4a750`; `main` adds docs images only.
 - Guition S3 XIP/`-O2` reverted in `5279456` (risk, no measured gain); do not retry without evidence.
+
+## Direct Bridge link (`feature/direct-link` in both repos, unreleased)
+
+- Panel connects to the Bridge over TCP 8140 instead of MQTT; Bridge = broker (same topics/retained), frames sealed with pairing-K keys. Contract `docs-dev/bridge-link.md`; vectors shared with Bridge `test_link_protocol.py`.
+- Setup: mDNS TXT `link=1` -> HA card -> `POST /api/link` -> restart -> pair mode -> number in the same dialog. V2 b219; HA/HW test pending.
+- Later: move MQTT panels to the link, then the entity rule (pairing + Web Admin password = all entities). New HA IP = new setup.
 
 ## Hardware validation
 
@@ -27,14 +32,10 @@ Last reviewed: 2026-10-02
 - JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups, tall popups.
 - P4 v3 images (post_v3 301-399, v3 DSI clock): WS 10.1 (PR #48, tested v3.2), WS 7B (`_rev3`, replaces exact-v3.1, #41), JC8012 V3 = V2 code (#44); HW pending.
 
-## Issue #30
+## Issue #30 (closed by fix b6, shipped v0.6.10)
 
-Issue: https://github.com/GalusPeres/HomeTiles/issues/30
-
-- Guition V1 (`JC8012P4A1C_I_W_Y`), Foscam cameras: OTA failed, USB worked; SDIO cascade (CMD53 `0x109`/`0x107`, `rst:0xc`), also without cameras, first DCRC on 11-/14-block reads. Not fixes, do not retry: a8204 markers, 20 MHz (b3), 1-bit alone (b5), 2.9.3 rollback.
-- Version RPC `0x15e` (also on the stable 8-inch) is not the cause. SDIO pull-ups: V1 5.1 kohm, 8-inch 51 kohm, Tab5 5.1 kohm + 22 ohm; margin unproven.
-- Original `JC8012P4A1_C6.bin`/HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 needs CN5 and a 3.3 V UART.
-- Fix b6 (shipped v0.6.10): exact V1 keeps 1-bit/40 MHz and splits large RX into 512-byte CMD53 reads; reporter OK (two cameras, Web OTA).
+- Guition V1 SDIO cascade (CMD53 `0x109`/`0x107`, `rst:0xc`) on large reads; fix: exact V1 keeps 1-bit/40 MHz and splits large RX into 512-byte CMD53 reads. Not fixes, do not retry: a8204 markers, 20 MHz, 1-bit alone, 2.9.3 rollback.
+- `JC-C6-slave_v2.3.2.bin` is packet mode: never flash it alone (original C6 and HomeTiles use streaming mode).
 
 ## ESP32-P4 network history
 

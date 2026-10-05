@@ -10,6 +10,8 @@
 // through thousands of bytes with zero scheduling points. See
 // src/network/vendor/pubsubclient/PubSubClient.cpp for details.
 #include "src/network/vendor/pubsubclient/PubSubClient.h"
+// MQTT or the direct Bridge link behind the same calls (docs-dev/bridge-link.md).
+#include "src/network/link/bridge_transport_client.h"
 
 // Single source of the device_id: the full 48-bit MAC as a hex string, with no
 // prefix. Used by network_manager.cpp and mqtt_handlers.cpp so both are
@@ -164,9 +166,47 @@ public:
   // only triggered by update() on the existing connect edge.
   void stopMdns();
 
+  // --- Direct Bridge link (docs-dev/bridge-link.md) ---
+  // A stored Bridge address (link_config) replaces MQTT from init() on; a new
+  // address restarts the panel, so the transport never changes at runtime.
+  bool linkConfigured() const { return link_configured_; }
+  // Loop task: the pairing key K and its key id for session mode, or nullptr
+  // after unpairing. Called by command_channel whenever the pairing changes.
+  void setLinkPairing(const uint8_t* pairing_key, const char* key_id);
+  // Loop task: connect in pair mode while no key exists (Pair on the display,
+  // or the first start after the Bridge sent its address).
+  void requestLinkPairing(bool requested);
+  // True while connected to the Bridge in pair mode: only the pairing topics
+  // travel, and the post-connect setup is skipped.
+  bool linkPairMode() const { return link_pair_mode_flag; }
+
 private:
   NetworkClient net_client;
-  PubSubClient mqtt_client;  // After init(), accessed only by the worker task.
+  // MQTT or the direct link; after init(), accessed only by the worker task.
+  BridgeTransportClient mqtt_client;
+
+  // Direct link settings. link_credentials_ is written by the loop task and
+  // copied by the worker, both under link_mux_; link_changed_ asks the worker
+  // to reconnect with them.
+  struct LinkCredentials {
+    bool has_key;
+    uint8_t key[32];
+    char key_id[17];
+    bool pair_requested;
+  };
+  bool link_configured_ = false;  // Fixed after init().
+  char link_host_[64] = {};
+  uint16_t link_port_ = 0;
+  portMUX_TYPE link_mux_ = portMUX_INITIALIZER_UNLOCKED;
+  LinkCredentials link_credentials_{};
+  volatile bool link_changed_ = false;
+  volatile bool link_pair_mode_flag = false;  // Written by the worker only.
+  // A connection is worth trying: MQTT, or the link with a key or a pairing request.
+  bool bridgeConnectionWanted();
+  // Worker only: the two transports' connects and the shared steps after them.
+  bool connectLink();
+  bool connectMqttBroker(const char* stat_topic);
+  void finishMqttConnect(const char* stat_topic);
 
   uint32_t wifi_retry_at = 0;
   uint32_t wired_ip_wait_until = 0;

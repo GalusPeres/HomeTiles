@@ -2753,6 +2753,12 @@ void mqttServiceDynamicSlotsReload() {
 // All resulting publishes and subscribes return through the outbound queue.
 void mqttServicePostConnect() {
   if (!networkManager.consumeMqttPostConnectPending()) return;
+  if (networkManager.linkPairMode()) {
+    // A direct link in pair mode carries the pairing topics only.
+    Serial.println("[Link] Post-connect in pair mode: pairing only");
+    command_channel::onMqttConnected();
+    return;
+  }
   Serial.println("[MQTT] Post-connect: subscriptions/discovery/settings (loop task)");
   viewNavigationConnected();
   mqttSubscribeTopics();

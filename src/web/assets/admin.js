@@ -2598,62 +2598,386 @@ function syncTileRadiusControls(tabEl) {
     if (typeof fn === 'function') return fn(...args);
   }
 
-  function rebuildEntitySelect(id, entries) {
-    const el = document.getElementById(id);
-    if (!el || !Array.isArray(entries)) return;
-    const keep = el.value || el.dataset.configuredValue || '';
-    const placeholder = el.options.length ? el.options[0].cloneNode(true) : null;
-    el.innerHTML = '';
-    if (placeholder) el.appendChild(placeholder);
-    for (const entry of entries) {
-      if (!entry || entry.v === undefined) continue;
-      const opt = document.createElement('option');
-      opt.value = entry.v;
-      opt.textContent = entry.t || entry.v;
-      el.appendChild(opt);
-    }
-    el.value = keep;
-    if (keep && el.value !== keep) {
-      // The stored entity is missing from the current bridge list, for example
-      // while the bridge is offline. Keep the selection instead of clearing it
-      // on the next autosave.
-      const opt = document.createElement('option');
-      opt.value = keep;
-      opt.textContent = keep;
-      el.appendChild(opt);
-      el.value = keep;
-    }
-    if (keep) el.dataset.configuredValue = keep;
-  }
-
   // One firmware request serves every editor. The short cache avoids repeated
   // large JSON responses while switching quickly between tiles.
   function refreshEntityOptionLists(tab) {
     return fetchEntityOptions()
-      .then(data => {
-        rebuildEntitySelect(tab + '_sensor_entity', data.sensors);
-        rebuildEntitySelect(tab + '_binary_sensor_entity', data.binary_sensors);
-        rebuildEntitySelect(tab + '_number_entity', data.numbers);
-        rebuildEntitySelect(tab + '_select_entity', data.selects);
-        rebuildEntitySelect(tab + '_datetime_entity', data.datetimes);
-
-        rebuildEntitySelect(tab + '_energy_entity', data.energy);
-        rebuildEntitySelect(tab + '_weather_entity', data.weathers);
-        rebuildEntitySelect(tab + '_switch_entity', data.switches);
-        rebuildEntitySelect(tab + '_media_entity', data.media);
-        rebuildEntitySelect(tab + '_climate_entity', data.climates);
-        rebuildEntitySelect(tab + '_cover_entity', data.covers);
-        rebuildEntitySelect(tab + '_lock_entity', data.locks);
-        rebuildEntitySelect(tab + '_alarm_entity', data.alarm_panels);
-        rebuildEntitySelect(tab + '_fan_entity', data.fans);
-        rebuildEntitySelect(tab + '_camera_entity', data.cameras);
-        rebuildEntitySelect(tab + '_scene_alias', data.scenes);
-        if (typeof iconColorSourceEntries === 'function') {
-          rebuildEntitySelect(tab + '_tile_icon_source', iconColorSourceEntries(data));
-        }
-      })
+      .then(() => refreshEntityPickers(tab))
       .catch(() => {});
   }
+  // Shared entity picker of every tile field that names a Home Assistant
+  // entity, like Home Assistant's own picker: icon, name, entity id and type,
+  // with a search. The server renders `<input type="hidden"
+  // data-entity-picker="<list>">` (appendEntityPickerField); the value stays
+  // in that input, so loading, saving, drafts, copy and import keep using the
+  // field id as before. The choices are the Bridge's released entities from
+  // /api/entity_options (fetchEntityOptions), filtered to the field's list.
+
+  // Home Assistant domains in the order of ENTITY_KIND_LABELS
+  // (LocaleProfile::entity_kind_labels).
+  const ENTITY_KIND_DOMAINS = [
+    ['sensor'], ['binary_sensor'], ['light'], ['switch', 'input_boolean'], ['fan'], ['cover'],
+    ['climate'], ['media_player'], ['weather'], ['camera'], ['lock'], ['alarm_control_panel'],
+    ['number', 'input_number'], ['select', 'input_select'],
+    ['datetime', 'date', 'time', 'input_datetime'], ['scene'], ['script'], ['button', 'input_button'],
+    ['automation'], ['humidifier'], ['siren'], ['remote']
+  ];
+  const ENTITY_PICKER_FALLBACK_ICON = 'shape-outline';
+  const entityPickerNativeValue = typeof HTMLInputElement === 'function'
+    ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value') : null;
+  let entityPickerPopover = null;
+  let entityPickerOpen = null;  // {input, entries, query, active, state}
+
+  function entityKindLabel(entityId) {
+    const domain = String(entityId || '').split('.')[0];
+    const index = ENTITY_KIND_DOMAINS.findIndex(domains => domains.includes(domain));
+    return index >= 0 && typeof ENTITY_KIND_LABELS !== 'undefined' ? ENTITY_KIND_LABELS[index] || '' : '';
+  }
+
+  // The entries of one list key, as {value, name, icon, entity}.
+  function entityPickerEntries(data, list) {
+    const raw = list === 'icon_sources' && typeof iconColorSourceEntries === 'function'
+      ? iconColorSourceEntries(data) : (data && data[list]);
+    const seen = new Set();
+    const entries = [];
+    for (const entry of Array.isArray(raw) ? raw : []) {
+      const value = String(entry?.v ?? '');
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      entries.push({
+        value,
+        name: String(entry.t || '') || titleFromEntity(value) || value,
+        icon: normalizeMdiIconName(entry.i || ''),
+        entity: String(entry.e || value)
+      });
+    }
+    return entries.sort((a, b) =>
+      a.name.localeCompare(b.name, APP_LOCALE, { sensitivity: 'base' }) || a.value.localeCompare(b.value));
+  }
+
+  // What the field shows for its value, also when the value is no longer in
+  // the released list (it is kept, never cleared).
+  function entityPickerEntryFor(input, value) {
+    if (!value) return null;
+    const list = input?.dataset?.entityPicker || '';
+    const known = entityOptionsCache ? entityPickerEntries(entityOptionsCache, list).find(entry => entry.value === value) : null;
+    if (known) return known;
+    const entity = list === 'scenes' ? (sensorMetaCache.sceneEntities?.[value] || value) : value;
+    return {
+      value,
+      name: sensorMetaCache.names?.[entity] || titleFromEntity(value) || value,
+      icon: normalizeMdiIconName(sensorMetaCache.icons?.[entity] || ''),
+      entity
+    };
+  }
+
+  // The chosen entity's name for an automatic tile title ('' without one).
+  function entityPickerName(input) {
+    const entry = entityPickerEntryFor(input, input?.value || '');
+    return entry ? entry.name : '';
+  }
+
+  function entityPickerRowHtml(entry, query) {
+    const mark = text => {
+      const plain = String(text || '');
+      const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+      const lower = plain.toLowerCase();
+      const word = words.find(candidate => lower.includes(candidate));
+      if (!word) return escapeHtml(plain);
+      const at = lower.indexOf(word);
+      return escapeHtml(plain.slice(0, at)) + '<mark>' + escapeHtml(plain.slice(at, at + word.length)) + '</mark>' +
+        escapeHtml(plain.slice(at + word.length));
+    };
+    return '<span class="entity-picker-icon"><i class="mdi mdi-' +
+      escapeHtml(entry.icon || ENTITY_PICKER_FALLBACK_ICON) + '"></i></span>' +
+      '<span class="entity-picker-text"><span class="entity-picker-name">' + mark(entry.name) + '</span>' +
+      '<span class="entity-picker-context">' + mark(entry.entity) + '</span></span>';
+  }
+
+  function entityPickerControl(input) {
+    const next = input?.nextElementSibling;
+    return next && next.classList.contains('entity-picker') ? next : null;
+  }
+
+  // Draws the closed field of one input from its current value.
+  function renderEntityPicker(input) {
+    const control = entityPickerControl(input);
+    if (!control) return;
+    const field = control.querySelector('.entity-picker-field');
+    const clear = control.querySelector('.entity-picker-clear');
+    const entry = entityPickerEntryFor(input, input.value);
+    if (field) {
+      field.innerHTML = (entry ? entityPickerRowHtml(entry, '')
+        : '<span class="entity-picker-placeholder">' + escapeHtml(t('entityPickerChoose')) + '</span>') +
+        '<i class="mdi mdi-chevron-down entity-picker-chevron"></i>';
+    }
+    if (clear) clear.hidden = !entry;
+  }
+
+  // Adds the visible field after a hidden entity input (once per element) and
+  // keeps it in step with every later `input.value = ...`.
+  function attachEntityPicker(input) {
+    if (!input || !input.id) return;
+    let control = entityPickerControl(input);
+    if (!control) {
+      control = document.createElement('div');
+      control.className = 'entity-picker';
+      input.insertAdjacentElement('afterend', control);
+    }
+    // A folder tab restored from the session cache brings the markup back
+    // without listeners; the clicks are delegated, the markup is rebuilt.
+    control.innerHTML = '<button type="button" class="entity-picker-field" id="' + escapeHtml(input.id) +
+      '_picker" aria-haspopup="listbox" aria-expanded="false"></button>' +
+      '<button type="button" class="entity-picker-clear" aria-label="' + escapeHtml(t('entityPickerClear')) +
+      '" title="' + escapeHtml(t('entityPickerClear')) + '" hidden><i class="mdi mdi-close"></i></button>';
+    if (entityPickerNativeValue && !Object.prototype.hasOwnProperty.call(input, 'value')) {
+      Object.defineProperty(input, 'value', {
+        configurable: true,
+        get() { return entityPickerNativeValue.get.call(this); },
+        set(value) {
+          entityPickerNativeValue.set.call(this, value);
+          renderEntityPicker(this);
+        }
+      });
+    }
+    renderEntityPicker(input);
+  }
+
+  function setupEntityPickers(root) {
+    (root || document).querySelectorAll?.('input[data-entity-picker]').forEach(attachEntityPicker);
+  }
+
+  // Redraws the fields of one tile tab (or all) once fresh names arrived.
+  function refreshEntityPickers(tab) {
+    const selector = tab ? 'input[data-entity-picker][id^="' + tab + '_"]' : 'input[data-entity-picker]';
+    document.querySelectorAll(selector).forEach(renderEntityPicker);
+    if (entityPickerOpen && entityPickerOpen.state !== 'ready') loadEntityPickerEntries();
+  }
+
+  function chooseEntityPickerValue(input, value) {
+    if (!input || input.value === value) return;
+    input.value = value;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  // ---- Open list ----
+
+  function entityPickerMatches() {
+    const open = entityPickerOpen;
+    const words = open.query.toLowerCase().split(/\s+/).filter(Boolean);
+    return open.entries.filter(entry => {
+      const text = (entry.name + ' ' + entry.value + ' ' + entry.entity).toLowerCase();
+      return words.every(word => text.includes(word));
+    });
+  }
+
+  function renderEntityPickerList() {
+    const open = entityPickerOpen;
+    const list = entityPickerPopover?.querySelector('.entity-picker-list');
+    if (!open || !list) return;
+    if (open.state === 'loading') {
+      list.innerHTML = '<div class="entity-picker-loading"><div></div><div></div><div></div></div>';
+      return;
+    }
+    if (open.state === 'failed') {
+      list.innerHTML = '<div class="entity-picker-state"><i class="mdi mdi-lan-disconnect"></i>' +
+        escapeHtml(t('entityPickerLoadFailed')) +
+        '<button type="button" class="btn entity-picker-retry">' + escapeHtml(t('entityPickerRetry')) + '</button></div>';
+      return;
+    }
+    const matches = entityPickerMatches();
+    open.active = Math.max(0, Math.min(open.active, matches.length - 1));
+    if (!matches.length) {
+      list.innerHTML = '<div class="entity-picker-state">' + escapeHtml(open.query
+        ? tf('entityPickerNoMatch', { query: open.query }) : t('entityPickerNone')) + '</div>';
+      return;
+    }
+    const current = open.input.value;
+    list.innerHTML = matches.map((entry, index) => {
+      const kind = entityKindLabel(entry.entity);
+      return '<div class="entity-picker-item' + (index === open.active ? ' active' : '') +
+        (entry.value === current ? ' selected' : '') + '" role="option" aria-selected="' +
+        (entry.value === current ? 'true' : 'false') + '" data-index="' + index + '">' +
+        entityPickerRowHtml(entry, open.query) +
+        (kind ? '<span class="entity-picker-kind">' + escapeHtml(kind) + '</span>' : '') + '</div>';
+    }).join('');
+    list.querySelector('.entity-picker-item.active')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function loadEntityPickerEntries(force) {
+    const open = entityPickerOpen;
+    if (!open) return;
+    const apply = data => {
+      open.entries = entityPickerEntries(data, open.input.dataset.entityPicker);
+      open.state = 'ready';
+      // Without a search the list starts at the chosen entity.
+      if (!open.query) open.active = Math.max(0, open.entries.findIndex(entry => entry.value === open.input.value));
+      renderEntityPickerList();
+    };
+    if (entityOptionsCache && !force) {
+      apply(entityOptionsCache);
+    } else {
+      open.state = 'loading';
+      renderEntityPickerList();
+    }
+    fetchEntityOptions(!!force)
+      .then(data => {
+        if (entityPickerOpen !== open) return;
+        apply(data);
+        renderEntityPicker(open.input);
+      })
+      .catch(() => {
+        if (entityPickerOpen !== open || open.state === 'ready') return;
+        open.state = 'failed';
+        renderEntityPickerList();
+      });
+  }
+
+  function placeEntityPickerPopover() {
+    const open = entityPickerOpen;
+    const field = open && entityPickerControl(open.input)?.querySelector('.entity-picker-field');
+    if (!field || !entityPickerPopover) return;
+    const pop = entityPickerPopover;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    if (viewportW <= 560) {
+      // Phones: a sheet at the bottom edge.
+      pop.classList.add('sheet');
+      pop.style.left = pop.style.top = pop.style.width = pop.style.maxHeight = '';
+      return;
+    }
+    pop.classList.remove('sheet');
+    const rect = field.getBoundingClientRect();
+    const width = Math.min(Math.max(rect.width, 340), viewportW - 16);
+    const below = viewportH - rect.bottom - 12;
+    const above = rect.top - 12;
+    const up = below < 280 && above > below;
+    const height = Math.min(440, Math.max(160, up ? above : below));
+    pop.style.width = width + 'px';
+    pop.style.left = Math.max(8, Math.min(rect.left, viewportW - width - 8)) + 'px';
+    pop.style.maxHeight = height + 'px';
+    pop.style.top = (up ? Math.max(8, rect.top - 6 - Math.min(height, pop.offsetHeight || height))
+      : rect.bottom + 6) + 'px';
+  }
+
+  function openEntityPicker(input) {
+    if (!input) return;
+    closeEntityPicker(false);
+    if (!entityPickerPopover) {
+      entityPickerPopover = document.createElement('div');
+      entityPickerPopover.className = 'entity-picker-popover';
+      entityPickerPopover.innerHTML = '<div class="entity-picker-search"><i class="mdi mdi-magnify"></i>' +
+        '<input type="search" autocomplete="off" spellcheck="false"></div>' +
+        '<div class="entity-picker-list" role="listbox"></div>';
+      document.body.appendChild(entityPickerPopover);
+    }
+    const search = entityPickerPopover.querySelector('input');
+    search.value = '';
+    search.placeholder = t('entityPickerSearch');
+    entityPickerOpen = { input, entries: [], query: '', active: 0, state: 'loading' };
+    const field = entityPickerControl(input)?.querySelector('.entity-picker-field');
+    field?.classList.add('open');
+    field?.setAttribute('aria-expanded', 'true');
+    entityPickerPopover.classList.add('open');
+    loadEntityPickerEntries(false);
+    placeEntityPickerPopover();
+    search.focus();
+  }
+
+  function closeEntityPicker(focusField) {
+    const open = entityPickerOpen;
+    if (!open) return;
+    entityPickerOpen = null;
+    entityPickerPopover?.classList.remove('open');
+    const field = entityPickerControl(open.input)?.querySelector('.entity-picker-field');
+    field?.classList.remove('open');
+    field?.setAttribute('aria-expanded', 'false');
+    if (focusField) field?.focus();
+  }
+
+  function pickEntityPickerIndex(index) {
+    const open = entityPickerOpen;
+    const entry = open ? entityPickerMatches()[index] : null;
+    if (!entry) return;
+    closeEntityPicker(true);
+    chooseEntityPickerValue(open.input, entry.value);
+  }
+
+  document.addEventListener('click', event => {
+    const target = event.target;
+    const control = target?.closest?.('.entity-picker');
+    if (control) {
+      const input = control.previousElementSibling;
+      if (target.closest('.entity-picker-clear')) {
+        closeEntityPicker(false);
+        chooseEntityPickerValue(input, '');
+        control.querySelector('.entity-picker-field')?.focus();
+      } else if (target.closest('.entity-picker-field')) {
+        if (entityPickerOpen?.input === input) closeEntityPicker(true);
+        else openEntityPicker(input);
+      }
+      return;
+    }
+    if (!entityPickerOpen) return;
+    if (!target?.closest?.('.entity-picker-popover')) {
+      closeEntityPicker(false);
+      return;
+    }
+    const item = target.closest('.entity-picker-item');
+    if (item) pickEntityPickerIndex(Number(item.dataset.index));
+    else if (target.closest('.entity-picker-retry')) loadEntityPickerEntries(true);
+  });
+
+  document.addEventListener('input', event => {
+    if (!entityPickerOpen || !event.target?.closest?.('.entity-picker-search')) return;
+    entityPickerOpen.query = event.target.value;
+    entityPickerOpen.active = 0;
+    renderEntityPickerList();
+  });
+
+  document.addEventListener('keydown', event => {
+    if (!entityPickerOpen || !event.target?.closest?.('.entity-picker-search')) return;
+    const count = entityPickerMatches().length;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!count) return;
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      entityPickerOpen.active = (entityPickerOpen.active + step + count) % count;
+      renderEntityPickerList();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      pickEntityPickerIndex(entityPickerOpen.active);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closeEntityPicker(true);
+    } else if (event.key === 'Tab') {
+      closeEntityPicker(false);
+    }
+  });
+
+  // The open list follows its field once per frame while the page scrolls or
+  // the window is resized; scrolling the list itself moves nothing.
+  const placeEntityPickerSoon = perFrame(placeEntityPickerPopover);
+  window.addEventListener('resize', perFrame(placeEntityPickerPopover));
+  document.addEventListener('scroll', event => {
+    if (entityPickerOpen && !event.target?.closest?.('.entity-picker-popover')) placeEntityPickerSoon();
+  }, true);
+
+  // Tile tabs arrive later (folder fragments, session cache): attach the
+  // fields of every inserted entity input.
+  document.addEventListener('DOMContentLoaded', () => {
+    setupEntityPickers(document);
+    if (typeof MutationObserver !== 'function') return;
+    new MutationObserver(records => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.matches?.('input[data-entity-picker]')) attachEntityPicker(node);
+          else if (node.querySelector?.('input[data-entity-picker]')) setupEntityPickers(node);
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  });
 
   // Per-tile icon disc options are common to every type with an icon, so
   // they travel with the type fields through drafts, copy/paste and saves.
@@ -3729,17 +4053,7 @@ function syncTileRadiusControls(tabEl) {
   function writeIconColorSource(tab, layer) {
     const select = iconColorEl(tab, '_tile_icon_source');
     const entity = layer && !layer.self ? layer.entity : '';
-    if (select) {
-      if (entity && !Array.from(select.options).some(option => option.value === entity)) {
-        const option = document.createElement('option');
-        option.value = entity;
-        option.textContent = entity;
-        select.appendChild(option);
-      }
-      select.value = entity;
-      if (entity) select.dataset.configuredValue = entity;
-      else delete select.dataset.configuredValue;
-    }
+    if (select) select.value = entity;
     const set = (suffix, value) => { const el = iconColorEl(tab, suffix); if (el) el.value = value; };
     // Without a stored layer the rules start at Own entity and Own rules, also
     // when the cell is still Empty and only gets its type afterwards; types
@@ -5540,18 +5854,6 @@ function syncTileRadiusControls(tabEl) {
     updateTileSettingsMaxHeight();
   }
 
-  function titleFromOption(option) {
-    if (!option) return '';
-    // The first option is the translated "No selection" placeholder.  It is
-    // not an entity name and must never become a persisted tile title.
-    if (!String(option.value || '').trim().length) return '';
-    const label = String(option.textContent || option.innerText || '').trim();
-    if (!label.length) return '';
-    const sep = label.indexOf(' - ');
-    if (sep > 0) return label.substring(0, sep).trim();
-    return label;
-  }
-
   function titleFromEntity(entity) {
     let name = String(entity || '').trim();
     if (!name.length) return '';
@@ -5568,8 +5870,8 @@ function syncTileRadiusControls(tabEl) {
     const selectEl = document.getElementById(prefix + selectSuffix);
     if (!titleInput || !selectEl) return;
     if (titleInput.value && titleInput.value.trim().length) return;
-    const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
-    let title = titleFromOption(opt);
+    if (!String(selectEl.value || '').trim()) return;
+    let title = entityPickerName(selectEl);
     if (!title.length) title = titleFromEntity(selectEl.value);
     if (title.length) titleInput.value = title;
   }
@@ -5721,8 +6023,6 @@ function syncTileRadiusControls(tabEl) {
     for (const kind of ['number', 'select', 'datetime']) {
       const select = document.getElementById(prefix + '_' + kind + '_entity');
       bindLive(select, 'change', kind + 'Entity', () => {
-        if (select.value) select.dataset.configuredValue = select.value;
-        else delete select.dataset.configuredValue;
         maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
@@ -5734,11 +6034,6 @@ function syncTileRadiusControls(tabEl) {
       });
     }
     bindLive(binarySensorSelect, 'change', 'binarySensorEntity', () => {
-      if (binarySensorSelect.value) {
-        binarySensorSelect.dataset.configuredValue = binarySensorSelect.value;
-      } else {
-        delete binarySensorSelect.dataset.configuredValue;
-      }
       maybeFillTitleFromEntity(tab, '_binary_sensor_entity');
       updateTilePreview(tab);
       updateDraft(tab);
@@ -5754,7 +6049,6 @@ function syncTileRadiusControls(tabEl) {
     bindLive(weatherPopupModeSelect, 'change', 'weatherPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(weatherColoredIconsCheck, 'change', 'weatherColoredIcons', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energySelect, 'change', 'energyEntity', () => {
-      energySelect.dataset.configuredValue = energySelect.value || '';
       maybeFillTitleFromEnergy(tab);
       updateTilePreview(tab);
       updateEnergyValuePreview(tab);
@@ -5778,7 +6072,7 @@ function syncTileRadiusControls(tabEl) {
     bindLive(gaugeYOffsetInput, 'input', 'sensorGaugeYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(valueYOffsetInput, 'input', 'sensorValueYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(graphHeightInput, 'input', 'sensorGraphHeight', () => { updateDraft(tab); scheduleAutoSave(tab); });
-    bindLive(sceneInput, 'input', 'sceneAlias', () => { maybeFillTitleFromScene(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(sceneInput, 'change', 'sceneAlias', () => { maybeFillTitleFromScene(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(textInput, 'input', 'textValue', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(textFontInput, 'change', 'textFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(navigateSelect, 'change', 'navigateTarget', () => {
@@ -5804,11 +6098,6 @@ function syncTileRadiusControls(tabEl) {
     bindLive(switchPopupModeSelect, 'change', 'switchPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(mediaSelect, 'change', 'mediaEntity', () => { maybeFillTitleFromMedia(tab); updateTilePreview(tab); updateMediaValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(climateSelect, 'change', 'climateEntity', () => {
-      if (climateSelect.value) {
-        climateSelect.dataset.configuredValue = climateSelect.value;
-      } else {
-        delete climateSelect.dataset.configuredValue;
-      }
       maybeFillTitleFromEntity(tab, '_climate_entity');
       updateTilePreview(tab);
       updateDraft(tab);
@@ -5822,11 +6111,6 @@ function syncTileRadiusControls(tabEl) {
     });
     bindLive(document.getElementById(prefix + '_cover_value_font'), 'change', 'coverValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(coverSelect, 'change', 'coverEntity', () => {
-      if (coverSelect.value) {
-        coverSelect.dataset.configuredValue = coverSelect.value;
-      } else {
-        delete coverSelect.dataset.configuredValue;
-      }
       maybeFillTitleFromEntity(tab, '_cover_entity');
       updateTilePreview(tab);
       updateDraft(tab);
@@ -5843,8 +6127,6 @@ function syncTileRadiusControls(tabEl) {
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
       bindLive(select, 'change', kind + 'Entity', () => {
-        if (select.value) select.dataset.configuredValue = select.value;
-        else delete select.dataset.configuredValue;
         maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
         updateTilePreview(tab);
         updateDraft(tab);
@@ -5856,11 +6138,6 @@ function syncTileRadiusControls(tabEl) {
       });
     }
     bindLive(cameraSelect, 'change', 'cameraEntity', () => {
-      if (cameraSelect.value) {
-        cameraSelect.dataset.configuredValue = cameraSelect.value;
-      } else {
-        delete cameraSelect.dataset.configuredValue;
-      }
       maybeFillTitleFromEntity(tab, '_camera_entity');
       updateTilePreview(tab);
       updateDraft(tab);
@@ -10735,11 +11012,8 @@ function syncTileRadiusControls(tabEl) {
   function scheduleHardwareIoEntityOptionsRefresh() {
     hardwareIoEntityRefreshTimers.forEach(timer => window.clearTimeout(timer));
     hardwareIoEntityRefreshTimers = [0, 2500, 7500].map(delay => window.setTimeout(() => {
-      fetchEntityOptions(true).then(data => {
-        tileTabs.forEach(tab => {
-          rebuildEntitySelect(tab + '_sensor_entity', data.sensors);
-          rebuildEntitySelect(tab + '_switch_entity', data.switches);
-        });
+      fetchEntityOptions(true).then(() => {
+        refreshEntityPickers();
         fetchSensorMetaCache(true);
       }).catch(() => {});
     }, delay));
@@ -11204,17 +11478,6 @@ function maybeFillTitleFromSensor(tab) {
     const entity = document.getElementById(tab + '_binary_sensor_entity');
     const configured = data.sensor_entity || data.binary_sensor_entity || '';
     if (entity) {
-      if (configured) {
-        entity.dataset.configuredValue = configured;
-        if (!Array.from(entity.options).some(option => option.value === configured)) {
-          const option = document.createElement('option');
-          option.value = configured;
-          option.textContent = configured;
-          entity.appendChild(option);
-        }
-      } else {
-        delete entity.dataset.configuredValue;
-      }
       entity.value = configured;
     }
     const font = document.getElementById(tab + '_binary_sensor_value_font');
@@ -11231,7 +11494,7 @@ function maybeFillTitleFromSensor(tab) {
     saveIconColorFields(tab, formData);
     const entityEl = document.getElementById(tab + '_binary_sensor_entity');
     const entity = entityEl
-      ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+      ? entityEl.value : '';
     formData.append('binary_sensor_entity', entity);
     formData.append('sensor_entity', entity);
     formData.append('sensor_value_font', document.getElementById(tab + '_binary_sensor_value_font')?.value || '0');
@@ -11245,10 +11508,7 @@ function maybeFillTitleFromSensor(tab) {
     const font = document.getElementById(tab + '_binary_sensor_value_font');
     if (font) font.value = '0';
     const entity = document.getElementById(tab + '_binary_sensor_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const popup = document.getElementById(
       tab + '_binary_sensor_popup_open_mode');
     if (popup) popup.value = '1';
@@ -11290,16 +11550,7 @@ function maybeFillTitleFromEnergy(tab) {
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
     if (entityEl) {
-      const configuredEntity = data.sensor_entity || data.energy_entity || '';
-      entityEl.dataset.configuredValue = configuredEntity;
-      entityEl.value = configuredEntity;
-      if (configuredEntity && entityEl.value !== configuredEntity) {
-        const opt = document.createElement('option');
-        opt.value = configuredEntity;
-        opt.textContent = configuredEntity;
-        entityEl.appendChild(opt);
-        entityEl.value = configuredEntity;
-      }
+      entityEl.value = data.sensor_entity || data.energy_entity || '';
     }
     const unitEl = document.getElementById(prefix + '_energy_unit');
     if (unitEl) unitEl.value = data.sensor_unit || '';
@@ -11318,7 +11569,7 @@ function maybeFillTitleFromEnergy(tab) {
     saveIconColorFields(tab, formData);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
-    const entity = entityEl ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+    const entity = entityEl ? entityEl.value : '';
     formData.append('energy_entity', entity);
     formData.append('sensor_entity', entity);
     formData.append('sensor_unit', document.getElementById(prefix + '_energy_unit')?.value || '');
@@ -11788,10 +12039,8 @@ function maybeFillTitleFromScene(tab) {
     if (!typeSel || !titleInput || !sceneSel) return;
     if (typeSel.value !== '2') return;
     if (titleInput.value && titleInput.value.trim().length) return;
-    const opt = sceneSel.selectedOptions && sceneSel.selectedOptions[0];
-    if (!opt) return;
-    const label = opt.textContent || opt.innerText || '';
-    const title = label.split(' - ')[0] || opt.value || '';
+    if (!sceneSel.value) return;
+    const title = entityPickerName(sceneSel) || sceneSel.value;
     if (title.trim().length) titleInput.value = title.trim();
   }
 
@@ -12718,17 +12967,6 @@ function maybeFillTitleFromSwitch(tab) {
     const entity = document.getElementById(tab + '_cover_entity');
     const configured = data.sensor_entity || data.cover_entity || '';
     if (entity) {
-      if (configured) {
-        entity.dataset.configuredValue = configured;
-        if (!Array.from(entity.options).some(option => option.value === configured)) {
-          const option = document.createElement('option');
-          option.value = configured;
-          option.textContent = configured;
-          entity.appendChild(option);
-        }
-      } else {
-        delete entity.dataset.configuredValue;
-      }
       entity.value = configured;
     }
     // State size like the Switch tile (Tile::sensor_value_font).
@@ -12756,10 +12994,7 @@ function maybeFillTitleFromSwitch(tab) {
   function resetCoverFields(tab) {
     resetIconColorFields(tab);
     const entity = document.getElementById(tab + '_cover_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const font = document.getElementById(tab + '_cover_value_font');
     if (font) font.value = '0';
     const popup = document.getElementById(tab + '_cover_popup_open_mode');
@@ -13013,17 +13248,6 @@ function maybeFillTitleFromSwitch(tab) {
     const entity = document.getElementById(tab + '_' + prefix + '_entity');
     const configured = data.sensor_entity || data[prefix + '_entity'] || '';
     if (entity) {
-      if (configured) {
-        entity.dataset.configuredValue = configured;
-        if (!Array.from(entity.options).some(option => option.value === configured)) {
-          const option = document.createElement('option');
-          option.value = configured;
-          option.textContent = configured;
-          entity.appendChild(option);
-        }
-      } else {
-        delete entity.dataset.configuredValue;
-      }
       entity.value = configured;
     }
     // State size like the Switch tile (Tile::sensor_value_font).
@@ -13049,10 +13273,7 @@ function maybeFillTitleFromSwitch(tab) {
   function resetDeviceFields(tab, prefix) {
     resetIconColorFields(tab);
     const entity = document.getElementById(tab + '_' + prefix + '_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const font = document.getElementById(tab + '_' + prefix + '_value_font');
     if (font) font.value = '0';
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');
@@ -15224,14 +15445,6 @@ function maybeFillTitleFromMedia(tab) {
           ? (data.sensor_entity || '')
           : (data.climate_entity || '');
       entity.value = configuredEntity;
-      if (configuredEntity) {
-        entity.dataset.configuredValue = configuredEntity;
-      } else {
-        // The option list is rebuilt asynchronously. Do not let a value from
-        // the previously edited climate tile come back when this tile
-        // explicitly has no entity configured.
-        delete entity.dataset.configuredValue;
-      }
     }
     const popup = document.getElementById(tab + '_climate_popup_open_mode');
     if (popup) popup.value = (data.popup_open_mode !== undefined)
@@ -15812,10 +16025,7 @@ function maybeFillTitleFromMedia(tab) {
   function resetClimateFields(tab) {
     resetIconColorFields(tab);
     const entity = document.getElementById(tab + '_climate_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const popup = document.getElementById(tab + '_climate_popup_open_mode');
     if (popup) popup.value = '1';
     const view = document.getElementById(tab + '_climate_view');
@@ -15843,17 +16053,6 @@ function loadCameraFields(tab, data) {
     const el = document.getElementById(tab + '_camera_entity');
     const configured = data.sensor_entity || data.camera_entity || '';
     if (el) {
-      if (configured) {
-        el.dataset.configuredValue = configured;
-        if (!Array.from(el.options).some(opt => opt.value === configured)) {
-          const opt = document.createElement('option');
-          opt.value = configured;
-          opt.textContent = configured;
-          el.appendChild(opt);
-        }
-      } else {
-        delete el.dataset.configuredValue;
-      }
       el.value = configured;
     }
     maybeFillTitleFromEntity(tab, '_camera_entity');
@@ -15868,10 +16067,7 @@ function loadCameraFields(tab, data) {
   function resetCameraFields(tab) {
     resetIconColorFields(tab);
     const el = document.getElementById(tab + '_camera_entity');
-    if (el) {
-      el.value = '';
-      delete el.dataset.configuredValue;
-    }
+    if (el) el.value = '';
   }
 
 function loadAnimationFields(tab, data) {
@@ -16320,17 +16516,6 @@ function normalizeTextValueFont(value) {
     const entity = document.getElementById(tab + '_number_entity');
     const configured = data.sensor_entity || data.number_entity || '';
     if (entity) {
-      if (configured) {
-        entity.dataset.configuredValue = configured;
-        if (!Array.from(entity.options).some(option => option.value === configured)) {
-          const option = document.createElement('option');
-          option.value = configured;
-          option.textContent = configured;
-          entity.appendChild(option);
-        }
-      } else {
-        delete entity.dataset.configuredValue;
-      }
       entity.value = configured;
     }
     const popup = document.getElementById(
@@ -16346,7 +16531,7 @@ function normalizeTextValueFont(value) {
     formData.append('sensor_value_font', document.getElementById(tab + '_number_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_number_entity');
     const entity = entityEl
-      ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+      ? entityEl.value : '';
     formData.append('number_entity', entity);
     formData.append('sensor_entity', entity);
     const popup = document.getElementById(
@@ -16359,10 +16544,7 @@ function normalizeTextValueFont(value) {
     const font = document.getElementById(tab + '_number_value_font');
     if (font) font.value = '2';
     const entity = document.getElementById(tab + '_number_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const popup = document.getElementById(
       tab + '_number_popup_open_mode');
     if (popup) popup.value = '1';
@@ -16375,17 +16557,6 @@ function normalizeTextValueFont(value) {
     const entity = document.getElementById(tab + '_select_entity');
     const configured = data.sensor_entity || data.select_entity || '';
     if (entity) {
-      if (configured) {
-        entity.dataset.configuredValue = configured;
-        if (!Array.from(entity.options).some(option => option.value === configured)) {
-          const option = document.createElement('option');
-          option.value = configured;
-          option.textContent = configured;
-          entity.appendChild(option);
-        }
-      } else {
-        delete entity.dataset.configuredValue;
-      }
       entity.value = configured;
     }
     const popup = document.getElementById(
@@ -16403,7 +16574,7 @@ function normalizeTextValueFont(value) {
     formData.append('sensor_value_font', document.getElementById(tab + '_select_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_select_entity');
     const entity = entityEl
-      ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+      ? entityEl.value : '';
     formData.append('select_entity', entity);
     formData.append('sensor_entity', entity);
     const popup = document.getElementById(
@@ -16416,10 +16587,7 @@ function normalizeTextValueFont(value) {
     const font = document.getElementById(tab + '_select_value_font');
     if (font) font.value = '2';
     const entity = document.getElementById(tab + '_select_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const popup = document.getElementById(
       tab + '_select_popup_open_mode');
     if (popup) popup.value = '1';
@@ -16432,17 +16600,6 @@ function normalizeTextValueFont(value) {
     const entity = document.getElementById(tab + '_datetime_entity');
     const configured = data.sensor_entity || data.datetime_entity || '';
     if (entity) {
-      if (configured) {
-        entity.dataset.configuredValue = configured;
-        if (!Array.from(entity.options).some(option => option.value === configured)) {
-          const option = document.createElement('option');
-          option.value = configured;
-          option.textContent = configured;
-          entity.appendChild(option);
-        }
-      } else {
-        delete entity.dataset.configuredValue;
-      }
       entity.value = configured;
     }
     const popup = document.getElementById(
@@ -16460,7 +16617,7 @@ function normalizeTextValueFont(value) {
     formData.append('sensor_value_font', document.getElementById(tab + '_datetime_value_font')?.value ?? '2');
     const entityEl = document.getElementById(tab + '_datetime_entity');
     const entity = entityEl
-      ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+      ? entityEl.value : '';
     formData.append('datetime_entity', entity);
     formData.append('sensor_entity', entity);
     const popup = document.getElementById(
@@ -16473,10 +16630,7 @@ function normalizeTextValueFont(value) {
     const font = document.getElementById(tab + '_datetime_value_font');
     if (font) font.value = '2';
     const entity = document.getElementById(tab + '_datetime_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const popup = document.getElementById(
       tab + '_datetime_popup_open_mode');
     if (popup) popup.value = '1';

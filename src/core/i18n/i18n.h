@@ -342,7 +342,6 @@ struct Strings {
   const char* tile_icon_color_state_off;
   // Icon-and-title tiles: the source entity of their icon color.
   const char* tile_icon_color_source;
-  const char* tile_icon_color_source_none;
   const char* tile_icon_color_source_auto;
   const char* tile_icon_color_source_rules;
   const char* tile_icon_color_source_hint;
@@ -763,6 +762,17 @@ struct LocaleProfile {
   // armed_vacation, armed_custom_bypass, pending, arming, disarming,
   // triggered, unavailable, unknown.
   const char* alarm_states[12];
+
+  // Shared Web Admin entity picker (tiles/entity-picker.js). Order: choose,
+  // search, no match ({query}), load failed, try again, clear, none available.
+  const char* entity_picker_labels[7];
+  // Entity type shown on the right of a picker row, by Home Assistant
+  // domain. Order: sensor, binary_sensor, light, switch/input_boolean, fan,
+  // cover, climate, media_player, weather, camera, lock,
+  // alarm_control_panel, number/input_number, select/input_select,
+  // datetime/date/time/input_datetime, scene, script, button/input_button,
+  // automation, humidifier, siren, remote.
+  const char* entity_kind_labels[22];
 };
 
 // Index into LocaleProfile::device_labels.

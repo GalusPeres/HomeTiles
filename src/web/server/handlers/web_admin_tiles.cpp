@@ -1129,170 +1129,117 @@ void WebAdminServer::handleGetEntityOptions() {
   webAdminMarkActivity();
   const HaBridgeConfigData& ha = haBridgeConfig.get();
 
-  auto appendPair = [](String& json, const String& value, const String& label, bool& first) {
-    if (!first) json += ",";
+  // The entities the Bridge released, one list per tile field, for the shared
+  // entity picker (tiles/entity-picker.js): v = entity id (scene alias),
+  // t = name, i = MDI icon when the Bridge sent one, e = scene entity.
+  String json = "{\"success\":true";
+  auto appendEntry = [&](const String& value, const String& name, const String& icon,
+                         const String& entity, bool& first) {
+    json += first ? "{\"v\":\"" : ",{\"v\":\"";
     first = false;
-    json += "{\"v\":\"";
     appendJsonEscaped(json, value);
     json += "\",\"t\":\"";
-    appendJsonEscaped(json, label);
-    json += "\"}";
-  };
-
-  auto appendHumanizedList = [&](String& json, const char* key, const std::vector<String>& ids) {
+    appendJsonEscaped(json, name);
     json += "\"";
+    if (icon.length()) {
+      json += ",\"i\":\"";
+      appendJsonEscaped(json, icon);
+      json += "\"";
+    }
+    if (entity.length()) {
+      json += ",\"e\":\"";
+      appendJsonEscaped(json, entity);
+      json += "\"";
+    }
+    json += "}";
+  };
+  auto entityName = [](const String& id) {
+    String name = haBridgeConfig.findSensorName(id);
+    return name.length() ? name : humanizeIdentifier(id, true);
+  };
+  auto appendList = [&](const char* key, const std::vector<String>& ids) {
+    json += ",\"";
     json += key;
     json += "\":[";
     bool first = true;
     for (const auto& id : ids) {
-      String label;
-      if (hardwareIo.isLocalEntityId(id.c_str())) {
-        label = haBridgeConfig.findSensorName(id);
-      }
-      if (!label.length()) label = humanizeIdentifier(id, true);
-      appendPair(json, id, label + " - " + id, first);
+      appendEntry(id, entityName(id), haBridgeConfig.findEntityIcon(id), String(), first);
     }
     json += "]";
   };
-
+  // Appends `id` unless the list already holds it (any case).
+  auto addUnique = [](std::vector<String>& ids, const String& id) {
+    if (!id.length()) return;
+    for (const auto& existing : ids) {
+      if (existing.equalsIgnoreCase(id)) return;
+    }
+    ids.push_back(id);
+  };
   auto appendLocalIds = [&](std::vector<String>& ids, HardwareIoType wanted) {
     for (uint8_t i = 0; i < hardwareIo.channelCount(); ++i) {
       String entity_id;
       String name;
       HardwareIoType type = HardwareIoType::Relay;
-      if (!hardwareIo.localEntityInfo(i, entity_id, name, type) ||
-          type != wanted) {
-        continue;
+      if (hardwareIo.localEntityInfo(i, entity_id, name, type) && type == wanted) {
+        addUnique(ids, entity_id);
       }
-      bool duplicate = false;
-      for (const auto& existing : ids) {
-        if (existing.equalsIgnoreCase(entity_id)) {
-          duplicate = true;
-          break;
-        }
-      }
-      if (!duplicate) ids.push_back(entity_id);
     }
   };
 
-  // Match label_already_has_unit_suffix in the Energy form.
-  auto hasUnitSuffix = [](const String& name, const String& unit) {
-    String n = name;
-    n.trim();
-    String u = unit;
-    u.trim();
-    if (!n.length() || !u.length()) return false;
-    String suffix = "(" + u + ")";
-    n.toLowerCase();
-    suffix.toLowerCase();
-    return n.endsWith(suffix);
-  };
-
-  String json = "{\"success\":true,";
   auto sensor_ids = parseSensorList(ha.sensors_text);
   appendLocalIds(sensor_ids, HardwareIoType::Temperature);
-  appendHumanizedList(json, "sensors", sensor_ids);
-  json += ",";
-  json += "\"binary_sensors\":[";
-  {
-    bool first = true;
-    for (const auto& id : parseSensorList(ha.binary_sensors_text)) {
-      String name = haBridgeConfig.findSensorName(id);
-      if (!name.length()) name = humanizeIdentifier(id, true);
-      appendPair(json, id, name + " - " + id, first);
-    }
-  }
-  json += "],";
-  appendHumanizedList(json, "numbers", parseSensorList(ha.numbers_text));
-  json += ",";
-  appendHumanizedList(json, "selects", parseSensorList(ha.selects_text));
-  json += ",";
-  appendHumanizedList(json, "datetimes", parseSensorList(ha.datetimes_text));
-  json += ",";
-  appendHumanizedList(json, "weathers", parseSensorList(ha.weathers_text));
-  json += ",";
-  appendHumanizedList(json, "climates", parseSensorList(ha.climates_text));
-  json += ",";
-  appendHumanizedList(json, "covers", parseSensorList(ha.covers_text));
-  json += ",";
-  appendHumanizedList(json, "locks", parseSensorList(ha.locks_text));
-  json += ",";
-  appendHumanizedList(json, "alarm_panels", parseSensorList(ha.alarm_panels_text));
-  json += ",";
-  appendHumanizedList(json, "fans", parseSensorList(ha.fans_text));
-  json += ",\"cameras\":[";
-  {
-    bool first = true;
-    for (const auto& id : parseSensorList(ha.cameras_text)) {
-      String name = haBridgeConfig.findSensorName(id);
-      if (!name.length()) name = humanizeIdentifier(id, true);
-      appendPair(json, id, name + " - " + id, first);
-    }
-  }
-  json += "],";
+  appendList("sensors", sensor_ids);
+  appendList("binary_sensors", parseSensorList(ha.binary_sensors_text));
+  appendList("numbers", parseSensorList(ha.numbers_text));
+  appendList("selects", parseSensorList(ha.selects_text));
+  appendList("datetimes", parseSensorList(ha.datetimes_text));
+  appendList("weathers", parseSensorList(ha.weathers_text));
+  appendList("climates", parseSensorList(ha.climates_text));
+  appendList("covers", parseSensorList(ha.covers_text));
+  appendList("locks", parseSensorList(ha.locks_text));
+  appendList("alarm_panels", parseSensorList(ha.alarm_panels_text));
+  appendList("fans", parseSensorList(ha.fans_text));
+  appendList("cameras", parseSensorList(ha.cameras_text));
+  appendList("media", parseSensorList(ha.media_players_text));
 
-  json += "\"energy\":[";
+  // Lights, switches, the panel's own entities and local relays.
+  std::vector<String> switch_ids;
+  for (const auto& id : parseSensorList(ha.lights_text)) addUnique(switch_ids, id);
+  for (const auto& id : parseSensorList(ha.switches_text)) addUnique(switch_ids, id);
+  addUnique(switch_ids, kEntityDisplayBrightness);
+  addUnique(switch_ids, kEntityScreensaverBrightness);
+  addUnique(switch_ids, kEntityDisplayRotate);
+  addUnique(switch_ids, kEntityDisplaySleep);
+  appendLocalIds(switch_ids, HardwareIoType::Relay);
+  appendList("switches", switch_ids);
+
+  // Energy names carry their unit, as in the Energy form; skip it when the
+  // name already ends with "(unit)".
+  json += ",\"energy\":[";
   {
     auto energy_ids = parseSensorList(ha.energy_text);
     energy_append_cached_entity_ids(energy_ids);
     bool first = true;
     for (const auto& id : energy_ids) {
-      String name = haBridgeConfig.findSensorName(id);
-      if (!name.length()) name = humanizeIdentifier(id, true);
+      String name = entityName(id);
       String unit = haBridgeConfig.findSensorUnit(id);
       if (!unit.length()) unit = energy_find_cached_unit(id);
-      String label = name;
-      if (unit.length() && !hasUnitSuffix(label, unit)) {
-        label += " (";
-        label += unit;
-        label += ")";
-      }
-      label += " - ";
-      label += id;
-      appendPair(json, id, label, first);
+      unit.trim();
+      String lower_name = name;
+      lower_name.trim();
+      lower_name.toLowerCase();
+      String suffix = "(" + unit + ")";
+      suffix.toLowerCase();
+      if (unit.length() && !lower_name.endsWith(suffix)) name += " (" + unit + ")";
+      appendEntry(id, name, haBridgeConfig.findEntityIcon(id), String(), first);
     }
   }
-  json += "],\"media\":[";
-  {
-    bool first = true;
-    for (const auto& id : parseSensorList(ha.media_players_text)) {
-      String name = haBridgeConfig.findSensorName(id);
-      if (!name.length()) name = humanizeIdentifier(id, true);
-      appendPair(json, id, name + " - " + id, first);
-    }
-  }
-  json += "],";
-
-  // Lichter + Schalter + Geraete-Entities, dedupliziert — gleiche Reihenfolge
-  // wie buildAdminFolderTabFragments.
-  {
-    std::vector<String> switch_options;
-    auto addSwitchOption = [&](const String& entry) {
-      if (!entry.length()) return;
-      for (const auto& existing : switch_options) {
-        if (existing.equalsIgnoreCase(entry)) return;
-      }
-      switch_options.push_back(entry);
-    };
-    for (const auto& opt : parseSensorList(ha.lights_text)) addSwitchOption(opt);
-    for (const auto& opt : parseSensorList(ha.switches_text)) addSwitchOption(opt);
-    addSwitchOption(kEntityDisplayBrightness);
-    addSwitchOption(kEntityScreensaverBrightness);
-    addSwitchOption(kEntityDisplayRotate);
-    addSwitchOption(kEntityDisplaySleep);
-    std::vector<String> local_relays;
-    appendLocalIds(local_relays, HardwareIoType::Relay);
-    for (const auto& opt : local_relays) addSwitchOption(opt);
-    appendHumanizedList(json, "switches", switch_options);
-  }
-
-  json += ",\"scenes\":[";
+  json += "],\"scenes\":[";
   {
     bool first = true;
     for (const auto& scene : parseSceneList(ha.scene_alias_text)) {
-      appendPair(json, scene.alias,
-                 humanizeIdentifier(scene.alias, false) + " - " + scene.entity,
-                 first);
+      appendEntry(scene.alias, humanizeIdentifier(scene.alias, false),
+                  haBridgeConfig.findEntityIcon(scene.entity), scene.entity, first);
     }
   }
   json += "]}";

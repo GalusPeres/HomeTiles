@@ -68,59 +68,10 @@
     if (typeof fn === 'function') return fn(...args);
   }
 
-  function rebuildEntitySelect(id, entries) {
-    const el = document.getElementById(id);
-    if (!el || !Array.isArray(entries)) return;
-    const keep = el.value || el.dataset.configuredValue || '';
-    const placeholder = el.options.length ? el.options[0].cloneNode(true) : null;
-    el.innerHTML = '';
-    if (placeholder) el.appendChild(placeholder);
-    for (const entry of entries) {
-      if (!entry || entry.v === undefined) continue;
-      const opt = document.createElement('option');
-      opt.value = entry.v;
-      opt.textContent = entry.t || entry.v;
-      el.appendChild(opt);
-    }
-    el.value = keep;
-    if (keep && el.value !== keep) {
-      // The stored entity is missing from the current bridge list, for example
-      // while the bridge is offline. Keep the selection instead of clearing it
-      // on the next autosave.
-      const opt = document.createElement('option');
-      opt.value = keep;
-      opt.textContent = keep;
-      el.appendChild(opt);
-      el.value = keep;
-    }
-    if (keep) el.dataset.configuredValue = keep;
-  }
-
   // One firmware request serves every editor. The short cache avoids repeated
   // large JSON responses while switching quickly between tiles.
   function refreshEntityOptionLists(tab) {
     return fetchEntityOptions()
-      .then(data => {
-        rebuildEntitySelect(tab + '_sensor_entity', data.sensors);
-        rebuildEntitySelect(tab + '_binary_sensor_entity', data.binary_sensors);
-        rebuildEntitySelect(tab + '_number_entity', data.numbers);
-        rebuildEntitySelect(tab + '_select_entity', data.selects);
-        rebuildEntitySelect(tab + '_datetime_entity', data.datetimes);
-
-        rebuildEntitySelect(tab + '_energy_entity', data.energy);
-        rebuildEntitySelect(tab + '_weather_entity', data.weathers);
-        rebuildEntitySelect(tab + '_switch_entity', data.switches);
-        rebuildEntitySelect(tab + '_media_entity', data.media);
-        rebuildEntitySelect(tab + '_climate_entity', data.climates);
-        rebuildEntitySelect(tab + '_cover_entity', data.covers);
-        rebuildEntitySelect(tab + '_lock_entity', data.locks);
-        rebuildEntitySelect(tab + '_alarm_entity', data.alarm_panels);
-        rebuildEntitySelect(tab + '_fan_entity', data.fans);
-        rebuildEntitySelect(tab + '_camera_entity', data.cameras);
-        rebuildEntitySelect(tab + '_scene_alias', data.scenes);
-        if (typeof iconColorSourceEntries === 'function') {
-          rebuildEntitySelect(tab + '_tile_icon_source', iconColorSourceEntries(data));
-        }
-      })
+      .then(() => refreshEntityPickers(tab))
       .catch(() => {});
   }

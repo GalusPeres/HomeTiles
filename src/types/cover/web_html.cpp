@@ -5,27 +5,13 @@
 #include "src/core/i18n/i18n.h"
 #include "src/web/server/web_admin_utils.h"
 
-void append_cover_fields_html(String& html, const String& tab_id,
-                              const std::vector<String>& cover_options) {
+void append_cover_fields_html(String& html, const String& tab_id) {
   const char* language = configManager.getConfig().language;
   const auto& tr = i18n::strings(language);
   html += "<div id=\"";
   html += tab_id;
-  html += "_cover_fields\" class=\"type-fields\"><label>";
-  html += i18n::cover_label(language, 1);
-  html += "</label><select id=\"";
-  html += tab_id;
-  html += "_cover_entity\"><option value=\"\">";
-  html += tr.no_selection;
-  html += "</option>";
-  for (const String& entity : cover_options) {
-    html += "<option value=\"";
-    appendHtmlEscaped(html, entity);
-    html += "\">";
-    appendHtmlEscaped(html, humanizeIdentifier(entity, true) + " - " + entity);
-    html += "</option>";
-  }
-  html += "</select>";
+  html += "_cover_fields\" class=\"type-fields\">";
+  appendEntityPickerField(html, tab_id, "cover_entity", i18n::cover_label(language, 1), "covers");
   // The state size like the Switch tile (tile_header.h): the half-height
   // Sensor value sizes beside the disc, the Sensor value sizes from 1.5 rows.
   const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},

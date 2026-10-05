@@ -238,14 +238,6 @@
           ? (data.sensor_entity || '')
           : (data.climate_entity || '');
       entity.value = configuredEntity;
-      if (configuredEntity) {
-        entity.dataset.configuredValue = configuredEntity;
-      } else {
-        // The option list is rebuilt asynchronously. Do not let a value from
-        // the previously edited climate tile come back when this tile
-        // explicitly has no entity configured.
-        delete entity.dataset.configuredValue;
-      }
     }
     const popup = document.getElementById(tab + '_climate_popup_open_mode');
     if (popup) popup.value = (data.popup_open_mode !== undefined)

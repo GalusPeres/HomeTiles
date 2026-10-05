@@ -76,6 +76,7 @@ struct ConfigManager { const Config& getConfig()const{return config;} } configMa
 struct SceneOption { String alias,entity; };
 String humanizeIdentifier(const String& value,bool){return value;}
 void appendHtmlEscaped(String& output,const String& value) {output+=value;}
+${definition(read('src/web/server/web_admin_utils.cpp'), 'void appendEntityPickerField(')}
 ${switchChoiceStruct}
 ${definition(switchHtml, 'void append_switch_choice(')}
 ${definition(switchHtml, 'void append_switch_fields_html(')}
@@ -121,12 +122,14 @@ int main(){
   mqttPublishSwitchCommand("switch.local","on");assert(local_commands==1);
   for(const char* language:{"de","en","fr"}){
     config.language=language;String html;
-    append_switch_fields_html(html,"folder3",{"automation.desk","input_boolean.guest","fan.office"});
-    append_scene_fields_html(html,"folder3",{{"desk","button.desk"},{"desk2","input_button.desk"}});
+    append_switch_fields_html(html,"folder3");
+    append_scene_fields_html(html,"folder3");
     const auto& tr=i18n::strings(language);
     assert(html.find(tr.switch_light)!=std::string::npos&&html.find(tr.scene_label)!=std::string::npos);
     assert(html.find("folder3_switch_entity")!=std::string::npos&&html.find("folder3_scene_alias")!=std::string::npos);
-    assert(html.find("automation.desk")!=std::string::npos&&html.find("input_button.desk")!=std::string::npos);
+    // The entities come from /api/entity_options through the shared picker.
+    assert(html.find("id=\"folder3_switch_entity\" data-entity-picker=\"switches\"")!=std::string::npos);
+    assert(html.find("id=\"folder3_scene_alias\" data-entity-picker=\"scenes\"")!=std::string::npos);
     // Layout, value size and popup as one line of choices like Tile color.
     for(const char* field:{"folder3_switch_style_choices","folder3_switch_value_font_choices","folder3_switch_popup_open_mode_choices"})
       assert(html.find(field)!=std::string::npos);

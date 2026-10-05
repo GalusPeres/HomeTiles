@@ -35,16 +35,7 @@ function maybeFillTitleFromEnergy(tab) {
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
     if (entityEl) {
-      const configuredEntity = data.sensor_entity || data.energy_entity || '';
-      entityEl.dataset.configuredValue = configuredEntity;
-      entityEl.value = configuredEntity;
-      if (configuredEntity && entityEl.value !== configuredEntity) {
-        const opt = document.createElement('option');
-        opt.value = configuredEntity;
-        opt.textContent = configuredEntity;
-        entityEl.appendChild(opt);
-        entityEl.value = configuredEntity;
-      }
+      entityEl.value = data.sensor_entity || data.energy_entity || '';
     }
     const unitEl = document.getElementById(prefix + '_energy_unit');
     if (unitEl) unitEl.value = data.sensor_unit || '';
@@ -63,7 +54,7 @@ function maybeFillTitleFromEnergy(tab) {
     saveIconColorFields(tab, formData);
     const prefix = tab;
     const entityEl = document.getElementById(prefix + '_energy_entity');
-    const entity = entityEl ? (entityEl.value || entityEl.dataset.configuredValue || '') : '';
+    const entity = entityEl ? entityEl.value : '';
     formData.append('energy_entity', entity);
     formData.append('sensor_entity', entity);
     formData.append('sensor_unit', document.getElementById(prefix + '_energy_unit')?.value || '');

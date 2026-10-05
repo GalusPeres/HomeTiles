@@ -189,14 +189,15 @@ for (const [index,[kind, camel, entity, state, unit]] of types.entries()) {
   const select=elements['folder1_'+kind+'_entity']=new TestElement();
   const popup=elements['folder1_'+kind+'_popup_open_mode']=new TestElement('1');
   const font=elements['folder1_'+kind+'_value_font']=new TestElement('2');
-  select.options=[{value:'',textContent:'No selection'},{value:entity,textContent:'Entity - '+entity}];
-  select.selectedOptions=[select.options[0]];
+  // The shared entity picker's hidden input; names from /api/entity_options.
+  select.dataset.entityPicker=kind+'s';
+  run(`entityOptionsCache={success:true,${kind}s:[{v:'${entity}',t:'Entity'}]};`);
   elements.folder1_tile_title.value='';
   elements.folder1_tile_type.value=String(type);
   run(`setupLivePreview('folder1');setupLivePreview('folder1');updateTileType('folder1');
     maybeFillTitleFromEntity('folder1','_${kind}_entity');`);
   assert.equal(elements.folder1_tile_title.value,'','Placeholder must never become a title');
-  select.value=entity;select.selectedOptions=[select.options[1]];
+  select.value=entity;
   const before=run('saveCount');select.dispatch('change');
   assert.equal(run('saveCount'),before+1,'Rebinding must replace listeners');
   elements.folder1_tile_title.value='Desk <custom>\nOffice';
@@ -208,7 +209,7 @@ for (const [index,[kind, camel, entity, state, unit]] of types.entries()) {
   assert.equal(snapshot.title,'Desk <custom>\nOffice');
   assert.equal(snapshot[kind+'_entity'],entity);assert.equal(String(snapshot.popup_open_mode),'0');
   run(`load${camel}Fields('folder1',{sensor_entity:'${entity}_missing',popup_open_mode:0});`);
-  assert.equal(select.value,entity+'_missing');assert(select.options.some(o=>o.value===entity+'_missing'));
+  assert.equal(select.value,entity+'_missing','A configured entity missing from the list is kept');
   run(`load${camel}Fields('folder1',{sensor_entity:'${entity}',popup_open_mode:0});`);
   for (const [option,css] of [['0','default'],['1','20'],['2','24'],['3','32'],['4','40']]) {
     const saves=run('saveCount');font.value=option;font.dispatch('change');

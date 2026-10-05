@@ -47,36 +47,16 @@ void append_switch_choice(String& html, const String& tab_id, const char* field,
   html += "</div>\n";
 }
 
-void append_switch_fields_html(String& html, const String& tab_id, const std::vector<String>& switchOptions) {
+void append_switch_fields_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
   html += R"html(
             <!-- Switch Fields -->
             <div id=")html";
   html += tab_id;
   html += R"html(_switch_fields" class="type-fields">
-              <label>)html";
-  html += tr.switch_light;
-  html += R"html(</label>
-              <select id=")html";
-  html += tab_id;
-  html += R"html(_switch_entity">
-                <option value="">)html";
-  html += tr.no_selection;
-  html += R"html(</option>
-)html";
-
-  for (const auto& opt : switchOptions) {
-    html += "<option value=\"";
-    appendHtmlEscaped(html, opt);
-    html += "\">";
-    String label = humanizeIdentifier(opt, true) + " - " + opt;
-    appendHtmlEscaped(html, label);
-    html += "</option>";
-  }
-
-  html += R"html(
-              </select>
-)html";
+              )html";
+  appendEntityPickerField(html, tab_id, "switch_entity", tr.switch_light, "switches");
+  html += "\n";
   // Values are switch_layout::Layout; Automatic first, the default of new
   // tiles.
   const SwitchChoice layouts[] = {{"3", tr.switch_layout_automatic},

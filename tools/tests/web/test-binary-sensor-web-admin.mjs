@@ -184,14 +184,14 @@ for (const [id, value] of Object.entries({
 elements['folder1-tile-3'] = new TestElement();
 elements['folder1-tile-3'].dataset.type = '0';
 
-const placeholder = { value: '', textContent: 'Keine Auswahl' };
-const entityOption = {
-  value: 'binary_sensor.door',
-  textContent: 'Tür - binary_sensor.door'
-};
+// The entity field is the shared picker's hidden input; its names come from
+// the Bridge's released list (/api/entity_options).
 const entitySelect = elements.folder1_binary_sensor_entity;
-entitySelect.options = [placeholder, entityOption];
-entitySelect.selectedOptions = [placeholder];
+entitySelect.dataset.entityPicker = 'binary_sensors';
+vm.runInContext(`entityOptionsCache = {
+  success: true,
+  binary_sensors: [{ v: 'binary_sensor.door', t: 'Tür' }]
+};`, sandbox);
 
 vm.runInContext(`
   currentTileIndex = 3;
@@ -221,8 +221,7 @@ elements.folder1_tile_type.inline.change = () => {
   vm.runInContext("updateTileType('folder1')", sandbox);
 };
 elements.folder1_tile_type.dispatch('change');
-entitySelect.value = entityOption.value;
-entitySelect.selectedOptions = [entityOption];
+entitySelect.value = 'binary_sensor.door';
 entitySelect.dispatch('change');
 elements.folder1_binary_sensor_popup_open_mode.value = '0';
 elements.folder1_binary_sensor_popup_open_mode.dispatch('change');
@@ -268,18 +267,13 @@ vm.runInContext(`
     popup_open_mode: 0
   });
 `, sandbox);
-if (entitySelect.value !== 'binary_sensor.temporarily_missing' ||
-    entitySelect.dataset.configuredValue !==
-      'binary_sensor.temporarily_missing' ||
-    !entitySelect.options.some(
-      option => option.value === 'binary_sensor.temporarily_missing')) {
+if (entitySelect.value !== 'binary_sensor.temporarily_missing') {
   throw new Error('A configured Binary Sensor was lost when options were stale');
 }
 
 elements.folder1_tile_title.value = 'Tür';
 elements.folder1_tile_icon.value = '';
 entitySelect.value = 'binary_sensor.door';
-entitySelect.dataset.configuredValue = 'binary_sensor.door';
 vm.runInContext(`
   updateTilePreview = __realUpdateTilePreview;
   sensorMetaCache = normalizeSensorMetaPayload({
@@ -422,7 +416,8 @@ const webHtml = readText(
   new URL('../../../src/types/binary_sensor/web_html.cpp', import.meta.url));
 for (const marker of [
   'i18n::binary_sensor_label(language, 1)',
-  '_binary_sensor_entity',
+  '"binary_sensor_entity"',
+  '"binary_sensors"',
   '_binary_sensor_popup_open_mode'
 ]) {
   if (!webHtml.includes(marker)) {

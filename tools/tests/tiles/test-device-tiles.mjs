@@ -150,7 +150,12 @@ assert.match(admin, /onResize = \(\) => \{\s*if \(fitNow\(\) !== fit\) applyDevi
 assert.match(admin, /bar\.__onResize = onResize;/);
 assert.match(read('src/types/switch/admin.js'), /if \(typeof bar\.__onResize === 'function'\) bar\.__onResize\(\);\s*drawSwitchPreviewFill\(bar\);/);
 assert.match(read('src/web/server/handlers/web_admin_tiles.cpp'), /\\"device_values\\"/);
-assert.match(read('src/web/admin/tiles/registry.js'), /_lock_entity', data\.locks/);
+// The entity field is the shared picker of the Bridge's released list.
+assert.match(read('src/types/device/web.cpp'),
+  /appendEntityPickerField\(html, tab_id, entity_field\.c_str\(\), entity_label\(type\),\s*type == TILE_LOCK \? "locks" : type == TILE_ALARM \? "alarm_panels" : "fans"\);/);
+for (const key of ['locks', 'alarm_panels', 'fans']) {
+  assert.ok(read('src/web/server/handlers/web_admin_tiles.cpp').includes(`appendList("${key}"`), key);
+}
 
 // Translations: one label per DeviceLabel in every language; the states in
 // the tables' documented order.

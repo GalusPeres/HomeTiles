@@ -1433,8 +1433,6 @@
     .type-fields.show > label { margin:0; }
     .type-fields.show > input, .type-fields.show > select { margin:0; }
     .type-fields.show > div, .type-fields.show > textarea { grid-column:1 / -1; }
-    .type-fields.show > select[id*="_entity"],
-    .type-fields.show > select[id$="_scene_alias"],
     .type-fields.show > select[id$="_animation_file"] { grid-column:1 / -1; }
     .type-fields.show > .folder-pin-toggle { grid-column:1 / -1; }
     .tile-settings .folder-pin-toggle {
@@ -2888,7 +2886,7 @@
    the value in the label size (like the Global settings sliders). */
 .icon-color-rules-body { display:flex; flex-direction:column; align-items:flex-start; gap:8px; margin-top:8px; }
 .icon-color-rules-body.hidden { display:none; }
-.icon-color-rules-body > select { width:100%; margin:0; }
+.icon-color-rules-body > .entity-picker { width:100%; }
 .icon-color-targets { display:flex; gap:16px; flex-wrap:wrap; }
 .icon-color-targets .inline-checkbox { margin:0; }
 .icon-color-strength { display:flex; align-items:center; gap:10px; width:100%; }
@@ -3035,3 +3033,63 @@
 .login-message.is-error { color:var(--danger); }
 .web-auth-status { margin:0 0 14px; }
 .web-auth-actions { margin-top:16px; }
+
+/* Shared entity picker (tiles/entity-picker.js), like Home Assistant's: the
+   field shows the chosen entity as a row, the list opens below it (a sheet on
+   phones) with a search. */
+.entity-picker { position:relative; width:100%; min-width:0; }
+input[data-entity-picker].hidden + .entity-picker { display:none; }
+.entity-picker-field {
+  width:100%; min-width:0; display:flex; align-items:center; gap:10px; min-height:44px;
+  padding:5px 40px 5px 8px; border:1px solid var(--line-strong); border-radius:10px;
+  background:var(--well); color:var(--text); font:inherit; text-align:left; cursor:pointer;
+  transition:border-color 0.15s, box-shadow 0.15s;
+}
+.entity-picker-field:focus-visible, .entity-picker-field.open {
+  outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring);
+}
+.entity-picker-placeholder { flex:1; padding-left:4px; color:var(--muted); font-size:13px; }
+.entity-picker-chevron { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:#888; font-size:18px; }
+.entity-picker-clear {
+  position:absolute; right:32px; top:50%; transform:translateY(-50%); width:26px; height:26px; padding:0;
+  display:grid; place-items:center; border:0; border-radius:50%; background:none; color:#888;
+  font-size:16px; cursor:pointer;
+}
+.entity-picker-clear:hover, .entity-picker-clear:focus-visible { background:#222; color:var(--text); outline:none; }
+.entity-picker-clear[hidden] { display:none; }
+.entity-picker-field:has(+ .entity-picker-clear:not([hidden])) { padding-right:64px; }
+.entity-picker-icon {
+  width:30px; height:30px; flex:0 0 30px; display:grid; place-items:center; border-radius:50%;
+  background:#1a1a1a; color:#9e9e9e; font-size:18px;
+}
+.entity-picker-text { min-width:0; flex:1; display:flex; flex-direction:column; }
+.entity-picker-name, .entity-picker-context { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.entity-picker-name { font-size:13px; line-height:18px; }
+.entity-picker-context { font-size:11.5px; line-height:15px; color:var(--text-3); }
+.entity-picker-kind { margin-left:10px; font-size:12px; color:var(--text-3); white-space:nowrap; }
+.entity-picker-popover {
+  position:fixed; z-index:1000; display:none; flex-direction:column; overflow:hidden;
+  background:#1c1c1c; border:1px solid var(--line-strong); border-radius:14px; box-shadow:0 16px 40px rgba(0,0,0,0.55);
+}
+.entity-picker-popover.open { display:flex; }
+.entity-picker-popover.sheet { left:8px; right:8px; bottom:8px; top:auto; width:auto; max-height:75vh; }
+.entity-picker-search { position:relative; flex:0 0 auto; padding:10px; border-bottom:1px solid var(--line); }
+.entity-picker-search .mdi { position:absolute; left:22px; top:50%; transform:translateY(-50%); color:#9e9e9e; font-size:19px; }
+.entity-picker-search input { margin:0; padding:9px 12px 9px 40px; font-size:14px; border-radius:10px; background:var(--panel); }
+.entity-picker-search input::-webkit-search-cancel-button { display:none; }
+.entity-picker-list { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; padding:4px 6px 8px; }
+.entity-picker-item { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:10px; cursor:pointer; }
+.entity-picker-item:hover, .entity-picker-item.active { background:#2a2a2a; }
+.entity-picker-item.selected { background:var(--accent-soft); }
+.entity-picker-item.selected .entity-picker-name { color:#5fd4c7; font-weight:600; }
+.entity-picker-item mark { background:none; color:#5fd4c7; font-weight:600; }
+.entity-picker-state { padding:22px 16px 26px; text-align:center; color:var(--text-3); font-size:13px; line-height:19px; }
+.entity-picker-state .mdi { display:block; margin-bottom:6px; font-size:30px; color:#777; }
+.entity-picker-state .btn { margin-top:12px; }
+.entity-picker-loading { display:flex; flex-direction:column; gap:8px; padding:8px 8px 12px; }
+.entity-picker-loading div {
+  height:40px; border-radius:10px; background:linear-gradient(90deg, #1f1f1f, #262626, #1f1f1f);
+  background-size:200% 100%; animation:entity-picker-loading 1.2s linear infinite;
+}
+@keyframes entity-picker-loading { to { background-position:-200% 0; } }
+@media (max-width:560px) { .entity-picker-kind { display:none; } }

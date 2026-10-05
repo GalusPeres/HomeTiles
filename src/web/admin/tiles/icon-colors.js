@@ -838,17 +838,7 @@
   function writeIconColorSource(tab, layer) {
     const select = iconColorEl(tab, '_tile_icon_source');
     const entity = layer && !layer.self ? layer.entity : '';
-    if (select) {
-      if (entity && !Array.from(select.options).some(option => option.value === entity)) {
-        const option = document.createElement('option');
-        option.value = entity;
-        option.textContent = entity;
-        select.appendChild(option);
-      }
-      select.value = entity;
-      if (entity) select.dataset.configuredValue = entity;
-      else delete select.dataset.configuredValue;
-    }
+    if (select) select.value = entity;
     const set = (suffix, value) => { const el = iconColorEl(tab, suffix); if (el) el.value = value; };
     // Without a stored layer the rules start at Own entity and Own rules, also
     // when the cell is still Empty and only gets its type afterwards; types

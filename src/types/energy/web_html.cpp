@@ -2,30 +2,9 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
-#include "src/network/bridge/ha_bridge_config.h"
-#include "src/types/energy/energy_data.h"
 #include "src/web/server/web_admin_utils.h"
 
-namespace {
-
-bool label_already_has_unit_suffix(const String& name, const String& unit) {
-  String trimmed_name = name;
-  trimmed_name.trim();
-  String trimmed_unit = unit;
-  trimmed_unit.trim();
-  if (!trimmed_name.length() || !trimmed_unit.length()) return false;
-
-  String suffix = "(" + trimmed_unit + ")";
-  trimmed_name.toLowerCase();
-  suffix.toLowerCase();
-  return trimmed_name.endsWith(suffix);
-}
-
-}  // namespace
-
-void append_energy_fields_html(String& html,
-                               const String& tab_id,
-                               const std::vector<String>& energyOptions) {
+void append_energy_fields_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
 
   html += R"html(
@@ -33,41 +12,9 @@ void append_energy_fields_html(String& html,
             <div id=")html";
   html += tab_id;
   html += R"html(_energy_fields" class="type-fields">
-              <label>)html";
-  html += tr.energy_entity;
-  html += R"html(</label>
-              <select id=")html";
-  html += tab_id;
-  html += R"html(_energy_entity">
-                <option value="">)html";
-  html += tr.no_selection;
-  html += R"html(</option>
-)html";
-
-  for (const auto& opt : energyOptions) {
-    html += "<option value=\"";
-    appendHtmlEscaped(html, opt);
-    html += "\">";
-    String name = haBridgeConfig.findSensorName(opt);
-    if (!name.length()) {
-      name = humanizeIdentifier(opt, true);
-    }
-    String unit = haBridgeConfig.findSensorUnit(opt);
-    if (!unit.length()) unit = energy_find_cached_unit(opt);
-    String label = name;
-    if (unit.length() && !label_already_has_unit_suffix(label, unit)) {
-      label += " (";
-      label += unit;
-      label += ")";
-    }
-    label += " - ";
-    label += opt;
-    appendHtmlEscaped(html, label);
-    html += "</option>";
-  }
-
+              )html";
+  appendEntityPickerField(html, tab_id, "energy_entity", tr.energy_entity, "energy");
   html += R"html(
-              </select>
               <label>)html";
   html += tr.sensor_unit;
   html += R"html(</label>

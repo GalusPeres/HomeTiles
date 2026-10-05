@@ -6,28 +6,15 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/web/server/web_admin_utils.h"
 
-void append_climate_fields_html(String& html,
-                                const String& tab_id,
-                                const std::vector<String>& climate_options) {
+void append_climate_fields_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
   const char* language = configManager.getConfig().language;
   html += "<div id=\"";
   html += tab_id;
-  html += "_climate_fields\" class=\"type-fields\"><label>";
-  html += i18n::climate_entity_label(configManager.getConfig().language);
-  html += "</label><select id=\"";
-  html += tab_id;
-  html += "_climate_entity\"><option value=\"\">";
-  html += tr.no_selection;
-  html += "</option>";
-  for (const auto& entity : climate_options) {
-    html += "<option value=\"";
-    appendHtmlEscaped(html, entity);
-    html += "\">";
-    appendHtmlEscaped(html, humanizeIdentifier(entity, true) + " - " + entity);
-    html += "</option>";
-  }
-  html += "</select><label>";
+  html += "_climate_fields\" class=\"type-fields\">";
+  appendEntityPickerField(html, tab_id, "climate_entity",
+                          i18n::climate_entity_label(language), "climates");
+  html += "<label>";
   html += tr.popup_open;
   html += "</label><select id=\"";
   html += tab_id;

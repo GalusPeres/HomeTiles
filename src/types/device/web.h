@@ -14,9 +14,6 @@
 
 // "lock", "alarm" or "fan".
 const char* device_field_prefix(TileType type);
-// The entities the Bridge offers for the type (Bridge keys locks,
-// alarm_panels, fans).
-std::vector<String> device_entity_options(TileType type);
 // An empty entity, or an entity of the type's Home Assistant domain.
 bool device_entity_matches(TileType type, const String& entity);
 

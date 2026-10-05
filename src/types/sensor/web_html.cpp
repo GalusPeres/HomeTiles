@@ -3,7 +3,7 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 
-void append_sensor_fields_html(String& html, const String& tab_id, const std::vector<String>& sensorOptions) {
+void append_sensor_fields_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
 
   html += R"html(
@@ -11,28 +11,9 @@ void append_sensor_fields_html(String& html, const String& tab_id, const std::ve
             <div id=")html";
   html += tab_id;
   html += R"html(_sensor_fields" class="type-fields">
-              <label>)html";
-  html += tr.sensor_entity;
-  html += R"html(</label>
-              <select id=")html";
-  html += tab_id;
-  html += R"html(_sensor_entity">
-                <option value="">)html";
-  html += tr.no_selection;
-  html += R"html(</option>
-)html";
-
-  for (const auto& opt : sensorOptions) {
-    html += "<option value=\"";
-    appendHtmlEscaped(html, opt);
-    html += "\">";
-    String label = humanizeIdentifier(opt, true) + " - " + opt;
-    appendHtmlEscaped(html, label);
-    html += "</option>";
-  }
-
+              )html";
+  appendEntityPickerField(html, tab_id, "sensor_entity", tr.sensor_entity, "sensors");
   html += R"html(
-              </select>
               <label>)html";
   html += tr.sensor_unit;
   html += R"html(</label>

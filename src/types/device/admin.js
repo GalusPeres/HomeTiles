@@ -245,17 +245,6 @@
     const entity = document.getElementById(tab + '_' + prefix + '_entity');
     const configured = data.sensor_entity || data[prefix + '_entity'] || '';
     if (entity) {
-      if (configured) {
-        entity.dataset.configuredValue = configured;
-        if (!Array.from(entity.options).some(option => option.value === configured)) {
-          const option = document.createElement('option');
-          option.value = configured;
-          option.textContent = configured;
-          entity.appendChild(option);
-        }
-      } else {
-        delete entity.dataset.configuredValue;
-      }
       entity.value = configured;
     }
     // State size like the Switch tile (Tile::sensor_value_font).
@@ -281,10 +270,7 @@
   function resetDeviceFields(tab, prefix) {
     resetIconColorFields(tab);
     const entity = document.getElementById(tab + '_' + prefix + '_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const font = document.getElementById(tab + '_' + prefix + '_value_font');
     if (font) font.value = '0';
     const popup = document.getElementById(tab + '_' + prefix + '_popup_open_mode');

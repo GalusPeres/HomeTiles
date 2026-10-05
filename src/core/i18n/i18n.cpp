@@ -322,7 +322,6 @@ static const Strings kStringsDe = {
     "Ein",
     "Aus",
     "Farbe von Entität",
-    "Keine",
     "Farbe der Entität",
     "Eigene Regeln",
     "Die Entität muss in der HomeTiles Bridge ausgewählt sein. Ohne Zustand gilt die Icon-Farbe.",
@@ -920,7 +919,6 @@ static const Strings kStringsEn = {
     "On",
     "Off",
     "Color from entity",
-    "None",
     "Entity color",
     "Own rules",
     "The entity must be selected in the HomeTiles Bridge. Without a state the icon color applies.",
@@ -1518,7 +1516,6 @@ static const Strings kStringsFr = {
     "Activé",
     "Désactivé",
     "Couleur depuis une entité",
-    "Aucune",
     "Couleur de l'entité",
     "Règles propres",
     "L'entité doit être sélectionnée dans le HomeTiles Bridge. Sans état, la couleur de l'icône s'applique.",
@@ -1907,7 +1904,14 @@ static const LocaleProfile kLocaleDe = {
      "Nicht verfügbar", "Unbekannt"},
     {"Unscharf", "Scharf zu Hause", "Scharf abwesend", "Scharf Nacht", "Scharf Urlaub",
      "Scharf benutzerdefiniert", "Ausstehend", "Wird scharf", "Wird unscharf", "Ausgelöst",
-     "Nicht verfügbar", "Unbekannt"}};
+     "Nicht verfügbar", "Unbekannt"},
+    {"Entität wählen", "Suchen", "Keine Entität passt zu „{query}“",
+     "Die Entitäten konnten nicht geladen werden. Die gewählte Entität bleibt erhalten.",
+     "Erneut versuchen", "Leeren", "Keine Entität verfügbar"},
+    {"Sensor", "Binärsensor", "Licht", "Schalter", "Ventilator", "Cover", "Klima",
+     "Mediaplayer", "Wetter", "Kamera", "Schloss", "Alarmanlage", "Zahl", "Auswahl",
+     "Datum/Uhrzeit", "Szene", "Skript", "Taste", "Automation", "Luftbefeuchter",
+     "Sirene", "Fernbedienung"}};
 
 static const LocaleProfile kLocaleEn = {
     "en",
@@ -2011,7 +2015,14 @@ static const LocaleProfile kLocaleEn = {
      "The device did not respond."},
     {"Locked", "Unlocked", "Locking", "Unlocking", "Open", "Opening", "Jammed", "Unavailable", "Unknown"},
     {"Disarmed", "Armed home", "Armed away", "Armed night", "Armed vacation", "Armed custom bypass",
-     "Pending", "Arming", "Disarming", "Triggered", "Unavailable", "Unknown"}};
+     "Pending", "Arming", "Disarming", "Triggered", "Unavailable", "Unknown"},
+    {"Choose an entity", "Search", "No entity matches “{query}”",
+     "Could not load the entities. The chosen entity stays as it is.",
+     "Try again", "Clear", "No entity available"},
+    {"Sensor", "Binary sensor", "Light", "Switch", "Fan", "Cover", "Climate",
+     "Media player", "Weather", "Camera", "Lock", "Alarm panel", "Number", "Select",
+     "Date/time", "Scene", "Script", "Button", "Automation", "Humidifier", "Siren",
+     "Remote"}};
 
 static const LocaleProfile kLocaleFr = {
     "fr",
@@ -2120,7 +2131,14 @@ static const LocaleProfile kLocaleFr = {
      "Indisponible", "Inconnu"},
     {"Désarmé", "Armé (domicile)", "Armé (absent)", "Armé (nuit)", "Armé (vacances)",
      "Armé (personnalisé)", "En attente", "Armement", "Désarmement", "Déclenché",
-     "Indisponible", "Inconnu"}};
+     "Indisponible", "Inconnu"},
+    {"Choisir une entité", "Rechercher", "Aucune entité ne correspond à « {query} »",
+     "Impossible de charger les entités. L’entité choisie reste inchangée.",
+     "Réessayer", "Effacer", "Aucune entité disponible"},
+    {"Capteur", "Capteur binaire", "Lumière", "Interrupteur", "Ventilateur", "Volet",
+     "Climat", "Lecteur multimédia", "Météo", "Caméra", "Serrure", "Alarme", "Nombre",
+     "Sélection", "Date/heure", "Scène", "Script", "Bouton", "Automatisation",
+     "Humidificateur", "Sirène", "Télécommande"}};
 
 // Codes and groups match LocaleProfile::timezone_labels and
 // timezone_group_labels (see i18n.h).
@@ -2452,7 +2470,6 @@ static const Strings kStringsPl = {
     "Włączony",
     "Wyłączony",
     "Kolor z encji",
-    "Brak",
     "Kolor encji",
     "Własne reguły",
     "Encja musi być wybrana w HomeTiles Bridge. Bez stanu obowiązuje kolor ikony.",
@@ -2760,6 +2777,13 @@ static const LocaleProfile kLocalePl = {
     {"Zamek", "Panel alarmowy", "Wentylator", "Encja zamka", "Encja panelu alarmowego", "Encja wentylatora", "Otwórz drzwi", "Na pewno otworzyć?", "Drzwi otwarte", "Odblokuj", "Zablokuj", "Rozbrój", "W domu", "Poza domem", "Noc", "Urlop", "Własny", "Tryb", "Brak", "Oscylacja", "Kierunek", "Do przodu", "Do tyłu", "Prędkość %u", "Wpisz kod", "Nieprawidłowy kod", "Za dużo błędnych kodów · %u s", "Aby używać tutaj, sparuj ten panel z Home Assistant i ustaw hasło Web Admin.", "Aby używać tutaj, sparuj ten panel z Home Assistant.", "Aby używać tutaj, ustaw hasło Web Admin.", "Odblokowywanie z tego panelu jest wyłączone. Zezwól na nie w opcjach HomeTiles Bridge.", "Rozbrajanie z tego panelu jest wyłączone. Zezwól na nie w opcjach HomeTiles Bridge.", "To urządzenie wymaga kodu tekstowego. Użyj Home Assistant.", "To nie jest dozwolone z panelu.", "Inne polecenie jest jeszcze wykonywane. Spróbuj ponownie za chwilę.", "Urządzenie tego nie obsługuje.", "Urządzenie jest niedostępne.", "Polecenie wygasło. Spróbuj ponownie.", "Brak odpowiedzi z Home Assistant.", "Home Assistant nie mógł wykonać polecenia.", "Zegar panelu nie jest jeszcze ustawiony.", "Urządzenie nie odpowiedziało."},
     {"Zablokowany", "Odblokowany", "Blokowanie…", "Odblokowywanie…", "Otwarty", "Otwieranie…", "Zacięty", "Niedostępny", "Nieznany"},
     {"Rozbrojony", "Uzbrojony (w domu)", "Uzbrojony (poza domem)", "Uzbrojony (noc)", "Uzbrojony (urlop)", "Uzbrojony (własny)", "Oczekiwanie", "Uzbrajanie", "Rozbrajanie", "Wyzwolony", "Niedostępny", "Nieznany"},
+    {"Wybierz encję", "Szukaj", "Żadna encja nie pasuje do „{query}”",
+     "Nie udało się wczytać encji. Wybrana encja pozostaje bez zmian.",
+     "Spróbuj ponownie", "Wyczyść", "Brak dostępnych encji"},
+    {"Czujnik", "Czujnik binarny", "Światło", "Przełącznik", "Wentylator", "Roleta",
+     "Klimat", "Odtwarzacz multimediów", "Pogoda", "Kamera", "Zamek", "Panel alarmowy",
+     "Liczba", "Wybór", "Data/czas", "Scena", "Skrypt", "Przycisk", "Automatyzacja",
+     "Nawilżacz", "Syrena", "Pilot"},
 };
 
 const TimezoneOptionInfo& timezone_option(size_t index) {

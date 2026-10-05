@@ -20,7 +20,6 @@
 #include "src/tiles/config/tile_config.h"
 #include "src/types/types_registry.h"
 #include "src/core/diagnostics/crash_log.h"
-#include "src/network/bridge/device_entities.h"
 #include "src/core/firmware/firmware_version.h"
 #include "src/core/i18n/i18n.h"
 #include "src/devices/device.h"
@@ -28,7 +27,6 @@
 #include "src/types/binary_sensor/renderer.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
-#include "src/types/energy/energy_data.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/video/local_camera/local_camera.h"
 #include "src/video/local_camera/local_camera_stream_contract.h"
@@ -412,16 +410,6 @@ static void appendTileTabHTML(
     uint16_t folder_id,
     const FolderEntry& folder,
     const TileGridConfig& grid,
-    const std::vector<String>& sensorOptions,
-    const std::vector<String>& binarySensorOptions,
-    const std::vector<String>& energyOptions,
-    const std::vector<String>& weatherOptions,
-    const std::vector<SceneOption>& sceneOptions,
-    const std::vector<String>& switchOptions,
-    const std::vector<String>& mediaOptions,
-    const std::vector<String>& climateOptions,
-    const std::vector<String>& coverOptions,
-    const std::vector<String>& cameraOptions,
     const std::function<String(const String&, uint8_t)>& formatSensorValue,
     const String& navigateOptionsHtml,
     bool screensaver_mode = false
@@ -1308,16 +1296,6 @@ static void appendTileTabHTML(
   html += "</p>";
             TileTypeWebContext type_ctx;
             type_ctx.tab_id = &tab_id;
-            type_ctx.sensor_options = &sensorOptions;
-            type_ctx.binary_sensor_options = &binarySensorOptions;
-            type_ctx.energy_options = &energyOptions;
-            type_ctx.weather_options = &weatherOptions;
-            type_ctx.scene_options = &sceneOptions;
-            type_ctx.switch_options = &switchOptions;
-            type_ctx.media_options = &mediaOptions;
-            type_ctx.climate_options = &climateOptions;
-            type_ctx.cover_options = &coverOptions;
-            type_ctx.camera_options = &cameraOptions;
             type_ctx.navigate_options_html = &navigateOptionsHtml;
             append_tile_type_fields_html(html, type_ctx);
 
@@ -1394,35 +1372,6 @@ bool buildAdminFolderTabFragments(uint16_t folder_id, String& button_html, Strin
   const FolderEntry* folder = tileConfig.getFolder(folder_id);
   if (!folder) return false;
 
-  const HaBridgeConfigData& ha = haBridgeConfig.get();
-  const auto sensorOptions = parseSensorList(ha.sensors_text);
-  const auto binarySensorOptions = parseSensorList(ha.binary_sensors_text);
-  auto energyOptions = parseSensorList(ha.energy_text);
-  energy_append_cached_entity_ids(energyOptions);
-  const auto weatherOptions = parseSensorList(ha.weathers_text);
-  const auto sceneOptions = parseSceneList(ha.scene_alias_text);
-  const auto lightOptions = parseSensorList(ha.lights_text);
-  const auto switchOptionsRaw = parseSensorList(ha.switches_text);
-  const auto mediaOptions = parseSensorList(ha.media_players_text);
-  const auto climateOptions = parseSensorList(ha.climates_text);
-  const auto coverOptions = parseSensorList(ha.covers_text);
-  const auto cameraOptions = parseSensorList(ha.cameras_text);
-  std::vector<String> switchOptions;
-  switchOptions.reserve(lightOptions.size() + switchOptionsRaw.size());
-  auto addSwitchOption = [&](const String& entry) {
-    if (!entry.length()) return;
-    for (const auto& existing : switchOptions) {
-      if (existing.equalsIgnoreCase(entry)) return;
-    }
-    switchOptions.push_back(entry);
-  };
-  for (const auto& opt : lightOptions) addSwitchOption(opt);
-  for (const auto& opt : switchOptionsRaw) addSwitchOption(opt);
-  addSwitchOption(kEntityDisplayBrightness);
-  addSwitchOption(kEntityScreensaverBrightness);
-  addSwitchOption(kEntityDisplayRotate);
-  addSwitchOption(kEntityDisplaySleep);
-
   auto formatSensorValue = [](const String& raw, uint8_t decimals) -> String {
     String v = raw;
     v.trim();
@@ -1465,11 +1414,8 @@ bool buildAdminFolderTabFragments(uint16_t folder_id, String& button_html, Strin
   tab_id = "folder" + String(folder_id);
   button_html = buildFolderTabButtonHtml(*folder);
   tab_html = "";
-  appendTileTabHTML(tab_html, folder_id, *folder, grid, sensorOptions,
-                    binarySensorOptions, energyOptions, weatherOptions,
-                    sceneOptions, switchOptions, mediaOptions, climateOptions,
-                    coverOptions, cameraOptions,
-                    formatSensorValue, navigateOptionsHtml);
+  appendTileTabHTML(tab_html, folder_id, *folder, grid, formatSensorValue,
+                    navigateOptionsHtml);
   return true;
 }
 
@@ -1486,40 +1432,6 @@ String WebAdminServer::getAdminPage() {
       String(FW_VERSION) + "  \xC2\xB7  " + Device::displayName();
   const String current_firmware_name =
       String("hometiles_") + FW_VERSION + "_" + Device::profile().key;
-  const HaBridgeConfigData& ha = haBridgeConfig.get();
-  const auto sensorOptions = parseSensorList(ha.sensors_text);
-  const auto binarySensorOptions = parseSensorList(ha.binary_sensors_text);
-  auto energyOptions = parseSensorList(ha.energy_text);
-  energy_append_cached_entity_ids(energyOptions);
-  const auto weatherOptions = parseSensorList(ha.weathers_text);
-  const auto sceneOptions = parseSceneList(ha.scene_alias_text);
-  const auto lightOptions = parseSensorList(ha.lights_text);
-  const auto switchOptionsRaw = parseSensorList(ha.switches_text);
-  const auto mediaOptions = parseSensorList(ha.media_players_text);
-  const auto climateOptions = parseSensorList(ha.climates_text);
-  const auto coverOptions = parseSensorList(ha.covers_text);
-  const auto cameraOptions = parseSensorList(ha.cameras_text);
-  std::vector<String> switchOptions;
-  switchOptions.reserve(lightOptions.size() + switchOptionsRaw.size());
-  auto addSwitchOption = [&](const String& entry) {
-    if (!entry.length()) return;
-    for (const auto& existing : switchOptions) {
-      if (existing.equalsIgnoreCase(entry)) {
-        return;
-      }
-    }
-    switchOptions.push_back(entry);
-  };
-  for (const auto& opt : lightOptions) {
-    addSwitchOption(opt);
-  }
-  for (const auto& opt : switchOptionsRaw) {
-    addSwitchOption(opt);
-  }
-  addSwitchOption(kEntityDisplayBrightness);
-  addSwitchOption(kEntityScreensaverBrightness);
-  addSwitchOption(kEntityDisplayRotate);
-  addSwitchOption(kEntityDisplaySleep);
   auto formatSensorValue = [](const String& raw, uint8_t decimals) -> String {
     String v = raw;
     v.trim();
@@ -1689,10 +1601,7 @@ String WebAdminServer::getAdminPage() {
     if (entry.id != 0) continue;
     TileGridConfig grid{};
     tileConfig.loadFolderGrid(entry.id, grid);
-    appendTileTabHTML(html, entry.id, entry, grid, sensorOptions,
-                      binarySensorOptions, energyOptions,
-                      weatherOptions, sceneOptions, switchOptions, mediaOptions,
-                      climateOptions, coverOptions, cameraOptions, formatSensorValue,
+    appendTileTabHTML(html, entry.id, entry, grid, formatSensorValue,
                       navigateOptionsHtml);
   }
 
@@ -1705,9 +1614,6 @@ String WebAdminServer::getAdminPage() {
            "%s", "monitor");
   appendTileTabHTML(html, TileConfig::kScreensaverGridStorageId,
                     screensaver_folder, screensaverConfig.tileGrid(),
-                    sensorOptions, binarySensorOptions, energyOptions,
-                    weatherOptions, sceneOptions,
-                    switchOptions, mediaOptions, climateOptions, coverOptions, cameraOptions,
                     formatSensorValue, navigateOptionsHtml, true);
 
   html += R"html(

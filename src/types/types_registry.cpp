@@ -1,6 +1,5 @@
 #include "src/types/types_registry.h"
 #include "src/types/value/value_control.h"
-#include "src/network/bridge/ha_bridge_config.h"
 
 #include <cstdio>
 #include <cstring>
@@ -111,19 +110,9 @@
 namespace {
 
 const String kEmptyString;
-const std::vector<String> kEmptyStrings;
-const std::vector<SceneOption> kEmptyScenes;
 
 const String& safeString(const String* value) {
   return value ? *value : kEmptyString;
-}
-
-const std::vector<String>& safeStrings(const std::vector<String>* value) {
-  return value ? *value : kEmptyStrings;
-}
-
-const std::vector<SceneOption>& safeScenes(const std::vector<SceneOption>* value) {
-  return value ? *value : kEmptyScenes;
 }
 
 lv_obj_t* render_number_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile,
@@ -135,7 +124,7 @@ bool apply_number_wrapper(WebServer& server, Tile& tile, const TileTypeApplyCont
   return editable_entity_matches(tile.type, tile.sensor_entity);
 }
 void append_number_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_number_fields_html(html, safeString(ctx.tab_id), parseSensorList(haBridgeConfig.get().numbers_text));
+  append_number_fields_html(html, safeString(ctx.tab_id));
 }
 
 lv_obj_t* render_select_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile,
@@ -147,7 +136,7 @@ bool apply_select_wrapper(WebServer& server, Tile& tile, const TileTypeApplyCont
   return editable_entity_matches(tile.type, tile.sensor_entity);
 }
 void append_select_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_select_fields_html(html, safeString(ctx.tab_id), parseSensorList(haBridgeConfig.get().selects_text));
+  append_select_fields_html(html, safeString(ctx.tab_id));
 }
 
 lv_obj_t* render_datetime_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile,
@@ -159,7 +148,7 @@ bool apply_datetime_wrapper(WebServer& server, Tile& tile, const TileTypeApplyCo
   return editable_entity_matches(tile.type, tile.sensor_entity);
 }
 void append_datetime_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_datetime_fields_html(html, safeString(ctx.tab_id), parseSensorList(haBridgeConfig.get().datetimes_text));
+  append_datetime_fields_html(html, safeString(ctx.tab_id));
 }
 
 lv_obj_t* render_sensor_wrapper(lv_obj_t* parent,
@@ -438,17 +427,16 @@ bool apply_back_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContex
 }
 
 void append_sensor_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_sensor_fields_html(html, safeString(ctx.tab_id), safeStrings(ctx.sensor_options));
+  append_sensor_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_binary_sensor_fields_wrapper(String& html,
                                          const TileTypeWebContext& ctx) {
-  append_binary_sensor_fields_html(
-      html, safeString(ctx.tab_id), safeStrings(ctx.binary_sensor_options));
+  append_binary_sensor_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_scene_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_scene_fields_html(html, safeString(ctx.tab_id), safeScenes(ctx.scene_options));
+  append_scene_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_navigate_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
@@ -460,7 +448,7 @@ void append_back_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
 }
 
 void append_switch_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_switch_fields_html(html, safeString(ctx.tab_id), safeStrings(ctx.switch_options));
+  append_switch_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_clock_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
@@ -472,20 +460,19 @@ void append_text_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
 }
 
 void append_weather_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_weather_fields_html(html, safeString(ctx.tab_id), safeStrings(ctx.weather_options));
+  append_weather_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_energy_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_energy_fields_html(html, safeString(ctx.tab_id), safeStrings(ctx.energy_options));
+  append_energy_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_media_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_media_fields_html(html, safeString(ctx.tab_id), safeStrings(ctx.media_options));
+  append_media_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_climate_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_climate_fields_html(
-      html, safeString(ctx.tab_id), safeStrings(ctx.climate_options));
+  append_climate_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_settings_fields_wrapper(String& html,
@@ -494,13 +481,11 @@ void append_settings_fields_wrapper(String& html,
 }
 
 void append_cover_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_cover_fields_html(
-      html, safeString(ctx.tab_id), safeStrings(ctx.cover_options));
+  append_cover_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_camera_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_camera_fields_html(
-      html, safeString(ctx.tab_id), safeStrings(ctx.camera_options));
+  append_camera_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_pixelanim_fields_wrapper(String& html, const TileTypeWebContext& ctx) {

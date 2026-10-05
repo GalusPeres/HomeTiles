@@ -84,18 +84,6 @@
     updateTileSettingsMaxHeight();
   }
 
-  function titleFromOption(option) {
-    if (!option) return '';
-    // The first option is the translated "No selection" placeholder.  It is
-    // not an entity name and must never become a persisted tile title.
-    if (!String(option.value || '').trim().length) return '';
-    const label = String(option.textContent || option.innerText || '').trim();
-    if (!label.length) return '';
-    const sep = label.indexOf(' - ');
-    if (sep > 0) return label.substring(0, sep).trim();
-    return label;
-  }
-
   function titleFromEntity(entity) {
     let name = String(entity || '').trim();
     if (!name.length) return '';
@@ -112,8 +100,8 @@
     const selectEl = document.getElementById(prefix + selectSuffix);
     if (!titleInput || !selectEl) return;
     if (titleInput.value && titleInput.value.trim().length) return;
-    const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
-    let title = titleFromOption(opt);
+    if (!String(selectEl.value || '').trim()) return;
+    let title = entityPickerName(selectEl);
     if (!title.length) title = titleFromEntity(selectEl.value);
     if (title.length) titleInput.value = title;
   }
@@ -265,8 +253,6 @@
     for (const kind of ['number', 'select', 'datetime']) {
       const select = document.getElementById(prefix + '_' + kind + '_entity');
       bindLive(select, 'change', kind + 'Entity', () => {
-        if (select.value) select.dataset.configuredValue = select.value;
-        else delete select.dataset.configuredValue;
         maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
@@ -278,11 +264,6 @@
       });
     }
     bindLive(binarySensorSelect, 'change', 'binarySensorEntity', () => {
-      if (binarySensorSelect.value) {
-        binarySensorSelect.dataset.configuredValue = binarySensorSelect.value;
-      } else {
-        delete binarySensorSelect.dataset.configuredValue;
-      }
       maybeFillTitleFromEntity(tab, '_binary_sensor_entity');
       updateTilePreview(tab);
       updateDraft(tab);
@@ -298,7 +279,6 @@
     bindLive(weatherPopupModeSelect, 'change', 'weatherPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(weatherColoredIconsCheck, 'change', 'weatherColoredIcons', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energySelect, 'change', 'energyEntity', () => {
-      energySelect.dataset.configuredValue = energySelect.value || '';
       maybeFillTitleFromEnergy(tab);
       updateTilePreview(tab);
       updateEnergyValuePreview(tab);
@@ -322,7 +302,7 @@
     bindLive(gaugeYOffsetInput, 'input', 'sensorGaugeYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(valueYOffsetInput, 'input', 'sensorValueYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(graphHeightInput, 'input', 'sensorGraphHeight', () => { updateDraft(tab); scheduleAutoSave(tab); });
-    bindLive(sceneInput, 'input', 'sceneAlias', () => { maybeFillTitleFromScene(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(sceneInput, 'change', 'sceneAlias', () => { maybeFillTitleFromScene(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(textInput, 'input', 'textValue', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(textFontInput, 'change', 'textFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(navigateSelect, 'change', 'navigateTarget', () => {
@@ -348,11 +328,6 @@
     bindLive(switchPopupModeSelect, 'change', 'switchPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(mediaSelect, 'change', 'mediaEntity', () => { maybeFillTitleFromMedia(tab); updateTilePreview(tab); updateMediaValuePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(climateSelect, 'change', 'climateEntity', () => {
-      if (climateSelect.value) {
-        climateSelect.dataset.configuredValue = climateSelect.value;
-      } else {
-        delete climateSelect.dataset.configuredValue;
-      }
       maybeFillTitleFromEntity(tab, '_climate_entity');
       updateTilePreview(tab);
       updateDraft(tab);
@@ -366,11 +341,6 @@
     });
     bindLive(document.getElementById(prefix + '_cover_value_font'), 'change', 'coverValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(coverSelect, 'change', 'coverEntity', () => {
-      if (coverSelect.value) {
-        coverSelect.dataset.configuredValue = coverSelect.value;
-      } else {
-        delete coverSelect.dataset.configuredValue;
-      }
       maybeFillTitleFromEntity(tab, '_cover_entity');
       updateTilePreview(tab);
       updateDraft(tab);
@@ -387,8 +357,6 @@
         updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
       });
       bindLive(select, 'change', kind + 'Entity', () => {
-        if (select.value) select.dataset.configuredValue = select.value;
-        else delete select.dataset.configuredValue;
         maybeFillTitleFromEntity(tab, '_' + kind + '_entity');
         updateTilePreview(tab);
         updateDraft(tab);
@@ -400,11 +368,6 @@
       });
     }
     bindLive(cameraSelect, 'change', 'cameraEntity', () => {
-      if (cameraSelect.value) {
-        cameraSelect.dataset.configuredValue = cameraSelect.value;
-      } else {
-        delete cameraSelect.dataset.configuredValue;
-      }
       maybeFillTitleFromEntity(tab, '_camera_entity');
       updateTilePreview(tab);
       updateDraft(tab);

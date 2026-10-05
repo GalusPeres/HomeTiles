@@ -4,7 +4,6 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
-#include "src/network/bridge/ha_bridge_config.h"
 #include "src/types/switch/web_html.h"
 #include "src/web/server/web_admin_utils.h"
 
@@ -29,11 +28,6 @@ const char* device_field_prefix(TileType type) {
   return type == TILE_LOCK ? "lock" : type == TILE_ALARM ? "alarm" : "fan";
 }
 
-std::vector<String> device_entity_options(TileType type) {
-  const HaBridgeConfigData& ha = haBridgeConfig.get();
-  return parseSensorList(type == TILE_LOCK ? ha.locks_text : type == TILE_ALARM ? ha.alarm_panels_text : ha.fans_text);
-}
-
 bool device_entity_matches(TileType type, const String& entity) {
   if (!entity.length()) return true;
   const int dot = entity.indexOf('.');
@@ -52,23 +46,10 @@ void append_device_fields_html(String& html, const String& tab_id, TileType type
   html += tab_id;
   html += "_";
   html += prefix;
-  html += "_fields\" class=\"type-fields\"><label>";
-  html += entity_label(type);
-  html += "</label><select id=\"";
-  html += tab_id;
-  html += "_";
-  html += prefix;
-  html += "_entity\"><option value=\"\">";
-  html += tr.no_selection;
-  html += "</option>";
-  for (const String& entity : device_entity_options(type)) {
-    html += "<option value=\"";
-    appendHtmlEscaped(html, entity);
-    html += "\">";
-    appendHtmlEscaped(html, humanizeIdentifier(entity, true) + " - " + entity);
-    html += "</option>";
-  }
-  html += "</select>";
+  html += "_fields\" class=\"type-fields\">";
+  const String entity_field = String(prefix) + "_entity";
+  appendEntityPickerField(html, tab_id, entity_field.c_str(), entity_label(type),
+                          type == TILE_LOCK ? "locks" : type == TILE_ALARM ? "alarm_panels" : "fans");
   // The state size like the Switch tile (tile_header.h): the half-height
   // Sensor value sizes beside the disc, the Sensor value sizes from 1.5 rows.
   const SwitchChoice sizes[] = {{"0", tr.sensor_value_size_default}, {"1", "20"}, {"2", "24"},

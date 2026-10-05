@@ -27,10 +27,7 @@
   function resetClimateFields(tab) {
     resetIconColorFields(tab);
     const entity = document.getElementById(tab + '_climate_entity');
-    if (entity) {
-      entity.value = '';
-      delete entity.dataset.configuredValue;
-    }
+    if (entity) entity.value = '';
     const popup = document.getElementById(tab + '_climate_popup_open_mode');
     if (popup) popup.value = '1';
     const view = document.getElementById(tab + '_climate_view');

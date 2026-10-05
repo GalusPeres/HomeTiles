@@ -7,10 +7,8 @@ function maybeFillTitleFromScene(tab) {
     if (!typeSel || !titleInput || !sceneSel) return;
     if (typeSel.value !== '2') return;
     if (titleInput.value && titleInput.value.trim().length) return;
-    const opt = sceneSel.selectedOptions && sceneSel.selectedOptions[0];
-    if (!opt) return;
-    const label = opt.textContent || opt.innerText || '';
-    const title = label.split(' - ')[0] || opt.value || '';
+    if (!sceneSel.value) return;
+    const title = entityPickerName(sceneSel) || sceneSel.value;
     if (title.trim().length) titleInput.value = title.trim();
   }
 

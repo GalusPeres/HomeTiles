@@ -149,7 +149,25 @@ void appendAdminScripts(String& html) {
   appendJsEntry("webAuthRemoved", tr.web_auth_removed);
   appendJsEntry("webAuthChangeFailed", tr.web_auth_change_failed);
   appendJsEntry("webAuthRemoveConfirm", tr.web_auth_remove_confirm);
+  const auto& loc = i18n::locale(configManager.getConfig().language);
+  static const char* const kEntityPickerKeys[] = {
+      "entityPickerChoose", "entityPickerSearch", "entityPickerNoMatch", "entityPickerLoadFailed",
+      "entityPickerRetry", "entityPickerClear", "entityPickerNone"};
+  static_assert(sizeof(kEntityPickerKeys) / sizeof(kEntityPickerKeys[0]) ==
+                    sizeof(i18n::LocaleProfile::entity_picker_labels) / sizeof(const char*),
+                "one key per entity picker label");
+  for (size_t i = 0; i < sizeof(kEntityPickerKeys) / sizeof(kEntityPickerKeys[0]); ++i) {
+    appendJsEntry(kEntityPickerKeys[i], loc.entity_picker_labels[i]);
+  }
   html += "  };\n";
+  // Order of LocaleProfile::entity_kind_labels (ENTITY_KIND_DOMAINS in
+  // tiles/entity-picker.js).
+  html += "  const ENTITY_KIND_LABELS = [";
+  for (size_t i = 0; i < sizeof(loc.entity_kind_labels) / sizeof(loc.entity_kind_labels[0]); ++i) {
+    if (i) html += ", ";
+    appendJsStringLiteral(html, loc.entity_kind_labels[i]);
+  }
+  html += "];\n";
   html += "  const GRID_COLS = " + String(GRID_COLS) + ";\n";
   html += "  const GRID_ROWS = " + String(GRID_ROWS) + ";\n";
   html += "  const TILES_PER_GRID = " +

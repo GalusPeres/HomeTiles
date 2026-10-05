@@ -20,6 +20,13 @@ void copyToBuffer(char* dest, size_t max_len, const String& value);
 void appendHtmlEscaped(String& out, const String& value);
 void appendTileTitleHtml(String& out, const String& value);
 
+// Entity field of a tile type. The value lives in a hidden input with the
+// usual field id, so loading, saving, drafts and previews keep reading it;
+// the shared Web Admin entity picker (tiles/entity-picker.js) draws the
+// control and lists the entities of `list` from /api/entity_options.
+void appendEntityPickerField(String& out, const String& tab_id, const char* field,
+                             const char* label, const char* list);
+
 // Convert identifier to human-readable format (e.g., "sensor.temp" -> "Sensor Temp")
 String humanizeIdentifier(const String& raw, bool strip_domain);
 

@@ -354,11 +354,8 @@
   function scheduleHardwareIoEntityOptionsRefresh() {
     hardwareIoEntityRefreshTimers.forEach(timer => window.clearTimeout(timer));
     hardwareIoEntityRefreshTimers = [0, 2500, 7500].map(delay => window.setTimeout(() => {
-      fetchEntityOptions(true).then(data => {
-        tileTabs.forEach(tab => {
-          rebuildEntitySelect(tab + '_sensor_entity', data.sensors);
-          rebuildEntitySelect(tab + '_switch_entity', data.switches);
-        });
+      fetchEntityOptions(true).then(() => {
+        refreshEntityPickers();
         fetchSensorMetaCache(true);
       }).catch(() => {});
     }, delay));

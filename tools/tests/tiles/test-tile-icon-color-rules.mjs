@@ -450,7 +450,7 @@ const block = `<div id="t_tile_icon_color_fields" class="tile-icon-color-fields 
 <div class="icon-color-segmented"><button type="button" data-icon-color="rules-on" data-mode="0">Off</button><button type="button" data-icon-color="rules-on" data-mode="1">On</button></div>
 <div class="icon-color-rules-body hidden" id="t_tile_icon_rules_body"><input type="hidden" id="t_tile_icon_source_kind" value="self">
 <div class="icon-color-segmented" id="t_tile_icon_source_kinds"><button type="button" data-icon-color="source-kind" data-mode="self">Own</button><button type="button" data-icon-color="source-kind" data-mode="other">Other</button></div>
-<select id="t_tile_icon_source" data-icon-color="source"><option value="">None</option></select><input type="hidden" id="t_tile_icon_source_mode" value="rules">
+<input type="hidden" id="t_tile_icon_source" data-icon-color="source" data-entity-picker="icon_sources"><input type="hidden" id="t_tile_icon_source_mode" value="rules">
 <div class="icon-color-segmented" id="t_tile_icon_source_modes"><button type="button" data-icon-color="source-mode" data-mode="auto">A</button><button type="button" data-icon-color="source-mode" data-mode="rules">R</button></div>
 <label class="inline-checkbox"><input type="checkbox" id="t_tile_icon_rule_icon" data-icon-color="rule-target" checked> Icon</label>
 <label class="inline-checkbox"><input type="checkbox" id="t_tile_icon_rule_tile" data-icon-color="rule-target"> Tile</label>
@@ -622,9 +622,10 @@ try{
  check($('t_tile_icon_on').value==='#4caf50'&&$('t_tile_icon_off').dataset.unset==='0','Binary colors load');
  click($('clear_on'));check(snapshot()==='v2\\n\\nis 607D8B off'&&$('t_tile_icon_on').value==='#ffc107','Reset returns On to amber');
  // Another entity: the Bridge entities once, Entity color or own rules.
- rebuildEntitySelect('t_tile_icon_source', iconColorSourceEntries({sensors:[{v:'sensor.waste',t:'Waste'}],
-   switches:[{v:'light.kitchen',t:'Kitchen'}],binary_sensors:[{v:'sensor.waste'},{v:'Bad Entity'}]}));
- check([...$('t_tile_icon_source').options].map(o=>o.value).join()===',sensor.waste,light.kitchen','Source list merges valid Bridge entities once');
+ // The shared entity picker lists the valid Bridge entities once.
+ check(entityPickerEntries({sensors:[{v:'sensor.waste',t:'Waste'}],switches:[{v:'light.kitchen',t:'Kitchen'}],
+   binary_sensors:[{v:'sensor.waste'},{v:'Bad Entity'}]},'icon_sources').map(e=>e.value).join()==='light.kitchen,sensor.waste',
+   'Source list merges valid Bridge entities once');
  load('4',{icon_colors:'v2\\nFF0000\\nsrc rules sensor.waste\\nhas F44336 6'});
  check(!hidden('t_tile_icon_rules_body')&&hidden('t_tile_icon_source_kinds')&&!hidden('t_tile_icon_source')&&$('t_tile_icon_source').value==='sensor.waste','Folder: another entity only');
  check(!hidden('t_tile_icon_state_section')&&hidden('t_tile_icon_bar_section'),'A text source shows the state list');

@@ -146,12 +146,11 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
   html += R"html(_tile_icon_source_kinds">)html";
   append_button(html, "", "source-kind", "data-mode", "self", tr.tile_rules_own_entity);
   append_button(html, "", "source-kind", "data-mode", "other", tr.tile_rules_other_entity);
+  // The other entity: the shared entity picker (tiles/entity-picker.js).
   html += R"html(</div>
-                  <select id=")html";
+                  <input type="hidden" id=")html";
   html += tab_id;
-  html += R"html(_tile_icon_source" data-icon-color="source"><option value="">)html";
-  appendHtmlEscaped(html, tr.tile_icon_color_source_none);
-  html += R"html(</option></select>
+  html += R"html(_tile_icon_source" data-icon-color="source" data-entity-picker="icon_sources">
                   <input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_source_mode" value="rules">

@@ -40,6 +40,23 @@ void appendHtmlEscaped(String& out, const String& value) {
   }
 }
 
+void appendEntityPickerField(String& out, const String& tab_id, const char* field,
+                             const char* label, const char* list) {
+  out += "<label for=\"";
+  out += tab_id;
+  out += "_";
+  out += field;
+  out += "_picker\">";
+  appendHtmlEscaped(out, label);
+  out += "</label><input type=\"hidden\" id=\"";
+  out += tab_id;
+  out += "_";
+  out += field;
+  out += "\" data-entity-picker=\"";
+  out += list;
+  out += "\">";
+}
+
 String humanizeIdentifier(const String& raw, bool strip_domain) {
   if (!raw.length()) return String("--");
   String text = raw;

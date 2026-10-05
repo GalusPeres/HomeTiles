@@ -367,6 +367,16 @@ bool sendUnpair() {
   return queued;
 }
 
+// Without its key the direct link is useless: the panel forgets the Bridge
+// and is a new panel again, without a restart; Pair makes it discoverable.
+// The worker sends queued messages before it leaves the link.
+void forgetLink(const char* why) {
+  if (!networkManager.linkConfigured()) return;
+  link_config::clear();
+  networkManager.leaveLink();
+  Serial.printf("[SecureCmd] Direct link removed (%s); the panel is new again\n", why);
+}
+
 bool turnOff(bool tell_bridge, bool* bridge_notified) {
   if (bridge_notified) *bridge_notified = false;
   if (!writeRecord(nullptr)) {
@@ -376,15 +386,8 @@ bool turnOff(bool tell_bridge, bool* bridge_notified) {
   const bool notified = tell_bridge && sendUnpair();
   if (bridge_notified) *bridge_notified = notified;
   releaseState();
-  // Without its key the direct link is useless: the panel forgets the Bridge
-  // and is a new panel again, without a restart; Pair sets it up again. The
-  // worker sends the queued unpair before it leaves the link.
   networkManager.setLinkPairing(nullptr, nullptr);
-  if (networkManager.linkConfigured()) {
-    link_config::clear();
-    networkManager.leaveLink();
-    Serial.println("[SecureCmd] Direct link removed; the panel is new again");
-  }
+  forgetLink("pairing removed");
   g_clear_status = true;
   publishStatus();
   // Replace the signed retained announcement with an unsigned one.
@@ -472,6 +475,10 @@ void endAttempt(PairingPhase phase, const char* reason) {
   g_attempt->phase = phase;
   wipeAttemptSecrets();
   linkPairingEnded();
+  // Rejected, cancelled or timed out after Home Assistant sent its address:
+  // keeping the address without a key would make the next Pair try the link
+  // instead of announcing the panel, and a new panel would hang there.
+  if (!g_state) forgetLink("pairing ended without a key");
 }
 
 void completePairing() {
@@ -802,7 +809,16 @@ void endPairing() {
     Serial.println("[SecureCmd] Pairing window closed on the panel");
     closeLinkWindow();
   }
-  if (!g_attempt) return;
+  if (!g_attempt) {
+    // Cancelled between Home Assistant's address and the first pairing
+    // message: the link would still connect and pair by itself.
+    if (g_link_setup_until) {
+      g_link_setup_until = 0;
+      Serial.println("[SecureCmd] Pairing cancelled on the panel");
+      if (!g_state) forgetLink("setup cancelled");
+    }
+    return;
+  }
   if (attemptRunning()) {
     Serial.println("[SecureCmd] Pairing cancelled on the panel");
     endAttempt(PairingPhase::Failed, "cancel");
@@ -868,9 +884,13 @@ void onMqttConnected() {
 void service() {
   // The Bridge refused the key three times: its entry was deleted in Home
   // Assistant. Become a new panel, so Pair sets it up again.
-  if (networkManager.consumeLinkForgotten() && g_state) {
+  if (networkManager.consumeLinkForgotten()) {
     Serial.println("[SecureCmd] The Bridge no longer knows this panel; it is new again");
-    turnOff(false, nullptr);
+    if (g_state) {
+      turnOff(false, nullptr);
+    } else {
+      forgetLink("unknown to the Bridge");
+    }
   }
   linkWindowActive();
   servicePairing();

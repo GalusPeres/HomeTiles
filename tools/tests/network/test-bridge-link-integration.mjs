@@ -63,15 +63,17 @@ assert.ok(complete.indexOf('networkManager.setLinkPairing(g_attempt->key') < com
 const turnOff = channel.slice(channel.indexOf('bool turnOff('), channel.indexOf('void handleUnpair('));
 assert.ok(turnOff.indexOf('sendUnpair()') < turnOff.indexOf('networkManager.setLinkPairing(nullptr, nullptr)'),
   'the unpair is queued before the link loses its key');
-assert.ok(turnOff.indexOf('networkManager.setLinkPairing(nullptr, nullptr)') < turnOff.indexOf('link_config::clear()') &&
-  turnOff.indexOf('link_config::clear()') < turnOff.indexOf('networkManager.leaveLink()'),
+const forget = channel.slice(channel.indexOf('void forgetLink(const char* why) {'), channel.indexOf('bool turnOff('));
+assert.ok(forget.indexOf('link_config::clear()') < forget.indexOf('networkManager.leaveLink()'));
+assert.ok(turnOff.indexOf('networkManager.setLinkPairing(nullptr, nullptr)') < turnOff.indexOf('forgetLink("pairing removed")'),
   'without its key the panel forgets the Bridge and is a new panel again');
 assert.doesNotMatch(channel, /g_restart|setRestartCallback/, 'removing the pairing does not restart the panel');
-assert.match(channel, /if \(networkManager\.consumeLinkForgotten\(\) && g_state\) \{[\s\S]{0,200}turnOff\(false, nullptr\);/,
+assert.match(channel, /if \(networkManager\.consumeLinkForgotten\(\)\) \{[\s\S]{0,200}?if \(g_state\) \{\s*turnOff\(false, nullptr\);\s*\} else \{\s*forgetLink\("unknown to the Bridge"\);/,
   'a panel the Bridge no longer knows becomes a new panel');
 assert.match(channel, /void acceptLinkSetup\(const char\* host, uint16_t port\) \{\s*closeLinkWindow\(\);[\s\S]*?networkManager\.switchToLink\(host, port\);\s*networkManager\.requestLinkPairing\(true\);/,
   'an accepted Bridge address switches to the link without a restart');
-assert.match(channel, /void endAttempt\([^)]*\) \{[\s\S]*?linkPairingEnded\(\);\s*\}/, 'every ended attempt leaves pair mode');
+assert.match(channel, /void endAttempt\([^)]*\) \{[\s\S]*?linkPairingEnded\(\);[\s\S]*?if \(!g_state\) forgetLink\([^)]*\);\s*\}/,
+  'every ended attempt leaves pair mode');
 assert.match(channel, /if \(networkManager\.linkConfigured\(\)\) networkManager\.requestLinkPairing\(true\);/,
   'Pair on a linked display connects the link in pair mode');
 const start = channel.slice(channel.indexOf('bool startPairing() {'), channel.indexOf('PairingPhase pairingPhase() {'));
@@ -160,6 +162,15 @@ assert.match(mdnsStart, /if \(!mdns_txt_seq_\) mdns_txt_seq_ = esp_random\(\) \|
 assert.doesNotMatch(mdnsStart, /addServiceTxt/, 'the TXT set comes from applyMdnsTxt() only');
 assert.match(network, /MDNS\.addService\("hometiles", "tcp", 80\);/,
   'the Arduino wrapper registers the service as _hometiles._tcp');
+
+// Rejected, cancelled or timed out after Submit: the panel must not keep the
+// address without a key, or the next Pair tries the link and a new panel hangs.
+const endAttemptFn = channel.slice(channel.indexOf('void endAttempt(PairingPhase phase, const char* reason) {'), channel.indexOf('void completePairing() {'));
+assert.match(endAttemptFn, /linkPairingEnded\(\);[\s\S]*?if \(!g_state\) forgetLink\("pairing ended without a key"\);/,
+  'a link pairing that ends without a key makes the panel new again');
+const cancel = channel.slice(channel.indexOf('void endPairing() {'), channel.indexOf('bool disable(bool* bridge_notified) {'));
+assert.match(cancel, /if \(!g_attempt\) \{[\s\S]*?if \(g_link_setup_until\) \{\s*g_link_setup_until = 0;[\s\S]*?if \(!g_state\) forgetLink\("setup cancelled"\);\s*\}\s*return;\s*\}/,
+  'Cancel right after Submit, before the number, does not let the link pair by itself');
 
 // Broker credentials never outlive the broker host.
 const mqttSave = web.slice(web.indexOf('void WebAdminServer::handleSaveMQTT() {'), web.indexOf('if (server.hasArg("mqtt_client_id"))'));

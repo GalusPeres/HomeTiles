@@ -60,7 +60,11 @@ unpair) also forgets the Bridge address: without its key the link cannot
 connect. The panel leaves the link without a restart and is a new panel
 again; **Pair** sets it up as above, and an existing entry is kept. When the
 Bridge refuses the stored key three times in a row (`unknown`: the entry was
-deleted in Home Assistant), the panel does the same by itself. A single
+deleted in Home Assistant), the panel does the same by itself, paired or not.
+A pairing that ends without a key after Home Assistant sent its address
+(rejected, cancelled, no answer or timed out, also a cancel before the number
+appears) forgets the address as well, so the next Pair announces the panel
+again instead of trying a link it has no key for. A single
 refusal can be the moment between pairing and the new entry, so the Bridge
 also accepts the key of a setup dialog that has just paired.
 

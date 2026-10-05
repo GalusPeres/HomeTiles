@@ -28,6 +28,9 @@ bool configured();
 const Settings& current();
 bool save(const Settings& settings);
 bool setPairRequested(bool requested);
+// Forgets the Bridge address; the panel uses neither link nor MQTT until it
+// is paired again (Pair on the panel).
+bool clear();
 
 // A host the panel can connect to: an IPv4 address or a DNS name of letters,
 // digits, dots and dashes.

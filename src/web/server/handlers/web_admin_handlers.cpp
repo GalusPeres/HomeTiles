@@ -656,9 +656,12 @@ void WebAdminServer::handleLinkSetup() {
   }
 
   DeviceConfig cfg = configManager.getConfig();
-  if (base != cfg.mqtt_base_topic || prefix != cfg.ha_prefix) {
+  // The link replaces MQTT; without a broker host the panel starts like a new
+  // one if the link is removed later.
+  if (base != cfg.mqtt_base_topic || prefix != cfg.ha_prefix || cfg.mqtt_host[0]) {
     copyToBuffer(cfg.mqtt_base_topic, sizeof(cfg.mqtt_base_topic), base);
     copyToBuffer(cfg.ha_prefix, sizeof(cfg.ha_prefix), prefix);
+    cfg.mqtt_host[0] = '\0';
     if (!configManager.save(cfg)) {
       sendJsonError(server, 500, "Could not store the base topic");
       return;

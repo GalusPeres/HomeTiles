@@ -128,6 +128,16 @@ bool save(const Settings& settings) {
   return true;
 }
 
+bool clear() {
+  if (!write(nullptr)) {
+    Serial.println("[Link] Could not remove the Bridge address");
+    return false;
+  }
+  g_loaded = true;
+  memset(&g_settings, 0, sizeof(g_settings));
+  return true;
+}
+
 bool setPairRequested(bool requested) {
   if (!configured()) return false;
   if (g_settings.pair_requested == requested) return true;

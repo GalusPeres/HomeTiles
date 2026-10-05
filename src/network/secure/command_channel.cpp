@@ -99,6 +99,11 @@ void (*g_pairing_prompt)() = nullptr;
 // value (0 = closed); see linkWindowOpen().
 constexpr uint32_t kLinkWindowMs = 120000;
 uint32_t g_link_window_until = 0;
+// After the pairing of a direct link ended, the panel restarts at this
+// millis() value (0 = none), once the unpair has left.
+constexpr uint32_t kLinkResetRestartMs = 2000;
+uint32_t g_restart_at = 0;
+void (*g_restart)() = nullptr;
 
 void closeLinkWindow() {
   if (!g_link_window_until) return;
@@ -363,8 +368,15 @@ bool turnOff(bool tell_bridge, bool* bridge_notified) {
   const bool notified = tell_bridge && sendUnpair();
   if (bridge_notified) *bridge_notified = notified;
   releaseState();
-  // A direct link stops after the queued unpair; Pair connects it again.
+  // A direct link stops after the queued unpair. Without its key the link is
+  // useless, so the panel forgets the Bridge and restarts like a new panel;
+  // Pair then sets it up again from Home Assistant.
   networkManager.setLinkPairing(nullptr, nullptr);
+  if (networkManager.linkConfigured() && link_config::clear()) {
+    const uint32_t at = millis() + kLinkResetRestartMs;
+    g_restart_at = at ? at : 1;
+    Serial.println("[SecureCmd] Direct link removed; restarting as a new panel");
+  }
   g_clear_status = true;
   publishStatus();
   // Replace the signed retained announcement with an unsigned one.
@@ -802,6 +814,10 @@ void setPairingPromptCallback(void (*callback)()) {
   g_pairing_prompt = callback;
 }
 
+void setRestartCallback(void (*callback)()) {
+  g_restart = callback;
+}
+
 void onMqttConnected() {
   begin();
   // The Bridge sent its address and the panel restarted: pair right away.
@@ -830,6 +846,10 @@ void onMqttConnected() {
 }
 
 void service() {
+  if (g_restart_at && static_cast<int32_t>(millis() - g_restart_at) >= 0) {
+    g_restart_at = 0;
+    if (g_restart) g_restart();
+  }
   linkWindowActive();
   servicePairing();
   if (!g_state) {

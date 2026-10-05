@@ -63,6 +63,10 @@ assert.ok(complete.indexOf('networkManager.setLinkPairing(g_attempt->key') < com
 const turnOff = channel.slice(channel.indexOf('bool turnOff('), channel.indexOf('void handleUnpair('));
 assert.ok(turnOff.indexOf('sendUnpair()') < turnOff.indexOf('networkManager.setLinkPairing(nullptr, nullptr)'),
   'the unpair is queued before the link loses its key');
+assert.ok(turnOff.indexOf('networkManager.setLinkPairing(nullptr, nullptr)') < turnOff.indexOf('link_config::clear()'),
+  'without its key the panel forgets the Bridge and starts again like a new panel');
+assert.match(channel, /if \(g_restart_at && static_cast<int32_t>\(millis\(\) - g_restart_at\) >= 0\) \{\s*g_restart_at = 0;\s*if \(g_restart\) g_restart\(\);/,
+  'the restart waits until the unpair has left');
 assert.match(channel, /void endAttempt\([^)]*\) \{[\s\S]*?linkPairingEnded\(\);\s*\}/, 'every ended attempt leaves pair mode');
 assert.match(channel, /if \(networkManager\.linkConfigured\(\)\) networkManager\.requestLinkPairing\(true\);/,
   'Pair on a linked display connects the link in pair mode');

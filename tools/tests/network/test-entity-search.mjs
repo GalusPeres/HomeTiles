@@ -46,21 +46,20 @@ assert.match(search, /g_answer\.received = 0;\s*g_answer\.full = false;\s*g_answ
 assert.equal((search.match(/haBridgeConfig\./g) || []).length, 2, 'only the two capability checks read the Bridge');
 assert.match(search, /bool declares\(\) \{\s*return command_channel::state\(\) == command_channel::PairingState::Active &&\s*haBridgeConfig\.supportsEntityDeclarations\(\);/);
 assert.doesNotMatch(search, /released|g_reported|g_last_report|parseSensorList/, 'no released lists, no sticky report state');
-const collect = search.slice(search.indexOf('std::vector<Declared> collectDeclared()'), search.indexOf('uint32_t fnv1a('));
-assert.match(collect, /declare\(lists, listOfType\(slots\[i\]\.type\), String\(slots\[i\]\.entity\)\);/, 'every folder tile');
-assert.match(collect, /const String source\(slots\[i\]\.rule_entity\);\s*declare\(lists, listOfSource\(source\), source\);/,
+const collect = search.slice(search.indexOf('entity_declaration::Declaration collectDeclaration()'),
+  search.indexOf('}  // namespace\n\nbool available()'));
+assert.match(collect, /declaration\.add\(listOfType\(slots\[i\]\.type\), slots\[i\]\.entity\);/, 'every folder tile');
+assert.match(collect, /declaration\.add\(listOfSource\(slots\[i\]\.rule_entity\), slots\[i\]\.rule_entity\);/,
   'icon color sources too');
-assert.match(collect, /screensaverConfig\.tileGrid\(\)[\s\S]*declare\(lists, listOfType\(tile\.type\), tile\.sensor_entity\);[\s\S]*tileIconSourceEntity\(tile\.type, tile\.icon_colors\)/,
+assert.match(collect, /screensaverConfig\.tileGrid\(\)[\s\S]*declaration\.add\(listOfType\(tile\.type\), tile\.sensor_entity\.c_str\(\)\);[\s\S]*tileIconSourceEntity\(tile\.type, tile\.icon_colors\)/,
   'screensaver tiles and their icon color sources');
-assert.match(collect, /std::sort\(item\.ids\.begin\(\), item\.ids\.end\(\)\);/, 'sorted: the same tiles, the same version');
-const partBytes = Number(search.match(/kMaxPartBytes = (\d+)/)?.[1]);
-assert.ok(partBytes > 0 && partBytes < maxBody, 'every part fits one sealed message');
-assert.match(search, /constexpr size_t kMaxDeclarationParts = 8;/, 'entity_search.py MAX_DECLARATION_PARTS');
-assert.match(search, /constexpr size_t kMaxDeclaredEntities = 300;/, 'entity_search.py MAX_PANEL_ENTITIES');
-assert.match(search, /if \(added > kMaxPartBytes\) \{\s*\+\+dropped;[^}]*continue;\s*\}/, 'one overlong value never overflows a part');
-assert.match(search, /if \(parts\.size\(\) == kMaxDeclarationParts\) \{\s*\+\+dropped;\s*continue;\s*\}/);
-assert.match(search, /array\.add\(id\);\s*version = fnv1a\(version, String\('\|'\) \+ item\.list \+ ',' \+ id\);/,
-  'the version covers exactly what is declared');
+// Version, parts and entity ids run on the host in test-entity-declaration-core.mjs.
+assert.doesNotMatch(search, /std::sort|std::vector<JsonDocument>|<algorithm>/,
+  'no sorting and no document copies: the version does not depend on the order');
+const declarationCore = read('src/network/bridge/entity_declaration_core.h');
+assert.ok(Number(declarationCore.match(/kMaxPartBytes = (\d+)/)?.[1]) < maxBody, 'every part fits one sealed message');
+assert.match(declarationCore, /constexpr size_t kMaxParts = 8;/, 'entity_search.py MAX_DECLARATION_PARTS');
+assert.match(declarationCore, /constexpr size_t kMaxEntities = 300;/, 'entity_search.py MAX_PANEL_ENTITIES');
 assert.match(search, /void handleDeclarationAck[\s\S]*?if \(g_sent && version == g_sent_version\) \{\s*g_acked = true;\s*g_acked_version = version;/,
   'only the acknowledgement of the sent version counts');
 const service = search.slice(search.indexOf('void service() {'));
@@ -69,7 +68,7 @@ assert.match(service, /if \(ready && !g_session_seen\) \{[\s\S]*?g_sent = false;
 assert.match(service, /if \(!ready \|\| !declares\(\)\) return;/);
 assert.match(service, /const bool retry = unconfirmed && now - g_sent_ms >= kDeclarationRetryMs;/, 'repeated until acknowledged');
 assert.match(service, /if \(g_acked && version == g_acked_version\) return;/, 'an acknowledged declaration is not sent again');
-assert.match(service, /for \(const String& part : parts\) publish\("tiles", part\);/);
+assert.match(service, /for \(const std::string& part : declaration\.parts\(version, web_auth, &dropped\)\) \{\s*publish\("tiles", String\(part\.c_str\(\)\)\);/);
 for (const [list, type] of [['sensors', 'TILE_SENSOR'], ['switches', 'TILE_SWITCH'], ['locks', 'TILE_LOCK'],
   ['alarm_panels', 'TILE_ALARM'], ['fans', 'TILE_FAN'], ['media', 'TILE_MEDIA']]) {
   assert.ok(search.includes(`{"${list}", ${type}}`), `${list} <- ${type}`);

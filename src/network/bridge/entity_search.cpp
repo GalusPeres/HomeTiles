@@ -2,10 +2,10 @@
 
 #include <ArduinoJson.h>
 
-#include <algorithm>
 #include <cstring>
-#include <vector>
+#include <string>
 
+#include "src/network/bridge/entity_declaration_core.h"
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
@@ -22,10 +22,6 @@ constexpr uint8_t kMaxParts = 6;
 constexpr size_t kMaxQuery = 64;
 // The picker loads further pages while scrolling (entity_search.py MAX_OFFSET).
 constexpr uint32_t kMaxOffset = 5000;
-// A declaration part stays below command_channel's sealed body limit.
-constexpr size_t kMaxPartBytes = 1800;
-constexpr size_t kMaxDeclarationParts = 8;       // entity_search.py MAX_DECLARATION_PARTS
-constexpr size_t kMaxDeclaredEntities = 300;     // entity_search.py MAX_PANEL_ENTITIES
 constexpr uint32_t kReportDelayMs = 1500;
 // Without the Bridge's acknowledgement the declaration is sent again.
 constexpr uint32_t kDeclarationRetryMs = 15000;
@@ -78,13 +74,6 @@ bool knownList(const String& list) {
   return false;
 }
 
-bool contains(const std::vector<String>& ids, const String& id) {
-  for (const String& item : ids) {
-    if (item.equalsIgnoreCase(id)) return true;
-  }
-  return false;
-}
-
 void publish(const char* leaf, const String& body) {
   const String topic = mqttTopics.deviceBase() + "/cmnd/" + leaf;
   networkManager.mqttEnqueuePublish(topic.c_str(), body.c_str(), false);
@@ -92,121 +81,36 @@ void publish(const char* leaf, const String& body) {
 
 // Picker list of an icon color source entity (icon_sources in the Web Admin:
 // sensors, binary sensors, lights and switches, climates, covers).
-const char* listOfSource(const String& entity) {
-  if (entity.startsWith("sensor.")) return "sensors";
-  if (entity.startsWith("binary_sensor.")) return "binary_sensors";
-  if (entity.startsWith("climate.")) return "climates";
-  if (entity.startsWith("cover.")) return "covers";
-  return entity.indexOf('.') > 0 ? "switches" : nullptr;
-}
-
-struct Declared {
-  const char* list;
-  std::vector<String> ids;
-};
-
-void declare(std::vector<Declared>& lists, const char* list, const String& entity) {
-  if (!list || !entity.length()) return;
-  for (Declared& item : lists) {
-    if (item.list == list) {
-      if (!contains(item.ids, entity)) item.ids.push_back(entity);
-      return;
-    }
-  }
-  lists.push_back({list, {entity}});
+const char* listOfSource(const char* entity) {
+  if (!entity || !strchr(entity, '.')) return nullptr;
+  if (!strncmp(entity, "sensor.", 7)) return "sensors";
+  if (!strncmp(entity, "binary_sensor.", 14)) return "binary_sensors";
+  if (!strncmp(entity, "climate.", 8)) return "climates";
+  if (!strncmp(entity, "cover.", 6)) return "covers";
+  return "switches";
 }
 
 // The declaration: every entity the tiles use, from the tiles alone. It never
 // reads what the Bridge serves, so the Bridge's answer to one declaration
-// cannot change the next one. Sorted, so the same tiles give the same
-// declaration and the same version.
-std::vector<Declared> collectDeclared() {
-  std::vector<Declared> lists;
+// cannot change the next one (entity_declaration_core.h).
+entity_declaration::Declaration collectDeclaration() {
+  entity_declaration::Declaration declaration;
   FolderEntitySlotView slots[TILES_PER_GRID];
   for (const FolderEntry& folder : tileConfig.getFolders()) {
     if (!tileConfig.getFolderEntitiesCached(folder.id, slots, TILES_PER_GRID)) continue;
     for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-      declare(lists, listOfType(slots[i].type), String(slots[i].entity));
-      const String source(slots[i].rule_entity);
-      declare(lists, listOfSource(source), source);
+      declaration.add(listOfType(slots[i].type), slots[i].entity);
+      declaration.add(listOfSource(slots[i].rule_entity), slots[i].rule_entity);
     }
   }
   const TileGridConfig& screensaver = screensaverConfig.tileGrid();
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& tile = screensaver.tiles[i];
-    declare(lists, listOfType(tile.type), tile.sensor_entity);
+    declaration.add(listOfType(tile.type), tile.sensor_entity.c_str());
     const String source = tileIconSourceEntity(tile.type, tile.icon_colors);
-    declare(lists, listOfSource(source), source);
+    declaration.add(listOfSource(source.c_str()), source.c_str());
   }
-  std::sort(lists.begin(), lists.end(),
-            [](const Declared& a, const Declared& b) { return strcmp(a.list, b.list) < 0; });
-  size_t total = 0;
-  for (Declared& item : lists) {
-    std::sort(item.ids.begin(), item.ids.end());
-    if (total + item.ids.size() > kMaxDeclaredEntities) {
-      Serial.printf("[EntitySearch] %u tile entities not declared (limit %u)\n",
-                    (unsigned)(total + item.ids.size() - kMaxDeclaredEntities), (unsigned)kMaxDeclaredEntities);
-      item.ids.resize(kMaxDeclaredEntities - total);
-    }
-    total += item.ids.size();
-  }
-  return lists;
-}
-
-uint32_t fnv1a(uint32_t hash, const String& text) {
-  for (size_t i = 0; i < text.length(); ++i) {
-    hash ^= static_cast<uint8_t>(text[i]);
-    hash *= 16777619u;
-  }
-  return hash;
-}
-
-// {"v":version,"p":part,"n":parts,"lists":{list:[entity ids]},"web_auth":bool}
-// in sealed-size parts. The version is a hash of the declared lists and the
-// password claim, so an unchanged declaration keeps its version.
-std::vector<String> buildDeclaration(uint32_t& version) {
-  const std::vector<Declared> lists = collectDeclared();
-  const bool web_auth = web_admin_auth::enabled();
-  // Room for "v", "p", "n", "web_auth" and one list key with its brackets.
-  constexpr size_t kPartOverhead = 96;
-  version = fnv1a(2166136261u, web_auth ? "1" : "0");
-  std::vector<JsonDocument> parts(1);
-  size_t dropped = 0;
-  for (const Declared& item : lists) {
-    for (const String& id : item.ids) {
-      const size_t added = strlen(item.list) + id.length() + kPartOverhead;
-      if (added > kMaxPartBytes) {
-        ++dropped;  // no Home Assistant entity id is this long
-        continue;
-      }
-      if (measureJson(parts.back()) + added > kMaxPartBytes) {
-        if (parts.size() == kMaxDeclarationParts) {
-          ++dropped;
-          continue;
-        }
-        parts.emplace_back();
-      }
-      JsonDocument& part = parts.back();
-      JsonArray array = part["lists"][item.list].as<JsonArray>();
-      if (array.isNull()) array = part["lists"][item.list].to<JsonArray>();
-      array.add(id);
-      version = fnv1a(version, String('|') + item.list + ',' + id);
-    }
-  }
-  if (dropped) Serial.printf("[EntitySearch] %u tile entities not declared (size limit)\n", (unsigned)dropped);
-  std::vector<String> bodies;
-  for (size_t i = 0; i < parts.size(); ++i) {
-    JsonDocument& part = parts[i];
-    part["v"] = version;
-    part["p"] = i;
-    part["n"] = parts.size();
-    if (part["lists"].isNull()) part["lists"].to<JsonObject>();
-    part["web_auth"] = web_auth;
-    String body;
-    serializeJson(part, body);
-    bodies.push_back(body);
-  }
-  return bodies;
+  return declaration;
 }
 
 }  // namespace
@@ -319,11 +223,16 @@ void service() {
   const bool due = g_report_pending && static_cast<int32_t>(now - g_report_due_ms) >= 0;
   if (!due && !retry) return;
   g_report_pending = false;
-  uint32_t version = 0;
-  const std::vector<String> parts = buildDeclaration(version);
+  const entity_declaration::Declaration declaration = collectDeclaration();
+  const bool web_auth = web_admin_auth::enabled();
+  const uint32_t version = declaration.version(web_auth);
   if (g_acked && version == g_acked_version) return;  // the Bridge has it
   if (!retry && g_sent && version == g_sent_version) return;  // sent, waiting
-  for (const String& part : parts) publish("tiles", part);
+  size_t dropped = declaration.dropped();
+  for (const std::string& part : declaration.parts(version, web_auth, &dropped)) {
+    publish("tiles", String(part.c_str()));
+  }
+  if (dropped) Serial.printf("[EntitySearch] %u tile values not declared\n", (unsigned)dropped);
   g_sent = true;
   g_sent_version = version;
   g_sent_ms = now;

@@ -2638,6 +2638,10 @@ function syncTileRadiusControls(tabEl) {
   // What the Bridge told about entities (name, icon, area ▸ device), by id.
   const entityRemoteInfo = new Map();
   const entityRemoteAsked = new Set();
+  // The Bridge's first page of each list, so a list opens with it at once.
+  const entityRemoteFirstPages = new Map();
+  const entityRemoteFetching = new Set();
+  let entityRemoteQueue = Promise.resolve();
   let entityRemoteSupported = true;  // false once the panel has no Bridge search
   let entityRemoteGeneration = 0;
   let entityRemoteTimer = 0;
@@ -2762,7 +2766,7 @@ function syncTileRadiusControls(tabEl) {
         '<i class="mdi mdi-chevron-down entity-picker-chevron"></i>';
     }
     if (clear) clear.hidden = !entry;
-    if (entry && !entry.remote) entityPickerLookup(input);
+    if (entry && !entry.remote && input.closest?.('.tile-entity-slot')) entityPickerLookup(input);
   }
 
   // Adds the visible field after a hidden entity input (once per element) and
@@ -2857,6 +2861,9 @@ function syncTileRadiusControls(tabEl) {
     const list = open.input.dataset.entityPicker;
     if (!entityRemoteSupported || !ENTITY_REMOTE_LISTS.has(list)) return;
     const generation = ++entityRemoteGeneration;
+    // A list opened from the remembered first page keeps its place when the
+    // fresh one arrives.
+    const shown = open.remote === 'ready';
     open.remote = 'loading';
     open.paging = false;
     entityRemoteSearch(list, open.query, generation, 0)
@@ -2865,16 +2872,20 @@ function syncTileRadiusControls(tabEl) {
         if (!answer) {
           open.remote = null;
         } else {
+          if (!open.query) entityRemoteFirstPages.set(list, answer);
           entityPickerApplyRemote(open, answer, false);
-          if (!open.query) open.active = Math.max(0, open.entries.findIndex(entry => entry.value === open.input.value));
+          if (!open.query && !shown) {
+            open.active = Math.max(0, open.entries.findIndex(entry => entry.value === open.input.value));
+          }
           renderEntityPicker(open.input);
         }
-        renderEntityPickerList();
+        renderEntityPickerList(shown);
       })
       .catch(() => {
         if (entityPickerOpen !== open || generation !== entityRemoteGeneration) return;
-        open.remote = null;
-        renderEntityPickerList();
+        // A remembered page stays; without one the panel's own list shows.
+        open.remote = open.entries.length ? 'ready' : null;
+        renderEntityPickerList(shown);
       });
   }
 
@@ -2903,28 +2914,62 @@ function syncTileRadiusControls(tabEl) {
     if (list.scrollHeight - list.scrollTop - list.clientHeight < 120) entityPickerRemoteMore(entityPickerOpen);
   }
 
+  // Requests ahead of an opening run one after another, since the panel
+  // keeps only its newest search; an open list's own search cancels them.
+  function entityRemoteInBackground(job) {
+    entityRemoteQueue = entityRemoteQueue.then(job).catch(() => {});
+  }
+
+  // Closed fields of these Bridge entities show their area and device.
+  function entityPickerShowRemote(items) {
+    const values = new Set(items.map(item => entityPickerFromRemote(item).value));
+    document.querySelectorAll('input[data-entity-picker]').forEach(input => {
+      if (values.has(input.value)) renderEntityPicker(input);
+    });
+    if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons();
+  }
+
+  // The shown tile's entity field: the first page of its list arrives ahead
+  // of the opening, then area and device of its own entity.
+  function entityPickerWarm(input) {
+    const list = input?.dataset?.entityPicker || '';
+    if (!entityRemoteSupported || !ENTITY_REMOTE_LISTS.has(list)) return;
+    if (!entityRemoteFirstPages.has(list) && !entityRemoteFetching.has(list)) {
+      entityRemoteFetching.add(list);
+      entityRemoteInBackground(async () => {
+        try {
+          if (entityPickerOpen) return;
+          const answer = await entityRemoteSearch(list, '', ++entityRemoteGeneration, 0);
+          if (!answer) return;
+          entityRemoteFirstPages.set(list, answer);
+          entityPickerShowRemote(Array.isArray(answer.r) ? answer.r : []);
+        } finally {
+          entityRemoteFetching.delete(list);
+        }
+      });
+    }
+    entityPickerLookup(input);
+  }
+
   // A closed field learns area and device of its entity from the Bridge,
-  // once per entity and only while no list is open.
+  // once per entity; the first page often has it already.
   function entityPickerLookup(input) {
     const list = input?.dataset?.entityPicker || '';
     const value = input?.value || '';
-    if (!value || !entityRemoteSupported || entityPickerOpen || !ENTITY_REMOTE_LISTS.has(list) ||
-        entityRemoteAsked.has(value)) {
+    if (!value || !entityRemoteSupported || !ENTITY_REMOTE_LISTS.has(list) || entityRemoteAsked.has(value)) {
       return;
     }
     entityRemoteAsked.add(value);
-    const generation = ++entityRemoteGeneration;
-    entityRemoteSearch(list, value, generation)
-      .then(answer => {
-        const item = answer && (answer.r || []).find(entry => entry.v === value);
-        if (!item) return;
-        entityPickerFromRemote(item);
-        document.querySelectorAll('input[data-entity-picker]').forEach(other => {
-          if (other.value === value) renderEntityPicker(other);
-        });
-        if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons();
-      })
-      .catch(() => {});
+    entityRemoteInBackground(async () => {
+      if (entityRemoteInfo.has(value)) return;
+      if (entityPickerOpen) {
+        entityRemoteAsked.delete(value);
+        return;
+      }
+      const answer = await entityRemoteSearch(list, value, ++entityRemoteGeneration, 0);
+      const item = answer && (answer.r || []).find(entry => entry.v === value);
+      if (item) entityPickerShowRemote([item]);
+    });
   }
 
   // ---- Tile adoption and placement ----
@@ -2974,6 +3019,7 @@ function syncTileRadiusControls(tabEl) {
     if (!input) return;
     input.dataset.entityHome = fields.id;
     slot.append(...parts(input));
+    entityPickerWarm(input);
   }
 
   // ---- Open list ----
@@ -2984,10 +3030,14 @@ function syncTileRadiusControls(tabEl) {
     return words.every(word => text.includes(word));
   }
 
-  // The Bridge's answer is already filtered; the own list filters here.
+  // The Bridge's answer is already filtered; while a new one is on its way
+  // the previous one filters here, and the panel's own list without a Bridge.
   function entityPickerMatches() {
     const open = entityPickerOpen;
     if (open.remote === 'ready') return open.entries;
+    if (open.remote === 'loading' && open.entries.length) {
+      return open.entries.filter(entry => entityPickerMatchesQuery(entry, open.query));
+    }
     return open.local.filter(entry => entityPickerMatchesQuery(entry, open.query));
   }
 
@@ -2998,8 +3048,12 @@ function syncTileRadiusControls(tabEl) {
     if (!open || !list) return;
     // Without a Web Admin password the Bridge finds only released entities.
     if (foot) foot.hidden = !(open.remote === 'ready' && !open.full);
-    if (open.state === 'loading' && open.remote !== 'ready') {
-      list.innerHTML = '<div class="entity-picker-loading"><div></div><div></div><div></div></div>';
+    // Nothing of the Bridge's list is there yet: the list waits at full size
+    // instead of showing the panel's short list first and then growing.
+    const waiting = open.remote === 'loading' && !open.entries.length;
+    entityPickerPopover.classList.toggle('waiting', waiting);
+    if (waiting || (open.state === 'loading' && open.remote !== 'ready')) {
+      list.innerHTML = '<div class="entity-picker-loading">' + '<div></div>'.repeat(6) + '</div>';
       return;
     }
     if (open.state === 'failed' && open.remote !== 'ready') {
@@ -3114,7 +3168,16 @@ function syncTileRadiusControls(tabEl) {
     field?.setAttribute('aria-expanded', 'true');
     entityPickerPopover.classList.add('open');
     loadEntityPickerEntries(false);
+    // The remembered first page shows at once; the Bridge's fresh one follows.
+    const remembered = entityRemoteSupported && entityRemoteFirstPages.get(input.dataset.entityPicker);
+    if (remembered) {
+      entityPickerApplyRemote(entityPickerOpen, remembered, false);
+      entityPickerOpen.active = Math.max(0, entityPickerOpen.entries.findIndex(entry => entry.value === input.value));
+    }
     entityPickerRemoteSearch(entityPickerOpen);
+    // Drawn once the Bridge search is under way, so the panel's short list
+    // never shows first.
+    renderEntityPickerList();
     placeEntityPickerPopover();
     search.focus();
   }

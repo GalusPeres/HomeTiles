@@ -74,6 +74,10 @@ const header = read('src/core/i18n/i18n.h');
 assert.match(header, /const char\* entity_picker_labels\[8\];/);
 assert.match(header, /const char\* entity_kind_labels\[22\];/);
 const picker = read('src/web/admin/tiles/entity-picker.js');
+assert.match(picker, /slot\.append\(\.\.\.parts\(input\)\);\s*entityPickerWarm\(input\);/,
+  'a selected tile asks the Bridge for its list ahead of the opening');
+assert.match(picker, /function entityRemoteInBackground\(job\) \{\s*entityRemoteQueue = entityRemoteQueue\.then\(job\)/,
+  'requests ahead of an opening run one after another (the panel keeps only its newest search)');
 const domains = picker.slice(picker.indexOf('const ENTITY_KIND_DOMAINS = ['), picker.indexOf('];', picker.indexOf('const ENTITY_KIND_DOMAINS')));
 assert.equal((domains.match(/\[/g) || []).length - 1, 22, 'One domain group per entity_kind_labels entry');
 const scripts = read('src/web/server/render/web_admin_scripts.cpp');
@@ -258,7 +262,7 @@ try {
 const remotePage = `<!doctype html><html lang="de"><head><style>${read('src/web/assets/admin.css')}</style></head><body>
 <div class="tile-settings" style="width:420px">
 <div class="type-fields show"><label for="r_switch_entity_picker">Schalter</label><input type="hidden" id="r_switch_entity" data-entity-picker="switches"></div>
-<div class="type-fields show"><label for="r_sensor_entity_picker">Sensor</label><input type="hidden" id="r_sensor_entity" data-entity-picker="sensors"></div>
+<div class="tile-entity-slot" id="r_tile_entity_slot"><label for="r_sensor_entity_picker">Sensor</label><input type="hidden" id="r_sensor_entity" data-entity-picker="sensors"></div>
 </div><div id="web_auth_section"></div><pre id="result"></pre><script>
 const loaded=[];const nativeListen=document.addEventListener.bind(document);
 document.addEventListener=(name,fn,...args)=>{if(name==='DOMContentLoaded')loaded.push(fn);else nativeListen(name,fn,...args);};
@@ -295,17 +299,28 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  const wait=ms=>new Promise(r=>setTimeout(r,ms));
  loaded.filter(fn=>String(fn).includes('setupEntityPickers(document)')).forEach(fn=>fn());
  await fetchEntityOptions();
- // A closed field learns area and device from the Bridge.
+ // The shown tile's closed field learns area and device from the Bridge.
  $('r_sensor_entity').value='sensor.kitchen';await wait(400);
  check(searches.includes('sensors|sensor.kitchen'),'The field asks once: '+searches.join());
  check($('r_sensor_entity_picker').textContent.includes('OG Küche ▸ Heizung'),'Area ▸ device: '+$('r_sensor_entity_picker').textContent);
  // Open: the Bridge's released entities with area and device, the panel's own entities after them.
- $('r_switch_entity_picker').click();await wait(400);
+ $('r_switch_entity_picker').click();
  const pop=document.querySelector('.entity-picker-popover.open');
+ check(pop.classList.contains('waiting')&&!pop.querySelector('.entity-picker-item'),
+   'Waits at full size, never the short list first');
+ await wait(400);
  let rows=[...pop.querySelectorAll('.entity-picker-item')];
+ check(!pop.classList.contains('waiting'),'Done waiting');
  check(rows.length===2&&rows[0].textContent.includes('EG Büro ▸ Schreibtischlampe')&&rows[1].textContent.includes('Display'),'Bridge plus own: '+rows.map(r=>r.textContent).join(' | '));
  const foot=pop.querySelector('.entity-picker-foot');
  check(!foot.hidden&&foot.textContent.includes(${JSON.stringify(de.labels[7])}),'Without a password: the hint');
+ // Opened again: the remembered page at once, the fresh one replaces it quietly.
+ $('r_switch_entity_picker').click();
+ $('r_switch_entity_picker').click();
+ rows=[...pop.querySelectorAll('.entity-picker-item')];
+ check(!pop.classList.contains('waiting')&&rows.length===2&&rows[0].textContent.includes('EG Büro'),
+   'Remembered page at once: '+rows.map(r=>r.textContent).join(' | '));
+ await wait(400);
  // Typing searches the Bridge again after a pause; with the password every
  // entity, page by page while the list nears its end.
  const search=pop.querySelector('input');search.value='desk';search.dispatchEvent(new Event('input',{bubbles:true}));

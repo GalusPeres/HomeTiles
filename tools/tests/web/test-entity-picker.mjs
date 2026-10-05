@@ -84,7 +84,8 @@ for (const key of ['entityPickerChoose', 'entityPickerSearch', 'entityPickerNoMa
 }
 assert.match(scripts, /const ENTITY_KIND_LABELS = \[/);
 
-// The last two arrays of every LocaleProfile table: picker labels, kinds.
+// The last three arrays of every LocaleProfile table: picker labels, kinds,
+// icon picker labels.
 const i18n = read('src/core/i18n/i18n.cpp');
 function lastArrays(open) {
   const groups = [];
@@ -105,16 +106,17 @@ function lastArrays(open) {
     }
   }
   const strings = group => [...group.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
-  return groups.slice(-2).map(strings);
+  return groups.slice(-3).map(strings);
 }
 const locales = {};
 for (const match of i18n.matchAll(/static const LocaleProfile kLocale(\w+) = \{/g)) {
-  const [labels, kinds] = lastArrays(match.index + match[0].length - 1);
+  const [labels, kinds, icons] = lastArrays(match.index + match[0].length - 1);
+  assert.equal(icons.length, 5, `${match[1]} icon picker labels`);
   assert.equal(labels.length, 7, `${match[1]} picker labels`);
   assert.equal(kinds.length, 22, `${match[1]} entity kinds`);
   for (const text of [...labels, ...kinds]) assert.ok(text.trim().length, `${match[1]} has no empty label`);
   assert.ok(labels[2].includes('{query}'), `${match[1]} no-match text names the search`);
-  locales[match[1]] = {labels, kinds};
+  locales[match[1]] = {labels, kinds, icons};
 }
 assert.deepEqual(Object.keys(locales).sort(), ['De', 'En', 'Fr', 'Pl']);
 assert.equal(locales.De.labels[0], 'Entität wählen');
@@ -213,7 +215,7 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  check($('t_tile_title').value.startsWith('<img'),'Another entity replaces the edited title');
  $('t_tile_title').value='Bleibt';field.click();await tick();
  document.querySelector('.entity-picker-popover .entity-picker-item.selected').click();
- check($('t_tile_title').value==='Bleibt'&&changes===3,'The same entity again changes nothing');
+ check($('t_tile_title').value.startsWith('<img')&&changes===4,'Choosing the same entity again takes its name again');
  field.click();await tick();document.body.click();
  check(!document.querySelector('.entity-picker-popover.open'),'Outside click closes');
  // Another type: its entity moves up, the sensor returns to its fields.

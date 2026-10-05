@@ -32,9 +32,7 @@ static const Strings kStringsDe = {
     "Typ gesperrt: Der Ordner enthält noch Kacheln. Erst leeren – Löschen der Kachel bleibt möglich.",
     "Titel",
     "Kachel-Titel",
-    "Icon (MDI)",
     "z.B. home, thermometer, lightbulb",
-    "Icon-Liste anzeigen",
     "Kachelfarbe",
     "Spalte",
     "Zeile",
@@ -629,9 +627,7 @@ static const Strings kStringsEn = {
     "Type locked: this folder still contains tiles. Empty it first – deleting the tile is still possible.",
     "Title",
     "Tile title",
-    "Icon (MDI)",
     "e.g. home, thermometer, lightbulb",
-    "Show icon list",
     "Tile color",
     "Column",
     "Row",
@@ -1226,9 +1222,7 @@ static const Strings kStringsFr = {
     "Type verrouillé\u00A0: le dossier contient encore des tuiles. Vide-le d'abord – la suppression de la tuile reste possible.",
     "Titre",
     "Titre de la tuile",
-    "Icône (MDI)",
     "p. ex. home, thermometer, lightbulb",
-    "Afficher la liste des icônes",
     "Couleur de la tuile",
     "Colonne",
     "Ligne",
@@ -1911,7 +1905,8 @@ static const LocaleProfile kLocaleDe = {
     {"Sensor", "Binärsensor", "Licht", "Schalter", "Ventilator", "Cover", "Klima",
      "Mediaplayer", "Wetter", "Kamera", "Schloss", "Alarmanlage", "Zahl", "Auswahl",
      "Datum/Uhrzeit", "Szene", "Skript", "Taste", "Automation", "Luftbefeuchter",
-     "Sirene", "Fernbedienung"}};
+     "Sirene", "Fernbedienung"},
+    {"Automatisch", "Icon der Entität", "Kein Icon", "Nur Titel und Wert", "Kein Icon passt zu „{query}“"}};
 
 static const LocaleProfile kLocaleEn = {
     "en",
@@ -2022,7 +2017,8 @@ static const LocaleProfile kLocaleEn = {
     {"Sensor", "Binary sensor", "Light", "Switch", "Fan", "Cover", "Climate",
      "Media player", "Weather", "Camera", "Lock", "Alarm panel", "Number", "Select",
      "Date/time", "Scene", "Script", "Button", "Automation", "Humidifier", "Siren",
-     "Remote"}};
+     "Remote"},
+    {"Automatic", "The entity's icon", "No icon", "Title and value only", "No icon matches “{query}”"}};
 
 static const LocaleProfile kLocaleFr = {
     "fr",
@@ -2138,7 +2134,9 @@ static const LocaleProfile kLocaleFr = {
     {"Capteur", "Capteur binaire", "Lumière", "Interrupteur", "Ventilateur", "Volet",
      "Climat", "Lecteur multimédia", "Météo", "Caméra", "Serrure", "Alarme", "Nombre",
      "Sélection", "Date/heure", "Scène", "Script", "Bouton", "Automatisation",
-     "Humidificateur", "Sirène", "Télécommande"}};
+     "Humidificateur", "Sirène", "Télécommande"},
+    {"Automatique", "Icône de l’entité", "Aucune icône", "Titre et valeur seulement",
+     "Aucune icône ne correspond à « {query} »"}};
 
 // Codes and groups match LocaleProfile::timezone_labels and
 // timezone_group_labels (see i18n.h).
@@ -2195,9 +2193,7 @@ static const Strings kStringsPl = {
     "Typ zablokowany: folder nadal zawiera kafelki. Najpierw go opróżnij – usunięcie kafelka jest nadal możliwe.",
     "Tytuł",
     "Tytuł kafelka",
-    "Ikona (MDI)",
     "np. home, thermometer, lightbulb",
-    "Pokaż listę ikon",
     "Kolor kafelka",
     "Kolumna",
     "Wiersz",
@@ -2784,6 +2780,7 @@ static const LocaleProfile kLocalePl = {
      "Klimat", "Odtwarzacz multimediów", "Pogoda", "Kamera", "Zamek", "Panel alarmowy",
      "Liczba", "Wybór", "Data/czas", "Scena", "Skrypt", "Przycisk", "Automatyzacja",
      "Nawilżacz", "Syrena", "Pilot"},
+    {"Automatyczna", "Ikona encji", "Brak ikony", "Tylko tytuł i wartość", "Żadna ikona nie pasuje do „{query}”"},
 };
 
 const TimezoneOptionInfo& timezone_option(size_t index) {

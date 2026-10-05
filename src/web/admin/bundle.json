@@ -15,6 +15,7 @@
     "src/web/admin/tiles/text-baseline.js",
     "src/web/admin/tiles/registry.js",
     "src/web/admin/tiles/entity-picker.js",
+    "src/web/admin/tiles/tile-head.js",
     "src/web/admin/tiles/snapshots.js",
     "src/web/admin/tiles/icon-colors.js",
     "src/web/admin/folders/navigation.js",

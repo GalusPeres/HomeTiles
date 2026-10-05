@@ -159,6 +159,15 @@ void appendAdminScripts(String& html) {
   for (size_t i = 0; i < sizeof(kEntityPickerKeys) / sizeof(kEntityPickerKeys[0]); ++i) {
     appendJsEntry(kEntityPickerKeys[i], loc.entity_picker_labels[i]);
   }
+  static const char* const kIconPickerKeys[] = {
+      "iconPickerAuto", "iconPickerAutoHint", "iconPickerNone", "iconPickerNoneHint", "iconPickerNoMatch"};
+  static_assert(sizeof(kIconPickerKeys) / sizeof(kIconPickerKeys[0]) ==
+                    sizeof(i18n::LocaleProfile::icon_picker_labels) / sizeof(const char*),
+                "one key per icon picker label");
+  for (size_t i = 0; i < sizeof(kIconPickerKeys) / sizeof(kIconPickerKeys[0]); ++i) {
+    appendJsEntry(kIconPickerKeys[i], loc.icon_picker_labels[i]);
+  }
+  appendJsEntry("iconPickerSearch", tr.admin_icon_placeholder);
   html += "  };\n";
   // Order of LocaleProfile::entity_kind_labels (ENTITY_KIND_DOMAINS in
   // tiles/entity-picker.js).

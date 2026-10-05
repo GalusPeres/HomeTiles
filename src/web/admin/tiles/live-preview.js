@@ -340,4 +340,6 @@
       mountClimateMiniEditor(tab);
       syncClimateSlotFields(tab);
     }
+    // The automatic icon of the head follows what the preview draws.
+    if (typeof renderTileIconButton === 'function') renderTileIconButton(tab);
   }

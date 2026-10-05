@@ -30,4 +30,8 @@ String normalizeMdiIconName(const String& iconName);
 // Returns the Unicode character as a String, for lv_label_set_text().
 String getMdiChar(const String& iconName);
 
+// The supported icon names in lexical order, for the Web Admin icon picker.
+size_t mdiIconCount();
+const char* mdiIconName(size_t index);
+
 #endif // MDI_ICONS_H

@@ -4,7 +4,8 @@ import {runDomHarness} from '../../lib/headless-dom.mjs';
 
 const editor = readRepoFile('src/web/admin/tiles/editor.js');
 assert(editor.includes('normalizeTileTitle(titleInput.value)'));
-assert.match(readRepoFile('src/web/server/render/web_admin_html.cpp'), /<textarea rows="2" class="tile-title-input"/);
+// One line in the tile head, two at most (tiles/tile-head.js).
+assert.match(readRepoFile('src/web/server/render/web_admin_html.cpp'), /<textarea rows="1" class="tile-title-input" spellcheck="false"/);
 const helpers = ['escapeHtml', 'normalizeTileTitle', 'tileTitleHtml'].map(extractDeliveredFunction).join('\n');
 const html = `<!doctype html><html><head><style>${readRepoFile('src/web/assets/admin.css')}
 body {padding:12px;} #fixtures {display:flex;flex-wrap:wrap;gap:12px;} .tile {position:relative;box-sizing:border-box;}

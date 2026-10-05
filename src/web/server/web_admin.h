@@ -62,6 +62,7 @@ public:
   void handleDeleteFolder();
   void handleGetSensorValues();
   void handleGetEntityOptions();
+  void handleGetMdiIcons();
   void handleGetScreensaver();
   void handleSaveScreensaver();
   void handleGetHardwareIo();

@@ -7467,6 +7467,12 @@ static const IconMapping iconMap[] PROGMEM = {
 
 static const size_t ICON_COUNT = sizeof(iconMap) / sizeof(iconMap[0]);
 
+size_t mdiIconCount() { return ICON_COUNT; }
+
+const char* mdiIconName(size_t index) {
+  return index < ICON_COUNT ? static_cast<const char*>(pgm_read_ptr(&iconMap[index].name)) : "";
+}
+
 // Binary search over iconMap, sorted by name.
 static int32_t findIconIndex(const char* name) {
   if (!name || !*name) return -1;

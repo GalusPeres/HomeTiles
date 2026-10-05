@@ -2693,7 +2693,7 @@
       white-space:nowrap;
       text-overflow:ellipsis;
     }
-    textarea.tile-title-input { resize:none; line-height:1.4; }
+    textarea.tile-title-input { resize:none; }
     .tile.clock .tile-title { width:calc(100% + 6px - 2 * var(--clock-header-pad-h, 10px)); }
     .tile.clock:has(.tile-icon) .tile-title,
     .tile.text:has(.tile-icon) .tile-title { max-width:calc((100% + 6px - 2 * var(--text-header-pad-h, 9px)) * .7); }
@@ -3070,17 +3070,17 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 .entity-picker-name { font-size:13px; line-height:18px; }
 .entity-picker-context { font-size:11.5px; line-height:15px; color:var(--text-3); }
 .entity-picker-kind { margin-left:10px; font-size:12px; color:var(--text-3); white-space:nowrap; }
-.entity-picker-popover {
+.entity-picker-popover, .icon-picker-popover {
   position:fixed; z-index:1000; display:none; flex-direction:column; overflow:hidden;
   background:#1c1c1c; border:1px solid var(--line-strong); border-radius:14px; box-shadow:0 16px 40px rgba(0,0,0,0.55);
 }
-.entity-picker-popover.open { display:flex; }
-.entity-picker-popover.sheet { left:8px; right:8px; bottom:8px; top:auto; width:auto; max-height:75vh; }
-.entity-picker-search { position:relative; flex:0 0 auto; padding:10px; border-bottom:1px solid var(--line); }
-.entity-picker-search .mdi { position:absolute; left:22px; top:50%; transform:translateY(-50%); color:#9e9e9e; font-size:19px; }
-.entity-picker-search input { margin:0; padding:9px 12px 9px 40px; font-size:14px; border-radius:10px; background:var(--panel); }
-.entity-picker-search input::-webkit-search-cancel-button { display:none; }
-.entity-picker-list { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; padding:4px 6px 8px; }
+.entity-picker-popover.open, .icon-picker-popover.open { display:flex; }
+.entity-picker-popover.sheet, .icon-picker-popover.sheet { left:8px; right:8px; bottom:8px; top:auto; width:auto; max-height:75vh; }
+.entity-picker-search, .icon-picker-search { position:relative; flex:0 0 auto; padding:10px; border-bottom:1px solid var(--line); }
+.entity-picker-search .mdi, .icon-picker-search .mdi { position:absolute; left:22px; top:50%; transform:translateY(-50%); color:#9e9e9e; font-size:19px; }
+.entity-picker-search input, .icon-picker-search input { margin:0; padding:9px 12px 9px 40px; font-size:14px; border-radius:10px; background:var(--panel); }
+.entity-picker-search input::-webkit-search-cancel-button, .icon-picker-search input::-webkit-search-cancel-button { display:none; }
+.entity-picker-list, .icon-picker-list { flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain; padding:4px 6px 8px; }
 .entity-picker-item { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:10px; cursor:pointer; }
 .entity-picker-item:hover, .entity-picker-item.active { background:#2a2a2a; }
 .entity-picker-item.selected { background:var(--accent-soft); }
@@ -3096,3 +3096,43 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 }
 @keyframes entity-picker-loading { to { background-position:-200% 0; } }
 @media (max-width:560px) { .entity-picker-kind { display:none; } }
+
+/* Tile head (web_admin_html.cpp): the heading with Type beside it, Title and
+   Icon side by side, then the entity. Top aligned, so a two-line title grows
+   downwards and Icon stays beside its first line. */
+.tile-head-top { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+.tile-head-top h3 { margin:0 !important; flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tile-settings .tile-head-top select { flex:0 0 44%; width:44%; margin:0; }
+.tile-head-row { display:grid; grid-template-columns:minmax(0, 1fr) 44px; gap:8px; align-items:start; }
+.tile-settings .tile-head-row textarea.tile-title-input {
+  display:block; margin:0; height:36px; min-height:36px; line-height:16px; white-space:pre; overflow:hidden;
+}
+.tile-settings .tile-head-row textarea.tile-title-input.two { height:52px; }
+.tile-icon-picker {
+  width:44px; height:36px; display:grid; place-items:center; padding:0; border:1px solid var(--line-strong);
+  border-radius:10px; background:var(--well); color:var(--text); font-size:20px; cursor:pointer;
+  transition:border-color 0.15s, box-shadow 0.15s;
+}
+.tile-icon-picker:focus-visible, .tile-icon-picker.open { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring); }
+.tile-icon-picker.none { color:var(--text-3); }
+/* Icon picker: the entity picker's popover with Automatic and No icon side by
+   side above a grid of the panel's icons. */
+.icon-picker-choices { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:4px 0 2px; }
+.icon-picker-choice {
+  display:flex; align-items:center; gap:10px; min-width:0; padding:7px 8px; border:0; border-radius:10px;
+  background:none; color:var(--text); font:inherit; text-align:left; cursor:pointer;
+}
+.icon-picker-choice:hover { background:#2a2a2a; }
+.icon-picker-choice.selected { background:var(--accent-soft); }
+.icon-picker-choice.selected .entity-picker-name { color:#5fd4c7; font-weight:600; }
+.icon-picker-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(44px, 1fr)); gap:4px; padding:6px 0 4px; }
+.icon-picker-cell {
+  height:44px; display:grid; place-items:center; padding:0; border:0; border-radius:10px;
+  background:none; color:#cfcfcf; font-size:22px; cursor:pointer;
+}
+.icon-picker-cell:hover, .icon-picker-cell.active { background:#2a2a2a; }
+.icon-picker-cell.selected { background:var(--accent-soft); color:#5fd4c7; }
+.icon-picker-name {
+  flex:0 0 auto; padding:6px 14px 9px; border-top:1px solid var(--line); font-size:12px; color:var(--text-3);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}

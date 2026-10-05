@@ -1089,16 +1089,14 @@ static void appendTileTabHTML(
             <!-- Tile Settings (Visible only when tile selected) -->
             <div class="tile-specific-settings hidden">
             <div class="tile-settings-head">
-              <h3 style="margin-top:0;">)html";
+              <div class="tile-head-top"><h3>)html";
   html += tr.admin_tile_settings;
   html += R"html(</h3>
-
-            <label>)html";
-  html += tr.admin_type;
-  html += R"html(</label>
             <select id=")html";
   html += tab_id;
-  html += R"html(_tile_type" onchange="updateTileType(')html";
+  html += R"html(_tile_type" aria-label=")html";
+  appendHtmlEscaped(html, tr.admin_type);
+  html += R"html(" onchange="updateTileType(')html";
   html += tab_id;
   html += R"html(')">
             )html";
@@ -1129,45 +1127,42 @@ static void appendTileTabHTML(
     append_tile_type_select_options(html);
   }
   html += R"html(
-            </select>
+            </select></div>
             <p class="hint hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_type_hint">)html";
   html += tr.admin_folder_type_locked;
-  // The entity of the shown type moves here, under Type and outside the
-  // scrolling body (placeTileEntityField in tiles/entity-picker.js).
+  // Title and icon side by side, then the entity of the shown type
+  // (placeTileEntityField in tiles/entity-picker.js). The head stays while
+  // the body scrolls. The icon picker (tiles/tile-head.js) keeps the icon
+  // name in the hidden input: empty = the entity's icon, "none" = no icon.
   html += R"html(</p>
+            <div class="tile-head-row"><div><label for=")html";
+  html += tab_id;
+  html += R"html(_tile_title">)html";
+  appendHtmlEscaped(html, tr.admin_title);
+  html += R"html(</label><textarea rows="1" class="tile-title-input" spellcheck="false" id=")html";
+  html += tab_id;
+  html += R"html(_tile_title" placeholder=")html";
+  appendHtmlEscaped(html, tr.admin_tile_title_placeholder);
+  html += R"html("></textarea></div><div><label for=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_picker">)html";
+  appendHtmlEscaped(html, tr.tile_group_icon);
+  html += R"html(</label><input type="hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_picker" aria-haspopup="listbox"></button></div></div>
             <div class="tile-entity-slot" id=")html";
   html += tab_id;
   html += R"html(_tile_entity_slot"></div>
             </div>
             <div class="tile-settings-body">
 
-            <label>)html";
-  html += tr.admin_title;
-  html += R"html(</label>
-            <textarea rows="2" class="tile-title-input" id=")html";
-  html += tab_id;
-  html += R"html(_tile_title" placeholder=")html";
-  html += tr.admin_tile_title_placeholder;
-  html += R"html("></textarea>
-
             <div class="tile-settings-group">)html";
   appendHtmlEscaped(html, tr.tile_group_icon);
   html += R"html(</div>
-            <label>)html";
-  html += tr.admin_icon_label;
-  html += R"html(</label>
-            <input type="text" id=")html";
-  html += tab_id;
-  html += R"html(_tile_icon" placeholder=")html";
-  html += tr.admin_icon_placeholder;
-  html += R"html(">
-            <div style="font-size:11px;color:#8a8a8a;margin-top:4px;">
-              Material Design Icons: <a href="https://pictogrammers.com/library/mdi/" target="_blank" style="color:#4db6ac;">)html";
-  html += tr.admin_icon_list;
-  html += R"html(</a>
-            </div>
 )html";
   append_tile_icon_color_fixed_html(html, tab_id);
   html += R"html(            <div class="tile-icon-disc-fields" id=")html";

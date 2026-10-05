@@ -19,7 +19,7 @@ const owners = {
   'web_admin_handlers.cpp': ['SaveMQTT', 'SaveBridge', 'BridgeRefresh', 'Status',
     'Restart', 'LinkSetup', 'SaveTileBorders', 'SaveIconDiscs', 'SaveIconGlow', 'SaveDefaultTileColor', 'TileRadius'],
   'web_admin_tiles.cpp': ['GetTiles', 'SaveTiles', 'ReorderTiles', 'GetSensorValues',
-    'GetEntityOptions', 'GetFolders', 'GetFolderTab', 'SaveFolderAccess', 'DeleteFolder'],
+    'GetEntityOptions', 'GetMdiIcons', 'GetFolders', 'GetFolderTab', 'SaveFolderAccess', 'DeleteFolder'],
   'web_admin_screensaver.cpp': ['GetScreensaver', 'SaveScreensaver', 'GetScreensaverWallpaper'],
   'web_admin_files.cpp': ['GetSdImages', 'GetSdIcons', 'UploadIcon', 'UploadIconDone',
     'FileManagerList', 'FileManagerDownload', 'FileManagerDelete', 'FileManagerRename',

@@ -146,6 +146,7 @@
   function refreshEntityPickers(tab) {
     const selector = tab ? 'input[data-entity-picker][id^="' + tab + '_"]' : 'input[data-entity-picker]';
     document.querySelectorAll(selector).forEach(renderEntityPicker);
+    if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
     if (entityPickerOpen && entityPickerOpen.state !== 'ready') loadEntityPickerEntries();
   }
 
@@ -156,8 +157,9 @@
     return slot ? slot.id.replace(/_tile_entity_slot$/, '') : '';
   }
 
-  // A tile takes the name, icon and icon color of every entity chosen for it;
-  // they stay editable until another entity is chosen.
+  // A tile takes the name, icon and icon color of every entity chosen for it
+  // from the list, also the one it already has; they stay editable until an
+  // entity is chosen again.
   function adoptEntityPickerEntry(tab, entry) {
     const title = document.getElementById(tab + '_tile_title');
     if (title) title.value = normalizeTileTitle(entry.name);
@@ -168,9 +170,10 @@
   }
 
   function chooseEntityPickerValue(input, value, entry) {
-    if (!input || input.value === value) return;
-    input.value = value;
+    if (!input) return;
     const tab = entry ? entityPickerTileTab(input) : '';
+    if (input.value === value && !tab) return;
+    input.value = value;
     if (tab) adoptEntityPickerEntry(tab, entry);
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }

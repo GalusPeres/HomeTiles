@@ -30,9 +30,7 @@ struct Strings {
   const char* admin_folder_type_locked;
   const char* admin_title;
   const char* admin_tile_title_placeholder;
-  const char* admin_icon_label;
   const char* admin_icon_placeholder;
-  const char* admin_icon_list;
   const char* admin_color;
   const char* admin_column;
   const char* admin_row;
@@ -773,6 +771,9 @@ struct LocaleProfile {
   // datetime/date/time/input_datetime, scene, script, button/input_button,
   // automation, humidifier, siren, remote.
   const char* entity_kind_labels[22];
+  // Icon picker of the tile head (tiles/tile-head.js). Order: automatic,
+  // automatic hint, no icon, no icon hint, no match ({query}).
+  const char* icon_picker_labels[5];
 };
 
 // Index into LocaleProfile::device_labels.

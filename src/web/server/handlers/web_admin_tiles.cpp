@@ -18,6 +18,7 @@
 #include "src/web/server/handlers/preview_payload.h"
 #include "src/types/types_registry.h"
 #include "src/types/energy/energy_data.h"
+#include "src/tiles/icons/mdi_icons.h"
 #include <algorithm>
 #include <vector>
 #include <memory>
@@ -1244,6 +1245,30 @@ void WebAdminServer::handleGetEntityOptions() {
   }
   json += "]}";
   sendChunkedResponse(server, 200, "application/json", json);
+}
+
+// Every icon name the panel can draw, one per line, for the icon picker
+// (tiles/tile-head.js). Streamed from the flash table in small chunks; the
+// browser keeps the list for the page.
+void WebAdminServer::handleGetMdiIcons() {
+  webAdminMarkActivity();
+  server.sendHeader("Cache-Control", "private, max-age=3600");
+  server.sendHeader("Connection", "close");
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/plain; charset=utf-8", "");
+  String chunk;
+  chunk.reserve(1600);
+  const size_t count = mdiIconCount();
+  for (size_t i = 0; i < count; ++i) {
+    chunk += mdiIconName(i);
+    chunk += '\n';
+    if (chunk.length() >= 1400 || i + 1 == count) {
+      server.sendContent(chunk);
+      chunk = "";
+      yield();
+    }
+  }
+  server.sendContent("");
 }
 
 // ========== Folder API ==========

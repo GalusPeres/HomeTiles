@@ -179,6 +179,9 @@ public:
   // True while connected to the Bridge in pair mode: only the pairing topics
   // travel, and the post-connect setup is skipped.
   bool linkPairMode() const { return link_pair_mode_flag; }
+  // Loop task: Pair was pressed on a panel without a link; mDNS announces it
+  // with TXT pair=1 (also when MQTT is set up) until the window closes.
+  void setPairingAdvertised(bool advertised) { pairing_advertised_ = advertised; }
 
 private:
   NetworkClient net_client;
@@ -195,6 +198,9 @@ private:
     bool pair_requested;
   };
   bool link_configured_ = false;  // Fixed after init().
+  // Loop task: Pair window open, and the pair flag of the running mDNS service.
+  bool pairing_advertised_ = false;
+  bool mdns_pair_flag_ = false;
   char link_host_[64] = {};
   uint16_t link_port_ = 0;
   portMUX_TYPE link_mux_ = portMUX_INITIALIZER_UNLOCKED;

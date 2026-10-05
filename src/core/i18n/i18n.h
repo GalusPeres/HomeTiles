@@ -662,6 +662,9 @@ struct Strings {
   const char* pairing_busy;
   const char* pairing_rejected;
   const char* pairing_failed;
+  // Pair on a panel without a direct Bridge link: two minutes to add it.
+  const char* pairing_discoverable;
+  const char* pairing_discoverable_hint;
   // Web Admin header badge: whether a Web Admin password protects the page.
   const char* web_auth_badge_on;
   const char* web_auth_badge_off;

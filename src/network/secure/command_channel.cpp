@@ -95,6 +95,27 @@ State* g_state = nullptr;
 Attempt* g_attempt = nullptr;
 // Shows the pairing view when the panel pairs by itself after link setup.
 void (*g_pairing_prompt)() = nullptr;
+// Pair on a panel without a direct link: discoverable until this millis()
+// value (0 = closed); see linkWindowOpen().
+constexpr uint32_t kLinkWindowMs = 120000;
+uint32_t g_link_window_until = 0;
+
+void closeLinkWindow() {
+  if (!g_link_window_until) return;
+  g_link_window_until = 0;
+  networkManager.setPairingAdvertised(false);
+}
+
+// Expires the window on the loop task.
+bool linkWindowActive() {
+  if (!g_link_window_until) return false;
+  if (static_cast<int32_t>(millis() - g_link_window_until) >= 0) {
+    Serial.println("[SecureCmd] Pairing window closed without Home Assistant");
+    closeLinkWindow();
+    return false;
+  }
+  return true;
+}
 TaskHandle_t g_owner = nullptr;
 bool g_loaded = false;
 bool g_clear_status = false;
@@ -657,6 +678,16 @@ bool startPairing() {
   begin();
   if (g_state) return false;  // Unpair first.
   if (attemptRunning()) return true;
+  if (!networkManager.linkConfigured()) {
+    // No Bridge address yet: be discoverable for Home Assistant, which sends
+    // its address when the panel is added (POST /api/link). The panel then
+    // restarts and pairs over the link (docs-dev/bridge-link.md, Setup).
+    const uint32_t until = millis() + kLinkWindowMs;
+    g_link_window_until = until ? until : 1;
+    networkManager.setPairingAdvertised(true);
+    Serial.println("[SecureCmd] Pair pressed: discoverable for Home Assistant for two minutes");
+    return true;
+  }
   releaseAttempt();
   const String& base = mqttTopics.deviceBase();
   if (base.length() == 0 || base.length() > kMaxBaseLength) {
@@ -699,7 +730,12 @@ bool startPairing() {
 }
 
 PairingPhase pairingPhase() {
-  return g_attempt ? g_attempt->phase : PairingPhase::Idle;
+  if (g_attempt) return g_attempt->phase;
+  return linkWindowActive() ? PairingPhase::Discoverable : PairingPhase::Idle;
+}
+
+bool linkWindowOpen() {
+  return linkWindowActive();
 }
 
 bool pairingNumber(char out[kPairNumberDisplaySize]) {
@@ -727,6 +763,10 @@ void confirmPairing() {
 }
 
 void endPairing() {
+  if (g_link_window_until) {
+    Serial.println("[SecureCmd] Pairing window closed on the panel");
+    closeLinkWindow();
+  }
   if (!g_attempt) return;
   if (attemptRunning()) {
     Serial.println("[SecureCmd] Pairing cancelled on the panel");
@@ -790,6 +830,7 @@ void onMqttConnected() {
 }
 
 void service() {
+  linkWindowActive();
   servicePairing();
   if (!g_state) {
     // A full MQTT queue drops the clear (and logs it): retry every 5 s.

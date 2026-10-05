@@ -2844,6 +2844,10 @@ static void security_show_pairing(command_channel::PairingPhase phase) {
   bool can_confirm = false;
   bool finished = false;
   switch (phase) {
+    case PairingPhase::Discoverable:
+      text = tr().pairing_discoverable;
+      hint = tr().pairing_discoverable_hint;
+      break;
     case PairingPhase::Asking:
       text = tr().pairing_asking;
       break;

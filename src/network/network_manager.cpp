@@ -2088,6 +2088,14 @@ void HomeTilesNetworkManager::startMdns() {
   const char* key_link = "link";
   const char* val_link = "1";
   MDNS.addServiceTxt(svc_name, svc_proto, key_link, val_link);
+  // Pair was pressed: Home Assistant offers to add the panel (or to switch an
+  // MQTT entry to the link) only while this flag is set.
+  if (pairing_advertised_) {
+    const char* key_pair = "pair";
+    const char* val_pair = "1";
+    MDNS.addServiceTxt(svc_name, svc_proto, key_pair, val_pair);
+  }
+  mdns_pair_flag_ = pairing_advertised_;
   mdns_active = true;
   logMdnsHeap("after-begin");
 }
@@ -2296,10 +2304,15 @@ void HomeTilesNetworkManager::update() {
     // mDNS serves initial pairing only. Once MQTT is configured, keep it off
     // even across broker reconnects to avoid begin/end cycles and DMA heap
     // fragmentation on every brief interruption.
-    // A panel with a direct Bridge link needs no discovery either.
-    if (configManager.hasMqttConfig() || link_configured_) {
+    // A panel with a direct Bridge link needs no discovery either. Pair on
+    // the panel announces it for two minutes (TXT pair=1), also with MQTT;
+    // the service restarts once when that flag changes.
+    const bool discoverable =
+        pairing_advertised_ || (!configManager.hasMqttConfig() && !link_configured_);
+    if (mdns_active && (!discoverable || mdns_pair_flag_ != pairing_advertised_)) {
       stopMdns();
-    } else if (webAdminServer.isRunning()) {
+    }
+    if (discoverable && webAdminServer.isRunning()) {
       startMdns();
     }
 

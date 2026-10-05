@@ -249,8 +249,17 @@ assert.ok(registrations.length > 60, 'every route registration is parsed');
 const publicRoutes = new Set([
   '"/"', '"/assets/inter-4.1-regular.woff2"', '"/assets/inter-4.1-semibold.woff2"',
   'adminCssAssetPath()', 'authJsAssetPath()', '"/api/auth/challenge"',
-  '"/api/auth/login"', '"/api/auth/logout"', '"/api/auth/password"'
+  '"/api/auth/login"', '"/api/auth/logout"', '"/api/auth/password"',
+  // The Bridge address for the direct link: gated by the Pair button on the
+  // panel instead of the password (docs-dev/bridge-link.md, Setup).
+  '"/api/link"'
 ]);
+{
+  const handlers = readRepoFile('src/web/server/handlers/web_admin_handlers.cpp');
+  const linkSetup = handlers.slice(handlers.indexOf('void WebAdminServer::handleLinkSetup() {'));
+  assert.match(linkSetup, /^void WebAdminServer::handleLinkSetup\(\) \{\s*if \(!command_channel::linkWindowOpen\(\)\) \{\s*sendJsonError\(server, 403,/,
+    '/api/link answers only within the two minutes after Pair was pressed on the panel');
+}
 for (const [, path, rest] of registrations) {
   const route = path.trim();
   if (publicRoutes.has(route)) continue;

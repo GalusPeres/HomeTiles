@@ -39,8 +39,10 @@ const changed = worker.slice(worker.indexOf('if (link_changed_ && mqtt_client.li
 assert.ok(changed.indexOf('drainOutboundQueues(') < changed.indexOf('mqtt_client.disconnect()'),
   'a queued unpair or pairing abort leaves before the link reconnects');
 
-assert.match(network, /if \(configManager\.hasMqttConfig\(\) \|\| link_configured_\) \{\s*stopMdns\(\);/,
-  'mDNS stays off once the panel has a Bridge');
+assert.match(network, /const bool discoverable =\s*pairing_advertised_ \|\| \(!configManager\.hasMqttConfig\(\) && !link_configured_\);/,
+  'mDNS stays off once the panel has a Bridge, unless Pair was pressed');
+assert.match(network, /if \(pairing_advertised_\) \{\s*const char\* key_pair = "pair";\s*const char\* val_pair = "1";/,
+  'Pair announces the panel to Home Assistant with TXT pair=1');
 assert.match(network, /const char\* key_link = "link";\s*const char\* val_link = "1";/,
   'mDNS tells the Bridge that this firmware can be added without MQTT');
 const setPairing = slice('void HomeTilesNetworkManager::setLinkPairing(', 'void HomeTilesNetworkManager::requestLinkPairing(');
@@ -63,7 +65,13 @@ assert.ok(turnOff.indexOf('sendUnpair()') < turnOff.indexOf('networkManager.setL
   'the unpair is queued before the link loses its key');
 assert.match(channel, /void endAttempt\([^)]*\) \{[\s\S]*?linkPairingEnded\(\);\s*\}/, 'every ended attempt leaves pair mode');
 assert.match(channel, /if \(networkManager\.linkConfigured\(\)\) networkManager\.requestLinkPairing\(true\);/,
-  'Pair on the display connects the link in pair mode');
+  'Pair on a linked display connects the link in pair mode');
+const start = channel.slice(channel.indexOf('bool startPairing() {'), channel.indexOf('PairingPhase pairingPhase() {'));
+assert.match(start, /if \(!networkManager\.linkConfigured\(\)\) \{[\s\S]*?g_link_window_until = [\s\S]*?networkManager\.setPairingAdvertised\(true\);[\s\S]*?return true;\s*\}/,
+  'Pair on a panel without a link opens the two-minute window');
+assert.match(channel, /constexpr uint32_t kLinkWindowMs = 120000;/);
+assert.match(channel, /void endPairing\(\) \{\s*if \(g_link_window_until\) \{[\s\S]*?closeLinkWindow\(\);/,
+  'Cancel closes the window');
 assert.match(channel, /networkManager\.linkPairMode\(\) && !g_state && !attemptRunning\(\) &&\s*link_config::current\(\)\.pair_requested && startPairing\(\)/,
   'after the Bridge sent its address the panel pairs by itself');
 
@@ -78,10 +86,12 @@ for (const match of client.matchAll(/Serial\.printf?\(([^;]*)\);/g)) {
 }
 
 const routes = readRepoFile('src/web/server/web_admin.cpp');
-assert.match(routes, /server\.on\("\/api\/link", HTTP_POST,\s*guarded\(withStorageHold\(\[this\]\(\) \{ this->handleLinkSetup\(\); \}\)\)\);/,
-  'the Bridge address needs the Web Admin session when a password is set');
+assert.match(routes, /server\.on\("\/api\/link", HTTP_POST,\s*withStorageHold\(\[this\]\(\) \{ this->handleLinkSetup\(\); \}\)\);/,
+  'the press on Pair replaces the Web Admin password for the Bridge address');
 const web = readRepoFile('src/web/server/handlers/web_admin_handlers.cpp');
 const setup = web.slice(web.indexOf('void WebAdminServer::handleLinkSetup() {'), web.indexOf('void WebAdminServer::handleRestart() {'));
+assert.match(setup, /^\s*void WebAdminServer::handleLinkSetup\(\) \{\s*if \(!command_channel::linkWindowOpen\(\)\) \{\s*sendJsonError\(server, 403,/m,
+  'without Pair pressed on the panel nobody on the network can redirect it');
 assert.match(setup, /link_config::validHost\(host\.c_str\(\)\)/);
 assert.match(setup, /settings\.pair_requested = true;/);
 assert.ok(setup.indexOf('link_config::save(settings)') < setup.indexOf('BoardHAL::restart()'));

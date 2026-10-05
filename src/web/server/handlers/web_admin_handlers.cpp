@@ -633,8 +633,14 @@ static bool linkTopicRootValid(const String& value, size_t max_length) {
 
 // The HomeTiles Bridge sends its address while the panel is added in Home
 // Assistant. The panel stores it, drops an older pairing, restarts and then
-// pairs over the link; MQTT is no longer used.
+// pairs over the link; MQTT is no longer used. It is accepted only within two
+// minutes after Pair was pressed on the panel, which replaces the Web Admin
+// password: whoever pressed it stands at the panel.
 void WebAdminServer::handleLinkSetup() {
+  if (!command_channel::linkWindowOpen()) {
+    sendJsonError(server, 403, "Press Pair on the panel first");
+    return;
+  }
   String host = server.arg("host");
   host.trim();
   const long port = server.arg("port").toInt();

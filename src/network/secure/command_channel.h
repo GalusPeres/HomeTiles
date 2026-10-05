@@ -24,6 +24,9 @@ bool sessionReady();
 // popup. One attempt at a time; it ends after 120 s at the latest.
 enum class PairingPhase : uint8_t {
   Idle,           // No attempt.
+  // Not linked yet: Pair made the panel discoverable for two minutes; Home
+  // Assistant sends the Bridge address (POST /api/link) when it is added.
+  Discoverable,
   Asking,         // Start sent; waiting for the Bridge.
   Compare,        // Number ready; waiting for the user on the panel.
   Confirmed,      // Confirmed here; waiting for Home Assistant.
@@ -52,6 +55,11 @@ bool disable(bool* bridge_notified = nullptr);
 // Called when the panel starts pairing by itself after the Bridge sent its
 // address for the direct link (docs-dev/bridge-link.md); shows the number.
 void setPairingPromptCallback(void (*callback)());
+
+// True within two minutes after Pair was pressed on a panel without a direct
+// link. Only then does POST /api/link accept a Bridge address; the press at
+// the panel replaces the Web Admin password.
+bool linkWindowOpen();
 
 // MQTT integration on the loop task.
 void onMqttConnected();

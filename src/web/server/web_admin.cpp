@@ -161,8 +161,10 @@ bool WebAdminServer::start() {
               guarded(withStorageHold([this]() { this->handleSaveBridge(); })));
     server.on("/restart", HTTP_POST,
               guarded([this]() { this->handleRestart(); }));
+    // No password check: the handler accepts the Bridge address only within
+    // two minutes after Pair was pressed on the panel itself.
     server.on("/api/link", HTTP_POST,
-              guarded(withStorageHold([this]() { this->handleLinkSetup(); })));
+              withStorageHold([this]() { this->handleLinkSetup(); }));
     server.on("/api/status", guarded([this]() { this->handleStatus(); }));
     server.on("/api/tiles", HTTP_GET,
               guarded([this]() { this->handleGetTiles(); }));

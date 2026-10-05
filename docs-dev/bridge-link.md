@@ -21,25 +21,38 @@ changes.
 
 ## Setup
 
-1. The panel advertises `_hometiles._tcp` over mDNS while it has neither a
-   link nor MQTT settings (as before). Firmware with link support adds the TXT
-   record `link=1`.
-2. Home Assistant shows "HomeTiles found". The user clicks **Add**.
-3. The Bridge sends `POST /api/link` to the panel's Web Admin (logged in first
-   when the panel has a Web Admin password, see `panel_auth.py`):
-   `host`, `port` (the Bridge's link server), `base` (base topic) and
-   `ha_prefix`. The panel stores them, marks pairing as requested and
-   restarts.
-4. After the restart the panel connects in pair mode and starts pairing v2
-   (`command-encryption.md`). The pairing messages travel as publishes on
-   `{base}/pair/panel` and `{base}/pair/bridge`; their content is unchanged.
+1. The user presses **Pair** on the panel (Settings > System > Security).
+   A panel without a Bridge address becomes discoverable for two minutes:
+   it advertises `_hometiles._tcp` over mDNS with the TXT records `link=1`
+   and `pair=1`, also when it is still set up over MQTT. Firmware with link
+   support always adds `link=1`; without `pair=1` the Bridge offers nothing.
+2. Home Assistant shows "Panel found" for a new panel, or "Switch to the
+   direct connection" for a panel that already has an entry (over MQTT). The
+   user clicks **Add** or **Submit**; no password is asked.
+3. The Bridge sends `POST /api/link` to the panel: `host`, `port` (the
+   Bridge's link server), `base` (base topic; an existing entry keeps its
+   own) and `ha_prefix`. The panel accepts it only while the two minutes
+   run, which replaces the Web Admin password: whoever pressed Pair stands at
+   the panel. Otherwise it answers 403. The panel stores the address, drops
+   an older pairing key, marks pairing as requested and restarts.
+4. After the restart the panel connects in pair mode, starts pairing v2
+   (`command-encryption.md`) and opens System > Security with the number.
+   The pairing messages travel as publishes on `{base}/pair/panel` and
+   `{base}/pair/bridge`; their content is unchanged.
 5. The same Home Assistant dialog shows the six-digit number. The user
-   confirms it there and on the panel. Both sides store the pairing key `K`,
-   the Bridge creates the entry, and the panel reconnects in session mode.
+   confirms it there and on the panel. Both sides store the pairing key `K`.
+   The Bridge creates the entry, or switches the existing one to the link
+   (`transport: link`, new key; area, names and entities stay), and the panel
+   reconnects in session mode.
 
 Pairing again (after Unpair on the display) uses the stored Bridge address:
 **Pair** on the display connects in pair mode, and the Bridge shows the
 existing pairing card for that entry.
+
+Once an entry uses the link, the Bridge neither publishes nor subscribes its
+topics over MQTT any more: the broker may still hold the panel's old retained
+messages (for example `0` on `{base}/stat/connected` from the moment it left
+MQTT), and they must not override the live state from the link.
 
 ## Wire format
 

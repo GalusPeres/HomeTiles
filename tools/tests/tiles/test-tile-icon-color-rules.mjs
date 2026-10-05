@@ -444,8 +444,8 @@ const rows = [0, 1, 2, 3, 4, 5].map(i => `<div class="tile-icon-rule hidden" id=
 <input type="color" id="t_tile_icon_rule_${i}_color" value="#22C55E" data-icon-color="rule-color">
 <button type="button" class="tile-color-reset-btn" data-icon-color="remove" data-rule="${i}">x</button></div>`).join('');
 const block = `<div id="t_tile_icon_color_fields" class="tile-icon-color-fields hidden" data-tab="t">
-<input type="color" id="t_tile_icon_color" value="#FFFFFF" data-unset="1" data-icon-color="color">
-<button type="button" id="clear" data-icon-color="clear">r</button>
+<div class="icon-color-segmented choice-row tile-icon-color-modes" id="t_tile_icon_color_modes"><button type="button" id="mode_auto" data-icon-color="icon-color-mode" data-mode="auto">A</button><button type="button" id="mode_own" data-icon-color="icon-color-mode" data-mode="own">O</button><button type="button" id="mode_cover" data-icon-color="icon-color-mode" data-mode="cover">C</button></div>
+<div class="tile-color-row" id="t_tile_icon_color_row"><input type="color" id="t_tile_icon_color" value="#FFFFFF" data-unset="1" data-icon-color="color"></div>
 <div class="icon-color-section hidden" id="t_tile_icon_source_section"><input type="hidden" id="t_tile_icon_rules_on" value="0">
 <div class="icon-color-segmented"><button type="button" data-icon-color="rules-on" data-mode="0">Off</button><button type="button" data-icon-color="rules-on" data-mode="1">On</button></div>
 <div class="icon-color-rules-body hidden" id="t_tile_icon_rules_body"><input type="hidden" id="t_tile_icon_source_kind" value="self">
@@ -548,10 +548,14 @@ try{
  check(snapshot()===''&&hidden('t_tile_icon_bar_editor'),'Off removes the bar');
  click(document.querySelector('[data-mode="steps"]'));
  check(snapshot().startsWith('v2\\n\\nbar steps -10.5 40 1000:123456 1000:EAB308'),'Turning it on again restores the last stops: '+snapshot());
- // Fixed color stays the fallback and clears to white.
+ // Icon color: Automatic hides the field, Custom shows it, Automatic again
+ // forgets the color; From cover is Media only.
+ const activeMode=()=>document.querySelector('#t_tile_icon_color_modes .active')?.dataset.mode;
+ check(activeMode()==='auto'&&hidden('t_tile_icon_color_row')&&hidden('mode_cover'),'Automatic without a field, no cover choice');
+ click($('mode_own'));check(activeMode()==='own'&&!hidden('t_tile_icon_color_row')&&snapshot().startsWith('v2\\nFFFFFF\\nbar'),'Custom shows the field: '+snapshot());
  $('t_tile_icon_color').value='#00bcd4';$('t_tile_icon_color').dispatchEvent(new Event('input',{bubbles:true}));
  check(snapshot().startsWith('v2\\n00BCD4\\nbar steps'),'Fixed color is kept');
- click($('clear'));check(snapshot().startsWith('v2\\n\\nbar')&&$('t_tile_icon_color').value==='#ffffff','Clear shows white');
+ click($('mode_auto'));check(snapshot().startsWith('v2\\n\\nbar')&&$('t_tile_icon_color').value==='#ffffff'&&hidden('t_tile_icon_color_row'),'Automatic forgets the color');
  callTypeHandler(getTileTypeMeta('1'),'reset','t');check(snapshot()==='','Reset clears everything');
  // Text Sensor (maintainer case): Rules on, the state list, contains 6.
  load('1',{sensor_entity:'sensor.waste',icon_colors:''});

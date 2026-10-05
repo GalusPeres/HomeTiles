@@ -34,10 +34,6 @@ static const Strings kStringsDe = {
     "Kachel-Titel",
     "z.B. home, thermometer, lightbulb",
     "Kachelfarbe",
-    "Spalte",
-    "Zeile",
-    "Breite",
-    "Höhe",
     "Änderungen werden automatisch gespeichert.",
     "Kopieren",
     "Einfügen",
@@ -600,7 +596,8 @@ static const Strings kStringsDe = {
     "Stars",
     "oder",
     "Farbige Wetter-Icons",
-    "Ordner"};
+    "Ordner",
+    "Automatisch"};
 
 static const Strings kStringsEn = {
     "en",
@@ -629,10 +626,6 @@ static const Strings kStringsEn = {
     "Tile title",
     "e.g. home, thermometer, lightbulb",
     "Tile color",
-    "Column",
-    "Row",
-    "Width",
-    "Height",
     "Changes are saved automatically.",
     "Copy",
     "Paste",
@@ -1195,7 +1188,8 @@ static const Strings kStringsEn = {
     "Stars",
     "or",
     "Colored weather icons",
-    "Folders"};
+    "Folders",
+    "Automatic"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1224,10 +1218,6 @@ static const Strings kStringsFr = {
     "Titre de la tuile",
     "p. ex. home, thermometer, lightbulb",
     "Couleur de la tuile",
-    "Colonne",
-    "Ligne",
-    "Largeur",
-    "Hauteur",
     "Les modifications sont enregistrées automatiquement.",
     "Copier",
     "Coller",
@@ -1790,7 +1780,8 @@ static const Strings kStringsFr = {
     "des étoiles",
     "ou",
     "Icônes météo en couleur",
-    "Dossiers"};
+    "Dossiers",
+    "Automatique"};
 
 static const LocaleProfile kLocaleDe = {
     "de",
@@ -2195,10 +2186,6 @@ static const Strings kStringsPl = {
     "Tytuł kafelka",
     "np. home, thermometer, lightbulb",
     "Kolor kafelka",
-    "Kolumna",
-    "Wiersz",
-    "Szerokość",
-    "Wysokość",
     "Zmiany są zapisywane automatycznie.",
     "Kopiuj",
     "Wklej",
@@ -2734,6 +2721,7 @@ static const Strings kStringsPl = {
     "lub",
     "Kolorowe ikony pogody",
     "Foldery",
+    "Automatyczny",
 };
 
 static const LocaleProfile kLocalePl = {

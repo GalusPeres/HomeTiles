@@ -1202,7 +1202,7 @@ static void appendTileTabHTML(
             <div class="tile-color-label-row no-reset"><span>)html";
   html += tr.admin_color;
   html += R"html(</span></div>
-            <div class="icon-color-segmented tile-color-modes" role="group" id=")html";
+            <div class="icon-color-segmented choice-row tile-color-modes" role="group" id=")html";
   html += tab_id;
   html += R"html(_tile_color_modes">)html";
   // Tile color is one choice: the global tile color, an own color, a tint
@@ -1242,52 +1242,31 @@ static void appendTileTabHTML(
   html += R"html(            </div>
 )html";
   append_tile_color_from_icon_html(html, tab_id);
+  // Position and size: dragging and resizing in the grid edit them; the
+  // values stay in hidden inputs for drafts, undo, copy and saving.
   html += R"html(
-
-            <div class="tile-layout">
-              <div class="layout-field">
-                <label>)html";
-  html += tr.admin_column;
-  html += R"html(</label>
-                <input type="number" id=")html";
+            <input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_col" min="1" max=")html";
   html += String(GRID_COLS);
   html += R"html(" step="0.5" value="1">
-              </div>
-              <div class="layout-field">
-                <label>)html";
-  html += tr.admin_row;
-  html += R"html(</label>
-                <input type="number" id=")html";
+            <input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_row" min=")html";
   html += String(screensaver_mode && GRID_ROWS > 1 ? GRID_ROWS - 1 : 1);
   html += R"html(" max=")html";
   html += String(GRID_ROWS);
   html += R"html(" step="0.5" value="1">
-              </div>
-              <div class="layout-field">
-                <label>)html";
-  html += tr.admin_width_cells;
-  html += R"html(</label>
-                <input type="number" id=")html";
+            <input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_span_w" min="1" max=")html";
   html += String(GRID_COLS);
   html += R"html(" step="0.5" value="1">
-              </div>
-              <div class="layout-field">
-                <label>)html";
-  html += tr.admin_height_cells;
-  html += R"html(</label>
-                <input type="number" id=")html";
+            <input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_span_h" min="1" max=")html";
   html += String(GRID_ROWS);
   html += R"html(" step="0.5" value="1">
-              </div>
-            </div>
 
 )html";
 

@@ -31,10 +31,11 @@ void append_button(String& html, const char* css, const char* role, const char* 
 
 }  // namespace
 
-// The fixed icon color sits with the icon fields (Icon group); its own
+// The icon color sits with the icon fields (Icon group); its own
 // tile-icon-color-fields wrapper keeps the delegated editor events working.
-// Media tiles also offer "From cover" (the hidden checkbox, "cover icon" in
-// the record) next to their own color, like the tile color choice.
+// One row of choices: Automatic (no fixed color: the type's and entity's own
+// colors), Custom (the color field) and, on Media tiles only, From cover (the
+// hidden checkbox, "cover icon" in the record).
 void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
   const auto& tr = i18n::strings(configManager.getConfig().language);
   html += R"html(            <div class="tile-icon-color-fields tile-icon-color-fixed hidden" id=")html";
@@ -43,24 +44,22 @@ void append_tile_icon_color_fixed_html(String& html, const String& tab_id) {
   html += tab_id;
   html += "\">\n";
   append_label_row(html, tr.tile_icon_color);
-  html += R"html(              <div class="icon-color-segmented tile-icon-color-modes hidden" role="group" id=")html";
+  html += R"html(              <div class="icon-color-segmented choice-row tile-icon-color-modes" role="group" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_color_modes">)html";
+  append_button(html, "", "icon-color-mode", "data-mode", "auto", tr.tile_icon_color_auto);
   append_button(html, "", "icon-color-mode", "data-mode", "own", tr.tile_color_mode_custom);
   append_button(html, "", "icon-color-mode", "data-mode", "cover", tr.tile_color_mode_from_cover);
   html += R"html(</div>
               <input type="checkbox" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_cover" hidden>
-              <div class="tile-color-row" id=")html";
+              <div class="tile-color-row no-reset" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_color_row">
                 <input type="color" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_color" value="#FFFFFF" data-unset="1" data-icon-color="color">
-                <button type="button" class="tile-color-reset-btn" data-icon-color="clear" title=")html";
-  appendHtmlEscaped(html, tr.tile_icon_color_remove);
-  html += R"html("><i class="mdi mdi-restore"></i></button>
               </div>
             </div>
 )html";

@@ -32,10 +32,6 @@ struct Strings {
   const char* admin_tile_title_placeholder;
   const char* admin_icon_placeholder;
   const char* admin_color;
-  const char* admin_column;
-  const char* admin_row;
-  const char* admin_width_cells;
-  const char* admin_height_cells;
   const char* admin_autosave;
   const char* admin_copy;
   const char* admin_paste;
@@ -673,6 +669,8 @@ struct Strings {
   const char* weather_colored_icons;
   // Web Admin navigation: the menu with every folder besides Home.
   const char* admin_folders;
+  // Icon color choice: Automatic (the type's and entity's own colors).
+  const char* tile_icon_color_auto;
 };
 
 // Locale-specific display rules and short runtime strings shared by

@@ -362,6 +362,34 @@
     }
   }, true);
 
+  // Rows of choices (Icon color, Tile color) span the panel in equal parts;
+  // every label stays on one line, the font steps down from 12 px to 10 px
+  // at most until nothing overflows.
+  const choiceRowObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(entries => entries.forEach(entry => fitChoiceRow(entry.target))) : null;
+
+  function fitChoiceRow(row) {
+    if (!row || !row.offsetWidth) return;
+    const buttons = Array.from(row.querySelectorAll('button'));
+    buttons.forEach(button => { button.style.fontSize = ''; });
+    const shown = buttons.filter(button => button.offsetWidth);
+    const overflows = () => shown.some(button => button.scrollWidth > button.clientWidth + 0.5);
+    for (let size = 11.5; size >= 10 && overflows(); size -= 0.5) {
+      shown.forEach(button => { button.style.fontSize = size + 'px'; });
+    }
+  }
+
+  function fitChoiceRows(tab) {
+    for (const suffix of ['_tile_icon_color_modes', '_tile_color_modes']) {
+      fitChoiceRow(document.getElementById(tab + suffix));
+    }
+  }
+
+  function observeChoiceRows(root) {
+    if (!choiceRowObserver) return;
+    (root || document).querySelectorAll?.('.choice-row').forEach(row => choiceRowObserver.observe(row));
+  }
+
   // The Type list opens down from the head; keep it inside the panel.
   function fitTileTypePicker(event) {
     const select = event.target;
@@ -382,6 +410,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     setupTileHeads(document);
+    observeChoiceRows(document);
     if (typeof MutationObserver !== 'function') return;
     new MutationObserver(records => {
       for (const record of records) {
@@ -389,6 +418,8 @@
           if (node.nodeType !== 1) continue;
           if (node.matches?.('input[data-tile-icon], textarea.tile-title-input')) attachTileHead(node);
           else if (node.querySelector?.('input[data-tile-icon], textarea.tile-title-input')) setupTileHeads(node);
+          if (node.matches?.('.choice-row')) observeChoiceRows(node.parentNode);
+          else observeChoiceRows(node);
         }
       }
     }).observe(document.body, { childList: true, subtree: true });

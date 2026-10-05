@@ -924,18 +924,22 @@
     if (typeof syncTileColorMode === 'function') syncTileColorMode(tab);
     block.classList.toggle('hidden', !visible);
     iconColorEl(tab, '_tile_icon_color_fixed')?.classList.toggle('hidden', !visible);
-    // Media offers the icon color "From cover" next to its own color.
+    // Icon color: Automatic (unset), Custom (the color field) or, on Media
+    // only, From cover.
     const media = type === ICON_COLOR_MEDIA_TYPE;
     const coverIconBox = iconColorEl(tab, '_tile_icon_cover');
     if (coverIconBox && !media) coverIconBox.checked = false;
     const coverIcon = media && !!coverIconBox?.checked;
-    iconColorEl(tab, '_tile_icon_color_modes')?.classList.toggle('hidden', !media);
-    iconColorEl(tab, '_tile_icon_color_row')?.classList.toggle('hidden', coverIcon);
+    const unset = iconColorEl(tab, '_tile_icon_color')?.dataset.unset !== '0';
+    const iconMode = coverIcon ? 'cover' : unset ? 'auto' : 'own';
+    iconColorEl(tab, '_tile_icon_color_row')?.classList.toggle('hidden', iconMode !== 'own');
     iconColorEl(tab, '_tile_icon_color_modes')?.querySelectorAll('[data-icon-color="icon-color-mode"]').forEach(button => {
-      const active = button.dataset.mode === (coverIcon ? 'cover' : 'own');
+      const active = button.dataset.mode === iconMode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      if (button.dataset.mode === 'cover') button.classList.toggle('hidden', !media);
     });
+    if (typeof fitChoiceRows === 'function') fitChoiceRows(tab);
     if (!visible) return;
     const own = ICON_COLOR_OWN_TYPES.includes(type);
     const kindInput = iconColorEl(tab, '_tile_icon_source_kind');
@@ -1140,11 +1144,14 @@
       openIconColorStopPicker(tab, index);
       return;
     }
-    if (role === 'clear') {
-      setIconColorInput(tab, '');
-    } else if (role === 'icon-color-mode') {
+    if (role === 'icon-color-mode') {
+      const mode = button.dataset.mode;
       const cover = iconColorEl(tab, '_tile_icon_cover');
-      if (cover) cover.checked = button.dataset.mode === 'cover';
+      if (cover) cover.checked = mode === 'cover';
+      // Custom starts from the color the field shows; Automatic forgets it.
+      const input = iconColorEl(tab, '_tile_icon_color');
+      if (mode === 'auto') setIconColorInput(tab, '');
+      else if (mode === 'own' && input) input.dataset.unset = '0';
     } else if (role === 'source-mode') {
       const mode = iconColorEl(tab, '_tile_icon_source_mode');
       if (mode) mode.value = button.dataset.mode === 'rules' ? 'rules' : 'auto';

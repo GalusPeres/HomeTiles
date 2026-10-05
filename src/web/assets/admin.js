@@ -3386,6 +3386,34 @@ function syncTileRadiusControls(tabEl) {
     }
   }, true);
 
+  // Rows of choices (Icon color, Tile color) span the panel in equal parts;
+  // every label stays on one line, the font steps down from 12 px to 10 px
+  // at most until nothing overflows.
+  const choiceRowObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(entries => entries.forEach(entry => fitChoiceRow(entry.target))) : null;
+
+  function fitChoiceRow(row) {
+    if (!row || !row.offsetWidth) return;
+    const buttons = Array.from(row.querySelectorAll('button'));
+    buttons.forEach(button => { button.style.fontSize = ''; });
+    const shown = buttons.filter(button => button.offsetWidth);
+    const overflows = () => shown.some(button => button.scrollWidth > button.clientWidth + 0.5);
+    for (let size = 11.5; size >= 10 && overflows(); size -= 0.5) {
+      shown.forEach(button => { button.style.fontSize = size + 'px'; });
+    }
+  }
+
+  function fitChoiceRows(tab) {
+    for (const suffix of ['_tile_icon_color_modes', '_tile_color_modes']) {
+      fitChoiceRow(document.getElementById(tab + suffix));
+    }
+  }
+
+  function observeChoiceRows(root) {
+    if (!choiceRowObserver) return;
+    (root || document).querySelectorAll?.('.choice-row').forEach(row => choiceRowObserver.observe(row));
+  }
+
   // The Type list opens down from the head; keep it inside the panel.
   function fitTileTypePicker(event) {
     const select = event.target;
@@ -3406,6 +3434,7 @@ function syncTileRadiusControls(tabEl) {
 
   document.addEventListener('DOMContentLoaded', () => {
     setupTileHeads(document);
+    observeChoiceRows(document);
     if (typeof MutationObserver !== 'function') return;
     new MutationObserver(records => {
       for (const record of records) {
@@ -3413,6 +3442,8 @@ function syncTileRadiusControls(tabEl) {
           if (node.nodeType !== 1) continue;
           if (node.matches?.('input[data-tile-icon], textarea.tile-title-input')) attachTileHead(node);
           else if (node.querySelector?.('input[data-tile-icon], textarea.tile-title-input')) setupTileHeads(node);
+          if (node.matches?.('.choice-row')) observeChoiceRows(node.parentNode);
+          else observeChoiceRows(node);
         }
       }
     }).observe(document.body, { childList: true, subtree: true });
@@ -4578,18 +4609,22 @@ function syncTileRadiusControls(tabEl) {
     if (typeof syncTileColorMode === 'function') syncTileColorMode(tab);
     block.classList.toggle('hidden', !visible);
     iconColorEl(tab, '_tile_icon_color_fixed')?.classList.toggle('hidden', !visible);
-    // Media offers the icon color "From cover" next to its own color.
+    // Icon color: Automatic (unset), Custom (the color field) or, on Media
+    // only, From cover.
     const media = type === ICON_COLOR_MEDIA_TYPE;
     const coverIconBox = iconColorEl(tab, '_tile_icon_cover');
     if (coverIconBox && !media) coverIconBox.checked = false;
     const coverIcon = media && !!coverIconBox?.checked;
-    iconColorEl(tab, '_tile_icon_color_modes')?.classList.toggle('hidden', !media);
-    iconColorEl(tab, '_tile_icon_color_row')?.classList.toggle('hidden', coverIcon);
+    const unset = iconColorEl(tab, '_tile_icon_color')?.dataset.unset !== '0';
+    const iconMode = coverIcon ? 'cover' : unset ? 'auto' : 'own';
+    iconColorEl(tab, '_tile_icon_color_row')?.classList.toggle('hidden', iconMode !== 'own');
     iconColorEl(tab, '_tile_icon_color_modes')?.querySelectorAll('[data-icon-color="icon-color-mode"]').forEach(button => {
-      const active = button.dataset.mode === (coverIcon ? 'cover' : 'own');
+      const active = button.dataset.mode === iconMode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      if (button.dataset.mode === 'cover') button.classList.toggle('hidden', !media);
     });
+    if (typeof fitChoiceRows === 'function') fitChoiceRows(tab);
     if (!visible) return;
     const own = ICON_COLOR_OWN_TYPES.includes(type);
     const kindInput = iconColorEl(tab, '_tile_icon_source_kind');
@@ -4794,11 +4829,14 @@ function syncTileRadiusControls(tabEl) {
       openIconColorStopPicker(tab, index);
       return;
     }
-    if (role === 'clear') {
-      setIconColorInput(tab, '');
-    } else if (role === 'icon-color-mode') {
+    if (role === 'icon-color-mode') {
+      const mode = button.dataset.mode;
       const cover = iconColorEl(tab, '_tile_icon_cover');
-      if (cover) cover.checked = button.dataset.mode === 'cover';
+      if (cover) cover.checked = mode === 'cover';
+      // Custom starts from the color the field shows; Automatic forgets it.
+      const input = iconColorEl(tab, '_tile_icon_color');
+      if (mode === 'auto') setIconColorInput(tab, '');
+      else if (mode === 'own' && input) input.dataset.unset = '0';
     } else if (role === 'source-mode') {
       const mode = iconColorEl(tab, '_tile_icon_source_mode');
       if (mode) mode.value = button.dataset.mode === 'rules' ? 'rules' : 'auto';
@@ -8664,6 +8702,7 @@ function syncTileRadiusControls(tabEl) {
     const strength = document.getElementById(tab + '_tile_icon_fill_strength');
     const output = document.getElementById(tab + '_tile_icon_fill_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
+    if (typeof fitChoiceRows === 'function') fitChoiceRows(tab);
   }
   function setTileColorMode(tab, mode) {
     const input = document.getElementById(tab + '_tile_color');

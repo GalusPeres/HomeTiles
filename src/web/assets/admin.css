@@ -1521,14 +1521,6 @@
       transition:border-color 0.15s, color 0.15s;
     }
     .tile-color-reset-btn:hover { border-color:#4a4a4a; color:var(--text); }
-    .tile-layout {
-      display:grid;
-      grid-template-columns:repeat(4, minmax(0, 1fr));
-      gap:8px;
-      margin:12px 0 12px;
-    }
-    .layout-field label { margin-bottom:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .layout-field input { padding:8px 10px; font-size:13px; margin-bottom:0; }
     .inline-checkbox { display:flex; width:fit-content; align-items:center; gap:8px; font-weight:600; margin-top:8px; }
     /* Only the checkbox itself toggles: a click next to it (or on its text)
        must not change the setting by accident. */
@@ -2925,6 +2917,10 @@
   cursor:pointer;
 }
 .icon-color-segmented button.active { background:var(--accent-soft); color:#5fd4c7; }
+/* Icon color and Tile color: one row across the panel in equal parts, every
+   label on one line (fitChoiceRow in tiles/tile-head.js shrinks the font). */
+.icon-color-segmented.choice-row { display:grid; width:100%; box-sizing:border-box; }
+.icon-color-segmented.choice-row button { min-width:0; padding:7px 4px; white-space:nowrap; overflow:hidden; }
 /* Switch fields like Tile color: the label on its own row, then one line of
    choices across the panel (types/switch/web_html.cpp); every button keeps
    its text on one line and takes the space its text needs. */

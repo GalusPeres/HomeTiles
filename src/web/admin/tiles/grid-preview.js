@@ -314,6 +314,7 @@
     const strength = document.getElementById(tab + '_tile_icon_fill_strength');
     const output = document.getElementById(tab + '_tile_icon_fill_strength_value');
     if (strength && output) output.textContent = strength.value + ' %';
+    if (typeof fitChoiceRows === 'function') fitChoiceRows(tab);
   }
   function setTileColorMode(tab, mode) {
     const input = document.getElementById(tab + '_tile_color');

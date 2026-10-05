@@ -27,6 +27,20 @@ assert.ok(head.indexOf('tile-head-row') < head.indexOf('tile-entity-slot') &&
 assert.doesNotMatch(page, /pictogrammers\.com|admin_icon_label|admin_icon_list|<input type="text" id="\)html";\s*html \+= tab_id;\s*html \+= R"html\(_tile_icon"/,
   'The old icon text field and its link are gone');
 assert.match(read('src/tiles/icons/mdi_icons.cpp'), /size_t mdiIconCount\(\) \{ return ICON_COUNT; \}/);
+// Position and size only by dragging: hidden inputs keep the values.
+for (const field of ['col', 'row', 'span_w', 'span_h']) {
+  assert.ok(page.includes(`<input type="hidden" id=")html";\n  html += tab_id;\n  html += R"html(_tile_${field}"`), field);
+}
+assert.doesNotMatch(page, /tile-layout|layout-field|admin_column|admin_width_cells/, 'No position fields left');
+assert.doesNotMatch(read('src/web/assets/admin.css'), /\.tile-layout|\.layout-field/);
+// Icon color and Tile color: one row of choices each.
+const colors = read('src/web/server/render/tile_icon_colors_html.cpp');
+assert.match(colors, /"icon-color-segmented choice-row tile-icon-color-modes"/);
+for (const mode of ['"auto", tr.tile_icon_color_auto', '"own", tr.tile_color_mode_custom', '"cover", tr.tile_color_mode_from_cover']) {
+  assert.ok(colors.includes(`append_button(html, "", "icon-color-mode", "data-mode", ${mode});`), mode);
+}
+assert.doesNotMatch(colors, /data-icon-color="clear"/, 'Automatic replaces the reset button');
+assert.match(page, /"icon-color-segmented choice-row tile-color-modes"/);
 assert.match(read('src/web/server/web_admin.cpp'), /"\/api\/mdi_icons", HTTP_GET,\s*guarded\(\[this\]\(\) \{ this->handleGetMdiIcons\(\); \}\)\)/);
 const handler = read('src/web/server/handlers/web_admin_tiles.cpp');
 const icons = handler.slice(handler.indexOf('void WebAdminServer::handleGetMdiIcons()'), handler.indexOf('// ========== Folder API'));
@@ -86,6 +100,8 @@ const html = `<!doctype html><html lang="de"><head><style>${read('src/web/assets
 <div class="tile-head-row"><div><label for="t_tile_title">Titel</label><textarea rows="1" class="tile-title-input" spellcheck="false" id="t_tile_title"></textarea></div><div><label for="t_tile_icon_picker">Icon</label><input type="hidden" id="t_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id="t_tile_icon_picker" aria-haspopup="listbox"></button></div></div>
 <div class="tile-entity-slot" id="t_tile_entity_slot"></div></div>
 <div class="tile-settings-body"><input type="color" id="t_tile_icon_color" value="#FFFFFF" data-unset="1">
+<div class="icon-color-segmented choice-row" id="t_tile_icon_color_modes"><button>Automatique</button><button>Personnalisée</button><button>De la pochette</button></div>
+<div class="icon-color-segmented choice-row" id="t_tile_color_modes"><button>Globale</button><button>Personnalisée</button><button>De l'icône</button><button>De la pochette</button></div>
 <div class="type-fields show" id="t_sensor_fields"><label for="t_sensor_entity_picker">Sensor</label><input type="hidden" id="t_sensor_entity" data-entity-picker="sensors"></div></div></div>
 <pre id="result"></pre><script>
 const loaded=[];const nativeListen=document.addEventListener.bind(document);
@@ -164,6 +180,15 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  const tall=title.getBoundingClientRect().height;title.value='Haus';
  check(!title.classList.contains('two')&&title.getBoundingClientRect().height<tall,'One line again');
  check(Math.round(button.getBoundingClientRect().top)===Math.round(title.getBoundingClientRect().top),'Icon beside the first line');
+ // Rows of choices: every label on one line, French with four choices too.
+ fitChoiceRows('t');
+ for(const id of ['t_tile_icon_color_modes','t_tile_color_modes']){
+  const buttons=[...$(id).querySelectorAll('button')];
+  check(buttons.every(b=>b.scrollWidth<=b.clientWidth+0.5),id+' overflows');
+  const size=parseFloat(getComputedStyle(buttons[0]).fontSize);
+  check(size>=10&&size<=12,id+' font '+size);
+  check(new Set(buttons.map(b=>Math.round(b.getBoundingClientRect().top))).size===1,id+' one row');
+ }
  document.body.dataset.result='pass';
 }catch(error){document.body.dataset.result='fail';document.getElementById('result').textContent=error.stack;}})();
 </script></body></html>`;

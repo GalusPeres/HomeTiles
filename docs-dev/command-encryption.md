@@ -56,6 +56,11 @@ panel cannot stall them. A record of the earlier single SHA-256 scheme
 (version 1, never released) keeps Web Admin locked until the password is
 removed on the device and set again.
 
+The first password can be set only within two minutes after tapping
+Password under System > Security on the panel; without that tap the panel
+answers `403 panel_tap_required`. Changing or removing a set password needs
+the Web Admin session as before.
+
 Login:
 
 1. `GET /api/auth/challenge` →
@@ -238,8 +243,8 @@ Plaintext:
 | `hello` | panel → Bridge | `-` | 0 | fresh 32-hex challenge | empty |
 | `session` | Bridge → panel | new random session id | 0 | the challenge it answers | empty |
 | `rekey` | Bridge → panel | `-` | 0 | `-` | empty |
-| `cmd` | panel → Bridge | current session | 1, 2, … | `scene`, `light`, `switch`, `media`, `climate`, `cover`, `camera`, `value`, `fan`, `lock`, `alarm` | the unchanged plain command payload |
-| `data` | Bridge → panel | current session | 1, 2, … | `camera` or `local_camera` | the unchanged plain payload of `{base}/stat/camera` or `{base}/cmnd/local_camera` |
+| `cmd` | panel → Bridge | current session | 1, 2, … | `scene`, `light`, `switch`, `media`, `climate`, `cover`, `camera`, `value`, `fan`, `lock`, `alarm`, `entities`, `tiles` | the unchanged plain command payload |
+| `data` | Bridge → panel | current session | 1, 2, … | `camera`, `local_camera` or `entities` | the unchanged plain payload of `{base}/stat/camera` or `{base}/cmnd/local_camera`, or a search answer part |
 | `unpair` | both | current session | next number of the sender (continues `cmd`/`data`) | `-` | empty |
 
 ### Session and replay protection
@@ -316,6 +321,30 @@ update and keeps sending plain commands. The Bridge betas b1/b2 and the
 matching firmware betas used a typed 25-symbol code (contract v1): both sides
 discard a stored v1 code at start with a log line and run unencrypted until
 the panel is paired again.
+
+## Entity search
+
+A paired panel whose Bridge announces `"entity_search": 1` in its
+configuration lets the Web Admin entity picker search Home Assistant through
+the Bridge. Both messages travel only sealed (`SEALED_ONLY_COMMANDS`):
+
+- `entities` (panel → Bridge): `{"id":n,"list":"<picker list>","q":"<query>",
+  "web_auth":true|false}`. The Bridge answers every entity of the list's
+  domains only when the command is sealed, the pairing is not being removed
+  and `web_auth` is true, the same rule as Lock and Alarm. Otherwise it
+  answers only the entities released for the panel. The answer comes back as
+  sealed `entities` data in at most six parts of up to 1,900 bytes
+  (`{"id","p","n","full","more","r":[{v,t,i,a,d}]}`); the panel joins
+  them and keeps only the newest search.
+- `tiles` (panel → Bridge): `{"lists":{"<list>":["entity_id",…]},"web_auth":…}` lists
+  the tiles' entities beyond the released lists. With the same rule the
+  Bridge adds them to that panel's tracked entities in memory; it validates
+  each domain against the list and keeps at most 200. The panel sends the
+  report again on every new session and whenever tiles, the Bridge lists or
+  the password change.
+
+A plain (unpaired) panel never searches; its picker shows the released
+entities.
 
 ## Announcements, discovery and history requests
 

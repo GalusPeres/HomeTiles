@@ -186,6 +186,10 @@ bool WebAdminServer::start() {
               guarded([this]() { this->handleGetEntityOptions(); }));
     server.on("/api/mdi_icons", HTTP_GET,
               guarded([this]() { this->handleGetMdiIcons(); }));
+    server.on("/api/entity_search", HTTP_POST,
+              guarded([this]() { this->handleStartEntitySearch(); }));
+    server.on("/api/entity_search", HTTP_GET,
+              guarded([this]() { this->handleGetEntitySearch(); }));
     server.on("/api/screensaver", HTTP_GET,
               guarded([this]() { this->handleGetScreensaver(); }));
     server.on("/api/screensaver", HTTP_POST,

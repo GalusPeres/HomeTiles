@@ -136,7 +136,14 @@ void appendWebAdminPasswordSettingsHtml(String& html, const i18n::Strings& tr) {
   appendHtmlEscaped(html, String(tr.web_auth_logout));
   html += R"html(</button>
             </div>
-            <div class="settings-note">)html";
+)html";
+  if (!enabled) {
+    // The first password needs a tap on the display (allowFirstPassword).
+    html += R"html(            <div class="settings-note" id="web_auth_tap_note">)html";
+    appendHtmlEscaped(html, String(tr.web_auth_panel_tap_required));
+    html += "</div>\n";
+  }
+  html += R"html(            <div class="settings-note">)html";
   appendHtmlEscaped(html, String(tr.web_auth_note));
   html += R"html(</div>
             <div class="settings-note">)html";

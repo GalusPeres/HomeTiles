@@ -564,9 +564,7 @@ static const Strings kStringsDe = {
     "Verschlüsseln schützt jeden Befehl an Home Assistant.",
     "Schaltet die Verschlüsselung auch in Home Assistant aus.",
     "Verschlüsseln",
-    "Befehle verschlüsseln",
     "Ausschalten",
-    "Verschlüsselung ausschalten",
     "Passwort",
     "Verschlüsselung ausschalten?",
     "Home Assistant schaltet sie ebenfalls aus.",
@@ -597,7 +595,9 @@ static const Strings kStringsDe = {
     "oder",
     "Farbige Wetter-Icons",
     "Ordner",
-    "Automatisch"};
+    "Automatisch",
+    "Jetzt im Web Admin ein Passwort festlegen (2 Minuten).",
+    "Tippe zuerst am Display unter System > Sicherheit auf „Passwort“."};
 
 static const Strings kStringsEn = {
     "en",
@@ -1156,9 +1156,7 @@ static const Strings kStringsEn = {
     "Encryption protects every command to Home Assistant.",
     "Also turns off encryption in Home Assistant.",
     "Encrypt",
-    "Encrypt commands",
     "Turn off",
-    "Turn off encryption",
     "Password",
     "Turn off encryption?",
     "Home Assistant turns it off too.",
@@ -1189,7 +1187,9 @@ static const Strings kStringsEn = {
     "or",
     "Colored weather icons",
     "Folders",
-    "Automatic"};
+    "Automatic",
+    "Now set a password in the Web Admin (2 minutes).",
+    "First tap “Password” on the display under System > Security."};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1748,9 +1748,7 @@ static const Strings kStringsFr = {
     "Le chiffrement protège chaque commande vers Home Assistant.",
     "Désactive aussi le chiffrement dans Home Assistant.",
     "Chiffrer",
-    "Chiffrer les commandes",
     "Désactiver",
-    "Désactiver le chiffrement",
     "Mot de passe",
     "Désactiver le chiffrement\u00A0?",
     "Home Assistant le désactive aussi.",
@@ -1781,7 +1779,9 @@ static const Strings kStringsFr = {
     "ou",
     "Icônes météo en couleur",
     "Dossiers",
-    "Automatique"};
+    "Automatique",
+    "Définissez maintenant un mot de passe dans le Web Admin (2 minutes).",
+    "Touchez d'abord « Mot de passe » sur l'écran sous Système > Sécurité."};
 
 static const LocaleProfile kLocaleDe = {
     "de",
@@ -1892,7 +1892,9 @@ static const LocaleProfile kLocaleDe = {
      "Nicht verfügbar", "Unbekannt"},
     {"Entität wählen", "Suchen", "Keine Entität passt zu „{query}“",
      "Die Entitäten konnten nicht geladen werden. Die gewählte Entität bleibt erhalten.",
-     "Erneut versuchen", "Leeren", "Keine Entität verfügbar"},
+     "Erneut versuchen", "Leeren", "Keine Entität verfügbar",
+     "Nur die in der Bridge freigegebenen Entitäten. Mit einem Web-Admin-Passwort findest du alle.",
+     "Weitere Treffer: Suche genauer eingeben."},
     {"Sensor", "Binärsensor", "Licht", "Schalter", "Ventilator", "Cover", "Klima",
      "Mediaplayer", "Wetter", "Kamera", "Schloss", "Alarmanlage", "Zahl", "Auswahl",
      "Datum/Uhrzeit", "Szene", "Skript", "Taste", "Automation", "Luftbefeuchter",
@@ -2004,7 +2006,9 @@ static const LocaleProfile kLocaleEn = {
      "Pending", "Arming", "Disarming", "Triggered", "Unavailable", "Unknown"},
     {"Choose an entity", "Search", "No entity matches “{query}”",
      "Could not load the entities. The chosen entity stays as it is.",
-     "Try again", "Clear", "No entity available"},
+     "Try again", "Clear", "No entity available",
+     "Only entities released in the Bridge. With a Web Admin password you find all of them.",
+     "More matches: refine the search."},
     {"Sensor", "Binary sensor", "Light", "Switch", "Fan", "Cover", "Climate",
      "Media player", "Weather", "Camera", "Lock", "Alarm panel", "Number", "Select",
      "Date/time", "Scene", "Script", "Button", "Automation", "Humidifier", "Siren",
@@ -2121,7 +2125,9 @@ static const LocaleProfile kLocaleFr = {
      "Indisponible", "Inconnu"},
     {"Choisir une entité", "Rechercher", "Aucune entité ne correspond à « {query} »",
      "Impossible de charger les entités. L’entité choisie reste inchangée.",
-     "Réessayer", "Effacer", "Aucune entité disponible"},
+     "Réessayer", "Effacer", "Aucune entité disponible",
+     "Seulement les entités autorisées dans le Bridge. Avec un mot de passe Web Admin, vous les trouvez toutes.",
+     "D'autres résultats\u00A0: précisez la recherche."},
     {"Capteur", "Capteur binaire", "Lumière", "Interrupteur", "Ventilateur", "Volet",
      "Climat", "Lecteur multimédia", "Météo", "Caméra", "Serrure", "Alarme", "Nombre",
      "Sélection", "Date/heure", "Scène", "Script", "Bouton", "Automatisation",
@@ -2688,9 +2694,7 @@ static const Strings kStringsPl = {
     "Szyfrowanie chroni każde polecenie wysyłane do Home Assistant.",
     "Wyłącza też szyfrowanie w Home Assistant.",
     "Szyfruj",
-    "Szyfruj polecenia",
     "Wyłącz",
-    "Wyłącz szyfrowanie",
     "Hasło",
     "Wyłączyć szyfrowanie?",
     "Home Assistant też je wyłączy.",
@@ -2722,6 +2726,8 @@ static const Strings kStringsPl = {
     "Kolorowe ikony pogody",
     "Foldery",
     "Automatyczny",
+    "Teraz ustaw hasło w Web Admin (2 minuty).",
+    "Najpierw dotknij „Hasło” na wyświetlaczu w System > Bezpieczeństwo.",
 };
 
 static const LocaleProfile kLocalePl = {
@@ -2763,7 +2769,9 @@ static const LocaleProfile kLocalePl = {
     {"Rozbrojony", "Uzbrojony (w domu)", "Uzbrojony (poza domem)", "Uzbrojony (noc)", "Uzbrojony (urlop)", "Uzbrojony (własny)", "Oczekiwanie", "Uzbrajanie", "Rozbrajanie", "Wyzwolony", "Niedostępny", "Nieznany"},
     {"Wybierz encję", "Szukaj", "Żadna encja nie pasuje do „{query}”",
      "Nie udało się wczytać encji. Wybrana encja pozostaje bez zmian.",
-     "Spróbuj ponownie", "Wyczyść", "Brak dostępnych encji"},
+     "Spróbuj ponownie", "Wyczyść", "Brak dostępnych encji",
+     "Tylko encje udostępnione w Bridge. Z hasłem Web Admin znajdziesz wszystkie.",
+     "Więcej wyników: zawęź wyszukiwanie."},
     {"Czujnik", "Czujnik binarny", "Światło", "Przełącznik", "Wentylator", "Roleta",
      "Klimat", "Odtwarzacz multimediów", "Pogoda", "Kamera", "Zamek", "Panel alarmowy",
      "Liczba", "Wybór", "Data/czas", "Scena", "Skrypt", "Przycisk", "Automatyzacja",

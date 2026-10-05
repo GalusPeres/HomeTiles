@@ -9,6 +9,7 @@
 #include "src/core/security/secure_random.h"
 #include "src/core/security/x25519.h"
 #include "src/devices/device.h"
+#include "src/network/bridge/entity_search.h"
 #include "src/network/link/link_config.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
@@ -419,6 +420,8 @@ void handleData(const Header& header, const uint8_t* body, size_t length) {
     heap_caps_free(text);
   } else if (strcmp(header.name, "local_camera") == 0) {
     local_camera::handleCommandPayload(body, length);
+  } else if (strcmp(header.name, "entities") == 0) {
+    entity_search::handleAnswer(body, length);
   }
 }
 
@@ -894,6 +897,7 @@ void service() {
   }
   linkWindowActive();
   servicePairing();
+  entity_search::service();
   if (!g_state) {
     // A full MQTT queue drops the clear (and logs it): retry every 5 s.
     static uint32_t last_clear_ms = 0;

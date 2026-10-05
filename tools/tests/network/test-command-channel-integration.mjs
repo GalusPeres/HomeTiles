@@ -85,7 +85,7 @@ assert.match(settings, /if \(security_refresh_timer\) \{\s*lv_timer_del\(securit
   'closing the popup deletes the refresh timer');
 for (const key of ['system_updates_btn', 'system_install_btn', 'security_value_connected', 'security_encryption_label',
   'security_value_offline', 'security_hint_pair', 'security_hint_unpair',
-  'security_pair_short', 'security_pair_long', 'security_unpair_short', 'security_unpair_long',
+  'security_pair_short', 'security_unpair_short', 'web_auth_window_open',
   'security_password_btn', 'security_unpair_question', 'security_unpair_question_hint',
   'security_password_question', 'security_password_question_hint', 'security_remove', 'security_cancel',
   'security_confirm', 'security_close', 'security_unpaired_offline', 'pairing_title', 'pairing_asking',
@@ -116,8 +116,11 @@ assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 
   'removing the password asks first and is red');
 assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 0x424242, "shield-off",\s*tr\(\)\.security_unpair_short, 0xC62828\);/,
   'turning encryption off asks first and is red');
-assert.match(settings, /full \? tr\(\)\.security_pair_long : tr\(\)\.security_pair_short/,
-  'the Encrypt button uses the long label when it has the full width');
+// Password is always offered: it removes a set password, and without one it
+// allows the first one in Web Admin for two minutes (like Pair).
+assert.match(settings, /const char\* password_icon = password_on \? "lock-open-variant" : "lock-plus";/);
+assert.match(settings, /if \(web_admin_auth::enabled\(\)\) \{\s*security_set_message\(nullptr, 0xA8A8A8\);\s*security_step = SecurityStep::ConfirmPassword;\s*\} else \{[\s\S]*?web_admin_auth::allowFirstPassword\(\);\s*security_set_message\(tr\(\)\.web_auth_window_open, 0x4DB6AC\);/,
+  'without a password the button opens the window for the first one');
 // The device name stays under the branding. One row per fact (Home Assistant
 // connected with a check, Encryption and Web Admin password with a shield)
 // sits centered in the middle area, which only takes the free space, so the

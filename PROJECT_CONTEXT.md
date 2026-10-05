@@ -20,7 +20,8 @@ Last reviewed: 2026-10-05
 
 - Panel connects to the Bridge over TCP 8140 instead of MQTT; Bridge = broker (same topics/retained), frames sealed with pairing-K keys. Contract `docs-dev/bridge-link.md` (shared vectors).
 - Setup: Pair on panel (2 min, TXT `pair=1`) -> HA card (new or switch MQTT entry) -> `POST /api/link` (no password) -> number, no restart.
-- V2 b226 + Bridge 0.9.0b9 HW OK: new, switch, unpair, delete, quick Pair. Both clear MQTT leftovers; mDNS TXT in place + seq. New HA IP = new setup. Next: entity rule.
+- V2 b226 + Bridge b9 HW OK: new, switch, unpair, delete, quick Pair. Both clear MQTT leftovers; mDNS TXT in place + seq. New HA IP = new setup.
+- Entity picker (b227-b232, Bridge b10 icons/b11 search): sealed `entities`/`tiles`; all HA entities only paired + password, else released; 1st password needs panel tap (2 min). HW pending.
 
 ## Hardware validation
 
@@ -115,8 +116,6 @@ Last reviewed: 2026-10-05
 
 ## v0.7.0 release
 
-- v0.7.0 (`609550a`): public, S3 assets from `c3e0a673`; P4 unchanged. Existing S3 v0.7.0 needs Web Admin update.
-- Bridge v0.7.0 `1c12eda`; evidence `build/release-v0.7.0/`.
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
 - v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44); French.
 - Tests pending #7 #11 #27 #34 #45; #55 reporter check.

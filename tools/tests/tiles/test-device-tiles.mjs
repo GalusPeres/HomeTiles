@@ -24,7 +24,7 @@ assert.match(policy, /tileTypeIsDeviceControl\(int type\) \{\s*return type == TI
 
 // Security: Lock and Alarm leave the panel sealed; the body states the
 // password and a deadline of at most 15 s; the plaintext body is wiped.
-assert.match(read('src/network/secure/command_channel_core.h'), /"value", "fan", "lock", "alarm"\}/);
+assert.match(read('src/network/secure/command_channel_core.h'), /"value", "fan", "lock", "alarm", "entities", "tiles"\}/);
 assert.match(read('docs-dev/command-encryption.md'), /`value`, `fan`, `lock`, `alarm`/);
 const control = read('src/types/device/device_control.cpp');
 for (const marker of [

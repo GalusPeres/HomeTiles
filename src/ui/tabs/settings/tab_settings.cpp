@@ -26,6 +26,7 @@
 #include "src/types/clock/clock_format.h"
 #include "src/web/setup/web_config.h"
 #include "src/web/server/auth/web_admin_auth.h"
+#include "src/network/bridge/entity_search.h"
 #include "src/network/secure/command_channel.h"
 #include "src/ui/shared/ui_keyboard.h"
 #include "src/ui/startup/hometiles_logo.h"
@@ -2925,18 +2926,15 @@ static void security_refresh() {
   system_refresh_rows();
   switch (security_step) {
     case SecurityStep::List: {
-      // One button takes the full width with the long label.
-      const bool full = !password_on;
+      // Password removes a set Web Admin password; without one it allows
+      // setting the first one in Web Admin for two minutes.
+      const char* password_icon = password_on ? "lock-open-variant" : "lock-plus";
       if (paired) {
-        security_set_buttons("shield-off",
-                             full ? tr().security_unpair_long : tr().security_unpair_short,
-                             0x424242, "lock-open-variant",
-                             password_on ? tr().security_password_btn : nullptr, 0x424242);
+        security_set_buttons("shield-off", tr().security_unpair_short, 0x424242, password_icon,
+                             tr().security_password_btn, 0x424242);
       } else {
-        security_set_buttons("shield-lock",
-                             full ? tr().security_pair_long : tr().security_pair_short,
-                             0x1E88E5, "lock-open-variant",
-                             password_on ? tr().security_password_btn : nullptr, 0x424242);
+        security_set_buttons("shield-lock", tr().security_pair_short, 0x1E88E5, password_icon,
+                             tr().security_password_btn, 0x424242);
       }
       if (security_hint_label) {
         lv_label_set_text(security_hint_label,
@@ -3006,11 +3004,19 @@ static void on_security_btn1_clicked(lv_event_t*) {
 static void on_security_btn2_clicked(lv_event_t*) {
   switch (security_step) {
     case SecurityStep::List:
-      security_set_message(nullptr, 0xA8A8A8);
-      security_step = SecurityStep::ConfirmPassword;
+      if (web_admin_auth::enabled()) {
+        security_set_message(nullptr, 0xA8A8A8);
+        security_step = SecurityStep::ConfirmPassword;
+      } else {
+        // The first Web Admin password needs this tap, like Pair.
+        web_admin_auth::allowFirstPassword();
+        security_set_message(tr().web_auth_window_open, 0x4DB6AC);
+      }
       break;
     case SecurityStep::ConfirmPassword:
       if (web_admin_auth::clearCredential()) {
+        // Without the password the Bridge no longer serves extra tile entities.
+        entity_search::scheduleTilesReport();
         security_set_message(tr().web_auth_removed, 0x51CF66);
       } else {
         security_set_message(tr().web_auth_change_failed, 0xFF6B6B);

@@ -27,6 +27,7 @@
 #include "src/core/hardware/board_hal.h"
 #include "src/core/display/lvgl_tick_service.h"
 #include "src/io/hardware_io.h"
+#include "src/network/bridge/entity_search.h"
 #include "src/web/server/web_admin.h"
 #include "src/video/local_camera/local_camera.h"
 #include <esp_heap_caps.h>
@@ -1417,6 +1418,9 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   // Media states with embedded covers need about 19 KB, exceeding the
   // 16 KB base receive buffer; the worker adjusts its size.
   networkManager.setMqttMediaBufferNeeded(has_media_tiles);
+  // The tiles or the Bridge's lists changed: tell the Bridge which tile
+  // entities it does not release itself (network/bridge/entity_search.h).
+  entity_search::scheduleTilesReport();
 }
 
 // Scan at boot before networkManager.init(). If stored configuration

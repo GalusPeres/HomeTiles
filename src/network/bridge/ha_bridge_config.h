@@ -80,6 +80,10 @@ public:
 
   const HaBridgeConfigData& get() const { return data; }
   bool hasData() const;
+  // The live Bridge configuration announced "entity_search" (the picker
+  // searches through the Bridge, network/bridge/entity_search.h). Not stored:
+  // false until the Bridge's configuration arrived after a start.
+  bool supportsEntitySearch() const { return entity_search_; }
   String findSensorUnit(const String& entity_id) const;
   String findSensorName(const String& entity_id) const;
   String findSensorInitialValue(const String& entity_id) const;
@@ -130,6 +134,7 @@ private:
   HaEntityKeyMap detail_values_index_;
   HaEntityKeyMap state_kinds_index_;
   HaEntityKeyMap icons_index_;
+  bool entity_search_ = false;
   // Call after every complete blob swap (load/save/applyJson). The single-value
   // updates such as updateSensorValue() maintain blob and index together.
   void rebuildEntityIndexes();

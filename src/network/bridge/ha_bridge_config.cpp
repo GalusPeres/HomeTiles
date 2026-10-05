@@ -569,6 +569,13 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
 
   uint32_t t_copy0 = millis();
   String json = json_payload;
+  {
+    // "entity_search": 1 (Python json.dumps writes ": " between key and value).
+    const int key = json.indexOf("\"entity_search\"");
+    int at = key >= 0 ? key + 15 : -1;
+    while (at >= 0 && at < static_cast<int>(json.length()) && (json[at] == ':' || json[at] == ' ')) ++at;
+    entity_search_ = at > 0 && at < static_cast<int>(json.length()) && json[at] == '1';
+  }
   HaBridgeConfigData merged = data;
   uint32_t t_start = millis();
   // merged = data deep-copies every String field of HaBridgeConfigData (7 text

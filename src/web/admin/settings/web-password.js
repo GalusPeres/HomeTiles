@@ -39,7 +39,8 @@
         showNotification(t('webAuthSaved'), true);
         window.setTimeout(() => window.location.reload(), login.ok ? 400 : 1200);
       } catch (error) {
-        showNotification(t('webAuthChangeFailed'), false);
+        // The first password needs a tap on the display first.
+        showNotification(t(auth.passwordError?.() === 'panel_tap_required' ? 'webAuthPanelTap' : 'webAuthChangeFailed'), false);
       } finally {
         busy(false);
       }

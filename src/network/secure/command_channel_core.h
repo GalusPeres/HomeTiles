@@ -685,9 +685,10 @@ inline size_t signAnnouncement(const uint8_t key[kKeySize], const char* topic,
 inline const char* sealedCommandLeaf(const char* topic, const char* base,
                                      size_t base_length) {
   // Lock and Alarm commands are accepted by the Bridge only sealed; Fan
-  // follows the other controls (plain while unpaired).
+  // follows the other controls (plain while unpaired). The entity search and
+  // the tiles' entities exist only sealed (network/bridge/entity_search.h).
   static const char* const kLeaves[] = {"scene", "light", "switch", "media", "climate", "cover",
-                                        "camera", "value", "fan", "lock", "alarm"};
+                                        "camera", "value", "fan", "lock", "alarm", "entities", "tiles"};
   if (!topic || !base || strncmp(topic, base, base_length) != 0 ||
       strncmp(topic + base_length, "/cmnd/", 6) != 0) {
     return nullptr;

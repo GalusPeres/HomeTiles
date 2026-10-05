@@ -19,6 +19,7 @@
 #include "src/types/types_registry.h"
 #include "src/types/energy/energy_data.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/network/bridge/entity_search.h"
 #include <algorithm>
 #include <vector>
 #include <memory>
@@ -1269,6 +1270,34 @@ void WebAdminServer::handleGetMdiIcons() {
     }
   }
   server.sendContent("");
+}
+
+// The picker searches through the Bridge (network/bridge/entity_search.h):
+// POST q and list starts a search ("bridge":false without a paired Bridge
+// that searches: the picker keeps its own list), GET id polls the answer.
+void WebAdminServer::handleStartEntitySearch() {
+  webAdminMarkActivity();
+  const uint32_t id = entity_search::start(server.arg("q"), server.arg("list"));
+  String json = "{\"success\":true,\"bridge\":";
+  json += id ? "true,\"id\":" + String(id) : String("false");
+  json += "}";
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", json);
+}
+
+void WebAdminServer::handleGetEntitySearch() {
+  webAdminMarkActivity();
+  const uint32_t id = static_cast<uint32_t>(strtoul(server.arg("id").c_str(), nullptr, 10));
+  String answer;
+  server.sendHeader("Cache-Control", "no-store");
+  if (!entity_search::result(id, answer)) {
+    server.send(200, "application/json", "{\"success\":true,\"ready\":false}");
+    return;
+  }
+  // {"full":..,"more":..,"r":[...]} behind success and ready.
+  String json = "{\"success\":true,\"ready\":true,";
+  json += answer.substring(1);
+  sendChunkedResponse(server, 200, "application/json", json);
 }
 
 // ========== Folder API ==========

@@ -63,6 +63,8 @@ public:
   void handleGetSensorValues();
   void handleGetEntityOptions();
   void handleGetMdiIcons();
+  void handleStartEntitySearch();
+  void handleGetEntitySearch();
   void handleGetScreensaver();
   void handleSaveScreensaver();
   void handleGetHardwareIo();

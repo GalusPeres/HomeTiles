@@ -1,4 +1,5 @@
 #include "src/web/server/web_admin.h"
+#include "src/network/bridge/entity_search.h"
 #include "src/web/server/auth/web_admin_auth.h"
 #include "src/web/server/handlers/web_admin_handler_utils.h"
 
@@ -210,6 +211,11 @@ void WebAdminServer::handleAuthPassword() {
     // request with this header needs a CORS preflight the panel never allows.
     sendAuthError(server, 403, "csrf_invalid", "csrf");
     return;
+  } else if (!web_admin_auth::firstPasswordAllowed()) {
+    // The first password only after a tap on the panel (System > Security >
+    // Password), so nobody else in the network can set one.
+    sendAuthError(server, 403, "panel_tap_required", "panel");
+    return;
   }
 
   const String body = server.arg("plain");
@@ -224,6 +230,8 @@ void WebAdminServer::handleAuthPassword() {
     server.sendHeader("Set-Cookie", expired);
     server.sendHeader("Cache-Control", "no-store");
     server.send(200, "application/json", "{\"ok\":true,\"enabled\":false}");
+    // Without the password the Bridge no longer serves extra tile entities.
+    entity_search::scheduleTilesReport();
     return;
   }
 
@@ -244,6 +252,8 @@ void WebAdminServer::handleAuthPassword() {
     sendJsonError(server, 500, "Could not save the password");
     return;
   }
+  // The Bridge serves the extra tile entities only with the password.
+  entity_search::scheduleTilesReport();
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", "{\"ok\":true,\"enabled\":true}");
 }

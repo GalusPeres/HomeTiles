@@ -631,9 +631,7 @@ struct Strings {
   const char* security_hint_pair;
   const char* security_hint_unpair;
   const char* security_pair_short;
-  const char* security_pair_long;
   const char* security_unpair_short;
-  const char* security_unpair_long;
   const char* security_password_btn;
   const char* security_unpair_question;
   const char* security_unpair_question_hint;
@@ -671,6 +669,10 @@ struct Strings {
   const char* admin_folders;
   // Icon color choice: Automatic (the type's and entity's own colors).
   const char* tile_icon_color_auto;
+  // Device Security view: the first Web Admin password may be set now (allowFirstPassword).
+  const char* web_auth_window_open;
+  // Web Admin: the first password needs a tap on the display first.
+  const char* web_auth_panel_tap_required;
 };
 
 // Locale-specific display rules and short runtime strings shared by
@@ -760,8 +762,9 @@ struct LocaleProfile {
   const char* alarm_states[12];
 
   // Shared Web Admin entity picker (tiles/entity-picker.js). Order: choose,
-  // search, no match ({query}), load failed, try again, clear, none available.
-  const char* entity_picker_labels[7];
+  // search, no match ({query}), load failed, try again, clear, none available,
+  // released only (no Web Admin password), more matches.
+  const char* entity_picker_labels[9];
   // Entity type shown on the right of a picker row, by Home Assistant
   // domain. Order: sensor, binary_sensor, light, switch/input_boolean, fan,
   // cover, climate, media_player, weather, camera, lock,

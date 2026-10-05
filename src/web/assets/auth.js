@@ -248,8 +248,16 @@
     return {ok: true, csrf: String(result.csrf || '')};
   }
 
+  // The error code of the last refused setPassword ("panel_tap_required"
+  // until the password was allowed on the display), else ''.
+  let passwordErrorCode = '';
+  function passwordError() {
+    return passwordErrorCode;
+  }
+
   async function setPassword(password) {
     justSet = null;
+    passwordErrorCode = '';
     const salt = randomBytes(16);
     const iterations = DEFAULT_ITERATIONS;
     const key = deriveKey(salt, password, iterations);
@@ -265,6 +273,7 @@
       body: JSON.stringify({salt: toHex(salt), iter: iterations, key: toHex(key)})
     });
     if (response.ok) justSet = {salt: toHex(salt), iterations, password, key};
+    else passwordErrorCode = String((await response.json().catch(() => ({}))).error || '');
     return response.ok;
   }
 
@@ -288,7 +297,7 @@
 
   window.HomeTilesAuth = {
     sha256, hmacSha256, pbkdf2Sha256, toHex, fromHex, utf8, deriveKey, csrfToken,
-    login, setPassword, removePassword, logout
+    login, setPassword, passwordError, removePassword, logout
   };
 
   function sameOrigin(url) {

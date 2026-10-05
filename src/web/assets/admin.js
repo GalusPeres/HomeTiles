@@ -970,7 +970,8 @@ function syncTileRadiusControls(tabEl) {
         showNotification(t('webAuthSaved'), true);
         window.setTimeout(() => window.location.reload(), login.ok ? 400 : 1200);
       } catch (error) {
-        showNotification(t('webAuthChangeFailed'), false);
+        // The first password needs a tap on the display first.
+        showNotification(t(auth.passwordError?.() === 'panel_tap_required' ? 'webAuthPanelTap' : 'webAuthChangeFailed'), false);
       } finally {
         busy(false);
       }
@@ -2606,12 +2607,15 @@ function syncTileRadiusControls(tabEl) {
       .catch(() => {});
   }
   // Shared entity picker of every tile field that names a Home Assistant
-  // entity, like Home Assistant's own picker: icon, name, entity id and type,
-  // with a search. The server renders `<input type="hidden"
+  // entity, like Home Assistant's own picker: icon, name, area and device, and
+  // type, with a search. The server renders `<input type="hidden"
   // data-entity-picker="<list>">` (appendEntityPickerField); the value stays
   // in that input, so loading, saving, drafts, copy and import keep using the
   // field id as before. The choices are the Bridge's released entities from
-  // /api/entity_options (fetchEntityOptions), filtered to the field's list.
+  // /api/entity_options (fetchEntityOptions); a panel paired with a Bridge
+  // that searches asks it as well (/api/entity_search, entity_search.h): with
+  // a Web Admin password every Home Assistant entity of the list, otherwise
+  // the released ones with their area and device.
 
   // Home Assistant domains in the order of ENTITY_KIND_LABELS
   // (LocaleProfile::entity_kind_labels).
@@ -2622,16 +2626,33 @@ function syncTileRadiusControls(tabEl) {
     ['datetime', 'date', 'time', 'input_datetime'], ['scene'], ['script'], ['button', 'input_button'],
     ['automation'], ['humidifier'], ['siren'], ['remote']
   ];
+  // Lists the Bridge searches (entity_search.py LIST_DOMAINS).
+  const ENTITY_REMOTE_LISTS = new Set(['sensors', 'binary_sensors', 'numbers', 'selects', 'datetimes',
+    'weathers', 'switches', 'media', 'climates', 'covers', 'cameras', 'locks', 'alarm_panels', 'fans']);
+  const ENTITY_REMOTE_DELAY_MS = 250;
+  const ENTITY_REMOTE_POLL_MS = 120;
+  const ENTITY_REMOTE_TIMEOUT_MS = 5000;
   const ENTITY_PICKER_FALLBACK_ICON = 'shape-outline';
   const entityPickerNativeValue = typeof HTMLInputElement === 'function'
     ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value') : null;
+  // What the Bridge told about entities (name, icon, area ▸ device), by id.
+  const entityRemoteInfo = new Map();
+  const entityRemoteAsked = new Set();
+  let entityRemoteSupported = true;  // false once the panel has no Bridge search
+  let entityRemoteGeneration = 0;
+  let entityRemoteTimer = 0;
   let entityPickerPopover = null;
-  let entityPickerOpen = null;  // {input, entries, query, active, state}
+  // {input, local, entries, query, active, state, remote, full, more}
+  let entityPickerOpen = null;
 
   function entityKindLabel(entityId) {
     const domain = String(entityId || '').split('.')[0];
     const index = ENTITY_KIND_DOMAINS.findIndex(domains => domains.includes(domain));
     return index >= 0 && typeof ENTITY_KIND_LABELS !== 'undefined' ? ENTITY_KIND_LABELS[index] || '' : '';
+  }
+
+  function entityPickerContext(area, device) {
+    return area && device ? area + ' ▸ ' + device : String(area || device || '');
   }
 
   // The entries of one list key, as {value, name, icon, entity}.
@@ -2655,11 +2676,26 @@ function syncTileRadiusControls(tabEl) {
       a.name.localeCompare(b.name, APP_LOCALE, { sensitivity: 'base' }) || a.value.localeCompare(b.value));
   }
 
+  function entityPickerFromRemote(item) {
+    const value = String(item?.v || '');
+    const entry = {
+      value,
+      name: String(item.t || '') || titleFromEntity(value) || value,
+      icon: normalizeMdiIconName(item.i || ''),
+      entity: value,
+      context: entityPickerContext(item.a, item.d),
+      remote: true
+    };
+    if (value) entityRemoteInfo.set(value, entry);
+    return entry;
+  }
+
   // What the field shows for its value, also when the value is no longer in
   // the released list (it is kept, never cleared).
   function entityPickerEntryFor(input, value) {
     if (!value) return null;
     const list = input?.dataset?.entityPicker || '';
+    if (ENTITY_REMOTE_LISTS.has(list) && entityRemoteInfo.has(value)) return entityRemoteInfo.get(value);
     const known = entityOptionsCache ? entityPickerEntries(entityOptionsCache, list).find(entry => entry.value === value) : null;
     if (known) return known;
     const entity = list === 'scenes' ? (sensorMetaCache.sceneEntities?.[value] || value) : value;
@@ -2691,7 +2727,7 @@ function syncTileRadiusControls(tabEl) {
     return '<span class="entity-picker-icon"><i class="mdi mdi-' +
       escapeHtml(entry.icon || ENTITY_PICKER_FALLBACK_ICON) + '"></i></span>' +
       '<span class="entity-picker-text"><span class="entity-picker-name">' + mark(entry.name) + '</span>' +
-      '<span class="entity-picker-context">' + mark(entry.entity) + '</span></span>';
+      '<span class="entity-picker-context">' + mark(entry.context || entry.entity) + '</span></span>';
   }
 
   function entityPickerControl(input) {
@@ -2712,6 +2748,7 @@ function syncTileRadiusControls(tabEl) {
         '<i class="mdi mdi-chevron-down entity-picker-chevron"></i>';
     }
     if (clear) clear.hidden = !entry;
+    if (entry && !entry.remote) entityPickerLookup(input);
   }
 
   // Adds the visible field after a hidden entity input (once per element) and
@@ -2756,6 +2793,87 @@ function syncTileRadiusControls(tabEl) {
     if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
     if (entityPickerOpen && entityPickerOpen.state !== 'ready') loadEntityPickerEntries();
   }
+
+  // ---- Bridge search ----
+
+  // One search through the panel; null without a Bridge that searches or
+  // when a newer search replaced it (the panel keeps the newest only).
+  async function entityRemoteSearch(list, query, generation) {
+    const begin = await fetch('/api/entity_search', { method: 'POST', body: new URLSearchParams({ q: query, list }) });
+    if (!begin.ok) throw new Error('Entity search HTTP ' + begin.status);
+    const started = await begin.json();
+    if (!started.bridge) {
+      entityRemoteSupported = false;
+      return null;
+    }
+    const deadline = Date.now() + ENTITY_REMOTE_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, ENTITY_REMOTE_POLL_MS));
+      if (generation !== entityRemoteGeneration) return null;
+      const poll = await fetch('/api/entity_search?id=' + encodeURIComponent(started.id));
+      if (!poll.ok) throw new Error('Entity search HTTP ' + poll.status);
+      const answer = await poll.json();
+      if (answer.ready) return answer;
+    }
+    throw new Error('Entity search timeout');
+  }
+
+  function entityPickerRemoteSearch(open) {
+    const list = open.input.dataset.entityPicker;
+    if (!entityRemoteSupported || !ENTITY_REMOTE_LISTS.has(list)) return;
+    const generation = ++entityRemoteGeneration;
+    open.remote = 'loading';
+    entityRemoteSearch(list, open.query, generation)
+      .then(answer => {
+        if (entityPickerOpen !== open || generation !== entityRemoteGeneration) return;
+        if (!answer) {
+          open.remote = null;
+        } else {
+          const remote = (Array.isArray(answer.r) ? answer.r : []).map(entityPickerFromRemote);
+          const found = new Set(remote.map(entry => entry.value));
+          // Panel entities the Bridge does not search (display, local relays).
+          const own = open.local.filter(entry => !found.has(entry.value) && entityPickerMatchesQuery(entry, open.query));
+          open.entries = remote.concat(own);
+          open.full = !!answer.full;
+          open.more = !!answer.more;
+          open.remote = 'ready';
+          if (!open.query) open.active = Math.max(0, open.entries.findIndex(entry => entry.value === open.input.value));
+          renderEntityPicker(open.input);
+        }
+        renderEntityPickerList();
+      })
+      .catch(() => {
+        if (entityPickerOpen !== open || generation !== entityRemoteGeneration) return;
+        open.remote = null;
+        renderEntityPickerList();
+      });
+  }
+
+  // A closed field learns area and device of its entity from the Bridge,
+  // once per entity and only while no list is open.
+  function entityPickerLookup(input) {
+    const list = input?.dataset?.entityPicker || '';
+    const value = input?.value || '';
+    if (!value || !entityRemoteSupported || entityPickerOpen || !ENTITY_REMOTE_LISTS.has(list) ||
+        entityRemoteAsked.has(value)) {
+      return;
+    }
+    entityRemoteAsked.add(value);
+    const generation = ++entityRemoteGeneration;
+    entityRemoteSearch(list, value, generation)
+      .then(answer => {
+        const item = answer && (answer.r || []).find(entry => entry.v === value);
+        if (!item) return;
+        entityPickerFromRemote(item);
+        document.querySelectorAll('input[data-entity-picker]').forEach(other => {
+          if (other.value === value) renderEntityPicker(other);
+        });
+        if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons();
+      })
+      .catch(() => {});
+  }
+
+  // ---- Tile adoption and placement ----
 
   // The tile tab of a tile's own entity field (it sits in the entity slot
   // under Type); '' for other entity fields such as the icon color source.
@@ -2806,24 +2924,31 @@ function syncTileRadiusControls(tabEl) {
 
   // ---- Open list ----
 
+  function entityPickerMatchesQuery(entry, query) {
+    const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+    const text = (entry.name + ' ' + entry.value + ' ' + entry.entity + ' ' + (entry.context || '')).toLowerCase();
+    return words.every(word => text.includes(word));
+  }
+
+  // The Bridge's answer is already filtered; the own list filters here.
   function entityPickerMatches() {
     const open = entityPickerOpen;
-    const words = open.query.toLowerCase().split(/\s+/).filter(Boolean);
-    return open.entries.filter(entry => {
-      const text = (entry.name + ' ' + entry.value + ' ' + entry.entity).toLowerCase();
-      return words.every(word => text.includes(word));
-    });
+    if (open.remote === 'ready') return open.entries;
+    return open.local.filter(entry => entityPickerMatchesQuery(entry, open.query));
   }
 
   function renderEntityPickerList() {
     const open = entityPickerOpen;
     const list = entityPickerPopover?.querySelector('.entity-picker-list');
+    const foot = entityPickerPopover?.querySelector('.entity-picker-foot');
     if (!open || !list) return;
-    if (open.state === 'loading') {
+    // Without a Web Admin password the Bridge finds only released entities.
+    if (foot) foot.hidden = !(open.remote === 'ready' && !open.full);
+    if (open.state === 'loading' && open.remote !== 'ready') {
       list.innerHTML = '<div class="entity-picker-loading"><div></div><div></div><div></div></div>';
       return;
     }
-    if (open.state === 'failed') {
+    if (open.state === 'failed' && open.remote !== 'ready') {
       list.innerHTML = '<div class="entity-picker-state"><i class="mdi mdi-lan-disconnect"></i>' +
         escapeHtml(t('entityPickerLoadFailed')) +
         '<button type="button" class="btn entity-picker-retry">' + escapeHtml(t('entityPickerRetry')) + '</button></div>';
@@ -2844,7 +2969,8 @@ function syncTileRadiusControls(tabEl) {
         (entry.value === current ? 'true' : 'false') + '" data-index="' + index + '">' +
         entityPickerRowHtml(entry, open.query) +
         (kind ? '<span class="entity-picker-kind">' + escapeHtml(kind) + '</span>' : '') + '</div>';
-    }).join('');
+    }).join('') + (open.remote === 'ready' && open.more
+      ? '<div class="entity-picker-more">' + escapeHtml(t('entityPickerMore')) + '</div>' : '');
     list.querySelector('.entity-picker-item.active')?.scrollIntoView({ block: 'nearest' });
   }
 
@@ -2852,10 +2978,12 @@ function syncTileRadiusControls(tabEl) {
     const open = entityPickerOpen;
     if (!open) return;
     const apply = data => {
-      open.entries = entityPickerEntries(data, open.input.dataset.entityPicker);
+      open.local = entityPickerEntries(data, open.input.dataset.entityPicker);
       open.state = 'ready';
       // Without a search the list starts at the chosen entity.
-      if (!open.query) open.active = Math.max(0, open.entries.findIndex(entry => entry.value === open.input.value));
+      if (!open.query && open.remote !== 'ready') {
+        open.active = Math.max(0, open.local.findIndex(entry => entry.value === open.input.value));
+      }
       renderEntityPickerList();
     };
     if (entityOptionsCache && !force) {
@@ -2907,23 +3035,30 @@ function syncTileRadiusControls(tabEl) {
   function openEntityPicker(input) {
     if (!input) return;
     closeEntityPicker(false);
+    if (typeof closeIconPicker === 'function') closeIconPicker(false);
     if (!entityPickerPopover) {
       entityPickerPopover = document.createElement('div');
       entityPickerPopover.className = 'entity-picker-popover';
       entityPickerPopover.innerHTML = '<div class="entity-picker-search"><i class="mdi mdi-magnify"></i>' +
         '<input type="search" autocomplete="off" spellcheck="false"></div>' +
-        '<div class="entity-picker-list" role="listbox"></div>';
+        '<div class="entity-picker-list" role="listbox"></div>' +
+        '<div class="entity-picker-foot" hidden><i class="mdi mdi-lock-outline"></i><span></span>' +
+        '<button type="button" class="entity-picker-password"></button></div>';
       document.body.appendChild(entityPickerPopover);
     }
     const search = entityPickerPopover.querySelector('input');
     search.value = '';
     search.placeholder = t('entityPickerSearch');
-    entityPickerOpen = { input, entries: [], query: '', active: 0, state: 'loading' };
+    entityPickerPopover.querySelector('.entity-picker-foot span').textContent = t('entityPickerReleased');
+    entityPickerPopover.querySelector('.entity-picker-password').textContent = t('webAuthSet');
+    entityPickerOpen = { input, local: [], entries: [], query: '', active: 0, state: 'loading',
+      remote: null, full: false, more: false };
     const field = entityPickerControl(input)?.querySelector('.entity-picker-field');
     field?.classList.add('open');
     field?.setAttribute('aria-expanded', 'true');
     entityPickerPopover.classList.add('open');
     loadEntityPickerEntries(false);
+    entityPickerRemoteSearch(entityPickerOpen);
     placeEntityPickerPopover();
     search.focus();
   }
@@ -2932,6 +3067,7 @@ function syncTileRadiusControls(tabEl) {
     const open = entityPickerOpen;
     if (!open) return;
     entityPickerOpen = null;
+    window.clearTimeout(entityRemoteTimer);
     entityPickerPopover?.classList.remove('open');
     const field = entityPickerControl(open.input)?.querySelector('.entity-picker-field');
     field?.classList.remove('open');
@@ -2968,14 +3104,29 @@ function syncTileRadiusControls(tabEl) {
       return;
     }
     const item = target.closest('.entity-picker-item');
-    if (item) pickEntityPickerIndex(Number(item.dataset.index));
-    else if (target.closest('.entity-picker-retry')) loadEntityPickerEntries(true);
+    if (item) {
+      pickEntityPickerIndex(Number(item.dataset.index));
+    } else if (target.closest('.entity-picker-retry')) {
+      loadEntityPickerEntries(true);
+    } else if (target.closest('.entity-picker-password')) {
+      // The Web Admin password section (Settings tab).
+      closeEntityPicker(false);
+      if (typeof switchTab === 'function') switchTab('tab-network');
+      document.getElementById('web_auth_section')?.scrollIntoView({ behavior: 'smooth' });
+    }
   });
 
   document.addEventListener('input', event => {
-    if (!entityPickerOpen || !event.target?.closest?.('.entity-picker-search')) return;
-    entityPickerOpen.query = event.target.value;
-    entityPickerOpen.active = 0;
+    const open = entityPickerOpen;
+    if (!open || !event.target?.closest?.('.entity-picker-search')) return;
+    open.query = event.target.value;
+    open.active = 0;
+    if (open.remote) {
+      // The own list right away, the Bridge's answer after a short pause.
+      open.remote = 'loading';
+      window.clearTimeout(entityRemoteTimer);
+      entityRemoteTimer = window.setTimeout(() => entityPickerRemoteSearch(open), ENTITY_REMOTE_DELAY_MS);
+    }
     renderEntityPickerList();
   });
 

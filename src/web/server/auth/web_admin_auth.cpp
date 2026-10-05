@@ -155,6 +155,25 @@ void begin() {
                  "locked until the password is reset on the device");
 }
 
+namespace {
+constexpr uint32_t kFirstPasswordWindowMs = 120000;
+uint32_t g_first_password_since = 0;
+bool g_first_password_open = false;
+}  // namespace
+
+void allowFirstPassword() {
+  g_first_password_since = millis();
+  g_first_password_open = true;
+}
+
+bool firstPasswordAllowed() {
+  if (g_first_password_open &&
+      static_cast<uint32_t>(millis() - g_first_password_since) >= kFirstPasswordWindowMs) {
+    g_first_password_open = false;
+  }
+  return g_first_password_open;
+}
+
 bool enabled() {
   begin();
   return g_credential.enabled;
@@ -171,6 +190,8 @@ bool setCredential(const uint8_t salt[kSaltSize], uint32_t iterations,
   memcpy(updated.key, key, kKeySize);
   const bool saved = writeRecord(&updated);
   if (saved) {
+    // Set: another first password needs a new tap on the panel.
+    g_first_password_open = false;
     g_credential = updated;
     if (g_tables) clearTables(*g_tables);
     writeSessions();

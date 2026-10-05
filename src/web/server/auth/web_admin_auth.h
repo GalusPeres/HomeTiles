@@ -22,6 +22,13 @@ bool setCredential(const uint8_t salt[kSaltSize], uint32_t iterations,
 // Removes the password, from Web Admin or from the device Settings.
 bool clearCredential();
 
+// The first password needs a tap on the panel: System > Security > Password
+// opens a window of two minutes in which Web Admin may set it, like Pair for
+// the Bridge address. Whoever sets it stands at the panel; the password then
+// unlocks Lock, Alarm and the full entity search. A set password closes it.
+void allowFirstPassword();
+bool firstPasswordAllowed();
+
 // Issues a single-use login nonce and returns the stored salt and iterations.
 bool challenge(uint8_t nonce_out[kNonceSize], uint8_t salt_out[kSaltSize],
                uint32_t* iterations_out);

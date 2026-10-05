@@ -3091,6 +3091,18 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
   background-size:200% 100%; animation:entity-picker-loading 1.2s linear infinite;
 }
 @keyframes entity-picker-loading { to { background-position:-200% 0; } }
+/* Without a Web Admin password the Bridge finds only released entities. */
+.entity-picker-foot {
+  flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:9px 12px; border-top:1px solid var(--line);
+  background:#171717; color:var(--text-3); font-size:12px; line-height:16px;
+}
+.entity-picker-foot[hidden] { display:none; }
+.entity-picker-foot .mdi { font-size:17px; color:#888; }
+.entity-picker-password {
+  margin-left:auto; flex:0 0 auto; padding:4px 2px; border:0; background:none; color:var(--accent-link);
+  font:inherit; font-weight:600; white-space:nowrap; cursor:pointer;
+}
+.entity-picker-more { padding:8px 10px 4px; text-align:center; font-size:12px; color:var(--text-3); }
 @media (max-width:560px) { .entity-picker-kind { display:none; } }
 
 /* Tile head (web_admin_html.cpp): the heading with Type beside it, Title and

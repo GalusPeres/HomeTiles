@@ -149,10 +149,13 @@ void appendAdminScripts(String& html) {
   appendJsEntry("webAuthRemoved", tr.web_auth_removed);
   appendJsEntry("webAuthChangeFailed", tr.web_auth_change_failed);
   appendJsEntry("webAuthRemoveConfirm", tr.web_auth_remove_confirm);
+  appendJsEntry("webAuthPanelTap", tr.web_auth_panel_tap_required);
+  appendJsEntry("webAuthSet", tr.web_auth_set);
   const auto& loc = i18n::locale(configManager.getConfig().language);
   static const char* const kEntityPickerKeys[] = {
       "entityPickerChoose", "entityPickerSearch", "entityPickerNoMatch", "entityPickerLoadFailed",
-      "entityPickerRetry", "entityPickerClear", "entityPickerNone"};
+      "entityPickerRetry", "entityPickerClear", "entityPickerNone", "entityPickerReleased",
+      "entityPickerMore"};
   static_assert(sizeof(kEntityPickerKeys) / sizeof(kEntityPickerKeys[0]) ==
                     sizeof(i18n::LocaleProfile::entity_picker_labels) / sizeof(const char*),
                 "one key per entity picker label");

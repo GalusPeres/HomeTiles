@@ -221,6 +221,8 @@ private:
   // Loop task: Pair window open, and the pair flag of the running mDNS service.
   bool pairing_advertised_ = false;
   bool mdns_pair_flag_ = false;
+  // Changes with every TXT update (random start per boot), see applyMdnsTxt().
+  uint32_t mdns_txt_seq_ = 0;
   char link_host_[64] = {};
   uint16_t link_port_ = 0;
   portMUX_TYPE link_mux_ = portMUX_INITIALIZER_UNLOCKED;
@@ -347,6 +349,8 @@ private:
   void startMdns();
   // Loop task: sets or removes TXT pair=1 on the running advertisement.
   void updateMdnsPairFlag();
+  // Loop task: replaces the advertisement's TXT set; false if mDNS refused it.
+  bool applyMdnsTxt();
 };
 
 // Shared instance.

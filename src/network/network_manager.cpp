@@ -17,6 +17,7 @@
 #include "src/video/local_camera/local_camera.h"
 #include <atomic>
 #include <esp_heap_caps.h>
+#include <esp_random.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
@@ -2155,66 +2156,60 @@ void HomeTilesNetworkManager::startMdns() {
     return;
   }
   MDNS.addService("hometiles", "tcp", 80);
-
-  // addServiceTxt() has char*, const char* and String overloads. Mixing
-  // string literals and char[] can make overload resolution ambiguous
-  // through the deprecated literal-to-char* conversion. Pass all four
-  // arguments as named const char* values to select that overload.
-  const char* svc_name = "hometiles";
-  const char* svc_proto = "tcp";
-  const char* key_txtvers = "txtvers";
-  const char* val_txtvers = "1";
-  const char* key_device_id = "device_id";
-  const char* val_device_id = did;
-  const char* key_name = "name";
-  const char* val_name = Device::displayName();
-  const char* key_model = "model";
-  const char* val_model = Device::profile().key;
-  const DeviceConfig& cfg = configManager.getConfig();
-  const char* key_base_topic = "base_topic";
-  const char* val_base_topic = cfg.mqtt_base_topic;
-  const char* key_ha_prefix = "ha_prefix";
-  const char* val_ha_prefix = cfg.ha_prefix;
-
-  MDNS.addServiceTxt(svc_name, svc_proto, key_txtvers, val_txtvers);
-  MDNS.addServiceTxt(svc_name, svc_proto, key_device_id, val_device_id);
-  MDNS.addServiceTxt(svc_name, svc_proto, key_name, val_name);
-  MDNS.addServiceTxt(svc_name, svc_proto, key_model, val_model);
-  MDNS.addServiceTxt(svc_name, svc_proto, key_base_topic, val_base_topic);
-  MDNS.addServiceTxt(svc_name, svc_proto, key_ha_prefix, val_ha_prefix);
-  // This firmware can be added without MQTT (docs-dev/bridge-link.md).
-  const char* key_link = "link";
-  const char* val_link = "1";
-  MDNS.addServiceTxt(svc_name, svc_proto, key_link, val_link);
-  // Pair was pressed: Home Assistant offers to add the panel (or to switch an
-  // MQTT entry to the link) only while this flag is set.
-  if (pairing_advertised_) {
-    const char* key_pair = "pair";
-    const char* val_pair = "1";
-    MDNS.addServiceTxt(svc_name, svc_proto, key_pair, val_pair);
+  if (!mdns_txt_seq_) mdns_txt_seq_ = esp_random() | 1u;
+  if (!applyMdnsTxt()) {
+    Serial.println("[mDNS] TXT records could not be set");
   }
-  mdns_pair_flag_ = pairing_advertised_;
   mdns_active = true;
   logMdnsHeap("after-begin");
 }
 
-// Pair pressed, or its window ended: change the one TXT entry in place; the
-// mDNS component announces it at once, also while it still probes or
-// announces. A restart (goodbye, probe, announce) took seconds, and a second
-// change within them never reached Home Assistant (Unpair, then Pair at
-// once); each cycle also costs P4 DMA memory (see startMdns()).
+// The whole TXT set in one call, so one announcement carries it. seq changes
+// with every change (random start per boot): Home Assistant's mDNS cache keeps
+// a replaced record for up to 10 s and ignores a record that equals one still
+// in it, so pair on, off and on again within seconds showed no card, or kept
+// a stale one. Bridges that do not know seq ignore it.
+bool HomeTilesNetworkManager::applyMdnsTxt() {
+  char did[24];
+  buildDeviceId(did, sizeof(did));
+  char seq[9];
+  snprintf(seq, sizeof(seq), "%08lx", static_cast<unsigned long>(mdns_txt_seq_));
+  const DeviceConfig& cfg = configManager.getConfig();
+  mdns_txt_item_t txt[] = {
+      {"txtvers", "1"},
+      {"device_id", did},
+      {"name", Device::displayName()},
+      {"model", Device::profile().key},
+      {"base_topic", cfg.mqtt_base_topic},
+      {"ha_prefix", cfg.ha_prefix},
+      // This firmware can be added without MQTT (docs-dev/bridge-link.md).
+      {"link", "1"},
+      {"seq", seq},
+      // Pair was pressed: Home Assistant offers to add the panel (or to switch
+      // an MQTT entry to the link) only while this entry is present. Last, so
+      // it can be left out.
+      {"pair", "1"},
+  };
+  const uint8_t count =
+      static_cast<uint8_t>(sizeof(txt) / sizeof(txt[0]) - (pairing_advertised_ ? 0u : 1u));
+  if (mdns_service_txt_set("_hometiles", "_tcp", txt, count) != ESP_OK) return false;
+  mdns_pair_flag_ = pairing_advertised_;
+  return true;
+}
+
+// Pair pressed, or its window ended: replace the TXT set in place; the mDNS
+// component announces it at once, also while it still probes or announces.
+// A restart (goodbye, probe, announce) took seconds, and a second change
+// within them never reached Home Assistant (Unpair, then Pair at once); each
+// cycle also costs P4 DMA memory (see startMdns()).
 void HomeTilesNetworkManager::updateMdnsPairFlag() {
-  const esp_err_t err = pairing_advertised_
-                            ? mdns_service_txt_item_set("_hometiles", "_tcp", "pair", "1")
-                            : mdns_service_txt_item_remove("_hometiles", "_tcp", "pair");
-  if (err != ESP_OK) {
+  ++mdns_txt_seq_;
+  if (!applyMdnsTxt()) {
     // startMdns() advertises the current flag on the same update.
-    Serial.printf("[mDNS] Pair flag update failed (%d); restarting the advertisement\n",
-                  static_cast<int>(err));
+    Serial.println("[mDNS] Pair flag update failed; restarting the advertisement");
     stopMdns();
     return;
   }
-  mdns_pair_flag_ = pairing_advertised_;
   Serial.printf("[mDNS] Pair flag %s\n", pairing_advertised_ ? "announced" : "withdrawn");
 }
 

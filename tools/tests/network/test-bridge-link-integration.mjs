@@ -41,9 +41,9 @@ assert.ok(changed.indexOf('drainOutboundQueues(') < changed.indexOf('mqtt_client
 
 assert.match(network, /const bool discoverable =\s*pairing_advertised_ \|\| \(!configManager\.hasMqttConfig\(\) && !link_configured_\);/,
   'mDNS stays off once the panel has a Bridge, unless Pair was pressed');
-assert.match(network, /if \(pairing_advertised_\) \{\s*const char\* key_pair = "pair";\s*const char\* val_pair = "1";/,
+assert.match(network, /\{"pair", "1"\},\s*\};[\s\S]{0,200}?\(pairing_advertised_ \? 0u : 1u\)/,
   'Pair announces the panel to Home Assistant with TXT pair=1');
-assert.match(network, /const char\* key_link = "link";\s*const char\* val_link = "1";/,
+assert.match(network, /\{"link", "1"\},/,
   'mDNS tells the Bridge that this firmware can be added without MQTT');
 const setPairing = slice('void HomeTilesNetworkManager::setLinkPairing(', 'void HomeTilesNetworkManager::requestLinkPairing(');
 assert.match(setPairing, /ht_crypto::secureZero\(link_credentials_\.key, sizeof\(link_credentials_\.key\)\);/);
@@ -144,10 +144,20 @@ const mdnsLoop = slice('const bool discoverable =', 'if (discoverable && webAdmi
 assert.match(mdnsLoop, /if \(mdns_active && !discoverable\) \{\s*stopMdns\(\);\s*\} else if \(mdns_active && mdns_pair_flag_ != pairing_advertised_\) \{\s*updateMdnsPairFlag\(\);\s*\}/,
   'only leaving discovery stops mDNS; the pair flag is updated in place');
 const pairFlag = slice('void HomeTilesNetworkManager::updateMdnsPairFlag() {', '// ========== Direct Bridge link ==========');
-assert.match(pairFlag, /mdns_service_txt_item_set\("_hometiles", "_tcp", "pair", "1"\)/);
-assert.match(pairFlag, /mdns_service_txt_item_remove\("_hometiles", "_tcp", "pair"\)/);
-assert.match(pairFlag, /if \(err != ESP_OK\) \{[\s\S]*?stopMdns\(\);\s*return;\s*\}\s*mdns_pair_flag_ = pairing_advertised_;/,
-  'a failed update falls back to a restart with the current flag');
+assert.match(pairFlag, /\+\+mdns_txt_seq_;\s*if \(!applyMdnsTxt\(\)\) \{[\s\S]*?stopMdns\(\);\s*return;\s*\}/,
+  'every change gets a new seq; a failed update falls back to a restart with the current flag');
+// Home Assistant's mDNS cache ignores a TXT record equal to one it still holds
+// (up to 10 s after it was replaced): pair on, off, on within seconds showed no
+// card, or kept a stale one. seq makes every TXT set unique.
+const txtSet = slice('bool HomeTilesNetworkManager::applyMdnsTxt() {', 'void HomeTilesNetworkManager::updateMdnsPairFlag() {');
+assert.match(txtSet, /\{"link", "1"\},\s*\{"seq", seq\},[\s\S]*?\{"pair", "1"\},\s*\};/, 'pair is the last entry, after seq');
+assert.match(txtSet, /sizeof\(txt\) \/ sizeof\(txt\[0\]\) - \(pairing_advertised_ \? 0u : 1u\)/, 'pair is left out unless Pair was pressed');
+assert.match(txtSet, /if \(mdns_service_txt_set\("_hometiles", "_tcp", txt, count\) != ESP_OK\) return false;\s*mdns_pair_flag_ = pairing_advertised_;/,
+  'the whole set is replaced at once, so one announcement carries it');
+const mdnsStart = slice('void HomeTilesNetworkManager::startMdns() {', 'bool HomeTilesNetworkManager::applyMdnsTxt() {');
+assert.match(mdnsStart, /if \(!mdns_txt_seq_\) mdns_txt_seq_ = esp_random\(\) \| 1u;\s*if \(!applyMdnsTxt\(\)\)/,
+  'seq starts randomly per boot, so no TXT set from before a restart repeats');
+assert.doesNotMatch(mdnsStart, /addServiceTxt/, 'the TXT set comes from applyMdnsTxt() only');
 assert.match(network, /MDNS\.addService\("hometiles", "tcp", 80\);/,
   'the Arduino wrapper registers the service as _hometiles._tcp');
 

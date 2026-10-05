@@ -3103,6 +3103,9 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 .tile-head-top { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
 .tile-head-top h3 { margin:0 !important; flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tile-settings .tile-head-top select { flex:0 0 44%; width:44%; margin:0; }
+/* The long Type list ends at the bottom of the panel and scrolls
+   (--picker-room, set by tiles/tile-head.js when it opens). */
+.tile-settings .tile-head-top select::picker(select) { max-height:var(--picker-room, 60vh); overflow-y:auto; }
 .tile-head-row { display:grid; grid-template-columns:minmax(0, 1fr) 44px; gap:8px; align-items:start; }
 .tile-settings .tile-head-row textarea.tile-title-input {
   display:block; margin:0; height:36px; min-height:36px; line-height:16px; white-space:pre; overflow:hidden;

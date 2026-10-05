@@ -3386,6 +3386,18 @@ function syncTileRadiusControls(tabEl) {
     }
   }, true);
 
+  // The Type list opens down from the head; keep it inside the panel.
+  function fitTileTypePicker(event) {
+    const select = event.target;
+    if (!select?.matches?.('.tile-head-top select')) return;
+    const panel = select.closest('.tile-settings')?.getBoundingClientRect();
+    if (!panel) return;
+    const room = Math.round(panel.bottom - select.getBoundingClientRect().bottom - 12);
+    select.style.setProperty('--picker-room', Math.max(160, room) + 'px');
+  }
+  document.addEventListener('pointerdown', fitTileTypePicker, true);
+  document.addEventListener('focusin', fitTileTypePicker);
+
   // A newly chosen entity brings its icon to the button.
   document.addEventListener('change', event => {
     const slot = event.target?.closest?.('.tile-entity-slot');

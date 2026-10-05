@@ -20,7 +20,7 @@ Last reviewed: 2026-10-05
 
 - Panel connects to the Bridge over TCP 8140 instead of MQTT; Bridge = broker (same topics/retained), frames sealed with pairing-K keys. Contract `docs-dev/bridge-link.md` (shared vectors).
 - Setup: Pair on panel (2 min, TXT `pair=1`) -> HA card (new or switch MQTT entry) -> `POST /api/link` (no password) -> number, no restart.
-- V2 b226 + Bridge 0.9.0b8 HW OK: new, switch, unpair, delete, quick Pair. Both clear MQTT leftovers; mDNS TXT in place + seq. New HA IP = new setup. Next: entity rule.
+- V2 b226 + Bridge 0.9.0b9 HW OK: new, switch, unpair, delete, quick Pair. Both clear MQTT leftovers; mDNS TXT in place + seq. New HA IP = new setup. Next: entity rule.
 
 ## Hardware validation
 

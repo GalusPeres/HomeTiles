@@ -49,6 +49,7 @@ struct CategoryView {
 lv_obj_t* g_panel = nullptr;
 CategoryView g_views[kCategoryCount] = {};
 lv_obj_t* g_bar_title = nullptr;
+lv_obj_t* g_close = nullptr;
 lv_obj_t* g_card_title = nullptr;
 // The card's body: holds the open page.
 // The page card and its body (the open page).
@@ -1557,6 +1558,7 @@ void build_page() {
 void clear_refs() {
   for (CategoryView& view : g_views) view = {};
   g_bar_title = nullptr;
+  g_close = nullptr;
   g_card_title = nullptr;
   close_dialog();
   close_entry();
@@ -1596,8 +1598,12 @@ void build_frame() {
   lv_obj_set_style_bg_color(gear, lv_color_hex(settings_style::tone(palette.card, settings_style::kGearColor).disc),
                             0);
   lv_obj_set_style_bg_opa(gear, LV_OPA_COVER, 0);
-  lv_obj_t* close = circle(panel, close_x, bar_y, d, "window-close", 0xFFFFFF);
-  make_round_button(close, on_close_clicked, nullptr);
+  // The X's pressed circle reaches half way to the edges around it, so it is
+  // more than a thin ring around the icon but never touches them (user
+  // 2026-10-06); the icon stays where it was.
+  const int grow = edge / 2;
+  g_close = circle(panel, close_x - grow, bar_y - grow, d + 2 * grow, "window-close", 0xFFFFFF);
+  make_round_button(g_close, on_close_clicked, nullptr);
   int title_end = close_x;
   if (kLayout == Layout::Tabs) {
     // The tabs sit beside the X, so a longer or shorter page name never

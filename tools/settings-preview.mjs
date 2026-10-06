@@ -384,6 +384,7 @@ int main(int argc, char** argv) {
   ${open === undefined ? '' : `settings_screen::open_locale_list(${Number(open)});`}
   ${press === undefined ? '' : `lv_obj_add_state(settings_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
   settings_screen::system_changed();
+  ${args.includes('--press-close') ? 'lv_obj_add_state(settings_screen::g_close, LV_STATE_PRESSED);' : ''}
   ${entry === undefined ? '' : `settings_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
   ${keys === 'accents' ? 'settings_keyboard::g_kb.accents = true; settings_keyboard::lay_out();' : ''}
   ${dialog === undefined || dialog === 'pairing' ? '' : `settings_screen::open_dialog(settings_screen::Dialog::${{github: 'GitHub', restart: 'Restart', unpair: 'Unpair', password: 'RemovePassword'}[dialog]});`}

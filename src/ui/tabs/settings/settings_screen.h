@@ -2,6 +2,8 @@
 
 #include <lvgl.h>
 
+#include "src/ui/tabs/settings/settings_model.h"
+
 // The Settings screen of the approved mockup
 // (build/design-mockups/settings/settings-menu.html): bar, categories, the
 // page card and its pages. Values and actions come from settings_model.h.
@@ -24,11 +26,21 @@ void sync_rotation();
 void texts_changed();
 // Opens a category's page (0 Display, 1 WiFi, 2 Localization, 3 System).
 void show_category(uint8_t index);
-// The update, pairing or password state changed: the System page follows now
-// (it also polls them while it shows).
+// The update, pairing or password state changed: the System page and the
+// setup follow now (they also poll them while they show).
 void system_changed();
+// The first-start setup started, ended or changed its step: Settings shows
+// it (or the frame again) now while Settings shows, else when it opens.
+void setup_changed();
 // Closes an open option list, dialog or network entry (navigation closes
 // every popup).
 void close_overlays();
+
+// Shared with the setup: a Localization row's name, icon and value, and the
+// rotation segment (quarter turns where the panel supports them).
+const char* locale_title(settings_model::LocaleList list);
+const char* locale_icon(settings_model::LocaleList list);
+const char* locale_value(settings_model::LocaleList list);
+lv_obj_t* rotation_segment(lv_obj_t* row, uint32_t track);
 
 }  // namespace settings_screen

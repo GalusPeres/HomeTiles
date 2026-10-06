@@ -636,6 +636,72 @@ lv_obj_t* qr_code(lv_obj_t* parent, int size, const char* text) {
 #endif
 }
 
+lv_obj_t* close_button(lv_obj_t* card, int x, int y, int size, lv_event_cb_t on_click, void* user_data) {
+  lv_obj_t* close = plain(card);
+  lv_obj_set_pos(close, x, y);
+  lv_obj_set_size(close, size, size);
+  lv_obj_add_flag(close, LV_OBJ_FLAG_CLICKABLE);
+  ui_surface_style::apply_radius(close, popup_layout::kCloseButtonRadius);
+  lv_obj_set_style_bg_color(close, lv_color_white(), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(close, LV_OPA_20, LV_STATE_PRESSED);
+  lv_obj_set_ext_click_area(close, popup_layout::kCloseButtonClickArea);
+  if (on_click) lv_obj_add_event_cb(close, on_click, LV_EVENT_CLICKED, user_data);
+  lv_obj_t* x_icon = lv_label_create(close);
+  lv_label_set_text(x_icon, getMdiChar("window-close").c_str());
+  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(x_icon, FONT_MDI_ICONS, 0);
+  lv_obj_set_style_text_color(x_icon, lv_color_white(), 0);
+  lv_obj_center(x_icon);
+  return close;
+}
+
+int popup_close_x(int card_w) {
+  return card_w - popup_layout::kCardPad - popup_layout::kCloseButtonSize + popup_layout::kCloseButtonOffsetX;
+}
+
+int popup_close_y() { return popup_layout::kCardPad + popup_layout::kCloseButtonOffsetY; }
+
+lv_obj_t* step_head(lv_obj_t* card, int card_w, const char* icon_name, uint32_t color, uint32_t card_color,
+                    const char* title, const char* line, int right) {
+  const int disc = popup_layout::kHeaderIconDiscSize;
+  const int x = popup_layout::kCardPad;
+  const int center = popup_layout::kHeaderCenterY;
+  const Tone tone = settings_style::tone(card_color, color);
+  lv_obj_t* circle = plain(card);
+  lv_obj_set_pos(circle, x, center - disc / 2);
+  lv_obj_set_size(circle, disc, disc);
+  lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(circle, lv_color_hex(tone.disc), 0);
+  lv_obj_set_style_bg_opa(circle, LV_OPA_COVER, 0);
+  lv_obj_t* icon = lv_label_create(circle);
+  lv_label_set_text(icon, getMdiChar(icon_name).c_str());
+  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
+  lv_obj_set_style_text_color(icon, lv_color_hex(tone.icon), 0);
+  lv_obj_center(icon);
+
+  // Title and line in line boxes of 1.2 and 1.3 times their font size,
+  // centered together on the circle.
+  const int text_x = x + disc + popup_layout::kHeaderIconDiscGap;
+  const int width = card_w - text_x - right;
+  const float box1 = kRowFontPx * 1.2f;
+  const float box2 = kSmallFontPx * 1.3f;
+  const float top = center - (box1 + box2) / 2;
+  lv_obj_t* head = lv_label_create(card);
+  lv_label_set_text(head, title ? title : "");
+  lv_label_set_long_mode(head, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(head, width);
+  lv_obj_set_style_text_font(head, row_font(), 0);
+  lv_obj_set_style_text_color(head, lv_color_white(), 0);
+  lv_obj_set_pos(head, text_x, browser_label_y(row_font(), kRowFontPx, top, box1));
+  lv_obj_t* sub = lv_label_create(card);
+  lv_label_set_text(sub, line ? line : "");
+  lv_label_set_long_mode(sub, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(sub, width);
+  lv_obj_set_style_text_font(sub, small_font(), 0);
+  grey_text(sub);
+  lv_obj_set_pos(sub, text_x, browser_label_y(small_font(), kSmallFontPx, top + box1, box2));
+  return head;
+}
+
 lv_obj_t* dialog_text(lv_obj_t* box, const char* text) {
   lv_obj_t* label = lv_label_create(box);
   lv_label_set_text(label, text ? text : "");

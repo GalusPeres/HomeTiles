@@ -151,4 +151,5 @@ Last reviewed: 2026-10-05
 
 ## Settings redesign (`feature/settings-setup`, unreleased)
 
-- Rebuilt after `build/design-mockups/settings` (HANDOFF.md): four pages, dialogs, new keyboard; old popups and `ui_keyboard` removed. b248 V2/S3 HW test pending; setup wizard next.
+- Rebuilt after `build/design-mockups/settings` (HANDOFF.md): four pages, dialogs, new keyboard; old popups and `ui_keyboard` removed.
+- First-start setup (b252, `setup_screen.cpp`): 4 steps in the popup card; a new panel stores its defaults at boot (network starts, no restart), step kept in NVS `setup_step`; HW test pending.

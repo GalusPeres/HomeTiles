@@ -694,6 +694,10 @@ void setup() {
   Serial.println("[Setup] Loading configs...");
   Serial.flush();
   bool has_config = configManager.load();
+  // A new panel stores its defaults and starts the first-start setup: its
+  // network then starts like any configured one, so neither the setup's WiFi
+  // search nor the Bridge link needs a restart.
+  if (!has_config) has_config = settings_begin_new_panel();
   haBridgeConfig.load();
   tileConfig.load();
   screensaverConfig.load();
@@ -850,6 +854,8 @@ void setup() {
   uiManager.updateStatusbar();
   Serial.println("[Setup] Statusbar updated");
   Serial.flush();
+  // A new panel, or a setup a restart interrupted, opens the first-start setup.
+  settings_resume_setup();
 
   // Tiles and status bar are ready. Re-enable invalidation so the wake refresh
   // presents the completed UI in one step.

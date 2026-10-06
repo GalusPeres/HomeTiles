@@ -60,8 +60,11 @@ const rawPage = between(rawScreen, 'void build_display_page(lv_obj_t* page) {', 
 assert.doesNotMatch(rawPage, /"[A-Z][a-z]+/, 'no display text in the page code');
 assert.match(page, /section\(page, s\.settings_screen, true\)/);
 assert.match(page, /section\(page, s\.settings_screensaver, false\)/);
-// Quarter turns on panels that support them, else normal and flipped.
-assert.match(page, /if \(settings_model::quarter_turns\(\)\) \{[\s\S]*?kQuarterTurns, 4,[\s\S]*?\} else \{[\s\S]*?kFlip, 2,/);
+// Quarter turns on panels that support them, else normal and flipped (the
+// setup's first step shares the segment).
+assert.match(page, /g_rotation_segment = rotation_segment\(rotation\.row, palette\.card\);/);
+const rotation = between(screen, 'lv_obj_t* rotation_segment(lv_obj_t* row, uint32_t track) {', 'const char* locale_title(');
+assert.match(rotation, /if \(settings_model::quarter_turns\(\)\) \{[\s\S]*?kQuarterTurns, 4,[\s\S]*?\}[\s\S]*?kFlip, 2,/);
 // The slider track is the control fill computed for the "From icon" card,
 // like the Light popup's brightness track (popup_shell.cpp header_fill).
 const sliderRow = between(screen, 'lv_obj_t* display_slider_row(', 'void build_display_page(');

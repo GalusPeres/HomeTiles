@@ -6,10 +6,11 @@
 
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/startup/hometiles_logo.h"
-#include "src/ui/tabs/settings/settings_keyboard.h"
+#include "src/ui/tabs/settings/settings_entry.h"
 #include "src/ui/tabs/settings/settings_model.h"
 #include "src/ui/tabs/settings/settings_parts.h"
 #include "src/ui/tabs/settings/settings_style.h"
+#include "src/ui/tabs/settings/setup_screen.h"
 
 // The approved layout (build/design-mockups/settings/settings-menu.html and
 // the reference images in its sheets/ folder). The top half row is the bar in
@@ -347,7 +348,20 @@ void on_saver_brightness(lv_obj_t*, int32_t value, bool final) {
   settings_model::saver_brightness_changed(value, final);
 }
 
-void on_rotation(lv_obj_t*, uint8_t index) { settings_model::rotation_selected(index); }
+}  // namespace
+
+lv_obj_t* rotation_segment(lv_obj_t* row, uint32_t track) {
+  static const char* const kQuarterTurns[] = {"0\xC2\xB0", "90\xC2\xB0", "180\xC2\xB0", "270\xC2\xB0"};
+  static const char* const kFlip[] = {"0\xC2\xB0", "180\xC2\xB0"};
+  const auto on_rotation = [](lv_obj_t*, uint8_t index) { settings_model::rotation_selected(index); };
+  if (settings_model::quarter_turns()) {
+    return settings_parts::segment(row, kQuarterTurns, 4, settings_model::rotation_index(), track, on_rotation,
+                                   settings_style::kQuarterSegmentMinWidth, settings_style::kQuarterSegmentPad);
+  }
+  return settings_parts::segment(row, kFlip, 2, settings_model::rotation_index(), track, on_rotation);
+}
+
+namespace {
 
 // One slider length per panel: what a row leaves beside the longest slider
 // name (+30 % headroom), so every slider starts at the same x (mockup
@@ -398,16 +412,7 @@ void build_display_page(lv_obj_t* page) {
                      &g_sleep_value);
   set_step_text(g_sleep_value, values.sleep_index);
   settings_parts::Row rotation = settings_parts::row(screen, "screen-rotation", s.settings_rotation);
-  static const char* const kQuarterTurns[] = {"0\xC2\xB0", "90\xC2\xB0", "180\xC2\xB0", "270\xC2\xB0"};
-  static const char* const kFlip[] = {"0\xC2\xB0", "180\xC2\xB0"};
-  if (settings_model::quarter_turns()) {
-    g_rotation_segment = settings_parts::segment(rotation.row, kQuarterTurns, 4, settings_model::rotation_index(),
-                                                 palette.card, on_rotation, settings_style::kQuarterSegmentMinWidth,
-                                                 settings_style::kQuarterSegmentPad);
-  } else {
-    g_rotation_segment =
-        settings_parts::segment(rotation.row, kFlip, 2, settings_model::rotation_index(), palette.card, on_rotation);
-  }
+  g_rotation_segment = rotation_segment(rotation.row, palette.card);
 
   settings_parts::section(page, s.settings_screensaver, false);
   lv_obj_t* saver = settings_parts::group(page, palette);
@@ -431,6 +436,8 @@ void clear_locale_refs() {
   settings_parts::close_options();
   for (LocaleRow& row : g_locale_rows) row = {};
 }
+
+}  // namespace
 
 const char* locale_title(LocaleList list) {
   const i18n::Strings& s = settings_model::text();
@@ -468,6 +475,8 @@ const char* locale_icon(LocaleList list) {
 const char* locale_value(LocaleList list) {
   return settings_model::locale_option(list, settings_model::locale_selected(list));
 }
+
+namespace {
 
 const char* option_text(uint8_t tag, uint8_t index) {
   return settings_model::locale_option(static_cast<LocaleList>(tag), index);
@@ -675,6 +684,9 @@ lv_obj_t* switch_on_button(lv_obj_t* row, const char* text, SystemAction action)
 
 void refresh_async(void*) { system_tick(); }
 
+void show_setup();
+void setup_async(void*) { show_setup(); }
+
 void open_dialog(Dialog dialog);
 
 void on_system_action(lv_event_t* e) {
@@ -701,6 +713,9 @@ void on_system_action(lv_event_t* e) {
       open_dialog(Dialog::GitHub);
       return;
     case SystemAction::Setup:
+      // The setup replaces the whole screen, the touched button with it.
+      settings_model::setup_start();
+      lv_async_call(setup_async, nullptr);
       return;
   }
   // The page may be rebuilt, the touched button with it: after the event.
@@ -1086,8 +1101,6 @@ void build_system_page(lv_obj_t* page) {
                                          palette, settings_style::kSystemButtonHeight, false, on_system_action,
                                          action_data(a.action));
     lv_obj_set_flex_grow(b, 1);
-    // The first-start setup follows after the Settings pages.
-    if (a.action == SystemAction::Setup) settings_parts::button_set_enabled(b, false);
   }
 
   // The head takes what the card has left, so the buttons end one card
@@ -1138,19 +1151,6 @@ enum class WifiAction : uint8_t { Disconnect, Hotspot, Search, AddNetwork, Resta
 uint32_t g_wifi_key = 0xFFFFFFFF;
 // The rebuild after a state change keeps the scan that is running.
 bool g_wifi_quiet_rebuild = false;
-
-struct Entry {
-  lv_obj_t* root = nullptr;
-  lv_obj_t* name = nullptr;  // the network name field (Add network)
-  lv_obj_t* password = nullptr;
-  lv_obj_t* message = nullptr;
-  lv_obj_t* keyboard = nullptr;
-  lv_obj_t* focus = nullptr;
-  bool manual = false;
-  bool busy = false;
-  char ssid[33] = {};
-};
-Entry g_entry;
 
 void* wifi_data(WifiAction action) { return reinterpret_cast<void*>(static_cast<uintptr_t>(action)); }
 
@@ -1444,327 +1444,37 @@ void build_wifi_page(lv_obj_t* page) {
 }
 
 // ---------- WiFi entry ----------
+// The entry takes the card's place (the categories or tabs stay;
+// settings_entry.cpp).
 
-struct EntryGeometry {
-  int pad;
-  int column;
-  int close;
-  int close_x;
-  int close_y;
-  int field_y;
-  int field_h;
-  int message_y;
-  int key_y;
-  bool compact;  // the 480 class: a slim title row
-  bool stacked;  // name above password
-};
-
-EntryGeometry entry_geometry(int card_w, int card_h) {
-  EntryGeometry g = {};
-#if defined(DEVICE_LAYOUT_480X480)
-  g.pad = settings_style::kEntryPad;
-  g.column = card_w - 2 * g.pad;
-  g.close = settings_style::kEntryClose;
-  g.close_x = card_w - settings_style::kEntryCloseRight - g.close;
-  g.close_y = settings_style::kEntryCloseTop;
-  g.field_y = settings_style::kEntryFieldTop;
-  g.field_h = settings_style::kEntryFieldHeight;
-  g.message_y = settings_style::kEntryMessageTop;
-  g.compact = true;
-  g.stacked = false;
-#else
-  g.column = card_w - 2 * settings_style::kEntrySide;
-  if (g.column > settings_style::kEntryColumn) g.column = settings_style::kEntryColumn;
-  g.pad = (card_w - g.column) / 2;
-  g.close = settings_style::kEntryClose;
-  g.close_x = card_w - settings_style::kEntryCloseRight - g.close;
-  g.close_y = settings_style::kEntryCloseTop;
-  g.field_y = settings_style::kEntryFieldTop;
-  g.field_h = settings_style::kEntryFieldHeight;
-  g.compact = false;
-#endif
-  g.key_y = card_h - settings_style::kKeyboardBottom - (3 * settings_style::kKeyStep + settings_style::kKeyHeight);
-#if !defined(DEVICE_LAYOUT_480X480)
-  g.stacked = g.field_y + 2 * g.field_h + settings_style::kEntryFieldGap + popup_layout::scale(40) <= g.key_y;
-  g.message_y = g.stacked ? g.field_y + 2 * g.field_h + popup_layout::scale(24) : g.field_y + g.field_h + popup_layout::scale(14);
-#endif
-  return g;
-}
-
-void entry_focus(lv_obj_t* field) {
-  if (!field || field == g_entry.focus) return;
-  if (g_entry.focus) {
-    lv_obj_remove_state(g_entry.focus, LV_STATE_FOCUSED);
-    lv_obj_send_event(g_entry.focus, LV_EVENT_DEFOCUSED, nullptr);
-  }
-  g_entry.focus = field;
-  lv_obj_add_state(field, LV_STATE_FOCUSED);
-  // Starts the cursor's blinking.
-  lv_obj_send_event(field, LV_EVENT_FOCUSED, nullptr);
-}
-
-void on_field_clicked(lv_event_t* e) {
-  if (!g_entry.busy) entry_focus(static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
-}
-
-void on_eye_clicked(lv_event_t* e) {
-  lv_obj_t* eye = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-  lv_obj_t* field = lv_obj_get_parent(eye);
-  const bool hidden = lv_textarea_get_password_mode(field);
-  lv_textarea_set_password_mode(field, !hidden);
-  lv_label_set_text(eye, getMdiChar(hidden ? "eye-off" : "eye").c_str());
-}
-
-const lv_font_t* field_font() {
-#if defined(DEVICE_LAYOUT_480X480)
-  return settings_style::row_font();
-#else
-  return popup_layout::font28();
-#endif
-}
-
-// A round field (mockup .fld): the control color, the accent edge while it
-// takes the keys, the placeholder grey, a blinking cursor.
-lv_obj_t* entry_field(int x, int y, int w, int h, const char* placeholder, bool secret, uint32_t max_length) {
-  const Colors palette = colors();
-  const lv_font_t* font = field_font();
-  lv_obj_t* field = lv_textarea_create(g_entry.root);
-  lv_obj_remove_style_all(field);
-  lv_obj_set_pos(field, x, y);
-  lv_obj_set_size(field, w, h);
-  lv_textarea_set_one_line(field, true);
-  lv_textarea_set_max_length(field, max_length);
-  lv_textarea_set_placeholder_text(field, placeholder);
-  lv_obj_set_style_bg_color(field, lv_color_hex(palette.group), 0);
-  lv_obj_set_style_bg_opa(field, LV_OPA_COVER, 0);
-  settings_style::apply_radius(field, h / 2);
-  lv_obj_set_style_border_width(field, 2, 0);
-  lv_obj_set_style_border_opa(field, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_color(field, lv_color_hex(settings_style::kWifiColor), LV_STATE_FOCUSED);
-  lv_obj_set_style_border_opa(field, LV_OPA_COVER, LV_STATE_FOCUSED);
-  lv_obj_set_style_text_font(field, font, 0);
-  lv_obj_set_style_text_color(field, lv_color_white(), 0);
-  lv_obj_set_style_text_color(field, lv_color_white(), LV_PART_TEXTAREA_PLACEHOLDER);
-  lv_obj_set_style_text_opa(field, settings_style::kGreyOpa, LV_PART_TEXTAREA_PLACEHOLDER);
-  const int pad_v = (h - 4 - lv_font_get_line_height(font)) / 2;
-  lv_obj_set_style_pad_top(field, pad_v, 0);
-  lv_obj_set_style_pad_bottom(field, pad_v, 0);
-  lv_obj_set_style_pad_left(field, h * 4 / 10, 0);
-  lv_obj_set_style_pad_right(field, h / 3, 0);
-  lv_obj_set_scrollbar_mode(field, LV_SCROLLBAR_MODE_OFF);
-  // The cursor: a 2 px line in the text color, blinking.
-  lv_obj_set_style_border_color(field, lv_color_white(), LV_PART_CURSOR);
-  lv_obj_set_style_border_width(field, 2, LV_PART_CURSOR);
-  lv_obj_set_style_border_side(field, LV_BORDER_SIDE_LEFT, LV_PART_CURSOR);
-  // Only in the field that takes the keys.
-  lv_obj_set_style_border_opa(field, LV_OPA_TRANSP, LV_PART_CURSOR);
-  lv_obj_set_style_border_opa(field, LV_OPA_COVER, LV_PART_CURSOR | LV_STATE_FOCUSED);
-  lv_obj_set_style_anim_duration(field, 500, LV_PART_CURSOR);
-  lv_obj_add_event_cb(field, on_field_clicked, LV_EVENT_CLICKED, nullptr);
-  if (secret) {
-    lv_textarea_set_password_mode(field, true);
-    lv_obj_t* eye = lv_label_create(field);
-    lv_label_set_text(eye, getMdiChar("eye").c_str());
-    if (FONT_MDI_ICONS) lv_obj_set_style_text_font(eye, FONT_MDI_ICONS, 0);
-    lv_obj_set_style_text_color(eye, lv_color_white(), 0);
-    lv_obj_set_style_text_opa(eye, settings_style::kGreyOpa, 0);
-    lv_obj_add_flag(eye, LV_OBJ_FLAG_FLOATING);
-    lv_obj_add_flag(eye, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_ext_click_area(eye, h / 4);
-    lv_obj_align(eye, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_event_cb(eye, on_eye_clicked, LV_EVENT_CLICKED, nullptr);
-    lv_obj_set_style_pad_right(field, h / 3 + settings_parts::icon_width() + h / 6, 0);
-    lv_obj_align(eye, LV_ALIGN_RIGHT_MID, settings_parts::icon_width() + h / 6, 0);
-  }
-  return field;
-}
-
-void entry_message(const char* text, uint32_t color) {
-  if (!g_entry.message) return;
-  lv_label_set_text(g_entry.message, text ? text : "");
-  lv_obj_set_style_text_color(g_entry.message, lv_color_hex(color), 0);
-  lv_obj_set_style_text_opa(g_entry.message, color == 0xFFFFFF ? settings_style::kGreyOpa : LV_OPA_COVER, 0);
-}
-
-void on_key_text(const char* text) {
-  if (g_entry.focus && !g_entry.busy) {
-    lv_textarea_add_text(g_entry.focus, text);
-    entry_message("", 0xFFFFFF);
+void show_page_content(bool shown) {
+  for (lv_obj_t* obj : {g_page, g_card_title}) {
+    if (!obj) continue;
+    if (shown) {
+      lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    }
   }
 }
 
-void on_key_backspace() {
-  if (g_entry.focus && !g_entry.busy) lv_textarea_delete_char(g_entry.focus);
-}
-
-// The keyboard's check connects (no extra Connect button).
-void on_key_ok() {
-  if (g_entry.busy) return;
-  const char* ssid = g_entry.manual ? lv_textarea_get_text(g_entry.name) : g_entry.ssid;
-  const char* password = lv_textarea_get_text(g_entry.password);
-  if (!ssid || !ssid[0]) {
-    entry_focus(g_entry.name);
-    return;
-  }
-  // A network found with a lock needs its password.
-  if (!g_entry.manual && (!password || !password[0])) {
-    entry_focus(g_entry.password);
-    return;
-  }
-  settings_model::wifi_connect(ssid, password);
-  g_entry.busy = true;
-  settings_keyboard::set_enabled(g_entry.keyboard, false);
-  entry_message(settings_model::text().settings_connecting, 0xFFFFFF);
-}
-
-void close_entry(bool from_event = false) {
-  if (!g_entry.root) return;
-  lv_obj_t* root = g_entry.root;
-  g_entry = Entry();
-  settings_model::wifi_connect_done();
-  if (from_event) {
-    lv_obj_delete_async(root);
-  } else {
-    lv_obj_delete(root);
-  }
-  if (g_page) lv_obj_remove_flag(g_page, LV_OBJ_FLAG_HIDDEN);
-  if (g_card_title) lv_obj_remove_flag(g_card_title, LV_OBJ_FLAG_HIDDEN);
-}
-
-void on_entry_close(lv_event_t*) {
-  // While connecting the entry stays (mockup sheetClose).
-  if (g_entry.busy) return;
-  close_entry(true);
+// The X closed it: the page again, with a fresh search.
+void on_entry_closed() {
+  show_page_content(true);
   settings_model::wifi_scan();
   lv_async_call(refresh_wifi_async, nullptr);
 }
 
-settings_keyboard::Layout keyboard_layout() {
-  switch (settings_model::keyboard_layout()) {
-    case 1:
-      return settings_keyboard::Layout::Qwertz;
-    case 2:
-      return settings_keyboard::Layout::Azerty;
-    default:
-      return settings_keyboard::Layout::Qwerty;
-  }
-}
-
-// The entry takes the card's place (the categories or tabs stay): the plain
-// title and X, the fields, a line for "Connecting..." or an error, and the
-// keyboard at the bottom.
 void open_entry(bool manual, const char* ssid) {
   if (!g_card) return;
-  close_entry();
-  settings_parts::close_options();
-  const i18n::Strings& s = settings_model::text();
-  const Colors palette = colors();
-  lv_obj_update_layout(g_card);
-  const int card_w = lv_obj_get_width(g_card);
-  const int card_h = lv_obj_get_height(g_card);
-  const EntryGeometry g = entry_geometry(card_w, card_h);
-  g_entry.manual = manual;
-  snprintf(g_entry.ssid, sizeof(g_entry.ssid), "%s", ssid ? ssid : "");
-  if (g_page) lv_obj_add_flag(g_page, LV_OBJ_FLAG_HIDDEN);
-  if (g_card_title) lv_obj_add_flag(g_card_title, LV_OBJ_FLAG_HIDDEN);
-  g_entry.root = settings_parts::plain(g_card);
-  lv_obj_set_size(g_entry.root, card_w, card_h);
+  show_page_content(false);
+  settings_entry::open({g_card, g_built_card, nullptr, on_entry_closed}, manual, ssid);
+}
 
-  // The title: what is asked; a found network's name where the fields do not
-  // repeat it.
-  const char* title = manual ? s.settings_add_network : g.stacked ? s.settings_join_network : g_entry.ssid;
-  lv_obj_t* head = lv_label_create(g_entry.root);
-  lv_label_set_text(head, title);
-  lv_label_set_long_mode(head, LV_LABEL_LONG_DOT);
-  lv_obj_set_style_text_color(head, lv_color_white(), 0);
-  if (g.compact) {
-    lv_obj_set_style_text_font(head, settings_style::row_font(), 0);
-    lv_obj_set_width(head, g.close_x - g.pad - 8);
-    lv_obj_set_pos(head, g.pad,
-                   settings_parts::browser_label_y(settings_style::row_font(), settings_style::kRowFontPx, g.close_y,
-                                                   g.close));
-  } else {
-    lv_obj_set_style_text_font(head, settings_style::page_title_font(), 0);
-    lv_obj_set_width(head, g.close_x - g.pad - settings_style::kSectionLeft - 10);
-    const int box = (settings_style::kTitleFontPx * 125 + 50) / 100;
-    lv_obj_set_pos(head, g.pad + settings_style::kSectionLeft,
-                   settings_parts::browser_label_y(settings_style::page_title_font(), settings_style::kTitleFontPx,
-                                                   g.close_y + g.close / 2.0f - box / 2.0f, box));
-  }
-  lv_obj_t* close = settings_parts::plain(g_entry.root);
-  lv_obj_set_pos(close, g.close_x, g.close_y);
-  lv_obj_set_size(close, g.close, g.close);
-  lv_obj_add_flag(close, LV_OBJ_FLAG_CLICKABLE);
-  ui_surface_style::apply_radius(close, popup_layout::kCloseButtonRadius);
-  lv_obj_set_style_bg_color(close, lv_color_white(), LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(close, 51, LV_STATE_PRESSED);
-  lv_obj_set_ext_click_area(close, popup_layout::kCloseButtonClickArea);
-  lv_obj_add_event_cb(close, on_entry_close, LV_EVENT_CLICKED, nullptr);
-  lv_obj_t* x = lv_label_create(close);
-  lv_label_set_text(x, getMdiChar("window-close").c_str());
-  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(x, FONT_MDI_ICONS, 0);
-  lv_obj_set_style_text_color(x, lv_color_white(), 0);
-  lv_obj_center(x);
-
-  const int gap = settings_style::kKeyGap;
-  if (g.stacked) {
-    // Name above password over the keyboard's width; a found network's name
-    // stands fixed in the first field.
-    if (manual) {
-      g_entry.name = entry_field(g.pad, g.field_y, g.column, g.field_h, s.settings_network_name, false, 32);
-    } else {
-      lv_obj_t* fixed = settings_parts::plain(g_entry.root);
-      lv_obj_set_pos(fixed, g.pad, g.field_y);
-      lv_obj_set_size(fixed, g.column, g.field_h);
-      settings_style::apply_radius(fixed, g.field_h / 2);
-      lv_obj_set_style_border_width(fixed, 1, 0);
-      lv_obj_set_style_border_color(fixed, lv_color_white(), 0);
-      lv_obj_set_style_border_opa(fixed, 51, 0);
-      lv_obj_set_style_pad_left(fixed, g.field_h * 4 / 10, 0);
-      lv_obj_set_style_pad_right(fixed, g.field_h / 3, 0);
-      lv_obj_set_flex_flow(fixed, LV_FLEX_FLOW_ROW);
-      lv_obj_set_flex_align(fixed, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-      lv_obj_t* name = lv_label_create(fixed);
-      lv_label_set_text(name, g_entry.ssid);
-      lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
-      lv_obj_set_width(name, 1);
-      lv_obj_set_flex_grow(name, 1);
-      lv_obj_set_style_text_font(name, field_font(), 0);
-      lv_obj_set_style_text_color(name, lv_color_white(), 0);
-      settings_parts::trailing_icon(fixed, "lock-outline");
-    }
-    g_entry.password = entry_field(g.pad, g.field_y + g.field_h + settings_style::kEntryFieldGap, g.column, g.field_h,
-                                   s.wifi_password_label, true, 63);
-  } else if (manual) {
-    // Name and password side by side.
-    const int half = (g.column - 2 * gap) / 2;
-    g_entry.name = entry_field(g.pad, g.field_y, half, g.field_h, s.settings_network_name, false, 32);
-    g_entry.password = entry_field(g.pad + half + 2 * gap, g.field_y, half, g.field_h, s.wifi_password_label, true, 63);
-  } else {
-    g_entry.password = entry_field(g.pad, g.field_y, g.column, g.field_h, s.wifi_password_label, true, 63);
-  }
-  // The saved password of the saved network, so it does not look lost.
-  if (!manual) lv_textarea_set_text(g_entry.password, settings_model::wifi_saved_password(g_entry.ssid));
-
-  g_entry.message = lv_label_create(g_entry.root);
-  lv_label_set_text(g_entry.message, "");
-  lv_label_set_long_mode(g_entry.message, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(g_entry.message, g.column);
-  lv_obj_set_pos(g_entry.message, g.pad, g.message_y);
-  lv_obj_set_style_text_align(g_entry.message, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_font(g_entry.message, settings_style::small_font(), 0);
-
-  const settings_keyboard::Geometry keys = {g.pad,
-                                            g.key_y,
-                                            g.column,
-                                            settings_style::kKeyHeight,
-                                            settings_style::kKeyStep,
-                                            gap,
-                                            settings_style::kKeyRadius};
-  g_entry.keyboard = settings_keyboard::create(g_entry.root, keys, keyboard_layout(), palette,
-                                               settings_style::kWifiColor,
-                                               {on_key_text, on_key_backspace, on_key_ok});
-  entry_focus(manual ? g_entry.name : g_entry.password);
+void close_entry() {
+  if (!settings_entry::is_open()) return;
+  settings_entry::close();
+  show_page_content(true);
 }
 
 void on_page_timer(lv_timer_t*);
@@ -1772,20 +1482,14 @@ void on_page_timer(lv_timer_t*);
 void wifi_tick() {
   if (g_category != Category::Wifi || !g_page_built || !g_page) return;
   const WifiValues v = settings_model::wifi_values();
-  if (g_entry.root) {
-    if (g_entry.busy && !v.connecting) {
-      if (v.connect_failed) {
-        // Wrong password or out of reach: edit and try again.
-        g_entry.busy = false;
-        settings_keyboard::set_enabled(g_entry.keyboard, true);
-        entry_message(settings_model::text().settings_connect_failed, settings_style::kErrorColor);
-      } else {
-        close_entry();
-        g_wifi_quiet_rebuild = true;
-        build_page();
-        g_wifi_quiet_rebuild = false;
-        refresh_lines();
-      }
+  if (settings_entry::is_open()) {
+    // Connected: the page with the new network.
+    if (settings_entry::tick(v)) {
+      show_page_content(true);
+      g_wifi_quiet_rebuild = true;
+      build_page();
+      g_wifi_quiet_rebuild = false;
+      refresh_lines();
     }
     return;
   }
@@ -1984,6 +1688,24 @@ void select_category(Category category) {
   build_page();
 }
 
+// The first-start setup takes the whole panel: the frame goes while it runs
+// and is built again when Settings shows without it.
+void show_setup() {
+  if (!g_panel || settings_model::setup_step() < 0) return;
+  if (g_lines_timer) {
+    lv_timer_delete(g_lines_timer);
+    g_lines_timer = nullptr;
+  }
+  stop_page_timer();
+  settings_parts::close_options();
+  if (!setup_screen::shown()) {
+    clear_refs();
+    lv_obj_clean(g_panel);
+    g_built_text = nullptr;
+  }
+  setup_screen::show(g_panel);
+}
+
 }  // namespace
 
 void build(lv_obj_t* panel) {
@@ -1993,6 +1715,15 @@ void build(lv_obj_t* panel) {
 
 void prepare_show() {
   if (!g_panel) return;
+  if (settings_model::setup_step() >= 0) {
+    show_setup();
+    return;
+  }
+  if (setup_screen::shown()) {
+    // The setup ended: the frame comes back.
+    setup_screen::hide();
+    g_built_text = nullptr;
+  }
   if ((settings_model::card_color() & 0xFFFFFF) != g_built_card ||
       ui_surface_style::icon_glow_percent() != g_built_glow || &settings_model::text() != g_built_text) {
     build_frame();
@@ -2015,6 +1746,7 @@ void did_hide() {
   clear_system_refs();
   if (g_page) lv_obj_clean(g_page);
   g_page_built = false;
+  setup_screen::hide();
 }
 
 void refresh_lines() {
@@ -2041,7 +1773,10 @@ void refresh_lines() {
   }
 }
 
-void sync_rotation() { settings_parts::segment_select(g_rotation_segment, settings_model::rotation_index()); }
+void sync_rotation() {
+  settings_parts::segment_select(g_rotation_segment, settings_model::rotation_index());
+  setup_screen::sync_rotation();
+}
 
 void texts_changed() {
   g_built_text = nullptr;
@@ -2049,15 +1784,23 @@ void texts_changed() {
 }
 
 void show_category(uint8_t index) {
-  if (index < kCategoryCount) select_category(static_cast<Category>(index));
+  if (index < kCategoryCount && !setup_screen::shown()) select_category(static_cast<Category>(index));
 }
 
-void system_changed() { system_tick(); }
+void system_changed() {
+  system_tick();
+  setup_screen::refresh();
+}
+
+void setup_changed() {
+  if (g_panel && !lv_obj_has_flag(g_panel, LV_OBJ_FLAG_HIDDEN)) prepare_show();
+}
 
 void close_overlays() {
   settings_parts::close_options();
   close_dialog();
   close_entry();
+  setup_screen::close_overlays();
 }
 
 }  // namespace settings_screen

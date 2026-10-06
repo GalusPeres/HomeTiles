@@ -109,6 +109,19 @@ void two_tone_sub(Row& row, const char* first, uint32_t color, const char* rest)
 // A QR code on white with rounded corners (mockup qr(): size / 12); nullptr
 // without QR support.
 lv_obj_t* qr_code(lv_obj_t* parent, int size, const char* text);
+
+// The popups' X (popup_layout::createCloseButton) at a given place on a card
+// without padding.
+lv_obj_t* close_button(lv_obj_t* card, int x, int y, int size, lv_event_cb_t on_click, void* user_data);
+// Where the popups put their X on a card `card_w` wide.
+int popup_close_x(int card_w);
+int popup_close_y();
+// The setup's step head (mockup wzCard): a circle in the step's color where
+// the popups' header circle sits, the title and a grey line under it,
+// centered together on the circle; `right` is what it leaves free on the
+// card's right (the X). Returns the title.
+lv_obj_t* step_head(lv_obj_t* card, int card_w, const char* icon_name, uint32_t color, uint32_t card_color,
+                    const char* title, const char* line, int right);
 // Grey, centered, wrapping text under the title.
 lv_obj_t* dialog_text(lv_obj_t* card, const char* text);
 // The row of buttons at the dialog's bottom; buttons share it evenly.

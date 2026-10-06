@@ -1,6 +1,8 @@
 #include <lvgl.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <cstring>
+#include "src/core/config/batched_nvs_write.h"
 #include "src/ui/tabs/settings/tab_settings.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/hardware/board_hal.h"
@@ -387,8 +389,15 @@ static bool selected_static_addressing_available() {
 }
 
 // The Bridge started pairing over the direct link: Settings opens on System,
-// whose dialog shows the number while the attempt runs.
+// whose dialog shows the number while the attempt runs; during the setup its
+// Home Assistant step shows the number instead.
 void settings_show_pairing() {
+  if (settings_model::setup_step() >= 0) {
+    settings_model::setup_step_changed(2);
+    uiManager.switchToTab(3);
+    settings_screen::setup_changed();
+    return;
+  }
   uiManager.switchToTab(3);
   settings_screen::show_category(3);
   settings_screen::system_changed();
@@ -941,7 +950,98 @@ bool update_available() { return system_update_available; }
 
 const char* firmware_version() { return FW_VERSION; }
 
+// ---------- First-start setup ----------
+// The step lives beside the configuration, so a restart in the middle of the
+// setup resumes it; Leave and Finish remove it.
+constexpr const char* kSetupNamespace = "tab5_config";
+static constexpr const char* kSetupKey = "setup_step";
+static int g_setup_step = -2;  // not read yet
+
+static void store_setup_step(int step) {
+  g_setup_step = step;
+  Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
+  BatchedNvsWrite::Preferences prefs;
+  if (!prefs.begin(kSetupNamespace, false)) {
+    Serial.println("[Setup] Could not store the setup step");
+    return;
+  }
+  if (step < 0) {
+    prefs.remove(kSetupKey);
+  } else {
+    prefs.putUChar(kSetupKey, static_cast<uint8_t>(step));
+  }
+  BatchedNvsWrite::finish(prefs);
+}
+
+int setup_step() {
+  if (g_setup_step == -2) {
+    g_setup_step = -1;
+    Preferences prefs;
+    if (prefs.begin(kSetupNamespace, true)) {
+      if (prefs.isKey(kSetupKey)) {
+        const uint8_t step = prefs.getUChar(kSetupKey, 0);
+        g_setup_step = step < 4 ? step : 0;
+      }
+      prefs.end();
+    }
+  }
+  return g_setup_step;
+}
+
+void setup_step_changed(uint8_t step) {
+  if (step > 3 || static_cast<int>(step) == setup_step()) return;
+  store_setup_step(step);
+  Serial.printf("[Setup] Step %u\n", static_cast<unsigned>(step + 1));
+}
+
+void setup_start() {
+  store_setup_step(0);
+  Serial.println("[Setup] Started");
+}
+
+void setup_end() {
+  store_setup_step(-1);
+  Serial.println("[Setup] Ended");
+}
+
+bool web_admin_url(char* buf, size_t len) {
+  if (ap_mode_active || !networkTransport.isConnected()) return false;
+  snprintf(buf, len, "http://%s", networkTransport.localIP().toString().c_str());
+  return true;
+}
+
+const char* setup_guide_url() { return "https://galusperes.github.io/HomeTiles/"; }
+
 }  // namespace settings_model
+
+// A new panel (nothing stored yet) stores its defaults right away and starts
+// the setup: its network then starts like any configured one (the WiFi
+// search of the setup, the worker for the Bridge link), so the setup and the
+// link run without a restart.
+bool settings_begin_new_panel() {
+  // Only a panel that never stored a configuration (a reset clears it all):
+  // storage that cannot be read keeps what it holds.
+  {
+    Preferences prefs;
+    if (!prefs.begin(settings_model::kSetupNamespace, false)) return false;
+    const bool stored = prefs.isKey("configured");
+    prefs.end();
+    if (stored) return false;
+  }
+  settings_model::setup_start();
+  const bool saved = configManager.save(configManager.getConfig());
+  Serial.println(saved ? "[Setup] New panel: defaults stored" : "[Setup] New panel: storing the defaults failed");
+  return saved;
+}
+
+// After the UI is built: a setup that runs (a new panel, or one a restart
+// interrupted) shows again.
+void settings_resume_setup() {
+  const int step = settings_model::setup_step();
+  if (step < 0) return;
+  Serial.printf("[Setup] Resuming at step %d\n", step + 1);
+  uiManager.switchToTab(3);
+}
 
 void settings_prepare_show() {
   settings_screen::prepare_show();

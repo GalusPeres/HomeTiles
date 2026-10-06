@@ -105,6 +105,10 @@ constexpr int kKeyStep = 62;
 constexpr int kKeyGap = 6;
 constexpr int kKeyRadius = 12;
 constexpr int kKeyboardBottom = 13;
+// The entry in the setup's popup card: larger fields than the Settings card's.
+constexpr int kSetupFieldTop = 76;
+constexpr int kSetupFieldHeight = 48;
+constexpr int kSetupMessageTop = 132;
 #else
 constexpr int kEntrySide = popup_layout::scale(20);
 constexpr int kEntryColumn = popup_layout::scale(864);
@@ -120,6 +124,17 @@ constexpr int kKeyGap = popup_layout::scale(10);
 constexpr int kKeyRadius = popup_layout::scale(18);
 constexpr int kKeyboardBottom = popup_layout::scale(20);
 #endif
+// First-start setup (mockup wzCard, wzBody, wzFoot): the space under the
+// body for Back and Next, the step dots, the pairing code's box, the width
+// from which the Web Admin QR code stands beside its text.
+constexpr int kSetupFoot = pick(100, 64);
+constexpr int kSetupDot = 8;
+constexpr int kSetupDotCurrent = 24;
+constexpr int kSetupCodePadTop = pick(32, 18);
+constexpr int kSetupCodePadSide = pick(24, 12);
+constexpr int kSetupCodeGap = pick(8, 4);
+constexpr int kSetupCodeButtonTop = pick(16, 10);
+constexpr int kSetupWideTiles = popup_layout::scale(740);
 // Settings card: padding, the large page title (5-row and portrait panels).
 constexpr int kCardPad = popup_layout::kCardPad;
 constexpr int kTitleTop = popup_layout::scale(6);
@@ -186,6 +201,7 @@ constexpr uint32_t kAccentText = 0x1A1A1A;
 constexpr const char* kProductName = "HomeTiles";
 constexpr const char* kHomeAssistant = "Home Assistant";
 constexpr const char* kGitHub = "GitHub";
+constexpr const char* kWebAdmin = "Web Admin";
 
 // A rounding the mockup draws at the default, maximum tile radius. It follows
 // the global radius like every popup corner: smaller by as much as the global

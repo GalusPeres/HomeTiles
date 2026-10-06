@@ -6,9 +6,15 @@
 // (settings_model.h), so both show the same state.
 //
 // Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880]
-//        [--page=display|wifi|localization|system] [--open=<row>] [--press=<row>]
-//        [--state=off|new|ap|eth|ethwifi] [--dialog=github|restart|unpair|password|pairing]
+//        [--page=display|wifi|localization|system|setup] [--open=<row>] [--press=<row>]
+//        [--state=off|new|ap|eth|ethwifi|online|code|ok|guide] [--step=0..3]
+//        [--dialog=github|restart|unpair|password|pairing|leave]
 //        [--entry=manual|join] [--no-mockup]
+// --page=setup shows the first-start setup at --step (mockup wiz=A&step=):
+// step 1 lists the networks (--state=online: connected, ap: the phone
+// setup's hotspot on); steps 2 and 3 are online, step 2 waits for Home
+// Assistant (--state=code: the number, ok: paired, guide: the Bridge guide);
+// --dialog=leave asks to leave it.
 // --open shows the option list of a Localization row (1 = time zone), like
 // the mockup's dd=<row>; --press shows that row pressed. System: --state=off
 // = not paired and the first-password window open (mockup enc=0&pw=win),
@@ -56,18 +62,25 @@ const press = option('press');
 const state = option('state');
 const dialog = option('dialog');
 const entry = option('entry');
-const dialogs = {github: 'git', restart: 'restart', unpair: 'encOff', password: 'pwOff', pairing: 'code'};
+const step = Number(option('step') || 0);
+const dialogs = {github: 'git', restart: 'restart', unpair: 'encOff', password: 'pwOff', pairing: 'code', leave: 'wzExit'};
 if (dialog !== undefined && !(dialog in dialogs)) throw new Error(`unknown dialog ${dialog}`);
-const categories = {display: 0, wifi: 1, localization: 2, system: 3};
+const categories = {display: 0, wifi: 1, localization: 2, system: 3, setup: 0};
 if (!(page in categories)) throw new Error(`unknown page ${page}`);
-const shot = page + (open === undefined ? '' : `-open${open}`) + (press === undefined ? '' : `-press${press}`) +
-  (state === undefined ? '' : `-${state}`) + (dialog === undefined ? '' : `-${dialog}`) +
-  (entry === undefined ? '' : `-${entry}`);
+const setup = page === 'setup';
+// The setup's network: step 1 searches unless --state=online (or ap); later steps are online.
+const online = setup ? state === 'online' || (step >= 2 && state !== 'new') : state !== 'ap';
+const shot = page + (setup ? step : '') + (open === undefined ? '' : `-open${open}`) +
+  (press === undefined ? '' : `-press${press}`) + (state === undefined ? '' : `-${state}`) +
+  (dialog === undefined ? '' : `-${dialog}`) + (entry === undefined ? '' : `-${entry}`);
 // The mockup's hash for the same state.
-const mockupState = (open === undefined ? '' : `&dd=${open}`) + (state === 'off' ? '&enc=0&pw=win' : state === 'new' ? '&enc=0&pw=0' : '') +
+const mockupState = (open === undefined ? '' : `&dd=${open}`) + (state === 'off' ? '&enc=0&pw=win' : state === 'new' && !setup ? '&enc=0&pw=0' : '') +
   (state === 'eth' ? '&eth=eth' : state === 'ethwifi' ? '&eth=wifi' : '') +
   (dialog === undefined ? '' : `&dlg=${dialogs[dialog]}`) +
   (entry === undefined ? '' : `&sheet=${entry === 'manual' ? 'manual' : 'pass'}`);
+const mockupView = setup
+  ? `wiz=A&step=${step}${online ? '&wifi=1' : ''}${state === 'ap' ? '&apqr=1' : ''}${state === 'code' || state === 'ok' ? `&ha=${state}` : ''}`
+  : `view=settings&cat=${page}`;
 const panels = selected.length ? selected : Object.keys(PANELS);
 
 // The time the mockup shows (Berlin, en-US 12 h), so both lines read the same.
@@ -83,7 +96,8 @@ const icons = ['cog', 'window-close', 'monitor', 'wifi', 'wifi-off', 'access-poi
   'download', 'wifi-strength-1-lock', 'wifi-strength-2', 'wifi-strength-2-lock', 'wifi-strength-3-lock',
   'wifi-strength-4', 'wifi-strength-lock-outline', 'plus', 'refresh', 'lan', 'ethernet', 'ip-network-outline',
   'pencil-outline', 'eye', 'eye-off', 'lock-outline', 'apple-keyboard-shift', 'apple-keyboard-caps',
-  'backspace-outline', 'check-bold', 'shield-check'];
+  'backspace-outline', 'check-bold', 'shield-check', 'loading', 'cellphone-wireless', 'book-open-variant', 'qrcode',
+  'view-grid-plus-outline', 'chevron-left', 'wifi-lock', 'wifi-strength-4-lock', 'wifi-strength-outline'];
 const iconTable = icons.map(name => {
   const match = mdi.match(new RegExp(`\\{"${name}", (0x[0-9A-Fa-f]+)\\}`));
   if (!match) throw new Error(`MDI icon ${name} missing`);
@@ -192,7 +206,11 @@ ${strip(read('src/ui/startup/hometiles_logo.cpp'))}
 ${strip(read('src/ui/tabs/settings/settings_parts.cpp'))}
 ${strip(read('src/ui/tabs/settings/settings_keyboard.h'))}
 ${strip(read('src/ui/tabs/settings/settings_keyboard.cpp'))}
+${strip(read('src/ui/tabs/settings/settings_entry.h'))}
+${strip(read('src/ui/tabs/settings/settings_entry.cpp'))}
+${strip(read('src/ui/tabs/settings/setup_screen.h'))}
 ${strip(read('src/ui/tabs/settings/settings_screen.cpp'))}
+${strip(read('src/ui/tabs/settings/setup_screen.cpp'))}
 // The mockup's example state.
 namespace settings_model {
 const i18n::Strings& text() { return i18n::kStringsEn; }
@@ -250,7 +268,9 @@ void locale_selected_changed(LocaleList, uint8_t) {}
 // shows the number.
 SystemValues system_values() {
   const bool off = ${state === 'off' || state === 'new' ? 'true' : 'false'};
-  const PairState pairing = ${dialog === 'pairing' ? 'PairState::Compare' : "off ? PairState::NotPaired : PairState::Paired"};
+  // The setup waits for Home Assistant unless --state=code or ok.
+  const PairState pairing = ${setup ? (state === 'code' ? 'PairState::Compare' : state === 'ok' ? 'PairState::Paired' : 'PairState::Discoverable')
+    : dialog === 'pairing' ? 'PairState::Compare' : 'off ? PairState::NotPaired : PairState::Paired'};
   return {UpdateState::Idle, 0, !off, pairing, 119, !off, ${state === 'off' ? 'true' : 'false'}, 119};
 }
 const char* latest_version() { return ""; }
@@ -273,7 +293,7 @@ WifiValues wifi_values() {
   v.ethernet_panel = ${state === 'eth' || state === 'ethwifi' ? 'true' : 'false'};
   v.ethernet_selected = v.ethernet_active = ${state === 'eth' ? 'true' : 'false'};
   v.access_point = ${state === 'ap' ? 'true' : 'false'};
-  v.connected = !v.access_point;
+  v.connected = ${online ? 'true' : 'false'} && !v.access_point;
   v.bars = 4;
   v.ip_mode_offered = v.ethernet_active;
   return v;
@@ -281,10 +301,13 @@ WifiValues wifi_values() {
 bool ethernet_panel() { return ${state === 'eth' || state === 'ethwifi' ? 'true' : 'false'}; }
 bool ethernet_active() { return ${state === 'eth' ? 'true' : 'false'}; }
 uint8_t keyboard_layout() { return 0; }
-static const WifiNetwork kNetworks[] = {{"HomeNet-Guest", 3, true}, {"FRITZ!Box 7590 XY", 2, true},
-                                        {"Garden-Cam", 2, false}, {"DIRECT-42-HP OfficeJet", 1, true}};
-uint8_t wifi_network_count() { return 4; }
-const WifiNetwork& wifi_network(uint8_t index) { return kNetworks[index < 4 ? index : 0]; }
+// The mockup's networks (st.nets); HomeNet only while it is not the connected one.
+static const WifiNetwork kNetworks[] = {{"HomeNet", 4, true}, {"HomeNet-Guest", 3, true},
+                                        {"FRITZ!Box 7590 XY", 2, true}, {"Garden-Cam", 2, false},
+                                        {"DIRECT-42-HP OfficeJet", 1, true}};
+constexpr uint8_t kFirst = ${online ? 1 : 0};
+uint8_t wifi_network_count() { return 5 - kFirst; }
+const WifiNetwork& wifi_network(uint8_t index) { return kNetworks[kFirst + (index < 5 - kFirst ? index : 0)]; }
 const char* wifi_saved_password(const char*) { return ""; }
 void hotspot_details(char* ssid, size_t ssid_len, char* password, size_t password_len) {
   snprintf(ssid, ssid_len, "HomeTiles-3F2A");
@@ -300,6 +323,12 @@ void ip_mode_selected(bool) {}
 void wifi_connect_done() {}
 const char* firmware_version() { return "v0.8.0"; }
 void close_settings() {}
+int setup_step() { return ${setup ? step : -1}; }
+void setup_step_changed(uint8_t) {}
+void setup_start() {}
+void setup_end() {}
+bool web_admin_url(char* buf, size_t len) { snprintf(buf, len, "http://192.168.1.50"); return ${online ? 'true' : 'false'}; }
+const char* setup_guide_url() { return "https://galusperes.github.io/HomeTiles/"; }
 }
 int main(int argc, char** argv) {
   tone_color::g_from_icon_card = &host_from_icon_card;
@@ -333,12 +362,20 @@ int main(int argc, char** argv) {
   lv_obj_set_style_pad_bottom(panel, GRID_PAD_BOTTOM, 0);
   settings_screen::build(panel);
   settings_screen::prepare_show();
+  ${setup ? `
+  ${state === 'guide' ? 'setup_screen::g_guide = true; setup_screen::build_body();' : ''}
+  ${open === undefined ? '' : `setup_screen::open_locale_list(${Number(open)});`}
+  ${press === undefined ? '' : `lv_obj_add_state(setup_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
+  ${entry === undefined ? '' : `setup_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
+  ${dialog === 'leave' ? 'setup_screen::open_leave_dialog();' : ''}
+  ` : `
   settings_screen::select_category(static_cast<settings_screen::Category>(${categories[page]}));
   ${open === undefined ? '' : `settings_screen::open_locale_list(${Number(open)});`}
   ${press === undefined ? '' : `lv_obj_add_state(settings_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
   settings_screen::system_changed();
   ${entry === undefined ? '' : `settings_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
   ${dialog === undefined || dialog === 'pairing' ? '' : `settings_screen::open_dialog(settings_screen::Dialog::${{github: 'GitHub', restart: 'Restart', unpair: 'Unpair', password: 'RemovePassword'}[dialog]});`}
+  `}
   ui_surface_style::process_pending_updates();
   lv_obj_update_layout(screen);
   lv_obj_invalidate(screen);
@@ -381,7 +418,7 @@ function mockup(key, p) {
   const winW = p.W + 2 * bezel + 34, winH = p.H + 2 * bezel + 18;
   const file = path.join(out, `${key}-mockup-full.png`);
   const url = 'file:///' + html.replace(/\\/g, '/') +
-    `#dev=${key}&view=settings&cat=${page}&ico=0&bare=1&shot=1${mockupState}`;
+    `#dev=${key}&${mockupView}&ico=0&bare=1&shot=1${mockupState}`;
   spawnSync(edge, ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--allow-file-access-from-files',
     `--window-size=${winW},${winH}`, '--virtual-time-budget=6000', `--screenshot=${file}`, url], {stdio: 'ignore'});
   if (!fs.existsSync(file)) return null;

@@ -168,6 +168,20 @@ void ip_mode_selected(bool static_ip);
 // Ends the connection attempt's state (the entry closed).
 void wifi_connect_done();
 
+// ---------- First-start setup ----------
+// The step the setup shows (0 language, 1 WiFi, 2 Home Assistant, 3 tiles),
+// or -1 while it does not run. Kept in flash, so a restart resumes it.
+int setup_step();
+void setup_step_changed(uint8_t step);
+// System > Setup: from the first step.
+void setup_start();
+// Leave or Finish: the setup ends and Home shows.
+void setup_end();
+// The panel's Web Admin address ("http://192.168.1.50"); false without one.
+bool web_admin_url(char* buf, size_t len);
+// The setup guide (Home Assistant and the Bridge).
+const char* setup_guide_url();
+
 // ---------- Category lines ----------
 bool access_point_on();
 bool network_connected();

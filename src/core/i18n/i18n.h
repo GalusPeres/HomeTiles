@@ -742,6 +742,40 @@ struct Strings {
   const char* settings_static;
   const char* settings_static_address;
   const char* settings_set_in_web_admin;
+  // First-start setup (no colon).
+  // The step line: %d = step, %d = number of steps.
+  const char* setup_step_fmt;
+  const char* setup_language_title;
+  const char* setup_wifi_title;
+  const char* setup_ha_title;
+  const char* setup_tiles_title;
+  const char* setup_next;
+  const char* setup_finish;
+  const char* setup_later;
+  const char* setup_other_network;
+  const char* setup_with_phone;
+  const char* setup_open_ha;
+  // Home Assistant's own menu names.
+  const char* setup_open_ha_where;
+  const char* setup_add_hometiles;
+  // %s = the panel's name in Home Assistant.
+  const char* setup_discovered_fmt;
+  const char* setup_continues;
+  const char* setup_tap_retry;
+  const char* setup_no_bridge;
+  const char* setup_guide;
+  const char* setup_back_to_pairing;
+  const char* setup_install_bridge;
+  const char* setup_pairing_code;
+  const char* setup_paired;
+  const char* setup_wifi_first;
+  const char* setup_scan_tiles;
+  const char* setup_password_hint;
+  const char* setup_password_hint_long;
+  const char* setup_leave_question;
+  // The path to the setup: %s = Settings, %s = Setup (their translations).
+  const char* setup_leave_text_fmt;
+  const char* setup_leave;
 };
 
 // Locale-specific display rules and short runtime strings shared by

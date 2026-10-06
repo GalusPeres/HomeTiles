@@ -15,6 +15,8 @@ const i18n = readRepoFile('src/core/i18n/i18n.cpp');
 const rawScreen = readRepoFile('src/ui/tabs/settings/settings_screen.cpp');
 const screen = maskCpp(rawScreen);
 const rawKeyboard = readRepoFile('src/ui/tabs/settings/settings_keyboard.cpp');
+const rawEntry = readRepoFile('src/ui/tabs/settings/settings_entry.cpp');
+const entrySource = maskCpp(rawEntry);
 const style = readRepoFile('src/ui/tabs/settings/settings_style.h');
 const model = maskCpp(readRepoFile('src/ui/tabs/settings/tab_settings.cpp'));
 
@@ -53,9 +55,10 @@ for (const table of ['kStringsEn', 'kStringsDe', 'kStringsFr', 'kStringsPl']) {
 }
 
 // --- Page ---------------------------------------------------------------------------------------------
-const page = between(screen, 'void build_wifi_page(lv_obj_t* page) {', 'struct EntryGeometry {');
+const page = between(screen, 'void build_wifi_page(lv_obj_t* page) {', 'void show_page_content(bool shown) {');
 const rawPage = between(rawScreen, '// ---------- WiFi page ----------', '// ---------- Frame ----------');
 assert.doesNotMatch(rawPage.replace(/\/\/[^\n]*/g, ''), /"[A-Z][a-z]+/, 'no display text in the WiFi code');
+assert.doesNotMatch(rawEntry.replace(/\/\/[^\n]*/g, ''), /"[A-Z][a-z]+/, 'no display text in the entry code');
 for (const key of ['wifi_disconnect_btn', 'settings_not_connected', 'settings_connecting', 'settings_choose_network',
   'settings_hotspot', 'settings_hotspot_on_sub', 'settings_hotspot_off_sub', 'settings_add_network']) {
   assert.match(page, new RegExp(`s\\.${key}\\b`), `the page shows ${key}`);
@@ -80,18 +83,23 @@ assert.match(build, /g_page_timer = lv_timer_create\(on_page_timer, 500, nullptr
 assert.match(between(screen, 'const char* category_title(', 'const char* category_icon('),
   /settings_model::ethernet_panel\(\) \? s\.settings_network : s\.wifi_label/);
 
-// --- Entry ----------------------------------------------------------------------------------------------
-const entry = between(screen, 'void open_entry(bool manual, const char* ssid) {', 'void on_page_timer(lv_timer_t*);');
+// --- Entry (settings_entry.cpp, shared with the setup) --------------------------------------------------
+const entry = between(entrySource, 'void open(const Spec& spec, bool manual, const char* ssid) {', 'void close(bool from_event) {');
 assert.match(entry, /manual \? s\.settings_add_network : g\.stacked \? s\.settings_join_network : g_entry\.ssid/);
 assert.match(entry, /settings_model::wifi_saved_password\(g_entry\.ssid\)/, 'the saved password is prefilled');
 assert.match(entry, /settings_keyboard::create\(g_entry\.root, keys, keyboard_layout\(\)/);
-const ok = between(screen, 'void on_key_ok() {', 'void close_entry(');
+const ok = between(entrySource, 'void on_key_ok() {', 'void on_close(lv_event_t*) {');
 assert.match(ok, /if \(!g_entry\.manual && \(!password \|\| !password\[0\]\)\)/, 'a locked network needs its password');
 assert.match(ok, /settings_model::wifi_connect\(ssid, password\);/);
-assert.match(between(screen, 'void on_entry_close(lv_event_t*) {', 'settings_keyboard::Layout keyboard_layout()'),
+assert.match(between(entrySource, 'void on_close(lv_event_t*) {', 'settings_keyboard::Layout keyboard_layout()'),
   /if \(g_entry\.busy\) return;/, 'the entry stays while connecting');
+const entryTick = entrySource.slice(entrySource.indexOf('bool tick(const settings_model::WifiValues& v) {'));
+assert.match(entryTick, /if \(v\.connect_failed\)[\s\S]*?settings_connect_failed/);
+// The page opens the entry in its card and follows it while it connects.
+assert.match(between(screen, 'void open_entry(bool manual, const char* ssid) {', 'void close_entry() {'),
+  /settings_entry::open\(\{g_card, g_built_card, nullptr, on_entry_closed\}, manual, ssid\);/);
 const tick = between(screen, 'void wifi_tick() {', 'void refresh_wifi_async(');
-assert.match(tick, /if \(v\.connect_failed\)[\s\S]*?s\w*\.settings_connect_failed|settings_connect_failed/);
+assert.match(tick, /if \(settings_entry::tick\(v\)\)/);
 for (const [name, big, small] of [['kEntryFieldHeight', 'popup_layout::scale(72)', '44'],
   ['kKeyHeight', 'popup_layout::scale(84)', '56'], ['kKeyStep', 'popup_layout::scale(94)', '62']]) {
   assert.ok(style.includes(`constexpr int ${name} = ${big};`) && style.includes(`constexpr int ${name} = ${small};`), name);

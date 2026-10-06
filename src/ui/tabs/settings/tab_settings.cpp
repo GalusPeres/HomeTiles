@@ -34,9 +34,8 @@
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/popups/weather/weather_popup.h"
-#include "src/tiles/runtime/tile_icon_disc.h"
-#include "src/ui/tabs/settings/settings_parts.h"
-#include "src/ui/tabs/settings/settings_style.h"
+#include "src/ui/tabs/settings/settings_model.h"
+#include "src/ui/tabs/settings/settings_screen.h"
 
 static bool display_rotated_180 = false;
 static uint8_t display_rotation_quarters = Device::kRotationDefault;
@@ -253,7 +252,6 @@ static const int kSettingsBrightnessPctMax = 100;
 // Forward declarations
 void settings_update_ap_mode(bool running);
 void settings_refresh_language();
-static void update_settings_category_lines();
 static void open_settings_popup(SettingsPopupKind kind);
 static void wifi_stop_scan_timer();
 static void wifi_show_list_view();
@@ -302,26 +300,6 @@ static uint32_t settings_tile_color() {
   return tileDefaultBgColor();
 }
 
-// ---------- Settings screen state ----------
-// The categories in their fixed order (mockup CATS).
-enum class SettingsCategory : uint8_t { Display = 0, Wifi, Localization, System };
-static constexpr uint8_t kSettingsCategoryCount = 4;
-static lv_obj_t* settings_panel = nullptr;
-// The card's body: holds the open page, built only while Settings shows.
-static lv_obj_t* settings_page = nullptr;
-static int settings_page_width = 0;
-static bool settings_page_built = false;
-static SettingsCategory settings_category = SettingsCategory::Display;
-// What the screen was built with: another tile color, Circle strength or
-// language rebuilds it when Settings opens next.
-static uint32_t settings_built_card = 0xFFFFFFFF;
-static uint8_t settings_built_glow = 0xFF;
-static const i18n::Strings* settings_built_strings = nullptr;
-
-static settings_style::Colors settings_colors() {
-  return settings_style::colors(settings_built_card);
-}
-
 static uint16_t sleep_seconds_from_index(int32_t index) {
   if (index < 0) {
     index = 0;
@@ -353,23 +331,6 @@ static int32_t sleep_slider_max_index() {
 
 static bool sleep_index_is_never(int32_t index) {
   return index >= static_cast<int32_t>(kSleepOptionsSecCount);
-}
-
-// A sleep or screensaver step as the mockup writes it: "30 s", "5 min",
-// "1 h", or Never past the last step.
-static void format_sleep_step(char* buf, size_t len, int32_t index) {
-  if (sleep_index_is_never(index)) {
-    snprintf(buf, len, "%s", tr().sleep_never);
-    return;
-  }
-  const unsigned seconds = sleep_seconds_from_index(index);
-  if (seconds < 60) {
-    snprintf(buf, len, "%u s", seconds);
-  } else if (seconds < 3600) {
-    snprintf(buf, len, "%u min", seconds / 60);
-  } else {
-    snprintf(buf, len, "%u h", seconds / 3600);
-  }
 }
 
 static void sync_display_rotation_state(uint8_t rotation_quarters) {
@@ -448,23 +409,9 @@ static void on_mains_wake_clicked(lv_event_t *e) {
   update_wake_button(mains_wake_label, mains_wake_sub_label, kWakeModeTouch);
 }
 
-// ---------- Display page ----------
-// Screen: Brightness, Sleep, Rotation; Screensaver: Starts after, Brightness
-// (mockup pageDisplay). All sliders start at the same x; the rotation offers
-// the quarter turns where the panel supports them.
-static lv_obj_t* display_brightness_value = nullptr;
-static lv_obj_t* display_sleep_value = nullptr;
-static lv_obj_t* display_saver_value = nullptr;
-static lv_obj_t* display_saver_brightness_value = nullptr;
-static lv_obj_t* display_rotation_segment = nullptr;
-
-static void clear_display_page_refs() {
-  display_brightness_value = nullptr;
-  display_sleep_value = nullptr;
-  display_saver_value = nullptr;
-  display_saver_brightness_value = nullptr;
-  display_rotation_segment = nullptr;
-}
+// ---------- Settings model: Display (settings_model.h) ----------
+// The Settings screen (settings_screen.cpp) draws; these read and save the
+// real configuration.
 
 static void save_display_settings(uint8_t brightness_raw, bool sleep_enabled, uint16_t sleep_seconds) {
   const DeviceConfig& cfg = configManager.getConfig();
@@ -482,61 +429,8 @@ static void save_display_settings(uint8_t brightness_raw, bool sleep_enabled, ui
   mqttPublishDeviceSettings();
 }
 
-static void set_percent_text(lv_obj_t* label, int32_t pct) {
-  if (!label) return;
-  char buf[16];
-  snprintf(buf, sizeof(buf), "%d %%", static_cast<int>(pct));
-  lv_label_set_text(label, buf);
-}
-
-static void set_step_text(lv_obj_t* label, int32_t index) {
-  if (!label) return;
-  char buf[24];
-  format_sleep_step(buf, sizeof(buf), index);
-  lv_label_set_text(label, buf);
-}
-
-static void on_display_brightness(lv_obj_t*, int32_t pct, bool final) {
-  const uint8_t raw = brightness_raw_from_pct(pct);
-  BoardHAL::setBrightness(raw);
-  set_percent_text(display_brightness_value, pct);
-  if (!final) return;
-  const DeviceConfig& cfg = configManager.getConfig();
-  save_display_settings(raw, cfg.auto_sleep_enabled, cfg.auto_sleep_seconds);
-  update_settings_category_lines();
-}
-
-static void on_display_sleep(lv_obj_t*, int32_t index, bool final) {
-  set_step_text(display_sleep_value, index);
-  if (!final) return;
-  const DeviceConfig& cfg = configManager.getConfig();
-  const bool enabled = !sleep_index_is_never(index);
-  save_display_settings(cfg.display_brightness, enabled,
-                        enabled ? sleep_seconds_from_index(index) : cfg.auto_sleep_seconds);
-  update_settings_category_lines();
-}
-
-static void on_display_screensaver(lv_obj_t*, int32_t index, bool final) {
-  set_step_text(display_saver_value, index);
-  if (!final) return;
-  const DeviceConfig& cfg = configManager.getConfig();
-  const bool enabled = !sleep_index_is_never(index);
-  configManager.saveScreensaverTimeout(
-      enabled, enabled ? sleep_seconds_from_index(index) : cfg.auto_screensaver_seconds);
-}
-
-static void on_display_screensaver_brightness(lv_obj_t*, int32_t pct, bool final) {
-  set_percent_text(display_saver_brightness_value, pct);
-  // Every touch previews the level, a tap on the current value too; one
-  // second after the last one the normal UI returns to its own brightness.
-  powerManager.setDisplayBrightness(Device::backlightRawFromPercent(static_cast<uint8_t>(pct)));
-  schedule_screensaver_brightness_preview_restore();
-  if (!final) return;
-  // A drag ending outside the slider (PRESS_LOST) commits like a release.
-  if (configManager.saveScreensaverBrightness(static_cast<uint8_t>(pct))) {
-    image_screensaver_brightness_changed();
-    mqttPublishDeviceSettings();
-  }
+static int32_t sleep_index_of(bool enabled, uint16_t seconds) {
+  return enabled ? sleep_index_from_seconds(seconds) : sleep_slider_max_index();
 }
 
 // Rotation steps: quarter turns where the panel supports them
@@ -560,18 +454,10 @@ static void apply_display_rotation(uint8_t rotation) {
   }
 }
 
-static void on_display_rotation(lv_obj_t*, uint8_t index) {
-  const uint8_t rotation =
-      Device::supportsQuarterTurnRotation()
-          ? static_cast<uint8_t>((Device::kRotationDefault + index) & 0x03)
-          : (index ? Device::kRotationFlipped : Device::kRotationDefault);
-  apply_display_rotation(rotation);
-}
-
 void settings_sync_display_rotation(bool rotated) {
   sync_display_rotation_state(rotated ? Device::kRotationFlipped : Device::kRotationDefault);
   displayManager.setRotation(display_rotation_quarters);
-  settings_parts::segment_select(display_rotation_segment, display_rotation_index());
+  settings_screen::sync_rotation();
   lv_obj_invalidate(lv_scr_act());
   lv_display_t* disp = lv_display_get_default();
   if (disp) {
@@ -579,80 +465,86 @@ void settings_sync_display_rotation(bool rotated) {
   }
 }
 
-// One slider length per panel: what a row leaves beside the longest slider
-// name (+30 % headroom), so every slider starts at the same x (mockup
-// applyProfile).
-static int display_slider_width(int page_width) {
-  const auto& s = tr();
-  int name = 0;
-  for (const char* text : {s.settings_brightness, s.settings_sleep, s.settings_starts_after}) {
-    const int width = settings_parts::text_width(settings_style::row_font(), text);
-    if (width > name) name = width;
-  }
-  name = name * 13 / 10;
-  const int room = page_width - settings_style::kRowPadLeft - settings_style::kRowPadRight -
-                   settings_parts::icon_width() - 3 * settings_style::kRowGap -
-                   settings_style::kValueWidth - name;
-  int width = room < settings_style::kSliderMaxWidth ? room : settings_style::kSliderMaxWidth;
-  if (width < settings_style::kSliderHeight * 3) width = settings_style::kSliderHeight * 3;
-  return width;
-}
+namespace settings_model {
 
-// A slider row: grey icon, name, slider in the page color, value.
-static lv_obj_t* display_slider_row(lv_obj_t* group, const char* icon, const char* title, int width,
-                                    int32_t min, int32_t max, int32_t value,
-                                    settings_parts::SliderCallback on_change, lv_obj_t** value_label) {
-  const settings_style::Colors colors = settings_colors();
-  const settings_style::Tone tone = settings_style::tone(colors.card, settings_style::kDisplayColor);
-  settings_parts::Row row = settings_parts::row(group, icon, title);
-  lv_obj_t* slider = settings_parts::slider(row.row, width, min, max, value, settings_style::kDisplayColor,
-                                            tone.disc, colors.card, on_change);
-  *value_label = settings_parts::value_label(row.row, "");
-  return slider;
-}
+const i18n::Strings& text() { return tr(); }
 
-static void build_display_page(lv_obj_t* page) {
-  const auto& s = tr();
+uint32_t card_color() { return settings_tile_color(); }
+
+DisplayValues display_values() {
   const DeviceConfig& cfg = configManager.getConfig();
-  const settings_style::Colors colors = settings_colors();
-  const int width = display_slider_width(settings_page_width);
-  const int32_t never = sleep_slider_max_index();
-
-  settings_parts::section(page, s.settings_screen, true);
-  lv_obj_t* screen = settings_parts::group(page, colors);
-  const int32_t brightness = brightness_pct_from_raw(BoardHAL::getBrightness());
-  display_slider_row(screen, "brightness-6", s.settings_brightness, width, kSettingsBrightnessPctMin,
-                     kSettingsBrightnessPctMax, brightness, on_display_brightness, &display_brightness_value);
-  set_percent_text(display_brightness_value, brightness);
-  const int32_t sleep = cfg.auto_sleep_enabled ? sleep_index_from_seconds(cfg.auto_sleep_seconds) : never;
-  display_slider_row(screen, "power-sleep", s.settings_sleep, width, 0, never, sleep, on_display_sleep,
-                     &display_sleep_value);
-  set_step_text(display_sleep_value, sleep);
-  settings_parts::Row rotation = settings_parts::row(screen, "screen-rotation", s.settings_rotation);
-  static const char* const kQuarterTurns[] = {"0\xC2\xB0", "90\xC2\xB0", "180\xC2\xB0", "270\xC2\xB0"};
-  static const char* const kFlip[] = {"0\xC2\xB0", "180\xC2\xB0"};
-  if (Device::supportsQuarterTurnRotation()) {
-    display_rotation_segment = settings_parts::segment(
-        rotation.row, kQuarterTurns, 4, display_rotation_index(), colors.card, on_display_rotation,
-        settings_style::kQuarterSegmentMinWidth, settings_style::kQuarterSegmentPad);
-  } else {
-    display_rotation_segment = settings_parts::segment(rotation.row, kFlip, 2, display_rotation_index(),
-                                                       colors.card, on_display_rotation);
-  }
-
-  settings_parts::section(page, s.settings_screensaver, false);
-  lv_obj_t* saver = settings_parts::group(page, colors);
-  const int32_t starts =
-      cfg.auto_screensaver_enabled ? sleep_index_from_seconds(cfg.auto_screensaver_seconds) : never;
-  display_slider_row(saver, "timer-outline", s.settings_starts_after, width, 0, never, starts,
-                     on_display_screensaver, &display_saver_value);
-  set_step_text(display_saver_value, starts);
-  display_slider_row(saver, "brightness-4", s.settings_brightness, width,
-                     Device::kConfiguredBrightnessPercentMin, kScreensaverBrightnessPctMax,
-                     cfg.screensaver_brightness_pct, on_display_screensaver_brightness,
-                     &display_saver_brightness_value);
-  set_percent_text(display_saver_brightness_value, cfg.screensaver_brightness_pct);
+  DisplayValues values;
+  values.brightness = brightness_pct_from_raw(BoardHAL::getBrightness());
+  values.brightness_min = kSettingsBrightnessPctMin;
+  values.brightness_max = kSettingsBrightnessPctMax;
+  values.sleep_index = sleep_index_of(cfg.auto_sleep_enabled, cfg.auto_sleep_seconds);
+  values.saver_index = sleep_index_of(cfg.auto_screensaver_enabled, cfg.auto_screensaver_seconds);
+  values.saver_brightness = cfg.screensaver_brightness_pct;
+  // The screensaver brightness starts at the device floor too.
+  values.saver_brightness_min = Device::kConfiguredBrightnessPercentMin;
+  values.saver_brightness_max = kScreensaverBrightnessPctMax;
+  return values;
 }
+
+int saved_brightness() { return brightness_pct_from_raw(configManager.getConfig().display_brightness); }
+
+int saved_sleep_index() {
+  const DeviceConfig& cfg = configManager.getConfig();
+  return sleep_index_of(cfg.auto_sleep_enabled, cfg.auto_sleep_seconds);
+}
+
+int sleep_steps() { return sleep_slider_max_index(); }
+
+unsigned sleep_step_seconds(int index) { return sleep_seconds_from_index(index); }
+
+bool quarter_turns() { return Device::supportsQuarterTurnRotation(); }
+
+uint8_t rotation_index() { return display_rotation_index(); }
+
+void brightness_changed(int percent, bool final) {
+  const uint8_t raw = brightness_raw_from_pct(percent);
+  BoardHAL::setBrightness(raw);
+  if (!final) return;
+  const DeviceConfig& cfg = configManager.getConfig();
+  save_display_settings(raw, cfg.auto_sleep_enabled, cfg.auto_sleep_seconds);
+}
+
+void sleep_changed(int index, bool final) {
+  if (!final) return;
+  const DeviceConfig& cfg = configManager.getConfig();
+  const bool enabled = !sleep_index_is_never(index);
+  save_display_settings(cfg.display_brightness, enabled,
+                        enabled ? sleep_seconds_from_index(index) : cfg.auto_sleep_seconds);
+}
+
+void saver_changed(int index, bool final) {
+  if (!final) return;
+  const DeviceConfig& cfg = configManager.getConfig();
+  const bool enabled = !sleep_index_is_never(index);
+  configManager.saveScreensaverTimeout(
+      enabled, enabled ? sleep_seconds_from_index(index) : cfg.auto_screensaver_seconds);
+}
+
+void saver_brightness_changed(int percent, bool final) {
+  // Every touch previews the level, a tap on the current value too; one
+  // second after the last one the normal UI returns to its own brightness.
+  powerManager.setDisplayBrightness(Device::backlightRawFromPercent(static_cast<uint8_t>(percent)));
+  schedule_screensaver_brightness_preview_restore();
+  if (!final) return;
+  // A drag ending outside the slider (PRESS_LOST) commits like a release.
+  if (configManager.saveScreensaverBrightness(static_cast<uint8_t>(percent))) {
+    image_screensaver_brightness_changed();
+    mqttPublishDeviceSettings();
+  }
+}
+
+void rotation_selected(uint8_t index) {
+  apply_display_rotation(Device::supportsQuarterTurnRotation()
+                             ? static_cast<uint8_t>((Device::kRotationDefault + index) & 0x03)
+                             : (index ? Device::kRotationFlipped : Device::kRotationDefault));
+}
+
+}  // namespace settings_model
 
 // Power Status Update (stub -> no battery on Waveshare)
 void settings_update_power_status() {
@@ -3317,435 +3209,66 @@ static void open_settings_popup(SettingsPopupKind kind) {
   lv_obj_invalidate(settings_popup_overlay);
 }
 
-static void select_settings_category(SettingsCategory category);
+// ---------- Settings model: category lines and navigation ----------
+namespace settings_model {
 
-// A category tile or tab. Display opens its page in the card; WiFi,
-// Localization and System still open their popups until their pages follow.
-static void on_settings_tile_clicked(lv_event_t* e) {
-  const uintptr_t raw = reinterpret_cast<uintptr_t>(lv_event_get_user_data(e));
-  if (raw >= kSettingsCategoryCount) return;
-  const SettingsCategory category = static_cast<SettingsCategory>(raw);
-  if (category != SettingsCategory::Display) {
-    static constexpr SettingsPopupKind kPopups[kSettingsCategoryCount] = {
-        SettingsPopupKind::Display, SettingsPopupKind::Wifi, SettingsPopupKind::Localization,
-        SettingsPopupKind::Firmware};
-    finish_press_before_popup(e);
-    open_settings_popup(kPopups[raw]);
-    return;
-  }
-  select_settings_category(category);
+// WiFi, Localization and System still open their popups until their pages
+// follow.
+void open_category_popup(uint8_t category, lv_event_t* e) {
+  static constexpr SettingsPopupKind kPopups[] = {SettingsPopupKind::Display, SettingsPopupKind::Wifi,
+                                                  SettingsPopupKind::Localization, SettingsPopupKind::Firmware};
+  if (category == 0 || category >= sizeof(kPopups) / sizeof(kPopups[0])) return;
+  finish_press_before_popup(e);
+  open_settings_popup(kPopups[category]);
 }
 
-// ========== Settings screen ==========
-// The approved layout (build/design-mockups/settings/settings-menu.html and
-// the reference images in its sheets/ folder). The top half row is the bar in
-// its Minimal style, laid out like a pill row: gear circle and title on the
-// left, X on the right. Landscape panels show the four categories as tiles
-// over the first two columns, sharing the height evenly (the one exception to
-// the grid), with the page card beside them; square panels put them as round
-// tabs into the bar beside the X; portrait panels show them as 2x1 tiles in
-// the bottom two rows under the card.
-enum class SettingsLayout : uint8_t { Split, Tabs, Portrait };
-static constexpr SettingsLayout kSettingsLayout =
-    SCREEN_WIDTH > SCREEN_HEIGHT    ? SettingsLayout::Split
-    : SCREEN_HEIGHT > SCREEN_WIDTH ? SettingsLayout::Portrait
-                                   : SettingsLayout::Tabs;
+void close_settings() { uiManager.switchToTab(0); }
 
-struct SettingsCategoryView {
-  lv_obj_t* box;
-  lv_obj_t* disc;
-  lv_obj_t* icon;
-  lv_obj_t* title;
-  lv_obj_t* line;
-};
-static SettingsCategoryView settings_views[kSettingsCategoryCount] = {};
-static lv_obj_t* settings_bar_title = nullptr;
-static lv_obj_t* settings_card_title = nullptr;
-// Refreshes the category lines (the time on Localization) while Settings shows.
-static lv_timer_t* settings_lines_timer = nullptr;
+bool access_point_on() { return ap_mode_active; }
 
-static constexpr uint32_t kSettingsCategoryColors[kSettingsCategoryCount] = {
-    settings_style::kDisplayColor, settings_style::kWifiColor, settings_style::kLocalizationColor,
-    settings_style::kSystemColor};
+bool network_connected() { return networkTransport.isConnected(); }
 
-static const char* settings_category_title(SettingsCategory category) {
-  switch (category) {
-    case SettingsCategory::Display:
-      return tr().display_label;
-    case SettingsCategory::Wifi:
-      return tr().wifi_label;
-    case SettingsCategory::Localization:
-      return tr().admin_settings_language;
-    case SettingsCategory::System:
-      return "System";
-  }
-  return "";
+void network_name(char* buf, size_t len) {
+  const String name = networkTransport.activeKind() == NetworkTransportKind::Wifi
+                          ? String(configManager.getConfig().wifi_ssid)
+                          : String(networkTransport.activeName());
+  snprintf(buf, len, "%s", name.c_str());
 }
 
-static const char* settings_category_icon(SettingsCategory category) {
-  switch (category) {
-    case SettingsCategory::Display:
-      return "monitor";
-    case SettingsCategory::Wifi:
-      return ap_mode_active ? "access-point" : networkTransport.isConnected() ? "wifi" : "wifi-off";
-    case SettingsCategory::Localization:
-      return "translate";
-    case SettingsCategory::System:
-      return "chip";
-  }
-  return "cog";
-}
+const char* language_name() { return i18n::locale(configManager.getConfig().language).native_name; }
 
-// The grey line under a category's name (mockup CATS sub): brightness and
-// sleep, the network, language and time, the version or a found update.
-static void settings_category_line(SettingsCategory category, char* buf, size_t len, bool* warn) {
-  *warn = false;
+bool time_text(char* buf, size_t len) {
+  struct tm now;
+  if (!getLocalTime(&now, 0) || now.tm_year + 1900 < 2023) return false;
   const DeviceConfig& cfg = configManager.getConfig();
-  const auto& s = tr();
-  switch (category) {
-    case SettingsCategory::Display: {
-      char step[24];
-      format_sleep_step(step, sizeof(step),
-                        cfg.auto_sleep_enabled ? sleep_index_from_seconds(cfg.auto_sleep_seconds)
-                                               : sleep_slider_max_index());
-      // "Sleep never": the step's first letter in lower case (ASCII only).
-      if (step[0] >= 'A' && step[0] <= 'Z') step[0] = static_cast<char>(step[0] - 'A' + 'a');
-      char sleep[48];
-      snprintf(sleep, sizeof(sleep), s.settings_sleep_summary_fmt, step);
-      snprintf(buf, len, "%d %% \xC2\xB7 %s", brightness_pct_from_raw(cfg.display_brightness), sleep);
-      return;
-    }
-    case SettingsCategory::Wifi:
-      if (ap_mode_active) {
-        snprintf(buf, len, "%s", s.settings_access_point_on);
-      } else if (networkTransport.isConnected()) {
-        const String name = networkTransport.activeKind() == NetworkTransportKind::Wifi
-                                ? String(cfg.wifi_ssid)
-                                : String(networkTransport.activeName());
-        snprintf(buf, len, "%s", name.c_str());
-      } else {
-        snprintf(buf, len, "%s", s.settings_not_connected);
-      }
-      return;
-    case SettingsCategory::Localization: {
-      const char* language = i18n::locale(cfg.language).native_name;
-      struct tm now;
-      if (getLocalTime(&now, 0) && now.tm_year + 1900 >= 2023) {
-        const bool h12 = clock_tile::resolve_time_format(clock_tile::TIME_FORMAT_AUTO, cfg.global_time_format,
-                                                         cfg.language) == clock_tile::TIME_FORMAT_12H;
-        if (h12) {
-          const int hour = now.tm_hour % 12 ? now.tm_hour % 12 : 12;
-          snprintf(buf, len, "%s \xC2\xB7 %d:%02d %s", language, hour, now.tm_min, now.tm_hour < 12 ? "AM" : "PM");
-        } else {
-          snprintf(buf, len, "%s \xC2\xB7 %02d:%02d", language, now.tm_hour, now.tm_min);
-        }
-      } else {
-        snprintf(buf, len, "%s", language);
-      }
-      return;
-    }
-    case SettingsCategory::System:
-      if (system_update_available) {
-        *warn = true;
-        snprintf(buf, len, "%s", s.settings_update_available);
-      } else {
-        snprintf(buf, len, "%s", FW_VERSION);
-      }
-      return;
+  const bool h12 = clock_tile::resolve_time_format(clock_tile::TIME_FORMAT_AUTO, cfg.global_time_format,
+                                                   cfg.language) == clock_tile::TIME_FORMAT_12H;
+  if (h12) {
+    const int hour = now.tm_hour % 12 ? now.tm_hour % 12 : 12;
+    snprintf(buf, len, "%d:%02d %s", hour, now.tm_min, now.tm_hour < 12 ? "AM" : "PM");
+  } else {
+    snprintf(buf, len, "%02d:%02d", now.tm_hour, now.tm_min);
   }
-  buf[0] = '\0';
+  return true;
 }
 
-static void update_settings_category_lines() {
-  for (uint8_t i = 0; i < kSettingsCategoryCount; ++i) {
-    const SettingsCategoryView& view = settings_views[i];
-    const SettingsCategory category = static_cast<SettingsCategory>(i);
-    if (view.icon) {
-      const String icon = getMdiChar(settings_category_icon(category));
-      if (strcmp(lv_label_get_text(view.icon), icon.c_str()) != 0) lv_label_set_text(view.icon, icon.c_str());
-    }
-    if (!view.line) continue;
-    char buf[96];
-    bool warn = false;
-    settings_category_line(category, buf, sizeof(buf), &warn);
-    if (strcmp(lv_label_get_text(view.line), buf) != 0) lv_label_set_text(view.line, buf);
-    lv_obj_set_style_text_color(view.line, warn ? lv_color_hex(0xFFC04D) : lv_color_white(), 0);
-    lv_obj_set_style_text_opa(view.line, warn ? LV_OPA_COVER : settings_style::kGreyOpa, 0);
-  }
-}
+bool update_available() { return system_update_available; }
 
-static void on_settings_lines_timer(lv_timer_t*) {
-  update_settings_category_lines();
-}
+const char* firmware_version() { return FW_VERSION; }
 
-// Selected = the tile in its color (tile color "From icon" at its default
-// strength) or the tab in its circle; the others on the plain card.
-static void style_settings_category(uint8_t index) {
-  SettingsCategoryView& view = settings_views[index];
-  if (!view.box) return;
-  const bool selected = index == static_cast<uint8_t>(settings_category);
-  const uint32_t color = kSettingsCategoryColors[index];
-  const uint32_t card = settings_built_card;
-  if (kSettingsLayout == SettingsLayout::Tabs) {
-    const settings_style::Tone tone = settings_style::tone(card, color);
-    lv_obj_set_style_bg_color(view.box, lv_color_hex(tone.disc), 0);
-    lv_obj_set_style_bg_opa(view.box, selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_color(view.box, lv_color_hex(selected ? tone.disc : settings_colors().button),
-                              LV_STATE_PRESSED);
-    if (view.icon) lv_obj_set_style_text_color(view.icon, lv_color_hex(tone.icon), 0);
-    return;
-  }
-  const uint32_t tile = selected ? tile_tint::background(card, color, tone_color::kReferenceTint) : card;
-  const settings_style::Tone tone = settings_style::tone(tile, color);
-  lv_obj_set_style_bg_color(view.box, lv_color_hex(tile), 0);
-  lv_obj_set_style_bg_color(
-      view.box, lv_color_hex(tone_color::lifted(tile, tile, false, settings_style::control_step())),
-      LV_STATE_PRESSED);
-  if (view.disc) lv_obj_set_style_bg_color(view.disc, lv_color_hex(tone.disc), 0);
-  if (view.icon) lv_obj_set_style_text_color(view.icon, lv_color_hex(tone.icon), 0);
-}
+}  // namespace settings_model
 
-// A circle with an MDI icon in its middle.
-static lv_obj_t* settings_circle(lv_obj_t* parent, int x, int y, int diameter, const char* icon,
-                                 uint32_t icon_color) {
-  lv_obj_t* circle = settings_parts::plain(parent);
-  lv_obj_set_pos(circle, x, y);
-  lv_obj_set_size(circle, diameter, diameter);
-  lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, 0);
-  lv_obj_t* label = lv_label_create(circle);
-  lv_label_set_text(label, getMdiChar(icon).c_str());
-  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(label, FONT_MDI_ICONS, 0);
-  lv_obj_set_style_text_color(label, lv_color_hex(icon_color), 0);
-  lv_obj_center(label);
-  return circle;
-}
-
-// A round bar button: no fill at rest, the button step while pressed.
-static void make_round_button(lv_obj_t* circle, lv_event_cb_t on_click, void* user_data) {
-  lv_obj_add_flag(circle, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_style_bg_color(circle, lv_color_hex(settings_colors().button), LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(circle, LV_OPA_COVER, LV_STATE_PRESSED);
-  lv_obj_set_ext_click_area(circle, tile_icon_disc::inset());
-  lv_obj_add_event_cb(circle, on_click, LV_EVENT_CLICKED, user_data);
-}
-
-static void on_settings_close_clicked(lv_event_t*) {
-  uiManager.switchToTab(0);
-}
-
-// A category tile: circle, name and the grey line, like the mockup's
-// catTileBig.
-static void build_settings_category_tile(lv_obj_t* panel, uint8_t index, int x, int y, int w, int h) {
-  SettingsCategoryView& view = settings_views[index];
-  const SettingsCategory category = static_cast<SettingsCategory>(index);
-  view.box = settings_parts::plain(panel);
-  lv_obj_add_flag(view.box, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_pos(view.box, x, y);
-  lv_obj_set_size(view.box, w, h);
-  lv_obj_set_style_bg_opa(view.box, LV_OPA_COVER, 0);
-  settings_style::apply_tile_radius(view.box);
-  ui_surface_style::apply_global_tile_border(view.box);
-  lv_obj_add_event_cb(view.box, on_settings_tile_clicked, LV_EVENT_CLICKED,
-                      reinterpret_cast<void*>(static_cast<uintptr_t>(index)));
-  const int disc = settings_style::kCategoryDisc;
-  const int x0 = settings_style::kCategoryPad;
-  view.disc = settings_circle(view.box, x0, (h - disc) / 2, disc, settings_category_icon(category), 0xFFFFFF);
-  lv_obj_set_style_bg_opa(view.disc, LV_OPA_COVER, 0);
-  view.icon = lv_obj_get_child(view.disc, 0);
-  // Name and line in line boxes of 1.21 and 1.3 times their font size,
-  // centered together on the tile.
-  const int text_x = x0 + disc + settings_style::kCategoryTextGap;
-  const int text_w = w - text_x - x0;
-  const int box1 = (settings_style::kRowFontPx * 121 + 50) / 100;
-  const int box2 = (settings_style::kSmallFontPx * 13 + 5) / 10;
-  const int top = (h - box1 - box2 + 1) / 2;
-  view.title = lv_label_create(view.box);
-  lv_label_set_text(view.title, settings_category_title(category));
-  lv_label_set_long_mode(view.title, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(view.title, text_w);
-  lv_obj_set_style_text_font(view.title, settings_style::row_font(), 0);
-  lv_obj_set_style_text_color(view.title, lv_color_white(), 0);
-  lv_obj_set_pos(view.title, text_x, top + (box1 - lv_font_get_line_height(settings_style::row_font())) / 2);
-  view.line = lv_label_create(view.box);
-  lv_label_set_text(view.line, "");
-  lv_label_set_long_mode(view.line, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(view.line, text_w);
-  lv_obj_set_style_text_font(view.line, settings_style::small_font(), 0);
-  lv_obj_set_pos(view.line, text_x,
-                 top + box1 + (box2 - lv_font_get_line_height(settings_style::small_font())) / 2);
-}
-
-static void build_display_page(lv_obj_t* page);
-
-// The open page in the card; only Display has its page so far.
-static void build_settings_page() {
-  if (!settings_page) return;
-  clear_display_page_refs();
-  lv_obj_clean(settings_page);
-  if (settings_category == SettingsCategory::Display) build_display_page(settings_page);
-  settings_page_built = true;
-}
-
-static void clear_settings_screen_refs() {
-  for (SettingsCategoryView& view : settings_views) view = {};
-  settings_bar_title = nullptr;
-  settings_card_title = nullptr;
-  settings_page = nullptr;
-  settings_page_built = false;
-  clear_display_page_refs();
-}
-
-// Bar, categories and the empty card, in the colors of the moment.
-static void build_settings_screen() {
-  lv_obj_t* panel = settings_panel;
-  if (!panel) return;
-  clear_settings_screen_refs();
-  lv_obj_clean(panel);
-  settings_built_card = settings_tile_color() & 0xFFFFFF;
-  settings_built_glow = ui_surface_style::icon_glow_percent();
-  settings_built_strings = &tr();
-  const settings_style::Colors colors = settings_colors();
-  const auto& s = tr();
-
-  // Bar: the half-height tiles' circle where a pill at the left edge has
-  // it (the tile inset from the grid corner), the X mirrored on the right.
-  const int inset = tile_icon_disc::inset();
-  const int d = tile_icon_disc::diameter();
-  const int grid_width = settings_style::grid_w(0, GRID_COLS);
-  const int close_x = grid_width - inset - d;
-  lv_obj_t* gear = settings_circle(panel, inset, inset, d, "cog", 0xFFFFFF);
-  lv_obj_set_style_bg_color(gear, lv_color_hex(settings_style::tone(colors.card, settings_style::kGearColor).disc), 0);
-  lv_obj_set_style_bg_opa(gear, LV_OPA_COVER, 0);
-  lv_obj_t* close = settings_circle(panel, close_x, inset, d, "window-close", 0xFFFFFF);
-  make_round_button(close, on_settings_close_clicked, nullptr);
-  int title_end = close_x;
-  if (kSettingsLayout == SettingsLayout::Tabs) {
-    // The tabs sit beside the X, so a longer or shorter page name never
-    // moves them; a fifth of a circle between them.
-    const int gap = (2 * d + 5) / 10;
-    const int right = close_x - (settings_style::kBarGap + 2) / 4 - (d + 2) / 4;
-    const int left = right - (kSettingsCategoryCount * d + (kSettingsCategoryCount - 1) * gap);
-    for (uint8_t i = 0; i < kSettingsCategoryCount; ++i) {
-      SettingsCategoryView& view = settings_views[i];
-      view.box = settings_circle(panel, left + i * (d + gap), inset, d,
-                                 settings_category_icon(static_cast<SettingsCategory>(i)), 0xFFFFFF);
-      view.icon = lv_obj_get_child(view.box, 0);
-      make_round_button(view.box, on_settings_tile_clicked, reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
-    }
-    title_end = left;
-  }
-  const int title_x = inset + d + 2 * inset;
-  settings_bar_title = lv_label_create(panel);
-  lv_label_set_text(settings_bar_title, kSettingsLayout == SettingsLayout::Tabs
-                                            ? settings_category_title(settings_category)
-                                            : s.tile_type_settings);
-  lv_label_set_long_mode(settings_bar_title, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(settings_bar_title, title_end - settings_style::kBarGap - title_x);
-  lv_obj_set_style_text_font(settings_bar_title, settings_style::bar_title_font(), 0);
-  lv_obj_set_style_text_color(settings_bar_title, lv_color_white(), 0);
-  lv_obj_set_pos(settings_bar_title, title_x,
-                 inset + (d - lv_font_get_line_height(settings_style::bar_title_font())) / 2);
-
-  // Categories and card below the bar, down to the grid's bottom edge.
-  const int top = settings_style::grid_y(0.5f);
-  const int bottom = settings_style::grid_y(GRID_ROWS) - GRID_GAP;
-  if (kSettingsLayout == SettingsLayout::Split) {
-    // The Settings exception: the tiles share the column height evenly.
-    const float tile_h = (bottom - top - (kSettingsCategoryCount - 1) * GRID_GAP) /
-                         static_cast<float>(kSettingsCategoryCount);
-    for (uint8_t i = 0; i < kSettingsCategoryCount; ++i) {
-      build_settings_category_tile(panel, i, 0, static_cast<int>(lroundf(top + i * (tile_h + GRID_GAP))),
-                                   settings_style::grid_w(0, 2), static_cast<int>(lroundf(tile_h)));
-    }
-  } else if (kSettingsLayout == SettingsLayout::Portrait) {
-    const float half = GRID_COLS / 2.0f;
-    for (uint8_t i = 0; i < kSettingsCategoryCount; ++i) {
-      const float col = (i % 2) * half;
-      const float row = GRID_ROWS - 2 + i / 2;
-      build_settings_category_tile(panel, i, settings_style::grid_x(col), settings_style::grid_y(row),
-                                   settings_style::grid_w(col, half), settings_style::grid_h(row, 1));
-    }
-  }
-  int card_x = 0;
-  int card_w = grid_width;
-  int card_h = bottom - top;
-  if (kSettingsLayout == SettingsLayout::Split) {
-    card_x = settings_style::grid_x(2);
-    card_w = settings_style::grid_w(2, GRID_COLS - 2);
-  } else if (kSettingsLayout == SettingsLayout::Portrait) {
-    card_h = settings_style::grid_h(0.5f, GRID_ROWS - 2.5f);
-  }
-  lv_obj_t* card = settings_parts::plain(panel);
-  lv_obj_set_pos(card, card_x, top);
-  lv_obj_set_size(card, card_w, card_h);
-  lv_obj_set_style_bg_color(card, lv_color_hex(colors.card), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  settings_style::apply_tile_radius(card);
-  ui_surface_style::apply_global_tile_border(card);
-  // The large page title where the card has room for it (five rows,
-  // portrait); on square panels the bar names the page.
-  const bool titled = kSettingsLayout == SettingsLayout::Portrait || GRID_ROWS >= 5;
-  int body_top = settings_style::kCardPad;
-  if (titled) {
-    const int box = (settings_style::kTitleFontPx * 125 + 50) / 100;
-    const int title_x = settings_style::kCardPad + settings_style::kSectionLeft;
-    settings_card_title = lv_label_create(card);
-    lv_label_set_text(settings_card_title, settings_category_title(settings_category));
-    lv_label_set_long_mode(settings_card_title, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(settings_card_title, card_w - title_x - settings_style::kCardPad);
-    lv_obj_set_style_text_font(settings_card_title, settings_style::page_title_font(), 0);
-    lv_obj_set_style_text_color(settings_card_title, lv_color_white(), 0);
-    lv_obj_set_pos(settings_card_title, title_x,
-                   settings_style::kCardPad + settings_style::kTitleTop +
-                       (box - lv_font_get_line_height(settings_style::page_title_font())) / 2);
-    body_top = settings_style::kCardPad + settings_style::kTitleBodyTop;
-  }
-  settings_page = settings_parts::plain(card);
-  settings_page_width = card_w - 2 * settings_style::kCardPad;
-  lv_obj_set_pos(settings_page, settings_style::kCardPad, body_top);
-  lv_obj_set_size(settings_page, settings_page_width, card_h - body_top - settings_style::kCardPad);
-  lv_obj_set_flex_flow(settings_page, LV_FLEX_FLOW_COLUMN);
-
-  for (uint8_t i = 0; i < kSettingsCategoryCount; ++i) style_settings_category(i);
-  update_settings_category_lines();
-}
-
-static void select_settings_category(SettingsCategory category) {
-  if (category == settings_category && settings_page_built) return;
-  settings_category = category;
-  for (uint8_t i = 0; i < kSettingsCategoryCount; ++i) style_settings_category(i);
-  const char* title = settings_category_title(category);
-  if (kSettingsLayout == SettingsLayout::Tabs && settings_bar_title) lv_label_set_text(settings_bar_title, title);
-  if (settings_card_title) lv_label_set_text(settings_card_title, title);
-  build_settings_page();
-}
-
-// Before Settings shows: a changed tile color, Circle strength or language
-// rebuilds the screen; the open page is built with the current values.
 void settings_prepare_show() {
-  if (!settings_panel) return;
-  if ((settings_tile_color() & 0xFFFFFF) != settings_built_card ||
-      ui_surface_style::icon_glow_percent() != settings_built_glow || &tr() != settings_built_strings) {
-    build_settings_screen();
-  }
-  update_settings_category_lines();
-  build_settings_page();
-  if (!settings_lines_timer) settings_lines_timer = lv_timer_create(on_settings_lines_timer, 5000, nullptr);
+  settings_screen::prepare_show();
 }
 
-// After Settings hid: the page and a running brightness preview go.
+// After Settings hid: a running brightness preview ends, the page goes.
 void settings_did_hide() {
-  if (settings_lines_timer) {
-    lv_timer_delete(settings_lines_timer);
-    settings_lines_timer = nullptr;
-  }
   if (screensaver_brightness_preview_timer) {
     cancel_screensaver_brightness_preview();
     restore_normal_brightness_after_preview();
   }
-  clear_display_page_refs();
-  if (settings_page) lv_obj_clean(settings_page);
-  settings_page_built = false;
+  settings_screen::did_hide();
 }
 
 // ========== Public API ==========
@@ -3784,7 +3307,7 @@ void settings_fw_check_result(bool ok, const char* latest_tag, bool update_avail
   }
   system_set_buttons_enabled(true);
   system_update_check_btn_text();
-  update_settings_category_lines();
+  settings_screen::refresh_lines();
   if (!system_status_label) return;
   if (!ok) {
     system_show_status(tr().system_check_failed, 0xFF6B6B);
@@ -3830,7 +3353,6 @@ void build_settings_tab(lv_obj_t *tab, hotspot_callback_t hotspot_cb) {
   if (settings_popup_overlay) close_settings_popup();
 
   lv_obj_clean(tab);
-  settings_panel = tab;
   lv_obj_clear_flag(tab, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_bg_color(tab, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, 0);
@@ -3873,7 +3395,7 @@ void build_settings_tab(lv_obj_t *tab, hotspot_callback_t hotspot_cb) {
   battery_percent_label = nullptr;
 
   // The frame now; the page when Settings opens (settings_prepare_show).
-  build_settings_screen();
+  settings_screen::build(tab);
 }
 
 // Tiles display descriptions only. Main-loop calls still keep an open
@@ -3881,12 +3403,12 @@ void build_settings_tab(lv_obj_t *tab, hotspot_callback_t hotspot_cb) {
 // after stopping AP mode.
 void settings_update_wifi_status(bool, const char*, const char*) {
   wifi_update_conn_status_label();
-  update_settings_category_lines();
+  settings_screen::refresh_lines();
 }
 
 void settings_update_wifi_status_ap(const char*, const char*) {
   wifi_update_conn_status_label();
-  update_settings_category_lines();
+  settings_screen::refresh_lines();
 }
 
 void settings_update_ap_mode(bool running) {
@@ -3909,7 +3431,7 @@ void settings_update_ap_mode(bool running) {
   // Update Wi-Fi popup status immediately after toggling: AP and IP,
   // or connected/offline. Previously the toggle gave no feedback here.
   wifi_update_conn_status_label();
-  update_settings_category_lines();
+  settings_screen::refresh_lines();
 }
 
 void settings_refresh_language() {
@@ -3926,8 +3448,7 @@ void settings_refresh_language() {
   if (ethernet_dhcp_btn) net_mode_update_ui();
   // The Settings screen takes the new texts: now while it shows, else when
   // it opens next.
-  settings_built_strings = nullptr;
-  if (settings_panel && !lv_obj_has_flag(settings_panel, LV_OBJ_FLAG_HIDDEN)) settings_prepare_show();
+  settings_screen::texts_changed();
 
   // A Web Admin save can change status-line visibility, text and height
   // plus both bottom buttons. Updating the existing flex layout in pieces

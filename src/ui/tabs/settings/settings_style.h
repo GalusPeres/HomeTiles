@@ -115,6 +115,12 @@ inline void apply_radius(lv_obj_t* obj, int at_maximum, lv_style_selector_t sele
 // The global tile radius itself (tiles, cards, popups).
 inline void apply_tile_radius(lv_obj_t* obj) { ui_surface_style::apply_radius(obj, tile_radius::kMinimum, 0); }
 
+// The half-height tiles' circle and its distance to the tile edges, as
+// tile_icon_disc::inset() and diameter() compute them: the bar's circles sit
+// exactly where a pill's circle does.
+inline int tile_inset() { return popup_layout::scale480(4); }
+inline int half_tile_disc() { return (GRID_CELL_H - GRID_GAP) / 2 - 2 * tile_inset(); }
+
 // Grid positions relative to the grid's top-left corner (the Settings panel
 // carries the grid margins as its padding), exactly like the tiles.
 inline int grid_x(float col) { return tile_geometry::edge(col, GRID_CELL_W, GRID_GAP); }
@@ -145,17 +151,30 @@ inline Colors colors(uint32_t card) {
           tone_color::lifted(card, card, false, 3 * step)};
 }
 
-// A colored circle on the card (category tabs, page accents): the circle in
-// the color's hue, the icon readable on it.
+// The card the tile color "From icon" gives a color (default strength), the
+// selected category tile; without the registered rule the plain tint.
+inline uint32_t from_icon_card(uint32_t card, uint32_t color, bool pressed = false) {
+  if (tone_color::g_from_icon_card) return tone_color::g_from_icon_card(color & 0xFFFFFF, pressed, 0) & 0xFFFFFF;
+  const uint32_t tile = tile_tint::background(card, color, tone_color::kReferenceTint);
+  return pressed ? tone_color::lifted(tile, tile, false, control_step()) : tile;
+}
+
+// A colored circle, control or slider track: like the popups' and tiles'
+// "Circle in icon color" (popup_shell.cpp header_fill, the Light popup's
+// brightness track), computed for the card "From icon" gives the color, so
+// card, circle and icon stay one family; a neutral color on the card itself.
+// The icon stays readable on the circle.
 struct Tone {
   uint32_t disc;
+  uint32_t control;
   uint32_t icon;
 };
 
 inline Tone tone(uint32_t card, uint32_t color) {
   const bool hue = tile_tint::has_hue(color);
-  const tone_color::Fill fill = tone_color::fill(card, color, hue, ui_surface_style::icon_glow_percent());
-  return {fill.disc, hue ? tone_color::readable_icon(color) : 0xFFFFFF};
+  const uint32_t circle_card = hue ? from_icon_card(card, color) : card;
+  const tone_color::Fill fill = tone_color::fill(circle_card, color, hue, ui_surface_style::icon_glow_percent());
+  return {fill.disc, fill.control_color, hue ? tone_color::readable_icon(color) : 0xFFFFFF};
 }
 
 }  // namespace settings_style

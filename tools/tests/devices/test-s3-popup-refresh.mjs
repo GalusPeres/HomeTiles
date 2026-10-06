@@ -32,7 +32,7 @@ assert.doesNotMatch(callback, /defer_popup_until_source_refreshed/,
 assert.doesNotMatch(callback, /lv_refr_now/);
 const settingsOpenStart = settings.indexOf('static void open_settings_popup(SettingsPopupKind kind) {');
 const settingsClickStart = settings.indexOf(
-  'static void on_settings_tile_clicked(', settingsOpenStart);
+  'void open_category_popup(', settingsOpenStart);
 assert.ok(settingsOpenStart >= 0 && settingsClickStart > settingsOpenStart,
           'Settings popup open function must exist');
 const settingsOpen = settings.slice(settingsOpenStart, settingsClickStart);

@@ -56,6 +56,18 @@ lv_obj_t* segment(lv_obj_t* row, const char* const* labels, uint8_t count, uint8
                   int pad = settings_style::kSegmentPad);
 void segment_select(lv_obj_t* segment, uint8_t index);
 
+// Text where a browser draws it (the mockup is the reference). The firmware's
+// Inter fonts have taller line boxes than a browser's (20 px: 27 instead of
+// 24.2) with the baseline lower in them, so stacked and centered labels moved
+// down. A label in a flex layout gets margins that give it the browser's
+// line height and baseline; `px` is its font size.
+void browser_line(lv_obj_t* label, int px, int margin_top = 0, int margin_bottom = 0);
+// The browser's line height of an Inter font size ("normal", 1.21 em).
+float browser_line_height(int px);
+// The y of a label placed by hand: its baseline where a browser puts it in a
+// line box `box` px high whose top is at `box_top`.
+int browser_label_y(const lv_font_t* font, int px, float box_top, float box);
+
 // The width of `text` in `font`.
 int text_width(const lv_font_t* font, const char* text);
 // The width of the device's MDI icon glyphs.

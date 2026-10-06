@@ -130,7 +130,7 @@ assert.match(
 );
 assert.match(
   settingsUi,
-  /display_slider_row\(saver,[^;]*Device::kConfiguredBrightnessPercentMin,\s*kScreensaverBrightnessPctMax,/,
+  /values\.saver_brightness_min = Device::kConfiguredBrightnessPercentMin;\s*values\.saver_brightness_max = kScreensaverBrightnessPctMax;/,
   'the on-device screensaver brightness slider must start at the device floor',
 );
 

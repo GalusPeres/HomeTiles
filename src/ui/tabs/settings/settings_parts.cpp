@@ -170,8 +170,7 @@ lv_obj_t* section(lv_obj_t* parent, const char* text, bool first) {
   lv_obj_set_style_text_font(label, small_font(), 0);
   grey_text(label);
   lv_obj_set_style_margin_left(label, kSectionLeft, 0);
-  lv_obj_set_style_margin_top(label, first ? 0 : kSectionTop, 0);
-  lv_obj_set_style_margin_bottom(label, kSectionBottom, 0);
+  browser_line(label, kSmallFontPx, first ? 0 : kSectionTop, kSectionBottom);
   return label;
 }
 
@@ -189,8 +188,7 @@ Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* s
   Row r;
   const bool first = lv_obj_get_child_count(group) == 0;
   r.row = plain(group);
-  lv_obj_set_size(r.row, LV_PCT(100), LV_SIZE_CONTENT);
-  lv_obj_set_style_min_height(r.row, kRowHeight, 0);
+  lv_obj_set_size(r.row, LV_PCT(100), kRowHeight);
   lv_obj_set_style_pad_left(r.row, kRowPadLeft, 0);
   lv_obj_set_style_pad_right(r.row, kRowPadRight, 0);
   lv_obj_set_style_pad_column(r.row, kRowGap, 0);
@@ -215,12 +213,15 @@ Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* s
   lv_obj_set_size(r.text, 1, LV_SIZE_CONTENT);
   lv_obj_set_flex_grow(r.text, 1);
   lv_obj_set_flex_flow(r.text, LV_FLEX_FLOW_COLUMN);
+  // Its labels reach a little past it (browser_line).
+  lv_obj_add_flag(r.text, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
   r.title = lv_label_create(r.text);
   lv_label_set_text(r.title, title ? title : "");
   lv_label_set_long_mode(r.title, LV_LABEL_LONG_DOT);
   lv_obj_set_width(r.title, LV_PCT(100));
   lv_obj_set_style_text_font(r.title, row_font(), 0);
   lv_obj_set_style_text_color(r.title, lv_color_white(), 0);
+  browser_line(r.title, kRowFontPx);
   if (sub) {
     r.sub = lv_label_create(r.text);
     lv_label_set_text(r.sub, sub);
@@ -228,7 +229,7 @@ Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* s
     lv_obj_set_width(r.sub, LV_PCT(100));
     lv_obj_set_style_text_font(r.sub, small_font(), 0);
     grey_text(r.sub);
-    lv_obj_set_style_margin_top(r.sub, kSubTop, 0);
+    browser_line(r.sub, kSmallFontPx, kSubTop);
   }
   return r;
 }
@@ -241,6 +242,7 @@ lv_obj_t* value_label(lv_obj_t* row, const char* text) {
   lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_style_text_font(label, row_font(), 0);
   lv_obj_set_style_text_color(label, lv_color_white(), 0);
+  browser_line(label, kRowFontPx);
   return label;
 }
 
@@ -319,6 +321,8 @@ lv_obj_t* segment(lv_obj_t* row, const char* const* labels, uint8_t count, uint8
     lv_obj_t* label = lv_label_create(option);
     lv_label_set_text(label, labels[i]);
     lv_obj_set_style_text_font(label, small_font(), 0);
+    browser_line(label, kSmallFontPx);
+    lv_obj_add_flag(option, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
     style_option(option, i == selected);
     lv_obj_add_event_cb(option, segment_option_cb, LV_EVENT_CLICKED, nullptr);
   }
@@ -333,6 +337,32 @@ void segment_select(lv_obj_t* segment, uint8_t index) {
   for (uint32_t i = 0; i < count; ++i) {
     style_option(lv_obj_get_child(segment, static_cast<int32_t>(i)), i == index);
   }
+}
+
+// Inter's vertical metrics (units per em 2048): ascender 1984, descender 494.
+constexpr float kInterAscent = 1984.0f / 2048.0f;
+constexpr float kInterLine = (1984.0f + 494.0f) / 2048.0f;
+
+void browser_line(lv_obj_t* label, int px, int margin_top, int margin_bottom) {
+  if (!label) return;
+  const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+  if (!font) return;
+  // How far the LVGL baseline sits below the browser's, and what the box
+  // has left below the text after moving it up by that.
+  const float shift = static_cast<float>(font->line_height - font->base_line) - kInterAscent * px;
+  const float rest = kInterLine * px - font->line_height + shift;
+  lv_obj_set_style_margin_top(label, margin_top - static_cast<int>(lroundf(shift)), 0);
+  lv_obj_set_style_margin_bottom(label, margin_bottom + static_cast<int>(lroundf(rest)), 0);
+}
+
+float browser_line_height(int px) {
+  return kInterLine * px;
+}
+
+int browser_label_y(const lv_font_t* font, int px, float box_top, float box) {
+  if (!font) return static_cast<int>(lroundf(box_top));
+  const float baseline = box_top + (box - kInterLine * px) / 2 + kInterAscent * px;
+  return static_cast<int>(lroundf(baseline - (font->line_height - font->base_line)));
 }
 
 int text_width(const lv_font_t* font, const char* text) {

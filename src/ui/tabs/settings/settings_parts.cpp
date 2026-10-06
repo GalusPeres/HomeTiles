@@ -181,6 +181,39 @@ void tap_draw_cb(lv_event_t* e) {
 
 void tap_state_cb(lv_event_t* e) { lv_obj_invalidate(static_cast<lv_obj_t*>(lv_event_get_current_target(e))); }
 
+// ---------- Touch layers ----------
+
+// A transparent layer over the whole host, hidden until reveal(): it only
+// takes taps; its children (a list, a dialog card) are what shows.
+lv_obj_t* touch_layer(lv_obj_t* host) {
+  lv_obj_update_layout(host);
+  lv_area_t host_area;
+  lv_area_t host_content;
+  lv_obj_get_coords(host, &host_area);
+  lv_obj_get_content_coords(host, &host_content);
+  lv_obj_t* layer = plain(host);
+  lv_obj_add_flag(layer, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(layer, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_pos(layer, host_area.x1 - host_content.x1, host_area.y1 - host_content.y1);
+  lv_obj_set_size(layer, lv_area_get_width(&host_area), lv_area_get_height(&host_area));
+  return layer;
+}
+
+// Showing or hiding the layer would mark the whole host for drawing; with
+// marking paused only the visible child's area (and its shadow) is drawn
+// again (popup_shell.cpp invalidate_shell).
+void toggle_quietly(lv_obj_t* root, bool hidden) {
+  lv_display_t* display = lv_obj_get_display(root);
+  const bool marking = display && lv_display_is_invalidation_enabled(display);
+  if (marking) lv_display_enable_invalidation(display, false);
+  if (hidden) {
+    lv_obj_add_flag(root, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_remove_flag(root, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (marking) lv_display_enable_invalidation(display, true);
+}
+
 // ---------- Option list ----------
 
 struct OptionState {
@@ -361,17 +394,12 @@ void open_options(const OptionList& spec) {
   if (!spec.host || !spec.row || spec.count == 0 || !spec.handler.text) return;
   lv_obj_update_layout(spec.host);
   lv_area_t host_area;
-  lv_area_t host_content;
   lv_area_t row_area;
   lv_obj_get_coords(spec.host, &host_area);
-  lv_obj_get_content_coords(spec.host, &host_content);
   lv_obj_get_coords(spec.row, &row_area);
 
-  // The cover over the whole host catches taps beside the list.
-  lv_obj_t* overlay = plain(spec.host);
-  lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_pos(overlay, host_area.x1 - host_content.x1, host_area.y1 - host_content.y1);
-  lv_obj_set_size(overlay, lv_area_get_width(&host_area), lv_area_get_height(&host_area));
+  // The transparent layer over the whole host catches taps beside the list.
+  lv_obj_t* overlay = touch_layer(spec.host);
   lv_obj_add_event_cb(overlay, overlay_clicked_cb, LV_EVENT_CLICKED, nullptr);
   lv_obj_add_event_cb(overlay, overlay_delete_cb, LV_EVENT_DELETE, nullptr);
   g_options = {};
@@ -436,12 +464,28 @@ void open_options(const OptionList& spec) {
     const int top = spec.selected * kOptionHeight - (height - 2 * edge - kOptionHeight) / 2;
     lv_obj_scroll_to_y(list, top > 0 ? top : 0, LV_ANIM_OFF);
   }
+  reveal(overlay, list);
 }
 
 void close_options() {
   lv_obj_t* overlay = g_options.overlay;
   g_options.overlay = nullptr;
-  if (overlay) lv_obj_delete(overlay);
+  if (!overlay) return;
+  conceal(overlay, lv_obj_get_child(overlay, 0));
+  lv_obj_delete(overlay);
+}
+
+void reveal(lv_obj_t* root, lv_obj_t* shown) {
+  if (!root) return;
+  lv_obj_update_layout(root);
+  toggle_quietly(root, false);
+  if (shown) lv_obj_invalidate(shown);
+}
+
+void conceal(lv_obj_t* root, lv_obj_t* shown) {
+  if (!root || lv_obj_has_flag(root, LV_OBJ_FLAG_HIDDEN)) return;
+  if (shown) lv_obj_invalidate(shown);
+  toggle_quietly(root, true);
 }
 
 lv_obj_t* button(lv_obj_t* parent, const char* text, const char* icon_name, ButtonKind kind, uint32_t accent,
@@ -491,21 +535,17 @@ void button_set_enabled(lv_obj_t* b, bool enabled) {
   }
 }
 
-lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t on_veil) {
-  lv_obj_update_layout(host);
-  lv_area_t host_area;
-  lv_area_t host_content;
-  lv_obj_get_coords(host, &host_area);
-  lv_obj_get_content_coords(host, &host_content);
-  lv_obj_t* root = plain(host);
-  lv_obj_add_flag(root, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_pos(root, host_area.x1 - host_content.x1, host_area.y1 - host_content.y1);
-  lv_obj_set_size(root, lv_area_get_width(&host_area), lv_area_get_height(&host_area));
-  lv_obj_set_style_bg_color(root, lv_color_black(), 0);
-  lv_obj_set_style_bg_opa(root, kVeilOpa, 0);
-  if (on_veil) lv_obj_add_event_cb(root, on_veil, LV_EVENT_CLICKED, nullptr);
+lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t on_outside) {
+  // No veil: a darkened screen would be drawn whole; the card stands out by
+  // the popups' shadow (create_popup_body), and only it is drawn.
+  lv_obj_t* root = touch_layer(host);
+  if (on_outside) lv_obj_add_event_cb(root, on_outside, LV_EVENT_CLICKED, nullptr);
 
   lv_obj_t* box = plain(root);
+  lv_obj_set_style_shadow_width(box, popup_layout::scale480(28), 0);
+  lv_obj_set_style_shadow_color(box, lv_color_black(), 0);
+  lv_obj_set_style_shadow_opa(box, LV_OPA_40, 0);
+  lv_obj_set_style_shadow_spread(box, popup_layout::scale480(2), 0);
   // Taps on the card stay in it.
   lv_obj_add_flag(box, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_size(box, kDialogWidth, LV_SIZE_CONTENT);

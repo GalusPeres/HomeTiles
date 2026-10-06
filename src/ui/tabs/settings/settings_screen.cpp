@@ -584,6 +584,8 @@ void close_dialog(bool from_event = false) {
   g_dialog_root = nullptr;
   g_dialog = Dialog::None;
   if (!root) return;
+  // Only the card's area is drawn again, not the screen.
+  settings_parts::conceal(root, lv_obj_get_child(root, 0));
   if (from_event) {
     lv_obj_delete_async(root);
   } else {
@@ -615,7 +617,8 @@ void set_progress(int percent) {
   if (!g_progress_fill) return;
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
-  lv_obj_set_width(g_progress_fill, settings_style::kProgressWidth * percent / 100);
+  const int width = settings_style::kProgressWidth * percent / 100;
+  if (lv_obj_get_style_width(g_progress_fill, LV_PART_MAIN) != width) lv_obj_set_width(g_progress_fill, width);
 }
 
 void color_text(lv_obj_t* label, uint32_t color) {
@@ -711,7 +714,7 @@ void on_dialog_action(lv_event_t* e) {
 }
 
 // A tap beside a question closes it; the pairing number stays until Cancel.
-void on_veil(lv_event_t*) {
+void on_outside(lv_event_t*) {
   if (g_dialog == Dialog::Pairing) return;
   close_dialog(true);
 }
@@ -736,28 +739,28 @@ void open_dialog(Dialog dialog) {
     case Dialog::None:
       return;
     case Dialog::Unpair:
-      box = settings_parts::dialog(g_panel, g_built_card, s.settings_unpair_question, on_veil);
+      box = settings_parts::dialog(g_panel, g_built_card, s.settings_unpair_question, on_outside);
       settings_parts::dialog_text(box, s.settings_unpair_text);
       buttons = settings_parts::dialog_buttons(box);
       dialog_button(buttons, s.security_cancel, nullptr, ButtonKind::Normal, DialogAction::Close);
       dialog_button(buttons, s.settings_unpair, nullptr, ButtonKind::Danger, DialogAction::Unpair);
       break;
     case Dialog::RemovePassword:
-      box = settings_parts::dialog(g_panel, g_built_card, s.security_password_question, on_veil);
+      box = settings_parts::dialog(g_panel, g_built_card, s.security_password_question, on_outside);
       settings_parts::dialog_text(box, s.security_password_question_hint);
       buttons = settings_parts::dialog_buttons(box);
       dialog_button(buttons, s.security_cancel, nullptr, ButtonKind::Normal, DialogAction::Close);
       dialog_button(buttons, s.security_remove, nullptr, ButtonKind::Danger, DialogAction::RemovePassword);
       break;
     case Dialog::Restart:
-      box = settings_parts::dialog(g_panel, g_built_card, s.settings_restart_question, on_veil);
+      box = settings_parts::dialog(g_panel, g_built_card, s.settings_restart_question, on_outside);
       settings_parts::dialog_text(box, s.settings_restart_text);
       buttons = settings_parts::dialog_buttons(box);
       dialog_button(buttons, s.security_cancel, nullptr, ButtonKind::Normal, DialogAction::Close);
       dialog_button(buttons, s.restart_button, nullptr, ButtonKind::Danger, DialogAction::Restart);
       break;
     case Dialog::GitHub: {
-      box = settings_parts::dialog(g_panel, g_built_card, settings_style::kGitHub, on_veil);
+      box = settings_parts::dialog(g_panel, g_built_card, settings_style::kGitHub, on_outside);
       const char* url = settings_model::repo_url();
       lv_obj_t* qr = settings_parts::qr_code(box, settings_style::kDialogQr, url);
       if (qr) lv_obj_set_style_margin_top(qr, settings_style::kDialogGap, 0);
@@ -772,7 +775,7 @@ void open_dialog(Dialog dialog) {
       break;
     }
     case Dialog::Pairing: {
-      box = settings_parts::dialog(g_panel, g_built_card, s.settings_pairing, on_veil);
+      box = settings_parts::dialog(g_panel, g_built_card, s.settings_pairing, on_outside);
       char number[24];
       if (g_dialog_pair != PairState::Asking && settings_model::pairing_number(number, sizeof(number))) {
         lv_obj_t* code = lv_label_create(box);
@@ -800,6 +803,7 @@ void open_dialog(Dialog dialog) {
   }
   g_dialog = dialog;
   g_dialog_root = box ? lv_obj_get_parent(box) : nullptr;
+  settings_parts::reveal(g_dialog_root, box);
 }
 
 // The number dialog follows the pairing attempt; a question whose state went
@@ -2006,8 +2010,14 @@ void refresh_lines() {
     bool warn = false;
     category_line(category, buf, sizeof(buf), &warn);
     if (strcmp(lv_label_get_text(view.line), buf) != 0) lv_label_set_text(view.line, buf);
-    lv_obj_set_style_text_color(view.line, warn ? lv_color_hex(0xFFC04D) : lv_color_white(), 0);
-    lv_obj_set_style_text_opa(view.line, warn ? LV_OPA_COVER : settings_style::kGreyOpa, 0);
+    // Only a change touches the styles: every set redraws the line, and the
+    // hotspot loop reports the network on each pass (the clock flickered).
+    const lv_color_t color = warn ? lv_color_hex(settings_style::kWarnColor) : lv_color_white();
+    const lv_opa_t opa = warn ? LV_OPA_COVER : settings_style::kGreyOpa;
+    if (!lv_color_eq(lv_obj_get_style_text_color(view.line, LV_PART_MAIN), color)) {
+      lv_obj_set_style_text_color(view.line, color, 0);
+    }
+    if (lv_obj_get_style_text_opa(view.line, LV_PART_MAIN) != opa) lv_obj_set_style_text_opa(view.line, opa, 0);
   }
 }
 

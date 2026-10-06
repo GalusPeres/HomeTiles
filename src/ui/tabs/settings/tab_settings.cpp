@@ -1047,17 +1047,23 @@ void hide_settings_popup() {
   settings_screen::close_overlays();
 }
 
-// The main loop reports the network: the category lines follow, the WiFi
-// page polls the rest.
-void settings_update_wifi_status(bool, const char*, const char*) {
+// The main loop reports the network, the hotspot loop on every pass: the
+// category lines follow at most once a second (the WiFi page polls the
+// rest), so the reports never keep LVGL drawing.
+static void refresh_lines_now_and_then() {
+  static uint32_t last_ms = 0;
+  const uint32_t now = millis();
+  if (last_ms != 0 && now - last_ms < 1000) return;
+  last_ms = now | 1;
   settings_screen::refresh_lines();
 }
 
-void settings_update_wifi_status_ap(const char*, const char*) {
-  settings_screen::refresh_lines();
-}
+void settings_update_wifi_status(bool, const char*, const char*) { refresh_lines_now_and_then(); }
+
+void settings_update_wifi_status_ap(const char*, const char*) { refresh_lines_now_and_then(); }
 
 void settings_update_ap_mode(bool running) {
+  if (running == ap_mode_active) return;
   ap_mode_active = running;
   // The switch is done: the toggle takes touches again.
   ap_mode_click_block_until = 0;

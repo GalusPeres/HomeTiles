@@ -104,12 +104,21 @@ assert.match(dialogs, /s\.settings_restart_question[\s\S]*?ButtonKind::Danger, D
 assert.match(dialogs, /settings_parts::qr_code\(box, settings_style::kDialogQr, url\)/);
 assert.match(dialogs, /popup_layout::font72\(\)/, 'the pairing number is large');
 assert.match(dialogs, /button_set_enabled\(confirm, g_dialog_pair == PairState::Compare\)/);
-assert.match(between(screen, 'void on_veil(lv_event_t*) {', 'lv_obj_t* dialog_button('),
+assert.match(between(screen, 'void on_outside(lv_event_t*) {', 'lv_obj_t* dialog_button('),
   /if \(g_dialog == Dialog::Pairing\) return;/, 'a tap beside the number does not cancel pairing');
 for (const [name, big, small] of [['kDialogWidth', 600, 440], ['kDialogButtonHeight', 72, 48], ['kDialogQr', 210, 140]]) {
   assert.match(style, new RegExp(`constexpr int ${name} = pick\\(${big}, ${small}\\);`), name);
 }
-assert.match(parts, /lv_obj_set_style_bg_opa\(root, kVeilOpa, 0\);/);
+// No veil (it would draw the whole screen): the card has the popups' shadow,
+// and the transparent layer for taps beside it shows and hides without
+// marking the screen (popup_shell invalidate_shell).
+assert.match(parts, /lv_obj_set_style_shadow_width\(box, popup_layout::scale480\(28\), 0\);/);
+assert.doesNotMatch(parts, /kVeilOpa|lv_obj_set_style_bg_opa\(root/);
+const quiet = between(parts, 'void toggle_quietly(lv_obj_t* root, bool hidden) {', '// ---------- Option list ----------');
+assert.match(quiet, /lv_display_enable_invalidation\(display, false\);[\s\S]*?LV_OBJ_FLAG_HIDDEN[\s\S]*?lv_display_enable_invalidation\(display, true\);/);
+assert.match(between(parts, 'void reveal(lv_obj_t* root, lv_obj_t* shown) {', 'void conceal('), /toggle_quietly\(root, false\);\s*if \(shown\) lv_obj_invalidate\(shown\);/);
+assert.match(between(screen, 'void close_dialog(', 'bool address_known()'), /settings_parts::conceal\(root, lv_obj_get_child\(root, 0\)\);/);
+assert.match(between(parts, 'void close_options() {', 'void reveal('), /conceal\(overlay, lv_obj_get_child\(overlay, 0\)\);/);
 assert.match(parts, /settings_style::apply_tile_radius\(box\);/);
 
 // --- Model: the former System popup's paths ---------------------------------------------------------

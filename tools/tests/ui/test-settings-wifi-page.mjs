@@ -135,4 +135,15 @@ assert.match(between(model, 'void network_mode_selected(bool ethernet) {', 'void
 assert.match(between(model, 'void ip_mode_selected(bool static_ip) {', 'void wifi_connect_done()'),
   /configManager\.saveStaticAddressingEnabled\(static_ip\)/);
 
+// The hotspot loop reports the network on every pass (S3 2026-10-06: the
+// clock on Localization flickered with the hotspot on): the category lines
+// follow at most once a second and touch their styles only on a change.
+const reports = between(model, 'static void refresh_lines_now_and_then() {', 'void settings_update_power_status()');
+assert.match(reports, /if \(last_ms != 0 && now - last_ms < 1000\) return;/);
+assert.match(reports, /void settings_update_wifi_status_ap\(const char\*, const char\*\) \{ refresh_lines_now_and_then\(\); \}/);
+assert.match(reports, /void settings_update_ap_mode\(bool running\) \{\s*if \(running == ap_mode_active\) return;/);
+const lines = between(screen, 'void refresh_lines() {', 'void sync_rotation()');
+assert.match(lines, /if \(!lv_color_eq\(lv_obj_get_style_text_color\(view\.line, LV_PART_MAIN\), color\)\)/);
+assert.match(lines, /if \(lv_obj_get_style_text_opa\(view\.line, LV_PART_MAIN\) != opa\)/);
+
 console.log('Settings WiFi page: list, hotspot, entry with the new keyboard, Ethernet, former paths');

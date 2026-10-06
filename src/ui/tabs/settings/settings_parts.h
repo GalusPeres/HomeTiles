@@ -86,11 +86,17 @@ lv_obj_t* button(lv_obj_t* parent, const char* text, const char* icon_name, Butt
 // Dimmed and without touches while disabled.
 void button_set_enabled(lv_obj_t* button, bool enabled);
 
-// A dialog (mockup .dlg) over a veil that covers `host`: returns the card, a
-// centered column with the title; the caller adds its text, extras and
-// dialog_buttons(). A tap on the veil calls `on_veil` (nullptr: ignored).
-// The dialog's root is lv_obj_get_parent(card).
-lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t on_veil);
+// A dialog (mockup .dlg) with the popups' shadow, over a transparent layer
+// that covers `host` for taps only: returns the card, a centered column with
+// the title; the caller adds its text, extras and dialog_buttons(), then
+// calls reveal(). A tap beside the card calls `on_outside` (nullptr:
+// ignored). The dialog's root is lv_obj_get_parent(card).
+lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t on_outside);
+// Shows or hides such a full-host layer like the popup shell does: only its
+// visible part (`shown`, with its shadow) is repainted, never the whole
+// screen behind the transparent layer. Delete the root after conceal().
+void reveal(lv_obj_t* root, lv_obj_t* shown);
+void conceal(lv_obj_t* root, lv_obj_t* shown);
 // Toggle (mockup .tg): the track in `track` (off) or `accent` (on), a grey
 // or white knob. Dimmed and without touches while `enabled` is false.
 lv_obj_t* toggle(lv_obj_t* row, bool on, uint32_t accent, uint32_t track, bool enabled, lv_event_cb_t on_click,

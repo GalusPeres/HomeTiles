@@ -78,8 +78,6 @@ constexpr int kDialogGap = pick(16, 10);
 constexpr int kDialogButtonsTop = pick(32, 20);
 constexpr int kDialogButtonHeight = pick(72, 48);
 constexpr int kDialogQr = pick(210, 140);
-// The veil behind a dialog: black at 62 %.
-constexpr lv_opa_t kVeilOpa = 158;
 // Toggle (mockup .tg): track and knob inset.
 constexpr int kToggleWidth = pick(88, 58);
 constexpr int kToggleHeight = pick(48, 32);

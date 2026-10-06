@@ -653,6 +653,25 @@ lv_obj_t* row_button(lv_obj_t* row, const char* text, const char* icon, settings
                                 settings_style::kButtonHeight, false, on_system_action, action_data(action));
 }
 
+// Pair and Allow: a little taller than the other row buttons and one width,
+// the longest of the two in every language, so a language change never
+// resizes them (user 2026-10-06).
+lv_obj_t* switch_on_button(lv_obj_t* row, const char* text, SystemAction action) {
+  int width = 0;
+  for (uint8_t i = 0; i < settings_model::language_count(); ++i) {
+    const i18n::Strings& s = settings_model::text_of(i);
+    for (const char* label : {s.settings_pair, s.settings_allow}) {
+      const int w = settings_parts::text_width(settings_style::small_font(), label);
+      if (w > width) width = w;
+    }
+  }
+  lv_obj_t* b = settings_parts::button(row, text, nullptr, settings_parts::ButtonKind::Accent,
+                                       settings_style::kSystemColor, colors(), settings_style::kSwitchOnHeight, false,
+                                       on_system_action, action_data(action));
+  lv_obj_set_width(b, width + 2 * settings_style::kButtonPad + settings_style::kSwitchOnExtra);
+  return b;
+}
+
 void refresh_async(void*) { system_tick(); }
 
 void open_dialog(Dialog dialog);
@@ -1026,7 +1045,7 @@ void build_system_page(lv_obj_t* page) {
       }
       settings_parts::Row r = settings_parts::row(security, "link-variant-off", s.settings_pairing, line);
       if (color) color_text(r.sub, color);
-      row_button(r.row, s.settings_pair, nullptr, ButtonKind::Accent, SystemAction::Pair);
+      switch_on_button(r.row, s.settings_pair, SystemAction::Pair);
       break;
     }
   }
@@ -1044,7 +1063,7 @@ void build_system_page(lv_obj_t* page) {
   } else {
     settings_parts::Row r =
         settings_parts::row(security, "form-textbox-password", s.web_auth_section, s.settings_password_none);
-    row_button(r.row, s.settings_allow, nullptr, ButtonKind::Accent, SystemAction::Allow);
+    switch_on_button(r.row, s.settings_allow, SystemAction::Allow);
   }
 
   // Setup, Restart and GitHub right on the card (no group, no heading).

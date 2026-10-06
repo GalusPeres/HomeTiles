@@ -14,6 +14,10 @@
 namespace settings_model {
 
 const i18n::Strings& text();
+// Every registered language's texts, for sizes that must not change with the
+// language.
+uint8_t language_count();
+const i18n::Strings& text_of(uint8_t language);
 // The global tile color: the card and every surface on it.
 uint32_t card_color();
 

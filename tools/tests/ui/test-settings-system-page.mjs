@@ -85,6 +85,15 @@ for (const key of ['settings_commands_encrypted', 'settings_paired', 'pairing_di
 // Paired and the password on: a tap on the row asks before turning them off.
 assert.match(page, /make_tap\(r\.row, palette\.button, on_system_action,\s*action_data\(SystemAction::Unpair\)\)/);
 assert.match(page, /make_tap\(r\.row, palette\.button, on_system_action,\s*action_data\(SystemAction::RemovePassword\)\)/);
+// Pair and Allow: one width in every language (the longest of both texts in
+// all of them) and a little taller than the other row buttons.
+const switchOn = between(screen, 'lv_obj_t* switch_on_button(', 'void refresh_async(');
+assert.match(switchOn, /for \(uint8_t i = 0; i < settings_model::language_count\(\); \+\+i\)/);
+assert.match(switchOn, /\{s\.settings_pair, s\.settings_allow\}/);
+assert.match(switchOn, /settings_style::kSwitchOnHeight/);
+assert.match(style, /constexpr int kSwitchOnHeight = pick\(64, 42\);/);
+assert.match(page, /switch_on_button\(r\.row, s\.settings_pair, SystemAction::Pair\);/);
+assert.match(page, /switch_on_button\(r\.row, s\.settings_allow, SystemAction::Allow\);/);
 // Setup, Restart and GitHub on the card; the head takes the space that is left.
 assert.match(rawBody, /\{s\.settings_setup, "rocket-launch-outline", SystemAction::Setup\}/);
 assert.match(rawBody, /\{s\.restart_button, "restart", SystemAction::Restart\}/);

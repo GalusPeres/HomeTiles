@@ -231,6 +231,10 @@ namespace settings_model {
 
 const i18n::Strings& text() { return tr(); }
 
+uint8_t language_count() { return static_cast<uint8_t>(i18n::language_count()); }
+
+const i18n::Strings& text_of(uint8_t language) { return i18n::strings(i18n::language_code_at(language)); }
+
 uint32_t card_color() { return settings_tile_color(); }
 
 DisplayValues display_values() {

@@ -7,11 +7,12 @@
 //
 // Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880]
 //        [--page=display|wifi|localization|system] [--open=<row>] [--press=<row>]
-//        [--state=off|ap|eth|ethwifi] [--dialog=github|restart|unpair|password|pairing]
+//        [--state=off|new|ap|eth|ethwifi] [--dialog=github|restart|unpair|password|pairing]
 //        [--entry=manual|join] [--no-mockup]
 // --open shows the option list of a Localization row (1 = time zone), like
 // the mockup's dd=<row>; --press shows that row pressed. System: --state=off
-// = not paired and the first-password window open (mockup enc=0&pw=win);
+// = not paired and the first-password window open (mockup enc=0&pw=win),
+// new = not paired and no password (mockup enc=0&pw=0);
 // --dialog opens a dialog (mockup dlg=git|restart|encOff|pwOff|code).
 // WiFi: --state=ap = the hotspot on, eth / ethwifi = a panel that can use
 // Ethernet in Ethernet or WiFi mode (mockup eth=eth|wifi); --entry opens the
@@ -63,7 +64,7 @@ const shot = page + (open === undefined ? '' : `-open${open}`) + (press === unde
   (state === undefined ? '' : `-${state}`) + (dialog === undefined ? '' : `-${dialog}`) +
   (entry === undefined ? '' : `-${entry}`);
 // The mockup's hash for the same state.
-const mockupState = (open === undefined ? '' : `&dd=${open}`) + (state === 'off' ? '&enc=0&pw=win' : '') +
+const mockupState = (open === undefined ? '' : `&dd=${open}`) + (state === 'off' ? '&enc=0&pw=win' : state === 'new' ? '&enc=0&pw=0' : '') +
   (state === 'eth' ? '&eth=eth' : state === 'ethwifi' ? '&eth=wifi' : '') +
   (dialog === undefined ? '' : `&dlg=${dialogs[dialog]}`) +
   (entry === undefined ? '' : `&sheet=${entry === 'manual' ? 'manual' : 'pass'}`);
@@ -89,10 +90,14 @@ const iconTable = icons.map(name => {
   return `{"${name}", ${match[1]}}`;
 }).join(', ');
 
-// The English strings table of the firmware.
+// The firmware's strings tables: English shows, every language counts for
+// sizes that must not change with the language.
 const i18nSource = read('src/core/i18n/i18n.cpp');
-const enStart = i18nSource.indexOf('static const Strings kStringsEn = {');
-const enTable = i18nSource.slice(enStart, i18nSource.indexOf('};', enStart) + 2);
+const table = name => {
+  const start = i18nSource.indexOf(`static const Strings ${name} = {`);
+  return i18nSource.slice(start, i18nSource.indexOf('};', start) + 2);
+};
+const enTable = ['kStringsEn', 'kStringsDe', 'kStringsFr', 'kStringsPl'].map(table).join('\n');
 // The English time zone names (LocaleProfile kLocaleEn timezone_labels).
 const enLocale = i18nSource.slice(i18nSource.indexOf('static const LocaleProfile kLocaleEn = {'));
 const zonesStart = enLocale.indexOf('{"UTC+0 - UTC"');
@@ -191,6 +196,12 @@ ${strip(read('src/ui/tabs/settings/settings_screen.cpp'))}
 // The mockup's example state.
 namespace settings_model {
 const i18n::Strings& text() { return i18n::kStringsEn; }
+uint8_t language_count() { return 4; }
+const i18n::Strings& text_of(uint8_t language) {
+  static const i18n::Strings* const kTables[] = {&i18n::kStringsEn, &i18n::kStringsDe, &i18n::kStringsFr,
+                                                 &i18n::kStringsPl};
+  return *kTables[language < 4 ? language : 0];
+}
 uint32_t card_color() { return 0x1A1A1A; }
 DisplayValues display_values() { return {80, 1, 100, 4, 3, 20, 1, 100}; }
 int saved_brightness() { return 80; }
@@ -238,9 +249,9 @@ void locale_selected_changed(LocaleList, uint8_t) {}
 // System: paired, password on (mockup st.sec), or --state=off; --dialog=pairing
 // shows the number.
 SystemValues system_values() {
-  const bool off = ${state === 'off' ? 'true' : 'false'};
+  const bool off = ${state === 'off' || state === 'new' ? 'true' : 'false'};
   const PairState pairing = ${dialog === 'pairing' ? 'PairState::Compare' : "off ? PairState::NotPaired : PairState::Paired"};
-  return {UpdateState::Idle, 0, !off, pairing, 119, !off, off, 119};
+  return {UpdateState::Idle, 0, !off, pairing, 119, !off, ${state === 'off' ? 'true' : 'false'}, 119};
 }
 const char* latest_version() { return ""; }
 const char* device_name() { return "${p.name}"; }

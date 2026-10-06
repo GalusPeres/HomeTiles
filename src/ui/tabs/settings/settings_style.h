@@ -42,6 +42,9 @@ constexpr int kSubTop = pick(4, 2);
 constexpr int kButtonHeight = pick(56, 37);
 constexpr int kButtonPad = pick(24, 16);
 constexpr int kButtonGap = pick(10, 6);
+// Pair and Allow on System: a little taller, both one width (text + pads + this).
+constexpr int kSwitchOnHeight = pick(64, 42);
+constexpr int kSwitchOnExtra = pick(24, 16);
 // Segment switch.
 constexpr int kSegmentHeight = pick(48, 32);
 constexpr int kSegmentInset = pick(4, 3);

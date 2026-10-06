@@ -15,8 +15,8 @@
 // whose frame is gone meanwhile: the step's circle, title and "Step n of 4"
 // top left, the X top right, the step's body, Back and Next in the bottom
 // corners with the step dots between them (mockup wzCard, wzBody, wzFoot).
-// One task per step, almost no text; WiFi and the pairing move on by
-// themselves once done.
+// One task per step, almost no text; each step waits for Next (user
+// 2026-10-06: step by step, no jump after WiFi or the pairing).
 namespace setup_screen {
 namespace {
 
@@ -35,8 +35,6 @@ constexpr StepLook kSteps[kStepCount] = {{"translate", settings_style::kLocaliza
                                          {"link-variant", 0x18BCF2},
                                          {"view-grid-plus-outline", 0x26A69A}};
 constexpr uint32_t kAccent = 0x26A69A;
-// A done step shows itself this long before the next one opens.
-constexpr uint32_t kNextDelayMs = 1200;
 // The setup opens the pairing window again at most this often.
 constexpr uint32_t kPairRetryMs = 3000;
 // A search without a result is repeated after this long.
@@ -84,9 +82,6 @@ uint32_t g_built_card = 0;
 const i18n::Strings* g_built_text = nullptr;
 // The body's state; a change builds the body and the foot again.
 uint32_t g_key = 0;
-// The step's task was done when last looked at; the time it moves on.
-bool g_done = false;
-uint32_t g_next_at = 0;
 // Step 3: the Bridge guide shows instead of the pairing steps.
 bool g_guide = false;
 uint32_t g_pair_tried_at = 0;
@@ -881,13 +876,11 @@ void build_card() {
     settings_model::wifi_scan();
     g_scan_at = lv_tick_get();
   }
-  g_done = step_done(g_step);
-  g_next_at = 0;
   build_body();
 }
 
-// While it shows: the WiFi entry's attempt, the state behind the body, the
-// pairing window, and the move to the next step once one is done.
+// While it shows: the WiFi entry's attempt, the state behind the body (Next
+// appears once the step is done) and the pairing window.
 void tick() {
   if (!g_card) return;
   const uint32_t now = lv_tick_get();
@@ -917,13 +910,6 @@ void tick() {
   }
   // A list or dialog stays as it is until it closes.
   if (body_key() != g_key && !g_dialog) build_body();
-  const bool done = step_done(g_step);
-  if (done && !g_done && (g_step == 1 || g_step == 2)) g_next_at = (now + kNextDelayMs) | 1;
-  g_done = done;
-  if (g_next_at && static_cast<int32_t>(now - g_next_at) >= 0) {
-    g_next_at = 0;
-    go_to(g_step + 1);
-  }
 }
 
 void on_timer(lv_timer_t*) { tick(); }

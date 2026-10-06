@@ -75,7 +75,7 @@ assert.doesNotMatch(setup, /LV_OPA_(?:50|60|70)|veil/i);
 const foot = between(setup, 'void build_foot(const Colors& palette) {', 'uint32_t body_key() {');
 assert.match(foot, /if \(g_step > 0\)/, 'no Back on the first step');
 assert.match(rawSetup, /s\.wifi_back_btn, "chevron-left"/);
-assert.match(foot, /else if \(g_step == 1 && !step_done\(1\)\) \{\s*label = nullptr;/, 'WiFi moves on by itself');
+assert.match(foot, /else if \(g_step == 1 && !step_done\(1\)\) \{\s*label = nullptr;/, 'Next once WiFi is connected');
 assert.match(foot, /else if \(g_step == 2 && !step_done\(2\)\) \{\s*label = s\.setup_later;/, 'Later until paired');
 assert.match(foot, /label = s\.setup_finish;/);
 // The four steps.
@@ -104,9 +104,10 @@ assert.match(tiles, /settings_parts::qr_code\(holder, qr, url\);/);
 
 // --- Behaviour ---------------------------------------------------------------------------------------------
 const tick = between(setup, 'void tick() {', 'void on_timer(lv_timer_t*)');
-// WiFi and the pairing move on by themselves once done, after a short look.
-assert.match(tick, /if \(done && !g_done && \(g_step == 1 \|\| g_step == 2\)\) g_next_at = \(now \+ kNextDelayMs\) \| 1;/);
-assert.match(setup, /constexpr uint32_t kNextDelayMs = 1200;/);
+// Step by step: the setup never moves on by itself (user 2026-10-06); Next
+// appears once WiFi is connected or the panel paired.
+assert.doesNotMatch(tick, /go_to\(/, 'no jump to the next step');
+assert.doesNotMatch(setup, /kNextDelayMs|g_next_at/);
 // The Home Assistant step keeps the panel findable, at most every few seconds.
 assert.match(tick, /pairing == PairState::NotPaired &&\s*\(g_pair_tried_at == 0 \|\| now - g_pair_tried_at >= kPairRetryMs\)/);
 assert.match(tick, /settings_model::pair\(\);/);

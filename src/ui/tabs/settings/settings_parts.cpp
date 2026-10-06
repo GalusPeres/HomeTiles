@@ -444,6 +444,135 @@ void close_options() {
   if (overlay) lv_obj_delete(overlay);
 }
 
+lv_obj_t* button(lv_obj_t* parent, const char* text, const char* icon_name, ButtonKind kind, uint32_t accent,
+                 const Colors& colors, int height, bool large_text, lv_event_cb_t on_click, void* user_data) {
+  const uint32_t fill = kind == ButtonKind::Accent ? accent : kind == ButtonKind::Danger ? kDangerColor : colors.button;
+  const lv_color_t ink = lv_color_hex(kind == ButtonKind::Accent ? kAccentText : 0xFFFFFF);
+  lv_obj_t* b = plain(parent);
+  lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_size(b, LV_SIZE_CONTENT, height);
+  settings_style::apply_radius(b, height / 2);
+  lv_obj_set_style_bg_color(b, lv_color_hex(fill), 0);
+  lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
+  // Normal buttons step up like the controls; colored ones get a little
+  // lighter (mockup :active brightness 1.12).
+  lv_obj_set_style_bg_color(b, kind == ButtonKind::Normal ? lv_color_hex(colors.pressed)
+                                                          : lv_color_lighten(lv_color_hex(fill), 31),
+                            LV_STATE_PRESSED);
+  lv_obj_set_style_pad_hor(b, kButtonPad, 0);
+  lv_obj_set_style_pad_column(b, kButtonGap, 0);
+  lv_obj_set_flex_flow(b, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(b, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_add_flag(b, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  if (icon_name && icon_name[0]) {
+    lv_obj_t* icon = lv_label_create(b);
+    lv_label_set_text(icon, getMdiChar(icon_name).c_str());
+    if (FONT_MDI_ICONS) lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
+    lv_obj_set_style_text_color(icon, ink, 0);
+  }
+  lv_obj_t* label = lv_label_create(b);
+  lv_label_set_text(label, text ? text : "");
+  lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+  lv_obj_set_style_text_font(label, large_text ? row_font() : small_font(), 0);
+  lv_obj_set_style_text_color(label, ink, 0);
+  browser_line(label, large_text ? kRowFontPx : kSmallFontPx);
+  if (on_click) lv_obj_add_event_cb(b, on_click, LV_EVENT_CLICKED, user_data);
+  return b;
+}
+
+void button_set_enabled(lv_obj_t* b, bool enabled) {
+  if (!b) return;
+  // Mockup .dis: 38 %.
+  lv_obj_set_style_opa(b, enabled ? LV_OPA_COVER : 97, 0);
+  if (enabled) {
+    lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
+  } else {
+    lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
+  }
+}
+
+lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t on_veil) {
+  lv_obj_update_layout(host);
+  lv_area_t host_area;
+  lv_area_t host_content;
+  lv_obj_get_coords(host, &host_area);
+  lv_obj_get_content_coords(host, &host_content);
+  lv_obj_t* root = plain(host);
+  lv_obj_add_flag(root, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_pos(root, host_area.x1 - host_content.x1, host_area.y1 - host_content.y1);
+  lv_obj_set_size(root, lv_area_get_width(&host_area), lv_area_get_height(&host_area));
+  lv_obj_set_style_bg_color(root, lv_color_black(), 0);
+  lv_obj_set_style_bg_opa(root, kVeilOpa, 0);
+  if (on_veil) lv_obj_add_event_cb(root, on_veil, LV_EVENT_CLICKED, nullptr);
+
+  lv_obj_t* box = plain(root);
+  // Taps on the card stay in it.
+  lv_obj_add_flag(box, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_size(box, kDialogWidth, LV_SIZE_CONTENT);
+  lv_obj_center(box);
+  lv_obj_set_style_bg_color(box, lv_color_hex(card), 0);
+  lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+  settings_style::apply_tile_radius(box);
+  ui_surface_style::apply_global_tile_border(box);
+  lv_obj_set_style_pad_top(box, kDialogPadTop, 0);
+  lv_obj_set_style_pad_hor(box, kDialogPadSide, 0);
+  lv_obj_set_style_pad_bottom(box, kDialogPadBottom, 0);
+  lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+  lv_obj_t* label = lv_label_create(box);
+  lv_label_set_text(label, title ? title : "");
+  lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(label, LV_PCT(100));
+  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(label, popup_layout::font28(), 0);
+  lv_obj_set_style_text_color(label, lv_color_white(), 0);
+  return box;
+}
+
+lv_obj_t* qr_code(lv_obj_t* parent, int size, const char* text) {
+#if LV_USE_QRCODE
+  lv_obj_t* qr = lv_qrcode_create(parent);
+  // The size first: setting it clears the code.
+  lv_qrcode_set_size(qr, size);
+  lv_qrcode_set_dark_color(qr, lv_color_black());
+  lv_qrcode_set_light_color(qr, lv_color_white());
+  lv_qrcode_set_quiet_zone(qr, true);
+  lv_qrcode_update(qr, text, strlen(text));
+  lv_obj_set_style_bg_color(qr, lv_color_white(), 0);
+  lv_obj_set_style_bg_opa(qr, LV_OPA_COVER, 0);
+  settings_style::apply_radius(qr, size / 12);
+  lv_obj_set_style_clip_corner(qr, true, 0);
+  return qr;
+#else
+  (void)parent;
+  (void)size;
+  (void)text;
+  return nullptr;
+#endif
+}
+
+lv_obj_t* dialog_text(lv_obj_t* box, const char* text) {
+  lv_obj_t* label = lv_label_create(box);
+  lv_label_set_text(label, text ? text : "");
+  lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(label, LV_PCT(100));
+  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(label, small_font(), 0);
+  grey_text(label);
+  lv_obj_set_style_margin_top(label, kDialogGap * 6 / 10, 0);
+  return label;
+}
+
+lv_obj_t* dialog_buttons(lv_obj_t* box) {
+  lv_obj_t* row = plain(box);
+  lv_obj_set_size(row, LV_PCT(100), kDialogButtonHeight);
+  lv_obj_set_style_margin_top(row, kDialogButtonsTop, 0);
+  lv_obj_set_style_pad_column(row, kDialogGap, 0);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  return row;
+}
+
 lv_obj_t* slider(lv_obj_t* row, int width, int32_t min, int32_t max, int32_t value, uint32_t accent,
                  uint32_t track, uint32_t thumb, SliderCallback on_change) {
   auto* state = static_cast<SliderState*>(lv_malloc(sizeof(SliderState)));

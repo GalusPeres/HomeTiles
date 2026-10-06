@@ -76,6 +76,29 @@ void open_options(const OptionList& list);
 // Closes an open list without calling its handler.
 void close_options();
 
+// Pill button (mockup .pb): an optional icon and the text (the row font when
+// `large_text`, else the small font). Normal sits in the button color, Accent
+// in `accent` with dark text, Danger in red.
+enum class ButtonKind : uint8_t { Normal, Accent, Danger };
+lv_obj_t* button(lv_obj_t* parent, const char* text, const char* icon_name, ButtonKind kind, uint32_t accent,
+                 const settings_style::Colors& colors, int height, bool large_text, lv_event_cb_t on_click,
+                 void* user_data);
+// Dimmed and without touches while disabled.
+void button_set_enabled(lv_obj_t* button, bool enabled);
+
+// A dialog (mockup .dlg) over a veil that covers `host`: returns the card, a
+// centered column with the title; the caller adds its text, extras and
+// dialog_buttons(). A tap on the veil calls `on_veil` (nullptr: ignored).
+// The dialog's root is lv_obj_get_parent(card).
+lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t on_veil);
+// A QR code on white with rounded corners (mockup qr(): size / 12); nullptr
+// without QR support.
+lv_obj_t* qr_code(lv_obj_t* parent, int size, const char* text);
+// Grey, centered, wrapping text under the title.
+lv_obj_t* dialog_text(lv_obj_t* card, const char* text);
+// The row of buttons at the dialog's bottom; buttons share it evenly.
+lv_obj_t* dialog_buttons(lv_obj_t* card);
+
 // Slider like the tiles' brightness bars: the track in `track`, the fill in
 // `accent` (at least a circle wide), a short line in `thumb` near the fill's
 // end. `on_change` runs while dragging (final = false) and once on release

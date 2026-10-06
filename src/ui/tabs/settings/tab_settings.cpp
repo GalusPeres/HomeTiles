@@ -3077,18 +3077,13 @@ static void build_system_popup(lv_obj_t* parent) {
   }
 }
 
+// The Bridge started pairing over the direct link: Settings opens on System,
+// whose dialog shows the number while the attempt runs.
 void settings_show_pairing() {
-  if (settings_popup_overlay && settings_popup_kind == SettingsPopupKind::Firmware &&
-      system_security_btn) {
-    security_step = SecurityStep::Pairing;
-    system_set_view(SystemView::Security);
-    return;
-  }
   if (settings_popup_overlay) close_settings_popup();
-  // The System popup builds its content after the first frame; it opens the
-  // pairing view at the end of build_system_popup().
-  system_open_pairing_pending = true;
-  open_settings_popup(SettingsPopupKind::Firmware);
+  uiManager.switchToTab(3);
+  settings_screen::show_category(3);
+  settings_screen::system_changed();
 }
 
 static const char* popup_title_for_kind(SettingsPopupKind kind) {
@@ -3308,7 +3303,194 @@ void locale_selected_changed(LocaleList list, uint8_t index) {
   tiles_request_reload_all();
 }
 
-// WiFi and System still open their popups until their pages follow.
+// ---------- System page ----------
+// The update check, the OTA install and Restart run through the sketch's
+// callbacks as before; their results arrive in settings_fw_* below.
+static UpdateState g_update_note = UpdateState::Idle;
+static int g_update_progress = 0;
+// When Pair and Allow were pressed: their two-minute windows count down.
+static uint32_t g_pair_started_ms = 0;
+static uint32_t g_password_allowed_ms = 0;
+static const char* g_pairing_note = nullptr;
+static constexpr uint32_t kWindowMs = 120000;
+
+static int seconds_left(uint32_t since_ms) {
+  if (!since_ms) return 0;
+  const uint32_t age = millis() - since_ms;
+  if (age >= kWindowMs) return 1;
+  return static_cast<int>((kWindowMs - age + 999) / 1000);
+}
+
+SystemValues system_values() {
+  using command_channel::PairingPhase;
+  SystemValues v = {};
+  const bool found = system_update_available && system_latest_tag[0];
+  if (g_update_note == UpdateState::Installed || g_update_note == UpdateState::Restarting) {
+    // The panel restarts next.
+    v.update = g_update_note;
+  } else if (system_install_running) {
+    v.update = UpdateState::Downloading;
+  } else if (system_check_running) {
+    v.update = UpdateState::Checking;
+  } else if (found && g_update_note != UpdateState::InstallFailed) {
+    v.update = UpdateState::Available;
+  } else {
+    v.update = g_update_note;
+  }
+  v.progress = g_update_progress;
+  v.connected = networkManager.isMqttConnected();
+
+  const PairingPhase phase = command_channel::pairingPhase();
+  // Without an answer, let an older Bridge find the panel again, as the
+  // former Pairing button did (MQTT reconnect).
+  if (phase == PairingPhase::NoAnswer && security_rediscover_pending) {
+    security_rediscover_pending = false;
+    if (g_ha_pair_callback) g_ha_pair_callback();
+  }
+  switch (phase) {
+    case PairingPhase::Discoverable:
+      v.pairing = PairState::Discoverable;
+      v.pair_seconds = seconds_left(g_pair_started_ms);
+      break;
+    case PairingPhase::Asking:
+      v.pairing = PairState::Asking;
+      break;
+    case PairingPhase::Compare:
+      v.pairing = PairState::Compare;
+      break;
+    case PairingPhase::Confirmed:
+      v.pairing = PairState::Confirmed;
+      break;
+    case PairingPhase::NoAnswer:
+      v.pairing = PairState::NoAnswer;
+      break;
+    case PairingPhase::AlreadyPaired:
+      v.pairing = PairState::AlreadyPaired;
+      break;
+    case PairingPhase::Busy:
+      v.pairing = PairState::Busy;
+      break;
+    case PairingPhase::Rejected:
+      v.pairing = PairState::Rejected;
+      break;
+    case PairingPhase::Failed:
+      v.pairing = PairState::Failed;
+      break;
+    default:
+      v.pairing = command_channel::state() == command_channel::PairingState::Active ? PairState::Paired
+                                                                                    : PairState::NotPaired;
+      break;
+  }
+  v.password_on = web_admin_auth::enabled();
+  v.password_window = !v.password_on && web_admin_auth::firstPasswordAllowed();
+  v.password_seconds = v.password_window ? seconds_left(g_password_allowed_ms) : 0;
+  return v;
+}
+
+const char* latest_version() { return system_latest_tag; }
+
+const char* device_name() { return Device::displayName(); }
+
+bool panel_address(char* buf, size_t len) {
+  if (ap_mode_active) {
+    // softAPIP() can still return 0.0.0.0 right after the hotspot started.
+    const String ip = WiFi.softAPIP().toString();
+    snprintf(buf, len, "%s", ip.length() && ip != "0.0.0.0" ? ip.c_str() : "192.168.4.1");
+    return true;
+  }
+  if (!networkTransport.isConnected()) return false;
+  snprintf(buf, len, "%s", networkTransport.localIP().toString().c_str());
+  return true;
+}
+
+bool pairing_number(char* buf, size_t len) {
+  char number[command_channel::kPairNumberDisplaySize];
+  if (!command_channel::pairingNumber(number)) return false;
+  snprintf(buf, len, "%s", number);
+  return true;
+}
+
+const char* pairing_note() { return g_pairing_note; }
+
+const char* repo_url() { return GithubUpdate::kRepoUrl; }
+
+void update_pressed() {
+  if (system_check_running || system_install_running) return;
+  if (system_update_available && system_latest_tag[0]) {
+    // The sketch pauses MQTT and Web Admin, downloads the release asset and
+    // restarts on success.
+    if (!g_fw_install_callback) return;
+    system_install_running = true;
+    g_update_note = UpdateState::Idle;
+    g_update_progress = 0;
+    g_fw_install_callback(system_latest_tag);
+    return;
+  }
+  if (!g_fw_check_callback) return;
+  system_check_running = true;
+  g_update_note = UpdateState::Idle;
+  g_fw_check_callback();
+}
+
+void restart() {
+  if (system_install_running || !g_system_reboot_callback) return;
+  system_install_running = true;
+  g_update_note = UpdateState::Restarting;
+  settings_screen::system_changed();
+  g_system_reboot_callback();
+}
+
+void pair() {
+  using command_channel::PairingPhase;
+  g_pairing_note = nullptr;
+  const PairingPhase phase = command_channel::pairingPhase();
+  // A finished attempt's result stays until it is cleared.
+  if (phase == PairingPhase::NoAnswer || phase == PairingPhase::AlreadyPaired || phase == PairingPhase::Busy ||
+      phase == PairingPhase::Rejected || phase == PairingPhase::Failed) {
+    command_channel::endPairing();
+  }
+  if (command_channel::startPairing()) {
+    security_rediscover_pending = true;
+    g_pair_started_ms = millis() | 1;
+  } else {
+    g_pairing_note = tr().pairing_failed;
+  }
+}
+
+void confirm_pairing() { command_channel::confirmPairing(); }
+
+void cancel_pairing() {
+  security_rediscover_pending = false;
+  command_channel::endPairing();
+}
+
+void unpair() {
+  bool bridge_notified = false;
+  if (command_channel::disable(&bridge_notified)) {
+    // The Bridge removes its side by itself when it was told; otherwise the
+    // pairing has to be removed in Home Assistant as well.
+    g_pairing_note = bridge_notified ? nullptr : tr().security_unpaired_offline;
+  } else {
+    g_pairing_note = tr().save_failed;
+  }
+}
+
+void allow_password() {
+  // The first Web Admin password needs this tap at the panel, like Pair.
+  web_admin_auth::allowFirstPassword();
+  g_password_allowed_ms = millis() | 1;
+}
+
+void remove_password() {
+  if (web_admin_auth::clearCredential()) {
+    // Without the password the Bridge no longer serves extra tile entities.
+    entity_search::scheduleTilesReport();
+  } else {
+    Serial.println("[Settings] Removing the Web Admin password failed");
+  }
+}
+
+// WiFi still opens its popup until its page follows.
 void open_category_popup(uint8_t category, lv_event_t* e) {
   static constexpr SettingsPopupKind kPopups[] = {SettingsPopupKind::Display, SettingsPopupKind::Wifi,
                                                   SettingsPopupKind::Localization, SettingsPopupKind::Firmware};
@@ -3400,6 +3582,10 @@ void settings_fw_check_result(bool ok, const char* latest_tag, bool update_avail
   if (ok && latest_tag && latest_tag[0]) {
     snprintf(system_latest_tag, sizeof(system_latest_tag), "%s", latest_tag);
   }
+  settings_model::g_update_note = !ok                    ? settings_model::UpdateState::CheckFailed
+                                  : update_available ? settings_model::UpdateState::Idle
+                                                     : settings_model::UpdateState::UpToDate;
+  settings_screen::system_changed();
   system_set_buttons_enabled(true);
   system_update_check_btn_text();
   settings_screen::refresh_lines();
@@ -3416,12 +3602,22 @@ void settings_fw_check_result(bool ok, const char* latest_tag, bool update_avail
 }
 
 void settings_fw_install_progress(size_t written, size_t total) {
-  if (!system_progress_bar || total == 0) return;
+  if (total == 0) return;
+  const int percent = static_cast<int>((written * 100ULL) / total);
+  if (percent != settings_model::g_update_progress) {
+    settings_model::g_update_progress = percent;
+    settings_screen::system_changed();
+  }
+  if (!system_progress_bar) return;
   lv_bar_set_value(system_progress_bar,
                    static_cast<int32_t>((written * 100ULL) / total), LV_ANIM_OFF);
 }
 
 void settings_fw_install_done() {
+  // Still running until the restart: the page keeps its buttons away.
+  settings_model::g_update_note = settings_model::UpdateState::Installed;
+  settings_model::g_update_progress = 100;
+  settings_screen::system_changed();
   system_install_running = false;
   if (system_progress_bar) lv_bar_set_value(system_progress_bar, 100, LV_ANIM_OFF);
   system_show_status(tr().system_installed_restarting, 0x51CF66);
@@ -3429,6 +3625,8 @@ void settings_fw_install_done() {
 
 void settings_fw_install_failed(const char* error) {
   system_install_running = false;
+  settings_model::g_update_note = settings_model::UpdateState::InstallFailed;
+  settings_screen::system_changed();
   system_set_buttons_enabled(true);
   if (system_progress_bar) lv_obj_add_flag(system_progress_bar, LV_OBJ_FLAG_HIDDEN);
   if (!system_status_label) return;

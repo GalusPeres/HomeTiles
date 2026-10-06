@@ -698,6 +698,27 @@ struct Strings {
   const char* settings_time_format;
   const char* settings_date_format;
   const char* settings_keyboard;
+  // Settings System page: section headings and rows (no colon).
+  const char* settings_connection;
+  // The panel address under Home Assistant: %s = IP address.
+  const char* settings_ip_fmt;
+  const char* settings_pairing;
+  const char* settings_commands_encrypted;
+  const char* settings_paired;
+  const char* settings_not_paired;
+  const char* settings_pair;
+  const char* settings_password_asks;
+  const char* settings_password_none;
+  const char* settings_allow;
+  const char* settings_set_password_now;
+  const char* settings_setup;
+  // Settings System dialogs.
+  const char* settings_unpair_question;
+  const char* settings_unpair_text;
+  const char* settings_unpair;
+  const char* settings_restart_question;
+  const char* settings_restart_text;
+  const char* settings_github_text;
 };
 
 // Locale-specific display rules and short runtime strings shared by

@@ -56,6 +56,66 @@ uint8_t locale_selected(LocaleList list);
 // Saved right away (no Save button); a new language renews every text.
 void locale_selected_changed(LocaleList list, uint8_t index);
 
+// ---------- System page ----------
+enum class UpdateState : uint8_t {
+  Idle,
+  Checking,
+  Available,  // latest_version() names it
+  UpToDate,
+  CheckFailed,
+  Downloading,
+  Installed,
+  InstallFailed,
+  Restarting,
+};
+// The direct link to Home Assistant (command_channel): findable after Pair,
+// the number dialog, the result of a failed attempt.
+enum class PairState : uint8_t {
+  NotPaired,
+  Discoverable,
+  Asking,
+  Compare,
+  Confirmed,
+  Paired,
+  NoAnswer,
+  AlreadyPaired,
+  Busy,
+  Rejected,
+  Failed,
+};
+struct SystemValues {
+  UpdateState update;
+  int progress;  // percent while Downloading
+  bool connected;  // Home Assistant reaches the panel
+  PairState pairing;
+  int pair_seconds;  // left while Discoverable, 0 when unknown
+  bool password_on;
+  bool password_window;  // the first password may be set in Web Admin now
+  int password_seconds;  // left in that window, 0 when unknown
+};
+// Also lets an older Bridge find the panel again after a pairing without an
+// answer, as the former Security view did; the System page polls it.
+SystemValues system_values();
+const char* latest_version();
+const char* device_name();
+// The panel's address (the hotspot's while it is on); false without one.
+bool panel_address(char* buf, size_t len);
+// The pairing number as "123 456" while it is shown.
+bool pairing_number(char* buf, size_t len);
+// A note after unpairing without the Bridge's answer (remove it in Home
+// Assistant too); nullptr otherwise. Pair clears it.
+const char* pairing_note();
+const char* repo_url();
+// Touches: check for updates, or install the update that was found.
+void update_pressed();
+void restart();
+void pair();
+void confirm_pairing();
+void cancel_pairing();
+void unpair();
+void allow_password();
+void remove_password();
+
 // ---------- Category lines ----------
 bool access_point_on();
 bool network_connected();
@@ -68,7 +128,7 @@ const char* firmware_version();
 
 // ---------- Navigation ----------
 void close_settings();
-// WiFi (1) and System (3) still open their popups until their pages follow.
+// WiFi (1) still opens its popup until its page follows.
 void open_category_popup(uint8_t category, lv_event_t* e);
 
 }  // namespace settings_model

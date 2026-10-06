@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/ui/startup/hometiles_logo.h"
 #include "src/ui/tabs/settings/settings_model.h"
 #include "src/ui/tabs/settings/settings_parts.h"
 #include "src/ui/tabs/settings/settings_style.h"
@@ -75,6 +76,19 @@ struct LocaleRow {
 };
 LocaleRow g_locale_rows[settings_model::kLocaleListCount] = {};
 int g_card_width = 0;
+
+// System page: what it was built for (a change rebuilds it), the labels that
+// count down, the download bar, the poll timer while it shows.
+uint32_t g_system_key = 0xFFFFFFFF;
+lv_obj_t* g_pair_time = nullptr;
+lv_obj_t* g_password_time = nullptr;
+lv_obj_t* g_progress_fill = nullptr;
+lv_timer_t* g_system_timer = nullptr;
+// The open dialog (on the panel, over a veil).
+enum class Dialog : uint8_t { None, Unpair, RemovePassword, Restart, GitHub, Pairing };
+Dialog g_dialog = Dialog::None;
+lv_obj_t* g_dialog_root = nullptr;
+settings_model::PairState g_dialog_pair = settings_model::PairState::NotPaired;
 
 Colors colors() { return settings_style::colors(g_built_card); }
 
@@ -227,13 +241,13 @@ void on_close_clicked(lv_event_t*) { settings_model::close_settings(); }
 
 void select_category(Category category);
 
-// A category tile or tab. Display and Localization open their pages in the
-// card; WiFi and System still open their popups until their pages follow.
+// A category tile or tab opens its page in the card; WiFi still opens its
+// popup until its page follows.
 void on_category_clicked(lv_event_t* e) {
   const uintptr_t raw = reinterpret_cast<uintptr_t>(lv_event_get_user_data(e));
   if (raw >= kCategoryCount) return;
   const Category category = static_cast<Category>(raw);
-  if (category != Category::Display && category != Category::Localization) {
+  if (category == Category::Wifi) {
     settings_model::open_category_popup(static_cast<uint8_t>(raw), e);
     return;
   }
@@ -536,16 +550,579 @@ void build_localization_page(lv_obj_t* page) {
   }
 }
 
+// ---------- System page ----------
+// The HomeTiles head (logo, name and version, the device or the update's
+// state, the update button), Connection (Home Assistant and the panel's
+// address), Security (Pairing, Web Admin password), then Setup, Restart and
+// GitHub at the card's bottom (mockup pageSystem). Questions, the pairing
+// number and the GitHub QR code open dialogs (mockup dialog()).
+
+using settings_model::PairState;
+using settings_model::SystemValues;
+using settings_model::UpdateState;
+
+lv_obj_t* g_address_label = nullptr;
+
+enum class SystemAction : uint8_t { Update, Pair, Unpair, Allow, RemovePassword, Setup, Restart, GitHub };
+enum class DialogAction : uint8_t { Close, Unpair, RemovePassword, Restart, CancelPairing, ConfirmPairing };
+
+void build_page();
+void system_tick();
+
+void clear_system_refs() {
+  g_pair_time = nullptr;
+  g_password_time = nullptr;
+  g_progress_fill = nullptr;
+  g_address_label = nullptr;
+  g_system_key = 0xFFFFFFFF;
+}
+
+void stop_system_timer() {
+  if (!g_system_timer) return;
+  lv_timer_delete(g_system_timer);
+  g_system_timer = nullptr;
+}
+
+// Inside a touch on the dialog it goes after the event.
+void close_dialog(bool from_event = false) {
+  lv_obj_t* root = g_dialog_root;
+  g_dialog_root = nullptr;
+  g_dialog = Dialog::None;
+  if (!root) return;
+  if (from_event) {
+    lv_obj_delete_async(root);
+  } else {
+    lv_obj_delete(root);
+  }
+}
+
+bool address_known() {
+  char address[48];
+  return settings_model::panel_address(address, sizeof(address));
+}
+
+// What the page shows apart from the countdowns, the download bar and the
+// address text; a change rebuilds it.
+uint32_t system_key(const SystemValues& v) {
+  return static_cast<uint32_t>(v.update) | static_cast<uint32_t>(v.pairing) << 4 | (v.connected ? 1u : 0u) << 8 |
+         (v.password_on ? 1u : 0u) << 9 | (v.password_window ? 1u : 0u) << 10 |
+         (settings_model::pairing_note() ? 1u : 0u) << 11 | (address_known() ? 1u : 0u) << 12;
+}
+
+void set_countdown(lv_obj_t* label, int seconds) {
+  if (!label) return;
+  char buf[12] = "";
+  if (seconds > 0) snprintf(buf, sizeof(buf), "%d:%02d", seconds / 60, seconds % 60);
+  if (strcmp(lv_label_get_text(label), buf) != 0) lv_label_set_text(label, buf);
+}
+
+void set_progress(int percent) {
+  if (!g_progress_fill) return;
+  if (percent < 0) percent = 0;
+  if (percent > 100) percent = 100;
+  lv_obj_set_width(g_progress_fill, settings_style::kProgressWidth * percent / 100);
+}
+
+void color_text(lv_obj_t* label, uint32_t color) {
+  if (!label) return;
+  lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
+  lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
+}
+
+// A state on the right of a row in green with a check ("Connected", "Paired",
+// "On"), and a chevron when a tap on the row asks to turn it off.
+void good_state(lv_obj_t* row, const char* text, bool chevron) {
+  color_text(settings_parts::trailing_text(row, text, g_page_width / 2), settings_style::kGoodColor);
+  color_text(settings_parts::trailing_icon(row, "check"), settings_style::kGoodColor);
+  if (chevron) settings_parts::trailing_icon(row, "chevron-right");
+}
+
+// The grey countdown of a two-minute window on the right of a row.
+lv_obj_t* countdown(lv_obj_t* row, int seconds) {
+  lv_obj_t* label = settings_parts::trailing_text(row, "", 0);
+  lv_obj_set_width(label, LV_SIZE_CONTENT);
+  set_countdown(label, seconds);
+  return label;
+}
+
+void* action_data(SystemAction action) { return reinterpret_cast<void*>(static_cast<uintptr_t>(action)); }
+
+void on_system_action(lv_event_t* e);
+
+lv_obj_t* row_button(lv_obj_t* row, const char* text, const char* icon, settings_parts::ButtonKind kind,
+                     SystemAction action) {
+  return settings_parts::button(row, text, icon, kind, settings_style::kSystemColor, colors(),
+                                settings_style::kButtonHeight, false, on_system_action, action_data(action));
+}
+
+void refresh_async(void*) { system_tick(); }
+
+void open_dialog(Dialog dialog);
+
+void on_system_action(lv_event_t* e) {
+  switch (static_cast<SystemAction>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)))) {
+    case SystemAction::Update:
+      settings_model::update_pressed();
+      break;
+    case SystemAction::Pair:
+      settings_model::pair();
+      break;
+    case SystemAction::Allow:
+      settings_model::allow_password();
+      break;
+    case SystemAction::Unpair:
+      open_dialog(Dialog::Unpair);
+      return;
+    case SystemAction::RemovePassword:
+      open_dialog(Dialog::RemovePassword);
+      return;
+    case SystemAction::Restart:
+      open_dialog(Dialog::Restart);
+      return;
+    case SystemAction::GitHub:
+      open_dialog(Dialog::GitHub);
+      return;
+    case SystemAction::Setup:
+      return;
+  }
+  // The page may be rebuilt, the touched button with it: after the event.
+  lv_async_call(refresh_async, nullptr);
+}
+
+void on_dialog_action(lv_event_t* e) {
+  const auto action = static_cast<DialogAction>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
+  // Confirm keeps the dialog: it turns into the wait for Home Assistant.
+  if (action != DialogAction::ConfirmPairing) close_dialog(true);
+  switch (action) {
+    case DialogAction::Close:
+      break;
+    case DialogAction::Unpair:
+      settings_model::unpair();
+      break;
+    case DialogAction::RemovePassword:
+      settings_model::remove_password();
+      break;
+    case DialogAction::Restart:
+      settings_model::restart();
+      break;
+    case DialogAction::CancelPairing:
+      settings_model::cancel_pairing();
+      break;
+    case DialogAction::ConfirmPairing:
+      settings_model::confirm_pairing();
+      break;
+  }
+  lv_async_call(refresh_async, nullptr);
+}
+
+// A tap beside a question closes it; the pairing number stays until Cancel.
+void on_veil(lv_event_t*) {
+  if (g_dialog == Dialog::Pairing) return;
+  close_dialog(true);
+}
+
+lv_obj_t* dialog_button(lv_obj_t* row, const char* text, const char* icon, settings_parts::ButtonKind kind,
+                        DialogAction action) {
+  lv_obj_t* b = settings_parts::button(row, text, icon, kind, settings_style::kSystemColor, colors(),
+                                       settings_style::kDialogButtonHeight, true, on_dialog_action,
+                                       reinterpret_cast<void*>(static_cast<uintptr_t>(action)));
+  lv_obj_set_flex_grow(b, 1);
+  return b;
+}
+
+void open_dialog(Dialog dialog) {
+  close_dialog();
+  settings_parts::close_options();
+  const i18n::Strings& s = settings_model::text();
+  using settings_parts::ButtonKind;
+  lv_obj_t* box = nullptr;
+  lv_obj_t* buttons = nullptr;
+  switch (dialog) {
+    case Dialog::None:
+      return;
+    case Dialog::Unpair:
+      box = settings_parts::dialog(g_panel, g_built_card, s.settings_unpair_question, on_veil);
+      settings_parts::dialog_text(box, s.settings_unpair_text);
+      buttons = settings_parts::dialog_buttons(box);
+      dialog_button(buttons, s.security_cancel, nullptr, ButtonKind::Normal, DialogAction::Close);
+      dialog_button(buttons, s.settings_unpair, nullptr, ButtonKind::Danger, DialogAction::Unpair);
+      break;
+    case Dialog::RemovePassword:
+      box = settings_parts::dialog(g_panel, g_built_card, s.security_password_question, on_veil);
+      settings_parts::dialog_text(box, s.security_password_question_hint);
+      buttons = settings_parts::dialog_buttons(box);
+      dialog_button(buttons, s.security_cancel, nullptr, ButtonKind::Normal, DialogAction::Close);
+      dialog_button(buttons, s.security_remove, nullptr, ButtonKind::Danger, DialogAction::RemovePassword);
+      break;
+    case Dialog::Restart:
+      box = settings_parts::dialog(g_panel, g_built_card, s.settings_restart_question, on_veil);
+      settings_parts::dialog_text(box, s.settings_restart_text);
+      buttons = settings_parts::dialog_buttons(box);
+      dialog_button(buttons, s.security_cancel, nullptr, ButtonKind::Normal, DialogAction::Close);
+      dialog_button(buttons, s.restart_button, nullptr, ButtonKind::Danger, DialogAction::Restart);
+      break;
+    case Dialog::GitHub: {
+      box = settings_parts::dialog(g_panel, g_built_card, settings_style::kGitHub, on_veil);
+      const char* url = settings_model::repo_url();
+      lv_obj_t* qr = settings_parts::qr_code(box, settings_style::kDialogQr, url);
+      if (qr) lv_obj_set_style_margin_top(qr, settings_style::kDialogGap, 0);
+      // The address without its scheme, as people type it.
+      const char* shown = strstr(url, "://") ? strstr(url, "://") + 3 : url;
+      lv_obj_t* link = settings_parts::dialog_text(box, shown);
+      lv_obj_set_style_text_color(link, lv_color_white(), 0);
+      lv_obj_set_style_text_opa(link, LV_OPA_COVER, 0);
+      settings_parts::dialog_text(box, s.settings_github_text);
+      buttons = settings_parts::dialog_buttons(box);
+      dialog_button(buttons, s.security_close, nullptr, ButtonKind::Normal, DialogAction::Close);
+      break;
+    }
+    case Dialog::Pairing: {
+      box = settings_parts::dialog(g_panel, g_built_card, s.settings_pairing, on_veil);
+      char number[24];
+      if (g_dialog_pair != PairState::Asking && settings_model::pairing_number(number, sizeof(number))) {
+        lv_obj_t* code = lv_label_create(box);
+        lv_label_set_text(code, number);
+        lv_obj_set_style_text_font(code, popup_layout::font72(), 0);
+        lv_obj_set_style_text_color(code, lv_color_white(), 0);
+        lv_obj_set_style_margin_top(code, settings_style::kDialogGap, 0);
+      }
+      char text[200];
+      if (g_dialog_pair == PairState::Compare) {
+        snprintf(text, sizeof(text), "%s. %s", s.pairing_compare, s.pairing_compare_hint);
+      } else {
+        snprintf(text, sizeof(text), "%s", g_dialog_pair == PairState::Asking ? s.pairing_asking : s.pairing_waiting);
+      }
+      settings_parts::dialog_text(box, text);
+      buttons = settings_parts::dialog_buttons(box);
+      dialog_button(buttons, s.security_cancel, nullptr, ButtonKind::Normal, DialogAction::CancelPairing);
+      if (g_dialog_pair != PairState::Asking) {
+        lv_obj_t* confirm =
+            dialog_button(buttons, s.security_confirm, "check", ButtonKind::Accent, DialogAction::ConfirmPairing);
+        settings_parts::button_set_enabled(confirm, g_dialog_pair == PairState::Compare);
+      }
+      break;
+    }
+  }
+  g_dialog = dialog;
+  g_dialog_root = box ? lv_obj_get_parent(box) : nullptr;
+}
+
+// The number dialog follows the pairing attempt; a question whose state went
+// away closes.
+void sync_dialog(const SystemValues& v) {
+  const bool numbered =
+      v.pairing == PairState::Asking || v.pairing == PairState::Compare || v.pairing == PairState::Confirmed;
+  if (numbered) {
+    if (g_dialog != Dialog::Pairing || g_dialog_pair != v.pairing) {
+      g_dialog_pair = v.pairing;
+      open_dialog(Dialog::Pairing);
+    }
+    return;
+  }
+  if (g_dialog == Dialog::Pairing || (g_dialog == Dialog::Unpair && v.pairing != PairState::Paired) ||
+      (g_dialog == Dialog::RemovePassword && !v.password_on)) {
+    close_dialog();
+  }
+}
+
+void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& palette) {
+  const i18n::Strings& s = settings_model::text();
+  using settings_parts::ButtonKind;
+  // Wide cards: the name large with the version in the row font; narrow ones
+  // keep the row font with the version small (mockup pageSystem).
+  const bool wide = g_card_width >= settings_style::kWideHeadCard;
+  lv_obj_t* group = settings_parts::group(page, palette);
+  settings_parts::Row head = settings_parts::row(group, nullptr, "", "");
+  const int pad = wide ? popup_layout::scale(GRID_ROWS < 5 ? 18 : 20) : 13;
+  lv_obj_set_height(head.row, settings_style::kHeroLogo + 2 * pad);
+
+  lv_obj_t* logo = lv_image_create(head.row);
+  lv_obj_remove_style_all(logo);
+  lv_image_set_src(logo, &hometiles_logo_dsc);
+  lv_image_set_antialias(logo, true);
+  lv_image_set_scale(logo, static_cast<uint32_t>(settings_style::kHeroLogo * 256 / hometiles_logo_dsc.header.w));
+  lv_obj_set_size(logo, settings_style::kHeroLogo, settings_style::kHeroLogo);
+  lv_obj_move_to_index(logo, 0);
+
+  // The product name and the version on one baseline.
+  lv_obj_delete(head.title);
+  head.title = nullptr;
+  lv_obj_t* line = settings_parts::plain(head.text);
+  lv_obj_move_to_index(line, 0);
+  lv_obj_set_size(line, LV_PCT(100), LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+  lv_obj_add_flag(line, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  const lv_font_t* name_font = wide ? settings_style::page_title_font() : settings_style::row_font();
+  const lv_font_t* version_font = wide ? settings_style::row_font() : settings_style::small_font();
+  lv_obj_t* name = lv_label_create(line);
+  lv_label_set_text(name, settings_style::kProductName);
+  lv_obj_set_style_text_font(name, name_font, 0);
+  lv_obj_set_style_text_color(name, lv_color_white(), 0);
+  settings_parts::browser_line(name, wide ? settings_style::kTitleFontPx : settings_style::kRowFontPx);
+  lv_obj_t* version = lv_label_create(line);
+  lv_label_set_text(version, settings_model::firmware_version());
+  lv_obj_set_style_text_font(version, version_font, 0);
+  lv_obj_set_style_text_color(version, lv_color_white(), 0);
+  lv_obj_set_style_text_opa(version, settings_style::kGreyOpa, 0);
+  // One space of the name's font (a lone space measures 0).
+  lv_obj_set_style_margin_left(
+      version, settings_parts::text_width(name_font, "H H") - settings_parts::text_width(name_font, "HH"), 0);
+  const int name_baseline = lv_obj_get_style_margin_top(name, LV_PART_MAIN) + name_font->line_height - name_font->base_line;
+  lv_obj_set_style_margin_top(version, name_baseline - (version_font->line_height - version_font->base_line), 0);
+
+  char buf[96];
+  const char* sub = settings_model::device_name();
+  uint32_t sub_color = 0;
+  const char* label = s.system_check_updates_btn;
+  const char* icon = "magnify";
+  ButtonKind kind = ButtonKind::Normal;
+  bool has_button = true;
+  bool enabled = true;
+  const bool found = settings_model::latest_version()[0] != '\0';
+  char install[64];
+  snprintf(install, sizeof(install), s.system_install_btn_fmt, settings_model::latest_version());
+  switch (v.update) {
+    case UpdateState::Idle:
+      break;
+    case UpdateState::Checking:
+      sub = s.system_checking;
+      enabled = false;
+      break;
+    case UpdateState::Available:
+      snprintf(buf, sizeof(buf), s.system_update_available_fmt, settings_model::latest_version());
+      sub = buf;
+      sub_color = settings_style::kWarnColor;
+      label = install;
+      icon = "download";
+      kind = ButtonKind::Accent;
+      break;
+    case UpdateState::UpToDate:
+      sub = s.system_up_to_date;
+      sub_color = settings_style::kGoodColor;
+      break;
+    case UpdateState::CheckFailed:
+      sub = s.system_check_failed;
+      sub_color = settings_style::kErrorColor;
+      break;
+    case UpdateState::Downloading:
+      sub = s.system_downloading;
+      has_button = false;
+      break;
+    case UpdateState::Installed:
+      sub = s.system_installed_restarting;
+      sub_color = settings_style::kGoodColor;
+      has_button = false;
+      break;
+    case UpdateState::InstallFailed:
+      sub = s.system_install_failed;
+      sub_color = settings_style::kErrorColor;
+      if (found) {
+        label = install;
+        icon = "download";
+        kind = ButtonKind::Accent;
+      }
+      break;
+    case UpdateState::Restarting:
+      sub = s.system_restarting;
+      has_button = false;
+      break;
+  }
+  lv_label_set_text(head.sub, sub);
+  if (sub_color) color_text(head.sub, sub_color);
+  if (has_button) {
+    settings_parts::button_set_enabled(row_button(head.row, label, icon, kind, SystemAction::Update), enabled);
+  } else if (v.update == UpdateState::Downloading) {
+    lv_obj_t* track = settings_parts::plain(head.row);
+    lv_obj_set_size(track, settings_style::kProgressWidth, settings_style::kProgressHeight);
+    lv_obj_set_style_bg_color(track, lv_color_hex(palette.card), 0);
+    lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(track, settings_style::kProgressHeight / 2, 0);
+    g_progress_fill = settings_parts::plain(track);
+    lv_obj_set_height(g_progress_fill, settings_style::kProgressHeight);
+    lv_obj_set_style_bg_color(g_progress_fill, lv_color_hex(settings_style::kSystemColor), 0);
+    lv_obj_set_style_bg_opa(g_progress_fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(g_progress_fill, settings_style::kProgressHeight / 2, 0);
+    set_progress(v.progress);
+  }
+}
+
+void build_system_page(lv_obj_t* page) {
+  const i18n::Strings& s = settings_model::text();
+  const SystemValues v = settings_model::system_values();
+  const Colors palette = colors();
+  using settings_parts::ButtonKind;
+  g_system_key = system_key(v);
+  build_system_head(page, v, palette);
+  lv_obj_t* head_row = lv_obj_get_child(lv_obj_get_child(page, 0), 0);
+  const int head_height = lv_obj_get_style_height(head_row, LV_PART_MAIN);
+
+  // Connection: Home Assistant, with the panel's own address under it.
+  settings_parts::section(page, s.settings_connection, false);
+  lv_obj_t* connection = settings_parts::group(page, palette);
+  char address[48];
+  char sub[64] = "";
+  if (settings_model::panel_address(address, sizeof(address))) snprintf(sub, sizeof(sub), s.settings_ip_fmt, address);
+  settings_parts::Row ha =
+      settings_parts::row(connection, "lan-connect", settings_style::kHomeAssistant, sub[0] ? sub : nullptr);
+  g_address_label = ha.sub;
+  if (v.connected) {
+    good_state(ha.row, s.security_value_connected, false);
+  } else {
+    settings_parts::trailing_text(ha.row, s.security_value_offline, g_page_width / 2);
+  }
+
+  // Security: Pairing and the Web Admin password.
+  settings_parts::section(page, s.security_btn, false);
+  lv_obj_t* security = settings_parts::group(page, palette);
+  switch (v.pairing) {
+    case PairState::Paired: {
+      settings_parts::Row r =
+          settings_parts::row(security, "link-variant", s.settings_pairing, s.settings_commands_encrypted);
+      good_state(r.row, s.settings_paired, true);
+      settings_parts::make_tap(r.row, palette.button, on_system_action,
+                               action_data(SystemAction::Unpair));
+      break;
+    }
+    case PairState::Discoverable: {
+      settings_parts::Row r = settings_parts::row(security, "link-variant", s.settings_pairing, s.pairing_discoverable);
+      color_text(r.sub, settings_style::kGoodColor);
+      g_pair_time = countdown(r.row, v.pair_seconds);
+      break;
+    }
+    case PairState::Asking:
+    case PairState::Compare:
+    case PairState::Confirmed:
+      settings_parts::row(security, "link-variant", s.settings_pairing,
+                          v.pairing == PairState::Asking ? s.pairing_asking : s.pairing_waiting);
+      break;
+    default: {
+      // Not paired, or a failed attempt's result; Pair tries again.
+      const char* note = settings_model::pairing_note();
+      const char* line = s.settings_not_paired;
+      uint32_t color = note ? settings_style::kWarnColor : 0;
+      switch (v.pairing) {
+        case PairState::NoAnswer:
+          line = s.pairing_no_answer;
+          color = settings_style::kWarnColor;
+          break;
+        case PairState::AlreadyPaired:
+          line = s.pairing_already_paired;
+          color = settings_style::kWarnColor;
+          break;
+        case PairState::Busy:
+          line = s.pairing_busy;
+          color = settings_style::kWarnColor;
+          break;
+        case PairState::Rejected:
+          line = s.pairing_rejected;
+          color = settings_style::kErrorColor;
+          break;
+        case PairState::Failed:
+          line = s.pairing_failed;
+          color = settings_style::kErrorColor;
+          break;
+        default:
+          if (note) line = note;
+          break;
+      }
+      settings_parts::Row r = settings_parts::row(security, "link-variant-off", s.settings_pairing, line);
+      if (color) color_text(r.sub, color);
+      row_button(r.row, s.settings_pair, nullptr, ButtonKind::Accent, SystemAction::Pair);
+      break;
+    }
+  }
+  if (v.password_on) {
+    settings_parts::Row r =
+        settings_parts::row(security, "form-textbox-password", s.web_auth_section, s.settings_password_asks);
+    good_state(r.row, s.security_state_on, true);
+    settings_parts::make_tap(r.row, palette.button, on_system_action,
+                             action_data(SystemAction::RemovePassword));
+  } else if (v.password_window) {
+    settings_parts::Row r =
+        settings_parts::row(security, "form-textbox-password", s.web_auth_section, s.settings_set_password_now);
+    color_text(r.sub, settings_style::kGoodColor);
+    g_password_time = countdown(r.row, v.password_seconds);
+  } else {
+    settings_parts::Row r =
+        settings_parts::row(security, "form-textbox-password", s.web_auth_section, s.settings_password_none);
+    row_button(r.row, s.settings_allow, nullptr, ButtonKind::Accent, SystemAction::Allow);
+  }
+
+  // Setup, Restart and GitHub right on the card (no group, no heading).
+  lv_obj_t* actions = settings_parts::plain(page);
+  lv_obj_set_size(actions, LV_PCT(100), settings_style::kSystemButtonHeight);
+  lv_obj_set_style_margin_top(actions, settings_style::kSectionTop, 0);
+  lv_obj_set_style_pad_column(actions, settings_style::kButtonGap, 0);
+  lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
+  struct Action {
+    const char* text;
+    const char* icon;
+    SystemAction action;
+  };
+  const Action kActions[] = {{s.settings_setup, "rocket-launch-outline", SystemAction::Setup},
+                             {s.restart_button, "restart", SystemAction::Restart},
+                             {settings_style::kGitHub, "github", SystemAction::GitHub}};
+  for (const Action& a : kActions) {
+    lv_obj_t* b = settings_parts::button(actions, a.text, a.icon, ButtonKind::Normal, settings_style::kSystemColor,
+                                         palette, settings_style::kSystemButtonHeight, false, on_system_action,
+                                         action_data(a.action));
+    lv_obj_set_flex_grow(b, 1);
+    // The first-start setup follows after the Settings pages.
+    if (a.action == SystemAction::Setup) settings_parts::button_set_enabled(b, false);
+  }
+
+  // The head takes what the card has left, so the buttons end one card
+  // margin above its edge (mockup growSystemHead).
+  lv_obj_update_layout(page);
+  lv_area_t page_area;
+  lv_area_t last;
+  lv_obj_get_coords(page, &page_area);
+  lv_obj_get_coords(actions, &last);
+  const int free = page_area.y2 - last.y2;
+  if (free > 0) lv_obj_set_height(head_row, head_height + free);
+}
+
+void on_system_timer(lv_timer_t*) { system_tick(); }
+
+void system_tick() {
+  if (g_category != Category::System || !g_page_built || !g_page) return;
+  const SystemValues v = settings_model::system_values();
+  if (system_key(v) != g_system_key) {
+    build_page();
+    refresh_lines();
+  } else {
+    set_countdown(g_pair_time, v.pair_seconds);
+    set_countdown(g_password_time, v.password_seconds);
+    set_progress(v.progress);
+    char address[48];
+    char sub[64];
+    if (g_address_label && settings_model::panel_address(address, sizeof(address))) {
+      snprintf(sub, sizeof(sub), settings_model::text().settings_ip_fmt, address);
+      if (strcmp(lv_label_get_text(g_address_label), sub) != 0) lv_label_set_text(g_address_label, sub);
+    }
+  }
+  sync_dialog(v);
+}
+
 // ---------- Frame ----------
 
-// The open page in the card; WiFi and System still use their popups.
+// The open page in the card; WiFi still uses its popup.
 void build_page() {
   if (!g_page) return;
   clear_display_refs();
   clear_locale_refs();
+  clear_system_refs();
+  if (g_category != Category::System) {
+    close_dialog();
+    stop_system_timer();
+  }
   lv_obj_clean(g_page);
   if (g_category == Category::Display) build_display_page(g_page);
   if (g_category == Category::Localization) build_localization_page(g_page);
+  if (g_category == Category::System) {
+    build_system_page(g_page);
+    if (!g_system_timer) g_system_timer = lv_timer_create(on_system_timer, 500, nullptr);
+  }
   g_page_built = true;
 }
 
@@ -555,8 +1132,10 @@ void clear_refs() {
   g_card_title = nullptr;
   g_page = nullptr;
   g_page_built = false;
+  close_dialog();
   clear_display_refs();
   clear_locale_refs();
+  clear_system_refs();
 }
 
 // Bar, categories and the empty card, in the colors of the moment.
@@ -715,8 +1294,11 @@ void did_hide() {
     lv_timer_delete(g_lines_timer);
     g_lines_timer = nullptr;
   }
+  close_dialog();
+  stop_system_timer();
   clear_display_refs();
   clear_locale_refs();
+  clear_system_refs();
   if (g_page) lv_obj_clean(g_page);
   g_page_built = false;
 }
@@ -745,5 +1327,11 @@ void texts_changed() {
   g_built_text = nullptr;
   if (g_panel && !lv_obj_has_flag(g_panel, LV_OBJ_FLAG_HIDDEN)) prepare_show();
 }
+
+void show_category(uint8_t index) {
+  if (index < kCategoryCount) select_category(static_cast<Category>(index));
+}
+
+void system_changed() { system_tick(); }
 
 }  // namespace settings_screen

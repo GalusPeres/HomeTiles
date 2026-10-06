@@ -51,12 +51,12 @@ const between = (source, from, to) => {
   assert.ok(start >= 0 && end > start, `${from} .. ${to}`);
   return source.slice(start, end);
 };
-const page = between(screen, 'void build_display_page(lv_obj_t* page) {', 'void build_page() {');
+const page = between(screen, 'void build_display_page(lv_obj_t* page) {', 'void clear_locale_refs() {');
 for (const key of ['settings_screen', 'settings_brightness', 'settings_sleep', 'settings_rotation',
   'settings_screensaver', 'settings_starts_after']) {
   assert.match(page, new RegExp(`s\\.${key}\\b`), `the page shows ${key}`);
 }
-const rawPage = between(rawScreen, 'void build_display_page(lv_obj_t* page) {', 'void build_page() {');
+const rawPage = between(rawScreen, 'void build_display_page(lv_obj_t* page) {', '// ---------- Localization page ----------');
 assert.doesNotMatch(rawPage, /"[A-Z][a-z]+/, 'no display text in the page code');
 assert.match(page, /section\(page, s\.settings_screen, true\)/);
 assert.match(page, /section\(page, s\.settings_screensaver, false\)/);

@@ -62,6 +62,24 @@ constexpr int kOptionInset = pick(8, 5);
 constexpr int kOptionsVisible = 6;
 // Cards narrower than this show a row's value under its label.
 constexpr int kStackedCardWidth = 520;
+// System page: the logo, the head's large name from this card width on, the
+// three buttons at the bottom, the download bar.
+constexpr int kHeroLogo = pick(72, 44);
+constexpr int kWideHeadCard = 720;
+constexpr int kSystemButtonHeight = pick(72, 47);
+constexpr int kProgressWidth = pick(220, 110);
+constexpr int kProgressHeight = pick(8, 6);
+// Dialog (mockup P.dlg): width, padding, gaps, buttons, the GitHub QR code.
+constexpr int kDialogWidth = pick(600, 440);
+constexpr int kDialogPadTop = pick(36, 24);
+constexpr int kDialogPadSide = pick(32, 20);
+constexpr int kDialogPadBottom = pick(28, 18);
+constexpr int kDialogGap = pick(16, 10);
+constexpr int kDialogButtonsTop = pick(32, 20);
+constexpr int kDialogButtonHeight = pick(72, 48);
+constexpr int kDialogQr = pick(210, 140);
+// The veil behind a dialog: black at 62 %.
+constexpr lv_opa_t kVeilOpa = 158;
 // Settings card: padding, the large page title (5-row and portrait panels).
 constexpr int kCardPad = popup_layout::kCardPad;
 constexpr int kTitleTop = popup_layout::scale(6);
@@ -109,6 +127,17 @@ constexpr uint32_t kLocalizationColor = 0xAB47BC;
 constexpr uint32_t kSystemColor = 0x26A69A;
 // The gear's circle: a neutral grey tile.
 constexpr uint32_t kGearColor = 0x9E9E9E;
+// States (mockup GOOD, WARN), errors, the danger button, text on accent
+// buttons.
+constexpr uint32_t kGoodColor = 0x51CF66;
+constexpr uint32_t kWarnColor = 0xFFC04D;
+constexpr uint32_t kErrorColor = 0xFF6B6B;
+constexpr uint32_t kDangerColor = 0xE5534B;
+constexpr uint32_t kAccentText = 0x1A1A1A;
+// Product names stay as they are in every language.
+constexpr const char* kProductName = "HomeTiles";
+constexpr const char* kHomeAssistant = "Home Assistant";
+constexpr const char* kGitHub = "GitHub";
 
 // A rounding the mockup draws at the default, maximum tile radius. It follows
 // the global radius like every popup corner: smaller by as much as the global

@@ -6,9 +6,12 @@
 // (settings_model.h), so both show the same state.
 //
 // Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880] [--page=display|localization]
-//        [--open=<row>] [--press=<row>] [--no-mockup]
+//        [--open=<row>] [--press=<row>] [--state=off] [--dialog=github|restart|unpair|password|pairing]
+//        [--no-mockup]
 // --open shows the option list of a Localization row (1 = time zone), like
-// the mockup's dd=<row>; --press shows that row pressed.
+// the mockup's dd=<row>; --press shows that row pressed. System: --state=off
+// = not paired and the first-password window open (mockup enc=0&pw=win);
+// --dialog opens a dialog (mockup dlg=git|restart|encOff|pwOff|code).
 // Output: build/settings-preview/<panel>-<page>.png (firmware render) and
 //         build/settings-preview/<panel>-<page>-compare.png (mockup | firmware | difference).
 import fs from 'node:fs';
@@ -30,13 +33,13 @@ fs.mkdirSync(out, {recursive: true});
 // The seven panel layouts (src/devices/*, kProfile), as in the mockup's
 // device menu: screen, Home grid, layout class, rotation steps.
 const PANELS = {
-  p8: {W: 1280, H: 800, cols: 7, rows: 5, cw: 168, ch: 145, gap: 16, pad: 4, cls: 'big', quarter: false},
-  p7: {W: 1280, H: 720, cols: 7, rows: 4, cw: 168, ch: 166, gap: 16, pad: 4, cls: 'big', quarter: false},
-  p1024: {W: 1024, H: 600, cols: 6, rows: 4, cw: 156, ch: 136, gap: 16, pad: 4, cls: 'mid', quarter: false},
-  p43: {W: 800, H: 480, cols: 5, rows: 4, cw: 150, ch: 111, gap: 10, pad: 3, cls: 'small', quarter: false},
-  p4b: {W: 720, H: 720, cols: 4, rows: 4, cw: 166, ch: 166, gap: 16, pad: 4, cls: 'big', quarter: true},
-  s3: {W: 480, H: 480, cols: 4, rows: 4, cw: 111, ch: 111, gap: 10, pad: 3, cls: 'small', quarter: true},
-  p4880: {W: 480, H: 800, cols: 4, rows: 6, cw: 111, ch: 124, gap: 10, pad: 3, cls: 'small', quarter: false},
+  p8: {W: 1280, H: 800, cols: 7, rows: 5, cw: 168, ch: 145, gap: 16, pad: 4, cls: 'big', quarter: false, name: 'Guition JC8012P4A1 V2'},
+  p7: {W: 1280, H: 720, cols: 7, rows: 4, cw: 168, ch: 166, gap: 16, pad: 4, cls: 'big', quarter: false, name: 'M5Stack Tab5'},
+  p1024: {W: 1024, H: 600, cols: 6, rows: 4, cw: 156, ch: 136, gap: 16, pad: 4, cls: 'mid', quarter: false, name: 'Guition JC1060P470C'},
+  p43: {W: 800, H: 480, cols: 5, rows: 4, cw: 150, ch: 111, gap: 10, pad: 3, cls: 'small', quarter: false, name: 'Waveshare Touch LCD 4.3'},
+  p4b: {W: 720, H: 720, cols: 4, rows: 4, cw: 166, ch: 166, gap: 16, pad: 4, cls: 'big', quarter: true, name: 'Waveshare 4B'},
+  s3: {W: 480, H: 480, cols: 4, rows: 4, cw: 111, ch: 111, gap: 10, pad: 3, cls: 'small', quarter: true, name: 'Guition ESP32-S3 4\\"'},
+  p4880: {W: 480, H: 800, cols: 4, rows: 6, cw: 111, ch: 124, gap: 10, pad: 3, cls: 'small', quarter: false, name: 'Guition JC4880P443'},
 };
 const args = process.argv.slice(2);
 const noMockup = args.includes('--no-mockup');
@@ -45,9 +48,17 @@ const option = name => (args.find(a => a.startsWith(`--${name}=`)) || '').split(
 const page = option('page') || 'display';
 const open = option('open');
 const press = option('press');
+const state = option('state');
+const dialog = option('dialog');
+const dialogs = {github: 'git', restart: 'restart', unpair: 'encOff', password: 'pwOff', pairing: 'code'};
+if (dialog !== undefined && !(dialog in dialogs)) throw new Error(`unknown dialog ${dialog}`);
 const categories = {display: 0, wifi: 1, localization: 2, system: 3};
 if (!(page in categories)) throw new Error(`unknown page ${page}`);
-const shot = page + (open === undefined ? '' : `-open${open}`) + (press === undefined ? '' : `-press${press}`);
+const shot = page + (open === undefined ? '' : `-open${open}`) + (press === undefined ? '' : `-press${press}`) +
+  (state === undefined ? '' : `-${state}`) + (dialog === undefined ? '' : `-${dialog}`);
+// The mockup's hash for the same state.
+const mockupState = (open === undefined ? '' : `&dd=${open}`) + (state === 'off' ? '&enc=0&pw=win' : '') +
+  (dialog === undefined ? '' : `&dlg=${dialogs[dialog]}`);
 const panels = selected.length ? selected : Object.keys(PANELS);
 
 // The time the mockup shows (Berlin, en-US 12 h), so both lines read the same.
@@ -58,7 +69,9 @@ const time = new Intl.DateTimeFormat('en-US', {timeZone: 'Europe/Berlin', hour: 
 const mdi = read('src/tiles/icons/mdi_icons.cpp');
 const icons = ['cog', 'window-close', 'monitor', 'wifi', 'wifi-off', 'access-point', 'translate', 'chip',
   'brightness-6', 'power-sleep', 'screen-rotation', 'timer-outline', 'brightness-4', 'earth', 'clock-outline',
-  'calendar-blank-outline', 'keyboard-outline', 'chevron-down', 'chevron-up'];
+  'calendar-blank-outline', 'keyboard-outline', 'chevron-down', 'chevron-up', 'chevron-right', 'check', 'lan-connect',
+  'link-variant', 'link-variant-off', 'form-textbox-password', 'rocket-launch-outline', 'restart', 'github', 'magnify',
+  'download'];
 const iconTable = icons.map(name => {
   const match = mdi.match(new RegExp(`\\{"${name}", (0x[0-9A-Fa-f]+)\\}`));
   if (!match) throw new Error(`MDI icon ${name} missing`);
@@ -158,6 +171,8 @@ ${strip(read('src/ui/tabs/settings/settings_style.h'))}
 ${strip(read('src/ui/tabs/settings/settings_parts.h'))}
 ${strip(read('src/ui/tabs/settings/settings_model.h'))}
 ${strip(read('src/ui/tabs/settings/settings_screen.h'))}
+${strip(read('src/ui/startup/hometiles_logo.h'))}
+${strip(read('src/ui/startup/hometiles_logo.cpp'))}
 ${strip(read('src/ui/tabs/settings/settings_parts.cpp'))}
 ${strip(read('src/ui/tabs/settings/settings_screen.cpp'))}
 // The mockup's example state.
@@ -207,6 +222,27 @@ const char* locale_option(LocaleList list, uint8_t index) {
 }
 uint8_t locale_selected(LocaleList list) { return list == LocaleList::TimeZone ? 2 : 0; }
 void locale_selected_changed(LocaleList, uint8_t) {}
+// System: paired, password on (mockup st.sec), or --state=off; --dialog=pairing
+// shows the number.
+SystemValues system_values() {
+  const bool off = ${state === 'off' ? 'true' : 'false'};
+  const PairState pairing = ${dialog === 'pairing' ? 'PairState::Compare' : "off ? PairState::NotPaired : PairState::Paired"};
+  return {UpdateState::Idle, 0, !off, pairing, 119, !off, off, 119};
+}
+const char* latest_version() { return ""; }
+const char* device_name() { return "${p.name}"; }
+bool panel_address(char* buf, size_t len) { snprintf(buf, len, "192.168.1.50"); return true; }
+bool pairing_number(char* buf, size_t len) { snprintf(buf, len, "465 848"); return true; }
+const char* pairing_note() { return nullptr; }
+const char* repo_url() { return "https://github.com/GalusPeres/HomeTiles"; }
+void update_pressed() {}
+void restart() {}
+void pair() {}
+void confirm_pairing() {}
+void cancel_pairing() {}
+void unpair() {}
+void allow_password() {}
+void remove_password() {}
 const char* firmware_version() { return "v0.8.0"; }
 void close_settings() {}
 void open_category_popup(uint8_t, lv_event_t*) {}
@@ -246,6 +282,8 @@ int main(int argc, char** argv) {
   settings_screen::select_category(static_cast<settings_screen::Category>(${categories[page]}));
   ${open === undefined ? '' : `settings_screen::open_locale_list(${Number(open)});`}
   ${press === undefined ? '' : `lv_obj_add_state(settings_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
+  settings_screen::system_changed();
+  ${dialog === undefined || dialog === 'pairing' ? '' : `settings_screen::open_dialog(settings_screen::Dialog::${{github: 'GitHub', restart: 'Restart', unpair: 'Unpair', password: 'RemovePassword'}[dialog]});`}
   ui_surface_style::process_pending_updates();
   lv_obj_update_layout(screen);
   lv_obj_invalidate(screen);
@@ -288,7 +326,7 @@ function mockup(key, p) {
   const winW = p.W + 2 * bezel + 34, winH = p.H + 2 * bezel + 18;
   const file = path.join(out, `${key}-mockup-full.png`);
   const url = 'file:///' + html.replace(/\\/g, '/') +
-    `#dev=${key}&view=settings&cat=${page}&ico=0&bare=1&shot=1${open === undefined ? '' : `&dd=${open}`}`;
+    `#dev=${key}&view=settings&cat=${page}&ico=0&bare=1&shot=1${mockupState}`;
   spawnSync(edge, ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--allow-file-access-from-files',
     `--window-size=${winW},${winH}`, '--virtual-time-budget=6000', `--screenshot=${file}`, url], {stdio: 'ignore'});
   if (!fs.existsSync(file)) return null;

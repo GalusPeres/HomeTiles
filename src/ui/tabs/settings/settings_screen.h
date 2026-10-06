@@ -22,5 +22,10 @@ void sync_rotation();
 // The texts changed: the frame is rebuilt now while it shows, else when it
 // opens next.
 void texts_changed();
+// Opens a category's page (0 Display, 1 WiFi, 2 Localization, 3 System).
+void show_category(uint8_t index);
+// The update, pairing or password state changed: the System page follows now
+// (it also polls them while it shows).
+void system_changed();
 
 }  // namespace settings_screen

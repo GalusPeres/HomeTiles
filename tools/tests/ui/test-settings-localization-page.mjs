@@ -50,10 +50,10 @@ for (const table of tables) {
 }
 
 // --- Page -----------------------------------------------------------------------------------
-const page = between(screen, 'void build_localization_page(lv_obj_t* page) {', 'void build_page() {');
+const page = between(screen, 'void build_localization_page(lv_obj_t* page) {', 'void clear_system_refs() {');
 const titles = between(screen, 'const char* locale_title(LocaleList list) {', 'const char* locale_icon(');
 for (const key of keys) assert.match(titles, new RegExp(`s\\.${key}\\b`), `the page shows ${key}`);
-const rawPage = between(rawScreen, 'void build_localization_page(lv_obj_t* page) {', 'void build_page() {');
+const rawPage = between(rawScreen, 'void build_localization_page(lv_obj_t* page) {', '// ---------- System page ----------');
 assert.doesNotMatch(rawPage, /"[A-Z][a-z]+/, 'no display text in the page code');
 // One group, a row per list; the value right, or under the label on narrow cards.
 assert.match(page, /settings_parts::group\(page, palette\)/);
@@ -65,7 +65,7 @@ assert.match(page, /settings_parts::make_tap\(row\.row, palette\.button, on_loca
 assert.doesNotMatch(page, /save|preview/i, 'no Save button and no Preview group');
 // The category opens its page in the card, not the old popup.
 const click = between(screen, 'void on_category_clicked(lv_event_t* e) {', 'void build_category_tile(');
-assert.match(click, /category != Category::Display && category != Category::Localization/);
+assert.match(click, /if \(category == Category::Wifi\) \{/, 'only WiFi still opens its popup');
 assert.match(between(screen, 'void build_page() {', 'void clear_refs() {'),
   /if \(g_category == Category::Localization\) build_localization_page\(g_page\);/);
 // The open list: the selected option in the Localization circle tone, labels aligned.

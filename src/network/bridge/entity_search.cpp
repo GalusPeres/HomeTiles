@@ -4,6 +4,7 @@
 
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "src/network/bridge/entity_declaration_core.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -206,9 +207,10 @@ void handleDeclarationAck(const uint8_t* body, size_t length) {
   JsonDocument doc;
   if (deserializeJson(doc, body, length) != DeserializationError::Ok) return;
   const uint32_t version = doc["v"] | 0u;
-  if (g_sent && version == g_sent_version) {
+  if (g_sent && version == g_sent_version && !(g_acked && g_acked_version == version)) {
     g_acked = true;
     g_acked_version = version;
+    Serial.printf("[EntitySearch] Declaration %08lx acknowledged\n", static_cast<unsigned long>(version));
   }
 }
 
@@ -234,9 +236,12 @@ void service() {
   if (g_acked && version == g_acked_version) return;  // the Bridge has it
   if (!retry && g_sent && version == g_sent_version) return;  // sent, waiting
   size_t dropped = declaration.dropped();
-  for (const std::string& part : declaration.parts(version, web_auth, &dropped)) {
-    publish("tiles", String(part.c_str()));
-  }
+  const std::vector<std::string> parts = declaration.parts(version, web_auth, &dropped);
+  for (const std::string& part : parts) publish("tiles", String(part.c_str()));
+  // Once per new declaration, new session or repeat (at most every 15 s).
+  Serial.printf("[EntitySearch] Declaration %08lx sent: %u entities in %u part(s)%s\n",
+                static_cast<unsigned long>(version), static_cast<unsigned>(declaration.count()),
+                static_cast<unsigned>(parts.size()), retry ? ", repeated" : "");
   if (dropped) Serial.printf("[EntitySearch] %u tile values not declared\n", (unsigned)dropped);
   g_sent = true;
   g_sent_version = version;

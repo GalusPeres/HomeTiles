@@ -63,7 +63,7 @@ const declarationCore = read('src/network/bridge/entity_declaration_core.h');
 assert.ok(Number(declarationCore.match(/kMaxPartBytes = (\d+)/)?.[1]) < maxBody, 'every part fits one sealed message');
 assert.match(declarationCore, /constexpr size_t kMaxParts = 8;/, 'entity_search.py MAX_DECLARATION_PARTS');
 assert.match(declarationCore, /constexpr size_t kMaxEntities = 300;/, 'entity_search.py MAX_PANEL_ENTITIES');
-assert.match(search, /void handleDeclarationAck[\s\S]*?if \(g_sent && version == g_sent_version\) \{\s*g_acked = true;\s*g_acked_version = version;/,
+assert.match(search, /void handleDeclarationAck[\s\S]*?if \(g_sent && version == g_sent_version && !\(g_acked && g_acked_version == version\)\) \{\s*g_acked = true;\s*g_acked_version = version;\s*Serial\.printf\("\[EntitySearch\] Declaration %08lx acknowledged\\n"/,
   'only the acknowledgement of the sent version counts');
 const service = search.slice(search.indexOf('void service() {'));
 assert.match(service, /if \(ready && !g_session_seen\) \{[\s\S]*?g_sent = false;\s*g_acked = false;\s*scheduleTilesReport\(\);/,
@@ -71,7 +71,8 @@ assert.match(service, /if \(ready && !g_session_seen\) \{[\s\S]*?g_sent = false;
 assert.match(service, /if \(!ready \|\| !declares\(\)\) return;/);
 assert.match(service, /const bool retry = unconfirmed && now - g_sent_ms >= kDeclarationRetryMs;/, 'repeated until acknowledged');
 assert.match(service, /if \(g_acked && version == g_acked_version\) return;/, 'an acknowledged declaration is not sent again');
-assert.match(service, /for \(const std::string& part : declaration\.parts\(version, web_auth, &dropped\)\) \{\s*publish\("tiles", String\(part\.c_str\(\)\)\);/);
+assert.match(service, /for \(const std::string& part : parts\) publish\("tiles", String\(part\.c_str\(\)\)\);\s*\/\/[^\n]*\n\s*Serial\.printf\("\[EntitySearch\] Declaration %08lx sent: %u entities in %u part\(s\)%s\\n"/,
+  'every declaration sent shows in the log, once per change, session or repeat');
 for (const [list, type] of [['sensors', 'TILE_SENSOR'], ['switches', 'TILE_SWITCH'], ['locks', 'TILE_LOCK'],
   ['alarm_panels', 'TILE_ALARM'], ['fans', 'TILE_FAN'], ['media', 'TILE_MEDIA']]) {
   assert.ok(search.includes(`{"${list}", ${type}}`), `${list} <- ${type}`);

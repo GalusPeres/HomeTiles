@@ -55,6 +55,13 @@ constexpr int kSliderHeight = pick(48, 32);
 constexpr int kSliderMaxWidth = pick(420, 160);
 constexpr int kSliderThumbWidth = pick(4, 3);
 constexpr int kValueWidth = pick(118, 64);
+// Option list of a dropdown row (mockup .ddl): option height, the inset of
+// the options in the list (also its gap to the row), six options visible.
+constexpr int kOptionHeight = pick(56, 37);
+constexpr int kOptionInset = pick(8, 5);
+constexpr int kOptionsVisible = 6;
+// Cards narrower than this show a row's value under its label.
+constexpr int kStackedCardWidth = 520;
 // Settings card: padding, the large page title (5-row and portrait panels).
 constexpr int kCardPad = popup_layout::kCardPad;
 constexpr int kTitleTop = popup_layout::scale(6);

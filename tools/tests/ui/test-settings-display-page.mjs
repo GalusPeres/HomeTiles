@@ -32,7 +32,8 @@ const expected = {
 };
 const struct = header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')));
 const fields = [...struct.replace(/\/\/[^\n]*/g, '').matchAll(/const char\*\s+(\w+);/g)].map(match => match[1]);
-assert.deepEqual(fields.slice(-keys.length), keys, 'the new Settings strings close the Strings struct');
+const first = fields.indexOf(keys[0]);
+assert.deepEqual(fields.slice(first, first + keys.length), keys, 'the Settings strings sit together in the Strings struct');
 const tables = [...new Set([...i18n.matchAll(/\{&(kStrings\w+), &kLocale\w+\}/g)].map(match => match[1]))];
 assert.deepEqual([...tables].sort(), Object.keys(expected).sort(), 'every registered language is checked');
 for (const table of tables) {
@@ -40,7 +41,7 @@ for (const table of tables) {
   const values = [...i18n.slice(start, i18n.indexOf('};', start)).matchAll(/"((?:\\.|[^"\\])*)"/g)]
     .map(match => match[1]);
   assert.equal(values.length, fields.length, `${table} has one value per field`);
-  assert.deepEqual(values.slice(-keys.length), expected[table], `${table} Settings strings`);
+  assert.deepEqual(values.slice(first, first + keys.length), expected[table], `${table} Settings strings`);
 }
 
 // --- Display page -----------------------------------------------------------------------

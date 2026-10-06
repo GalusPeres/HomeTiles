@@ -609,7 +609,12 @@ static const Strings kStringsDe = {
     "Standby %s",
     "Nicht verbunden",
     "Hotspot an",
-    "Update verfügbar"};
+    "Update verfügbar",
+    "Sprache",
+    "Zeitzone",
+    "Zeitformat",
+    "Datumsformat",
+    "Tastatur"};
 
 static const Strings kStringsEn = {
     "en",
@@ -1213,7 +1218,12 @@ static const Strings kStringsEn = {
     "Sleep %s",
     "Not connected",
     "Access point on",
-    "Update available"};
+    "Update available",
+    "Language",
+    "Time zone",
+    "Time format",
+    "Date format",
+    "Keyboard"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1817,7 +1827,12 @@ static const Strings kStringsFr = {
     "Veille %s",
     "Non connecté",
     "Point d'accès actif",
-    "Mise à jour disponible"};
+    "Mise à jour disponible",
+    "Langue",
+    "Fuseau horaire",
+    "Format de l'heure",
+    "Format de date",
+    "Clavier"};
 
 static const LocaleProfile kLocaleDe = {
     "de",
@@ -2773,6 +2788,11 @@ static const Strings kStringsPl = {
     "Brak połączenia",
     "Punkt dostępu włączony",
     "Dostępna aktualizacja",
+    "Język",
+    "Strefa czasowa",
+    "Format czasu",
+    "Format daty",
+    "Klawiatura",
 };
 
 static const LocaleProfile kLocalePl = {

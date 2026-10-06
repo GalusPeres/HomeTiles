@@ -45,6 +45,17 @@ void saver_changed(int index, bool final);
 void saver_brightness_changed(int percent, bool final);
 void rotation_selected(uint8_t index);
 
+// ---------- Localization page ----------
+// The option lists, in the page's order: language, time zone, time format,
+// date format, keyboard.
+enum class LocaleList : uint8_t { Language = 0, TimeZone, TimeFormat, DateFormat, Keyboard };
+constexpr uint8_t kLocaleListCount = 5;
+uint8_t locale_option_count(LocaleList list);
+const char* locale_option(LocaleList list, uint8_t index);
+uint8_t locale_selected(LocaleList list);
+// Saved right away (no Save button); a new language renews every text.
+void locale_selected_changed(LocaleList list, uint8_t index);
+
 // ---------- Category lines ----------
 bool access_point_on();
 bool network_connected();
@@ -57,8 +68,7 @@ const char* firmware_version();
 
 // ---------- Navigation ----------
 void close_settings();
-// WiFi (1), Localization (2) and System (3) still open their popups until
-// their pages follow.
+// WiFi (1) and System (3) still open their popups until their pages follow.
 void open_category_popup(uint8_t category, lv_event_t* e);
 
 }  // namespace settings_model

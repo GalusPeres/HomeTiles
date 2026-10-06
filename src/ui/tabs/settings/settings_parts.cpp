@@ -152,6 +152,84 @@ void segment_delete_cb(lv_event_t* e) {
   lv_free(state);
 }
 
+// ---------- Tappable row ----------
+
+// The pressed fill: a rounded rectangle in the group's rounding that reaches
+// past the row where another row follows, so the row's clip area cuts it
+// square there (mockup .grp > .row:first-child / :last-child).
+void tap_draw_cb(lv_event_t* e) {
+  lv_obj_t* row = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  lv_layer_t* layer = lv_event_get_layer(e);
+  if (!layer || !lv_obj_has_state(row, LV_STATE_PRESSED)) return;
+  lv_obj_t* group = lv_obj_get_parent(row);
+  const int32_t index = lv_obj_get_index(row);
+  const int32_t count = static_cast<int32_t>(lv_obj_get_child_count(group));
+  const int32_t radius = lv_obj_get_style_radius(group, LV_PART_MAIN);
+  lv_area_t area;
+  lv_obj_get_coords(row, &area);
+  if (index > 0) area.y1 -= radius;
+  if (index + 1 < count) area.y2 += radius;
+  lv_draw_rect_dsc_t dsc;
+  lv_draw_rect_dsc_init(&dsc);
+  dsc.base.layer = layer;
+  dsc.bg_color = lv_obj_get_style_bg_color(row, LV_PART_MAIN);
+  dsc.bg_opa = LV_OPA_COVER;
+  dsc.border_opa = LV_OPA_TRANSP;
+  dsc.radius = radius;
+  lv_draw_rect(layer, &dsc, &area);
+}
+
+void tap_state_cb(lv_event_t* e) { lv_obj_invalidate(static_cast<lv_obj_t*>(lv_event_get_current_target(e))); }
+
+// ---------- Option list ----------
+
+struct OptionState {
+  lv_obj_t* overlay;
+  uint8_t tag;
+  OptionHandler handler;
+  // A tap waiting for the list to close (after the event that reported it).
+  bool pick_pending;
+  uint8_t pick;
+  bool tap_pending;
+  lv_point_t tap;
+};
+OptionState g_options = {};
+
+void overlay_delete_cb(lv_event_t* e) {
+  if (lv_event_get_current_target(e) == g_options.overlay) g_options.overlay = nullptr;
+}
+
+// Closing deletes the list, so it waits until the touch event is over.
+void options_async_cb(void*) {
+  const OptionHandler handler = g_options.handler;
+  const uint8_t tag = g_options.tag;
+  const bool picked = g_options.pick_pending;
+  const uint8_t pick = g_options.pick;
+  const bool tapped = g_options.tap_pending;
+  const lv_point_t point = g_options.tap;
+  g_options.pick_pending = false;
+  g_options.tap_pending = false;
+  close_options();
+  if (handler.closed) handler.closed(tag, tapped ? &point : nullptr);
+  if (picked && handler.picked) handler.picked(tag, pick);
+}
+
+void option_clicked_cb(lv_event_t* e) {
+  if (g_options.pick_pending || g_options.tap_pending) return;
+  g_options.pick = static_cast<uint8_t>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
+  g_options.pick_pending = true;
+  lv_async_call(options_async_cb, nullptr);
+}
+
+void overlay_clicked_cb(lv_event_t*) {
+  if (g_options.pick_pending || g_options.tap_pending) return;
+  lv_indev_t* indev = lv_indev_active();
+  g_options.tap = {0, 0};
+  if (indev) lv_indev_get_point(indev, &g_options.tap);
+  g_options.tap_pending = true;
+  lv_async_call(options_async_cb, nullptr);
+}
+
 }  // namespace
 
 lv_obj_t* plain(lv_obj_t* parent) {
@@ -244,6 +322,126 @@ lv_obj_t* value_label(lv_obj_t* row, const char* text) {
   lv_obj_set_style_text_color(label, lv_color_white(), 0);
   browser_line(label, kRowFontPx);
   return label;
+}
+
+void make_tap(lv_obj_t* row, uint32_t pressed, lv_event_cb_t on_click, void* user_data) {
+  if (!row) return;
+  lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  // The fill color rides on the row's (transparent) background.
+  lv_obj_set_style_bg_color(row, lv_color_hex(pressed), 0);
+  lv_obj_add_event_cb(row, tap_draw_cb, LV_EVENT_DRAW_MAIN_BEGIN, nullptr);
+  lv_obj_add_event_cb(row, tap_state_cb, LV_EVENT_PRESSED, nullptr);
+  lv_obj_add_event_cb(row, tap_state_cb, LV_EVENT_RELEASED, nullptr);
+  lv_obj_add_event_cb(row, tap_state_cb, LV_EVENT_PRESS_LOST, nullptr);
+  if (on_click) lv_obj_add_event_cb(row, on_click, LV_EVENT_CLICKED, user_data);
+}
+
+lv_obj_t* trailing_text(lv_obj_t* row, const char* text, int max_width) {
+  lv_obj_t* label = lv_label_create(row);
+  lv_label_set_text(label, text ? text : "");
+  lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+  lv_obj_set_style_text_font(label, row_font(), 0);
+  const int width = text_width(row_font(), text);
+  lv_obj_set_width(label, width < max_width ? width : max_width);
+  grey_text(label);
+  browser_line(label, kRowFontPx);
+  return label;
+}
+
+lv_obj_t* trailing_icon(lv_obj_t* row, const char* icon_name) {
+  lv_obj_t* icon = lv_label_create(row);
+  lv_label_set_text(icon, getMdiChar(icon_name).c_str());
+  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
+  grey_text(icon);
+  return icon;
+}
+
+void open_options(const OptionList& spec) {
+  close_options();
+  if (!spec.host || !spec.row || spec.count == 0 || !spec.handler.text) return;
+  lv_obj_update_layout(spec.host);
+  lv_area_t host_area;
+  lv_area_t host_content;
+  lv_area_t row_area;
+  lv_obj_get_coords(spec.host, &host_area);
+  lv_obj_get_content_coords(spec.host, &host_content);
+  lv_obj_get_coords(spec.row, &row_area);
+
+  // The cover over the whole host catches taps beside the list.
+  lv_obj_t* overlay = plain(spec.host);
+  lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_pos(overlay, host_area.x1 - host_content.x1, host_area.y1 - host_content.y1);
+  lv_obj_set_size(overlay, lv_area_get_width(&host_area), lv_area_get_height(&host_area));
+  lv_obj_add_event_cb(overlay, overlay_clicked_cb, LV_EVENT_CLICKED, nullptr);
+  lv_obj_add_event_cb(overlay, overlay_delete_cb, LV_EVENT_DELETE, nullptr);
+  g_options = {};
+  g_options.overlay = overlay;
+  g_options.tag = spec.tag;
+  g_options.handler = spec.handler;
+
+  // Height: the options, their inset and the hairline, six at most; then
+  // the side with room (mockup placeDropdown).
+  const int edge = kOptionInset + 1;
+  const int visible = spec.count < kOptionsVisible ? spec.count : kOptionsVisible;
+  int height = visible * kOptionHeight + 2 * edge;
+  const int below = spec.bounds.y2 + 1 - (row_area.y2 + 1) - kOptionInset;
+  const int above = row_area.y1 - spec.bounds.y1 - kOptionInset;
+  const bool down = below >= height || below >= above;
+  const int room = down ? below : above;
+  if (height > room) height = room;
+  const int y = down ? row_area.y2 + 1 + kOptionInset : row_area.y1 - kOptionInset - height;
+
+  lv_obj_t* list = plain(overlay);
+  // Taps on its padding stay in the list.
+  lv_obj_add_flag(list, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_set_pos(list, row_area.x1 - host_area.x1, y - host_area.y1);
+  lv_obj_set_size(list, lv_area_get_width(&row_area), height);
+  lv_obj_set_style_bg_color(list, lv_color_hex(spec.card), 0);
+  lv_obj_set_style_bg_opa(list, LV_OPA_COVER, 0);
+  settings_style::apply_radius(list, kGroupRadius);
+  ui_surface_style::apply_global_tile_border(list);
+  lv_obj_set_style_pad_all(list, edge, 0);
+  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+
+  const int text_pad = spec.text_x - edge;
+  for (uint8_t i = 0; i < spec.count; ++i) {
+    lv_obj_t* option = plain(list);
+    lv_obj_add_flag(option, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_size(option, LV_PCT(100), kOptionHeight);
+    settings_style::apply_radius(option, kGroupRadius - kOptionInset);
+    lv_obj_set_style_bg_color(option, lv_color_hex(spec.selected_color), 0);
+    lv_obj_set_style_bg_opa(option, i == spec.selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(option, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_set_style_pad_left(option, text_pad > 0 ? text_pad : 0, 0);
+    lv_obj_set_flex_flow(option, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(option, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_flag(option, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+    lv_obj_t* label = lv_label_create(option);
+    const char* text = spec.handler.text(spec.tag, i);
+    lv_label_set_text(label, text ? text : "");
+    lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(label, LV_PCT(100));
+    lv_obj_set_style_text_font(label, row_font(), 0);
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    browser_line(label, kRowFontPx);
+    lv_obj_add_event_cb(option, option_clicked_cb, LV_EVENT_CLICKED,
+                        reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
+  }
+  // The selected option in the middle of the list.
+  if (spec.selected < spec.count) {
+    lv_obj_update_layout(list);
+    const int top = spec.selected * kOptionHeight - (height - 2 * edge - kOptionHeight) / 2;
+    lv_obj_scroll_to_y(list, top > 0 ? top : 0, LV_ANIM_OFF);
+  }
+}
+
+void close_options() {
+  lv_obj_t* overlay = g_options.overlay;
+  g_options.overlay = nullptr;
+  if (overlay) lv_obj_delete(overlay);
 }
 
 lv_obj_t* slider(lv_obj_t* row, int width, int32_t min, int32_t max, int32_t value, uint32_t accent,

@@ -692,6 +692,12 @@ struct Strings {
   const char* settings_access_point_on;
   // System category line.
   const char* settings_update_available;
+  // Settings Localization page: row labels (no colon).
+  const char* settings_language;
+  const char* settings_time_zone;
+  const char* settings_time_format;
+  const char* settings_date_format;
+  const char* settings_keyboard;
 };
 
 // Locale-specific display rules and short runtime strings shared by

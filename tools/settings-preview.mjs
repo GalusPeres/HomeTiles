@@ -5,9 +5,12 @@
 // The mockup's example values stand in for the configuration
 // (settings_model.h), so both show the same state.
 //
-// Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880] [--no-mockup]
-// Output: build/settings-preview/<panel>-display.png (firmware render) and
-//         build/settings-preview/<panel>-display-compare.png (mockup | firmware | difference).
+// Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880] [--page=display|localization]
+//        [--open=<row>] [--press=<row>] [--no-mockup]
+// --open shows the option list of a Localization row (1 = time zone), like
+// the mockup's dd=<row>; --press shows that row pressed.
+// Output: build/settings-preview/<panel>-<page>.png (firmware render) and
+//         build/settings-preview/<panel>-<page>-compare.png (mockup | firmware | difference).
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -38,6 +41,13 @@ const PANELS = {
 const args = process.argv.slice(2);
 const noMockup = args.includes('--no-mockup');
 const selected = args.filter(a => PANELS[a]);
+const option = name => (args.find(a => a.startsWith(`--${name}=`)) || '').split('=')[1];
+const page = option('page') || 'display';
+const open = option('open');
+const press = option('press');
+const categories = {display: 0, wifi: 1, localization: 2, system: 3};
+if (!(page in categories)) throw new Error(`unknown page ${page}`);
+const shot = page + (open === undefined ? '' : `-open${open}`) + (press === undefined ? '' : `-press${press}`);
 const panels = selected.length ? selected : Object.keys(PANELS);
 
 // The time the mockup shows (Berlin, en-US 12 h), so both lines read the same.
@@ -47,7 +57,8 @@ const time = new Intl.DateTimeFormat('en-US', {timeZone: 'Europe/Berlin', hour: 
 // MDI codepoints of the icons the screen uses, from the firmware's table.
 const mdi = read('src/tiles/icons/mdi_icons.cpp');
 const icons = ['cog', 'window-close', 'monitor', 'wifi', 'wifi-off', 'access-point', 'translate', 'chip',
-  'brightness-6', 'power-sleep', 'screen-rotation', 'timer-outline', 'brightness-4'];
+  'brightness-6', 'power-sleep', 'screen-rotation', 'timer-outline', 'brightness-4', 'earth', 'clock-outline',
+  'calendar-blank-outline', 'keyboard-outline', 'chevron-down', 'chevron-up'];
 const iconTable = icons.map(name => {
   const match = mdi.match(new RegExp(`\\{"${name}", (0x[0-9A-Fa-f]+)\\}`));
   if (!match) throw new Error(`MDI icon ${name} missing`);
@@ -58,6 +69,10 @@ const iconTable = icons.map(name => {
 const i18nSource = read('src/core/i18n/i18n.cpp');
 const enStart = i18nSource.indexOf('static const Strings kStringsEn = {');
 const enTable = i18nSource.slice(enStart, i18nSource.indexOf('};', enStart) + 2);
+// The English time zone names (LocaleProfile kLocaleEn timezone_labels).
+const enLocale = i18nSource.slice(i18nSource.indexOf('static const LocaleProfile kLocaleEn = {'));
+const zonesStart = enLocale.indexOf('{"UTC+0 - UTC"');
+const zones = enLocale.slice(zonesStart, enLocale.indexOf('}', zonesStart) + 1);
 
 function harness(p) {
   const fontPx = {big: 48, mid: 40, small: 32}[p.cls];
@@ -170,6 +185,28 @@ void network_name(char* buf, size_t len) { snprintf(buf, len, "HomeNet"); }
 const char* language_name() { return "English"; }
 bool time_text(char* buf, size_t len) { snprintf(buf, len, "%s", "${time}"); return true; }
 bool update_available() { return false; }
+// Localization: English, Berlin, the rest Auto (mockup st.loc).
+uint8_t locale_option_count(LocaleList list) {
+  static const uint8_t kCounts[] = {4, 27, 3, 4, 3};
+  return kCounts[static_cast<int>(list)];
+}
+const char* locale_option(LocaleList list, uint8_t index) {
+  static const char* const kLanguages[] = {"English", "Deutsch", "Fran\xC3\xA7" "ais", "Polski"};
+  static const char* const kZones[] = ${zones};
+  static const char* const kTimes[] = {"Auto (language)", "24-hour", "12-hour"};
+  static const char* const kDates[] = {"Auto (language)", "DD.MM.YYYY", "MM/DD/YYYY", "YYYY/MM/DD"};
+  static const char* const kKeyboards[] = {"Auto (language)", "Deutsch (QWERTZ)", "English (QWERTY)"};
+  switch (list) {
+    case LocaleList::Language: return kLanguages[index];
+    case LocaleList::TimeZone: return kZones[index];
+    case LocaleList::TimeFormat: return kTimes[index];
+    case LocaleList::DateFormat: return kDates[index];
+    case LocaleList::Keyboard: return kKeyboards[index];
+  }
+  return "";
+}
+uint8_t locale_selected(LocaleList list) { return list == LocaleList::TimeZone ? 2 : 0; }
+void locale_selected_changed(LocaleList, uint8_t) {}
 const char* firmware_version() { return "v0.8.0"; }
 void close_settings() {}
 void open_category_popup(uint8_t, lv_event_t*) {}
@@ -206,6 +243,9 @@ int main(int argc, char** argv) {
   lv_obj_set_style_pad_bottom(panel, GRID_PAD_BOTTOM, 0);
   settings_screen::build(panel);
   settings_screen::prepare_show();
+  settings_screen::select_category(static_cast<settings_screen::Category>(${categories[page]}));
+  ${open === undefined ? '' : `settings_screen::open_locale_list(${Number(open)});`}
+  ${press === undefined ? '' : `lv_obj_add_state(settings_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
   ui_surface_style::process_pending_updates();
   lv_obj_update_layout(screen);
   lv_obj_invalidate(screen);
@@ -242,17 +282,18 @@ function encodePng(width, height, rgb) {
 // screen cropped out of the device frame; see mockup fit()).
 function mockup(key, p) {
   const edge = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
-  const page = path.join(root, 'build/design-mockups/settings/settings-menu.html');
-  if (!fs.existsSync(edge) || !fs.existsSync(page)) return null;
+  const html = path.join(root, 'build/design-mockups/settings/settings-menu.html');
+  if (!fs.existsSync(edge) || !fs.existsSync(html)) return null;
   const bezel = {big: 14, mid: 12, small: 10}[p.cls];
   const winW = p.W + 2 * bezel + 34, winH = p.H + 2 * bezel + 18;
-  const shot = path.join(out, `${key}-mockup-full.png`);
-  const url = 'file:///' + page.replace(/\\/g, '/') + `#dev=${key}&view=settings&cat=display&ico=0&bare=1&shot=1`;
+  const file = path.join(out, `${key}-mockup-full.png`);
+  const url = 'file:///' + html.replace(/\\/g, '/') +
+    `#dev=${key}&view=settings&cat=${page}&ico=0&bare=1&shot=1${open === undefined ? '' : `&dd=${open}`}`;
   spawnSync(edge, ['--headless=new', '--disable-gpu', '--hide-scrollbars', '--allow-file-access-from-files',
-    `--window-size=${winW},${winH}`, '--virtual-time-budget=6000', `--screenshot=${shot}`, url], {stdio: 'ignore'});
-  if (!fs.existsSync(shot)) return null;
-  const image = decodePng(fs.readFileSync(shot));
-  fs.unlinkSync(shot);
+    `--window-size=${winW},${winH}`, '--virtual-time-budget=6000', `--screenshot=${file}`, url], {stdio: 'ignore'});
+  if (!fs.existsSync(file)) return null;
+  const image = decodePng(fs.readFileSync(file));
+  fs.unlinkSync(file);
   const x0 = Math.floor((winW - (p.W + 2 * bezel)) / 2) + bezel, y0 = bezel;
   const rgb = Buffer.alloc(p.W * p.H * 3);
   const channels = 4;
@@ -291,10 +332,10 @@ for (const key of panels) {
   for (let i = 0; i < p.W * p.H; i++) {
     firmware[i * 3] = xrgb[i * 4 + 2]; firmware[i * 3 + 1] = xrgb[i * 4 + 1]; firmware[i * 3 + 2] = xrgb[i * 4];
   }
-  fs.writeFileSync(path.join(out, `${key}-display.png`), encodePng(p.W, p.H, firmware));
+  fs.writeFileSync(path.join(out, `${key}-${shot}.png`), encodePng(p.W, p.H, firmware));
   const reference = noMockup ? null : mockup(key, p);
   if (!reference) {
-    console.log(`${key}: ${path.join(out, `${key}-display.png`)}`);
+    console.log(`${key}: ${path.join(out, `${key}-${shot}.png`)}`);
     continue;
   }
   // mockup | firmware | difference (white = differs, grey = the firmware image faintly).
@@ -313,7 +354,7 @@ for (const key of panels) {
       }
     }
   }
-  const file = path.join(out, `${key}-display-compare.png`);
+  const file = path.join(out, `${key}-${shot}-compare.png`);
   fs.writeFileSync(file, encodePng(width, p.H, sheet));
   console.log(`${key}: ${(100 * differing / (p.W * p.H)).toFixed(2)} % of the pixels differ clearly -> ${file}`);
 }

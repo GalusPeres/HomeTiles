@@ -3212,8 +3212,103 @@ static void open_settings_popup(SettingsPopupKind kind) {
 // ---------- Settings model: category lines and navigation ----------
 namespace settings_model {
 
-// WiFi, Localization and System still open their popups until their pages
-// follow.
+// ---------- Localization page ----------
+
+uint8_t locale_option_count(LocaleList list) {
+  switch (list) {
+    case LocaleList::Language:
+      return static_cast<uint8_t>(i18n::language_count());
+    case LocaleList::TimeZone:
+      return static_cast<uint8_t>(i18n::kTimezoneOptionCount);
+    case LocaleList::TimeFormat:
+      return 3;
+    case LocaleList::DateFormat:
+      return 4;
+    case LocaleList::Keyboard:
+      return 3;
+  }
+  return 0;
+}
+
+// The same options as Web Admin: native language names, the time zone names
+// of the current language, Auto first in the format and keyboard lists. The
+// date patterns and keyboard names identify their formats and stay as they
+// are in every language.
+const char* locale_option(LocaleList list, uint8_t index) {
+  const i18n::Strings& s = tr();
+  if (index >= locale_option_count(list)) index = 0;
+  switch (list) {
+    case LocaleList::Language:
+      return i18n::language_native_name_at(index);
+    case LocaleList::TimeZone:
+      return i18n::locale(configManager.getConfig().language).timezone_labels[index];
+    case LocaleList::TimeFormat: {
+      const char* const options[] = {s.format_auto_language, s.format_24_hour, s.format_12_hour};
+      return options[index];
+    }
+    case LocaleList::DateFormat: {
+      const char* const options[] = {s.format_auto_language, "DD.MM.YYYY", "MM/DD/YYYY", "YYYY/MM/DD"};
+      return options[index];
+    }
+    case LocaleList::Keyboard: {
+      const char* const options[] = {s.format_auto_language, "Deutsch (QWERTZ)", "English (QWERTY)"};
+      return options[index];
+    }
+  }
+  return "";
+}
+
+uint8_t locale_selected(LocaleList list) {
+  const DeviceConfig& cfg = configManager.getConfig();
+  switch (list) {
+    case LocaleList::Language:
+      return static_cast<uint8_t>(i18n::language_index(cfg.language));
+    case LocaleList::TimeZone:
+      return static_cast<uint8_t>(settings_timezone_index(cfg.timezone));
+    case LocaleList::TimeFormat:
+      return clock_tile::normalize_time_format(cfg.global_time_format);
+    case LocaleList::DateFormat:
+      return clock_tile::normalize_date_format(cfg.global_date_format);
+    case LocaleList::Keyboard:
+      return cfg.keyboard_layout > 2 ? 0 : cfg.keyboard_layout;
+  }
+  return 0;
+}
+
+void locale_selected_changed(LocaleList list, uint8_t index) {
+  if (index >= locale_option_count(list)) return;
+  DeviceConfig cfg = configManager.getConfig();
+  switch (list) {
+    case LocaleList::Language:
+      strncpy(cfg.language, i18n::language_code_at(index), sizeof(cfg.language) - 1);
+      cfg.language[sizeof(cfg.language) - 1] = '\0';
+      break;
+    case LocaleList::TimeZone:
+      strncpy(cfg.timezone, selected_timezone_code(index), sizeof(cfg.timezone) - 1);
+      cfg.timezone[sizeof(cfg.timezone) - 1] = '\0';
+      break;
+    case LocaleList::TimeFormat:
+      cfg.global_time_format = clock_tile::normalize_time_format(index);
+      break;
+    case LocaleList::DateFormat:
+      cfg.global_date_format = clock_tile::normalize_date_format(index);
+      break;
+    case LocaleList::Keyboard:
+      cfg.keyboard_layout = index;
+      break;
+  }
+  if (!configManager.save(cfg)) {
+    Serial.println("[Settings] Saving the localization failed");
+    return;
+  }
+  if (list == LocaleList::Keyboard) return;
+  // As the former Save button did: texts, clock and tiles follow at once.
+  if (list == LocaleList::Language) settings_refresh_language();
+  if (list == LocaleList::TimeZone) uiManager.scheduleNtpSync(0);
+  tiles_request_reload_all();
+}
+
+// WiFi and System still open their popups until their pages follow.
 void open_category_popup(uint8_t category, lv_event_t* e) {
   static constexpr SettingsPopupKind kPopups[] = {SettingsPopupKind::Display, SettingsPopupKind::Wifi,
                                                   SettingsPopupKind::Localization, SettingsPopupKind::Firmware};

@@ -67,6 +67,15 @@ lv_obj_t* g_saver_value = nullptr;
 lv_obj_t* g_saver_brightness_value = nullptr;
 lv_obj_t* g_rotation_segment = nullptr;
 
+// Localization page: one dropdown row per list.
+struct LocaleRow {
+  lv_obj_t* row;
+  lv_obj_t* value;
+  lv_obj_t* chevron;
+};
+LocaleRow g_locale_rows[settings_model::kLocaleListCount] = {};
+int g_card_width = 0;
+
 Colors colors() { return settings_style::colors(g_built_card); }
 
 const char* category_title(Category category) {
@@ -218,13 +227,13 @@ void on_close_clicked(lv_event_t*) { settings_model::close_settings(); }
 
 void select_category(Category category);
 
-// A category tile or tab. Display opens its page in the card; the others
-// still open their popups until their pages follow.
+// A category tile or tab. Display and Localization open their pages in the
+// card; WiFi and System still open their popups until their pages follow.
 void on_category_clicked(lv_event_t* e) {
   const uintptr_t raw = reinterpret_cast<uintptr_t>(lv_event_get_user_data(e));
   if (raw >= kCategoryCount) return;
   const Category category = static_cast<Category>(raw);
-  if (category != Category::Display) {
+  if (category != Category::Display && category != Category::Localization) {
     settings_model::open_category_popup(static_cast<uint8_t>(raw), e);
     return;
   }
@@ -396,14 +405,147 @@ void build_display_page(lv_obj_t* page) {
   set_percent_text(g_saver_brightness_value, values.saver_brightness);
 }
 
+// ---------- Localization page ----------
+// Language, Time zone, Time format, Date format, Keyboard as dropdown rows
+// (mockup pageLocalization, no Preview group): the value on the right, or
+// under the label on narrow cards; a tap opens the option list.
+
+using settings_model::LocaleList;
+
+void clear_locale_refs() {
+  settings_parts::close_options();
+  for (LocaleRow& row : g_locale_rows) row = {};
+}
+
+const char* locale_title(LocaleList list) {
+  const i18n::Strings& s = settings_model::text();
+  switch (list) {
+    case LocaleList::Language:
+      return s.settings_language;
+    case LocaleList::TimeZone:
+      return s.settings_time_zone;
+    case LocaleList::TimeFormat:
+      return s.settings_time_format;
+    case LocaleList::DateFormat:
+      return s.settings_date_format;
+    case LocaleList::Keyboard:
+      return s.settings_keyboard;
+  }
+  return "";
+}
+
+const char* locale_icon(LocaleList list) {
+  switch (list) {
+    case LocaleList::Language:
+      return "translate";
+    case LocaleList::TimeZone:
+      return "earth";
+    case LocaleList::TimeFormat:
+      return "clock-outline";
+    case LocaleList::DateFormat:
+      return "calendar-blank-outline";
+    case LocaleList::Keyboard:
+      return "keyboard-outline";
+  }
+  return "translate";
+}
+
+const char* locale_value(LocaleList list) {
+  return settings_model::locale_option(list, settings_model::locale_selected(list));
+}
+
+const char* option_text(uint8_t tag, uint8_t index) {
+  return settings_model::locale_option(static_cast<LocaleList>(tag), index);
+}
+
+void open_locale_list(uint8_t index);
+
+void set_chevron(uint8_t index, bool up) {
+  if (index >= settings_model::kLocaleListCount || !g_locale_rows[index].chevron) return;
+  lv_label_set_text(g_locale_rows[index].chevron, getMdiChar(up ? "chevron-up" : "chevron-down").c_str());
+}
+
+// A tap beside the list closed it; one on another dropdown row opens that
+// row's list right away (mockup: the same tap switches lists).
+void on_options_closed(uint8_t tag, const lv_point_t* tapped) {
+  set_chevron(tag, false);
+  if (!tapped) return;
+  for (uint8_t i = 0; i < settings_model::kLocaleListCount; ++i) {
+    lv_obj_t* row = g_locale_rows[i].row;
+    if (i == tag || !row) continue;
+    lv_area_t area;
+    lv_obj_get_coords(row, &area);
+    if (tapped->x >= area.x1 && tapped->x <= area.x2 && tapped->y >= area.y1 && tapped->y <= area.y2) {
+      open_locale_list(i);
+      return;
+    }
+  }
+}
+
+void on_option_picked(uint8_t tag, uint8_t index) {
+  const LocaleList list = static_cast<LocaleList>(tag);
+  if (index == settings_model::locale_selected(list)) return;
+  // A new language rebuilds the whole screen in it (texts_changed).
+  settings_model::locale_selected_changed(list, index);
+  if (tag < settings_model::kLocaleListCount && g_locale_rows[tag].value) {
+    lv_label_set_text(g_locale_rows[tag].value, locale_value(list));
+  }
+  refresh_lines();
+}
+
+void open_locale_list(uint8_t index) {
+  if (index >= settings_model::kLocaleListCount || !g_locale_rows[index].row || !g_page) return;
+  const LocaleList list = static_cast<LocaleList>(index);
+  settings_parts::OptionList spec = {};
+  spec.host = g_panel;
+  spec.row = g_locale_rows[index].row;
+  lv_obj_update_layout(g_panel);
+  lv_obj_get_coords(g_page, &spec.bounds);
+  spec.tag = index;
+  spec.count = settings_model::locale_option_count(list);
+  spec.selected = settings_model::locale_selected(list);
+  spec.card = g_built_card;
+  spec.selected_color = settings_style::tone(g_built_card, settings_style::kLocalizationColor).disc;
+  spec.text_x = settings_style::kRowPadLeft + settings_parts::icon_width() + settings_style::kRowGap;
+  spec.handler = {option_text, on_option_picked, on_options_closed};
+  settings_parts::open_options(spec);
+  set_chevron(index, true);
+}
+
+void on_locale_row_clicked(lv_event_t* e) {
+  open_locale_list(static_cast<uint8_t>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
+}
+
+void build_localization_page(lv_obj_t* page) {
+  const Colors palette = colors();
+  // Narrow cards put the value under the label, so long translations never
+  // meet it (mockup P.stack).
+  const bool stacked = g_card_width < settings_style::kStackedCardWidth;
+  const int value_width = (g_page_width - settings_style::kRowPadLeft - settings_style::kRowPadRight) / 2;
+  lv_obj_t* group = settings_parts::group(page, palette);
+  for (uint8_t i = 0; i < settings_model::kLocaleListCount; ++i) {
+    const LocaleList list = static_cast<LocaleList>(i);
+    LocaleRow& view = g_locale_rows[i];
+    settings_parts::Row row =
+        settings_parts::row(group, locale_icon(list), locale_title(list), stacked ? locale_value(list) : nullptr);
+    view.row = row.row;
+    view.value = stacked ? row.sub : settings_parts::trailing_text(row.row, locale_value(list), value_width);
+    view.chevron = settings_parts::trailing_icon(row.row, "chevron-down");
+    settings_parts::make_tap(row.row, palette.button, on_locale_row_clicked,
+                             reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
+  }
+}
+
 // ---------- Frame ----------
 
-// The open page in the card; only Display has its page so far.
+// The open page in the card; WiFi and System still use their popups.
 void build_page() {
   if (!g_page) return;
   clear_display_refs();
+  clear_locale_refs();
   lv_obj_clean(g_page);
   if (g_category == Category::Display) build_display_page(g_page);
+  if (g_category == Category::Localization) build_localization_page(g_page);
   g_page_built = true;
 }
 
@@ -414,6 +556,7 @@ void clear_refs() {
   g_page = nullptr;
   g_page_built = false;
   clear_display_refs();
+  clear_locale_refs();
 }
 
 // Bar, categories and the empty card, in the colors of the moment.
@@ -527,6 +670,7 @@ void build_frame() {
     body_top = settings_style::kCardPad + settings_style::kTitleBodyTop;
   }
   g_page = settings_parts::plain(card);
+  g_card_width = card_w;
   g_page_width = card_w - 2 * settings_style::kCardPad;
   lv_obj_set_pos(g_page, settings_style::kCardPad, body_top);
   lv_obj_set_size(g_page, g_page_width, card_h - body_top - settings_style::kCardPad);
@@ -572,6 +716,7 @@ void did_hide() {
     g_lines_timer = nullptr;
   }
   clear_display_refs();
+  clear_locale_refs();
   if (g_page) lv_obj_clean(g_page);
   g_page_built = false;
 }

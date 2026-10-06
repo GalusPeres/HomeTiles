@@ -38,6 +38,44 @@ Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* s
 // Right-aligned value text of a slider row (fixed column width).
 lv_obj_t* value_label(lv_obj_t* row, const char* text);
 
+// A row that reacts to a tap: `pressed` fills it while the finger is down,
+// with the group's rounding where it touches the group's edge.
+void make_tap(lv_obj_t* row, uint32_t pressed, lv_event_cb_t on_click, void* user_data);
+// A grey value on the right of a row, at most `max_width` wide (ellipsis).
+lv_obj_t* trailing_text(lv_obj_t* row, const char* text, int max_width);
+// A grey icon on the right of a row (chevrons).
+lv_obj_t* trailing_icon(lv_obj_t* row, const char* icon_name);
+
+// The option list of a dropdown row (mockup .ddl, like the Select popup's
+// list): the row's width, a small gap below the row, the card color with the
+// tile hairline, option text aligned with the row labels, the selected option
+// inset in `selected_color`. It opens below the row when it fits there, else
+// above; when neither side holds it whole, on the larger side, and it scrolls
+// in itself. It never leaves `bounds`. One list at a time; a tap beside it
+// only closes it.
+struct OptionHandler {
+  const char* (*text)(uint8_t tag, uint8_t index);
+  void (*picked)(uint8_t tag, uint8_t index);
+  // After a tap closed the list: `tapped` is where a tap beside the list
+  // landed, nullptr after a pick.
+  void (*closed)(uint8_t tag, const lv_point_t* tapped);
+};
+struct OptionList {
+  lv_obj_t* host;  // covered while the list is open (taps beside it close it)
+  lv_obj_t* row;
+  lv_area_t bounds;
+  uint8_t tag;
+  uint8_t count;
+  uint8_t selected;
+  uint32_t card;
+  uint32_t selected_color;
+  int text_x;  // the row labels' x from the row's left edge
+  OptionHandler handler;
+};
+void open_options(const OptionList& list);
+// Closes an open list without calling its handler.
+void close_options();
+
 // Slider like the tiles' brightness bars: the track in `track`, the fill in
 // `accent` (at least a circle wide), a short line in `thumb` near the fill's
 // end. `on_change` runs while dragging (final = false) and once on release

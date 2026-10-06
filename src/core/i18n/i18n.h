@@ -57,11 +57,8 @@ struct Strings {
   const char* wifi_status;
   const char* wifi_connected;
   const char* wifi_disconnected;
-  const char* wifi_offline;
-  const char* wifi_ap_active;
   const char* wifi_label;
   const char* ssid_label;
-  const char* ip_label;
   const char* wifi_password_label;
   const char* wifi_static_ip_label;
   const char* wifi_gateway_label;
@@ -69,8 +66,6 @@ struct Strings {
   const char* wifi_dns_label;
   const char* wifi_dhcp_hint;
   const char* mqtt_not_configured;
-  const char* ap_enable;
-  const char* ap_disable;
   const char* yes;
   const char* no;
 
@@ -120,8 +115,6 @@ struct Strings {
   const char* sleep_after;
   const char* sleep_never;
   const char* screensaver_label;
-  const char* touch_label;
-  const char* no_imu_hint;
 
   const char* tile_type_empty;
   const char* tile_type_sensor;
@@ -228,21 +221,12 @@ struct Strings {
   const char* js_ota_success;
   const char* js_ota_failed;
 
-  // On-device Wi-Fi selection (Settings popup, see tab_settings.cpp).
-  const char* wifi_scan_searching;
-  const char* wifi_scan_none;
+  // Wi-Fi selection texts (wifi_back_btn is Back in the first-start setup).
   const char* wifi_scan_retry;
-  const char* wifi_manual_entry;
   const char* wifi_open_network;
   const char* wifi_password_for_fmt;
   const char* wifi_back_btn;
-  const char* wifi_connect_btn;
   const char* wifi_saved_restarting;
-  const char* wifi_save_failed;
-
-  // Keyboard layout localization. The option names "Deutsch (QWERTZ)" and
-  // "English (QWERTY)" identify the layouts and remain untranslated.
-  const char* keyboard_layout_label;
 
   // Settings tiles: short descriptions of the controls behind each tile.
   const char* settings_tile_desc_display;
@@ -259,7 +243,6 @@ struct Strings {
   const char* system_checking;
   const char* system_up_to_date;
   const char* system_update_available_fmt;  // %s = new version (release tag)
-  const char* system_update_restart_note;
   const char* system_install_btn_fmt;       // %s = new version (release tag)
   const char* system_check_failed;
   const char* system_downloading;
@@ -359,18 +342,11 @@ struct Strings {
   const char* js_screensaver_save_failed;
   const char* js_screensaver_load_failed;
 
-  // Network mode switch in the Wi-Fi popup and Web Admin. Select fixed
-  // Wi-Fi or Ethernet mode; a change takes effect after restarting.
-  const char* net_mode_to_ethernet;
-  const char* net_mode_to_wifi;
-  const char* net_mode_restart_note;
+  // Network mode switch in Web Admin. Select fixed Wi-Fi or Ethernet mode;
+  // a change takes effect after restarting.
   const char* admin_ethernet_mode;
 
   // Static network addressing on the device and in Web Admin.
-  const char* ethernet_dhcp_reset;
-  const char* ethernet_static_restore;
-  const char* ethernet_dhcp_selected;
-  const char* ethernet_static_selected;
   const char* admin_ip_configuration;
   const char* admin_ip_dhcp;
   const char* admin_ip_static;
@@ -611,30 +587,16 @@ struct Strings {
   const char* web_auth_forgot;
   const char* security_btn;
   const char* security_state_on;
-  const char* security_state_off;
   // Stored Wi-Fi/MQTT passwords and PINs are not sent to browsers while a
   // Web Admin password is set; they can only be replaced.
   const char* secret_hidden_placeholder;
   const char* web_auth_secrets_note;
   const char* ap_wifi_keep_password_hint;
-  // System popup buttons: short labels that fit a half-width button; the
-  // status line above them carries the details.
-  const char* system_updates_btn;
-  const char* system_install_btn;
-  // Security view of the System popup: pairing with Home Assistant (the
-  // panel and Home Assistant show the same number) and the Web Admin password.
-  // System rows: Home Assistant connected or offline, and the Encryption
-  // row label (its value is security_state_on/off).
+  // Settings System page: Home Assistant connected or offline, the pairing
+  // (the panel and Home Assistant show the same number) and the Web Admin
+  // password.
   const char* security_value_connected;
-  const char* security_encryption_label;
   const char* security_value_offline;
-  const char* security_hint_pair;
-  const char* security_hint_unpair;
-  const char* security_pair_short;
-  const char* security_unpair_short;
-  const char* security_password_btn;
-  const char* security_unpair_question;
-  const char* security_unpair_question_hint;
   const char* security_password_question;
   const char* security_password_question_hint;
   const char* security_remove;
@@ -642,20 +604,17 @@ struct Strings {
   const char* security_confirm;
   const char* security_close;
   const char* security_unpaired_offline;
-  const char* pairing_title;
   const char* pairing_asking;
   const char* pairing_compare;
   const char* pairing_compare_hint;
   const char* pairing_waiting;
   const char* pairing_no_answer;
-  const char* pairing_no_answer_hint;
   const char* pairing_already_paired;
   const char* pairing_busy;
   const char* pairing_rejected;
   const char* pairing_failed;
   // Pair on a panel without a direct Bridge link: two minutes to add it.
   const char* pairing_discoverable;
-  const char* pairing_discoverable_hint;
   // Web Admin header badge: whether a Web Admin password protects the page.
   const char* web_auth_badge_on;
   const char* web_auth_badge_off;
@@ -669,8 +628,6 @@ struct Strings {
   const char* admin_folders;
   // Icon color choice: Automatic (the type's and entity's own colors).
   const char* tile_icon_color_auto;
-  // Device Security view: the first Web Admin password may be set now (allowFirstPassword).
-  const char* web_auth_window_open;
   // Web Admin: the first password needs a tap on the display first.
   const char* web_auth_panel_tap_required;
   // Title switch: the tile takes its entity's name from Home Assistant

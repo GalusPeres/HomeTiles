@@ -123,6 +123,14 @@ assert.match(between(setup, 'void on_action(lv_event_t* e) {', 'void close_dialo
   /case Action::Next:\s*go_later\(g_step \+ 1\);/);
 const finish = between(setup, 'void finish() {', 'void refresh_async(');
 assert.match(finish, /settings_model::setup_end\(\);\s*lv_async_call\(go_home_async, nullptr\);/);
+// X on the last step finishes without asking (user 2026-10-06).
+assert.match(setup, /case Action::Close:\s*if \(g_step == kStepCount - 1\) \{\s*finish\(\);\s*\} else \{\s*open_leave_dialog\(\);/);
+// Back and Next in the popups' navigation size (user 2026-10-06).
+assert.match(readRepoFile('src/ui/tabs/settings/settings_style.h'), /constexpr int kSetupNavHeight = popup_layout::kNavHeight;/);
+assert.match(between(setup, 'lv_obj_t* nav_button(', 'void build_foot('), /settings_style::kSetupNavHeight/);
+// Connecting shows moving dots, so it never looks stuck (user 2026-10-06).
+assert.match(entry, /show_progress\(settings_model::text\(\)\.settings_connecting\);/);
+assert.match(entry, /lv_timer_create\(on_dots, 400, nullptr\)/);
 // Leaving asks first; it can be finished later in System > Setup.
 const leave = between(setup, 'void open_leave_dialog() {', 'void build_language(');
 assert.match(leave, /settings_parts::dialog\(g_panel, g_built_card, s\.setup_leave_question/);

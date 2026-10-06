@@ -17,6 +17,10 @@ struct Entry {
   lv_obj_t* name = nullptr;  // the network name field (Add network)
   lv_obj_t* password = nullptr;
   lv_obj_t* message = nullptr;
+  // The moving dots after "Connecting" (a fixed width, so the text stays).
+  lv_obj_t* dots = nullptr;
+  lv_timer_t* dots_timer = nullptr;
+  uint8_t dot_count = 0;
   lv_obj_t* keyboard = nullptr;
   lv_obj_t* focus = nullptr;
   bool manual = false;
@@ -166,11 +170,46 @@ lv_obj_t* field(int x, int y, int w, int h, const char* placeholder, bool secret
   return f;
 }
 
+void stop_dots() {
+  if (g_entry.dots_timer) {
+    lv_timer_delete(g_entry.dots_timer);
+    g_entry.dots_timer = nullptr;
+  }
+  if (g_entry.dots) {
+    lv_label_set_text(g_entry.dots, "");
+    lv_obj_set_width(g_entry.dots, 0);
+  }
+}
+
 void show_message(const char* text, uint32_t color) {
   if (!g_entry.message) return;
+  stop_dots();
   lv_label_set_text(g_entry.message, text ? text : "");
   lv_obj_set_style_text_color(g_entry.message, lv_color_hex(color), 0);
   lv_obj_set_style_text_opa(g_entry.message, color == 0xFFFFFF ? settings_style::kGreyOpa : LV_OPA_COVER, 0);
+}
+
+void on_dots(lv_timer_t*) {
+  if (!g_entry.dots) return;
+  g_entry.dot_count = static_cast<uint8_t>((g_entry.dot_count + 1) % 4);
+  static const char* const kDots[] = {"", ".", "..", "..."};
+  lv_label_set_text(g_entry.dots, kDots[g_entry.dot_count]);
+}
+
+// "Connecting" with dots that keep moving, so a slow connection never looks
+// stuck (user 2026-10-06). The text's own trailing dots become the moving ones.
+void show_progress(const char* text) {
+  if (!g_entry.message || !g_entry.dots || !text) return;
+  show_message(text, 0xFFFFFF);
+  char base[64];
+  snprintf(base, sizeof(base), "%s", text);
+  size_t length = strlen(base);
+  while (length > 0 && base[length - 1] == '.') base[--length] = '\0';
+  lv_label_set_text(g_entry.message, base);
+  lv_obj_set_width(g_entry.dots, settings_parts::text_width(settings_style::small_font(), "..."));
+  g_entry.dot_count = 3;
+  lv_label_set_text(g_entry.dots, "...");
+  g_entry.dots_timer = lv_timer_create(on_dots, 400, nullptr);
 }
 
 void on_key_text(const char* text) {
@@ -201,7 +240,7 @@ void on_key_ok() {
   settings_model::wifi_connect(ssid, password);
   g_entry.busy = true;
   settings_keyboard::set_enabled(g_entry.keyboard, false);
-  show_message(settings_model::text().settings_connecting, 0xFFFFFF);
+  show_progress(settings_model::text().settings_connecting);
 }
 
 void on_close(lv_event_t*) {
@@ -314,13 +353,25 @@ void open(const Spec& spec, bool manual, const char* ssid) {
   // The saved password of the saved network, so it does not look lost.
   if (!manual) lv_textarea_set_text(g_entry.password, settings_model::wifi_saved_password(g_entry.ssid));
 
-  g_entry.message = lv_label_create(g_entry.root);
+  // The message and the moving dots, centered together.
+  lv_obj_t* line = settings_parts::plain(g_entry.root);
+  lv_obj_set_pos(line, g.pad, g.message_y);
+  lv_obj_set_size(line, g.column, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(line, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+  g_entry.message = lv_label_create(line);
   lv_label_set_text(g_entry.message, "");
   lv_label_set_long_mode(g_entry.message, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(g_entry.message, g.column);
-  lv_obj_set_pos(g_entry.message, g.pad, g.message_y);
-  lv_obj_set_style_text_align(g_entry.message, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_width(g_entry.message, LV_SIZE_CONTENT);
+  lv_obj_set_style_max_width(g_entry.message, g.column, 0);
   lv_obj_set_style_text_font(g_entry.message, settings_style::small_font(), 0);
+  g_entry.dots = lv_label_create(line);
+  lv_label_set_text(g_entry.dots, "");
+  lv_label_set_long_mode(g_entry.dots, LV_LABEL_LONG_CLIP);
+  lv_obj_set_width(g_entry.dots, 0);
+  lv_obj_set_style_text_font(g_entry.dots, settings_style::small_font(), 0);
+  lv_obj_set_style_text_color(g_entry.dots, lv_color_white(), 0);
+  lv_obj_set_style_text_opa(g_entry.dots, settings_style::kGreyOpa, 0);
 
   const settings_keyboard::Geometry keys = {g.pad,
                                             g.key_y,
@@ -338,6 +389,7 @@ void open(const Spec& spec, bool manual, const char* ssid) {
 void close(bool from_event) {
   if (!g_entry.root) return;
   lv_obj_t* root = g_entry.root;
+  stop_dots();
   g_entry = Entry();
   settings_model::wifi_connect_done();
   if (from_event) {

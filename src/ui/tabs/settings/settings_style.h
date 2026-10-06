@@ -124,10 +124,14 @@ constexpr int kKeyGap = popup_layout::scale(10);
 constexpr int kKeyRadius = popup_layout::scale(18);
 constexpr int kKeyboardBottom = popup_layout::scale(20);
 #endif
-// First-start setup (mockup wzCard, wzBody, wzFoot): the space under the
-// body for Back and Next, the step dots, the pairing code's box, the width
-// from which the Web Admin QR code stands beside its text.
-constexpr int kSetupFoot = pick(100, 64);
+// First-start setup (mockup wzCard, wzBody, wzFoot): Back and Next in the
+// popups' navigation size and place (popup_layout kNavHeight above
+// kNavBottomInset, user 2026-10-06), the space under the body for them, the
+// step dots, the pairing code's box, the width from which the Web Admin QR
+// code stands beside its text.
+constexpr int kSetupNavHeight = popup_layout::kNavHeight;
+constexpr int kSetupNavBottom = popup_layout::kCardPad + popup_layout::kNavBottomInset;
+constexpr int kSetupFoot = kSetupNavBottom + kSetupNavHeight + pick(24, 14);
 constexpr int kSetupDot = 8;
 constexpr int kSetupDotCurrent = 24;
 constexpr int kSetupCodePadTop = pick(32, 18);

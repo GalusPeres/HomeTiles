@@ -300,7 +300,13 @@ void on_action(lv_event_t* e) {
       finish();
       return;
     case Action::Close:
-      open_leave_dialog();
+      // On the last step everything is done: X finishes like Finish, without
+      // asking (user 2026-10-06).
+      if (g_step == kStepCount - 1) {
+        finish();
+      } else {
+        open_leave_dialog();
+      }
       return;
     case Action::Language:
       open_locale_list(0);
@@ -738,17 +744,27 @@ void build_tiles(const Colors& palette) {
 // Back bottom left, the step dots in the middle, Next (or Later, Finish)
 // bottom right; no Next while the step waits for something that moves on by
 // itself.
+// The popups' navigation buttons: their height, the row font, pills at least
+// twice as wide as high.
+lv_obj_t* nav_button(const char* text, const char* icon, settings_parts::ButtonKind kind, const Colors& palette,
+                     Action action) {
+  const int height = settings_style::kSetupNavHeight;
+  lv_obj_t* b = settings_parts::button(g_foot, text, icon, kind, kAccent, palette, height, true, on_action, data(action));
+  lv_obj_set_style_min_width(b, 2 * height, 0);
+  lv_obj_set_style_pad_hor(b, height / 3, 0);
+  return b;
+}
+
 void build_foot(const Colors& palette) {
   const i18n::Strings& s = settings_model::text();
   const int pad = popup_layout::kCardPad;
-  const int height = settings_style::kButtonHeight;
+  const int height = settings_style::kSetupNavHeight;
   g_foot = settings_parts::plain(g_content);
   lv_obj_set_size(g_foot, card_width() - 2 * pad, height);
-  lv_obj_set_pos(g_foot, pad, card_height() - pad - height);
+  lv_obj_set_pos(g_foot, pad, card_height() - settings_style::kSetupNavBottom - height);
   lv_obj_add_flag(g_foot, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
   if (g_step > 0) {
-    lv_obj_t* back = settings_parts::button(g_foot, s.wifi_back_btn, "chevron-left", settings_parts::ButtonKind::Normal,
-                                            kAccent, palette, height, false, on_action, data(Action::Back));
+    lv_obj_t* back = nav_button(s.wifi_back_btn, "chevron-left", settings_parts::ButtonKind::Normal, palette, Action::Back);
     lv_obj_align(back, LV_ALIGN_LEFT_MID, 0, 0);
   }
   lv_obj_t* dots = settings_parts::plain(g_foot);
@@ -778,8 +794,7 @@ void build_foot(const Colors& palette) {
     kind = settings_parts::ButtonKind::Normal;
   }
   if (label) {
-    lv_obj_t* next =
-        settings_parts::button(g_foot, label, nullptr, kind, kAccent, palette, height, false, on_action, data(action));
+    lv_obj_t* next = nav_button(label, nullptr, kind, palette, action);
     lv_obj_align(next, LV_ALIGN_RIGHT_MID, 0, 0);
   }
 }

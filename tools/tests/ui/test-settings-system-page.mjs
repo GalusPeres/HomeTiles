@@ -85,6 +85,11 @@ for (const key of ['settings_commands_encrypted', 'settings_paired', 'pairing_di
 // Paired and the password on: a tap on the row asks before turning them off.
 assert.match(page, /make_tap\(r\.row, palette\.button, on_system_action,\s*action_data\(SystemAction::Unpair\)\)/);
 assert.match(page, /make_tap\(r\.row, palette\.button, on_system_action,\s*action_data\(SystemAction::RemovePassword\)\)/);
+// Paired and the password on show a green shield (security at a glance);
+// Connected keeps its check.
+assert.match(rawBody, /good_state\(r\.row, s\.settings_paired, "shield-check", true\);/);
+assert.match(rawBody, /good_state\(r\.row, s\.security_state_on, "shield-check", true\);/);
+assert.match(rawBody, /good_state\(ha\.row, s\.security_value_connected, "check", false\);/);
 // Pair and Allow: one width in every language (the longest of both texts in
 // all of them) and a little taller than the other row buttons.
 const switchOn = between(screen, 'lv_obj_t* switch_on_button(', 'void refresh_async(');

@@ -83,7 +83,7 @@ const icons = ['cog', 'window-close', 'monitor', 'wifi', 'wifi-off', 'access-poi
   'download', 'wifi-strength-1-lock', 'wifi-strength-2', 'wifi-strength-2-lock', 'wifi-strength-3-lock',
   'wifi-strength-4', 'wifi-strength-lock-outline', 'plus', 'refresh', 'lan', 'ethernet', 'ip-network-outline',
   'pencil-outline', 'eye', 'eye-off', 'lock-outline', 'apple-keyboard-shift', 'apple-keyboard-caps',
-  'backspace-outline', 'check-bold'];
+  'backspace-outline', 'check-bold', 'shield-check'];
 const iconTable = icons.map(name => {
   const match = mdi.match(new RegExp(`\\{"${name}", (0x[0-9A-Fa-f]+)\\}`));
   if (!match) throw new Error(`MDI icon ${name} missing`);

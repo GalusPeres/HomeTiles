@@ -627,11 +627,12 @@ void color_text(lv_obj_t* label, uint32_t color) {
   lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
 }
 
-// A state on the right of a row in green with a check ("Connected", "Paired",
-// "On"), and a chevron when a tap on the row asks to turn it off.
-void good_state(lv_obj_t* row, const char* text, bool chevron) {
+// A state on the right of a row in green with its icon ("Connected" with a
+// check; "Paired" and "On" with a shield, so security reads at a glance,
+// user 2026-10-06), and a chevron when a tap on the row asks to turn it off.
+void good_state(lv_obj_t* row, const char* text, const char* icon, bool chevron) {
   color_text(settings_parts::trailing_text(row, text, g_page_width / 2), settings_style::kGoodColor);
-  color_text(settings_parts::trailing_icon(row, "check"), settings_style::kGoodColor);
+  color_text(settings_parts::trailing_icon(row, icon), settings_style::kGoodColor);
   if (chevron) settings_parts::trailing_icon(row, "chevron-right");
 }
 
@@ -984,7 +985,7 @@ void build_system_page(lv_obj_t* page) {
       settings_parts::row(connection, "lan-connect", settings_style::kHomeAssistant, sub[0] ? sub : nullptr);
   g_address_label = ha.sub;
   if (v.connected) {
-    good_state(ha.row, s.security_value_connected, false);
+    good_state(ha.row, s.security_value_connected, "check", false);
   } else {
     settings_parts::trailing_text(ha.row, s.security_value_offline, g_page_width / 2);
   }
@@ -996,7 +997,7 @@ void build_system_page(lv_obj_t* page) {
     case PairState::Paired: {
       settings_parts::Row r =
           settings_parts::row(security, "link-variant", s.settings_pairing, s.settings_commands_encrypted);
-      good_state(r.row, s.settings_paired, true);
+      good_state(r.row, s.settings_paired, "shield-check", true);
       settings_parts::make_tap(r.row, palette.button, on_system_action,
                                action_data(SystemAction::Unpair));
       break;
@@ -1052,7 +1053,7 @@ void build_system_page(lv_obj_t* page) {
   if (v.password_on) {
     settings_parts::Row r =
         settings_parts::row(security, "form-textbox-password", s.web_auth_section, s.settings_password_asks);
-    good_state(r.row, s.security_state_on, true);
+    good_state(r.row, s.security_state_on, "shield-check", true);
     settings_parts::make_tap(r.row, palette.button, on_system_action,
                              action_data(SystemAction::RemovePassword));
   } else if (v.password_window) {

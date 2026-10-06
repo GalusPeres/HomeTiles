@@ -109,7 +109,8 @@ assert.match(passwordHandler, /if \(web_admin_auth::enabled\(\)\) \{\s*if \(!aut
 assert.equal((passwordHandler.match(/entity_search::scheduleTilesReport\(\);/g) || []).length, 2,
   'setting and removing the password declares again');
 const settings = read('src/ui/tabs/settings/tab_settings.cpp');
-assert.match(settings, /web_admin_auth::allowFirstPassword\(\);\s*security_set_message\(tr\(\)\.web_auth_window_open, 0x4DB6AC\);/);
+assert.match(settings, /void allow_password\(\) \{[\s\S]*?web_admin_auth::allowFirstPassword\(\);/,
+  'Allow on the System page opens the window');
 const html = read('src/web/server/render/web_admin_security_html.cpp');
 assert.match(html, /if \(!enabled\) \{[\s\S]*?id="web_auth_tap_note"[\s\S]*?tr\.web_auth_panel_tap_required/,
   'Web Admin says where to tap before the first password');

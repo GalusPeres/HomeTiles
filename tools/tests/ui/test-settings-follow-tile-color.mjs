@@ -1,7 +1,6 @@
 // Settings takes the global tile color like the home tiles: the card, the
-// category tiles and the popup cards follow it, also when it changes while
-// Settings exists (the screen is rebuilt when it opens next). Buttons, rows
-// and fields inside the old popups keep their own colors.
+// category tiles, option lists and dialogs follow it, also when it changes
+// while Settings exists (the screen is rebuilt when it opens next).
 import assert from 'node:assert/strict';
 
 import {readRepoFile} from '../../lib/admin-source.mjs';
@@ -32,11 +31,8 @@ assert.match(show, /\(settings_model::card_color\(\) & 0xFFFFFF\) != g_built_car
   'a changed global color rebuilds the screen when Settings opens');
 assert.match(show, /build_frame\(\);/);
 
-assert.match(settings, /create_popup_body\(on_settings_popup_close_clicked, nullptr,\s*settings_tile_color\(\)\);/,
-  'the Settings popup card uses the global tile color');
+// Option lists, dialogs and the network entry sit on the same card color.
+assert.match(screen, /spec\.card = g_built_card;/, 'option lists use the card color');
+assert.match(screen, /settings_parts::dialog\(g_panel, g_built_card,/, 'dialogs use the card color');
 
-// Buttons inside the popups keep their neutral grey.
-assert.match(settings, /static constexpr uint32_t kSystemToggleIdle = 0x424242;/);
-assert.doesNotMatch(settings, /popup_surface::lighter/, 'popup buttons do not derive from the card color');
-
-console.log('Settings: card, category tiles and popup cards follow the global tile color');
+console.log('Settings: card, category tiles, lists and dialogs follow the global tile color');

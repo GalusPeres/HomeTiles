@@ -78,90 +78,21 @@ for (const line of ['Session answer for an old request ignored', 'Bridge asked f
 const camera = readRepoFile('src/video/local_camera/local_camera.cpp');
 assert.match(camera, /bool handleMqttMessage\(const char\* topic, const uint8_t\* payload, size_t length\) \{\s*if \(!isCommandTopic\(topic\)\) return false;\s*handleCommandPayload\(payload, length\);\s*return true;\s*\}/);
 
+// The Settings System page (settings_model in tab_settings.cpp, drawn by
+// settings_screen.cpp; test-settings-system-page.mjs has the layout): the
+// number shows only while the attempt has one, unpairing and removing the
+// password ask first and are red, and without a password Allow opens the
+// window for the first one.
 const settings = readRepoFile('src/ui/tabs/settings/tab_settings.cpp');
-assert.match(settings, /const bool has_number = command_channel::pairingNumber\(number\);/,
+const screen = readRepoFile('src/ui/tabs/settings/settings_screen.cpp');
+assert.match(settings, /if \(!command_channel::pairingNumber\(number\)\) return false;/,
   'the number is shown only while the attempt has one');
-assert.match(settings, /if \(security_refresh_timer\) \{\s*lv_timer_del\(security_refresh_timer\);\s*security_refresh_timer = nullptr;\s*\}\s*if \(networkTransport\.isWifiDriverActive\(\)\) WiFi\.scanDelete\(\);/,
-  'closing the popup deletes the refresh timer');
-for (const key of ['system_updates_btn', 'system_install_btn', 'security_value_connected', 'security_encryption_label',
-  'security_value_offline', 'security_hint_pair', 'security_hint_unpair',
-  'security_pair_short', 'security_unpair_short', 'web_auth_window_open',
-  'security_password_btn', 'security_unpair_question', 'security_unpair_question_hint',
-  'security_password_question', 'security_password_question_hint', 'security_remove', 'security_cancel',
-  'security_confirm', 'security_close', 'security_unpaired_offline', 'pairing_title', 'pairing_asking',
-  'pairing_compare', 'pairing_compare_hint', 'pairing_waiting', 'pairing_no_answer', 'pairing_no_answer_hint',
-  'pairing_already_paired', 'pairing_busy', 'pairing_rejected', 'pairing_failed', 'web_auth_section',
-  'security_btn', 'restart_button']) {
-  assert.match(settings, new RegExp(`tr\\(\\)\\.${key}`), `${key} comes from i18n`);
-}
-// System popup: every view keeps exactly two button rows and the branding.
-const systemPopup = settings.slice(settings.indexOf('static void build_system_popup('),
-  settings.indexOf('static const char* popup_title_for_kind('));
-assert.equal((systemPopup.match(/= create_system_button_row\(box\);|create_system_button_row\(box\);/g) || []).length, 3,
-  'Updates/Restart, the Security actions and GitHub/Security');
-assert.match(systemPopup, /create_system_icon_button\(system_action_row, "magnify"[\s\S]*create_system_icon_button\(system_action_row, "restart"/);
-assert.match(systemPopup, /create_system_icon_button\(link_row, "github"[\s\S]*create_system_icon_button\(link_row, "shield-lock"/);
-assert.match(systemPopup, /constexpr bool kCompactSystem = SCREEN_HEIGHT < popup_layout::scale\(780\);\s*if \(kCompactSystem\) lv_obj_set_style_pad_top\(parent, 0, 0\);\s*lv_obj_set_style_pad_top\(box, kCompactSystem \? 0 : popup_layout::scale\(20\), 0\);/,
-  'the branding sits just below the header, right at it on displays lower than 800 layout pixels');
-// 1280x800 keeps the spacing; 480x480 (2/3 scale), 1024x600 (5/6) and the
-// 720-high layouts are compact.
-const compact = (height, scale) => height < Math.round(780 * scale);
-assert.ok(!compact(800, 1) && compact(720, 1) && compact(480, 2 / 3) && compact(600, 5 / 6));
-assert.doesNotMatch(systemPopup, /system_pair_btn|"Pairing"/, 'pairing lives in the Security view');
-const applyView = settings.slice(settings.indexOf('static void system_apply_view() {'), settings.indexOf('static void system_set_view('));
-assert.match(applyView, /system_set_hidden\(system_action_row, !main\);\s*system_set_hidden\(security_action_row, !security\);/,
-  'the first button row belongs to the current view');
-assert.doesNotMatch(applyView, /system_brand/, 'the branding stays in every view');
-assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 0x424242, "lock-open-variant",\s*tr\(\)\.security_remove, 0xC62828\);/,
+assert.match(screen, /s\.settings_unpair_question[\s\S]*?ButtonKind::Danger, DialogAction::Unpair/,
+  'unpairing asks first and is red');
+assert.match(screen, /s\.security_password_question[\s\S]*?ButtonKind::Danger, DialogAction::RemovePassword/,
   'removing the password asks first and is red');
-assert.match(settings, /security_set_buttons\("close", tr\(\)\.security_cancel, 0x424242, "shield-off",\s*tr\(\)\.security_unpair_short, 0xC62828\);/,
-  'turning encryption off asks first and is red');
-// Password is always offered: it removes a set password, and without one it
-// allows the first one in Web Admin for two minutes (like Pair).
-assert.match(settings, /const char\* password_icon = password_on \? "lock-open-variant" : "lock-plus";/);
-assert.match(settings, /if \(web_admin_auth::enabled\(\)\) \{\s*security_set_message\(nullptr, 0xA8A8A8\);\s*security_step = SecurityStep::ConfirmPassword;\s*\} else \{[\s\S]*?web_admin_auth::allowFirstPassword\(\);\s*security_set_message\(tr\(\)\.web_auth_window_open, 0x4DB6AC\);/,
-  'without a password the button opens the window for the first one');
-// The device name stays under the branding. One row per fact (Home Assistant
-// connected with a check, Encryption and Web Admin password with a shield)
-// sits centered in the middle area, which only takes the free space, so the
-// buttons never move; a question or the pairing number takes the rows' place
-// with the same line height and gap.
-const rows = settings.slice(settings.indexOf('static void system_refresh_rows() {'),
-  settings.indexOf('static constexpr uint32_t kSystemToggleActive'));
-assert.match(rows, /connected \? tr\(\)\.security_value_connected : tr\(\)\.security_value_offline/);
-assert.match(rows, /lv_obj_set_style_text_opa\(security_ha_check, connected \? LV_OPA_COVER : LV_OPA_TRANSP, 0\);/,
-  'the check keeps its place while offline, so the texts stay aligned');
-assert.match(rows, /system_set_row\(security_encryption_value, security_encryption_icon,\s*encrypted \? tr\(\)\.security_state_on : tr\(\)\.security_state_off, encrypted\);/,
-  'a green shield means encrypted');
-assert.match(rows, /if \(state == system_rows_state\) return;/, 'the timer redraws the rows only on a change');
-assert.match(systemPopup, /system_device_name = lv_label_create\(head\);\s*lv_label_set_text\(system_device_name, Device::displayName\(\)\);/);
-assert.match(systemPopup, /lv_obj_set_flex_grow\(system_middle, 1\);/);
-assert.match(systemPopup, /if \(kCompactSystem\) lv_obj_set_style_pad_bottom\(system_middle, popup_layout::scale\(24\), 0\);/,
-  'lower displays center the rows a little higher');
-for (const parent of ['system_info_rows', 'security_prompt_box', 'security_pair_box']) {
-  assert.match(systemPopup, new RegExp(`${parent} = create_centered_column\\(system_middle, system_line_gap\\(\\)\\);`),
-    `${parent} shares the middle area and the line gap`);
-}
-assert.match(systemPopup, /create_security_row\(system_info_rows, tr\(\)\.security_encryption_label,/);
-assert.match(settings, /lv_obj_t\* row = create_system_line\(parent, true\);/, 'every row is one line high');
-assert.match(applyView, /system_set_hidden\(system_middle, qr\);\s*system_set_hidden\(system_spacer, !qr\);/,
-  'the QR view keeps its place under the branding');
-assert.match(applyView, /system_set_hidden\(system_info_rows, !\(main \|\| list\)\);/);
-// The status area always keeps two lines (messages, the Security hint or the
-// download progress), so neither a message nor another view moves the rows.
-assert.match(systemPopup, /lv_obj_set_height\(system_status_row,\s*2 \* lv_font_get_line_height\(popup_layout::font24\(\)\)\);/);
-assert.match(systemPopup, /security_hint_label = create_centered_label\(system_status_row,/);
-assert.match(systemPopup, /system_progress_bar = lv_bar_create\(system_status_row\);/);
-// While pairing, the title and the number replace the rows; the instruction
-// and its hint use the status area, so the number fits on 480x480.
-assert.match(systemPopup, /security_pair_text = create_centered_label\(system_status_row,/);
-assert.match(systemPopup, /security_pair_hint = create_centered_label\(system_status_row,/);
-assert.match(applyView, /system_set_hidden\(security_pair_text, !pairing\);\s*system_set_hidden\(security_pair_hint, !pairing \|\| !pair_hint \|\| !pair_hint\[0\]\);/);
-assert.match(applyView, /system_set_hidden\(system_status_row, qr\);\s*system_set_hidden\(system_status_label, !main\);\s*system_set_hidden\(security_hint_label, !list\);/);
-assert.match(applyView, /system_set_toggle\(system_github_btn, &system_github_color, qr\);\s*system_set_toggle\(system_security_btn, &system_security_color, security\);/,
-  'GitHub and Security are colored while their view is open');
-assert.doesNotMatch(settings, /system_status_icon|system_show_pairing_status|link-variant-off/,
-  'the status line holds only messages; the buttons use the Security shields');
+assert.match(settings, /void allow_password\(\) \{[\s\S]*?web_admin_auth::allowFirstPassword\(\);/,
+  'Allow opens the window for the first password');
 // The retained announcement is signed while a code exists and republished
 // whenever the code changes; without pairing it stays byte-identical.
 const announce = network.slice(network.indexOf('void HomeTilesNetworkManager::publishBridgeConfig() {'),

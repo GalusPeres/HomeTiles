@@ -289,7 +289,6 @@ void ip_mode_selected(bool) {}
 void wifi_connect_done() {}
 const char* firmware_version() { return "v0.8.0"; }
 void close_settings() {}
-void open_category_popup(uint8_t, lv_event_t*) {}
 }
 int main(int argc, char** argv) {
   tone_color::g_from_icon_card = &host_from_icon_card;

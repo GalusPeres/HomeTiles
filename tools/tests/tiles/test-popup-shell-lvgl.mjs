@@ -88,26 +88,8 @@ void request_weather_for_context(WeatherPopupContext*){assert(flushed>0);}
 void apply_weather_header(WeatherPopupContext*,const String&){}
 void queue_weather_popup_payload(const char*,const char*){}
 ${cppFunctionDefinitions(read('src/ui/popups/weather/weather_popup.cpp')).find(f=>f.name==='finish_weather_popup_open').source}
-// Execute the Settings shell, flex form and close/back callback from production.
-// Only form data/network actions are injected; layout and event delivery are real.
-enum class SettingsPopupKind { Wifi };
-SettingsPopupKind settings_popup_kind=SettingsPopupKind::Wifi;
-lv_obj_t *settings_popup_overlay=nullptr,*settings_popup_card=nullptr,*settings_popup_title=nullptr,*settings_popup_close_icon=nullptr,*settings_popup_content=nullptr,*wifi_entry_view=nullptr;
-namespace Device {constexpr int kGridPad=4;}
-constexpr int kPopupCardPad=popup_layout::scale(20);
-int settings_built=0,settings_closed=0;
-void reset_popup_refs(){}
-const char* popup_icon_for_kind(SettingsPopupKind){return "wifi";}
-const char* popup_title_for_kind(SettingsPopupKind){return "Wi-Fi";}
-uint32_t settings_tile_color(){return 0x2A2A2A;}  // The global tile color in production.
-void style_plain_container(lv_obj_t*o){lv_obj_remove_style_all(o);lv_obj_remove_flag(o,LV_OBJ_FLAG_SCROLLABLE);}
-void build_popup_content(SettingsPopupKind,lv_obj_t*parent){++settings_built;wifi_entry_view=lv_obj_create(parent);lv_obj_set_size(wifi_entry_view,100,100);}
-void close_settings_popup(){++settings_closed;hide_popup_shell(settings_popup_card);lv_obj_delete(settings_popup_overlay);settings_popup_overlay=nullptr;settings_popup_card=nullptr;settings_popup_content=nullptr;wifi_entry_view=nullptr;}
-void hide_settings_popup(){if(settings_popup_overlay)close_settings_popup();}
-void wifi_show_list_view(){lv_obj_add_flag(wifi_entry_view,LV_OBJ_FLAG_HIDDEN);lv_label_set_text(settings_popup_close_icon,"X");}
 // The production body also forgets the last tile opener (tile_icon_source.cpp).
 namespace tile_icon_source {int opened_without_tile=0;void open_popup_without_tile(){++opened_without_tile;popup_shell_use_no_tile_disc();}}
-${['on_settings_popup_close_clicked','finish_settings_popup_open','open_settings_popup'].map(name=>cppFunctionDefinitions(read('src/ui/tabs/settings/tab_settings.cpp')).find(f=>f.name===name).source).join('\n')}
 void save_frame(const std::string&path,const std::vector<uint32_t>&pixels){std::ofstream f(path,std::ios::binary);f<<"P6\n"<<SCREEN_WIDTH<<" "<<SCREEN_HEIGHT<<"\n255\n";for(auto p:pixels){const char rgb[]={char(p>>16),char(p>>8),char(p)};f.write(rgb,3);}}
 int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t>pixels(SCREEN_WIDTH*SCREEN_HEIGHT),band(SCREEN_WIDTH*16);lv_display_set_color_format(d,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(d,band.data(),nullptr,band.size()*4,LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_user_data(d,&pixels);lv_display_set_flush_cb(d,[](lv_display_t*d,const lv_area_t*area,uint8_t*data){++flushed;if(first_flush_y==-1)first_flush_y=area->y1;auto&pixels=*static_cast<std::vector<uint32_t>*>(lv_display_get_user_data(d));auto*source=reinterpret_cast<uint32_t*>(data);for(int y=area->y1;y<=area->y2;++y)for(int x=area->x1;x<=area->x2;++x)pixels[y*SCREEN_WIDTH+x]=*source++;lv_display_flush_ready(d);});
  int outside_draws=0;auto*outside=lv_obj_create(lv_screen_active());lv_obj_set_size(outside,100,100);lv_obj_set_pos(outside,30,30);lv_obj_add_event_cb(outside,[](lv_event_t*e){++*static_cast<int*>(lv_event_get_user_data(e));},LV_EVENT_DRAW_MAIN,&outside_draws);
@@ -194,23 +176,6 @@ int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SC
   assert(shell.active&&shell.active->body==b.body&&lv_obj_get_parent(b.body)==shell.overlay);assert(!lv_obj_has_flag(b.body,LV_OBJ_FLAG_HIDDEN));hide_popup_shell(b.body);
  }
  g_weather_popup_ctx=nullptr;
- // A folder click without a PIN leaves tile disc options and opens no popup;
- // Settings, no tile popup, must not take them (V2 2026-10-03).
- popup_shell_use_tile_disc(true,false,false);
- open_settings_popup(SettingsPopupKind::Wifi);assert(settings_built==0);assert(shell.frame==frame&&shell.close==button);
- assert(tile_icon_source::opened_without_tile==1&&!shell.disc.from_tile&&"Settings is no tile popup");
- auto*settings_card=settings_popup_card;lv_refr_now(d);process_popup_open();lv_obj_update_layout(shell.overlay);assert(settings_built==1);
- assert(lv_obj_get_width(shell.frame)==lv_obj_get_width(settings_card));assert(lv_obj_get_width(settings_card)>popup_layout::kCardWidth||SCREEN_WIDTH==SCREEN_HEIGHT);
- assert(lv_obj_has_flag(settings_popup_title,LV_OBJ_FLAG_IGNORE_LAYOUT));
- lv_obj_send_event(shell.active->close,LV_EVENT_RELEASED,nullptr);assert(settings_closed==0&&!lv_obj_has_flag(wifi_entry_view,LV_OBJ_FLAG_HIDDEN));
- lv_obj_send_event(button,LV_EVENT_CLICKED,nullptr);assert(settings_closed==0&&lv_obj_has_flag(wifi_entry_view,LV_OBJ_FLAG_HIDDEN));
- lv_obj_send_event(button,LV_EVENT_CLICKED,nullptr);assert(settings_closed==1&&!shell.active);assert(allocations==2);
- // The next tile popup after the full-screen Settings card resizes the shared
- // frame; that must not repaint the tiles outside the new frame (P4 ~100 ms).
- lv_refr_now(d);outside_draws=0;show(a,"After Settings",true);lv_refr_now(d);process_popup_open();lv_refr_now(d);
- if(SCREEN_WIDTH>SCREEN_HEIGHT)assert(outside_draws==0&&"A popup after Settings must not repaint tiles outside its frame");
- lv_obj_update_layout(shell.overlay);assert(lv_obj_get_width(shell.frame)==lv_obj_get_width(a.body));hide_popup_shell(a.body);lv_refr_now(d);
-
  // A tapped tile under the popup's edge marks itself on release, before its
  // popup opens. The popup's area is drawn first; drawn first, the tile's area
  // showed a flat, popup-colored square until the popup reached it (V2 video).

@@ -125,13 +125,13 @@ assert.match(between(model, 'void restart() {', 'void pair() {'), /g_system_rebo
 assert.match(between(model, 'void pair() {', 'void confirm_pairing()'), /command_channel::startPairing\(\)/);
 assert.match(between(model, 'void unpair() {', 'void allow_password()'), /command_channel::disable\(&bridge_notified\)/);
 assert.match(between(model, 'void allow_password() {', 'void remove_password()'), /web_admin_auth::allowFirstPassword\(\);/);
-const remove = between(model, 'void remove_password() {', 'void open_category_popup(');
+const remove = between(model, 'void remove_password() {', 'static uint8_t wifi_bars(');
 assert.match(remove, /web_admin_auth::clearCredential\(\)/);
 assert.match(remove, /entity_search::scheduleTilesReport\(\);/);
 // Update results and the Bridge's pairing prompt reach the page.
 assert.match(between(model, 'void settings_fw_check_result(', 'void settings_fw_install_progress('), /settings_screen::system_changed\(\);/);
 assert.match(between(model, 'void settings_fw_install_failed(', 'void build_settings_tab('), /UpdateState::InstallFailed/);
-const prompt = between(model, 'void settings_show_pairing() {', 'static const char* popup_title_for_kind(');
+const prompt = between(model, 'void settings_show_pairing() {', 'namespace settings_model {');
 assert.match(prompt, /uiManager\.switchToTab\(3\);/);
 assert.match(prompt, /settings_screen::show_category\(3\);/);
 

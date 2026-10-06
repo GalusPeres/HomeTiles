@@ -148,3 +148,7 @@ Last reviewed: 2026-10-05
 
 - IDs 24-26 share `src/types/device/` and `src/ui/popups/device/`; design/contract: `build/ha-dummy-sim/`.
 - Retained `.../detail` state; views on their cards, by entity. Lock/Alarm: pairing + Web Admin password, sealed (id, 15 s deadline, `web_auth`); answers `{base}/stat/lock|alarm` (large buffer); PIN popup code; only reported states show; no screensaver.
+
+## Settings redesign (`feature/settings-setup`, unreleased)
+
+- Rebuilt after `build/design-mockups/settings` (HANDOFF.md): four pages, dialogs, new keyboard; old popups and `ui_keyboard` removed. b248 V2/S3 HW test pending; setup wizard next.

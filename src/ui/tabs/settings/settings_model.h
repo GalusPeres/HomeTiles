@@ -176,7 +176,5 @@ const char* firmware_version();
 
 // ---------- Navigation ----------
 void close_settings();
-// WiFi (1) still opens its popup until its page follows.
-void open_category_popup(uint8_t category, lv_event_t* e);
 
 }  // namespace settings_model

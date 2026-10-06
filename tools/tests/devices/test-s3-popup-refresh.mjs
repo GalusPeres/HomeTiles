@@ -30,16 +30,9 @@ assert.match(callback, /finish_press_before_popup\(e\);\s+show_weather_popup\(in
 assert.doesNotMatch(callback, /defer_popup_until_source_refreshed/,
                     'A cold weather payload must not delay the common shell');
 assert.doesNotMatch(callback, /lv_refr_now/);
-const settingsOpenStart = settings.indexOf('static void open_settings_popup(SettingsPopupKind kind) {');
-const settingsClickStart = settings.indexOf(
-  'void open_category_popup(', settingsOpenStart);
-assert.ok(settingsOpenStart >= 0 && settingsClickStart > settingsOpenStart,
-          'Settings popup open function must exist');
-const settingsOpen = settings.slice(settingsOpenStart, settingsClickStart);
-assert.doesNotMatch(settingsOpen, /lv_refr_now\s*\(/,
-                    'Settings must use the normal popup refresh on P4 and S3');
-assert.match(settingsOpen, /show_popup_shell\(/);
-assert.match(settingsOpen, /defer_popup_content\(/);
+// Settings opens no popup any more: its pages, lists and dialogs live on
+// the Settings panel itself.
+assert.doesNotMatch(settings, /show_popup_shell\(|open_settings_popup/);
 
 for (const marker of [
   'defined(DEVICE_GUITION_ESP32_4848S040) ||',
@@ -58,7 +51,6 @@ for (const renderer of [
   'src/types/media/renderer.cpp',
   'src/types/sensor/renderer.cpp',
   'src/types/switch/renderer.cpp',
-  'src/ui/tabs/settings/tab_settings.cpp',
 ]) {
   assert.match(read(renderer), /finish_press_before_popup\s*\(/,
                `${renderer} must use the shared popup refresh path`);

@@ -27,5 +27,8 @@ void show_category(uint8_t index);
 // The update, pairing or password state changed: the System page follows now
 // (it also polls them while it shows).
 void system_changed();
+// Closes an open option list, dialog or network entry (navigation closes
+// every popup).
+void close_overlays();
 
 }  // namespace settings_screen

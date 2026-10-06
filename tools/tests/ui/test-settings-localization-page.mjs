@@ -98,7 +98,7 @@ assert.match(between(parts, 'void option_clicked_cb(lv_event_t* e) {', 'void ove
 assert.match(between(parts, 'void overlay_clicked_cb(lv_event_t*) {', '}  // namespace'), /lv_async_call\(options_async_cb, nullptr\);/);
 
 // --- Model: the same values and side effects as the former Save button -------------------------
-const save = between(model, 'void locale_selected_changed(LocaleList list, uint8_t index) {', 'void open_category_popup(');
+const save = between(model, 'void locale_selected_changed(LocaleList list, uint8_t index) {', 'static int seconds_left(');
 assert.match(save, /strncpy\(cfg\.language, i18n::language_code_at\(index\)/);
 assert.match(save, /strncpy\(cfg\.timezone, selected_timezone_code\(index\)/);
 assert.match(save, /cfg\.global_time_format = clock_tile::normalize_time_format\(index\);/);

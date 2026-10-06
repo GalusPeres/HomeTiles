@@ -19,11 +19,10 @@ const open = apBranch.indexOf('process_popup_open();');
 assert.ok(open >= 0, 'AP-mode loop must call process_popup_open()');
 assert.ok(open < apBranch.indexOf('lv_timer_handler();'), 'build before the LVGL refresh');
 
-// lv_qrcode_set_size clears the canvas. A reopened popup's QR object can reuse
-// the freed address, so the code must be redrawn after every sizing.
-const status = cppFunctionDefinitions(read('src/ui/tabs/settings/tab_settings.cpp'))
-  .find(f => f.name === 'wifi_update_conn_status_label').source;
-assert.doesNotMatch(status, /last_qr_obj/);
-assert.match(status, /if \(qr_resized \|\| strcmp\(last_qr_buf, qr_buf\) != 0\)/);
+// lv_qrcode_set_size clears the canvas: the Settings QR codes (the hotspot
+// on the WiFi page, GitHub) are sized first and drawn after.
+const qr = cppFunctionDefinitions(read('src/ui/tabs/settings/settings_parts.cpp'))
+  .find(f => f.name === 'qr_code').source;
+assert.ok(qr.indexOf('lv_qrcode_set_size(') < qr.indexOf('lv_qrcode_update('), 'size first, then the code');
 
 console.log('AP-mode loop builds deferred popups; the AP QR code is redrawn after sizing.');

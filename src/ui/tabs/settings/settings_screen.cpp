@@ -2024,4 +2024,10 @@ void show_category(uint8_t index) {
 
 void system_changed() { system_tick(); }
 
+void close_overlays() {
+  settings_parts::close_options();
+  close_dialog();
+  close_entry();
+}
+
 }  // namespace settings_screen

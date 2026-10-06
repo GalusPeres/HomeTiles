@@ -1680,6 +1680,9 @@ void HomeTilesNetworkManager::drainOutboundQueues(uint8_t max_commands) {
 // Keep the former update() receive-buffer grow/shrink policy on the
 // worker because setBufferSize() accesses the client.
 void HomeTilesNetworkManager::serviceBufferHousekeeping(uint32_t now_ms) {
+  // The direct link's buffer is fixed: every resize attempt would only log
+  // "65535 -> 65535" again on each worker pass.
+  if (!mqtt_client.resizableBuffer()) return;
   const uint32_t large_until = mqtt_large_until;
   if (large_until == 0) {
     // Without an active large-response window, match the normal buffer to
@@ -1706,6 +1709,13 @@ void HomeTilesNetworkManager::serviceBufferHousekeeping(uint32_t now_ms) {
     // until the window ends, as the former update() "large-deferred" path did.
     setMqttBufferSize(kMqttBufferLarge, "large");
   }
+}
+
+// No subscribe/unsubscribe waits for the worker: every subscription queued so
+// far has been sent. The worker sends a dequeued subscription before it takes
+// any later publish, so a publish queued now goes out after them.
+bool HomeTilesNetworkManager::mqttControlIdle() const {
+  return !g_mqtt_control_queue || uxQueueMessagesWaiting(g_mqtt_control_queue) == 0;
 }
 
 // ========== Single-owner MQTT: API for other tasks ==========
@@ -2006,8 +2016,8 @@ uint16_t HomeTilesNetworkManager::mqttNormalBufferSize() const {
 bool HomeTilesNetworkManager::setMqttBufferSize(uint16_t size, const char* reason) {
   if (size == 0) return false;
   const uint16_t before = mqtt_client.getBufferSize();
-  if (before == size) {
-    mqtt_buffer_size = size;
+  if (before == size || !mqtt_client.resizableBuffer()) {
+    mqtt_buffer_size = before;
     return true;
   }
 

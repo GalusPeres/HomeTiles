@@ -69,6 +69,7 @@ public:
                                          uint32_t hold_ms,
                                          bool priority = false);
   bool mqttEnqueueSubscribe(const char* topic);
+  bool mqttControlIdle() const;
   bool mqttEnqueueUnsubscribe(const char* topic);
 
   // Streams one binary payload that exceeds the client buffer (the local

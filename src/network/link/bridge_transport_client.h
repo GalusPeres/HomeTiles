@@ -72,6 +72,8 @@ class BridgeTransportClient {
     return link_mode_ ? link_.lastPublishRetained() : mqtt_.lastPublishRetained();
   }
 
+  // The direct link receives into one fixed buffer (kReceiveCapacity).
+  bool resizableBuffer() const { return !link_mode_; }
   bool setBufferSize(uint16_t size) { return link_mode_ ? true : mqtt_.setBufferSize(size); }
   uint16_t getBufferSize() {
     return link_mode_ ? BridgeLinkClient::kReceiveCapacity : mqtt_.getBufferSize();

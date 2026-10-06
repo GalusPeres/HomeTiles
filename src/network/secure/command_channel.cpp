@@ -56,6 +56,8 @@ struct State {
   uint32_t last_hello_ms;
   uint8_t hello_attempts;
   bool hello_requested;
+  // The answer topic {base}/stat/secure is subscribed on this connection.
+  bool answer_subscribed;
   bool status_dirty;
   // One command waiting for the session: topic, NUL, payload.
   char* held;
@@ -268,6 +270,13 @@ char* sealForBridge(const Header& header, const uint8_t* body, size_t body_lengt
 
 void sendHello() {
   if (!g_state || !networkManager.isMqttConnected()) return;
+  // The Bridge answers on {base}/stat/secure. Asked before that subscription
+  // went out (it queues behind every other subscribe of a new connection),
+  // the answer was lost and the session came only with the retry 10 s later.
+  if (!g_state->answer_subscribed || !networkManager.mqttControlIdle()) {
+    g_state->hello_requested = true;
+    return;
+  }
   const uint32_t now = millis();
   if (g_state->last_hello_ms != 0 &&
       static_cast<uint32_t>(now - g_state->last_hello_ms) < kHelloMinIntervalMs) {
@@ -508,6 +517,7 @@ void completePairing() {
   wipeAttemptSecrets();
   if (networkManager.isMqttConnected()) {
     networkManager.mqttEnqueueSubscribe(topicFor(kBridgeLeaf).c_str());
+    g_state->answer_subscribed = true;
     publishStatus();
     // The retained announcement is signed from now on.
     networkManager.publishBridgeConfig();
@@ -879,6 +889,7 @@ void onMqttConnected() {
     return;
   }
   networkManager.mqttEnqueueSubscribe(topicFor(kBridgeLeaf).c_str());
+  g_state->answer_subscribed = true;
   // The Bridge may have restarted; ask for a fresh session.
   resetSession();
   g_state->last_hello_ms = 0;
@@ -917,7 +928,10 @@ void service() {
     dropHeld();
     Serial.println("[SecureCmd] Command dropped: no Bridge session");
   }
-  if (!networkManager.isMqttConnected()) return;
+  if (!networkManager.isMqttConnected()) {
+    g_state->answer_subscribed = false;  // the next connection subscribes again
+    return;
+  }
   if (g_state->status_dirty) publishStatus();
   if (g_state->has_session) return;
   const uint8_t attempts = g_state->hello_attempts;

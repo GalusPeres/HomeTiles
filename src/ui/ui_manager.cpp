@@ -337,6 +337,7 @@ void UIManager::switchToTab(uint8_t index) {
     if (tab_panels[active_tab_index]) {
       lv_obj_add_flag(tab_panels[active_tab_index], LV_OBJ_FLAG_HIDDEN);
     }
+    if (active_tab_index == 3) settings_did_hide();
     if (tab_buttons[active_tab_index]) {
       lv_obj_set_style_bg_opa(tab_buttons[active_tab_index], LV_OPA_TRANSP, 0);
     }
@@ -350,7 +351,8 @@ void UIManager::switchToTab(uint8_t index) {
     }
   }
 
-  // Activate the new tab.
+  // Activate the new tab; Settings builds its open page first.
+  if (index == 3) settings_prepare_show();
   if (tab_panels[index]) {
     lv_obj_clear_flag(tab_panels[index], LV_OBJ_FLAG_HIDDEN);
   }

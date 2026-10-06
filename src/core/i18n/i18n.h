@@ -677,6 +677,21 @@ struct Strings {
   const char* tile_title_auto;
   // Hint of the title switch
   const char* tile_title_auto_hint;
+  // Settings Display page: section of the screen controls.
+  const char* settings_screen;
+  // Settings row labels (no colon).
+  const char* settings_brightness;
+  const char* settings_sleep;
+  const char* settings_rotation;
+  const char* settings_screensaver;
+  const char* settings_starts_after;
+  // Display category line: %s = sleep time ("5 min", "never").
+  const char* settings_sleep_summary_fmt;
+  // WiFi category line.
+  const char* settings_not_connected;
+  const char* settings_access_point_on;
+  // System category line.
+  const char* settings_update_available;
 };
 
 // Locale-specific display rules and short runtime strings shared by

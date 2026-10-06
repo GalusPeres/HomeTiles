@@ -8,6 +8,10 @@ typedef void (*hotspot_callback_t)(bool enable);
 
 void hide_settings_popup();
 void build_settings_tab(lv_obj_t *tab, hotspot_callback_t hotspot_cb = nullptr);
+// UIManager::switchToTab: before the Settings panel shows (builds the open
+// page with current values) and after it hid (releases the page).
+void settings_prepare_show();
+void settings_did_hide();
 
 // Registered by the sketch to request main-loop Wi-Fi reconnection
 // with the currently saved credentials, without restarting the device.

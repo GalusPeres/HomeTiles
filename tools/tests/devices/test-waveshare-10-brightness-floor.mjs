@@ -130,7 +130,7 @@ assert.match(
 );
 assert.match(
   settingsUi,
-  /lv_slider_set_range\(screensaver_brightness_slider,\s*Device::kConfiguredBrightnessPercentMin,\s*kScreensaverBrightnessPctMax\)/,
+  /display_slider_row\(saver,[^;]*Device::kConfiguredBrightnessPercentMin,\s*kScreensaverBrightnessPctMax,/,
   'the on-device screensaver brightness slider must start at the device floor',
 );
 

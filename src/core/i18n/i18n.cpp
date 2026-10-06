@@ -599,7 +599,17 @@ static const Strings kStringsDe = {
     "Jetzt im Web Admin ein Passwort festlegen (2 Minuten).",
     "Tippe zuerst am Display unter System > Sicherheit auf „Passwort“.",
     "Auto",
-    "Name aus Home Assistant"};
+    "Name aus Home Assistant",
+    "Bildschirm",
+    "Helligkeit",
+    "Standby",
+    "Drehung",
+    "Screensaver",
+    "Startet nach",
+    "Standby %s",
+    "Nicht verbunden",
+    "Hotspot an",
+    "Update verfügbar"};
 
 static const Strings kStringsEn = {
     "en",
@@ -1193,7 +1203,17 @@ static const Strings kStringsEn = {
     "Now set a password in the Web Admin (2 minutes).",
     "First tap “Password” on the display under System > Security.",
     "Auto",
-    "Name from Home Assistant"};
+    "Name from Home Assistant",
+    "Screen",
+    "Brightness",
+    "Sleep",
+    "Rotation",
+    "Screensaver",
+    "Starts after",
+    "Sleep %s",
+    "Not connected",
+    "Access point on",
+    "Update available"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1787,7 +1807,17 @@ static const Strings kStringsFr = {
     "Définissez maintenant un mot de passe dans le Web Admin (2 minutes).",
     "Touchez d'abord « Mot de passe » sur l'écran sous Système > Sécurité.",
     "Auto",
-    "Nom depuis Home Assistant"};
+    "Nom depuis Home Assistant",
+    "Écran",
+    "Luminosité",
+    "Veille",
+    "Rotation",
+    "Écran de veille",
+    "Démarre après",
+    "Veille %s",
+    "Non connecté",
+    "Point d'accès actif",
+    "Mise à jour disponible"};
 
 static const LocaleProfile kLocaleDe = {
     "de",
@@ -2733,6 +2763,16 @@ static const Strings kStringsPl = {
     "Najpierw dotknij „Hasło” na wyświetlaczu w System > Bezpieczeństwo.",
     "Auto",
     "Nazwa z Home Assistant",
+    "Ekran",
+    "Jasność",
+    "Uśpienie",
+    "Obrót",
+    "Wygaszacz ekranu",
+    "Start po",
+    "Uśpienie %s",
+    "Brak połączenia",
+    "Punkt dostępu włączony",
+    "Dostępna aktualizacja",
 };
 
 static const LocaleProfile kLocalePl = {

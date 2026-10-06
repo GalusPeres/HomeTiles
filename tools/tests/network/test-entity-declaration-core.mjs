@@ -92,8 +92,9 @@ if (output !== null) {
     assert.ok(list.length >= 1 && list.length <= 8, `${tag}: 1 to 8 parts`);
     raw.forEach(text => assert.ok(Buffer.byteLength(text) <= 1800, `${tag}: ${Buffer.byteLength(text)} bytes`));
     list.forEach((part, index) => {
-      assert.deepEqual(Object.keys(part), ['v', 'p', 'n', 'lists', 'web_auth']);
-      assert.deepEqual([part.v, part.p, part.n, part.web_auth], [version, index, list.length, webAuth]);
+      assert.deepEqual(Object.keys(part), ['v', 'p', 'n', 'lists', 'own', 'web_auth']);
+      assert.deepEqual([part.v, part.p, part.n, part.own, part.web_auth], [version, index, list.length, true, webAuth],
+        'own: the declaration names everything the panel uses');
       for (const ids of Object.values(part.lists)) assert.ok(Array.isArray(ids) && ids.length > 0);
     });
     return list;

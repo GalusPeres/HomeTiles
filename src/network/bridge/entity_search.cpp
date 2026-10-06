@@ -90,11 +90,16 @@ const char* listOfSource(const char* entity) {
   return "switches";
 }
 
-// The declaration: every entity the tiles use, from the tiles alone. It never
-// reads what the Bridge serves, so the Bridge's answer to one declaration
-// cannot change the next one (entity_declaration_core.h).
+// The declaration: every entity the panel uses, from its tiles and settings
+// alone. It never reads what the Bridge serves, so the Bridge's answer to one
+// declaration cannot change the next one (entity_declaration_core.h). It is
+// complete ("own"): the Bridge sends the panel nothing else beyond its own
+// entry's releases.
 entity_declaration::Declaration collectDeclaration() {
   entity_declaration::Declaration declaration;
+  // The sensor slots are panel settings; applyJson clears one whose sensor
+  // the Bridge stops sending, so they are declared too.
+  for (const String& slot : haBridgeConfig.get().sensor_slots) declaration.add("sensors", slot.c_str());
   FolderEntitySlotView slots[TILES_PER_GRID];
   for (const FolderEntry& folder : tileConfig.getFolders()) {
     if (!tileConfig.getFolderEntitiesCached(folder.id, slots, TILES_PER_GRID)) continue;

@@ -340,7 +340,8 @@ the Bridge. Both messages travel only sealed (`SEALED_ONLY_COMMANDS`):
   tiles use (folder and screensaver tiles, and their icon color sources),
   like an ESPHome device names the Home Assistant states it needs. Parts of
   `{"v":version,"p":part,"n":parts,"lists":{"<list>":["entity_id",…]},
-  "web_auth":…}`, at most eight of up to 1,800 bytes and 300 entities. The
+  "own":true,"web_auth":…}`, at most eight of up to 1,800 bytes and 300
+  entities. The sensor slots of the panel's settings are declared too. The
   declaration is built from the tiles and the password alone, never from
   what the Bridge serves, so the Bridge's answer cannot change the next one.
   `version` is a hash of the content: the same tiles give the same version.
@@ -349,10 +350,15 @@ the Bridge. Both messages travel only sealed (`SEALED_ONLY_COMMANDS`):
   with sealed `tiles` data `{"v":version}`.
 
   The Bridge joins the parts of one version, leaves out entities outside
-  their list's domains, and replaces the panel's previous declaration. It
-  serves the declared entities like released ones only under the Lock/Alarm
-  rule (sealed, pairing not being removed, `web_auth` true in every part);
-  otherwise the declaration serves nothing. An unchanged result publishes
+  their list's domains, and replaces the panel's previous declaration.
+  Declared entities that any panel's releases hold are served; any other
+  declared entity only under the Lock/Alarm rule (sealed, pairing not being
+  removed, `web_auth` true in every part). Declaring never grants what the
+  released lists do not. With `"own":true` (every part) the declaration
+  names everything the panel uses, so the panel gets its own entry's
+  releases and its declared entities instead of every entry's releases;
+  lock rules and scenes still come from every entry. A declaration without
+  it (firmware b232–b237) narrows nothing. An unchanged result publishes
   nothing. The Bridge keeps the last served declaration with the pairing's
   key id (Home Assistant storage `tab5_lvgl.panel_entities.<entry>`), so a
   restart serves the tiles from its first configuration; another pairing

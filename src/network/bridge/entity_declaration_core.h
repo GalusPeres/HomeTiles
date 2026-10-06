@@ -17,8 +17,8 @@ constexpr size_t kMaxPartBytes = 1800;  // below command_channel's sealed body l
 constexpr size_t kMaxParts = 8;         // entity_search.py MAX_DECLARATION_PARTS
 constexpr size_t kMaxEntities = 300;    // entity_search.py MAX_PANEL_ENTITIES
 constexpr size_t kMaxEntityLength = 255;
-// {"v":4294967295,"p":7,"n":8,"lists":{ ... ]},"web_auth":false}
-constexpr size_t kPartEnvelope = 64;
+// {"v":4294967295,"p":7,"n":8,"lists":{ ... ]},"own":true,"web_auth":false}
+constexpr size_t kPartEnvelope = 80;
 
 // A Home Assistant entity id: letters, digits and '_' around one '.'.
 // Anything else names no entity, and none of these characters needs JSON
@@ -99,9 +99,12 @@ class Declaration {
     return sum;
   }
 
-  // {"v":version,"p":part,"n":parts,"lists":{list:[entity ids]},"web_auth":bool}
-  // in parts of at most kMaxPartBytes; what does not fit kMaxParts parts is
-  // left out and counted in `dropped`.
+  // {"v":version,"p":part,"n":parts,"lists":{list:[entity ids]},"own":true,
+  // "web_auth":bool} in parts of at most kMaxPartBytes; what does not fit
+  // kMaxParts parts is left out and counted in `dropped`. "own" tells the
+  // Bridge that the declaration names everything the panel uses, so it gets
+  // its own entry's releases and these entities instead of every panel's
+  // releases.
   std::vector<std::string> parts(uint32_t version, bool web_auth, size_t* dropped) const {
     std::vector<std::string> lists(1);  // the "lists" object content of each part
     const char* open = nullptr;         // the list whose array is open in the last part
@@ -138,7 +141,7 @@ class Declaration {
     for (size_t i = 0; i < lists.size(); ++i) {
       std::string part = "{\"v\":" + std::to_string(version) + ",\"p\":" + std::to_string(i) +
                          ",\"n\":" + std::to_string(lists.size()) + ",\"lists\":{" + lists[i] +
-                         "},\"web_auth\":" + (web_auth ? "true" : "false") + "}";
+                         "},\"own\":true,\"web_auth\":" + (web_auth ? "true" : "false") + "}";
       parts.push_back(part);
     }
     return parts;

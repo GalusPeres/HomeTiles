@@ -43,7 +43,10 @@ assert.match(search, /g_answer\.received = 0;\s*g_answer\.full = false;\s*g_answ
 // declarations; nothing it serves can change the next declaration (the loop
 // of b232-b235: a reported entity came back released, was dropped from the
 // next report, removed by the Bridge and reported again).
-assert.equal((search.match(/haBridgeConfig\./g) || []).length, 2, 'only the two capability checks read the Bridge');
+assert.equal((search.match(/haBridgeConfig\./g) || []).length, 3,
+  'only the two capability checks and the own sensor slots read the Bridge configuration');
+assert.match(search, /for \(const String& slot : haBridgeConfig\.get\(\)\.sensor_slots\) declaration\.add\("sensors", slot\.c_str\(\)\);/,
+  'the sensor slots are declared: applyJson clears a slot whose sensor the Bridge stops sending');
 assert.match(search, /bool declares\(\) \{\s*return command_channel::state\(\) == command_channel::PairingState::Active &&\s*haBridgeConfig\.supportsEntityDeclarations\(\);/);
 assert.doesNotMatch(search, /released|g_reported|g_last_report|parseSensorList/, 'no released lists, no sticky report state');
 const collect = search.slice(search.indexOf('entity_declaration::Declaration collectDeclaration()'),

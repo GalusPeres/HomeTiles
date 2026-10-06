@@ -92,10 +92,13 @@ assert.match(rawBody, /good_state\(r\.row, s\.security_state_on, "shield-check",
 assert.match(rawBody, /good_state\(ha\.row, s\.security_value_connected, "check", false\);/);
 // Pair and Allow: one width in every language (the longest of both texts in
 // all of them) and a little taller than the other row buttons.
+// The width is shared with the setup's Pair (switch_on_width).
+const switchWidth = between(screen, 'int switch_on_width() {', 'lv_obj_t* switch_on_button(');
+assert.match(switchWidth, /for \(uint8_t i = 0; i < settings_model::language_count\(\); \+\+i\)/);
+assert.match(switchWidth, /\{s\.settings_pair, s\.settings_allow\}/);
 const switchOn = between(screen, 'lv_obj_t* switch_on_button(', 'void refresh_async(');
-assert.match(switchOn, /for \(uint8_t i = 0; i < settings_model::language_count\(\); \+\+i\)/);
-assert.match(switchOn, /\{s\.settings_pair, s\.settings_allow\}/);
 assert.match(switchOn, /settings_style::kSwitchOnHeight/);
+assert.match(switchOn, /lv_obj_set_width\(b, switch_on_width\(\)\);/);
 assert.match(style, /constexpr int kSwitchOnHeight = pick\(64, 42\);/);
 assert.match(page, /switch_on_button\(r\.row, s\.settings_pair, SystemAction::Pair\);/);
 assert.match(page, /switch_on_button\(r\.row, s\.settings_allow, SystemAction::Allow\);/);

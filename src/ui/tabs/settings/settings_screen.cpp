@@ -663,10 +663,12 @@ lv_obj_t* row_button(lv_obj_t* row, const char* text, const char* icon, settings
                                 settings_style::kButtonHeight, false, on_system_action, action_data(action));
 }
 
+}  // namespace
+
 // Pair and Allow: a little taller than the other row buttons and one width,
 // the longest of the two in every language, so a language change never
 // resizes them (user 2026-10-06).
-lv_obj_t* switch_on_button(lv_obj_t* row, const char* text, SystemAction action) {
+int switch_on_width() {
   int width = 0;
   for (uint8_t i = 0; i < settings_model::language_count(); ++i) {
     const i18n::Strings& s = settings_model::text_of(i);
@@ -675,10 +677,16 @@ lv_obj_t* switch_on_button(lv_obj_t* row, const char* text, SystemAction action)
       if (w > width) width = w;
     }
   }
+  return width + 2 * settings_style::kButtonPad + settings_style::kSwitchOnExtra;
+}
+
+namespace {
+
+lv_obj_t* switch_on_button(lv_obj_t* row, const char* text, SystemAction action) {
   lv_obj_t* b = settings_parts::button(row, text, nullptr, settings_parts::ButtonKind::Accent,
                                        settings_style::kSystemColor, colors(), settings_style::kSwitchOnHeight, false,
                                        on_system_action, action_data(action));
-  lv_obj_set_width(b, width + 2 * settings_style::kButtonPad + settings_style::kSwitchOnExtra);
+  lv_obj_set_width(b, switch_on_width());
   return b;
 }
 

@@ -760,8 +760,6 @@ struct Strings {
   const char* setup_add_hometiles;
   // %s = the panel's name in Home Assistant.
   const char* setup_discovered_fmt;
-  const char* setup_continues;
-  const char* setup_tap_retry;
   const char* setup_no_bridge;
   const char* setup_guide;
   const char* setup_back_to_pairing;

@@ -7,13 +7,14 @@
 //
 // Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880]
 //        [--page=display|wifi|localization|system|setup] [--open=<row>] [--press=<row>]
-//        [--state=off|new|ap|eth|ethwifi|online|code|ok|guide] [--step=0..3]
+//        [--state=off|new|ap|eth|ethwifi|online|wait|code|ok|guide] [--step=0..3]
 //        [--dialog=github|restart|unpair|password|pairing|leave]
 //        [--entry=manual|join] [--no-mockup]
 // --page=setup shows the first-start setup at --step (mockup wiz=A&step=):
 // step 1 lists the networks (--state=online: connected, ap: the phone
-// setup's hotspot on); steps 2 and 3 are online, step 2 waits for Home
-// Assistant (--state=code: the number, ok: paired, guide: the Bridge guide);
+// setup's hotspot on); steps 2 and 3 are online, step 2 offers Pair
+// (--state=wait: findable with the time left, code: the number, ok: paired,
+// guide: the Bridge guide);
 // --dialog=leave asks to leave it.
 // --open shows the option list of a Localization row (1 = time zone), like
 // the mockup's dd=<row>; --press shows that row pressed. System: --state=off
@@ -268,8 +269,10 @@ void locale_selected_changed(LocaleList, uint8_t) {}
 // shows the number.
 SystemValues system_values() {
   const bool off = ${state === 'off' || state === 'new' ? 'true' : 'false'};
-  // The setup waits for Home Assistant unless --state=code or ok.
-  const PairState pairing = ${setup ? (state === 'code' ? 'PairState::Compare' : state === 'ok' ? 'PairState::Paired' : 'PairState::Discoverable')
+  // The setup shows Pair (--state=wait: findable with the time left, code:
+  // the number, ok: paired).
+  const PairState pairing = ${setup ? (state === 'code' ? 'PairState::Compare' : state === 'ok' ? 'PairState::Paired'
+    : state === 'wait' ? 'PairState::Discoverable' : 'PairState::NotPaired')
     : dialog === 'pairing' ? 'PairState::Compare' : 'off ? PairState::NotPaired : PairState::Paired'};
   return {UpdateState::Idle, 0, !off, pairing, 119, !off, ${state === 'off' ? 'true' : 'false'}, 119};
 }

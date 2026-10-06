@@ -130,6 +130,11 @@ constexpr int kKeyboardBottom = popup_layout::scale(20);
 // step dots, the pairing code's box, the width from which the Web Admin QR
 // code stands beside its text.
 constexpr int kSetupNavHeight = popup_layout::kNavHeight;
+// More room than the Settings pages (user 2026-10-06): from the head to the
+// body, per row, between groups.
+constexpr int kSetupBodyGap = pick(32, 20);
+constexpr int kSetupRowHeight = pick(100, 66);
+constexpr int kSetupGroupGap = pick(24, 16);
 constexpr int kSetupNavBottom = popup_layout::kCardPad + popup_layout::kNavBottomInset;
 constexpr int kSetupFoot = kSetupNavBottom + kSetupNavHeight + pick(24, 14);
 constexpr int kSetupDot = 8;

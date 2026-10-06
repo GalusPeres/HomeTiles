@@ -35,8 +35,6 @@ constexpr StepLook kSteps[kStepCount] = {{"translate", settings_style::kLocaliza
                                          {"link-variant", 0x18BCF2},
                                          {"view-grid-plus-outline", 0x26A69A}};
 constexpr uint32_t kAccent = 0x26A69A;
-// The setup opens the pairing window again at most this often.
-constexpr uint32_t kPairRetryMs = 3000;
 // A search without a result is repeated after this long.
 constexpr uint32_t kScanRetryMs = 5000;
 
@@ -52,7 +50,7 @@ enum class Action : uint8_t {
   Search,
   Phone,
   ToWifi,
-  Retry,
+  Pair,
   Guide,
   Confirm,
   StayInSetup,
@@ -85,7 +83,8 @@ const i18n::Strings* g_built_text = nullptr;
 uint32_t g_key = 0;
 // Step 3: the Bridge guide shows instead of the pairing steps.
 bool g_guide = false;
-uint32_t g_pair_tried_at = 0;
+// Step 3: the time left of the pairing window.
+lv_obj_t* g_countdown = nullptr;
 uint32_t g_scan_at = 0;
 int g_spin_angle = 0;
 // The networks listed (a tap names one by its index).
@@ -94,12 +93,19 @@ uint8_t g_network_count = 0;
 
 Colors colors() { return settings_style::colors(g_built_card); }
 
+// A row of the Settings pages with the setup's extra room.
+settings_parts::Row setup_row(lv_obj_t* group, const char* icon_name, const char* title, const char* sub = nullptr) {
+  settings_parts::Row r = settings_parts::row(group, icon_name, title, sub);
+  lv_obj_set_height(r.row, settings_style::kSetupRowHeight);
+  return r;
+}
+
 void* data(Action action) { return reinterpret_cast<void*>(static_cast<uintptr_t>(action)); }
 
 int card_width() { return popup_layout::kCardWidth; }
 int card_height() { return popup_layout::kCardHeight; }
 int body_top() {
-  return popup_layout::kHeaderCenterY + popup_layout::kHeaderIconDiscSize / 2 + popup_layout::kHeaderIconDiscGap;
+  return popup_layout::kHeaderCenterY + popup_layout::kHeaderIconDiscSize / 2 + settings_style::kSetupBodyGap;
 }
 int body_width() { return card_width() - 2 * popup_layout::kCardPad; }
 int body_height() { return card_height() - body_top() - settings_style::kSetupFoot; }
@@ -136,6 +142,14 @@ void color_text(lv_obj_t* label, uint32_t color) {
   lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
 }
 
+// "1:59" while the pairing window is open; set only on a change.
+void set_countdown(int seconds) {
+  if (!g_countdown) return;
+  char buf[12] = "";
+  if (seconds > 0) snprintf(buf, sizeof(buf), "%d:%02d", seconds / 60, seconds % 60);
+  if (strcmp(lv_label_get_text(g_countdown), buf) != 0) lv_label_set_text(g_countdown, buf);
+}
+
 // ---------- Spinner ----------
 // The waiting rows' icon turns (mockup .spin): one turn a second in steps,
 // so only its small area is drawn now and then.
@@ -156,7 +170,7 @@ void stop_spinner() {
 
 // A row whose icon is the turning circle.
 settings_parts::Row spinner_row(lv_obj_t* group, const char* title, const char* sub) {
-  settings_parts::Row r = settings_parts::row(group, "loading", title, sub);
+  settings_parts::Row r = setup_row(group, "loading", title, sub);
   g_spinner = r.icon;
   lv_obj_set_style_transform_pivot_x(g_spinner, lv_pct(50), 0);
   lv_obj_set_style_transform_pivot_y(g_spinner, lv_pct(50), 0);
@@ -330,8 +344,7 @@ void on_action(lv_event_t* e) {
     case Action::ToWifi:
       go_later(1);
       return;
-    case Action::Retry:
-      g_pair_tried_at = lv_tick_get() | 1;
+    case Action::Pair:
       settings_model::pair();
       break;
     case Action::Guide:
@@ -406,7 +419,7 @@ void build_language(const Colors& palette) {
     const LocaleList list = locale_list(i);
     LocaleRow& view = g_locale_rows[i];
     const char* value = settings_screen::locale_value(list);
-    settings_parts::Row row = settings_parts::row(group, settings_screen::locale_icon(list),
+    settings_parts::Row row = setup_row(group, settings_screen::locale_icon(list),
                                                   settings_screen::locale_title(list), stacked ? value : nullptr);
     view.row = row.row;
     view.value = stacked ? row.sub : settings_parts::trailing_text(row.row, value, value_width);
@@ -414,7 +427,7 @@ void build_language(const Colors& palette) {
     settings_parts::make_tap(row.row, palette.button, on_action, data(i == 0 ? Action::Language : Action::TimeZone));
   }
   settings_parts::Row rotation =
-      settings_parts::row(group, "screen-rotation", settings_model::text().settings_rotation);
+      setup_row(group, "screen-rotation", settings_model::text().settings_rotation);
   g_rotation = settings_screen::rotation_segment(rotation.row, palette.card);
 }
 
@@ -428,7 +441,7 @@ void signal_icon(char* buf, size_t len, uint8_t bars, bool locked) {
 
 // A QR code beside a title and a grey line (mockup wzQrRow).
 void qr_row(lv_obj_t* group, const char* code, const char* title, const char* line) {
-  settings_parts::Row row = settings_parts::row(group, nullptr, title, line);
+  settings_parts::Row row = setup_row(group, nullptr, title, line);
   lv_obj_set_height(row.row, settings_style::kHotspotQr + 2 * settings_style::kHotspotQrPad);
   lv_obj_t* qr = settings_parts::qr_code(row.row, settings_style::kHotspotQr, code);
   if (qr) lv_obj_move_to_index(qr, lv_obj_get_index(row.text));
@@ -438,18 +451,21 @@ void qr_row(lv_obj_t* group, const char* code, const char* title, const char* li
 // so the search works the rest of the time.
 void phone_row(lv_obj_t* group, const settings_model::WifiValues& v, const Colors& palette) {
   settings_parts::Row row =
-      settings_parts::row(group, "cellphone-wireless", settings_model::text().setup_with_phone);
+      setup_row(group, "cellphone-wireless", settings_model::text().setup_with_phone);
   settings_parts::toggle(row.row, v.access_point, kAccent, palette.card, !v.hotspot_switching, on_action,
                          data(Action::Phone));
 }
 
-// 2: every network in a box that scrolls by itself; Other network and the
-// phone setup always visible below it.
+// 2: Networks and Search over every network in a box that scrolls by
+// itself; Other network and the phone setup below it. Once connected, the
+// network stands on top and the others stay to pick from (user 2026-10-06);
+// Other network then closes the list, like Add network on the WiFi page.
 void build_wifi(const Colors& palette) {
   const i18n::Strings& s = settings_model::text();
   const settings_model::WifiValues v = settings_model::wifi_values();
   g_network_count = 0;
-  if (wifi_done(v)) {
+  const bool connected = wifi_done(v);
+  if (connected) {
     char name[40];
     char icon[32];
     char address[48];
@@ -461,13 +477,13 @@ void build_wifi(const Colors& palette) {
       signal_icon(icon, sizeof(icon), v.bars, false);
     }
     lv_obj_t* group = settings_parts::group(g_body, palette);
-    settings_parts::Row row = settings_parts::row(group, icon, name, "");
+    settings_parts::Row row = setup_row(group, icon, name, "");
     if (settings_model::panel_address(address, sizeof(address))) snprintf(rest, sizeof(rest), " \xC2\xB7 %s", address);
     settings_parts::two_tone_sub(row, s.wifi_connected, settings_style::kGoodColor, rest);
     color_text(settings_parts::trailing_icon(row.row, "check"), settings_style::kGoodColor);
-    return;
-  }
-  if (v.access_point) {
+    // On Ethernet there is no network to pick.
+    if (v.ethernet_active) return;
+  } else if (v.access_point) {
     lv_obj_t* group = settings_parts::group(g_body, palette);
     phone_row(group, v, palette);
     char ssid[40];
@@ -481,7 +497,7 @@ void build_wifi(const Colors& palette) {
     return;
   }
   // Networks and Search, as on the WiFi page (user 2026-10-06).
-  settings_screen::networks_heading(g_body, v.scanning, true, on_action, data(Action::Search));
+  settings_screen::networks_heading(g_body, v.scanning, !connected, on_action, data(Action::Search));
   lv_obj_t* list = settings_parts::group(g_body, palette);
   if (v.connecting) {
     spinner_row(list, s.settings_connecting, nullptr);
@@ -492,23 +508,24 @@ void build_wifi(const Colors& palette) {
       g_networks[i] = settings_model::wifi_network(i);
       char icon[32];
       signal_icon(icon, sizeof(icon), g_networks[i].bars, g_networks[i].locked);
-      settings_parts::Row row = settings_parts::row(list, icon, g_networks[i].ssid);
+      settings_parts::Row row = setup_row(list, icon, g_networks[i].ssid);
       settings_parts::trailing_icon(row.row, "chevron-right");
       settings_parts::make_tap(row.row, palette.button, on_network, reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
     }
   }
-  lv_obj_t* more = settings_parts::group(g_body, palette);
-  lv_obj_set_style_margin_top(more, settings_style::kSectionBottom, 0);
-  settings_parts::Row other = settings_parts::row(more, "plus", s.setup_other_network);
+  lv_obj_t* more = connected ? nullptr : settings_parts::group(g_body, palette);
+  if (more) lv_obj_set_style_margin_top(more, settings_style::kSetupGroupGap, 0);
+  settings_parts::Row other = setup_row(more ? more : list, "plus", s.setup_other_network);
   settings_parts::trailing_icon(other.row, "chevron-right");
   settings_parts::make_tap(other.row, palette.button, on_action, data(Action::OtherNetwork));
-  phone_row(more, v, palette);
+  if (more) phone_row(more, v, palette);
 
-  // The list keeps what the body leaves under the heading and above the
-  // second group, and scrolls in itself.
+  // The list keeps what the body leaves under the heading (and above the
+  // second group), and scrolls in itself.
   lv_obj_update_layout(g_body);
-  const int room = body_height() - lv_obj_get_y(list) - lv_obj_get_height(more) - settings_style::kSectionBottom;
-  if (lv_obj_get_height(list) > room && room > settings_style::kRowHeight) {
+  const int below = more ? lv_obj_get_height(more) + settings_style::kSetupGroupGap : 0;
+  const int room = body_height() - lv_obj_get_y(list) - below;
+  if (lv_obj_get_height(list) > room && room > settings_style::kSetupRowHeight) {
     lv_obj_set_height(list, room);
     lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
@@ -534,7 +551,7 @@ lv_obj_t* column_text(lv_obj_t* parent, const char* text, const lv_font_t* font,
 // A step of the Home Assistant instructions: its number in a filled circle
 // (easier to read than an outline digit), what to do and where.
 void number_row(lv_obj_t* group, int number, const char* title, const char* sub) {
-  settings_parts::Row row = settings_parts::row(group, nullptr, title, sub);
+  settings_parts::Row row = setup_row(group, nullptr, title, sub);
   lv_obj_t* circle = settings_parts::plain(row.row);
   lv_obj_set_size(circle, settings_style::kIconPx, settings_style::kIconPx);
   lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, 0);
@@ -554,7 +571,7 @@ void number_row(lv_obj_t* group, int number, const char* title, const char* sub)
 void guide_row(lv_obj_t* group, const Colors& palette) {
   const i18n::Strings& s = settings_model::text();
   settings_parts::Row row =
-      settings_parts::row(group, "book-open-variant", s.setup_no_bridge, g_guide ? s.setup_back_to_pairing : s.setup_guide);
+      setup_row(group, "book-open-variant", s.setup_no_bridge, g_guide ? s.setup_back_to_pairing : s.setup_guide);
   settings_parts::trailing_icon(row.row, g_guide ? "chevron-up" : "qrcode");
   settings_parts::make_tap(row.row, palette.button, on_action, data(Action::Guide));
 }
@@ -565,6 +582,17 @@ void shown_url(const char* url, char* buf, size_t len) {
   snprintf(buf, len, "%s", start);
   const size_t n = strlen(buf);
   if (n > 0 && buf[n - 1] == '/') buf[n - 1] = '\0';
+}
+
+// The popups' navigation buttons: their height, the row font, pills at least
+// twice as wide as high (Back, Next, Confirm; user 2026-10-06).
+lv_obj_t* nav_button(lv_obj_t* parent, const char* text, const char* icon, settings_parts::ButtonKind kind,
+                     const Colors& palette, Action action) {
+  const int height = settings_style::kSetupNavHeight;
+  lv_obj_t* b = settings_parts::button(parent, text, icon, kind, kAccent, palette, height, true, on_action, data(action));
+  lv_obj_set_style_min_width(b, 2 * height, 0);
+  lv_obj_set_style_pad_hor(b, height / 3, 0);
+  return b;
 }
 
 // The pairing number: both sides confirm it (firmware pairing_compare).
@@ -592,9 +620,8 @@ void build_code(const settings_model::SystemValues& v, const Colors& palette) {
   const bool confirmed = v.pairing == PairState::Confirmed;
   column_text(box, confirmed ? s.pairing_waiting : s.pairing_compare, settings_style::row_font(),
               settings_style::kRowFontPx, false, 0, true);
-  lv_obj_t* confirm = settings_parts::button(box, s.security_confirm, "check", settings_parts::ButtonKind::Accent,
-                                             kAccent, palette, settings_style::kButtonHeight, false, on_action,
-                                             data(Action::Confirm));
+  lv_obj_t* confirm =
+      nav_button(box, s.security_confirm, "check", settings_parts::ButtonKind::Accent, palette, Action::Confirm);
   lv_obj_set_style_margin_top(confirm, settings_style::kSetupCodeButtonTop, 0);
   settings_parts::button_set_enabled(confirm, !confirmed);
 }
@@ -605,7 +632,7 @@ void build_home_assistant(const Colors& palette) {
   const i18n::Strings& s = settings_model::text();
   if (!wifi_done(settings_model::wifi_values())) {
     lv_obj_t* group = settings_parts::group(g_body, palette);
-    settings_parts::Row row = settings_parts::row(group, "wifi-off", s.setup_wifi_first);
+    settings_parts::Row row = setup_row(group, "wifi-off", s.setup_wifi_first);
     color_text(row.icon, settings_style::kWarnColor);
     settings_parts::trailing_icon(row.row, "chevron-right");
     settings_parts::make_tap(row.row, palette.button, on_action, data(Action::ToWifi));
@@ -614,7 +641,7 @@ void build_home_assistant(const Colors& palette) {
   const settings_model::SystemValues v = settings_model::system_values();
   if (v.pairing == PairState::Paired) {
     lv_obj_t* group = settings_parts::group(g_body, palette);
-    settings_parts::Row row = settings_parts::row(group, "shield-check", s.setup_paired);
+    settings_parts::Row row = setup_row(group, "shield-check", s.setup_paired);
     color_text(row.icon, settings_style::kGoodColor);
     return;
   }
@@ -636,38 +663,59 @@ void build_home_assistant(const Colors& palette) {
   number_row(steps, 1, s.setup_open_ha, s.setup_open_ha_where);
   number_row(steps, 2, s.setup_add_hometiles, discovered);
 
+  // Pairing starts only with Pair (as on System), never by itself, so nobody
+  // is rushed (user 2026-10-06): findable for two minutes with the time left,
+  // then Pair again.
   lv_obj_t* wait = settings_parts::group(g_body, palette);
-  lv_obj_set_style_margin_top(wait, settings_style::kSectionTop, 0);
-  const char* failure = nullptr;
-  uint32_t failure_color = settings_style::kWarnColor;
+  lv_obj_set_style_margin_top(wait, settings_style::kSetupGroupGap, 0);
   switch (v.pairing) {
-    case PairState::NoAnswer:
-      failure = s.pairing_no_answer;
+    case PairState::Discoverable: {
+      settings_parts::Row row = spinner_row(wait, s.pairing_waiting, s.pairing_discoverable);
+      color_text(row.sub, settings_style::kGoodColor);
+      g_countdown = settings_parts::trailing_text(row.row, "", 0);
+      lv_obj_set_width(g_countdown, LV_SIZE_CONTENT);
+      set_countdown(v.pair_seconds);
       break;
-    case PairState::AlreadyPaired:
-      failure = s.pairing_already_paired;
+    }
+    case PairState::Asking:
+      spinner_row(wait, s.pairing_asking, nullptr);
       break;
-    case PairState::Busy:
-      failure = s.pairing_busy;
+    default: {
+      // Not paired, or a failed attempt's result.
+      const char* line = settings_model::pairing_note() ? settings_model::pairing_note() : s.settings_not_paired;
+      uint32_t color = settings_model::pairing_note() ? settings_style::kWarnColor : 0;
+      switch (v.pairing) {
+        case PairState::NoAnswer:
+          line = s.pairing_no_answer;
+          color = settings_style::kWarnColor;
+          break;
+        case PairState::AlreadyPaired:
+          line = s.pairing_already_paired;
+          color = settings_style::kWarnColor;
+          break;
+        case PairState::Busy:
+          line = s.pairing_busy;
+          color = settings_style::kWarnColor;
+          break;
+        case PairState::Rejected:
+          line = s.pairing_rejected;
+          color = settings_style::kErrorColor;
+          break;
+        case PairState::Failed:
+          line = s.pairing_failed;
+          color = settings_style::kErrorColor;
+          break;
+        default:
+          break;
+      }
+      settings_parts::Row row = setup_row(wait, "link-variant-off", s.settings_pairing, line);
+      if (color) color_text(row.sub, color);
+      lv_obj_t* pair = settings_parts::button(row.row, s.settings_pair, nullptr, settings_parts::ButtonKind::Accent,
+                                              kAccent, palette, settings_style::kSwitchOnHeight, false, on_action,
+                                              data(Action::Pair));
+      lv_obj_set_width(pair, settings_screen::switch_on_width());
       break;
-    case PairState::Rejected:
-      failure = s.pairing_rejected;
-      failure_color = settings_style::kErrorColor;
-      break;
-    case PairState::Failed:
-      failure = s.pairing_failed;
-      failure_color = settings_style::kErrorColor;
-      break;
-    default:
-      break;
-  }
-  if (failure) {
-    // A finished attempt waits for a tap, so a refusal is not repeated.
-    settings_parts::Row row = settings_parts::row(wait, "refresh", failure, s.setup_tap_retry);
-    color_text(row.title, failure_color);
-    settings_parts::make_tap(row.row, palette.button, on_action, data(Action::Retry));
-  } else {
-    spinner_row(wait, v.pairing == PairState::Asking ? s.pairing_asking : s.pairing_waiting, s.setup_continues);
+    }
   }
   guide_row(wait, palette);
 }
@@ -679,7 +727,7 @@ void build_tiles(const Colors& palette) {
   char url[64];
   if (!settings_model::web_admin_url(url, sizeof(url))) {
     lv_obj_t* group = settings_parts::group(g_body, palette);
-    settings_parts::Row row = settings_parts::row(group, "wifi-off", s.setup_wifi_first);
+    settings_parts::Row row = setup_row(group, "wifi-off", s.setup_wifi_first);
     color_text(row.icon, settings_style::kWarnColor);
     settings_parts::trailing_icon(row.row, "chevron-right");
     settings_parts::make_tap(row.row, palette.button, on_action, data(Action::ToWifi));
@@ -742,18 +790,7 @@ void build_tiles(const Colors& palette) {
 }
 
 // Back bottom left, the step dots in the middle, Next (or Later, Finish)
-// bottom right; no Next while the step waits for something that moves on by
-// itself.
-// The popups' navigation buttons: their height, the row font, pills at least
-// twice as wide as high.
-lv_obj_t* nav_button(const char* text, const char* icon, settings_parts::ButtonKind kind, const Colors& palette,
-                     Action action) {
-  const int height = settings_style::kSetupNavHeight;
-  lv_obj_t* b = settings_parts::button(g_foot, text, icon, kind, kAccent, palette, height, true, on_action, data(action));
-  lv_obj_set_style_min_width(b, 2 * height, 0);
-  lv_obj_set_style_pad_hor(b, height / 3, 0);
-  return b;
-}
+// bottom right; no Next while WiFi is not connected yet.
 
 void build_foot(const Colors& palette) {
   const i18n::Strings& s = settings_model::text();
@@ -764,7 +801,8 @@ void build_foot(const Colors& palette) {
   lv_obj_set_pos(g_foot, pad, card_height() - settings_style::kSetupNavBottom - height);
   lv_obj_add_flag(g_foot, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
   if (g_step > 0) {
-    lv_obj_t* back = nav_button(s.wifi_back_btn, "chevron-left", settings_parts::ButtonKind::Normal, palette, Action::Back);
+    lv_obj_t* back =
+        nav_button(g_foot, s.wifi_back_btn, "chevron-left", settings_parts::ButtonKind::Normal, palette, Action::Back);
     lv_obj_align(back, LV_ALIGN_LEFT_MID, 0, 0);
   }
   lv_obj_t* dots = settings_parts::plain(g_foot);
@@ -794,7 +832,7 @@ void build_foot(const Colors& palette) {
     kind = settings_parts::ButtonKind::Normal;
   }
   if (label) {
-    lv_obj_t* next = nav_button(label, nullptr, kind, palette, action);
+    lv_obj_t* next = nav_button(g_foot, label, nullptr, kind, palette, action);
     lv_obj_align(next, LV_ALIGN_RIGHT_MID, 0, 0);
   }
 }
@@ -809,7 +847,7 @@ uint32_t body_key() {
     const settings_model::WifiValues v = settings_model::wifi_values();
     mix(v.connected | v.access_point << 1 | v.hotspot_switching << 2 | v.connecting << 3 | v.ethernet_active << 4 |
         static_cast<uint32_t>(v.bars) << 5);
-    if (g_step == 1 && !v.connected && !v.access_point) {
+    if (g_step == 1 && !v.access_point) {
       // Search turns into Searching... and back.
       mix(v.scanning ? 0x200u : 0u);
       for (uint8_t i = 0; i < settings_model::wifi_network_count(); ++i) {
@@ -834,6 +872,7 @@ void build_body() {
   settings_parts::close_options();
   stop_spinner();
   g_rotation = nullptr;
+  g_countdown = nullptr;
   for (LocaleRow& row : g_locale_rows) row = {};
   if (g_body) lv_obj_delete(g_body);
   if (g_foot) lv_obj_delete(g_foot);
@@ -921,14 +960,8 @@ void tick() {
       settings_model::wifi_scan();
     }
   }
-  if (g_step == 2 && wifi_done(settings_model::wifi_values()) &&
-      settings_model::system_values().pairing == PairState::NotPaired &&
-      (g_pair_tried_at == 0 || now - g_pair_tried_at >= kPairRetryMs)) {
-    // Findable for Home Assistant while this step shows (the window lasts
-    // two minutes; it opens again when it lapsed).
-    g_pair_tried_at = now | 1;
-    settings_model::pair();
-  }
+  // The pairing window's time left.
+  if (g_countdown) set_countdown(settings_model::system_values().pair_seconds);
   // A list or dialog stays as it is until it closes.
   if (body_key() != g_key && !g_dialog) build_body();
 }
@@ -962,6 +995,7 @@ void hide() {
   if (g_card) lv_obj_delete(g_card);
   g_card = g_content = g_body = g_foot = nullptr;
   g_rotation = nullptr;
+  g_countdown = nullptr;
   for (LocaleRow& row : g_locale_rows) row = {};
   g_built_text = nullptr;
 }

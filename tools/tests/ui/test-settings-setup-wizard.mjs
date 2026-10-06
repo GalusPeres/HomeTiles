@@ -30,14 +30,12 @@ const between = (source, from, to) => {
 // --- Translations ------------------------------------------------------------------------------
 const keys = ['setup_step_fmt', 'setup_language_title', 'setup_wifi_title', 'setup_ha_title', 'setup_tiles_title',
   'setup_next', 'setup_finish', 'setup_later', 'setup_other_network', 'setup_with_phone', 'setup_open_ha',
-  'setup_open_ha_where', 'setup_add_hometiles', 'setup_discovered_fmt', 'setup_continues', 'setup_tap_retry',
-  'setup_no_bridge', 'setup_guide', 'setup_back_to_pairing', 'setup_install_bridge', 'setup_pairing_code',
+  'setup_open_ha_where', 'setup_add_hometiles', 'setup_discovered_fmt', 'setup_no_bridge', 'setup_guide', 'setup_back_to_pairing', 'setup_install_bridge', 'setup_pairing_code',
   'setup_paired', 'setup_wifi_first', 'setup_scan_tiles', 'setup_password_hint', 'setup_password_hint_long',
   'setup_leave_question', 'setup_leave_text_fmt', 'setup_leave'];
 const english = ['Step %d of %d', 'Choose your language', 'Connect to WiFi', 'Add to Home Assistant', 'Add your tiles',
   'Next', 'Finish', 'Later', 'Other network', 'Set up with your phone', 'Open Home Assistant',
-  'Settings › Devices & services', 'Add HomeTiles', 'Under Discovered · %s', 'Continues by itself', 'Tap to try again',
-  'No HomeTiles Bridge yet?', 'Setup guide', 'Back to the pairing', 'Install the Bridge first', 'Pairing code',
+  'Settings › Devices & services', 'Add HomeTiles', 'Under Discovered · %s', 'No HomeTiles Bridge yet?', 'Setup guide', 'Back to the pairing', 'Install the Bridge first', 'Pairing code',
   'Paired with Home Assistant', 'Connect WiFi first', 'Scan it to add your tiles.', 'Set a Web Admin password there.',
   'Set a Web Admin password there, so only you can change the panel.', 'Leave the setup?',
   'You can finish it later in %s › System › %s.', 'Leave'];
@@ -89,14 +87,25 @@ assert.match(setup, /LocaleList locale_list\(uint8_t index\) \{ return index == 
   'language and time zone (a new panel starts on Berlin)');
 const wifi = between(setup, 'void build_wifi(const Colors& palette) {', 'lv_obj_t* column_text(');
 assert.match(wifi, /s\.setup_other_network/);
-// Networks with Search, as on the WiFi page (user 2026-10-06).
-assert.match(wifi, /settings_screen::networks_heading\(g_body, v\.scanning, true, on_action, data\(Action::Search\)\);/);
+// Networks with Search, as on the WiFi page, also once connected (user
+// 2026-10-06): another network can still be picked.
+assert.match(wifi, /settings_screen::networks_heading\(g_body, v\.scanning, !connected, on_action, data\(Action::Search\)\);/);
+assert.match(wifi, /if \(v\.ethernet_active\) return;\s*\} else if \(v\.access_point\) \{/, 'connected WiFi keeps the list');
 assert.match(setup, /case Action::Search:\s*settings_model::wifi_scan\(\);/);
-assert.match(wifi, /phone_row\(more, v, palette\);/, 'the phone setup stays visible under the list');
+assert.match(wifi, /if \(more\) phone_row\(more, v, palette\);/, 'the phone setup stays visible under the list');
+// More room than on the Settings pages (user 2026-10-06).
+assert.match(setup, /lv_obj_set_height\(r\.row, settings_style::kSetupRowHeight\);/);
+assert.match(setup, /kHeaderIconDiscSize \/ 2 \+ settings_style::kSetupBodyGap;/);
+assert.equal(setup.match(/settings_parts::row\(/g).length, 1, 'every setup row has the larger height (setup_row)');
 assert.match(rawSetup, /"WIFI:T:WPA;S:%s;P:%s;;"/, 'the QR code joins the hotspot');
 assert.match(wifi, /lv_obj_set_height\(list, room\);[\s\S]*?LV_OBJ_FLAG_SCROLLABLE/, 'the list scrolls in itself');
 const ha = between(setup, 'void build_home_assistant(const Colors& palette) {', 'void build_tiles(');
-assert.match(rawSetup, /settings_parts::row\(group, "shield-check", s\.setup_paired\)/, 'paired shows the green shield');
+assert.match(rawSetup, /setup_row\(group, "shield-check", s\.setup_paired\)/, 'paired shows the green shield');
+// Pairing starts only with Pair, then the window's time left shows (user
+// 2026-10-06: nothing activates by itself).
+assert.match(ha, /data\(Action::Pair\)\);\s*lv_obj_set_width\(pair, settings_screen::switch_on_width\(\)\);/);
+assert.match(ha, /case PairState::Discoverable: \{[\s\S]*?g_countdown = settings_parts::trailing_text\(row\.row/);
+assert.match(setup, /case Action::Pair:\s*settings_model::pair\(\);/);
 assert.match(ha, /color_text\(row\.icon, settings_style::kGoodColor\);/);
 assert.match(ha, /number_row\(steps, 1, s\.setup_open_ha, s\.setup_open_ha_where\);/);
 assert.match(ha, /settings_model::device_name\(\)/, 'the name Home Assistant lists');
@@ -111,9 +120,10 @@ const tick = between(setup, 'void tick() {', 'void on_timer(lv_timer_t*)');
 // appears once WiFi is connected or the panel paired.
 assert.doesNotMatch(tick, /go_to\(/, 'no jump to the next step');
 assert.doesNotMatch(setup, /kNextDelayMs|g_next_at/);
-// The Home Assistant step keeps the panel findable, at most every few seconds.
-assert.match(tick, /pairing == PairState::NotPaired &&\s*\(g_pair_tried_at == 0 \|\| now - g_pair_tried_at >= kPairRetryMs\)/);
-assert.match(tick, /settings_model::pair\(\);/);
+// The Home Assistant step never opens the pairing window by itself; it
+// counts the open window down.
+assert.doesNotMatch(tick, /settings_model::pair\(\)/);
+assert.match(tick, /if \(g_countdown\) set_countdown\(settings_model::system_values\(\)\.pair_seconds\);/);
 // The WiFi entry is the Settings entry with the step head.
 assert.match(setup, /settings_entry::open\(\{g_card, g_built_card, line, on_entry_closed\}, manual, ssid\);/);
 assert.match(between(entry, 'Geometry geometry(int card_w, int card_h, bool setup) {', 'void focus_field('),

@@ -65,7 +65,8 @@ assert.match(page, /settings_parts::make_tap\(row\.row, palette\.button, on_loca
 assert.doesNotMatch(page, /save|preview/i, 'no Save button and no Preview group');
 // The category opens its page in the card, not the old popup.
 const click = between(screen, 'void on_category_clicked(lv_event_t* e) {', 'void build_category_tile(');
-assert.match(click, /if \(category == Category::Wifi\) \{/, 'only WiFi still opens its popup');
+assert.match(click, /select_category\(static_cast<Category>\(raw\)\);/, 'every category opens its page');
+assert.doesNotMatch(click, /open_category_popup/, 'no category opens a popup');
 assert.match(between(screen, 'void build_page() {', 'void clear_refs() {'),
   /if \(g_category == Category::Localization\) build_localization_page\(g_page\);/);
 // The open list: the selected option in the Localization circle tone, labels aligned.

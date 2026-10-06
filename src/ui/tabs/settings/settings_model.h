@@ -116,6 +116,54 @@ void unpair();
 void allow_password();
 void remove_password();
 
+// ---------- WiFi page ----------
+struct WifiNetwork {
+  char ssid[33];
+  uint8_t bars;  // signal strength 1..4
+  bool locked;   // needs a password
+};
+struct WifiValues {
+  bool ethernet_panel;     // the panel can switch to Ethernet
+  bool ethernet_selected;  // the saved mode (applies after a restart)
+  bool ethernet_active;    // the running mode
+  bool access_point;       // the hotspot is on
+  bool hotspot_switching;  // the hotspot is being switched
+  bool connected;          // the running network is up
+  uint8_t bars;            // the connected WiFi's signal 1..4
+  bool scanning;
+  bool connecting;         // a connection was just requested
+  bool connect_failed;     // ... and did not come up in time
+  bool static_ip;          // the saved IP mode
+  bool static_ip_available;  // static values are set in Web Admin
+  bool ip_mode_offered;    // Automatic | Static shows (static in use or changed)
+  bool restart_needed;     // the network or IP mode differs from the running one
+};
+// Also finishes a running scan.
+WifiValues wifi_values();
+// The keyboard's letters: 0 QWERTY, 1 QWERTZ, 2 AZERTY (the Keyboard
+// setting, or the language's on Auto).
+uint8_t keyboard_layout();
+// For the category: "Network" on panels that can use Ethernet.
+bool ethernet_panel();
+bool ethernet_active();
+// The networks found, strongest first, without the connected one; the
+// saved network is included even when the scan missed it.
+uint8_t wifi_network_count();
+const WifiNetwork& wifi_network(uint8_t index);
+// The saved password when `ssid` is the saved network, else "".
+const char* wifi_saved_password(const char* ssid);
+void hotspot_details(char* ssid, size_t ssid_len, char* password, size_t password_len);
+bool static_address(char* buf, size_t len);
+// Touches.
+void wifi_scan();
+void wifi_connect(const char* ssid, const char* password);
+void wifi_disconnect();
+void hotspot_selected(bool on);
+void network_mode_selected(bool ethernet);
+void ip_mode_selected(bool static_ip);
+// Ends the connection attempt's state (the entry closed).
+void wifi_connect_done();
+
 // ---------- Category lines ----------
 bool access_point_on();
 bool network_connected();

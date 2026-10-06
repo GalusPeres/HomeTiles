@@ -55,9 +55,9 @@ for (const table of tables) {
 
 // --- Page ---------------------------------------------------------------------------------------------
 const head = between(screen, 'void build_system_head(', 'void build_system_page(');
-const page = between(screen, 'void build_system_page(lv_obj_t* page) {', 'void on_system_timer(');
-const rawPage = between(rawScreen, 'void build_system_head(', 'void on_system_timer(');
-const rawBody = between(rawScreen, 'void build_system_page(lv_obj_t* page) {', 'void on_system_timer(');
+const page = between(screen, 'void build_system_page(lv_obj_t* page) {', 'void system_tick() {');
+const rawPage = between(rawScreen, 'void build_system_head(', 'void system_tick() {');
+const rawBody = between(rawScreen, 'void build_system_page(lv_obj_t* page) {', 'void system_tick() {');
 assert.doesNotMatch(rawPage, /"[A-Z][a-z]+/, 'no display text in the page code (product names come from settings_style)');
 for (const name of ['kProductName = "HomeTiles"', 'kHomeAssistant = "Home Assistant"', 'kGitHub = "GitHub"']) {
   assert.ok(style.includes(`constexpr const char* ${name};`), name);
@@ -93,8 +93,8 @@ assert.match(style, /constexpr int kSystemButtonHeight = pick\(72, 47\);/);
 assert.match(page, /if \(free > 0\) lv_obj_set_height\(head_row, head_height \+ free\);/);
 // The page follows the state while it shows.
 assert.match(between(screen, 'void build_page() {', 'void clear_refs() {'),
-  /g_system_timer = lv_timer_create\(on_system_timer, 500, nullptr\);/);
-assert.match(between(screen, 'void did_hide() {', 'void refresh_lines() {'), /stop_system_timer\(\);/);
+  /g_page_timer = lv_timer_create\(on_page_timer, 500, nullptr\);/);
+assert.match(between(screen, 'void did_hide() {', 'void refresh_lines() {'), /stop_page_timer\(\);/);
 
 // --- Dialogs -------------------------------------------------------------------------------------------
 const dialogs = between(screen, 'void open_dialog(Dialog dialog) {', 'void sync_dialog(');

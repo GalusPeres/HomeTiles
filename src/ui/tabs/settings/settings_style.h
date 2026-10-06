@@ -80,6 +80,45 @@ constexpr int kDialogButtonHeight = pick(72, 48);
 constexpr int kDialogQr = pick(210, 140);
 // The veil behind a dialog: black at 62 %.
 constexpr lv_opa_t kVeilOpa = 158;
+// Toggle (mockup .tg): track and knob inset.
+constexpr int kToggleWidth = pick(88, 58);
+constexpr int kToggleHeight = pick(48, 32);
+constexpr int kToggleInset = pick(6, 4);
+// WiFi page: the hotspot's QR code and the padding around it, the
+// Networks heading's right margin.
+constexpr int kHotspotQr = pick(168, 112);
+constexpr int kHotspotQrPad = pick(16, 11);
+constexpr int kHeadingRight = 8;
+// WiFi entry (mockup sheetGeo): the 480 class has its own sizes.
+#if defined(DEVICE_LAYOUT_480X480)
+constexpr int kEntryPad = 13;
+constexpr int kEntryClose = 44;
+constexpr int kEntryCloseRight = 8;
+constexpr int kEntryCloseTop = 8;
+constexpr int kEntryFieldTop = 60;
+constexpr int kEntryFieldHeight = 44;
+constexpr int kEntryFieldGap = 12;
+constexpr int kEntryMessageTop = 112;
+constexpr int kKeyHeight = 56;
+constexpr int kKeyStep = 62;
+constexpr int kKeyGap = 6;
+constexpr int kKeyRadius = 12;
+constexpr int kKeyboardBottom = 13;
+#else
+constexpr int kEntrySide = popup_layout::scale(20);
+constexpr int kEntryColumn = popup_layout::scale(864);
+constexpr int kEntryClose = popup_layout::scale(96);
+constexpr int kEntryCloseRight = popup_layout::scale(14);
+constexpr int kEntryCloseTop = popup_layout::scale(12);
+constexpr int kEntryFieldTop = popup_layout::scale(112);
+constexpr int kEntryFieldHeight = popup_layout::scale(72);
+constexpr int kEntryFieldGap = popup_layout::scale(12);
+constexpr int kKeyHeight = popup_layout::scale(84);
+constexpr int kKeyStep = popup_layout::scale(94);
+constexpr int kKeyGap = popup_layout::scale(10);
+constexpr int kKeyRadius = popup_layout::scale(18);
+constexpr int kKeyboardBottom = popup_layout::scale(20);
+#endif
 // Settings card: padding, the large page title (5-row and portrait panels).
 constexpr int kCardPad = popup_layout::kCardPad;
 constexpr int kTitleTop = popup_layout::scale(6);
@@ -111,6 +150,14 @@ constexpr int kTitleFontPx = 20;
 constexpr int kRowFontPx = 24;
 constexpr int kSmallFontPx = 20;
 constexpr int kTitleFontPx = 32;
+#endif
+// The MDI icon size of the class (FONT_MDI_ICONS).
+#if defined(DEVICE_LAYOUT_1024X600)
+constexpr int kIconPx = 40;
+#elif defined(DEVICE_LAYOUT_480X480)
+constexpr int kIconPx = 32;
+#else
+constexpr int kIconPx = 48;
 #endif
 // Grey text and icons: white at 60 %.
 constexpr lv_opa_t kGreyOpa = 153;

@@ -530,6 +530,50 @@ lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t
   return box;
 }
 
+lv_obj_t* toggle(lv_obj_t* row, bool on, uint32_t accent, uint32_t track, bool enabled, lv_event_cb_t on_click,
+                 void* user_data) {
+  lv_obj_t* t = plain(row);
+  lv_obj_set_size(t, kToggleWidth, kToggleHeight);
+  lv_obj_set_style_bg_color(t, lv_color_hex(on ? accent : track), 0);
+  lv_obj_set_style_bg_opa(t, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(t, LV_RADIUS_CIRCLE, 0);
+  const int knob = kToggleHeight - 2 * kToggleInset;
+  lv_obj_t* k = plain(t);
+  lv_obj_set_size(k, knob, knob);
+  lv_obj_set_pos(k, on ? kToggleWidth - kToggleHeight + kToggleInset : kToggleInset, kToggleInset);
+  lv_obj_set_style_bg_color(k, lv_color_hex(on ? 0xFFFFFF : 0x8A8A8A), 0);
+  lv_obj_set_style_bg_opa(k, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(k, LV_RADIUS_CIRCLE, 0);
+  if (on_click) lv_obj_add_event_cb(t, on_click, LV_EVENT_CLICKED, user_data);
+  // Touch over the row's height.
+  lv_obj_set_ext_click_area(t, (kRowHeight - kToggleHeight) / 2);
+  lv_obj_add_flag(t, LV_OBJ_FLAG_CLICKABLE);
+  button_set_enabled(t, enabled);
+  return t;
+}
+
+void two_tone_sub(Row& r, const char* first, uint32_t color, const char* rest) {
+  if (!r.sub) return;
+  lv_obj_t* line = plain(r.text);
+  lv_obj_set_size(line, LV_PCT(100), LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+  lv_obj_add_flag(line, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  lv_obj_move_to_index(line, lv_obj_get_index(r.sub));
+  lv_obj_set_parent(r.sub, line);
+  lv_label_set_text(r.sub, first ? first : "");
+  lv_obj_set_width(r.sub, LV_SIZE_CONTENT);
+  lv_obj_set_style_text_color(r.sub, lv_color_hex(color), 0);
+  lv_obj_set_style_text_opa(r.sub, LV_OPA_COVER, 0);
+  lv_obj_t* tail = lv_label_create(line);
+  lv_label_set_text(tail, rest ? rest : "");
+  lv_label_set_long_mode(tail, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(tail, 1);
+  lv_obj_set_flex_grow(tail, 1);
+  lv_obj_set_style_text_font(tail, small_font(), 0);
+  grey_text(tail);
+  browser_line(tail, kSmallFontPx, kSubTop);
+}
+
 lv_obj_t* qr_code(lv_obj_t* parent, int size, const char* text) {
 #if LV_USE_QRCODE
   lv_obj_t* qr = lv_qrcode_create(parent);

@@ -5,13 +5,17 @@
 // The mockup's example values stand in for the configuration
 // (settings_model.h), so both show the same state.
 //
-// Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880] [--page=display|localization]
-//        [--open=<row>] [--press=<row>] [--state=off] [--dialog=github|restart|unpair|password|pairing]
-//        [--no-mockup]
+// Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880]
+//        [--page=display|wifi|localization|system] [--open=<row>] [--press=<row>]
+//        [--state=off|ap|eth|ethwifi] [--dialog=github|restart|unpair|password|pairing]
+//        [--entry=manual|join] [--no-mockup]
 // --open shows the option list of a Localization row (1 = time zone), like
 // the mockup's dd=<row>; --press shows that row pressed. System: --state=off
 // = not paired and the first-password window open (mockup enc=0&pw=win);
 // --dialog opens a dialog (mockup dlg=git|restart|encOff|pwOff|code).
+// WiFi: --state=ap = the hotspot on, eth / ethwifi = a panel that can use
+// Ethernet in Ethernet or WiFi mode (mockup eth=eth|wifi); --entry opens the
+// network entry (mockup sheet=manual|pass).
 // Output: build/settings-preview/<panel>-<page>.png (firmware render) and
 //         build/settings-preview/<panel>-<page>-compare.png (mockup | firmware | difference).
 import fs from 'node:fs';
@@ -50,15 +54,19 @@ const open = option('open');
 const press = option('press');
 const state = option('state');
 const dialog = option('dialog');
+const entry = option('entry');
 const dialogs = {github: 'git', restart: 'restart', unpair: 'encOff', password: 'pwOff', pairing: 'code'};
 if (dialog !== undefined && !(dialog in dialogs)) throw new Error(`unknown dialog ${dialog}`);
 const categories = {display: 0, wifi: 1, localization: 2, system: 3};
 if (!(page in categories)) throw new Error(`unknown page ${page}`);
 const shot = page + (open === undefined ? '' : `-open${open}`) + (press === undefined ? '' : `-press${press}`) +
-  (state === undefined ? '' : `-${state}`) + (dialog === undefined ? '' : `-${dialog}`);
+  (state === undefined ? '' : `-${state}`) + (dialog === undefined ? '' : `-${dialog}`) +
+  (entry === undefined ? '' : `-${entry}`);
 // The mockup's hash for the same state.
 const mockupState = (open === undefined ? '' : `&dd=${open}`) + (state === 'off' ? '&enc=0&pw=win' : '') +
-  (dialog === undefined ? '' : `&dlg=${dialogs[dialog]}`);
+  (state === 'eth' ? '&eth=eth' : state === 'ethwifi' ? '&eth=wifi' : '') +
+  (dialog === undefined ? '' : `&dlg=${dialogs[dialog]}`) +
+  (entry === undefined ? '' : `&sheet=${entry === 'manual' ? 'manual' : 'pass'}`);
 const panels = selected.length ? selected : Object.keys(PANELS);
 
 // The time the mockup shows (Berlin, en-US 12 h), so both lines read the same.
@@ -71,7 +79,10 @@ const icons = ['cog', 'window-close', 'monitor', 'wifi', 'wifi-off', 'access-poi
   'brightness-6', 'power-sleep', 'screen-rotation', 'timer-outline', 'brightness-4', 'earth', 'clock-outline',
   'calendar-blank-outline', 'keyboard-outline', 'chevron-down', 'chevron-up', 'chevron-right', 'check', 'lan-connect',
   'link-variant', 'link-variant-off', 'form-textbox-password', 'rocket-launch-outline', 'restart', 'github', 'magnify',
-  'download'];
+  'download', 'wifi-strength-1-lock', 'wifi-strength-2', 'wifi-strength-2-lock', 'wifi-strength-3-lock',
+  'wifi-strength-4', 'wifi-strength-lock-outline', 'plus', 'refresh', 'lan', 'ethernet', 'ip-network-outline',
+  'pencil-outline', 'eye', 'eye-off', 'lock-outline', 'apple-keyboard-shift', 'apple-keyboard-caps',
+  'backspace-outline', 'check-bold'];
 const iconTable = icons.map(name => {
   const match = mdi.match(new RegExp(`\\{"${name}", (0x[0-9A-Fa-f]+)\\}`));
   if (!match) throw new Error(`MDI icon ${name} missing`);
@@ -174,6 +185,8 @@ ${strip(read('src/ui/tabs/settings/settings_screen.h'))}
 ${strip(read('src/ui/startup/hometiles_logo.h'))}
 ${strip(read('src/ui/startup/hometiles_logo.cpp'))}
 ${strip(read('src/ui/tabs/settings/settings_parts.cpp'))}
+${strip(read('src/ui/tabs/settings/settings_keyboard.h'))}
+${strip(read('src/ui/tabs/settings/settings_keyboard.cpp'))}
 ${strip(read('src/ui/tabs/settings/settings_screen.cpp'))}
 // The mockup's example state.
 namespace settings_model {
@@ -231,7 +244,7 @@ SystemValues system_values() {
 }
 const char* latest_version() { return ""; }
 const char* device_name() { return "${p.name}"; }
-bool panel_address(char* buf, size_t len) { snprintf(buf, len, "192.168.1.50"); return true; }
+bool panel_address(char* buf, size_t len) { snprintf(buf, len, "${state === 'ap' ? '192.168.4.1' : '192.168.1.50'}"); return true; }
 bool pairing_number(char* buf, size_t len) { snprintf(buf, len, "465 848"); return true; }
 const char* pairing_note() { return nullptr; }
 const char* repo_url() { return "https://github.com/GalusPeres/HomeTiles"; }
@@ -243,6 +256,37 @@ void cancel_pairing() {}
 void unpair() {}
 void allow_password() {}
 void remove_password() {}
+// WiFi: HomeNet connected, the mockup's other networks (st.nets).
+WifiValues wifi_values() {
+  WifiValues v = {};
+  v.ethernet_panel = ${state === 'eth' || state === 'ethwifi' ? 'true' : 'false'};
+  v.ethernet_selected = v.ethernet_active = ${state === 'eth' ? 'true' : 'false'};
+  v.access_point = ${state === 'ap' ? 'true' : 'false'};
+  v.connected = !v.access_point;
+  v.bars = 4;
+  v.ip_mode_offered = v.ethernet_active;
+  return v;
+}
+bool ethernet_panel() { return ${state === 'eth' || state === 'ethwifi' ? 'true' : 'false'}; }
+bool ethernet_active() { return ${state === 'eth' ? 'true' : 'false'}; }
+uint8_t keyboard_layout() { return 0; }
+static const WifiNetwork kNetworks[] = {{"HomeNet-Guest", 3, true}, {"FRITZ!Box 7590 XY", 2, true},
+                                        {"Garden-Cam", 2, false}, {"DIRECT-42-HP OfficeJet", 1, true}};
+uint8_t wifi_network_count() { return 4; }
+const WifiNetwork& wifi_network(uint8_t index) { return kNetworks[index < 4 ? index : 0]; }
+const char* wifi_saved_password(const char*) { return ""; }
+void hotspot_details(char* ssid, size_t ssid_len, char* password, size_t password_len) {
+  snprintf(ssid, ssid_len, "HomeTiles-3F2A");
+  snprintf(password, password_len, "hometiles");
+}
+bool static_address(char*, size_t) { return false; }
+void wifi_scan() {}
+void wifi_connect(const char*, const char*) {}
+void wifi_disconnect() {}
+void hotspot_selected(bool) {}
+void network_mode_selected(bool) {}
+void ip_mode_selected(bool) {}
+void wifi_connect_done() {}
 const char* firmware_version() { return "v0.8.0"; }
 void close_settings() {}
 void open_category_popup(uint8_t, lv_event_t*) {}
@@ -283,6 +327,7 @@ int main(int argc, char** argv) {
   ${open === undefined ? '' : `settings_screen::open_locale_list(${Number(open)});`}
   ${press === undefined ? '' : `lv_obj_add_state(settings_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
   settings_screen::system_changed();
+  ${entry === undefined ? '' : `settings_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
   ${dialog === undefined || dialog === 'pairing' ? '' : `settings_screen::open_dialog(settings_screen::Dialog::${{github: 'GitHub', restart: 'Restart', unpair: 'Unpair', password: 'RemovePassword'}[dialog]});`}
   ui_surface_style::process_pending_updates();
   lv_obj_update_layout(screen);

@@ -91,6 +91,15 @@ void button_set_enabled(lv_obj_t* button, bool enabled);
 // dialog_buttons(). A tap on the veil calls `on_veil` (nullptr: ignored).
 // The dialog's root is lv_obj_get_parent(card).
 lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t on_veil);
+// Toggle (mockup .tg): the track in `track` (off) or `accent` (on), a grey
+// or white knob. Dimmed and without touches while `enabled` is false.
+lv_obj_t* toggle(lv_obj_t* row, bool on, uint32_t accent, uint32_t track, bool enabled, lv_event_cb_t on_click,
+                 void* user_data);
+
+// The row's sub line in two parts: `first` in `color`, then grey `rest`
+// ("Connected" in green, " · 192.168.1.50" in grey).
+void two_tone_sub(Row& row, const char* first, uint32_t color, const char* rest);
+
 // A QR code on white with rounded corners (mockup qr(): size / 12); nullptr
 // without QR support.
 lv_obj_t* qr_code(lv_obj_t* parent, int size, const char* text);

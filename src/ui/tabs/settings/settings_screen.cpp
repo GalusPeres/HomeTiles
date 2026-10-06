@@ -6,6 +6,7 @@
 
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/startup/hometiles_logo.h"
+#include "src/ui/tabs/settings/settings_keyboard.h"
 #include "src/ui/tabs/settings/settings_model.h"
 #include "src/ui/tabs/settings/settings_parts.h"
 #include "src/ui/tabs/settings/settings_style.h"
@@ -49,6 +50,8 @@ CategoryView g_views[kCategoryCount] = {};
 lv_obj_t* g_bar_title = nullptr;
 lv_obj_t* g_card_title = nullptr;
 // The card's body: holds the open page.
+// The page card and its body (the open page).
+lv_obj_t* g_card = nullptr;
 lv_obj_t* g_page = nullptr;
 int g_page_width = 0;
 bool g_page_built = false;
@@ -83,7 +86,7 @@ uint32_t g_system_key = 0xFFFFFFFF;
 lv_obj_t* g_pair_time = nullptr;
 lv_obj_t* g_password_time = nullptr;
 lv_obj_t* g_progress_fill = nullptr;
-lv_timer_t* g_system_timer = nullptr;
+lv_timer_t* g_page_timer = nullptr;
 // The open dialog (on the panel, over a veil).
 enum class Dialog : uint8_t { None, Unpair, RemovePassword, Restart, GitHub, Pairing };
 Dialog g_dialog = Dialog::None;
@@ -98,7 +101,8 @@ const char* category_title(Category category) {
     case Category::Display:
       return s.display_label;
     case Category::Wifi:
-      return s.wifi_label;
+      // Panels that can use Ethernet name the whole network.
+      return settings_model::ethernet_panel() ? s.settings_network : s.wifi_label;
     case Category::Localization:
       return s.admin_settings_language;
     case Category::System:
@@ -112,7 +116,8 @@ const char* category_icon(Category category) {
     case Category::Display:
       return "monitor";
     case Category::Wifi:
-      return settings_model::access_point_on() ? "access-point"
+      return settings_model::ethernet_active()     ? "ethernet"
+             : settings_model::access_point_on()   ? "access-point"
              : settings_model::network_connected() ? "wifi"
                                                    : "wifi-off";
     case Category::Localization:
@@ -157,7 +162,9 @@ void category_line(Category category, char* buf, size_t len, bool* warn) {
       return;
     }
     case Category::Wifi:
-      if (settings_model::access_point_on()) {
+      if (settings_model::ethernet_active()) {
+        snprintf(buf, len, "%s", s.settings_ethernet);
+      } else if (settings_model::access_point_on()) {
         snprintf(buf, len, "%s", s.settings_access_point_on);
       } else if (settings_model::network_connected()) {
         settings_model::network_name(buf, len);
@@ -241,17 +248,11 @@ void on_close_clicked(lv_event_t*) { settings_model::close_settings(); }
 
 void select_category(Category category);
 
-// A category tile or tab opens its page in the card; WiFi still opens its
-// popup until its page follows.
+// A category tile or tab opens its page in the card.
 void on_category_clicked(lv_event_t* e) {
   const uintptr_t raw = reinterpret_cast<uintptr_t>(lv_event_get_user_data(e));
   if (raw >= kCategoryCount) return;
-  const Category category = static_cast<Category>(raw);
-  if (category == Category::Wifi) {
-    settings_model::open_category_popup(static_cast<uint8_t>(raw), e);
-    return;
-  }
-  select_category(category);
+  select_category(static_cast<Category>(raw));
 }
 
 // A category tile: circle, name and the grey line (mockup catTileBig).
@@ -575,12 +576,6 @@ void clear_system_refs() {
   g_progress_fill = nullptr;
   g_address_label = nullptr;
   g_system_key = 0xFFFFFFFF;
-}
-
-void stop_system_timer() {
-  if (!g_system_timer) return;
-  lv_timer_delete(g_system_timer);
-  g_system_timer = nullptr;
 }
 
 // Inside a touch on the dialog it goes after the event.
@@ -1082,8 +1077,6 @@ void build_system_page(lv_obj_t* page) {
   if (free > 0) lv_obj_set_height(head_row, head_height + free);
 }
 
-void on_system_timer(lv_timer_t*) { system_tick(); }
-
 void system_tick() {
   if (g_category != Category::System || !g_page_built || !g_page) return;
   const SystemValues v = settings_model::system_values();
@@ -1104,25 +1097,718 @@ void system_tick() {
   sync_dialog(v);
 }
 
+// ---------- WiFi page ----------
+// The connection and the hotspot in one group (with the hotspot on: its QR
+// code and details), then Networks with Search and the list that scrolls in
+// its own box down to the card's edge (mockup pageWifi). Panels that can use
+// Ethernet start with Connection WiFi | Ethernet; in Ethernet mode the page
+// shows the cable's status and the IP mode. Joining or adding a network
+// opens the entry inside the card: title, X, fields and the keyboard
+// (mockup sheet()).
+
+using settings_model::WifiValues;
+
+enum class WifiAction : uint8_t { Disconnect, Hotspot, Search, AddNetwork, Restart };
+
+// What the page was built for; a finished scan or a new state rebuilds it.
+uint32_t g_wifi_key = 0xFFFFFFFF;
+// The rebuild after a state change keeps the scan that is running.
+bool g_wifi_quiet_rebuild = false;
+
+struct Entry {
+  lv_obj_t* root = nullptr;
+  lv_obj_t* name = nullptr;  // the network name field (Add network)
+  lv_obj_t* password = nullptr;
+  lv_obj_t* message = nullptr;
+  lv_obj_t* keyboard = nullptr;
+  lv_obj_t* focus = nullptr;
+  bool manual = false;
+  bool busy = false;
+  char ssid[33] = {};
+};
+Entry g_entry;
+
+void* wifi_data(WifiAction action) { return reinterpret_cast<void*>(static_cast<uintptr_t>(action)); }
+
+uint32_t wifi_key(const WifiValues& v) {
+  uint32_t key = 2166136261u;
+  const auto mix = [&key](uint32_t value) { key = (key ^ value) * 16777619u; };
+  mix(v.ethernet_selected | v.ethernet_active << 1 | v.access_point << 2 | v.hotspot_switching << 3 |
+      v.connected << 4 | v.scanning << 5 | v.connecting << 6 | v.static_ip << 7 | v.ip_mode_offered << 8 |
+      v.restart_needed << 9 | static_cast<uint32_t>(v.bars) << 10 | address_known() << 14);
+  for (uint8_t i = 0; i < settings_model::wifi_network_count(); ++i) {
+    const settings_model::WifiNetwork& network = settings_model::wifi_network(i);
+    for (const char* c = network.ssid; *c; ++c) mix(static_cast<uint8_t>(*c));
+    mix(network.bars | network.locked << 4);
+  }
+  return key;
+}
+
+void refresh_wifi_async(void*);
+
+// The signal icon: bars 1..4, with a lock when the network needs a
+// password; the outline while the strength is unknown.
+void signal_icon(char* buf, size_t len, uint8_t bars, bool locked) {
+  if (bars == 0) {
+    snprintf(buf, len, "%s", locked ? "wifi-strength-lock-outline" : "wifi-strength-outline");
+  } else {
+    snprintf(buf, len, "wifi-strength-%u%s", bars, locked ? "-lock" : "");
+  }
+}
+
+void open_entry(bool manual, const char* ssid);
+
+void on_wifi_action(lv_event_t* e) {
+  const WifiValues v = settings_model::wifi_values();
+  switch (static_cast<WifiAction>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)))) {
+    case WifiAction::Disconnect:
+      settings_model::wifi_disconnect();
+      break;
+    case WifiAction::Hotspot:
+      settings_model::hotspot_selected(!v.access_point);
+      // Off again: search once the WiFi is back.
+      if (v.access_point) settings_model::wifi_scan();
+      break;
+    case WifiAction::Search:
+      settings_model::wifi_scan();
+      break;
+    case WifiAction::AddNetwork:
+      open_entry(true, nullptr);
+      return;
+    case WifiAction::Restart:
+      open_dialog(Dialog::Restart);
+      return;
+  }
+  lv_async_call(refresh_wifi_async, nullptr);
+}
+
+void on_network_clicked(lv_event_t* e) {
+  const uint8_t index = static_cast<uint8_t>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
+  if (index >= settings_model::wifi_network_count()) return;
+  const settings_model::WifiNetwork network = settings_model::wifi_network(index);
+  if (network.locked) {
+    open_entry(false, network.ssid);
+    return;
+  }
+  // An open network connects right away.
+  settings_model::wifi_connect(network.ssid, "");
+  lv_async_call(refresh_wifi_async, nullptr);
+}
+
+void on_network_mode(lv_obj_t*, uint8_t index) {
+  settings_model::network_mode_selected(index == 1);
+  lv_async_call(refresh_wifi_async, nullptr);
+}
+
+void on_ip_mode(lv_obj_t* segment, uint8_t index) {
+  settings_model::ip_mode_selected(index == 1);
+  // Without static values the choice stays Automatic.
+  if (index == 1 && !settings_model::wifi_values().static_ip) settings_parts::segment_select(segment, 0);
+  lv_async_call(refresh_wifi_async, nullptr);
+}
+
+// "Connected" in green and the address after it.
+void connected_sub(settings_parts::Row& row) {
+  char address[48];
+  char rest[64] = "";
+  if (settings_model::panel_address(address, sizeof(address))) snprintf(rest, sizeof(rest), " \xC2\xB7 %s", address);
+  settings_parts::two_tone_sub(row, settings_model::text().wifi_connected, settings_style::kGoodColor, rest);
+}
+
+lv_obj_t* wifi_button(lv_obj_t* row, const char* text, WifiAction action) {
+  return settings_parts::button(row, text, nullptr, settings_parts::ButtonKind::Normal, settings_style::kWifiColor,
+                                colors(), settings_style::kButtonHeight, false, on_wifi_action, wifi_data(action));
+}
+
+// Ethernet panels: WiFi | Ethernet (applies after a restart, as before), and
+// Restart while a network or IP mode waits for it.
+void build_network_mode(lv_obj_t* page, const WifiValues& v, const Colors& palette) {
+  const i18n::Strings& s = settings_model::text();
+  lv_obj_t* group = settings_parts::group(page, palette);
+  lv_obj_set_style_margin_bottom(group, settings_style::kSectionTop, 0);
+  settings_parts::Row mode = settings_parts::row(group, "lan", s.settings_connection);
+  const char* const options[] = {s.wifi_label, s.settings_ethernet};
+  settings_parts::segment(mode.row, options, 2, v.ethernet_selected ? 1 : 0, palette.card, on_network_mode);
+  if (v.restart_needed) {
+    settings_parts::Row restart = settings_parts::row(group, "restart", s.settings_restart_to_switch);
+    wifi_button(restart.row, s.restart_button, WifiAction::Restart);
+  }
+}
+
+// Automatic (DHCP) | Static; the static values come from Web Admin.
+void ip_mode_row(lv_obj_t* group, const WifiValues& v, const Colors& palette) {
+  const i18n::Strings& s = settings_model::text();
+  settings_parts::Row row = settings_parts::row(group, "ip-network-outline", s.settings_ip_address);
+  const char* const options[] = {s.settings_automatic, s.settings_static};
+  settings_parts::segment(row.row, options, 2, v.static_ip ? 1 : 0, palette.card, on_ip_mode);
+}
+
+void build_ethernet(lv_obj_t* page, const WifiValues& v, const Colors& palette) {
+  const i18n::Strings& s = settings_model::text();
+  lv_obj_t* group = settings_parts::group(page, palette);
+  settings_parts::Row cable =
+      settings_parts::row(group, "ethernet", s.settings_ethernet, v.connected ? "" : s.settings_not_connected);
+  if (v.connected) {
+    connected_sub(cable);
+    lv_obj_t* check = settings_parts::trailing_icon(cable.row, "check");
+    lv_obj_set_style_text_color(check, lv_color_hex(settings_style::kGoodColor), 0);
+    lv_obj_set_style_text_opa(check, LV_OPA_COVER, 0);
+  }
+  ip_mode_row(group, v, palette);
+  char address[48];
+  if (v.static_ip && settings_model::static_address(address, sizeof(address))) {
+    settings_parts::section(page, s.settings_static_address, false);
+    lv_obj_t* fixed = settings_parts::group(page, palette);
+    settings_parts::row(fixed, "pencil-outline", address, s.settings_set_in_web_admin);
+  }
+}
+
+// The hotspot's QR code (joins its network) beside its name, password and
+// address.
+void hotspot_row(lv_obj_t* group) {
+  const i18n::Strings& s = settings_model::text();
+  char ssid[40];
+  char password[72];
+  char address[48] = "";
+  settings_model::hotspot_details(ssid, sizeof(ssid), password, sizeof(password));
+  settings_model::panel_address(address, sizeof(address));
+  settings_parts::Row row = settings_parts::row(group, nullptr, "", nullptr);
+  lv_obj_set_height(row.row, settings_style::kHotspotQr + 2 * settings_style::kHotspotQrPad);
+  char join[128];
+  snprintf(join, sizeof(join), "WIFI:T:WPA;S:%s;P:%s;;", ssid, password);
+  lv_obj_t* qr = settings_parts::qr_code(row.row, settings_style::kHotspotQr, join);
+  if (qr) lv_obj_move_to_index(qr, 0);
+  lv_obj_delete(row.title);
+  row.title = nullptr;
+  const char* const labels[] = {s.settings_network, s.wifi_password_label, s.settings_address};
+  const char* const values[] = {ssid, password, address};
+  int column = 0;
+  for (const char* label : labels) {
+    const int width = settings_parts::text_width(settings_style::small_font(), label);
+    if (width > column) column = width;
+  }
+  lv_obj_set_style_pad_row(row.text, settings_style::pick(12, 6), 0);
+  for (int i = 0; i < 3; ++i) {
+    lv_obj_t* line = settings_parts::plain(row.text);
+    lv_obj_set_size(line, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(line, settings_style::pick(24, 12), 0);
+    lv_obj_t* name = lv_label_create(line);
+    lv_label_set_text(name, labels[i]);
+    lv_obj_set_width(name, column);
+    lv_obj_set_style_text_font(name, settings_style::small_font(), 0);
+    lv_obj_set_style_text_color(name, lv_color_white(), 0);
+    lv_obj_set_style_text_opa(name, settings_style::kGreyOpa, 0);
+    lv_obj_t* value = lv_label_create(line);
+    lv_label_set_text(value, values[i]);
+    lv_label_set_long_mode(value, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(value, 1);
+    lv_obj_set_flex_grow(value, 1);
+    lv_obj_set_style_text_font(value, settings_style::small_font(), 0);
+    lv_obj_set_style_text_color(value, lv_color_white(), 0);
+  }
+}
+
+// Networks and Search (the icon stays while searching, so nothing moves).
+void networks_heading(lv_obj_t* page, bool scanning) {
+  const i18n::Strings& s = settings_model::text();
+  lv_obj_t* heading = settings_parts::plain(page);
+  lv_obj_set_size(heading, LV_PCT(100), LV_SIZE_CONTENT);
+  lv_obj_set_style_margin_top(heading, settings_style::kSectionTop, 0);
+  lv_obj_set_style_margin_bottom(heading, settings_style::kSectionBottom, 0);
+  lv_obj_set_style_pad_left(heading, settings_style::kSectionLeft, 0);
+  lv_obj_set_style_pad_right(heading, settings_style::kHeadingRight, 0);
+  // As high as a browser's line of the icon (1.21 em).
+  lv_obj_set_style_min_height(
+      heading, static_cast<int>(lroundf(settings_parts::browser_line_height(settings_style::kIconPx))), 0);
+  lv_obj_set_flex_flow(heading, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(heading, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_t* title = lv_label_create(heading);
+  lv_label_set_text(title, s.settings_networks);
+  lv_obj_set_style_text_font(title, settings_style::small_font(), 0);
+  lv_obj_set_style_text_color(title, lv_color_white(), 0);
+  lv_obj_set_style_text_opa(title, settings_style::kGreyOpa, 0);
+  lv_obj_t* search = settings_parts::plain(heading);
+  lv_obj_set_size(search, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(search, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(search, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(search, 6, 0);
+  lv_obj_t* icon = lv_label_create(search);
+  lv_label_set_text(icon, getMdiChar("refresh").c_str());
+  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
+  lv_obj_t* text = lv_label_create(search);
+  lv_label_set_text(text, scanning ? s.settings_searching : s.settings_search);
+  lv_obj_set_style_text_font(text, settings_style::small_font(), 0);
+  for (lv_obj_t* label : {icon, text}) {
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_opa(label, scanning ? settings_style::kGreyOpa : LV_OPA_COVER, 0);
+  }
+  if (!scanning) {
+    lv_obj_add_flag(search, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(search, settings_style::kSectionTop / 2);
+    lv_obj_add_event_cb(search, on_wifi_action, LV_EVENT_CLICKED, wifi_data(WifiAction::Search));
+  }
+}
+
+void build_wifi_page(lv_obj_t* page) {
+  const i18n::Strings& s = settings_model::text();
+  const WifiValues v = settings_model::wifi_values();
+  const Colors palette = colors();
+  g_wifi_key = wifi_key(v);
+  if (v.ethernet_panel) build_network_mode(page, v, palette);
+  if (v.ethernet_active) {
+    build_ethernet(page, v, palette);
+    return;
+  }
+
+  lv_obj_t* group = settings_parts::group(page, palette);
+  if (!v.access_point && v.connected) {
+    char name[40];
+    char icon[32];
+    settings_model::network_name(name, sizeof(name));
+    signal_icon(icon, sizeof(icon), v.bars, false);
+    settings_parts::Row status = settings_parts::row(group, icon, name, "");
+    connected_sub(status);
+    wifi_button(status.row, s.wifi_disconnect_btn, WifiAction::Disconnect);
+  } else if (!v.access_point) {
+    settings_parts::row(group, "wifi-off", s.settings_not_connected,
+                        v.connecting ? s.settings_connecting : s.settings_choose_network);
+  }
+  // The hotspot right under the status, so only a long list scrolls.
+  settings_parts::Row hotspot = settings_parts::row(group, "access-point", s.settings_hotspot,
+                                                    v.access_point ? s.settings_hotspot_on_sub
+                                                                   : s.settings_hotspot_off_sub);
+  settings_parts::toggle(hotspot.row, v.access_point, settings_style::kWifiColor, palette.card, !v.hotspot_switching,
+                         on_wifi_action, wifi_data(WifiAction::Hotspot));
+  if (v.access_point) hotspot_row(group);
+  // The way back to DHCP while a static address is in use (as before).
+  if (v.ip_mode_offered) ip_mode_row(group, v, palette);
+  if (!v.ethernet_panel && v.restart_needed) {
+    settings_parts::Row restart = settings_parts::row(group, "restart", s.settings_restart_to_switch);
+    wifi_button(restart.row, s.restart_button, WifiAction::Restart);
+  }
+  if (v.access_point) return;
+
+  networks_heading(page, v.scanning);
+  lv_obj_t* list = settings_parts::group(page, palette);
+  for (uint8_t i = 0; i < settings_model::wifi_network_count(); ++i) {
+    const settings_model::WifiNetwork& network = settings_model::wifi_network(i);
+    char icon[32];
+    signal_icon(icon, sizeof(icon), network.bars, network.locked);
+    settings_parts::Row row = settings_parts::row(list, icon, network.ssid);
+    settings_parts::trailing_icon(row.row, "chevron-right");
+    settings_parts::make_tap(row.row, palette.button, on_network_clicked,
+                             reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
+  }
+  settings_parts::Row add = settings_parts::row(list, "plus", s.settings_add_network);
+  settings_parts::trailing_icon(add.row, "chevron-right");
+  settings_parts::make_tap(add.row, palette.button, on_wifi_action, wifi_data(WifiAction::AddNetwork));
+
+  // The list keeps its height up to the card's edge and scrolls in itself.
+  lv_obj_update_layout(page);
+  lv_area_t page_area;
+  lv_area_t list_area;
+  lv_obj_get_coords(page, &page_area);
+  lv_obj_get_coords(list, &list_area);
+  const int room = page_area.y2 - list_area.y1 + 1;
+  if (lv_area_get_height(&list_area) > room && room > settings_style::kRowHeight) {
+    lv_obj_set_height(list, room);
+    lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+  }
+}
+
+// ---------- WiFi entry ----------
+
+struct EntryGeometry {
+  int pad;
+  int column;
+  int close;
+  int close_x;
+  int close_y;
+  int field_y;
+  int field_h;
+  int message_y;
+  int key_y;
+  bool compact;  // the 480 class: a slim title row
+  bool stacked;  // name above password
+};
+
+EntryGeometry entry_geometry(int card_w, int card_h) {
+  EntryGeometry g = {};
+#if defined(DEVICE_LAYOUT_480X480)
+  g.pad = settings_style::kEntryPad;
+  g.column = card_w - 2 * g.pad;
+  g.close = settings_style::kEntryClose;
+  g.close_x = card_w - settings_style::kEntryCloseRight - g.close;
+  g.close_y = settings_style::kEntryCloseTop;
+  g.field_y = settings_style::kEntryFieldTop;
+  g.field_h = settings_style::kEntryFieldHeight;
+  g.message_y = settings_style::kEntryMessageTop;
+  g.compact = true;
+  g.stacked = false;
+#else
+  g.column = card_w - 2 * settings_style::kEntrySide;
+  if (g.column > settings_style::kEntryColumn) g.column = settings_style::kEntryColumn;
+  g.pad = (card_w - g.column) / 2;
+  g.close = settings_style::kEntryClose;
+  g.close_x = card_w - settings_style::kEntryCloseRight - g.close;
+  g.close_y = settings_style::kEntryCloseTop;
+  g.field_y = settings_style::kEntryFieldTop;
+  g.field_h = settings_style::kEntryFieldHeight;
+  g.compact = false;
+#endif
+  g.key_y = card_h - settings_style::kKeyboardBottom - (3 * settings_style::kKeyStep + settings_style::kKeyHeight);
+#if !defined(DEVICE_LAYOUT_480X480)
+  g.stacked = g.field_y + 2 * g.field_h + settings_style::kEntryFieldGap + popup_layout::scale(40) <= g.key_y;
+  g.message_y = g.stacked ? g.field_y + 2 * g.field_h + popup_layout::scale(24) : g.field_y + g.field_h + popup_layout::scale(14);
+#endif
+  return g;
+}
+
+void entry_focus(lv_obj_t* field) {
+  if (!field || field == g_entry.focus) return;
+  if (g_entry.focus) {
+    lv_obj_remove_state(g_entry.focus, LV_STATE_FOCUSED);
+    lv_obj_send_event(g_entry.focus, LV_EVENT_DEFOCUSED, nullptr);
+  }
+  g_entry.focus = field;
+  lv_obj_add_state(field, LV_STATE_FOCUSED);
+  // Starts the cursor's blinking.
+  lv_obj_send_event(field, LV_EVENT_FOCUSED, nullptr);
+}
+
+void on_field_clicked(lv_event_t* e) {
+  if (!g_entry.busy) entry_focus(static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
+}
+
+void on_eye_clicked(lv_event_t* e) {
+  lv_obj_t* eye = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  lv_obj_t* field = lv_obj_get_parent(eye);
+  const bool hidden = lv_textarea_get_password_mode(field);
+  lv_textarea_set_password_mode(field, !hidden);
+  lv_label_set_text(eye, getMdiChar(hidden ? "eye-off" : "eye").c_str());
+}
+
+const lv_font_t* field_font() {
+#if defined(DEVICE_LAYOUT_480X480)
+  return settings_style::row_font();
+#else
+  return popup_layout::font28();
+#endif
+}
+
+// A round field (mockup .fld): the control color, the accent edge while it
+// takes the keys, the placeholder grey, a blinking cursor.
+lv_obj_t* entry_field(int x, int y, int w, int h, const char* placeholder, bool secret, uint32_t max_length) {
+  const Colors palette = colors();
+  const lv_font_t* font = field_font();
+  lv_obj_t* field = lv_textarea_create(g_entry.root);
+  lv_obj_remove_style_all(field);
+  lv_obj_set_pos(field, x, y);
+  lv_obj_set_size(field, w, h);
+  lv_textarea_set_one_line(field, true);
+  lv_textarea_set_max_length(field, max_length);
+  lv_textarea_set_placeholder_text(field, placeholder);
+  lv_obj_set_style_bg_color(field, lv_color_hex(palette.group), 0);
+  lv_obj_set_style_bg_opa(field, LV_OPA_COVER, 0);
+  settings_style::apply_radius(field, h / 2);
+  lv_obj_set_style_border_width(field, 2, 0);
+  lv_obj_set_style_border_opa(field, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_color(field, lv_color_hex(settings_style::kWifiColor), LV_STATE_FOCUSED);
+  lv_obj_set_style_border_opa(field, LV_OPA_COVER, LV_STATE_FOCUSED);
+  lv_obj_set_style_text_font(field, font, 0);
+  lv_obj_set_style_text_color(field, lv_color_white(), 0);
+  lv_obj_set_style_text_color(field, lv_color_white(), LV_PART_TEXTAREA_PLACEHOLDER);
+  lv_obj_set_style_text_opa(field, settings_style::kGreyOpa, LV_PART_TEXTAREA_PLACEHOLDER);
+  const int pad_v = (h - 4 - lv_font_get_line_height(font)) / 2;
+  lv_obj_set_style_pad_top(field, pad_v, 0);
+  lv_obj_set_style_pad_bottom(field, pad_v, 0);
+  lv_obj_set_style_pad_left(field, h * 4 / 10, 0);
+  lv_obj_set_style_pad_right(field, h / 3, 0);
+  lv_obj_set_scrollbar_mode(field, LV_SCROLLBAR_MODE_OFF);
+  // The cursor: a 2 px line in the text color, blinking.
+  lv_obj_set_style_border_color(field, lv_color_white(), LV_PART_CURSOR);
+  lv_obj_set_style_border_width(field, 2, LV_PART_CURSOR);
+  lv_obj_set_style_border_side(field, LV_BORDER_SIDE_LEFT, LV_PART_CURSOR);
+  // Only in the field that takes the keys.
+  lv_obj_set_style_border_opa(field, LV_OPA_TRANSP, LV_PART_CURSOR);
+  lv_obj_set_style_border_opa(field, LV_OPA_COVER, LV_PART_CURSOR | LV_STATE_FOCUSED);
+  lv_obj_set_style_anim_duration(field, 500, LV_PART_CURSOR);
+  lv_obj_add_event_cb(field, on_field_clicked, LV_EVENT_CLICKED, nullptr);
+  if (secret) {
+    lv_textarea_set_password_mode(field, true);
+    lv_obj_t* eye = lv_label_create(field);
+    lv_label_set_text(eye, getMdiChar("eye").c_str());
+    if (FONT_MDI_ICONS) lv_obj_set_style_text_font(eye, FONT_MDI_ICONS, 0);
+    lv_obj_set_style_text_color(eye, lv_color_white(), 0);
+    lv_obj_set_style_text_opa(eye, settings_style::kGreyOpa, 0);
+    lv_obj_add_flag(eye, LV_OBJ_FLAG_FLOATING);
+    lv_obj_add_flag(eye, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(eye, h / 4);
+    lv_obj_align(eye, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_add_event_cb(eye, on_eye_clicked, LV_EVENT_CLICKED, nullptr);
+    lv_obj_set_style_pad_right(field, h / 3 + settings_parts::icon_width() + h / 6, 0);
+    lv_obj_align(eye, LV_ALIGN_RIGHT_MID, settings_parts::icon_width() + h / 6, 0);
+  }
+  return field;
+}
+
+void entry_message(const char* text, uint32_t color) {
+  if (!g_entry.message) return;
+  lv_label_set_text(g_entry.message, text ? text : "");
+  lv_obj_set_style_text_color(g_entry.message, lv_color_hex(color), 0);
+  lv_obj_set_style_text_opa(g_entry.message, color == 0xFFFFFF ? settings_style::kGreyOpa : LV_OPA_COVER, 0);
+}
+
+void on_key_text(const char* text) {
+  if (g_entry.focus && !g_entry.busy) {
+    lv_textarea_add_text(g_entry.focus, text);
+    entry_message("", 0xFFFFFF);
+  }
+}
+
+void on_key_backspace() {
+  if (g_entry.focus && !g_entry.busy) lv_textarea_delete_char(g_entry.focus);
+}
+
+// The keyboard's check connects (no extra Connect button).
+void on_key_ok() {
+  if (g_entry.busy) return;
+  const char* ssid = g_entry.manual ? lv_textarea_get_text(g_entry.name) : g_entry.ssid;
+  const char* password = lv_textarea_get_text(g_entry.password);
+  if (!ssid || !ssid[0]) {
+    entry_focus(g_entry.name);
+    return;
+  }
+  // A network found with a lock needs its password.
+  if (!g_entry.manual && (!password || !password[0])) {
+    entry_focus(g_entry.password);
+    return;
+  }
+  settings_model::wifi_connect(ssid, password);
+  g_entry.busy = true;
+  settings_keyboard::set_enabled(g_entry.keyboard, false);
+  entry_message(settings_model::text().settings_connecting, 0xFFFFFF);
+}
+
+void close_entry(bool from_event = false) {
+  if (!g_entry.root) return;
+  lv_obj_t* root = g_entry.root;
+  g_entry = Entry();
+  settings_model::wifi_connect_done();
+  if (from_event) {
+    lv_obj_delete_async(root);
+  } else {
+    lv_obj_delete(root);
+  }
+  if (g_page) lv_obj_remove_flag(g_page, LV_OBJ_FLAG_HIDDEN);
+  if (g_card_title) lv_obj_remove_flag(g_card_title, LV_OBJ_FLAG_HIDDEN);
+}
+
+void on_entry_close(lv_event_t*) {
+  // While connecting the entry stays (mockup sheetClose).
+  if (g_entry.busy) return;
+  close_entry(true);
+  settings_model::wifi_scan();
+  lv_async_call(refresh_wifi_async, nullptr);
+}
+
+settings_keyboard::Layout keyboard_layout() {
+  switch (settings_model::keyboard_layout()) {
+    case 1:
+      return settings_keyboard::Layout::Qwertz;
+    case 2:
+      return settings_keyboard::Layout::Azerty;
+    default:
+      return settings_keyboard::Layout::Qwerty;
+  }
+}
+
+// The entry takes the card's place (the categories or tabs stay): the plain
+// title and X, the fields, a line for "Connecting..." or an error, and the
+// keyboard at the bottom.
+void open_entry(bool manual, const char* ssid) {
+  if (!g_card) return;
+  close_entry();
+  settings_parts::close_options();
+  const i18n::Strings& s = settings_model::text();
+  const Colors palette = colors();
+  lv_obj_update_layout(g_card);
+  const int card_w = lv_obj_get_width(g_card);
+  const int card_h = lv_obj_get_height(g_card);
+  const EntryGeometry g = entry_geometry(card_w, card_h);
+  g_entry.manual = manual;
+  snprintf(g_entry.ssid, sizeof(g_entry.ssid), "%s", ssid ? ssid : "");
+  if (g_page) lv_obj_add_flag(g_page, LV_OBJ_FLAG_HIDDEN);
+  if (g_card_title) lv_obj_add_flag(g_card_title, LV_OBJ_FLAG_HIDDEN);
+  g_entry.root = settings_parts::plain(g_card);
+  lv_obj_set_size(g_entry.root, card_w, card_h);
+
+  // The title: what is asked; a found network's name where the fields do not
+  // repeat it.
+  const char* title = manual ? s.settings_add_network : g.stacked ? s.settings_join_network : g_entry.ssid;
+  lv_obj_t* head = lv_label_create(g_entry.root);
+  lv_label_set_text(head, title);
+  lv_label_set_long_mode(head, LV_LABEL_LONG_DOT);
+  lv_obj_set_style_text_color(head, lv_color_white(), 0);
+  if (g.compact) {
+    lv_obj_set_style_text_font(head, settings_style::row_font(), 0);
+    lv_obj_set_width(head, g.close_x - g.pad - 8);
+    lv_obj_set_pos(head, g.pad,
+                   settings_parts::browser_label_y(settings_style::row_font(), settings_style::kRowFontPx, g.close_y,
+                                                   g.close));
+  } else {
+    lv_obj_set_style_text_font(head, settings_style::page_title_font(), 0);
+    lv_obj_set_width(head, g.close_x - g.pad - settings_style::kSectionLeft - 10);
+    const int box = (settings_style::kTitleFontPx * 125 + 50) / 100;
+    lv_obj_set_pos(head, g.pad + settings_style::kSectionLeft,
+                   settings_parts::browser_label_y(settings_style::page_title_font(), settings_style::kTitleFontPx,
+                                                   g.close_y + g.close / 2.0f - box / 2.0f, box));
+  }
+  lv_obj_t* close = settings_parts::plain(g_entry.root);
+  lv_obj_set_pos(close, g.close_x, g.close_y);
+  lv_obj_set_size(close, g.close, g.close);
+  lv_obj_add_flag(close, LV_OBJ_FLAG_CLICKABLE);
+  ui_surface_style::apply_radius(close, popup_layout::kCloseButtonRadius);
+  lv_obj_set_style_bg_color(close, lv_color_white(), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(close, 51, LV_STATE_PRESSED);
+  lv_obj_set_ext_click_area(close, popup_layout::kCloseButtonClickArea);
+  lv_obj_add_event_cb(close, on_entry_close, LV_EVENT_CLICKED, nullptr);
+  lv_obj_t* x = lv_label_create(close);
+  lv_label_set_text(x, getMdiChar("window-close").c_str());
+  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(x, FONT_MDI_ICONS, 0);
+  lv_obj_set_style_text_color(x, lv_color_white(), 0);
+  lv_obj_center(x);
+
+  const int gap = settings_style::kKeyGap;
+  if (g.stacked) {
+    // Name above password over the keyboard's width; a found network's name
+    // stands fixed in the first field.
+    if (manual) {
+      g_entry.name = entry_field(g.pad, g.field_y, g.column, g.field_h, s.settings_network_name, false, 32);
+    } else {
+      lv_obj_t* fixed = settings_parts::plain(g_entry.root);
+      lv_obj_set_pos(fixed, g.pad, g.field_y);
+      lv_obj_set_size(fixed, g.column, g.field_h);
+      settings_style::apply_radius(fixed, g.field_h / 2);
+      lv_obj_set_style_border_width(fixed, 1, 0);
+      lv_obj_set_style_border_color(fixed, lv_color_white(), 0);
+      lv_obj_set_style_border_opa(fixed, 51, 0);
+      lv_obj_set_style_pad_left(fixed, g.field_h * 4 / 10, 0);
+      lv_obj_set_style_pad_right(fixed, g.field_h / 3, 0);
+      lv_obj_set_flex_flow(fixed, LV_FLEX_FLOW_ROW);
+      lv_obj_set_flex_align(fixed, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+      lv_obj_t* name = lv_label_create(fixed);
+      lv_label_set_text(name, g_entry.ssid);
+      lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+      lv_obj_set_width(name, 1);
+      lv_obj_set_flex_grow(name, 1);
+      lv_obj_set_style_text_font(name, field_font(), 0);
+      lv_obj_set_style_text_color(name, lv_color_white(), 0);
+      settings_parts::trailing_icon(fixed, "lock-outline");
+    }
+    g_entry.password = entry_field(g.pad, g.field_y + g.field_h + settings_style::kEntryFieldGap, g.column, g.field_h,
+                                   s.wifi_password_label, true, 63);
+  } else if (manual) {
+    // Name and password side by side.
+    const int half = (g.column - 2 * gap) / 2;
+    g_entry.name = entry_field(g.pad, g.field_y, half, g.field_h, s.settings_network_name, false, 32);
+    g_entry.password = entry_field(g.pad + half + 2 * gap, g.field_y, half, g.field_h, s.wifi_password_label, true, 63);
+  } else {
+    g_entry.password = entry_field(g.pad, g.field_y, g.column, g.field_h, s.wifi_password_label, true, 63);
+  }
+  // The saved password of the saved network, so it does not look lost.
+  if (!manual) lv_textarea_set_text(g_entry.password, settings_model::wifi_saved_password(g_entry.ssid));
+
+  g_entry.message = lv_label_create(g_entry.root);
+  lv_label_set_text(g_entry.message, "");
+  lv_label_set_long_mode(g_entry.message, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(g_entry.message, g.column);
+  lv_obj_set_pos(g_entry.message, g.pad, g.message_y);
+  lv_obj_set_style_text_align(g_entry.message, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(g_entry.message, settings_style::small_font(), 0);
+
+  const settings_keyboard::Geometry keys = {g.pad,
+                                            g.key_y,
+                                            g.column,
+                                            settings_style::kKeyHeight,
+                                            settings_style::kKeyStep,
+                                            gap,
+                                            settings_style::kKeyRadius};
+  g_entry.keyboard = settings_keyboard::create(g_entry.root, keys, keyboard_layout(), palette,
+                                               settings_style::kWifiColor,
+                                               {on_key_text, on_key_backspace, on_key_ok});
+  entry_focus(manual ? g_entry.name : g_entry.password);
+}
+
+void on_page_timer(lv_timer_t*);
+
+void wifi_tick() {
+  if (g_category != Category::Wifi || !g_page_built || !g_page) return;
+  const WifiValues v = settings_model::wifi_values();
+  if (g_entry.root) {
+    if (g_entry.busy && !v.connecting) {
+      if (v.connect_failed) {
+        // Wrong password or out of reach: edit and try again.
+        g_entry.busy = false;
+        settings_keyboard::set_enabled(g_entry.keyboard, true);
+        entry_message(settings_model::text().settings_connect_failed, settings_style::kErrorColor);
+      } else {
+        close_entry();
+        g_wifi_quiet_rebuild = true;
+        build_page();
+        g_wifi_quiet_rebuild = false;
+        refresh_lines();
+      }
+    }
+    return;
+  }
+  if (wifi_key(v) != g_wifi_key) {
+    g_wifi_quiet_rebuild = true;
+    build_page();
+    g_wifi_quiet_rebuild = false;
+    refresh_lines();
+  }
+}
+
+void refresh_wifi_async(void*) { wifi_tick(); }
+
+void on_page_timer(lv_timer_t*) {
+  if (g_category == Category::System) system_tick();
+  if (g_category == Category::Wifi) wifi_tick();
+}
+
+void stop_page_timer() {
+  if (!g_page_timer) return;
+  lv_timer_delete(g_page_timer);
+  g_page_timer = nullptr;
+}
+
 // ---------- Frame ----------
 
-// The open page in the card; WiFi still uses its popup.
+// The open page in the card. System and WiFi follow their state with a
+// timer while they show.
 void build_page() {
   if (!g_page) return;
   clear_display_refs();
   clear_locale_refs();
   clear_system_refs();
-  if (g_category != Category::System) {
-    close_dialog();
-    stop_system_timer();
-  }
+  if (g_category != Category::System) close_dialog();
+  if (g_category != Category::Wifi) close_entry();
+  const bool polled = g_category == Category::System || g_category == Category::Wifi;
+  if (!polled) stop_page_timer();
   lv_obj_clean(g_page);
   if (g_category == Category::Display) build_display_page(g_page);
   if (g_category == Category::Localization) build_localization_page(g_page);
-  if (g_category == Category::System) {
-    build_system_page(g_page);
-    if (!g_system_timer) g_system_timer = lv_timer_create(on_system_timer, 500, nullptr);
+  if (g_category == Category::System) build_system_page(g_page);
+  if (g_category == Category::Wifi) {
+    // Opening the page searches; its own rebuilds do not.
+    if (!g_wifi_quiet_rebuild) settings_model::wifi_scan();
+    build_wifi_page(g_page);
   }
+  if (polled && !g_page_timer) g_page_timer = lv_timer_create(on_page_timer, 500, nullptr);
   g_page_built = true;
 }
 
@@ -1130,9 +1816,11 @@ void clear_refs() {
   for (CategoryView& view : g_views) view = {};
   g_bar_title = nullptr;
   g_card_title = nullptr;
+  close_dialog();
+  close_entry();
+  g_card = nullptr;
   g_page = nullptr;
   g_page_built = false;
-  close_dialog();
   clear_display_refs();
   clear_locale_refs();
   clear_system_refs();
@@ -1224,6 +1912,7 @@ void build_frame() {
     card_h = settings_style::grid_h(0.5f, GRID_ROWS - 2.5f);
   }
   lv_obj_t* card = settings_parts::plain(panel);
+  g_card = card;
   lv_obj_set_pos(card, card_x, top);
   lv_obj_set_size(card, card_w, card_h);
   lv_obj_set_style_bg_color(card, lv_color_hex(palette.card), 0);
@@ -1295,7 +1984,8 @@ void did_hide() {
     g_lines_timer = nullptr;
   }
   close_dialog();
-  stop_system_timer();
+  close_entry();
+  stop_page_timer();
   clear_display_refs();
   clear_locale_refs();
   clear_system_refs();

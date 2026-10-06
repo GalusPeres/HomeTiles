@@ -1064,11 +1064,8 @@ static void wifi_populate_list() {
   }
 }
 
-static void wifi_on_scan_timer(lv_timer_t*) {
-  int16_t n = WiFi.scanComplete();
-  if (n == WIFI_SCAN_RUNNING) return;
-  wifi_stop_scan_timer();
-
+// Keeps the strongest entry per SSID, strongest first, and frees the scan.
+static void wifi_collect_scan(int16_t n) {
   wifi_scan_result_count = 0;
   for (int16_t i = 0; i < n && wifi_scan_result_count < 24; ++i) {
     String ssid = WiFi.SSID(i);
@@ -1107,7 +1104,13 @@ static void wifi_on_scan_timer(lv_timer_t*) {
     }
     wifi_scan_results[j] = key;
   }
+}
 
+static void wifi_on_scan_timer(lv_timer_t*) {
+  int16_t n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_RUNNING) return;
+  wifi_stop_scan_timer();
+  wifi_collect_scan(n);
   wifi_populate_list();
   wifi_show_scan_finished_state();
 }
@@ -3490,7 +3493,234 @@ void remove_password() {
   }
 }
 
-// WiFi still opens its popup until its page follows.
+// ---------- WiFi page ----------
+// The former WiFi popup's paths: the same scan guards, the same saving and
+// reconnect, the hotspot and network mode through the sketch's callbacks.
+static bool g_wifi_scanning = false;
+// A wanted scan waits while the hotspot is on, the WiFi driver is off or a
+// connection was just requested, and starts once that has passed.
+static bool g_wifi_scan_wanted = false;
+static WifiNetwork g_wifi_list[25];
+static uint8_t g_wifi_list_count = 0;
+static char g_connect_ssid[33] = {};
+static uint32_t g_connect_started_ms = 0;
+static bool g_connect_failed = false;
+static constexpr uint32_t kConnectTimeoutMs = 20000;
+
+static uint8_t wifi_bars(int16_t rssi) { return rssi >= -55 ? 4 : rssi >= -67 ? 3 : rssi >= -78 ? 2 : 1; }
+
+static bool wifi_station_connected() {
+  return !ap_mode_active && networkTransport.activeKind() == NetworkTransportKind::Wifi &&
+         networkTransport.isWifiConnected();
+}
+
+// The scan's networks without the connected one, plus the saved network when
+// the scan missed it (hidden networks are not listed by a scan).
+static void wifi_rebuild_list() {
+  const char* saved = configManager.getConfig().wifi_ssid;
+  const bool connected = wifi_station_connected();
+  g_wifi_list_count = 0;
+  bool saved_seen = false;
+  for (size_t i = 0; i < wifi_scan_result_count && g_wifi_list_count < 24; ++i) {
+    const WifiScanEntry& entry = wifi_scan_results[i];
+    const bool is_saved = saved[0] && strcmp(saved, entry.ssid) == 0;
+    if (is_saved) saved_seen = true;
+    if (is_saved && connected) continue;
+    WifiNetwork& network = g_wifi_list[g_wifi_list_count++];
+    snprintf(network.ssid, sizeof(network.ssid), "%s", entry.ssid);
+    network.bars = wifi_bars(entry.rssi);
+    network.locked = !entry.open;
+  }
+  if (saved[0] && !saved_seen && !connected) {
+    WifiNetwork& network = g_wifi_list[g_wifi_list_count++];
+    snprintf(network.ssid, sizeof(network.ssid), "%s", saved);
+    network.bars = 0;
+    network.locked = true;
+  }
+}
+
+static bool wifi_scan_blocked() {
+  return ap_mode_active || !networkTransport.isWifiDriverActive() ||
+         (wifi_scan_block_until != 0 && (int32_t)(millis() - wifi_scan_block_until) < 0);
+}
+
+static void wifi_try_scan() {
+  if (!g_wifi_scan_wanted || g_wifi_scanning || wifi_scan_blocked()) return;
+  g_wifi_scan_wanted = false;
+  // scanNetworks() runs several ESP-Hosted calls; probe the channel first so
+  // a stuck coprocessor triggers the central recovery instead.
+  if (!networkManager.probeWifiDriverHealth("WiFi scan in Settings")) return;
+  WiFi.scanDelete();
+  if (WiFi.scanNetworks(/*async=*/true) == WIFI_SCAN_FAILED) return;
+  g_wifi_scanning = true;
+}
+
+static void wifi_stop_scan() {
+  g_wifi_scanning = false;
+  g_wifi_scan_wanted = false;
+  if (networkTransport.isWifiDriverActive()) WiFi.scanDelete();
+}
+
+WifiValues wifi_values() {
+  if (g_wifi_scanning) {
+    const int16_t n = WiFi.scanComplete();
+    if (n != WIFI_SCAN_RUNNING) {
+      g_wifi_scanning = false;
+      wifi_collect_scan(n);
+    }
+  }
+  wifi_try_scan();
+  wifi_rebuild_list();
+  const DeviceConfig& cfg = configManager.getConfig();
+  WifiValues v = {};
+  v.ethernet_panel = NetworkTransportManager::deviceSupportsEthernet();
+  v.ethernet_selected = cfg.ethernet_enabled;
+  v.ethernet_active = networkTransport.isEthernetMode();
+  v.access_point = ap_mode_active;
+  v.hotspot_switching = ap_mode_click_block_until != 0 && (int32_t)(millis() - ap_mode_click_block_until) < 0;
+  v.connected = v.ethernet_active ? networkTransport.isConnected() : wifi_station_connected();
+  v.bars = 4;
+  for (size_t i = 0; i < wifi_scan_result_count; ++i) {
+    if (strcmp(wifi_scan_results[i].ssid, cfg.wifi_ssid) == 0) v.bars = wifi_bars(wifi_scan_results[i].rssi);
+  }
+  // A wanted scan that waits for a connection attempt already counts.
+  v.scanning = g_wifi_scanning || (g_wifi_scan_wanted && !ap_mode_active && networkTransport.isWifiDriverActive());
+  if (g_connect_started_ms) {
+    if (wifi_station_connected() && strcmp(cfg.wifi_ssid, g_connect_ssid) == 0) {
+      g_connect_started_ms = 0;
+    } else if (millis() - g_connect_started_ms >= kConnectTimeoutMs) {
+      g_connect_started_ms = 0;
+      g_connect_failed = true;
+    }
+  }
+  v.connecting = g_connect_started_ms != 0;
+  v.connect_failed = g_connect_failed;
+  v.static_ip = cfg.wifi_static_enabled;
+  v.static_ip_available = selected_static_addressing_available();
+  const bool boot_static = configManager.bootStaticAddressingEnabled();
+  // On WiFi only while a static address is in use or was just changed: the
+  // way back to DHCP when a wrong address made the panel unreachable.
+  v.ip_mode_offered = v.ethernet_active || (boot_static && (v.static_ip || v.static_ip_available)) ||
+                      v.static_ip != boot_static;
+  v.restart_needed = (v.ethernet_panel && v.ethernet_selected != v.ethernet_active) || v.static_ip != boot_static;
+  return v;
+}
+
+// As the former keyboard chose it (ui_keyboard layout_for_config).
+uint8_t keyboard_layout() {
+  const DeviceConfig& cfg = configManager.getConfig();
+  if (cfg.keyboard_layout == 1) return 1;
+  if (cfg.keyboard_layout == 2) return 0;
+  const char* lang = cfg.language;
+  if (lang[0] == 'd' && lang[1] == 'e') return 1;
+  if (lang[0] == 'f' && lang[1] == 'r') return 2;
+  return 0;
+}
+
+bool ethernet_panel() { return NetworkTransportManager::deviceSupportsEthernet(); }
+
+bool ethernet_active() { return networkTransport.isEthernetMode(); }
+
+uint8_t wifi_network_count() { return g_wifi_list_count; }
+
+const WifiNetwork& wifi_network(uint8_t index) {
+  return g_wifi_list[index < g_wifi_list_count ? index : 0];
+}
+
+const char* wifi_saved_password(const char* ssid) {
+  const DeviceConfig& cfg = configManager.getConfig();
+  return ssid && ssid[0] && strcmp(ssid, cfg.wifi_ssid) == 0 ? cfg.wifi_pass : "";
+}
+
+void hotspot_details(char* ssid, size_t ssid_len, char* password, size_t password_len) {
+  snprintf(ssid, ssid_len, "%s", webConfigApSsid());
+  snprintf(password, password_len, "%s", webConfigApPassword());
+}
+
+bool static_address(char* buf, size_t len) {
+  const char* ip = configManager.getConfig().wifi_static_ip;
+  if (!valid_static_ip_value(ip)) return false;
+  snprintf(buf, len, "%s", ip);
+  return true;
+}
+
+void wifi_scan() {
+  g_wifi_scan_wanted = true;
+  wifi_try_scan();
+}
+
+// Saves the network (a new one resets a static address to DHCP, so an old
+// address cannot make the panel unreachable) and connects in the main loop.
+void wifi_connect(const char* ssid, const char* password) {
+  if (!ssid || !ssid[0]) return;
+  const char* pass = password ? password : "";
+  const DeviceConfig& current = configManager.getConfig();
+  const bool changed = strcmp(current.wifi_ssid, ssid) != 0 || strcmp(current.wifi_pass, pass) != 0;
+  if (changed) {
+    DeviceConfig cfg = configManager.getConfig();
+    strncpy(cfg.wifi_ssid, ssid, CONFIG_WIFI_SSID_MAX - 1);
+    cfg.wifi_ssid[CONFIG_WIFI_SSID_MAX - 1] = '\0';
+    strncpy(cfg.wifi_pass, pass, CONFIG_WIFI_PASS_MAX - 1);
+    cfg.wifi_pass[CONFIG_WIFI_PASS_MAX - 1] = '\0';
+    cfg.wifi_static_enabled = false;
+    cfg.wifi_static_ip[0] = '\0';
+    cfg.wifi_gateway[0] = '\0';
+    cfg.wifi_subnet[0] = '\0';
+    cfg.wifi_dns[0] = '\0';
+    if (!configManager.save(cfg)) {
+      Serial.println("[Settings] Saving the WiFi network failed");
+      g_connect_failed = true;
+      return;
+    }
+  }
+  wifi_stop_scan();
+  // No scan may compete with the connection setup.
+  wifi_scan_block_until = millis() + 10000UL;
+  if (ap_mode_active) {
+    // The main loop connects with the saved network once the hotspot is off.
+    if (g_hotspot_callback) g_hotspot_callback(false);
+  } else if (changed || !networkTransport.isWifiConnected()) {
+    if (g_wifi_reconnect_callback) g_wifi_reconnect_callback();
+  }
+  snprintf(g_connect_ssid, sizeof(g_connect_ssid), "%s", ssid);
+  g_connect_started_ms = millis() | 1;
+  g_connect_failed = false;
+}
+
+void wifi_disconnect() {
+  if (!g_wifi_disconnect_callback) return;
+  wifi_stop_scan();
+  g_wifi_disconnect_callback();
+}
+
+void hotspot_selected(bool on) {
+  if (on == ap_mode_active) return;
+  if (ap_mode_click_block_until != 0 && (int32_t)(millis() - ap_mode_click_block_until) < 0) return;
+  // The mode changes in the main loop and must not overlap a scan.
+  wifi_stop_scan();
+  if (g_hotspot_callback) g_hotspot_callback(on);
+  ap_mode_click_block_until = millis() + 2500;
+}
+
+void network_mode_selected(bool ethernet) {
+  if (ethernet == configManager.getConfig().ethernet_enabled) return;
+  if (!configManager.saveEthernetEnabled(ethernet)) return;
+  Serial.printf("[Settings] Network mode saved: %s (applies after restart)\n", ethernet ? "Ethernet" : "Wi-Fi");
+}
+
+void ip_mode_selected(bool static_ip) {
+  if (static_ip == configManager.getConfig().wifi_static_enabled) return;
+  if (static_ip && !selected_static_addressing_available()) return;
+  if (!configManager.saveStaticAddressingEnabled(static_ip)) return;
+  Serial.printf("[Settings] Shared IP mode saved: %s (applies after restart)\n", static_ip ? "static" : "DHCP");
+}
+
+void wifi_connect_done() {
+  g_connect_started_ms = 0;
+  g_connect_failed = false;
+}
+
+// No category opens a popup any more.
 void open_category_popup(uint8_t category, lv_event_t* e) {
   static constexpr SettingsPopupKind kPopups[] = {SettingsPopupKind::Display, SettingsPopupKind::Wifi,
                                                   SettingsPopupKind::Localization, SettingsPopupKind::Firmware};

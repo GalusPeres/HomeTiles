@@ -719,6 +719,29 @@ struct Strings {
   const char* settings_restart_question;
   const char* settings_restart_text;
   const char* settings_github_text;
+  // Settings WiFi page (no colon).
+  const char* settings_choose_network;
+  const char* settings_hotspot;
+  const char* settings_hotspot_off_sub;
+  const char* settings_hotspot_on_sub;
+  // Hotspot details and the category title on Ethernet panels.
+  const char* settings_network;
+  const char* settings_address;
+  const char* settings_networks;
+  const char* settings_search;
+  const char* settings_searching;
+  const char* settings_add_network;
+  const char* settings_join_network;
+  const char* settings_network_name;
+  const char* settings_connecting;
+  const char* settings_connect_failed;
+  const char* settings_ethernet;
+  const char* settings_restart_to_switch;
+  const char* settings_ip_address;
+  const char* settings_automatic;
+  const char* settings_static;
+  const char* settings_static_address;
+  const char* settings_set_in_web_admin;
 };
 
 // Locale-specific display rules and short runtime strings shared by

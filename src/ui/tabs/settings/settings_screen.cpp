@@ -428,17 +428,23 @@ void build_frame() {
   const Colors palette = colors();
   const i18n::Strings& s = settings_model::text();
 
-  // Bar: the half-height tiles' circle where a pill at the left edge has it
-  // (the tile inset from the grid corner), the X mirrored on the right.
+  // Bar: the half-height tiles' circle, centered between the screen's top
+  // edge and the tiles below (as much space above as below, user
+  // 2026-10-06), and as far from the side edges as from the top, so gear
+  // and X sit evenly in their corners. Positions are relative to the panel's
+  // padding (the grid margins).
   const int inset = settings_style::tile_inset();
   const int d = settings_style::half_tile_disc();
   const int grid_width = settings_style::grid_w(0, GRID_COLS);
-  const int close_x = grid_width - inset - d;
-  lv_obj_t* gear = circle(panel, inset, inset, d, "cog", 0xFFFFFF);
+  const int edge = (GRID_PAD_TOP + settings_style::grid_y(0.5f) - d) / 2;
+  const int bar_y = edge - GRID_PAD_TOP;
+  const int gear_x = edge - GRID_PAD_LEFT;
+  const int close_x = SCREEN_WIDTH - edge - d - GRID_PAD_LEFT;
+  lv_obj_t* gear = circle(panel, gear_x, bar_y, d, "cog", 0xFFFFFF);
   lv_obj_set_style_bg_color(gear, lv_color_hex(settings_style::tone(palette.card, settings_style::kGearColor).disc),
                             0);
   lv_obj_set_style_bg_opa(gear, LV_OPA_COVER, 0);
-  lv_obj_t* close = circle(panel, close_x, inset, d, "window-close", 0xFFFFFF);
+  lv_obj_t* close = circle(panel, close_x, bar_y, d, "window-close", 0xFFFFFF);
   make_round_button(close, on_close_clicked, nullptr);
   int title_end = close_x;
   if (kLayout == Layout::Tabs) {
@@ -449,13 +455,13 @@ void build_frame() {
     const int left = right - (kCategoryCount * d + (kCategoryCount - 1) * gap);
     for (uint8_t i = 0; i < kCategoryCount; ++i) {
       CategoryView& view = g_views[i];
-      view.box = circle(panel, left + i * (d + gap), inset, d, category_icon(static_cast<Category>(i)), 0xFFFFFF);
+      view.box = circle(panel, left + i * (d + gap), bar_y, d, category_icon(static_cast<Category>(i)), 0xFFFFFF);
       view.icon = lv_obj_get_child(view.box, 0);
       make_round_button(view.box, on_category_clicked, reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
     }
     title_end = left;
   }
-  const int title_x = inset + d + 2 * inset;
+  const int title_x = gear_x + d + 2 * inset;
   g_bar_title = lv_label_create(panel);
   lv_label_set_text(g_bar_title, kLayout == Layout::Tabs ? category_title(g_category) : s.tile_type_settings);
   lv_label_set_long_mode(g_bar_title, LV_LABEL_LONG_DOT);
@@ -465,7 +471,7 @@ void build_frame() {
   const float title_box = settings_parts::browser_line_height(settings_style::kRowFontPx);
   lv_obj_set_pos(g_bar_title, title_x,
                  settings_parts::browser_label_y(settings_style::bar_title_font(), settings_style::kRowFontPx,
-                                                 inset + d / 2.0f - title_box / 2, title_box));
+                                                 bar_y + d / 2.0f - title_box / 2, title_box));
 
   // Categories and card below the bar, down to the grid's bottom edge.
   const int top = settings_style::grid_y(0.5f);

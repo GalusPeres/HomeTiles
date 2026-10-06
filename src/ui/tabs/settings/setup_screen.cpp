@@ -49,6 +49,7 @@ enum class Action : uint8_t {
   TimeZone,
   Network,
   OtherNetwork,
+  Search,
   Phone,
   ToWifi,
   Retry,
@@ -310,6 +311,9 @@ void on_action(lv_event_t* e) {
     case Action::OtherNetwork:
       open_entry(true, nullptr);
       return;
+    case Action::Search:
+      settings_model::wifi_scan();
+      break;
     case Action::Phone: {
       const bool on = settings_model::wifi_values().access_point;
       settings_model::hotspot_selected(!on);
@@ -470,6 +474,8 @@ void build_wifi(const Colors& palette) {
     qr_row(group, join, ssid, line);
     return;
   }
+  // Networks and Search, as on the WiFi page (user 2026-10-06).
+  settings_screen::networks_heading(g_body, v.scanning, true, on_action, data(Action::Search));
   lv_obj_t* list = settings_parts::group(g_body, palette);
   if (v.connecting) {
     spinner_row(list, s.settings_connecting, nullptr);
@@ -484,8 +490,6 @@ void build_wifi(const Colors& palette) {
       settings_parts::trailing_icon(row.row, "chevron-right");
       settings_parts::make_tap(row.row, palette.button, on_network, reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
     }
-    // Still searching (a new panel's WiFi starts with the setup).
-    if (g_network_count == 0) spinner_row(list, s.settings_searching, nullptr);
   }
   lv_obj_t* more = settings_parts::group(g_body, palette);
   lv_obj_set_style_margin_top(more, settings_style::kSectionBottom, 0);
@@ -494,10 +498,10 @@ void build_wifi(const Colors& palette) {
   settings_parts::make_tap(other.row, palette.button, on_action, data(Action::OtherNetwork));
   phone_row(more, v, palette);
 
-  // The list keeps what the body leaves beside the second group and scrolls
-  // in itself.
+  // The list keeps what the body leaves under the heading and above the
+  // second group, and scrolls in itself.
   lv_obj_update_layout(g_body);
-  const int room = body_height() - lv_obj_get_height(more) - settings_style::kSectionBottom;
+  const int room = body_height() - lv_obj_get_y(list) - lv_obj_get_height(more) - settings_style::kSectionBottom;
   if (lv_obj_get_height(list) > room && room > settings_style::kRowHeight) {
     lv_obj_set_height(list, room);
     lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
@@ -791,6 +795,8 @@ uint32_t body_key() {
     mix(v.connected | v.access_point << 1 | v.hotspot_switching << 2 | v.connecting << 3 | v.ethernet_active << 4 |
         static_cast<uint32_t>(v.bars) << 5);
     if (g_step == 1 && !v.connected && !v.access_point) {
+      // Search turns into Searching... and back.
+      mix(v.scanning ? 0x200u : 0u);
       for (uint8_t i = 0; i < settings_model::wifi_network_count(); ++i) {
         const settings_model::WifiNetwork& network = settings_model::wifi_network(i);
         for (const char* c = network.ssid; *c; ++c) mix(static_cast<uint8_t>(*c));

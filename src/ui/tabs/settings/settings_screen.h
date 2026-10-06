@@ -42,5 +42,8 @@ const char* locale_title(settings_model::LocaleList list);
 const char* locale_icon(settings_model::LocaleList list);
 const char* locale_value(settings_model::LocaleList list);
 lv_obj_t* rotation_segment(lv_obj_t* row, uint32_t track);
+// The Networks heading with Search (Searching... while a scan runs); `first`
+// drops the space above it.
+lv_obj_t* networks_heading(lv_obj_t* parent, bool scanning, bool first, lv_event_cb_t on_search, void* user_data);
 
 }  // namespace settings_screen

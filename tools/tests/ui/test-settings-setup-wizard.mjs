@@ -89,6 +89,9 @@ assert.match(setup, /LocaleList locale_list\(uint8_t index\) \{ return index == 
   'language and time zone (a new panel starts on Berlin)');
 const wifi = between(setup, 'void build_wifi(const Colors& palette) {', 'lv_obj_t* column_text(');
 assert.match(wifi, /s\.setup_other_network/);
+// Networks with Search, as on the WiFi page (user 2026-10-06).
+assert.match(wifi, /settings_screen::networks_heading\(g_body, v\.scanning, true, on_action, data\(Action::Search\)\);/);
+assert.match(setup, /case Action::Search:\s*settings_model::wifi_scan\(\);/);
 assert.match(wifi, /phone_row\(more, v, palette\);/, 'the phone setup stays visible under the list');
 assert.match(rawSetup, /"WIFI:T:WPA;S:%s;P:%s;;"/, 'the QR code joins the hotspot');
 assert.match(wifi, /lv_obj_set_height\(list, room\);[\s\S]*?LV_OBJ_FLAG_SCROLLABLE/, 'the list scrolls in itself');

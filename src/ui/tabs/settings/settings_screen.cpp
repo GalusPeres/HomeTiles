@@ -1333,12 +1333,14 @@ void hotspot_row(lv_obj_t* group) {
   }
 }
 
+}  // namespace
+
 // Networks and Search (the icon stays while searching, so nothing moves).
-void networks_heading(lv_obj_t* page, bool scanning) {
+lv_obj_t* networks_heading(lv_obj_t* parent, bool scanning, bool first, lv_event_cb_t on_search, void* user_data) {
   const i18n::Strings& s = settings_model::text();
-  lv_obj_t* heading = settings_parts::plain(page);
+  lv_obj_t* heading = settings_parts::plain(parent);
   lv_obj_set_size(heading, LV_PCT(100), LV_SIZE_CONTENT);
-  lv_obj_set_style_margin_top(heading, settings_style::kSectionTop, 0);
+  lv_obj_set_style_margin_top(heading, first ? 0 : settings_style::kSectionTop, 0);
   lv_obj_set_style_margin_bottom(heading, settings_style::kSectionBottom, 0);
   lv_obj_set_style_pad_left(heading, settings_style::kSectionLeft, 0);
   lv_obj_set_style_pad_right(heading, settings_style::kHeadingRight, 0);
@@ -1370,9 +1372,12 @@ void networks_heading(lv_obj_t* page, bool scanning) {
   if (!scanning) {
     lv_obj_add_flag(search, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_ext_click_area(search, settings_style::kSectionTop / 2);
-    lv_obj_add_event_cb(search, on_wifi_action, LV_EVENT_CLICKED, wifi_data(WifiAction::Search));
+    lv_obj_add_event_cb(search, on_search, LV_EVENT_CLICKED, user_data);
   }
+  return heading;
 }
+
+namespace {
 
 void build_wifi_page(lv_obj_t* page) {
   const i18n::Strings& s = settings_model::text();
@@ -1413,7 +1418,7 @@ void build_wifi_page(lv_obj_t* page) {
   }
   if (v.access_point) return;
 
-  networks_heading(page, v.scanning);
+  networks_heading(page, v.scanning, false, on_wifi_action, wifi_data(WifiAction::Search));
   lv_obj_t* list = settings_parts::group(page, palette);
   for (uint8_t i = 0; i < settings_model::wifi_network_count(); ++i) {
     const settings_model::WifiNetwork& network = settings_model::wifi_network(i);

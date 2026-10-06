@@ -673,6 +673,10 @@ struct Strings {
   const char* web_auth_window_open;
   // Web Admin: the first password needs a tap on the display first.
   const char* web_auth_panel_tap_required;
+  // Title switch: the tile takes its entity's name from Home Assistant
+  const char* tile_title_auto;
+  // Hint of the title switch
+  const char* tile_title_auto_hint;
 };
 
 // Locale-specific display rules and short runtime strings shared by

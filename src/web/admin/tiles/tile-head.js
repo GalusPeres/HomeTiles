@@ -38,11 +38,32 @@
     textarea?.classList.toggle('two', String(textarea.value || '').includes('\n'));
   }
 
-  // ---- Icon button ----
-
   function tileHeadTab(element) {
-    return String(element?.id || '').replace(/_tile_(icon|icon_picker|title)$/, '');
+    return String(element?.id || '').replace(/_tile_(icon|icon_picker|title|title_auto)$/, '');
   }
+
+  // ---- Title: Auto = the entity's name from Home Assistant ----
+
+  function tileEntityName(tab) {
+    const entity = document.querySelector('#' + tab + '_tile_entity_slot input[data-entity-picker]');
+    return entity && entity.value && typeof entityPickerName === 'function' ? entityPickerName(entity) : '';
+  }
+
+  // Auto lights while the title is the entity's name: choosing an entity or
+  // the switch puts the name in, typing turns it off. The title stays a plain
+  // stored title, so nothing new is saved.
+  function syncTileTitleAuto(tab) {
+    const button = document.getElementById(tab + '_tile_title_auto');
+    const title = document.getElementById(tab + '_tile_title');
+    if (!button || !title) return;
+    const name = tileEntityName(tab);
+    const on = !!name && title.value === normalizeTileTitle(name);
+    button.classList.toggle('on', on);
+    button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    button.disabled = !name;
+  }
+
+  // ---- Icon button ----
 
   // The icon the tile shows without a choice of its own: its entity's icon,
   // else the icon its preview draws (type defaults such as a folder).
@@ -68,9 +89,13 @@
     button.title = none ? t('iconPickerNone') : raw ? normalizeMdiIconName(raw) : t('iconPickerAuto');
   }
 
+  // Also after names and icons of entities arrived from the Bridge.
   function refreshTileIconButtons(tab) {
     const selector = tab ? '#' + tab + '_tile_icon' : 'input[data-tile-icon]';
-    document.querySelectorAll(selector).forEach(input => renderTileIconButton(tileHeadTab(input)));
+    document.querySelectorAll(selector).forEach(input => {
+      renderTileIconButton(tileHeadTab(input));
+      syncTileTitleAuto(tileHeadTab(input));
+    });
   }
 
   // Programmatic loads (tile, draft, paste, import) redraw the head.
@@ -84,12 +109,20 @@
       get() { return native.get.call(this); },
       set(value) {
         native.set.call(this, value);
-        if (title) syncTileTitleRows(this);
-        else renderTileIconButton(tileHeadTab(this));
+        if (title) {
+          syncTileTitleRows(this);
+          syncTileTitleAuto(tileHeadTab(this));
+        } else {
+          renderTileIconButton(tileHeadTab(this));
+        }
       }
     });
-    if (title) syncTileTitleRows(element);
-    else renderTileIconButton(tileHeadTab(element));
+    if (title) {
+      syncTileTitleRows(element);
+      syncTileTitleAuto(tileHeadTab(element));
+    } else {
+      renderTileIconButton(tileHeadTab(element));
+    }
   }
 
   function setupTileHeads(root) {
@@ -283,6 +316,18 @@
 
   document.addEventListener('click', event => {
     const target = event.target;
+    const auto = target?.closest?.('.tile-title-auto');
+    if (auto) {
+      // Off: the entity's name comes back like typed (preview, draft, save).
+      const tab = tileHeadTab(auto);
+      const title = document.getElementById(tab + '_tile_title');
+      const name = tileEntityName(tab);
+      if (title && name && !auto.classList.contains('on')) {
+        title.value = normalizeTileTitle(name);
+        title.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
     const button = target?.closest?.('.tile-icon-picker');
     if (button) {
       const tab = tileHeadTab(button);
@@ -307,7 +352,10 @@
 
   document.addEventListener('input', event => {
     const target = event.target;
-    if (target?.classList?.contains('tile-title-input')) syncTileTitleRows(target);
+    if (target?.classList?.contains('tile-title-input')) {
+      syncTileTitleRows(target);
+      syncTileTitleAuto(tileHeadTab(target));
+    }
     if (!iconPickerOpen || !target?.closest?.('.icon-picker-search')) return;
     iconPickerOpen.query = target.value;
     if (iconPickerOpen.state === 'ready') filterIconPicker();
@@ -402,10 +450,13 @@
   document.addEventListener('pointerdown', fitTileTypePicker, true);
   document.addEventListener('focusin', fitTileTypePicker);
 
-  // A newly chosen entity brings its icon to the button.
+  // A newly chosen entity brings its icon to the button and its name (Auto).
   document.addEventListener('change', event => {
     const slot = event.target?.closest?.('.tile-entity-slot');
-    if (slot) renderTileIconButton(slot.id.replace(/_tile_entity_slot$/, ''));
+    if (!slot) return;
+    const tab = slot.id.replace(/_tile_entity_slot$/, '');
+    renderTileIconButton(tab);
+    syncTileTitleAuto(tab);
   });
 
   document.addEventListener('DOMContentLoaded', () => {

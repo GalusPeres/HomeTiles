@@ -1141,11 +1141,18 @@ static void appendTileTabHTML(
             <div class="tile-entity-slot" id=")html";
   html += tab_id;
   html += R"html(_tile_entity_slot"></div>
-            <div class="tile-head-row"><div><label for=")html";
+            <div class="tile-head-row"><div><div class="tile-title-label"><label for=")html";
   html += tab_id;
   html += R"html(_tile_title">)html";
   appendHtmlEscaped(html, tr.admin_title);
-  html += R"html(</label><textarea rows="1" class="tile-title-input" spellcheck="false" id=")html";
+  // Auto: the title is the entity's name from Home Assistant (tile-head.js).
+  html += R"html(</label><button type="button" class="tile-title-auto" id=")html";
+  html += tab_id;
+  html += R"html(_tile_title_auto" aria-pressed="false" title=")html";
+  appendHtmlEscaped(html, tr.tile_title_auto_hint);
+  html += R"html(">)html";
+  appendHtmlEscaped(html, tr.tile_title_auto);
+  html += R"html(</button></div><textarea rows="1" class="tile-title-input" spellcheck="false" id=")html";
   html += tab_id;
   html += R"html(_tile_title" placeholder=")html";
   appendHtmlEscaped(html, tr.admin_tile_title_placeholder);

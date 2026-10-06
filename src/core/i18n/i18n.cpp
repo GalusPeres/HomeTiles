@@ -597,7 +597,9 @@ static const Strings kStringsDe = {
     "Ordner",
     "Automatisch",
     "Jetzt im Web Admin ein Passwort festlegen (2 Minuten).",
-    "Tippe zuerst am Display unter System > Sicherheit auf „Passwort“."};
+    "Tippe zuerst am Display unter System > Sicherheit auf „Passwort“.",
+    "Auto",
+    "Name aus Home Assistant"};
 
 static const Strings kStringsEn = {
     "en",
@@ -1189,7 +1191,9 @@ static const Strings kStringsEn = {
     "Folders",
     "Automatic",
     "Now set a password in the Web Admin (2 minutes).",
-    "First tap “Password” on the display under System > Security."};
+    "First tap “Password” on the display under System > Security.",
+    "Auto",
+    "Name from Home Assistant"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1781,7 +1785,9 @@ static const Strings kStringsFr = {
     "Dossiers",
     "Automatique",
     "Définissez maintenant un mot de passe dans le Web Admin (2 minutes).",
-    "Touchez d'abord « Mot de passe » sur l'écran sous Système > Sécurité."};
+    "Touchez d'abord « Mot de passe » sur l'écran sous Système > Sécurité.",
+    "Auto",
+    "Nom depuis Home Assistant"};
 
 static const LocaleProfile kLocaleDe = {
     "de",
@@ -2725,6 +2731,8 @@ static const Strings kStringsPl = {
     "Automatyczny",
     "Teraz ustaw hasło w Web Admin (2 minuty).",
     "Najpierw dotknij „Hasło” na wyświetlaczu w System > Bezpieczeństwo.",
+    "Auto",
+    "Nazwa z Home Assistant",
 };
 
 static const LocaleProfile kLocalePl = {

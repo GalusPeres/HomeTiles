@@ -19,9 +19,10 @@ assert.match(rules, /\.tile-grid-scroll,\s*\.tab-content\.tile-tab\.active \.set
   'preview and parking keep their size');
 assert.match(rules, /\.folder-footer \{\s*flex:1 1 auto;\s*min-height:90px;\s*overflow-y:auto;/,
   'the Global settings footer scrolls and keeps a usable height');
-// The Tile settings panel takes the row height; no script caps it inline (a
-// cap from the window height ran 2 px past the row and scrolled the tab).
-assert.match(rules, /\.tab-content\.tile-tab\.active \.tile-settings \{ max-height:100%; \}/);
+// The Tile settings panel takes the row height, also for a short type
+// (test-tile-settings-full-height.mjs); no script caps it inline (a cap from
+// the window height ran 2 px past the row and scrolled the tab).
+assert.match(rules, /\.tab-content\.tile-tab\.active \.tile-settings \{ align-self:stretch; max-height:100%; \}/);
 assert.match(readRepoFile('src/web/admin/navigation/tabs.js'),
   /function updateTileSettingsMaxHeight\(\) \{\s*document\.querySelectorAll\('\.tile-settings'\)\.forEach\(panel => \{ panel\.style\.maxHeight = ''; \}\);\s*\}/);
 // The parking row follows the grid width, so its hint wraps instead of

@@ -17,7 +17,10 @@ const head = page.slice(page.indexOf('<div class="tile-settings-head">\n        
   page.indexOf('append_tile_icon_color_fixed_html(html, tab_id);'));
 assert.ok(head.length > 0, 'The tile head markup exists');
 for (const marker of ['<div class="tile-head-top"><h3>', '_tile_type" aria-label=")html";',
-  '<div class="tile-head-row"><div><label for=")html";', '<textarea rows="1" class="tile-title-input" spellcheck="false"',
+  '<div class="tile-head-row"><div><div class="tile-title-label"><label for=")html";',
+  '<button type="button" class="tile-title-auto" id=")html";', '_tile_title_auto" aria-pressed="false" title=")html";',
+  'appendHtmlEscaped(html, tr.tile_title_auto_hint);', 'appendHtmlEscaped(html, tr.tile_title_auto);',
+  '<textarea rows="1" class="tile-title-input" spellcheck="false"',
   '_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker"', '_tile_entity_slot"></div>',
   '<div class="tile-settings-body">']) {
   assert.ok(head.includes(marker), `Head markup: ${marker}`);
@@ -99,7 +102,7 @@ const html = `<!doctype html><html lang="de"><head><style>${read('src/web/assets
 <div class="tile-settings" id="tSettings" style="width:420px"><div class="tile-settings-head">
 <div class="tile-head-top"><h3>Kachel-Einstellungen</h3><select id="t_tile_type" aria-label="Typ"><option value="1">Sensor</option></select></div>
 <div class="tile-entity-slot" id="t_tile_entity_slot"></div>
-<div class="tile-head-row"><div><label for="t_tile_title">Titel</label><textarea rows="1" class="tile-title-input" spellcheck="false" id="t_tile_title"></textarea></div><div><label for="t_tile_icon_picker">Icon</label><input type="hidden" id="t_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id="t_tile_icon_picker" aria-haspopup="listbox"></button></div></div></div>
+<div class="tile-head-row"><div><div class="tile-title-label"><label for="t_tile_title">Titel</label><button type="button" class="tile-title-auto" id="t_tile_title_auto" aria-pressed="false">Auto</button></div><textarea rows="1" class="tile-title-input" spellcheck="false" id="t_tile_title"></textarea></div><div><label for="t_tile_icon_picker">Icon</label><input type="hidden" id="t_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id="t_tile_icon_picker" aria-haspopup="listbox"></button></div></div></div>
 <div class="tile-settings-body"><input type="color" id="t_tile_icon_color" value="#FFFFFF" data-unset="1">
 <div class="icon-color-segmented choice-row" id="t_tile_icon_color_modes"><button>Automatique</button><button>Personnalisée</button><button>De la pochette</button></div>
 <div class="icon-color-segmented choice-row" id="t_tile_color_modes"><button>Globale</button><button>Personnalisée</button><button>De l'icône</button><button>De la pochette</button></div>
@@ -122,6 +125,8 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  loaded.filter(fn=>/setupEntityPickers\\(document\\)|setupTileHeads\\(document\\)/.test(String(fn))).forEach(fn=>fn());
  placeTileEntityField('t');await fetchEntityOptions();
  const icon=$('t_tile_icon'),button=$('t_tile_icon_picker'),entity=$('t_sensor_entity'),title=$('t_tile_title');
+ const auto=$('t_tile_title_auto');
+ check(auto.disabled&&!auto.classList.contains('on'),'Auto needs an entity');
  let inputs=0;nativeListen('input',e=>{if(e.target===icon)inputs++;});
  entity.value='sensor.battery';refreshTileIconButtons('t');
  check(button.querySelector('.mdi-battery-80')&&button.title===${JSON.stringify(de[0])},'Automatic shows the entity icon');
@@ -162,6 +167,18 @@ ${inlineScriptSafe(readAdminDeliverySource())}
  $('t_sensor_entity_picker').click();await tick();
  [...document.querySelectorAll('.entity-picker-item')].find(i=>i.textContent.includes('Sterne')).click();
  check(button.querySelector('.mdi-star')&&title.value==='Sterne','The entity brings name and icon');
+ // Auto: lit while the title is the entity's name, off once typed, the name
+ // back on a click (as typed: preview, draft and save follow).
+ check(!auto.disabled&&auto.classList.contains('on')&&auto.getAttribute('aria-pressed')==='true','A chosen entity turns Auto on');
+ let titleInputs=0;nativeListen('input',e=>{if(e.target===title)titleInputs++;});
+ title.value='Mein Titel';title.dispatchEvent(new Event('input',{bubbles:true}));
+ check(!auto.classList.contains('on')&&auto.getAttribute('aria-pressed')==='false','Typing turns Auto off');
+ auto.click();
+ check(title.value==='Sterne'&&auto.classList.contains('on')&&titleInputs===2,'Auto brings the name back: '+title.value);
+ auto.click();check(title.value==='Sterne'&&titleInputs===2,'A lit Auto stays as it is');
+ const autoStyle=getComputedStyle(auto),choiceStyle=getComputedStyle(document.querySelector('#t_tile_color_modes button'));
+ check(autoStyle.borderTopLeftRadius!=='999px'&&parseFloat(autoStyle.borderTopLeftRadius)<=8,'Not round: '+autoStyle.borderTopLeftRadius);
+ check(autoStyle.color==='rgb(95, 212, 199)','Lit in the color of an active choice: '+autoStyle.color);
  // Escape and outside clicks close; the two pickers never stay open together.
  button.click();await tick();
  document.querySelector('.icon-picker-popover input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));

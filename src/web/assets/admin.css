@@ -1579,7 +1579,9 @@
       .tab-content.tile-tab.active .tile-editor-main { align-self:stretch; min-height:0; }
       .tab-content.tile-tab.active .tile-grid-scroll,
       .tab-content.tile-tab.active .settings-hidden-parking { flex:0 0 auto; }
-      .tab-content.tile-tab.active .tile-settings { max-height:100%; }
+      /* The panel reaches the end of the column for every type, so a short
+         one (Empty) leaves its Type list the same room as a long one. */
+      .tab-content.tile-tab.active .tile-settings { align-self:stretch; max-height:100%; }
       .tab-content.tile-tab.active .folder-footer {
         flex:1 1 auto;
         min-height:90px;
@@ -3118,6 +3120,19 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
    (--picker-room, set by tiles/tile-head.js when it opens). */
 .tile-settings .tile-head-top select::picker(select) { max-height:var(--picker-room, 60vh); overflow-y:auto; }
 .tile-head-row { display:grid; grid-template-columns:minmax(0, 1fr) 44px; gap:8px; align-items:start; }
+/* Title label with the small Auto switch at its end (tile-head.js): lit while
+   the title is the entity's name from Home Assistant. */
+.tile-title-label { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+.tile-settings .tile-title-label label { margin-bottom:0; }
+/* Same look as the choice buttons (.icon-color-segmented), only smaller. */
+.tile-title-auto {
+  /* The negative margin keeps the label row as high as the Icon label, so
+     the title field stays level with the icon button. */
+  flex:0 0 auto; margin:-3px 0; padding:0 8px; height:20px; border-radius:6px; border:1px solid var(--line-strong);
+  background:var(--well); color:var(--text-2); font:inherit; font-size:11px; font-weight:600; line-height:18px; cursor:pointer;
+}
+.tile-title-auto.on { background:var(--accent-soft); color:#5fd4c7; }
+.tile-title-auto:disabled { opacity:0.35; cursor:default; }
 .tile-settings .tile-head-row textarea.tile-title-input {
   display:block; margin:0; height:36px; min-height:36px; line-height:16px; white-space:pre; overflow:hidden;
 }

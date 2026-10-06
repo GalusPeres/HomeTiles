@@ -351,7 +351,7 @@ bool ConfigManager::load() {
   config.global_date_format =
       normalize_global_date_format(prefs.getUChar("date_fmt", clock_tile::DATE_FORMAT_AUTO));
   config.keyboard_layout = prefs.getUChar("kb_layout", 0);
-  if (config.keyboard_layout > 2) config.keyboard_layout = 0;
+  if (config.keyboard_layout > 3) config.keyboard_layout = 0;
 
   // Load display and power settings.
   config.display_brightness = prefs.getUChar("disp_bright", 200);
@@ -558,7 +558,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   normalized.tile_radius = tile_radius::clamp(normalized.tile_radius);
   normalized.icon_glow = icon_glow::clamp(normalized.icon_glow);
   normalized.default_tile_color = tile_color::normalize(normalized.default_tile_color);
-  if (normalized.keyboard_layout > 2) normalized.keyboard_layout = 0;
+  if (normalized.keyboard_layout > 3) normalized.keyboard_layout = 0;
   if (normalized.settings_reveal_edge >
       static_cast<uint8_t>(SettingsRevealEdge::Bottom)) {
     normalized.settings_reveal_edge =

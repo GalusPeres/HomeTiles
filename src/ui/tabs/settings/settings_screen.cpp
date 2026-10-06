@@ -284,7 +284,7 @@ void build_category_tile(lv_obj_t* panel, uint8_t index, int x, int y, int w, in
   view.title = lv_label_create(view.box);
   lv_label_set_text(view.title, category_title(category));
   lv_label_set_long_mode(view.title, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(view.title, text_w);
+  lv_obj_set_size(view.title, text_w, lv_font_get_line_height(settings_style::row_font()));
   lv_obj_set_style_text_font(view.title, settings_style::row_font(), 0);
   lv_obj_set_style_text_color(view.title, lv_color_white(), 0);
   lv_obj_set_pos(view.title, text_x,
@@ -292,7 +292,8 @@ void build_category_tile(lv_obj_t* panel, uint8_t index, int x, int y, int w, in
   view.line = lv_label_create(view.box);
   lv_label_set_text(view.line, "");
   lv_label_set_long_mode(view.line, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(view.line, text_w);
+  // One line each, ending in dots (a fixed height; LVGL wraps otherwise).
+  lv_obj_set_size(view.line, text_w, lv_font_get_line_height(settings_style::small_font()));
   lv_obj_set_style_text_font(view.line, settings_style::small_font(), 0);
   lv_obj_set_pos(view.line, text_x,
                  settings_parts::browser_label_y(settings_style::small_font(), settings_style::kSmallFontPx,

@@ -15,6 +15,14 @@ void grey_text(lv_obj_t* label) {
   lv_obj_set_style_text_opa(label, kGreyOpa, 0);
 }
 
+// One line that ends in dots: LVGL only cuts a label of a fixed height; with
+// its height left to the content it wraps (the device name on the S3 in
+// French and Polish).
+void one_line(lv_obj_t* label) {
+  const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+  if (font) lv_obj_set_height(label, lv_font_get_line_height(font));
+}
+
 // ---------- Slider ----------
 
 struct SliderState {
@@ -332,6 +340,7 @@ Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* s
   lv_obj_set_width(r.title, LV_PCT(100));
   lv_obj_set_style_text_font(r.title, row_font(), 0);
   lv_obj_set_style_text_color(r.title, lv_color_white(), 0);
+  one_line(r.title);
   browser_line(r.title, kRowFontPx);
   if (sub) {
     r.sub = lv_label_create(r.text);
@@ -340,6 +349,7 @@ Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* s
     lv_obj_set_width(r.sub, LV_PCT(100));
     lv_obj_set_style_text_font(r.sub, small_font(), 0);
     grey_text(r.sub);
+    one_line(r.sub);
     browser_line(r.sub, kSmallFontPx, kSubTop);
   }
   return r;
@@ -377,6 +387,7 @@ lv_obj_t* trailing_text(lv_obj_t* row, const char* text, int max_width) {
   const int width = text_width(row_font(), text);
   lv_obj_set_width(label, width < max_width ? width : max_width);
   grey_text(label);
+  one_line(label);
   browser_line(label, kRowFontPx);
   return label;
 }
@@ -611,6 +622,7 @@ void two_tone_sub(Row& r, const char* first, uint32_t color, const char* rest) {
   lv_obj_set_flex_grow(tail, 1);
   lv_obj_set_style_text_font(tail, small_font(), 0);
   grey_text(tail);
+  one_line(tail);
   browser_line(tail, kSmallFontPx, kSubTop);
 }
 
@@ -691,6 +703,7 @@ lv_obj_t* step_head(lv_obj_t* card, int card_w, const char* icon_name, uint32_t 
   lv_obj_set_width(head, width);
   lv_obj_set_style_text_font(head, row_font(), 0);
   lv_obj_set_style_text_color(head, lv_color_white(), 0);
+  one_line(head);
   lv_obj_set_pos(head, text_x, browser_label_y(row_font(), kRowFontPx, top, box1));
   lv_obj_t* sub = lv_label_create(card);
   lv_label_set_text(sub, line ? line : "");
@@ -698,6 +711,7 @@ lv_obj_t* step_head(lv_obj_t* card, int card_w, const char* icon_name, uint32_t 
   lv_obj_set_width(sub, width);
   lv_obj_set_style_text_font(sub, small_font(), 0);
   grey_text(sub);
+  one_line(sub);
   lv_obj_set_pos(sub, text_x, browser_label_y(small_font(), kSmallFontPx, top + box1, box2));
   return head;
 }

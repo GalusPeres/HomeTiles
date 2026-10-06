@@ -122,6 +122,31 @@ for (let code = 0x21; code <= 0x7e; ++code) {
 }
 for (const ch of 'äöüßąćęłńóśźżàâæçéèêëîïôœùûÿ') assert.ok(glyphs.has(ch), `holding a letter offers ${ch}`);
 assert.match(rawKeyboard, /LV_EVENT_LONG_PRESSED_REPEAT/, 'Backspace repeats while held');
+// The accent key shows the language's accented letters in the letter rows,
+// as the former keyboard's language key did (user 2026-10-06: holding a
+// letter alone was not to be found).
+assert.match(rawKeyboard, /g_kb\.accent_key = special_key\(kAccentKey, colors\.group, colors\.button, 3, 1\.5f, 1\);/);
+assert.match(rawKeyboard, /special_key\(kSpace, colors\.button, colors\.pressed, 3, 2\.5f, 5\);/);
+const accentPages = rawKeyboard.slice(rawKeyboard.indexOf('struct AccentPage {'), rawKeyboard.indexOf('enum Special'));
+const pageGlyphs = name => {
+  const start = accentPages.indexOf(`const char* const ${name}[] = {`);
+  const text = accentPages.slice(start, accentPages.indexOf('};', start));
+  return [...text.matchAll(/"((?:\\.|[^"\\])*)"/g)].map(match => Buffer.from(match[1]
+    .replace(/\\x([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))), 'latin1').toString('utf8'));
+};
+const french = ['kFrenchLower1', 'kFrenchLower2', 'kFrenchLower3'].flatMap(pageGlyphs).join('');
+for (const ch of 'àâæéèêëîïôçœùûüÿ€') assert.ok(french.includes(ch), `the French page has ${ch}`);
+const polish = ['kPolishLower1', 'kPolishLower2', 'kPolishLower3'].flatMap(pageGlyphs).join('');
+for (const ch of 'ąćęłńóśźż') assert.ok(polish.includes(ch), `the Polish page has ${ch}`);
+const european = ['kEuropeanLower1', 'kEuropeanLower2', 'kEuropeanLower3'].flatMap(pageGlyphs).join('');
+for (const ch of 'äöüß') assert.ok(european.includes(ch), `the German page has ${ch}`);
+const rawModel = readRepoFile('src/ui/tabs/settings/tab_settings.cpp');
+assert.match(rawModel, /if \(lang\[0\] == 'f' && lang\[1\] == 'r'\) return 1;\s*if \(lang\[0\] == 'p' && lang\[1\] == 'l'\) return 2;/,
+  'the accent page follows the language');
+// French AZERTY can be chosen in Localization > Keyboard (value 3).
+assert.match(rawModel, /"Fran\\xC3\\xA7" "ais \(AZERTY\)"/);
+assert.match(model, /if \(cfg\.keyboard_layout == 3\) return 2;/);
+assert.match(readRepoFile('src/core/config/config_manager.cpp'), /if \(normalized\.keyboard_layout > 3\) normalized\.keyboard_layout = 0;/);
 
 // --- Model: the former WiFi popup's paths --------------------------------------------------------------
 const scan = between(model, 'static void wifi_try_scan() {', 'static void wifi_stop_scan() {');

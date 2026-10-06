@@ -64,6 +64,10 @@ const state = option('state');
 const dialog = option('dialog');
 const entry = option('entry');
 const step = Number(option('step') || 0);
+// --lang=de|fr|pl renders the firmware in that language (the mockup stays English).
+const language = option('lang') || 'en';
+// --keys=accents shows the keyboard's accent page (with --entry).
+const keys = option('keys');
 const dialogs = {github: 'git', restart: 'restart', unpair: 'encOff', password: 'pwOff', pairing: 'code', leave: 'wzExit'};
 if (dialog !== undefined && !(dialog in dialogs)) throw new Error(`unknown dialog ${dialog}`);
 const categories = {display: 0, wifi: 1, localization: 2, system: 3, setup: 0};
@@ -73,7 +77,8 @@ const setup = page === 'setup';
 const online = setup ? state === 'online' || (step >= 2 && state !== 'new') : state !== 'ap';
 const shot = page + (setup ? step : '') + (open === undefined ? '' : `-open${open}`) +
   (press === undefined ? '' : `-press${press}`) + (state === undefined ? '' : `-${state}`) +
-  (dialog === undefined ? '' : `-${dialog}`) + (entry === undefined ? '' : `-${entry}`);
+  (dialog === undefined ? '' : `-${dialog}`) + (entry === undefined ? '' : `-${entry}`) +
+  (language === 'en' ? '' : `-${language}`) + (keys === undefined ? '' : `-${keys}`);
 // The mockup's hash for the same state.
 const mockupState = (open === undefined ? '' : `&dd=${open}`) + (state === 'off' ? '&enc=0&pw=win' : state === 'new' && !setup ? '&enc=0&pw=0' : '') +
   (state === 'eth' ? '&eth=eth' : state === 'ethwifi' ? '&eth=wifi' : '') +
@@ -214,7 +219,7 @@ ${strip(read('src/ui/tabs/settings/settings_screen.cpp'))}
 ${strip(read('src/ui/tabs/settings/setup_screen.cpp'))}
 // The mockup's example state.
 namespace settings_model {
-const i18n::Strings& text() { return i18n::kStringsEn; }
+const i18n::Strings& text() { return i18n::${{de: 'kStringsDe', fr: 'kStringsFr', pl: 'kStringsPl'}[language] || 'kStringsEn'}; }
 uint8_t language_count() { return 4; }
 const i18n::Strings& text_of(uint8_t language) {
   static const i18n::Strings* const kTables[] = {&i18n::kStringsEn, &i18n::kStringsDe, &i18n::kStringsFr,
@@ -245,7 +250,7 @@ bool time_text(char* buf, size_t len) { snprintf(buf, len, "%s", "${time}"); ret
 bool update_available() { return false; }
 // Localization: English, Berlin, the rest Auto (mockup st.loc).
 uint8_t locale_option_count(LocaleList list) {
-  static const uint8_t kCounts[] = {4, 27, 3, 4, 3};
+  static const uint8_t kCounts[] = {4, 27, 3, 4, 4};
   return kCounts[static_cast<int>(list)];
 }
 const char* locale_option(LocaleList list, uint8_t index) {
@@ -253,7 +258,8 @@ const char* locale_option(LocaleList list, uint8_t index) {
   static const char* const kZones[] = ${zones};
   static const char* const kTimes[] = {"Auto (language)", "24-hour", "12-hour"};
   static const char* const kDates[] = {"Auto (language)", "DD.MM.YYYY", "MM/DD/YYYY", "YYYY/MM/DD"};
-  static const char* const kKeyboards[] = {"Auto (language)", "Deutsch (QWERTZ)", "English (QWERTY)"};
+  static const char* const kKeyboards[] = {"Auto (language)", "Deutsch (QWERTZ)", "English (QWERTY)",
+                                           "Fran\xC3\xA7" "ais (AZERTY)"};
   switch (list) {
     case LocaleList::Language: return kLanguages[index];
     case LocaleList::TimeZone: return kZones[index];
@@ -303,7 +309,8 @@ WifiValues wifi_values() {
 }
 bool ethernet_panel() { return ${state === 'eth' || state === 'ethwifi' ? 'true' : 'false'}; }
 bool ethernet_active() { return ${state === 'eth' ? 'true' : 'false'}; }
-uint8_t keyboard_layout() { return 0; }
+uint8_t keyboard_layout() { return ${language === 'de' ? 1 : language === 'fr' ? 2 : 0}; }
+uint8_t keyboard_accents() { return ${language === 'fr' ? 1 : language === 'pl' ? 2 : 0}; }
 // The mockup's networks (st.nets); HomeNet only while it is not the connected one.
 static const WifiNetwork kNetworks[] = {{"HomeNet", 4, true}, {"HomeNet-Guest", 3, true},
                                         {"FRITZ!Box 7590 XY", 2, true}, {"Garden-Cam", 2, false},
@@ -370,6 +377,7 @@ int main(int argc, char** argv) {
   ${open === undefined ? '' : `setup_screen::open_locale_list(${Number(open)});`}
   ${press === undefined ? '' : `lv_obj_add_state(setup_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
   ${entry === undefined ? '' : `setup_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
+  ${keys === 'accents' ? 'settings_keyboard::g_kb.accents = true; settings_keyboard::lay_out();' : ''}
   ${dialog === 'leave' ? 'setup_screen::open_leave_dialog();' : ''}
   ` : `
   settings_screen::select_category(static_cast<settings_screen::Category>(${categories[page]}));
@@ -377,6 +385,7 @@ int main(int argc, char** argv) {
   ${press === undefined ? '' : `lv_obj_add_state(settings_screen::g_locale_rows[${Number(press)}].row, LV_STATE_PRESSED);`}
   settings_screen::system_changed();
   ${entry === undefined ? '' : `settings_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
+  ${keys === 'accents' ? 'settings_keyboard::g_kb.accents = true; settings_keyboard::lay_out();' : ''}
   ${dialog === undefined || dialog === 'pairing' ? '' : `settings_screen::open_dialog(settings_screen::Dialog::${{github: 'GitHub', restart: 'Restart', unpair: 'Unpair', password: 'RemovePassword'}[dialog]});`}
   `}
   ui_surface_style::process_pending_updates();

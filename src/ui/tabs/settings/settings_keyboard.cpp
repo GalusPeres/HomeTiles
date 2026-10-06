@@ -42,6 +42,55 @@ const Page kPages[] = {
     {{kMore1, kMore2, kMore3}, {10, 9, 7}},
 };
 
+// The accent key's pages: the language's accented letters first, then other
+// common ones, lower and upper case (Shift). German and other European
+// languages, French (as the former keyboard's French page), Polish.
+struct AccentPage {
+  const char* label;  // on the accent key
+  const char* const* lower[3];
+  const char* const* upper[3];
+  uint8_t counts[3];
+};
+const char* const kEuropeanLower1[] = {"\xC3\xA4", "\xC3\xB6", "\xC3\xBC", "\xC3\x9F", "\xC3\xA9",
+                                       "\xC3\xA8", "\xC3\xAA", "\xC3\xA0", "\xC3\xA2", "\xC3\xA7"};
+const char* const kEuropeanLower2[] = {"\xC3\xAB", "\xC3\xAE", "\xC3\xAF", "\xC3\xB4", "\xC3\xBB",
+                                       "\xC3\xB9", "\xC3\xB1", "\xC5\x93", "\xC3\xA6"};
+const char* const kEuropeanLower3[] = {"\xC3\xA1", "\xC3\xAD", "\xC3\xB3", "\xC3\xBA", "\xC3\xBF", "\xC3\xB8", "\xC3\xA5"};
+const char* const kEuropeanUpper1[] = {"\xC3\x84", "\xC3\x96", "\xC3\x9C", "\xC3\x9F", "\xC3\x89",
+                                       "\xC3\x88", "\xC3\x8A", "\xC3\x80", "\xC3\x82", "\xC3\x87"};
+const char* const kEuropeanUpper2[] = {"\xC3\x8B", "\xC3\x8E", "\xC3\x8F", "\xC3\x94", "\xC3\x9B",
+                                       "\xC3\x99", "\xC3\x91", "\xC5\x92", "\xC3\x86"};
+const char* const kEuropeanUpper3[] = {"\xC3\x81", "\xC3\x8D", "\xC3\x93", "\xC3\x9A", "\xC5\xB8", "\xC3\x98", "\xC3\x85"};
+const char* const kFrenchLower1[] = {"\xC3\xA0", "\xC3\xA2", "\xC3\xA6", "\xC3\xA9", "\xC3\xA8",
+                                     "\xC3\xAA", "\xC3\xAB", "\xC3\xAE", "\xC3\xAF", "\xC3\xB4"};
+const char* const kFrenchLower2[] = {"\xC3\xA7", "\xC5\x93", "\xC3\xB9", "\xC3\xBB", "\xC3\xBC",
+                                     "\xC3\xBF", "\xC2\xAB", "\xC2\xBB", "\xE2\x80\x99", "\xE2\x82\xAC"};
+const char* const kFrenchLower3[] = {"\xC3\xA4", "\xC3\xB6", "\xC3\x9F", "\xC3\xB1", "\xC3\xA1", "\xC3\xAD", "\xC3\xB3"};
+const char* const kFrenchUpper1[] = {"\xC3\x80", "\xC3\x82", "\xC3\x86", "\xC3\x89", "\xC3\x88",
+                                     "\xC3\x8A", "\xC3\x8B", "\xC3\x8E", "\xC3\x8F", "\xC3\x94"};
+const char* const kFrenchUpper2[] = {"\xC3\x87", "\xC5\x92", "\xC3\x99", "\xC3\x9B", "\xC3\x9C",
+                                     "\xC5\xB8", "\xC2\xAB", "\xC2\xBB", "\xE2\x80\x99", "\xE2\x82\xAC"};
+const char* const kFrenchUpper3[] = {"\xC3\x84", "\xC3\x96", "\xC3\x9F", "\xC3\x91", "\xC3\x81", "\xC3\x8D", "\xC3\x93"};
+const char* const kPolishLower1[] = {"\xC4\x85", "\xC4\x87", "\xC4\x99", "\xC5\x82", "\xC5\x84",
+                                     "\xC3\xB3", "\xC5\x9B", "\xC5\xBA", "\xC5\xBC"};
+const char* const kPolishLower2[] = {"\xC3\xA4", "\xC3\xB6", "\xC3\xBC", "\xC3\x9F", "\xC3\xA9",
+                                     "\xC3\xA8", "\xC3\xA0", "\xC3\xA7", "\xC3\xB1"};
+const char* const kPolishLower3[] = {"\xC3\xAA", "\xC3\xA2", "\xC3\xAE", "\xC3\xB4", "\xC3\xBB", "\xC3\xAB", "\xC3\xAF"};
+const char* const kPolishUpper1[] = {"\xC4\x84", "\xC4\x86", "\xC4\x98", "\xC5\x81", "\xC5\x83",
+                                     "\xC3\x93", "\xC5\x9A", "\xC5\xB9", "\xC5\xBB"};
+const char* const kPolishUpper2[] = {"\xC3\x84", "\xC3\x96", "\xC3\x9C", "\xC3\x9F", "\xC3\x89",
+                                     "\xC3\x88", "\xC3\x80", "\xC3\x87", "\xC3\x91"};
+const char* const kPolishUpper3[] = {"\xC3\x8A", "\xC3\x82", "\xC3\x8E", "\xC3\x94", "\xC3\x9B", "\xC3\x8B", "\xC3\x8F"};
+
+const AccentPage kAccentPages[] = {
+    {"\xC3\xA4\xC3\xB6", {kEuropeanLower1, kEuropeanLower2, kEuropeanLower3},
+     {kEuropeanUpper1, kEuropeanUpper2, kEuropeanUpper3}, {10, 9, 7}},
+    {"\xC3\xA9\xC3\xA0", {kFrenchLower1, kFrenchLower2, kFrenchLower3}, {kFrenchUpper1, kFrenchUpper2, kFrenchUpper3},
+     {10, 10, 7}},
+    {"\xC4\x85\xC4\x99", {kPolishLower1, kPolishLower2, kPolishLower3}, {kPolishUpper1, kPolishUpper2, kPolishUpper3},
+     {9, 9, 7}},
+};
+
 // Accented forms offered when a letter is held: German, Polish and French
 // letters first, all within the panel font's Latin ranges.
 struct Variants {
@@ -71,12 +120,13 @@ const Variants kVariants[] = {
     {'z', {"\xC5\xBC", "\xC5\xBA"}, {"\xC5\xBB", "\xC5\xB9"}},
 };
 
-enum Special : uint8_t { kShift = 40, kBackspace, kSymbols, kSpace, kDot, kOk };
+enum Special : uint8_t { kShift = 40, kBackspace, kSymbols, kAccentKey, kSpace, kDot, kOk };
 
 struct State {
   lv_obj_t* root = nullptr;
   Geometry g = {};
   Layout layout = Layout::Qwerty;
+  Accents accent_set = Accents::European;
   Colors colors = {};
   uint32_t accent = 0;
   Handler handler = {};
@@ -84,9 +134,12 @@ struct State {
   bool shift = false;
   bool symbols = false;
   bool more = false;
+  // The accent page shows in the letter rows.
+  bool accents = false;
   lv_obj_t* keys[3][10] = {};
   lv_obj_t* shift_key = nullptr;
   lv_obj_t* symbols_key = nullptr;
+  lv_obj_t* accent_key = nullptr;
   // The accented forms of a held letter.
   lv_obj_t* popup = nullptr;
   const Variants* variants = nullptr;
@@ -123,12 +176,29 @@ void key_text(const char* text, char* out, size_t len) {
   if (g_kb.shift && !g_kb.symbols && out[0] >= 'a' && out[0] <= 'z' && !out[1]) out[0] = static_cast<char>(out[0] - 32);
 }
 
+const AccentPage& accent_page() { return kAccentPages[static_cast<uint8_t>(g_kb.accent_set) % 3]; }
+
 void lay_out() {
-  const Page& p = page();
+  const char* const* rows[3];
+  uint8_t counts[3];
+  if (g_kb.accents) {
+    // Upper and lower case come from the page itself (Shift).
+    const AccentPage& a = accent_page();
+    for (int row = 0; row < 3; ++row) {
+      rows[row] = g_kb.shift ? a.upper[row] : a.lower[row];
+      counts[row] = a.counts[row];
+    }
+  } else {
+    const Page& p = page();
+    for (int row = 0; row < 3; ++row) {
+      rows[row] = p.rows[row];
+      counts[row] = p.counts[row];
+    }
+  }
   for (int row = 0; row < 3; ++row) {
-    const int count = p.counts[row];
-    // Row 2 with nine keys starts half a key in; row 3 sits after Shift.
-    const float start = row == 1 ? (10 - count) / 2.0f : row == 2 ? 1.5f : 0.0f;
+    const int count = counts[row];
+    // Shorter rows are centered on the grid; row 3 sits after Shift.
+    const float start = row == 2 ? 1.5f : (10 - count) / 2.0f;
     for (int i = 0; i < 10; ++i) {
       lv_obj_t* key = g_kb.keys[row][i];
       if (!key) continue;
@@ -139,7 +209,11 @@ void lay_out() {
       lv_obj_remove_flag(key, LV_OBJ_FLAG_HIDDEN);
       place(key, row, start + i, 1);
       char text[8];
-      key_text(p.rows[row][i], text, sizeof(text));
+      if (g_kb.accents) {
+        snprintf(text, sizeof(text), "%s", rows[row][i]);
+      } else {
+        key_text(rows[row][i], text, sizeof(text));
+      }
       set_label(key, text);
     }
   }
@@ -165,10 +239,11 @@ void lay_out() {
     }
   }
   if (g_kb.symbols_key) set_label(g_kb.symbols_key, g_kb.symbols ? "ABC" : "?123");
+  if (g_kb.accent_key) set_label(g_kb.accent_key, g_kb.accents ? "ABC" : accent_page().label);
 }
 
 const Variants* variants_for(const char* text) {
-  if (g_kb.symbols || !text || !text[0] || text[1]) return nullptr;
+  if (g_kb.symbols || g_kb.accents || !text || !text[0] || text[1]) return nullptr;
   const char base = static_cast<char>(text[0] | 0x20);
   for (const Variants& v : kVariants) {
     if (v.base == base) return &v;
@@ -308,6 +383,14 @@ void special_key_cb(lv_event_t* e) {
       break;
     case kSymbols:
       g_kb.symbols = !g_kb.symbols;
+      g_kb.accents = false;
+      g_kb.more = false;
+      g_kb.shift = false;
+      lay_out();
+      break;
+    case kAccentKey:
+      g_kb.accents = !g_kb.accents;
+      g_kb.symbols = false;
       g_kb.more = false;
       g_kb.shift = false;
       lay_out();
@@ -372,12 +455,13 @@ lv_obj_t* icon_label(lv_obj_t* key, const char* icon, uint32_t color) {
 
 }  // namespace
 
-lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, const Colors& colors, uint32_t accent,
-                 const Handler& handler) {
+lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, Accents accents, const Colors& colors,
+                 uint32_t accent, const Handler& handler) {
   if (g_kb.root) lv_obj_delete(g_kb.root);
   g_kb = State();
   g_kb.g = geometry;
   g_kb.layout = layout;
+  g_kb.accent_set = accents;
   g_kb.colors = colors;
   g_kb.accent = accent & 0xFFFFFF;
   g_kb.handler = handler;
@@ -415,7 +499,10 @@ lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, cons
 #endif
   g_kb.symbols_key = special_key(kSymbols, colors.group, colors.button, 3, 0, 1.5f);
   key_label(g_kb.symbols_key, "?123", mode_font, 0xFFFFFF);
-  special_key(kSpace, colors.button, colors.pressed, 3, 1.5f, 6);
+  // The accent key beside it: the language's accented letters (or ABC back).
+  g_kb.accent_key = special_key(kAccentKey, colors.group, colors.button, 3, 1.5f, 1);
+  key_label(g_kb.accent_key, "", mode_font, 0xFFFFFF);
+  special_key(kSpace, colors.button, colors.pressed, 3, 2.5f, 5);
   lv_obj_t* dot = special_key(kDot, colors.button, colors.pressed, 3, 7.5f, 1);
   key_label(dot, ".", font, 0xFFFFFF);
   lv_obj_t* ok = special_key(kOk, g_kb.accent, lv_color_to_u32(lv_color_lighten(lv_color_hex(g_kb.accent), 31)) & 0xFFFFFF,

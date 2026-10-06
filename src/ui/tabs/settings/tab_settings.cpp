@@ -419,7 +419,7 @@ uint8_t locale_option_count(LocaleList list) {
     case LocaleList::DateFormat:
       return 4;
     case LocaleList::Keyboard:
-      return 3;
+      return 4;
   }
   return 0;
 }
@@ -445,7 +445,8 @@ const char* locale_option(LocaleList list, uint8_t index) {
       return options[index];
     }
     case LocaleList::Keyboard: {
-      const char* const options[] = {s.format_auto_language, "Deutsch (QWERTZ)", "English (QWERTY)"};
+      const char* const options[] = {s.format_auto_language, "Deutsch (QWERTZ)", "English (QWERTY)",
+                                     "Fran\xC3\xA7" "ais (AZERTY)"};
       return options[index];
     }
   }
@@ -464,7 +465,7 @@ uint8_t locale_selected(LocaleList list) {
     case LocaleList::DateFormat:
       return clock_tile::normalize_date_format(cfg.global_date_format);
     case LocaleList::Keyboard:
-      return cfg.keyboard_layout > 2 ? 0 : cfg.keyboard_layout;
+      return cfg.keyboard_layout > 3 ? 0 : cfg.keyboard_layout;
   }
   return 0;
 }
@@ -807,9 +808,18 @@ uint8_t keyboard_layout() {
   const DeviceConfig& cfg = configManager.getConfig();
   if (cfg.keyboard_layout == 1) return 1;
   if (cfg.keyboard_layout == 2) return 0;
+  if (cfg.keyboard_layout == 3) return 2;
   const char* lang = cfg.language;
   if (lang[0] == 'd' && lang[1] == 'e') return 1;
   if (lang[0] == 'f' && lang[1] == 'r') return 2;
+  return 0;
+}
+
+// The accent page follows the language, whatever the letters' layout.
+uint8_t keyboard_accents() {
+  const char* lang = configManager.getConfig().language;
+  if (lang[0] == 'f' && lang[1] == 'r') return 1;
+  if (lang[0] == 'p' && lang[1] == 'l') return 2;
   return 0;
 }
 

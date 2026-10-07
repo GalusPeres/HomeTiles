@@ -181,17 +181,14 @@
       overflow-y:auto;
       overscroll-behavior:contain;
     }
-    /* Settings stays below the tab bar and scrolls internally there instead
-       of growing the browser viewport with long configuration forms. */
-    #tab-network.active,
-    #tab-hardware.active {
+    /* Settings stays below the tab bar; each of its pages scrolls by itself
+       instead of growing the browser viewport. The tab does not clip: a
+       page's scrollbar sits in the card's free right margin. */
+    #tab-network.active {
       flex:1 1 auto;
       min-height:0;
-      max-height:none;
       display:flex;
       flex-direction:column;
-      overflow:hidden;
-      overscroll-behavior:contain;
     }
     .hardware-io-content {
       flex:1 1 auto;
@@ -361,17 +358,85 @@
     .hardware-io-save-state.saving { color:var(--accent-link); }
     .hardware-io-save-state.saved { color:var(--ok); }
     .hardware-io-save-state.error { color:var(--err); }
-    /* Like the I/O list: the scrollbar stays inside the tab. A negative
-       margin pushed it past #tab-network, whose overflow:hidden cut it off. */
-    #admin_settings_form {
+    /* Settings: the page list on the left, the chosen page on the right, in
+       the order of the panel's Settings (settings/pages.js). */
+    .settings-layout {
+      flex:1 1 auto;
+      min-height:0;
+      display:grid;
+      grid-template-columns:260px minmax(0, 1fr);
+      gap:20px;
+    }
+    .settings-nav { min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+    .settings-nav-item {
+      display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px;
+      border:1px solid #333333; border-radius:14px; background:#1a1a1a; color:var(--text);
+      font-family:inherit; text-align:left; cursor:pointer;
+      transition:background 0.15s, border-color 0.15s;
+    }
+    .settings-nav-item:hover { background:#202020; border-color:#444444; }
+    .settings-nav-item:focus-visible { outline:none; box-shadow:0 0 0 3px var(--accent-ring); }
+    .settings-nav-item.active { border-color:var(--accent); background:#1d2524; }
+    .settings-nav-disc {
+      flex:0 0 40px; width:40px; height:40px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center; font-size:22px;
+      color:var(--settings-color); background:color-mix(in srgb, var(--settings-color) 22%, #1a1a1a);
+    }
+    .settings-nav-text { min-width:0; display:flex; flex-direction:column; gap:2px; }
+    .settings-nav-title { font-size:14px; font-weight:600; }
+    .settings-nav-sub { font-size:12px; color:var(--text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .settings-nav-sep { flex:0 0 1px; background:#3a3a3a; margin:6px 4px; }
+    .settings-pages { min-height:0; display:flex; flex-direction:column; }
+    .settings-form { display:contents; }
+    /* Every page reserves its scrollbar's width and gives it back with the
+       negative margin (--settings-scrollbar, measured by pages.js): the cards
+       end where the tab bar ends and nothing moves when a row folds out. */
+    .settings-page {
       flex:1 1 auto;
       min-height:0;
       overflow-y:auto;
       overscroll-behavior:contain;
-      margin:0;
-      padding-right:4px;
-      padding-bottom:16px;
+      scrollbar-gutter:stable;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+      margin-right:calc(-8px - var(--settings-scrollbar, 10px));
+      padding-right:8px;
     }
+    .settings-page[hidden] { display:none; }
+    /* I/O scrolls with its page like the others. */
+    .settings-page .hardware-io-content { flex:none; overflow:visible; }
+    .settings-page .hardware-io-list { flex:none; overflow:visible; padding-right:0; }
+    .settings-state-row { display:flex; align-items:center; gap:14px; padding:4px 0; }
+    .settings-state-row + .settings-state-row,
+    .settings-state-row + .settings-fold,
+    .settings-fold + .settings-fold { border-top:1px solid #232323; margin-top:10px; padding-top:10px; }
+    .settings-state-icon { flex:0 0 auto; font-size:26px; color:var(--text-3); }
+    .settings-state-text { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; }
+    .settings-state-title { font-size:15px; font-weight:600; color:var(--text); }
+    .settings-state-sub { font-size:12px; color:var(--text-3); margin-top:3px; }
+    .settings-state-value { flex:0 0 auto; display:flex; align-items:center; gap:6px; font-size:14px; font-weight:600; color:var(--text-3); }
+    .settings-state-value.is-good { color:#51cf66; }
+    .settings-state-value .mdi { font-size:20px; }
+    .settings-version-row svg { flex:0 0 auto; }
+    .settings-version { font-size:18px; }
+    .settings-version span { color:var(--text-3); font-weight:400; }
+    .settings-row-btn { flex:0 0 auto; width:auto; margin:0; }
+    .settings-fw-file { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:1px solid #232323; }
+    .settings-fw-file .settings-note { margin:0; }
+    .settings-fold > summary { list-style:none; display:flex; align-items:center; gap:14px; padding:4px 0; cursor:pointer; }
+    .settings-fold > summary::-webkit-details-marker { display:none; }
+    .settings-fold > summary:focus-visible { outline:none; box-shadow:0 0 0 3px var(--accent-ring); border-radius:8px; }
+    .settings-fold-chev { flex:0 0 auto; font-size:22px; color:var(--text-3); transition:transform 0.15s; }
+    .settings-fold[open] .settings-fold-chev { transform:rotate(90deg); }
+    .settings-fold-body { padding:14px 0 4px 40px; }
+    .settings-fold-note { margin:0 0 14px; }
+    .settings-fold-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:12px; margin-top:14px; }
+    .settings-fold-actions .btn { width:auto; margin:0; }
+    /* One footer under the list and the page, across the full width. */
+    .admin-footer-actions.settings-foot { margin-top:16px; padding-right:0; }
+    .settings-foot[hidden], .settings-foot-set[hidden] { display:none; }
+    .settings-foot-set { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }
 
     /* Forms */
     form { display:grid; gap:16px; margin-bottom:32px; }
@@ -596,8 +661,6 @@
     .local-camera-slider input[type="range"] { width:100%; min-width:0; height:24px; margin:0; accent-color:var(--accent); }
     .local-camera-slider input[type="range"]:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
     .local-camera-slider output { text-align:right; font-variant-numeric:tabular-nums; color:var(--text-2); }
-    .ota-github-actions { margin-top:8px; }
-    .file-picker { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px; }
     .file-picker-name { color:var(--text-3); font-size:14px; overflow-wrap:anywhere; }
     .btn-inline { width:auto; margin-top:0; }
     .file-picker .btn,
@@ -1603,13 +1666,14 @@
       .card { height:auto; min-height:calc(100vh - 32px); }
       #tab-network.active { flex:none; overflow:visible; }
       .tab-content.tile-tab.active { flex:none; overflow:visible; }
-      #tab-hardware.active {
-        flex:1 1 auto;
-        min-height:420px;
-        height:calc(100vh - 190px);
-        overflow:hidden;
-      }
-      .hardware-io-content { flex:1 1 auto; min-height:0; overflow:hidden; }
+      /* Narrow windows: the page list above the page, two entries a row; the
+         page grows with the browser window. */
+      .settings-layout { grid-template-columns:1fr; }
+      .settings-nav { flex-direction:row; flex-wrap:wrap; overflow:visible; }
+      .settings-nav-item { flex:1 1 calc(50% - 4px); min-width:0; }
+      .settings-nav-sep { display:none; }
+      .settings-page { flex:none; overflow:visible; scrollbar-gutter:auto; margin-right:0; padding-right:0; }
+      .settings-fold-body { padding-left:0; }
       .hardware-io-fields,
       .hardware-io-card-temperature .hardware-io-fields {
         grid-template-columns:minmax(0, 1fr) minmax(0, 1fr) 34px;
@@ -1623,12 +1687,6 @@
       .hardware-io-card-temperature .hardware-io-delete {
         grid-column:3;
         grid-row:1;
-      }
-      #admin_settings_form {
-        flex:none;
-        overflow:visible;
-        margin:0;
-        padding:0;
       }
       .admin-footer-actions {
         position:sticky;

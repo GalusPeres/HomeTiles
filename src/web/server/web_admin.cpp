@@ -166,6 +166,8 @@ bool WebAdminServer::start() {
     server.on("/api/link", HTTP_POST,
               withStorageHold([this]() { this->handleLinkSetup(); }));
     server.on("/api/status", guarded([this]() { this->handleStatus(); }));
+    server.on("/api/language", HTTP_GET,
+              guarded([this]() { this->handleLanguage(); }));
     server.on("/api/tiles", HTTP_GET,
               guarded([this]() { this->handleGetTiles(); }));
     server.on("/api/tiles", HTTP_POST,

@@ -626,6 +626,15 @@ void WebAdminServer::handleStatus() {
   sendChunkedResponse(server, 200, "application/json", getStatusJSON());
 }
 
+// The same code as the page's <html lang>, so the page compares like with
+// like. A poll, so it does not count as Web Admin activity.
+void WebAdminServer::handleLanguage() {
+  String json = "{\"language\":\"";
+  json += i18n::strings(configManager.getConfig().language).html_lang;
+  json += "\"}";
+  server.send(200, "application/json", json);
+}
+
 // A base topic or prefix the link hello can carry: printable ASCII without
 // spaces, quotes, backslashes or MQTT wildcards, no trailing slash.
 static bool linkTopicRootValid(const String& value, size_t max_length) {

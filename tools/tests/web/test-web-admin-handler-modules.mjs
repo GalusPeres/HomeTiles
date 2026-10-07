@@ -16,7 +16,7 @@ const read = (name) => {
   return fs.readFileSync(new URL(matches[0], directory), 'utf8');
 };
 const owners = {
-  'web_admin_handlers.cpp': ['SaveMQTT', 'SaveBridge', 'BridgeRefresh', 'Status',
+  'web_admin_handlers.cpp': ['SaveMQTT', 'SaveBridge', 'BridgeRefresh', 'Status', 'Language',
     'Restart', 'LinkSetup', 'SaveTileBorders', 'SaveIconDiscs', 'SaveIconGlow', 'SaveDefaultTileColor', 'TileRadius'],
   'web_admin_tiles.cpp': ['GetTiles', 'SaveTiles', 'ReorderTiles', 'GetSensorValues',
     'GetEntityOptions', 'GetMdiIcons', 'StartEntitySearch', 'GetEntitySearch', 'GetFolders', 'GetFolderTab', 'SaveFolderAccess', 'DeleteFolder'],

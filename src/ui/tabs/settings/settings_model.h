@@ -104,6 +104,13 @@ const char* latest_version();
 const char* device_name();
 // The panel's address (the hotspot's while it is on); false without one.
 bool panel_address(char* buf, size_t len);
+// The way to Home Assistant under its row, in the panel and the Web Admin:
+// "Direct · Bridge <host>" on the direct link, "MQTT · Broker <host>" over
+// MQTT; false while neither is set up.
+bool bridge_route(char* buf, size_t len);
+// True while the panel uses the direct Bridge link, where pairing seals the
+// states as well as the commands.
+bool link_active();
 // The pairing number as "123 456" while it is shown.
 bool pairing_number(char* buf, size_t len);
 // A note after unpairing without the Bridge's answer (remove it in Home

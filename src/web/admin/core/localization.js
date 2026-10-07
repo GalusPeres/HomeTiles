@@ -10,6 +10,40 @@ function t(key) {
     return out;
   }
   let APP_LOCALE = document.documentElement.lang || 'en';
+
+  // Issue #73: the panel builds this page in its own language, so a language
+  // change made on the display shows only after a reload. A small poll
+  // notices it and reloads once nothing is being edited here.
+  const DEVICE_LANGUAGE_POLL_MS = 15000;
+
+  function adminEditsPending() {
+    const active = document.activeElement;
+    if (active?.matches?.('input, textarea, select')) return true;
+    if (dragSource || resizeState || fileManagerUploadBusy || hardwareIoDirty) return true;
+    const busy = map => Object.values(map || {}).some(Boolean);
+    return busy(autoSaveTimers) || busy(saveInFlightByTile) || busy(queuedSaveByTile);
+  }
+
+  async function checkDeviceLanguage() {
+    if (document.hidden) return;
+    try {
+      const response = await fetch('/api/language', {cache: 'no-store'});
+      if (!response.ok) return;
+      const data = await response.json();
+      const device = String(data?.language || '').toLowerCase();
+      const page = String(document.documentElement.lang || APP_LOCALE).toLowerCase();
+      if (device && device !== page && !adminEditsPending()) location.reload();
+    } catch (error) {
+      // Offline or signed out: the next poll tries again.
+    }
+  }
+
+  function watchDeviceLanguage() {
+    window.setInterval(checkDeviceLanguage, DEVICE_LANGUAGE_POLL_MS);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) checkDeviceLanguage();
+    });
+  }
   function formatLocalizedNumber(value, decimals = 0, trimTrailingZeros = false) {
     const numeric = Number(String(value ?? '').trim().replace(',', '.'));
     if (!Number.isFinite(numeric)) return '--';

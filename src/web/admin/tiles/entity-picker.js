@@ -620,10 +620,9 @@
     } else if (target.closest('.entity-picker-retry')) {
       loadEntityPickerEntries(true);
     } else if (target.closest('.entity-picker-password')) {
-      // The Web Admin password section (Settings tab).
+      // The Web Admin password row (Settings > System).
       closeEntityPicker(false);
-      if (typeof switchTab === 'function') switchTab('tab-network');
-      document.getElementById('web_auth_section')?.scrollIntoView({ behavior: 'smooth' });
+      if (typeof openSettingsPage === 'function') openSettingsPage('system', 'web_auth_section');
     }
   });
 

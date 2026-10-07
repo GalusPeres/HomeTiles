@@ -12,10 +12,14 @@ import {runDomHarness} from '../../lib/headless-dom.mjs';
 const html = readRepoFile("src/web/server/render/web_admin_html.cpp");
 
 // Every tab button, static or per folder, must name the panel it opens.
-for (const target of ['tab-tiles-screensaver', 'tab-hardware', 'tab-network']) {
+for (const target of ['tab-tiles-screensaver', 'tab-network']) {
   assert.ok(html.includes(`data-tab-target="${target}"`),
     `The ${target} button must name its panel`);
 }
+// I/O is a Settings page now; a remembered or linked I/O tab opens that page.
+assert.doesNotMatch(html, /data-tab-target="tab-hardware"/, 'I/O has no tab of its own');
+assert.match(adminSource, /if \(tabName === 'tab-hardware'\) \{\s*tabName = 'tab-network';\s*showSettingsPage\('io'\);/,
+  'switchTab opens the I/O page for the former tab');
 assert.ok(html.includes('html += R"html(" data-tab-target="tab-tiles-)html";'),
   'Folder tab buttons must name their panel too');
 // Home alone, a divider, the folder row, a divider, then the other tabs; no

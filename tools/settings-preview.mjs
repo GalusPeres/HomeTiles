@@ -7,7 +7,7 @@
 //
 // Usage: node tools/settings-preview.mjs [p8 p7 p1024 p43 p4b s3 p4880]
 //        [--page=display|wifi|localization|system|setup] [--open=<row>] [--press=<row>]
-//        [--state=off|new|ap|eth|ethwifi|online|wait|code|ok|guide] [--step=0..3]
+//        [--state=off|new|ap|eth|ethwifi|online|wait|code|ok|guide|mqtt] [--step=0..3]
 //        [--dialog=github|restart|unpair|password|pairing|leave]
 //        [--entry=manual|join] [--no-mockup]
 // --page=setup shows the first-start setup at --step (mockup wiz=A&step=):
@@ -203,6 +203,7 @@ static uint32_t host_from_icon_card(uint32_t icon, bool pressed, uint8_t percent
   for (int shift = 16; shift >= 0; shift -= 8) out |= std::min<uint32_t>(255, ((card >> shift) & 0xFF) + 0x10) << shift;
   return out;
 }
+${strip(read('src/ui/shared/text_scroll.h'))}
 ${strip(read('src/ui/tabs/settings/settings_style.h'))}
 ${strip(read('src/ui/tabs/settings/settings_parts.h'))}
 ${strip(read('src/ui/tabs/settings/settings_model.h'))}
@@ -285,6 +286,12 @@ SystemValues system_values() {
 const char* latest_version() { return ""; }
 const char* device_name() { return "${p.name}"; }
 bool panel_address(char* buf, size_t len) { snprintf(buf, len, "${state === 'ap' ? '192.168.4.1' : '192.168.1.50'}"); return true; }
+// The way to Home Assistant: the direct link, or MQTT with --state=mqtt.
+bool bridge_route(char* buf, size_t len) {
+  snprintf(buf, len, text().${state === 'mqtt' ? 'settings_link_mqtt_fmt' : 'settings_link_direct_fmt'}, "192.168.1.10");
+  return true;
+}
+bool link_active() { return ${state === 'mqtt' ? 'false' : 'true'}; }
 bool pairing_number(char* buf, size_t len) { snprintf(buf, len, "465 848"); return true; }
 const char* pairing_note() { return nullptr; }
 const char* repo_url() { return "https://github.com/GalusPeres/HomeTiles"; }

@@ -50,6 +50,9 @@ public:
   void handleSaveBridge();
   void handleBridgeRefresh();
   void handleStatus();
+  // GET /api/language: the panel's language, so an open page notices a change
+  // made on the display and reloads (issue #73).
+  void handleLanguage();
   void handleRestart();
   // POST /api/link: the Bridge's address for the direct link (docs-dev/bridge-link.md).
   void handleLinkSetup();

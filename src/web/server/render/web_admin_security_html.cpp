@@ -91,77 +91,85 @@ String WebAdminServer::getLoginPage() {
   return html;
 }
 
-// Settings section inside the admin page. The password inputs have no name
-// attribute, so the surrounding /mqtt form never submits them; the browser
-// sends only the derived salt/key pair to /api/auth/password.
+// The Web Admin password row of the Settings System page (Security), as on
+// the panel: one line with the state that folds out the fields. The password
+// inputs have no name attribute, so the surrounding /mqtt form never submits
+// them; the browser sends only the derived salt/key pair to /api/auth/password.
 void appendWebAdminPasswordSettingsHtml(String& html, const i18n::Strings& tr) {
   const bool enabled = web_admin_auth::enabled();
   html += R"html(
-          <div class="settings-section" id="web_auth_section" data-enabled=")html";
+              <details class="settings-fold" id="web_auth_section" data-enabled=")html";
   html += enabled ? "1" : "0";
   html += R"html(">
-            <div class="section-title">)html";
+                <summary><i class="mdi mdi-form-textbox-password settings-state-icon"></i><span class="settings-state-text"><span class="settings-state-title">)html";
   appendHtmlEscaped(html, String(tr.web_auth_section));
-  html += R"html(</div>
-            <div class="settings-note web-auth-status" id="web_auth_status">)html";
-  appendHtmlEscaped(html, String(enabled ? tr.web_auth_status_on
-                                         : tr.web_auth_status_off));
-  html += R"html(</div>
-            <div class="settings-grid">
-              <div>
-                <label for="web_auth_password">)html";
+  html += R"html(</span><span class="settings-state-sub" id="web_auth_status">)html";
+  appendHtmlEscaped(html, String(enabled ? tr.settings_password_asks : tr.settings_password_none));
+  html += R"html(</span></span>)html";
+  if (enabled) {
+    html += R"html(<span class="settings-state-value is-good">)html";
+    appendHtmlEscaped(html, String(tr.security_state_on));
+    html += R"html(<i class="mdi mdi-shield-check"></i></span>)html";
+  }
+  html += R"html(<i class="mdi mdi-chevron-right settings-fold-chev"></i></summary>
+                <div class="settings-fold-body">
+                  <div class="settings-grid">
+                    <div>
+                      <label for="web_auth_password">)html";
   appendHtmlEscaped(html, String(tr.web_auth_new_password));
   html += R"html(</label>
-                <input type="password" id="web_auth_password" autocomplete="new-password" minlength="8">
-              </div>
-              <div>
-                <label for="web_auth_password_repeat">)html";
+                      <input type="password" id="web_auth_password" autocomplete="new-password" minlength="8">
+                    </div>
+                    <div>
+                      <label for="web_auth_password_repeat">)html";
   appendHtmlEscaped(html, String(tr.web_auth_repeat_password));
   html += R"html(</label>
-                <input type="password" id="web_auth_password_repeat" autocomplete="new-password" minlength="8">
-              </div>
-            </div>
-            <div class="settings-actions web-auth-actions">
-              <button type="button" class="btn btn-go" id="web_auth_set">)html";
+                      <input type="password" id="web_auth_password_repeat" autocomplete="new-password" minlength="8">
+                    </div>
+                  </div>
+                  <div class="settings-fold-actions web-auth-actions">
+                    <button type="button" class="btn btn-go" id="web_auth_set">)html";
   appendHtmlEscaped(html, String(tr.web_auth_set));
   html += R"html(</button>
-              <button type="button" class="btn btn-secondary)html";
+                    <button type="button" class="btn btn-secondary)html";
   if (!enabled) html += " is-hidden";
   html += R"html(" id="web_auth_remove">)html";
   appendHtmlEscaped(html, String(tr.web_auth_remove));
   html += R"html(</button>
-              <button type="button" class="btn btn-secondary)html";
+                    <button type="button" class="btn btn-secondary)html";
   if (!enabled) html += " is-hidden";
   html += R"html(" id="web_auth_logout">)html";
   appendHtmlEscaped(html, String(tr.web_auth_logout));
   html += R"html(</button>
-            </div>
+                  </div>
 )html";
   if (!enabled) {
     // The first password needs a tap on the display (allowFirstPassword).
-    html += R"html(            <div class="settings-note" id="web_auth_tap_note">)html";
+    html += R"html(                  <div class="settings-note" id="web_auth_tap_note">)html";
     appendHtmlEscaped(html, String(tr.web_auth_panel_tap_required));
     html += "</div>\n";
   }
-  html += R"html(            <div class="settings-note">)html";
+  html += R"html(                  <div class="settings-note">)html";
   appendHtmlEscaped(html, String(tr.web_auth_note));
   html += R"html(</div>
-            <div class="settings-note">)html";
+                  <div class="settings-note">)html";
   appendHtmlEscaped(html, String(tr.web_auth_secrets_note));
   html += R"html(</div>
-          </div>
+                </div>
+              </details>
 )html";
 }
 
 // Header badge: a green shield while a Web Admin password is set, a red one
-// otherwise. It opens the Settings tab at the password section; setting or
-// removing the password reloads the page, so the server-side state is current.
+// otherwise. It opens Settings > System with the password row folded out;
+// setting or removing the password reloads the page, so the server-side state
+// is current.
 void appendWebAdminPasswordBadgeHtml(String& html, const i18n::Strings& tr) {
   const bool enabled = web_admin_auth::enabled();
   html += R"html(
           <a class="brand-link brand-security )html";
   html += enabled ? "is-on" : "is-off";
-  html += R"html(" id="web_auth_badge" href="#web_auth_section" onclick="switchTab('tab-network');document.getElementById('web_auth_section')?.scrollIntoView({behavior:'smooth'});return false;"><i class="mdi mdi-shield-lock"></i>)html";
+  html += R"html(" id="web_auth_badge" href="#web_auth_section" onclick="openSettingsPage('system','web_auth_section');return false;"><i class="mdi mdi-shield-lock"></i>)html";
   appendHtmlEscaped(html, String(enabled ? tr.web_auth_badge_on : tr.web_auth_badge_off));
   html += "</a>";
 }

@@ -25,11 +25,14 @@ const between = (source, from, to) => {
 };
 
 // --- Translations ------------------------------------------------------------------------------
-const keys = ['settings_connection', 'settings_ip_fmt', 'settings_pairing', 'settings_commands_encrypted',
+const keys = ['settings_connection', 'settings_link_direct_fmt', 'settings_link_mqtt_fmt', 'settings_pairing',
+  'settings_commands_encrypted', 'settings_states_encrypted', 'settings_mqtt_unused', 'settings_mqtt_unused_note',
   'settings_paired', 'settings_not_paired', 'settings_pair', 'settings_password_asks', 'settings_password_none',
   'settings_allow', 'settings_set_password_now', 'settings_setup', 'settings_unpair_question', 'settings_unpair_text',
   'settings_unpair', 'settings_restart_question', 'settings_restart_text', 'settings_github_text'];
-const english = ['Connection', 'IP %s', 'Pairing', 'Commands are encrypted', 'Paired', 'Not paired', 'Pair',
+const english = ['Connection', 'Direct · Bridge %s', 'MQTT · Broker %s', 'Pairing', 'Commands are encrypted',
+  'Commands and states are encrypted', 'Not used, the direct connection is active',
+  'While the direct connection is active, the panel does not connect to the broker. The fields stay saved.', 'Paired', 'Not paired', 'Pair',
   'Web Admin asks for it', 'Web Admin opens without one', 'Allow', 'Set it in Web Admin now', 'Setup',
   'Unpair from Home Assistant?', 'Home Assistant is disconnected until you pair again.', 'Unpair',
   'Restart the panel?', 'The panel is back in a few seconds.', 'Scan to open the project. A star helps it grow.'];
@@ -50,7 +53,9 @@ for (const table of tables) {
     assert.doesNotMatch(text, /:\s*$/, `${table}.${keys[i]} has no colon`);
   }
   if (table === 'kStringsEn') assert.deepEqual(texts, english, 'English System texts');
-  assert.equal(texts[1], 'IP %s', `${table}: the address pattern`);
+  // The way to Home Assistant: one %s each, the Bridge or the broker address.
+  assert.match(texts[1], /^[^%]* · Bridge %s$/, `${table}: the direct link pattern`);
+  assert.equal(texts[2], 'MQTT · Broker %s', `${table}: the MQTT pattern`);
 }
 
 // --- Page ---------------------------------------------------------------------------------------------
@@ -77,6 +82,17 @@ for (const key of ['system_checking', 'system_update_available_fmt', 'system_ins
 assert.match(page, /settings_parts::section\(page, s\.settings_connection, false\)/);
 assert.match(page, /settings_parts::section\(page, s\.security_btn, false\)/);
 assert.match(rawBody, /settings_parts::row\(connection, "lan-connect", settings_style::kHomeAssistant/);
+// Under Home Assistant: the way to it (direct link or MQTT), kept current by
+// the tick; the panel's own address is on the WLAN page.
+assert.match(rawBody, /settings_model::bridge_route\(route, sizeof\(route\)\)/);
+assert.match(between(rawScreen, 'void system_tick() {', 'sync_dialog(v);'),
+  /settings_model::bridge_route\(route, sizeof\(route\)\)[\s\S]*lv_label_set_text\(g_route_label, route\)/);
+assert.match(model, /bool bridge_route\(char\* buf, size_t len\) \{[\s\S]*linkConfigured\(\)[\s\S]*settings_link_direct_fmt[\s\S]*mqtt_host[\s\S]*settings_link_mqtt_fmt/);
+// Paired over the direct link, the states are sealed too.
+assert.match(rawBody, /settings_model::link_active\(\) \? s\.settings_states_encrypted : s\.settings_commands_encrypted/);
+// The longer line scrolls back and forth like the media title (shared helper).
+assert.match(rawBody, /ui_text_scroll::apply\(r\.sub\);\s*good_state\(r\.row, s\.settings_paired/);
+assert.match(readRepoFile('src/ui/popups/media/media_popup.cpp'), /ui_text_scroll::apply\(ctx->media_title_label\);/);
 for (const key of ['settings_commands_encrypted', 'settings_paired', 'pairing_discoverable', 'settings_not_paired',
   'settings_pair', 'pairing_no_answer', 'pairing_rejected', 'settings_password_asks', 'security_state_on',
   'settings_set_password_now', 'settings_password_none', 'settings_allow']) {

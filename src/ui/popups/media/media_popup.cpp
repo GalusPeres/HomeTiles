@@ -29,6 +29,7 @@
 #include "src/ui/popups/popup_nav_style.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
+#include "src/ui/shared/text_scroll.h"
 
 // lvgl.h no longer exports lv_image_cache_drop() in 9.5; its declaration
 // is available only in the instance header.
@@ -149,27 +150,6 @@ static lv_image_dsc_t* clone_cover_dsc(const lv_image_dsc_t* src) {
   memcpy(clone, src, sizeof(lv_image_dsc_t));
   clone->data = data;
   return clone;
-}
-
-static const lv_anim_t* media_popup_text_scroll_anim() {
-  static lv_anim_t anim;
-  static bool initialized = false;
-  if (!initialized) {
-    lv_anim_init(&anim);
-    lv_anim_set_delay(&anim, 2000);
-    lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_set_repeat_delay(&anim, 2000);
-    lv_anim_set_reverse_delay(&anim, 2000);
-    lv_anim_set_path_cb(&anim, lv_anim_path_linear);
-    initialized = true;
-  }
-  return &anim;
-}
-
-static void apply_popup_scroll_style(lv_obj_t* label) {
-  if (!label) return;
-  lv_obj_set_style_anim(label, media_popup_text_scroll_anim(), LV_PART_MAIN);
-  lv_obj_set_style_anim_duration(label, lv_anim_speed_clamped(18, 300, 12000), LV_PART_MAIN);
 }
 
 static void update_cover(MediaPopupContext* ctx, const lv_image_dsc_t* cover_dsc, uint32_t cover_hash) {
@@ -701,16 +681,14 @@ void show_media_popup(const MediaPopupInit& init) {
   set_label_style(ctx->media_title_label, lv_color_white(), popup_layout::font32());
   lv_obj_set_width(ctx->media_title_label, text_width);
   lv_obj_set_style_text_align(ctx->media_title_label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(ctx->media_title_label, LV_LABEL_LONG_SCROLL);
-  apply_popup_scroll_style(ctx->media_title_label);
+  ui_text_scroll::apply(ctx->media_title_label);
   lv_obj_align(ctx->media_title_label, LV_ALIGN_TOP_MID, 0, kTitleTop);
 
   ctx->media_subtitle_label = lv_label_create(card);
   set_label_style(ctx->media_subtitle_label, lv_color_hex(0xD8DEE9), popup_layout::font24());
   lv_obj_set_width(ctx->media_subtitle_label, text_width);
   lv_obj_set_style_text_align(ctx->media_subtitle_label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_label_set_long_mode(ctx->media_subtitle_label, LV_LABEL_LONG_SCROLL);
-  apply_popup_scroll_style(ctx->media_subtitle_label);
+  ui_text_scroll::apply(ctx->media_subtitle_label);
   lv_obj_align_to(ctx->media_subtitle_label, ctx->media_title_label,
                   LV_ALIGN_OUT_BOTTOM_MID, 0, popup_layout::scale480(8));
 

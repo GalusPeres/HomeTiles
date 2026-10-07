@@ -9,6 +9,8 @@
 #include <nvs_flash.h>
 #include "src/core/config/config_manager.h"
 #include "src/network/bridge/ha_bridge_config.h"
+#include "src/network/network_manager.h"
+#include "src/network/secure/command_channel.h"
 #include "src/network/transport/network_transport.h"
 #include "src/network/transport/usb_ethernet_backend.h"
 #include "src/web/server/render/web_admin_scripts.h"
@@ -28,6 +30,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/ui/screensaver/screensaver_config.h"
+#include "src/ui/tabs/settings/settings_model.h"
 #include "src/video/local_camera/local_camera.h"
 #include "src/video/local_camera/local_camera_stream_contract.h"
 #include <cstring>
@@ -1406,6 +1409,683 @@ bool buildAdminFolderTabFragments(uint16_t folder_id, String& button_html, Strin
   return true;
 }
 
+// One entry of the Settings list: a colored icon disc, the title and an
+// optional line under it, like the category tiles of the panel's Settings.
+static void appendSettingsNavItem(String& html, const char* page, const char* color,
+                                  const char* icon, const String& title, const String& sub) {
+  html += R"html(
+          <button class="settings-nav-item" type="button" data-settings-page=")html";
+  html += page;
+  html += R"html(" style="--settings-color:)html";
+  html += color;
+  html += R"html("><span class="settings-nav-disc"><i class="mdi mdi-)html";
+  html += icon;
+  html += R"html("></i></span><span class="settings-nav-text"><span class="settings-nav-title">)html";
+  appendHtmlEscaped(html, title);
+  html += "</span>";
+  if (sub.length()) {
+    html += R"html(<span class="settings-nav-sub">)html";
+    appendHtmlEscaped(html, sub);
+    html += "</span>";
+  }
+  html += "</span></button>";
+}
+
+// A status row: icon, title, an optional line under it, and a value on the
+// right ("Connected", "Paired"), as on the panel's System page.
+static void appendSettingsStateRow(String& html, const char* icon, const String& title,
+                                   const String& sub, const String& value, const char* value_icon) {
+  html += R"html(
+              <div class="settings-state-row"><i class="mdi mdi-)html";
+  html += icon;
+  html += R"html( settings-state-icon"></i><div class="settings-state-text"><div class="settings-state-title">)html";
+  appendHtmlEscaped(html, title);
+  html += "</div>";
+  if (sub.length()) {
+    html += R"html(<div class="settings-state-sub">)html";
+    appendHtmlEscaped(html, sub);
+    html += "</div>";
+  }
+  html += "</div>";
+  if (value.length()) {
+    html += value_icon ? R"html(<div class="settings-state-value is-good">)html"
+                       : R"html(<div class="settings-state-value">)html";
+    appendHtmlEscaped(html, value);
+    if (value_icon) {
+      html += R"html(<i class="mdi mdi-)html";
+      html += value_icon;
+      html += R"html("></i>)html";
+    }
+    html += "</div>";
+  }
+  html += "</div>";
+}
+
+// The Settings tab, ordered like the panel's Settings (WLAN, Lokalisierung,
+// System), then the pages only the Web Admin has: I/O, the built-in camera,
+// files and diagnostics. The list on the left picks one page; the footer
+// under both carries that page's buttons (settings/pages.js). WLAN,
+// Lokalisierung and the MQTT fields share the /mqtt form, so every Save
+// stores them together as before.
+static void appendSettingsTabHtml(String& html, const DeviceConfig& cfg,
+                                  const i18n::Strings& tr, bool supports_ethernet,
+                                  bool use_static) {
+  const bool connected = networkTransport.isConnected();
+  const bool on_wifi = networkTransport.activeKind() == NetworkTransportKind::Wifi;
+  const bool camera = local_camera::supported() && Device::kCapabilities.has_builtin_camera;
+  const bool link = networkManager.linkConfigured();
+  const bool paired = command_channel::state() == command_channel::PairingState::Active;
+  const String network_title = supports_ethernet ? tr.settings_network : tr.wifi_label;
+  String network_name;
+  if (connected) network_name = on_wifi ? WiFi.SSID() : String(networkTransport.activeName());
+
+  html += R"html(
+      <div id="tab-network" class="tab-content">
+        <div class="settings-layout">
+        <nav class="settings-nav" aria-label=")html";
+  appendHtmlEscaped(html, tr.tile_type_settings);
+  html += R"html(">)html";
+  appendSettingsNavItem(html, "network", "#42A5F5",
+                        !connected ? "wifi-off" : on_wifi ? "wifi" : "ethernet", network_title,
+                        connected ? network_name : String(tr.settings_not_connected));
+  appendSettingsNavItem(html, "locale", "#AB47BC", "translate", tr.admin_settings_language,
+                        String(i18n::locale(cfg.language).native_name) + " \xC2\xB7 " + cfg.timezone);
+  appendSettingsNavItem(html, "system", "#26A69A", "chip", "System", FW_VERSION);
+  html += R"html(
+          <div class="settings-nav-sep" aria-hidden="true"></div>)html";
+  appendSettingsNavItem(html, "io", "#FF8A65", "electric-switch", tr.admin_io,
+                        String(tr.tile_type_switch) + " \xC2\xB7 " + tr.admin_io_temperature);
+  if (camera) {
+    appendSettingsNavItem(html, "camera", "#FFB300", "camera", tr.local_camera_section,
+                          localCameraStateText(local_camera::stateName(), tr));
+  }
+  appendSettingsNavItem(html, "files", "#78909C", "folder-open", tr.file_manager_title,
+                        String(tr.admin_export) + " \xC2\xB7 " + tr.admin_import + " \xC2\xB7 microSD");
+  appendSettingsNavItem(html, "diagnostics", "#9E9E9E", "stethoscope", tr.admin_settings_screenshot, "");
+  html += R"html(
+        </nav>
+        <div class="settings-pages">
+        <form id="admin_settings_form" class="settings-form" action="/mqtt" method="POST" autocomplete="on">
+          <section class="settings-page" data-settings-page="network">
+          <div class="settings-section">
+            <div class="section-title-row">
+              <div class="section-title">)html";
+  appendHtmlEscaped(html, network_title);
+  html += R"html(</div>
+              <div class="wifi-inline-status"><span class="wifi-inline-dot)html";
+  if (!connected) html += " off";
+  html += R"html("></span>)html";
+  html += connected ? tr.wifi_connected : tr.wifi_disconnected;
+  if (connected) {
+    html += " \xC2\xB7 ";
+    appendHtmlEscaped(html, network_name);
+    html += " \xC2\xB7 ";
+    html += networkTransport.localIP().toString();
+  }
+  html += R"html(</div>
+            </div>
+            <div class="settings-grid">)html";
+  if (supports_ethernet) {
+    html += R"html(
+              <div class="settings-full">
+                <label for="network_mode">)html";
+    html += tr.admin_connection_type;
+    html += R"html(:</label>
+                <select id="network_mode" name="network_mode" onchange="toggleNetworkSettings()">
+                  <option value="wifi")html";
+    if (!cfg.ethernet_enabled) html += " selected";
+    html += R"html(>WiFi</option>
+                  <option value="ethernet")html";
+    if (cfg.ethernet_enabled) html += " selected";
+    html += R"html(>Ethernet</option>
+                </select>
+                <div class="settings-note">)html";
+    html += tr.admin_connection_type_note;
+    html += R"html(</div>
+              </div>)html";
+  }
+  html += R"html(
+              <div id="wifi_network_settings" class="network-settings-group settings-full )html";
+  if (supports_ethernet && cfg.ethernet_enabled) html += "is-hidden";
+  html += R"html(">)html";
+  if (supports_ethernet) {
+    html += R"html(
+                <div class="network-settings-heading">WiFi</div>)html";
+  }
+  html += R"html(
+                <div class="settings-subgrid">
+                  <div>
+                <label for="wifi_ssid">)html";
+  html += tr.ssid_label;
+  html += R"html(:</label>
+                <input type="text" id="wifi_ssid" name="wifi_ssid" value=")html";
+  appendHtmlEscaped(html, cfg.wifi_ssid);
+  html += R"html(">
+                  </div>
+                  <div>
+                <label for="wifi_pass">)html";
+  html += tr.wifi_password_label;
+  html += R"html(:</label>
+                <div class="password-field">
+                  <input type="password" id="wifi_pass" name="wifi_pass"
+                         autocomplete="new-password" value=")html";
+  appendStoredSecretValue(html, cfg.wifi_pass, tr);
+  html += R"html(">
+                  <button type="button" class="password-toggle" data-label-show=")html";
+  html += tr.password_show;
+  html += R"html(" data-label-hide=")html";
+  html += tr.password_hide;
+  html += R"html(" onclick="togglePasswordVisibility('wifi_pass', this)">)html";
+  html += tr.password_show;
+  html += R"html(</button>
+                </div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="network_ip_settings" class="network-settings-group settings-full">
+                <div class="network-settings-heading">)html";
+  html += tr.admin_ip_configuration;
+  html += R"html(</div>
+                <label class="settings-checkbox">
+                  <input type="checkbox" id="network_use_static" name="network_use_static" onchange="toggleStaticNetworkFields()")html";
+  if (use_static) html += " checked";
+  html += R"html(>
+                  <span>)html";
+  html += tr.admin_ip_use_static;
+  html += R"html(</span>
+                </label>
+                <div id="network_ip_mode_note" class="settings-note"
+                     data-dhcp-note=")html";
+  html += tr.admin_ip_dhcp_note;
+  html += R"html(" data-static-note=")html";
+  html += tr.admin_ip_static_note;
+  html += R"html(">)html";
+  html += use_static ? tr.admin_ip_static_note : tr.admin_ip_dhcp_note;
+  html += R"html(</div>
+                <div id="network_static_fields" class="settings-subgrid )html";
+  if (!use_static) html += "is-hidden";
+  html += R"html(">
+                <div>
+                <label for="network_static_ip">)html";
+  html += tr.wifi_static_ip_label;
+  html += R"html(:</label>
+                <input type="text" id="network_static_ip" name="network_static_ip" inputmode="decimal" autocomplete="on" value=")html";
+  appendHtmlEscaped(html, cfg.wifi_static_ip);
+  html += R"html(">
+                </div>
+                <div>
+                <label for="network_gateway">)html";
+  html += tr.wifi_gateway_label;
+  html += R"html(:</label>
+                <input type="text" id="network_gateway" name="network_gateway" inputmode="decimal" autocomplete="on" value=")html";
+  appendHtmlEscaped(html, cfg.wifi_gateway);
+  html += R"html(">
+                </div>
+                <div>
+                <label for="network_subnet">)html";
+  html += tr.wifi_subnet_label;
+  html += R"html(:</label>
+                <input type="text" id="network_subnet" name="network_subnet" inputmode="decimal" autocomplete="on" value=")html";
+  appendHtmlEscaped(html, cfg.wifi_subnet);
+  html += R"html(">
+                </div>
+                <div>
+                <label for="network_dns">)html";
+  html += tr.wifi_dns_label;
+  html += R"html(:</label>
+                <input type="text" id="network_dns" name="network_dns" inputmode="decimal" autocomplete="on" value=")html";
+  appendHtmlEscaped(html, cfg.wifi_dns);
+  html += R"html(">
+                </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </section>
+
+          <section class="settings-page" data-settings-page="locale">
+          <div class="settings-section">
+            <div class="section-title">)html";
+  html += tr.admin_settings_language;
+  html += R"html(</div>
+            <div class="settings-grid">
+              <div>
+                <label for="language">)html";
+  html += tr.language_label;
+  html += R"html(</label>
+                <select id="language" name="language">)html";
+  html += i18n::build_language_options_html(cfg.language);
+  html += R"html(</select>
+              </div>
+              <div>
+                <label for="timezone">)html";
+  html += tr.timezone_label;
+  html += R"html(</label>
+                <select id="timezone" name="timezone">)html";
+  html += buildTimezoneOptionsHtml(cfg.timezone, i18n::locale(cfg.language));
+  html += R"html(</select>
+              </div>
+              <div>
+                <label for="locale_time_format">)html";
+  html += tr.time_format_label;
+  html += R"html(</label>
+                <select id="locale_time_format" name="locale_time_format">)html";
+  html += buildGlobalTimeFormatOptionsHtml(cfg.global_time_format, tr);
+  html += R"html(</select>
+              </div>
+              <div>
+                <label for="locale_date_format">)html";
+  html += tr.date_format_label;
+  html += R"html(</label>
+                <select id="locale_date_format" name="locale_date_format">)html";
+  html += buildGlobalDateFormatOptionsHtml(cfg.global_date_format, tr);
+  html += R"html(</select>
+              </div>
+            </div>
+          </div>
+          </section>
+
+          <section class="settings-page" data-settings-page="system">
+          <div class="settings-section">
+            <div class="settings-state-row settings-version-row">
+              <svg width="40" height="40" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="4" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
+                <rect x="27" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
+                <rect x="4" y="27" width="17" height="17" rx="4" fill="#ffffff"/>
+                <path d="M33 26h5v6.5h6.5v5H38V44h-5v-6.5h-6.5v-5H33z" fill="#26a69a"/>
+              </svg>
+              <div class="settings-state-text">
+                <div class="settings-state-title settings-version">HomeTiles <span>)html";
+  html += FW_VERSION;
+  html += R"html(</span></div>
+                <div class="settings-state-sub">)html";
+  appendHtmlEscaped(html, Device::displayName());
+  html += R"html(</div>
+              </div>
+              <button class="btn btn-go settings-row-btn" type="button" id="ota_github_btn" onclick="checkOrInstallGithubFirmware()"><i class="mdi mdi-magnify"></i> )html";
+  html += tr.system_check_updates_btn;
+  html += R"html(</button>
+            </div>
+            <div id="ota_github_status" class="settings-note ota-status"></div>
+            <div id="ota_github_progress" class="ota-progress is-hidden" aria-hidden="true">
+              <div id="ota_github_progress_bar" class="ota-progress-bar"></div>
+            </div>
+            <div class="settings-fw-file">
+              <span class="settings-note">)html";
+  html += tr.ota_firmware_file;
+  html += R"html(:</span>
+              <input type="file" id="ota_file" accept=".bin,application/octet-stream" style="display:none" onchange="updateOtaFileName(this)">
+              <button class="btn btn-secondary btn-inline" type="button" id="ota_choose_btn" onclick="document.getElementById('ota_file').click()">)html";
+  html += tr.ota_choose_file;
+  html += R"html(</button>
+              <button class="btn btn-go btn-inline" type="button" id="ota_upload_btn" onclick="uploadOtaFirmware()">)html";
+  html += tr.ota_upload_install;
+  html += R"html(</button>
+              <span id="ota_file_name" class="file-picker-name">)html";
+  html += tr.ota_no_file_selected;
+  html += R"html(</span>
+            </div>
+            <div id="ota_status" class="settings-note ota-status"></div>
+            <div id="ota_progress" class="ota-progress is-hidden" aria-hidden="true">
+              <div id="ota_progress_bar" class="ota-progress-bar"></div>
+            </div>
+            <div class="settings-note">)html";
+  html += tr.ota_update_note;
+  html += R"html(</div>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">)html";
+  html += tr.settings_connection;
+  html += R"html(</div>)html";
+  char route[96];
+  const bool has_route = settings_model::bridge_route(route, sizeof(route));
+  const bool ha_connected = networkManager.isMqttConnected();
+  appendSettingsStateRow(html, "lan-connect", "Home Assistant", has_route ? String(route) : String(),
+                         ha_connected ? tr.security_value_connected : tr.settings_not_connected,
+                         ha_connected ? "check" : nullptr);
+  // MQTT stays reachable, folded into one row; on the direct link its fields
+  // are kept but not used.
+  String mqtt_line;
+  if (link) {
+    mqtt_line = tr.settings_mqtt_unused;
+  } else if (cfg.mqtt_host[0]) {
+    mqtt_line = String(cfg.mqtt_host) + ":" + String(cfg.mqtt_port ? cfg.mqtt_port : 1883);
+  } else {
+    mqtt_line = tr.mqtt_not_configured;
+  }
+  html += R"html(
+              <details class="settings-fold" id="mqtt_settings">
+                <summary><i class="mdi mdi-access-point-network settings-state-icon"></i><span class="settings-state-text"><span class="settings-state-title">MQTT</span><span class="settings-state-sub">)html";
+  appendHtmlEscaped(html, mqtt_line);
+  html += R"html(</span></span><i class="mdi mdi-chevron-right settings-fold-chev"></i></summary>
+                <div class="settings-fold-body">)html";
+  if (link) {
+    html += R"html(
+                  <div class="settings-note settings-fold-note">)html";
+    appendHtmlEscaped(html, tr.settings_mqtt_unused_note);
+    html += "</div>";
+  }
+  html += R"html(
+                  <div class="settings-grid">
+                    <div>
+                      <label for="mqtt_host">)html";
+  html += tr.mqtt_host;
+  html += R"html(:</label>
+                      <input type="text" id="mqtt_host" name="mqtt_host" value=")html";
+  appendHtmlEscaped(html, cfg.mqtt_host);
+  html += R"html(">
+                    </div>
+                    <div>
+                      <label for="mqtt_port">)html";
+  html += tr.mqtt_port;
+  html += R"html(:</label>
+                      <input type="number" id="mqtt_port" name="mqtt_port" value=")html";
+  html += String(cfg.mqtt_port ? cfg.mqtt_port : 1883);
+  html += R"html(">
+                    </div>
+                    <div>
+                      <label for="mqtt_user">)html";
+  html += tr.mqtt_username;
+  html += R"html(:</label>
+                      <input type="text" id="mqtt_user" name="mqtt_user" value=")html";
+  appendHtmlEscaped(html, cfg.mqtt_user);
+  html += R"html(">
+                    </div>
+                    <div>
+                      <label for="mqtt_pass">)html";
+  html += tr.mqtt_password;
+  html += R"html(:</label>
+                      <div class="password-field">
+                        <input type="password" id="mqtt_pass" name="mqtt_pass"
+                               autocomplete="new-password" value=")html";
+  appendStoredSecretValue(html, cfg.mqtt_pass, tr);
+  html += R"html(">
+                        <button type="button" class="password-toggle" data-label-show=")html";
+  html += tr.password_show;
+  html += R"html(" data-label-hide=")html";
+  html += tr.password_hide;
+  html += R"html(" onclick="togglePasswordVisibility('mqtt_pass', this)">)html";
+  html += tr.password_show;
+  html += R"html(</button>
+                      </div>
+                    </div>
+                    <div class="settings-full">
+                      <label for="mqtt_client_id">)html";
+  html += tr.mqtt_client_id;
+  html += R"html(:</label>
+                      <input type="text" id="mqtt_client_id" name="mqtt_client_id" placeholder=")html";
+  html += tr.mqtt_client_id_placeholder;
+  html += R"html(" value=")html";
+  appendHtmlEscaped(html, cfg.mqtt_client_id);
+  html += R"html(">
+                      <div class="settings-note">)html";
+  html += tr.mqtt_client_id_hint;
+  html += R"html(</div>
+                    </div>
+                    <div>
+                      <label for="mqtt_base">)html";
+  html += tr.mqtt_base_topic;
+  html += R"html(:</label>
+                      <input type="text" id="mqtt_base" name="mqtt_base" value=")html";
+  appendHtmlEscaped(html, cfg.mqtt_base_topic);
+  html += R"html(">
+                    </div>
+                    <div>
+                      <label for="ha_prefix">)html";
+  html += tr.ha_prefix;
+  html += R"html(:</label>
+                      <input type="text" id="ha_prefix" name="ha_prefix" value=")html";
+  appendHtmlEscaped(html, cfg.ha_prefix);
+  html += R"html(">
+                    </div>
+                  </div>
+                  <div class="settings-fold-actions">
+                    <button class="btn btn-go" type="submit" form="admin_settings_form">)html";
+  html += tr.save;
+  html += R"html(</button>
+                  </div>
+                </div>
+              </details>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">)html";
+  html += tr.security_btn;
+  html += R"html(</div>)html";
+  appendSettingsStateRow(html, paired ? "link-variant" : "link-variant-off", tr.settings_pairing,
+                         !paired ? tr.settings_not_paired
+                         : link  ? tr.settings_states_encrypted
+                                 : tr.settings_commands_encrypted,
+                         paired ? tr.settings_paired : "", paired ? "shield-check" : nullptr);
+  // The Web Admin password row folds out its fields (web_admin_security_html.cpp).
+  appendWebAdminPasswordSettingsHtml(html, tr);
+  html += R"html(
+          </div>
+          </section>
+        </form>
+
+          <!-- Local GPIO / relay / temperature assignments -->
+          <section class="settings-page settings-page-io" data-settings-page="io">
+          <div class="hardware-io-content">
+            <div class="settings-actions hardware-io-toolbar">
+              <button id="hardwareIoAddSwitch" class="btn btn-secondary hardware-io-add-button" type="button">+ )html";
+  html += tr.tile_type_switch;
+  html += R"html(</button>
+              <button id="hardwareIoAddTemperature" class="btn btn-secondary hardware-io-add-button" type="button">+ )html";
+  html += tr.admin_io_temperature;
+  html += R"html(</button>
+            </div>
+            <div id="hardwareIoList" class="hardware-io-list">
+              <div class="hardware-io-loading">)html";
+  html += tr.loading;
+  html += R"html(</div>
+            </div>
+          </div>
+          </section>
+)html";
+
+  if (camera) {
+    html += R"html(
+          <section class="settings-page" data-settings-page="camera">)html";
+    appendLocalCameraSettingsHtml(html, tr);
+    html += R"html(
+          </section>
+)html";
+  }
+
+  html += R"html(
+          <section class="settings-page" data-settings-page="files">
+          <div class="settings-section">
+            <div class="section-title">)html";
+  html += tr.admin_import_export;
+  html += R"html(</div>
+            <div class="settings-grid">
+              <div class="settings-full">
+                <div class="settings-actions">
+                  <button type="button" class="btn" onclick="exportTilesConfig()">)html";
+  html += tr.admin_export;
+  html += R"html(</button>
+                  <input type="file" id="settings_tile_import" accept="application/json" style="display:none" onchange="importTilesConfig('settings', this.files)">
+                  <button type="button" class="btn" onclick="triggerTilesImport('settings')">)html";
+  html += tr.admin_import;
+  html += R"html(</button>
+                </div>
+                <div class="settings-note">)html";
+  html += tr.admin_import_overwrite;
+  html += R"html(</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="section-title">)html";
+  html += tr.file_manager_title;
+  html += R"html(</div>
+            <div class="settings-grid file-manager">
+              <div class="settings-full">
+                <div class="file-manager-topbar">
+                  <span id="file_manager_sd_state" class="file-manager-storage-state">)html";
+  html += tr.file_manager_checking;
+  html += R"html(</span>
+                  <div class="file-manager-toolbar-group">
+                    <button class="btn btn-secondary file-manager-toolbar-btn" type="button" onclick="loadFileManager()">)html";
+  html += tr.file_manager_refresh;
+  html += R"html(</button>
+                    <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="createFileManagerFolder()" disabled>)html";
+  html += tr.file_manager_new_folder;
+  html += R"html(</button>
+                  </div>
+                </div>
+                <div class="file-manager-upload-row">
+                  <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="document.getElementById('file_manager_upload').click()" disabled>)html";
+  html += tr.file_manager_choose_files;
+  html += R"html(</button>
+                  <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="uploadFileManagerFile()" disabled>)html";
+  html += tr.file_manager_upload;
+  html += R"html(</button>
+                  <span id="file_manager_upload_name" class="file-picker-name">)html";
+  html += tr.ota_no_file_selected;
+  html += R"html(</span>
+                </div>
+                <input type="file" id="file_manager_upload" multiple style="display:none" onchange="updateFileManagerUploadName(this)">
+                <div class="file-manager-selection-bar">
+                  <div id="file_manager_selection" class="file-manager-selection-info">)html";
+  html += tr.file_manager_no_selection;
+  html += R"html(</div>
+                  <div class="file-manager-selection-actions">
+                    <button class="btn btn-secondary file-manager-selection-btn" id="file_manager_primary_btn" type="button" onclick="openSelectedFileManagerEntry()" disabled>)html";
+  html += tr.file_manager_open;
+  html += R"html(</button>
+                    <button class="btn btn-secondary file-manager-selection-btn" id="file_manager_rename_btn" type="button" onclick="renameSelectedFileManagerEntry()" disabled>)html";
+  html += tr.file_manager_rename;
+  html += R"html(</button>
+                    <button class="btn btn-danger file-manager-selection-btn" id="file_manager_delete_btn" type="button" onclick="deleteSelectedFileManagerEntry()" disabled>)html";
+  html += tr.admin_delete;
+  html += R"html(</button>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-full">
+                <div id="file_manager_breadcrumb" class="file-manager-breadcrumb"></div>
+                <div class="file-manager-table-wrap">
+                  <table class="file-manager-table">
+                    <thead>
+                      <tr>
+                        <th>)html";
+  html += tr.file_manager_name;
+  html += R"html(</th>
+                        <th>)html";
+  html += tr.file_manager_modified;
+  html += R"html(</th>
+                        <th>)html";
+  html += tr.file_manager_size;
+  html += R"html(</th>
+                      </tr>
+                    </thead>
+                    <tbody id="file_manager_entries">
+                      <tr><td colspan="3">)html";
+  html += tr.file_manager_not_loaded;
+  html += R"html(</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div id="file_manager_status" class="settings-note file-manager-status"></div>
+              </div>
+            </div>
+          </div>
+          </section>
+
+          <section class="settings-page" data-settings-page="diagnostics">
+          <div class="settings-section">
+            <div class="section-title">)html";
+  html += tr.admin_settings_screenshot;
+  html += R"html(</div>
+            <div class="settings-grid">
+              <div class="settings-full">
+                <div class="settings-actions">
+                  <button class="btn" type="button" onclick="createScreenshotAndDownload()">)html";
+  html += tr.screenshot_create_download;
+  html += R"html(</button>
+                  <button class="btn btn-secondary" type="button" onclick="downloadCrashLog()">)html";
+  html += tr.crash_log_download;
+  html += R"html(</button>
+                  <button class="btn btn-secondary" type="button" onclick="window.open('/api/sd-diagnostics?ts=' + Date.now(), '_blank')">)html";
+  html += tr.sd_diagnostics_open;
+  html += R"html(</button>
+                </div>
+                <div class="settings-note">)html";
+  html += tr.screenshot_saved_note;
+  html += R"html(</div>)html";
+
+  // Offer the core dump only when its partition contains one. The panic
+  // handler writes it automatically; see src/core/diagnostics/crash_log.h.
+  // The separate crashlog.txt download above reads LittleFS, whereas the file
+  // manager exposes only the microSD card.
+  if (CrashLog::hasCoreDump()) {
+    const String summary = CrashLog::coreDumpSummaryLine();
+    html += R"html(
+                <div class="settings-note"><strong>)html";
+    html += tr.coredump_stored;
+    html += R"html(:</strong></div>)html";
+    if (summary.length()) {
+      html += R"html(
+                <div class="settings-note ota-version-value">)html";
+      html += summary;
+      html += R"html(</div>)html";
+    }
+    html += R"html(
+                <div class="settings-actions" id="coredump_actions">
+                  <button class="btn btn-secondary" type="button" onclick="window.location.href='/api/coredump'">)html";
+    html += tr.coredump_download;
+    html += R"html(</button>
+                  <button class="btn btn-secondary" type="button" onclick="eraseCoreDump()">)html";
+    html += tr.coredump_delete;
+    html += R"html(</button>
+                </div>
+                <div class="settings-note">)html";
+    html += tr.coredump_decode_note;
+    html += R"html(</div>)html";
+  }
+
+  html += R"html(
+              </div>
+            </div>
+          </div>
+          </section>
+        </div>
+        </div>
+
+        <form id="admin_restart_form" action="/restart" method="POST" class="admin-hidden-form" data-confirm=")html";
+  appendHtmlEscaped(html, tr.restart_confirm);
+  html += R"html(" onsubmit="return confirm(this.dataset.confirm);"></form>
+        <!-- One footer under the list and the page, across the full width; its
+             buttons follow the chosen page. Pages that act at once have none. -->
+        <div class="admin-footer-actions settings-foot" id="settingsFoot">
+          <div class="settings-foot-set" data-settings-foot="network"><button class="btn btn-go admin-footer-btn" type="submit" form="admin_settings_form">)html";
+  html += tr.save;
+  html += R"html(</button></div>
+          <div class="settings-foot-set" data-settings-foot="locale"><button class="btn btn-go admin-footer-btn" type="submit" form="admin_settings_form">)html";
+  html += tr.save;
+  html += R"html(</button></div>
+          <div class="settings-foot-set" data-settings-foot="system"><button class="btn btn-secondary admin-footer-btn" type="submit" form="admin_restart_form">)html";
+  html += tr.restart_button;
+  html += R"html(</button></div>
+          <div class="settings-foot-set" data-settings-foot="io">
+            <div id="hardwareIoSaveState" class="hardware-io-save-state"></div>
+            <button id="hardwareIoSave" class="btn btn-go admin-footer-btn" type="button">)html";
+  html += tr.save;
+  html += R"html(</button>
+            <button id="hardwareIoRestart" class="btn btn-secondary admin-footer-btn" type="button">)html";
+  html += tr.restart_button;
+  html += R"html(</button>
+          </div>
+        </div>
+      </div>
+)html";
+}
+
 String WebAdminServer::getAdminPage() {
   const DeviceConfig& cfg = configManager.getConfig();
   const auto& tr = i18n::strings(cfg.language);
@@ -1417,8 +2097,6 @@ String WebAdminServer::getAdminPage() {
   const String admin_heading_title = String("HomeTiles ") + tr.admin_panel_word;
   const String admin_heading_subtitle =
       String(FW_VERSION) + "  \xC2\xB7  " + Device::displayName();
-  const String current_firmware_name =
-      String("hometiles_") + FW_VERSION + "_" + Device::profile().key;
   auto formatSensorValue = [](const String& raw, uint8_t decimals) -> String {
     String v = raw;
     v.trim();
@@ -1523,7 +2201,7 @@ String WebAdminServer::getAdminPage() {
   html += R"html( <a class="brand-coffee" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener"><i class="mdi mdi-coffee"></i>Buy Me a Coffee</a></div>
         </div>
       </div>
-      
+
       <!-- Tab Navigation -->
       <div class="tab-nav">
 )html";
@@ -1564,13 +2242,6 @@ String WebAdminServer::getAdminPage() {
           <span class="tab-disc"><i class="mdi mdi-monitor"></i></span>
           <span class="tab-label">Screensaver</span>
         </button>
-        <button class="tab-btn" type="button" data-tab-target="tab-hardware"
-                onclick="switchTab('tab-hardware')">
-          <span class="tab-disc"><i class="mdi mdi-electric-switch"></i></span>
-          <span class="tab-label">)html";
-  html += tr.admin_io;
-  html += R"html(</span>
-        </button>
         <button class="tab-btn" type="button" data-tab-target="tab-network"
                 onclick="switchTab('tab-network')">
           <span class="tab-disc"><i class="mdi mdi-cog"></i></span>
@@ -1603,529 +2274,8 @@ String WebAdminServer::getAdminPage() {
                     screensaver_folder, screensaverConfig.tileGrid(),
                     formatSensorValue, navigateOptionsHtml, true);
 
+  appendSettingsTabHtml(html, cfg, tr, supports_ethernet, use_static);
   html += R"html(
-      <!-- Local GPIO / relay / temperature assignments -->
-      <div id="tab-hardware" class="tab-content">
-        <div class="hardware-io-content">
-          <div class="settings-actions hardware-io-toolbar">
-            <button id="hardwareIoAddSwitch" class="btn btn-secondary hardware-io-add-button" type="button">+ )html";
-  html += tr.tile_type_switch;
-  html += R"html(</button>
-            <button id="hardwareIoAddTemperature" class="btn btn-secondary hardware-io-add-button" type="button">+ )html";
-  html += tr.admin_io_temperature;
-  html += R"html(</button>
-          </div>
-          <div id="hardwareIoList" class="hardware-io-list">
-            <div class="hardware-io-loading">)html";
-  html += tr.loading;
-  html += R"html(</div>
-          </div>
-          <div class="admin-footer-actions hardware-io-footer">
-            <div id="hardwareIoSaveState" class="hardware-io-save-state"></div>
-            <button id="hardwareIoSave" class="btn btn-go admin-footer-btn" type="button">)html";
-  html += tr.save;
-  html += R"html(</button>
-            <button id="hardwareIoRestart" class="btn btn-secondary admin-footer-btn" type="button">)html";
-  html += tr.restart_button;
-  html += R"html(</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab 3: Settings (Network/MQTT Configuration) -->
-      <div id="tab-network" class="tab-content">
-        <form id="admin_settings_form" action="/mqtt" method="POST" autocomplete="on">)html";
-  // The Web Admin password comes first, above the network settings.
-  appendWebAdminPasswordSettingsHtml(html, tr);
-  html += R"html(
-          <div class="settings-section">
-            <div class="section-title-row">
-              <div class="section-title">)html";
-  html += supports_ethernet
-              ? tr.admin_network_section
-              : tr.admin_settings_wifi;
-  html += R"html(</div>
-              <div class="wifi-inline-status"><span class="wifi-inline-dot)html";
-  if (!networkTransport.isConnected()) {
-    html += " off";
-  }
-  html += R"html("></span>)html";
-  html += networkTransport.isConnected() ? tr.wifi_connected : tr.wifi_disconnected;
-  if (networkTransport.isConnected()) {
-    html += " \xC2\xB7 ";
-    if (networkTransport.activeKind() == NetworkTransportKind::Wifi) {
-      appendHtmlEscaped(html, WiFi.SSID());
-    } else {
-      appendHtmlEscaped(html, networkTransport.activeName());
-    }
-    html += " \xC2\xB7 ";
-    html += networkTransport.localIP().toString();
-  }
-  html += R"html(</div>
-            </div>
-            <div class="settings-grid">)html";
-  if (supports_ethernet) {
-    html += R"html(
-              <div class="settings-full">
-                <label for="network_mode">)html";
-    html += tr.admin_connection_type;
-    html += R"html(:</label>
-                <select id="network_mode" name="network_mode" onchange="toggleNetworkSettings()">
-                  <option value="wifi")html";
-    if (!cfg.ethernet_enabled) {
-      html += " selected";
-    }
-    html += R"html(>WiFi</option>
-                  <option value="ethernet")html";
-    if (cfg.ethernet_enabled) {
-      html += " selected";
-    }
-    html += R"html(>Ethernet</option>
-                </select>
-                <div class="settings-note">)html";
-    html += tr.admin_connection_type_note;
-    html += R"html(</div>
-              </div>)html";
-  }
-  html += R"html(
-              <div id="wifi_network_settings" class="network-settings-group settings-full )html";
-  if (supports_ethernet && cfg.ethernet_enabled) {
-    html += "is-hidden";
-  }
-  html += R"html(">)html";
-  if (supports_ethernet) {
-    html += R"html(
-                <div class="network-settings-heading">WiFi</div>)html";
-  }
-  html += R"html(
-                <div class="settings-subgrid">
-                  <div>
-                <label for="wifi_ssid">)html";
-  html += tr.ssid_label;
-  html += R"html(:</label>
-                <input type="text" id="wifi_ssid" name="wifi_ssid" value=")html";
-  appendHtmlEscaped(html, cfg.wifi_ssid);
-  html += R"html(">
-                  </div>
-                  <div>
-                <label for="wifi_pass">)html";
-  html += tr.wifi_password_label;
-  html += R"html(:</label>
-                <div class="password-field">
-                  <input type="password" id="wifi_pass" name="wifi_pass"
-                         autocomplete="new-password" value=")html";
-  appendStoredSecretValue(html, cfg.wifi_pass, tr);
-  html += R"html(">
-                  <button type="button" class="password-toggle" data-label-show=")html";
-  html += tr.password_show;
-  html += R"html(" data-label-hide=")html";
-  html += tr.password_hide;
-  html += R"html(" onclick="togglePasswordVisibility('wifi_pass', this)">)html";
-  html += tr.password_show;
-  html += R"html(</button>
-                </div>
-                  </div>
-                </div>
-              </div>
-
-              <div id="network_ip_settings" class="network-settings-group settings-full">
-                <div class="network-settings-heading">)html";
-  html += tr.admin_ip_configuration;
-  html += R"html(</div>
-                <label class="settings-checkbox">
-                  <input type="checkbox" id="network_use_static" name="network_use_static" onchange="toggleStaticNetworkFields()")html";
-  if (use_static) html += " checked";
-  html += R"html(>
-                  <span>)html";
-  html += tr.admin_ip_use_static;
-  html += R"html(</span>
-                </label>
-                <div id="network_ip_mode_note" class="settings-note"
-                     data-dhcp-note=")html";
-  html += tr.admin_ip_dhcp_note;
-  html += R"html(" data-static-note=")html";
-  html += tr.admin_ip_static_note;
-  html += R"html(">)html";
-  html += use_static ? tr.admin_ip_static_note : tr.admin_ip_dhcp_note;
-  html += R"html(</div>
-                <div id="network_static_fields" class="settings-subgrid )html";
-  if (!use_static) {
-    html += "is-hidden";
-  }
-  html += R"html(">
-                <div>
-                <label for="network_static_ip">)html";
-  html += tr.wifi_static_ip_label;
-  html += R"html(:</label>
-                <input type="text" id="network_static_ip" name="network_static_ip" inputmode="decimal" autocomplete="on" value=")html";
-  appendHtmlEscaped(html, cfg.wifi_static_ip);
-  html += R"html(">
-                </div>
-                <div>
-                <label for="network_gateway">)html";
-  html += tr.wifi_gateway_label;
-  html += R"html(:</label>
-                <input type="text" id="network_gateway" name="network_gateway" inputmode="decimal" autocomplete="on" value=")html";
-  appendHtmlEscaped(html, cfg.wifi_gateway);
-  html += R"html(">
-                </div>
-                <div>
-                <label for="network_subnet">)html";
-  html += tr.wifi_subnet_label;
-  html += R"html(:</label>
-                <input type="text" id="network_subnet" name="network_subnet" inputmode="decimal" autocomplete="on" value=")html";
-  appendHtmlEscaped(html, cfg.wifi_subnet);
-  html += R"html(">
-                </div>
-                <div>
-                <label for="network_dns">)html";
-  html += tr.wifi_dns_label;
-  html += R"html(:</label>
-                <input type="text" id="network_dns" name="network_dns" inputmode="decimal" autocomplete="on" value=")html";
-  appendHtmlEscaped(html, cfg.wifi_dns);
-  html += R"html(">
-                </div>
-                </div>
-              </div>)html";
-  html += R"html(
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <div class="section-title">)html";
-  html += tr.admin_settings_mqtt;
-  html += R"html(</div>
-            <div class="settings-grid">
-              <div>
-                <label for="mqtt_host">)html";
-  html += tr.mqtt_host;
-  html += R"html(:</label>
-                <input type="text" id="mqtt_host" name="mqtt_host" value=")html";
-  appendHtmlEscaped(html, cfg.mqtt_host);
-  html += R"html(">
-              </div>
-              <div>
-                <label for="mqtt_port">)html";
-  html += tr.mqtt_port;
-  html += R"html(:</label>
-                <input type="number" id="mqtt_port" name="mqtt_port" value=")html";
-  html += String(cfg.mqtt_port ? cfg.mqtt_port : 1883);
-  html += R"html(">
-              </div>
-              <div>
-                <label for="mqtt_user">)html";
-  html += tr.mqtt_username;
-  html += R"html(:</label>
-                <input type="text" id="mqtt_user" name="mqtt_user" value=")html";
-  appendHtmlEscaped(html, cfg.mqtt_user);
-  html += R"html(">
-              </div>
-              <div>
-                <label for="mqtt_pass">)html";
-  html += tr.mqtt_password;
-  html += R"html(:</label>
-                <div class="password-field">
-                  <input type="password" id="mqtt_pass" name="mqtt_pass"
-                         autocomplete="new-password" value=")html";
-  appendStoredSecretValue(html, cfg.mqtt_pass, tr);
-  html += R"html(">
-                  <button type="button" class="password-toggle" data-label-show=")html";
-  html += tr.password_show;
-  html += R"html(" data-label-hide=")html";
-  html += tr.password_hide;
-  html += R"html(" onclick="togglePasswordVisibility('mqtt_pass', this)">)html";
-  html += tr.password_show;
-  html += R"html(</button>
-                </div>
-              </div>
-              <div class="settings-full">
-                <label for="mqtt_client_id">)html";
-  html += tr.mqtt_client_id;
-  html += R"html(:</label>
-                <input type="text" id="mqtt_client_id" name="mqtt_client_id" placeholder=")html";
-  html += tr.mqtt_client_id_placeholder;
-  html += R"html(" value=")html";
-  appendHtmlEscaped(html, cfg.mqtt_client_id);
-  html += R"html(">
-                <div class="settings-note">)html";
-  html += tr.mqtt_client_id_hint;
-  html += R"html(</div>
-              </div>
-              <div>
-                <label for="mqtt_base">)html";
-  html += tr.mqtt_base_topic;
-  html += R"html(:</label>
-                <input type="text" id="mqtt_base" name="mqtt_base" value=")html";
-  appendHtmlEscaped(html, cfg.mqtt_base_topic);
-  html += R"html(">
-              </div>
-              <div>
-                <label for="ha_prefix">)html";
-  html += tr.ha_prefix;
-  html += R"html(:</label>
-                <input type="text" id="ha_prefix" name="ha_prefix" value=")html";
-  appendHtmlEscaped(html, cfg.ha_prefix);
-  html += R"html(">
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <div class="section-title">)html";
-  html += tr.admin_settings_language;
-  html += R"html(</div>
-            <div class="settings-grid">
-              <div>
-                <label for="language">)html";
-  html += tr.language_label;
-  html += R"html(</label>
-                <select id="language" name="language">)html";
-  html += i18n::build_language_options_html(cfg.language);
-  html += R"html(</select>
-              </div>
-              <div>
-                <label for="timezone">)html";
-  html += tr.timezone_label;
-  html += R"html(</label>
-                <select id="timezone" name="timezone">)html";
-  html += buildTimezoneOptionsHtml(cfg.timezone, i18n::locale(cfg.language));
-  html += R"html(</select>
-              </div>
-              <div>
-                <label for="locale_time_format">)html";
-  html += tr.time_format_label;
-  html += R"html(</label>
-                <select id="locale_time_format" name="locale_time_format">)html";
-  html += buildGlobalTimeFormatOptionsHtml(cfg.global_time_format, tr);
-  html += R"html(</select>
-              </div>
-              <div>
-                <label for="locale_date_format">)html";
-  html += tr.date_format_label;
-  html += R"html(</label>
-                <select id="locale_date_format" name="locale_date_format">)html";
-  html += buildGlobalDateFormatOptionsHtml(cfg.global_date_format, tr);
-  html += R"html(</select>
-              </div>
-            </div>
-          </div>
-
-)html";
-  appendLocalCameraSettingsHtml(html, tr);
-  html += R"html(
-          <div class="settings-section">
-            <div class="section-title">)html";
-  html += tr.admin_settings_screenshot;
-  html += R"html(</div>
-            <div class="settings-grid">
-              <div class="settings-full">
-                <div class="settings-actions">
-                  <button class="btn" type="button" onclick="createScreenshotAndDownload()">)html";
-  html += tr.screenshot_create_download;
-  html += R"html(</button>
-                  <button class="btn btn-secondary" type="button" onclick="downloadCrashLog()">)html";
-  html += tr.crash_log_download;
-  html += R"html(</button>
-)html";
-  html += R"html(                  <button class="btn btn-secondary" type="button" onclick="window.open('/api/sd-diagnostics?ts=' + Date.now(), '_blank')">)html";
-  html += tr.sd_diagnostics_open;
-  html += R"html(</button>
-)html";
-  html += R"html(
-                </div>
-                <div class="settings-note">)html";
-  html += tr.screenshot_saved_note;
-  html += R"html(</div>)html";
-
-  // Offer the core dump only when its partition contains one. The panic
-  // handler writes it automatically; see src/core/diagnostics/crash_log.h.
-  // The separate crashlog.txt download above reads LittleFS, whereas the file
-  // manager exposes only the microSD card.
-  if (CrashLog::hasCoreDump()) {
-    const String summary = CrashLog::coreDumpSummaryLine();
-    html += R"html(
-                <div class="settings-note"><strong>)html";
-    html += tr.coredump_stored;
-    html += R"html(:</strong></div>)html";
-    if (summary.length()) {
-      html += R"html(
-                <div class="settings-note ota-version-value">)html";
-      html += summary;
-      html += R"html(</div>)html";
-    }
-    html += R"html(
-                <div class="settings-actions" id="coredump_actions">
-                  <button class="btn btn-secondary" type="button" onclick="window.location.href='/api/coredump'">)html";
-    html += tr.coredump_download;
-    html += R"html(</button>
-                  <button class="btn btn-secondary" type="button" onclick="eraseCoreDump()">)html";
-    html += tr.coredump_delete;
-    html += R"html(</button>
-                </div>
-                <div class="settings-note">)html";
-    html += tr.coredump_decode_note;
-    html += R"html(</div>)html";
-  }
-
-  html += R"html(
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <div class="section-title">)html";
-  html += tr.file_manager_title;
-  html += R"html(</div>
-            <div class="settings-grid file-manager">
-              <div class="settings-full">
-                <div class="file-manager-topbar">
-                  <span id="file_manager_sd_state" class="file-manager-storage-state">)html";
-  html += tr.file_manager_checking;
-  html += R"html(</span>
-                  <div class="file-manager-toolbar-group">
-                    <button class="btn btn-secondary file-manager-toolbar-btn" type="button" onclick="loadFileManager()">)html";
-  html += tr.file_manager_refresh;
-  html += R"html(</button>
-                    <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="createFileManagerFolder()" disabled>)html";
-  html += tr.file_manager_new_folder;
-  html += R"html(</button>
-                  </div>
-                </div>
-                <div class="file-manager-upload-row">
-                  <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="document.getElementById('file_manager_upload').click()" disabled>)html";
-  html += tr.file_manager_choose_files;
-  html += R"html(</button>
-                  <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="uploadFileManagerFile()" disabled>)html";
-  html += tr.file_manager_upload;
-  html += R"html(</button>
-                  <span id="file_manager_upload_name" class="file-picker-name">)html";
-  html += tr.ota_no_file_selected;
-  html += R"html(</span>
-                </div>
-                <input type="file" id="file_manager_upload" multiple style="display:none" onchange="updateFileManagerUploadName(this)">
-                <div class="file-manager-selection-bar">
-                  <div id="file_manager_selection" class="file-manager-selection-info">)html";
-  html += tr.file_manager_no_selection;
-  html += R"html(</div>
-                  <div class="file-manager-selection-actions">
-                    <button class="btn btn-secondary file-manager-selection-btn" id="file_manager_primary_btn" type="button" onclick="openSelectedFileManagerEntry()" disabled>)html";
-  html += tr.file_manager_open;
-  html += R"html(</button>
-                    <button class="btn btn-secondary file-manager-selection-btn" id="file_manager_rename_btn" type="button" onclick="renameSelectedFileManagerEntry()" disabled>)html";
-  html += tr.file_manager_rename;
-  html += R"html(</button>
-                    <button class="btn btn-danger file-manager-selection-btn" id="file_manager_delete_btn" type="button" onclick="deleteSelectedFileManagerEntry()" disabled>)html";
-  html += tr.admin_delete;
-  html += R"html(</button>
-                  </div>
-                </div>
-              </div>
-              <div class="settings-full">
-                <div id="file_manager_breadcrumb" class="file-manager-breadcrumb"></div>
-                <div class="file-manager-table-wrap">
-                  <table class="file-manager-table">
-                    <thead>
-                      <tr>
-                        <th>)html";
-  html += tr.file_manager_name;
-  html += R"html(</th>
-                        <th>)html";
-  html += tr.file_manager_modified;
-  html += R"html(</th>
-                        <th>)html";
-  html += tr.file_manager_size;
-  html += R"html(</th>
-                      </tr>
-                    </thead>
-                    <tbody id="file_manager_entries">
-                      <tr><td colspan="3">)html";
-  html += tr.file_manager_not_loaded;
-  html += R"html(</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div id="file_manager_status" class="settings-note file-manager-status"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <div class="section-title">)html";
-  html += tr.admin_import_export;
-  html += R"html(</div>
-            <div class="settings-grid">
-              <div class="settings-full">
-                <div class="settings-actions">
-                  <button type="button" class="btn" onclick="exportTilesConfig()">)html";
-  html += tr.admin_export;
-  html += R"html(</button>
-                  <input type="file" id="settings_tile_import" accept="application/json" style="display:none" onchange="importTilesConfig('settings', this.files)">
-                  <button type="button" class="btn" onclick="triggerTilesImport('settings')">)html";
-  html += tr.admin_import;
-  html += R"html(</button>
-                </div>
-                <div class="settings-note">)html";
-  html += tr.admin_import_overwrite;
-  html += R"html(</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <div class="section-title">)html";
-  html += tr.admin_settings_ota;
-  html += R"html(</div>
-            <div class="settings-grid">
-              <div class="settings-full">
-                <div class="settings-note"><strong>)html";
-  html += tr.ota_current_version;
-  html += R"html(:</strong></div>
-                <div class="settings-note ota-version-value">)html";
-  html += current_firmware_name;
-  html += R"html(</div>
-                <div class="settings-note"><strong>GitHub OTA:</strong></div>
-                <div class="settings-actions ota-github-actions">
-                  <button class="btn btn-go" type="button" id="ota_github_btn" onclick="checkOrInstallGithubFirmware()">)html";
-  html += tr.system_check_updates_btn;
-  html += R"html(</button>
-                </div>
-                <div id="ota_github_status" class="settings-note ota-status"></div>
-                <div id="ota_github_progress" class="ota-progress is-hidden" aria-hidden="true">
-                  <div id="ota_github_progress_bar" class="ota-progress-bar"></div>
-                </div>
-                <div class="settings-note"><strong>)html";
-  html += tr.ota_firmware_file;
-  html += R"html(:</strong></div>
-                <input type="file" id="ota_file" accept=".bin,application/octet-stream" style="display:none" onchange="updateOtaFileName(this)">
-                <div class="file-picker">
-                  <button class="btn btn-secondary btn-inline" type="button" id="ota_choose_btn" onclick="document.getElementById('ota_file').click()">)html";
-  html += tr.ota_choose_file;
-  html += R"html(</button>
-                  <button class="btn btn-go btn-inline" type="button" id="ota_upload_btn" onclick="uploadOtaFirmware()">)html";
-  html += tr.ota_upload_install;
-  html += R"html(</button>
-                  <span id="ota_file_name" class="file-picker-name">)html";
-  html += tr.ota_no_file_selected;
-  html += R"html(</span>
-                </div>
-                <div id="ota_status" class="settings-note ota-status"></div>
-                <div id="ota_progress" class="ota-progress is-hidden" aria-hidden="true">
-                  <div id="ota_progress_bar" class="ota-progress-bar"></div>
-                </div>
-                <div class="settings-note">)html";
-  html += tr.ota_update_note;
-  html += R"html(</div>
-              </div>
-            </div>
-          </div>
-        </form>
-
-        <form id="admin_restart_form" action="/restart" method="POST" onsubmit="return confirm('Gerät wirklich neu starten?');" class="admin-hidden-form"></form>
-        <div class="admin-footer-actions">
-          <button class="btn btn-go admin-footer-btn" type="submit" form="admin_settings_form">Speichern</button>
-          <button class="btn btn-secondary admin-footer-btn" type="submit" form="admin_restart_form">Gerät neu starten</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -2134,10 +2284,6 @@ String WebAdminServer::getAdminPage() {
 </body>
 </html>
 )html";
-
-  html.replace(">Speichern</button>", String(">") + tr.save + "</button>");
-  html.replace("return confirm('Gerät wirklich neu starten?');", String("return confirm('") + tr.restart_confirm + "');");
-  html.replace(">Gerät neu starten</button>", String(">") + tr.restart_button + "</button>");
 
   return html;
 }

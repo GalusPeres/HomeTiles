@@ -303,14 +303,22 @@ for (const key of ['web_auth_login_title', 'web_auth_password_label', 'web_auth_
   'web_auth_wrong_password', 'web_auth_wait_fmt', 'web_auth_forgot', 'web_auth_section']) {
   assert.match(section, new RegExp(`tr\\.${key}`), `${key} is rendered from i18n`);
 }
-// The password section opens the Settings form, above the network settings,
-// and the header badge shows in red or green whether a password is set.
+// The password is a row of Settings > System under Security, after Pairing,
+// as on the panel; it folds out its fields. The header badge shows in red or
+// green whether a password is set and opens that row.
 const adminHtml = readRepoFile('src/web/server/render/web_admin_html.cpp');
-const settingsForm = adminHtml.slice(adminHtml.indexOf('<form id="admin_settings_form"'));
-assert.ok(settingsForm.indexOf('appendWebAdminPasswordSettingsHtml(html, tr);') <
-  settingsForm.indexOf('tr.admin_settings_wifi'), 'the password section comes before Wi-Fi');
+const systemPage = adminHtml.slice(adminHtml.indexOf('data-settings-page="system"'),
+  adminHtml.indexOf('</form>', adminHtml.indexOf('data-settings-page="system"')));
+assert.ok(systemPage.indexOf('html += tr.security_btn;') < systemPage.indexOf('tr.settings_pairing') &&
+  systemPage.indexOf('tr.settings_pairing') < systemPage.indexOf('appendWebAdminPasswordSettingsHtml(html, tr);'),
+  'the password row follows Pairing under Security');
 assert.equal((adminHtml.match(/appendWebAdminPasswordSettingsHtml\(html, tr\);/g) || []).length, 1,
   'the password section is rendered once');
+assert.match(section, /<details class="settings-fold" id="web_auth_section"/, 'the row folds out its fields');
+assert.match(section, /enabled \? tr\.settings_password_asks : tr\.settings_password_none/,
+  'the row says what the panel says');
+assert.match(section, /onclick="openSettingsPage\('system','web_auth_section'\);return false;"/,
+  'the badge opens the password row');
 const brandLinks = adminHtml.slice(adminHtml.indexOf('<div class="brand-links">'),
   adminHtml.indexOf('<!-- Tab Navigation -->'));
 assert.match(brandLinks, /appendWebAdminPasswordBadgeHtml\(html, tr\);/);

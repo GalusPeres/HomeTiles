@@ -8,6 +8,7 @@
 #include "src/core/hardware/board_hal.h"
 #include "src/core/power/power_manager.h"
 #include "src/network/network_manager.h"
+#include "src/network/link/link_config.h"
 #include "src/network/transport/network_transport.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -600,6 +601,19 @@ bool panel_address(char* buf, size_t len) {
   }
   if (!networkTransport.isConnected()) return false;
   snprintf(buf, len, "%s", networkTransport.localIP().toString().c_str());
+  return true;
+}
+
+bool link_active() { return networkManager.linkConfigured(); }
+
+bool bridge_route(char* buf, size_t len) {
+  if (networkManager.linkConfigured()) {
+    snprintf(buf, len, tr().settings_link_direct_fmt, link_config::current().host);
+    return true;
+  }
+  const DeviceConfig& cfg = configManager.getConfig();
+  if (!cfg.mqtt_host[0]) return false;
+  snprintf(buf, len, tr().settings_link_mqtt_fmt, cfg.mqtt_host);
   return true;
 }
 

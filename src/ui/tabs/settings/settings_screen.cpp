@@ -11,6 +11,7 @@
 #include "src/ui/tabs/settings/settings_parts.h"
 #include "src/ui/tabs/settings/settings_style.h"
 #include "src/ui/tabs/settings/setup_screen.h"
+#include "src/ui/shared/text_scroll.h"
 
 // The approved layout (build/design-mockups/settings/settings-menu.html and
 // the reference images in its sheets/ folder). The top half row is the bar in
@@ -573,7 +574,8 @@ using settings_model::PairState;
 using settings_model::SystemValues;
 using settings_model::UpdateState;
 
-lv_obj_t* g_address_label = nullptr;
+// The line under Home Assistant: the way to the Bridge (bridge_route()).
+lv_obj_t* g_route_label = nullptr;
 
 enum class SystemAction : uint8_t { Update, Pair, Unpair, Allow, RemovePassword, Setup, Restart, GitHub };
 enum class DialogAction : uint8_t { Close, Unpair, RemovePassword, Restart, CancelPairing, ConfirmPairing };
@@ -585,7 +587,7 @@ void clear_system_refs() {
   g_pair_time = nullptr;
   g_password_time = nullptr;
   g_progress_fill = nullptr;
-  g_address_label = nullptr;
+  g_route_label = nullptr;
   g_system_key = 0xFFFFFFFF;
 }
 
@@ -1000,15 +1002,15 @@ void build_system_page(lv_obj_t* page) {
   lv_obj_t* head_row = lv_obj_get_child(lv_obj_get_child(page, 0), 0);
   const int head_height = lv_obj_get_style_height(head_row, LV_PART_MAIN);
 
-  // Connection: Home Assistant, with the panel's own address under it.
+  // Connection: Home Assistant, with the way to it under it (direct link or
+  // MQTT). The panel's own address is on the WLAN page.
   settings_parts::section(page, s.settings_connection, false);
   lv_obj_t* connection = settings_parts::group(page, palette);
-  char address[48];
-  char sub[64] = "";
-  if (settings_model::panel_address(address, sizeof(address))) snprintf(sub, sizeof(sub), s.settings_ip_fmt, address);
+  char route[96];
+  const bool has_route = settings_model::bridge_route(route, sizeof(route));
   settings_parts::Row ha =
-      settings_parts::row(connection, "lan-connect", settings_style::kHomeAssistant, sub[0] ? sub : nullptr);
-  g_address_label = ha.sub;
+      settings_parts::row(connection, "lan-connect", settings_style::kHomeAssistant, has_route ? route : nullptr);
+  g_route_label = ha.sub;
   if (v.connected) {
     good_state(ha.row, s.security_value_connected, "check", false);
   } else {
@@ -1021,7 +1023,11 @@ void build_system_page(lv_obj_t* page) {
   switch (v.pairing) {
     case PairState::Paired: {
       settings_parts::Row r =
-          settings_parts::row(security, "link-variant", s.settings_pairing, s.settings_commands_encrypted);
+          settings_parts::row(security, "link-variant", s.settings_pairing,
+                              settings_model::link_active() ? s.settings_states_encrypted : s.settings_commands_encrypted);
+      // Too long beside the paired state on the small panels: it scrolls back and
+      // forth like the media title instead of ending in dots.
+      ui_text_scroll::apply(r.sub);
       good_state(r.row, s.settings_paired, "shield-check", true);
       settings_parts::make_tap(r.row, palette.button, on_system_action,
                                action_data(SystemAction::Unpair));
@@ -1134,11 +1140,10 @@ void system_tick() {
     set_countdown(g_pair_time, v.pair_seconds);
     set_countdown(g_password_time, v.password_seconds);
     set_progress(v.progress);
-    char address[48];
-    char sub[64];
-    if (g_address_label && settings_model::panel_address(address, sizeof(address))) {
-      snprintf(sub, sizeof(sub), settings_model::text().settings_ip_fmt, address);
-      if (strcmp(lv_label_get_text(g_address_label), sub) != 0) lv_label_set_text(g_address_label, sub);
+    char route[96];
+    if (g_route_label && settings_model::bridge_route(route, sizeof(route)) &&
+        strcmp(lv_label_get_text(g_route_label), route) != 0) {
+      lv_label_set_text(g_route_label, route);
     }
   }
   sync_dialog(v);

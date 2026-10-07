@@ -440,7 +440,8 @@
         form.elements.namedItem('language')?.value || '').toLowerCase();
       const currentLanguage = String(
         document.documentElement.lang || APP_LOCALE || '').toLowerCase();
-      const submitButton =
+      // Several pages carry a Save for this form; the pressed one shows the result.
+      const submitButton = event.submitter ||
         document.querySelector('button[form="admin_settings_form"][type="submit"]');
       const originalLabel = submitButton ? submitButton.textContent : '';
       if (submitButton) submitButton.disabled = true;

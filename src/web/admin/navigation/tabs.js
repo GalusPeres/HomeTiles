@@ -24,6 +24,11 @@
 
 
   async function switchTab(tabName) {
+    // I/O became a Settings page; a remembered or linked I/O tab opens it.
+    if (tabName === 'tab-hardware') {
+      tabName = 'tab-network';
+      showSettingsPage('io');
+    }
     const sequence = ++tabSwitchSequence;
     let target = document.getElementById(tabName);
     if (!target) {
@@ -97,14 +102,7 @@
         }
       }, 0));
     }
-    if (tabName === 'tab-network') {
-      window.setTimeout(() => {
-        if (typeof loadFileManager === 'function' && !fileManagerLoaded) loadFileManager();
-      }, 0);
-    }
-    if (tabName === 'tab-hardware') {
-      window.setTimeout(initHardwareIo, 0);
-    }
+    if (tabName === 'tab-network') runSettingsPageWork();
   }
 
   // The Tile settings panel takes the height of the tile editor row, which

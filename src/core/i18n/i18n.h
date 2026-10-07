@@ -40,15 +40,11 @@ struct Strings {
   const char* admin_export;
   const char* admin_import;
   const char* admin_import_overwrite;
-  const char* admin_settings_wifi;
-  const char* admin_settings_mqtt;
   const char* admin_settings_language;
   const char* admin_settings_screenshot;
-  const char* admin_settings_ota;
   const char* screenshot_create_download;
   const char* screenshot_saved_note;
   const char* ota_firmware_file;
-  const char* ota_current_version;
   const char* ota_upload_install;
   const char* ota_update_note;
   const char* ota_choose_file;
@@ -359,7 +355,6 @@ struct Strings {
   const char* admin_slideshow;
 
   // Web Admin: network section on Ethernet-capable devices.
-  const char* admin_network_section;
   const char* admin_connection_type;
   const char* admin_connection_type_note;
   const char* admin_ip_use_static;
@@ -563,8 +558,6 @@ struct Strings {
   // Optional Web Admin password: login page, Web Admin settings section and
   // the Security view in the device System popup. %s is a number of seconds.
   const char* web_auth_section;
-  const char* web_auth_status_on;
-  const char* web_auth_status_off;
   const char* web_auth_new_password;
   const char* web_auth_repeat_password;
   const char* web_auth_set;
@@ -657,10 +650,19 @@ struct Strings {
   const char* settings_keyboard;
   // Settings System page: section headings and rows (no colon).
   const char* settings_connection;
-  // The panel address under Home Assistant: %s = IP address.
-  const char* settings_ip_fmt;
+  // The way to Home Assistant under its row: %s = the Bridge address on the
+  // direct link, the broker address over MQTT (panel and Web Admin).
+  const char* settings_link_direct_fmt;
+  const char* settings_link_mqtt_fmt;
   const char* settings_pairing;
   const char* settings_commands_encrypted;
+  // Paired over the direct link: states are sealed as well as commands (the
+  // camera video is not: it has its own ports).
+  const char* settings_states_encrypted;
+  // Web Admin MQTT row while the direct link is used: its line and the
+  // note above the kept broker fields.
+  const char* settings_mqtt_unused;
+  const char* settings_mqtt_unused_note;
   const char* settings_paired;
   const char* settings_not_paired;
   const char* settings_pair;

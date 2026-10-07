@@ -7,9 +7,15 @@
     initSettingsAccessControls();
     initAdminSettingsSave();
     initWebAdminPasswordSettings();
+    initSettingsPages();
     initTileTabs();
     let initialTab = '';
     try { initialTab = localStorage.getItem('activeAdminTab') || ''; } catch (e) {}
+    // I/O was a tab of its own before it became a Settings page.
+    if (initialTab === 'tab-hardware') {
+      initialTab = 'tab-network';
+      showSettingsPage('io');
+    }
     prepareFolderTabSessionCache();
     restoreInitialFolderTabSessionFragment(initialTab);
     loadSelectedTileStates();
@@ -46,6 +52,7 @@
     associateFieldLabels();
     fillStaticClockPreviews();
     setInterval(fillStaticClockPreviews, 30000);
+    watchDeviceLanguage();
     updateTileSettingsMaxHeight();
     // Any editing postpones the background folder tab prefetch.
     ['pointerdown', 'keydown', 'input'].forEach(type =>

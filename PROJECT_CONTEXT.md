@@ -15,7 +15,7 @@ Last reviewed: 2026-10-07
 
 - v0.8.0: tag `2a7790a` (2026-10-03), Bridge v0.8.0 `dc4a750`; `main` adds docs images only.
 - Guition S3 XIP/`-O2` reverted in `5279456` (risk, no measured gain); XIP now needs 5.4 MB of the 8 MB PSRAM (3.6 MB in use) - do not retry.
-- `feature/perf` (both repos, unreleased, FW `b259-perf3f`): nav preload (S3 max 3 grids, 40/16 KB reserve, pressure release), shadow/circle caches, P4 CPU rotation for small areas, touch hold, 60 s energy/history reuse, S3 PCLK 12 MHz; V2/S3/8-inch HW ok. Bridge: request limits, empty energy answer, meta push + `"push": 1` (panel refresh 15 min); HA test pending.
+- `feature/perf` (both repos, unreleased, FW `b259-perf3f`): nav preload (S3 max 3 grids, 40/16 KB reserve, pressure release), shadow/circle caches, P4 CPU rotation for small areas, touch hold, 60 s energy/history reuse, S3 PCLK 12 MHz; V2/S3/8-inch HW ok. Bridge v0.9.0b16 beta (`17ca8a3`, feature/direct-link): request limits, empty energy answer, meta push + `"push": 1` (panel refresh 15 min); HA test pending.
 - Rejected: LVGL 2 draw threads (global compressed-font RLE state: glyph artifacts, no gain). S3 GT911 (fw 0x1060, cfg 0xFA, filter 8 = 32 px) steps slow drags and ignores config writes (also esp32-macropad #101) - do not retry. Open: S3 Web Admin pages block the loop 1-6 s.
 
 ## Direct Bridge link (`feature/direct-link` in both repos, unreleased)

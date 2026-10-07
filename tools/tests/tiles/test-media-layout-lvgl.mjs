@@ -54,6 +54,7 @@ ${radiusPolicyHost(root)}
 struct Config{bool tile_borders=true;bool icon_discs=true;uint8_t icon_glow=icon_glow::kDefault;int tile_radius=tile_radius::kMinimum;const char*language="en";};struct Manager{Config cfg;const Config&getConfig(){return cfg;}}configManager;
 ${surfaceStyleHost(root)}
 constexpr int GRID_CELL_H=CELL_H,GRID_GAP=GAP;
+#include "src/types/climate/layout.h"
 ${read('src/tiles/runtime/tile_icon_disc.h').replace(/^#.*$/gm,'')}
 namespace i18n{struct Strings{const char*media_no_playback="No playback";};const Strings&strings(const char*){static Strings s;return s;}}
 uint32_t tileBgColorOrDefault(const Tile&,uint32_t d){return d;}uint32_t tileDefaultBgColor(){return 0x2A2A2A;}

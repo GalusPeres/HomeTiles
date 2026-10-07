@@ -999,13 +999,7 @@ static String format_weather_temp_value(float temp) {
       configManager.getConfig().language, temp, 1, true);
 }
 
-static const char* weather_unit_gap() {
-#if defined(DEVICE_LAYOUT_1024X600)
-  return " ";
-#else
-  return "\xE2\x80\x89";
-#endif
-}
+static const char* weather_unit_gap() { return weather_tile::unit_gap(); }
 
 static String format_weather_temp_unit(const String& unit) {
   return String(weather_unit_gap()) + (unit.length() ? unit : String("\xC2\xB0\x43"));
@@ -1196,8 +1190,10 @@ static String weekday_from_iso(const String& iso) {
   return String(kDaysDe[dow]);
 }
 
+// The short "today" like the popup's buttons (French "Auj."): the day's
+// texts set how many days fit (weather_forecast_text_width()).
 static const char* weather_today_tile_label() {
-  return i18n::weather_today_label(configManager.getConfig().language);
+  return i18n::weather_today_button_label(configManager.getConfig().language);
 }
 
 static bool get_local_today_date(String& date_out) {
@@ -2635,17 +2631,15 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
     lv_text_get_size(&condition_size, condition_text.c_str(),
                      lv_obj_get_style_text_font(widgets.condition_label, LV_PART_MAIN),
                      0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    if (tile.span_w < 2.0f ? condition_size.x > room : room < tile_layout::scale(60)) {
+    if (weather_condition_narrow(card_w) ? condition_size.x > room : room < tile_layout::scale(60)) {
       show_condition = false;
     } else {
       lv_obj_set_style_max_width(widgets.condition_label, room, 0);
     }
   }
-  const uint8_t forecast_limit = weather_shows_forecast(tile.span_h)
-      ? weather_forecast_count(tile.span_w, card_w,
-                               tile_geometry::extent(tile.col, tile.span_w + 0.5f,
-                                                     GRID_CELL_W, GRID_GAP))
-      : 0;
+  const lv_coord_t card_h = tile_geometry::extent(
+      tile.row, tile.span_h < 1 ? 1.0f : tile.span_h, GRID_CELL_H, GRID_GAP);
+  const uint8_t forecast_limit = weather_shows_forecast(card_h) ? weather_forecast_count(card_w) : 0;
   String today_date;
   const bool has_today = get_local_today_date(today_date);
 

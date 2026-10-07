@@ -64,6 +64,7 @@ constexpr int TILES_PER_GRID=1,GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device
 struct Tile{String title,icon_name;float col=0,row=0,span_w=1,span_h=0.5f;uint8_t sensor_value_font=0;int type=1;};
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'apply_fractional_tile_geometry')}
+#include "src/types/climate/layout.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 uint32_t tileDefaultBgColor(){return 0x1A1A1A;}

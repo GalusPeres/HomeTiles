@@ -89,8 +89,13 @@ assert.match(style, /constexpr int kOptionsVisible = 6;/);
 const list = between(parts, 'void open_options(const OptionList& spec) {', 'void close_options() {');
 assert.match(list, /const bool down = below >= height \|\| below >= above;/);
 assert.match(list, /if \(height > room\) height = room;/);
-assert.match(list, /settings_style::apply_radius\(list, kGroupRadius\);/);
-assert.match(list, /ui_surface_style::apply_global_tile_border\(list\);/);
+// The rounded box with the hairline holds the scrolling column one inset
+// inside it, so scrolled options are cut there; a small gap between options.
+assert.match(list, /settings_style::apply_radius\(box, kGroupRadius\);/);
+assert.match(list, /ui_surface_style::apply_global_tile_border\(box\);/);
+assert.match(list, /lv_obj_t\* list = plain\(box\);/);
+assert.match(list, /lv_obj_set_style_pad_row\(list, kOptionGap, 0\);/);
+assert.match(list, /lv_obj_set_size\(option, LV_PCT\(100\), kOptionHeight - kOptionGap\);/);
 assert.match(list, /settings_style::apply_radius\(option, kGroupRadius - kOptionInset\);/);
 assert.match(list, /lv_obj_scroll_to_y\(list, top > 0 \? top : 0, LV_ANIM_OFF\);/);
 // Picks and taps close the list after the touch event, never inside it.

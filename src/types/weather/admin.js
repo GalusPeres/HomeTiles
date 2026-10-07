@@ -146,19 +146,16 @@ function maybeFillTitleFromWeather(tab) {
         WEATHER_ICON_LAYER_PATHS[index] + '</g>').join('') + '</svg>';
   }
 
-  // weather_forecast_count(): days per whole width; a half step shows as many
-  // days as fit at the density of the next whole width.
-  function weatherForecastCount(spanW, cardW, nextW) {
-    const whole = Math.floor(Math.max(0, spanW));
-    const count = span => {
-      const w = Math.floor(Math.max(0, span));
-      return [0, 1, 2, 4, 5, 6, 8][Math.min(w, 6)] ?? 8;
-    };
-    const fixed = count(spanW);
-    if (spanW < 1 || spanW === whole || nextW <= 0) return fixed;
-    const next = count(spanW + 0.5);
-    const fits = Math.trunc(cardW * next / nextW);
-    return fits <= fixed ? fixed : Math.min(fits, next);
+  // weather_forecast_gap()/weather_forecast_count() (widgets.h): as many days
+  // as fit the card's real width with even room between and around their
+  // widest text (textW, measured by the device in its language).
+  function weatherForecastGap(textW) {
+    return Math.trunc(textW * 85 / 100);
+  }
+  function weatherForecastCount(cardW, textW) {
+    const gap = weatherForecastGap(textW);
+    const days = textW + gap > 0 ? Math.trunc((cardW - gap) / (textW + gap)) : 1;
+    return Math.max(1, Math.min(8, days));
   }
 
   // tile_geometry::extent in display pixels.
@@ -218,9 +215,11 @@ function maybeFillTitleFromWeather(tab) {
 
     // Display pixels of the card and the preview's (border box) size.
     const col = Number(tile?.col) || 0;
+    const row = Number(tile?.row) || 0;
     const spanW = Math.max(1, Number(tile?.span_w) || 1);
     const spanH = Math.max(1, Number(tile?.span_h) || 1);
     const cardW = weatherExtent(col, spanW, L.cellW, L.gap);
+    const cardH = weatherExtent(row, spanH, L.cellH, L.gap);
     const cellW = parseFloat(rootStyle.getPropertyValue('--preview-cell-w'));
     const cellH = parseFloat(rootStyle.getPropertyValue('--preview-cell-h'));
     const previewGap = parseFloat(rootStyle.getPropertyValue('--preview-gap')) || 0;
@@ -257,15 +256,18 @@ function maybeFillTitleFromWeather(tab) {
     const hasTemp = !!state && state.temperature !== null;
     const tempText = hasTemp ? weatherPreviewTemp(state.temperature) + (state.unit ? ' ' + state.unit : '') : '--';
     const conditionText = state ? weatherConditionLabel(state.condition) : '--';
-    let showCondition = spanW > 1 && conditionText !== '--';
+    // The card's real size decides (widgets.h): the condition whenever it
+    // fits, below the narrow width only completely; the forecast row from
+    // the device's two-row height.
+    let showCondition = conditionText !== '--';
     let room = 0;
     if (showCondition) {
       const gap = L.valueGap * scale;
       room = width - 2 * L.padH * scale - measure(tempText, valueFont) - measure('|', valueFont) - 2 * gap;
       const conditionWidth = measure(conditionText, valueFont);
-      if (spanW < 2 ? conditionWidth > room : room < L.minConditionRoom * scale) showCondition = false;
+      if (cardW < L.conditionNarrowW ? conditionWidth > room : room < L.minConditionRoom * scale) showCondition = false;
     }
-    const showForecast = Math.floor(Number(tile?.span_h) || 1) >= 2;
+    const showForecast = cardH >= L.forecastMinH;
     const rowCenter = showForecast ? (L.cellH / 2 + L.valueDy) * scale : height / 2 + L.valueDy * scale;
     const textSpan = (cls, text, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
       'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + escapeHtml(text) + '</span>';
@@ -279,8 +281,7 @@ function maybeFillTitleFromWeather(tab) {
 
     // Forecast columns, spread evenly over the card, the row anchored to the
     // card's bottom like on the device.
-    const count = showForecast
-      ? weatherForecastCount(spanW, cardW, weatherExtent(col, spanW + 0.5, L.cellW, L.gap)) : 0;
+    const count = showForecast ? weatherForecastCount(cardW, L.forecastTextW) : 0;
     if (count > 0) {
       const today = weatherLocalToday(now);
       const slots = Array.from({length: count}, () => null);
@@ -314,10 +315,12 @@ function maybeFillTitleFromWeather(tab) {
         if (index >= 0) slots[index] = slot;
       }
 
-      const colW = L.colW * scale;
-      // In display pixels with the device's integer division, so the columns
-      // do not drift apart from the device's.
-      const spacing = Math.trunc((Math.round(width / scale) - count * L.colW) / (count + 1)) * scale;
+      // Even room around the days' widest text, each column centred on its
+      // day (renderer.cpp), in display pixels with the device's integer
+      // division so the columns do not drift apart from the device's.
+      const textW = L.forecastTextW;
+      const spacing = Math.trunc((cardW - count * textW) / (count + 1));
+      const columnLeft = i => (spacing + Math.trunc(textW / 2) + i * (textW + spacing) - Math.trunc(L.colW / 2)) * scale;
       const rowTop = height - (L.cellH + L.headroom - L.yOffset) * scale;
       const contentTop = rowTop + L.padV * scale;
       const contentW = (L.colW - 2 * L.padH) * scale;
@@ -328,7 +331,7 @@ function maybeFillTitleFromWeather(tab) {
       const baseDay = weatherIsoParts(base);
       for (let i = 0; i < count; ++i) {
         const slot = slots[i];
-        const left = spacing + i * (colW + spacing) + L.padH * scale;
+        const left = columnLeft(i) + L.padH * scale;
         const displayDate = slot?.dateLocal || (baseDay !== null ? weatherIsoDate(baseDay + i * 86400000) : '');
         let dayText = slot?.day || '';
         if ((i === 0 && (slot || displayDate)) || displayDate === today) dayText = WEATHER_I18N.today;

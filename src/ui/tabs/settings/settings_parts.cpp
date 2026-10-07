@@ -437,6 +437,7 @@ lv_obj_t* trailing_icon(lv_obj_t* row, const char* icon_name) {
   return icon;
 }
 
+constexpr int kOptionGap = 2;
 void open_options(const OptionList& spec) {
   close_options();
   if (!spec.host || !spec.row || spec.count == 0 || !spec.handler.text) return;
@@ -467,26 +468,37 @@ void open_options(const OptionList& spec) {
   if (height > room) height = room;
   const int y = down ? row_area.y2 + 1 + kOptionInset : row_area.y1 - kOptionInset - height;
 
-  lv_obj_t* list = plain(overlay);
+  // The box (card color, hairline, rounded) holds the scrolling column one
+  // inset inside it: the options are cut at the column's edge, so a
+  // scrolled option never covers the hairline or pokes out of the rounded
+  // corners (time zone list, user 2026-10-07).
+  lv_obj_t* box = plain(overlay);
   // Taps on its padding stay in the list.
+  lv_obj_add_flag(box, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_pos(box, row_area.x1 - host_area.x1, y - host_area.y1);
+  lv_obj_set_size(box, lv_area_get_width(&row_area), height);
+  lv_obj_set_style_bg_color(box, lv_color_hex(spec.card), 0);
+  lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+  settings_style::apply_radius(box, kGroupRadius);
+  ui_surface_style::apply_global_tile_border(box);
+  lv_obj_set_style_pad_all(box, edge, 0);
+  lv_obj_t* list = plain(box);
   lv_obj_add_flag(list, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_scroll_dir(list, LV_DIR_VER);
   lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
-  lv_obj_set_pos(list, row_area.x1 - host_area.x1, y - host_area.y1);
-  lv_obj_set_size(list, lv_area_get_width(&row_area), height);
-  lv_obj_set_style_bg_color(list, lv_color_hex(spec.card), 0);
-  lv_obj_set_style_bg_opa(list, LV_OPA_COVER, 0);
-  settings_style::apply_radius(list, kGroupRadius);
-  ui_surface_style::apply_global_tile_border(list);
-  lv_obj_set_style_pad_all(list, edge, 0);
+  lv_obj_set_size(list, LV_PCT(100), LV_PCT(100));
   lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+  // A small gap between the options, so a pressed one and the selected
+  // one stay two pills instead of one block (user 2026-10-07); the row
+  // pitch stays kOptionHeight.
+  lv_obj_set_style_pad_row(list, kOptionGap, 0);
 
   const int text_pad = spec.text_x - edge;
   for (uint8_t i = 0; i < spec.count; ++i) {
     lv_obj_t* option = plain(list);
     lv_obj_add_flag(option, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_size(option, LV_PCT(100), kOptionHeight);
+    lv_obj_set_size(option, LV_PCT(100), kOptionHeight - kOptionGap);
     settings_style::apply_radius(option, kGroupRadius - kOptionInset);
     lv_obj_set_style_bg_color(option, lv_color_hex(spec.selected_color), 0);
     lv_obj_set_style_bg_opa(option, i == spec.selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
@@ -512,7 +524,7 @@ void open_options(const OptionList& spec) {
     const int top = spec.selected * kOptionHeight - (height - 2 * edge - kOptionHeight) / 2;
     lv_obj_scroll_to_y(list, top > 0 ? top : 0, LV_ANIM_OFF);
   }
-  reveal(overlay, list);
+  reveal(overlay, box);
 }
 
 void close_options() {
@@ -685,15 +697,23 @@ lv_obj_t* qr_code(lv_obj_t* parent, int size, const char* text) {
 #endif
 }
 
+// The head button (X or Back) in a box of `size` at x/y: the pressed shape
+// of the Settings X (settings_style::kClosePressed) centred on the box, a
+// smaller box (the slim entry row on the 480 class) presses whole. Its
+// corner is concentric with the card's corner (tile radius + grid gap)
+// around it; the touch area keeps the box.
 lv_obj_t* close_button(lv_obj_t* card, int x, int y, int size, lv_event_cb_t on_click, void* user_data) {
+  const int pressed = size >= popup_layout::kCloseButtonSize ? settings_style::kClosePressed : size;
+  const int inset = (size - pressed) / 2;
+  const int baseline = tile_radius::kMinimum + GRID_GAP - (y + inset);
   lv_obj_t* close = plain(card);
-  lv_obj_set_pos(close, x, y);
-  lv_obj_set_size(close, size, size);
+  lv_obj_set_pos(close, x + inset, y + inset);
+  lv_obj_set_size(close, pressed, pressed);
   lv_obj_add_flag(close, LV_OBJ_FLAG_CLICKABLE);
-  ui_surface_style::apply_radius(close, popup_layout::kCloseButtonRadius);
+  ui_surface_style::apply_radius(close, baseline > 0 ? baseline : 0);
   lv_obj_set_style_bg_color(close, lv_color_white(), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(close, LV_OPA_20, LV_STATE_PRESSED);
-  lv_obj_set_ext_click_area(close, popup_layout::kCloseButtonClickArea);
+  lv_obj_set_ext_click_area(close, popup_layout::kCloseButtonClickArea + inset);
   if (on_click) lv_obj_add_event_cb(close, on_click, LV_EVENT_CLICKED, user_data);
   lv_obj_t* x_icon = lv_label_create(close);
   lv_label_set_text(x_icon, getMdiChar("window-close").c_str());

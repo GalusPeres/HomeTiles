@@ -146,6 +146,7 @@ inline String format_number(const char*,float v,uint8_t d,bool trim){char b[32];
 inline String weather_condition_label(const char*,const String&c){if(c=="cloudy")return "Cloudy";if(c=="partlycloudy")return "Partly cloudy";if(c=="sunny")return "Sunny";if(c=="rainy")return "Rainy";return c.empty()?String("--"):c;}
 inline String weather_weekday_short(const char*,const String&iso){if(iso.size()<10)return "";struct tm t{};t.tm_year=std::atoi(iso.substr(0,4).c_str())-1900;t.tm_mon=std::atoi(iso.substr(5,2).c_str())-1;t.tm_mday=std::atoi(iso.substr(8,2).c_str());t.tm_hour=12;mktime(&t);return locale("en").weather_weekdays_short[t.tm_wday];}
 inline const char* weather_today_label(const char*){return "Today";}
+inline const char* weather_today_button_label(const char*){return "Today";}
 }
 ${strip(read('src/types/weather/weather_icon_table.h'))}
 ${strip(read('src/types/weather/weather_icons.h'))}
@@ -158,6 +159,7 @@ void viewNavigationSource(lv_obj_t*){}
 ${['brighten_rgb_color','disable_pressed_button_animation','finish_press_before_popup'].map(n=>fn(read('src/tiles/runtime/tile_renderer_shared.h'),n)).join('\n')}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'apply_fractional_tile_geometry')}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'place_tile_card')}
+#include "src/types/climate/layout.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 void show_weather_popup(const WeatherPopupInit&){}

@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-10-07
+Last reviewed: 2026-10-08
 
 ## Sources of truth
 
@@ -50,12 +50,11 @@ Last reviewed: 2026-10-07
 
 ## Issue #38
 
-- Reporter: JC8012P4A1 V2, SKU10153001-V2 (2632), `_I_W_Y`; #18 tested SKU10153002-V2 (2627), `_I_W_Y1`. Maintainer received JC8012P4A1C_I_W_Y1, SKU10153002-V2. Labels alone prove no other panel.
-- V2 fixes committed in `e1a9297`: touch bounds, internal I2C atomic-state allocation, slot-aware SD cleanup; exact-V2 only. Beta `HOMETILES_ISSUE38_BETA` reports v0.6.12b1; release version stays v0.6.12.
+- Reporter SKU10153001-V2 (`_I_W_Y`); #18 and maintainer SKU10153002-V2 (`_I_W_Y1`). Labels alone prove no other panel.
+- V2 fixes `e1a9297` (exact V2): touch bounds, internal I2C atomic state, slot-aware SD cleanup; beta define `HOMETILES_ISSUE38_BETA`.
 - SD (#55): reporter card-init fails (40/20 MHz); Web Admin remounts then hit a Hosted slot-1 assert. Failed V2 mount now final until restart (boot try before Wi-Fi); init cause open. `build/issue-38/SD-LOG-ANALYSIS.md`.
-- Touch: maintainer confirms rapid-tap raw-bounds fix works. BIN/ELF: `build/guition-v2-touch/`.
-- Interrupt-WDT dump (touch ELF): I2C atomic-state object was in PSRAM; backport `37758ef327f9` forces internal allocation. Exposure proven, WDT cause unproven; evidence `build/guition-v2-crash-20260911/`.
-- Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace minute polling; 134 tests pass, restart validation pending. v0.6.12 keeps daily extrema (24 C daily vs partial hourly 11 C).
+- Touch rapid-tap fix confirmed. Interrupt-WDT dump: I2C atomic state was in PSRAM, `37758ef327f9` forces internal; WDT cause unproven (`build/guition-v2-crash-20260911/`).
+- Bridge v0.6.47 (`43be012`): HA forecast subscriptions replace polling; restart validation pending.
 
 ## Sensor history
 
@@ -71,7 +70,7 @@ Last reviewed: 2026-10-07
 - Additive `/control` preserves legacy clients; sessions/revisions/deadlines reject stale commands.
 - Bridge v0.6.44 (`148dec4`) fixed the stale icon cache.
 - Controls clear titles/close area; Select status in header; range changes retain data; offline closes dropdowns.
-- Drafts coalesce steps/rollers for 600 ms, publish sliders on release and survive service ACKs until confirmation/rejection or 30-second timeout.
+- Drafts coalesce steps/rollers 600 ms, sliders publish on release, kept until confirmation/rejection or 30 s.
 - Editable surfaces: control fill, white text; Select list = card + hairline, gap, inset selection.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
 - S3 froze adding Number to active screensaver (Web ok, manual reboot); cause unknown.
@@ -139,7 +138,7 @@ Last reviewed: 2026-10-07
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
 - Commands validate targets/availability/features; ignore retained commands. Battery is a stub; unsupported probes stay unregistered.
 - View/editable controls confirmed on 8-inch/S3. HA migration, legacy firmware and lifecycle coverage pending.
-- Issue #37: valid 20,033-byte packet disconnects v0.6.9 at 16 KiB; reception up to 65,535 bytes with bounded queues/draining/ACKs/logs. Reporter confirmation pending; no unplanned MQTT loss in ~8 h.
+- Issue #37: packets up to 65,535 bytes (was 16 KiB) with bounded queues/ACKs; reporter confirmation pending.
 
 ## Security branch (unreleased)
 
@@ -156,4 +155,5 @@ Last reviewed: 2026-10-07
 - Rebuilt after `build/design-mockups/settings` (HANDOFF.md): four pages, dialogs, new keyboard; old popups and `ui_keyboard` removed.
 - First-start setup (b252, `setup_screen.cpp`): 4 steps in the popup card; a new panel stores its defaults at boot (network starts, no restart), step kept in NVS `setup_step`; V2 HW ok, S3 pending.
 - Web Admin Settings (b257): list like the panel (WLAN, Lokalisierung, System + I/O, camera, files, diagnostics), one footer; System shows the way (direct/MQTT), MQTT folded; #73 `/api/language` poll. V2 b258 HW ok.
-- New look (b260): popup head, groups in tile color, no borders; square panels gear + four fixed tabs. Portrait popups = centered square card (setup full height). V2 compiled, HW pending.
+- New look (b260): popup head, borderless groups; square panels gear + four tabs; portrait popups = centered square card. b261: WLAN entry card, back arrow, option gap, concentric head buttons, corner circle at the pill inset. HW pending.
+- Weather tile (b261) by real size, not slots: days = width / (widest measured text + 85 % gap) (4B/V2 3x2 = 5), row from two-row height, FR tile "Auj."; preview gets the measured width.

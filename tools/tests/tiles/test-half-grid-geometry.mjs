@@ -42,6 +42,7 @@ ${fn('src/tiles/config/tile_config.cpp','packGeometry')}
 ${fn('src/tiles/config/tile_config.cpp','unpackGeometry')}
 ${fn('src/tiles/runtime/tile_renderer_shared.h','apply_fractional_tile_geometry')}
 ${fn('src/tiles/runtime/tile_renderer.cpp','set_tile_grid_cell')}
+#include "src/types/climate/layout.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 int main(){
@@ -120,7 +121,10 @@ int main(){
   auto*value=lv_label_create(card);lv_label_set_text(value,"22.5 C");
   compact_sensor_layout::apply(card,icon,title,value,tile);lv_obj_update_layout(card);
   const auto* disc=lv_obj_get_parent(icon);
-  assert(lv_obj_get_style_radius(disc,LV_PART_MAIN)==tile_radius::kMinimum-compact_sensor_layout::inset());
+  // The corner circle keeps the bar pill's inset: drawn smaller around its
+  // middle, its radius smaller by the same amount (concentric).
+  assert(lv_obj_get_style_radius(disc,LV_PART_MAIN)==tile_radius::kMinimum-compact_sensor_layout::inset()-tile_icon_disc::corner_shrink());
+  assert(lv_obj_get_style_transform_width(disc,LV_PART_MAIN)==-tile_icon_disc::corner_shrink());
   lv_area_t bounds,t,v;lv_obj_get_coords(card,&bounds);lv_obj_get_coords(title,&t);lv_obj_get_coords(value,&v);
   assert(std::strchr(lv_label_get_text(title),'\\n')==nullptr);
   assert(t.x1==v.x1 && t.y2<v.y1 && v.y2<=bounds.y2);

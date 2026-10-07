@@ -47,8 +47,13 @@ constexpr int SCREEN_WIDTH=Device::kScreenWidth,SCREEN_HEIGHT=Device::kScreenHei
 String getMdiChar(const String&){return "\xF3\xB0\x96\xAD";}
 ${radiusPolicyHost(root, 'Device::kGridCellH', 'Device::kGridGap')}
 #include "src/core/config/icon_glow.h"
-struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = true; bool icon_discs = true; uint8_t icon_glow = icon_glow::kDefault; };
+struct TestConfig { int tile_radius = tile_radius::kMinimum; bool tile_borders = true; bool icon_discs = true; uint8_t icon_glow = icon_glow::kDefault; const char* language = "en"; };
 struct TestConfigManager { TestConfig config; const TestConfig& getConfig() const { return config; } } configManager;
+// The forecast texts renderer.cpp measures to fit the days.
+namespace i18n {
+inline const char* weather_today_button_label(const char*){return "Today";}
+inline String weather_weekday_short(const char*,const String&){return "Wed";}
+}
 ${surfaceStyleHost(root)}
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
 void* heap_caps_malloc(size_t n,int){return malloc(n);}void heap_caps_free(void*p){free(p);}
@@ -86,6 +91,7 @@ void viewNavigationSource(lv_obj_t*){}
 ${['brighten_rgb_color','disable_pressed_button_animation','finish_press_before_popup'].map(n=>fn(read('src/tiles/runtime/tile_renderer_shared.h'),n)).join('\n')}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'apply_fractional_tile_geometry')}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'place_tile_card')}
+#include "src/types/climate/layout.h"
 ${strip(read('src/tiles/runtime/tile_icon_disc.h'))}
 ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 PopupShellParts popup;int opens=0,completed_opens=0,sensor_opens=0;
@@ -139,7 +145,7 @@ void check_energy_layout() {
     lv_area_t card_area,value_area;lv_obj_get_coords(card,&card_area);lv_obj_get_coords(value,&value_area);
     assert(value_area.y2<=card_area.y2&&"Every chosen value size fits in the half tile");
     auto*disc=lv_obj_get_child(card,0);
-    assert(lv_obj_get_style_radius(disc,LV_PART_MAIN)==tile_radius::kMinimum-compact_sensor_layout::inset());
+    assert(lv_obj_get_style_radius(disc,LV_PART_MAIN)==tile_radius::kMinimum-compact_sensor_layout::inset()-tile_icon_disc::corner_shrink());
    }
    lv_obj_delete(card);
   }
@@ -276,7 +282,10 @@ void check_value_alignment(lv_display_t* display) {
  lv_obj_get_coords(lv_obj_get_child(sensor,0),&disc);
  lv_obj_get_coords(lv_obj_get_child(sensor,1),&icon);
  lv_obj_get_coords(lv_obj_get_child(sensor,2),&title);
- assert(lv_obj_get_style_radius(lv_obj_get_child(sensor,0),LV_PART_MAIN)==ui_surface_style::radius(tile_icon_disc::radius_baseline()));
+ // Drawn smaller around its middle to the bar pill's inset, concentric:
+ // the radius shrinks by the same amount, the box (coords) stays.
+ assert(lv_obj_get_style_radius(lv_obj_get_child(sensor,0),LV_PART_MAIN)==ui_surface_style::radius(tile_icon_disc::radius_baseline()-tile_icon_disc::corner_shrink()));
+ assert(lv_obj_get_style_transform_width(lv_obj_get_child(sensor,0),LV_PART_MAIN)==-tile_icon_disc::corner_shrink());
  assert(tile_icon_disc::round_diameter()==tile_icon_disc::diameter()+tile_icon_disc::inset());
  // One half-height row square in the corner, concentric with the tile corner
  // like the half-height disc (left and top gaps equal its inset), with the

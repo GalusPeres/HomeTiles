@@ -42,6 +42,9 @@ struct Geometry {
   int field_h;
   int message_y;
   int key_y;
+  // The keys' height and row pitch: the style's, flatter on low panels.
+  int key_h;
+  int key_step;
   bool compact;  // the Settings card on the 480 class: a slim title row
   bool stacked;  // name above password
 };
@@ -69,15 +72,40 @@ Geometry geometry(int card_w, int card_h, bool setup) {
     g.close = popup_layout::kCloseButtonSize;
     g.close_x = settings_parts::popup_close_x(card_w);
     g.close_y = settings_parts::popup_close_y();
-  } else {
+  } else if (g.compact) {
+    // The 480 class: the slim title row.
     g.close = settings_style::kEntryClose;
     g.close_x = card_w - settings_style::kEntryCloseRight - g.close;
     g.close_y = settings_style::kEntryCloseTop;
+  } else {
+    // The head button one grid gap inside the card's corner, like the X in
+    // the Settings head and in the popups (the same concentric press).
+    g.close = popup_layout::kCloseButtonSize;
+    g.close_x = card_w - GRID_GAP - g.close;
+    g.close_y = GRID_GAP;
+    // The fields one grid gap below the head row, like the Settings body
+    // below its head (user 2026-10-07: the field a little lower); on the low
+    // panels the keys make room (below).
+    g.field_y = g.close_y + g.close + GRID_GAP;
   }
-  g.key_y = card_h - settings_style::kKeyboardBottom - (3 * settings_style::kKeyStep + settings_style::kKeyHeight);
+  g.key_h = settings_style::kKeyHeight;
+  g.key_step = settings_style::kKeyStep;
+  g.key_y = card_h - settings_style::kKeyboardBottom - (3 * g.key_step + g.key_h);
 #if !defined(DEVICE_LAYOUT_480X480)
   g.stacked = g.field_y + 2 * g.field_h + settings_style::kEntryFieldGap + popup_layout::scale(40) <= g.key_y;
   g.message_y = g.stacked ? g.field_y + 2 * g.field_h + popup_layout::scale(24) : g.field_y + g.field_h + popup_layout::scale(14);
+  if (!setup) {
+    // Low panels (Tab5, 7", 4B): the keys get flatter until the message line
+    // under the field keeps its room above them (user 2026-10-07: field and
+    // keyboard touched); the gaps between the keys stay.
+    const int top = g.message_y + lv_font_get_line_height(settings_style::small_font()) + settings_style::kKeyGap;
+    if (g.key_y < top) {
+      const int gap = settings_style::kKeyStep - settings_style::kKeyHeight;
+      g.key_h = (card_h - settings_style::kKeyboardBottom - top - 3 * gap) / 4;
+      g.key_step = g.key_h + gap;
+      g.key_y = top;
+    }
+  }
 #endif
   return g;
 }
@@ -296,6 +324,12 @@ void open(const Spec& spec, bool manual, const char* ssid) {
   const Colors palette = settings_style::colors(g_entry.card_color);
   g_entry.root = settings_parts::plain(spec.card);
   lv_obj_set_size(g_entry.root, card_w, card_h);
+  if (!setup) {
+    lv_obj_set_style_bg_color(g_entry.root, lv_color_hex(palette.card), 0);
+    lv_obj_set_style_bg_opa(g_entry.root, LV_OPA_COVER, 0);
+    // A popup card's corner (tile radius + grid gap, mockup sheet(): cardR).
+    ui_surface_style::apply_radius(g_entry.root, tile_radius::kMinimum + GRID_GAP);
+  }
 
   const char* title = manual ? s.settings_add_network : g.stacked ? s.settings_join_network : g_entry.ssid;
   if (setup) {
@@ -322,7 +356,14 @@ void open(const Spec& spec, bool manual, const char* ssid) {
                                                      g.close_y + g.close / 2.0f - box / 2.0f, box));
     }
   }
-  settings_parts::close_button(g_entry.root, g.close_x, g.close_y, g.close, on_close, nullptr);
+  lv_obj_t* close = settings_parts::close_button(g_entry.root, g.close_x, g.close_y, g.close, on_close, nullptr);
+  // Settings: a back arrow in the X's place instead of a second X (the
+  // Settings head has its own X, user 2026-10-07).
+  if (!setup) lv_label_set_text(lv_obj_get_child(close, 0), getMdiChar("arrow-left").c_str());
+  // On a card it presses in the card's control color, like the popups' X
+  // (popup_shell: controls_fill), not the white veil of the screen's X.
+  lv_obj_set_style_bg_color(close, lv_color_hex(palette.group), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(close, LV_OPA_COVER, LV_STATE_PRESSED);
 
   const int gap = settings_style::kKeyGap;
   if (g.stacked) {
@@ -387,8 +428,8 @@ void open(const Spec& spec, bool manual, const char* ssid) {
   const settings_keyboard::Geometry keys = {g.pad,
                                             g.key_y,
                                             g.column,
-                                            settings_style::kKeyHeight,
-                                            settings_style::kKeyStep,
+                                            g.key_h,
+                                            g.key_step,
                                             gap,
                                             settings_style::kKeyRadius};
   g_entry.keyboard = settings_keyboard::create(g_entry.root, keys, keyboard_layout(), keyboard_accents(), palette,

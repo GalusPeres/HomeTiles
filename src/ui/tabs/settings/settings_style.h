@@ -246,6 +246,11 @@ inline int body_top() { return popup_layout::kCardMargin + 2 * GRID_GAP + popup_
 // centred on the X, with the tile radius (user 2026-10-07 "Mittelweg"); the
 // touch area keeps the X's size.
 constexpr int kClosePressed = (popup_layout::kCloseButtonSize + popup_layout::kHeaderIconDiscSize) / 2;
+// Its corner is concentric with the corner around the X (a frame or card of
+// the tile radius + the grid gap, the X one gap inside it): the tile radius
+// minus the pressed shape's inset in the X (user 2026-10-07: every head
+// button the same size, every one concentric).
+constexpr int kClosePressedBaseline = tile_radius::kMinimum - (popup_layout::kCloseButtonSize - kClosePressed) / 2;
 
 // The width of `span` grid columns from `col`, exactly like the tiles (the
 // landscape category column: two columns).

@@ -27,6 +27,11 @@ const source = `
 #include <initializer_list>
 #include <string>
 
+// renderer.cpp measures the widest forecast text with the real fonts; the
+// header test fixes it at the P4 width of "Today" (59 px).
+lv_coord_t weather_forecast_text_width(const char*) { return 59; }
+lv_coord_t weather_forecast_text_width() { return 59; }
+
 static std::string expected_csv(unsigned mask,
                                std::initializer_list<const char*> names) {
   std::string value;
@@ -89,23 +94,22 @@ int main() {
       {"off", "on", "vertical", "horizontal", "both"}));
     assert(climateHorizontalSwingModesCsv(mask) == expected_csv(mask,
       {"off", "on", "left", "center", "right", "swing", "wide"}));
-    const unsigned forecast[] = {0, 1, 2, 4, 5, 6};
-    assert(weather_forecast_count(mask) == (mask < 6 ? forecast[mask] : 8));
     if (mask >= 8) assert(std::strcmp(climatePresetName(mask), "") == 0);
   }
-  // Half steps never drop below or jump past their whole neighbours
-  // (168 px cells, 16 px gap: 2.5 cells = 444 px, 3 cells = 536 px).
-  assert(weather_forecast_count(2.5f, 444, 536) == 3);
-  assert(weather_forecast_count(1.5f, 260, 352) == 1);
-  assert(weather_forecast_count(3.0f, 536, 628) == 4);
-  for (int half = 2; half <= 12; ++half) {
-    const float span = half / 2.0f;
-    const auto width = [](float s) { return static_cast<lv_coord_t>(s * 168 + (s - 1) * 16); };
-    const uint8_t count = weather_forecast_count(span, width(span), width(span + 0.5f));
-    const uint8_t below = weather_forecast_count(span - 0.5f, width(span - 0.5f), width(span));
-    assert(count >= below);
-    if (half % 2) assert(count <= weather_forecast_count(span + 0.5f));
+  // Forecast days follow the card's real width with even room (85 % of the
+  // widest text) between and around them: 4B and V2 3 x 2 = 5 days, the old
+  // V2 cells (168 px) keep 2 cells = 2 and 3 cells = 4 days.
+  assert(weather_forecast_gap(59) == 50);
+  assert(weather_forecast_count(680) == 5 && weather_forecast_count(611) == 5);
+  assert(weather_forecast_count(402) == 3 && weather_forecast_count(193) == 1);
+  assert(weather_forecast_count(352) == 2 && weather_forecast_count(536) == 4);
+  assert(weather_forecast_count(1088) == 8 && weather_forecast_count(40) == 1);
+  for (lv_coord_t width = 1; width < 1400; ++width) {
+    assert(weather_forecast_count(width) >= weather_forecast_count(width - 1));
   }
+  // The forecast row from the device's two-row height, not from slots.
+  assert(weather_shows_forecast(WEATHER_FORECAST_MIN_H) && !weather_shows_forecast(WEATHER_FORECAST_MIN_H - 1));
+  assert(weather_condition_narrow(WEATHER_CONDITION_NARROW_W - 1) && !weather_condition_narrow(WEATHER_CONDITION_NARROW_W));
   for (unsigned mask = 0; mask < 65536; ++mask) {
     assert(climateFanModesCsv(mask) == expected_csv(mask,
       {"auto", "low", "medium", "high", "on", "off", "top", "middle", "focus", "diffuse"}));

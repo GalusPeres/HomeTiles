@@ -60,6 +60,15 @@ inline const lv_font_t* forecast_day_font() {
 #endif
 }
 
+// The space before the forecast temperatures' unit.
+inline const char* unit_gap() {
+#if defined(DEVICE_LAYOUT_1024X600)
+  return " ";
+#else
+  return "\xE2\x80\x89";
+#endif
+}
+
 inline const lv_font_t* unit_font() {
 #if defined(DEVICE_LAYOUT_1024X600)
   return LV_FONT_DEFAULT;

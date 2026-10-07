@@ -1707,7 +1707,7 @@ void build_frame() {
   g_close = settings_parts::plain(panel);
   lv_obj_set_pos(g_close, close_left + (close - pressed) / 2 - px, cy - pressed / 2 - py);
   lv_obj_set_size(g_close, pressed, pressed);
-  settings_style::apply_tile_radius(g_close);
+  ui_surface_style::apply_radius(g_close, settings_style::kClosePressedBaseline);
   lv_obj_add_flag(g_close, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_style_bg_color(g_close, lv_color_white(), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(g_close, LV_OPA_20, LV_STATE_PRESSED);

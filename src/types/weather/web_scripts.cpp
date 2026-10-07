@@ -108,7 +108,8 @@ void append_weather_scripts(String& html) {
     append_weather_js_string(html, i18n::locale(language).weather_weekdays_short[day]);
   }
   html += "]),\n    today: ";
-  append_weather_js_string(html, i18n::weather_today_label(language));
+  // The short "today" the tile shows (renderer.cpp, like the popup's).
+  append_weather_js_string(html, i18n::weather_today_button_label(language));
   html += "\n  });\n";
 
   // The tile geometry in display pixels (renderer.cpp, tile_layout.h); the
@@ -132,6 +133,12 @@ void append_weather_scripts(String& html) {
   snprintf(text, sizeof(text), "    unitDy: %d, valueGap: %d, valueDy: %d, minConditionRoom: %d,\n",
            static_cast<int>(weather_tile::kUnitYOffset), static_cast<int>(weather_tile::kValueGap),
            static_cast<int>(weather_tile::kValueDy), static_cast<int>(tile_layout::scale(60)));
+  html += text;
+  // What the card's real size shows (widgets.h): the forecast row from this
+  // height, the days by their widest text, the condition's narrow rule.
+  snprintf(text, sizeof(text), "    forecastMinH: %d, forecastTextW: %d, conditionNarrowW: %d,\n",
+           static_cast<int>(WEATHER_FORECAST_MIN_H), static_cast<int>(weather_forecast_text_width(language)),
+           static_cast<int>(WEATHER_CONDITION_NARROW_W));
   html += text;
   {
     // The weather icon font copies the MDI line metrics: its em box (the

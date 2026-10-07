@@ -5,6 +5,7 @@
 #include "src/core/config/icon_glow.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/shared/tone_color.h"
+#include "src/types/climate/layout.h"
 
 // One translucent disc behind every tile icon. Half-height tiles hold the icon
 // in a disc that is concentric with the tile corner. Taller tiles keep their
@@ -24,6 +25,20 @@ inline int round_diameter() { return diameter() + inset(); }
 // Tile radius baseline minus the inset keeps the half-height disc concentric
 // with the tile corner; the shared radius style follows global radius changes.
 inline int radius_baseline() { return tile_layout::scale_480(22) - inset(); }
+// The corner circle keeps the same distance to the card edge as the bar
+// pill (climate_layout::kOuterInset, user 2026-10-07): it is drawn smaller
+// around its own middle by the difference, concentric with the tile corner;
+// its box, the icon and the labels beside it stay where they were.
+inline int corner_shrink() {
+  const int extra = climate_layout::kOuterInset - inset();
+  return extra > 0 ? extra : 0;
+}
+inline void shrink_corner_disc(lv_obj_t* disc) {
+  if (!disc || !corner_shrink()) return;
+  lv_obj_set_style_transform_width(disc, -corner_shrink(), 0);
+  lv_obj_set_style_transform_height(disc, -corner_shrink(), 0);
+  ui_surface_style::apply_radius(disc, radius_baseline() - corner_shrink(), 0);
+}
 // With glow, a colored icon tints its disc with its hue (tone_color.h: a
 // fixed lightness step above the tile); the global Circle strength
 // (icon_glow.h) sets the step of every disc, glowing and white. The tile
@@ -468,6 +483,7 @@ inline void place_in_corner(lv_obj_t* card, lv_obj_t* disc) {
   lv_obj_align(disc, LV_ALIGN_TOP_LEFT,
                tile_icon_disc::inset() - lv_obj_get_style_space_left(card, LV_PART_MAIN),
                tile_icon_disc::inset() - lv_obj_get_style_space_top(card, LV_PART_MAIN));
+  shrink_corner_disc(disc);
 }
 
 // Offset that moves a box of `size` so its center matches a box of
@@ -574,6 +590,7 @@ inline lv_obj_t* add_round(lv_obj_t* card, lv_obj_t* icon) {
     const CornerHeader header = corner_header(pad_top, pad_left, icon_y, icon_size.x, icon_size.y);
     lv_obj_set_size(disc, header.disc, header.disc);
     lv_obj_align(disc, LV_ALIGN_TOP_LEFT, inset() - pad_left, inset() - pad_top);
+    shrink_corner_disc(disc);
     if (header.shift != 0) {
       const int header_bottom = icon_y + icon_size.y;
       const uint32_t count = lv_obj_get_child_count(card);

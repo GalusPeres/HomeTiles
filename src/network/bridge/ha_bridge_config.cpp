@@ -577,6 +577,26 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
     const bool digit = at > 0 && at < static_cast<int>(json.length()) && json[at] >= '0' && json[at] <= '9';
     entity_search_ = digit ? static_cast<uint8_t>(json[at] - '0') : 0;
   }
+  {
+    // "push": <level>, the same format as "entity_search". An entity named
+    // "push" is a value, not a key: skip occurrences without a colon.
+    push_ = 0;
+    const int len = static_cast<int>(json.length());
+    for (int key = json.indexOf("\"push\""); key >= 0; key = json.indexOf("\"push\"", key + 6)) {
+      int at = key + 6;
+      while (at < len && json[at] == ' ') ++at;
+      if (at >= len || json[at] != ':') continue;
+      ++at;
+      while (at < len && json[at] == ' ') ++at;
+      if (at < len && json[at] >= '0' && json[at] <= '9') {
+        push_ = static_cast<uint8_t>(json[at] - '0');
+      }
+      break;
+    }
+  }
+  // Live values must be in the blob before it is copied and the indexes are
+  // rebuilt from the merged copy.
+  if (values_blob_dirty_) materializeValuesBlob();
   HaBridgeConfigData merged = data;
   uint32_t t_start = millis();
   // merged = data deep-copies every String field of HaBridgeConfigData (7 text
@@ -1719,6 +1739,8 @@ static size_t indexApproxBytes(const HaEntityKeyMap& m) {
 
 void HaBridgeConfig::rebuildEntityIndexes() {
   pruneEditableValues();
+  // The blob was just swapped in as a whole and is now the source again.
+  values_blob_dirty_ = false;
   rebuildIndexFromBlob(data.sensor_units_map, units_index_);
   rebuildIndexFromBlob(data.sensor_names_map, names_index_);
   rebuildIndexFromBlob(data.sensor_values_map, values_index_);
@@ -1771,51 +1793,34 @@ void HaBridgeConfig::updateEntityMeta(const String& entity_id, const String& nam
 
 void HaBridgeConfig::updateSensorValue(const String& entity_id, const String& value) {
   if (entity_id.length() == 0) return;
-
-  // Parse sensor_values_map and update/add the value
-  String& valuesMap = data.sensor_values_map;
-  String newMap = "";
-  bool found = false;
-
-  int start = 0;
-  while (start < valuesMap.length()) {
-    int end = valuesMap.indexOf('\n', start);
-    if (end < 0) end = valuesMap.length();
-
-    String line = valuesMap.substring(start, end);
-    int eq = line.indexOf('=');
-
-    if (eq > 0) {
-      String entity = line.substring(0, eq);
-      entity.trim();
-
-      if (entity.equalsIgnoreCase(entity_id)) {
-        // Update existing entry
-        if (newMap.length()) newMap += '\n';
-        newMap += entity_id + "=" + value;
-        found = true;
-      } else {
-        // Keep existing entry
-        if (newMap.length()) newMap += '\n';
-        newMap += line;
-      }
-    } else if (line.length() > 0) {
-      // Keep non-empty lines without '='
-      if (newMap.length()) newMap += '\n';
-      newMap += line;
-    }
-
-    start = end + 1;
+  // Every live sensor state lands here. Rewriting the whole blob line by line
+  // (one substring allocation per entity) cost each update the same as the
+  // blocking blob scans removed from lookupKeyValue(); only the index changes
+  // now, and get() rebuilds the blob when Web Admin or applyJson needs it.
+  auto it = values_index_.find(entity_id.c_str());
+  if (it != values_index_.end() &&
+      it->second.size() == value.length() &&
+      memcmp(it->second.c_str(), value.c_str(), value.length()) == 0) {
+    return;
   }
-
-  // Add new entry if not found
-  if (!found) {
-    if (newMap.length()) newMap += '\n';
-    newMap += entity_id + "=" + value;
-  }
-
-  valuesMap = newMap;
   indexPut(values_index_, entity_id, value);
+  values_blob_dirty_ = true;
+}
+
+void HaBridgeConfig::materializeValuesBlob() const {
+  size_t bytes = 0;
+  for (const auto& kv : values_index_) bytes += kv.first.size() + kv.second.size() + 2;
+  String blob;
+  blob.reserve(bytes);
+  for (const auto& kv : values_index_) {
+    if (blob.length()) blob += '\n';
+    blob.concat(kv.first.c_str(), kv.first.size());
+    blob += '=';
+    blob.concat(kv.second.c_str(), kv.second.size());
+  }
+  // The global configuration object is never const; only get() is.
+  const_cast<HaBridgeConfig*>(this)->data.sensor_values_map = std::move(blob);
+  values_blob_dirty_ = false;
 }
 
 String HaBridgeConfig::findEditableValue(const String& entity_id) const {

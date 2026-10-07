@@ -37,6 +37,7 @@
 #include "src/network/network_manager.h"
 #include "src/network/transport/network_transport.h"
 #include "src/network/mqtt/mqtt_handlers.h"
+#include "src/network/bridge/ha_bridge_config.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/web/setup/web_config.h"
 #include "src/web/server/web_admin.h"
@@ -563,13 +564,28 @@ static bool init_nvs() {
   return true;
 }
 
+// The periodic refresh repairs states this panel lost and, from older
+// Bridges, carries name and unit changes. A Bridge that announces "push"
+// sends those changes itself; the refresh then follows a lost message (no
+// earlier than 30 s after the last one) and otherwise runs as a safety net.
 static constexpr uint32_t BACKGROUND_STATE_REFRESH_MS = 60UL * 1000UL;
+static constexpr uint32_t BACKGROUND_STATE_SAFETY_REFRESH_MS = 15UL * 60UL * 1000UL;
+static constexpr uint32_t DROP_REPAIR_DELAY_MS = 5000UL;
+static constexpr uint32_t DROP_REPAIR_MIN_GAP_MS = 30000UL;
+// A drop this soon after our own request belongs to the answer's burst; the
+// next repair then waits twice as long (up to the safety interval) so a
+// panel that cannot keep up does not ask again and again.
+static constexpr uint32_t DROP_REPAIR_ANSWER_WINDOW_MS = 20000UL;
 static uint32_t g_last_bridge_state_refresh_ms = 0;
 static bool g_bridge_state_refresh_pending = false;
+static bool g_drop_repair_pending = false;
+static uint32_t g_drop_repair_due_ms = 0;
+static uint32_t g_drop_repair_gap_ms = DROP_REPAIR_MIN_GAP_MS;
 
 static void mark_background_state_refresh_sent() {
   g_last_bridge_state_refresh_ms = millis();
   g_bridge_state_refresh_pending = false;
+  g_drop_repair_pending = false;
 }
 
 static void service_background_state_refresh(bool allow_now) {
@@ -577,17 +593,56 @@ static void service_background_state_refresh(bool allow_now) {
   if (!networkManager.isMqttConnected()) return;
 
   const uint32_t now = millis();
+  if (mqttTakeInboundDropped() && !g_drop_repair_pending) {
+    if (g_last_bridge_state_refresh_ms != 0 &&
+        now - g_last_bridge_state_refresh_ms < DROP_REPAIR_ANSWER_WINDOW_MS) {
+      g_drop_repair_gap_ms = g_drop_repair_gap_ms >= BACKGROUND_STATE_SAFETY_REFRESH_MS / 2
+                                 ? BACKGROUND_STATE_SAFETY_REFRESH_MS
+                                 : g_drop_repair_gap_ms * 2;
+    } else {
+      g_drop_repair_gap_ms = DROP_REPAIR_MIN_GAP_MS;
+    }
+    // Let the burst that filled the queue end before asking for it again.
+    g_drop_repair_pending = true;
+    g_drop_repair_due_ms = now + DROP_REPAIR_DELAY_MS;
+  }
   if (g_last_bridge_state_refresh_ms == 0) {
     g_last_bridge_state_refresh_ms = now;
     return;
   }
-  if ((uint32_t)(now - g_last_bridge_state_refresh_ms) >= BACKGROUND_STATE_REFRESH_MS) {
+  const uint32_t since_last = now - g_last_bridge_state_refresh_ms;
+  const uint32_t interval = haBridgeConfig.bridgePushesChanges()
+                                ? BACKGROUND_STATE_SAFETY_REFRESH_MS
+                                : BACKGROUND_STATE_REFRESH_MS;
+  if (since_last >= interval) {
+    g_bridge_state_refresh_pending = true;
+  }
+  if (g_drop_repair_pending && static_cast<int32_t>(now - g_drop_repair_due_ms) >= 0 &&
+      since_last >= g_drop_repair_gap_ms) {
     g_bridge_state_refresh_pending = true;
   }
   if (!g_bridge_state_refresh_pending || !allow_now) return;
 
   networkManager.publishBridgeRequest();
   mark_background_state_refresh_sent();
+}
+
+// While a finger is down (slider, colour wheel, scrolling) the frame time
+// belongs to the control under it: background tile states wait for the
+// release, at most TILE_HOLD_MAX_MS at a time. The queues keep the newest
+// state of each tile meanwhile (overflow replaces the oldest entry).
+static constexpr uint32_t TILE_HOLD_MAX_MS = 1500UL;
+static bool tile_updates_held_for_touch() {
+  static uint32_t held_since_ms = 0;
+  if (!DisplayManager::isTouchHeld()) {
+    held_since_ms = 0;
+    return false;
+  }
+  const uint32_t now = millis();
+  if (held_since_ms == 0) held_since_ms = now ? now : 1;
+  if (now - held_since_ms < TILE_HOLD_MAX_MS) return true;
+  held_since_ms = now ? now : 1;  // Apply once, then hold again.
+  return false;
 }
 
 // Single-owner MQTT worker
@@ -1310,8 +1365,9 @@ void loop() {
   // setWifiPowerSaving), and the batch only delayed states: a moving Cover's
   // 5 % steps showed as 20 % jumps (user 2026-10-02). Energy keeps its own
   // retry and one-minute timers.
+  const bool hold_tile_updates = tile_updates_held_for_touch();
   if (!camera_popup_busy && !PopupFirstFrame::any_pending()) {
-    process_tile_update_queues<TileUpdateBudget::Active>();
+    if (!hold_tile_updates) process_tile_update_queues<TileUpdateBudget::Active>();
     process_tile_graph_queue();
     energy_service_periodic();
   }

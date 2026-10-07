@@ -17,6 +17,8 @@ public:
 
   void resetActivityTimer();
   uint32_t getLastActivityTime() { return last_activity_time; }
+  // True while the last touch read reported a finger on the panel.
+  static bool isTouchHeld();
 
   void armWakeTouchGuard();
   void setInputEnabled(bool enable);

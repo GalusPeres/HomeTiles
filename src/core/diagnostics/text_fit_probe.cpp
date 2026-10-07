@@ -23,7 +23,11 @@ bool g_seen_full_logged = false;
 uint32_t hash_text(const char* text, uint32_t seed) {
   uint32_t hash = seed ^ 2166136261u;
   for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p; ++p) {
-    hash = (hash ^ *p) * 16777619u;
+    // Every digit counts as one: a sensor value that keeps changing is one
+    // finding, not a new one per value (they filled the list within hours
+    // and later real findings were no longer logged).
+    const unsigned char c = (*p >= '0' && *p <= '9') ? '0' : *p;
+    hash = (hash ^ c) * 16777619u;
   }
   return hash;
 }
@@ -104,9 +108,14 @@ void check_label(lv_obj_t* label) {
   const int32_t width = lv_obj_get_content_width(label);
   const int32_t height = lv_obj_get_content_height(label);
 
+  // Measure like lv_label does: with recoloring on, "#RRGGBB text#" codes
+  // take no space (they were reported as cut before).
+  const lv_text_flag_t flags = reinterpret_cast<const lv_label_t*>(label)->recolor
+                                   ? LV_TEXT_FLAG_RECOLOR
+                                   : LV_TEXT_FLAG_NONE;
   // The text on its own lines, without wrapping.
   lv_point_t natural;
-  lv_text_get_size(&natural, text, font, letter, line, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  lv_text_get_size(&natural, text, font, letter, line, LV_COORD_MAX, flags);
   if (dotted || lv_label_get_long_mode(label) != LV_LABEL_LONG_MODE_WRAP) {
     if (dotted || natural.x > width + 1) {
       report(label, text, "cut", natural.x, width);
@@ -114,7 +123,7 @@ void check_label(lv_obj_t* label) {
     }
   } else {
     lv_point_t wrapped;
-    lv_text_get_size(&wrapped, text, font, letter, line, width, LV_TEXT_FLAG_NONE);
+    lv_text_get_size(&wrapped, text, font, letter, line, width, flags);
     if (wrapped.y > height + 1) {
       report(label, text, "too-tall", wrapped.y, height);
       return;

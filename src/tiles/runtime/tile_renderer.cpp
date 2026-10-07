@@ -558,7 +558,10 @@ struct SensorUpdate {
   bool valid;
 };
 
-static const uint8_t QUEUE_SIZE = 32;
+// A full-grid cache application queues every Sensor tile of a grid at once
+// (35 on the 7x5 layouts); the queue must hold that without dropping.
+static constexpr uint8_t QUEUE_SIZE =
+    TILES_PER_GRID + 8 > 32 ? static_cast<uint8_t>(TILES_PER_GRID + 8) : 32;
 static SensorUpdate g_update_queue[QUEUE_SIZE];
 
 // Keep byte-sized queue cursors together to avoid padding before each aligned
@@ -575,6 +578,7 @@ static volatile uint8_t g_media_head = 0;
 static volatile uint8_t g_media_tail = 0;
 
 static uint32_t g_queue_overflow_count = 0;
+static volatile bool g_queue_overflowed = false;
 
 static uint8_t get_sensor_decimals(GridType grid_type, uint8_t grid_index) {
   if (grid_index >= TILES_PER_GRID) return 0xFF;
@@ -679,6 +683,9 @@ void queue_sensor_tile_update(GridType grid_type, uint8_t grid_index, const char
     if ((g_queue_overflow_count++ % 10) == 0) {
       Serial.println("[Queue] FULL! Oldest sensor update will be overwritten");
     }
+    // The entity cache already holds the overwritten value; the visible grid
+    // is repaired from it (tiles_process_visible_cache_refresh()).
+    g_queue_overflowed = true;
     g_queue_tail = (g_queue_tail + 1) % QUEUE_SIZE;
   }
 
@@ -689,6 +696,12 @@ void queue_sensor_tile_update(GridType grid_type, uint8_t grid_index, const char
   g_update_queue[g_queue_head].valid = true;
 
   g_queue_head = next_head;
+}
+
+bool tile_renderer_take_sensor_queue_overflow() {
+  if (!g_queue_overflowed) return false;
+  g_queue_overflowed = false;
+  return true;
 }
 
 // The main loop calls this BEFORE lv_timer_handler().
@@ -4986,7 +4999,13 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
     combined += " ";
     combined += unit;
   }
-  lv_label_set_text(value_label, combined.c_str());
+  // The Bridge repeats unchanged states (minute snapshot, reconnects).
+  // lv_label_set_text() always reallocates, relayouts and redraws the label,
+  // so only hand it a text that differs.
+  const char* shown = lv_label_get_text(value_label);
+  if (!shown || strcmp(shown, combined.c_str()) != 0) {
+    lv_label_set_text(value_label, combined.c_str());
+  }
 
   // Per-tile icon colors follow every state update; "--" covers empty,
   // unavailable and unknown states, which keep the default white icon.

@@ -24,6 +24,7 @@
 
 #include "src/devices/common/p4_dsi_ui_ppa.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
+#include "src/devices/common/p4_dsi_cpu_rotate.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/displays_config.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/gsl3680_touch.h"
 #include "src/devices/guition_jc8012p4a1_v2/vendor/guition_sdmmc.h"
@@ -451,6 +452,19 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
     return true;
   }
   if (ppa_result == p4_dsi_ui_ppa::Result::Failed) return false;
+
+  // Small regions: rotate straight into the panel framebuffer
+  // (p4_dsi_cpu_rotate.h) instead of through the PSRAM rotate buffer.
+  if (g_panel_fb_ready) {
+    if (uint16_t* fb = panel_fb()) {
+      p4_dsi_cpu_rotate::rotate_into(fb, display_cfg.width, dst_x, dst_y, w, h,
+                                     data, (g_rotation & 0x02) != 0);
+      flush_framebuffer_rect(fb, dst_x, dst_y, dst_w, dst_h);
+      mark_dirty_rect(dst_x, dst_y, dst_w, dst_h);
+      g_camera_presenter.noteUiWrite(dst_x, dst_y, dst_w, dst_h, false);
+      return true;
+    }
+  }
 
   const size_t pixel_count = static_cast<size_t>(w) * static_cast<size_t>(h);
   if (!ensure_rotate_buffer(pixel_count)) {

@@ -70,6 +70,8 @@ void reset_sensor_widgets(GridType grid_type);
 // Thread-safe sensor update queue (MQTT callback -> main loop).
 void queue_sensor_tile_update(GridType grid_type, uint8_t grid_index, const char* value, const char* unit = nullptr);
 void process_sensor_update_queue(uint8_t max_updates = 0);  // 0 drains the queue
+// True once after the sensor queue overwrote an update that was not applied.
+bool tile_renderer_take_sensor_queue_overflow();
 
 // Switch widget reset functions
 void reset_switch_widget(GridType grid_type, uint8_t grid_index);

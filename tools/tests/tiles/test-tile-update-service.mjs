@@ -24,7 +24,7 @@ assert.doesNotMatch(sleep, /process_tile_graph_queue\(\);/,
 // Every loop, inside the camera gate: no idle two-second batch any more (a
 // moving Cover's steps arrive twice a second, user 2026-10-02).
 assert.match(active,
-  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{\s*process_tile_update_queues<TileUpdateBudget::Active>\(\);\s*process_tile_graph_queue\(\);\s*energy_service_periodic\(\);\s*\}/,
+  /if \(!camera_popup_busy && !PopupFirstFrame::any_pending\(\)\)\s*\{\s*if \(!hold_tile_updates\) process_tile_update_queues<TileUpdateBudget::Active>\(\);\s*process_tile_graph_queue\(\);\s*energy_service_periodic\(\);\s*\}/,
   'Camera gating, graph order, and energy scheduling must stay in loop()');
 assert.doesNotMatch(active, /isHighPerformance|last_queue_ms|>= 2000|process_idle_media_updates/,
   'Tile updates must not wait for an idle batch');

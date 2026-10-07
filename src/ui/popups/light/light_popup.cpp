@@ -2036,7 +2036,7 @@ static void apply_brightness_point(LightPopupContext* ctx, const lv_point_t& poi
   else maybe_live_publish_brightness(ctx);
 }
 
-// Diagnostics for the color wheel and the Kelvin slider: one line per drag
+// Diagnostics for the color wheel and the Kelvin/brightness sliders: one line per drag
 // when the finger lifts, with the handler time per step and LVGL's frames
 // (render time and dirty areas), so a stutter shows where the time goes.
 struct DragTiming {
@@ -2133,9 +2133,11 @@ static void on_brightness_track_event(lv_event_t* e) {
   }
 
   const lv_event_code_t code = lv_event_get_code(e);
+  const bool release = code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST;
   if (code == LV_EVENT_PRESSED) {
     begin_slider_gesture(ctx);
-  } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    start_drag_timing(ctx->card);
+  } else if (release) {
     ctx->user_dragging = false;
   } else if (code != LV_EVENT_PRESSING) {
     return;
@@ -2143,8 +2145,9 @@ static void on_brightness_track_event(lv_event_t* e) {
 
   lv_indev_t* indev = lv_indev_get_act();
   if (!indev) {
-    if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    if (release) {
       commit_brightness(ctx);
+      finish_drag_timing("Brightness");
     }
     return;
   }
@@ -2152,7 +2155,13 @@ static void on_brightness_track_event(lv_event_t* e) {
   lv_point_t point;
   lv_indev_get_point(indev, &point);
   note_slider_movement(ctx, point);
-  apply_brightness_point(ctx, point, code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST);
+  const uint32_t step_us = micros();
+  apply_brightness_point(ctx, point, release);
+  if (!release) {
+    note_drag_step(step_us);
+  } else {
+    finish_drag_timing("Brightness");
+  }
 }
 
 static void apply_temperature_point(LightPopupContext* ctx, const lv_point_t& point, bool commit) {

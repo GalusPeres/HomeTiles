@@ -313,13 +313,26 @@
 #if LV_DRAW_SW_COMPLEX
 /** Maximum shadow size to buffer, where shadow size is `shadow_width + radius`.
  *  Costs this value squared in RAM; 0 disables caching.
+ *  HomeTiles: the popup card shadow corner (shadow width + card radius at the
+ *  largest tile radius) is 19 + 25 = 44 px on 480x480 and at most 28 + 38 =
+ *  66 px on the larger layouts. Without the cache LVGL recomputes that blur for
+ *  every refresh band touching the card, including slider updates inside an
+ *  open popup. The buffer lives in lv_global (internal RAM), so the S3 gets
+ *  only what its corner needs.
  */
-#define LV_DRAW_SW_SHADOW_CACHE_SIZE 0
+#if defined(DEVICE_ESP32_S3_RGB_480)
+#define LV_DRAW_SW_SHADOW_CACHE_SIZE 48
+#else
+#define LV_DRAW_SW_SHADOW_CACHE_SIZE 72
+#endif
 
 /** The circumference of a 1/4 circle is cached for anti-aliasing, costing
  *  radius * 4 bytes per circle. Set to 0 to disable caching.
+ *  HomeTiles: tiles, icon discs, pills, buttons and popups use many different
+ *  radii; with 4 entries they evict each other on every frame. The buffers come
+ *  from the LVGL pool (PSRAM); each entry adds ~24 bytes to lv_global.
  */
-#define LV_DRAW_SW_CIRCLE_CACHE_SIZE 4
+#define LV_DRAW_SW_CIRCLE_CACHE_SIZE 32
 
 #endif /*LV_DRAW_SW_COMPLEX*/
 

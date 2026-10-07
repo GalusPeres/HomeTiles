@@ -160,7 +160,13 @@ constexpr uint32_t kSdRetryMs = 1500;
 // Espressif recommends lowering PCLK when direct PSRAM scanout competes with
 // large SD/JPEG/PSRAM operations. Ten MHz retains smooth UI updates while
 // restoring the margin used by the previously stable Guition build.
-constexpr uint32_t kRgbPclkHz = 10000000;
+// perf3 hardware test: 12 MHz like Arduino_GFX's profile (refresh 35 -> 42
+// Hz); no flicker in the first test. Return to 10 MHz if the panel flickers
+// or shifts under load.
+#ifndef HOMETILES_GUITION_S3_RGB_PCLK_HZ
+#define HOMETILES_GUITION_S3_RGB_PCLK_HZ 12000000UL
+#endif
+constexpr uint32_t kRgbPclkHz = HOMETILES_GUITION_S3_RGB_PCLK_HZ;
 // Espressif explicitly recommends reducing PCLK while RGB scanout competes
 // with network/OTA traffic. Six MHz leaves substantial PSRAM/GDMA headroom
 // while the synchronous version check is active.

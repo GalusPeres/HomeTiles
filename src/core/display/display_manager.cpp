@@ -25,6 +25,8 @@ lv_color_t* DisplayManager::buf2 = nullptr;
 uint32_t DisplayManager::last_activity_time = 0;
 uint8_t DisplayManager::rotation = 0;
 static bool g_ignore_touch_until_release = false;
+// Last touch read reported a pressed point (loop task only).
+static bool g_touch_held = false;
 static bool g_input_enabled = true;
 static volatile uint16_t g_flush_log_budget = 0;
 static size_t g_buffer_lines = 0;
@@ -762,6 +764,7 @@ void IRAM_ATTR DisplayManager::flush_cb(lv_display_t *lv_disp, const lv_area_t *
 // ========== Touch Callback ==========
 // IRAM_ATTR keeps frequent touch polling in internal RAM for responsive input.
 void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *data) {
+  g_touch_held = false;
   // Wake from display sleep only on real touch. The normal loop does not
   // drive this callback during sleep, but lvglServiceDuringBlockingWork()
   // can call lv_timer_handler(), for example while logList() prints a large
@@ -826,6 +829,7 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = mapped_x;
     data->point.y = mapped_y;
+    g_touch_held = true;
 
     // Reset the activity timer and wake the power manager.
     last_activity_time = millis();
@@ -947,6 +951,10 @@ bool DisplayManager::init() {
 
   Serial.println("[OK] Display Manager initialized");
   return true;
+}
+
+bool DisplayManager::isTouchHeld() {
+  return g_touch_held;
 }
 
 void DisplayManager::resetActivityTimer() {

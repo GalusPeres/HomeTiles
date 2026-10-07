@@ -3,7 +3,8 @@
 // device (user 2026-10-03). It runs here on real LVGL: a cut and an
 // ellipsized single-line label, a wrapped label taller than its fixed box
 // and a label wider than its clipping parent are logged once with their
-// whole text; fitting, wrapping and hidden labels are not.
+// whole text; fitting, wrapping, hidden and recolored labels whose codes
+// take no space are not, and a value that changes is one finding.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -70,6 +71,10 @@ int main() {
   label(button, "Zaktualizuj HomeTiles Bridge", LV_SIZE_CONTENT, LV_LABEL_LONG_MODE_WRAP);   // outside parent
   lv_obj_t* hidden = label(screen, "Bardzo długi ukryty tekst etykiety", 60, LV_LABEL_LONG_MODE_CLIP);
   lv_obj_add_flag(hidden, LV_OBJ_FLAG_HIDDEN);                                        // hidden: not checked
+  lv_obj_t* colored = label(screen, "#FFC53D 1234# Wh", 110, LV_LABEL_LONG_MODE_CLIP);
+  lv_label_set_recolor(colored, true);                                                // codes take no space: fits
+  label(screen, "Moc 1234567890 W", 80, LV_LABEL_LONG_MODE_CLIP);                     // cut
+  label(screen, "Moc 9876543210 W", 80, LV_LABEL_LONG_MODE_CLIP);                     // same finding, other value
 
   lv_refr_now(display);
   text_fit_probe::start();
@@ -94,6 +99,7 @@ assert.deepEqual(reasons, [
   'cut Uzbrojony (poza domem)',
   'too-tall Encja musi być wybrana w HomeTiles Bridge.',
   'outside-parent Zaktualizuj HomeTiles Bridge',
+  'cut Moc 1234567890 W',
 ], run.stdout);
 for (const line of findings) assert.match(line, /need=\d+ have=\d+ line=\d+ at=-?\d+,-?\d+/, line);
 assert.match(fs.readFileSync(path.join(root, 'HomeTiles.ino'), 'utf8'),

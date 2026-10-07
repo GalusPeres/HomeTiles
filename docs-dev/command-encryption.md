@@ -407,3 +407,19 @@ in pages of 5,000 rows, newest time range first, at most 60,480 rows (one
 change per 10 s for a week); beyond that the oldest buckets stay empty. State,
 binary and editable histories keep their existing paged limit of 8,192
 changes.
+
+Refresh (`tab5_lvgl/config/{id}/bridge/request`), energy and weather requests
+are never answered when retained either. A refresh republishes the
+configuration and every entity state: one runs at a time, one more waits and
+at most six start per minute. Energy and weather requests run one at a time
+with two waiting and twelve per minute. Further requests are dropped with one
+warning per minute. Without an Energy dashboard the Bridge answers
+`{"period": ..., "entries": []}` (one warning per hour) instead of staying
+silent, which had every panel ask again every 15 seconds.
+
+The configuration carries `"push": 1` when the Bridge sends name, unit and
+icon changes by itself (5 s after the change, only when the configuration
+differs). Such a panel asks for a refresh after a reconnect, 5 s after it
+dropped an incoming message (at most every 30 s) and otherwise every
+15 minutes; with older Bridges it keeps asking every minute. These flags only
+change how often the panel asks, never a check.

@@ -9,6 +9,12 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length);
 // header comment) and runs the real per-topic processing on the caller's task.
 // Call from the main loop(). max_msgs=0 drains everything currently queued.
 void mqtt_process_inbound_queue(uint8_t max_msgs = 0);
+// True once after mqttCallback() had to drop a state message (queue full or
+// no memory); the loop then asks the Bridge for a refresh.
+bool mqttTakeInboundDropped();
+// True while received messages wait for the loop or one arrived within
+// `quiet_ms`: a long loop block now would overflow the inbound queue.
+bool mqttInboundBusy(uint32_t quiet_ms = 0);
 // Consumes the post-connect pending flag of the MQTT worker and brings the
 // application layer up: subscribes, discovery, settings, snapshot. Must run on
 // the loop task because of flash, LVGL and I2C access; call once per loop

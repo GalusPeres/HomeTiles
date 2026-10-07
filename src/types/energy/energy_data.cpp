@@ -35,6 +35,10 @@ struct EnergyRequestState {
   uint32_t last_attempt_ms = 0;  // loop-task only
   volatile bool awaiting_response = false;
   volatile bool retry_requested = false;
+  // Timeouts in a row (loop-task only); the response clears it.
+  uint8_t timeouts = 0;
+  // millis() of the last response for this period (loop-task only).
+  uint32_t last_response_ms = 0;
 };
 
 EnergyRequestState g_day_request;
@@ -45,6 +49,16 @@ uint32_t g_last_periodic_ms = 0;
 constexpr uint32_t kEnergyRequestThrottleMs = 10000UL;
 constexpr uint32_t kEnergyRetryBackoffMs = 2000UL;
 constexpr uint32_t kEnergyResponseTimeoutMs = 15000UL;
+// Home Assistant's statistics have five-minute resolution at best, so a
+// shorter periodic refresh of the tiles only repeats the same totals.
+constexpr uint32_t kEnergyPeriodicMs = 5UL * 60UL * 1000UL;
+// A Bridge without Energy dashboard never answers. After this many timeouts
+// in a row the request waits for the next periodic slot or a popup instead of
+// retrying every 15 seconds (each try logged a Home Assistant warning).
+constexpr uint8_t kEnergyMaxTimeoutsInRow = 2;
+// The popup asks again on every Day/Week/Month switch; within a minute the
+// statistics cannot have changed, so the cached answer is shown instead.
+constexpr uint32_t kEnergyFreshMs = 60UL * 1000UL;
 
 const char* normalize_period(const char* period) {
   if (!period || !*period) return "day";
@@ -108,7 +122,12 @@ void service_energy_retry(const char* period,
   if (state.awaiting_response) {
     if ((uint32_t)(now - state.last_attempt_ms) < kEnergyResponseTimeoutMs) return;
     state.awaiting_response = false;
-    state.retry_requested = true;
+    if (state.timeouts < 255) ++state.timeouts;
+    state.retry_requested = state.timeouts < kEnergyMaxTimeoutsInRow;
+    if (!state.retry_requested) {
+      Serial.printf("[Energy] No response to %s request (%u in a row); waiting for the next refresh\n",
+                    period, static_cast<unsigned>(state.timeouts));
+    }
   }
   if (!state.retry_requested) return;
   if (state.last_attempt_ms != 0 &&
@@ -300,6 +319,9 @@ void queue_energy_response(const char* payload, size_t len) {
   EnergyRequestState& request = request_state_for_period(period);
   request.awaiting_response = false;
   request.retry_requested = false;
+  request.timeouts = 0;
+  request.last_response_ms = millis();
+  if (request.last_response_ms == 0) request.last_response_ms = 1;
 }
 
 void process_energy_response_queue() {
@@ -337,6 +359,10 @@ bool energy_request_period(const char* period, bool force) {
     request.awaiting_response = false;
     request.retry_requested = true;
   }
+  if (force && !request.retry_requested && request.last_response_ms != 0 &&
+      (uint32_t)(now - request.last_response_ms) < kEnergyFreshMs) {
+    return true;
+  }
   if (request.retry_requested) {
     if (request.last_attempt_ms != 0 &&
         (uint32_t)(now - request.last_attempt_ms) < kEnergyRetryBackoffMs) {
@@ -361,7 +387,10 @@ void energy_service_periodic() {
   service_energy_retry("day", g_day_request, now);
   service_energy_retry("week", g_week_request, now);
   service_energy_retry("month", g_month_request, now);
-  if (g_last_periodic_ms != 0 && (uint32_t)(now - g_last_periodic_ms) < 60UL * 1000UL) {
+  // Without an energy section the Bridge has nothing to answer; Energy tiles
+  // and the popup still ask on their own when they are shown.
+  if (!haBridgeConfig.hasEnergyEntries()) return;
+  if (g_last_periodic_ms != 0 && (uint32_t)(now - g_last_periodic_ms) < kEnergyPeriodicMs) {
     return;
   }
   if (energy_request_day_for_tiles(false)) {

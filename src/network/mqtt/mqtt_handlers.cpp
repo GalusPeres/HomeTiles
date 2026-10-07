@@ -87,6 +87,22 @@ struct PendingHistoryRequest {
 
 static PendingHistoryRequest g_pending_history[kHistoryPendingSlots];
 
+// The graph popup asks again on every range switch. An answer stays valid for
+// a minute: replay it instead of another Recorder query. Payloads in PSRAM.
+struct HistoryReplayEntry {
+  String entity_id;
+  uint16_t hours = 0;
+  uint16_t period_minutes = 0;
+  uint16_t points = 0;
+  uint32_t stored_ms = 0;
+  char* payload = nullptr;
+  size_t length = 0;
+};
+static constexpr uint8_t kHistoryReplaySlots = 4;
+static constexpr uint32_t kHistoryReplayMaxAgeMs = 60UL * 1000UL;
+static constexpr size_t kHistoryReplayMaxBytes = 8UL * 1024UL;
+static HistoryReplayEntry g_history_replay[kHistoryReplaySlots];
+
 struct PendingDiscreteHistoryRequest {
   String entity_id;
   String kind;
@@ -98,6 +114,17 @@ struct PendingDiscreteHistoryRequest {
 static PendingDiscreteHistoryRequest g_pending_discrete_history;
 
 static String buildHaStatestreamTopic(const String& entity_id, const char* suffix);
+
+// Set by the MQTT worker when it drops an inbound message, read by the loop.
+static volatile bool g_inbound_dropped = false;
+// millis() of the last message the MQTT worker received.
+static volatile uint32_t g_last_inbound_ms = 0;
+
+bool mqttTakeInboundDropped() {
+  if (!g_inbound_dropped) return false;
+  g_inbound_dropped = false;
+  return true;
+}
 
 static void update_all_grids(const char* entity_id, const char* payload) {
   if (!entity_id || !payload) return;
@@ -375,6 +402,70 @@ static bool extract_json_uint16_field(const char* json, const char* key,
   if (!end || end == value || parsed > 0xFFFFUL) return false;
   out = static_cast<uint16_t>(parsed);
   return true;
+}
+
+static const PendingHistoryRequest* find_pending_history_request(const char* entity_id) {
+  if (!entity_id || !*entity_id) return nullptr;
+  for (uint8_t i = 0; i < kHistoryPendingSlots; ++i) {
+    if (g_pending_history[i].active &&
+        g_pending_history[i].entity_id.equalsIgnoreCase(entity_id)) {
+      return &g_pending_history[i];
+    }
+  }
+  return nullptr;
+}
+
+static void store_history_replay(const PendingHistoryRequest& request,
+                                 const char* payload, size_t length) {
+  if (!payload || length == 0 || length > kHistoryReplayMaxBytes) return;
+  HistoryReplayEntry* slot = nullptr;
+  for (auto& entry : g_history_replay) {
+    if (entry.payload && entry.entity_id.equalsIgnoreCase(request.entity_id) &&
+        entry.hours == request.hours &&
+        entry.period_minutes == request.period_minutes &&
+        entry.points == request.points) {
+      slot = &entry;
+      break;
+    }
+  }
+  if (!slot) {
+    for (auto& entry : g_history_replay) {
+      if (!entry.payload) { slot = &entry; break; }
+      if (!slot || entry.stored_ms < slot->stored_ms) slot = &entry;
+    }
+  }
+  char* copy = static_cast<char*>(
+      heap_caps_malloc(length + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (!copy) return;
+  memcpy(copy, payload, length);
+  copy[length] = '\0';
+  if (slot->payload) heap_caps_free(slot->payload);
+  slot->entity_id = request.entity_id;
+  slot->hours = request.hours;
+  slot->period_minutes = request.period_minutes;
+  slot->points = request.points;
+  slot->stored_ms = millis();
+  slot->payload = copy;
+  slot->length = length;
+}
+
+static bool replay_history_response(const char* entity_id, uint16_t hours,
+                                    uint16_t period_minutes, uint16_t points) {
+  const uint32_t now = millis();
+  for (auto& entry : g_history_replay) {
+    if (!entry.payload || !entry.entity_id.equalsIgnoreCase(entity_id) ||
+        entry.hours != hours || entry.period_minutes != period_minutes ||
+        entry.points != points) {
+      continue;
+    }
+    if (now - entry.stored_ms >= kHistoryReplayMaxAgeMs) return false;
+    Serial.printf("[History] Reusing answer for %s (%lu s old)\n", entity_id,
+                  static_cast<unsigned long>((now - entry.stored_ms) / 1000));
+    queue_sensor_popup_history(nullptr, entry.payload, entry.length);
+    queue_tile_graph_history(nullptr, entry.payload, entry.length);
+    return true;
+  }
+  return false;
 }
 
 static void clear_pending_history_request(const char* entity_id) {
@@ -882,9 +973,9 @@ static void handleSceneCommand(const char* payload, size_t) {
   Serial.printf("Scene command received: %s\n", payload);
 }
 
-static void handleHaWohnTemp(const char* payload, size_t) {
-  float v = atof(payload);
-  Serial.printf("HA living area temperature: %s -> %.2f C\n", payload, v);
+static void handleHaWohnTemp(const char*, size_t) {
+  // Legacy fixed topic: nothing reads this value any more. It only printed
+  // every state into the log.
 }
 
 static bool parseBoolPayload(const char* payload, bool* out) {
@@ -1613,6 +1704,12 @@ static QueueHandle_t mqttInboundQueue() {
   return g_mqtt_inbound_queue;
 }
 
+bool mqttInboundBusy(uint32_t quiet_ms) {
+  if (g_mqtt_inbound_queue && uxQueueMessagesWaiting(g_mqtt_inbound_queue) > 0) return true;
+  const uint32_t last = g_last_inbound_ms;
+  return quiet_ms != 0 && last != 0 && millis() - last < quiet_ms;
+}
+
 // One allocation per message, laid out as [MqttInboundMsg][topic\0][payload].
 // PSRAM preferred (freed by the drainer after processMqttMessage()).
 static MqttInboundMsg* mqttAllocInbound(const char* topic,
@@ -1719,6 +1816,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   }
 
   QueueHandle_t q = mqttInboundQueue();
+  g_last_inbound_ms = millis();
   bool invalid = false;
   const size_t packet_capacity = networkManager.getMqttBufferSize();
   MqttInboundMsg* msg =
@@ -1738,6 +1836,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
     return;
   }
   if (!msg) {
+    g_inbound_dropped = true;
     Serial.printf("[MQTT] Inbound allocation/queue unavailable; dropped '%s'\n",
                   topic ? topic : "?");
     return;
@@ -1748,6 +1847,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   // drop logs because display sleep drains only about every 150 ms.
   if (xQueueSend(q, &msg, pdMS_TO_TICKS(50)) != pdTRUE) {
     heap_caps_free(msg);
+    g_inbound_dropped = true;
     static uint32_t last_drop_log_ms = 0;
     const uint32_t drop_now_ms = millis();
     if (last_drop_log_ms == 0 || (uint32_t)(drop_now_ms - last_drop_log_ms) >= 5000) {
@@ -1909,6 +2009,19 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
           clear_pending_history_request(response_entity.c_str());
         }
       } else {
+        // Keep it for a replay only when the answer is for the range still
+        // pending: a fast second switch replaces the pending range first.
+        uint16_t response_hours = 0;
+        uint16_t response_period = 0;
+        const PendingHistoryRequest* request =
+            find_pending_history_request(response_entity.c_str());
+        if (request &&
+            extract_json_uint16_field(large_buf, "hours", response_hours) &&
+            extract_json_uint16_field(large_buf, "period_minutes", response_period) &&
+            response_hours == request->hours &&
+            response_period == request->period_minutes) {
+          store_history_replay(*request, large_buf, copy_len);
+        }
         clear_pending_history_request(response_entity.c_str());
       }
     }
@@ -2457,6 +2570,11 @@ void mqttPublishHistoryRequest(const char* entity_id,
   const char* history_topic = networkManager.getHistoryRequestTopic();
   const bool can_request_ha = mqtt_online && history_topic && *history_topic;
   const bool time_valid = has_valid_local_time_for_history();
+
+  if (can_request_ha && replay_history_response(entity_id, hours, period_minutes, points)) {
+    clear_pending_history_request(entity_id);
+    return;
+  }
 
   // Discard previous pending entries for the same entity.
   clear_pending_history_request(entity_id);

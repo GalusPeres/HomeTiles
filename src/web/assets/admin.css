@@ -424,6 +424,8 @@
     .settings-row-btn { flex:0 0 auto; width:auto; margin:0; }
     .settings-fw-file { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:1px solid #232323; }
     .settings-fw-file .settings-note { margin:0; }
+    /* An update status line shows only while it has something to say. */
+    .settings-page .ota-status:empty { display:none; }
     .settings-fold > summary { list-style:none; display:flex; align-items:center; gap:14px; padding:4px 0; cursor:pointer; }
     .settings-fold > summary::-webkit-details-marker { display:none; }
     .settings-fold > summary:focus-visible { outline:none; box-shadow:0 0 0 3px var(--accent-ring); border-radius:8px; }
@@ -663,9 +665,11 @@
     .local-camera-slider output { text-align:right; font-variant-numeric:tabular-nums; color:var(--text-2); }
     .file-picker-name { color:var(--text-3); font-size:14px; overflow-wrap:anywhere; }
     .btn-inline { width:auto; margin-top:0; }
-    .file-picker .btn,
-    .file-picker .btn-secondary,
-    .file-picker .btn-inline {
+    /* The firmware file row on Settings > System: compact buttons in one line
+       (.btn-secondary alone is as wide as its container). */
+    .settings-fw-file .btn,
+    .settings-fw-file .btn-secondary,
+    .settings-fw-file .btn-inline {
       width:auto;
       margin-top:0;
       padding:10px 14px;

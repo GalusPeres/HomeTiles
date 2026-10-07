@@ -110,6 +110,8 @@ void appendAdminScripts(String& html) {
   appendJsEntry("save", tr.save);
   appendJsEntry("restart", tr.restart_button);
   appendJsEntry("restartConfirm", tr.restart_confirm);
+  appendJsEntry("headBarRestartConfirm", tr.head_bar_restart_confirm);
+  appendJsEntry("headBarTileOutside", tr.head_bar_tile_outside);
   appendJsEntry("saveFailed", tr.save_failed);
   appendJsEntry("loading", tr.loading);
   appendJsEntry("ioSwitch", tr.tile_type_switch);
@@ -181,6 +183,11 @@ void appendAdminScripts(String& html) {
   html += "];\n";
   html += "  const GRID_COLS = " + String(GRID_COLS) + ";\n";
   html += "  const GRID_ROWS = " + String(GRID_ROWS) + ";\n";
+  // The shown grid of this boot (grid_layout.h): with the head bar fewer,
+  // larger cells; tiles are placed and moved inside it.
+  html += "  const GRID_SHOWN_COLS = " + String(GRID_SHOWN_COLS) + ";\n";
+  html += "  const GRID_SHOWN_ROWS = " + String(GRID_SHOWN_ROWS) + ";\n";
+  html += String("  const HEAD_BAR = ") + (grid_layout::head_bar() ? "true" : "false") + ";\n";
   html += "  const TILES_PER_GRID = " +
           String(static_cast<unsigned>(TILES_PER_GRID)) + ";\n";
   html += "  const ADMIN_WEB_SESSION_TOKEN = " +

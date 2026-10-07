@@ -6,35 +6,38 @@
 
 #include "src/devices/device.h"
 #include "src/tiles/config/tile_geometry.h"
+#include "src/tiles/config/grid_layout.h"
 #include "src/core/config/pin_access.h"
 #include "src/core/config/tile_color.h"
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/types/tile_type_policy.h"
 
+// The stored grid: the profile's columns and rows. Tile positions, the
+// slots per grid and their validation keep it whatever the panel shows.
 static constexpr uint8_t GRID_COLS = Device::kGridCols;
 static constexpr uint8_t GRID_ROWS = Device::kGridRows;
 static constexpr size_t TILES_PER_GRID = GRID_COLS * GRID_ROWS;
 
 static constexpr int GRID_GAP = Device::kGridGap;
 static constexpr int GRID_PAD = Device::kGridPad;
-static constexpr int GRID_CELL_W = Device::kGridCellW;
-static constexpr int GRID_CELL_H = Device::kGridCellH;
 
-// The fixed tracks rarely fill the screen exactly (1280x800 with 7x5 cells
-// leaves 3 px vertically). The rest is split between both outer margins, the
-// top and left margins taking the smaller half, instead of collecting at the
-// bottom or right edge; opposite margins then differ by at most one pixel.
-static constexpr int GRID_EXTRA_X =
-    static_cast<int>(Device::kScreenWidth) -
-    (GRID_COLS * GRID_CELL_W + (GRID_COLS - 1) * GRID_GAP + 2 * GRID_PAD);
-static constexpr int GRID_EXTRA_Y =
-    static_cast<int>(Device::kScreenHeight) -
-    (GRID_ROWS * GRID_CELL_H + (GRID_ROWS - 1) * GRID_GAP + 2 * GRID_PAD);
-static_assert(GRID_EXTRA_X >= 0 && GRID_EXTRA_Y >= 0, "The tile grid must fit the screen");
-static constexpr int GRID_PAD_LEFT = GRID_PAD + GRID_EXTRA_X / 2;
-static constexpr int GRID_PAD_RIGHT = GRID_PAD + GRID_EXTRA_X - GRID_EXTRA_X / 2;
-static constexpr int GRID_PAD_TOP = GRID_PAD + GRID_EXTRA_Y / 2;
-static constexpr int GRID_PAD_BOTTOM = GRID_PAD + GRID_EXTRA_Y - GRID_EXTRA_Y / 2;
+// The shown grid (grid_layout.h), read at boot: the profile's own or, with
+// the head bar, fewer and larger cells below the head. Cell sizes and the
+// outer margins follow it; with the profile's grid they are the former
+// constants (the fixed tracks' leftover split between both outer margins,
+// the top and left ones taking the smaller half).
+static_assert(grid_layout::profile_grid().pad_left >= Device::kGridPad &&
+                  grid_layout::profile_grid().pad_top >= Device::kGridPad,
+              "The tile grid must fit the screen");
+static const int& GRID_CELL_W = grid_layout::g_shown.cell_w;
+static const int& GRID_CELL_H = grid_layout::g_shown.cell_h;
+static const int& GRID_PAD_LEFT = grid_layout::g_shown.pad_left;
+static const int& GRID_PAD_RIGHT = grid_layout::g_shown.pad_right;
+static const int& GRID_PAD_TOP = grid_layout::g_shown.pad_top;
+static const int& GRID_PAD_BOTTOM = grid_layout::g_shown.pad_bottom;
+// The shown grid's columns and rows (at most GRID_COLS and GRID_ROWS).
+static const uint8_t& GRID_SHOWN_COLS = grid_layout::g_shown.cols;
+static const uint8_t& GRID_SHOWN_ROWS = grid_layout::g_shown.rows;
 
 // A media tile renders its (often long) title as a horizontally scrolling band the
 // full width of the tile. On the 8-inch device every flush is PPA-rotated, and a
@@ -250,6 +253,27 @@ static inline bool tileBorderEnabled(const Tile& tile) {
 
 // Weather uses the same byte for its icons: 0 draws filled, colored weather
 // icons, 1 the white MDI outlines.
+// Where a stored tile shows in the shown grid (grid_layout.h). Without the
+// head bar its span is cut at the grid's edge as always. With the head bar a
+// tile that does not lie wholly inside the smaller grid is not drawn (the Web
+// Admin marks it; its position stays), and the Settings and Back tiles give
+// way to the head's gear and X.
+static inline bool shownTileLayout(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
+  if (tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
+  col = tile.col;
+  row = tile.row;
+  span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
+  span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
+  clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
+  if (grid_layout::head_bar()) {
+    if (tile.type == TILE_SETTINGS || tile.type == TILE_BACK) return false;
+    return grid_layout::inside(col, row, span_w, span_h);
+  }
+  if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
+  if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
+  return true;
+}
+
 static inline bool weatherColoredIcons(const Tile& tile) {
   return tile.type != TILE_WEATHER || tile.sensor_display_mode != 1;
 }

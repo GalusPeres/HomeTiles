@@ -1,3 +1,27 @@
+  // The shown grid (grid_layout.h): with the head bar the panel shows fewer,
+  // larger cells. New places, moves and sizes stay inside it; stored
+  // positions keep the full GRID_COLS x GRID_ROWS, so a tile outside the
+  // shown grid is marked (tile-outside) and never moved by the editor. The
+  // screensaver tab keeps its own grid.
+  function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
+  function placeCols(tab = currentTileTab) {
+    return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_COLS === 'number'
+      ? GRID_SHOWN_COLS : GRID_COLS;
+  }
+  function placeRows(tab = currentTileTab) {
+    return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_ROWS === 'number'
+      ? GRID_SHOWN_ROWS : GRID_ROWS;
+  }
+  // A stored layout wholly inside the shown grid.
+  function insideShownGrid(tab, layout) {
+    return !!layout && layout.col + layout.span_w <= placeCols(tab) + 0.001 &&
+      layout.row + layout.span_h <= placeRows(tab) + 0.001;
+  }
+  // Settings and Back give way to the head's gear and X (shownTileLayout).
+  function hiddenByHeadBar(tab, type) {
+    return headBarLayout() && !isScreensaverTileTab(tab) && [7, 8].includes(Number(type));
+  }
+
   function clampInt(value, min, max, fallback) {
     const v = parseInt(value, 10);
     if (isNaN(v)) return fallback !== undefined ? fallback : min;
@@ -168,7 +192,22 @@
 
   function setTileGridPosition(el, col, row, spanW, spanH) {
     setGridItemPosition(el, col, row, spanW, spanH);
-    const fractional = [col, row, spanW, spanH].some(v => !Number.isInteger(v));
+    // Outside the shown grid: placed like a half step (absolute, not a grid
+    // track), so it shows beside the screen instead of widening it.
+    const headBar = headBarLayout();
+    const tab = headBar ? (el.closest?.('[id^="tab-tiles-"]')?.id?.slice('tab-tiles-'.length) || currentTileTab) : '';
+    const outside = headBar && !el.classList.contains('empty') &&
+      !insideShownGrid(tab, {col, row, span_w: spanW, span_h: spanH});
+    el.classList.toggle('tile-outside', outside);
+    if (outside) {
+      el.title = t('headBarTileOutside');
+      el.dataset.outsideTitle = '1';
+    } else if (el.dataset.outsideTitle) {
+      el.removeAttribute('title');
+      delete el.dataset.outsideTitle;
+    }
+    el.classList.toggle('tile-bar-hidden', headBar && hiddenByHeadBar(tab, el.dataset.type));
+    const fractional = outside || [col, row, spanW, spanH].some(v => !Number.isInteger(v));
     el.classList.toggle('fractional-tile', fractional);
     for (const [name, value] of Object.entries({col, row, w: spanW, h: spanH})) el.style.setProperty('--tile-' + name, String(value));
     if (fractional) { el.style.gridColumn = 'auto'; el.style.gridRow = 'auto'; }
@@ -249,7 +288,7 @@
 
   function slotFits(tab, occupied, col, row, spanW, spanH) {
     if (col < 0 || row < firstAllowedGridRow(tab) ||
-        col + spanW > GRID_COLS || row + spanH > GRID_ROWS) return false;
+        col + spanW > placeCols(tab) || row + spanH > placeRows(tab)) return false;
     for (let r = row * 2; r < (row + spanH) * 2; r++) {
       for (let c = col * 2; c < (col + spanW) * 2; c++) {
         if (occupied[r][c]) return false;
@@ -325,8 +364,8 @@
 
   function firstFreeSlot(tab, occupied) {
     for (const [spanW, spanH, step] of [[1, 1, 1], [1, 1, 0.5], [1, 0.5, 1], [1, 0.5, 0.5]]) {
-      for (let r = firstAllowedGridRow(tab); r + spanH <= GRID_ROWS; r += step) {
-        for (let c = 0; c + spanW <= GRID_COLS; c += step) {
+      for (let r = firstAllowedGridRow(tab); r + spanH <= placeRows(tab); r += step) {
+        for (let c = 0; c + spanW <= placeCols(tab); c += step) {
           if (slotFits(tab, occupied, c, r, spanW, spanH)) {
             return { col: c, row: r, span_w: spanW, span_h: spanH };
           }

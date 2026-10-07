@@ -27,6 +27,56 @@
     }
   }
 
+// The head bar layout (grid_layout.h) is read at boot: saving it asks to
+// restart the panel; the switch shows the saved choice until then.
+function setHeadBarToggles(enabled) {
+  document.querySelectorAll('.global-head-bar-toggle').forEach(box => { box.checked = !!enabled; });
+}
+function restartPanelForLayout() {
+  const restartForm = document.getElementById('admin_restart_form');
+  // form.submit() cannot carry the CSRF header a password-protected panel
+  // requires (hardware/editor.js restartHardwareIoNow).
+  if (restartForm && !window.HomeTilesAuth?.csrfToken()) {
+    window.setTimeout(() => restartForm.submit(), 100);
+    return;
+  }
+  fetch('/restart', {method: 'POST'}).catch(() => {}).finally(() => {
+    window.setTimeout(() => window.location.assign('/'), 300);
+  });
+}
+async function saveHeadBar(input) {
+  const wanted = !!input?.checked;
+  setHeadBarToggles(wanted);
+  try {
+    const response = await fetch('/api/display/head-bar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'enabled=' + (wanted ? '1' : '0')
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    // Already this boot's layout (switched back before a restart).
+    if (data.active === wanted) return;
+    if (window.confirm(t('headBarRestartConfirm'))) restartPanelForLayout();
+  } catch (error) {
+    setHeadBarToggles(!wanted);
+    showNotification(t('networkErrorSave'), false);
+  }
+}
+// The head bar preview's time (web_admin_html.cpp), from the browser clock
+// in the panel's 12/24-hour format.
+function refreshHeadBarTime() {
+  const now = new Date();
+  document.querySelectorAll('.head-bar-preview .head-time').forEach(el => {
+    let hour = now.getHours();
+    if (el.dataset.hour12 === '1') hour = hour % 12 || 12;
+    el.textContent = String(hour).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  });
+}
+if (typeof HEAD_BAR === 'boolean' && HEAD_BAR && typeof window !== 'undefined' && window.setInterval) {
+  window.setInterval(refreshHeadBarTime, 30000);
+}
+
 // Icon discs are a root class: every preview grid, including cached and lazily
 // inserted folders, follows it without re-rendering a tile.
 let iconDiscsSaveSequence = 0;

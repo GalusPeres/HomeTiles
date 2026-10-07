@@ -4806,15 +4806,7 @@ void set_tile_grid_cell(lv_obj_t* obj, uint8_t col, uint8_t row, uint8_t span_w,
 }
 
 static bool get_tile_layout(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
-  if (tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
-  col = tile.col;
-  row = tile.row;
-  span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
-  span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
-  clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
-  if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
-  if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
-  return true;
+  return shownTileLayout(tile, col, row, span_w, span_h);
 }
 
 static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], float col, float row, float span_w, float span_h) {
@@ -4875,8 +4867,9 @@ void render_tile_grid(lv_obj_t* parent, const TileGridConfig& config, GridType g
     mark_occupied(occupied, col, row, span_w, span_h);
   }
 
-  for (uint8_t r = 0; r < GRID_ROWS; ++r) {
-    for (uint8_t c = 0; c < GRID_COLS; ++c) {
+  // The empty cells of the shown grid (grid_layout.h).
+  for (uint8_t r = 0; r < GRID_SHOWN_ROWS; ++r) {
+    for (uint8_t c = 0; c < GRID_SHOWN_COLS; ++c) {
       if (!occupied[r][c]) {
         render_empty_tile(parent, c, r);
       }

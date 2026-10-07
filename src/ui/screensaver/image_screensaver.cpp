@@ -1419,14 +1419,15 @@ void rebuild_slot_grid(ScreensaverState* st) {
   // Use exactly the normal tile system's tracks, gaps and outer padding.
   // The prepared full-frame image starts at GRID_PAD - 4, placing it
   // exactly 4 px outside the tiles on every side.
+  // The shown grid (grid_layout.h): with the head bar its larger cells.
   static lv_coord_t col_dsc[GRID_COLS + 1];
   static lv_coord_t row_dsc[GRID_ROWS + 1];
   static bool grid_dsc_ready = false;
   if (!grid_dsc_ready) {
-    for (uint8_t i = 0; i < GRID_COLS; ++i) col_dsc[i] = GRID_CELL_W;
-    col_dsc[GRID_COLS] = LV_GRID_TEMPLATE_LAST;
-    for (uint8_t i = 0; i < GRID_ROWS; ++i) row_dsc[i] = GRID_CELL_H;
-    row_dsc[GRID_ROWS] = LV_GRID_TEMPLATE_LAST;
+    for (uint8_t i = 0; i < GRID_SHOWN_COLS; ++i) col_dsc[i] = GRID_CELL_W;
+    col_dsc[GRID_SHOWN_COLS] = LV_GRID_TEMPLATE_LAST;
+    for (uint8_t i = 0; i < GRID_SHOWN_ROWS; ++i) row_dsc[i] = GRID_CELL_H;
+    row_dsc[GRID_SHOWN_ROWS] = LV_GRID_TEMPLATE_LAST;
     grid_dsc_ready = true;
   }
 
@@ -1449,10 +1450,16 @@ void rebuild_slot_grid(ScreensaverState* st) {
     lv_obj_remove_flag(st->slot_grid, LV_OBJ_FLAG_CLICKABLE);
   }
 
+  // Screensaver tiles keep to the bottom rows: with the head bar's fewer
+  // rows they move up by the difference; one beyond its columns is left out.
+  const float row_shift = static_cast<float>(GRID_ROWS - GRID_SHOWN_ROWS);
   const TileGridConfig& tile_grid = screensaverConfig.tileGrid();
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     if (tile_grid.tiles[i].type == TILE_EMPTY) continue;
-    build_slot_tile(st, i, tile_grid.tiles[i]);
+    Tile shown = tile_grid.tiles[i];
+    shown.row -= row_shift;
+    if (shown.row < 0 || shown.col + (shown.span_w < 1 ? 1 : shown.span_w) > GRID_SHOWN_COLS + 0.001f) continue;
+    build_slot_tile(st, i, shown);
   }
 
   apply_slot_tile_shadows(st);

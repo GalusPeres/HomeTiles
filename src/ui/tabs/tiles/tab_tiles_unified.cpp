@@ -24,6 +24,7 @@
 #include "src/web/server/web_admin.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/runtime/tile_icon_source.h"
+#include "src/ui/tabs/tiles/home_bar.h"
 #include <misc/cache/instance/lv_image_cache.h>
 #include <Arduino.h>
 #include <atomic>
@@ -722,15 +723,7 @@ static const char* getGridName(GridType type) {
 }
 
 static bool get_tile_layout(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
-  if (tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
-  col = tile.col;
-  row = tile.row;
-  span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
-  span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
-  clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
-  if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
-  if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
-  return true;
+  return shownTileLayout(tile, col, row, span_w, span_h);
 }
 
 static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], float col, float row, float span_w, float span_h) {
@@ -1118,6 +1111,7 @@ static void build_folder_cache_entry(FolderCacheEntry& entry, GridType grid_type
   // unchanged payload is skipped there.
   tile_renderer_set_build_grid(&config);
   render_tile_grid(entry.grid, config, grid_type, g_tiles_scene_cbs[idx], entry.tile_objs);
+  home_bar::build(entry.grid, entry.folder_id);
 
   // Warm hidden folder caches with lightweight states only. Media payloads can
   // include cover data and are applied when the folder becomes visible.
@@ -1321,12 +1315,13 @@ static lv_obj_t* create_tiles_grid(lv_obj_t* parent) {
   lv_obj_set_style_pad_column(grid, GAP, 0);
   lv_obj_set_style_pad_row(grid, GAP, 0);
 
+  // The shown grid's tracks (grid_layout.h), fixed for this boot.
   static lv_coord_t col_dsc[GRID_COLS + 1];
   static lv_coord_t row_dsc[GRID_ROWS + 1];
   static bool dsc_ready = false;
   if (!dsc_ready) {
-    build_grid_track_descriptors(col_dsc, GRID_COLS, GRID_CELL_W);
-    build_grid_track_descriptors(row_dsc, GRID_ROWS, GRID_CELL_H);
+    build_grid_track_descriptors(col_dsc, GRID_SHOWN_COLS, GRID_CELL_W);
+    build_grid_track_descriptors(row_dsc, GRID_SHOWN_ROWS, GRID_CELL_H);
     dsc_ready = true;
   }
   lv_obj_set_layout(grid, LV_LAYOUT_GRID);
@@ -1718,6 +1713,10 @@ void tiles_reload_layout(GridType grid_type) {
     g_tiles_objs[idx][i] = nullptr;
   }
   lv_obj_clean(g_tiles_grids[idx]);
+  // The head bar layout's head (grid_layout.h), above the tiles.
+  if (grid_type == GridType::TAB0) {
+    home_bar::build(g_tiles_grids[idx], g_active_cache ? g_active_cache->folder_id : tileConfig.getActiveFolderId());
+  }
 
   const TileGridConfig& config = getGridConfig(grid_type);
   bool occupied[GRID_ROWS][GRID_COLS] = {};
@@ -1742,8 +1741,9 @@ void tiles_reload_layout(GridType grid_type) {
     mark_occupied(occupied, col, row, span_w, span_h);
   }
 
-  for (uint8_t r = 0; r < GRID_ROWS; ++r) {
-    for (uint8_t c = 0; c < GRID_COLS; ++c) {
+  // The empty cells of the shown grid (grid_layout.h).
+  for (uint8_t r = 0; r < GRID_SHOWN_ROWS; ++r) {
+    for (uint8_t c = 0; c < GRID_SHOWN_COLS; ++c) {
       if (!occupied[r][c]) {
         render_empty_tile(g_tiles_grids[idx], c, r);
       }
@@ -1968,7 +1968,12 @@ static bool update_active_layout() {
   bool rebuilds = false;
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& after = next.tiles[i];
-    if (after.type != TILE_EMPTY && !get_tile_layout(after, col, row, span_w, span_h)) return false;
+    // A tile the head bar layout does not show (grid_layout.h) is fine here;
+    // otherwise no layout means invalid data and a full rebuild.
+    if (after.type != TILE_EMPTY && !get_tile_layout(after, col, row, span_w, span_h) &&
+        !grid_layout::head_bar()) {
+      return false;
+    }
     if (shown.tiles[i].type == TILE_EMPTY && after.type == TILE_EMPTY) continue;
     if (!tileContentEquals(shown.tiles[i], after) || !g_tiles_objs[idx][i]) rebuilds = true;
   }
@@ -1979,6 +1984,7 @@ static bool update_active_layout() {
   const uint32_t child_count = lv_obj_get_child_count(grid);
   for (uint32_t c = 0; c < child_count; ++c) {
     lv_obj_t* child = lv_obj_get_child(grid, static_cast<int32_t>(c));
+    if (home_bar::is_bar(child)) continue;
     bool is_tile = false;
     for (size_t i = 0; i < TILES_PER_GRID && !is_tile; ++i) is_tile = g_tiles_objs[idx][i] == child;
     if (is_tile) continue;
@@ -2044,7 +2050,22 @@ static bool update_active_layout() {
       note_rebuilt(i);
       continue;
     }
-    if (!get_tile_layout(after, col, row, span_w, span_h)) continue;
+    if (!get_tile_layout(after, col, row, span_w, span_h)) {
+      // Not shown with the head bar (outside the grid, Settings, Back): a
+      // tile shown before goes like a removed one.
+      if (g_tiles_objs[idx][i]) {
+        lv_obj_delete(g_tiles_objs[idx][i]);
+        g_tiles_objs[idx][i] = nullptr;
+        reset_sensor_widget(GridType::TAB0, static_cast<uint8_t>(i));
+        reset_switch_widget(GridType::TAB0, static_cast<uint8_t>(i));
+        reset_climate_widget(GridType::TAB0, static_cast<uint8_t>(i));
+        reset_cover_widget(GridType::TAB0, static_cast<uint8_t>(i));
+        reset_binary_sensor_widget(GridType::TAB0, static_cast<uint8_t>(i));
+        reset_weather_widget(GridType::TAB0, static_cast<uint8_t>(i));
+        note_rebuilt(i);
+      }
+      continue;
+    }
     mark_occupied(occupied, col, row, span_w, span_h);
     if (!tileContentEquals(before, after) || !g_tiles_objs[idx][i]) {
       rebuild_tile_at_index(GridType::TAB0, static_cast<uint8_t>(i));
@@ -2063,8 +2084,8 @@ static bool update_active_layout() {
     place_tile_card(g_tiles_objs[idx][i], static_cast<int>(col), static_cast<int>(row), layout_tile);
     ++moved;
   }
-  for (uint8_t r = 0; r < GRID_ROWS; ++r) {
-    for (uint8_t c = 0; c < GRID_COLS; ++c) {
+  for (uint8_t r = 0; r < GRID_SHOWN_ROWS; ++r) {
+    for (uint8_t c = 0; c < GRID_SHOWN_COLS; ++c) {
       if (occupied[r][c]) continue;
       // Behind the tiles, as tiles_reload_layout creates them first.
       lv_obj_move_to_index(render_empty_tile(grid, c, r), 0);

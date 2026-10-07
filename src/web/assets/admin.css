@@ -2767,6 +2767,70 @@
     .global-tile-radius-value { min-width:2ch; }
     .global-icon-glow-value, .global-tile-opacity-value { min-width:4.5ch; }
 
+/* Head bar layout (grid_layout.h): the panel shows fewer, larger cells
+   below a head like the Settings head. A tile outside the shown grid sits
+   beside the screen, outlined red, until it is moved in (nothing moves by
+   itself); Settings and Back give way to the head's gear and X. */
+/* Inset: the tile border's outline and the rounded clip would hide an
+   outline here. */
+.tile-grid > .tile.tile-outside {
+  box-shadow:inset 0 0 0 2px #e5534b;
+}
+.tile-grid > .tile.tile-bar-hidden { opacity:.35; }
+.head-bar-preview {
+  position:absolute;
+  left:var(--preview-frame, 0px);
+  top:var(--preview-frame, 0px);
+  width:var(--head-screen-w);
+  height:var(--head-top);
+  pointer-events:none;
+  color:#ffffff;
+}
+.head-bar-preview > * { position:absolute; }
+.head-bar-preview .head-disc {
+  left:var(--head-disc-x);
+  top:calc(var(--head-cy) - var(--head-disc) / 2);
+  width:var(--head-disc);
+  height:var(--head-disc);
+  border-radius:50%;
+  background:var(--head-disc-color, #3a3a3a);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:var(--head-icon);
+  line-height:1;
+}
+.head-bar-preview .head-title,
+.head-bar-preview .head-time {
+  top:calc(var(--head-cy) - var(--head-line) / 2);
+  height:var(--head-line);
+  line-height:var(--head-line);
+  font-size:var(--head-font);
+  white-space:nowrap;
+  overflow:hidden;
+}
+.head-bar-preview .head-title {
+  left:var(--head-title-x);
+  width:var(--head-title-w);
+  text-overflow:ellipsis;
+}
+.head-bar-preview .head-time {
+  left:var(--head-time-x);
+  width:var(--head-time-w);
+  text-align:right;
+}
+.head-bar-preview .head-button {
+  left:var(--head-close-x);
+  top:calc(var(--head-cy) - var(--head-close) / 2);
+  width:var(--head-close);
+  height:var(--head-close);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:var(--head-icon);
+  line-height:1;
+}
+
 /* Fractional placement preserves the existing cell pitch and gutter. */
 .tile-grid > .fractional-tile {
   position:absolute;

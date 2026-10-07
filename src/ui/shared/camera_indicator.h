@@ -56,8 +56,9 @@ namespace detail {
 constexpr uint32_t kPollMs = 100;
 // A darker red than the Material 600 tone: calmer on the dark UI.
 constexpr uint32_t kRed = 0xC62828;
-// Stripe: the top margin minus the one-pixel gap to the tiles.
-constexpr int kStripeHeight = GRID_PAD_TOP > 1 ? GRID_PAD_TOP - 1 : 1;
+// Stripe: the profile grid's top margin minus the one-pixel gap to the tiles
+// (the head bar layout keeps this thin stripe at the screen's top edge).
+constexpr int kStripeHeight = grid_layout::profile_grid().pad_top > 1 ? grid_layout::profile_grid().pad_top - 1 : 1;
 // The whole stripe, pill included, spans this share of the screen width.
 constexpr int kStripePermille = 600;
 // Each wing fades in from its outer end up to this gradient position (of
@@ -67,7 +68,7 @@ constexpr int32_t kFadeStop = 180;
 constexpr float kPillSpan = 2.0f;
 // Concave fillets between the stripe and the pill sides: half the tile
 // radius, at most half the largest radius the setting allows.
-constexpr int kMaxFillet = (tile_radius::maximum(GRID_CELL_H, GRID_GAP) + 1) / 2;
+constexpr int kMaxFillet = (tile_radius::maximum(Device::kGridCellH, GRID_GAP) + 1) / 2;
 // Icon disc on the red pill (~25% white; tiles use ~15%).
 constexpr lv_opa_t kDiscOpa = 64;
 // Contour border: as bright as the disc (the tile border's ~20% white is hard

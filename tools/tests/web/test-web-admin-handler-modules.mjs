@@ -17,7 +17,7 @@ const read = (name) => {
 };
 const owners = {
   'web_admin_handlers.cpp': ['SaveMQTT', 'SaveBridge', 'BridgeRefresh', 'Status', 'Language',
-    'Restart', 'LinkSetup', 'SaveTileBorders', 'SaveIconDiscs', 'SaveIconGlow', 'SaveDefaultTileColor', 'TileRadius'],
+    'Restart', 'LinkSetup', 'SaveTileBorders', 'SaveIconDiscs', 'SaveHeadBar', 'SaveIconGlow', 'SaveDefaultTileColor', 'TileRadius'],
   'web_admin_tiles.cpp': ['GetTiles', 'SaveTiles', 'ReorderTiles', 'GetSensorValues',
     'GetEntityOptions', 'GetMdiIcons', 'StartEntitySearch', 'GetEntitySearch', 'GetFolders', 'GetFolderTab', 'SaveFolderAccess', 'DeleteFolder'],
   'web_admin_screensaver.cpp': ['GetScreensaver', 'SaveScreensaver', 'GetScreensaverWallpaper'],

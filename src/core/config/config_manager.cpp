@@ -57,6 +57,7 @@ static bool persisted_config_equal(const DeviceConfig& a,
          a.tile_borders == b.tile_borders &&
          a.tile_radius == b.tile_radius &&
          a.icon_discs == b.icon_discs &&
+         a.head_bar == b.head_bar &&
          a.icon_glow == b.icon_glow &&
          a.default_tile_color == b.default_tile_color &&
          a.display_rotated_180 == b.display_rotated_180 &&
@@ -229,6 +230,7 @@ ConfigManager::ConfigManager() {
   config.tile_borders = true;
   config.tile_radius = tile_radius::kDefault;
   config.icon_discs = true;
+  config.head_bar = false;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;
   config.display_rotated_180 = false;
@@ -363,6 +365,7 @@ bool ConfigManager::load() {
   config.tile_borders = prefs.getBool("tile_border", true);
   config.tile_radius = tile_radius::clamp(prefs.getUShort("tile_radius", tile_radius::kDefault));
   config.icon_discs = prefs.getBool("icon_disc", true);
+  config.head_bar = prefs.getBool("head_bar", false);
   config.icon_glow = icon_glow::clamp(prefs.getUChar("icon_glow", icon_glow::kDefault));
   config.default_tile_color =
       tile_color::normalize(prefs.getUInt("tile_color", tile_color::kDefault));
@@ -653,6 +656,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   prefs.putBool("tile_border", normalized.tile_borders);
   prefs.putUShort("tile_radius", normalized.tile_radius);
   prefs.putBool("icon_disc", normalized.icon_discs);
+  prefs.putBool("head_bar", normalized.head_bar);
   prefs.putUChar("icon_glow", normalized.icon_glow);
   prefs.putUInt("tile_color", normalized.default_tile_color);
   prefs.putBool("eth_mode", normalized.ethernet_enabled);
@@ -928,6 +932,24 @@ bool ConfigManager::saveTileBorders(bool enabled) {
   return true;
 }
 
+bool ConfigManager::saveHeadBar(bool enabled) {
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  if (config.head_bar == enabled) return true;
+#endif
+  Device::ScopedStorageWrite storage_write(
+      BatchedNvsWrite::kNeedsDisplayGuard);
+  BatchedNvsWrite::Preferences prefs;
+  if (!prefs.begin(PREF_NAMESPACE, false)) {
+    Serial.println("ConfigManager: Failed to open head bar preferences");
+    return false;
+  }
+  prefs.putBool("head_bar", enabled);
+  if (!BatchedNvsWrite::finish(prefs)) return false;
+
+  config.head_bar = enabled;
+  return true;
+}
+
 bool ConfigManager::saveEthernetEnabled(bool enabled) {
 #if defined(DEVICE_ESP32_S3_RGB_480)
   if (config.ethernet_enabled == enabled) return true;
@@ -1056,6 +1078,7 @@ void ConfigManager::clear() {
   config.tile_borders = true;
   config.tile_radius = tile_radius::kDefault;
   config.icon_discs = true;
+  config.head_bar = false;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;
   config.display_rotated_180 = false;

@@ -91,6 +91,56 @@ function t(key) {
     }
   }
 
+// The head bar layout (grid_layout.h) is read at boot: saving it asks to
+// restart the panel; the switch shows the saved choice until then.
+function setHeadBarToggles(enabled) {
+  document.querySelectorAll('.global-head-bar-toggle').forEach(box => { box.checked = !!enabled; });
+}
+function restartPanelForLayout() {
+  const restartForm = document.getElementById('admin_restart_form');
+  // form.submit() cannot carry the CSRF header a password-protected panel
+  // requires (hardware/editor.js restartHardwareIoNow).
+  if (restartForm && !window.HomeTilesAuth?.csrfToken()) {
+    window.setTimeout(() => restartForm.submit(), 100);
+    return;
+  }
+  fetch('/restart', {method: 'POST'}).catch(() => {}).finally(() => {
+    window.setTimeout(() => window.location.assign('/'), 300);
+  });
+}
+async function saveHeadBar(input) {
+  const wanted = !!input?.checked;
+  setHeadBarToggles(wanted);
+  try {
+    const response = await fetch('/api/display/head-bar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'enabled=' + (wanted ? '1' : '0')
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    // Already this boot's layout (switched back before a restart).
+    if (data.active === wanted) return;
+    if (window.confirm(t('headBarRestartConfirm'))) restartPanelForLayout();
+  } catch (error) {
+    setHeadBarToggles(!wanted);
+    showNotification(t('networkErrorSave'), false);
+  }
+}
+// The head bar preview's time (web_admin_html.cpp), from the browser clock
+// in the panel's 12/24-hour format.
+function refreshHeadBarTime() {
+  const now = new Date();
+  document.querySelectorAll('.head-bar-preview .head-time').forEach(el => {
+    let hour = now.getHours();
+    if (el.dataset.hour12 === '1') hour = hour % 12 || 12;
+    el.textContent = String(hour).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  });
+}
+if (typeof HEAD_BAR === 'boolean' && HEAD_BAR && typeof window !== 'undefined' && window.setInterval) {
+  window.setInterval(refreshHeadBarTime, 30000);
+}
+
 // Icon discs are a root class: every preview grid, including cached and lazily
 // inserted folders, follows it without re-rendering a tile.
 let iconDiscsSaveSequence = 0;
@@ -5987,6 +6037,30 @@ function syncTileRadiusControls(tabEl) {
     const targetId = Number(tile?.navigate_target ?? tileEl.dataset.navigateTarget);
     switchToFolderId(targetId);
   }
+  // The shown grid (grid_layout.h): with the head bar the panel shows fewer,
+  // larger cells. New places, moves and sizes stay inside it; stored
+  // positions keep the full GRID_COLS x GRID_ROWS, so a tile outside the
+  // shown grid is marked (tile-outside) and never moved by the editor. The
+  // screensaver tab keeps its own grid.
+  function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
+  function placeCols(tab = currentTileTab) {
+    return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_COLS === 'number'
+      ? GRID_SHOWN_COLS : GRID_COLS;
+  }
+  function placeRows(tab = currentTileTab) {
+    return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_ROWS === 'number'
+      ? GRID_SHOWN_ROWS : GRID_ROWS;
+  }
+  // A stored layout wholly inside the shown grid.
+  function insideShownGrid(tab, layout) {
+    return !!layout && layout.col + layout.span_w <= placeCols(tab) + 0.001 &&
+      layout.row + layout.span_h <= placeRows(tab) + 0.001;
+  }
+  // Settings and Back give way to the head's gear and X (shownTileLayout).
+  function hiddenByHeadBar(tab, type) {
+    return headBarLayout() && !isScreensaverTileTab(tab) && [7, 8].includes(Number(type));
+  }
+
   function clampInt(value, min, max, fallback) {
     const v = parseInt(value, 10);
     if (isNaN(v)) return fallback !== undefined ? fallback : min;
@@ -6157,7 +6231,22 @@ function syncTileRadiusControls(tabEl) {
 
   function setTileGridPosition(el, col, row, spanW, spanH) {
     setGridItemPosition(el, col, row, spanW, spanH);
-    const fractional = [col, row, spanW, spanH].some(v => !Number.isInteger(v));
+    // Outside the shown grid: placed like a half step (absolute, not a grid
+    // track), so it shows beside the screen instead of widening it.
+    const headBar = headBarLayout();
+    const tab = headBar ? (el.closest?.('[id^="tab-tiles-"]')?.id?.slice('tab-tiles-'.length) || currentTileTab) : '';
+    const outside = headBar && !el.classList.contains('empty') &&
+      !insideShownGrid(tab, {col, row, span_w: spanW, span_h: spanH});
+    el.classList.toggle('tile-outside', outside);
+    if (outside) {
+      el.title = t('headBarTileOutside');
+      el.dataset.outsideTitle = '1';
+    } else if (el.dataset.outsideTitle) {
+      el.removeAttribute('title');
+      delete el.dataset.outsideTitle;
+    }
+    el.classList.toggle('tile-bar-hidden', headBar && hiddenByHeadBar(tab, el.dataset.type));
+    const fractional = outside || [col, row, spanW, spanH].some(v => !Number.isInteger(v));
     el.classList.toggle('fractional-tile', fractional);
     for (const [name, value] of Object.entries({col, row, w: spanW, h: spanH})) el.style.setProperty('--tile-' + name, String(value));
     if (fractional) { el.style.gridColumn = 'auto'; el.style.gridRow = 'auto'; }
@@ -6238,7 +6327,7 @@ function syncTileRadiusControls(tabEl) {
 
   function slotFits(tab, occupied, col, row, spanW, spanH) {
     if (col < 0 || row < firstAllowedGridRow(tab) ||
-        col + spanW > GRID_COLS || row + spanH > GRID_ROWS) return false;
+        col + spanW > placeCols(tab) || row + spanH > placeRows(tab)) return false;
     for (let r = row * 2; r < (row + spanH) * 2; r++) {
       for (let c = col * 2; c < (col + spanW) * 2; c++) {
         if (occupied[r][c]) return false;
@@ -6314,8 +6403,8 @@ function syncTileRadiusControls(tabEl) {
 
   function firstFreeSlot(tab, occupied) {
     for (const [spanW, spanH, step] of [[1, 1, 1], [1, 1, 0.5], [1, 0.5, 1], [1, 0.5, 0.5]]) {
-      for (let r = firstAllowedGridRow(tab); r + spanH <= GRID_ROWS; r += step) {
-        for (let c = 0; c + spanW <= GRID_COLS; c += step) {
+      for (let r = firstAllowedGridRow(tab); r + spanH <= placeRows(tab); r += step) {
+        for (let c = 0; c + spanW <= placeCols(tab); c += step) {
           if (slotFits(tab, occupied, c, r, spanW, spanH)) {
             return { col: c, row: r, span_w: spanW, span_h: spanH };
           }
@@ -9739,7 +9828,7 @@ function syncTileRadiusControls(tabEl) {
 
   function getTileGridMetrics(tab) {
     const grid = getTileGrid(tab);
-    return getGridElementMetrics(grid, GRID_COLS, GRID_ROWS);
+    return getGridElementMetrics(grid, placeCols(tab), placeRows(tab));
   }
 
   function getRawGridCellFromPointer(tab, clientX, clientY, sizeStep = null) {
@@ -9760,8 +9849,8 @@ function syncTileRadiusControls(tabEl) {
     if (col < 0) col = 0;
     const firstRow = firstAllowedGridRow(tab);
     if (row < firstRow) row = firstRow;
-    if (col >= GRID_COLS) col = GRID_COLS - unit;
-    if (row >= GRID_ROWS) row = GRID_ROWS - unit;
+    if (col >= placeCols(tab)) col = placeCols(tab) - unit;
+    if (row >= placeRows(tab)) row = placeRows(tab) - unit;
     return { col, row };
   }
 
@@ -9779,9 +9868,9 @@ function syncTileRadiusControls(tabEl) {
       if (!isFinite(left) || !isFinite(top) || !(halfX > 0) || !(halfY > 0)) return null;
       const layout = getDragSourceLayout();
       return {
-        col: Math.max(0, Math.min(GRID_COLS - (layout?.span_w || 0.5), Math.round(left / halfX) / 2)),
+        col: Math.max(0, Math.min(placeCols(tab) - (layout?.span_w || 0.5), Math.round(left / halfX) / 2)),
         row: Math.max(firstAllowedGridRow(tab),
-                      Math.min(GRID_ROWS - (layout?.span_h || 0.5), Math.round(top / halfY) / 2))
+                      Math.min(placeRows(tab) - (layout?.span_h || 0.5), Math.round(top / halfY) / 2))
       };
     }
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
@@ -9971,7 +10060,7 @@ function syncTileRadiusControls(tabEl) {
     });
     return canPlaceGridLayout(
       layouts, active, index, candidateLayout,
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab));
+      placeCols(tab), placeRows(tab), firstAllowedGridRow(tab));
   }
 
   function canPlaceHiddenSettingsLayout(tab, candidateLayout) {
@@ -9991,7 +10080,7 @@ function syncTileRadiusControls(tabEl) {
     });
     return canPlaceGridLayout(
       layouts, active, -1, candidateLayout,
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab));
+      placeCols(tab), placeRows(tab), firstAllowedGridRow(tab));
   }
 
   function manhattanDistance(colA, rowA, colB, rowB) {
@@ -10023,7 +10112,7 @@ function syncTileRadiusControls(tabEl) {
   function buildPlacementCandidates(
       tab, spanW, spanH, preferredCol, preferredRow) {
     return buildGridPlacementCandidates(
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab),
+      placeCols(tab), placeRows(tab), firstAllowedGridRow(tab),
       spanW, spanH, preferredCol, preferredRow);
   }
 
@@ -10133,7 +10222,7 @@ function syncTileRadiusControls(tabEl) {
     return simulateGridReorderLayouts(
       baseLayouts, active, fromIdx,
       targetCol, targetRow,
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab), tiles.map(tile => tile?.type));
+      placeCols(tab), placeRows(tab), firstAllowedGridRow(tab), tiles.map(tile => tile?.type));
   }
 
   function clearDragPlaceholder() {
@@ -10259,18 +10348,18 @@ function syncTileRadiusControls(tabEl) {
       ? tiles[currentTileIndex] : null;
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
-    const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
+    const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, placeCols(tab)) : 1;
     const unit = 0.5;
     const snap = clampHalf;
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, unit);
     if (!rawCell) return null;
-    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (supportsHalfSize(typeValue) ? 0.5 : 1);
+    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, placeRows(tab)) : (supportsHalfSize(typeValue) ? 0.5 : 1);
     const maxW = isMedia
-      ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS - layout.col)
-      : GRID_COLS - layout.col;
+      ? Math.min(MEDIA_TILE_MAX_SPAN, placeCols(tab) - layout.col)
+      : placeCols(tab) - layout.col;
     const maxH = isMedia
-      ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_ROWS - layout.row)
-      : GRID_ROWS - layout.row;
+      ? Math.min(MEDIA_TILE_MAX_SPAN, placeRows(tab) - layout.row)
+      : placeRows(tab) - layout.row;
     if (String(direction || '').includes('s')) {
       spanH = snap(rawCell.row - layout.row + unit, minH, maxH, layout.span_h);
     }
@@ -10406,12 +10495,12 @@ function syncTileRadiusControls(tabEl) {
     const placeholder = ensureDragPlaceholder(tab);
     if (!sourceLayout || !placeholder) return;
 
-    const targetCol = clampHalf(col, 0, GRID_COLS - 0.5, sourceLayout.col);
-    const targetRow = clampHalf(row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
-    const fits = (targetCol + sourceLayout.span_w <= GRID_COLS) &&
-                 (targetRow + sourceLayout.span_h <= GRID_ROWS);
-    const spanW = Math.max(1, Math.min(sourceLayout.span_w, GRID_COLS - targetCol));
-    const spanH = Math.max(0.5, Math.min(sourceLayout.span_h, GRID_ROWS - targetRow));
+    const targetCol = clampHalf(col, 0, placeCols(tab) - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(row, firstAllowedGridRow(tab), placeRows(tab) - 0.5, sourceLayout.row);
+    const fits = (targetCol + sourceLayout.span_w <= placeCols(tab)) &&
+                 (targetRow + sourceLayout.span_h <= placeRows(tab));
+    const spanW = Math.max(1, Math.min(sourceLayout.span_w, placeCols(tab) - targetCol));
+    const spanH = Math.max(0.5, Math.min(sourceLayout.span_h, placeRows(tab) - targetRow));
 
     placeholder.classList.toggle('invalid', !fits);
     placeholder.classList.add('show');
@@ -10426,8 +10515,8 @@ function syncTileRadiusControls(tabEl) {
     e.dataTransfer.dropEffect = 'move';
     const sourceLayout = getDragSourceLayout();
     if (!sourceLayout) return;
-    const targetCol = clampHalf(cell.col, 0, GRID_COLS - 0.5, sourceLayout.col);
-    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
+    const targetCol = clampHalf(cell.col, 0, placeCols(tab) - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), placeRows(tab) - 0.5, sourceLayout.row);
     updateDragPlaceholder(tab, targetCol, targetRow);
 
     if (dragSource.kind === 'hidden-settings') {
@@ -10475,10 +10564,10 @@ function syncTileRadiusControls(tabEl) {
 
     e.preventDefault();
     e.stopPropagation();
-    const targetCol = clampHalf(cell.col, 0, GRID_COLS - 0.5, sourceLayout.col);
-    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
-    const fits = (targetCol + sourceLayout.span_w <= GRID_COLS) &&
-                 (targetRow + sourceLayout.span_h <= GRID_ROWS);
+    const targetCol = clampHalf(cell.col, 0, placeCols(tab) - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), placeRows(tab) - 0.5, sourceLayout.row);
+    const fits = (targetCol + sourceLayout.span_w <= placeCols(tab)) &&
+                 (targetRow + sourceLayout.span_h <= placeRows(tab));
 
     if (dragSource.kind === 'hidden-settings') {
       const candidate = {

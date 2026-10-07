@@ -8,6 +8,8 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/shared/tone_color.h"
 #include "src/ui/screensaver/screensaver_tile_shadow.h"
+#include "src/ui/tabs/settings/settings_style.h"
+#include "src/ui/tabs/tiles/home_bar.h"
 
 namespace {
 
@@ -348,10 +350,12 @@ void appendPreviewScaleVars(String& html) {
   html += "--admin-wrapper-width:";
   html += String(admin_wrapper_target_width_px());
   html += "px;";
+  // The shown grid (grid_layout.h): with the head bar its fewer, larger
+  // cells; a stored tile outside it sits beside the screen (tile-outside).
   html += "--grid-cols:";
-  html += String(GRID_COLS);
+  html += String(GRID_SHOWN_COLS);
   html += ";--grid-rows:";
-  html += String(GRID_ROWS);
+  html += String(GRID_SHOWN_ROWS);
   html += ";--preview-cell-h:";
   html += String(preview_cell_h_px());
   html += "px;";
@@ -375,13 +379,35 @@ void appendPreviewScaleVars(String& html) {
              static_cast<double>((GRID_PAD < 4 ? GRID_PAD : 4) * preview_cell_h_px()) / GRID_CELL_H);
     html += radius;
   }
-  html += "}</style>\n";
+  html += "}";
+  if (grid_layout::head_bar()) {
+    // The screensaver tab keeps the profile's grid, where its tiles are
+    // stored; the panel shows them in the bottom rows of the head bar's grid
+    // (image_screensaver.cpp).
+    const grid_layout::Shown profile = grid_layout::profile_grid();
+    html += ".screensaver-tile-grid{--grid-cols:";
+    html += String(profile.cols);
+    html += ";--grid-rows:";
+    html += String(profile.rows);
+    html += ";";
+    emit_scaled("preview-cell-w", profile.cell_w);
+    emit_scaled("preview-cell-h", profile.cell_h);
+    emit_scaled("preview-pad-left", profile.pad_left);
+    emit_scaled("preview-pad-right", profile.pad_right);
+    emit_scaled("preview-pad-top", profile.pad_top);
+    emit_scaled("preview-pad-bottom", profile.pad_bottom);
+    html += "}";
+  }
+  html += "</style>\n";
 }
 
 }  // namespace
 
+static void appendHeadBarVars(String& html);
+
 void appendAdminStyles(String& html) {
   appendPreviewScaleVars(html);
+  if (grid_layout::head_bar()) appendHeadBarVars(html);
   html += R"html(
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%2316181c'/%3E%3Crect x='4' y='4' width='17' height='17' rx='4' fill='%23ffffff'/%3E%3Crect x='27' y='4' width='17' height='17' rx='4' fill='%23ffffff'/%3E%3Crect x='4' y='27' width='17' height='17' rx='4' fill='%23ffffff'/%3E%3Cpath d='M33 26h5v6.5h6.5v5H38V44h-5v-6.5h-6.5v-5H33z' fill='%2326a69a'/%3E%3C/svg%3E">
@@ -389,4 +415,41 @@ void appendAdminStyles(String& html) {
   html += adminCssAssetPath();
   html += R"html(">
 )html";
+}
+
+// The head bar's head (grid_layout.h, home_bar.cpp) over the preview grid's
+// top margin, in the device's places, and its circle like the Settings gear's.
+static void appendHeadBarVars(String& html) {
+  auto emit_scaled = [&html](const char* name, float lvgl_px) {
+    char value[64];
+    snprintf(value, sizeof(value), "--%s:%.2fpx;", name,
+             static_cast<double>(lvgl_px * preview_cell_h_px() / GRID_CELL_H));
+    html += value;
+  };
+  const home_bar::Geometry head = home_bar::geometry();
+  html += "  <style>:root{";
+  emit_scaled("head-screen-w", SCREEN_WIDTH);
+  emit_scaled("head-top", GRID_PAD_TOP);
+  emit_scaled("head-disc", head.disc);
+  emit_scaled("head-disc-x", head.disc_x);
+  emit_scaled("head-cy", head.center_y);
+  emit_scaled("head-close", head.close);
+  emit_scaled("head-close-x", head.close_x);
+  emit_scaled("head-title-x", head.title_x);
+  emit_scaled("head-title-w", head.title_w);
+  emit_scaled("head-time-x", head.time_x);
+  emit_scaled("head-time-w", head.time_w);
+  emit_scaled("head-line", head.line);
+  // The head font's size (popup_layout::headerTitleFont) and the icons'.
+#if defined(DEVICE_LAYOUT_1024X600) || defined(DEVICE_LAYOUT_480X480)
+  emit_scaled("head-font", 16);
+#else
+  emit_scaled("head-font", 24);
+#endif
+  emit_scaled("head-icon", kPreviewIconSize);
+  char color[40];
+  snprintf(color, sizeof(color), "--head-disc-color:#%06X;",
+           static_cast<unsigned>(settings_style::tone(tileDefaultBgColor(), settings_style::kGearColor).disc));
+  html += color;
+  html += "}</style>\n";
 }

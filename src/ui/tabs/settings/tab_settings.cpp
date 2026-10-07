@@ -1153,10 +1153,12 @@ void build_settings_tab(lv_obj_t *tab, hotspot_callback_t hotspot_cb) {
   lv_obj_set_style_border_opa(tab, LV_OPA_TRANSP, 0);
   // The panel carries the grid margins: positions inside are grid
   // coordinates, so the screen lines up with the Home tiles.
-  lv_obj_set_style_pad_left(tab, GRID_PAD_LEFT, 0);
-  lv_obj_set_style_pad_right(tab, GRID_PAD_RIGHT, 0);
-  lv_obj_set_style_pad_top(tab, GRID_PAD_TOP, 0);
-  lv_obj_set_style_pad_bottom(tab, GRID_PAD_BOTTOM, 0);
+  // The profile grid's margins (grid_layout.h): Settings keeps its look with
+  // the head bar layout, and its pages subtract these (settings_style::kGrid).
+  lv_obj_set_style_pad_left(tab, grid_layout::profile_grid().pad_left, 0);
+  lv_obj_set_style_pad_right(tab, grid_layout::profile_grid().pad_right, 0);
+  lv_obj_set_style_pad_top(tab, grid_layout::profile_grid().pad_top, 0);
+  lv_obj_set_style_pad_bottom(tab, grid_layout::profile_grid().pad_bottom, 0);
 
   const DeviceConfig& cfg = configManager.getConfig();
   display_rotated_180 = cfg.display_rotated_180;

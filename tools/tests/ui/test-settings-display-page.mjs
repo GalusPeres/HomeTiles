@@ -132,6 +132,8 @@ const disc = readRepoFile('src/tiles/runtime/tile_icon_disc.h');
 assert.match(disc, /inline int inset\(\) \{ return tile_layout::scale_480\(4\); \}/);
 assert.match(disc, /inline int diameter\(\) \{ return row_height\(\) - inset\(\) \* 2; \}/);
 assert.match(style, /inline int tile_inset\(\) \{ return popup_layout::scale480\(4\); \}/);
-assert.match(style, /inline int half_tile_disc\(\) \{ return \(GRID_CELL_H - GRID_GAP\) \/ 2 - 2 \* tile_inset\(\); \}/);
+// Settings keeps the profile's grid (grid_layout.h) whatever the tiles show.
+assert.match(style, /constexpr grid_layout::Shown kGrid = grid_layout::profile_grid\(\);/);
+assert.match(style, /inline int half_tile_disc\(\) \{ return \(kGrid\.cell_h - GRID_GAP\) \/ 2 - 2 \* tile_inset\(\); \}/);
 
 console.log('Settings Display page: translated texts, mockup sizes and rotation steps');

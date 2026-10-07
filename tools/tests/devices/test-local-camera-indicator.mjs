@@ -29,7 +29,7 @@ const popupShell = read('src/ui/popups/popup_shell.cpp');
 // static. The wings fade out towards their outer ends, the section along the
 // pill stays solid. No animation: it would redraw and rotate part of the
 // screen every frame while the camera shares the 2D-DMA with the display.
-assert.match(indicator, /constexpr int kStripeHeight = GRID_PAD_TOP > 1 \? GRID_PAD_TOP - 1 : 1;/);
+assert.match(indicator, /constexpr int kStripeHeight = grid_layout::profile_grid\(\)\.pad_top > 1 \? grid_layout::profile_grid\(\)\.pad_top - 1 : 1;/);
 assert.match(indicator, /lv_obj_remove_flag\(part, static_cast<lv_obj_flag_t>\(LV_OBJ_FLAG_CLICKABLE/,
   'The stripe never takes touch input');
 assert.doesNotMatch(indicator, /lv_obj_set_width\(/, 'The stripe no longer grows and shrinks');
@@ -102,7 +102,7 @@ assert.match(indicator, /lv_obj_set_size\(top, pill_width, pill_height \/ 2\);/)
 // while visible when the setting or the Web Admin preview changes it.
 // Fillets: half the tile radius; buffers in PSRAM, not in internal RAM.
 assert.match(indicator, /inline int filletRadius\(\) \{ return std::clamp\(tileRadius\(\) \/ 2, 1, kMaxFillet\); \}/);
-assert.match(indicator, /constexpr int kMaxFillet = \(tile_radius::maximum\(GRID_CELL_H, GRID_GAP\) \+ 1\) \/ 2;/);
+assert.match(indicator, /constexpr int kMaxFillet = \(tile_radius::maximum\(Device::kGridCellH, GRID_GAP\) \+ 1\) \/ 2;/);
 assert.match(indicator, /LV_CANVAS_BUF_SIZE\(kMaxFillet, kMaxFillet, 32, LV_DRAW_BUF_STRIDE_ALIGN\)/);
 assert.match(indicator, /heap_caps_malloc\(kBufferBytes, MALLOC_CAP_SPIRAM \| MALLOC_CAP_8BIT\)/);
 assert.doesNotMatch(indicator, /static uint8_t buffers/, 'No static fillet buffers in internal RAM');
@@ -297,16 +297,27 @@ assert.match(body('handleCommandPayload'), /command\.kind == CommandKind::Pause 
 
 // Grid margins: leftover pixels are split between both sides (1280x800: top
 // 5, bottom 6) for the tiles, the screensaver tiles and the settings grid.
-assert.match(tileConfig, /static constexpr int GRID_PAD_TOP = GRID_PAD \+ GRID_EXTRA_Y \/ 2;/);
-assert.match(tileConfig, /static constexpr int GRID_PAD_BOTTOM = GRID_PAD \+ GRID_EXTRA_Y - GRID_EXTRA_Y \/ 2;/);
-assert.match(tileConfig, /static_assert\(GRID_EXTRA_X >= 0 && GRID_EXTRA_Y >= 0/);
+// The margins come from the shown grid (grid_layout.h): the profile's split
+// them like this; the head bar layout has its own.
+const gridLayout = read('src/tiles/config/grid_layout.h');
+assert.match(gridLayout, /Device::kGridPad \+ extra_y \/ 2,\s*Device::kGridPad \+ extra_y - extra_y \/ 2,/);
+assert.match(tileConfig, /static const int& GRID_PAD_TOP = grid_layout::g_shown\.pad_top;/);
+assert.match(tileConfig, /static const int& GRID_PAD_BOTTOM = grid_layout::g_shown\.pad_bottom;/);
+assert.match(tileConfig, /static_assert\(grid_layout::profile_grid\(\)\.pad_left >= Device::kGridPad/);
 for (const [file, obj] of [['src/ui/tabs/tiles/tab_tiles_unified.cpp', 'grid'],
-                           ['src/ui/screensaver/image_screensaver.cpp', 'st->slot_grid'],
-                           ['src/ui/tabs/settings/tab_settings.cpp', 'tab']]) {
+                           ['src/ui/screensaver/image_screensaver.cpp', 'st->slot_grid']]) {
   const source = read(file);
   for (const side of ['left', 'right', 'top', 'bottom']) {
     assert.ok(source.includes(`lv_obj_set_style_pad_${side}(${obj}, GRID_PAD_${side.toUpperCase()}, 0);`),
       `${file} ${side}`);
+  }
+}
+// Settings keeps the profile grid's margins whatever the tiles show.
+{
+  const source = read('src/ui/tabs/settings/tab_settings.cpp');
+  for (const side of ['left', 'right', 'top', 'bottom']) {
+    assert.ok(source.includes(`lv_obj_set_style_pad_${side}(tab, grid_layout::profile_grid().pad_${side}, 0);`),
+      `tab_settings.cpp ${side}`);
   }
 }
 // Exact numbers for the 1280x800 profiles: 7x5 cells of 168x145, gap 16, pad 4.

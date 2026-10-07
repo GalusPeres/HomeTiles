@@ -31,6 +31,7 @@
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/tabs/settings/settings_model.h"
+#include "src/ui/tabs/tiles/home_bar.h"
 #include "src/video/local_camera/local_camera.h"
 #include "src/video/local_camera/local_camera_stream_contract.h"
 #include <cstring>
@@ -451,6 +452,29 @@ static void appendTileTabHTML(
   html += tab_id;
   html += R"html(Grid">
 )html";
+  if (!screensaver_mode && grid_layout::head_bar()) {
+    // The head bar's head over the grid's top margin (home_bar.cpp): the
+    // page's circle and title, the time, and the gear (Home) or the X.
+    const bool home = folder_id == 0;  // the root folder (TileConfig)
+    const String icon = home ? String("home")
+                             : normalizeMdiIconName(folder.icon_name[0] ? String(folder.icon_name) : String("folder"));
+    char time_text[8];
+    home_bar::format_time(time_text, sizeof(time_text));
+    const uint8_t time_format = clock_tile::resolve_time_format(
+        clock_tile::TIME_FORMAT_AUTO, configManager.getConfig().global_time_format,
+        configManager.getConfig().language);
+    html += "<div class=\"head-bar-preview\" aria-hidden=\"true\"><span class=\"head-disc\"><i class=\"mdi mdi-";
+    appendHtmlEscaped(html, icon);
+    html += "\"></i></span><span class=\"head-title\">";
+    appendHtmlEscaped(html, home || !folder.name[0] ? String(tr.home) : String(folder.name));
+    html += "</span><span class=\"head-time\" data-hour12=\"";
+    html += time_format == clock_tile::TIME_FORMAT_12H ? "1" : "0";
+    html += "\">";
+    html += time_text;
+    html += "</span><span class=\"head-button\"><i class=\"mdi mdi-";
+    html += home ? "cog" : "window-close";
+    html += "\"></i></span></div>\n";
+  }
 
   if (screensaver_mode) {
     html += R"html(            <div class="screensaver-grid-image-frame">
@@ -538,7 +562,14 @@ static void appendTileTabHTML(
       cssClass += " screensaver-bg-clear";
     }
 
-    if (tile_geometry::fraction_bits(col, row, span_w, span_h)) {
+    // Head bar layout (grid_layout.h): a tile outside the shown grid sits
+    // beside the screen, outlined, until it is moved in; Settings and Back
+    // give way to the head's gear and X.
+    const bool head_bar_grid = !screensaver_mode && grid_layout::head_bar();
+    const bool outside = head_bar_grid && tile.type != TILE_EMPTY && !grid_layout::inside(col, row, span_w, span_h);
+    if (outside) cssClass += " tile-outside";
+    if (head_bar_grid && (tile.type == TILE_SETTINGS || tile.type == TILE_BACK)) cssClass += " tile-bar-hidden";
+    if (outside || tile_geometry::fraction_bits(col, row, span_w, span_h)) {
       cssClass += " fractional-tile";
       tileStyle += ";--tile-col:" + String(col) + ";--tile-row:" + String(row) +
                    ";--tile-w:" + String(span_w) + ";--tile-h:" + String(span_h) +
@@ -911,6 +942,13 @@ static void appendTileTabHTML(
     if (display.icon_discs) html += " checked";
     html += "> ";
     appendHtmlEscaped(html, tr.icon_discs);
+    // The head bar layout (grid_layout.h): saved at once, active after the
+    // restart the browser asks for.
+    html += "</label><label class=\"inline-checkbox\"><input class=\"global-head-bar-toggle\" id=\"" + tab_id +
+            "_global_head_bar\" type=\"checkbox\" onchange=\"saveHeadBar(this)\"";
+    if (display.head_bar) html += " checked";
+    html += "> ";
+    appendHtmlEscaped(html, tr.head_bar);
     html += "</label><div class=\"global-settings-field\"><label for=\"" + radius_id + "\">";
     appendHtmlEscaped(html, tr.tile_radius);
     html += "</label><div class=\"global-radius-field\">";

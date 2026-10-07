@@ -126,7 +126,7 @@
 
   function getTileGridMetrics(tab) {
     const grid = getTileGrid(tab);
-    return getGridElementMetrics(grid, GRID_COLS, GRID_ROWS);
+    return getGridElementMetrics(grid, placeCols(tab), placeRows(tab));
   }
 
   function getRawGridCellFromPointer(tab, clientX, clientY, sizeStep = null) {
@@ -147,8 +147,8 @@
     if (col < 0) col = 0;
     const firstRow = firstAllowedGridRow(tab);
     if (row < firstRow) row = firstRow;
-    if (col >= GRID_COLS) col = GRID_COLS - unit;
-    if (row >= GRID_ROWS) row = GRID_ROWS - unit;
+    if (col >= placeCols(tab)) col = placeCols(tab) - unit;
+    if (row >= placeRows(tab)) row = placeRows(tab) - unit;
     return { col, row };
   }
 
@@ -166,9 +166,9 @@
       if (!isFinite(left) || !isFinite(top) || !(halfX > 0) || !(halfY > 0)) return null;
       const layout = getDragSourceLayout();
       return {
-        col: Math.max(0, Math.min(GRID_COLS - (layout?.span_w || 0.5), Math.round(left / halfX) / 2)),
+        col: Math.max(0, Math.min(placeCols(tab) - (layout?.span_w || 0.5), Math.round(left / halfX) / 2)),
         row: Math.max(firstAllowedGridRow(tab),
-                      Math.min(GRID_ROWS - (layout?.span_h || 0.5), Math.round(top / halfY) / 2))
+                      Math.min(placeRows(tab) - (layout?.span_h || 0.5), Math.round(top / halfY) / 2))
       };
     }
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);

@@ -46,7 +46,7 @@
     });
     return canPlaceGridLayout(
       layouts, active, index, candidateLayout,
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab));
+      placeCols(tab), placeRows(tab), firstAllowedGridRow(tab));
   }
 
   function canPlaceHiddenSettingsLayout(tab, candidateLayout) {
@@ -66,7 +66,7 @@
     });
     return canPlaceGridLayout(
       layouts, active, -1, candidateLayout,
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab));
+      placeCols(tab), placeRows(tab), firstAllowedGridRow(tab));
   }
 
   function manhattanDistance(colA, rowA, colB, rowB) {
@@ -98,7 +98,7 @@
   function buildPlacementCandidates(
       tab, spanW, spanH, preferredCol, preferredRow) {
     return buildGridPlacementCandidates(
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab),
+      placeCols(tab), placeRows(tab), firstAllowedGridRow(tab),
       spanW, spanH, preferredCol, preferredRow);
   }
 
@@ -208,5 +208,5 @@
     return simulateGridReorderLayouts(
       baseLayouts, active, fromIdx,
       targetCol, targetRow,
-      GRID_COLS, GRID_ROWS, firstAllowedGridRow(tab), tiles.map(tile => tile?.type));
+      placeCols(tab), placeRows(tab), firstAllowedGridRow(tab), tiles.map(tile => tile?.type));
   }

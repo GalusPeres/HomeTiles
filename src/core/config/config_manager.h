@@ -86,6 +86,9 @@ struct DeviceConfig {
   uint16_t tile_radius = tile_radius::kDefault;
   bool tile_borders;           // Thin borders around normal dashboard tiles.
   bool icon_discs = true;      // Background discs behind tile icons.
+  // The head bar layout (grid_layout.h): a head with the time, gear and X
+  // above fewer, larger tiles. Read at boot; a change applies after a restart.
+  bool head_bar = false;
   // Glow strength of colored icon discs in percent (icon_glow.h).
   uint8_t icon_glow = icon_glow::kDefault;
   // Background of tiles without their own color (and of reset/new tiles).
@@ -146,6 +149,7 @@ public:
   bool saveScreensaverTimeout(bool enabled, uint16_t seconds);
   bool saveScreensaverBrightness(uint8_t brightness_pct);
   bool saveTileBorders(bool enabled);
+  bool saveHeadBar(bool enabled);
   bool saveTileRadius(uint16_t radius);
   bool saveIconDiscs(bool enabled);
   bool saveIconGlow(uint8_t percent);

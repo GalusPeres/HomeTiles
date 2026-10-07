@@ -227,6 +227,11 @@ struct Strings {
   // Web Admin: global display settings row below the grid preview.
   const char* global_settings_heading;
   const char* icon_discs;
+  // The head bar layout switch (grid_layout.h): its label, the restart
+  // question, and the hint on a tile outside the shown grid.
+  const char* head_bar;
+  const char* head_bar_restart_confirm;
+  const char* head_bar_tile_outside;
   const char* default_tile_color;
   // Tile color choice: global tile color, own color or a tint from the icon.
   const char* tile_color_mode_global;

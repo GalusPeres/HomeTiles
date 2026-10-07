@@ -1630,7 +1630,7 @@ void set_head_title(const char* text) {
   lv_label_set_text(g_bar_title, text);
   lv_obj_set_style_text_font(g_bar_title, font, 0);
   lv_obj_set_height(g_bar_title, lv_font_get_line_height(font));
-  lv_obj_set_y(g_bar_title, settings_style::head_center_y() - lv_font_get_line_height(font) / 2 - GRID_PAD_TOP);
+  lv_obj_set_y(g_bar_title, settings_style::head_center_y() - lv_font_get_line_height(font) / 2 - settings_style::kGrid.pad_top);
 }
 
 // Portrait: a category as the 1x1 Home tile (the folder tile: the circle
@@ -1686,8 +1686,8 @@ void build_frame() {
   const i18n::Strings& s = settings_model::text();
 
   // Screen coordinates minus the panel's padding (the grid margins).
-  const int px = GRID_PAD_LEFT;
-  const int py = GRID_PAD_TOP;
+  const int px = settings_style::kGrid.pad_left;
+  const int py = settings_style::kGrid.pad_top;
   const int d = popup_layout::kHeaderIconDiscSize;
   const int close = popup_layout::kCloseButtonSize;
   const int cy = settings_style::head_center_y();
@@ -1764,7 +1764,7 @@ void build_frame() {
   } else if (kLayout == Layout::Portrait) {
     // One row of four, three quarters of a grid row high (user 2026-10-07:
     // 1x1 tiles in one row, not so tall); the width shared evenly.
-    const int tile_h = static_cast<int>(lroundf(0.75f * (GRID_CELL_H + GRID_GAP) - GRID_GAP));
+    const int tile_h = static_cast<int>(lroundf(0.75f * (settings_style::kGrid.cell_h + GRID_GAP) - GRID_GAP));
     const float tile_w = (body_w - (kCategoryCount - 1) * GRID_GAP) / static_cast<float>(kCategoryCount);
     // One font for all four names: the largest that fits every one.
     const int room = static_cast<int>(tile_w) - 4 * settings_style::tile_inset();

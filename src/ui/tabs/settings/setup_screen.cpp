@@ -917,7 +917,8 @@ void build_card() {
   g_built_text = &settings_model::text();
   const Colors palette = colors();
   g_card = settings_parts::plain(g_panel);
-  lv_obj_set_pos(g_card, (SCREEN_WIDTH - card_width()) / 2 - GRID_PAD_LEFT, popup_layout::kCardMargin - GRID_PAD_TOP);
+  lv_obj_set_pos(g_card, (SCREEN_WIDTH - card_width()) / 2 - settings_style::kGrid.pad_left,
+                 popup_layout::kCardMargin - settings_style::kGrid.pad_top);
   lv_obj_set_size(g_card, card_width(), card_height());
   lv_obj_set_style_bg_color(g_card, lv_color_hex(palette.card), 0);
   lv_obj_set_style_bg_opa(g_card, LV_OPA_COVER, 0);

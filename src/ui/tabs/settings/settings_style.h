@@ -224,7 +224,10 @@ inline void apply_tile_radius(lv_obj_t* obj) { ui_surface_style::apply_radius(ob
 // tile_icon_disc::inset() and diameter() compute them (the portrait
 // category tiles' circle).
 inline int tile_inset() { return popup_layout::scale480(4); }
-inline int half_tile_disc() { return (GRID_CELL_H - GRID_GAP) / 2 - 2 * tile_inset(); }
+// Settings keeps the profile's grid (grid_layout.h) whatever the tile grid
+// shows: its look does not change with the head bar layout.
+constexpr grid_layout::Shown kGrid = grid_layout::profile_grid();
+inline int half_tile_disc() { return (kGrid.cell_h - GRID_GAP) / 2 - 2 * tile_inset(); }
 
 // The frame and head (mockup head=popup/row): Settings is a popup card at
 // full size. The popup card margin (kCardMargin) frames the screen; inside
@@ -254,7 +257,7 @@ constexpr int kClosePressedBaseline = tile_radius::kMinimum - (popup_layout::kCl
 
 // The width of `span` grid columns from `col`, exactly like the tiles (the
 // landscape category column: two columns).
-inline int grid_w(float col, float span) { return tile_geometry::extent(col, span, GRID_CELL_W, GRID_GAP); }
+inline int grid_w(float col, float span) { return tile_geometry::extent(col, span, kGrid.cell_w, GRID_GAP); }
 
 // The colors of the moment: the card is the global tile color; groups,
 // buttons and their pressed step sit one, two and three control steps above

@@ -122,18 +122,18 @@
       ? tiles[currentTileIndex] : null;
     const typeValue = document.getElementById(tab + '_tile_type')?.value ?? tile?.type ?? 0;
     const isMedia = Number(typeValue) === MEDIA_TILE_TYPE;
-    const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1;
+    const minW = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, placeCols(tab)) : 1;
     const unit = 0.5;
     const snap = clampHalf;
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY, unit);
     if (!rawCell) return null;
-    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS) : (supportsHalfSize(typeValue) ? 0.5 : 1);
+    const minH = isMedia ? Math.min(MEDIA_TILE_MIN_SPAN, placeRows(tab)) : (supportsHalfSize(typeValue) ? 0.5 : 1);
     const maxW = isMedia
-      ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS - layout.col)
-      : GRID_COLS - layout.col;
+      ? Math.min(MEDIA_TILE_MAX_SPAN, placeCols(tab) - layout.col)
+      : placeCols(tab) - layout.col;
     const maxH = isMedia
-      ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_ROWS - layout.row)
-      : GRID_ROWS - layout.row;
+      ? Math.min(MEDIA_TILE_MAX_SPAN, placeRows(tab) - layout.row)
+      : placeRows(tab) - layout.row;
     if (String(direction || '').includes('s')) {
       spanH = snap(rawCell.row - layout.row + unit, minH, maxH, layout.span_h);
     }
@@ -269,12 +269,12 @@
     const placeholder = ensureDragPlaceholder(tab);
     if (!sourceLayout || !placeholder) return;
 
-    const targetCol = clampHalf(col, 0, GRID_COLS - 0.5, sourceLayout.col);
-    const targetRow = clampHalf(row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
-    const fits = (targetCol + sourceLayout.span_w <= GRID_COLS) &&
-                 (targetRow + sourceLayout.span_h <= GRID_ROWS);
-    const spanW = Math.max(1, Math.min(sourceLayout.span_w, GRID_COLS - targetCol));
-    const spanH = Math.max(0.5, Math.min(sourceLayout.span_h, GRID_ROWS - targetRow));
+    const targetCol = clampHalf(col, 0, placeCols(tab) - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(row, firstAllowedGridRow(tab), placeRows(tab) - 0.5, sourceLayout.row);
+    const fits = (targetCol + sourceLayout.span_w <= placeCols(tab)) &&
+                 (targetRow + sourceLayout.span_h <= placeRows(tab));
+    const spanW = Math.max(1, Math.min(sourceLayout.span_w, placeCols(tab) - targetCol));
+    const spanH = Math.max(0.5, Math.min(sourceLayout.span_h, placeRows(tab) - targetRow));
 
     placeholder.classList.toggle('invalid', !fits);
     placeholder.classList.add('show');
@@ -289,8 +289,8 @@
     e.dataTransfer.dropEffect = 'move';
     const sourceLayout = getDragSourceLayout();
     if (!sourceLayout) return;
-    const targetCol = clampHalf(cell.col, 0, GRID_COLS - 0.5, sourceLayout.col);
-    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
+    const targetCol = clampHalf(cell.col, 0, placeCols(tab) - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), placeRows(tab) - 0.5, sourceLayout.row);
     updateDragPlaceholder(tab, targetCol, targetRow);
 
     if (dragSource.kind === 'hidden-settings') {
@@ -338,10 +338,10 @@
 
     e.preventDefault();
     e.stopPropagation();
-    const targetCol = clampHalf(cell.col, 0, GRID_COLS - 0.5, sourceLayout.col);
-    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, sourceLayout.row);
-    const fits = (targetCol + sourceLayout.span_w <= GRID_COLS) &&
-                 (targetRow + sourceLayout.span_h <= GRID_ROWS);
+    const targetCol = clampHalf(cell.col, 0, placeCols(tab) - 0.5, sourceLayout.col);
+    const targetRow = clampHalf(cell.row, firstAllowedGridRow(tab), placeRows(tab) - 0.5, sourceLayout.row);
+    const fits = (targetCol + sourceLayout.span_w <= placeCols(tab)) &&
+                 (targetRow + sourceLayout.span_h <= placeRows(tab));
 
     if (dragSource.kind === 'hidden-settings') {
       const candidate = {

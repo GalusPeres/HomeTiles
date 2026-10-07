@@ -42,7 +42,7 @@ assert.ok(grid.includes('dropOffset: getDragLayoutOffset(tab, layout, e.clientX,
 const cellSource = extractDeliveredFunction('getGridCellFromPointer');
 const cellAt = (clientX, clientY, dropOffset, layout = {span_w: 1, span_h: 1}) => vm.runInNewContext(
   `${cellSource}; getGridCellFromPointer('folder0', clientX, clientY)`, {
-    clientX, clientY, GRID_COLS: 6, GRID_ROWS: 4,
+    clientX, clientY, GRID_COLS: 6, GRID_ROWS: 4, placeCols: () => 6, placeRows: () => 4,
     dragSource: {tab: 'folder0', dropOffset, layout},
     getTileGridMetrics: () => ({rect: {left: 100, top: 50}, padLeft: 6, padTop: 6,
       cellW: 120, cellH: 100, gapX: 10, gapY: 10}),

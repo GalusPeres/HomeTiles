@@ -9,7 +9,7 @@ Last reviewed: 2026-10-08
 - ESP32-P4/ESP-Hosted patches: `tools/esp-hosted-3.3.7-rx-fix/README.md`
 - Release procedure: `RELEASING.md`
 - Live bug status: newest GitHub issue comments; recheck online before changing an issue status
-- Bridge publishing requires separate authorization.
+- Bridge publishing requires separate authorization. Docs: `docs/`, `mkdocs.yml`, `overrides/` (gh-pages).
 
 ## Firmware baseline
 
@@ -58,8 +58,7 @@ Last reviewed: 2026-10-08
 
 ## Sensor history
 
-- Binary Sensor (20): V7-compatible; localized icons/previews and history shipped.
-- Textual states use timeline/Activity; numeric keep graphs. Missing/unknown/unavailable stay distinct.
+- Binary Sensor (20) V7-compatible; textual states timeline/Activity, numeric graphs; missing/unknown/unavailable distinct.
 - Bridge v0.6.40 (`581150b`): bounded Recorder paging, categorical history, legacy compatibility.
 
 ## Editable tiles
@@ -67,9 +66,7 @@ Last reviewed: 2026-10-08
 - IDs 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups; `PackedTileV7` unchanged.
 - Number: Media slider, Climate +/- pill or roller, graph/Activity; Select: Settings dropdown, timeline/Activity.
 - Date/Time: hh/mm/ss rollers in a pill, 23/00 and 59/00 wrap; date spinboxes; HA timezone/DST validation.
-- Additive `/control` preserves legacy clients; sessions/revisions/deadlines reject stale commands.
-- Bridge v0.6.44 (`148dec4`) fixed the stale icon cache.
-- Controls clear titles/close area; Select status in header; range changes retain data; offline closes dropdowns.
+- Additive `/control` keeps legacy clients; sessions/revisions/deadlines reject stale commands.
 - Drafts coalesce steps/rollers 600 ms, sliders publish on release, kept until confirmation/rejection or 30 s.
 - Editable surfaces: control fill, white text; Select list = card + hairline, gap, inset selection.
 - Titles (approved): two centered/ellipsized lines; 255 UTF-8 bytes in `/_tile_titles`; Settings v4 size unchanged; view labels flatten CR/LF.
@@ -80,11 +77,10 @@ Last reviewed: 2026-10-08
 - v0.6.11 `3b534ab`: shared popup frame/header/close, cached bodies; cold content waits for first frame; close/switch/delete cancel work.
 - Artwork: URL-only `state_fast` precedes MQTT; failed replacements keep covers; URL/content pairing avoids S3 redownloads.
 - Memory: LVGL PSRAM S3 2 MiB/P4 12 MiB; internal/DMA band <=72 KiB; page caches S3 4/P4 6. Bindings, popup history, Select options in PSRAM (b123).
-- Popup/title fixes accepted on 8-inch, S3, 4B, Tab5. Pending: artwork, sleep/wake, camera soak, memory minima.
+- Pending: artwork, sleep/wake, camera soak, memory minima.
 - Colors: `tone_color.h` OKLCH (+0.06 L at 25 %); opaque circles/controls, veil only on see-through tiles; dark icons lifted vs. defaults (b156); tinted circle/controls = From icon circle (b153). Presses: no theme recolor/teal fade, PIN/pill a step up.
 - LVGL 9.6.0 (lvgl#10306): S3 recolor 230->5 ms; caches `hometiles-lvgl96-*`.
-- LVGL 9.6 rounds draw bands to 64 B: 4B (720 px) hung at splash b132-b164; buffers rounded up (77e6a695), b166 HW ok.
-- Reverted: b126 cover fade, b128 UI frame swap (lag).
+- Reverted: b126 cover fade, b128 UI frame swap (lag). LVGL 9.6 band rounding: 4B buffers rounded up (b166 ok).
 
 ## Radius and half-grid
 
@@ -111,19 +107,15 @@ Last reviewed: 2026-10-08
 - V2 OV02C10 720p. 8-inch OV5647 544x960, Bridge `rotate` 90. Tab5 SC202CS 720p RAW8, mirror+180, BGGR under flips.
 - Camera builds pass; HW pending (#56): WS 7/10.1/7B/4.3/4B OV5647, V1/JC1060 V2 OV02C10, JC4880 quarter turn.
 - Advanced: `lcam_rot` (180 = flip, odd = `rotate` 90), `lcam_rbswap` (Bayer, next start).
-- HW pending: b30 CSI/ISP, q10; b31 gain, q10-90; b32 screenshot; b33 Wi-Fi/AP, kbd, #43; b34 rotation, boards; b35 sleep stream/indicator wake, Tab5 1% wake, S3 150Hz.
+- HW pending: b30-b35 (CSI/ISP, gain, screenshot, Wi-Fi/AP, rotation, sleep stream/indicator wake).
 - Open: int WDT HW; TEST `kChunkWindow = 4`; stream AE waits for a step to show (b215).
-- Popup stream: Bridge b8 thins before area scaling, `2a714a9` shares FFmpeg per camera; P4 b134 30 FPS, no refresh wait; #63 1024x600 552x310 (b135).
+- Popup stream: Bridge thins before scaling, shared FFmpeg per camera; P4 b134 30 FPS; #63 1024x600 552x310 (b135).
 
 ## v0.7.0 release
 
 - S3 fix `c3e0a673`: PSRAM-first OTA TLS, all three profiles. Guition b74 OTA/boot/MQTT passed; Waveshare HW pending.
 - v0.7.1 promised: PR #51 Polish port, #26 S3-4B PCLK (16 vs 10 MHz), P4 v3.2 for 7B (#41) and JC8012 V3 (#44); French.
 - Tests pending #7 #11 #27 #34 #45; #55 reporter check.
-
-## Maintenance
-
-- Docs: `docs/`, `mkdocs.yml`, `overrides/` (gh-pages).
 
 ## Flash and RAM (PR #62)
 
@@ -136,7 +128,7 @@ Last reviewed: 2026-10-08
 - Visible folders are reused for their popup/descendants; new/locked paths still require access checks (S3 Home detour fix).
 - Stable tile IDs use reserved PackedTileV7 bytes and durable counters; MQTT sessions/sequences/deadlines reject replay.
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
-- Commands validate targets/availability/features; ignore retained commands. Battery is a stub; unsupported probes stay unregistered.
+- Commands validate targets/availability/features; ignore retained commands.
 - View/editable controls confirmed on 8-inch/S3. HA migration, legacy firmware and lifecycle coverage pending.
 - Issue #37: packets up to 65,535 bytes (was 16 KiB) with bounded queues/ACKs; reporter confirmation pending.
 
@@ -157,3 +149,9 @@ Last reviewed: 2026-10-08
 - Web Admin Settings (b257): list like the panel (WLAN, Lokalisierung, System + I/O, camera, files, diagnostics), one footer; System shows the way (direct/MQTT), MQTT folded; #73 `/api/language` poll. V2 b258 HW ok.
 - New look (b260): popup head, borderless groups; square panels gear + four tabs; portrait popups = centered square card. b261: WLAN entry card, back arrow, option gap, concentric head buttons, corner circle at the pill inset. HW pending.
 - Weather tile (b261) by real size, not slots: days = width / (widest measured text + 85 % gap) (4B/V2 3x2 = 5), row from two-row height, FR tile "Auj."; preview gets the measured width.
+
+## Layouts (`feature/layouts`, unreleased)
+
+- Head bar option: Web Admin global switch, NVS `head_bar`, read at boot (restart). `grid_layout.h` shown grid: 1280x800 6x4, 1280x720/1024x600 5x3, 800x480 4x3, square 3x3, JC4880 3x5; `home_bar.cpp` = Settings head (circle, title, time, gear/X), Settings/Back tiles hidden.
+- Stored positions keep the profile grid: tiles outside the shown grid are not drawn and outlined red in Web Admin, never moved; placement/reorder stay inside it. Screensaver tab keeps the profile grid, the panel shifts its rows. Settings and camera stripe keep profile geometry.
+- Emulator only so far: portrait, folder circles in the bar. HW pending.

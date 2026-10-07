@@ -91,6 +91,12 @@ struct TileRect {
   float span_h;
 };
 
+// Where a reorder may place tiles: the shown grid (grid_layout.h), with the
+// head bar its fewer cells; the screensaver keeps its stored grid. Tiles
+// that already lie outside it stay where they are.
+static uint8_t g_place_cols = GRID_COLS;
+static uint8_t g_place_rows = GRID_ROWS;
+
 static bool buildTileRect(float col, float row, float span_w, float span_h, TileRect& out) {
   if (col >= GRID_COLS || row >= GRID_ROWS) return false;
   if (!tile_geometry::half_step(col) || !tile_geometry::half_step(row) ||
@@ -174,10 +180,11 @@ static std::vector<PlacementCandidate> buildPlacementCandidates(
     uint8_t first_row = 0,
     float step = 1) {
   std::vector<PlacementCandidate> out;
-  for (float row = first_row; row < GRID_ROWS; row += step) {
-    for (float col = 0; col < GRID_COLS; col += step) {
+  for (float row = first_row; row < g_place_rows; row += step) {
+    for (float col = 0; col < g_place_cols; col += step) {
       TileRect rect{};
       if (!buildTileRect(col, row, span_w, span_h, rect)) continue;
+      if (col + span_w > g_place_cols || row + span_h > g_place_rows) continue;
       float distance = row * GRID_COLS + col;
       if (preferred_col >= 0 && preferred_row >= 0) {
         distance = manhattanDistance(col, row,
@@ -246,7 +253,8 @@ static bool applySmartReorder(
 
   TileRect target_rect{};
   if (!tile_geometry::supported(moving_tile.type, target_col, target_row, span_w, span_h) ||
-      !buildTileRect(target_col, target_row, span_w, span_h, target_rect)) return false;
+      !buildTileRect(target_col, target_row, span_w, span_h, target_rect) ||
+      target_col + span_w > g_place_cols || target_row + span_h > g_place_rows) return false;
 
   bool fractional_grid = false;
   for (const Tile& item : grid.tiles) {
@@ -882,6 +890,8 @@ void WebAdminServer::handleReorderTiles() {
   const uint8_t first_row = screensaver_grid && GRID_ROWS > 1
                                 ? GRID_ROWS - 2
                                 : 0;
+  g_place_cols = screensaver_grid ? GRID_COLS : GRID_SHOWN_COLS;
+  g_place_rows = screensaver_grid ? GRID_ROWS : GRID_SHOWN_ROWS;
   if (!applySmartReorder(grid, static_cast<size_t>(from), target_col,
                          target_row, first_row)) {
     server.send(409, "application/json", "{\"success\":false,\"error\":\"Tile overlaps\"}");

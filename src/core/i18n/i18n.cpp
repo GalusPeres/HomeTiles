@@ -590,7 +590,8 @@ static const Strings kStringsDe = {
     "Lege dort ein Web-Admin-Passwort fest, damit nur du das Panel ändern kannst.",
     "Einrichtung verlassen?",
     "Du kannst sie später unter %s › System › %s abschließen.",
-    "Verlassen"};
+    "Verlassen",
+    "Update"};
 
 static const Strings kStringsEn = {
     "en",
@@ -1175,7 +1176,8 @@ static const Strings kStringsEn = {
     "Set a Web Admin password there, so only you can change the panel.",
     "Leave the setup?",
     "You can finish it later in %s › System › %s.",
-    "Leave"};
+    "Leave",
+    "Update"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1760,7 +1762,8 @@ static const Strings kStringsFr = {
     "Définissez-y un mot de passe Web Admin, pour être seul à pouvoir modifier le panneau.",
     "Quitter la configuration\u00A0?",
     "Vous pourrez la terminer plus tard dans %s › System › %s.",
-    "Quitter"};
+    "Quitter",
+    "Mise à jour"};
 
 static const LocaleProfile kLocaleDe = {
     "de",
@@ -2697,6 +2700,7 @@ static const Strings kStringsPl = {
     "Opuścić konfigurację?",
     "Możesz ją dokończyć później w %s › System › %s.",
     "Wyjdź",
+    "Aktualizacja",
 };
 
 static const LocaleProfile kLocalePl = {

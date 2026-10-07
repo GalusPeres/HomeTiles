@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "src/fonts/ui_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/startup/hometiles_logo.h"
 #include "src/ui/tabs/settings/settings_entry.h"
@@ -13,14 +14,15 @@
 #include "src/ui/tabs/settings/setup_screen.h"
 #include "src/ui/shared/text_scroll.h"
 
-// The approved layout (build/design-mockups/settings/settings-menu.html and
-// the reference images in its sheets/ folder). The top half row is the bar in
-// its Minimal style, laid out like a pill row: gear circle and title on the
-// left, X on the right. Landscape panels show the four categories as tiles
-// over the first two columns, sharing the height evenly (the one exception to
-// the grid), with the page card beside them; square panels put them as round
-// tabs into the bar beside the X; portrait panels show them as 2x1 tiles in
-// the bottom two rows under the card. Only the open page is built, while
+// The layout of the mockup (build/design-mockups/settings/settings-menu.html,
+// head=row with the headings in the groups, 2026-10-07): Settings is a popup
+// card at full size with the popup head (gear circle and title on the left,
+// the X in the corner). Landscape panels show the four categories as tiles in
+// the first two grid columns, sharing the height evenly (the one exception to
+// the grid), with the page beside them; square panels put them as round tabs
+// into the head beside the X; portrait panels show them as one row of 1x1
+// tiles above the page. The page has no card: its groups are the surfaces,
+// one grid gap apart and from the frame. Only the open page is built, while
 // Settings shows.
 namespace settings_screen {
 namespace {
@@ -51,7 +53,6 @@ lv_obj_t* g_panel = nullptr;
 CategoryView g_views[kCategoryCount] = {};
 lv_obj_t* g_bar_title = nullptr;
 lv_obj_t* g_close = nullptr;
-lv_obj_t* g_card_title = nullptr;
 // The card's body: holds the open page.
 // The page card and its body (the open page).
 lv_obj_t* g_card = nullptr;
@@ -268,7 +269,6 @@ void build_category_tile(lv_obj_t* panel, uint8_t index, int x, int y, int w, in
   lv_obj_set_size(view.box, w, h);
   lv_obj_set_style_bg_opa(view.box, LV_OPA_COVER, 0);
   settings_style::apply_tile_radius(view.box);
-  ui_surface_style::apply_global_tile_border(view.box);
   lv_obj_add_event_cb(view.box, on_category_clicked, LV_EVENT_CLICKED,
                       reinterpret_cast<void*>(static_cast<uintptr_t>(index)));
   const int disc = settings_style::kCategoryDisc;
@@ -415,7 +415,8 @@ void build_display_page(lv_obj_t* page) {
                      &g_sleep_value);
   set_step_text(g_sleep_value, values.sleep_index);
   settings_parts::Row rotation = settings_parts::row(screen, "screen-rotation", s.settings_rotation);
-  g_rotation_segment = rotation_segment(rotation.row, palette.card);
+  // Controls sit one step above the group (the tile color).
+  g_rotation_segment = rotation_segment(rotation.row, palette.group);
 
   settings_parts::section(page, s.settings_screensaver, false);
   lv_obj_t* saver = settings_parts::group(page, palette);
@@ -879,8 +880,11 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
   const bool wide = g_card_width >= settings_style::kWideHeadCard;
   lv_obj_t* group = settings_parts::group(page, palette);
   settings_parts::Row head = settings_parts::row(group, nullptr, "", "");
-  const int pad = wide ? popup_layout::scale(GRID_ROWS < 5 ? 18 : 20) : 13;
-  lv_obj_set_height(head.row, settings_style::kHeroLogo + 2 * pad);
+  // At least a row high, the logo with a little air on narrow cards (mockup
+  // pageSystem with the popup head).
+  const int pad = wide ? 0 : 8;
+  const int height = settings_style::kHeroLogo + 2 * pad;
+  lv_obj_set_height(head.row, height > settings_style::kRowHeight ? height : settings_style::kRowHeight);
 
   lv_obj_t* logo = lv_image_create(head.row);
   lv_obj_remove_style_all(logo);
@@ -919,14 +923,15 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
   char buf[96];
   const char* sub = settings_model::device_name();
   uint32_t sub_color = 0;
-  const char* label = s.system_check_updates_btn;
+  // The button stays short (magnifier or download icon and the short update
+  // word, user 2026-10-07): the line beside it names the device or the found
+  // version.
+  const char* label = s.settings_update_short;
   const char* icon = "magnify";
   ButtonKind kind = ButtonKind::Normal;
   bool has_button = true;
   bool enabled = true;
   const bool found = settings_model::latest_version()[0] != '\0';
-  char install[64];
-  snprintf(install, sizeof(install), s.system_install_btn_fmt, settings_model::latest_version());
   switch (v.update) {
     case UpdateState::Idle:
       break;
@@ -938,7 +943,6 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
       snprintf(buf, sizeof(buf), s.system_update_available_fmt, settings_model::latest_version());
       sub = buf;
       sub_color = settings_style::kWarnColor;
-      label = install;
       icon = "download";
       kind = ButtonKind::Accent;
       break;
@@ -963,7 +967,6 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
       sub = s.system_install_failed;
       sub_color = settings_style::kErrorColor;
       if (found) {
-        label = install;
         icon = "download";
         kind = ButtonKind::Accent;
       }
@@ -980,7 +983,7 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
   } else if (v.update == UpdateState::Downloading) {
     lv_obj_t* track = settings_parts::plain(head.row);
     lv_obj_set_size(track, settings_style::kProgressWidth, settings_style::kProgressHeight);
-    lv_obj_set_style_bg_color(track, lv_color_hex(palette.card), 0);
+    lv_obj_set_style_bg_color(track, lv_color_hex(palette.group), 0);
     lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(track, settings_style::kProgressHeight / 2, 0);
     g_progress_fill = settings_parts::plain(track);
@@ -999,8 +1002,6 @@ void build_system_page(lv_obj_t* page) {
   using settings_parts::ButtonKind;
   g_system_key = system_key(v);
   build_system_head(page, v, palette);
-  lv_obj_t* head_row = lv_obj_get_child(lv_obj_get_child(page, 0), 0);
-  const int head_height = lv_obj_get_style_height(head_row, LV_PART_MAIN);
 
   // Connection: Home Assistant, with the way to it under it (direct link or
   // MQTT). The panel's own address is on the WLAN page.
@@ -1098,10 +1099,16 @@ void build_system_page(lv_obj_t* page) {
     switch_on_button(r.row, s.settings_allow, SystemAction::Allow);
   }
 
-  // Setup, Restart and GitHub right on the card (no group, no heading).
+  // Setup, Restart and GitHub one grid gap under the groups like a further
+  // group (no heading; the free room stays at the bottom like on the other
+  // pages, user 2026-10-07). Their corners take the tile radius: at the
+  // maximum radius they are full pills (twice the radius high), with a small
+  // radius they keep a touch-friendly minimum height.
+  const int corner = ui_surface_style::radius(tile_radius::kMinimum);
+  const int button_height =
+      2 * corner > settings_style::kSystemButtonMin ? 2 * corner : settings_style::kSystemButtonMin;
   lv_obj_t* actions = settings_parts::plain(page);
-  lv_obj_set_size(actions, LV_PCT(100), settings_style::kSystemButtonHeight);
-  lv_obj_set_style_margin_top(actions, settings_style::kSectionTop, 0);
+  lv_obj_set_size(actions, LV_PCT(100), button_height);
   lv_obj_set_style_pad_column(actions, settings_style::kButtonGap, 0);
   lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
   struct Action {
@@ -1114,20 +1121,34 @@ void build_system_page(lv_obj_t* page) {
                              {settings_style::kGitHub, "github", SystemAction::GitHub}};
   for (const Action& a : kActions) {
     lv_obj_t* b = settings_parts::button(actions, a.text, a.icon, ButtonKind::Normal, settings_style::kSystemColor,
-                                         palette, settings_style::kSystemButtonHeight, false, on_system_action,
-                                         action_data(a.action));
+                                         palette, button_height, false, on_system_action, action_data(a.action));
     lv_obj_set_flex_grow(b, 1);
+    // Surfaces on the page like the groups and tiles: the tile color and
+    // radius, no border (inside a popup); pressed one step up (user 2026-10-07).
+    lv_obj_set_style_bg_color(b, lv_color_hex(palette.card), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(palette.group), LV_STATE_PRESSED);
+    settings_style::apply_tile_radius(b);
   }
 
-  // The head takes what the card has left, so the buttons end one card
-  // margin above its edge (mockup growSystemHead).
-  lv_obj_update_layout(page);
-  lv_area_t page_area;
-  lv_area_t last;
-  lv_obj_get_coords(page, &page_area);
-  lv_obj_get_coords(actions, &last);
-  const int free = page_area.y2 - last.y2;
-  if (free > 0) lv_obj_set_height(head_row, head_height + free);
+  // The head gets its air (the logo scale(20) from the group's edges, on
+  // narrow cards half a logo, user 2026-10-07 "warum so eng", "gib ihm Platz
+  // in der Höhe") as far as the page has room below the buttons; on the
+  // smaller panels it takes only what is free, so nothing runs past the frame.
+  lv_obj_t* head_row = lv_obj_get_child(lv_obj_get_child(page, 0), 0);
+  const int head_height = lv_obj_get_style_height(head_row, LV_PART_MAIN);
+  const bool wide = g_card_width >= settings_style::kWideHeadCard;
+  const int wanted =
+      settings_style::kHeroLogo + 2 * (wide ? popup_layout::scale(20) : settings_style::kHeroLogo / 2);
+  if (wanted > head_height) {
+    lv_obj_update_layout(page);
+    lv_area_t page_area;
+    lv_area_t last;
+    lv_obj_get_coords(page, &page_area);
+    lv_obj_get_coords(actions, &last);
+    const int free = page_area.y2 - last.y2;
+    const int grow = wanted - head_height < free ? wanted - head_height : free;
+    if (grow > 0) lv_obj_set_height(head_row, head_height + grow);
+  }
 }
 
 void system_tick() {
@@ -1264,10 +1285,9 @@ lv_obj_t* wifi_button(lv_obj_t* row, const char* text, WifiAction action) {
 void build_network_mode(lv_obj_t* page, const WifiValues& v, const Colors& palette) {
   const i18n::Strings& s = settings_model::text();
   lv_obj_t* group = settings_parts::group(page, palette);
-  lv_obj_set_style_margin_bottom(group, settings_style::kSectionTop, 0);
   settings_parts::Row mode = settings_parts::row(group, "lan", s.settings_connection);
   const char* const options[] = {s.wifi_label, s.settings_ethernet};
-  settings_parts::segment(mode.row, options, 2, v.ethernet_selected ? 1 : 0, palette.card, on_network_mode);
+  settings_parts::segment(mode.row, options, 2, v.ethernet_selected ? 1 : 0, palette.group, on_network_mode);
   if (v.restart_needed) {
     settings_parts::Row restart = settings_parts::row(group, "restart", s.settings_restart_to_switch);
     wifi_button(restart.row, s.restart_button, WifiAction::Restart);
@@ -1279,7 +1299,7 @@ void ip_mode_row(lv_obj_t* group, const WifiValues& v, const Colors& palette) {
   const i18n::Strings& s = settings_model::text();
   settings_parts::Row row = settings_parts::row(group, "ip-network-outline", s.settings_ip_address);
   const char* const options[] = {s.settings_automatic, s.settings_static};
-  settings_parts::segment(row.row, options, 2, v.static_ip ? 1 : 0, palette.card, on_ip_mode);
+  settings_parts::segment(row.row, options, 2, v.static_ip ? 1 : 0, palette.group, on_ip_mode);
 }
 
 void build_ethernet(lv_obj_t* page, const WifiValues& v, const Colors& palette) {
@@ -1355,10 +1375,16 @@ lv_obj_t* networks_heading(lv_obj_t* parent, bool scanning, bool first, lv_event
   const i18n::Strings& s = settings_model::text();
   lv_obj_t* heading = settings_parts::plain(parent);
   lv_obj_set_size(heading, LV_PCT(100), LV_SIZE_CONTENT);
-  lv_obj_set_style_margin_top(heading, first ? 0 : settings_style::kSectionTop, 0);
-  lv_obj_set_style_margin_bottom(heading, settings_style::kSectionBottom, 0);
-  lv_obj_set_style_pad_left(heading, settings_style::kSectionLeft, 0);
-  lv_obj_set_style_pad_right(heading, settings_style::kHeadingRight, 0);
+  if (settings_parts::is_surface_page(parent)) {
+    // Settings: the first line of the network list's group.
+    settings_parts::mark_heading(heading);
+    lv_obj_set_style_margin_top(heading, settings_style::kHeadingInsideTop, 0);
+  } else {
+    lv_obj_set_style_margin_top(heading, first ? 0 : settings_style::kSectionTop, 0);
+    lv_obj_set_style_margin_bottom(heading, settings_style::kSectionBottom, 0);
+    lv_obj_set_style_pad_left(heading, settings_style::kSectionLeft, 0);
+    lv_obj_set_style_pad_right(heading, settings_style::kHeadingRight, 0);
+  }
   // As high as a browser's line of the icon (1.21 em).
   lv_obj_set_style_min_height(
       heading, static_cast<int>(lroundf(settings_parts::browser_line_height(settings_style::kIconPx))), 0);
@@ -1422,7 +1448,7 @@ void build_wifi_page(lv_obj_t* page) {
   settings_parts::Row hotspot = settings_parts::row(group, "access-point", s.settings_hotspot,
                                                     v.access_point ? s.settings_hotspot_on_sub
                                                                    : s.settings_hotspot_off_sub);
-  settings_parts::toggle(hotspot.row, v.access_point, settings_style::kWifiColor, palette.card, !v.hotspot_switching,
+  settings_parts::toggle(hotspot.row, v.access_point, settings_style::kWifiColor, palette.group, !v.hotspot_switching,
                          on_wifi_action, wifi_data(WifiAction::Hotspot));
   if (v.access_point) hotspot_row(group);
   // The way back to DHCP while a static address is in use (as before).
@@ -1448,7 +1474,8 @@ void build_wifi_page(lv_obj_t* page) {
   settings_parts::trailing_icon(add.row, "chevron-right");
   settings_parts::make_tap(add.row, palette.button, on_wifi_action, wifi_data(WifiAction::AddNetwork));
 
-  // The list keeps its height up to the card's edge and scrolls in itself.
+  // The list keeps its height up to the page's edge; its networks scroll in
+  // themselves below the Networks heading, which stays (mockup: sticky).
   lv_obj_update_layout(page);
   lv_area_t page_area;
   lv_area_t list_area;
@@ -1457,9 +1484,16 @@ void build_wifi_page(lv_obj_t* page) {
   const int room = page_area.y2 - list_area.y1 + 1;
   if (lv_area_get_height(&list_area) > room && room > settings_style::kRowHeight) {
     lv_obj_set_height(list, room);
-    lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scroll_dir(list, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_t* rows = settings_parts::plain(list);
+    lv_obj_set_width(rows, LV_PCT(100));
+    lv_obj_set_flex_grow(rows, 1);
+    lv_obj_set_flex_flow(rows, LV_FLEX_FLOW_COLUMN);
+    // A pressed row rounds its corners like the group where it meets it.
+    settings_style::apply_tile_radius(rows);
+    while (lv_obj_get_child_count(list) > 2) lv_obj_set_parent(lv_obj_get_child(list, 1), rows);
+    lv_obj_add_flag(rows, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(rows, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(rows, LV_SCROLLBAR_MODE_OFF);
   }
 }
 
@@ -1468,13 +1502,11 @@ void build_wifi_page(lv_obj_t* page) {
 // settings_entry.cpp).
 
 void show_page_content(bool shown) {
-  for (lv_obj_t* obj : {g_page, g_card_title}) {
-    if (!obj) continue;
-    if (shown) {
-      lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
-    } else {
-      lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
-    }
+  if (!g_page) return;
+  if (shown) {
+    lv_obj_remove_flag(g_page, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(g_page, LV_OBJ_FLAG_HIDDEN);
   }
 }
 
@@ -1564,7 +1596,6 @@ void clear_refs() {
   for (CategoryView& view : g_views) view = {};
   g_bar_title = nullptr;
   g_close = nullptr;
-  g_card_title = nullptr;
   close_dialog();
   close_entry();
   g_card = nullptr;
@@ -1575,7 +1606,74 @@ void clear_refs() {
   clear_system_refs();
 }
 
-// Bar, categories and the empty card, in the colors of the moment.
+// The head's title: the popup header font, a smaller one when it would not
+// fit beside the tabs (never cut, mockup popHead).
+void set_head_title(const char* text) {
+  if (!g_bar_title) return;
+  const int width = lv_obj_get_style_width(g_bar_title, LV_PART_MAIN);
+  // 14 and 12 exist only on the 480x480 panels (ui_fonts.h); the others stop
+  // at 16.
+  const lv_font_t* const fonts[] = {popup_layout::headerTitleFont(), settings_style::small_font(),
+#if defined(DEVICE_LAYOUT_480X480)
+                                    &ui_font_14, &ui_font_12,
+#else
+                                    &ui_font_16,
+#endif
+  };
+  const lv_font_t* font = fonts[sizeof(fonts) / sizeof(fonts[0]) - 1];
+  for (const lv_font_t* candidate : fonts) {
+    if (settings_parts::text_width(candidate, text) <= width) {
+      font = candidate;
+      break;
+    }
+  }
+  lv_label_set_text(g_bar_title, text);
+  lv_obj_set_style_text_font(g_bar_title, font, 0);
+  lv_obj_set_height(g_bar_title, lv_font_get_line_height(font));
+  lv_obj_set_y(g_bar_title, settings_style::head_center_y() - lv_font_get_line_height(font) / 2 - GRID_PAD_TOP);
+}
+
+// Portrait: a category as the 1x1 Home tile (the folder tile: the circle
+// centred above, the name centred below, mockup catTile1), the block centred
+// on the tile; `font` is one font for all four names.
+void build_category_square(lv_obj_t* panel, uint8_t index, int x, int y, int w, int h, const lv_font_t* font) {
+  CategoryView& view = g_views[index];
+  const Category category = static_cast<Category>(index);
+  view.box = settings_parts::plain(panel);
+  lv_obj_add_flag(view.box, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_pos(view.box, x, y);
+  lv_obj_set_size(view.box, w, h);
+  lv_obj_set_style_bg_opa(view.box, LV_OPA_COVER, 0);
+  settings_style::apply_tile_radius(view.box);
+  lv_obj_add_event_cb(view.box, on_category_clicked, LV_EVENT_CLICKED,
+                      reinterpret_cast<void*>(static_cast<uintptr_t>(index)));
+  const int inset = settings_style::tile_inset();
+  const int disc = settings_style::half_tile_disc();
+  const int line = lv_font_get_line_height(font);
+  const int space = 2 * inset;
+  const int top = (h - disc - space - line) / 2;
+  view.disc = circle(view.box, (w - disc) / 2, top, disc, category_icon(category), 0xFFFFFF);
+  lv_obj_set_style_bg_opa(view.disc, LV_OPA_COVER, 0);
+  view.icon = lv_obj_get_child(view.disc, 0);
+  view.title = lv_label_create(view.box);
+  lv_label_set_text(view.title, category_title(category));
+  lv_label_set_long_mode(view.title, LV_LABEL_LONG_CLIP);
+  lv_obj_set_size(view.title, w - 4 * inset, line);
+  lv_obj_set_style_text_align(view.title, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(view.title, font, 0);
+  lv_obj_set_style_text_color(view.title, lv_color_white(), 0);
+  lv_obj_set_pos(view.title, 2 * inset, top + disc + space);
+}
+
+// Head, categories and the page area, in the colors of the moment (mockup
+// head=popup/row, headings in the groups): Settings is a popup card at full
+// size. The head is the popup head (settings_style head_*); below it, one
+// grid gap inside the frame on every side, landscape panels show the four
+// categories as tiles in the first two grid columns (sharing the height
+// evenly, the Settings exception) with the page beside them, square panels
+// put them as round tabs into the head beside the X, portrait panels as one
+// row of 1x1 tiles above the page. No card behind the page: its groups are
+// the surfaces, like tiles, one grid gap apart.
 void build_frame() {
   lv_obj_t* panel = g_panel;
   if (!panel) return;
@@ -1587,117 +1685,126 @@ void build_frame() {
   const Colors palette = colors();
   const i18n::Strings& s = settings_model::text();
 
-  // Bar: the half-height tiles' circle, centered between the screen's top
-  // edge and the tiles below (as much space above as below, user
-  // 2026-10-06), and as far from the side edges as from the top, so gear
-  // and X sit evenly in their corners. Positions are relative to the panel's
-  // padding (the grid margins).
-  const int inset = settings_style::tile_inset();
-  const int d = settings_style::half_tile_disc();
-  const int grid_width = settings_style::grid_w(0, GRID_COLS);
-  const int edge = (GRID_PAD_TOP + settings_style::grid_y(0.5f) - d) / 2;
-  const int bar_y = edge - GRID_PAD_TOP;
-  const int gear_x = edge - GRID_PAD_LEFT;
-  const int close_x = SCREEN_WIDTH - edge - d - GRID_PAD_LEFT;
-  lv_obj_t* gear = circle(panel, gear_x, bar_y, d, "cog", 0xFFFFFF);
-  lv_obj_set_style_bg_color(gear, lv_color_hex(settings_style::tone(palette.card, settings_style::kGearColor).disc),
-                            0);
+  // Screen coordinates minus the panel's padding (the grid margins).
+  const int px = GRID_PAD_LEFT;
+  const int py = GRID_PAD_TOP;
+  const int d = popup_layout::kHeaderIconDiscSize;
+  const int close = popup_layout::kCloseButtonSize;
+  const int cy = settings_style::head_center_y();
+  const int disc_x = settings_style::head_disc_x();
+  const int close_left = settings_style::inner_right() - close;
+
+  // The gear circle, the same head on every panel.
+  lv_obj_t* gear = circle(panel, disc_x - px, cy - d / 2 - py, d, "cog", 0xFFFFFF);
+  lv_obj_set_style_bg_color(
+      gear, lv_color_hex(settings_style::tone(palette.card, settings_style::kGearColor).disc), 0);
   lv_obj_set_style_bg_opa(gear, LV_OPA_COVER, 0);
-  // The X's pressed circle reaches half way to the edges around it, so it is
-  // more than a thin ring around the icon but never touches them (user
-  // 2026-10-06); the icon stays where it was.
-  const int grow = edge / 2;
-  g_close = circle(panel, close_x - grow, bar_y - grow, d + 2 * grow, "window-close", 0xFFFFFF);
-  make_round_button(g_close, on_close_clicked, nullptr);
-  int title_end = close_x;
+
+  // The X like the popups' (white veil while pressed), its pressed shape
+  // settings_style::kClosePressed with the tile radius; the touch area keeps
+  // the X's size.
+  const int pressed = settings_style::kClosePressed;
+  g_close = settings_parts::plain(panel);
+  lv_obj_set_pos(g_close, close_left + (close - pressed) / 2 - px, cy - pressed / 2 - py);
+  lv_obj_set_size(g_close, pressed, pressed);
+  settings_style::apply_tile_radius(g_close);
+  lv_obj_add_flag(g_close, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_bg_color(g_close, lv_color_white(), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(g_close, LV_OPA_20, LV_STATE_PRESSED);
+  lv_obj_set_ext_click_area(g_close, popup_layout::kCloseButtonClickArea + (close - pressed) / 2);
+  lv_obj_t* glyph = lv_label_create(g_close);
+  lv_label_set_text(glyph, getMdiChar("window-close").c_str());
+  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(glyph, FONT_MDI_ICONS, 0);
+  lv_obj_set_style_text_color(glyph, lv_color_white(), 0);
+  lv_obj_center(glyph);
+  lv_obj_add_event_cb(g_close, on_close_clicked, LV_EVENT_CLICKED, nullptr);
+
+  int title_end = close_left;
   if (kLayout == Layout::Tabs) {
-    // The tabs sit beside the X, so a longer or shorter page name never
-    // moves them; a fifth of a circle between them.
-    const int gap = (2 * d + 5) / 10;
-    const int right = close_x - (settings_style::kBarGap + 2) / 4 - (d + 2) / 4;
-    const int left = right - (kCategoryCount * d + (kCategoryCount - 1) * gap);
+    // The four tabs in the circle's size right beside the X, always in the
+    // same place (moving tabs confused, user 2026-10-07); the open page's tab
+    // sits in its circle. A fifth of a circle between them.
+    const int gap = (d + 2) / 5;
+    const int left = close_left - gap - kCategoryCount * d - (kCategoryCount - 1) * gap;
     for (uint8_t i = 0; i < kCategoryCount; ++i) {
       CategoryView& view = g_views[i];
-      view.box = circle(panel, left + i * (d + gap), bar_y, d, category_icon(static_cast<Category>(i)), 0xFFFFFF);
+      view.box = circle(panel, left + i * (d + gap) - px, cy - d / 2 - py, d, category_icon(static_cast<Category>(i)),
+                        0xFFFFFF);
       view.icon = lv_obj_get_child(view.box, 0);
       make_round_button(view.box, on_category_clicked, reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
     }
-    title_end = left;
+    title_end = left - gap;
   }
-  const int title_x = gear_x + d + 2 * inset;
+  const int title_x = disc_x + d + popup_layout::kHeaderIconDiscGap;
   g_bar_title = lv_label_create(panel);
-  lv_label_set_text(g_bar_title, kLayout == Layout::Tabs ? category_title(g_category) : s.tile_type_settings);
   lv_label_set_long_mode(g_bar_title, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(g_bar_title, title_end - settings_style::kBarGap - title_x);
-  lv_obj_set_style_text_font(g_bar_title, settings_style::bar_title_font(), 0);
+  lv_obj_set_width(g_bar_title, title_end - title_x);
+  lv_obj_set_x(g_bar_title, title_x - px);
   lv_obj_set_style_text_color(g_bar_title, lv_color_white(), 0);
-  const float title_box = settings_parts::browser_line_height(settings_style::kRowFontPx);
-  lv_obj_set_pos(g_bar_title, title_x,
-                 settings_parts::browser_label_y(settings_style::bar_title_font(), settings_style::kRowFontPx,
-                                                 bar_y + d / 2.0f - title_box / 2, title_box));
+  set_head_title(s.tile_type_settings);
 
-  // Categories and card below the bar, down to the grid's bottom edge.
-  const int top = settings_style::grid_y(0.5f);
-  const int bottom = settings_style::grid_y(GRID_ROWS) - GRID_GAP;
+  // The body: one grid gap inside the frame, from one gap below the X.
+  const int body_x = settings_style::inner_left();
+  const int body_y = settings_style::body_top();
+  const int body_w = settings_style::inner_right() - body_x;
+  const int body_h = settings_style::inner_bottom() - body_y;
+  int card_x = body_x;
+  int card_y = body_y;
+  int card_w = body_w;
+  int card_h = body_h;
   if (kLayout == Layout::Split) {
-    // The Settings exception: the tiles share the column height evenly.
-    const float tile_h = (bottom - top - (kCategoryCount - 1) * GRID_GAP) / static_cast<float>(kCategoryCount);
+    const int column = settings_style::grid_w(0, 2);
+    const float tile_h = (body_h - (kCategoryCount - 1) * GRID_GAP) / static_cast<float>(kCategoryCount);
     for (uint8_t i = 0; i < kCategoryCount; ++i) {
-      build_category_tile(panel, i, 0, static_cast<int>(lroundf(top + i * (tile_h + GRID_GAP))),
-                          settings_style::grid_w(0, 2), static_cast<int>(lroundf(tile_h)));
+      build_category_tile(panel, i, body_x - px, static_cast<int>(lroundf(body_y + i * (tile_h + GRID_GAP))) - py,
+                          column, static_cast<int>(lroundf(tile_h)));
     }
+    card_x = body_x + column + GRID_GAP;
+    card_w = body_w - column - GRID_GAP;
   } else if (kLayout == Layout::Portrait) {
-    const float half = GRID_COLS / 2.0f;
+    // One row of four, three quarters of a grid row high (user 2026-10-07:
+    // 1x1 tiles in one row, not so tall); the width shared evenly.
+    const int tile_h = static_cast<int>(lroundf(0.75f * (GRID_CELL_H + GRID_GAP) - GRID_GAP));
+    const float tile_w = (body_w - (kCategoryCount - 1) * GRID_GAP) / static_cast<float>(kCategoryCount);
+    // One font for all four names: the largest that fits every one.
+    const int room = static_cast<int>(tile_w) - 4 * settings_style::tile_inset();
+    const lv_font_t* const fonts[] = {settings_style::small_font(),
+#if defined(DEVICE_LAYOUT_480X480)
+                                      &ui_font_12,
+#else
+                                      &ui_font_16,
+#endif
+    };
+    const lv_font_t* font = fonts[sizeof(fonts) / sizeof(fonts[0]) - 1];
+    for (const lv_font_t* candidate : fonts) {
+      bool fits = true;
+      for (uint8_t i = 0; i < kCategoryCount; ++i) {
+        if (settings_parts::text_width(candidate, category_title(static_cast<Category>(i))) > room) fits = false;
+      }
+      if (fits) {
+        font = candidate;
+        break;
+      }
+    }
     for (uint8_t i = 0; i < kCategoryCount; ++i) {
-      const float col = (i % 2) * half;
-      const float row = GRID_ROWS - 2 + i / 2;
-      build_category_tile(panel, i, settings_style::grid_x(col), settings_style::grid_y(row),
-                          settings_style::grid_w(col, half), settings_style::grid_h(row, 1));
+      const int x = static_cast<int>(lroundf(body_x + i * (tile_w + GRID_GAP)));
+      const int right = static_cast<int>(lroundf(body_x + i * (tile_w + GRID_GAP) + tile_w));
+      build_category_square(panel, i, x - px, body_y - py, right - x, tile_h, font);
     }
+    card_y = body_y + tile_h + GRID_GAP;
+    card_h = body_h - tile_h - GRID_GAP;
   }
-  int card_x = 0;
-  int card_w = grid_width;
-  int card_h = bottom - top;
-  if (kLayout == Layout::Split) {
-    card_x = settings_style::grid_x(2);
-    card_w = settings_style::grid_w(2, GRID_COLS - 2);
-  } else if (kLayout == Layout::Portrait) {
-    card_h = settings_style::grid_h(0.5f, GRID_ROWS - 2.5f);
-  }
-  lv_obj_t* card = settings_parts::plain(panel);
-  g_card = card;
-  lv_obj_set_pos(card, card_x, top);
-  lv_obj_set_size(card, card_w, card_h);
-  lv_obj_set_style_bg_color(card, lv_color_hex(palette.card), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  settings_style::apply_tile_radius(card);
-  ui_surface_style::apply_global_tile_border(card);
-  // The large page title where the card has room for it (five rows,
-  // portrait); on square panels the bar names the page.
-  const bool titled = kLayout == Layout::Portrait || GRID_ROWS >= 5;
-  int body_top = settings_style::kCardPad;
-  if (titled) {
-    const int box = (settings_style::kTitleFontPx * 125 + 50) / 100;
-    const int title_x2 = settings_style::kCardPad + settings_style::kSectionLeft;
-    g_card_title = lv_label_create(card);
-    lv_label_set_text(g_card_title, category_title(g_category));
-    lv_label_set_long_mode(g_card_title, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(g_card_title, card_w - title_x2 - settings_style::kCardPad);
-    lv_obj_set_style_text_font(g_card_title, settings_style::page_title_font(), 0);
-    lv_obj_set_style_text_color(g_card_title, lv_color_white(), 0);
-    lv_obj_set_pos(g_card_title, title_x2,
-                   settings_parts::browser_label_y(settings_style::page_title_font(), settings_style::kTitleFontPx,
-                                                   settings_style::kCardPad + settings_style::kTitleTop, box));
-    body_top = settings_style::kCardPad + settings_style::kTitleBodyTop;
-  }
-  g_page = settings_parts::plain(card);
+  // The page area: no card of its own, its groups are the surfaces.
+  g_card = settings_parts::plain(panel);
+  lv_obj_set_pos(g_card, card_x - px, card_y - py);
+  lv_obj_set_size(g_card, card_w, card_h);
+  g_page = settings_parts::plain(g_card);
+  settings_parts::mark_surface_page(g_page);
   g_card_width = card_w;
-  g_page_width = card_w - 2 * settings_style::kCardPad;
-  lv_obj_set_pos(g_page, settings_style::kCardPad, body_top);
-  lv_obj_set_size(g_page, g_page_width, card_h - body_top - settings_style::kCardPad);
+  g_page_width = card_w;
+  lv_obj_set_size(g_page, card_w, card_h);
   lv_obj_set_flex_flow(g_page, LV_FLEX_FLOW_COLUMN);
-  // The first heading reaches a little above the page (browser_line).
-  lv_obj_add_flag(g_page, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  lv_obj_set_style_pad_row(g_page, GRID_GAP, 0);
 
   for (uint8_t i = 0; i < kCategoryCount; ++i) style_category(i);
   refresh_lines();
@@ -1707,9 +1814,6 @@ void select_category(Category category) {
   if (category == g_category && g_page_built) return;
   g_category = category;
   for (uint8_t i = 0; i < kCategoryCount; ++i) style_category(i);
-  const char* title = category_title(category);
-  if (kLayout == Layout::Tabs && g_bar_title) lv_label_set_text(g_bar_title, title);
-  if (g_card_title) lv_label_set_text(g_card_title, title);
   build_page();
 }
 

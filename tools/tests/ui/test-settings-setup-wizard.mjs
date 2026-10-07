@@ -64,7 +64,11 @@ assert.doesNotMatch(rawSetup.replace(/\/\/[^\n]*/g, ''), /"[A-Z][a-z]+/, 'no dis
 const card = between(setup, 'void build_card() {', 'void tick() {');
 assert.match(card, /lv_obj_set_size\(g_card, card_width\(\), card_height\(\)\);/);
 assert.match(setup, /int card_width\(\) \{ return popup_layout::kCardWidth; \}/);
-assert.match(setup, /int card_height\(\) \{ return popup_layout::kCardHeight; \}/);
+// The setup keeps the full height on portrait panels (popup cards are square there).
+assert.match(setup, /int card_height\(\) \{ return SCREEN_HEIGHT - 2 \* popup_layout::kCardMargin; \}/);
+const layout = readRepoFile('src/ui/popups/popup_layout.h');
+assert.match(layout, /kCardHeight =\s*\(SCREEN_HEIGHT > SCREEN_WIDTH\) \? kCardWidth : \(SCREEN_HEIGHT - \(kCardMargin \* 2\)\);/,
+  'popup cards are a square in the middle on portrait panels');
 assert.match(card, /settings_parts::step_head\(g_content, card_width\(\), kSteps\[g_step\]\.icon/);
 assert.match(card, /settings_parts::close_button\(g_content, settings_parts::popup_close_x\(card_width\(\)\)/);
 // No full-screen veil: the card sits on the Settings panel, dialogs use the

@@ -32,7 +32,7 @@ Last reviewed: 2026-10-07
 - Other revisions need community validation; compiling is not support.
 - P4 code is shared; panel/touch init, timings, revision and images stay profile-specific.
 - LCD-4 Rev 4.0: contributor-tested display/touch/Wi-Fi/MQTT/Web OTA; older revisions and SD unsupported (`docs/index.md`).
-- JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups, tall popups.
+- JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups.
 - P4 v3 images (post_v3 301-399, v3 DSI clock): WS 10.1 (PR #48, tested v3.2), WS 7B (`_rev3`, replaces exact-v3.1, #41), JC8012 V3 = V2 code (#44); HW pending.
 
 ## Issue #30 (closed by fix b6, shipped v0.6.10)
@@ -156,3 +156,4 @@ Last reviewed: 2026-10-07
 - Rebuilt after `build/design-mockups/settings` (HANDOFF.md): four pages, dialogs, new keyboard; old popups and `ui_keyboard` removed.
 - First-start setup (b252, `setup_screen.cpp`): 4 steps in the popup card; a new panel stores its defaults at boot (network starts, no restart), step kept in NVS `setup_step`; V2 HW ok, S3 pending.
 - Web Admin Settings (b257): list like the panel (WLAN, Lokalisierung, System + I/O, camera, files, diagnostics), one footer; System shows the way (direct/MQTT), MQTT folded; #73 `/api/language` poll. V2 b258 HW ok.
+- New look (b260): popup head, groups in tile color, no borders; square panels gear + four fixed tabs. Portrait popups = centered square card (setup full height). V2 compiled, HW pending.

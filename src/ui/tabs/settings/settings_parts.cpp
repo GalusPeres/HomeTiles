@@ -10,6 +10,11 @@ namespace {
 
 using namespace settings_style;
 
+// Marks a heading the next group takes in as its first line, and the
+// Settings page whose groups are tile-like surfaces (mark_surface_page).
+constexpr lv_obj_flag_t kHeadingFlag = LV_OBJ_FLAG_USER_1;
+constexpr lv_obj_flag_t kSurfacePageFlag = LV_OBJ_FLAG_USER_2;
+
 void grey_text(lv_obj_t* label) {
   lv_obj_set_style_text_color(label, lv_color_white(), 0);
   lv_obj_set_style_text_opa(label, kGreyOpa, 0);
@@ -281,31 +286,63 @@ lv_obj_t* plain(lv_obj_t* parent) {
   return obj;
 }
 
-lv_obj_t* section(lv_obj_t* parent, const char* text, bool first) {
+void mark_heading(lv_obj_t* heading) {
+  lv_obj_add_flag(heading, kHeadingFlag);
+  // Inside the group: the rows' side padding, a little space above, none
+  // below (the first row follows).
+  lv_obj_set_style_pad_left(heading, kRowPadLeft, 0);
+  lv_obj_set_style_pad_right(heading, kRowPadRight, 0);
+}
+
+bool is_heading(lv_obj_t* obj) { return obj && lv_obj_has_flag(obj, kHeadingFlag); }
+
+lv_obj_t* section(lv_obj_t* parent, const char* text, bool) {
   lv_obj_t* label = lv_label_create(parent);
   lv_label_set_text(label, text ? text : "");
   lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
   lv_obj_set_width(label, LV_PCT(100));
   lv_obj_set_style_text_font(label, small_font(), 0);
   grey_text(label);
-  lv_obj_set_style_margin_left(label, kSectionLeft, 0);
-  browser_line(label, kSmallFontPx, first ? 0 : kSectionTop, kSectionBottom);
+  mark_heading(label);
+  browser_line(label, kSmallFontPx, kHeadingInsideTop, 0);
   return label;
 }
+
+void mark_surface_page(lv_obj_t* page) {
+  if (page) lv_obj_add_flag(page, kSurfacePageFlag);
+}
+
+bool is_surface_page(lv_obj_t* page) { return page && lv_obj_has_flag(page, kSurfacePageFlag); }
 
 lv_obj_t* group(lv_obj_t* parent, const Colors& colors) {
   lv_obj_t* g = plain(parent);
   lv_obj_set_size(g, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_style_bg_color(g, lv_color_hex(colors.group), 0);
   lv_obj_set_style_bg_opa(g, LV_OPA_COVER, 0);
-  settings_style::apply_radius(g, kGroupRadius);
   lv_obj_set_flex_flow(g, LV_FLEX_FLOW_COLUMN);
+  if (!lv_obj_has_flag(parent, kSurfacePageFlag)) {
+    // Inside a card (the setup): concentric with it.
+    settings_style::apply_radius(g, kGroupRadius);
+    return g;
+  }
+  // On the Settings page: a surface like a tile, in the tile color (one grey
+  // with the category tiles, user 2026-10-07), with the tile radius; no
+  // border, like everything inside a popup (Settings is one at full size);
+  // a heading just before it becomes its first line.
+  lv_obj_set_style_bg_color(g, lv_color_hex(colors.card), 0);
+  settings_style::apply_tile_radius(g);
+  const uint32_t count = lv_obj_get_child_count(parent);
+  if (count >= 2) {
+    lv_obj_t* heading = lv_obj_get_child(parent, static_cast<int32_t>(count) - 2);
+    if (is_heading(heading)) lv_obj_set_parent(heading, g);
+  }
   return g;
 }
 
 Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* sub) {
   Row r;
-  const bool first = lv_obj_get_child_count(group) == 0;
+  const uint32_t before = lv_obj_get_child_count(group);
+  const bool first = before == 0 || (before == 1 && is_heading(lv_obj_get_child(group, 0)));
   r.row = plain(group);
   lv_obj_set_size(r.row, LV_PCT(100), kRowHeight);
   lv_obj_set_style_pad_left(r.row, kRowPadLeft, 0);

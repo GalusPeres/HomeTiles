@@ -86,7 +86,8 @@ const mockupState = (open === undefined ? '' : `&dd=${open}`) + (state === 'off'
   (entry === undefined ? '' : `&sheet=${entry === 'manual' ? 'manual' : 'pass'}`);
 const mockupView = setup
   ? `wiz=A&step=${step}${online ? '&wifi=1' : ''}${state === 'ap' ? '&apqr=1' : ''}${state === 'code' || state === 'ok' ? `&ha=${state}` : ''}`
-  : `view=settings&cat=${page}`;
+  // Settings: the popup head with the headings in the groups (2026-10-07).
+  : `view=settings&cat=${page}&head=row&secin=1`;
 const panels = selected.length ? selected : Object.keys(PANELS);
 
 // The time the mockup shows (Berlin, en-US 12 h), so both lines read the same.

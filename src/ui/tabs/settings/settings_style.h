@@ -27,10 +27,13 @@ constexpr int pick(int big, int small) {
 #endif
 }
 
-// Section heading above a group.
+// Heading above a group (the setup's Networks heading; the WiFi entry's
+// title keeps its left inset); headings inside a group (the Settings pages)
+// sit kHeadingInsideTop below its top edge.
 constexpr int kSectionTop = pick(22, 14);
 constexpr int kSectionBottom = pick(10, 7);
 constexpr int kSectionLeft = pick(24, 16);
+constexpr int kHeadingInsideTop = pick(16, 11);
 // Group of rows and its rows.
 constexpr int kGroupRadius = pick(28, 19);
 constexpr int kRowHeight = pick(88, 59);
@@ -69,7 +72,7 @@ constexpr int kStackedCardWidth = 520;
 // three buttons at the bottom, the download bar.
 constexpr int kHeroLogo = pick(72, 44);
 constexpr int kWideHeadCard = 720;
-constexpr int kSystemButtonHeight = pick(72, 47);
+constexpr int kSystemButtonMin = pick(60, 44);
 constexpr int kProgressWidth = pick(220, 110);
 constexpr int kProgressHeight = pick(8, 6);
 // Dialog (mockup P.dlg): width, padding, gaps, buttons, the GitHub QR code.
@@ -144,22 +147,15 @@ constexpr int kSetupCodePadSide = pick(24, 12);
 constexpr int kSetupCodeGap = pick(8, 4);
 constexpr int kSetupCodeButtonTop = pick(16, 10);
 constexpr int kSetupWideTiles = popup_layout::scale(740);
-// Settings card: padding, the large page title (5-row and portrait panels).
-constexpr int kCardPad = popup_layout::kCardPad;
-constexpr int kTitleTop = popup_layout::scale(6);
-constexpr int kTitleBodyTop = popup_layout::scale(62);
 // Category tile: circle, its distance to the edge and to the text.
 constexpr int kCategoryDisc = popup_layout::scale(72);
 constexpr int kCategoryPad = popup_layout::scale(20);
 constexpr int kCategoryTextGap = popup_layout::scale(16);
-// Bar: space after the title; the tabs keep a quarter of it to the X.
-constexpr int kBarGap = pick(28, 10);
 
-// Text: row text, sub lines and headings, buttons and segments, the bar
-// title, the large page title.
+// Text: row text, sub lines and headings, buttons and segments, the large
+// name on the System page and the WiFi entry's title.
 inline const lv_font_t* row_font() { return popup_layout::font24(); }
 inline const lv_font_t* small_font() { return popup_layout::font20(); }
-inline const lv_font_t* bar_title_font() { return popup_layout::font24(); }
 inline const lv_font_t* page_title_font() { return popup_layout::font32(); }
 // Their pixel sizes: the mockup sets line boxes from them (row text x 1.21,
 // sub lines x 1.3, page title x 1.25).
@@ -225,17 +221,35 @@ inline void apply_radius(lv_obj_t* obj, int at_maximum, lv_style_selector_t sele
 inline void apply_tile_radius(lv_obj_t* obj) { ui_surface_style::apply_radius(obj, tile_radius::kMinimum, 0); }
 
 // The half-height tiles' circle and its distance to the tile edges, as
-// tile_icon_disc::inset() and diameter() compute them: the bar's circles sit
-// exactly where a pill's circle does.
+// tile_icon_disc::inset() and diameter() compute them (the portrait
+// category tiles' circle).
 inline int tile_inset() { return popup_layout::scale480(4); }
 inline int half_tile_disc() { return (GRID_CELL_H - GRID_GAP) / 2 - 2 * tile_inset(); }
 
-// Grid positions relative to the grid's top-left corner (the Settings panel
-// carries the grid margins as its padding), exactly like the tiles.
-inline int grid_x(float col) { return tile_geometry::edge(col, GRID_CELL_W, GRID_GAP); }
-inline int grid_y(float row) { return tile_geometry::edge(row, GRID_CELL_H, GRID_GAP); }
+// The frame and head (mockup head=popup/row): Settings is a popup card at
+// full size. The popup card margin (kCardMargin) frames the screen; inside
+// it everything keeps one grid gap to the frame, like the tiles keep it to
+// each other. The head is the popup head: the X (kCloseButtonSize) in the top
+// right corner of that inner box, the circle (kHeaderIconDiscSize) mirroring
+// it on the left (as far from the top as from the side), the title beside the
+// circle, all on the X's centre line; the body starts one grid gap below the
+// X. Screen coordinates (the panel's padding is subtracted where they are used).
+inline int inner_left() { return popup_layout::kCardMargin + GRID_GAP; }
+inline int inner_right() { return SCREEN_WIDTH - popup_layout::kCardMargin - GRID_GAP; }
+inline int inner_bottom() { return SCREEN_HEIGHT - popup_layout::kCardMargin - GRID_GAP; }
+inline int head_center_y() { return popup_layout::kCardMargin + GRID_GAP + popup_layout::kCloseButtonSize / 2; }
+inline int head_disc_x() {
+  return inner_left() + (popup_layout::kCloseButtonSize - popup_layout::kHeaderIconDiscSize) / 2;
+}
+inline int body_top() { return popup_layout::kCardMargin + 2 * GRID_GAP + popup_layout::kCloseButtonSize; }
+// The X's pressed shape: halfway between the head circle and the full X,
+// centred on the X, with the tile radius (user 2026-10-07 "Mittelweg"); the
+// touch area keeps the X's size.
+constexpr int kClosePressed = (popup_layout::kCloseButtonSize + popup_layout::kHeaderIconDiscSize) / 2;
+
+// The width of `span` grid columns from `col`, exactly like the tiles (the
+// landscape category column: two columns).
 inline int grid_w(float col, float span) { return tile_geometry::extent(col, span, GRID_CELL_W, GRID_GAP); }
-inline int grid_h(float row, float span) { return tile_geometry::extent(row, span, GRID_CELL_H, GRID_GAP); }
 
 // The colors of the moment: the card is the global tile color; groups,
 // buttons and their pressed step sit one, two and three control steps above

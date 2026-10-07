@@ -73,10 +73,29 @@ assert.match(head, /const bool wide = g_card_width >= settings_style::kWideHeadC
 assert.match(style, /constexpr int kWideHeadCard = 720;/);
 assert.match(head, /settings_style::kProductName/);
 assert.match(head, /settings_model::firmware_version\(\)/);
-for (const key of ['system_checking', 'system_update_available_fmt', 'system_install_btn_fmt', 'system_up_to_date',
+for (const key of ['system_checking', 'system_update_available_fmt', 'system_up_to_date',
   'system_check_failed', 'system_downloading', 'system_installed_restarting', 'system_install_failed',
-  'system_restarting', 'system_check_updates_btn']) {
+  'system_restarting', 'settings_update_short']) {
   assert.match(head, new RegExp(`s\\.${key}\\b`), `the head shows ${key}`);
+}
+// The update button stays short (magnifier or download icon and "Update",
+// user 2026-10-07), so the device name keeps its room on narrow cards.
+assert.doesNotMatch(head, /s\.system_check_updates_btn|s\.system_install_btn_fmt/);
+{
+  const i18nSource = readRepoFile('src/core/i18n/i18n.cpp');
+  const header = readRepoFile('src/core/i18n/i18n.h');
+  const struct = header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')));
+  const fields = [...struct.replace(/\/\/[^\n]*/g, '').matchAll(/const char\*\s+(\w+);/g)].map(match => match[1]);
+  const index = fields.indexOf('settings_update_short');
+  assert.ok(index >= 0, 'settings_update_short is a Strings field');
+  const expected = {kStringsEn: 'Update', kStringsDe: 'Update', kStringsFr: 'Mise à jour', kStringsPl: 'Aktualizacja'};
+  for (const [table, text] of Object.entries(expected)) {
+    const start = i18nSource.indexOf(`static const Strings ${table} = {`);
+    const values = [...i18nSource.slice(start, i18nSource.indexOf('};', start)).matchAll(/"((?:\\.|[^"\\])*)"/g)]
+      .map(match => match[1]);
+    assert.equal(values.length, fields.length, `${table} has one value per field`);
+    assert.equal(values[index], text, `${table} settings_update_short`);
+  }
 }
 // Connection and Security.
 assert.match(page, /settings_parts::section\(page, s\.settings_connection, false\)/);
@@ -118,12 +137,16 @@ assert.match(switchOn, /lv_obj_set_width\(b, switch_on_width\(\)\);/);
 assert.match(style, /constexpr int kSwitchOnHeight = pick\(64, 42\);/);
 assert.match(page, /switch_on_button\(r\.row, s\.settings_pair, SystemAction::Pair\);/);
 assert.match(page, /switch_on_button\(r\.row, s\.settings_allow, SystemAction::Allow\);/);
-// Setup, Restart and GitHub on the card; the head takes the space that is left.
+// Setup, Restart and GitHub one grid gap under the groups (user 2026-10-07:
+// not pinned to the bottom), with the tile radius: twice the radius high, at
+// least a touch-friendly minimum; the free room stays at the bottom.
 assert.match(rawBody, /\{s\.settings_setup, "rocket-launch-outline", SystemAction::Setup\}/);
 assert.match(rawBody, /\{s\.restart_button, "restart", SystemAction::Restart\}/);
 assert.match(rawBody, /\{settings_style::kGitHub, "github", SystemAction::GitHub\}/);
-assert.match(style, /constexpr int kSystemButtonHeight = pick\(72, 47\);/);
-assert.match(page, /if \(free > 0\) lv_obj_set_height\(head_row, head_height \+ free\);/);
+assert.match(style, /constexpr int kSystemButtonMin = pick\(60, 44\);/);
+assert.match(page, /2 \* corner > settings_style::kSystemButtonMin \? 2 \* corner : settings_style::kSystemButtonMin/);
+assert.match(page, /settings_style::apply_tile_radius\(b\);/);
+assert.doesNotMatch(page, /head_height \+ free/, 'the head no longer stretches to push the buttons down');
 // The page follows the state while it shows.
 assert.match(between(screen, 'void build_page() {', 'void clear_refs() {'),
   /g_page_timer = lv_timer_create\(on_page_timer, 500, nullptr\);/);

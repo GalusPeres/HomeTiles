@@ -674,6 +674,9 @@ struct Strings {
   // The path to the setup: %s = Settings, %s = Setup (their translations).
   const char* setup_leave_text_fmt;
   const char* setup_leave;
+  // The panel's update button beside the magnifier (Settings > System),
+  // short so the device name keeps its room.
+  const char* settings_update_short;
 };
 
 // Locale-specific display rules and short runtime strings shared by

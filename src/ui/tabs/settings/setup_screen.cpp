@@ -103,7 +103,9 @@ settings_parts::Row setup_row(lv_obj_t* group, const char* icon_name, const char
 void* data(Action action) { return reinterpret_cast<void*>(static_cast<uintptr_t>(action)); }
 
 int card_width() { return popup_layout::kCardWidth; }
-int card_height() { return popup_layout::kCardHeight; }
+// The setup is the whole screen, not a popup over Home: its card keeps the
+// full height on portrait panels too (popup cards are square there).
+int card_height() { return SCREEN_HEIGHT - 2 * popup_layout::kCardMargin; }
 int body_top() {
   return popup_layout::kHeaderCenterY + popup_layout::kHeaderIconDiscSize / 2 + settings_style::kSetupBodyGap;
 }

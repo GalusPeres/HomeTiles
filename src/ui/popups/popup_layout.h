@@ -208,11 +208,16 @@ constexpr int kCardRadius = 15;
 constexpr int kCardMargin = 4;
 constexpr int kCardRadius = 22;
 #endif
+// The card is a square in the middle of the screen: of the screen height on
+// landscape panels, of the screen width on portrait ones (like the 480x480
+// panels; a card over the whole portrait height left the square content
+// above a large gap, user 2026-10-07).
 constexpr int kCardWidth =
     (SCREEN_WIDTH > SCREEN_HEIGHT)
         ? (SCREEN_HEIGHT - (kCardMargin * 2))
         : (SCREEN_WIDTH - (kCardMargin * 2));
-constexpr int kCardHeight = SCREEN_HEIGHT - (kCardMargin * 2);
+constexpr int kCardHeight =
+    (SCREEN_HEIGHT > SCREEN_WIDTH) ? kCardWidth : (SCREEN_HEIGHT - (kCardMargin * 2));
 // PIN keypad keys at most this share of the card height, per mille. On the
 // panels of 7 inches and more (1024x600 7", 1280x800 8" and 10.1") filling
 // the card would make them physically about twice the size of the 4" and 5"

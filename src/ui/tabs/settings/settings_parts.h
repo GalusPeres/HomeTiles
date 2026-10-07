@@ -15,10 +15,19 @@ namespace settings_parts {
 // A transparent container without padding, border or scrolling.
 lv_obj_t* plain(lv_obj_t* parent);
 
-// Grey heading above a group; `first` drops the space above it.
+// Grey heading of the group that follows: group() takes it in as the group's
+// first line (headings in the groups, mockup secin). `first` is unused.
 lv_obj_t* section(lv_obj_t* parent, const char* text, bool first);
+// Makes `heading` (a label or a row of them) such a heading: the rows' side
+// padding; the caller sets the space above it (kHeadingInsideTop).
+void mark_heading(lv_obj_t* heading);
 
-// A rounded group of rows in the group color.
+// The Settings page: its groups are surfaces like tiles (below).
+void mark_surface_page(lv_obj_t* page);
+bool is_surface_page(lv_obj_t* page);
+// A group of rows in the group color. On a surface page a surface like a
+// tile (the tile radius and the global tile border) that takes in a heading
+// made just before it; elsewhere (the setup's card) concentric with the card.
 lv_obj_t* group(lv_obj_t* parent, const settings_style::Colors& colors);
 
 struct Row {

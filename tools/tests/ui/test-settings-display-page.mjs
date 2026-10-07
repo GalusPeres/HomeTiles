@@ -62,7 +62,7 @@ assert.match(page, /section\(page, s\.settings_screen, true\)/);
 assert.match(page, /section\(page, s\.settings_screensaver, false\)/);
 // Quarter turns on panels that support them, else normal and flipped (the
 // setup's first step shares the segment).
-assert.match(page, /g_rotation_segment = rotation_segment\(rotation\.row, palette\.card\);/);
+assert.match(page, /g_rotation_segment = rotation_segment\(rotation\.row, palette\.group\);/);
 const rotation = between(screen, 'lv_obj_t* rotation_segment(lv_obj_t* row, uint32_t track) {', 'const char* locale_title(');
 assert.match(rotation, /if \(settings_model::quarter_turns\(\)\) \{[\s\S]*?kQuarterTurns, 4,[\s\S]*?\}[\s\S]*?kFlip, 2,/);
 // The slider track is the control fill computed for the "From icon" card,
@@ -83,10 +83,28 @@ assert.match(parts, /lv_obj_set_size\(r\.row, LV_PCT\(100\), kRowHeight\);/);
 // Text sits on the browser's baselines (Inter: ascender 1984, line 2478 per 2048).
 assert.match(parts, /constexpr float kInterAscent = 1984\.0f \/ 2048\.0f;/);
 assert.match(parts, /constexpr float kInterLine = \(1984\.0f \+ 494\.0f\) \/ 2048\.0f;/);
-for (const call of [/browser_line\(label, kSmallFontPx, first \? 0 : kSectionTop, kSectionBottom\)/,
+for (const call of [/browser_line\(label, kSmallFontPx, kHeadingInsideTop, 0\)/,
   /browser_line\(r\.title, kRowFontPx\)/, /browser_line\(r\.sub, kSmallFontPx, kSubTop\)/]) {
   assert.match(parts, call);
 }
+// Headings sit inside their group (mockup secin): group() takes in the
+// heading made just before it; a row after the heading draws no separator.
+assert.match(parts, /if \(is_heading\(heading\)\) lv_obj_set_parent\(heading, g\);/);
+assert.match(parts, /const bool first = before == 0 \|\| \(before == 1 && is_heading\(lv_obj_get_child\(group, 0\)\)\);/);
+// The groups are surfaces like tiles with the tile radius, but without a
+// border, like everything inside a popup (user 2026-10-07); so are the
+// category tiles.
+assert.match(parts, /settings_style::apply_tile_radius\(g\);/);
+assert.doesNotMatch(screen, /apply_global_tile_border\((g|view\.box|b)\)/);
+// The head is the popup head: the X in the corner of the box one grid gap
+// inside the popup card margin, the circle mirroring it, the body one gap
+// below the X.
+assert.match(style, /inline int head_center_y\(\) \{ return popup_layout::kCardMargin \+ GRID_GAP \+ popup_layout::kCloseButtonSize \/ 2; \}/);
+assert.match(style, /return inner_left\(\) \+ \(popup_layout::kCloseButtonSize - popup_layout::kHeaderIconDiscSize\) \/ 2;/);
+assert.match(style, /inline int body_top\(\) \{ return popup_layout::kCardMargin \+ 2 \* GRID_GAP \+ popup_layout::kCloseButtonSize; \}/);
+const frame = between(screen, 'void build_frame() {', 'void select_category(Category category) {');
+assert.doesNotMatch(frame, /page_title_font|g_card_title/, 'no large page title: the selected category names the page');
+assert.match(frame, /lv_obj_set_style_pad_row\(g_page, GRID_GAP, 0\);/, 'one grid gap between the groups');
 // The firmware saves through the model: the screensaver brightness starts at
 // the device floor.
 assert.match(model, /values\.saver_brightness_min = Device::kConfiguredBrightnessPercentMin;/);
@@ -100,6 +118,7 @@ for (const key of ['settings_sleep_summary_fmt', 'settings_access_point_on', 'se
 
 // --- Mockup sizes (PROFILES.vars: 1280x800 values, x 5/6 on 1024x600, own 480 values) ---------
 for (const [name, big, small] of [['kSectionTop', 22, 14], ['kSectionBottom', 10, 7], ['kSectionLeft', 24, 16],
+  ['kHeadingInsideTop', 16, 11],
   ['kGroupRadius', 28, 19], ['kRowHeight', 88, 59], ['kRowPadLeft', 28, 19], ['kRowPadRight', 24, 16],
   ['kRowGap', 20, 12], ['kSegmentHeight', 48, 32], ['kSegmentInset', 4, 3], ['kSegmentMinWidth', 104, 64],
   ['kSegmentPad', 18, 12], ['kSliderHeight', 48, 32], ['kSliderMaxWidth', 420, 160], ['kSliderThumbWidth', 4, 3],

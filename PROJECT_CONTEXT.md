@@ -153,4 +153,4 @@ Last reviewed: 2026-10-05
 
 - Rebuilt after `build/design-mockups/settings` (HANDOFF.md): four pages, dialogs, new keyboard; old popups and `ui_keyboard` removed.
 - First-start setup (b252, `setup_screen.cpp`): 4 steps in the popup card; a new panel stores its defaults at boot (network starts, no restart), step kept in NVS `setup_step`; V2 HW ok, S3 pending.
-- Web Admin Settings (b257): list like the panel (WLAN, Lokalisierung, System + I/O, camera, files, diagnostics), one footer; System shows the way (direct/MQTT), MQTT folded; #73 `/api/language` poll. HW pending.
+- Web Admin Settings (b257): list like the panel (WLAN, Lokalisierung, System + I/O, camera, files, diagnostics), one footer; System shows the way (direct/MQTT), MQTT folded; #73 `/api/language` poll. V2 b258 HW ok.

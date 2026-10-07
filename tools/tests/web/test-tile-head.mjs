@@ -13,7 +13,7 @@ const read = file => readRepoFile(file).replace(/\r\n?/g, '\n');
 
 // ---- Server ----
 const page = read('src/web/server/render/web_admin_html.cpp');
-const head = page.slice(page.indexOf('<div class="tile-settings-head">\n              <div class="tile-head-top">'),
+const head = page.slice(page.indexOf('<div class="tile-settings-head">\n<div class="tile-head-top">'),
   page.indexOf('append_tile_icon_color_fixed_html(html, tab_id);'));
 assert.ok(head.length > 0, 'The tile head markup exists');
 for (const marker of ['<div class="tile-head-top"><h3>', '_tile_type" aria-label=")html";',

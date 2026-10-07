@@ -189,7 +189,7 @@ assert.equal(visibleText, '', 'No display text may be hard-coded in the section 
 // exact camera profile.
 assert.match(html, /const bool camera = local_camera::supported\(\) && Device::kCapabilities\.has_builtin_camera;/);
 assert.match(html, /if \(camera\) \{\r?\n    appendSettingsNavItem\(html, "camera", [^;]*tr\.local_camera_section,/);
-assert.match(html, /if \(camera\) \{\r?\n    html \+= R"html\(\r?\n          <section class="settings-page" data-settings-page="camera">\)html";\r?\n    appendLocalCameraSettingsHtml\(html, tr\);/);
+assert.match(html, /if \(camera\) \{\r?\n    html \+= R"html\(\r?\n<section class="settings-page" data-settings-page="camera">\)html";\r?\n    appendLocalCameraSettingsHtml\(html, tr\);/);
 assert.match(html, /if \(local_camera::supported\(\) && Device::kCapabilities\.has_builtin_camera\) \{\n    json \+= ",\\"local_camera\\":";\n    local_camera::appendStatusJson\(json\);\n  \}/,
   '/api/status exposes the camera status only on the exact camera profile');
 

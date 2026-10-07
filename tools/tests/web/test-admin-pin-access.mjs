@@ -388,15 +388,11 @@ if (adminCss.includes('height:44px;\n      min-width:0;\n      margin:0;')) {
 }
 
 for (const marker of [
-  'const char* admin_access_control;',
   'const char* settings_home_full;',
   'const char* folder_pin_enable;',
   'const char* pin_popup_incorrect;',
 ]) requireMarker(i18nHeader, marker, 'Central PIN translations');
 for (const marker of [
-  '"Zugriffsschutz"',
-  '"Access control"',
-  '"Contrôle d’accès"',
   '"Falsche PIN"',
   '"Incorrect PIN"',
   '"Code PIN incorrect"',

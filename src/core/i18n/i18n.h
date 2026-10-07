@@ -20,9 +20,7 @@ struct Strings {
   const char* home;
   const char* folder_prefix;
 
-  const char* admin_window_title;
   const char* admin_panel_title;
-  const char* admin_subtitle;
   const char* admin_tile_hint;
   const char* admin_delete_folder_tab;
   const char* admin_tile_settings;
@@ -32,7 +30,6 @@ struct Strings {
   const char* admin_tile_title_placeholder;
   const char* admin_icon_placeholder;
   const char* admin_color;
-  const char* admin_autosave;
   const char* admin_copy;
   const char* admin_paste;
   const char* admin_delete;
@@ -50,7 +47,6 @@ struct Strings {
   const char* ota_choose_file;
   const char* ota_no_file_selected;
 
-  const char* wifi_status;
   const char* wifi_connected;
   const char* wifi_disconnected;
   const char* wifi_label;
@@ -60,7 +56,6 @@ struct Strings {
   const char* wifi_gateway_label;
   const char* wifi_subnet_label;
   const char* wifi_dns_label;
-  const char* wifi_dhcp_hint;
   const char* mqtt_not_configured;
   const char* yes;
   const char* no;
@@ -74,8 +69,6 @@ struct Strings {
   const char* mqtt_client_id_hint;
   const char* mqtt_base_topic;
   const char* ha_prefix;
-  const char* status_time_font;
-  const char* status_date_font;
   const char* save;
   const char* restart_confirm;
   const char* restart_button;
@@ -85,32 +78,8 @@ struct Strings {
   const char* bridge_saved_message;
   const char* save_failed;
 
-  const char* ap_window_title;
-  const char* ap_heading;
-  const char* ap_subtitle;
-  const char* ap_wifi_section;
-  const char* ap_wifi_ssid_label;
-  const char* ap_wifi_ssid_placeholder;
-  const char* ap_wifi_password_label;
-  const char* ap_wifi_password_placeholder;
-  const char* ap_wifi_open_hint;
-  const char* ap_info_notice;
-  const char* ap_info_message;
-  const char* ap_save_connect;
-  const char* ap_success_title;
-  const char* ap_success_message;
-  const char* ap_success_notice;
-  const char* ap_wifi_required;
-
   const char* display_label;
-  const char* brightness_label;
-  const char* screensaver_brightness_label;
-  const char* hue_label;
-  const char* saturation_label;
-  const char* sleep_label;
-  const char* sleep_after;
   const char* sleep_never;
-  const char* screensaver_label;
 
   const char* tile_type_empty;
   const char* tile_type_sensor;
@@ -169,7 +138,6 @@ struct Strings {
   const char* text_size;
   const char* text_max_chars;
   const char* target_folder;
-  const char* new_folder;
   const char* scene_label;
 
   const char* js_select_tile_first;
@@ -218,23 +186,9 @@ struct Strings {
   const char* js_ota_failed;
 
   // Wi-Fi selection texts (wifi_back_btn is Back in the first-start setup).
-  const char* wifi_scan_retry;
-  const char* wifi_open_network;
-  const char* wifi_password_for_fmt;
   const char* wifi_back_btn;
-  const char* wifi_saved_restarting;
 
-  // Settings tiles: short descriptions of the controls behind each tile.
-  const char* settings_tile_desc_display;
-  const char* settings_tile_desc_wifi;
-  const char* settings_tile_desc_locale;
-  const char* settings_tile_desc_firmware_fmt;  // %s = firmware version
-
-  // Display popup: rotation button label.
-  const char* display_rotate_btn_text;
-
-  // System popup (formerly Firmware): device row, GitHub update check and OTA.
-  const char* system_device_label;
+  // System: GitHub update check and OTA.
   const char* system_check_updates_btn;
   const char* system_checking;
   const char* system_up_to_date;
@@ -245,10 +199,8 @@ struct Strings {
   const char* system_install_failed;
   const char* system_installed_restarting;
 
-  // Wi-Fi popup disconnect button; System popup HA pairing button and status.
+  // Wi-Fi disconnect button.
   const char* wifi_disconnect_btn;
-  const char* system_pair_btn;
-  const char* system_pair_status;
 
   // Dedicated screensaver editor in Web Admin.
   const char* screensaver_use_wallpapers;
@@ -285,7 +237,6 @@ struct Strings {
   const char* tile_color_mode_from_cover;
   // Web Admin tile editor: per-tile icon disc override.
   const char* icon_disc_label;
-  const char* icon_disc_global;
   const char* icon_disc_on;
   const char* icon_disc_off;
   const char* icon_glow;
@@ -314,7 +265,6 @@ struct Strings {
   const char* tile_icon_color_state_on;
   const char* tile_icon_color_state_off;
   // Icon-and-title tiles: the source entity of their icon color.
-  const char* tile_icon_color_source;
   const char* tile_icon_color_source_auto;
   const char* tile_icon_color_source_rules;
   const char* tile_icon_color_source_hint;
@@ -338,17 +288,10 @@ struct Strings {
   const char* js_screensaver_save_failed;
   const char* js_screensaver_load_failed;
 
-  // Network mode switch in Web Admin. Select fixed Wi-Fi or Ethernet mode;
-  // a change takes effect after restarting.
-  const char* admin_ethernet_mode;
-
   // Static network addressing on the device and in Web Admin.
   const char* admin_ip_configuration;
-  const char* admin_ip_dhcp;
-  const char* admin_ip_static;
   const char* admin_ip_dhcp_note;
   const char* admin_ip_static_note;
-  const char* admin_ip_invalid;
 
   // Web Admin: heading ("<Device> Admin Panel") and slideshow editor.
   const char* admin_panel_word;
@@ -427,7 +370,6 @@ struct Strings {
   const char* camera_input_memory_failed;
   const char* camera_buffering;
   const char* camera_connection_ended;
-  const char* camera_resolution_error_fmt;  // %u = decoded frame size
   const char* camera_http_error_fmt;        // %d = HTTP status
   const char* camera_device_only;
   const char* camera_unknown;
@@ -474,7 +416,6 @@ struct Strings {
   const char* admin_io_restarting;
 
   // Web Admin and device UI: local parental-control PIN protection.
-  const char* admin_access_control;
   const char* settings_lock_enable;
   const char* settings_hide_tile;
   const char* settings_pin_label;

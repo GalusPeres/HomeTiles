@@ -33,7 +33,7 @@ assert.match(pages, /tab\.style\.setProperty\('--settings-scrollbar', \(page\.of
 assert.match(css, /\* \{ scrollbar-width:thin; scrollbar-color:#555555 transparent; \}/, 'a visible thumb');
 
 // The footer is outside every page: after the list and the pages, inside the tab.
-const pagesEnd = html.indexOf('          </section>\n        </div>\n        </div>\n');
+const pagesEnd = html.indexOf('</section>\n</div>\n</div>\n');
 const footer = html.indexOf('<div class="admin-footer-actions settings-foot" id="settingsFoot">');
 assert.ok(pagesEnd > 0 && footer > pagesEnd, 'the footer follows the closed list and pages');
 assert.match(rule('.admin-footer-actions.settings-foot'), /padding-right:0;/,

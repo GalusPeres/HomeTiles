@@ -116,7 +116,7 @@ static void appendLocalCameraImageSlider(String& html, const char* key,
                                          int max_value, int value,
                                          const char* unit) {
   html += R"html(
-                <label class="local-camera-slider" for="local_camera_)html";
+<label class="local-camera-slider" for="local_camera_)html";
   html += key;
   html += R"html("><span>)html";
   appendHtmlEscaped(html, label);
@@ -148,7 +148,7 @@ static void appendLocalCameraCustomSlider(String& html, const char* key,
                                           const char* label, int min_value,
                                           int max_value, int value) {
   html += R"html(
-                <label class="local-camera-slider" for="local_camera_custom_)html";
+<label class="local-camera-slider" for="local_camera_custom_)html";
   html += key;
   html += R"html("><span>)html";
   appendHtmlEscaped(html, label);
@@ -192,24 +192,24 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
   }
   const char* state = local_camera::stateName();
   html += R"html(
-          <div class="settings-section" id="local_camera_section">
-            <div class="section-title">)html";
+<div class="settings-section" id="local_camera_section">
+<div class="section-title">)html";
   appendHtmlEscaped(html, tr.local_camera_section);
   html += R"html(</div>
-            <div class="settings-grid">
-              <div class="settings-full">
-                <label class="settings-checkbox">
-                  <input type="checkbox" id="local_camera_enabled" onchange="saveLocalCameraEnabled(this.checked)")html";
+<div class="settings-grid">
+<div class="settings-full">
+<label class="settings-checkbox">
+<input type="checkbox" id="local_camera_enabled" onchange="saveLocalCameraEnabled(this.checked)")html";
   if (local_camera::enabled()) html += " checked";
   html += R"html(>
-                  <span>)html";
+<span>)html";
   appendHtmlEscaped(html, tr.local_camera_enable);
   html += R"html(</span>
-                </label>
-                <div class="settings-note">)html";
+</label>
+<div class="settings-note">)html";
   appendHtmlEscaped(html, tr.local_camera_note);
   html += R"html(</div>
-                <div id="local_camera_status" class="settings-note" data-state=")html";
+<div id="local_camera_status" class="settings-note" data-state=")html";
   html += state;
   html += R"html(" data-label=")html";
   appendHtmlEscaped(html, tr.local_camera_status_label);
@@ -228,22 +228,22 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
   html += ": ";
   appendHtmlEscaped(html, localCameraStateText(state, tr));
   html += R"html(</div>
-              </div>
-              <div class="local-camera-group" id="local_camera_stream">
-                <div class="network-settings-heading">)html";
+</div>
+<div class="local-camera-group" id="local_camera_stream">
+<div class="network-settings-heading">)html";
   // Two columns: the live stream (mode, Custom sliders) on the left, the
   // experimental indicator on the right, the collapsed Advanced block below
   // over the full width. Narrow screens stack them (.settings-grid).
   appendHtmlEscaped(html, tr.local_camera_stream_section);
   html += R"html(</div>
-                <div>
-                <label for="local_camera_stream_mode">)html";
+<div>
+<label for="local_camera_stream_mode">)html";
   appendHtmlEscaped(html, tr.local_camera_stream_mode);
   html += R"html(:</label>
-                <select id="local_camera_stream_mode" onchange="saveLocalCameraStreamMode(this.value)">)html";
+<select id="local_camera_stream_mode" onchange="saveLocalCameraStreamMode(this.value)">)html";
   const uint8_t selected_mode = local_camera::streamMode();
   html += R"html(
-                  <option value="0")html";
+<option value="0")html";
   if (selected_mode == local_camera_stream::kModeAuto) html += " selected";
   html += ">";
   appendHtmlEscaped(html, tr.local_camera_stream_mode_auto);
@@ -256,7 +256,7 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
       continue;
     }
     html += R"html(
-                  <option value=")html";
+<option value=")html";
     html += String(static_cast<unsigned>(mode.id));
     html += "\"";
     if (mode.id == selected_mode) html += " selected";
@@ -265,16 +265,16 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
     html += "</option>";
   }
   html += R"html(
-                  <option value=")html";
+<option value=")html";
   html += String(static_cast<unsigned>(local_camera_stream::kModeCustom));
   html += "\"";
   if (selected_mode == local_camera_stream::kModeCustom) html += " selected";
   html += ">";
   appendHtmlEscaped(html, tr.local_camera_stream_mode_custom);
   html += R"html(</option>
-                </select>
-                </div>
-                <div class="local-camera-custom" id="local_camera_custom" data-mode=")html";
+</select>
+</div>
+<div class="local-camera-custom" id="local_camera_custom" data-mode=")html";
   // Custom mode: frames per second and JPEG quality, shown only while the
   // Custom mode is selected; the resolution stays the full image.
   html += String(static_cast<unsigned>(local_camera_stream::kModeCustom));
@@ -289,54 +289,54 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
                                 local_camera_stream::kCustomMinQuality,
                                 local_camera_stream::kMaxQuality, custom.quality);
   html += R"html(
-                </div>
-              </div>
-              <div class="local-camera-group local-camera-indicator" id="local_camera_indicator">
-                <div class="network-settings-heading">)html";
+</div>
+</div>
+<div class="local-camera-group local-camera-indicator" id="local_camera_indicator">
+<div class="network-settings-heading">)html";
   // Indicator style (experimental): the line checkbox switches the whole
   // indicator, the pill checkbox only applies while the line is shown.
   appendHtmlEscaped(html, tr.local_camera_indicator_section);
   html += R"html(</div>
-                  <label class="settings-checkbox">
-                    <input type="checkbox" id="local_camera_indicator_line" onchange="saveLocalCameraIndicator()")html";
+<label class="settings-checkbox">
+<input type="checkbox" id="local_camera_indicator_line" onchange="saveLocalCameraIndicator()")html";
   const local_camera::IndicatorStyle indicator = local_camera::indicatorStyle();
   if (indicator != local_camera::IndicatorStyle::None) html += " checked";
   html += R"html(>
-                    <span>)html";
+<span>)html";
   appendHtmlEscaped(html, tr.local_camera_indicator_line);
   html += R"html(</span>
-                  </label>
-                  <label class="settings-checkbox">
-                    <input type="checkbox" id="local_camera_indicator_pill" onchange="saveLocalCameraIndicator()")html";
+</label>
+<label class="settings-checkbox">
+<input type="checkbox" id="local_camera_indicator_pill" onchange="saveLocalCameraIndicator()")html";
   if (indicator != local_camera::IndicatorStyle::Line) html += " checked";
   if (indicator == local_camera::IndicatorStyle::None) html += " disabled";
   html += R"html(>
-                    <span>)html";
+<span>)html";
   appendHtmlEscaped(html, tr.local_camera_indicator_pill);
   html += R"html(</span>
-                  </label>
-                <div class="settings-note">)html";
+</label>
+<div class="settings-note">)html";
   appendHtmlEscaped(html, tr.local_camera_indicator_note);
   html += R"html(</div>
-              </div>
-              <details class="settings-full local-camera-advanced" id="local_camera_advanced">
-                <summary class="network-settings-heading">)html";
+</div>
+<details class="settings-full local-camera-advanced" id="local_camera_advanced">
+<summary class="network-settings-heading">)html";
   // Fine-tuning controls, collapsed by default: rotation and mirror (left),
   // red/blue swap (right), the image controls below. Every control keeps
   // saving immediately through /api/local-camera.
   appendHtmlEscaped(html, tr.local_camera_advanced);
   html += R"html(</summary>
-                <div class="settings-grid">
-              <div class="local-camera-group" id="local_camera_orientation">
-                <div>
-                <label for="local_camera_rotation">)html";
+<div class="settings-grid">
+<div class="local-camera-group" id="local_camera_orientation">
+<div>
+<label for="local_camera_rotation">)html";
   appendHtmlEscaped(html, tr.local_camera_rotation);
   html += R"html(:</label>
-                <select id="local_camera_rotation" onchange="saveLocalCameraRotation(this.value)">)html";
+<select id="local_camera_rotation" onchange="saveLocalCameraRotation(this.value)">)html";
   const uint8_t rotation = local_camera::rotation();
   for (uint8_t turns = 0; turns <= local_camera_contract::kRotationMax; ++turns) {
     html += R"html(
-                  <option value=")html";
+<option value=")html";
     html += String(static_cast<unsigned>(turns));
     html += "\"";
     if (turns == rotation) html += " selected";
@@ -346,32 +346,32 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
     html += "\xC2\xB0</option>";
   }
   html += R"html(
-                </select>
-                </div>
-                <label class="settings-checkbox">
-                  <input type="checkbox" id="local_camera_mirror" onchange="saveLocalCameraMirror(this.checked)")html";
+</select>
+</div>
+<label class="settings-checkbox">
+<input type="checkbox" id="local_camera_mirror" onchange="saveLocalCameraMirror(this.checked)")html";
   if (local_camera::mirror()) html += " checked";
   html += R"html(>
-                  <span>)html";
+<span>)html";
   appendHtmlEscaped(html, tr.local_camera_mirror);
   html += R"html(</span>
-                </label>
-              </div>
-              <div class="local-camera-group" id="local_camera_color">
-                <label class="settings-checkbox">
-                  <input type="checkbox" id="local_camera_rb_swap" onchange="saveLocalCameraRbSwap(this.checked)")html";
+</label>
+</div>
+<div class="local-camera-group" id="local_camera_color">
+<label class="settings-checkbox">
+<input type="checkbox" id="local_camera_rb_swap" onchange="saveLocalCameraRbSwap(this.checked)")html";
   if (local_camera::redBlueSwap()) html += " checked";
   html += R"html(>
-                  <span>)html";
+<span>)html";
   appendHtmlEscaped(html, tr.local_camera_rb_swap);
   html += R"html(</span>
-                </label>
-                <div class="settings-note">)html";
+</label>
+<div class="settings-note">)html";
   appendHtmlEscaped(html, tr.local_camera_rb_swap_note);
   html += R"html(</div>
-              </div>
-              <div class="settings-full local-camera-image" id="local_camera_image">
-                <div class="network-settings-heading">)html";
+</div>
+<div class="settings-full local-camera-image" id="local_camera_image">
+<div class="network-settings-heading">)html";
   appendHtmlEscaped(html, tr.local_camera_image_section);
   html += R"html(</div>)html";
   // Live controls: saved through /api/local-camera while dragging (debounced)
@@ -394,16 +394,16 @@ static void appendLocalCameraSettingsHtml(String& html, const i18n::Strings& tr)
                                local_camera_contract::kGainLimitMin,
                                local_camera_contract::kGainLimitMax, image.gain, "%");
   html += R"html(
-                <div class="settings-actions local-camera-image-actions">
-                  <button type="button" class="btn btn-secondary" id="local_camera_image_reset" onclick="resetLocalCameraImage()">)html";
+<div class="settings-actions local-camera-image-actions">
+<button type="button" class="btn btn-secondary" id="local_camera_image_reset" onclick="resetLocalCameraImage()">)html";
   appendHtmlEscaped(html, tr.local_camera_image_reset);
   html += R"html(</button>
-                </div>
-              </div>
-                </div>
-              </details>
-            </div>
-          </div>
+</div>
+</div>
+</div>
+</details>
+</div>
+</div>
 )html";
 }
 
@@ -422,8 +422,8 @@ static void appendTileTabHTML(
                                    : String("folder") + String(folder_id);
 
   html += R"html(
-      <!-- Tile Folder -->
-      <div id="tab-tiles-)html";
+<!-- Tile Folder -->
+<div id="tab-tiles-)html";
   html += tab_id;
   html += R"html(" class="tab-content tile-tab" data-tab-id=")html";
   html += tab_id;
@@ -437,11 +437,11 @@ static void appendTileTabHTML(
   appendHtmlEscaped(html, folder.icon_name);
   if (screensaver_mode) html += R"html(" data-screensaver-grid="1)html";
   html += R"html(">
-        <div class="tile-editor">
-          <div class="tile-editor-main">
-          <div class="tile-grid-scroll">
-          <!-- Grid Preview -->
-          <div class="tile-grid)html";
+<div class="tile-editor">
+<div class="tile-editor-main">
+<div class="tile-grid-scroll">
+<!-- Grid Preview -->
+<div class="tile-grid)html";
   if (screensaver_mode) {
     html += " screensaver-tile-grid";
   } else if (configManager.getConfig().tile_borders) {
@@ -454,13 +454,13 @@ static void appendTileTabHTML(
 
   if (screensaver_mode) {
     html += R"html(            <div class="screensaver-grid-image-frame">
-              <img id="screensaverPreviewImage" class="screensaver-grid-image" alt="" draggable="false" hidden>
-            </div>
-            <div id="screensaverClock" class="screensaver-grid-clock">
-              <div id="screensaverClockTime">--:--</div>
-              <div id="screensaverClockDate">--.--.----</div>
-              <span class="screensaver-clock-resize-handle" title="Resize"></span>
-            </div>
+<img id="screensaverPreviewImage" class="screensaver-grid-image" alt="" draggable="false" hidden>
+</div>
+<div id="screensaverClock" class="screensaver-grid-clock">
+<div id="screensaverClockTime">--:--</div>
+<div id="screensaverClockDate">--.--.----</div>
+<span class="screensaver-clock-resize-handle" title="Resize"></span>
+</div>
 )html";
   }
 
@@ -776,8 +776,8 @@ static void appendTileTabHTML(
   }
 
   html += R"html(
-          </div>
-          </div>
+</div>
+</div>
 )html";
   if (!screensaver_mode && folder_id == 0) {
     const DeviceConfig& cfg = configManager.getConfig();
@@ -944,7 +944,7 @@ static void appendTileTabHTML(
     html += "')\"><i class=\"mdi mdi-restore\"></i></button></div></div></div></section>\n";
   } else {
     html += R"html(            <div class="folder-footer-options screensaver-tile-options">
-              <label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";
+<label class="inline-checkbox"><input id="screensaverTileBorder" type="checkbox"> )html";
     html += tr.screensaver_tile_border;
     html += R"html(</label>
 )html";
@@ -967,7 +967,7 @@ static void appendTileTabHTML(
     html += String((tile_opacity * 100 + 127) / 255);
     html += " %</output></label>";
     html += R"html(            </div>
-            <p class="hint">)html";
+<p class="hint">)html";
   }
   if (screensaver_mode) {
     html += tr.screensaver_hint;
@@ -975,87 +975,87 @@ static void appendTileTabHTML(
 )html";
   }
   html += R"html(          </div>
-          </div>
+</div>
 
-          <!-- Settings Panel -->
-          <div class="tile-settings" id=")html";
+<!-- Settings Panel -->
+<div class="tile-settings" id=")html";
   html += tab_id;
   html += R"html(Settings">
 )html";
   if (screensaver_mode) {
     html += R"html(            <div id="screensaverBackgroundSettings" class="screensaver-background-settings">
-              <div class="tile-settings-head"><h3 style="margin-top:0;">)html";
+<div class="tile-settings-head"><h3 style="margin-top:0;">)html";
     html += tr.admin_slideshow;
     html += R"html(</h3></div>
-              <div class="tile-settings-body">
-                <div class="screensaver-fixed-type"><label>)html";
+<div class="tile-settings-body">
+<div class="screensaver-fixed-type"><label>)html";
     html += tr.admin_type;
     html += R"html(</label><input value=")html";
     html += tr.admin_slideshow;
     html += R"html(" disabled></div>
-                <label class="inline-checkbox"><input id="screensaverUseWallpapers" type="checkbox"> )html";
+<label class="inline-checkbox"><input id="screensaverUseWallpapers" type="checkbox"> )html";
     html += tr.screensaver_use_wallpapers;
     html += R"html(</label>
-                <label class="inline-checkbox"><input id="screensaverShuffle" type="checkbox"> )html";
+<label class="inline-checkbox"><input id="screensaverShuffle" type="checkbox"> )html";
     html += tr.screensaver_shuffle;
     html += R"html(</label>
-                <div class="screensaver-wallpaper-heading">)html";
+<div class="screensaver-wallpaper-heading">)html";
     html += tr.screensaver_wallpapers_heading;
     html += R"html(</div>
-                <div class="screensaver-storage-hint">)html";
+<div class="screensaver-storage-hint">)html";
     html += tr.screensaver_storage_hint;
     html += R"html(</div>
-                <div id="screensaverWallpaperList" class="screensaver-wallpaper-list"></div>
-                <div id="screensaverWallpaperControls" class="screensaver-wallpaper-controls">
-                  <label>)html";
+<div id="screensaverWallpaperList" class="screensaver-wallpaper-list"></div>
+<div id="screensaverWallpaperControls" class="screensaver-wallpaper-controls">
+<label>)html";
     html += tr.screensaver_duration_seconds;
     html += R"html(</label><input id="screensaverWallpaperDuration" type="number" min="3" max="3600" value="15">
-                  <label>)html";
+<label>)html";
     html += tr.screensaver_zoom;
     html += R"html(</label><input id="screensaverWallpaperZoom" type="range" min="1000" max="3000" step="25" value="1000">
-                  <div class="screensaver-focus-grid">
-                    <label>)html";
+<div class="screensaver-focus-grid">
+<label>)html";
     html += tr.screensaver_focus_x;
     html += R"html(<input id="screensaverFocusX" type="range" min="0" max="1000" value="500"></label>
-                    <label>)html";
+<label>)html";
     html += tr.screensaver_focus_y;
     html += R"html(<input id="screensaverFocusY" type="range" min="0" max="1000" value="500"></label>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div id="screensaverClockSettings" class="screensaver-background-settings screensaver-clock-settings hidden">
-              <div class="tile-settings-head"><h3 style="margin-top:0;">)html";
+</div>
+</div>
+</div>
+</div>
+<div id="screensaverClockSettings" class="screensaver-background-settings screensaver-clock-settings hidden">
+<div class="tile-settings-head"><h3 style="margin-top:0;">)html";
     html += tr.screensaver_clock_heading;
     html += R"html(</h3></div>
-              <div class="tile-settings-body">
-                <div class="screensaver-fixed-type"><label>)html";
+<div class="tile-settings-body">
+<div class="screensaver-fixed-type"><label>)html";
     html += tr.admin_type;
     html += R"html(</label><input value=")html";
     html += tr.tile_type_clock;
     html += R"html(" disabled></div>
-                  <div class="clock-toggle-row">
-                    <label class="inline-checkbox"><input id="screensaverShowTime" type="checkbox"> )html";
+<div class="clock-toggle-row">
+<label class="inline-checkbox"><input id="screensaverShowTime" type="checkbox"> )html";
     html += tr.show_time;
     html += R"html(</label>
-                    <label class="inline-checkbox"><input id="screensaverShowDate" type="checkbox"> )html";
+<label class="inline-checkbox"><input id="screensaverShowDate" type="checkbox"> )html";
     html += tr.show_date;
     html += R"html(</label>
-                    <label class="inline-checkbox"><input id="screensaverShowWeekday" type="checkbox"> )html";
+<label class="inline-checkbox"><input id="screensaverShowWeekday" type="checkbox"> )html";
     html += tr.screensaver_show_weekday;
     html += R"html(</label>
-                    <label class="inline-checkbox"><input id="screensaverClockShadow" type="checkbox"> )html";
+<label class="inline-checkbox"><input id="screensaverClockShadow" type="checkbox"> )html";
     html += tr.screensaver_clock_shadow;
     html += R"html(</label>
-                  </div>
-                  <div class="screensaver-two-fields">
-                    <label>)html";
+</div>
+<div class="screensaver-two-fields">
+<label>)html";
     html += tr.time_font_size;
     html += R"html(<select id="screensaverTimeFont"><option>20</option><option>24</option><option>28</option><option>32</option><option>40</option><option selected>48</option><option>56</option><option>64</option><option>72</option><option>80</option><option>96</option></select></label>
-                    <label>)html";
+<label>)html";
     html += tr.date_font_size;
     html += R"html(<select id="screensaverDateFont"><option>20</option><option>24</option><option selected>28</option><option>32</option><option>40</option><option>48</option><option>56</option><option>64</option><option>72</option></select></label>
-                    <label>)html";
+<label>)html";
     html += tr.screensaver_time_alignment;
     html += R"html(<select id="screensaverTimeAlignment"><option value="0">)html";
     html += tr.alignment_left;
@@ -1064,7 +1064,7 @@ static void appendTileTabHTML(
     html += R"html(</option><option value="2">)html";
     html += tr.alignment_right;
     html += R"html(</option></select></label>
-                    <label>)html";
+<label>)html";
     html += tr.screensaver_date_alignment;
     html += R"html(<select id="screensaverDateAlignment"><option value="0">)html";
     html += tr.alignment_left;
@@ -1073,36 +1073,36 @@ static void appendTileTabHTML(
     html += R"html(</option><option value="2">)html";
     html += tr.alignment_right;
     html += R"html(</option></select></label>
-                    <label>)html";
+<label>)html";
     html += tr.time_format_label;
     html += R"html(<select id="screensaverTimeFormat"><option value="0">)html";
     html += tr.format_auto_localization;
     html += R"html(</option><option value="1">24 h</option><option value="2">12 h</option></select></label>
-                    <label>)html";
+<label>)html";
     html += tr.date_format_label;
     html += R"html(<select id="screensaverDateFormat"><option value="0">)html";
     html += tr.format_auto_localization;
     html += R"html(</option><option value="1">DD.MM.YYYY</option><option value="2">MM/DD/YYYY</option><option value="3">YYYY/MM/DD</option></select></label>
-                  </div>
-              </div>
-            </div>
+</div>
+</div>
+</div>
 )html";
   }
   html += R"html(
-            <!-- Tile Settings (Visible only when tile selected) -->
-            <div class="tile-specific-settings hidden">
-            <div class="tile-settings-head">
-              <div class="tile-head-top"><h3>)html";
+<!-- Tile Settings (Visible only when tile selected) -->
+<div class="tile-specific-settings hidden">
+<div class="tile-settings-head">
+<div class="tile-head-top"><h3>)html";
   html += tr.admin_tile_settings;
   html += R"html(</h3>
-            <select id=")html";
+<select id=")html";
   html += tab_id;
   html += R"html(_tile_type" aria-label=")html";
   appendHtmlEscaped(html, tr.admin_type);
   html += R"html(" onchange="updateTileType(')html";
   html += tab_id;
   html += R"html(')">
-            )html";
+)html";
   if (screensaver_mode) {
     html += "<option value=\"0\">";
     html += tr.tile_type_empty;
@@ -1130,8 +1130,8 @@ static void appendTileTabHTML(
     append_tile_type_select_options(html);
   }
   html += R"html(
-            </select></div>
-            <p class="hint hidden" id=")html";
+</select></div>
+<p class="hint hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_type_hint">)html";
   html += tr.admin_folder_type_locked;
@@ -1141,10 +1141,10 @@ static void appendTileTabHTML(
   // the icon name in the hidden input: empty = the entity's icon, "none" =
   // no icon.
   html += R"html(</p>
-            <div class="tile-entity-slot" id=")html";
+<div class="tile-entity-slot" id=")html";
   html += tab_id;
   html += R"html(_tile_entity_slot"></div>
-            <div class="tile-head-row"><div><div class="tile-title-label"><label for=")html";
+<div class="tile-head-row"><div><div class="tile-title-label"><label for=")html";
   html += tab_id;
   html += R"html(_tile_title">)html";
   appendHtmlEscaped(html, tr.admin_title);
@@ -1168,10 +1168,10 @@ static void appendTileTabHTML(
   html += R"html(_tile_icon" data-tile-icon><button type="button" class="tile-icon-picker" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_picker" aria-haspopup="listbox"></button></div></div>
-            </div>
-            <div class="tile-settings-body">
+</div>
+<div class="tile-settings-body">
 
-            <div class="tile-settings-group">)html";
+<div class="tile-settings-group">)html";
   appendHtmlEscaped(html, tr.tile_group_icon);
   html += R"html(</div>
 )html";
@@ -1179,14 +1179,14 @@ static void appendTileTabHTML(
   html += R"html(            <div class="tile-icon-disc-fields" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_disc_fields">
-              <label class="inline-checkbox" id=")html";
+<label class="inline-checkbox" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_disc_row"><input type="checkbox" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_disc" checked> )html";
   appendHtmlEscaped(html, tr.icon_disc_label);
   html += R"html(</label>
-              <label class="inline-checkbox" id=")html";
+<label class="inline-checkbox" id=")html";
   html += tab_id;
   html += R"html(_tile_icon_glow_row"><input type="checkbox" id=")html";
   html += tab_id;
@@ -1207,13 +1207,13 @@ static void appendTileTabHTML(
   }
   html += R"html(            </div>
 
-            <div class="tile-settings-group">)html";
+<div class="tile-settings-group">)html";
   appendHtmlEscaped(html, tr.tile_group_tile);
   html += R"html(</div>
-            <div class="tile-color-label-row no-reset"><span>)html";
+<div class="tile-color-label-row no-reset"><span>)html";
   html += tr.admin_color;
   html += R"html(</span></div>
-            <div class="icon-color-segmented choice-row tile-color-modes" role="group" id=")html";
+<div class="icon-color-segmented choice-row tile-color-modes" role="group" id=")html";
   html += tab_id;
   html += R"html(_tile_color_modes">)html";
   // Tile color is one choice: the global tile color, an own color, a tint
@@ -1242,10 +1242,10 @@ static void appendTileTabHTML(
     html += "</button>";
   }
   html += R"html(</div>
-            <div class="tile-color-row no-reset" id=")html";
+<div class="tile-color-row no-reset" id=")html";
   html += tab_id;
   html += R"html(_tile_color_row">
-            <input type="color" id=")html";
+<input type="color" id=")html";
   html += tab_id;
   html += R"html(_tile_color" value="#2A2A2A">
 )html";
@@ -1256,24 +1256,24 @@ static void appendTileTabHTML(
   // Position and size: dragging and resizing in the grid edit them; the
   // values stay in hidden inputs for drafts, undo, copy and saving.
   html += R"html(
-            <input type="hidden" id=")html";
+<input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_col" min="1" max=")html";
   html += String(GRID_COLS);
   html += R"html(" step="0.5" value="1">
-            <input type="hidden" id=")html";
+<input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_row" min=")html";
   html += String(screensaver_mode && GRID_ROWS > 1 ? GRID_ROWS - 1 : 1);
   html += R"html(" max=")html";
   html += String(GRID_ROWS);
   html += R"html(" step="0.5" value="1">
-            <input type="hidden" id=")html";
+<input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_span_w" min="1" max=")html";
   html += String(GRID_COLS);
   html += R"html(" step="0.5" value="1">
-            <input type="hidden" id=")html";
+<input type="hidden" id=")html";
   html += tab_id;
   html += R"html(_tile_span_h" min="1" max=")html";
   html += String(GRID_ROWS);
@@ -1290,28 +1290,28 @@ static void appendTileTabHTML(
             append_tile_type_fields_html(html, type_ctx);
 
   html += R"html(
-            </div><!-- /tile-settings-body -->
-            <div class="tile-actions">
-                <button type="button" class="btn" onclick="copyTile(')html";
+</div><!-- /tile-settings-body -->
+<div class="tile-actions">
+<button type="button" class="btn" onclick="copyTile(')html";
   html += tab_id;
   html += R"html(')">)html";
   html += tr.admin_copy;
   html += R"html(</button>
-                <button type="button" class="btn" onclick="pasteTile(')html";
+<button type="button" class="btn" onclick="pasteTile(')html";
   html += tab_id;
   html += R"html(')">)html";
   html += tr.admin_paste;
   html += R"html(</button>
-                <button type="button" class="btn btn-danger" onclick="resetTile(')html";
+<button type="button" class="btn btn-danger" onclick="resetTile(')html";
   html += tab_id;
   html += R"html(')">)html";
   html += tr.admin_delete;
   html += R"html(</button>
-            </div>
-            </div><!-- /tile-specific-settings -->
-          </div>
-        </div>
-      </div>
+</div>
+</div><!-- /tile-specific-settings -->
+</div>
+</div>
+</div>
 )html";
 }
 
@@ -1331,7 +1331,7 @@ static String buildFolderTabButtonHtml(const FolderEntry& entry) {
 
   String html;
   html += R"html(
-        <button class="tab-btn folder-tab-btn" data-folder-id=")html";
+<button class="tab-btn folder-tab-btn" data-folder-id=")html";
   html += String(entry.id);
   html += R"html(" data-folder-parent=")html";
   html += String(entry.parent_id);
@@ -1347,13 +1347,13 @@ static String buildFolderTabButtonHtml(const FolderEntry& entry) {
   html += R"html( onclick="switchTab('tab-tiles-)html";
   html += tab_id;
   html += R"html(')">
-          <span class="tab-disc"><i class="mdi mdi-)html";
+<span class="tab-disc"><i class="mdi mdi-)html";
   html += icon.length() ? icon : String(entry.id == 0 ? "home" : "folder");
   html += R"html("></i></span>
-          <span class="tab-label">)html";
+<span class="tab-label">)html";
   appendHtmlEscaped(html, name);
   html += R"html(</span>
-        </button>
+</button>
 )html";
   return html;
 }
@@ -1414,7 +1414,7 @@ bool buildAdminFolderTabFragments(uint16_t folder_id, String& button_html, Strin
 static void appendSettingsNavItem(String& html, const char* page, const char* color,
                                   const char* icon, const String& title, const String& sub) {
   html += R"html(
-          <button class="settings-nav-item" type="button" data-settings-page=")html";
+<button class="settings-nav-item" type="button" data-settings-page=")html";
   html += page;
   html += R"html(" style="--settings-color:)html";
   html += color;
@@ -1436,7 +1436,7 @@ static void appendSettingsNavItem(String& html, const char* page, const char* co
 static void appendSettingsStateRow(String& html, const char* icon, const String& title,
                                    const String& sub, const String& value, const char* value_icon) {
   html += R"html(
-              <div class="settings-state-row"><i class="mdi mdi-)html";
+<div class="settings-state-row"><i class="mdi mdi-)html";
   html += icon;
   html += R"html( settings-state-icon"></i><div class="settings-state-text"><div class="settings-state-title">)html";
   appendHtmlEscaped(html, title);
@@ -1480,9 +1480,9 @@ static void appendSettingsTabHtml(String& html, const DeviceConfig& cfg,
   if (connected) network_name = on_wifi ? WiFi.SSID() : String(networkTransport.activeName());
 
   html += R"html(
-      <div id="tab-network" class="tab-content">
-        <div class="settings-layout">
-        <nav class="settings-nav" aria-label=")html";
+<div id="tab-network" class="tab-content">
+<div class="settings-layout">
+<nav class="settings-nav" aria-label=")html";
   appendHtmlEscaped(html, tr.tile_type_settings);
   html += R"html(">)html";
   appendSettingsNavItem(html, "network", "#42A5F5",
@@ -1492,7 +1492,7 @@ static void appendSettingsTabHtml(String& html, const DeviceConfig& cfg,
                         String(i18n::locale(cfg.language).native_name) + " \xC2\xB7 " + cfg.timezone);
   appendSettingsNavItem(html, "system", "#26A69A", "chip", "System", FW_VERSION);
   html += R"html(
-          <div class="settings-nav-sep" aria-hidden="true"></div>)html";
+<div class="settings-nav-sep" aria-hidden="true"></div>)html";
   appendSettingsNavItem(html, "io", "#FF8A65", "electric-switch", tr.admin_io,
                         String(tr.tile_type_switch) + " \xC2\xB7 " + tr.admin_io_temperature);
   if (camera) {
@@ -1503,16 +1503,16 @@ static void appendSettingsTabHtml(String& html, const DeviceConfig& cfg,
                         String(tr.admin_export) + " \xC2\xB7 " + tr.admin_import + " \xC2\xB7 microSD");
   appendSettingsNavItem(html, "diagnostics", "#9E9E9E", "stethoscope", tr.admin_settings_screenshot, "");
   html += R"html(
-        </nav>
-        <div class="settings-pages">
-        <form id="admin_settings_form" class="settings-form" action="/mqtt" method="POST" autocomplete="on">
-          <section class="settings-page" data-settings-page="network">
-          <div class="settings-section">
-            <div class="section-title-row">
-              <div class="section-title">)html";
+</nav>
+<div class="settings-pages">
+<form id="admin_settings_form" class="settings-form" action="/mqtt" method="POST" autocomplete="on">
+<section class="settings-page" data-settings-page="network">
+<div class="settings-section">
+<div class="section-title-row">
+<div class="section-title">)html";
   appendHtmlEscaped(html, network_title);
   html += R"html(</div>
-              <div class="wifi-inline-status"><span class="wifi-inline-dot)html";
+<div class="wifi-inline-status"><span class="wifi-inline-dot)html";
   if (!connected) html += " off";
   html += R"html("></span>)html";
   html += connected ? tr.wifi_connected : tr.wifi_disconnected;
@@ -1523,220 +1523,220 @@ static void appendSettingsTabHtml(String& html, const DeviceConfig& cfg,
     html += networkTransport.localIP().toString();
   }
   html += R"html(</div>
-            </div>
-            <div class="settings-grid">)html";
+</div>
+<div class="settings-grid">)html";
   if (supports_ethernet) {
     html += R"html(
-              <div class="settings-full">
-                <label for="network_mode">)html";
+<div class="settings-full">
+<label for="network_mode">)html";
     html += tr.admin_connection_type;
     html += R"html(:</label>
-                <select id="network_mode" name="network_mode" onchange="toggleNetworkSettings()">
-                  <option value="wifi")html";
+<select id="network_mode" name="network_mode" onchange="toggleNetworkSettings()">
+<option value="wifi")html";
     if (!cfg.ethernet_enabled) html += " selected";
     html += R"html(>WiFi</option>
-                  <option value="ethernet")html";
+<option value="ethernet")html";
     if (cfg.ethernet_enabled) html += " selected";
     html += R"html(>Ethernet</option>
-                </select>
-                <div class="settings-note">)html";
+</select>
+<div class="settings-note">)html";
     html += tr.admin_connection_type_note;
     html += R"html(</div>
-              </div>)html";
+</div>)html";
   }
   html += R"html(
-              <div id="wifi_network_settings" class="network-settings-group settings-full )html";
+<div id="wifi_network_settings" class="network-settings-group settings-full )html";
   if (supports_ethernet && cfg.ethernet_enabled) html += "is-hidden";
   html += R"html(">)html";
   if (supports_ethernet) {
     html += R"html(
-                <div class="network-settings-heading">WiFi</div>)html";
+<div class="network-settings-heading">WiFi</div>)html";
   }
   html += R"html(
-                <div class="settings-subgrid">
-                  <div>
-                <label for="wifi_ssid">)html";
+<div class="settings-subgrid">
+<div>
+<label for="wifi_ssid">)html";
   html += tr.ssid_label;
   html += R"html(:</label>
-                <input type="text" id="wifi_ssid" name="wifi_ssid" value=")html";
+<input type="text" id="wifi_ssid" name="wifi_ssid" value=")html";
   appendHtmlEscaped(html, cfg.wifi_ssid);
   html += R"html(">
-                  </div>
-                  <div>
-                <label for="wifi_pass">)html";
+</div>
+<div>
+<label for="wifi_pass">)html";
   html += tr.wifi_password_label;
   html += R"html(:</label>
-                <div class="password-field">
-                  <input type="password" id="wifi_pass" name="wifi_pass"
-                         autocomplete="new-password" value=")html";
+<div class="password-field">
+<input type="password" id="wifi_pass" name="wifi_pass"
+autocomplete="new-password" value=")html";
   appendStoredSecretValue(html, cfg.wifi_pass, tr);
   html += R"html(">
-                  <button type="button" class="password-toggle" data-label-show=")html";
+<button type="button" class="password-toggle" data-label-show=")html";
   html += tr.password_show;
   html += R"html(" data-label-hide=")html";
   html += tr.password_hide;
   html += R"html(" onclick="togglePasswordVisibility('wifi_pass', this)">)html";
   html += tr.password_show;
   html += R"html(</button>
-                </div>
-                  </div>
-                </div>
-              </div>
+</div>
+</div>
+</div>
+</div>
 
-              <div id="network_ip_settings" class="network-settings-group settings-full">
-                <div class="network-settings-heading">)html";
+<div id="network_ip_settings" class="network-settings-group settings-full">
+<div class="network-settings-heading">)html";
   html += tr.admin_ip_configuration;
   html += R"html(</div>
-                <label class="settings-checkbox">
-                  <input type="checkbox" id="network_use_static" name="network_use_static" onchange="toggleStaticNetworkFields()")html";
+<label class="settings-checkbox">
+<input type="checkbox" id="network_use_static" name="network_use_static" onchange="toggleStaticNetworkFields()")html";
   if (use_static) html += " checked";
   html += R"html(>
-                  <span>)html";
+<span>)html";
   html += tr.admin_ip_use_static;
   html += R"html(</span>
-                </label>
-                <div id="network_ip_mode_note" class="settings-note"
-                     data-dhcp-note=")html";
+</label>
+<div id="network_ip_mode_note" class="settings-note"
+data-dhcp-note=")html";
   html += tr.admin_ip_dhcp_note;
   html += R"html(" data-static-note=")html";
   html += tr.admin_ip_static_note;
   html += R"html(">)html";
   html += use_static ? tr.admin_ip_static_note : tr.admin_ip_dhcp_note;
   html += R"html(</div>
-                <div id="network_static_fields" class="settings-subgrid )html";
+<div id="network_static_fields" class="settings-subgrid )html";
   if (!use_static) html += "is-hidden";
   html += R"html(">
-                <div>
-                <label for="network_static_ip">)html";
+<div>
+<label for="network_static_ip">)html";
   html += tr.wifi_static_ip_label;
   html += R"html(:</label>
-                <input type="text" id="network_static_ip" name="network_static_ip" inputmode="decimal" autocomplete="on" value=")html";
+<input type="text" id="network_static_ip" name="network_static_ip" inputmode="decimal" autocomplete="on" value=")html";
   appendHtmlEscaped(html, cfg.wifi_static_ip);
   html += R"html(">
-                </div>
-                <div>
-                <label for="network_gateway">)html";
+</div>
+<div>
+<label for="network_gateway">)html";
   html += tr.wifi_gateway_label;
   html += R"html(:</label>
-                <input type="text" id="network_gateway" name="network_gateway" inputmode="decimal" autocomplete="on" value=")html";
+<input type="text" id="network_gateway" name="network_gateway" inputmode="decimal" autocomplete="on" value=")html";
   appendHtmlEscaped(html, cfg.wifi_gateway);
   html += R"html(">
-                </div>
-                <div>
-                <label for="network_subnet">)html";
+</div>
+<div>
+<label for="network_subnet">)html";
   html += tr.wifi_subnet_label;
   html += R"html(:</label>
-                <input type="text" id="network_subnet" name="network_subnet" inputmode="decimal" autocomplete="on" value=")html";
+<input type="text" id="network_subnet" name="network_subnet" inputmode="decimal" autocomplete="on" value=")html";
   appendHtmlEscaped(html, cfg.wifi_subnet);
   html += R"html(">
-                </div>
-                <div>
-                <label for="network_dns">)html";
+</div>
+<div>
+<label for="network_dns">)html";
   html += tr.wifi_dns_label;
   html += R"html(:</label>
-                <input type="text" id="network_dns" name="network_dns" inputmode="decimal" autocomplete="on" value=")html";
+<input type="text" id="network_dns" name="network_dns" inputmode="decimal" autocomplete="on" value=")html";
   appendHtmlEscaped(html, cfg.wifi_dns);
   html += R"html(">
-                </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          </section>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
 
-          <section class="settings-page" data-settings-page="locale">
-          <div class="settings-section">
-            <div class="section-title">)html";
+<section class="settings-page" data-settings-page="locale">
+<div class="settings-section">
+<div class="section-title">)html";
   html += tr.admin_settings_language;
   html += R"html(</div>
-            <div class="settings-grid">
-              <div>
-                <label for="language">)html";
+<div class="settings-grid">
+<div>
+<label for="language">)html";
   html += tr.language_label;
   html += R"html(</label>
-                <select id="language" name="language">)html";
+<select id="language" name="language">)html";
   html += i18n::build_language_options_html(cfg.language);
   html += R"html(</select>
-              </div>
-              <div>
-                <label for="timezone">)html";
+</div>
+<div>
+<label for="timezone">)html";
   html += tr.timezone_label;
   html += R"html(</label>
-                <select id="timezone" name="timezone">)html";
+<select id="timezone" name="timezone">)html";
   html += buildTimezoneOptionsHtml(cfg.timezone, i18n::locale(cfg.language));
   html += R"html(</select>
-              </div>
-              <div>
-                <label for="locale_time_format">)html";
+</div>
+<div>
+<label for="locale_time_format">)html";
   html += tr.time_format_label;
   html += R"html(</label>
-                <select id="locale_time_format" name="locale_time_format">)html";
+<select id="locale_time_format" name="locale_time_format">)html";
   html += buildGlobalTimeFormatOptionsHtml(cfg.global_time_format, tr);
   html += R"html(</select>
-              </div>
-              <div>
-                <label for="locale_date_format">)html";
+</div>
+<div>
+<label for="locale_date_format">)html";
   html += tr.date_format_label;
   html += R"html(</label>
-                <select id="locale_date_format" name="locale_date_format">)html";
+<select id="locale_date_format" name="locale_date_format">)html";
   html += buildGlobalDateFormatOptionsHtml(cfg.global_date_format, tr);
   html += R"html(</select>
-              </div>
-            </div>
-          </div>
-          </section>
+</div>
+</div>
+</div>
+</section>
 
-          <section class="settings-page" data-settings-page="system">
-          <div class="settings-section">
-            <div class="settings-state-row settings-version-row">
-              <svg width="40" height="40" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <rect x="4" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
-                <rect x="27" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
-                <rect x="4" y="27" width="17" height="17" rx="4" fill="#ffffff"/>
-                <path d="M33 26h5v6.5h6.5v5H38V44h-5v-6.5h-6.5v-5H33z" fill="#26a69a"/>
-              </svg>
-              <div class="settings-state-text">
-                <div class="settings-state-title settings-version">HomeTiles <span>)html";
+<section class="settings-page" data-settings-page="system">
+<div class="settings-section">
+<div class="settings-state-row settings-version-row">
+<svg width="40" height="40" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<rect x="4" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
+<rect x="27" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
+<rect x="4" y="27" width="17" height="17" rx="4" fill="#ffffff"/>
+<path d="M33 26h5v6.5h6.5v5H38V44h-5v-6.5h-6.5v-5H33z" fill="#26a69a"/>
+</svg>
+<div class="settings-state-text">
+<div class="settings-state-title settings-version">HomeTiles <span>)html";
   html += FW_VERSION;
   html += R"html(</span></div>
-                <div class="settings-state-sub">)html";
+<div class="settings-state-sub">)html";
   appendHtmlEscaped(html, Device::displayName());
   html += R"html(</div>
-              </div>
-              <button class="btn btn-go settings-row-btn" type="button" id="ota_github_btn" onclick="checkOrInstallGithubFirmware()"><i class="mdi mdi-magnify"></i> )html";
+</div>
+<button class="btn btn-go settings-row-btn" type="button" id="ota_github_btn" onclick="checkOrInstallGithubFirmware()"><i class="mdi mdi-magnify"></i> )html";
   html += tr.system_check_updates_btn;
   html += R"html(</button>
-            </div>
-            <div id="ota_github_status" class="settings-note ota-status"></div>
-            <div id="ota_github_progress" class="ota-progress is-hidden" aria-hidden="true">
-              <div id="ota_github_progress_bar" class="ota-progress-bar"></div>
-            </div>
-            <div class="settings-fw-file">
-              <span class="settings-note">)html";
+</div>
+<div id="ota_github_status" class="settings-note ota-status"></div>
+<div id="ota_github_progress" class="ota-progress is-hidden" aria-hidden="true">
+<div id="ota_github_progress_bar" class="ota-progress-bar"></div>
+</div>
+<div class="settings-fw-file">
+<span class="settings-note">)html";
   html += tr.ota_firmware_file;
   html += R"html(:</span>
-              <input type="file" id="ota_file" accept=".bin,application/octet-stream" style="display:none" onchange="updateOtaFileName(this)">
-              <button class="btn btn-secondary btn-inline" type="button" id="ota_choose_btn" onclick="document.getElementById('ota_file').click()">)html";
+<input type="file" id="ota_file" accept=".bin,application/octet-stream" style="display:none" onchange="updateOtaFileName(this)">
+<button class="btn btn-secondary btn-inline" type="button" id="ota_choose_btn" onclick="document.getElementById('ota_file').click()">)html";
   html += tr.ota_choose_file;
   html += R"html(</button>
-              <button class="btn btn-go btn-inline" type="button" id="ota_upload_btn" onclick="uploadOtaFirmware()">)html";
+<button class="btn btn-go btn-inline" type="button" id="ota_upload_btn" onclick="uploadOtaFirmware()">)html";
   html += tr.ota_upload_install;
   html += R"html(</button>
-              <span id="ota_file_name" class="file-picker-name">)html";
+<span id="ota_file_name" class="file-picker-name">)html";
   html += tr.ota_no_file_selected;
   html += R"html(</span>
-            </div>
-            <div id="ota_status" class="settings-note ota-status"></div>
-            <div id="ota_progress" class="ota-progress is-hidden" aria-hidden="true">
-              <div id="ota_progress_bar" class="ota-progress-bar"></div>
-            </div>
-            <div class="settings-note">)html";
+</div>
+<div id="ota_status" class="settings-note ota-status"></div>
+<div id="ota_progress" class="ota-progress is-hidden" aria-hidden="true">
+<div id="ota_progress_bar" class="ota-progress-bar"></div>
+</div>
+<div class="settings-note">)html";
   html += tr.ota_update_note;
   html += R"html(</div>
-          </div>
+</div>
 
-          <div class="settings-section">
-            <div class="section-title">)html";
+<div class="settings-section">
+<div class="section-title">)html";
   html += tr.settings_connection;
   html += R"html(</div>)html";
   char route[96];
@@ -1756,102 +1756,102 @@ static void appendSettingsTabHtml(String& html, const DeviceConfig& cfg,
     mqtt_line = tr.mqtt_not_configured;
   }
   html += R"html(
-              <details class="settings-fold" id="mqtt_settings">
-                <summary><i class="mdi mdi-access-point-network settings-state-icon"></i><span class="settings-state-text"><span class="settings-state-title">MQTT</span><span class="settings-state-sub">)html";
+<details class="settings-fold" id="mqtt_settings">
+<summary><i class="mdi mdi-access-point-network settings-state-icon"></i><span class="settings-state-text"><span class="settings-state-title">MQTT</span><span class="settings-state-sub">)html";
   appendHtmlEscaped(html, mqtt_line);
   html += R"html(</span></span><i class="mdi mdi-chevron-right settings-fold-chev"></i></summary>
-                <div class="settings-fold-body">)html";
+<div class="settings-fold-body">)html";
   if (link) {
     html += R"html(
-                  <div class="settings-note settings-fold-note">)html";
+<div class="settings-note settings-fold-note">)html";
     appendHtmlEscaped(html, tr.settings_mqtt_unused_note);
     html += "</div>";
   }
   html += R"html(
-                  <div class="settings-grid">
-                    <div>
-                      <label for="mqtt_host">)html";
+<div class="settings-grid">
+<div>
+<label for="mqtt_host">)html";
   html += tr.mqtt_host;
   html += R"html(:</label>
-                      <input type="text" id="mqtt_host" name="mqtt_host" value=")html";
+<input type="text" id="mqtt_host" name="mqtt_host" value=")html";
   appendHtmlEscaped(html, cfg.mqtt_host);
   html += R"html(">
-                    </div>
-                    <div>
-                      <label for="mqtt_port">)html";
+</div>
+<div>
+<label for="mqtt_port">)html";
   html += tr.mqtt_port;
   html += R"html(:</label>
-                      <input type="number" id="mqtt_port" name="mqtt_port" value=")html";
+<input type="number" id="mqtt_port" name="mqtt_port" value=")html";
   html += String(cfg.mqtt_port ? cfg.mqtt_port : 1883);
   html += R"html(">
-                    </div>
-                    <div>
-                      <label for="mqtt_user">)html";
+</div>
+<div>
+<label for="mqtt_user">)html";
   html += tr.mqtt_username;
   html += R"html(:</label>
-                      <input type="text" id="mqtt_user" name="mqtt_user" value=")html";
+<input type="text" id="mqtt_user" name="mqtt_user" value=")html";
   appendHtmlEscaped(html, cfg.mqtt_user);
   html += R"html(">
-                    </div>
-                    <div>
-                      <label for="mqtt_pass">)html";
+</div>
+<div>
+<label for="mqtt_pass">)html";
   html += tr.mqtt_password;
   html += R"html(:</label>
-                      <div class="password-field">
-                        <input type="password" id="mqtt_pass" name="mqtt_pass"
-                               autocomplete="new-password" value=")html";
+<div class="password-field">
+<input type="password" id="mqtt_pass" name="mqtt_pass"
+autocomplete="new-password" value=")html";
   appendStoredSecretValue(html, cfg.mqtt_pass, tr);
   html += R"html(">
-                        <button type="button" class="password-toggle" data-label-show=")html";
+<button type="button" class="password-toggle" data-label-show=")html";
   html += tr.password_show;
   html += R"html(" data-label-hide=")html";
   html += tr.password_hide;
   html += R"html(" onclick="togglePasswordVisibility('mqtt_pass', this)">)html";
   html += tr.password_show;
   html += R"html(</button>
-                      </div>
-                    </div>
-                    <div class="settings-full">
-                      <label for="mqtt_client_id">)html";
+</div>
+</div>
+<div class="settings-full">
+<label for="mqtt_client_id">)html";
   html += tr.mqtt_client_id;
   html += R"html(:</label>
-                      <input type="text" id="mqtt_client_id" name="mqtt_client_id" placeholder=")html";
+<input type="text" id="mqtt_client_id" name="mqtt_client_id" placeholder=")html";
   html += tr.mqtt_client_id_placeholder;
   html += R"html(" value=")html";
   appendHtmlEscaped(html, cfg.mqtt_client_id);
   html += R"html(">
-                      <div class="settings-note">)html";
+<div class="settings-note">)html";
   html += tr.mqtt_client_id_hint;
   html += R"html(</div>
-                    </div>
-                    <div>
-                      <label for="mqtt_base">)html";
+</div>
+<div>
+<label for="mqtt_base">)html";
   html += tr.mqtt_base_topic;
   html += R"html(:</label>
-                      <input type="text" id="mqtt_base" name="mqtt_base" value=")html";
+<input type="text" id="mqtt_base" name="mqtt_base" value=")html";
   appendHtmlEscaped(html, cfg.mqtt_base_topic);
   html += R"html(">
-                    </div>
-                    <div>
-                      <label for="ha_prefix">)html";
+</div>
+<div>
+<label for="ha_prefix">)html";
   html += tr.ha_prefix;
   html += R"html(:</label>
-                      <input type="text" id="ha_prefix" name="ha_prefix" value=")html";
+<input type="text" id="ha_prefix" name="ha_prefix" value=")html";
   appendHtmlEscaped(html, cfg.ha_prefix);
   html += R"html(">
-                    </div>
-                  </div>
-                  <div class="settings-fold-actions">
-                    <button class="btn btn-go" type="submit" form="admin_settings_form">)html";
+</div>
+</div>
+<div class="settings-fold-actions">
+<button class="btn btn-go" type="submit" form="admin_settings_form">)html";
   html += tr.save;
   html += R"html(</button>
-                  </div>
-                </div>
-              </details>
-          </div>
+</div>
+</div>
+</details>
+</div>
 
-          <div class="settings-section">
-            <div class="section-title">)html";
+<div class="settings-section">
+<div class="section-title">)html";
   html += tr.security_btn;
   html += R"html(</div>)html";
   appendSettingsStateRow(html, paired ? "link-variant" : "link-variant-off", tr.settings_pairing,
@@ -1862,160 +1862,160 @@ static void appendSettingsTabHtml(String& html, const DeviceConfig& cfg,
   // The Web Admin password row folds out its fields (web_admin_security_html.cpp).
   appendWebAdminPasswordSettingsHtml(html, tr);
   html += R"html(
-          </div>
-          </section>
-        </form>
+</div>
+</section>
+</form>
 
-          <!-- Local GPIO / relay / temperature assignments -->
-          <section class="settings-page settings-page-io" data-settings-page="io">
-          <div class="hardware-io-content">
-            <div class="settings-actions hardware-io-toolbar">
-              <button id="hardwareIoAddSwitch" class="btn btn-secondary hardware-io-add-button" type="button">+ )html";
+<!-- Local GPIO / relay / temperature assignments -->
+<section class="settings-page settings-page-io" data-settings-page="io">
+<div class="hardware-io-content">
+<div class="settings-actions hardware-io-toolbar">
+<button id="hardwareIoAddSwitch" class="btn btn-secondary hardware-io-add-button" type="button">+ )html";
   html += tr.tile_type_switch;
   html += R"html(</button>
-              <button id="hardwareIoAddTemperature" class="btn btn-secondary hardware-io-add-button" type="button">+ )html";
+<button id="hardwareIoAddTemperature" class="btn btn-secondary hardware-io-add-button" type="button">+ )html";
   html += tr.admin_io_temperature;
   html += R"html(</button>
-            </div>
-            <div id="hardwareIoList" class="hardware-io-list">
-              <div class="hardware-io-loading">)html";
+</div>
+<div id="hardwareIoList" class="hardware-io-list">
+<div class="hardware-io-loading">)html";
   html += tr.loading;
   html += R"html(</div>
-            </div>
-          </div>
-          </section>
+</div>
+</div>
+</section>
 )html";
 
   if (camera) {
     html += R"html(
-          <section class="settings-page" data-settings-page="camera">)html";
+<section class="settings-page" data-settings-page="camera">)html";
     appendLocalCameraSettingsHtml(html, tr);
     html += R"html(
-          </section>
+</section>
 )html";
   }
 
   html += R"html(
-          <section class="settings-page" data-settings-page="files">
-          <div class="settings-section">
-            <div class="section-title">)html";
+<section class="settings-page" data-settings-page="files">
+<div class="settings-section">
+<div class="section-title">)html";
   html += tr.admin_import_export;
   html += R"html(</div>
-            <div class="settings-grid">
-              <div class="settings-full">
-                <div class="settings-actions">
-                  <button type="button" class="btn" onclick="exportTilesConfig()">)html";
+<div class="settings-grid">
+<div class="settings-full">
+<div class="settings-actions">
+<button type="button" class="btn" onclick="exportTilesConfig()">)html";
   html += tr.admin_export;
   html += R"html(</button>
-                  <input type="file" id="settings_tile_import" accept="application/json" style="display:none" onchange="importTilesConfig('settings', this.files)">
-                  <button type="button" class="btn" onclick="triggerTilesImport('settings')">)html";
+<input type="file" id="settings_tile_import" accept="application/json" style="display:none" onchange="importTilesConfig('settings', this.files)">
+<button type="button" class="btn" onclick="triggerTilesImport('settings')">)html";
   html += tr.admin_import;
   html += R"html(</button>
-                </div>
-                <div class="settings-note">)html";
+</div>
+<div class="settings-note">)html";
   html += tr.admin_import_overwrite;
   html += R"html(</div>
-              </div>
-            </div>
-          </div>
+</div>
+</div>
+</div>
 
-          <div class="settings-section">
-            <div class="section-title">)html";
+<div class="settings-section">
+<div class="section-title">)html";
   html += tr.file_manager_title;
   html += R"html(</div>
-            <div class="settings-grid file-manager">
-              <div class="settings-full">
-                <div class="file-manager-topbar">
-                  <span id="file_manager_sd_state" class="file-manager-storage-state">)html";
+<div class="settings-grid file-manager">
+<div class="settings-full">
+<div class="file-manager-topbar">
+<span id="file_manager_sd_state" class="file-manager-storage-state">)html";
   html += tr.file_manager_checking;
   html += R"html(</span>
-                  <div class="file-manager-toolbar-group">
-                    <button class="btn btn-secondary file-manager-toolbar-btn" type="button" onclick="loadFileManager()">)html";
+<div class="file-manager-toolbar-group">
+<button class="btn btn-secondary file-manager-toolbar-btn" type="button" onclick="loadFileManager()">)html";
   html += tr.file_manager_refresh;
   html += R"html(</button>
-                    <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="createFileManagerFolder()" disabled>)html";
+<button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="createFileManagerFolder()" disabled>)html";
   html += tr.file_manager_new_folder;
   html += R"html(</button>
-                  </div>
-                </div>
-                <div class="file-manager-upload-row">
-                  <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="document.getElementById('file_manager_upload').click()" disabled>)html";
+</div>
+</div>
+<div class="file-manager-upload-row">
+<button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="document.getElementById('file_manager_upload').click()" disabled>)html";
   html += tr.file_manager_choose_files;
   html += R"html(</button>
-                  <button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="uploadFileManagerFile()" disabled>)html";
+<button class="btn btn-secondary file-manager-toolbar-btn file-manager-requires-sd" type="button" onclick="uploadFileManagerFile()" disabled>)html";
   html += tr.file_manager_upload;
   html += R"html(</button>
-                  <span id="file_manager_upload_name" class="file-picker-name">)html";
+<span id="file_manager_upload_name" class="file-picker-name">)html";
   html += tr.ota_no_file_selected;
   html += R"html(</span>
-                </div>
-                <input type="file" id="file_manager_upload" multiple style="display:none" onchange="updateFileManagerUploadName(this)">
-                <div class="file-manager-selection-bar">
-                  <div id="file_manager_selection" class="file-manager-selection-info">)html";
+</div>
+<input type="file" id="file_manager_upload" multiple style="display:none" onchange="updateFileManagerUploadName(this)">
+<div class="file-manager-selection-bar">
+<div id="file_manager_selection" class="file-manager-selection-info">)html";
   html += tr.file_manager_no_selection;
   html += R"html(</div>
-                  <div class="file-manager-selection-actions">
-                    <button class="btn btn-secondary file-manager-selection-btn" id="file_manager_primary_btn" type="button" onclick="openSelectedFileManagerEntry()" disabled>)html";
+<div class="file-manager-selection-actions">
+<button class="btn btn-secondary file-manager-selection-btn" id="file_manager_primary_btn" type="button" onclick="openSelectedFileManagerEntry()" disabled>)html";
   html += tr.file_manager_open;
   html += R"html(</button>
-                    <button class="btn btn-secondary file-manager-selection-btn" id="file_manager_rename_btn" type="button" onclick="renameSelectedFileManagerEntry()" disabled>)html";
+<button class="btn btn-secondary file-manager-selection-btn" id="file_manager_rename_btn" type="button" onclick="renameSelectedFileManagerEntry()" disabled>)html";
   html += tr.file_manager_rename;
   html += R"html(</button>
-                    <button class="btn btn-danger file-manager-selection-btn" id="file_manager_delete_btn" type="button" onclick="deleteSelectedFileManagerEntry()" disabled>)html";
+<button class="btn btn-danger file-manager-selection-btn" id="file_manager_delete_btn" type="button" onclick="deleteSelectedFileManagerEntry()" disabled>)html";
   html += tr.admin_delete;
   html += R"html(</button>
-                  </div>
-                </div>
-              </div>
-              <div class="settings-full">
-                <div id="file_manager_breadcrumb" class="file-manager-breadcrumb"></div>
-                <div class="file-manager-table-wrap">
-                  <table class="file-manager-table">
-                    <thead>
-                      <tr>
-                        <th>)html";
+</div>
+</div>
+</div>
+<div class="settings-full">
+<div id="file_manager_breadcrumb" class="file-manager-breadcrumb"></div>
+<div class="file-manager-table-wrap">
+<table class="file-manager-table">
+<thead>
+<tr>
+<th>)html";
   html += tr.file_manager_name;
   html += R"html(</th>
-                        <th>)html";
+<th>)html";
   html += tr.file_manager_modified;
   html += R"html(</th>
-                        <th>)html";
+<th>)html";
   html += tr.file_manager_size;
   html += R"html(</th>
-                      </tr>
-                    </thead>
-                    <tbody id="file_manager_entries">
-                      <tr><td colspan="3">)html";
+</tr>
+</thead>
+<tbody id="file_manager_entries">
+<tr><td colspan="3">)html";
   html += tr.file_manager_not_loaded;
   html += R"html(</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div id="file_manager_status" class="settings-note file-manager-status"></div>
-              </div>
-            </div>
-          </div>
-          </section>
+</tbody>
+</table>
+</div>
+<div id="file_manager_status" class="settings-note file-manager-status"></div>
+</div>
+</div>
+</div>
+</section>
 
-          <section class="settings-page" data-settings-page="diagnostics">
-          <div class="settings-section">
-            <div class="section-title">)html";
+<section class="settings-page" data-settings-page="diagnostics">
+<div class="settings-section">
+<div class="section-title">)html";
   html += tr.admin_settings_screenshot;
   html += R"html(</div>
-            <div class="settings-grid">
-              <div class="settings-full">
-                <div class="settings-actions">
-                  <button class="btn" type="button" onclick="createScreenshotAndDownload()">)html";
+<div class="settings-grid">
+<div class="settings-full">
+<div class="settings-actions">
+<button class="btn" type="button" onclick="createScreenshotAndDownload()">)html";
   html += tr.screenshot_create_download;
   html += R"html(</button>
-                  <button class="btn btn-secondary" type="button" onclick="downloadCrashLog()">)html";
+<button class="btn btn-secondary" type="button" onclick="downloadCrashLog()">)html";
   html += tr.crash_log_download;
   html += R"html(</button>
-                  <button class="btn btn-secondary" type="button" onclick="window.open('/api/sd-diagnostics?ts=' + Date.now(), '_blank')">)html";
+<button class="btn btn-secondary" type="button" onclick="window.open('/api/sd-diagnostics?ts=' + Date.now(), '_blank')">)html";
   html += tr.sd_diagnostics_open;
   html += R"html(</button>
-                </div>
-                <div class="settings-note">)html";
+</div>
+<div class="settings-note">)html";
   html += tr.screenshot_saved_note;
   html += R"html(</div>)html";
 
@@ -2026,63 +2026,63 @@ static void appendSettingsTabHtml(String& html, const DeviceConfig& cfg,
   if (CrashLog::hasCoreDump()) {
     const String summary = CrashLog::coreDumpSummaryLine();
     html += R"html(
-                <div class="settings-note"><strong>)html";
+<div class="settings-note"><strong>)html";
     html += tr.coredump_stored;
     html += R"html(:</strong></div>)html";
     if (summary.length()) {
       html += R"html(
-                <div class="settings-note ota-version-value">)html";
+<div class="settings-note ota-version-value">)html";
       html += summary;
       html += R"html(</div>)html";
     }
     html += R"html(
-                <div class="settings-actions" id="coredump_actions">
-                  <button class="btn btn-secondary" type="button" onclick="window.location.href='/api/coredump'">)html";
+<div class="settings-actions" id="coredump_actions">
+<button class="btn btn-secondary" type="button" onclick="window.location.href='/api/coredump'">)html";
     html += tr.coredump_download;
     html += R"html(</button>
-                  <button class="btn btn-secondary" type="button" onclick="eraseCoreDump()">)html";
+<button class="btn btn-secondary" type="button" onclick="eraseCoreDump()">)html";
     html += tr.coredump_delete;
     html += R"html(</button>
-                </div>
-                <div class="settings-note">)html";
+</div>
+<div class="settings-note">)html";
     html += tr.coredump_decode_note;
     html += R"html(</div>)html";
   }
 
   html += R"html(
-              </div>
-            </div>
-          </div>
-          </section>
-        </div>
-        </div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
 
-        <form id="admin_restart_form" action="/restart" method="POST" class="admin-hidden-form" data-confirm=")html";
+<form id="admin_restart_form" action="/restart" method="POST" class="admin-hidden-form" data-confirm=")html";
   appendHtmlEscaped(html, tr.restart_confirm);
   html += R"html(" onsubmit="return confirm(this.dataset.confirm);"></form>
-        <!-- One footer under the list and the page, across the full width; its
-             buttons follow the chosen page. Pages that act at once have none. -->
-        <div class="admin-footer-actions settings-foot" id="settingsFoot">
-          <div class="settings-foot-set" data-settings-foot="network"><button class="btn btn-go admin-footer-btn" type="submit" form="admin_settings_form">)html";
+<!-- One footer under the list and the page, across the full width; its
+buttons follow the chosen page. Pages that act at once have none. -->
+<div class="admin-footer-actions settings-foot" id="settingsFoot">
+<div class="settings-foot-set" data-settings-foot="network"><button class="btn btn-go admin-footer-btn" type="submit" form="admin_settings_form">)html";
   html += tr.save;
   html += R"html(</button></div>
-          <div class="settings-foot-set" data-settings-foot="locale"><button class="btn btn-go admin-footer-btn" type="submit" form="admin_settings_form">)html";
+<div class="settings-foot-set" data-settings-foot="locale"><button class="btn btn-go admin-footer-btn" type="submit" form="admin_settings_form">)html";
   html += tr.save;
   html += R"html(</button></div>
-          <div class="settings-foot-set" data-settings-foot="system"><button class="btn btn-secondary admin-footer-btn" type="submit" form="admin_restart_form">)html";
+<div class="settings-foot-set" data-settings-foot="system"><button class="btn btn-secondary admin-footer-btn" type="submit" form="admin_restart_form">)html";
   html += tr.restart_button;
   html += R"html(</button></div>
-          <div class="settings-foot-set" data-settings-foot="io">
-            <div id="hardwareIoSaveState" class="hardware-io-save-state"></div>
-            <button id="hardwareIoSave" class="btn btn-go admin-footer-btn" type="button">)html";
+<div class="settings-foot-set" data-settings-foot="io">
+<div id="hardwareIoSaveState" class="hardware-io-save-state"></div>
+<button id="hardwareIoSave" class="btn btn-go admin-footer-btn" type="button">)html";
   html += tr.save;
   html += R"html(</button>
-            <button id="hardwareIoRestart" class="btn btn-secondary admin-footer-btn" type="button">)html";
+<button id="hardwareIoRestart" class="btn btn-secondary admin-footer-btn" type="button">)html";
   html += tr.restart_button;
   html += R"html(</button>
-          </div>
-        </div>
-      </div>
+</div>
+</div>
+</div>
 )html";
 }
 
@@ -2147,9 +2147,9 @@ String WebAdminServer::getAdminPage() {
   if (!configManager.getConfig().icon_discs) html += "\" class=\"icon-discs-off";
   html += R"html(">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>)html";
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>)html";
   html += admin_panel_title;
   html += R"html(</title>
 )html";
@@ -2161,49 +2161,49 @@ String WebAdminServer::getAdminPage() {
   html += R"html(
 </head>
 <body>
-  <div class="wrapper)html";
+<div class="wrapper)html";
   // Four-column devices keep their preview size on the wide page; the
   // Settings slot moves beside it (admin.css .compact-grid).
   if (GRID_COLS <= 4) html += " compact-grid";
   html += R"html(">
-    <div class="card">
-      <div class="brand">
-        <svg width="44" height="44" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <rect x="4" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
-          <rect x="27" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
-          <rect x="4" y="27" width="17" height="17" rx="4" fill="#ffffff"/>
-          <path d="M33 26h5v6.5h6.5v5H38V44h-5v-6.5h-6.5v-5H33z" fill="#26a69a"/>
-        </svg>
-        <div>
-          <h1>)html";
+<div class="card">
+<div class="brand">
+<svg width="44" height="44" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<rect x="4" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
+<rect x="27" y="4" width="17" height="17" rx="4" fill="#ffffff"/>
+<rect x="4" y="27" width="17" height="17" rx="4" fill="#ffffff"/>
+<path d="M33 26h5v6.5h6.5v5H38V44h-5v-6.5h-6.5v-5H33z" fill="#26a69a"/>
+</svg>
+<div>
+<h1>)html";
   html += admin_heading_title;
   html += R"html(</h1>
-          <div class="device">)html";
+<div class="device">)html";
   html += admin_heading_subtitle;
   html += R"html(</div>
-        </div>
-        <div class="brand-side">
-        <div class="brand-links">)html";
+</div>
+<div class="brand-side">
+<div class="brand-links">)html";
   appendWebAdminPasswordBadgeHtml(html, tr);
   html += R"html(
-          <a class="brand-link" href="https://galusperes.github.io/HomeTiles/" target="_blank" rel="noopener"><i class="mdi mdi-book-open-variant"></i>Docs</a>
-          <a class="brand-link" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-github"></i>GitHub</a>
-        </div>)html";
+<a class="brand-link" href="https://galusperes.github.io/HomeTiles/" target="_blank" rel="noopener"><i class="mdi mdi-book-open-variant"></i>Docs</a>
+<a class="brand-link" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-github"></i>GitHub</a>
+</div>)html";
   // Small support line: a GitHub star (GitHub has no direct star URL, the
   // repository page has the button) or a coffee.
   html += R"html(
-        <div class="brand-support">)html";
+<div class="brand-support">)html";
   appendHtmlEscaped(html, String(tr.web_support_prefix));
   html += R"html( <a class="brand-star" href="https://github.com/GalusPeres/HomeTiles" target="_blank" rel="noopener"><i class="mdi mdi-star"></i>)html";
   appendHtmlEscaped(html, String(tr.web_support_stars));
   html += R"html(</a> )html";
   appendHtmlEscaped(html, String(tr.web_support_or));
   html += R"html( <a class="brand-coffee" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener"><i class="mdi mdi-coffee"></i>Buy Me a Coffee</a></div>
-        </div>
-      </div>
+</div>
+</div>
 
-      <!-- Tab Navigation -->
-      <div class="tab-nav">
+<!-- Tab Navigation -->
+<div class="tab-nav">
 )html";
 
   // Home stands alone on the left. A divider separates it from the folders,
@@ -2215,8 +2215,8 @@ String WebAdminServer::getAdminPage() {
     if (entry.id == 0) html += buildFolderTabButtonHtml(entry);
   }
   html += R"html(
-        <span class="tab-sep" aria-hidden="true"></span>
-        <div class="tab-folders" id="folderTabs" role="group" aria-label=")html";
+<span class="tab-sep" aria-hidden="true"></span>
+<div class="tab-folders" id="folderTabs" role="group" aria-label=")html";
   appendHtmlEscaped(html, String(tr.admin_folders));
   html += R"html(">)html";
   auto append_children = [&](auto&& self, uint16_t parent, int depth) -> void {
@@ -2235,22 +2235,22 @@ String WebAdminServer::getAdminPage() {
     }
   }
   html += R"html(</div>
-        <span class="tab-sep" aria-hidden="true"></span>
-        <div class="tab-system">
-        <button class="tab-btn" type="button" data-tab-target="tab-tiles-screensaver"
-                onclick="switchTab('tab-tiles-screensaver')">
-          <span class="tab-disc"><i class="mdi mdi-monitor"></i></span>
-          <span class="tab-label">Screensaver</span>
-        </button>
-        <button class="tab-btn" type="button" data-tab-target="tab-network"
-                onclick="switchTab('tab-network')">
-          <span class="tab-disc"><i class="mdi mdi-cog"></i></span>
-          <span class="tab-label">)html";
+<span class="tab-sep" aria-hidden="true"></span>
+<div class="tab-system">
+<button class="tab-btn" type="button" data-tab-target="tab-tiles-screensaver"
+onclick="switchTab('tab-tiles-screensaver')">
+<span class="tab-disc"><i class="mdi mdi-monitor"></i></span>
+<span class="tab-label">Screensaver</span>
+</button>
+<button class="tab-btn" type="button" data-tab-target="tab-network"
+onclick="switchTab('tab-network')">
+<span class="tab-disc"><i class="mdi mdi-cog"></i></span>
+<span class="tab-label">)html";
   html += tr.tile_type_settings;
   html += R"html(</span>
-        </button>
-        </div>
-      </div>
+</button>
+</div>
+</div>
 )html";
 
   // Only Home is part of the initial page. Other folder editors are generated
@@ -2276,11 +2276,11 @@ String WebAdminServer::getAdminPage() {
 
   appendSettingsTabHtml(html, cfg, tr, supports_ethernet, use_static);
   html += R"html(
-    </div>
-  </div>
+</div>
+</div>
 
-  <!-- Notification Toast -->
-  <div id="notification" class="notification" role="status" aria-live="polite"></div>
+<!-- Notification Toast -->
+<div id="notification" class="notification" role="status" aria-live="polite"></div>
 </body>
 </html>
 )html";
@@ -2294,30 +2294,30 @@ String WebAdminServer::getSuccessPage() {
   html += tr.html_lang;
   html += R"html(">
 <head>
-  <meta charset="utf-8">
-  <title>)html";
+<meta charset="utf-8">
+<title>)html";
   html += tr.save;
   html += R"html(</title>
 )html";
   appendWebFontFaceStyles(html);
   html += R"html(
-  <style>
-    body { font-family:'HomeTiles Inter', sans-serif; background:#0a0a0a; height:100vh; margin:0; display:flex; align-items:center; justify-content:center; }
-    .box { background:#1c1c1c; border:1px solid #2a2a2a; padding:32px; border-radius:22px; box-shadow:0 20px 60px rgba(0,0,0,.5); text-align:center; }
-    h1 { margin:0 0 10px; color:#ffffff; font-size:22px; }
-    p { margin:0; color:#8a8a8a; }
-  </style>
-  <script>setTimeout(function(){window.location.href='/'},1500);</script>
+<style>
+body { font-family:'HomeTiles Inter', sans-serif; background:#0a0a0a; height:100vh; margin:0; display:flex; align-items:center; justify-content:center; }
+.box { background:#1c1c1c; border:1px solid #2a2a2a; padding:32px; border-radius:22px; box-shadow:0 20px 60px rgba(0,0,0,.5); text-align:center; }
+h1 { margin:0 0 10px; color:#ffffff; font-size:22px; }
+p { margin:0; color:#8a8a8a; }
+</style>
+<script>setTimeout(function(){window.location.href='/'},1500);</script>
 </head>
 <body>
-  <div class="box">
-    <h1>)html";
+<div class="box">
+<h1>)html";
   html += tr.mqtt_saved_title;
   html += R"html(</h1>
-    <p>)html";
+<p>)html";
   html += tr.mqtt_saved_message;
   html += R"html(</p>
-  </div>
+</div>
 </body>
 </html>)html";
   return html;
@@ -2329,30 +2329,30 @@ String WebAdminServer::getBridgeSuccessPage() {
   html += tr.html_lang;
   html += R"html(">
 <head>
-  <meta charset="utf-8">
-  <title>)html";
+<meta charset="utf-8">
+<title>)html";
   html += tr.bridge_saved_title;
   html += R"html(</title>
 )html";
   appendWebFontFaceStyles(html);
   html += R"html(
-  <style>
-    body { font-family:'HomeTiles Inter', sans-serif; background:#0a0a0a; height:100vh; margin:0; display:flex; align-items:center; justify-content:center; }
-    .box { background:#1c1c1c; border:1px solid #2a2a2a; padding:32px; border-radius:22px; box-shadow:0 20px 60px rgba(0,0,0,.5); text-align:center; }
-    h1 { margin:0 0 10px; color:#ffffff; font-size:22px; }
-    p { margin:0; color:#8a8a8a; }
-  </style>
-  <script>setTimeout(function(){window.location.href='/'},1500);</script>
+<style>
+body { font-family:'HomeTiles Inter', sans-serif; background:#0a0a0a; height:100vh; margin:0; display:flex; align-items:center; justify-content:center; }
+.box { background:#1c1c1c; border:1px solid #2a2a2a; padding:32px; border-radius:22px; box-shadow:0 20px 60px rgba(0,0,0,.5); text-align:center; }
+h1 { margin:0 0 10px; color:#ffffff; font-size:22px; }
+p { margin:0; color:#8a8a8a; }
+</style>
+<script>setTimeout(function(){window.location.href='/'},1500);</script>
 </head>
 <body>
-  <div class="box">
-    <h1>)html";
+<div class="box">
+<h1>)html";
   html += tr.bridge_saved_title;
   html += R"html(</h1>
-    <p>)html";
+<p>)html";
   html += tr.bridge_saved_message;
   html += R"html(</p>
-  </div>
+</div>
 </body>
 </html>)html";
   return html;

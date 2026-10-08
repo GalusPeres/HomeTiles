@@ -78,6 +78,25 @@ const ov02c10_reginfo_t kWindow1280x720[] = {
     {OV02C10_REG_END, 0x00},
 };
 
+// The turned 400x720 window on the 1280x720 window's centre: x 451 (448
+// mirrored, the same phases as 11/8), y unchanged. 0x3810 holds the x
+// offset's high bit (the table writes 0).
+constexpr uint16_t kTurnedWindowX = kWindowX + (kFrameWidth - kTurnedFrameWidth) / 2;          // 451
+constexpr uint16_t kTurnedWindowXMirrored = kWindowXMirrored + (kFrameWidth - kTurnedFrameWidth) / 2;  // 448
+constexpr uint16_t kRegIspXWinHigh = 0x3810;
+static_assert(kTurnedWindowX >> 8 == kTurnedWindowXMirrored >> 8, "only the low byte follows the mirror");
+static_assert((kTurnedWindowX & 1) == (kWindowX & 1) && (kTurnedWindowXMirrored & 1) == (kWindowXMirrored & 1),
+              "the turned window keeps the Bayer phases");
+static_assert(kTurnedWindowX + kTurnedFrameWidth <= kArrayWindowWidth, "turned x window");
+const ov02c10_reginfo_t kTurnedWindow400x720[] = {
+    {0x3808, 0x01}, {0x3809, 0x90},  // x_output_size 400
+    {0x380a, 0x02}, {0x380b, 0xd0},  // y_output_size 720
+    {kRegIspXWinHigh, static_cast<uint8_t>(kTurnedWindowX >> 8)},
+    {kRegIspXWinLow, static_cast<uint8_t>(kTurnedWindowX & 0xff)},
+    {kRegIspYWinLow, kWindowY},
+    {OV02C10_REG_END, 0x00},
+};
+
 }  // namespace
 
 esp_err_t Sensor::attach(i2c_master_bus_handle_t bus) {
@@ -160,13 +179,14 @@ static esp_err_t write_table(Sensor* sensor, const ov02c10_reginfo_t* table,
   return err;
 }
 
-esp_err_t Sensor::loadDefaultMode(bool mirror) {
+esp_err_t Sensor::loadDefaultMode(bool mirror, bool turned) {
   esp_err_t err = write_table(this, ov02c10_mipi_reset_regs, &Sensor::write);
   if (err != ESP_OK) return err;
   err = write_table(this, ov02c10_input_24M_MIPI_1lane_raw10_1288x728_30fps,
                     &Sensor::write);
   if (err != ESP_OK) return err;
-  err = write_table(this, kWindow1280x720, &Sensor::write);
+  turned_ = turned;
+  err = write_table(this, turned ? kTurnedWindow400x720 : kWindow1280x720, &Sensor::write);
   if (err != ESP_OK) return err;
   digital_gain_reg_ = kTableDigitalGainReg;
   err = setStream(false);
@@ -209,7 +229,8 @@ esp_err_t Sensor::setMirror(bool enable) {
 }
 
 esp_err_t Sensor::setOrientation(bool mirror, bool flip) {
-  const uint8_t x = mirror ? kWindowXMirrored : kWindowX;
+  const uint8_t x = turned_ ? static_cast<uint8_t>((mirror ? kTurnedWindowXMirrored : kTurnedWindowX) & 0xff)
+                            : (mirror ? kWindowXMirrored : kWindowX);
   const uint8_t y = flip ? kWindowYFlipped : kWindowY;
   uint8_t format1 = 0;
   esp_err_t err = read(kRegFormat1, &format1);

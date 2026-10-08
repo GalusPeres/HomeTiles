@@ -103,7 +103,7 @@ assert.match(up('ensureSlots'), /heap_caps_malloc\(kSlotBytes, MALLOC_CAP_SPIRAM
 assert.match(upload, /constexpr uint32_t kSlotBytes = kMaxFrameBytes;/);
 assert.match(contract, /constexpr uint32_t kMaxFrameBytes = local_camera_contract::kPanelMaxJpegBytes;/);
 // No scale buffer: the stream encodes the CSI frame, so only the full image works.
-assert.match(svc('applyStreamSettings'), /if \(settings\.width != kImageWidth \|\| settings\.height != kImageHeight\) return false;/);
+assert.match(svc('applyStreamSettings'), /if \(settings\.width != imageWidthSent\(\) \|\| settings\.height != imageHeightSent\(\)\) return false;/);
 assert.doesNotMatch(service, /freeStreamScale|run\.scale/, 'No stream scale buffer remains');
 // Stop order: sender, then sensor/CSI, then buffers.
 const run = svc('runStream');
@@ -131,16 +131,21 @@ assert.doesNotMatch(captureFrame, /downscale2x2Rgb565|compactCenterCrop|std::rev
 assert.doesNotMatch(service, /ppa_do_scale_rotate_mirror|turnFrame|g_pipe\.turned/, 'No PPA turn on the panel');
 assert.match(service, /static_assert\(kMode\.frame_width == kMode\.image_width &&\s*kMode\.frame_height == kMode\.image_height,/);
 // Quarter turn: 4:2:0 so the Bridge's lossless turn keeps a common format.
-assert.match(service, /constexpr jpeg_down_sampling_type_t kJpegSubsampling =\s*kQuarterTurn \? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;/);
-assert.equal((service.match(/config\.sub_sample = kJpegSubsampling;/g) || []).length, 2, 'Snapshot and stream');
+// 4:2:0 whenever the Bridge turns (the mounting or the upright layout).
+assert.match(service, /return statusRotate\(\) != 0 \? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;/);
+assert.equal((service.match(/config\.sub_sample = jpegSubsampling\(\);/g) || []).length, 2, 'Snapshot and stream');
+// The sensor window of this boot: the turned one with an upright layout.
+assert.match(service, /bool windowTurned\(\) \{ return grid_layout::turned\(\); \}/);
+assert.match(service, /uint32_t frameWidth\(\) \{ return windowTurned\(\) \? board::Sensor::kTurnedWidth : kMode\.frame_width; \}/);
+assert.match(service, /err = g_sensor\.loadDefaultMode\(kMode\.mirror, windowTurned\(\)\);/);
 assert.doesNotMatch(service, /config\.sub_sample = JPEG_DOWN_SAMPLING/);
 // The announced turn follows the mounting and the user rotation at runtime
 // (tools/tests/web/test-local-camera-rotation.mjs covers the combinations).
 assert.match(svc('statusRotate'), /statusRotateDegrees\(imageTurn\(false, local_camera_board::kMode\.quarter_turn,\s*static_cast<uint8_t>\(g_rotation\.load\(\) \+ displayQuarterTurns\(\)\)\)\)/);
 assert.match(svc('currentStatusFields'), /fields\.rotate = statusRotate\(\);/);
 // ISP statistics run on the frame as delivered.
-assert.match(svc('createAutoExposure'), /config\.window\.btm_right\.x = kStatsLeft \+ kStatsWidth;/);
-assert.match(service, /constexpr uint32_t kStatsWidth = kMode\.frame_width \/ 5 \* 5;/);
+assert.match(svc('createAutoExposure'), /config\.window\.btm_right\.x = statsLeft\(\) \+ statsWidth\(\);/);
+assert.match(service, /uint32_t statsWidth\(\) \{ return frameWidth\(\) \/ 5 \* 5; \}/);
 // No frames (b28 on the 8-inch: after a quick stop/start every retry saw no
 // frame until the 30 s idle release): the run ends and the whole camera path
 // is rebuilt, the snapshot path likewise.

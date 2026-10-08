@@ -40,6 +40,11 @@ constexpr uint8_t kStartX = 0x04;
 constexpr uint8_t kStartY = 0x04;
 static_assert(kStartX + kFrameWidth <= 1288, "x window");
 static_assert(kStartY + kFrameHeight <= 728, "y window");
+// The turned 400x720 window on the 1280x720 window's centre: start x 444
+// (even like 4; the sensor keeps BGGR itself), width 400 (0x3208/0x3209).
+constexpr uint16_t kTurnedStartX = kStartX + (kFrameWidth - kTurnedFrameWidth) / 2;  // 444
+static_assert(kTurnedStartX % 2 == 0, "the start keeps the table's phase");
+static_assert(kTurnedStartX + kTurnedFrameWidth <= 1288, "turned x window");
 
 // HomeTiles overrides, not vendor data (PROVENANCE.md): the table leaves VTS
 // at its reset value 1250; it is written explicitly because longer exposures
@@ -113,11 +118,20 @@ static esp_err_t write_table(Sensor* sensor, const sc202cs_reginfo_t* table,
   return err;
 }
 
-esp_err_t Sensor::loadDefaultMode(bool mirror) {
+esp_err_t Sensor::loadDefaultMode(bool mirror, bool turned) {
   esp_err_t err = write_table(this, sc202cs_mipi_1lane_24Minput_1280x720_raw8_30fps, &Sensor::write);
   if (err != ESP_OK) return err;
   err = write_table(this, kOverrides, &Sensor::write);
   if (err != ESP_OK) return err;
+  turned_ = turned;
+  if (turned) {
+    // The output width and the start's high byte; setOrientation() writes
+    // the start's low byte.
+    err = write(SC202CS_REG_OUT_WIDTH_H, static_cast<uint8_t>(kTurnedFrameWidth >> 8));
+    if (err == ESP_OK) err = write(SC202CS_REG_OUT_WIDTH_L, static_cast<uint8_t>(kTurnedFrameWidth & 0xff));
+    if (err == ESP_OK) err = write(SC202CS_REG_OUT_START_PIXEL_H, static_cast<uint8_t>(kTurnedStartX >> 8));
+    if (err != ESP_OK) return err;
+  }
   err = setStream(false);
   if (err != ESP_OK) return err;
   // Orientation state 0 is the board mirror; the table reads out unmirrored.
@@ -137,7 +151,7 @@ esp_err_t Sensor::setOrientation(bool mirror, bool flip) {
   const uint8_t wanted = static_cast<uint8_t>((value & ~(kMirrorBits | kFlipBits)) |
                                               (mirrored ? kMirrorBits : 0) |
                                               (flip ? kFlipBits : 0));
-  const uint8_t x = kStartX;
+  const uint8_t x = turned_ ? static_cast<uint8_t>(kTurnedStartX & 0xff) : kStartX;
   const uint8_t y = kStartY;
   err = write(SC202CS_REG_OUT_START_PIXEL_L, x);
   if (err == ESP_OK) err = write(SC202CS_REG_OUT_START_LINE_L, y);

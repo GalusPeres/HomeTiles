@@ -112,7 +112,11 @@ assert.match(boardHeader, /true,\s*\/\/ Mirrored like the M5Stack demo[^\n]*\n\s
 // The SC202CS keeps BGGR under mirror/flip itself (upstream writes 0x3221
 // only); a one-pixel window move per flip turned the image green/magenta.
 assert.doesNotMatch(sensorCpp, /kStartXMirrored|kStartYFlipped/);
-assert.match(sensorCpp, /const uint8_t x = kStartX;\s*const uint8_t y = kStartY;/);
+assert.match(sensorCpp, /const uint8_t x = turned_ \? static_cast<uint8_t>\(kTurnedStartX & 0xff\) : kStartX;\s*const uint8_t y = kStartY;/);
+// Upright layout (the 8-inch way, user 2026-10-08): a centred 400x720 window,
+// start x 444 (even like 4), width and the start's high byte written.
+assert.match(sensorCpp, /constexpr uint16_t kTurnedStartX = kStartX \+ \(kFrameWidth - kTurnedFrameWidth\) \/ 2;  \/\/ 444/);
+assert.match(sensorCpp, /err = write\(SC202CS_REG_OUT_WIDTH_H, static_cast<uint8_t>\(kTurnedFrameWidth >> 8\)\);/);
 assert.match(sensorCpp, /constexpr uint8_t kStartX = 0x04;\s*constexpr uint8_t kStartY = 0x04;/);
 assert.match(boardHeader, /false,\s*\/\/ The mode sends no MIPI line-sync packets\./);
 assert.match(boardHeader, /sc202cs::kRawBits,\s*\};/);

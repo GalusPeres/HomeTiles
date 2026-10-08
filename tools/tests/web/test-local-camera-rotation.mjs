@@ -75,8 +75,8 @@ const statusJson = svc('appendStatusJson').body;
 assert.match(statusJson, /json \+= ",\\"rotation\\":";\s*json \+= String\(static_cast<unsigned>\(g_rotation\.load\(\)\)\);/);
 assert.match(statusJson, /json \+= ",\\"rb_swap\\":";\s*json \+= g_rb_swap\.load\(\) \? "true" : "false";/);
 // The picture size Home Assistant shows follows the Bridge turn.
-assert.match(svc('imageWidth').body, /statusRotate\(\) != 0 \? kImageHeight : kImageWidth/);
-assert.match(svc('imageHeight').body, /statusRotate\(\) != 0 \? kImageWidth : kImageHeight/);
+assert.match(svc('imageWidth').body, /statusRotate\(\) != 0 \? imageHeightSent\(\) : imageWidthSent\(\)/);
+assert.match(svc('imageHeight').body, /statusRotate\(\) != 0 \? imageWidthSent\(\) : imageHeightSent\(\)/);
 
 // --- Red/blue swap: Bayer counterpart when the pipeline is built ------------------
 const pipeline = svc('ensurePipeline').body;

@@ -74,6 +74,17 @@ static_assert(kOffsetXCentred + 1 + kFrameWidth <= kBinnedWidth, "x window");
 static_assert(kOffsetYFlipped + kFrameHeight <= kBinnedHeight, "y window");
 static_assert((kOffsetX & 1) != (kOffsetXMirrored & 1), "a mirror moves the x phase");
 static_assert((kOffsetY & 1) != (kOffsetYFlipped & 1), "a flip moves the y phase");
+// The turned 960x544 window, centred the same way: x 164 (165 mirrored),
+// y 210 (211 flipped), the same phases as the 544x960 window.
+constexpr uint16_t kTurnedOffsetXCentred = (kBinnedWidth - kTurnedFrameWidth) / 2;  // 164
+constexpr uint8_t kTurnedOffsetX = static_cast<uint8_t>(kTurnedOffsetXCentred);
+constexpr uint8_t kTurnedOffsetXMirrored = static_cast<uint8_t>(kTurnedOffsetXCentred + 1);
+constexpr uint8_t kTurnedOffsetY = static_cast<uint8_t>((kBinnedHeight - kTurnedFrameHeight) / 2 & ~1u);  // 210
+constexpr uint8_t kTurnedOffsetYFlipped = static_cast<uint8_t>(kTurnedOffsetY + 1);
+static_assert(kTurnedOffsetXCentred % 2 == 0 && kTurnedOffsetXCentred + 1 < 256, "x offset in the low byte");
+static_assert(kTurnedOffsetXCentred + 1 + kTurnedFrameWidth <= kBinnedWidth, "turned x window");
+static_assert(kTurnedOffsetYFlipped + kTurnedFrameHeight <= kBinnedHeight, "turned y window");
+static_assert(kTurnedOffsetY % 2 == 0, "the flip phase like the table's");
 
 // Manual white balance: sensor AWB off (0x3406 bit0), R/G/B gains 1x
 // (0x0400); the ISP pipeline balances the colours like on the OV02C10.
@@ -102,6 +113,17 @@ const ov5647_reginfo_t kWindow544x960[] = {
     {0x3400, 0x04}, {0x3401, 0x00},  // R gain 1x
     {0x3402, 0x04}, {0x3403, 0x00},  // G gain 1x
     {0x3404, 0x04}, {0x3405, 0x00},  // B gain 1x
+    {OV5647_REG_END, 0x00},
+};
+
+// The turned window: 960x544 output, its centred offsets (the high bytes 0).
+const ov5647_reginfo_t kTurnedWindow960x544[] = {
+    {0x3808, 0x03}, {0x3809, 0xc0},  // x output size 960
+    {0x380a, 0x02}, {0x380b, 0x20},  // y output size 544
+    {kRegIspXOffsetHigh, 0x00},
+    {kRegIspXOffset, kTurnedOffsetX},
+    {0x3812, 0x00},
+    {kRegIspYOffset, kTurnedOffsetY},
     {OV5647_REG_END, 0x00},
 };
 
@@ -187,13 +209,19 @@ static esp_err_t write_table(Sensor* sensor, const ov5647_reginfo_t* table,
   return err;
 }
 
-esp_err_t Sensor::loadDefaultMode(bool mirror) {
+esp_err_t Sensor::loadDefaultMode(bool mirror, bool turned) {
   esp_err_t err = write_table(this, ov5647_mipi_reset_regs, &Sensor::write);
   if (err != ESP_OK) return err;
   err = write_table(this, ov5647_mipi_2lane_24Minput_1280x960_raw10_45fps, &Sensor::write);
   if (err != ESP_OK) return err;
   err = write_table(this, kWindow544x960, &Sensor::write);
   if (err != ESP_OK) return err;
+  // The turned window over the portrait one (sizes and offsets only).
+  turned_ = turned;
+  if (turned) {
+    err = write_table(this, kTurnedWindow960x544, &Sensor::write);
+    if (err != ESP_OK) return err;
+  }
   err = setStream(false);
   if (err != ESP_OK) return err;
   // Orientation state 0 is the board mirror; the table itself reads out
@@ -222,8 +250,10 @@ esp_err_t Sensor::setOrientation(bool mirror, bool flip) {
   // offset follows the hardware mirror bit relative to the table readout,
   // which is mirrored with an even offset; the table is not flipped (offset 2).
   const bool mirrored = default_mirror_ != mirror;
-  const uint8_t x = mirrored ? kOffsetX : kOffsetXMirrored;
-  const uint8_t y = flip ? kOffsetYFlipped : kOffsetY;
+  const uint8_t x = turned_ ? (mirrored ? kTurnedOffsetX : kTurnedOffsetXMirrored)
+                            : (mirrored ? kOffsetX : kOffsetXMirrored);
+  const uint8_t y = turned_ ? (flip ? kTurnedOffsetYFlipped : kTurnedOffsetY)
+                            : (flip ? kOffsetYFlipped : kOffsetY);
   uint8_t timing_h = 0;
   uint8_t timing_v = 0;
   esp_err_t err = read(kRegTimingH, &timing_h);

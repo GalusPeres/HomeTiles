@@ -21,8 +21,14 @@ const sensor = read(`${ov}/ov02c10_sensor.cpp`);
 // table's 1296x732 array window, offsets 11/8 (the former centred crop).
 assert.match(sensor, /\{0x3808, 0x05\}, \{0x3809, 0x00\},[\s\S]*?\{0x380a, 0x02\}, \{0x380b, 0xd0\},/);
 assert.match(sensor, /constexpr uint8_t kWindowX = 0x0b;\s*constexpr uint8_t kWindowXMirrored = 0x08;\s*constexpr uint8_t kWindowY = 0x08;\s*constexpr uint8_t kWindowYFlipped = 0x07;/);
-assert.match(sensor, /ov02c10_input_24M_MIPI_1lane_raw10_1288x728_30fps,[\s\S]*?write_table\(this, kWindow1280x720, &Sensor::write\);[\s\S]*?setStream\(false\);[\s\S]*?setMirror\(mirror\)/,
+assert.match(sensor, /ov02c10_input_24M_MIPI_1lane_raw10_1288x728_30fps,[\s\S]*?write_table\(this, turned \? kTurnedWindow400x720 : kWindow1280x720, &Sensor::write\);[\s\S]*?setStream\(false\);[\s\S]*?setMirror\(mirror\)/,
   'The window override follows the vendored table, before standby and the demo mirror');
+// Upright layout (the 8-inch way, user 2026-10-08): a centred 400x720 window
+// the Bridge turns into 720x400, on the 1280x720 window's centre with the
+// same Bayer phases (x 451/448, high bit in 0x3810).
+assert.match(sensor, /\{0x3808, 0x01\}, \{0x3809, 0x90\},  \/\/ x_output_size 400/);
+assert.match(sensor, /\{kRegIspXWinHigh, static_cast<uint8_t>\(kTurnedWindowX >> 8\)\},/);
+assert.match(read(`${ov}/ov02c10_sensor.h`), /constexpr uint32_t kTurnedFrameWidth = 400;\s*constexpr uint32_t kTurnedFrameHeight = 720;/);
 // Orientation: only FORMAT1 bits 4/3 change; the window moves with the flips
 // and the registers are read back.
 assert.match(sensor, /constexpr uint16_t kRegFormat1 = 0x3820;\s*constexpr uint8_t kFormat1Flip = 0x10;\s*constexpr uint8_t kFormat1Mirror = 0x08;/);
@@ -197,7 +203,7 @@ const streamEncode = body('encodeStreamFrame');
 // the buffer is released after the encoder read it, and no PPA pass remains.
 const streamCapture = body('streamCaptureFrame');
 assert.match(streamCapture, /const uint8_t\* input = g_isr\.buffers\[frozen\];/);
-assert.match(streamCapture, /Dma2dArbiterGuard guard\(kStreamArbiterTimeoutMs\);\s*if \(!guard\.locked\(\)\) \{[\s\S]*?\+\+window\.arb;[\s\S]*?encodeStreamFrame\(input, kJpegInputBytes, kImageWidth, kImageHeight,[\s\S]*?\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;/,
+assert.match(streamCapture, /Dma2dArbiterGuard guard\(kStreamArbiterTimeoutMs\);\s*if \(!guard\.locked\(\)\) \{[\s\S]*?\+\+window\.arb;[\s\S]*?encodeStreamFrame\(input, jpegInputBytes\(\), imageWidthSent\(\), imageHeightSent\(\),[\s\S]*?\}\s*\/\/[^\n]*\n\s*g_isr\.frozen = -1;/,
   'The stream encode reads the frozen CSI buffer inside one short arbiter lease and releases it afterwards');
 assert.match(boardHeader, /false,\s*\/\/ Landscape sensor: the frame is the image, no PPA pass\./,
   'The V2 sensor is not a quarter-turn mounting');
@@ -208,8 +214,8 @@ assert.match(streamEncode, /jpeg_del_encoder_engine\(g_pipe\.jpeg\);[\s\S]*?\}\s
   'A failed stream encode drops the engine while the arbiter is still held');
 assert.match(capture, /JPEG_ENCODE_IN_FORMAT_RGB565/);
 // 4:2:2 on landscape boards like the V2; quarter-turn boards use 4:2:0.
-assert.match(capture, /config\.sub_sample = kJpegSubsampling;/);
-assert.match(service, /kQuarterTurn \? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;/);
+assert.match(capture, /config\.sub_sample = jpegSubsampling\(\);/);
+assert.match(service, /statusRotate\(\) != 0 \? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;/);
 // Pre-v3 silicon has no ISP crop block: the sensor window is the JPEG size,
 // so the snapshot encodes the frozen buffer without any CPU pixel pass.
 assert.doesNotMatch(capture, /compactCenterCrop|std::reverse|esp_cache_msync/,
@@ -226,7 +232,7 @@ assert.match(pipeline, /csi_config\.data_lane_num = kMode\.data_lanes;/);
 assert.match(pipeline, /ISP_INPUT_DATA_SOURCE_CSI/);
 // esp_cam_ctlr_start() rejects a frame buffer that is not cache-line aligned
 // (hardware log: 0x494eb050 from esp_cam_ctlr_alloc_buffer).
-assert.match(pipeline, /heap_caps_aligned_calloc\(kFrameBufferAlign, 1, kFrameBytes, MALLOC_CAP_SPIRAM\)/,
+assert.match(pipeline, /heap_caps_aligned_calloc\(kFrameBufferAlign, 1, frameBytes\(\), MALLOC_CAP_SPIRAM\)/,
   'Frame buffers belong in PSRAM, aligned to the cache line');
 assert.ok(!pipeline.includes('esp_cam_ctlr_alloc_buffer(g_pipe'), 'No unaligned driver allocation');
 assert.ok(pipeline.indexOf('esp_cam_new_csi_ctlr') < pipeline.indexOf('esp_isp_new_processor'),

@@ -99,7 +99,12 @@ assert.ok(sensorCpp.indexOf('write(kRegFrameLengthHigh') < sensorCpp.indexOf('wr
 }
 // Orientation: flip bits only, window offsets keep the Bayer phase, readback.
 assert.match(sensorCpp, /constexpr uint16_t kRegTimingV = 0x3820;\s*constexpr uint16_t kRegTimingH = 0x3821;/);
-assert.match(sensorCpp, /const uint8_t x = mirrored \? kOffsetX : kOffsetXMirrored;/);
+assert.match(sensorCpp, /\(mirrored \? kOffsetX : kOffsetXMirrored\);/);
+// Upright layout (user 2026-10-08): the sensor lies like a landscape camera,
+// a centred 960x544 window without the Bridge's turn, the same phases.
+assert.match(sensorCpp, /\{0x3808, 0x03\}, \{0x3809, 0xc0\},  \/\/ x output size 960/);
+assert.match(sensorCpp, /\(mirrored \? kTurnedOffsetX : kTurnedOffsetXMirrored\)/);
+assert.match(sensorCpp, /write_table\(this, kTurnedWindow960x544, &Sensor::write\);/);
 assert.match(sensorCpp, /return ESP_ERR_INVALID_RESPONSE;/);
 assert.match(sensorCpp, /if \(err == ESP_OK\) err = write\(kRegStreamMode, 0x01\);/);
 assert.match(sensorCpp, /esp_err_t first = write\(kRegStreamMode, 0x00\);/, 'Standby first on stop');

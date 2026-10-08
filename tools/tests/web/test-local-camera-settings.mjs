@@ -156,7 +156,7 @@ assert.match(readRepoFile('src/web/assets/admin.css'), /\.local-camera-custom\[h
   assert.match(service, /kPrefsCustomFpsKey\[\] = "lcam_cfps";/);
   assert.match(service, /kPrefsCustomQualityKey\[\] = "lcam_cq";/);
   assert.match(service, /json \+= ",\\"custom\\":\{\\"fps\\":";/);
-  assert.match(service, /kImageWidth, kImageHeight, &settings,\s*currentCustomMode\(\)\)/);
+  assert.match(service, /imageWidthSent\(\), imageHeightSent\(\), &settings,\s*currentCustomMode\(\)\)/);
 }
 {
   const service = readRepoFile('src/video/local_camera/local_camera.cpp');

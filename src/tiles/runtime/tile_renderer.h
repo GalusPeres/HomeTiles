@@ -128,6 +128,9 @@ void process_binary_sensor_update_queue(uint8_t max_updates = 0);
 void reset_weather_widget(GridType grid_type, uint8_t grid_index);
 void reset_weather_widgets(GridType grid_type);
 void tile_renderer_invalidate_weather_payload(GridType grid_type);
+// The Bridge stored a new picture of this player (bridge_images.h): tiles
+// whose song it belongs to show it, and an open Media popup with them.
+void tile_renderer_media_picture_arrived(const char* entity_id);
 void queue_weather_tile_update(GridType grid_type, uint8_t grid_index, const char* payload);
 void process_weather_update_queue(uint8_t max_updates = 0);  // 0 drains the queue
 

@@ -14,6 +14,9 @@ struct MediaCoverRef {
   uint32_t requested_url_hash = 0;
   uint32_t failed_url_hash = 0;
   uint32_t failed_at_ms = 0;
+  // The Bridge's picture of the current song (the state's "image_key",
+  // bridge_images.h); empty without one.
+  char image_key[17] = "";
 };
 
 struct MediaTileWidgets {

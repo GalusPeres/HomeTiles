@@ -6,6 +6,8 @@
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/json_scan.h"
 #include "src/network/bridge/ha_bridge_config.h"
+#include "src/network/bridge/bridge_images.h"
+#include "src/network/network_manager.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -4218,17 +4220,30 @@ static void update_media_cover(GridType grid_type,
   queue_media_cover_request(grid_type, grid_index, ref, url, hash);
 }
 
-static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const String& raw_data,
-                                         const String& source_url = String()) {
-  String encoded = raw_data;
-  encoded.trim();
-  if (!widgets.cover_image || !widgets.cover_ref || !encoded.length()) return false;
+// What a cover's pixels decode from: the Base64 text embedded in a media
+// state, or the bytes of the Bridge's picture (bridge_images.h).
+struct MediaCoverSource {
+  const String* base64 = nullptr;
+  const uint8_t* bytes = nullptr;
+  size_t length = 0;
+  const char* tag = "mqtt";      // MediaCoverRef::source_url
+  const char* label = "MQTT";    // in the log
+};
 
+static lv_image_dsc_t* decode_media_cover_source(const MediaCoverSource& source) {
+  return source.base64 ? make_media_cover_dsc_from_base64(*source.base64)
+                       : make_media_cover_dsc_from_bytes(source.bytes, source.length);
+}
+
+// Shows a cover's pixels (content hash `hash`) on a tile: unchanged pixels
+// stay, a sibling tile's pixels are copied, otherwise `source` is decoded.
+static bool show_media_cover_pixels(MediaTileWidgets& widgets, uint32_t hash,
+                                    uint32_t embedded_url_hash, const MediaCoverSource& source) {
+  if (!widgets.cover_image || !widgets.cover_ref) return false;
   MediaCoverRef* ref = widgets.cover_ref;
-  const uint32_t hash = fnv1a_hash(encoded.c_str());
   if (ref->url_hash == hash && ref->dsc) {
-    ref->source_url = "mqtt";
-    ref->embedded_url_hash = source_url.length() ? fnv1a_hash(source_url.c_str()) : 0;
+    ref->source_url = source.tag;
+    ref->embedded_url_hash = embedded_url_hash;
     ref->requested_url_hash = 0;
     ref->failed_url_hash = 0;
     ref->failed_at_ms = 0;
@@ -4262,9 +4277,9 @@ static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const Stri
   }
 
   if (!adopted_from_sibling) {
-    lv_image_dsc_t* decoded_dsc = make_media_cover_dsc_from_base64(encoded);
+    lv_image_dsc_t* decoded_dsc = decode_media_cover_source(source);
     if (!decoded_dsc) {
-      Serial.println("[MediaCover] MQTT cover could not be decoded");
+      Serial.printf("[MediaCover] %s cover could not be decoded\n", source.label);
       return false;
     }
 
@@ -4291,21 +4306,80 @@ static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const Stri
 
   ref->dsc = dsc;
   ref->popup_dsc = popup_dsc;
-  ref->source_url = "mqtt";
+  ref->source_url = source.tag;
   ref->url_hash = hash;
-  ref->embedded_url_hash = source_url.length() ? fnv1a_hash(source_url.c_str()) : 0;
+  ref->embedded_url_hash = embedded_url_hash;
   ref->requested_url_hash = 0;
   ref->failed_url_hash = 0;
   ref->failed_at_ms = 0;
   free_media_cover_dsc(old);
   free_media_cover_dsc(old_popup);
   if (adopted_from_sibling) {
-    Serial.println("[MediaCover] MQTT cover adopted from neighboring tile (no re-decode)");
+    Serial.printf("[MediaCover] %s cover adopted from neighboring tile (no re-decode)\n", source.label);
   } else {
-    Serial.printf("[MediaCover] MQTT cover loaded (tile scaling=%u ms)\n",
+    Serial.printf("[MediaCover] %s cover loaded (tile scaling=%u ms)\n", source.label,
                   static_cast<unsigned>(tile_scale_ms));
   }
   return true;
+}
+
+static bool update_media_cover_from_base64(MediaTileWidgets& widgets, const String& raw_data,
+                                         const String& source_url = String()) {
+  String encoded = raw_data;
+  encoded.trim();
+  if (!widgets.cover_image || !widgets.cover_ref || !encoded.length()) return false;
+  MediaCoverSource source;
+  source.base64 = &encoded;
+  return show_media_cover_pixels(widgets, fnv1a_hash(encoded.c_str()),
+                                 source_url.length() ? fnv1a_hash(source_url.c_str()) : 0, source);
+}
+
+// Panels on the direct link show the Bridge's picture of the player
+// (bridge_images.h), keyed by the state's "image_key": a picture is shown only
+// with its song; until the new song's picture arrives the tile keeps its
+// cover, as with every other replacement. An empty key clears the cover.
+static bool bridge_pictures_enabled() {
+  return networkManager.linkConfigured();
+}
+
+static void show_media_picture(MediaTileWidgets& widgets, const bridge_images::Picture& picture) {
+  MediaCoverSource source;
+  source.bytes = picture.jpeg;
+  source.length = picture.length;
+  source.tag = "image";
+  source.label = "Bridge picture";
+  show_media_cover_pixels(widgets, fnv1a_hash(picture.key), 0, source);
+}
+
+static void update_media_cover_from_picture(GridType grid_type, uint8_t grid_index,
+                                            MediaTileWidgets& widgets, const String& key) {
+  MediaCoverRef* ref = widgets.cover_ref;
+  if (!ref || !widgets.cover_image) return;
+  strlcpy(ref->image_key, key.c_str(), sizeof(ref->image_key));
+  if (!key.length()) {
+    update_media_cover(grid_type, grid_index, widgets, String());
+    return;
+  }
+  const bridge_images::Picture* picture =
+      bridge_images::find(media_entity_for_grid_index(grid_type, grid_index).c_str());
+  if (picture && strcmp(picture->key, ref->image_key) == 0) show_media_picture(widgets, *picture);
+}
+
+void tile_renderer_media_picture_arrived(const char* entity_id) {
+  const bridge_images::Picture* picture = bridge_images::find(entity_id);
+  if (!picture) return;
+  const GridType types[] = {GridType::TAB0, GridType::TAB1, GridType::TAB2, GridType::SCREENSAVER};
+  MediaTileWidgets* const grids[] = {g_tab0_media, g_tab1_media, g_tab2_media, g_screensaver_media};
+  for (size_t grid = 0; grid < 4; ++grid) {
+    if (!grids[grid]) continue;
+    for (uint8_t i = 0; i < TILES_PER_GRID; ++i) {
+      MediaTileWidgets& widgets = grids[grid][i];
+      if (!widgets.cover_ref || strcmp(widgets.cover_ref->image_key, picture->key) != 0) continue;
+      if (!media_entity_for_grid_index(types[grid], i).equalsIgnoreCase(entity_id)) continue;
+      show_media_picture(widgets, *picture);
+      update_media_popup_from_widgets(types[grid], i, widgets);
+    }
+  }
 }
 
 static void retry_failed_media_covers_for_grid(GridType grid_type, MediaTileWidgets* target) {
@@ -4498,7 +4572,11 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     lv_obj_add_flag(widgets.state_label, LV_OBJ_FLAG_HIDDEN);
   }
 
-  if (should_update_cover) {
+  String image_key;
+  if (should_update_cover && bridge_pictures_enabled() &&
+      media_artwork::read_string(payload_start, "image_key", image_key)) {
+    update_media_cover_from_picture(grid_type, grid_index, widgets, image_key);
+  } else if (should_update_cover) {
     String cover_url;
     String cover_data;
     if (!media_artwork::read_string(payload_start, "entity_picture", cover_url)) {

@@ -28,6 +28,7 @@
 #include "src/core/display/lvgl_tick_service.h"
 #include "src/io/hardware_io.h"
 #include "src/network/bridge/entity_search.h"
+#include "src/network/bridge/bridge_images.h"
 #include "src/web/server/web_admin.h"
 #include "src/video/local_camera/local_camera.h"
 #include <esp_heap_caps.h>
@@ -1461,6 +1462,10 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
           // normal state subscription as well for retained full payloads and
           // compatibility with older bridge versions.
           add_route(String(slot.entity), -1, "state_fast");
+          // Over the link the Bridge sends the cover as its own picture.
+          if (networkManager.linkConfigured()) {
+            add_route(String(slot.entity), -1, bridge_images::coverSuffix());
+          }
         }
       }
     }
@@ -1503,6 +1508,9 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
     if (tile.type == TILE_MEDIA) {
       has_media_tiles = true;
       add_route(tile.sensor_entity, -1, "state_fast");
+      if (networkManager.linkConfigured()) {
+        add_route(tile.sensor_entity, -1, bridge_images::coverSuffix());
+      }
     }
   }
 
@@ -1929,6 +1937,8 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
   // copies of stream-token topics, never reach the plain handlers below.
   if (command_channel::handleMqttMessage(topic, payload, length)) return;
   if (command_channel::blocksPlaintext(topic)) return;
+  // Pictures from the Bridge (link only) never reach the state handlers.
+  if (bridge_images::handleMqttMessage(topic, payload, length)) return;
 
   // Local relays use a small direct topic path, avoiding JSON parsing
   // while normal Bridge and camera messages retain the established router.

@@ -20,6 +20,10 @@
 //     fades out towards the stripe. A tap ends the running live stream and
 //     hides the pill; nothing is paused or stored, Home Assistant can open the
 //     camera again.
+// With the head bar layout (grid_layout::head_bar()) the pill would cover the
+// head and the first tile row: a red circle with the webcam icon takes its
+// place, exactly in the middle of the head (home_bar::create_camera_circle,
+// user 2026-10-08); a tap ends the stream the same way.
 // The stripe and fillets lie above the pill. The stripe lies above every
 // screen, popup and the screensaver. The pill belongs to the tile grids: it
 // hides on the Settings tab and while a popup, the PIN pad or the screensaver
@@ -45,6 +49,7 @@
 #include "src/ui/popups/popup_shell.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/tabs/tiles/home_bar.h"
 #include "src/ui/ui_manager.h"
 #include "src/video/local_camera/local_camera.h"
 
@@ -102,6 +107,7 @@ struct Objects {
   int radius = -1;
   int fillet = 0;
   bool border = false;
+  bool head = false;       // The head bar's circle instead of the pill.
   bool visible = false;    // Stripe shown.
   bool with_pill = false;  // Pill, fillets and border shown as well.
 };
@@ -207,6 +213,7 @@ inline void setFadeGradient(lv_obj_t* obj, lv_color_t color, lv_opa_t main_opa,
 // clip area, so it starts where the fillets end; its outline follows the
 // global tile border setting here.
 inline void updateShape(Objects& ui) {
+  if (ui.head) return;  // The circle has no fillets or border.
   const int radius = tileRadius();
   const int fillet = filletRadius();
   const bool border = bordersEnabled();
@@ -250,6 +257,21 @@ inline void create(Objects& ui) {
   ui.pill_width = pill_width;
   ui.pill_height = pill_height;
   ui.wing_width = wing_width;
+
+  if (grid_layout::head_bar()) {
+    // The circle in the middle of the head, under the same stripe.
+    ui.head = true;
+    ui.pill = home_bar::create_camera_circle(lv_layer_top(), kRed);
+    disable_pressed_button_animation(ui.pill);
+    lv_obj_add_flag(ui.pill, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_IGNORE_LAYOUT | LV_OBJ_FLAG_HIDDEN));
+    lv_obj_add_event_cb(ui.pill, onPillClicked, LV_EVENT_CLICKED, nullptr);
+    ui.bar = createStripePart(pill_x, pill_width);
+    ui.left = createStripePart(pill_x - wing_width, wing_width);
+    setFadeGradient(ui.left, lv_color_hex(kRed), LV_OPA_TRANSP, LV_OPA_COVER, 0, kFadeStop);
+    ui.right = createStripePart(pill_x + pill_width, wing_width);
+    setFadeGradient(ui.right, lv_color_hex(kRed), LV_OPA_COVER, LV_OPA_TRANSP, 255 - kFadeStop, 255);
+    return;
+  }
 
   // Pill first: the stripe parts created after it lie above its shadow.
   ui.pill = lv_button_create(lv_layer_top());
@@ -332,6 +354,7 @@ inline void create(Objects& ui) {
 }
 
 inline void setShown(lv_obj_t* obj, bool shown) {
+  if (!obj) return;  // The circle has no fillets or border.
   if (shown) {
     lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
   } else {
@@ -345,7 +368,7 @@ inline void setVisible(Objects& ui, bool visible, bool with_pill) {
   if (visible == ui.visible && with_pill == ui.with_pill) return;
   ui.visible = visible;
   ui.with_pill = with_pill;
-  if (with_pill) {
+  if (with_pill && !ui.head) {
     // The language may have changed since the last capture.
     const auto& strings = i18n::strings(configManager.getConfig().language);
     lv_label_set_text(ui.title, strings.local_camera_indicator_active);
@@ -370,17 +393,22 @@ inline bool pillAllowed() {
 // Popups and the screensaver are added to the same layer later: keep the pill
 // and, above it, the stripe and fillets on top.
 inline void keepOnTop(Objects& ui) {
-  lv_obj_t* const order[] = {ui.pill, ui.frame_clip, ui.bar, ui.left, ui.right,
-                             ui.fillet_left, ui.fillet_right};
-  constexpr uint32_t kCount = sizeof(order) / sizeof(order[0]);
+  lv_obj_t* parts[] = {ui.pill, ui.frame_clip, ui.bar, ui.left, ui.right,
+                       ui.fillet_left, ui.fillet_right};
+  // The circle has no fillets or border: only the parts that exist.
+  lv_obj_t* order[sizeof(parts) / sizeof(parts[0])] = {};
+  uint32_t count = 0;
+  for (lv_obj_t* part : parts) {
+    if (part) order[count++] = part;
+  }
   lv_obj_t* layer = lv_layer_top();
   const uint32_t children = lv_obj_get_child_count(layer);
-  bool on_top = children >= kCount;
-  for (uint32_t i = 0; on_top && i < kCount; ++i) {
-    on_top = lv_obj_get_child(layer, static_cast<int32_t>(children - kCount + i)) == order[i];
+  bool on_top = children >= count;
+  for (uint32_t i = 0; on_top && i < count; ++i) {
+    on_top = lv_obj_get_child(layer, static_cast<int32_t>(children - count + i)) == order[i];
   }
   if (on_top) return;
-  for (lv_obj_t* part : order) lv_obj_move_foreground(part);
+  for (uint32_t i = 0; i < count; ++i) lv_obj_move_foreground(order[i]);
 }
 
 inline void refresh(Objects& ui) {
@@ -431,7 +459,7 @@ inline void invalidateVisible() {
   for (lv_obj_t* part : {ui.bar, ui.left, ui.right}) lv_obj_invalidate(part);
   if (!ui.with_pill) return;
   for (lv_obj_t* part : {ui.pill, ui.frame_clip, ui.fillet_left, ui.fillet_right}) {
-    lv_obj_invalidate(part);
+    if (part) lv_obj_invalidate(part);
   }
 }
 

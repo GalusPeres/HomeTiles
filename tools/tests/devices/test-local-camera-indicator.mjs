@@ -165,9 +165,30 @@ assert.doesNotMatch(indicator, /setPaused\(|setEnabled\(/);
 
 // Stacking: pill below the stripe (its shadow never darkens the stripe), all
 // of them above later popups and the screensaver.
-assert.match(indicator, /lv_obj_t\* const order\[\] = \{ui\.pill, ui\.frame_clip, ui\.bar, ui\.left, ui\.right,\s*ui\.fillet_left, ui\.fillet_right\};/);
-assert.ok(indicator.indexOf('ui.pill = lv_button_create') < indicator.indexOf('ui.bar = createStripePart'),
+assert.match(indicator, /lv_obj_t\* parts\[\] = \{ui\.pill, ui\.frame_clip, ui\.bar, ui\.left, ui\.right,\s*ui\.fillet_left, ui\.fillet_right\};/);
+assert.match(indicator, /if \(part\) order\[count\+\+\] = part;/, 'Only the parts that exist (the circle has no fillets)');
+const pillBranch = indicator.slice(indicator.indexOf('  // Pill first:'));
+assert.ok(pillBranch.indexOf('ui.pill = lv_button_create') < pillBranch.indexOf('ui.bar = createStripePart'),
   'The stripe is created above the pill');
+
+// The head bar layout (user 2026-10-08): the pill would cover the head and
+// the first tile row; a red circle with the webcam icon exactly in the middle
+// of the head takes its place, under the same stripe, and a tap ends the
+// stream the same way.
+const headBranch = indicator.slice(indicator.indexOf('  if (grid_layout::head_bar()) {'), indicator.indexOf('  // Pill first:'));
+assert.match(headBranch, /ui\.head = true;\s*ui\.pill = home_bar::create_camera_circle\(lv_layer_top\(\), kRed\);/);
+assert.match(headBranch, /lv_obj_add_event_cb\(ui\.pill, onPillClicked, LV_EVENT_CLICKED, nullptr\);/);
+assert.ok(headBranch.indexOf('create_camera_circle') < headBranch.indexOf('ui.bar = createStripePart'), 'The stripe above the circle');
+assert.match(headBranch, /return;\s*\}\s*$/, 'No pill parts with the circle');
+assert.match(indicator, /if \(ui\.head\) return;  \/\/ The circle has no fillets or border\./);
+assert.match(indicator, /if \(with_pill && !ui\.head\) \{/, 'No pill texts on the circle');
+const bar = read('src/ui/tabs/tiles/home_bar.cpp');
+const circle = bar.slice(bar.indexOf('lv_obj_t* create_camera_circle('));
+assert.match(circle, /lv_obj_set_pos\(circle, \(grid_layout::screen_w\(\) - g\.disc\) \/ 2, g\.center_y - g\.disc \/ 2\);\s*lv_obj_set_size\(circle, g\.disc, g\.disc\);/,
+  'The page circle\'s size on the head\'s centre line, in the middle of the screen');
+assert.match(circle, /lv_label_set_text\(icon, getMdiChar\("webcam"\)\.c_str\(\)\);/);
+assert.match(circle, /lv_obj_set_style_text_color\(icon, lv_color_white\(\), 0\);\s*lv_obj_center\(icon\);/);
+assert.match(read('src/ui/tabs/tiles/home_bar.h'), /lv_obj_t\* create_camera_circle\(lv_obj_t\* parent, uint32_t color\);/);
 assert.match(indicator, /constexpr uint32_t kPollMs = 100;/);
 assert.match(indicator, /if \(started \|\| !local_camera::supported\(\)\) return;/,
   'Devices without a camera never create the timer');

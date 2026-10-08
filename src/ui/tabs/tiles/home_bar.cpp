@@ -284,4 +284,22 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   lv_obj_set_pos(title, g.title_x, g.center_y - lv_font_get_line_height(font) / 2);
 }
 
+lv_obj_t* create_camera_circle(lv_obj_t* parent, uint32_t color) {
+  const Geometry g = geometry();
+  lv_obj_t* circle = lv_button_create(parent);
+  lv_obj_remove_style_all(circle);
+  lv_obj_remove_flag(circle, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_pos(circle, (grid_layout::screen_w() - g.disc) / 2, g.center_y - g.disc / 2);
+  lv_obj_set_size(circle, g.disc, g.disc);
+  lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(circle, lv_color_hex(color), 0);
+  lv_obj_set_style_bg_opa(circle, LV_OPA_COVER, 0);
+  lv_obj_t* icon = lv_label_create(circle);
+  lv_label_set_text(icon, getMdiChar("webcam").c_str());
+  if (FONT_MDI_ICONS) lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
+  lv_obj_set_style_text_color(icon, lv_color_white(), 0);
+  lv_obj_center(icon);
+  return circle;
+}
+
 }  // namespace home_bar

@@ -89,7 +89,8 @@ const lv_font_t* title_font(const char* text, int width) {
 void on_gear(lv_event_t*) { uiManager.requestSettingsAccess(); }
 
 // A Settings PIN: the gear shows the lock like the Settings tile
-// (icon_lock_mark.h), its rim in the color behind the head.
+// (icon_lock_mark.h), its rim in the color behind the head; a pressed gear's
+// light fill mixed over it, like the tile's disc.
 void gear_lock_event_cb(lv_event_t* event) {
   lv_obj_t* icon = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
   if (lv_event_get_code(event) == LV_EVENT_REFR_EXT_DRAW_SIZE) {
@@ -97,13 +98,14 @@ void gear_lock_event_cb(lv_event_t* event) {
     return;
   }
   if (lv_event_get_code(event) != LV_EVENT_DRAW_POST) return;
+  lv_obj_t* button = lv_obj_get_parent(icon);
   lv_color_t under = lv_color_black();
-  for (lv_obj_t* obj = lv_obj_get_parent(icon); obj; obj = lv_obj_get_parent(obj)) {
+  for (lv_obj_t* obj = button ? lv_obj_get_parent(button) : nullptr; obj; obj = lv_obj_get_parent(obj)) {
     if (lv_obj_get_style_bg_opa(obj, LV_PART_MAIN) <= LV_OPA_MIN) continue;
     under = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
     break;
   }
-  icon_lock_mark::draw(lv_event_get_layer(event), icon, under);
+  icon_lock_mark::draw(lv_event_get_layer(event), icon, icon_lock_mark::behind(button, under));
 }
 
 void on_back(lv_event_t* event) {

@@ -18,9 +18,17 @@
 // caller takes the snapshot.
 namespace composite_over_image {
 
+// Optional timing for the caller's log: the picture's copy and LVGL's drawing
+// above it, measured with the caller's clock.
+struct Timing {
+  uint32_t (*now_ms)() = nullptr;
+  uint32_t copy_ms = 0;
+  uint32_t draw_ms = 0;
+};
+
 inline bool render(lv_display_t* display, lv_obj_t* top, lv_obj_t* image,
                    const lv_image_dsc_t* picture, lv_draw_buf_t* buf,
-                   const char** refused = nullptr) {
+                   const char** refused = nullptr, Timing* timing = nullptr) {
   auto refuse = [refused](const char* why) {
     if (refused) *refused = why;
     return false;
@@ -76,7 +84,10 @@ inline bool render(lv_display_t* display, lv_obj_t* top, lv_obj_t* image,
   lv_obj_t* start = lv_refr_get_top_obj(&frame, top);
   if (start != image && start != lv_obj_get_parent(image)) return refuse("start");
 
+  const bool timed = timing && timing->now_ms;
+  const uint32_t copy_started = timed ? timing->now_ms() : 0;
   memcpy(buf->data, picture->data, bytes);
+  const uint32_t draw_started = timed ? timing->now_ms() : 0;
 
   lv_layer_t layer;
   lv_layer_init(&layer);
@@ -118,6 +129,10 @@ inline bool render(lv_display_t* display, lv_obj_t* top, lv_obj_t* image,
   display->layer_head = layer_old;
   lv_refr_set_disp_refreshing(display_old);
   lv_draw_unit_send_event(nullptr, LV_EVENT_SCREEN_LOAD_START, &layer);
+  if (timed) {
+    timing->copy_ms = draw_started - copy_started;
+    timing->draw_ms = timing->now_ms() - draw_started;
+  }
   if (refused) *refused = nullptr;
   return true;
 }

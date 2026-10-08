@@ -82,7 +82,9 @@ class Presenter {
   void end();
 
  private:
-  bool begin();
+  // covers_panel: the frame about to be presented fills the whole panel, so
+  // the inactive framebuffer needs no copy of the active one first.
+  bool begin(bool covers_panel);
   bool syncUiToInactive();
   bool faultCooldownActive();
   void noteFault(const PpaRuntime& runtime);

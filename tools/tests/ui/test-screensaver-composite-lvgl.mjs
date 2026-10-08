@@ -106,8 +106,12 @@ int main() {
   lv_obj_set_style_radius(overlay, 0, 0);
   lv_snapshot_take_to_draw_buf(top, LV_COLOR_FORMAT_RGB565, a);
   memset(b->data, 0x5A, W * H * 2);
-  const bool used = composite_over_image::render(display, top, image, &picture, b, &why);
+  // A clock that advances 5 ms per reading: copy and drawing each take one step.
+  composite_over_image::Timing timing;
+  timing.now_ms = []() -> uint32_t { static uint32_t now = 0; return now += 5; };
+  const bool used = composite_over_image::render(display, top, image, &picture, b, &why, &timing);
   std::printf("used %d same %d %s\\n", used ? 1 : 0, used && same(a, b) ? 1 : 0, why ? why : "-");
+  std::printf("timing %u %u\\n", static_cast<unsigned>(timing.copy_ms), static_cast<unsigned>(timing.draw_ms));
 
   // Refused when LVGL would not copy the picture as it is.
   lv_obj_set_style_image_recolor_opa(image, 80, 0);
@@ -132,6 +136,7 @@ run = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, run.stdout + run.stderr);
 assert.match(run.stdout, /rounded 0 start/, `rounded overlay corners refuse the copy\n${run.stdout}`);
 assert.match(run.stdout, /used 1 same 1 -/, `the copied frame equals LVGL's snapshot\n${run.stdout}`);
+assert.match(run.stdout, /timing 5 5/, `the picture copy and LVGL's drawing are timed apart\n${run.stdout}`);
 // The device's overlay keeps square corners, or the copy is never used.
 const screensaver = fs.readFileSync(path.join(root, 'src/ui/screensaver/image_screensaver.cpp'), 'utf8');
 assert.match(screensaver, /st->overlay = lv_obj_create\(lv_layer_top\(\)\);[\s\S]*?lv_obj_set_style_radius\(st->overlay, 0, 0\);/,

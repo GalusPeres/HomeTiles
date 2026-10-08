@@ -112,7 +112,7 @@ requireMarker(finishBody, 'if (!waitRefreshDone())', 'deferred DSI swap confirma
 requireMarker(finishBody, 'restartAfterDisplayTimeout(', 'deferred fail-closed refresh timeout');
 requireMarker(finishBody, 'refresh_pending_ = false;', 'pending swap reset');
 const beginBody = presenterSource.slice(
-  presenterSource.indexOf('bool Presenter::begin()'),
+  presenterSource.indexOf('bool Presenter::begin(bool covers_panel)'),
   presenterSource.indexOf('bool Presenter::syncUiToInactive()'),
 );
 assert.ok(
@@ -120,6 +120,17 @@ assert.ok(
     beginBody.indexOf('finishPendingSwap();') < beginBody.indexOf('std::memcpy(inactive'),
   'begin() must confirm a pending swap before it copies into the inactive framebuffer',
 );
+// A frame that fills the panel (the screensaver) replaces every pixel: no
+// 2 MB copy of the UI before it (V2 b308). A partial frame (a camera stream)
+// still lands on a copy of the UI and its later changes. The inactive
+// framebuffer is written back either way.
+assert.match(beginBody, /if \(!covers_panel\) \{[\s\S]*?std::memcpy\(inactive, active, framebufferBytes\(\)\);\s*\}/,
+  'only a partial frame copies the UI into the inactive framebuffer');
+assert.ok(beginBody.indexOf('if (!syncCache(inactive, framebufferBytes(), false)) return false;') >
+    beginBody.indexOf('std::memcpy(inactive'), 'the inactive framebuffer is written back in both cases');
+assert.match(presentBody,
+  /const bool covers_panel = dst_x == 0 && dst_y == 0 &&\s*dst_w == config_\.panel_width &&\s*dst_h == config_\.panel_height;\s*bool synced = begin\(covers_panel\);\s*if \(synced && covers_panel\) \{\s*resetMirrorDirty\(\);[^\n]*\n\s*\} else if \(synced\) \{\s*synced = syncUiToInactive\(\);/,
+  'a full-panel frame skips the UI copy and the dirty mirror; a partial frame keeps both');
 const endBody = presenterSource.slice(presenterSource.indexOf('void Presenter::end()'));
 assert.ok(
   endBody.indexOf('finishPendingSwap();') >= 0 &&

@@ -221,17 +221,24 @@ bool Presenter::noteUiWrite(int32_t x, int32_t y, int32_t w, int32_t h,
   return true;
 }
 
-bool Presenter::begin() {
+bool Presenter::begin(bool covers_panel) {
   if (double_buffer_active_) return true;
   finishPendingSwap();
   uint16_t* active = activeFramebuffer();
   uint16_t* inactive = inactiveFramebuffer();
-  if (!active || !inactive ||
-      !syncFramebufferSpan(active, 0, 0, config_.panel_width,
-                           config_.panel_height, true)) {
-    return false;
+  if (!active || !inactive) return false;
+  // A partial frame (a camera stream) lands on a copy of the UI. A frame
+  // that fills the panel (the screensaver, each opening and slide) replaces
+  // every pixel, and the 2 MB copy before it cost the V2 tens of ms (b307).
+  if (!covers_panel) {
+    if (!syncFramebufferSpan(active, 0, 0, config_.panel_width,
+                             config_.panel_height, true)) {
+      return false;
+    }
+    std::memcpy(inactive, active, framebufferBytes());
   }
-  std::memcpy(inactive, active, framebufferBytes());
+  // Written back either way: no dirty CPU line of the inactive framebuffer
+  // may be evicted over the PPA result later.
   if (!syncCache(inactive, framebufferBytes(), false)) return false;
   resetMirrorDirty();
   double_buffer_active_ = true;
@@ -384,7 +391,16 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   finishPendingSwap();
   Dma2dArbiterGuard dma2d_guard(kDma2dLockTimeoutMs);
   if (!dma2d_guard.locked()) return false;
-  if (!begin() || !syncUiToInactive()) {
+  const bool covers_panel = dst_x == 0 && dst_y == 0 &&
+                            dst_w == config_.panel_width &&
+                            dst_h == config_.panel_height;
+  bool synced = begin(covers_panel);
+  if (synced && covers_panel) {
+    resetMirrorDirty();  // UI changes since the last frame are overwritten.
+  } else if (synced) {
+    synced = syncUiToInactive();
+  }
+  if (!synced) {
     Serial.printf("[CameraDisplay/%s] Framebuffer synchronization failed\n",
                   config_.device_name ? config_.device_name : "P4");
     noteFault(runtime);

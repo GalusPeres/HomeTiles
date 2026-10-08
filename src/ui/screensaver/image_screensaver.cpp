@@ -250,9 +250,10 @@ bool ensure_composite_draw_buf(ScreensaverState* st) {
 // (composite_over_image.h); false when LVGL would not draw it as a plain
 // copy (the caller takes the snapshot), `refused` names the failed check.
 bool composite_over_wallpaper(ScreensaverState* st, lv_display_t* display,
-                              lv_obj_t* top_layer, const char** refused) {
+                              lv_obj_t* top_layer, const char** refused,
+                              composite_over_image::Timing* timing) {
   return composite_over_image::render(display, top_layer, st->image, g_cache_dsc,
-                                      &st->composite_draw_buf, refused);
+                                      &st->composite_draw_buf, refused, timing);
 }
 
 bool present_composited_screensaver_frame(ScreensaverState* st) {
@@ -265,7 +266,9 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
   // Use the entire top layer intentionally so the clock and tiles remain
   // visible during slide transitions and are presented together.
   const char* refused = nullptr;
-  if (!composite_over_wallpaper(st, display, top_layer, &refused) &&
+  composite_over_image::Timing timing;
+  timing.now_ms = []() -> uint32_t { return millis(); };
+  if (!composite_over_wallpaper(st, display, top_layer, &refused, &timing) &&
       lv_snapshot_take_to_draw_buf(top_layer, LV_COLOR_FORMAT_RGB565,
                                    &st->composite_draw_buf) != LV_RESULT_OK) {
     Serial.println("[Screensaver] Composite snapshot failed");
@@ -282,13 +285,22 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
   // A slideshow frame needs one atomic swap only. Do not leave the persistent
   // camera mirroring state active while the normal UI resumes underneath it.
   Device::displayEndFullFramePreview();
-  Serial.printf("[Screensaver] Composite-Preview %s in %u ms (%s %u, present %u)%s%s\n",
-                preview_ok ? "OK" : "skipped",
-                static_cast<unsigned>(millis() - snapshot_started),
-                refused ? "snapshot" : "copy",
-                static_cast<unsigned>(snapshot_ms),
-                static_cast<unsigned>(millis() - snapshot_started - snapshot_ms),
-                refused ? "; copy refused: " : "", refused ? refused : "");
+  if (refused) {
+    Serial.printf("[Screensaver] Composite-Preview %s in %u ms (snapshot %u, present %u); copy refused: %s\n",
+                  preview_ok ? "OK" : "skipped",
+                  static_cast<unsigned>(millis() - snapshot_started),
+                  static_cast<unsigned>(snapshot_ms),
+                  static_cast<unsigned>(millis() - snapshot_started - snapshot_ms),
+                  refused);
+  } else {
+    Serial.printf("[Screensaver] Composite-Preview %s in %u ms (copy %u: picture %u, above %u; present %u)\n",
+                  preview_ok ? "OK" : "skipped",
+                  static_cast<unsigned>(millis() - snapshot_started),
+                  static_cast<unsigned>(snapshot_ms),
+                  static_cast<unsigned>(timing.copy_ms),
+                  static_cast<unsigned>(timing.draw_ms),
+                  static_cast<unsigned>(millis() - snapshot_started - snapshot_ms));
+  }
   if (preview_ok) {
     // The presented frame is the whole top layer as it stands, in the
     // framebuffer LVGL draws its next areas into (every P4 driver's

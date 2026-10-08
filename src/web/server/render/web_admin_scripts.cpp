@@ -209,7 +209,8 @@ void appendAdminScripts(String& html) {
   html += "  let GRID_COLS = " + String(GRID_COLS) + ";\n";
   html += "  let GRID_ROWS = " + String(GRID_ROWS) + ";\n";
   html += "  let GRID_SHOWN_COLS = " + String(GRID_SHOWN_COLS) + ";\n";
-  html += "  let GRID_SHOWN_ROWS = " + String(GRID_SHOWN_ROWS) + ";\n";
+  // With an upright layout's half row (6.5).
+  html += "  let GRID_SHOWN_ROWS = " + String(GRID_SHOWN_ROWS) + (grid_layout::shown().half_row ? ".5" : "") + ";\n";
   html += String("  let HEAD_BAR = ") + (grid_layout::head_bar() ? "true" : "false") + ";\n";
   // The three layouts in screen pixels (the window scales them like the
   // preview): grid, margins, screen, and whether the panel can show them.

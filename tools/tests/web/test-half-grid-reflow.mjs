@@ -59,7 +59,9 @@ ${geometry}
 constexpr int GRID_COLS=7, GRID_ROWS=5,TILES_PER_GRID=35;
 struct Tile {TileType type=TILE_EMPTY;float col=0,row=0,span_w=1,span_h=1;bool layout_hidden=false;};
 struct TileGridConfig {Tile tiles[TILES_PER_GRID];};
-void clamp_media_tile_layout(TileType,float&,float&,float&,float&){}
+void clamp_media_tile_layout(TileType,float&,float&,float&,float&,float=0,float=0){}
+inline float tilePlaceCols(){return GRID_COLS;}
+inline float tilePlaceRows(){return GRID_ROWS;}
 ${source.slice(source.indexOf('struct TileRect {'),source.indexOf('static bool parseFolderIdArg'))}
 int main(){int count,first;float x,y;while(std::cin>>count>>first>>x>>y){TileGridConfig grid;for(int i=0;i<count;i++){int type;auto&t=grid.tiles[i];std::cin>>type>>t.col>>t.row>>t.span_w>>t.span_h;t.type=static_cast<TileType>(type);}bool ok=applySmartReorder(grid,0,x,y,first);std::cout<<ok;for(int i=0;i<count;i++)std::cout<<' '<<grid.tiles[i].col<<' '<<grid.tiles[i].row;std::cout<<'\\n';}}
 `;

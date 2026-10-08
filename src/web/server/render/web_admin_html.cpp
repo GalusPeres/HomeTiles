@@ -504,16 +504,20 @@ static void appendTileTabHTML(
     String tileStyle = "";
     const TileTypeDescriptor* type_desc = get_tile_type_descriptor(tile.type);
     const char* type_css = type_desc ? type_desc->css_class : nullptr;
-    float col = (tile.col < GRID_COLS) ? tile.col : 0;
-    float row = (tile.row < GRID_ROWS) ? tile.row : 0;
+    // The page's grid: the active layout's (an upright one has more rows);
+    // the screensaver's stored grid until the page loads its shown one.
+    const float place_cols = screensaver_mode ? GRID_COLS : tilePlaceCols();
+    const float place_rows = screensaver_mode ? GRID_ROWS : tilePlaceRows();
+    float col = (tile.col < place_cols) ? tile.col : 0;
+    float row = (tile.row < place_rows) ? tile.row : 0;
     float span_w = (tile.span_w < 0.5f) ? 1 : tile.span_w;
     float span_h = (tile.span_h < 0.5f) ? 1 : tile.span_h;
-    clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
+    clamp_media_tile_layout(tile.type, col, row, span_w, span_h, place_cols, place_rows);
     if (screensaver_mode && GRID_ROWS > 1 && row < GRID_ROWS - 2) {
       row = GRID_ROWS - 2;
     }
-    if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;
-    if (span_h > GRID_ROWS - row) span_h = GRID_ROWS - row;
+    if (span_w > place_cols - col) span_w = place_cols - col;
+    if (span_h > place_rows - row) span_h = place_rows - row;
 
     if (!tileBorderEnabled(tile)) cssClass += " tile-border-hidden";
     if (type_css && type_css[0]) {

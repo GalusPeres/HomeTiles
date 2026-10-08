@@ -47,6 +47,8 @@ int preview_cell_h_px() {
   // The screen fills the target height inside the bezel, so the preview
   // keeps its former size and the settings panel beside it fits.
   const int screen_h = preview_target_height_px() - 2 * kPreviewFramePx;
+  // One scale for every layout (the layout window draws them side by side):
+  // an upright screen's preview is taller.
   const int cell = (screen_h * GRID_CELL_H + Device::kScreenHeight / 2) / Device::kScreenHeight;
   return (cell < 40) ? 40 : cell;
 }
@@ -364,6 +366,11 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
   html += String(GRID_SHOWN_COLS);
   html += ";--grid-rows:";
   html += String(GRID_SHOWN_ROWS);
+  // An upright layout's half row: one more track half a cell high
+  // (admin.css .tile-grid grid-template-rows).
+  if (grid_layout::shown().half_row) {
+    html += ";--grid-half-track:calc((var(--preview-cell-h) - var(--preview-gap)) / 2)";
+  }
   html += ";--preview-cell-h:";
   html += String(preview_cell_h_px());
   html += "px;";
@@ -431,7 +438,7 @@ static void appendHeadBarVars(String& html) {
   };
   const home_bar::Geometry head = home_bar::geometry();
   html += "  <style>:root{";
-  emit_scaled("head-screen-w", SCREEN_WIDTH);
+  emit_scaled("head-screen-w", grid_layout::screen_w());
   emit_scaled("head-top", grid_layout::layout_grid(grid_layout::Layout::kBar).pad_top);
   emit_scaled("head-disc", head.disc);
   emit_scaled("head-disc-x", head.disc_x);

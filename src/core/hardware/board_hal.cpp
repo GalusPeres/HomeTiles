@@ -41,6 +41,10 @@ void BoardHAL::displaySetRotation(uint8_t rotation) {
   Device::displaySetRotation(rotation);
 }
 
+void BoardHAL::displaySetUpright(bool upright) {
+  Device::displaySetUpright(upright);
+}
+
 void BoardHAL::setBrightness(uint8_t value) {
   Device::setBrightness(value);
 }

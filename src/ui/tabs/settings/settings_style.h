@@ -238,8 +238,8 @@ inline int half_tile_disc() { return (kGrid.cell_h - GRID_GAP) / 2 - 2 * tile_in
 // circle, all on the X's centre line; the body starts one grid gap below the
 // X. Screen coordinates (the panel's padding is subtracted where they are used).
 inline int inner_left() { return popup_layout::kCardMargin + GRID_GAP; }
-inline int inner_right() { return SCREEN_WIDTH - popup_layout::kCardMargin - GRID_GAP; }
-inline int inner_bottom() { return SCREEN_HEIGHT - popup_layout::kCardMargin - GRID_GAP; }
+inline int inner_right() { return grid_layout::screen_w() - popup_layout::kCardMargin - GRID_GAP; }
+inline int inner_bottom() { return grid_layout::screen_h() - popup_layout::kCardMargin - GRID_GAP; }
 inline int head_center_y() { return popup_layout::kCardMargin + GRID_GAP + popup_layout::kCloseButtonSize / 2; }
 inline int head_disc_x() {
   return inner_left() + (popup_layout::kCloseButtonSize - popup_layout::kHeaderIconDiscSize) / 2;

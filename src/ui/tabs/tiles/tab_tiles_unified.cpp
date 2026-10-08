@@ -726,10 +726,11 @@ static bool get_tile_layout(const Tile& tile, float& col, float& row, float& spa
   return shownTileLayout(tile, col, row, span_w, span_h);
 }
 
-static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], float col, float row, float span_w, float span_h) {
+static void mark_occupied(bool occupied[GRID_SPACE_ROWS][GRID_SPACE_COLS], float col, float row, float span_w,
+                          float span_h) {
   for (uint8_t r = static_cast<uint8_t>(row); r < row + span_h; ++r) {
     for (uint8_t c = static_cast<uint8_t>(col); c < col + span_w; ++c) {
-      if (r < GRID_ROWS && c < GRID_COLS) {
+      if (r < GRID_SPACE_ROWS && c < GRID_SPACE_COLS) {
         occupied[r][c] = true;
       }
     }
@@ -1315,13 +1316,19 @@ static lv_obj_t* create_tiles_grid(lv_obj_t* parent) {
   lv_obj_set_style_pad_column(grid, GAP, 0);
   lv_obj_set_style_pad_row(grid, GAP, 0);
 
-  // The shown grid's tracks (grid_layout.h), fixed for this boot.
-  static lv_coord_t col_dsc[GRID_COLS + 1];
-  static lv_coord_t row_dsc[GRID_ROWS + 1];
+  // The shown grid's tracks (grid_layout.h), fixed for this boot; an upright
+  // layout's half row is a last track half a cell high (a half-height tile
+  // there, tile_geometry::extent).
+  static lv_coord_t col_dsc[GRID_SPACE_COLS + 1];
+  static lv_coord_t row_dsc[GRID_SPACE_ROWS + 1];
   static bool dsc_ready = false;
   if (!dsc_ready) {
     build_grid_track_descriptors(col_dsc, GRID_SHOWN_COLS, GRID_CELL_W);
     build_grid_track_descriptors(row_dsc, GRID_SHOWN_ROWS, GRID_CELL_H);
+    if (grid_layout::shown().half_row) {
+      row_dsc[GRID_SHOWN_ROWS] = tile_geometry::extent(GRID_SHOWN_ROWS, 0.5f, GRID_CELL_H, GAP);
+      row_dsc[GRID_SHOWN_ROWS + 1] = LV_GRID_TEMPLATE_LAST;
+    }
     dsc_ready = true;
   }
   lv_obj_set_layout(grid, LV_LAYOUT_GRID);
@@ -1719,7 +1726,7 @@ void tiles_reload_layout(GridType grid_type) {
   }
 
   const TileGridConfig& config = getGridConfig(grid_type);
-  bool occupied[GRID_ROWS][GRID_COLS] = {};
+  bool occupied[GRID_SPACE_ROWS][GRID_SPACE_COLS] = {};
   struct TileLayout {
     float col = 0;
     float row = 0;
@@ -1979,7 +1986,7 @@ static bool update_active_layout() {
   }
   // Only tiles and the empty cell placeholders (render_empty_tile) live in
   // the grid; anything else rebuilds.
-  lv_obj_t* placeholders[GRID_ROWS * GRID_COLS] = {};
+  lv_obj_t* placeholders[GRID_SPACE_ROWS * GRID_SPACE_COLS] = {};
   size_t placeholder_count = 0;
   const uint32_t child_count = lv_obj_get_child_count(grid);
   for (uint32_t c = 0; c < child_count; ++c) {
@@ -1988,7 +1995,7 @@ static bool update_active_layout() {
     bool is_tile = false;
     for (size_t i = 0; i < TILES_PER_GRID && !is_tile; ++i) is_tile = g_tiles_objs[idx][i] == child;
     if (is_tile) continue;
-    if (lv_obj_get_child_count(child) != 0 || placeholder_count >= GRID_ROWS * GRID_COLS) return false;
+    if (lv_obj_get_child_count(child) != 0 || placeholder_count >= GRID_SPACE_ROWS * GRID_SPACE_COLS) return false;
     placeholders[placeholder_count++] = child;
   }
 
@@ -2016,7 +2023,7 @@ static bool update_active_layout() {
   lv_display_t* disp = lv_obj_get_display(grid);
   if (disp) lv_display_enable_invalidation(disp, false);
   for (size_t p = 0; p < placeholder_count; ++p) lv_obj_delete(placeholders[p]);
-  bool occupied[GRID_ROWS][GRID_COLS] = {};
+  bool occupied[GRID_SPACE_ROWS][GRID_SPACE_COLS] = {};
   unsigned moved = 0;
   unsigned rebuilt = 0;
   // The rebuilt slots, for the log: an unchanged tile must never be among them.

@@ -20,7 +20,7 @@ const conf = read('lv_conf.h');
 const align = Number(conf.match(/^#define LV_DRAW_BUF_ALIGN (\d+)/m)[1]);
 assert.equal(align, 64);
 assert.match(manager,
-  /static size_t draw_buffer_bytes\(size_t lines\) \{\s*const size_t bytes = static_cast<size_t>\(SCREEN_WIDTH\) \* lines \* g_bytes_per_pixel;\s*return \(bytes \+ LV_DRAW_BUF_ALIGN - 1\) \/ LV_DRAW_BUF_ALIGN \* LV_DRAW_BUF_ALIGN;\s*\}/);
+  /static size_t draw_buffer_bytes\(size_t lines\) \{\s*const size_t bytes = static_cast<size_t>\(grid_layout::screen_w\(\)\) \* lines \* g_bytes_per_pixel;\s*return \(bytes \+ LV_DRAW_BUF_ALIGN - 1\) \/ LV_DRAW_BUF_ALIGN \* LV_DRAW_BUF_ALIGN;\s*\}/);
 
 // Every buffer LVGL draws into is sized by draw_buffer_bytes: no raw
 // width * lines * bytes per pixel product reaches lv_display_set_buffers or

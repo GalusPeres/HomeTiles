@@ -118,7 +118,7 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   lv_obj_set_style_border_width(tab_content_container, 0, 0);
   lv_obj_set_style_pad_all(tab_content_container, 0, 0);
   lv_obj_clear_flag(tab_content_container, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(tab_content_container, SCREEN_WIDTH, SCREEN_HEIGHT);
+  lv_obj_set_size(tab_content_container, grid_layout::screen_w(), grid_layout::screen_h());
   lv_obj_set_pos(tab_content_container, 0, 0);
 
   tab_panels[0] = createTabPanel(tab_content_container);
@@ -721,13 +721,13 @@ void UIManager::settings_gesture_indev_event_cb(lv_event_t* event) {
         starts_at_edge = point.x < edge_zone;
         break;
       case SettingsRevealEdge::Right:
-        starts_at_edge = point.x >= SCREEN_WIDTH - edge_zone;
+        starts_at_edge = point.x >= grid_layout::screen_w() - edge_zone;
         break;
       case SettingsRevealEdge::Top:
         starts_at_edge = point.y < edge_zone;
         break;
       case SettingsRevealEdge::Bottom:
-        starts_at_edge = point.y >= SCREEN_HEIGHT - edge_zone;
+        starts_at_edge = point.y >= grid_layout::screen_h() - edge_zone;
         break;
     }
     if (!starts_at_edge) return;

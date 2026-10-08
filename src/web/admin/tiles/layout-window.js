@@ -505,8 +505,10 @@
     const scale = base['--radius-preview-scale'] || layoutScale();
     layoutSetVars(grid, Object.fromEntries(Object.entries(base).filter(([n]) => n !== '--radius-preview-scale')
       .map(([n, val]) => [n, (val * f).toFixed(2) + 'px'])));
+    // The window's area has whole rows only (an upright page's half row
+    // track, --grid-half-track, is not part of it).
     layoutSetVars(grid, {'--grid-cols': String(GRID_COLS), '--grid-rows': String(GRID_ROWS),
-      '--radius-preview-scale': String(scale * f)});
+      '--grid-half-track': 'initial', '--radius-preview-scale': String(scale * f)});
     // The layout's screen, black with its rounded corners, behind the tiles.
     // The classic screen has no head: its cells start where the bar
     // layouts' do, right under the window's head.

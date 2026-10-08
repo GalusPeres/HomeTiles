@@ -35,9 +35,14 @@ static const int& GRID_PAD_LEFT = grid_layout::g_shown.pad_left;
 static const int& GRID_PAD_RIGHT = grid_layout::g_shown.pad_right;
 static const int& GRID_PAD_TOP = grid_layout::g_shown.pad_top;
 static const int& GRID_PAD_BOTTOM = grid_layout::g_shown.pad_bottom;
-// The shown grid's columns and rows (at most GRID_COLS and GRID_ROWS).
+// The shown grid's columns and whole rows (an upright layout's half row is
+// grid_layout::shown().half_row).
 static const uint8_t& GRID_SHOWN_COLS = grid_layout::g_shown.cols;
 static const uint8_t& GRID_SHOWN_ROWS = grid_layout::g_shown.rows;
+// The room of every layout's grid (grid_layout.h): the size of the tile
+// grids' cell arrays. An upright layout can have more rows than GRID_ROWS.
+static constexpr uint8_t GRID_SPACE_COLS = grid_layout::kSpaceCols;
+static constexpr uint8_t GRID_SPACE_ROWS = grid_layout::kSpaceRows;
 
 // A media tile renders its (often long) title as a horizontally scrolling band the
 // full width of the tile. On the 8-inch device every flush is PPA-rotated, and a
@@ -66,16 +71,31 @@ static inline void clamp_media_tile_span(TileType type, T& span_w, T& span_h) {
 // A media tile must not be clipped back below its 2x2 minimum at the right or
 // bottom edge. Move its position inwards in that case; the layout of every other
 // tile type stays as it is.
+// The bounds are the profile's grid unless given (the shown grid of a head
+// bar layout, tilePlaceCols()/tilePlaceRows()).
 template <typename P, typename S>
 static inline void clamp_media_tile_layout(TileType type,
                                            P& col, P& row,
-                                           S& span_w, S& span_h) {
+                                           S& span_w, S& span_h,
+                                           float cols = GRID_COLS, float rows = GRID_ROWS) {
   clamp_media_tile_span(type, span_w, span_h);
   if (type != TILE_MEDIA) return;
-  if (span_w > GRID_COLS) span_w = GRID_COLS;
-  if (span_h > GRID_ROWS) span_h = GRID_ROWS;
-  if (col > GRID_COLS - span_w) col = GRID_COLS - span_w;
-  if (row > GRID_ROWS - span_h) row = GRID_ROWS - span_h;
+  if (span_w > cols) span_w = static_cast<S>(cols);
+  if (span_h > rows) span_h = static_cast<S>(rows);
+  if (col > cols - span_w) col = static_cast<P>(cols - span_w);
+  if (row > rows - span_h) row = static_cast<P>(rows - span_h);
+}
+
+// The grid the panel places its tiles in: the profile's (the classic layout)
+// or the shown one of a head bar layout, which may have more rows upright and
+// a half row (grid_layout.h).
+static inline float tilePlaceCols() { return grid_layout::head_bar() ? GRID_SHOWN_COLS : GRID_COLS; }
+static inline float tilePlaceRows() { return grid_layout::head_bar() ? grid_layout::shown_rows() : GRID_ROWS; }
+// A size and place the type allows inside that grid.
+static inline bool tilePlaceSupported(int type, float col, float row, float span_w, float span_h) {
+  return grid_layout::head_bar() ? tile_geometry::supported_size(type, col, row, span_w, span_h) &&
+                                       grid_layout::inside(col, row, span_w, span_h)
+                                 : tile_geometry::supported(type, col, row, span_w, span_h);
 }
 
 enum TilePopupOpenMode : uint8_t {
@@ -260,12 +280,12 @@ static inline bool tileBorderEnabled(const Tile& tile) {
 // tile wholly inside the grid shows, and the Back tile gives way to the
 // head's X.
 static inline bool shownTileLayout(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
-  if (tile.layout_hidden || tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
+  if (tile.layout_hidden || tile.col >= tilePlaceCols() || tile.row >= tilePlaceRows()) return false;
   col = tile.col;
   row = tile.row;
   span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
   span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
-  clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
+  clamp_media_tile_layout(tile.type, col, row, span_w, span_h, tilePlaceCols(), tilePlaceRows());
   if (grid_layout::head_bar()) {
     if (tile.type == TILE_BACK) return false;
     return grid_layout::inside(col, row, span_w, span_h);

@@ -762,6 +762,10 @@ void setup() {
                 grid_layout::shown().cell_w, grid_layout::shown().cell_h);
   haBridgeConfig.load();
   tileConfig.load();
+  // An upright layout on a landscape panel: the screen turns before the
+  // splash (Hochkant, grid_layout::switchable). After tileConfig.load(): a
+  // layout without places falls back to the classic one there.
+  displayManager.applyShownScreen();
   screensaverConfig.load();
   hardwareIo.load();
   hardwareIo.begin();

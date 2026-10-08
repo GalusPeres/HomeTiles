@@ -60,6 +60,9 @@ class Presenter {
 
   uint16_t* activeFramebuffer() const;
   bool active() const { return double_buffer_active_; }
+  // The UI's orientation on the panel changed (an upright layout on a
+  // landscape panel draws without the quarter turn).
+  void setTransform(Transform transform) { config_.transform = transform; }
 
   // Call after a normal UI write into activeFramebuffer(). PPA writers must
   // set ppa_writer so cached CPU lines cannot later overwrite the DMA result.

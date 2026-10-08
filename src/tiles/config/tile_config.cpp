@@ -3623,10 +3623,11 @@ static void applyLayoutPlaces(uint16_t folder_id, TileGridConfig& grid) {
       continue;
     }
     tile_layouts::Place place{};
+    // Inside the shown grid (an upright one has more rows than the profile).
     const bool placed = tile.type != TILE_BACK &&
                         tile_layouts::find(active, folder_id, tile.view_id, place) &&
                         grid_layout::inside(place.col, place.row, place.span_w, place.span_h) &&
-                        tile_geometry::supported(tile.type, place.col, place.row, place.span_w, place.span_h);
+                        tile_geometry::supported_size(tile.type, place.col, place.row, place.span_w, place.span_h);
     if (!placed) {
       tile.layout_hidden = true;
       continue;

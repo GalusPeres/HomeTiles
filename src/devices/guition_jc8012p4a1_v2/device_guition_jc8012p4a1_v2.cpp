@@ -90,6 +90,9 @@ uint32_t g_sd_retry_tick_ms = 0;
 // card inserted later needs a restart.
 bool g_sd_mount_failed = false;
 uint8_t g_rotation = DeviceGuitionJC8012P4A1V2::kProfile.rotation_default;
+// The upright layout (grid_layout.h): the UI is drawn in the panel's own
+// orientation, 800 x 1280, without the quarter turn.
+bool g_upright = false;
 bool g_touch_active = false;
 uint8_t g_touch_release_reads = 0;
 int32_t g_touch_stable_x = 0;
@@ -494,6 +497,42 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
   return draw_physical(dst_x, dst_y, dst_w, dst_h, g_rotate_buf);
 }
 
+// An upright UI area: copied straight into the panel framebuffer (180: turned
+// into the mirrored place), no rotation. Through a buffer when the panel has
+// no framebuffer access.
+bool draw_upright_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* data) {
+  if (!data || w <= 0 || h <= 0) {
+    return false;
+  }
+  const int32_t panel_w = display_cfg.width;
+  const int32_t panel_h = display_cfg.height;
+  if (x < 0 || y < 0 || (x + w) > panel_w || (y + h) > panel_h) {
+    Serial.printf("[Device/Guition JC8012P4A1 V2] Reject out-of-range upright draw x=%ld y=%ld w=%ld h=%ld\n",
+                  static_cast<long>(x), static_cast<long>(y),
+                  static_cast<long>(w), static_cast<long>(h));
+    return false;
+  }
+  const bool flipped = (g_rotation & 0x02) != 0;
+  const int32_t dst_x = flipped ? panel_w - x - w : x;
+  const int32_t dst_y = flipped ? panel_h - y - h : y;
+  if (g_panel_fb_ready) {
+    if (uint16_t* fb = panel_fb()) {
+      p4_dsi_cpu_rotate::copy_into(fb, panel_w, panel_w, panel_h, x, y, w, h, data, flipped);
+      flush_framebuffer_rect(fb, dst_x, dst_y, w, h);
+      mark_dirty_rect(dst_x, dst_y, w, h);
+      g_camera_presenter.noteUiWrite(dst_x, dst_y, w, h, false);
+      return true;
+    }
+  }
+  if (!flipped) return draw_physical(x, y, w, h, data);
+  const size_t pixel_count = static_cast<size_t>(w) * static_cast<size_t>(h);
+  if (!ensure_rotate_buffer(pixel_count)) {
+    return false;
+  }
+  for (size_t i = 0; i < pixel_count; ++i) g_rotate_buf[i] = data[pixel_count - 1 - i];
+  return draw_physical(dst_x, dst_y, w, h, g_rotate_buf);
+}
+
 void hold_panel_reset_low() {
   if (display_cfg.lcd_rst < 0) {
     return;
@@ -809,12 +848,16 @@ bool DeviceGuitionJC8012P4A1V2::ppaCooldownActive() {
 
 void DeviceGuitionJC8012P4A1V2::displayPushPixels(int32_t x, int32_t y, int32_t w, int32_t h,
                                          const uint16_t* data) {
+  if (g_upright) {
+    draw_upright_area(x, y, w, h, data);
+    return;
+  }
   draw_landscape_area(x, y, w, h, data);
 }
 
 void DeviceGuitionJC8012P4A1V2::displayPushPixelsDMA(int32_t x, int32_t y, int32_t w, int32_t h,
                                             const uint16_t* data) {
-  draw_landscape_area(x, y, w, h, data);
+  displayPushPixels(x, y, w, h, data);
 }
 
 bool DeviceGuitionJC8012P4A1V2::displayTryFullFramePreview(
@@ -877,6 +920,14 @@ void DeviceGuitionJC8012P4A1V2::displayFillScreen(uint16_t color) {
 
 void DeviceGuitionJC8012P4A1V2::displaySetRotation(uint8_t rotation) {
   g_rotation = rotation & 0x03;
+}
+
+void DeviceGuitionJC8012P4A1V2::displaySetUpright(bool upright) {
+  g_upright = upright;
+  // The camera popup's frames: straight (or 180) into the upright screen.
+  g_camera_presenter.setTransform(upright ? p4_dsi_camera_presenter::Transform::Native0Or180
+                                          : p4_dsi_camera_presenter::Transform::Portrait90Or270);
+  Serial.printf("[Device/Guition JC8012P4A1 V2] UI %s\n", upright ? "upright (no quarter turn)" : "landscape");
 }
 
 void DeviceGuitionJC8012P4A1V2::setBrightness(uint8_t value) {
@@ -944,13 +995,20 @@ bool DeviceGuitionJC8012P4A1V2::getTouch(int16_t& x, int16_t& y) {
   int32_t mapped_x = 0;
   int32_t mapped_y = 0;
 
-  const int32_t logical_w = static_cast<int32_t>(display_cfg.height);
-  const int32_t logical_h = static_cast<int32_t>(display_cfg.width);
+  const int32_t logical_w = static_cast<int32_t>(g_upright ? display_cfg.width : display_cfg.height);
+  const int32_t logical_h = static_cast<int32_t>(g_upright ? display_cfg.height : display_cfg.width);
 
   // The clean GSL3680 driver returns the panel's long and short axes as
   // px=(physical Y) and py=(physical X), matching Espressif's raw scaling.
-  // Apply the exact inverse of draw_landscape_area()'s framebuffer rotation.
-  if (g_rotation & 0x02) {
+  // Apply the exact inverse of draw_landscape_area()'s framebuffer rotation:
+  // the framebuffer's X is (width - 1 - py), its Y is px. Upright the UI is
+  // the framebuffer itself (draw_upright_area), turned by 180 when flipped.
+  if (g_upright) {
+    const int32_t fb_x = logical_w - 1 - static_cast<int32_t>(py[selected]);
+    const int32_t fb_y = static_cast<int32_t>(px[selected]);
+    mapped_x = (g_rotation & 0x02) ? logical_w - 1 - fb_x : fb_x;
+    mapped_y = (g_rotation & 0x02) ? logical_h - 1 - fb_y : fb_y;
+  } else if (g_rotation & 0x02) {
     mapped_x = logical_w - 1 - static_cast<int32_t>(px[selected]);
     mapped_y = logical_h - 1 - static_cast<int32_t>(py[selected]);
   } else {

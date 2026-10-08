@@ -55,6 +55,7 @@ void displayEndFullFramePreview();
 void displayWaitDMA();
 void displayFillScreen(uint16_t color);
 void displaySetRotation(uint8_t rotation);
+void displaySetUpright(bool upright);
 
 void setBrightness(uint8_t value);
 uint8_t getBrightness();

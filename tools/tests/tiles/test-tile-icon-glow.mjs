@@ -82,7 +82,7 @@ assert.match(css, /\.tile\.sensor-compact > \.tile-icon\.tile-icon-tinted \{\s*b
 assert.ok(css.indexOf('.tile-icon.tile-icon-tinted') < css.indexOf('.icon-discs-off .tile.sensor-compact'),
   'Off rules win over the tint');
 // The weather and media previews set their icon and its color first.
-assert.match(read('src/web/admin/tiles/grid-preview.js'), /el\.innerHTML = html;\s*(?:if \(previewKind === '(?:weather|media)'\) \{\s*apply(?:Weather|Media)Preview\([^;]*;\s*\}\s*)*if \(typeof applyTileRulesTint === 'function'\) \{[\s\S]*?\}\s*applyIconDiscTint\(el\);/);
+assert.match(read('src/web/admin/tiles/grid-preview.js'), /el\.innerHTML = html;\s*(?:if \(keptCover\) el\.appendChild\(keptCover\);\s*)?(?:if \(previewKind === '(?:weather|media)'\) \{\s*apply(?:Weather|Media)Preview\([^;]*;\s*\}\s*)*if \(typeof applyTileRulesTint === 'function'\) \{[\s\S]*?\}\s*applyIconDiscTint\(el\);/);
 assert.match(read('src/web/admin/tiles/live-preview.js'), /tileElem\.innerHTML = html;\s*(?:if \(previewKind === '(?:weather|media)'\) \{[\s\S]*?apply(?:Weather|Media)Preview\([\s\S]*?\);\s*\}\s*)*if \(typeof applyTileRulesTint === 'function'[\s\S]*?\}\s*applyIconDiscTint\(tileElem\);/);
 assert.match(read('src/types/switch/admin.js'), /applySwitchPreviewColors\(tileElem, state\);\s*\/\/[^\n]*\s*applyIconDiscTint\(tileElem\);/);
 

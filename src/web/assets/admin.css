@@ -931,7 +931,9 @@
       position:relative;
       display:grid;
       grid-template-columns:repeat(var(--grid-cols), var(--preview-cell-w));
-      grid-template-rows:repeat(var(--grid-rows), var(--preview-cell-h));
+      /* An upright layout's half row: a last track half a cell high
+         (--grid-half-track, web_admin_styles.cpp). */
+      grid-template-rows:repeat(var(--grid-rows), var(--preview-cell-h)) var(--grid-half-track,);
       gap:var(--preview-gap);
       /* The scaled screen inside a black bezel (--preview-frame). */
       padding:calc(var(--preview-frame, 0px) + var(--preview-pad-top, var(--preview-pad)))

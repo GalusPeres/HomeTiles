@@ -201,8 +201,8 @@ void set_image_src_without_invalidation(lv_obj_t* image, const void* src) {
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
 bool ensure_composite_draw_buf(ScreensaverState* st) {
   if (!st) return false;
-  const uint32_t width = Device::kScreenWidth;
-  const uint32_t height = Device::kScreenHeight;
+  const uint32_t width = grid_layout::screen_w();
+  const uint32_t height = grid_layout::screen_h();
   const uint32_t stride = width * sizeof(uint16_t);
   const size_t needed = static_cast<size_t>(stride) * height;
   if (needed > UINT32_MAX) return false;
@@ -257,8 +257,8 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
   }
 
   const bool preview_ok = Device::displayTryFullFramePreview(
-      0, 0, Device::kScreenWidth, Device::kScreenHeight,
-      Device::kScreenWidth,
+      0, 0, grid_layout::screen_w(), grid_layout::screen_h(),
+      grid_layout::screen_w(),
       reinterpret_cast<const uint16_t*>(st->composite_draw_buf.data),
       st->composite_draw_buf.data_size,
       false);  // The snapshot uses native RGB565, not RGB565_SWAPPED.
@@ -1106,8 +1106,8 @@ int next_enabled_wallpaper(int current) {
 void position_global_clock(ScreensaverState* st) {
   if (!st || !st->clock_box) return;
   const ScreensaverConfigData& config = screensaverConfig.get();
-  const int x = (static_cast<int>(config.clock_x) * Device::kScreenWidth) / 1000;
-  const int y = (static_cast<int>(config.clock_y) * Device::kScreenHeight) / 1000;
+  const int x = (static_cast<int>(config.clock_x) * grid_layout::screen_w()) / 1000;
+  const int y = (static_cast<int>(config.clock_y) * grid_layout::screen_h()) / 1000;
   lv_obj_set_pos(st->clock_box, x - lv_obj_get_width(st->clock_box) / 2,
                  y - lv_obj_get_height(st->clock_box) / 2);
 }
@@ -1198,13 +1198,13 @@ bool apply_wallpaper(ScreensaverState* st, int index, bool allow_fallback,
 #endif
 
   const bool cache_hit = g_cache_dsc && g_cache_name == wallpaper.file_name &&
-                         g_cache_w == Device::kScreenWidth &&
-                         g_cache_h == Device::kScreenHeight &&
+                         g_cache_w == grid_layout::screen_w() &&
+                         g_cache_h == grid_layout::screen_h() &&
                          g_cache_focus_x == wallpaper.focus_x &&
                          g_cache_focus_y == wallpaper.focus_y &&
                          g_cache_zoom == wallpaper.zoom && g_cache_radius == image_radius();
   lv_image_dsc_t* dsc = get_or_decode_cached(
-      wallpaper, Device::kScreenWidth, Device::kScreenHeight, st->image);
+      wallpaper, grid_layout::screen_w(), grid_layout::screen_h(), st->image);
   if (!dsc) {
 #if defined(DEVICE_ESP32_S3_RGB_480)
     if (index >= 0 && static_cast<size_t>(index) < kMaxScreensaverWallpapers) {
@@ -1250,8 +1250,8 @@ bool apply_wallpaper(ScreensaverState* st, int index, bool allow_fallback,
         DeviceImpl::displayBeginAtomicFrame("screensaver");
 #endif
     GuitionS3Diagnostics::beginSlideshowPresentation(
-        wallpaper.file_name.c_str(), cache_hit, Device::kScreenWidth,
-        Device::kScreenHeight, dsc->header.stride);
+        wallpaper.file_name.c_str(), cache_hit, grid_layout::screen_w(),
+        grid_layout::screen_h(), dsc->header.stride);
 #if defined(DEVICE_ESP32_S3_RGB_480)
     // The inactive framebuffer deliberately isn't copied first: that large
     // PSRAM read/write burst can starve RGB EDMA. Invalidate the whole screen
@@ -1424,21 +1424,26 @@ void rebuild_slot_grid(ScreensaverState* st) {
   // Use exactly the normal tile system's tracks, gaps and outer padding.
   // The prepared full-frame image starts at GRID_PAD - 4, placing it
   // exactly 4 px outside the tiles on every side.
-  // The shown grid (grid_layout.h): with the head bar its larger cells.
-  static lv_coord_t col_dsc[GRID_COLS + 1];
-  static lv_coord_t row_dsc[GRID_ROWS + 1];
+  // The shown grid (grid_layout.h): with the head bar its larger cells, an
+  // upright layout's half row as a last track half a cell high.
+  static lv_coord_t col_dsc[GRID_SPACE_COLS + 1];
+  static lv_coord_t row_dsc[GRID_SPACE_ROWS + 1];
   static bool grid_dsc_ready = false;
   if (!grid_dsc_ready) {
     for (uint8_t i = 0; i < GRID_SHOWN_COLS; ++i) col_dsc[i] = GRID_CELL_W;
     col_dsc[GRID_SHOWN_COLS] = LV_GRID_TEMPLATE_LAST;
     for (uint8_t i = 0; i < GRID_SHOWN_ROWS; ++i) row_dsc[i] = GRID_CELL_H;
-    row_dsc[GRID_SHOWN_ROWS] = LV_GRID_TEMPLATE_LAST;
+    uint8_t rows = GRID_SHOWN_ROWS;
+    if (grid_layout::shown().half_row) {
+      row_dsc[rows++] = tile_geometry::extent(GRID_SHOWN_ROWS, 0.5f, GRID_CELL_H, GRID_GAP);
+    }
+    row_dsc[rows] = LV_GRID_TEMPLATE_LAST;
     grid_dsc_ready = true;
   }
 
   if (!st->slot_grid) {
     st->slot_grid = lv_obj_create(st->overlay);
-    lv_obj_set_size(st->slot_grid, Device::kScreenWidth, Device::kScreenHeight);
+    lv_obj_set_size(st->slot_grid, grid_layout::screen_w(), grid_layout::screen_h());
     lv_obj_set_pos(st->slot_grid, 0, 0);
     lv_obj_set_style_bg_opa(st->slot_grid, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(st->slot_grid, 0, 0);
@@ -1610,8 +1615,8 @@ void refresh_live_background_and_clock(ScreensaverState* st,
         config.wallpapers[static_cast<size_t>(desired)];
     const bool same_pixels = st->active_wallpaper_name == wallpaper.file_name &&
                              g_cache_dsc && g_cache_name == wallpaper.file_name &&
-                             g_cache_w == Device::kScreenWidth &&
-                             g_cache_h == Device::kScreenHeight &&
+                             g_cache_w == grid_layout::screen_w() &&
+                             g_cache_h == grid_layout::screen_h() &&
                              g_cache_focus_x == wallpaper.focus_x &&
                              g_cache_focus_y == wallpaper.focus_y &&
                              g_cache_zoom == wallpaper.zoom && g_cache_radius == image_radius() &&
@@ -1714,7 +1719,7 @@ void global_preload_timer_cb(lv_timer_t*) {
   g_preload_timer = nullptr;
   if (g_state || !g_preload_wallpaper.file_name.length()) return;
   get_or_decode_cached(g_preload_wallpaper,
-                       Device::kScreenWidth, Device::kScreenHeight);
+                       grid_layout::screen_w(), grid_layout::screen_h());
 }
 
 }  // namespace
@@ -1758,7 +1763,7 @@ void show_image_screensaver() {
 #endif
 
   st->overlay = lv_obj_create(lv_layer_top());
-  lv_obj_set_size(st->overlay, Device::kScreenWidth, Device::kScreenHeight);
+  lv_obj_set_size(st->overlay, grid_layout::screen_w(), grid_layout::screen_h());
   lv_obj_set_pos(st->overlay, 0, 0);
   lv_obj_set_style_bg_color(st->overlay, lv_color_black(), 0);
   lv_obj_set_style_bg_opa(st->overlay, LV_OPA_COVER, 0);

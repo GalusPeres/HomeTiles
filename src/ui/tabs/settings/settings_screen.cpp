@@ -36,10 +36,14 @@ constexpr uint8_t kCategoryCount = 4;
 constexpr uint32_t kCategoryColors[kCategoryCount] = {settings_style::kDisplayColor, settings_style::kWifiColor,
                                                       settings_style::kLocalizationColor, settings_style::kSystemColor};
 
+// By the screen as this boot shows it: an upright layout on a landscape
+// panel takes the upright Settings (grid_layout::screen_w()).
 enum class Layout : uint8_t { Split, Tabs, Portrait };
-constexpr Layout kLayout = SCREEN_WIDTH > SCREEN_HEIGHT    ? Layout::Split
-                           : SCREEN_HEIGHT > SCREEN_WIDTH ? Layout::Portrait
-                                                          : Layout::Tabs;
+Layout layout() {
+  const int w = grid_layout::screen_w();
+  const int h = grid_layout::screen_h();
+  return w > h ? Layout::Split : h > w ? Layout::Portrait : Layout::Tabs;
+}
 
 struct CategoryView {
   lv_obj_t* box;
@@ -207,7 +211,7 @@ void style_category(uint8_t index) {
   const bool selected = index == static_cast<uint8_t>(g_category);
   const uint32_t color = kCategoryColors[index];
   const uint32_t card = g_built_card;
-  if (kLayout == Layout::Tabs) {
+  if (layout() == Layout::Tabs) {
     const Tone tone = settings_style::tone(card, color);
     lv_obj_set_style_bg_color(view.box, lv_color_hex(tone.disc), 0);
     lv_obj_set_style_bg_opa(view.box, selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
@@ -1720,7 +1724,7 @@ void build_frame() {
   lv_obj_add_event_cb(g_close, on_close_clicked, LV_EVENT_CLICKED, nullptr);
 
   int title_end = close_left;
-  if (kLayout == Layout::Tabs) {
+  if (layout() == Layout::Tabs) {
     // The four tabs in the circle's size right beside the X, always in the
     // same place (moving tabs confused, user 2026-10-07); the open page's tab
     // sits in its circle. A fifth of a circle between them.
@@ -1752,7 +1756,7 @@ void build_frame() {
   int card_y = body_y;
   int card_w = body_w;
   int card_h = body_h;
-  if (kLayout == Layout::Split) {
+  if (layout() == Layout::Split) {
     const int column = settings_style::grid_w(0, 2);
     const float tile_h = (body_h - (kCategoryCount - 1) * GRID_GAP) / static_cast<float>(kCategoryCount);
     for (uint8_t i = 0; i < kCategoryCount; ++i) {
@@ -1761,7 +1765,7 @@ void build_frame() {
     }
     card_x = body_x + column + GRID_GAP;
     card_w = body_w - column - GRID_GAP;
-  } else if (kLayout == Layout::Portrait) {
+  } else if (layout() == Layout::Portrait) {
     // One row of four, three quarters of a grid row high (user 2026-10-07:
     // 1x1 tiles in one row, not so tall); the width shared evenly.
     const int tile_h = static_cast<int>(lroundf(0.75f * (settings_style::kGrid.cell_h + GRID_GAP) - GRID_GAP));

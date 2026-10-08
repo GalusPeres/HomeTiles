@@ -5,6 +5,8 @@
 
 #include "src/devices/device.h"
 
+// The profile's screen. An upright layout on a landscape panel shows it
+// turned: grid_layout::screen_w()/screen_h() are this boot's.
 static constexpr int SCREEN_WIDTH = Device::kScreenWidth;
 static constexpr int SCREEN_HEIGHT = Device::kScreenHeight;
 
@@ -22,6 +24,9 @@ public:
 
   void armWakeTouchGuard();
   void setInputEnabled(bool enable);
+  // After grid_layout::apply(), before anything is drawn: an upright layout
+  // on a landscape panel turns LVGL's screen and the panel draws it upright.
+  void applyShownScreen();
   void setRotation(uint8_t rotation);
   void setRotationFlipped(bool flipped);
   bool isRotationFlipped() const;

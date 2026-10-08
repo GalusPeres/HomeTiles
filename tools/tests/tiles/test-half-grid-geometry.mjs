@@ -36,8 +36,12 @@ struct Tile{int type=TILE_SENSOR;float col=0,row=0,span_w=1,span_h=1;uint8_t sen
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
 ${fn('src/tiles/config/tile_config.h','tileBorderEnabled')}
 struct PackedQuarterGridV7{uint8_t version=7,quarter_index=0,reserved[2]={};};
-template<class P,class S>void clamp_media_tile_layout(int,P&,P&,S&,S&){}
+template<class P,class S>void clamp_media_tile_layout(int,P&,P&,S&,S&,float=0,float=0){}
 #include "src/tiles/config/grid_layout.h"
+static const uint8_t& GRID_SHOWN_COLS=grid_layout::g_shown.cols;
+static const uint8_t& GRID_SHOWN_ROWS=grid_layout::g_shown.rows;
+${fn('src/tiles/config/tile_config.h','tilePlaceCols')}
+${fn('src/tiles/config/tile_config.h','tilePlaceRows')}
 ${fn('src/tiles/config/tile_config.h','shownTileLayout')}
 ${fn('src/ui/tabs/tiles/tab_tiles_unified.cpp','get_tile_layout')}
 ${fn('src/tiles/config/tile_config.cpp','packGeometry')}

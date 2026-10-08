@@ -78,6 +78,14 @@ void displaySetRotation(uint8_t rotation) {
   DeviceImpl::displaySetRotation(rotation);
 }
 
+void displaySetUpright(bool upright) {
+#if defined(DEVICE_GUITION_JC8012P4A1_V2)
+  DeviceImpl::displaySetUpright(upright);
+#else
+  (void)upright;
+#endif
+}
+
 void setBrightness(uint8_t value) {
   DeviceImpl::setBrightness(value);
 }

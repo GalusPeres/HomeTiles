@@ -4796,10 +4796,15 @@ void set_label_style(lv_obj_t* lbl, lv_color_t c, const lv_font_t* f) {
 
 void set_tile_grid_cell(lv_obj_t* obj, uint8_t col, uint8_t row, uint8_t span_w, uint8_t span_h) {
   if (!obj) return;
+  // The grid's tracks: the profile's, or the shown grid's with its half row
+  // (grid_layout.h, tab_tiles_unified.cpp create_tiles_grid).
+  const int cols = grid_layout::head_bar() ? GRID_SHOWN_COLS : GRID_COLS;
+  const int rows = grid_layout::head_bar() ? grid_layout::whole_rows(grid_layout::shown()) : GRID_ROWS;
+  if (col >= cols || row >= rows) return;
   uint8_t w = span_w < 1 ? 1 : span_w;
   uint8_t h = span_h < 1 ? 1 : span_h;
-  if (w > GRID_COLS - col) w = GRID_COLS - col;
-  if (h > GRID_ROWS - row) h = GRID_ROWS - row;
+  if (w > cols - col) w = static_cast<uint8_t>(cols - col);
+  if (h > rows - row) h = static_cast<uint8_t>(rows - row);
   lv_obj_set_grid_cell(obj,
       LV_GRID_ALIGN_STRETCH, col, w,
       LV_GRID_ALIGN_STRETCH, row, h);
@@ -4809,10 +4814,11 @@ static bool get_tile_layout(const Tile& tile, float& col, float& row, float& spa
   return shownTileLayout(tile, col, row, span_w, span_h);
 }
 
-static void mark_occupied(bool occupied[GRID_ROWS][GRID_COLS], float col, float row, float span_w, float span_h) {
+static void mark_occupied(bool occupied[GRID_SPACE_ROWS][GRID_SPACE_COLS], float col, float row, float span_w,
+                          float span_h) {
   for (uint8_t r = static_cast<uint8_t>(row); r < row + span_h; ++r) {
     for (uint8_t c = static_cast<uint8_t>(col); c < col + span_w; ++c) {
-      if (r < GRID_ROWS && c < GRID_COLS) {
+      if (r < GRID_SPACE_ROWS && c < GRID_SPACE_COLS) {
         occupied[r][c] = true;
       }
     }
@@ -4845,7 +4851,7 @@ void render_tile_grid(lv_obj_t* parent, const TileGridConfig& config, GridType g
     }
   }
 
-  bool occupied[GRID_ROWS][GRID_COLS] = {};
+  bool occupied[GRID_SPACE_ROWS][GRID_SPACE_COLS] = {};
   struct TileLayout {
     float col = 0;
     float row = 0;

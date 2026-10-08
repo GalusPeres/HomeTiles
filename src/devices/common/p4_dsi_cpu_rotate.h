@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace p4_dsi_cpu_rotate {
 
@@ -35,6 +36,29 @@ inline void rotate_into(uint16_t* fb, size_t fb_stride, int32_t dst_x,
         dst[col] = column[static_cast<size_t>(h - 1 - col) * src_stride];
       }
     }
+  }
+}
+
+// Straight copy of an upright LVGL area (w x h pixels, row-major) into the
+// panel framebuffer at (x, y), or turned by 180 degrees (`flipped`, the
+// drivers' `g_rotation & 0x02`) into the mirrored place. The caller writes the
+// touched rows back for the DMA (cache sync).
+inline void copy_into(uint16_t* fb, size_t fb_stride, int32_t fb_w, int32_t fb_h, int32_t x,
+                      int32_t y, int32_t w, int32_t h, const uint16_t* src, bool flipped) {
+  const size_t src_stride = static_cast<size_t>(w);
+  if (!flipped) {
+    for (int32_t row = 0; row < h; ++row) {
+      std::memcpy(fb + static_cast<size_t>(y + row) * fb_stride + x, src + static_cast<size_t>(row) * src_stride,
+                  static_cast<size_t>(w) * sizeof(uint16_t));
+    }
+    return;
+  }
+  const int32_t dst_x = fb_w - x - w;
+  const int32_t dst_y = fb_h - y - h;
+  for (int32_t row = 0; row < h; ++row) {
+    uint16_t* dst = fb + static_cast<size_t>(dst_y + row) * fb_stride + dst_x;
+    const uint16_t* line = src + static_cast<size_t>(h - 1 - row) * src_stride;
+    for (int32_t col = 0; col < w; ++col) dst[col] = line[w - 1 - col];
   }
 }
 

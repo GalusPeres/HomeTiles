@@ -22,8 +22,10 @@ const getFunction = name => {
 const draw = getFunction('draw_landscape_area');
 assert.match(draw, /g_ui_ppa\.rotate\(/, `${revision} ordinary UI must reach the PPA path`);
 for (const entry of ['displayPushPixels', 'displayPushPixelsDMA']) {
+  // The DMA entry is the same path; an upright UI is copied without a turn.
   assert.match(getFunction(`${namespace}::${entry}`),
-    /draw_landscape_area\(/, `${entry} must use the accelerated path`);
+    entry === 'displayPushPixels' ? /draw_landscape_area\(/ : /draw_landscape_area\(|displayPushPixels\(/,
+    `${entry} must use the accelerated path`);
 }
 assert.match(getFunction('init_display'), /g_ui_ppa\.init\(/);
 assert.match(getFunction(`${namespace}::displayTryFullFramePreview`),

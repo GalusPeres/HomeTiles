@@ -14,11 +14,14 @@
 //  - Portrait: the same with the screen upright.
 // The places of the bar layouts live in their own file (tile_layouts.h), by
 // stable tile ID. The layout is read once at boot; changing it restarts the
-// panel. A layout that needs the screen turned (or a half row) cannot be
-// switched to yet: the panel then starts with the classic layout.
+// panel. A layout the panel cannot show yet (a turned screen or a half row
+// on a panel without upright_ready()) is not switched to: the panel then
+// starts with the classic layout.
 //
 // Stored tiles keep the profile's grid as their space (GRID_COLS, GRID_ROWS,
-// TILES_PER_GRID in tile_config.h); the shown grid is never larger.
+// TILES_PER_GRID in tile_config.h). The shown grid has at most as many cells,
+// but an upright layout can have more rows (kSpaceRows, its places live in
+// the layout file).
 namespace grid_layout {
 
 enum class Layout : uint8_t { kClassic = 0, kBar = 1, kPortrait = 2 };
@@ -165,10 +168,31 @@ constexpr bool available(Layout layout) { return layout != Layout::kPortrait || 
 constexpr bool needs_rotation(Layout layout) {
   return layout != Layout::kClassic && layout_grid(layout).portrait != native_portrait();
 }
-// The panel can start with it: no turned screen and no half row yet.
-constexpr bool switchable(Layout layout) {
-  return available(layout) && !needs_rotation(layout) && !layout_grid(layout).half_row;
+// The panel shows a turned layout: its driver draws and reads the touch
+// upright without the quarter turn (Device::displaySetUpright), and the tile
+// grid takes the half row. Hochkant step 2, one panel after the other (user
+// 2026-10-08: the Guition V2 first).
+constexpr bool upright_ready() {
+#if defined(DEVICE_GUITION_JC8012P4A1_V2)
+  return true;
+#else
+  return false;
+#endif
 }
+// The panel can start with it.
+constexpr bool switchable(Layout layout) {
+  return available(layout) && ((!needs_rotation(layout) && !layout_grid(layout).half_row) || upright_ready());
+}
+
+// The room every layout's grid fits in (a half row counts whole): the tile
+// grids' arrays and the editor's bounds. An upright layout can have more rows
+// than the profile (1280 x 800: 7 x 5, upright 4 x 6.5).
+constexpr uint8_t whole_rows(const Shown& grid) { return static_cast<uint8_t>(grid.rows + (grid.half_row ? 1 : 0)); }
+constexpr uint8_t larger(uint8_t a, uint8_t b) { return a > b ? a : b; }
+constexpr uint8_t kSpaceCols = larger(larger(Device::kGridCols, layout_grid(Layout::kBar).cols),
+                                      available(Layout::kPortrait) ? layout_grid(Layout::kPortrait).cols : 0);
+constexpr uint8_t kSpaceRows = larger(larger(Device::kGridRows, whole_rows(layout_grid(Layout::kBar))),
+                                      available(Layout::kPortrait) ? whole_rows(layout_grid(Layout::kPortrait)) : 0);
 constexpr Layout from_index(uint8_t value) {
   return value == 1 ? Layout::kBar : value == 2 ? Layout::kPortrait : Layout::kClassic;
 }
@@ -183,6 +207,13 @@ inline Shown g_shown = profile_grid();
 inline const Shown& shown() { return g_shown; }
 inline bool head_bar() { return g_shown.head_bar; }
 inline Layout active() { return g_shown.layout; }
+// The screen as this boot shows it: turned with an upright layout on a
+// landscape panel (SCREEN_WIDTH/SCREEN_HEIGHT stay the profile's).
+inline int screen_w() { return g_shown.screen_w; }
+inline int screen_h() { return g_shown.screen_h; }
+inline bool turned() { return g_shown.portrait != native_portrait(); }
+// The shown grid's rows with its half row.
+inline float shown_rows() { return g_shown.rows + (g_shown.half_row ? 0.5f : 0.0f); }
 // The stored layout, or the classic one while it cannot be switched to.
 inline Layout apply(uint8_t stored) {
   const Layout layout = switchable(from_index(stored)) ? from_index(stored) : Layout::kClassic;

@@ -95,19 +95,26 @@ struct TileRect {
   float span_h;
 };
 
-// Where a reorder may place tiles: the shown grid (grid_layout.h), with the
-// head bar its fewer cells; the screensaver keeps its stored grid. Tiles
-// that already lie outside it stay where they are.
-static uint8_t g_place_cols = GRID_COLS;
-static uint8_t g_place_rows = GRID_ROWS;
+// Where a request places tiles, set at its start: the shown grid
+// (grid_layout.h), with the head bar its fewer cells (upright more rows and a
+// half row); the classic places (import) and the screensaver without a bar
+// layout keep the stored grid. Tiles that already lie outside it stay where
+// they are.
+static float g_place_cols = GRID_COLS;
+static float g_place_rows = GRID_ROWS;
+
+static void setPlaceGrid(bool stored_grid) {
+  g_place_cols = stored_grid ? GRID_COLS : tilePlaceCols();
+  g_place_rows = stored_grid ? GRID_ROWS : tilePlaceRows();
+}
 
 static bool buildTileRect(float col, float row, float span_w, float span_h, TileRect& out) {
-  if (col >= GRID_COLS || row >= GRID_ROWS) return false;
+  if (col >= g_place_cols || row >= g_place_rows) return false;
   if (!tile_geometry::half_step(col) || !tile_geometry::half_step(row) ||
       !tile_geometry::half_step(span_w) || !tile_geometry::half_step(span_h) ||
       span_w < 0.5f || span_h < 0.5f) return false;
-  if (span_w > GRID_COLS - col) return false;
-  if (span_h > GRID_ROWS - row) return false;
+  if (span_w > g_place_cols - col) return false;
+  if (span_h > g_place_rows - row) return false;
   out = TileRect{col, row, span_w, span_h};
   return true;
 }
@@ -118,7 +125,7 @@ static bool getTileRect(const Tile& tile, TileRect& out) {
   float row = tile.row;
   float span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
   float span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
-  clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
+  clamp_media_tile_layout(tile.type, col, row, span_w, span_h, g_place_cols, g_place_rows);
   return buildTileRect(col, row, span_w, span_h, out);
 }
 
@@ -182,7 +189,7 @@ static std::vector<PlacementCandidate> buildPlacementCandidates(
     float span_h,
     float preferred_col,
     float preferred_row,
-    uint8_t first_row = 0,
+    float first_row = 0,
     float step = 1) {
   std::vector<PlacementCandidate> out;
   for (float row = first_row; row < g_place_rows; row += step) {
@@ -214,7 +221,7 @@ static bool findPlacementForTile(
     float preferred_col,
     float preferred_row,
     const std::vector<size_t>& floating_indices,
-    uint8_t first_row = 0,
+    float first_row = 0,
     float step = 1) {
   if (tile_index >= TILES_PER_GRID) return false;
   Tile& tile = grid.tiles[tile_index];
@@ -245,7 +252,7 @@ static bool applySmartReorder(
     size_t from_index,
     float target_col,
     float target_row,
-    uint8_t first_row = 0) {
+    float first_row = 0) {
   if (from_index >= TILES_PER_GRID) return false;
   if (target_row < first_row) return false;
   Tile& moving_tile = grid.tiles[from_index];
@@ -257,7 +264,7 @@ static bool applySmartReorder(
   const float span_h = moving_tile.span_h < 0.5f ? 1 : moving_tile.span_h;
 
   TileRect target_rect{};
-  if (!tile_geometry::supported(moving_tile.type, target_col, target_row, span_w, span_h) ||
+  if (!tile_geometry::supported_size(moving_tile.type, target_col, target_row, span_w, span_h) ||
       !buildTileRect(target_col, target_row, span_w, span_h, target_rect) ||
       target_col + span_w > g_place_cols || target_row + span_h > g_place_rows) return false;
 
@@ -622,6 +629,7 @@ void WebAdminServer::handleSaveTiles() {
                                  : tileConfig.loadFolderGrid(folder_id, *grid);
     if (grid_loaded && classic_places) markClassicStorage(folder_id, *grid);
   }
+  setPlaceGrid(classic_places || (screensaver_grid && !screensaver_layout));
   if (!grid_loaded) {
     server.send(500, "application/json", "{\"success\":false,\"error\":\"Folder load failed\"}");
     return;
@@ -731,8 +739,9 @@ void WebAdminServer::handleSaveTiles() {
     server.send(400, "application/json", "{\"success\":false,\"error\":\"Invalid layout\"}");
     return;
   }
-  clamp_media_tile_layout(static_cast<TileType>(type), col, row, span_w, span_h);
-  if ((type != TILE_EMPTY && !tile_geometry::supported(type, col, row, span_w, span_h)) ||
+  clamp_media_tile_layout(static_cast<TileType>(type), col, row, span_w, span_h, g_place_cols, g_place_rows);
+  if ((type != TILE_EMPTY && (!tile_geometry::supported_size(type, col, row, span_w, span_h) ||
+                              col + span_w > g_place_cols || row + span_h > g_place_rows)) ||
       (screensaver_grid &&
        row < (screensaver_layout ? screensaver_places::first_row(grid_layout::active()) : GRID_ROWS - 2) - 0.001f)) {
     tile = previous_tile;
@@ -972,19 +981,19 @@ void WebAdminServer::handleReorderTiles() {
 
   float target_col_raw = server.hasArg("target_col") ? server.arg("target_col").toFloat() : -1;
   float target_row_raw = server.hasArg("target_row") ? server.arg("target_row").toFloat() : -1;
-  float target_col = (target_col_raw >= 0 && target_col_raw < GRID_COLS) ? target_col_raw : tile_to.col;
-  float target_row = (target_row_raw >= 0 && target_row_raw < GRID_ROWS) ? target_row_raw : tile_to.row;
+  setPlaceGrid(screensaver_grid && !screensaver_layout);
+  float target_col = (target_col_raw >= 0 && target_col_raw < g_place_cols) ? target_col_raw : tile_to.col;
+  float target_row = (target_row_raw >= 0 && target_row_raw < g_place_rows) ? target_row_raw : tile_to.row;
 
-  if (target_col >= GRID_COLS || target_row >= GRID_ROWS) {
+  if (target_col >= g_place_cols || target_row >= g_place_rows) {
     server.send(400, "application/json", "{\"success\":false,\"error\":\"Invalid target\"}");
     return;
   }
 
-  const uint8_t first_row = screensaver_layout ? static_cast<uint8_t>(screensaver_places::first_row(grid_layout::active()))
-                            : screensaver_grid && GRID_ROWS > 1 ? GRID_ROWS - 2
-                                                                : 0;
-  g_place_cols = screensaver_grid && !screensaver_layout ? GRID_COLS : GRID_SHOWN_COLS;
-  g_place_rows = screensaver_grid && !screensaver_layout ? GRID_ROWS : GRID_SHOWN_ROWS;
+  // The screensaver's rows at the bottom (three upright: from row 3.5).
+  const float first_row = screensaver_layout ? screensaver_places::first_row(grid_layout::active())
+                          : screensaver_grid && GRID_ROWS > 1 ? GRID_ROWS - 2
+                                                              : 0;
   if (!applySmartReorder(grid, static_cast<size_t>(from), target_col,
                          target_row, first_row)) {
     server.send(409, "application/json", "{\"success\":false,\"error\":\"Tile overlaps\"}");

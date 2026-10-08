@@ -82,6 +82,10 @@ void displayWaitDMA();
 void displayWaitFrameStart();
 void displayFillScreen(uint16_t color);
 void displaySetRotation(uint8_t rotation);
+// The upright layout on a landscape panel (grid_layout::turned()): LVGL draws
+// the screen upright and the panel shows it without the quarter turn; touch
+// comes upright too. Only panels with grid_layout::upright_ready() act on it.
+void displaySetUpright(bool upright);
 
 void setBrightness(uint8_t value);
 uint8_t getBrightness();

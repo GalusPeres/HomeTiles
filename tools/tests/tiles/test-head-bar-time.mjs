@@ -35,7 +35,7 @@ assert.match(styles, /emit_scaled\("head-time-line", head\.time_line\);/);
 assert.match(bar, /const lv_font_t\* font = time_font\(\);/);
 assert.match(bar, /const int ink_top = g\.time_line - font->base_line - digit\.box_h - digit\.ofs_y;/);
 assert.match(bar, /const int top_gap = g\.center_y - g\.time_line \/ 2 \+ ink_top;/);
-assert.match(bar, /g\.time_x_alone = SCREEN_WIDTH - top_gap \+ right_bearing - g\.time_w;/);
+assert.match(bar, /g\.time_x_alone = grid_layout::screen_w\(\) - top_gap \+ right_bearing - g\.time_w;/);
 assert.match(styles, /emit_scaled\("head-time-x-alone", head\.time_x_alone\);/);
 assert.match(bar, /g\.title_w_alone = g\.title_w \+ g\.time_x_alone - g\.time_x;/);
 assert.match(bar, /const bool gear_hidden = home && !configManager\.getConfig\(\)\.head_gear;/);

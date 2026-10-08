@@ -495,8 +495,8 @@ String ScreensaverConfigStore::toJson(bool include_device_meta) const {
   }
   doc["duration_seconds"] = data_.duration_seconds;
   if (include_device_meta) {
-    doc["screen_width"] = Device::kScreenWidth;
-    doc["screen_height"] = Device::kScreenHeight;
+    doc["screen_width"] = grid_layout::screen_w();
+    doc["screen_height"] = grid_layout::screen_h();
     doc["grid_cols"] = Device::kGridCols;
     doc["grid_rows"] = Device::kGridRows;
     doc["grid_cell_w"] = Device::kGridCellW;

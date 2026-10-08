@@ -187,7 +187,7 @@ Geometry geometry() {
   const int ink_top = g.time_line - font->base_line - digit.box_h - digit.ofs_y;
   const int top_gap = g.center_y - g.time_line / 2 + ink_top;
   const int right_bearing = digit.adv_w - digit.ofs_x - digit.box_w;
-  g.time_x_alone = SCREEN_WIDTH - top_gap + right_bearing - g.time_w;
+  g.time_x_alone = grid_layout::screen_w() - top_gap + right_bearing - g.time_w;
   if (g.time_x_alone < g.time_x) g.time_x_alone = g.time_x;
   g.title_w_alone = g.title_w + g.time_x_alone - g.time_x;
   return g;
@@ -208,7 +208,7 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   lv_obj_add_flag(bar, LV_OBJ_FLAG_FLOATING);
   lv_obj_set_user_data(bar, &g_marker);
   lv_obj_set_pos(bar, -GRID_PAD_LEFT, -GRID_PAD_TOP);
-  lv_obj_set_size(bar, SCREEN_WIDTH, GRID_PAD_TOP);
+  lv_obj_set_size(bar, grid_layout::screen_w(), GRID_PAD_TOP);
 
   // The page's circle: Home's house or the folder's icon, in the Settings
   // gear's grey over the global tile color.

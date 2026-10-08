@@ -59,6 +59,7 @@ esp_lcd_touch_handle_t g_touch = &g_state;
 struct { int width=800, height=1280; } display_cfg;
 bool g_touch_active=false;
 uint8_t g_touch_release_reads=0, g_touch_active_track_id=kInvalidTouchTrackId, g_rotation=0;
+bool g_upright=false;  // landscape UI (the upright mapping: test-upright-layout.mjs)
 int32_t g_touch_stable_x=0, g_touch_stable_y=0;
 ${fn(board, 'DeviceGuitionJC8012P4A1V2::getTouch').replace('DeviceGuitionJC8012P4A1V2::getTouch', 'read_board_touch')}
 void contact(int index, uint16_t x, uint16_t y, uint8_t id=1) {

@@ -14,6 +14,7 @@
 #include <soc/soc_caps.h>
 #endif
 #include <string.h>
+#include <memory>
 
 // lvgl.h no longer exports lv_image_cache_drop() in 9.5; its declaration
 // is available only in the instance header (see tile_renderer.cpp).
@@ -34,6 +35,7 @@
 #include "src/types/clock/renderer.h"
 #include "src/types/energy/energy_data.h"
 #include "src/ui/screensaver/screensaver_config.h"
+#include "src/ui/screensaver/screensaver_places.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -1394,7 +1396,10 @@ lv_obj_t* build_slot_tile(ScreensaverState* st, size_t i, const Tile& tile) {
 
 void remember_shown_grid(ScreensaverState* st) {
   if (!st->shown_grid) st->shown_grid = new (std::nothrow) TileGridConfig();
-  if (st->shown_grid) *st->shown_grid = screensaverConfig.tileGrid();
+  if (!st->shown_grid) return;
+  // As the active layout shows them (screensaver_places.h).
+  *st->shown_grid = screensaverConfig.tileGrid();
+  screensaver_places::overlay(*st->shown_grid);
   st->built_opacity = screensaverConfig.get().tile_opacity;
 }
 
@@ -1450,21 +1455,20 @@ void rebuild_slot_grid(ScreensaverState* st) {
     lv_obj_remove_flag(st->slot_grid, LV_OBJ_FLAG_CLICKABLE);
   }
 
-  // Screensaver tiles keep to the bottom rows: with the head bar's fewer
-  // rows they move up by the difference; one beyond its columns is left out.
-  const float row_shift = static_cast<float>(GRID_ROWS - GRID_SHOWN_ROWS);
-  const TileGridConfig& tile_grid = screensaverConfig.tileGrid();
-  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
-    if (tile_grid.tiles[i].type == TILE_EMPTY) continue;
-    Tile shown = tile_grid.tiles[i];
-    shown.row -= row_shift;
-    if (shown.row < 0 || shown.col + (shown.span_w < 1 ? 1 : shown.span_w) > GRID_SHOWN_COLS + 0.001f) continue;
-    build_slot_tile(st, i, shown);
+  // The active layout's places (screensaver_places.h): a bar layout's own,
+  // two rows at the bottom of its grid; a tile without one is left out.
+  remember_shown_grid(st);
+  if (st->shown_grid) {
+    const TileGridConfig& shown = *st->shown_grid;
+    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+      const Tile& tile = shown.tiles[i];
+      if (tile.type == TILE_EMPTY || tile.layout_hidden) continue;
+      build_slot_tile(st, i, tile);
+    }
   }
 
   apply_slot_tile_shadows(st);
   apply_slot_tile_borders(st);
-  remember_shown_grid(st);
 
   // Match the Web preview: tiles at z=2, freely positioned clock at z=3.
   if (st->clock_box) lv_obj_move_foreground(st->clock_box);
@@ -1485,8 +1489,13 @@ bool update_slot_grid(ScreensaverState* st) {
   if (cards != lv_obj_get_child_count(st->slot_grid)) return false;
 
   const uint32_t started_ms = millis();
-  const TileGridConfig& next = screensaverConfig.tileGrid();
+  // Both as the active layout shows them (screensaver_places.h).
+  std::unique_ptr<TileGridConfig> next_storage(new (std::nothrow) TileGridConfig(screensaverConfig.tileGrid()));
+  if (!next_storage) return false;
+  screensaver_places::overlay(*next_storage);
+  const TileGridConfig& next = *next_storage;
   const TileGridConfig& shown = *st->shown_grid;
+  auto visible = [](const Tile& tile) { return tile.type != TILE_EMPTY && !tile.layout_hidden; };
   const bool shadows = screensaverConfig.get().tile_shadow;
   const bool borders = screensaverConfig.get().tile_border;
   unsigned rebuilt = 0;
@@ -1494,8 +1503,8 @@ bool update_slot_grid(ScreensaverState* st) {
   for (size_t i = 0; i < TILES_PER_GRID; ++i) {
     const Tile& before = shown.tiles[i];
     const Tile& after = next.tiles[i];
-    if (before.type == TILE_EMPTY && after.type == TILE_EMPTY) continue;
-    if (after.type != TILE_EMPTY && st->slot_objs[i] &&
+    if (!visible(before) && !visible(after)) continue;
+    if (visible(after) && st->slot_objs[i] &&
         tileContentEquals(before, after) && before.col == after.col &&
         before.row == after.row) {
       ++position;
@@ -1514,7 +1523,7 @@ bool update_slot_grid(ScreensaverState* st) {
     st->slot_units[i] = String();
     st->slot_rule_payloads[i] = String();
     ++rebuilt;
-    if (after.type == TILE_EMPTY) continue;
+    if (!visible(after)) continue;
     lv_obj_t* card = build_slot_tile(st, i, after);
     if (!card) continue;
     apply_slot_card_shadow(card, shadows);

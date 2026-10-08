@@ -388,24 +388,6 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
     html += radius;
   }
   html += "}";
-  if (page && grid_layout::head_bar()) {
-    // The screensaver tab keeps the profile's grid, where its tiles are
-    // stored; the panel shows them in the bottom rows of the head bar's grid
-    // (image_screensaver.cpp).
-    const grid_layout::Shown profile = grid_layout::profile_grid();
-    html += ".screensaver-tile-grid{--grid-cols:";
-    html += String(profile.cols);
-    html += ";--grid-rows:";
-    html += String(profile.rows);
-    html += ";";
-    emit_scaled("preview-cell-w", profile.cell_w);
-    emit_scaled("preview-cell-h", profile.cell_h);
-    emit_scaled("preview-pad-left", profile.pad_left);
-    emit_scaled("preview-pad-right", profile.pad_right);
-    emit_scaled("preview-pad-top", profile.pad_top);
-    emit_scaled("preview-pad-bottom", profile.pad_bottom);
-    html += "}";
-  }
   html += "</style>\n";
 }
 

@@ -23,11 +23,12 @@ import {extractDeliveredFunction, readRepoFile} from '../../lib/admin-source.mjs
   const run = code => vm.runInContext(code, ctx);
   assert.equal(run("placeCols('folder0')"), 6);
   assert.equal(run("placeRows('folder3')"), 4);
-  assert.equal(run("placeCols('screensaver')"), 7, 'the screensaver keeps its stored grid');
+  assert.equal(run("placeCols('screensaver')"), 6, 'the screensaver takes the shown grid (screensaver_places.h)');
   run('var occupied = Array.from({length: 10}, () => Array(14).fill(false));');
   assert.equal(run("slotFits('folder0', occupied, 6, 0, 1, 1)"), false, 'no free slot beside the shown grid');
   assert.equal(run("slotFits('folder0', occupied, 5, 3, 1, 1)"), true);
-  assert.equal(run("slotFits('screensaver', occupied, 6, 4, 1, 1)"), true);
+  assert.equal(run("slotFits('screensaver', occupied, 5, 3, 1, 1)"), true, 'the bottom rows of the shown grid');
+  assert.equal(run("slotFits('screensaver', occupied, 6, 4, 1, 1)"), false);
   assert.equal(run("tileTakesRoom({type: 5, col: 0, row: 0})"), true);
   assert.equal(run("tileTakesRoom({type: 5, layout_hidden: true})"), false, 'a tile without a place takes no room');
   assert.equal(run("tileTakesRoom({type: 0})"), false);

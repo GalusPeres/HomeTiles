@@ -2,6 +2,7 @@
 #include "src/web/server/auth/web_admin_auth.h"
 #include "src/core/text/title_text.h"
 #include "src/ui/screensaver/screensaver_config.h"
+#include "src/ui/screensaver/screensaver_places.h"
 #include "src/web/server/render/web_admin_html.h"
 #include "src/core/i18n/i18n.h"
 #include "src/core/config/pin_access.h"
@@ -119,28 +120,6 @@ static bool getTileRect(const Tile& tile, TileRect& out) {
   float span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
   clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
   return buildTileRect(col, row, span_w, span_h, out);
-}
-
-// A tile in the classic storage (the layout window's, tile_layouts.h) has no
-// classic place: its stored one is stale and may lie under another tile. The
-// export marks it, and the import's overlap checks leave it out.
-static void markClassicStorage(uint16_t folder_id, TileGridConfig& grid) {
-  for (Tile& tile : grid.tiles) {
-    tile.layout_hidden = tile.type != TILE_EMPTY && tile_layouts::classic_hidden(folder_id, tile.view_id);
-  }
-}
-
-// An imported storage tile's spot beside the classic screen ("col,row,w,h").
-static bool parseClassicStorageSpot(const String& value, tile_layouts::Place& out) {
-  float v[4] = {0, 0, 0, 0};
-  if (sscanf(value.c_str(), "%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3]) != 4) return false;
-  for (float f : v) {
-    if (!std::isfinite(f) || f * 2 != std::floor(f * 2)) return false;
-  }
-  if (v[2] < 0.5f || v[3] < 0.5f || v[0] < -16 || v[1] < -16 || v[0] > 32 || v[1] > 32) return false;
-  out = {v[0], v[1], v[2], v[3]};
-  return !grid_layout::inside(grid_layout::layout_grid(grid_layout::Layout::kClassic), out.col, out.row,
-                              out.span_w, out.span_h);
 }
 
 static bool rectsOverlap(const TileRect& a, const TileRect& b) {
@@ -389,6 +368,28 @@ static bool folderHasContent(uint16_t folder_id) {
   return false;
 }
 
+// A tile in the classic storage (the layout window's, tile_layouts.h) has no
+// classic place: its stored one is stale and may lie under another tile. The
+// export marks it, and the import's overlap checks leave it out.
+static void markClassicStorage(uint16_t folder_id, TileGridConfig& grid) {
+  for (Tile& tile : grid.tiles) {
+    tile.layout_hidden = tile.type != TILE_EMPTY && tile_layouts::classic_hidden(folder_id, tile.view_id);
+  }
+}
+
+// An imported storage tile's spot beside the classic screen ("col,row,w,h").
+static bool parseClassicStorageSpot(const String& value, tile_layouts::Place& out) {
+  float v[4] = {0, 0, 0, 0};
+  if (sscanf(value.c_str(), "%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3]) != 4) return false;
+  for (float f : v) {
+    if (!std::isfinite(f) || f * 2 != std::floor(f * 2)) return false;
+  }
+  if (v[2] < 0.5f || v[3] < 0.5f || v[0] < -16 || v[1] < -16 || v[0] > 32 || v[1] > 32) return false;
+  out = {v[0], v[1], v[2], v[3]};
+  return !grid_layout::inside(grid_layout::layout_grid(grid_layout::Layout::kClassic), out.col, out.row,
+                              out.span_w, out.span_h);
+}
+
 void WebAdminServer::handleGetTiles() {
   // GET /api/tiles?folder=<id>[&index=0-23]
   webAdminMarkActivity();
@@ -422,6 +423,9 @@ void WebAdminServer::handleGetTiles() {
   const bool classic_places = !screensaver_grid && server.arg("layout") == "classic";
   if (screensaver_grid) {
     grid = screensaverConfig.tileGrid();
+    // The active layout's places (screensaver_places.h), the export the
+    // classic ones.
+    if (server.arg("layout") != "classic") screensaver_places::overlay(grid);
   } else {
     loaded = classic_places ? tileConfig.loadFolderGridClassic(folder_id, grid)
                             : tileConfig.loadFolderGrid(folder_id, grid);
@@ -601,8 +605,14 @@ void WebAdminServer::handleSaveTiles() {
   bool grid_loaded = true;
   // The import writes the classic layout's places whatever layout is shown.
   const bool classic_places = !screensaver_grid && server.arg("layout") == "classic";
+  // A bar layout shows the screensaver in its own grid: the editor's places
+  // are that layout's (screensaver_places.h); the import writes the classic
+  // ones.
+  const bool screensaver_layout = screensaver_grid && grid_layout::active() != grid_layout::Layout::kClassic &&
+                                  server.arg("layout") != "classic";
   if (screensaver_grid) {
     *grid = screensaverConfig.tileGrid();
+    if (screensaver_layout) screensaver_places::overlay(*grid);
   } else {
     grid_loaded = classic_places ? tileConfig.loadFolderGridClassic(folder_id, *grid)
                                  : tileConfig.loadFolderGrid(folder_id, *grid);
@@ -719,7 +729,8 @@ void WebAdminServer::handleSaveTiles() {
   }
   clamp_media_tile_layout(static_cast<TileType>(type), col, row, span_w, span_h);
   if ((type != TILE_EMPTY && !tile_geometry::supported(type, col, row, span_w, span_h)) ||
-      (screensaver_grid && row < GRID_ROWS - 2)) {
+      (screensaver_grid &&
+       row < (screensaver_layout ? screensaver_places::first_row(grid_layout::active()) : GRID_ROWS - 2) - 0.001f)) {
     tile = previous_tile;
     server.send(400, "application/json", "{\"success\":false,\"error\":\"Unsupported tile size\"}");
     return;
@@ -793,16 +804,33 @@ void WebAdminServer::handleSaveTiles() {
   // Admin: an edit that keeps the tile type (color, text, size, entity) before
   // the flash write; a new or changed type right after it, once the saved
   // grid carries its view ID.
+  // A bar layout's edit: its places to the layout file, the tile with its
+  // classic place into the screensaver grid.
+  std::unique_ptr<TileGridConfig> classic_grid;
+  if (screensaver_layout) {
+    classic_grid.reset(new (std::nothrow) TileGridConfig(screensaverConfig.tileGrid()));
+    if (!classic_grid) {
+      tile = previous_tile;
+      server.send(500, "application/json", "{\"success\":false,\"error\":\"No memory\"}");
+      return;
+    }
+    screensaver_places::take(*grid, *classic_grid, static_cast<size_t>(index));
+  }
+  TileGridConfig& saved_grid = classic_grid ? *classic_grid : *grid;
+  // An emptied slot's places in the other layouts go too.
+  if (screensaver_grid && !screensaver_layout && tile.type == TILE_EMPTY) {
+    screensaver_places::forget(static_cast<size_t>(index));
+  }
   const bool display_awake = !powerManager.isInSleep();
   const bool shown_before_save =
       screensaver_grid
-          ? display_awake && showScreensaverGridBeforeSave(*grid)
+          ? display_awake && showScreensaverGridBeforeSave(saved_grid)
           : !deleting_folder && !classic_places && display_awake &&
                 previous_tile.type == tile.type &&
                 tileConfig.previewActiveFolderGrid(folder_id, *grid) &&
                 tiles_show_active_layout_now();
   const uint32_t save_started_ms = millis();
-  bool success = screensaver_grid ? screensaverConfig.replaceTileGrid(*grid)
+  bool success = screensaver_grid ? tile_layouts::commit() && screensaverConfig.replaceTileGrid(saved_grid)
                  : classic_places ? tileConfig.saveFolderGridClassic(folder_id, *grid)
                                   : tileConfig.saveFolderGrid(folder_id, *grid);
   // The classic storage follows the import: in it (with its spot when the
@@ -923,8 +951,11 @@ void WebAdminServer::handleReorderTiles() {
   TileGridConfig& grid = *grid_storage;
   // Abort rather than overwrite the whole folder if the current grid can't be loaded.
   bool grid_loaded = true;
+  // A bar layout: the moves are in its grid (screensaver_places.h).
+  const bool screensaver_layout = screensaver_grid && grid_layout::active() != grid_layout::Layout::kClassic;
   if (screensaver_grid) {
     grid = screensaverConfig.tileGrid();
+    if (screensaver_layout) screensaver_places::overlay(grid);
   } else {
     grid_loaded = tileConfig.loadFolderGrid(folder_id, grid);
   }
@@ -945,11 +976,11 @@ void WebAdminServer::handleReorderTiles() {
     return;
   }
 
-  const uint8_t first_row = screensaver_grid && GRID_ROWS > 1
-                                ? GRID_ROWS - 2
-                                : 0;
-  g_place_cols = screensaver_grid ? GRID_COLS : GRID_SHOWN_COLS;
-  g_place_rows = screensaver_grid ? GRID_ROWS : GRID_SHOWN_ROWS;
+  const uint8_t first_row = screensaver_layout ? static_cast<uint8_t>(screensaver_places::first_row(grid_layout::active()))
+                            : screensaver_grid && GRID_ROWS > 1 ? GRID_ROWS - 2
+                                                                : 0;
+  g_place_cols = screensaver_grid && !screensaver_layout ? GRID_COLS : GRID_SHOWN_COLS;
+  g_place_rows = screensaver_grid && !screensaver_layout ? GRID_ROWS : GRID_SHOWN_ROWS;
   if (!applySmartReorder(grid, static_cast<size_t>(from), target_col,
                          target_row, first_row)) {
     server.send(409, "application/json", "{\"success\":false,\"error\":\"Tile overlaps\"}");
@@ -959,15 +990,18 @@ void WebAdminServer::handleReorderTiles() {
   // The visible folder shows the new order before the flash write (about a
   // second) instead of after it and a quiet Web Admin.
   const uint32_t show_started_ms = millis();
+  // A bar layout's moves go to the layout file only.
+  if (screensaver_layout) screensaver_places::take_places(grid);
   const bool shown_now =
       !powerManager.isInSleep() &&
-      (screensaver_grid ? showScreensaverGridBeforeSave(grid)
-                        : tileConfig.previewActiveFolderGrid(folder_id, grid) &&
-                              tiles_show_active_layout_now());
+      (screensaver_layout ? false
+       : screensaver_grid ? showScreensaverGridBeforeSave(grid)
+                          : tileConfig.previewActiveFolderGrid(folder_id, grid) &&
+                                tiles_show_active_layout_now());
   const uint32_t save_started_ms = millis();
-  bool success = screensaver_grid
-                     ? screensaverConfig.replaceTileGrid(grid)
-                     : tileConfig.saveFolderGrid(folder_id, grid);
+  bool success = screensaver_layout ? tile_layouts::commit()
+                 : screensaver_grid ? screensaverConfig.replaceTileGrid(grid)
+                                    : tileConfig.saveFolderGrid(folder_id, grid);
   const uint32_t saved_ms = millis();
   if (success) {
     if (!screensaver_grid) {

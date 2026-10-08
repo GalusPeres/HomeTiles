@@ -2,15 +2,13 @@
   // larger cells. New places, moves and sizes stay inside it. A tile without
   // a place in the active layout (layout_hidden, tile_layouts.h) is not shown
   // and takes no room; the layout window places it. The screensaver tab
-  // keeps its own grid.
+  // shows the same grid, its two rows at the bottom (screensaver_places.h).
   function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
   function placeCols(tab = currentTileTab) {
-    return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_COLS === 'number'
-      ? GRID_SHOWN_COLS : GRID_COLS;
+    return headBarLayout() && typeof GRID_SHOWN_COLS === 'number' ? GRID_SHOWN_COLS : GRID_COLS;
   }
   function placeRows(tab = currentTileTab) {
-    return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_ROWS === 'number'
-      ? GRID_SHOWN_ROWS : GRID_ROWS;
+    return headBarLayout() && typeof GRID_SHOWN_ROWS === 'number' ? GRID_SHOWN_ROWS : GRID_ROWS;
   }
   // A tile that is shown and takes room in the editor's grid.
   function tileTakesRoom(tile) {

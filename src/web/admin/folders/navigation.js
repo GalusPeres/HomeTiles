@@ -48,7 +48,8 @@
     return tab === 'screensaver';
   }
   function firstAllowedGridRow(tab) {
-    return isScreensaverTileTab(tab) ? Math.max(0, GRID_ROWS - 2) : 0;
+    // The screensaver's two rows at the bottom of the shown grid.
+    return isScreensaverTileTab(tab) ? Math.max(0, placeRows(tab) - 2) : 0;
   }
   function restoreCurrentTileSelectionUi() {
     if (currentTileIndex === -1 || !currentTileTab) return;

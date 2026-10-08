@@ -5510,7 +5510,8 @@ function syncTileRadiusControls(tabEl) {
     return tab === 'screensaver';
   }
   function firstAllowedGridRow(tab) {
-    return isScreensaverTileTab(tab) ? Math.max(0, GRID_ROWS - 2) : 0;
+    // The screensaver's two rows at the bottom of the shown grid.
+    return isScreensaverTileTab(tab) ? Math.max(0, placeRows(tab) - 2) : 0;
   }
   function restoreCurrentTileSelectionUi() {
     if (currentTileIndex === -1 || !currentTileTab) return;
@@ -6048,15 +6049,13 @@ function syncTileRadiusControls(tabEl) {
   // larger cells. New places, moves and sizes stay inside it. A tile without
   // a place in the active layout (layout_hidden, tile_layouts.h) is not shown
   // and takes no room; the layout window places it. The screensaver tab
-  // keeps its own grid.
+  // shows the same grid, its two rows at the bottom (screensaver_places.h).
   function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
   function placeCols(tab = currentTileTab) {
-    return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_COLS === 'number'
-      ? GRID_SHOWN_COLS : GRID_COLS;
+    return headBarLayout() && typeof GRID_SHOWN_COLS === 'number' ? GRID_SHOWN_COLS : GRID_COLS;
   }
   function placeRows(tab = currentTileTab) {
-    return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_ROWS === 'number'
-      ? GRID_SHOWN_ROWS : GRID_ROWS;
+    return headBarLayout() && typeof GRID_SHOWN_ROWS === 'number' ? GRID_SHOWN_ROWS : GRID_ROWS;
   }
   // A tile that is shown and takes room in the editor's grid.
   function tileTakesRoom(tile) {
@@ -8152,8 +8151,9 @@ function syncTileRadiusControls(tabEl) {
         if (!res.ok || !data?.success) throw new Error('Screensaver config export failed');
         return data;
       });
+      // The classic places, like the folders' (screensaver_places.h).
       const screensaverGridRequest = fetch(
-        '/api/tiles?folder=' + encodeURIComponent(SCREENSAVER_FOLDER_ID)
+        '/api/tiles?folder=' + encodeURIComponent(SCREENSAVER_FOLDER_ID) + '&layout=classic'
       ).then(async res => {
         const data = await res.json();
         if (!res.ok || !Array.isArray(data)) throw new Error('Screensaver grid export failed');

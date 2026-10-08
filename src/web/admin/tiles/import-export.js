@@ -91,8 +91,9 @@
         if (!res.ok || !data?.success) throw new Error('Screensaver config export failed');
         return data;
       });
+      // The classic places, like the folders' (screensaver_places.h).
       const screensaverGridRequest = fetch(
-        '/api/tiles?folder=' + encodeURIComponent(SCREENSAVER_FOLDER_ID)
+        '/api/tiles?folder=' + encodeURIComponent(SCREENSAVER_FOLDER_ID) + '&layout=classic'
       ).then(async res => {
         const data = await res.json();
         if (!res.ok || !Array.isArray(data)) throw new Error('Screensaver grid export failed');

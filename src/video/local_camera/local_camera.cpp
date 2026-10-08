@@ -296,10 +296,12 @@ String deviceTopic(const char* leaf, const char* id = nullptr) {
 
 // The panel shown upright (Hochkant, grid_layout::turned()): the camera turns
 // with the panel, a quarter from the landscape UI its mounting is given for,
-// so the image turns a quarter back. The 8-inch sensor, mounted for the
-// panel's own upright orientation, then needs no turn at all; the V2's
-// landscape sensor gets one (user 2026-10-08). Added to the user turns.
-uint8_t displayQuarterTurns() { return grid_layout::turned() ? 3u : 0u; }
+// so the image gets a clockwise quarter turn (V2 hardware 2026-10-08: three
+// quarters stood upside down). Both P4 panels map the landscape UI the same
+// way into their upright framebuffer, so the 8-inch's quarter-turn mounting
+// then adds up to 180 degrees, sensor flips without a Bridge turn. Added to
+// the user turns.
+uint8_t displayQuarterTurns() { return grid_layout::turned() ? 1u : 0u; }
 
 // Clockwise turn the Bridge applies to every JPEG: the quarter turn left from
 // the board mounting, the upright panel and the user rotation. The 180 degree

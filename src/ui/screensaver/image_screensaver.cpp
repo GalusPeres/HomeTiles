@@ -21,6 +21,7 @@
 #include <misc/cache/instance/lv_image_cache.h>
 
 #include "src/core/display/dma2d_arbiter.h"
+#include "src/core/display/jpeg_padded_output.h"
 #include "src/core/memory/psram_budget.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
@@ -330,9 +331,12 @@ uint8_t* read_wallpaper_file(const String& file_name, size_t& out_len) {
 }
 
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && SOC_JPEG_DECODE_SUPPORTED
-// Hardware decoding follows media covers (tile_renderer.cpp): dimensions
-// aligned to 16 pixels, RGB order = big-endian RGB565 =
-// LV_COLOR_FORMAT_RGB565_SWAPPED. Unsupported images fall back to TJpgDec.
+// Hardware decoding like media covers (tile_renderer.cpp): RGB order =
+// big-endian RGB565 = LV_COLOR_FORMAT_RGB565_SWAPPED. Any image size: the
+// decoder writes whole MCUs and the padding is cut off afterwards
+// (jpeg_padded_output.h); a 1280x854 wallpaper took 727 ms in TJpgDec when
+// only multiples of 16 used the hardware (V2 b300). An output that does not
+// match the expected MCU layout falls back to TJpgDec.
 // Returns a malloc buffer of out_w*out_h pixels; the caller must free it.
 uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
                          uint16_t& out_w, uint16_t& out_h) {
@@ -341,9 +345,19 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
   jpeg_decode_picture_info_t info{};
   esp_err_t err = jpeg_decoder_get_info(data, static_cast<uint32_t>(len), &info);
   if (err != ESP_OK || info.width == 0 || info.height == 0) return nullptr;
-  if ((info.width & 15U) != 0 || (info.height & 15U) != 0) return nullptr;
 
-  const uint32_t pixels = static_cast<uint32_t>(info.width) * info.height;
+  // MCU size of the luma component: 4:2:0 = 16x16, 4:2:2 = 16x8, 4:4:4 and
+  // gray = 8x8.
+  uint32_t mcu_w = 8, mcu_h = 8;
+  if (info.sample_method == JPEG_DOWN_SAMPLING_YUV420) {
+    mcu_w = 16;
+    mcu_h = 16;
+  } else if (info.sample_method == JPEG_DOWN_SAMPLING_YUV422) {
+    mcu_w = 16;
+  }
+  const uint32_t stride = jpeg_padded_output::align_up(info.width, mcu_w);
+  const uint32_t rows = jpeg_padded_output::align_up(info.height, mcu_h);
+  const uint32_t pixels = stride * rows;
   if (pixels > kMaxDecodePixels) return nullptr;
 
   const size_t requested_bytes = static_cast<size_t>(pixels) * sizeof(uint16_t);
@@ -416,6 +430,17 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
       return nullptr;
     }
   }
+  // The decoder reports the size it wrote; another MCU layout than the one
+  // assumed above would shift every row.
+  if (decoded_bytes != requested_bytes) {
+    free(decoded);
+    Serial.printf("[Screensaver] HW JPEG layout %ux%u unexpected: bytes=%u/%u, using software fallback\n",
+                  static_cast<unsigned>(stride), static_cast<unsigned>(rows),
+                  static_cast<unsigned>(decoded_bytes),
+                  static_cast<unsigned>(requested_bytes));
+    return nullptr;
+  }
+  jpeg_padded_output::crop_in_place(decoded, stride, info.width, info.height);
 
   out_w = static_cast<uint16_t>(info.width);
   out_h = static_cast<uint16_t>(info.height);
@@ -423,7 +448,8 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
 }
 #endif
 
-// TJpgDec fallback for dimensions not aligned to 16 pixels or very large images.
+// TJpgDec fallback for targets without the JPEG hardware, very large images
+// and decoder failures.
 struct SwJpegCtx {
   const uint8_t* data = nullptr;
   size_t len = 0;

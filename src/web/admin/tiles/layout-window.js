@@ -733,6 +733,8 @@
       data,
       pages: Object.fromEntries(tabs.map(tab => [tab, layoutClone(getTilesData(tab))])),
       drafts: layoutClone(drafts),
+      // The page's selected tile: selected again when the window closes.
+      selection: {tab: currentTileTab, index: currentTileIndex, byTab: layoutClone(selectedTileByTab)},
       grid: {GRID_COLS, GRID_ROWS, GRID_SHOWN_COLS, GRID_SHOWN_ROWS, HEAD_BAR},
       changed: false,
       busy: false,
@@ -840,6 +842,20 @@
         try { await fetchTileGridData(tab, true); } catch (error) {}
       }
       showLayoutTiles(tab, getTilesData(tab));
+    }
+    // The tile the page had selected before, with its settings beside the
+    // preview (the window's own selections are forgotten).
+    const selection = state.selection;
+    for (const key of Object.keys(selectedTileByTab)) delete selectedTileByTab[key];
+    Object.assign(selectedTileByTab, selection.byTab);
+    currentTileTab = selection.tab;
+    if (selection.index === -2 && typeof selectHiddenSettingsTile === 'function') {
+      selectHiddenSettingsTile();
+    } else if (selection.tab && selection.index >= 0 &&
+               Number(getTilesData(selection.tab)?.[selection.index]?.type || 0) !== 0) {
+      selectTile(selection.index, selection.tab);
+    } else {
+      try { localStorage.setItem(SELECTED_TILE_STORAGE_KEY, JSON.stringify(selectedTileByTab)); } catch (e) {}
     }
   }
 

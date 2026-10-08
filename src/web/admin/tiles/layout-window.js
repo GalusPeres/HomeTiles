@@ -338,17 +338,21 @@
     const L = LAYOUTS[layoutWindow.key];
     const apply = dialog.querySelector('.setup-apply');
     apply.disabled = missing > 0 || !L.switchable;
-    const note = dialog.querySelector('.setup-note');
-    note.style.visibility = L.switchable || layoutWindow.key === ACTIVE_LAYOUT ? 'hidden' : '';
-    const status = dialog.querySelector('.setup-status');
-    status.classList.toggle('is-ok', !total);
-    const text = missing
-      ? (missing === 1 ? t('layoutFolderMissing') : tf('layoutFoldersMissing', {n: missing}))
-      : total ? (total === 1 ? t('layoutTileMissing') : tf('layoutTilesMissing', {n: total}))
-        : parked ? (parked === 1 ? t('layoutParkedTile') : tf('layoutParkedTiles', {n: parked})) : t('layoutAllFit');
-    const icon = missing ? 'folder-alert-outline' : total ? 'alert-circle-outline'
-      : parked ? 'tray-arrow-down' : 'check-circle-outline';
-    status.innerHTML = `<i class="mdi mdi-${icon}"></i><span>${layoutRichText(text)}</span>`;
+    // Every note side by side (user 2026-10-08): folders without a place,
+    // tiles half over the edge, tiles in the storage, a layout that cannot
+    // be switched to yet; or that everything fits.
+    const tiles = total - missing;
+    const notes = [];
+    if (missing) notes.push(['missing', 'folder-alert-outline',
+      missing === 1 ? t('layoutFolderMissing') : tf('layoutFoldersMissing', {n: missing})]);
+    if (tiles) notes.push(['missing', 'alert-circle-outline',
+      tiles === 1 ? t('layoutTileMissing') : tf('layoutTilesMissing', {n: tiles})]);
+    if (parked) notes.push(['parked', 'tray-arrow-down',
+      parked === 1 ? t('layoutParkedTile') : tf('layoutParkedTiles', {n: parked})]);
+    if (!L.switchable && layoutWindow.key !== ACTIVE_LAYOUT) notes.push(['later', 'information-outline', t('layoutSwitchLater')]);
+    if (!notes.length) notes.push(['ok', 'check-circle-outline', t('layoutAllFit')]);
+    dialog.querySelector('.setup-status').innerHTML = notes.map(([kind, icon, text]) =>
+      `<span class="setup-status-item is-${kind}"><i class="mdi mdi-${icon}"></i><span>${layoutRichText(text)}</span></span>`).join('');
     refreshLayoutSave();
     refreshLayoutDelete();
   }
@@ -742,14 +746,15 @@
       `<div class="setup-head-row"><div class="setup-title">${escapeHtml(t('layoutChange'))}</div>`,
       `<div class="setup-layouts">${layoutButtons}</div>`,
       `<button type="button" class="setup-close" aria-label="${escapeHtml(t('close'))}"><i class="mdi mdi-close"></i></button></div>`,
-      `<div class="setup-tabs">${tabButtons}</div>`,
+      // The page tabs, the notes beside them on the right (user 2026-10-08).
+      `<div class="setup-tabs-row"><div class="setup-tabs">${tabButtons}</div><div class="setup-status"></div></div>`,
       '<div class="setup-stage"></div>',
-      '<div class="setup-foot"><div class="setup-status"></div>',
-      `<span class="setup-note">${escapeHtml(t('layoutSwitchLater'))}</span>`,
+      // The buttons always on the right.
+      '<div class="setup-foot"><div class="setup-actions">',
       `<button type="button" class="btn setup-undo" hidden><i class="mdi mdi-undo"></i> ${escapeHtml(t('layoutUndo'))}</button>`,
       `<select class="setup-from" aria-label="${escapeHtml(t('layoutCopyFrom'))}"></select>`,
       `<button type="button" class="btn setup-save">${escapeHtml(t('save'))}</button>`,
-      `<button type="button" class="btn btn-go setup-apply">${escapeHtml(t('layoutSwitch'))}</button></div></div>`
+      `<button type="button" class="btn btn-go setup-apply">${escapeHtml(t('layoutSwitch'))}</button></div></div></div>`
     ].join('');
     document.body.appendChild(backdrop);
     document.body.classList.add('setup-window');

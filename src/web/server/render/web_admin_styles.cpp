@@ -461,11 +461,15 @@ static void appendHeadBarVars(String& html) {
   emit_scaled("head-time-x", head.time_x);
   emit_scaled("head-time-w", head.time_w);
   emit_scaled("head-line", head.line);
-  // The head font's size (popup_layout::headerTitleFont) and the icons'.
+  emit_scaled("head-time-line", head.time_line);
+  // The head font's size (popup_layout::headerTitleFont), the time's
+  // (home_bar::time_font) and the icons'.
 #if defined(DEVICE_LAYOUT_1024X600) || defined(DEVICE_LAYOUT_480X480)
   emit_scaled("head-font", 16);
+  emit_scaled("head-time-font", 20);
 #else
   emit_scaled("head-font", 24);
+  emit_scaled("head-time-font", 32);
 #endif
   emit_scaled("head-icon", kPreviewIconSize);
   char color[40];

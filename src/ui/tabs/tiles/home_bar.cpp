@@ -123,11 +123,19 @@ void format_time(char* out, size_t size) {
 
 const lv_font_t* head_font() { return popup_layout::headerTitleFont(); }
 
+const lv_font_t* time_font() {
+#if defined(DEVICE_LAYOUT_1024X600) || defined(DEVICE_LAYOUT_480X480)
+  return &ui_font_20;
+#else
+  return &ui_font_32;
+#endif
+}
+
 Geometry geometry() {
   // The Settings head's places: the X in the top right corner one grid gap
   // inside the card margin, the circle mirroring it on the left, everything
   // on the X's centre line; the time right before the X, as wide as the
-  // widest time in the head font (its digits are not all equally wide), the
+  // widest time in its font (its digits are not all equally wide), the
   // title between the circle and the time.
   Geometry g{};
   g.disc = popup_layout::kHeaderIconDiscSize;
@@ -136,7 +144,7 @@ Geometry geometry() {
   g.disc_x = settings_style::head_disc_x();
   g.close_x = settings_style::inner_right() - g.close;
   const int space = g.disc / 5;
-  const lv_font_t* font = head_font();
+  const lv_font_t* font = time_font();
   int digit_w = 0;
   for (char digit = '0'; digit <= '9'; ++digit) {
     const char text[2] = {digit, 0};
@@ -148,7 +156,10 @@ Geometry geometry() {
   g.title_x = g.disc_x + g.disc + popup_layout::kHeaderIconDiscGap;
   g.title_w = g.time_x - space - g.title_x;
   if (g.title_w < 1) g.title_w = 1;
-  g.line = lv_font_get_line_height(font);
+  g.time_x_alone = g.close_x + g.close - g.time_w;
+  g.title_w_alone = g.title_w + g.time_x_alone - g.time_x;
+  g.line = lv_font_get_line_height(head_font());
+  g.time_line = lv_font_get_line_height(font);
   return g;
 }
 
@@ -191,7 +202,8 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   // the X's box.
   const int pressed = settings_style::kClosePressed;
   lv_obj_t* button = plain(bar);
-  if (home && !configManager.getConfig().head_gear) lv_obj_add_flag(button, LV_OBJ_FLAG_HIDDEN);
+  const bool gear_hidden = home && !configManager.getConfig().head_gear;
+  if (gear_hidden) lv_obj_add_flag(button, LV_OBJ_FLAG_HIDDEN);
   lv_obj_set_pos(button, g.close_x + (g.close - pressed) / 2, g.center_y - pressed / 2);
   lv_obj_set_size(button, pressed, pressed);
   ui_surface_style::apply_radius(button, settings_style::kClosePressedBaseline);
@@ -211,14 +223,14 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
                         reinterpret_cast<void*>(static_cast<uintptr_t>(folder_id)));
   }
 
-  // The time right before the X.
+  // The time right before the X; without the gear in its place.
   lv_obj_t* time_label = lv_label_create(bar);
-  lv_obj_set_style_text_font(time_label, head_font(), 0);
+  lv_obj_set_style_text_font(time_label, time_font(), 0);
   lv_obj_set_style_text_color(time_label, lv_color_white(), 0);
   lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_RIGHT, 0);
   lv_label_set_long_mode(time_label, LV_LABEL_LONG_CLIP);
-  lv_obj_set_size(time_label, g.time_w, g.line);
-  lv_obj_set_pos(time_label, g.time_x, g.center_y - g.line / 2);
+  lv_obj_set_size(time_label, g.time_w, g.time_line);
+  lv_obj_set_pos(time_label, gear_hidden ? g.time_x_alone : g.time_x, g.center_y - g.time_line / 2);
   if (!g_time_text[0]) format_time(g_time_text, sizeof(g_time_text));
   lv_label_set_text(time_label, g_time_text);
   remember_time_label(time_label);
@@ -226,12 +238,13 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
 
   // Home or the folder's name, one line between the circle and the time.
   const char* title_text = home ? tr.home : (folder && folder->name[0] ? folder->name : tr.home);
-  const lv_font_t* font = title_font(title_text, g.title_w);
+  const int title_w = gear_hidden ? g.title_w_alone : g.title_w;
+  const lv_font_t* font = title_font(title_text, title_w);
   lv_obj_t* title = lv_label_create(bar);
   lv_obj_set_style_text_font(title, font, 0);
   lv_obj_set_style_text_color(title, lv_color_white(), 0);
   lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
-  lv_obj_set_size(title, g.title_w, lv_font_get_line_height(font));
+  lv_obj_set_size(title, title_w, lv_font_get_line_height(font));
   lv_label_set_text(title, title_text);
   lv_obj_set_pos(title, g.title_x, g.center_y - lv_font_get_line_height(font) / 2);
 }

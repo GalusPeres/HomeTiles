@@ -23,11 +23,18 @@ struct Geometry {
   int title_w;
   int time_x;
   int time_w;
-  int line;      // line height of the head font
+  int line;       // line height of the head font (the title)
+  int time_line;  // line height of the time font
+  // Home without the gear: the time up to the gear's right edge, the title
+  // wider by as much.
+  int time_x_alone;
+  int title_w_alone;
 };
 Geometry geometry();
-// The head font for the time and, when it fits, the title.
+// The head font for the title, when it fits.
 const lv_font_t* head_font();
+// The time's font, a size larger than the head font (user 2026-10-08).
+const lv_font_t* time_font();
 // HH:MM in the panel's time format; dashes until the clock is set.
 void format_time(char* out, size_t size);
 

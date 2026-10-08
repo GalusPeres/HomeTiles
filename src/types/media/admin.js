@@ -179,18 +179,27 @@ function maybeFillTitleFromMedia(tab) {
       fontCss(f) + 'margin-top:' + f.shift.toFixed(2) + 'px;';
 
     let html = '';
-    if (state?.cover && /^(https?:|data:image\/)/i.test(state.cover)) {
-      const side = (plain.side * scale).toFixed(2) + 'px';
-      html += '<div class="media-preview-cover" hidden style="' + at(L.coverLeft, plain.top) + 'width:' + side +
-        ';height:' + side + ';border-radius:' + (L.coverRadius * scale).toFixed(2) + 'px">' +
+    const hasCover = !!state?.cover && /^(https?:|data:image\/)/i.test(state.cover);
+    // The artwork already shown stays: a re-render (sensor refresh, layout)
+    // only moves it, so it never blinks away until a new copy has loaded
+    // (user 2026-10-08). A new artwork shows once it loaded.
+    const shownCover = hasCover ? [...el.querySelectorAll(':scope > .media-preview-cover:not([hidden])')]
+      .find(node => node.querySelector('img')?.getAttribute('src') === state.cover &&
+        node.querySelector('img')?.complete) : null;
+    const coverStyle = hasCover ? at(L.coverLeft, plain.top) + 'width:' + (plain.side * scale).toFixed(2) + 'px;height:' +
+      (plain.side * scale).toFixed(2) + 'px;border-radius:' + (L.coverRadius * scale).toFixed(2) + 'px' : '';
+    if (hasCover && !shownCover) {
+      html += '<div class="media-preview-cover" hidden style="' + coverStyle + '">' +
         '<img src="' + escapeHtml(state.cover) + '" alt="" referrerpolicy="no-referrer" ' +
         'onload="mediaPreviewCoverLoaded(this)" onerror="this.parentElement.remove()"></div>';
     }
+    const titleLayout = shownCover ? covered : plain;
     html += '<div class="media-preview-title' + (titleText ? '' : ' media-preview-state') + '" style="' +
-      textStyle(plain, plain.titleY, titleFont) + '" data-cover-style="' +
+      textStyle(titleLayout, titleLayout.titleY, titleFont) + '" data-cover-style="' +
       escapeHtml(textStyle(covered, covered.titleY, titleFont)) + '">' + escapeHtml(mainText) + '</div>';
     if (subtitle) {
-      html += '<div class="media-preview-subtitle" style="' + textStyle(plain, plain.subtitleY, subtitleFont) +
+      html += '<div class="media-preview-subtitle" style="' +
+        textStyle(titleLayout, titleLayout.subtitleY, subtitleFont) +
         '" data-cover-style="' + escapeHtml(textStyle(covered, covered.subtitleY, subtitleFont)) + '">' +
         escapeHtml(subtitle) + '</div>';
     }
@@ -214,7 +223,8 @@ function maybeFillTitleFromMedia(tab) {
       }
     }
     el.querySelectorAll(':scope > :is(.media-preview-cover, .media-preview-title, .media-preview-subtitle, ' +
-      '.media-preview-control)').forEach(node => node.remove());
+      '.media-preview-control)').forEach(node => { if (node !== shownCover) node.remove(); });
+    if (shownCover) shownCover.setAttribute('style', coverStyle);
     const handles = el.querySelector(':scope > .tile-resize-handle');
     if (handles) handles.insertAdjacentHTML('beforebegin', html);
     else el.insertAdjacentHTML('beforeend', html);

@@ -669,7 +669,12 @@
       }
       if (previewKind === 'switch') html += switchPreviewExtraHtml(tile.switch_style, Number(tile.span_h) === 0.5);
       html += getTileResizeHandlesHtml(typeValue);
+      // A media tile's shown artwork survives the re-render; applyMediaPreview
+      // keeps it when it is still the same picture.
+      const keptCover = previewKind === 'media'
+        ? el.querySelector(':scope > .media-preview-cover:not([hidden])') : null;
       el.innerHTML = html;
+      if (keptCover) el.appendChild(keptCover);
       if (previewKind === 'weather') {
         applyWeatherPreview(el, parseWeatherPreviewPayload(
           tile.sensor_entity ? (sensorMeta?.weatherValues?.[tile.sensor_entity] ?? '') : ''),

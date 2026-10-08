@@ -118,7 +118,6 @@ void appendAdminScripts(String& html) {
   appendJsEntry("layoutSaved", tr.layout_saved);
   appendJsEntry("layoutSwitch", tr.layout_switch);
   appendJsEntry("layoutSwitchConfirm", tr.layout_switch_confirm);
-  appendJsEntry("layoutSwitchLater", tr.layout_switch_later);
   appendJsEntry("layoutFoldersMissing", tr.layout_folders_missing);
   appendJsEntry("layoutFolderMissing", tr.layout_folder_missing);
   appendJsEntry("layoutTilesMissing", tr.layout_tiles_missing);

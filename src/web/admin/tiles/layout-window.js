@@ -32,25 +32,21 @@
   }
   function layoutSize(key) { return LAYOUTS[key].cols + ' × ' + String(LAYOUTS[key].rows).replace('.', ','); }
 
-  // The window's editor area: the same for every layout, so nothing jumps
-  // when the layout changes. Every layout's screen starts right under the
-  // head, top left (user 2026-10-08), the classic one too.
+  // The window's editor area: the same for every layout. Every layout's
+  // screen starts right under the head, in the middle of the area (user
+  // 2026-10-08), with the storage on both sides.
   function layoutCanvas() {
     const keys = LAYOUT_KEYS.filter(key => LAYOUTS[key].available);
     return {cols: Math.max(...keys.map(key => LAYOUTS[key].cols)),
             rows: Math.ceil(Math.max(...keys.map(key => LAYOUTS[key].rows)))};
   }
+  // Where a layout's screen starts in the area's columns (half steps): its
+  // places are stored from its own first column.
+  function layoutOffsetX(key) { return Math.floor(layoutCanvas().cols - LAYOUTS[key].cols) / 2; }
   function layoutInside(tile, key) {
-    const L = LAYOUTS[key];
-    return tile.col >= -1e-6 && tile.col + tile.span_w <= L.cols + 1e-6 &&
+    const L = LAYOUTS[key], x = layoutOffsetX(key);
+    return tile.col >= x - 1e-6 && tile.col + tile.span_w <= x + L.cols + 1e-6 &&
       tile.row >= -1e-6 && tile.row + tile.span_h <= L.rows + 1e-6;
-  }
-
-  function layoutVars(L) {
-    const s = layoutScale();
-    return {'--preview-cell-w': layoutPx(L.cellW * s), '--preview-cell-h': layoutPx(L.cellH * s),
-      '--preview-pad-left': layoutPx(L.padLeft * s), '--preview-pad-right': layoutPx(L.padRight * s),
-      '--preview-pad-top': layoutPx(L.padTop * s), '--preview-pad-bottom': layoutPx(L.padBottom * s)};
   }
   // The head on the layout's screen: the X and the time keep their distance
   // to its right edge.
@@ -62,21 +58,44 @@
   }
   function layoutSetVars(el, vars) { for (const [name, value] of Object.entries(vars)) el.style.setProperty(name, value); }
 
-  // Read at every opening: the page's sizes change with the global options
-  // (the tile radius slider).
+  // Every layout's own preview sizes (cells, circles, text places): the
+  // page's for the active layout, .layout-vars-<key> for the others
+  // (web_admin_styles.cpp). Read at every opening: the page's sizes change
+  // with the global options (the tile radius slider).
   function readLayoutBaseSizes() {
     layoutBaseSizes = {};
     const rootStyle = getComputedStyle(document.documentElement);
+    const px = value => /^\s*-?[\d.]+px\s*$/.test(value) ? parseFloat(value) : null;
+    for (const key of LAYOUT_KEYS) layoutBaseSizes[key] = {};
     for (const sheet of document.styleSheets) {
       let rules;
       try { rules = sheet.cssRules; } catch (e) { continue; }
       for (const rule of rules) {
-        if (rule.selectorText !== ':root' || !rule.style) continue;
+        const key = rule.selectorText === ':root' ? ACTIVE_LAYOUT
+          : LAYOUT_KEYS.find(k => rule.selectorText === '.layout-vars-' + k);
+        if (!key || !rule.style) continue;
         for (const name of rule.style) {
-          const value = rootStyle.getPropertyValue(name);
-          if (name.startsWith('--') && /^\s*-?[\d.]+px\s*$/.test(value)) layoutBaseSizes[name] = parseFloat(value);
+          if (!name.startsWith('--')) continue;
+          // The page's values as they are now (the radius slider sets some).
+          const raw = key === ACTIVE_LAYOUT ? rootStyle.getPropertyValue(name) : rule.style.getPropertyValue(name);
+          const value = name === '--radius-preview-scale' ? parseFloat(raw) : px(raw);
+          if (value !== null && !Number.isNaN(value)) layoutBaseSizes[key][name] = value;
         }
       }
+    }
+    // The global options live on the page only (the radius slider's last
+    // value). A page without a layout's own sizes takes the page's with that
+    // layout's cells and margins.
+    const page = layoutBaseSizes[ACTIVE_LAYOUT];
+    for (const key of LAYOUT_KEYS) {
+      if (key === ACTIVE_LAYOUT) continue;
+      if (!Object.keys(layoutBaseSizes[key]).length) {
+        const L = LAYOUTS[key], s = layoutScale();
+        layoutBaseSizes[key] = {...page, '--preview-cell-w': L.cellW * s, '--preview-cell-h': L.cellH * s,
+          '--preview-pad-left': L.padLeft * s, '--preview-pad-right': L.padRight * s,
+          '--preview-pad-top': L.padTop * s, '--preview-pad-bottom': L.padBottom * s};
+      }
+      if (page['--tile-radius'] !== undefined) layoutBaseSizes[key]['--tile-radius'] = page['--tile-radius'];
     }
     layoutHead = {w: layoutRootPx('--head-screen-w'), close: layoutRootPx('--head-close-x'),
       time: layoutRootPx('--head-time-x'), title: layoutRootPx('--head-title-w')};
@@ -92,13 +111,14 @@
   }
   function classicParked(tab, view) {
     const p = layoutWindow.data.places?.classic_parked?.[layoutFolderId(tab)]?.[view];
-    return p && p[2] > 0 && p[3] > 0 ? {col: p[0], row: p[1], span_w: p[2], span_h: p[3]} : null;
+    return p && p[2] > 0 && p[3] > 0
+      ? {col: p[0] + layoutOffsetX('classic'), row: p[1], span_w: p[2], span_h: p[3]} : null;
   }
   // Wholly beside the layout's screen: in its storage.
   function layoutParked(tile, key) {
-    const L = LAYOUTS[key];
-    return tile.col >= L.cols - 1e-6 || tile.row >= L.rows - 1e-6 ||
-      tile.col + tile.span_w <= 1e-6 || tile.row + tile.span_h <= 1e-6;
+    const L = LAYOUTS[key], x = layoutOffsetX(key);
+    return tile.col >= x + L.cols - 1e-6 || tile.row >= L.rows - 1e-6 ||
+      tile.col + tile.span_w <= x + 1e-6 || tile.row + tile.span_h <= 1e-6;
   }
   // The page's tiles with their classic places.
   function layoutBase(tab) {
@@ -111,7 +131,7 @@
       delete tile.layout_hidden;
       const p = classic[index];
       if (p && Number(p.view) === Number(tile.view_id)) {
-        Object.assign(tile, {col: p.col, row: p.row, span_w: p.span_w, span_h: p.span_h});
+        Object.assign(tile, {col: p.col + layoutOffsetX('classic'), row: p.row, span_w: p.span_w, span_h: p.span_h});
       } else {
         tile._unplaced = true;
       }
@@ -171,7 +191,11 @@
     const L = LAYOUTS[key];
     const tiles = layoutBase(tab);
     if (from === 'classic') {
-      tiles.forEach(tile => { if (layoutUsed(tile) && classicHidden(tab, tile.view_id)) tile._unplaced = true; });
+      tiles.forEach(tile => {
+        if (!layoutUsed(tile)) return;
+        if (classicHidden(tab, tile.view_id)) tile._unplaced = true;
+        tile.col += layoutOffsetX(key) - layoutOffsetX('classic');
+      });
     } else {
       // The other layout as its window shows it: saved, or its first take-over.
       const source = setupTiles(tab, from);
@@ -179,9 +203,11 @@
         const p = source[index];
         if (!layoutUsed(tile)) return;
         if (layoutUsed(p) && layoutInside(p, from)) {
-          Object.assign(tile, {col: p.col, row: p.row, span_w: p.span_w, span_h: p.span_h});
+          Object.assign(tile, {col: p.col - layoutOffsetX(from) + layoutOffsetX(key), row: p.row,
+            span_w: p.span_w, span_h: p.span_h});
           delete tile._unplaced;
         } else if (!layoutBarHidden(tile.type)) {
+          // Back keeps its classic place, here in this layout's columns.
           // Not on that screen: into this layout's storage too. Back keeps
           // its classic place.
           tile._unplaced = true;
@@ -216,7 +242,7 @@
       if (layoutBarHidden(tile.type)) return layoutEmptyTile();
       const p = places[tile.view_id];
       if (p) {
-        Object.assign(tile, {col: p[0], row: p[1], span_w: p[2], span_h: p[3]});
+        Object.assign(tile, {col: p[0] + layoutOffsetX(key), row: p[1], span_w: p[2], span_h: p[3]});
         delete tile._unplaced;
       } else {
         tile._unplaced = true;
@@ -335,9 +361,12 @@
       });
     }
     layoutWindow.missingFolders = missing;
+    // Red (a folder without a place, a tile half over the edge) is to be
+    // solved first: nothing is stored or switched before (user 2026-10-08).
+    layoutWindow.blocked = total > 0;
     const L = LAYOUTS[layoutWindow.key];
     const apply = dialog.querySelector('.setup-apply');
-    apply.disabled = missing > 0 || !L.switchable;
+    apply.disabled = layoutWindow.blocked || !L.switchable;
     // Every note side by side (user 2026-10-08): folders without a place,
     // tiles half over the edge, tiles in the storage, a layout that cannot
     // be switched to yet; or that everything fits.
@@ -349,7 +378,6 @@
       tiles === 1 ? t('layoutTileMissing') : tf('layoutTilesMissing', {n: tiles})]);
     if (parked) notes.push(['parked', 'tray-arrow-down',
       parked === 1 ? t('layoutParkedTile') : tf('layoutParkedTiles', {n: parked})]);
-    if (!L.switchable && layoutWindow.key !== ACTIVE_LAYOUT) notes.push(['later', 'information-outline', t('layoutSwitchLater')]);
     if (!notes.length) notes.push(['ok', 'check-circle-outline', t('layoutAllFit')]);
     dialog.querySelector('.setup-status').innerHTML = notes.map(([kind, icon, text]) =>
       `<span class="setup-status-item is-${kind}"><i class="mdi mdi-${icon}"></i><span>${layoutRichText(text)}</span></span>`).join('');
@@ -397,10 +425,11 @@
     const dialog = backdrop.querySelector('.setup-dialog');
     const chrome = [...dialog.children].filter(el => !el.classList.contains('setup-stage'))
       .reduce((sum, el) => sum + el.offsetHeight, 0) + 16 * (dialog.children.length - 1) + 48 + 2;
-    // Every layout gets the head's room on top, the classic one too.
-    const sizesOf = K => ({...layoutBaseSizes, ...Object.fromEntries(Object.entries({...layoutVars(K), ...layoutHeadVars(K),
-      ...(K.bar ? {} : {'--preview-pad-top': layoutVars(LAYOUTS.bar)['--preview-pad-top']})})
-      .map(([n, val]) => [n, parseFloat(val)]))});
+    // Every layout with its own sizes; each gets the head's room on top, the
+    // classic one too.
+    const sizesOf = key => ({...layoutBaseSizes[key], ...Object.fromEntries(Object.entries(layoutHeadVars(LAYOUTS[key]))
+      .map(([n, val]) => [n, parseFloat(val)])),
+      ...(LAYOUTS[key].bar ? {} : {'--preview-pad-top': layoutBaseSizes.bar['--preview-pad-top']})});
     const areaOf = (sizes, cols, rows) => {
       const frame = sizes['--preview-frame'] || 0;
       const gap = sizes['--preview-gap'] || 0;
@@ -408,7 +437,7 @@
         2 * frame + sizes['--preview-pad-top'] + sizes['--preview-pad-bottom'] + rows * sizes['--preview-cell-h'] + (rows - 1) * gap];
     };
     const canvas = layoutCanvas();
-    const areas = LAYOUT_KEYS.filter(key => LAYOUTS[key].available).map(key => areaOf(sizesOf(LAYOUTS[key]), canvas.cols, canvas.rows));
+    const areas = LAYOUT_KEYS.filter(key => LAYOUTS[key].available).map(key => areaOf(sizesOf(key), canvas.cols, canvas.rows));
     // The page's own preview scale; smaller only when the window lacks room.
     const roomW = Math.min(innerWidth - 32, layoutRootPx('--admin-wrapper-width') || innerWidth) - 58;
     // Taken once: the window keeps its size whatever layout it shows.
@@ -417,10 +446,12 @@
     const stage = backdrop.querySelector('.setup-stage');
     stage.style.width = Math.max(...areas.map(([w]) => w)) * f + 2 + 'px';
     stage.style.height = Math.max(...areas.map(([, h]) => h)) * f + 2 + 'px';
-    const base = sizesOf(L);
-    layoutSetVars(grid, Object.fromEntries(Object.entries(base).map(([n, val]) => [n, (val * f).toFixed(2) + 'px'])));
+    const base = sizesOf(layoutWindow.key);
+    const scale = base['--radius-preview-scale'] || layoutScale();
+    layoutSetVars(grid, Object.fromEntries(Object.entries(base).filter(([n]) => n !== '--radius-preview-scale')
+      .map(([n, val]) => [n, (val * f).toFixed(2) + 'px'])));
     layoutSetVars(grid, {'--grid-cols': String(GRID_COLS), '--grid-rows': String(GRID_ROWS),
-      '--radius-preview-scale': String(layoutScale() * f)});
+      '--radius-preview-scale': String(scale * f)});
     // The layout's screen, black with its rounded corners, behind the tiles.
     // The classic screen has no head: its cells start where the bar
     // layouts' do, right under the window's head.
@@ -428,8 +459,8 @@
     if (L.bar) {
       [w, h] = areaOf(base, L.cols, L.rows).map(value => value * f);
     } else {
-      const own = layoutVars(L);
-      const px = name => parseFloat(own[name]);
+      const own = layoutBaseSizes.classic;
+      const px = name => own[name];
       const frame = base['--preview-frame'] || 0;
       const gap = base['--preview-gap'] || 0;
       w = (2 * frame + px('--preview-pad-left') + px('--preview-pad-right') + L.cols * px('--preview-cell-w') + (L.cols - 1) * gap) * f;
@@ -439,7 +470,10 @@
     const r = parseFloat(getComputedStyle(grid).borderTopLeftRadius) || 20;
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='${w}' height='${h}' rx='${r}' fill='black'/></svg>`;
     grid.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-    grid.style.backgroundPosition = `0 ${y}px`;
+    // In the middle of the area: the head and the screen move along.
+    const x = layoutOffsetX(layoutWindow.key) * (base['--preview-cell-w'] + (base['--preview-gap'] || 0)) * f;
+    grid.style.backgroundPosition = `${x}px ${y}px`;
+    grid.style.setProperty('--setup-screen-x', x.toFixed(2) + 'px');
     // The storage's name in its bottom right corner (beside every screen).
     const label = document.createElement('div');
     label.className = 'setup-storage-label';
@@ -492,7 +526,7 @@
     const changed = layoutDirty();
     // A layout with a folder out of reach is never stored, like it can never
     // be switched to: the folder would be gone on the panel.
-    button.disabled = !changed || layoutWindow.missingFolders > 0 || layoutWindow.busy;
+    button.disabled = !changed || layoutWindow.blocked || layoutWindow.busy;
     button.innerHTML = changed ? escapeHtml(t('save')) : `<i class="mdi mdi-check"></i> ${escapeHtml(t('layoutSaved'))}`;
   }
 
@@ -618,14 +652,14 @@
   // "Speichern": every place of every page; the server takes what lies on
   // the layout's screen (and keeps the bar layouts' red places).
   async function saveLayoutWindow() {
-    if (!layoutWindow || layoutWindow.missingFolders > 0 || layoutWindow.busy) return false;
+    if (!layoutWindow || layoutWindow.blocked || layoutWindow.busy) return false;
     const key = layoutWindow.key;
     const folders = {};
     for (const tab of layoutTabs()) {
       const places = folders[layoutFolderId(tab)] = {};
       getTilesData(tab).forEach(tile => {
         if (!layoutUsed(tile) || !tile.view_id || (key !== 'classic' && layoutBarHidden(tile.type))) return;
-        places[tile.view_id] = [tile.col, tile.row, tile.span_w, tile.span_h];
+        places[tile.view_id] = [tile.col - layoutOffsetX(key), tile.row, tile.span_w, tile.span_h];
       });
     }
     layoutWindow.busy = true;
@@ -657,7 +691,7 @@
   async function applyLayoutWindow() {
     if (!layoutWindow) return;
     const L = LAYOUTS[layoutWindow.key];
-    if (!L.switchable || layoutWindow.missingFolders > 0) return;
+    if (!L.switchable || layoutWindow.blocked) return;
     if (!window.confirm(tf('layoutSwitchConfirm', {layout: L.name}))) return;
     if (!(await saveLayoutWindow())) return;
     try {
@@ -707,6 +741,7 @@
       work: {},
       saved: {},
       missingFolders: 0,
+      blocked: false,
       home: null
     };
     const backdrop = document.createElement('div');
@@ -742,12 +777,14 @@
     }).join('');
     backdrop.innerHTML = [
       '<div class="setup-dialog" role="dialog" aria-modal="true">',
-      // One head: the title, the layouts and the X (user 2026-10-08).
+      // One head: the title, the layouts, the X with the notes below it
+      // (user 2026-10-08).
       `<div class="setup-head-row"><div class="setup-title">${escapeHtml(t('layoutChange'))}</div>`,
       `<div class="setup-layouts">${layoutButtons}</div>`,
-      `<button type="button" class="setup-close" aria-label="${escapeHtml(t('close'))}"><i class="mdi mdi-close"></i></button></div>`,
-      // The page tabs, the notes beside them on the right (user 2026-10-08).
-      `<div class="setup-tabs-row"><div class="setup-tabs">${tabButtons}</div><div class="setup-status"></div></div>`,
+      `<div class="setup-head-right"><button type="button" class="setup-close" aria-label="${escapeHtml(t('close'))}">` +
+        '<i class="mdi mdi-close"></i></button><div class="setup-status"></div></div></div>',
+
+      `<div class="setup-tabs">${tabButtons}</div>`,
       '<div class="setup-stage"></div>',
       // The buttons always on the right.
       '<div class="setup-foot"><div class="setup-actions">',

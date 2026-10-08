@@ -3315,13 +3315,16 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 }
 .setup-dialog {
   display:flex; flex-direction:column; gap:16px; max-width:min(var(--admin-wrapper-width, 1100px), 100%); max-height:100%;
+  /* Room for the head (title, layouts, the notes under the X) on smaller
+     screens too; the stage stays in the middle. */
+  min-width:min(980px, 100%);
   overflow:auto; padding:24px 28px; background:var(--card); border:1px solid var(--line-strong); border-radius:22px;
   box-shadow:0 16px 40px rgba(0,0,0,0.55);
 }
 .setup-head-row { display:flex; flex-wrap:wrap; align-items:center; gap:16px 28px; }
 .setup-title { font-size:20px; font-weight:700; margin-right:8px; }
 .setup-close {
-  margin-left:auto; align-self:flex-start; flex:none; width:36px; height:36px; border:none; border-radius:10px; background:#2a2a2a;
+  flex:none; width:36px; height:36px; border:none; border-radius:10px; background:#2a2a2a;
   color:#e8e8e8; font-size:20px; cursor:pointer;
 }
 .setup-close:hover { background:#333333; }
@@ -3367,7 +3370,9 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
   position:absolute; top:-7px; right:-7px; min-width:18px; height:18px; padding:0 5px; border-radius:9px;
   background:#e5484d; color:#fff; font-size:11px; font-weight:600; line-height:18px; text-align:center;
 }
-.setup-stage { display:flex; justify-content:flex-start; align-items:flex-start; margin:0 auto; }
+.setup-stage { display:flex; justify-content:center; align-items:flex-start; margin:0 auto; }
+/* The head over the layout's screen, in the middle of the area. */
+.tile-grid.setup-grid > .head-bar-preview { left:calc(var(--preview-frame, 0px) + var(--setup-screen-x, 0px)); }
 /* The editor's area: the layout's screen in black, the rest is outside. */
 .tile-grid.setup-grid {
   background-color:var(--panel, #141414); background-repeat:no-repeat; background-position:0 0;
@@ -3412,11 +3417,15 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 .tile-grid.setup-grid > .setup-trash:hover { background:var(--danger-hover); }
 .setup-foot { display:flex; align-items:center; gap:16px; width:0; min-width:100%; }
 .setup-actions { flex:none; margin-left:auto; display:flex; align-items:center; gap:10px; }
-.setup-tabs-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px 24px; width:0; min-width:100%; }
-.setup-tabs-row > .setup-tabs { flex:1 1 auto; }
-.setup-status { flex:none; margin-left:auto; display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:6px 20px; }
-.setup-status-item { display:flex; align-items:center; gap:8px; font-size:14px; line-height:1.4; white-space:nowrap; }
-.setup-status-item > i { font-size:20px; }
+.setup-tabs { width:0; min-width:100%; }
+/* The X with the notes below it, small and right-aligned; they never move
+   the window (absolute, under the head's fixed height). */
+.setup-head-right { position:relative; align-self:stretch; min-width:170px; margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; }
+.setup-head-right > .setup-status {
+  position:absolute; top:44px; right:0; display:flex; flex-direction:column; align-items:flex-end; gap:2px;
+}
+.setup-status-item { display:flex; align-items:center; gap:6px; font-size:12px; line-height:16px; white-space:nowrap; }
+.setup-status-item > i { font-size:15px; }
 .setup-status-item.is-missing > i { color:#e5484d; }
 .setup-status-item.is-parked > i, .setup-status-item.is-later > i { color:var(--text-3, #9e9e9e); }
 .setup-status-item.is-later { color:var(--text-3, #9e9e9e); font-size:13px; }

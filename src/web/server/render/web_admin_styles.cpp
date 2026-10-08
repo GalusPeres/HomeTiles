@@ -97,7 +97,10 @@ int preview_scaled_px(int lvgl_px) {
   return (v < 6) ? 6 : v;
 }
 
-void appendPreviewScaleVars(String& html) {
+// The preview's sizes for the shown grid under `selector`: the page's own
+// (:root, with the screensaver grid's), or another layout's for the layout
+// window (.layout-vars-<key>).
+void appendPreviewScaleVars(String& html, const char* selector = ":root", bool page = true) {
   auto emit = [&html](const char* name, int lvgl_px) {
     html += "--";
     html += name;
@@ -128,7 +131,9 @@ void appendPreviewScaleVars(String& html) {
   auto emit_scaled = [&emit_fraction](const char* name, float lvgl_px) {
     emit_fraction(name, lvgl_px * preview_cell_h_px() / GRID_CELL_H);
   };
-  html += "  <style>:root{";
+  html += "  <style>";
+  html += selector;
+  html += "{";
   emit_scaled("compact-inset", compact_sensor_layout::inset());
   // Corner circles keep the bar pill's distance to the card edge
   // (tile_icon_disc::shrink_corner_disc): drawn smaller around their middle.
@@ -383,7 +388,7 @@ void appendPreviewScaleVars(String& html) {
     html += radius;
   }
   html += "}";
-  if (grid_layout::head_bar()) {
+  if (page && grid_layout::head_bar()) {
     // The screensaver tab keeps the profile's grid, where its tiles are
     // stored; the panel shows them in the bottom rows of the head bar's grid
     // (image_screensaver.cpp).
@@ -409,7 +414,19 @@ void appendPreviewScaleVars(String& html) {
 static void appendHeadBarVars(String& html);
 
 void appendAdminStyles(String& html) {
-  appendPreviewScaleVars(html);
+  appendPreviewScaleVars(html, ":root", true);
+  // The layout window shows the other layouts with their own sizes (cells,
+  // circles, text places): the same variables per layout. The page is built
+  // on the loop task like the UI, and nothing here draws, so the shown grid
+  // is switched for these moments only.
+  const grid_layout::Shown shown = grid_layout::g_shown;
+  for (uint8_t i = 0; i < grid_layout::kLayoutCount; ++i) {
+    const grid_layout::Layout layout = grid_layout::from_index(i);
+    if (layout == shown.layout || !grid_layout::available(layout)) continue;
+    grid_layout::g_shown = grid_layout::layout_grid(layout);
+    appendPreviewScaleVars(html, (String(".layout-vars-") + grid_layout::key(layout)).c_str(), false);
+  }
+  grid_layout::g_shown = shown;
   // Always: the layout window draws the head for the bar layouts.
   appendHeadBarVars(html);
   html += R"html(

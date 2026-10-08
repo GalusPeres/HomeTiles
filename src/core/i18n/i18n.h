@@ -241,7 +241,6 @@ struct Strings {
   const char* layout_saved;
   const char* layout_switch;
   const char* layout_switch_confirm;
-  const char* layout_switch_later;
   const char* layout_folders_missing;
   const char* layout_folder_missing;
   const char* layout_tiles_missing;

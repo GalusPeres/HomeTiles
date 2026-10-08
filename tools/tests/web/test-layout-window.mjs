@@ -34,7 +34,7 @@ import {extractDeliveredFunction, readRepoFile} from '../../lib/admin-source.mjs
 }
 
 // --- The window's places (Tab5: classic 7 x 4, bar 5 x 3, upright 3 x 6).
-const windowNames = ['layoutClone', 'layoutEmptyTile', 'layoutUsed', 'layoutNavType', 'layoutBarHidden', 'layoutCanvas',
+const windowNames = ['layoutClone', 'layoutEmptyTile', 'layoutUsed', 'layoutNavType', 'layoutBarHidden', 'layoutCanvas', 'layoutOffsetX',
   'layoutInside', 'layoutFolderId', 'classicHidden', 'layoutBase', 'layoutSettle', 'takeoverTiles', 'setupTiles',
   'isCompactSensorType', 'isEditableValueType', 'supportsHalfSize', 'supportedTileLayout', 'saveLayoutWindow', 'refreshLayoutSave', 'layoutTabs',
   'layoutSignature', 'layoutSavedSig', 'layoutDirty', 'layoutSelectedTile', 'deselectLayoutTile', 'parkLayoutTile',
@@ -77,12 +77,17 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   assert.equal(run("layoutInside({col: 0, row: 3.5, span_w: 1, span_h: 1}, 'classic')"), false);
   assert.equal(run("layoutInside({col: 2, row: 5, span_w: 1, span_h: 1}, 'portrait')"), true);
 
+  // Each screen in the middle of the window's area: the bar's 5 columns
+  // start at column 1 of 7, the upright 3 at column 2.
+  assert.equal(run("layoutOffsetX('bar')"), 1);
+  assert.equal(run("layoutOffsetX('portrait')"), 2);
   // Into a bar layout: every tile as it is in the classic layout, from the
   // top left of the new screen (folders too, no pills), the Settings tile
   // too (here beside the smaller screen: in the storage); the tile without a
   // classic place gets a free spot beside the screen.
   const bar = run("takeoverTiles('folder0', 'bar', 'classic')");
-  assert.deepEqual(place(bar).slice(0, 4), [[4, 0, 0, 1, 1], [4, 1, 0, 1, 1], [1, 0, 1, 2, 1], [7, 6, 3, 1, 0.5]]);
+  assert.deepEqual(place(bar).slice(0, 3), [[4, 1, 0, 1, 1], [4, 2, 0, 1, 1], [1, 1, 1, 2, 1]]);
+  assert.equal(run(`layoutParked(${JSON.stringify(bar[3])}, 'bar')`), true, 'Settings beyond the smaller screen: stored');
   assert.equal(run(`layoutInside(${JSON.stringify(bar[4])}, 'bar')`), false, 'red beside the bar screen');
   // The classic layout in the window: its places; the hidden tile beside
   // the screen, nothing overlaps.
@@ -95,7 +100,7 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   const page = [tile(1, 0, 1, 2, 1, 21), tile(5, 2, 0, 1, 1, 22)];
   const ctx = windowContext({folder3: page}, {classic: {3: [[0, 21, 0, 1, 2, 1], [1, 22, 2, 0, 1, 1]]}, places: {}});
   assert.deepEqual(place(vm.runInContext("takeoverTiles('folder3', 'bar', 'classic')", ctx)),
-    [[1, 0, 1, 2, 1], [5, 2, 0, 1, 1]]);
+    [[1, 1, 1, 2, 1], [5, 3, 0, 1, 1]]);
 }
 // A saved bar layout: its places; a tile without one (made under the
 // classic layout) beside the screen. Taken over into the classic layout,
@@ -105,7 +110,7 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   const ctx = windowContext({folder0: home}, {classic, places});
   const run = code => vm.runInContext(code, ctx);
   const saved = run("setupTiles('folder0', 'bar')");
-  assert.deepEqual(place(saved).slice(0, 3), [[4, 0, 0, 1, 0.5], [4, 1, 0, 1, 0.5], [1, 0, 1, 2, 1]]);
+  assert.deepEqual(place(saved).slice(0, 3), [[4, 1, 0, 1, 0.5], [4, 2, 0, 1, 0.5], [1, 1, 1, 2, 1]]);
   assert.equal(run(`layoutParked(${JSON.stringify(saved[3])}, 'bar')`), true, 'Settings without a place: in the storage');
   assert.equal(run(`layoutInside(${JSON.stringify(saved[4])}, 'bar')`), false);
   const back = run("takeoverTiles('folder0', 'classic', 'bar')");
@@ -131,10 +136,11 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   ctx.layoutWindow.tab = 'folder0';
   ctx.tilesData.folder0 = vm.runInContext("setupTiles('folder0', 'bar')", ctx);
   const run = code => vm.runInContext(code, ctx);
-  assert.equal(run("layoutRed({type: 1, col: 4.5, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'half over the edge');
-  assert.equal(run("layoutRed({type: 1, col: 5, row: 0, span_w: 1, span_h: 1}, 'bar')"), false, 'in the storage');
-  assert.equal(run("layoutParked({col: 5, row: 0, span_w: 1, span_h: 1}, 'bar')"), true);
-  assert.equal(run("layoutRed({type: 4, col: 5, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'a folder needs a place');
+  assert.equal(run("layoutRed({type: 1, col: 5.5, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'half over the edge');
+  assert.equal(run("layoutRed({type: 1, col: 6, row: 0, span_w: 1, span_h: 1}, 'bar')"), false, 'in the storage');
+  assert.equal(run("layoutParked({col: 6, row: 0, span_w: 1, span_h: 1}, 'bar')"), true);
+  assert.equal(run("layoutParked({col: 0, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'storage on the left too');
+  assert.equal(run("layoutRed({type: 4, col: 6, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'a folder needs a place');
   assert.equal(run("layoutInside(getTilesData('folder0')[2], 'bar')"), true);
   run('parkLayoutTile()');
   const parked = run("getTilesData('folder0')[2]");
@@ -186,11 +192,12 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   calls.length = 0;
   ctx.layoutWindow.key = 'bar';
   await vm.runInContext('saveLayoutWindow()', ctx);
-  assert.deepEqual(JSON.parse(calls[0][1]).folders[0][14], [6, 3, 1, 0.5], 'the Settings tile is part of a bar layout too');
+  assert.deepEqual(JSON.parse(calls[0][1]).folders[0][14], [5, 3, 1, 0.5],
+    'the Settings tile is part of a bar layout too, stored from the screen\'s first column');
   calls.length = 0;
-  ctx.layoutWindow.missingFolders = 1;
+  ctx.layoutWindow.blocked = true;
   assert.equal(await vm.runInContext('saveLayoutWindow()', ctx), false);
-  assert.equal(calls.length, 0, 'a red folder blocks saving');
+  assert.equal(calls.length, 0, 'red (a folder without a place, a tile over the edge) blocks saving');
 }
 
 // The editor in the window talks to nobody (user 2026-10-08: thrown out of

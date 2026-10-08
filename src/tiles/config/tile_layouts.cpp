@@ -5,6 +5,7 @@
 #include <freertos/semphr.h>
 
 #include <algorithm>
+#include <cmath>
 
 #include "src/core/memory/psram_allocator.h"
 #include "src/devices/device.h"
@@ -21,8 +22,9 @@ struct Entry {
   uint16_t folder;
   uint16_t view;
   uint8_t layout;
-  uint8_t col2;
-  uint8_t row2;
+  // Signed: the layout window keeps storage spots left of a screen too.
+  int8_t col2;
+  int8_t row2;
   uint8_t w2;
   uint8_t h2;
 };
@@ -57,6 +59,10 @@ class Guard {
 uint8_t half(float value) {
   const float doubled = value * 2.0f + 0.5f;
   return doubled <= 0 ? 0 : doubled >= 255 ? 255 : static_cast<uint8_t>(doubled);
+}
+int8_t half_signed(float value) {
+  const float doubled = std::floor(value * 2.0f + 0.5f);
+  return doubled <= -128 ? -128 : doubled >= 127 ? 127 : static_cast<int8_t>(doubled);
 }
 
 Entry* lookup(uint8_t layout, uint16_t folder, uint16_t view) {
@@ -109,8 +115,8 @@ void begin() {
         JsonArrayConst place = tile.value().as<JsonArrayConst>();
         if (place.size() != 4) continue;
         g_entries.push_back({folder_id, static_cast<uint16_t>(atoi(tile.key().c_str())), layout,
-                             half(place[0].as<float>()), half(place[1].as<float>()), half(place[2].as<float>()),
-                             half(place[3].as<float>())});
+                             half_signed(place[0].as<float>()), half_signed(place[1].as<float>()),
+                             half(place[2].as<float>()), half(place[3].as<float>())});
       }
     }
   }
@@ -136,8 +142,8 @@ bool find(Layout layout, uint16_t folder_id, uint16_t view_id, Place& out) {
 
 void set(Layout layout, uint16_t folder_id, uint16_t view_id, const Place& place) {
   if (!view_id) return;
-  const Entry wanted{folder_id, view_id, static_cast<uint8_t>(layout), half(place.col), half(place.row),
-                     half(place.span_w), half(place.span_h)};
+  const Entry wanted{folder_id, view_id, static_cast<uint8_t>(layout), half_signed(place.col),
+                     half_signed(place.row), half(place.span_w), half(place.span_h)};
   Guard guard;
   Entry* entry = lookup(wanted.layout, folder_id, view_id);
   if (!entry) {
@@ -236,7 +242,11 @@ void append_json(String& out) {
     if (a.folder != b.folder) return a.folder < b.folder;
     return a.view < b.view;
   });
-  auto number = [&out](uint8_t half_steps) {
+  auto number = [&out](int half_steps) {
+    if (half_steps < 0) {
+      out += "-";
+      half_steps = -half_steps;
+    }
     out += String(half_steps / 2);
     if (half_steps & 1) out += ".5";
   };

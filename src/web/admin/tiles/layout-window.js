@@ -33,19 +33,21 @@
   function layoutSize(key) { return LAYOUTS[key].cols + ' × ' + String(LAYOUTS[key].rows).replace('.', ','); }
 
   // The window's editor area: the same for every layout. Every layout's
-  // screen starts right under the head, in the middle of the area (user
-  // 2026-10-08), with the storage on both sides. Every screen keeps at least
-  // a column of storage on each side and two rows below (the square panels'
-  // layouts are all 3 x 3, user 2026-10-08).
+  // screen starts right under the head, in the middle of the widest screen
+  // (user 2026-10-08), with the storage on both sides. Every screen keeps at
+  // least two columns of storage and two rows below; where the screens leave
+  // too little (the square panels' layouts are all 3 x 3), the area grows
+  // from the screen's corner to the right and down (user 2026-10-08).
   function layoutCanvas() {
     const keys = LAYOUT_KEYS.filter(key => LAYOUTS[key].available);
     const cols = keys.map(key => LAYOUTS[key].cols);
     const rows = keys.map(key => Math.ceil(LAYOUTS[key].rows));
-    return {cols: Math.max(...cols, Math.min(...cols) + 2), rows: Math.max(...rows, Math.min(...rows) + 2)};
+    return {cols: Math.max(...cols, Math.min(...cols) + 2), rows: Math.max(...rows, Math.min(...rows) + 2),
+            screens: Math.max(...cols)};
   }
   // Where a layout's screen starts in the area's columns (half steps): its
   // places are stored from its own first column.
-  function layoutOffsetX(key) { return Math.floor(layoutCanvas().cols - LAYOUTS[key].cols) / 2; }
+  function layoutOffsetX(key) { return Math.floor(layoutCanvas().screens - LAYOUTS[key].cols) / 2; }
   function layoutInside(tile, key) {
     const L = LAYOUTS[key], x = layoutOffsetX(key);
     return tile.col >= x - 1e-6 && tile.col + tile.span_w <= x + L.cols + 1e-6 &&

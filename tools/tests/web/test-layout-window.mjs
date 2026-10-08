@@ -72,14 +72,16 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
 {
   const ctx = windowContext({folder0: home}, {classic, places: {classic_parked: {0: {15: [0, 0, 0, 0]}}}});
   const run = code => vm.runInContext(code, ctx);
-  assert.deepEqual(JSON.parse(JSON.stringify(run('layoutCanvas()'))), {cols: 7, rows: 6}, 'one area for every layout');
-  // The square panels (every layout 3 x 3): a column of storage on each side
-  // and two rows below.
+  assert.deepEqual(JSON.parse(JSON.stringify(run('layoutCanvas()'))), {cols: 7, rows: 6, screens: 7},
+    'one area for every layout');
+  // The square panels (every layout 3 x 3): the screen in the corner, two
+  // columns of storage to the right and two rows below.
   const tab5Layouts = ctx.LAYOUTS;
   ctx.LAYOUTS = {classic: {cols: 3, rows: 3, available: true}, bar: {cols: 3, rows: 3, available: true},
                  portrait: {cols: 3, rows: 3, available: false}};
-  assert.deepEqual(JSON.parse(JSON.stringify(run('layoutCanvas()'))), {cols: 5, rows: 5}, 'room beside small screens');
-  assert.equal(run("layoutOffsetX('bar')"), 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(run('layoutCanvas()'))), {cols: 5, rows: 5, screens: 3},
+    'room beside small screens');
+  assert.equal(run("layoutOffsetX('bar')"), 0, 'from the corner');
   ctx.LAYOUTS = tab5Layouts;
   assert.equal(run("layoutInside({col: 0, row: 0, span_w: 1, span_h: 1}, 'classic')"), true, 'every screen starts under the head');
   assert.equal(run("layoutInside({col: 0, row: 3.5, span_w: 1, span_h: 1}, 'classic')"), false);

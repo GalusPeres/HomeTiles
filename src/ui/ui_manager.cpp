@@ -429,9 +429,11 @@ void UIManager::switchToFolder(uint16_t folder_id) {
 static constexpr int kSettingsGestureCaptureWidth = popup_layout::scale(56);
 static constexpr int kSettingsGestureThreshold = popup_layout::scale(48);
 
-void UIManager::requestSettingsAccess(const String& title,
-                                      const String& icon_name,
-                                      uint32_t bg_color) {
+// The PIN popup before Settings looks the same from the Settings tile, the
+// head's gear and the swipe (user 2026-10-08): the global tile color, the
+// gear with the lock and "Settings", never the tile's own color, icon or
+// title.
+void UIManager::requestSettingsAccess() {
   const DeviceConfig& config = configManager.getConfig();
   if (!config.settings_pin_enabled) {
     switchToTab(3);
@@ -441,13 +443,11 @@ void UIManager::requestSettingsAccess(const String& title,
   pending_access_kind = PendingAccessKind::Settings;
   pending_access_folder_id = 0;
   const auto& tr = i18n::strings(config.language);
-  const String source_title =
-      title.length() ? title : String(tr.tile_type_settings);
   PinPopupInit init;
-  // The header shows the protected tile's name and the state "Locked".
-  init.title = source_title;
-  init.icon_name = icon_name.length() ? icon_name : String("cog");
-  init.bg_color = bg_color;
+  // The header shows "Settings" and the state "Locked".
+  init.title = tr.tile_type_settings;
+  init.icon_name = "cog";
+  init.bg_color = tileDefaultBgColor();
   init.lock_mark = true;
   init.verify = verify_pending_access;
   init.success = complete_pending_access;
@@ -577,14 +577,6 @@ void UIManager::refreshSettingsGestureZone() {
   syncSettingsGestureZone();
 }
 
-void UIManager::setSettingsGestureStyle(const String& title,
-                                        const String& icon_name,
-                                        uint32_t bg_color) {
-  settings_gesture_title = title;
-  settings_gesture_icon_name = icon_name;
-  settings_gesture_bg_color = bg_color & TILE_BG_COLOR_RGB_MASK;
-}
-
 void UIManager::syncSettingsGestureZone() {
   const DeviceConfig& config = configManager.getConfig();
   const bool enabled = config.settings_swipe_enabled;
@@ -667,20 +659,7 @@ void UIManager::processSettingsGestureMotion(lv_indev_t* input,
   if (!released) lv_indev_wait_release(input);
   lv_indev_reset(input, nullptr);
 
-  const SettingsTileSnapshot& snapshot = config.settings_tile_snapshot;
-  const uint32_t snapshot_color = snapshot.bg_color;
-  const bool use_snapshot = config.settings_tile_hidden && snapshot.valid;
-  const uint32_t bg_color =
-      use_snapshot
-          ? (tileBgColorFollowsDefault(snapshot_color)
-                 ? tileDefaultBgColor()
-                 : (snapshot_color & TILE_BG_COLOR_RGB_MASK))
-          : settings_gesture_bg_color;
-  const String title = use_snapshot ? String(snapshot.title)
-                                    : settings_gesture_title;
-  const String icon_name = use_snapshot ? String(snapshot.icon_name)
-                                        : settings_gesture_icon_name;
-  requestSettingsAccess(title, icon_name, bg_color);
+  requestSettingsAccess();
 }
 
 void UIManager::settings_gesture_pressed_object_event_cb(lv_event_t* event) {

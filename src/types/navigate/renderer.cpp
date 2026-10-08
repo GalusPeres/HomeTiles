@@ -156,7 +156,6 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
   uint16_t target_folder = 0;
   if (tile.type == TILE_SETTINGS) {
     target_kind = NAV_KIND_SETTINGS;
-    uiManager.setSettingsGestureStyle(tile.title, tile.icon_name, btn_color);
   } else if (tile.type == TILE_BACK) {
     target_kind = NAV_KIND_BACK;
   } else {
@@ -183,8 +182,7 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
         if (!data) return;
         if (data->target_kind == NAV_KIND_SETTINGS) {
           Serial.printf("[Tile] Navigation CLICKED! Settings, title: %s\n", data->title.c_str());
-          uiManager.requestSettingsAccess(data->title, data->icon_name,
-                                          data->bg_color);
+          uiManager.requestSettingsAccess();
         } else if (data->target_kind == NAV_KIND_BACK) {
           uint16_t current = tileConfig.getActiveFolderId();
           uint16_t parent = tileConfig.getFolderParent(current);

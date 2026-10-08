@@ -2830,6 +2830,11 @@
 .head-bar-preview:has(.head-gear.is-off) .head-title {
   width:calc(var(--head-title-w) + var(--head-close-x) + var(--head-close) - var(--head-time-w) - var(--head-time-x));
 }
+/* The gear's icon box for its lock (home_bar.cpp gear_lock_event_cb), over
+   the black screen. */
+.head-bar-preview .head-gear > i {
+  position:relative; display:inline-block; width:1em; height:1em; line-height:1; --icon-lock-rim:#000000;
+}
 .head-bar-preview .head-button {
   left:var(--head-close-x);
   top:calc(var(--head-cy) - var(--head-close) / 2);
@@ -2923,7 +2928,8 @@
    mdi:folder-lock, on a rim of 6 % of the icon in the color behind it
    (--icon-lock-rim, applyIconDiscTint). Offsets in the lock's own em (icon
    em / 0.46). */
-.tile-icon > .tile-icon-lock {
+.tile-icon > .tile-icon-lock,
+.head-bar-preview .head-gear > i > .tile-icon-lock {
   position:absolute; left:50%; top:50%; width:1em; height:1em;
   margin-left:0.037em; margin-top:-0.088em;
   font-size:0.46em; line-height:1; pointer-events:none; color:inherit;

@@ -7,6 +7,7 @@
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/fonts/ui_fonts.h"
+#include "src/ui/shared/icon_lock_mark.h"
 #include "src/tiles/config/grid_layout.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -86,6 +87,24 @@ const lv_font_t* title_font(const char* text, int width) {
 }
 
 void on_gear(lv_event_t*) { uiManager.requestSettingsAccess(); }
+
+// A Settings PIN: the gear shows the lock like the Settings tile
+// (icon_lock_mark.h), its rim in the color behind the head.
+void gear_lock_event_cb(lv_event_t* event) {
+  lv_obj_t* icon = static_cast<lv_obj_t*>(lv_event_get_current_target(event));
+  if (lv_event_get_code(event) == LV_EVENT_REFR_EXT_DRAW_SIZE) {
+    icon_lock_mark::ext_draw_size(event, icon);
+    return;
+  }
+  if (lv_event_get_code(event) != LV_EVENT_DRAW_POST) return;
+  lv_color_t under = lv_color_black();
+  for (lv_obj_t* obj = lv_obj_get_parent(icon); obj; obj = lv_obj_get_parent(obj)) {
+    if (lv_obj_get_style_bg_opa(obj, LV_PART_MAIN) <= LV_OPA_MIN) continue;
+    under = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
+    break;
+  }
+  icon_lock_mark::draw(lv_event_get_layer(event), icon, under);
+}
 
 void on_back(lv_event_t* event) {
   const uint16_t folder_id = static_cast<uint16_t>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(event)));
@@ -218,6 +237,11 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   lv_obj_center(glyph);
   if (home) {
     lv_obj_add_event_cb(button, on_gear, LV_EVENT_CLICKED, nullptr);
+    if (configManager.getConfig().settings_pin_enabled) {
+      lv_obj_add_event_cb(glyph, gear_lock_event_cb, LV_EVENT_DRAW_POST, nullptr);
+      lv_obj_add_event_cb(glyph, gear_lock_event_cb, LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr);
+      lv_obj_refresh_ext_draw_size(glyph);
+    }
   } else {
     lv_obj_add_event_cb(button, on_back, LV_EVENT_CLICKED,
                         reinterpret_cast<void*>(static_cast<uintptr_t>(folder_id)));

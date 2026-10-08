@@ -479,7 +479,10 @@ static void appendTileTabHTML(
                                                         : "</span><span class=\"head-button head-gear is-off\"><i class=\"mdi mdi-")
                  : "</span><span class=\"head-button\"><i class=\"mdi mdi-";
     html += home ? "cog" : "window-close";
-    html += "\"></i></span></div>\n";
+    // A Settings PIN: the gear's lock like the Settings tile's.
+    html += home && configManager.getConfig().settings_pin_enabled
+                ? "\"><span class=\"tile-icon-lock mdi mdi-lock\" aria-hidden=\"true\"></span></i></span></div>\n"
+                : "\"></i></span></div>\n";
   }
 
   if (screensaver_mode) {

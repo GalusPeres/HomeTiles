@@ -28,9 +28,7 @@ public:
   uint8_t activeTab() const { return active_tab_index; }
   void switchToTab(uint8_t index);
   void switchToFolder(uint16_t folder_id);
-  void requestSettingsAccess(const String& title = String(),
-                             const String& icon_name = String(),
-                             uint32_t bg_color = 0x2A2A2A);
+  void requestSettingsAccess();
   void requestFolderAccess(uint16_t folder_id, const String& title,
                            const String& icon_name,
                            uint32_t bg_color = 0x2A2A2A,
@@ -38,8 +36,6 @@ public:
   void lockProtectedAccess();
   void finishFolderSwitch(uint16_t folder_id, bool success);
   void refreshSettingsGestureZone();
-  void setSettingsGestureStyle(const String& title, const String& icon_name,
-                               uint32_t bg_color);
 
 private:
   static constexpr uint8_t TAB_COUNT = 4;
@@ -63,9 +59,6 @@ private:
   bool access_gesture_triggered = false;
   bool settings_gesture_enabled = false;
   uint8_t settings_gesture_edge = UINT8_MAX;
-  String settings_gesture_title;
-  String settings_gesture_icon_name;
-  uint32_t settings_gesture_bg_color = 0x2A2A2A;
 
   enum class PendingAccessKind : uint8_t {
     None,

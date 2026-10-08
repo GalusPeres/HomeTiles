@@ -110,9 +110,19 @@ assert.ok(parked.includes("previewTileLocked('7', tile)") &&
 assert.ok(access.includes("if ((pinToggle.dataset.pinConfigured === '1') !== lockedBefore) refreshSettingsTileLock();"));
 assert.ok(between(access, '  function refreshSettingsTileLock(', '\n  }\n').includes('renderSettingsHiddenSlot(true);'));
 const css = read('src/web/assets/admin.css');
-const rule = between(css, '.tile-icon > .tile-icon-lock {', '}');
+const rule = between(css, '.tile-icon > .tile-icon-lock,\n.head-bar-preview .head-gear > i > .tile-icon-lock {', '}');
 assert.ok(rule.includes('font-size:0.46em;') && rule.includes('margin-left:0.037em; margin-top:-0.088em;') &&
   rule.includes('var(--icon-lock-rim, #2e2e2e)'));
 assert.equal((rule.match(/var\(--icon-lock-rim/g) || []).length, 24, 'a full ring and a half ring');
 
-console.log('PIN lock: tiles, PIN popup header and Web Admin previews show the lock in the icon');
+// The head's gear (home_bar.cpp) shows the lock too, on the panel and in the
+// preview, and follows a PIN change in the Web Admin.
+const bar = read('src/ui/tabs/tiles/home_bar.cpp');
+assert.ok(bar.includes('if (configManager.getConfig().settings_pin_enabled) {') &&
+  bar.includes('lv_obj_add_event_cb(glyph, gear_lock_event_cb, LV_EVENT_DRAW_POST, nullptr);') &&
+  bar.includes('icon_lock_mark::draw(lv_event_get_layer(event), icon, under);'));
+assert.ok(server.includes('html += home && configManager.getConfig().settings_pin_enabled'));
+assert.ok(between(access, '  function refreshSettingsTileLock(', '\n  }\n').includes(
+  "if (locked) icon.insertAdjacentHTML('beforeend', PREVIEW_LOCK_MARK);"));
+
+console.log('PIN lock: tiles, the head gear, PIN popup header and Web Admin previews show the lock in the icon');

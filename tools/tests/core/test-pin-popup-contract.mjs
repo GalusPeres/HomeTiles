@@ -140,13 +140,13 @@ for (const marker of [
   'lv_indev_wait_release(input);',
   'lv_indev_reset(input, nullptr);',
   'void UIManager::refreshSettingsGestureZone()',
-  'void UIManager::setSettingsGestureStyle(const String& title,',
-  'const uint32_t snapshot_color = snapshot.bg_color;',
-  '? (tileBgColorFollowsDefault(snapshot_color)',
-  '? tileDefaultBgColor()',
-  ': settings_gesture_bg_color;',
-  'config.settings_tile_hidden && snapshot.valid',
-  'requestSettingsAccess(title, icon_name, bg_color);',
+  // One PIN popup before Settings from the tile, the head's gear and the
+  // swipe: the global tile color, the gear and "Settings" (user 2026-10-08).
+  'void UIManager::requestSettingsAccess() {',
+  'init.title = tr.tile_type_settings;',
+  'init.icon_name = "cog";',
+  'init.bg_color = tileDefaultBgColor();',
+  '  requestSettingsAccess();\n}',
   'SettingsRevealEdge::Left:',
   'SettingsRevealEdge::Right:',
   'SettingsRevealEdge::Top:',
@@ -236,8 +236,10 @@ for (const forbidden of [
   }
 }
 
-if (!manager.includes('(snapshot_color & TILE_BG_COLOR_RGB_MASK)')) {
-  throw new Error('An explicitly black Settings tile must remain black in the PIN popup');
+// The Settings PIN popup takes the global tile color, whatever color the
+// Settings tile has (user 2026-10-08).
+if (manager.includes('snapshot_color') || !manager.includes('init.bg_color = tileDefaultBgColor();')) {
+  throw new Error('The Settings PIN popup must take the global tile color');
 }
 
 if (manager.includes('popup_layout::scale(72)') ||
@@ -291,12 +293,12 @@ if (indevBlock.includes('if (code == LV_EVENT_PRESSING)')) {
 
 requireMarker(renderer, 'String icon_name;', 'Navigation popup icon');
 requireMarker(renderer, 'uint32_t bg_color;', 'Navigation popup color');
-requireMarker(renderer,
-              'uiManager.setSettingsGestureStyle(tile.title, tile.icon_name, btn_color);',
-              'Visible Settings edge-swipe identity');
-requireMarker(renderer,
-              'uiManager.requestSettingsAccess(data->title, data->icon_name,',
-              'Settings navigation gate');
+if (renderer.includes('setSettingsGestureStyle') || manager.includes('settings_gesture_bg_color')) {
+  throw new Error('The Settings PIN popup must not take the color, icon or title of the Settings tile');
+}
+requireMarker(renderer, 'uiManager.requestSettingsAccess();', 'Settings navigation gate');
+requireMarker(read('src/ui/tabs/tiles/home_bar.cpp'),
+              'void on_gear(lv_event_t*) { uiManager.requestSettingsAccess(); }', 'Head gear gate');
 requireMarker(renderer,
               'uiManager.requestFolderAccess(data->target_folder_id, data->title,',
               'Folder navigation gate');

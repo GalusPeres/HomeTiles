@@ -171,6 +171,12 @@
   // (previewTileLocked): redraw it, in the grid or parked, once the PIN is
   // set or cleared.
   function refreshSettingsTileLock() {
+    // The head's gear shows the lock too (home_bar.cpp).
+    const locked = typeof previewTileLocked === 'function' && previewTileLocked('7');
+    document.querySelectorAll('.head-bar-preview .head-gear > i').forEach(icon => {
+      icon.querySelector('.tile-icon-lock')?.remove();
+      if (locked) icon.insertAdjacentHTML('beforeend', PREVIEW_LOCK_MARK);
+    });
     const editing = currentTileTab === 'folder0' &&
       (currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX ||
        document.getElementById('folder0-tile-' + currentTileIndex)?.dataset.type === '7');

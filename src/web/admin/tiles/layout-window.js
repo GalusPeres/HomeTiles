@@ -849,12 +849,31 @@
     for (const key of Object.keys(selectedTileByTab)) delete selectedTileByTab[key];
     Object.assign(selectedTileByTab, selection.byTab);
     currentTileTab = selection.tab;
+    // Deleted meanwhile or now in the storage: the first tile top left.
+    const visible = (tile) => !!tile && Number(tile.type || 0) !== 0 && !tile.layout_hidden;
+    const firstVisible = tab => {
+      const tiles = getTilesData(tab) || [];
+      let best = -1;
+      tiles.forEach((tile, index) => {
+        if (!visible(tile)) return;
+        const other = tiles[best];
+        if (best < 0 || Number(tile.row) < Number(other.row) ||
+            (Number(tile.row) === Number(other.row) && Number(tile.col) < Number(other.col))) best = index;
+      });
+      return best;
+    };
+    let restored = false;
     if (selection.index === -2 && typeof selectHiddenSettingsTile === 'function') {
       selectHiddenSettingsTile();
-    } else if (selection.tab && selection.index >= 0 &&
-               Number(getTilesData(selection.tab)?.[selection.index]?.type || 0) !== 0) {
-      selectTile(selection.index, selection.tab);
-    } else {
+      restored = currentTileIndex === -2;
+    } else if (selection.tab && selection.index >= 0) {
+      const index = visible(getTilesData(selection.tab)?.[selection.index]) ? selection.index : firstVisible(selection.tab);
+      if (index >= 0) {
+        selectTile(index, selection.tab);
+        restored = true;
+      }
+    }
+    if (!restored) {
       try { localStorage.setItem(SELECTED_TILE_STORAGE_KEY, JSON.stringify(selectedTileByTab)); } catch (e) {}
     }
   }

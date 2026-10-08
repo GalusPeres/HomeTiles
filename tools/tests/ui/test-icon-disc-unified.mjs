@@ -191,12 +191,17 @@ for (const marker of [
 const popupDisc = layout.slice(layout.indexOf('inline lv_obj_t* createHeaderIconDisc('));
 assert.doesNotMatch(popupDisc.slice(0, popupDisc.indexOf('return disc;')), /apply_radius|kCloseButton/,
   'The popup header disc is a plain circle');
-// The close button itself stays unchanged.
+// The close button presses like every head button: halfway between the
+// header circle and the X, centred where the X was, concentric corner, no
+// grow, the touch area of the full X.
 for (const marker of [
-  'lv_obj_set_size(close_btn, kCloseButtonSize, kCloseButtonSize);',
+  'constexpr int kPressed = (kCloseButtonSize + kHeaderIconDiscSize) / 2;',
+  'lv_obj_set_size(close_btn, kPressed, kPressed);',
+  'lv_obj_set_style_transform_width(close_btn, 0, LV_PART_MAIN | LV_STATE_PRESSED);',
   'lv_obj_set_style_bg_opa(close_btn, LV_OPA_TRANSP, 0);',
-  'ui_surface_style::apply_radius(close_btn, kCloseButtonRadius, 0);',
-  'lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT, kCloseButtonOffsetX,',
+  'ui_surface_style::apply_radius(close_btn, tile_radius::kMinimum - kInset, 0);',
+  'lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT, kCloseButtonOffsetX - kInset,',
+  'lv_obj_set_ext_click_area(close_btn, kCloseButtonClickArea + kInset);',
 ]) assert.ok(layout.includes(marker), `close button: ${marker}`);
 
 const shell = code(read('src/ui/popups/popup_shell.cpp'));

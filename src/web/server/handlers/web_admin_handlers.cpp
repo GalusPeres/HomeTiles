@@ -748,29 +748,6 @@ void WebAdminServer::handleTileRadius() {
       String("{\"success\":true,\"radius\":") + configManager.getConfig().tile_radius + "}");
 }
 
-// The head bar layout (grid_layout.h) is read at boot: this only stores it;
-// the browser restarts the panel to apply it ("active" tells this boot's).
-void WebAdminServer::handleSaveHeadBar() {
-  webAdminMarkActivity();
-  if (!server.hasArg("enabled")) {
-    sendJsonError(server, 400, "Missing enabled value");
-    return;
-  }
-  String value = server.arg("enabled");
-  value.trim();
-  value.toLowerCase();
-  const bool enabled = value == "1" || value == "true" || value == "on";
-  if (!configManager.saveHeadBar(enabled)) {
-    sendJsonError(server, 500, "Could not save the head bar");
-    return;
-  }
-  Serial.printf("[WebAdmin] Head bar layout saved %s (this boot: %s)\n", enabled ? "on" : "off",
-                grid_layout::head_bar() ? "on" : "off");
-  server.send(200, "application/json",
-              String("{\"success\":true,\"enabled\":") + (enabled ? "true" : "false") +
-                  ",\"active\":" + (grid_layout::head_bar() ? "true" : "false") + "}");
-}
-
 void WebAdminServer::handleSaveIconDiscs() {
   webAdminMarkActivity();
   if (!server.hasArg("enabled")) {

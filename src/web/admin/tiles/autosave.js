@@ -4,6 +4,8 @@
   function showNotification(message, success = true) {
     const notification = document.getElementById('notification');
     if (!notification) return;
+    // The layout window keeps the editor's saves to itself (layout-window.js).
+    if (success && typeof layoutWindowOpen === 'function' && layoutWindowOpen()) return;
     // A single shared timer. Every call used to schedule its own, so the timeout
     // of an earlier message hid the next one long before its three seconds were
     // up - easy to hit because autosave reports on every field change.
@@ -169,6 +171,11 @@
       formData.append(key, value);
     }
     applySnapshotToTileData(tab, tileIndex, snapshot);
+    // The layout window keeps the editor's places to itself (layout-window.js).
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) {
+      clearDraft(tab, tileIndex);
+      return;
+    }
     const requestId = ++saveRequestSeq;
     const draftRev = Number(snapshot._rev || 0);
     markLatestSaveRequest(tab, tileIndex, requestId);

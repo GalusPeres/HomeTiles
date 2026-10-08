@@ -32,7 +32,7 @@ ${radiusPolicyHost(root,'Device::kGridCellH','Device::kGridGap')}
 struct Config{int tile_radius=tile_radius::kMinimum;bool tile_borders=true;bool icon_discs=true;uint8_t icon_glow=icon_glow::kDefault;};
 struct Manager{Config config;const Config& getConfig(){return config;}}configManager;
 ${surfaceStyleHost(root)}
-struct Tile{int type=TILE_SENSOR;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_display_mode=0;uint8_t sensor_value_font=0;};
+struct Tile{int type=TILE_SENSOR;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_display_mode=0;uint8_t sensor_value_font=0;bool layout_hidden=false;};
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
 ${fn('src/tiles/config/tile_config.h','tileBorderEnabled')}
 struct PackedQuarterGridV7{uint8_t version=7,quarter_index=0,reserved[2]={};};
@@ -50,17 +50,25 @@ ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 int main(){
  {
   // The head bar layout (grid_layout.h): a tile shows only wholly inside the
-  // smaller grid, Settings and Back give way to the head; without the bar the
-  // span is cut at the grid's edge as before.
-  grid_layout::apply(true);
-  const auto bar = grid_layout::shown();
+  // smaller grid, Settings and Back give way to the head, a tile without a
+  // place in the layout is not drawn; without the bar the span is cut at the
+  // grid's edge as before. A panel that cannot show the bar layout yet (the
+  // upright JC4880 needs it turned) starts with the classic one.
   float c,r,w,h;
-  Tile inside{TILE_SENSOR,0,0,1,1};assert(get_tile_layout(inside,c,r,w,h));
-  Tile beside{TILE_SENSOR,static_cast<float>(bar.cols),0,1,1};assert(!get_tile_layout(beside,c,r,w,h));
-  Tile wide{TILE_SENSOR,static_cast<float>(bar.cols-1),0,2,1};assert(!get_tile_layout(wide,c,r,w,h));
-  Tile settings{TILE_SETTINGS,0,0,1,0.5f};assert(!get_tile_layout(settings,c,r,w,h));
-  grid_layout::apply(false);
+  Tile settings{TILE_SETTINGS,0,0,1,0.5f};
+  Tile inside{TILE_SENSOR,0,0,1,1};
+  if (grid_layout::apply(1) == grid_layout::Layout::kBar) {
+   const auto bar = grid_layout::shown();
+   assert(get_tile_layout(inside,c,r,w,h));
+   Tile beside{TILE_SENSOR,static_cast<float>(bar.cols),0,1,1};assert(!get_tile_layout(beside,c,r,w,h));
+   Tile wide{TILE_SENSOR,static_cast<float>(bar.cols-1),0,2,1};assert(!get_tile_layout(wide,c,r,w,h));
+   assert(!get_tile_layout(settings,c,r,w,h));
+  } else {
+   assert(!grid_layout::head_bar());
+  }
+  assert(grid_layout::apply(0) == grid_layout::Layout::kClassic);
   assert(get_tile_layout(settings,c,r,w,h));
+  Tile hidden{TILE_SENSOR,0,0,1,1};hidden.layout_hidden=true;assert(!get_tile_layout(hidden,c,r,w,h));
   Tile cut{TILE_SENSOR,static_cast<float>(GRID_COLS-1),0,2,1};assert(get_tile_layout(cut,c,r,w,h) && w==1);
  }
  assert(tile_layout::value_font_for_choice(0,nullptr)==nullptr);

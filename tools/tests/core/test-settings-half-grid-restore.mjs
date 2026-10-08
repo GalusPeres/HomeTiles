@@ -30,7 +30,7 @@ namespace Device { constexpr int kGridCols = GRID_COLS, kGridRows = GRID_ROWS; }
 ${readRepoFile('src/types/tile_type.h').replace(/^#include.*$/gm,'').replace('#pragma once','')}
 ${readRepoFile('src/tiles/config/tile_geometry.h').replace(/^#include.*$/gm,'').replace('#pragma once','')}
 ${readRepoFile('src/core/config/config_manager.h').match(/struct SettingsTileSnapshot \{[\s\S]*?\};/)[0]}
-struct Tile { TileType type = TILE_EMPTY; String title, icon_name; uint32_t bg_color = 0; float col=0,row=0,span_w=1,span_h=1; };
+struct Tile { TileType type = TILE_EMPTY; String title, icon_name; uint32_t bg_color = 0; float col=0,row=0,span_w=1,span_h=1; bool layout_hidden = false; };
 struct TileGridConfig { Tile tiles[TILES_PER_GRID]; };
 struct Config { SettingsTileSnapshot settings_tile_snapshot{}; const char* language="en"; };
 struct Manager { Config config; const Config& getConfig() { return config; } } configManager;

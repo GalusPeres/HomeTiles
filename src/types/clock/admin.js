@@ -70,10 +70,11 @@ function getClockPreviewLanguage() {
     }
   }
 
-  function getClockPreviewCssPx(raw, fallback) {
+  function getClockPreviewCssPx(raw, fallback, el) {
     const n = normalizeClockPreviewFont(raw, fallback);
-    // Same scaling as the CSS variables (LVGL pixels * preview factor).
-    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs' + n));
+    // Same scaling as the CSS variables (LVGL pixels * preview factor), as the
+    // tile's own grid sets them (a grid may scale its preview).
+    const v = parseFloat(getComputedStyle(el?.isConnected ? el : document.documentElement).getPropertyValue('--fs' + n));
     return (v > 0) ? v : Math.round(n / 2);
   }
 
@@ -101,7 +102,7 @@ function getClockPreviewLanguage() {
     if (!el) return;
     const font = normalizeClockPreviewFont(raw, fallback);
     el.dataset.clockFont = String(font);
-    applyClockPreviewLine(el, font, getClockPreviewCssPx(raw, fallback));
+    applyClockPreviewLine(el, font, getClockPreviewCssPx(raw, fallback, el));
     el.style.color = color || '#fff';
   }
 
@@ -242,11 +243,12 @@ function getClockPreviewLanguage() {
       if (!el) return;
       el.hidden = false;
       const font = normalizeClockPreviewFont(el.dataset.clockFont, 40);
-      applyClockPreviewLine(el, font, getClockPreviewCssPx(font, 40));
+      applyClockPreviewLine(el, font, getClockPreviewCssPx(font, 40, tileElem));
     });
     if (!tileElem.classList.contains('clock-compact')) return;
     const style = getComputedStyle(tileElem);
-    const root = getComputedStyle(document.documentElement);
+    // The tile's own grid sizes (inherited variables), not the page's.
+    const root = tileElem.isConnected ? style : getComputedStyle(document.documentElement);
     const cellW = parseFloat(root.getPropertyValue('--preview-cell-w'));
     const cellH = parseFloat(root.getPropertyValue('--preview-cell-h'));
     const gridGap = parseFloat(root.getPropertyValue('--preview-gap')) || 0;
@@ -265,14 +267,14 @@ function getClockPreviewLanguage() {
     const fit = (el, capPx, usedW) => {
       const sample = clockPreviewSample(el, el === time);
       for (const size of [...CLOCK_PREVIEW_FONT_SIZES].reverse()) {
-        const px = getClockPreviewCssPx(size, size);
+        const px = getClockPreviewCssPx(size, size, tileElem);
         if (size > Number(el.dataset.clockFont || 40) || px > capPx) continue;
         const width = measureClockPreviewText(el, sample, px);
         if (usedW + width <= availW) return { size, px, width };
       }
       return null;
     };
-    const first = fit(primary, maxPx, 0) || { size: 20, px: getClockPreviewCssPx(20, 20), width: 0 };
+    const first = fit(primary, maxPx, 0) || { size: 20, px: getClockPreviewCssPx(20, 20, tileElem), width: 0 };
     applyClockPreviewLine(primary, first.size, first.px);
     if (!secondary) return;
     const second = fit(secondary, first.px, first.width + gap);

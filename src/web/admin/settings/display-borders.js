@@ -27,11 +27,8 @@
     }
   }
 
-// The head bar layout (grid_layout.h) is read at boot: saving it asks to
-// restart the panel; the switch shows the saved choice until then.
-function setHeadBarToggles(enabled) {
-  document.querySelectorAll('.global-head-bar-toggle').forEach(box => { box.checked = !!enabled; });
-}
+// A layout (grid_layout.h) is read at boot: the layout window restarts the
+// panel after choosing one.
 function restartPanelForLayout() {
   const restartForm = document.getElementById('admin_restart_form');
   // form.submit() cannot carry the CSRF header a password-protected panel
@@ -44,25 +41,6 @@ function restartPanelForLayout() {
     window.setTimeout(() => window.location.assign('/'), 300);
   });
 }
-async function saveHeadBar(input) {
-  const wanted = !!input?.checked;
-  setHeadBarToggles(wanted);
-  try {
-    const response = await fetch('/api/display/head-bar', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: 'enabled=' + (wanted ? '1' : '0')
-    });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
-    // Already this boot's layout (switched back before a restart).
-    if (data.active === wanted) return;
-    if (window.confirm(t('headBarRestartConfirm'))) restartPanelForLayout();
-  } catch (error) {
-    setHeadBarToggles(!wanted);
-    showNotification(t('networkErrorSave'), false);
-  }
-}
 // The head bar preview's time (web_admin_html.cpp), from the browser clock
 // in the panel's 12/24-hour format.
 function refreshHeadBarTime() {
@@ -73,7 +51,8 @@ function refreshHeadBarTime() {
     el.textContent = String(hour).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
   });
 }
-if (typeof HEAD_BAR === 'boolean' && HEAD_BAR && typeof window !== 'undefined' && window.setInterval) {
+// The layout window shows the head with any layout.
+if (typeof window !== 'undefined' && window.setInterval) {
   window.setInterval(refreshHeadBarTime, 30000);
 }
 

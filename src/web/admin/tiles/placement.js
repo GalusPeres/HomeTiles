@@ -42,7 +42,7 @@
       getTileLayoutFromData(tab, tileIndex));
     const active = new Set();
     tiles.forEach((tile, tileIndex) => {
-      if (tile && Number(tile.type || 0) !== 0) active.add(tileIndex);
+      if (tileTakesRoom(tile)) active.add(tileIndex);
     });
     return canPlaceGridLayout(
       layouts, active, index, candidateLayout,
@@ -58,7 +58,8 @@
     const active = new Set();
     document.querySelectorAll('#tab-tiles-' + tab + ' .tile').forEach(tile => {
       const index = Number(tile.dataset.index);
-      if (!Number.isInteger(index) || Number(tile.dataset.type || 0) === 0) return;
+      if (!Number.isInteger(index) || Number(tile.dataset.type || 0) === 0 ||
+          tile.classList.contains('tile-unplaced')) return;
       const layout = getTileElementLayout(tab, index);
       if (!layout) return;
       layouts[index] = layout;
@@ -203,7 +204,7 @@
 
     const active = new Set();
     tiles.forEach((tile, index) => {
-      if (tile && Number(tile.type || 0) !== 0) active.add(index);
+      if (tileTakesRoom(tile)) active.add(index);
     });
     return simulateGridReorderLayouts(
       baseLayouts, active, fromIdx,

@@ -10,7 +10,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 import {lvglHost} from '../../lib/lvgl-host.mjs';
-import {toneColorHost} from '../../lib/surface-style-host.mjs';
+import {radiusPolicyHost, toneColorHost} from '../../lib/surface-style-host.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
@@ -143,6 +143,7 @@ inline lv_color_t border_hint(lv_color_t c){return lv_color_mix(lv_color_white()
 }
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
 void* heap_caps_malloc(size_t n,int){return malloc(n);}void heap_caps_free(void*p){free(p);}
+${radiusPolicyHost(root)}
 ${strip(read('src/ui/popups/popup_layout.h'))}
 ${strip(read('src/ui/popups/popup_open.h'))}
 ${strip(read('src/ui/popups/popup_shell.h'))}
@@ -176,7 +177,8 @@ void check_value_header(const char* expected){
  assert(line(shell.title)+line(shell.value)<=popup_layout::kHeaderIconDiscSize&&"The block fits beside the disc");
  assert(std::abs((title.y1+value.y2)-(disc.y1+disc.y2))<=2&&"The block is centered on the icon disc");
  assert(title.x2<close.x1&&value.x2<close.x1&&"Close button unchanged and clear of the text");
- assert(lv_obj_get_width(shell.close)==popup_layout::kCloseButtonSize);
+ // The X presses at the head buttons' size, centred where the full X box is.
+ assert(lv_obj_get_width(shell.close)==(popup_layout::kCloseButtonSize+popup_layout::kHeaderIconDiscSize)/2);
 }
 int main(){
  lv_init();auto* display=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t> band(SCREEN_WIDTH*16);

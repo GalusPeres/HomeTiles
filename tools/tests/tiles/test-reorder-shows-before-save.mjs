@@ -28,7 +28,7 @@ const saveTiles = fn(read('src/web/server/handlers/web_admin_tiles.cpp'), 'WebAd
 const preview = saveTiles.indexOf('tileConfig.previewActiveFolderGrid(folder_id, *grid) &&\n                tiles_show_active_layout_now();');
 assert.ok(preview > 0 && saveTiles.indexOf('tileConfig.saveFolderGrid(folder_id, *grid)') > preview,
   'a tile edit is shown before the flash write');
-assert.match(saveTiles, /: !deleting_folder && display_awake &&\n                previous_tile\.type == tile\.type &&/,
+assert.match(saveTiles, /: !deleting_folder && !classic_places && display_awake &&\n                previous_tile\.type == tile\.type &&/,
   'only edits that keep the tile type are shown before saving (new tiles get their view ID first)');
 assert.match(saveTiles, /if \(deleting_folder\) \{\n        tiles_invalidate_folder\(folder_id\);\n      \} else \{\n[^\n]*\n        tiles_invalidate_folder_only\(folder_id\);/);
 assert.match(saveTiles, /if \(!shown_before_save && tileConfig\.getActiveFolderId\(\) == folder_id &&\n          !\(display_awake && tiles_show_active_layout_now\(\)\)\) \{\n        tiles_request_reload_if_loaded\(GridType::TAB0\);/,

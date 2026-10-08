@@ -739,6 +739,8 @@
 
   function loadSensorValues(
       refreshTiles = false, forceMetaFetch = false, tabsOverride = null) {
+    // The layout window's tiles are not the panel's: values only.
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) refreshTiles = false;
     // A Settings move to or from the parking slot shows ahead of the device
     // (previewSettingsTileTransfer); stored tile data would draw it back.
     if (dragSource || resizeState || settingsTileTransfersInFlight) {

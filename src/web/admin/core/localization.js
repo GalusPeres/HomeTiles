@@ -17,6 +17,7 @@ function t(key) {
   const DEVICE_LANGUAGE_POLL_MS = 15000;
 
   function adminEditsPending() {
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) return true;
     const active = document.activeElement;
     if (active?.matches?.('input, textarea, select')) return true;
     if (dragSource || resizeState || fileManagerUploadBusy || hardwareIoDirty) return true;

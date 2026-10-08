@@ -2,6 +2,7 @@
 #include "src/web/server/assets/web_admin_assets.h"
 #include "src/types/types_registry.h"
 #include "src/tiles/config/tile_config.h"
+#include "src/tiles/config/grid_layout.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/ui/screensaver/screensaver_config.h"
@@ -110,8 +111,23 @@ void appendAdminScripts(String& html) {
   appendJsEntry("save", tr.save);
   appendJsEntry("restart", tr.restart_button);
   appendJsEntry("restartConfirm", tr.restart_confirm);
-  appendJsEntry("headBarRestartConfirm", tr.head_bar_restart_confirm);
-  appendJsEntry("headBarTileOutside", tr.head_bar_tile_outside);
+  appendJsEntry("layoutChange", tr.layout_change);
+  appendJsEntry("layoutActive", tr.layout_active);
+  appendJsEntry("layoutCopyFrom", tr.layout_copy_from);
+  appendJsEntry("layoutSaved", tr.layout_saved);
+  appendJsEntry("layoutSwitch", tr.layout_switch);
+  appendJsEntry("layoutSwitchConfirm", tr.layout_switch_confirm);
+  appendJsEntry("layoutSwitchLater", tr.layout_switch_later);
+  appendJsEntry("layoutFoldersMissing", tr.layout_folders_missing);
+  appendJsEntry("layoutFolderMissing", tr.layout_folder_missing);
+  appendJsEntry("layoutTilesMissing", tr.layout_tiles_missing);
+  appendJsEntry("layoutTileMissing", tr.layout_tile_missing);
+  appendJsEntry("layoutAllFit", tr.layout_all_fit);
+  appendJsEntry("layoutUnsavedConfirm", tr.layout_unsaved_confirm);
+  appendJsEntry("layoutTakeOut", tr.layout_take_out);
+  appendJsEntry("close", tr.security_close);
+  appendJsEntry("home", tr.home);
+  appendJsEntry("loadFailed", tr.admin_io_load_failed);
   appendJsEntry("saveFailed", tr.save_failed);
   appendJsEntry("loading", tr.loading);
   appendJsEntry("ioSwitch", tr.tile_type_switch);
@@ -181,13 +197,42 @@ void appendAdminScripts(String& html) {
     appendJsStringLiteral(html, loc.entity_kind_labels[i]);
   }
   html += "];\n";
-  html += "  const GRID_COLS = " + String(GRID_COLS) + ";\n";
-  html += "  const GRID_ROWS = " + String(GRID_ROWS) + ";\n";
-  // The shown grid of this boot (grid_layout.h): with the head bar fewer,
-  // larger cells; tiles are placed and moved inside it.
-  html += "  const GRID_SHOWN_COLS = " + String(GRID_SHOWN_COLS) + ";\n";
-  html += "  const GRID_SHOWN_ROWS = " + String(GRID_SHOWN_ROWS) + ";\n";
-  html += String("  const HEAD_BAR = ") + (grid_layout::head_bar() ? "true" : "false") + ";\n";
+  // The stored grid and the shown grid of this boot (grid_layout.h): with
+  // the head bar fewer, larger cells; tiles are placed and moved inside it.
+  // Variables: the layout window (tiles/layout-window.js) edits every
+  // layout in its own area with the same editor.
+  html += "  let GRID_COLS = " + String(GRID_COLS) + ";\n";
+  html += "  let GRID_ROWS = " + String(GRID_ROWS) + ";\n";
+  html += "  let GRID_SHOWN_COLS = " + String(GRID_SHOWN_COLS) + ";\n";
+  html += "  let GRID_SHOWN_ROWS = " + String(GRID_SHOWN_ROWS) + ";\n";
+  html += String("  let HEAD_BAR = ") + (grid_layout::head_bar() ? "true" : "false") + ";\n";
+  // The three layouts in screen pixels (the window scales them like the
+  // preview): grid, margins, screen, and whether the panel can show them.
+  {
+    const char* names[] = {tr.layout_classic, tr.layout_bar, tr.layout_portrait};
+    html += "  const LAYOUTS = {";
+    for (uint8_t i = 0; i < grid_layout::kLayoutCount; ++i) {
+      const grid_layout::Layout layout = grid_layout::from_index(i);
+      const grid_layout::Shown grid = grid_layout::layout_grid(layout);
+      if (i) html += ", ";
+      html += grid_layout::key(layout);
+      html += ": {name: ";
+      appendJsStringLiteral(html, names[i]);
+      html += ", cols: " + String(grid.cols) + ", rows: " + String(grid.rows) + (grid.half_row ? ".5" : "");
+      html += String(", bar: ") + (grid.head_bar ? "true" : "false");
+      html += String(", portrait: ") + (grid.portrait ? "true" : "false");
+      html += String(", available: ") + (grid_layout::available(layout) ? "true" : "false");
+      html += String(", switchable: ") + (grid_layout::switchable(layout) ? "true" : "false");
+      html += ", screenW: " + String(grid.screen_w) + ", screenH: " + String(grid.screen_h);
+      html += ", cellW: " + String(grid.cell_w) + ", cellH: " + String(grid.cell_h);
+      html += ", padLeft: " + String(grid.pad_left) + ", padRight: " + String(grid.pad_right);
+      html += ", padTop: " + String(grid.pad_top) + ", padBottom: " + String(grid.pad_bottom) + "}";
+    }
+    html += "};\n";
+    html += "  const ACTIVE_LAYOUT = '";
+    html += grid_layout::key(grid_layout::active());
+    html += "';\n";
+  }
   html += "  const TILES_PER_GRID = " +
           String(static_cast<unsigned>(TILES_PER_GRID)) + ";\n";
   html += "  const ADMIN_WEB_SESSION_TOKEN = " +

@@ -106,9 +106,13 @@
       const [folders, screensaverData, screensaverGrid] = await Promise.all([
         foldersRequest, screensaverConfigRequest, screensaverGridRequest
       ]);
+      // The tiles with their classic places whatever layout is shown; the
+      // other layouts' places come with the layout file (tile_layouts.h).
+      const layoutsRequest = fetch('/api/layouts', {cache: 'no-store'})
+        .then(res => res.ok ? res.json() : null).catch(() => null);
       const tilesLists = await Promise.all(folders.map(async folder => {
         const response = await fetch(
-          '/api/tiles?folder=' + encodeURIComponent(folder.id));
+          '/api/tiles?folder=' + encodeURIComponent(folder.id) + '&layout=classic');
         const data = await response.json();
         if (!response.ok || !Array.isArray(data)) {
           throw new Error('Folder grid export failed');
@@ -126,6 +130,7 @@
         grids[String(folder.id)] =
           Array.isArray(tilesLists[idx]) ? tilesLists[idx] : [];
       });
+      const layoutData = await layoutsRequest;
 
       const payload = {
         version: 3,
@@ -133,6 +138,13 @@
         folders: folders,
         grids: grids,
         settings_tile: exportSettingsTileState(),
+        // Only a panel with the same screen takes these places back.
+        layouts: layoutData?.success ? {
+          screen_width: LAYOUTS.classic.screenW,
+          screen_height: LAYOUTS.classic.screenH,
+          active: layoutData.stored,
+          places: layoutData.places
+        } : undefined,
         screensaver: {
           version: 2,
           config: buildScreensaverExportConfig(screensaverData),
@@ -192,7 +204,7 @@
   }
 
   async function fetchTilesForImport(folderId) {
-    const res = await fetch('/api/tiles?folder=' + encodeURIComponent(folderId));
+    const res = await fetch('/api/tiles?folder=' + encodeURIComponent(folderId) + '&layout=classic');
     if (!res.ok) throw new Error('Tile fetch failed');
     const data = await res.json();
     return Array.isArray(data) ? data : [];
@@ -342,7 +354,12 @@
   // so no imported tile meets one of them, then the system tile takes its
   // place, then the imported tiles. Empty cells are not written. A folder
   // tile maps its exported folder to the one the server created for it.
-  async function applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget = null) {
+  // Where each exported tile landed ({source, view, target, index}), so the
+  // other layouts' places follow their tiles (restoreImportLayouts).
+  let importedSlots = [];
+
+  async function applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget = null,
+                                 sourceFolderId = null) {
     const tileCount = GRID_COLS * GRID_ROWS;
     const systemIndex = currentTiles.findIndex(tile => importTileType(tile) === systemType);
     const post = async (index, tile) => {
@@ -358,6 +375,11 @@
       }
     }
     if (systemIndex >= 0 && plan.system) await post(systemIndex, plan.system);
+    const note = (tile, index) => {
+      if (sourceFolderId !== null && Number(tile.view_id) > 0) {
+        importedSlots.push({source: sourceFolderId, view: Number(tile.view_id), target: folderId, index});
+      }
+    };
     const freeIndices = [];
     for (let i = 0; i < tileCount; i++) {
       if (i !== systemIndex) freeIndices.push(i);
@@ -365,6 +387,7 @@
     for (let i = 0; i < plan.tiles.length; i++) {
       const tile = plan.tiles[i];
       const data = await post(freeIndices[i], tile);
+      note(tile, freeIndices[i]);
       const sourceTarget = Number(tile.navigate_target);
       const target = Number(data && data.navigate_target);
       if (sourceToTarget && importTileType(tile) === 4 && sourceTarget > 0 && target > 0 &&
@@ -391,12 +414,40 @@
   // cell, the top-left one of an empty grid (TileConfig::ensureBackTile).
   const NEW_FOLDER_BACK_TILE = { type: 8, title: '', icon_name: 'arrow-left', col: 0, row: 0, span_w: 1, span_h: 1 };
 
-  async function replaceFolderGridForImport(folderId, sourceTiles, systemType, folderName, sourceToTarget = null) {
+  async function replaceFolderGridForImport(folderId, sourceTiles, systemType, folderName, sourceToTarget = null,
+                                           sourceFolderId = null) {
     const currentTiles = await fetchTilesForImport(folderId);
     const targetSystem = currentTiles.find(tile => importTileType(tile) === systemType) || null;
     const plan = planImportGrid(sourceTiles, systemType, targetSystem, tabByFolder[folderId] || '');
     if (plan.conflict) throw new TileImportError('Import layout conflict', 'stopped', plan.conflict, folderName);
-    await applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget);
+    await applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget, sourceFolderId);
+  }
+
+  // The bar layouts' places of an export from a panel with the same screen
+  // go to the imported tiles (their new IDs); a layout whose folders would
+  // lose their place stays as it was.
+  async function restoreImportLayouts(layouts) {
+    if (!layouts || typeof layouts !== 'object' || !importedSlots.length) return;
+    if (Number(layouts.screen_width) !== LAYOUTS.classic.screenW ||
+        Number(layouts.screen_height) !== LAYOUTS.classic.screenH) return;
+    const tiles = {};
+    for (const target of new Set(importedSlots.map(slot => slot.target))) {
+      tiles[target] = await fetchTilesForImport(target);
+    }
+    for (const key of ['bar', 'portrait']) {
+      const places = layouts.places?.[key];
+      if (!places || !LAYOUTS[key]?.available) continue;
+      const folders = {};
+      for (const slot of importedSlots) {
+        const place = places[String(slot.source)]?.[String(slot.view)];
+        const view = tiles[slot.target]?.[slot.index]?.view_id;
+        if (!Array.isArray(place) || !view) continue;
+        (folders[slot.target] = folders[slot.target] || {})[view] = place;
+      }
+      if (!Object.keys(folders).length) continue;
+      await fetch('/api/layouts', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({layout: key, folders})}).catch(() => {});
+    }
   }
 
   function prepareScreensaverTilesForImport(sourceTiles, sourceLayout) {
@@ -589,6 +640,7 @@
         : null;
 
       showNotification(t('importRunning'));
+      importedSlots = [];
 
       const sourceToTarget = { 0: 0 };
       if (homePlan) {
@@ -598,7 +650,7 @@
           await setSettingsTileHiddenForImport(true, parkedSettings, null, folderName(0));
           if (targetSettings) homeTiles = await fetchTilesForImport(0);
         }
-        await applyImportGrid(0, homeTiles, homePlan, 7, folderName(0), sourceToTarget);
+        await applyImportGrid(0, homeTiles, homePlan, 7, folderName(0), sourceToTarget, 0);
         if (!settingsHidden && !targetSettings) {
           await setSettingsTileHiddenForImport(
             false, homePlan.system, { col: homePlan.system.col, row: homePlan.system.row }, folderName(0));
@@ -622,7 +674,8 @@
             continue;
           }
           await replaceFolderGridForImport(
-            targetFolderId, grids[String(sourceFolderId)], 8, folderName(sourceFolderId), sourceToTarget);
+            targetFolderId, grids[String(sourceFolderId)], 8, folderName(sourceFolderId), sourceToTarget,
+            sourceFolderId);
           pendingFolderIds.splice(i, 1);
           progressed = true;
           targetFolders = await fetchFoldersForImport();
@@ -634,6 +687,8 @@
       if (pendingFolderIds.length) {
         console.warn('Import skipped unreachable folders:', pendingFolderIds);
       }
+
+      await restoreImportLayouts(payload.layouts);
 
       if (screensaverConfig && typeof screensaverConfig === 'object') {
         await importScreensaverConfig(screensaverConfig);
@@ -668,6 +723,8 @@
     fd.append('folder', folderId);
     fd.append('index', index);
     fd.append('type', safeType);
+    // The export's places are the classic layout's (tile_layouts.h).
+    fd.append('layout', 'classic');
     fd.append('title', tile.title || '');
     fd.append('icon_name', tile.icon_name || '');
     if (tile.icon_disc !== undefined && tile.icon_disc !== null) {

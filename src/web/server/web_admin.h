@@ -63,6 +63,9 @@ public:
   void handleGetFolderTab();
   void handleSaveFolderAccess();
   void handleDeleteFolder();
+  void handleGetLayouts();
+  void handleSaveLayouts();
+  void handleSwitchLayout();
   void handleGetSensorValues();
   void handleGetEntityOptions();
   void handleGetMdiIcons();
@@ -74,7 +77,6 @@ public:
   void handleSaveHardwareIo();
   void handleSaveTileBorders();
   void handleSaveIconDiscs();
-  void handleSaveHeadBar();
   void handleSaveIconGlow();
   void handleSaveDefaultTileColor();
   void handleTileRadius();

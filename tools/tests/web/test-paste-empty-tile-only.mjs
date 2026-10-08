@@ -38,7 +38,7 @@ const context = vm.createContext({
   updateDraft: () => calls.push(['draft']),
   scheduleAutoSave: () => calls.push(['save'])
 });
-vm.runInContext(['headBarLayout', 'placeCols', 'placeRows', 'rectsOverlap', 'canPlaceGridLayout', 'canPlaceTileLayout', 'supportsHalfSize',
+vm.runInContext(['headBarLayout', 'placeCols', 'placeRows', 'tileTakesRoom', 'rectsOverlap', 'canPlaceGridLayout', 'canPlaceTileLayout', 'supportsHalfSize',
   'supportedTileLayout', 'pasteTile'].map(extractDeliveredFunction).join('\n'), context);
 
 const paste = (index, clipboard) => {

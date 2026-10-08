@@ -20,7 +20,7 @@ await check('An older grid GET must not replace a locally edited tile',async()=>
 });
 await check('A displaced tile must not autosave its previous position',async()=>{
  const c=vm.createContext({currentTileTab:'folder0',currentTileIndex:0,tilesData:{folder0:[{type:1,col:0,row:0,span_w:2,span_h:.5},{type:20,col:0,row:.5,span_w:2,span_h:.5}]},drafts:{folder0:{1:{type:'20',title:'Edited neighbour',col:'1',row:'1.5',span_w:'2',span_h:'0.5',_dirty:true,_rev:2}}},layoutTiles(){},clearReflowPreviewClasses(){},syncSelectedLayoutInputs(){},persistDrafts(){}});
- vm.runInContext('function getTilesData(tab){return tilesData[tab]||[];}\n'+['applyLocalTileReorder','restoreLocalTileReorder','getTileSnapshotForSave'].map(extractDeliveredFunction).join('\n'),c);
+ vm.runInContext('function getTilesData(tab){return tilesData[tab]||[];}\n'+['tileTakesRoom','applyLocalTileReorder','restoreLocalTileReorder','getTileSnapshotForSave'].map(extractDeliveredFunction).join('\n'),c);
  c.applyLocalTileReorder('folder0',{layouts:[{col:0,row:.5,span_w:2,span_h:.5},{col:0,row:0,span_w:2,span_h:.5}]});
  const saving=c.getTileSnapshotForSave('folder0',1);
  assert.equal(saving.row,'1');

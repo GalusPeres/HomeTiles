@@ -2767,16 +2767,11 @@
     .global-tile-radius-value { min-width:2ch; }
     .global-icon-glow-value, .global-tile-opacity-value { min-width:4.5ch; }
 
-/* Head bar layout (grid_layout.h): the panel shows fewer, larger cells
-   below a head like the Settings head. A tile outside the shown grid sits
-   beside the screen, outlined red, until it is moved in (nothing moves by
-   itself); Settings and Back give way to the head's gear and X. */
-/* Inset: the tile border's outline and the rounded clip would hide an
-   outline here. */
-.tile-grid > .tile.tile-outside {
-  box-shadow:inset 0 0 0 2px #e5534b;
-}
-.tile-grid > .tile.tile-bar-hidden { opacity:.35; }
+/* Head bar layouts (grid_layout.h): the panel shows fewer, larger cells
+   below a head like the Settings head. A tile without a place in the active
+   layout is not shown (tile-unplaced); the layout window places it. */
+.tile-grid > .tile.tile-unplaced { display:none !important; }
+.tile-grid:not(.head-bar-grid):not(.setup-head) > .head-bar-preview { display:none; }
 .head-bar-preview {
   position:absolute;
   left:var(--preview-frame, 0px);
@@ -3291,3 +3286,111 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
   flex:0 0 auto; padding:6px 14px 9px; border-top:1px solid var(--line); font-size:12px; color:var(--text-3);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
+
+/* The layout field in the global settings: like the tile color field, the
+   pen opens the layout window. */
+.layout-choice {
+  display:inline-flex; align-items:center; gap:8px; height:32px; padding:4px 10px; box-sizing:border-box;
+  border:1px solid var(--line-strong); border-radius:10px; background:var(--well); color:var(--text);
+  font:inherit; font-size:13px; cursor:pointer;
+}
+.layout-choice:hover { border-color:#444444; }
+.layout-choice i { font-size:16px; color:var(--text-3, #9e9e9e); }
+
+/* The layout window (tiles/layout-window.js), in the Web Admin's popover
+   look: it holds the page's real grid and editor. */
+.setup-backdrop {
+  position:fixed; inset:0; z-index:900; display:flex; align-items:center; justify-content:center;
+  padding:16px; background:rgba(0,0,0,0.6);
+}
+.setup-dialog {
+  display:flex; flex-direction:column; gap:16px; max-width:min(var(--admin-wrapper-width, 1100px), 100%); max-height:100%;
+  overflow:auto; padding:24px 28px; background:var(--card); border:1px solid var(--line-strong); border-radius:22px;
+  box-shadow:0 16px 40px rgba(0,0,0,0.55);
+}
+.setup-head-row { display:flex; align-items:center; gap:16px; }
+.setup-title { font-size:20px; font-weight:700; margin-right:8px; }
+.setup-close {
+  margin-left:auto; flex:none; width:36px; height:36px; border:none; border-radius:10px; background:#2a2a2a;
+  color:#e8e8e8; font-size:20px; cursor:pointer;
+}
+.setup-close:hover { background:#333333; }
+/* The three layouts in one row under the title, as low as the page tabs. */
+.setup-layouts { display:flex; flex-wrap:wrap; gap:10px; }
+.setup-layout {
+  position:relative; display:flex; align-items:center; gap:8px; padding:6px 12px 6px 10px; border-radius:10px;
+  cursor:pointer; background:#202020; border:1px solid var(--line-strong); color:var(--text); font:inherit;
+  text-align:left;
+}
+.setup-layout:hover { background:#262626; }
+.setup-layout.selected { border-color:var(--accent); background:var(--accent-soft); }
+/* The layout the panel runs now: a green pill half outside the top right
+   corner, like the tab counters and folder badges. */
+.setup-active {
+  position:absolute; top:-9px; right:10px; height:18px; padding:0 8px; border-radius:9px; display:flex;
+  align-items:center; background:#43a047; color:#fff; font-size:11px; font-weight:600; line-height:1;
+}
+.setup-layout-text { display:flex; align-items:baseline; gap:6px; line-height:1.25; white-space:nowrap; }
+.setup-layout-text b { font-size:13px; font-weight:600; }
+.setup-layout-text small { font-size:12px; color:var(--text-3, #9e9e9e); }
+.setup-shape {
+  position:relative; flex:none; width:22px; height:15px; border:1.5px solid currentColor; border-radius:3px;
+  opacity:0.85;
+}
+.setup-shape.portrait { width:13px; height:19px; margin:0 4px; }
+.setup-shape.bar::before {
+  content:""; position:absolute; left:1.5px; right:1.5px; top:1.5px; height:2.5px; border-radius:1px;
+  background:currentColor; opacity:0.6;
+}
+.setup-tabs { display:flex; flex-wrap:wrap; gap:10px; }
+.setup-tab { position:relative; }
+.setup-badge {
+  position:absolute; top:-7px; right:-7px; min-width:18px; height:18px; padding:0 5px; border-radius:9px;
+  background:#e5484d; color:#fff; font-size:11px; font-weight:600; line-height:18px; text-align:center;
+}
+.setup-stage { display:flex; justify-content:flex-start; align-items:flex-start; margin:0 auto; }
+/* The editor's area: the layout's screen in black, the rest is outside. */
+.tile-grid.setup-grid {
+  background-color:var(--panel, #141414); background-repeat:no-repeat; background-position:0 0;
+  border:1px dashed var(--line-strong);
+}
+/* No new tiles in the window. */
+.tile-grid.setup-grid > .tile.empty { display:none !important; }
+.tile-grid.setup-grid.setup-head-ghost > .head-bar-preview { opacity:0.35; }
+/* Red lies one ring further in, so the editor's hover and selection rings
+   at the edge still show on a red tile. */
+.tile-grid.setup-grid > .tile.setup-red:not(.empty)::before {
+  content:""; position:absolute; inset:0; z-index:25; pointer-events:none; box-sizing:border-box;
+  border:3px solid #e5484d; border-radius:max(0px, calc(var(--tile-radius, 11px) - 3px));
+}
+.tile-grid.setup-grid > .tile.sensor-compact.setup-red:not(.empty)::before { inset:3px; }
+/* A folder's badge, like the page tabs' counters, half outside its top
+   right corner: green with a place, red "!" without. */
+.tile-grid.setup-grid > .setup-flag {
+  position:absolute; z-index:40; width:18px; height:18px; border-radius:9px; display:flex; align-items:center;
+  justify-content:center; color:#fff; font-size:12px; font-weight:700; line-height:1; pointer-events:none;
+}
+.tile-grid.setup-grid > .setup-flag.ok { background:#43a047; }
+.tile-grid.setup-grid > .setup-flag.missing { background:#e5484d; }
+.tile-grid.setup-grid > .setup-flag i { font-size:13px; }
+/* The selected tile's cross, where and as large as a folder's badge. */
+.tile-grid.setup-grid > .setup-trash {
+  position:absolute; z-index:41; width:18px; height:18px; border-radius:9px; cursor:pointer; display:flex;
+  align-items:center; justify-content:center; background:var(--danger); color:#fff; font-size:13px; line-height:1;
+}
+.tile-grid.setup-grid > .setup-trash:hover { background:var(--danger-hover); }
+.setup-foot { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.setup-status { flex:1 1 280px; display:flex; align-items:center; gap:10px; font-size:14px; line-height:1.4; }
+.setup-status > i { font-size:22px; color:#e5484d; }
+.setup-status.is-ok > i { color:#26a69a; }
+.setup-note { font-size:13px; color:var(--text-3, #9e9e9e); }
+/* Like the buttons beside it; the arrow keeps its room on the right. */
+select.setup-from {
+  width:auto; margin:0; padding:8px 34px 8px 12px; border:none; border-radius:12px;
+  background-position:right 12px center; background-color:#2a2a2a; color:#e8e8e8; font-size:13px; font-weight:600;
+}
+select.setup-from:hover { background-color:#333333; }
+/* The size of the tile editor's action buttons (Kopieren, Einfügen). */
+.setup-foot .btn { padding:8px 12px; font-size:13px; }
+.setup-apply:disabled, .setup-save:disabled { opacity:0.45; cursor:not-allowed; }
+.setup-save:disabled { background:var(--accent); }

@@ -185,7 +185,8 @@ function maybeFillTitleFromWeather(tab) {
   function applyWeatherPreview(el, state, tile, iconName, forcedColor) {
     if (!el || typeof WEATHER_TILE_LAYOUT === 'undefined') return;
     const L = WEATHER_TILE_LAYOUT;
-    const rootStyle = getComputedStyle(document.documentElement);
+    // The tile's own grid sizes (inherited variables), not the page's.
+    const rootStyle = getComputedStyle(el.isConnected ? el : document.documentElement);
     const scale = parseFloat(rootStyle.getPropertyValue('--radius-preview-scale')) || 0.5;
     const colored = Number(tile?.sensor_display_mode) !== 1;
     const now = new Date();

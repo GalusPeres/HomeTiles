@@ -152,6 +152,6 @@ Last reviewed: 2026-10-08
 
 ## Layouts (`feature/layouts`, unreleased)
 
-- Head bar option: Web Admin global switch, NVS `head_bar`, read at boot (restart). `grid_layout.h` shown grid: 1280x800 6x4, 1280x720/1024x600 5x3, 800x480 4x3, square 3x3, JC4880 3x5; `home_bar.cpp` = Settings head (circle, title, time, gear/X), Settings/Back tiles hidden.
-- Stored positions keep the profile grid: tiles outside the shown grid are not drawn and outlined red in Web Admin, never moved; placement/reorder stay inside it. Screensaver tab keeps the profile grid, the panel shifts its rows. Settings and camera stripe keep profile geometry.
-- Emulator only so far: portrait, folder circles in the bar. HW pending.
+- Three layouts (`grid_layout.h`): classic (profile grid, places in PackedTileV7), head bar landscape (1280x800 6x4, 1280x720/1024x600 5x3, 800x480 4x3, square 3x3), head bar upright (prepared: 4x6.5, 3x6, 3x5.5; switchable only without turn/half row). NVS `layout` read at boot; a bar layout without places starts classic.
+- Bar places: `/_tile_grids/layouts.json` by folder + view_id (`tile_layouts.cpp`); no place = `layout_hidden` (not drawn, no room). Saves keep the classic places; a tile made under a bar layout takes the first free classic cell.
+- Web Admin: "Layout" field opens the layout window (`tiles/layout-window.js`): real editor, red = not part of the layout, folder rule, take-out cross, Speichern/Umstellen; `/api/layouts`, export/import use classic places. Tab5 b266 HW test pending.

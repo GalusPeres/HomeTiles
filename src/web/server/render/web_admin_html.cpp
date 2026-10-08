@@ -448,13 +448,16 @@ static void appendTileTabHTML(
   } else if (configManager.getConfig().tile_borders) {
     html += " tiles-bordered";
   }
+  // The head shows with a bar layout (the layout window shows it too).
+  if (!screensaver_mode && grid_layout::head_bar()) html += " head-bar-grid";
   html += R"html(" id=")html";
   html += tab_id;
   html += R"html(Grid">
 )html";
-  if (!screensaver_mode && grid_layout::head_bar()) {
+  if (!screensaver_mode) {
     // The head bar's head over the grid's top margin (home_bar.cpp): the
     // page's circle and title, the time, and the gear (Home) or the X.
+    // Hidden without a bar layout; the layout window shows it.
     const bool home = folder_id == 0;  // the root folder (TileConfig)
     const String icon = home ? String("home")
                              : normalizeMdiIconName(folder.icon_name[0] ? String(folder.icon_name) : String("folder"));
@@ -562,14 +565,13 @@ static void appendTileTabHTML(
       cssClass += " screensaver-bg-clear";
     }
 
-    // Head bar layout (grid_layout.h): a tile outside the shown grid sits
-    // beside the screen, outlined, until it is moved in; Settings and Back
-    // give way to the head's gear and X.
-    const bool head_bar_grid = !screensaver_mode && grid_layout::head_bar();
-    const bool outside = head_bar_grid && tile.type != TILE_EMPTY && !grid_layout::inside(col, row, span_w, span_h);
-    if (outside) cssClass += " tile-outside";
-    if (head_bar_grid && (tile.type == TILE_SETTINGS || tile.type == TILE_BACK)) cssClass += " tile-bar-hidden";
-    if (outside || tile_geometry::fraction_bits(col, row, span_w, span_h)) {
+    // No place in the active layout (tile_layouts.h): not shown, no room
+    // taken; the layout window places it.
+    if (!screensaver_mode && tile.layout_hidden) {
+      cssClass += " tile-unplaced";
+      tileStyle += "display:none;";
+    }
+    if (tile_geometry::fraction_bits(col, row, span_w, span_h)) {
       cssClass += " fractional-tile";
       tileStyle += ";--tile-col:" + String(col) + ";--tile-row:" + String(row) +
                    ";--tile-w:" + String(span_w) + ";--tile-h:" + String(span_h) +
@@ -942,14 +944,23 @@ static void appendTileTabHTML(
     if (display.icon_discs) html += " checked";
     html += "> ";
     appendHtmlEscaped(html, tr.icon_discs);
-    // The head bar layout (grid_layout.h): saved at once, active after the
-    // restart the browser asks for.
-    html += "</label><label class=\"inline-checkbox\"><input class=\"global-head-bar-toggle\" id=\"" + tab_id +
-            "_global_head_bar\" type=\"checkbox\" onchange=\"saveHeadBar(this)\"";
-    if (display.head_bar) html += " checked";
-    html += "> ";
-    appendHtmlEscaped(html, tr.head_bar);
-    html += "</label><div class=\"global-settings-field\"><label for=\"" + radius_id + "\">";
+    // The layout (grid_layout.h): a field like the tile color, its pen opens
+    // the layout window (tiles/layout-window.js).
+    {
+      const grid_layout::Shown& shown = grid_layout::shown();
+      const char* name = grid_layout::active() == grid_layout::Layout::kBar        ? tr.layout_bar
+                         : grid_layout::active() == grid_layout::Layout::kPortrait ? tr.layout_portrait
+                                                                                   : tr.layout_classic;
+      html += "</label><div class=\"global-settings-field\"><label>";
+      appendHtmlEscaped(html, tr.layout_label);
+      html += "</label><button type=\"button\" class=\"layout-choice\" onclick=\"openLayoutWindow()\" title=\"";
+      appendHtmlEscaped(html, tr.layout_change);
+      html += "\"><span class=\"layout-current\">";
+      appendHtmlEscaped(html, name);
+      html += " · " + String(shown.cols) + " × " + String(shown.rows);
+      html += "</span><i class=\"mdi mdi-pencil-outline\"></i></button></div>";
+    }
+    html += "<div class=\"global-settings-field\"><label for=\"" + radius_id + "\">";
     appendHtmlEscaped(html, tr.tile_radius);
     html += "</label><div class=\"global-radius-field\">";
     append_radius_input(radius_id);

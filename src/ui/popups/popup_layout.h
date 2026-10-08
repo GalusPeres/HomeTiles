@@ -1,6 +1,7 @@
 #pragma once
 
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/core/config/tile_radius.h"
 
 #include "src/ui/shared/title_label.h"
 
@@ -335,19 +336,29 @@ inline void alignHeader(lv_obj_t* card, lv_obj_t* title, lv_obj_t* icon,
 // behavior; `user_data` reaches it unchanged.
 inline lv_obj_t* createCloseButton(lv_obj_t* card, lv_event_cb_t handler,
                                    void* user_data) {
+  // The pressed shape of every head button (the Settings X and gear, the
+  // head bar's): halfway between the header circle and the full X, centred
+  // where the X always was, its corner the tile radius minus its inset
+  // (concentric), without the theme's grow on press (user 2026-10-07: every
+  // head button the same size, every one concentric). The touch area keeps
+  // the full X box.
+  constexpr int kPressed = (kCloseButtonSize + kHeaderIconDiscSize) / 2;
+  constexpr int kInset = (kCloseButtonSize - kPressed) / 2;
   lv_obj_t* close_btn = lv_button_create(card);
-  lv_obj_set_size(close_btn, kCloseButtonSize, kCloseButtonSize);
+  lv_obj_set_size(close_btn, kPressed, kPressed);
+  lv_obj_set_style_transform_width(close_btn, 0, LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_transform_height(close_btn, 0, LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(close_btn, LV_OPA_TRANSP, 0);
   lv_obj_set_style_bg_color(close_btn, lv_color_hex(0xFFFFFF), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(close_btn, LV_OPA_20, LV_STATE_PRESSED);
   lv_obj_set_style_border_opa(close_btn, LV_OPA_TRANSP, 0);
   lv_obj_set_style_outline_opa(close_btn, LV_OPA_TRANSP, 0);
   lv_obj_set_style_shadow_opa(close_btn, LV_OPA_TRANSP, 0);
-  ui_surface_style::apply_radius(close_btn, kCloseButtonRadius, 0);
+  ui_surface_style::apply_radius(close_btn, tile_radius::kMinimum - kInset, 0);
   lv_obj_set_style_pad_all(close_btn, 0, 0);
-  lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT, kCloseButtonOffsetX,
-               kCloseButtonOffsetY);
-  lv_obj_set_ext_click_area(close_btn, kCloseButtonClickArea);
+  lv_obj_align(close_btn, LV_ALIGN_TOP_RIGHT, kCloseButtonOffsetX - kInset,
+               kCloseButtonOffsetY + kInset);
+  lv_obj_set_ext_click_area(close_btn, kCloseButtonClickArea + kInset);
   lv_obj_add_flag(close_btn, LV_OBJ_FLAG_PRESS_LOCK);
   lv_obj_clear_flag(close_btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_event_cb(close_btn, handler, LV_EVENT_CLICKED, user_data);

@@ -401,7 +401,7 @@
     for (let i = 0; i < tiles.length; i++) {
       const tile = tiles[i];
       const layout = previewResult.layouts[i];
-      if (!tile || Number(tile.type || 0) === 0 || !layout) continue;
+      if (!tileTakesRoom(tile) || !layout) continue;
       const changed = tile.col !== layout.col || tile.row !== layout.row;
       tile.col = layout.col;
       tile.row = layout.row;
@@ -792,6 +792,11 @@
     const localSnapshot = captureTilePositionSnapshot(tab);
     applyLocalTileReorder(tab, previewResult);
     clearDragPlaceholder();
+    // The layout window keeps the editor's places to itself (layout-window.js).
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) {
+      clearDeferredSensorRefresh();
+      return;
+    }
     fetch('/api/tiles/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -830,7 +835,8 @@
     let selectedCol = Number.MAX_SAFE_INTEGER;
     document.querySelectorAll('#tab-tiles-' + tab + ' .tile').forEach(tile => {
       const index = parseInt(tile.dataset.index, 10);
-      if (isNaN(index) || Number(tile.dataset.type || 0) === 0) return;
+      if (isNaN(index) || Number(tile.dataset.type || 0) === 0 ||
+          tile.classList.contains('tile-unplaced')) return;
       const row = Number(tile.dataset.row);
       const col = Number(tile.dataset.col);
       const safeRow = isNaN(row) ? Number.MAX_SAFE_INTEGER : row;

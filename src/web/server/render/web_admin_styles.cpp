@@ -407,7 +407,8 @@ static void appendHeadBarVars(String& html);
 
 void appendAdminStyles(String& html) {
   appendPreviewScaleVars(html);
-  if (grid_layout::head_bar()) appendHeadBarVars(html);
+  // Always: the layout window draws the head for the bar layouts.
+  appendHeadBarVars(html);
   html += R"html(
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%2316181c'/%3E%3Crect x='4' y='4' width='17' height='17' rx='4' fill='%23ffffff'/%3E%3Crect x='27' y='4' width='17' height='17' rx='4' fill='%23ffffff'/%3E%3Crect x='4' y='27' width='17' height='17' rx='4' fill='%23ffffff'/%3E%3Cpath d='M33 26h5v6.5h6.5v5H38V44h-5v-6.5h-6.5v-5H33z' fill='%2326a69a'/%3E%3C/svg%3E">
@@ -429,7 +430,7 @@ static void appendHeadBarVars(String& html) {
   const home_bar::Geometry head = home_bar::geometry();
   html += "  <style>:root{";
   emit_scaled("head-screen-w", SCREEN_WIDTH);
-  emit_scaled("head-top", GRID_PAD_TOP);
+  emit_scaled("head-top", grid_layout::layout_grid(grid_layout::Layout::kBar).pad_top);
   emit_scaled("head-disc", head.disc);
   emit_scaled("head-disc-x", head.disc_x);
   emit_scaled("head-cy", head.center_y);

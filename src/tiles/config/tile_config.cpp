@@ -1,5 +1,6 @@
 #include "src/core/text/title_text.h"
 #include "src/tiles/config/tile_config.h"
+#include "src/tiles/config/tile_layouts.h"
 #include "src/devices/device.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
@@ -1845,7 +1846,7 @@ static void unpackTileV1(const PackedTileV1& in, Tile& out, uint8_t index) {
   }
 }
 static bool get_tile_layout_clamped(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
-  if (tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
+  if (tile.layout_hidden || tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
   col = tile.col;
   row = tile.row;
   span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
@@ -2684,6 +2685,15 @@ static FolderEntry makeFolderEntry(uint16_t id, uint16_t parent_id, const String
 }
 
 bool TileConfig::load() {
+  // The other layouts' places (tile_layouts.h) before any grid is loaded.
+  // A bar layout without places (the file is gone) would show empty pages:
+  // the panel starts with the classic layout then (before the UI is built).
+  tile_layouts::begin();
+  if (grid_layout::active() != grid_layout::Layout::kClassic && !tile_layouts::has_layout(grid_layout::active())) {
+    Serial.printf("[Layouts] No places for %s, starting with the classic layout\n",
+                  grid_layout::key(grid_layout::active()));
+    grid_layout::apply(0);
+  }
   folders.clear();
   bool folders_ok = loadFolders();
   bool had_root = folderExists(kRootFolderId);
@@ -2924,6 +2934,18 @@ bool TileConfig::saveFolderGrid(uint16_t folder_id, TileGridConfig& grid) {
     adoptActiveGrid(folder_id, grid);
   }
   return ok;
+}
+
+bool TileConfig::loadFolderGridClassic(uint16_t folder_id, TileGridConfig& out) {
+  if (!folderExists(folder_id)) return false;
+  return loadGrid(folder_id, out, true, false);
+}
+
+bool TileConfig::saveFolderGridClassic(uint16_t folder_id, TileGridConfig& grid) {
+  if (!folderExists(folder_id)) return false;
+  bool ids_changed = false;
+  if (!ensureNavigationIds(grid, ids_changed)) return false;
+  return saveGridInPlace(folder_id, grid, true, false);
 }
 
 bool TileConfig::previewActiveFolderGrid(uint16_t folder_id,
@@ -3573,7 +3595,9 @@ bool TileConfig::deleteFolder(uint16_t folder_id) {
       writeLongTitleSd(id, i, "");
       writeIconColorsSd(id, i, "");
     }
+    tile_layouts::drop_folder(id);
   }
+  tile_layouts::commit();
 
   for (uint16_t id : to_delete) {
     if (active_folder_id == id) {
@@ -3586,8 +3610,163 @@ bool TileConfig::deleteFolder(uint16_t folder_id) {
   return true;
 }
 
+// The active layout's places (tile_layouts.h) over the stored classic ones.
+// A tile without a place there is hidden: not drawn, no room taken.
+static void applyLayoutPlaces(uint16_t folder_id, TileGridConfig& grid) {
+  using grid_layout::Layout;
+  const Layout active = grid_layout::active();
+  for (auto& tile : grid.tiles) {
+    tile.layout_hidden = false;
+    if (tile.type == TILE_EMPTY || !tile.view_id) continue;
+    if (active == Layout::kClassic) {
+      tile.layout_hidden = tile_layouts::classic_hidden(folder_id, tile.view_id);
+      continue;
+    }
+    tile_layouts::Place place{};
+    const bool placed = tile.type != TILE_SETTINGS && tile.type != TILE_BACK &&
+                        tile_layouts::find(active, folder_id, tile.view_id, place) &&
+                        grid_layout::inside(place.col, place.row, place.span_w, place.span_h) &&
+                        tile_geometry::supported(tile.type, place.col, place.row, place.span_w, place.span_h);
+    if (!placed) {
+      tile.layout_hidden = true;
+      continue;
+    }
+    tile.col = place.col;
+    tile.row = place.row;
+    tile.span_w = place.span_w;
+    tile.span_h = place.span_h;
+  }
+}
+
+// A free place in the classic layout for a tile made under a bar layout: its
+// own size first, then the smallest its type allows; whole cells before half
+// steps.
+static bool findFreeClassicPlace(const std::vector<uint8_t>& occupied, const Tile& tile,
+                                 tile_layouts::Place& out) {
+  const int cols2 = GRID_COLS * 2;
+  auto fits = [&](float col, float row, float w, float h) {
+    if (col + w > GRID_COLS || row + h > GRID_ROWS) return false;
+    if (!tile_geometry::supported(tile.type, col, row, w, h)) return false;
+    for (int r = static_cast<int>(row * 2); r < static_cast<int>((row + h) * 2); ++r) {
+      for (int c = static_cast<int>(col * 2); c < static_cast<int>((col + w) * 2); ++c) {
+        if (occupied[r * cols2 + c]) return false;
+      }
+    }
+    return true;
+  };
+  const float sizes[][2] = {{tile.span_w, tile.span_h}, {1, 1}, {1, 0.5f}};
+  for (const auto& size : sizes) {
+    for (float step : {1.0f, 0.5f}) {
+      for (float row = 0; row + size[1] <= GRID_ROWS; row += step) {
+        for (float col = 0; col + size[0] <= GRID_COLS; col += step) {
+          if (!fits(col, row, size[0], size[1])) continue;
+          out = {col, row, size[0], size[1]};
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Before a grid is written: the active layout's places of its tiles go to the
+// layout file, and `classic` gets the classic place of every slot (what the
+// tile data stores). With the classic layout shown (or classic_only) the grid
+// holds them already; a tile hidden there keeps the stored one. A tile whose
+// slot got a new ID (its type changed) keeps the places of the tile before.
+static void resolveLayoutPlaces(uint16_t folder_id, TileGridConfig& grid, bool classic_only,
+                                tile_layouts::Place* classic) {
+  using grid_layout::Layout;
+  const Layout active = classic_only ? Layout::kClassic : grid_layout::active();
+  std::vector<uint16_t> views;
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& tile = grid.tiles[i];
+    classic[i] = {tile.col, tile.row, tile.span_w, tile.span_h};
+    if (tile.type != TILE_EMPTY && tile.view_id) views.push_back(tile.view_id);
+  }
+  if (active == Layout::kClassic && !tile_layouts::has_any(folder_id)) return;
+
+  // What the file holds now: each slot's tile and its classic place.
+  struct Stored {
+    uint16_t view;
+    tile_layouts::Place place;
+  };
+  std::vector<Stored> stored(TILES_PER_GRID, Stored{0, {0, 0, 1, 1}});
+  {
+    auto packed_storage = allocPackedGridScratch<PackedQuarterGridV7>(QUARTERS_PER_GRID, "Grid-Layouts");
+    if (packed_storage && readGridSd(folder_id, packed_storage.get(), QUARTERS_PER_GRID)) {
+      std::unique_ptr<Tile> tile(new (std::nothrow) Tile());
+      for (size_t q = 0; tile && q < QUARTERS_PER_GRID; ++q) {
+        for (size_t i = 0; i < TILES_PER_QUARTER; ++i) {
+          const size_t index = quarterGridIndex(q, i);
+          if (index >= TILES_PER_GRID) continue;
+          *tile = Tile();
+          unpackTileV7(packed_storage.get()[q].tiles[i], *tile);
+          unpackGeometry(packed_storage.get()[q], i, *tile);
+          if (tile->type == TILE_EMPTY) continue;
+          stored[index] = {tile->view_id, {tile->col, tile->row, tile->span_w, tile->span_h}};
+        }
+      }
+    }
+  }
+  auto stored_slot = [&](uint16_t view) -> int {
+    for (size_t j = 0; j < TILES_PER_GRID; ++j) {
+      if (view && stored[j].view == view) return static_cast<int>(j);
+    }
+    return -1;
+  };
+  auto present = [&](uint16_t view) { return std::find(views.begin(), views.end(), view) != views.end(); };
+
+  std::vector<int> source(TILES_PER_GRID, -1);
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& tile = grid.tiles[i];
+    if (tile.type == TILE_EMPTY || !tile.view_id) continue;
+    source[i] = stored_slot(tile.view_id);
+    if (source[i] < 0 && stored[i].view && !present(stored[i].view)) {
+      tile_layouts::rekey(folder_id, stored[i].view, tile.view_id);
+      source[i] = static_cast<int>(i);
+    }
+  }
+
+  const int cols2 = GRID_COLS * 2;
+  std::vector<uint8_t> occupied(static_cast<size_t>(GRID_ROWS * 2 * cols2), 0);
+  auto occupy = [&](const tile_layouts::Place& place) {
+    for (int r = static_cast<int>(place.row * 2); r < static_cast<int>((place.row + place.span_h) * 2); ++r) {
+      for (int c = static_cast<int>(place.col * 2); c < static_cast<int>((place.col + place.span_w) * 2); ++c) {
+        if (r >= 0 && c >= 0 && r < GRID_ROWS * 2 && c < cols2) occupied[r * cols2 + c] = 1;
+      }
+    }
+  };
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    Tile& tile = grid.tiles[i];
+    if (tile.type == TILE_EMPTY || !tile.view_id) continue;
+    if (active == Layout::kClassic) {
+      if (tile.layout_hidden && source[i] >= 0) classic[i] = stored[source[i]].place;
+      continue;
+    }
+    if (!tile.layout_hidden && tile.type != TILE_SETTINGS && tile.type != TILE_BACK) {
+      tile_layouts::set(active, folder_id, tile.view_id, {tile.col, tile.row, tile.span_w, tile.span_h});
+    }
+    if (source[i] < 0) continue;
+    classic[i] = stored[source[i]].place;
+    if (!tile_layouts::classic_hidden(folder_id, tile.view_id)) occupy(classic[i]);
+  }
+  // Made under a bar layout: the first free classic place, else none (the
+  // Layout window shows it red there).
+  for (size_t i = 0; active != Layout::kClassic && i < TILES_PER_GRID; ++i) {
+    const Tile& tile = grid.tiles[i];
+    if (tile.type == TILE_EMPTY || !tile.view_id || source[i] >= 0) continue;
+    tile_layouts::Place place{};
+    const bool free = findFreeClassicPlace(occupied, tile, place);
+    tile_layouts::set_classic_hidden(folder_id, tile.view_id, !free);
+    classic[i] = free ? place : tile_layouts::Place{0, 0, 1, 1};
+    if (free) occupy(place);
+  }
+  tile_layouts::retain(folder_id, views);
+}
+
 bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
-                          bool ensure_navigation_tile) {
+                          bool ensure_navigation_tile, bool layout_places) {
   initGridDefaults(grid);
 
   bool ok = false;
@@ -3694,8 +3873,9 @@ bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
   if (folder_id != kScreensaverGridStorageId &&
       !ensureNavigationIds(grid, changed)) return false;
   if (needs_migration_save || changed) {
-    if (!saveGridInPlace(folder_id, grid, ensure_navigation_tile)) return false;
+    if (!saveGridInPlace(folder_id, grid, ensure_navigation_tile, false)) return false;
   }
+  if (layout_places && folder_id != kScreensaverGridStorageId) applyLayoutPlaces(folder_id, grid);
   return true;
 }
 
@@ -3715,7 +3895,7 @@ bool TileConfig::saveGrid(uint16_t folder_id, const TileGridConfig& grid,
 // navigation tile) and writes it. No second full grid copy: two copies on the
 // loop task stack overflowed it when the Web Admin saved a folder (b39).
 bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
-                                 bool ensure_navigation_tile) {
+                                 bool ensure_navigation_tile, bool layout_places) {
   if (!storageReady()) {
     Serial.println("[TileConfig] WARN: Storage unavailable, grid cannot be saved");
     return false;
@@ -3745,6 +3925,14 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
                 static_cast<unsigned>(QUARTERS_PER_GRID),
                 static_cast<unsigned>(sizeof(PackedQuarterGridV7)));
 
+  // The tile data keeps the classic layout's places (tile_layouts.h).
+  std::unique_ptr<tile_layouts::Place[]> classic;
+  if (folder_id != kScreensaverGridStorageId) {
+    classic.reset(new (std::nothrow) tile_layouts::Place[TILES_PER_GRID]);
+    if (!classic) return false;
+    resolveLayoutPlaces(folder_id, working, !layout_places, classic.get());
+  }
+
   auto packed_storage =
       allocPackedGridScratch<PackedQuarterGridV7>(QUARTERS_PER_GRID, "Grid-Save");
   PackedQuarterGridV7* packed = packed_storage.get();
@@ -3758,10 +3946,25 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
         packed[q].tiles[i] = PackedTileV7{};
         continue;
       }
-      packTile(working.tiles[grid_idx], packed[q].tiles[i]);
-      packGeometry(working.tiles[grid_idx], packed[q], i);
+      Tile& tile = working.tiles[grid_idx];
+      const tile_layouts::Place shown{tile.col, tile.row, tile.span_w, tile.span_h};
+      if (classic) {
+        tile.col = classic[grid_idx].col;
+        tile.row = classic[grid_idx].row;
+        tile.span_w = classic[grid_idx].span_w;
+        tile.span_h = classic[grid_idx].span_h;
+      }
+      packTile(tile, packed[q].tiles[i]);
+      packGeometry(tile, packed[q], i);
+      tile.col = shown.col;
+      tile.row = shown.row;
+      tile.span_w = shown.span_w;
+      tile.span_h = shown.span_h;
     }
   }
+  // The layout file before the tiles: a place is never lost to a failed
+  // grid write, an unused one is dropped on the next save.
+  tile_layouts::commit();
 
 #if defined(DEVICE_ESP32_S3_RGB_480)
   const bool legacy_v6_present =

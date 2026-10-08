@@ -1,8 +1,8 @@
-  // The shown grid (grid_layout.h): with the head bar the panel shows fewer,
-  // larger cells. New places, moves and sizes stay inside it; stored
-  // positions keep the full GRID_COLS x GRID_ROWS, so a tile outside the
-  // shown grid is marked (tile-outside) and never moved by the editor. The
-  // screensaver tab keeps its own grid.
+  // The shown grid (grid_layout.h): with a bar layout the panel shows fewer,
+  // larger cells. New places, moves and sizes stay inside it. A tile without
+  // a place in the active layout (layout_hidden, tile_layouts.h) is not shown
+  // and takes no room; the layout window places it. The screensaver tab
+  // keeps its own grid.
   function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
   function placeCols(tab = currentTileTab) {
     return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_COLS === 'number'
@@ -12,14 +12,9 @@
     return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_ROWS === 'number'
       ? GRID_SHOWN_ROWS : GRID_ROWS;
   }
-  // A stored layout wholly inside the shown grid.
-  function insideShownGrid(tab, layout) {
-    return !!layout && layout.col + layout.span_w <= placeCols(tab) + 0.001 &&
-      layout.row + layout.span_h <= placeRows(tab) + 0.001;
-  }
-  // Settings and Back give way to the head's gear and X (shownTileLayout).
-  function hiddenByHeadBar(tab, type) {
-    return headBarLayout() && !isScreensaverTileTab(tab) && [7, 8].includes(Number(type));
+  // A tile that is shown and takes room in the editor's grid.
+  function tileTakesRoom(tile) {
+    return !!tile && Number(tile.type || 0) !== 0 && !tile.layout_hidden;
   }
 
   function clampInt(value, min, max, fallback) {
@@ -192,22 +187,7 @@
 
   function setTileGridPosition(el, col, row, spanW, spanH) {
     setGridItemPosition(el, col, row, spanW, spanH);
-    // Outside the shown grid: placed like a half step (absolute, not a grid
-    // track), so it shows beside the screen instead of widening it.
-    const headBar = headBarLayout();
-    const tab = headBar ? (el.closest?.('[id^="tab-tiles-"]')?.id?.slice('tab-tiles-'.length) || currentTileTab) : '';
-    const outside = headBar && !el.classList.contains('empty') &&
-      !insideShownGrid(tab, {col, row, span_w: spanW, span_h: spanH});
-    el.classList.toggle('tile-outside', outside);
-    if (outside) {
-      el.title = t('headBarTileOutside');
-      el.dataset.outsideTitle = '1';
-    } else if (el.dataset.outsideTitle) {
-      el.removeAttribute('title');
-      delete el.dataset.outsideTitle;
-    }
-    el.classList.toggle('tile-bar-hidden', headBar && hiddenByHeadBar(tab, el.dataset.type));
-    const fractional = outside || [col, row, spanW, spanH].some(v => !Number.isInteger(v));
+    const fractional = [col, row, spanW, spanH].some(v => !Number.isInteger(v));
     el.classList.toggle('fractional-tile', fractional);
     for (const [name, value] of Object.entries({col, row, w: spanW, h: spanH})) el.style.setProperty('--tile-' + name, String(value));
     if (fractional) { el.style.gridColumn = 'auto'; el.style.gridRow = 'auto'; }
@@ -236,8 +216,14 @@
         emptyIndices.push(idx);
         return;
       }
-      const layout = normalizeTileLayout(tile, idx, tab);
       const el = document.getElementById(tab + '-tile-' + idx);
+      if (tile.layout_hidden) {
+        el?.classList.add('tile-unplaced');
+        if (el) el.style.display = 'none';
+        return;
+      }
+      el?.classList.remove('tile-unplaced');
+      const layout = normalizeTileLayout(tile, idx, tab);
       if (el) {
         setTileGridPosition(el, layout.col, layout.row, layout.span_w, layout.span_h);
         el.style.display = '';
@@ -276,6 +262,8 @@
         el.style.display = 'none';
       }
     });
+    // The layout window marks what does not fit its layout.
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) markLayoutRed(tab);
   }
 
   function markOccupied(occupied, layout) {
@@ -513,7 +501,12 @@
     const tile = tiles[currentTileIndex] || {};
     const type = document.getElementById(tab + '_tile_type')?.value ?? tile.type;
     if (Number(type) !== 0 && (!supportedTileLayout(type, layout) || !canPlaceTileLayout(tab, currentTileIndex, layout))) {
-      applyLayoutInputsFromLayout(tab, normalizeTileLayout(tile, currentTileIndex, tab), false);
+      // The stored place stays; a preview redraw may have dropped the tile's
+      // placement classes (a tile outside the shown grid then fell into the
+      // first free grid cell), so they are set again.
+      const stored = normalizeTileLayout(tile, currentTileIndex, tab);
+      applyLayoutInputsFromLayout(tab, stored, false);
+      if (tileEl) setTileGridPosition(tileEl, stored.col, stored.row, stored.span_w, stored.span_h);
       return;
     }
     tile.col = layout.col;

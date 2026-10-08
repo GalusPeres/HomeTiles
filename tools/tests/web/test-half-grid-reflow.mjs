@@ -57,7 +57,7 @@ const code=`#include <cmath>
 namespace Device {constexpr int kGridCols=7,kGridRows=5;}
 ${geometry}
 constexpr int GRID_COLS=7, GRID_ROWS=5,TILES_PER_GRID=35;
-struct Tile {TileType type=TILE_EMPTY;float col=0,row=0,span_w=1,span_h=1;};
+struct Tile {TileType type=TILE_EMPTY;float col=0,row=0,span_w=1,span_h=1;bool layout_hidden=false;};
 struct TileGridConfig {Tile tiles[TILES_PER_GRID];};
 void clamp_media_tile_layout(TileType,float&,float&,float&,float&){}
 ${source.slice(source.indexOf('struct TileRect {'),source.indexOf('static bool parseFolderIdArg'))}

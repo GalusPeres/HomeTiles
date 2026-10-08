@@ -227,11 +227,27 @@ struct Strings {
   // Web Admin: global display settings row below the grid preview.
   const char* global_settings_heading;
   const char* icon_discs;
-  // The head bar layout switch (grid_layout.h): its label, the restart
-  // question, and the hint on a tile outside the shown grid.
-  const char* head_bar;
-  const char* head_bar_restart_confirm;
-  const char* head_bar_tile_outside;
+  // The layouts (grid_layout.h) and their "Layout ändern" window: the field
+  // in the global settings, the three layouts, the window's buttons and
+  // status ("**...**" is shown bold, {n} a count, {layout}/{tile} a name).
+  const char* layout_label;
+  const char* layout_change;
+  const char* layout_classic;
+  const char* layout_bar;
+  const char* layout_portrait;
+  const char* layout_active;
+  const char* layout_copy_from;
+  const char* layout_saved;
+  const char* layout_switch;
+  const char* layout_switch_confirm;
+  const char* layout_switch_later;
+  const char* layout_folders_missing;
+  const char* layout_folder_missing;
+  const char* layout_tiles_missing;
+  const char* layout_tile_missing;
+  const char* layout_all_fit;
+  const char* layout_unsaved_confirm;
+  const char* layout_take_out;
   const char* default_tile_color;
   // Tile color choice: global tile color, own color or a tint from the icon.
   const char* tile_color_mode_global;

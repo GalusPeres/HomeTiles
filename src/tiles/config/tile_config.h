@@ -99,6 +99,9 @@ struct Tile {
   TileType type;
   // Stable navigation identity, stored in the two unused V7 reserved bytes.
   uint16_t view_id = 0;
+  // Not stored: the tile has no place in the active layout (tile_layouts.h).
+  // It is not drawn and takes no room; its places in the other layouts stay.
+  bool layout_hidden = false;
   String title;
   String icon_name;
   uint32_t bg_color;
@@ -170,7 +173,7 @@ struct Tile {
 // Everything a tile shows, all fields but its cell (col, row): equal tiles
 // can move to another cell without being rebuilt (tiles_show_active_layout_now).
 static inline bool tileContentEquals(const Tile& a, const Tile& b) {
-  return a.type == b.type && a.view_id == b.view_id && a.title == b.title &&
+  return a.type == b.type && a.view_id == b.view_id && a.layout_hidden == b.layout_hidden && a.title == b.title &&
          a.icon_name == b.icon_name && a.bg_color == b.bg_color &&
          a.background_opacity == b.background_opacity &&
          a.span_w == b.span_w && a.span_h == b.span_h &&
@@ -251,15 +254,13 @@ static inline bool tileBorderEnabled(const Tile& tile) {
          tile.sensor_display_mode != 1;
 }
 
-// Weather uses the same byte for its icons: 0 draws filled, colored weather
-// icons, 1 the white MDI outlines.
-// Where a stored tile shows in the shown grid (grid_layout.h). Without the
-// head bar its span is cut at the grid's edge as always. With the head bar a
-// tile that does not lie wholly inside the smaller grid is not drawn (the Web
-// Admin marks it; its position stays), and the Settings and Back tiles give
-// way to the head's gear and X.
+// Where a tile shows in the shown grid (grid_layout.h). A tile without a
+// place in the active layout is not drawn (layout_hidden). Without the head
+// bar a span is cut at the grid's edge as always. With the head bar only a
+// tile wholly inside the grid shows, and the Settings and Back tiles give way
+// to the head's gear and X.
 static inline bool shownTileLayout(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
-  if (tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
+  if (tile.layout_hidden || tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
   col = tile.col;
   row = tile.row;
   span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
@@ -274,6 +275,8 @@ static inline bool shownTileLayout(const Tile& tile, float& col, float& row, flo
   return true;
 }
 
+// Weather uses the same byte for its icons: 0 draws filled, colored weather
+// icons, 1 the white MDI outlines.
 static inline bool weatherColoredIcons(const Tile& tile) {
   return tile.type != TILE_WEATHER || tile.sensor_display_mode != 1;
 }
@@ -692,6 +695,10 @@ public:
 
   bool load();
   bool loadFolderGrid(uint16_t folder_id, TileGridConfig& out);
+  // The classic layout's places whatever layout is shown (tile_layouts.h):
+  // export, import and the Layout window work on them.
+  bool loadFolderGridClassic(uint16_t folder_id, TileGridConfig& out);
+  bool saveFolderGridClassic(uint16_t folder_id, TileGridConfig& grid);
   bool loadScreensaverGrid(TileGridConfig& out);
   bool loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* out, size_t count);
   // Like loadFolderGridEntitiesOnly(), but through a PSRAM cache: the flash
@@ -770,13 +777,17 @@ private:
   bool saveFolders() const;
   bool loadFolderAccess();
   bool saveFolderAccess() const;
+  // layout_places: the active layout's places (tile_layouts.h); false keeps
+  // the stored classic ones.
   bool loadGrid(uint16_t folder_id, TileGridConfig& grid,
-                bool ensure_navigation_tile = true);
+                bool ensure_navigation_tile = true, bool layout_places = true);
   bool saveGrid(uint16_t folder_id, const TileGridConfig& grid,
                 bool ensure_navigation_tile = true);
   // Normalizes and saves the caller's grid without another full copy.
+  // layout_places: the grid holds the active layout's places; false: the
+  // classic ones.
   bool saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
-                       bool ensure_navigation_tile = true);
+                       bool ensure_navigation_tile = true, bool layout_places = true);
   uint16_t nextFolderId() const;
   void ensureRootFolder();
   bool ensureSettingsTile(TileGridConfig& grid, float target_col = -1,

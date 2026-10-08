@@ -272,7 +272,7 @@
     dragSource.previewKey = '';
     for (let i = 0; i < dragSource.baseLayouts.length; i++) {
       const tile = Array.isArray(tiles) ? tiles[i] : null;
-      if (!tile || Number(tile.type || 0) === 0) continue;
+      if (!tileTakesRoom(tile)) continue;
       const el = document.getElementById(tab + '-tile-' + i);
       const layout = dragSource.baseLayouts[i];
       if (!el || !layout) continue;
@@ -286,7 +286,7 @@
     const tiles = getTilesData(tab);
     for (let i = 0; i < previewResult.layouts.length; i++) {
       const tile = Array.isArray(tiles) ? tiles[i] : null;
-      if (!tile || Number(tile.type || 0) === 0) continue;
+      if (!tileTakesRoom(tile)) continue;
       const el = document.getElementById(tab + '-tile-' + i);
       if (!el) continue;
 

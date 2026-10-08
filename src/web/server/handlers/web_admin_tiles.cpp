@@ -10,6 +10,8 @@
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/core/power/power_manager.h"
 #include "src/tiles/config/tile_config.h"
+#include "src/tiles/config/tile_layouts.h"
+#include "src/core/config/config_manager.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/ui/screensaver/image_screensaver.h"
@@ -20,6 +22,7 @@
 #include "src/types/energy/energy_data.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/network/bridge/entity_search.h"
+#include <ArduinoJson.h>
 #include <algorithm>
 #include <vector>
 #include <memory>
@@ -109,6 +112,7 @@ static bool buildTileRect(float col, float row, float span_w, float span_h, Tile
 }
 
 static bool getTileRect(const Tile& tile, TileRect& out) {
+  if (tile.layout_hidden) return false;
   float col = tile.col;
   float row = tile.row;
   float span_w = tile.span_w < 0.5f ? 1 : tile.span_w;
@@ -392,10 +396,13 @@ void WebAdminServer::handleGetTiles() {
   }
   TileGridConfig& grid = *grid_storage;
   bool loaded = true;
+  // The export takes the classic layout's places whatever layout is shown.
+  const bool classic_places = !screensaver_grid && server.arg("layout") == "classic";
   if (screensaver_grid) {
     grid = screensaverConfig.tileGrid();
   } else {
-    loaded = tileConfig.loadFolderGrid(folder_id, grid);
+    loaded = classic_places ? tileConfig.loadFolderGridClassic(folder_id, grid)
+                            : tileConfig.loadFolderGrid(folder_id, grid);
   }
   if (!loaded) {
     server.send(500, "application/json", "{\"error\":\"Grid load failed\"}");
@@ -405,6 +412,10 @@ void WebAdminServer::handleGetTiles() {
   auto appendTileJson = [&](String& out, const Tile& tile) {
     out += "{\"type\":";
     out += String(static_cast<int>(tile.type));
+    out += ",\"view_id\":";
+    out += String(tile.view_id);
+    // No place in the active layout: the editor leaves it out (tile_layouts.h).
+    if (tile.layout_hidden) out += ",\"layout_hidden\":true";
     out += ",\"title\":\"";
     appendJsonEscaped(out, tile.title);
     out += "\",\"icon_name\":\"";
@@ -565,10 +576,13 @@ void WebAdminServer::handleSaveTiles() {
   // whole grid, so if the existing grid can't be read we must abort instead of
   // persisting an (empty) grid over every tile in the folder.
   bool grid_loaded = true;
+  // The import writes the classic layout's places whatever layout is shown.
+  const bool classic_places = !screensaver_grid && server.arg("layout") == "classic";
   if (screensaver_grid) {
     *grid = screensaverConfig.tileGrid();
   } else {
-    grid_loaded = tileConfig.loadFolderGrid(folder_id, *grid);
+    grid_loaded = classic_places ? tileConfig.loadFolderGridClassic(folder_id, *grid)
+                                 : tileConfig.loadFolderGrid(folder_id, *grid);
   }
   if (!grid_loaded) {
     server.send(500, "application/json", "{\"success\":false,\"error\":\"Folder load failed\"}");
@@ -754,14 +768,18 @@ void WebAdminServer::handleSaveTiles() {
   const bool shown_before_save =
       screensaver_grid
           ? display_awake && showScreensaverGridBeforeSave(*grid)
-          : !deleting_folder && display_awake &&
+          : !deleting_folder && !classic_places && display_awake &&
                 previous_tile.type == tile.type &&
                 tileConfig.previewActiveFolderGrid(folder_id, *grid) &&
                 tiles_show_active_layout_now();
   const uint32_t save_started_ms = millis();
-  bool success = screensaver_grid
-                     ? screensaverConfig.replaceTileGrid(*grid)
-                     : tileConfig.saveFolderGrid(folder_id, *grid);
+  bool success = screensaver_grid ? screensaverConfig.replaceTileGrid(*grid)
+                 : classic_places ? tileConfig.saveFolderGridClassic(folder_id, *grid)
+                                  : tileConfig.saveFolderGrid(folder_id, *grid);
+  // The shown folder takes the saved tiles with the active layout's places.
+  if (success && classic_places && tileConfig.getActiveFolderId() == folder_id) {
+    tileConfig.setActiveFolder(folder_id);
+  }
   const uint32_t save_ms = millis() - save_started_ms;
   if (success) {
     Serial.printf("[WebAdmin] Tile in folder %u[%d] saved - type: %d shown=%u save=%lu ms\n",
@@ -1333,6 +1351,213 @@ void WebAdminServer::handleGetFolders() {
   }
   json += "]";
   sendChunkedResponse(server, 200, "application/json", json);
+}
+
+// GET /api/layouts: the layout window's data. The active layout, every
+// folder's tiles with their classic places ([slot, view, col, row, w, h]),
+// and the other layouts' places (tile_layouts.h).
+void WebAdminServer::handleGetLayouts() {
+  webAdminMarkActivity();
+  std::unique_ptr<TileGridConfig> grid(new (std::nothrow) TileGridConfig{});
+  if (!grid) {
+    server.send(500, "application/json", "{\"success\":false,\"error\":\"No memory\"}");
+    return;
+  }
+  String json = "{\"success\":true,\"active\":\"";
+  json += grid_layout::key(grid_layout::active());
+  json += "\",\"stored\":\"";
+  json += grid_layout::key(grid_layout::from_index(configManager.getConfig().layout));
+  json += "\",\"classic\":{";
+  bool first_folder = true;
+  for (const auto& folder : tileConfig.getFolders()) {
+    if (!tileConfig.loadFolderGridClassic(folder.id, *grid)) continue;
+    if (!first_folder) json += ",";
+    first_folder = false;
+    json += "\"";
+    json += String(folder.id);
+    json += "\":[";
+    bool first_tile = true;
+    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+      const Tile& tile = grid->tiles[i];
+      if (tile.type == TILE_EMPTY) continue;
+      if (!first_tile) json += ",";
+      first_tile = false;
+      json += "[" + String(i) + "," + String(tile.view_id) + "," + String(tile.col) + "," + String(tile.row) + "," +
+              String(tile.span_w) + "," + String(tile.span_h) + "]";
+    }
+    json += "]";
+  }
+  json += "},\"places\":";
+  tile_layouts::append_json(json);
+  json += "}";
+  sendChunkedResponse(server, 200, "application/json", json);
+}
+
+namespace {
+
+// One tile's place from the layout window.
+struct LayoutPlace {
+  uint16_t view;
+  tile_layouts::Place place;
+  bool inside;
+};
+
+bool layoutFromKey(const String& key, grid_layout::Layout& out) {
+  for (uint8_t i = 0; i < grid_layout::kLayoutCount; ++i) {
+    if (key != grid_layout::key(grid_layout::from_index(i))) continue;
+    out = grid_layout::from_index(i);
+    return grid_layout::available(out);
+  }
+  return false;
+}
+
+// The window's places of one folder, checked against its stored tiles: half
+// steps, sizes the type allows, no overlap on the screen, every folder tile
+// on the screen (else it could not be reached).
+const char* readFolderPlaces(JsonObjectConst places, const TileGridConfig& grid, const grid_layout::Shown& screen,
+                             std::vector<LayoutPlace>& out) {
+  out.clear();
+  for (JsonPairConst entry : places) {
+    JsonArrayConst value = entry.value().as<JsonArrayConst>();
+    const uint16_t view = static_cast<uint16_t>(atoi(entry.key().c_str()));
+    if (!view || value.size() != 4) return "Invalid place";
+    const tile_layouts::Place place{value[0].as<float>(), value[1].as<float>(), value[2].as<float>(),
+                                    value[3].as<float>()};
+    // Half steps; a classic tile above its screen (the window's folder row)
+    // lies at a negative row.
+    auto half = [](float value) { return std::isfinite(value) && value * 2 == std::floor(value * 2); };
+    if (!half(place.col) || !half(place.row) || !half(place.span_w) || !half(place.span_h) ||
+        place.span_w < 0.5f || place.span_h < 0.5f || place.col < -16 || place.row < -16 || place.col > 32 ||
+        place.row > 32) {
+      return "Invalid place";
+    }
+    const Tile* tile = nullptr;
+    for (const Tile& candidate : grid.tiles) {
+      if (candidate.type != TILE_EMPTY && candidate.view_id == view) tile = &candidate;
+    }
+    if (!tile) continue;  // deleted meanwhile
+    const bool inside = grid_layout::inside(screen, place.col, place.row, place.span_w, place.span_h);
+    // The sizes the type allows (tile_geometry::supported without the
+    // classic grid's bounds: the upright screen has more rows).
+    if (inside && (place.span_w < 1 || (place.span_h < 1 && !tile_geometry::half_size(tile->type)))) {
+      return "Unsupported tile size";
+    }
+    for (const LayoutPlace& other : out) {
+      if (!inside || !other.inside) continue;
+      if (place.col < other.place.col + other.place.span_w && other.place.col < place.col + place.span_w &&
+          place.row < other.place.row + other.place.span_h && other.place.row < place.row + place.span_h) {
+        return "Tile overlaps";
+      }
+    }
+    out.push_back({view, place, inside});
+  }
+  for (const Tile& tile : grid.tiles) {
+    if (tile.type != TILE_FOLDER) continue;
+    const bool placed = std::any_of(out.begin(), out.end(),
+                                    [&](const LayoutPlace& entry) { return entry.view == tile.view_id && entry.inside; });
+    if (!placed) return "Folder without place";
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+// POST /api/layouts {"layout":"bar","folders":{"<id>":{"<view>":[col,row,w,h]}}}:
+// the layout window's "Speichern". The bar layouts keep every place, also
+// those beside the screen (red in the window); the classic layout takes the
+// places on its screen into the tile data, a tile beside it has no classic
+// place. Folders not sent stay as they are.
+void WebAdminServer::handleSaveLayouts() {
+  webAdminMarkActivity();
+  JsonDocument doc;
+  if (deserializeJson(doc, server.arg("plain"))) {
+    sendJsonError(server, 400, "Invalid JSON");
+    return;
+  }
+  grid_layout::Layout layout = grid_layout::Layout::kClassic;
+  if (!layoutFromKey(String(doc["layout"] | ""), layout)) {
+    sendJsonError(server, 400, "Unknown layout");
+    return;
+  }
+  const grid_layout::Shown screen = grid_layout::layout_grid(layout);
+  std::unique_ptr<TileGridConfig> grid(new (std::nothrow) TileGridConfig{});
+  if (!grid) {
+    sendJsonError(server, 500, "No memory");
+    return;
+  }
+  JsonObjectConst folders = doc["folders"].as<JsonObjectConst>();
+  std::vector<LayoutPlace> places;
+  // Everything is checked before anything is written.
+  for (JsonPairConst folder : folders) {
+    const uint16_t folder_id = static_cast<uint16_t>(atoi(folder.key().c_str()));
+    if (!tileConfig.loadFolderGridClassic(folder_id, *grid)) continue;
+    if (const char* error = readFolderPlaces(folder.value().as<JsonObjectConst>(), *grid, screen, places)) {
+      sendJsonError(server, 409, error);
+      return;
+    }
+  }
+  bool ok = true;
+  for (JsonPairConst folder : folders) {
+    const uint16_t folder_id = static_cast<uint16_t>(atoi(folder.key().c_str()));
+    if (!tileConfig.loadFolderGridClassic(folder_id, *grid)) continue;
+    readFolderPlaces(folder.value().as<JsonObjectConst>(), *grid, screen, places);
+    if (layout != grid_layout::Layout::kClassic) {
+      for (const Tile& tile : grid->tiles) {
+        if (tile.type == TILE_EMPTY || !tile.view_id) continue;
+        auto entry = std::find_if(places.begin(), places.end(),
+                                  [&](const LayoutPlace& place) { return place.view == tile.view_id; });
+        if (entry != places.end() && tile.type != TILE_SETTINGS && tile.type != TILE_BACK) {
+          tile_layouts::set(layout, folder_id, tile.view_id, entry->place);
+        } else {
+          tile_layouts::remove(layout, folder_id, tile.view_id);
+        }
+      }
+      continue;
+    }
+    for (Tile& tile : grid->tiles) {
+      if (tile.type == TILE_EMPTY || !tile.view_id) continue;
+      auto entry = std::find_if(places.begin(), places.end(),
+                                [&](const LayoutPlace& place) { return place.view == tile.view_id && place.inside; });
+      tile_layouts::set_classic_hidden(folder_id, tile.view_id, entry == places.end());
+      if (entry == places.end()) continue;
+      tile.col = entry->place.col;
+      tile.row = entry->place.row;
+      tile.span_w = entry->place.span_w;
+      tile.span_h = entry->place.span_h;
+    }
+    ok = tileConfig.saveFolderGridClassic(folder_id, *grid) && ok;
+  }
+  ok = tile_layouts::commit() && ok;
+  if (!ok) {
+    sendJsonError(server, 500, "Save failed");
+    return;
+  }
+  // The panel shows this layout: it takes the new places right away.
+  if (layout == grid_layout::active()) {
+    tileConfig.setActiveFolder(tileConfig.getActiveFolderId());
+    tiles_invalidate_folder(tileConfig.getActiveFolderId());
+    tiles_request_reload(GridType::TAB0);
+  }
+  Serial.printf("[WebAdmin] Layout %s saved\n", grid_layout::key(layout));
+  server.send(200, "application/json", "{\"success\":true}");
+}
+
+// POST /api/layouts/active layout=<key>: the panel starts with this layout
+// after the restart the browser asks for next.
+void WebAdminServer::handleSwitchLayout() {
+  webAdminMarkActivity();
+  grid_layout::Layout layout = grid_layout::Layout::kClassic;
+  if (!layoutFromKey(server.arg("layout"), layout) || !grid_layout::switchable(layout)) {
+    sendJsonError(server, 409, "Layout not available");
+    return;
+  }
+  if (!configManager.saveLayout(static_cast<uint8_t>(layout))) {
+    sendJsonError(server, 500, "Could not save the layout");
+    return;
+  }
+  Serial.printf("[WebAdmin] Layout %s chosen (this boot: %s)\n", grid_layout::key(layout),
+                grid_layout::key(grid_layout::active()));
+  server.send(200, "application/json", "{\"success\":true}");
 }
 
 void WebAdminServer::handleGetFolderTab() {

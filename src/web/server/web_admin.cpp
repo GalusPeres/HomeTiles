@@ -182,6 +182,12 @@ bool WebAdminServer::start() {
               guarded(withStorageHold([this]() { this->handleSaveFolderAccess(); })));
     server.on("/api/folders/delete", HTTP_POST,
               guarded(withStorageHold([this]() { this->handleDeleteFolder(); })));
+    server.on("/api/layouts", HTTP_GET,
+              guarded([this]() { this->handleGetLayouts(); }));
+    server.on("/api/layouts", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveLayouts(); })));
+    server.on("/api/layouts/active", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSwitchLayout(); })));
     server.on("/api/sensor_values", HTTP_GET,
               guarded([this]() { this->handleGetSensorValues(); }));
     server.on("/api/entity_options", HTTP_GET,
@@ -211,8 +217,6 @@ bool WebAdminServer::start() {
               guarded(withStorageHold([this]() { this->handleSaveTileBorders(); })));
     server.on("/api/display/icon-discs", HTTP_POST,
               guarded(withStorageHold([this]() { this->handleSaveIconDiscs(); })));
-    server.on("/api/display/head-bar", HTTP_POST,
-              guarded(withStorageHold([this]() { this->handleSaveHeadBar(); })));
     server.on("/api/display/icon-glow", HTTP_POST,
               guarded(withStorageHold([this]() { this->handleSaveIconGlow(); })));
     server.on("/api/display/tile-color", HTTP_POST,

@@ -120,7 +120,9 @@ for (const marker of [
   'html += "</h3><div class=\\"global-settings-grid\\"><label class=\\"inline-checkbox\\">"',
   '"<input class=\\"normal-tile-border-toggle\\" id=\\"" +',
   'html += "</label><label class=\\"inline-checkbox\\"><input class=\\"global-icon-disc-toggle\\" id=\\"" +',
-  'html += "</label><div class=\\"global-settings-field\\"><label for=\\"" + radius_id + "\\">";',
+  // The layout field (its pen opens the layout window) before the radius.
+  'html += "</label><button type=\\"button\\" class=\\"layout-choice\\" onclick=\\"openLayoutWindow()\\" title=\\"";',
+  'html += "<div class=\\"global-settings-field\\"><label for=\\"" + radius_id + "\\">";',
   'html += "</div></div><div class=\\"global-settings-field\\"><label for=\\"" + glow_id + "\\">";',
   'appendHtmlEscaped(html, tr.icon_glow);',
   '"\\" oninput=\\"previewIconGlowLive(this.value)\\" onchange=\\"saveIconGlow(this.value)\\">"',

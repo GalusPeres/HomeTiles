@@ -753,12 +753,13 @@ void setup() {
   // network then starts like any configured one, so neither the setup's WiFi
   // search nor the Bridge link needs a restart.
   if (!has_config) has_config = settings_begin_new_panel();
-  // The shown tile grid of this boot (grid_layout.h): the profile's, or the
-  // head bar's larger cells. Before anything builds or measures tiles.
-  grid_layout::apply(configManager.getConfig().head_bar);
-  Serial.printf("[Setup] Grid %ux%u, cells %dx%d, head bar %s\n",
+  // The shown tile grid of this boot (grid_layout.h): the layout's, or the
+  // classic one while the stored layout cannot be shown yet. Before anything
+  // builds or measures tiles.
+  grid_layout::apply(configManager.getConfig().layout);
+  Serial.printf("[Setup] Layout %s, grid %ux%u, cells %dx%d\n", grid_layout::key(grid_layout::active()),
                 static_cast<unsigned>(grid_layout::shown().cols), static_cast<unsigned>(grid_layout::shown().rows),
-                grid_layout::shown().cell_w, grid_layout::shown().cell_h, grid_layout::head_bar() ? "on" : "off");
+                grid_layout::shown().cell_w, grid_layout::shown().cell_h);
   haBridgeConfig.load();
   tileConfig.load();
   screensaverConfig.load();

@@ -119,7 +119,9 @@ function maybeFillTitleFromMedia(tab) {
   function applyMediaPreview(el, state, tile, iconName, displayName) {
     if (!el || typeof MEDIA_TILE_LAYOUT === 'undefined') return;
     const L = MEDIA_TILE_LAYOUT;
-    const rootStyle = getComputedStyle(document.documentElement);
+    // The tile's own grid sizes (inherited variables), not the page's: a grid
+    // such as the screensaver's has its own cells.
+    const rootStyle = getComputedStyle(el.isConnected ? el : document.documentElement);
     const scale = parseFloat(rootStyle.getPropertyValue('--radius-preview-scale')) || 0.5;
     const entity = String(tile?.sensor_entity || '');
 

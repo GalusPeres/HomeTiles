@@ -17,9 +17,10 @@ const read = (name) => {
 };
 const owners = {
   'web_admin_handlers.cpp': ['SaveMQTT', 'SaveBridge', 'BridgeRefresh', 'Status', 'Language',
-    'Restart', 'LinkSetup', 'SaveTileBorders', 'SaveIconDiscs', 'SaveHeadBar', 'SaveIconGlow', 'SaveDefaultTileColor', 'TileRadius'],
+    'Restart', 'LinkSetup', 'SaveTileBorders', 'SaveIconDiscs', 'SaveIconGlow', 'SaveDefaultTileColor', 'TileRadius'],
   'web_admin_tiles.cpp': ['GetTiles', 'SaveTiles', 'ReorderTiles', 'GetSensorValues',
-    'GetEntityOptions', 'GetMdiIcons', 'StartEntitySearch', 'GetEntitySearch', 'GetFolders', 'GetFolderTab', 'SaveFolderAccess', 'DeleteFolder'],
+    'GetEntityOptions', 'GetMdiIcons', 'StartEntitySearch', 'GetEntitySearch', 'GetFolders', 'GetFolderTab', 'SaveFolderAccess', 'DeleteFolder',
+    'GetLayouts', 'SaveLayouts', 'SwitchLayout'],
   'web_admin_screensaver.cpp': ['GetScreensaver', 'SaveScreensaver', 'GetScreensaverWallpaper'],
   'web_admin_files.cpp': ['GetSdImages', 'GetSdIcons', 'UploadIcon', 'UploadIconDone',
     'FileManagerList', 'FileManagerDownload', 'FileManagerDelete', 'FileManagerRename',

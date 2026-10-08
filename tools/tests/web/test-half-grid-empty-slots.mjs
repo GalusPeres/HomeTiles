@@ -6,7 +6,7 @@ import {runDomHarness} from '../../lib/headless-dom.mjs';
 // tile grows when a type needs more room. Other empty tiles stay hidden.
 const helpers=['clampInt','clampHalf','isCompactSensorType','isEditableValueType','supportsHalfSize','supportedTileLayout',
   'normalizeLayoutForTileType','normalizeTileLayout','constrainLayoutToTab','setGridItemPosition',
-  'setTileGridPosition','layoutTiles','headBarLayout','placeCols','placeRows','insideShownGrid','hiddenByHeadBar','markOccupied','slotFits','freeSlotNear','pointerGridPoint','firstFreeSlot',
+  'setTileGridPosition','layoutTiles','headBarLayout','placeCols','placeRows','tileTakesRoom','markOccupied','slotFits','freeSlotNear','pointerGridPoint','firstFreeSlot',
   'occupiedFromGrid','freeSlotElement','enableFreeSlotHover','getTileElementLayout',
   'minimumTileSize','grownNewTileLayout','canPlaceTileLayout','canPlaceGridLayout','rectsOverlap','getTileLayoutFromData'].map(extractDeliveredFunction).join('\n');
 const html=`<!doctype html><html><head><style>${readRepoFile('src/web/assets/admin.css')}

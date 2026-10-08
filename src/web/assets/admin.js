@@ -17,6 +17,7 @@ function t(key) {
   const DEVICE_LANGUAGE_POLL_MS = 15000;
 
   function adminEditsPending() {
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) return true;
     const active = document.activeElement;
     if (active?.matches?.('input, textarea, select')) return true;
     if (dragSource || resizeState || fileManagerUploadBusy || hardwareIoDirty) return true;
@@ -91,11 +92,8 @@ function t(key) {
     }
   }
 
-// The head bar layout (grid_layout.h) is read at boot: saving it asks to
-// restart the panel; the switch shows the saved choice until then.
-function setHeadBarToggles(enabled) {
-  document.querySelectorAll('.global-head-bar-toggle').forEach(box => { box.checked = !!enabled; });
-}
+// A layout (grid_layout.h) is read at boot: the layout window restarts the
+// panel after choosing one.
 function restartPanelForLayout() {
   const restartForm = document.getElementById('admin_restart_form');
   // form.submit() cannot carry the CSRF header a password-protected panel
@@ -108,25 +106,6 @@ function restartPanelForLayout() {
     window.setTimeout(() => window.location.assign('/'), 300);
   });
 }
-async function saveHeadBar(input) {
-  const wanted = !!input?.checked;
-  setHeadBarToggles(wanted);
-  try {
-    const response = await fetch('/api/display/head-bar', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: 'enabled=' + (wanted ? '1' : '0')
-    });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
-    // Already this boot's layout (switched back before a restart).
-    if (data.active === wanted) return;
-    if (window.confirm(t('headBarRestartConfirm'))) restartPanelForLayout();
-  } catch (error) {
-    setHeadBarToggles(!wanted);
-    showNotification(t('networkErrorSave'), false);
-  }
-}
 // The head bar preview's time (web_admin_html.cpp), from the browser clock
 // in the panel's 12/24-hour format.
 function refreshHeadBarTime() {
@@ -137,7 +116,8 @@ function refreshHeadBarTime() {
     el.textContent = String(hour).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
   });
 }
-if (typeof HEAD_BAR === 'boolean' && HEAD_BAR && typeof window !== 'undefined' && window.setInterval) {
+// The layout window shows the head with any layout.
+if (typeof window !== 'undefined' && window.setInterval) {
   window.setInterval(refreshHeadBarTime, 30000);
 }
 
@@ -6037,11 +6017,11 @@ function syncTileRadiusControls(tabEl) {
     const targetId = Number(tile?.navigate_target ?? tileEl.dataset.navigateTarget);
     switchToFolderId(targetId);
   }
-  // The shown grid (grid_layout.h): with the head bar the panel shows fewer,
-  // larger cells. New places, moves and sizes stay inside it; stored
-  // positions keep the full GRID_COLS x GRID_ROWS, so a tile outside the
-  // shown grid is marked (tile-outside) and never moved by the editor. The
-  // screensaver tab keeps its own grid.
+  // The shown grid (grid_layout.h): with a bar layout the panel shows fewer,
+  // larger cells. New places, moves and sizes stay inside it. A tile without
+  // a place in the active layout (layout_hidden, tile_layouts.h) is not shown
+  // and takes no room; the layout window places it. The screensaver tab
+  // keeps its own grid.
   function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
   function placeCols(tab = currentTileTab) {
     return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_COLS === 'number'
@@ -6051,14 +6031,9 @@ function syncTileRadiusControls(tabEl) {
     return headBarLayout() && !isScreensaverTileTab(tab) && typeof GRID_SHOWN_ROWS === 'number'
       ? GRID_SHOWN_ROWS : GRID_ROWS;
   }
-  // A stored layout wholly inside the shown grid.
-  function insideShownGrid(tab, layout) {
-    return !!layout && layout.col + layout.span_w <= placeCols(tab) + 0.001 &&
-      layout.row + layout.span_h <= placeRows(tab) + 0.001;
-  }
-  // Settings and Back give way to the head's gear and X (shownTileLayout).
-  function hiddenByHeadBar(tab, type) {
-    return headBarLayout() && !isScreensaverTileTab(tab) && [7, 8].includes(Number(type));
+  // A tile that is shown and takes room in the editor's grid.
+  function tileTakesRoom(tile) {
+    return !!tile && Number(tile.type || 0) !== 0 && !tile.layout_hidden;
   }
 
   function clampInt(value, min, max, fallback) {
@@ -6231,22 +6206,7 @@ function syncTileRadiusControls(tabEl) {
 
   function setTileGridPosition(el, col, row, spanW, spanH) {
     setGridItemPosition(el, col, row, spanW, spanH);
-    // Outside the shown grid: placed like a half step (absolute, not a grid
-    // track), so it shows beside the screen instead of widening it.
-    const headBar = headBarLayout();
-    const tab = headBar ? (el.closest?.('[id^="tab-tiles-"]')?.id?.slice('tab-tiles-'.length) || currentTileTab) : '';
-    const outside = headBar && !el.classList.contains('empty') &&
-      !insideShownGrid(tab, {col, row, span_w: spanW, span_h: spanH});
-    el.classList.toggle('tile-outside', outside);
-    if (outside) {
-      el.title = t('headBarTileOutside');
-      el.dataset.outsideTitle = '1';
-    } else if (el.dataset.outsideTitle) {
-      el.removeAttribute('title');
-      delete el.dataset.outsideTitle;
-    }
-    el.classList.toggle('tile-bar-hidden', headBar && hiddenByHeadBar(tab, el.dataset.type));
-    const fractional = outside || [col, row, spanW, spanH].some(v => !Number.isInteger(v));
+    const fractional = [col, row, spanW, spanH].some(v => !Number.isInteger(v));
     el.classList.toggle('fractional-tile', fractional);
     for (const [name, value] of Object.entries({col, row, w: spanW, h: spanH})) el.style.setProperty('--tile-' + name, String(value));
     if (fractional) { el.style.gridColumn = 'auto'; el.style.gridRow = 'auto'; }
@@ -6275,8 +6235,14 @@ function syncTileRadiusControls(tabEl) {
         emptyIndices.push(idx);
         return;
       }
-      const layout = normalizeTileLayout(tile, idx, tab);
       const el = document.getElementById(tab + '-tile-' + idx);
+      if (tile.layout_hidden) {
+        el?.classList.add('tile-unplaced');
+        if (el) el.style.display = 'none';
+        return;
+      }
+      el?.classList.remove('tile-unplaced');
+      const layout = normalizeTileLayout(tile, idx, tab);
       if (el) {
         setTileGridPosition(el, layout.col, layout.row, layout.span_w, layout.span_h);
         el.style.display = '';
@@ -6315,6 +6281,8 @@ function syncTileRadiusControls(tabEl) {
         el.style.display = 'none';
       }
     });
+    // The layout window marks what does not fit its layout.
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) markLayoutRed(tab);
   }
 
   function markOccupied(occupied, layout) {
@@ -6552,7 +6520,12 @@ function syncTileRadiusControls(tabEl) {
     const tile = tiles[currentTileIndex] || {};
     const type = document.getElementById(tab + '_tile_type')?.value ?? tile.type;
     if (Number(type) !== 0 && (!supportedTileLayout(type, layout) || !canPlaceTileLayout(tab, currentTileIndex, layout))) {
-      applyLayoutInputsFromLayout(tab, normalizeTileLayout(tile, currentTileIndex, tab), false);
+      // The stored place stays; a preview redraw may have dropped the tile's
+      // placement classes (a tile outside the shown grid then fell into the
+      // first free grid cell), so they are set again.
+      const stored = normalizeTileLayout(tile, currentTileIndex, tab);
+      applyLayoutInputsFromLayout(tab, stored, false);
+      if (tileEl) setTileGridPosition(tileEl, stored.col, stored.row, stored.span_w, stored.span_h);
       return;
     }
     tile.col = layout.col;
@@ -7829,6 +7802,8 @@ function syncTileRadiusControls(tabEl) {
   function showNotification(message, success = true) {
     const notification = document.getElementById('notification');
     if (!notification) return;
+    // The layout window keeps the editor's saves to itself (layout-window.js).
+    if (success && typeof layoutWindowOpen === 'function' && layoutWindowOpen()) return;
     // A single shared timer. Every call used to schedule its own, so the timeout
     // of an earlier message hid the next one long before its three seconds were
     // up - easy to hit because autosave reports on every field change.
@@ -7994,6 +7969,11 @@ function syncTileRadiusControls(tabEl) {
       formData.append(key, value);
     }
     applySnapshotToTileData(tab, tileIndex, snapshot);
+    // The layout window keeps the editor's places to itself (layout-window.js).
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) {
+      clearDraft(tab, tileIndex);
+      return;
+    }
     const requestId = ++saveRequestSeq;
     const draftRev = Number(snapshot._rev || 0);
     markLatestSaveRequest(tab, tileIndex, requestId);
@@ -8160,9 +8140,13 @@ function syncTileRadiusControls(tabEl) {
       const [folders, screensaverData, screensaverGrid] = await Promise.all([
         foldersRequest, screensaverConfigRequest, screensaverGridRequest
       ]);
+      // The tiles with their classic places whatever layout is shown; the
+      // other layouts' places come with the layout file (tile_layouts.h).
+      const layoutsRequest = fetch('/api/layouts', {cache: 'no-store'})
+        .then(res => res.ok ? res.json() : null).catch(() => null);
       const tilesLists = await Promise.all(folders.map(async folder => {
         const response = await fetch(
-          '/api/tiles?folder=' + encodeURIComponent(folder.id));
+          '/api/tiles?folder=' + encodeURIComponent(folder.id) + '&layout=classic');
         const data = await response.json();
         if (!response.ok || !Array.isArray(data)) {
           throw new Error('Folder grid export failed');
@@ -8180,6 +8164,7 @@ function syncTileRadiusControls(tabEl) {
         grids[String(folder.id)] =
           Array.isArray(tilesLists[idx]) ? tilesLists[idx] : [];
       });
+      const layoutData = await layoutsRequest;
 
       const payload = {
         version: 3,
@@ -8187,6 +8172,13 @@ function syncTileRadiusControls(tabEl) {
         folders: folders,
         grids: grids,
         settings_tile: exportSettingsTileState(),
+        // Only a panel with the same screen takes these places back.
+        layouts: layoutData?.success ? {
+          screen_width: LAYOUTS.classic.screenW,
+          screen_height: LAYOUTS.classic.screenH,
+          active: layoutData.stored,
+          places: layoutData.places
+        } : undefined,
         screensaver: {
           version: 2,
           config: buildScreensaverExportConfig(screensaverData),
@@ -8246,7 +8238,7 @@ function syncTileRadiusControls(tabEl) {
   }
 
   async function fetchTilesForImport(folderId) {
-    const res = await fetch('/api/tiles?folder=' + encodeURIComponent(folderId));
+    const res = await fetch('/api/tiles?folder=' + encodeURIComponent(folderId) + '&layout=classic');
     if (!res.ok) throw new Error('Tile fetch failed');
     const data = await res.json();
     return Array.isArray(data) ? data : [];
@@ -8396,7 +8388,12 @@ function syncTileRadiusControls(tabEl) {
   // so no imported tile meets one of them, then the system tile takes its
   // place, then the imported tiles. Empty cells are not written. A folder
   // tile maps its exported folder to the one the server created for it.
-  async function applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget = null) {
+  // Where each exported tile landed ({source, view, target, index}), so the
+  // other layouts' places follow their tiles (restoreImportLayouts).
+  let importedSlots = [];
+
+  async function applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget = null,
+                                 sourceFolderId = null) {
     const tileCount = GRID_COLS * GRID_ROWS;
     const systemIndex = currentTiles.findIndex(tile => importTileType(tile) === systemType);
     const post = async (index, tile) => {
@@ -8412,6 +8409,11 @@ function syncTileRadiusControls(tabEl) {
       }
     }
     if (systemIndex >= 0 && plan.system) await post(systemIndex, plan.system);
+    const note = (tile, index) => {
+      if (sourceFolderId !== null && Number(tile.view_id) > 0) {
+        importedSlots.push({source: sourceFolderId, view: Number(tile.view_id), target: folderId, index});
+      }
+    };
     const freeIndices = [];
     for (let i = 0; i < tileCount; i++) {
       if (i !== systemIndex) freeIndices.push(i);
@@ -8419,6 +8421,7 @@ function syncTileRadiusControls(tabEl) {
     for (let i = 0; i < plan.tiles.length; i++) {
       const tile = plan.tiles[i];
       const data = await post(freeIndices[i], tile);
+      note(tile, freeIndices[i]);
       const sourceTarget = Number(tile.navigate_target);
       const target = Number(data && data.navigate_target);
       if (sourceToTarget && importTileType(tile) === 4 && sourceTarget > 0 && target > 0 &&
@@ -8445,12 +8448,40 @@ function syncTileRadiusControls(tabEl) {
   // cell, the top-left one of an empty grid (TileConfig::ensureBackTile).
   const NEW_FOLDER_BACK_TILE = { type: 8, title: '', icon_name: 'arrow-left', col: 0, row: 0, span_w: 1, span_h: 1 };
 
-  async function replaceFolderGridForImport(folderId, sourceTiles, systemType, folderName, sourceToTarget = null) {
+  async function replaceFolderGridForImport(folderId, sourceTiles, systemType, folderName, sourceToTarget = null,
+                                           sourceFolderId = null) {
     const currentTiles = await fetchTilesForImport(folderId);
     const targetSystem = currentTiles.find(tile => importTileType(tile) === systemType) || null;
     const plan = planImportGrid(sourceTiles, systemType, targetSystem, tabByFolder[folderId] || '');
     if (plan.conflict) throw new TileImportError('Import layout conflict', 'stopped', plan.conflict, folderName);
-    await applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget);
+    await applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget, sourceFolderId);
+  }
+
+  // The bar layouts' places of an export from a panel with the same screen
+  // go to the imported tiles (their new IDs); a layout whose folders would
+  // lose their place stays as it was.
+  async function restoreImportLayouts(layouts) {
+    if (!layouts || typeof layouts !== 'object' || !importedSlots.length) return;
+    if (Number(layouts.screen_width) !== LAYOUTS.classic.screenW ||
+        Number(layouts.screen_height) !== LAYOUTS.classic.screenH) return;
+    const tiles = {};
+    for (const target of new Set(importedSlots.map(slot => slot.target))) {
+      tiles[target] = await fetchTilesForImport(target);
+    }
+    for (const key of ['bar', 'portrait']) {
+      const places = layouts.places?.[key];
+      if (!places || !LAYOUTS[key]?.available) continue;
+      const folders = {};
+      for (const slot of importedSlots) {
+        const place = places[String(slot.source)]?.[String(slot.view)];
+        const view = tiles[slot.target]?.[slot.index]?.view_id;
+        if (!Array.isArray(place) || !view) continue;
+        (folders[slot.target] = folders[slot.target] || {})[view] = place;
+      }
+      if (!Object.keys(folders).length) continue;
+      await fetch('/api/layouts', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({layout: key, folders})}).catch(() => {});
+    }
   }
 
   function prepareScreensaverTilesForImport(sourceTiles, sourceLayout) {
@@ -8643,6 +8674,7 @@ function syncTileRadiusControls(tabEl) {
         : null;
 
       showNotification(t('importRunning'));
+      importedSlots = [];
 
       const sourceToTarget = { 0: 0 };
       if (homePlan) {
@@ -8652,7 +8684,7 @@ function syncTileRadiusControls(tabEl) {
           await setSettingsTileHiddenForImport(true, parkedSettings, null, folderName(0));
           if (targetSettings) homeTiles = await fetchTilesForImport(0);
         }
-        await applyImportGrid(0, homeTiles, homePlan, 7, folderName(0), sourceToTarget);
+        await applyImportGrid(0, homeTiles, homePlan, 7, folderName(0), sourceToTarget, 0);
         if (!settingsHidden && !targetSettings) {
           await setSettingsTileHiddenForImport(
             false, homePlan.system, { col: homePlan.system.col, row: homePlan.system.row }, folderName(0));
@@ -8676,7 +8708,8 @@ function syncTileRadiusControls(tabEl) {
             continue;
           }
           await replaceFolderGridForImport(
-            targetFolderId, grids[String(sourceFolderId)], 8, folderName(sourceFolderId), sourceToTarget);
+            targetFolderId, grids[String(sourceFolderId)], 8, folderName(sourceFolderId), sourceToTarget,
+            sourceFolderId);
           pendingFolderIds.splice(i, 1);
           progressed = true;
           targetFolders = await fetchFoldersForImport();
@@ -8688,6 +8721,8 @@ function syncTileRadiusControls(tabEl) {
       if (pendingFolderIds.length) {
         console.warn('Import skipped unreachable folders:', pendingFolderIds);
       }
+
+      await restoreImportLayouts(payload.layouts);
 
       if (screensaverConfig && typeof screensaverConfig === 'object') {
         await importScreensaverConfig(screensaverConfig);
@@ -8722,6 +8757,8 @@ function syncTileRadiusControls(tabEl) {
     fd.append('folder', folderId);
     fd.append('index', index);
     fd.append('type', safeType);
+    // The export's places are the classic layout's (tile_layouts.h).
+    fd.append('layout', 'classic');
     fd.append('title', tile.title || '');
     fd.append('icon_name', tile.icon_name || '');
     if (tile.icon_disc !== undefined && tile.icon_disc !== null) {
@@ -9651,6 +9688,8 @@ function syncTileRadiusControls(tabEl) {
 
   function loadSensorValues(
       refreshTiles = false, forceMetaFetch = false, tabsOverride = null) {
+    // The layout window's tiles are not the panel's: values only.
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) refreshTiles = false;
     // A Settings move to or from the parking slot shows ahead of the device
     // (previewSettingsTileTransfer); stored tile data would draw it back.
     if (dragSource || resizeState || settingsTileTransfersInFlight) {
@@ -9974,7 +10013,7 @@ function syncTileRadiusControls(tabEl) {
     dragSource.previewKey = '';
     for (let i = 0; i < dragSource.baseLayouts.length; i++) {
       const tile = Array.isArray(tiles) ? tiles[i] : null;
-      if (!tile || Number(tile.type || 0) === 0) continue;
+      if (!tileTakesRoom(tile)) continue;
       const el = document.getElementById(tab + '-tile-' + i);
       const layout = dragSource.baseLayouts[i];
       if (!el || !layout) continue;
@@ -9988,7 +10027,7 @@ function syncTileRadiusControls(tabEl) {
     const tiles = getTilesData(tab);
     for (let i = 0; i < previewResult.layouts.length; i++) {
       const tile = Array.isArray(tiles) ? tiles[i] : null;
-      if (!tile || Number(tile.type || 0) === 0) continue;
+      if (!tileTakesRoom(tile)) continue;
       const el = document.getElementById(tab + '-tile-' + i);
       if (!el) continue;
 
@@ -10056,7 +10095,7 @@ function syncTileRadiusControls(tabEl) {
       getTileLayoutFromData(tab, tileIndex));
     const active = new Set();
     tiles.forEach((tile, tileIndex) => {
-      if (tile && Number(tile.type || 0) !== 0) active.add(tileIndex);
+      if (tileTakesRoom(tile)) active.add(tileIndex);
     });
     return canPlaceGridLayout(
       layouts, active, index, candidateLayout,
@@ -10072,7 +10111,8 @@ function syncTileRadiusControls(tabEl) {
     const active = new Set();
     document.querySelectorAll('#tab-tiles-' + tab + ' .tile').forEach(tile => {
       const index = Number(tile.dataset.index);
-      if (!Number.isInteger(index) || Number(tile.dataset.type || 0) === 0) return;
+      if (!Number.isInteger(index) || Number(tile.dataset.type || 0) === 0 ||
+          tile.classList.contains('tile-unplaced')) return;
       const layout = getTileElementLayout(tab, index);
       if (!layout) return;
       layouts[index] = layout;
@@ -10217,7 +10257,7 @@ function syncTileRadiusControls(tabEl) {
 
     const active = new Set();
     tiles.forEach((tile, index) => {
-      if (tile && Number(tile.type || 0) !== 0) active.add(index);
+      if (tileTakesRoom(tile)) active.add(index);
     });
     return simulateGridReorderLayouts(
       baseLayouts, active, fromIdx,
@@ -10627,7 +10667,7 @@ function syncTileRadiusControls(tabEl) {
     for (let i = 0; i < tiles.length; i++) {
       const tile = tiles[i];
       const layout = previewResult.layouts[i];
-      if (!tile || Number(tile.type || 0) === 0 || !layout) continue;
+      if (!tileTakesRoom(tile) || !layout) continue;
       const changed = tile.col !== layout.col || tile.row !== layout.row;
       tile.col = layout.col;
       tile.row = layout.row;
@@ -11018,6 +11058,11 @@ function syncTileRadiusControls(tabEl) {
     const localSnapshot = captureTilePositionSnapshot(tab);
     applyLocalTileReorder(tab, previewResult);
     clearDragPlaceholder();
+    // The layout window keeps the editor's places to itself (layout-window.js).
+    if (typeof layoutWindowOpen === 'function' && layoutWindowOpen()) {
+      clearDeferredSensorRefresh();
+      return;
+    }
     fetch('/api/tiles/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -11056,7 +11101,8 @@ function syncTileRadiusControls(tabEl) {
     let selectedCol = Number.MAX_SAFE_INTEGER;
     document.querySelectorAll('#tab-tiles-' + tab + ' .tile').forEach(tile => {
       const index = parseInt(tile.dataset.index, 10);
-      if (isNaN(index) || Number(tile.dataset.type || 0) === 0) return;
+      if (isNaN(index) || Number(tile.dataset.type || 0) === 0 ||
+          tile.classList.contains('tile-unplaced')) return;
       const row = Number(tile.dataset.row);
       const col = Number(tile.dataset.col);
       const safeRow = isNaN(row) ? Number.MAX_SAFE_INTEGER : row;
@@ -11069,6 +11115,703 @@ function syncTileRadiusControls(tabEl) {
     });
     return selectedIndex >= 0 ? selectedIndex : 0;
   }
+  // The layout window ("Layout ändern", grid_layout.h / tile_layouts.h). It
+  // holds the page's real tile grid and editor, laid out for the chosen
+  // layout in one area for all three: tiles keep their places, what does not
+  // fit sticks out red and is simply not part of that layout. Each layout
+  // keeps its own arrangement: "Speichern" stores it, "Umstellen" stores it
+  // and restarts the panel with it. Nothing else reaches the panel while the
+  // window is open: the editor's own saves stay in the window.
+  const LAYOUT_KEYS = ['classic', 'bar', 'portrait'];
+  let layoutWindow = null;
+  const layoutWindowFetch = window.fetch.bind(window);
+  let layoutBaseSizes = null;  // every px size of the page's preview (:root)
+  let layoutHead = null;       // the head's places on the page's screen
+
+  function layoutWindowOpen() { return !!layoutWindow; }
+  function layoutPx(value) { return value.toFixed(2) + 'px'; }
+  function layoutClone(value) { return JSON.parse(JSON.stringify(value)); }
+  function layoutEmptyTile() { return {type: 0, title: '', icon_name: '', col: 0, row: 0, span_w: 1, span_h: 1}; }
+  function layoutUsed(tile) { return !!tile && Number(tile.type || 0) !== 0; }
+  function layoutNavType(type) { return [7, 8].includes(Number(type)); }
+  function layoutRootPx(name) {
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+  }
+  // Preview px per screen px (web_admin_styles.cpp), the same for every layout.
+  function layoutScale() { return layoutRootPx('--radius-preview-scale') || 1; }
+  function layoutTabs() {
+    return tileTabs.filter(tab => !isScreensaverTileTab(tab) && document.getElementById('tab-tiles-' + tab));
+  }
+  function layoutSize(key) { return LAYOUTS[key].cols + ' × ' + String(LAYOUTS[key].rows).replace('.', ','); }
+
+  // The window's editor area: the same for every layout, so nothing jumps
+  // when the layout changes. Every layout's screen starts right under the
+  // head, top left (user 2026-10-08), the classic one too.
+  function layoutCanvas() {
+    const keys = LAYOUT_KEYS.filter(key => LAYOUTS[key].available);
+    return {cols: Math.max(...keys.map(key => LAYOUTS[key].cols)),
+            rows: Math.ceil(Math.max(...keys.map(key => LAYOUTS[key].rows)))};
+  }
+  function layoutInside(tile, key) {
+    const L = LAYOUTS[key];
+    return tile.col >= -1e-6 && tile.col + tile.span_w <= L.cols + 1e-6 &&
+      tile.row >= -1e-6 && tile.row + tile.span_h <= L.rows + 1e-6;
+  }
+
+  function layoutVars(L) {
+    const s = layoutScale();
+    return {'--preview-cell-w': layoutPx(L.cellW * s), '--preview-cell-h': layoutPx(L.cellH * s),
+      '--preview-pad-left': layoutPx(L.padLeft * s), '--preview-pad-right': layoutPx(L.padRight * s),
+      '--preview-pad-top': layoutPx(L.padTop * s), '--preview-pad-bottom': layoutPx(L.padBottom * s)};
+  }
+  // The head on the layout's screen: the X and the time keep their distance
+  // to its right edge.
+  function layoutHeadVars(L) {
+    const w = L.screenW * layoutScale();
+    const shift = w - layoutHead.w;
+    return {'--head-screen-w': layoutPx(w), '--head-close-x': layoutPx(layoutHead.close + shift),
+      '--head-time-x': layoutPx(layoutHead.time + shift), '--head-title-w': layoutPx(layoutHead.title + shift)};
+  }
+  function layoutSetVars(el, vars) { for (const [name, value] of Object.entries(vars)) el.style.setProperty(name, value); }
+
+  function readLayoutBaseSizes() {
+    if (layoutBaseSizes) return;
+    layoutBaseSizes = {};
+    const rootStyle = getComputedStyle(document.documentElement);
+    for (const sheet of document.styleSheets) {
+      let rules;
+      try { rules = sheet.cssRules; } catch (e) { continue; }
+      for (const rule of rules) {
+        if (rule.selectorText !== ':root' || !rule.style) continue;
+        for (const name of rule.style) {
+          const value = rootStyle.getPropertyValue(name);
+          if (name.startsWith('--') && /^\s*-?[\d.]+px\s*$/.test(value)) layoutBaseSizes[name] = parseFloat(value);
+        }
+      }
+    }
+    layoutHead = {w: layoutRootPx('--head-screen-w'), close: layoutRootPx('--head-close-x'),
+      time: layoutRootPx('--head-time-x'), title: layoutRootPx('--head-title-w')};
+  }
+
+  // --- Places ------------------------------------------------------------
+
+  function layoutFolderId(tab) { return String(getFolderIdForTab(tab)); }
+  function classicHidden(tab, view) {
+    return (layoutWindow.data.places?.classic_hidden?.[layoutFolderId(tab)] || []).includes(Number(view));
+  }
+  // The page's tiles with their classic places.
+  function layoutBase(tab) {
+    const classic = {};
+    (layoutWindow.data.classic?.[layoutFolderId(tab)] || []).forEach(([slot, view, col, row, w, h]) => {
+      classic[slot] = {view, col, row, span_w: w, span_h: h};
+    });
+    return layoutClone(layoutWindow.pages[tab] || []).map((tile, index) => {
+      if (!layoutUsed(tile)) return tile;
+      delete tile.layout_hidden;
+      const p = classic[index];
+      if (p && Number(p.view) === Number(tile.view_id)) {
+        Object.assign(tile, {col: p.col, row: p.row, span_w: p.span_w, span_h: p.span_h});
+      } else {
+        tile._unplaced = true;
+      }
+      return tile;
+    });
+  }
+
+  // Every tile on its own spot of the window's area: tiles that need a place
+  // (none in this layout, or one taken) go to a free spot, beside the
+  // layout's screen first (red there).
+  function layoutSettle(key, tiles) {
+    const canvas = layoutCanvas();
+    const cols2 = canvas.cols * 2, rows2 = canvas.rows * 2;
+    const taken = Array.from({length: rows2}, () => Array(cols2).fill(false));
+    const fits = (col, row, w, h) => {
+      if (col < 0 || row < 0 || col + w > canvas.cols || row + h > canvas.rows) return false;
+      for (let r = row * 2; r < (row + h) * 2; r++) for (let c = col * 2; c < (col + w) * 2; c++) if (taken[r][c]) return false;
+      return true;
+    };
+    const take = tile => {
+      for (let r = tile.row * 2; r < (tile.row + tile.span_h) * 2; r++) for (let c = tile.col * 2; c < (tile.col + tile.span_w) * 2; c++) taken[r][c] = true;
+    };
+    const order = tiles.map((tile, index) => index).filter(index => layoutUsed(tiles[index]))
+      .sort((a, b) => (tiles[a]._unplaced ? 1 : 0) - (tiles[b]._unplaced ? 1 : 0));
+    const later = [];
+    for (const index of order) {
+      const tile = tiles[index];
+      if (!tile._unplaced && fits(tile.col, tile.row, tile.span_w, tile.span_h)) take(tile);
+      else later.push(tile);
+    }
+    for (const tile of later) {
+      const sizes = [[tile.span_w, tile.span_h], [1, 1], [1, 0.5]];
+      let spot = null;
+      for (const outside of [true, false]) {
+        for (const [w, h] of sizes) {
+          for (let row = 0; !spot && row + h <= canvas.rows; row += 0.5) {
+            for (let col = 0; !spot && col + w <= canvas.cols; col += 0.5) {
+              if (fits(col, row, w, h) && (!outside || !layoutInside({col, row, span_w: w, span_h: h}, key)) &&
+                  supportedTileLayout(tile.type, {col, row, span_w: w, span_h: h})) spot = {col, row, span_w: w, span_h: h};
+            }
+          }
+          if (spot) break;
+        }
+        if (spot) break;
+      }
+      if (spot) { Object.assign(tile, spot); take(tile); }
+    }
+    tiles.forEach(tile => { if (tile) delete tile._unplaced; });
+    return tiles;
+  }
+
+  // Taking a layout over from another one: every tile as it is there, the
+  // same place on the screen and the same size (user 2026-10-08: "wie es
+  // aktuell im Layout ist"); what does not fit the new screen is red.
+  // Settings and Back stay in the classic layout only.
+  function takeoverTiles(tab, key, from) {
+    const L = LAYOUTS[key];
+    const tiles = layoutBase(tab);
+    if (from === 'classic') {
+      tiles.forEach(tile => { if (layoutUsed(tile) && classicHidden(tab, tile.view_id)) tile._unplaced = true; });
+    } else {
+      // The other layout as its window shows it: saved, or its first take-over.
+      const source = setupTiles(tab, from);
+      tiles.forEach((tile, index) => {
+        const p = source[index];
+        if (!layoutUsed(tile)) return;
+        if (layoutUsed(p)) {
+          Object.assign(tile, {col: p.col, row: p.row, span_w: p.span_w, span_h: p.span_h});
+          delete tile._unplaced;
+        } else if (!layoutNavType(tile.type)) {
+          // No place there; Settings and Back keep their classic one.
+          tile._unplaced = true;
+        }
+      });
+    }
+    return layoutSettle(key, L.bar ? tiles.map(tile => (layoutUsed(tile) && layoutNavType(tile.type)
+      ? layoutEmptyTile() : tile)) : tiles);
+  }
+
+  // The window's start: the layout's saved places; a layout never set up is
+  // taken over from the classic layout.
+  function setupTiles(tab, key) {
+    if (key === 'classic') {
+      const tiles = layoutBase(tab);
+      tiles.forEach(tile => { if (layoutUsed(tile) && classicHidden(tab, tile.view_id)) tile._unplaced = true; });
+      return layoutSettle(key, tiles);
+    }
+    const places = layoutWindow.data.places?.[key]?.[layoutFolderId(tab)];
+    if (!places) return takeoverTiles(tab, key, 'classic');
+    return layoutSettle(key, layoutBase(tab).map(tile => {
+      if (!layoutUsed(tile)) return tile;
+      if (layoutNavType(tile.type)) return layoutEmptyTile();
+      const p = places[tile.view_id];
+      if (p) {
+        Object.assign(tile, {col: p[0], row: p[1], span_w: p[2], span_h: p[3]});
+        delete tile._unplaced;
+      } else {
+        tile._unplaced = true;
+      }
+      return tile;
+    }));
+  }
+
+  // Every tile's place on every page, to tell unsaved changes.
+  function layoutSignature(list) {
+    return JSON.stringify(layoutTabs().map(tab => (list(tab) || []).map(tile => layoutUsed(tile)
+      ? [tile.col, tile.row, tile.span_w, tile.span_h] : 0)));
+  }
+  function layoutDirty() { return !!layoutWindow && layoutSignature(getTilesData) !== layoutWindow.savedSig; }
+
+  // --- The window ----------------------------------------------------------
+
+  function showLayoutTiles(tab, tiles) {
+    tilesData[tab] = tiles;
+    tiles.forEach((tile, index) => renderTileFromData(tab, index, tile || layoutEmptyTile(), sensorMetaCache));
+    layoutTiles(tab, tiles);
+  }
+
+  function useLayoutGrid() {
+    const canvas = layoutCanvas();
+    GRID_COLS = canvas.cols;
+    GRID_ROWS = canvas.rows;
+    GRID_SHOWN_COLS = canvas.cols;
+    GRID_SHOWN_ROWS = canvas.rows;
+    HEAD_BAR = false;
+  }
+
+  function redCount(tab) {
+    return getTilesData(tab).filter(tile => layoutUsed(tile) && !layoutInside(tile, layoutWindow.key)).length;
+  }
+
+  function markLayoutRed(tab) {
+    if (!layoutWindow || layoutWindow.tab !== tab) return;
+    document.querySelectorAll(`#tab-tiles-${tab} .setup-grid > .tile`).forEach(el => {
+      const red = !el.classList.contains('empty') && el.dataset.col !== undefined &&
+        !layoutInside({col: Number(el.dataset.col), row: Number(el.dataset.row),
+          span_w: Number(el.dataset.spanW), span_h: Number(el.dataset.spanH)}, layoutWindow.key);
+      el.classList.toggle('setup-red', red);
+    });
+    // Folders carry a badge on their top right corner like the page tabs: a
+    // green tick when they have a place (still reachable), a red "!" when not.
+    const grid = document.querySelector(`#tab-tiles-${tab} .setup-grid`);
+    if (grid) {
+      grid.querySelectorAll('.setup-flag').forEach(flag => flag.remove());
+      grid.querySelectorAll(':scope > .tile[data-type="4"]:not(.empty)').forEach(el => {
+        const flag = document.createElement('span');
+        const missing = el.classList.contains('setup-red');
+        flag.className = 'setup-flag ' + (missing ? 'missing' : 'ok');
+        flag.dataset.for = el.id;
+        flag.innerHTML = missing ? '!' : '<i class="mdi mdi-check"></i>';
+        grid.appendChild(flag);
+      });
+      placeLayoutBadges(grid);
+    }
+    refreshLayoutStatus();
+  }
+
+  // "**...**" in a translation is shown bold.
+  function layoutRichText(text) {
+    return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  }
+
+  function refreshLayoutStatus() {
+    const dialog = document.querySelector('.setup-dialog');
+    if (!dialog || !layoutWindow) return;
+    let total = 0;
+    for (const tab of layoutTabs()) {
+      const count = redCount(tab);
+      total += count;
+      const badge = dialog.querySelector(`.setup-tab[data-tab="${tab}"] .setup-badge`);
+      if (badge) {
+        badge.textContent = count || '';
+        badge.hidden = !count;
+      }
+    }
+    dialog.querySelectorAll('.setup-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === layoutWindow.tab));
+    dialog.querySelectorAll('.setup-layout').forEach(b => b.classList.toggle('selected', b.dataset.key === layoutWindow.key));
+    // A folder without a place could not be reached in that layout, so every
+    // folder must have one (green) before the layout can be stored or shown.
+    let missing = 0;
+    for (const tab of layoutTabs()) {
+      getTilesData(tab).forEach(tile => {
+        if (layoutUsed(tile) && Number(tile.type) === 4 && !layoutInside(tile, layoutWindow.key)) missing++;
+      });
+    }
+    layoutWindow.missingFolders = missing;
+    const L = LAYOUTS[layoutWindow.key];
+    const apply = dialog.querySelector('.setup-apply');
+    apply.disabled = missing > 0 || !L.switchable;
+    const note = dialog.querySelector('.setup-note');
+    note.hidden = L.switchable || layoutWindow.key === ACTIVE_LAYOUT;
+    const status = dialog.querySelector('.setup-status');
+    status.classList.toggle('is-ok', !total);
+    const text = missing
+      ? (missing === 1 ? t('layoutFolderMissing') : tf('layoutFoldersMissing', {n: missing}))
+      : total ? (total === 1 ? t('layoutTileMissing') : tf('layoutTilesMissing', {n: total})) : t('layoutAllFit');
+    const icon = missing ? 'folder-alert-outline' : total ? 'alert-circle-outline' : 'check-circle-outline';
+    status.innerHTML = `<i class="mdi mdi-${icon}"></i><span>${layoutRichText(text)}</span>`;
+    refreshLayoutSave();
+    refreshLayoutDelete();
+  }
+
+  function unmountLayoutGrid() {
+    const home = layoutWindow?.home;
+    if (!home) return;
+    home.grid.classList.remove('setup-grid', 'setup-head', 'setup-head-ghost');
+    home.grid.removeAttribute('style');
+    home.placeholder.replaceWith(home.grid);
+    layoutWindow.home = null;
+  }
+
+  async function mountLayoutTab(tab) {
+    unmountLayoutGrid();
+    layoutWindow.tab = tab;
+    await switchTab('tab-tiles-' + tab);
+    if (!layoutWindow) return;
+    const host = document.getElementById('tab-tiles-' + tab);
+    const backdrop = document.querySelector('.setup-backdrop');
+    const grid = host?.querySelector('.tile-grid');
+    if (!host || !backdrop || !grid) return;
+    // The page keeps the grid's room, so nothing behind the window reflows.
+    const placeholder = document.createElement('div');
+    placeholder.style.cssText = `width:${grid.offsetWidth}px;height:${grid.offsetHeight}px;flex:none;`;
+    grid.replaceWith(placeholder);
+    layoutWindow.home = {grid, placeholder};
+    // First in the tab, so the editor's "#tab-tiles-x .tile-grid" still finds this grid.
+    host.insertBefore(backdrop, host.firstChild);
+    backdrop.querySelector('.setup-stage').appendChild(grid);
+    const L = LAYOUTS[layoutWindow.key];
+    grid.classList.add('setup-grid', 'setup-head');
+    // The classic layout has no head on the panel: here it is only the place
+    // for folders still to be pulled in, so it is greyed out.
+    grid.classList.toggle('setup-head-ghost', !L.bar);
+    // One scale for all layouts, taken from the largest one: the head and the
+    // tiles keep their size when the layout changes, and so does the window.
+    // The screen always starts in the same corner. All preview sizes grow by
+    // that one factor, so the editor's own measuring stays right.
+    const dialog = backdrop.querySelector('.setup-dialog');
+    const chrome = [...dialog.children].filter(el => !el.classList.contains('setup-stage'))
+      .reduce((sum, el) => sum + el.offsetHeight, 0) + 16 * (dialog.children.length - 1) + 48 + 2;
+    // Every layout gets the head's room on top, the classic one too.
+    const sizesOf = K => ({...layoutBaseSizes, ...Object.fromEntries(Object.entries({...layoutVars(K), ...layoutHeadVars(K),
+      ...(K.bar ? {} : {'--preview-pad-top': layoutVars(LAYOUTS.bar)['--preview-pad-top']})})
+      .map(([n, val]) => [n, parseFloat(val)]))});
+    const areaOf = (sizes, cols, rows) => {
+      const frame = sizes['--preview-frame'] || 0;
+      const gap = sizes['--preview-gap'] || 0;
+      return [2 * frame + sizes['--preview-pad-left'] + sizes['--preview-pad-right'] + cols * sizes['--preview-cell-w'] + (cols - 1) * gap,
+        2 * frame + sizes['--preview-pad-top'] + sizes['--preview-pad-bottom'] + rows * sizes['--preview-cell-h'] + (rows - 1) * gap];
+    };
+    const canvas = layoutCanvas();
+    const areas = LAYOUT_KEYS.filter(key => LAYOUTS[key].available).map(key => areaOf(sizesOf(LAYOUTS[key]), canvas.cols, canvas.rows));
+    // The page's own preview scale; smaller only when the window lacks room.
+    const roomW = Math.min(innerWidth - 32, layoutRootPx('--admin-wrapper-width') || innerWidth) - 58;
+    const f = Math.min(0.9, ...areas.map(([w, h]) => Math.min(roomW / w, (innerHeight - 32 - chrome) / h)));
+    const stage = backdrop.querySelector('.setup-stage');
+    stage.style.width = Math.max(...areas.map(([w]) => w)) * f + 2 + 'px';
+    stage.style.height = Math.max(...areas.map(([, h]) => h)) * f + 2 + 'px';
+    const base = sizesOf(L);
+    layoutSetVars(grid, Object.fromEntries(Object.entries(base).map(([n, val]) => [n, (val * f).toFixed(2) + 'px'])));
+    layoutSetVars(grid, {'--grid-cols': String(GRID_COLS), '--grid-rows': String(GRID_ROWS),
+      '--radius-preview-scale': String(layoutScale() * f)});
+    // The layout's screen, black with its rounded corners, behind the tiles.
+    // The classic screen has no head: its cells start where the bar
+    // layouts' do, right under the window's head.
+    let w, h, y = 0;
+    if (L.bar) {
+      [w, h] = areaOf(base, L.cols, L.rows).map(value => value * f);
+    } else {
+      const own = layoutVars(L);
+      const px = name => parseFloat(own[name]);
+      const frame = base['--preview-frame'] || 0;
+      const gap = base['--preview-gap'] || 0;
+      w = (2 * frame + px('--preview-pad-left') + px('--preview-pad-right') + L.cols * px('--preview-cell-w') + (L.cols - 1) * gap) * f;
+      h = (2 * frame + px('--preview-pad-top') + px('--preview-pad-bottom') + L.rows * px('--preview-cell-h') + (L.rows - 1) * gap) * f;
+      y = (base['--preview-pad-top'] - px('--preview-pad-top')) * f;
+    }
+    const r = parseFloat(getComputedStyle(grid).borderTopLeftRadius) || 20;
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='${w}' height='${h}' rx='${r}' fill='black'/></svg>`;
+    grid.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    grid.style.backgroundPosition = `0 ${y}px`;
+    // Tiles such as Media measure their card when they are drawn: draw them
+    // again at the window's scale.
+    showLayoutTiles(tab, getTilesData(tab));
+  }
+
+  async function loadLayoutWindow(key, from) {
+    layoutWindow.key = key;
+    useLayoutGrid();
+    for (const tab of layoutTabs()) showLayoutTiles(tab, from ? takeoverTiles(tab, key, from) : setupTiles(tab, key));
+    layoutWindow.savedSig = layoutSignature(tab => setupTiles(tab, key));
+    await mountLayoutTab(layoutWindow.tab);
+    refreshLayoutButtons();
+  }
+
+  function refreshLayoutButtons() {
+    const dialog = document.querySelector('.setup-dialog');
+    if (!dialog || !layoutWindow) return;
+    // Take over from any other layout.
+    dialog.querySelector('.setup-from').innerHTML = `<option value="">${escapeHtml(t('layoutCopyFrom'))}</option>` +
+      LAYOUT_KEYS.filter(key => key !== layoutWindow.key && LAYOUTS[key].available)
+        .map(key => `<option value="${key}">${escapeHtml(LAYOUTS[key].name)}</option>`).join('');
+    dialog.querySelector('.setup-apply').hidden = layoutWindow.key === ACTIVE_LAYOUT;
+    refreshLayoutStatus();
+  }
+
+  function refreshLayoutSave() {
+    const button = document.querySelector('.setup-save');
+    if (!button || !layoutWindow) return;
+    const changed = layoutDirty();
+    // A layout with a folder out of reach is never stored, like it can never
+    // be switched to: the folder would be gone on the panel.
+    button.disabled = !changed || layoutWindow.missingFolders > 0 || layoutWindow.busy;
+    button.innerHTML = changed ? escapeHtml(t('save')) : `<i class="mdi mdi-check"></i> ${escapeHtml(t('layoutSaved'))}`;
+  }
+
+  // The selected tile on the layout's screen, which the cross on its corner
+  // takes out of the layout (not folders, not Settings and Back).
+  function layoutSelectedTile() {
+    if (!layoutWindow || currentTileTab !== layoutWindow.tab || currentTileIndex < 0) return null;
+    const tile = getTilesData(layoutWindow.tab)[currentTileIndex];
+    return layoutUsed(tile) && Number(tile.type) !== 4 && !layoutNavType(tile.type) &&
+      layoutInside(tile, layoutWindow.key) ? tile : null;
+  }
+
+  function refreshLayoutDelete() {
+    const grid = layoutWindow && document.querySelector(`#tab-tiles-${layoutWindow.tab} .setup-grid`);
+    if (!grid) return;
+    grid.querySelectorAll('.setup-trash').forEach(node => node.remove());
+    const el = layoutSelectedTile() && document.getElementById(`${layoutWindow.tab}-tile-${currentTileIndex}`);
+    if (!el) return;
+    const cross = document.createElement('span');
+    cross.className = 'setup-trash';
+    cross.title = t('layoutTakeOut');
+    cross.dataset.for = el.id;
+    cross.innerHTML = '<i class="mdi mdi-close"></i>';
+    grid.appendChild(cross);
+    placeLayoutBadges(grid);
+  }
+
+  // Badges sit on their tile's top right corner, half outside. While a tile
+  // is dragged or resized they ride on the editor's placeholder, so they go
+  // along with the tile's new place.
+  let layoutMoving = '';
+  function placeLayoutBadges(grid) {
+    const resizing = resizeState ? resizeState.tileId : '';
+    const target = layoutMoving || resizing;
+    const holder = target && grid.querySelector(resizing ? '.tile-resize-placeholder.show' : '.tile-drop-placeholder.show');
+    grid.querySelectorAll('.setup-flag, .setup-trash').forEach(badge => {
+      const tile = document.getElementById(badge.dataset.for);
+      const box = badge.dataset.for === target && holder ? holder : tile;
+      if (!box) return;
+      const left = (box.offsetLeft + box.offsetWidth - 11) + 'px';
+      const top = (box.offsetTop - 7) + 'px';
+      if (badge.style.left !== left) badge.style.left = left;
+      if (badge.style.top !== top) badge.style.top = top;
+    });
+  }
+
+  // The cross takes the selected tile out of this layout only (user
+  // 2026-10-08): it moves beside the layout's screen, red, keeps its places
+  // in the other layouts and can be pulled in again. Deleting a tile stays
+  // with the normal editor.
+  function takeOutLayoutTile() {
+    const tile = layoutSelectedTile();
+    if (!tile) return;
+    const tab = layoutWindow.tab, index = currentTileIndex;
+    // The window's own drafts end with it; the tile's place is its data.
+    if (drafts[tab]) delete drafts[tab][index];
+    currentTileIndex = -1;
+    document.querySelectorAll(`#tab-tiles-${tab} .tile-grid > .tile`).forEach(el => {
+      el.classList.remove('active');
+      delete el.dataset.selected;
+    });
+    const tiles = getTilesData(tab);
+    tile._unplaced = true;
+    layoutSettle(layoutWindow.key, tiles);
+    showLayoutTiles(tab, tiles);
+  }
+
+  // Leaving a layout with changes that are not saved asks first.
+  function mayLeaveLayout() {
+    return !layoutDirty() || window.confirm(tf('layoutUnsavedConfirm', {layout: LAYOUTS[layoutWindow.key].name}));
+  }
+
+  // "Speichern": every place of every page; the server takes what lies on
+  // the layout's screen (and keeps the bar layouts' red places).
+  async function saveLayoutWindow() {
+    if (!layoutWindow || layoutWindow.missingFolders > 0 || layoutWindow.busy) return false;
+    const key = layoutWindow.key;
+    const folders = {};
+    for (const tab of layoutTabs()) {
+      const places = folders[layoutFolderId(tab)] = {};
+      getTilesData(tab).forEach(tile => {
+        if (!layoutUsed(tile) || !tile.view_id || (key !== 'classic' && layoutNavType(tile.type))) return;
+        places[tile.view_id] = [tile.col, tile.row, tile.span_w, tile.span_h];
+      });
+    }
+    layoutWindow.busy = true;
+    refreshLayoutSave();
+    try {
+      const response = await layoutWindowFetch('/api/layouts', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({layout: key, folders})});
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await (await layoutWindowFetch('/api/layouts', {cache: 'no-store'})).json();
+      if (data?.success) layoutWindow.data = data;
+    } catch (error) {
+      showNotification(t('saveFailed'), false);
+      return false;
+    } finally {
+      if (layoutWindow) layoutWindow.busy = false;
+    }
+    if (!layoutWindow) return false;
+    if (key === ACTIVE_LAYOUT) layoutWindow.changed = true;
+    layoutWindow.savedSig = layoutSignature(getTilesData);
+    refreshLayoutSave();
+    return true;
+  }
+
+  // "Umstellen": stored, chosen, and the panel restarts with it.
+  async function applyLayoutWindow() {
+    if (!layoutWindow) return;
+    const L = LAYOUTS[layoutWindow.key];
+    if (!L.switchable || layoutWindow.missingFolders > 0) return;
+    if (!window.confirm(tf('layoutSwitchConfirm', {layout: L.name}))) return;
+    if (!(await saveLayoutWindow())) return;
+    try {
+      const response = await layoutWindowFetch('/api/layouts/active', {
+        method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'layout=' + encodeURIComponent(layoutWindow.key)});
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+    } catch (error) {
+      showNotification(t('saveFailed'), false);
+      return;
+    }
+    closeLayoutWindow();
+    restartPanelForLayout();
+  }
+
+  async function openLayoutWindow() {
+    if (layoutWindow) return;
+    // Every folder's page with its tiles, and the stored places.
+    for (const folderId of Object.keys(tabByFolder).map(Number).filter(id => id > 0)) {
+      try { await ensureFolderTabUi(folderId); } catch (error) {}
+    }
+    initTileTabs();
+    let data = null;
+    try {
+      for (const tab of tileTabs.filter(tab => !isScreensaverTileTab(tab))) await fetchTileGridData(tab);
+      const response = await layoutWindowFetch('/api/layouts', {cache: 'no-store'});
+      data = await response.json();
+      if (!response.ok || !data?.success) throw new Error('layouts');
+    } catch (error) {
+      showNotification(t('loadFailed'), false);
+      return;
+    }
+    if (layoutWindow) return;
+    readLayoutBaseSizes();
+    const tabs = layoutTabs();
+    layoutWindow = {
+      key: ACTIVE_LAYOUT === 'classic' ? 'bar' : ACTIVE_LAYOUT,
+      tab: tabs.includes(currentTileTab) ? currentTileTab : tabs[0],
+      data,
+      pages: Object.fromEntries(tabs.map(tab => [tab, layoutClone(getTilesData(tab))])),
+      drafts: layoutClone(drafts),
+      grid: {GRID_COLS, GRID_ROWS, GRID_SHOWN_COLS, GRID_SHOWN_ROWS, HEAD_BAR},
+      changed: false,
+      busy: false,
+      missingFolders: 0,
+      home: null
+    };
+    const backdrop = document.createElement('div');
+    backdrop.className = 'setup-backdrop';
+    const layoutButtons = LAYOUT_KEYS.filter(key => LAYOUTS[key].available).map(key => {
+      const L = LAYOUTS[key];
+      const shape = 'setup-shape' + (L.portrait ? ' portrait' : '') + (L.bar ? ' bar' : '');
+      const active = key === ACTIVE_LAYOUT ? `<span class="setup-active">${escapeHtml(t('layoutActive'))}</span>` : '';
+      return `<button type="button" class="setup-layout" data-key="${key}"><span class="${shape}"></span>` +
+        `<span class="setup-layout-text"><b>${escapeHtml(L.name)}</b><small>${layoutSize(key)}</small></span>${active}</button>`;
+    }).join('');
+    const tabButtons = tabs.map(tab => {
+      const host = document.getElementById('tab-tiles-' + tab);
+      const home = layoutFolderId(tab) === '0';
+      const name = home ? t('home') : host.dataset.folderName || tab;
+      const icon = home ? 'home' : host.dataset.folderIcon || 'folder';
+      return `<button type="button" class="tab-btn setup-tab" data-tab="${tab}"><i class="mdi mdi-${escapeHtml(icon)}"></i> ` +
+        `${escapeHtml(name)}<span class="setup-badge" hidden></span></button>`;
+    }).join('');
+    backdrop.innerHTML = [
+      '<div class="setup-dialog" role="dialog" aria-modal="true">',
+      `<div class="setup-head-row"><div class="setup-title">${escapeHtml(t('layoutChange'))}</div>`,
+      `<button type="button" class="setup-close" aria-label="${escapeHtml(t('close'))}"><i class="mdi mdi-close"></i></button></div>`,
+      `<div class="setup-layouts">${layoutButtons}</div>`,
+      `<div class="setup-tabs">${tabButtons}</div>`,
+      '<div class="setup-stage"></div>',
+      '<div class="setup-foot"><div class="setup-status"></div>',
+      `<span class="setup-note" hidden>${escapeHtml(t('layoutSwitchLater'))}</span>`,
+      `<select class="setup-from" aria-label="${escapeHtml(t('layoutCopyFrom'))}"></select>`,
+      `<button type="button" class="btn setup-save">${escapeHtml(t('save'))}</button>`,
+      `<button type="button" class="btn btn-go setup-apply">${escapeHtml(t('layoutSwitch'))}</button></div></div>`
+    ].join('');
+    document.body.appendChild(backdrop);
+    document.body.classList.add('setup-window');
+    // A click on the window's free area does not start a new tile.
+    backdrop.querySelector('.setup-stage').addEventListener('click', event => {
+      if (event.target.classList?.contains('setup-grid')) event.stopPropagation();
+    }, true);
+    await loadLayoutWindow(layoutWindow.key, '');
+  }
+
+  async function closeLayoutWindow() {
+    if (!layoutWindow) return;
+    const state = layoutWindow;
+    unmountLayoutGrid();
+    document.querySelector('.setup-backdrop')?.remove();
+    document.body.classList.remove('setup-window');
+    // The window's places never reach the editor: pending saves are dropped,
+    // its drafts give way to the page's.
+    for (const key of Object.keys(autoSaveTimers)) {
+      if (autoSaveTimers[key]) clearTimeout(autoSaveTimers[key]);
+      if (key.includes(':')) delete autoSaveTimers[key];
+      else autoSaveTimers[key] = null;
+    }
+    for (const key of Object.keys(drafts)) delete drafts[key];
+    Object.assign(drafts, state.drafts);
+    persistDrafts();
+    GRID_COLS = state.grid.GRID_COLS;
+    GRID_ROWS = state.grid.GRID_ROWS;
+    GRID_SHOWN_COLS = state.grid.GRID_SHOWN_COLS;
+    GRID_SHOWN_ROWS = state.grid.GRID_SHOWN_ROWS;
+    HEAD_BAR = state.grid.HEAD_BAR;
+    layoutWindow = null;
+    currentTileIndex = -1;
+    document.querySelectorAll('.tile-grid > .tile').forEach(el => {
+      el.classList.remove('active', 'setup-red');
+      delete el.dataset.selected;
+    });
+    document.querySelectorAll('.tile-specific-settings').forEach(el => el.classList.add('hidden'));
+    // The page again, with what the panel now has.
+    for (const tab of Object.keys(state.pages)) {
+      tilesData[tab] = state.pages[tab];
+      if (state.changed) {
+        try { await fetchTileGridData(tab, true); } catch (error) {}
+      }
+      showLayoutTiles(tab, getTilesData(tab));
+    }
+  }
+
+  // The window's editor saves only in the window (see above).
+  window.fetch = (url, options) => (layoutWindow && options && /post/i.test(options.method || '') &&
+      /^\/api\/tiles(\/reorder)?(\?|$)/.test(String(url)))
+    ? Promise.resolve(new Response('{"success":true}', {headers: {'Content-Type': 'application/json'}}))
+    : layoutWindowFetch(url, options);
+
+  document.addEventListener('dragstart', event => {
+    const tile = layoutWindow && event.target.closest?.('.setup-grid > .tile');
+    layoutMoving = tile ? tile.id : '';
+  }, true);
+  document.addEventListener('dragend', () => {
+    layoutMoving = '';
+    const grid = layoutWindow && document.querySelector(`#tab-tiles-${layoutWindow.tab} .setup-grid`);
+    if (grid) requestAnimationFrame(() => placeLayoutBadges(grid));
+  }, true);
+  // The placeholders move by style changes; the badges follow frame by frame.
+  let layoutBadgeFrame = 0;
+  if (typeof MutationObserver === 'function') {
+    new MutationObserver(records => {
+      if (!layoutWindow || layoutBadgeFrame) return;
+      if (records.every(record => record.target.classList?.contains('setup-flag') ||
+          record.target.classList?.contains('setup-trash'))) return;
+      layoutBadgeFrame = requestAnimationFrame(() => {
+        layoutBadgeFrame = 0;
+        const grid = layoutWindow && document.querySelector(`#tab-tiles-${layoutWindow.tab} .setup-grid`);
+        if (grid) placeLayoutBadges(grid);
+      });
+    }).observe(document.body, {attributes: true, subtree: true, attributeFilter: ['style', 'class']});
+  }
+
+  document.addEventListener('click', event => {
+    if (!layoutWindow || !event.target.closest?.('.setup-dialog')) return;
+    const layout = event.target.closest('.setup-layout');
+    if (layout && layout.dataset.key !== layoutWindow.key && mayLeaveLayout()) loadLayoutWindow(layout.dataset.key, '');
+    const tab = event.target.closest('.setup-tab');
+    if (tab && tab.dataset.tab !== layoutWindow.tab) mountLayoutTab(tab.dataset.tab);
+    if (event.target.closest('.setup-close') && mayLeaveLayout()) { closeLayoutWindow(); return; }
+    if (event.target.closest('.setup-save')) saveLayoutWindow();
+    if (event.target.closest('.setup-trash')) takeOutLayoutTile();
+    if (event.target.closest('.setup-apply')) applyLayoutWindow();
+    // Selecting a tile decides the delete cross.
+    setTimeout(refreshLayoutDelete, 0);
+  });
+  document.addEventListener('change', event => {
+    const from = event.target.closest?.('.setup-from');
+    if (!from || !layoutWindow || !from.value) return;
+    const source = from.value;
+    from.value = '';
+    loadLayoutWindow(layoutWindow.key, source);
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && layoutWindow && mayLeaveLayout()) closeLayoutWindow();
+  });
 
   let screensaverDraft = null;
   let screensaverLoaded = false;
@@ -12843,7 +13586,8 @@ function maybeFillTitleFromWeather(tab) {
   function applyWeatherPreview(el, state, tile, iconName, forcedColor) {
     if (!el || typeof WEATHER_TILE_LAYOUT === 'undefined') return;
     const L = WEATHER_TILE_LAYOUT;
-    const rootStyle = getComputedStyle(document.documentElement);
+    // The tile's own grid sizes (inherited variables), not the page's.
+    const rootStyle = getComputedStyle(el.isConnected ? el : document.documentElement);
     const scale = parseFloat(rootStyle.getPropertyValue('--radius-preview-scale')) || 0.5;
     const colored = Number(tile?.sensor_display_mode) !== 1;
     const now = new Date();
@@ -14427,7 +15171,9 @@ function maybeFillTitleFromMedia(tab) {
   function applyMediaPreview(el, state, tile, iconName, displayName) {
     if (!el || typeof MEDIA_TILE_LAYOUT === 'undefined') return;
     const L = MEDIA_TILE_LAYOUT;
-    const rootStyle = getComputedStyle(document.documentElement);
+    // The tile's own grid sizes (inherited variables), not the page's: a grid
+    // such as the screensaver's has its own cells.
+    const rootStyle = getComputedStyle(el.isConnected ? el : document.documentElement);
     const scale = parseFloat(rootStyle.getPropertyValue('--radius-preview-scale')) || 0.5;
     const entity = String(tile?.sensor_entity || '');
 
@@ -17220,10 +17966,11 @@ function getClockPreviewLanguage() {
     }
   }
 
-  function getClockPreviewCssPx(raw, fallback) {
+  function getClockPreviewCssPx(raw, fallback, el) {
     const n = normalizeClockPreviewFont(raw, fallback);
-    // Same scaling as the CSS variables (LVGL pixels * preview factor).
-    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs' + n));
+    // Same scaling as the CSS variables (LVGL pixels * preview factor), as the
+    // tile's own grid sets them (a grid may scale its preview).
+    const v = parseFloat(getComputedStyle(el?.isConnected ? el : document.documentElement).getPropertyValue('--fs' + n));
     return (v > 0) ? v : Math.round(n / 2);
   }
 
@@ -17251,7 +17998,7 @@ function getClockPreviewLanguage() {
     if (!el) return;
     const font = normalizeClockPreviewFont(raw, fallback);
     el.dataset.clockFont = String(font);
-    applyClockPreviewLine(el, font, getClockPreviewCssPx(raw, fallback));
+    applyClockPreviewLine(el, font, getClockPreviewCssPx(raw, fallback, el));
     el.style.color = color || '#fff';
   }
 
@@ -17392,11 +18139,12 @@ function getClockPreviewLanguage() {
       if (!el) return;
       el.hidden = false;
       const font = normalizeClockPreviewFont(el.dataset.clockFont, 40);
-      applyClockPreviewLine(el, font, getClockPreviewCssPx(font, 40));
+      applyClockPreviewLine(el, font, getClockPreviewCssPx(font, 40, tileElem));
     });
     if (!tileElem.classList.contains('clock-compact')) return;
     const style = getComputedStyle(tileElem);
-    const root = getComputedStyle(document.documentElement);
+    // The tile's own grid sizes (inherited variables), not the page's.
+    const root = tileElem.isConnected ? style : getComputedStyle(document.documentElement);
     const cellW = parseFloat(root.getPropertyValue('--preview-cell-w'));
     const cellH = parseFloat(root.getPropertyValue('--preview-cell-h'));
     const gridGap = parseFloat(root.getPropertyValue('--preview-gap')) || 0;
@@ -17415,14 +18163,14 @@ function getClockPreviewLanguage() {
     const fit = (el, capPx, usedW) => {
       const sample = clockPreviewSample(el, el === time);
       for (const size of [...CLOCK_PREVIEW_FONT_SIZES].reverse()) {
-        const px = getClockPreviewCssPx(size, size);
+        const px = getClockPreviewCssPx(size, size, tileElem);
         if (size > Number(el.dataset.clockFont || 40) || px > capPx) continue;
         const width = measureClockPreviewText(el, sample, px);
         if (usedW + width <= availW) return { size, px, width };
       }
       return null;
     };
-    const first = fit(primary, maxPx, 0) || { size: 20, px: getClockPreviewCssPx(20, 20), width: 0 };
+    const first = fit(primary, maxPx, 0) || { size: 20, px: getClockPreviewCssPx(20, 20, tileElem), width: 0 };
     applyClockPreviewLine(primary, first.size, first.px);
     if (!secondary) return;
     const second = fit(secondary, first.px, first.width + gap);

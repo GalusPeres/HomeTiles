@@ -13625,11 +13625,16 @@ function maybeFillTitleFromWeather(tab) {
     const row = Number(tile?.row) || 0;
     const spanW = Math.max(1, Number(tile?.span_w) || 1);
     const spanH = Math.max(1, Number(tile?.span_h) || 1);
-    const cardW = weatherExtent(col, spanW, L.cellW, L.gap);
-    const cardH = weatherExtent(row, spanH, L.cellH, L.gap);
     const cellW = parseFloat(rootStyle.getPropertyValue('--preview-cell-w'));
     const cellH = parseFloat(rootStyle.getPropertyValue('--preview-cell-h'));
     const previewGap = parseFloat(rootStyle.getPropertyValue('--preview-gap')) || 0;
+    // The tile's own grid in display pixels: the layout window shows other
+    // layouts' cells than this boot's (WEATHER_TILE_LAYOUT).
+    const gridCellW = cellW > 0 ? Math.round(cellW / scale) : L.cellW;
+    const gridCellH = cellH > 0 ? Math.round(cellH / scale) : L.cellH;
+    const gridGap = previewGap > 0 ? Math.round(previewGap / scale) : L.gap;
+    const cardW = weatherExtent(col, spanW, gridCellW, gridGap);
+    const cardH = weatherExtent(row, spanH, gridCellH, gridGap);
     // The tile's size like the grid gives it (.fractional-tile), never
     // measured: a re-rendered tile at a half position is placed only after
     // it is filled.
@@ -13675,7 +13680,7 @@ function maybeFillTitleFromWeather(tab) {
       if (cardW < L.conditionNarrowW ? conditionWidth > room : room < L.minConditionRoom * scale) showCondition = false;
     }
     const showForecast = cardH >= L.forecastMinH;
-    const rowCenter = showForecast ? (L.cellH / 2 + L.valueDy) * scale : height / 2 + L.valueDy * scale;
+    const rowCenter = showForecast ? (gridCellH / 2 + L.valueDy) * scale : height / 2 + L.valueDy * scale;
     const textSpan = (cls, text, f, extra = '') => '<span class="' + cls + '" style="' + fontCss(f) +
       'top:' + f.shift.toFixed(2) + 'px;' + extra + '">' + escapeHtml(text) + '</span>';
     let html = '<div class="weather-preview-row" style="top:' + (rowCenter - valueFont.line / 2 - 3).toFixed(2) +
@@ -13728,7 +13733,7 @@ function maybeFillTitleFromWeather(tab) {
       const textW = L.forecastTextW;
       const spacing = Math.trunc((cardW - count * textW) / (count + 1));
       const columnLeft = i => (spacing + Math.trunc(textW / 2) + i * (textW + spacing) - Math.trunc(L.colW / 2)) * scale;
-      const rowTop = height - (L.cellH + L.headroom - L.yOffset) * scale;
+      const rowTop = height - (gridCellH + L.headroom - L.yOffset) * scale;
       const contentTop = rowTop + L.padV * scale;
       const contentW = (L.colW - 2 * L.padH) * scale;
       const dayFont = font(L.day);

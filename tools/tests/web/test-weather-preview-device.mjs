@@ -322,7 +322,22 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
     });
     results.push({boxes, texts});
   }
-  document.getElementById('result').textContent = JSON.stringify({scale, results});
+  // The layout window gives a tile another layout's cells through its own
+  // grid's variables: the days follow those cells, not this boot's
+  // (user 2026-10-08: two days squeezed into a larger bar tile).
+  const wide = Math.round(WEATHER_TILE_LAYOUT.cellW * 1.4);
+  const other = document.createElement('div');
+  other.className = 'tile weather';
+  other.style.setProperty('--preview-cell-w', wide * scale + 'px');
+  document.getElementById('host').replaceChildren(other);
+  applyWeatherPreview(other, parseWeatherPreviewPayload(${JSON.stringify(payload)}),
+                      {col: 0, span_w: 2, span_h: 2, sensor_display_mode: 0}, 'weather-cloudy', '');
+  const windowDays = {
+    shown: other.querySelectorAll('.weather-preview-day').length,
+    expected: weatherForecastCount(2 * wide + WEATHER_TILE_LAYOUT.gap, WEATHER_TILE_LAYOUT.forecastTextW),
+    own: weatherForecastCount(2 * WEATHER_TILE_LAYOUT.cellW + WEATHER_TILE_LAYOUT.gap, WEATHER_TILE_LAYOUT.forecastTextW),
+  };
+  document.getElementById('result').textContent = JSON.stringify({scale, results, windowDays});
   document.body.dataset.done = '1';
 });
 </script></body></html>`;
@@ -333,7 +348,9 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
   assert.equal(run.status, 0, run.stderr);
   const match = /<pre id="result">([^<]*)<\/pre>/.exec(run.stdout);
   assert(match && match[1], profile + ': the preview harness did not finish\n' + run.stdout.slice(-2000));
-  const {scale, results} = JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+  const {scale, results, windowDays} = JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&'));
+  assert.ok(windowDays.expected > windowDays.own, profile + ': the wider cells fit more days');
+  assert.equal(windowDays.shown, windowDays.expected, profile + ': the days follow the tile grid of the window');
   const report = [];
   tiles.forEach((device, index) => {
     const browserTile = results[index];

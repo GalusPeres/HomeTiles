@@ -107,16 +107,30 @@ the counter also rejects replayed, dropped or reordered frames.
 | `0x10` | publish | both | `flags (1) || u16be(topic length) || topic || payload`; flag bit 0 = retain |
 | `0x11` | subscribe | panel → Bridge | topic |
 | `0x12` | unsubscribe | panel → Bridge | topic |
-| `0x13` | publish begin | panel → Bridge | `flags (1) || u16be(topic length) || topic || u32be(total length)` |
-| `0x14` | publish data | panel → Bridge | the next bytes of the streamed payload |
-| `0x15` | publish end | panel → Bridge | empty |
+| `0x13` | publish begin | both | `flags (1) || u16be(topic length) || topic || u32be(total length)` |
+| `0x14` | publish data | both | the next bytes of the streamed payload |
+| `0x15` | publish end | both | empty |
 | `0x20` | ping | both | empty |
 | `0x21` | pong | both | empty |
 
 Topics are 1–255 bytes of UTF-8 without NUL, `+` or `#`. A publish payload is
-at most 65,535 bytes. Payloads above that (the built-in camera still image)
-use publish begin/data/end with at most 2 MiB in total; data frames carry at
-most 8,192 bytes each.
+at most 65,535 bytes. Payloads above that use publish begin/data/end with at
+most 2 MiB in total; data frames carry at most 8,192 bytes each.
+
+- Panel to Bridge: the built-in camera still image. The data frames follow
+  the begin frame without other frames in between.
+- Bridge to panel: pictures (media covers, screensaver images), only to a
+  panel that announced room for them with `rx` in its hello, and only up to
+  that size; a panel without it gets no larger message (the Bridge drops it
+  with a rate-limited log line). Other frames may pass between the data
+  frames of a stream, so states do not wait for a picture; one stream runs
+  at a time, and a newer picture of a topic replaces one that has not
+  started. The panel collects a stream in PSRAM, reads and drops one it has
+  no room for without ending the connection, and passes on only image
+  topics (`/image/` in the topic). A nested begin, more data than announced
+  or an early end closes the connection.
+- The Bridge seals frames in the order they leave, so the counters of the
+  frames between the pieces stay in order.
 
 ## Handshake
 
@@ -127,7 +141,10 @@ The panel sends hello as the first frame:
 ```
 
 `mode` is `session` (paired: `kid` is the key id of `K`, `n` 16 fresh random
-bytes) or `pair` (no `kid`, no `n`).
+bytes) or `pair` (no `kid`, no `n`). A session hello may add `"rx":<bytes>`,
+65,536 to 2,097,152: the largest stream the panel takes from the Bridge
+(P4 panels 524,288, the S3 262,144). The Bridge ignores a value outside that
+range, and an older Bridge ignores the field.
 
 Session mode: the Bridge looks up the entry with this device id whose pairing
 key (or key being removed) has this key id and the same base topic. Otherwise

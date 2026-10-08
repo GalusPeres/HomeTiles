@@ -1679,9 +1679,18 @@ static char* mqttConfigBuffer() {
 // ---------------------------------------------------------------------------
 struct MqttInboundMsg {
   char* topic;       // -> into the same backing allocation
-  uint8_t* payload;  // -> into the same backing allocation
+  uint8_t* payload;  // -> into the same backing allocation, or `external`
   unsigned int length;
+  // A streamed message's own payload block (mqttStreamCallback), freed with
+  // the message; nullptr for every other message.
+  uint8_t* external;
 };
+
+static void mqttFreeInbound(MqttInboundMsg* msg) {
+  if (!msg) return;
+  if (msg->external) heap_caps_free(msg->external);
+  heap_caps_free(msg);
+}
 
 // A complete retained reconnect includes 46 dynamic topics plus Bridge
 // and Settings messages. A 16-entry queue filled during the measured
@@ -1750,6 +1759,7 @@ static MqttInboundMsg* mqttAllocInbound(const char* topic,
   msg->topic = reinterpret_cast<char*>(block + sizeof(MqttInboundMsg));
   msg->payload = reinterpret_cast<uint8_t*>(msg->topic + topic_len + 1);
   msg->length = length;
+  msg->external = nullptr;
   if (topic_len) memcpy(msg->topic, topic, topic_len);
   msg->topic[topic_len] = '\0';
   if (length) memcpy(msg->payload, payload, length);
@@ -1774,7 +1784,7 @@ void mqtt_process_inbound_queue(uint8_t max_msgs) {
         deferred->length);
     processMqttMessage(
         deferred->topic, deferred->payload, deferred->length);
-    heap_caps_free(deferred);
+    mqttFreeInbound(deferred);
     ++processed;
   }
 
@@ -1794,7 +1804,7 @@ void mqtt_process_inbound_queue(uint8_t max_msgs) {
       if (camera_busy && apply_topic &&
           strcmp(msg->topic, apply_topic) == 0) {
         if (g_deferred_bridge_apply) {
-          heap_caps_free(g_deferred_bridge_apply);
+          mqttFreeInbound(g_deferred_bridge_apply);
         }
         g_deferred_bridge_apply = msg;
         Serial.printf(
@@ -1811,7 +1821,7 @@ void mqtt_process_inbound_queue(uint8_t max_msgs) {
         slowest_ms = message_ms;
         strlcpy(slowest_topic, msg->topic, sizeof(slowest_topic));
       }
-      heap_caps_free(msg);
+      mqttFreeInbound(msg);
       ++processed;
       ++drained;
     }
@@ -1867,7 +1877,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   // task. Briefly wait for a full queue to drain, then drop. Rate-limit
   // drop logs because display sleep drains only about every 150 ms.
   if (xQueueSend(q, &msg, pdMS_TO_TICKS(50)) != pdTRUE) {
-    heap_caps_free(msg);
+    mqttFreeInbound(msg);
     g_inbound_dropped = true;
     static uint32_t last_drop_log_ms = 0;
     const uint32_t drop_now_ms = millis();
@@ -1876,6 +1886,38 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
       Serial.printf("[MQTT] Inbound queue full -> message dropped (latest: %s)\n",
                     topic ? topic : "?");
     }
+  }
+}
+
+// A streamed message from the Bridge (link only, above the normal message
+// size). Only image topics may be this large: every other handler was built
+// for messages within the MQTT buffer. The payload keeps its own block.
+void mqttStreamCallback(const char* topic, uint8_t* data, size_t length) {
+  QueueHandle_t q = mqttInboundQueue();
+  const size_t topic_len = topic ? strnlen(topic, 256) : 0;
+  if (!q || !data || topic_len == 0 || topic_len >= 256 || !strstr(topic, "/image/")) {
+    Serial.printf("[MQTT] Streamed message dropped (%u bytes): %s\n",
+                  static_cast<unsigned>(length), topic ? topic : "?");
+    if (data) heap_caps_free(data);
+    return;
+  }
+  uint8_t* block = static_cast<uint8_t*>(
+      heap_caps_malloc(sizeof(MqttInboundMsg) + topic_len + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (!block) {
+    heap_caps_free(data);
+    Serial.printf("[MQTT] Inbound allocation unavailable; dropped '%s'\n", topic);
+    return;
+  }
+  MqttInboundMsg* msg = reinterpret_cast<MqttInboundMsg*>(block);
+  msg->topic = reinterpret_cast<char*>(block + sizeof(MqttInboundMsg));
+  memcpy(msg->topic, topic, topic_len + 1);
+  msg->payload = data;
+  msg->length = static_cast<unsigned int>(length);
+  msg->external = data;
+  g_last_inbound_ms = millis();
+  if (xQueueSend(q, &msg, pdMS_TO_TICKS(50)) != pdTRUE) {
+    mqttFreeInbound(msg);
+    Serial.printf("[MQTT] Inbound queue full -> streamed message dropped: %s\n", topic);
   }
 }
 

@@ -91,8 +91,13 @@ inline bool validTopic(const char* topic, size_t length) {
 // {"v":1,"id":"<id>","base":"<base>","mode":"session","kid":"<16 hex>","n":"<32 hex>"}
 // or, without a key (pairing), {"v":1,"id":...,"base":...,"mode":"pair"}.
 // Device id and base are written unescaped and must not need escaping.
+// stream_limit: the largest message the panel takes from the Bridge as a
+// stream (above kMaxPayloadLength, at most kMaxStreamLength), sent as
+// ,"rx":<bytes> in session mode; 0 leaves it out and the Bridge streams
+// nothing to the panel. Older Bridges ignore the field.
 inline size_t buildHello(const char* device_id, const char* base, const char* key_id,
-                         const uint8_t nonce[kNonceSize], char* out, size_t out_size) {
+                         const uint8_t nonce[kNonceSize], char* out, size_t out_size,
+                         size_t stream_limit = 0) {
   if (!device_id || !base || !out || !*device_id || !*base ||
       strlen(device_id) > kMaxDeviceIdLength || strlen(base) > kMaxBaseLength) {
     return 0;
@@ -114,9 +119,14 @@ inline size_t buildHello(const char* device_id, const char* base, const char* ke
         !ht_crypto::hexEncode(nonce, kNonceSize, nonce_hex, sizeof(nonce_hex))) {
       return 0;
     }
+    if (stream_limit && (stream_limit <= kMaxPayloadLength || stream_limit > kMaxStreamLength)) {
+      return 0;
+    }
+    char rx[24] = "";
+    if (stream_limit) snprintf(rx, sizeof(rx), ",\"rx\":%u", static_cast<unsigned>(stream_limit));
     written = snprintf(out, out_size,
-                       "{\"v\":1,\"id\":\"%s\",\"base\":\"%s\",\"mode\":\"session\",\"kid\":\"%s\",\"n\":\"%s\"}",
-                       device_id, base, key_id, nonce_hex);
+                       "{\"v\":1,\"id\":\"%s\",\"base\":\"%s\",\"mode\":\"session\",\"kid\":\"%s\",\"n\":\"%s\"%s}",
+                       device_id, base, key_id, nonce_hex, rx);
   } else {
     written = snprintf(out, out_size, "{\"v\":1,\"id\":\"%s\",\"base\":\"%s\",\"mode\":\"pair\"}",
                        device_id, base);
@@ -321,6 +331,33 @@ inline bool parsePublish(const uint8_t* payload, size_t length, Publish& out) {
   out.data_length = length - 3 - topic_length;
   out.retain = (payload[0] & kFlagRetain) != 0;
   return out.data_length <= kMaxPayloadLength;
+}
+
+// Stream begin: flags || u16be(topic length) || topic || u32be(total), the
+// total 1..kMaxStreamLength. Data frames follow with at most kMaxStreamChunk
+// bytes each, then an empty end frame; other frames may come between them.
+struct StreamBegin {
+  const char* topic = nullptr;  // Not NUL-terminated.
+  size_t topic_length = 0;
+  size_t total = 0;
+  bool retain = false;
+};
+
+inline bool parseStreamBegin(const uint8_t* payload, size_t length, StreamBegin& out) {
+  if (!payload || length < 3 || (payload[0] & ~kFlagRetain) != 0) return false;
+  const size_t topic_length = (static_cast<size_t>(payload[1]) << 8) | payload[2];
+  if (topic_length == 0 || topic_length > kMaxTopicLength || length != 3 + topic_length + 4) {
+    return false;
+  }
+  const char* topic = reinterpret_cast<const char*>(payload + 3);
+  if (!validTopic(topic, topic_length)) return false;
+  const size_t total = getU32(payload + 3 + topic_length);
+  if (total == 0 || total > kMaxStreamLength) return false;
+  out.topic = topic;
+  out.topic_length = topic_length;
+  out.total = total;
+  out.retain = (payload[0] & kFlagRetain) != 0;
+  return true;
 }
 
 }  // namespace bridge_link

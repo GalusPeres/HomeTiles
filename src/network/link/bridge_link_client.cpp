@@ -33,9 +33,19 @@ bool deadlinePassed(uint32_t deadline_ms) {
 
 BridgeLinkClient::~BridgeLinkClient() {
   wipeKeys();
+  dropIncoming();
   if (tx_) heap_caps_free(tx_);
   if (rx_) heap_caps_free(rx_);
   if (chunk_) heap_caps_free(chunk_);
+}
+
+void BridgeLinkClient::dropIncoming() {
+  if (incoming_data_) heap_caps_free(incoming_data_);
+  incoming_data_ = nullptr;
+  incoming_ = false;
+  incoming_skip_ = false;
+  incoming_total_ = 0;
+  incoming_have_ = 0;
 }
 
 void BridgeLinkClient::setServer(const char* host, uint16_t port) {
@@ -74,6 +84,7 @@ void BridgeLinkClient::fail(int state) {
   connected_ = false;
   streaming_ = false;
   chunk_fill_ = 0;
+  dropIncoming();
   rx_header_have_ = 0;
   rx_body_need_ = 0;
   rx_body_have_ = 0;
@@ -169,7 +180,7 @@ bool BridgeLinkClient::connect(const char* device_id, const char* base,
   if (session) secure_random::fill(panel_nonce, sizeof(panel_nonce));
   const size_t hello_length =
       buildHello(device_id, base, session ? key_id : nullptr, session ? panel_nonce : nullptr,
-                 hello, sizeof(hello));
+                 hello, sizeof(hello), session && stream_callback_ ? stream_limit_ : 0);
   if (hello_length == 0) {
     Serial.println("[Link] Device id or base topic cannot be used for the link");
     state_ = kConnectFailed;
@@ -356,6 +367,10 @@ bool BridgeLinkClient::handleFrame(size_t body_length) {
       last_retained_ = false;
       return true;
     }
+    case kStreamBegin:
+    case kStreamData:
+    case kStreamEnd:
+      return handleStream(type, payload, payload_length);
     case kPing:
       return sendFrame(kPong, nullptr, 0);
     case kPong:
@@ -370,6 +385,62 @@ bool BridgeLinkClient::handleFrame(size_t body_length) {
       // Unknown frames from a newer Bridge are skipped.
       return true;
   }
+}
+
+// A stream from the Bridge (docs-dev/bridge-link.md): begin, data frames of
+// at most kMaxStreamChunk bytes, end; other frames may come in between. A
+// stream the panel did not announce room for is read and dropped, without
+// ending the connection; a malformed one ends it.
+bool BridgeLinkClient::handleStream(uint8_t type, const uint8_t* payload, size_t length) {
+  if (type == kStreamBegin) {
+    StreamBegin begin;
+    if (incoming_ || !parseStreamBegin(payload, length, begin)) {
+      fail(kProtocolError);
+      return false;
+    }
+    incoming_ = true;
+    incoming_total_ = begin.total;
+    incoming_have_ = 0;
+    incoming_retain_ = begin.retain;
+    memcpy(incoming_topic_, begin.topic, begin.topic_length);
+    incoming_topic_[begin.topic_length] = '\0';
+    incoming_skip_ = pair_mode_ || !stream_callback_ || begin.total > stream_limit_;
+    if (!incoming_skip_) {
+      incoming_data_ = static_cast<uint8_t*>(
+          heap_caps_malloc(begin.total, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+      incoming_skip_ = incoming_data_ == nullptr;
+    }
+    if (incoming_skip_ && !pair_mode_) {
+      Serial.printf("[Link] Stream %s (%u bytes) dropped: %s\n", incoming_topic_,
+                    static_cast<unsigned>(begin.total),
+                    begin.total > stream_limit_ ? "over the announced limit" : "no memory");
+    }
+    return true;
+  }
+  if (type == kStreamData) {
+    if (!incoming_ || length > kMaxStreamChunk || incoming_have_ + length > incoming_total_) {
+      fail(kProtocolError);
+      return false;
+    }
+    if (!incoming_skip_) memcpy(incoming_data_ + incoming_have_, payload, length);
+    incoming_have_ += length;
+    return true;
+  }
+  // kStreamEnd
+  if (!incoming_ || length != 0 || incoming_have_ != incoming_total_) {
+    fail(kProtocolError);
+    return false;
+  }
+  if (incoming_skip_) {
+    dropIncoming();
+    return true;
+  }
+  uint8_t* data = incoming_data_;
+  const size_t total = incoming_total_;
+  incoming_data_ = nullptr;  // The receiver owns it now.
+  dropIncoming();
+  stream_callback_(incoming_topic_, data, total, incoming_retain_);
+  return true;
 }
 
 bool BridgeLinkClient::loop() {

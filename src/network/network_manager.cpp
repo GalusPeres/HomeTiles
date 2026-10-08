@@ -1092,6 +1092,17 @@ void HomeTilesNetworkManager::installMessageCallback() {
     if (dropRetainedLocalCameraCommand(mqtt_client, topic)) return;
     mqttCallback(topic, payload, length);
   });
+  // Pictures above the normal message size (covers, the screensaver image)
+  // come over the link as streams, collected in PSRAM.
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  constexpr size_t kStreamReceiveLimit = 512 * 1024;
+#else
+  constexpr size_t kStreamReceiveLimit = 256 * 1024;
+#endif
+  mqtt_client.setStreamReceive(kStreamReceiveLimit,
+                               [](const char* topic, uint8_t* data, size_t length, bool) {
+                                 mqttStreamCallback(topic, data, length);
+                               });
 }
 
 // Worker only: moves the client to the link or away from it. Queued messages

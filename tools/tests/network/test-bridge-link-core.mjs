@@ -132,6 +132,29 @@ int main() {
   CHECK(buildHello("ID", "a\"b", nullptr, nullptr, hello, sizeof(hello)) == 0);
   CHECK(buildHello("ID", "base", "short", n_p, hello, sizeof(hello)) == 0);
   CHECK(buildHello("ID", "base", nullptr, nullptr, hello, 10) == 0);
+  // The room for streams from the Bridge rides on the session hello only.
+  CHECK(buildHello("${VECTOR.id}", "${VECTOR.base}", "20a8108ed11215c5", n_p, hello, sizeof(hello), 524288) > 0);
+  CHECK(std::strcmp(hello, "{\"v\":1,\"id\":\"A1B2C3D4E5F6\",\"base\":\"hometiles/test\",\"mode\":\"session\","
+                           "\"kid\":\"20a8108ed11215c5\",\"n\":\"11111111111111111111111111111111\",\"rx\":524288}") == 0);
+  CHECK(buildHello("${VECTOR.id}", "${VECTOR.base}", nullptr, nullptr, hello, sizeof(hello), 524288) > 0);
+  CHECK(std::strstr(hello, "rx") == nullptr);
+  CHECK(buildHello("ID", "base", "20a8108ed11215c5", n_p, hello, sizeof(hello), kMaxPayloadLength) == 0);
+  CHECK(buildHello("ID", "base", "20a8108ed11215c5", n_p, hello, sizeof(hello), kMaxStreamLength + 1) == 0);
+
+  // Stream begin from the Bridge (link_protocol.stream_begin_payload).
+  StreamBegin begin;
+  const uint8_t stream_begin[] = {0x01, 0x00, 0x03, 'a', '/', 'b', 0x00, 0x08, 0x00, 0x00};
+  CHECK(parseStreamBegin(stream_begin, sizeof(stream_begin), begin));
+  CHECK(begin.retain && begin.topic_length == 3 && std::memcmp(begin.topic, "a/b", 3) == 0 &&
+        begin.total == 524288);
+  const uint8_t stream_empty[] = {0x00, 0x00, 0x01, 'a', 0x00, 0x00, 0x00, 0x00};
+  CHECK(!parseStreamBegin(stream_empty, sizeof(stream_empty), begin));
+  const uint8_t stream_huge[] = {0x00, 0x00, 0x01, 'a', 0x00, 0x20, 0x00, 0x01};
+  CHECK(!parseStreamBegin(stream_huge, sizeof(stream_huge), begin));
+  const uint8_t stream_short[] = {0x00, 0x00, 0x01, 'a', 0x00, 0x00, 0x10};
+  CHECK(!parseStreamBegin(stream_short, sizeof(stream_short), begin));
+  const uint8_t stream_wild[] = {0x00, 0x00, 0x01, '#', 0x00, 0x00, 0x10, 0x00};
+  CHECK(!parseStreamBegin(stream_wild, sizeof(stream_wild), begin));
 
   // Welcome and refuse from the Bridge (link_protocol.build_welcome/refuse).
   uint8_t nonce[16];

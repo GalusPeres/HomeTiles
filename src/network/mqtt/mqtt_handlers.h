@@ -5,6 +5,11 @@
 
 // MQTT callback functions.
 void mqttCallback(char* topic, uint8_t* payload, unsigned int length);
+// A message the Bridge streamed over the link (above the normal message
+// size): only image topics ("/image/" in the topic) are taken. It joins the
+// same inbound queue without a copy; takes ownership of `data` (PSRAM,
+// heap_caps_free) in every case. Network worker only.
+void mqttStreamCallback(const char* topic, uint8_t* data, size_t length);
 // Drains inbound MQTT messages that mqttCallback() queued (see mqtt_handlers.cpp
 // header comment) and runs the real per-topic processing on the caller's task.
 // Call from the main loop(). max_msgs=0 drains everything currently queued.

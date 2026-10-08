@@ -19,6 +19,11 @@
 class BridgeLinkClient {
  public:
   using Callback = std::function<void(char*, uint8_t*, unsigned int)>;
+  // A message the Bridge streamed (above kReceiveCapacity, up to the limit
+  // the panel announced). The receiver owns `data` and frees it with
+  // heap_caps_free(); it runs in the network worker task.
+  using StreamCallback = std::function<void(const char* topic, uint8_t* data, size_t length,
+                                            bool retained)>;
 
   // state() values; negative values mean "not connected", as in PubSubClient.
   static constexpr int kConnected = 0;
@@ -41,6 +46,12 @@ class BridgeLinkClient {
   void setClient(NetworkClient& client) { client_ = &client; }
   void setServer(const char* host, uint16_t port);
   void setCallback(Callback callback) { callback_ = std::move(callback); }
+  // Streams from the Bridge up to `limit` bytes (announced in the hello of
+  // the next connection); 0 announces nothing.
+  void setStreamReceive(size_t limit, StreamCallback callback) {
+    stream_limit_ = limit;
+    stream_callback_ = std::move(callback);
+  }
 
   // Session mode with a pairing key (and its key id), pair mode without.
   bool connect(const char* device_id, const char* base, const uint8_t* pairing_key,
@@ -72,6 +83,8 @@ class BridgeLinkClient {
   bool readExact(uint8_t* out, size_t length, uint32_t deadline_ms);
   bool readHandshakeFrame(uint32_t deadline_ms, uint8_t* type, size_t* payload_length);
   bool handleFrame(size_t body_length);
+  bool handleStream(uint8_t type, const uint8_t* payload, size_t length);
+  void dropIncoming();
   bool flushChunk();
   void fail(int state);
   void wipeKeys();
@@ -112,6 +125,18 @@ class BridgeLinkClient {
   size_t stream_written_ = 0;
   uint8_t* chunk_ = nullptr;
   size_t chunk_fill_ = 0;
+
+  // A stream from the Bridge, collected in PSRAM. Skipped (read and dropped)
+  // when it is larger than announced or the memory is missing.
+  size_t stream_limit_ = 0;
+  StreamCallback stream_callback_;
+  bool incoming_ = false;
+  bool incoming_skip_ = false;
+  bool incoming_retain_ = false;
+  char incoming_topic_[bridge_link::kMaxTopicLength + 1] = {};
+  uint8_t* incoming_data_ = nullptr;
+  size_t incoming_total_ = 0;
+  size_t incoming_have_ = 0;
 
   int state_ = kDisconnected;
   char refuse_reason_[bridge_link::kReasonSize] = {};

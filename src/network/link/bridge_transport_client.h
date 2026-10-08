@@ -36,6 +36,10 @@ class BridgeTransportClient {
     mqtt_.setCallback(callback);
     link_.setCallback(callback);
   }
+  // Larger messages from the Bridge arrive only over the link, as streams.
+  void setStreamReceive(size_t limit, BridgeLinkClient::StreamCallback callback) {
+    link_.setStreamReceive(limit, std::move(callback));
+  }
 
   bool connected() { return link_mode_ ? link_.connected() : mqtt_.connected(); }
   void disconnect() {

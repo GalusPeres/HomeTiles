@@ -955,9 +955,12 @@
       width:0;
       min-width:100%;
     }
-    /* The slot keeps its cell size; only the hint beside it may shrink. */
+    /* The slot keeps its cell size; only the hint beside it may shrink. Its
+       margin is the plain one on every side: a bar layout's top margin holds
+       the head, which the slot does not have. */
     .tile-grid.settings-hidden-slot {
       flex:none;
+      padding:calc(var(--preview-frame, 0px) + var(--preview-pad));
       grid-template-columns:var(--preview-cell-w);
       grid-template-rows:var(--preview-cell-h);
       width:fit-content;

@@ -30,7 +30,9 @@ struct Place {
 // Reads the file once at boot (after the storage is mounted).
 void begin();
 
-// A tile's place in a bar layout. False when it has none.
+// A tile's place in a bar layout (also beside its screen: the layout
+// window's storage), or the classic storage spot of a tile without a classic
+// place. False when it has none.
 bool find(Layout layout, uint16_t folder_id, uint16_t view_id, Place& out);
 void set(Layout layout, uint16_t folder_id, uint16_t view_id, const Place& place);
 void remove(Layout layout, uint16_t folder_id, uint16_t view_id);
@@ -56,7 +58,8 @@ void drop_folder(uint16_t folder_id);
 bool commit();
 
 // Everything as JSON: {"bar":{"<folder>":{"<view>":[col,row,w,h]}},
-// "portrait":{...},"classic_hidden":{"<folder>":[view,...]}}.
+// "portrait":{...},"classic_parked":{...}} (a classic entry [0,0,0,0] has no
+// storage spot yet).
 void append_json(String& out);
 
 }  // namespace tile_layouts

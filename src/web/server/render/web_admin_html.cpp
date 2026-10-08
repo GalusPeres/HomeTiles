@@ -845,7 +845,11 @@ static void appendTileTabHTML(
     char hidden_color_hex[8];
     snprintf(hidden_color_hex, sizeof(hidden_color_hex), "#%06X",
              static_cast<unsigned>(hidden_color));
-    html += "<div class=\"settings-hidden-parking\"><div id=\"settingsHiddenSlot\" class=\"tile-grid settings-hidden-slot";
+    // With a bar layout the head's gear replaces the Settings tile: no slot
+    // for it (the hint stays).
+    html += grid_layout::head_bar() ? "<div class=\"settings-hidden-parking head-bar-parking\">"
+                                    : "<div class=\"settings-hidden-parking\">";
+    html += "<div id=\"settingsHiddenSlot\" class=\"tile-grid settings-hidden-slot";
     if (configManager.getConfig().tile_borders) html += " tiles-bordered";
     if (hidden) html += " has-tile";
     html += "\"><div id=\"settingsHiddenTile\" class=\"tile settings-hidden-tile ";

@@ -1463,10 +1463,11 @@ const char* readFolderPlaces(JsonObjectConst places, const TileGridConfig& grid,
 }  // namespace
 
 // POST /api/layouts {"layout":"bar","folders":{"<id>":{"<view>":[col,row,w,h]}}}:
-// the layout window's "Speichern". The bar layouts keep every place, also
-// those beside the screen (red in the window); the classic layout takes the
+// the layout window's "Speichern". Every layout keeps every place, also those
+// beside the screen (the window's storage): the classic layout takes the
 // places on its screen into the tile data, a tile beside it has no classic
-// place. Folders not sent stay as they are.
+// place and keeps its storage spot in the layout file. Folders not sent stay
+// as they are.
 void WebAdminServer::handleSaveLayouts() {
   webAdminMarkActivity();
   JsonDocument doc;
@@ -1517,7 +1518,13 @@ void WebAdminServer::handleSaveLayouts() {
     for (Tile& tile : grid->tiles) {
       if (tile.type == TILE_EMPTY || !tile.view_id) continue;
       auto entry = std::find_if(places.begin(), places.end(),
-                                [&](const LayoutPlace& place) { return place.view == tile.view_id && place.inside; });
+                                [&](const LayoutPlace& place) { return place.view == tile.view_id; });
+      // Beside the classic screen (the window's storage): no classic place,
+      // the spot is kept for the window.
+      if (entry != places.end() && !entry->inside) {
+        tile_layouts::set(grid_layout::Layout::kClassic, folder_id, tile.view_id, entry->place);
+        continue;
+      }
       tile_layouts::set_classic_hidden(folder_id, tile.view_id, entry == places.end());
       if (entry == places.end()) continue;
       tile.col = entry->place.col;

@@ -124,7 +124,12 @@ void appendAdminScripts(String& html) {
   appendJsEntry("layoutTileMissing", tr.layout_tile_missing);
   appendJsEntry("layoutAllFit", tr.layout_all_fit);
   appendJsEntry("layoutUnsavedConfirm", tr.layout_unsaved_confirm);
-  appendJsEntry("layoutTakeOut", tr.layout_take_out);
+  appendJsEntry("layoutStorage", tr.layout_storage);
+  appendJsEntry("layoutPark", tr.layout_park);
+  appendJsEntry("layoutParkedTiles", tr.layout_parked_tiles);
+  appendJsEntry("layoutParkedTile", tr.layout_parked_tile);
+  appendJsEntry("layoutDeleteTile", tr.layout_delete_tile);
+  appendJsEntry("layoutDeleteConfirm", tr.layout_delete_confirm);
   appendJsEntry("close", tr.security_close);
   appendJsEntry("home", tr.home);
   appendJsEntry("loadFailed", tr.admin_io_load_failed);

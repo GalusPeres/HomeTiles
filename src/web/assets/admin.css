@@ -2771,6 +2771,7 @@
    below a head like the Settings head. A tile without a place in the active
    layout is not shown (tile-unplaced); the layout window places it. */
 .tile-grid > .tile.tile-unplaced { display:none !important; }
+.settings-hidden-parking.head-bar-parking > .settings-hidden-slot { display:none; }
 .tile-grid:not(.head-bar-grid):not(.setup-head) > .head-bar-preview { display:none; }
 .head-bar-preview {
   position:absolute;
@@ -3364,6 +3365,16 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
   border:3px solid #e5484d; border-radius:max(0px, calc(var(--tile-radius, 11px) - 3px));
 }
 .tile-grid.setup-grid > .tile.sensor-compact.setup-red:not(.empty)::before { inset:3px; }
+/* In the storage beside the screen: no part of the layout, kept dimmed. */
+.tile-grid.setup-grid > .tile.setup-parked:not(.empty) { opacity:0.55; }
+.tile-grid.setup-grid > .setup-storage-label {
+  position:absolute; right:12px; bottom:8px; pointer-events:none;
+  font-size:12px; font-weight:600; color:var(--text-3, #9e9e9e); letter-spacing:0.02em;
+}
+/* A layout with places not saved yet. */
+.setup-layout.is-dirty::after {
+  content:""; position:absolute; top:-4px; left:10px; width:8px; height:8px; border-radius:4px; background:var(--accent);
+}
 /* A folder's badge, like the page tabs' counters, half outside its top
    right corner: green with a place, red "!" without. */
 .tile-grid.setup-grid > .setup-flag {

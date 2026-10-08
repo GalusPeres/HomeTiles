@@ -247,7 +247,12 @@ struct Strings {
   const char* layout_tile_missing;
   const char* layout_all_fit;
   const char* layout_unsaved_confirm;
-  const char* layout_take_out;
+  const char* layout_storage;
+  const char* layout_park;
+  const char* layout_parked_tiles;
+  const char* layout_parked_tile;
+  const char* layout_delete_tile;
+  const char* layout_delete_confirm;
   const char* default_tile_color;
   // Tile color choice: global tile color, own color or a tint from the icon.
   const char* tile_color_mode_global;

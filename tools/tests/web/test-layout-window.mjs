@@ -37,8 +37,11 @@ import {extractDeliveredFunction, readRepoFile} from '../../lib/admin-source.mjs
 const windowNames = ['layoutClone', 'layoutEmptyTile', 'layoutUsed', 'layoutNavType', 'layoutCanvas',
   'layoutInside', 'layoutFolderId', 'classicHidden', 'layoutBase', 'layoutSettle', 'takeoverTiles', 'setupTiles',
   'isCompactSensorType', 'isEditableValueType', 'supportsHalfSize', 'supportedTileLayout', 'saveLayoutWindow', 'refreshLayoutSave', 'layoutTabs',
-  'layoutSignature', 'layoutDirty', 'layoutSelectedTile', 'takeOutLayoutTile'];
+  'layoutSignature', 'layoutSavedSig', 'layoutDirty', 'layoutSelectedTile', 'deselectLayoutTile', 'parkLayoutTile',
+  'deleteLayoutTile', 'classicParked', 'layoutParked', 'layoutRed', 'loadLayoutWindow', 'mayLeaveLayout'];
 function windowContext(pages, data, extra = {}) {
+  // Every case gets its own copy: the window changes the pages it holds.
+  pages = JSON.parse(JSON.stringify(pages));
   const ctx = vm.createContext({
     LAYOUT_KEYS: ['classic', 'bar', 'portrait'],
     LAYOUTS: {
@@ -47,7 +50,10 @@ function windowContext(pages, data, extra = {}) {
       portrait: {name: 'Kopfleiste hochkant', cols: 3, rows: 6, bar: true, portrait: true, available: true, switchable: false},
     },
     ACTIVE_LAYOUT: 'classic', MEDIA_TILE_TYPE: 15, MEDIA_TILE_MIN_SPAN: 2, MEDIA_TILE_MAX_SPAN: 4, GRID_COLS: 7, GRID_ROWS: 6,
-    tileTabs: Object.keys(pages), tilesData: {}, layoutWindow: {pages, data, key: 'bar', missingFolders: 0, busy: false},
+    tileTabs: Object.keys(pages), tilesData: {},
+    layoutWindow: {pages, data, key: 'bar', missingFolders: 0, busy: false, shown: false, work: {}, saved: {}},
+    refreshLayoutStatus: () => {}, refreshLayoutButtons: () => {}, mountLayoutTab: async () => {}, useLayoutGrid: () => {},
+    showLayoutTiles: (tab, tiles) => { ctx.tilesData[tab] = tiles; },
     getTilesData: tab => ctx.tilesData[tab] || [], getFolderIdForTab: tab => Number(tab.slice('folder'.length)),
     isScreensaverTileTab: tab => tab === 'screensaver', document: {getElementById: () => ({}), querySelector: () => null},
     t: key => key, escapeHtml: value => String(value), showNotification: () => {}, ...extra,
@@ -64,7 +70,7 @@ const home = [tile(4, 0, 0, 1, 1, 11, 'Radio'), tile(4, 1, 0, 1, 1, 12, 'Licht')
   tile(7, 6, 3, 1, 0.5, 14), tile(5, 3, 2, 1, 1, 15), {type: 0}];
 const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 1], [3, 14, 6, 3, 1, 0.5], [4, 15, 0, 0, 1, 1]]};
 {
-  const ctx = windowContext({folder0: home}, {classic, places: {classic_hidden: {0: [15]}}});
+  const ctx = windowContext({folder0: home}, {classic, places: {classic_parked: {0: {15: [0, 0, 0, 0]}}}});
   const run = code => vm.runInContext(code, ctx);
   assert.deepEqual(JSON.parse(JSON.stringify(run('layoutCanvas()'))), {cols: 7, rows: 6}, 'one area for every layout');
   assert.equal(run("layoutInside({col: 0, row: 0, span_w: 1, span_h: 1}, 'classic')"), true, 'every screen starts under the head');
@@ -106,26 +112,57 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   assert.deepEqual(place(back).slice(0, 4), [[4, 0, 0, 1, 0.5], [4, 1, 0, 1, 0.5], [1, 0, 1, 2, 1], [7, 6, 3, 1, 0.5]]);
 }
 
-// The cross takes a tile out of this layout only: beside the screen (red),
-// without a request (its places in the other layouts stay); not for folders.
+// The storage beside a screen: a tile wholly there is parked (dimmed), half
+// over the edge it is red; a folder outside the screen is always red. The
+// cross parks a tile on the screen without a request, and deletes a parked
+// one from every layout; never a folder.
 {
   const calls = [];
   const ctx = windowContext({folder0: home}, {classic, places: {}}, {
     currentTileTab: 'folder0', currentTileIndex: 2, drafts: {folder0: {2: {col: '1'}}},
-    showLayoutTiles: () => calls.push('shown'), layoutWindowFetch: () => calls.push('fetch'),
+    layoutWindowFetch: async (url, options) => { calls.push([url, [...options.body.entries()]]); return {ok: true}; },
+    FormData: class { constructor() { this.list = []; } append(k, v) { this.list.push([k, v]); } entries() { return this.list; } },
+    tf: (key, values) => key + JSON.stringify(values), getTileTypeMeta: () => ({label: 'Sensor'}),
+    renderTileFromData: () => {}, layoutTiles: () => {}, sensorMetaCache: {}, window: {confirm: () => true},
   });
   ctx.document.querySelectorAll = () => [];
   ctx.layoutWindow.tab = 'folder0';
   ctx.tilesData.folder0 = vm.runInContext("setupTiles('folder0', 'bar')", ctx);
   const run = code => vm.runInContext(code, ctx);
+  assert.equal(run("layoutRed({type: 1, col: 4.5, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'half over the edge');
+  assert.equal(run("layoutRed({type: 1, col: 5, row: 0, span_w: 1, span_h: 1}, 'bar')"), false, 'in the storage');
+  assert.equal(run("layoutParked({col: 5, row: 0, span_w: 1, span_h: 1}, 'bar')"), true);
+  assert.equal(run("layoutRed({type: 4, col: 5, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'a folder needs a place');
   assert.equal(run("layoutInside(getTilesData('folder0')[2], 'bar')"), true);
-  run('takeOutLayoutTile()');
-  assert.equal(run("layoutInside(getTilesData('folder0')[2], 'bar')"), false, 'the tile is red beside the screen');
-  assert.equal(run("getTilesData('folder0')[2].type"), 1, 'it is not deleted');
-  assert.deepEqual(calls, ['shown'], 'nothing is sent to the panel');
+  run('parkLayoutTile()');
+  const parked = run("getTilesData('folder0')[2]");
+  assert.equal(run(`layoutParked(${JSON.stringify(parked)}, 'bar')`), true, 'the cross parks a tile from the screen');
+  assert.equal(parked.type, 1, 'parking keeps the tile');
+  assert.deepEqual(calls, [], 'parking sends nothing to the panel');
   assert.equal(ctx.drafts.folder0[2], undefined);
+  ctx.currentTileIndex = 2;
+  await run('deleteLayoutTile()');
+  assert.deepEqual(calls, [['/api/tiles', [['folder', '0'], ['index', '2'], ['type', '0']]]], 'a parked tile is deleted');
+  assert.equal(run("getTilesData('folder0')[2].type"), 0);
   ctx.currentTileIndex = 0;
-  assert.equal(run('layoutSelectedTile()'), null, 'a folder cannot be taken out');
+  assert.equal(run('layoutSelectedTile()'), null, 'no cross on a folder');
+}
+
+// Switching layouts keeps the unsaved places of the one left, without a
+// question; closing asks while any layout is not saved.
+{
+  const ctx = windowContext({folder0: home}, {classic, places: {}}, {window: {confirm: () => false}});
+  ctx.tf = (key, values) => key + ':' + values.layout;
+  const run = code => vm.runInContext(code, ctx);
+  await run("loadLayoutWindow('bar', '')");
+  run("getTilesData('folder0')[2].col = 3");
+  assert.equal(run("layoutDirty('bar')"), true);
+  await run("loadLayoutWindow('classic', '')");
+  assert.equal(run("layoutDirty('bar')"), true, 'the bar layout keeps its unsaved move');
+  assert.equal(run("layoutDirty('classic')"), false);
+  await run("loadLayoutWindow('bar', '')");
+  assert.equal(run("getTilesData('folder0')[2].col"), 3, 'and shows it again');
+  assert.equal(run('mayLeaveLayout()'), false, 'closing asks');
 }
 
 // "Speichern": places by tile ID in the layout's own rows; Settings and Back
@@ -140,6 +177,7 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   ctx.tilesData.folder0 = [tile(4, 0, 0, 1, 1, 11), tile(4, 1, 0, 1, 1, 12), tile(1, 0, 1, 2, 1, 13),
     tile(7, 6, 3, 1, 0.5, 14), {type: 0}, {type: 0}];
   ctx.layoutWindow.key = 'classic';
+  ctx.layoutWindow.shown = true;
   assert.equal(await vm.runInContext('saveLayoutWindow()', ctx), true);
   assert.deepEqual(JSON.parse(calls[0][1]), {layout: 'classic', folders: {0: {11: [0, 0, 1, 1], 12: [1, 0, 1, 1],
     13: [0, 1, 2, 1], 14: [6, 3, 1, 0.5]}}}, 'classic places, Settings included');
@@ -173,8 +211,8 @@ assert.match(readRepoFile('src/web/admin/core/localization.js'),
 const tiles = readRepoFile('src/web/server/handlers/web_admin_tiles.cpp');
 assert.match(tiles, /if \(!placed\) return "Folder without place";/, 'a folder without a place is refused');
 assert.match(tiles, /return "Tile overlaps";/);
-assert.match(tiles, /tile_layouts::set_classic_hidden\(folder_id, tile\.view_id, entry == places\.end\(\)\);/,
-  'a classic tile beside the screen has no classic place');
+assert.match(tiles, /tile_layouts::set\(grid_layout::Layout::kClassic, folder_id, tile\.view_id, entry->place\);/,
+  'a classic tile in the storage keeps its spot there and has no classic place');
 assert.match(tiles, /!layoutFromKey\(server\.arg\("layout"\), layout\) \|\| !grid_layout::switchable\(layout\)/,
   'only a layout the panel can show is chosen');
 assert.match(tiles, /const bool classic_places = !screensaver_grid && server\.arg\("layout"\) == "classic";/,

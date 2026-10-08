@@ -15,8 +15,8 @@ namespace {
 constexpr const char* kFile = "/_tile_grids/layouts.json";
 constexpr const char* kDir = "/_tile_grids";
 
-// One place in half cells. A classic entry only marks a tile without a
-// classic place.
+// One place in half cells. A classic entry marks a tile without a classic
+// place; its place, if any, is its spot in the layout window's storage.
 struct Entry {
   uint16_t folder;
   uint16_t view;
@@ -76,7 +76,9 @@ void erase_if_locked(bool (*match)(const Entry&, uint16_t, uint16_t), uint16_t a
 }
 
 Layout layout_from_key(const char* key) {
-  return strcmp(key, "portrait") == 0 ? Layout::kPortrait : Layout::kBar;
+  return strcmp(key, "portrait") == 0 ? Layout::kPortrait
+         : strcmp(key, "bar") == 0    ? Layout::kBar
+                                      : Layout::kClassic;
 }
 
 }  // namespace
@@ -99,7 +101,7 @@ void begin() {
   }
   Guard guard;
   g_entries.clear();
-  for (const char* key : {"bar", "portrait"}) {
+  for (const char* key : {"bar", "portrait", "classic_parked"}) {
     const uint8_t layout = static_cast<uint8_t>(layout_from_key(key));
     for (JsonPair folder : doc[key].as<JsonObject>()) {
       const uint16_t folder_id = static_cast<uint16_t>(atoi(folder.key().c_str()));
@@ -112,6 +114,7 @@ void begin() {
       }
     }
   }
+  // b265/b266 noted the classic tiles without a place as a plain list.
   for (JsonPair folder : doc["classic_hidden"].as<JsonObject>()) {
     const uint16_t folder_id = static_cast<uint16_t>(atoi(folder.key().c_str()));
     for (JsonVariantConst view : folder.value().as<JsonArrayConst>()) {
@@ -123,7 +126,7 @@ void begin() {
 }
 
 bool find(Layout layout, uint16_t folder_id, uint16_t view_id, Place& out) {
-  if (layout == Layout::kClassic || !view_id) return false;
+  if (!view_id) return false;
   Guard guard;
   const Entry* entry = lookup(static_cast<uint8_t>(layout), folder_id, view_id);
   if (!entry || !entry->w2 || !entry->h2) return false;
@@ -132,7 +135,7 @@ bool find(Layout layout, uint16_t folder_id, uint16_t view_id, Place& out) {
 }
 
 void set(Layout layout, uint16_t folder_id, uint16_t view_id, const Place& place) {
-  if (layout == Layout::kClassic || !view_id) return;
+  if (!view_id) return;
   const Entry wanted{folder_id, view_id, static_cast<uint8_t>(layout), half(place.col), half(place.row),
                      half(place.span_w), half(place.span_h)};
   Guard guard;
@@ -243,26 +246,22 @@ void append_json(String& out) {
     if (!first_layout) out += ",";
     first_layout = false;
     out += "\"";
-    out += layout == Layout::kClassic ? "classic_hidden" : grid_layout::key(layout);
+    out += layout == Layout::kClassic ? "classic_parked" : grid_layout::key(layout);
     out += "\":{";
     int folder = -1;
     bool first_tile = true;
     for (const Entry& entry : sorted) {
       if (entry.layout != static_cast<uint8_t>(layout)) continue;
       if (entry.folder != folder) {
-        if (folder >= 0) out += layout == Layout::kClassic ? "]," : "},";
+        if (folder >= 0) out += "},";
         folder = entry.folder;
         out += "\"";
         out += String(entry.folder);
-        out += layout == Layout::kClassic ? "\":[" : "\":{";
+        out += "\":{";
         first_tile = true;
       }
       if (!first_tile) out += ",";
       first_tile = false;
-      if (layout == Layout::kClassic) {
-        out += String(entry.view);
-        continue;
-      }
       out += "\"";
       out += String(entry.view);
       out += "\":[";
@@ -275,7 +274,7 @@ void append_json(String& out) {
       number(entry.h2);
       out += "]";
     }
-    if (folder >= 0) out += layout == Layout::kClassic ? "]" : "}";
+    if (folder >= 0) out += "}";
     out += "}";
   }
   out += "}";

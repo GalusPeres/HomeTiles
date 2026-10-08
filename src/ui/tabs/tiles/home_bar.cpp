@@ -186,10 +186,12 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   lv_obj_set_style_text_color(icon, lv_color_hex(tone.icon), 0);
   lv_obj_center(icon);
 
-  // The gear on Home, the X in a folder: the Settings X's pressed shape and
-  // corner, the touch area keeps the X's box.
+  // The gear on Home (when chosen in the Settings tile's options), the X in a
+  // folder: the Settings X's pressed shape and corner, the touch area keeps
+  // the X's box.
   const int pressed = settings_style::kClosePressed;
   lv_obj_t* button = plain(bar);
+  if (home && !configManager.getConfig().head_gear) lv_obj_add_flag(button, LV_OBJ_FLAG_HIDDEN);
   lv_obj_set_pos(button, g.close_x + (g.close - pressed) / 2, g.center_y - pressed / 2);
   lv_obj_set_size(button, pressed, pressed);
   ui_surface_style::apply_radius(button, settings_style::kClosePressedBaseline);

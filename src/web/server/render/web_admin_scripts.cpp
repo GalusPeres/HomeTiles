@@ -114,6 +114,7 @@ void appendAdminScripts(String& html) {
   appendJsEntry("layoutChange", tr.layout_change);
   appendJsEntry("layoutActive", tr.layout_active);
   appendJsEntry("layoutCopyFrom", tr.layout_copy_from);
+  appendJsEntry("layoutUndo", tr.layout_undo);
   appendJsEntry("layoutSaved", tr.layout_saved);
   appendJsEntry("layoutSwitch", tr.layout_switch);
   appendJsEntry("layoutSwitchConfirm", tr.layout_switch_confirm);
@@ -125,6 +126,7 @@ void appendAdminScripts(String& html) {
   appendJsEntry("layoutAllFit", tr.layout_all_fit);
   appendJsEntry("layoutUnsavedConfirm", tr.layout_unsaved_confirm);
   appendJsEntry("layoutStorage", tr.layout_storage);
+  appendJsEntry("layoutStorageHint", tr.layout_storage_hint);
   appendJsEntry("layoutPark", tr.layout_park);
   appendJsEntry("layoutParkedTiles", tr.layout_parked_tiles);
   appendJsEntry("layoutParkedTile", tr.layout_parked_tile);

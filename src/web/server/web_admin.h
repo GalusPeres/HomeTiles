@@ -77,6 +77,7 @@ public:
   void handleSaveHardwareIo();
   void handleSaveTileBorders();
   void handleSaveIconDiscs();
+  void handleSaveHeadGear();
   void handleSaveIconGlow();
   void handleSaveDefaultTileColor();
   void handleTileRadius();

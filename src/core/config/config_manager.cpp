@@ -58,6 +58,7 @@ static bool persisted_config_equal(const DeviceConfig& a,
          a.tile_radius == b.tile_radius &&
          a.icon_discs == b.icon_discs &&
          a.layout == b.layout &&
+         a.head_gear == b.head_gear &&
          a.icon_glow == b.icon_glow &&
          a.default_tile_color == b.default_tile_color &&
          a.display_rotated_180 == b.display_rotated_180 &&
@@ -231,6 +232,7 @@ ConfigManager::ConfigManager() {
   config.tile_radius = tile_radius::kDefault;
   config.icon_discs = true;
   config.layout = 0;
+  config.head_gear = false;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;
   config.display_rotated_180 = false;
@@ -368,6 +370,7 @@ bool ConfigManager::load() {
   // b264's test switch "head_bar" is not taken over: a bar layout needs its
   // places, which only the layout window sets up.
   config.layout = prefs.getUChar("layout", 0);
+  config.head_gear = prefs.getBool("head_gear", false);
   if (config.layout > 2) config.layout = 0;
   config.icon_glow = icon_glow::clamp(prefs.getUChar("icon_glow", icon_glow::kDefault));
   config.default_tile_color =
@@ -660,6 +663,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   prefs.putUShort("tile_radius", normalized.tile_radius);
   prefs.putBool("icon_disc", normalized.icon_discs);
   prefs.putUChar("layout", normalized.layout);
+  prefs.putBool("head_gear", normalized.head_gear);
   prefs.putUChar("icon_glow", normalized.icon_glow);
   prefs.putUInt("tile_color", normalized.default_tile_color);
   prefs.putBool("eth_mode", normalized.ethernet_enabled);
@@ -885,6 +889,21 @@ bool ConfigManager::saveIconDiscs(bool enabled) {
   return true;
 }
 
+bool ConfigManager::saveHeadGear(bool enabled) {
+  if (config.head_gear == enabled) return true;
+  Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
+  BatchedNvsWrite::Preferences prefs;
+  if (!prefs.begin(PREF_NAMESPACE, false)) {
+    Serial.println("ConfigManager: Failed to open head gear preferences");
+    return false;
+  }
+  const bool written = prefs.putBool("head_gear", enabled) == sizeof(uint8_t);
+  const bool committed = BatchedNvsWrite::finish(prefs);
+  if (!written || !committed) return false;
+  config.head_gear = enabled;
+  return true;
+}
+
 bool ConfigManager::saveIconGlow(uint8_t percent) {
   percent = icon_glow::clamp(percent);
   if (config.icon_glow == percent) return true;
@@ -1083,6 +1102,7 @@ void ConfigManager::clear() {
   config.tile_radius = tile_radius::kDefault;
   config.icon_discs = true;
   config.layout = 0;
+  config.head_gear = false;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;
   config.display_rotated_180 = false;

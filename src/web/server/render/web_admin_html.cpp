@@ -474,7 +474,10 @@ static void appendTileTabHTML(
     html += time_format == clock_tile::TIME_FORMAT_12H ? "1" : "0";
     html += "\">";
     html += time_text;
-    html += "</span><span class=\"head-button\"><i class=\"mdi mdi-";
+    // The gear on Home only when chosen (Settings tile option).
+    html += home ? (configManager.getConfig().head_gear ? "</span><span class=\"head-button head-gear\"><i class=\"mdi mdi-"
+                                                        : "</span><span class=\"head-button head-gear is-off\"><i class=\"mdi mdi-")
+                 : "</span><span class=\"head-button\"><i class=\"mdi mdi-";
     html += home ? "cog" : "window-close";
     html += "\"></i></span></div>\n";
   }
@@ -845,11 +848,7 @@ static void appendTileTabHTML(
     char hidden_color_hex[8];
     snprintf(hidden_color_hex, sizeof(hidden_color_hex), "#%06X",
              static_cast<unsigned>(hidden_color));
-    // With a bar layout the head's gear replaces the Settings tile: no slot
-    // for it (the hint stays).
-    html += grid_layout::head_bar() ? "<div class=\"settings-hidden-parking head-bar-parking\">"
-                                    : "<div class=\"settings-hidden-parking\">";
-    html += "<div id=\"settingsHiddenSlot\" class=\"tile-grid settings-hidden-slot";
+    html += "<div class=\"settings-hidden-parking\"><div id=\"settingsHiddenSlot\" class=\"tile-grid settings-hidden-slot";
     if (configManager.getConfig().tile_borders) html += " tiles-bordered";
     if (hidden) html += " has-tile";
     html += "\"><div id=\"settingsHiddenTile\" class=\"tile settings-hidden-tile ";

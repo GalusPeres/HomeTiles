@@ -34,7 +34,7 @@ import {extractDeliveredFunction, readRepoFile} from '../../lib/admin-source.mjs
 }
 
 // --- The window's places (Tab5: classic 7 x 4, bar 5 x 3, upright 3 x 6).
-const windowNames = ['layoutClone', 'layoutEmptyTile', 'layoutUsed', 'layoutNavType', 'layoutCanvas',
+const windowNames = ['layoutClone', 'layoutEmptyTile', 'layoutUsed', 'layoutNavType', 'layoutBarHidden', 'layoutCanvas',
   'layoutInside', 'layoutFolderId', 'classicHidden', 'layoutBase', 'layoutSettle', 'takeoverTiles', 'setupTiles',
   'isCompactSensorType', 'isEditableValueType', 'supportsHalfSize', 'supportedTileLayout', 'saveLayoutWindow', 'refreshLayoutSave', 'layoutTabs',
   'layoutSignature', 'layoutSavedSig', 'layoutDirty', 'layoutSelectedTile', 'deselectLayoutTile', 'parkLayoutTile',
@@ -78,11 +78,11 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   assert.equal(run("layoutInside({col: 2, row: 5, span_w: 1, span_h: 1}, 'portrait')"), true);
 
   // Into a bar layout: every tile as it is in the classic layout, from the
-  // top left of the new screen (folders too, no pills); Settings stays with
-  // the classic layout; the tile without a classic place gets a free spot
-  // beside the screen.
+  // top left of the new screen (folders too, no pills), the Settings tile
+  // too (here beside the smaller screen: in the storage); the tile without a
+  // classic place gets a free spot beside the screen.
   const bar = run("takeoverTiles('folder0', 'bar', 'classic')");
-  assert.deepEqual(place(bar).slice(0, 4), [[4, 0, 0, 1, 1], [4, 1, 0, 1, 1], [1, 0, 1, 2, 1], 0]);
+  assert.deepEqual(place(bar).slice(0, 4), [[4, 0, 0, 1, 1], [4, 1, 0, 1, 1], [1, 0, 1, 2, 1], [7, 6, 3, 1, 0.5]]);
   assert.equal(run(`layoutInside(${JSON.stringify(bar[4])}, 'bar')`), false, 'red beside the bar screen');
   // The classic layout in the window: its places; the hidden tile beside
   // the screen, nothing overlaps.
@@ -99,17 +99,19 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
 }
 // A saved bar layout: its places; a tile without one (made under the
 // classic layout) beside the screen. Taken over into the classic layout,
-// every tile keeps its place on the screen; Settings keeps its classic one.
+// every tile keeps its place on the screen; a parked one is parked there too.
 {
   const places = {bar: {0: {11: [0, 0, 1, 0.5], 12: [1, 0, 1, 0.5], 13: [0, 1, 2, 1]}}};
   const ctx = windowContext({folder0: home}, {classic, places});
   const run = code => vm.runInContext(code, ctx);
   const saved = run("setupTiles('folder0', 'bar')");
-  assert.deepEqual(place(saved).slice(0, 4), [[4, 0, 0, 1, 0.5], [4, 1, 0, 1, 0.5], [1, 0, 1, 2, 1], 0]);
+  assert.deepEqual(place(saved).slice(0, 3), [[4, 0, 0, 1, 0.5], [4, 1, 0, 1, 0.5], [1, 0, 1, 2, 1]]);
+  assert.equal(run(`layoutParked(${JSON.stringify(saved[3])}, 'bar')`), true, 'Settings without a place: in the storage');
   assert.equal(run(`layoutInside(${JSON.stringify(saved[4])}, 'bar')`), false);
   const back = run("takeoverTiles('folder0', 'classic', 'bar')");
   assert.equal(run(`layoutInside(${JSON.stringify(back[0])}, 'classic')`), true, 'the same place on the classic screen');
-  assert.deepEqual(place(back).slice(0, 4), [[4, 0, 0, 1, 0.5], [4, 1, 0, 1, 0.5], [1, 0, 1, 2, 1], [7, 6, 3, 1, 0.5]]);
+  assert.deepEqual(place(back).slice(0, 3), [[4, 0, 0, 1, 0.5], [4, 1, 0, 1, 0.5], [1, 0, 1, 2, 1]]);
+  assert.equal(run(`layoutParked(${JSON.stringify(back[3])}, 'classic')`), true, 'parked there, parked here');
 }
 
 // The storage beside a screen: a tile wholly there is parked (dimmed), half
@@ -184,7 +186,7 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   calls.length = 0;
   ctx.layoutWindow.key = 'bar';
   await vm.runInContext('saveLayoutWindow()', ctx);
-  assert.equal(JSON.parse(calls[0][1]).folders[0][14], undefined, 'no Settings tile in a bar layout');
+  assert.deepEqual(JSON.parse(calls[0][1]).folders[0][14], [6, 3, 1, 0.5], 'the Settings tile is part of a bar layout too');
   calls.length = 0;
   ctx.layoutWindow.missingFolders = 1;
   assert.equal(await vm.runInContext('saveLayoutWindow()', ctx), false);

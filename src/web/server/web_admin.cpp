@@ -217,6 +217,8 @@ bool WebAdminServer::start() {
               guarded(withStorageHold([this]() { this->handleSaveTileBorders(); })));
     server.on("/api/display/icon-discs", HTTP_POST,
               guarded(withStorageHold([this]() { this->handleSaveIconDiscs(); })));
+    server.on("/api/display/head-gear", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveHeadGear(); })));
     server.on("/api/display/icon-glow", HTTP_POST,
               guarded(withStorageHold([this]() { this->handleSaveIconGlow(); })));
     server.on("/api/display/tile-color", HTTP_POST,

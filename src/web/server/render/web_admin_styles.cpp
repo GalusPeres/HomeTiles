@@ -130,6 +130,9 @@ void appendPreviewScaleVars(String& html) {
   };
   html += "  <style>:root{";
   emit_scaled("compact-inset", compact_sensor_layout::inset());
+  // Corner circles keep the bar pill's distance to the card edge
+  // (tile_icon_disc::shrink_corner_disc): drawn smaller around their middle.
+  emit_scaled("corner-disc-shrink", tile_icon_disc::corner_shrink());
   emit_exact("icon-disc-round", tile_icon_disc::round_diameter());
   // The global Circle strength; applyIconDiscTint derives every circle
   // from it like the device (tone_color.h).

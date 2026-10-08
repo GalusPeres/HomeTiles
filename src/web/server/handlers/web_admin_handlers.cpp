@@ -773,6 +773,22 @@ void WebAdminServer::handleSaveIconDiscs() {
                       : "{\"success\":true,\"enabled\":false}");
 }
 
+// The gear in Home's head with a bar layout (home_bar.cpp): the heads are
+// built again on the next safe UI pass.
+void WebAdminServer::handleSaveHeadGear() {
+  webAdminMarkActivity();
+  const String value = server.arg("enabled");
+  const bool enabled = value == "1" || value == "true" || value == "on";
+  if (!configManager.saveHeadGear(enabled)) {
+    sendJsonError(server, 500, "Could not save the head gear");
+    return;
+  }
+  tiles_invalidate_folder(0);
+  tiles_request_reload_all();
+  server.send(200, "application/json", enabled ? "{\"success\":true,\"enabled\":true}"
+                                               : "{\"success\":true,\"enabled\":false}");
+}
+
 void WebAdminServer::handleSaveIconGlow() {
   webAdminMarkActivity();
   const String value = server.arg("percent");

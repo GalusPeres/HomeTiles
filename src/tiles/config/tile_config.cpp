@@ -3623,7 +3623,7 @@ static void applyLayoutPlaces(uint16_t folder_id, TileGridConfig& grid) {
       continue;
     }
     tile_layouts::Place place{};
-    const bool placed = tile.type != TILE_SETTINGS && tile.type != TILE_BACK &&
+    const bool placed = tile.type != TILE_BACK &&
                         tile_layouts::find(active, folder_id, tile.view_id, place) &&
                         grid_layout::inside(place.col, place.row, place.span_w, place.span_h) &&
                         tile_geometry::supported(tile.type, place.col, place.row, place.span_w, place.span_h);
@@ -3744,7 +3744,7 @@ static void resolveLayoutPlaces(uint16_t folder_id, TileGridConfig& grid, bool c
       if (tile.layout_hidden && source[i] >= 0) classic[i] = stored[source[i]].place;
       continue;
     }
-    if (!tile.layout_hidden && tile.type != TILE_SETTINGS && tile.type != TILE_BACK) {
+    if (!tile.layout_hidden && tile.type != TILE_BACK) {
       tile_layouts::set(active, folder_id, tile.view_id, {tile.col, tile.row, tile.span_w, tile.span_h});
     }
     if (source[i] < 0) continue;

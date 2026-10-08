@@ -93,7 +93,9 @@ int main(){
  // from the card corner, header.disc wide.
  const auto header=tile_icon_disc::corner_header(tile_layout::scale_480(24),tile_layout::scale_480(20),tile_layout::scale_480(-8),
    lv_font_get_glyph_width(FONT_MDI_ICONS,tile_icon_disc::kMdiReferenceGlyph,0),lv_font_get_line_height(FONT_MDI_ICONS));
- std::cout<<"DISC "<<tile_icon_disc::inset()<<" "<<header.disc<<"\n";
+ // Drawn smaller around its middle (shrink_corner_disc: the bar pill's
+ // distance to the card edge); the box stays.
+ std::cout<<"DISC "<<tile_icon_disc::inset()+tile_icon_disc::corner_shrink()<<" "<<header.disc-2*tile_icon_disc::corner_shrink()<<"\n";
  // The tile radius slider ends and what the preview gets for them; the card
  // and the disc take the radius with the half-height rule (radius()).
  // (unrounded, like emit_scaled).

@@ -2,6 +2,7 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
+#include "src/tiles/config/grid_layout.h"
 #include "src/web/server/web_admin_utils.h"
 #include "src/web/server/auth/web_admin_auth.h"
 
@@ -36,6 +37,13 @@ void append_settings_access_fields_html(String& html, const String& tab_id) {
           prefix + "settings_swipe_enabled\"";
   if (cfg.settings_swipe_enabled) html += " checked";
   html += "><span>" + String(tr.settings_swipe_enable) + "</span></label>";
+  // With a bar layout: the gear in Home's head (grid_layout.h), saved at once.
+  if (grid_layout::head_bar()) {
+    html += "<label class=\"folder-pin-toggle\"><input type=\"checkbox\" class=\"settings-head-gear\" id=\"" +
+            prefix + "settings_head_gear\" onchange=\"saveHeadGear(this.checked)\"";
+    if (cfg.head_gear) html += " checked";
+    html += "><span>" + String(tr.settings_head_gear) + "</span></label>";
+  }
   html += "</div>";
 
   html += "<div class=\"settings-access-columns\">";

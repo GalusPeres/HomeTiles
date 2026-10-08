@@ -257,8 +257,8 @@ static inline bool tileBorderEnabled(const Tile& tile) {
 // Where a tile shows in the shown grid (grid_layout.h). A tile without a
 // place in the active layout is not drawn (layout_hidden). Without the head
 // bar a span is cut at the grid's edge as always. With the head bar only a
-// tile wholly inside the grid shows, and the Settings and Back tiles give way
-// to the head's gear and X.
+// tile wholly inside the grid shows, and the Back tile gives way to the
+// head's X.
 static inline bool shownTileLayout(const Tile& tile, float& col, float& row, float& span_w, float& span_h) {
   if (tile.layout_hidden || tile.col >= GRID_COLS || tile.row >= GRID_ROWS) return false;
   col = tile.col;
@@ -267,7 +267,7 @@ static inline bool shownTileLayout(const Tile& tile, float& col, float& row, flo
   span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
   clamp_media_tile_layout(tile.type, col, row, span_w, span_h);
   if (grid_layout::head_bar()) {
-    if (tile.type == TILE_SETTINGS || tile.type == TILE_BACK) return false;
+    if (tile.type == TILE_BACK) return false;
     return grid_layout::inside(col, row, span_w, span_h);
   }
   if (span_w > GRID_COLS - col) span_w = GRID_COLS - col;

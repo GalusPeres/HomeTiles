@@ -19,6 +19,9 @@
   function layoutEmptyTile() { return {type: 0, title: '', icon_name: '', col: 0, row: 0, span_w: 1, span_h: 1}; }
   function layoutUsed(tile) { return !!tile && Number(tile.type || 0) !== 0; }
   function layoutNavType(type) { return [7, 8].includes(Number(type)); }
+  // The bar layouts' head has the X: no Back tile there. The Settings tile
+  // is a tile like any other (user 2026-10-08).
+  function layoutBarHidden(type) { return Number(type) === 8; }
   function layoutRootPx(name) {
     return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
   }
@@ -59,8 +62,9 @@
   }
   function layoutSetVars(el, vars) { for (const [name, value] of Object.entries(vars)) el.style.setProperty(name, value); }
 
+  // Read at every opening: the page's sizes change with the global options
+  // (the tile radius slider).
   function readLayoutBaseSizes() {
-    if (layoutBaseSizes) return;
     layoutBaseSizes = {};
     const rootStyle = getComputedStyle(document.documentElement);
     for (const sheet of document.styleSheets) {
@@ -174,16 +178,17 @@
       tiles.forEach((tile, index) => {
         const p = source[index];
         if (!layoutUsed(tile)) return;
-        if (layoutUsed(p)) {
+        if (layoutUsed(p) && layoutInside(p, from)) {
           Object.assign(tile, {col: p.col, row: p.row, span_w: p.span_w, span_h: p.span_h});
           delete tile._unplaced;
-        } else if (!layoutNavType(tile.type)) {
-          // No place there; Settings and Back keep their classic one.
+        } else if (!layoutBarHidden(tile.type)) {
+          // Not on that screen: into this layout's storage too. Back keeps
+          // its classic place.
           tile._unplaced = true;
         }
       });
     }
-    return layoutSettle(key, L.bar ? tiles.map(tile => (layoutUsed(tile) && layoutNavType(tile.type)
+    return layoutSettle(key, L.bar ? tiles.map(tile => (layoutUsed(tile) && layoutBarHidden(tile.type)
       ? layoutEmptyTile() : tile)) : tiles);
   }
 
@@ -208,7 +213,7 @@
     if (!places) return takeoverTiles(tab, key, 'classic');
     return layoutSettle(key, layoutBase(tab).map(tile => {
       if (!layoutUsed(tile)) return tile;
-      if (layoutNavType(tile.type)) return layoutEmptyTile();
+      if (layoutBarHidden(tile.type)) return layoutEmptyTile();
       const p = places[tile.view_id];
       if (p) {
         Object.assign(tile, {col: p[0], row: p[1], span_w: p[2], span_h: p[3]});
@@ -316,8 +321,9 @@
     dialog.querySelectorAll('.setup-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === layoutWindow.tab));
     dialog.querySelectorAll('.setup-layout').forEach(b => {
       b.classList.toggle('selected', b.dataset.key === layoutWindow.key);
-      dialog.querySelector(`.setup-arrow[data-key="${b.dataset.key}"]`)?.classList
-        .toggle('selected', b.dataset.key === layoutWindow.key);
+      const arrow = dialog.querySelector(`.setup-arrow[data-key="${b.dataset.key}"]`);
+      arrow?.classList.toggle('selected', b.dataset.key === layoutWindow.key);
+      if (arrow && b.dataset.key === layoutWindow.key) arrow.parentNode.appendChild(arrow);
       b.classList.toggle('is-dirty', layoutDirty(b.dataset.key));
     });
     // A folder without a place could not be reached in that layout, so every
@@ -333,7 +339,7 @@
     const apply = dialog.querySelector('.setup-apply');
     apply.disabled = missing > 0 || !L.switchable;
     const note = dialog.querySelector('.setup-note');
-    note.hidden = L.switchable || layoutWindow.key === ACTIVE_LAYOUT;
+    note.style.visibility = L.switchable || layoutWindow.key === ACTIVE_LAYOUT ? 'hidden' : '';
     const status = dialog.querySelector('.setup-status');
     status.classList.toggle('is-ok', !total);
     const text = missing
@@ -401,7 +407,9 @@
     const areas = LAYOUT_KEYS.filter(key => LAYOUTS[key].available).map(key => areaOf(sizesOf(LAYOUTS[key]), canvas.cols, canvas.rows));
     // The page's own preview scale; smaller only when the window lacks room.
     const roomW = Math.min(innerWidth - 32, layoutRootPx('--admin-wrapper-width') || innerWidth) - 58;
-    const f = Math.min(0.9, ...areas.map(([w, h]) => Math.min(roomW / w, (innerHeight - 32 - chrome) / h)));
+    // Taken once: the window keeps its size whatever layout it shows.
+    const f = layoutWindow.scale ||
+      (layoutWindow.scale = Math.min(0.9, ...areas.map(([w, h]) => Math.min(roomW / w, (innerHeight - 32 - chrome) / h))));
     const stage = backdrop.querySelector('.setup-stage');
     stage.style.width = Math.max(...areas.map(([w]) => w)) * f + 2 + 'px';
     stage.style.height = Math.max(...areas.map(([, h]) => h)) * f + 2 + 'px';
@@ -431,7 +439,7 @@
     // The storage's name in its bottom right corner (beside every screen).
     const label = document.createElement('div');
     label.className = 'setup-storage-label';
-    label.textContent = t('layoutStorage');
+    label.innerHTML = `<b>${escapeHtml(t('layoutStorage'))}</b><span>${escapeHtml(t('layoutStorageHint'))}</span>`;
     grid.appendChild(label);
     // Tiles such as Media measure their card when they are drawn: draw them
     // again at the window's scale.
@@ -439,6 +447,10 @@
   }
 
   async function loadLayoutWindow(key, from) {
+    // "Kopieren von" can be undone: the places before it, until the next
+    // layout or save.
+    layoutWindow.undo = from && layoutWindow.shown && key === layoutWindow.key
+      ? Object.fromEntries(layoutTabs().map(tab => [tab, layoutClone(getTilesData(tab))])) : null;
     // The layout left keeps its unsaved places for later.
     if (layoutWindow.shown) {
       layoutWindow.work[layoutWindow.key] = Object.fromEntries(layoutTabs().map(tab => [tab, layoutClone(getTilesData(tab))]));
@@ -460,10 +472,13 @@
     const dialog = document.querySelector('.setup-dialog');
     if (!dialog || !layoutWindow) return;
     // Take over from any other layout.
+    dialog.querySelector('.setup-undo').hidden = !layoutWindow.undo;
     dialog.querySelector('.setup-from').innerHTML = `<option value="">${escapeHtml(t('layoutCopyFrom'))}</option>` +
       LAYOUT_KEYS.filter(key => key !== layoutWindow.key && LAYOUTS[key].available)
         .map(key => `<option value="${key}">${escapeHtml(LAYOUTS[key].name)}</option>`).join('');
-    dialog.querySelector('.setup-apply').hidden = layoutWindow.key === ACTIVE_LAYOUT;
+    // The active layout needs no switch; the button keeps its room, so the
+    // window keeps its size.
+    dialog.querySelector('.setup-apply').style.visibility = layoutWindow.key === ACTIVE_LAYOUT ? 'hidden' : '';
     refreshLayoutStatus();
   }
 
@@ -580,6 +595,16 @@
     layoutTiles(tab, getTilesData(tab));
   }
 
+  // Back to the places before "Kopieren von".
+  async function undoLayoutCopy() {
+    const before = layoutWindow?.undo;
+    if (!before) return;
+    layoutWindow.undo = null;
+    for (const tab of layoutTabs()) if (before[tab]) showLayoutTiles(tab, before[tab]);
+    await mountLayoutTab(layoutWindow.tab);
+    refreshLayoutButtons();
+  }
+
   // Closing the window with layouts not saved asks first.
   function mayLeaveLayout() {
     const open = LAYOUT_KEYS.filter(key => layoutDirty(key)).map(key => LAYOUTS[key].name);
@@ -595,7 +620,7 @@
     for (const tab of layoutTabs()) {
       const places = folders[layoutFolderId(tab)] = {};
       getTilesData(tab).forEach(tile => {
-        if (!layoutUsed(tile) || !tile.view_id || (key !== 'classic' && layoutNavType(tile.type))) return;
+        if (!layoutUsed(tile) || !tile.view_id || (key !== 'classic' && layoutBarHidden(tile.type))) return;
         places[tile.view_id] = [tile.col, tile.row, tile.span_w, tile.span_h];
       });
     }
@@ -616,6 +641,9 @@
     if (!layoutWindow) return false;
     if (key === ACTIVE_LAYOUT) layoutWindow.changed = true;
     for (const other of Object.keys(layoutWindow.saved)) if (!layoutWindow.work[other]) delete layoutWindow.saved[other];
+    layoutWindow.undo = null;
+    const undo = document.querySelector('.setup-undo');
+    if (undo) undo.hidden = true;
     layoutWindow.saved[key] = layoutSignature(getTilesData);
     refreshLayoutStatus();
     return true;
@@ -671,6 +699,7 @@
       changed: false,
       busy: false,
       shown: false,
+      undo: null,
       work: {},
       saved: {},
       missingFolders: 0,
@@ -709,19 +738,24 @@
     }).join('');
     backdrop.innerHTML = [
       '<div class="setup-dialog" role="dialog" aria-modal="true">',
+      // One head: the title, the layouts and the X (user 2026-10-08).
       `<div class="setup-head-row"><div class="setup-title">${escapeHtml(t('layoutChange'))}</div>`,
-      `<button type="button" class="setup-close" aria-label="${escapeHtml(t('close'))}"><i class="mdi mdi-close"></i></button></div>`,
       `<div class="setup-layouts">${layoutButtons}</div>`,
+      `<button type="button" class="setup-close" aria-label="${escapeHtml(t('close'))}"><i class="mdi mdi-close"></i></button></div>`,
       `<div class="setup-tabs">${tabButtons}</div>`,
       '<div class="setup-stage"></div>',
       '<div class="setup-foot"><div class="setup-status"></div>',
-      `<span class="setup-note" hidden>${escapeHtml(t('layoutSwitchLater'))}</span>`,
+      `<span class="setup-note">${escapeHtml(t('layoutSwitchLater'))}</span>`,
+      `<button type="button" class="btn setup-undo" hidden><i class="mdi mdi-undo"></i> ${escapeHtml(t('layoutUndo'))}</button>`,
       `<select class="setup-from" aria-label="${escapeHtml(t('layoutCopyFrom'))}"></select>`,
       `<button type="button" class="btn setup-save">${escapeHtml(t('save'))}</button>`,
       `<button type="button" class="btn btn-go setup-apply">${escapeHtml(t('layoutSwitch'))}</button></div></div>`
     ].join('');
     document.body.appendChild(backdrop);
     document.body.classList.add('setup-window');
+    const buttons = [...backdrop.querySelectorAll('.setup-layout')];
+    const widest = Math.max(...buttons.map(button => button.offsetWidth));
+    buttons.forEach(button => { button.style.width = widest + 'px'; });
     // A click on the window's free area does not start a new tile.
     backdrop.querySelector('.setup-stage').addEventListener('click', event => {
       if (event.target.classList?.contains('setup-grid')) event.stopPropagation();
@@ -805,6 +839,7 @@
     if (tab && tab.dataset.tab !== layoutWindow.tab) mountLayoutTab(tab.dataset.tab);
     if (event.target.closest('.setup-close') && mayLeaveLayout()) { closeLayoutWindow(); return; }
     if (event.target.closest('.setup-save')) saveLayoutWindow();
+    if (event.target.closest('.setup-undo')) undoLayoutCopy();
     if (event.target.closest('.setup-trash')) {
       const tile = layoutSelectedTile();
       if (tile && layoutInside(tile, layoutWindow.key)) parkLayoutTile();

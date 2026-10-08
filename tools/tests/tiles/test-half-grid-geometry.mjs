@@ -50,7 +50,7 @@ ${strip(read('src/tiles/runtime/compact_sensor_layout.h'))}
 int main(){
  {
   // The head bar layout (grid_layout.h): a tile shows only wholly inside the
-  // smaller grid, Settings and Back give way to the head, a tile without a
+  // smaller grid, Back gives way to the head's X, a tile without a
   // place in the layout is not drawn; without the bar the span is cut at the
   // grid's edge as before. A panel that cannot show the bar layout yet (the
   // upright JC4880 needs it turned) starts with the classic one.
@@ -62,7 +62,8 @@ int main(){
    assert(get_tile_layout(inside,c,r,w,h));
    Tile beside{TILE_SENSOR,static_cast<float>(bar.cols),0,1,1};assert(!get_tile_layout(beside,c,r,w,h));
    Tile wide{TILE_SENSOR,static_cast<float>(bar.cols-1),0,2,1};assert(!get_tile_layout(wide,c,r,w,h));
-   assert(!get_tile_layout(settings,c,r,w,h));
+   assert(get_tile_layout(settings,c,r,w,h));
+   Tile back{TILE_BACK,0,0,1,1};assert(!get_tile_layout(back,c,r,w,h));
   } else {
    assert(!grid_layout::head_bar());
   }

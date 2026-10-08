@@ -237,6 +237,7 @@ struct Strings {
   const char* layout_portrait;
   const char* layout_active;
   const char* layout_copy_from;
+  const char* layout_undo;
   const char* layout_saved;
   const char* layout_switch;
   const char* layout_switch_confirm;
@@ -248,6 +249,7 @@ struct Strings {
   const char* layout_all_fit;
   const char* layout_unsaved_confirm;
   const char* layout_storage;
+  const char* layout_storage_hint;
   const char* layout_park;
   const char* layout_parked_tiles;
   const char* layout_parked_tile;
@@ -449,6 +451,8 @@ struct Strings {
   const char* settings_pin_configured;
   const char* settings_pin_not_configured;
   const char* settings_swipe_enable;
+  // With a bar layout: the gear in Home's head opens Settings too.
+  const char* settings_head_gear;
   const char* settings_reveal_edge;
   const char* settings_swipe_note;
   const char* edge_left;

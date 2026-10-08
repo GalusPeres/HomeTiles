@@ -1507,7 +1507,7 @@ void WebAdminServer::handleSaveLayouts() {
         if (tile.type == TILE_EMPTY || !tile.view_id) continue;
         auto entry = std::find_if(places.begin(), places.end(),
                                   [&](const LayoutPlace& place) { return place.view == tile.view_id; });
-        if (entry != places.end() && tile.type != TILE_SETTINGS && tile.type != TILE_BACK) {
+        if (entry != places.end() && tile.type != TILE_BACK) {
           tile_layouts::set(layout, folder_id, tile.view_id, entry->place);
         } else {
           tile_layouts::remove(layout, folder_id, tile.view_id);

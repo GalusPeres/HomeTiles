@@ -27,6 +27,27 @@
     }
   }
 
+// The gear in Home's head with a bar layout (a Settings tile option): saved
+// at once, the preview's head follows.
+async function saveHeadGear(enabled) {
+  const show = value => {
+    document.querySelectorAll('.settings-head-gear').forEach(box => { box.checked = value; });
+    document.querySelectorAll('.head-bar-preview .head-gear').forEach(gear => gear.classList.toggle('is-off', !value));
+  };
+  show(!!enabled);
+  try {
+    const response = await fetch('/api/display/head-gear', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'enabled=' + (enabled ? '1' : '0')
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+  } catch (error) {
+    show(!enabled);
+    showNotification(t('networkErrorSave'), false);
+  }
+}
+
 // A layout (grid_layout.h) is read at boot: the layout window restarts the
 // panel after choosing one.
 function restartPanelForLayout() {

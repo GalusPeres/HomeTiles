@@ -12,7 +12,8 @@ assert.match(renderer,
   'set_text returns early for unchanged text');
 assert.match(renderer, /changed \|= data->time_shadows\.set_text\(buf\);/, 'the time line reports a change');
 assert.match(renderer, /changed \|= data->date_shadows\.set_text\(buf\);/, 'the date line reports a change');
-assert.match(renderer, /if \(changed\) apply_clock_line_alignment\(data\);/,
-  'widths and alignment are refreshed only after a change');
+// The shadow copies' mask (b306) is refreshed only after a change as well.
+assert.match(renderer, /if \(changed\) \{\s*apply_clock_line_alignment\(data\);[\s\S]*?refresh_shadow\(\);[\s\S]*?refresh_shadow\(\);\s*\}/,
+  'widths, alignment and the shadow mask are refreshed only after a change');
 
 console.log('Clock: unchanged minutes are not redrawn');

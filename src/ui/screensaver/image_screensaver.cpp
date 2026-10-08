@@ -23,6 +23,7 @@
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/display/jpeg_padded_output.h"
 #include "src/ui/screensaver/wallpaper_cover.h"
+#include "src/ui/screensaver/composite_over_image.h"
 #include "src/core/memory/psram_budget.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
@@ -245,52 +246,13 @@ bool ensure_composite_draw_buf(ScreensaverState* st) {
   return true;
 }
 
-// Diagnostics (b304, once per boot): what the composite snapshot spends its
-// 280-300 ms on (V2 b303; the tile shadows were only 15 ms of it). Each part
-// is snapshotted alone into the composite buffer, free again once the frame
-// was presented. Invalidation stays off while parts are hidden and shown
-// again, so nothing is redrawn for the measurement.
-bool g_snapshot_split_logged = false;
-
-void log_snapshot_split(ScreensaverState* st, lv_display_t* display, lv_obj_t* top_layer) {
-  if (g_snapshot_split_logged) return;
-  g_snapshot_split_logged = true;
-  lv_obj_t* const parts[] = {st->image, st->slot_grid, st->clock_box};
-  constexpr int kParts = sizeof(parts) / sizeof(parts[0]);
-  bool was_hidden[kParts];
-  for (int i = 0; i < kParts; ++i) {
-    was_hidden[i] = !parts[i] || lv_obj_has_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
-  }
-  lv_display_enable_invalidation(display, false);
-  auto snapshot_with = [&](int shown) -> uint32_t {
-    for (int i = 0; i < kParts; ++i) {
-      if (!parts[i]) continue;
-      if (i == shown && !was_hidden[i]) {
-        lv_obj_remove_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
-      } else {
-        lv_obj_add_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
-      }
-    }
-    const uint32_t started = millis();
-    lv_snapshot_take_to_draw_buf(top_layer, LV_COLOR_FORMAT_RGB565, &st->composite_draw_buf);
-    return millis() - started;
-  };
-  const uint32_t empty_ms = snapshot_with(-1);
-  const uint32_t image_ms = snapshot_with(0);
-  const uint32_t tiles_ms = snapshot_with(1);
-  const uint32_t clock_ms = snapshot_with(2);
-  for (int i = 0; i < kParts; ++i) {
-    if (!parts[i]) continue;
-    if (was_hidden[i]) {
-      lv_obj_add_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
-    } else {
-      lv_obj_remove_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
-    }
-  }
-  lv_display_enable_invalidation(display, true);
-  Serial.printf("[Screensaver] Snapshot split: empty %u, image %u, tiles %u, clock %u ms\n",
-                static_cast<unsigned>(empty_ms), static_cast<unsigned>(image_ms),
-                static_cast<unsigned>(tiles_ms), static_cast<unsigned>(clock_ms));
+// The wallpaper copied into the frame, LVGL drawing only what lies above it
+// (composite_over_image.h); false when LVGL would not draw it as a plain
+// copy (the caller takes the snapshot).
+bool composite_over_wallpaper(ScreensaverState* st, lv_display_t* display,
+                              lv_obj_t* top_layer) {
+  return composite_over_image::render(display, top_layer, st->image, g_cache_dsc,
+                                      &st->composite_draw_buf);
 }
 
 bool present_composited_screensaver_frame(ScreensaverState* st) {
@@ -302,7 +264,8 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
   const uint32_t snapshot_started = millis();
   // Use the entire top layer intentionally so the clock and tiles remain
   // visible during slide transitions and are presented together.
-  if (lv_snapshot_take_to_draw_buf(top_layer, LV_COLOR_FORMAT_RGB565,
+  if (!composite_over_wallpaper(st, display, top_layer) &&
+      lv_snapshot_take_to_draw_buf(top_layer, LV_COLOR_FORMAT_RGB565,
                                    &st->composite_draw_buf) != LV_RESULT_OK) {
     Serial.println("[Screensaver] Composite snapshot failed");
     return false;
@@ -324,7 +287,6 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
                 static_cast<unsigned>(snapshot_ms),
                 static_cast<unsigned>(millis() - snapshot_started - snapshot_ms));
   if (preview_ok) {
-    log_snapshot_split(st, display, top_layer);
     // The presented frame is the whole top layer as it stands, in the
     // framebuffer LVGL draws its next areas into (every P4 driver's
     // full-frame path writes the active buffer). The areas invalidated while
@@ -890,9 +852,11 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   uint16_t* column_map = static_cast<uint16_t*>(
       heap_caps_malloc(static_cast<size_t>(image_w) * sizeof(uint16_t),
                        MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  // Native RGB565 (to_native), the composite frame's own format: the frame
+  // takes the picture with one copy (composite_over_wallpaper).
   wallpaper_cover::cover_pixels(
       src, src_w, crop, out + static_cast<size_t>(image_inset) * target_w + image_inset,
-      target_w, image_w, image_h, corner_radius, column_map);
+      target_w, image_w, image_h, corner_radius, column_map, true);
   heap_caps_free(column_map);
 
   lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
@@ -902,7 +866,7 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   }
   memset(dsc, 0, sizeof(*dsc));
   dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-  dsc->header.cf = LV_COLOR_FORMAT_RGB565_SWAPPED;
+  dsc->header.cf = LV_COLOR_FORMAT_RGB565;
   dsc->header.w = target_w;
   dsc->header.h = target_h;
   dsc->header.stride = target_w * 2;

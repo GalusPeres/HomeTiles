@@ -21,22 +21,21 @@ const fn = name => cppFunctionDefinitions(source).find(f => f.name === name).sou
 const cover = fn('make_cover_dsc');
 assert.match(cover, /wallpaper_cover::crop_for\(src_w, src_h, image_w, image_h, focus_x, focus_y,\s*zoom, crop\)/);
 assert.match(cover, /heap_caps_malloc\(static_cast<size_t>\(image_w\) \* sizeof\(uint16_t\),\s*MALLOC_CAP_INTERNAL \| MALLOC_CAP_8BIT\)/);
-assert.match(cover, /wallpaper_cover::cover_pixels\(/);
+assert.match(cover, /wallpaper_cover::cover_pixels\([\s\S]*?corner_radius, column_map, true\);/,
+  'the picture is written as native RGB565 (b305)');
+assert.match(cover, /dsc->header\.cf = LV_COLOR_FORMAT_RGB565;/);
 assert.match(cover, /heap_caps_free\(column_map\);/);
 assert.doesNotMatch(cover, /rounded_pixel_coverage\(x, y/, 'no coverage test per pixel any more');
 // The S3 direct decoder keeps using the same helpers.
 assert.match(source, /using wallpaper_cover::blend_swapped_rgb565_with_black;\nusing wallpaper_cover::rounded_pixel_coverage;/);
 
-// A presented composite frame drops the invalidated areas it shows; the
-// snapshot split is logged once per boot before that.
+// The composite takes the wallpaper by one copy (composite_over_image.h,
+// test-screensaver-composite-lvgl.mjs) and falls back to the snapshot; a
+// presented frame drops the invalidated areas it shows.
 const present = fn('present_composited_screensaver_frame');
-assert.match(present, /if \(preview_ok\) \{\s*log_snapshot_split\(st, display, top_layer\);[\s\S]*?lv_inv_area\(display, nullptr\);\s*\}\s*return preview_ok;/);
-const split = fn('log_snapshot_split');
-assert.match(split, /if \(g_snapshot_split_logged\) return;\s*g_snapshot_split_logged = true;/);
-assert.ok(split.indexOf('lv_display_enable_invalidation(display, false);') <
-  split.indexOf('lv_snapshot_take_to_draw_buf') &&
-  split.lastIndexOf('lv_display_enable_invalidation(display, true);') > split.lastIndexOf('lv_obj_remove_flag'),
-  'parts are hidden and shown again without invalidating');
+assert.match(present, /if \(!composite_over_wallpaper\(st, display, top_layer\) &&\s*lv_snapshot_take_to_draw_buf\(top_layer, LV_COLOR_FORMAT_RGB565,/);
+assert.match(present, /if \(preview_ok\) \{[\s\S]*?lv_inv_area\(display, nullptr\);\s*\}\s*return preview_ok;/);
+assert.doesNotMatch(source, /log_snapshot_split/, 'the b304 split diagnostics are gone');
 
 // The new loop against the former per-pixel loop, pixel for pixel: unscaled
 // (1280x854 -> 1280x800, the V2 wallpaper), zoomed, a narrow source, focus
@@ -89,7 +88,8 @@ static bool reference(const uint16_t* src, uint16_t src_w, uint16_t src_h, uint1
 }
 
 static int check(const char* name, uint16_t src_w, uint16_t src_h, uint16_t image_w, uint16_t image_h,
-                 uint16_t focus_x, uint16_t focus_y, uint16_t zoom, uint16_t radius, bool map) {
+                 uint16_t focus_x, uint16_t focus_y, uint16_t zoom, uint16_t radius, bool map,
+                 bool native = false) {
   std::vector<uint16_t> src(static_cast<size_t>(src_w) * src_h);
   uint32_t seed = 12345u + src_w * 7u + src_h;
   for (auto& px : src) { seed = seed * 1103515245u + 12345u; px = static_cast<uint16_t>(seed >> 16); }
@@ -102,9 +102,11 @@ static int check(const char* name, uint16_t src_w, uint16_t src_h, uint16_t imag
   std::vector<uint16_t> got(static_cast<size_t>(image_w) * image_h, 0xBEEF);
   std::vector<uint16_t> columns(image_w);
   cover_pixels(src.data(), src_w, crop, got.data(), image_w, image_w, image_h, radius,
-               map ? columns.data() : nullptr);
+               map ? columns.data() : nullptr, native);
   for (size_t i = 0; i < got.size(); ++i) {
-    if (got[i] != expected[i]) {
+    // Native output: the same pixels with their two bytes swapped.
+    const uint16_t want = native ? static_cast<uint16_t>((expected[i] >> 8) | (expected[i] << 8)) : expected[i];
+    if (got[i] != want) {
       std::printf("%s: pixel %zu,%zu differs\\n", name, i % image_w, i / image_w);
       return 1;
     }
@@ -122,12 +124,15 @@ int main() {
   bad |= check("square-radius0", 720, 720, 720, 720, 500, 500, 1000, 0, true);
   bad |= check("big-radius", 300, 200, 64, 40, 500, 500, 1000, 25, true);
   bad |= check("tiny", 3, 2, 480, 480, 500, 500, 3000, 34, true);
+  bad |= check("v2-native", 1280, 854, 1280, 800, 500, 500, 1000, 48, true, true);
+  bad |= check("zoomed-native", 1280, 854, 1280, 800, 300, 700, 1750, 48, true, true);
   return bad;
 }
 `,
 });
 if (out !== null) {
-  for (const name of ['v2-wallpaper', 'v2-no-map', 'zoomed', 'narrow-source', 'square-radius0', 'big-radius', 'tiny']) {
+  for (const name of ['v2-wallpaper', 'v2-no-map', 'zoomed', 'narrow-source', 'square-radius0', 'big-radius', 'tiny',
+    'v2-native', 'zoomed-native']) {
     assert.match(out, new RegExp(`${name} same`), `${name}: the new loop writes the same pixels`);
   }
 }

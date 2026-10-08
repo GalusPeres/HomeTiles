@@ -11,6 +11,8 @@
 #include "src/fonts/ui_fonts.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include <Arduino.h>
+#include <lvgl_private.h>
+#include <misc/cache/instance/lv_image_cache.h>
 #include <new>
 #include <time.h>
 
@@ -80,6 +82,78 @@ static lv_text_align_t clock_text_align(uint8_t raw) {
 // because of the additional PPA load.
 static constexpr uint8_t kClockShadowCopies = 9;
 
+// The copies' offsets and opacity.
+struct ClockShadowCopy {
+  int16_t x;
+  int16_t y;
+  lv_opa_t opa;
+};
+static void clock_shadow_copies(ClockShadowCopy (&copies)[kClockShadowCopies]) {
+  const int16_t a = tile_layout::scale(2), b = tile_layout::scale(4), c = tile_layout::scale(6);
+  const ClockShadowCopy table[kClockShadowCopies] = {
+      {b, b, 34}, {a, b, 14}, {c, b, 14}, {b, a, 14}, {b, c, 14},
+      {a, a, 8},  {c, a, 8},  {a, c, 8},  {c, c, 8},
+  };
+  memcpy(copies, table, sizeof(table));
+}
+
+// Each copy was a label of the large compressed clock font: every frame
+// unpacked its glyphs ten times (about 110 ms of each screensaver opening on
+// the V2, b304). The line's text is now drawn once into an A8 mask and the
+// nine copies are A8 images of it in black at their offset and opacity:
+// LVGL blends an A8 image with the same mask blend as a glyph, so the copies
+// darken exactly as before (also the per-copy rounding of RGB565 panels,
+// which makes the shadow darker than its opacities; one composed picture
+// came out visibly lighter, b306 host test). The masks of the last lines
+// are kept across openings: the screensaver builds its clock anew for each
+// opening, and an unchanged line's mask is copied instead of drawn.
+struct ClockShadowCacheEntry {
+  const lv_font_t* font = nullptr;
+  lv_coord_t width = 0;
+  lv_coord_t height = 0;
+  uint8_t alignment = 0;
+  char text[48] = "";
+  int32_t ext = 0;
+  lv_draw_buf_t* mask = nullptr;
+  uint32_t used = 0;
+};
+static ClockShadowCacheEntry g_clock_shadow_cache[2];
+static uint32_t g_clock_shadow_cache_tick = 0;
+
+// The hidden mask label's text as an A8 mask; the caller owns the returned
+// copy, nullptr when LVGL memory is short. ext_out: the label's extra draw
+// size, by which the mask reaches beyond the label on every side.
+static lv_draw_buf_t* clock_shadow_mask(lv_obj_t* mask_label, const lv_font_t* font,
+                                        uint8_t alignment, int32_t& ext_out) {
+  const char* text = lv_label_get_text(mask_label);
+  const lv_coord_t width = lv_obj_get_width(mask_label);
+  const lv_coord_t height = lv_obj_get_height(mask_label);
+  ClockShadowCacheEntry* slot = &g_clock_shadow_cache[0];
+  for (ClockShadowCacheEntry& entry : g_clock_shadow_cache) {
+    if (entry.mask && entry.font == font && entry.width == width && entry.height == height &&
+        entry.alignment == alignment && strcmp(entry.text, text) == 0) {
+      entry.used = ++g_clock_shadow_cache_tick;
+      ext_out = entry.ext;
+      return lv_draw_buf_dup(entry.mask);
+    }
+    if (entry.used < slot->used) slot = &entry;
+  }
+
+  lv_draw_buf_t* mask = lv_snapshot_take(mask_label, LV_COLOR_FORMAT_A8);
+  if (!mask) return nullptr;
+  if (slot->mask) lv_draw_buf_destroy(slot->mask);
+  slot->font = font;
+  slot->width = width;
+  slot->height = height;
+  slot->alignment = alignment;
+  strlcpy(slot->text, text, sizeof(slot->text));
+  slot->ext = lv_obj_get_ext_draw_size(mask_label);
+  slot->mask = mask;
+  slot->used = ++g_clock_shadow_cache_tick;
+  ext_out = slot->ext;
+  return lv_draw_buf_dup(mask);
+}
+
 struct ClockShadowSet {
   lv_obj_t* line = nullptr;
   lv_obj_t* main_label = nullptr;
@@ -90,6 +164,14 @@ struct ClockShadowSet {
   lv_coord_t text_width = 0;
   lv_coord_t text_height = 0;
   lv_obj_t* labels[kClockShadowCopies] = {};
+  // The copies as A8 images of one mask (clock_shadow_mask): a hidden label
+  // holding the text for the mask, the nine images behind the white text and
+  // the line's own copy of the mask. Without them (fill_parent) the copy
+  // labels above draw themselves.
+  lv_obj_t* mask_label = nullptr;
+  lv_obj_t* copy_images[kClockShadowCopies] = {};
+  lv_draw_buf_t* mask_buf = nullptr;
+  bool shadow_dirty = false;
 
   // Returns false for unchanged text. The clock ticks every second but shows
   // minutes; rewriting the same text redrew it and its nine shadow copies
@@ -101,6 +183,8 @@ struct ClockShadowSet {
     for (lv_obj_t* label : labels) {
       if (label) lv_label_set_text(label, text);
     }
+    if (mask_label) lv_label_set_text(mask_label, text);
+    shadow_dirty = true;
     if (!line || !font) return true;
 
     lv_point_t text_size{};
@@ -118,6 +202,7 @@ struct ClockShadowSet {
       for (lv_obj_t* label : labels) {
         if (label) lv_obj_set_size(label, text_width, text_height);
       }
+      if (mask_label) lv_obj_set_size(mask_label, text_width, text_height);
     }
     return true;
   }
@@ -130,11 +215,46 @@ struct ClockShadowSet {
     for (lv_obj_t* label : labels) {
       if (label) lv_obj_set_style_text_align(label, align, 0);
     }
+    if (mask_label) lv_obj_set_style_text_align(mask_label, align, 0);
     if (!container) return;
     if (main_label) lv_obj_set_width(main_label, width);
     for (lv_obj_t* label : labels) {
       if (label) lv_obj_set_width(label, width);
     }
+    if (mask_label) {
+      lv_obj_set_width(mask_label, width);
+      shadow_dirty = true;
+    }
+  }
+
+  // Gives the copies the mask of the current text and width, after a change.
+  void refresh_shadow() {
+    if (!mask_label || !copy_images[0] || !shadow_dirty) return;
+    shadow_dirty = false;
+    lv_obj_update_layout(mask_label);
+    int32_t ext = 0;
+    lv_draw_buf_t* mask = clock_shadow_mask(mask_label, font, alignment, ext);
+    ClockShadowCopy copies[kClockShadowCopies];
+    clock_shadow_copies(copies);
+    for (uint8_t i = 0; i < kClockShadowCopies; ++i) {
+      lv_image_set_src(copy_images[i], mask);
+      lv_obj_set_pos(copy_images[i], copies[i].x - ext, copies[i].y - ext);
+    }
+    if (mask_buf) {
+      lv_image_cache_drop(mask_buf);
+      lv_draw_buf_destroy(mask_buf);
+    }
+    mask_buf = mask;
+  }
+
+  void release_shadow() {
+    for (lv_obj_t* image : copy_images) {
+      if (image) lv_image_set_src(image, nullptr);
+    }
+    if (!mask_buf) return;
+    lv_image_cache_drop(mask_buf);
+    lv_draw_buf_destroy(mask_buf);
+    mask_buf = nullptr;
   }
 };
 
@@ -227,7 +347,12 @@ static void update_clock_labels(ClockTileData* data) {
       }
       changed |= data->date_shadows.set_text(buf);
     }
-    if (changed) apply_clock_line_alignment(data);
+    if (changed) {
+      apply_clock_line_alignment(data);
+      // After both lines have their final width.
+      data->time_shadows.refresh_shadow();
+      data->date_shadows.refresh_shadow();
+    }
   }
 }
 
@@ -279,31 +404,53 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
   lv_obj_remove_flag(line, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(line, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
 
-  const struct {
-    int16_t x;
-    int16_t y;
-    lv_opa_t opa;
-  } copies[kClockShadowCopies] = {
-      {tile_layout::scale(4), tile_layout::scale(4), static_cast<lv_opa_t>(34)},
-      {tile_layout::scale(2), tile_layout::scale(4), static_cast<lv_opa_t>(14)},
-      {tile_layout::scale(6), tile_layout::scale(4), static_cast<lv_opa_t>(14)},
-      {tile_layout::scale(4), tile_layout::scale(2), static_cast<lv_opa_t>(14)},
-      {tile_layout::scale(4), tile_layout::scale(6), static_cast<lv_opa_t>(14)},
-      {tile_layout::scale(2), tile_layout::scale(2), static_cast<lv_opa_t>(8)},
-      {tile_layout::scale(6), tile_layout::scale(2), static_cast<lv_opa_t>(8)},
-      {tile_layout::scale(2), tile_layout::scale(6), static_cast<lv_opa_t>(8)},
-      {tile_layout::scale(6), tile_layout::scale(6), static_cast<lv_opa_t>(8)},
-  };
-  for (uint8_t i = 0; i < kClockShadowCopies; ++i) {
-    lv_obj_t* shadow = lv_label_create(line);
-    if (!shadow) break;
-    set_label_style(shadow, lv_color_black(), font);
-    lv_obj_set_style_text_opa(shadow, copies[i].opa, 0);
-    lv_obj_set_style_text_align(shadow, clock_text_align(alignment), 0);
-    if (config.fill_parent) lv_obj_set_width(shadow, LV_PCT(100));
-    lv_obj_set_pos(shadow, copies[i].x, copies[i].y);
-    lv_label_set_text(shadow, "");
-    if (shadow_out) shadow_out->labels[i] = shadow;
+  ClockShadowCopy copies[kClockShadowCopies];
+  clock_shadow_copies(copies);
+  if (!config.fill_parent && shadow_out) {
+    // The copies as A8 images of one mask (clock_shadow_mask): the hidden
+    // label holds the text for the mask, the images lie behind the white
+    // text, each at its copy's opacity in black.
+    lv_obj_t* mask = lv_label_create(line);
+    if (mask) {
+      set_label_style(mask, lv_color_white(), font);
+      lv_obj_set_style_text_align(mask, clock_text_align(alignment), 0);
+      lv_obj_set_pos(mask, 0, 0);
+      lv_label_set_text(mask, "");
+      lv_obj_add_flag(mask, LV_OBJ_FLAG_HIDDEN);
+      bool complete = true;
+      for (uint8_t i = 0; i < kClockShadowCopies && complete; ++i) {
+        lv_obj_t* image = lv_image_create(line);
+        complete = image != nullptr;
+        if (!image) break;
+        lv_obj_set_pos(image, copies[i].x, copies[i].y);
+        lv_obj_remove_flag(image, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_image_recolor(image, lv_color_black(), 0);
+        lv_obj_set_style_image_opa(image, copies[i].opa, 0);
+        shadow_out->copy_images[i] = image;
+      }
+      if (complete) {
+        shadow_out->mask_label = mask;
+      } else {
+        for (lv_obj_t*& image : shadow_out->copy_images) {
+          if (image) lv_obj_delete(image);
+          image = nullptr;
+        }
+        lv_obj_delete(mask);
+      }
+    }
+  }
+  if (!shadow_out || !shadow_out->mask_label) {
+    for (uint8_t i = 0; i < kClockShadowCopies; ++i) {
+      lv_obj_t* shadow = lv_label_create(line);
+      if (!shadow) break;
+      set_label_style(shadow, lv_color_black(), font);
+      lv_obj_set_style_text_opa(shadow, copies[i].opa, 0);
+      lv_obj_set_style_text_align(shadow, clock_text_align(alignment), 0);
+      if (config.fill_parent) lv_obj_set_width(shadow, LV_PCT(100));
+      lv_obj_set_pos(shadow, copies[i].x, copies[i].y);
+      lv_label_set_text(shadow, "");
+      if (shadow_out) shadow_out->labels[i] = shadow;
+    }
   }
   if (shadow_out) {
     shadow_out->line = line;
@@ -395,6 +542,11 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
             static_cast<ClockTileData*>(lv_event_get_user_data(e));
         if (!data) return;
         if (data->timer) lv_timer_delete(data->timer);
+        // The stack's delete event comes before its children's: the
+        // pictures leave their images, then are freed (the cache keeps its
+        // own).
+        data->time_shadows.release_shadow();
+        data->date_shadows.release_shadow();
         delete data;
       },
       LV_EVENT_DELETE,

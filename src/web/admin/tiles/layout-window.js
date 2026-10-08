@@ -316,6 +316,8 @@
     dialog.querySelectorAll('.setup-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === layoutWindow.tab));
     dialog.querySelectorAll('.setup-layout').forEach(b => {
       b.classList.toggle('selected', b.dataset.key === layoutWindow.key);
+      dialog.querySelector(`.setup-arrow[data-key="${b.dataset.key}"]`)?.classList
+        .toggle('selected', b.dataset.key === layoutWindow.key);
       b.classList.toggle('is-dirty', layoutDirty(b.dataset.key));
     });
     // A folder without a place could not be reached in that layout, so every
@@ -676,13 +678,27 @@
     };
     const backdrop = document.createElement('div');
     backdrop.className = 'setup-backdrop';
-    const layoutButtons = LAYOUT_KEYS.filter(key => LAYOUTS[key].available).map(key => {
+    const layoutButton = key => {
       const L = LAYOUTS[key];
       const shape = 'setup-shape' + (L.portrait ? ' portrait' : '') + (L.bar ? ' bar' : '');
       const active = key === ACTIVE_LAYOUT ? `<span class="setup-active">${escapeHtml(t('layoutActive'))}</span>` : '';
       return `<button type="button" class="setup-layout" data-key="${key}"><span class="${shape}"></span>` +
         `<span class="setup-layout-text"><b>${escapeHtml(L.name)}</b><small>${layoutSize(key)}</small></span>${active}</button>`;
+    };
+    // The layout the panel shows on the left, arrows to the others on the
+    // right, one above the other (user 2026-10-08); the arrow to the layout
+    // being set up lights up, none while the active one itself is edited.
+    const targets = LAYOUT_KEYS.filter(key => key !== ACTIVE_LAYOUT && LAYOUTS[key].available);
+    const arrowHeight = targets.length > 1 ? 76 : 34;
+    const arrows = targets.map((key, index) => {
+      const y = targets.length > 1 ? (index ? 59 : 17) : 17;
+      const middle = arrowHeight / 2;
+      return `<g class="setup-arrow" data-key="${key}"><path d="M2 ${middle} H12 C22 ${middle} 22 ${y} 32 ${y} H40"/>` +
+        `<path d="M35 ${y - 5} L40.5 ${y} L35 ${y + 5}"/></g>`;
     }).join('');
+    const layoutButtons = layoutButton(ACTIVE_LAYOUT) +
+      `<svg class="setup-arrows" viewBox="0 0 44 ${arrowHeight}" width="44" height="${arrowHeight}" aria-hidden="true">` +
+      `${arrows}</svg><div class="setup-targets">${targets.map(layoutButton).join('')}</div>`;
     const tabButtons = tabs.map(tab => {
       const host = document.getElementById('tab-tiles-' + tab);
       const home = layoutFolderId(tab) === '0';

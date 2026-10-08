@@ -3316,12 +3316,18 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
   color:#e8e8e8; font-size:20px; cursor:pointer;
 }
 .setup-close:hover { background:#333333; }
-/* The three layouts in one row under the title, as low as the page tabs. */
-.setup-layouts { display:flex; flex-wrap:wrap; gap:10px; }
+/* The layout the panel shows, arrows to the other two above each other. */
+.setup-layouts { display:flex; align-items:center; gap:6px; }
+.setup-targets { display:flex; flex-direction:column; gap:8px; }
+.setup-arrows { flex:none; overflow:visible; }
+.setup-arrow path {
+  fill:none; stroke:var(--line-strong); stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+}
+.setup-arrow.selected path { stroke:var(--accent); }
 .setup-layout {
-  position:relative; display:flex; align-items:center; gap:8px; padding:6px 12px 6px 10px; border-radius:10px;
-  cursor:pointer; background:#202020; border:1px solid var(--line-strong); color:var(--text); font:inherit;
-  text-align:left;
+  position:relative; display:flex; align-items:center; gap:8px; height:34px; box-sizing:border-box;
+  padding:0 12px 0 10px; border-radius:10px; cursor:pointer; background:#202020;
+  border:1px solid var(--line-strong); color:var(--text); font:inherit; text-align:left;
 }
 .setup-layout:hover { background:#262626; }
 .setup-layout.selected { border-color:var(--accent); background:var(--accent-soft); }

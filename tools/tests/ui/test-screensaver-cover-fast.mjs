@@ -21,7 +21,9 @@ const fn = name => cppFunctionDefinitions(source).find(f => f.name === name).sou
 const cover = fn('make_cover_dsc');
 assert.match(cover, /wallpaper_cover::crop_for\(src_w, src_h, image_w, image_h, focus_x, focus_y,\s*zoom, crop\)/);
 assert.match(cover, /heap_caps_malloc\(static_cast<size_t>\(image_w\) \* sizeof\(uint16_t\),\s*MALLOC_CAP_INTERNAL \| MALLOC_CAP_8BIT\)/);
-assert.match(cover, /wallpaper_cover::cover_pixels\(/);
+assert.match(cover, /wallpaper_cover::cover_pixels\([\s\S]*?corner_radius, column_map, true\);/,
+  'the picture is written as native RGB565 (b305)');
+assert.match(cover, /dsc->header\.cf = LV_COLOR_FORMAT_RGB565;/);
 assert.match(cover, /heap_caps_free\(column_map\);/);
 assert.doesNotMatch(cover, /rounded_pixel_coverage\(x, y/, 'no coverage test per pixel any more');
 // The S3 direct decoder keeps using the same helpers.
@@ -89,7 +91,8 @@ static bool reference(const uint16_t* src, uint16_t src_w, uint16_t src_h, uint1
 }
 
 static int check(const char* name, uint16_t src_w, uint16_t src_h, uint16_t image_w, uint16_t image_h,
-                 uint16_t focus_x, uint16_t focus_y, uint16_t zoom, uint16_t radius, bool map) {
+                 uint16_t focus_x, uint16_t focus_y, uint16_t zoom, uint16_t radius, bool map,
+                 bool native = false) {
   std::vector<uint16_t> src(static_cast<size_t>(src_w) * src_h);
   uint32_t seed = 12345u + src_w * 7u + src_h;
   for (auto& px : src) { seed = seed * 1103515245u + 12345u; px = static_cast<uint16_t>(seed >> 16); }
@@ -102,9 +105,11 @@ static int check(const char* name, uint16_t src_w, uint16_t src_h, uint16_t imag
   std::vector<uint16_t> got(static_cast<size_t>(image_w) * image_h, 0xBEEF);
   std::vector<uint16_t> columns(image_w);
   cover_pixels(src.data(), src_w, crop, got.data(), image_w, image_w, image_h, radius,
-               map ? columns.data() : nullptr);
+               map ? columns.data() : nullptr, native);
   for (size_t i = 0; i < got.size(); ++i) {
-    if (got[i] != expected[i]) {
+    // Native output: the same pixels with their two bytes swapped.
+    const uint16_t want = native ? static_cast<uint16_t>((expected[i] >> 8) | (expected[i] << 8)) : expected[i];
+    if (got[i] != want) {
       std::printf("%s: pixel %zu,%zu differs\\n", name, i % image_w, i / image_w);
       return 1;
     }
@@ -122,12 +127,15 @@ int main() {
   bad |= check("square-radius0", 720, 720, 720, 720, 500, 500, 1000, 0, true);
   bad |= check("big-radius", 300, 200, 64, 40, 500, 500, 1000, 25, true);
   bad |= check("tiny", 3, 2, 480, 480, 500, 500, 3000, 34, true);
+  bad |= check("v2-native", 1280, 854, 1280, 800, 500, 500, 1000, 48, true, true);
+  bad |= check("zoomed-native", 1280, 854, 1280, 800, 300, 700, 1750, 48, true, true);
   return bad;
 }
 `,
 });
 if (out !== null) {
-  for (const name of ['v2-wallpaper', 'v2-no-map', 'zoomed', 'narrow-source', 'square-radius0', 'big-radius', 'tiny']) {
+  for (const name of ['v2-wallpaper', 'v2-no-map', 'zoomed', 'narrow-source', 'square-radius0', 'big-radius', 'tiny',
+    'v2-native', 'zoomed-native']) {
     assert.match(out, new RegExp(`${name} same`), `${name}: the new loop writes the same pixels`);
   }
 }

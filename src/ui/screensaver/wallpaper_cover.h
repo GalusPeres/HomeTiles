@@ -103,10 +103,20 @@ inline bool crop_for(uint16_t src_w, uint16_t src_h, uint16_t image_w, uint16_t 
 // only the corner pixels take the coverage math. The same pixels as one
 // division, one coverage test and one blend per pixel (183 ms for 1280x800
 // on the V2, b303).
+// to_native turns every finished row into native RGB565 while it is still
+// in the cache: LVGL then draws the picture with a plain copy instead of a
+// copy and a byte swap of each row (b305; the swapped picture cost about
+// 140 ms of every screensaver composite on the V2).
+inline void swap_row(uint16_t* row, uint32_t count) {
+  for (uint32_t x = 0; x < count; ++x) {
+    row[x] = static_cast<uint16_t>((row[x] >> 8) | (row[x] << 8));
+  }
+}
+
 inline void cover_pixels(const uint16_t* src, uint16_t src_w, const Crop& crop,
                          uint16_t* dst, uint32_t dst_stride,
                          uint16_t image_w, uint16_t image_h, uint16_t radius,
-                         uint16_t* column_map) {
+                         uint16_t* column_map, bool to_native = false) {
   const bool copy_rows = crop.w == image_w;
   if (column_map && !copy_rows) {
     for (uint32_t x = 0; x < image_w; ++x) {
@@ -127,15 +137,17 @@ inline void cover_pixels(const uint16_t* src, uint16_t src_w, const Crop& crop,
         dst_row[x] = src_row[crop.x0 + (x * crop.w) / image_w];
       }
     }
-    if (!rounded || (y >= radius && y < static_cast<uint32_t>(image_h - radius))) continue;
-    for (uint32_t x = 0; x < radius; ++x) {
-      dst_row[x] = blend_swapped_rgb565_with_black(
-          dst_row[x], rounded_pixel_coverage(x, y, image_w, image_h, radius));
+    if (rounded && (y < radius || y >= static_cast<uint32_t>(image_h - radius))) {
+      for (uint32_t x = 0; x < radius; ++x) {
+        dst_row[x] = blend_swapped_rgb565_with_black(
+            dst_row[x], rounded_pixel_coverage(x, y, image_w, image_h, radius));
+      }
+      for (uint32_t x = image_w - radius; x < image_w; ++x) {
+        dst_row[x] = blend_swapped_rgb565_with_black(
+            dst_row[x], rounded_pixel_coverage(x, y, image_w, image_h, radius));
+      }
     }
-    for (uint32_t x = image_w - radius; x < image_w; ++x) {
-      dst_row[x] = blend_swapped_rgb565_with_black(
-          dst_row[x], rounded_pixel_coverage(x, y, image_w, image_h, radius));
-    }
+    if (to_native) swap_row(dst_row, image_w);
   }
 }
 

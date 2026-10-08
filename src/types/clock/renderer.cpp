@@ -1,6 +1,7 @@
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/types/clock/renderer.h"
 #include "src/types/clock/clock_format.h"
+#include "src/types/clock/clock_shadow_cache.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
@@ -90,6 +91,19 @@ struct ClockShadowSet {
   lv_coord_t text_width = 0;
   lv_coord_t text_height = 0;
   lv_obj_t* labels[kClockShadowCopies] = {};
+  // The copies' hidden group and the picture drawn from it
+  // (clock_shadow_cache.h); without a group the copies draw themselves.
+  lv_obj_t* shadow_group = nullptr;
+  lv_obj_t* shadow_image = nullptr;
+  lv_draw_buf_t* shadow_buf = nullptr;
+  lv_coord_t shadow_offset = 0;  // the copies' largest offset
+  bool shadow_dirty = false;
+
+  // The group holds every copy at its offset: one copy size plus the offset.
+  void size_shadow_group(lv_coord_t width, lv_coord_t height) {
+    if (shadow_group) lv_obj_set_size(shadow_group, width + shadow_offset, height + shadow_offset);
+    shadow_dirty = true;
+  }
 
   // Returns false for unchanged text. The clock ticks every second but shows
   // minutes; rewriting the same text redrew it and its nine shadow copies
@@ -101,6 +115,7 @@ struct ClockShadowSet {
     for (lv_obj_t* label : labels) {
       if (label) lv_label_set_text(label, text);
     }
+    shadow_dirty = true;
     if (!line || !font) return true;
 
     lv_point_t text_size{};
@@ -118,6 +133,7 @@ struct ClockShadowSet {
       for (lv_obj_t* label : labels) {
         if (label) lv_obj_set_size(label, text_width, text_height);
       }
+      size_shadow_group(text_width, text_height);
     }
     return true;
   }
@@ -135,7 +151,25 @@ struct ClockShadowSet {
     for (lv_obj_t* label : labels) {
       if (label) lv_obj_set_width(label, width);
     }
+    size_shadow_group(width, text_height);
   }
+
+  // Draws the copies into the picture after their text or width changed.
+  // Short of LVGL memory the copies draw themselves as before.
+  void refresh_shadow() {
+    if (!shadow_group || !shadow_image || !shadow_dirty) return;
+    shadow_dirty = false;
+    lv_draw_buf_t* picture = clock_shadow_cache::render(shadow_group);
+    if (!picture) {
+      clock_shadow_cache::release(shadow_image, shadow_buf);
+      lv_obj_remove_flag(shadow_group, LV_OBJ_FLAG_HIDDEN);
+      return;
+    }
+    lv_obj_add_flag(shadow_group, LV_OBJ_FLAG_HIDDEN);
+    clock_shadow_cache::show(shadow_image, shadow_buf, picture);
+  }
+
+  void release_shadow() { clock_shadow_cache::release(shadow_image, shadow_buf); }
 };
 
 struct ClockTileData {
@@ -227,7 +261,13 @@ static void update_clock_labels(ClockTileData* data) {
       }
       changed |= data->date_shadows.set_text(buf);
     }
-    if (changed) apply_clock_line_alignment(data);
+    if (changed) {
+      apply_clock_line_alignment(data);
+      // After both lines have their final width (the shadow pictures are
+      // drawn from the laid-out copies).
+      data->time_shadows.refresh_shadow();
+      data->date_shadows.refresh_shadow();
+    }
   }
 }
 
@@ -294,8 +334,26 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
       {tile_layout::scale(2), tile_layout::scale(6), static_cast<lv_opa_t>(8)},
       {tile_layout::scale(6), tile_layout::scale(6), static_cast<lv_opa_t>(8)},
   };
+  const lv_coord_t shadow_offset = tile_layout::scale(6);
+  // The copies go into a hidden group drawn once per text change into a
+  // picture (clock_shadow_cache.h); a full-width line (fill_parent) keeps
+  // them in the line, drawn in every frame.
+  lv_obj_t* group = nullptr;
+  if (!config.fill_parent && shadow_out) {
+    group = lv_obj_create(line);
+    if (group) {
+      lv_obj_remove_style_all(group);
+      lv_obj_set_pos(group, 0, 0);
+      lv_obj_set_size(group, 1 + shadow_offset, font->line_height + shadow_offset);
+      lv_obj_remove_flag(group, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_remove_flag(group, LV_OBJ_FLAG_CLICKABLE);
+      // Only for the fallback, when the copies draw themselves.
+      lv_obj_add_flag(group, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+      lv_obj_add_flag(group, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
   for (uint8_t i = 0; i < kClockShadowCopies; ++i) {
-    lv_obj_t* shadow = lv_label_create(line);
+    lv_obj_t* shadow = lv_label_create(group ? group : line);
     if (!shadow) break;
     set_label_style(shadow, lv_color_black(), font);
     lv_obj_set_style_text_opa(shadow, copies[i].opa, 0);
@@ -305,12 +363,27 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
     lv_label_set_text(shadow, "");
     if (shadow_out) shadow_out->labels[i] = shadow;
   }
+  lv_obj_t* picture = nullptr;
+  if (group) {
+    // Behind the white text, where the group's copies would be.
+    picture = lv_image_create(line);
+    if (picture) {
+      lv_obj_set_pos(picture, 0, 0);
+      lv_obj_remove_flag(picture, LV_OBJ_FLAG_CLICKABLE);
+    } else {
+      lv_obj_remove_flag(group, LV_OBJ_FLAG_HIDDEN);
+      group = nullptr;
+    }
+  }
   if (shadow_out) {
     shadow_out->line = line;
     shadow_out->font = font;
     shadow_out->container = true;
     shadow_out->fill_parent = config.fill_parent;
     shadow_out->alignment = normalize_clock_alignment(alignment);
+    shadow_out->shadow_group = group;
+    shadow_out->shadow_image = picture;
+    shadow_out->shadow_offset = shadow_offset;
   }
   lv_obj_t* label = lv_label_create(line);
   if (!label) return nullptr;  // The stack owns and cleans up line.
@@ -395,6 +468,10 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
             static_cast<ClockTileData*>(lv_event_get_user_data(e));
         if (!data) return;
         if (data->timer) lv_timer_delete(data->timer);
+        // The stack's delete event comes before its children's: the pictures
+        // are taken out of their images, then freed.
+        data->time_shadows.release_shadow();
+        data->date_shadows.release_shadow();
         delete data;
       },
       LV_EVENT_DELETE,

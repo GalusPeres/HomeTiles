@@ -31,6 +31,12 @@ const light = source.slice(source.lastIndexOf('#else'));
 assert.match(light, /constexpr uint32_t kSlowStepMs = 300;/);
 assert.match(light, /if \(g_stepping && now - g_step_since_ms >= kSlowStepMs\) \{\s*Serial\.printf\("\[LoopStall\] Step %s took %u ms\\n", stepName\(g_step\),/);
 assert.doesNotMatch(light, /esp_timer|backtrace|WiFi/, 'no timer, backtraces or Wi-Fi sampling outside the S3');
+// A refresh of 250 ms or more names the screen region it drew (V2 b304:
+// about 300 ms once a minute on Home with no other log line).
+const slow = read('src/core/diagnostics/slow_refresh.h');
+assert.match(slow, /inline constexpr uint32_t kSlowRefreshMs = 250;/);
+assert.match(slow, /\[SlowRefresh\] %u ms, %u flushes, %u px, region x=%d y=%d w=%d h=%d/);
+assert.match(read('src/core/display/display_manager.cpp'), /\n  slow_refresh::attach\(disp\);/);
 // The inbound drain (unlimited on the P4) names its slowest message when it
 // holds the loop; the count is not the 8-bit limit counter.
 const drain = cppFunctionDefinitions(read('src/network/mqtt/mqtt_handlers.cpp'))

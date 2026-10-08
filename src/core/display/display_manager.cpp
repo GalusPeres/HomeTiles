@@ -4,6 +4,7 @@
 #include "src/devices/device_select.h"
 #include "src/devices/guition_esp32_4848s040/s3_diagnostics.h"
 #include "src/core/diagnostics/popup_timing.h"
+#include "src/core/diagnostics/slow_refresh.h"
 #include "src/tiles/config/grid_layout.h"
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_X) || \
     defined(DEVICE_GUITION_JC1060P470C_FAMILY)
@@ -964,6 +965,7 @@ bool DisplayManager::init() {
 #if defined(HOMETILES_POPUP_TIMING)
   popup_timing::attach(disp, indev);
 #endif
+  slow_refresh::attach(disp);
 #if HOMETILES_GUITION_S3_DIAGNOSTICS_ACTIVE
   lv_indev_add_event_cb(indev, guition_s3_indev_event_cb, LV_EVENT_ALL,
                         nullptr);

@@ -1,9 +1,12 @@
 // Hochkant (user 2026-10-08, layouts step 2): the upright layout on a panel
-// that is landscape in its profile. The Guition V2 panel is upright by itself
-// (800 x 1280): the landscape UI is turned into it, the upright UI is copied
-// straight (180: turned into the mirrored place) and the touch follows the
-// same framebuffer mapping. The tile grid gets the upright grid's rows and
-// half row (4 x 6.5), the screensaver three rows at the bottom.
+// that is landscape in its profile. Every P4 panel with a landscape profile
+// here is upright by itself; its driver turns the landscape UI into it. One
+// general way for all of them (user 2026-10-08, tested on the Guition V2):
+// the upright UI is copied straight into the panel (180: turned into the
+// mirrored place, p4_dsi_camera_presenter drawUpright), and DisplayManager
+// turns the drivers' landscape touch point once for all. The tile grid gets
+// the upright grid's rows and half row, the screensaver three rows at the
+// bottom.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,54 +14,75 @@ import {spawnSync} from 'node:child_process';
 import {readRepoFile} from '../../lib/admin-source.mjs';
 
 const read = file => readRepoFile(file).replace(/\r\n?/g, '\n');
+const display = read('src/core/display/display_manager.cpp');
+const v2 = read('src/devices/guition_jc8012p4a1_v2/device_guition_jc8012p4a1_v2.cpp');
+const eight = read('src/devices/waveshare_touch_lcd_8/device_waveshare_touch_lcd_8.cpp');
 
-// --- Native: the copy and the touch mapping against the landscape turn.
+// --- Native: the shared copy, and the central touch turn against the V2's
+// and the 8-inch's own landscape mappings (their raw axes differ).
 const compiler = ['clang++', 'g++'].find(c => spawnSync(c, ['--version']).status === 0);
 if (!compiler) {
   console.log('SKIP: native upright copy check needs a C++ compiler');
 } else {
-  const driver = read('src/devices/guition_jc8012p4a1_v2/device_guition_jc8012p4a1_v2.cpp');
-  const touch = driver.slice(driver.indexOf('  if (g_upright) {\n    const int32_t fb_x'),
-    driver.indexOf('  if (mapped_x < 0) mapped_x = 0;'));
+  const turn = display.slice(display.indexOf('    if (grid_layout::turned()) {'),
+    display.indexOf('    data->state = LV_INDEV_STATE_PRESSED;'));
+  const landscape = (source, from, to) => source.slice(source.indexOf(from), source.indexOf(to));
+  const v2Touch = landscape(v2, '  if (g_rotation & 0x02) {\n    mapped_x = logical_w - 1', '  if (mapped_x < 0) mapped_x = 0;');
+  const eightTouch = landscape(eight, '  if (g_rotation & 0x02) {\n    mapped_x = static_cast<int32_t>(display_cfg.height)',
+    '  const int32_t logical_w = static_cast<int32_t>(display_cfg.height);');
   const code = `#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <vector>
 ${read('src/devices/common/p4_dsi_cpu_rotate.h').replace('#pragma once', '')}
 constexpr int32_t W = 800, H = 1280;  // the panel, upright
+namespace grid_layout { inline bool turned() { return true; } inline int screen_w() { return W; } }
+struct { int width = W, height = H; } display_cfg;
 // The landscape UI point (x, y) in the framebuffer (draw_landscape_area).
 void landscape_to_fb(int x, int y, bool flip, int& fx, int& fy) {
   if (flip) { fx = y; fy = (H - 1) - x; } else { fx = (W - 1) - y; fy = x; }
 }
-void map(bool g_upright, uint8_t g_rotation, int32_t px0, int32_t py0, int32_t& mapped_x, int32_t& mapped_y) {
-  const int32_t logical_w = g_upright ? W : H;
-  const int32_t logical_h = g_upright ? H : W;
+void v2_touch(uint8_t g_rotation, int32_t px0, int32_t py0, int32_t& mapped_x, int32_t& mapped_y) {
+  const int32_t logical_w = H, logical_h = W;
   const int32_t px[1] = {px0}, py[1] = {py0};
   const int selected = 0;
-${touch}}
+${v2Touch}}
+void eight_touch(uint8_t g_rotation, int32_t px0, int32_t py0, int32_t& mapped_x, int32_t& mapped_y) {
+  const int32_t px[1] = {px0}, py[1] = {py0};
+  const int selected = 0;
+${eightTouch}}
+void central(int16_t& mapped_x, int16_t& mapped_y) {
+${turn}}
 int main() {
-  // The touch's raw axes from the landscape mapping at rotation 0.
-  for (int x : {0, 17, 640, 1279}) for (int y : {0, 33, 400, 799}) {
-    int fx, fy; landscape_to_fb(x, y, false, fx, fy);
-    const int32_t px = x, py = y;  // landscape rotation 0 maps px, py through
-    // Upright: the touch lands on the framebuffer pixel, 180 on its mirror.
-    int32_t ux, uy; map(true, 0, px, py, ux, uy); assert(ux == fx && uy == fy);
-    map(true, 2, px, py, ux, uy); assert(ux == W - 1 - fx && uy == H - 1 - fy);
-    // Landscape flipped keeps its own mapping (same raw axes).
-    int lfx, lfy; landscape_to_fb(x, y, true, lfx, lfy);
-    int32_t lx, ly; map(false, 2, px, py, lx, ly);
-    int cfx, cfy; landscape_to_fb(lx, ly, true, cfx, cfy); assert(cfx == fx && cfy == fy);
+  for (int fx : {0, 17, 400, 799}) for (int fy : {0, 33, 640, 1279}) {
+    for (uint8_t rotation : {0, 2}) {
+      // The upright UI point a finger on panel pixel (fx, fy) means.
+      const int ux = rotation ? W - 1 - fx : fx, uy = rotation ? H - 1 - fy : fy;
+      // V2: the GSL3680's raw axes (px = panel Y, py = W - 1 - panel X).
+      int32_t lx, ly; v2_touch(rotation, fy, W - 1 - fx, lx, ly);
+      int16_t x = static_cast<int16_t>(lx), y = static_cast<int16_t>(ly); central(x, y);
+      assert(x == ux && y == uy);
+      // 8-inch: the GT911 reports the panel's own coordinates.
+      eight_touch(rotation, fx, fy, lx, ly);
+      x = static_cast<int16_t>(lx); y = static_cast<int16_t>(ly); central(x, y);
+      assert(x == ux && y == uy);
+    }
   }
-  // The copy: straight, and 180 into the mirrored place.
+  // The copy: straight, 180 into the mirrored place, and bytes swapped.
   std::vector<uint16_t> fb(W * H, 0), src(5 * 3);
-  for (int i = 0; i < 15; ++i) src[i] = static_cast<uint16_t>(i + 1);
+  for (int i = 0; i < 15; ++i) src[i] = static_cast<uint16_t>(0x0100 * (i + 1) + i);
   p4_dsi_cpu_rotate::copy_into(fb.data(), W, W, H, 10, 20, 5, 3, src.data(), false);
   for (int r = 0; r < 3; ++r) for (int c = 0; c < 5; ++c) assert(fb[(20 + r) * W + 10 + c] == src[r * 5 + c]);
   std::fill(fb.begin(), fb.end(), 0);
   p4_dsi_cpu_rotate::copy_into(fb.data(), W, W, H, 10, 20, 5, 3, src.data(), true);
   for (int r = 0; r < 3; ++r) for (int c = 0; c < 5; ++c) {
-    // UI pixel (10 + c, 20 + r) shows at (W-1-(10+c), H-1-(20+r)).
     assert(fb[(H - 1 - (20 + r)) * W + (W - 1 - (10 + c))] == src[r * 5 + c]);
+  }
+  std::fill(fb.begin(), fb.end(), 0);
+  p4_dsi_cpu_rotate::copy_into(fb.data(), W, W, H, 10, 20, 5, 3, src.data(), false, true);
+  for (int r = 0; r < 3; ++r) for (int c = 0; c < 5; ++c) {
+    const uint16_t v = src[r * 5 + c];
+    assert(fb[(20 + r) * W + 10 + c] == static_cast<uint16_t>((v << 8) | (v >> 8)));
   }
   std::puts("ok");
 }
@@ -75,12 +99,45 @@ int main() {
   assert.equal(run.stdout.trim(), 'ok');
 }
 
-// --- The switch: only a panel that draws upright starts a turned layout.
+// --- Every panel upright by itself under a landscape profile: the same
+// landscape turn (the central touch turn relies on it) and the shared hook.
+for (const [file, ns] of [
+  ['guition_jc8012p4a1/device_guition_jc8012p4a1.cpp', 'DeviceGuitionJC8012P4A1'],
+  ['guition_jc8012p4a1_v2/device_guition_jc8012p4a1_v2.cpp', 'DeviceGuitionJC8012P4A1V2'],
+  ['waveshare_touch_lcd_4_3/device_waveshare_touch_lcd_4_3.cpp', 'DeviceWaveshareTouchLCD4_3'],
+  ['waveshare_touch_lcd_7/device_waveshare_touch_lcd_7.cpp', 'DeviceWaveshareTouchLCD7'],
+  ['waveshare_touch_lcd_8/device_waveshare_touch_lcd_8.cpp', 'DeviceWaveshareTouchLCD8'],
+  ['waveshare_touch_lcd_10_1/device_waveshare_touch_lcd_10_1.cpp', 'DeviceWaveshareTouchLCD10']]) {
+  const source = read('src/devices/' + file);
+  assert.match(source, /\} else \{\n    dst_x = logical_h - y - h;\n    dst_y = x;/, `${file}: landscape (x, y) at panel (w - 1 - y, x)`);
+  assert.match(source, /if \(g_camera_presenter\.upright\(\)\) \{\n    g_camera_presenter\.drawUpright\(x, y, w, h, data, g_rotation\);\n    return;\n  \}\n  draw_landscape_area\(x, y, w, h, data\);/,
+    `${file}: the shared upright draw`);
+  assert.ok(source.includes(`void ${ns}::displaySetUpright(bool upright) {\n  // The UI and the camera popup's frames without the quarter turn.\n  g_camera_presenter.setUpright(upright);\n}`),
+    `${file}: the presenter turns the camera frames too`);
+}
+// The Tab5 (M5GFX): the same turn in its PPA path, its own copy with the
+// bytes swapped; M5GFX keeps its landscape rotation, so its touch too.
+const tab5 = read('src/devices/m5stacks_tab5/device_m5stacks_tab5.cpp');
+assert.match(tab5, /\} else \{\n    dst_x = kLogicalHeight - y - h;\n    dst_y = x;/);
+assert.match(tab5, /p4_dsi_cpu_rotate::copy_into\(g_panel_fb, kPanelWidth, kPanelWidth, kPanelHeight, x, y, w, h, data, flipped, true\);/);
+assert.match(tab5, /oper\.rotation_angle = g_upright \? \(\(g_rotation & 0x02\) \? PPA_SRM_ROTATION_ANGLE_180/);
+assert.ok(!/M5\.Display\.setRotation\([^)]*g_upright/.test(tab5), 'M5GFX keeps its landscape rotation');
+// The JC1060 and the Waveshare 7B are landscape panels (no turn today) and
+// the JC4880's profile is upright: no upright layout there yet.
+const upright = /constexpr bool upright_ready\(\) \{\n#if ([\s\S]*?)\n  return true;/.exec(read('src/tiles/config/grid_layout.h'))[1];
+for (const name of ['JC8012P4A1)', 'JC8012P4A1_V2)', 'LCD_4_3)', 'LCD_7)', 'LCD_8)', 'LCD_10_1)', 'TAB5)']) {
+  assert.ok(upright.includes(name), name);
+}
+for (const name of ['JC1060', 'LCD_7B', 'JC4880']) assert.ok(!upright.includes(name), name + ' stays without');
+assert.ok(read('src/devices/device.cpp').includes('void displaySetUpright(bool upright) {\n#if ' + upright + '\n  DeviceImpl::displaySetUpright(upright);'));
+const presenter = read('src/devices/common/p4_dsi_camera_presenter.cpp');
+assert.match(presenter, /config_\.transform = upright \? Transform::Native0Or180 : landscape_transform_;/);
+assert.match(presenter, /p4_dsi_cpu_rotate::copy_into\(framebuffer, config_\.panel_width/);
+
+// --- The switch and the boot.
 const grid = read('src/tiles/config/grid_layout.h');
-assert.match(grid, /constexpr bool upright_ready\(\) \{\n#if defined\(DEVICE_GUITION_JC8012P4A1_V2\)\n  return true;/);
 assert.match(grid, /return available\(layout\) && \(\(!needs_rotation\(layout\) && !layout_grid\(layout\)\.half_row\) \|\| upright_ready\(\)\);/);
 assert.match(grid, /constexpr uint8_t kSpaceRows = larger\(larger\(Device::kGridRows, whole_rows\(layout_grid\(Layout::kBar\)\)\),/);
-assert.match(read('src/devices/device.cpp'), /void displaySetUpright\(bool upright\) \{\n#if defined\(DEVICE_GUITION_JC8012P4A1_V2\)/);
 // Before the splash: LVGL's screen turns and the driver draws upright. After
 // tileConfig.load(): a layout without places falls back to the classic one
 // there, and the screen must not turn then.
@@ -88,11 +145,7 @@ const ino = read('HomeTiles.ino');
 assert.ok(ino.indexOf('displayManager.applyShownScreen();') > ino.indexOf('  tileConfig.load();') &&
   ino.indexOf('  tileConfig.load();') > ino.indexOf('grid_layout::apply(configManager.getConfig().layout);') &&
   ino.indexOf('displayManager.applyShownScreen();') < ino.indexOf('BootSplash::show();'));
-const display = read('src/core/display/display_manager.cpp');
 assert.match(display, /BoardHAL::displaySetUpright\(grid_layout::turned\(\)\);\n  lv_display_set_resolution\(disp, w, h\);/);
-const driver = read('src/devices/guition_jc8012p4a1_v2/device_guition_jc8012p4a1_v2.cpp');
-assert.match(driver, /g_camera_presenter\.setTransform\(upright \? p4_dsi_camera_presenter::Transform::Native0Or180/,
-  'the camera popup frames go straight into the upright screen');
 
 // --- The tile grid: the upright grid's rows and its half row.
 const config = read('src/tiles/config/tile_config.h');

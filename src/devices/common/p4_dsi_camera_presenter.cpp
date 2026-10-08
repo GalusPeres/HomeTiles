@@ -1,4 +1,5 @@
 #include "src/devices/common/p4_dsi_camera_presenter.h"
+#include "src/devices/common/p4_dsi_cpu_rotate.h"
 
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
 
@@ -77,6 +78,8 @@ bool Presenter::init(const Config& config, esp_lcd_panel_handle_t panel,
                      SemaphoreHandle_t refresh_done,
                      uint16_t* framebuffer0, uint16_t* framebuffer1) {
   config_ = config;
+  landscape_transform_ = config.transform;
+  if (upright_) config_.transform = Transform::Native0Or180;
   panel_ = panel;
   refresh_done_ = refresh_done;
   framebuffers_[0] = framebuffer0;
@@ -89,6 +92,29 @@ bool Presenter::init(const Config& config, esp_lcd_panel_handle_t panel,
   ready_ = panel_ && refresh_done_ && framebuffers_[0] && framebuffers_[1] &&
            config_.panel_width > 0 && config_.panel_height > 0;
   return ready_;
+}
+
+void Presenter::setUpright(bool upright) {
+  upright_ = upright;
+  config_.transform = upright ? Transform::Native0Or180 : landscape_transform_;
+  Serial.printf("[CameraDisplay/%s] UI %s\n", config_.device_name ? config_.device_name : "P4",
+                upright ? "upright (no quarter turn)" : "landscape");
+}
+
+bool Presenter::drawUpright(int32_t x, int32_t y, int32_t w, int32_t h,
+                            const uint16_t* data, uint8_t rotation) {
+  uint16_t* framebuffer = activeFramebuffer();
+  if (!framebuffer || !data ||
+      !rectInside(x, y, w, h, config_.panel_width, config_.panel_height)) {
+    return false;
+  }
+  const bool flipped = (rotation & 0x02U) != 0;
+  const int32_t dst_x = flipped ? config_.panel_width - x - w : x;
+  const int32_t dst_y = flipped ? config_.panel_height - y - h : y;
+  p4_dsi_cpu_rotate::copy_into(framebuffer, config_.panel_width, config_.panel_width,
+                               config_.panel_height, x, y, w, h, data, flipped);
+  return flushFramebufferRect(framebuffer, dst_x, dst_y, w, h) &&
+         noteUiWrite(dst_x, dst_y, w, h, false);
 }
 
 size_t Presenter::framebufferBytes() const {

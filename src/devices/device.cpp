@@ -79,7 +79,10 @@ void displaySetRotation(uint8_t rotation) {
 }
 
 void displaySetUpright(bool upright) {
-#if defined(DEVICE_GUITION_JC8012P4A1_V2)
+#if defined(DEVICE_GUITION_JC8012P4A1) || defined(DEVICE_GUITION_JC8012P4A1_V2) || \
+    defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3) || defined(DEVICE_WAVESHARE_TOUCH_LCD_7) || \
+    defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) || \
+    defined(DEVICE_M5STACKS_TAB5)
   DeviceImpl::displaySetUpright(upright);
 #else
   (void)upright;

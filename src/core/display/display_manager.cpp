@@ -844,6 +844,17 @@ void IRAM_ATTR DisplayManager::touch_cb(lv_indev_t* indev_drv, lv_indev_data_t *
     }
 #endif
 
+    // The upright layout (grid_layout::turned()): the drivers report the
+    // landscape UI's point; every P4 driver turns the landscape UI into its
+    // upright panel the same way (landscape (x, y) at panel (w - 1 - y, x),
+    // with 180 the mirrored place in both), and the upright UI is the panel
+    // itself, so the upright point is the same turn for every rotation.
+    if (grid_layout::turned()) {
+      const int16_t landscape_x = mapped_x;
+      mapped_x = static_cast<int16_t>(grid_layout::screen_w() - 1 - mapped_y);
+      mapped_y = landscape_x;
+    }
+
     data->state = LV_INDEV_STATE_PRESSED;
     data->point.x = mapped_x;
     data->point.y = mapped_y;

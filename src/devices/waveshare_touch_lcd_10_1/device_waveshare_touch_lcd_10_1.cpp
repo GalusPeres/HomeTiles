@@ -1059,12 +1059,17 @@ bool DeviceWaveshareTouchLCD10::ppaCooldownActive() {
 
 void DeviceWaveshareTouchLCD10::displayPushPixels(int32_t x, int32_t y, int32_t w, int32_t h,
                                                  const uint16_t* data) {
+  // The upright layout: straight into the panel (the shared way).
+  if (g_camera_presenter.upright()) {
+    g_camera_presenter.drawUpright(x, y, w, h, data, g_rotation);
+    return;
+  }
   draw_landscape_area(x, y, w, h, data);
 }
 
 void DeviceWaveshareTouchLCD10::displayPushPixelsDMA(int32_t x, int32_t y, int32_t w, int32_t h,
                                                     const uint16_t* data) {
-  draw_landscape_area(x, y, w, h, data);
+  displayPushPixels(x, y, w, h, data);
 }
 
 bool DeviceWaveshareTouchLCD10::displayTryFullFramePreview(
@@ -1144,6 +1149,11 @@ void DeviceWaveshareTouchLCD10::displayFillScreen(uint16_t color) {
 
 void DeviceWaveshareTouchLCD10::displaySetRotation(uint8_t rotation) {
   g_rotation = rotation & 0x03;
+}
+
+void DeviceWaveshareTouchLCD10::displaySetUpright(bool upright) {
+  // The UI and the camera popup's frames without the quarter turn.
+  g_camera_presenter.setUpright(upright);
 }
 
 void DeviceWaveshareTouchLCD10::setBrightness(uint8_t value) {

@@ -779,12 +779,17 @@ bool DeviceGuitionJC8012P4A1::ppaCooldownActive() {
 
 void DeviceGuitionJC8012P4A1::displayPushPixels(int32_t x, int32_t y, int32_t w, int32_t h,
                                          const uint16_t* data) {
+  // The upright layout: straight into the panel (the shared way).
+  if (g_camera_presenter.upright()) {
+    g_camera_presenter.drawUpright(x, y, w, h, data, g_rotation);
+    return;
+  }
   draw_landscape_area(x, y, w, h, data);
 }
 
 void DeviceGuitionJC8012P4A1::displayPushPixelsDMA(int32_t x, int32_t y, int32_t w, int32_t h,
                                             const uint16_t* data) {
-  draw_landscape_area(x, y, w, h, data);
+  displayPushPixels(x, y, w, h, data);
 }
 
 bool DeviceGuitionJC8012P4A1::displayTryFullFramePreview(
@@ -847,6 +852,11 @@ void DeviceGuitionJC8012P4A1::displayFillScreen(uint16_t color) {
 
 void DeviceGuitionJC8012P4A1::displaySetRotation(uint8_t rotation) {
   g_rotation = rotation & 0x03;
+}
+
+void DeviceGuitionJC8012P4A1::displaySetUpright(bool upright) {
+  // The UI and the camera popup's frames without the quarter turn.
+  g_camera_presenter.setUpright(upright);
 }
 
 void DeviceGuitionJC8012P4A1::setBrightness(uint8_t value) {

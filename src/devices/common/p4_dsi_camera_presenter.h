@@ -60,9 +60,14 @@ class Presenter {
 
   uint16_t* activeFramebuffer() const;
   bool active() const { return double_buffer_active_; }
-  // The UI's orientation on the panel changed (an upright layout on a
-  // landscape panel draws without the quarter turn).
-  void setTransform(Transform transform) { config_.transform = transform; }
+  // The upright layout (grid_layout::turned()): the UI and the camera frames
+  // go into the panel without the quarter turn the landscape UI needs.
+  void setUpright(bool upright);
+  bool upright() const { return upright_; }
+  // An upright UI area straight into the active framebuffer (rotation 2:
+  // turned by 180 into the mirrored place), written back for the scan-out.
+  bool drawUpright(int32_t x, int32_t y, int32_t w, int32_t h,
+                   const uint16_t* data, uint8_t rotation);
 
   // Call after a normal UI write into activeFramebuffer(). PPA writers must
   // set ppa_writer so cached CPU lines cannot later overwrite the DMA result.
@@ -100,6 +105,10 @@ class Presenter {
                                         uint8_t rotation) const;
 
   Config config_{};
+  // The driver's transform for the landscape UI (init()); upright the
+  // frames go in Native0Or180.
+  Transform landscape_transform_ = Transform::Portrait90Or270;
+  bool upright_ = false;
   esp_lcd_panel_handle_t panel_ = nullptr;
   SemaphoreHandle_t refresh_done_ = nullptr;
   uint16_t* framebuffers_[2] = {nullptr, nullptr};

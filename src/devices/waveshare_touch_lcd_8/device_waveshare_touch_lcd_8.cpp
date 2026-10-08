@@ -1055,12 +1055,17 @@ bool DeviceWaveshareTouchLCD8::ppaCooldownActive() {
 
 void DeviceWaveshareTouchLCD8::displayPushPixels(int32_t x, int32_t y, int32_t w, int32_t h,
                                                  const uint16_t* data) {
+  // The upright layout: straight into the panel (the shared way).
+  if (g_camera_presenter.upright()) {
+    g_camera_presenter.drawUpright(x, y, w, h, data, g_rotation);
+    return;
+  }
   draw_landscape_area(x, y, w, h, data);
 }
 
 void DeviceWaveshareTouchLCD8::displayPushPixelsDMA(int32_t x, int32_t y, int32_t w, int32_t h,
                                                     const uint16_t* data) {
-  draw_landscape_area(x, y, w, h, data);
+  displayPushPixels(x, y, w, h, data);
 }
 
 bool DeviceWaveshareTouchLCD8::displayTryFullFramePreview(
@@ -1146,6 +1151,11 @@ void DeviceWaveshareTouchLCD8::displayFillScreen(uint16_t color) {
 
 void DeviceWaveshareTouchLCD8::displaySetRotation(uint8_t rotation) {
   g_rotation = rotation & 0x03;
+}
+
+void DeviceWaveshareTouchLCD8::displaySetUpright(bool upright) {
+  // The UI and the camera popup's frames without the quarter turn.
+  g_camera_presenter.setUpright(upright);
 }
 
 void DeviceWaveshareTouchLCD8::setBrightness(uint8_t value) {
@@ -1240,6 +1250,7 @@ bool DeviceWaveshareTouchLCD8::getTouch(int16_t& x, int16_t& y) {
   int32_t mapped_x = 0;
   int32_t mapped_y = 0;
 
+  // An upright layout turns this landscape point in DisplayManager.
   if (g_rotation & 0x02) {
     mapped_x = static_cast<int32_t>(display_cfg.height) - 1 - static_cast<int32_t>(py[selected]);
     mapped_y = static_cast<int32_t>(px[selected]);

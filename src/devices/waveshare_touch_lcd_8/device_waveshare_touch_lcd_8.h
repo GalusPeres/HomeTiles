@@ -61,6 +61,7 @@ void displayWaitFrameStart();
 void displayCommit();
 void displayFillScreen(uint16_t color);
 void displaySetRotation(uint8_t rotation);
+void displaySetUpright(bool upright);
 void pausePpaFor(uint32_t duration_ms);
 // Read-only: true while a pausePpaFor() cooldown is still active (all flushes
 // fall back to slow CPU rotate during this window). Lets callers that redraw

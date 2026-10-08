@@ -168,12 +168,19 @@ constexpr bool available(Layout layout) { return layout != Layout::kPortrait || 
 constexpr bool needs_rotation(Layout layout) {
   return layout != Layout::kClassic && layout_grid(layout).portrait != native_portrait();
 }
-// The panel shows a turned layout: its driver draws and reads the touch
-// upright without the quarter turn (Device::displaySetUpright), and the tile
-// grid takes the half row. Hochkant step 2, one panel after the other (user
-// 2026-10-08: the Guition V2 first).
+// The panel shows a turned layout. Every P4 panel here is upright by itself
+// and its driver turns the landscape UI into it; an upright layout is drawn
+// without that turn (the shared path, p4_dsi_camera_presenter.h
+// drawUpright), the touch is turned once for all in DisplayManager, and the
+// tile grid takes the half row (user 2026-10-08: one general way, tested on
+// the Guition V2). The 1024 x 600 panels (JC1060, Waveshare 7B) are landscape
+// by themselves and the JC4880's profile is upright: they would need a real
+// quarter turn and stay without (classic and landscape layouts only).
 constexpr bool upright_ready() {
-#if defined(DEVICE_GUITION_JC8012P4A1_V2)
+#if defined(DEVICE_GUITION_JC8012P4A1) || defined(DEVICE_GUITION_JC8012P4A1_V2) || \
+    defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3) || defined(DEVICE_WAVESHARE_TOUCH_LCD_7) || \
+    defined(DEVICE_WAVESHARE_TOUCH_LCD_8) || defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) || \
+    defined(DEVICE_M5STACKS_TAB5)
   return true;
 #else
   return false;

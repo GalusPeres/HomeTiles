@@ -11,6 +11,7 @@
 
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
+#include "src/devices/common/p4_dsi_cpu_rotate.h"
 #include <LittleFS.h>
 #include <M5Unified.h>
 #include <SD.h>
@@ -54,6 +55,10 @@ uint32_t g_sd_retry_tick_ms = 0;
 bool g_littlefs_ready = false;
 uint8_t g_brightness = 150;
 uint8_t g_rotation = DeviceM5StacksTab5::kProfile.rotation_default;
+// The upright layout (grid_layout.h): the UI is drawn into the panel in its
+// own orientation, 720 x 1280, without the quarter turn. M5GFX keeps its
+// landscape rotation, so its touch stays landscape (DisplayManager turns it).
+bool g_upright = false;
 
 // The Tab5 backlight driver keeps running when the level is lowered to 1%, but
 // it does not start from off at such a low duty: waking at 1% left the display
@@ -339,8 +344,8 @@ bool init_display() {
 
 bool rect_inside_logical_bounds(int32_t x, int32_t y, int32_t w, int32_t h) {
   return x >= 0 && y >= 0 && w > 0 && h > 0 &&
-         (x + w) <= kLogicalWidth &&
-         (y + h) <= kLogicalHeight;
+         (x + w) <= (g_upright ? kPanelWidth : kLogicalWidth) &&
+         (y + h) <= (g_upright ? kPanelHeight : kLogicalHeight);
 }
 
 bool ppa_rotate_to_panel(int32_t x, int32_t y, int32_t w, int32_t h,
@@ -402,9 +407,14 @@ bool ppa_rotate_to_panel(int32_t x, int32_t y, int32_t w, int32_t h,
 
   int32_t dst_x = 0;
   int32_t dst_y = 0;
-  const int32_t dst_w = h;
-  const int32_t dst_h = w;
-  if (g_rotation & 0x02) {
+  // Upright: the area keeps its shape, straight or turned by 180 into the
+  // mirrored place.
+  const int32_t dst_w = g_upright ? w : h;
+  const int32_t dst_h = g_upright ? h : w;
+  if (g_upright) {
+    dst_x = (g_rotation & 0x02) ? kPanelWidth - x - w : x;
+    dst_y = (g_rotation & 0x02) ? kPanelHeight - y - h : y;
+  } else if (g_rotation & 0x02) {
     dst_x = y;
     dst_y = kLogicalWidth - x - w;
   } else {
@@ -450,8 +460,10 @@ bool ppa_rotate_to_panel(int32_t x, int32_t y, int32_t w, int32_t h,
   oper.out.block_offset_y = dst_y;
   oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
 
-  oper.rotation_angle = (g_rotation & 0x02) ? PPA_SRM_ROTATION_ANGLE_90
-                                            : PPA_SRM_ROTATION_ANGLE_270;
+  oper.rotation_angle = g_upright ? ((g_rotation & 0x02) ? PPA_SRM_ROTATION_ANGLE_180
+                                                         : PPA_SRM_ROTATION_ANGLE_0)
+                       : (g_rotation & 0x02) ? PPA_SRM_ROTATION_ANGLE_90
+                                             : PPA_SRM_ROTATION_ANGLE_270;
   oper.scale_x = 1.0f;
   oper.scale_y = 1.0f;
   oper.rgb_swap = false;
@@ -497,6 +509,21 @@ void push_pixels_with_ppa_fallback(int32_t x, int32_t y, int32_t w, int32_t h,
                                    const uint16_t* data, bool dma) {
   // Tab5 LVGL uses RGB565_SWAPPED; the panel framebuffer uses RGB565.
   if (ppa_rotate_to_panel(x, y, w, h, w, data, true)) {
+    return;
+  }
+
+  // Upright: straight (or 180) into the panel framebuffer, bytes swapped
+  // like the PPA does; M5GFX would turn it for its landscape rotation.
+  if (g_upright) {
+    if (!g_panel_fb) return;
+    const bool flipped = (g_rotation & 0x02) != 0;
+    p4_dsi_cpu_rotate::copy_into(g_panel_fb, kPanelWidth, kPanelWidth, kPanelHeight, x, y, w, h, data, flipped, true);
+    const int32_t dst_x = flipped ? kPanelWidth - x - w : x;
+    const int32_t dst_y = flipped ? kPanelHeight - y - h : y;
+    for (int32_t row = 0; row < h; ++row) {
+      flush_cache_for_dma(g_panel_fb + static_cast<size_t>(dst_y + row) * kPanelWidth + dst_x,
+                          static_cast<size_t>(w) * sizeof(uint16_t));
+    }
     return;
   }
 
@@ -600,6 +627,11 @@ void DeviceM5StacksTab5::displaySetRotation(uint8_t rotation) {
 
   M5.Display.waitDMA();
   M5.Display.setRotation(to_panel_rotation(g_rotation));
+}
+
+void DeviceM5StacksTab5::displaySetUpright(bool upright) {
+  g_upright = upright;
+  Serial.printf("[Device/M5StacksTab5] UI %s\n", upright ? "upright (no quarter turn)" : "landscape");
 }
 
 void DeviceM5StacksTab5::setBrightness(uint8_t value) {

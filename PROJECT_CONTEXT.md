@@ -150,8 +150,10 @@ Last reviewed: 2026-10-08
 - New look (b260): popup head, borderless groups; square panels gear + four tabs; portrait popups = centered square card. b261: WLAN entry card, back arrow, option gap, concentric head buttons, corner circle at the pill inset. HW pending.
 - Weather tile (b261) by real size, not slots: days = width / (widest measured text + 85 % gap) (4B/V2 3x2 = 5), row from two-row height, FR tile "Auj."; preview gets the measured width.
 
-## Layouts (`feature/layouts`, unreleased)
+## Layouts (`feature/layouts`, unreleased, b287)
 
-- Three layouts (`grid_layout.h`): classic (profile grid, places in PackedTileV7), head bar landscape (1280x800 6x4, 1280x720/1024x600 5x3, 800x480 4x3, square 3x3), head bar upright (prepared: 4x6.5, 3x6, 3x5.5; switchable only without turn/half row). NVS `layout` read at boot; a bar layout without places starts classic.
-- Bar places: `/_tile_grids/layouts.json` by folder + view_id (`tile_layouts.cpp`); no place = `layout_hidden` (not drawn, no room). Saves keep the classic places; a tile made under a bar layout takes the first free classic cell.
-- Web Admin: "Layout" field opens the layout window (`tiles/layout-window.js`): real editor, red = not part of the layout, folder rule, take-out cross, Speichern/Umstellen; `/api/layouts`, export/import use classic places. Tab5 b266 HW test pending.
+- Three layouts (`grid_layout.h`): classic (profile grid, places in PackedTileV7), head bar landscape (1280x800 6x4, 1280x720/1024x600 5x3, 800x480 4x3, square 3x3), head bar upright (prepared: 4x6.5, 3x6, 3x5.5). NVS `layout` read at boot (OTA keeps it); a bar layout without places starts classic.
+- Places: `/_tile_grids/layouts.json` by folder + view_id (`tile_layouts.cpp`); screensaver = folder 0xFFFE keyed slot+1 (`screensaver_places.*`: the layout's grid, no head, two rows at the bottom); its clock per layout in the screensaver config (`clock_layouts`, classic on top). No place = `layout_hidden` (not drawn, no room).
+- Layout window (`tiles/layout-window.js`): screen top left, storage only right/below; X always deletes after a question; tiles never shrink; red blocks Speichern/Umstellen; screensaver tab without picture. Export marks classic storage tiles.
+- Popup header = head bar rule (b284, `popup_layout.h`): X one grid gap in the card corner, circle mirrored, card radius = tile radius + gap; emulator now uses the firmware rule. Head time 32/20 px; without gear its right gap = top gap; gear shows the PIN lock; Settings PIN popup always global color.
+- Next: Hochkant (screen size at runtime, V2 first; V2/8"/Tab5 panels are natively upright, so no rotation; touch, camera popup, own camera, wallpaper fit; then unlock Umstellen); first-start wizard later. HW tests pending b283-b286.

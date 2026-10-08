@@ -37,7 +37,7 @@ import {extractDeliveredFunction, readRepoFile} from '../../lib/admin-source.mjs
 const windowNames = ['layoutClone', 'layoutEmptyTile', 'layoutUsed', 'layoutNavType', 'layoutBarHidden', 'layoutCanvas', 'layoutOffsetX',
   'layoutInside', 'layoutFolderId', 'classicHidden', 'layoutBase', 'layoutSettle', 'takeoverTiles', 'setupTiles',
   'isCompactSensorType', 'isEditableValueType', 'supportsHalfSize', 'supportedTileLayout', 'saveLayoutWindow', 'refreshLayoutSave', 'layoutTabs',
-  'layoutSignature', 'layoutSavedSig', 'layoutDirty', 'layoutSelectedTile', 'deselectLayoutTile', 'parkLayoutTile',
+  'layoutSignature', 'layoutSavedSig', 'layoutDirty', 'layoutSelectedTile', 'deselectLayoutTile', 'normalizeLayoutForTileType', 'clampHalf',
   'deleteLayoutTile', 'classicParked', 'layoutParked', 'layoutRed', 'loadLayoutWindow', 'mayLeaveLayout'];
 function windowContext(pages, data, extra = {}) {
   // Every case gets its own copy: the window changes the pages it holds.
@@ -151,16 +151,12 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   assert.equal(run("layoutParked({col: 6, row: 0, span_w: 1, span_h: 1}, 'bar')"), true);
   assert.equal(run("layoutParked({col: 0, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'storage on the left too');
   assert.equal(run("layoutRed({type: 4, col: 6, row: 0, span_w: 1, span_h: 1}, 'bar')"), true, 'a folder needs a place');
+  // The cross on a tile on the screen asks and deletes it too (user
+  // 2026-10-08); into the storage a tile is dragged.
   assert.equal(run("layoutInside(getTilesData('folder0')[2], 'bar')"), true);
-  run('parkLayoutTile()');
-  const parked = run("getTilesData('folder0')[2]");
-  assert.equal(run(`layoutParked(${JSON.stringify(parked)}, 'bar')`), true, 'the cross parks a tile from the screen');
-  assert.equal(parked.type, 1, 'parking keeps the tile');
-  assert.deepEqual(calls, [], 'parking sends nothing to the panel');
-  assert.equal(ctx.drafts.folder0[2], undefined);
   ctx.currentTileIndex = 2;
   await run('deleteLayoutTile()');
-  assert.deepEqual(calls, [['/api/tiles', [['folder', '0'], ['index', '2'], ['type', '0']]]], 'a parked tile is deleted');
+  assert.deepEqual(calls, [['/api/tiles', [['folder', '0'], ['index', '2'], ['type', '0']]]], 'the tile is deleted');
   assert.equal(run("getTilesData('folder0')[2].type"), 0);
   ctx.currentTileIndex = 0;
   assert.equal(run('layoutSelectedTile()'), null, 'no cross on a folder');

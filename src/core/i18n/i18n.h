@@ -249,7 +249,6 @@ struct Strings {
   const char* layout_unsaved_confirm;
   const char* layout_storage;
   const char* layout_storage_hint;
-  const char* layout_park;
   const char* layout_parked_tiles;
   const char* layout_parked_tile;
   const char* layout_delete_tile;

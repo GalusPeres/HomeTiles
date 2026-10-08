@@ -11347,21 +11347,35 @@ function syncTileRadiusControls(tabEl) {
     };
     const order = tiles.map((tile, index) => index).filter(index => layoutUsed(tiles[index]))
       .sort((a, b) => (tiles[a]._unplaced ? 1 : 0) - (tiles[b]._unplaced ? 1 : 0));
+    // Every tile in the size it is drawn in (a Media tile at least 2 x 2).
+    const drawn = (type, col, row, w, h) => {
+      const shown = normalizeLayoutForTileType(type, col, row, w, h);
+      return shown.col === col && shown.row === row && shown.span_w === w && shown.span_h === h;
+    };
     const later = [];
     for (const index of order) {
       const tile = tiles[index];
-      if (!tile._unplaced && fits(tile.col, tile.row, tile.span_w, tile.span_h)) take(tile);
-      else later.push(tile);
+      const shown = normalizeLayoutForTileType(tile.type, tile.col, tile.row, tile.span_w, tile.span_h);
+      if (!tile._unplaced && shown.col === tile.col && shown.row === tile.row &&
+          fits(tile.col, tile.row, shown.span_w, shown.span_h)) {
+        Object.assign(tile, shown);
+        take(tile);
+      } else {
+        later.push(tile);
+      }
     }
     for (const tile of later) {
-      const sizes = [[tile.span_w, tile.span_h], [1, 1], [1, 0.5]];
+      const shown = normalizeLayoutForTileType(tile.type, 0, 0, tile.span_w, tile.span_h);
+      const sizes = [[shown.span_w, shown.span_h], [1, 1], [1, 0.5]];
       let spot = null;
       for (const outside of [true, false]) {
         for (const [w, h] of sizes) {
           for (let row = 0; !spot && row + h <= canvas.rows; row += 0.5) {
             for (let col = 0; !spot && col + w <= canvas.cols; col += 0.5) {
               if (fits(col, row, w, h) && (!outside || layoutParked({col, row, span_w: w, span_h: h}, key)) &&
-                  supportedTileLayout(tile.type, {col, row, span_w: w, span_h: h})) spot = {col, row, span_w: w, span_h: h};
+                  supportedTileLayout(tile.type, {col, row, span_w: w, span_h: h}) && drawn(tile.type, col, row, w, h)) {
+                spot = {col, row, span_w: w, span_h: h};
+              }
             }
           }
           if (spot) break;
@@ -11738,7 +11752,7 @@ function syncTileRadiusControls(tabEl) {
     if (!el) return;
     const cross = document.createElement('span');
     cross.className = 'setup-trash';
-    cross.title = t(layoutInside(layoutSelectedTile(), layoutWindow.key) ? 'layoutPark' : 'layoutDeleteTile');
+    cross.title = t('layoutDeleteTile');
     cross.dataset.for = el.id;
     cross.innerHTML = '<i class="mdi mdi-close"></i>';
     grid.appendChild(cross);
@@ -11774,20 +11788,8 @@ function syncTileRadiusControls(tabEl) {
 
   // The cross on a tile on the screen puts it into the storage: no part of
   // this layout, its places in the other layouts stay (user 2026-10-08).
-  function parkLayoutTile() {
-    const tile = layoutSelectedTile();
-    if (!tile) return;
-    const tab = layoutWindow.tab, index = currentTileIndex;
-    // The window's own drafts end with it; the tile's place is its data.
-    if (drafts[tab]) delete drafts[tab][index];
-    deselectLayoutTile(tab);
-    const tiles = getTilesData(tab);
-    tile._unplaced = true;
-    layoutSettle(layoutWindow.key, tiles);
-    showLayoutTiles(tab, tiles);
-  }
-
-  // The cross on a tile in the storage deletes it, from every layout.
+  // The cross on a tile deletes it after the question, from every layout
+  // (user 2026-10-08); into the storage a tile is dragged.
   async function deleteLayoutTile() {
     const tile = layoutSelectedTile();
     if (!tile) return;
@@ -12108,11 +12110,7 @@ function syncTileRadiusControls(tabEl) {
     if (event.target.closest('.setup-close') && mayLeaveLayout()) { closeLayoutWindow(); return; }
     if (event.target.closest('.setup-save')) saveLayoutWindow();
     if (event.target.closest('.setup-undo')) undoLayoutCopy();
-    if (event.target.closest('.setup-trash')) {
-      const tile = layoutSelectedTile();
-      if (tile && layoutInside(tile, layoutWindow.key)) parkLayoutTile();
-      else deleteLayoutTile();
-    }
+    if (event.target.closest('.setup-trash')) deleteLayoutTile();
     if (event.target.closest('.setup-apply')) applyLayoutWindow();
     // Selecting a tile decides the delete cross.
     setTimeout(refreshLayoutDelete, 0);

@@ -126,7 +126,6 @@ void appendAdminScripts(String& html) {
   appendJsEntry("layoutUnsavedConfirm", tr.layout_unsaved_confirm);
   appendJsEntry("layoutStorage", tr.layout_storage);
   appendJsEntry("layoutStorageHint", tr.layout_storage_hint);
-  appendJsEntry("layoutPark", tr.layout_park);
   appendJsEntry("layoutParkedTiles", tr.layout_parked_tiles);
   appendJsEntry("layoutParkedTile", tr.layout_parked_tile);
   appendJsEntry("layoutDeleteTile", tr.layout_delete_tile);

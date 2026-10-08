@@ -32,11 +32,12 @@ constexpr uint16_t kChipId = 0x5602;
 // size, so no crop pass runs; the array window stays 1296x732.
 constexpr uint32_t kFrameWidth = 1280;
 constexpr uint32_t kFrameHeight = 720;
-// The panel shown upright (an upright layout, grid_layout::turned()): the
-// sensor then stands like the 8-inch's, so it outputs a centred 400x720
-// window (16:9 once the Bridge turns it; whole 16x16 MCUs for 4:2:0) - the
-// 8-inch way, cropping on the sensor costs nothing and sends less (user
-// 2026-10-08).
+// The other window: a centred 400x720 strip, sent when the Bridge turns the
+// image a quarter (an upright layout, or a camera rotation of 90 degrees;
+// the sensor then stands upright): 16:9 landscape once turned, whole 16x16
+// MCUs for 4:2:0. User 2026-10-08, the 8-inch way: a sensor standing upright
+// sends a landscape strip - cropping on the sensor costs nothing and sends
+// less - a lying one everything.
 constexpr uint32_t kTurnedFrameWidth = 400;
 constexpr uint32_t kTurnedFrameHeight = 720;
 constexpr uint32_t kArrayWindowWidth = 1296;

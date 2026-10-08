@@ -134,10 +134,18 @@ assert.match(service, /static_assert\(kMode\.frame_width == kMode\.image_width &
 // 4:2:0 whenever the Bridge turns (the mounting or the upright layout).
 assert.match(service, /return statusRotate\(\) != 0 \? JPEG_DOWN_SAMPLING_YUV420 : JPEG_DOWN_SAMPLING_YUV422;/);
 assert.equal((service.match(/config\.sub_sample = jpegSubsampling\(\);/g) || []).length, 2, 'Snapshot and stream');
-// The sensor window of this boot: the turned one with an upright layout.
-assert.match(service, /bool windowTurned\(\) \{ return grid_layout::turned\(\); \}/);
-assert.match(service, /uint32_t frameWidth\(\) \{ return windowTurned\(\) \? board::Sensor::kTurnedWidth : kMode\.frame_width; \}/);
-assert.match(service, /err = g_sensor\.loadDefaultMode\(kMode\.mirror, windowTurned\(\)\);/);
+// The window follows the Bridge's turn (user 2026-10-08, drawn): the
+// upright strip while the Bridge turns, the whole image otherwise, relative to
+// the board's default window; applied at a capture or stream start; a
+// rotation change ends a stream with the other window (the keepalive starts
+// it again).
+assert.match(service, /constexpr bool kDefaultIsStrip = kMode\.frame_height > kMode\.frame_width;/);
+assert.match(service, /bool windowWanted\(\) \{ return \(statusRotate\(\) != 0\) != kDefaultIsStrip; \}/);
+assert.match(service, /return sensor\.loadDefaultMode\(kMode\.mirror, turned\);/);
+assert.match(service, /const bool turned = windowWanted\(\);\s*err = loadSensorMode\(g_sensor, turned\);/);
+assert.match(svc('runStream'), /if \(!ensureSensor\(true\) \|\| !ensureSensorWindow\(\)\) \{/);
+assert.match(service, /if \(!ensureSensorWindow\(\)\) \{\s*\*detail = Detail::SensorInitFailed;/);
+assert.match(service, /if \(g_stream_running\.load\(\) && windowWanted\(\) != windowTurned\(\)\) g_stream_wanted\.store\(false\);/);
 assert.doesNotMatch(service, /config\.sub_sample = JPEG_DOWN_SAMPLING/);
 // The announced turn follows the mounting and the user rotation at runtime
 // (tools/tests/web/test-local-camera-rotation.mjs covers the combinations).

@@ -380,16 +380,31 @@ constexpr UBaseType_t kWorkerPriority = tskIDLE_PRIORITY;
 constexpr uint32_t kPipelineIdleReleaseMs = 30000;
 
 constexpr uint32_t kIspClockHz = 80 * 1000 * 1000;
-// The sensor window of this boot (user 2026-10-08, the 8-inch way): a layout
-// that shows the panel turned (Hochkant, grid_layout::turned()) turns the
-// camera with it, so the sensor outputs its turned window - the 8-inch's
-// landscape 960x544 that needs no turn, the landscape sensors' upright
-// 400x720 that the Bridge turns - and the picture stays 16:9 landscape.
-// Cropping on the sensor costs nothing and sends less. Fixed for the boot
-// like the layout.
-bool windowTurned() { return grid_layout::turned(); }
-uint32_t frameWidth() { return windowTurned() ? board::Sensor::kTurnedWidth : kMode.frame_width; }
-uint32_t frameHeight() { return windowTurned() ? board::Sensor::kTurnedHeight : kMode.frame_height; }
+// The sensor window follows the Bridge's turn (user 2026-10-08, drawn): a
+// sensor standing upright in the world - the Bridge turns its image a
+// quarter - sends a centred landscape strip, 16:9 once turned (the 8-inch's
+// 544x960, the other sensors' 400x720); a lying one sends its whole image
+// (1280x960, 1280x720) unturned. Cropping on the sensor costs nothing and
+// sends less; the panel never turns. Every sensor has both windows: the
+// board's default one (the mode's frame, the strip when it is upright) and
+// the other (kTurnedWidth x kTurnedHeight). The turn - board mounting, an
+// upright layout, the camera rotation in the Web Admin - picks the window,
+// so a board whose mounting is guessed wrong is put right by the rotation
+// alone, crop included.
+constexpr bool kQuarterTurn = kMode.quarter_turn;
+constexpr bool kDefaultIsStrip = kMode.frame_height > kMode.frame_width;
+bool windowWanted() { return (statusRotate() != 0) != kDefaultIsStrip; }
+uint32_t windowWidth(bool turned) { return turned ? board::Sensor::kTurnedWidth : kMode.frame_width; }
+uint32_t windowHeight(bool turned) { return turned ? board::Sensor::kTurnedHeight : kMode.frame_height; }
+esp_err_t loadSensorMode(board::Sensor& sensor, bool turned) {
+  return sensor.loadDefaultMode(kMode.mirror, turned);
+}
+// The window the sensor and the pipeline have: set when the mode is loaded,
+// changed only at a capture or stream start (the sensor in standby).
+std::atomic<bool> g_window_turned{false};
+bool windowTurned() { return g_window_turned.load(); }
+uint32_t frameWidth() { return windowWidth(windowTurned()); }
+uint32_t frameHeight() { return windowHeight(windowTurned()); }
 uint32_t frameBytes() { return frameWidth() * frameHeight() * 2; }  // RGB565
 // This silicon has no ISP crop and the JPEG encoder has no stride: the sensor
 // window must be the JPEG size.
@@ -398,13 +413,14 @@ static_assert(kMode.frame_width == kMode.image_width &&
               "the sensor must deliver the JPEG size");
 uint32_t imageWidthSent() { return frameWidth(); }
 uint32_t imageHeightSent() { return frameHeight(); }
-uint16_t statusWidth() { return static_cast<uint16_t>(imageWidthSent()); }
-uint16_t statusHeight() { return static_cast<uint16_t>(imageHeightSent()); }
+// As sent from the next start on (the status and its "rotate" follow a
+// change at once).
+uint16_t statusWidth() { return static_cast<uint16_t>(windowWidth(windowWanted())); }
+uint16_t statusHeight() { return static_cast<uint16_t>(windowHeight(windowWanted())); }
 // A sensor mounted a quarter turn from the landscape image: the JPEG leaves
 // the panel portrait and the receiver (the Bridge) turns it 90 degrees
 // clockwise, announced as "rotate" in the retained status. A PPA turn on the
 // panel held the 2D-DMA for ~29 ms per frame and made the display sluggish.
-constexpr bool kQuarterTurn = kMode.quarter_turn;
 // RAW8 or RAW10 from the sensor; the ISP output (RGB565) is the same.
 constexpr bool kRaw8 = kMode.raw_bits == 8;
 static_assert(kMode.raw_bits == 8 || kMode.raw_bits == 10, "RAW8 or RAW10 only");
@@ -416,7 +432,9 @@ jpeg_down_sampling_type_t jpegSubsampling() {
 }
 static_assert(kMode.image_width % 16 == 0 && kMode.image_height % 16 == 0 &&
                   board::Sensor::kTurnedWidth % 16 == 0 && board::Sensor::kTurnedHeight % 16 == 0,
-              "a lossless quarter turn needs whole 16x16 MCUs in either window");
+              "whole 16x16 MCUs (4:2:0 for a turn) in either window");
+static_assert((board::Sensor::kTurnedHeight > board::Sensor::kTurnedWidth) != kDefaultIsStrip,
+              "one window is the upright strip, the other the whole landscape image");
 constexpr size_t kFrameBufferAlign = 128;
 static_assert(uint32_t{kMode.frame_width} * kMode.frame_height * 2 % kFrameBufferAlign == 0 &&
                   uint32_t{board::Sensor::kTurnedWidth} * board::Sensor::kTurnedHeight * 2 % kFrameBufferAlign == 0,
@@ -1177,7 +1195,8 @@ bool ensureSensor(bool report_state) {
     return false;
   }
   g_sensor_identified = true;
-  err = g_sensor.loadDefaultMode(kMode.mirror, windowTurned());
+  const bool turned = windowWanted();
+  err = loadSensorMode(g_sensor, turned);
   if (err != ESP_OK) {
     Serial.printf("[LocalCam] Sensor %s mode setup failed: %s\n", kMode.name,
                   esp_err_to_name(err));
@@ -1185,6 +1204,7 @@ bool ensureSensor(bool report_state) {
     if (report_state) publishWorkerState(ServiceState::Error, Detail::SensorInitFailed);
     return false;
   }
+  g_window_turned.store(turned);
   g_exposure.lines = kMode.default_exposure_lines;
   g_exposure.gain_x16 = kMode.default_gain_x16;
   // The mode table reads out in orientation state 0.
@@ -1198,6 +1218,27 @@ bool ensureSensor(bool report_state) {
       static_cast<unsigned>(kMode.raw_bits), static_cast<unsigned>(kMode.data_lanes),
       static_cast<unsigned>(millis() - started_ms));
   if (report_state) publishWorkerState(ServiceState::Ready, Detail::None);
+  return true;
+}
+
+// A capture or stream starts with the window the Bridge's turn wants (the
+// sensor is in standby here): a change reloads the mode with it, the
+// pipeline is built for it next.
+bool ensureSensorWindow() {
+  const bool wanted = windowWanted();
+  if (wanted == windowTurned()) return true;
+  const esp_err_t err = loadSensorMode(g_sensor, wanted);
+  if (err != ESP_OK) {
+    Serial.printf("[LocalCam] Sensor %s window change failed: %s\n", kMode.name, esp_err_to_name(err));
+    return false;
+  }
+  g_window_turned.store(wanted);
+  g_exposure.lines = kMode.default_exposure_lines;
+  g_exposure.gain_x16 = kMode.default_gain_x16;
+  g_applied_orientation = 0;
+  Serial.printf("[LocalCam] Sensor window %ux%u for a Bridge turn of %u degrees\n",
+                static_cast<unsigned>(frameWidth()), static_cast<unsigned>(frameHeight()),
+                static_cast<unsigned>(statusRotate()));
   return true;
 }
 
@@ -1544,6 +1585,10 @@ ErrorCode captureJpeg(uint32_t max_bytes, size_t* jpeg_bytes, CaptureStats* stat
   // updates the published state so the Bridge capability follows reality.
   if (!ensureSensor(true)) {
     *detail = static_cast<Detail>(g_detail.load());
+    return ErrorCode::SensorUnavailable;
+  }
+  if (!ensureSensorWindow()) {
+    *detail = Detail::SensorInitFailed;
     return ErrorCode::SensorUnavailable;
   }
   releaseUsedPipeline();
@@ -2615,7 +2660,7 @@ uint32_t runStream() {
   const uint32_t frames_at_start = local_camera_upload::framesSentTotal();
 
   do {
-    if (!ensureSensor(true)) {
+    if (!ensureSensor(true) || !ensureSensorWindow()) {
       reason = StopReason::SensorUnavailable;
       break;
     }
@@ -3485,7 +3530,7 @@ uint8_t streamMode() { return g_stream_mode.load(); }
 // The picture Home Assistant shows: the JPEG as turned by the Bridge.
 uint16_t imageWidth() {
 #if defined(HOMETILES_LOCAL_CAMERA)
-  return static_cast<uint16_t>(statusRotate() != 0 ? imageHeightSent() : imageWidthSent());
+  return static_cast<uint16_t>(statusRotate() != 0 ? statusHeight() : statusWidth());
 #else
   return 0;
 #endif
@@ -3493,7 +3538,7 @@ uint16_t imageWidth() {
 
 uint16_t imageHeight() {
 #if defined(HOMETILES_LOCAL_CAMERA)
-  return static_cast<uint16_t>(statusRotate() != 0 ? imageWidthSent() : imageHeightSent());
+  return static_cast<uint16_t>(statusRotate() != 0 ? statusWidth() : statusHeight());
 #else
   return 0;
 #endif
@@ -3589,7 +3634,10 @@ bool setRotation(uint8_t quarter_turns) {
                 static_cast<unsigned>(quarter_turns) * 90u,
                 static_cast<unsigned>(statusRotate()));
   // The quarter turn the Bridge applies may have changed; the sensor flips
-  // follow with the next frame (applyOrientation()).
+  // follow with the next frame (applyOrientation()). A running stream with
+  // the other window ends; the Bridge's keepalive starts it again with the
+  // new window (ensureSensorWindow()).
+  if (g_stream_running.load() && windowWanted() != windowTurned()) g_stream_wanted.store(false);
   publishStatus();
   return true;
 #else

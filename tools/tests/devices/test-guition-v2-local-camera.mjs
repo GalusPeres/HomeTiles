@@ -252,7 +252,7 @@ assert.match(body('releaseSensor'), /if \(g_sensor_identified\) sensorStandby\(\
   'Disable puts an identified sensor into standby and releases only this driver\'s resources');
 assert.match(body('sensorStandby'), /setStream\(false\)[\s\S]*setStream\(false\)/,
   'A failed standby is retried once');
-assert.match(body('ensureSensor'), /g_sensor\.probe\(&chip_id\)[\s\S]*g_sensor_identified = true;[\s\S]*loadDefaultMode/,
+assert.match(body('ensureSensor'), /g_sensor\.probe\(&chip_id\)[\s\S]*g_sensor_identified = true;[\s\S]*loadSensorMode\(g_sensor, turned\)/,
   'Register writes follow only a matching chip ID');
 assert.match(body('ensureSensor'), /err == ESP_ERR_NOT_FOUND/,
   'Only an address NACK or ID mismatch is reported as a missing sensor');

@@ -176,6 +176,15 @@ assert.equal(turnsOf(true, false, 0 + 1), 2, '8-inch upright: sensor flips, no B
 assert.equal(turnsOf(true, false, 0), 1, '8-inch landscape: the Bridge turns 90 as before');
 assert.equal(turnsOf(false, false, 0 + 1), 1, 'V2 upright: the Bridge turns 90 clockwise');
 assert.equal(turnsOf(false, false, 0), 0, 'V2 landscape unchanged');
+// The sensor window follows the Bridge's turn (user 2026-10-08, drawn):
+// the upright strip while it turns, the whole image otherwise.
+const strip = (quarter, user, upright) => (turnsOf(quarter, false, user + (upright ? 1 : 0)) & 1) === 1;
+assert.equal(strip(true, 0, false), true, '8-inch landscape: the 544x960 strip, the Bridge turns');
+assert.equal(strip(true, 0, true), false, '8-inch upright: the whole 1280x960, no turn');
+assert.equal(strip(false, 0, false), false, 'V2 landscape: the whole 1280x720');
+assert.equal(strip(false, 0, true), true, 'V2 upright: the 400x720 strip, the Bridge turns');
+assert.equal(strip(true, 1, false), false, 'a camera rotation of 90 degrees swaps strip and whole');
+assert.equal(strip(false, 1, false), true, 'the same on a landscape sensor');
 
 // --- Settings and the screensaver take the screen of this boot.
 assert.match(read('src/ui/tabs/settings/settings_screen.cpp'),

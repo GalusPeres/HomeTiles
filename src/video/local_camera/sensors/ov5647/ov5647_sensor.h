@@ -35,12 +35,12 @@ constexpr uint16_t kChipId = 0x5647;
 // (less CSI and PSRAM traffic).
 constexpr uint32_t kFrameWidth = 544;
 constexpr uint32_t kFrameHeight = 960;
-// The panel shown upright (an upright layout, grid_layout::turned()): the
-// sensor then lies like a landscape camera, so it outputs a centred 960x544
-// window that needs no turn (user 2026-10-08: the 8-inch way, cropping on the
-// sensor costs nothing and sends less).
-constexpr uint32_t kTurnedFrameWidth = 960;
-constexpr uint32_t kTurnedFrameHeight = 544;
+// The other window: the whole binned image, 1280x960, sent when the Bridge
+// does not turn (an upright layout, or a camera rotation that takes the
+// quarter turn back; the sensor then lies landscape). User 2026-10-08: a
+// sensor standing upright sends a landscape strip, a lying one everything.
+constexpr uint32_t kTurnedFrameWidth = 1280;
+constexpr uint32_t kTurnedFrameHeight = 960;
 constexpr uint32_t kDataLanes = 2;
 // Table pixel clock 88333333 Hz, RAW10 over two lanes (esp_cam_sensor:
 // OV5647_MIPI_CSI_LINE_RATE_1280x960_45FPS = 441.7 Mbit/s per lane).
@@ -71,7 +71,7 @@ constexpr uint16_t frameLengthFor(uint16_t lines) {
 
 class Sensor {
  public:
-  // The turned window (kTurnedFrameWidth x kTurnedFrameHeight) for the core.
+  // The full-width window of an upright layout for the core.
   static constexpr uint32_t kTurnedWidth = kTurnedFrameWidth;
   static constexpr uint32_t kTurnedHeight = kTurnedFrameHeight;
   // Adds the SCCB device to an existing bus. Never creates a bus.
@@ -84,7 +84,7 @@ class Sensor {
   // ACK probe followed by the chip-ID read. chip_id receives the raw value
   // even when it does not match kChipId.
   esp_err_t probe(uint16_t* chip_id);
-  // Software reset, 1280x960 table, 544x960 window (turned: 960x544) at
+  // Software reset, 1280x960 table, 544x960 window (turned: 1280x960) at
   // 30 fps, manual exposure, gain and white balance (the ISP pipeline owns
   // them), stream off, table-default mirror when mirror is set. The readout
   // is then orientation state 0.

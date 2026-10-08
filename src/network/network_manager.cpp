@@ -2389,11 +2389,15 @@ void HomeTilesNetworkManager::update() {
     Serial.printf("[Network] Active transport: %s (generation=%u)\n",
                   networkTransport.activeName(),
                   static_cast<unsigned>(current_generation));
+    // The first transport since boot has no socket to rebind. A reconfigure
+    // there raced the worker's first connection and dropped it once (b300
+    // boot log: Bridge connected, disconnected, connected again).
+    const bool first_transport = transport_generation_seen == 0;
     transport_generation_seen = current_generation;
 
     // Recreate sockets after a default-route switch. Existing sockets can
     // otherwise stay bound to the interface that just disappeared.
-    if (mqtt_enabled) {
+    if (mqtt_enabled && !first_transport) {
       mqtt_reconfig_requested = true;
     }
     if (webAdminServer.isRunning()) {

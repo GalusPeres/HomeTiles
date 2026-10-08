@@ -8,6 +8,7 @@
 #include "src/core/power/power_manager.h"
 #include "src/devices/device.h"
 #include "src/network/mqtt/mqtt_topics.h"
+#include "src/tiles/config/grid_layout.h"
 #include "src/network/network_manager.h"
 #include "src/video/local_camera/local_camera_contract.h"
 #include "src/video/local_camera/local_camera_request.h"
@@ -293,13 +294,21 @@ String deviceTopic(const char* leaf, const char* id = nullptr) {
   networkManager.mqttEnqueuePublish(topic.c_str(), payload, false);
 }
 
+// The panel shown upright (Hochkant, grid_layout::turned()): the camera turns
+// with the panel, a quarter from the landscape UI its mounting is given for,
+// so the image turns a quarter back. The 8-inch sensor, mounted for the
+// panel's own upright orientation, then needs no turn at all; the V2's
+// landscape sensor gets one (user 2026-10-08). Added to the user turns.
+uint8_t displayQuarterTurns() { return grid_layout::turned() ? 3u : 0u; }
+
 // Clockwise turn the Bridge applies to every JPEG: the quarter turn left from
-// the board mounting and the user rotation. The 180 degree part (and the
-// display rotation, which only adds 180 degree steps) is a sensor flip.
+// the board mounting, the upright panel and the user rotation. The 180 degree
+// part (and the display rotation, which only adds 180 degree steps) is a
+// sensor flip.
 uint16_t statusRotate() {
 #if defined(HOMETILES_LOCAL_CAMERA)
-  return statusRotateDegrees(
-      imageTurn(false, local_camera_board::kMode.quarter_turn, g_rotation.load()));
+  return statusRotateDegrees(imageTurn(false, local_camera_board::kMode.quarter_turn,
+                                       static_cast<uint8_t>(g_rotation.load() + displayQuarterTurns())));
 #else
   return 0;
 #endif
@@ -952,7 +961,8 @@ bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit, uint32_t
 // live: the sensor streams; the frames still in flight are dropped. Returns
 // false when the sensor did not confirm the registers.
 bool applyOrientation(bool live) {
-  const ImageTurn turn = imageTurn(imageRotated180(), kQuarterTurn, g_rotation.load());
+  const ImageTurn turn = imageTurn(imageRotated180(), kQuarterTurn,
+                                   static_cast<uint8_t>(g_rotation.load() + displayQuarterTurns()));
   const SensorOrientation wanted =
       desiredOrientation(turn.rotated_180, g_mirror.load(), turn.quarter_turn);
   const uint8_t code = orientationCode(wanted);

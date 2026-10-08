@@ -55,9 +55,9 @@ assert.match(setRotation, /g_rotation\.store\(quarter_turns\);[\s\S]*?publishSta
 assert.match(svc('publishStatus').body, /buildStatusJson\(payload, sizeof\(payload\), currentStatusFields\(\)\)/);
 assert.match(svc('currentStatusFields').body, /fields\.rotate = statusRotate\(\);/);
 assert.match(svc('statusRotate').body,
-  /statusRotateDegrees\(\s*imageTurn\(false, local_camera_board::kMode\.quarter_turn, g_rotation\.load\(\)\)\)/);
+  /statusRotateDegrees\(imageTurn\(false, local_camera_board::kMode\.quarter_turn,\s*static_cast<uint8_t>\(g_rotation\.load\(\) \+ displayQuarterTurns\(\)\)\)\)/);
 assert.match(svc('applyOrientation').body,
-  /const ImageTurn turn = imageTurn\(imageRotated180\(\), kQuarterTurn, g_rotation\.load\(\)\);\s*const SensorOrientation wanted =\s*desiredOrientation\(turn\.rotated_180, g_mirror\.load\(\), turn\.quarter_turn\);/,
+  /const ImageTurn turn = imageTurn\(imageRotated180\(\), kQuarterTurn,\s*static_cast<uint8_t>\(g_rotation\.load\(\) \+ displayQuarterTurns\(\)\)\);\s*const SensorOrientation wanted =\s*desiredOrientation\(turn\.rotated_180, g_mirror\.load\(\), turn\.quarter_turn\);/,
   'The 180 degree part and the mirror become sensor flips');
 {
   const run = svc('runStream').body;

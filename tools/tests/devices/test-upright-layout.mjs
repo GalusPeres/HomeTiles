@@ -110,6 +110,20 @@ const handler = read('src/web/server/handlers/web_admin_tiles.cpp');
 assert.match(handler, /setPlaceGrid\(classic_places \|\| \(screensaver_grid && !screensaver_layout\)\);/);
 assert.match(handler, /const float first_row = screensaver_layout \? screensaver_places::first_row\(grid_layout::active\(\)\)/);
 
+// --- The own camera turns with the panel: upright, its image turns a
+// quarter back (user 2026-10-08). The 8-inch sensor, mounted for the
+// panel's own upright orientation (quarter_turn), then needs no turn at all;
+// the V2's landscape sensor gets three quarters (Bridge 90 + sensor 180).
+const camera = read('src/video/local_camera/local_camera.cpp');
+assert.match(camera, /uint8_t displayQuarterTurns\(\) \{ return grid_layout::turned\(\) \? 3u : 0u; \}/);
+const contract = read('src/video/local_camera/local_camera_contract.h');
+const turnsOf = (quarter, rotated180, user) => ((quarter ? 1 : 0) + (rotated180 ? 2 : 0) + user) & 3;
+assert.match(contract, /\(\(quarter_turn \? 1u : 0u\) \+ \(rotated_180 \? 2u : 0u\) \+ user_turns\) & 3u;/);
+assert.equal(turnsOf(true, false, 0 + 3), 0, '8-inch upright: no turn, no flip');
+assert.equal(turnsOf(true, false, 0), 1, '8-inch landscape: the Bridge turns 90 as before');
+assert.equal(turnsOf(false, false, 0 + 3), 3, 'V2 upright: a quarter back');
+assert.equal(turnsOf(false, false, 0), 0, 'V2 landscape unchanged');
+
 // --- Settings and the screensaver take the screen of this boot.
 assert.match(read('src/ui/tabs/settings/settings_screen.cpp'),
   /return w > h \? Layout::Split : h > w \? Layout::Portrait : Layout::Tabs;/);

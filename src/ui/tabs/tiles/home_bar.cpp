@@ -177,10 +177,19 @@ Geometry geometry() {
   g.title_x = g.disc_x + g.disc + popup_layout::kHeaderIconDiscGap;
   g.title_w = g.time_x - space - g.title_x;
   if (g.title_w < 1) g.title_w = 1;
-  g.time_x_alone = g.close_x + g.close - g.time_w;
-  g.title_w_alone = g.title_w + g.time_x_alone - g.time_x;
   g.line = lv_font_get_line_height(head_font());
   g.time_line = lv_font_get_line_height(font);
+  // Without the gear the time moves right until the digits are as far from
+  // the screen's right edge as from its top (user 2026-10-08), measured on
+  // the glyphs: the label box has the font's spacing above and beside them.
+  lv_font_glyph_dsc_t digit{};
+  lv_font_get_glyph_dsc(font, &digit, '0', 0);
+  const int ink_top = g.time_line - font->base_line - digit.box_h - digit.ofs_y;
+  const int top_gap = g.center_y - g.time_line / 2 + ink_top;
+  const int right_bearing = digit.adv_w - digit.ofs_x - digit.box_w;
+  g.time_x_alone = SCREEN_WIDTH - top_gap + right_bearing - g.time_w;
+  if (g.time_x_alone < g.time_x) g.time_x_alone = g.time_x;
+  g.title_w_alone = g.title_w + g.time_x_alone - g.time_x;
   return g;
 }
 

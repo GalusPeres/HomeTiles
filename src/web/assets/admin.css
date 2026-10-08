@@ -2822,13 +2822,14 @@
   font-size:var(--head-time-font, var(--head-font));
   text-align:right;
 }
-/* Home without the gear: the time in its place up to its right edge, the
-   title wider by as much (home_bar.cpp time_x_alone). */
+/* Home without the gear: the time moved right until its digits are as far
+   from the screen's right edge as from its top, the title wider by as much
+   (home_bar.cpp time_x_alone). */
 .head-bar-preview:has(.head-gear.is-off) .head-time {
-  left:calc(var(--head-close-x) + var(--head-close) - var(--head-time-w));
+  left:var(--head-time-x-alone, var(--head-time-x));
 }
 .head-bar-preview:has(.head-gear.is-off) .head-title {
-  width:calc(var(--head-title-w) + var(--head-close-x) + var(--head-close) - var(--head-time-w) - var(--head-time-x));
+  width:calc(var(--head-title-w) + var(--head-time-x-alone, var(--head-time-x)) - var(--head-time-x));
 }
 /* The gear's icon box for its lock (home_bar.cpp gear_lock_event_cb), over
    the black screen. */

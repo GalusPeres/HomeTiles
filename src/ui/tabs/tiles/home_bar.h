@@ -25,8 +25,8 @@ struct Geometry {
   int time_w;
   int line;       // line height of the head font (the title)
   int time_line;  // line height of the time font
-  // Home without the gear: the time up to the gear's right edge, the title
-  // wider by as much.
+  // Home without the gear: the time's digits as far from the screen's right
+  // edge as from its top, the title wider by as much.
   int time_x_alone;
   int title_w_alone;
 };

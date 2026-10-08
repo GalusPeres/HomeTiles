@@ -459,6 +459,7 @@ static void appendHeadBarVars(String& html) {
   emit_scaled("head-title-x", head.title_x);
   emit_scaled("head-title-w", head.title_w);
   emit_scaled("head-time-x", head.time_x);
+  emit_scaled("head-time-x-alone", head.time_x_alone);
   emit_scaled("head-time-w", head.time_w);
   emit_scaled("head-line", head.line);
   emit_scaled("head-time-line", head.time_line);

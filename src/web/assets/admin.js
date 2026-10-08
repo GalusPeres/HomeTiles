@@ -11218,11 +11218,14 @@ function syncTileRadiusControls(tabEl) {
 
   // The window's editor area: the same for every layout. Every layout's
   // screen starts right under the head, in the middle of the area (user
-  // 2026-10-08), with the storage on both sides.
+  // 2026-10-08), with the storage on both sides. Every screen keeps at least
+  // a column of storage on each side and two rows below (the square panels'
+  // layouts are all 3 x 3, user 2026-10-08).
   function layoutCanvas() {
     const keys = LAYOUT_KEYS.filter(key => LAYOUTS[key].available);
-    return {cols: Math.max(...keys.map(key => LAYOUTS[key].cols)),
-            rows: Math.ceil(Math.max(...keys.map(key => LAYOUTS[key].rows)))};
+    const cols = keys.map(key => LAYOUTS[key].cols);
+    const rows = keys.map(key => Math.ceil(LAYOUTS[key].rows));
+    return {cols: Math.max(...cols, Math.min(...cols) + 2), rows: Math.max(...rows, Math.min(...rows) + 2)};
   }
   // Where a layout's screen starts in the area's columns (half steps): its
   // places are stored from its own first column.
@@ -11238,7 +11241,8 @@ function syncTileRadiusControls(tabEl) {
     const w = L.screenW * layoutScale();
     const shift = w - layoutHead.w;
     return {'--head-screen-w': layoutPx(w), '--head-close-x': layoutPx(layoutHead.close + shift),
-      '--head-time-x': layoutPx(layoutHead.time + shift), '--head-title-w': layoutPx(layoutHead.title + shift)};
+      '--head-time-x': layoutPx(layoutHead.time + shift), '--head-title-w': layoutPx(layoutHead.title + shift),
+      '--head-time-x-alone': layoutPx(layoutHead.timeAlone + shift)};
   }
   function layoutSetVars(el, vars) { for (const [name, value] of Object.entries(vars)) el.style.setProperty(name, value); }
 
@@ -11282,7 +11286,8 @@ function syncTileRadiusControls(tabEl) {
       if (page['--tile-radius'] !== undefined) layoutBaseSizes[key]['--tile-radius'] = page['--tile-radius'];
     }
     layoutHead = {w: layoutRootPx('--head-screen-w'), close: layoutRootPx('--head-close-x'),
-      time: layoutRootPx('--head-time-x'), title: layoutRootPx('--head-title-w')};
+      time: layoutRootPx('--head-time-x'), title: layoutRootPx('--head-title-w'),
+      timeAlone: layoutRootPx('--head-time-x-alone') || layoutRootPx('--head-time-x')};
   }
 
   // --- Places ------------------------------------------------------------

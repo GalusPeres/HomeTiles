@@ -209,13 +209,48 @@ constexpr int kPopupBorderOpa = 51;
 constexpr int kHeaderIconX = Device::kGridGap + (kCloseButtonSize - kHeaderIconDiscSize) / 2 - kHeadCardPad;
 constexpr int kHeaderTitleX = kHeaderIconX + kHeaderIconDiscSize + kHeaderIconDiscGap;
 
+// The card reaches the screen edge (user 2026-10-08: the 3 or 4 px margin
+// gave away 8 px in every dimension; the shadow is cut at the edge anyway).
+// The head bar and the Settings head keep the same frame (kHeadMargin,
+// settings_style.h), so the X stays over the gear and every corner stays
+// concentric.
+constexpr int kCardMargin = 0;
 #if defined(DEVICE_LAYOUT_480X480)
-constexpr int kCardMargin = 3;
 constexpr int kCardRadius = 15;
 #else
-constexpr int kCardMargin = 4;
 constexpr int kCardRadius = 22;
 #endif
+
+// The card shadow of every popup: tile popups and the PIN pad (popup_shell),
+// the Settings dialogs and the first-start setup, the camera pill. LVGL keeps
+// a blurred shadow corner only while blur width + radius stays below
+// LV_DRAW_SW_SHADOW_CACHE_SIZE (lv_draw_sw_box_shadow.c, the cache of
+// lv_conf.h: S3 48, P4 72); a missed corner is computed again for every
+// refresh band. Since b284 the card radius is the tile radius plus a grid
+// gap, and the former 28 px blur missed the cache on the V2, 8-inch, 10.1",
+// Tab5, 7", 4B and the S3 (V2: 14.6 ms per frame while a popup slider
+// moved). LVGL computes the whole corner before it clips it to the screen,
+// so a shadow cut at the edge costs the same. The blur is therefore as wide
+// as the cache still holds at the object's current radius (it follows the
+// tile radius setting), at most the former 28 px (user 2026-10-08: smaller,
+// the same on every popup). A card that fills a square screen gets none.
+#if defined(DEVICE_ESP32_S3_RGB_480) || defined(DEVICE_GUITION_ESP32_4848S040) || \
+    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
+constexpr int kShadowCacheSize = 48;
+#else
+constexpr int kShadowCacheSize = 72;
+#endif
+#if defined(LV_DRAW_SW_SHADOW_CACHE_SIZE) && LV_DRAW_SW_SHADOW_CACHE_SIZE > 0
+static_assert(kShadowCacheSize == LV_DRAW_SW_SHADOW_CACHE_SIZE, "the shadow cache of lv_conf.h");
+#endif
+constexpr int kCardShadowMax = scale480(28);
+constexpr int kCardShadowSpread = scale480(2);
+// The widest blur LVGL still caches with this corner radius.
+inline int shadow_width_for(int radius) {
+  const int room = kShadowCacheSize - 1 - radius;
+  return room <= 0 ? 0 : room < kCardShadowMax ? room : kCardShadowMax;
+}
+
 // The card is a square in the middle of the screen: of the screen height on
 // landscape panels, of the screen width on portrait ones (like the 480x480
 // panels; a card over the whole portrait height left the square content
@@ -226,6 +261,8 @@ constexpr int kCardWidth =
         : (SCREEN_WIDTH - (kCardMargin * 2));
 constexpr int kCardHeight =
     (SCREEN_HEIGHT > SCREEN_WIDTH) ? kCardWidth : (SCREEN_HEIGHT - (kCardMargin * 2));
+// A card that fills a square screen: its shadow would lie outside it.
+constexpr bool kCardFillsScreen = kCardWidth == SCREEN_WIDTH && kCardHeight == SCREEN_HEIGHT;
 // PIN keypad keys at most this share of the card height, per mille. On the
 // panels of 7 inches and more (1024x600 7", 1280x800 8" and 10.1") filling
 // the card would make them physically about twice the size of the 4" and 5"
@@ -378,6 +415,15 @@ inline lv_obj_t* createCloseButton(lv_obj_t* card, lv_event_cb_t handler,
   lv_label_set_text(close_label, getMdiChar("window-close").c_str());
   lv_obj_center(close_label);
   return close_btn;
+}
+
+// The popups' card shadow (kCardShadowMax, shadow_width_for() above).
+// After the object's radius is set (apply_radius()).
+inline void apply_card_shadow(lv_obj_t* obj) {
+  lv_obj_set_style_shadow_width(obj, shadow_width_for(lv_obj_get_style_radius(obj, LV_PART_MAIN)), 0);
+  lv_obj_set_style_shadow_color(obj, lv_color_black(), 0);
+  lv_obj_set_style_shadow_opa(obj, LV_OPA_40, 0);
+  lv_obj_set_style_shadow_spread(obj, kCardShadowSpread, 0);
 }
 
 // Header icon label: as wide as the icon disc with centered text, so the

@@ -1,8 +1,9 @@
 // The head bar layout's grid (src/tiles/config/grid_layout.h, user picks
 // 2026-10-07): per screen the columns and rows below the head, the cells as
-// large as the rest allows, the head's frame like the popups'. The profile's
-// own grid stays the former constants. Compiled against the real header with
-// a Device stub per panel class.
+// large as the rest allows, the head's frame like the popups' (no card margin
+// since 2026-10-08). The classic grid has the profile's columns and rows with
+// one grid gap as the outer margin (device.h). Compiled against the real
+// header with a Device stub per panel class.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -21,22 +22,22 @@ if (!compiler) {
 // build/design-mockups/layouts/layouts-data.json): cols x rows, cell w x h,
 // top margin (head), side margin.
 const panels = [
-  {name: 'Guition V2 / 8" / 10.1"', define: '', w: 1280, h: 800, cols: 7, rows: 5, cw: 168, ch: 145, gap: 16, pad: 4,
-   bar: {cols: 6, rows: 4, cw: 193, ch: 150, top: 132, pad: 20},
-   upright: {cols: 4, rows: 6, half: true, cw: 178, ch: 160}},
-  {name: 'Tab5 / Waveshare 7"', define: '', w: 1280, h: 720, cols: 7, rows: 4, cw: 168, ch: 166, gap: 16, pad: 4,
-   bar: {cols: 5, rows: 3, cw: 235, ch: 178, top: 132, pad: 20},
-   upright: {cols: 3, rows: 6, half: false, cw: 216, ch: 174}},
-  {name: 'Guition 7" / Waveshare 7B', define: 'DEVICE_LAYOUT_1024X600', w: 1024, h: 600, cols: 6, rows: 4, cw: 156, ch: 136,
-   gap: 16, pad: 4, bar: {cols: 5, rows: 3, cw: 184, ch: 146, top: 108, pad: 20},
-   upright: {cols: 3, rows: 6, half: false, cw: 176, ch: 136}},
-  {name: 'Waveshare 4B', define: '', w: 720, h: 720, cols: 4, rows: 4, cw: 166, ch: 166, gap: 16, pad: 4,
-   bar: {cols: 3, rows: 3, cw: 216, ch: 178, top: 132, pad: 20}},
-  {name: 'Guition S3', define: 'DEVICE_LAYOUT_480X480', w: 480, h: 480, cols: 4, rows: 4, cw: 111, ch: 111, gap: 10, pad: 3,
-   bar: {cols: 3, rows: 3, cw: 144, ch: 120, top: 87, pad: 13}},
-  {name: 'Waveshare 4.3"', define: 'DEVICE_LAYOUT_480X480', w: 800, h: 480, cols: 5, rows: 4, cw: 150, ch: 111, gap: 10, pad: 3,
-   bar: {cols: 4, rows: 3, cw: 186, ch: 120, top: 87, pad: 13},
-   upright: {cols: 3, rows: 5, half: true, cw: 144, ch: 119}},
+  {name: 'Guition V2 / 8" / 10.1"', define: '', w: 1280, h: 800, cols: 7, rows: 5, cw: 164, ch: 140, gap: 16, pad: 16,
+   bar: {cols: 6, rows: 4, cw: 194, ch: 152, top: 128, pad: 16},
+   upright: {cols: 4, rows: 6, half: true, cw: 180, ch: 161}},
+  {name: 'Tab5 / Waveshare 7"', define: '', w: 1280, h: 720, cols: 7, rows: 4, cw: 164, ch: 160, gap: 16, pad: 16,
+   bar: {cols: 5, rows: 3, cw: 236, ch: 181, top: 128, pad: 16},
+   upright: {cols: 3, rows: 6, half: false, cw: 218, ch: 176}},
+  {name: 'Guition 7" / Waveshare 7B', define: 'DEVICE_LAYOUT_1024X600', w: 1024, h: 600, cols: 6, rows: 4, cw: 152, ch: 130, gap: 16, pad: 16,
+   bar: {cols: 5, rows: 3, cw: 185, ch: 149, top: 104, pad: 16},
+   upright: {cols: 3, rows: 6, half: false, cw: 178, ch: 137}},
+  {name: 'Waveshare 4B', define: '', w: 720, h: 720, cols: 4, rows: 4, cw: 160, ch: 160, gap: 16, pad: 16,
+   bar: {cols: 3, rows: 3, cw: 218, ch: 181, top: 128, pad: 16}},
+  {name: 'Guition S3', define: 'DEVICE_LAYOUT_480X480', w: 480, h: 480, cols: 4, rows: 4, cw: 107, ch: 107, gap: 10, pad: 10,
+   bar: {cols: 3, rows: 3, cw: 146, ch: 122, top: 84, pad: 10}},
+  {name: 'Waveshare 4.3"', define: 'DEVICE_LAYOUT_480X480', w: 800, h: 480, cols: 5, rows: 4, cw: 148, ch: 107, gap: 10, pad: 10,
+   bar: {cols: 4, rows: 3, cw: 187, ch: 122, top: 84, pad: 10},
+   upright: {cols: 3, rows: 5, half: true, cw: 146, ch: 120}},
 ];
 
 const buildRoot = path.join(repoRoot, 'build', 'tests');
@@ -119,7 +120,7 @@ int main() {
     const run = spawnSync(exe, [], {encoding: 'utf8'});
     assert.equal(run.status, 0, `${panel.name}: ${run.stdout}${run.stderr}`);
   }
-  console.log(`Head bar grids (landscape and upright) match the picks on ${panels.length} panels; the profile grid is unchanged`);
+  console.log(`Head bar grids (landscape and upright) match the picks on ${panels.length} panels; the classic grid keeps its columns and rows`);
 } finally {
   fs.rmSync(tempRoot, {recursive: true, force: true});
 }

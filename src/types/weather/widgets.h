@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <lvgl.h>
 
+#include "src/devices/device.h"
 #include "src/devices/device_select.h"
 
 struct WeatherForecastWidgets {
@@ -27,16 +28,16 @@ static constexpr lv_coord_t WEATHER_FORECAST_COL_W = 150;
 
 // The card's real size decides, not its slots, so every grid gets what
 // fits: as many forecast days as their texts leave even room around
-// (weather_forecast_count()), the forecast row from today's two-row height,
-// the condition beside the temperature whenever it fits.
+// (weather_forecast_count()), the forecast row from a two-row card of the
+// classic grid (device.h; 2026-10-08: the fixed heights of the former grid
+// hid the row once the classic grid kept a grid gap to the screen edge), the
+// condition beside the temperature whenever it fits.
+static constexpr lv_coord_t WEATHER_FORECAST_MIN_H = 2 * Device::kGridCellH + Device::kGridGap;
 #if defined(DEVICE_LAYOUT_1024X600)
-static constexpr lv_coord_t WEATHER_FORECAST_MIN_H = 288;
 static constexpr lv_coord_t WEATHER_CONDITION_NARROW_W = 250;
 #elif defined(DEVICE_LAYOUT_480X480)
-static constexpr lv_coord_t WEATHER_FORECAST_MIN_H = 232;
 static constexpr lv_coord_t WEATHER_CONDITION_NARROW_W = 176;
 #else
-static constexpr lv_coord_t WEATHER_FORECAST_MIN_H = 306;
 static constexpr lv_coord_t WEATHER_CONDITION_NARROW_W = 264;
 #endif
 inline uint8_t weather_whole_cells(float span) {

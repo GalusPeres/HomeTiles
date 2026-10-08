@@ -21,11 +21,28 @@ const fn = (source, name) => {
 const conf = read('lv_conf.h');
 assert.match(conf, /#if defined\(DEVICE_ESP32_S3_RGB_480\)\n#define LV_DRAW_SW_SHADOW_CACHE_SIZE 48\n#else\n#define LV_DRAW_SW_SHADOW_CACHE_SIZE 72\n#endif/);
 assert.match(conf, /#define LV_DRAW_SW_CIRCLE_CACHE_SIZE 32\n/);
-// lv_draw_sw_box_shadow.c caches only when corner^2 < size^2.
-// scale480(28) = (28 * 2 + 1) / 3; radius at most (cell h - gap + 2) / 4.
-const corner480 = Math.floor((28 * 2 + 1) / 3) + Math.floor((111 - 10 + 2) / 4);
-const cornerLarge = 28 + Math.floor((166 - 16 + 2) / 4);
-assert.ok(corner480 < 48 && cornerLarge < 72, `shadow corners ${corner480}/${cornerLarge} must fit the cache`);
+// lv_draw_sw_box_shadow.c caches only when (blur + radius)^2 < size^2. The
+// popup card's radius is the tile radius plus a grid gap (b284), so the blur
+// follows the object's radius: as wide as still fits, at most 28 px
+// (popup_layout.h shadow_width_for(), 2026-10-08; with 28 px the V2 missed
+// the cache and recomputed the corner for every refresh band).
+const popupLayout = read('src/ui/popups/popup_layout.h');
+assert.match(popupLayout, /inline int shadow_width_for\(int radius\) \{\s*const int room = kShadowCacheSize - 1 - radius;\s*return room <= 0 \? 0 : room < kCardShadowMax \? room : kCardShadowMax;/);
+assert.match(popupLayout, /lv_obj_set_style_shadow_width\(obj, shadow_width_for\(lv_obj_get_style_radius\(obj, LV_PART_MAIN\)\), 0\);/);
+assert.match(popupLayout, /constexpr bool kCardFillsScreen = kCardWidth == SCREEN_WIDTH && kCardHeight == SCREEN_HEIGHT;/);
+// Every panel's largest card radius still leaves a visible blur (classic
+// grid: one grid gap as the margin, device.h).
+for (const [name, h, rows, gap, minimum, cache] of [['V2', 800, 5, 16, 22, 72], ['Tab5', 720, 4, 16, 22, 72],
+  ['7B', 600, 4, 16, 22, 72], ['4B', 720, 4, 16, 22, 72], ['S3', 480, 4, 10, 15, 48], ['4.3', 480, 4, 10, 15, 72],
+  ['JC4880', 800, 6, 10, 15, 72]]) {
+  const cellH = Math.floor((h - (rows + 1) * gap) / rows);
+  const tileMax = Math.floor((cellH - gap + 2) / 4);
+  const cardRadius = tileMax + gap;  // kCardRadius == tile_radius::kMinimum
+  const blur = Math.min(name === 'S3' || name === '4.3' || name === 'JC4880' ? 19 : 28, cache - 1 - cardRadius);
+  assert.ok(blur >= 8 && blur + cardRadius < cache && minimum > 0, `${name}: blur ${blur} at radius ${cardRadius}`);
+}
+// The popup shell's frame takes the blur for its own radius on every open.
+assert.match(read('src/ui/popups/popup_shell.cpp'), /popup_layout::shadow_width_for\(lv_obj_get_style_radius\(shell\.frame, LV_PART_MAIN\)\)/);
 
 // Folder caches: both chips warm Back and the visible Folder tiles while idle;
 // the S3 waits longer and never builds during a burst of Bridge messages.

@@ -376,7 +376,7 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
   html += "px;";
   emit_scaled("preview-cell-w", GRID_CELL_W);
   emit_scaled("preview-gap", GRID_GAP);
-  emit_scaled("preview-pad", GRID_PAD);
+  emit_scaled("preview-pad", grid_layout::kEdgePad);
   // The tracks rarely fill the screen exactly; the rest sits in the margins
   // (tile_config.h GRID_PAD_*).
   emit_scaled("preview-pad-left", GRID_PAD_LEFT);
@@ -385,13 +385,13 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
   emit_scaled("preview-pad-bottom", GRID_PAD_BOTTOM);
   {
     // The wallpaper fills the whole screen with corners of the tile radius
-    // plus the margin up to 4 px (image_screensaver image_radius()).
+    // plus the tiles' distance to the edge (image_screensaver image_radius()).
     char radius[160];
     snprintf(radius, sizeof(radius),
              "--preview-frame:%dpx;--screensaver-image-inset:%dpx;"
              "--screensaver-image-radius:calc(var(--tile-radius) + %.2fpx);",
              kPreviewFramePx, kPreviewFramePx,
-             static_cast<double>((GRID_PAD < 4 ? GRID_PAD : 4) * preview_cell_h_px()) / GRID_CELL_H);
+             static_cast<double>(grid_layout::kEdgePad * preview_cell_h_px()) / GRID_CELL_H);
     html += radius;
   }
   html += "}";

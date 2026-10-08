@@ -168,7 +168,8 @@ for (const [name, big, small] of [['kDialogWidth', 600, 440], ['kDialogButtonHei
 // No veil (it would draw the whole screen): the card has the popups' shadow,
 // and the transparent layer for taps beside it shows and hides without
 // marking the screen (popup_shell invalidate_shell).
-assert.match(parts, /lv_obj_set_style_shadow_width\(box, popup_layout::scale480\(28\), 0\);/);
+assert.match(parts, /settings_style::apply_tile_radius\(box\);\s*\/\/[^\n]*\n\s*popup_layout::apply_card_shadow\(box\);/,
+  'the popups\' shadow, after the radius it follows');
 assert.doesNotMatch(parts, /kVeilOpa|lv_obj_set_style_bg_opa\(root/);
 const quiet = between(parts, 'void toggle_quietly(lv_obj_t* root, bool hidden) {', '// ---------- Option list ----------');
 assert.match(quiet, /lv_display_enable_invalidation\(display, false\);[\s\S]*?LV_OBJ_FLAG_HIDDEN[\s\S]*?lv_display_enable_invalidation\(display, true\);/);

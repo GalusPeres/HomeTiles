@@ -15,7 +15,11 @@ const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath)
 const geometry = read('src/video/camera_geometry.h');
 const layout = read('src/ui/popups/popup_layout.h');
 
-assert.match(geometry, /kWidth =\s*static_cast<uint16_t>\(popup_layout::kContentWidth & ~7\);/);
+// The stream keeps the sizes the Bridge was tested with: the content width
+// of the card with its former 3 or 4 px margin (the card reaches the screen
+// edge since 2026-10-08), so frame() below still uses that margin.
+assert.match(geometry, /kWidth =\s*static_cast<uint16_t>\(\(popup_layout::kContentWidth - 2 \* kFormerCardMargin\) & ~7\);/);
+assert.match(geometry, /#if defined\(DEVICE_LAYOUT_480X480\)\s*inline constexpr int kFormerCardMargin = 3;\s*#else\s*inline constexpr int kFormerCardMargin = 4;/);
 assert.match(geometry, /kHeight = evenRound\(\s*static_cast<uint32_t>\(kWidth\) \* 9U, 16U\);/);
 assert.match(geometry, /\(numerator \+ denominator\) \/ \(2U \* denominator\) \* 2U/);
 assert.match(geometry, /% 8U == 0U,\s*"The P4 JPEG decoder needs width \* height divisible by 8"/);

@@ -13,9 +13,16 @@ inline constexpr uint16_t kScreenHeight = kProfile.screen_height;
 inline constexpr uint8_t kGridCols = kProfile.grid_cols;
 inline constexpr uint8_t kGridRows = kProfile.grid_rows;
 inline constexpr uint16_t kGridGap = kProfile.grid_gap;
-inline constexpr uint16_t kGridPad = kProfile.grid_pad;
-inline constexpr uint16_t kGridCellW = kProfile.grid_cell_w;
-inline constexpr uint16_t kGridCellH = kProfile.grid_cell_h;
+// The classic layout's grid (user 2026-10-08): the profile's columns and
+// rows with one grid gap as the outer margin like the head bar layouts, the
+// cells as large as the rest allows. One look on every layout: the popup card
+// reaches the screen edge and every corner stays concentric. The profiles'
+// own pad and cell sizes (the former 3 or 4 px margin) are not used.
+inline constexpr uint16_t kGridPad = kGridGap;
+inline constexpr uint16_t kGridCellW =
+    static_cast<uint16_t>((kScreenWidth - (kGridCols + 1) * kGridGap) / kGridCols);
+inline constexpr uint16_t kGridCellH =
+    static_cast<uint16_t>((kScreenHeight - (kGridRows + 1) * kGridGap) / kGridRows);
 inline constexpr uint8_t kDisplayFlushBands = kProfile.display_flush_bands;
 inline constexpr uint8_t kBacklightInputMin = kProfile.backlight_input_min;
 #if defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1)

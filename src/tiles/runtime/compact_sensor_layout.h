@@ -17,13 +17,28 @@ inline int title_size() {
   return 20;
 #endif
 }
+inline int inset() { return tile_icon_disc::inset(); }
+inline int text_gap() { return 0; }
+inline const lv_font_t* title_font() { return tile_layout::header_title_font(); }
+inline int header_height() { return tile_icon_disc::row_height(); }
+inline const lv_font_t* step_font(uint8_t step) {
+  switch (step) {
+    case 1: return tile_layout::content_font_24();
+    case 2: return tile_layout::content_font_28();
+    default: return tile_layout::content_font_20();
+  }
+}
 // Half-height tiles show the value at the title size by default (20 px on the
-// 1280x800 layouts), or at 24 or 28 when chosen (sensor_value_font). 28 is the
-// largest size that fits below the title on every device, so 32 and 40 use
-// 28 here. Steps: 0 = title size, 1 = 24, 2 = 28.
+// 1280x800 layouts), or at 24 or 28 when chosen (sensor_value_font); 32 and
+// 40 use 28 here. Steps: 0 = title size, 1 = 24, 2 = 28. A step whose value
+// would end below the half-height row steps down: since the classic grid
+// keeps one grid gap to the screen edge (2026-10-08) the 1280x800 panels'
+// half tile is 62 px, where 28 sticks out 2 px, so they show 24 (user
+// 2026-10-08); larger rows (head bar layouts, other panels) keep 28.
 inline uint8_t value_step(uint8_t choice) {
-  if (choice == 2) return 1;
-  return choice >= 3 && choice <= SENSOR_VALUE_FONT_MAX ? 2 : 0;
+  uint8_t step = choice == 2 ? 1 : choice >= 3 && choice <= SENSOR_VALUE_FONT_MAX ? 2 : 0;
+  while (step > 0 && title_font()->line_height + text_gap() + step_font(step)->line_height > header_height()) --step;
+  return step;
 }
 inline int value_size(uint8_t choice = 0) {
 #if defined(DEVICE_LAYOUT_480X480)
@@ -35,17 +50,7 @@ inline int value_size(uint8_t choice = 0) {
 #endif
   return kSizes[value_step(choice)];
 }
-inline int inset() { return tile_icon_disc::inset(); }
-inline int text_gap() { return 0; }
-inline const lv_font_t* title_font() { return tile_layout::header_title_font(); }
-inline const lv_font_t* value_font(uint8_t choice = 0) {
-  switch (value_step(choice)) {
-    case 1: return tile_layout::content_font_24();
-    case 2: return tile_layout::content_font_28();
-    default: return tile_layout::content_font_20();
-  }
-}
-inline int header_height() { return tile_icon_disc::row_height(); }
+inline const lv_font_t* value_font(uint8_t choice = 0) { return step_font(value_step(choice)); }
 // Top of the title line, the title and value block centered on the disc row;
 // without a value line (half-height Back) the title alone is centered. The
 // value follows one title line and the gap lower. The Web Admin preview takes

@@ -49,14 +49,17 @@ struct Shown {
 // The head's frame like the Settings head and the popups: the card margin
 // and the X's box (popup_layout::kCardMargin and kCloseButtonSize; home_bar.cpp
 // checks they agree).
+// No margin: the popup card reaches the screen edge (user 2026-10-08).
+constexpr int kHeadMargin = 0;
+// Every layout's tiles keep one grid gap to the screen edge, where the popup
+// card ends: one look, every corner concentric (user 2026-10-08).
+constexpr int kEdgePad = kHeadMargin + Device::kGridGap;
+static_assert(kEdgePad == Device::kGridPad, "the classic grid has the same edge (device.h)");
 #if defined(DEVICE_LAYOUT_480X480)
-constexpr int kHeadMargin = 3;
 constexpr int kHeadClose = 64;
 #elif defined(DEVICE_LAYOUT_1024X600)
-constexpr int kHeadMargin = 4;
 constexpr int kHeadClose = 72;
 #else
-constexpr int kHeadMargin = 4;
 constexpr int kHeadClose = 96;
 #endif
 

@@ -326,16 +326,16 @@ void check_value_alignment(lv_display_t* display) {
  {
   // Unrounded, like every corner disc length (the disc sits at the inset).
   char want[64];snprintf(want,sizeof want,"--icon-disc-corner:%.2fpx;",
-    static_cast<double>(lv_area_get_width(&disc))*preview_cell_h_px()/GRID_CELL_H);
+    static_cast<double>(static_cast<float>(lv_area_get_width(&disc))*preview_cell_h_px()/GRID_CELL_H));
   assert(css.find(want)!=std::string::npos&&"The preview header disc has the device size");
  }
  for(const auto& item:std::vector<std::pair<const char*,int>>{
      {"title-top",title.y1-sensor_area.y1},{"title-right",sensor_area.x2-title.x2},
      {"icon-top",icon.y1-sensor_area.y1},{"icon-left",icon.x1-sensor_area.x1}}) {
-  // The icon position is unrounded like the disc; the title stays in whole
-  // preview pixels.
+  // The icon position is unrounded like the disc (in float, like the
+  // emitter); the title stays in whole preview pixels.
   const bool icon_item=std::string(item.first).rfind("icon",0)==0;
-  char fraction[32];snprintf(fraction,sizeof fraction,"%.2f",static_cast<double>(item.second)*preview_cell_h_px()/GRID_CELL_H);
+  char fraction[32];snprintf(fraction,sizeof fraction,"%.2f",static_cast<double>(static_cast<float>(item.second)*preview_cell_h_px()/GRID_CELL_H));
   const auto property=std::string("--tile-header-")+item.first+":"+
       (icon_item?std::string(fraction):std::to_string(preview_scaled_exact_px(item.second)))+"px;";
   assert(css.find(property)!=std::string::npos&&"Preview scale must come from the actual Sensor header");

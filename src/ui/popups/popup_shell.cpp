@@ -450,10 +450,8 @@ PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
   // No hairline on the body: the shell frame draws the only card border
   // (apply_popup_border); a second one on the body doubled its strength.
   lv_obj_set_style_pad_all(parts.card, popup_layout::kCardPad, 0);
-  lv_obj_set_style_shadow_width(parts.card, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(parts.card, lv_color_black(), 0);
-  lv_obj_set_style_shadow_opa(parts.card, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(parts.card, popup_layout::scale480(2), 0);
+  // No shadow where the card fills a square screen (nothing to see).
+  if (!popup_layout::kCardFillsScreen) popup_layout::apply_card_shadow(parts.card);
   lv_obj_remove_flag(parts.card, LV_OBJ_FLAG_SCROLLABLE);
   create_header(parts.card, parts.title, parts.icon, parts.close, close_handler, context);
   return parts;
@@ -513,7 +511,13 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
     lv_obj_set_style_border_width(shell.frame, binding->border_width, 0);
     lv_obj_set_style_border_color(shell.frame, binding->border_color, 0);
     lv_obj_set_style_border_opa(shell.frame, binding->border_opa, 0);
-    lv_obj_set_style_shadow_width(shell.frame, binding->shadow_width, 0);
+    // The blur follows the frame's current radius (popup_layout.h).
+    lv_obj_set_style_shadow_width(
+        shell.frame,
+        binding->shadow_width > 0
+            ? popup_layout::shadow_width_for(lv_obj_get_style_radius(shell.frame, LV_PART_MAIN))
+            : 0,
+        0);
     lv_obj_set_style_shadow_spread(shell.frame, binding->shadow_spread, 0);
     lv_obj_set_style_shadow_color(shell.frame, binding->shadow_color, 0);
     lv_obj_set_style_shadow_opa(shell.frame, binding->shadow_opa, 0);

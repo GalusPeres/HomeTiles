@@ -284,10 +284,7 @@ inline void create(Objects& ui) {
   lv_obj_set_style_bg_color(ui.pill, lv_color_hex(kRed), 0);
   lv_obj_set_style_bg_opa(ui.pill, LV_OPA_COVER, 0);
   // Same shadow as the popup cards.
-  lv_obj_set_style_shadow_width(ui.pill, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(ui.pill, lv_color_black(), 0);
-  lv_obj_set_style_shadow_opa(ui.pill, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(ui.pill, popup_layout::scale480(2), 0);
+  popup_layout::apply_card_shadow(ui.pill);
   lv_obj_remove_flag(ui.pill, LV_OBJ_FLAG_SCROLLABLE);
   disable_pressed_button_animation(ui.pill);
   lv_obj_add_flag(ui.pill, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_IGNORE_LAYOUT | LV_OBJ_FLAG_HIDDEN));

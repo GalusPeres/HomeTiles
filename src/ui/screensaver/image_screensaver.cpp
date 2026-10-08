@@ -57,8 +57,10 @@ constexpr uint32_t kMaxDecodePixels = 2048U * 2048U;
 // UI: the cover worker, popups and LVGL intermediate buffers.
 constexpr size_t kMaxPsramReserveBytes = 4U * 1024U * 1024U;
 constexpr size_t kPpaBufferAlignment = 64;
+// The whole screen, its corners concentric with the tiles one grid gap
+// inside (grid_layout::kEdgePad).
 uint16_t image_radius() {
-  return ui_surface_style::radius(tile_radius::kMinimum) + (GRID_PAD < 4 ? GRID_PAD : 4);
+  return ui_surface_style::radius(tile_radius::kMinimum) + grid_layout::kEdgePad;
 }
 // After interaction, let visible tile/MQTT state settle first. Otherwise
 // a decode/composite pass due at the same time can block the loop before
@@ -718,7 +720,7 @@ lv_image_dsc_t* s3_decode_jpeg_direct_cover(
     return nullptr;
   }
 
-  ctx.image_inset = GRID_PAD > 4 ? GRID_PAD - 4 : 0;
+  ctx.image_inset = 0;  // The whole screen (image_radius()).
   if (target_w <= ctx.image_inset * 2 ||
       target_h <= ctx.image_inset * 2) {
     free(work);
@@ -806,10 +808,9 @@ lv_image_dsc_t* s3_decode_jpeg_direct_cover(
 }
 #endif
 
-// Build the final screen image with the same outer black border as the
-// normal tile grid. The image edge sits exactly 4 px outside the tiles
-// (GRID_PAD - 4), with the configured tile radius plus the
-// extra 4 px outside them. PPA and LVGL share this full-frame buffer,
+// Build the final screen image over the whole screen, its corners the
+// configured tile radius plus the tiles' distance to the edge (concentric,
+// image_radius()). PPA and LVGL share this full-frame buffer,
 // so opening needs neither additional clipping nor rendering in bands.
 lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
                                uint16_t src_h, uint16_t target_w,
@@ -818,7 +819,7 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   if (!src || src_w == 0 || src_h == 0 || target_w == 0 || target_h == 0) {
     return nullptr;
   }
-  const uint16_t image_inset = GRID_PAD > 4 ? GRID_PAD - 4 : 0;
+  const uint16_t image_inset = 0;
   if (target_w <= image_inset * 2 || target_h <= image_inset * 2) {
     return nullptr;
   }
@@ -1422,8 +1423,8 @@ void rebuild_slot_grid(ScreensaverState* st) {
   for (String& payload : st->slot_rule_payloads) payload = String();
 
   // Use exactly the normal tile system's tracks, gaps and outer padding.
-  // The prepared full-frame image starts at GRID_PAD - 4, placing it
-  // exactly 4 px outside the tiles on every side.
+  // The prepared full-frame image fills the screen, its corners concentric
+  // with the tiles one grid gap inside.
   // The shown grid (grid_layout.h): with the head bar its larger cells, an
   // upright layout's half row as a last track half a cell high.
   static lv_coord_t col_dsc[GRID_SPACE_COLS + 1];

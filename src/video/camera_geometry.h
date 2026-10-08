@@ -19,8 +19,16 @@ constexpr uint16_t evenRound(uint32_t numerator, uint32_t denominator) {
 // can produce yuv420 frames and the Bridge's 16:9 check (|w*9 - h*16| <= 16)
 // accepts it. 1280x800 752x424, 1280x720 672x378 and 480x480 448x252 are
 // unchanged; 1024x600 is 552x310, centred in its 558 px content width.
+// The stream keeps the sizes the Bridge was tested with: the content width
+// of the card with its former 3 or 4 px screen margin (the card reaches the
+// edge since 2026-10-08; the frame sits centred in the wider content).
+#if defined(DEVICE_LAYOUT_480X480)
+inline constexpr int kFormerCardMargin = 3;
+#else
+inline constexpr int kFormerCardMargin = 4;
+#endif
 inline constexpr uint16_t kWidth =
-    static_cast<uint16_t>(popup_layout::kContentWidth & ~7);
+    static_cast<uint16_t>((popup_layout::kContentWidth - 2 * kFormerCardMargin) & ~7);
 inline constexpr uint16_t kHeight = evenRound(
     static_cast<uint32_t>(kWidth) * 9U, 16U);
 inline constexpr uint16_t kCornerRadius =

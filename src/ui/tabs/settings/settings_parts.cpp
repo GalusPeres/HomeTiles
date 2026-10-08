@@ -602,10 +602,6 @@ lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t
   if (on_outside) lv_obj_add_event_cb(root, on_outside, LV_EVENT_CLICKED, nullptr);
 
   lv_obj_t* box = plain(root);
-  lv_obj_set_style_shadow_width(box, popup_layout::scale480(28), 0);
-  lv_obj_set_style_shadow_color(box, lv_color_black(), 0);
-  lv_obj_set_style_shadow_opa(box, LV_OPA_40, 0);
-  lv_obj_set_style_shadow_spread(box, popup_layout::scale480(2), 0);
   // Taps on the card stay in it.
   lv_obj_add_flag(box, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_size(box, kDialogWidth, LV_SIZE_CONTENT);
@@ -613,6 +609,8 @@ lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t
   lv_obj_set_style_bg_color(box, lv_color_hex(card), 0);
   lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
   settings_style::apply_tile_radius(box);
+  // After the radius: the shadow's width follows it (popup_layout.h).
+  popup_layout::apply_card_shadow(box);
   ui_surface_style::apply_global_tile_border(box);
   lv_obj_set_style_pad_top(box, kDialogPadTop, 0);
   lv_obj_set_style_pad_hor(box, kDialogPadSide, 0);

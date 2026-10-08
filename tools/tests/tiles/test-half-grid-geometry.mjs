@@ -163,8 +163,14 @@ int main(){
   lv_obj_add_state(card,LV_STATE_PRESSED);lv_obj_update_layout(card);
   lv_area_t pressed;lv_obj_get_coords(value,&pressed);assert(memcmp(&pressed,&v,sizeof(v))==0);
   // Half-height values use the title size by default and for 20, 24 for 24,
-  // and 28 for 28, 32 and 40; every size fits below the title.
-  const lv_font_t* expected=choice==2?tile_layout::content_font_24():choice>=3?tile_layout::content_font_28():tile_layout::content_font_20();
+  // and 28 for 28, 32 and 40 - stepping down while the size would not fit
+  // below the title (the 1280x800 classic half tile, 62 px, shows 24;
+  // user 2026-10-08); every size fits.
+  const lv_font_t* steps[]={tile_layout::content_font_20(),tile_layout::content_font_24(),tile_layout::content_font_28()};
+  int step=choice==2?1:choice>=3?2:0;
+  while(step>0&&tile_layout::header_title_font()->line_height+steps[step]->line_height>(GRID_CELL_H-GRID_GAP)/2) --step;
+  const lv_font_t* expected=steps[step];
+  if(Device::kScreenWidth==1280&&Device::kScreenHeight==800&&choice>=3) assert(expected==tile_layout::content_font_24()&&"The 1280x800 classic half tile shows 24");
   assert(lv_obj_get_style_text_font(value, LV_PART_MAIN)==expected&&compact_sensor_layout::value_font(choice)==expected);
   lv_obj_delete(card);
  }

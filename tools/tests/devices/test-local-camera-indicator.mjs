@@ -86,12 +86,9 @@ assert.match(indicator, /getMdiChar\("webcam"\)/);
 assert.match(indicator, /constexpr uint32_t kRed = 0xC62828;/);
 assert.match(indicator, /constexpr lv_opa_t kDiscOpa = 64;/);
 assert.match(indicator, /lv_obj_set_style_bg_opa\(disc, kDiscOpa, 0\);/);
-for (const line of ['lv_obj_set_style_shadow_width(parts.card, popup_layout::scale480(28), 0);',
-                    'lv_obj_set_style_shadow_opa(parts.card, LV_OPA_40, 0);',
-                    'lv_obj_set_style_shadow_spread(parts.card, popup_layout::scale480(2), 0);']) {
-  assert.ok(popupShell.includes(line), `popup reference: ${line}`);
-  assert.ok(indicator.includes(line.replace('parts.card', 'ui.pill')), `pill shadow: ${line}`);
-}
+// The popups' card shadow (popup_layout::apply_card_shadow), the pill too.
+assert.ok(popupShell.includes('popup_layout::apply_card_shadow(parts.card);'), 'popup reference shadow');
+assert.ok(indicator.includes('popup_layout::apply_card_shadow(ui.pill);'), 'pill shadow');
 assert.match(indicator, /lv_label_set_text\(ui\.title, strings\.local_camera_indicator_active\);/);
 assert.match(indicator, /lv_label_set_text\(ui\.hint, strings\.local_camera_indicator_end\);/);
 assert.doesNotMatch(indicator, /lv_label_set_text\([^,]+, "[^"]/, 'No hard-coded UI text');

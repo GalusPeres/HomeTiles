@@ -890,11 +890,9 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   uint16_t* column_map = static_cast<uint16_t*>(
       heap_caps_malloc(static_cast<size_t>(image_w) * sizeof(uint16_t),
                        MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-  // Native RGB565 (to_native): LVGL copies the rows as they are, without
-  // the per-row byte swap of an RGB565_SWAPPED picture (b305).
   wallpaper_cover::cover_pixels(
       src, src_w, crop, out + static_cast<size_t>(image_inset) * target_w + image_inset,
-      target_w, image_w, image_h, corner_radius, column_map, true);
+      target_w, image_w, image_h, corner_radius, column_map);
   heap_caps_free(column_map);
 
   lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
@@ -904,7 +902,7 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   }
   memset(dsc, 0, sizeof(*dsc));
   dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-  dsc->header.cf = LV_COLOR_FORMAT_RGB565;
+  dsc->header.cf = LV_COLOR_FORMAT_RGB565_SWAPPED;
   dsc->header.w = target_w;
   dsc->header.h = target_h;
   dsc->header.stride = target_w * 2;

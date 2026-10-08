@@ -48,8 +48,11 @@
     return tab === 'screensaver';
   }
   function firstAllowedGridRow(tab) {
-    // The screensaver's two rows at the bottom of the shown grid.
-    return isScreensaverTileTab(tab) ? Math.max(0, placeRows(tab) - 2) : 0;
+    // The screensaver's two rows at the bottom of the shown grid; in the
+    // layout window at the bottom of that layout's screen.
+    if (!isScreensaverTileTab(tab)) return 0;
+    const rows = typeof layoutWindow !== 'undefined' && layoutWindow ? LAYOUTS[layoutWindow.key].rows : placeRows(tab);
+    return Math.max(0, rows - 2);
   }
   function restoreCurrentTileSelectionUi() {
     if (currentTileIndex === -1 || !currentTileTab) return;

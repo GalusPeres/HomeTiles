@@ -3411,6 +3411,9 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 .tile-grid.setup-grid > .tile.sensor-compact.setup-red:not(.empty)::before { inset:3px; }
 /* In the storage beside the screen: no part of the layout, kept dimmed. */
 .tile-grid.setup-grid > .tile.setup-parked:not(.empty) { opacity:0.55; }
+/* The screensaver in the layout window: only its tiles, no picture or clock
+   (user 2026-10-08: it is only about the layout). */
+.tile-grid.setup-grid.screensaver-tile-grid > :not(.tile):not(.setup-storage-label):not(.setup-flag):not(.setup-trash):not(.tile-drop-placeholder):not(.tile-resize-placeholder) { display:none !important; }
 .tile-grid.setup-grid > .setup-storage-label {
   position:absolute; right:12px; bottom:8px; pointer-events:none; display:flex; align-items:baseline;
   gap:6px; white-space:nowrap; color:var(--text-3, #9e9e9e);

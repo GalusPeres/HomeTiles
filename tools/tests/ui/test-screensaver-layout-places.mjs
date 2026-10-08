@@ -46,8 +46,22 @@ assert.match(read('src/web/admin/tiles/import-export.js'),
 // The screensaver tab: the shown grid, its two rows at the bottom.
 const layout = read('src/web/admin/tiles/layout.js');
 assert.match(layout, /return headBarLayout\(\) && typeof GRID_SHOWN_COLS === 'number' \? GRID_SHOWN_COLS : GRID_COLS;/);
-assert.match(read('src/web/admin/folders/navigation.js'), /return isScreensaverTileTab\(tab\) \? Math\.max\(0, placeRows\(tab\) - 2\) : 0;/);
+const navigation = read('src/web/admin/folders/navigation.js');
+assert.ok(navigation.includes("const rows = typeof layoutWindow !== 'undefined' && layoutWindow ? LAYOUTS[layoutWindow.key].rows : placeRows(tab);") &&
+  navigation.includes('return Math.max(0, rows - 2);'), 'two rows at the bottom, in the window of that layout');
 assert.ok(!read('src/web/server/render/web_admin_styles.cpp').includes('.screensaver-tile-grid{--grid-cols:'),
   'no more profile grid for the screensaver tab');
+
+// The layout window: a screensaver tab after the pages, without picture and
+// clock; its tiles keep to the bottom rows when taken over; the server loads
+// and saves it like a folder with its slot keys as IDs.
+const windowSource = read('src/web/admin/tiles/layout-window.js');
+assert.ok(windowSource.includes('return [...tabs.filter(tab => !isScreensaverTileTab(tab)), ...tabs.filter(isScreensaverTileTab)];'));
+assert.ok(windowSource.includes('const shift = isScreensaverTileTab(tab) ? L.rows - LAYOUTS[from].rows : 0;'));
+assert.ok(read('src/web/assets/admin.css').includes('.tile-grid.setup-grid.screensaver-tile-grid > :not(.tile)'));
+assert.ok(handler.includes('grid.tiles[i].view_id = grid.tiles[i].type == TILE_EMPTY ? 0 : screensaver_places::key(i);'));
+assert.ok(handler.includes('if (folder_id != screensaver_places::kFolder) return tileConfig.loadFolderGridClassic(folder_id, *grid);'));
+assert.ok(handler.includes('return place.inside && place.place.row < screensaver_places::first_row(layout) - 0.001f;'));
+assert.ok(handler.includes('ok = screensaverConfig.replaceTileGrid(*grid) && ok;'));
 
 console.log('Screensaver: the active layout\'s grid, two rows at the bottom, own places per layout');

@@ -424,8 +424,12 @@ void WebAdminServer::handleGetTiles() {
   if (screensaver_grid) {
     grid = screensaverConfig.tileGrid();
     // The active layout's places (screensaver_places.h), the export the
-    // classic ones.
+    // classic ones. Its tiles carry their key in the layout file as ID (the
+    // layout window's places).
     if (server.arg("layout") != "classic") screensaver_places::overlay(grid);
+    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+      grid.tiles[i].view_id = grid.tiles[i].type == TILE_EMPTY ? 0 : screensaver_places::key(i);
+    }
   } else {
     loaded = classic_places ? tileConfig.loadFolderGridClassic(folder_id, grid)
                             : tileConfig.loadFolderGrid(folder_id, grid);
@@ -1461,6 +1465,22 @@ void WebAdminServer::handleGetLayouts() {
     }
     json += "]";
   }
+  // The screensaver like a folder (screensaver_places.h): its slot keys as IDs.
+  {
+    const TileGridConfig& saver = screensaverConfig.tileGrid();
+    if (!first_folder) json += ",";
+    json += "\"" + String(screensaver_places::kFolder) + "\":[";
+    bool first_tile = true;
+    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+      const Tile& tile = saver.tiles[i];
+      if (tile.type == TILE_EMPTY) continue;
+      if (!first_tile) json += ",";
+      first_tile = false;
+      json += "[" + String(i) + "," + String(screensaver_places::key(i)) + "," + String(tile.col) + "," +
+              String(tile.row) + "," + String(tile.span_w) + "," + String(tile.span_h) + "]";
+    }
+    json += "]";
+  }
   json += "},\"places\":";
   tile_layouts::append_json(json);
   json += "}";
@@ -1562,19 +1582,40 @@ void WebAdminServer::handleSaveLayouts() {
   }
   JsonObjectConst folders = doc["folders"].as<JsonObjectConst>();
   std::vector<LayoutPlace> places;
+  // A folder's classic grid, or the screensaver's with its slot keys as IDs
+  // (screensaver_places.h).
+  auto load = [&](uint16_t folder_id) {
+    if (folder_id != screensaver_places::kFolder) return tileConfig.loadFolderGridClassic(folder_id, *grid);
+    *grid = screensaverConfig.tileGrid();
+    for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+      grid->tiles[i].view_id = grid->tiles[i].type == TILE_EMPTY ? 0 : screensaver_places::key(i);
+    }
+    return true;
+  };
   // Everything is checked before anything is written.
   for (JsonPairConst folder : folders) {
     const uint16_t folder_id = static_cast<uint16_t>(atoi(folder.key().c_str()));
-    if (!tileConfig.loadFolderGridClassic(folder_id, *grid)) continue;
+    if (!load(folder_id)) continue;
     if (const char* error = readFolderPlaces(folder.value().as<JsonObjectConst>(), *grid, screen, places)) {
       sendJsonError(server, 409, error);
       return;
     }
+    // The screensaver's tiles on the screen keep to its two bottom rows.
+    if (folder_id == screensaver_places::kFolder &&
+        std::any_of(places.begin(), places.end(), [&](const LayoutPlace& place) {
+          return place.inside && place.place.row < screensaver_places::first_row(layout) - 0.001f;
+        })) {
+      sendJsonError(server, 409, "Invalid place");
+      return;
+    }
   }
   bool ok = true;
+  bool screensaver_changed = false;
   for (JsonPairConst folder : folders) {
     const uint16_t folder_id = static_cast<uint16_t>(atoi(folder.key().c_str()));
-    if (!tileConfig.loadFolderGridClassic(folder_id, *grid)) continue;
+    if (!load(folder_id)) continue;
+    const bool screensaver = folder_id == screensaver_places::kFolder;
+    screensaver_changed = screensaver_changed || screensaver;
     readFolderPlaces(folder.value().as<JsonObjectConst>(), *grid, screen, places);
     if (layout != grid_layout::Layout::kClassic) {
       for (const Tile& tile : grid->tiles) {
@@ -1606,6 +1647,12 @@ void WebAdminServer::handleSaveLayouts() {
       tile.span_w = entry->place.span_w;
       tile.span_h = entry->place.span_h;
     }
+    if (screensaver) {
+      // Its tiles have no IDs of their own.
+      for (Tile& tile : grid->tiles) tile.view_id = 0;
+      ok = screensaverConfig.replaceTileGrid(*grid) && ok;
+      continue;
+    }
     ok = tileConfig.saveFolderGridClassic(folder_id, *grid) && ok;
   }
   ok = tile_layouts::commit() && ok;
@@ -1618,6 +1665,7 @@ void WebAdminServer::handleSaveLayouts() {
     tileConfig.setActiveFolder(tileConfig.getActiveFolderId());
     tiles_invalidate_folder(tileConfig.getActiveFolderId());
     tiles_request_reload(GridType::TAB0);
+    if (screensaver_changed) image_screensaver_tiles_changed();
   }
   Serial.printf("[WebAdmin] Layout %s saved\n", grid_layout::key(layout));
   server.send(200, "application/json", "{\"success\":true}");

@@ -27,8 +27,11 @@
   }
   // Preview px per screen px (web_admin_styles.cpp), the same for every layout.
   function layoutScale() { return layoutRootPx('--radius-preview-scale') || 1; }
+  // The pages, then the screensaver (its two rows at the bottom of each
+  // screen, screensaver_places.h).
   function layoutTabs() {
-    return tileTabs.filter(tab => !isScreensaverTileTab(tab) && document.getElementById('tab-tiles-' + tab));
+    const tabs = tileTabs.filter(tab => document.getElementById('tab-tiles-' + tab));
+    return [...tabs.filter(tab => !isScreensaverTileTab(tab)), ...tabs.filter(isScreensaverTileTab)];
   }
   function layoutSize(key) { return LAYOUTS[key].cols + ' × ' + String(LAYOUTS[key].rows).replace('.', ','); }
 
@@ -204,10 +207,12 @@
   function takeoverTiles(tab, key, from) {
     const L = LAYOUTS[key];
     const tiles = layoutBase(tab);
+    const shift = isScreensaverTileTab(tab) ? L.rows - LAYOUTS[from].rows : 0;
     if (from === 'classic') {
       tiles.forEach(tile => {
         if (!layoutUsed(tile)) return;
         if (classicHidden(tab, tile.view_id)) tile._unplaced = true;
+        tile.row += shift;
       });
     } else {
       // The other layout as its window shows it: saved, or its first take-over.
@@ -216,7 +221,7 @@
         const p = source[index];
         if (!layoutUsed(tile)) return;
         if (layoutUsed(p) && layoutInside(p, from)) {
-          Object.assign(tile, {col: p.col, row: p.row, span_w: p.span_w, span_h: p.span_h});
+          Object.assign(tile, {col: p.col, row: p.row + shift, span_w: p.span_w, span_h: p.span_h});
           delete tile._unplaced;
         } else if (!layoutBarHidden(tile.type)) {
           // Back keeps its classic place, here in this layout's columns.
@@ -769,8 +774,9 @@
     const tabButtons = tabs.map(tab => {
       const host = document.getElementById('tab-tiles-' + tab);
       const home = layoutFolderId(tab) === '0';
-      const name = home ? t('home') : host.dataset.folderName || tab;
-      const icon = home ? 'home' : host.dataset.folderIcon || 'folder';
+      const saver = isScreensaverTileTab(tab);
+      const name = home ? t('home') : saver ? t('importScreensaver') : host.dataset.folderName || tab;
+      const icon = home ? 'home' : saver ? 'monitor' : host.dataset.folderIcon || 'folder';
       return `<button type="button" class="tab-btn setup-tab" data-tab="${tab}"><i class="mdi mdi-${escapeHtml(icon)}"></i> ` +
         `${escapeHtml(name)}<span class="setup-badge" hidden></span></button>`;
     }).join('');

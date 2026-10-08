@@ -10,6 +10,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/ui/screensaver/image_screensaver.h"
+#include "src/types/clock/clock_shadow_paint.h"
 #include <Arduino.h>
 #include <lvgl_private.h>
 #include <misc/cache/instance/lv_image_cache.h>
@@ -80,14 +81,10 @@ static lv_text_align_t clock_text_align(uint8_t raw) {
 // Retain the soft shadow from the stable screensaver: nine faint copies
 // approximate a smooth blur. A later expansion to 21 copies was reverted
 // because of the additional PPA load.
-static constexpr uint8_t kClockShadowCopies = 9;
+static constexpr uint8_t kClockShadowCopies = clock_shadow_paint::kCopies;
 
 // The copies' offsets and opacity.
-struct ClockShadowCopy {
-  int16_t x;
-  int16_t y;
-  lv_opa_t opa;
-};
+using ClockShadowCopy = clock_shadow_paint::Copy;
 static void clock_shadow_copies(ClockShadowCopy (&copies)[kClockShadowCopies]) {
   const int16_t a = tile_layout::scale(2), b = tile_layout::scale(4), c = tile_layout::scale(6);
   const ClockShadowCopy table[kClockShadowCopies] = {
@@ -100,13 +97,13 @@ static void clock_shadow_copies(ClockShadowCopy (&copies)[kClockShadowCopies]) {
 // Each copy was a label of the large compressed clock font: every frame
 // unpacked its glyphs ten times (about 110 ms of each screensaver opening on
 // the V2, b304). The line's text is now drawn once into an A8 mask and the
-// nine copies are A8 images of it in black at their offset and opacity:
-// LVGL blends an A8 image with the same mask blend as a glyph, so the copies
-// darken exactly as before (also the per-copy rounding of RGB565 panels,
-// which makes the shadow darker than its opacities; one composed picture
-// came out visibly lighter, b306 host test). The masks of the last lines
-// are kept across openings: the screensaver builds its clock anew for each
-// opening, and an unchanged line's mask is copied instead of drawn.
+// nine copies are copies of it in black at their offset and opacity, drawn
+// by one object (clock_shadow_paint.h) with LVGL's own A8 blend: they darken
+// exactly as before (also the per-copy rounding of RGB565 panels, which
+// makes the shadow darker than its opacities; one composed picture came out
+// visibly lighter, b306 host test). The masks of the last lines are kept
+// across openings: the screensaver builds its clock anew for each opening,
+// and an unchanged line's mask is copied instead of drawn.
 struct ClockShadowCacheEntry {
   const lv_font_t* font = nullptr;
   lv_coord_t width = 0;
@@ -164,14 +161,20 @@ struct ClockShadowSet {
   lv_coord_t text_width = 0;
   lv_coord_t text_height = 0;
   lv_obj_t* labels[kClockShadowCopies] = {};
-  // The copies as A8 images of one mask (clock_shadow_mask): a hidden label
-  // holding the text for the mask, the nine images behind the white text and
-  // the line's own copy of the mask. Without them (fill_parent) the copy
-  // labels above draw themselves.
+  // The copies of one mask (clock_shadow_mask): a hidden label holding the
+  // text for the mask, the object drawing the nine copies behind the white
+  // text and the line's own copy of the mask. Without them (fill_parent) the
+  // copy labels above draw themselves. Lives in ClockTileData: the painter
+  // draws from `paint`.
   lv_obj_t* mask_label = nullptr;
-  lv_obj_t* copy_images[kClockShadowCopies] = {};
+  lv_obj_t* painter = nullptr;
+  clock_shadow_paint::Shadow paint;
   lv_draw_buf_t* mask_buf = nullptr;
   bool shadow_dirty = false;
+
+  ClockShadowSet() = default;
+  ClockShadowSet(const ClockShadowSet&) = delete;
+  ClockShadowSet& operator=(const ClockShadowSet&) = delete;
 
   // Returns false for unchanged text. The clock ticks every second but shows
   // minutes; rewriting the same text redrew it and its nine shadow copies
@@ -229,17 +232,15 @@ struct ClockShadowSet {
 
   // Gives the copies the mask of the current text and width, after a change.
   void refresh_shadow() {
-    if (!mask_label || !copy_images[0] || !shadow_dirty) return;
+    if (!mask_label || !painter || !shadow_dirty) return;
     shadow_dirty = false;
     lv_obj_update_layout(mask_label);
     int32_t ext = 0;
     lv_draw_buf_t* mask = clock_shadow_mask(mask_label, font, alignment, ext);
     ClockShadowCopy copies[kClockShadowCopies];
     clock_shadow_copies(copies);
-    for (uint8_t i = 0; i < kClockShadowCopies; ++i) {
-      lv_image_set_src(copy_images[i], mask);
-      lv_obj_set_pos(copy_images[i], copies[i].x - ext, copies[i].y - ext);
-    }
+    clock_shadow_paint::place(painter, paint, mask, copies, ext);
+    // The old mask: LVGL may hold it in its image cache from a fallback draw.
     if (mask_buf) {
       lv_image_cache_drop(mask_buf);
       lv_draw_buf_destroy(mask_buf);
@@ -248,9 +249,7 @@ struct ClockShadowSet {
   }
 
   void release_shadow() {
-    for (lv_obj_t* image : copy_images) {
-      if (image) lv_image_set_src(image, nullptr);
-    }
+    clock_shadow_paint::release(paint);
     if (!mask_buf) return;
     lv_image_cache_drop(mask_buf);
     lv_draw_buf_destroy(mask_buf);
@@ -407,9 +406,9 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
   ClockShadowCopy copies[kClockShadowCopies];
   clock_shadow_copies(copies);
   if (!config.fill_parent && shadow_out) {
-    // The copies as A8 images of one mask (clock_shadow_mask): the hidden
-    // label holds the text for the mask, the images lie behind the white
-    // text, each at its copy's opacity in black.
+    // The copies of one mask (clock_shadow_mask): the hidden label holds the
+    // text for the mask, the painter draws the nine copies behind the white
+    // text, each at its opacity in black.
     lv_obj_t* mask = lv_label_create(line);
     if (mask) {
       set_label_style(mask, lv_color_white(), font);
@@ -417,24 +416,11 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
       lv_obj_set_pos(mask, 0, 0);
       lv_label_set_text(mask, "");
       lv_obj_add_flag(mask, LV_OBJ_FLAG_HIDDEN);
-      bool complete = true;
-      for (uint8_t i = 0; i < kClockShadowCopies && complete; ++i) {
-        lv_obj_t* image = lv_image_create(line);
-        complete = image != nullptr;
-        if (!image) break;
-        lv_obj_set_pos(image, copies[i].x, copies[i].y);
-        lv_obj_remove_flag(image, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_style_image_recolor(image, lv_color_black(), 0);
-        lv_obj_set_style_image_opa(image, copies[i].opa, 0);
-        shadow_out->copy_images[i] = image;
-      }
-      if (complete) {
+      lv_obj_t* painter = clock_shadow_paint::create(line, &shadow_out->paint);
+      if (painter) {
         shadow_out->mask_label = mask;
+        shadow_out->painter = painter;
       } else {
-        for (lv_obj_t*& image : shadow_out->copy_images) {
-          if (image) lv_obj_delete(image);
-          image = nullptr;
-        }
         lv_obj_delete(mask);
       }
     }
@@ -495,30 +481,31 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
   lv_obj_remove_flag(stack, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(stack, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
 
-  lv_obj_t* time_label = nullptr;
-  ClockShadowSet time_shadows;
-  if (config.show_time) {
-    time_label =
-        create_clock_line(stack, config, config.time_font_size, 40, false,
-                          config.time_alignment,
-                          &time_shadows);
-  }
-
-  // The date line also holds a standalone weekday.
-  lv_obj_t* date_label = nullptr;
-  ClockShadowSet date_shadows;
-  if (config.show_date || config.show_weekday) {
-    date_label =
-        create_clock_line(stack, config, config.date_font_size, 20, true,
-                          config.date_alignment,
-                          &date_shadows);
-  }
-
+  // The lines' shadow state lives in the data from the start: the shadow
+  // painters draw from it (clock_shadow_paint.h).
   ClockTileData* data = new (std::nothrow) ClockTileData{};
   if (!data) {
     lv_obj_delete(stack);
     return nullptr;
   }
+
+  lv_obj_t* time_label = nullptr;
+  if (config.show_time) {
+    time_label =
+        create_clock_line(stack, config, config.time_font_size, 40, false,
+                          config.time_alignment,
+                          &data->time_shadows);
+  }
+
+  // The date line also holds a standalone weekday.
+  lv_obj_t* date_label = nullptr;
+  if (config.show_date || config.show_weekday) {
+    date_label =
+        create_clock_line(stack, config, config.date_font_size, 20, true,
+                          config.date_alignment,
+                          &data->date_shadows);
+  }
+
   data->time_format = config.time_format;
   data->date_format = config.date_format;
   data->flags = (config.show_time ? 1 : 0) | (config.show_date ? 2 : 0);
@@ -530,8 +517,6 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
   data->stack = stack;
   data->time_label = time_label;
   data->date_label = date_label;
-  data->time_shadows = time_shadows;
-  data->date_shadows = date_shadows;
   update_clock_labels(data);
   data->timer = lv_timer_create(clock_timer_cb, 1000, data);
 
@@ -543,8 +528,8 @@ lv_obj_t* create_clock_widget(lv_obj_t* parent,
         if (!data) return;
         if (data->timer) lv_timer_delete(data->timer);
         // The stack's delete event comes before its children's: the
-        // pictures leave their images, then are freed (the cache keeps its
-        // own).
+        // painters lose their masks, then the masks are freed (the cache
+        // keeps its own).
         data->time_shadows.release_shadow();
         data->date_shadows.release_shadow();
         delete data;

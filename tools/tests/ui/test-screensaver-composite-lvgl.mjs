@@ -59,11 +59,16 @@ int main() {
   picture.data = reinterpret_cast<const uint8_t*>(pixels.data());
 
   lv_obj_t* top = lv_layer_top();
+  // The overlay as the screensaver builds it: the default theme's card
+  // style (its radius included) under the screensaver's own styles.
   lv_obj_t* overlay = lv_obj_create(top);
-  lv_obj_remove_style_all(overlay);
   lv_obj_set_size(overlay, W, H);
+  lv_obj_set_pos(overlay, 0, 0);
   lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
   lv_obj_set_style_bg_opa(overlay, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(overlay, 0, 0);
+  lv_obj_set_style_pad_all(overlay, 0, 0);
+  lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_t* image = lv_image_create(overlay);
   lv_obj_set_pos(image, 0, 0);
   lv_image_set_src(image, &picture);
@@ -93,8 +98,16 @@ int main() {
   lv_draw_buf_t* b = lv_draw_buf_create(W, H, LV_COLOR_FORMAT_RGB565, W * 2);
   lv_snapshot_take_to_draw_buf(top, LV_COLOR_FORMAT_RGB565, a);
   memset(b->data, 0x5A, W * H * 2);
-  const bool used = composite_over_image::render(display, top, image, &picture, b);
-  std::printf("used %d same %d\\n", used ? 1 : 0, used && same(a, b) ? 1 : 0);
+  // The theme's rounded corners keep the overlay from covering the frame:
+  // LVGL starts from the bottom and the copy is refused (V2 b306).
+  const char* why = nullptr;
+  const bool rounded = composite_over_image::render(display, top, image, &picture, b, &why);
+  std::printf("rounded %d %s\\n", rounded ? 1 : 0, why ? why : "-");
+  lv_obj_set_style_radius(overlay, 0, 0);
+  lv_snapshot_take_to_draw_buf(top, LV_COLOR_FORMAT_RGB565, a);
+  memset(b->data, 0x5A, W * H * 2);
+  const bool used = composite_over_image::render(display, top, image, &picture, b, &why);
+  std::printf("used %d same %d %s\\n", used ? 1 : 0, used && same(a, b) ? 1 : 0, why ? why : "-");
 
   // Refused when LVGL would not copy the picture as it is.
   lv_obj_set_style_image_recolor_opa(image, 80, 0);
@@ -117,7 +130,12 @@ let run = spawnSync(host.cxx, [...host.flags, '-std=c++17', '-Wno-deprecated-dec
 assert.equal(run.status, 0, run.stdout + run.stderr);
 run = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, run.stdout + run.stderr);
-assert.match(run.stdout, /used 1 same 1/, `the copied frame equals LVGL's snapshot\n${run.stdout}`);
+assert.match(run.stdout, /rounded 0 start/, `rounded overlay corners refuse the copy\n${run.stdout}`);
+assert.match(run.stdout, /used 1 same 1 -/, `the copied frame equals LVGL's snapshot\n${run.stdout}`);
+// The device's overlay keeps square corners, or the copy is never used.
+const screensaver = fs.readFileSync(path.join(root, 'src/ui/screensaver/image_screensaver.cpp'), 'utf8');
+assert.match(screensaver, /st->overlay = lv_obj_create\(lv_layer_top\(\)\);[\s\S]*?lv_obj_set_style_radius\(st->overlay, 0, 0\);/,
+  'the screensaver overlay has square corners');
 for (const refused of ['recolored', 'see-through', 'hidden', 'swapped']) {
   assert.match(run.stdout, new RegExp(`${refused} 0`), `${refused}: the snapshot is taken instead`);
 }

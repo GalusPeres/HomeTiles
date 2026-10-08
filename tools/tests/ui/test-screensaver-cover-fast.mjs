@@ -33,7 +33,8 @@ assert.match(source, /using wallpaper_cover::blend_swapped_rgb565_with_black;\nu
 // test-screensaver-composite-lvgl.mjs) and falls back to the snapshot; a
 // presented frame drops the invalidated areas it shows.
 const present = fn('present_composited_screensaver_frame');
-assert.match(present, /if \(!composite_over_wallpaper\(st, display, top_layer\) &&\s*lv_snapshot_take_to_draw_buf\(top_layer, LV_COLOR_FORMAT_RGB565,/);
+assert.match(present, /if \(!composite_over_wallpaper\(st, display, top_layer, &refused\) &&\s*lv_snapshot_take_to_draw_buf\(top_layer, LV_COLOR_FORMAT_RGB565,/);
+assert.match(present, /refused \? "; copy refused: " : ""/, 'the log names why the copy was refused');
 assert.match(present, /if \(preview_ok\) \{[\s\S]*?lv_inv_area\(display, nullptr\);\s*\}\s*return preview_ok;/);
 assert.doesNotMatch(source, /log_snapshot_split/, 'the b304 split diagnostics are gone');
 

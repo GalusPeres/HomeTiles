@@ -248,11 +248,11 @@ bool ensure_composite_draw_buf(ScreensaverState* st) {
 
 // The wallpaper copied into the frame, LVGL drawing only what lies above it
 // (composite_over_image.h); false when LVGL would not draw it as a plain
-// copy (the caller takes the snapshot).
+// copy (the caller takes the snapshot), `refused` names the failed check.
 bool composite_over_wallpaper(ScreensaverState* st, lv_display_t* display,
-                              lv_obj_t* top_layer) {
+                              lv_obj_t* top_layer, const char** refused) {
   return composite_over_image::render(display, top_layer, st->image, g_cache_dsc,
-                                      &st->composite_draw_buf);
+                                      &st->composite_draw_buf, refused);
 }
 
 bool present_composited_screensaver_frame(ScreensaverState* st) {
@@ -264,7 +264,8 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
   const uint32_t snapshot_started = millis();
   // Use the entire top layer intentionally so the clock and tiles remain
   // visible during slide transitions and are presented together.
-  if (!composite_over_wallpaper(st, display, top_layer) &&
+  const char* refused = nullptr;
+  if (!composite_over_wallpaper(st, display, top_layer, &refused) &&
       lv_snapshot_take_to_draw_buf(top_layer, LV_COLOR_FORMAT_RGB565,
                                    &st->composite_draw_buf) != LV_RESULT_OK) {
     Serial.println("[Screensaver] Composite snapshot failed");
@@ -281,11 +282,13 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
   // A slideshow frame needs one atomic swap only. Do not leave the persistent
   // camera mirroring state active while the normal UI resumes underneath it.
   Device::displayEndFullFramePreview();
-  Serial.printf("[Screensaver] Composite-Preview %s in %u ms (snapshot %u, present %u)\n",
+  Serial.printf("[Screensaver] Composite-Preview %s in %u ms (%s %u, present %u)%s%s\n",
                 preview_ok ? "OK" : "skipped",
                 static_cast<unsigned>(millis() - snapshot_started),
+                refused ? "snapshot" : "copy",
                 static_cast<unsigned>(snapshot_ms),
-                static_cast<unsigned>(millis() - snapshot_started - snapshot_ms));
+                static_cast<unsigned>(millis() - snapshot_started - snapshot_ms),
+                refused ? "; copy refused: " : "", refused ? refused : "");
   if (preview_ok) {
     // The presented frame is the whole top layer as it stands, in the
     // framebuffer LVGL draws its next areas into (every P4 driver's
@@ -1761,6 +1764,10 @@ void show_image_screensaver() {
   lv_obj_set_style_bg_opa(st->overlay, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(st->overlay, 0, 0);
   lv_obj_set_style_pad_all(st->overlay, 0, 0);
+  // Square corners: the default theme's card radius left the overlay not
+  // covering the screen, so LVGL drew every frame from the screen below and
+  // the composite could not take the wallpaper by one copy (V2 b306).
+  lv_obj_set_style_radius(st->overlay, 0, 0);
   lv_obj_remove_flag(st->overlay, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(st->overlay, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(st->overlay, on_global_screensaver_clicked,

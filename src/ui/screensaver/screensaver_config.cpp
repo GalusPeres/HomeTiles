@@ -5,6 +5,7 @@
 #include <new>
 
 #include "src/devices/device.h"
+#include "src/tiles/config/grid_layout.h"
 #include "src/types/clock/clock_format.h"
 
 namespace {
@@ -172,6 +173,7 @@ void ScreensaverConfigStore::resetSettings() {
 }
 
 void ScreensaverConfigStore::resetDefaults() {
+  for (ClockPlace& place : clock_places_) place = ClockPlace{};
   resetSettings();
   resetGrid(gridStorage(), true);
 }
@@ -298,11 +300,54 @@ bool ScreensaverConfigStore::loadPath(const char* path) {
     ++index;
   }
 
+  ClockPlace places[grid_layout::kLayoutCount];
+  places[0] = {loaded.clock_x, loaded.clock_y, loaded.time_font_size, loaded.date_font_size, true};
+  JsonObjectConst clock_layouts = doc["clock_layouts"].as<JsonObjectConst>();
+  for (uint8_t i = 1; i < grid_layout::kLayoutCount; ++i) {
+    JsonObjectConst item = clock_layouts[grid_layout::key(grid_layout::from_index(i))].as<JsonObjectConst>();
+    if (item.isNull()) continue;
+    places[i] = {clamp_u16(item["clock_x"] | 500, 0, 1000), clamp_u16(item["clock_y"] | 350, 0, 1000),
+                 normalize_font(item["time_font_size"] | 48, 48), normalize_font(item["date_font_size"] | 28, 28, 72),
+                 true};
+  }
+  const ClockPlace& shown = places[static_cast<uint8_t>(grid_layout::active())].set
+                                ? places[static_cast<uint8_t>(grid_layout::active())]
+                                : places[0];
+  loaded.clock_x = shown.x;
+  loaded.clock_y = shown.y;
+  loaded.time_font_size = shown.time_size;
+  loaded.date_font_size = shown.date_size;
+
   data_ = loaded;
+  for (uint8_t i = 0; i < grid_layout::kLayoutCount; ++i) clock_places_[i] = places[i];
   legacy_slot_count_ = index;
   legacy_slots_loaded_ = have_legacy;
   normalize();
   return true;
+}
+
+// The file's clock keys: the classic place on top, the others' below.
+void ScreensaverConfigStore::writeClockPlaces(JsonDocument& doc, const ClockPlace (&places)[3]) {
+  doc["clock_x"] = places[0].x;
+  doc["clock_y"] = places[0].y;
+  doc["time_font_size"] = places[0].time_size;
+  doc["date_font_size"] = places[0].date_size;
+  JsonObject clock_layouts = doc["clock_layouts"].to<JsonObject>();
+  for (uint8_t i = 1; i < grid_layout::kLayoutCount; ++i) {
+    if (!places[i].set) continue;
+    JsonObject item = clock_layouts[grid_layout::key(grid_layout::from_index(i))].to<JsonObject>();
+    item["clock_x"] = places[i].x;
+    item["clock_y"] = places[i].y;
+    item["time_font_size"] = places[i].time_size;
+    item["date_font_size"] = places[i].date_size;
+  }
+}
+
+void ScreensaverConfigStore::currentClockPlaces(ClockPlace (&out)[3]) const {
+  for (uint8_t i = 0; i < grid_layout::kLayoutCount; ++i) out[i] = clock_places_[i];
+  out[static_cast<uint8_t>(grid_layout::active())] = {data_.clock_x, data_.clock_y, data_.time_font_size,
+                                                       data_.date_font_size, true};
+  if (!out[0].set) out[0] = {data_.clock_x, data_.clock_y, data_.time_font_size, data_.date_font_size, true};
 }
 
 bool ScreensaverConfigStore::load() {
@@ -414,6 +459,12 @@ String ScreensaverConfigStore::toJson(bool include_device_meta) const {
   doc["date_font_size"] = data_.date_font_size;
   doc["clock_x"] = data_.clock_x;
   doc["clock_y"] = data_.clock_y;
+  if (!include_device_meta) {
+    // The file: the classic place on top, the other layouts' below.
+    ClockPlace places[grid_layout::kLayoutCount];
+    currentClockPlaces(places);
+    writeClockPlaces(doc, places);
+  }
   doc["duration_seconds"] = data_.duration_seconds;
   if (include_device_meta) {
     doc["screen_width"] = Device::kScreenWidth;
@@ -502,6 +553,18 @@ bool ScreensaverConfigStore::replaceFromJson(const String& json, String& error,
     item.remove("duration_seconds");
   }
   doc["version"] = kConfigVersion;
+  // The clock keys are the active layout's: the file keeps the classic place
+  // on top and the other layouts' in clock_layouts.
+  {
+    ClockPlace places[grid_layout::kLayoutCount];
+    currentClockPlaces(places);
+    const uint8_t active = static_cast<uint8_t>(grid_layout::active());
+    places[active] = {static_cast<uint16_t>(doc["clock_x"] | static_cast<int>(data_.clock_x)),
+                      static_cast<uint16_t>(doc["clock_y"] | static_cast<int>(data_.clock_y)),
+                      static_cast<uint8_t>(doc["time_font_size"] | static_cast<int>(data_.time_font_size)),
+                      static_cast<uint8_t>(doc["date_font_size"] | static_cast<int>(data_.date_font_size)), true};
+    writeClockPlaces(doc, places);
+  }
   // Tile data does not belong in this JSON file, preventing older or
   // incorrect clients from accidentally overwriting the grid.
   doc.remove("slots");

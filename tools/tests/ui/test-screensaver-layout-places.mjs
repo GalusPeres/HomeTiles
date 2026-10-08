@@ -64,4 +64,14 @@ assert.ok(handler.includes('if (folder_id != screensaver_places::kFolder) return
 assert.ok(handler.includes('return place.inside && place.place.row < screensaver_places::first_row(layout) - 0.001f;'));
 assert.ok(handler.includes('ok = screensaverConfig.replaceTileGrid(*grid) && ok;'));
 
-console.log('Screensaver: the active layout\'s grid, two rows at the bottom, own places per layout');
+// The clock per layout: the file keeps the classic place on top (older
+// firmware reads it) and the others in clock_layouts; the panel and the Web
+// Admin see the active layout's; a layout without its own takes the classic.
+const config = read('src/ui/screensaver/screensaver_config.cpp');
+assert.ok(config.includes('JsonObjectConst clock_layouts = doc["clock_layouts"].as<JsonObjectConst>();'));
+assert.ok(config.includes(': places[0];'), 'a layout without its own clock takes the classic one');
+assert.ok(config.includes('if (!include_device_meta) {') && config.includes('writeClockPlaces(doc, places);'));
+assert.ok(config.includes('places[active] = {static_cast<uint16_t>(doc["clock_x"] | static_cast<int>(data_.clock_x)),'),
+  'an edit from the Web Admin goes to the active layout');
+
+console.log('Screensaver: the active layout\'s grid, two rows at the bottom, own places and clock per layout');

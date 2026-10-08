@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <vector>
 
 #include "src/tiles/config/tile_config.h"
@@ -76,6 +77,23 @@ class ScreensaverConfigStore {
   bool legacy_slots_loaded_ = false;
   // The last loaded file carried tile_opacity; older files kept it per tile.
   bool tile_opacity_stored_ = false;
+
+  // The clock's place and size per layout (user 2026-10-08): the classic
+  // one in the file's top-level keys (older firmware reads them), the others
+  // in "clock_layouts"; a layout without its own takes the classic one.
+  // data_ always carries the active layout's (grid_layout::active()), so the
+  // panel and the Web Admin see and edit only that one.
+  struct ClockPlace {
+    uint16_t x = 500;
+    uint16_t y = 350;
+    uint8_t time_size = 48;
+    uint8_t date_size = 28;
+    bool set = false;
+  };
+  ClockPlace clock_places_[3];
+  // The places with the active layout's taken from data_.
+  void currentClockPlaces(ClockPlace (&out)[3]) const;
+  static void writeClockPlaces(JsonDocument& doc, const ClockPlace (&places)[3]);
 
   void resetDefaults();
   void resetSettings();

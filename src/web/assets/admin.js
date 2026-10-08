@@ -11217,24 +11217,19 @@ function syncTileRadiusControls(tabEl) {
   function layoutSize(key) { return LAYOUTS[key].cols + ' × ' + String(LAYOUTS[key].rows).replace('.', ','); }
 
   // The window's editor area: the same for every layout. Every layout's
-  // screen starts right under the head, in the middle of the widest screen
-  // (user 2026-10-08), with the storage on both sides. Every screen keeps at
-  // least two columns of storage and two rows below; where the screens leave
-  // too little (the square panels' layouts are all 3 x 3), the area grows
-  // from the screen's corner to the right and down (user 2026-10-08).
+  // screen starts in its top left corner, right under the head; the storage
+  // lies to the right and below (user 2026-10-08, every panel). The area
+  // keeps at least two columns and two rows beside the smallest screen (the
+  // square panels' layouts are all 3 x 3).
   function layoutCanvas() {
     const keys = LAYOUT_KEYS.filter(key => LAYOUTS[key].available);
     const cols = keys.map(key => LAYOUTS[key].cols);
     const rows = keys.map(key => Math.ceil(LAYOUTS[key].rows));
-    return {cols: Math.max(...cols, Math.min(...cols) + 2), rows: Math.max(...rows, Math.min(...rows) + 2),
-            screens: Math.max(...cols)};
+    return {cols: Math.max(...cols, Math.min(...cols) + 2), rows: Math.max(...rows, Math.min(...rows) + 2)};
   }
-  // Where a layout's screen starts in the area's columns (half steps): its
-  // places are stored from its own first column.
-  function layoutOffsetX(key) { return Math.floor(layoutCanvas().screens - LAYOUTS[key].cols) / 2; }
   function layoutInside(tile, key) {
-    const L = LAYOUTS[key], x = layoutOffsetX(key);
-    return tile.col >= x - 1e-6 && tile.col + tile.span_w <= x + L.cols + 1e-6 &&
+    const L = LAYOUTS[key];
+    return tile.col >= -1e-6 && tile.col + tile.span_w <= L.cols + 1e-6 &&
       tile.row >= -1e-6 && tile.row + tile.span_h <= L.rows + 1e-6;
   }
   // The head on the layout's screen: the X and the time keep their distance
@@ -11303,13 +11298,12 @@ function syncTileRadiusControls(tabEl) {
   function classicParked(tab, view) {
     const p = layoutWindow.data.places?.classic_parked?.[layoutFolderId(tab)]?.[view];
     return p && p[2] > 0 && p[3] > 0
-      ? {col: p[0] + layoutOffsetX('classic'), row: p[1], span_w: p[2], span_h: p[3]} : null;
+      ? {col: p[0], row: p[1], span_w: p[2], span_h: p[3]} : null;
   }
-  // Wholly beside the layout's screen: in its storage.
+  // Wholly beside the layout's screen, to the right or below: in its storage.
   function layoutParked(tile, key) {
-    const L = LAYOUTS[key], x = layoutOffsetX(key);
-    return tile.col >= x + L.cols - 1e-6 || tile.row >= L.rows - 1e-6 ||
-      tile.col + tile.span_w <= x + 1e-6 || tile.row + tile.span_h <= 1e-6;
+    const L = LAYOUTS[key];
+    return tile.col >= -1e-6 && tile.row >= -1e-6 && (tile.col >= L.cols - 1e-6 || tile.row >= L.rows - 1e-6);
   }
   // The page's tiles with their classic places.
   function layoutBase(tab) {
@@ -11322,7 +11316,7 @@ function syncTileRadiusControls(tabEl) {
       delete tile.layout_hidden;
       const p = classic[index];
       if (p && Number(p.view) === Number(tile.view_id)) {
-        Object.assign(tile, {col: p.col + layoutOffsetX('classic'), row: p.row, span_w: p.span_w, span_h: p.span_h});
+        Object.assign(tile, {col: p.col, row: p.row, span_w: p.span_w, span_h: p.span_h});
       } else {
         tile._unplaced = true;
       }
@@ -11364,21 +11358,20 @@ function syncTileRadiusControls(tabEl) {
         later.push(tile);
       }
     }
+    // The others keep their size (user 2026-10-08: they are moved by hand):
+    // the first free spot beside the screen, else on it.
     for (const tile of later) {
       const shown = normalizeLayoutForTileType(tile.type, 0, 0, tile.span_w, tile.span_h);
-      const sizes = [[shown.span_w, shown.span_h], [1, 1], [1, 0.5]];
+      const w = shown.span_w, h = shown.span_h;
       let spot = null;
       for (const outside of [true, false]) {
-        for (const [w, h] of sizes) {
-          for (let row = 0; !spot && row + h <= canvas.rows; row += 0.5) {
-            for (let col = 0; !spot && col + w <= canvas.cols; col += 0.5) {
-              if (fits(col, row, w, h) && (!outside || layoutParked({col, row, span_w: w, span_h: h}, key)) &&
-                  supportedTileLayout(tile.type, {col, row, span_w: w, span_h: h}) && drawn(tile.type, col, row, w, h)) {
-                spot = {col, row, span_w: w, span_h: h};
-              }
+        for (let row = 0; !spot && row + h <= canvas.rows; row += 0.5) {
+          for (let col = 0; !spot && col + w <= canvas.cols; col += 0.5) {
+            if (fits(col, row, w, h) && (!outside || layoutParked({col, row, span_w: w, span_h: h}, key)) &&
+                supportedTileLayout(tile.type, {col, row, span_w: w, span_h: h}) && drawn(tile.type, col, row, w, h)) {
+              spot = {col, row, span_w: w, span_h: h};
             }
           }
-          if (spot) break;
         }
         if (spot) break;
       }
@@ -11399,7 +11392,6 @@ function syncTileRadiusControls(tabEl) {
       tiles.forEach(tile => {
         if (!layoutUsed(tile)) return;
         if (classicHidden(tab, tile.view_id)) tile._unplaced = true;
-        tile.col += layoutOffsetX(key) - layoutOffsetX('classic');
       });
     } else {
       // The other layout as its window shows it: saved, or its first take-over.
@@ -11408,8 +11400,7 @@ function syncTileRadiusControls(tabEl) {
         const p = source[index];
         if (!layoutUsed(tile)) return;
         if (layoutUsed(p) && layoutInside(p, from)) {
-          Object.assign(tile, {col: p.col - layoutOffsetX(from) + layoutOffsetX(key), row: p.row,
-            span_w: p.span_w, span_h: p.span_h});
+          Object.assign(tile, {col: p.col, row: p.row, span_w: p.span_w, span_h: p.span_h});
           delete tile._unplaced;
         } else if (!layoutBarHidden(tile.type)) {
           // Back keeps its classic place, here in this layout's columns.
@@ -11447,7 +11438,7 @@ function syncTileRadiusControls(tabEl) {
       if (layoutBarHidden(tile.type)) return layoutEmptyTile();
       const p = places[tile.view_id];
       if (p) {
-        Object.assign(tile, {col: p[0] + layoutOffsetX(key), row: p[1], span_w: p[2], span_h: p[3]});
+        Object.assign(tile, {col: p[0], row: p[1], span_w: p[2], span_h: p[3]});
         delete tile._unplaced;
       } else {
         tile._unplaced = true;
@@ -11675,10 +11666,7 @@ function syncTileRadiusControls(tabEl) {
     const r = parseFloat(getComputedStyle(grid).borderTopLeftRadius) || 20;
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='${w}' height='${h}' rx='${r}' fill='black'/></svg>`;
     grid.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-    // In the middle of the area: the head and the screen move along.
-    const x = layoutOffsetX(layoutWindow.key) * (base['--preview-cell-w'] + (base['--preview-gap'] || 0)) * f;
-    grid.style.backgroundPosition = `${x}px ${y}px`;
-    grid.style.setProperty('--setup-screen-x', x.toFixed(2) + 'px');
+    grid.style.backgroundPosition = `0px ${y}px`;
     // The storage's name in its bottom right corner (beside every screen).
     const label = document.createElement('div');
     label.className = 'setup-storage-label';
@@ -11852,7 +11840,7 @@ function syncTileRadiusControls(tabEl) {
       const places = folders[layoutFolderId(tab)] = {};
       getTilesData(tab).forEach(tile => {
         if (!layoutUsed(tile) || !tile.view_id || (key !== 'classic' && layoutBarHidden(tile.type))) return;
-        places[tile.view_id] = [tile.col - layoutOffsetX(key), tile.row, tile.span_w, tile.span_h];
+        places[tile.view_id] = [tile.col, tile.row, tile.span_w, tile.span_h];
       });
     }
     layoutWindow.busy = true;

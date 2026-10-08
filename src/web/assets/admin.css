@@ -3394,7 +3394,6 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 }
 .setup-stage { display:flex; justify-content:center; align-items:flex-start; margin:0 auto; }
 /* The head over the layout's screen, in the middle of the area. */
-.tile-grid.setup-grid > .head-bar-preview { left:calc(var(--preview-frame, 0px) + var(--setup-screen-x, 0px)); }
 /* The editor's area: the layout's screen in black, the rest is outside. */
 .tile-grid.setup-grid {
   background-color:var(--panel, #141414); background-repeat:no-repeat; background-position:0 0;

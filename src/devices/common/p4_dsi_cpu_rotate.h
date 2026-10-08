@@ -16,9 +16,12 @@ namespace p4_dsi_cpu_rotate {
 // RAM, is read column-wise. The former path rotated into a PSRAM buffer first
 // (one cache line per pixel write) and then copied that buffer again.
 // The caller writes the touched rows back for the DMA (cache sync).
+// `swap_bytes` for a UI in RGB565_SWAPPED (Tab5), like copy_into().
+inline uint16_t swapped(uint16_t pixel) { return static_cast<uint16_t>((pixel << 8) | (pixel >> 8)); }
 inline void rotate_into(uint16_t* fb, size_t fb_stride, int32_t dst_x,
                         int32_t dst_y, int32_t w, int32_t h,
-                        const uint16_t* src, bool rotation_bit2) {
+                        const uint16_t* src, bool rotation_bit2,
+                        bool swap_bytes = false) {
   const size_t src_stride = static_cast<size_t>(w);
   for (int32_t row = 0; row < w; ++row) {
     uint16_t* dst =
@@ -26,14 +29,18 @@ inline void rotate_into(uint16_t* fb, size_t fb_stride, int32_t dst_x,
     if (rotation_bit2) {
       // Destination row `row` is source column w-1-row, top to bottom.
       const uint16_t* column = src + (w - 1 - row);
-      for (int32_t col = 0; col < h; ++col) {
-        dst[col] = column[static_cast<size_t>(col) * src_stride];
+      if (swap_bytes) {
+        for (int32_t col = 0; col < h; ++col) dst[col] = swapped(column[static_cast<size_t>(col) * src_stride]);
+      } else {
+        for (int32_t col = 0; col < h; ++col) dst[col] = column[static_cast<size_t>(col) * src_stride];
       }
     } else {
       // Destination row `row` is source column `row`, bottom to top.
       const uint16_t* column = src + row;
-      for (int32_t col = 0; col < h; ++col) {
-        dst[col] = column[static_cast<size_t>(h - 1 - col) * src_stride];
+      if (swap_bytes) {
+        for (int32_t col = 0; col < h; ++col) dst[col] = swapped(column[static_cast<size_t>(h - 1 - col) * src_stride]);
+      } else {
+        for (int32_t col = 0; col < h; ++col) dst[col] = column[static_cast<size_t>(h - 1 - col) * src_stride];
       }
     }
   }
@@ -62,7 +69,7 @@ inline void copy_into(uint16_t* fb, size_t fb_stride, int32_t fb_w, int32_t fb_h
     const uint16_t* line = src + static_cast<size_t>(flipped ? h - 1 - row : row) * src_stride;
     for (int32_t col = 0; col < w; ++col) {
       const uint16_t pixel = line[flipped ? w - 1 - col : col];
-      dst[col] = swap_bytes ? static_cast<uint16_t>((pixel << 8) | (pixel >> 8)) : pixel;
+      dst[col] = swap_bytes ? swapped(pixel) : pixel;
     }
   }
 }

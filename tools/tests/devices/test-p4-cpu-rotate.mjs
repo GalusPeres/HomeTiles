@@ -31,6 +31,24 @@ for (const driverPath of drivers) {
   }
 }
 
+// The Tab5 (M5GFX, RGB565_SWAPPED UI): landscape areas below the PPA's width
+// are turned by the CPU into the panel framebuffer at the PPA's places, bytes
+// swapped, instead of through M5GFX; every PPA write drops its cached lines.
+{
+  const tab5 = fs.readFileSync(path.join(root, 'src/devices/m5stacks_tab5/device_m5stacks_tab5.cpp'), 'utf8');
+  const push = cppFunctionDefinitions(tab5).find(f => f.name === 'push_pixels_with_ppa_fallback');
+  assert.ok(push, 'Tab5: push_pixels_with_ppa_fallback is missing');
+  const cpu = push.source.indexOf('p4_dsi_cpu_rotate::rotate_into(g_panel_fb, kPanelWidth, dst_x, dst_y, w, h, data, flipped, true);');
+  assert.ok(cpu > push.source.indexOf('ppa_rotate_to_panel('), 'Tab5: the PPA first, then the CPU');
+  assert.ok(cpu < push.source.indexOf('M5.Display.pushImage'), 'Tab5: M5GFX only without the framebuffer');
+  assert.match(push.source, /const int32_t dst_x = flipped \? y : kLogicalHeight - y - h;\s*const int32_t dst_y = flipped \? kLogicalWidth - x - w : x;/);
+  const ppa = cppFunctionDefinitions(tab5).find(f => f.name === 'ppa_rotate_to_panel').source;
+  assert.match(ppa, /\} else if \(g_rotation & 0x02\) \{\s*dst_x = y;\s*dst_y = kLogicalWidth - x - w;\s*\} else \{\s*dst_x = kLogicalHeight - y - h;\s*dst_y = x;/,
+    'Tab5: the CPU places equal the PPA\'s');
+  assert.equal((ppa.match(/invalidate_panel_rect\(dst_x, dst_y, dst_w, dst_h\);\s*return true;/g) || []).length, 2,
+    'Tab5: both PPA success paths drop the cached lines');
+}
+
 const cxx = ['clang++', 'g++'].find(name => spawnSync(name, ['--version']).status === 0);
 if (!cxx) {
   console.log('SKIP: P4 CPU rotation runtime test requires a host C++ compiler');
@@ -80,6 +98,17 @@ int main() {
       p4_dsi_cpu_rotate::rotate_into(actual.data(), panel_w, dst_x, dst_y, w, h, data.data(), bit2 != 0);
       if (expected != actual) {
         std::printf("mismatch w=%d h=%d bit2=%d\n", w, h, bit2);
+        return 1;
+      }
+      // Swapped bytes (Tab5): the same places, every pixel byte-swapped.
+      std::vector<uint16_t> swapped_expected(static_cast<size_t>(panel_w) * panel_h, 0xA5A5);
+      std::vector<uint16_t> swapped_data(data);
+      for (auto& px : swapped_data) px = static_cast<uint16_t>((px << 8) | (px >> 8));
+      reference(swapped_expected, panel_w, dst_x, dst_y, w, h, swapped_data.data(), bit2 != 0);
+      std::vector<uint16_t> swapped_actual(static_cast<size_t>(panel_w) * panel_h, 0xA5A5);
+      p4_dsi_cpu_rotate::rotate_into(swapped_actual.data(), panel_w, dst_x, dst_y, w, h, data.data(), bit2 != 0, true);
+      if (swapped_expected != swapped_actual) {
+        std::printf("swap mismatch w=%d h=%d bit2=%d\n", w, h, bit2);
         return 1;
       }
     }

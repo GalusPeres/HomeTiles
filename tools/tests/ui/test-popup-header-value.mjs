@@ -144,6 +144,7 @@ inline lv_color_t border_hint(lv_color_t c){return lv_color_mix(lv_color_white()
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
 void* heap_caps_malloc(size_t n,int){return malloc(n);}void heap_caps_free(void*p){free(p);}
 ${radiusPolicyHost(root)}
+namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${strip(read('src/ui/popups/popup_layout.h'))}
 ${strip(read('src/ui/popups/popup_open.h'))}
 ${strip(read('src/ui/popups/popup_shell.h'))}

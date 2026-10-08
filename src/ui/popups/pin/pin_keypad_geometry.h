@@ -19,9 +19,9 @@ constexpr int kDotsGapPct = 26;       // dots line to the keys
 constexpr int kMarginPct = 8;         // at least this above and below the block
 constexpr int kKeyWidthPct = 130;     // keys are a bit wider than tall
 constexpr int kDotPct = 22;           // dot diameter, share of the key height
-// Keys are a bit rounder than the close button and follow the global tile
-// radius like it (ui_surface_style::apply_radius).
-constexpr int kKeyRadius = popup_layout::kCloseButtonRadius + popup_layout::kCloseButtonRadius / 2;
+// Keys are never rounder than a tile and follow the global tile radius
+// (ui_surface_style::apply_radius).
+constexpr int kKeyRadius = tile_radius::kMinimum;
 
 // Positions below the header, in the card's content coordinates.
 struct KeypadGeometry {

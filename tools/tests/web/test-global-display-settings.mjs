@@ -188,7 +188,9 @@ assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes('html += "
 const tileHeader = read('src/tiles/config/tile_config.h');
 assert.match(tileHeader, /return stored == 0 \|\| tile_color::isDefaultGrey\(stored\);/);
 assert.match(tileHeader, /return tileBgColorFollowsDefault\(tile\.bg_color\) \? tileDefaultBgColor\(\) : tileBgColorRgb\(tile\);/);
-assert.ok(read('src/ui/ui_manager.cpp').includes('? (tileBgColorFollowsDefault(snapshot_color)'), 'Hidden Settings gesture color');
+// The Settings PIN popup takes the global tile color from the tile, the
+// head's gear and the swipe alike (user 2026-10-08).
+assert.ok(read('src/ui/ui_manager.cpp').includes('init.bg_color = tileDefaultBgColor();'), 'Settings PIN popup color');
 assert.ok(html.includes('tileBgColorFollowsDefault(tile.bg_color) && tile_type_follows_default_tile_color(tile.type)'));
 assert.ok(html.includes('snapshot.valid && !tileBgColorFollowsDefault(snapshot.bg_color)'));
 const gridPreview = read('src/web/admin/tiles/grid-preview.js');

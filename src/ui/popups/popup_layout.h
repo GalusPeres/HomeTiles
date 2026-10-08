@@ -167,26 +167,33 @@ inline void applyIconScale(lv_obj_t* label) {
   (void)label;
 }
 
+// The header like the Home head bar and the Settings head (home_bar.cpp,
+// settings_style.h), with the card as the frame: the X's box one grid gap
+// inside the card corner (its pressed shape concentric with the card), the
+// header circle mirroring it, circle, title and X on the X's centre line
+// (user 2026-10-08: the head and every popup match). The offsets are from the
+// card's content box (kCardPad, below).
+constexpr int kHeadCardPad = scale(20);
 #if defined(DEVICE_LAYOUT_1024X600)
-constexpr int kHeaderCenterY = 50;
+constexpr int kHeaderCenterY = Device::kGridGap + 72 / 2;
 constexpr int kCloseButtonSize = 72;
 constexpr int kCloseButtonRadius = 13;
-constexpr int kCloseButtonOffsetX = 3;
-constexpr int kCloseButtonOffsetY = -3;
+constexpr int kCloseButtonOffsetX = kHeadCardPad - Device::kGridGap;
+constexpr int kCloseButtonOffsetY = -(kHeadCardPad - Device::kGridGap);
 constexpr int kCloseButtonClickArea = 7;
 #elif defined(DEVICE_LAYOUT_480X480)
-constexpr int kHeaderCenterY = 40;
+constexpr int kHeaderCenterY = Device::kGridGap + 64 / 2;
 constexpr int kCloseButtonSize = 64;
 constexpr int kCloseButtonRadius = 11;
-constexpr int kCloseButtonOffsetX = 4;
-constexpr int kCloseButtonOffsetY = -4;
+constexpr int kCloseButtonOffsetX = kHeadCardPad - Device::kGridGap;
+constexpr int kCloseButtonOffsetY = -(kHeadCardPad - Device::kGridGap);
 constexpr int kCloseButtonClickArea = 6;
 #else
-constexpr int kHeaderCenterY = 60;
+constexpr int kHeaderCenterY = Device::kGridGap + 96 / 2;
 constexpr int kCloseButtonSize = 96;
 constexpr int kCloseButtonRadius = 16;
-constexpr int kCloseButtonOffsetX = 6;
-constexpr int kCloseButtonOffsetY = -6;
+constexpr int kCloseButtonOffsetX = kHeadCardPad - Device::kGridGap;
+constexpr int kCloseButtonOffsetY = -(kHeadCardPad - Device::kGridGap);
 constexpr int kCloseButtonClickArea = 8;
 #endif
 // Header icon disc: a translucent circle at the card content's left edge,
@@ -199,8 +206,8 @@ constexpr int kHeaderIconDiscOpa = 38;
 // (tone_color::fill, popup_shell.cpp header_fill). The card hairline is the
 // plain white 20 % tile border.
 constexpr int kPopupBorderOpa = 51;
-constexpr int kHeaderIconX = 0;
-constexpr int kHeaderTitleX = kHeaderIconDiscSize + kHeaderIconDiscGap;
+constexpr int kHeaderIconX = Device::kGridGap + (kCloseButtonSize - kHeaderIconDiscSize) / 2 - kHeadCardPad;
+constexpr int kHeaderTitleX = kHeaderIconX + kHeaderIconDiscSize + kHeaderIconDiscGap;
 
 #if defined(DEVICE_LAYOUT_480X480)
 constexpr int kCardMargin = 3;
@@ -230,7 +237,7 @@ constexpr int kKeypadKeyMaxPermille = 125;
 #else
 constexpr int kKeypadKeyMaxPermille = 1000;
 #endif
-constexpr int kCardPad = scale(20);
+constexpr int kCardPad = kHeadCardPad;
 constexpr int kContentWidth = kCardWidth - (kCardPad * 2);
 
 #if defined(DEVICE_LAYOUT_1024X600) || defined(DEVICE_LAYOUT_480X480)

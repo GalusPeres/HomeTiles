@@ -445,7 +445,7 @@ PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
   lv_obj_center(parts.card);
   lv_obj_set_style_bg_color(parts.card, lv_color_hex(color), 0);
   lv_obj_set_style_bg_opa(parts.card, LV_OPA_COVER, 0);
-  ui_surface_style::apply_radius(parts.card, popup_layout::kCardRadius, 0);
+  ui_surface_style::apply_radius(parts.card, popup_layout::kCardRadius + Device::kGridGap, 0);
   lv_obj_set_style_border_width(parts.card, 0, 0);
   // No hairline on the body: the shell frame draws the only card border
   // (apply_popup_border); a second one on the body doubled its strength.
@@ -509,7 +509,7 @@ void show_popup_shell(lv_obj_t* owner, lv_obj_t* body, lv_obj_t* title,
     }
     lv_obj_set_style_border_width(shell.header, binding->border_width, 0);
     lv_obj_set_style_border_opa(shell.header, LV_OPA_TRANSP, 0);
-    ui_surface_style::apply_radius(shell.frame, popup_layout::kCardRadius, 0);
+    ui_surface_style::apply_radius(shell.frame, popup_layout::kCardRadius + Device::kGridGap, 0);
     lv_obj_set_style_border_width(shell.frame, binding->border_width, 0);
     lv_obj_set_style_border_color(shell.frame, binding->border_color, 0);
     lv_obj_set_style_border_opa(shell.frame, binding->border_opa, 0);

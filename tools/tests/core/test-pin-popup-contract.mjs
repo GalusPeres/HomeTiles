@@ -35,7 +35,7 @@ for (const marker of [
   'g.keys_y = top + (available - block) / 2 + 2 * g.prompt_h + prompt_gap + dots_gap;',
   'g.prompt_y = top + even - cap_top;',
   'g.dots_y = g.prompt_y + baseline + even - (g.prompt_h - g.dot) / 2;',
-  'constexpr int kKeyRadius = popup_layout::kCloseButtonRadius + popup_layout::kCloseButtonRadius / 2;',
+  'constexpr int kKeyRadius = tile_radius::kMinimum;',
   'ui_surface_style::apply_radius(button, kKeyRadius, 0);',
   'for (uint8_t digit = 1; digit <= 9; ++digit)',
   'getMdiChar("backspace")',

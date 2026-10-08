@@ -83,6 +83,7 @@ int allocations = 0;
 void* heap_caps_malloc(size_t size, int) { ++allocations; return malloc(size); }
 void heap_caps_free(void* pointer) { if (pointer) { --allocations; free(pointer); } }
 ${surfaceStyleHost(root)}
+namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${stripIncludes(read('src/ui/popups/popup_layout.h'))}
 ${stripIncludes(read('src/ui/popups/popup_open.h'))}
 ${stripIncludes(read('src/ui/popups/popup_shell.h'))}

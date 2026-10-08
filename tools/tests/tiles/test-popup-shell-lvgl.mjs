@@ -44,6 +44,7 @@ bool fail_alloc=false;int allocations=0;
 constexpr int MALLOC_CAP_SPIRAM=1,MALLOC_CAP_8BIT=2;
 void* heap_caps_malloc(size_t n,int caps){assert(caps==(MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));if(fail_alloc)return nullptr;++allocations;return malloc(n);}
 void heap_caps_free(void*p){if(p){--allocations;free(p);}}
+namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${withoutIncludes(read('src/ui/popups/popup_layout.h'))}
 ${withoutIncludes(read('src/ui/popups/popup_open.h'))}
 ${withoutIncludes(read('src/ui/popups/popup_shell.h'))}

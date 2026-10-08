@@ -16,13 +16,27 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\
 const header = read('src/core/diagnostics/loop_stall.h');
 assert.match(header, /#if defined\(DEVICE_GUITION_ESP32_4848S040\)\n#define HOMETILES_LOOP_STALL_DIAGNOSTICS 1\n#else\n#define HOMETILES_LOOP_STALL_DIAGNOSTICS 0/,
   'active only on the exact Guition S3 profile');
-for (const fn of ['begin()', 'enter(Step)', 'webRequestBegin(const char*, const char*)', 'webRequestEnd()',
+for (const fn of ['begin()', 'webRequestBegin(const char*, const char*)', 'webRequestEnd()',
   'webUploadBegin(const char*)', 'webIdle()', 'sampleNetwork()']) {
   assert.ok(header.includes(`inline void ${fn} {}`), `other profiles compile ${fn} to nothing`);
 }
+// Other profiles time the steps only (V2 b301 boot: the loop stood still for
+// 0.7 s twice and [LoopGap] stayed silent): a step of 300 ms or more is named.
+assert.match(header, /#else\n\ninline void begin\(\) \{\}\n\/\/ [^\n]*\nvoid enter\(Step step\);/);
 
 const source = read('src/core/diagnostics/loop_stall.cpp');
-assert.match(source, /^#include "src\/core\/diagnostics\/loop_stall.h"\n\n#if HOMETILES_LOOP_STALL_DIAGNOSTICS\n/);
+assert.match(source, /^#include "src\/core\/diagnostics\/loop_stall.h"\n\n#include <Arduino.h>\n\nnamespace loop_stall \{/);
+assert.match(source, /\n#if HOMETILES_LOOP_STALL_DIAGNOSTICS\n/);
+const light = source.slice(source.lastIndexOf('#else'));
+assert.match(light, /constexpr uint32_t kSlowStepMs = 300;/);
+assert.match(light, /if \(g_stepping && now - g_step_since_ms >= kSlowStepMs\) \{\s*Serial\.printf\("\[LoopStall\] Step %s took %u ms\\n", stepName\(g_step\),/);
+assert.doesNotMatch(light, /esp_timer|backtrace|WiFi/, 'no timer, backtraces or Wi-Fi sampling outside the S3');
+// The inbound drain (unlimited on the P4) names its slowest message when it
+// holds the loop; the count is not the 8-bit limit counter.
+const drain = cppFunctionDefinitions(read('src/network/mqtt/mqtt_handlers.cpp'))
+  .find(f => f.name === 'mqtt_process_inbound_queue').source;
+assert.match(drain, /constexpr uint32_t kSlowDrainMs = 300;/);
+assert.match(drain, /\[MqttInbound\] Drained %u messages in %u ms; slowest %u ms: %s\\n",\s*static_cast<unsigned>\(drained\)/);
 assert.match(source, /args\.dispatch_method = ESP_TIMER_TASK;/, 'the check runs outside the loop task');
 assert.match(source, /esp_backtrace_print_all_tasks\(kBacktraceDepth\)/, 'task backtraces name the blocking call');
 assert.match(source, /constexpr uint8_t kMaxBacktraces = 3;/, 'backtraces are bounded per boot');

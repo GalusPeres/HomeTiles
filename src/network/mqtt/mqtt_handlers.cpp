@@ -1779,6 +1779,14 @@ void mqtt_process_inbound_queue(uint8_t max_msgs) {
   }
 
   if (!q) return;
+  // A drain that holds the loop this long is logged with its slowest message
+  // (V2 b301 boot: the loop stood still for 0.7 s twice after the Bridge link
+  // came up). Logging only.
+  constexpr uint32_t kSlowDrainMs = 300;
+  const uint32_t drain_started = millis();
+  uint32_t slowest_ms = 0;
+  uint32_t drained = 0;  // processed is 8 bits and wraps in an unlimited drain
+  char slowest_topic[96] = "";
   MqttInboundMsg* msg = nullptr;
   while ((max_msgs == 0 || processed < max_msgs) && xQueueReceive(q, &msg, 0) == pdTRUE) {
     if (msg) {
@@ -1796,10 +1804,23 @@ void mqtt_process_inbound_queue(uint8_t max_msgs) {
         ++processed;
         continue;
       }
+      const uint32_t message_started = millis();
       processMqttMessage(msg->topic, msg->payload, msg->length);
+      const uint32_t message_ms = millis() - message_started;
+      if (message_ms > slowest_ms) {
+        slowest_ms = message_ms;
+        strlcpy(slowest_topic, msg->topic, sizeof(slowest_topic));
+      }
       heap_caps_free(msg);
       ++processed;
+      ++drained;
     }
+  }
+  const uint32_t drain_ms = millis() - drain_started;
+  if (drain_ms >= kSlowDrainMs) {
+    Serial.printf("[MqttInbound] Drained %u messages in %u ms; slowest %u ms: %s\n",
+                  static_cast<unsigned>(drained), static_cast<unsigned>(drain_ms),
+                  static_cast<unsigned>(slowest_ms), slowest_topic);
   }
 }
 

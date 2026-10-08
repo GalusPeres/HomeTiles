@@ -12,8 +12,9 @@
 // memory and Wi-Fi state, and prints the backtrace of every task once per
 // stall so the exact blocking call can be decoded with the build's ELF.
 //
-// Logging only: nothing here changes what the loop does. Other profiles
-// compile the markers to nothing.
+// Logging only: nothing here changes what the loop does. Other profiles only
+// time the steps: one of 300 ms or more is logged with its name when it ends;
+// the other markers compile to nothing.
 
 #if defined(DEVICE_GUITION_ESP32_4848S040)
 #define HOMETILES_LOOP_STALL_DIAGNOSTICS 1
@@ -76,7 +77,8 @@ void sampleNetwork();
 #else
 
 inline void begin() {}
-inline void enter(Step) {}
+// Logs the previous step if it took 300 ms or more (loop_stall.cpp).
+void enter(Step step);
 inline void webRequestBegin(const char*, const char*) {}
 inline void webRequestEnd() {}
 inline void webUploadBegin(const char*) {}

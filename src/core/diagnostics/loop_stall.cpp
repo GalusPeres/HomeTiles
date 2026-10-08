@@ -1,8 +1,30 @@
 #include "src/core/diagnostics/loop_stall.h"
 
+#include <Arduino.h>
+
+namespace loop_stall {
+namespace {
+
+const char* const kStepNames[] = {
+    "top",           "ota-web",        "access-point", "board",
+    "power",         "sleep-network",  "sleep-web",    "sleep-mqtt",
+    "sleep-tiles",   "sleep-touch",    "pre-lvgl",     "lvgl",
+    "folder-switch", "web-admin",      "post-connect", "services",
+    "mqtt-inbound",  "dynamic-slots",  "network-update", "status",
+};
+static_assert(sizeof(kStepNames) / sizeof(kStepNames[0]) ==
+                  static_cast<size_t>(Step::Status) + 1,
+              "every step has a name");
+
+const char* stepName(uint8_t step) {
+  return step < sizeof(kStepNames) / sizeof(kStepNames[0]) ? kStepNames[step] : "?";
+}
+
+}  // namespace
+}  // namespace loop_stall
+
 #if HOMETILES_LOOP_STALL_DIAGNOSTICS
 
-#include <Arduino.h>
 #include <WiFi.h>
 #include <esp_debug_helpers.h>
 #include <esp_event.h>
@@ -26,16 +48,6 @@ constexpr uint32_t kSampleMs = 2000;
 constexpr uint32_t kWifiLogMs = 60000;
 constexpr uint32_t kWifiEventLogMs = 5000;
 
-const char* const kStepNames[] = {
-    "top",           "ota-web",        "access-point", "board",
-    "power",         "sleep-network",  "sleep-web",    "sleep-mqtt",
-    "sleep-tiles",   "sleep-touch",    "pre-lvgl",     "lvgl",
-    "folder-switch", "web-admin",      "post-connect", "services",
-    "mqtt-inbound",  "dynamic-slots",  "network-update", "status",
-};
-static_assert(sizeof(kStepNames) / sizeof(kStepNames[0]) ==
-                  static_cast<size_t>(Step::Status) + 1,
-              "every step has a name");
 
 // Written by the loop task and read by the esp_timer task. Aligned 32-bit
 // values are read whole; the sequence number discards a step that changed
@@ -70,10 +82,6 @@ uint32_t g_reported_ms = 0;
 uint32_t g_backtrace_seq = 0;
 uint8_t g_backtraces = 0;
 esp_timer_handle_t g_timer = nullptr;
-
-const char* stepName(uint8_t step) {
-  return step < sizeof(kStepNames) / sizeof(kStepNames[0]) ? kStepNames[step] : "?";
-}
 
 bool isWebStep(uint8_t step) {
   return step == static_cast<uint8_t>(Step::OtaWeb) ||
@@ -309,6 +317,34 @@ void sampleNetwork() {
                   static_cast<unsigned>(g_beacon_timeouts),
                   static_cast<unsigned>(g_disconnects));
   }
+}
+
+}  // namespace loop_stall
+
+#else
+
+namespace loop_stall {
+namespace {
+
+// Other profiles only time the steps: one that took this long is logged with
+// its name when it ends (V2 b301 boot: the loop stood still for 0.7 s twice
+// after the Bridge link came up while [LoopGap] stayed silent).
+constexpr uint32_t kSlowStepMs = 300;
+uint8_t g_step = 0;
+uint32_t g_step_since_ms = 0;
+bool g_stepping = false;
+
+}  // namespace
+
+void enter(Step step) {
+  const uint32_t now = millis();
+  if (g_stepping && now - g_step_since_ms >= kSlowStepMs) {
+    Serial.printf("[LoopStall] Step %s took %u ms\n", stepName(g_step),
+                  static_cast<unsigned>(now - g_step_since_ms));
+  }
+  g_stepping = true;
+  g_step = static_cast<uint8_t>(step);
+  g_step_since_ms = now;
 }
 
 }  // namespace loop_stall

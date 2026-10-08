@@ -258,6 +258,7 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
     Serial.println("[Screensaver] Composite snapshot failed");
     return false;
   }
+  const uint32_t snapshot_ms = millis() - snapshot_started;
 
   const bool preview_ok = Device::displayTryFullFramePreview(
       0, 0, grid_layout::screen_w(), grid_layout::screen_h(),
@@ -268,9 +269,11 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
   // A slideshow frame needs one atomic swap only. Do not leave the persistent
   // camera mirroring state active while the normal UI resumes underneath it.
   Device::displayEndFullFramePreview();
-  Serial.printf("[Screensaver] Composite-Preview %s in %u ms\n",
+  Serial.printf("[Screensaver] Composite-Preview %s in %u ms (snapshot %u, present %u)\n",
                 preview_ok ? "OK" : "skipped",
-                static_cast<unsigned>(millis() - snapshot_started));
+                static_cast<unsigned>(millis() - snapshot_started),
+                static_cast<unsigned>(snapshot_ms),
+                static_cast<unsigned>(millis() - snapshot_started - snapshot_ms));
   return preview_ok;
 }
 #endif
@@ -989,11 +992,13 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
       static_cast<uint32_t>(target_w) * sizeof(uint16_t),
       decoder, dsc != nullptr, read_ms, decode_ms, cover_ms);
   if (dsc) {
-    Serial.printf("[Screensaver] %s-Decode %ux%u -> %ux%u in %u ms\n",
+    Serial.printf("[Screensaver] %s-Decode %ux%u -> %ux%u in %u ms (read %u, decode %u, cover %u)\n",
                   decoder,
                   static_cast<unsigned>(w), static_cast<unsigned>(h),
                   static_cast<unsigned>(target_w), static_cast<unsigned>(target_h),
-                  static_cast<unsigned>(millis() - pipeline_started_ms));
+                  static_cast<unsigned>(millis() - pipeline_started_ms),
+                  static_cast<unsigned>(read_ms), static_cast<unsigned>(decode_ms),
+                  static_cast<unsigned>(cover_ms));
   }
   return dsc;
 #endif

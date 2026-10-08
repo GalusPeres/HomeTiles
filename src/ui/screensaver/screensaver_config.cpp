@@ -350,6 +350,34 @@ void ScreensaverConfigStore::currentClockPlaces(ClockPlace (&out)[3]) const {
   if (!out[0].set) out[0] = {data_.clock_x, data_.clock_y, data_.time_font_size, data_.date_font_size, true};
 }
 
+ScreensaverConfigStore::ClockPlace ScreensaverConfigStore::clockPlace(grid_layout::Layout layout) const {
+  ClockPlace places[grid_layout::kLayoutCount];
+  currentClockPlaces(places);
+  const ClockPlace& own = places[static_cast<uint8_t>(layout)];
+  return own.set ? own : places[0];
+}
+
+bool ScreensaverConfigStore::setClockPlace(grid_layout::Layout layout, const ClockPlace& place) {
+  ClockPlace before[grid_layout::kLayoutCount];
+  for (uint8_t i = 0; i < grid_layout::kLayoutCount; ++i) before[i] = clock_places_[i];
+  const ScreensaverConfigData previous = data_;
+  currentClockPlaces(clock_places_);
+  const ClockPlace normalized{clamp_u16(place.x, 0, 1000), clamp_u16(place.y, 0, 1000),
+                              normalize_font(place.time_size, 48), normalize_font(place.date_size, 28, 72), true};
+  clock_places_[static_cast<uint8_t>(layout)] = normalized;
+  // The active layout's lives in data_ (the panel's clock).
+  if (layout == grid_layout::active()) {
+    data_.clock_x = normalized.x;
+    data_.clock_y = normalized.y;
+    data_.time_font_size = normalized.time_size;
+    data_.date_font_size = normalized.date_size;
+  }
+  if (save()) return true;
+  for (uint8_t i = 0; i < grid_layout::kLayoutCount; ++i) clock_places_[i] = before[i];
+  data_ = previous;
+  return false;
+}
+
 bool ScreensaverConfigStore::load() {
   resetDefaults();
   if (!Device::storageReady()) return false;

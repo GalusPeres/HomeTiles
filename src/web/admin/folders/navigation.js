@@ -48,11 +48,14 @@
     return tab === 'screensaver';
   }
   function firstAllowedGridRow(tab) {
-    // The screensaver's two rows at the bottom of the shown grid; in the
-    // layout window at the bottom of that layout's screen.
+    // The screensaver's two rows at the bottom of the shown grid, three
+    // upright (screensaver_places.cpp); in the layout window at the bottom
+    // of that layout's screen.
     if (!isScreensaverTileTab(tab)) return 0;
-    const rows = typeof layoutWindow !== 'undefined' && layoutWindow ? LAYOUTS[layoutWindow.key].rows : placeRows(tab);
-    return Math.max(0, rows - 2);
+    const inWindow = typeof layoutWindow !== 'undefined' && layoutWindow;
+    const key = inWindow ? layoutWindow.key : typeof ACTIVE_LAYOUT === 'string' ? ACTIVE_LAYOUT : 'classic';
+    const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);
+    return Math.max(0, rows - (key === 'portrait' ? 3 : 2));
   }
   function restoreCurrentTileSelectionUi() {
     if (currentTileIndex === -1 || !currentTileTab) return;

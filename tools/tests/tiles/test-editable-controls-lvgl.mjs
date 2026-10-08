@@ -87,6 +87,7 @@ constexpr size_t EDITABLE_PAYLOAD_MAX=24576;
 #include "src/core/memory/psram_allocator.h"
 ${read('src/types/value/value_control.h').match(/struct EditableValue \{[\s\S]*?\n};/)[0]}
 ${['label','finite_json','parse_editable_value','editable_display_value'].map(n=>fn(control,n)).join('\n')}
+namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${geometry}
 ${styles}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'),'disable_pressed_button_animation')}

@@ -24,6 +24,9 @@
   // The image frame stands for the panel's screen: its box in the grid's
   // padding box (where the clock is positioned) and on the page.
   function ssPreviewScreenRect(preview) {
+    // In the layout window: that layout's screen (layout-window.js).
+    const shown = layoutWindowScreen(preview);
+    if (shown) return shown.rect;
     const frame = preview.querySelector('.screensaver-grid-image-frame');
     return (frame || preview).getBoundingClientRect();
   }
@@ -51,6 +54,8 @@
   }
 
   function ssPreviewScreen(preview) {
+    const shown = layoutWindowScreen(preview);
+    if (shown) return shown;
     const frame = preview.querySelector('.screensaver-grid-image-frame');
     const rect = ssPreviewScreenRect(preview);
     return {
@@ -59,6 +64,17 @@
       width: rect.width || 800,
       height: rect.height || 500
     };
+  }
+
+  // The clock's place and size: the draft's (the active layout's), in the
+  // layout window the edited layout's (user 2026-10-08: the clock per
+  // layout); the window stores it with its places.
+  function ssClockPlace(preview) {
+    return (layoutWindowScreen(preview) && layoutWindowClock()) || screensaverDraft;
+  }
+  function ssClockEdited(preview) {
+    if (layoutWindowScreen(preview) && layoutWindowClock()) layoutWindowClockChanged();
+    else scheduleScreensaverSave();
   }
 
   function ssNearestClockFont(value, dateLine = false) {
@@ -325,7 +341,8 @@
     // (editor padding and gaps), so the clock is placed and scaled on the
     // frame; on the grid it sat about 10 px up and right, against the edge.
     const screen = ssPreviewScreen(preview);
-    const scale = screen.width / Number(d.screen_width || 1280);
+    const scale = screen.width / Number(screen.screenW || d.screen_width || 1280);
+    const place = ssClockPlace(preview);
     const rootStyles = getComputedStyle(document.documentElement);
     const devicePx = (name, fallback) => {
       const value = parseFloat(rootStyles.getPropertyValue(name));
@@ -359,16 +376,16 @@
       image.removeAttribute('src');
       delete image.dataset.src;
     }
-    clock.style.left = (screen.left + d.clock_x * screen.width / 1000) + 'px';
-    clock.style.top = (screen.top + d.clock_y * screen.height / 1000) + 'px';
+    clock.style.left = (screen.left + place.clock_x * screen.width / 1000) + 'px';
+    clock.style.top = (screen.top + place.clock_y * screen.height / 1000) + 'px';
     const time = document.getElementById('screensaverClockTime');
     const date = document.getElementById('screensaverClockDate');
     time.hidden = !d.show_time;
     date.hidden = !d.show_date && !d.show_weekday;
     time.style.fontSize =
-      Math.max(10, deviceClockFontPx(d.time_font_size, 48) * scale) + 'px';
+      Math.max(10, deviceClockFontPx(place.time_font_size, 48) * scale) + 'px';
     date.style.fontSize =
-      Math.max(8, deviceClockFontPx(d.date_font_size, 28) * scale) + 'px';
+      Math.max(8, deviceClockFontPx(place.date_font_size, 28) * scale) + 'px';
     // Each line is as tall as its LVGL font's line height, the glyphs on the
     // LVGL baseline, with the device gap between the lines (clock/renderer.cpp).
     const applyClockLine = (el, raw, fallback, minPx) => {
@@ -385,8 +402,8 @@
       el.style.top = (Number.isFinite(base)
         ? previewBaselineShift(Math.max(minPx, fontPx), linePx, base * scale * lineScale) : 0) + 'px';
     };
-    applyClockLine(time, d.time_font_size, 48, 10);
-    applyClockLine(date, d.date_font_size, 28, 8);
+    applyClockLine(time, place.time_font_size, 48, 10);
+    applyClockLine(date, place.date_font_size, 28, 8);
     date.style.marginTop = !time.hidden && !date.hidden
       ? devicePx('--screensaver-clock-gap', 6) * scale + 'px' : '0px';
     time.textContent = getClockPreviewTime(d.time_format);
@@ -451,7 +468,7 @@
     });
     let backgroundDrag = null;
     preview.addEventListener('pointerdown', e => {
-      if (fromTileOrClock(e)) return;
+      if (fromTileOrClock(e) || layoutWindowScreen(preview)) return;
       selectScreensaverBackground();
       const wallpaper = ssCurrentWallpaper();
       if (!wallpaper) return;
@@ -490,13 +507,14 @@
       const rect = ssPreviewScreenRect(preview);
       const centerX = e.clientX - clockDrag.offsetX;
       const centerY = e.clientY - clockDrag.offsetY;
-      screensaverDraft.clock_x = Math.round(ssClamp((centerX - rect.left) * 1000 / rect.width, 0, 1000));
-      screensaverDraft.clock_y = Math.round(ssClamp((centerY - rect.top) * 1000 / rect.height, 0, 1000));
+      const place = ssClockPlace(preview);
+      place.clock_x = Math.round(ssClamp((centerX - rect.left) * 1000 / rect.width, 0, 1000));
+      place.clock_y = Math.round(ssClamp((centerY - rect.top) * 1000 / rect.height, 0, 1000));
       renderScreensaverEditor();
     });
     const finishClockDrag = e => {
       if (!clockDrag || clockDrag.id !== e.pointerId) return;
-      clockDrag = null; clock.classList.remove('dragging'); scheduleScreensaverSave();
+      clockDrag = null; clock.classList.remove('dragging'); ssClockEdited(preview);
     };
     clock.addEventListener('pointerup', finishClockDrag);
     clock.addEventListener('pointercancel', finishClockDrag);
@@ -518,8 +536,8 @@
           y: e.clientY,
           width: Math.max(1, rect.width),
           height: Math.max(1, rect.height),
-          timeFont: Number(screensaverDraft.time_font_size || 48),
-          dateFont: Number(screensaverDraft.date_font_size || 28)
+          timeFont: Number(ssClockPlace(preview).time_font_size || 48),
+          dateFont: Number(ssClockPlace(preview).date_font_size || 28)
         };
         clockResize.setPointerCapture(e.pointerId);
       });
@@ -530,16 +548,17 @@
         const heightFactor = (clockResizeDrag.height + e.clientY - clockResizeDrag.y) /
                              clockResizeDrag.height;
         const factor = ssClamp(Math.max(widthFactor, heightFactor), 0.35, 3.0);
-        screensaverDraft.time_font_size = ssNearestClockFont(
+        const place = ssClockPlace(preview);
+        place.time_font_size = ssNearestClockFont(
           clockResizeDrag.timeFont * factor, false);
-        screensaverDraft.date_font_size = ssNearestClockFont(
+        place.date_font_size = ssNearestClockFont(
           clockResizeDrag.dateFont * factor, true);
         renderScreensaverEditor();
       });
       const finishClockResize = e => {
         if (!clockResizeDrag || clockResizeDrag.id !== e.pointerId) return;
         clockResizeDrag = null;
-        scheduleScreensaverSave();
+        ssClockEdited(preview);
       };
       clockResize.addEventListener('pointerup', finishClockResize);
       clockResize.addEventListener('pointercancel', finishClockResize);

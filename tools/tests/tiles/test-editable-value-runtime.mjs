@@ -57,6 +57,7 @@ const char* binary_sensor_state_label(const char* language,const char* state,con
 constexpr size_t EDITABLE_PAYLOAD_MAX=24576;
 ${valueStruct}
 ${['finite_json','editable_entity_matches','parse_editable_value','editable_display_value'].map(n=>fn(control,n)).join('\n')}
+namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${geometry}
 struct Obj {int y=0,w=0,h=0;unsigned flags=0;};using lv_obj_t=Obj;
 struct lv_display_t;

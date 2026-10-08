@@ -9,7 +9,7 @@
 
 // The screensaver's tiles in the layouts (user 2026-10-08): the screensaver
 // takes the active layout's grid without the head, two rows of slots at the
-// bottom. The classic places stay in the screensaver grid; the other layouts
+// bottom (three upright). The classic places stay in the screensaver grid; the other layouts
 // keep their own in the layout file (tile_layouts.h) under the screensaver's
 // storage ID, keyed by slot + 1 (screensaver tiles have no view IDs; a slot
 // keeps its tile while it moves).
@@ -18,7 +18,8 @@ namespace screensaver_places {
 constexpr uint16_t kFolder = TileConfig::kScreensaverGridStorageId;
 inline uint16_t key(size_t index) { return static_cast<uint16_t>(index + 1); }
 
-// The first row of the screensaver's two rows in a layout's grid.
+// The first row of the screensaver's rows in a layout's grid: two at the
+// bottom, three on the upright screen.
 float first_row(grid_layout::Layout layout);
 
 // A tile's place in `layout`: its own, or while the layout has none yet the

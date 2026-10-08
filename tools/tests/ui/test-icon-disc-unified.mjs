@@ -179,8 +179,9 @@ for (const marker of [
   'constexpr int kHeaderIconDiscSize = scale(72);',
   'constexpr int kHeaderIconDiscGap = scale(16);',
   'constexpr int kHeaderIconDiscOpa = 38;',
-  'constexpr int kHeaderIconX = 0;',
-  'constexpr int kHeaderTitleX = kHeaderIconDiscSize + kHeaderIconDiscGap;',
+  // Mirrors the X's box one grid gap inside the card corner (b284).
+  'constexpr int kHeaderIconX = Device::kGridGap + (kCloseButtonSize - kHeaderIconDiscSize) / 2 - kHeadCardPad;',
+  'constexpr int kHeaderTitleX = kHeaderIconX + kHeaderIconDiscSize + kHeaderIconDiscGap;',
   'lv_obj_set_size(disc, kHeaderIconDiscSize, kHeaderIconDiscSize);',
   'lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);',
   'const int y = center - kHeaderIconDiscSize / 2;',

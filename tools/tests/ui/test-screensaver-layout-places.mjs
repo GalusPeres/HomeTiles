@@ -1,5 +1,6 @@
 // The screensaver in the layouts (user 2026-10-08): it takes the active
-// layout's grid without the head, two rows of slots at the bottom, with own
+// layout's grid without the head, two rows of slots at the bottom (three
+// upright), with own
 // places per layout in the layout file (screensaver_places.h, keyed by slot
 // + 1). The classic places stay in the screensaver grid; the export keeps
 // them; the Web Admin's screensaver tab edits the active layout's places.
@@ -15,8 +16,8 @@ const places = read('src/ui/screensaver/screensaver_places.cpp');
 const header = read('src/ui/screensaver/screensaver_places.h');
 assert.match(header, /constexpr uint16_t kFolder = TileConfig::kScreensaverGridStorageId;/);
 assert.match(header, /inline uint16_t key\(size_t index\) \{ return static_cast<uint16_t>\(index \+ 1\); \}/);
-// Two rows at the bottom of the layout's grid.
-assert.match(places, /return rows > 2 \? rows - 2 : 0;/);
+// Two rows at the bottom of the layout's grid, three upright.
+assert.match(places, /const float count = layout == Layout::kPortrait \? 3 : 2;\s*return rows > count \? rows - count : 0;/);
 // A layout without places yet: the classic rows moved onto its bottom rows.
 assert.match(places, /out\.row -= rows_of\(grid_layout::profile_grid\(\)\) - rows_of\(grid\);/);
 assert.match(places, /return out\.row >= first_row\(layout\) - 0\.001f &&\s*grid_layout::inside\(grid, out\.col, out\.row, out\.span_w, out\.span_h\);/);
@@ -47,18 +48,19 @@ assert.match(read('src/web/admin/tiles/import-export.js'),
 const layout = read('src/web/admin/tiles/layout.js');
 assert.match(layout, /return headBarLayout\(\) && typeof GRID_SHOWN_COLS === 'number' \? GRID_SHOWN_COLS : GRID_COLS;/);
 const navigation = read('src/web/admin/folders/navigation.js');
-assert.ok(navigation.includes("const rows = typeof layoutWindow !== 'undefined' && layoutWindow ? LAYOUTS[layoutWindow.key].rows : placeRows(tab);") &&
-  navigation.includes('return Math.max(0, rows - 2);'), 'two rows at the bottom, in the window of that layout');
+assert.ok(navigation.includes('const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);') &&
+  navigation.includes("return Math.max(0, rows - (key === 'portrait' ? 3 : 2));"),
+  'two rows at the bottom, three upright, in the window of that layout');
 assert.ok(!read('src/web/server/render/web_admin_styles.cpp').includes('.screensaver-tile-grid{--grid-cols:'),
   'no more profile grid for the screensaver tab');
 
-// The layout window: a screensaver tab after the pages, without picture and
-// clock; its tiles keep to the bottom rows when taken over; the server loads
+// The layout window: a screensaver tab after the pages, without picture,
+// with the clock of that layout; its tiles keep to the bottom rows when taken over; the server loads
 // and saves it like a folder with its slot keys as IDs.
 const windowSource = read('src/web/admin/tiles/layout-window.js');
 assert.ok(windowSource.includes('return [...tabs.filter(tab => !isScreensaverTileTab(tab)), ...tabs.filter(isScreensaverTileTab)];'));
 assert.ok(windowSource.includes('const shift = isScreensaverTileTab(tab) ? L.rows - LAYOUTS[from].rows : 0;'));
-assert.ok(read('src/web/assets/admin.css').includes('.tile-grid.setup-grid.screensaver-tile-grid > :not(.tile)'));
+assert.ok(read('src/web/assets/admin.css').includes('.tile-grid.setup-grid.screensaver-tile-grid > :not(.tile):not(.screensaver-grid-clock)'));
 assert.ok(handler.includes('grid.tiles[i].view_id = grid.tiles[i].type == TILE_EMPTY ? 0 : screensaver_places::key(i);'));
 assert.ok(handler.includes('if (folder_id != screensaver_places::kFolder) return tileConfig.loadFolderGridClassic(folder_id, *grid);'));
 assert.ok(handler.includes('return place.inside && place.place.row < screensaver_places::first_row(layout) - 0.001f;'));
@@ -72,6 +74,13 @@ assert.ok(config.includes('JsonObjectConst clock_layouts = doc["clock_layouts"].
 assert.ok(config.includes(': places[0];'), 'a layout without its own clock takes the classic one');
 assert.ok(config.includes('if (!include_device_meta) {') && config.includes('writeClockPlaces(doc, places);'));
 assert.ok(config.includes('places[active] = {static_cast<uint16_t>(doc["clock_x"] | static_cast<int>(data_.clock_x)),'),
-  'an edit from the Web Admin goes to the active layout');
+  'an edit from the screensaver tab goes to the active layout');
+// The layout window edits every layout's clock: GET /api/layouts lists them,
+// its POST stores the edited layout's.
+assert.ok(config.includes('clock_places_[static_cast<uint8_t>(layout)] = normalized;') &&
+  config.includes('if (layout == grid_layout::active()) {'), 'the active layout\'s clock is the panel\'s at once');
+assert.ok(handler.includes('const ScreensaverConfigStore::ClockPlace clock = screensaverConfig.clockPlace(layout);'));
+assert.ok(handler.includes('ok = screensaverConfig.setClockPlace(layout, place) && ok;'));
+assert.ok(handler.includes('if (clock.size() == 4) image_screensaver_config_changed();'));
 
-console.log('Screensaver: the active layout\'s grid, two rows at the bottom, own places and clock per layout');
+console.log('Screensaver: the active layout\'s grid, two rows at the bottom (three upright), own places and clock per layout');

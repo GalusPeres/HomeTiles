@@ -49,7 +49,10 @@ bool free_classic_place(const TileGridConfig& classic, size_t index, const Tile&
 
 float first_row(Layout layout) {
   const float rows = rows_of(grid_layout::layout_grid(layout));
-  return rows > 2 ? rows - 2 : 0;
+  // Three rows on the upright screen (user 2026-10-08; square panels have
+  // no upright layout).
+  const float count = layout == Layout::kPortrait ? 3 : 2;
+  return rows > count ? rows - count : 0;
 }
 
 bool find(Layout layout, size_t index, const Tile& tile, tile_layouts::Place& out) {

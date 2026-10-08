@@ -92,6 +92,7 @@ struct Logger{void println(const char*){}template<class... T>void printf(const c
 int opening_layout_calls=0;
 void counted_opening_layout(lv_obj_t* object){++opening_layout_calls;lv_obj_update_layout(object);}
 #define lv_obj_update_layout counted_opening_layout
+namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)
 ${geometry}
 #undef lv_obj_update_layout
 ${popup.slice(popup.indexOf('constexpr int kBinaryTimelineHeight') - '#if defined(DEVICE_LAYOUT_480X480)\n'.length, popup.indexOf('struct HistoryRangeConfig'))}

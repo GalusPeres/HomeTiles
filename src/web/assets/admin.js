@@ -5510,11 +5510,14 @@ function syncTileRadiusControls(tabEl) {
     return tab === 'screensaver';
   }
   function firstAllowedGridRow(tab) {
-    // The screensaver's two rows at the bottom of the shown grid; in the
-    // layout window at the bottom of that layout's screen.
+    // The screensaver's two rows at the bottom of the shown grid, three
+    // upright (screensaver_places.cpp); in the layout window at the bottom
+    // of that layout's screen.
     if (!isScreensaverTileTab(tab)) return 0;
-    const rows = typeof layoutWindow !== 'undefined' && layoutWindow ? LAYOUTS[layoutWindow.key].rows : placeRows(tab);
-    return Math.max(0, rows - 2);
+    const inWindow = typeof layoutWindow !== 'undefined' && layoutWindow;
+    const key = inWindow ? layoutWindow.key : typeof ACTIVE_LAYOUT === 'string' ? ACTIVE_LAYOUT : 'classic';
+    const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);
+    return Math.max(0, rows - (key === 'portrait' ? 3 : 2));
   }
   function restoreCurrentTileSelectionUi() {
     if (currentTileIndex === -1 || !currentTileTab) return;
@@ -11215,7 +11218,7 @@ function syncTileRadiusControls(tabEl) {
   // Preview px per screen px (web_admin_styles.cpp), the same for every layout.
   function layoutScale() { return layoutRootPx('--radius-preview-scale') || 1; }
   // The pages, then the screensaver (its two rows at the bottom of each
-  // screen, screensaver_places.h).
+  // screen, three upright, screensaver_places.h).
   function layoutTabs() {
     const tabs = tileTabs.filter(tab => document.getElementById('tab-tiles-' + tab));
     return [...tabs.filter(tab => !isScreensaverTileTab(tab)), ...tabs.filter(isScreensaverTileTab)];
@@ -11468,7 +11471,44 @@ function syncTileRadiusControls(tabEl) {
   function layoutDirty(key = layoutWindow?.key) {
     if (!layoutWindow) return false;
     const work = key === layoutWindow.key ? getTilesData : (layoutWindow.work[key] ? tab => layoutWindow.work[key][tab] : null);
-    return !!work && layoutSignature(work) !== layoutSavedSig(key);
+    return (!!work && layoutSignature(work) !== layoutSavedSig(key)) || layoutClockDirty(key);
+  }
+
+  // --- The screensaver clock -------------------------------------------------
+
+  // Every layout's clock, place and size (screensaver_config.h): as stored,
+  // and the window's unsaved one.
+  function layoutClockFrom(data, key) {
+    const c = data?.clock?.[key];
+    return Array.isArray(c) && c.length === 4
+      ? {clock_x: Number(c[0]), clock_y: Number(c[1]), time_font_size: Number(c[2]), date_font_size: Number(c[3])} : null;
+  }
+  function layoutClock(key) {
+    const clocks = layoutWindow.clocks || (layoutWindow.clocks = {});
+    if (!clocks[key]) clocks[key] = layoutClockFrom(layoutWindow.data, key);
+    return clocks[key];
+  }
+  function layoutClockDirty(key) {
+    const clock = layoutWindow.clocks?.[key];
+    return !!clock && JSON.stringify(clock) !== JSON.stringify(layoutClockFrom(layoutWindow.data, key));
+  }
+  // The clock the screensaver tab shows in the window: the edited layout's
+  // (the screensaver editor's place and size, screensaver/editor.js).
+  function layoutWindowClock() {
+    if (!layoutWindow || !isScreensaverTileTab(layoutWindow.tab)) return null;
+    return layoutClock(layoutWindow.key);
+  }
+  // The layout's screen in the window's grid (padding box px, the bezel
+  // left out) and on the page, for the clock's place.
+  function layoutWindowScreen(preview) {
+    const screen = layoutWindow?.screen;
+    if (!screen || !preview?.classList?.contains('setup-grid') || !isScreensaverTileTab(layoutWindow.tab)) return null;
+    const box = preview.getBoundingClientRect();
+    return {...screen, rect: {left: box.left + preview.clientLeft + screen.left, top: box.top + preview.clientTop + screen.top,
+      width: screen.width, height: screen.height}};
+  }
+  function layoutWindowClockChanged() {
+    refreshLayoutStatus();
   }
 
   // --- The window ----------------------------------------------------------
@@ -11603,6 +11643,7 @@ function syncTileRadiusControls(tabEl) {
   async function mountLayoutTab(tab) {
     unmountLayoutGrid();
     layoutWindow.tab = tab;
+    layoutWindow.screen = null;
     await switchTab('tab-tiles-' + tab);
     if (!layoutWindow) return;
     const host = document.getElementById('tab-tiles-' + tab);
@@ -11675,6 +11716,9 @@ function syncTileRadiusControls(tabEl) {
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='${w}' height='${h}' rx='${r}' fill='black'/></svg>`;
     grid.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
     grid.style.backgroundPosition = `0px ${y}px`;
+    // The screen inside its bezel: the screensaver clock's frame.
+    const bezel = (base['--preview-frame'] || 0) * f;
+    layoutWindow.screen = {left: bezel, top: y + bezel, width: w - 2 * bezel, height: h - 2 * bezel, screenW: L.screenW};
     // The storage's name in its bottom right corner (beside every screen).
     const label = document.createElement('div');
     label.className = 'setup-storage-label';
@@ -11683,6 +11727,8 @@ function syncTileRadiusControls(tabEl) {
     // Tiles such as Media measure their card when they are drawn: draw them
     // again at the window's scale.
     showLayoutTiles(tab, getTilesData(tab));
+    // The screensaver's clock at this layout's place.
+    if (isScreensaverTileTab(tab) && typeof screensaverLoaded !== 'undefined' && screensaverLoaded) renderScreensaverEditor();
   }
 
   async function loadLayoutWindow(key, from) {
@@ -11690,6 +11736,9 @@ function syncTileRadiusControls(tabEl) {
     // layout or save.
     layoutWindow.undo = from && layoutWindow.shown && key === layoutWindow.key
       ? Object.fromEntries(layoutTabs().map(tab => [tab, layoutClone(getTilesData(tab))])) : null;
+    // The screensaver clock comes along (its place and size there).
+    layoutWindow.undoClock = layoutWindow.undo ? layoutClone(layoutClock(key)) : null;
+    if (from && layoutClock(from)) layoutWindow.clocks[key] = layoutClone(layoutClock(from));
     // The layout left keeps its unsaved places for later.
     if (layoutWindow.shown) {
       layoutWindow.work[layoutWindow.key] = Object.fromEntries(layoutTabs().map(tab => [tab, layoutClone(getTilesData(tab))]));
@@ -11827,6 +11876,8 @@ function syncTileRadiusControls(tabEl) {
     const before = layoutWindow?.undo;
     if (!before) return;
     layoutWindow.undo = null;
+    if (layoutWindow.undoClock) layoutWindow.clocks[layoutWindow.key] = layoutWindow.undoClock;
+    layoutWindow.undoClock = null;
     for (const tab of layoutTabs()) if (before[tab]) showLayoutTiles(tab, before[tab]);
     await mountLayoutTab(layoutWindow.tab);
     refreshLayoutButtons();
@@ -11851,11 +11902,14 @@ function syncTileRadiusControls(tabEl) {
         places[tile.view_id] = [tile.col, tile.row, tile.span_w, tile.span_h];
       });
     }
+    const body = {layout: key, folders};
+    const clock = layoutClockDirty(key) && layoutWindow.clocks[key];
+    if (clock) body.clock = [clock.clock_x, clock.clock_y, clock.time_font_size, clock.date_font_size];
     layoutWindow.busy = true;
     refreshLayoutSave();
     try {
       const response = await layoutWindowFetch('/api/layouts', {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({layout: key, folders})});
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
       if (!response.ok) throw new Error('HTTP ' + response.status);
       const data = await (await layoutWindowFetch('/api/layouts', {cache: 'no-store'})).json();
       if (data?.success) layoutWindow.data = data;
@@ -11867,6 +11921,11 @@ function syncTileRadiusControls(tabEl) {
     }
     if (!layoutWindow) return false;
     if (key === ACTIVE_LAYOUT) layoutWindow.changed = true;
+    // The page's screensaver tab shows the active layout's clock.
+    if (clock && key === ACTIVE_LAYOUT && typeof screensaverDraft !== 'undefined' && screensaverDraft) {
+      Object.assign(screensaverDraft, clock);
+    }
+    if (layoutWindow.clocks) delete layoutWindow.clocks[key];
     for (const other of Object.keys(layoutWindow.saved)) if (!layoutWindow.work[other]) delete layoutWindow.saved[other];
     layoutWindow.undo = null;
     const undo = document.querySelector('.setup-undo');
@@ -12020,6 +12079,7 @@ function syncTileRadiusControls(tabEl) {
     HEAD_BAR = state.grid.HEAD_BAR;
     layoutWindow = null;
     currentTileIndex = -1;
+    if (typeof screensaverLoaded !== 'undefined' && screensaverLoaded) renderScreensaverEditor();
     document.querySelectorAll('.tile-grid > .tile').forEach(el => {
       el.classList.remove('active', 'setup-red');
       delete el.dataset.selected;
@@ -12148,6 +12208,9 @@ function syncTileRadiusControls(tabEl) {
   // The image frame stands for the panel's screen: its box in the grid's
   // padding box (where the clock is positioned) and on the page.
   function ssPreviewScreenRect(preview) {
+    // In the layout window: that layout's screen (layout-window.js).
+    const shown = layoutWindowScreen(preview);
+    if (shown) return shown.rect;
     const frame = preview.querySelector('.screensaver-grid-image-frame');
     return (frame || preview).getBoundingClientRect();
   }
@@ -12175,6 +12238,8 @@ function syncTileRadiusControls(tabEl) {
   }
 
   function ssPreviewScreen(preview) {
+    const shown = layoutWindowScreen(preview);
+    if (shown) return shown;
     const frame = preview.querySelector('.screensaver-grid-image-frame');
     const rect = ssPreviewScreenRect(preview);
     return {
@@ -12183,6 +12248,17 @@ function syncTileRadiusControls(tabEl) {
       width: rect.width || 800,
       height: rect.height || 500
     };
+  }
+
+  // The clock's place and size: the draft's (the active layout's), in the
+  // layout window the edited layout's (user 2026-10-08: the clock per
+  // layout); the window stores it with its places.
+  function ssClockPlace(preview) {
+    return (layoutWindowScreen(preview) && layoutWindowClock()) || screensaverDraft;
+  }
+  function ssClockEdited(preview) {
+    if (layoutWindowScreen(preview) && layoutWindowClock()) layoutWindowClockChanged();
+    else scheduleScreensaverSave();
   }
 
   function ssNearestClockFont(value, dateLine = false) {
@@ -12449,7 +12525,8 @@ function syncTileRadiusControls(tabEl) {
     // (editor padding and gaps), so the clock is placed and scaled on the
     // frame; on the grid it sat about 10 px up and right, against the edge.
     const screen = ssPreviewScreen(preview);
-    const scale = screen.width / Number(d.screen_width || 1280);
+    const scale = screen.width / Number(screen.screenW || d.screen_width || 1280);
+    const place = ssClockPlace(preview);
     const rootStyles = getComputedStyle(document.documentElement);
     const devicePx = (name, fallback) => {
       const value = parseFloat(rootStyles.getPropertyValue(name));
@@ -12483,16 +12560,16 @@ function syncTileRadiusControls(tabEl) {
       image.removeAttribute('src');
       delete image.dataset.src;
     }
-    clock.style.left = (screen.left + d.clock_x * screen.width / 1000) + 'px';
-    clock.style.top = (screen.top + d.clock_y * screen.height / 1000) + 'px';
+    clock.style.left = (screen.left + place.clock_x * screen.width / 1000) + 'px';
+    clock.style.top = (screen.top + place.clock_y * screen.height / 1000) + 'px';
     const time = document.getElementById('screensaverClockTime');
     const date = document.getElementById('screensaverClockDate');
     time.hidden = !d.show_time;
     date.hidden = !d.show_date && !d.show_weekday;
     time.style.fontSize =
-      Math.max(10, deviceClockFontPx(d.time_font_size, 48) * scale) + 'px';
+      Math.max(10, deviceClockFontPx(place.time_font_size, 48) * scale) + 'px';
     date.style.fontSize =
-      Math.max(8, deviceClockFontPx(d.date_font_size, 28) * scale) + 'px';
+      Math.max(8, deviceClockFontPx(place.date_font_size, 28) * scale) + 'px';
     // Each line is as tall as its LVGL font's line height, the glyphs on the
     // LVGL baseline, with the device gap between the lines (clock/renderer.cpp).
     const applyClockLine = (el, raw, fallback, minPx) => {
@@ -12509,8 +12586,8 @@ function syncTileRadiusControls(tabEl) {
       el.style.top = (Number.isFinite(base)
         ? previewBaselineShift(Math.max(minPx, fontPx), linePx, base * scale * lineScale) : 0) + 'px';
     };
-    applyClockLine(time, d.time_font_size, 48, 10);
-    applyClockLine(date, d.date_font_size, 28, 8);
+    applyClockLine(time, place.time_font_size, 48, 10);
+    applyClockLine(date, place.date_font_size, 28, 8);
     date.style.marginTop = !time.hidden && !date.hidden
       ? devicePx('--screensaver-clock-gap', 6) * scale + 'px' : '0px';
     time.textContent = getClockPreviewTime(d.time_format);
@@ -12575,7 +12652,7 @@ function syncTileRadiusControls(tabEl) {
     });
     let backgroundDrag = null;
     preview.addEventListener('pointerdown', e => {
-      if (fromTileOrClock(e)) return;
+      if (fromTileOrClock(e) || layoutWindowScreen(preview)) return;
       selectScreensaverBackground();
       const wallpaper = ssCurrentWallpaper();
       if (!wallpaper) return;
@@ -12614,13 +12691,14 @@ function syncTileRadiusControls(tabEl) {
       const rect = ssPreviewScreenRect(preview);
       const centerX = e.clientX - clockDrag.offsetX;
       const centerY = e.clientY - clockDrag.offsetY;
-      screensaverDraft.clock_x = Math.round(ssClamp((centerX - rect.left) * 1000 / rect.width, 0, 1000));
-      screensaverDraft.clock_y = Math.round(ssClamp((centerY - rect.top) * 1000 / rect.height, 0, 1000));
+      const place = ssClockPlace(preview);
+      place.clock_x = Math.round(ssClamp((centerX - rect.left) * 1000 / rect.width, 0, 1000));
+      place.clock_y = Math.round(ssClamp((centerY - rect.top) * 1000 / rect.height, 0, 1000));
       renderScreensaverEditor();
     });
     const finishClockDrag = e => {
       if (!clockDrag || clockDrag.id !== e.pointerId) return;
-      clockDrag = null; clock.classList.remove('dragging'); scheduleScreensaverSave();
+      clockDrag = null; clock.classList.remove('dragging'); ssClockEdited(preview);
     };
     clock.addEventListener('pointerup', finishClockDrag);
     clock.addEventListener('pointercancel', finishClockDrag);
@@ -12642,8 +12720,8 @@ function syncTileRadiusControls(tabEl) {
           y: e.clientY,
           width: Math.max(1, rect.width),
           height: Math.max(1, rect.height),
-          timeFont: Number(screensaverDraft.time_font_size || 48),
-          dateFont: Number(screensaverDraft.date_font_size || 28)
+          timeFont: Number(ssClockPlace(preview).time_font_size || 48),
+          dateFont: Number(ssClockPlace(preview).date_font_size || 28)
         };
         clockResize.setPointerCapture(e.pointerId);
       });
@@ -12654,16 +12732,17 @@ function syncTileRadiusControls(tabEl) {
         const heightFactor = (clockResizeDrag.height + e.clientY - clockResizeDrag.y) /
                              clockResizeDrag.height;
         const factor = ssClamp(Math.max(widthFactor, heightFactor), 0.35, 3.0);
-        screensaverDraft.time_font_size = ssNearestClockFont(
+        const place = ssClockPlace(preview);
+        place.time_font_size = ssNearestClockFont(
           clockResizeDrag.timeFont * factor, false);
-        screensaverDraft.date_font_size = ssNearestClockFont(
+        place.date_font_size = ssNearestClockFont(
           clockResizeDrag.dateFont * factor, true);
         renderScreensaverEditor();
       });
       const finishClockResize = e => {
         if (!clockResizeDrag || clockResizeDrag.id !== e.pointerId) return;
         clockResizeDrag = null;
-        scheduleScreensaverSave();
+        ssClockEdited(preview);
       };
       clockResize.addEventListener('pointerup', finishClockResize);
       clockResize.addEventListener('pointercancel', finishClockResize);

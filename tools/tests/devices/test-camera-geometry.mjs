@@ -22,7 +22,7 @@ assert.match(geometry, /% 8U == 0U,\s*"The P4 JPEG decoder needs width \* height
 // The popup formulas this test mirrors.
 assert.match(layout, /kCardWidth =\s*\(SCREEN_WIDTH > SCREEN_HEIGHT\)\s*\? \(SCREEN_HEIGHT - \(kCardMargin \* 2\)\)\s*: \(SCREEN_WIDTH - \(kCardMargin \* 2\)\);/);
 assert.match(layout, /kContentWidth = kCardWidth - \(kCardPad \* 2\);/);
-assert.match(layout, /constexpr int kCardPad = scale\(20\);/);
+assert.match(layout, /constexpr int kHeadCardPad = scale\(20\);[\s\S]*constexpr int kCardPad = kHeadCardPad;/);
 
 const scale = {
   default: (value) => value,

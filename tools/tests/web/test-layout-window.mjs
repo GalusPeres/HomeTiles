@@ -39,7 +39,8 @@ const windowNames = ['layoutClone', 'layoutEmptyTile', 'layoutUsed', 'layoutNavT
   'layoutInside', 'layoutFolderId', 'classicHidden', 'layoutBase', 'layoutSettle', 'takeoverTiles', 'setupTiles',
   'isCompactSensorType', 'isEditableValueType', 'supportsHalfSize', 'supportedTileLayout', 'saveLayoutWindow', 'refreshLayoutSave', 'layoutTabs',
   'layoutSignature', 'layoutSavedSig', 'layoutDirty', 'layoutSelectedTile', 'deselectLayoutTile', 'normalizeLayoutForTileType', 'clampHalf',
-  'deleteLayoutTile', 'classicParked', 'layoutParked', 'layoutRed', 'loadLayoutWindow', 'mayLeaveLayout'];
+  'deleteLayoutTile', 'classicParked', 'layoutParked', 'layoutRed', 'loadLayoutWindow', 'mayLeaveLayout',
+  'layoutClockFrom', 'layoutClock', 'layoutClockDirty'];
 function windowContext(pages, data, extra = {}) {
   // Every case gets its own copy: the window changes the pages it holds.
   pages = JSON.parse(JSON.stringify(pages));
@@ -201,6 +202,43 @@ const classic = {0: [[0, 11, 0, 0, 1, 1], [1, 12, 1, 0, 1, 1], [2, 13, 0, 1, 2, 
   assert.equal(await vm.runInContext('saveLayoutWindow()', ctx), false);
   assert.equal(calls.length, 0, 'red (a folder without a place, a tile over the edge) blocks saving');
 }
+
+// The screensaver clock per layout (user 2026-10-08): each layout's place
+// and size, unsaved until "Speichern" (then sent with the places), taken
+// along by "Kopieren von".
+{
+  const calls = [];
+  const clock = {classic: [500, 350, 48, 28], bar: [500, 350, 48, 28], portrait: [500, 200, 64, 32]};
+  const fetchStub = async (url, options) => {
+    calls.push([url, options?.body]);
+    return {ok: true, json: async () => ({success: true, classic, places: {}, clock})};
+  };
+  const ctx = windowContext({folder0: home}, {classic, places: {}, clock}, {layoutWindowFetch: fetchStub});
+  const run = code => vm.runInContext(code, ctx);
+  await run("loadLayoutWindow('bar', '')");
+  assert.equal(run("layoutDirty('bar')"), false);
+  run("layoutClock('bar').clock_y = 800");
+  assert.equal(run("layoutDirty('bar')"), true, 'a moved clock is unsaved');
+  assert.equal(run("layoutDirty('portrait')"), false, 'the other layouts keep theirs');
+  assert.equal(await run('saveLayoutWindow()'), true);
+  assert.deepEqual(JSON.parse(calls[0][1]).clock, [500, 800, 48, 28], 'sent with the places');
+  clock.bar = [500, 800, 48, 28];
+  assert.equal(run("layoutDirty('bar')"), false);
+  ctx.layoutWindow.shown = true;
+  await run("loadLayoutWindow('bar', 'portrait')");
+  assert.deepEqual(JSON.parse(JSON.stringify(run("layoutClock('bar')"))),
+    {clock_x: 500, clock_y: 200, time_font_size: 64, date_font_size: 32}, 'Kopieren von takes the clock along');
+  calls.length = 0;
+  await run('saveLayoutWindow()');
+  assert.deepEqual(JSON.parse(calls[0][1]).clock, [500, 200, 64, 32]);
+}
+const windowSource = readRepoFile('src/web/admin/tiles/layout-window.js');
+assert.ok(windowSource.includes('if (isScreensaverTileTab(tab) && typeof screensaverLoaded !== \'undefined\' && screensaverLoaded) renderScreensaverEditor();'),
+  'the window draws the clock at its layout\'s place');
+const screensaverEditor = readRepoFile('src/web/admin/screensaver/editor.js');
+assert.ok(screensaverEditor.includes('return (layoutWindowScreen(preview) && layoutWindowClock()) || screensaverDraft;'),
+  'the clock in the window is the layout\'s, on the page the active one\'s');
+assert.ok(screensaverEditor.includes("clock.style.left = (screen.left + place.clock_x * screen.width / 1000) + 'px';"));
 
 // The editor in the window talks to nobody (user 2026-10-08: thrown out of
 // the window after every move): no tile save, no reorder request, no tile

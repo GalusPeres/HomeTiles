@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <vector>
 
+#include "src/tiles/config/grid_layout.h"
 #include "src/tiles/config/tile_config.h"
 
 static constexpr size_t kMaxScreensaverWallpapers = 32;
@@ -65,6 +66,24 @@ class ScreensaverConfigStore {
   void previewTileGrid(const TileGridConfig& grid);
   const Tile* tile(size_t index) const;
 
+  // The clock's place and size per layout (user 2026-10-08): the classic
+  // one in the file's top-level keys (older firmware reads them), the others
+  // in "clock_layouts"; a layout without its own takes the classic one.
+  // data_ always carries the active layout's (grid_layout::active()), so the
+  // panel and the screensaver tab see and edit only that one; the layout
+  // window edits every layout's.
+  struct ClockPlace {
+    uint16_t x = 500;
+    uint16_t y = 350;
+    uint8_t time_size = 48;
+    uint8_t date_size = 28;
+    bool set = false;
+  };
+  // A layout's clock: its own, else the classic one.
+  ClockPlace clockPlace(grid_layout::Layout layout) const;
+  // The layout window's clock for a layout, saved at once.
+  bool setClockPlace(grid_layout::Layout layout, const ClockPlace& place);
+
  private:
   ScreensaverConfigData data_;
   // PSRAM, allocated with transparent defaults on first use (load() in
@@ -78,18 +97,6 @@ class ScreensaverConfigStore {
   // The last loaded file carried tile_opacity; older files kept it per tile.
   bool tile_opacity_stored_ = false;
 
-  // The clock's place and size per layout (user 2026-10-08): the classic
-  // one in the file's top-level keys (older firmware reads them), the others
-  // in "clock_layouts"; a layout without its own takes the classic one.
-  // data_ always carries the active layout's (grid_layout::active()), so the
-  // panel and the Web Admin see and edit only that one.
-  struct ClockPlace {
-    uint16_t x = 500;
-    uint16_t y = 350;
-    uint8_t time_size = 48;
-    uint8_t date_size = 28;
-    bool set = false;
-  };
   ClockPlace clock_places_[3];
   // The places with the active layout's taken from data_.
   void currentClockPlaces(ClockPlace (&out)[3]) const;

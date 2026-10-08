@@ -1483,7 +1483,19 @@ void WebAdminServer::handleGetLayouts() {
   }
   json += "},\"places\":";
   tile_layouts::append_json(json);
-  json += "}";
+  // The screensaver clock per layout ([x, y, time size, date size]; a layout
+  // without its own shows the classic one).
+  json += ",\"clock\":{";
+  for (uint8_t i = 0; i < grid_layout::kLayoutCount; ++i) {
+    const grid_layout::Layout layout = grid_layout::from_index(i);
+    const ScreensaverConfigStore::ClockPlace clock = screensaverConfig.clockPlace(layout);
+    if (i) json += ",";
+    json += "\"";
+    json += grid_layout::key(layout);
+    json += "\":[" + String(clock.x) + "," + String(clock.y) + "," + String(clock.time_size) + "," +
+            String(clock.date_size) + "]";
+  }
+  json += "}}";
   sendChunkedResponse(server, 200, "application/json", json);
 }
 
@@ -1580,6 +1592,13 @@ void WebAdminServer::handleSaveLayouts() {
     sendJsonError(server, 500, "No memory");
     return;
   }
+  // The screensaver clock in this layout ([x, y, time size, date size]),
+  // sent when it changed.
+  JsonArrayConst clock = doc["clock"].as<JsonArrayConst>();
+  if (!clock.isNull() && clock.size() != 4) {
+    sendJsonError(server, 400, "Invalid clock");
+    return;
+  }
   JsonObjectConst folders = doc["folders"].as<JsonObjectConst>();
   std::vector<LayoutPlace> places;
   // A folder's classic grid, or the screensaver's with its slot keys as IDs
@@ -1656,6 +1675,14 @@ void WebAdminServer::handleSaveLayouts() {
     ok = tileConfig.saveFolderGridClassic(folder_id, *grid) && ok;
   }
   ok = tile_layouts::commit() && ok;
+  if (clock.size() == 4) {
+    const ScreensaverConfigStore::ClockPlace place{
+        static_cast<uint16_t>(constrain(clock[0].as<int>(), 0, 1000)),
+        static_cast<uint16_t>(constrain(clock[1].as<int>(), 0, 1000)),
+        static_cast<uint8_t>(constrain(clock[2].as<int>(), 0, 255)),
+        static_cast<uint8_t>(constrain(clock[3].as<int>(), 0, 255)), true};
+    ok = screensaverConfig.setClockPlace(layout, place) && ok;
+  }
   if (!ok) {
     sendJsonError(server, 500, "Save failed");
     return;
@@ -1666,6 +1693,7 @@ void WebAdminServer::handleSaveLayouts() {
     tiles_invalidate_folder(tileConfig.getActiveFolderId());
     tiles_request_reload(GridType::TAB0);
     if (screensaver_changed) image_screensaver_tiles_changed();
+    if (clock.size() == 4) image_screensaver_config_changed();
   }
   Serial.printf("[WebAdmin] Layout %s saved\n", grid_layout::key(layout));
   server.send(200, "application/json", "{\"success\":true}");

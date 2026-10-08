@@ -1456,7 +1456,8 @@ void rebuild_slot_grid(ScreensaverState* st) {
   }
 
   // The active layout's places (screensaver_places.h): a bar layout's own,
-  // two rows at the bottom of its grid; a tile without one is left out.
+  // two rows at the bottom of its grid (three upright); a tile without one
+  // is left out.
   remember_shown_grid(st);
   if (st->shown_grid) {
     const TileGridConfig& shown = *st->shown_grid;

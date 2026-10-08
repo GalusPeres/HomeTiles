@@ -22,6 +22,7 @@
 
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/core/display/jpeg_padded_output.h"
+#include "src/ui/screensaver/wallpaper_cover.h"
 #include "src/core/memory/psram_budget.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
@@ -244,6 +245,54 @@ bool ensure_composite_draw_buf(ScreensaverState* st) {
   return true;
 }
 
+// Diagnostics (b304, once per boot): what the composite snapshot spends its
+// 280-300 ms on (V2 b303; the tile shadows were only 15 ms of it). Each part
+// is snapshotted alone into the composite buffer, free again once the frame
+// was presented. Invalidation stays off while parts are hidden and shown
+// again, so nothing is redrawn for the measurement.
+bool g_snapshot_split_logged = false;
+
+void log_snapshot_split(ScreensaverState* st, lv_display_t* display, lv_obj_t* top_layer) {
+  if (g_snapshot_split_logged) return;
+  g_snapshot_split_logged = true;
+  lv_obj_t* const parts[] = {st->image, st->slot_grid, st->clock_box};
+  constexpr int kParts = sizeof(parts) / sizeof(parts[0]);
+  bool was_hidden[kParts];
+  for (int i = 0; i < kParts; ++i) {
+    was_hidden[i] = !parts[i] || lv_obj_has_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
+  }
+  lv_display_enable_invalidation(display, false);
+  auto snapshot_with = [&](int shown) -> uint32_t {
+    for (int i = 0; i < kParts; ++i) {
+      if (!parts[i]) continue;
+      if (i == shown && !was_hidden[i]) {
+        lv_obj_remove_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
+      } else {
+        lv_obj_add_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
+      }
+    }
+    const uint32_t started = millis();
+    lv_snapshot_take_to_draw_buf(top_layer, LV_COLOR_FORMAT_RGB565, &st->composite_draw_buf);
+    return millis() - started;
+  };
+  const uint32_t empty_ms = snapshot_with(-1);
+  const uint32_t image_ms = snapshot_with(0);
+  const uint32_t tiles_ms = snapshot_with(1);
+  const uint32_t clock_ms = snapshot_with(2);
+  for (int i = 0; i < kParts; ++i) {
+    if (!parts[i]) continue;
+    if (was_hidden[i]) {
+      lv_obj_add_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_remove_flag(parts[i], LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+  lv_display_enable_invalidation(display, true);
+  Serial.printf("[Screensaver] Snapshot split: empty %u, image %u, tiles %u, clock %u ms\n",
+                static_cast<unsigned>(empty_ms), static_cast<unsigned>(image_ms),
+                static_cast<unsigned>(tiles_ms), static_cast<unsigned>(clock_ms));
+}
+
 bool present_composited_screensaver_frame(ScreensaverState* st) {
   if (!st || !st->overlay || !ensure_composite_draw_buf(st)) return false;
   lv_display_t* display = lv_obj_get_display(st->overlay);
@@ -274,6 +323,16 @@ bool present_composited_screensaver_frame(ScreensaverState* st) {
                 static_cast<unsigned>(millis() - snapshot_started),
                 static_cast<unsigned>(snapshot_ms),
                 static_cast<unsigned>(millis() - snapshot_started - snapshot_ms));
+  if (preview_ok) {
+    log_snapshot_split(st, display, top_layer);
+    // The presented frame is the whole top layer as it stands, in the
+    // framebuffer LVGL draws its next areas into (every P4 driver's
+    // full-frame path writes the active buffer). The areas invalidated while
+    // the overlay was built are on screen already: drop them instead of
+    // rendering the whole screen a second time in bands (about 600 ms on the
+    // V2 after every opening, b303). Later changes invalidate as usual.
+    lv_inv_area(display, nullptr);
+  }
   return preview_ok;
 }
 #endif
@@ -565,54 +624,10 @@ uint16_t* sw_decode_jpeg(const uint8_t* data, size_t len,
   return out;
 }
 
-// Pixel coverage inside a rounded corner, using 4x4 supersampling:
-// 16 means fully visible, 0 means entirely the border color.
-uint8_t rounded_pixel_coverage(uint16_t x, uint16_t y,
-                               uint16_t w, uint16_t h,
-                               uint16_t radius) {
-  if (radius == 0 || w < radius * 2 || h < radius * 2) return 16;
-  const bool at_left = x < radius;
-  const bool at_right = x >= w - radius;
-  const bool at_top = y < radius;
-  const bool at_bottom = y >= h - radius;
-  if ((!at_left && !at_right) || (!at_top && !at_bottom)) return 16;
-
-  const uint16_t edge_x = at_left ? x : static_cast<uint16_t>(w - 1 - x);
-  const uint16_t edge_y = at_top ? y : static_cast<uint16_t>(h - 1 - y);
-  constexpr int32_t kSamples = 4;
-  constexpr int32_t kUnitsPerPixel = kSamples * 2;
-  const int32_t center = static_cast<int32_t>(radius) * kUnitsPerPixel;
-  const int32_t radius_sq = center * center;
-  uint8_t covered = 0;
-  for (int32_t sample_y = 0; sample_y < kSamples; ++sample_y) {
-    const int32_t py = static_cast<int32_t>(edge_y) * kUnitsPerPixel +
-                       sample_y * 2 + 1;
-    const int32_t dy = center - py;
-    for (int32_t sample_x = 0; sample_x < kSamples; ++sample_x) {
-      const int32_t px = static_cast<int32_t>(edge_x) * kUnitsPerPixel +
-                         sample_x * 2 + 1;
-      const int32_t dx = center - px;
-      if (dx * dx + dy * dy <= radius_sq) ++covered;
-    }
-  }
-  return covered;
-}
-
-uint16_t blend_swapped_rgb565_with_black(uint16_t swapped, uint8_t coverage) {
-  if (coverage == 0) return 0;
-  if (coverage >= 16) return swapped;
-  const uint16_t color =
-      static_cast<uint16_t>((swapped >> 8) | (swapped << 8));
-  const uint16_t red =
-      static_cast<uint16_t>((((color >> 11) & 0x1F) * coverage + 8) / 16);
-  const uint16_t green =
-      static_cast<uint16_t>((((color >> 5) & 0x3F) * coverage + 8) / 16);
-  const uint16_t blue =
-      static_cast<uint16_t>(((color & 0x1F) * coverage + 8) / 16);
-  const uint16_t blended =
-      static_cast<uint16_t>((red << 11) | (green << 5) | blue);
-  return static_cast<uint16_t>((blended >> 8) | (blended << 8));
-}
+// The corner coverage and black blend live in wallpaper_cover.h (shared with
+// make_cover_dsc and the host test); the S3 direct decoder uses them too.
+using wallpaper_cover::blend_swapped_rgb565_with_black;
+using wallpaper_cover::rounded_pixel_coverage;
 
 #if defined(DEVICE_ESP32_S3_RGB_480)
 struct S3DirectJpegCtx {
@@ -855,28 +870,11 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   const uint16_t image_w = target_w - image_inset * 2;
   const uint16_t image_h = target_h - image_inset * 2;
 
-  uint32_t crop_w = src_w;
-  uint32_t crop_h =
-      static_cast<uint32_t>((static_cast<uint64_t>(crop_w) * image_h) / image_w);
-  if (crop_h > src_h || crop_h == 0) {
-    crop_h = src_h;
-    crop_w =
-        static_cast<uint32_t>((static_cast<uint64_t>(crop_h) * image_w) / image_h);
-    if (crop_w > src_w) crop_w = src_w;
+  wallpaper_cover::Crop crop;
+  if (!wallpaper_cover::crop_for(src_w, src_h, image_w, image_h, focus_x, focus_y,
+                                 zoom, crop)) {
+    return nullptr;
   }
-  if (crop_w == 0 || crop_h == 0) return nullptr;
-  if (zoom < 1000) zoom = 1000;
-  if (zoom > 3000) zoom = 3000;
-  crop_w = (crop_w * 1000U) / zoom;
-  crop_h = (crop_h * 1000U) / zoom;
-  if (crop_w == 0) crop_w = 1;
-  if (crop_h == 0) crop_h = 1;
-  if (crop_w > src_w) crop_w = src_w;
-  if (crop_h > src_h) crop_h = src_h;
-  if (focus_x > 1000) focus_x = 1000;
-  if (focus_y > 1000) focus_y = 1000;
-  const uint32_t x0 = ((src_w - crop_w) * focus_x) / 1000U;
-  const uint32_t y0 = ((src_h - crop_h) * focus_y) / 1000U;
 
   const size_t bytes = static_cast<size_t>(target_w) * target_h * sizeof(uint16_t);
   // The completed cache can feed PPA directly on the 8-inch device.
@@ -884,20 +882,18 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   // stays unchanged for LVGL and the other targets.
   uint16_t* out = static_cast<uint16_t*>(alloc_aligned_prefer_psram(bytes));
   if (!out) return nullptr;
-  memset(out, 0, bytes);
+  // Every image pixel is written below; only an inset leaves a black frame.
+  if (image_inset) memset(out, 0, bytes);
 
-  for (uint16_t y = 0; y < image_h; ++y) {
-    const uint32_t sy = y0 + (static_cast<uint32_t>(y) * crop_h) / image_h;
-    const uint16_t* src_row = src + static_cast<size_t>(sy) * src_w;
-    uint16_t* dst_row = out +
-        static_cast<size_t>(y + image_inset) * target_w + image_inset;
-    for (uint16_t x = 0; x < image_w; ++x) {
-      const uint32_t sx = x0 + (static_cast<uint32_t>(x) * crop_w) / image_w;
-      const uint8_t coverage =
-          rounded_pixel_coverage(x, y, image_w, image_h, corner_radius);
-      dst_row[x] = blend_swapped_rgb565_with_black(src_row[sx], coverage);
-    }
-  }
+  // The source column per target column, computed once (internal RAM; the
+  // per-pixel division is the fallback without it).
+  uint16_t* column_map = static_cast<uint16_t*>(
+      heap_caps_malloc(static_cast<size_t>(image_w) * sizeof(uint16_t),
+                       MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  wallpaper_cover::cover_pixels(
+      src, src_w, crop, out + static_cast<size_t>(image_inset) * target_w + image_inset,
+      target_w, image_w, image_h, corner_radius, column_map);
+  heap_caps_free(column_map);
 
   lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
   if (!dsc) {

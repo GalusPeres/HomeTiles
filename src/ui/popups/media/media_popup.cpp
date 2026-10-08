@@ -367,6 +367,31 @@ static void apply_availability(MediaPopupContext* ctx) {
   }
 }
 
+// The song title and artist under the cover.
+static void apply_media_text(MediaPopupContext* ctx, const MediaPopupInit& init) {
+  String media_title = init.media_title;
+  media_title.trim();
+  if (!media_title.length()) {
+    media_title = i18n::strings(configManager.getConfig().language).media_no_playback;
+  }
+  set_popup_label(ctx->media_title_label, media_title);
+
+  String subtitle = init.media_subtitle;
+  subtitle.trim();
+  if (popup_text_same(subtitle, media_title)) {
+    subtitle = "";
+  }
+  if (ctx->media_subtitle_label) {
+    if (subtitle.length()) {
+      lv_label_set_text(ctx->media_subtitle_label, subtitle.c_str());
+      lv_obj_clear_flag(ctx->media_subtitle_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_label_set_text(ctx->media_subtitle_label, "");
+      lv_obj_add_flag(ctx->media_subtitle_label, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+}
+
 static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& init) {
   if (!ctx) return;
   ctx->entity_id = init.entity_id;
@@ -402,27 +427,7 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
   if (ctx->fallback_icon) lv_label_set_text(ctx->fallback_icon, icon_char.c_str());
   popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
 
-  String media_title = init.media_title;
-  media_title.trim();
-  if (!media_title.length()) {
-    media_title = i18n::strings(configManager.getConfig().language).media_no_playback;
-  }
-  set_popup_label(ctx->media_title_label, media_title);
-
-  String subtitle = init.media_subtitle;
-  subtitle.trim();
-  if (popup_text_same(subtitle, media_title)) {
-    subtitle = "";
-  }
-  if (ctx->media_subtitle_label) {
-    if (subtitle.length()) {
-      lv_label_set_text(ctx->media_subtitle_label, subtitle.c_str());
-      lv_obj_clear_flag(ctx->media_subtitle_label, LV_OBJ_FLAG_HIDDEN);
-    } else {
-      lv_label_set_text(ctx->media_subtitle_label, "");
-      lv_obj_add_flag(ctx->media_subtitle_label, LV_OBJ_FLAG_HIDDEN);
-    }
-  }
+  apply_media_text(ctx, init);
 
   if (ctx->play_pause_label) {
     String play_icon = getMdiChar(init.is_playing ? "pause" : "play");
@@ -610,11 +615,23 @@ static void prepare_media_popup_open(const MediaPopupInit& init) {
   lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(init.icon_color), 0);
   lv_obj_set_style_bg_color(ctx->card,
       lv_color_hex(init.bg_color ? init.bg_color : 0x2A2A2A), 0);
+  const bool same_entity = ctx->entity_id == init.entity_id;
+  if (same_entity) {
+    // The kept body shows in the first frame: a song that changed while the
+    // popup was closed showed the previous cover and title until the body
+    // was applied (user 2026-10-08, every device). The tile's current cover
+    // is decoded already; take it and the song's text now (a 240x240 copy).
+    // Applying the body later leaves them as they are.
+    uint32_t cover_hash = 0;
+    const lv_image_dsc_t* cover = tile_renderer_find_media_cover(init.entity_id, cover_hash);
+    update_cover(ctx, cover, cover_hash);
+    apply_media_text(ctx, init);
+  }
   MediaPopupInit pending = init;
   pending.cover_dsc = nullptr;
   if (!defer_popup_body(ctx->card, ctx->title_label, ctx->icon_label,
                         ctx->close_button, pending, finish_media_popup_open,
-                        ctx->entity_id == init.entity_id))
+                        same_entity))
     apply_init_to_context(ctx, init);
 }
 

@@ -21,14 +21,15 @@ const sensor = read(`${ov}/ov02c10_sensor.cpp`);
 // table's 1296x732 array window, offsets 11/8 (the former centred crop).
 assert.match(sensor, /\{0x3808, 0x05\}, \{0x3809, 0x00\},[\s\S]*?\{0x380a, 0x02\}, \{0x380b, 0xd0\},/);
 assert.match(sensor, /constexpr uint8_t kWindowX = 0x0b;\s*constexpr uint8_t kWindowXMirrored = 0x08;\s*constexpr uint8_t kWindowY = 0x08;\s*constexpr uint8_t kWindowYFlipped = 0x07;/);
-assert.match(sensor, /ov02c10_input_24M_MIPI_1lane_raw10_1288x728_30fps,[\s\S]*?write_table\(this, turned \? kTurnedWindow400x720 : kWindow1280x720, &Sensor::write\);[\s\S]*?setStream\(false\);[\s\S]*?setMirror\(mirror\)/,
+assert.match(sensor, /ov02c10_input_24M_MIPI_1lane_raw10_1288x728_30fps,[\s\S]*?write_table\(this, turned \? kTurnedWindow544x720 : kWindow1280x720, &Sensor::write\);[\s\S]*?setStream\(false\);[\s\S]*?setMirror\(mirror\)/,
   'The window override follows the vendored table, before standby and the demo mirror');
-// Upright layout (the 8-inch way, user 2026-10-08): a centred 400x720 window
-// the Bridge turns into 720x400, on the 1280x720 window's centre with the
-// same Bayer phases (x 451/448, high bit in 0x3810).
-assert.match(sensor, /\{0x3808, 0x01\}, \{0x3809, 0x90\},  \/\/ x_output_size 400/);
+// The Bridge's turn (an upright layout, user 2026-10-08): a centred 544x720
+// strip it turns into 720x544 (a strip is 4:3), on the 1280x720 window's
+// centre with the same Bayer phases (x 379/376, high bit in 0x3810).
+assert.match(sensor, /\{0x3808, 0x02\}, \{0x3809, 0x20\},  \/\/ x_output_size 544/);
+assert.match(sensor, /\(kFrameWidth - kTurnedFrameWidth\) \/ 2;          \/\/ 379/);
 assert.match(sensor, /\{kRegIspXWinHigh, static_cast<uint8_t>\(kTurnedWindowX >> 8\)\},/);
-assert.match(read(`${ov}/ov02c10_sensor.h`), /constexpr uint32_t kTurnedFrameWidth = 400;\s*constexpr uint32_t kTurnedFrameHeight = 720;/);
+assert.match(read(`${ov}/ov02c10_sensor.h`), /constexpr uint32_t kTurnedFrameWidth = 544;\s*constexpr uint32_t kTurnedFrameHeight = 720;/);
 // Orientation: only FORMAT1 bits 4/3 change; the window moves with the flips
 // and the registers are read back.
 assert.match(sensor, /constexpr uint16_t kRegFormat1 = 0x3820;\s*constexpr uint8_t kFormat1Flip = 0x10;\s*constexpr uint8_t kFormat1Mirror = 0x08;/);

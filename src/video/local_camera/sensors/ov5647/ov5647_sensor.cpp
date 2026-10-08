@@ -53,7 +53,7 @@ constexpr uint16_t kRegTimingV = 0x3820;
 constexpr uint16_t kRegTimingH = 0x3821;
 constexpr uint8_t kTimingFlipBit = 0x02;
 // ISP window offsets inside the binned array window (table: x 4, y 2). The x
-// offset centres the 544 columns (0x3810 holds its high bits). A flip moves
+// offset centres the 720 columns (0x3810 holds its high bits). A flip moves
 // the window by one pixel so the Bayer phase (GBRG) stays the same, as on the
 // OV02C10.
 constexpr uint16_t kRegIspXOffsetHigh = 0x3810;
@@ -62,7 +62,7 @@ constexpr uint16_t kRegIspYOffset = 0x3813;
 // Binned input of the table: x 24..2599 -> 1288 columns, y 12..1943 -> 966 rows.
 constexpr uint32_t kBinnedWidth = 1288;
 constexpr uint32_t kBinnedHeight = 966;
-constexpr uint16_t kOffsetXCentred = (kBinnedWidth - kFrameWidth) / 2;  // 372, even like 4
+constexpr uint16_t kOffsetXCentred = (kBinnedWidth - kFrameWidth) / 2;  // 284, even like 4
 constexpr uint8_t kOffsetXHigh = static_cast<uint8_t>(kOffsetXCentred >> 8);
 constexpr uint8_t kOffsetX = static_cast<uint8_t>(kOffsetXCentred & 0xff);
 constexpr uint8_t kOffsetXMirrored = static_cast<uint8_t>((kOffsetXCentred + 1) & 0xff);
@@ -75,7 +75,7 @@ static_assert(kOffsetYFlipped + kFrameHeight <= kBinnedHeight, "y window");
 static_assert((kOffsetX & 1) != (kOffsetXMirrored & 1), "a mirror moves the x phase");
 static_assert((kOffsetY & 1) != (kOffsetYFlipped & 1), "a flip moves the y phase");
 // The whole 1280x960 window, centred the same way: x 4 (5 mirrored), y 2
-// (3 flipped), the same phases as the 544x960 window.
+// (3 flipped), the same phases as the 720x960 window.
 constexpr uint16_t kTurnedOffsetXCentred = (kBinnedWidth - kTurnedFrameWidth) / 2;  // 4
 constexpr uint8_t kTurnedOffsetX = static_cast<uint8_t>(kTurnedOffsetXCentred);
 constexpr uint8_t kTurnedOffsetXMirrored = static_cast<uint8_t>(kTurnedOffsetXCentred + 1);
@@ -90,13 +90,13 @@ static_assert(kTurnedOffsetY % 2 == 0, "the flip phase like the table's");
 // (0x0400); the ISP pipeline balances the colours like on the OV02C10.
 constexpr uint16_t kRegAwbManual = 0x3406;
 
-// HomeTiles overrides, not vendor data (PROVENANCE.md): 544x960 portrait
+// HomeTiles overrides, not vendor data (PROVENANCE.md): 720x960 portrait
 // output inside the table's array window (all binned rows, centred columns
 // through the ISP x offset), VTS 1640 = 30 fps, manual AEC/AGC/AWB with a
 // full-frame default exposure at 1x gain.
 constexpr uint16_t kExposureReg = static_cast<uint16_t>(kDefaultExposureLines);
-const ov5647_reginfo_t kWindow544x960[] = {
-    {0x3808, 0x02}, {0x3809, 0x20},  // x output size 544
+const ov5647_reginfo_t kWindow720x960[] = {
+    {0x3808, 0x02}, {0x3809, 0xd0},  // x output size 720
     {0x380a, 0x03}, {0x380b, 0xc0},  // y output size 960
     {kRegFrameLengthHigh, static_cast<uint8_t>(kFrameLengthLines >> 8)},
     {kRegFrameLengthLow, static_cast<uint8_t>(kFrameLengthLines & 0xff)},
@@ -215,7 +215,7 @@ esp_err_t Sensor::loadDefaultMode(bool mirror, bool turned) {
   if (err != ESP_OK) return err;
   err = write_table(this, ov5647_mipi_2lane_24Minput_1280x960_raw10_45fps, &Sensor::write);
   if (err != ESP_OK) return err;
-  err = write_table(this, kWindow544x960, &Sensor::write);
+  err = write_table(this, kWindow720x960, &Sensor::write);
   if (err != ESP_OK) return err;
   // The whole window over the portrait one (sizes and offsets only).
   turned_ = turned;

@@ -37,7 +37,7 @@ inline constexpr local_camera::SensorMode kMode = {
     static_cast<uint8_t>(ov5647::kSccbAddress),
     static_cast<uint16_t>(ov5647::kFrameWidth),
     static_cast<uint16_t>(ov5647::kFrameHeight),
-    // The sensor window is the JPEG size (544x960 portrait, whole 16x16 MCUs
+    // The sensor window is the JPEG size (720x960 portrait, whole 16x16 MCUs
     // for the Bridge's lossless quarter turn), no crop.
     static_cast<uint16_t>(ov5647::kFrameWidth),
     static_cast<uint16_t>(ov5647::kFrameHeight),
@@ -45,7 +45,7 @@ inline constexpr local_camera::SensorMode kMode = {
     static_cast<uint16_t>(ov5647::kLaneBitRateMbps),
     true,   // The table reads out mirrored, like the Waveshare example.
     false,
-    // 8-inch default: mounted a quarter turn from the landscape image (544x960
+    // 8-inch default: mounted a quarter turn from the landscape image (720x960
     // portrait JPEG, turned by the Bridge); orientation pending hardware check.
     true,
     COLOR_RAW_ELEMENT_ORDER_GBRG,

@@ -12,8 +12,8 @@
 //   - GBRG Bayer order with the table's mirrored readout; display rotation
 //     and the mirror setting are sensor readout flips that keep GBRG
 //   - mounted a quarter turn from the landscape UI (confirmed on hardware):
-//     the sensor delivers a 544x960 portrait window, sent as it is; the
-//     Bridge turns every JPEG clockwise into 960x544 ("rotate":90)
+//     the sensor delivers a 720x960 portrait window, sent as it is; the
+//     Bridge turns every JPEG clockwise into 960x720 ("rotate":90)
 //   - black level: the OV5647 default BLC target 0x10 of 1023, 4 in 8-bit units
 
 #include "src/video/local_camera/camera_select.h"
@@ -37,7 +37,7 @@ inline constexpr local_camera::SensorMode kMode = {
     static_cast<uint8_t>(ov5647::kSccbAddress),
     static_cast<uint16_t>(ov5647::kFrameWidth),
     static_cast<uint16_t>(ov5647::kFrameHeight),
-    // The sensor window is the JPEG size (544x960 portrait, whole 16x16 MCUs
+    // The sensor window is the JPEG size (720x960 portrait, whole 16x16 MCUs
     // for the Bridge's lossless quarter turn), no crop.
     static_cast<uint16_t>(ov5647::kFrameWidth),
     static_cast<uint16_t>(ov5647::kFrameHeight),

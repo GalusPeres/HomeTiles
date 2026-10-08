@@ -33,10 +33,12 @@ exposure and colour, like on the OV02C10.
 
 ## HomeTiles overrides (not vendor data)
 
-- Portrait output 544x960 for the quarter-turn mounting: all 960 binned rows
-  of the table window, 544 centred columns (`0x3808/0x3809 = 544`, ISP x offset
-  `0x3810/0x3811 = 372`). The JPEG leaves the panel portrait; the Bridge turns it
-  into 960x544.
+- Portrait output 720x960 for the quarter-turn mounting: all 960 binned rows
+  of the table window, 720 centred columns (`0x3808/0x3809 = 720`, ISP x offset
+  `0x3810/0x3811 = 284`). The JPEG leaves the panel portrait; the Bridge turns it
+  into 960x720 (4:3; 544x960 until b297).
+- Without the Bridge's turn (an upright layout) the whole binned image,
+  1280x960 (x offset 4, y offset 2).
 - VTS 1640 (`0x380E/0x380F`) for 30 fps instead of 45 (less CSI/PSRAM traffic).
 - Manual exposure and analog gain after the Linux ov5647 driver: `0x3503 =
   0x03`, exposure `0x3500..0x3502` in 1/16 lines, gain `0x350A/0x350B` in 1/16

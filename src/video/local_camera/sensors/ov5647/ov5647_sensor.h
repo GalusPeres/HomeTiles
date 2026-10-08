@@ -30,10 +30,10 @@ constexpr uint16_t kChipId = 0x5647;
 // 2-lane 24 MHz RAW10 mode: the vendored 1280x960 2x2-binning table plus the
 // HomeTiles window override (PROVENANCE.md). The Waveshare LCD-X front camera
 // sits a quarter turn from the landscape UI, so the sensor outputs a portrait
-// window with all 960 binned rows and 544 centred columns; the Bridge turns
-// the JPEG into 960x544. 30 fps instead of the table's 45
+// window with all 960 binned rows and 720 centred columns; the Bridge turns
+// the JPEG into 960x720 (a strip is 4:3, user 2026-10-08). 30 fps instead of the table's 45
 // (less CSI and PSRAM traffic).
-constexpr uint32_t kFrameWidth = 544;
+constexpr uint32_t kFrameWidth = 720;
 constexpr uint32_t kFrameHeight = 960;
 // The other window: the whole binned image, 1280x960, sent when the Bridge
 // does not turn (an upright layout, or a camera rotation that takes the
@@ -72,6 +72,10 @@ constexpr uint16_t frameLengthFor(uint16_t lines) {
 class Sensor {
  public:
   // The full-width window of an upright layout for the core.
+  // An upright layout turns the picture a quarter back: counter-clockwise
+  // when this sensor's picture (board mirror on) is mirrored that way
+  // (local_camera.cpp displayQuarterTurns(); 8-inch hardware 2026-10-08).
+  static constexpr bool kUprightTurnCounterClockwise = true;
   static constexpr uint32_t kTurnedWidth = kTurnedFrameWidth;
   static constexpr uint32_t kTurnedHeight = kTurnedFrameHeight;
   // Adds the SCCB device to an existing bus. Never creates a bus.
@@ -84,7 +88,7 @@ class Sensor {
   // ACK probe followed by the chip-ID read. chip_id receives the raw value
   // even when it does not match kChipId.
   esp_err_t probe(uint16_t* chip_id);
-  // Software reset, 1280x960 table, 544x960 window (turned: 1280x960) at
+  // Software reset, 1280x960 table, 720x960 window (turned: 1280x960) at
   // 30 fps, manual exposure, gain and white balance (the ISP pipeline owns
   // them), stream off, table-default mirror when mirror is set. The readout
   // is then orientation state 0.

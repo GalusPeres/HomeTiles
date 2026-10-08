@@ -40,9 +40,9 @@ constexpr uint8_t kStartX = 0x04;
 constexpr uint8_t kStartY = 0x04;
 static_assert(kStartX + kFrameWidth <= 1288, "x window");
 static_assert(kStartY + kFrameHeight <= 728, "y window");
-// The turned 400x720 window on the 1280x720 window's centre: start x 444
-// (even like 4; the sensor keeps BGGR itself), width 400 (0x3208/0x3209).
-constexpr uint16_t kTurnedStartX = kStartX + (kFrameWidth - kTurnedFrameWidth) / 2;  // 444
+// The turned 544x720 window on the 1280x720 window's centre: start x 372
+// (even like 4; the sensor keeps BGGR itself), width 544 (0x3208/0x3209).
+constexpr uint16_t kTurnedStartX = kStartX + (kFrameWidth - kTurnedFrameWidth) / 2;  // 372
 static_assert(kTurnedStartX % 2 == 0, "the start keeps the table's phase");
 static_assert(kTurnedStartX + kTurnedFrameWidth <= 1288, "turned x window");
 

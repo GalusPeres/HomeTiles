@@ -58,6 +58,10 @@ constexpr char kPrefsStreamModeKey[] = "lcam_mode";
 constexpr char kPrefsMirrorKey[] = "lcam_mirror";
 // User rotation: clockwise quarter turns 0..3 (kRotationMax), u8.
 constexpr char kPrefsRotationKey[] = "lcam_rot";
+// The rotation of the upright layouts (Hochkant), kept apart from the
+// landscape one: a board whose upright default is wrong is put right there
+// without turning its landscape picture (user 2026-10-08).
+constexpr char kPrefsRotationUprightKey[] = "lcam_rot_up";
 // Red/blue swap for boards whose colours come out exchanged, bool.
 constexpr char kPrefsRbSwapKey[] = "lcam_rbswap";
 // On-display indicator style (IndicatorStyle as uint8_t).
@@ -172,9 +176,12 @@ std::atomic<uint8_t> g_custom_quality{local_camera_stream::CustomMode{}.quality}
 // Horizontal mirror of the delivered image (Web Admin setting).
 std::atomic<bool> g_mirror{false};
 // User rotation in clockwise quarter turns, 0..kRotationMax (Web Admin
-// setting). The worker reads it per frame (applyOrientation()), the loop task
-// for the retained status.
+// setting), one for the landscape layouts and one for the upright ones; the
+// layout of this boot picks it (userTurns()). The worker reads it per frame
+// (applyOrientation()), the loop task for the retained status.
 std::atomic<uint8_t> g_rotation{0};
+std::atomic<uint8_t> g_rotation_upright{0};
+uint8_t userTurns() { return grid_layout::turned() ? g_rotation_upright.load() : g_rotation.load(); }
 // Red and blue exchanged in the ISP Bayer order (Web Admin setting); read by
 // the worker when it builds the pipeline, i.e. from the next capture or stream
 // start on.
@@ -295,12 +302,22 @@ String deviceTopic(const char* leaf, const char* id = nullptr) {
 
 // The panel shown upright (Hochkant, grid_layout::turned()): the camera turns
 // with the panel, a quarter from the landscape UI its mounting is given for,
-// so the image gets a clockwise quarter turn (V2 hardware 2026-10-08: three
-// quarters stood upside down). Both P4 panels map the landscape UI the same
-// way into their upright framebuffer, so the 8-inch's quarter-turn mounting
-// then adds up to 180 degrees, sensor flips without a Bridge turn. Added to
-// the user turns.
-uint8_t displayQuarterTurns() { return grid_layout::turned() ? 1u : 0u; }
+// so the image turns a quarter back. Every P4 panel turns the same way, but
+// a mirror reverses a turn and the sensors' pictures are mirrored
+// differently: clockwise on the V2 (OV02C10, hardware 2026-10-08: three
+// quarters stood upside down), counter-clockwise on the 8-inch (OV5647,
+// hardware 2026-10-08: one quarter, adding up to 180 with its mounting,
+// stood upside down). The user's mirror setting reverses it again. Added to
+// the user turns, so the user rotation stays the same in both layouts.
+uint8_t displayQuarterTurns() {
+  if (!grid_layout::turned()) return 0u;
+#if defined(HOMETILES_LOCAL_CAMERA)
+  const bool counter_clockwise = local_camera_board::Sensor::kUprightTurnCounterClockwise != g_mirror.load();
+  return counter_clockwise ? 3u : 1u;
+#else
+  return 1u;
+#endif
+}
 
 // Clockwise turn the Bridge applies to every JPEG: the quarter turn left from
 // the board mounting, the upright panel and the user rotation. The 180 degree
@@ -309,7 +326,7 @@ uint8_t displayQuarterTurns() { return grid_layout::turned() ? 1u : 0u; }
 uint16_t statusRotate() {
 #if defined(HOMETILES_LOCAL_CAMERA)
   return statusRotateDegrees(imageTurn(false, local_camera_board::kMode.quarter_turn,
-                                       static_cast<uint8_t>(g_rotation.load() + displayQuarterTurns())));
+                                       static_cast<uint8_t>(userTurns() + displayQuarterTurns())));
 #else
   return 0;
 #endif
@@ -382,8 +399,8 @@ constexpr uint32_t kPipelineIdleReleaseMs = 30000;
 constexpr uint32_t kIspClockHz = 80 * 1000 * 1000;
 // The sensor window follows the Bridge's turn (user 2026-10-08, drawn): a
 // sensor standing upright in the world - the Bridge turns its image a
-// quarter - sends a centred landscape strip, 16:9 once turned (the 8-inch's
-// 544x960, the other sensors' 400x720); a lying one sends its whole image
+// quarter - sends a centred landscape strip, 4:3 once turned (the 8-inch's
+// 720x960, the other sensors' 544x720; user 2026-10-08: more picture); a lying one sends its whole image
 // (1280x960, 1280x720) unturned. Cropping on the sensor costs nothing and
 // sends less; the panel never turns. Every sensor has both windows: the
 // board's default one (the mode's frame, the strip when it is upright) and
@@ -998,7 +1015,7 @@ bool stepDigitalGain(uint32_t mean_luma, bool sensor_at_brighter_limit, uint32_t
 // false when the sensor did not confirm the registers.
 bool applyOrientation(bool live) {
   const ImageTurn turn = imageTurn(imageRotated180(), kQuarterTurn,
-                                   static_cast<uint8_t>(g_rotation.load() + displayQuarterTurns()));
+                                   static_cast<uint8_t>(userTurns() + displayQuarterTurns()));
   const SensorOrientation wanted =
       desiredOrientation(turn.rotated_180, g_mirror.load(), turn.quarter_turn);
   const uint8_t code = orientationCode(wanted);
@@ -3114,6 +3131,8 @@ void begin() {
     // Unknown rotations (e.g. from a newer firmware) fall back to none.
     const uint8_t rotation = prefs.getUChar(kPrefsRotationKey, 0);
     g_rotation.store(rotation <= kRotationMax ? rotation : 0);
+    const uint8_t rotation_upright = prefs.getUChar(kPrefsRotationUprightKey, 0);
+    g_rotation_upright.store(rotation_upright <= kRotationMax ? rotation_upright : 0);
     g_rb_swap.store(prefs.getBool(kPrefsRbSwapKey, false));
     // Unknown styles (e.g. from a newer firmware) fall back to the default.
     const uint8_t style =
@@ -3449,7 +3468,7 @@ void appendStatusJson(String& json) {
   json += ",\"mirror\":";
   json += g_mirror.load() ? "true" : "false";
   json += ",\"rotation\":";
-  json += String(static_cast<unsigned>(g_rotation.load()));
+  json += String(static_cast<unsigned>(userTurns()));
   json += ",\"rb_swap\":";
   json += g_rb_swap.load() ? "true" : "false";
   json += ",\"indicator\":";
@@ -3610,12 +3629,14 @@ bool setMirror(bool mirror) {
 #endif
 }
 
-uint8_t rotation() { return g_rotation.load(); }
+// The rotation of this boot's layout (landscape or upright).
+uint8_t rotation() { return userTurns(); }
 
 bool setRotation(uint8_t quarter_turns) {
 #if defined(HOMETILES_LOCAL_CAMERA)
   if (quarter_turns > kRotationMax) return false;
-  if (quarter_turns == g_rotation.load()) return true;
+  if (quarter_turns == userTurns()) return true;
+  const bool upright = grid_layout::turned();
   {
     Device::ScopedStorageWrite storage_write(BatchedNvsWrite::kNeedsDisplayGuard);
     BatchedNvsWrite::Preferences prefs;
@@ -3623,15 +3644,16 @@ bool setRotation(uint8_t quarter_turns) {
       Serial.println("[LocalCam] Could not open preferences");
       return false;
     }
-    const bool written = prefs.putUChar(kPrefsRotationKey, quarter_turns) > 0;
+    const bool written =
+        prefs.putUChar(upright ? kPrefsRotationUprightKey : kPrefsRotationKey, quarter_turns) > 0;
     if (!BatchedNvsWrite::finish(prefs) || !written) {
       Serial.println("[LocalCam] Could not save the rotation setting");
       return false;
     }
   }
-  g_rotation.store(quarter_turns);
-  Serial.printf("[LocalCam] Rotation %u degrees, Bridge turn %u\n",
-                static_cast<unsigned>(quarter_turns) * 90u,
+  (upright ? g_rotation_upright : g_rotation).store(quarter_turns);
+  Serial.printf("[LocalCam] Rotation (%s) %u degrees, Bridge turn %u\n",
+                upright ? "upright" : "landscape", static_cast<unsigned>(quarter_turns) * 90u,
                 static_cast<unsigned>(statusRotate()));
   // The quarter turn the Bridge applies may have changed; the sensor flips
   // follow with the next frame (applyOrientation()). A running stream with

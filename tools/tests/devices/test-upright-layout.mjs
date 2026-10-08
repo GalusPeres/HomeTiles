@@ -163,26 +163,46 @@ const handler = read('src/web/server/handlers/web_admin_tiles.cpp');
 assert.match(handler, /setPlaceGrid\(classic_places \|\| \(screensaver_grid && !screensaver_layout\)\);/);
 assert.match(handler, /const float first_row = screensaver_layout \? screensaver_places::first_row\(grid_layout::active\(\)\)/);
 
-// --- The own camera turns with the panel: upright, its image gets a
-// clockwise quarter turn (V2 hardware 2026-10-08: three quarters stood upside
-// down). The 8-inch's quarter-turn mounting then adds up to 180 degrees:
-// sensor flips, no Bridge turn.
+// --- The own camera turns with the panel: upright, its image turns a
+// quarter back, clockwise on the V2 (hardware 2026-10-08: three quarters
+// stood upside down), counter-clockwise on the 8-inch (hardware 2026-10-08:
+// one quarter, 180 with its mounting, stood upside down) - their pictures are
+// mirrored differently and a mirror reverses a turn, the user's mirror too.
 const camera = read('src/video/local_camera/local_camera.cpp');
-assert.match(camera, /uint8_t displayQuarterTurns\(\) \{ return grid_layout::turned\(\) \? 1u : 0u; \}/);
+assert.match(camera, /if \(!grid_layout::turned\(\)\) return 0u;/);
+assert.match(camera, /const bool counter_clockwise = local_camera_board::Sensor::kUprightTurnCounterClockwise != g_mirror\.load\(\);\s*return counter_clockwise \? 3u : 1u;/);
+assert.match(read('src/video/local_camera/sensors/ov5647/ov5647_sensor.h'), /static constexpr bool kUprightTurnCounterClockwise = true;/);
+assert.match(read('src/video/local_camera/sensors/ov02c10/ov02c10_sensor.h'), /static constexpr bool kUprightTurnCounterClockwise = false;/);
+assert.match(read('src/video/local_camera/sensors/sc202cs/sc202cs_sensor.h'), /static constexpr bool kUprightTurnCounterClockwise = false;/);
 const contract = read('src/video/local_camera/local_camera_contract.h');
 const turnsOf = (quarter, rotated180, user) => ((quarter ? 1 : 0) + (rotated180 ? 2 : 0) + user) & 3;
 assert.match(contract, /\(\(quarter_turn \? 1u : 0u\) \+ \(rotated_180 \? 2u : 0u\) \+ user_turns\) & 3u;/);
-assert.equal(turnsOf(true, false, 0 + 1), 2, '8-inch upright: sensor flips, no Bridge turn');
+assert.equal(turnsOf(true, false, 0 + 3), 0, '8-inch upright: no flips, no Bridge turn');
 assert.equal(turnsOf(true, false, 0), 1, '8-inch landscape: the Bridge turns 90 as before');
 assert.equal(turnsOf(false, false, 0 + 1), 1, 'V2 upright: the Bridge turns 90 clockwise');
 assert.equal(turnsOf(false, false, 0), 0, 'V2 landscape unchanged');
+// Each format keeps its own rotation (user 2026-10-08): the upright one put
+// right never turns the landscape picture.
+assert.match(camera, /constexpr char kPrefsRotationUprightKey\[\] = "lcam_rot_up";/);
+assert.match(camera, /uint8_t userTurns\(\) \{ return grid_layout::turned\(\) \? g_rotation_upright\.load\(\) : g_rotation\.load\(\); \}/);
+assert.match(camera, /prefs\.putUChar\(upright \? kPrefsRotationUprightKey : kPrefsRotationKey, quarter_turns\)/);
+assert.match(camera, /uint8_t rotation\(\) \{ return userTurns\(\); \}/);
+assert.doesNotMatch(camera, /g_rotation\.load\(\) \+ displayQuarterTurns\(\)/);
+// The Web Admin names the upright one, in every language.
+assert.match(read('src/web/server/render/web_admin_html.cpp'),
+  /appendHtmlEscaped\(html, grid_layout::turned\(\) \? tr\.local_camera_rotation_upright : tr\.local_camera_rotation\);/);
+const i18n = read('src/core/i18n/i18n.cpp');
+for (const [rotation, upright] of [['Drehung', 'Drehung (hochkant)'], ['Rotation', 'Rotation (portrait)'], ['Obrót', 'Obrót (pionowo)']]) {
+  assert.ok(i18n.includes(`    "${rotation}",\n    "${upright}",\n`), upright);
+}
+assert.equal((i18n.match(/"Rotation \(portrait\)",/g) || []).length, 2, 'English and French');
 // The sensor window follows the Bridge's turn (user 2026-10-08, drawn):
 // the upright strip while it turns, the whole image otherwise.
 const strip = (quarter, user, upright) => (turnsOf(quarter, false, user + (upright ? 1 : 0)) & 1) === 1;
-assert.equal(strip(true, 0, false), true, '8-inch landscape: the 544x960 strip, the Bridge turns');
+assert.equal(strip(true, 0, false), true, '8-inch landscape: the 720x960 strip, the Bridge turns');
 assert.equal(strip(true, 0, true), false, '8-inch upright: the whole 1280x960, no turn');
 assert.equal(strip(false, 0, false), false, 'V2 landscape: the whole 1280x720');
-assert.equal(strip(false, 0, true), true, 'V2 upright: the 400x720 strip, the Bridge turns');
+assert.equal(strip(false, 0, true), true, 'V2 upright: the 544x720 strip, the Bridge turns');
 assert.equal(strip(true, 1, false), false, 'a camera rotation of 90 degrees swaps strip and whole');
 assert.equal(strip(false, 1, false), true, 'the same on a landscape sensor');
 

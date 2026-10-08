@@ -518,8 +518,10 @@ struct Strings {
   // Collapsed Web Admin block with the fine-tuning controls (rotation,
   // mirror, red/blue swap, image controls).
   const char* local_camera_advanced;
-  // Clockwise rotation select; the degree values stay untranslated.
+  // Clockwise rotation select; the degree values stay untranslated. The
+  // upright layouts keep their own rotation, labelled as such.
   const char* local_camera_rotation;
+  const char* local_camera_rotation_upright;
   // Red/blue swap checkbox and its note (applies from the next start).
   const char* local_camera_rb_swap;
   const char* local_camera_rb_swap_note;

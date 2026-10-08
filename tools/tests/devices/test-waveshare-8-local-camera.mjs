@@ -51,8 +51,9 @@ for (const reg of ['{0x3018, 0x44}', '{0x3808, 0x05}', '{0x3809, 0x00}', '{0x380
 
 // --- HomeTiles overrides ------------------------------------------------------------
 // The front camera is mounted a quarter turn from the landscape UI (hardware
-// test 2026-09-24): a 544x960 portrait window that the PPA turns into 960x544.
-assert.match(sensorHeader, /constexpr uint32_t kFrameWidth = 544;\s*constexpr uint32_t kFrameHeight = 960;/);
+// test 2026-09-24): a 720x960 portrait strip the Bridge turns into 960x720
+// (a strip is 4:3, user 2026-10-08; 544x960 until b297).
+assert.match(sensorHeader, /constexpr uint32_t kFrameWidth = 720;\s*constexpr uint32_t kFrameHeight = 960;/);
 assert.match(sensorHeader, /constexpr uint32_t kDataLanes = 2;/);
 assert.match(sensorHeader, /constexpr uint32_t kLaneBitRateMbps = 441;/);
 assert.match(sensorHeader, /constexpr uint16_t kFrameLengthLines = 1640;/);
@@ -65,16 +66,16 @@ assert.match(sensorHeader, /constexpr uint16_t kFrameLengthLines = 1640;/);
   const binnedRows = (1943 - 12 + 1) / 2;
   assert.equal(binnedWidth, 1288);
   assert.equal(binnedRows, 966);
-  // All 960 rows with the flip offset, 544 centred columns with the mirror offset.
-  const offsetX = (binnedWidth - 544) / 2;
-  assert.equal(offsetX, 372);
-  assert.ok(3 + 960 <= binnedRows && offsetX + 1 + 544 <= binnedWidth);
+  // All 960 rows with the flip offset, 720 centred columns with the mirror offset.
+  const offsetX = (binnedWidth - 720) / 2;
+  assert.equal(offsetX, 284);
+  assert.ok(3 + 960 <= binnedRows && offsetX + 1 + 720 <= binnedWidth);
   assert.equal(offsetX % 2, 0, 'Even like the table offset 4: GBRG in the table readout');
   assert.equal(offsetX >> 8, (offsetX + 1) >> 8, 'The mirror only changes the low byte');
   // JPEG: whole 16x8 MCUs, cache-line sized RGB565 buffers.
-  assert.ok(960 % 16 === 0 && 544 % 8 === 0 && (960 * 544 * 2) % 128 === 0);
+  assert.ok(960 % 16 === 0 && 720 % 8 === 0 && (960 * 720 * 2) % 128 === 0);
 }
-assert.match(sensorCpp, /\{0x3808, 0x02\}, \{0x3809, 0x20\},\s*\/\/ x output size 544/);
+assert.match(sensorCpp, /\{0x3808, 0x02\}, \{0x3809, 0xd0\},\s*\/\/ x output size 720/);
 assert.match(sensorCpp, /\{0x380a, 0x03\}, \{0x380b, 0xc0\},\s*\/\/ y output size 960/);
 assert.match(sensorCpp, /constexpr uint16_t kOffsetXCentred = \(kBinnedWidth - kFrameWidth\) \/ 2;/);
 assert.match(sensorCpp, /\{kRegIspXOffsetHigh, kOffsetXHigh\},\s*\{kRegIspXOffset, kOffsetX\},/);
@@ -82,7 +83,7 @@ assert.doesNotMatch(sensorCpp, /\{0x3802,|\{0x3806,/, 'The table y window stays'
 assert.match(sensorCpp, /\{kRegAecAgc, kAecAgcManual\}/, 'Manual AEC/AGC: the ISP pipeline owns exposure');
 assert.match(sensorCpp, /constexpr uint8_t kAecAgcManual = 0x03;/);
 assert.match(sensorCpp, /\{kRegAwbManual, 0x01\}/, 'Manual white balance at 1x gains');
-assert.match(sensorCpp, /write_table\(this, ov5647_mipi_reset_regs[\s\S]*?write_table\(this, ov5647_mipi_2lane_24Minput_1280x960_raw10_45fps[\s\S]*?write_table\(this, kWindow544x960/,
+assert.match(sensorCpp, /write_table\(this, ov5647_mipi_reset_regs[\s\S]*?write_table\(this, ov5647_mipi_2lane_24Minput_1280x960_raw10_45fps[\s\S]*?write_table\(this, kWindow720x960/,
   'Reset, vendored table, then the overrides');
 assert.doesNotMatch(sensorCpp, /0x3a0f|0x3a10|0x3a1b|0x3a1e|0x3c0/, 'No on-sensor AE target or banding writes');
 // Exposure in 1/16 lines over 0x3500..0x3502, gain in 1/16 over 0x350a/0x350b,
@@ -127,10 +128,10 @@ for (const text of [boardHeader, boardCpp]) {
 }
 assert.match(boardHeader, /using Sensor = ov5647::Sensor;/);
 assert.match(boardHeader, /COLOR_RAW_ELEMENT_ORDER_GBRG/);
-// Quarter-turn mounting: the JPEG is the portrait frame (544x960, 4:2:0);
+// Quarter-turn mounting: the JPEG is the portrait frame (720x960, 4:2:0);
 // the Bridge turns it (the PPA turn on the panel made the display sluggish).
 assert.match(boardHeader, /static_cast<uint16_t>\(ov5647::kFrameWidth\),\s*static_cast<uint16_t>\(ov5647::kFrameHeight\),\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*static_cast<uint16_t>\(ov5647::kFrameWidth\),\s*static_cast<uint16_t>\(ov5647::kFrameHeight\),/);
-assert.ok(544 % 16 === 0 && 960 % 16 === 0, 'Whole 16x16 MCUs for the lossless turn');
+assert.ok(720 % 16 === 0 && 960 % 16 === 0, 'Whole 16x16 MCUs for the turn');
 assert.match(boardHeader, /true,   \/\/ The table reads out mirrored, like the Waveshare example\.\s*false,\s*(\/\/[^\n]*\n\s*)+true,\s*COLOR_RAW_ELEMENT_ORDER_GBRG,/,
   'mirror, rotate_180 false, quarter_turn true');
 assert.match(boardCpp, /DeviceWaveshareTouchLCD8::sharedI2cBus\(\)/);

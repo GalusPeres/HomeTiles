@@ -46,7 +46,7 @@ struct ModeEntry {
 };
 
 // Every mode streams the full board image (whatever size the board delivers:
-// 1280x720 on the V2, 960x544 on the Waveshare 8-inch); a mode is only a rate
+// 1280x720 on the V2, 960x720 on the Waveshare 8-inch); a mode is only a rate
 // and a start quality. Higher rates use a lower quality to keep the frames
 // small. Adding a mode is one line here.
 constexpr ModeEntry kModes[] = {

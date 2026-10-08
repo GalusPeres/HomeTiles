@@ -27,7 +27,7 @@ const keys = ['local_camera_section', 'local_camera_enable', 'local_camera_note'
   'local_camera_indicator_line', 'local_camera_indicator_pill', 'local_camera_indicator_note',
   'local_camera_stream_mode_custom', 'local_camera_custom_fps', 'local_camera_custom_quality',
   'local_camera_indicator_section', 'local_camera_stream_section', 'local_camera_gain',
-  'local_camera_advanced', 'local_camera_rotation', 'local_camera_rb_swap',
+  'local_camera_advanced', 'local_camera_rotation', 'local_camera_rotation_upright', 'local_camera_rb_swap',
   'local_camera_rb_swap_note'];
 const members = [...header.matchAll(/^\s*const char\* (\w+);/gm)].map(match => match[1]);
 const stringsMembers = members.slice(0, members.indexOf('settings_tile_parking') + keys.length + 1);

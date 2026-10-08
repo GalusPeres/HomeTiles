@@ -13,6 +13,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const drivers = [
   'src/devices/guition_jc8012p4a1_v2/device_guition_jc8012p4a1_v2.cpp',
   'src/devices/waveshare_touch_lcd_8/device_waveshare_touch_lcd_8.cpp',
+  // The same driver code (optimisation hand-over 2026-10-08), compile only.
+  'src/devices/guition_jc8012p4a1/device_guition_jc8012p4a1.cpp',
+  'src/devices/waveshare_touch_lcd_10_1/device_waveshare_touch_lcd_10_1.cpp',
+  'src/devices/waveshare_touch_lcd_4_3/device_waveshare_touch_lcd_4_3.cpp',
+  'src/devices/waveshare_touch_lcd_7/device_waveshare_touch_lcd_7.cpp',
 ];
 for (const driverPath of drivers) {
   const driver = fs.readFileSync(path.join(root, driverPath), 'utf8');

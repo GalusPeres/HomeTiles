@@ -24,6 +24,7 @@
 
 #include "src/core/display/dma2d_arbiter.h"
 #include "src/devices/common/p4_dsi_camera_presenter.h"
+#include "src/devices/common/p4_dsi_cpu_rotate.h"
 #include "src/devices/waveshare_touch_lcd_10_1/sdmmc.h"
 #include "src/devices/waveshare_touch_lcd_10_1/vendor/displays_config.h"
 #include "src/devices/waveshare_touch_lcd_10_1/vendor/gt911.h"
@@ -643,6 +644,19 @@ bool draw_landscape_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
         mark_dirty_rect(dst_x, dst_y, dst_w, dst_h);
         return true;
       }
+    }
+  }
+
+  // Small regions: rotate straight into the panel framebuffer
+  // (p4_dsi_cpu_rotate.h) instead of through the PSRAM rotate buffer.
+  if (g_panel_fb_ready) {
+    if (uint16_t* fb = panel_fb()) {
+      p4_dsi_cpu_rotate::rotate_into(fb, display_cfg.width, dst_x, dst_y, w, h,
+                                     data, (g_rotation & 0x02) != 0);
+      flush_framebuffer_rect(fb, dst_x, dst_y, dst_w, dst_h);
+      mark_dirty_rect(dst_x, dst_y, dst_w, dst_h);
+      g_camera_presenter.noteUiWrite(dst_x, dst_y, dst_w, dst_h, false);
+      return true;
     }
   }
 

@@ -1273,6 +1273,20 @@
     .tile.resize-invalid {
       box-shadow:0 0 0 2px rgba(239,68,68,0.22) inset, 0 0 18px rgba(239,68,68,0.2);
     }
+    /* Safari has no overflow-clip-margin: the tile's overflow cuts at the
+       inner edge of its 3 px editor border and with it the rings above, which
+       lie on that border, so tiles from 1 x 1 showed no selection (issue #80;
+       half tiles have no border and keep their ring inside). There the
+       content never reaches the border, so the border itself is the ring. */
+    @supports not (overflow-clip-margin:3px) {
+      .tile:not(.empty):not(.sensor-compact):is(.active, [data-selected="1"]) { border-color:#26a69a; }
+      .tile:not(.empty):not(.sensor-compact):hover:not(.active):not([data-selected="1"]) {
+        border:3px dashed rgba(38,166,154,0.6);
+      }
+      body.tile-resize-active .tile:not(.empty):not(.sensor-compact):hover:not(.active):not([data-selected="1"]) {
+        border-color:transparent;
+      }
+    }
     .tile.reflow-preview {
       border:3px solid rgba(100,216,203,0.55);
       box-shadow:0 0 0 2px rgba(100,216,203,0.35) inset, 0 0 18px rgba(38,166,154,0.18);

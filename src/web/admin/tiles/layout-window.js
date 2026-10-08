@@ -777,12 +777,12 @@
     }).join('');
     backdrop.innerHTML = [
       '<div class="setup-dialog" role="dialog" aria-modal="true">',
-      // One head: the title, the layouts, the X with the notes below it
-      // (user 2026-10-08).
+      // One head: the title, the layouts with the notes right beside them,
+      // the X (user 2026-10-08).
       `<div class="setup-head-row"><div class="setup-title">${escapeHtml(t('layoutChange'))}</div>`,
-      `<div class="setup-layouts">${layoutButtons}</div>`,
+      `<div class="setup-layouts">${layoutButtons}</div><div class="setup-status"></div>`,
       `<div class="setup-head-right"><button type="button" class="setup-close" aria-label="${escapeHtml(t('close'))}">` +
-        '<i class="mdi mdi-close"></i></button><div class="setup-status"></div></div></div>',
+        '<i class="mdi mdi-close"></i></button></div></div>',
 
       `<div class="setup-tabs">${tabButtons}</div>`,
       '<div class="setup-stage"></div>',

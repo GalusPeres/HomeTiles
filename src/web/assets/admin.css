@@ -3394,11 +3394,12 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 /* In the storage beside the screen: no part of the layout, kept dimmed. */
 .tile-grid.setup-grid > .tile.setup-parked:not(.empty) { opacity:0.55; }
 .tile-grid.setup-grid > .setup-storage-label {
-  position:absolute; right:12px; bottom:8px; pointer-events:none; display:flex; flex-direction:column;
-  align-items:flex-end; gap:2px; text-align:right; color:var(--text-3, #9e9e9e);
+  position:absolute; right:12px; bottom:8px; pointer-events:none; display:flex; align-items:baseline;
+  gap:6px; white-space:nowrap; color:var(--text-3, #9e9e9e);
 }
 .setup-storage-label b { font-size:12px; font-weight:600; letter-spacing:0.02em; }
 .setup-storage-label span { font-size:11px; opacity:0.8; }
+.setup-storage-label span::before { content:"\00B7"; margin-right:6px; }
 /* A layout with places not saved yet. */
 .setup-layout.is-dirty::after {
   content:""; position:absolute; top:-4px; left:10px; width:8px; height:8px; border-radius:4px; background:var(--accent);
@@ -3421,12 +3422,12 @@ input[data-entity-picker].hidden + .entity-picker { display:none; }
 .setup-foot { display:flex; align-items:center; gap:16px; width:0; min-width:100%; }
 .setup-actions { flex:none; margin-left:auto; display:flex; align-items:center; gap:10px; }
 .setup-tabs { width:0; min-width:100%; }
-/* The X with the notes below it, small and right-aligned; they never move
-   the window (absolute, under the head's fixed height). */
-.setup-head-right { position:relative; align-self:stretch; min-width:170px; margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; }
-.setup-head-right > .setup-status {
-  position:absolute; top:44px; right:0; display:flex; flex-direction:column; align-items:flex-end; gap:2px;
+/* The notes right beside the layouts, small and left-aligned in a column;
+   they fill the room up to the X and never widen the window (width 0). */
+.setup-head-row > .setup-status {
+  flex:1 1 auto; width:0; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:2px;
 }
+.setup-head-right { align-self:flex-start; margin-left:auto; }
 .setup-status-item { display:flex; align-items:center; gap:6px; font-size:12px; line-height:16px; white-space:nowrap; }
 .setup-status-item > i { font-size:15px; }
 .setup-status-item.is-missing > i { color:#e5484d; }

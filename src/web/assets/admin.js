@@ -8360,6 +8360,16 @@ function syncTileRadiusControls(tabEl) {
       layout.col + layout.span_w <= GRID_COLS && layout.row + layout.span_h <= GRID_ROWS &&
       cells(layout, false);
 
+    // A tile from the classic storage (the layout window's) takes no room:
+    // it keeps a valid placeholder place, the server leaves it out of the
+    // overlap checks (layout_hidden).
+    const stored = entry => !!entry.tile.layout_hidden;
+    const placeholder = entry => {
+      const layout = entry.layout;
+      if (layout.col + layout.span_w > GRID_COLS) layout.col = Math.max(0, GRID_COLS - layout.span_w);
+      if (layout.row + layout.span_h > GRID_ROWS) layout.row = Math.max(0, GRID_ROWS - layout.span_h);
+    };
+
     const entries = [];
     let sourceSystem = null;
     (Array.isArray(sourceTiles) ? sourceTiles : []).forEach((tile, index) => {
@@ -8379,11 +8389,17 @@ function syncTileRadiusControls(tabEl) {
     // An exported system tile replaces the target's; a target without one
     // (Settings hidden there) keeps it hidden and the place stays free.
     const placeSystem = !!(sourceSystem && targetSystem);
-    if (placeSystem) {
+    if (placeSystem && stored(sourceSystem)) {
+      placeholder(sourceSystem);
+    } else if (placeSystem) {
       if (!fits(systemType, sourceSystem.layout)) return { conflict: sourceSystem.tile };
       cells(sourceSystem.layout, true);
     }
     for (const entry of entries) {
+      if (stored(entry)) {
+        placeholder(entry);
+        continue;
+      }
       if (!fits(entry.type, entry.layout)) return { conflict: entry.tile };
       cells(entry.layout, true);
     }
@@ -8648,6 +8664,20 @@ function syncTileRadiusControls(tabEl) {
         return;
       }
 
+      // Tiles from the classic storage go back into it, with their spot
+      // beside the screen when the export came from the same screen.
+      const layoutsBlock = payload.layouts && typeof payload.layouts === 'object' ? payload.layouts : null;
+      const sameScreen = !!layoutsBlock && Number(layoutsBlock.screen_width) === LAYOUTS.classic.screenW &&
+        Number(layoutsBlock.screen_height) === LAYOUTS.classic.screenH;
+      const storageSpots = sameScreen ? layoutsBlock.places?.classic_parked || {} : {};
+      for (const [folder, tiles] of Object.entries(grids)) {
+        if (!Array.isArray(tiles)) continue;
+        for (const tile of tiles) {
+          const spot = tile && tile.layout_hidden ? storageSpots[folder]?.[String(tile.view_id)] : null;
+          if (Array.isArray(spot) && spot.length === 4) tile.layout_spot = spot;
+        }
+      }
+
       const sourceFolders = Array.isArray(payload.folders) ? payload.folders : [{ id: 0, parent_id: 0, name: 'Home', icon_name: '' }];
       const folderName = folderId => {
         const folder = sourceFolders.find(entry => Number(entry && entry.id) === Number(folderId));
@@ -8778,8 +8808,13 @@ function syncTileRadiusControls(tabEl) {
     fd.append('folder', folderId);
     fd.append('index', index);
     fd.append('type', safeType);
-    // The export's places are the classic layout's (tile_layouts.h).
+    // The export's places are the classic layout's (tile_layouts.h); a tile
+    // from its storage has none there, only its spot beside the screen.
     fd.append('layout', 'classic');
+    if (tile.layout_hidden) {
+      fd.append('layout_hidden', '1');
+      if (Array.isArray(tile.layout_spot)) fd.append('layout_spot', tile.layout_spot.join(','));
+    }
     fd.append('title', tile.title || '');
     fd.append('icon_name', tile.icon_name || '');
     if (tile.icon_disc !== undefined && tile.icon_disc !== null) {

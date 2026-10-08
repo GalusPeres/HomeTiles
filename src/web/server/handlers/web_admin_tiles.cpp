@@ -121,6 +121,28 @@ static bool getTileRect(const Tile& tile, TileRect& out) {
   return buildTileRect(col, row, span_w, span_h, out);
 }
 
+// A tile in the classic storage (the layout window's, tile_layouts.h) has no
+// classic place: its stored one is stale and may lie under another tile. The
+// export marks it, and the import's overlap checks leave it out.
+static void markClassicStorage(uint16_t folder_id, TileGridConfig& grid) {
+  for (Tile& tile : grid.tiles) {
+    tile.layout_hidden = tile.type != TILE_EMPTY && tile_layouts::classic_hidden(folder_id, tile.view_id);
+  }
+}
+
+// An imported storage tile's spot beside the classic screen ("col,row,w,h").
+static bool parseClassicStorageSpot(const String& value, tile_layouts::Place& out) {
+  float v[4] = {0, 0, 0, 0};
+  if (sscanf(value.c_str(), "%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3]) != 4) return false;
+  for (float f : v) {
+    if (!std::isfinite(f) || f * 2 != std::floor(f * 2)) return false;
+  }
+  if (v[2] < 0.5f || v[3] < 0.5f || v[0] < -16 || v[1] < -16 || v[0] > 32 || v[1] > 32) return false;
+  out = {v[0], v[1], v[2], v[3]};
+  return !grid_layout::inside(grid_layout::layout_grid(grid_layout::Layout::kClassic), out.col, out.row,
+                              out.span_w, out.span_h);
+}
+
 static bool rectsOverlap(const TileRect& a, const TileRect& b) {
   return !(a.col + a.span_w <= b.col ||
            b.col + b.span_w <= a.col ||
@@ -403,6 +425,7 @@ void WebAdminServer::handleGetTiles() {
   } else {
     loaded = classic_places ? tileConfig.loadFolderGridClassic(folder_id, grid)
                             : tileConfig.loadFolderGrid(folder_id, grid);
+    if (loaded && classic_places) markClassicStorage(folder_id, grid);
   }
   if (!loaded) {
     server.send(500, "application/json", "{\"error\":\"Grid load failed\"}");
@@ -583,6 +606,7 @@ void WebAdminServer::handleSaveTiles() {
   } else {
     grid_loaded = classic_places ? tileConfig.loadFolderGridClassic(folder_id, *grid)
                                  : tileConfig.loadFolderGrid(folder_id, *grid);
+    if (grid_loaded && classic_places) markClassicStorage(folder_id, *grid);
   }
   if (!grid_loaded) {
     server.send(500, "application/json", "{\"success\":false,\"error\":\"Folder load failed\"}");
@@ -746,6 +770,11 @@ void WebAdminServer::handleSaveTiles() {
     }
   }
 
+  // An imported tile from the classic storage: no classic place, it takes
+  // no room (its stored place is only a valid placeholder).
+  tile.layout_hidden = classic_places && tile.type != TILE_EMPTY && server.arg("layout_hidden") == "1";
+  tile_layouts::Place storage_spot{};
+  const bool has_storage_spot = tile.layout_hidden && parseClassicStorageSpot(server.arg("layout_spot"), storage_spot);
   if (tile.type != TILE_EMPTY) {
     TileRect rect{};
     if (!buildTileRect(col, row, span_w, span_h, rect)) {
@@ -753,7 +782,7 @@ void WebAdminServer::handleSaveTiles() {
       server.send(400, "application/json", "{\"success\":false,\"error\":\"Invalid layout\"}");
       return;
     }
-    if (placementOverlaps(*grid, index, rect)) {
+    if (!tile.layout_hidden && placementOverlaps(*grid, index, rect)) {
       tile = previous_tile;
       server.send(409, "application/json", "{\"success\":false,\"error\":\"Tile overlaps\"}");
       return;
@@ -776,6 +805,17 @@ void WebAdminServer::handleSaveTiles() {
   bool success = screensaver_grid ? screensaverConfig.replaceTileGrid(*grid)
                  : classic_places ? tileConfig.saveFolderGridClassic(folder_id, *grid)
                                   : tileConfig.saveFolderGrid(folder_id, *grid);
+  // The classic storage follows the import: in it (with its spot when the
+  // export came from the same screen) or on the screen. The view ID is the
+  // saved one.
+  if (success && classic_places && tile.type != TILE_EMPTY) {
+    if (has_storage_spot) {
+      tile_layouts::set(grid_layout::Layout::kClassic, folder_id, tile.view_id, storage_spot);
+    } else {
+      tile_layouts::set_classic_hidden(folder_id, tile.view_id, tile.layout_hidden);
+    }
+    success = tile_layouts::commit();
+  }
   // The shown folder takes the saved tiles with the active layout's places.
   if (success && classic_places && tileConfig.getActiveFolderId() == folder_id) {
     tileConfig.setActiveFolder(folder_id);

@@ -126,9 +126,19 @@ String g_live_preview_wallpaper;
 // A new Home Assistant picture arrived for the open screensaver; its timer
 // shows it in the LVGL context.
 bool g_ha_picture_arrived = false;
-// The camera whose still is subscribed while the screensaver shows it
-// (sync_live_picture).
+// The camera whose still is subscribed while the screensaver shows it, with
+// its placement and interval (sync_live_picture).
 String g_live_picture_entity;
+uint8_t g_live_picture_fit = 0;
+uint8_t g_live_picture_every = 0;
+// A Home Assistant picture that could not be decoded (its PSRAM taken at
+// that moment, e.g. by the panel's own camera) is tried again every few
+// seconds for a minute (apply_ha_picture).
+constexpr uint32_t kHaPictureRetryMs = 3000;
+constexpr uint8_t kHaPictureRetries = 20;
+String g_ha_retry_name;
+uint8_t g_ha_retries_left = 0;
+uint32_t g_ha_retry_at_ms = 0;
 
 void apply_configured_screensaver_brightness() {
   powerManager.setDisplayBrightness(Device::backlightRawFromPercent(
@@ -899,6 +909,35 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   return dsc;
 }
 
+// A decoded picture already in the screen's size without zoom (always the
+// Bridge's, which fits it to the screen) becomes the cover where the decoder
+// wrote it: corners and byte order in place, no second 2 MB buffer and no
+// copy (V2: 85 of 131 ms). Only a buffer aligned for the composite (the HW
+// decoder's); nullptr otherwise, then make_cover_dsc copies.
+lv_image_dsc_t* finish_cover_in_place(uint16_t* pixels, uint16_t w, uint16_t h,
+                                      uint16_t target_w, uint16_t target_h,
+                                      uint16_t focus_x, uint16_t focus_y,
+                                      uint16_t zoom, uint16_t corner_radius) {
+  wallpaper_cover::Crop crop;
+  if (!pixels || reinterpret_cast<uintptr_t>(pixels) % kPpaBufferAlignment != 0 ||
+      !wallpaper_cover::crop_for(w, h, target_w, target_h, focus_x, focus_y, zoom, crop) ||
+      !wallpaper_cover::is_whole_source(crop, w, h, target_w, target_h)) {
+    return nullptr;
+  }
+  lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
+  if (!dsc) return nullptr;
+  wallpaper_cover::finish_in_place(pixels, w, h, corner_radius, true);
+  memset(dsc, 0, sizeof(*dsc));
+  dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+  dsc->header.cf = LV_COLOR_FORMAT_RGB565;
+  dsc->header.w = target_w;
+  dsc->header.h = target_h;
+  dsc->header.stride = target_w * 2;
+  dsc->data_size = static_cast<uint32_t>(target_w) * target_h * sizeof(uint16_t);
+  dsc->data = reinterpret_cast<const uint8_t*>(pixels);
+  return dsc;
+}
+
 // Decodes a JPEG in memory into the screen-sized cover. `owned` data (an SD
 // file) is freed right after decoding, before the cover is cut, keeping the
 // PSRAM peak as before; otherwise the caller keeps it.
@@ -966,8 +1005,15 @@ lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
   }
 
   const uint32_t cover_started_ms = millis();
-  lv_image_dsc_t* dsc = make_cover_dsc(pixels, w, h, target_w, target_h,
-                                       focus_x, focus_y, zoom, corner_radius);
+  lv_image_dsc_t* dsc = finish_cover_in_place(pixels, w, h, target_w, target_h,
+                                              focus_x, focus_y, zoom, corner_radius);
+  const char* cover_way = "in place";
+  if (dsc) {
+    pixels = nullptr;  // Now the picture's own buffer.
+  } else {
+    cover_way = "copy";
+    dsc = make_cover_dsc(pixels, w, h, target_w, target_h, focus_x, focus_y, zoom, corner_radius);
+  }
   const uint32_t cover_ms = millis() - cover_started_ms;
   free(pixels);
   GuitionS3Diagnostics::logSlideshowDecode(
@@ -975,13 +1021,13 @@ lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
       static_cast<uint32_t>(target_w) * sizeof(uint16_t),
       decoder, dsc != nullptr, read_ms, decode_ms, cover_ms);
   if (dsc) {
-    Serial.printf("[Screensaver] %s-Decode %ux%u -> %ux%u in %u ms (read %u, decode %u, cover %u)\n",
+    Serial.printf("[Screensaver] %s-Decode %ux%u -> %ux%u in %u ms (read %u, decode %u, cover %u %s)\n",
                   decoder,
                   static_cast<unsigned>(w), static_cast<unsigned>(h),
                   static_cast<unsigned>(target_w), static_cast<unsigned>(target_h),
                   static_cast<unsigned>(millis() - pipeline_started_ms),
                   static_cast<unsigned>(read_ms), static_cast<unsigned>(decode_ms),
-                  static_cast<unsigned>(cover_ms));
+                  static_cast<unsigned>(cover_ms), cover_way);
   }
   return dsc;
 #endif
@@ -1058,8 +1104,8 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
 
 // The screensaver's picture from Home Assistant (screensaver_uses_ha_picture):
 // the Bridge's newest picture of the entity, centered and unzoomed since the
-// Bridge already fit it to the screen. Its name carries the picture's key, so
-// a new picture decodes and the same one is reused. Without a picture in
+// Bridge already placed it on the screen. Its name carries the picture's key
+// and placement, so a new picture decodes and the same one is reused. Without a picture in
 // bridge_images (`picture` null) a decoded one of the same entity stays;
 // false without either.
 bool ha_picture_source(ScreensaverWallpaperConfig& out,
@@ -1069,7 +1115,7 @@ bool ha_picture_source(ScreensaverWallpaperConfig& out,
   const String prefix = String("ha:") + config.picture_entity + "#";
   picture = bridge_images::find(config.picture_entity.c_str());
   if (picture) {
-    out.file_name = prefix + picture->key;
+    out.file_name = prefix + picture->key + "/" + String(picture->fit);
     return true;
   }
   if (g_cache_dsc && g_cache_name.startsWith(prefix)) {
@@ -1362,7 +1408,26 @@ bool apply_ha_picture(ScreensaverState* st) {
   const bool cache_hit = cache_holds(source);
   lv_image_dsc_t* dsc = get_or_decode_cached(
       source, grid_layout::screen_w(), grid_layout::screen_h(), st->image, picture);
-  if (!dsc) return false;
+  if (!dsc) {
+    // Not decoded, mostly for want of PSRAM at this moment: again in a few
+    // seconds, a bounded number of times per picture.
+    if (picture) {
+      if (g_ha_retry_name != source.file_name) {
+        g_ha_retry_name = source.file_name;
+        g_ha_retries_left = kHaPictureRetries;
+      }
+      if (g_ha_retries_left) {
+        --g_ha_retries_left;
+        g_ha_retry_at_ms = millis() + kHaPictureRetryMs;
+        if (!g_ha_retry_at_ms) g_ha_retry_at_ms = 1;
+        Serial.printf("[Screensaver] Picture not decoded; retry in %u s (%u left)\n",
+                      static_cast<unsigned>(kHaPictureRetryMs / 1000U),
+                      static_cast<unsigned>(g_ha_retries_left));
+      }
+    }
+    return false;
+  }
+  g_ha_retry_at_ms = 0;
   st->active_wallpaper_name = source.file_name;
   present_picture(st, dsc, source.file_name, cache_hit);
   return true;
@@ -1764,6 +1829,10 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
     st->next_slot_refresh_ms = now + 1000U;
   }
   const auto& config = screensaverConfig.get();
+  if (g_ha_retry_at_ms && static_cast<int32_t>(now - g_ha_retry_at_ms) >= 0) {
+    g_ha_retry_at_ms = 0;
+    g_ha_picture_arrived = true;
+  }
   if (g_ha_picture_arrived) {
     // Like a slide change: after a touch the tiles settle first.
     const uint32_t since_activity =
@@ -1865,9 +1934,16 @@ void sync_live_picture() {
                     screensaver_uses_ha_picture(config) &&
                     config.picture_entity.startsWith("camera.");
   const char* entity = live ? config.picture_entity.c_str() : "";
-  if (g_live_picture_entity == entity) return;
+  const uint8_t fit = live ? config.picture_fit : 0;
+  const uint8_t every = live ? config.picture_every : 0;
+  if (g_live_picture_entity == entity && g_live_picture_fit == fit &&
+      g_live_picture_every == every) {
+    return;
+  }
   g_live_picture_entity = entity;
-  mqttSetLivePicture(entity);
+  g_live_picture_fit = fit;
+  g_live_picture_every = every;
+  mqttSetLivePicture(entity, fit, every);
 }
 
 }  // namespace
@@ -1985,6 +2061,7 @@ void hide_image_screensaver() {
   g_live_grid_refresh_requested = false;
   g_live_preview_wallpaper = String();
   g_ha_picture_arrived = false;
+  g_ha_retry_at_ms = 0;
   reset_sensor_widgets(GridType::SCREENSAVER);
   reset_switch_widgets(GridType::SCREENSAVER);
   reset_cover_widgets(GridType::SCREENSAVER);

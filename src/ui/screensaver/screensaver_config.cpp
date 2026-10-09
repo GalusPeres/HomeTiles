@@ -281,6 +281,11 @@ bool ScreensaverConfigStore::loadPath(const char* path) {
   loaded.picture_entity = String(doc["picture_entity"] | "");
   loaded.picture_entity.trim();
   if (!screensaver_picture_entity_valid(loaded.picture_entity)) loaded.picture_entity = "";
+  const char* fit = doc["picture_fit"] | "fill";
+  loaded.picture_fit = strcmp(fit, "fit") == 0 ? 1 : strcmp(fit, "original") == 0 ? 2 : 0;
+  loaded.picture_every = doc["picture_every"].is<int>()
+                             ? static_cast<uint8_t>(clamp_u16(doc["picture_every"].as<int>(), 3, 60))
+                             : 10;
 
   JsonArrayConst wallpapers = doc["wallpapers"].as<JsonArrayConst>();
   for (JsonObjectConst item : wallpapers) {
@@ -500,6 +505,8 @@ String ScreensaverConfigStore::toJson(bool include_device_meta) const {
   doc["duration_seconds"] = data_.duration_seconds;
   doc["picture_source"] = data_.picture_from_ha ? "ha" : "sd";
   doc["picture_entity"] = data_.picture_entity;
+  doc["picture_fit"] = data_.picture_fit == 1 ? "fit" : data_.picture_fit == 2 ? "original" : "fill";
+  doc["picture_every"] = data_.picture_every;
   if (include_device_meta) {
     doc["screen_width"] = grid_layout::screen_w();
     doc["screen_height"] = grid_layout::screen_h();

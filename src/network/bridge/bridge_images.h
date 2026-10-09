@@ -18,6 +18,7 @@ struct Picture {
   size_t length = 0;
   uint16_t width = 0;
   uint16_t height = 0;
+  uint8_t fit = kFill;  // The placement its topic asked for.
   uint32_t used = 0;
 };
 
@@ -26,9 +27,10 @@ uint16_t coverEdge();
 // The statestream route suffix of a cover picture, "image/<edge>x<edge>".
 const char* coverSuffix();
 
-// The statestream route suffix of a full-screen picture, "image/<w>x<h>"
-// of the screen as shown (the screensaver's picture).
-const char* screenSuffix();
+// The statestream route suffix of a full-screen picture: "image/<w>x<h>" of
+// the screen as shown (the screensaver's picture) with its placement and a
+// camera's interval in seconds (0: none).
+const char* screenSuffix(uint8_t fit, uint8_t every);
 
 // A message on a picture topic: stored (or dropped when malformed), and the
 // player's tiles or the screensaver told. False for any other topic.

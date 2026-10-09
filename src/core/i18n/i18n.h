@@ -713,6 +713,11 @@ struct Strings {
   const char* screensaver_source_ha;
   const char* screensaver_picture_entity;
   const char* screensaver_picture_hint;
+  const char* screensaver_picture_fit;
+  const char* screensaver_fit_fill;
+  const char* screensaver_fit_contain;
+  const char* screensaver_fit_original;
+  const char* screensaver_picture_every;
 };
 
 // Locale-specific display rules and short runtime strings shared by

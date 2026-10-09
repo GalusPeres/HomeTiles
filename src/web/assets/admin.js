@@ -3303,8 +3303,13 @@ function syncTileRadiusControls(tabEl) {
     const above = rect.top - 12;
     const up = below < 280 && above > below;
     const height = Math.min(440, Math.max(160, up ? above : below));
+    // Wider than its field: open from the field's right edge when the list
+    // would leave the settings card on the right (user 2026-10-09).
+    const card = field.closest('.tile-settings')?.getBoundingClientRect();
+    let left = rect.left;
+    if (card && left + width > card.right) left = Math.max(card.left, rect.right - width);
     pop.style.width = width + 'px';
-    pop.style.left = Math.max(8, Math.min(rect.left, viewportW - width - 8)) + 'px';
+    pop.style.left = Math.max(8, Math.min(left, viewportW - width - 8)) + 'px';
     pop.style.maxHeight = height + 'px';
     pop.style.top = (up ? Math.max(8, rect.top - 6 - Math.min(height, pop.offsetHeight || height))
       : rect.bottom + 6) + 'px';
@@ -12304,6 +12309,9 @@ function syncTileRadiusControls(tabEl) {
     // image or camera entity (the slideshow stays stored).
     data.picture_source = data.picture_source === 'ha' ? 'ha' : 'sd';
     data.picture_entity = typeof data.picture_entity === 'string' ? data.picture_entity : '';
+    // How the Bridge places it and a camera's interval (3..60 s).
+    data.picture_fit = ['fit', 'original'].includes(data.picture_fit) ? data.picture_fit : 'fill';
+    data.picture_every = Math.round(ssClamp(data.picture_every ?? 10, 3, 60));
     return data;
   }
 
@@ -12394,6 +12402,8 @@ function syncTileRadiusControls(tabEl) {
       duration_seconds: Math.round(ssClamp(d.duration_seconds, 3, 3600)),
       picture_source: d.picture_source === 'ha' ? 'ha' : 'sd',
       picture_entity: String(d.picture_entity || ''),
+      picture_fit: ['fit', 'original'].includes(d.picture_fit) ? d.picture_fit : 'fill',
+      picture_every: Math.round(ssClamp(d.picture_every ?? 10, 3, 60)),
       preview_wallpaper: previewName ?? (ssCurrentWallpaper()?.file_name || ''),
       wallpapers: d.wallpapers.map(w => ({
         file_name: w.file_name, enabled: !!w.enabled,
@@ -12563,6 +12573,14 @@ function syncTileRadiusControls(tabEl) {
     if (heading) heading.textContent = fromHa ? heading.dataset.ha : heading.dataset.sd;
     const pictureEntity = document.getElementById('screensaver_picture_entity');
     if (pictureEntity && pictureEntity.value !== d.picture_entity) pictureEntity.value = d.picture_entity;
+    const pictureFit = document.getElementById('screensaverPictureFit');
+    if (pictureFit && pictureFit.value !== d.picture_fit) pictureFit.value = d.picture_fit;
+    const pictureEvery = document.getElementById('screensaverPictureEvery');
+    if (pictureEvery && document.activeElement !== pictureEvery &&
+        Number(pictureEvery.value) !== d.picture_every) pictureEvery.value = String(d.picture_every);
+    // Only a camera sends stills on an interval.
+    document.getElementById('screensaverPictureEveryRow')?.classList.toggle('hidden',
+      !String(d.picture_entity || '').startsWith('camera.'));
     const wallpaper = fromHa ? null : ssCurrentWallpaper();
     if (d.use_wallpapers && wallpaper && wallpaper.file_name) {
       const wanted = '/api/screensaver/wallpaper?name=' + encodeURIComponent(wallpaper.file_name);
@@ -12775,6 +12793,12 @@ function syncTileRadiusControls(tabEl) {
       screensaverDraft.picture_source = el.value === 'ha' ? 'ha' : 'sd';
     });
     bind('screensaver_picture_entity', 'change', el => { screensaverDraft.picture_entity = el.value || ''; });
+    bind('screensaverPictureFit', 'change', el => {
+      screensaverDraft.picture_fit = ['fit', 'original'].includes(el.value) ? el.value : 'fill';
+    });
+    bind('screensaverPictureEvery', 'change', el => {
+      screensaverDraft.picture_every = Math.round(ssClamp(Number(el.value) || 10, 3, 60));
+    });
     bind('screensaverShuffle', 'change', el => { screensaverDraft.shuffle = el.checked; });
     bind('screensaverTileShadow', 'change', el => { screensaverDraft.tile_shadow = el.checked; });
     bind('screensaverTileBorder', 'change', el => { screensaverDraft.tile_border = el.checked; });

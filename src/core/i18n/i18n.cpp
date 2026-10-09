@@ -620,7 +620,12 @@ static const Strings kStringsDe = {
     "Diashow (SD-Karte)",
     "Bild aus Home Assistant",
     "Bild oder Kamera",
-    "Jedes neue Bild der Entität erscheint sofort, eine Kamera zeigt alle 10 Sekunden ein Standbild. Braucht die direkte Verbindung zur Bridge."};
+    "Jedes neue Bild der Entität erscheint sofort, eine Kamera schickt im eingestellten Abstand ein Standbild. Braucht die direkte Verbindung zur Bridge.",
+    "Anpassung",
+    "Füllen",
+    "Einpassen",
+    "Original",
+    "Aktualisieren (s)"};
 
 static const Strings kStringsEn = {
     "en",
@@ -1235,7 +1240,12 @@ static const Strings kStringsEn = {
     "Slideshow (SD card)",
     "Picture from Home Assistant",
     "Image or camera",
-    "Every new picture of the entity shows at once, a camera shows a still image every 10 seconds. Needs the direct connection to the Bridge."};
+    "Every new picture of the entity shows at once, a camera sends a still image at the set interval. Needs the direct connection to the Bridge.",
+    "Scaling",
+    "Fill",
+    "Fit",
+    "Original",
+    "Refresh (s)"};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1850,7 +1860,12 @@ static const Strings kStringsFr = {
     "Diaporama (carte SD)",
     "Image de Home Assistant",
     "Image ou caméra",
-    "Chaque nouvelle image de l’entité s’affiche aussitôt, une caméra montre une image fixe toutes les 10 secondes. Nécessite la connexion directe au Bridge."};
+    "Chaque nouvelle image de l’entité s’affiche aussitôt, une caméra envoie une image fixe à l’intervalle choisi. Nécessite la connexion directe au Bridge.",
+    "Ajustement",
+    "Remplir",
+    "Ajuster",
+    "Original",
+    "Actualiser (s)"};
 
 static const LocaleProfile kLocaleDe = {
     "de",
@@ -2816,7 +2831,12 @@ static const Strings kStringsPl = {
     "Pokaz slajdów (karta SD)",
     "Obraz z Home Assistant",
     "Obraz lub kamera",
-    "Każdy nowy obraz encji pojawia się od razu, kamera pokazuje zdjęcie co 10 sekund. Wymaga bezpośredniego połączenia z Bridge.",
+    "Każdy nowy obraz encji pojawia się od razu, kamera wysyła zdjęcie w ustawionym odstępie. Wymaga bezpośredniego połączenia z Bridge.",
+    "Dopasowanie",
+    "Wypełnij",
+    "Dopasuj",
+    "Oryginał",
+    "Odświeżanie (s)",
 };
 
 static const LocaleProfile kLocalePl = {

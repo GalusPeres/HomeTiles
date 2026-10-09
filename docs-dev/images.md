@@ -16,7 +16,15 @@ embedded in the media state and the screensaver on its SD slideshow.
 
 `<ha_prefix>/<domain>/<object_id>/image/<w>x<h>` with the domain
 `media_player`, `image` or `camera`, `w` and `h` 16 to 1,280 without leading
-zeros. A panel subscribes to the picture it shows in the size it shows it; the
+zeros. Two optional segments follow the size, in this order:
+
+- the placement: none = fill (cover w x h, cut what stands out), `/fit` (the
+  whole picture as large as it fits, black bars), `/original` (1:1 in the
+  middle when smaller than w x h, else like fit);
+- `/<n>s`: a camera's still every n seconds, 3 to 60 (none = every 10).
+
+Anything else after the size is not a picture topic. Each combination is its
+own picture with its own retained message. A panel subscribes to the picture it shows in the size it shows it; the
 Bridge renders a picture only while at least one linked panel subscribes to
 its topic and the Bridge serves that entity to the panel. Nobody else gets a
 render. Served are a player in the panel's media players, an image in its
@@ -34,7 +42,9 @@ shows it (`popup_layout::scale(240)`: 240 on 1280x800 panels, 200 on
 The screensaver, set to "Picture from Home Assistant" in the Web Admin
 (`picture_source` `"ha"`, `picture_entity` in its `config_v2.json`), subscribes
 to its image or camera entity in the screen's size as shown (`1280x800`,
-upright `800x1280`). An image entity stays subscribed while it is the source,
+upright `800x1280`), with the placement chosen in the Web Admin
+(`picture_fit`: `fill`, `fit`, `original`) and, for a camera, the interval
+(`picture_every`, 3..60 s, default 10). An image entity stays subscribed while it is the source,
 so a new picture is decoded ahead and the screensaver opens with it. A camera
 is subscribed only while the screensaver shows it on an awake display, and
 again after a reconnect; the panel declares the entity in its `images` list
@@ -83,7 +93,12 @@ without `token`) and its state, the time of its last picture. A camera has no
 address to name its still: the key is the first 16 hex digits of SHA-256 of
 the still's bytes, loaded every 10 s while a panel subscribes; an unchanged
 still is not sent again. The screensaver shows a new key once the tiles have
-settled after a touch, like a slide change.
+settled after a touch, like a slide change. Its cache names a picture by
+entity, key and placement. A picture it cannot decode (its PSRAM taken at
+that moment, e.g. by the panel's own camera) is tried again every 3 s, at
+most 20 times. A picture in the screen's size without zoom, always the
+Bridge's, is finished where the hardware decoder wrote it (corners and byte
+order in place) instead of a second 2 MB buffer and a copy.
 
 ## Rendering
 
@@ -91,7 +106,9 @@ The Bridge fetches the artwork through Home Assistant's HTTP client (at most
 1.5 MB), reads an image entity's picture from the entity itself like Home
 Assistant's image proxy (at most 12 MB; its address only as a fallback) and a
 camera's still through Home Assistant's camera component. Six sources up to
-8 MB in total are cached. It renders in an executor with Pillow:
+8 MB in total are cached. It renders in an executor with Pillow, a picture
+with at most 256 colours (a QR code, a map) enlarged with hard edges
+(nearest neighbour), any other one smoothly:
 EXIF orientation, transparency over black, `ImageOps.fit` to the size. A
 render runs per topic and artwork at most once; a state change with the same
 artwork renders nothing, and a newer artwork that arrives during a render

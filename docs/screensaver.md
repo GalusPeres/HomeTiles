@@ -69,7 +69,15 @@ Instead of the slideshow, the screensaver can show the picture of a Home Assista
 2. Release the entity in the Bridge options under **Images (screensaver)**. A camera released under **Cameras** works too.
 3. In the **Screensaver** tab, click the background, set **Type** to **Picture from Home Assistant**, keep **Use images** on, and choose the entity.
 
-A new picture of an image entity appears at once. A camera shows a new still image every 10 seconds, and only while the screensaver is visible. The Bridge fits the picture to the screen. Switch back to **Slideshow (SD card)** at any time; the slideshow settings stay stored.
+A new picture of an image entity appears at once. A camera sends a new still image at the interval set under **Refresh (s)**, 3 to 60 seconds, and only while the screensaver is visible. **Scaling** sets how the picture uses the screen:
+
+| Scaling | What it does |
+| --- | --- |
+| **Fill** | Covers the whole screen; what stands out is cut off |
+| **Fit** | The whole picture as large as possible, black bars where needed |
+| **Original** | A smaller picture at its own size in the middle; a larger one like **Fit** |
+
+QR codes and maps are enlarged with sharp edges. Upright displays get the picture in their upright size. Switch back to **Slideshow (SD card)** at any time; the slideshow settings stay stored.
 
 ## Position the Clock
 

@@ -56,10 +56,10 @@ const char* coverSuffix() {
   return suffix;
 }
 
-const char* screenSuffix() {
-  static char suffix[24] = "";
-  snprintf(suffix, sizeof(suffix), "image/%ux%u", static_cast<unsigned>(grid_layout::screen_w()),
-           static_cast<unsigned>(grid_layout::screen_h()));
+const char* screenSuffix(uint8_t fit, uint8_t every) {
+  static char suffix[40] = "";
+  pictureSuffix(suffix, sizeof(suffix), static_cast<uint16_t>(grid_layout::screen_w()),
+                static_cast<uint16_t>(grid_layout::screen_h()), fit, every);
   return suffix;
 }
 
@@ -67,7 +67,8 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
   const String& configured = mqttTopics.haPrefix();
   const char* prefix = configured.length() ? configured.c_str() : "ha/statestream";
   char entity[sizeof(Picture::entity_id)];
-  if (!entityFromTopic(topic, prefix, entity, sizeof(entity), nullptr, nullptr)) return false;
+  uint8_t fit = kFill;
+  if (!entityFromTopic(topic, prefix, entity, sizeof(entity), nullptr, nullptr, &fit)) return false;
 
   if (length == 0) {
     for (Picture& picture : g_pictures) {
@@ -98,6 +99,7 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
   slot->length = jpeg_length;
   slot->width = header.width;
   slot->height = header.height;
+  slot->fit = fit;
   slot->used = ++g_tick;
   Serial.printf("[Images] %s %s %ux%u, %u bytes\n", entity, header.key, header.width,
                 header.height, static_cast<unsigned>(jpeg_length));

@@ -1620,6 +1620,14 @@
     .screensaver-fixed-type { display:grid; grid-template-columns:1fr 1.35fr; gap:10px; align-items:center; margin-bottom:10px; }
     .screensaver-fixed-type label { margin:0; }
     .screensaver-fixed-type input, .screensaver-fixed-type select { margin:0; }
+    /* The list of a select in the right column opens from its right edge, so
+       a list wider than the field stays inside the card (user 2026-10-09). */
+    @supports (appearance: base-select) {
+      .screensaver-fixed-type select::picker(select) {
+        position-area:block-end span-inline-start;
+        position-try-fallbacks:block-start span-inline-start;
+      }
+    }
     .screensaver-wallpaper-heading { color:var(--text-2); font-weight:600; font-size:13px; letter-spacing:normal; text-transform:none; margin:18px 0 6px; }
     .screensaver-storage-hint { color:var(--text-2); font-size:12px; line-height:1.4; margin:-2px 0 10px; }
     .screensaver-wallpaper-list { display:flex; flex-direction:column; gap:7px; max-height:190px; overflow:auto; }

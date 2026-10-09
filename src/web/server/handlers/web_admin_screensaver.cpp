@@ -71,6 +71,7 @@ void WebAdminServer::handleSaveScreensaver() {
   const ScreensaverConfigData& before = screensaverConfig.get();
   const bool had_picture = before.use_wallpapers && screensaver_uses_ha_picture(before);
   const String old_entity = had_picture ? before.picture_entity : String();
+  const uint8_t old_fit = before.picture_fit;
   if (!screensaverConfig.replaceFromJson(payload, error, &preview_wallpaper)) {
     String json = "{\"success\":false,\"error\":\"";
     appendJsonEscaped(json, error);
@@ -78,11 +79,13 @@ void WebAdminServer::handleSaveScreensaver() {
     server.send(400, "application/json", json);
     return;
   }
-  // A new Home Assistant picture source changes the subscriptions and what
-  // the panel tells the Bridge it uses (docs-dev/images.md).
+  // A new Home Assistant picture source or placement changes the
+  // subscriptions and what the panel tells the Bridge it uses
+  // (docs-dev/images.md). A camera's interval follows when it is shown.
   const ScreensaverConfigData& after = screensaverConfig.get();
   const bool has_picture = after.use_wallpapers && screensaver_uses_ha_picture(after);
-  if (had_picture != has_picture || (has_picture && old_entity != after.picture_entity)) {
+  if (had_picture != has_picture ||
+      (has_picture && (old_entity != after.picture_entity || old_fit != after.picture_fit))) {
     mqttRequestDynamicSlotsReload(1000);
   }
   image_screensaver_config_changed(preview_wallpaper);

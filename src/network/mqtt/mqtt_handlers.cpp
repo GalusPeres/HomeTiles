@@ -1379,10 +1379,10 @@ static String buildHaStatestreamTopic(const String& entity_id, const char* suffi
 // The screensaver's live camera picture topic (mqttSetLivePicture).
 static String g_live_picture_topic;
 
-void mqttSetLivePicture(const char* entity_id) {
+void mqttSetLivePicture(const char* entity_id, uint8_t fit, uint8_t every) {
   String topic;
   if (entity_id && *entity_id) {
-    topic = buildHaStatestreamTopic(String(entity_id), bridge_images::screenSuffix());
+    topic = buildHaStatestreamTopic(String(entity_id), bridge_images::screenSuffix(fit, every));
   }
   if (topic == g_live_picture_topic) return;
   if (networkManager.isMqttConnected() && networkManager.linkConfigured()) {
@@ -1540,7 +1540,7 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   if (networkManager.linkConfigured() && screensaver.use_wallpapers &&
       screensaver_uses_ha_picture(screensaver) &&
       screensaver.picture_entity.startsWith("image.")) {
-    add_route(screensaver.picture_entity, -1, bridge_images::screenSuffix());
+    add_route(screensaver.picture_entity, -1, bridge_images::screenSuffix(screensaver.picture_fit, 0));
   }
 
   // Media states with embedded covers need about 19 KB, exceeding the

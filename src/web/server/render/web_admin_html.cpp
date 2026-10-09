@@ -1067,6 +1067,19 @@ static void appendTileTabHTML(
     // A Home Assistant image or camera; the Bridge sends its picture.
     appendEntityPickerField(html, "screensaver", "picture_entity", tr.screensaver_picture_entity, "images");
     html += R"html(</div>
+<div class="screensaver-fixed-type"><label for="screensaverPictureFit">)html";
+    appendHtmlEscaped(html, tr.screensaver_picture_fit);
+    html += R"html(</label><select id="screensaverPictureFit"><option value="fill">)html";
+    appendHtmlEscaped(html, tr.screensaver_fit_fill);
+    html += R"html(</option><option value="fit">)html";
+    appendHtmlEscaped(html, tr.screensaver_fit_contain);
+    html += R"html(</option><option value="original">)html";
+    appendHtmlEscaped(html, tr.screensaver_fit_original);
+    html += R"html(</option></select></div>
+<div id="screensaverPictureEveryRow" class="screensaver-fixed-type hidden"><label for="screensaverPictureEvery">)html";
+    // A camera's interval; image entities send each new picture at once.
+    appendHtmlEscaped(html, tr.screensaver_picture_every);
+    html += R"html(</label><input id="screensaverPictureEvery" type="number" min="3" max="60" step="1" value="10"></div>
 <p class="hint">)html";
     appendHtmlEscaped(html, tr.screensaver_picture_hint);
     html += R"html(</p>

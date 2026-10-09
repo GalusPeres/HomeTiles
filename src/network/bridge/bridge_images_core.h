@@ -3,12 +3,14 @@
 // Pictures from the Bridge over the direct link (docs-dev/images.md): the
 // platform-independent parts, run by tools/tests/network/test-bridge-images.mjs.
 // A picture message on "<ha_prefix>/<domain>/<object>/image/<w>x<h>" (domain
-// media_player, image or camera) is
+// media_player, image or camera, optionally followed by "/fit" or
+// "/original" and by "/<n>s", a camera's interval of 3..60 s) is
 //   "HTIMG1 <16 hex key> <w>x<h>\n" followed by a baseline JPEG of w x h;
 // an empty message clears the picture.
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 namespace bridge_images {
@@ -16,6 +18,13 @@ namespace bridge_images {
 constexpr size_t kKeyLength = 16;
 constexpr uint16_t kMinEdge = 16;
 constexpr uint16_t kMaxEdge = 1280;
+constexpr uint8_t kEveryDefault = 10;
+constexpr uint8_t kEveryMin = 3;
+constexpr uint8_t kEveryMax = 60;
+
+// How the Bridge places a picture on w x h: filled and cut, whole with black
+// bars, or 1:1 when smaller (else like Contain). Stored values.
+enum Fit : uint8_t { kFill = 0, kContain = 1, kOriginal = 2 };
 
 struct Header {
   char key[kKeyLength + 1] = "";
@@ -67,11 +76,38 @@ inline bool parseHeader(const uint8_t* data, size_t length, Header& out) {
          data[out.jpeg_offset + 1] == 0xD8;
 }
 
+// The options after a picture topic's size, exactly: "", "/fit",
+// "/original", each optionally followed by "/<n>s" (3..60). `every` is 0
+// without an interval.
+inline bool readOptions(const char* p, const char* end, uint8_t& fit, uint8_t& every) {
+  fit = kFill;
+  every = 0;
+  if (p < end && end - p >= 4 && strncmp(p, "/fit", 4) == 0 && (p + 4 == end || p[4] == '/')) {
+    fit = kContain;
+    p += 4;
+  } else if (p < end && end - p >= 9 && strncmp(p, "/original", 9) == 0 &&
+             (p + 9 == end || p[9] == '/')) {
+    fit = kOriginal;
+    p += 9;
+  }
+  if (p == end) return true;
+  if (*p++ != '/' || p >= end || *p < '1' || *p > '9') return false;
+  uint32_t seconds = 0;
+  while (p < end && *p >= '0' && *p <= '9') {
+    seconds = seconds * 10 + static_cast<uint32_t>(*p - '0');
+    if (seconds > kEveryMax) return false;
+    ++p;
+  }
+  if (p + 1 != end || *p != 's' || seconds < kEveryMin) return false;
+  every = static_cast<uint8_t>(seconds);
+  return true;
+}
+
 // The entity of a picture topic below `prefix`: a media player's cover, an
 // image entity or a camera still ("<domain>.<object>"), and the picture's
-// size; false for any other topic.
+// size and placement; false for any other topic.
 inline bool entityFromTopic(const char* topic, const char* prefix, char* entity, size_t entity_size,
-                            uint16_t* width, uint16_t* height) {
+                            uint16_t* width, uint16_t* height, uint8_t* fit = nullptr) {
   static const char* const kDomains[] = {"media_player", "image", "camera"};
   static const char kImage[] = "/image/";
   if (!topic || !prefix || !entity || entity_size == 0) return false;
@@ -97,8 +133,12 @@ inline bool entityFromTopic(const char* topic, const char* prefix, char* entity,
     if (!((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '_')) return false;
   }
   const char* size = image + sizeof(kImage) - 1;
+  const char* topic_end = size + strlen(size);
+  const char* size_end = static_cast<const char*>(memchr(size, '/', static_cast<size_t>(topic_end - size)));
+  if (!size_end) size_end = topic_end;
   uint16_t w = 0, h = 0;
-  if (!readSize(size, size + strlen(size), w, h)) return false;
+  uint8_t placement = kFill, every = 0;
+  if (!readSize(size, size_end, w, h) || !readOptions(size_end, topic_end, placement, every)) return false;
   const size_t object_length = static_cast<size_t>(image - object);
   if (domain_length + 1 + object_length + 1 > entity_size) return false;
   memcpy(entity, domain, domain_length);
@@ -107,7 +147,21 @@ inline bool entityFromTopic(const char* topic, const char* prefix, char* entity,
   entity[domain_length + 1 + object_length] = '\0';
   if (width) *width = w;
   if (height) *height = h;
+  if (fit) *fit = placement;
   return true;
+}
+
+// The route suffix of a picture: "image/<w>x<h>" with its placement and a
+// camera's interval (`every` 0 or the default: none). False when `out` is
+// too small.
+inline bool pictureSuffix(char* out, size_t out_size, uint16_t width, uint16_t height, uint8_t fit,
+                          uint8_t every) {
+  const char* placement = fit == kContain ? "/fit" : fit == kOriginal ? "/original" : "";
+  char interval[8] = "";
+  if (every && every != kEveryDefault) snprintf(interval, sizeof(interval), "/%us", static_cast<unsigned>(every));
+  const int n = snprintf(out, out_size, "image/%ux%u%s%s", static_cast<unsigned>(width),
+                         static_cast<unsigned>(height), placement, interval);
+  return n > 0 && static_cast<size_t>(n) < out_size;
 }
 
 }  // namespace bridge_images

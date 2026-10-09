@@ -53,6 +53,27 @@ int main() {
                         entity, sizeof(entity), &w, &hh));
   CHECK(strcmp(entity, "camera.haustuer_2") == 0 && w == 800 && hh == 1280);
   CHECK(!entityFromTopic("ha/statestream/imagex/garten/image/240x240", "ha/statestream", entity, sizeof(entity), &w, &hh));
+  // Options after the size: the placement and a camera's interval (3..60 s).
+  uint8_t fit = 9;
+  CHECK(entityFromTopic("ha/statestream/image/garten/image/1280x800", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit) && fit == kFill);
+  CHECK(entityFromTopic("ha/statestream/image/garten/image/1280x800/fit", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit) && fit == kContain && w == 1280);
+  CHECK(entityFromTopic("ha/statestream/camera/tuer/image/800x1280/original/5s", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit) && fit == kOriginal && hh == 1280);
+  CHECK(strcmp(entity, "camera.tuer") == 0);
+  CHECK(entityFromTopic("ha/statestream/camera/tuer/image/800x480/3s", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit) && fit == kFill);
+  CHECK(entityFromTopic("ha/statestream/camera/tuer/image/800x480/60s", "ha/statestream", entity, sizeof(entity), &w, &hh, &fit));
+  const char* bad[] = {"/2s", "/61s", "/05s", "/fill", "/5s/fit", "/fit/", "/fitx", "/originals", "/5", "/5s/", "/fit/fit"};
+  for (const char* option : bad) {
+    char topic[96];
+    std::snprintf(topic, sizeof(topic), "ha/statestream/camera/tuer/image/800x480%s", option);
+    if (entityFromTopic(topic, "ha/statestream", entity, sizeof(entity), &w, &hh, &fit)) { std::printf("FAIL %s\n", option); return 1; }
+  }
+  char suffix[40];
+  CHECK(pictureSuffix(suffix, sizeof(suffix), 1280, 800, kFill, 0) && strcmp(suffix, "image/1280x800") == 0);
+  CHECK(pictureSuffix(suffix, sizeof(suffix), 1280, 800, kFill, 10) && strcmp(suffix, "image/1280x800") == 0);
+  CHECK(pictureSuffix(suffix, sizeof(suffix), 800, 1280, kContain, 0) && strcmp(suffix, "image/800x1280/fit") == 0);
+  CHECK(pictureSuffix(suffix, sizeof(suffix), 480, 480, kOriginal, 5) && strcmp(suffix, "image/480x480/original/5s") == 0);
+  CHECK(pictureSuffix(suffix, sizeof(suffix), 480, 480, kFill, 3) && strcmp(suffix, "image/480x480/3s") == 0);
+  CHECK(!pictureSuffix(suffix, 12, 1280, 800, kOriginal, 5));
   CHECK(!entityFromTopic("ha/statestream/image/garten/image/2000x800", "ha/statestream", entity, sizeof(entity), &w, &hh));
   CHECK(!entityFromTopic("ha/statestreamimage/garten/image/240x240", "ha/statestream", entity, sizeof(entity), &w, &hh));
   CHECK(!entityFromTopic("ha/statestream/media_player/tv/state", "ha/statestream", entity, sizeof(entity), &w, &hh));
@@ -83,13 +104,14 @@ const images = readRepoFile('src/network/bridge/bridge_images.cpp');
 assert.match(images, /return static_cast<uint16_t>\(popup_layout::scale\(240\)\);/);
 assert.match(readRepoFile('src/ui/popups/media/media_popup.cpp'), /constexpr int kCoverSize = popup_layout::scale\(240\);/,
   'the cover picture has the size the Media popup shows');
-assert.match(images, /if \(!entityFromTopic\(topic, prefix, entity, sizeof\(entity\), nullptr, nullptr\)\) return false;/);
+assert.match(images, /if \(!entityFromTopic\(topic, prefix, entity, sizeof\(entity\), nullptr, nullptr, &fit\)\) return false;/);
 assert.match(images, /if \(!parseHeader\(payload, length, header\)\) \{[\s\S]*?return true;\s*\}/, 'a malformed picture is dropped');
 assert.match(images, /if \(strncmp\(entity, "media_player\.", 13\) == 0\) \{\s*tile_renderer_media_picture_arrived\(entity\);\s*\} else \{\s*image_screensaver_picture_arrived\(entity\);\s*\}/,
   'a cover goes to the tiles, an image or camera picture to the screensaver');
 assert.equal((images.match(/announce\(entity\);/g) || []).length, 2, 'a new and a cleared picture are told');
-assert.match(images, /snprintf\(suffix, sizeof\(suffix\), "image\/%ux%u", static_cast<unsigned>\(grid_layout::screen_w\(\)\),\s*static_cast<unsigned>\(grid_layout::screen_h\(\)\)\);/,
-  'the screensaver picture has the screen\'s size as shown, upright or not');
+assert.match(images, /pictureSuffix\(suffix, sizeof\(suffix\), static_cast<uint16_t>\(grid_layout::screen_w\(\)\),\s*static_cast<uint16_t>\(grid_layout::screen_h\(\)\), fit, every\);/,
+  'the screensaver picture has the screen\'s size as shown, upright or not, with its placement');
+assert.match(images, /slot->fit = fit;/, 'a picture remembers the placement it was rendered with');
 
 const renderer = readRepoFile('src/tiles/runtime/tile_renderer.cpp');
 assert.match(renderer, /if \(should_update_cover && bridge_pictures_enabled\(\) &&\s*media_artwork::read_string\(payload_start, "image_key", image_key\)\) \{\s*update_media_cover_from_picture\(grid_type, grid_index, widgets, image_key\);\s*\} else if \(should_update_cover\) \{/,

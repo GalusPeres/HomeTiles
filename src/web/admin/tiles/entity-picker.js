@@ -527,8 +527,13 @@
     const above = rect.top - 12;
     const up = below < 280 && above > below;
     const height = Math.min(440, Math.max(160, up ? above : below));
+    // Wider than its field: open from the field's right edge when the list
+    // would leave the settings card on the right (user 2026-10-09).
+    const card = field.closest('.tile-settings')?.getBoundingClientRect();
+    let left = rect.left;
+    if (card && left + width > card.right) left = Math.max(card.left, rect.right - width);
     pop.style.width = width + 'px';
-    pop.style.left = Math.max(8, Math.min(rect.left, viewportW - width - 8)) + 'px';
+    pop.style.left = Math.max(8, Math.min(left, viewportW - width - 8)) + 'px';
     pop.style.maxHeight = height + 'px';
     pop.style.top = (up ? Math.max(8, rect.top - 6 - Math.min(height, pop.offsetHeight || height))
       : rect.bottom + 6) + 'px';

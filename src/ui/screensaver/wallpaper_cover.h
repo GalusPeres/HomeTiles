@@ -113,6 +113,34 @@ inline void swap_row(uint16_t* row, uint32_t count) {
   }
 }
 
+// A source already in the target's size, without zoom (crop_for gives all
+// of it): finish_in_place makes cover_pixels' result where the decoder wrote
+// it, without a second buffer and without the copy.
+inline bool is_whole_source(const Crop& crop, uint16_t src_w, uint16_t src_h,
+                            uint16_t image_w, uint16_t image_h) {
+  return src_w == image_w && src_h == image_h && crop.x0 == 0 && crop.y0 == 0 &&
+         crop.w == src_w && crop.h == src_h;
+}
+
+// cover_pixels for a whole source in place: the rounded corners and, with
+// to_native, every row in native byte order.
+inline void finish_in_place(uint16_t* pixels, uint16_t w, uint16_t h, uint16_t radius,
+                            bool to_native = false) {
+  const bool rounded = radius != 0 && w >= radius * 2 && h >= radius * 2;
+  for (uint32_t y = 0; y < h; ++y) {
+    uint16_t* row = pixels + static_cast<size_t>(y) * w;
+    if (rounded && (y < radius || y >= static_cast<uint32_t>(h - radius))) {
+      for (uint32_t x = 0; x < radius; ++x) {
+        row[x] = blend_swapped_rgb565_with_black(row[x], rounded_pixel_coverage(x, y, w, h, radius));
+      }
+      for (uint32_t x = w - radius; x < w; ++x) {
+        row[x] = blend_swapped_rgb565_with_black(row[x], rounded_pixel_coverage(x, y, w, h, radius));
+      }
+    }
+    if (to_native) swap_row(row, w);
+  }
+}
+
 inline void cover_pixels(const uint16_t* src, uint16_t src_w, const Crop& crop,
                          uint16_t* dst, uint32_t dst_stride,
                          uint16_t image_w, uint16_t image_h, uint16_t radius,

@@ -48,6 +48,10 @@ struct ScreensaverConfigData {
   // slideshow stays stored for switching back).
   bool picture_from_ha = false;
   String picture_entity;
+  // How the Bridge places it on the screen (bridge_images::Fit) and how
+  // often a camera sends a new still image (3..60 s).
+  uint8_t picture_fit = 0;
+  uint8_t picture_every = 10;
 };
 
 // An entity whose picture the Bridge sends: image.* or camera.*.

@@ -42,6 +42,33 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
       x, y, w, h, source_stride, data, data_size, byte_swap);
 }
 
+bool displayTryScaledFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
+                                  int32_t source_stride,
+                                  const uint16_t* data, size_t data_size,
+                                  bool byte_swap, uint8_t scale16) {
+#if defined(DEVICE_GUITION_JC8012P4A1_V2)
+  return DeviceImpl::displayTryScaledFramePreview(
+      x, y, w, h, source_stride, data, data_size, byte_swap, scale16);
+#else
+  (void)x; (void)y; (void)w; (void)h; (void)source_stride; (void)data;
+  (void)data_size; (void)byte_swap; (void)scale16;
+  return false;
+#endif
+}
+
+uint32_t displayBenchPreviewScale(int32_t w, int32_t h, int32_t source_stride,
+                                  const uint16_t* data, size_t data_size,
+                                  bool byte_swap, uint8_t scale16, bool turned) {
+#if defined(DEVICE_GUITION_JC8012P4A1_V2)
+  return DeviceImpl::displayBenchPreviewScale(
+      w, h, source_stride, data, data_size, byte_swap, scale16, turned);
+#else
+  (void)w; (void)h; (void)source_stride; (void)data; (void)data_size;
+  (void)byte_swap; (void)scale16; (void)turned;
+  return 0;
+#endif
+}
+
 void displayEndFullFramePreview() {
 #if defined(DEVICE_P4_IDF_DSI)
   DeviceImpl::displayEndFullFramePreview();

@@ -834,6 +834,26 @@ bool DeviceGuitionJC8012P4A1V2::displayTryFullFramePreview(
   return presented;
 }
 
+bool DeviceGuitionJC8012P4A1V2::displayTryScaledFramePreview(
+    int32_t x, int32_t y, int32_t w, int32_t h,
+    int32_t source_stride, const uint16_t* data, size_t data_size,
+    bool byte_swap, uint8_t scale16) {
+  const auto runtime = g_ui_ppa.runtime(note_ppa_fault);
+  const bool presented = g_camera_presenter.present(
+      x, y, w, h, source_stride, data, data_size, byte_swap, g_rotation,
+      runtime, scale16);
+  if (presented) g_ui_ppa.noteSuccess();
+  return presented;
+}
+
+uint32_t DeviceGuitionJC8012P4A1V2::displayBenchPreviewScale(
+    int32_t w, int32_t h, int32_t source_stride, const uint16_t* data,
+    size_t data_size, bool byte_swap, uint8_t scale16, bool turned) {
+  const auto runtime = g_ui_ppa.runtime(note_ppa_fault);
+  return g_camera_presenter.benchScale(w, h, source_stride, data, data_size,
+                                       byte_swap, scale16, turned, runtime);
+}
+
 void DeviceGuitionJC8012P4A1V2::displayEndFullFramePreview() {
   g_camera_presenter.end();
 }

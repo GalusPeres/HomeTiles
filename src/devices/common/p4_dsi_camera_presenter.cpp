@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include <cstring>
 #include <esp_cache.h>
+#include <esp_heap_caps.h>
 #include <freertos/task.h>
 
 #include "src/core/hardware/board_hal.h"
@@ -336,8 +337,8 @@ void Presenter::finishPendingSwap() {
 bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
                         int32_t source_stride, const uint16_t* data,
                         size_t data_size, bool byte_swap, uint8_t rotation,
-                        const PpaRuntime& runtime) {
-  if (!ready_ || !data || source_stride < w || h <= 0 ||
+                        const PpaRuntime& runtime, uint8_t scale16) {
+  if (!ready_ || !data || source_stride < w || h <= 0 || scale16 < 16 ||
       (reinterpret_cast<uintptr_t>(data) & (kCacheLineSize - 1U)) != 0 ||
       !runtime.handle || !runtime.done || !runtime.async_ready ||
       runtime.reset_pending || runtime.cooldown_active ||
@@ -349,6 +350,9 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
       (static_cast<size_t>(h - 1) * source_stride + w) * sizeof(uint16_t);
   if (data_size < required_bytes) return false;
 
+  // The block on the screen, truncated like the PPA driver's output block.
+  const int32_t out_w = w * scale16 / 16;
+  const int32_t out_h = h * scale16 / 16;
   const int32_t logical_w =
       config_.transform == Transform::Portrait90Or270
           ? config_.panel_height
@@ -357,28 +361,28 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
       config_.transform == Transform::Portrait90Or270
           ? config_.panel_width
           : config_.panel_height;
-  if (!rectInside(x, y, w, h, logical_w, logical_h)) return false;
+  if (!rectInside(x, y, out_w, out_h, logical_w, logical_h)) return false;
 
   int32_t dst_x = x;
   int32_t dst_y = y;
-  int32_t dst_w = w;
-  int32_t dst_h = h;
+  int32_t dst_w = out_w;
+  int32_t dst_h = out_h;
   ppa_srm_rotation_angle_t rotation_angle = PPA_SRM_ROTATION_ANGLE_0;
   if (config_.transform == Transform::Portrait90Or270) {
-    dst_w = h;
-    dst_h = w;
+    dst_w = out_h;
+    dst_h = out_w;
     if (rotation & 0x02U) {
       dst_x = y;
-      dst_y = logical_w - x - w;
+      dst_y = logical_w - x - out_w;
       rotation_angle = PPA_SRM_ROTATION_ANGLE_90;
     } else {
-      dst_x = logical_h - y - h;
+      dst_x = logical_h - y - out_h;
       dst_y = x;
       rotation_angle = PPA_SRM_ROTATION_ANGLE_270;
     }
   } else if (rotation & 0x02U) {
-    dst_x = logical_w - x - w;
-    dst_y = logical_h - y - h;
+    dst_x = logical_w - x - out_w;
+    dst_y = logical_h - y - out_h;
     rotation_angle = PPA_SRM_ROTATION_ANGLE_180;
   }
   if (!rectInside(dst_x, dst_y, dst_w, dst_h, config_.panel_width,
@@ -430,8 +434,8 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   oper.out.block_offset_y = dst_y;
   oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
   oper.rotation_angle = rotation_angle;
-  oper.scale_x = 1.0f;
-  oper.scale_y = 1.0f;
+  oper.scale_x = static_cast<float>(scale16) / 16.0f;
+  oper.scale_y = static_cast<float>(scale16) / 16.0f;
   oper.rgb_swap = false;
   oper.byte_swap = byte_swap;
   oper.mode = PPA_TRANS_MODE_NON_BLOCKING;
@@ -496,7 +500,83 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   return true;
 }
 
+uint32_t Presenter::benchScale(int32_t w, int32_t h, int32_t source_stride,
+                               const uint16_t* data, size_t data_size,
+                               bool byte_swap, uint8_t scale16, bool turned,
+                               const PpaRuntime& runtime) {
+  if (!ready_ || !data || source_stride < w || h <= 0 || scale16 < 16 ||
+      (reinterpret_cast<uintptr_t>(data) & (kCacheLineSize - 1U)) != 0 ||
+      !runtime.handle || !runtime.done || !runtime.async_ready ||
+      runtime.reset_pending || runtime.cooldown_active ||
+      faultCooldownActive()) {
+    return 0;
+  }
+  const size_t required_bytes =
+      (static_cast<size_t>(h - 1) * source_stride + w) * sizeof(uint16_t);
+  if (data_size < required_bytes) return 0;
+  const int32_t out_w = w * scale16 / 16;
+  const int32_t out_h = h * scale16 / 16;
+  const size_t bytes =
+      (static_cast<size_t>(out_w) * out_h * sizeof(uint16_t) + kCacheLineSize - 1U) &
+      ~(kCacheLineSize - 1U);
+  if (!bench_buffer_ || bench_bytes_ < bytes) {
+    if (bench_buffer_) heap_caps_free(bench_buffer_);
+    bench_buffer_ = static_cast<uint16_t*>(
+        heap_caps_aligned_calloc(kCacheLineSize, 1, bytes, MALLOC_CAP_SPIRAM));
+    bench_bytes_ = bench_buffer_ ? bytes : 0;
+    if (!bench_buffer_) return 0;
+    // No dirty CPU line of the zeroed buffer may be evicted over the result.
+    if (!syncCache(bench_buffer_, bench_bytes_, false)) return 0;
+  }
+
+  Dma2dArbiterGuard dma2d_guard(kDma2dLockTimeoutMs);
+  if (!dma2d_guard.locked() || !syncCache(data, required_bytes, false)) return 0;
+
+  ppa_srm_oper_config_t oper = {};
+  oper.in.buffer = data;
+  oper.in.pic_w = source_stride;
+  oper.in.pic_h = h;
+  oper.in.block_w = w;
+  oper.in.block_h = h;
+  oper.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  oper.out.buffer = bench_buffer_;
+  oper.out.buffer_size = bench_bytes_;
+  oper.out.pic_w = turned ? out_h : out_w;
+  oper.out.pic_h = turned ? out_w : out_h;
+  oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  oper.rotation_angle = turned ? PPA_SRM_ROTATION_ANGLE_270 : PPA_SRM_ROTATION_ANGLE_0;
+  oper.scale_x = static_cast<float>(scale16) / 16.0f;
+  oper.scale_y = static_cast<float>(scale16) / 16.0f;
+  oper.byte_swap = byte_swap;
+  oper.mode = PPA_TRANS_MODE_NON_BLOCKING;
+  oper.user_data = runtime.done;
+
+  while (xSemaphoreTake(runtime.done, 0) == pdTRUE) {
+  }
+  const uint32_t started_us = micros();
+  if (ppa_do_scale_rotate_mirror(runtime.handle, &oper) != ESP_OK) return 0;
+  bool completed =
+      xSemaphoreTake(runtime.done, pdMS_TO_TICKS(config_.ppa_timeout_ms)) ==
+      pdTRUE;
+  if (!completed && config_.ppa_grace_ms > 0) {
+    completed =
+        xSemaphoreTake(runtime.done, pdMS_TO_TICKS(config_.ppa_grace_ms)) ==
+        pdTRUE;
+  }
+  if (!completed) {
+    dma2d_guard.detach();
+    restartAfterTimeout(0, 0, w, h, source_stride, turned ? 3 : 0);
+  }
+  const uint32_t elapsed_us = micros() - started_us;
+  return elapsed_us ? elapsed_us : 1;
+}
+
 void Presenter::end() {
+  if (bench_buffer_) {
+    heap_caps_free(bench_buffer_);
+    bench_buffer_ = nullptr;
+    bench_bytes_ = 0;
+  }
   if (!double_buffer_active_) return;
   finishPendingSwap();
   double_buffer_active_ = false;

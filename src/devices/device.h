@@ -79,6 +79,16 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
                                 int32_t source_stride,
                                 const uint16_t* data, size_t data_size,
                                 bool byte_swap);
+// Camera full-screen test (#65, Guition V2 only; false/0 elsewhere): the
+// frame enlarged by scale16 / 16 at x/y, and one timed enlargement into a
+// scratch buffer (microseconds), straight or with the panel's quarter turn.
+bool displayTryScaledFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
+                                  int32_t source_stride,
+                                  const uint16_t* data, size_t data_size,
+                                  bool byte_swap, uint8_t scale16);
+uint32_t displayBenchPreviewScale(int32_t w, int32_t h, int32_t source_stride,
+                                  const uint16_t* data, size_t data_size,
+                                  bool byte_swap, uint8_t scale16, bool turned);
 // Ends device-specific preview buffering. This is a no-op on devices whose
 // preview path does not keep persistent display state.
 void displayEndFullFramePreview();

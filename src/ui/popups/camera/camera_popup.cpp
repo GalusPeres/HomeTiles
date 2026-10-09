@@ -47,6 +47,9 @@ struct CameraPopupContext {
   lv_obj_t* image = nullptr;
   lv_obj_t* placeholder = nullptr;
   lv_obj_t* status = nullptr;
+  // Camera full-screen test (#65): black cover over the whole screen; the
+  // stream is drawn over it, a tap anywhere returns to the popup.
+  lv_obj_t* fullscreen = nullptr;
   size_t previous_draw_buffer_requested_lines = 0;
   bool previous_draw_buffer_fast = false;
   bool large_draw_buffer_active = false;
@@ -128,8 +131,20 @@ static bool restore_previous_draw_buffer(CameraPopupContext* ctx) {
   return true;
 }
 
+static void set_fullscreen_test(bool on) {
+  if (!g_camera_popup || !g_camera_popup->fullscreen) return;
+  camera_stream_set_fullscreen_test(on);
+  if (on) {
+    lv_obj_clear_flag(g_camera_popup->fullscreen, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(g_camera_popup->fullscreen);
+  } else {
+    lv_obj_add_flag(g_camera_popup->fullscreen, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
 static void close_camera_popup() {
   if (!g_camera_popup || !g_camera_popup->visible) return;
+  set_fullscreen_test(false);
   const String entity_id = g_camera_popup->entity_id;
   g_camera_popup->visible = false;
 
@@ -170,6 +185,18 @@ static void overlay_event_cb(lv_event_t* event) {
   (void)event;
 }
 
+static void video_event_cb(lv_event_t* event) {
+  if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
+  if (g_camera_popup && g_camera_popup->visible && camera_stream_is_active()) {
+    set_fullscreen_test(true);
+  }
+}
+
+static void fullscreen_event_cb(lv_event_t* event) {
+  if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
+  set_fullscreen_test(false);
+}
+
 static CameraPopupContext* create_popup() {
   CameraPopupContext* ctx = new CameraPopupContext();
 
@@ -196,7 +223,26 @@ static CameraPopupContext* create_popup() {
   lv_obj_set_style_shadow_width(video, 0, 0);
   lv_obj_set_style_pad_all(video, 0, 0);
   lv_obj_remove_flag(video, LV_OBJ_FLAG_SCROLLABLE);
+#if defined(DEVICE_GUITION_JC8012P4A1_V2)
+  // Camera full-screen test (#65): a tap on the video enlarges it.
+  lv_obj_add_flag(video, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(video, video_event_cb, LV_EVENT_CLICKED, ctx);
+  ctx->fullscreen = lv_obj_create(lv_layer_top());
+  lv_obj_set_size(ctx->fullscreen, LV_PCT(100), LV_PCT(100));
+  lv_obj_set_pos(ctx->fullscreen, 0, 0);
+  lv_obj_set_style_bg_color(ctx->fullscreen, lv_color_black(), 0);
+  lv_obj_set_style_bg_opa(ctx->fullscreen, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(ctx->fullscreen, 0, 0);
+  lv_obj_set_style_radius(ctx->fullscreen, 0, 0);
+  lv_obj_set_style_shadow_width(ctx->fullscreen, 0, 0);
+  lv_obj_set_style_pad_all(ctx->fullscreen, 0, 0);
+  lv_obj_remove_flag(ctx->fullscreen, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(ctx->fullscreen, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(ctx->fullscreen, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_event_cb(ctx->fullscreen, fullscreen_event_cb, LV_EVENT_CLICKED, ctx);
+#else
   lv_obj_clear_flag(video, LV_OBJ_FLAG_CLICKABLE);
+#endif
 
   ctx->image = lv_image_create(video);
   // The bridge delivers the native frame size requested by this device.

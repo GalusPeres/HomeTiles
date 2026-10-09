@@ -395,14 +395,21 @@ uint8_t* read_wallpaper_file(const String& file_name, size_t& out_len) {
 // (jpeg_padded_output.h); a 1280x854 wallpaper took 727 ms in TJpgDec when
 // only multiples of 16 used the hardware (V2 b300). An output that does not
 // match the expected MCU layout falls back to TJpgDec.
+// A picture of exactly native_w x native_h (the screen, without zoom) comes
+// out in native byte order instead (BGR order = little-endian RGB565), so the
+// screensaver need not turn every pixel (finish_native_in_place); `native`
+// says which order the buffer has.
 // Returns a malloc buffer of out_w*out_h pixels; the caller must free it.
 uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
-                         uint16_t& out_w, uint16_t& out_h) {
+                         uint16_t& out_w, uint16_t& out_h, bool& native,
+                         uint16_t native_w = 0, uint16_t native_h = 0) {
+  native = false;
   if (len > UINT32_MAX) return nullptr;
 
   jpeg_decode_picture_info_t info{};
   esp_err_t err = jpeg_decoder_get_info(data, static_cast<uint32_t>(len), &info);
   if (err != ESP_OK || info.width == 0 || info.height == 0) return nullptr;
+  const bool want_native = native_w && info.width == native_w && info.height == native_h;
 
   // MCU size of the luma component: 4:2:0 = 16x16, 4:2:2 = 16x8, 4:4:4 and
   // gray = 8x8.
@@ -444,7 +451,8 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
   static jpeg_decoder_handle_t s_engine = nullptr;
   jpeg_decode_cfg_t decode_cfg{};
   decode_cfg.output_format = JPEG_DECODE_OUT_FORMAT_RGB565;
-  decode_cfg.rgb_order = JPEG_DEC_RGB_ELEMENT_ORDER_RGB;
+  decode_cfg.rgb_order =
+      want_native ? JPEG_DEC_RGB_ELEMENT_ORDER_BGR : JPEG_DEC_RGB_ELEMENT_ORDER_RGB;
   decode_cfg.conv_std = JPEG_YUV_RGB_CONV_STD_BT601;
   uint32_t decoded_bytes = 0;
   {
@@ -502,6 +510,7 @@ uint16_t* hw_decode_jpeg(const uint8_t* data, size_t len,
 
   out_w = static_cast<uint16_t>(info.width);
   out_h = static_cast<uint16_t>(info.height);
+  native = want_native;
   return decoded;
 }
 #endif
@@ -917,7 +926,8 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
 lv_image_dsc_t* finish_cover_in_place(uint16_t* pixels, uint16_t w, uint16_t h,
                                       uint16_t target_w, uint16_t target_h,
                                       uint16_t focus_x, uint16_t focus_y,
-                                      uint16_t zoom, uint16_t corner_radius) {
+                                      uint16_t zoom, uint16_t corner_radius,
+                                      bool native) {
   wallpaper_cover::Crop crop;
   if (!pixels || reinterpret_cast<uintptr_t>(pixels) % kPpaBufferAlignment != 0 ||
       !wallpaper_cover::crop_for(w, h, target_w, target_h, focus_x, focus_y, zoom, crop) ||
@@ -926,7 +936,11 @@ lv_image_dsc_t* finish_cover_in_place(uint16_t* pixels, uint16_t w, uint16_t h,
   }
   lv_image_dsc_t* dsc = static_cast<lv_image_dsc_t*>(malloc(sizeof(lv_image_dsc_t)));
   if (!dsc) return nullptr;
-  wallpaper_cover::finish_in_place(pixels, w, h, corner_radius, true);
+  if (native) {
+    wallpaper_cover::finish_native_in_place(pixels, w, h, corner_radius);
+  } else {
+    wallpaper_cover::finish_in_place(pixels, w, h, corner_radius, true);
+  }
   memset(dsc, 0, sizeof(*dsc));
   dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
   dsc->header.cf = LV_COLOR_FORMAT_RGB565;
@@ -985,13 +999,17 @@ lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
 #else
   uint16_t* pixels = nullptr;
   bool hw = false;
+  bool native = false;
   const char* decoder = "SW";
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && SOC_JPEG_DECODE_SUPPORTED
-  pixels = hw_decode_jpeg(data, len, w, h);
+  // A picture of the screen's size without zoom comes out in native order.
+  pixels = hw_decode_jpeg(data, len, w, h, native, zoom <= 1000 ? target_w : 0,
+                          zoom <= 1000 ? target_h : 0);
   hw = pixels != nullptr;
   if (hw) decoder = "HW";
 #endif
   if (!pixels) {
+    native = false;
     pixels = sw_decode_jpeg(data, len, w, h);
   }
   const uint32_t decode_ms = millis() - decode_started_ms;
@@ -1006,12 +1024,14 @@ lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
 
   const uint32_t cover_started_ms = millis();
   lv_image_dsc_t* dsc = finish_cover_in_place(pixels, w, h, target_w, target_h,
-                                              focus_x, focus_y, zoom, corner_radius);
-  const char* cover_way = "in place";
+                                              focus_x, focus_y, zoom, corner_radius, native);
+  const char* cover_way = native ? "native" : "in place";
   if (dsc) {
     pixels = nullptr;  // Now the picture's own buffer.
   } else {
     cover_way = "copy";
+    // The copy expects the decoders' usual byte-swapped order.
+    if (native) wallpaper_cover::swap_row(pixels, static_cast<uint32_t>(w) * h);
     dsc = make_cover_dsc(pixels, w, h, target_w, target_h, focus_x, focus_y, zoom, corner_radius);
   }
   const uint32_t cover_ms = millis() - cover_started_ms;

@@ -1,7 +1,9 @@
 // A picture already in the screen's size without zoom (always the Bridge's
 // Home Assistant picture) becomes the screensaver's cover where the decoder
 // wrote it: corners and byte order in place instead of a second 2 MB buffer
-// and a copy (V2: 85 of 131 ms). Pixel for pixel the copy's result.
+// and a copy (V2 b312: cover 84 -> 56 ms). The hardware decoder then writes
+// it in native byte order already, so only the corners change (the 56 ms of
+// turning every pixel go). Pixel for pixel the copy's result.
 import assert from 'node:assert/strict';
 
 import {readRepoFile} from '../../lib/admin-source.mjs';
@@ -39,6 +41,16 @@ int main() {
           std::printf("differs %ux%u r%u native%d\\n", w, h, radius, native);
           return 1;
         }
+        if (native) {
+          // The decoder's native output: only the corners, same pixels.
+          std::vector<uint16_t> decoded(src.size());
+          for (size_t i = 0; i < src.size(); ++i) decoded[i] = static_cast<uint16_t>((src[i] >> 8) | (src[i] << 8));
+          finish_native_in_place(decoded.data(), w, h, radius);
+          if (copy != decoded) {
+            std::printf("native differs %ux%u r%u\\n", w, h, radius);
+            return 1;
+          }
+        }
         ++checked;
       }
     }
@@ -63,11 +75,19 @@ const fn = name => cppFunctionDefinitions(source).find(f => f.name === name)?.so
 const finish = fn('finish_cover_in_place');
 assert.match(finish, /reinterpret_cast<uintptr_t>\(pixels\) % kPpaBufferAlignment != 0/);
 assert.match(finish, /wallpaper_cover::is_whole_source\(crop, w, h, target_w, target_h\)/);
-assert.match(finish, /wallpaper_cover::finish_in_place\(pixels, w, h, corner_radius, true\);/);
+assert.match(finish, /if \(native\) \{\s*wallpaper_cover::finish_native_in_place\(pixels, w, h, corner_radius\);\s*\} else \{\s*wallpaper_cover::finish_in_place\(pixels, w, h, corner_radius, true\);\s*\}/);
 assert.match(finish, /dsc->data = reinterpret_cast<const uint8_t\*>\(pixels\);/);
 const decode = fn('decode_jpeg_to_size');
-assert.match(decode, /lv_image_dsc_t\* dsc = finish_cover_in_place\(pixels, w, h, target_w, target_h,\s*focus_x, focus_y, zoom, corner_radius\);[\s\S]*?if \(dsc\) \{\s*pixels = nullptr;[\s\S]*?\} else \{[\s\S]*?dsc = make_cover_dsc\(/,
-  'in place first, the copy only otherwise; the buffer then belongs to the picture');
+assert.match(decode, /lv_image_dsc_t\* dsc = finish_cover_in_place\(pixels, w, h, target_w, target_h,\s*focus_x, focus_y, zoom, corner_radius, native\);[\s\S]*?if \(dsc\) \{\s*pixels = nullptr;[\s\S]*?\} else \{[\s\S]*?if \(native\) wallpaper_cover::swap_row\(pixels, static_cast<uint32_t>\(w\) \* h\);\s*dsc = make_cover_dsc\(/,
+  'in place first, the copy only otherwise (back in the swapped order); the buffer then belongs to the picture');
+assert.match(decode, /pixels = hw_decode_jpeg\(data, len, w, h, native, zoom <= 1000 \? target_w : 0,\s*zoom <= 1000 \? target_h : 0\);/,
+  'only a picture of the screen\'s size without zoom is asked for in native order');
+assert.match(decode, /if \(!pixels\) \{\s*native = false;\s*pixels = sw_decode_jpeg\(/, 'the software decoder keeps its order');
+const hw = fn('hw_decode_jpeg');
+assert.match(hw, /const bool want_native = native_w && info\.width == native_w && info\.height == native_h;/);
+assert.match(hw, /decode_cfg\.rgb_order =\s*want_native \? JPEG_DEC_RGB_ELEMENT_ORDER_BGR : JPEG_DEC_RGB_ELEMENT_ORDER_RGB;/,
+  'BGR order is the decoder\'s little-endian RGB565 (jpeg_types.h)');
+assert.match(hw, /native = want_native;\s*return decoded;/);
 assert.match(decode, /cover %u %s\)\\n"/, 'the log names the way');
 
 console.log('Screensaver cover in place: same pixels as the copy, no second buffer');

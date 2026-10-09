@@ -84,6 +84,20 @@ assert.match(body(popup, 'static void start_camera_stream('), /if \(camera_strea
   'a new stream waits for the previous task (stop is asynchronous)');
 assert.match(body(popup, 'static void close_camera_popup('), /leave_full_screen\(false\);/);
 
-assert.match(mqtt, /\\"view\\":\\"full\\",\\"rotate\\":%u,\\"fit\\":\\"contain\\"/);
+// Full screen asks for two 8 KB chunks in flight (b315: one chunk held the
+// stream at 9.4 Mbit/s, 50 KB frames at ~20 FPS); the popup keeps one.
+assert.match(mqtt, /\\"view\\":\\"full\\",\\"rotate\\":%u,\\"fit\\":\\"contain\\",\\"window\\":2,/);
+assert.doesNotMatch(body(mqtt, 'void mqttPublishCameraCommand('), /window/);
+
+// Back from the full screen: only the screen outside the popup is drawn
+// again; the popup keeps its last frame and status until its stream shows
+// (b315 showed Buffering and stalled 350 ms on a whole-screen redraw).
+assert.doesNotMatch(leave, /lv_obj_invalidate\(lv_screen_active\(\)\)/);
+assert.match(leave, /lv_obj_invalidate_area\(lv_screen_active\(\), &area\)/);
+assert.match(leave, /ctx->resuming = reopen && ctx->visible;/);
+assert.doesNotMatch(enter, /lv_obj_clear_flag\(ctx->placeholder/);
+assert.match(popup, /g_camera_popup->resuming \? nullptr : g_camera_popup->status/);
+assert.match(body(popup, 'void camera_popup_set_status('),
+  /if \(!error && g_camera_popup && g_camera_popup->resuming\) \{\s*camera_stream_set_external_status\(text, error\);\s*return;/);
 
 console.log('Camera full screen: decoder straight into the framebuffer, UI kept and restored');

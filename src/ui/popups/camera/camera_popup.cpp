@@ -77,6 +77,9 @@ struct CameraPopupContext {
   // A stream URL waits until the previous stream's task has ended.
   String pending_url;
   bool pending_full = false;
+  // Back from the full screen: the kept popup shows its last frame and
+  // status until its own stream shows a frame again (no Buffering flash).
+  bool resuming = false;
 };
 
 CameraPopupContext* g_camera_popup = nullptr;
@@ -168,10 +171,25 @@ static void leave_full_screen(bool reopen) {
   if (ctx->full_touch) lv_obj_add_flag(ctx->full_touch, LV_OBJ_FLAG_HIDDEN);
   lv_display_t* display = lv_display_get_default();
   if (display) lv_display_enable_invalidation(display, true);
-  lv_obj_invalidate(lv_screen_active());
-  lv_obj_invalidate(lv_layer_top());
+  // What changed meanwhile outside the popup is drawn again. The popup stays
+  // as kept, its last frame and status, until its stream shows again (b315:
+  // the whole screen drawn again took 350 ms and showed Buffering).
+  lv_area_t card{};
+  lv_obj_get_coords(ctx->card, &card);
+  const int32_t width = display ? lv_display_get_horizontal_resolution(display) : 0;
+  const int32_t height = display ? lv_display_get_vertical_resolution(display) : 0;
+  const lv_area_t outside[] = {
+      {0, 0, card.x1 - 1, height - 1},
+      {card.x2 + 1, 0, width - 1, height - 1},
+      {card.x1, 0, card.x2, card.y1 - 1},
+      {card.x1, card.y2 + 1, card.x2, height - 1},
+  };
+  for (const lv_area_t& area : outside) {
+    if (area.x2 >= area.x1 && area.y2 >= area.y1) lv_obj_invalidate_area(lv_screen_active(), &area);
+  }
   Serial.println("[Camera] Full screen ended");
-  if (reopen && ctx->visible) open_popup_stream(ctx);
+  ctx->resuming = reopen && ctx->visible;
+  if (ctx->resuming) open_popup_stream(ctx);
 }
 
 // The screen black at once with the popup kept, then the Bridge asked for
@@ -190,8 +208,6 @@ static void enter_full_screen() {
   // The popup's frames go with its stream.
   lv_image_set_src(ctx->image, nullptr);
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_clear_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
-  lv_label_set_text(ctx->placeholder, camera_text().camera_preparing);
   ctx->pending_url = String();
   camera_stream_stop();
   if (!Device::displayBeginFullFrames()) {
@@ -222,6 +238,7 @@ static void close_camera_popup() {
   if (!g_camera_popup || !g_camera_popup->visible) return;
   leave_full_screen(false);
   g_camera_popup->pending_url = String();
+  g_camera_popup->resuming = false;
   const String entity_id = g_camera_popup->entity_id;
   g_camera_popup->visible = false;
 
@@ -419,6 +436,7 @@ void show_camera_popup(const CameraPopupInit& init) {
   // A different camera may be opened before the deferred restore runs. Reuse
   // the existing large buffer and retain the original small-buffer size.
   g_camera_popup->draw_buffer_restore_pending = false;
+  g_camera_popup->resuming = false;
   g_camera_popup->entity_id = init.entity_id;
   g_camera_popup->visible = true;
   g_camera_popup->surface_color =
@@ -531,7 +549,10 @@ void process_camera_popup() {
   }
   camera_stream_process_ui(g_camera_popup->image,
                            g_camera_popup->placeholder,
-                           g_camera_popup->status);
+                           g_camera_popup->resuming ? nullptr : g_camera_popup->status);
+  if (g_camera_popup->resuming && !lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN)) {
+    g_camera_popup->resuming = false;
+  }
 }
 
 void camera_popup_handle_mqtt_status(const char* payload) {
@@ -646,6 +667,11 @@ void camera_popup_set_status(const char* text, bool error) {
   if (error && g_camera_popup) {
     g_camera_popup->waiting_for_bridge = false;
     g_camera_popup->bridge_response_deadline_ms = 0;
+    g_camera_popup->resuming = false;
+  }
+  if (!error && g_camera_popup && g_camera_popup->resuming) {
+    camera_stream_set_external_status(text, error);
+    return;
   }
   set_status_label(text, error);
   camera_stream_set_external_status(text, error);

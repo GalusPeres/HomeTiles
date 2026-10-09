@@ -619,8 +619,7 @@ void ensure_full_refresh_signal() {
   } else if (sem) {
     vSemaphoreDelete(sem);
   }
-  Serial.printf("[Device/M5StacksTab5] Full screen refresh signal: %s
-",
+  Serial.printf("[Device/M5StacksTab5] Full screen refresh signal: %s\n",
                 err == ESP_OK ? "ready" : "unavailable, frames may tear");
 }
 

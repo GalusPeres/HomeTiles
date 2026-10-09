@@ -26,6 +26,10 @@ assert.match(stream, /const bool full = CAMERA_STREAM_HW_JPEG && g_full_mode;/, 
 assert.match(stream, /lv_image_cache_drop\(&g_images\[ready\]\);\s*lv_image_header_cache_drop\(&g_images\[ready\]\);\s*lv_image_set_src\(image, &g_images\[ready\]\);\s*lv_obj_invalidate\(image\);/,
   'a reused buffer with new pixels or a new size is drawn again');
 assert.match(stream, /g_frame_w = full_screen \? camera_geometry::kSoftFullWidth : kWidth;/);
+// b327 left the S3's full screen black: the hardware full-screen flag skipped
+// LVGL's presentation; and the other view's last frame showed while switching.
+assert.match(stream, /g_full_shown = CAMERA_STREAM_HW_JPEG && full_screen;/);
+assert.match(stream, /#if !CAMERA_STREAM_HW_JPEG\n[^#]*take_frame = take_frame && !g_stop_requested;\n#endif\n  if \(take_frame\) \{/);
 
 // The S3's sizes and rate: the whole screen in full screen, a few frames.
 assert.match(geometry, /#if defined\(DEVICE_ESP32_S3_RGB_480\)[\s\S]*?kFps = 8;[\s\S]*?kSoftFullWidth = 480;\s*inline constexpr uint16_t kSoftFullHeight = 480;/);

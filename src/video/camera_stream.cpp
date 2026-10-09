@@ -1704,7 +1704,9 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb, bool full_screen)
   g_full_decode_total_us = 0;
   g_full_wait_total_us = 0;
   g_full_log_ms = millis();
-  g_full_shown = full_screen;
+  // Software decoding shows its full screen through LVGL like the popup
+  // (b327 skipped those frames: the S3's full screen stayed black).
+  g_full_shown = CAMERA_STREAM_HW_JPEG && full_screen;
   g_transport_failed = false;
   g_first_shown_ms = 0;
   const BaseType_t task_core = (ARDUINO_RUNNING_CORE == 0) ? 1 : 0;
@@ -1748,7 +1750,7 @@ void camera_stream_stop() {
 
 #if !CAMERA_STREAM_HW_JPEG
 // Software decoding shows the full screen through LVGL (g_full_shown stays
-// false).
+// false, see camera_stream_start).
 static void process_full_frame() {}
 #else
 // Full screen: the newest waiting JPEG decoded by the hardware decoder
@@ -1859,7 +1861,14 @@ void camera_stream_process_ui(lv_obj_t* image,
   // If the display PPA has entered its short self-healing cooldown, keep the
   // last frame. Repainting the full video area during recovery would make
   // every other LVGL interaction sluggish and fight the recovery.
-  if (!Device::ppaCooldownActive()) {
+  bool take_frame = !Device::ppaCooldownActive();
+#if !CAMERA_STREAM_HW_JPEG
+  // Nothing from a stream being stopped: between popup and full screen the
+  // other view's last frame showed (b327), from a buffer the ending task
+  // frees while LVGL still points at it.
+  take_frame = take_frame && !g_stop_requested;
+#endif
+  if (take_frame) {
     portENTER_CRITICAL(&g_state_mux);
     for (uint8_t i = 0; i < kFrameBufferCount; ++i) {
       if (g_frame_states[i] == FrameState::Ready) {

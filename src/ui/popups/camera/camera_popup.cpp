@@ -196,6 +196,11 @@ static void enter_soft_full_screen() {
   lv_obj_clear_flag(ctx->soft_full, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(ctx->soft_full);
   ctx->full = true;
+  // The Bridge's answer is checked against these (and a transport fallback
+  // asks again with them).
+  ctx->full_width = camera_geometry::kSoftFullWidth;
+  ctx->full_height = camera_geometry::kSoftFullHeight;
+  ctx->full_turn = 0;
   ctx->waiting_for_bridge = true;
   ctx->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
   note_switch(ctx, "full screen black on screen");

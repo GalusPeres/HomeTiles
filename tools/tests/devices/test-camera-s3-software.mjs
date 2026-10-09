@@ -37,6 +37,8 @@ assert.match(popup, /constexpr bool kLargeDrawBuffer = false;/);
 const softEnter = popup.slice(popup.indexOf('static void enter_soft_full_screen('), popup.indexOf('static void leave_soft_full_screen('));
 assert.ok(softEnter.indexOf('lv_image_set_src(ctx->image, nullptr);') < softEnter.indexOf('camera_stream_stop();'),
   'LVGL lets go of the popup frame before the stream frees it');
+assert.match(softEnter, /ctx->full_width = camera_geometry::kSoftFullWidth;\s*ctx->full_height = camera_geometry::kSoftFullHeight;/,
+  'the 480 x 480 answer of the Bridge is checked against the full screen (b325 refused it)');
 assert.match(softEnter, /mqttPublishCameraFullScreenOpen\(ctx->entity_id\.c_str\(\), camera_geometry::kFps,\s*camera_geometry::kSoftFullWidth,\s*camera_geometry::kSoftFullHeight, 0\);/);
 const softLeave = popup.slice(popup.indexOf('static void leave_soft_full_screen('), popup.indexOf('static void leave_full_screen('));
 assert.ok(softLeave.indexOf('lv_image_set_src(ctx->soft_full_image, nullptr);') < softLeave.indexOf('camera_stream_stop();'));

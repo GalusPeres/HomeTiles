@@ -71,15 +71,19 @@
   }
 
   function normalizeSnapshotLayout(snapshot, index, tab = currentTileTab) {
-    const fallbackCol = (index >= 0) ? ((index % GRID_COLS) + 1) : 1;
+    // The shown grid, like normalizeTileLayout (an upright layout's lower
+    // rows must survive the draft and the save).
+    const cols = placeCols(tab);
+    const rows = placeRows(tab);
+    const fallbackCol = (index >= 0) ? ((index % cols) + 1) : 1;
     const firstRow = firstAllowedGridRow(tab);
     const fallbackRow = (index >= 0)
-      ? (Math.max(firstRow, Math.floor(index / GRID_COLS)) + 1)
+      ? (Math.max(firstRow, Math.floor(index / cols)) + 1)
       : (firstRow + 1);
-    let col = clampHalf(snapshot?.col, 1, GRID_COLS, fallbackCol);
-    let row = clampHalf(snapshot?.row, firstRow + 1, GRID_ROWS + 0.5, fallbackRow);
-    let spanW = clampHalf(snapshot?.span_w, 0.5, GRID_COLS, 1);
-    let spanH = clampHalf(snapshot?.span_h, 0.5, GRID_ROWS, 1);
+    let col = clampHalf(snapshot?.col, 1, cols, fallbackCol);
+    let row = clampHalf(snapshot?.row, firstRow + 1, rows + 0.5, fallbackRow);
+    let spanW = clampHalf(snapshot?.span_w, 0.5, cols, 1);
+    let spanH = clampHalf(snapshot?.span_h, 0.5, rows, 1);
     return constrainLayoutToTab(
       normalizeLayoutForTileType(snapshot?.type, col - 1, row - 1,
                                  spanW, spanH),

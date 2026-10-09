@@ -3,6 +3,9 @@ import {runDomHarness} from '../../lib/headless-dom.mjs';
 
 const productionFunctions = [
   extractDeliveredFunction('clampHalf'),
+  extractDeliveredFunction('headBarLayout'),
+  extractDeliveredFunction('placeCols'),
+  extractDeliveredFunction('placeRows'),
   extractDeliveredFunction('restoreCurrentTileSelectionUi'),
   extractDeliveredFunction('enableTileDrag'),
   extractDeliveredFunction('enableSettingsHiddenSlot')

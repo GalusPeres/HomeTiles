@@ -39,6 +39,7 @@ const windowNames = ['layoutClone', 'layoutEmptyTile', 'layoutUsed', 'layoutNavT
   'layoutInside', 'layoutFolderId', 'classicHidden', 'layoutBase', 'layoutSettle', 'takeoverTiles', 'setupTiles',
   'isCompactSensorType', 'isEditableValueType', 'supportsHalfSize', 'supportedTileLayout', 'saveLayoutWindow', 'refreshLayoutSave', 'layoutTabs',
   'layoutSignature', 'layoutSavedSig', 'layoutDirty', 'layoutSelectedTile', 'deselectLayoutTile', 'normalizeLayoutForTileType', 'clampHalf',
+  'headBarLayout', 'placeCols', 'placeRows',
   'deleteLayoutTile', 'classicParked', 'layoutParked', 'layoutRed', 'loadLayoutWindow', 'mayLeaveLayout',
   'layoutClockFrom', 'layoutClock', 'layoutClockDirty'];
 function windowContext(pages, data, extra = {}) {
@@ -52,7 +53,7 @@ function windowContext(pages, data, extra = {}) {
       portrait: {name: 'Kopfleiste hochkant', cols: 3, rows: 6, bar: true, portrait: true, available: true, switchable: false},
     },
     ACTIVE_LAYOUT: 'classic', MEDIA_TILE_TYPE: 15, MEDIA_TILE_MIN_SPAN: 2, MEDIA_TILE_MAX_SPAN: 4, GRID_COLS: 7, GRID_ROWS: 6,
-    tileTabs: Object.keys(pages), tilesData: {},
+    tileTabs: Object.keys(pages), tilesData: {}, currentTileTab: 'folder0',
     layoutWindow: {pages, data, key: 'bar', missingFolders: 0, busy: false, shown: false, work: {}, saved: {}},
     refreshLayoutStatus: () => {}, refreshLayoutButtons: () => {}, mountLayoutTab: async () => {}, useLayoutGrid: () => {},
     showLayoutTiles: (tab, tiles) => { ctx.tilesData[tab] = tiles; },

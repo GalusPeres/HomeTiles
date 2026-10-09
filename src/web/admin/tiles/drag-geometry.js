@@ -174,8 +174,8 @@
     const rawCell = getRawGridCellFromPointer(tab, clientX, clientY);
     if (!rawCell) return null;
     if (!dragSource || dragSource.tab !== tab) return rawCell;
-    const anchorCol = clampHalf(dragSource.grabCellCol, 0, GRID_COLS - 1, 0);
-    const anchorRow = clampHalf(dragSource.grabCellRow, 0, GRID_ROWS - 1, 0);
+    const anchorCol = clampHalf(dragSource.grabCellCol, 0, placeCols(tab) - 1, 0);
+    const anchorRow = clampHalf(dragSource.grabCellRow, 0, placeRows(tab) - 1, 0);
     return {
       col: rawCell.col - anchorCol,
       row: rawCell.row - anchorRow

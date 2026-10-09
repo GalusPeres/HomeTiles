@@ -125,18 +125,24 @@
     if (Number(type) === 9) fitCompactClockPreview(el);
   }
 
+  // Every bound is the shown grid (placeCols/placeRows, the server's
+  // tilePlaceCols/tilePlaceRows): an upright layout has more rows than the
+  // stored grid (1280 x 800: 4 x 6.5 against 7 x 5), and the stored grid
+  // pushed its lower tiles up and halved them (8-inch export, 2026-10-09).
   function normalizeLayoutForTileType(typeValue, col, row, spanW, spanH) {
-    let safeCol = clampHalf(col, 0, GRID_COLS - 0.5, 0);
-    let safeRow = clampHalf(row, 0, GRID_ROWS - 0.5, 0);
-    let safeW = clampHalf(spanW, 0.5, GRID_COLS, 1);
-    let safeH = clampHalf(spanH, 0.5, GRID_ROWS, 1);
+    const cols = placeCols();
+    const rows = placeRows();
+    let safeCol = clampHalf(col, 0, cols - 0.5, 0);
+    let safeRow = clampHalf(row, 0, rows - 0.5, 0);
+    let safeW = clampHalf(spanW, 0.5, cols, 1);
+    let safeH = clampHalf(spanH, 0.5, rows, 1);
     if (Number(typeValue) === MEDIA_TILE_TYPE) {
-      const minW = Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS);
-      const minH = Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS);
-      safeW = clampHalf(safeW, minW, Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS), minW);
-      safeH = clampHalf(safeH, minH, Math.min(MEDIA_TILE_MAX_SPAN, GRID_ROWS), minH);
-      safeCol = Math.min(safeCol, GRID_COLS - safeW);
-      safeRow = Math.min(safeRow, GRID_ROWS - safeH);
+      const minW = Math.min(MEDIA_TILE_MIN_SPAN, cols);
+      const minH = Math.min(MEDIA_TILE_MIN_SPAN, rows);
+      safeW = clampHalf(safeW, minW, Math.min(MEDIA_TILE_MAX_SPAN, cols), minW);
+      safeH = clampHalf(safeH, minH, Math.min(MEDIA_TILE_MAX_SPAN, rows), minH);
+      safeCol = Math.min(safeCol, cols - safeW);
+      safeRow = Math.min(safeRow, rows - safeH);
     } else {
       // Keep at least a whole cell wide (and a whole row high unless the type
       // allows half a row), so clamping at the grid edge never yields 0.5.
@@ -144,10 +150,10 @@
       const minH = (type === 0 || supportsHalfSize(type)) ? 0.5 : 1;
       safeW = Math.max(1, safeW);
       safeH = Math.max(minH, safeH);
-      safeCol = Math.min(safeCol, GRID_COLS - 1);
-      safeRow = Math.min(safeRow, GRID_ROWS - minH);
-      safeW = Math.min(safeW, GRID_COLS - safeCol);
-      safeH = Math.min(safeH, GRID_ROWS - safeRow);
+      safeCol = Math.min(safeCol, cols - 1);
+      safeRow = Math.min(safeRow, rows - minH);
+      safeW = Math.min(safeW, cols - safeCol);
+      safeH = Math.min(safeH, rows - safeRow);
     }
     return { col: safeCol, row: safeRow, span_w: safeW, span_h: safeH };
   }
@@ -155,20 +161,22 @@
   function constrainLayoutToTab(layout, tab) {
     const firstRow = firstAllowedGridRow(tab);
     if (layout.row < firstRow) layout.row = firstRow;
-    if (layout.span_h > GRID_ROWS - layout.row) {
-      layout.span_h = GRID_ROWS - layout.row;
+    if (layout.span_h > placeRows(tab) - layout.row) {
+      layout.span_h = placeRows(tab) - layout.row;
     }
     return layout;
   }
 
   function normalizeTileLayout(tile, index, tab = currentTileTab) {
-    const fallbackCol = index % GRID_COLS;
+    const cols = placeCols(tab);
+    const rows = placeRows(tab);
+    const fallbackCol = index % cols;
     const firstRow = firstAllowedGridRow(tab);
-    const fallbackRow = Math.max(firstRow, Math.floor(index / GRID_COLS));
-    const col = clampHalf(tile?.col, 0, GRID_COLS - 0.5, fallbackCol);
-    const row = clampHalf(tile?.row, firstRow, GRID_ROWS - 0.5, fallbackRow);
-    let spanW = clampHalf(tile?.span_w, 0.5, GRID_COLS, 1);
-    let spanH = clampHalf(tile?.span_h, 0.5, GRID_ROWS, 1);
+    const fallbackRow = Math.max(firstRow, Math.floor(index / cols));
+    const col = clampHalf(tile?.col, 0, cols - 0.5, fallbackCol);
+    const row = clampHalf(tile?.row, firstRow, rows - 0.5, fallbackRow);
+    let spanW = clampHalf(tile?.span_w, 0.5, cols, 1);
+    let spanH = clampHalf(tile?.span_h, 0.5, rows, 1);
     return constrainLayoutToTab(
       normalizeLayoutForTileType(tile?.type, col, row, spanW, spanH), tab);
   }
@@ -195,17 +203,24 @@
   function getTileElementLayout(tab, index) {
     const el = document.getElementById(tab + '-tile-' + index);
     if (!el) return null;
-    const col = clampHalf(el.dataset.col, 0, GRID_COLS - 0.5, null);
-    const row = clampHalf(el.dataset.row, firstAllowedGridRow(tab), GRID_ROWS - 0.5, null);
-    const spanW = clampHalf(el.dataset.spanW, 0.5, GRID_COLS, null);
-    const spanH = clampHalf(el.dataset.spanH, 0.5, GRID_ROWS, null);
+    const col = clampHalf(el.dataset.col, 0, placeCols(tab) - 0.5, null);
+    const row = clampHalf(el.dataset.row, firstAllowedGridRow(tab), placeRows(tab) - 0.5, null);
+    const spanW = clampHalf(el.dataset.spanW, 0.5, placeCols(tab), null);
+    const spanH = clampHalf(el.dataset.spanH, 0.5, placeRows(tab), null);
     if (col === null || row === null || spanW === null || spanH === null) return null;
     return { col, row, span_w: spanW, span_h: spanH };
   }
 
+  // Half-cell occupancy over the stored and the shown grid, whichever is larger.
+  function emptyOccupancy(tab) {
+    const rows = Math.ceil(Math.max(GRID_ROWS, placeRows(tab)) * 2);
+    const cols = Math.ceil(Math.max(GRID_COLS, placeCols(tab)) * 2);
+    return Array.from({ length: rows }, () => Array(cols).fill(false));
+  }
+
   function layoutTiles(tab, tiles) {
     if (!Array.isArray(tiles)) return;
-    const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
+    const occupied = emptyOccupancy(tab);
     const emptyIndices = [];
 
     tiles.forEach((tile, idx) => {
@@ -267,7 +282,7 @@
   function markOccupied(occupied, layout) {
     for (let r = layout.row * 2; r < (layout.row + layout.span_h) * 2; r++) {
       for (let c = layout.col * 2; c < (layout.col + layout.span_w) * 2; c++) {
-        if (r >= 0 && c >= 0 && r < GRID_ROWS * 2 && c < GRID_COLS * 2) occupied[r][c] = true;
+        if (r >= 0 && c >= 0 && r < occupied.length && c < occupied[r].length) occupied[r][c] = true;
       }
     }
   }
@@ -292,7 +307,7 @@
 
   // Smallest size a type accepts (Media needs 2x2, half-size types 1x0.5).
   function minimumTileSize(type) {
-    if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS), Math.min(MEDIA_TILE_MIN_SPAN, GRID_ROWS)];
+    if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, placeCols()), Math.min(MEDIA_TILE_MIN_SPAN, placeRows())];
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 
@@ -364,7 +379,7 @@
   // Occupancy as currently shown, including unsaved local edits and a selected
   // new tile, but without the free slot itself.
   function occupiedFromGrid(tab, grid, freeEl) {
-    const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
+    const occupied = emptyOccupancy(tab);
     // A selected new tile still of type Empty does not block the free slot:
     // the pointer may pick a spot half a cell next to or over it, and a click
     // moves the new tile there. Once a type is chosen it blocks like a tile.
@@ -460,11 +475,11 @@
       return { col: 0, row: 0, span_w: 1, span_h: 1 };
     }
 
-    let col = clampHalf(colEl.value, 1, GRID_COLS, 1);
+    let col = clampHalf(colEl.value, 1, placeCols(tab), 1);
     const firstRow = firstAllowedGridRow(tab);
-    let row = clampHalf(rowEl.value, firstRow + 1, GRID_ROWS + 0.5, firstRow + 1);
-    let spanW = clampHalf(spanWEl.value, 0.5, GRID_COLS, 1);
-    let spanH = clampHalf(spanHEl.value, 0.5, GRID_ROWS, 1);
+    let row = clampHalf(rowEl.value, firstRow + 1, placeRows(tab) + 0.5, firstRow + 1);
+    let spanW = clampHalf(spanWEl.value, 0.5, placeCols(tab), 1);
+    let spanH = clampHalf(spanHEl.value, 0.5, placeRows(tab), 1);
 
     const typeValue = document.getElementById(prefix + '_tile_type')?.value || '0';
     const layout = constrainLayoutToTab(

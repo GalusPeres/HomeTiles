@@ -712,8 +712,8 @@
       if (currentTileTab !== 'folder0' || currentTileIndex !== HIDDEN_SETTINGS_TILE_INDEX) {
         selectHiddenSettingsTile();
       }
-      const spanW = clampHalf(hiddenTile.dataset.spanW, 1, GRID_COLS, 1);
-      const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, GRID_ROWS, 1);
+      const spanW = clampHalf(hiddenTile.dataset.spanW, 1, placeCols(), 1);
+      const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, placeRows(), 1);
       // The slot shows one cell: the grabbed half of it anchors the drop like
       // a grid tile, and the drag image stays where the pointer took it.
       const rect = hiddenTile.getBoundingClientRect();

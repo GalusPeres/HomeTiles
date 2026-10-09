@@ -122,15 +122,15 @@
     const spanWEl = document.getElementById(prefix + '_tile_span_w');
     const spanHEl = document.getElementById(prefix + '_tile_span_h');
     if (spanWEl) {
-      spanWEl.min = String(mediaType ? Math.min(MEDIA_TILE_MIN_SPAN, GRID_COLS) : 1);
-      spanWEl.max = String(mediaType ? Math.min(MEDIA_TILE_MAX_SPAN, GRID_COLS) : GRID_COLS);
+      spanWEl.min = String(mediaType ? Math.min(MEDIA_TILE_MIN_SPAN, placeCols(tab)) : 1);
+      spanWEl.max = String(mediaType ? Math.min(MEDIA_TILE_MAX_SPAN, placeCols(tab)) : placeCols(tab));
     }
     if (spanHEl) {
-      const availableRows = GRID_ROWS - firstAllowedGridRow(tab);
+      const availableRows = placeRows(tab) - firstAllowedGridRow(tab);
       spanHEl.min = String(mediaType ? Math.min(MEDIA_TILE_MIN_SPAN, availableRows) : 1);
       spanHEl.max = String(mediaType
         ? Math.min(MEDIA_TILE_MAX_SPAN, availableRows)
-        : GRID_ROWS);
+        : placeRows(tab));
     }
     document.querySelectorAll('#' + prefix + 'Settings .type-fields').forEach(f => f.classList.remove('show'));
     const meta = getTileTypeMeta(typeValue);
@@ -175,7 +175,7 @@
       if (input) input.step = '0.5';
     }
     const row = document.getElementById(tab + '_tile_row');
-    if (row) row.max = String(GRID_ROWS + (compact && h === 0.5 ? 0.5 : 0));
+    if (row) row.max = String(placeRows(tab) + (compact && h === 0.5 ? 0.5 : 0));
     const height = document.getElementById(tab + '_tile_span_h');
     if (height && compact) height.min = '0.5';
     const note = document.getElementById(tab + '_tile_size_note');

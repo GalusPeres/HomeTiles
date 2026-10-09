@@ -73,7 +73,7 @@ assert.doesNotMatch(
 );
 assert.match(
   showSource,
-  /const bool wallpaper_visible\s*=\s*apply_wallpaper\([\s\S]*?#if defined\(CONFIG_IDF_TARGET_ESP32P4\)[\s\S]*?if \(!wallpaper_visible\) present_composited_screensaver_frame\(st\);/,
+  /wallpaper_visible\s*=\s*apply_wallpaper\([\s\S]*?#if defined\(CONFIG_IDF_TARGET_ESP32P4\)[\s\S]*?if \(!wallpaper_visible\) present_composited_screensaver_frame\(st\);/,
   'P4 black fallback must use the same fast complete-frame presentation as wallpapers',
 );
 

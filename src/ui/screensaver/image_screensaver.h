@@ -28,6 +28,11 @@ void service_image_screensaver_auto(uint32_t last_activity_ms);
 void image_screensaver_config_changed(
     const String& preview_wallpaper = String());
 
+// A picture of an image or camera entity arrived from the Bridge (or was
+// cleared; bridge_images.h): the screensaver showing that entity shows it,
+// a hidden one decodes it ahead.
+void image_screensaver_picture_arrived(const char* entity_id);
+
 // Separate live refresh for settings that restyle every tile (default
 // color, icon glow) or a failed save. Rebuild only the small screensaver
 // grid, preserving the image and clock.

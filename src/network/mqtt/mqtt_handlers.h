@@ -74,6 +74,10 @@ void mqttPublishDeviceSettings();
 void mqttServiceLocalSensors();
 void mqttReloadDynamicSlots(bool subscribe_all = false);
 void mqttRequestDynamicSlotsReload(uint32_t quiet_ms = 3000);
+// The screensaver's camera still in the screen's size, subscribed only while
+// the screensaver shows it (link only; empty or null = none). Kept across
+// reconnects.
+void mqttSetLivePicture(const char* entity_id);
 void mqttServiceDynamicSlotsReload();
 // Boot scan for setup(): is there a media tile in the stored configuration? The
 // result sets the initial size of the MQTT receive buffer, because cover

@@ -20,7 +20,7 @@
   ];
   // Lists the Bridge searches (entity_search.py LIST_DOMAINS).
   const ENTITY_REMOTE_LISTS = new Set(['sensors', 'binary_sensors', 'numbers', 'selects', 'datetimes',
-    'weathers', 'switches', 'media', 'climates', 'covers', 'cameras', 'locks', 'alarm_panels', 'fans']);
+    'weathers', 'switches', 'media', 'climates', 'covers', 'cameras', 'images', 'locks', 'alarm_panels', 'fans']);
   const ENTITY_REMOTE_DELAY_MS = 250;
   const ENTITY_REMOTE_POLL_MS = 120;
   const ENTITY_REMOTE_TIMEOUT_MS = 5000;

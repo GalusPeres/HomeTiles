@@ -2,7 +2,8 @@
 
 // Pictures from the Bridge over the direct link (docs-dev/images.md): the
 // platform-independent parts, run by tools/tests/network/test-bridge-images.mjs.
-// A picture message on "<ha_prefix>/media_player/<object>/image/<w>x<h>" is
+// A picture message on "<ha_prefix>/<domain>/<object>/image/<w>x<h>" (domain
+// media_player, image or camera) is
 //   "HTIMG1 <16 hex key> <w>x<h>\n" followed by a baseline JPEG of w x h;
 // an empty message clears the picture.
 
@@ -66,18 +67,30 @@ inline bool parseHeader(const uint8_t* data, size_t length, Header& out) {
          data[out.jpeg_offset + 1] == 0xD8;
 }
 
-// The media player of a picture topic below `prefix`: "media_player.<object>"
-// and the picture's size; false for any other topic.
+// The entity of a picture topic below `prefix`: a media player's cover, an
+// image entity or a camera still ("<domain>.<object>"), and the picture's
+// size; false for any other topic.
 inline bool entityFromTopic(const char* topic, const char* prefix, char* entity, size_t entity_size,
                             uint16_t* width, uint16_t* height) {
-  static const char kDomain[] = "/media_player/";
+  static const char* const kDomains[] = {"media_player", "image", "camera"};
   static const char kImage[] = "/image/";
   if (!topic || !prefix || !entity || entity_size == 0) return false;
   const size_t prefix_length = strlen(prefix);
   if (prefix_length == 0 || strncmp(topic, prefix, prefix_length) != 0) return false;
   const char* p = topic + prefix_length;
-  if (strncmp(p, kDomain, sizeof(kDomain) - 1) != 0) return false;
-  const char* object = p + sizeof(kDomain) - 1;
+  if (*p++ != '/') return false;
+  const char* domain = nullptr;
+  size_t domain_length = 0;
+  for (const char* candidate : kDomains) {
+    const size_t length = strlen(candidate);
+    if (strncmp(p, candidate, length) == 0 && p[length] == '/') {
+      domain = candidate;
+      domain_length = length;
+      break;
+    }
+  }
+  if (!domain) return false;
+  const char* object = p + domain_length + 1;
   const char* image = strstr(object, kImage);
   if (!image || image == object) return false;
   for (const char* c = object; c < image; ++c) {
@@ -87,11 +100,11 @@ inline bool entityFromTopic(const char* topic, const char* prefix, char* entity,
   uint16_t w = 0, h = 0;
   if (!readSize(size, size + strlen(size), w, h)) return false;
   const size_t object_length = static_cast<size_t>(image - object);
-  static const char kEntityDomain[] = "media_player.";
-  if (sizeof(kEntityDomain) - 1 + object_length + 1 > entity_size) return false;
-  memcpy(entity, kEntityDomain, sizeof(kEntityDomain) - 1);
-  memcpy(entity + sizeof(kEntityDomain) - 1, object, object_length);
-  entity[sizeof(kEntityDomain) - 1 + object_length] = '\0';
+  if (domain_length + 1 + object_length + 1 > entity_size) return false;
+  memcpy(entity, domain, domain_length);
+  entity[domain_length] = '.';
+  memcpy(entity + domain_length + 1, object, object_length);
+  entity[domain_length + 1 + object_length] = '\0';
   if (width) *width = w;
   if (height) *height = h;
   return true;

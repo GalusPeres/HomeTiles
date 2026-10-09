@@ -72,7 +72,8 @@ bool knownList(const String& list) {
   for (const ListTile& entry : kListTiles) {
     if (list == entry.list) return true;
   }
-  return false;
+  // The screensaver picture: an image or a camera (no tile type).
+  return list == "images";
 }
 
 void publish(const char* leaf, const String& body) {
@@ -115,6 +116,11 @@ entity_declaration::Declaration collectDeclaration() {
     declaration.add(listOfType(tile.type), tile.sensor_entity.c_str());
     const String source = tileIconSourceEntity(tile.type, tile.icon_colors);
     declaration.add(listOfSource(source.c_str()), source.c_str());
+  }
+  // The screensaver picture the Bridge sends (docs-dev/images.md).
+  const ScreensaverConfigData& screensaver_config = screensaverConfig.get();
+  if (screensaver_config.use_wallpapers && screensaver_uses_ha_picture(screensaver_config)) {
+    declaration.add("images", screensaver_config.picture_entity.c_str());
   }
   return declaration;
 }

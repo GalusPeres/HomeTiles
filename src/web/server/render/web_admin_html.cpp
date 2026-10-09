@@ -1044,18 +1044,34 @@ static void appendTileTabHTML(
 )html";
   if (screensaver_mode) {
     html += R"html(            <div id="screensaverBackgroundSettings" class="screensaver-background-settings">
-<div class="tile-settings-head"><h3 style="margin-top:0;">)html";
+<div class="tile-settings-head"><h3 id="screensaverBackgroundHeading" style="margin-top:0;" data-sd=")html";
+    appendHtmlEscaped(html, tr.admin_slideshow);
+    html += "\" data-ha=\"";
+    appendHtmlEscaped(html, tr.screensaver_source_ha);
+    html += "\">";
     html += tr.admin_slideshow;
     html += R"html(</h3></div>
 <div class="tile-settings-body">
-<div class="screensaver-fixed-type"><label>)html";
+<div class="screensaver-fixed-type"><label for="screensaverPictureSource">)html";
     html += tr.admin_type;
-    html += R"html(</label><input value=")html";
-    html += tr.admin_slideshow;
-    html += R"html(" disabled></div>
+    html += R"html(</label><select id="screensaverPictureSource"><option value="sd">)html";
+    appendHtmlEscaped(html, tr.screensaver_source_sd);
+    html += R"html(</option><option value="ha">)html";
+    appendHtmlEscaped(html, tr.screensaver_source_ha);
+    html += R"html(</option></select></div>
 <label class="inline-checkbox"><input id="screensaverUseWallpapers" type="checkbox"> )html";
     html += tr.screensaver_use_wallpapers;
     html += R"html(</label>
+<div id="screensaverHaPicture" class="hidden">
+<div class="screensaver-fixed-type">)html";
+    // A Home Assistant image or camera; the Bridge sends its picture.
+    appendEntityPickerField(html, "screensaver", "picture_entity", tr.screensaver_picture_entity, "images");
+    html += R"html(</div>
+<p class="hint">)html";
+    appendHtmlEscaped(html, tr.screensaver_picture_hint);
+    html += R"html(</p>
+</div>
+<div id="screensaverSdPicture">
 <label class="inline-checkbox"><input id="screensaverShuffle" type="checkbox"> )html";
     html += tr.screensaver_shuffle;
     html += R"html(</label>
@@ -1080,6 +1096,7 @@ static void appendTileTabHTML(
 <label>)html";
     html += tr.screensaver_focus_y;
     html += R"html(<input id="screensaverFocusY" type="range" min="0" max="1000" value="500"></label>
+</div>
 </div>
 </div>
 </div>

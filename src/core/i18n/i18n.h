@@ -707,6 +707,12 @@ struct Strings {
   // The panel's update button beside the magnifier (Settings > System),
   // short so the device name keeps its room.
   const char* settings_update_short;
+  // The screensaver picture's source in Web Admin: the SD card slideshow or
+  // a picture Home Assistant sends (an image or a camera entity).
+  const char* screensaver_source_sd;
+  const char* screensaver_source_ha;
+  const char* screensaver_picture_entity;
+  const char* screensaver_picture_hint;
 };
 
 // Locale-specific display rules and short runtime strings shared by

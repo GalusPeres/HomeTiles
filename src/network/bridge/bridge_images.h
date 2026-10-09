@@ -6,8 +6,9 @@
 
 // Pictures from the Bridge over the direct link (docs-dev/images.md): a
 // Media tile subscribes to its player's cover in the size the Media popup
-// shows it; the Bridge renders and sends it, keyed like the player state's
-// "image_key". Loop task only.
+// shows it, keyed like the player state's "image_key"; the screensaver to
+// its image or camera entity in the screen's size. The Bridge renders and
+// sends them. Loop task only.
 namespace bridge_images {
 
 struct Picture {
@@ -25,11 +26,15 @@ uint16_t coverEdge();
 // The statestream route suffix of a cover picture, "image/<edge>x<edge>".
 const char* coverSuffix();
 
+// The statestream route suffix of a full-screen picture, "image/<w>x<h>"
+// of the screen as shown (the screensaver's picture).
+const char* screenSuffix();
+
 // A message on a picture topic: stored (or dropped when malformed), and the
-// player's tiles told. False for any other topic.
+// player's tiles or the screensaver told. False for any other topic.
 bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length);
 
-// The newest picture of a player; nullptr without one.
+// The newest picture of an entity; nullptr without one.
 const Picture* find(const char* entity_id);
 
 }  // namespace bridge_images

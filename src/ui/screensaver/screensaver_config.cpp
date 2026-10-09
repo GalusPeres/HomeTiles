@@ -277,6 +277,10 @@ bool ScreensaverConfigStore::loadPath(const char* path) {
   loaded.duration_seconds = doc["duration_seconds"].is<int>()
                                 ? clamp_u16(doc["duration_seconds"].as<int>(), 3, 3600)
                                 : legacy_duration_from_doc(doc);
+  loaded.picture_from_ha = strcmp(doc["picture_source"] | "sd", "ha") == 0;
+  loaded.picture_entity = String(doc["picture_entity"] | "");
+  loaded.picture_entity.trim();
+  if (!screensaver_picture_entity_valid(loaded.picture_entity)) loaded.picture_entity = "";
 
   JsonArrayConst wallpapers = doc["wallpapers"].as<JsonArrayConst>();
   for (JsonObjectConst item : wallpapers) {
@@ -494,6 +498,8 @@ String ScreensaverConfigStore::toJson(bool include_device_meta) const {
     writeClockPlaces(doc, places);
   }
   doc["duration_seconds"] = data_.duration_seconds;
+  doc["picture_source"] = data_.picture_from_ha ? "ha" : "sd";
+  doc["picture_entity"] = data_.picture_entity;
   if (include_device_meta) {
     doc["screen_width"] = grid_layout::screen_w();
     doc["screen_height"] = grid_layout::screen_h();

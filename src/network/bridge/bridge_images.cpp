@@ -3,13 +3,16 @@
 #include <esp_heap_caps.h>
 
 #include "src/network/mqtt/mqtt_topics.h"
+#include "src/tiles/config/grid_layout.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/screensaver/image_screensaver.h"
 
 namespace bridge_images {
 namespace {
 
-// A few players at most show covers; the oldest picture makes room.
+// A few players at most show covers, and the screensaver one picture; the
+// oldest picture makes room.
 constexpr size_t kPictures = 6;
 Picture g_pictures[kPictures];
 uint32_t g_tick = 0;
@@ -29,6 +32,16 @@ Picture* slotFor(const char* entity_id) {
   return oldest;
 }
 
+// A cover goes to the player's tiles, an image or camera picture to the
+// screensaver.
+void announce(const char* entity) {
+  if (strncmp(entity, "media_player.", 13) == 0) {
+    tile_renderer_media_picture_arrived(entity);
+  } else {
+    image_screensaver_picture_arrived(entity);
+  }
+}
+
 }  // namespace
 
 uint16_t coverEdge() {
@@ -43,6 +56,13 @@ const char* coverSuffix() {
   return suffix;
 }
 
+const char* screenSuffix() {
+  static char suffix[24] = "";
+  snprintf(suffix, sizeof(suffix), "image/%ux%u", static_cast<unsigned>(grid_layout::screen_w()),
+           static_cast<unsigned>(grid_layout::screen_h()));
+  return suffix;
+}
+
 bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length) {
   const String& configured = mqttTopics.haPrefix();
   const char* prefix = configured.length() ? configured.c_str() : "ha/statestream";
@@ -53,6 +73,7 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
     for (Picture& picture : g_pictures) {
       if (picture.jpeg && strcmp(picture.entity_id, entity) == 0) release(picture);
     }
+    announce(entity);
     return true;
   }
   Header header;
@@ -80,7 +101,7 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
   slot->used = ++g_tick;
   Serial.printf("[Images] %s %s %ux%u, %u bytes\n", entity, header.key, header.width,
                 header.height, static_cast<unsigned>(jpeg_length));
-  tile_renderer_media_picture_arrived(entity);
+  announce(entity);
   return true;
 }
 

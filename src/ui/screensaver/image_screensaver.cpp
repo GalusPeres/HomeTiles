@@ -30,7 +30,9 @@
 #include "src/core/power/power_manager.h"
 #include "src/devices/device.h"
 #include "src/devices/guition_esp32_4848s040/s3_diagnostics.h"
+#include "src/network/bridge/bridge_images.h"
 #include "src/network/bridge/ha_bridge_config.h"
+#include "src/network/mqtt/mqtt_handlers.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
@@ -121,6 +123,12 @@ bool g_opening = false;
 bool g_live_config_refresh_requested = false;
 bool g_live_grid_refresh_requested = false;
 String g_live_preview_wallpaper;
+// A new Home Assistant picture arrived for the open screensaver; its timer
+// shows it in the LVGL context.
+bool g_ha_picture_arrived = false;
+// The camera whose still is subscribed while the screensaver shows it
+// (sync_live_picture).
+String g_live_picture_entity;
 
 void apply_configured_screensaver_brightness() {
   powerManager.setDisplayBrightness(Device::backlightRawFromPercent(
@@ -148,6 +156,7 @@ lv_image_dsc_t* g_cache_dsc = nullptr;
 // Preload the image a few seconds after tile construction so the first
 // tap can open it without waiting for SD access or decoding.
 ScreensaverWallpaperConfig g_preload_wallpaper;
+bool g_preload_ha_picture = false;
 lv_timer_t* g_preload_timer = nullptr;
 scene_publish_cb_t g_scene_callback = nullptr;
 
@@ -890,28 +899,27 @@ lv_image_dsc_t* make_cover_dsc(const uint16_t* src, uint16_t src_w,
   return dsc;
 }
 
-lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
-                                         uint16_t target_w, uint16_t target_h,
-                                         uint16_t focus_x, uint16_t focus_y,
-                                         uint16_t zoom, uint16_t corner_radius) {
-  const uint32_t pipeline_started_ms = millis();
-  size_t len = 0;
-  uint8_t* file = read_wallpaper_file(file_name, len);
-  if (!file) {
-    GuitionS3Diagnostics::logSlideshowDecode(
-        file_name.c_str(), 0, 0, 0, target_w, target_h,
-        static_cast<uint32_t>(target_w) * sizeof(uint16_t), "none", false,
-        millis() - pipeline_started_ms, 0, 0);
-    return nullptr;
-  }
-  const uint32_t read_ms = millis() - pipeline_started_ms;
-  if (!is_jpeg(file, len)) {
+// Decodes a JPEG in memory into the screen-sized cover. `owned` data (an SD
+// file) is freed right after decoding, before the cover is cut, keeping the
+// PSRAM peak as before; otherwise the caller keeps it.
+lv_image_dsc_t* decode_jpeg_to_size(const char* name, const uint8_t* data,
+                                    size_t len, bool owned,
+                                    uint16_t target_w, uint16_t target_h,
+                                    uint16_t focus_x, uint16_t focus_y,
+                                    uint16_t zoom, uint16_t corner_radius,
+                                    uint32_t pipeline_started_ms,
+                                    uint32_t read_ms) {
+  auto release = [&]() {
+    if (owned) free(const_cast<uint8_t*>(data));
+    owned = false;
+  };
+  if (!is_jpeg(data, len)) {
     Serial.println("[Screensaver] File is not a JPEG");
     GuitionS3Diagnostics::logSlideshowDecode(
-        file_name.c_str(), len, 0, 0, target_w, target_h,
+        name, len, 0, 0, target_w, target_h,
         static_cast<uint32_t>(target_w) * sizeof(uint16_t), "none", false,
         read_ms, 0, 0);
-    free(file);
+    release();
     return nullptr;
   }
 
@@ -920,11 +928,11 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
   uint16_t h = 0;
 #if defined(DEVICE_ESP32_S3_RGB_480)
   lv_image_dsc_t* dsc = s3_decode_jpeg_direct_cover(
-      file, len, target_w, target_h, focus_x, focus_y, zoom, w, h, corner_radius);
+      data, len, target_w, target_h, focus_x, focus_y, zoom, w, h, corner_radius);
   const uint32_t decode_ms = millis() - decode_started_ms;
-  free(file);
+  release();
   GuitionS3Diagnostics::logSlideshowDecode(
-      file_name.c_str(), len, w, h, target_w, target_h,
+      name, len, w, h, target_w, target_h,
       static_cast<uint32_t>(target_w) * sizeof(uint16_t),
       "SW-direct", dsc != nullptr, read_ms, decode_ms, 0);
   if (dsc) {
@@ -940,18 +948,18 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
   bool hw = false;
   const char* decoder = "SW";
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && SOC_JPEG_DECODE_SUPPORTED
-  pixels = hw_decode_jpeg(file, len, w, h);
+  pixels = hw_decode_jpeg(data, len, w, h);
   hw = pixels != nullptr;
   if (hw) decoder = "HW";
 #endif
   if (!pixels) {
-    pixels = sw_decode_jpeg(file, len, w, h);
+    pixels = sw_decode_jpeg(data, len, w, h);
   }
   const uint32_t decode_ms = millis() - decode_started_ms;
-  free(file);
+  release();
   if (!pixels) {
     GuitionS3Diagnostics::logSlideshowDecode(
-        file_name.c_str(), len, w, h, target_w, target_h,
+        name, len, w, h, target_w, target_h,
         static_cast<uint32_t>(target_w) * sizeof(uint16_t),
         decoder, false, read_ms, decode_ms, 0);
     return nullptr;
@@ -963,7 +971,7 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
   const uint32_t cover_ms = millis() - cover_started_ms;
   free(pixels);
   GuitionS3Diagnostics::logSlideshowDecode(
-      file_name.c_str(), len, w, h, target_w, target_h,
+      name, len, w, h, target_w, target_h,
       static_cast<uint32_t>(target_w) * sizeof(uint16_t),
       decoder, dsc != nullptr, read_ms, decode_ms, cover_ms);
   if (dsc) {
@@ -979,9 +987,41 @@ lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
 #endif
 }
 
+lv_image_dsc_t* decode_wallpaper_to_size(const String& file_name,
+                                         uint16_t target_w, uint16_t target_h,
+                                         uint16_t focus_x, uint16_t focus_y,
+                                         uint16_t zoom, uint16_t corner_radius) {
+  const uint32_t pipeline_started_ms = millis();
+  size_t len = 0;
+  uint8_t* file = read_wallpaper_file(file_name, len);
+  if (!file) {
+    GuitionS3Diagnostics::logSlideshowDecode(
+        file_name.c_str(), 0, 0, 0, target_w, target_h,
+        static_cast<uint32_t>(target_w) * sizeof(uint16_t), "none", false,
+        millis() - pipeline_started_ms, 0, 0);
+    return nullptr;
+  }
+  return decode_jpeg_to_size(file_name.c_str(), file, len, true, target_w,
+                             target_h, focus_x, focus_y, zoom, corner_radius,
+                             pipeline_started_ms, millis() - pipeline_started_ms);
+}
+
+// The cache holds this picture in the screen's size and corners.
+bool cache_holds(const ScreensaverWallpaperConfig& wallpaper) {
+  return g_cache_dsc && g_cache_name == wallpaper.file_name &&
+         g_cache_w == grid_layout::screen_w() &&
+         g_cache_h == grid_layout::screen_h() &&
+         g_cache_focus_x == wallpaper.focus_x &&
+         g_cache_focus_y == wallpaper.focus_y &&
+         g_cache_zoom == wallpaper.zoom && g_cache_radius == image_radius();
+}
+
+// The slide's file, or the Bridge's `picture` named by wallpaper.file_name
+// (ha_picture_source), decoded into the single cache slot.
 lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper,
                                      uint16_t w, uint16_t h,
-                                     lv_obj_t* visible_image = nullptr) {
+                                     lv_obj_t* visible_image = nullptr,
+                                     const bridge_images::Picture* picture = nullptr) {
   const String& name = wallpaper.file_name;
   if (g_cache_dsc && g_cache_name == name && g_cache_w == w && g_cache_h == h &&
       g_cache_focus_x == wallpaper.focus_x &&
@@ -989,8 +1029,12 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
     return g_cache_dsc;
   }
   const uint16_t corner_radius = image_radius();
-  lv_image_dsc_t* dsc = decode_wallpaper_to_size(
-      name, w, h, wallpaper.focus_x, wallpaper.focus_y, wallpaper.zoom, corner_radius);
+  lv_image_dsc_t* dsc =
+      picture ? decode_jpeg_to_size(name.c_str(), picture->jpeg, picture->length, false, w, h,
+                                    wallpaper.focus_x, wallpaper.focus_y, wallpaper.zoom,
+                                    corner_radius, millis(), 0)
+              : decode_wallpaper_to_size(name, w, h, wallpaper.focus_x, wallpaper.focus_y,
+                                         wallpaper.zoom, corner_radius);
   if (!dsc) return nullptr;
   // Detach the old source from the visible LVGL object only now, immediately
   // before swapping caches. The previous slide stays visible during decoding
@@ -1012,6 +1056,28 @@ lv_image_dsc_t* get_or_decode_cached(const ScreensaverWallpaperConfig& wallpaper
   return dsc;
 }
 
+// The screensaver's picture from Home Assistant (screensaver_uses_ha_picture):
+// the Bridge's newest picture of the entity, centered and unzoomed since the
+// Bridge already fit it to the screen. Its name carries the picture's key, so
+// a new picture decodes and the same one is reused. Without a picture in
+// bridge_images (`picture` null) a decoded one of the same entity stays;
+// false without either.
+bool ha_picture_source(ScreensaverWallpaperConfig& out,
+                       const bridge_images::Picture*& picture) {
+  const ScreensaverConfigData& config = screensaverConfig.get();
+  out = ScreensaverWallpaperConfig{};
+  const String prefix = String("ha:") + config.picture_entity + "#";
+  picture = bridge_images::find(config.picture_entity.c_str());
+  if (picture) {
+    out.file_name = prefix + picture->key;
+    return true;
+  }
+  if (g_cache_dsc && g_cache_name.startsWith(prefix)) {
+    out.file_name = g_cache_name;
+    return true;
+  }
+  return false;
+}
 
 bool is_wallpaper_file(const String& file_name) {
   if (!file_name.length() || file_name.indexOf('/') >= 0 ||
@@ -1169,6 +1235,54 @@ void rebuild_global_clock(ScreensaverState* st) {
   position_global_clock(st);
 }
 
+// Shows a decoded picture in the overlay at once.
+void present_picture(ScreensaverState* st, lv_image_dsc_t* dsc, const String& name,
+                     bool cache_hit) {
+  // Change the source internally without triggering a full-screen LVGL
+  // redraw yet. On rotated P4 devices, LVGL first renders the complete
+  // frame off-screen; only that frame is then passed to PPA.
+  set_image_src_without_invalidation(st->image, dsc);
+  lv_obj_remove_flag(st->image, LV_OBJ_FLAG_HIDDEN);
+
+  // On rotated P4 devices, PPA must not initially write just the wallpaper
+  // to the visible buffer: the clock and tiles would disappear until their
+  // LVGL redraw, causing visible blinking. Instead, composite the entire
+  // top layer off-screen and present the completed frame. On B4, write it
+  // directly into the native DSI framebuffer without rotation.
+  const uint32_t started = millis();
+  bool preview_ok = false;
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  preview_ok = present_composited_screensaver_frame(st);
+#endif
+  Serial.printf("[Screensaver] Hardware-Preview %s (%s) in %u ms\n",
+                preview_ok ? "OK" : "skipped",
+                cache_hit ? "cache" : "decode",
+                static_cast<unsigned>(millis() - started));
+  if (!preview_ok) {
+    // If the device-specific full-frame path is unavailable, LVGL continues
+    // to draw the new image safely through its established path.
+#if defined(DEVICE_ESP32_S3_RGB_480)
+    const bool atomic_redraw =
+        DeviceImpl::displayBeginAtomicFrame("screensaver");
+#endif
+    GuitionS3Diagnostics::beginSlideshowPresentation(
+        name.c_str(), cache_hit, grid_layout::screen_w(),
+        grid_layout::screen_h(), dsc->header.stride);
+#if defined(DEVICE_ESP32_S3_RGB_480)
+    // The inactive framebuffer deliberately isn't copied first: that large
+    // PSRAM read/write burst can starve RGB EDMA. Invalidate the whole screen
+    // so LVGL fully replaces it before the atomic swap instead.
+    if (atomic_redraw) {
+      lv_obj_invalidate(lv_screen_active());
+    } else {
+      lv_obj_invalidate(st->image);
+    }
+#else
+    lv_obj_invalidate(st->image);
+#endif
+  }
+}
+
 bool apply_wallpaper(ScreensaverState* st, int index, bool allow_fallback,
                      bool allow_disabled = false) {
   if (!st || !st->image) return false;
@@ -1204,12 +1318,7 @@ bool apply_wallpaper(ScreensaverState* st, int index, bool allow_fallback,
   }
 #endif
 
-  const bool cache_hit = g_cache_dsc && g_cache_name == wallpaper.file_name &&
-                         g_cache_w == grid_layout::screen_w() &&
-                         g_cache_h == grid_layout::screen_h() &&
-                         g_cache_focus_x == wallpaper.focus_x &&
-                         g_cache_focus_y == wallpaper.focus_y &&
-                         g_cache_zoom == wallpaper.zoom && g_cache_radius == image_radius();
+  const bool cache_hit = cache_holds(wallpaper);
   lv_image_dsc_t* dsc = get_or_decode_cached(
       wallpaper, grid_layout::screen_w(), grid_layout::screen_h(), st->image);
   if (!dsc) {
@@ -1225,53 +1334,37 @@ bool apply_wallpaper(ScreensaverState* st, int index, bool allow_fallback,
     g_wallpaper_retry_after_ms[index] = 0;
   }
 #endif
-  // Change the source internally without triggering a full-screen LVGL
-  // redraw yet. On rotated P4 devices, LVGL first renders the complete
-  // frame off-screen; only that frame is then passed to PPA.
-  set_image_src_without_invalidation(st->image, dsc);
-  lv_obj_remove_flag(st->image, LV_OBJ_FLAG_HIDDEN);
   st->active_wallpaper = index;
   st->active_wallpaper_name = wallpaper.file_name;
   st->next_wallpaper_ms = millis() +
       static_cast<uint32_t>(screensaverConfig.get().duration_seconds) * 1000U;
+  present_picture(st, dsc, wallpaper.file_name, cache_hit);
+  return true;
+}
 
-  // On rotated P4 devices, PPA must not initially write just the wallpaper
-  // to the visible buffer: the clock and tiles would disappear until their
-  // LVGL redraw, causing visible blinking. Instead, composite the entire
-  // top layer off-screen and present the completed frame. On B4, write it
-  // directly into the native DSI framebuffer without rotation.
-  const uint32_t started = millis();
-  bool preview_ok = false;
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
-  preview_ok = present_composited_screensaver_frame(st);
-#endif
-  Serial.printf("[Screensaver] Hardware-Preview %s (%s) in %u ms\n",
-                preview_ok ? "OK" : "skipped",
-                cache_hit ? "cache" : "decode",
-                static_cast<unsigned>(millis() - started));
-  if (!preview_ok) {
-    // If the device-specific full-frame path is unavailable, LVGL continues
-    // to draw the new image safely through its established path.
-#if defined(DEVICE_ESP32_S3_RGB_480)
-    const bool atomic_redraw =
-        DeviceImpl::displayBeginAtomicFrame("screensaver");
-#endif
-    GuitionS3Diagnostics::beginSlideshowPresentation(
-        wallpaper.file_name.c_str(), cache_hit, grid_layout::screen_w(),
-        grid_layout::screen_h(), dsc->header.stride);
-#if defined(DEVICE_ESP32_S3_RGB_480)
-    // The inactive framebuffer deliberately isn't copied first: that large
-    // PSRAM read/write burst can starve RGB EDMA. Invalidate the whole screen
-    // so LVGL fully replaces it before the atomic swap instead.
-    if (atomic_redraw) {
-      lv_obj_invalidate(lv_screen_active());
-    } else {
-      lv_obj_invalidate(st->image);
-    }
-#else
-    lv_obj_invalidate(st->image);
-#endif
+// The Bridge's picture of the configured image or camera entity instead of
+// the slideshow (ha_picture_source); false until one arrived, the overlay
+// then stays black.
+bool apply_ha_picture(ScreensaverState* st) {
+  if (!st || !st->image) return false;
+  // No slideshow: the timer never advances a slide.
+  st->active_wallpaper = -1;
+  ScreensaverWallpaperConfig source;
+  const bridge_images::Picture* picture = nullptr;
+  if (!ha_picture_source(source, picture)) {
+    st->active_wallpaper_name = String();
+    return false;
   }
+  if (st->active_wallpaper_name == source.file_name && cache_holds(source) &&
+      !lv_obj_has_flag(st->image, LV_OBJ_FLAG_HIDDEN)) {
+    return true;  // Already shown.
+  }
+  const bool cache_hit = cache_holds(source);
+  lv_image_dsc_t* dsc = get_or_decode_cached(
+      source, grid_layout::screen_w(), grid_layout::screen_h(), st->image, picture);
+  if (!dsc) return false;
+  st->active_wallpaper_name = source.file_name;
+  present_picture(st, dsc, source.file_name, cache_hit);
   return true;
 }
 
@@ -1605,6 +1698,11 @@ void refresh_live_background_and_clock(ScreensaverState* st,
     clear_live_wallpaper(st);
     return;
   }
+  if (screensaver_uses_ha_picture(config)) {
+    if (!apply_ha_picture(st)) clear_live_wallpaper(st);
+    if (st->clock_box) lv_obj_move_foreground(st->clock_box);
+    return;
+  }
 
   bool allow_disabled = false;
   int desired = -1;
@@ -1666,6 +1764,17 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
     st->next_slot_refresh_ms = now + 1000U;
   }
   const auto& config = screensaverConfig.get();
+  if (g_ha_picture_arrived) {
+    // Like a slide change: after a touch the tiles settle first.
+    const uint32_t since_activity =
+        static_cast<uint32_t>(now - displayManager.getLastActivityTime());
+    if (since_activity >= kInteractionSettleBeforeSlideMs) {
+      g_ha_picture_arrived = false;
+      if (config.use_wallpapers && screensaver_uses_ha_picture(config)) {
+        apply_ha_picture(st);
+      }
+    }
+  }
   if (config.use_wallpapers && st->active_wallpaper >= 0 &&
       static_cast<int32_t>(now - st->next_wallpaper_ms) >= 0) {
     const uint32_t since_activity =
@@ -1724,23 +1833,60 @@ void on_global_overlay_delete(lv_event_t* e) {
 
 void global_preload_timer_cb(lv_timer_t*) {
   g_preload_timer = nullptr;
-  if (g_state || !g_preload_wallpaper.file_name.length()) return;
+  if (g_state) return;
+  if (g_preload_ha_picture) {
+    g_preload_ha_picture = false;
+    ScreensaverWallpaperConfig source;
+    const bridge_images::Picture* picture = nullptr;
+    if (screensaver_uses_ha_picture(screensaverConfig.get()) &&
+        ha_picture_source(source, picture) && picture) {
+      get_or_decode_cached(source, grid_layout::screen_w(), grid_layout::screen_h(),
+                           nullptr, picture);
+    }
+    return;
+  }
+  if (!g_preload_wallpaper.file_name.length()) return;
   get_or_decode_cached(g_preload_wallpaper,
                        grid_layout::screen_w(), grid_layout::screen_h());
+}
+
+void schedule_preload(uint32_t delay_ms) {
+  if (g_preload_timer) lv_timer_delete(g_preload_timer);
+  g_preload_timer = lv_timer_create(global_preload_timer_cb, delay_ms, nullptr);
+  if (g_preload_timer) lv_timer_set_repeat_count(g_preload_timer, 1);
+}
+
+// A camera's still is subscribed only while the screensaver shows it on an
+// awake display: the Bridge loads a new one every 10 s for a subscribed
+// camera. Runs every loop pass, awake or asleep.
+void sync_live_picture() {
+  const ScreensaverConfigData& config = screensaverConfig.get();
+  const bool live = g_state && !powerManager.isInSleep() && config.use_wallpapers &&
+                    screensaver_uses_ha_picture(config) &&
+                    config.picture_entity.startsWith("camera.");
+  const char* entity = live ? config.picture_entity.c_str() : "";
+  if (g_live_picture_entity == entity) return;
+  g_live_picture_entity = entity;
+  mqttSetLivePicture(entity);
 }
 
 }  // namespace
 
 void preload_image_screensaver() {
   if (!screensaverConfig.get().use_wallpapers) return;
+  if (screensaver_uses_ha_picture(screensaverConfig.get())) {
+    g_preload_ha_picture = true;
+    g_preload_wallpaper = ScreensaverWallpaperConfig{};
+    schedule_preload(4000);
+    return;
+  }
+  g_preload_ha_picture = false;
   ScreensaverWallpaperConfig wallpaper;
   const int index = first_enabled_wallpaper();
   if (index >= 0) wallpaper = screensaverConfig.get().wallpapers[index];
   else if (!find_first_sd_wallpaper(wallpaper)) return;
   g_preload_wallpaper = wallpaper;
-  if (g_preload_timer) lv_timer_delete(g_preload_timer);
-  g_preload_timer = lv_timer_create(global_preload_timer_cb, 4000, nullptr);
-  if (g_preload_timer) lv_timer_set_repeat_count(g_preload_timer, 1);
+  schedule_preload(4000);
 }
 
 void show_image_screensaver() {
@@ -1800,12 +1946,18 @@ void show_image_screensaver() {
   g_live_config_refresh_requested = false;
   g_live_grid_refresh_requested = false;
   g_live_preview_wallpaper = String();
+  g_ha_picture_arrived = false;
   // Apply known entity values to newly created widgets before the first
   // complete PPA frame. Otherwise that first visible frame contains "--"
   // and is corrected only later.
   refresh_slot_values(st);
-  const int wallpaper = first_enabled_wallpaper();
-  const bool wallpaper_visible = apply_wallpaper(st, wallpaper, true);
+  const ScreensaverConfigData& config = screensaverConfig.get();
+  bool wallpaper_visible = false;
+  if (config.use_wallpapers && screensaver_uses_ha_picture(config)) {
+    wallpaper_visible = apply_ha_picture(st);
+  } else {
+    wallpaper_visible = apply_wallpaper(st, first_enabled_wallpaper(), true);
+  }
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   // The wallpaper path already presents the complete overlay through the
   // fast full-frame path. Do the same for the black fallback so a missing SD
@@ -1832,6 +1984,7 @@ void hide_image_screensaver() {
   g_live_config_refresh_requested = false;
   g_live_grid_refresh_requested = false;
   g_live_preview_wallpaper = String();
+  g_ha_picture_arrived = false;
   reset_sensor_widgets(GridType::SCREENSAVER);
   reset_switch_widgets(GridType::SCREENSAVER);
   reset_cover_widgets(GridType::SCREENSAVER);
@@ -1873,6 +2026,7 @@ void image_screensaver_brightness_changed() {
 }
 
 void service_image_screensaver_auto(uint32_t last_activity_ms) {
+  sync_live_picture();
   if (g_state || powerManager.isInSleep()) return;
   const auto& config = configManager.getConfig();
   if (!config.auto_screensaver_enabled || config.auto_screensaver_seconds == 0) return;
@@ -1900,6 +2054,22 @@ void image_screensaver_config_changed(const String& preview_wallpaper) {
   // and slide duration do not change the decoded image. get_or_decode_cached()
   // checks filename/focus/zoom and replaces it only when needed.
   preload_image_screensaver();
+}
+
+void image_screensaver_picture_arrived(const char* entity_id) {
+  const ScreensaverConfigData& config = screensaverConfig.get();
+  if (!entity_id || !config.use_wallpapers || !screensaver_uses_ha_picture(config) ||
+      !config.picture_entity.equalsIgnoreCase(entity_id)) {
+    return;
+  }
+  if (g_state) {
+    g_ha_picture_arrived = true;
+    if (g_state->timer) lv_timer_ready(g_state->timer);
+    return;
+  }
+  // Decoded ahead, so the screensaver opens with it at once.
+  g_preload_ha_picture = true;
+  schedule_preload(1000);
 }
 
 void image_screensaver_tiles_changed() {

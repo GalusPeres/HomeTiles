@@ -55,6 +55,8 @@ struct HaBridgeConfigData {
   String alarm_panels_text;
   String fans_text;
   String cameras_text;
+  // Image entities released for the screensaver picture (Bridge "images").
+  String images_text;
   String scene_alias_text;
   String sensor_slots[HA_SENSOR_SLOT_COUNT];
   String scene_slots[HA_SCENE_SLOT_COUNT];

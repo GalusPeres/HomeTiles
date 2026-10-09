@@ -43,7 +43,23 @@ struct ScreensaverConfigData {
   uint16_t clock_y = 350;
   uint16_t duration_seconds = 15;  // Global slide duration, 3..3600 s
   std::vector<ScreensaverWallpaperConfig> wallpapers;
+  // The picture's source: the SD card slideshow above, or the picture the
+  // Bridge sends of an image or camera entity (docs-dev/images.md; the
+  // slideshow stays stored for switching back).
+  bool picture_from_ha = false;
+  String picture_entity;
 };
+
+// An entity whose picture the Bridge sends: image.* or camera.*.
+inline bool screensaver_picture_entity_valid(const String& entity) {
+  return (entity.startsWith("image.") && entity.length() > 6) ||
+         (entity.startsWith("camera.") && entity.length() > 7);
+}
+
+// The screensaver shows the Bridge's picture instead of the SD slideshow.
+inline bool screensaver_uses_ha_picture(const ScreensaverConfigData& data) {
+  return data.picture_from_ha && screensaver_picture_entity_valid(data.picture_entity);
+}
 
 class ScreensaverConfigStore {
  public:

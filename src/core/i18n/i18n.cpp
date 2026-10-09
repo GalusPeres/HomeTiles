@@ -616,7 +616,11 @@ static const Strings kStringsDe = {
     "Einrichtung verlassen?",
     "Du kannst sie später unter %s › System › %s abschließen.",
     "Verlassen",
-    "Update"};
+    "Update",
+    "Diashow (SD-Karte)",
+    "Bild aus Home Assistant",
+    "Bild oder Kamera",
+    "Jedes neue Bild der Entität erscheint sofort, eine Kamera zeigt alle 10 Sekunden ein Standbild. Braucht die direkte Verbindung zur Bridge."};
 
 static const Strings kStringsEn = {
     "en",
@@ -1227,7 +1231,11 @@ static const Strings kStringsEn = {
     "Leave the setup?",
     "You can finish it later in %s › System › %s.",
     "Leave",
-    "Update"};
+    "Update",
+    "Slideshow (SD card)",
+    "Picture from Home Assistant",
+    "Image or camera",
+    "Every new picture of the entity shows at once, a camera shows a still image every 10 seconds. Needs the direct connection to the Bridge."};
 
 static const Strings kStringsFr = {
     "fr",
@@ -1838,7 +1846,11 @@ static const Strings kStringsFr = {
     "Quitter la configuration\u00A0?",
     "Vous pourrez la terminer plus tard dans %s › System › %s.",
     "Quitter",
-    "Mise à jour"};
+    "Mise à jour",
+    "Diaporama (carte SD)",
+    "Image de Home Assistant",
+    "Image ou caméra",
+    "Chaque nouvelle image de l’entité s’affiche aussitôt, une caméra montre une image fixe toutes les 10 secondes. Nécessite la connexion directe au Bridge."};
 
 static const LocaleProfile kLocaleDe = {
     "de",
@@ -2801,6 +2813,10 @@ static const Strings kStringsPl = {
     "Możesz ją dokończyć później w %s › System › %s.",
     "Wyjdź",
     "Aktualizacja",
+    "Pokaz slajdów (karta SD)",
+    "Obraz z Home Assistant",
+    "Obraz lub kamera",
+    "Każdy nowy obraz encji pojawia się od razu, kamera pokazuje zdjęcie co 10 sekund. Wymaga bezpośredniego połączenia z Bridge.",
 };
 
 static const LocaleProfile kLocalePl = {

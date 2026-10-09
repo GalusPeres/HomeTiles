@@ -1,4 +1,5 @@
 #include "src/web/server/web_admin.h"
+#include "src/network/mqtt/mqtt_handlers.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/web/server/web_admin_utils.h"
@@ -67,12 +68,22 @@ void WebAdminServer::handleSaveScreensaver() {
   const String payload = server.arg("plain");
   String preview_wallpaper;
   String error;
+  const ScreensaverConfigData& before = screensaverConfig.get();
+  const bool had_picture = before.use_wallpapers && screensaver_uses_ha_picture(before);
+  const String old_entity = had_picture ? before.picture_entity : String();
   if (!screensaverConfig.replaceFromJson(payload, error, &preview_wallpaper)) {
     String json = "{\"success\":false,\"error\":\"";
     appendJsonEscaped(json, error);
     json += "\"}";
     server.send(400, "application/json", json);
     return;
+  }
+  // A new Home Assistant picture source changes the subscriptions and what
+  // the panel tells the Bridge it uses (docs-dev/images.md).
+  const ScreensaverConfigData& after = screensaverConfig.get();
+  const bool has_picture = after.use_wallpapers && screensaver_uses_ha_picture(after);
+  if (had_picture != has_picture || (has_picture && old_entity != after.picture_entity)) {
+    mqttRequestDynamicSlotsReload(1000);
   }
   image_screensaver_config_changed(preview_wallpaper);
   server.send(200, "application/json", "{\"success\":true}");

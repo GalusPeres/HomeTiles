@@ -87,6 +87,7 @@ bool HaBridgeConfig::load() {
   data.alarm_panels_text = "";
   data.fans_text = "";
   data.cameras_text = "";
+  data.images_text = "";
   data.scene_alias_text = "";
   data.sensor_units_map = "";
   data.sensor_names_map = "";
@@ -246,6 +247,7 @@ bool HaBridgeConfig::hasData() const {
          data.alarm_panels_text.length() > 0 ||
          data.fans_text.length() > 0 ||
          data.cameras_text.length() > 0 ||
+         data.images_text.length() > 0 ||
          data.scene_alias_text.length() > 0;
 }
 
@@ -676,7 +678,8 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
   // (older Bridges send none).
   for (auto section : {std::make_pair("\"locks\"", &merged.locks_text),
                        std::make_pair("\"alarm_panels\"", &merged.alarm_panels_text),
-                       std::make_pair("\"fans\"", &merged.fans_text)}) {
+                       std::make_pair("\"fans\"", &merged.fans_text),
+                       std::make_pair("\"images\"", &merged.images_text)}) {
     const int index = json.indexOf(section.first);
     if (index >= 0) parseArraySection(json.substring(index), *section.second);
   }
@@ -1013,6 +1016,7 @@ static bool bridgeConfigEquals(const HaBridgeConfigData& a, const HaBridgeConfig
   if (!listEqualsIgnoringOrder(a.alarm_panels_text, b.alarm_panels_text)) return false;
   if (!listEqualsIgnoringOrder(a.fans_text, b.fans_text)) return false;
   if (!listEqualsIgnoringOrder(a.cameras_text, b.cameras_text)) return false;
+  if (!listEqualsIgnoringOrder(a.images_text, b.images_text)) return false;
   if (!mapEqualsIgnoringOrder(a.scene_alias_text, b.scene_alias_text)) return false;
 
   for (size_t i = 0; i < HA_SENSOR_SLOT_COUNT; ++i) {

@@ -1376,6 +1376,25 @@ static String buildHaStatestreamTopic(const String& entity_id, const char* suffi
   return topic;
 }
 
+// The screensaver's live camera picture topic (mqttSetLivePicture).
+static String g_live_picture_topic;
+
+void mqttSetLivePicture(const char* entity_id) {
+  String topic;
+  if (entity_id && *entity_id) {
+    topic = buildHaStatestreamTopic(String(entity_id), bridge_images::screenSuffix());
+  }
+  if (topic == g_live_picture_topic) return;
+  if (networkManager.isMqttConnected() && networkManager.linkConfigured()) {
+    if (g_live_picture_topic.length()) {
+      networkManager.mqttEnqueueUnsubscribe(g_live_picture_topic.c_str());
+    }
+    if (topic.length()) networkManager.mqttEnqueueSubscribe(topic.c_str());
+  }
+  Serial.printf("[Images] Live picture: %s\n", topic.length() ? topic.c_str() : "none");
+  g_live_picture_topic = topic;
+}
+
 static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
   routes.clear();
 
@@ -1512,6 +1531,16 @@ static void rebuildDynamicRoutes(std::vector<DynamicSensorRoute>& routes) {
         add_route(tile.sensor_entity, -1, bridge_images::coverSuffix());
       }
     }
+  }
+
+  // The screensaver's picture of an image entity stays subscribed, ready when
+  // the screensaver opens; a camera's still only while it shows it
+  // (mqttSetLivePicture), since the Bridge loads a new one every 10 s.
+  const ScreensaverConfigData& screensaver = screensaverConfig.get();
+  if (networkManager.linkConfigured() && screensaver.use_wallpapers &&
+      screensaver_uses_ha_picture(screensaver) &&
+      screensaver.picture_entity.startsWith("image.")) {
+    add_route(screensaver.picture_entity, -1, bridge_images::screenSuffix());
   }
 
   // Media states with embedded covers need about 19 KB, exceeding the
@@ -2148,6 +2177,9 @@ void mqttSubscribeTopics() {
   // unsubscribe commands.
   mqttReloadDynamicSlots(true);
   hardwareIo.subscribeMqttTopics();
+  if (g_live_picture_topic.length() && networkManager.linkConfigured()) {
+    networkManager.mqttEnqueueSubscribe(g_live_picture_topic.c_str());
+  }
 }
 
 // ========== Publish home snapshot ==========

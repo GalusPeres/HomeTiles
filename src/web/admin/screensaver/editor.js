@@ -114,6 +114,10 @@
     data.wallpapers = Array.isArray(data.wallpapers) ? data.wallpapers : [];
     data.duration_seconds = Math.round(ssClamp(
       data.duration_seconds ?? 15, 3, 3600));
+    // The picture's source: the SD slideshow or the Bridge's picture of an
+    // image or camera entity (the slideshow stays stored).
+    data.picture_source = data.picture_source === 'ha' ? 'ha' : 'sd';
+    data.picture_entity = typeof data.picture_entity === 'string' ? data.picture_entity : '';
     return data;
   }
 
@@ -202,6 +206,8 @@
       clock_x: Math.round(ssClamp(d.clock_x, 0, 1000)),
       clock_y: Math.round(ssClamp(d.clock_y, 0, 1000)),
       duration_seconds: Math.round(ssClamp(d.duration_seconds, 3, 3600)),
+      picture_source: d.picture_source === 'ha' ? 'ha' : 'sd',
+      picture_entity: String(d.picture_entity || ''),
       preview_wallpaper: previewName ?? (ssCurrentWallpaper()?.file_name || ''),
       wallpapers: d.wallpapers.map(w => ({
         file_name: w.file_name, enabled: !!w.enabled,
@@ -361,7 +367,17 @@
     clock.style.setProperty(
       '--screensaver-clock-shadow-6',
       (devicePx('--screensaver-shadow-6', 6) * scale) + 'px');
-    const wallpaper = ssCurrentWallpaper();
+    // The type picks the controls: the slideshow's or the picture entity.
+    const fromHa = d.picture_source === 'ha';
+    const source = document.getElementById('screensaverPictureSource');
+    if (source && source.value !== d.picture_source) source.value = d.picture_source;
+    document.getElementById('screensaverHaPicture')?.classList.toggle('hidden', !fromHa);
+    document.getElementById('screensaverSdPicture')?.classList.toggle('hidden', fromHa);
+    const heading = document.getElementById('screensaverBackgroundHeading');
+    if (heading) heading.textContent = fromHa ? heading.dataset.ha : heading.dataset.sd;
+    const pictureEntity = document.getElementById('screensaver_picture_entity');
+    if (pictureEntity && pictureEntity.value !== d.picture_entity) pictureEntity.value = d.picture_entity;
+    const wallpaper = fromHa ? null : ssCurrentWallpaper();
     if (d.use_wallpapers && wallpaper && wallpaper.file_name) {
       const wanted = '/api/screensaver/wallpaper?name=' + encodeURIComponent(wallpaper.file_name);
       if (image.dataset.src !== wanted) { image.src = wanted; image.dataset.src = wanted; }
@@ -569,6 +585,10 @@
       element.addEventListener(event, () => { fn(element); renderScreensaverEditor(); if (save) scheduleScreensaverSave(); });
     };
     bind('screensaverUseWallpapers', 'change', el => { screensaverDraft.use_wallpapers = el.checked; });
+    bind('screensaverPictureSource', 'change', el => {
+      screensaverDraft.picture_source = el.value === 'ha' ? 'ha' : 'sd';
+    });
+    bind('screensaver_picture_entity', 'change', el => { screensaverDraft.picture_entity = el.value || ''; });
     bind('screensaverShuffle', 'change', el => { screensaverDraft.shuffle = el.checked; });
     bind('screensaverTileShadow', 'change', el => { screensaverDraft.tile_shadow = el.checked; });
     bind('screensaverTileBorder', 'change', el => { screensaverDraft.tile_border = el.checked; });

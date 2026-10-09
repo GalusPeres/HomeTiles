@@ -1317,6 +1317,10 @@ void WebAdminServer::handleGetEntityOptions() {
   appendList("alarm_panels", parseSensorList(ha.alarm_panels_text));
   appendList("fans", parseSensorList(ha.fans_text));
   appendList("cameras", parseSensorList(ha.cameras_text));
+  // The screensaver picture: released images, then cameras.
+  std::vector<String> picture_ids = parseSensorList(ha.images_text);
+  for (const auto& id : parseSensorList(ha.cameras_text)) addUnique(picture_ids, id);
+  appendList("images", picture_ids);
   appendList("media", parseSensorList(ha.media_players_text));
 
   // Lights, switches, the panel's own entities and local relays.

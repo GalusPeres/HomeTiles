@@ -1,6 +1,6 @@
 # Screensaver
 
-Create a separate layout with a clock, tiles, and an optional image slideshow in the Web Admin's **Screensaver** tab.
+Create a separate layout with a clock, tiles, and an optional image slideshow or a picture from Home Assistant in the Web Admin's **Screensaver** tab.
 
 <figure class="ht-screenshot">
 <img src="../images/8in-screensaver.png" alt="Screensaver on the Waveshare 8 inch display" width="1308" height="828" loading="lazy">
@@ -21,7 +21,7 @@ Create a separate layout with a clock, tiles, and an optional image slideshow in
 
 ## Prepare the microSD Card { data-toc-label="Prepare images" }
 
-A slideshow needs microSD support. The Waveshare S3 LCD-4 Rev 4.0 and S3 LCD-4B profiles cannot use SD images. The clock and tiles work on a black background without a card.
+A slideshow needs microSD support. The Waveshare S3 LCD-4 Rev 4.0 and S3 LCD-4B profiles cannot use SD images. The clock and tiles work on a black background without a card. A [picture from Home Assistant](#picture-from-home-assistant) needs no card.
 
 1. Format the card as FAT32 and insert it.
 2. Create an `images` folder in the card's root (`/images`).
@@ -60,6 +60,16 @@ In the Web Admin's **Screensaver** tab, click the background.
 | **Focus X / Focus Y** | Move its crop horizontally or vertically |
 
 Changes save automatically.
+
+## Picture from Home Assistant { data-toc-label="Home Assistant picture" }
+
+Instead of the slideshow, the screensaver can show the picture of a Home Assistant `image` or `camera` entity, for example a weather webcam.
+
+1. Connect the panel to the Bridge directly (pairing on the panel); panels on MQTT keep the slideshow.
+2. Release the entity in the Bridge options under **Images (screensaver)**. A camera released under **Cameras** works too.
+3. In the **Screensaver** tab, click the background, set **Type** to **Picture from Home Assistant**, keep **Use images** on, and choose the entity.
+
+A new picture of an image entity appears at once. A camera shows a new still image every 10 seconds, and only while the screensaver is visible. The Bridge fits the picture to the screen. Switch back to **Slideshow (SD card)** at any time; the slideshow settings stay stored.
 
 ## Position the Clock
 

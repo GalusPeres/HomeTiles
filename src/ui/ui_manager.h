@@ -3,6 +3,7 @@
 
 #include <lvgl.h>
 #include <Arduino.h>
+#include <atomic>
 #include "src/ui/shared/ui_theme.h"
 
 // Forward Declarations
@@ -37,6 +38,12 @@ public:
   void lockProtectedAccess();
   void finishFolderSwitch(uint16_t folder_id, bool success);
   void refreshSettingsGestureZone();
+
+  // The theme (dark/light) applies while running, like the global tile
+  // color: a save only requests it (any task), the loop applies the stored
+  // theme once the camera and popup openings allow it.
+  void requestThemeChange() { theme_change_pending.store(true); }
+  void processThemeChange();
 
 private:
   static constexpr uint8_t TAB_COUNT = 4;
@@ -73,7 +80,10 @@ private:
   bool tz_configured = false;
   static const char* TZ_EUROPE_BERLIN;
 
+  std::atomic<bool> theme_change_pending{false};
+
   // Internal functions
+  void preloadPopups();
   void statusbarInit(lv_obj_t *tab_bar);
   lv_obj_t* setupTabButton(lv_obj_t *btn, uint8_t tab_index, const char *icon_name, const char *tab_name);
   lv_obj_t* createTabPanel(lv_obj_t *parent);

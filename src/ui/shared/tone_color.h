@@ -186,18 +186,20 @@ inline Fill fill(uint32_t card, uint32_t icon, bool tinted, uint8_t percent, boo
   card &= 0xFFFFFF;
   icon &= 0xFFFFFF;
   if (percent > 100) percent = 100;
-  // Popups restyle on every sync: keep the last few results.
+  // Popups restyle on every sync: keep the last few results (per theme: the
+  // theme switches while running).
   struct Entry {
     uint32_t card, icon;
     uint8_t percent;
-    bool tinted, see_through, used;
+    bool tinted, see_through, light, used;
     Fill fill;
   };
   static Entry cache[4] = {};
   static uint8_t next = 0;
+  const bool light = ui_theme::light();
   for (const Entry& entry : cache) {
     if (entry.used && entry.card == card && entry.icon == icon && entry.percent == percent &&
-        entry.tinted == tinted && entry.see_through == see_through) {
+        entry.tinted == tinted && entry.see_through == see_through && entry.light == light) {
       return entry.fill;
     }
   }
@@ -238,7 +240,7 @@ inline Fill fill(uint32_t card, uint32_t icon, bool tinted, uint8_t percent, boo
   }
   Entry& slot = cache[next];
   next = static_cast<uint8_t>((next + 1) % 4);
-  slot = {card, icon, percent, tinted, see_through, true, result};
+  slot = {card, icon, percent, tinted, see_through, light, true, result};
   return result;
 }
 
@@ -264,14 +266,16 @@ inline uint32_t switch_thumb_off(uint32_t track) { return lifted(track, track, f
 // a dark icon is lifted the same everywhere.
 inline uint32_t readable_icon(uint32_t icon) {
   icon &= 0xFFFFFF;
-  // Tiles and popups restyle often: keep the last few results.
+  const bool light = ui_theme::light();
+  // Tiles and popups restyle often: keep the last few results, keyed with the
+  // theme (bit 24; the theme switches while running).
+  const uint32_t key = icon | (light ? 0x1000000u : 0u);
   static uint32_t cached_icon[4] = {}, cached_shown[4] = {};
   static uint8_t used = 0, next = 0;
   for (uint8_t i = 0; i < used; ++i) {
-    if (cached_icon[i] == icon) return cached_shown[i];
+    if (cached_icon[i] == key) return cached_shown[i];
   }
   const bool tinted = tile_tint::has_hue(icon);
-  const bool light = ui_theme::light();
   const uint32_t base = light ? ui_theme::card() : tile_color::kDefault;
   const uint32_t card = tinted ? tile_tint::background(base, icon, kReferenceTint) : base;
   const uint32_t circle = lifted(card, icon, tinted, icon_glow::kDefault * kStepPerPercent);
@@ -289,7 +293,7 @@ inline uint32_t readable_icon(uint32_t icon) {
     const float maximum = from_rgb(circle).L - kIconMinStep;
     if (seed.L > maximum) shown = to_rgb(maximum, seed.C, seed.h);
   }
-  cached_icon[next] = icon;
+  cached_icon[next] = key;
   cached_shown[next] = shown;
   next = static_cast<uint8_t>((next + 1) % 4);
   if (used < 4) ++used;

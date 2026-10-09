@@ -1195,6 +1195,7 @@ void loop() {
     webConfigServer.handle();
     // Folder taps only set a pending flag. Consume it in AP mode as well as the
     // normal loop; otherwise navigation remains stuck until AP mode ends.
+    uiManager.processThemeChange();
     tiles_process_reload_requests();
     settings_update_ap_mode(true);
     settings_update_wifi_status_ap(webConfigApSsid(), webConfigApPassword());
@@ -1413,6 +1414,7 @@ void loop() {
   // Retain navigation/layout/style reload flags while the camera covers them;
   // rebuilding invisible content could otherwise cost a complete camera frame.
   if (!camera_popup_busy && !PopupFirstFrame::any_pending()) {
+    uiManager.processThemeChange();
     tiles_process_reload_requests();
   }
   uint32_t t_reload_requests = millis();

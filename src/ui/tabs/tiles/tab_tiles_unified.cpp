@@ -1886,6 +1886,15 @@ void tiles_request_reload_if_loaded(GridType grid_type) {
   g_tiles_reload_requested[idx] = true;
 }
 
+void tiles_apply_screen_color() {
+  const lv_color_t screen = lv_color_hex(ui_theme::screen());
+  for (uint8_t i = 0; i < 3; ++i) {
+    if (g_tiles_roots[i]) lv_obj_set_style_bg_color(g_tiles_roots[i], screen, 0);
+    if (g_tiles_grids[i]) lv_obj_set_style_bg_color(g_tiles_grids[i], screen, 0);
+  }
+  if (g_active_cache && g_active_cache->grid) lv_obj_set_style_bg_color(g_active_cache->grid, screen, 0);
+}
+
 void tiles_request_reload_all() {
   for (uint8_t i = 0; i < 3; ++i) {
     if (!g_tiles_reload_requested[i]) {

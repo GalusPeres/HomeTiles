@@ -71,13 +71,72 @@ assert.ok(ino.indexOf('ui_theme::set(configManager.getConfig().theme);') > ino.i
   ino.indexOf('ui_theme::set(configManager.getConfig().theme);') < ino.indexOf('tileConfig.load();'),
   'the theme is set after loading the config, before the tiles');
 
+// The theme switches while running (user 2026-10-09: "warum muss neugestartet
+// werden", like the global tile color): the Web Admin's field stores it and
+// requests the change; the loop applies it outside camera and popup openings.
+const handlers = read('src/web/server/handlers/web_admin_handlers.cpp');
+const saveTheme = handlers.slice(handlers.indexOf('void WebAdminServer::handleSaveTheme() {'),
+  handlers.indexOf('void WebAdminServer::handleSaveTileBorders() {'));
+assert.ok(saveTheme.includes('if (value != "0" && value != "1") {') &&
+  saveTheme.indexOf('configManager.saveTheme(') < saveTheme.indexOf('uiManager.requestThemeChange();'),
+  'The theme is validated, stored, then requested');
+assert.ok(read('src/web/server/web_admin.cpp').includes('server.on("/api/display/theme", HTTP_POST,'));
+const html = read('src/web/server/render/web_admin_html.cpp');
+assert.ok(html.includes('<select class=\\"global-theme\\" id=\\"" + theme_id + "\\" onchange=\\"saveTheme(this.value)\\">') &&
+  html.includes('if (display.theme == theme) html += " selected";') &&
+  html.includes('appendHtmlEscaped(html, theme ? tr.theme_light : tr.theme_dark);') &&
+  html.includes('appendHtmlEscaped(html, tr.theme_label);'), 'Global settings: the theme field');
+const admin = read('src/web/admin/settings/display-borders.js');
+assert.ok(admin.includes("const response = await fetch('/api/display/theme', {") && admin.includes("body: 'theme=' + theme"));
+const i18n = read('src/core/i18n/i18n.cpp');
+for (const words of [['"Design",', '"Dunkel",', '"Hell",'], ['"Theme",', '"Dark",', '"Light",'],
+  ['"Thème",', '"Sombre",', '"Clair",'], ['"Motyw",', '"Ciemny",', '"Jasny",']]) {
+  assert.ok(i18n.includes(words.map(word => '    ' + word).join('\n')), 'theme texts: ' + words[0]);
+}
+const ui = read('src/ui/ui_manager.cpp');
+const apply = ui.slice(ui.indexOf('void UIManager::processThemeChange() {'), ui.indexOf('// Initialize the status bar.'));
+for (const step of ['if (camera_popup_is_busy() || PopupFirstFrame::any_pending()) return;',
+  'ui_theme::set(theme);', 'viewNavigationClosePopups();', 'popup_shell_delete_popups();', 'preloadPopups();',
+  'lv_obj_set_style_bg_color(lv_screen_active(), screen, 0);', 'tiles_apply_screen_color();',
+  'tiles_invalidate_folder(tileConfig.rootFolderId());', 'tiles_request_reload_all();',
+  'image_screensaver_tiles_changed();', 'settings_screen::texts_changed();']) {
+  assert.ok(apply.includes(step), 'processThemeChange: ' + step);
+}
+assert.ok(apply.indexOf('popup_shell_delete_popups();') < apply.indexOf('preloadPopups();'));
+const inoLoop = read('HomeTiles.ino');
+assert.equal(inoLoop.split('uiManager.processThemeChange();\n').length - 1, 2, 'Both loop branches apply a change');
+// Every popup goes with its overlay: the shell keeps the overlays, deletes them
+// and itself; camera and device popups free their state on delete.
+const shell = read('src/ui/popups/popup_shell.cpp');
+assert.ok(shell.includes('lv_obj_add_event_cb(parts.overlay, popup_overlay_deleted, LV_EVENT_DELETE, nullptr);'));
+assert.match(shell, /void popup_shell_delete_popups\(\) \{\n  detach\(\);[\s\S]*?if \(overlay\) lv_obj_delete\(overlay\);[\s\S]*?if \(shell\.overlay\) lv_obj_delete\(shell\.overlay\);/);
+const camera = read('src/ui/popups/camera/camera_popup.cpp');
+assert.ok(camera.includes('lv_obj_add_event_cb(ctx->overlay, overlay_deleted_cb, LV_EVENT_DELETE, ctx);') &&
+  camera.includes('if (ctx->full_touch) lv_obj_delete(ctx->full_touch);') &&
+  camera.includes('if (g_camera_popup == ctx) g_camera_popup = nullptr;'));
+const device = read('src/ui/popups/device/device_popup.cpp');
+assert.ok(device.includes('lv_obj_add_event_cb(pop.overlay, on_overlay_delete, LV_EVENT_DELETE, nullptr);') &&
+  /void on_overlay_delete\(lv_event_t\*\) \{[\s\S]*?lv_timer_delete\(g_live_timer\);[\s\S]*?pop = Popup\{\};/.test(device));
+for (const [file, owner] of [['src/ui/popups/light/light_popup.cpp', 'g_light_popup_ctx'],
+  ['src/ui/popups/climate/climate_popup.cpp', 'g_climate_popup'], ['src/ui/popups/cover/cover_popup.cpp', 'g_ctx'],
+  ['src/ui/popups/energy/energy_popup.cpp', 'g_energy_popup_ctx'], ['src/ui/popups/media/media_popup.cpp', 'g_media_popup_ctx'],
+  ['src/ui/popups/pin/pin_popup.cpp', 'g_ctx'], ['src/ui/popups/sensor/sensor_popup.cpp', 'g_sensor_popup_ctx'],
+  ['src/ui/popups/weather/weather_popup.cpp', 'g_weather_popup_ctx']]) {
+  const text = read(file);
+  assert.ok(/LV_EVENT_DELETE, ctx\);/.test(text) && text.includes(owner + ' = nullptr;'), file + ' frees its context on delete');
+}
+// The color caches keep each theme apart.
+const tone = read('src/ui/shared/tone_color.h');
+assert.ok(tone.includes('entry.see_through == see_through && entry.light == light') &&
+  tone.includes('const uint32_t key = icon | (light ? 0x1000000u : 0u);'));
+assert.ok(read('src/tiles/runtime/tile_icon_source.cpp').includes('entry.percent == percent && entry.light == light'));
+
 const host = await lvglHost(root);
 if (!host) {
   console.log('UI theme: roles and setting pass; SKIP: color math needs a host compiler');
   process.exit(0);
 }
-// The color math in both themes (one process per theme: tone_color caches
-// its results, and a panel never changes the theme while running).
+// The color math in both themes (one process per theme).
 const out = path.join(root, 'build/tests/ui-theme');
 fs.mkdirSync(out, {recursive: true});
 const colors = [0xFFFFFF, 0x1A1A1A, 0xF44336, 0x4CAF50, 0x2196F3, 0xFFD54F, 0xFF9800, 0x9C27B0, 0xB0B0B0, 0x9E9E9E];

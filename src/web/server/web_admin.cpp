@@ -223,6 +223,8 @@ bool WebAdminServer::start() {
               guarded(withStorageHold([this]() { this->handleSaveIconGlow(); })));
     server.on("/api/display/tile-color", HTTP_POST,
               guarded(withStorageHold([this]() { this->handleSaveDefaultTileColor(); })));
+    server.on("/api/display/theme", HTTP_POST,
+              guarded(withStorageHold([this]() { this->handleSaveTheme(); })));
     server.on("/api/local-camera", HTTP_GET,
               guarded([this]() { this->handleLocalCamera(); }));
     server.on("/api/local-camera", HTTP_POST,

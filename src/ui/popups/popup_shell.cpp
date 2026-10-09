@@ -43,6 +43,9 @@ struct HeaderDisc {
   uint8_t tile_tint = 0;
 };
 HeaderDisc g_next_disc;
+// Every popup body's overlay (create_popup_body), for popup_shell_delete_popups.
+constexpr size_t kMaxPopupOverlays = 16;
+lv_obj_t* g_popup_overlays[kMaxPopupOverlays] = {};
 // popup_shell_hold_close_fill: a drag holds the close button's press color.
 bool g_hold_close_fill = false;
 struct Shell {
@@ -213,6 +216,13 @@ void body_deleted(lv_event_t* event) {
     lv_obj_remove_event_cb_with_user_data(binding->owner, owner_deleted, binding);
   binding->~Binding();
   heap_caps_free(binding);
+}
+
+void popup_overlay_deleted(lv_event_t* event) {
+  lv_obj_t* overlay = static_cast<lv_obj_t*>(lv_event_get_target(event));
+  for (lv_obj_t*& slot : g_popup_overlays) {
+    if (slot == overlay) slot = nullptr;
+  }
 }
 
 void shell_deleted(lv_event_t*) {
@@ -440,6 +450,12 @@ PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
   lv_obj_set_style_border_width(parts.overlay, 0, 0);
   lv_obj_remove_flag(parts.overlay, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(parts.overlay, LV_OBJ_FLAG_CLICKABLE);
+  for (lv_obj_t*& slot : g_popup_overlays) {
+    if (slot) continue;
+    slot = parts.overlay;
+    lv_obj_add_event_cb(parts.overlay, popup_overlay_deleted, LV_EVENT_DELETE, nullptr);
+    break;
+  }
 
   parts.card = lv_obj_create(parts.overlay);
   lv_obj_set_size(parts.card, popup_layout::kCardWidth, popup_layout::kCardHeight);
@@ -586,6 +602,17 @@ void popup_shell_follow_tile_color(uint32_t color) {
   // frame is marked now and drawn first.
   lv_obj_invalidate(shell.frame);
   draw_shell_first();
+}
+
+void popup_shell_delete_popups() {
+  detach();
+  for (lv_obj_t*& slot : g_popup_overlays) {
+    lv_obj_t* overlay = slot;
+    slot = nullptr;
+    if (overlay) lv_obj_delete(overlay);
+  }
+  // shell_deleted resets the shell; ensure_shell builds it on the next show.
+  if (shell.overlay) lv_obj_delete(shell.overlay);
 }
 
 void hide_popup_shell(lv_obj_t* body) {

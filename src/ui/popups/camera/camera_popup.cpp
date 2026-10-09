@@ -402,6 +402,20 @@ static void full_touch_event_cb(lv_event_t* event) {
   }
 }
 
+// A theme change deletes the popup (popup_shell_delete_popups) while it is
+// idle (camera_popup_is_busy holds the change): its full-screen layers on the
+// top layer go with it; preload_camera_popup builds it again.
+static void overlay_deleted_cb(lv_event_t* e) {
+  auto* ctx = static_cast<CameraPopupContext*>(lv_event_get_user_data(e));
+  if (!ctx) return;
+  if (ctx->full_touch) lv_obj_delete(ctx->full_touch);
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  if (ctx->soft_full) lv_obj_delete(ctx->soft_full);
+#endif
+  if (g_camera_popup == ctx) g_camera_popup = nullptr;
+  delete ctx;
+}
+
 static CameraPopupContext* create_popup() {
   CameraPopupContext* ctx = new CameraPopupContext();
 
@@ -414,6 +428,7 @@ static CameraPopupContext* create_popup() {
   lv_obj_t* close_button = parts.close;
   lv_obj_set_style_pad_all(ctx->overlay, 0, 0);
   lv_obj_add_event_cb(ctx->overlay, overlay_event_cb, LV_EVENT_CLICKED, ctx);
+  lv_obj_add_event_cb(ctx->overlay, overlay_deleted_cb, LV_EVENT_DELETE, ctx);
 
   lv_obj_t* video = lv_obj_create(ctx->card);
   lv_obj_set_size(video, kVideoFrameWidth, kVideoHeight);

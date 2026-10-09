@@ -18,8 +18,8 @@
 //                                         white to #B0B0B0 above #464646)
 //   secondary text             #5F6368
 //   accents as text            their dark tone (OKLCH L 0.58)
-// The theme is read once at boot (ConfigManager "theme"); a change applies
-// after a restart, like the layout.
+// The theme is read at boot (ConfigManager "theme"); a change applies while
+// running (UIManager::processThemeChange).
 namespace ui_theme {
 
 enum class Theme : uint8_t { Dark = 0, Light = 1 };

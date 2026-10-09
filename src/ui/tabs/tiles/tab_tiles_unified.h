@@ -13,6 +13,9 @@ bool tiles_is_loaded(GridType grid_type);
 void tiles_request_reload(GridType grid_type);
 void tiles_request_reload_if_loaded(GridType grid_type);
 void tiles_request_reload_all();
+// The theme changed (UIManager::processThemeChange): the tabs and their grids
+// take the new screen color; the tiles rebuild through the reload requests.
+void tiles_apply_screen_color();
 void tiles_request_icon_refresh();
 void tiles_refresh_image_previews_for_key(GridType grid_type, const String& raw_key);
 void tiles_request_release(GridType grid_type);

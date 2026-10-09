@@ -24,6 +24,10 @@
 #include "src/fonts/ui_fonts.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/shared/camera_indicator.h"
+#include "src/ui/popups/popup_shell.h"
+#include "src/ui/popups/popup_first_frame.h"
+#include "src/ui/tabs/settings/settings_screen.h"
+#include "src/ui/screensaver/image_screensaver.h"
 
 #include <time.h>
 #include <string.h>
@@ -137,7 +141,18 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   }
   switchToTab(0);
 
-  // Keep popup bodies resident; the shared shell presents before content work.
+  preloadPopups();
+
+  access_gesture_eligible = false;
+  mqttPublishDeviceSettings();
+  // Red frame in the outer margin while the built-in camera captures.
+  camera_indicator::init();
+
+  Serial.println("[UI] UI built");
+}
+
+// Keep popup bodies resident; the shared shell presents before content work.
+void UIManager::preloadPopups() {
   preload_light_popup();
   preload_sensor_popup();
   preload_weather_popup();
@@ -148,13 +163,39 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   preload_device_popup();
   preload_pin_popup();
   preload_camera_popup();
+}
 
-  access_gesture_eligible = false;
-  mqttPublishDeviceSettings();
-  // Red frame in the outer margin while the built-in camera captures.
-  camera_indicator::init();
-
-  Serial.println("[UI] UI built");
+void UIManager::processThemeChange() {
+  if (!theme_change_pending.load()) return;
+  // The camera owns the screen, or a popup is drawing its first frame: later.
+  if (camera_popup_is_busy() || PopupFirstFrame::any_pending()) return;
+  theme_change_pending.store(false);
+  const uint8_t theme = configManager.getConfig().theme;
+  if ((theme == 1) == ui_theme::light()) return;
+  const uint32_t started = millis();
+  ui_theme::set(theme);
+  // Popups and the shell were built in the old colors: closed, deleted and
+  // built again (their fixed labels take the colors when created).
+  viewNavigationClosePopups();
+  settings_screen::close_overlays();
+  popup_shell_delete_popups();
+  preloadPopups();
+  // The screen behind everything.
+  const lv_color_t screen = lv_color_hex(ui_theme::screen());
+  lv_obj_set_style_bg_color(lv_screen_active(), screen, 0);
+  if (tab_content_container) lv_obj_set_style_bg_color(tab_content_container, screen, 0);
+  for (lv_obj_t* panel : tab_panels) {
+    if (panel) lv_obj_set_style_bg_color(panel, screen, 0);
+  }
+  tiles_apply_screen_color();
+  // Tiles, head bars and the screensaver grid rebuild like after a default
+  // tile color change; Settings rebuilds when it shows (now, if it does).
+  tiles_invalidate_folder(tileConfig.rootFolderId());
+  tiles_request_reload_all();
+  image_screensaver_tiles_changed();
+  settings_screen::texts_changed();
+  Serial.printf("[UI] Theme %s applied in %lu ms\n", ui_theme::light() ? "light" : "dark",
+                static_cast<unsigned long>(millis() - started));
 }
 
 // Initialize the status bar.

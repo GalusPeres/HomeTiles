@@ -1011,10 +1011,21 @@ void on_close(lv_event_t* e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) hide_device_popup();
 }
 
+// A theme change deletes the popup (popup_shell_delete_popups): its objects
+// are gone, ensure_popup builds it again.
+void on_overlay_delete(lv_event_t*) {
+  if (g_live_timer) {
+    lv_timer_delete(g_live_timer);
+    g_live_timer = nullptr;
+  }
+  pop = Popup{};
+}
+
 void ensure_popup() {
   if (pop.card) return;
   const auto parts = create_popup_body(on_close, nullptr, pop.card_rgb);
   pop.overlay = parts.overlay;
+  lv_obj_add_event_cb(pop.overlay, on_overlay_delete, LV_EVENT_DELETE, nullptr);
   pop.card = parts.card;
   pop.title = parts.title;
   pop.icon = parts.icon;

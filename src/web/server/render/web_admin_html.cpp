@@ -941,6 +941,7 @@ static void appendTileTabHTML(
     const String radius_id = tab_id + "_global_tile_radius";
     const String color_id = tab_id + "_global_tile_color";
     const String glow_id = tab_id + "_global_icon_glow";
+    const String theme_id = tab_id + "_global_theme";
     const String glow_value = String(icon_glow::clamp(display.icon_glow));
     html += "<section class=\"global-settings-panel\"><h3>";
     appendHtmlEscaped(html, tr.global_settings_heading);
@@ -971,6 +972,18 @@ static void appendTileTabHTML(
       html += " · " + String(shown.cols) + " × " + String(shown.rows);
       html += "</span><i class=\"mdi mdi-pencil-outline\"></i></button></div>";
     }
+    // The theme (ui_theme.h): the panel switches while running.
+    html += "<div class=\"global-settings-field\"><label for=\"" + theme_id + "\">";
+    appendHtmlEscaped(html, tr.theme_label);
+    html += "</label><select class=\"global-theme\" id=\"" + theme_id + "\" onchange=\"saveTheme(this.value)\">";
+    for (uint8_t theme = 0; theme < 2; ++theme) {
+      html += "<option value=\"" + String(theme) + "\"";
+      if (display.theme == theme) html += " selected";
+      html += ">";
+      appendHtmlEscaped(html, theme ? tr.theme_light : tr.theme_dark);
+      html += "</option>";
+    }
+    html += "</select></div>";
     html += "<div class=\"global-settings-field\"><label for=\"" + radius_id + "\">";
     appendHtmlEscaped(html, tr.tile_radius);
     html += "</label><div class=\"global-radius-field\">";

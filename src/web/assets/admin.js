@@ -267,6 +267,30 @@ async function saveDefaultTileColor(value) {
     showNotification(t('networkErrorSave'), false);
   }
 }
+// The theme (ui_theme.h): the panel switches while running; every grid's
+// field shows the saved choice.
+let themeSaveSequence = 0;
+let themeChosen = null;
+async function saveTheme(value) {
+  const theme = String(value) === '1' ? '1' : '0';
+  const previous = theme === '1' ? '0' : '1';
+  themeChosen = theme;
+  document.querySelectorAll('.global-theme').forEach(select => { select.value = theme; });
+  const sequence = ++themeSaveSequence;
+  try {
+    const response = await fetch('/api/display/theme', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'theme=' + theme
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+  } catch (error) {
+    if (sequence !== themeSaveSequence) return;
+    themeChosen = previous;
+    document.querySelectorAll('.global-theme').forEach(select => { select.value = previous; });
+    showNotification(t('networkErrorSave'), false);
+  }
+}
 function syncGlobalDisplayControls(tabEl) {
   tabEl.querySelectorAll('.global-icon-disc-toggle').forEach(input => {
     input.checked = iconDiscsEnabled();
@@ -276,6 +300,7 @@ function syncGlobalDisplayControls(tabEl) {
   const glow = currentIconGlow();
   tabEl.querySelectorAll('.global-icon-glow').forEach(input => { input.value = String(glow); });
   tabEl.querySelectorAll('.global-icon-glow-value').forEach(output => { output.textContent = glow + ' %'; });
+  if (themeChosen !== null) tabEl.querySelectorAll('.global-theme').forEach(select => { select.value = themeChosen; });
 }
 
 // The shared root variables also reach cached and lazily inserted folder grids.

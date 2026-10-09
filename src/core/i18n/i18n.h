@@ -227,6 +227,10 @@ struct Strings {
   // Web Admin: global display settings row below the grid preview.
   const char* global_settings_heading;
   const char* icon_discs;
+  // The theme field (ui_theme.h) and its two choices.
+  const char* theme_label;
+  const char* theme_dark;
+  const char* theme_light;
   // The layouts (grid_layout.h) and their "Layout ändern" window: the field
   // in the global settings, the three layouts, the window's buttons and
   // status ("**...**" is shown bold, {n} a count, {layout}/{tile} a name).

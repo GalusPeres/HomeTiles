@@ -74,6 +74,12 @@ void popup_shell_pulse_icon(lv_obj_t* body, bool on);
 // one. Another popup removes it.
 void popup_shell_icon_lock(lv_obj_t* body, bool on);
 
+// The theme changed (UIManager::processThemeChange): hides the shown popup and
+// deletes every popup body and the shell. Each popup's own delete handler
+// frees its context; the preloads and the next opening build them again in
+// the new colors.
+void popup_shell_delete_popups();
+
 // Register an existing background tree, once after construction. Opaque popup
 // pixels can skip its covered draw calls without hiding or rebuilding widgets.
 void register_popup_background(lv_obj_t* root);

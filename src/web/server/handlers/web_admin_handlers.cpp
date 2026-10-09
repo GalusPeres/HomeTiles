@@ -843,6 +843,24 @@ void WebAdminServer::handleSaveDefaultTileColor() {
   server.send(200, "application/json", response);
 }
 
+// The theme (ui_theme.h, 0 dark, 1 light): stored, then the UI loop applies
+// it while running (UIManager::processThemeChange).
+void WebAdminServer::handleSaveTheme() {
+  webAdminMarkActivity();
+  const String value = server.arg("theme");
+  if (value != "0" && value != "1") {
+    sendJsonError(server, 400, "Invalid theme");
+    return;
+  }
+  if (!configManager.saveTheme(static_cast<uint8_t>(value.toInt()))) {
+    sendJsonError(server, 500, "Could not save the theme");
+    return;
+  }
+  uiManager.requestThemeChange();
+  server.send(200, "application/json",
+              String("{\"success\":true,\"theme\":") + static_cast<int>(configManager.getConfig().theme) + "}");
+}
+
 void WebAdminServer::handleSaveTileBorders() {
   webAdminMarkActivity();
   if (!server.hasArg("enabled")) {

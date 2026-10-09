@@ -80,6 +80,7 @@ public:
   void handleSaveHeadGear();
   void handleSaveIconGlow();
   void handleSaveDefaultTileColor();
+  void handleSaveTheme();
   void handleTileRadius();
   void handleLocalCamera();
   void handleGetScreensaverWallpaper();

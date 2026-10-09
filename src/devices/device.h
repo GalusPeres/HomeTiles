@@ -79,19 +79,18 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
                                 int32_t source_stride,
                                 const uint16_t* data, size_t data_size,
                                 bool byte_swap);
-// Camera full-screen test (#65, Guition V2 only; false/0 elsewhere): the
-// frame enlarged by scale16 / 16 at x/y, and one timed enlargement into a
-// scratch buffer (microseconds), straight or with the panel's quarter turn.
-bool displayTryScaledFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
-                                  int32_t source_stride,
-                                  const uint16_t* data, size_t data_size,
-                                  bool byte_swap, uint8_t scale16);
-uint32_t displayBenchPreviewScale(int32_t w, int32_t h, int32_t source_stride,
-                                  const uint16_t* data, size_t data_size,
-                                  bool byte_swap, uint8_t scale16, bool turned);
 // Ends device-specific preview buffering. This is a no-op on devices whose
 // preview path does not keep persistent display state.
 void displayEndFullFramePreview();
+// Camera full screen (#65; Guition V2 for now, false/nullptr elsewhere):
+// frames in the panel's own size and orientation (the clockwise turn the
+// Bridge applies) go from the JPEG decoder straight into the framebuffer.
+// Begin keeps the UI and turns the screen black, End puts the UI back.
+bool displayFullFrameInfo(uint16_t& width, uint16_t& height, uint16_t& turn_cw);
+bool displayBeginFullFrames();
+uint16_t* displayAcquireFullFrame(size_t& bytes);
+bool displaySubmitFullFrame();
+void displayEndFullFrames();
 bool ppaCooldownActive();
 void displayWaitDMA();
 // Best-effort wait for the beginning of a physical panel frame. Devices

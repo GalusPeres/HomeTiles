@@ -24,6 +24,7 @@
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/video/camera_geometry.h"
+#include "src/devices/device.h"
 #include "src/video/camera_stream.h"
 
 namespace {
@@ -35,6 +36,10 @@ constexpr int kStatusTop =
     kVideoTop + kVideoHeight + popup_layout::scale480(22);
 constexpr uint8_t kRequiredBridgeCameraProtocol = 1;
 constexpr uint32_t kBridgeResponseTimeoutMs = 30000;
+// A full-screen request the Bridge does not answer goes back to the popup.
+constexpr uint32_t kFullScreenResponseTimeoutMs = 10000;
+constexpr uint8_t kFullEnter = 1;
+constexpr uint8_t kFullLeave = 2;
 
 struct CameraPopupContext {
   String entity_id;
@@ -47,9 +52,6 @@ struct CameraPopupContext {
   lv_obj_t* image = nullptr;
   lv_obj_t* placeholder = nullptr;
   lv_obj_t* status = nullptr;
-  // Camera full-screen test (#65): black cover over the whole screen; the
-  // stream is drawn over it, a tap anywhere returns to the popup.
-  lv_obj_t* fullscreen = nullptr;
   size_t previous_draw_buffer_requested_lines = 0;
   bool previous_draw_buffer_fast = false;
   bool large_draw_buffer_active = false;
@@ -61,6 +63,20 @@ struct CameraPopupContext {
   uint8_t requested_fps = camera_geometry::kFps;
   bool waiting_for_bridge = false;
   bool visible = false;
+  // Camera full screen (#65): the stream in the panel's own size straight in
+  // the framebuffer (Device full frames). A tap on the video asks for it, a
+  // tap anywhere ends it; both run in process_camera_popup(), outside the
+  // LVGL event. full_touch takes that tap and is never drawn (LVGL
+  // invalidation stays off while the full screen shows).
+  lv_obj_t* full_touch = nullptr;
+  uint8_t full_request = 0;
+  bool full = false;
+  uint16_t full_width = 0;
+  uint16_t full_height = 0;
+  uint16_t full_turn = 0;
+  // A stream URL waits until the previous stream's task has ended.
+  String pending_url;
+  bool pending_full = false;
 };
 
 CameraPopupContext* g_camera_popup = nullptr;
@@ -131,20 +147,81 @@ static bool restore_previous_draw_buffer(CameraPopupContext* ctx) {
   return true;
 }
 
-static void set_fullscreen_test(bool on) {
-  if (!g_camera_popup || !g_camera_popup->fullscreen) return;
-  camera_stream_set_fullscreen_test(on);
-  if (on) {
-    lv_obj_clear_flag(g_camera_popup->fullscreen, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_move_foreground(g_camera_popup->fullscreen);
-  } else {
-    lv_obj_add_flag(g_camera_popup->fullscreen, LV_OBJ_FLAG_HIDDEN);
+static void open_popup_stream(CameraPopupContext* ctx) {
+  ctx->waiting_for_bridge = true;
+  ctx->bridge_response_deadline_ms = millis() + kBridgeResponseTimeoutMs;
+  ctx->requested_fps = camera_geometry::kFps;
+  mqttPublishCameraCommand(ctx->entity_id.c_str(), "open", ctx->requested_fps);
+}
+
+// The popup back at once: the kept UI swapped in and LVGL drawing again
+// (what changed meanwhile is drawn again, the rest are the same pixels);
+// with reopen also the popup's own stream again.
+static void leave_full_screen(bool reopen) {
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || !ctx->full) return;
+  ctx->full = false;
+  ctx->full_request = 0;
+  ctx->pending_url = String();
+  camera_stream_stop();
+  Device::displayEndFullFrames();
+  if (ctx->full_touch) lv_obj_add_flag(ctx->full_touch, LV_OBJ_FLAG_HIDDEN);
+  lv_display_t* display = lv_display_get_default();
+  if (display) lv_display_enable_invalidation(display, true);
+  lv_obj_invalidate(lv_screen_active());
+  lv_obj_invalidate(lv_layer_top());
+  Serial.println("[Camera] Full screen ended");
+  if (reopen && ctx->visible) open_popup_stream(ctx);
+}
+
+// The screen black at once with the popup kept, then the Bridge asked for
+// frames in the panel's own size. In the loop: lv_refr_now first, or an area
+// LVGL still owes would land on the black screen.
+static void enter_full_screen() {
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || !ctx->visible || ctx->full) return;
+  uint16_t width = 0;
+  uint16_t height = 0;
+  uint16_t turn = 0;
+  if (!Device::displayFullFrameInfo(width, height, turn)) return;
+  lv_display_t* display = lv_display_get_default();
+  lv_refr_now(display);
+  if (display) lv_display_enable_invalidation(display, false);
+  // The popup's frames go with its stream.
+  lv_image_set_src(ctx->image, nullptr);
+  lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
+  lv_label_set_text(ctx->placeholder, camera_text().camera_preparing);
+  ctx->pending_url = String();
+  camera_stream_stop();
+  if (!Device::displayBeginFullFrames()) {
+    Serial.println("[Camera] Full screen unavailable; the popup stays");
+    if (display) lv_display_enable_invalidation(display, true);
+    lv_obj_invalidate(ctx->card);
+    open_popup_stream(ctx);
+    return;
   }
+  ctx->full = true;
+  ctx->full_width = width;
+  ctx->full_height = height;
+  ctx->full_turn = turn;
+  if (ctx->full_touch) {
+    lv_obj_clear_flag(ctx->full_touch, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(ctx->full_touch);
+  }
+  ctx->waiting_for_bridge = true;
+  ctx->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
+  Serial.printf("[Camera] Full screen: %ux%u frames turned %u clockwise\n",
+                static_cast<unsigned>(width), static_cast<unsigned>(height),
+                static_cast<unsigned>(turn));
+  mqttPublishCameraFullScreenOpen(ctx->entity_id.c_str(), camera_geometry::kFps,
+                                  width, height, turn);
 }
 
 static void close_camera_popup() {
   if (!g_camera_popup || !g_camera_popup->visible) return;
-  set_fullscreen_test(false);
+  leave_full_screen(false);
+  g_camera_popup->pending_url = String();
   const String entity_id = g_camera_popup->entity_id;
   g_camera_popup->visible = false;
 
@@ -187,14 +264,15 @@ static void overlay_event_cb(lv_event_t* event) {
 
 static void video_event_cb(lv_event_t* event) {
   if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
-  if (g_camera_popup && g_camera_popup->visible && camera_stream_is_active()) {
-    set_fullscreen_test(true);
+  if (g_camera_popup && g_camera_popup->visible && !g_camera_popup->full &&
+      camera_stream_is_active()) {
+    g_camera_popup->full_request = kFullEnter;
   }
 }
 
-static void fullscreen_event_cb(lv_event_t* event) {
+static void full_touch_event_cb(lv_event_t* event) {
   if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
-  set_fullscreen_test(false);
+  if (g_camera_popup && g_camera_popup->full) g_camera_popup->full_request = kFullLeave;
 }
 
 static CameraPopupContext* create_popup() {
@@ -223,26 +301,15 @@ static CameraPopupContext* create_popup() {
   lv_obj_set_style_shadow_width(video, 0, 0);
   lv_obj_set_style_pad_all(video, 0, 0);
   lv_obj_remove_flag(video, LV_OBJ_FLAG_SCROLLABLE);
-#if defined(DEVICE_GUITION_JC8012P4A1_V2)
-  // Camera full-screen test (#65): a tap on the video enlarges it.
+  // A tap on the video shows it full screen where the panel can (#65).
   lv_obj_add_flag(video, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(video, video_event_cb, LV_EVENT_CLICKED, ctx);
-  ctx->fullscreen = lv_obj_create(lv_layer_top());
-  lv_obj_set_size(ctx->fullscreen, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_pos(ctx->fullscreen, 0, 0);
-  lv_obj_set_style_bg_color(ctx->fullscreen, lv_color_black(), 0);
-  lv_obj_set_style_bg_opa(ctx->fullscreen, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_width(ctx->fullscreen, 0, 0);
-  lv_obj_set_style_radius(ctx->fullscreen, 0, 0);
-  lv_obj_set_style_shadow_width(ctx->fullscreen, 0, 0);
-  lv_obj_set_style_pad_all(ctx->fullscreen, 0, 0);
-  lv_obj_remove_flag(ctx->fullscreen, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(ctx->fullscreen, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_flag(ctx->fullscreen, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_event_cb(ctx->fullscreen, fullscreen_event_cb, LV_EVENT_CLICKED, ctx);
-#else
-  lv_obj_clear_flag(video, LV_OBJ_FLAG_CLICKABLE);
-#endif
+  ctx->full_touch = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(ctx->full_touch);
+  lv_obj_set_size(ctx->full_touch, LV_PCT(100), LV_PCT(100));
+  lv_obj_add_flag(ctx->full_touch, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(ctx->full_touch, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_event_cb(ctx->full_touch, full_touch_event_cb, LV_EVENT_CLICKED, ctx);
 
   ctx->image = lv_image_create(video);
   // The bridge delivers the native frame size requested by this device.
@@ -280,6 +347,46 @@ static CameraPopupContext* create_popup() {
 }
 
 }  // namespace
+
+// Starts the stream the Bridge announced. While the previous stream's task
+// still ends (stop is asynchronous), the URL waits for process_camera_popup.
+static void start_camera_stream(const String& url, bool full) {
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || !ctx->visible || full != ctx->full) return;
+  if (camera_stream_is_active()) {
+    ctx->pending_url = url;
+    ctx->pending_full = full;
+    return;
+  }
+  ctx->pending_url = String();
+  if (!full && !ctx->large_draw_buffer_active) {
+    const size_t previous_requested_lines =
+        displayManager.getRequestedBufferLines() != 0
+            ? displayManager.getRequestedBufferLines()
+            : displayManager.getBufferLines();
+    const bool previous_fast =
+        displayManager.isUsingFastInternalBuffer();
+    if (displayManager.setSinglePsramBufferLines(kVideoHeight)) {
+      ctx->previous_draw_buffer_requested_lines =
+          previous_requested_lines;
+      ctx->previous_draw_buffer_fast = previous_fast;
+      ctx->large_draw_buffer_active = true;
+    } else {
+      Serial.println(
+          "[Camera] Large LVGL draw buffer unavailable; "
+          "normal safe rendering path remains active");
+    }
+  }
+  if (camera_stream_start(url.c_str(), ctx->surface_color, full)) return;
+  if (full) {
+    leave_full_screen(true);
+    return;
+  }
+  if (ctx->large_draw_buffer_active && !restore_previous_draw_buffer(ctx)) {
+    ctx->draw_buffer_restore_pending = true;
+    ctx->draw_buffer_restore_retry_at_ms = millis() + 2000;
+  }
+}
 
 void preload_camera_popup() {
   if (!g_camera_popup) g_camera_popup = create_popup();
@@ -386,6 +493,25 @@ void process_camera_popup() {
     }
   }
   if (!g_camera_popup->visible || popup_open_pending(g_camera_popup->card)) return;
+  const uint8_t full_request = g_camera_popup->full_request;
+  g_camera_popup->full_request = 0;
+  if (full_request == kFullEnter) {
+    enter_full_screen();
+  } else if (full_request == kFullLeave) {
+    leave_full_screen(true);
+  }
+  if (g_camera_popup->full) {
+    // A popup scene change elsewhere may have turned LVGL drawing on again:
+    // the full screen must not get UI pixels.
+    lv_display_t* display = lv_display_get_default();
+    if (display && lv_display_is_invalidation_enabled(display)) {
+      lv_display_enable_invalidation(display, false);
+    }
+  }
+  if (g_camera_popup->pending_url.length() && !camera_stream_is_active()) {
+    const String url = g_camera_popup->pending_url;
+    start_camera_stream(url, g_camera_popup->pending_full);
+  }
   if (g_camera_popup->waiting_for_bridge &&
       static_cast<int32_t>(
           millis() - g_camera_popup->bridge_response_deadline_ms) >= 0) {
@@ -393,7 +519,11 @@ void process_camera_popup() {
     g_camera_popup->bridge_response_deadline_ms = 0;
     Serial.println(
         "[Camera] No camera response before the bridge deadline");
-    camera_popup_set_status(camera_text().camera_bridge_no_response, true);
+    if (g_camera_popup->full) {
+      leave_full_screen(true);
+    } else {
+      camera_popup_set_status(camera_text().camera_bridge_no_response, true);
+    }
   }
   if (powerManager.isInSleep()) {
     close_camera_popup();
@@ -453,8 +583,15 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     const uint8_t fps = doc["fps"] | 0;
     const char* transport = doc["transport"] | "";
     const char* framing = doc["framing"] | "";
-    if (width != camera_geometry::kWidth ||
-        height != camera_geometry::kHeight ||
+    const bool full = g_camera_popup->full;
+    const char* view = doc["view"] | "popup";
+    const bool size_ok =
+        full ? width == g_camera_popup->full_width &&
+                   height == g_camera_popup->full_height &&
+                   strcmp(view, "full") == 0
+             : width == camera_geometry::kWidth &&
+                   height == camera_geometry::kHeight;
+    if (!size_ok ||
         fps < 1 || fps > camera_geometry::kFps ||
         strcmp(transport, "tcp-ack-v1") != 0 ||
         strcmp(framing, "ack-jpeg-v1") != 0) {
@@ -470,35 +607,17 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     Serial.printf("[Camera] Stream URL received (%u characters)\n",
                   static_cast<unsigned>(strlen(url)));
     camera_popup_set_status(camera_text().camera_connecting, false);
-    if (!g_camera_popup->large_draw_buffer_active) {
-      const size_t previous_requested_lines =
-          displayManager.getRequestedBufferLines() != 0
-              ? displayManager.getRequestedBufferLines()
-              : displayManager.getBufferLines();
-      const bool previous_fast =
-          displayManager.isUsingFastInternalBuffer();
-      if (displayManager.setSinglePsramBufferLines(kVideoHeight)) {
-        g_camera_popup->previous_draw_buffer_requested_lines =
-            previous_requested_lines;
-        g_camera_popup->previous_draw_buffer_fast = previous_fast;
-        g_camera_popup->large_draw_buffer_active = true;
-      } else {
-        Serial.println(
-            "[Camera] Large LVGL draw buffer unavailable; "
-            "normal safe rendering path remains active");
-      }
-    }
-    if (!camera_stream_start(url, g_camera_popup->surface_color) &&
-        g_camera_popup->large_draw_buffer_active) {
-      if (!restore_previous_draw_buffer(g_camera_popup)) {
-        g_camera_popup->draw_buffer_restore_pending = true;
-        g_camera_popup->draw_buffer_restore_retry_at_ms = millis() + 2000;
-      }
-    }
+    start_camera_stream(String(url), full);
     return;
   }
   if (strcmp(status, "error") == 0) {
     const char* error = doc["error"] | "";
+    if (g_camera_popup->full) {
+      // A Bridge before full-screen frames, or a camera it cannot turn.
+      Serial.printf("[Camera] Full screen refused by the Bridge: %s\n", error);
+      leave_full_screen(true);
+      return;
+    }
     if (strcmp(error, "camera_invalid_stream_request") == 0 &&
         g_camera_popup->requested_fps > camera_geometry::kFallbackFps) {
       // Bridges before v0.7.1b9 accept at most 24 FPS: ask once more at 24.
@@ -518,6 +637,7 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     return;
   }
   if (strcmp(status, "stopped") == 0) {
+    leave_full_screen(false);
     camera_popup_set_status(camera_text().camera_stream_stopped, false);
   }
 }

@@ -74,19 +74,26 @@ class Presenter {
   bool noteUiWrite(int32_t x, int32_t y, int32_t w, int32_t h,
                    bool ppa_writer);
 
-  // scale16: the frame enlarged by scale16 / 16 (the PPA's 1/16 steps); x/y
-  // place the enlarged block, w/h are the source block.
   bool present(int32_t x, int32_t y, int32_t w, int32_t h,
                int32_t source_stride, const uint16_t* data,
                size_t data_size, bool byte_swap, uint8_t rotation,
-               const PpaRuntime& runtime, uint8_t scale16 = 16);
+               const PpaRuntime& runtime);
 
-  // Camera full-screen test (#65): one PPA enlargement of a frame into a
-  // scratch buffer, straight or with the panel's quarter turn, timed in
-  // microseconds (0 = not run). The buffer is freed by end().
-  uint32_t benchScale(int32_t w, int32_t h, int32_t source_stride,
-                      const uint16_t* data, size_t data_size, bool byte_swap,
-                      uint8_t scale16, bool turned, const PpaRuntime& runtime);
+  // Camera full screen (#65): frames that already have the panel's size and
+  // orientation go straight from the JPEG decoder into the inactive
+  // framebuffer and are swapped in, without the PPA. fullFrameInfo gives that
+  // size and the clockwise turn the Bridge applies (the PPA's turn for this
+  // rotation). beginFullFrames keeps a copy of the UI shown now and turns the
+  // screen black at once; endFullFrames puts the copy back at once. LVGL
+  // must not draw in between.
+  bool fullFrameInfo(uint8_t rotation, uint16_t& width, uint16_t& height,
+                     uint16_t& turn_cw) const;
+  bool beginFullFrames();
+  // The framebuffer the decoder may write (nullptr: none), its size in bytes.
+  uint16_t* acquireFullFrame(size_t& bytes);
+  bool submitFullFrame();
+  void endFullFrames();
+  bool fullFramesActive() const { return full_frames_; }
 
   void end();
 
@@ -136,8 +143,9 @@ class Presenter {
   int32_t dirty_x2_ = 0;
   int32_t dirty_y2_ = 0;
   uint32_t fault_cooldown_until_ms_ = 0;
-  uint16_t* bench_buffer_ = nullptr;
-  size_t bench_bytes_ = 0;
+  bool swapTo(uint16_t* framebuffer);
+  bool full_frames_ = false;
+  uint16_t* ui_copy_ = nullptr;
 };
 
 }  // namespace p4_dsi_camera_presenter

@@ -94,19 +94,28 @@ uint32_t g_present_timed_frames = 0;
 uint16_t g_corner_fill_swapped = 0;
 bool g_direct_preview_logged = false;
 bool g_direct_fallback_logged = false;
-// Camera full-screen test (#65): the stream enlarged over the whole screen
-// by the PPA, the decode time per frame and, once a second, one timed PPA
-// enlargement into a scratch buffer (straight, turned, 1:1 straight).
-volatile bool g_fullscreen_test = false;
+// The worker's decode time, 2D-DMA wait and JPEG bytes for the Decode log.
 uint64_t g_decode_total_us = 0;
 uint64_t g_decode_wait_total_us = 0;
 uint64_t g_decode_jpeg_bytes = 0;
 uint32_t g_decode_timed = 0;
-uint32_t g_bench_next_ms = 0;
-uint32_t g_bench_log_ms = 0;
-uint8_t g_bench_kind = 0;
-uint64_t g_bench_total_us[3] = {};
-uint32_t g_bench_count[3] = {};
+// Camera full screen (#65): frames in the panel's own size and orientation.
+// The worker keeps the newest JPEG in one of two slots; the UI loop decodes
+// it straight into the framebuffer (Device full frames, no PPA). g_full_mode
+// is fixed per stream; g_full_shown ends with camera_stream_stop().
+bool g_full_mode = false;
+bool g_full_shown = false;
+uint16_t g_full_width = 0;
+uint16_t g_full_height = 0;
+constexpr uint8_t kFullJpegSlots = 2;
+uint8_t* g_full_jpeg[kFullJpegSlots] = {};
+size_t g_full_jpeg_bytes[kFullJpegSlots] = {};
+FrameState g_full_states[kFullJpegSlots] = {};
+uint32_t g_full_frames = 0;
+uint32_t g_full_failed = 0;
+uint64_t g_full_decode_total_us = 0;
+uint64_t g_full_wait_total_us = 0;
+uint32_t g_full_log_ms = 0;
 
 // Keep the engine alive across popup opens. Creating/deleting JPEG engines
 // repeatedly churns the 2D-DMA pool shared with the display PPA.
@@ -185,6 +194,35 @@ static void release_frame_buffers() {
   for (uint8_t i = 0; i < kFrameBufferCount; ++i) {
     free(buffers[i]);
   }
+
+  uint8_t* jpegs[kFullJpegSlots] = {};
+  portENTER_CRITICAL(&g_state_mux);
+  for (uint8_t i = 0; i < kFullJpegSlots; ++i) {
+    jpegs[i] = g_full_jpeg[i];
+    g_full_jpeg[i] = nullptr;
+    g_full_jpeg_bytes[i] = 0;
+    g_full_states[i] = FrameState::Free;
+  }
+  portEXIT_CRITICAL(&g_state_mux);
+  for (uint8_t i = 0; i < kFullJpegSlots; ++i) {
+    heap_caps_free(jpegs[i]);
+  }
+}
+
+static bool ensure_full_slots() {
+  for (uint8_t i = 0; i < kFullJpegSlots; ++i) {
+    if (!g_full_jpeg[i]) {
+      g_full_jpeg[i] = static_cast<uint8_t*>(heap_caps_aligned_alloc(
+          64, kMaxJpegBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    }
+    if (!g_full_jpeg[i]) {
+      release_frame_buffers();
+      return false;
+    }
+    g_full_jpeg_bytes[i] = 0;
+    g_full_states[i] = FrameState::Free;
+  }
+  return true;
 }
 
 static bool ensure_frame_buffers() {
@@ -274,8 +312,8 @@ static void note_presented_frame() {
   set_status(message);
   if (g_present_timed_frames > 0) {
     Serial.printf(
-        "[CameraStream] Present%s: %.1f FPS wait=%.1fms ppa+cache+swap=%.1fms\n",
-        g_fullscreen_test ? " (full screen)" : "", fps,
+        "[CameraStream] Present: %.1f FPS wait=%.1fms ppa+cache+swap=%.1fms\n",
+        fps,
         static_cast<double>(g_present_wait_total_us) /
             static_cast<double>(g_present_timed_frames) / 1000.0,
         static_cast<double>(g_present_copy_total_us) /
@@ -341,6 +379,47 @@ static void apply_rounded_frame_corners(uint16_t* pixels) {
       bottom[kWidth - 1U - x] = g_corner_fill_swapped;
     }
   }
+}
+
+// Full screen: the newest JPEG goes into a free slot (or replaces the one
+// still waiting); the UI loop decodes it (process_full_frame).
+static bool queue_full_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
+  if (!jpeg || jpeg_bytes < 4 || jpeg_bytes > kMaxJpegBytes ||
+      jpeg[0] != 0xFF || jpeg[1] != 0xD8 ||
+      jpeg[jpeg_bytes - 2] != 0xFF || jpeg[jpeg_bytes - 1] != 0xD9) {
+    Serial.printf("[CameraStream] Invalid JPEG frame: %u bytes\n",
+                  static_cast<unsigned>(jpeg_bytes));
+    set_status(camera_text().camera_invalid_response, true);
+    return false;
+  }
+  int8_t slot = -1;
+  portENTER_CRITICAL(&g_state_mux);
+  for (uint8_t i = 0; i < kFullJpegSlots && slot < 0; ++i) {
+    if (g_full_jpeg[i] && g_full_states[i] == FrameState::Free) slot = static_cast<int8_t>(i);
+  }
+  for (uint8_t i = 0; i < kFullJpegSlots && slot < 0; ++i) {
+    if (g_full_jpeg[i] && g_full_states[i] == FrameState::Ready) slot = static_cast<int8_t>(i);
+  }
+  if (slot >= 0) g_full_states[slot] = FrameState::Writing;
+  portEXIT_CRITICAL(&g_state_mux);
+  if (slot < 0) {
+    ++g_no_write_buffer_drops;
+    return true;
+  }
+  memcpy(g_full_jpeg[slot], jpeg, jpeg_bytes);
+  portENTER_CRITICAL(&g_state_mux);
+  g_full_jpeg_bytes[slot] = jpeg_bytes;
+  g_full_states[slot] = FrameState::Ready;
+  portEXIT_CRITICAL(&g_state_mux);
+  g_decode_jpeg_bytes += jpeg_bytes;
+  ++g_decode_timed;
+  ++g_worker_frame_count;
+  if (g_worker_frame_count == 1) {
+    Serial.printf("[CameraStream] First full-screen frame: jpeg=%u bytes\n",
+                  static_cast<unsigned>(jpeg_bytes));
+    set_status(camera_text().camera_ready);
+  }
+  return true;
 }
 
 static bool decode_jpeg_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
@@ -425,8 +504,7 @@ static bool decode_jpeg_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
     return false;
   }
 
-  // The full-screen test shows the frame without the popup's corners.
-  if (!g_fullscreen_test) apply_rounded_frame_corners(g_pixels[index]);
+  apply_rounded_frame_corners(g_pixels[index]);
   publish_write_buffer(index);
   ++g_worker_frame_count;
   if (g_worker_frame_count == 1) {
@@ -1049,6 +1127,7 @@ static void run_camera_task_http_legacy() {
 #endif
 
 static void run_camera_task() {
+  const bool full = g_full_mode;
   set_status(camera_text().camera_http_connecting);
   const String url = g_url;
   CameraEndpoint endpoint;
@@ -1271,7 +1350,8 @@ static void run_camera_task() {
     }
 
     const uint32_t frames_before = g_worker_frame_count;
-    if (!decode_jpeg_frame(input, jpeg_bytes)) {
+    if (!(full ? queue_full_frame(input, jpeg_bytes)
+               : decode_jpeg_frame(input, jpeg_bytes))) {
       stream_ok = false;
       break;
     }
@@ -1284,9 +1364,9 @@ static void run_camera_task() {
       const double timed = g_decode_timed ? static_cast<double>(g_decode_timed) : 1.0;
       const double seconds = static_cast<double>(now - last_fps_ms) / 1000.0;
       Serial.printf(
-          "[CameraStream] Decode: %.1f FPS (buffer_drops=%u) decode=%.1fms "
+          "[CameraStream] %s: %.1f FPS (buffer_drops=%u) decode=%.1fms "
           "dma_wait=%.1fms jpeg=%.1fKB net=%.1fMbit/s\n",
-          fps,
+          full ? "Receive" : "Decode", fps,
           static_cast<unsigned>(g_no_write_buffer_drops),
           static_cast<double>(g_decode_total_us) / timed / 1000.0,
           static_cast<double>(g_decode_wait_total_us) / timed / 1000.0,
@@ -1345,7 +1425,7 @@ static void camera_task(void*) {
 
 }  // namespace
 
-bool camera_stream_start(const char* url, uint32_t corner_rgb) {
+bool camera_stream_start(const char* url, uint32_t corner_rgb, bool full_screen) {
   if (!url || !*url) {
     set_status(camera_text().camera_empty_url, true);
     return false;
@@ -1354,18 +1434,38 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb) {
     set_status(camera_text().camera_already_running, true);
     return false;
   }
-  if (!ensure_frame_buffers()) return false;
-  Serial.printf(
-      "[CameraStream] JPEG image buffers ready: %u x %u bytes, int=%uKB "
-      "largest=%uKB psram=%uKB\n",
-      static_cast<unsigned>(kFrameBufferCount),
-      static_cast<unsigned>(kPixelBytes),
-      static_cast<unsigned>(
-          heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024U),
-      static_cast<unsigned>(
-          heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024U),
-      static_cast<unsigned>(
-          heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
+  g_full_mode = full_screen;
+  g_full_shown = false;
+  if (full_screen) {
+    uint16_t turn_cw = 0;
+    if (!Device::displayFullFrameInfo(g_full_width, g_full_height, turn_cw) ||
+        !ensure_full_slots()) {
+      set_status(camera_text().camera_frame_memory_failed, true);
+      return false;
+    }
+    Serial.printf(
+        "[CameraStream] Full-screen JPEG slots ready: %u x %u bytes for "
+        "%ux%u frames, psram=%uKB\n",
+        static_cast<unsigned>(kFullJpegSlots),
+        static_cast<unsigned>(kMaxJpegBytes),
+        static_cast<unsigned>(g_full_width),
+        static_cast<unsigned>(g_full_height),
+        static_cast<unsigned>(
+            heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
+  } else {
+    if (!ensure_frame_buffers()) return false;
+    Serial.printf(
+        "[CameraStream] JPEG image buffers ready: %u x %u bytes, int=%uKB "
+        "largest=%uKB psram=%uKB\n",
+        static_cast<unsigned>(kFrameBufferCount),
+        static_cast<unsigned>(kPixelBytes),
+        static_cast<unsigned>(
+            heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024U),
+        static_cast<unsigned>(
+            heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024U),
+        static_cast<unsigned>(
+            heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
+  }
 
   portENTER_CRITICAL(&g_state_mux);
   for (uint8_t i = 0; i < kFrameBufferCount; ++i) {
@@ -1393,13 +1493,12 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb) {
   g_decode_wait_total_us = 0;
   g_decode_jpeg_bytes = 0;
   g_decode_timed = 0;
-  g_bench_next_ms = millis() + 3000;
-  g_bench_log_ms = millis();
-  g_bench_kind = 0;
-  for (uint8_t i = 0; i < 3; ++i) {
-    g_bench_total_us[i] = 0;
-    g_bench_count[i] = 0;
-  }
+  g_full_frames = 0;
+  g_full_failed = 0;
+  g_full_decode_total_us = 0;
+  g_full_wait_total_us = 0;
+  g_full_log_ms = millis();
+  g_full_shown = full_screen;
   const BaseType_t task_core = (ARDUINO_RUNNING_CORE == 0) ? 1 : 0;
   // Never outrank the MQTT worker on this core. Both tasks run at idle
   // priority; explicit yields within each frame share CPU time without
@@ -1425,6 +1524,8 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb) {
 void camera_stream_stop() {
   const bool was_active = task_is_active();
   g_stop_requested = true;
+  // The UI no longer decodes full-screen frames; the worker frees the slots.
+  g_full_shown = false;
   Device::displayEndFullFramePreview();
   Serial.printf("[CameraStream] Stop requested (active=%s)\n",
                 was_active ? "yes" : "no");
@@ -1436,79 +1537,104 @@ void camera_stream_stop() {
   if (!active) release_frame_buffers();
 }
 
-// Camera full-screen test (#65): the largest PPA enlargement in 1/16 steps
-// that keeps the whole stream on the screen, centred.
-static uint8_t fullscreen_scale16(int32_t& x, int32_t& y) {
-  lv_display_t* display = lv_display_get_default();
-  const int32_t screen_w = lv_display_get_horizontal_resolution(display);
-  const int32_t screen_h = lv_display_get_vertical_resolution(display);
-  int32_t scale16 = std::min(screen_w * 16 / kWidth, screen_h * 16 / kHeight);
-  if (scale16 < 16) scale16 = 16;
-  if (scale16 > 64) scale16 = 64;
-  x = (screen_w - kWidth * scale16 / 16) / 2;
-  y = (screen_h - kHeight * scale16 / 16) / 2;
-  return static_cast<uint8_t>(scale16);
-}
-
-// Once a second one timed PPA enlargement of the frame just shown into a
-// scratch buffer, in turn: straight, with the panel's quarter turn, 1:1
-// straight. The averages every 6 s.
-static void run_ppa_bench(const uint16_t* pixels) {
-  const uint32_t now = millis();
-  if (static_cast<int32_t>(now - g_bench_next_ms) < 0) return;
-  g_bench_next_ms = now + 1000;
-  int32_t x = 0;
-  int32_t y = 0;
-  const uint8_t full16 = fullscreen_scale16(x, y);
-  const uint8_t kind = g_bench_kind;
-  g_bench_kind = static_cast<uint8_t>((kind + 1) % 3);
-  const uint32_t us = Device::displayBenchPreviewScale(
-      kWidth, kHeight, kDecodedWidth, pixels, kPixelBytes, true,
-      kind == 2 ? 16 : full16, kind == 1);
-  if (us) {
-    g_bench_total_us[kind] += us;
-    ++g_bench_count[kind];
+// Full screen: the newest waiting JPEG decoded by the hardware decoder
+// straight into the framebuffer the panel does not scan, then swapped in. In
+// the UI loop, like the popup's PPA presentation it replaces.
+static void process_full_frame() {
+  int8_t ready = -1;
+  portENTER_CRITICAL(&g_state_mux);
+  for (uint8_t i = 0; i < kFullJpegSlots; ++i) {
+    if (g_full_states[i] == FrameState::Ready) ready = static_cast<int8_t>(i);
   }
-  if (now - g_bench_log_ms < 6000) return;
-  g_bench_log_ms = now;
-  double avg[3] = {};
-  for (uint8_t i = 0; i < 3; ++i) {
-    if (g_bench_count[i]) {
-      avg[i] = static_cast<double>(g_bench_total_us[i]) / g_bench_count[i] / 1000.0;
+  if (ready >= 0) g_full_states[ready] = FrameState::Presenting;
+  portEXIT_CRITICAL(&g_state_mux);
+  if (ready < 0) return;
+
+  const uint8_t* jpeg = g_full_jpeg[ready];
+  const size_t jpeg_bytes = g_full_jpeg_bytes[ready];
+  const uint32_t wait_started_us = micros();
+  size_t frame_bytes = 0;
+  uint16_t* frame = Device::displayAcquireFullFrame(frame_bytes);
+  const uint32_t acquired_us = micros();
+  bool shown = false;
+  jpeg_decode_picture_info_t info{};
+  if (!frame || !ensure_jpeg_decoder()) {
+    ++g_full_failed;
+  } else if (jpeg_decoder_get_info(jpeg, static_cast<uint32_t>(jpeg_bytes), &info) != ESP_OK ||
+             info.width != g_full_width || info.height != g_full_height) {
+    if (g_full_failed++ == 0) {
+      Serial.printf("[CameraStream] Full-screen frame %ux%u, expected %ux%u\n",
+                    static_cast<unsigned>(info.width), static_cast<unsigned>(info.height),
+                    static_cast<unsigned>(g_full_width), static_cast<unsigned>(g_full_height));
+    }
+  } else {
+    jpeg_decode_cfg_t decode_config{};
+    decode_config.output_format = JPEG_DECODE_OUT_FORMAT_RGB565;
+    // BGR order is the decoder's little-endian RGB565, the framebuffer's
+    // own order (jpeg_types.h).
+    decode_config.rgb_order = JPEG_DEC_RGB_ELEMENT_ORDER_BGR;
+    decode_config.conv_std = JPEG_YUV_RGB_CONV_STD_BT601;
+    uint32_t decoded_bytes = 0;
+    esp_err_t result = ESP_FAIL;
+    uint32_t decode_us = 0;
+    {
+      Dma2dArbiterGuard dma2d_guard(100);
+      if (dma2d_guard.locked()) {
+        const uint32_t decode_started_us = micros();
+        result = jpeg_decoder_process(
+            g_jpeg_decoder, &decode_config, jpeg, static_cast<uint32_t>(jpeg_bytes),
+            reinterpret_cast<uint8_t*>(frame), static_cast<uint32_t>(frame_bytes),
+            &decoded_bytes);
+        decode_us = micros() - decode_started_us;
+        if (result != ESP_OK || decoded_bytes < frame_bytes) {
+          // A potentially wedged decoder goes while the arbiter is held.
+          jpeg_del_decoder_engine(g_jpeg_decoder);
+          g_jpeg_decoder = nullptr;
+        }
+      }
+    }
+    if (result == ESP_OK && decoded_bytes >= frame_bytes) {
+      shown = Device::displaySubmitFullFrame();
+      if (shown) {
+        ++g_full_frames;
+        g_full_decode_total_us += decode_us;
+        g_full_wait_total_us += acquired_us - wait_started_us;
+      }
+    }
+    if (!shown && g_full_failed++ == 0) {
+      Serial.printf("[CameraStream] Full-screen frame not shown: %s bytes=%u/%u\n",
+                    esp_err_to_name(result), static_cast<unsigned>(decoded_bytes),
+                    static_cast<unsigned>(frame_bytes));
     }
   }
+
+  portENTER_CRITICAL(&g_state_mux);
+  g_full_states[ready] = FrameState::Free;
+  portEXIT_CRITICAL(&g_state_mux);
+
+  const uint32_t now = millis();
+  if (now - g_full_log_ms < 2000) return;
+  const double frames = g_full_frames ? static_cast<double>(g_full_frames) : 1.0;
   Serial.printf(
-      "[CamFullTest] PPA %ux%u -> %ux%u: straight %.1fms, turned %.1fms; "
-      "1:1 straight %.1fms (n=%u/%u/%u)\n",
-      static_cast<unsigned>(kWidth), static_cast<unsigned>(kHeight),
-      static_cast<unsigned>(kWidth * full16 / 16),
-      static_cast<unsigned>(kHeight * full16 / 16), avg[0], avg[1], avg[2],
-      static_cast<unsigned>(g_bench_count[0]),
-      static_cast<unsigned>(g_bench_count[1]),
-      static_cast<unsigned>(g_bench_count[2]));
-  for (uint8_t i = 0; i < 3; ++i) {
-    g_bench_total_us[i] = 0;
-    g_bench_count[i] = 0;
-  }
+      "[CameraStream] Full screen: %.1f FPS decode=%.1fms swap_wait=%.1fms failed=%u\n",
+      static_cast<double>(g_full_frames) * 1000.0 / static_cast<double>(now - g_full_log_ms),
+      static_cast<double>(g_full_decode_total_us) / frames / 1000.0,
+      static_cast<double>(g_full_wait_total_us) / frames / 1000.0,
+      static_cast<unsigned>(g_full_failed));
+  g_full_frames = 0;
+  g_full_failed = 0;
+  g_full_decode_total_us = 0;
+  g_full_wait_total_us = 0;
+  g_full_log_ms = now;
 }
-
-void camera_stream_set_fullscreen_test(bool on) {
-  if (g_fullscreen_test == on) return;
-  g_fullscreen_test = on;
-  // Fresh presentation averages for the new mode.
-  g_presented_frame_count = 0;
-  g_presented_fps_ms = millis();
-  g_present_wait_total_us = 0;
-  g_present_copy_total_us = 0;
-  g_present_timed_frames = 0;
-  Serial.printf("[CamFullTest] Full screen %s\n", on ? "on" : "off");
-}
-
-bool camera_stream_fullscreen_test() { return g_fullscreen_test; }
 
 void camera_stream_process_ui(lv_obj_t* image,
                               lv_obj_t* placeholder,
                               lv_obj_t* status_label) {
+  if (g_full_shown) {
+    process_full_frame();
+    return;
+  }
   if (!image) return;
   int8_t ready = -1;
   bool direct_preview = false;
@@ -1543,27 +1669,18 @@ void camera_stream_process_ui(lv_obj_t* image,
   if (ready >= 0 && can_try_direct_preview) {
     lv_area_t area{};
     lv_obj_get_coords(image, &area);
-    int32_t x = area.x1;
-    int32_t y = area.y1;
-    const uint8_t scale16 = g_fullscreen_test ? fullscreen_scale16(x, y) : 16;
     const uint32_t wait_started_us = micros();
     Device::displayWaitFrameStart();
     const uint32_t copy_started_us = micros();
-    // JPEG output is RGB565 byte-swapped for LVGL.
-    direct_preview =
-        scale16 == 16
-            ? Device::displayTryFullFramePreview(
-                  x, y, kWidth, kHeight, kDecodedWidth, g_pixels[ready],
-                  kPixelBytes, true)
-            : Device::displayTryScaledFramePreview(
-                  x, y, kWidth, kHeight, kDecodedWidth, g_pixels[ready],
-                  kPixelBytes, true, scale16);
+    direct_preview = Device::displayTryFullFramePreview(
+        area.x1, area.y1, kWidth, kHeight, kDecodedWidth,
+        g_pixels[ready], kPixelBytes,
+        true);  // JPEG output is RGB565 byte-swapped for LVGL.
     if (direct_preview) {
       const uint32_t copy_finished_us = micros();
       g_present_wait_total_us += copy_started_us - wait_started_us;
       g_present_copy_total_us += copy_finished_us - copy_started_us;
       ++g_present_timed_frames;
-      run_ppa_bench(g_pixels[ready]);
     }
     if (direct_preview && !g_direct_preview_logged) {
       g_direct_preview_logged = true;
@@ -1611,9 +1728,6 @@ void camera_stream_process_ui(lv_obj_t* image,
 
   if (ready >= 0 && !drop_unpresented_frame) note_presented_frame();
 
-  // The status label lies under the full-screen test's black cover: a
-  // redraw there would flash black over the video.
-  if (g_fullscreen_test) return;
   char status[sizeof(g_status)] = "";
   bool status_error = false;
   bool status_changed = false;
@@ -1643,7 +1757,7 @@ bool camera_stream_is_active() {
 
 #else
 
-bool camera_stream_start(const char*, uint32_t) {
+bool camera_stream_start(const char*, uint32_t, bool) {
   camera_stream_set_external_status(
       i18n::strings(configManager.getConfig().language).camera_device_only,
       true);
@@ -1654,7 +1768,5 @@ void camera_stream_stop() {}
 void camera_stream_process_ui(lv_obj_t*, lv_obj_t*, lv_obj_t*) {}
 void camera_stream_set_external_status(const char*, bool) {}
 bool camera_stream_is_active() { return false; }
-void camera_stream_set_fullscreen_test(bool) {}
-bool camera_stream_fullscreen_test() { return false; }
 
 #endif

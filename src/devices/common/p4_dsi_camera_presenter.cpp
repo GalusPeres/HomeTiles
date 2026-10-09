@@ -337,8 +337,9 @@ void Presenter::finishPendingSwap() {
 bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
                         int32_t source_stride, const uint16_t* data,
                         size_t data_size, bool byte_swap, uint8_t rotation,
-                        const PpaRuntime& runtime, uint8_t scale16) {
-  if (!ready_ || !data || source_stride < w || h <= 0 || scale16 < 16 ||
+                        const PpaRuntime& runtime) {
+  // Full-screen frames own both framebuffers until endFullFrames().
+  if (!ready_ || full_frames_ || !data || source_stride < w || h <= 0 ||
       (reinterpret_cast<uintptr_t>(data) & (kCacheLineSize - 1U)) != 0 ||
       !runtime.handle || !runtime.done || !runtime.async_ready ||
       runtime.reset_pending || runtime.cooldown_active ||
@@ -350,9 +351,6 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
       (static_cast<size_t>(h - 1) * source_stride + w) * sizeof(uint16_t);
   if (data_size < required_bytes) return false;
 
-  // The block on the screen, truncated like the PPA driver's output block.
-  const int32_t out_w = w * scale16 / 16;
-  const int32_t out_h = h * scale16 / 16;
   const int32_t logical_w =
       config_.transform == Transform::Portrait90Or270
           ? config_.panel_height
@@ -361,28 +359,28 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
       config_.transform == Transform::Portrait90Or270
           ? config_.panel_width
           : config_.panel_height;
-  if (!rectInside(x, y, out_w, out_h, logical_w, logical_h)) return false;
+  if (!rectInside(x, y, w, h, logical_w, logical_h)) return false;
 
   int32_t dst_x = x;
   int32_t dst_y = y;
-  int32_t dst_w = out_w;
-  int32_t dst_h = out_h;
+  int32_t dst_w = w;
+  int32_t dst_h = h;
   ppa_srm_rotation_angle_t rotation_angle = PPA_SRM_ROTATION_ANGLE_0;
   if (config_.transform == Transform::Portrait90Or270) {
-    dst_w = out_h;
-    dst_h = out_w;
+    dst_w = h;
+    dst_h = w;
     if (rotation & 0x02U) {
       dst_x = y;
-      dst_y = logical_w - x - out_w;
+      dst_y = logical_w - x - w;
       rotation_angle = PPA_SRM_ROTATION_ANGLE_90;
     } else {
-      dst_x = logical_h - y - out_h;
+      dst_x = logical_h - y - h;
       dst_y = x;
       rotation_angle = PPA_SRM_ROTATION_ANGLE_270;
     }
   } else if (rotation & 0x02U) {
-    dst_x = logical_w - x - out_w;
-    dst_y = logical_h - y - out_h;
+    dst_x = logical_w - x - w;
+    dst_y = logical_h - y - h;
     rotation_angle = PPA_SRM_ROTATION_ANGLE_180;
   }
   if (!rectInside(dst_x, dst_y, dst_w, dst_h, config_.panel_width,
@@ -434,8 +432,8 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   oper.out.block_offset_y = dst_y;
   oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
   oper.rotation_angle = rotation_angle;
-  oper.scale_x = static_cast<float>(scale16) / 16.0f;
-  oper.scale_y = static_cast<float>(scale16) / 16.0f;
+  oper.scale_x = 1.0f;
+  oper.scale_y = 1.0f;
   oper.rgb_swap = false;
   oper.byte_swap = byte_swap;
   oper.mode = PPA_TRANS_MODE_NON_BLOCKING;
@@ -500,83 +498,112 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   return true;
 }
 
-uint32_t Presenter::benchScale(int32_t w, int32_t h, int32_t source_stride,
-                               const uint16_t* data, size_t data_size,
-                               bool byte_swap, uint8_t scale16, bool turned,
-                               const PpaRuntime& runtime) {
-  if (!ready_ || !data || source_stride < w || h <= 0 || scale16 < 16 ||
-      (reinterpret_cast<uintptr_t>(data) & (kCacheLineSize - 1U)) != 0 ||
-      !runtime.handle || !runtime.done || !runtime.async_ready ||
-      runtime.reset_pending || runtime.cooldown_active ||
-      faultCooldownActive()) {
-    return 0;
+bool Presenter::fullFrameInfo(uint8_t rotation, uint16_t& width,
+                              uint16_t& height, uint16_t& turn_cw) const {
+  if (!ready_) return false;
+  width = static_cast<uint16_t>(config_.panel_width);
+  height = static_cast<uint16_t>(config_.panel_height);
+  // present() turns frames by the PPA's counter-clockwise angle: 90 CCW is
+  // 270 clockwise, 270 CCW is 90 clockwise.
+  if (config_.transform == Transform::Portrait90Or270) {
+    turn_cw = (rotation & 0x02U) ? 270 : 90;
+  } else {
+    turn_cw = (rotation & 0x02U) ? 180 : 0;
   }
-  const size_t required_bytes =
-      (static_cast<size_t>(h - 1) * source_stride + w) * sizeof(uint16_t);
-  if (data_size < required_bytes) return 0;
-  const int32_t out_w = w * scale16 / 16;
-  const int32_t out_h = h * scale16 / 16;
-  const size_t bytes =
-      (static_cast<size_t>(out_w) * out_h * sizeof(uint16_t) + kCacheLineSize - 1U) &
-      ~(kCacheLineSize - 1U);
-  if (!bench_buffer_ || bench_bytes_ < bytes) {
-    if (bench_buffer_) heap_caps_free(bench_buffer_);
-    bench_buffer_ = static_cast<uint16_t*>(
-        heap_caps_aligned_calloc(kCacheLineSize, 1, bytes, MALLOC_CAP_SPIRAM));
-    bench_bytes_ = bench_buffer_ ? bytes : 0;
-    if (!bench_buffer_) return 0;
-    // No dirty CPU line of the zeroed buffer may be evicted over the result.
-    if (!syncCache(bench_buffer_, bench_bytes_, false)) return 0;
-  }
+  return true;
+}
 
-  Dma2dArbiterGuard dma2d_guard(kDma2dLockTimeoutMs);
-  if (!dma2d_guard.locked() || !syncCache(data, required_bytes, false)) return 0;
+bool Presenter::swapTo(uint16_t* framebuffer) {
+  const esp_err_t swap_err = esp_lcd_panel_draw_bitmap(
+      panel_, 0, 0, config_.panel_width, config_.panel_height, framebuffer);
+  if (swap_err != ESP_OK) {
+    Serial.printf("[CameraDisplay/%s] DSI framebuffer swap failed: %d\n",
+                  config_.device_name ? config_.device_name : "P4",
+                  static_cast<int>(swap_err));
+    return false;
+  }
+  // As in present(): the next refresh after this point shows the new one.
+  drainRefreshSignal();
+  active_index_ ^= 1U;
+  refresh_pending_ = true;
+  return true;
+}
 
-  ppa_srm_oper_config_t oper = {};
-  oper.in.buffer = data;
-  oper.in.pic_w = source_stride;
-  oper.in.pic_h = h;
-  oper.in.block_w = w;
-  oper.in.block_h = h;
-  oper.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-  oper.out.buffer = bench_buffer_;
-  oper.out.buffer_size = bench_bytes_;
-  oper.out.pic_w = turned ? out_h : out_w;
-  oper.out.pic_h = turned ? out_w : out_h;
-  oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-  oper.rotation_angle = turned ? PPA_SRM_ROTATION_ANGLE_270 : PPA_SRM_ROTATION_ANGLE_0;
-  oper.scale_x = static_cast<float>(scale16) / 16.0f;
-  oper.scale_y = static_cast<float>(scale16) / 16.0f;
-  oper.byte_swap = byte_swap;
-  oper.mode = PPA_TRANS_MODE_NON_BLOCKING;
-  oper.user_data = runtime.done;
+bool Presenter::beginFullFrames() {
+  if (!ready_) return false;
+  if (full_frames_) return true;
+  finishPendingSwap();
+  uint16_t* active = activeFramebuffer();
+  uint16_t* inactive = inactiveFramebuffer();
+  const size_t bytes = framebufferBytes();
+  if (!active || !inactive) return false;
+  if (!ui_copy_) {
+    ui_copy_ = static_cast<uint16_t*>(
+        heap_caps_aligned_alloc(kCacheLineSize, bytes, MALLOC_CAP_SPIRAM));
+  }
+  if (!ui_copy_) {
+    Serial.printf("[CameraDisplay/%s] Full screen: no memory for the UI copy\n",
+                  config_.device_name ? config_.device_name : "P4");
+    return false;
+  }
+  // The UI as the panel scans it, like begin() (PPA writes reach memory only).
+  bool ok = syncCache(active, bytes, true);
+  if (ok) {
+    std::memcpy(ui_copy_, active, bytes);
+    // Black at once: the inactive framebuffer cleared, written back, shown.
+    std::memset(inactive, 0, bytes);
+    ok = syncCache(inactive, bytes, false) && swapTo(inactive);
+  }
+  if (!ok) {
+    heap_caps_free(ui_copy_);
+    ui_copy_ = nullptr;
+    return false;
+  }
+  double_buffer_active_ = true;
+  resetMirrorDirty();
+  full_frames_ = true;
+  Serial.printf("[CameraDisplay/%s] Full screen: UI kept, screen black\n",
+                config_.device_name ? config_.device_name : "P4");
+  return true;
+}
 
-  while (xSemaphoreTake(runtime.done, 0) == pdTRUE) {
+uint16_t* Presenter::acquireFullFrame(size_t& bytes) {
+  bytes = 0;
+  if (!ready_ || !full_frames_) return nullptr;
+  // The decoder may only write a framebuffer the panel no longer scans.
+  finishPendingSwap();
+  bytes = framebufferBytes();
+  return inactiveFramebuffer();
+}
+
+bool Presenter::submitFullFrame() {
+  if (!ready_ || !full_frames_) return false;
+  uint16_t* frame = inactiveFramebuffer();
+  // The decoder wrote memory: no stale CPU line may stand for its pixels.
+  if (!frame || !syncCache(frame, framebufferBytes(), true)) return false;
+  return swapTo(frame);
+}
+
+void Presenter::endFullFrames() {
+  if (!full_frames_) return;
+  full_frames_ = false;
+  finishPendingSwap();
+  uint16_t* inactive = inactiveFramebuffer();
+  if (ui_copy_ && inactive) {
+    std::memcpy(inactive, ui_copy_, framebufferBytes());
+    if (syncCache(inactive, framebufferBytes(), false)) swapTo(inactive);
   }
-  const uint32_t started_us = micros();
-  if (ppa_do_scale_rotate_mirror(runtime.handle, &oper) != ESP_OK) return 0;
-  bool completed =
-      xSemaphoreTake(runtime.done, pdMS_TO_TICKS(config_.ppa_timeout_ms)) ==
-      pdTRUE;
-  if (!completed && config_.ppa_grace_ms > 0) {
-    completed =
-        xSemaphoreTake(runtime.done, pdMS_TO_TICKS(config_.ppa_grace_ms)) ==
-        pdTRUE;
-  }
-  if (!completed) {
-    dma2d_guard.detach();
-    restartAfterTimeout(0, 0, w, h, source_stride, turned ? 3 : 0);
-  }
-  const uint32_t elapsed_us = micros() - started_us;
-  return elapsed_us ? elapsed_us : 1;
+  heap_caps_free(ui_copy_);
+  ui_copy_ = nullptr;
+  // The other framebuffer still holds the last video frame: a later camera
+  // frame starts over with a whole copy of the UI (begin()).
+  double_buffer_active_ = false;
+  resetMirrorDirty();
+  Serial.printf("[CameraDisplay/%s] Full screen ended: UI back\n",
+                config_.device_name ? config_.device_name : "P4");
 }
 
 void Presenter::end() {
-  if (bench_buffer_) {
-    heap_caps_free(bench_buffer_);
-    bench_buffer_ = nullptr;
-    bench_bytes_ = 0;
-  }
   if (!double_buffer_active_) return;
   finishPendingSwap();
   double_buffer_active_ = false;

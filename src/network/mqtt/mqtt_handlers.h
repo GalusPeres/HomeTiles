@@ -36,6 +36,11 @@ void mqttPublishMediaMute(const char* entity_id, bool muted);
 // fps 0 asks for camera_geometry::kFps.
 void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps = 0);
+// Camera full screen (#65): frames in the panel's own size and orientation
+// (turned clockwise by turn_cw), the picture whole with black bars.
+void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
+                                     uint16_t width, uint16_t height,
+                                     uint16_t turn_cw);
 void mqttPublishClimateTemperature(const char* entity_id,
                                    float temperature,
                                    bool use_range = false,

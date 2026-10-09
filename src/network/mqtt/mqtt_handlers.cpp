@@ -3003,6 +3003,34 @@ void mqttServicePostConnect() {
   networkManager.publishBridgeConfig();
 }
 
+void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
+                                     uint16_t width, uint16_t height,
+                                     uint16_t turn_cw) {
+  if (!entity_id || !*entity_id) return;
+  const auto& text = i18n::strings(configManager.getConfig().language);
+  const char* topic = mqttTopics.topic(TopicKey::CAMERA_CMND);
+  if (!networkManager.isMqttConnected() || !topic || !*topic) {
+    camera_popup_set_status(text.camera_mqtt_disconnected, true);
+    return;
+  }
+  char payload[384];
+  snprintf(payload, sizeof(payload),
+           "{\"entity_id\":\"%s\",\"command\":\"open\","
+           "\"width\":%u,\"height\":%u,\"fps\":%u,"
+           "\"view\":\"full\",\"rotate\":%u,\"fit\":\"contain\","
+           "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
+           entity_id, static_cast<unsigned>(width),
+           static_cast<unsigned>(height),
+           static_cast<unsigned>(fps ? fps : camera_geometry::kFps),
+           static_cast<unsigned>(turn_cw));
+  const bool queued =
+      networkManager.mqttEnqueuePublishPriority(topic, payload, false);
+  Serial.printf("[Camera] command open full screen %ux%u -> %s (%s)\n",
+                static_cast<unsigned>(width), static_cast<unsigned>(height),
+                topic, queued ? "queued" : "queue-full");
+  if (!queued) camera_popup_set_status(text.camera_mqtt_queue_full, true);
+}
+
 void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps) {
   if (!entity_id || !*entity_id) return;

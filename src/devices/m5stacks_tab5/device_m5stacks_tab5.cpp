@@ -140,20 +140,21 @@ void flush_cache_for_dma(const void* ptr, size_t size) {
 // After a PPA write: drops the cached panel framebuffer lines of the area, so
 // a later CPU write next to it (p4_dsi_cpu_rotate.h) cannot write stale
 // pixels back over the PPA's result through a shared cache line (the V2's
-// and 8-inch's ppa_writer sync). CPU writes are written back at once, so
-// every cached line here is clean.
+// and 8-inch's ppa_writer sync). One call over the whole span, like the V2's
+// syncFramebufferSpan: one call per row took 1280 calls for every 28-line
+// landscape band, about 300 ms per folder switch (b322). The other lines in
+// the span are clean too: CPU writes are written back at once.
 void invalidate_panel_rect(int32_t x, int32_t y, int32_t w, int32_t h) {
   if (!g_panel_fb || w <= 0 || h <= 0) return;
-  for (int32_t row = 0; row < h; ++row) {
-    const uintptr_t start =
-        reinterpret_cast<uintptr_t>(g_panel_fb + static_cast<size_t>(y + row) * kPanelWidth + x);
-    const uintptr_t aligned_start = start & ~(kCacheLineSize - 1);
-    const uintptr_t end = start + static_cast<size_t>(w) * sizeof(uint16_t);
-    const uintptr_t aligned_end = (end + kCacheLineSize - 1) & ~(kCacheLineSize - 1);
-    esp_cache_msync(reinterpret_cast<void*>(aligned_start), aligned_end - aligned_start,
-                    ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_INVALIDATE |
-                        ESP_CACHE_MSYNC_FLAG_TYPE_DATA);
-  }
+  const uintptr_t start =
+      reinterpret_cast<uintptr_t>(g_panel_fb + static_cast<size_t>(y) * kPanelWidth + x);
+  const uintptr_t end = reinterpret_cast<uintptr_t>(
+      g_panel_fb + static_cast<size_t>(y + h - 1) * kPanelWidth + x + w);
+  const uintptr_t aligned_start = start & ~(kCacheLineSize - 1);
+  const uintptr_t aligned_end = (end + kCacheLineSize - 1) & ~(kCacheLineSize - 1);
+  esp_cache_msync(reinterpret_cast<void*>(aligned_start), aligned_end - aligned_start,
+                  ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_INVALIDATE |
+                      ESP_CACHE_MSYNC_FLAG_TYPE_DATA);
 }
 
 bool ppa_cooldown_active() {

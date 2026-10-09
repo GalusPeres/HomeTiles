@@ -52,6 +52,12 @@ for (const driverPath of drivers) {
     'Tab5: the CPU places equal the PPA\'s');
   assert.equal((ppa.match(/invalidate_panel_rect\(dst_x, dst_y, dst_w, dst_h\);\s*return true;/g) || []).length, 2,
     'Tab5: both PPA success paths drop the cached lines');
+  // One cache call over the whole span (the V2's syncFramebufferSpan): one
+  // per row took 1280 calls for every landscape band, ~300 ms per folder
+  // switch on b322 while popups (one whole frame) stayed fast.
+  const invalidate = cppFunctionDefinitions(tab5).find(f => f.name === 'invalidate_panel_rect').source;
+  assert.doesNotMatch(invalidate, /for \(/, 'Tab5: no cache call per row');
+  assert.equal((invalidate.match(/esp_cache_msync\(/g) || []).length, 1, 'Tab5: one cache call per PPA write');
 }
 
 const cxx = ['clang++', 'g++'].find(name => spawnSync(name, ['--version']).status === 0);

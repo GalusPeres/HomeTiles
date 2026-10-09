@@ -84,9 +84,25 @@ assert.match(body(popup, 'static void start_camera_stream('), /if \(camera_strea
   'a new stream waits for the previous task (stop is asynchronous)');
 assert.match(body(popup, 'static void close_camera_popup('), /leave_full_screen\(false\);/);
 
-// Full screen asks for four 8 KB chunks in flight (one chunk held the V2 at
-// 9.4 Mbit/s, two at 11.9 Mbit/s with 150 KB DMA left); the popup keeps one.
-assert.match(mqtt, /\\"view\\":\\"full\\",\\"rotate\\":%u,\\"fit\\":\\"contain\\",\\"window\\":4,/);
+// Every stream asks for the transport camera_transport picks: 32 KB chunks
+// with two in flight (b319: the panel receives 28 Mbit/s, one 8 KB chunk at a
+// time gave 12), the 8 KB one-at-a-time protocol as the fallback.
+const transport = read('src/video/camera_transport.cpp');
+assert.match(transport, /constexpr uint32_t kFastChunkBytes = 32 \* 1024;\s*constexpr uint8_t kFastWindow = 2;\s*constexpr uint32_t kSafeChunkBytes = 8 \* 1024;\s*constexpr uint8_t kSafeWindow = 1;/);
+assert.match(transport, /if \(prefs\.getBool\(kRunKey, false\)\) \{\s*prefs\.putBool\(kRunKey, false\);\s*prefs\.putString\(kSafeKey, FW_VERSION\);\s*g_safe = true;/,
+  'a restart while a fast stream ran: 8 KB for this firmware');
+assert.match(transport, /prefs\.getString\(kSafeKey, ""\) == FW_VERSION/, 'a new firmware tries the fast transport again');
+for (const fn of ['void mqttPublishCameraFullScreenOpen(', 'void mqttPublishCameraCommand(']) {
+  assert.match(body(mqtt, fn), /\\"chunk\\":%u,\\"window\\":%u,/);
+  assert.match(body(mqtt, fn), /static_cast<unsigned>\(transport\.chunk_bytes\),\s*static_cast<unsigned>\(transport\.window\)\);/);
+}
+assert.match(stream, /constexpr size_t kCameraMaxChunkBytes = 32 \* 1024;/);
+assert.match(body(stream, 'static void run_camera_task('), /chunk_bytes > kCameraMaxChunkBytes\) \{/);
+assert.equal((body(stream, 'static void run_camera_task(').match(/g_transport_failed = !g_stop_requested;/g) || []).length, 4,
+  'safety stop, receive, block and acknowledgement errors count as transport failures');
+assert.match(popup, /if \(camera_stream_take_transport_failure\(\) && g_camera_popup->stream_fast\) \{\s*g_camera_popup->stream_fast = false;\s*camera_transport::fall_back\(/,
+  'a fast stream ending in a transport error: 8 KB until restart, the same view again');
+assert.match(body(popup, 'static void close_camera_popup('), /camera_transport::popup_closed\(\);/);
 
 // The full screen's first moment: the popup's frame enlarged by the PPA on
 // the black screen, read before the popup stream stops (b317 showed black
@@ -96,7 +112,6 @@ assert.match(beginFull, /std::memset\(inactive, 0, bytes\);\s*ok = syncCache\(in
 assert.match(body(presenter, 'bool Presenter::drawPreview('), /return syncFramebufferSpan\(destination, dst_x, dst_y, dst_w, dst_h, true\);/);
 assert.match(presenter, /void Presenter::end\(\) \{\s*\/\/ A stream stopping under the full screen leaves it to endFullFrames\(\)\.\s*if \(full_frames_ \|\| !double_buffer_active_\) return;/);
 assert.match(body(stream, 'bool camera_stream_shown_frame('), /const int8_t shown = g_full_mode \? -1 : g_displayed_index;/);
-assert.doesNotMatch(body(mqtt, 'void mqttPublishCameraCommand('), /window/);
 
 // Back from the full screen: only the screen outside the popup is drawn
 // again; the popup keeps its last frame and status until its stream shows

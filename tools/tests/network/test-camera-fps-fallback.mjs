@@ -23,7 +23,8 @@ assert.match(
   mqttHeader,
   /void mqttPublishCameraCommand\(const char\* entity_id, const char\* command,\s*uint8_t fps = 0\);/,
 );
-assert.match(mqtt, /fps \? fps : camera_geometry::kFps\);/);
+// The rate is followed by the transport's chunk and window (b320).
+assert.match(mqtt, /fps \? fps : camera_geometry::kFps,\s*static_cast<unsigned>\(transport\.chunk_bytes\)/);
 
 // Every open starts at kFps again.
 assert.match(

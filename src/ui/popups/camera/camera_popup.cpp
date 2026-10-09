@@ -26,6 +26,7 @@
 #include "src/video/camera_geometry.h"
 #include "src/devices/device.h"
 #include "src/video/camera_stream.h"
+#include "src/video/camera_transport.h"
 
 namespace {
 
@@ -80,6 +81,12 @@ struct CameraPopupContext {
   // Back from the full screen: the kept popup shows its last frame and
   // status until its own stream shows a frame again (no Buffering flash).
   bool resuming = false;
+  // Switch timing for the log: the tap and whether the first frame of the
+  // new stream was logged.
+  uint32_t switch_started_ms = 0;
+  bool switch_frame_logged = true;
+  // The running stream used the fast transport (camera_transport).
+  bool stream_fast = false;
 };
 
 CameraPopupContext* g_camera_popup = nullptr;
@@ -150,6 +157,12 @@ static bool restore_previous_draw_buffer(CameraPopupContext* ctx) {
   return true;
 }
 
+static void note_switch(CameraPopupContext* ctx, const char* step) {
+  if (!ctx->switch_started_ms) return;
+  Serial.printf("[Camera] Switch: %s after %u ms\n", step,
+                static_cast<unsigned>(millis() - ctx->switch_started_ms));
+}
+
 static void open_popup_stream(CameraPopupContext* ctx) {
   ctx->waiting_for_bridge = true;
   ctx->bridge_response_deadline_ms = millis() + kBridgeResponseTimeoutMs;
@@ -188,6 +201,8 @@ static void leave_full_screen(bool reopen) {
     if (area.x2 >= area.x1 && area.y2 >= area.y1) lv_obj_invalidate_area(lv_screen_active(), &area);
   }
   Serial.println("[Camera] Full screen ended");
+  note_switch(ctx, "popup kept on screen");
+  ctx->switch_frame_logged = false;
   ctx->resuming = reopen && ctx->visible;
   if (ctx->resuming) open_popup_stream(ctx);
 }
@@ -236,6 +251,8 @@ static void enter_full_screen() {
   }
   ctx->waiting_for_bridge = true;
   ctx->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
+  note_switch(ctx, "full screen preview on screen");
+  ctx->switch_frame_logged = false;
   Serial.printf("[Camera] Full screen: %ux%u frames turned %u clockwise\n",
                 static_cast<unsigned>(width), static_cast<unsigned>(height),
                 static_cast<unsigned>(turn));
@@ -248,6 +265,8 @@ static void close_camera_popup() {
   leave_full_screen(false);
   g_camera_popup->pending_url = String();
   g_camera_popup->resuming = false;
+  g_camera_popup->switch_started_ms = 0;
+  camera_transport::popup_closed();
   const String entity_id = g_camera_popup->entity_id;
   g_camera_popup->visible = false;
 
@@ -293,12 +312,16 @@ static void video_event_cb(lv_event_t* event) {
   if (g_camera_popup && g_camera_popup->visible && !g_camera_popup->full &&
       camera_stream_is_active()) {
     g_camera_popup->full_request = kFullEnter;
+    g_camera_popup->switch_started_ms = millis();
   }
 }
 
 static void full_touch_event_cb(lv_event_t* event) {
   if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
-  if (g_camera_popup && g_camera_popup->full) g_camera_popup->full_request = kFullLeave;
+  if (g_camera_popup && g_camera_popup->full) {
+    g_camera_popup->full_request = kFullLeave;
+    g_camera_popup->switch_started_ms = millis();
+  }
 }
 
 static CameraPopupContext* create_popup() {
@@ -403,7 +426,12 @@ static void start_camera_stream(const String& url, bool full) {
           "normal safe rendering path remains active");
     }
   }
-  if (camera_stream_start(url.c_str(), ctx->surface_color, full)) return;
+  const bool fast = camera_transport::request().fast;
+  if (camera_stream_start(url.c_str(), ctx->surface_color, full)) {
+    ctx->stream_fast = fast;
+    camera_transport::stream_started(fast);
+    return;
+  }
   if (full) {
     leave_full_screen(true);
     return;
@@ -559,6 +587,26 @@ void process_camera_popup() {
   camera_stream_process_ui(g_camera_popup->image,
                            g_camera_popup->placeholder,
                            g_camera_popup->resuming ? nullptr : g_camera_popup->status);
+  if (!g_camera_popup->switch_frame_logged && camera_stream_first_frame_ms()) {
+    g_camera_popup->switch_frame_logged = true;
+    note_switch(g_camera_popup, g_camera_popup->full ? "first full-screen frame" : "first popup frame");
+    g_camera_popup->switch_started_ms = 0;
+  }
+  // A fast stream that ended in a transport error: the 8 KB transport until
+  // the next restart, and the same view again on it.
+  if (camera_stream_take_transport_failure() && g_camera_popup->stream_fast) {
+    g_camera_popup->stream_fast = false;
+    camera_transport::fall_back("the stream ended in a transport error");
+    if (g_camera_popup->full) {
+      g_camera_popup->waiting_for_bridge = true;
+      g_camera_popup->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
+      mqttPublishCameraFullScreenOpen(g_camera_popup->entity_id.c_str(), camera_geometry::kFps,
+                                      g_camera_popup->full_width, g_camera_popup->full_height,
+                                      g_camera_popup->full_turn);
+    } else {
+      open_popup_stream(g_camera_popup);
+    }
+  }
   if (g_camera_popup->resuming && !lv_obj_has_flag(g_camera_popup->image, LV_OBJ_FLAG_HIDDEN)) {
     g_camera_popup->resuming = false;
   }
@@ -636,6 +684,7 @@ void camera_popup_handle_mqtt_status(const char* payload) {
     }
     Serial.printf("[Camera] Stream URL received (%u characters)\n",
                   static_cast<unsigned>(strlen(url)));
+    note_switch(g_camera_popup, "Bridge ready");
     camera_popup_set_status(camera_text().camera_connecting, false);
     start_camera_stream(String(url), full);
     return;

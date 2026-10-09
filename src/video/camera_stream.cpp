@@ -47,6 +47,9 @@ constexpr uint8_t kFrameBufferCount = 3;
 // built-in camera upload (src/video/tcp_ack_wire.h, tcp_ack_socket.h).
 constexpr int kCameraReceiveBufferBytes = 4 * 1024;
 constexpr size_t kCameraChunkBytes = tcp_ack::kChunkBytes;
+// The largest chunk a Bridge may announce (camera_transport asks for 32 KB;
+// the 8 KB of the wire contract stays the default and the fallback).
+constexpr size_t kCameraMaxChunkBytes = 32 * 1024;
 constexpr uint32_t kCameraConnectTimeoutMs = 4000;
 constexpr uint32_t kSocketPollTimeoutMs = 250;
 constexpr size_t kMinCameraDmaHeadroomBytes = tcp_ack::kMinCameraDmaHeadroomBytes;
@@ -116,6 +119,10 @@ uint32_t g_full_failed = 0;
 uint64_t g_full_decode_total_us = 0;
 uint64_t g_full_wait_total_us = 0;
 uint32_t g_full_log_ms = 0;
+// The stream ended on its own in a transport error (camera_transport falls
+// back), and when the first frame of this stream was shown (switch timing).
+volatile bool g_transport_failed = false;
+uint32_t g_first_shown_ms = 0;
 
 // Keep the engine alive across popup opens. Creating/deleting JPEG engines
 // repeatedly churns the 2D-DMA pool shared with the display PPA.
@@ -1182,7 +1189,7 @@ static void run_camera_task() {
       memcmp(hello, kCameraHelloMagic, sizeof(kCameraHelloMagic)) != 0 ||
       hello_status != 0 ||
       chunk_bytes == 0 ||
-      chunk_bytes > kCameraChunkBytes) {
+      chunk_bytes > kCameraMaxChunkBytes) {
     Serial.printf(
         "[CameraStream] Invalid TCP handshake: result=%u status=%u "
         "chunk=%u\n",
@@ -1227,6 +1234,7 @@ static void run_camera_task() {
       return true;
     }
 
+    g_transport_failed = !g_stop_requested;
     Serial.printf(
         "[CameraStream] Safety stop: DMA free=%u KB reserve=%u KB "
         "headroom=%u KB for %u ms; MQTT/Wi-Fi remain active\n",
@@ -1249,6 +1257,7 @@ static void run_camera_task() {
         socket_receive_exact(socket_fd, header, sizeof(header));
     if (header_result != SocketReadResult::Ok) {
       if (header_result == SocketReadResult::Error) {
+        g_transport_failed = !g_stop_requested;
         Serial.printf("[CameraStream] TCP receive error: errno=%d\n", errno);
       }
       stream_ok = header_result == SocketReadResult::Stopped;
@@ -1307,6 +1316,7 @@ static void run_camera_task() {
           socket_fd, input + received_bytes, receive_now);
       if (chunk_result != SocketReadResult::Ok) {
         if (chunk_result == SocketReadResult::Error) {
+          g_transport_failed = !g_stop_requested;
           Serial.printf(
               "[CameraStream] TCP block error: errno=%d offset=%u\n",
               errno, static_cast<unsigned>(received_bytes));
@@ -1321,6 +1331,7 @@ static void run_camera_task() {
       write_be32(ack + 4, sequence);
       write_be32(ack + 8, static_cast<uint32_t>(received_bytes));
       if (!socket_send_all(socket_fd, ack, sizeof(ack))) {
+        g_transport_failed = !g_stop_requested;
         Serial.printf("[CameraStream] TCP ACK send failed: errno=%d\n",
                       errno);
         stream_ok = false;
@@ -1499,6 +1510,8 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb, bool full_screen)
   g_full_wait_total_us = 0;
   g_full_log_ms = millis();
   g_full_shown = full_screen;
+  g_transport_failed = false;
+  g_first_shown_ms = 0;
   const BaseType_t task_core = (ARDUINO_RUNNING_CORE == 0) ? 1 : 0;
   // Never outrank the MQTT worker on this core. Both tasks run at idle
   // priority; explicit yields within each frame share CPU time without
@@ -1526,6 +1539,7 @@ void camera_stream_stop() {
   g_stop_requested = true;
   // The UI no longer decodes full-screen frames; the worker frees the slots.
   g_full_shown = false;
+  g_first_shown_ms = 0;
   Device::displayEndFullFramePreview();
   Serial.printf("[CameraStream] Stop requested (active=%s)\n",
                 was_active ? "yes" : "no");
@@ -1596,6 +1610,7 @@ static void process_full_frame() {
     if (result == ESP_OK && decoded_bytes >= frame_bytes) {
       shown = Device::displaySubmitFullFrame();
       if (shown) {
+        if (!g_first_shown_ms) g_first_shown_ms = millis();
         ++g_full_frames;
         g_full_decode_total_us += decode_us;
         g_full_wait_total_us += acquired_us - wait_started_us;
@@ -1677,6 +1692,7 @@ void camera_stream_process_ui(lv_obj_t* image,
         g_pixels[ready], kPixelBytes,
         true);  // JPEG output is RGB565 byte-swapped for LVGL.
     if (direct_preview) {
+      if (!g_first_shown_ms) g_first_shown_ms = millis();
       const uint32_t copy_finished_us = micros();
       g_present_wait_total_us += copy_started_us - wait_started_us;
       g_present_copy_total_us += copy_finished_us - copy_started_us;
@@ -1755,6 +1771,14 @@ bool camera_stream_is_active() {
   return task_is_active();
 }
 
+uint32_t camera_stream_first_frame_ms() { return g_first_shown_ms; }
+
+bool camera_stream_take_transport_failure() {
+  if (!g_transport_failed || task_is_active()) return false;
+  g_transport_failed = false;
+  return true;
+}
+
 bool camera_stream_shown_frame(const uint16_t*& pixels, int32_t& width,
                                int32_t& height, int32_t& stride, size_t& bytes) {
   pixels = nullptr;
@@ -1785,6 +1809,8 @@ void camera_stream_stop() {}
 void camera_stream_process_ui(lv_obj_t*, lv_obj_t*, lv_obj_t*) {}
 void camera_stream_set_external_status(const char*, bool) {}
 bool camera_stream_is_active() { return false; }
+uint32_t camera_stream_first_frame_ms() { return 0; }
+bool camera_stream_take_transport_failure() { return false; }
 bool camera_stream_shown_frame(const uint16_t*& pixels, int32_t&, int32_t&, int32_t&, size_t&) {
   pixels = nullptr;
   return false;

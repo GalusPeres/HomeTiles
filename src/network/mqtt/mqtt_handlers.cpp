@@ -14,6 +14,7 @@
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/video/camera_geometry.h"
+#include "src/video/camera_transport.h"
 #include "src/ui/tabs/settings/tab_settings.h"
 #include "src/types/energy/energy_data.h"
 #include "src/tiles/config/tile_config.h"
@@ -3008,6 +3009,7 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
                                      uint16_t turn_cw) {
   if (!entity_id || !*entity_id) return;
   const auto& text = i18n::strings(configManager.getConfig().language);
+  const camera_transport::Request transport = camera_transport::request();
   const char* topic = mqttTopics.topic(TopicKey::CAMERA_CMND);
   if (!networkManager.isMqttConnected() || !topic || !*topic) {
     camera_popup_set_status(text.camera_mqtt_disconnected, true);
@@ -3017,12 +3019,15 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
   snprintf(payload, sizeof(payload),
            "{\"entity_id\":\"%s\",\"command\":\"open\","
            "\"width\":%u,\"height\":%u,\"fps\":%u,"
-           "\"view\":\"full\",\"rotate\":%u,\"fit\":\"contain\",\"window\":4,"
+           "\"view\":\"full\",\"rotate\":%u,\"fit\":\"contain\","
+           "\"chunk\":%u,\"window\":%u,"
            "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
            entity_id, static_cast<unsigned>(width),
            static_cast<unsigned>(height),
            static_cast<unsigned>(fps ? fps : camera_geometry::kFps),
-           static_cast<unsigned>(turn_cw));
+           static_cast<unsigned>(turn_cw),
+           static_cast<unsigned>(transport.chunk_bytes),
+           static_cast<unsigned>(transport.window));
   const bool queued =
       networkManager.mqttEnqueuePublishPriority(topic, payload, false);
   Serial.printf("[Camera] command open full screen %ux%u -> %s (%s)\n",
@@ -3049,14 +3054,18 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command,
   const char* action = (command && *command) ? command : "open";
   char payload[384];
   if (strcmp(action, "open") == 0) {
+    const camera_transport::Request transport = camera_transport::request();
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\","
              "\"width\":%u,\"height\":%u,\"fps\":%u,"
+             "\"chunk\":%u,\"window\":%u,"
              "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
              entity_id, action,
              camera_geometry::kWidth,
              camera_geometry::kHeight,
-             fps ? fps : camera_geometry::kFps);
+             fps ? fps : camera_geometry::kFps,
+             static_cast<unsigned>(transport.chunk_bytes),
+             static_cast<unsigned>(transport.window));
   } else {
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\"}",

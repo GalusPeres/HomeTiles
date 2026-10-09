@@ -17,3 +17,8 @@ bool camera_stream_is_active();
 // stream stops: the full screen's first moment (#65). False without one.
 bool camera_stream_shown_frame(const uint16_t*& pixels, int32_t& width,
                                int32_t& height, int32_t& stride, size_t& bytes);
+// millis() of this stream's first shown frame, 0 before it (switch timing).
+uint32_t camera_stream_first_frame_ms();
+// True once after the stream task ended on its own in a transport error
+// (DMA safety stop, receive or acknowledgement failure).
+bool camera_stream_take_transport_failure();

@@ -54,6 +54,7 @@
 #include "src/tiles/runtime/tile_update_service.h"
 #include "src/types/media/update_service.h"
 #include "src/tiles/icons/mdi_icons.h"      // MDI Icon Mapping
+#include "src/network/net_bench.h"
 
 // MDI icon font (48px, 4bpp), defined in src/fonts/mdi_icons_48.c.
 LV_FONT_DECLARE(mdi_icons_48);
@@ -1017,6 +1018,8 @@ void setup() {
     }
     log_memory_status("after-mqtt-worker");
     Serial.flush();
+    // Network measurement build (#65): TCP sinks on 5001-5003, V2 only.
+    net_bench_start();
   } else {
     Serial.println("[Setup] Skipping network (no configuration)");
   }

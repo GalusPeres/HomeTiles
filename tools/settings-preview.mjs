@@ -53,6 +53,13 @@ const PANELS = {
   s3: {W: 480, H: 480, cols: 4, rows: 4, cw: 111, ch: 111, gap: 10, pad: 3, cls: 'small', quarter: true, name: 'Guition ESP32-S3 4\\"'},
   p4880: {W: 480, H: 800, cols: 4, rows: 6, cw: 111, ch: 124, gap: 10, pad: 3, cls: 'small', quarter: false, name: 'Guition JC4880P443'},
 };
+// Since b300 every layout keeps one grid gap to the screen edge
+// (device.h kGridPad = kGridGap) and the cells take what is left.
+for (const p of Object.values(PANELS)) {
+  p.pad = p.gap;
+  p.cw = Math.floor((p.W - (p.cols + 1) * p.gap) / p.cols);
+  p.ch = Math.floor((p.H - (p.rows + 1) * p.gap) / p.rows);
+}
 const args = process.argv.slice(2);
 const noMockup = args.includes('--no-mockup');
 const selected = args.filter(a => PANELS[a]);
@@ -169,6 +176,7 @@ String getMdiChar(const char* name) {
 // Board and grid (src/devices kProfile, tile_config.h).
 namespace Device {
 constexpr int kGridCols = ${p.cols}, kGridRows = ${p.rows}, kGridCellW = ${p.cw}, kGridCellH = ${p.ch}, kGridGap = ${p.gap};
+constexpr int kGridPad = ${p.gap}, kScreenWidth = SCREEN_WIDTH, kScreenHeight = SCREEN_HEIGHT;
 }
 static constexpr uint8_t GRID_COLS = ${p.cols};
 static constexpr uint8_t GRID_ROWS = ${p.rows};
@@ -191,6 +199,7 @@ ${surfaceStyleHost(root)}
 enum : int { TILE_SENSOR = 1, TILE_BINARY_SENSOR, TILE_ENERGY, TILE_SCENE, TILE_FOLDER, TILE_BACK, TILE_CAMERA, TILE_SETTINGS,
   TILE_NUMBER, TILE_SELECT, TILE_DATETIME, TILE_LOCK, TILE_ALARM, TILE_FAN, TILE_CLOCK, TILE_SWITCH, TILE_COVER, TILE_CLIMATE };
 ${strip(read('src/tiles/config/tile_geometry.h'))}
+${strip(read('src/tiles/config/grid_layout.h'))}
 ${strip(read('src/ui/popups/popup_layout.h'))}
 ${strip(read('src/core/i18n/i18n.h'))}
 namespace i18n {

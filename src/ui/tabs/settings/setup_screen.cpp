@@ -922,8 +922,11 @@ void build_card() {
   lv_obj_set_size(g_card, card_width(), card_height());
   lv_obj_set_style_bg_color(g_card, lv_color_hex(palette.card), 0);
   lv_obj_set_style_bg_opa(g_card, LV_OPA_COVER, 0);
-  settings_style::apply_tile_radius(g_card);
-  ui_surface_style::apply_global_tile_border(g_card);
+  // Like every popup card (popup_shell.cpp): the tile radius plus a grid gap,
+  // concentric with the X's box in its corner, and the plain hairline.
+  ui_surface_style::apply_radius(g_card, popup_layout::kCardRadius + Device::kGridGap, 0);
+  ui_surface_style::apply_popup_border(g_card, lv_color_white(),
+                                       static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));
   g_content = settings_parts::plain(g_card);
   lv_obj_set_size(g_content, card_width(), card_height());
 

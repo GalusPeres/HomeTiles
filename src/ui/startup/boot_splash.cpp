@@ -48,29 +48,26 @@ void show() {
   lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-  // Match the system popup's two layers (settings_popup_overlay and
-  // settings_popup_card): a borderless, almost-black background with device
-  // grid padding as its frame, containing a rounded gray card with the
-  // same dimensions and radius as the system popup.
+  // The whole screen black with the brand in its middle: no frame and no
+  // card (user 2026-10-09; a card at the screen edge looked like a border).
   g_overlay = lv_obj_create(scr);
   lv_obj_set_size(g_overlay, LV_PCT(100), LV_PCT(100));
   lv_obj_set_pos(g_overlay, 0, 0);
-  lv_obj_set_style_bg_color(g_overlay, lv_color_hex(0x0A0A0A), 0);
+  lv_obj_set_style_bg_color(g_overlay, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(g_overlay, LV_OPA_COVER, 0);
   lv_obj_set_style_border_opa(g_overlay, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(g_overlay, 0, 0);
   lv_obj_set_style_radius(g_overlay, 0, 0);
-  lv_obj_set_style_pad_all(g_overlay, Device::kGridPad, 0);
+  lv_obj_set_style_pad_all(g_overlay, 0, 0);
   lv_obj_clear_flag(g_overlay, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t* card = lv_obj_create(g_overlay);
   lv_obj_set_size(card, LV_PCT(100), LV_PCT(100));
   lv_obj_center(card);
-  lv_obj_set_style_bg_color(card, lv_color_hex(0x2A2A2A), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_opa(card, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(card, 0, 0);
-  lv_obj_set_style_radius(card, popup_layout::scale(22), 0);
-  lv_obj_set_style_clip_corner(card, false, 0);
+  lv_obj_set_style_radius(card, 0, 0);
   lv_obj_set_style_pad_all(card, 0, 0);
   lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);

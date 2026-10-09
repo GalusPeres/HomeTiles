@@ -730,7 +730,9 @@ int popup_close_y() { return popup_layout::kCardPad + popup_layout::kCloseButton
 lv_obj_t* step_head(lv_obj_t* card, int card_w, const char* icon_name, uint32_t color, uint32_t card_color,
                     const char* title, const char* line, int right) {
   const int disc = popup_layout::kHeaderIconDiscSize;
-  const int x = popup_layout::kCardPad;
+  // The popup head rule: the circle mirrors the X's box, one grid gap inside
+  // the card corner (popup_layout kHeaderIconX).
+  const int x = popup_layout::kCardPad + popup_layout::kHeaderIconX;
   const int center = popup_layout::kHeaderCenterY;
   const Tone tone = settings_style::tone(card_color, color);
   lv_obj_t* circle = plain(card);

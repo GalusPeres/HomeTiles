@@ -89,7 +89,8 @@ class Presenter {
   bool fullFrameInfo(uint8_t rotation, uint16_t& width, uint16_t& height,
                      uint16_t& turn_cw) const;
   bool beginFullFrames();
-  // The framebuffer the decoder may write (nullptr: none), its size in bytes.
+  // Where the decoder may write the next frame (nullptr: nowhere) and the
+  // frame's size in bytes; a frame lower than the panel sits centred in black.
   uint16_t* acquireFullFrame(size_t& bytes);
   bool submitFullFrame();
   void endFullFrames();
@@ -144,6 +145,8 @@ class Presenter {
   int32_t dirty_y2_ = 0;
   uint32_t fault_cooldown_until_ms_ = 0;
   bool swapTo(uint16_t* framebuffer);
+  // Where a full frame lands: its first row and its rows (multiples of 16).
+  bool fullFrameRows(int32_t& top, int32_t& rows) const;
   bool full_frames_ = false;
   uint16_t* ui_copy_ = nullptr;
 };

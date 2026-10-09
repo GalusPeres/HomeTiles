@@ -1099,6 +1099,29 @@ void DeviceWaveshareTouchLCD4_3::displayEndFullFramePreview() {
   g_camera_presenter.end();
 }
 
+bool DeviceWaveshareTouchLCD4_3::displayFullFrameInfo(uint16_t& width, uint16_t& height,
+                                                      uint16_t& turn_cw) {
+  return g_panel_fb_ready &&
+         g_camera_presenter.fullFrameInfo(g_rotation, width, height, turn_cw);
+}
+
+bool DeviceWaveshareTouchLCD4_3::displayBeginFullFrames() {
+  return g_panel_fb_ready && g_camera_presenter.beginFullFrames();
+}
+
+uint16_t* DeviceWaveshareTouchLCD4_3::displayAcquireFullFrame(size_t& bytes) {
+  bytes = 0;
+  return g_panel_fb_ready ? g_camera_presenter.acquireFullFrame(bytes) : nullptr;
+}
+
+bool DeviceWaveshareTouchLCD4_3::displaySubmitFullFrame() {
+  return g_panel_fb_ready && g_camera_presenter.submitFullFrame();
+}
+
+void DeviceWaveshareTouchLCD4_3::displayEndFullFrames() {
+  if (g_panel_fb_ready) g_camera_presenter.endFullFrames();
+}
+
 void DeviceWaveshareTouchLCD4_3::displayWaitDMA() {
 }
 

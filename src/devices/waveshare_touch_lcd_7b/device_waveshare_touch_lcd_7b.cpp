@@ -1047,6 +1047,29 @@ void DeviceWaveshareTouchLCD7B::displayEndFullFramePreview() {
   g_camera_presenter.end();
 }
 
+bool DeviceWaveshareTouchLCD7B::displayFullFrameInfo(uint16_t& width, uint16_t& height,
+                                                     uint16_t& turn_cw) {
+  return g_panel_fb_ready &&
+         g_camera_presenter.fullFrameInfo(g_rotation, width, height, turn_cw);
+}
+
+bool DeviceWaveshareTouchLCD7B::displayBeginFullFrames() {
+  return g_panel_fb_ready && g_camera_presenter.beginFullFrames();
+}
+
+uint16_t* DeviceWaveshareTouchLCD7B::displayAcquireFullFrame(size_t& bytes) {
+  bytes = 0;
+  return g_panel_fb_ready ? g_camera_presenter.acquireFullFrame(bytes) : nullptr;
+}
+
+bool DeviceWaveshareTouchLCD7B::displaySubmitFullFrame() {
+  return g_panel_fb_ready && g_camera_presenter.submitFullFrame();
+}
+
+void DeviceWaveshareTouchLCD7B::displayEndFullFrames() {
+  if (g_panel_fb_ready) g_camera_presenter.endFullFrames();
+}
+
 void DeviceWaveshareTouchLCD7B::displayWaitDMA() {
 }
 

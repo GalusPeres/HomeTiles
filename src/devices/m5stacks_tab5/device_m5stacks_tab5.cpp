@@ -4,9 +4,11 @@
 
 #if defined(DEVICE_M5STACKS_TAB5)
 
+#include <cstring>
 #include <driver/ppa.h>
 #include <esp_cache.h>
 #include <esp_heap_caps.h>
+#include <esp_lcd_mipi_dsi.h>
 #include <soc/ppa_reg.h>
 
 #include "src/core/display/dma2d_arbiter.h"
@@ -572,6 +574,64 @@ void push_pixels_with_ppa_fallback(int32_t x, int32_t y, int32_t w, int32_t h,
   }
 }
 
+// Camera full screen (#65): the Bridge's frames, 720 x 1280 and already in
+// the panel's orientation, go from the JPEG decoder straight into the one
+// framebuffer M5GFX scans (it has no second one); a copy of the UI comes back
+// afterwards. Each decode starts right after a panel refresh: the decoder
+// fills the framebuffer (about 11 ms) faster than the panel reads it (about
+// 16 ms), so the scan stays behind it and shows no half frame.
+uint16_t* g_full_ui_copy = nullptr;
+bool g_full_active = false;
+SemaphoreHandle_t g_full_refresh = nullptr;
+bool g_full_refresh_tried = false;
+
+// M5GFX keeps its DPI panel handle protected and registers no DPI callbacks.
+struct PanelDsiAccess : lgfx::Panel_DSI {
+  static esp_lcd_panel_handle_t handle(lgfx::Panel_DSI* panel) {
+    return panel ? panel->*(&PanelDsiAccess::_disp_panel_handle) : nullptr;
+  }
+};
+
+bool IRAM_ATTR on_full_refresh_done(esp_lcd_panel_handle_t, esp_lcd_dpi_panel_event_data_t*,
+                                    void* user_ctx) {
+  SemaphoreHandle_t sem = static_cast<SemaphoreHandle_t>(user_ctx);
+  if (!sem) return false;
+  BaseType_t high_task_woken = pdFALSE;
+  xSemaphoreGiveFromISR(sem, &high_task_woken);
+  return high_task_woken == pdTRUE;
+}
+
+// Once: the refresh signal. Without it the frames still show, maybe torn.
+void ensure_full_refresh_signal() {
+  if (g_full_refresh_tried) return;
+  g_full_refresh_tried = true;
+  auto* panel = static_cast<lgfx::Panel_DSI*>(M5.Display.getPanel());
+  const esp_lcd_panel_handle_t handle = PanelDsiAccess::handle(panel);
+  SemaphoreHandle_t sem = xSemaphoreCreateBinary();
+  esp_err_t err = ESP_ERR_INVALID_STATE;
+  if (handle && sem) {
+    esp_lcd_dpi_panel_event_callbacks_t cbs = {};
+    cbs.on_refresh_done = on_full_refresh_done;
+    err = esp_lcd_dpi_panel_register_event_callbacks(handle, &cbs, sem);
+  }
+  if (err == ESP_OK) {
+    g_full_refresh = sem;
+  } else if (sem) {
+    vSemaphoreDelete(sem);
+  }
+  Serial.printf("[Device/M5StacksTab5] Full screen refresh signal: %s
+",
+                err == ESP_OK ? "ready" : "unavailable, frames may tear");
+}
+
+void sync_panel_fb(bool memory_to_cache) {
+  esp_cache_msync(g_panel_fb, kPanelFrameBytes,
+                  memory_to_cache
+                      ? (ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_INVALIDATE |
+                         ESP_CACHE_MSYNC_FLAG_TYPE_DATA)
+                      : (ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_TYPE_DATA));
+}
+
 }  // namespace
 
 bool DeviceM5StacksTab5::init() {
@@ -636,6 +696,73 @@ bool DeviceM5StacksTab5::displayTryFullFramePreview(
 
   return ppa_rotate_to_panel(
       x, y, w, h, source_stride, data, byte_swap);
+}
+
+bool DeviceM5StacksTab5::displayFullFrameInfo(uint16_t& width, uint16_t& height,
+                                              uint16_t& turn_cw) {
+  if (!g_display_ready || !g_panel_fb) return false;
+  width = static_cast<uint16_t>(kPanelWidth);
+  height = static_cast<uint16_t>(kPanelHeight);
+  // ppa_rotate_to_panel()'s counter-clockwise turns, clockwise.
+  if (g_upright) {
+    turn_cw = (g_rotation & 0x02) ? 180 : 0;
+  } else {
+    turn_cw = (g_rotation & 0x02) ? 270 : 90;
+  }
+  return true;
+}
+
+bool DeviceM5StacksTab5::displayBeginFullFrames() {
+  if (!g_display_ready || !g_panel_fb) return false;
+  if (g_full_active) return true;
+  ensure_full_refresh_signal();
+  if (!g_full_ui_copy) {
+    g_full_ui_copy = static_cast<uint16_t*>(
+        heap_caps_aligned_alloc(kCacheLineSize, kPanelFrameBytes, MALLOC_CAP_SPIRAM));
+  }
+  if (!g_full_ui_copy) {
+    Serial.println("[Device/M5StacksTab5] Full screen: no memory for the UI copy");
+    return false;
+  }
+  // The UI as the panel scans it (PPA writes reach memory only), then black.
+  sync_panel_fb(true);
+  std::memcpy(g_full_ui_copy, g_panel_fb, kPanelFrameBytes);
+  std::memset(g_panel_fb, 0, kPanelFrameBytes);
+  sync_panel_fb(false);
+  g_full_active = true;
+  Serial.println("[Device/M5StacksTab5] Full screen: UI kept, screen black");
+  return true;
+}
+
+uint16_t* DeviceM5StacksTab5::displayAcquireFullFrame(size_t& bytes) {
+  bytes = 0;
+  if (!g_full_active || !g_panel_fb) return nullptr;
+  if (g_full_refresh) {
+    // A refresh that already passed does not count: start with the next one.
+    xSemaphoreTake(g_full_refresh, 0);
+    xSemaphoreTake(g_full_refresh, pdMS_TO_TICKS(40));
+  }
+  bytes = kPanelFrameBytes;
+  return g_panel_fb;
+}
+
+bool DeviceM5StacksTab5::displaySubmitFullFrame() {
+  if (!g_full_active || !g_panel_fb) return false;
+  // The decoder wrote memory: no stale CPU line may stand for its pixels.
+  sync_panel_fb(true);
+  return true;
+}
+
+void DeviceM5StacksTab5::displayEndFullFrames() {
+  if (!g_full_active) return;
+  g_full_active = false;
+  if (g_full_ui_copy && g_panel_fb) {
+    std::memcpy(g_panel_fb, g_full_ui_copy, kPanelFrameBytes);
+    sync_panel_fb(false);
+  }
+  heap_caps_free(g_full_ui_copy);
+  g_full_ui_copy = nullptr;
+  Serial.println("[Device/M5StacksTab5] Full screen ended: UI back");
 }
 
 void DeviceM5StacksTab5::displayWaitDMA() {

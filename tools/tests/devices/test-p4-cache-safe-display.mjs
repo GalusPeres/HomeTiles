@@ -62,8 +62,13 @@ for (const dir of fs.readdirSync(devicesDir)) {
     const source = fs.readFileSync(path.join(folder, file), 'utf8');
     if (!source.includes('esp_lcd_dpi_panel_register_event_callbacks(')) continue;
     ++boards;
-    assert.match(source, /bool IRAM_ATTR on_color_trans_done\(/, `${dir}/${file} on_color_trans_done`);
-    assert.match(source, /bool IRAM_ATTR on_refresh_done\(/, `${dir}/${file} on_refresh_done`);
+    // Every DPI callback the file registers (the Tab5 only on_refresh_done for
+    // its camera full screen, on M5GFX's panel).
+    const callbacks = [...source.matchAll(/\bcbs\.on_(?:color_trans_done|refresh_done) = (\w+);/g)].map(m => m[1]);
+    assert.ok(callbacks.length > 0, `${dir}/${file} registers no named DPI callback`);
+    for (const callback of callbacks) {
+      assert.match(source, new RegExp(`bool IRAM_ATTR ${callback}\\(`), `${dir}/${file} ${callback}`);
+    }
   }
 }
 assert.ok(boards >= 10, `expected the shared P4 DSI boards, found ${boards}`);

@@ -822,6 +822,29 @@ void DeviceGuitionJC8012P4A1::displayEndFullFramePreview() {
   g_camera_presenter.end();
 }
 
+bool DeviceGuitionJC8012P4A1::displayFullFrameInfo(uint16_t& width, uint16_t& height,
+                                                   uint16_t& turn_cw) {
+  return g_panel_fb_ready &&
+         g_camera_presenter.fullFrameInfo(g_rotation, width, height, turn_cw);
+}
+
+bool DeviceGuitionJC8012P4A1::displayBeginFullFrames() {
+  return g_panel_fb_ready && g_camera_presenter.beginFullFrames();
+}
+
+uint16_t* DeviceGuitionJC8012P4A1::displayAcquireFullFrame(size_t& bytes) {
+  bytes = 0;
+  return g_panel_fb_ready ? g_camera_presenter.acquireFullFrame(bytes) : nullptr;
+}
+
+bool DeviceGuitionJC8012P4A1::displaySubmitFullFrame() {
+  return g_panel_fb_ready && g_camera_presenter.submitFullFrame();
+}
+
+void DeviceGuitionJC8012P4A1::displayEndFullFrames() {
+  if (g_panel_fb_ready) g_camera_presenter.endFullFrames();
+}
+
 void DeviceGuitionJC8012P4A1::displayWaitDMA() {
 }
 

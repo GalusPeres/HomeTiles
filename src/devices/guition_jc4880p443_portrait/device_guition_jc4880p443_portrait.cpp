@@ -985,6 +985,29 @@ void DeviceGuitionJC4880P443Portrait::displayEndFullFramePreview() {
   g_camera_presenter.end();
 }
 
+bool DeviceGuitionJC4880P443Portrait::displayFullFrameInfo(uint16_t& width, uint16_t& height,
+                                                           uint16_t& turn_cw) {
+  return g_panel_fb_ready &&
+         g_camera_presenter.fullFrameInfo(g_rotation, width, height, turn_cw);
+}
+
+bool DeviceGuitionJC4880P443Portrait::displayBeginFullFrames() {
+  return g_panel_fb_ready && g_camera_presenter.beginFullFrames();
+}
+
+uint16_t* DeviceGuitionJC4880P443Portrait::displayAcquireFullFrame(size_t& bytes) {
+  bytes = 0;
+  return g_panel_fb_ready ? g_camera_presenter.acquireFullFrame(bytes) : nullptr;
+}
+
+bool DeviceGuitionJC4880P443Portrait::displaySubmitFullFrame() {
+  return g_panel_fb_ready && g_camera_presenter.submitFullFrame();
+}
+
+void DeviceGuitionJC4880P443Portrait::displayEndFullFrames() {
+  if (g_panel_fb_ready) g_camera_presenter.endFullFrames();
+}
+
 void DeviceGuitionJC4880P443Portrait::displayWaitDMA() {
 }
 

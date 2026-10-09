@@ -8,7 +8,9 @@
 #include <LittleFS.h>
 #include <driver/gpio.h>
 #include <driver/ledc.h>
+#include <esp_cache.h>
 #include <esp_err.h>
+#include <esp_heap_caps.h>
 #include <esp_ldo_regulator.h>
 #include <string.h>
 
@@ -42,6 +44,9 @@ bool g_sd_init_attempted = false;
 bool g_sd_available = false;
 uint32_t g_sd_retry_tick_ms = 0;
 bool g_littlefs_ready = false;
+// Camera full screen (#65): the UI kept while the frames own the framebuffer.
+uint16_t* g_full_ui_copy = nullptr;
+bool g_full_active = false;
 
 void apply_backlight(uint8_t value);
 
@@ -360,6 +365,81 @@ bool DeviceWaveshare4B::displayTryFullFramePreview(
         static_cast<int16_t>(w), static_cast<int16_t>(h));
   }
   return true;
+}
+
+// Camera full screen (#65): the Bridge's frames (720 x 720, turned by 180
+// when the panel is) go from the JPEG decoder straight into the one
+// framebuffer Arduino_GFX scans. Its DSI panel handle is private, so there is
+// no refresh signal to start on; the decoder fills 720 x 720 in a few ms. Only
+// rotations 0 and 180, like the direct popup frames above.
+bool DeviceWaveshare4B::displayFullFrameInfo(uint16_t& width, uint16_t& height,
+                                             uint16_t& turn_cw) {
+  if (!g_gfx || !g_gfx->getFramebuffer() || (g_gfx->getRotation() & 0x01) != 0 ||
+      display_cfg.width % 16 != 0 || display_cfg.height % 16 != 0) {
+    return false;
+  }
+  width = static_cast<uint16_t>(display_cfg.width);
+  height = static_cast<uint16_t>(display_cfg.height);
+  turn_cw = g_gfx->getRotation() == 2 ? 180 : 0;
+  return true;
+}
+
+bool DeviceWaveshare4B::displayBeginFullFrames() {
+  uint16_t* framebuffer = g_gfx ? g_gfx->getFramebuffer() : nullptr;
+  if (!framebuffer) return false;
+  if (g_full_active) return true;
+  const size_t bytes = static_cast<size_t>(display_cfg.width) *
+                       static_cast<size_t>(display_cfg.height) * sizeof(uint16_t);
+  if (!g_full_ui_copy) {
+    g_full_ui_copy = static_cast<uint16_t*>(heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM));
+  }
+  if (!g_full_ui_copy) {
+    Serial.println("[Device/Waveshare4B] Full screen: no memory for the UI copy");
+    return false;
+  }
+  // Arduino_GFX writes through the cache and writes it back: the cache holds
+  // the UI as shown.
+  memcpy(g_full_ui_copy, framebuffer, bytes);
+  memset(framebuffer, 0, bytes);
+  g_gfx->flush(true);
+  g_full_active = true;
+  Serial.println("[Device/Waveshare4B] Full screen: UI kept, screen black");
+  return true;
+}
+
+uint16_t* DeviceWaveshare4B::displayAcquireFullFrame(size_t& bytes) {
+  bytes = 0;
+  uint16_t* framebuffer = g_gfx ? g_gfx->getFramebuffer() : nullptr;
+  if (!g_full_active || !framebuffer) return nullptr;
+  bytes = static_cast<size_t>(display_cfg.width) *
+          static_cast<size_t>(display_cfg.height) * sizeof(uint16_t);
+  return framebuffer;
+}
+
+bool DeviceWaveshare4B::displaySubmitFullFrame() {
+  uint16_t* framebuffer = g_gfx ? g_gfx->getFramebuffer() : nullptr;
+  if (!g_full_active || !framebuffer) return false;
+  // The decoder wrote memory: no stale CPU line may stand for its pixels.
+  const size_t bytes = static_cast<size_t>(display_cfg.width) *
+                       static_cast<size_t>(display_cfg.height) * sizeof(uint16_t);
+  return esp_cache_msync(framebuffer, bytes,
+                         ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_INVALIDATE |
+                             ESP_CACHE_MSYNC_FLAG_TYPE_DATA) == ESP_OK;
+}
+
+void DeviceWaveshare4B::displayEndFullFrames() {
+  if (!g_full_active) return;
+  g_full_active = false;
+  uint16_t* framebuffer = g_gfx ? g_gfx->getFramebuffer() : nullptr;
+  if (framebuffer && g_full_ui_copy) {
+    memcpy(framebuffer, g_full_ui_copy,
+           static_cast<size_t>(display_cfg.width) *
+               static_cast<size_t>(display_cfg.height) * sizeof(uint16_t));
+    g_gfx->flush(true);
+  }
+  heap_caps_free(g_full_ui_copy);
+  g_full_ui_copy = nullptr;
+  Serial.println("[Device/Waveshare4B] Full screen ended: UI back");
 }
 
 void DeviceWaveshare4B::displayWaitDMA() {

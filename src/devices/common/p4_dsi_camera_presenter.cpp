@@ -498,11 +498,29 @@ bool Presenter::present(int32_t x, int32_t y, int32_t w, int32_t h,
   return true;
 }
 
+// The Bridge sends full frames in multiples of 16 (the JPEG blocks). The
+// frame keeps the panel's width (the decoder writes whole framebuffer rows);
+// a height like 600 becomes 592, centred, the rows around it black. The top
+// row starts on a cache line, as the decoder's output must.
+bool Presenter::fullFrameRows(int32_t& top, int32_t& rows) const {
+  top = 0;
+  rows = 0;
+  if (config_.panel_width <= 0 || config_.panel_width % 16 != 0) return false;
+  rows = config_.panel_height - config_.panel_height % 16;
+  if (rows <= 0) return false;
+  const size_t row_bytes = static_cast<size_t>(config_.panel_width) * sizeof(uint16_t);
+  top = (config_.panel_height - rows) / 2;
+  while (top > 0 && (static_cast<size_t>(top) * row_bytes) % kCacheLineSize != 0) --top;
+  return true;
+}
+
 bool Presenter::fullFrameInfo(uint8_t rotation, uint16_t& width,
                               uint16_t& height, uint16_t& turn_cw) const {
-  if (!ready_) return false;
+  int32_t top = 0;
+  int32_t rows = 0;
+  if (!ready_ || !fullFrameRows(top, rows)) return false;
   width = static_cast<uint16_t>(config_.panel_width);
-  height = static_cast<uint16_t>(config_.panel_height);
+  height = static_cast<uint16_t>(rows);
   // present() turns frames by the PPA's counter-clockwise angle: 90 CCW is
   // 270 clockwise, 270 CCW is 90 clockwise.
   if (config_.transform == Transform::Portrait90Or270) {
@@ -571,11 +589,30 @@ bool Presenter::beginFullFrames() {
 
 uint16_t* Presenter::acquireFullFrame(size_t& bytes) {
   bytes = 0;
-  if (!ready_ || !full_frames_) return nullptr;
+  int32_t top = 0;
+  int32_t rows = 0;
+  if (!ready_ || !full_frames_ || !fullFrameRows(top, rows)) return nullptr;
   // The decoder may only write a framebuffer the panel no longer scans.
   finishPendingSwap();
-  bytes = framebufferBytes();
-  return inactiveFramebuffer();
+  uint16_t* framebuffer = inactiveFramebuffer();
+  if (!framebuffer) return nullptr;
+  // The rows the frame does not cover stay black (this framebuffer may
+  // still hold the UI there).
+  const size_t row_pixels = static_cast<size_t>(config_.panel_width);
+  const int32_t bottom = top + rows;
+  if (top > 0) {
+    std::memset(framebuffer, 0, static_cast<size_t>(top) * row_pixels * sizeof(uint16_t));
+  }
+  if (bottom < config_.panel_height) {
+    std::memset(framebuffer + static_cast<size_t>(bottom) * row_pixels, 0,
+                static_cast<size_t>(config_.panel_height - bottom) * row_pixels * sizeof(uint16_t));
+  }
+  if ((top > 0 || bottom < config_.panel_height) &&
+      !syncCache(framebuffer, framebufferBytes(), false)) {
+    return nullptr;
+  }
+  bytes = static_cast<size_t>(rows) * row_pixels * sizeof(uint16_t);
+  return framebuffer + static_cast<size_t>(top) * row_pixels;
 }
 
 bool Presenter::submitFullFrame() {

@@ -16,7 +16,6 @@ const read = (relativePath) =>
 
 const presenter = read('src/devices/common/p4_dsi_camera_presenter.cpp');
 const dispatch = read('src/devices/device.cpp');
-const v2 = read('src/devices/guition_jc8012p4a1_v2/device_guition_jc8012p4a1_v2.cpp');
 const stream = read('src/video/camera_stream.cpp');
 const popup = read('src/ui/popups/camera/camera_popup.cpp');
 const mqtt = read('src/network/mqtt/mqtt_handlers.cpp');
@@ -41,7 +40,7 @@ assert.ok(begin.indexOf('std::memcpy(ui_copy_, active, bytes);') < begin.indexOf
 assert.match(begin, /std::memset\(inactive, 0, bytes\);\s*ok = syncCache\(inactive, bytes, false\) && swapTo\(inactive\);/,
   'black at once: cleared, written back, swapped in');
 assert.match(body(presenter, 'uint16_t* Presenter::acquireFullFrame('),
-  /finishPendingSwap\(\);\s*bytes = framebufferBytes\(\);\s*return inactiveFramebuffer\(\);/,
+  /finishPendingSwap\(\);\s*uint16_t\* framebuffer = inactiveFramebuffer\(\);/,
   'the decoder writes only a framebuffer the panel no longer scans');
 assert.match(body(presenter, 'bool Presenter::submitFullFrame('),
   /syncCache\(frame, framebufferBytes\(\), true\)\) return false;\s*return swapTo\(frame\);/);
@@ -49,9 +48,59 @@ const end = body(presenter, 'void Presenter::endFullFrames(');
 assert.match(end, /std::memcpy\(inactive, ui_copy_, framebufferBytes\(\)\);\s*if \(syncCache\(inactive, framebufferBytes\(\), false\)\) swapTo\(inactive\);/);
 assert.match(end, /double_buffer_active_ = false;/, 'a later popup frame copies the whole UI again');
 
-// Only the V2 so far; every other panel keeps the popup.
-assert.match(dispatch, /#if defined\(DEVICE_GUITION_JC8012P4A1_V2\)\s*bool displayFullFrameInfo[\s\S]*?#else\s*bool displayFullFrameInfo\(uint16_t&, uint16_t&, uint16_t&\) \{ return false; \}/);
-assert.match(v2, /g_camera_presenter\.fullFrameInfo\(g_rotation, width, height, turn_cw\)/);
+// Every P4 panel (user 09.10.: all devices); the ESP32-S3 panels keep the
+// popup. The shared-presenter panels all use the same five calls; the Tab5
+// (M5GFX) and the 4B (Arduino_GFX) have one framebuffer of their own.
+assert.match(dispatch, /#if defined\(DEVICE_P4_IDF_DSI\) \|\| defined\(DEVICE_M5STACKS_TAB5\) \|\| defined\(DEVICE_WAVESHARE_4B\)\s*bool displayFullFrameInfo[\s\S]*?#else\s*bool displayFullFrameInfo\(uint16_t&, uint16_t&, uint16_t&\) \{ return false; \}/);
+const presenterDevices = ['guition_jc8012p4a1_v2', 'guition_jc8012p4a1', 'guition_jc1060p470c',
+  'guition_jc1060p470c_v2', 'guition_jc4880p443_portrait', 'waveshare_touch_lcd_4_3',
+  'waveshare_touch_lcd_7', 'waveshare_touch_lcd_7b', 'waveshare_touch_lcd_8', 'waveshare_touch_lcd_10_1'];
+for (const name of presenterDevices) {
+  const source = read(`src/devices/${name}/device_${name}.cpp`);
+  const header = read(`src/devices/${name}/device_${name}.h`);
+  assert.match(source, /g_camera_presenter\.fullFrameInfo\(g_rotation, width, height, turn_cw\)/, name);
+  assert.match(source, /return g_panel_fb_ready && g_camera_presenter\.beginFullFrames\(\);/, name);
+  assert.match(source, /return g_panel_fb_ready \? g_camera_presenter\.acquireFullFrame\(bytes\) : nullptr;/, name);
+  assert.match(source, /return g_panel_fb_ready && g_camera_presenter\.submitFullFrame\(\);/, name);
+  assert.match(source, /if \(g_panel_fb_ready\) g_camera_presenter\.endFullFrames\(\);/, name);
+  assert.match(header, /bool displayFullFrameInfo\(uint16_t& width, uint16_t& height, uint16_t& turn_cw\);\s*bool displayBeginFullFrames\(\);/, name);
+}
+const deviceSelect = read('src/devices/device_select.h');
+const dsiEnd = deviceSelect.indexOf('#define DEVICE_P4_IDF_DSI');
+const dsiBlock = deviceSelect.slice(deviceSelect.lastIndexOf('#if ', dsiEnd), dsiEnd);
+for (const name of presenterDevices) {
+  assert.ok(dsiBlock.includes(`defined(DEVICE_${name.toUpperCase()})`), `${name} is a DEVICE_P4_IDF_DSI panel`);
+}
+
+// Frames are multiples of 16 high (JPEG blocks; the Bridge checks it): a
+// 1024 x 600 panel gets 592 rows, centred on a cache line, the rest black.
+const rows = body(presenter, 'bool Presenter::fullFrameRows(');
+assert.match(rows, /config_\.panel_width % 16 != 0\) return false;/);
+assert.match(rows, /rows = config_\.panel_height - config_\.panel_height % 16;/);
+assert.match(rows, /% kCacheLineSize != 0\) --top;/);
+const acquire = body(presenter, 'uint16_t* Presenter::acquireFullFrame(');
+assert.match(acquire, /std::memset\(framebuffer, 0,/);
+assert.match(acquire, /bytes = static_cast<size_t>\(rows\) \* row_pixels \* sizeof\(uint16_t\);\s*return framebuffer \+ static_cast<size_t>\(top\) \* row_pixels;/);
+
+// The Tab5 (M5GFX, one framebuffer): the decoder writes the scanned
+// framebuffer right after a refresh, faster than the panel reads it.
+const tab5 = read('src/devices/m5stacks_tab5/device_m5stacks_tab5.cpp');
+assert.match(tab5, /panel->\*\(&PanelDsiAccess::_disp_panel_handle\)/);
+assert.match(tab5, /cbs\.on_refresh_done = on_full_refresh_done;/);
+assert.match(body(tab5, 'uint16_t* DeviceM5StacksTab5::displayAcquireFullFrame('),
+  /xSemaphoreTake\(g_full_refresh, 0\);\s*xSemaphoreTake\(g_full_refresh, pdMS_TO_TICKS\(40\)\);/);
+const tab5Begin = body(tab5, 'bool DeviceM5StacksTab5::displayBeginFullFrames(');
+assert.ok(tab5Begin.indexOf('std::memcpy(g_full_ui_copy, g_panel_fb') < tab5Begin.indexOf('std::memset(g_panel_fb, 0'));
+assert.match(body(tab5, 'void DeviceM5StacksTab5::displayEndFullFrames('), /std::memcpy\(g_panel_fb, g_full_ui_copy, kPanelFrameBytes\);\s*sync_panel_fb\(false\);/);
+const b4 = read('src/devices/waveshare_4b/device_waveshare_4b.cpp');
+assert.match(body(b4, 'bool DeviceWaveshare4B::displayFullFrameInfo('),
+  /\(g_gfx->getRotation\(\) & 0x01\) != 0[\s\S]*?turn_cw = g_gfx->getRotation\(\) == 2 \? 180 : 0;/,
+  'the 4B: only rotations 0 and 180, like its direct popup frames');
+const b4Begin = body(b4, 'bool DeviceWaveshare4B::displayBeginFullFrames(');
+assert.ok(b4Begin.indexOf('memcpy(g_full_ui_copy, framebuffer, bytes);') < b4Begin.indexOf('memset(framebuffer, 0, bytes);'));
+assert.match(body(b4, 'bool DeviceWaveshare4B::displaySubmitFullFrame('), /ESP_CACHE_MSYNC_FLAG_DIR_M2C \| ESP_CACHE_MSYNC_FLAG_INVALIDATE/);
+assert.match(body(tab5, 'bool DeviceM5StacksTab5::displayFullFrameInfo('),
+  /turn_cw = \(g_rotation & 0x02\) \? 180 : 0;[\s\S]*?turn_cw = \(g_rotation & 0x02\) \? 270 : 90;/);
 
 // The worker keeps the newest JPEG; the UI loop decodes it in the
 // framebuffer's own byte order and checks the size first.

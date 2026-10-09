@@ -48,7 +48,8 @@ void displayEndFullFramePreview() {
 #endif
 }
 
-#if defined(DEVICE_GUITION_JC8012P4A1_V2)
+// Camera full screen (#65): every ESP32-P4 panel.
+#if defined(DEVICE_P4_IDF_DSI) || defined(DEVICE_M5STACKS_TAB5) || defined(DEVICE_WAVESHARE_4B)
 bool displayFullFrameInfo(uint16_t& width, uint16_t& height, uint16_t& turn_cw) {
   return DeviceImpl::displayFullFrameInfo(width, height, turn_cw);
 }

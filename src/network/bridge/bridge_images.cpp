@@ -101,8 +101,10 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
   slot->height = header.height;
   slot->fit = fit;
   slot->used = ++g_tick;
-  Serial.printf("[Images] %s %s %ux%u, %u bytes\n", entity, header.key, header.width,
-                header.height, static_cast<unsigned>(jpeg_length));
+  Serial.printf("[Images] %s %s %ux%u, %u bytes | int=%u KB min=%u KB\n", entity, header.key,
+                header.width, header.height, static_cast<unsigned>(jpeg_length),
+                static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024));
   announce(entity);
   return true;
 }

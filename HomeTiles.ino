@@ -94,6 +94,10 @@ static constexpr uint32_t kBootBlackWarmupMs = 90;
 static constexpr uint32_t kBootBlackGapMs = 60;
 #endif
 
+#if defined(DEVICE_ESP32_S3_RGB_480)
+constexpr size_t kS3InternalMallocMax = 32;
+#endif
+
 static void log_memory_status(const char* tag) {
   const uint32_t heap_free = ESP.getFreeHeap();
   const uint32_t heap_min = ESP.getMinFreeHeap();
@@ -114,6 +118,12 @@ static void log_memory_status(const char* tag) {
                 psram_free / 1024,
                 psram_largest / 1024,
                 ESP.getPsramSize() / 1024);
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  // The loop task's 16 KB stack is internal RAM: how much of it was ever used.
+  Serial.printf("[Mem] %s | Loop stack never below %u B free of %u B\n", tag ? tag : "?",
+                static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)),
+                static_cast<unsigned>(getArduinoLoopTaskStackSize()));
+#endif
   if (lv_is_initialized()) {
     lv_mem_monitor_t lv_mem{};
     lv_mem_monitor(&lv_mem);
@@ -665,6 +675,16 @@ void setup() {
   delay(2000);
   Serial.println("\n\n=== HOMETILES STARTUP ===");
   Serial.printf("[Setup] Firmware: hometiles-%s-%s\n", FW_VERSION, Device::profile().key);
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  // The S3's internal RAM carries Wi-Fi, the draw band and, by the SDK's
+  // CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL, every malloc up to 4 KB; it ran down
+  // to 14 KB with the screensaver's camera picture (b322). Small allocations
+  // (strings, JSON, lists) prefer PSRAM from here on; FreeRTOS, Wi-Fi and the
+  // drivers ask for internal RAM by their own caps.
+  heap_caps_malloc_extmem_enable(kS3InternalMallocMax);
+  Serial.printf("[Mem] S3: allocations above %u bytes prefer PSRAM\n",
+                static_cast<unsigned>(kS3InternalMallocMax));
+#endif
   GuitionS3Diagnostics::logBoot(FW_VERSION, Device::profile().key);
   GuitionS3Diagnostics::logOtaPartitions("boot");
   confirm_running_ota_if_needed();

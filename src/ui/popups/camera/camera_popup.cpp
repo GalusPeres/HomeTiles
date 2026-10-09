@@ -78,8 +78,9 @@ struct CameraPopupContext {
   // A stream URL waits until the previous stream's task has ended.
   String pending_url;
   bool pending_full = false;
-  // Back from the full screen: the kept popup shows its last frame and
-  // status until its own stream shows a frame again (no Buffering flash).
+  // Back from the full screen: the kept popup shows its black video area
+  // and status until its own stream shows a frame again (no Buffering flash,
+  // no frozen frame).
   bool resuming = false;
   // Switch timing for the log: the tap and whether the first frame of the
   // new stream was logged.
@@ -185,7 +186,7 @@ static void leave_full_screen(bool reopen) {
   lv_display_t* display = lv_display_get_default();
   if (display) lv_display_enable_invalidation(display, true);
   // What changed meanwhile outside the popup is drawn again. The popup stays
-  // as kept, its last frame and status, until its stream shows again (b315:
+  // as kept, black video and status, until its stream shows again (b315:
   // the whole screen drawn again took 350 ms and showed Buffering).
   lv_area_t card{};
   lv_obj_get_coords(ctx->card, &card);
@@ -201,16 +202,19 @@ static void leave_full_screen(bool reopen) {
     if (area.x2 >= area.x1 && area.y2 >= area.y1) lv_obj_invalidate_area(lv_screen_active(), &area);
   }
   Serial.println("[Camera] Full screen ended");
-  note_switch(ctx, "popup kept on screen");
+  note_switch(ctx, "popup with black video on screen");
   ctx->switch_frame_logged = false;
   ctx->resuming = reopen && ctx->visible;
   if (ctx->resuming) open_popup_stream(ctx);
 }
 
-// The popup kept and its frame large at once on black (the PPA enlarges it
-// until the first full frame), then the Bridge asked for frames in the
-// panel's own size. In the loop: lv_refr_now first, or an area LVGL still
-// owes would land on the full screen.
+// The video area turns black and the popup is kept, the screen black at once
+// until the first full frame, then the Bridge asked for frames in the panel's
+// own size. The user wants black rather than a still frame either way (b318's
+// enlarged popup frame was smaller and stood still; back, the kept last frame
+// stood still): the kept popup comes back with the black video area. In the
+// loop: lv_refr_now first, or an area LVGL still owes would land on the full
+// screen.
 static void enter_full_screen() {
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->visible || ctx->full) return;
@@ -219,21 +223,15 @@ static void enter_full_screen() {
   uint16_t turn = 0;
   if (!Device::displayFullFrameInfo(width, height, turn)) return;
   lv_display_t* display = lv_display_get_default();
-  lv_refr_now(display);
-  if (display) lv_display_enable_invalidation(display, false);
-  // The popup's frames go with its stream.
+  // The popup's frames go with its stream; its video area drawn black.
   lv_image_set_src(ctx->image, nullptr);
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_invalidate(lv_obj_get_parent(ctx->image));
+  lv_refr_now(display);
+  if (display) lv_display_enable_invalidation(display, false);
   ctx->pending_url = String();
-  // The popup's frame is read before its stream stops (and frees it).
-  const uint16_t* preview = nullptr;
-  int32_t preview_w = 0;
-  int32_t preview_h = 0;
-  int32_t preview_stride = 0;
-  size_t preview_bytes = 0;
-  camera_stream_shown_frame(preview, preview_w, preview_h, preview_stride, preview_bytes);
-  if (!Device::displayBeginFullFrames(preview, preview_w, preview_h, preview_stride,
-                                      preview_bytes, true)) {
+  if (!Device::displayBeginFullFrames()) {
     Serial.println("[Camera] Full screen unavailable; the popup stays");
     // The running popup stream shows its next frame again.
     if (display) lv_display_enable_invalidation(display, true);
@@ -251,7 +249,7 @@ static void enter_full_screen() {
   }
   ctx->waiting_for_bridge = true;
   ctx->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
-  note_switch(ctx, "full screen preview on screen");
+  note_switch(ctx, "full screen black on screen");
   ctx->switch_frame_logged = false;
   Serial.printf("[Camera] Full screen: %ux%u frames turned %u clockwise\n",
                 static_cast<unsigned>(width), static_cast<unsigned>(height),

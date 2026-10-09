@@ -1779,23 +1779,6 @@ bool camera_stream_take_transport_failure() {
   return true;
 }
 
-bool camera_stream_shown_frame(const uint16_t*& pixels, int32_t& width,
-                               int32_t& height, int32_t& stride, size_t& bytes) {
-  pixels = nullptr;
-  portENTER_CRITICAL(&g_state_mux);
-  const int8_t shown = g_full_mode ? -1 : g_displayed_index;
-  if (shown >= 0 && shown < static_cast<int8_t>(kFrameBufferCount) &&
-      g_frame_states[shown] == FrameState::Displayed) {
-    pixels = g_pixels[shown];
-  }
-  portEXIT_CRITICAL(&g_state_mux);
-  width = kWidth;
-  height = kHeight;
-  stride = kDecodedWidth;
-  bytes = kPixelBytes;
-  return pixels != nullptr;
-}
-
 #else
 
 bool camera_stream_start(const char*, uint32_t, bool) {
@@ -1811,9 +1794,5 @@ void camera_stream_set_external_status(const char*, bool) {}
 bool camera_stream_is_active() { return false; }
 uint32_t camera_stream_first_frame_ms() { return 0; }
 bool camera_stream_take_transport_failure() { return false; }
-bool camera_stream_shown_frame(const uint16_t*& pixels, int32_t&, int32_t&, int32_t&, size_t&) {
-  pixels = nullptr;
-  return false;
-}
 
 #endif

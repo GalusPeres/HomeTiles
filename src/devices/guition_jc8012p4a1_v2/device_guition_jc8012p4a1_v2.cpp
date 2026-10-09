@@ -845,14 +845,8 @@ bool DeviceGuitionJC8012P4A1V2::displayFullFrameInfo(uint16_t& width,
          g_camera_presenter.fullFrameInfo(g_rotation, width, height, turn_cw);
 }
 
-bool DeviceGuitionJC8012P4A1V2::displayBeginFullFrames(
-    const uint16_t* preview, int32_t preview_w, int32_t preview_h,
-    int32_t preview_stride, size_t preview_bytes, bool byte_swap) {
-  if (!g_panel_fb_ready) return false;
-  const auto runtime = g_ui_ppa.runtime(note_ppa_fault);
-  return g_camera_presenter.beginFullFrames(preview, preview_w, preview_h,
-                                            preview_stride, preview_bytes,
-                                            byte_swap, g_rotation, runtime);
+bool DeviceGuitionJC8012P4A1V2::displayBeginFullFrames() {
+  return g_panel_fb_ready && g_camera_presenter.beginFullFrames();
 }
 
 uint16_t* DeviceGuitionJC8012P4A1V2::displayAcquireFullFrame(size_t& bytes) {

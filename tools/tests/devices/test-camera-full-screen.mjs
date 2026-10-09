@@ -38,7 +38,7 @@ assert.match(presenter, /present\([\s\S]*?\{\s*\/\/ Full-screen frames own both 
 const begin = body(presenter, 'bool Presenter::beginFullFrames(');
 assert.ok(begin.indexOf('std::memcpy(ui_copy_, active, bytes);') < begin.indexOf('std::memset(inactive, 0, bytes);'),
   'the UI is kept before the screen turns black');
-assert.match(begin, /std::memset\(inactive, 0, bytes\);\s*ok = syncCache\(inactive, bytes, false\);[\s\S]*?ok = ok && swapTo\(inactive\);/,
+assert.match(begin, /std::memset\(inactive, 0, bytes\);\s*ok = syncCache\(inactive, bytes, false\) && swapTo\(inactive\);/,
   'black at once: cleared, written back, swapped in');
 assert.match(body(presenter, 'uint16_t* Presenter::acquireFullFrame('),
   /finishPendingSwap\(\);\s*bytes = framebufferBytes\(\);\s*return inactiveFramebuffer\(\);/,
@@ -68,8 +68,9 @@ assert.match(body(stream, 'void camera_stream_stop('), /g_stop_requested = true;
 
 // The popup: both switches run in the loop, LVGL draws nothing meanwhile.
 const enter = body(popup, 'static void enter_full_screen(');
-const order = ['lv_refr_now(display);', 'lv_display_enable_invalidation(display, false);',
-  'lv_image_set_src(ctx->image, nullptr);', 'camera_stream_shown_frame(', 'Device::displayBeginFullFrames(',
+const order = ['lv_image_set_src(ctx->image, nullptr);', 'lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);',
+  'lv_obj_invalidate(lv_obj_get_parent(ctx->image));', 'lv_refr_now(display);',
+  'lv_display_enable_invalidation(display, false);', 'Device::displayBeginFullFrames()',
   'camera_stream_stop();', 'mqttPublishCameraFullScreenOpen('];
 for (let i = 1; i < order.length; ++i) {
   assert.ok(enter.indexOf(order[i - 1]) < enter.indexOf(order[i]), `${order[i - 1]} before ${order[i]}`);
@@ -104,17 +105,17 @@ assert.match(popup, /if \(camera_stream_take_transport_failure\(\) && g_camera_p
   'a fast stream ending in a transport error: 8 KB until restart, the same view again');
 assert.match(body(popup, 'static void close_camera_popup('), /camera_transport::popup_closed\(\);/);
 
-// The full screen's first moment: the popup's frame enlarged by the PPA on
-// the black screen, read before the popup stream stops (b317 showed black
-// for about a second).
-const beginFull = body(presenter, 'bool Presenter::beginFullFrames(');
-assert.match(beginFull, /std::memset\(inactive, 0, bytes\);\s*ok = syncCache\(inactive, bytes, false\);\s*if \(ok && preview\) \{\s*drawPreview\(inactive,/);
-assert.match(body(presenter, 'bool Presenter::drawPreview('), /return syncFramebufferSpan\(destination, dst_x, dst_y, dst_w, dst_h, true\);/);
+// Black instead of a still frame both ways (user, b320): the screen black
+// until the first full frame (b318's enlarged popup frame was smaller and
+// stood still), and the popup kept with its video area black, so it comes
+// back black until its stream runs (not with its last frame).
+assert.doesNotMatch(presenter, /drawPreview/);
+assert.doesNotMatch(stream, /camera_stream_shown_frame/);
+assert.match(enter, /lv_obj_add_flag\(ctx->placeholder, LV_OBJ_FLAG_HIDDEN\);/);
 assert.match(presenter, /void Presenter::end\(\) \{\s*\/\/ A stream stopping under the full screen leaves it to endFullFrames\(\)\.\s*if \(full_frames_ \|\| !double_buffer_active_\) return;/);
-assert.match(body(stream, 'bool camera_stream_shown_frame('), /const int8_t shown = g_full_mode \? -1 : g_displayed_index;/);
 
 // Back from the full screen: only the screen outside the popup is drawn
-// again; the popup keeps its last frame and status until its stream shows
+// again; the popup keeps its black video and status until its stream shows
 // (b315 showed Buffering and stalled 350 ms on a whole-screen redraw).
 assert.doesNotMatch(leave, /lv_obj_invalidate\(lv_screen_active\(\)\)/);
 assert.match(leave, /lv_obj_invalidate_area\(lv_screen_active\(\), &area\)/);

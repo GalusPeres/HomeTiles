@@ -87,9 +87,7 @@ void displayEndFullFramePreview();
 // Bridge applies) go from the JPEG decoder straight into the framebuffer.
 // Begin keeps the UI and turns the screen black, End puts the UI back.
 bool displayFullFrameInfo(uint16_t& width, uint16_t& height, uint16_t& turn_cw);
-bool displayBeginFullFrames(const uint16_t* preview, int32_t preview_w,
-                            int32_t preview_h, int32_t preview_stride,
-                            size_t preview_bytes, bool byte_swap);
+bool displayBeginFullFrames();
 uint16_t* displayAcquireFullFrame(size_t& bytes);
 bool displaySubmitFullFrame();
 void displayEndFullFrames();

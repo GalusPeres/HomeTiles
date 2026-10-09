@@ -11,6 +11,7 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/camera/camera_popup.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -22,7 +23,7 @@ struct CameraEventData {
   String entity_id;
   String title;
   String icon_name;
-  uint32_t bg_color = 0x2A2A2A;
+  uint32_t bg_color = 0;  // 0: the popup takes its default card
 };
 
 static String friendly_camera_name(const String& entity_id) {
@@ -113,7 +114,7 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
   }
   if (icon_char.length()) {
     icon = lv_label_create(card);
-    set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
+    set_label_style(icon, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
     lv_label_set_text(icon, icon_char.c_str());
     tile_icon_source::apply_initial(icon, tile);
     if (!compact) {
@@ -123,7 +124,7 @@ lv_obj_t* render_camera_tile(lv_obj_t* parent,
   }
 
   lv_obj_t* title_label = lv_label_create(card);
-  set_label_style(title_label, lv_color_white(),
+  set_label_style(title_label, lv_color_hex(ui_theme::text()),
                   tile_layout::header_title_font());
   hometiles_title::tile(title_label, title.c_str(), false);
   if (compact) {

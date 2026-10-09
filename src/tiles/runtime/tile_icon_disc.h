@@ -6,6 +6,7 @@
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/shared/tone_color.h"
 #include "src/types/climate/layout.h"
+#include "src/ui/shared/ui_theme.h"
 
 // One translucent disc behind every tile icon. Half-height tiles hold the icon
 // in a disc that is concentric with the tile corner. Taller tiles keep their
@@ -274,7 +275,7 @@ inline uint32_t circle_card(lv_obj_t* host, uint32_t card, uint32_t rgb, bool ti
 // `see_through_card` report that card.
 inline tone_color::Fill disc_fill(lv_obj_t* disc, bool pressed, uint32_t& card, bool& see_through_card) {
   lv_obj_t* icon = icon_of(disc);
-  const uint32_t rgb = icon ? icon_color(icon) : 0xFFFFFF;
+  const uint32_t rgb = icon ? icon_color(icon) : ui_theme::text();
   const bool tinted = glow_of(disc) && icon_color_tints(rgb);
   lv_obj_t* host = card_of(disc);
   card = card_state_color(host, pressed);
@@ -291,7 +292,7 @@ inline void apply_fill(lv_obj_t* disc) {
   if (!is_disc(disc)) return;
   const Mode mode = mode_of(disc);
   lv_obj_t* icon = icon_of(disc);
-  const uint32_t rgb = icon ? icon_color(icon) : 0xFFFFFF;
+  const uint32_t rgb = icon ? icon_color(icon) : ui_theme::text();
   uint32_t card = 0, card_pressed = 0;
   bool see_through_card = false;
   const tone_color::Fill fill = disc_fill(disc, false, card, see_through_card);
@@ -396,7 +397,7 @@ inline void release_icon_color(lv_obj_t* icon) {
   lv_color_t forced;
   if (!forced_color(icon, forced)) return;
   lv_style_value_t value;
-  lv_color_t requested = lv_color_white();
+  lv_color_t requested = lv_color_hex(ui_theme::text());
   if (lv_obj_get_local_style_prop(icon, LV_STYLE_TEXT_COLOR, &value, kIconRequested) == LV_STYLE_RES_FOUND) {
     requested = value.color;
   }
@@ -427,7 +428,7 @@ inline lv_obj_t* create(lv_obj_t* card, Shape shape) {
   // Both shapes follow the global radius with the half-height rule. The shape
   // decides the placement (corner or behind the icon) and the diameter.
   ui_surface_style::apply_radius(disc, radius_baseline(), 0);
-  lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(disc, lv_color_hex(ui_theme::icon()), 0);
   // New discs follow the global option until the tile's own mode is applied.
   ui_surface_style::apply_icon_disc(disc, false, true);
   fade_with_card(disc);
@@ -454,7 +455,7 @@ inline void apply_tile_options(lv_obj_t* card, uint8_t mode, bool glow) {
     // changes do not touch it: a border change redraws the whole tile and
     // any popup above it, which made a dragged Light color stutter.
     lv_obj_t* icon = icon_of(child);
-    const uint32_t rgb = icon ? icon_color(icon) : 0xFFFFFF;
+    const uint32_t rgb = icon ? icon_color(icon) : ui_theme::text();
     if (glow && disc_mode != Mode::Off && icon_color_tints(rgb) && card_follows_icon(card)) {
       ui_surface_style::set_tile_border_tint(card, lv_color_hex(rgb));
     } else {

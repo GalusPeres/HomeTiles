@@ -31,6 +31,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -708,7 +709,7 @@ static void update_forecast_graph(WeatherPopupContext* ctx) {
   const bool has_today = get_local_now_parts(today_date, today_hour);
   const lv_color_t popup_bg_color =
       ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(ctx->bg_color);
-  const lv_color_t inactive_day_color = lv_color_mix(lv_color_white(), popup_bg_color, 96);
+  const lv_color_t inactive_day_color = lv_color_mix(lv_color_hex(ui_theme::text()), popup_bg_color, 96);
 
   bool has_temp = false;
   int min_temp = 0;
@@ -915,7 +916,7 @@ static void update_forecast_graph(WeatherPopupContext* ctx) {
                                    (full_line - lv_font_get_line_height(day_font)) / 2, 0);
         }
         lv_obj_set_style_text_color(fw.day_label,
-                                    data.active ? lv_color_white() : inactive_day_color,
+                                    data.active ? lv_color_hex(ui_theme::text()) : inactive_day_color,
                                     0);
         lv_obj_clear_flag(fw.day_label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_update_layout(fw.day_label);
@@ -1343,12 +1344,12 @@ static bool next_json_object_in_array(const String& array, int& cursor, String& 
 
 // Footer controls match the header disc, which follows card and icon color.
 static lv_color_t card_color(const WeatherPopupContext* ctx) {
-  return ctx && ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(0x2A2A2A);
+  return ctx && ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(ui_theme::popup_card());
 }
 
 static lv_color_t header_icon_color(const WeatherPopupContext* ctx) {
   return ctx && ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN)
-                                : lv_color_white();
+                                : lv_color_hex(ui_theme::text());
 }
 
 static void style_mode_button(WeatherPopupContext* ctx, lv_obj_t* btn, bool active) {
@@ -1394,7 +1395,7 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
   if (ctx->mode_week_btn) {
     lv_obj_t* label = lv_obj_get_child(ctx->mode_week_btn, 0);
     if (label) {
-      set_label_style(label, lv_color_white(), FONT_MDI_ICONS);
+      set_label_style(label, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
       lv_label_set_text(label, getMdiChar("arrow-left").c_str());
     }
     style_mode_button(ctx, ctx->mode_week_btn, true);
@@ -1414,7 +1415,7 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
   if (ctx->header_today_btn) {
     lv_obj_t* label = lv_obj_get_child(ctx->header_today_btn, 0);
     if (label) {
-      set_label_style(label, lv_color_white(), FONT_UNIT);
+      set_label_style(label, lv_color_hex(ui_theme::text()), FONT_UNIT);
       lv_label_set_text(label, weather_today_button_text());
     }
     if (lv_obj_get_style_width(ctx->header_today_btn, LV_PART_MAIN) != today_w) {
@@ -1434,7 +1435,7 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
   if (ctx->header_week_btn) {
     lv_obj_t* label = lv_obj_get_child(ctx->header_week_btn, 0);
     if (label) {
-      set_label_style(label, lv_color_white(), FONT_UNIT);
+      set_label_style(label, lv_color_hex(ui_theme::text()), FONT_UNIT);
       lv_label_set_text(label, "7D");
     }
     style_header_action_button(ctx, ctx->header_week_btn, ctx->view_mode == WeatherPopupViewMode::Week);
@@ -1449,7 +1450,7 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
   const int next_day = find_next_active_day_index(ctx, ctx->selected_day_index);
   const lv_color_t nav_bg_color =
       ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(ctx->bg_color);
-  const lv_color_t nav_inactive_color = lv_color_mix(lv_color_white(), nav_bg_color, 96);
+  const lv_color_t nav_inactive_color = lv_color_mix(lv_color_hex(ui_theme::text()), nav_bg_color, 96);
   auto set_nav_state = [&](lv_obj_t* btn, bool visible, bool enabled) {
     if (!btn) return;
     if (!visible) {
@@ -1461,8 +1462,8 @@ static void update_mode_buttons(WeatherPopupContext* ctx) {
     lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, LV_STATE_PRESSED);
     lv_obj_t* icon = lv_obj_get_child(btn, 0);
     if (icon) {
-      lv_obj_set_style_text_color(icon, enabled ? lv_color_white() : nav_inactive_color, 0);
-      lv_obj_set_style_text_color(icon, enabled ? lv_color_white() : nav_inactive_color, LV_STATE_PRESSED);
+      lv_obj_set_style_text_color(icon, enabled ? lv_color_hex(ui_theme::text()) : nav_inactive_color, 0);
+      lv_obj_set_style_text_color(icon, enabled ? lv_color_hex(ui_theme::text()) : nav_inactive_color, LV_STATE_PRESSED);
     }
     popup_nav_style::style_press(btn, card_color(ctx), header_icon_color(ctx));
     if (enabled) {
@@ -1830,7 +1831,7 @@ static bool update_detail_view(WeatherPopupContext* ctx, int day_index) {
 
   const lv_color_t popup_bg_color =
       ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(ctx->bg_color);
-  const lv_color_t past_overlay_label_color = lv_color_mix(lv_color_white(), popup_bg_color, 96);
+  const lv_color_t past_overlay_label_color = lv_color_mix(lv_color_hex(ui_theme::text()), popup_bg_color, 96);
 
   constexpr int kDetailDataHourCount = 24;
   const int marker_hours[kDetailMarkerCount] = {0, 6, 12, 18, 24};
@@ -2203,7 +2204,7 @@ static bool update_detail_view(WeatherPopupContext* ctx, int day_index) {
         lv_obj_set_style_text_color(ctx->detail_time_labels[marker],
                                     (past_marker || end_missing_marker || whole_day_missing)
                                         ? past_overlay_label_color
-                                        : lv_color_white(),
+                                        : lv_color_hex(ui_theme::text()),
                                     0);
         String label = format_detail_time_axis_label(marker_hours[marker]);
         lv_label_set_text(ctx->detail_time_labels[marker], label.c_str());
@@ -2917,7 +2918,7 @@ static void build_weather_ui(WeatherPopupContext* ctx,
 static void apply_card_color(WeatherPopupContext* ctx, uint32_t bg_color) {
   if (!ctx) return;
   ctx->bg_color = bg_color;
-  uint32_t color = ctx->bg_color ? ctx->bg_color : 0x2A2A2A;
+  uint32_t color = ctx->bg_color ? ctx->bg_color : ui_theme::popup_card();
   if (ctx->card) {
     lv_obj_set_style_bg_color(ctx->card, lv_color_hex(color), 0);
   }
@@ -3144,7 +3145,7 @@ static void on_day_column_click(lv_event_t* e) {
 }
 
 static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& init) {
-  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : 0x2A2A2A);
+  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : ui_theme::popup_card());
   ctx->overlay = parts.overlay;
   ctx->card = parts.card;
   ctx->location_label = parts.title;
@@ -3156,18 +3157,18 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   lv_obj_t* location = parts.title;
   lv_obj_t* icon = parts.icon;
   lv_obj_t* close_btn = parts.close;
-  uint32_t popup_tile_bg_color = init.bg_color ? init.bg_color : 0x2A2A2A;
+  uint32_t popup_tile_bg_color = init.bg_color ? init.bg_color : ui_theme::popup_card();
   ctx->bg_color = popup_tile_bg_color;
   lv_obj_add_flag(parts.icon, LV_OBJ_FLAG_HIDDEN);
 
   auto make_header_action_button = [&](const char* text, int x_ofs, const lv_font_t* font) -> lv_obj_t* {
     lv_obj_t* btn = lv_button_create(card);
     lv_obj_set_size(btn, kFooterActionButtonWidth, kFooterButtonHeight);
-    lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_color(btn, lv_color_white(), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(ui_theme::icon()), LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(btn, kFooterIndicatorOpa, LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn, lv_color_white(), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_border_width(btn, 0, 0);
     lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, 0);
     lv_obj_set_style_outline_opa(btn, LV_OPA_TRANSP, 0);
@@ -3188,7 +3189,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(btn, on_header_action_click, LV_EVENT_CLICKED, ctx);
     lv_obj_t* label = lv_label_create(btn);
-    set_label_style(label, lv_color_white(), font);
+    set_label_style(label, lv_color_hex(ui_theme::text()), font);
     lv_label_set_text(label, text);
     lv_obj_center(label);
     return btn;
@@ -3231,7 +3232,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(btn, LV_OBJ_FLAG_PRESS_LOCK);
     lv_obj_t* label = lv_label_create(btn);
-    set_label_style(label, lv_color_white(), FONT_MDI_ICONS);
+    set_label_style(label, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
     lv_label_set_text(label, text);
     lv_obj_center(label);
     return btn;
@@ -3254,7 +3255,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* condition_label = lv_label_create(value_row);
   ctx->condition_label = condition_label;
-  set_label_style(condition_label, lv_color_white(), FONT_VALUE);
+  set_label_style(condition_label, lv_color_hex(ui_theme::text()), FONT_VALUE);
   lv_label_set_long_mode(condition_label, LV_LABEL_LONG_DOT);
   lv_obj_set_width(condition_label, LV_SIZE_CONTENT);
   // The width cap follows the text (fit_condition_label).
@@ -3263,13 +3264,13 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* sep_label = lv_label_create(value_row);
   ctx->condition_sep_label = sep_label;
-  set_label_style(sep_label, lv_color_white(), FONT_VALUE);
+  set_label_style(sep_label, lv_color_hex(ui_theme::text()), FONT_VALUE);
   lv_label_set_text(sep_label, "|");
   lv_obj_add_flag(sep_label, LV_OBJ_FLAG_HIDDEN);
 
   lv_obj_t* temp_label = lv_label_create(value_row);
   ctx->temp_label = temp_label;
-  set_label_style(temp_label, lv_color_white(), FONT_VALUE);
+  set_label_style(temp_label, lv_color_hex(ui_theme::text()), FONT_VALUE);
   lv_label_set_text(temp_label, "--");
   lv_obj_align(value_row, LV_ALIGN_TOP_MID, 0, kSummaryRowTop);
 
@@ -3277,7 +3278,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   ctx->week_range_pill = week_range_pill;
   lv_obj_remove_style_all(week_range_pill);
   lv_obj_set_size(week_range_pill, kFooterDatePillWidth, kFooterButtonHeight);
-  lv_obj_set_style_bg_color(week_range_pill, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(week_range_pill, lv_color_hex(ui_theme::icon()), 0);
   lv_obj_set_style_bg_opa(week_range_pill, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(week_range_pill, 0, 0);
   lv_obj_set_style_border_opa(week_range_pill, LV_OPA_TRANSP, 0);
@@ -3330,7 +3331,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   lv_obj_set_style_line_opa(temp_chart, LV_OPA_COVER, LV_PART_ITEMS);
   lv_obj_set_style_line_rounded(temp_chart, true, LV_PART_ITEMS);
   lv_obj_set_style_size(temp_chart, 0, 0, LV_PART_INDICATOR);
-  lv_obj_set_style_bg_color(temp_chart, lv_color_white(), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(temp_chart, lv_color_hex(ui_theme::icon()), LV_PART_INDICATOR);
   lv_obj_set_style_bg_opa(temp_chart, LV_OPA_COVER, LV_PART_INDICATOR);
   lv_obj_set_style_radius(temp_chart, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
   lv_obj_remove_flag(temp_chart, LV_OBJ_FLAG_SCROLLABLE);
@@ -3340,14 +3341,14 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   lv_chart_set_update_mode(temp_chart, LV_CHART_UPDATE_MODE_SHIFT);
   lv_chart_set_point_count(temp_chart, kForecastTempPointCount);
   ctx->forecast_temp_series =
-      lv_chart_add_series(temp_chart, lv_color_white(), LV_CHART_AXIS_PRIMARY_Y);
+      lv_chart_add_series(temp_chart, lv_color_hex(ui_theme::text()), LV_CHART_AXIS_PRIMARY_Y);
 
   for (int i = 1; i < kCols; ++i) {
     lv_obj_t* divider = lv_obj_create(forecast_row);
     lv_obj_remove_style_all(divider);
     lv_obj_set_size(
         divider, 1, kForecastRowHeight - popup_layout::scale480(12));
-    lv_obj_set_style_bg_color(divider, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_color(divider, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_bg_opa(divider, LV_OPA_10, 0);
     lv_obj_set_style_radius(divider, 0, 0);
     lv_obj_remove_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
@@ -3365,7 +3366,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   ctx->forecast_precip_base = precip_base;
   lv_obj_remove_style_all(precip_base);
   lv_obj_set_size(precip_base, forecast_plot_w, 1);
-  lv_obj_set_style_bg_color(precip_base, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_set_style_bg_color(precip_base, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_bg_opa(precip_base, LV_OPA_20, 0);
   lv_obj_set_style_radius(precip_base, 0, 0);
   lv_obj_remove_flag(precip_base, LV_OBJ_FLAG_SCROLLABLE);
@@ -3376,7 +3377,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* line = lv_obj_create(forecast_row);
     lv_obj_remove_style_all(line);
     lv_obj_set_size(line, 0, 1);
-    lv_obj_set_style_bg_color(line, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(line, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(line, LV_OPA_30, 0);
     lv_obj_remove_flag(line, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(line, LV_OBJ_FLAG_SCROLLABLE);
@@ -3391,7 +3392,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* vline = lv_obj_create(forecast_row);
     lv_obj_remove_style_all(vline);
     lv_obj_set_size(vline, 1, 0);
-    lv_obj_set_style_bg_color(vline, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(vline, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(vline, LV_OPA_30, 0);
     lv_obj_remove_flag(vline, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(vline, LV_OBJ_FLAG_SCROLLABLE);
@@ -3420,7 +3421,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->forecast[i].column = col;
 
     lv_obj_t* day = lv_label_create(col);
-    set_label_style(day, lv_color_white(), popup_layout::font20());
+    set_label_style(day, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_label_set_long_mode(day, LV_LABEL_LONG_DOT);
     lv_obj_set_width(day, LV_PCT(100));
     lv_obj_set_style_text_align(day, LV_TEXT_ALIGN_CENTER, 0);
@@ -3429,28 +3430,28 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_set_pos(day, 0, kForecastDayTop);
 
     lv_obj_t* icon_day = lv_label_create(col);
-    set_label_style(icon_day, lv_color_white(), FONT_MDI_ICONS);
+    set_label_style(icon_day, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
     weather_icons::style_label(icon_day);
     lv_label_set_text(icon_day, "");
     lv_obj_add_flag(icon_day, LV_OBJ_FLAG_HIDDEN);
     lv_obj_align(icon_day, LV_ALIGN_TOP_MID, 0, kForecastIconTop);
 
     lv_obj_t* high = lv_label_create(col);
-    set_label_style(high, lv_color_white(), popup_layout::font20());
+    set_label_style(high, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(high, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(high, "");
     lv_obj_add_flag(high, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_pos(high, 0, kForecastTempChartTop);
 
     lv_obj_t* high_unit = lv_label_create(col);
-    set_label_style(high_unit, lv_color_white(), weather_unit_font());
+    set_label_style(high_unit, lv_color_hex(ui_theme::text()), weather_unit_font());
     lv_obj_set_style_text_align(high_unit, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(high_unit, "");
     lv_obj_add_flag(high_unit, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_pos(high_unit, 0, kForecastTempChartTop);
 
     lv_obj_t* low = lv_label_create(col);
-    set_label_style(low, lv_color_white(), popup_layout::font20());
+    set_label_style(low, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(low, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(low, "");
     lv_obj_add_flag(low, LV_OBJ_FLAG_HIDDEN);
@@ -3458,7 +3459,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
                    kForecastTempChartTop + popup_layout::scale480(24));
 
     lv_obj_t* low_unit = lv_label_create(col);
-    set_label_style(low_unit, lv_color_white(), weather_unit_font());
+    set_label_style(low_unit, lv_color_hex(ui_theme::text()), weather_unit_font());
     lv_obj_set_style_text_align(low_unit, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(low_unit, "");
     lv_obj_add_flag(low_unit, LV_OBJ_FLAG_HIDDEN);
@@ -3468,35 +3469,35 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* precip_bar = lv_obj_create(col);
     lv_obj_remove_style_all(precip_bar);
     lv_obj_set_size(precip_bar, kForecastBarWidth, 0);
-    lv_obj_set_style_bg_color(precip_bar, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(precip_bar, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(precip_bar, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(precip_bar, 0, 0);
     lv_obj_add_flag(precip_bar, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(precip_bar, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* amount = lv_label_create(col);
-    set_label_style(amount, lv_color_white(), popup_layout::font20());
+    set_label_style(amount, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(amount, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(amount, "");
     lv_obj_add_flag(amount, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_pos(amount, 0, kForecastAmountTop);
 
     lv_obj_t* amount_unit = lv_label_create(col);
-    set_label_style(amount_unit, lv_color_white(), weather_unit_font());
+    set_label_style(amount_unit, lv_color_hex(ui_theme::text()), weather_unit_font());
     lv_obj_set_style_text_align(amount_unit, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(amount_unit, "");
     lv_obj_add_flag(amount_unit, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_pos(amount_unit, 0, kForecastAmountTop);
 
     lv_obj_t* probability = lv_label_create(col);
-    set_label_style(probability, lv_color_white(), popup_layout::font20());
+    set_label_style(probability, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(probability, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(probability, "");
     lv_obj_add_flag(probability, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_pos(probability, 0, kForecastProbabilityTop);
 
     lv_obj_t* probability_unit = lv_label_create(col);
-    set_label_style(probability_unit, lv_color_white(), weather_unit_font());
+    set_label_style(probability_unit, lv_color_hex(ui_theme::text()), weather_unit_font());
     lv_obj_set_style_text_align(probability_unit, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(probability_unit, "");
     lv_obj_add_flag(probability_unit, LV_OBJ_FLAG_HIDDEN);
@@ -3531,7 +3532,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   ctx->detail_title_pill = detail_title_pill;
   lv_obj_remove_style_all(detail_title_pill);
   lv_obj_set_size(detail_title_pill, kFooterDatePillWidth, kFooterButtonHeight);
-  lv_obj_set_style_bg_color(detail_title_pill, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(detail_title_pill, lv_color_hex(ui_theme::icon()), 0);
   lv_obj_set_style_bg_opa(detail_title_pill, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(detail_title_pill, 0, 0);
   lv_obj_set_style_border_opa(detail_title_pill, LV_OPA_TRANSP, 0);
@@ -3553,11 +3554,11 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* btn = lv_button_create(card);
     lv_obj_set_size(btn, kDetailNavButtonSize, kDetailNavButtonSize);
     lv_obj_set_style_radius(btn, kFooterButtonRadius, 0);
-    lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_bg_color(btn, lv_color_white(), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(ui_theme::icon()), LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(btn, kFooterIndicatorOpa, LV_STATE_PRESSED);
-    lv_obj_set_style_border_color(btn, lv_color_white(), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_border_width(btn, 0, 0);
     lv_obj_set_style_border_width(btn, 0, LV_STATE_PRESSED);
     lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, 0);
@@ -3581,7 +3582,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_set_ext_click_area(btn, 12);
     lv_obj_add_flag(btn, LV_OBJ_FLAG_HIDDEN);
     lv_obj_t* label = lv_label_create(btn);
-    set_label_style(label, lv_color_white(), FONT_MDI_ICONS);
+    set_label_style(label, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
     lv_label_set_text(label, getMdiChar(mdi_icon).c_str());
     lv_obj_center(label);
     lv_obj_add_event_cb(btn, on_detail_nav_click, LV_EVENT_CLICKED, ctx);
@@ -3614,7 +3615,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_remove_style_all(block);
     lv_obj_set_size(block, LV_PCT(100), LV_PCT(100));
     lv_obj_set_pos(block, 0, 0);
-    lv_obj_set_style_bg_color(block, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(block, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(block, 32, 0);
     lv_obj_set_style_border_width(block, 0, 0);
     lv_obj_set_style_radius(block, kDetailPastOverlayRadius, 0);
@@ -3664,7 +3665,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* y_max = lv_label_create(chart_wrap);
   ctx->detail_y_max_label = y_max;
-  set_label_style(y_max, lv_color_white(), popup_layout::font20());
+  set_label_style(y_max, lv_color_hex(ui_theme::text()), popup_layout::font20());
   lv_obj_set_style_text_align(y_max, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_width(
       y_max, kDetailYAxisWidth - popup_layout::scale480(10));
@@ -3674,7 +3675,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* y_min = lv_label_create(chart_wrap);
   ctx->detail_y_min_label = y_min;
-  set_label_style(y_min, lv_color_white(), popup_layout::font20());
+  set_label_style(y_min, lv_color_hex(ui_theme::text()), popup_layout::font20());
   lv_obj_set_style_text_align(y_min, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_width(
       y_min, kDetailYAxisWidth - popup_layout::scale480(10));
@@ -3686,7 +3687,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* line = lv_obj_create(chart_wrap);
     lv_obj_remove_style_all(line);
     lv_obj_set_size(line, line_width, 1);
-    lv_obj_set_style_bg_color(line, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(line, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(line, LV_OPA_30, 0);
     lv_obj_remove_flag(line, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(line, LV_OBJ_FLAG_SCROLLABLE);
@@ -3701,7 +3702,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* icon_line = lv_obj_create(chart_wrap);
     lv_obj_remove_style_all(icon_line);
     lv_obj_set_size(icon_line, 1, 0);
-    lv_obj_set_style_bg_color(icon_line, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(icon_line, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(icon_line, LV_OPA_30, 0);
     lv_obj_remove_flag(icon_line, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(icon_line, LV_OBJ_FLAG_SCROLLABLE);
@@ -3711,7 +3712,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* vline = lv_obj_create(chart_wrap);
     lv_obj_remove_style_all(vline);
     lv_obj_set_size(vline, 1, 0);
-    lv_obj_set_style_bg_color(vline, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(vline, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(vline, LV_OPA_30, 0);
     lv_obj_remove_flag(vline, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(vline, LV_OBJ_FLAG_SCROLLABLE);
@@ -3720,7 +3721,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->detail_time_lines[i] = vline;
 
     lv_obj_t* tlbl = lv_label_create(chart_wrap);
-    set_label_style(tlbl, lv_color_white(), popup_layout::font20());
+    set_label_style(tlbl, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(tlbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(tlbl, "");
     lv_obj_set_pos(tlbl, 0, kDetailTimeLabelY);
@@ -3728,7 +3729,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->detail_time_labels[i] = tlbl;
 
     lv_obj_t* ilbl = lv_label_create(chart_wrap);
-    set_label_style(ilbl, lv_color_white(), FONT_MDI_ICONS);
+    set_label_style(ilbl, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
     weather_icons::style_label(ilbl);
     lv_obj_set_style_text_align(ilbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(ilbl, "");
@@ -3739,7 +3740,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* dot = lv_obj_create(chart_wrap);
     lv_obj_remove_style_all(dot);
     lv_obj_set_size(dot, kDetailTempMarkerSize, kDetailTempMarkerSize);
-    lv_obj_set_style_bg_color(dot, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_remove_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
@@ -3748,9 +3749,9 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->detail_temp_point_dots[i] = dot;
 
     lv_obj_t* vlbl = lv_label_create(chart_wrap);
-    set_label_style(vlbl, lv_color_white(), popup_layout::font20());
+    set_label_style(vlbl, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(vlbl, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_bg_color(vlbl, lv_color_hex(ctx->bg_color ? ctx->bg_color : 0x2A2A2A), 0);
+    lv_obj_set_style_bg_color(vlbl, lv_color_hex(ctx->bg_color ? ctx->bg_color : ui_theme::popup_card()), 0);
     lv_obj_set_style_bg_opa(vlbl, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(vlbl, popup_layout::scale480(6), 0);
     lv_obj_set_style_pad_left(vlbl, popup_layout::scale480(4), 0);
@@ -3762,9 +3763,9 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->detail_temp_value_labels[i] = vlbl;
 
     lv_obj_t* vu = lv_label_create(chart_wrap);
-    set_label_style(vu, lv_color_white(), weather_unit_font());
+    set_label_style(vu, lv_color_hex(ui_theme::text()), weather_unit_font());
     lv_obj_set_style_text_align(vu, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_bg_color(vu, lv_color_hex(ctx->bg_color ? ctx->bg_color : 0x2A2A2A), 0);
+    lv_obj_set_style_bg_color(vu, lv_color_hex(ctx->bg_color ? ctx->bg_color : ui_theme::popup_card()), 0);
     lv_obj_set_style_bg_opa(vu, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(vu, popup_layout::scale480(6), 0);
     lv_obj_set_style_pad_left(vu, 0, 0);
@@ -3776,7 +3777,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->detail_temp_unit_labels[i] = vu;
 
     lv_obj_t* albl = lv_label_create(chart_wrap);
-    set_label_style(albl, lv_color_white(), popup_layout::font20());
+    set_label_style(albl, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(albl, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(albl, "");
     lv_obj_set_pos(albl, 0, kDetailAmountTop);
@@ -3784,7 +3785,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->detail_precip_amount_labels[i] = albl;
 
     lv_obj_t* au = lv_label_create(chart_wrap);
-    set_label_style(au, lv_color_white(), weather_unit_font());
+    set_label_style(au, lv_color_hex(ui_theme::text()), weather_unit_font());
     lv_obj_set_style_text_align(au, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(au, "");
     lv_obj_set_pos(au, 0, kDetailAmountTop);
@@ -3792,7 +3793,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->detail_precip_amount_unit_labels[i] = au;
 
     lv_obj_t* plbl = lv_label_create(chart_wrap);
-    set_label_style(plbl, lv_color_white(), popup_layout::font20());
+    set_label_style(plbl, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(plbl, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(plbl, "");
     lv_obj_set_pos(plbl, 0, kDetailProbabilityTop);
@@ -3800,7 +3801,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     ctx->detail_probability_labels[i] = plbl;
 
     lv_obj_t* pu = lv_label_create(chart_wrap);
-    set_label_style(pu, lv_color_white(), weather_unit_font());
+    set_label_style(pu, lv_color_hex(ui_theme::text()), weather_unit_font());
     lv_obj_set_style_text_align(pu, LV_TEXT_ALIGN_LEFT, 0);
     lv_label_set_text(pu, "");
     lv_obj_set_pos(pu, 0, kDetailProbabilityTop);
@@ -3810,7 +3811,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
     lv_obj_t* precip_line = lv_obj_create(chart_wrap);
     lv_obj_remove_style_all(precip_line);
     lv_obj_set_size(precip_line, 1, 0);
-    lv_obj_set_style_bg_color(precip_line, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(precip_line, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(precip_line, LV_OPA_30, 0);
     lv_obj_remove_flag(precip_line, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(precip_line, LV_OBJ_FLAG_SCROLLABLE);
@@ -3830,10 +3831,10 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   lv_obj_set_style_pad_bottom(detail_temp_chart, 0, 0);
   lv_obj_set_style_line_width(detail_temp_chart, 3, LV_PART_ITEMS);
   lv_obj_set_style_line_opa(detail_temp_chart, LV_OPA_COVER, LV_PART_ITEMS);
-  lv_obj_set_style_line_color(detail_temp_chart, lv_color_white(), LV_PART_ITEMS);
+  lv_obj_set_style_line_color(detail_temp_chart, lv_color_hex(ui_theme::text()), LV_PART_ITEMS);
   lv_obj_set_style_line_rounded(detail_temp_chart, true, LV_PART_ITEMS);
   lv_obj_set_style_size(detail_temp_chart, 6, 6, LV_PART_INDICATOR);
-  lv_obj_set_style_bg_color(detail_temp_chart, lv_color_white(), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(detail_temp_chart, lv_color_hex(ui_theme::icon()), LV_PART_INDICATOR);
   lv_obj_set_style_bg_opa(detail_temp_chart, LV_OPA_COVER, LV_PART_INDICATOR);
   lv_obj_set_style_radius(detail_temp_chart, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
   lv_obj_remove_flag(detail_temp_chart, LV_OBJ_FLAG_SCROLLABLE);
@@ -3843,13 +3844,13 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   lv_chart_set_update_mode(detail_temp_chart, LV_CHART_UPDATE_MODE_SHIFT);
   lv_chart_set_point_count(detail_temp_chart, kDetailChartPointCount);
   ctx->detail_temp_series =
-      lv_chart_add_series(detail_temp_chart, lv_color_white(), LV_CHART_AXIS_PRIMARY_Y);
+      lv_chart_add_series(detail_temp_chart, lv_color_hex(ui_theme::text()), LV_CHART_AXIS_PRIMARY_Y);
 
   lv_obj_t* current_dot = lv_obj_create(chart_wrap);
   ctx->detail_current_dot = current_dot;
   lv_obj_remove_style_all(current_dot);
   lv_obj_set_size(current_dot, kDetailCurrentHourDotSize, kDetailCurrentHourDotSize);
-  lv_obj_set_style_bg_color(current_dot, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(current_dot, lv_color_hex(ui_theme::icon()), 0);
   lv_obj_set_style_bg_opa(current_dot, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(current_dot, LV_RADIUS_CIRCLE, 0);
   lv_obj_remove_flag(current_dot, LV_OBJ_FLAG_SCROLLABLE);
@@ -3860,7 +3861,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   ctx->detail_now_time_line = now_time_line;
   lv_obj_remove_style_all(now_time_line);
   lv_obj_set_size(now_time_line, kDetailNowGuideWidth, 0);
-  lv_obj_set_style_bg_color(now_time_line, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(now_time_line, lv_color_hex(ui_theme::icon()), 0);
   lv_obj_set_style_bg_opa(now_time_line, kDetailNowGuideOpa, 0);
   lv_obj_remove_flag(now_time_line, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_remove_flag(now_time_line, LV_OBJ_FLAG_SCROLLABLE);
@@ -3870,7 +3871,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   ctx->detail_now_precip_guide = now_precip_guide;
   lv_obj_remove_style_all(now_precip_guide);
   lv_obj_set_size(now_precip_guide, kDetailNowGuideWidth, 0);
-  lv_obj_set_style_bg_color(now_precip_guide, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(now_precip_guide, lv_color_hex(ui_theme::icon()), 0);
   lv_obj_set_style_bg_opa(now_precip_guide, kDetailNowGuideOpa, 0);
   lv_obj_remove_flag(now_precip_guide, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_remove_flag(now_precip_guide, LV_OBJ_FLAG_SCROLLABLE);
@@ -3878,7 +3879,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* now_time = lv_label_create(chart_wrap);
   ctx->detail_now_time_label = now_time;
-  set_label_style(now_time, lv_color_white(), popup_layout::font20());
+  set_label_style(now_time, lv_color_hex(ui_theme::text()), popup_layout::font20());
   lv_obj_set_style_text_align(now_time, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_text(now_time, "");
   lv_obj_set_pos(now_time, 0, kDetailTimeLabelY);
@@ -3886,7 +3887,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* now_icon = lv_label_create(chart_wrap);
   ctx->detail_now_icon_label = now_icon;
-  set_label_style(now_icon, lv_color_white(), FONT_MDI_ICONS);
+  set_label_style(now_icon, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
   weather_icons::style_label(now_icon);
   lv_obj_set_style_text_align(now_icon, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_text(now_icon, "");
@@ -3895,9 +3896,9 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* now_temp = lv_label_create(chart_wrap);
   ctx->detail_now_temp_value_label = now_temp;
-  set_label_style(now_temp, lv_color_white(), popup_layout::font20());
+  set_label_style(now_temp, lv_color_hex(ui_theme::text()), popup_layout::font20());
   lv_obj_set_style_text_align(now_temp, LV_TEXT_ALIGN_LEFT, 0);
-  lv_obj_set_style_bg_color(now_temp, lv_color_hex(ctx->bg_color ? ctx->bg_color : 0x2A2A2A), 0);
+  lv_obj_set_style_bg_color(now_temp, lv_color_hex(ctx->bg_color ? ctx->bg_color : ui_theme::popup_card()), 0);
   lv_obj_set_style_bg_opa(now_temp, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(now_temp, 6, 0);
   lv_obj_set_style_pad_left(now_temp, 4, 0);
@@ -3909,9 +3910,9 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* now_temp_unit = lv_label_create(chart_wrap);
   ctx->detail_now_temp_unit_label = now_temp_unit;
-  set_label_style(now_temp_unit, lv_color_white(), weather_unit_font());
+  set_label_style(now_temp_unit, lv_color_hex(ui_theme::text()), weather_unit_font());
   lv_obj_set_style_text_align(now_temp_unit, LV_TEXT_ALIGN_LEFT, 0);
-  lv_obj_set_style_bg_color(now_temp_unit, lv_color_hex(ctx->bg_color ? ctx->bg_color : 0x2A2A2A), 0);
+  lv_obj_set_style_bg_color(now_temp_unit, lv_color_hex(ctx->bg_color ? ctx->bg_color : ui_theme::popup_card()), 0);
   lv_obj_set_style_bg_opa(now_temp_unit, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(now_temp_unit, 6, 0);
   lv_obj_set_style_pad_left(now_temp_unit, 0, 0);
@@ -3923,7 +3924,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* now_amount = lv_label_create(chart_wrap);
   ctx->detail_now_precip_amount_label = now_amount;
-  set_label_style(now_amount, lv_color_white(), popup_layout::font20());
+  set_label_style(now_amount, lv_color_hex(ui_theme::text()), popup_layout::font20());
   lv_obj_set_style_text_align(now_amount, LV_TEXT_ALIGN_LEFT, 0);
   lv_label_set_text(now_amount, "");
   lv_obj_set_pos(now_amount, 0, kDetailAmountTop);
@@ -3931,7 +3932,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* now_amount_unit = lv_label_create(chart_wrap);
   ctx->detail_now_precip_amount_unit_label = now_amount_unit;
-  set_label_style(now_amount_unit, lv_color_white(), weather_unit_font());
+  set_label_style(now_amount_unit, lv_color_hex(ui_theme::text()), weather_unit_font());
   lv_obj_set_style_text_align(now_amount_unit, LV_TEXT_ALIGN_LEFT, 0);
   lv_label_set_text(now_amount_unit, "");
   lv_obj_set_pos(now_amount_unit, 0, kDetailAmountTop);
@@ -3939,7 +3940,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* now_probability = lv_label_create(chart_wrap);
   ctx->detail_now_probability_label = now_probability;
-  set_label_style(now_probability, lv_color_white(), popup_layout::font20());
+  set_label_style(now_probability, lv_color_hex(ui_theme::text()), popup_layout::font20());
   lv_obj_set_style_text_align(now_probability, LV_TEXT_ALIGN_LEFT, 0);
   lv_label_set_text(now_probability, "");
   lv_obj_set_pos(now_probability, 0, kDetailProbabilityTop);
@@ -3947,7 +3948,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
 
   lv_obj_t* now_prob_unit = lv_label_create(chart_wrap);
   ctx->detail_now_probability_unit_label = now_prob_unit;
-  set_label_style(now_prob_unit, lv_color_white(), weather_unit_font());
+  set_label_style(now_prob_unit, lv_color_hex(ui_theme::text()), weather_unit_font());
   lv_obj_set_style_text_align(now_prob_unit, LV_TEXT_ALIGN_LEFT, 0);
   lv_label_set_text(now_prob_unit, "");
   lv_obj_set_pos(now_prob_unit, 0, kDetailProbabilityTop);
@@ -3963,7 +3964,7 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   lv_obj_set_style_pad_right(detail_precip_chart, kDetailChartRightInset, 0);
   lv_obj_set_style_pad_top(detail_precip_chart, 0, 0);
   lv_obj_set_style_pad_bottom(detail_precip_chart, 0, 0);
-  lv_obj_set_style_bg_color(detail_precip_chart, lv_color_white(), LV_PART_ITEMS);
+  lv_obj_set_style_bg_color(detail_precip_chart, lv_color_hex(ui_theme::icon()), LV_PART_ITEMS);
   lv_obj_set_style_bg_opa(detail_precip_chart, LV_OPA_TRANSP, LV_PART_ITEMS);
   lv_obj_set_style_radius(detail_precip_chart, 0, LV_PART_ITEMS);
   lv_obj_set_style_line_width(detail_precip_chart, 0, LV_PART_ITEMS);
@@ -3976,13 +3977,13 @@ static void build_popup_ui(WeatherPopupContext* ctx, const WeatherPopupInit& ini
   lv_chart_set_update_mode(detail_precip_chart, LV_CHART_UPDATE_MODE_SHIFT);
   lv_chart_set_point_count(detail_precip_chart, kDetailChartPointCount);
   ctx->detail_precip_series =
-      lv_chart_add_series(detail_precip_chart, lv_color_white(), LV_CHART_AXIS_PRIMARY_Y);
+      lv_chart_add_series(detail_precip_chart, lv_color_hex(ui_theme::text()), LV_CHART_AXIS_PRIMARY_Y);
 
   for (int i = 0; i < kDetailChartPointCount; ++i) {
     lv_obj_t* bar = lv_obj_create(chart_wrap);
     lv_obj_remove_style_all(bar);
     lv_obj_set_size(bar, kDetailPrecipBarWidth, 0);
-    lv_obj_set_style_bg_color(bar, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(bar, 0, 0);
     lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
@@ -4180,7 +4181,7 @@ void show_weather_popup(const WeatherPopupInit& init) {
   ctx->entity_id = init.entity_id;
   ctx->title = init.title;
   ctx->bg_color = init.bg_color;
-  lv_obj_set_style_bg_color(ctx->card, lv_color_hex(init.bg_color ? init.bg_color : 0x2A2A2A), 0);
+  lv_obj_set_style_bg_color(ctx->card, lv_color_hex(init.bg_color ? init.bg_color : ui_theme::popup_card()), 0);
   hometiles_title::set(ctx->location_label, init.title.c_str());
   popup_layout::alignHeader(ctx->card, ctx->location_label, ctx->icon_label);
   g_pending_weather_init = init;

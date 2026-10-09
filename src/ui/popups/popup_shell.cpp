@@ -13,6 +13,7 @@
 #include <new>
 #include <cstring>
 #include <string>
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 struct Binding {
@@ -125,7 +126,7 @@ void create_header(lv_obj_t* parent, lv_obj_t*& title, lv_obj_t*& icon,
   title = lv_label_create(parent);
   lv_obj_set_width(title, LV_PCT(62));
   lv_obj_set_style_text_font(title, popup_layout::headerTitleFont(), 0);
-  lv_obj_set_style_text_color(title, lv_color_white(), 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
   lv_label_set_text(title, "");
   lv_obj_t* disc = icon_disc ? popup_layout::createHeaderIconDisc(parent) : nullptr;
@@ -134,7 +135,7 @@ void create_header(lv_obj_t* parent, lv_obj_t*& title, lv_obj_t*& icon,
   lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
   popup_layout::applyIconScale(icon);
   popup_layout::styleHeaderIcon(icon);
-  lv_obj_set_style_text_color(icon, lv_color_white(), 0);
+  lv_obj_set_style_text_color(icon, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_text(icon, "");
   close = popup_layout::createCloseButton(parent, handler, context);
   for (auto* object : {title, disc, icon, close})
@@ -281,7 +282,7 @@ void ensure_shell() {
   shell.value = lv_label_create(shell.header);
   lv_obj_set_width(shell.value, LV_PCT(62));
   lv_obj_set_style_text_font(shell.value, popup_layout::headerValueFont(), 0);
-  lv_obj_set_style_text_color(shell.value, lv_color_white(), 0);
+  lv_obj_set_style_text_color(shell.value, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_text(shell.value, "");
   lv_obj_add_flag(shell.value, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_IGNORE_LAYOUT |
                                                           LV_OBJ_FLAG_HIDDEN));
@@ -372,7 +373,7 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   // (controls_fill, popup_nav_style.h): the same color at rest (transparent),
   // so the press fades from the card to it, and no theme darkening. Only a
   // change restyles it, and not during a drag (popup_shell_hold_close_fill).
-  static lv_color_t close_color = lv_color_white();
+  static lv_color_t close_color = lv_color_hex(ui_theme::text());
   static lv_opa_t close_opa = LV_OPA_20;
   const tone_color::Fill controls = controls_fill(options, card, rgb);
   const lv_color_t press = lv_color_hex(controls.control_color);
@@ -389,7 +390,7 @@ void apply_header_disc_tint(lv_obj_t* disc, lv_obj_t* icon, lv_obj_t* source) {
   // The card hairline is the plain lighter tile border. It never follows the
   // icon color: a hairline change redraws the whole popup, and a Light popup
   // changes its icon color on every step of a dragged color or Kelvin value.
-  ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),
+  ui_surface_style::apply_popup_border(shell.frame, lv_color_hex(ui_theme::text()),
                                        static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));
 }
 

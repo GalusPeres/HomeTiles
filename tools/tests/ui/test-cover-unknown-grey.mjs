@@ -22,7 +22,7 @@ const body = (source, start) => {
 
 // Popup: one state color for icon, slider fill, tracks and buttons.
 assert.match(body(popup, 'uint32_t cover_accent('),
-  /return cover_icon_is_active\(state\) \? kHaCoverActive : kHaCoverInactive;/);
+  /return cover_icon_is_active\(state\) \? kHaCoverActive : ha_cover_inactive\(\);/);
 const apply = body(popup, 'void apply_accent(');
 assert.ok(apply.includes('if (!ctx || ctx->accent == accent) return;'), 'only a change restyles');
 assert.ok(apply.includes('{ctx->position_slider.track, ctx->tilt_slider.track}') &&
@@ -42,9 +42,9 @@ for (const call of popup.matchAll(/update_preset_group\(([\s\S]*?)\);/g)) {
 }
 
 // Tile: the bar fill takes the icon's state color.
-assert.match(renderer, /constexpr uint32_t kCoverInactive = 0x9E9E9E;/);
+assert.match(renderer, /inline uint32_t cover_inactive\(\) \{ return ui_theme::icon_rest\(\); \}/);
 assert.match(body(renderer, 'uint32_t cover_icon_color('),
-  /return cover_icon_active\(state\) \? kCoverActive : kCoverInactive;/);
+  /return cover_icon_active\(state\) \? kCoverActive : cover_inactive\(\);/);
 assert.ok(renderer.includes('lv_color_hex(widget->fill_color), card);'));
 const view = body(renderer, 'void show_view(GridType grid_type, uint8_t index) {');
 assert.ok(view.includes('const uint32_t fill_color = cover_icon_color(state);') &&

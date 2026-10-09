@@ -84,6 +84,7 @@ struct Command { std::string entity; float value; };
 static std::vector<Command> volumes, seeks;
 static void mqttPublishMediaVolume(const char* entity, float value) { volumes.push_back({entity, value}); }
 static void mqttPublishMediaSeek(const char* entity, float value) { seeks.push_back({entity, value}); }
+${fs.readFileSync(path.join(repoRoot, 'src/ui/shared/ui_theme.h'), 'utf8')}
 ${productionStruct(header, 'MediaPopupInit')}
 ${productionStruct(popup, 'MediaPopupContext')}
 static MediaPopupContext* g_media_popup_ctx = nullptr;

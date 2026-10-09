@@ -15,6 +15,7 @@
 #include "src/ui/popups/popup_layout.h"
 #include "src/ui/tabs/settings/settings_style.h"
 #include "src/ui/ui_manager.h"
+#include "src/ui/shared/ui_theme.h"
 
 // grid_layout.h sizes the bar's grid with the head's frame; it must be the
 // popups' (and the Settings head's).
@@ -99,7 +100,7 @@ void gear_lock_event_cb(lv_event_t* event) {
   }
   if (lv_event_get_code(event) != LV_EVENT_DRAW_POST) return;
   lv_obj_t* button = lv_obj_get_parent(icon);
-  lv_color_t under = lv_color_black();
+  lv_color_t under = lv_color_hex(ui_theme::screen());
   for (lv_obj_t* obj = button ? lv_obj_get_parent(button) : nullptr; obj; obj = lv_obj_get_parent(obj)) {
     if (lv_obj_get_style_bg_opa(obj, LV_PART_MAIN) <= LV_OPA_MIN) continue;
     under = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
@@ -214,7 +215,10 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   // gear's grey over the global tile color.
   const FolderEntry* folder = home ? nullptr : tileConfig.getFolder(folder_id);
   const char* icon_name = home ? "home" : (folder && folder->icon_name[0] ? folder->icon_name : "folder");
-  const settings_style::Tone tone = settings_style::tone(tileDefaultBgColor(), settings_style::kGearColor);
+  // The light theme's head sits on the screen, not on a card: its circle is
+  // one step from the screen like the dark theme's circle from its card.
+  const settings_style::Tone tone =
+      settings_style::tone(ui_theme::light() ? ui_theme::screen() : tileDefaultBgColor(), settings_style::kGearColor);
   lv_obj_t* circle = plain(bar);
   lv_obj_set_pos(circle, g.disc_x, g.center_y - g.disc / 2);
   lv_obj_set_size(circle, g.disc, g.disc);
@@ -238,13 +242,13 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   lv_obj_set_size(button, pressed, pressed);
   ui_surface_style::apply_radius(button, settings_style::kClosePressedBaseline);
   lv_obj_add_flag(button, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_style_bg_color(button, lv_color_white(), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(button, lv_color_hex(ui_theme::icon()), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(button, LV_OPA_20, LV_STATE_PRESSED);
   lv_obj_set_ext_click_area(button, popup_layout::kCloseButtonClickArea + (g.close - pressed) / 2);
   lv_obj_t* glyph = lv_label_create(button);
   lv_label_set_text(glyph, getMdiChar(home ? "cog" : "window-close").c_str());
   if (FONT_MDI_ICONS) lv_obj_set_style_text_font(glyph, FONT_MDI_ICONS, 0);
-  lv_obj_set_style_text_color(glyph, lv_color_white(), 0);
+  lv_obj_set_style_text_color(glyph, lv_color_hex(ui_theme::text()), 0);
   lv_obj_center(glyph);
   if (home) {
     lv_obj_add_event_cb(button, on_gear, LV_EVENT_CLICKED, nullptr);
@@ -261,7 +265,7 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   // The time right before the X; without the gear in its place.
   lv_obj_t* time_label = lv_label_create(bar);
   lv_obj_set_style_text_font(time_label, time_font(), 0);
-  lv_obj_set_style_text_color(time_label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(time_label, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_text_align(time_label, LV_TEXT_ALIGN_RIGHT, 0);
   lv_label_set_long_mode(time_label, LV_LABEL_LONG_CLIP);
   lv_obj_set_size(time_label, g.time_w, g.time_line);
@@ -277,7 +281,7 @@ void build(lv_obj_t* grid, uint16_t folder_id) {
   const lv_font_t* font = title_font(title_text, title_w);
   lv_obj_t* title = lv_label_create(bar);
   lv_obj_set_style_text_font(title, font, 0);
-  lv_obj_set_style_text_color(title, lv_color_white(), 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
   lv_obj_set_size(title, title_w, lv_font_get_line_height(font));
   lv_label_set_text(title, title_text);
@@ -297,6 +301,7 @@ lv_obj_t* create_camera_circle(lv_obj_t* parent, uint32_t color) {
   lv_obj_t* icon = lv_label_create(circle);
   lv_label_set_text(icon, getMdiChar("webcam").c_str());
   if (FONT_MDI_ICONS) lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
+  // On the colored camera circle: white in both themes (text on an accent).
   lv_obj_set_style_text_color(icon, lv_color_white(), 0);
   lv_obj_center(icon);
   return circle;

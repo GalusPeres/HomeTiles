@@ -35,9 +35,9 @@ assert.ok(renderer.includes('if (active) *active = climate_visuals::state_active
 // Closed stays active (user 2026-10-01): only unknown and unavailable are grey.
 const coverRenderer = read('src/types/cover/renderer.cpp');
 assert.ok(coverRenderer.includes('if (active) *active = cover_icon_active(state);') &&
-  coverRenderer.includes('return cover_icon_active(state) ? kCoverActive : kCoverInactive;') &&
+  coverRenderer.includes('return cover_icon_active(state) ? kCoverActive : cover_inactive();') &&
   coverRenderer.includes('constexpr uint32_t kCoverActive = 0x926BC7;') &&
-  coverRenderer.includes('constexpr uint32_t kCoverInactive = 0x9E9E9E;'),
+  coverRenderer.includes('inline uint32_t cover_inactive() { return ui_theme::icon_rest(); }'),
   'Cover activity matches cover_icon_color()');
 assert.match(coverRenderer, /bool cover_icon_active\(const CoverState& state\) \{\s*return state\.valid && state\.available && strcmp\(state\.state, "unknown"\) != 0 &&\s*strcmp\(state\.state, "unavailable"\) != 0;\s*\}/);
 

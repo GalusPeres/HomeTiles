@@ -56,7 +56,7 @@ for (const marker of [
   // Colors: the popup control rule; backspace halfway, confirm white.
   'popup_nav_style::fill(card, icon, fill, opa);',
   'popup_nav_style::set_bg(key, fill, backspace ? static_cast<lv_opa_t>(opa / 2) : opa, LV_PART_MAIN);',
-  'popup_nav_style::set_bg(key, lv_color_white(), LV_OPA_COVER, LV_PART_MAIN);',
+  'popup_nav_style::set_bg(key, lv_color_hex(ui_theme::icon()), LV_OPA_COVER, LV_PART_MAIN);',
   'pin_access::secureClear(ctx->input, sizeof(ctx->input))',
   'LV_EVENT_CLICKED',
   'lv_obj_set_style_bg_color(ctx->card, lv_color_hex(init.bg_color), 0);',

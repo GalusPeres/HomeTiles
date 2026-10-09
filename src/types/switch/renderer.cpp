@@ -23,13 +23,13 @@
 #include "src/tiles/config/tile_config.h"
 #include <Arduino.h>
 #include <algorithm>
+#include "src/ui/shared/ui_theme.h"
 
 using switch_layout::Bar;
 using switch_layout::Layout;
 
 namespace {
 
-constexpr uint32_t kIconOff = tone_color::kOffIcon;
 // Remote brightness echoes stay out of a dimmer the finger just released,
 // like the Light popup (kRemoteBlockMs).
 constexpr uint32_t kRemoteBlockMs = 3000;
@@ -333,7 +333,7 @@ void bar_draw_cb(lv_event_t* e) {
       view->thumb_off = tone_color::switch_thumb_off(base);
     }
     thumb_color = lv_color_hex(view->thumb_off);
-    symbol_color = lv_color_hex(kIconOff);
+    symbol_color = lv_color_hex(tone_color::off_icon());
   }
   level_bar::draw_rect(layer, thumb, thumb_color, radius);
   draw_power_symbol(layer, thumb, symbol_color, view->on, view->bar_base);
@@ -520,7 +520,7 @@ lv_obj_t* create_icon(lv_obj_t* card, const Tile& tile) {
   if (!glyph.length()) return nullptr;
   lv_obj_t* icon = lv_label_create(card);
   if (!icon) return nullptr;
-  set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
+  set_label_style(icon, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
   lv_label_set_text(icon, glyph.c_str());
   return icon;
 }
@@ -617,7 +617,7 @@ bool switch_tile_held_on(const SwitchTileWidgets& widgets, bool& on) {
 void switch_tile_show_state(SwitchTileWidgets& widgets, const Tile& tile, const SwitchState& state,
                             uint32_t icon_rgb) {
   SwitchBarView* view = widgets.view;
-  const lv_color_t icon_color = lv_color_hex(state.available ? icon_rgb : kIconOff);
+  const lv_color_t icon_color = lv_color_hex(state.available ? icon_rgb : tone_color::off_icon());
   if (widgets.icon_label) {
     tile_icon_disc::set_icon_color(widgets.icon_label, icon_color);
   } else if (widgets.title_label && !view) {
@@ -681,7 +681,7 @@ lv_obj_t* render_switch_tile(lv_obj_t* parent, int col, int row, const Tile& til
     if (has_title) {
       title_lbl = lv_label_create(container);
       if (title_lbl) {
-        set_label_style(title_lbl, lv_color_white(), tile_layout::header_title_font());
+        set_label_style(title_lbl, lv_color_hex(ui_theme::text()), tile_layout::header_title_font());
         hometiles_title::tile(title_lbl, tile.title.c_str(), false);
         if (icon_lbl) {
           lv_obj_align(title_lbl, LV_ALIGN_CENTER, 0, tile_layout::scale_480(35));

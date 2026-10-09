@@ -2,6 +2,7 @@
 
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/popups/popup_layout.h"
+#include "src/ui/shared/ui_theme.h"
 
 // Shared Settings controls; keep popup editors visually identical to Settings.
 namespace ui_control_style {
@@ -11,13 +12,13 @@ inline void slider(lv_obj_t* slider) {
   lv_obj_set_style_width(slider, popup_layout::scale(42), LV_PART_KNOB);
   lv_obj_set_style_height(slider, popup_layout::scale(42), LV_PART_KNOB);
   lv_obj_set_ext_click_area(slider, popup_layout::scale(20));
-  lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(ui_theme::icon()), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(slider, LV_OPA_20, LV_PART_MAIN);
   lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-  lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(ui_theme::icon()), LV_PART_INDICATOR);
   lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_INDICATOR);
   lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
-  lv_obj_set_style_bg_color(slider, lv_color_white(), LV_PART_KNOB);
+  lv_obj_set_style_bg_color(slider, lv_color_hex(ui_theme::icon()), LV_PART_KNOB);
   lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_KNOB);
   lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
   lv_obj_set_style_border_width(slider, 0, LV_PART_KNOB);
@@ -29,8 +30,8 @@ inline void dropdown(lv_obj_t* dd) {
   lv_obj_set_style_text_font(dd, popup_layout::font20(), LV_PART_MAIN);
   lv_obj_set_style_text_font(dd, &ui_symbols_20, LV_PART_INDICATOR);
   lv_obj_set_style_bg_color(dd, lv_color_hex(0x1E1E1E), 0);
-  lv_obj_set_style_text_color(dd, lv_color_white(), 0);
-  lv_obj_set_style_text_color(dd, lv_color_white(), LV_PART_INDICATOR);
+  lv_obj_set_style_text_color(dd, lv_color_hex(ui_theme::text()), 0);
+  lv_obj_set_style_text_color(dd, lv_color_hex(ui_theme::text()), LV_PART_INDICATOR);
   ui_surface_style::apply_radius(dd, popup_layout::scale(10), 0);
   lv_obj_set_style_border_color(dd, lv_color_hex(0x555555), 0);
   lv_obj_set_style_border_width(dd, 1, 0);
@@ -44,7 +45,7 @@ inline void dropdownList(lv_obj_t* list) {
   lv_obj_set_style_bg_color(list, lv_color_hex(0x1E1E1E), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_text_font(list, popup_layout::font20(), LV_PART_MAIN);
-  lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_text_color(list, lv_color_hex(ui_theme::text()), LV_PART_MAIN);
   ui_surface_style::apply_radius(list, popup_layout::scale(10), LV_PART_MAIN);
   lv_obj_set_style_border_color(list, lv_color_hex(0x555555), LV_PART_MAIN);
   lv_obj_set_style_border_width(list, 1, LV_PART_MAIN);
@@ -53,7 +54,7 @@ inline void dropdownList(lv_obj_t* list) {
   lv_obj_set_style_bg_color(list, lv_color_hex(0x26A69A), LV_PART_SELECTED);
   lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SELECTED);
   lv_obj_set_style_text_font(list, popup_layout::font20(), LV_PART_SELECTED);
-  lv_obj_set_style_text_color(list, lv_color_white(), LV_PART_SELECTED);
+  lv_obj_set_style_text_color(list, lv_color_hex(ui_theme::text()), LV_PART_SELECTED);
   ui_surface_style::apply_radius(list, popup_layout::scale(6), LV_PART_SELECTED);
   lv_obj_set_style_bg_color(list, lv_color_hex(0x4A4A4A), LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SCROLLBAR);
@@ -92,7 +93,7 @@ inline void mediaSlider(lv_obj_t* obj) {
 // Match the existing Climate popup's transparent round step buttons.
 inline void climateStepButton(lv_obj_t* button) {
   auto apply = [&](lv_style_selector_t state, lv_opa_t opacity) {
-    lv_obj_set_style_bg_color(button, lv_color_white(), state);
+    lv_obj_set_style_bg_color(button, lv_color_hex(ui_theme::icon()), state);
     lv_obj_set_style_bg_opa(button, opacity, state);
     lv_obj_set_style_border_width(button, 0, state);
     lv_obj_set_style_outline_width(button, 0, state);
@@ -125,7 +126,7 @@ inline void valueDropdown(lv_obj_t* obj) {
     // LVGL 9.5's light base theme recolors disabled controls separately from
     // color filters. Keep the dark surface and dim only its text and arrow.
     lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN | state);
-    lv_obj_set_style_text_color(obj, lv_color_white(), LV_PART_INDICATOR | state);
+    lv_obj_set_style_text_color(obj, lv_color_hex(ui_theme::text()), LV_PART_INDICATOR | state);
   }
   lv_obj_set_style_text_opa(obj, LV_OPA_50, LV_PART_MAIN | LV_STATE_DISABLED);
   lv_obj_set_style_text_opa(obj, LV_OPA_50, LV_PART_INDICATOR | LV_STATE_DISABLED);

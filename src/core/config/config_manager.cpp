@@ -59,6 +59,7 @@ static bool persisted_config_equal(const DeviceConfig& a,
          a.icon_discs == b.icon_discs &&
          a.layout == b.layout &&
          a.head_gear == b.head_gear &&
+         a.theme == b.theme &&
          a.icon_glow == b.icon_glow &&
          a.default_tile_color == b.default_tile_color &&
          a.display_rotated_180 == b.display_rotated_180 &&
@@ -233,6 +234,7 @@ ConfigManager::ConfigManager() {
   config.icon_discs = true;
   config.layout = 0;
   config.head_gear = false;
+  config.theme = 0;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;
   config.display_rotated_180 = false;
@@ -372,6 +374,8 @@ bool ConfigManager::load() {
   config.layout = prefs.getUChar("layout", 0);
   config.head_gear = prefs.getBool("head_gear", false);
   if (config.layout > 2) config.layout = 0;
+  config.theme = prefs.getUChar("theme", 0);
+  if (config.theme > 1) config.theme = 0;
   config.icon_glow = icon_glow::clamp(prefs.getUChar("icon_glow", icon_glow::kDefault));
   config.default_tile_color =
       tile_color::normalize(prefs.getUInt("tile_color", tile_color::kDefault));
@@ -568,6 +572,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   normalized.icon_glow = icon_glow::clamp(normalized.icon_glow);
   normalized.default_tile_color = tile_color::normalize(normalized.default_tile_color);
   if (normalized.keyboard_layout > 3) normalized.keyboard_layout = 0;
+  if (normalized.theme > 1) normalized.theme = 0;
   if (normalized.settings_reveal_edge >
       static_cast<uint8_t>(SettingsRevealEdge::Bottom)) {
     normalized.settings_reveal_edge =
@@ -664,6 +669,7 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   prefs.putBool("icon_disc", normalized.icon_discs);
   prefs.putUChar("layout", normalized.layout);
   prefs.putBool("head_gear", normalized.head_gear);
+  prefs.putUChar("theme", normalized.theme);
   prefs.putUChar("icon_glow", normalized.icon_glow);
   prefs.putUInt("tile_color", normalized.default_tile_color);
   prefs.putBool("eth_mode", normalized.ethernet_enabled);
@@ -973,6 +979,23 @@ bool ConfigManager::saveLayout(uint8_t layout) {
   return true;
 }
 
+bool ConfigManager::saveTheme(uint8_t theme) {
+  if (theme > 1) return false;
+  if (config.theme == theme) return true;
+  Device::ScopedStorageWrite storage_write(
+      BatchedNvsWrite::kNeedsDisplayGuard);
+  BatchedNvsWrite::Preferences prefs;
+  if (!prefs.begin(PREF_NAMESPACE, false)) {
+    Serial.println("ConfigManager: Failed to open theme preferences");
+    return false;
+  }
+  prefs.putUChar("theme", theme);
+  if (!BatchedNvsWrite::finish(prefs)) return false;
+
+  config.theme = theme;
+  return true;
+}
+
 bool ConfigManager::saveEthernetEnabled(bool enabled) {
 #if defined(DEVICE_ESP32_S3_RGB_480)
   if (config.ethernet_enabled == enabled) return true;
@@ -1103,6 +1126,7 @@ void ConfigManager::clear() {
   config.icon_discs = true;
   config.layout = 0;
   config.head_gear = false;
+  config.theme = 0;
   config.icon_glow = icon_glow::kDefault;
   config.default_tile_color = tile_color::kDefault;
   config.display_rotated_180 = false;

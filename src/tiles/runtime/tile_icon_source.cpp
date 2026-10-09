@@ -24,6 +24,7 @@
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace tile_icon_source {
 namespace {
@@ -242,7 +243,7 @@ lv_obj_t* find_disc(lv_obj_t* card) {
 // The color the icon of a disc was given; white without an icon.
 uint32_t disc_icon_rgb(lv_obj_t* disc) {
   lv_obj_t* icon = disc ? tile_icon_disc::icon_of(disc) : nullptr;
-  return icon ? tile_icon_disc::icon_color(icon) : 0xFFFFFF;
+  return icon ? tile_icon_disc::icon_color(icon) : ui_theme::text();
 }
 
 // Shows the tint tile_tint::choose() picked, or the card's own color.
@@ -500,8 +501,8 @@ namespace {
 void style_controls(lv_obj_t* card) {
   bool known = false;
   bool see_through = false;
-  lv_color_t color = lv_color_white();
-  lv_color_t raised = lv_color_white();
+  lv_color_t color = lv_color_hex(ui_theme::text());
+  lv_color_t raised = lv_color_hex(ui_theme::text());
   uint32_t surface_pressed = 0;
   // Controls sit on the card or one level deeper (Climate - and + inside
   // their target pill); a button on a surface presses one control step above

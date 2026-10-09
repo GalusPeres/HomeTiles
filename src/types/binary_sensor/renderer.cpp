@@ -18,6 +18,7 @@
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/ui/popups/binary_sensor/binary_sensor_popup.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -454,7 +455,7 @@ uint32_t binary_sensor_visual_color(const BinarySensorState& state) {
   return state.valid && state.available &&
                  state.value == BinarySensorValue::On
              ? 0xFFC107
-             : 0x9E9E9E;
+             : ui_theme::icon_rest();
 }
 
 bool binary_sensor_init_storage() {
@@ -570,7 +571,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
 
   if (tile.title.length()) {
     widgets.title_label = lv_label_create(card);
-    set_label_style(widgets.title_label, lv_color_white(),
+    set_label_style(widgets.title_label, lv_color_hex(ui_theme::text()),
                     tile_layout::header_title_font());
     lv_obj_set_width(widgets.title_label, LV_PCT(70));
     lv_obj_set_style_text_align(widgets.title_label, LV_TEXT_ALIGN_RIGHT, 0);
@@ -581,7 +582,7 @@ lv_obj_t* render_binary_sensor_tile(lv_obj_t* parent, int col, int row,
   }
 
   widgets.state_label = lv_label_create(card);
-  set_label_style(widgets.state_label, lv_color_white(),
+  set_label_style(widgets.state_label, lv_color_hex(ui_theme::text()),
                   tile_layout::value_font_for_choice(tile.sensor_value_font, tile_layout::header_title_font()));
   lv_label_set_long_mode(widgets.state_label, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(widgets.state_label, LV_PCT(100));

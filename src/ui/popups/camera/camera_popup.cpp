@@ -27,6 +27,7 @@
 #include "src/devices/device.h"
 #include "src/video/camera_stream.h"
 #include "src/video/camera_transport.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -44,7 +45,7 @@ constexpr uint8_t kFullLeave = 2;
 
 struct CameraPopupContext {
   String entity_id;
-  uint32_t surface_color = 0x2A2A2A;
+  uint32_t surface_color = ui_theme::popup_card();
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
   lv_obj_t* close_button = nullptr;
@@ -129,7 +130,7 @@ static void set_status_label(const char* text, bool error) {
   lv_label_set_text(g_camera_popup->status, text ? text : "");
   lv_obj_set_style_text_color(
       g_camera_popup->status,
-      error ? lv_color_hex(0xFF6B6B) : lv_color_hex(0xD8DEE9), 0);
+      error ? lv_color_hex(0xFF6B6B) : lv_color_hex(ui_theme::text_secondary()), 0);
 }
 
 static bool restore_previous_draw_buffer(CameraPopupContext* ctx) {
@@ -404,7 +405,7 @@ static void full_touch_event_cb(lv_event_t* event) {
 static CameraPopupContext* create_popup() {
   CameraPopupContext* ctx = new CameraPopupContext();
 
-  const auto parts = create_popup_body(close_event_cb, ctx, 0x2A2A2A);
+  const auto parts = create_popup_body(close_event_cb, ctx, ui_theme::popup_card());
   ctx->overlay = parts.overlay;
   ctx->card = parts.card;
   ctx->title_label = parts.title;
@@ -464,7 +465,7 @@ static CameraPopupContext* create_popup() {
 
   ctx->placeholder = lv_label_create(video);
   lv_obj_set_style_text_font(ctx->placeholder, popup_layout::font24(), 0);
-  lv_obj_set_style_text_color(ctx->placeholder, lv_color_hex(0xD8DEE9), 0);
+  lv_obj_set_style_text_color(ctx->placeholder, lv_color_hex(ui_theme::text_secondary()), 0);
   lv_obj_set_width(ctx->placeholder, LV_PCT(90));
   lv_obj_set_style_text_align(ctx->placeholder, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_text(ctx->placeholder, camera_text().camera_preparing);
@@ -474,7 +475,7 @@ static CameraPopupContext* create_popup() {
   lv_obj_set_width(ctx->status, kVideoFrameWidth);
   lv_obj_set_style_text_align(ctx->status, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_font(ctx->status, popup_layout::font20(), 0);
-  lv_obj_set_style_text_color(ctx->status, lv_color_hex(0xD8DEE9), 0);
+  lv_obj_set_style_text_color(ctx->status, lv_color_hex(ui_theme::text_secondary()), 0);
   lv_label_set_long_mode(ctx->status, LV_LABEL_LONG_DOT);
   lv_label_set_text(ctx->status, camera_text().camera_ready);
   lv_obj_align(ctx->status, LV_ALIGN_TOP_MID, 0, kStatusTop);
@@ -588,7 +589,7 @@ void show_camera_popup(const CameraPopupInit& init) {
   g_camera_popup->entity_id = init.entity_id;
   g_camera_popup->visible = true;
   g_camera_popup->surface_color =
-      init.bg_color != 0 ? init.bg_color : 0x2A2A2A;
+      init.bg_color ? init.bg_color : ui_theme::popup_card();
   lv_obj_set_style_bg_color(
       g_camera_popup->card,
       lv_color_hex(g_camera_popup->surface_color), 0);

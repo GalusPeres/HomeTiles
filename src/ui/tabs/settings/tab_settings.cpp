@@ -30,6 +30,7 @@
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/tabs/settings/settings_model.h"
 #include "src/ui/tabs/settings/settings_screen.h"
+#include "src/ui/shared/ui_theme.h"
 
 // The Settings tab: what its pages show and do (settings_model.h, drawn by
 // settings_screen.cpp) on the real configuration, and the sketch's calls into
@@ -1148,7 +1149,7 @@ void build_settings_tab(lv_obj_t *tab, hotspot_callback_t hotspot_cb) {
 
   lv_obj_clean(tab);
   lv_obj_clear_flag(tab, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(tab, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(tab, lv_color_hex(ui_theme::screen()), 0);
   lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, 0);
   lv_obj_set_style_border_opa(tab, LV_OPA_TRANSP, 0);
   // The panel carries the grid margins: positions inside are grid

@@ -29,6 +29,7 @@
 #include <string.h>
 
 #include "src/core/hardware/board_hal.h"
+#include "src/ui/shared/ui_theme.h"
 
 static const lv_font_t* get_status_time_font() {
   const DeviceConfig& cfg = configManager.getConfig();
@@ -96,7 +97,7 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   Serial.println("[UI] Building UI...");
 
   lv_obj_t *scr = lv_screen_active();
-  lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(scr, lv_color_hex(ui_theme::screen()), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
 
@@ -113,7 +114,7 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
 
 
   tab_content_container = lv_obj_create(scr);
-  lv_obj_set_style_bg_color(tab_content_container, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(tab_content_container, lv_color_hex(ui_theme::screen()), 0);
   lv_obj_set_style_bg_opa(tab_content_container, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(tab_content_container, 0, 0);
   lv_obj_set_style_pad_all(tab_content_container, 0, 0);
@@ -194,7 +195,7 @@ void UIManager::statusbarInit(lv_obj_t *tab_bar) {
   lv_obj_set_style_align(status_time_label, LV_ALIGN_CENTER, 0);
   lv_label_set_long_mode(status_time_label, LV_LABEL_LONG_CLIP);
   lv_obj_set_style_text_align(status_time_label, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_color(status_time_label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(status_time_label, lv_color_hex(ui_theme::text()), 0);
 
   lv_obj_set_style_text_font(status_time_label, get_status_time_font(), 0);
   // Use placeholder characters supported by the digit font.
@@ -259,7 +260,7 @@ lv_obj_t* UIManager::setupTabButton(lv_obj_t *btn, uint8_t tab_index, const char
     if (iconChar.length() > 0) {
       icon_label = lv_label_create(btn);
       lv_label_set_text(icon_label, iconChar.c_str());
-      lv_obj_set_style_text_color(icon_label, lv_color_white(), 0);
+      lv_obj_set_style_text_color(icon_label, lv_color_hex(ui_theme::text()), 0);
       lv_obj_set_style_text_font(icon_label, FONT_MDI_ICONS, 0);
       popup_layout::applyIconScale(icon_label);
     }
@@ -269,7 +270,7 @@ lv_obj_t* UIManager::setupTabButton(lv_obj_t *btn, uint8_t tab_index, const char
   if (has_name) {
     text_label = lv_label_create(btn);
     lv_label_set_text(text_label, tab_name);
-    lv_obj_set_style_text_color(text_label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(text_label, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_text_font(text_label, popup_layout::font24(), 0);
     lv_label_set_long_mode(text_label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(text_label, LV_PCT(90));
@@ -285,7 +286,7 @@ lv_obj_t* UIManager::setupTabButton(lv_obj_t *btn, uint8_t tab_index, const char
     } else {
       lv_label_set_text(text_label, fallback);
     }
-    lv_obj_set_style_text_color(text_label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(text_label, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_text_font(text_label, popup_layout::font24(), 0);
     lv_obj_set_style_text_align(text_label, LV_TEXT_ALIGN_CENTER, 0);
   }
@@ -299,7 +300,7 @@ lv_obj_t* UIManager::createTabPanel(lv_obj_t *parent) {
 
   lv_obj_t *panel = lv_obj_create(parent);
   lv_obj_set_size(panel, LV_PCT(100), LV_PCT(100));
-  lv_obj_set_style_bg_color(panel, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(panel, lv_color_hex(ui_theme::screen()), 0);
   lv_obj_set_style_bg_opa(panel, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(panel, 0, 0);
   lv_obj_set_style_pad_all(panel, 0, 0);

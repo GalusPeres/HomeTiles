@@ -5,6 +5,7 @@
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include <Arduino.h>
+#include "src/ui/shared/ui_theme.h"
 
 lv_obj_t* render_text_tile(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index) {
   (void)index;
@@ -46,7 +47,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   if (has_icon) {
     lv_obj_t* icon_lbl = lv_label_create(card);
     if (icon_lbl) {
-      set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
+      set_label_style(icon_lbl, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
       lv_label_set_text(icon_lbl, iconChar.c_str());
       lv_obj_align(icon_lbl, LV_ALIGN_TOP_RIGHT,
                    tile_layout::scale_480(4),
@@ -59,7 +60,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   if (tile.title.length() > 0) {
     lv_obj_t* title_lbl = lv_label_create(card);
     if (title_lbl) {
-      set_label_style(title_lbl, lv_color_hex(0xFFFFFF),
+      set_label_style(title_lbl, lv_color_hex(ui_theme::text()),
                       tile_layout::header_title_font());
       lv_obj_set_width(title_lbl, LV_PCT(has_icon ? 70 : 100));
       hometiles_title::tile(title_lbl, tile.title.c_str(), true);
@@ -91,7 +92,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   if (text.length()) {
     lv_obj_t* text_lbl = lv_label_create(card);
     if (text_lbl) {
-      set_label_style(text_lbl, lv_color_white(), get_text_font(tile));
+      set_label_style(text_lbl, lv_color_hex(ui_theme::text()), get_text_font(tile));
       lv_label_set_text(text_lbl, text.c_str());
       lv_label_set_long_mode(text_lbl, LV_LABEL_LONG_WRAP);
       lv_obj_set_width(text_lbl, lv_pct(100));

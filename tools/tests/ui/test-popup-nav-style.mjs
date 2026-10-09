@@ -84,6 +84,7 @@ const cpp = String.raw`
 #include <lvgl.h>
 #include <cstdint>
 #include <cstdio>
+#include "src/ui/shared/ui_theme.h"
 static lv_color_t g_disc_color = lv_color_white();
 static lv_opa_t g_disc_opa = 40;
 static uint32_t g_card = 0, g_icon = 0;

@@ -10,6 +10,7 @@
 #include "src/core/i18n/i18n.h"
 #include "src/types/device/device_detail.h"
 #include "src/types/tile_type.h"
+#include "src/ui/shared/ui_theme.h"
 
 // The state look of Lock, Alarm panel and Fan tiles and their popup, like
 // the Home Assistant frontend: lock locked green, unlocked, open and jammed
@@ -22,13 +23,14 @@ namespace device_visual {
 constexpr uint32_t kGreen = 0x4CAF50;
 constexpr uint32_t kRed = 0xF44336;
 constexpr uint32_t kOrange = 0xFF9800;
-constexpr uint32_t kGrey = 0x9E9E9E;
+// The device grey: the inactive grey of the theme (ui_theme::icon_inactive).
+inline uint32_t grey() { return ui_theme::icon_inactive(); }
 constexpr uint32_t kCyan = 0x00BCD4;
 
 struct Visual {
   String label;
   const char* icon = "";
-  uint32_t color = kGrey;
+  uint32_t color = grey();
   bool waiting = false;
 };
 
@@ -129,7 +131,7 @@ inline Visual visual(TileType type, const Detail& d) {
       uint32_t color;
       bool waiting;
     } kLooks[] = {
-        {"disarmed", "shield-off", kGrey, false},
+        {"disarmed", "shield-off", grey(), false},
         {"armed_home", "shield-home", kGreen, false},
         {"armed_away", "shield-lock", kGreen, false},
         {"armed_night", "shield-moon", kGreen, false},

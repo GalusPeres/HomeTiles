@@ -5,6 +5,7 @@
 #include "src/ui/shared/tone_color.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include <atomic>
+#include "src/ui/shared/ui_theme.h"
 
 namespace ui_surface_style {
 namespace {
@@ -78,7 +79,7 @@ void apply_style(lv_obj_t* obj, bool enabled) {
   };
   // A tile whose icon disc glows keeps the icon's border hint
   // (set_tile_border_tint); every other tile uses white.
-  lv_color_t color = lv_color_white();
+  lv_color_t color = lv_color_hex(ui_theme::text());
   lv_style_value_t stored{};
   if (lv_obj_get_local_style_prop(obj, LV_STYLE_OUTLINE_COLOR, &stored, kBorderTintStore) ==
       LV_STYLE_RES_FOUND) {
@@ -186,7 +187,7 @@ void set_tile_border_tint(lv_obj_t* obj, lv_color_t icon) {
 }
 
 void clear_tile_border_tint(lv_obj_t* obj) {
-  if (lv_obj_t* host = border_host(obj)) store_border_color(host, lv_color_white(), false);
+  if (lv_obj_t* host = border_host(obj)) store_border_color(host, lv_color_hex(ui_theme::text()), false);
 }
 
 void apply_global_tile_border(lv_obj_t* obj) {

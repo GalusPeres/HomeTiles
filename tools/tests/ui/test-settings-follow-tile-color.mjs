@@ -30,7 +30,7 @@ assert.match(parts, /lv_obj_set_style_bg_color\(g, lv_color_hex\(colors\.card\),
 
 const style = screen.slice(screen.indexOf('void style_category(uint8_t index) {'), screen.indexOf('lv_obj_t* circle('));
 assert.match(style, /const uint32_t card = g_built_card;/, 'category tiles start from the card color');
-assert.match(style, /selected \? settings_style::from_icon_card\(card, color\) : card/,
+assert.match(style, /!selected\s+\? card\s+: ui_theme::light\(\) \? tile_tint::mix\(ui_theme::card\(\), color, 32\)\s+: settings_style::from_icon_card\(card, color\)/,
   'the open category is a "From icon" tile, the others keep the card color');
 
 const show = screen.slice(screen.indexOf('void prepare_show() {'), screen.indexOf('void did_hide() {'));

@@ -4,6 +4,7 @@
 
 #include "src/fonts/ui_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace settings_parts {
 namespace {
@@ -16,7 +17,7 @@ constexpr lv_obj_flag_t kHeadingFlag = LV_OBJ_FLAG_USER_1;
 constexpr lv_obj_flag_t kSurfacePageFlag = LV_OBJ_FLAG_USER_2;
 
 void grey_text(lv_obj_t* label) {
-  lv_obj_set_style_text_color(label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_text_opa(label, kGreyOpa, 0);
 }
 
@@ -143,7 +144,7 @@ void style_option(lv_obj_t* option, bool selected) {
   lv_obj_set_style_bg_opa(option, selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
   lv_obj_t* label = lv_obj_get_child(option, 0);
   if (label) {
-    lv_obj_set_style_text_color(label, selected ? lv_color_hex(kSelectedText) : lv_color_white(), 0);
+    lv_obj_set_style_text_color(label, selected ? lv_color_hex(kSelectedText) : lv_color_hex(ui_theme::text()), 0);
   }
 }
 
@@ -356,14 +357,16 @@ Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* s
     lv_obj_add_flag(line, LV_OBJ_FLAG_IGNORE_LAYOUT);
     lv_obj_set_size(line, LV_PCT(100), 1);
     lv_obj_set_pos(line, 0, 0);
-    lv_obj_set_style_bg_color(line, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(line, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(line, kSeparatorOpa, 0);
   }
   if (icon_name && icon_name[0]) {
     r.icon = lv_label_create(r.row);
     lv_label_set_text(r.icon, getMdiChar(icon_name).c_str());
     if (FONT_MDI_ICONS) lv_obj_set_style_text_font(r.icon, FONT_MDI_ICONS, 0);
-    grey_text(r.icon);
+    // The light theme's icon grey, opaque; the dark theme's 60 % white.
+    if (ui_theme::light()) lv_obj_set_style_text_color(r.icon, lv_color_hex(ui_theme::icon()), 0);
+    else grey_text(r.icon);
   }
   r.text = plain(r.row);
   lv_obj_set_size(r.text, 1, LV_SIZE_CONTENT);
@@ -376,7 +379,7 @@ Row row(lv_obj_t* group, const char* icon_name, const char* title, const char* s
   lv_label_set_long_mode(r.title, LV_LABEL_LONG_DOT);
   lv_obj_set_width(r.title, LV_PCT(100));
   lv_obj_set_style_text_font(r.title, row_font(), 0);
-  lv_obj_set_style_text_color(r.title, lv_color_white(), 0);
+  lv_obj_set_style_text_color(r.title, lv_color_hex(ui_theme::text()), 0);
   one_line(r.title);
   browser_line(r.title, kRowFontPx);
   if (sub) {
@@ -399,7 +402,7 @@ lv_obj_t* value_label(lv_obj_t* row, const char* text) {
   lv_obj_set_width(label, kValueWidth);
   lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_RIGHT, 0);
   lv_obj_set_style_text_font(label, row_font(), 0);
-  lv_obj_set_style_text_color(label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
   browser_line(label, kRowFontPx);
   return label;
 }
@@ -433,7 +436,8 @@ lv_obj_t* trailing_icon(lv_obj_t* row, const char* icon_name) {
   lv_obj_t* icon = lv_label_create(row);
   lv_label_set_text(icon, getMdiChar(icon_name).c_str());
   if (FONT_MDI_ICONS) lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
-  grey_text(icon);
+  if (ui_theme::light()) lv_obj_set_style_text_color(icon, lv_color_hex(ui_theme::icon()), 0);
+  else grey_text(icon);
   return icon;
 }
 
@@ -513,7 +517,7 @@ void open_options(const OptionList& spec) {
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(label, LV_PCT(100));
     lv_obj_set_style_text_font(label, row_font(), 0);
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
     browser_line(label, kRowFontPx);
     lv_obj_add_event_cb(option, option_clicked_cb, LV_EVENT_CLICKED,
                         reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
@@ -551,7 +555,7 @@ void conceal(lv_obj_t* root, lv_obj_t* shown) {
 lv_obj_t* button(lv_obj_t* parent, const char* text, const char* icon_name, ButtonKind kind, uint32_t accent,
                  const Colors& colors, int height, bool large_text, lv_event_cb_t on_click, void* user_data) {
   const uint32_t fill = kind == ButtonKind::Accent ? accent : kind == ButtonKind::Danger ? kDangerColor : colors.button;
-  const lv_color_t ink = lv_color_hex(kind == ButtonKind::Accent ? kAccentText : 0xFFFFFF);
+  const lv_color_t ink = lv_color_hex(kind == ButtonKind::Accent ? kAccentText : ui_theme::text());
   lv_obj_t* b = plain(parent);
   lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_size(b, LV_SIZE_CONTENT, height);
@@ -624,7 +628,7 @@ lv_obj_t* dialog(lv_obj_t* host, uint32_t card, const char* title, lv_event_cb_t
   lv_obj_set_width(label, LV_PCT(100));
   lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_font(label, popup_layout::font28(), 0);
-  lv_obj_set_style_text_color(label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
   return box;
 }
 
@@ -709,14 +713,14 @@ lv_obj_t* close_button(lv_obj_t* card, int x, int y, int size, lv_event_cb_t on_
   lv_obj_set_size(close, pressed, pressed);
   lv_obj_add_flag(close, LV_OBJ_FLAG_CLICKABLE);
   ui_surface_style::apply_radius(close, baseline > 0 ? baseline : 0);
-  lv_obj_set_style_bg_color(close, lv_color_white(), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(close, lv_color_hex(ui_theme::icon()), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(close, LV_OPA_20, LV_STATE_PRESSED);
   lv_obj_set_ext_click_area(close, popup_layout::kCloseButtonClickArea + inset);
   if (on_click) lv_obj_add_event_cb(close, on_click, LV_EVENT_CLICKED, user_data);
   lv_obj_t* x_icon = lv_label_create(close);
   lv_label_set_text(x_icon, getMdiChar("window-close").c_str());
   if (FONT_MDI_ICONS) lv_obj_set_style_text_font(x_icon, FONT_MDI_ICONS, 0);
-  lv_obj_set_style_text_color(x_icon, lv_color_white(), 0);
+  lv_obj_set_style_text_color(x_icon, lv_color_hex(ui_theme::text()), 0);
   lv_obj_center(x_icon);
   return close;
 }
@@ -759,7 +763,7 @@ lv_obj_t* step_head(lv_obj_t* card, int card_w, const char* icon_name, uint32_t 
   lv_label_set_long_mode(head, LV_LABEL_LONG_DOT);
   lv_obj_set_width(head, width);
   lv_obj_set_style_text_font(head, row_font(), 0);
-  lv_obj_set_style_text_color(head, lv_color_white(), 0);
+  lv_obj_set_style_text_color(head, lv_color_hex(ui_theme::text()), 0);
   one_line(head);
   lv_obj_set_pos(head, text_x, browser_label_y(row_font(), kRowFontPx, top, box1));
   lv_obj_t* sub = lv_label_create(card);

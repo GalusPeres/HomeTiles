@@ -23,7 +23,7 @@ assert.match(stepHead, /const int x = popup_layout::kCardPad \+ popup_layout::kH
 
 const buildCard = setup.slice(setup.indexOf('void build_card() {'));
 assert.match(buildCard, /ui_surface_style::apply_radius\(g_card, popup_layout::kCardRadius \+ Device::kGridGap, 0\);/);
-assert.match(buildCard, /ui_surface_style::apply_popup_border\(g_card, lv_color_white\(\),\s*static_cast<lv_opa_t>\(popup_layout::kPopupBorderOpa\)\);/);
+assert.match(buildCard, /ui_surface_style::apply_popup_border\(g_card, lv_color_hex\(ui_theme::text\(\)\),\s*static_cast<lv_opa_t>\(popup_layout::kPopupBorderOpa\)\);/);
 assert.doesNotMatch(buildCard, /apply_tile_radius\(g_card\)/);
 assert.match(radius, /constexpr int kDefault = kMaximum;/, 'a new panel starts with the largest radius');
 

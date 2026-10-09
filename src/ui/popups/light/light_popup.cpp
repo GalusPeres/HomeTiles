@@ -27,6 +27,7 @@
 #include "esp_heap_caps.h"
 #include <lvgl_private.h>
 #include <math.h>
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -134,7 +135,7 @@ struct LightPopupContext {
   lv_obj_t* temp_value_label = nullptr;
   // Background of the tile that opened the popup. Card-colored cut-outs and
   // lighter neutral surfaces derive from it.
-  uint32_t card_bg = popup_surface::kDefaultCard;
+  uint32_t card_bg = popup_surface::default_card();
   uint16_t hue = 0;
   uint8_t sat = 0;
   uint8_t val = 100;
@@ -549,7 +550,7 @@ static bool is_visible_obj(lv_obj_t* obj) {
 }
 
 static uint32_t get_preview_icon_rgb(const LightPopupContext* ctx) {
-  if (!ctx || !ctx->available || !ctx->is_on) return tone_color::kOffIcon;
+  if (!ctx || !ctx->available || !ctx->is_on) return tone_color::off_icon();
   if (ctx->supports_temperature && ctx->use_color_temperature) {
     return lv_color_to_u32(color_from_temperature_kelvin(ctx->color_temp_kelvin)) & 0xFFFFFF;
   }
@@ -637,7 +638,7 @@ static void update_header_and_power_visuals(LightPopupContext* ctx, uint32_t ico
   if (ctx->power_button_icon) {
     // While on, the glyph is a card-colored cut-out of the accent fill.
     const lv_color_t glyph_color =
-        visual_on ? popup_surface::card(ctx->card_bg) : lv_color_white();
+        visual_on ? popup_surface::card(ctx->card_bg) : lv_color_hex(ui_theme::text());
     lv_obj_set_style_text_color(ctx->power_button_icon, glyph_color, 0);
     lv_obj_set_style_text_color(ctx->power_button_icon, glyph_color, LV_STATE_PRESSED);
   }
@@ -668,7 +669,7 @@ static lv_color_t brightness_dash_color(const LightPopupContext* ctx);
 // The switch like the Switch tile's bar: the track in the control fill; on,
 // the thumb in the light color with the power symbol in the tile's card
 // color; off, the thumb one step above the track with the symbol in the grey
-// of an off icon (tone_color::switch_thumb_off, kOffIcon).
+// of an off icon (tone_color::switch_thumb_off, off_icon).
 static void update_switch_slider_visuals(LightPopupContext* ctx, uint32_t icon_rgb, bool invalidate) {
   if (!ctx || !ctx->val_slider || !ctx->val_cap) return;
 
@@ -704,7 +705,7 @@ static void update_switch_slider_visuals(LightPopupContext* ctx, uint32_t icon_r
   if (ctx->val_switch_icon) {
     lv_obj_clear_flag(ctx->val_switch_icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_text_color(ctx->val_switch_icon,
-                                ctx->is_on ? brightness_dash_color(ctx) : lv_color_hex(tone_color::kOffIcon), 0);
+                                ctx->is_on ? brightness_dash_color(ctx) : lv_color_hex(tone_color::off_icon()), 0);
     lv_label_set_text(ctx->val_switch_icon, getMdiChar(get_switch_slider_icon_name(ctx)).c_str());
     lv_obj_center(ctx->val_switch_icon);
   }
@@ -1020,11 +1021,11 @@ static void style_control_button(lv_obj_t* button,
     const lv_color_t disabled_color = popup_surface::lighter(card, popup_surface::kDisabled);
     lv_obj_set_style_text_color(
         icon,
-        enabled ? lv_color_white() : disabled_color,
+        enabled ? lv_color_hex(ui_theme::text()) : disabled_color,
         0);
     lv_obj_set_style_text_color(
         icon,
-        enabled ? lv_color_white() : disabled_color,
+        enabled ? lv_color_hex(ui_theme::text()) : disabled_color,
         LV_STATE_PRESSED);
   }
 }
@@ -1502,9 +1503,9 @@ static lv_obj_t* create_color_field_panel(lv_obj_t* parent,
   lv_obj_set_size(cursor, kColorFieldCursorSize, kColorFieldCursorSize);
   lv_obj_set_style_radius(cursor, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_opa(cursor, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(cursor, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(cursor, lv_color_hex(ui_theme::icon()), 0);
   lv_obj_set_style_border_width(cursor, 3, 0);
-  lv_obj_set_style_border_color(cursor, lv_color_white(), 0);
+  lv_obj_set_style_border_color(cursor, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_outline_width(cursor, 1, 0);
   lv_obj_set_style_outline_color(cursor, lv_color_hex(0x111111), 0);
   lv_obj_set_style_shadow_width(cursor, 12, 0);
@@ -1608,7 +1609,7 @@ static lv_obj_t* create_vertical_slider_panel(lv_obj_t* parent,
     switch_icon = lv_label_create(cap);
     lv_obj_set_style_text_font(switch_icon, FONT_MDI_ICONS, 0);
     popup_layout::applyIconScale(switch_icon);
-    lv_obj_set_style_text_color(switch_icon, lv_color_white(), 0);
+    lv_obj_set_style_text_color(switch_icon, lv_color_hex(ui_theme::text()), 0);
     lv_label_set_text(switch_icon, "");
     lv_obj_center(switch_icon);
     lv_obj_add_flag(switch_icon, LV_OBJ_FLAG_HIDDEN);
@@ -1618,7 +1619,7 @@ static lv_obj_t* create_vertical_slider_panel(lv_obj_t* parent,
 
   lv_obj_t* value = lv_label_create(panel);
   lv_obj_set_style_text_font(value, popup_layout::font24(), 0);
-  lv_obj_set_style_text_color(value, lv_color_white(), 0);
+  lv_obj_set_style_text_color(value, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_text(value, "");
   lv_obj_add_flag(value, LV_OBJ_FLAG_HIDDEN);
 
@@ -1704,7 +1705,7 @@ static lv_obj_t* create_temperature_panel(lv_obj_t* parent,
 
   lv_obj_t* value = lv_label_create(panel);
   lv_obj_set_style_text_font(value, popup_layout::font24(), 0);
-  lv_obj_set_style_text_color(value, lv_color_white(), 0);
+  lv_obj_set_style_text_color(value, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_text(value, "");
   lv_obj_add_flag(value, LV_OBJ_FLAG_HIDDEN);
 
@@ -1748,8 +1749,8 @@ static lv_obj_t* create_control_icon_button(lv_obj_t* parent, const char* icon_n
   lv_obj_t* icon = lv_label_create(btn);
   lv_obj_set_style_text_font(icon, FONT_MDI_ICONS, 0);
   popup_layout::applyIconScale(icon);
-  lv_obj_set_style_text_color(icon, lv_color_white(), 0);
-  lv_obj_set_style_text_color(icon, lv_color_white(), LV_STATE_PRESSED);
+  lv_obj_set_style_text_color(icon, lv_color_hex(ui_theme::text()), 0);
+  lv_obj_set_style_text_color(icon, lv_color_hex(ui_theme::text()), LV_STATE_PRESSED);
   lv_label_set_text(icon, getMdiChar(icon_name).c_str());
   lv_obj_center(icon);
 
@@ -2469,7 +2470,7 @@ void show_light_popup(const LightPopupInit& init) {
   lv_obj_set_height(ctx->top_value_label, kTopValueHeight);
   lv_obj_set_style_text_align(ctx->top_value_label, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_font(ctx->top_value_label, popup_layout::font40(), 0);
-  lv_obj_set_style_text_color(ctx->top_value_label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(ctx->top_value_label, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_translate_y(ctx->top_value_label, popup_layout::kLargeValueTextOffsetY, 0);
   lv_obj_set_style_pad_bottom(ctx->top_value_label, kTopValueBottomPad, 0);
   lv_label_set_text(ctx->top_value_label, "");

@@ -16,6 +16,7 @@
 #include <misc/cache/instance/lv_image_cache.h>
 #include <new>
 #include <time.h>
+#include "src/ui/shared/ui_theme.h"
 
 static uint8_t layout_clock_font_size(uint8_t size) {
 #if defined(DEVICE_LAYOUT_1024X600)
@@ -377,7 +378,7 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
   if (!config.text_shadow) {
     lv_obj_t* label = lv_label_create(stack);
     if (!label) return nullptr;
-    set_label_style(label, lv_color_white(), font);
+    set_label_style(label, lv_color_hex(ui_theme::text()), font);
     if (config.fill_parent) lv_obj_set_width(label, LV_PCT(100));
     lv_obj_set_style_text_align(label, clock_text_align(alignment), 0);
     lv_label_set_text(label, "");
@@ -411,7 +412,7 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
     // text, each at its opacity in black.
     lv_obj_t* mask = lv_label_create(line);
     if (mask) {
-      set_label_style(mask, lv_color_white(), font);
+      set_label_style(mask, lv_color_hex(ui_theme::text()), font);
       lv_obj_set_style_text_align(mask, clock_text_align(alignment), 0);
       lv_obj_set_pos(mask, 0, 0);
       lv_label_set_text(mask, "");
@@ -447,7 +448,7 @@ static lv_obj_t* create_clock_line(lv_obj_t* stack,
   }
   lv_obj_t* label = lv_label_create(line);
   if (!label) return nullptr;  // The stack owns and cleans up line.
-  set_label_style(label, lv_color_white(), font);
+  set_label_style(label, lv_color_hex(ui_theme::text()), font);
   lv_obj_set_style_text_align(label, clock_text_align(alignment), 0);
   if (config.fill_parent) lv_obj_set_width(label, LV_PCT(100));
   lv_obj_set_pos(label, 0, 0);
@@ -636,7 +637,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   if (has_icon) {
     lv_obj_t* icon_lbl = lv_label_create(card);
     if (icon_lbl) {
-      set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
+      set_label_style(icon_lbl, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
       lv_label_set_text(icon_lbl, iconChar.c_str());
       lv_obj_align(icon_lbl, LV_ALIGN_TOP_RIGHT,
                    tile_layout::scale_480(4),
@@ -649,7 +650,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   if (!compact && tile.title.length() > 0) {
     lv_obj_t* title_lbl = lv_label_create(card);
     if (title_lbl) {
-      set_label_style(title_lbl, lv_color_white(),
+      set_label_style(title_lbl, lv_color_hex(ui_theme::text()),
                       tile_layout::header_title_font());
       lv_obj_set_width(title_lbl, LV_PCT(has_icon ? 70 : 100));
       hometiles_title::tile(title_lbl, tile.title.c_str(), true);

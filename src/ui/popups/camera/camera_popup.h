@@ -1,12 +1,13 @@
 #pragma once
 
 #include <Arduino.h>
+#include "src/ui/shared/ui_theme.h"
 
 struct CameraPopupInit {
   String entity_id;
   String title;
   String icon_name;
-  uint32_t bg_color = 0x2A2A2A;
+  uint32_t bg_color = ui_theme::popup_card();
   // Header icon color: the tile's fixed icon color, else white.
   uint32_t icon_color = 0xFFFFFF;
 };

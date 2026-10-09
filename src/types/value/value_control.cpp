@@ -24,6 +24,7 @@
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/tiles/config/tile_geometry.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 const char* label(unsigned index) {
@@ -168,7 +169,7 @@ void refresh_editable_tile(GridType grid, uint8_t index) {
     const bool known = value.valid && value.has_state && value.available && value.state != "unknown";
     tiles_request_rule_refresh(grid, index);
     tile_icon_color_rules::apply(widgets[index].icon_label, tile->icon_colors.c_str(), known,
-                                 value.state.c_str(), display.c_str(), lv_color_white());
+                                 value.state.c_str(), display.c_str(), lv_color_hex(ui_theme::text()));
   }
 }
 
@@ -602,7 +603,7 @@ void input_event(lv_event_t* event) {
 void style_panel(lv_obj_t* obj) {
   lv_obj_set_style_bg_color(obj, lv_color_hex(0x333333), 0);
   lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
-  lv_obj_set_style_text_color(obj, lv_color_white(), 0);
+  lv_obj_set_style_text_color(obj, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_border_color(obj, lv_color_hex(0x555555), 0);
   lv_obj_set_style_border_width(obj, 0, 0);
   ui_surface_style::apply_radius(obj, popup_layout::scale(10), 0);
@@ -614,7 +615,7 @@ lv_obj_t* arrow_button(lv_obj_t* parent, bool up, EditableControl* c) {
   lv_obj_set_size(button, popup_layout::scale(48), popup_layout::scale(32));
   lv_obj_align(button, up ? LV_ALIGN_TOP_RIGHT : LV_ALIGN_BOTTOM_RIGHT, 0, 0);
   lv_obj_set_style_bg_opa(button, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(button, lv_color_white(), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(button, lv_color_hex(ui_theme::icon()), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(button, LV_OPA_20, LV_STATE_PRESSED);
   lv_obj_set_style_shadow_width(button, 0, LV_PART_MAIN);
   ui_surface_style::apply_radius(button, popup_layout::scale(12), 0);
@@ -622,7 +623,7 @@ lv_obj_t* arrow_button(lv_obj_t* parent, bool up, EditableControl* c) {
   lv_obj_remove_flag(button, LV_OBJ_FLAG_SCROLLABLE);
   auto* icon = lv_label_create(button); lv_label_set_text(icon, LV_SYMBOL_DOWN);
   lv_obj_set_style_text_font(icon, &ui_symbols_20, 0);
-  lv_obj_set_style_text_color(icon, lv_color_white(), 0);
+  lv_obj_set_style_text_color(icon, lv_color_hex(ui_theme::text()), 0);
   if (up) {
     lv_obj_set_style_transform_pivot_x(icon, LV_PCT(50), 0);
     lv_obj_set_style_transform_pivot_y(icon, LV_PCT(50), 0);
@@ -648,7 +649,7 @@ lv_obj_t* number_step_button(lv_obj_t* parent, bool increase, EditableControl* c
   lv_obj_remove_flag(button, LV_OBJ_FLAG_SCROLLABLE);
   auto* icon = lv_label_create(button);
   lv_obj_set_style_text_font(icon, popup_layout::font24(), 0);
-  lv_obj_set_style_text_color(icon, lv_color_white(), 0);
+  lv_obj_set_style_text_color(icon, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_text(icon, increase ? "+" : "-");
   lv_obj_align(icon, increase ? LV_ALIGN_RIGHT_MID : LV_ALIGN_LEFT_MID,
                popup_layout::scale(increase ? -16 : 16), 0);
@@ -661,8 +662,8 @@ void style_roller(lv_obj_t* roller) {
   lv_obj_set_style_bg_opa(roller, LV_OPA_TRANSP, LV_PART_MAIN);
   lv_obj_set_style_text_font(roller, popup_layout::font24(), LV_PART_MAIN);
   lv_obj_set_style_text_font(roller, popup_layout::font24(), LV_PART_SELECTED);
-  lv_obj_set_style_text_color(roller, lv_color_white(), LV_PART_MAIN);
-  lv_obj_set_style_text_color(roller, lv_color_white(), LV_PART_SELECTED);
+  lv_obj_set_style_text_color(roller, lv_color_hex(ui_theme::text()), LV_PART_MAIN);
+  lv_obj_set_style_text_color(roller, lv_color_hex(ui_theme::text()), LV_PART_SELECTED);
   lv_obj_set_style_bg_opa(roller, LV_OPA_TRANSP, LV_PART_SELECTED);
   lv_obj_set_style_text_line_space(roller, popup_layout::scale(8), LV_PART_MAIN);
   lv_obj_set_style_clip_corner(roller, true, 0);
@@ -673,7 +674,7 @@ void style_roller(lv_obj_t* roller) {
 
 void apply_control_colors(EditableControl* c) {
   const lv_color_t base = lv_obj_get_style_bg_color(c->card, LV_PART_MAIN);
-  const lv_color_t icon = c->icon ? lv_obj_get_style_text_color(c->icon, LV_PART_MAIN) : lv_color_white();
+  const lv_color_t icon = c->icon ? lv_obj_get_style_text_color(c->icon, LV_PART_MAIN) : lv_color_hex(ui_theme::text());
   lv_color_t fill;
   lv_opa_t opa;
   popup_nav_style::fill(base, icon, fill, opa);
@@ -695,7 +696,7 @@ void apply_control_colors(EditableControl* c) {
   // the white mixed toward the card (0xBBBBBB on the default 0x2A2A2A card).
   if (c->apply) {
     lv_obj_set_style_text_color(c->apply, base, 0);
-    lv_obj_set_style_bg_color(c->apply, lv_color_mix(base, lv_color_white(), 81), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(c->apply, lv_color_mix(base, lv_color_hex(ui_theme::icon()), 81), LV_STATE_PRESSED);
   }
   editable_colors::surface(c->number_box, c->colors);
   editable_colors::surface(c->clock_box, c->colors);
@@ -798,7 +799,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t
   c->field = lv_label_create(c->number_box);
   lv_label_set_long_mode(c->field, LV_LABEL_LONG_DOT);
   lv_obj_set_style_text_font(c->field, popup_layout::font28(), 0);
-  lv_obj_set_style_text_color(c->field, lv_color_white(), 0);
+  lv_obj_set_style_text_color(c->field, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_text_align(c->field, LV_TEXT_ALIGN_CENTER, 0);
   c->up = number_step_button(c->number_box, true, c); c->down = number_step_button(c->number_box, false, c);
 
@@ -813,7 +814,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t
     c->separators[i] = lv_obj_create(c->clock_box); lv_obj_remove_style_all(c->separators[i]);
     auto* colon = lv_label_create(c->separators[i]); lv_label_set_text(colon, ":");
     lv_obj_set_style_text_font(colon, popup_layout::font24(), 0);
-    lv_obj_set_style_text_color(colon, lv_color_white(), 0); lv_obj_center(colon);
+    lv_obj_set_style_text_color(colon, lv_color_hex(ui_theme::text()), 0); lv_obj_center(colon);
   }
   for (int i = 0; i < 6; ++i) {
     auto& field = c->fields[i]; field.box = lv_obj_create(i < 3 ? row : c->clock_box); lv_obj_remove_style_all(field.box);
@@ -844,7 +845,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t
     lv_obj_set_style_border_width(field.spinbox, 0, 0);
     lv_obj_set_style_pad_all(field.spinbox, 0, 0);
     lv_obj_set_style_text_font(field.spinbox, popup_layout::font24(), 0);
-    lv_obj_set_style_text_color(field.spinbox, lv_color_white(), 0);
+    lv_obj_set_style_text_color(field.spinbox, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_text_align(field.spinbox, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_bg_opa(field.spinbox, LV_OPA_TRANSP, LV_PART_CURSOR);
     lv_obj_set_style_border_opa(field.spinbox, LV_OPA_TRANSP, LV_PART_CURSOR);
@@ -854,7 +855,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t
     }
   }
   c->apply = lv_button_create(row);
-  lv_obj_set_style_bg_color(c->apply, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(c->apply, lv_color_hex(ui_theme::icon()), 0);
   lv_obj_set_style_text_color(c->apply, lv_color_hex(0x2A2A2A), 0);
   lv_obj_set_style_bg_color(c->apply, lv_color_hex(0xBBBBBB), LV_STATE_PRESSED);
   ui_surface_style::apply_radius(c->apply, popup_layout::scale(18), 0);
@@ -879,7 +880,7 @@ EditableControl* editable_control_create(lv_obj_t* row, lv_obj_t* card, lv_obj_t
   c->status = lv_label_create(row); lv_obj_set_width(c->status, LV_PCT(58));
   lv_label_set_long_mode(c->status, LV_LABEL_LONG_DOT);
   lv_obj_set_style_text_font(c->status, popup_layout::font20(), 0);
-  lv_obj_set_style_text_color(c->status, lv_color_white(), 0);
+  lv_obj_set_style_text_color(c->status, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_text_align(c->status, LV_TEXT_ALIGN_RIGHT, 0);
   for (auto* obj : {c->slider, c->apply, c->dropdown}) lv_obj_add_event_cb(obj, input_event, LV_EVENT_ALL, c);
   apply_control_colors(c);

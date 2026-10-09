@@ -54,7 +54,7 @@ struct ClimatePopupInit {
   bool has_target_humidity = false;
   bool has_target_range = false;
   // The opening tile's current background, including a rules tint; 0 means
-  // popup_surface::kDefaultCard. Only openings apply it, state updates keep
+  // popup_surface::default_card(). Only openings apply it, state updates keep
   // the color of the last opening.
   uint32_t bg_color = 0;
 };

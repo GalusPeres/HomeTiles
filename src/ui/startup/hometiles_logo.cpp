@@ -1,5 +1,9 @@
 #include "src/ui/startup/hometiles_logo.h"
 
+#include <string.h>
+
+#include "src/ui/shared/ui_theme.h"
+
 // Generated from docs/images/logo.svg (viewBox 0 0 48 48), rendered at 144x144
 // with 8x supersampling and box-filter downsampling for clean antialiased
 // edges. Pixel format matches lv_color32_t (blue, green, red, alpha bytes),
@@ -4166,3 +4170,27 @@ const lv_image_dsc_t hometiles_logo_dsc = {
     nullptr,
     nullptr,
 };
+
+const lv_image_dsc_t* hometiles_logo_for_theme() {
+  if (!ui_theme::light()) return &hometiles_logo_dsc;
+  static lv_image_dsc_t light_dsc;
+  static uint8_t* pixels = nullptr;
+  if (!pixels) {
+    pixels = static_cast<uint8_t*>(lv_malloc(sizeof(hometiles_logo_map)));
+    if (!pixels) return &hometiles_logo_dsc;
+    memcpy(pixels, hometiles_logo_map, sizeof(hometiles_logo_map));
+    // ARGB8888 bytes are blue, green, red, alpha: only pure white pixels
+    // (the tiles and their antialiased edges) change, alpha stays.
+    const uint32_t ink = ui_theme::text();
+    for (size_t i = 0; i + 3 < sizeof(hometiles_logo_map); i += 4) {
+      if (pixels[i] == 0xFF && pixels[i + 1] == 0xFF && pixels[i + 2] == 0xFF) {
+        pixels[i] = ink & 0xFF;
+        pixels[i + 1] = (ink >> 8) & 0xFF;
+        pixels[i + 2] = (ink >> 16) & 0xFF;
+      }
+    }
+    light_dsc = hometiles_logo_dsc;
+    light_dsc.data = pixels;
+  }
+  return &light_dsc;
+}

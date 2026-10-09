@@ -195,11 +195,13 @@ constexpr uint32_t kLocalizationColor = 0xAB47BC;
 constexpr uint32_t kSystemColor = 0x26A69A;
 // The gear's circle: a neutral grey tile.
 constexpr uint32_t kGearColor = 0x9E9E9E;
-// States (mockup GOOD, WARN), errors, the danger button, text on accent
-// buttons.
-constexpr uint32_t kGoodColor = 0x51CF66;
-constexpr uint32_t kWarnColor = 0xFFC04D;
-constexpr uint32_t kErrorColor = 0xFF6B6B;
+// States (mockup GOOD, WARN) and errors as text and icons. The light theme
+// takes the dark tone of each color (like Material 3; OKLCH L 0.58), so they
+// read on white.
+inline uint32_t good_color() { return ui_theme::light() ? 0x019432 : 0x51CF66; }
+inline uint32_t warn_color() { return ui_theme::light() ? 0xA07004 : 0xFFC04D; }
+inline uint32_t error_color() { return ui_theme::light() ? 0xD03F45 : 0xFF6B6B; }
+// The danger button and the text on accent buttons.
 constexpr uint32_t kDangerColor = 0xE5534B;
 constexpr uint32_t kAccentText = 0x1A1A1A;
 // Product names stay as they are in every language.
@@ -305,7 +307,7 @@ inline Tone tone(uint32_t card, uint32_t color) {
   const bool hue = tile_tint::has_hue(color);
   const uint32_t circle_card = hue ? from_icon_card(card, color) : card;
   const tone_color::Fill fill = tone_color::fill(circle_card, color, hue, ui_surface_style::icon_glow_percent());
-  return {fill.disc, fill.control_color, hue ? tone_color::readable_icon(color) : 0xFFFFFF};
+  return {fill.disc, fill.control_color, hue ? tone_color::readable_icon(color) : ui_theme::text()};
 }
 
 }  // namespace settings_style

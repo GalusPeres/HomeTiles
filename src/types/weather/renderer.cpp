@@ -16,6 +16,7 @@
 #include <string.h>
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
+#include "src/ui/shared/ui_theme.h"
 
 struct WeatherEventData {
   String entity_id;
@@ -107,14 +108,14 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
   if (!location.length()) location = "--";
 
   lv_obj_t* icon_label = lv_label_create(card);
-  set_label_style(icon_label, lv_color_white(), FONT_MDI_ICONS);
+  set_label_style(icon_label, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
   weather_icons::style_label(icon_label);
   lv_obj_align(icon_label, LV_ALIGN_TOP_LEFT,
                tile_layout::scale_480(-8),
                tile_layout::scale_480(-8));
 
   lv_obj_t* location_label = lv_label_create(card);
-  set_label_style(location_label, lv_color_white(),
+  set_label_style(location_label, lv_color_hex(ui_theme::text()),
                   tile_layout::header_title_font());
   lv_label_set_long_mode(location_label, LV_LABEL_LONG_DOT);
   lv_obj_set_width(location_label, LV_PCT(70));
@@ -170,7 +171,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
     const lv_font_t* condition_font = weather_tile::value_font();
 
     condition_label = lv_label_create(value_row);
-    set_label_style(condition_label, lv_color_white(), condition_font);
+    set_label_style(condition_label, lv_color_hex(ui_theme::text()), condition_font);
     lv_label_set_long_mode(condition_label, LV_LABEL_LONG_DOT);
     lv_obj_set_height(condition_label, lv_font_get_line_height(condition_font));
     lv_obj_set_width(condition_label, LV_SIZE_CONTENT);
@@ -180,14 +181,14 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
     lv_obj_add_flag(condition_label, LV_OBJ_FLAG_HIDDEN);
 
     sep_label = lv_label_create(value_row);
-    set_label_style(sep_label, lv_color_hex(0xB0B0B0),
+    set_label_style(sep_label, lv_color_hex(ui_theme::text()),
                     weather_tile::value_font());
     lv_label_set_text(sep_label, "|");
     lv_obj_add_flag(sep_label, LV_OBJ_FLAG_HIDDEN);
   }
 
   temp_label = lv_label_create(value_row);
-  set_label_style(temp_label, lv_color_white(), weather_tile::value_font());
+  set_label_style(temp_label, lv_color_hex(ui_theme::text()), weather_tile::value_font());
   lv_label_set_text(temp_label, "--");
 
   if (!show_forecast) {
@@ -252,7 +253,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
                        0);
 
         lv_obj_t* day = lv_label_create(col);
-        set_label_style(day, lv_color_white(), weather_tile::forecast_day_font());
+        set_label_style(day, lv_color_hex(ui_theme::text()), weather_tile::forecast_day_font());
         lv_label_set_long_mode(day, LV_LABEL_LONG_DOT);
         lv_obj_set_width(day, LV_PCT(100));
         lv_obj_set_style_text_align(day, LV_TEXT_ALIGN_CENTER, 0);
@@ -260,7 +261,7 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
         lv_obj_set_pos(day, 0, weather_tile::kForecastDayTop);
 
         lv_obj_t* icon = lv_label_create(col);
-        set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
+        set_label_style(icon, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
         weather_icons::style_label(icon);
         lv_obj_set_width(icon, LV_PCT(100));
         lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
@@ -269,25 +270,25 @@ lv_obj_t* render_weather_tile(lv_obj_t* parent, int col, int row, const Tile& ti
         lv_obj_set_pos(icon, 0, weather_tile::kForecastIconTop);
 
         lv_obj_t* hi_val = lv_label_create(col);
-        set_label_style(hi_val, lv_color_white(), weather_tile::forecast_font());
+        set_label_style(hi_val, lv_color_hex(ui_theme::text()), weather_tile::forecast_font());
         lv_obj_set_style_text_align(hi_val, LV_TEXT_ALIGN_LEFT, 0);
         lv_label_set_text(hi_val, "");
         lv_obj_add_flag(hi_val, LV_OBJ_FLAG_HIDDEN);
 
         lv_obj_t* hi_unit = lv_label_create(col);
-        set_label_style(hi_unit, lv_color_white(), weather_tile::unit_font());
+        set_label_style(hi_unit, lv_color_hex(ui_theme::text()), weather_tile::unit_font());
         lv_obj_set_style_text_align(hi_unit, LV_TEXT_ALIGN_LEFT, 0);
         lv_label_set_text(hi_unit, "");
         lv_obj_add_flag(hi_unit, LV_OBJ_FLAG_HIDDEN);
 
         lv_obj_t* lo_val = lv_label_create(col);
-        set_label_style(lo_val, lv_color_white(), weather_tile::forecast_font());
+        set_label_style(lo_val, lv_color_hex(ui_theme::text()), weather_tile::forecast_font());
         lv_obj_set_style_text_align(lo_val, LV_TEXT_ALIGN_LEFT, 0);
         lv_label_set_text(lo_val, "");
         lv_obj_add_flag(lo_val, LV_OBJ_FLAG_HIDDEN);
 
         lv_obj_t* lo_unit = lv_label_create(col);
-        set_label_style(lo_unit, lv_color_white(), weather_tile::unit_font());
+        set_label_style(lo_unit, lv_color_hex(ui_theme::text()), weather_tile::unit_font());
         lv_obj_set_style_text_align(lo_unit, LV_TEXT_ALIGN_LEFT, 0);
         lv_label_set_text(lo_unit, "");
         lv_obj_add_flag(lo_unit, LV_OBJ_FLAG_HIDDEN);

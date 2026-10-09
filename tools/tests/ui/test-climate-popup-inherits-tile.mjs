@@ -31,7 +31,7 @@ assert.match(renderer,
 // Init field and context color.
 assert.ok(header.includes('  uint32_t bg_color = 0;\n};'), 'ClimatePopupInit carries bg_color (0 = default card)');
 assert.ok(popup.includes('#include "src/ui/popups/popup_surface.h"'));
-assert.ok(popup.includes('  uint32_t bg_color = popup_surface::kDefaultCard;'),
+assert.ok(popup.includes('  uint32_t bg_color = popup_surface::default_card();'),
   'The context keeps the color of the last opening');
 
 // First build: the card and every derived surface use the opening color.
@@ -99,7 +99,7 @@ for (const marker of [
   'const lv_color_t cut_out = popup_surface::card(ctx->bg_color);',
   'popup_surface::lighter(ctx->bg_color, kMenuSeparatorStep), 0);',
   'lv_obj_set_style_bg_opa(separator_line, LV_OPA_COVER, 0);',
-  'label, selected ? cut_out : lv_color_white(), 0);',
+  'label, selected ? cut_out : lv_color_hex(ui_theme::text()), 0);',
 ]) assert.ok(menu.includes(marker), `open_control_menu: ${marker}`);
 
 // The former fixed greys and the hardcoded card color are gone.

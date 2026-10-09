@@ -57,8 +57,8 @@ int main() {
       }
       // Off: the grey off icon never tints; tile (the card falls back to the
       // global color) and popup show the neutral step and the same off thumb.
-      const tone_color::Fill tile = tone_color::fill(global, tone_color::kOffIcon, false, glow);
-      const tone_color::Fill popup = tone_color::fill(global, tone_color::kOffIcon, false, glow);
+      const tone_color::Fill tile = tone_color::fill(global, tone_color::off_icon(), false, glow);
+      const tone_color::Fill popup = tone_color::fill(global, tone_color::off_icon(), false, glow);
       std::printf("off %06X %u %06X %06X %06X %06X\n", static_cast<unsigned>(global), static_cast<unsigned>(glow),
                   static_cast<unsigned>(tile.control_color), static_cast<unsigned>(popup.control_color),
                   static_cast<unsigned>(tone_color::switch_thumb_off(tile.control_color)),
@@ -89,19 +89,18 @@ if (output !== null) {
 
 // One set of functions on both sides.
 const tone = read('src/ui/shared/tone_color.h');
-assert.ok(tone.includes('inline constexpr uint32_t kOffIcon = 0xB0B0B0;') &&
+assert.ok(tone.includes('inline uint32_t off_icon() { return ui_theme::icon_off(); }') &&
   tone.includes('inline uint32_t switch_thumb_off(uint32_t track) { return lifted(track, track, false, kThumbStep); }'));
 const tileSwitch = read('src/types/switch/renderer.cpp');
-assert.ok(tileSwitch.includes('constexpr uint32_t kIconOff = tone_color::kOffIcon;') &&
-  tileSwitch.includes('view->thumb_off = tone_color::switch_thumb_off(base);') &&
-  tileSwitch.includes('symbol_color = lv_color_hex(kIconOff);'), 'Tile switch: off thumb and grey off symbol');
+assert.ok(tileSwitch.includes('view->thumb_off = tone_color::switch_thumb_off(base);') &&
+  tileSwitch.includes('symbol_color = lv_color_hex(tone_color::off_icon());'), 'Tile switch: off thumb and grey off symbol');
 const popup = read('src/ui/popups/light/light_popup.cpp');
 assert.ok(popup.includes('popup_nav_style::fill(popup_surface::card(ctx->card_bg), lv_color_hex(header_icon_rgb(ctx, icon_rgb)), color, opa);'),
   'Light popup controls use the shell control fill (the header circle color)');
 assert.equal((popup.match(/control_fill\(ctx, icon_rgb, track, track_opa\);\n\s*(?:const lv_color_t thumb_color =|lv_obj_set_style_bg_color\(ctx->val_slider, track, LV_PART_MAIN\);)/g) || []).length, 2,
   'Switch and brightness track take the control fill');
 assert.ok(popup.includes(': lv_color_hex(tone_color::switch_thumb_off(lv_color_to_u32(track) & 0xFFFFFF));') &&
-  popup.includes('ctx->is_on ? brightness_dash_color(ctx) : lv_color_hex(tone_color::kOffIcon), 0);'),
+  popup.includes('ctx->is_on ? brightness_dash_color(ctx) : lv_color_hex(tone_color::off_icon()), 0);'),
   'Light popup switch: off thumb a step above the track, grey off symbol, on symbol in the tile card color');
 assert.ok(popup.includes('const lv_opa_t bg_opa = enabled && (active || pressed) ? fill_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);') &&
   popup.includes('popup_nav_style::no_press_filter(button, selector);'),

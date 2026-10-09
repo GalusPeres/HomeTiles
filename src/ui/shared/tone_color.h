@@ -6,6 +6,7 @@
 #include "src/core/config/icon_glow.h"
 #include "src/core/config/tile_color.h"
 #include "src/tiles/config/tile_tint.h"
+#include "src/ui/shared/ui_theme.h"
 
 // Colors of the icon circle, the controls and the icon itself, derived from
 // the icon color in fixed steps of perceived lightness (OKLCH L), like the
@@ -128,6 +129,9 @@ inline uint32_t blend(uint32_t under, uint32_t over, uint8_t opa) {
 // neutral grey only on a grey tile).
 inline uint32_t lifted(uint32_t card, uint32_t icon, bool tinted, float step) {
   const Oklch base = from_rgb(card);
+  // The light theme steps down from its light cards, by 5/6 of the step
+  // (light mockup: -0.05 L for +0.06 L).
+  if (ui_theme::light()) step = -step * 5.0f / 6.0f;
   if (!tinted) return to_rgb(base.L + step, base.C, base.h);
   const Oklch seed = from_rgb(icon);
   return to_rgb(base.L + step, seed.C * kCircleChroma, seed.h);
@@ -246,7 +250,7 @@ inline constexpr uint8_t kReferenceTint = 20;
 // preview): its track is the control fill; off, the thumb is one circle step
 // above the track in the track's own color and its symbol has the grey of an
 // off icon.
-inline constexpr uint32_t kOffIcon = 0xB0B0B0;
+inline uint32_t off_icon() { return ui_theme::icon_off(); }
 inline constexpr float kThumbStep = 0.06f;
 inline uint32_t switch_thumb_off(uint32_t track) { return lifted(track, track, false, kThumbStep); }
 
@@ -267,12 +271,24 @@ inline uint32_t readable_icon(uint32_t icon) {
     if (cached_icon[i] == icon) return cached_shown[i];
   }
   const bool tinted = tile_tint::has_hue(icon);
-  const uint32_t card =
-      tinted ? tile_tint::background(tile_color::kDefault, icon, kReferenceTint) : tile_color::kDefault;
+  const bool light = ui_theme::light();
+  const uint32_t base = light ? ui_theme::card() : tile_color::kDefault;
+  const uint32_t card = tinted ? tile_tint::background(base, icon, kReferenceTint) : base;
   const uint32_t circle = lifted(card, icon, tinted, icon_glow::kDefault * kStepPerPercent);
   const Oklch seed = from_rgb(icon);
-  const float minimum = from_rgb(circle).L + kIconMinStep;
-  const uint32_t shown = seed.L >= minimum ? icon : to_rgb(minimum, seed.C, seed.h);
+  uint32_t shown = icon;
+  if (!light) {
+    const float minimum = from_rgb(circle).L + kIconMinStep;
+    if (seed.L < minimum) shown = to_rgb(minimum, seed.C, seed.h);
+  } else if (!tinted && (seed.L > 0.9f || icon == ui_theme::text())) {
+    // The dark theme's white icon is the light theme's icon grey.
+    shown = ui_theme::icon();
+  } else {
+    // Mirrored: a light icon is lowered until it sits kIconMinStep below
+    // its circle.
+    const float maximum = from_rgb(circle).L - kIconMinStep;
+    if (seed.L > maximum) shown = to_rgb(maximum, seed.C, seed.h);
+  }
   cached_icon[next] = icon;
   cached_shown[next] = shown;
   next = static_cast<uint8_t>((next + 1) % 4);

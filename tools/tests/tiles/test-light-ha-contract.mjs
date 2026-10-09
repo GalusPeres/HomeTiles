@@ -16,7 +16,7 @@ for (const marker of [
   'if (normalized_state == "unavailable")',
   'out.available = false;',
   'init.available = state.available;',
-  'lv_color_hex(state.available ? icon_rgb : kIconOff)',
+  'lv_color_hex(state.available ? icon_rgb : tone_color::off_icon())',
   'view->available = state.available;',
   'if (!view->available) {'
 ]) {

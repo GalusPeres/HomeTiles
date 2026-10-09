@@ -20,6 +20,7 @@
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/shared/command_pacer.h"
 #include "src/ui/shared/ui_pulse.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -34,7 +35,8 @@ struct CoverEventData {
 // included, and the second for unknown and unavailable (stateColorCss), like
 // the Cover popup's sliders.
 constexpr uint32_t kCoverActive = 0x926BC7;
-constexpr uint32_t kCoverInactive = 0x9E9E9E;
+// A closed cover: the resting grey of the theme (ui_theme::icon_rest).
+inline uint32_t cover_inactive() { return ui_theme::icon_rest(); }
 
 struct CoverUpdate {
   GridType grid_type = GridType::TAB0;
@@ -254,7 +256,7 @@ bool cover_icon_active(const CoverState& state) {
 }
 
 uint32_t cover_icon_color(const CoverState& state) {
-  return cover_icon_active(state) ? kCoverActive : kCoverInactive;
+  return cover_icon_active(state) ? kCoverActive : cover_inactive();
 }
 
 String cover_value_text(const CoverState& state) {
@@ -662,7 +664,7 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
 
   if (!header && tile.title.length()) {
     widget.title_label = lv_label_create(card);
-    set_label_style(widget.title_label, lv_color_white(),
+    set_label_style(widget.title_label, lv_color_hex(ui_theme::text()),
                     tile_layout::header_title_font());
     lv_obj_set_width(widget.title_label, LV_PCT(70));
     lv_obj_set_style_text_align(widget.title_label, LV_TEXT_ALIGN_RIGHT, 0);
@@ -679,7 +681,7 @@ lv_obj_t* render_cover_tile(lv_obj_t* parent, int col, int row,
     // Same value block as a Sensor tile, but with the HA Cover state and
     // position on two lines (for example "Open\n40%").
     widget.value_label = lv_label_create(card);
-    set_label_style(widget.value_label, lv_color_white(),
+    set_label_style(widget.value_label, lv_color_hex(ui_theme::text()),
                     tile_layout::header_title_font());
     lv_label_set_long_mode(widget.value_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(widget.value_label, LV_PCT(100));

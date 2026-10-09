@@ -23,6 +23,7 @@
 // LVGL 9.5 no longer exports lv_image_cache_drop() through lvgl.h;
 // its declaration is only in the instance header.
 #include <misc/cache/instance/lv_image_cache.h>
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -43,7 +44,7 @@ struct MediaPopupEventData {
   String entity_id;
   String title;
   String icon_name;
-  uint32_t bg_color = 0x2A2A2A;
+  uint32_t bg_color = 0;  // 0: the popup takes its default card
   GridType grid_type = GridType::TAB0;
   uint8_t grid_index = 0;
 };
@@ -231,11 +232,11 @@ static lv_obj_t* create_media_control_button(lv_obj_t* parent,
   // An unavailable player disables the controls; they dim like the Cover
   // popup's disabled sliders.
   lv_obj_set_style_opa(btn, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
-  lv_obj_set_style_bg_color(btn, primary ? lv_color_white() : lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_color(btn, primary ? lv_color_hex(ui_theme::icon()) : lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_bg_opa(btn, primary ? LV_OPA_COVER : LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
   if (primary) {
     // Play keeps its white circle.
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0xD8D8D8), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(ui_theme::text_soft()), LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
   } else {
     // Previous and next press like the popup controls
@@ -252,7 +253,7 @@ static lv_obj_t* create_media_control_button(lv_obj_t* parent,
 
   lv_obj_t* label = lv_label_create(btn);
   if (label) {
-    set_label_style(label, primary ? lv_color_hex(tile_bg_color) : lv_color_white(), FONT_MDI_ICONS);
+    set_label_style(label, primary ? lv_color_hex(tile_bg_color) : lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
     String icon_char = getMdiChar(icon_name);
     lv_label_set_text(label, icon_char.length() ? icon_char.c_str() : "");
     lv_obj_align(label, LV_ALIGN_CENTER, 0, primary ? 0 : 0);
@@ -377,7 +378,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
 
   lv_obj_t* icon_label = lv_label_create(card);
   if (icon_label) {
-    set_label_style(icon_label, lv_color_white(), FONT_MDI_ICONS);
+    set_label_style(icon_label, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
     String icon_char = icon_name.length() ? getMdiChar(icon_name) : "";
     if (icon_char.length()) {
       lv_label_set_text(icon_label, icon_char.c_str());
@@ -404,7 +405,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
 
   lv_obj_t* title_label = lv_label_create(card);
   if (title_label) {
-    set_label_style(title_label, lv_color_white(),
+    set_label_style(title_label, lv_color_hex(ui_theme::text()),
                     tile_layout::header_title_font());
     lv_label_set_long_mode(title_label, LV_LABEL_LONG_DOT);
     lv_obj_set_width(title_label, LV_PCT(70));
@@ -423,7 +424,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
 
   lv_obj_t* media_title = lv_label_create(card);
   if (media_title) {
-    set_label_style(media_title, lv_color_white(), media_font);
+    set_label_style(media_title, lv_color_hex(ui_theme::text()), media_font);
     lv_label_set_long_mode(media_title, LV_LABEL_LONG_SCROLL);
     apply_media_text_scroll_style(media_title);
     lv_obj_set_width(media_title, LV_PCT(82));
@@ -438,7 +439,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
 
   lv_obj_t* subtitle = lv_label_create(card);
   if (subtitle) {
-    set_label_style(subtitle, lv_color_hex(0xD8DEE9), media_subtitle_font);
+    set_label_style(subtitle, lv_color_hex(ui_theme::text_secondary()), media_subtitle_font);
     lv_label_set_long_mode(subtitle, LV_LABEL_LONG_SCROLL);
     apply_media_text_scroll_style(subtitle);
     lv_obj_set_width(subtitle, LV_PCT(82));

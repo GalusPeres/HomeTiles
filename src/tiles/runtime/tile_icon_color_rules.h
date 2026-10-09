@@ -2,6 +2,7 @@
 
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace tile_icon_color_rules {
 
@@ -31,7 +32,7 @@ inline void apply(lv_obj_t* icon, const char* record, bool known,
 // the icon takes the tile's fixed icon color, else stays white. Called once
 // when the tile is built; the disc reads the color when its options apply.
 inline void apply_fixed(lv_obj_t* icon, const char* record) {
-  apply(icon, record, true, "", nullptr, lv_color_white());
+  apply(icon, record, true, "", nullptr, lv_color_hex(ui_theme::text()));
 }
 
 }  // namespace tile_icon_color_rules

@@ -5,6 +5,7 @@
 
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/ui/tabs/settings/settings_parts.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace settings_keyboard {
 namespace {
@@ -266,7 +267,7 @@ void style_variant(lv_obj_t* cell, bool selected) {
   lv_obj_set_style_bg_color(cell, lv_color_hex(selected ? g_kb.accent : g_kb.colors.button), 0);
   lv_obj_t* label = lv_obj_get_child(cell, 0);
   if (label) {
-    lv_obj_set_style_text_color(label, lv_color_hex(selected ? settings_style::kAccentText : 0xFFFFFF), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(selected ? settings_style::kAccentText : ui_theme::text()), 0);
   }
 }
 
@@ -477,7 +478,7 @@ lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, Acce
     for (int i = 0; i < 10; ++i) {
       if (row == 2 && i >= 7) break;
       lv_obj_t* key = make_key(colors.button, colors.pressed);
-      key_label(key, "", font, 0xFFFFFF);
+      key_label(key, "", font, ui_theme::text());
       for (lv_event_code_t code : {LV_EVENT_SHORT_CLICKED, LV_EVENT_LONG_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED,
                                    LV_EVENT_PRESS_LOST}) {
         lv_obj_add_event_cb(key, char_key_cb, code, nullptr);
@@ -487,10 +488,10 @@ lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, Acce
   }
   // Shift and Backspace beside row 3; ?123, space, dot and check below.
   g_kb.shift_key = special_key(kShift, colors.group, colors.button, 2, 0, 1.5f);
-  icon_label(g_kb.shift_key, "apple-keyboard-shift", 0xFFFFFF);
-  key_label(g_kb.shift_key, "#+=", font, 0xFFFFFF);
+  icon_label(g_kb.shift_key, "apple-keyboard-shift", ui_theme::text());
+  key_label(g_kb.shift_key, "#+=", font, ui_theme::text());
   lv_obj_t* backspace = special_key(kBackspace, colors.group, colors.button, 2, 8.5f, 1.5f);
-  icon_label(backspace, "backspace-outline", 0xFFFFFF);
+  icon_label(backspace, "backspace-outline", ui_theme::text());
   // The mode key's text is smaller (mockup: 20 px class-scaled, 16 px on the 480 class).
 #if defined(DEVICE_LAYOUT_480X480)
   const lv_font_t* mode_font = settings_style::row_font();
@@ -498,13 +499,13 @@ lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, Acce
   const lv_font_t* mode_font = settings_style::small_font();
 #endif
   g_kb.symbols_key = special_key(kSymbols, colors.group, colors.button, 3, 0, 1.5f);
-  key_label(g_kb.symbols_key, "?123", mode_font, 0xFFFFFF);
+  key_label(g_kb.symbols_key, "?123", mode_font, ui_theme::text());
   // The accent key beside it: the language's accented letters (or ABC back).
   g_kb.accent_key = special_key(kAccentKey, colors.group, colors.button, 3, 1.5f, 1);
-  key_label(g_kb.accent_key, "", mode_font, 0xFFFFFF);
+  key_label(g_kb.accent_key, "", mode_font, ui_theme::text());
   special_key(kSpace, colors.button, colors.pressed, 3, 2.5f, 5);
   lv_obj_t* dot = special_key(kDot, colors.button, colors.pressed, 3, 7.5f, 1);
-  key_label(dot, ".", font, 0xFFFFFF);
+  key_label(dot, ".", font, ui_theme::text());
   lv_obj_t* ok = special_key(kOk, g_kb.accent, lv_color_to_u32(lv_color_lighten(lv_color_hex(g_kb.accent), 31)) & 0xFFFFFF,
                              3, 8.5f, 1.5f);
   icon_label(ok, "check-bold", settings_style::kAccentText);

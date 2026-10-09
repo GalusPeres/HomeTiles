@@ -91,6 +91,9 @@ struct DeviceConfig {
   uint8_t layout = 0;
   // With a bar layout: the gear in Home's head (Settings tile option).
   bool head_gear = false;
+  // The UI theme (ui_theme.h): 0 dark, 1 light. Read at boot; a change
+  // applies after a restart.
+  uint8_t theme = 0;
   // Glow strength of colored icon discs in percent (icon_glow.h).
   uint8_t icon_glow = icon_glow::kDefault;
   // Background of tiles without their own color (and of reset/new tiles).
@@ -153,6 +156,7 @@ public:
   bool saveTileBorders(bool enabled);
   bool saveLayout(uint8_t layout);
   bool saveHeadGear(bool enabled);
+  bool saveTheme(uint8_t theme);
   bool saveTileRadius(uint16_t radius);
   bool saveIconDiscs(bool enabled);
   bool saveIconGlow(uint8_t percent);

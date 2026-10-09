@@ -3,6 +3,8 @@
 #include <math.h>
 #include <stdint.h>
 
+#include "src/ui/shared/ui_theme.h"
+
 // Tile background tint of the rule layer (tile_icon_colors.h "tile=NN"): the
 // tile color mixed with the rule color at NN percent, then darkened in 5 %
 // steps until white text keeps a WCAG contrast of at least 4.5:1. The Web
@@ -41,7 +43,16 @@ inline uint32_t scale(uint32_t rgb, unsigned percent) {
 }
 
 inline uint32_t background(uint32_t base, uint32_t color, unsigned percent) {
-  uint32_t out = mix(base & 0xFFFFFF, color & 0xFFFFFF, percent > 100 ? 100 : percent);
+  if (percent > 100) percent = 100;
+  if (ui_theme::light()) {
+    // Light theme: the tint on the light card at 4/5 of its strength (tile
+    // color "From icon" 20 % = 16 %). Its text is dark, so the tile is never
+    // darkened for white text; a default grey base is the light card.
+    const uint32_t rgb = base & 0xFFFFFF;
+    const bool grey_default = rgb == 0x1A1A1A || rgb == 0x2A2A2A || rgb == 0x222222;
+    return mix(grey_default ? ui_theme::card() : rgb, color & 0xFFFFFF, percent * 4 / 5);
+  }
+  uint32_t out = mix(base & 0xFFFFFF, color & 0xFFFFFF, percent);
   for (int i = 0; i < 40 && white_contrast(out) < 4.5; ++i) out = scale(out, 95);
   return out;
 }

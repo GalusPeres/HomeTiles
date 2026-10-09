@@ -62,6 +62,7 @@
 // LVGL 9.5 no longer exports lv_image_cache_drop() through lvgl.h;
 // its declaration is only in the instance header.
 #include <misc/cache/instance/lv_image_cache.h>
+#include "src/ui/shared/ui_theme.h"
 
 /* === Layout constants === */
 
@@ -1751,7 +1752,7 @@ static bool switch_state_has_update(const SwitchState& state) {
 // color of CCT-only lights, else amber) while on, grey while off or
 // unavailable.
 uint32_t switch_state_icon_color(const SwitchState& state) {
-  if (!state.available || (state.has_state && !state.is_on)) return 0xB0B0B0;
+  if (!state.available || (state.has_state && !state.is_on)) return ui_theme::icon_off();
   if (state.supports_temperature && !state.supports_color && state.has_color_temp) {
     return lv_color_to_u32(light_color_from_temperature_kelvin(state.color_temp_kelvin)) & 0xFFFFFF;
   }
@@ -2329,7 +2330,7 @@ String climate_visual_icon(
 }
 
 uint32_t climate_visual_color(const ClimateState& state) {
-  if (!state.available) return 0x9E9E9E;
+  if (!state.available) return ui_theme::icon_inactive();
   return climate_visuals::state_foreground_color(
       state.hvac_mode, state.hvac_action);
 }
@@ -2598,7 +2599,7 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
         lv_label_set_text(widgets.icon_label, iconChar.c_str());
         if (colored_icons) {
           const uint32_t tint = weather_icons::tint(icon_name);
-          tile_icon_disc::set_icon_color(widgets.icon_label, lv_color_hex(tint ? tint : 0xFFFFFF));
+          tile_icon_disc::set_icon_color(widgets.icon_label, lv_color_hex(tint ? tint : ui_theme::text()));
         }
         tile_icon_disc::set_icon_hidden(widgets.icon_label, false);
       } else {
@@ -2781,7 +2782,7 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
     }
   }
 
-  const lv_color_t forecast_active_color = lv_color_white();
+  const lv_color_t forecast_active_color = lv_color_hex(ui_theme::text());
   const lv_color_t forecast_inactive_color = lv_color_hex(0x7F8BAA);
   for (uint8_t i = 0; i < forecast_limit; ++i) {
     WeatherForecastWidgets& fw = widgets.forecast[i];
@@ -5086,7 +5087,7 @@ void update_sensor_tile_value(GridType grid_type, uint8_t grid_index, const char
     if (tile && tile->icon_colors.length()) {
       tile_icon_color_rules::apply(icon, tile->icon_colors.c_str(),
                                    displayValue != "--", value, nullptr,
-                                   lv_color_white());
+                                   lv_color_hex(ui_theme::text()));
     }
   }
 }

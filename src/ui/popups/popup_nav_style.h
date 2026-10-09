@@ -2,6 +2,7 @@
 
 #include <lvgl.h>
 #include <stdint.h>
+#include "src/ui/shared/ui_theme.h"
 
 // popup_shell.h: the fill of the controls around a popup's header; with
 // `tinted` whether it takes the icon's hue.
@@ -64,7 +65,7 @@ inline void style_toggle(lv_obj_t* btn, lv_obj_t* label, lv_color_t popup, lv_co
     no_press_filter(btn, selector);
   }
   if (label) {
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
   }
 }
@@ -125,7 +126,7 @@ inline void style_slider(lv_obj_t* slider, lv_color_t popup, lv_color_t icon) {
   bool tinted = false;
   fill(popup, icon, color, opa, &tinted);
   set_bg(slider, color, opa, LV_PART_MAIN);
-  set_bg(slider, tinted ? icon : lv_color_white(), LV_OPA_COVER, LV_PART_INDICATOR);
+  set_bg(slider, tinted ? icon : lv_color_hex(ui_theme::text()), LV_OPA_COVER, LV_PART_INDICATOR);
 }
 
 // An info pill (date range, day title): the control fill like a selected
@@ -139,7 +140,7 @@ inline void style_pill(lv_obj_t* pill, lv_obj_t* label, lv_color_t popup, lv_col
     lv_obj_set_style_bg_opa(pill, opa, 0);
   }
   if (label) {
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_text_opa(label, LV_OPA_COVER, 0);
   }
 }

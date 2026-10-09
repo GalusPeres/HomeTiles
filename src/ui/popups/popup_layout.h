@@ -8,6 +8,7 @@
 #include "src/core/display/display_manager.h"
 #include "src/fonts/ui_fonts.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace popup_layout {
 
@@ -393,7 +394,7 @@ inline lv_obj_t* createCloseButton(lv_obj_t* card, lv_event_cb_t handler,
   lv_obj_set_style_transform_width(close_btn, 0, LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_transform_height(close_btn, 0, LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(close_btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(close_btn, lv_color_hex(0xFFFFFF), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(close_btn, lv_color_hex(ui_theme::text()), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(close_btn, LV_OPA_20, LV_STATE_PRESSED);
   lv_obj_set_style_border_opa(close_btn, LV_OPA_TRANSP, 0);
   lv_obj_set_style_outline_opa(close_btn, LV_OPA_TRANSP, 0);
@@ -411,7 +412,7 @@ inline lv_obj_t* createCloseButton(lv_obj_t* card, lv_event_cb_t handler,
   lv_obj_t* close_label = lv_label_create(close_btn);
   lv_obj_set_style_text_font(close_label, FONT_MDI_ICONS, 0);
   applyIconScale(close_label);
-  lv_obj_set_style_text_color(close_label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(close_label, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_text(close_label, getMdiChar("window-close").c_str());
   lv_obj_center(close_label);
   return close_btn;
@@ -441,7 +442,7 @@ inline lv_obj_t* createHeaderIconDisc(lv_obj_t* card) {
   lv_obj_remove_flag(disc, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
   lv_obj_set_size(disc, kHeaderIconDiscSize, kHeaderIconDiscSize);
   lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(disc, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(disc, lv_color_hex(ui_theme::icon()), 0);
   lv_obj_set_style_bg_opa(disc, static_cast<lv_opa_t>(kHeaderIconDiscOpa), 0);
   return disc;
 }

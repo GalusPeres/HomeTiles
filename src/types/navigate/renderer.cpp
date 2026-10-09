@@ -11,6 +11,7 @@
 #include "src/ui/shared/icon_lock_mark.h"
 #include "src/core/config/config_manager.h"
 #include <Arduino.h>
+#include "src/ui/shared/ui_theme.h"
 
 struct NavigateEventData {
   uint8_t target_kind;
@@ -36,7 +37,7 @@ static void lock_mark_event_cb(lv_event_t* event) {
   if (lv_event_get_code(event) != LV_EVENT_DRAW_POST) return;
   lv_obj_t* disc = tile_icon_disc::disc_of(icon);
   lv_obj_t* card = lv_obj_get_parent(disc ? disc : icon);
-  const lv_color_t under = card ? lv_obj_get_style_bg_color(card, LV_PART_MAIN) : lv_color_black();
+  const lv_color_t under = card ? lv_obj_get_style_bg_color(card, LV_PART_MAIN) : lv_color_hex(ui_theme::screen());
   icon_lock_mark::draw(lv_event_get_layer(event), icon, icon_lock_mark::behind(disc, under));
 }
 
@@ -105,7 +106,7 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
   if (has_icon) {
     icon_lbl = lv_label_create(btn);
     if (icon_lbl) {
-      set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
+      set_label_style(icon_lbl, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
       lv_label_set_text(icon_lbl, iconChar.c_str());
       tile_icon_source::apply_initial(icon_lbl, tile);
 
@@ -128,7 +129,7 @@ lv_obj_t* render_navigate_tile(lv_obj_t* parent, int col, int row, const Tile& t
     lv_obj_t* l = lv_label_create(btn);
     title_lbl = l;
     if (l) {
-      set_label_style(l, lv_color_white(), tile_layout::header_title_font());
+      set_label_style(l, lv_color_hex(ui_theme::text()), tile_layout::header_title_font());
       hometiles_title::tile(l, tile.title.c_str(), false);
 
       // Position below the icon, or center when there is no icon.

@@ -50,7 +50,8 @@ assert.match(surface, /g_icon_disc_refresh_pending\.exchange\(false\)[\s\S]*lv_o
 assert.ok(read('src/tiles/runtime/tile_icon_disc.h').includes('ui_surface_style::apply_icon_disc(disc, false, true);'));
 
 // Device: every tile without its own color uses the global default color.
-assert.match(read('src/tiles/config/tile_config.cpp'), /uint32_t tileDefaultBgColor\(\) \{\s*return tile_color::normalize\(configManager\.getConfig\(\)\.default_tile_color\);/);
+// (The light theme keeps its light card: ui_theme.h.)
+assert.match(read('src/tiles/config/tile_config.cpp'), /uint32_t tileDefaultBgColor\(\) \{[\s\S]*?if \(ui_theme::light\(\)\) return ui_theme::card\(\);\s*return tile_color::normalize\(configManager\.getConfig\(\)\.default_tile_color\);/);
 for (const type of ['binary_sensor', 'camera', 'climate', 'clock', 'cover', 'energy', 'media', 'navigate', 'scene', 'sensor', 'switch', 'text', 'weather']) {
   const source = read(`src/types/${type}/renderer.cpp`);
   assert.match(source, /tileBgColorOrDefault\(\*?tile, tileDefaultBgColor\(\)\)/, `${type} uses the global default tile color`);
@@ -187,7 +188,7 @@ assert.ok(read('src/web/server/render/web_admin_styles.cpp').includes('html += "
 // both previews; every other stored color is kept.
 const tileHeader = read('src/tiles/config/tile_config.h');
 assert.match(tileHeader, /return stored == 0 \|\| tile_color::isDefaultGrey\(stored\);/);
-assert.match(tileHeader, /return tileBgColorFollowsDefault\(tile\.bg_color\) \? tileDefaultBgColor\(\) : tileBgColorRgb\(tile\);/);
+assert.match(tileHeader, /if \(tileBgColorFollowsDefault\(tile\.bg_color\)\) return tileDefaultBgColor\(\);[\s\S]*?return tileBgColorRgb\(tile\);/);
 // The Settings PIN popup takes the global tile color from the tile, the
 // head's gear and the swipe alike (user 2026-10-08).
 assert.ok(read('src/ui/ui_manager.cpp').includes('init.bg_color = tileDefaultBgColor();'), 'Settings PIN popup color');

@@ -182,7 +182,7 @@ assert.match(rules, /if \(!tile_icon_disc::forced_color\(icon, forced\) &&\s*lv_
 const header = read('src/tiles/config/tile_icon_colors.h');
 assert.ok(!/\bnew\b|malloc|String\b/.test(code(rules) + code(header)), 'No allocation per state update');
 const renderer = code(read('src/tiles/runtime/tile_renderer.cpp'));
-assert.match(renderer, /if \(tile && tile->icon_colors\.length\(\)\) \{\s*tile_icon_color_rules::apply\(icon, tile->icon_colors\.c_str\(\),\s*displayValue != "--", value, nullptr,\s*lv_color_white\(\)\);/,
+assert.match(renderer, /if \(tile && tile->icon_colors\.length\(\)\) \{\s*tile_icon_color_rules::apply\(icon, tile->icon_colors\.c_str\(\),\s*displayValue != "--", value, nullptr,\s*lv_color_hex\(ui_theme::text\(\)\)\);/,
   'Sensor and Energy updates color the icon from the raw state; "--" states keep the default');
 assert.match(renderer, /if \(g_build_grid\) return &g_build_grid->tiles\[index\];\s*return &tileConfig\.getActiveGrid\(\)\.tiles\[index\];/,
   'State updates read the grid that is being built');
@@ -191,14 +191,15 @@ const build = unified.slice(unified.indexOf('static void build_folder_cache_entr
 assert.match(build, /tile_renderer_set_build_grid\(&config\);\s*render_tile_grid\(entry\.grid, config,[\s\S]*apply_cached_states\(grid_type, config, false\);[\s\S]*process_binary_sensor_update_queue\(\);[\s\S]*tile_renderer_set_build_grid\(nullptr\);/,
   'Hidden folder builds (preloads) resolve icon colors from their own tiles, not the visible folder');
 const control = code(read('src/types/value/value_control.cpp'));
-assert.match(control, /const bool known = value\.valid && value\.has_state && value\.available && value\.state != "unknown";\s*tiles_request_rule_refresh\(grid, index\);\s*tile_icon_color_rules::apply\(widgets\[index\]\.icon_label, tile->icon_colors\.c_str\(\), known,\s*value\.state\.c_str\(\), display\.c_str\(\), lv_color_white\(\)\);/,
+assert.match(control, /const bool known = value\.valid && value\.has_state && value\.available && value\.state != "unknown";\s*tiles_request_rule_refresh\(grid, index\);\s*tile_icon_color_rules::apply\(widgets\[index\]\.icon_label, tile->icon_colors\.c_str\(\), known,\s*value\.state\.c_str\(\), display\.c_str\(\), lv_color_hex\(ui_theme::text\(\)\)\);/,
   'Number, Select and Date/Time match the raw state and the displayed text');
 const binary = code(read('src/types/binary_sensor/renderer.cpp'));
 assert.match(binary, /tile_icon_color_rules::apply\(\s*widgets\.icon_label, tile \? tile->icon_colors\.c_str\(\) : nullptr,\s*rule_state_known\(state\), binary_sensor_state_name\(state\.value\),\s*label\.c_str\(\), lv_color_hex\(binary_sensor_visual_color\(state\)\)\);/,
   'Binary sensor matches the raw state and its translation, default is the state color');
 assert.match(binary, /const uint32_t icon_color = tile_icon_colors::state_icon_color\(\s*tile\.icon_colors\.c_str\(\), rule_state_known\(state\), binary_sensor_state_name\(state\.value\),\s*initial_label\.c_str\(\), binary_sensor_visual_color\(state\)\);/,
   'The first Binary render uses the same rule as every state update ("Color icon" off keeps the fixed color)');
-assert.match(binary, /\? 0xFFC107\s*: 0x9E9E9E;/, 'Binary defaults stay amber and grey');
+// (The grey is the theme's resting grey: 0x9E9E9E in the dark theme.)
+assert.match(binary, /\? 0xFFC107\s*: ui_theme::icon_rest\(\);/, 'Binary defaults stay amber and grey');
 const cppFunction = (file, name) => {
   const found = cppFunctionDefinitions(read(file)).find(f => f.name === name);
   assert.ok(found, `${file}: ${name}`);

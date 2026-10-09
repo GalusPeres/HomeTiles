@@ -9,6 +9,7 @@
 #include "src/tiles/config/grid_layout.h"
 #include "src/core/config/pin_access.h"
 #include "src/core/config/tile_color.h"
+#include "src/ui/shared/ui_theme.h"
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/types/tile_type_policy.h"
 
@@ -659,7 +660,11 @@ static inline bool tileBgColorFollowsDefault(uint32_t stored) {
 
 static inline uint32_t tileBgColorOrDefault(const Tile& tile, uint32_t default_color) {
   if (!tileBgColorIsSet(tile)) return default_color & TILE_BG_COLOR_RGB_MASK;
-  return tileBgColorFollowsDefault(tile.bg_color) ? tileDefaultBgColor() : tileBgColorRgb(tile);
+  if (tileBgColorFollowsDefault(tile.bg_color)) return tileDefaultBgColor();
+  // Light theme: a black tile (the dark screen's color, a clock meant to sit
+  // on the screen) takes the light screen's color instead of a black block.
+  if (ui_theme::light() && tileBgColorRgb(tile) == 0) return ui_theme::screen();
+  return tileBgColorRgb(tile);
 }
 
 struct FolderEntry {

@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <cstring>
+#include "src/ui/shared/ui_theme.h"
 
 namespace climate_visuals {
 
@@ -20,7 +21,7 @@ inline uint32_t mode_foreground_color(const char* mode) {
   // Home Assistant's --state-inactive-color: a state it does not know yet
   // (a template after a restart) is inactive, like the Cover (user
   // 2026-10-02: the icon and popup ring were white).
-  if (equals(mode, "unknown")) return 0x9E9E9E;
+  if (equals(mode, "unknown")) return ui_theme::icon_rest();
   return 0xFFFFFF;
 }
 

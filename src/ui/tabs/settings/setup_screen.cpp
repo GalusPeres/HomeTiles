@@ -9,6 +9,7 @@
 #include "src/ui/tabs/settings/settings_parts.h"
 #include "src/ui/tabs/settings/settings_screen.h"
 #include "src/ui/tabs/settings/settings_style.h"
+#include "src/ui/shared/ui_theme.h"
 
 // The setup runs in the popup card (popup_layout: centered, square on
 // landscape panels, the full height on portrait ones) on the Settings panel,
@@ -481,8 +482,8 @@ void build_wifi(const Colors& palette) {
     lv_obj_t* group = settings_parts::group(g_body, palette);
     settings_parts::Row row = setup_row(group, icon, name, "");
     if (settings_model::panel_address(address, sizeof(address))) snprintf(rest, sizeof(rest), " \xC2\xB7 %s", address);
-    settings_parts::two_tone_sub(row, s.wifi_connected, settings_style::kGoodColor, rest);
-    color_text(settings_parts::trailing_icon(row.row, "check"), settings_style::kGoodColor);
+    settings_parts::two_tone_sub(row, s.wifi_connected, settings_style::good_color(), rest);
+    color_text(settings_parts::trailing_icon(row.row, "check"), settings_style::good_color());
     // On Ethernet there is no network to pick.
     if (v.ethernet_active) return;
   } else if (v.access_point) {
@@ -544,7 +545,7 @@ lv_obj_t* column_text(lv_obj_t* parent, const char* text, const lv_font_t* font,
   lv_obj_set_width(label, LV_PCT(100));
   if (centered) lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_font(label, font, 0);
-  lv_obj_set_style_text_color(label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
   if (grey) lv_obj_set_style_text_opa(label, settings_style::kGreyOpa, 0);
   settings_parts::browser_line(label, px, top);
   return label;
@@ -616,7 +617,7 @@ void build_code(const settings_model::SystemValues& v, const Colors& palette) {
   lv_obj_t* code = lv_label_create(box);
   lv_label_set_text(code, number);
   lv_obj_set_style_text_font(code, code_font, 0);
-  lv_obj_set_style_text_color(code, lv_color_white(), 0);
+  lv_obj_set_style_text_color(code, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_margin_top(code, settings_style::kSetupCodeGap, 0);
   lv_obj_set_style_margin_bottom(code, settings_style::kSetupCodeGap, 0);
   const bool confirmed = v.pairing == PairState::Confirmed;
@@ -635,7 +636,7 @@ void build_home_assistant(const Colors& palette) {
   if (!wifi_done(settings_model::wifi_values())) {
     lv_obj_t* group = settings_parts::group(g_body, palette);
     settings_parts::Row row = setup_row(group, "wifi-off", s.setup_wifi_first);
-    color_text(row.icon, settings_style::kWarnColor);
+    color_text(row.icon, settings_style::warn_color());
     settings_parts::trailing_icon(row.row, "chevron-right");
     settings_parts::make_tap(row.row, palette.button, on_action, data(Action::ToWifi));
     return;
@@ -644,7 +645,7 @@ void build_home_assistant(const Colors& palette) {
   if (v.pairing == PairState::Paired) {
     lv_obj_t* group = settings_parts::group(g_body, palette);
     settings_parts::Row row = setup_row(group, "shield-check", s.setup_paired);
-    color_text(row.icon, settings_style::kGoodColor);
+    color_text(row.icon, settings_style::good_color());
     return;
   }
   if (v.pairing == PairState::Compare || v.pairing == PairState::Confirmed) {
@@ -673,7 +674,7 @@ void build_home_assistant(const Colors& palette) {
   switch (v.pairing) {
     case PairState::Discoverable: {
       settings_parts::Row row = spinner_row(wait, s.pairing_waiting, s.pairing_discoverable);
-      color_text(row.sub, settings_style::kGoodColor);
+      color_text(row.sub, settings_style::good_color());
       g_countdown = settings_parts::trailing_text(row.row, "", 0);
       lv_obj_set_width(g_countdown, LV_SIZE_CONTENT);
       set_countdown(v.pair_seconds);
@@ -685,27 +686,27 @@ void build_home_assistant(const Colors& palette) {
     default: {
       // Not paired, or a failed attempt's result.
       const char* line = settings_model::pairing_note() ? settings_model::pairing_note() : s.settings_not_paired;
-      uint32_t color = settings_model::pairing_note() ? settings_style::kWarnColor : 0;
+      uint32_t color = settings_model::pairing_note() ? settings_style::warn_color() : 0;
       switch (v.pairing) {
         case PairState::NoAnswer:
           line = s.pairing_no_answer;
-          color = settings_style::kWarnColor;
+          color = settings_style::warn_color();
           break;
         case PairState::AlreadyPaired:
           line = s.pairing_already_paired;
-          color = settings_style::kWarnColor;
+          color = settings_style::warn_color();
           break;
         case PairState::Busy:
           line = s.pairing_busy;
-          color = settings_style::kWarnColor;
+          color = settings_style::warn_color();
           break;
         case PairState::Rejected:
           line = s.pairing_rejected;
-          color = settings_style::kErrorColor;
+          color = settings_style::error_color();
           break;
         case PairState::Failed:
           line = s.pairing_failed;
-          color = settings_style::kErrorColor;
+          color = settings_style::error_color();
           break;
         default:
           break;
@@ -730,7 +731,7 @@ void build_tiles(const Colors& palette) {
   if (!settings_model::web_admin_url(url, sizeof(url))) {
     lv_obj_t* group = settings_parts::group(g_body, palette);
     settings_parts::Row row = setup_row(group, "wifi-off", s.setup_wifi_first);
-    color_text(row.icon, settings_style::kWarnColor);
+    color_text(row.icon, settings_style::warn_color());
     settings_parts::trailing_icon(row.row, "chevron-right");
     settings_parts::make_tap(row.row, palette.button, on_action, data(Action::ToWifi));
     return;
@@ -816,7 +817,7 @@ void build_foot(const Colors& palette) {
     lv_obj_set_size(dot, i == g_step ? settings_style::kSetupDotCurrent : settings_style::kSetupDot,
                     settings_style::kSetupDot);
     lv_obj_set_style_radius(dot, settings_style::kSetupDot / 2, 0);
-    lv_obj_set_style_bg_color(dot, i == g_step ? lv_color_hex(kAccent) : lv_color_white(), 0);
+    lv_obj_set_style_bg_color(dot, i == g_step ? lv_color_hex(kAccent) : lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(dot, i == g_step ? LV_OPA_COVER : LV_OPA_20, 0);
   }
   lv_obj_align(dots, LV_ALIGN_CENTER, 0, 0);
@@ -925,7 +926,7 @@ void build_card() {
   // Like every popup card (popup_shell.cpp): the tile radius plus a grid gap,
   // concentric with the X's box in its corner, and the plain hairline.
   ui_surface_style::apply_radius(g_card, popup_layout::kCardRadius + Device::kGridGap, 0);
-  ui_surface_style::apply_popup_border(g_card, lv_color_white(),
+  ui_surface_style::apply_popup_border(g_card, lv_color_hex(ui_theme::text()),
                                        static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));
   g_content = settings_parts::plain(g_card);
   lv_obj_set_size(g_content, card_width(), card_height());

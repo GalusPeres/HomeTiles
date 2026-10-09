@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "src/ui/shared/ui_theme.h"
 
 using PinPopupVerifyCallback = bool (*)(const char* pin, void* context);
 using PinPopupSuccessCallback = void (*)(void* context);
@@ -9,7 +10,7 @@ using PinPopupDismissedCallback = void (*)(void* context);
 struct PinPopupInit {
   String title;
   String icon_name;
-  uint32_t bg_color = 0x2A2A2A;
+  uint32_t bg_color = ui_theme::popup_card();
   // Header icon color: a Folder's PIN popup takes the folder tile's icon color.
   uint32_t icon_color = 0xFFFFFF;
   bool hide_on_success = true;

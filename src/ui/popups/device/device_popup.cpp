@@ -35,6 +35,7 @@
 #include "src/ui/shared/tone_color.h"
 #include "src/ui/shared/ui_pulse.h"
 #include "src/ui/shared/ui_surface_style.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -75,8 +76,8 @@ struct Popup {
   lv_obj_t* value = nullptr;
   lv_obj_t* body = nullptr;
   DevicePopupTarget target;
-  uint32_t card_rgb = popup_surface::kDefaultCard;
-  uint32_t icon_rgb = device_visual::kGrey;
+  uint32_t card_rgb = popup_surface::default_card();
+  uint32_t icon_rgb = device_visual::grey();
   bool open = false;
   // Lock Open like Home Assistant: "Really open?" for 5 s, "Door open" 2 s.
   uint32_t open_confirm_until = 0;
@@ -239,7 +240,7 @@ lv_obj_t* pill(int x, int y, int w, int h, const char* icon, const char* label, 
   lv_obj_set_flex_flow(button, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(button, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(button, popup_layout::scale(10), 0);
-  const lv_color_t fg = lit ? lv_color_hex(pop.card_rgb) : lv_color_white();
+  const lv_color_t fg = lit ? lv_color_hex(pop.card_rgb) : lv_color_hex(ui_theme::text());
   make_icon(button, fg, icon);
   make_label(button, fg, popup_layout::font24(), label);
   if (!enabled) {
@@ -254,7 +255,7 @@ lv_obj_t* pill(int x, int y, int w, int h, const char* icon, const char* label, 
 // Why the panel may not operate the device, or the last answer, centered.
 lv_obj_t* hint(int y, const char* value) {
   const int content_w = content_width();
-  lv_obj_t* label = make_label(pop.body, lv_color_hex(tone_color::kOffIcon), popup_layout::font20(), value);
+  lv_obj_t* label = make_label(pop.body, lv_color_hex(tone_color::off_icon()), popup_layout::font20(), value);
   lv_obj_set_width(label, content_w - 2 * popup_layout::scale(40));
   lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
   lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
@@ -267,7 +268,7 @@ lv_obj_t* value_label(const char* value) {
   lv_obj_t* box = make_box(pop.body);
   lv_obj_set_size(box, content_width(), popup_layout::kValueHeight);
   lv_obj_set_pos(box, 0, popup_layout::kValueY);
-  lv_obj_t* label = make_label(box, lv_color_white(), popup_layout::font40(), value);
+  lv_obj_t* label = make_label(box, lv_color_hex(ui_theme::text()), popup_layout::font40(), value);
   lv_obj_center(label);
   return label;
 }
@@ -528,7 +529,7 @@ void build_alarm(const Detail& d, const Visual& v) {
     lv_obj_set_flex_flow(key, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(key, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(key, kh / 16, 0);
-    const lv_color_t fg = selected ? lv_color_hex(pop.card_rgb) : lv_color_white();
+    const lv_color_t fg = selected ? lv_color_hex(pop.card_rgb) : lv_color_hex(ui_theme::text());
     make_icon(key, fg, mode < 0 ? "shield-off" : device_control::alarm_mode(static_cast<size_t>(mode)).icon);
     // The Disarm key names the action unless the alarm is disarmed.
     const char* label =
@@ -783,7 +784,7 @@ void open_fan_menu(int index) {
   lv_color_t fill;
   lv_opa_t opa;
   control_fill(fill, opa);
-  const lv_color_t pressed = lv_color_mix(lv_color_white(), fill, 40);
+  const lv_color_t pressed = lv_color_mix(lv_color_hex(ui_theme::text()), fill, 40);
   pop.fan_menu = make_box(pop.body);
   lv_obj_set_pos(pop.fan_menu, x, y + pill_h - menu_h);
   lv_obj_set_size(pop.fan_menu, w, menu_h);
@@ -800,13 +801,13 @@ void open_fan_menu(int index) {
     const bool selected = i == source.selected;
     lv_obj_t* option = make_button(pop.fan_menu, 0, i * option_h, w, option_h, option_h / 2);
     lv_obj_set_style_radius(option, option_h / 2, 0);
-    lv_obj_set_style_bg_color(option, selected ? lv_color_white() : fill, 0);
+    lv_obj_set_style_bg_color(option, selected ? lv_color_hex(ui_theme::icon()) : fill, 0);
     lv_obj_set_style_bg_opa(option, selected ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_color(option, pressed, LV_STATE_PRESSED);
     lv_obj_set_style_bg_opa(option, LV_OPA_COVER, LV_STATE_PRESSED);
     popup_nav_style::no_press_filter(option, LV_PART_MAIN | LV_STATE_PRESSED);
     const String label_text = fan_option_text(d, source.menu, i);
-    lv_obj_t* label = make_label(option, selected ? lv_color_hex(pop.card_rgb) : lv_color_white(),
+    lv_obj_t* label = make_label(option, selected ? lv_color_hex(pop.card_rgb) : lv_color_hex(ui_theme::text()),
                                  popup_layout::font24(), label_text.c_str());
     lv_obj_set_width(label, w - 8);
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
@@ -817,7 +818,7 @@ void open_fan_menu(int index) {
   lv_obj_t* line = make_box(pop.fan_menu);
   lv_obj_set_size(line, w - 24, 1);
   lv_obj_set_pos(line, 12, choices_h + separator_area - 1 - separator_inset);
-  lv_obj_set_style_bg_color(line, lv_color_mix(lv_color_white(), fill, 62), 0);
+  lv_obj_set_style_bg_color(line, lv_color_mix(lv_color_hex(ui_theme::icon()), fill, 62), 0);
   lv_obj_set_style_bg_opa(line, LV_OPA_COVER, 0);
   // The current pill closes the menu.
   lv_obj_t* current = make_button(pop.fan_menu, 0, choices_h + separator_area, w, pill_h, pill_h / 2);
@@ -828,7 +829,7 @@ void open_fan_menu(int index) {
   popup_nav_style::no_press_filter(current, LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_flex_flow(current, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(current, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  pill_texts(current, source.caption, source.value.c_str(), lv_color_white());
+  pill_texts(current, source.caption, source.value.c_str(), lv_color_hex(ui_theme::text()));
   lv_obj_add_event_cb(
       current,
       [](lv_event_t*) {
@@ -849,7 +850,7 @@ void build_fan(const Detail& d) {
   const bool usable = d.valid && d.available;
   // On: the fan color; off or unavailable: the grey off color, like the
   // Light popup.
-  const lv_color_t accent = lv_color_hex(on && usable ? device_visual::kCyan : device_visual::kGrey);
+  const lv_color_t accent = lv_color_hex(on && usable ? device_visual::kCyan : device_visual::grey());
   pop.fan_segment_count = 0;
   pop.fan_accent = accent;
   control_fill(pop.fan_rest, pop.fan_rest_opa);
@@ -921,7 +922,7 @@ void build_fan(const Detail& d) {
     // Off: the Light popup switch's off thumb, one step above the rail.
     lv_obj_set_style_bg_color(pop.fan_fill,
                               on ? accent : lv_color_hex(tone_color::switch_thumb_off(lv_color_to_u32(pop.fan_rest) & 0xFFFFFF)), 0);
-    lv_obj_t* symbol = make_icon(pop.fan_fill, on ? lv_color_hex(pop.card_rgb) : lv_color_hex(tone_color::kOffIcon),
+    lv_obj_t* symbol = make_icon(pop.fan_fill, on ? lv_color_hex(pop.card_rgb) : lv_color_hex(tone_color::off_icon()),
                                  on ? "fan" : "fan-off");
     lv_obj_center(symbol);
   }
@@ -973,7 +974,7 @@ void build_fan(const Detail& d) {
   lv_obj_set_style_radius(power, LV_RADIUS_CIRCLE, 0);
   popup_nav_style::set_bg(power, on ? accent : fill, on ? LV_OPA_COVER : opa, LV_PART_MAIN);
   control_pressed(power, on, accent);
-  lv_obj_t* power_icon = make_icon(power, on ? lv_color_hex(pop.card_rgb) : lv_color_white(), "power");
+  lv_obj_t* power_icon = make_icon(power, on ? lv_color_hex(pop.card_rgb) : lv_color_hex(ui_theme::text()), "power");
   lv_obj_center(power_icon);
   const uint32_t power_feature = on ? device_detail::kFanTurnOff : device_detail::kFanTurnOn;
   if (!usable || !(d.features & power_feature)) {
@@ -991,7 +992,7 @@ void build_fan(const Detail& d) {
     control_pressed(item, false, fill);
     lv_obj_set_flex_flow(item, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(item, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    pill_texts(item, pop.pills[i].caption, pop.pills[i].value.c_str(), lv_color_white());
+    pill_texts(item, pop.pills[i].caption, pop.pills[i].value.c_str(), lv_color_hex(ui_theme::text()));
     pop.pill_objects[i] = item;
     if (!usable) {
       lv_obj_add_state(item, LV_STATE_DISABLED);

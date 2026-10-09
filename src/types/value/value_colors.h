@@ -2,6 +2,7 @@
 
 #include <lvgl.h>
 #include <initializer_list>
+#include "src/ui/shared/ui_theme.h"
 
 // Only the Number, Select and Date/Time popup editors use this palette.
 namespace editable_colors {
@@ -68,7 +69,7 @@ inline void dropdownList(lv_obj_t* obj, const Palette& p) {
   lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_MAIN);
   lv_obj_set_style_color_filter_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
   lv_obj_set_style_recolor_opa(obj, LV_OPA_TRANSP, LV_PART_MAIN);
-  lv_obj_set_style_border_color(obj, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_border_color(obj, lv_color_hex(ui_theme::text()), LV_PART_MAIN);
   lv_obj_set_style_border_opa(obj, kHairlineOpa, LV_PART_MAIN);
   lv_obj_set_style_border_width(obj, 1, LV_PART_MAIN);
   lv_obj_set_style_border_post(obj, true, LV_PART_MAIN);
@@ -76,7 +77,7 @@ inline void dropdownList(lv_obj_t* obj, const Palette& p) {
   for (lv_style_selector_t state : std::initializer_list<lv_style_selector_t>{LV_STATE_DEFAULT, LV_STATE_CHECKED,
        LV_STATE_PRESSED, LV_STATE_CHECKED | LV_STATE_PRESSED}) {
     lv_obj_set_style_bg_opa(obj, LV_OPA_TRANSP, LV_PART_SELECTED | state);
-    lv_obj_set_style_text_color(obj, lv_color_white(), LV_PART_SELECTED | state);
+    lv_obj_set_style_text_color(obj, lv_color_hex(ui_theme::text()), LV_PART_SELECTED | state);
   }
 }
 }  // namespace editable_colors

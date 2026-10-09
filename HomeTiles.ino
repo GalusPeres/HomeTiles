@@ -26,6 +26,7 @@
 #include "src/core/display/lvgl_tick_service.h"
 #include "src/devices/guition_esp32_4848s040/s3_diagnostics.h"
 #include "src/ui/ui_manager.h"
+#include "src/ui/shared/ui_theme.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_open.h"
@@ -780,6 +781,9 @@ void setup() {
   // classic one while the stored layout cannot be shown yet. Before anything
   // builds or measures tiles.
   grid_layout::apply(configManager.getConfig().layout);
+  // The UI theme of this boot (ui_theme.h), before anything builds or colors
+  // the UI.
+  ui_theme::set(configManager.getConfig().theme);
   Serial.printf("[Setup] Layout %s, grid %ux%u, cells %dx%d\n", grid_layout::key(grid_layout::active()),
                 static_cast<unsigned>(grid_layout::shown().cols), static_cast<unsigned>(grid_layout::shown().rows),
                 grid_layout::shown().cell_w, grid_layout::shown().cell_h);

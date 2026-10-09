@@ -3,6 +3,7 @@
 
 #include <lvgl.h>
 #include <Arduino.h>
+#include "src/ui/shared/ui_theme.h"
 
 // Forward Declarations
 typedef void (*scene_publish_cb_t)(const char* scene_name);
@@ -31,7 +32,7 @@ public:
   void requestSettingsAccess();
   void requestFolderAccess(uint16_t folder_id, const String& title,
                            const String& icon_name,
-                           uint32_t bg_color = 0x2A2A2A,
+                           uint32_t bg_color = ui_theme::popup_card(),
                            uint32_t icon_color = 0xFFFFFF);
   void lockProtectedAccess();
   void finishFolderSwitch(uint16_t folder_id, bool success);

@@ -6,6 +6,7 @@
 #include "src/ui/tabs/settings/settings_keyboard.h"
 #include "src/ui/tabs/settings/settings_parts.h"
 #include "src/ui/tabs/settings/settings_style.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace settings_entry {
 namespace {
@@ -163,8 +164,8 @@ lv_obj_t* field(int x, int y, int w, int h, const char* placeholder, bool secret
   lv_obj_set_style_border_color(f, lv_color_hex(settings_style::kWifiColor), LV_STATE_FOCUSED);
   lv_obj_set_style_border_opa(f, LV_OPA_COVER, LV_STATE_FOCUSED);
   lv_obj_set_style_text_font(f, font, 0);
-  lv_obj_set_style_text_color(f, lv_color_white(), 0);
-  lv_obj_set_style_text_color(f, lv_color_white(), LV_PART_TEXTAREA_PLACEHOLDER);
+  lv_obj_set_style_text_color(f, lv_color_hex(ui_theme::text()), 0);
+  lv_obj_set_style_text_color(f, lv_color_hex(ui_theme::text()), LV_PART_TEXTAREA_PLACEHOLDER);
   lv_obj_set_style_text_opa(f, settings_style::kGreyOpa, LV_PART_TEXTAREA_PLACEHOLDER);
   const int pad_v = (h - 4 - lv_font_get_line_height(font)) / 2;
   lv_obj_set_style_pad_top(f, pad_v, 0);
@@ -173,7 +174,7 @@ lv_obj_t* field(int x, int y, int w, int h, const char* placeholder, bool secret
   lv_obj_set_style_pad_right(f, h / 3, 0);
   lv_obj_set_scrollbar_mode(f, LV_SCROLLBAR_MODE_OFF);
   // The cursor: a 2 px line in the text color, blinking.
-  lv_obj_set_style_border_color(f, lv_color_white(), LV_PART_CURSOR);
+  lv_obj_set_style_border_color(f, lv_color_hex(ui_theme::text()), LV_PART_CURSOR);
   lv_obj_set_style_border_width(f, 2, LV_PART_CURSOR);
   lv_obj_set_style_border_side(f, LV_BORDER_SIDE_LEFT, LV_PART_CURSOR);
   // Only in the field that takes the keys.
@@ -186,7 +187,7 @@ lv_obj_t* field(int x, int y, int w, int h, const char* placeholder, bool secret
     lv_obj_t* eye = lv_label_create(f);
     lv_label_set_text(eye, getMdiChar("eye").c_str());
     if (FONT_MDI_ICONS) lv_obj_set_style_text_font(eye, FONT_MDI_ICONS, 0);
-    lv_obj_set_style_text_color(eye, lv_color_white(), 0);
+    lv_obj_set_style_text_color(eye, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_text_opa(eye, settings_style::kGreyOpa, 0);
     lv_obj_add_flag(eye, LV_OBJ_FLAG_FLOATING);
     lv_obj_add_flag(eye, LV_OBJ_FLAG_CLICKABLE);
@@ -228,7 +229,7 @@ void on_dots(lv_timer_t*) {
 // stuck (user 2026-10-06). The text's own trailing dots become the moving ones.
 void show_progress(const char* text) {
   if (!g_entry.message || !g_entry.dots || !text) return;
-  show_message(text, 0xFFFFFF);
+  show_message(text, ui_theme::text());
   char base[64];
   snprintf(base, sizeof(base), "%s", text);
   size_t length = strlen(base);
@@ -243,7 +244,7 @@ void show_progress(const char* text) {
 void on_key_text(const char* text) {
   if (g_entry.focus && !g_entry.busy) {
     lv_textarea_add_text(g_entry.focus, text);
-    show_message("", 0xFFFFFF);
+    show_message("", ui_theme::text());
   }
 }
 
@@ -340,7 +341,7 @@ void open(const Spec& spec, bool manual, const char* ssid) {
     lv_obj_t* head = lv_label_create(g_entry.root);
     lv_label_set_text(head, title);
     lv_label_set_long_mode(head, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_color(head, lv_color_white(), 0);
+    lv_obj_set_style_text_color(head, lv_color_hex(ui_theme::text()), 0);
     if (g.compact) {
       lv_obj_set_style_text_font(head, settings_style::row_font(), 0);
       lv_obj_set_width(head, g.close_x - g.pad - 8);
@@ -377,7 +378,7 @@ void open(const Spec& spec, bool manual, const char* ssid) {
       lv_obj_set_size(fixed, g.column, g.field_h);
       settings_style::apply_radius(fixed, g.field_h / 2);
       lv_obj_set_style_border_width(fixed, 1, 0);
-      lv_obj_set_style_border_color(fixed, lv_color_white(), 0);
+      lv_obj_set_style_border_color(fixed, lv_color_hex(ui_theme::text()), 0);
       lv_obj_set_style_border_opa(fixed, 51, 0);
       lv_obj_set_style_pad_left(fixed, g.field_h * 4 / 10, 0);
       lv_obj_set_style_pad_right(fixed, g.field_h / 3, 0);
@@ -389,7 +390,7 @@ void open(const Spec& spec, bool manual, const char* ssid) {
       lv_obj_set_width(name, 1);
       lv_obj_set_flex_grow(name, 1);
       lv_obj_set_style_text_font(name, field_font(), 0);
-      lv_obj_set_style_text_color(name, lv_color_white(), 0);
+      lv_obj_set_style_text_color(name, lv_color_hex(ui_theme::text()), 0);
       settings_parts::trailing_icon(fixed, "lock-outline");
     }
     g_entry.password = field(g.pad, g.field_y + g.field_h + settings_style::kEntryFieldGap, g.column, g.field_h,
@@ -422,7 +423,7 @@ void open(const Spec& spec, bool manual, const char* ssid) {
   lv_label_set_long_mode(g_entry.dots, LV_LABEL_LONG_CLIP);
   lv_obj_set_width(g_entry.dots, 0);
   lv_obj_set_style_text_font(g_entry.dots, settings_style::small_font(), 0);
-  lv_obj_set_style_text_color(g_entry.dots, lv_color_white(), 0);
+  lv_obj_set_style_text_color(g_entry.dots, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_text_opa(g_entry.dots, settings_style::kGreyOpa, 0);
 
   const settings_keyboard::Geometry keys = {g.pad,
@@ -459,7 +460,7 @@ bool tick(const settings_model::WifiValues& v) {
     // Wrong password or out of reach: edit and try again.
     g_entry.busy = false;
     settings_keyboard::set_enabled(g_entry.keyboard, true);
-    show_message(settings_model::text().settings_connect_failed, settings_style::kErrorColor);
+    show_message(settings_model::text().settings_connect_failed, settings_style::error_color());
     return false;
   }
   close();

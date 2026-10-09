@@ -1848,7 +1848,8 @@
     }
     .tile.weather > .weather-preview-row > span { position:relative; display:block; white-space:nowrap; }
     .tile.weather > .weather-preview-row > .weather-preview-condition { overflow:hidden; text-overflow:ellipsis; min-width:0; }
-    .tile.weather > .weather-preview-row > .weather-preview-separator { color:#B0B0B0; }
+    /* The separator in the text color like on the device (user 2026-10-09). */
+    .tile.weather > .weather-preview-row > .weather-preview-separator { color:inherit; }
     .tile.weather > :is(.weather-preview-day, .weather-preview-icon, .weather-preview-temp-value, .weather-preview-temp-unit) {
       position:absolute; color:#fff; white-space:nowrap; pointer-events:none;
     }
@@ -2052,7 +2053,7 @@
     }
     /* Switch: a half-width thumb flush with the bar like the Light popup
        switch, the power symbol on it; off in the grey of an off icon
-       (tone_color::kOffIcon). */
+       (tone_color::off_icon()). */
     .tile-switch .tile-switch-knob {
       display:none;
       position:absolute; top:0; bottom:0; left:0; width:50%;

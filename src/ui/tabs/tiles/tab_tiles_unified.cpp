@@ -32,6 +32,7 @@
 #include <strings.h>
 #include <esp_heap_caps.h>
 #include <new>
+#include "src/ui/shared/ui_theme.h"
 
 // Layout constants
 static const int GAP = GRID_GAP;
@@ -1304,7 +1305,7 @@ static void release_folder_cache_under_pressure() {
 static lv_obj_t* create_tiles_grid(lv_obj_t* parent) {
   if (!parent) return nullptr;
   lv_obj_t* grid = lv_obj_create(parent);
-  lv_obj_set_style_bg_color(grid, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(grid, lv_color_hex(ui_theme::screen()), 0);
   lv_obj_set_style_bg_opa(grid, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(grid, 0, 0);
   lv_obj_set_style_pad_left(grid, GRID_PAD_LEFT, 0);
@@ -1627,7 +1628,7 @@ void build_tiles_tab(lv_obj_t *parent, GridType grid_type, scene_publish_cb_t sc
   }
   g_tiles_scene_cbs[idx] = scene_cb;
 
-  lv_obj_set_style_bg_color(parent, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_color(parent, lv_color_hex(ui_theme::screen()), 0);
   lv_obj_set_style_bg_opa(parent, LV_OPA_COVER, 0);
   lv_obj_set_scroll_dir(parent, LV_DIR_VER);
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLL_ELASTIC);

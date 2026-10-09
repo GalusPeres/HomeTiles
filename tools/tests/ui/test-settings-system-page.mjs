@@ -68,7 +68,7 @@ for (const name of ['kProductName = "HomeTiles"', 'kHomeAssistant = "Home Assist
   assert.ok(style.includes(`constexpr const char* ${name};`), name);
 }
 // Head: the logo image, name and version on one baseline, the update states.
-assert.match(head, /lv_image_set_src\(logo, &hometiles_logo_dsc\);/);
+assert.match(head, /lv_image_set_src\(logo, hometiles_logo_for_theme\(\)\);/);
 assert.match(head, /const bool wide = g_card_width >= settings_style::kWideHeadCard;/);
 assert.match(style, /constexpr int kWideHeadCard = 720;/);
 assert.match(head, /settings_style::kProductName/);

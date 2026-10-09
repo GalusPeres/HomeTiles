@@ -31,6 +31,7 @@
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/popups/popup_body.h"
 #include "src/ui/popups/popup_graph_readout.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -110,7 +111,7 @@ struct EnergyPopupContext : EnergyChartView {
   String unit;
   String period = "day";
   uint8_t decimals = 1;
-  uint32_t bg_color = 0x2A2A2A;
+  uint32_t bg_color = ui_theme::popup_card();
   // Bar readout in the old value row; texts are static label buffers, so
   // dragging allocates nothing. It opens on the newest bar, stays where the
   // finger leaves it and follows the newest bar while it shows that bar.
@@ -189,9 +190,9 @@ int time_axis_height() {
 void style_period_button(EnergyPopupContext* ctx, lv_obj_t* btn, lv_obj_t* label, bool active) {
   if (!ctx || !btn || !label) return;
   const lv_color_t popup =
-      ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(0x2A2A2A);
+      ctx->card ? lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN) : lv_color_hex(ui_theme::popup_card());
   const lv_color_t icon =
-      ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN) : lv_color_white();
+      ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN) : lv_color_hex(ui_theme::text());
   lv_obj_set_style_text_font(label, popup_layout::font24(), 0);
   lv_obj_set_style_text_font(label, popup_layout::font24(), LV_STATE_PRESSED);
   popup_nav_style::style_toggle(btn, label, popup, icon, active);
@@ -538,7 +539,7 @@ void on_energy_cursor_draw(lv_event_t* event) {
   lv_draw_rect_dsc_t mark;
   lv_draw_rect_dsc_init(&mark);
   mark.base.layer = layer;
-  mark.bg_color = lv_color_white();
+  mark.bg_color = lv_color_hex(ui_theme::text());
   mark.bg_opa = LV_OPA_COVER;
   mark.radius = 0;
   const int line_x = x - kReadoutLineWidth / 2;
@@ -1025,7 +1026,7 @@ void apply_init_to_context(EnergyPopupContext* ctx, const EnergyPopupInit& init,
   ctx->title = init.title;
   ctx->unit = init.unit;
   ctx->decimals = init.decimals > 6 ? 6 : init.decimals;
-  ctx->bg_color = init.bg_color ? init.bg_color : 0x2A2A2A;
+  ctx->bg_color = init.bg_color ? init.bg_color : ui_theme::popup_card();
   ctx->period = "day";
   show_period_view(ctx);
 
@@ -1145,7 +1146,7 @@ lv_obj_t* make_button_label(lv_obj_t* parent, const char* text, lv_obj_t** out_l
   lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(btn, LV_OBJ_FLAG_PRESS_LOCK);
   lv_obj_t* label = lv_label_create(btn);
-  set_label_style(label, lv_color_white(), popup_layout::font24());
+  set_label_style(label, lv_color_hex(ui_theme::text()), popup_layout::font24());
   lv_label_set_text(label, text);
   lv_obj_center(label);
   if (out_label) *out_label = label;
@@ -1172,7 +1173,7 @@ void build_chart_view(EnergyPopupContext* ctx, lv_obj_t* body_box) {
   lv_obj_set_style_pad_right(chart, 0, 0);
   lv_obj_set_style_pad_top(chart, 0, 0);
   lv_obj_set_style_pad_bottom(chart, 0, 0);
-  lv_obj_set_style_bg_color(chart, lv_color_white(), LV_PART_ITEMS);
+  lv_obj_set_style_bg_color(chart, lv_color_hex(ui_theme::icon()), LV_PART_ITEMS);
   lv_obj_set_style_bg_opa(chart, LV_OPA_TRANSP, LV_PART_ITEMS);
   lv_obj_set_style_radius(chart, 0, LV_PART_ITEMS);
   lv_obj_set_style_line_width(chart, 0, LV_PART_ITEMS);
@@ -1183,11 +1184,11 @@ void build_chart_view(EnergyPopupContext* ctx, lv_obj_t* body_box) {
   lv_chart_set_type(chart, LV_CHART_TYPE_BAR);
   lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
   lv_chart_set_point_count(chart, kDaySlotCount);
-  ctx->series = lv_chart_add_series(chart, lv_color_white(), LV_CHART_AXIS_PRIMARY_Y);
+  ctx->series = lv_chart_add_series(chart, lv_color_hex(ui_theme::text()), LV_CHART_AXIS_PRIMARY_Y);
 
   auto make_axis_label = [&](void) -> lv_obj_t* {
     lv_obj_t* label = lv_label_create(chart_wrap);
-    set_label_style(label, lv_color_white(), popup_layout::font20());
+    set_label_style(label, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_RIGHT, 0);
     lv_label_set_text(label, "");
     lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
@@ -1201,7 +1202,7 @@ void build_chart_view(EnergyPopupContext* ctx, lv_obj_t* body_box) {
     lv_obj_t* line = lv_obj_create(chart_wrap);
     lv_obj_remove_style_all(line);
     lv_obj_set_size(line, popup_layout::scale480(10), 1);
-    lv_obj_set_style_bg_color(line, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(line, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(line, opa, 0);
     lv_obj_remove_flag(line, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(line, LV_OBJ_FLAG_CLICKABLE);
@@ -1220,7 +1221,7 @@ void build_chart_view(EnergyPopupContext* ctx, lv_obj_t* body_box) {
     lv_obj_t* bar = lv_obj_create(chart_wrap);
     lv_obj_remove_style_all(bar);
     lv_obj_set_size(bar, popup_layout::scale480(4), 0);
-    lv_obj_set_style_bg_color(bar, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(bar, 0, 0);
     lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
@@ -1240,7 +1241,7 @@ void build_chart_view(EnergyPopupContext* ctx, lv_obj_t* body_box) {
   for (uint8_t i = 0; i < ENERGY_VALUES_MAX; ++i) {
     lv_obj_t* label = lv_label_create(x_axis);
     ctx->x_labels[i] = label;
-    set_label_style(label, lv_color_white(), popup_layout::font20());
+    set_label_style(label, lv_color_hex(ui_theme::text()), popup_layout::font20());
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(label, LV_SIZE_CONTENT);
     lv_label_set_text(label, "");
@@ -1254,7 +1255,7 @@ void build_chart_view(EnergyPopupContext* ctx, lv_obj_t* body_box) {
 }
 
 void build_popup_ui(EnergyPopupContext* ctx, const EnergyPopupInit& init) {
-  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : 0x2A2A2A);
+  const auto parts = create_popup_body(on_close_click, ctx, init.bg_color ? init.bg_color : ui_theme::popup_card());
   ctx->overlay = parts.overlay;
   ctx->card = parts.card;
   ctx->title_label = parts.title;

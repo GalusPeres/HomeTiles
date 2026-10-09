@@ -14,7 +14,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\
 const visuals = read('src/types/climate/visuals.h');
 const modeColor = visuals.slice(visuals.indexOf('inline uint32_t mode_foreground_color(const char* mode)'),
   visuals.indexOf('inline uint32_t mode_ring_color(const char* mode)'));
-assert.match(modeColor, /if \(equals\(mode, "unknown"\)\) return 0x9E9E9E;\s*return 0xFFFFFF;/);
+assert.match(modeColor, /if \(equals\(mode, "unknown"\)\) return ui_theme::icon_rest\(\);\s*return 0xFFFFFF;/);
 assert.match(visuals, /!equals\(mode, "unknown"\)/, 'unknown stays inactive (no tile tint)');
 assert.match(read('src/types/climate/admin-preview.js'),
   /state\?\.available === false \|\| mode === 'unavailable' \|\| mode === 'unknown'\) \{\s*return '#9e9e9e';/);

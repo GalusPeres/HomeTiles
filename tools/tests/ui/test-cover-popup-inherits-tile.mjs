@@ -44,7 +44,7 @@ assert.doesNotMatch(body(renderer, 'CoverPopupInit popup_init(', 'Cover renderer
 // Context keeps the color of the last opening.
 assert.ok(popup.includes('#include "src/ui/popups/popup_surface.h"'));
 assert.match(body(popup, 'struct CoverPopupContext', 'Cover context'),
-  /uint32_t card_color = popup_surface::kDefaultCard;/);
+  /uint32_t card_color = popup_surface::default_card\(\);/);
 
 // First build uses the opener's color for the card and the resident surfaces.
 const show = body(popup, 'void show_cover_popup(const CoverPopupInit& init)', 'show');
@@ -105,13 +105,16 @@ for (const gone of ['kPanelBg', '0x2A2A2A', '0x6B6B6B', 'constexpr uint32_t kDis
   assert.ok(!popup.includes(gone), `Cover popup still uses ${gone}`);
 }
 assert.ok(popup.includes('constexpr uint32_t kHaCoverActive = 0x926BC7;') &&
-  popup.includes('constexpr uint32_t kHaCoverInactive = 0x9E9E9E;'));
+  popup.includes('inline uint32_t ha_cover_inactive() { return ui_theme::icon_rest(); }'));
 
 // The chosen step reproduces the former grey on the default card
 // (lv_color_mix with LV_COLOR_MIX_ROUND_OFS 0).
 const constant = name => Number(surface.match(new RegExp(`${name} = (0x[0-9A-Fa-f]+|\\d+);`))[1]);
 const mix = (step, channel) => Math.floor((255 * step + channel * (255 - step)) * 0x8081 / 2 ** 23);
-const card = constant('kDefaultCard') & 0xFF;
+// The dark theme's default card (the light theme has its own light card).
+assert.ok(surface.includes('inline uint32_t default_card() { return ui_theme::popup_card(); }'));
+const card = Number(read('src/ui/shared/ui_theme.h')
+  .match(/popup_card\(\) \{ return light\(\) \? card\(\) : (0x[0-9A-Fa-f]+); \}/)[1]) & 0xFF;
 assert.equal(card, 0x2A);
 assert.equal(mix(constant('kDisabled'), card), 0x6B, 'kDisabled step keeps 0x6B6B6B on 0x2A2A2A');
 

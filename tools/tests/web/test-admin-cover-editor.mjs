@@ -368,7 +368,7 @@ for (const marker of [
     throw new Error(`Cover live-icon refresh contract is missing: ${marker}`);
   }
 }
-if (!/set_label_style\(widget\.value_label,\s*lv_color_white\(\),\s*tile_layout::header_title_font\(\)\)/s.test(coverRenderer)) {
+if (!/set_label_style\(widget\.value_label,\s*lv_color_hex\(ui_theme::text\(\)\),\s*tile_layout::header_title_font\(\)\)/s.test(coverRenderer)) {
   throw new Error('Cover value no longer uses the smaller title font');
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <lvgl.h>
+#include "src/ui/shared/ui_theme.h"
 
 struct PopupShellParts {
   lv_obj_t* overlay;
@@ -13,7 +14,7 @@ struct PopupShellParts {
 // Build a cached content owner with the standard Light geometry. Header
 // objects retain each type's state; show_popup_shell presents the shared header.
 PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
-                                 uint32_t color = 0x2A2A2A);
+                                 uint32_t color = ui_theme::popup_card());
 
 // The UI owns one visible frame/header. Type-specific resident cards supply
 // only their cached content and keep their existing event/state ownership.

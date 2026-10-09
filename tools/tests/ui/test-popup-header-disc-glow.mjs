@@ -27,7 +27,7 @@ for (const marker of [
   '(!options.off && (!options.follows_global || ui_surface_style::icon_discs_shown()));',
   'const lv_opa_t opa = shown ? fill.disc_opa : static_cast<lv_opa_t>(LV_OPA_TRANSP);',
   'lv_color_hex(tone_color::readable_icon(rgb));',
-  'ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),',
+  'ui_surface_style::apply_popup_border(shell.frame, lv_color_hex(ui_theme::text()),',
   'static_cast<lv_opa_t>(popup_layout::kPopupBorderOpa));',
 ]) assert.ok(tint.includes(marker), `header tint: ${marker}`);
 // A newly shown popup takes the options its tile passed (or the default).

@@ -40,7 +40,7 @@ for (const marker of [
   'set_title_single_line(shell.title, with_value);',
   'popup_layout::alignHeaderWithValue(shell.header, shell.title, shell.value, shell.icon,',
   'popup_layout::alignHeader(shell.header, shell.title, shell.icon, shell.icon_disc);',
-  'lv_obj_set_style_text_color(shell.value, lv_color_white(), 0);',
+  'lv_obj_set_style_text_color(shell.value, lv_color_hex(ui_theme::text()), 0);',
 ]) assert.ok(shellSource.includes(marker), `popup_shell.cpp: ${marker}`);
 
 // Only the value popups pass a holder; every other popup keeps its header.

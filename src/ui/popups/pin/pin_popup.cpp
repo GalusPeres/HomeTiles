@@ -4,6 +4,7 @@
 #include "src/ui/popups/pin/pin_keypad_geometry.h"
 
 #include "src/core/config/config_manager.h"
+#include "src/ui/shared/ui_theme.h"
 #include "src/core/i18n/i18n.h"
 #include "src/core/config/pin_access.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -29,7 +30,8 @@ namespace {
 
 using namespace pin_keypad;
 
-constexpr uint32_t kErrorColor = 0xFF6B6B;
+// The error text; the light theme takes its dark tone (settings_style::error_color).
+inline uint32_t error_color() { return ui_theme::light() ? 0xD03F45 : 0xFF6B6B; }
 constexpr uint32_t kAutoCloseMs = 60000;
 constexpr int kKeyCount = 12;
 constexpr int kBackspaceKey = 9;
@@ -134,7 +136,7 @@ void update_value(PinPopupContext* ctx) {
   const char* error = ctx->error.length() ? ctx->error.c_str() : tr.pin_popup_incorrect;
   lv_label_set_text(ctx->prompt_label, ctx->show_error ? error : prompt);
   lv_obj_set_style_text_color(ctx->prompt_label,
-                              ctx->show_error ? lv_color_hex(kErrorColor) : lv_color_white(), 0);
+                              ctx->show_error ? lv_color_hex(error_color()) : lv_color_hex(ui_theme::text()), 0);
   const size_t circles = ctx->length > pin_access::kUserPinMinDigits ? ctx->length : pin_access::kUserPinMinDigits;
   for (size_t i = 0; i < pin_access::kInputMaxDigits; ++i) {
     lv_obj_set_flag(ctx->dots[i], LV_OBJ_FLAG_HIDDEN, i >= circles);
@@ -161,8 +163,8 @@ void style_keypad(PinPopupContext* ctx) {
     lv_obj_t* key = ctx->key_buttons[i];
     if (!key) continue;
     if (i == kConfirmKey) {
-      popup_nav_style::set_bg(key, lv_color_white(), LV_OPA_COVER, LV_PART_MAIN);
-      popup_nav_style::set_bg(key, lv_color_hex(0xD8D8D8), LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
+      popup_nav_style::set_bg(key, lv_color_hex(ui_theme::icon()), LV_OPA_COVER, LV_PART_MAIN);
+      popup_nav_style::set_bg(key, lv_color_hex(ui_theme::text_soft()), LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
       popup_nav_style::no_press_filter(key, LV_PART_MAIN | LV_STATE_PRESSED);
       lv_obj_t* label = lv_obj_get_child(key, 0);
       if (label && !lv_color_eq(lv_obj_get_style_text_color(label, LV_PART_MAIN), card)) {
@@ -197,7 +199,7 @@ lv_obj_t* create_key(lv_obj_t* parent, const char* text, const lv_font_t* font,
   lv_obj_t* label = lv_label_create(button);
   lv_obj_set_style_text_font(label, font, 0);
   popup_layout::applyIconScale(label);
-  lv_obj_set_style_text_color(label, lv_color_white(), 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
   lv_label_set_text(label, text);
   lv_obj_center(label);
   lv_obj_add_event_cb(
@@ -324,9 +326,9 @@ void build_keypad(PinPopupContext* ctx) {
     lv_obj_remove_style_all(dot);
     lv_obj_set_size(dot, g.dot, g.dot);
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(dot, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(ui_theme::icon()), 0);
     lv_obj_set_style_bg_opa(dot, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_color(dot, lv_color_white(), 0);
+    lv_obj_set_style_border_color(dot, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_border_width(dot, g.dot / 9 > 2 ? g.dot / 9 : 2, 0);
     lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
     ctx->dots[i] = dot;

@@ -13,6 +13,7 @@
 #include "src/ui/tabs/settings/settings_style.h"
 #include "src/ui/tabs/settings/setup_screen.h"
 #include "src/ui/shared/text_scroll.h"
+#include "src/ui/shared/ui_theme.h"
 
 // The layout of the mockup (build/design-mockups/settings/settings-menu.html,
 // head=row with the headings in the groups, 2026-10-07): Settings is a popup
@@ -219,7 +220,12 @@ void style_category(uint8_t index) {
     if (view.icon) lv_obj_set_style_text_color(view.icon, lv_color_hex(tone.icon), 0);
     return;
   }
-  const uint32_t tile = selected ? settings_style::from_icon_card(card, color) : card;
+  // The light theme marks the selected category with a "container" tint,
+  // twice a tile's, so it stands off the grey screen like Material 3's
+  // selected surfaces (a tile's 16 % nearly matched the screen).
+  const uint32_t tile = !selected                ? card
+                        : ui_theme::light() ? tile_tint::mix(ui_theme::card(), color, 32)
+                                            : settings_style::from_icon_card(card, color);
   const uint32_t pressed = selected ? settings_style::from_icon_card(card, color, true)
                                     : tone_color::lifted(card, card, false, settings_style::control_step());
   const Tone tone = settings_style::tone(tile, color);
@@ -277,7 +283,7 @@ void build_category_tile(lv_obj_t* panel, uint8_t index, int x, int y, int w, in
                       reinterpret_cast<void*>(static_cast<uintptr_t>(index)));
   const int disc = settings_style::kCategoryDisc;
   const int x0 = settings_style::kCategoryPad;
-  view.disc = circle(view.box, x0, (h - disc) / 2, disc, category_icon(category), 0xFFFFFF);
+  view.disc = circle(view.box, x0, (h - disc) / 2, disc, category_icon(category), ui_theme::text());
   lv_obj_set_style_bg_opa(view.disc, LV_OPA_COVER, 0);
   view.icon = lv_obj_get_child(view.disc, 0);
   // Name and line in line boxes of 1.21 and 1.3 times their font size,
@@ -292,7 +298,7 @@ void build_category_tile(lv_obj_t* panel, uint8_t index, int x, int y, int w, in
   lv_label_set_long_mode(view.title, LV_LABEL_LONG_DOT);
   lv_obj_set_size(view.title, text_w, lv_font_get_line_height(settings_style::row_font()));
   lv_obj_set_style_text_font(view.title, settings_style::row_font(), 0);
-  lv_obj_set_style_text_color(view.title, lv_color_white(), 0);
+  lv_obj_set_style_text_color(view.title, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_pos(view.title, text_x,
                  settings_parts::browser_label_y(settings_style::row_font(), settings_style::kRowFontPx, top, box1));
   view.line = lv_label_create(view.box);
@@ -649,8 +655,8 @@ void color_text(lv_obj_t* label, uint32_t color) {
 // check; "Paired" and "On" with a shield, so security reads at a glance,
 // user 2026-10-06), and a chevron when a tap on the row asks to turn it off.
 void good_state(lv_obj_t* row, const char* text, const char* icon, bool chevron) {
-  color_text(settings_parts::trailing_text(row, text, g_page_width / 2), settings_style::kGoodColor);
-  color_text(settings_parts::trailing_icon(row, icon), settings_style::kGoodColor);
+  color_text(settings_parts::trailing_text(row, text, g_page_width / 2), settings_style::good_color());
+  color_text(settings_parts::trailing_icon(row, icon), settings_style::good_color());
   if (chevron) settings_parts::trailing_icon(row, "chevron-right");
 }
 
@@ -819,7 +825,7 @@ void open_dialog(Dialog dialog) {
       // The address without its scheme, as people type it.
       const char* shown = strstr(url, "://") ? strstr(url, "://") + 3 : url;
       lv_obj_t* link = settings_parts::dialog_text(box, shown);
-      lv_obj_set_style_text_color(link, lv_color_white(), 0);
+      lv_obj_set_style_text_color(link, lv_color_hex(ui_theme::text()), 0);
       lv_obj_set_style_text_opa(link, LV_OPA_COVER, 0);
       settings_parts::dialog_text(box, s.settings_github_text);
       buttons = settings_parts::dialog_buttons(box);
@@ -833,7 +839,7 @@ void open_dialog(Dialog dialog) {
         lv_obj_t* code = lv_label_create(box);
         lv_label_set_text(code, number);
         lv_obj_set_style_text_font(code, popup_layout::font72(), 0);
-        lv_obj_set_style_text_color(code, lv_color_white(), 0);
+        lv_obj_set_style_text_color(code, lv_color_hex(ui_theme::text()), 0);
         lv_obj_set_style_margin_top(code, settings_style::kDialogGap, 0);
       }
       char text[200];
@@ -892,7 +898,7 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
 
   lv_obj_t* logo = lv_image_create(head.row);
   lv_obj_remove_style_all(logo);
-  lv_image_set_src(logo, &hometiles_logo_dsc);
+  lv_image_set_src(logo, hometiles_logo_for_theme());
   lv_image_set_antialias(logo, true);
   lv_image_set_scale(logo, static_cast<uint32_t>(settings_style::kHeroLogo * 256 / hometiles_logo_dsc.header.w));
   lv_obj_set_size(logo, settings_style::kHeroLogo, settings_style::kHeroLogo);
@@ -911,12 +917,12 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
   lv_obj_t* name = lv_label_create(line);
   lv_label_set_text(name, settings_style::kProductName);
   lv_obj_set_style_text_font(name, name_font, 0);
-  lv_obj_set_style_text_color(name, lv_color_white(), 0);
+  lv_obj_set_style_text_color(name, lv_color_hex(ui_theme::text()), 0);
   settings_parts::browser_line(name, wide ? settings_style::kTitleFontPx : settings_style::kRowFontPx);
   lv_obj_t* version = lv_label_create(line);
   lv_label_set_text(version, settings_model::firmware_version());
   lv_obj_set_style_text_font(version, version_font, 0);
-  lv_obj_set_style_text_color(version, lv_color_white(), 0);
+  lv_obj_set_style_text_color(version, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_text_opa(version, settings_style::kGreyOpa, 0);
   // One space of the name's font (a lone space measures 0).
   lv_obj_set_style_margin_left(
@@ -946,17 +952,17 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
     case UpdateState::Available:
       snprintf(buf, sizeof(buf), s.system_update_available_fmt, settings_model::latest_version());
       sub = buf;
-      sub_color = settings_style::kWarnColor;
+      sub_color = settings_style::warn_color();
       icon = "download";
       kind = ButtonKind::Accent;
       break;
     case UpdateState::UpToDate:
       sub = s.system_up_to_date;
-      sub_color = settings_style::kGoodColor;
+      sub_color = settings_style::good_color();
       break;
     case UpdateState::CheckFailed:
       sub = s.system_check_failed;
-      sub_color = settings_style::kErrorColor;
+      sub_color = settings_style::error_color();
       break;
     case UpdateState::Downloading:
       sub = s.system_downloading;
@@ -964,12 +970,12 @@ void build_system_head(lv_obj_t* page, const SystemValues& v, const Colors& pale
       break;
     case UpdateState::Installed:
       sub = s.system_installed_restarting;
-      sub_color = settings_style::kGoodColor;
+      sub_color = settings_style::good_color();
       has_button = false;
       break;
     case UpdateState::InstallFailed:
       sub = s.system_install_failed;
-      sub_color = settings_style::kErrorColor;
+      sub_color = settings_style::error_color();
       if (found) {
         icon = "download";
         kind = ButtonKind::Accent;
@@ -1040,7 +1046,7 @@ void build_system_page(lv_obj_t* page) {
     }
     case PairState::Discoverable: {
       settings_parts::Row r = settings_parts::row(security, "link-variant", s.settings_pairing, s.pairing_discoverable);
-      color_text(r.sub, settings_style::kGoodColor);
+      color_text(r.sub, settings_style::good_color());
       g_pair_time = countdown(r.row, v.pair_seconds);
       break;
     }
@@ -1054,27 +1060,27 @@ void build_system_page(lv_obj_t* page) {
       // Not paired, or a failed attempt's result; Pair tries again.
       const char* note = settings_model::pairing_note();
       const char* line = s.settings_not_paired;
-      uint32_t color = note ? settings_style::kWarnColor : 0;
+      uint32_t color = note ? settings_style::warn_color() : 0;
       switch (v.pairing) {
         case PairState::NoAnswer:
           line = s.pairing_no_answer;
-          color = settings_style::kWarnColor;
+          color = settings_style::warn_color();
           break;
         case PairState::AlreadyPaired:
           line = s.pairing_already_paired;
-          color = settings_style::kWarnColor;
+          color = settings_style::warn_color();
           break;
         case PairState::Busy:
           line = s.pairing_busy;
-          color = settings_style::kWarnColor;
+          color = settings_style::warn_color();
           break;
         case PairState::Rejected:
           line = s.pairing_rejected;
-          color = settings_style::kErrorColor;
+          color = settings_style::error_color();
           break;
         case PairState::Failed:
           line = s.pairing_failed;
-          color = settings_style::kErrorColor;
+          color = settings_style::error_color();
           break;
         default:
           if (note) line = note;
@@ -1095,7 +1101,7 @@ void build_system_page(lv_obj_t* page) {
   } else if (v.password_window) {
     settings_parts::Row r =
         settings_parts::row(security, "form-textbox-password", s.web_auth_section, s.settings_set_password_now);
-    color_text(r.sub, settings_style::kGoodColor);
+    color_text(r.sub, settings_style::good_color());
     g_password_time = countdown(r.row, v.password_seconds);
   } else {
     settings_parts::Row r =
@@ -1276,7 +1282,7 @@ void connected_sub(settings_parts::Row& row) {
   char address[48];
   char rest[64] = "";
   if (settings_model::panel_address(address, sizeof(address))) snprintf(rest, sizeof(rest), " \xC2\xB7 %s", address);
-  settings_parts::two_tone_sub(row, settings_model::text().wifi_connected, settings_style::kGoodColor, rest);
+  settings_parts::two_tone_sub(row, settings_model::text().wifi_connected, settings_style::good_color(), rest);
 }
 
 lv_obj_t* wifi_button(lv_obj_t* row, const char* text, WifiAction action) {
@@ -1314,7 +1320,7 @@ void build_ethernet(lv_obj_t* page, const WifiValues& v, const Colors& palette) 
   if (v.connected) {
     connected_sub(cable);
     lv_obj_t* check = settings_parts::trailing_icon(cable.row, "check");
-    lv_obj_set_style_text_color(check, lv_color_hex(settings_style::kGoodColor), 0);
+    lv_obj_set_style_text_color(check, lv_color_hex(settings_style::good_color()), 0);
     lv_obj_set_style_text_opa(check, LV_OPA_COVER, 0);
   }
   ip_mode_row(group, v, palette);
@@ -1360,7 +1366,7 @@ void hotspot_row(lv_obj_t* group) {
     lv_label_set_text(name, labels[i]);
     lv_obj_set_width(name, column);
     lv_obj_set_style_text_font(name, settings_style::small_font(), 0);
-    lv_obj_set_style_text_color(name, lv_color_white(), 0);
+    lv_obj_set_style_text_color(name, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_text_opa(name, settings_style::kGreyOpa, 0);
     lv_obj_t* value = lv_label_create(line);
     lv_label_set_text(value, values[i]);
@@ -1368,7 +1374,7 @@ void hotspot_row(lv_obj_t* group) {
     lv_obj_set_width(value, 1);
     lv_obj_set_flex_grow(value, 1);
     lv_obj_set_style_text_font(value, settings_style::small_font(), 0);
-    lv_obj_set_style_text_color(value, lv_color_white(), 0);
+    lv_obj_set_style_text_color(value, lv_color_hex(ui_theme::text()), 0);
   }
 }
 
@@ -1397,7 +1403,7 @@ lv_obj_t* networks_heading(lv_obj_t* parent, bool scanning, bool first, lv_event
   lv_obj_t* title = lv_label_create(heading);
   lv_label_set_text(title, s.settings_networks);
   lv_obj_set_style_text_font(title, settings_style::small_font(), 0);
-  lv_obj_set_style_text_color(title, lv_color_white(), 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_style_text_opa(title, settings_style::kGreyOpa, 0);
   lv_obj_t* search = settings_parts::plain(heading);
   lv_obj_set_size(search, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -1411,7 +1417,7 @@ lv_obj_t* networks_heading(lv_obj_t* parent, bool scanning, bool first, lv_event
   lv_label_set_text(text, scanning ? s.settings_searching : s.settings_search);
   lv_obj_set_style_text_font(text, settings_style::small_font(), 0);
   for (lv_obj_t* label : {icon, text}) {
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(ui_theme::text()), 0);
     lv_obj_set_style_text_opa(label, scanning ? settings_style::kGreyOpa : LV_OPA_COVER, 0);
   }
   if (!scanning) {
@@ -1656,7 +1662,7 @@ void build_category_square(lv_obj_t* panel, uint8_t index, int x, int y, int w, 
   const int line = lv_font_get_line_height(font);
   const int space = 2 * inset;
   const int top = (h - disc - space - line) / 2;
-  view.disc = circle(view.box, (w - disc) / 2, top, disc, category_icon(category), 0xFFFFFF);
+  view.disc = circle(view.box, (w - disc) / 2, top, disc, category_icon(category), ui_theme::text());
   lv_obj_set_style_bg_opa(view.disc, LV_OPA_COVER, 0);
   view.icon = lv_obj_get_child(view.disc, 0);
   view.title = lv_label_create(view.box);
@@ -1665,7 +1671,7 @@ void build_category_square(lv_obj_t* panel, uint8_t index, int x, int y, int w, 
   lv_obj_set_size(view.title, w - 4 * inset, line);
   lv_obj_set_style_text_align(view.title, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_font(view.title, font, 0);
-  lv_obj_set_style_text_color(view.title, lv_color_white(), 0);
+  lv_obj_set_style_text_color(view.title, lv_color_hex(ui_theme::text()), 0);
   lv_obj_set_pos(view.title, 2 * inset, top + disc + space);
 }
 
@@ -1699,9 +1705,11 @@ void build_frame() {
   const int close_left = settings_style::inner_right() - close;
 
   // The gear circle, the same head on every panel.
-  lv_obj_t* gear = circle(panel, disc_x - px, cy - d / 2 - py, d, "cog", 0xFFFFFF);
+  lv_obj_t* gear = circle(panel, disc_x - px, cy - d / 2 - py, d, "cog", ui_theme::text());
   lv_obj_set_style_bg_color(
-      gear, lv_color_hex(settings_style::tone(palette.card, settings_style::kGearColor).disc), 0);
+      gear,
+      lv_color_hex(settings_style::tone(ui_theme::light() ? ui_theme::screen() : palette.card, settings_style::kGearColor).disc),
+      0);
   lv_obj_set_style_bg_opa(gear, LV_OPA_COVER, 0);
 
   // The X like the popups' (white veil while pressed), its pressed shape
@@ -1713,13 +1721,13 @@ void build_frame() {
   lv_obj_set_size(g_close, pressed, pressed);
   ui_surface_style::apply_radius(g_close, settings_style::kClosePressedBaseline);
   lv_obj_add_flag(g_close, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_style_bg_color(g_close, lv_color_white(), LV_STATE_PRESSED);
+  lv_obj_set_style_bg_color(g_close, lv_color_hex(ui_theme::icon()), LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(g_close, LV_OPA_20, LV_STATE_PRESSED);
   lv_obj_set_ext_click_area(g_close, popup_layout::kCloseButtonClickArea + (close - pressed) / 2);
   lv_obj_t* glyph = lv_label_create(g_close);
   lv_label_set_text(glyph, getMdiChar("window-close").c_str());
   if (FONT_MDI_ICONS) lv_obj_set_style_text_font(glyph, FONT_MDI_ICONS, 0);
-  lv_obj_set_style_text_color(glyph, lv_color_white(), 0);
+  lv_obj_set_style_text_color(glyph, lv_color_hex(ui_theme::text()), 0);
   lv_obj_center(glyph);
   lv_obj_add_event_cb(g_close, on_close_clicked, LV_EVENT_CLICKED, nullptr);
 
@@ -1744,7 +1752,7 @@ void build_frame() {
   lv_label_set_long_mode(g_bar_title, LV_LABEL_LONG_DOT);
   lv_obj_set_width(g_bar_title, title_end - title_x);
   lv_obj_set_x(g_bar_title, title_x - px);
-  lv_obj_set_style_text_color(g_bar_title, lv_color_white(), 0);
+  lv_obj_set_style_text_color(g_bar_title, lv_color_hex(ui_theme::text()), 0);
   set_head_title(s.tile_type_settings);
 
   // The body: one grid gap inside the frame, from one gap below the X.
@@ -1897,7 +1905,7 @@ void refresh_lines() {
     if (strcmp(lv_label_get_text(view.line), buf) != 0) lv_label_set_text(view.line, buf);
     // Only a change touches the styles: every set redraws the line, and the
     // hotspot loop reports the network on each pass (the clock flickered).
-    const lv_color_t color = warn ? lv_color_hex(settings_style::kWarnColor) : lv_color_white();
+    const lv_color_t color = warn ? lv_color_hex(settings_style::warn_color()) : lv_color_hex(ui_theme::text());
     const lv_opa_t opa = warn ? LV_OPA_COVER : settings_style::kGreyOpa;
     if (!lv_color_eq(lv_obj_get_style_text_color(view.line, LV_PART_MAIN), color)) {
       lv_obj_set_style_text_color(view.line, color, 0);

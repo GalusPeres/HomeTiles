@@ -12,7 +12,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 
 const header = read('src/ui/shared/ui_surface_style.h');
-assert.ok(header.includes('return lv_color_mix(lv_color_white(), icon, 128);'), 'Border hint: icon halfway to white');
+// (Halfway to the theme's text color: white in the dark theme.)
+assert.ok(header.includes('return lv_color_mix(lv_color_hex(ui_theme::text()), icon, 128);'), 'Border hint: icon halfway to white');
 const style = read('src/ui/shared/ui_surface_style.cpp');
 for (const marker of [
   'constexpr lv_opa_t kTileBorderOpa = 51;',
@@ -41,7 +42,7 @@ assert.ok(read('src/web/admin/tiles/grid-preview.js').includes('if (tinted && fi
 
 // The popup hairline is the plain white border and never follows the icon.
 const shell = read('src/ui/popups/popup_shell.cpp');
-assert.ok(shell.includes('ui_surface_style::apply_popup_border(shell.frame, lv_color_white(),'), 'Popup hairline is fixed');
+assert.ok(shell.includes('ui_surface_style::apply_popup_border(shell.frame, lv_color_hex(ui_theme::text()),'), 'Popup hairline is fixed');
 assert.ok(!shell.includes('border_hint('), 'The popup hairline never follows the icon');
 assert.ok(!shell.includes('ui_surface_style::apply_global_tile_border(parts.card);'), 'One popup hairline, not two');
 

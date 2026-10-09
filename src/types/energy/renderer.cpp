@@ -13,6 +13,7 @@
 #include "src/types/energy/energy_data.h"
 #include "src/tiles/config/tile_icon_colors.h"
 #include "src/ui/popups/energy/energy_popup.h"
+#include "src/ui/shared/ui_theme.h"
 
 namespace {
 
@@ -106,7 +107,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
     if (iconChar.length() > 0) {
       icon_lbl = lv_label_create(card);
       if (icon_lbl) {
-        set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
+        set_label_style(icon_lbl, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
         lv_label_set_text(icon_lbl, iconChar.c_str());
         lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT,
                      tile_layout::scale_480(-8),
@@ -124,7 +125,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
   if (title_text.length() > 0) {
     title_label = lv_label_create(card);
     if (title_label) {
-      set_label_style(title_label, lv_color_hex(0xFFFFFF),
+      set_label_style(title_label, lv_color_hex(ui_theme::text()),
                       tile_layout::header_title_font());
       lv_label_set_long_mode(title_label, LV_LABEL_LONG_DOT);
       lv_obj_set_width(title_label, LV_PCT(70));
@@ -140,7 +141,7 @@ lv_obj_t* render_energy_tile(lv_obj_t* parent,
   if (!value_label) {
     return card;
   }
-  set_label_style(value_label, lv_color_white(), get_energy_value_font(tile));
+  set_label_style(value_label, lv_color_hex(ui_theme::text()), get_energy_value_font(tile));
   lv_label_set_long_mode(value_label, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(value_label, LV_PCT(100));
   lv_obj_set_style_text_align(value_label, LV_TEXT_ALIGN_CENTER, 0);

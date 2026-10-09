@@ -13,6 +13,7 @@
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/ui/shared/title_label.h"
+#include "src/ui/shared/ui_theme.h"
 
 // The header of tiles with a state line below the corner disc (the Switch
 // header layouts, the Cover with its position bar, the Climate Layout "with
@@ -103,7 +104,7 @@ inline Header create(lv_obj_t* card, const Tile& tile, bool tall, int bar_top) {
   if (tall) {
     if (has_title) {
       header.title = lv_label_create(card);
-      set_label_style(header.title, lv_color_white(), tile_layout::header_title_font());
+      set_label_style(header.title, lv_color_hex(ui_theme::text()), tile_layout::header_title_font());
       lv_label_set_long_mode(header.title, LV_LABEL_LONG_DOT);
       lv_obj_set_width(header.title, LV_PCT(70));
       lv_obj_set_style_text_align(header.title, LV_TEXT_ALIGN_RIGHT, 0);
@@ -113,7 +114,7 @@ inline Header create(lv_obj_t* card, const Tile& tile, bool tall, int bar_top) {
     const int content_w = std::max(1, card_w - 2 * pad_x);
     header.state_center = static_cast<int16_t>((inset + disc + bar_top) / 2 - pad_y);
     header.state = lv_label_create(card);
-    set_label_style(header.state, lv_color_white(), state_font);
+    set_label_style(header.state, lv_color_hex(ui_theme::text()), state_font);
     lv_label_set_long_mode(header.state, LV_LABEL_LONG_DOT);
     lv_obj_set_width(header.state, content_w);
     lv_obj_set_style_text_align(header.state, LV_TEXT_ALIGN_CENTER, 0);
@@ -125,7 +126,7 @@ inline Header create(lv_obj_t* card, const Tile& tile, bool tall, int bar_top) {
   }
   if (has_title) {
     header.title = lv_label_create(card);
-    set_label_style(header.title, lv_color_white(), compact_sensor_layout::title_font());
+    set_label_style(header.title, lv_color_hex(ui_theme::text()), compact_sensor_layout::title_font());
     lv_label_set_long_mode(header.title, LV_LABEL_LONG_DOT);
     lv_obj_set_width(header.title, text_w);
     hometiles_title::tile(header.title, tile.title.c_str(), true);
@@ -135,7 +136,7 @@ inline Header create(lv_obj_t* card, const Tile& tile, bool tall, int bar_top) {
     lv_obj_set_pos(header.title, text_x - pad_x, text_y - pad_y);
   }
   header.state = lv_label_create(card);
-  set_label_style(header.state, lv_color_white(), state_font);
+  set_label_style(header.state, lv_color_hex(ui_theme::text()), state_font);
   lv_label_set_long_mode(header.state, LV_LABEL_LONG_DOT);
   lv_obj_set_width(header.state, text_w);
   lv_obj_set_style_text_align(header.state, LV_TEXT_ALIGN_LEFT, 0);

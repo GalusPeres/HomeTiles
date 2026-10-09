@@ -110,7 +110,7 @@ assert.match(rawSetup, /setup_row\(group, "shield-check", s\.setup_paired\)/, 'p
 assert.match(ha, /data\(Action::Pair\)\);\s*lv_obj_set_width\(pair, settings_screen::switch_on_width\(\)\);/);
 assert.match(ha, /case PairState::Discoverable: \{[\s\S]*?g_countdown = settings_parts::trailing_text\(row\.row/);
 assert.match(setup, /case Action::Pair:\s*settings_model::pair\(\);/);
-assert.match(ha, /color_text\(row\.icon, settings_style::kGoodColor\);/);
+assert.match(ha, /color_text\(row\.icon, settings_style::good_color\(\)\);/);
 assert.match(ha, /number_row\(steps, 1, s\.setup_open_ha, s\.setup_open_ha_where\);/);
 assert.match(ha, /settings_model::device_name\(\)/, 'the name Home Assistant lists');
 assert.match(between(setup, 'void build_code(', 'void build_home_assistant('), /settings_model::pairing_number\(/);

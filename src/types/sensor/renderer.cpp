@@ -11,6 +11,7 @@
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include <Arduino.h>
 #include "src/types/value/value_control.h"
+#include "src/ui/shared/ui_theme.h"
 
 static const lv_font_t* get_sensor_value_font(const Tile& tile) {
   return tile_layout::value_font_for_choice(tile.sensor_value_font, FONT_VALUE);
@@ -96,7 +97,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     if (iconChar.length() > 0) {
       icon_lbl = lv_label_create(card);
       if (icon_lbl) {
-        set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
+        set_label_style(icon_lbl, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
         lv_label_set_text(icon_lbl, iconChar.c_str());
         lv_obj_align(icon_lbl, LV_ALIGN_TOP_LEFT,
                      tile_layout::scale_480(-8),
@@ -110,7 +111,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
   if (tile.title.length() > 0) {
     title_label = lv_label_create(card);
     if (title_label) {
-      set_label_style(title_label, lv_color_hex(0xFFFFFF),
+      set_label_style(title_label, lv_color_hex(ui_theme::text()),
                       tile_layout::header_title_font());
       lv_label_set_long_mode(title_label, LV_LABEL_LONG_DOT);
       lv_obj_set_width(title_label, LV_PCT(70));
@@ -215,9 +216,9 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
       lv_obj_set_style_pad_all(chart, 0, LV_PART_MAIN);
 
       // Series - white color, line width 4 (same as popup)
-      series = lv_chart_add_series(chart, lv_color_white(), LV_CHART_AXIS_PRIMARY_Y);
+      series = lv_chart_add_series(chart, lv_color_hex(ui_theme::text()), LV_CHART_AXIS_PRIMARY_Y);
       lv_obj_set_style_line_width(chart, 2, LV_PART_ITEMS);
-      lv_obj_set_style_line_color(chart, lv_color_white(), LV_PART_ITEMS);
+      lv_obj_set_style_line_color(chart, lv_color_hex(ui_theme::text()), LV_PART_ITEMS);
       lv_obj_set_style_line_rounded(chart, true, LV_PART_ITEMS);
       lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);
 
@@ -234,7 +235,7 @@ lv_obj_set_style_bg_grad_dir(card, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRE
     Serial.println("[TileRenderer] ERROR: Could not create value label");
     return card;
   }
-  set_label_style(v, lv_color_white(), get_sensor_value_font(tile));
+  set_label_style(v, lv_color_hex(ui_theme::text()), get_sensor_value_font(tile));
   lv_label_set_long_mode(v, LV_LABEL_LONG_WRAP);
   lv_obj_set_width(v, LV_PCT(100));
   lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_CENTER, 0);

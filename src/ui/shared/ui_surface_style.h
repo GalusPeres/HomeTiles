@@ -1,6 +1,7 @@
 #pragma once
 
 #include <lvgl.h>
+#include "src/ui/shared/ui_theme.h"
 
 namespace ui_surface_style {
 
@@ -15,7 +16,7 @@ void preview_radius(int value);
 // the hairline's 20 % the border stays mostly the tile, slightly lighter,
 // with only a hint of the icon.
 inline lv_color_t border_hint(lv_color_t icon) {
-  return lv_color_mix(lv_color_white(), icon, 128);
+  return lv_color_mix(lv_color_hex(ui_theme::text()), icon, 128);
 }
 
 void disable_tile_border(lv_obj_t* obj);

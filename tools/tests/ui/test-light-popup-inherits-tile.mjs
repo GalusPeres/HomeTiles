@@ -19,7 +19,7 @@ const popup = read('src/ui/popups/light/light_popup.cpp');
 assert.match(header, /struct LightPopupInit \{[^}]*\n  uint32_t bg_color = 0;\n[^}]*\};/,
   'LightPopupInit has a bg_color field');
 assert.ok(popup.includes('#include "src/ui/popups/popup_surface.h"'));
-assert.ok(popup.includes('  uint32_t card_bg = popup_surface::kDefaultCard;\n'),
+assert.ok(popup.includes('  uint32_t card_bg = popup_surface::default_card();\n'),
   'The context keeps the card color of the last opening');
 
 // First build: the body is created in the tile's color and the resident
@@ -72,9 +72,9 @@ for (const [name, body] of [['update_light_popup', update], ['apply_init_to_cont
 
 // Neutral surfaces derive from the current card.
 for (const marker of [
-  'visual_on ? popup_surface::card(ctx->card_bg) : lv_color_white();',
+  'visual_on ? popup_surface::card(ctx->card_bg) : lv_color_hex(ui_theme::text());',
   ': lv_color_hex(tone_color::switch_thumb_off(lv_color_to_u32(track) & 0xFFFFFF));',
-  'ctx->is_on ? brightness_dash_color(ctx) : lv_color_hex(tone_color::kOffIcon), 0);',
+  'ctx->is_on ? brightness_dash_color(ctx) : lv_color_hex(tone_color::off_icon()), 0);',
   'dash_dsc.bg_color = brightness_dash_color(ctx);',
   'return popup_surface::card(ctx->card_bg);',
   'const lv_color_t disabled_color = popup_surface::lighter(card, popup_surface::kDisabled);',

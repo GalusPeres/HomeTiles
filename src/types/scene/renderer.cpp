@@ -10,6 +10,7 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include <Arduino.h>
 #include <libs/tjpgd/tjpgd.h>
+#include "src/ui/shared/ui_theme.h"
 
 static constexpr uint16_t kSceneIconMaxSide =
     static_cast<uint16_t>(tile_layout::scale_480(64));
@@ -297,7 +298,7 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
     if (iconChar.length() > 0) {
       icon_lbl = lv_label_create(btn);
       if (icon_lbl) {
-        set_label_style(icon_lbl, lv_color_white(), FONT_MDI_ICONS);
+        set_label_style(icon_lbl, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);
         lv_label_set_text(icon_lbl, iconChar.c_str());
       }
     }
@@ -345,7 +346,7 @@ lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, LV_PART_MAIN | LV_STATE_PRES
     lv_obj_t* l = lv_label_create(btn);
     title_lbl = l;
     if (l) {
-      set_label_style(l, lv_color_white(), tile_layout::header_title_font());
+      set_label_style(l, lv_color_hex(ui_theme::text()), tile_layout::header_title_font());
       hometiles_title::tile(l, tile.title.c_str(), false);
       if (compact) {
         // compact_sensor_layout places it beside the disc below.

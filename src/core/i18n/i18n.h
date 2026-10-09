@@ -692,6 +692,11 @@ struct LocaleProfile {
   const char* weather_months_short[12];
   const char* weather_conditions[15];
 
+  // Optional sensors shown instead of the weather entity's own current
+  // temperature and humidity: temperature sensor, humidity sensor and the
+  // empty "use the weather entity's value" option.
+  const char* weather_sensor_labels[3];
+
   const char* tile_type_climate;
   const char* climate_entity;
   const char* climate_target_temperature;
@@ -843,6 +848,9 @@ const char* weather_month_short(const char* language_code, int month);
 const char* weather_today_label(const char* language_code);
 const char* weather_today_button_label(const char* language_code);
 const char* weather_tomorrow_label(const char* language_code);
+// 0 temperature sensor, 1 humidity sensor, 2 the empty "use the weather
+// entity's value" option.
+const char* weather_sensor_label(const char* language_code, uint8_t index);
 const char* climate_tile_type_label(const char* language_code);
 const char* climate_entity_label(const char* language_code);
 const char* climate_target_temperature_label(const char* language_code);

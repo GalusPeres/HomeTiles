@@ -1808,6 +1808,7 @@ static const LocaleProfile kLocaleDe = {
     {"Klare Nacht", "Bewölkt", "Ausnahme", "Nebel", "Hagel",
      "Gewitter", "Gewitterregen", "Teilw. bewölkt", "Starkregen",
      "Regen", "Schnee", "Schneeregen", "Sonnig", "Windig", "Böig"},
+    {"Temperatursensor", "Luftfeuchtigkeitssensor", "Wert der Wetter-Entity"},
     "Klima",
     "Klima-Entity",
     "Solltemperatur",
@@ -1916,6 +1917,7 @@ static const LocaleProfile kLocaleEn = {
     {"Clear night", "Cloudy", "Exceptional", "Fog", "Hail",
      "Lightning", "Lightning rain", "Partly cloudy", "Pouring",
      "Rain", "Snow", "Sleet", "Sunny", "Windy", "Windy"},
+    {"Temperature sensor", "Humidity sensor", "Weather entity value"},
     "Climate",
     "Climate Entity",
     "Target",
@@ -2021,6 +2023,7 @@ static const LocaleProfile kLocaleFr = {
     {"Nuit claire", "Nuageux", "Exceptionnel", "Brouillard", "Grêle",
      "Orage", "Orage pluvieux", "Partiellement nuageux", "Pluie forte",
      "Pluie", "Neige", "Neige fondue", "Ensoleillé", "Venteux", "Rafales"},
+    {"Capteur de température", "Capteur d'humidité", "Valeur de l'entité météo"},
     "Climat",
     "Entité climat",
     "Température cible",
@@ -2725,6 +2728,7 @@ static const LocaleProfile kLocalePl = {
     {"Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "Sb"},
     {"sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"},
     {"Czysta noc", "Pochmurno", "Wyjątkowe", "Mgła", "Grad", "Burza", "Burza z deszczem", "Częściowo pochmurno", "Ulewny deszcz", "Deszcz", "Śnieg", "Deszcz ze śniegiem", "Słonecznie", "Wietrznie", "Porywisty wiatr"},
+    {"Czujnik temperatury", "Czujnik wilgotności", "Wartość encji pogody"},
     "Klimatyzacja",
     "Encja klimatyzacji",
     "Temperatura docelowa",
@@ -2953,6 +2957,11 @@ const char* weather_today_button_label(const char* language_code) {
 
 const char* weather_tomorrow_label(const char* language_code) {
   return locale(language_code).weather_tomorrow;
+}
+
+const char* weather_sensor_label(const char* language_code, uint8_t index) {
+  if (index >= 3) index = 2;
+  return locale(language_code).weather_sensor_labels[index];
 }
 
 const char* climate_tile_type_label(const char* language_code) {

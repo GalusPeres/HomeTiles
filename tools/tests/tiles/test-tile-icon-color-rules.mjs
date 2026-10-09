@@ -310,12 +310,12 @@ struct FS {bool exists(const String&p){return files.count(p)||directories.count(
  }} filesystem;
 FS& storageFS(){return filesystem;}bool storageReady(){return ready;}
 constexpr size_t TILES_PER_GRID=4;
-const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors";
+const char*kTitlePathDir="/_tile_titles",*kImagePathDir="/_tile_images",*kEntityPathDir="/_tile_entities",*kIconColorPathDir="/_tile_icon_colors",*kWeatherSensorPathDir="/_tile_weather_sensors";
 bool g_sidecar_index_built=false;
-std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys;
+std::vector<uint32_t> g_title_sidecar_keys,g_image_sidecar_keys,g_entity_sidecar_keys,g_icon_color_sidecar_keys,g_weather_sensor_sidecar_keys;
 // The PSRAM sidecar text cache (tile_config.cpp) with std containers, no lock.
 using PsString=std::string;struct SidecarText{uint32_t key;PsString text;};using SidecarTexts=std::vector<SidecarText>;
-SidecarTexts g_image_sidecar_texts,g_entity_sidecar_texts,g_title_sidecar_texts,g_icon_color_sidecar_texts;
+SidecarTexts g_image_sidecar_texts,g_entity_sidecar_texts,g_title_sidecar_texts,g_icon_color_sidecar_texts,g_weather_sensor_sidecar_texts;
 struct SidecarTextsGuard{SidecarTextsGuard(){}~SidecarTextsGuard(){}};
 struct Tile {TileType type=TILE_EMPTY;String icon_colors;};struct TileGridConfig{Tile tiles[TILES_PER_GRID];};
 ${normalizeTile}

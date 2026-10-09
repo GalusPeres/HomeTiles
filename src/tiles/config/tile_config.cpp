@@ -438,6 +438,7 @@ static const char* kImagePathDir = "/_tile_links";
 static const char* kEntityPathDir = "/_tile_entities";
 static const char* kTitlePathDir = "/_tile_titles";
 static const char* kIconColorPathDir = "/_tile_icon_colors";
+static const char* kWeatherSensorPathDir = "/_tile_weather_sensors";
 static const char* kTileGridDir = "/_tile_grids";
 static const char* kFolderIndexFile = "/_tile_grids/folders.bin";
 static constexpr uint32_t kFolderIndexMagic = 0x54464C44;  // 'TFLD'
@@ -575,6 +576,7 @@ static std::vector<uint32_t> g_image_sidecar_keys;
 static std::vector<uint32_t> g_entity_sidecar_keys;
 static std::vector<uint32_t> g_title_sidecar_keys;
 static std::vector<uint32_t> g_icon_color_sidecar_keys;
+static std::vector<uint32_t> g_weather_sensor_sidecar_keys;
 
 static uint32_t sidecarKey(uint16_t folder_id, size_t index) {
   return (static_cast<uint32_t>(folder_id) << 8) | static_cast<uint8_t>(index);
@@ -603,6 +605,7 @@ static SidecarTexts g_image_sidecar_texts;
 static SidecarTexts g_entity_sidecar_texts;
 static SidecarTexts g_title_sidecar_texts;
 static SidecarTexts g_icon_color_sidecar_texts;
+static SidecarTexts g_weather_sensor_sidecar_texts;
 
 static SemaphoreHandle_t sidecarTextsLock() {
   static SemaphoreHandle_t lock = xSemaphoreCreateMutex();
@@ -653,6 +656,7 @@ static SidecarTexts& sidecarTextsFor(const std::vector<uint32_t>& keys) {
   if (&keys == &g_image_sidecar_keys) return g_image_sidecar_texts;
   if (&keys == &g_entity_sidecar_keys) return g_entity_sidecar_texts;
   if (&keys == &g_title_sidecar_keys) return g_title_sidecar_texts;
+  if (&keys == &g_weather_sensor_sidecar_keys) return g_weather_sensor_sidecar_texts;
   return g_icon_color_sidecar_texts;
 }
 
@@ -683,6 +687,7 @@ static void ensureSidecarIndexBuilt() {
   scanSidecarDir(kEntityPathDir, g_entity_sidecar_keys);
   scanSidecarDir(kTitlePathDir, g_title_sidecar_keys);
   scanSidecarDir(kIconColorPathDir, g_icon_color_sidecar_keys);
+  scanSidecarDir(kWeatherSensorPathDir, g_weather_sensor_sidecar_keys);
 }
 
 static String entityPathFileLegacy(const char* prefix, size_t index) {
@@ -1144,6 +1149,82 @@ static void applyIconColorsFromSd(uint16_t folder_id, TileGridConfig& grid) {
   }
 }
 
+// Weather temperature/humidity sensors (weatherSensorsRecord) do not fit
+// PackedTileV7 either and follow the same sidecar pattern as icon colors.
+static constexpr size_t kWeatherSensorRecordMax = 2 * kWeatherSensorEntityMax;
+
+static String weatherSensorPathFile(uint16_t folder_id, size_t index) {
+  char path[64];
+  snprintf(path, sizeof(path), "%s/f%u_%02u.txt", kWeatherSensorPathDir,
+           static_cast<unsigned>(folder_id), static_cast<unsigned>(index));
+  return String(path);
+}
+
+static bool readWeatherSensorsSd(uint16_t folder_id, size_t index, String& out) {
+  if (!storageReady()) return false;
+  ensureSidecarIndexBuilt();
+  const uint32_t key = sidecarKey(folder_id, index);
+  if (!sidecarKeyPresent(g_weather_sensor_sidecar_keys, key)) return false;
+  if (sidecarTextCached(g_weather_sensor_sidecar_texts, key, out)) return true;
+  const String path = weatherSensorPathFile(folder_id, index);
+  for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)}) {
+    File file = storageFS().open(candidate, FILE_READ);
+    if (!file) continue;
+    const size_t size = file.size();
+    if (size == 0 || size > kWeatherSensorRecordMax) { file.close(); continue; }
+    String value = file.readString();
+    file.close();
+    if (value.length() != size) continue;
+    out = value;
+    sidecarTextStore(g_weather_sensor_sidecar_texts, key, value);
+    return true;
+  }
+  return false;
+}
+
+static bool writeWeatherSensorsSd(uint16_t folder_id, size_t index, const String& record) {
+  if (!storageReady()) return false;
+  if (record.length() > kWeatherSensorRecordMax) return false;
+  ensureSidecarIndexBuilt();
+  const uint32_t key = sidecarKey(folder_id, index);
+  const String path = weatherSensorPathFile(folder_id, index);
+  const bool present = sidecarKeyPresent(g_weather_sensor_sidecar_keys, key);
+  if (record.length() == 0) {
+    if (!present) return true;
+    for (const String& candidate : {path, tmpPathFor(path), backupPathFor(path)})
+      if (storageFS().exists(candidate) && !storageFS().remove(candidate)) return false;
+    sidecarKeyRemove(g_weather_sensor_sidecar_keys, key);
+    return true;
+  }
+  String current;
+  if (readWeatherSensorsSd(folder_id, index, current) && current == record) return true;
+  if (!storageFS().exists(kWeatherSensorPathDir) && !storageFS().mkdir(kWeatherSensorPathDir)) return false;
+  sidecarTextForget(g_weather_sensor_sidecar_texts, key);
+  const String temporary = tmpPathFor(path);
+  if (storageFS().exists(temporary)) storageFS().remove(temporary);
+  File file = storageFS().open(temporary, FILE_WRITE);
+  if (!file) return false;
+  const size_t written = file.print(record);
+  file.flush(); file.close();
+  if (written != record.length() || !replaceFileWithPreparedTmp(temporary, path)) {
+    storageFS().remove(temporary);
+    return false;
+  }
+  sidecarKeyAdd(g_weather_sensor_sidecar_keys, key);
+  sidecarTextStore(g_weather_sensor_sidecar_texts, key, record);
+  return true;
+}
+
+static void applyWeatherSensorsFromSd(uint16_t folder_id, TileGridConfig& grid) {
+  for (size_t index = 0; index < TILES_PER_GRID; ++index) {
+    Tile& tile = grid.tiles[index];
+    String record;
+    if (tile.type != TILE_WEATHER || !readWeatherSensorsSd(folder_id, index, record)) continue;
+    // Normalized again so a damaged or foreign file cannot reach the runtime.
+    applyWeatherSensorsRecord(tile, record);
+  }
+}
+
 #if defined(DEVICE_ESP32_S3_RGB_480)
 static bool sidecarTextMatches(bool has_sidecar, const String& file_path,
                                const String& expected,
@@ -1182,6 +1263,12 @@ static bool gridSidecarsMatchStored(uint16_t folder_id,
     if (tile.icon_colors.length()
             ? (!readIconColorsSd(folder_id, index, stored_colors) || stored_colors != tile.icon_colors)
             : sidecarKeyPresent(g_icon_color_sidecar_keys, key)) return false;
+
+    String stored_sensors;
+    const String sensors = weatherSensorsRecord(tile);
+    if (sensors.length()
+            ? (!readWeatherSensorsSd(folder_id, index, stored_sensors) || stored_sensors != sensors)
+            : sidecarKeyPresent(g_weather_sensor_sidecar_keys, key)) return false;
 
     const bool entity_required =
         entityTileStoresSensorEntity(tile.type) &&
@@ -2731,6 +2818,8 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
       out[i].type = full.tiles[i].type;
       out[i].sensor_entity = full.tiles[i].sensor_entity;
       out[i].rule_entity = tileIconSourceEntity(full.tiles[i].type, full.tiles[i].icon_colors);
+      const String sensors = weatherSensorsRecord(full.tiles[i]);
+      out[i].extra_entities = sensors;
     }
     return true;
   }
@@ -2761,6 +2850,16 @@ bool TileConfig::loadFolderGridEntitiesOnly(uint16_t folder_id, TileEntitySlot* 
     String record;
     if (readIconColorsSd(folder_id, i, record)) out[i].rule_entity = tileIconSourceEntity(out[i].type, record);
   }
+  // Weather sensors subscribe to their own state topics as well.
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    if (out[i].type != TILE_WEATHER) continue;
+    String record;
+    if (!readWeatherSensorsSd(folder_id, i, record)) continue;
+    Tile sensors;
+    sensors.type = TILE_WEATHER;
+    applyWeatherSensorsRecord(sensors, record);
+    out[i].extra_entities = weatherSensorsRecord(sensors);
+  }
   uint32_t sidecar_ms = millis() - t_sidecar0;
   if (read_ms + unpack_ms + sidecar_ms >= 5) {
     Serial.printf("[Bridge]     loadFolderGridEntitiesOnly(%u) split: read=%ums unpack=%ums sidecar=%ums\n",
@@ -2781,9 +2880,11 @@ struct FolderEntityCacheEntry {
   TileType types[TILES_PER_GRID];
   char* entities[TILES_PER_GRID];  // PSRAM copies; nullptr means empty.
   char* rule_entities[TILES_PER_GRID];  // The rules' other entity, same rules.
+  char* extra_entities[TILES_PER_GRID];  // TileEntitySlot::extra_entities.
 };
 
-// 128 entries x ~184 B = ~24 KB of PSRAM. Beyond 128 live folders,
+// 128 entries of a type byte and three string pointers per tile, all in PSRAM
+// (calloc'd once on first use). Beyond 128 live folders,
 // getFolderEntitiesCached returns false; callers treat this as a failed load.
 static constexpr size_t kFolderEntityCacheMax = 128;
 
@@ -2843,9 +2944,14 @@ FolderEntityCacheEntry* TileConfig::storeFolderEntityCache(uint16_t folder_id,
       heap_caps_free(e->rule_entities[i]);
       e->rule_entities[i] = nullptr;
     }
+    if (e->extra_entities[i]) {
+      heap_caps_free(e->extra_entities[i]);
+      e->extra_entities[i] = nullptr;
+    }
     e->types[i] = slots[i].type;
     e->entities[i] = psramStrdupLocal(slots[i].sensor_entity);
     e->rule_entities[i] = psramStrdupLocal(slots[i].rule_entity);
+    e->extra_entities[i] = psramStrdupLocal(slots[i].extra_entities);
   }
   e->built_gen = built_gen;
   return e;
@@ -2871,6 +2977,7 @@ bool TileConfig::getFolderEntitiesCached(uint16_t folder_id, FolderEntitySlotVie
     out[i].type = e->types[i];
     out[i].entity = e->entities[i] ? e->entities[i] : "";
     out[i].rule_entity = e->rule_entities[i] ? e->rule_entities[i] : "";
+    out[i].extra_entities = e->extra_entities[i] ? e->extra_entities[i] : "";
   }
   return true;
 }
@@ -3572,6 +3679,7 @@ bool TileConfig::deleteFolder(uint16_t folder_id) {
       sidecarKeyRemove(g_entity_sidecar_keys, sidecarKey(id, i));
       writeLongTitleSd(id, i, "");
       writeIconColorsSd(id, i, "");
+      writeWeatherSensorsSd(id, i, "");
     }
   }
 
@@ -3677,6 +3785,7 @@ bool TileConfig::loadGrid(uint16_t folder_id, TileGridConfig& grid,
   applyLongEntityIdsFromSd(folder_id, grid);
   applyLongTitlesFromSd(folder_id, grid);
   applyIconColorsFromSd(folder_id, grid);
+  applyWeatherSensorsFromSd(folder_id, grid);
 
   // Retired tile types become empty without renumbering the persisted enum.
   // Empty tiles saved before deletion cleared them still carry the deleted
@@ -3731,6 +3840,7 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
     }
     working.tiles[i].icon_colors = normalizeTileIconColors(
         working.tiles[i].type, working.tiles[i].icon_colors.c_str());
+    normalizeWeatherSensors(working.tiles[i]);
   }
   if (ensure_navigation_tile) {
     if (folder_id == kRootFolderId) {
@@ -3790,6 +3900,11 @@ bool TileConfig::saveGridInPlace(uint16_t folder_id, TileGridConfig& grid,
     }
     if (!writeIconColorsSd(folder_id, grid_idx, tile.icon_colors)) {
       Serial.println("[TileConfig] Error saving tile icon colors");
+      invalidateFolderEntityCache();
+      return false;
+    }
+    if (!writeWeatherSensorsSd(folder_id, grid_idx, weatherSensorsRecord(tile))) {
+      Serial.println("[TileConfig] Error saving weather sensors");
       invalidateFolderEntityCache();
       return false;
     }

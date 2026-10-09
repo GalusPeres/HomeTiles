@@ -2639,6 +2639,8 @@ function syncTileRadiusControls(tabEl) {
 
         rebuildEntitySelect(tab + '_energy_entity', data.energy);
         rebuildEntitySelect(tab + '_weather_entity', data.weathers);
+        rebuildEntitySelect(tab + '_weather_temperature_sensor', data.sensors);
+        rebuildEntitySelect(tab + '_weather_humidity_sensor', data.sensors);
         rebuildEntitySelect(tab + '_switch_entity', data.switches);
         rebuildEntitySelect(tab + '_media_entity', data.media);
         rebuildEntitySelect(tab + '_climate_entity', data.climates);
@@ -5751,6 +5753,19 @@ function syncTileRadiusControls(tabEl) {
       scheduleAutoSave(tab);
     });
     bindLive(weatherSelect, 'change', 'weatherEntity', () => { maybeFillTitleFromWeather(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // Temperature/humidity sensors replace the weather entity's current values.
+    for (const [field, name] of [['weather_temperature_sensor', 'weatherTemperatureSensor'],
+                                 ['weather_humidity_sensor', 'weatherHumiditySensor']]) {
+      const select = document.getElementById(prefix + '_' + field);
+      bindLive(select, 'change', name, () => {
+        if (select.value) {
+          select.dataset.configuredValue = select.value;
+        } else {
+          delete select.dataset.configuredValue;
+        }
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+    }
     bindLive(weatherPopupModeSelect, 'change', 'weatherPopupMode', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(weatherColoredIconsCheck, 'change', 'weatherColoredIcons', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(energySelect, 'change', 'energyEntity', () => {
@@ -6316,8 +6331,11 @@ function syncTileRadiusControls(tabEl) {
     tileElem.innerHTML = html;
     if (previewKind === 'weather') {
       const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
-      applyWeatherPreview(tileElem, parseWeatherPreviewPayload(
-        weatherEntity ? (sensorMetaCache.weatherValues?.[weatherEntity] ?? '') : ''), {
+      applyWeatherPreview(tileElem, applyWeatherSensorOverrides(parseWeatherPreviewPayload(
+        weatherEntity ? (sensorMetaCache.weatherValues?.[weatherEntity] ?? '') : ''),
+        document.getElementById(prefix + '_weather_temperature_sensor')?.value || '',
+        document.getElementById(prefix + '_weather_humidity_sensor')?.value || '',
+        sensorMetaCache.values), {
         col: Number(tileElem.dataset.col || 0),
         span_w: Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
         span_h: Number(document.getElementById(prefix + '_tile_span_h')?.value || 1),
@@ -7558,6 +7576,8 @@ function syncTileRadiusControls(tabEl) {
       fd.append('clock_date_format', (tile.sensor_gauge_max !== undefined && tile.sensor_gauge_max !== null) ? tile.sensor_gauge_max : 0);
     } else if (safeType === 12) {
       fd.append('weather_entity', tile.sensor_entity || tile.weather_entity || '');
+      fd.append('weather_temperature_sensor', tile.weather_temperature_sensor || '');
+      fd.append('weather_humidity_sensor', tile.weather_humidity_sensor || '');
       fd.append('weather_colored_icons', Number(tile.sensor_display_mode) === 1 ? '0' : '1');
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
@@ -8301,8 +8321,9 @@ function syncTileRadiusControls(tabEl) {
       html += getTileResizeHandlesHtml(typeValue);
       el.innerHTML = html;
       if (previewKind === 'weather') {
-        applyWeatherPreview(el, parseWeatherPreviewPayload(
+        applyWeatherPreview(el, applyWeatherSensorOverrides(parseWeatherPreviewPayload(
           tile.sensor_entity ? (sensorMeta?.weatherValues?.[tile.sensor_entity] ?? '') : ''),
+          tile.weather_temperature_sensor || '', tile.weather_humidity_sensor || '', metaValues),
           tile, iconName, previewIconColor(typeValue, tile.icon_colors, tile.sensor_entity || '', sensorMeta, null, ''));
       }
       if (previewKind === 'media') {
@@ -11398,11 +11419,32 @@ function maybeFillTitleFromWeather(tab) {
     maybeFillTitleFromEntity(tab, '_weather_entity');
   }
 
+  const WEATHER_SENSOR_FIELDS = Object.freeze(['weather_temperature_sensor', 'weather_humidity_sensor']);
+
   function loadWeatherFields(tab, data) {
     loadIconColorFields(tab, data);
     const prefix = tab;
     const el = document.getElementById(prefix + '_weather_entity');
     if (el) el.value = data.sensor_entity || data.weather_entity || '';
+    // Optional temperature/humidity sensors: like the entity, a configured
+    // value survives the asynchronous rebuild of the option list.
+    for (const field of WEATHER_SENSOR_FIELDS) {
+      const select = document.getElementById(prefix + '_' + field);
+      if (!select) continue;
+      const configured = String(data[field] || '');
+      if (configured && !Array.from(select.options || []).some(option => option.value === configured)) {
+        const option = document.createElement('option');
+        option.value = configured;
+        option.textContent = configured;
+        select.appendChild(option);
+      }
+      select.value = configured;
+      if (configured) {
+        select.dataset.configuredValue = configured;
+      } else {
+        delete select.dataset.configuredValue;
+      }
+    }
     const popupModeEl = document.getElementById(prefix + '_weather_popup_open_mode');
     if (popupModeEl) popupModeEl.value = (data.popup_open_mode !== undefined) ? String(data.popup_open_mode) : '1';
     const colored = document.getElementById(prefix + '_weather_colored_icons');
@@ -11414,6 +11456,9 @@ function maybeFillTitleFromWeather(tab) {
     saveIconColorFields(tab, formData);
     const prefix = tab;
     formData.append('weather_entity', document.getElementById(prefix + '_weather_entity')?.value || '');
+    for (const field of WEATHER_SENSOR_FIELDS) {
+      formData.append(field, document.getElementById(prefix + '_' + field)?.value || '');
+    }
     formData.append('popup_open_mode', document.getElementById(prefix + '_weather_popup_open_mode')?.value || '1');
     const colored = document.getElementById(prefix + '_weather_colored_icons');
     if (colored) formData.append('weather_colored_icons', colored.checked ? '1' : '0');
@@ -11424,6 +11469,12 @@ function maybeFillTitleFromWeather(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_weather_entity');
     if (el) el.value = '';
+    for (const field of WEATHER_SENSOR_FIELDS) {
+      const select = document.getElementById(prefix + '_' + field);
+      if (!select) continue;
+      select.value = '';
+      delete select.dataset.configuredValue;
+    }
     const popupModeEl = document.getElementById(prefix + '_weather_popup_open_mode');
     if (popupModeEl) popupModeEl.value = '1';
     const colored = document.getElementById(prefix + '_weather_colored_icons');
@@ -11525,6 +11576,20 @@ function maybeFillTitleFromWeather(tab) {
       unit: units ? weatherPreviewString(units.temperature) : weatherPreviewString(data.temperature_unit),
       forecast: Array.isArray(data.forecast) ? data.forecast.filter(entry => entry && typeof entry === 'object') : []
     };
+  }
+
+  // Mirrors weather_sensors.h: a configured temperature sensor replaces the
+  // weather entity's current temperature, a humidity sensor adds a humidity
+  // value; without a numeric sensor state the value shows "--". The forecast
+  // stays the weather entity's.
+  function applyWeatherSensorOverrides(state, temperatureEntity, humidityEntity, values) {
+    if (!state) return state;
+    if (temperatureEntity) state.temperature = weatherPreviewNumber(values?.[temperatureEntity] ?? '');
+    if (humidityEntity) {
+      const humidity = weatherPreviewNumber(values?.[humidityEntity] ?? '');
+      state.humidity = humidity === null ? '--' : formatLocalizedNumber(humidity, 0, true) + ' %';
+    }
+    return state;
   }
 
   function weatherPreviewTemp(value) {
@@ -11650,7 +11715,8 @@ function maybeFillTitleFromWeather(tab) {
     // Condition | temperature.
     const valueFont = font(L.value);
     const hasTemp = !!state && state.temperature !== null;
-    const tempText = hasTemp ? weatherPreviewTemp(state.temperature) + (state.unit ? ' ' + state.unit : '') : '--';
+    let tempText = hasTemp ? weatherPreviewTemp(state.temperature) + (state.unit ? ' ' + state.unit : '') : '--';
+    if (state?.humidity) tempText += ' \u00B7 ' + state.humidity;
     const conditionText = state ? weatherConditionLabel(state.condition) : '--';
     let showCondition = spanW > 1 && conditionText !== '--';
     let room = 0;
@@ -11668,7 +11734,7 @@ function maybeFillTitleFromWeather(tab) {
       'px;height:' + valueFont.line.toFixed(2) + 'px;gap:' + px(L.valueGap) + '">';
     if (showCondition) {
       html += textSpan('weather-preview-condition', conditionText, valueFont, 'max-width:' + Math.max(0, room).toFixed(2) + 'px;');
-      if (hasTemp) html += textSpan('weather-preview-separator', '|', valueFont);
+      if (tempText !== '--') html += textSpan('weather-preview-separator', '|', valueFont);
     }
     html += textSpan('weather-preview-temp', tempText, valueFont) + '</div>';
 

@@ -109,6 +109,8 @@
 
         rebuildEntitySelect(tab + '_energy_entity', data.energy);
         rebuildEntitySelect(tab + '_weather_entity', data.weathers);
+        rebuildEntitySelect(tab + '_weather_temperature_sensor', data.sensors);
+        rebuildEntitySelect(tab + '_weather_humidity_sensor', data.sensors);
         rebuildEntitySelect(tab + '_switch_entity', data.switches);
         rebuildEntitySelect(tab + '_media_entity', data.media);
         rebuildEntitySelect(tab + '_climate_entity', data.climates);

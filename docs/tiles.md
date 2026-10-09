@@ -305,6 +305,8 @@ Shows current conditions and the next days from a `weather` entity.
 
 **Icons:** weather icons are filled and colored (sun gold, clouds grey, rain blue, snow ice blue, thunderstorms purple, wind teal, night grey blue). Turn off **Colored weather icons** in the tile settings to keep the white outlines. With **Tile color: From icon**, the tile takes the color of the current weather; an icon color you set yourself draws the whole icon in that color. When the bridge sends sunrise and sunset, partly cloudy and clear hours after sunset show the moon.
 
+**Own sensors:** choose a **Temperature sensor** to show your own outdoor sensor instead of the weather entity's current temperature, and a **Humidity sensor** to add its humidity, as in `21.5 °C · 64 %`. The tile and the popup header use them; the forecast still comes from the weather entity. A chosen sensor without a numeric state shows `--`. Add the sensors to the bridge's Sensors list so the display receives their states.
+
 ### Media
 
 Shows cover art, title, and playback controls for a `media_player` entity. Media tiles need at least 2×2 cells.

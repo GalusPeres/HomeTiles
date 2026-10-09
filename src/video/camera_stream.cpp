@@ -8,12 +8,29 @@
 
 #include "src/core/config/config_manager.h"
 #include "src/core/i18n/i18n.h"
+#include "src/devices/device_select.h"
 #include "src/network/network_manager.h"
 
+// The ESP32-P4 decodes with its JPEG hardware; the ESP32-S3 480 x 480 panels
+// decode the popup's frames in software (tjpgd) in the camera task, at a few
+// frames per second, and LVGL draws them (no direct output, no full screen).
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && \
     defined(SOC_JPEG_DECODE_SUPPORTED) && SOC_JPEG_DECODE_SUPPORTED
+#define CAMERA_STREAM_HW_JPEG 1
+#elif defined(DEVICE_ESP32_S3_RGB_480)
+#define CAMERA_STREAM_HW_JPEG 0
+#endif
 
+#if defined(CAMERA_STREAM_HW_JPEG)
+
+#if CAMERA_STREAM_HW_JPEG
 #include <driver/jpeg_decode.h>
+#else
+#include <libs/tjpgd/tjpgd.h>
+// lvgl.h no longer exports the image caches' drop calls (LVGL 9.5+).
+#include <misc/cache/instance/lv_image_cache.h>
+#include <misc/cache/instance/lv_image_header_cache.h>
+#endif
 #include <fcntl.h>
 #include <lwip/netdb.h>
 #include <lwip/sockets.h>
@@ -25,7 +42,9 @@
 #include <cstring>
 #include <strings.h>
 
+#if CAMERA_STREAM_HW_JPEG
 #include "src/core/display/dma2d_arbiter.h"
+#endif
 #include "src/devices/device.h"
 #include "src/video/camera_geometry.h"
 #include "src/video/tcp_ack_socket.h"
@@ -34,8 +53,21 @@ namespace {
 
 constexpr uint16_t kWidth = camera_geometry::kWidth;
 constexpr uint16_t kHeight = camera_geometry::kHeight;
+#if CAMERA_STREAM_HW_JPEG
 constexpr uint16_t kDecodedWidth = camera_geometry::kDecodedWidth;
 constexpr uint16_t kDecodedHeight = camera_geometry::kDecodedHeight;
+#else
+// Software decoding: a stream has the popup's size or the full screen's
+// (camera_geometry::kSoftFull*); every buffer fits the larger one.
+constexpr uint16_t kDecodedWidth =
+    camera_geometry::kDecodedWidth > camera_geometry::kSoftFullWidth
+        ? camera_geometry::kDecodedWidth
+        : camera_geometry::kSoftFullWidth;
+constexpr uint16_t kDecodedHeight =
+    camera_geometry::kDecodedHeight > ((camera_geometry::kSoftFullHeight + 15U) & ~15U)
+        ? camera_geometry::kDecodedHeight
+        : static_cast<uint16_t>((camera_geometry::kSoftFullHeight + 15U) & ~15U);
+#endif
 constexpr size_t kPixelBytes =
     static_cast<size_t>(kDecodedWidth) * kDecodedHeight * sizeof(uint16_t);
 constexpr size_t kMaxJpegBytes = 256U * 1024U;
@@ -124,9 +156,18 @@ uint32_t g_full_log_ms = 0;
 volatile bool g_transport_failed = false;
 uint32_t g_first_shown_ms = 0;
 
+#if CAMERA_STREAM_HW_JPEG
 // Keep the engine alive across popup opens. Creating/deleting JPEG engines
 // repeatedly churns the 2D-DMA pool shared with the display PPA.
 jpeg_decoder_handle_t g_jpeg_decoder = nullptr;
+#else
+// This stream's frame size (the popup's or the full screen's) and tjpgd's
+// work area, kept for the stream.
+uint16_t g_frame_w = kWidth;
+uint16_t g_frame_h = kHeight;
+constexpr size_t kSoftWorkBytes = 4096;
+uint8_t* g_soft_work = nullptr;
+#endif
 
 static const i18n::Strings& camera_text() {
   return i18n::strings(configManager.getConfig().language);
@@ -214,6 +255,11 @@ static void release_frame_buffers() {
   for (uint8_t i = 0; i < kFullJpegSlots; ++i) {
     heap_caps_free(jpegs[i]);
   }
+#if !CAMERA_STREAM_HW_JPEG
+  // Only the camera task decodes; it has ended or never started here.
+  heap_caps_free(g_soft_work);
+  g_soft_work = nullptr;
+#endif
 }
 
 static bool ensure_full_slots() {
@@ -234,13 +280,24 @@ static bool ensure_full_slots() {
 
 static bool ensure_frame_buffers() {
   for (uint8_t i = 0; i < kFrameBufferCount; ++i) {
+#if !CAMERA_STREAM_HW_JPEG
+    // This stream's size on every buffer, kept or new.
+    g_images[i].header.w = g_frame_w;
+    g_images[i].header.h = g_frame_h;
+#endif
     if (g_pixels[i]) continue;
 
+#if CAMERA_STREAM_HW_JPEG
     jpeg_decode_memory_alloc_cfg_t memory_config{};
     memory_config.buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER;
     size_t allocated_bytes = 0;
     g_pixels[i] = static_cast<uint16_t*>(
         jpeg_alloc_decoder_mem(kPixelBytes, &memory_config, &allocated_bytes));
+#else
+    const size_t allocated_bytes = kPixelBytes;
+    g_pixels[i] = static_cast<uint16_t*>(heap_caps_aligned_alloc(
+        64, kPixelBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+#endif
     if (!g_pixels[i] || allocated_bytes < kPixelBytes) {
       free(g_pixels[i]);
       g_pixels[i] = nullptr;
@@ -252,9 +309,16 @@ static bool ensure_frame_buffers() {
     memset(g_pixels[i], 0, kPixelBytes);
     memset(&g_images[i], 0, sizeof(g_images[i]));
     g_images[i].header.magic = LV_IMAGE_HEADER_MAGIC;
+#if CAMERA_STREAM_HW_JPEG
     g_images[i].header.cf = LV_COLOR_FORMAT_RGB565_SWAPPED;
     g_images[i].header.w = kWidth;
     g_images[i].header.h = kHeight;
+#else
+    // The S3 panel draws RGB565: LVGL copies these frames unconverted.
+    g_images[i].header.cf = LV_COLOR_FORMAT_RGB565;
+    g_images[i].header.w = g_frame_w;
+    g_images[i].header.h = g_frame_h;
+#endif
     g_images[i].header.stride = kDecodedWidth * sizeof(uint16_t);
     g_images[i].data_size = kPixelBytes;
     g_images[i].data =
@@ -333,6 +397,7 @@ static void note_presented_frame() {
   g_present_timed_frames = 0;
 }
 
+#if CAMERA_STREAM_HW_JPEG
 static bool ensure_jpeg_decoder() {
   if (g_jpeg_decoder) return true;
 
@@ -351,6 +416,7 @@ static bool ensure_jpeg_decoder() {
   Serial.println("[CameraStream] JPEG hardware decoder ready");
   return true;
 }
+#endif
 
 static uint16_t rgb888_to_swapped_rgb565(uint32_t rgb) {
   const uint16_t native = static_cast<uint16_t>(
@@ -429,6 +495,117 @@ static bool queue_full_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
   return true;
 }
 
+#if !CAMERA_STREAM_HW_JPEG
+// Software decoding (ESP32-S3): tjpgd in the camera task, straight into a
+// frame buffer at kDecodedWidth pixels per row, native RGB565.
+struct SoftJpegInput {
+  const uint8_t* data = nullptr;
+  size_t length = 0;
+  size_t position = 0;
+  uint16_t* pixels = nullptr;
+};
+
+static size_t soft_jpeg_input(JDEC* decoder, uint8_t* buffer, size_t bytes) {
+  SoftJpegInput* input = static_cast<SoftJpegInput*>(decoder->device);
+  if (!input || input->position >= input->length) return 0;
+  const size_t left = input->length - input->position;
+  const size_t take = bytes < left ? bytes : left;
+  if (buffer && take) memcpy(buffer, input->data + input->position, take);
+  input->position += take;
+  return take;
+}
+
+// tjpgd's blocks come in B, G, R byte order (like the media cover and the
+// screensaver decode read them).
+static int soft_jpeg_output(JDEC* decoder, void* bitmap, JRECT* rect) {
+  SoftJpegInput* input = static_cast<SoftJpegInput*>(decoder->device);
+  if (!input || !input->pixels || !bitmap || !rect) return 0;
+  const uint8_t* source = static_cast<const uint8_t*>(bitmap);
+  const uint32_t block_w = static_cast<uint32_t>(rect->right) - rect->left + 1U;
+  const uint16_t right = rect->right < g_frame_w ? rect->right : static_cast<uint16_t>(g_frame_w - 1U);
+  for (uint16_t y = rect->top; y <= rect->bottom && y < g_frame_h; ++y) {
+    const uint8_t* pixel = source + static_cast<size_t>(y - rect->top) * block_w * 3U;
+    uint16_t* row = input->pixels + static_cast<size_t>(y) * kDecodedWidth;
+    for (uint16_t x = rect->left; x <= right; ++x, pixel += 3) {
+      row[x] = static_cast<uint16_t>(((pixel[2] >> 3) << 11) | ((pixel[1] >> 2) << 5) |
+                                     (pixel[0] >> 3));
+    }
+  }
+  return 1;
+}
+
+static bool decode_jpeg_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
+  if (!jpeg || jpeg_bytes < 4 ||
+      jpeg[0] != 0xFF || jpeg[1] != 0xD8 ||
+      jpeg[jpeg_bytes - 2] != 0xFF || jpeg[jpeg_bytes - 1] != 0xD9) {
+    Serial.printf("[CameraStream] Invalid JPEG frame: %u bytes\n",
+                  static_cast<unsigned>(jpeg_bytes));
+    set_status(camera_text().camera_invalid_response, true);
+    return false;
+  }
+  if (!g_soft_work) {
+    g_soft_work = static_cast<uint8_t*>(
+        heap_caps_malloc(kSoftWorkBytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    if (!g_soft_work) {
+      g_soft_work = static_cast<uint8_t*>(
+          heap_caps_malloc(kSoftWorkBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    }
+    if (!g_soft_work) {
+      set_status(camera_text().camera_decoder_start_failed, true);
+      return false;
+    }
+  }
+  const int8_t index = acquire_write_buffer();
+  if (index < 0) {
+    ++g_no_write_buffer_drops;
+    return true;
+  }
+
+  const uint32_t started_ms = millis();
+  const uint32_t started_us = micros();
+  SoftJpegInput input;
+  input.data = jpeg;
+  input.length = jpeg_bytes;
+  input.pixels = g_pixels[index];
+  JDEC decoder;
+  JRESULT result = jd_prepare(&decoder, soft_jpeg_input, g_soft_work, kSoftWorkBytes, &input);
+  if (result == JDR_OK && (decoder.width != g_frame_w || decoder.height != g_frame_h)) {
+    release_write_buffer(index);
+    Serial.printf("[CameraStream] Invalid JPEG format: size=%ux%u, expected %ux%u\n",
+                  static_cast<unsigned>(decoder.width), static_cast<unsigned>(decoder.height),
+                  static_cast<unsigned>(g_frame_w), static_cast<unsigned>(g_frame_h));
+    set_status(camera_text().camera_invalid_response, true);
+    return false;
+  }
+  if (result == JDR_OK) result = jd_decomp(&decoder, soft_jpeg_output, 0);
+  g_decode_total_us += micros() - started_us;
+  g_decode_jpeg_bytes += jpeg_bytes;
+  ++g_decode_timed;
+  if (result != JDR_OK) {
+    release_write_buffer(index);
+    Serial.printf("[CameraStream] JPEG decode failed: tjpgd %d\n", static_cast<int>(result));
+    set_status(camera_text().camera_decoder_error, true);
+    return false;
+  }
+
+  // The popup's frame has rounded corners; the full screen's has none.
+  if (!g_full_mode) apply_rounded_frame_corners(g_pixels[index]);
+  publish_write_buffer(index);
+  ++g_worker_frame_count;
+  if (g_worker_frame_count == 1) {
+    Serial.printf(
+        "[CameraStream] First image decoded (software): jpeg=%u bytes %ux%u decode=%ums "
+        "int=%uKB largest=%uKB psram=%uKB\n",
+        static_cast<unsigned>(jpeg_bytes), static_cast<unsigned>(g_frame_w),
+        static_cast<unsigned>(g_frame_h), static_cast<unsigned>(millis() - started_ms),
+        static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024U),
+        static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024U),
+        static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
+    set_status(camera_text().camera_ready);
+  }
+  return true;
+}
+#else
 static bool decode_jpeg_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
   if (!jpeg || jpeg_bytes < 4 || jpeg_bytes > UINT32_MAX ||
       jpeg[0] != 0xFF || jpeg[1] != 0xD8 ||
@@ -530,6 +707,7 @@ static bool decode_jpeg_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
   }
   return true;
 }
+#endif
 
 // Kept out of the binary for reference while the bridge/firmware transition
 // is tested. The acknowledged TCP protocol below replaces HTTP chunking.
@@ -1134,7 +1312,9 @@ static void run_camera_task_http_legacy() {
 #endif
 
 static void run_camera_task() {
-  const bool full = g_full_mode;
+  // The P4's full screen queues each JPEG for the UI loop's hardware decode;
+  // software decoding decodes every frame here, the full screen's too.
+  const bool full = CAMERA_STREAM_HW_JPEG && g_full_mode;
   set_status(camera_text().camera_http_connecting);
   const String url = g_url;
   CameraEndpoint endpoint;
@@ -1447,7 +1627,16 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb, bool full_screen)
   }
   g_full_mode = full_screen;
   g_full_shown = false;
-  if (full_screen) {
+#if CAMERA_STREAM_HW_JPEG
+  const bool queue_jpegs = full_screen;
+#else
+  // Software decoding: the popup's frame or the whole screen's, both decoded
+  // into the frame buffers and drawn by LVGL.
+  const bool queue_jpegs = false;
+  g_frame_w = full_screen ? camera_geometry::kSoftFullWidth : kWidth;
+  g_frame_h = full_screen ? camera_geometry::kSoftFullHeight : kHeight;
+#endif
+  if (queue_jpegs) {
     uint16_t turn_cw = 0;
     if (!Device::displayFullFrameInfo(g_full_width, g_full_height, turn_cw) ||
         !ensure_full_slots()) {
@@ -1489,7 +1678,13 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb, bool full_screen)
   portEXIT_CRITICAL(&g_state_mux);
 
   g_url = url;
+#if CAMERA_STREAM_HW_JPEG
   g_corner_fill_swapped = rgb888_to_swapped_rgb565(corner_rgb);
+#else
+  // The frames are native RGB565 here (the S3 panel's order).
+  g_corner_fill_swapped = static_cast<uint16_t>(rgb888_to_swapped_rgb565(corner_rgb) << 8U |
+                                                rgb888_to_swapped_rgb565(corner_rgb) >> 8U);
+#endif
   g_stop_requested = false;
   g_worker_frame_count = 0;
   g_no_write_buffer_drops = 0;
@@ -1551,6 +1746,11 @@ void camera_stream_stop() {
   if (!active) release_frame_buffers();
 }
 
+#if !CAMERA_STREAM_HW_JPEG
+// Software decoding shows the full screen through LVGL (g_full_shown stays
+// false).
+static void process_full_frame() {}
+#else
 // Full screen: the newest waiting JPEG decoded by the hardware decoder
 // straight into the framebuffer the panel does not scan, then swapped in. In
 // the UI loop, like the popup's PPA presentation it replaces.
@@ -1642,6 +1842,7 @@ static void process_full_frame() {
   g_full_wait_total_us = 0;
   g_full_log_ms = now;
 }
+#endif
 
 void camera_stream_process_ui(lv_obj_t* image,
                               lv_obj_t* placeholder,
@@ -1681,6 +1882,27 @@ void camera_stream_process_ui(lv_obj_t* image,
     portEXIT_CRITICAL(&g_state_mux);
   }
 
+#if !CAMERA_STREAM_HW_JPEG
+  // No direct output on the S3: LVGL draws the frame in this loop pass. A
+  // buffer is reused with new pixels and, popup or full screen, a new size:
+  // no cache may keep its old picture or header.
+  if (ready >= 0 && can_try_direct_preview) {
+    const uint32_t started_us = micros();
+    lv_image_cache_drop(&g_images[ready]);
+    lv_image_header_cache_drop(&g_images[ready]);
+    lv_image_set_src(image, &g_images[ready]);
+    lv_obj_invalidate(image);
+    direct_preview = true;
+    if (!g_first_shown_ms) g_first_shown_ms = millis();
+    g_present_copy_total_us += micros() - started_us;
+    ++g_present_timed_frames;
+    if (!g_direct_preview_logged) {
+      g_direct_preview_logged = true;
+      Serial.printf("[CameraStream] Presentation path: LVGL image, software decode %ux%u\n",
+                    static_cast<unsigned>(g_frame_w), static_cast<unsigned>(g_frame_h));
+    }
+  }
+#else
   if (ready >= 0 && can_try_direct_preview) {
     lv_area_t area{};
     lv_obj_get_coords(image, &area);
@@ -1720,6 +1942,7 @@ void camera_stream_process_ui(lv_obj_t* image,
   if (ready >= 0 && direct_preview) {
     set_image_source_without_redraw(image, &g_images[ready]);
   }
+#endif
 
   if (direct_preview) {
     lv_obj_clear_flag(image, LV_OBJ_FLAG_HIDDEN);

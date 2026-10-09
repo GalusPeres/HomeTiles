@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "src/devices/device_select.h"
 #include "src/ui/popups/popup_layout.h"
 
 namespace camera_geometry {
@@ -33,6 +34,17 @@ inline constexpr uint16_t kHeight = evenRound(
     static_cast<uint32_t>(kWidth) * 9U, 16U);
 inline constexpr uint16_t kCornerRadius =
     static_cast<uint16_t>(popup_layout::scale480(18));
+#if defined(DEVICE_ESP32_S3_RGB_480)
+// The ESP32-S3 decodes in software (camera_stream.cpp, ~1.1 us per pixel):
+// the popup's frame about 8 times a second at most, its full screen (the
+// whole 480 x 480, black bars, nothing cut) about 3 times. The Bridge thins
+// its stream to this; the rest is measured on the panel (user 2026-10-09:
+// "schauen wir einfach was möglich ist").
+inline constexpr uint8_t kFps = 8;
+inline constexpr uint8_t kFallbackFps = 8;
+inline constexpr uint16_t kSoftFullWidth = 480;
+inline constexpr uint16_t kSoftFullHeight = 480;
+#else
 // Target for the bounded low-latency camera path. The PPA rotation takes
 // about 17 ms per frame on the 800x1280 panels; since the UI loop no longer
 // waits for the panel refresh after each swap, 30 FPS keeps about the loop
@@ -41,6 +53,7 @@ inline constexpr uint8_t kFps = 30;
 // Bridges before v0.7.1b9 reject more than 24 FPS; the popup then asks again
 // at this rate.
 inline constexpr uint8_t kFallbackFps = 24;
+#endif
 
 // ESP32-P4's JPEG hardware decoder writes in 16-pixel-aligned dimensions.
 // LVGL still receives the visible width/height and the aligned row stride.

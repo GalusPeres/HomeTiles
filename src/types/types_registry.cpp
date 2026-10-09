@@ -763,7 +763,8 @@ const TileTypeDescriptor kTileTypes[] = {
     append_no_scripts,
     append_no_scripts
   },
-#if !defined(DEVICE_ESP32_S3_RGB_480)
+  // The ESP32-S3 shows the camera too, decoded in software at a few frames
+  // per second (camera_stream.cpp, user 2026-10-09).
   {
     TILE_CAMERA,
     "Camera",
@@ -782,7 +783,6 @@ const TileTypeDescriptor kTileTypes[] = {
     append_camera_styles,
     append_camera_scripts
   },
-#endif
   {
     TILE_PIXELANIM,
     "Animation",

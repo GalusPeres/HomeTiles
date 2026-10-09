@@ -88,6 +88,12 @@ struct CameraPopupContext {
   bool switch_frame_logged = true;
   // The running stream used the fast transport (camera_transport).
   bool stream_fast = false;
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  // The S3's full screen (software decode, camera_stream.cpp): LVGL shows the
+  // whole picture centred on black over everything; a tap leaves it.
+  lv_obj_t* soft_full = nullptr;
+  lv_obj_t* soft_full_image = nullptr;
+#endif
 };
 
 CameraPopupContext* g_camera_popup = nullptr;
@@ -171,10 +177,64 @@ static void open_popup_stream(CameraPopupContext* ctx) {
   mqttPublishCameraCommand(ctx->entity_id.c_str(), "open", ctx->requested_fps);
 }
 
+#if defined(DEVICE_ESP32_S3_RGB_480)
+// The S3's full screen (user 2026-10-09: the whole picture, nothing cut,
+// fewer frames if need be): its stream in the screen's size, black bars from
+// the Bridge, decoded in software and drawn by LVGL on black over everything.
+static void enter_soft_full_screen() {
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || !ctx->visible || ctx->full || !ctx->soft_full) return;
+  // The popup's frames go with its stream; its video area drawn black.
+  lv_image_set_src(ctx->image, nullptr);
+  lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(ctx->placeholder, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_invalidate(lv_obj_get_parent(ctx->image));
+  ctx->pending_url = String();
+  camera_stream_stop();
+  lv_image_set_src(ctx->soft_full_image, nullptr);
+  lv_obj_add_flag(ctx->soft_full_image, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(ctx->soft_full, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(ctx->soft_full);
+  ctx->full = true;
+  ctx->waiting_for_bridge = true;
+  ctx->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
+  note_switch(ctx, "full screen black on screen");
+  ctx->switch_frame_logged = false;
+  Serial.printf("[Camera] Full screen (software): %ux%u frames\n",
+                static_cast<unsigned>(camera_geometry::kSoftFullWidth),
+                static_cast<unsigned>(camera_geometry::kSoftFullHeight));
+  mqttPublishCameraFullScreenOpen(ctx->entity_id.c_str(), camera_geometry::kFps,
+                                  camera_geometry::kSoftFullWidth,
+                                  camera_geometry::kSoftFullHeight, 0);
+}
+
+static void leave_soft_full_screen(bool reopen) {
+  CameraPopupContext* ctx = g_camera_popup;
+  if (!ctx || !ctx->full) return;
+  ctx->full = false;
+  ctx->full_request = 0;
+  ctx->pending_url = String();
+  // LVGL lets go of the frame before the stream frees it.
+  lv_image_set_src(ctx->soft_full_image, nullptr);
+  lv_obj_add_flag(ctx->soft_full_image, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(ctx->soft_full, LV_OBJ_FLAG_HIDDEN);
+  camera_stream_stop();
+  Serial.println("[Camera] Full screen ended");
+  note_switch(ctx, "popup with black video on screen");
+  ctx->switch_frame_logged = false;
+  ctx->resuming = reopen && ctx->visible;
+  if (ctx->resuming) open_popup_stream(ctx);
+}
+#endif
+
 // The popup back at once: the kept UI swapped in and LVGL drawing again
 // (what changed meanwhile is drawn again, the rest are the same pixels);
 // with reopen also the popup's own stream again.
 static void leave_full_screen(bool reopen) {
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  leave_soft_full_screen(reopen);
+  return;
+#endif
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->full) return;
   ctx->full = false;
@@ -216,6 +276,10 @@ static void leave_full_screen(bool reopen) {
 // loop: lv_refr_now first, or an area LVGL still owes would land on the full
 // screen.
 static void enter_full_screen() {
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  enter_soft_full_screen();
+  return;
+#endif
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->visible || ctx->full) return;
   uint16_t width = 0;
@@ -357,6 +421,22 @@ static CameraPopupContext* create_popup() {
   lv_obj_add_flag(ctx->full_touch, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(ctx->full_touch, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_event_cb(ctx->full_touch, full_touch_event_cb, LV_EVENT_CLICKED, ctx);
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  ctx->soft_full = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(ctx->soft_full);
+  lv_obj_set_size(ctx->soft_full, LV_PCT(100), LV_PCT(100));
+  lv_obj_set_style_bg_color(ctx->soft_full, lv_color_black(), 0);
+  lv_obj_set_style_bg_opa(ctx->soft_full, LV_OPA_COVER, 0);
+  lv_obj_remove_flag(ctx->soft_full, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(ctx->soft_full, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(ctx->soft_full, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_event_cb(ctx->soft_full, full_touch_event_cb, LV_EVENT_CLICKED, ctx);
+  ctx->soft_full_image = lv_image_create(ctx->soft_full);
+  lv_obj_set_size(ctx->soft_full_image, camera_geometry::kSoftFullWidth,
+                  camera_geometry::kSoftFullHeight);
+  lv_obj_center(ctx->soft_full_image);
+  lv_obj_add_flag(ctx->soft_full_image, LV_OBJ_FLAG_HIDDEN);
+#endif
 
   ctx->image = lv_image_create(video);
   // The bridge delivers the native frame size requested by this device.
@@ -406,7 +486,15 @@ static void start_camera_stream(const String& url, bool full) {
     return;
   }
   ctx->pending_url = String();
-  if (!full && !ctx->large_draw_buffer_active) {
+  // The S3 keeps its internal draw band: a PSRAM band as tall as the video
+  // would add PSRAM traffic next to its RGB scan-out (and the frames are
+  // drawn by LVGL there anyway).
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  constexpr bool kLargeDrawBuffer = false;
+#else
+  constexpr bool kLargeDrawBuffer = true;
+#endif
+  if (kLargeDrawBuffer && !full && !ctx->large_draw_buffer_active) {
     const size_t previous_requested_lines =
         displayManager.getRequestedBufferLines() != 0
             ? displayManager.getRequestedBufferLines()
@@ -553,6 +641,7 @@ void process_camera_popup() {
   } else if (full_request == kFullLeave) {
     leave_full_screen(true);
   }
+#if !defined(DEVICE_ESP32_S3_RGB_480)
   if (g_camera_popup->full) {
     // A popup scene change elsewhere may have turned LVGL drawing on again:
     // the full screen must not get UI pixels.
@@ -561,6 +650,7 @@ void process_camera_popup() {
       lv_display_enable_invalidation(display, false);
     }
   }
+#endif
   if (g_camera_popup->pending_url.length() && !camera_stream_is_active()) {
     const String url = g_camera_popup->pending_url;
     start_camera_stream(url, g_camera_popup->pending_full);
@@ -582,6 +672,12 @@ void process_camera_popup() {
     close_camera_popup();
     return;
   }
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  // The S3's full screen shows the frames in its own image (LVGL).
+  if (g_camera_popup->full) {
+    camera_stream_process_ui(g_camera_popup->soft_full_image, nullptr, nullptr);
+  } else
+#endif
   camera_stream_process_ui(g_camera_popup->image,
                            g_camera_popup->placeholder,
                            g_camera_popup->resuming ? nullptr : g_camera_popup->status);

@@ -2,7 +2,11 @@
 
 #include <sdkconfig.h>
 
-#if defined(CONFIG_IDF_TARGET_ESP32P4)
+#include "src/devices/device_select.h"
+
+// The P4 cameras and camera streams, and the S3 panels' camera stream
+// (software decode, camera_stream.cpp).
+#if defined(CONFIG_IDF_TARGET_ESP32P4) || defined(DEVICE_ESP32_S3_RGB_480)
 
 #include <Arduino.h>
 #include <fcntl.h>
@@ -176,4 +180,4 @@ void closeSocket(int fd) {
 
 }  // namespace tcp_ack
 
-#endif  // defined(CONFIG_IDF_TARGET_ESP32P4)
+#endif  // defined(CONFIG_IDF_TARGET_ESP32P4) || defined(DEVICE_ESP32_S3_RGB_480)

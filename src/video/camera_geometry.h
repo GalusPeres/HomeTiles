@@ -44,11 +44,14 @@ inline constexpr uint8_t kFps = 8;
 inline constexpr uint8_t kFallbackFps = 8;
 inline constexpr uint16_t kSoftFullWidth = 480;
 inline constexpr uint16_t kSoftFullHeight = 480;
-// JPEG quality asked of the Bridge (FFmpeg -q:v, 2 best .. 31 smallest). Its
-// own 11 keeps the P4's 30 FPS within the network; the S3 uses a fraction of
-// its network and 11 looked blocky (7 KB frames, user 2026-10-09). Bridges
-// before v0.9.0b25 ignore it.
-inline constexpr uint8_t kJpegQuality = 5;
+// JPEG quality asked of the Bridge (FFmpeg -q:v, 2 best .. 31 smallest; 0 =
+// the Bridge's own 11). b329 asked for 5: frames 2-3 times larger, no visible
+// difference (user 2026-10-09), each KB ~6 ms more decoding (4.5 -> 3.5 FPS).
+inline constexpr uint8_t kJpegQuality = 0;
+// The full screen gets the whole picture without bars, within 480 x 480; the
+// panel draws the black around it (with "contain" the bars were almost half
+// of each decoded frame: 2 FPS instead of the popup's 4.5).
+inline constexpr const char* kFullFit = "inside";
 #else
 // Target for the bounded low-latency camera path. The PPA rotation takes
 // about 17 ms per frame on the 800x1280 panels; since the UI loop no longer
@@ -60,6 +63,9 @@ inline constexpr uint8_t kFps = 30;
 inline constexpr uint8_t kFallbackFps = 24;
 // 0: no "quality" in the request, the Bridge's own JPEG quality.
 inline constexpr uint8_t kJpegQuality = 0;
+// Frames exactly the framebuffer's size, black bars from the Bridge: the
+// hardware decoder writes them straight into the framebuffer.
+inline constexpr const char* kFullFit = "contain";
 #endif
 
 // ESP32-P4's JPEG hardware decoder writes in 16-pixel-aligned dimensions.

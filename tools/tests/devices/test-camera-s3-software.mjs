@@ -20,7 +20,11 @@ const registry = read('src/types/types_registry.cpp');
 assert.match(stream, /SOC_JPEG_DECODE_SUPPORTED\n#define CAMERA_STREAM_HW_JPEG 1\n#elif defined\(DEVICE_ESP32_S3_RGB_480\)\n#define CAMERA_STREAM_HW_JPEG 0/);
 assert.match(stream, /#include <libs\/tjpgd\/tjpgd\.h>/);
 assert.match(stream, /JRESULT result = jd_prepare\(&decoder, soft_jpeg_input, g_soft_work, kSoftWorkBytes, &input\);/);
-assert.match(stream, /decoder\.width != g_frame_w \|\| decoder\.height != g_frame_h/, 'only frames of this stream\'s size');
+// The popup's frames exactly its size; the full screen's the whole picture
+// without bars (Bridge fit "inside", b330: the bars were almost half of each
+// 480 x 480 frame), any size within the screen, its own size for LVGL.
+assert.match(stream, /const bool size_ok = g_full_mode\s*\? decoder\.width <= g_frame_w && decoder\.height <= g_frame_h\s*: decoder\.width == g_frame_w && decoder\.height == g_frame_h;/);
+assert.match(stream, /g_images\[index\]\.header\.w = decoder\.width;\s*g_images\[index\]\.header\.h = decoder\.height;\s*publish_write_buffer\(index\);/);
 assert.match(stream, /g_images\[i\]\.header\.cf = LV_COLOR_FORMAT_RGB565;/, 'native RGB565: LVGL copies the frames unconverted');
 assert.match(stream, /const bool full = CAMERA_STREAM_HW_JPEG && g_full_mode;/, 'software decoding decodes the full screen\'s frames in the task too');
 assert.match(stream, /lv_image_cache_drop\(&g_images\[ready\]\);\s*lv_image_header_cache_drop\(&g_images\[ready\]\);\s*lv_image_set_src\(image, &g_images\[ready\]\);\s*lv_obj_invalidate\(image\);/,
@@ -33,6 +37,12 @@ assert.match(stream, /#if !CAMERA_STREAM_HW_JPEG\n[^#]*take_frame = take_frame &
 
 // The S3's sizes and rate: the whole screen in full screen, a few frames.
 assert.match(geometry, /#if defined\(DEVICE_ESP32_S3_RGB_480\)[\s\S]*?kFps = 8;[\s\S]*?kSoftFullWidth = 480;\s*inline constexpr uint16_t kSoftFullHeight = 480;/);
+// b329's JPEG quality 5 looked no different and cost FPS: the Bridge's own.
+assert.match(geometry, /#if defined\(DEVICE_ESP32_S3_RGB_480\)[\s\S]*?kJpegQuality = 0;[\s\S]*?kFullFit = "inside";[\s\S]*?#else[\s\S]*?kFullFit = "contain";/);
+const mqttHandlers = read('src/network/mqtt/mqtt_handlers.cpp');
+assert.match(mqttHandlers, /\\"fit\\":\\"%s\\",[\s\S]{0,400}?camera_geometry::kFullFit,/);
+assert.match(popup, /lv_obj_set_size\(ctx->soft_full_image, LV_SIZE_CONTENT, LV_SIZE_CONTENT\);\s*lv_obj_center\(ctx->soft_full_image\);/,
+  'the frame centred on black at its own size');
 
 // The popup: the camera tile is no longer left out, the S3 keeps its
 // internal draw band, its full screen is LVGL on black.

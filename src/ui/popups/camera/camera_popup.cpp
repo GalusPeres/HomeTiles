@@ -205,9 +205,10 @@ static void enter_soft_full_screen() {
   ctx->bridge_response_deadline_ms = millis() + kFullScreenResponseTimeoutMs;
   note_switch(ctx, "full screen black on screen");
   ctx->switch_frame_logged = false;
-  Serial.printf("[Camera] Full screen (software): %ux%u frames\n",
+  Serial.printf("[Camera] Full screen (software): frames within %ux%u, fit %s\n",
                 static_cast<unsigned>(camera_geometry::kSoftFullWidth),
-                static_cast<unsigned>(camera_geometry::kSoftFullHeight));
+                static_cast<unsigned>(camera_geometry::kSoftFullHeight),
+                camera_geometry::kFullFit);
   mqttPublishCameraFullScreenOpen(ctx->entity_id.c_str(), camera_geometry::kFps,
                                   camera_geometry::kSoftFullWidth,
                                   camera_geometry::kSoftFullHeight, 0);
@@ -436,9 +437,10 @@ static CameraPopupContext* create_popup() {
   lv_obj_add_flag(ctx->soft_full, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(ctx->soft_full, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_event_cb(ctx->soft_full, full_touch_event_cb, LV_EVENT_CLICKED, ctx);
+  // The frame's own size (the whole picture without bars, Bridge fit
+  // "inside"), centred on the black: only the picture is drawn each frame.
   ctx->soft_full_image = lv_image_create(ctx->soft_full);
-  lv_obj_set_size(ctx->soft_full_image, camera_geometry::kSoftFullWidth,
-                  camera_geometry::kSoftFullHeight);
+  lv_obj_set_size(ctx->soft_full_image, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_center(ctx->soft_full_image);
   lv_obj_add_flag(ctx->soft_full_image, LV_OBJ_FLAG_HIDDEN);
 #endif

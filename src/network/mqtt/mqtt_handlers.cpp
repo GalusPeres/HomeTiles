@@ -3030,13 +3030,13 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
   snprintf(payload, sizeof(payload),
            "{\"entity_id\":\"%s\",\"command\":\"open\","
            "\"width\":%u,\"height\":%u,\"fps\":%u,"
-           "\"view\":\"full\",\"rotate\":%u,\"fit\":\"contain\","
+           "\"view\":\"full\",\"rotate\":%u,\"fit\":\"%s\","
            "\"chunk\":%u,\"window\":%u%s,"
            "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
            entity_id, static_cast<unsigned>(width),
            static_cast<unsigned>(height),
            static_cast<unsigned>(fps ? fps : camera_geometry::kFps),
-           static_cast<unsigned>(turn_cw),
+           static_cast<unsigned>(turn_cw), camera_geometry::kFullFit,
            static_cast<unsigned>(transport.chunk_bytes),
            static_cast<unsigned>(transport.window), quality);
   const bool queued =

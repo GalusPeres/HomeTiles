@@ -147,11 +147,12 @@ for (const fn of ['void mqttPublishCameraFullScreenOpen(', 'void mqttPublishCame
   assert.match(body(mqtt, fn), /camera_quality_field\(quality, sizeof\(quality\)\);/);
   assert.match(body(mqtt, fn), /static_cast<unsigned>\(transport\.chunk_bytes\),\s*static_cast<unsigned>\(transport\.window\), quality\);/);
 }
-// The panel's JPEG quality only where it asks for one (S3 b329): the P4
-// keeps the Bridge's 11, older Bridges ignore the field.
+// The panel's JPEG quality only where it asks for one (none today: the S3's
+// 5 in b329 looked no different); older Bridges ignore the field.
 assert.match(body(mqtt, 'static void camera_quality_field('), /if \(camera_geometry::kJpegQuality\) \{\s*snprintf\(out, size, ",\\"quality\\":%u",/);
 const geometry = read('src/video/camera_geometry.h');
-assert.match(geometry, /#if defined\(DEVICE_ESP32_S3_RGB_480\)[\s\S]*?kJpegQuality = 5;[\s\S]*?#else[\s\S]*?kJpegQuality = 0;\s*#endif/);
+assert.match(geometry, /#if defined\(DEVICE_ESP32_S3_RGB_480\)[\s\S]*?kJpegQuality = 0;[\s\S]*?#else[\s\S]*?kJpegQuality = 0;[\s\S]*?kFullFit = "contain";\s*#endif/,
+  'the P4 keeps its framebuffer-sized frames with the Bridge\'s bars');
 // A restart the user or an update asked for clears the "fast stream runs"
 // mark (b327: an OTA during a stream fell back for the new firmware); the
 // recovery restarts (network wedge, display timeout) keep it.

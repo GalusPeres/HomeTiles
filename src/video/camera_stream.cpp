@@ -569,7 +569,13 @@ static bool decode_jpeg_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
   input.pixels = g_pixels[index];
   JDEC decoder;
   JRESULT result = jd_prepare(&decoder, soft_jpeg_input, g_soft_work, kSoftWorkBytes, &input);
-  if (result == JDR_OK && (decoder.width != g_frame_w || decoder.height != g_frame_h)) {
+  // The popup's frames have exactly its size; the full screen's are the
+  // whole picture without bars, any size within the screen (fit "inside",
+  // Bridge b26: the bars were almost half of each 480 x 480 frame).
+  const bool size_ok = g_full_mode
+                           ? decoder.width <= g_frame_w && decoder.height <= g_frame_h
+                           : decoder.width == g_frame_w && decoder.height == g_frame_h;
+  if (result == JDR_OK && !size_ok) {
     release_write_buffer(index);
     Serial.printf("[CameraStream] Invalid JPEG format: size=%ux%u, expected %ux%u\n",
                   static_cast<unsigned>(decoder.width), static_cast<unsigned>(decoder.height),
@@ -590,14 +596,17 @@ static bool decode_jpeg_frame(const uint8_t* jpeg, size_t jpeg_bytes) {
 
   // The popup's frame has rounded corners; the full screen's has none.
   if (!g_full_mode) apply_rounded_frame_corners(g_pixels[index]);
+  // This frame's size for LVGL (not shown before it is published).
+  g_images[index].header.w = decoder.width;
+  g_images[index].header.h = decoder.height;
   publish_write_buffer(index);
   ++g_worker_frame_count;
   if (g_worker_frame_count == 1) {
     Serial.printf(
         "[CameraStream] First image decoded (software): jpeg=%u bytes %ux%u decode=%ums "
         "int=%uKB largest=%uKB psram=%uKB\n",
-        static_cast<unsigned>(jpeg_bytes), static_cast<unsigned>(g_frame_w),
-        static_cast<unsigned>(g_frame_h), static_cast<unsigned>(millis() - started_ms),
+        static_cast<unsigned>(jpeg_bytes), static_cast<unsigned>(decoder.width),
+        static_cast<unsigned>(decoder.height), static_cast<unsigned>(millis() - started_ms),
         static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024U),
         static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024U),
         static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
@@ -1908,7 +1917,8 @@ void camera_stream_process_ui(lv_obj_t* image,
     if (!g_direct_preview_logged) {
       g_direct_preview_logged = true;
       Serial.printf("[CameraStream] Presentation path: LVGL image, software decode %ux%u\n",
-                    static_cast<unsigned>(g_frame_w), static_cast<unsigned>(g_frame_h));
+                    static_cast<unsigned>(g_images[ready].header.w),
+                    static_cast<unsigned>(g_images[ready].header.h));
     }
   }
 #else

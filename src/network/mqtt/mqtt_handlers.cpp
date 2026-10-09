@@ -3004,6 +3004,15 @@ void mqttServicePostConnect() {
   networkManager.publishBridgeConfig();
 }
 
+// The panel's own JPEG quality for the Bridge, or nothing for the Bridge's.
+static void camera_quality_field(char* out, size_t size) {
+  out[0] = '\0';
+  if (camera_geometry::kJpegQuality) {
+    snprintf(out, size, ",\"quality\":%u",
+             static_cast<unsigned>(camera_geometry::kJpegQuality));
+  }
+}
+
 void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
                                      uint16_t width, uint16_t height,
                                      uint16_t turn_cw) {
@@ -3015,19 +3024,21 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
     camera_popup_set_status(text.camera_mqtt_disconnected, true);
     return;
   }
+  char quality[24];
+  camera_quality_field(quality, sizeof(quality));
   char payload[384];
   snprintf(payload, sizeof(payload),
            "{\"entity_id\":\"%s\",\"command\":\"open\","
            "\"width\":%u,\"height\":%u,\"fps\":%u,"
            "\"view\":\"full\",\"rotate\":%u,\"fit\":\"contain\","
-           "\"chunk\":%u,\"window\":%u,"
+           "\"chunk\":%u,\"window\":%u%s,"
            "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
            entity_id, static_cast<unsigned>(width),
            static_cast<unsigned>(height),
            static_cast<unsigned>(fps ? fps : camera_geometry::kFps),
            static_cast<unsigned>(turn_cw),
            static_cast<unsigned>(transport.chunk_bytes),
-           static_cast<unsigned>(transport.window));
+           static_cast<unsigned>(transport.window), quality);
   const bool queued =
       networkManager.mqttEnqueuePublishPriority(topic, payload, false);
   Serial.printf("[Camera] command open full screen %ux%u -> %s (%s)\n",
@@ -3055,17 +3066,19 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command,
   char payload[384];
   if (strcmp(action, "open") == 0) {
     const camera_transport::Request transport = camera_transport::request();
+    char quality[24];
+    camera_quality_field(quality, sizeof(quality));
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\","
              "\"width\":%u,\"height\":%u,\"fps\":%u,"
-             "\"chunk\":%u,\"window\":%u,"
+             "\"chunk\":%u,\"window\":%u%s,"
              "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
              entity_id, action,
              camera_geometry::kWidth,
              camera_geometry::kHeight,
              fps ? fps : camera_geometry::kFps,
              static_cast<unsigned>(transport.chunk_bytes),
-             static_cast<unsigned>(transport.window));
+             static_cast<unsigned>(transport.window), quality);
   } else {
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\"}",

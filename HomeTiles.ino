@@ -48,6 +48,7 @@
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/io/hardware_io.h"
 #include "src/video/local_camera/local_camera.h"
+#include "src/video/camera_transport.h"
 #include "src/network/secure/command_channel.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
@@ -508,6 +509,7 @@ static void apply_fw_install() {
     clear_fw_install_auto_retry();
     settings_fw_install_done();
     Serial.println("[Update] Successful - restarting");
+    camera_transport::planned_restart();
     BoardHAL::prepareForRestart();
     delay(800);  // Erfolgsmeldung kurz stehen lassen
     BoardHAL::restart();
@@ -542,6 +544,7 @@ static void apply_system_reboot() {
   Serial.println("[System] Restart requested");
   displayManager.setInputEnabled(false);
   lv_refr_now(displayManager.getDisplay());
+  camera_transport::planned_restart();
   BoardHAL::prepareForRestart();
   delay(800);
   BoardHAL::restart();

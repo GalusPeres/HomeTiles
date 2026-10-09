@@ -143,8 +143,26 @@ assert.match(transport, /if \(prefs\.getBool\(kRunKey, false\)\) \{\s*prefs\.put
   'a restart while a fast stream ran: 8 KB for this firmware');
 assert.match(transport, /prefs\.getString\(kSafeKey, ""\) == FW_VERSION/, 'a new firmware tries the fast transport again');
 for (const fn of ['void mqttPublishCameraFullScreenOpen(', 'void mqttPublishCameraCommand(']) {
-  assert.match(body(mqtt, fn), /\\"chunk\\":%u,\\"window\\":%u,/);
-  assert.match(body(mqtt, fn), /static_cast<unsigned>\(transport\.chunk_bytes\),\s*static_cast<unsigned>\(transport\.window\)\);/);
+  assert.match(body(mqtt, fn), /\\"chunk\\":%u,\\"window\\":%u%s,/);
+  assert.match(body(mqtt, fn), /camera_quality_field\(quality, sizeof\(quality\)\);/);
+  assert.match(body(mqtt, fn), /static_cast<unsigned>\(transport\.chunk_bytes\),\s*static_cast<unsigned>\(transport\.window\), quality\);/);
+}
+// The panel's JPEG quality only where it asks for one (S3 b329): the P4
+// keeps the Bridge's 11, older Bridges ignore the field.
+assert.match(body(mqtt, 'static void camera_quality_field('), /if \(camera_geometry::kJpegQuality\) \{\s*snprintf\(out, size, ",\\"quality\\":%u",/);
+const geometry = read('src/video/camera_geometry.h');
+assert.match(geometry, /#if defined\(DEVICE_ESP32_S3_RGB_480\)[\s\S]*?kJpegQuality = 5;[\s\S]*?#else[\s\S]*?kJpegQuality = 0;\s*#endif/);
+// A restart the user or an update asked for clears the "fast stream runs"
+// mark (b327: an OTA during a stream fell back for the new firmware); the
+// recovery restarts (network wedge, display timeout) keep it.
+assert.match(transport, /void planned_restart\(\) \{\s*if \(g_run_marked\) write_run_mark\(false\);\s*\}/);
+const handlerUtils = read('src/web/server/handlers/web_admin_handler_utils.h');
+assert.match(body(handlerUtils, 'inline void prepareDisplayForRestart('), /camera_transport::planned_restart\(\);/);
+const ino = read('HomeTiles.ino');
+assert.match(ino, /\[Update\] Successful - restarting"\);\s*camera_transport::planned_restart\(\);/);
+assert.match(body(ino, 'static void apply_system_reboot('), /camera_transport::planned_restart\(\);/);
+for (const recovery of ['src/network/network_manager.cpp', 'src/devices/common/p4_dsi_camera_presenter.cpp']) {
+  assert.doesNotMatch(read(recovery), /planned_restart/, `${recovery}: a recovery restart keeps the fallback`);
 }
 assert.match(stream, /constexpr size_t kCameraMaxChunkBytes = 32 \* 1024;/);
 assert.match(body(stream, 'static void run_camera_task('), /chunk_bytes > kCameraMaxChunkBytes\) \{/);

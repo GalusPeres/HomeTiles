@@ -23,6 +23,11 @@ Request request();
 // stream runs" in NVS, written only when it changes.
 void stream_started(bool fast);
 void popup_closed();
+// A restart asked for by the user or an update (b327: an OTA during a stream
+// fell back for the new firmware): the mark is cleared, the next boot keeps
+// the fast transport. Recovery restarts (network wedge, display timeout) do
+// not call this, so they still fall back.
+void planned_restart();
 // The 8 KB transport until the next restart.
 void fall_back(const char* reason);
 

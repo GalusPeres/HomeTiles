@@ -65,6 +65,10 @@ void popup_closed() {
   if (g_run_marked) write_run_mark(false);
 }
 
+void planned_restart() {
+  if (g_run_marked) write_run_mark(false);
+}
+
 void fall_back(const char* reason) {
   ensure_ready();
   if (g_safe) return;

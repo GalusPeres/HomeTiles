@@ -38,7 +38,7 @@ assert.match(presenter, /present\([\s\S]*?\{\s*\/\/ Full-screen frames own both 
 const begin = body(presenter, 'bool Presenter::beginFullFrames(');
 assert.ok(begin.indexOf('std::memcpy(ui_copy_, active, bytes);') < begin.indexOf('std::memset(inactive, 0, bytes);'),
   'the UI is kept before the screen turns black');
-assert.match(begin, /std::memset\(inactive, 0, bytes\);\s*ok = syncCache\(inactive, bytes, false\) && swapTo\(inactive\);/,
+assert.match(begin, /std::memset\(inactive, 0, bytes\);\s*ok = syncCache\(inactive, bytes, false\);[\s\S]*?ok = ok && swapTo\(inactive\);/,
   'black at once: cleared, written back, swapped in');
 assert.match(body(presenter, 'uint16_t* Presenter::acquireFullFrame('),
   /finishPendingSwap\(\);\s*bytes = framebufferBytes\(\);\s*return inactiveFramebuffer\(\);/,
@@ -69,8 +69,8 @@ assert.match(body(stream, 'void camera_stream_stop('), /g_stop_requested = true;
 // The popup: both switches run in the loop, LVGL draws nothing meanwhile.
 const enter = body(popup, 'static void enter_full_screen(');
 const order = ['lv_refr_now(display);', 'lv_display_enable_invalidation(display, false);',
-  'lv_image_set_src(ctx->image, nullptr);', 'camera_stream_stop();', 'Device::displayBeginFullFrames()',
-  'mqttPublishCameraFullScreenOpen('];
+  'lv_image_set_src(ctx->image, nullptr);', 'camera_stream_shown_frame(', 'Device::displayBeginFullFrames(',
+  'camera_stream_stop();', 'mqttPublishCameraFullScreenOpen('];
 for (let i = 1; i < order.length; ++i) {
   assert.ok(enter.indexOf(order[i - 1]) < enter.indexOf(order[i]), `${order[i - 1]} before ${order[i]}`);
 }
@@ -84,9 +84,18 @@ assert.match(body(popup, 'static void start_camera_stream('), /if \(camera_strea
   'a new stream waits for the previous task (stop is asynchronous)');
 assert.match(body(popup, 'static void close_camera_popup('), /leave_full_screen\(false\);/);
 
-// Full screen asks for two 8 KB chunks in flight (b315: one chunk held the
-// stream at 9.4 Mbit/s, 50 KB frames at ~20 FPS); the popup keeps one.
-assert.match(mqtt, /\\"view\\":\\"full\\",\\"rotate\\":%u,\\"fit\\":\\"contain\\",\\"window\\":2,/);
+// Full screen asks for four 8 KB chunks in flight (one chunk held the V2 at
+// 9.4 Mbit/s, two at 11.9 Mbit/s with 150 KB DMA left); the popup keeps one.
+assert.match(mqtt, /\\"view\\":\\"full\\",\\"rotate\\":%u,\\"fit\\":\\"contain\\",\\"window\\":4,/);
+
+// The full screen's first moment: the popup's frame enlarged by the PPA on
+// the black screen, read before the popup stream stops (b317 showed black
+// for about a second).
+const beginFull = body(presenter, 'bool Presenter::beginFullFrames(');
+assert.match(beginFull, /std::memset\(inactive, 0, bytes\);\s*ok = syncCache\(inactive, bytes, false\);\s*if \(ok && preview\) \{\s*drawPreview\(inactive,/);
+assert.match(body(presenter, 'bool Presenter::drawPreview('), /return syncFramebufferSpan\(destination, dst_x, dst_y, dst_w, dst_h, true\);/);
+assert.match(presenter, /void Presenter::end\(\) \{\s*\/\/ A stream stopping under the full screen leaves it to endFullFrames\(\)\.\s*if \(full_frames_ \|\| !double_buffer_active_\) return;/);
+assert.match(body(stream, 'bool camera_stream_shown_frame('), /const int8_t shown = g_full_mode \? -1 : g_displayed_index;/);
 assert.doesNotMatch(body(mqtt, 'void mqttPublishCameraCommand('), /window/);
 
 // Back from the full screen: only the screen outside the popup is drawn

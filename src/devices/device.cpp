@@ -52,7 +52,13 @@ void displayEndFullFramePreview() {
 bool displayFullFrameInfo(uint16_t& width, uint16_t& height, uint16_t& turn_cw) {
   return DeviceImpl::displayFullFrameInfo(width, height, turn_cw);
 }
-bool displayBeginFullFrames() { return DeviceImpl::displayBeginFullFrames(); }
+bool displayBeginFullFrames(const uint16_t* preview, int32_t preview_w,
+                            int32_t preview_h, int32_t preview_stride,
+                            size_t preview_bytes, bool byte_swap) {
+  return DeviceImpl::displayBeginFullFrames(preview, preview_w, preview_h,
+                                            preview_stride, preview_bytes,
+                                            byte_swap);
+}
 uint16_t* displayAcquireFullFrame(size_t& bytes) {
   return DeviceImpl::displayAcquireFullFrame(bytes);
 }
@@ -60,7 +66,9 @@ bool displaySubmitFullFrame() { return DeviceImpl::displaySubmitFullFrame(); }
 void displayEndFullFrames() { DeviceImpl::displayEndFullFrames(); }
 #else
 bool displayFullFrameInfo(uint16_t&, uint16_t&, uint16_t&) { return false; }
-bool displayBeginFullFrames() { return false; }
+bool displayBeginFullFrames(const uint16_t*, int32_t, int32_t, int32_t, size_t, bool) {
+  return false;
+}
 uint16_t* displayAcquireFullFrame(size_t& bytes) {
   bytes = 0;
   return nullptr;

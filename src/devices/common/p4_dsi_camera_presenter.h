@@ -84,11 +84,15 @@ class Presenter {
   // framebuffer and are swapped in, without the PPA. fullFrameInfo gives that
   // size and the clockwise turn the Bridge applies (the PPA's turn for this
   // rotation). beginFullFrames keeps a copy of the UI shown now and turns the
-  // screen black at once; endFullFrames puts the copy back at once. LVGL
-  // must not draw in between.
+  // screen black at once, with `preview` (the popup's frame, may be null)
+  // enlarged by the PPA in its middle until the first full frame;
+  // endFullFrames puts the copy back at once. LVGL must not draw in between.
   bool fullFrameInfo(uint8_t rotation, uint16_t& width, uint16_t& height,
                      uint16_t& turn_cw) const;
-  bool beginFullFrames();
+  bool beginFullFrames(const uint16_t* preview, int32_t preview_w,
+                       int32_t preview_h, int32_t preview_stride,
+                       size_t preview_bytes, bool byte_swap, uint8_t rotation,
+                       const PpaRuntime& runtime);
   // The framebuffer the decoder may write (nullptr: none), its size in bytes.
   uint16_t* acquireFullFrame(size_t& bytes);
   bool submitFullFrame();
@@ -144,6 +148,9 @@ class Presenter {
   int32_t dirty_y2_ = 0;
   uint32_t fault_cooldown_until_ms_ = 0;
   bool swapTo(uint16_t* framebuffer);
+  bool drawPreview(uint16_t* destination, const uint16_t* data, int32_t w,
+                   int32_t h, int32_t source_stride, size_t data_size,
+                   bool byte_swap, uint8_t rotation, const PpaRuntime& runtime);
   bool full_frames_ = false;
   uint16_t* ui_copy_ = nullptr;
 };

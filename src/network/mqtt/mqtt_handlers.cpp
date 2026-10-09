@@ -3017,7 +3017,7 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
   snprintf(payload, sizeof(payload),
            "{\"entity_id\":\"%s\",\"command\":\"open\","
            "\"width\":%u,\"height\":%u,\"fps\":%u,"
-           "\"view\":\"full\",\"rotate\":%u,\"fit\":\"contain\",\"window\":2,"
+           "\"view\":\"full\",\"rotate\":%u,\"fit\":\"contain\",\"window\":4,"
            "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
            entity_id, static_cast<unsigned>(width),
            static_cast<unsigned>(height),

@@ -192,9 +192,10 @@ static void leave_full_screen(bool reopen) {
   if (ctx->resuming) open_popup_stream(ctx);
 }
 
-// The screen black at once with the popup kept, then the Bridge asked for
-// frames in the panel's own size. In the loop: lv_refr_now first, or an area
-// LVGL still owes would land on the black screen.
+// The popup kept and its frame large at once on black (the PPA enlarges it
+// until the first full frame), then the Bridge asked for frames in the
+// panel's own size. In the loop: lv_refr_now first, or an area LVGL still
+// owes would land on the full screen.
 static void enter_full_screen() {
   CameraPopupContext* ctx = g_camera_popup;
   if (!ctx || !ctx->visible || ctx->full) return;
@@ -209,14 +210,22 @@ static void enter_full_screen() {
   lv_image_set_src(ctx->image, nullptr);
   lv_obj_add_flag(ctx->image, LV_OBJ_FLAG_HIDDEN);
   ctx->pending_url = String();
-  camera_stream_stop();
-  if (!Device::displayBeginFullFrames()) {
+  // The popup's frame is read before its stream stops (and frees it).
+  const uint16_t* preview = nullptr;
+  int32_t preview_w = 0;
+  int32_t preview_h = 0;
+  int32_t preview_stride = 0;
+  size_t preview_bytes = 0;
+  camera_stream_shown_frame(preview, preview_w, preview_h, preview_stride, preview_bytes);
+  if (!Device::displayBeginFullFrames(preview, preview_w, preview_h, preview_stride,
+                                      preview_bytes, true)) {
     Serial.println("[Camera] Full screen unavailable; the popup stays");
+    // The running popup stream shows its next frame again.
     if (display) lv_display_enable_invalidation(display, true);
     lv_obj_invalidate(ctx->card);
-    open_popup_stream(ctx);
     return;
   }
+  camera_stream_stop();
   ctx->full = true;
   ctx->full_width = width;
   ctx->full_height = height;

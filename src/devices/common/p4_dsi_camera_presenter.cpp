@@ -4,6 +4,7 @@
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
 
 #include <Arduino.h>
+#include <algorithm>
 #include <cstring>
 #include <esp_cache.h>
 #include <esp_heap_caps.h>
@@ -529,7 +530,103 @@ bool Presenter::swapTo(uint16_t* framebuffer) {
   return true;
 }
 
-bool Presenter::beginFullFrames() {
+// The popup's frame enlarged by the PPA (1/16 steps, as large as the screen
+// allows, centred) into `destination`, turned like present() turns it.
+bool Presenter::drawPreview(uint16_t* destination, const uint16_t* data,
+                            int32_t w, int32_t h, int32_t source_stride,
+                            size_t data_size, bool byte_swap, uint8_t rotation,
+                            const PpaRuntime& runtime) {
+  if (!destination || !data || w <= 0 || h <= 0 || source_stride < w ||
+      (reinterpret_cast<uintptr_t>(data) & (kCacheLineSize - 1U)) != 0 ||
+      !runtime.handle || !runtime.done || !runtime.async_ready ||
+      runtime.reset_pending || runtime.cooldown_active ||
+      faultCooldownActive()) {
+    return false;
+  }
+  const size_t required_bytes =
+      (static_cast<size_t>(h - 1) * source_stride + w) * sizeof(uint16_t);
+  if (data_size < required_bytes) return false;
+  const bool quarter = config_.transform == Transform::Portrait90Or270;
+  const int32_t logical_w = quarter ? config_.panel_height : config_.panel_width;
+  const int32_t logical_h = quarter ? config_.panel_width : config_.panel_height;
+  int32_t scale16 = std::min(logical_w * 16 / w, logical_h * 16 / h);
+  if (scale16 < 16) return false;
+  if (scale16 > 64) scale16 = 64;
+  const int32_t out_w = w * scale16 / 16;
+  const int32_t out_h = h * scale16 / 16;
+  const int32_t x = (logical_w - out_w) / 2;
+  const int32_t y = (logical_h - out_h) / 2;
+  int32_t dst_x = x;
+  int32_t dst_y = y;
+  int32_t dst_w = out_w;
+  int32_t dst_h = out_h;
+  ppa_srm_rotation_angle_t rotation_angle = PPA_SRM_ROTATION_ANGLE_0;
+  if (quarter) {
+    dst_w = out_h;
+    dst_h = out_w;
+    if (rotation & 0x02U) {
+      dst_x = y;
+      dst_y = logical_w - x - out_w;
+      rotation_angle = PPA_SRM_ROTATION_ANGLE_90;
+    } else {
+      dst_x = logical_h - y - out_h;
+      dst_y = x;
+      rotation_angle = PPA_SRM_ROTATION_ANGLE_270;
+    }
+  } else if (rotation & 0x02U) {
+    dst_x = logical_w - x - out_w;
+    dst_y = logical_h - y - out_h;
+    rotation_angle = PPA_SRM_ROTATION_ANGLE_180;
+  }
+  if (!rectInside(dst_x, dst_y, dst_w, dst_h, config_.panel_width,
+                  config_.panel_height)) {
+    return false;
+  }
+
+  Dma2dArbiterGuard dma2d_guard(kDma2dLockTimeoutMs);
+  if (!dma2d_guard.locked() || !syncCache(data, required_bytes, false)) return false;
+  ppa_srm_oper_config_t oper = {};
+  oper.in.buffer = data;
+  oper.in.pic_w = source_stride;
+  oper.in.pic_h = h;
+  oper.in.block_w = w;
+  oper.in.block_h = h;
+  oper.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  oper.out.buffer = destination;
+  oper.out.buffer_size = framebufferBytes();
+  oper.out.pic_w = config_.panel_width;
+  oper.out.pic_h = config_.panel_height;
+  oper.out.block_offset_x = dst_x;
+  oper.out.block_offset_y = dst_y;
+  oper.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  oper.rotation_angle = rotation_angle;
+  oper.scale_x = static_cast<float>(scale16) / 16.0f;
+  oper.scale_y = static_cast<float>(scale16) / 16.0f;
+  oper.byte_swap = byte_swap;
+  oper.mode = PPA_TRANS_MODE_NON_BLOCKING;
+  oper.user_data = runtime.done;
+  while (xSemaphoreTake(runtime.done, 0) == pdTRUE) {
+  }
+  if (ppa_do_scale_rotate_mirror(runtime.handle, &oper) != ESP_OK) return false;
+  bool completed =
+      xSemaphoreTake(runtime.done, pdMS_TO_TICKS(config_.ppa_timeout_ms)) ==
+      pdTRUE;
+  if (!completed && config_.ppa_grace_ms > 0) {
+    completed =
+        xSemaphoreTake(runtime.done, pdMS_TO_TICKS(config_.ppa_grace_ms)) ==
+        pdTRUE;
+  }
+  if (!completed) {
+    dma2d_guard.detach();
+    restartAfterTimeout(x, y, w, h, source_stride, rotation);
+  }
+  return syncFramebufferSpan(destination, dst_x, dst_y, dst_w, dst_h, true);
+}
+
+bool Presenter::beginFullFrames(const uint16_t* preview, int32_t preview_w,
+                                int32_t preview_h, int32_t preview_stride,
+                                size_t preview_bytes, bool byte_swap,
+                                uint8_t rotation, const PpaRuntime& runtime) {
   if (!ready_) return false;
   if (full_frames_) return true;
   finishPendingSwap();
@@ -550,9 +647,15 @@ bool Presenter::beginFullFrames() {
   bool ok = syncCache(active, bytes, true);
   if (ok) {
     std::memcpy(ui_copy_, active, bytes);
-    // Black at once: the inactive framebuffer cleared, written back, shown.
+    // Black at once: the inactive framebuffer cleared, written back, shown;
+    // the popup's frame enlarged in its middle until the first full frame.
     std::memset(inactive, 0, bytes);
-    ok = syncCache(inactive, bytes, false) && swapTo(inactive);
+    ok = syncCache(inactive, bytes, false);
+    if (ok && preview) {
+      drawPreview(inactive, preview, preview_w, preview_h, preview_stride,
+                  preview_bytes, byte_swap, rotation, runtime);
+    }
+    ok = ok && swapTo(inactive);
   }
   if (!ok) {
     heap_caps_free(ui_copy_);
@@ -604,7 +707,8 @@ void Presenter::endFullFrames() {
 }
 
 void Presenter::end() {
-  if (!double_buffer_active_) return;
+  // A stream stopping under the full screen leaves it to endFullFrames().
+  if (full_frames_ || !double_buffer_active_) return;
   finishPendingSwap();
   double_buffer_active_ = false;
   resetMirrorDirty();

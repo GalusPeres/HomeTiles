@@ -53,7 +53,9 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
                                 bool byte_swap);
 void displayEndFullFramePreview();
 bool displayFullFrameInfo(uint16_t& width, uint16_t& height, uint16_t& turn_cw);
-bool displayBeginFullFrames();
+bool displayBeginFullFrames(const uint16_t* preview, int32_t preview_w,
+                            int32_t preview_h, int32_t preview_stride,
+                            size_t preview_bytes, bool byte_swap);
 uint16_t* displayAcquireFullFrame(size_t& bytes);
 bool displaySubmitFullFrame();
 void displayEndFullFrames();

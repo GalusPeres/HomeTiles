@@ -23,7 +23,7 @@ Last reviewed: 2026-10-08
 - Panel connects to the Bridge over TCP 8140 instead of MQTT; Bridge = broker (same topics/retained), frames sealed with pairing-K keys. Contract `docs-dev/bridge-link.md` (shared vectors).
 - Setup: Pair on panel (2 min, TXT `pair=1`) -> HA card (new or switch MQTT entry) -> `POST /api/link` (no password) -> number, no restart. V2 b226 + Bridge b9 HW OK: new, switch, unpair, delete, quick Pair; both clear MQTT leftovers; new HA IP = new setup.
 - Entity picker (b227-b241, Bridge b15): panel declares all it uses (acked; `own` = own entry's releases + these); others only paired + password, 1st via panel tap. Never from Bridge lists (b232-235 loop). S3 b240 HW ok; b241 title Auto/full-height settings HW pending.
-- Pictures (`docs-dev/images.md`, link only, >64 KB as streams within the panel's `rx`): covers in popup size by state `image_key` (b310 V2 HW ok, Bridge b17 pushed); #69 screensaver source SD or HA image/camera (camera subscribed only while shown, still every 10 s): HW pending, Bridge `edaf99d` local.
+- Pictures (`docs-dev/images.md`, link only, >64 KB as streams within the panel's `rx`): covers in popup size by state `image_key` (b310 V2 HW ok, Bridge b17 pushed); #69 screensaver source SD or HA image/camera (camera subscribed only while shown, still every 10 s): V2 b311 + Bridge b18 (pushed beta) HW pending.
 
 ## Hardware validation
 

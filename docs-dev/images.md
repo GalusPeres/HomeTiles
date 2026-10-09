@@ -20,7 +20,12 @@ zeros. A panel subscribes to the picture it shows in the size it shows it; the
 Bridge renders a picture only while at least one linked panel subscribes to
 its topic and the Bridge serves that entity to the panel. Nobody else gets a
 render. Served are a player in the panel's media players, an image in its
-images, a camera in its images or cameras (released or declared).
+images, a camera in its images or cameras (released or declared). A
+subscription that arrives before the entity is served is kept: the panel
+subscribes a new choice at once and declares it 1.5 s later; every change of
+the served lists checks the kept subscriptions again (`recheck`), and one no
+longer served stops. Each topic logs one line per outcome (sent, waits,
+could not load or render).
 
 A Media tile subscribes to its player's cover in the size the Media popup
 shows it (`popup_layout::scale(240)`: 240 on 1280x800 panels, 200 on
@@ -82,10 +87,11 @@ settled after a touch, like a slide change.
 
 ## Rendering
 
-The Bridge fetches the artwork or the image entity's picture through Home
-Assistant's HTTP client (at most 1.5 MB, six sources cached), a camera's
-still through Home Assistant's camera component, and renders in an executor
-with Pillow:
+The Bridge fetches the artwork through Home Assistant's HTTP client (at most
+1.5 MB), reads an image entity's picture from the entity itself like Home
+Assistant's image proxy (at most 12 MB; its address only as a fallback) and a
+camera's still through Home Assistant's camera component. Six sources up to
+8 MB in total are cached. It renders in an executor with Pillow:
 EXIF orientation, transparency over black, `ImageOps.fit` to the size. A
 render runs per topic and artwork at most once; a state change with the same
 artwork renders nothing, and a newer artwork that arrives during a render

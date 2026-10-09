@@ -1,6 +1,6 @@
 # HomeTiles shared project context
 
-Last reviewed: 2026-10-02
+Last reviewed: 2026-10-09
 
 ## Sources of truth
 
@@ -8,40 +8,40 @@ Last reviewed: 2026-10-02
 - Device support and validation: `docs/index.md` (device status notes)
 - ESP32-P4/ESP-Hosted patches: `tools/esp-hosted-3.3.7-rx-fix/README.md`
 - Release procedure: `RELEASING.md`
-- Live bug status: newest GitHub issue comments; recheck online before changing an issue status
-- Bridge publishing requires separate authorization.
+- Live bug status: newest GitHub issue comments; recheck online before changing status
+- Bridge publishing needs separate authorization.
 
 ## Firmware baseline
 
 - v0.6.12: `9605b6a`, CI `34353664113`, 15 profiles / 30 images; 102 tests pass. Guition V1/V2 PPA and Weather fixes; V2 confirmed, V1 hardware pending.
 - Stabilization: display/MQTT guards, Light coalescing, incremental Weather (`e3de63c`-`33b4e06`).
-- Guition S3 XIP/`-O2` reverted in `5279456` (risk, no measured gain); do not retry without evidence.
+- Guition S3 XIP/`-O2` reverted in `5279456` (risk, no measured gain); retry only with evidence.
 
 ## Hardware validation
 
-- Maintainer hardware: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 Tested, PPA/SD confirmed.
-- v0.6.9 Binary/Text-State Sensor UI passed hardware tests on 4B, 8-inch and S3.
-- Other revisions need community validation; compiling is not support.
-- P4 code is shared; panel/touch init, timings, revision and images stay profile-specific.
+- Maintainer HW: Tab5, Waveshare 4B/8-inch, Guition S3/V2 (JC8012P4A1C_I_W_Y1, SKU10153002-V2). V2 Tested, PPA/SD confirmed.
+- v0.6.9 Binary/Text-State Sensor UI: HW passed on 4B, 8-inch, S3.
+- Other revisions need community validation; compiling != support.
+- P4 code shared; panel/touch init, timings, revision, images profile-specific.
 - LCD-4 Rev 4.0: contributor-tested display/touch/Wi-Fi/MQTT/Web OTA; older revisions and SD unsupported (`docs/index.md`).
 - JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups, tall popups.
 - P4 v3 images (post_v3 301-399, v3 DSI clock): WS 10.1 (PR #48, tested v3.2), WS 7B (`_rev3`, replaces exact-v3.1, #41), JC8012 V3 = V2 code (#44); HW pending.
 
 ## Issue #30
 
-Issue: https://github.com/GalusPeres/HomeTiles/issues/30
+Issue: GalusPeres/HomeTiles#30
 
 - Guition V1 (`JC8012P4A1C_I_W_Y`), Foscam cameras: OTA failed, USB worked; SDIO cascade (CMD53 `0x109`/`0x107`, `rst:0xc`), also without cameras, first DCRC on 11-/14-block reads. Not fixes, do not retry: a8204 markers, 20 MHz (b3), 1-bit alone (b5), 2.9.3 rollback.
-- Version RPC `0x15e` (also on the stable 8-inch) is not the cause. SDIO pull-ups: V1 5.1 kohm, 8-inch 51 kohm, Tab5 5.1 kohm + 22 ohm; margin unproven.
+- Version RPC `0x15e` (also on stable 8-inch) is not the cause. SDIO pull-ups: V1 5.1 kohm, 8-inch 51 kohm, Tab5 5.1 kohm + 22 ohm; margin unproven.
 - Original `JC8012P4A1_C6.bin`/HomeTiles use streaming mode; `JC-C6-slave_v2.3.2.bin` is packet mode, never flash it alone. USB reaches P4 only; C6 needs CN5 and a 3.3 V UART.
 - Fix b6 (shipped v0.6.10): exact V1 keeps 1-bit/40 MHz and splits large RX into 512-byte CMD53 reads; reporter OK (two cameras, Web OTA).
 
 ## ESP32-P4 network history
 
 - Backported: ESP-Hosted allocation/PSRAM fixes, synchronous RPC UID routing, Espressif's `a8204f9` dropped-RX recovery, sparse diagnostics. Patches, variants, hashes, limits: `tools/esp-hosted-3.3.7-rx-fix/README.md`.
-- `repo-a8204` is the release-safe baseline; the short-tail variant was experimental.
+- `repo-a8204` = release-safe baseline; short-tail variant was experimental.
 - Failed P4 OTA approaches: throttling, PSRAM staging, TLS-to-flash streaming, Hosted restart, permanent SDIO buffers; retry only with new evidence.
-- Network wedge safeguards are recovery, not a transport fix.
+- Network wedge safeguards: recovery, not a transport fix.
 - Flash-write blue flash: cache-safe DSI/DMA/CSI objects (`tools/esp-idf-3.3.7-p4-cache-safe`), V2 b137 ok.
 
 ## Issue #38
@@ -55,9 +55,10 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 
 ## Sensor history
 
-- Binary Sensor (20): V7-compatible; localized icons/previews and history shipped.
-- Textual states use timeline/Activity; numeric keep graphs. Missing/unknown/unavailable stay distinct.
-- Bridge v0.6.40 (`581150b`): bounded Recorder paging, categorical history, legacy compatibility.
+- Binary Sensor (20): V7-compatible; localized icons/previews/history shipped.
+- Text states: timeline/Activity; numeric: graphs. Missing/unknown/unavailable distinct.
+- Bridge v0.6.40 (`581150b`): bounded Recorder paging, categorical history, legacy compat.
+- Weather: optional temp/humidity sensors replace current (`/_tile_weather_sensors`); HW pending.
 
 ## Editable tiles
 
@@ -132,7 +133,7 @@ Issue: https://github.com/GalusPeres/HomeTiles/issues/30
 ## View control and telemetry
 
 - v0.6.10: Home/folder/popup navigation (`4c9ea4e`) via existing UI, PIN and camera teardown paths.
-- Visible folders are reused for their popup/descendants; new/locked paths still require access checks (S3 Home detour fix).
+- Visible folders are reused for their popup/descendants; new/locked paths still need access checks (S3 Home detour fix).
 - Stable tile IDs use reserved PackedTileV7 bytes and durable counters; MQTT sessions/sequences/deadlines reject replay.
 - Switch adds input_boolean/automation/fan/humidifier/remote/siren; Scene adds button/input_button. Aliases stay stable.
 - Commands validate targets/availability/features; ignore retained commands. Battery is a stub; unsupported probes stay unregistered.

@@ -12,6 +12,7 @@
 #include "src/types/climate/visuals.h"
 #include "src/types/weather/weather_icons.h"
 #include "src/types/weather/tile_layout.h"
+#include "src/types/weather/weather_sensors.h"
 #include "src/types/climate/renderer.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/switch/renderer.h"
@@ -2529,7 +2530,13 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
     return;
   }
 
-  uint32_t payload_hash = fnv1a_hash(payload);
+  const TileGridConfig& grid = tileConfig.getActiveGrid();
+  const Tile& tile = grid.tiles[grid_index];
+  // The temperature/humidity sensors (weather_sensors.h) count as part of
+  // the state, so a sensor change re-renders an unchanged weather payload.
+  const uint32_t payload_hash = weather_sensors::mix_hash(
+      tile.weather_temperature_sensor, tile.weather_humidity_sensor,
+      fnv1a_hash(payload));
   if (widgets.last_payload_hash == payload_hash) {
     return;
   }
@@ -2555,12 +2562,11 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   weather_icons::parse_sun(json.c_str(), sun);
   icon_name = weather_icons::for_now(icon_name, sun);
 
-  const TileGridConfig& grid = tileConfig.getActiveGrid();
-  const Tile& tile = grid.tiles[grid_index];
   const bool colored_icons = weatherColoredIcons(tile);
 
   float temperature = 0.0f;
   bool has_temp = extract_json_number_or_string_field(json, "temperature", temperature);
+  weather_sensors::apply_temperature(tile.weather_temperature_sensor, temperature, has_temp);
 
   String unit;
   String units_obj;
@@ -2603,7 +2609,8 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   const bool has_condition_text = condition_text.length() && condition_text != "--";
   const lv_coord_t card_w = tile_geometry::extent(
       tile.col, tile.span_w < 1 ? 1.0f : tile.span_w, GRID_CELL_W, GRID_GAP);
-  const String temp_text = has_temp ? format_weather_temp(temperature, unit) : String("--");
+  String temp_text = has_temp ? format_weather_temp(temperature, unit) : String("--");
+  weather_sensors::append_humidity(tile.weather_humidity_sensor, temp_text);
   bool show_condition = weather_shows_condition(tile.span_w) && has_condition_text;
   if (show_condition && widgets.condition_label && widgets.temp_label) {
     // The condition takes the room left beside the temperature. Below two
@@ -2663,7 +2670,7 @@ static void update_weather_tile_state(GridType grid_type, uint8_t grid_index, co
   }
 
   if (widgets.condition_sep_label) {
-    if (show_condition && has_temp) {
+    if (show_condition && temp_text != "--") {
       lv_label_set_text(widgets.condition_sep_label, "|");
       lv_obj_clear_flag(widgets.condition_sep_label, LV_OBJ_FLAG_HIDDEN);
     } else {

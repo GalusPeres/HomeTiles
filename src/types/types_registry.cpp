@@ -472,7 +472,8 @@ void append_text_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
 }
 
 void append_weather_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
-  append_weather_fields_html(html, safeString(ctx.tab_id), safeStrings(ctx.weather_options));
+  append_weather_fields_html(html, safeString(ctx.tab_id), safeStrings(ctx.weather_options),
+                             safeStrings(ctx.sensor_options));
 }
 
 void append_energy_fields_wrapper(String& html, const TileTypeWebContext& ctx) {

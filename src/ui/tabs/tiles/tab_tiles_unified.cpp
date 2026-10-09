@@ -2605,6 +2605,17 @@ void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, co
       Serial.printf("[%s] Cover %s@%u queued\n",
                     getGridName(grid_type), entity_id, i);
     }
+    // Weather tiles can show their current temperature/humidity from chosen
+    // sensors; re-render them from the cached weather payload.
+    if (tile.type == TILE_WEATHER && !powerManager.isInSleep() &&
+        (tile.weather_temperature_sensor.equalsIgnoreCase(entity_id) ||
+         tile.weather_humidity_sensor.equalsIgnoreCase(entity_id))) {
+      String weather_payload;
+      if (get_cached_or_initial_payload(tile, weather_payload)) {
+        queue_weather_tile_update(grid_type, i, weather_payload.c_str());
+      }
+      queue_weather_popup_sensor_refresh(entity_id);
+    }
     if (tile.type == TILE_BINARY_SENSOR &&
         tile.sensor_entity.equalsIgnoreCase(entity_id)) {
       binary_sensor_indices |= uint64_t{1} << i;

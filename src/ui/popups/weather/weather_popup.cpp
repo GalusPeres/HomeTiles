@@ -20,6 +20,7 @@
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/types/weather/weather_icons.h"
+#include "src/types/weather/weather_sensors.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/tiles/runtime/tile_renderer.h"
@@ -272,6 +273,9 @@ struct WeatherPopupContext {
   String precipitation_unit = "mm";
   bool current_has_temp = false;
   float current_temp = 0.0f;
+  // The opening tile's temperature/humidity sensors (weather_sensors.h).
+  String temperature_sensor;
+  String humidity_sensor;
   String current_icon;
   lv_obj_t* overlay = nullptr;
   lv_obj_t* card = nullptr;
@@ -393,6 +397,9 @@ struct PendingWeatherUpdate {
 };
 
 static WeatherPopupContext* g_weather_popup_ctx = nullptr;
+// Set when a configured temperature/humidity sensor changed while the popup
+// is visible; the header is refreshed from the cached weather payload.
+static bool g_weather_sensor_refresh_pending = false;
 static PopupBody g_weather_body;
 static WeatherPopupInit g_pending_weather_init;
 static bool g_weather_open_pending = false;
@@ -2598,6 +2605,7 @@ static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
 
   float temperature = 0.0f;
   bool has_temp = extract_json_number_or_string_field(json, "temperature", temperature);
+  weather_sensors::apply_temperature(ctx->temperature_sensor, temperature, has_temp);
 
   String unit;
   String precipitation_unit;
@@ -2641,7 +2649,8 @@ static void apply_weather_header(WeatherPopupContext* ctx, const String& json) {
   String condition_text = weather_condition_display_label(condition);
   bool show_condition = (condition_text.length() && condition_text != "--");
 
-  const String temp_text = has_temp ? format_weather_temp(temperature, unit) : String("--");
+  String temp_text = has_temp ? format_weather_temp(temperature, unit) : String("--");
+  weather_sensors::append_humidity(ctx->humidity_sensor, temp_text);
   if (ctx->temp_label) {
     lv_label_set_text(ctx->temp_label, temp_text.c_str());
     lv_obj_clear_flag(ctx->temp_label, LV_OBJ_FLAG_HIDDEN);
@@ -2954,6 +2963,8 @@ static void apply_init_to_context(WeatherPopupContext* ctx, const WeatherPopupIn
   apply_card_color(ctx, init.bg_color);
   ctx->colored_icons = init.colored_icons;
   ctx->icon_forced = init.icon_forced;
+  ctx->temperature_sensor = init.temperature_sensor;
+  ctx->humidity_sensor = init.humidity_sensor;
   if (ctx->location_label) {
     String title = ctx->title;
     title.trim();
@@ -4130,6 +4141,11 @@ static void finish_weather_popup_open() {
       Serial.printf("[WeatherPopup] Using cached payload: %s (%u bytes)\n",
                     init.entity_id.c_str(),
                     static_cast<unsigned>(cached_length));
+      // Sensor overrides may have changed since the snapshot was rendered.
+      if (g_weather_popup_ctx->temperature_sensor.length() ||
+          g_weather_popup_ctx->humidity_sensor.length()) {
+        g_weather_sensor_refresh_pending = true;
+      }
     } else {
       String cached;
       if (!tiles_get_cached_entity_payload(init.entity_id.c_str(), cached)) {
@@ -4278,8 +4294,20 @@ void queue_weather_popup_payload(const char* entity_id, const char* payload) {
   g_pending_weather.valid = true;
 }
 
+void queue_weather_popup_sensor_refresh(const char* entity_id) {
+  if (!entity_id || !*entity_id || !g_weather_popup_ctx ||
+      !is_popup_visible(g_weather_popup_ctx)) {
+    return;
+  }
+  if (g_weather_popup_ctx->temperature_sensor.equalsIgnoreCase(entity_id) ||
+      g_weather_popup_ctx->humidity_sensor.equalsIgnoreCase(entity_id)) {
+    g_weather_sensor_refresh_pending = true;
+  }
+}
+
 void process_weather_popup_queue() {
   if (!g_weather_popup_ctx || !g_weather_popup_ctx->card) {
+    g_weather_sensor_refresh_pending = false;
     reset_pending_weather_update();
     return;
   }
@@ -4287,6 +4315,16 @@ void process_weather_popup_queue() {
   if (g_weather_open_pending) {
     finish_weather_popup_open();
     return;
+  }
+  if (g_weather_sensor_refresh_pending) {
+    g_weather_sensor_refresh_pending = false;
+    String cached;
+    if (is_popup_visible(g_weather_popup_ctx) &&
+        g_weather_popup_ctx->has_rendered_data &&
+        tiles_get_cached_entity_payload(
+            g_weather_popup_ctx->entity_id.c_str(), cached)) {
+      apply_weather_header(g_weather_popup_ctx, cached);
+    }
   }
 
   // The very first payload is prepared immediately, so even a user who opens

@@ -126,7 +126,9 @@ ${strip(read('src/types/weather/tile_layout.h'))}
 ${strip(read('src/ui/popups/weather/weather_popup.h'))}
 enum class GridType{TAB0,TAB1,TAB2,SCREENSAVER};constexpr int TILES_PER_GRID=1,GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device::kGridCellH,GRID_GAP=Device::kGridGap;
 #include "src/tiles/config/tile_icon_colors.h"
-struct Tile{String title="Weather\nMunich",sensor_entity="weather.home",icon_name="weather-cloudy",sensor_unit,icon_colors;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_value_font=0,sensor_display_mode=0,sensor_decimals=0xFF,popup_open_mode=1;int type=12;};
+struct Tile{String title="Weather\nMunich",sensor_entity="weather.home",icon_name="weather-cloudy",sensor_unit,icon_colors,weather_temperature_sensor,weather_humidity_sensor;float col=0,row=0,span_w=1,span_h=1;uint8_t sensor_value_font=0,sensor_display_mode=0,sensor_decimals=0xFF,popup_open_mode=1;int type=12;};
+// No temperature/humidity sensors here (test-weather-sensor-overrides.mjs).
+namespace weather_sensors { inline uint32_t mix_hash(const String&,const String&,uint32_t h){return h;} inline void apply_temperature(const String&,float&,bool&){} inline void append_humidity(const String&,String&){} }
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t SENSOR_VALUE_FONT_MAX = \d+;/)[0]}
 struct TileGridConfig{Tile tiles[TILES_PER_GRID];};struct TileConfigStub{TileGridConfig grid;const TileGridConfig&getActiveGrid()const{return grid;}}tileConfig;
 namespace tile_icon_source { inline lv_obj_t* card_icon(lv_obj_t*) { return nullptr; } inline void refresh_card(lv_obj_t*, const Tile&) {} inline uint32_t popup_background(lv_obj_t*, uint32_t fallback) { return fallback; } }

@@ -297,8 +297,11 @@
     tileElem.innerHTML = html;
     if (previewKind === 'weather') {
       const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
-      applyWeatherPreview(tileElem, parseWeatherPreviewPayload(
-        weatherEntity ? (sensorMetaCache.weatherValues?.[weatherEntity] ?? '') : ''), {
+      applyWeatherPreview(tileElem, applyWeatherSensorOverrides(parseWeatherPreviewPayload(
+        weatherEntity ? (sensorMetaCache.weatherValues?.[weatherEntity] ?? '') : ''),
+        document.getElementById(prefix + '_weather_temperature_sensor')?.value || '',
+        document.getElementById(prefix + '_weather_humidity_sensor')?.value || '',
+        sensorMetaCache.values), {
         col: Number(tileElem.dataset.col || 0),
         span_w: Number(document.getElementById(prefix + '_tile_span_w')?.value || 1),
         span_h: Number(document.getElementById(prefix + '_tile_span_h')?.value || 1),

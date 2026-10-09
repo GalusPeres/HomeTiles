@@ -2,6 +2,16 @@
 
 void apply_weather_fields_from_request(WebServer& server, Tile& tile) {
   tile.sensor_entity = server.hasArg("weather_entity") ? server.arg("weather_entity") : "";
+  // Optional sensors for the current temperature/humidity; a request without
+  // the field keeps the stored sensor, an empty value uses the weather
+  // entity's own value again.
+  if (server.hasArg("weather_temperature_sensor")) {
+    tile.weather_temperature_sensor = server.arg("weather_temperature_sensor");
+  }
+  if (server.hasArg("weather_humidity_sensor")) {
+    tile.weather_humidity_sensor = server.arg("weather_humidity_sensor");
+  }
+  normalizeWeatherSensors(tile);
   tile.sensor_unit = "";
   tile.sensor_decimals = 0xFF;
   tile.sensor_value_font = 0;

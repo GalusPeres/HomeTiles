@@ -785,6 +785,8 @@
       fd.append('clock_date_format', (tile.sensor_gauge_max !== undefined && tile.sensor_gauge_max !== null) ? tile.sensor_gauge_max : 0);
     } else if (safeType === 12) {
       fd.append('weather_entity', tile.sensor_entity || tile.weather_entity || '');
+      fd.append('weather_temperature_sensor', tile.weather_temperature_sensor || '');
+      fd.append('weather_humidity_sensor', tile.weather_humidity_sensor || '');
       fd.append('weather_colored_icons', Number(tile.sensor_display_mode) === 1 ? '0' : '1');
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);

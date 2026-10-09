@@ -28,7 +28,8 @@
 
 namespace {
 constexpr size_t kMaxFolders = 128;
-struct Target { uint16_t id; uint16_t folder; };
+// camera: the tile also has a full-screen target ("full:<id>", #65).
+struct Target { uint16_t id; uint16_t folder; bool camera; };
 std::vector<Target, PsramAllocator<Target>> targets;
 std::vector<uint16_t> folder_ids;
 char session[33] = {};
@@ -56,6 +57,8 @@ struct Pending {
   uint16_t previous_folder = 0;
   bool waiting = false;
   bool pin = false;
+  // The camera tile's popup opens straight in full screen.
+  bool full = false;
   size_t step = 0;
   std::vector<uint16_t> path;
 } pending;
@@ -74,6 +77,10 @@ bool popupSupported(const Tile& tile) {
     case TILE_LOCK: case TILE_ALARM: case TILE_FAN: return true;
     default: return false;
   }
+}
+
+bool fullScreenSupported(const Tile& tile) {
+  return tile.type == TILE_CAMERA && popupSupported(tile);
 }
 
 String folderTarget(uint16_t folder) {
@@ -129,6 +136,7 @@ void cancelPending() {
   if (pending.waiting) tiles_cancel_folder_switch(pending.waiting_folder);
   pending.active = false;
   pending.waiting = false;
+  pending.full = false;
   pending.path.clear();
 }
 
@@ -158,7 +166,11 @@ void serviceCatalog(uint32_t now) {
   if (catalog_revision != tileConfig.viewRevision()) { startCatalog(); return; }
   const String path = folderLabel(folder);
   if (!path.length()) return;
-  DynamicJsonDocument doc(2048 + TILES_PER_GRID * 384);
+  size_t cameras = 0;
+  for (const Tile& tile : grid->tiles) {
+    if (tile.view_id && fullScreenSupported(tile)) ++cameras;
+  }
+  DynamicJsonDocument doc(2048 + (TILES_PER_GRID + cameras) * 384);
   doc["session"] = session;
   doc["revision"] = catalog_revision;
   doc["page"] = catalog_page;
@@ -167,6 +179,12 @@ void serviceCatalog(uint32_t now) {
   JsonObject page = options.createNestedObject();
   page["id"] = folderTarget(folder);
   page["label"] = folder == 0 ? path : path + " [f:" + String(folder) + "]";
+  // A camera tile also opens straight in full screen (#65, doorbell
+  // automations). A key of its own: Bridges before v0.9.0b27 ignore it, while
+  // an unknown id in "targets" would make them drop the whole page.
+  JsonArray full_options = doc.createNestedArray("full_targets");
+  const char* full_text =
+      i18n::strings(configManager.getConfig().language).camera_view_full_screen;
   for (const Tile& tile : grid->tiles) {
     if (!tile.view_id || !popupSupported(tile)) continue;
     String name = tile.title;
@@ -176,6 +194,12 @@ void serviceCatalog(uint32_t now) {
     JsonObject option = options.createNestedObject();
     option["id"] = "tile:" + String(tile.view_id);
     option["label"] = path + " / " + name + " [t:" + String(tile.view_id) + "]";
+    if (fullScreenSupported(tile)) {
+      JsonObject full = full_options.createNestedObject();
+      full["id"] = "full:" + String(tile.view_id);
+      full["label"] = path + " / " + name + " (" + full_text + ") [t:" +
+                      String(tile.view_id) + "]";
+    }
   }
   if (doc.overflowed()) return;
   String payload;
@@ -184,7 +208,9 @@ void serviceCatalog(uint32_t now) {
   if (!networkManager.mqttEnqueuePublishWithLargeBuffer(
           destination.c_str(), payload.c_str(), true, 1000)) return;
   for (const Tile& tile : grid->tiles) {
-    if (tile.view_id && popupSupported(tile)) targets.push_back({tile.view_id, folder});
+    if (tile.view_id && popupSupported(tile)) {
+      targets.push_back({tile.view_id, folder, fullScreenSupported(tile)});
+    }
   }
   ++catalog_page;
 }
@@ -246,32 +272,40 @@ void servicePending(uint32_t now) {
     return;
   }
   remote_opening = true;
+  camera_popup_open_next_in_full_screen(pending.full);
   const bool opened = tiles_open_view_popup(pending.tile);
+  camera_popup_open_next_in_full_screen(false);
   remote_opening = false;
   if (opened) cancelPending();
 }
 
-struct DisplayedView { String current; const char* mode; };
+// full: the camera popup shows its full screen (older Bridges ignore it and
+// keep showing the tile's popup option).
+struct DisplayedView { String current; const char* mode; bool full; };
 
 DisplayedView displayedView() {
   String current;
   const char* mode = "folder";
+  bool full = false;
   if (powerManager.isInSleep()) mode = "sleep";
   else if (is_image_screensaver_visible()) mode = "screensaver";
   else if (is_pin_popup_visible()) mode = "pin";
   else if (uiManager.activeTab() != 0) mode = "settings";
   else if (popup_card && !lv_obj_has_flag(popup_card, LV_OBJ_FLAG_HIDDEN)) {
     mode = "popup";
-    if (popup_source) current = "tile:" + String(popup_source);
+    if (popup_source) {
+      current = "tile:" + String(popup_source);
+      full = camera_popup_is_full_screen();
+    }
   } else current = folderTarget(tileConfig.getActiveFolderId());
-  return {current, mode};
+  return {current, mode, full};
 }
 
 void publishState(uint32_t now) {
   const auto displayed = displayedView();
   const String& current = displayed.current;
   const char* mode = displayed.mode;
-  const String key = String(mode) + current + String(catalog_revision) +
+  const String key = String(mode) + current + String(displayed.full) + String(catalog_revision) +
                      String(catalog_complete) + String(gate.last_sequence);
   if (key == last_state_key && now - last_state_ms < 5000) return;
   StaticJsonDocument<512> doc;
@@ -280,6 +314,7 @@ void publishState(uint32_t now) {
   doc["ready"] = catalog_complete;
   doc["current"] = current.length() ? current.c_str() : nullptr;
   doc["mode"] = mode;
+  if (displayed.full) doc["full"] = true;
   doc["sequence"] = gate.last_sequence;
   doc["uptime"] = now;
   String payload;
@@ -384,6 +419,7 @@ bool viewNavigationHandleMessage(const char* incoming_topic, const char* payload
   const String requested = doc["target"].as<const char*>();
   uint16_t folder = 0;
   uint16_t tile_id = 0;
+  bool full = false;
   bool found = requested == "home";
   for (uint16_t id : folder_ids) {
     if (requested == folderTarget(id)) { folder = id; found = true; break; }
@@ -391,6 +427,9 @@ bool viewNavigationHandleMessage(const char* incoming_topic, const char* payload
   for (const Target& target : targets) {
     if (requested == "tile:" + String(target.id)) {
       folder = target.folder; tile_id = target.id; found = true; break;
+    }
+    if (target.camera && requested == "full:" + String(target.id)) {
+      folder = target.folder; tile_id = target.id; full = true; found = true; break;
     }
   }
   if (!found || !tileConfig.folderExists(folder)) return true;
@@ -414,6 +453,7 @@ bool viewNavigationHandleMessage(const char* incoming_topic, const char* payload
   pending.active = true;
   pending.folder = folder;
   pending.tile = tile_id;
+  pending.full = full;
   pending.revision = tileConfig.viewRevision();
   pending.started = millis();
   pending.previous_folder = tileConfig.getActiveFolderId();

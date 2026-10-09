@@ -15,6 +15,11 @@ void show_camera_popup(const CameraPopupInit& init);
 void hide_camera_popup();
 void preload_camera_popup();
 bool camera_popup_is_visible();
+// The View select's full-screen option (#65, doorbell automations): the next
+// camera popup opens straight in full screen. Cleared by that opening; the
+// caller clears it when no camera popup opened.
+void camera_popup_open_next_in_full_screen(bool full_screen);
+bool camera_popup_is_full_screen();
 bool camera_popup_is_busy();
 void process_camera_popup();
 void camera_popup_handle_mqtt_status(const char* payload);

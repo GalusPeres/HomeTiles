@@ -88,6 +88,9 @@ struct CameraPopupContext {
   bool switch_frame_logged = true;
   // The running stream used the fast transport (camera_transport).
   bool stream_fast = false;
+  // Opened by the View select's full-screen option (#65): no popup stream,
+  // the full screen right after the popup opened.
+  bool open_full = false;
 #if defined(DEVICE_ESP32_S3_RGB_480)
   // The S3's full screen (software decode, camera_stream.cpp): LVGL shows the
   // whole picture centred on black over everything; a tap leaves it.
@@ -97,6 +100,8 @@ struct CameraPopupContext {
 };
 
 CameraPopupContext* g_camera_popup = nullptr;
+// Set by the View select just before it opens a camera tile's popup.
+bool g_open_next_full = false;
 
 static const i18n::Strings& camera_text() {
   return i18n::strings(configManager.getConfig().language);
@@ -334,6 +339,10 @@ static void close_camera_popup() {
   g_camera_popup->pending_url = String();
   g_camera_popup->resuming = false;
   g_camera_popup->switch_started_ms = 0;
+  // A full screen asked for but not reached yet must not open with the next
+  // popup.
+  g_camera_popup->full_request = 0;
+  g_camera_popup->open_full = false;
   camera_transport::popup_closed();
   const String entity_id = g_camera_popup->entity_id;
   g_camera_popup->visible = false;
@@ -541,6 +550,13 @@ void preload_camera_popup() {
 
 static void finish_camera_popup_open(const CameraPopupInit& init) {
   if (!g_camera_popup || !g_camera_popup->visible) return;
+  if (g_camera_popup->open_full) {
+    // Straight to the full screen (process_camera_popup, once the popup is
+    // open); a popup stream first would only be stopped again.
+    g_camera_popup->full_request = kFullEnter;
+    g_camera_popup->switch_started_ms = millis();
+    return;
+  }
   g_camera_popup->bridge_response_deadline_ms = millis() + kBridgeResponseTimeoutMs;
   g_camera_popup->requested_fps = camera_geometry::kFps;
   mqttPublishCameraCommand(init.entity_id.c_str(), "open",
@@ -567,6 +583,8 @@ void show_camera_popup(const CameraPopupInit& init) {
   // the existing large buffer and retain the original small-buffer size.
   g_camera_popup->draw_buffer_restore_pending = false;
   g_camera_popup->resuming = false;
+  g_camera_popup->open_full = g_open_next_full;
+  g_open_next_full = false;
   g_camera_popup->entity_id = init.entity_id;
   g_camera_popup->visible = true;
   g_camera_popup->surface_color =
@@ -615,6 +633,14 @@ bool camera_popup_is_visible() {
   return g_camera_popup && g_camera_popup->visible;
 }
 
+void camera_popup_open_next_in_full_screen(bool full_screen) {
+  g_open_next_full = full_screen;
+}
+
+bool camera_popup_is_full_screen() {
+  return g_camera_popup && g_camera_popup->visible && g_camera_popup->full;
+}
+
 bool camera_popup_is_busy() {
   return g_camera_popup &&
          (g_camera_popup->visible ||
@@ -645,6 +671,10 @@ void process_camera_popup() {
   g_camera_popup->full_request = 0;
   if (full_request == kFullEnter) {
     enter_full_screen();
+    // Opened for the full screen without a popup stream: where the full
+    // screen cannot start, the popup's own stream runs instead.
+    if (g_camera_popup->open_full && !g_camera_popup->full) open_popup_stream(g_camera_popup);
+    g_camera_popup->open_full = false;
   } else if (full_request == kFullLeave) {
     leave_full_screen(true);
   }

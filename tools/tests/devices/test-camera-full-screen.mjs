@@ -127,7 +127,7 @@ for (let i = 1; i < order.length; ++i) {
 const leave = body(popup, 'static void leave_full_screen(');
 assert.ok(leave.indexOf('Device::displayEndFullFrames();') < leave.indexOf('lv_display_enable_invalidation(display, true);'));
 assert.match(popup, /static void video_event_cb[\s\S]*?full_request = kFullEnter;/);
-assert.match(popup, /if \(full_request == kFullEnter\) \{\s*enter_full_screen\(\);\s*\} else if \(full_request == kFullLeave\) \{\s*leave_full_screen\(true\);/);
+assert.match(popup, /if \(full_request == kFullEnter\) \{\s*enter_full_screen\(\);[\s\S]{0,400}?\} else if \(full_request == kFullLeave\) \{\s*leave_full_screen\(true\);/);
 assert.match(popup, /if \(g_camera_popup->full\) \{\s*\/\/ A Bridge before full-screen frames[\s\S]*?leave_full_screen\(true\);/,
   'an older Bridge refuses: back to the popup');
 assert.match(body(popup, 'static void start_camera_stream('), /if \(camera_stream_is_active\(\)\) \{\s*ctx->pending_url = url;/,

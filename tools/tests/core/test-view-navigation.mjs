@@ -122,13 +122,17 @@ void hide_cover_popup(){card.hidden=true;}
 void hide_device_popup(){card.hidden=true;}
 void viewNavigationSource(lv_obj_t*);
 void viewNavigationPopupShown(lv_obj_t*,const char*);
+// The camera popup's full-screen request (#65): set just before the opening.
+bool next_full=false, last_open_full=false, camera_full=false;
+void camera_popup_open_next_in_full_screen(bool on){next_full=on;}
+bool camera_popup_is_full_screen(){return camera_full;}
 void lv_obj_send_event(lv_obj_t* obj,int event,void*){
   if(event==LV_EVENT_PRESSED)return;
   const auto& tile=tileConfig.grid.tiles[0];
   // Like the renderers: Camera and Media open on a tap, every other type
   // (Weather included) on its popup mode's gesture.
   const int popup_event=tile.type==TILE_CAMERA||tile.type==TILE_MEDIA||tile.popup==1 ? 1:2;
-  if(event==popup_event){++opens;card.hidden=false;viewNavigationSource(obj);viewNavigationPopupShown(&card,tile.sensor_entity.c_str());}
+  if(event==popup_event){++opens;last_open_full=next_full;card.hidden=false;viewNavigationSource(obj);viewNavigationPopupShown(&card,tile.sensor_entity.c_str());}
   else ++toggles;
 }
 struct ScopedStorageWriteDisplayGuard {};
@@ -299,8 +303,49 @@ int main(){
   // A full route after waking still tolerates the earlier lock-to-Home switch.
   prepare(3,id,{0,1,2,3});tileConfig.active=0;servicePending(100);
   assert(pending.active&&requests==std::vector<uint16_t>{0});cancelPending();
+  // The full-screen option (#65): the camera popup opens straight in full
+  // screen, the request ends with that opening, and the state reports it.
+  tileConfig.grid.tiles[0].type=TILE_CAMERA;tileConfig.grid.tiles[0].sensor_entity="camera.door";
+  viewNavigationClosePopups();tileConfig.active=2;
+  prepare(2,id,{0,1,2});pending.full=true;pending.step=firstRequiredFolderStep(pending.path);
+  before=opens;servicePending(100);
+  assert(opens==before+1&&last_open_full&&!next_full&&!pending.active&&!pending.full);
+  assert(displayedView().current==String("tile:")+String(id)&&!displayedView().full);
+  camera_full=true;assert(displayedView().full);
+  card.hidden=true;assert(!displayedView().full);camera_full=false;
+  prepare(2,id,{0,1,2});pending.step=firstRequiredFolderStep(pending.path);
+  servicePending(100);assert(!last_open_full);
+  prepare(2,id,{0,1,2});pending.full=true;cancelPending();assert(!pending.full);
 }
 `;
+
+// Full-screen targets in a key of their own: an unknown id among "targets"
+// makes a Bridge before v0.9.0b27 drop the whole catalog page.
+const catalogSource = definition(navigation, 'void serviceCatalog(');
+assert.match(catalogSource, /JsonArray full_options = doc\.createNestedArray\("full_targets"\);/);
+assert.match(catalogSource, /if \(fullScreenSupported\(tile\)\) \{\s*JsonObject full = full_options\.createNestedObject\(\);\s*full\["id"\] = "full:" \+ String\(tile\.view_id\);/);
+assert.match(catalogSource, /camera_view_full_screen/);
+assert.doesNotMatch(catalogSource, /option\["id"\] = "full:/);
+assert.match(definition(navigation, 'bool fullScreenSupported('), /tile\.type == TILE_CAMERA && popupSupported\(tile\)/);
+const handler = definition(navigation, 'bool viewNavigationHandleMessage(');
+assert.match(handler, /if \(target\.camera && requested == "full:" \+ String\(target\.id\)\) \{\s*folder = target\.folder; tile_id = target\.id; full = true; found = true; break;/);
+assert.match(handler, /pending\.full = full;/);
+assert.match(definition(navigation, 'void publishState('), /if \(displayed\.full\) doc\["full"\] = true;/);
+// The popup: straight to the full screen without a popup stream, the popup's
+// stream where the full screen cannot start, nothing left over after a close.
+const cameraPopup = read('src/ui/popups/camera/camera_popup.cpp');
+assert.match(definition(cameraPopup, 'static void finish_camera_popup_open('), /if \(g_camera_popup->open_full\) \{[\s\S]*?full_request = kFullEnter;[\s\S]*?return;\s*\}/);
+assert.match(cameraPopup, /enter_full_screen\(\);\s*[^\n]*\n[^\n]*\n\s*if \(g_camera_popup->open_full && !g_camera_popup->full\) open_popup_stream\(g_camera_popup\);\s*g_camera_popup->open_full = false;/);
+assert.match(definition(cameraPopup, 'static void close_camera_popup('), /full_request = 0;\s*g_camera_popup->open_full = false;/);
+assert.match(cameraPopup, /g_camera_popup->open_full = g_open_next_full;\s*g_open_next_full = false;/);
+const i18nSource = read('src/core/i18n/i18n.cpp');
+// camera_view_full_screen follows camera_mqtt_queue_full in every language.
+for (const pair of [['MQTT-Warteschlange voll', 'Vollbild'], ['MQTT queue full', 'Full screen'],
+                    ["File d'attente MQTT pleine", 'Plein écran'], ['Kolejka MQTT pełna', 'Pełny ekran']]) {
+  assert.ok(i18nSource.includes(`"${pair[0]}",\n    "${pair[1]}",`) ||
+            i18nSource.includes(`"${pair[0]}",\r\n    "${pair[1]}",`), pair[1]);
+}
+assert.match(read('src/core/i18n/i18n.h'), /const char\* camera_mqtt_queue_full;\s*\/\/[^\n]*\n\s*const char\* camera_view_full_screen;/);
 
 assert.match(navigation, /requestFolderAccess\(next/);
 assert.match(navigation, /gate\.accept/);

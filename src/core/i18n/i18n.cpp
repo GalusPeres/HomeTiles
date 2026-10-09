@@ -380,6 +380,7 @@ static const Strings kStringsDe = {
     "MQTT nicht verbunden",
     "Kamera-Topic fehlt",
     "MQTT-Warteschlange voll",
+    "Vollbild",
 
     "I/O",
     "Temperatur",
@@ -1000,6 +1001,7 @@ static const Strings kStringsEn = {
     "MQTT disconnected",
     "Camera topic missing",
     "MQTT queue full",
+    "Full screen",
 
     "I/O",
     "Temperature",
@@ -1620,6 +1622,7 @@ static const Strings kStringsFr = {
     "MQTT déconnecté",
     "Topic caméra manquant",
     "File d'attente MQTT pleine",
+    "Plein écran",
 
     "I/O",
     "Température",
@@ -2593,6 +2596,7 @@ static const Strings kStringsPl = {
     "MQTT rozłączono",
     "Brak tematu kamery",
     "Kolejka MQTT pełna",
+    "Pełny ekran",
     "I/O",
     "Temperatura",
     "Nazwa",

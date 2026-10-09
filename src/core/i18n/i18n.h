@@ -407,6 +407,8 @@ struct Strings {
   const char* camera_mqtt_disconnected;
   const char* camera_mqtt_topic_missing;
   const char* camera_mqtt_queue_full;
+  // View select (Home Assistant): a camera tile opened straight in full screen.
+  const char* camera_view_full_screen;
 
   // Web Admin: local I/O assignments. Even shared technical terms use the
   // central language schema; the UI has no language branches or hardcoded

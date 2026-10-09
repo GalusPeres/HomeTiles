@@ -42,4 +42,9 @@ const softLeave = popup.slice(popup.indexOf('static void leave_soft_full_screen(
 assert.ok(softLeave.indexOf('lv_image_set_src(ctx->soft_full_image, nullptr);') < softLeave.indexOf('camera_stream_stop();'));
 assert.match(popup, /if \(g_camera_popup->full\) \{\s*camera_stream_process_ui\(g_camera_popup->soft_full_image, nullptr, nullptr\);/);
 
+// A saved tile is declared to the Bridge even without MQTT routes: a new
+// camera tile was "unknown_camera" until a restart (S3 b325).
+const tileSave = read('src/web/server/handlers/web_admin_tiles.cpp');
+assert.match(tileSave, /MQTT routes unchanged \(no rebuild for style\/layout\)"\);\s*\}[\s\S]{0,300}?entity_search::scheduleTilesReport\(\);/);
+
 console.log('Camera on the S3: software decode, LVGL frames, whole-screen full screen');

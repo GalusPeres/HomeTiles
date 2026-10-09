@@ -879,6 +879,10 @@ void WebAdminServer::handleSaveTiles() {
     } else if (!screensaver_grid) {
       Serial.println("[WebAdmin] MQTT routes unchanged (no rebuild for style/layout)");
     }
+    // The Bridge serves a tile's entity once the panel declares it, also one
+    // without MQTT routes (a camera tile: "unknown_camera" until a restart,
+    // S3 b325). Sent only when the declaration changed.
+    entity_search::scheduleTilesReport();
 
     if (!screensaver_grid) {
       if (deleting_folder) {

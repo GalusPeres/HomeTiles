@@ -105,6 +105,9 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   lv_obj_t *scr = lv_screen_active();
   lv_obj_set_style_bg_color(scr, lv_color_hex(ui_theme::screen()), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+  // Before anything draws: the tiles refresh the panel while they are built,
+  // and the light screen showed square corners until the end of the build.
+  applyScreenCorners();
 
 
   for (uint8_t i = 0; i < TAB_COUNT; ++i) {
@@ -149,7 +152,6 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   mqttPublishDeviceSettings();
   // Red frame in the outer margin while the built-in camera captures.
   camera_indicator::init();
-  applyScreenCorners();
 
   Serial.println("[UI] UI built");
 }
@@ -463,25 +465,28 @@ void UIManager::switchToTab(uint8_t index) {
     const uint32_t cleared_ms = switch_started_ms;
     const uint32_t child_count = lv_obj_get_child_count(tab_panels[index]);
 #else
-    // In the theme's screen color: only the Settings controls are drawn
-    // again, the gaps between them keep this fill (black showed as bars and a
-    // flash in the light theme, user 2026-10-10).
-    BoardHAL::displayFillScreen(lv_color_to_u16(lv_color_hex(ui_theme::screen())));
-    const uint32_t cleared_ms = millis();
-
-    // The cleared framebuffer also lost the camera stripe on the top layer.
-    // LVGL draws the dirty areas in this order: the stripe first, so its
-    // faded ends do not appear only after the Settings controls.
-    camera_indicator::invalidateVisible();
-    // So did the light theme's screen corners.
-    for (lv_obj_t* corner : screen_corners) {
-      if (corner && !lv_obj_has_flag(corner, LV_OBJ_FLAG_HIDDEN)) lv_obj_invalidate(corner);
-    }
+    uint32_t cleared_ms = switch_started_ms;
     const uint32_t child_count = lv_obj_get_child_count(tab_panels[index]);
-    for (uint32_t i = 0; i < child_count; ++i) {
-      lv_obj_t* child = lv_obj_get_child(tab_panels[index], static_cast<int32_t>(i));
-      if (child && !lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) {
-        lv_obj_invalidate(child);
+    const bool fill = !ui_theme::light();
+    if (!fill) {
+      // The light theme lets LVGL draw the whole page: after the black fill
+      // the gaps between the controls stayed black, and a fill in the screen
+      // color showed square corners until the screen corners were drawn
+      // again (user 2026-10-10).
+      lv_obj_invalidate(tab_panels[index]);
+    } else {
+      BoardHAL::displayFillScreen(0x0000);
+      cleared_ms = millis();
+
+      // The cleared framebuffer also lost the camera stripe on the top layer.
+      // LVGL draws the dirty areas in this order: the stripe first, so its
+      // faded ends do not appear only after the Settings controls.
+      camera_indicator::invalidateVisible();
+      for (uint32_t i = 0; i < child_count; ++i) {
+        lv_obj_t* child = lv_obj_get_child(tab_panels[index], static_cast<int32_t>(i));
+        if (child && !lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) {
+          lv_obj_invalidate(child);
+        }
       }
     }
 #endif
@@ -498,7 +503,7 @@ void UIManager::switchToTab(uint8_t index) {
 #if defined(DEVICE_ESP32_S3_RGB_480)
         "s3-panel"
 #else
-        "children"
+        fill ? "children" : "panel"
 #endif
     );
     return;

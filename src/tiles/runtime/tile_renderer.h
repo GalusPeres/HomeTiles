@@ -131,6 +131,10 @@ void process_weather_update_queue(uint8_t max_updates = 0);  // 0 drains the que
 
 // UI-thread lookup for the deferred popup body; the caller copies pixels immediately.
 const lv_image_dsc_t* tile_renderer_find_media_cover(const String& entity_id, uint32_t& hash);
+// Decodes a Base64 JPEG/PNG with the media cover decoder (UI thread). The
+// result is owned by the caller; release it with tile_renderer_free_image_dsc().
+lv_image_dsc_t* tile_renderer_decode_image_base64(const String& encoded);
+void tile_renderer_free_image_dsc(lv_image_dsc_t*& dsc);
 // The "From cover" color a shown media card of the entity sampled from its
 // cover (media/cover_color.h); false without a shown cover or a clear color.
 // For the Web Admin preview, on the UI thread.

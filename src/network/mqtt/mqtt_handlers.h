@@ -22,6 +22,29 @@ void mqttPublishMediaCommand(const char* entity_id, const char* command);
 void mqttPublishMediaSeek(const char* entity_id, float position_seconds);
 void mqttPublishMediaVolume(const char* entity_id, float volume_level);
 void mqttPublishMediaMute(const char* entity_id, bool muted);
+// Media browse: asks the Bridge to run media_player.async_browse_media and
+// publish the result on {base}/stat/media/catalog/{page} (errors on
+// {base}/stat/media). Empty content id and type request the root catalog.
+// Returns true when the request was queued.
+bool mqttPublishMediaBrowse(const char* entity_id,
+                            const char* session,
+                            uint32_t request_id,
+                            uint32_t revision,
+                            const char* media_content_id,
+                            const char* media_content_type);
+// Media browse: plays a catalog entry (media_player.play_media in HA).
+// Both content id and type are required by the Bridge.
+bool mqttPublishMediaPlay(const char* entity_id,
+                          const char* media_content_id,
+                          const char* media_content_type);
+// Media browse: asks the Bridge for one catalog thumbnail as a size x size
+// JPEG padded with bg_rgb. The answer arrives on {base}/stat/media/thumb.
+bool mqttPublishMediaThumbnail(const char* entity_id,
+                               const char* session,
+                               uint32_t thumb_id,
+                               const char* url,
+                               uint16_t size,
+                               uint32_t bg_rgb);
 // fps 0 asks for camera_geometry::kFps.
 void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps = 0);

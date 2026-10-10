@@ -42,6 +42,9 @@ enum class TopicKey : uint8_t {
   // The Bridge's answers to Lock and Alarm commands.
   LOCK_STAT,
   ALARM_STAT,
+  // Speaker playback (exact speaker profiles only subscribe).
+  AUDIO_CMND,
+  AUDIO_STAT,
   COUNT
 };
 

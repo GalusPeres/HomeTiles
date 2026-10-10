@@ -34,6 +34,8 @@ const MqttTopicRegistry::TopicDescriptor MqttTopicRegistry::kDescriptors[] = {
   {TopicKey::LOCAL_CAMERA_STAT, TopicDomain::State, "local_camera"},
   {TopicKey::LOCK_STAT, TopicDomain::State, "lock"},
   {TopicKey::ALARM_STAT, TopicDomain::State, "alarm"},
+  {TopicKey::AUDIO_CMND, TopicDomain::Command, "audio"},
+  {TopicKey::AUDIO_STAT, TopicDomain::State, "audio"},
 };
 
 void MqttTopicRegistry::begin(const TopicSettings& settings) {

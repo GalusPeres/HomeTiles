@@ -32,6 +32,7 @@
 #include "src/network/bridge/bridge_images.h"
 #include "src/web/server/web_admin.h"
 #include "src/video/local_camera/local_camera.h"
+#include "src/audio/speaker.h"
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
@@ -2023,6 +2024,8 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
   // Built-in camera snapshot requests only validate and wake the camera
   // worker here; capture and upload never run on the loop task.
   if (local_camera::handleMqttMessage(topic, payload, length)) return;
+  // Speaker commands only validate and hand a clip to the playback worker.
+  if (speaker::handleMqttMessage(topic, payload, length)) return;
   if (editable_handle_ack(topic, reinterpret_cast<const char*>(payload), length)) return;
   const char* apply_topic = networkManager.getBridgeApplyTopic();
   if (apply_topic && strcmp(topic, apply_topic) == 0) {
@@ -2228,6 +2231,12 @@ void mqttSubscribeTopics() {
   if (const char* camera_topic = local_camera::commandTopic()) {
     if (networkManager.mqttEnqueueSubscribe(camera_topic)) {
       Serial.printf("MQTT: subscribe queued %s\n", camera_topic);
+    }
+  }
+  // Same for {base}/cmnd/audio on profiles without a speaker.
+  if (const char* audio_topic = speaker::commandTopic()) {
+    if (networkManager.mqttEnqueueSubscribe(audio_topic)) {
+      Serial.printf("MQTT: subscribe queued %s\n", audio_topic);
     }
   }
 
@@ -3058,6 +3067,8 @@ void mqttServicePostConnect() {
   local_camera::onMqttConnected();
   // Bridge pairing: secure topic subscription, status and session request.
   command_channel::onMqttConnected();
+  // Retained {base}/stat/audio on speaker profiles; no-op elsewhere.
+  speaker::onMqttConnected();
   // Announce the exact MAC-based Bridge topic after every connection. Without
   // this retained message the HA integration cannot discover a new device or
   // repair an entry that still points at an older device ID. The publish uses

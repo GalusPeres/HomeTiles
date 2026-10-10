@@ -3,6 +3,7 @@
 #include "src/devices/device.h"
 #include "src/devices/device_select.h"
 #include "src/video/local_camera/local_camera.h"
+#include "src/audio/speaker.h"
 
 #if defined(DEVICE_WAVESHARE_4B)
 #include <esp_private/system_internal.h>
@@ -85,6 +86,8 @@ void BoardHAL::displayWaitDisplay() {
 }
 
 void BoardHAL::prepareForRestart() {
+  // Switch the speaker amplifier off before the reset.
+  speaker::shutdown("restart");
   // Put a built-in camera into software standby before the chip resets.
   local_camera::shutdown("restart");
   Device::prepareForRestart();

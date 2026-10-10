@@ -13,6 +13,7 @@
 #include "src/devices/device.h"
 #include "src/io/hardware_io.h"
 #include "src/video/local_camera/local_camera.h"
+#include "src/audio/speaker.h"
 #include <vector>
 
 static const char* PREF_NAMESPACE = "tab5_config";
@@ -349,6 +350,9 @@ String HaBridgeConfig::buildJsonPayload(const char* device_id,
   // Live upload to the Bridge (panel -> Bridge TCP stream); same conditions.
   json += ",\"local_camera_stream\":";
   json += local_camera::bridgeStreamCapability() ? "true" : "false";
+  // Speaker playback (media_player entity): codec found on its exact profile.
+  json += ",\"audio_output\":";
+  json += speaker::bridgeCapability() ? "true" : "false";
   json += "}";
   if (data.has_editable_lists) {
     json += ",\"numbers\":";

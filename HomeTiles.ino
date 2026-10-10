@@ -52,6 +52,7 @@
 #include "src/io/hardware_io.h"
 #include "src/video/local_camera/local_camera.h"
 #include "src/video/camera_transport.h"
+#include "src/audio/speaker.h"
 #include "src/network/secure/command_channel.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/config/new_panel_tiles.h"
@@ -1094,6 +1095,9 @@ void setup() {
   // After the Bridge sent its link address, the panel pairs by itself and
   // shows the number in System > Security.
   command_channel::setPairingPromptCallback(settings_show_pairing);
+  // Speaker playback (exact speaker profiles); the codec probe also needs
+  // the touch-owned I2C bus.
+  speaker::begin();
   Serial.flush();
 
   if (has_config) {
@@ -1384,6 +1388,7 @@ void loop() {
     viewNavigationService();
       mqtt_process_inbound_queue();
       local_camera::service();
+      speaker::service();
       command_channel::service();
       // Drops the camera pictures while the display sleeps.
       camera_picture::service();
@@ -1564,6 +1569,7 @@ void loop() {
     loop_stall::enter(loop_stall::Step::Services);
     viewNavigationService();
     local_camera::service();
+    speaker::service();
     command_channel::service();
     camera_picture::service();
     loop_stall::enter(loop_stall::Step::MqttInbound);

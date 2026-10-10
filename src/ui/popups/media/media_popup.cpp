@@ -5,11 +5,14 @@
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/popups/media/media_popup.h"
+#include "src/ui/popups/media/media_browse.h"
 
+#include <ArduinoJson.h>
 #include <esp_heap_caps.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 #include "src/core/config/config_manager.h"
 #include "src/core/display/display_manager.h"
@@ -59,6 +62,31 @@ constexpr int kVolumeSliderHeight = popup_layout::scale(16);
 constexpr int kVolumeSliderKnobSize = popup_layout::scale(36);
 constexpr int kVolumeSliderClickPad = popup_layout::scale(20);
 constexpr int kVolumeSideOffset = (kVolumeWidth / 2) + popup_layout::scale(70);
+// Media browse: the toggle sits right of "next" in the controls row; the
+// browse panel covers the popup body below the header.
+constexpr int kContentWidth = popup_layout::kContentWidth;
+constexpr int kBrowseToggleOffset = kControlSideOffset * 2;
+constexpr int kBrowseTop = kCoverTop - popup_layout::scale(8);
+constexpr int kBrowsePanelHeight =
+    kCardHeight - (kCardPad * 2) - kBrowseTop;
+constexpr int kBrowseBarHeight = popup_layout::scale(72);
+constexpr int kBrowseBarButtonSize = popup_layout::scale(64);
+constexpr int kBrowseRowHeight = popup_layout::scale(76);
+constexpr int kBrowseRowIconWidth = popup_layout::scale(64);
+constexpr int kBrowseRowPad = popup_layout::scale(8);
+// Thumbnails: square JPEGs from the Bridge, side a multiple of 16 for the
+// P4 hardware decoder. One request in flight; decoded images are cached.
+constexpr int kBrowseThumbSize =
+    (kBrowseRowIconWidth / 16) * 16 < 32 ? 32 : (kBrowseRowIconWidth / 16) * 16;
+constexpr uint32_t kBrowseThumbTimeoutMs = 6000;
+constexpr uint32_t kBrowseThumbPollMs = 120;
+constexpr size_t kBrowseThumbCacheMax = 48;  // 64x64 RGB565 = 8 KB each, PSRAM.
+
+struct BrowseRowThumb {
+  String url;
+  lv_obj_t* image = nullptr;
+  lv_obj_t* icon = nullptr;
+};
 
 struct MediaPopupContext;
 
@@ -106,9 +134,37 @@ struct MediaPopupContext {
   int32_t last_volume_pct = 35;
   int32_t shown_volume_pct = -1;
   uint8_t shown_volume_icon = 255;
+  // Media browse view (catalog navigation, state in media_browse.cpp).
+  lv_obj_t* browse_toggle_label = nullptr;
+  lv_obj_t* browse_panel = nullptr;
+  lv_obj_t* browse_back_button = nullptr;
+  lv_obj_t* browse_title_label = nullptr;
+  lv_obj_t* browse_status_label = nullptr;
+  lv_obj_t* browse_list = nullptr;
+  lv_obj_t* browse_message_label = nullptr;
+  uint32_t browse_items_version = 0xFFFFFFFFu;
+  // Browse thumbnails (folder rows only).
+  std::vector<BrowseRowThumb> browse_rows;
+  std::vector<String> browse_thumb_queue;
+  lv_timer_t* browse_thumb_timer = nullptr;
+  uint32_t browse_thumb_inflight_id = 0;
+  String browse_thumb_inflight_url;
+  uint32_t browse_thumb_inflight_ms = 0;
 };
 
 static MediaPopupContext* g_media_popup_ctx = nullptr;
+
+// Decoded browse thumbnails, oldest first. Global so they survive popup
+// reuse. Keyed by URL only: the card color can follow the cover and change
+// with every track, re-fetching for each color would multiply the traffic.
+struct BrowseThumbCacheEntry {
+  String url;
+  lv_image_dsc_t* dsc = nullptr;
+};
+static std::vector<BrowseThumbCacheEntry> g_browse_thumb_cache;
+// URLs the Bridge could not deliver; not requested again.
+static std::vector<String> g_browse_thumb_failed;
+static uint32_t g_browse_thumb_seq = 0;
 
 static void* alloc_popup_memory(size_t bytes, bool prefer_psram = false) {
   if (!bytes) return nullptr;
@@ -363,7 +419,8 @@ static void apply_control_colors(MediaPopupContext* ctx) {
   const lv_color_t popup = lv_obj_get_style_bg_color(ctx->card, LV_PART_MAIN);
   const lv_color_t icon =
       ctx->icon_label ? lv_obj_get_style_text_color(ctx->icon_label, LV_PART_MAIN) : lv_color_white();
-  lv_obj_t* const labels[] = {ctx->previous_label, ctx->next_label, ctx->volume_icon_label};
+  lv_obj_t* const labels[] = {ctx->previous_label, ctx->next_label, ctx->volume_icon_label,
+                              ctx->browse_toggle_label};
   for (lv_obj_t* label : labels) {
     if (label) popup_nav_style::style_press(lv_obj_get_parent(label), popup, icon);
   }
@@ -387,8 +444,17 @@ static void apply_availability(MediaPopupContext* ctx) {
   }
 }
 
+// Media browse view, defined further below.
+static void browse_hide(MediaPopupContext* ctx);
+static bool browse_supported(const MediaPopupContext* ctx);
+
 static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& init) {
   if (!ctx) return;
+  // The popup was reused for another player: close its browse view so it
+  // never shows (or controls) the catalog of the previous player.
+  if (ctx->entity_id.length() && !ctx->entity_id.equalsIgnoreCase(init.entity_id)) {
+    browse_hide(ctx);
+  }
   ctx->entity_id = init.entity_id;
   ctx->available = init.available;
   if (!ctx->available) ctx->seek_dragging = false;
@@ -396,6 +462,14 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
 
   if (ctx->card) {
     lv_obj_set_style_bg_color(ctx->card, lv_color_hex(ctx->bg_color), 0);
+  }
+  if (ctx->browse_panel) {
+    lv_obj_set_style_bg_color(ctx->browse_panel, lv_color_hex(ctx->bg_color), 0);
+  }
+  if (ctx->browse_toggle_label) {
+    // Browsing needs a real media_player entity (not the preload placeholder).
+    set_control_enabled(lv_obj_get_parent(ctx->browse_toggle_label),
+                        browse_supported(ctx));
   }
 
   if (ctx->title_label) {
@@ -464,6 +538,7 @@ static void on_close_click(lv_event_t* e) {
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->overlay || !ctx->card) return;
   ctx->seek_dragging = false;
+  browse_hide(ctx);
   hide_popup_shell(ctx->card);
   cancel_popup_open(ctx->card);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
@@ -483,8 +558,15 @@ static void on_overlay_delete(lv_event_t* e) {
     lv_timer_delete(ctx->progress_timer);
     ctx->progress_timer = nullptr;
   }
+  if (ctx->browse_thumb_timer) {
+    lv_timer_delete(ctx->browse_thumb_timer);
+    ctx->browse_thumb_timer = nullptr;
+  }
   free_cover_dsc(ctx->cover_dsc);
-  if (g_media_popup_ctx == ctx) g_media_popup_ctx = nullptr;
+  if (g_media_popup_ctx == ctx) {
+    media_browse_set_listener(nullptr);
+    g_media_popup_ctx = nullptr;
+  }
   delete ctx;
 }
 
@@ -603,6 +685,542 @@ static lv_obj_t* create_control_button(lv_obj_t* parent,
   lv_obj_add_event_cb(btn, on_media_command, LV_EVENT_CLICKED, data);
   lv_obj_add_event_cb(btn, on_media_command_delete, LV_EVENT_DELETE, data);
   return label;
+}
+
+// ---------------------------------------------------------------------------
+// Media browse view
+//
+// A panel over the popup body (below the header) with a bar (back, title,
+// status, close) and a scrollable list of catalog entries. The state lives in
+// media_browse.cpp; this view only renders it and forwards taps. The browse
+// session is bound to the popup's entity, so every media tile browses its own
+// player.
+// ---------------------------------------------------------------------------
+
+enum class BrowseText : uint8_t { Root, Loading, Empty, ErrorPrefix, Truncated };
+
+static const char* browse_text(BrowseText id) {
+  const char* lang =
+      i18n::normalize_language_code(configManager.getConfig().language);
+  const bool de = lang && strcmp(lang, "de") == 0;
+  const bool fr = lang && strcmp(lang, "fr") == 0;
+  switch (id) {
+    case BrowseText::Root:
+      return de ? "Mediathek" : (fr ? "Médiathèque" : "Media library");
+    case BrowseText::Loading:
+      return de ? "Lädt..." : (fr ? "Chargement..." : "Loading...");
+    case BrowseText::Empty:
+      return de ? "Keine Einträge" : (fr ? "Aucun élément" : "No items");
+    case BrowseText::ErrorPrefix:
+      return de ? "Fehler: " : (fr ? "Erreur : " : "Error: ");
+    case BrowseText::Truncated:
+      return de ? "Nur die ersten Einträge werden angezeigt"
+                : (fr ? "Seuls les premiers éléments sont affichés"
+                      : "Only the first entries are shown");
+  }
+  return "";
+}
+
+static const char* browse_icon_name(const MediaBrowseItem& item) {
+  const String& c = item.media_class;
+  if (c == "album") return "album";
+  if (c == "artist") return "account-music";
+  if (c == "playlist") return "playlist-music";
+  if (c == "podcast" || c == "episode") return "podcast";
+  if (c == "track" || c == "music") return "music-note";
+  // Sonos favorites: the "Radio" folder and its stations are both "genre".
+  if (c == "channel" || c == "genre") return item.can_expand ? "folder-music" : "radio";
+  if (c == "movie") return "movie";
+  if (c == "tv_show" || c == "season") return "television";
+  if (c == "video") return "video";
+  if (c == "image") return "image";
+  if (c == "app") return "apps";
+  return item.can_expand ? "folder" : "music-note";
+}
+
+static bool browse_visible(const MediaPopupContext* ctx) {
+  return ctx && ctx->browse_panel &&
+         !lv_obj_has_flag(ctx->browse_panel, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void on_browse_row_click(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+  const size_t index =
+      static_cast<size_t>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
+  const auto& items = media_browse_items();
+  if (index >= items.size()) return;
+  // Row tap: folders open, pure leaves (tracks, stations) play.
+  if (items[index].can_expand) {
+    media_browse_open(index);
+  } else if (items[index].can_play) {
+    media_browse_play(index);
+  }
+}
+
+// Separate play button for entries that can both open and play (albums,
+// playlists, artists): the row opens them, this button plays them.
+static void on_browse_play_click(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+  lv_event_stop_bubbling(e);
+  const size_t index =
+      static_cast<size_t>(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
+  media_browse_play(index);
+}
+
+// --- Browse thumbnails ----------------------------------------------------
+
+static lv_image_dsc_t* browse_thumb_cached(const String& url) {
+  for (const auto& entry : g_browse_thumb_cache) {
+    if (entry.url == url) return entry.dsc;
+  }
+  return nullptr;
+}
+
+static bool browse_thumb_failed(const String& url) {
+  for (const auto& failed : g_browse_thumb_failed) {
+    if (failed == url) return true;
+  }
+  return false;
+}
+
+static void browse_thumb_mark_failed(const String& url) {
+  if (!url.length() || browse_thumb_failed(url)) return;
+  if (g_browse_thumb_failed.size() >= 64) {
+    g_browse_thumb_failed.erase(g_browse_thumb_failed.begin());
+  }
+  g_browse_thumb_failed.push_back(url);
+}
+
+static bool browse_thumb_in_use(const MediaPopupContext* ctx, const String& url) {
+  if (!ctx) return false;
+  for (const auto& row : ctx->browse_rows) {
+    if (row.url == url) return true;
+  }
+  return false;
+}
+
+// Takes ownership of dsc. Returns false (and frees dsc) when the cache is
+// full of thumbnails the current rows still show.
+static bool browse_thumb_store(MediaPopupContext* ctx, const String& url,
+                               lv_image_dsc_t*& dsc) {
+  if (g_browse_thumb_cache.size() >= kBrowseThumbCacheMax) {
+    for (size_t i = 0; i < g_browse_thumb_cache.size(); ++i) {
+      if (browse_thumb_in_use(ctx, g_browse_thumb_cache[i].url)) continue;
+      tile_renderer_free_image_dsc(g_browse_thumb_cache[i].dsc);
+      g_browse_thumb_cache.erase(g_browse_thumb_cache.begin() + i);
+      break;
+    }
+  }
+  if (g_browse_thumb_cache.size() >= kBrowseThumbCacheMax) {
+    tile_renderer_free_image_dsc(dsc);
+    return false;
+  }
+  BrowseThumbCacheEntry entry;
+  entry.url = url;
+  entry.dsc = dsc;
+  g_browse_thumb_cache.push_back(entry);
+  dsc = nullptr;
+  return true;
+}
+
+static void browse_thumb_apply(MediaPopupContext* ctx, const String& url,
+                               const lv_image_dsc_t* dsc) {
+  if (!ctx || !dsc) return;
+  for (auto& row : ctx->browse_rows) {
+    if (row.url != url || !row.image) continue;
+    lv_image_set_src(row.image, dsc);
+    lv_obj_clear_flag(lv_obj_get_parent(row.image), LV_OBJ_FLAG_HIDDEN);
+    if (row.icon) lv_obj_add_flag(row.icon, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+static void browse_thumb_enqueue(MediaPopupContext* ctx, const String& url) {
+  if (!ctx || !url.length() || browse_thumb_failed(url)) return;
+  if (url == ctx->browse_thumb_inflight_url) return;
+  for (const auto& queued : ctx->browse_thumb_queue) {
+    if (queued == url) return;
+  }
+  ctx->browse_thumb_queue.push_back(url);
+}
+
+// Sends the next queued request; one at a time keeps MQTT traffic and the
+// Bridge's fetches small.
+static void browse_thumb_timer_cb(lv_timer_t* timer) {
+  MediaPopupContext* ctx =
+      timer ? static_cast<MediaPopupContext*>(lv_timer_get_user_data(timer)) : nullptr;
+  if (!ctx) return;
+
+  if (ctx->browse_thumb_inflight_id != 0) {
+    if (static_cast<uint32_t>(millis() - ctx->browse_thumb_inflight_ms) <
+        kBrowseThumbTimeoutMs) {
+      return;
+    }
+    Serial.printf("[MediaBrowse] Thumbnail %lu timed out\n",
+                  static_cast<unsigned long>(ctx->browse_thumb_inflight_id));
+    ctx->browse_thumb_inflight_id = 0;
+    ctx->browse_thumb_inflight_url = "";
+  }
+
+  if (!ctx->browse_panel ||
+      lv_obj_has_flag(ctx->browse_panel, LV_OBJ_FLAG_HIDDEN)) {
+    return;
+  }
+
+  while (!ctx->browse_thumb_queue.empty()) {
+    const String url = ctx->browse_thumb_queue.front();
+    ctx->browse_thumb_queue.erase(ctx->browse_thumb_queue.begin());
+    if (const lv_image_dsc_t* hit = browse_thumb_cached(url)) {
+      browse_thumb_apply(ctx, url, hit);
+      continue;
+    }
+    if (!browse_thumb_in_use(ctx, url)) continue;  // Level changed meanwhile.
+
+    const uint32_t id = ++g_browse_thumb_seq ? g_browse_thumb_seq : ++g_browse_thumb_seq;
+    if (!mqttPublishMediaThumbnail(media_browse_entity().c_str(),
+                                   media_browse_session().c_str(), id,
+                                   url.c_str(), kBrowseThumbSize,
+                                   ctx->bg_color)) {
+      // MQTT busy or offline: retry this URL on the next tick.
+      ctx->browse_thumb_queue.insert(ctx->browse_thumb_queue.begin(), url);
+      return;
+    }
+    ctx->browse_thumb_inflight_id = id;
+    ctx->browse_thumb_inflight_url = url;
+    ctx->browse_thumb_inflight_ms = millis();
+    return;
+  }
+}
+
+static void browse_rebuild_rows(MediaPopupContext* ctx) {
+  lv_obj_t* list = ctx->browse_list;
+  if (!list) return;
+  lv_obj_clean(list);
+  // The rows (and their image objects) are gone; pending requests of the
+  // old level are dropped. An answer already in flight still fills the cache.
+  ctx->browse_rows.clear();
+  ctx->browse_thumb_queue.clear();
+
+  const auto& items = media_browse_items();
+  const lv_coord_t title_width = kContentWidth - (kBrowseRowPad * 2) -
+                                 (kBrowseRowIconWidth * 2) -
+                                 popup_layout::scale(24);
+  for (size_t i = 0; i < items.size(); ++i) {
+    const MediaBrowseItem& item = items[i];
+
+    lv_obj_t* row = lv_button_create(list);
+    lv_obj_set_size(row, LV_PCT(100), kBrowseRowHeight);
+    lv_obj_set_style_bg_color(row, lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(row, lv_color_white(), LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(row, LV_OPA_20, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_radius(row, popup_layout::scale480(12), 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_set_style_shadow_width(row, 0, 0);
+    lv_obj_set_style_pad_hor(row, kBrowseRowPad, 0);
+    lv_obj_set_style_pad_ver(row, 0, 0);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    disable_pressed_button_animation(row);
+
+    lv_obj_t* icon = lv_label_create(row);
+    set_label_style(icon, lv_color_white(), FONT_MDI_ICONS);
+    lv_label_set_text(icon, getMdiChar(browse_icon_name(item)).c_str());
+    lv_obj_set_width(icon, kBrowseRowIconWidth);
+    lv_obj_set_style_text_align(icon, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(icon, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_clear_flag(icon, LV_OBJ_FLAG_CLICKABLE);
+
+    // Folder rows with artwork: a rounded image slot over the icon. The icon
+    // stays until the thumbnail arrives (or for good if it cannot load).
+    if (item.can_expand && item.thumbnail.length()) {
+      lv_obj_t* clip = lv_obj_create(row);
+      lv_obj_remove_style_all(clip);
+      lv_obj_set_size(clip, kBrowseThumbSize, kBrowseThumbSize);
+      lv_obj_align(clip, LV_ALIGN_LEFT_MID,
+                   (kBrowseRowIconWidth - kBrowseThumbSize) / 2, 0);
+      lv_obj_set_style_radius(clip, popup_layout::scale480(8), 0);
+      lv_obj_set_style_clip_corner(clip, true, 0);
+      lv_obj_remove_flag(clip, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_clear_flag(clip, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_add_flag(clip, LV_OBJ_FLAG_HIDDEN);
+
+      lv_obj_t* image = lv_image_create(clip);
+      lv_obj_set_size(image, kBrowseThumbSize, kBrowseThumbSize);
+      lv_obj_center(image);
+      lv_image_set_inner_align(image, LV_IMAGE_ALIGN_CENTER);
+      lv_obj_clear_flag(image, LV_OBJ_FLAG_CLICKABLE);
+
+      BrowseRowThumb thumb;
+      thumb.url = item.thumbnail;
+      thumb.image = image;
+      thumb.icon = icon;
+      ctx->browse_rows.push_back(thumb);
+
+      if (const lv_image_dsc_t* hit = browse_thumb_cached(item.thumbnail)) {
+        lv_image_set_src(image, hit);
+        lv_obj_clear_flag(clip, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+      } else {
+        browse_thumb_enqueue(ctx, item.thumbnail);
+      }
+    }
+
+    lv_obj_t* title = lv_label_create(row);
+    set_label_style(title, lv_color_white(), popup_layout::font24());
+    lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(title, title_width);
+    lv_label_set_text(title, item.title.c_str());
+    lv_obj_align(title, LV_ALIGN_LEFT_MID,
+                 kBrowseRowIconWidth + popup_layout::scale(12), 0);
+    lv_obj_clear_flag(title, LV_OBJ_FLAG_CLICKABLE);
+
+    if (item.can_play) {
+      // Own tap target so "play" works for folders too (album, playlist).
+      lv_obj_t* play = lv_button_create(row);
+      lv_obj_set_size(play, kBrowseRowIconWidth, kBrowseRowIconWidth);
+      lv_obj_align(play, LV_ALIGN_RIGHT_MID, 0, 0);
+      lv_obj_set_style_bg_color(play, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
+      lv_obj_set_style_bg_opa(play, LV_OPA_10, LV_PART_MAIN | LV_STATE_DEFAULT);
+      lv_obj_set_style_bg_opa(play, LV_OPA_40, LV_PART_MAIN | LV_STATE_PRESSED);
+      lv_obj_set_style_radius(play, LV_RADIUS_CIRCLE, 0);
+      lv_obj_set_style_border_width(play, 0, 0);
+      lv_obj_set_style_shadow_width(play, 0, 0);
+      lv_obj_set_style_pad_all(play, 0, 0);
+      lv_obj_remove_flag(play, LV_OBJ_FLAG_SCROLLABLE);
+      disable_pressed_button_animation(play);
+      lv_obj_t* play_icon = lv_label_create(play);
+      set_label_style(play_icon, lv_color_white(), FONT_MDI_ICONS);
+      lv_label_set_text(play_icon, getMdiChar("play").c_str());
+      lv_obj_center(play_icon);
+      lv_obj_clear_flag(play_icon, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_add_event_cb(play, on_browse_play_click, LV_EVENT_CLICKED,
+                          reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
+    } else if (item.can_expand) {
+      lv_obj_t* trail = lv_label_create(row);
+      set_label_style(trail, lv_color_hex(0xD8DEE9), FONT_MDI_ICONS);
+      lv_label_set_text(trail, getMdiChar("chevron-right").c_str());
+      lv_obj_set_width(trail, kBrowseRowIconWidth);
+      lv_obj_set_style_text_align(trail, LV_TEXT_ALIGN_CENTER, 0);
+      lv_obj_align(trail, LV_ALIGN_RIGHT_MID, 0, 0);
+      lv_obj_clear_flag(trail, LV_OBJ_FLAG_CLICKABLE);
+    }
+
+    lv_obj_add_event_cb(row, on_browse_row_click, LV_EVENT_CLICKED,
+                        reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
+  }
+  lv_obj_scroll_to_y(list, 0, LV_ANIM_OFF);
+}
+
+// Renders the current browse state. Cheap when nothing but the status changed:
+// rows are only rebuilt when the item list was replaced.
+static void browse_refresh(MediaPopupContext* ctx) {
+  if (!browse_visible(ctx)) return;
+  const MediaBrowseStatus status = media_browse_status();
+
+  const MediaBrowseLevel* level = media_browse_current_level();
+  const char* title = (level && level->title.length())
+                          ? level->title.c_str()
+                          : browse_text(BrowseText::Root);
+  if (ctx->browse_title_label) lv_label_set_text(ctx->browse_title_label, title);
+  set_control_enabled(ctx->browse_back_button, media_browse_can_go_back());
+
+  String status_text;
+  uint32_t status_color = 0xD8DEE9;
+  if (status == MediaBrowseStatus::Loading) {
+    status_text = browse_text(BrowseText::Loading);
+  } else if (status == MediaBrowseStatus::Error) {
+    status_text = browse_text(BrowseText::ErrorPrefix);
+    status_text += media_browse_error();
+    status_color = 0xFF8A80;
+  } else if (media_browse_truncated()) {
+    status_text = browse_text(BrowseText::Truncated);
+  }
+  if (ctx->browse_status_label) {
+    lv_label_set_text(ctx->browse_status_label, status_text.c_str());
+    lv_obj_set_style_text_color(ctx->browse_status_label,
+                                lv_color_hex(status_color), 0);
+    if (status_text.length()) {
+      lv_obj_clear_flag(ctx->browse_status_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(ctx->browse_status_label, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+
+  const uint32_t version = media_browse_items_version();
+  if (ctx->browse_items_version != version) {
+    ctx->browse_items_version = version;
+    browse_rebuild_rows(ctx);
+  }
+
+  if (ctx->browse_message_label) {
+    const bool empty =
+        status == MediaBrowseStatus::Ready && media_browse_items().empty();
+    if (empty) {
+      lv_label_set_text(ctx->browse_message_label, browse_text(BrowseText::Empty));
+      lv_obj_clear_flag(ctx->browse_message_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(ctx->browse_message_label, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+}
+
+static void on_media_browse_changed() {
+  browse_refresh(g_media_popup_ctx);
+}
+
+static bool browse_supported(const MediaPopupContext* ctx) {
+  return ctx && ctx->entity_id.startsWith("media_player.");
+}
+
+static void browse_show(MediaPopupContext* ctx) {
+  if (!ctx || !ctx->browse_panel || !browse_supported(ctx)) return;
+  lv_obj_clear_flag(ctx->browse_panel, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(ctx->browse_panel);
+  if (ctx->browse_thumb_timer) lv_timer_resume(ctx->browse_thumb_timer);
+  // Force a row rebuild: the list may still show another player's items.
+  ctx->browse_items_version = 0xFFFFFFFFu;
+
+  const bool same_entity = media_browse_entity().equalsIgnoreCase(ctx->entity_id);
+  if (!same_entity || media_browse_status() == MediaBrowseStatus::Idle) {
+    // New player (or first open): start at its root catalog.
+    media_browse_start(ctx->entity_id.c_str());
+  } else if (media_browse_status() == MediaBrowseStatus::Error &&
+             media_browse_depth() == 0) {
+    // The root never loaded (for example MQTT was offline): try again.
+    media_browse_reload();
+  }
+  browse_refresh(ctx);
+}
+
+static void browse_hide(MediaPopupContext* ctx) {
+  if (!ctx || !ctx->browse_panel) return;
+  // The session is kept: reopening the browser for the same player resumes
+  // at the last level. Thumbnail requests pause; an answer in flight still
+  // fills the cache.
+  lv_obj_add_flag(ctx->browse_panel, LV_OBJ_FLAG_HIDDEN);
+  if (ctx->browse_thumb_timer) lv_timer_pause(ctx->browse_thumb_timer);
+}
+
+static void on_browse_toggle_click(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+  browse_show(static_cast<MediaPopupContext*>(lv_event_get_user_data(e)));
+}
+
+static void on_browse_back_click(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+  media_browse_back();
+}
+
+static void on_browse_close_click(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+  browse_hide(static_cast<MediaPopupContext*>(lv_event_get_user_data(e)));
+}
+
+static lv_obj_t* create_round_icon_button(lv_obj_t* parent, const char* icon_name,
+                                          lv_coord_t size, lv_event_cb_t cb,
+                                          MediaPopupContext* ctx,
+                                          lv_obj_t** label_out = nullptr) {
+  lv_obj_t* btn = lv_button_create(parent);
+  lv_obj_set_size(btn, size, size);
+  lv_obj_set_style_opa(btn, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
+  lv_obj_set_style_bg_color(btn, lv_color_black(), LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_bg_color(btn, lv_color_white(), LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(btn, LV_OPA_30, LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_border_width(btn, 0, 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);
+  lv_obj_set_style_pad_all(btn, 0, 0);
+  lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+  disable_pressed_button_animation(btn);
+
+  lv_obj_t* label = lv_label_create(btn);
+  set_label_style(label, lv_color_white(), FONT_MDI_ICONS);
+  lv_label_set_text(label, getMdiChar(icon_name).c_str());
+  lv_obj_center(label);
+  lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE);
+  if (label_out) *label_out = label;
+
+  lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, ctx);
+  return btn;
+}
+
+static void create_browse_view(lv_obj_t* card, MediaPopupContext* ctx,
+                               uint32_t bg_color) {
+  // Toggle in the controls row, right of "next".
+  lv_obj_t* toggle = create_round_icon_button(card, "folder-music", kControlButtonSize,
+                                              on_browse_toggle_click, ctx,
+                                              &ctx->browse_toggle_label);
+  lv_obj_align(toggle, LV_ALIGN_TOP_MID, kBrowseToggleOffset, kControlsTop);
+
+  // Panel over the popup body. Opaque, same color as the card.
+  lv_obj_t* panel = lv_obj_create(card);
+  ctx->browse_panel = panel;
+  lv_obj_remove_style_all(panel);
+  lv_obj_set_size(panel, kContentWidth, kBrowsePanelHeight);
+  lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, kBrowseTop);
+  lv_obj_set_style_bg_color(panel, lv_color_hex(bg_color), 0);
+  lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+  lv_obj_set_style_pad_all(panel, 0, 0);
+  lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(panel, LV_OBJ_FLAG_CLICKABLE);  // Swallow taps on gaps.
+  lv_obj_add_flag(panel, LV_OBJ_FLAG_HIDDEN);
+
+  // Bar: back | title + status | close.
+  lv_obj_t* bar = lv_obj_create(panel);
+  lv_obj_remove_style_all(bar);
+  lv_obj_set_size(bar, kContentWidth, kBrowseBarHeight);
+  lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, 0);
+  lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+
+  ctx->browse_back_button = create_round_icon_button(
+      bar, "chevron-left", kBrowseBarButtonSize, on_browse_back_click, ctx);
+  lv_obj_align(ctx->browse_back_button, LV_ALIGN_LEFT_MID, 0, 0);
+
+  lv_obj_t* close = create_round_icon_button(
+      bar, "close", kBrowseBarButtonSize, on_browse_close_click, ctx);
+  lv_obj_align(close, LV_ALIGN_RIGHT_MID, 0, 0);
+
+  const lv_coord_t text_width =
+      kContentWidth - (kBrowseBarButtonSize * 2) - popup_layout::scale(24);
+  ctx->browse_title_label = lv_label_create(bar);
+  set_label_style(ctx->browse_title_label, lv_color_white(), popup_layout::font24());
+  lv_label_set_long_mode(ctx->browse_title_label, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(ctx->browse_title_label, text_width);
+  lv_obj_set_style_text_align(ctx->browse_title_label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(ctx->browse_title_label, LV_ALIGN_TOP_MID, 0, popup_layout::scale(4));
+  lv_label_set_text(ctx->browse_title_label, "");
+
+  ctx->browse_status_label = lv_label_create(bar);
+  set_label_style(ctx->browse_status_label, lv_color_hex(0xD8DEE9), popup_layout::font20());
+  lv_label_set_long_mode(ctx->browse_status_label, LV_LABEL_LONG_DOT);
+  lv_obj_set_width(ctx->browse_status_label, text_width);
+  lv_obj_set_style_text_align(ctx->browse_status_label, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(ctx->browse_status_label, LV_ALIGN_BOTTOM_MID, 0, -popup_layout::scale(2));
+  lv_label_set_text(ctx->browse_status_label, "");
+  lv_obj_add_flag(ctx->browse_status_label, LV_OBJ_FLAG_HIDDEN);
+
+  // Scrollable list of entries.
+  const lv_coord_t list_top = kBrowseBarHeight + popup_layout::scale(8);
+  lv_obj_t* list = lv_obj_create(panel);
+  ctx->browse_list = list;
+  lv_obj_remove_style_all(list);
+  lv_obj_set_size(list, kContentWidth, kBrowsePanelHeight - list_top);
+  lv_obj_align(list, LV_ALIGN_TOP_MID, 0, list_top);
+  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_style_pad_row(list, popup_layout::scale(4), 0);
+  lv_obj_set_scroll_dir(list, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
+
+  ctx->browse_thumb_timer = lv_timer_create(browse_thumb_timer_cb, kBrowseThumbPollMs, ctx);
+  if (ctx->browse_thumb_timer) lv_timer_pause(ctx->browse_thumb_timer);
+
+  ctx->browse_message_label = lv_label_create(panel);
+  set_label_style(ctx->browse_message_label, lv_color_hex(0xD8DEE9), popup_layout::font24());
+  lv_obj_align(ctx->browse_message_label, LV_ALIGN_TOP_MID, 0,
+               list_top + popup_layout::scale(40));
+  lv_label_set_text(ctx->browse_message_label, "");
+  lv_obj_add_flag(ctx->browse_message_label, LV_OBJ_FLAG_HIDDEN);
 }
 
 }  // namespace
@@ -839,6 +1457,8 @@ void show_media_popup(const MediaPopupInit& init) {
                                           kControlSideOffset,
                                           init.bg_color != 0 ? init.bg_color : 0x2A2A2A,
                                           false);
+  create_browse_view(card, ctx, init.bg_color != 0 ? init.bg_color : 0x2A2A2A);
+  media_browse_set_listener(on_media_browse_changed);
 
   lv_obj_move_foreground(ctx->icon_label);
   lv_obj_move_foreground(ctx->title_label);
@@ -892,8 +1512,54 @@ void update_media_popup_cover(const char* entity_id, const lv_image_dsc_t* cover
 void hide_media_popup() {
   if (!g_media_popup_ctx || !g_media_popup_ctx->card || !g_media_popup_ctx->overlay) return;
   g_media_popup_ctx->seek_dragging = false;
+  browse_hide(g_media_popup_ctx);
   hide_popup_shell(g_media_popup_ctx->card);
   cancel_popup_open(g_media_popup_ctx->card);
   lv_obj_add_flag(g_media_popup_ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(g_media_popup_ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
+}
+
+void media_popup_handle_browse_thumbnail(const char* payload, size_t length) {
+  MediaPopupContext* ctx = g_media_popup_ctx;
+  if (!payload || !length || !ctx || ctx->browse_thumb_inflight_id == 0) return;
+
+  JsonDocument doc;
+  if (deserializeJson(doc, payload, length)) {
+    Serial.printf("[MediaBrowse] Thumbnail parse failed (%u bytes)\n",
+                  static_cast<unsigned>(length));
+    return;
+  }
+  const uint32_t thumb_id = doc["thumb_id"] | 0u;
+  const char* session = doc["session"] | "";
+  if (thumb_id != ctx->browse_thumb_inflight_id ||
+      media_browse_session() != session) {
+    return;  // Late answer after a timeout, or another session.
+  }
+
+  const String url = ctx->browse_thumb_inflight_url;
+  ctx->browse_thumb_inflight_id = 0;
+  ctx->browse_thumb_inflight_url = "";
+
+  const char* status = doc["status"] | "";
+  const char* data = doc["data"] | "";
+  if (strcmp(status, "ok") != 0 || !*data) {
+    Serial.printf("[MediaBrowse] Thumbnail %lu failed: %s %s\n",
+                  static_cast<unsigned long>(thumb_id),
+                  doc["error"] | "unknown", doc["detail"] | "");
+    browse_thumb_mark_failed(url);
+  } else {
+    lv_image_dsc_t* dsc = tile_renderer_decode_image_base64(String(data));
+    if (!dsc) {
+      Serial.printf("[MediaBrowse] Thumbnail %lu could not be decoded\n",
+                    static_cast<unsigned long>(thumb_id));
+      browse_thumb_mark_failed(url);
+    } else if (browse_thumb_store(ctx, url, dsc)) {
+      browse_thumb_apply(ctx, url, browse_thumb_cached(url));
+    }
+  }
+
+  // Next request right away instead of waiting for the next poll.
+  if (ctx->browse_thumb_timer && browse_visible(ctx)) {
+    lv_timer_ready(ctx->browse_thumb_timer);
+  }
 }

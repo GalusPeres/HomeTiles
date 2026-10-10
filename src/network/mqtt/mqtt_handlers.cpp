@@ -12,6 +12,8 @@
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/camera/camera_popup.h"
+#include "src/ui/popups/media/media_browse.h"
+#include "src/ui/popups/media/media_popup.h"
 #include "src/ui/screensaver/image_screensaver.h"
 #include "src/video/camera_geometry.h"
 #include "src/ui/tabs/settings/tab_settings.h"
@@ -1838,6 +1840,43 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
     return;
   }
 
+  // Media browse answers: {base}/stat/media/catalog/{page} and the error
+  // channel {base}/stat/media. A catalog page can carry 32 items with long
+  // provider ids, so it always goes through the large buffer.
+  {
+    const String& base = mqttTopics.deviceBase();
+    const size_t base_len = base.length();
+    static const char kMediaStat[] = "/stat/media";
+    static const char kCatalogLeaf[] = "/catalog/";
+    if (base_len && strncmp(topic, base.c_str(), base_len) == 0 &&
+        strncmp(topic + base_len, kMediaStat, sizeof(kMediaStat) - 1) == 0) {
+      const char* rest = topic + base_len + sizeof(kMediaStat) - 1;
+      const bool is_status = (*rest == '\0');
+      const bool is_catalog =
+          strncmp(rest, kCatalogLeaf, sizeof(kCatalogLeaf) - 1) == 0;
+      const bool is_thumb = strcmp(rest, "/thumb") == 0;
+      if (is_status || is_catalog || is_thumb) {
+        char* large_buf = mqttLargeBuffer();
+        if (!large_buf) return;
+        if (length >= LARGE_BUF) {
+          Serial.printf("[MediaBrowse] Payload too large (%u bytes), dropped\n",
+                        static_cast<unsigned>(length));
+          return;
+        }
+        memcpy(large_buf, payload, length);
+        large_buf[length] = '\0';
+        if (is_catalog) {
+          media_browse_handle_catalog_message(topic, large_buf, length);
+        } else if (is_thumb) {
+          media_popup_handle_browse_thumbnail(large_buf, length);
+        } else {
+          media_browse_handle_status_message(large_buf, length);
+        }
+        return;
+      }
+    }
+  }
+
   bool processed_static = false;
   for (const auto& route : kRoutes) {
     const char* expected = mqttTopics.topic(route.key);
@@ -1938,6 +1977,10 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
 // ========== Subscribe to topics ==========
 void mqttSubscribeTopics() {
   networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + "/stat/value").c_str());
+  // Media browse answers (catalog pages and the error channel).
+  networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + "/stat/media/catalog/+").c_str());
+  networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + "/stat/media").c_str());
+  networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + "/stat/media/thumb").c_str());
   for (const auto& route : kRoutes) {
     const char* tpc = mqttTopics.topic(route.key);
     if (!tpc || !*tpc) continue;
@@ -2174,6 +2217,155 @@ void mqttPublishMediaMute(const char* entity_id, bool muted) {
   Serial.printf("Media mute -> MQTT '%s' %s (%s, priority)\n",
                 topic, muted ? "on" : "off",
                 queued ? "queued" : "queue-full");
+}
+
+// Appends value as a JSON string literal (quotes included). Media content ids
+// are opaque provider strings and may contain quotes, backslashes or control
+// characters, so they cannot go through snprintf("%s") like entity ids.
+static void append_json_string(String& out, const char* value) {
+  out += '"';
+  for (const char* p = value ? value : ""; *p; ++p) {
+    const unsigned char c = static_cast<unsigned char>(*p);
+    switch (c) {
+      case '"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (c < 0x20) {
+          char esc[8];
+          snprintf(esc, sizeof(esc), "\\u%04x", c);
+          out += esc;
+        } else {
+          out += static_cast<char>(c);  // UTF-8 bytes pass through unchanged.
+        }
+    }
+  }
+  out += '"';
+}
+
+bool mqttPublishMediaBrowse(const char* entity_id,
+                            const char* session,
+                            uint32_t request_id,
+                            uint32_t revision,
+                            const char* media_content_id,
+                            const char* media_content_type) {
+  if (!entity_id || !*entity_id) return false;
+
+  if (!networkManager.isMqttConnected()) {
+    Serial.printf("Media browse skipped (MQTT offline): %s\n", entity_id);
+    return false;
+  }
+
+  const char* topic = mqttTopics.topic(TopicKey::MEDIA_CMND);
+  if (!topic || !*topic) {
+    Serial.printf("Media browse skipped (no topic): %s\n", entity_id);
+    return false;
+  }
+
+  String payload;
+  payload.reserve(256 + (media_content_id ? strlen(media_content_id) : 0) +
+                  (media_content_type ? strlen(media_content_type) : 0));
+  payload += "{\"entity_id\":";
+  append_json_string(payload, entity_id);
+  payload += ",\"command\":\"browse_media\",\"session\":";
+  append_json_string(payload, session);
+  payload += ",\"request_id\":";
+  payload += String(request_id);
+  payload += ",\"revision\":";
+  payload += String(revision);
+  payload += ",\"media_content_id\":";
+  append_json_string(payload, media_content_id);
+  payload += ",\"media_content_type\":";
+  append_json_string(payload, media_content_type);
+  payload += '}';
+
+  // A catalog page (up to 32 items with long provider ids and thumbnails) can
+  // exceed the normal receive buffer. Like history requests, ask the worker to
+  // hold the large buffer while the answer is expected; priority so the user's
+  // tap is not queued behind a subscribe burst.
+  const bool queued = networkManager.mqttEnqueuePublishWithLargeBuffer(
+      topic, payload.c_str(), false, 15000, true);
+  Serial.printf("Media browse -> MQTT '%s' req=%lu id='%s' type='%s' (%s)\n",
+                topic,
+                static_cast<unsigned long>(request_id),
+                media_content_id ? media_content_id : "",
+                media_content_type ? media_content_type : "",
+                queued ? "queued" : "queue-full");
+  return queued;
+}
+
+bool mqttPublishMediaPlay(const char* entity_id,
+                          const char* media_content_id,
+                          const char* media_content_type) {
+  if (!entity_id || !*entity_id) return false;
+  if (!media_content_id || !*media_content_id ||
+      !media_content_type || !*media_content_type) {
+    Serial.printf("Media play skipped (missing content): %s\n", entity_id);
+    return false;
+  }
+  if (!networkManager.isMqttConnected()) {
+    Serial.printf("Media play skipped (MQTT offline): %s\n", entity_id);
+    return false;
+  }
+  const char* topic = mqttTopics.topic(TopicKey::MEDIA_CMND);
+  if (!topic || !*topic) {
+    Serial.printf("Media play skipped (no topic): %s\n", entity_id);
+    return false;
+  }
+
+  String payload;
+  payload.reserve(128 + strlen(media_content_id) + strlen(media_content_type));
+  payload += "{\"entity_id\":";
+  append_json_string(payload, entity_id);
+  payload += ",\"command\":\"play_media\",\"media_content_id\":";
+  append_json_string(payload, media_content_id);
+  payload += ",\"media_content_type\":";
+  append_json_string(payload, media_content_type);
+  payload += '}';
+
+  // A tap the user waits for: priority lane like the other media controls.
+  const bool queued =
+      networkManager.mqttEnqueuePublishPriority(topic, payload.c_str(), false);
+  Serial.printf("Media play -> MQTT '%s' id='%s' type='%s' (%s, priority)\n",
+                topic, media_content_id, media_content_type,
+                queued ? "queued" : "queue-full");
+  return queued;
+}
+
+bool mqttPublishMediaThumbnail(const char* entity_id,
+                               const char* session,
+                               uint32_t thumb_id,
+                               const char* url,
+                               uint16_t size,
+                               uint32_t bg_rgb) {
+  if (!entity_id || !*entity_id || !url || !*url) return false;
+  if (!networkManager.isMqttConnected()) return false;
+  const char* topic = mqttTopics.topic(TopicKey::MEDIA_CMND);
+  if (!topic || !*topic) return false;
+
+  char bg[8];
+  snprintf(bg, sizeof(bg), "%06lX", static_cast<unsigned long>(bg_rgb & 0xFFFFFFu));
+
+  String payload;
+  payload.reserve(192 + strlen(url));
+  payload += "{\"entity_id\":";
+  append_json_string(payload, entity_id);
+  payload += ",\"command\":\"browse_thumbnail\",\"session\":";
+  append_json_string(payload, session);
+  payload += ",\"thumb_id\":";
+  payload += String(thumb_id);
+  payload += ",\"url\":";
+  append_json_string(payload, url);
+  payload += ",\"size\":";
+  payload += String(size);
+  payload += ",\"bg\":\"";
+  payload += bg;
+  payload += "\"}";
+
+  // Background work: the normal lane, so control taps stay ahead of it.
+  return networkManager.mqttEnqueuePublish(topic, payload.c_str(), false);
 }
 
 void mqttPublishClimateTemperature(const char* entity_id,

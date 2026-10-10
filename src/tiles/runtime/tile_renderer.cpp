@@ -3677,6 +3677,16 @@ static lv_image_dsc_t* make_media_cover_dsc_from_base64(const String& encoded) {
   return dsc;
 }
 
+// Media browse thumbnails reuse the cover decoder (HW JPEG on the P4 with the
+// software fallback). UI thread only; free with tile_renderer_free_image_dsc().
+lv_image_dsc_t* tile_renderer_decode_image_base64(const String& encoded) {
+  return make_media_cover_dsc_from_base64(encoded);
+}
+
+void tile_renderer_free_image_dsc(lv_image_dsc_t*& dsc) {
+  free_media_cover_dsc(dsc);
+}
+
 static uint8_t* alloc_media_cover_download_buffer(size_t bytes) {
   return static_cast<uint8_t*>(alloc_media_cover_memory(bytes, true));
 }

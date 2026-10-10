@@ -1356,10 +1356,12 @@
 
     /* Settings panel: sticky on the right, scrolls internally on long content
        (capped at the viewport height) instead of stretching the whole page. */
-    /* The same width on every device; only narrow windows stack it below
-       the grid (media query further down). */
+    /* The same width on every device; the page is wide enough for it
+       (admin_wrapper_target_width_px). A slightly narrower window shrinks it
+       toward min-width instead of clipping its right edge, and narrow windows
+       stack it below the grid (media query further down). */
     .tile-settings {
-      flex:0 0 var(--settings-panel-width, 390px);
+      flex:0 1 var(--settings-panel-width, 390px);
       width:var(--settings-panel-width, 390px);
       min-width:300px;
       max-width:var(--settings-panel-width, 390px);

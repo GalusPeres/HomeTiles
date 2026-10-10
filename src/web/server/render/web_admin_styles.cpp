@@ -29,12 +29,6 @@ int settings_panel_target_width_px() {
   return 390;
 }
 
-int admin_wrapper_target_width_px() {
-  // Every device gets the same 1200 px page; four-column previews keep their
-  // size with the Settings slot beside them (admin.css .compact-grid).
-  return 1200;
-}
-
 // The preview is the panel's screen scaled down exactly: cells, gaps and
 // margins keep the device proportions, so every tile, half-height tile and
 // span has the device's shape (user 2026-10-02: the fixed 10 px editor gap
@@ -53,6 +47,25 @@ int preview_scaled_exact_px(int lvgl_px) {
   const int cell_h = preview_cell_h_px();
   const int scaled = (lvgl_px * cell_h + (GRID_CELL_H / 2)) / GRID_CELL_H;
   return scaled < 1 ? 1 : scaled;
+}
+
+int admin_wrapper_target_width_px() {
+  // Every device gets at least the 1200 px page; four-column previews keep
+  // their size with the Settings slot beside them (admin.css .compact-grid).
+  // Wide screens such as 1024x600 scale to a wider preview, so the page grows
+  // until the preview, the editor gap and the Tile Settings panel fit beside
+  // each other instead of clipping the panel's right edge.
+  constexpr int kMinWidth = 1200;
+  constexpr int kEditorGap = 24;        // admin.css .tile-editor gap
+  constexpr int kWrapperPadX = 20;      // admin.css .wrapper side padding
+  constexpr int kCardPadX = 32;         // admin.css .card side padding
+  constexpr int kBorderPx = 1;          // .card and .tile-grid borders
+  const int screen_w =
+      (Device::kScreenWidth * preview_cell_h_px() + GRID_CELL_H - 1) / GRID_CELL_H;
+  const int preview_w = screen_w + 2 * kPreviewFramePx + 2 * kBorderPx;
+  const int needed = preview_w + kEditorGap + settings_panel_target_width_px() +
+                     2 * (kCardPadX + kBorderPx + kWrapperPadX);
+  return needed > kMinWidth ? needed : kMinWidth;
 }
 
 }  // namespace

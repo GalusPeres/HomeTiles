@@ -103,6 +103,17 @@ for (const step of ['if (camera_popup_is_busy() || PopupFirstFrame::any_pending(
   assert.ok(apply.includes(step), 'processThemeChange: ' + step);
 }
 assert.ok(apply.indexOf('popup_shell_delete_popups();') < apply.indexOf('preloadPopups();'));
+// The light screen ends round in black corners (user 2026-10-10), with the
+// popup card's radius; hidden in the dark theme. Built at boot, updated on a
+// switch.
+assert.ok(apply.includes('applyScreenCorners();') && ui.includes('  camera_indicator::init();\n  applyScreenCorners();'));
+const corners = ui.slice(ui.indexOf('void UIManager::applyScreenCorners() {'), ui.indexOf('void UIManager::processThemeChange() {'));
+for (const marker of ['lv_obj_t* corner = lv_obj_create(lv_layer_sys());',
+  'ui_surface_style::apply_radius(ring, popup_layout::kCardRadius + Device::kGridGap, 0);',
+  'lv_obj_set_style_outline_color(ring, lv_color_black(), 0);',
+  'if (ui_theme::light()) {\n      lv_obj_remove_flag(screen_corners[i], LV_OBJ_FLAG_HIDDEN);']) {
+  assert.ok(corners.includes(marker), 'screen corners: ' + marker);
+}
 const inoLoop = read('HomeTiles.ino');
 assert.equal(inoLoop.split('uiManager.processThemeChange();\n').length - 1, 2, 'Both loop branches apply a change');
 // Every popup goes with its overlay: the shell keeps the overlays, deletes them

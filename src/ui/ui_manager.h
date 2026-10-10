@@ -81,9 +81,12 @@ private:
   static const char* TZ_EUROPE_BERLIN;
 
   std::atomic<bool> theme_change_pending{false};
+  // The light theme's black screen corners (applyScreenCorners).
+  lv_obj_t* screen_corners[4] = {};
 
   // Internal functions
   void preloadPopups();
+  void applyScreenCorners();
   void statusbarInit(lv_obj_t *tab_bar);
   lv_obj_t* setupTabButton(lv_obj_t *btn, uint8_t tab_index, const char *icon_name, const char *tab_name);
   lv_obj_t* createTabPanel(lv_obj_t *parent);

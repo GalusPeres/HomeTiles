@@ -28,6 +28,8 @@
 #include "src/ui/popups/popup_first_frame.h"
 #include "src/ui/tabs/settings/settings_screen.h"
 #include "src/ui/screensaver/image_screensaver.h"
+#include "src/ui/shared/ui_surface_style.h"
+#include "src/core/config/tile_radius.h"
 
 #include <time.h>
 #include <string.h>
@@ -147,6 +149,7 @@ void UIManager::buildUI(scene_publish_cb_t scene_cb, hotspot_start_cb_t hotspot_
   mqttPublishDeviceSettings();
   // Red frame in the outer margin while the built-in camera captures.
   camera_indicator::init();
+  applyScreenCorners();
 
   Serial.println("[UI] UI built");
 }
@@ -163,6 +166,45 @@ void UIManager::preloadPopups() {
   preload_device_popup();
   preload_pin_popup();
   preload_camera_popup();
+}
+
+// The light theme's screen corners: black outside the popup card's rounding
+// (tile radius + one grid gap, the frame every layout keeps), so the light
+// screen ends round like the dark one does on its black (user 2026-10-10).
+// An outline around a larger rounded box, clipped to a box in each corner,
+// paints only the corner; its radius follows the global tile radius
+// (apply_radius). Hidden in the dark theme, which stays as it was.
+void UIManager::applyScreenCorners() {
+  static constexpr lv_align_t kCorners[4] = {LV_ALIGN_TOP_LEFT, LV_ALIGN_TOP_RIGHT, LV_ALIGN_BOTTOM_LEFT,
+                                             LV_ALIGN_BOTTOM_RIGHT};
+  // As large as the largest rounding (the largest tile radius + one gap).
+  constexpr int32_t box = tile_radius::kMaximum + Device::kGridGap;
+  for (uint8_t i = 0; i < 4; ++i) {
+    if (!screen_corners[i]) {
+      lv_obj_t* corner = lv_obj_create(lv_layer_sys());
+      lv_obj_remove_style_all(corner);
+      lv_obj_set_size(corner, box, box);
+      lv_obj_align(corner, kCorners[i], 0, 0);
+      lv_obj_remove_flag(corner, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_remove_flag(corner, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_t* ring = lv_obj_create(corner);
+      lv_obj_remove_style_all(ring);
+      lv_obj_set_size(ring, 3 * box, 3 * box);
+      lv_obj_set_pos(ring, (i & 1) ? -2 * box : 0, (i & 2) ? -2 * box : 0);
+      lv_obj_remove_flag(ring, LV_OBJ_FLAG_CLICKABLE);
+      ui_surface_style::apply_radius(ring, popup_layout::kCardRadius + Device::kGridGap, 0);
+      lv_obj_set_style_outline_width(ring, box, 0);
+      lv_obj_set_style_outline_pad(ring, 0, 0);
+      lv_obj_set_style_outline_color(ring, lv_color_black(), 0);
+      lv_obj_set_style_outline_opa(ring, LV_OPA_COVER, 0);
+      screen_corners[i] = corner;
+    }
+    if (ui_theme::light()) {
+      lv_obj_remove_flag(screen_corners[i], LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(screen_corners[i], LV_OBJ_FLAG_HIDDEN);
+    }
+  }
 }
 
 void UIManager::processThemeChange() {
@@ -188,6 +230,7 @@ void UIManager::processThemeChange() {
     if (panel) lv_obj_set_style_bg_color(panel, screen, 0);
   }
   tiles_apply_screen_color();
+  applyScreenCorners();
   // Tiles, head bars and the screensaver grid rebuild like after a default
   // tile color change; Settings rebuilds when it shows (now, if it does).
   tiles_invalidate_folder(tileConfig.rootFolderId());

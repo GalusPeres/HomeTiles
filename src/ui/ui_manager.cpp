@@ -463,13 +463,20 @@ void UIManager::switchToTab(uint8_t index) {
     const uint32_t cleared_ms = switch_started_ms;
     const uint32_t child_count = lv_obj_get_child_count(tab_panels[index]);
 #else
-    BoardHAL::displayFillScreen(0x0000);
+    // In the theme's screen color: only the Settings controls are drawn
+    // again, the gaps between them keep this fill (black showed as bars and a
+    // flash in the light theme, user 2026-10-10).
+    BoardHAL::displayFillScreen(lv_color_to_u16(lv_color_hex(ui_theme::screen())));
     const uint32_t cleared_ms = millis();
 
     // The cleared framebuffer also lost the camera stripe on the top layer.
     // LVGL draws the dirty areas in this order: the stripe first, so its
     // faded ends do not appear only after the Settings controls.
     camera_indicator::invalidateVisible();
+    // So did the light theme's screen corners.
+    for (lv_obj_t* corner : screen_corners) {
+      if (corner && !lv_obj_has_flag(corner, LV_OBJ_FLAG_HIDDEN)) lv_obj_invalidate(corner);
+    }
     const uint32_t child_count = lv_obj_get_child_count(tab_panels[index]);
     for (uint32_t i = 0; i < child_count; ++i) {
       lv_obj_t* child = lv_obj_get_child(tab_panels[index], static_cast<int32_t>(i));

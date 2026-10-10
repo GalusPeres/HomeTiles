@@ -108,6 +108,13 @@ assert.ok(apply.indexOf('popup_shell_delete_popups();') < apply.indexOf('preload
 // switch.
 assert.ok(apply.includes('applyScreenCorners();') && ui.includes('  camera_indicator::init();\n  applyScreenCorners();'));
 const corners = ui.slice(ui.indexOf('void UIManager::applyScreenCorners() {'), ui.indexOf('void UIManager::processThemeChange() {'));
+// The P4's quick Settings switch fills the framebuffer and draws only the
+// Settings controls (and the corners) again: the fill is the theme's screen,
+// black left bars and a flash in the light theme (user 2026-10-10).
+const settingsSwitch = ui.slice(ui.indexOf('void UIManager::switchToTab(uint8_t index) {'));
+assert.ok(settingsSwitch.includes('BoardHAL::displayFillScreen(lv_color_to_u16(lv_color_hex(ui_theme::screen())));') &&
+  !settingsSwitch.includes('BoardHAL::displayFillScreen(0x0000);') &&
+  settingsSwitch.includes('if (corner && !lv_obj_has_flag(corner, LV_OBJ_FLAG_HIDDEN)) lv_obj_invalidate(corner);'));
 for (const marker of ['lv_obj_t* corner = lv_obj_create(lv_layer_sys());',
   'ui_surface_style::apply_radius(ring, popup_layout::kCardRadius + Device::kGridGap, 0);',
   'lv_obj_set_style_outline_color(ring, lv_color_black(), 0);',

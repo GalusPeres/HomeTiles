@@ -190,7 +190,7 @@ assert.match(indicator, /constexpr uint32_t kPollMs = 100;/);
 assert.match(indicator, /if \(started \|\| !local_camera::supported\(\)\) return;/,
   'Devices without a camera never create the timer');
 assert.match(ui, /#include "src\/ui\/shared\/camera_indicator\.h"/);
-assert.match(ui, /camera_indicator::init\(\);\s*\n\s*Serial\.println\("\[UI\] UI built"\);/);
+assert.match(ui, /camera_indicator::init\(\);\s*\n\s*applyScreenCorners\(\);\s*\n\s*Serial\.println\("\[UI\] UI built"\);/);
 
 // Translations: every language has the title and the hint.
 assert.match(i18nHeader, /const char\* local_camera_indicator_active;\s*const char\* local_camera_indicator_end;/);
@@ -250,7 +250,7 @@ assert.match(indicator, /inline void poll\(lv_timer_t\*\) \{ refresh\(objects\(\
   assert.match(partial, /^if \(partial_settings_switch\) \{\s*lv_display_enable_invalidation\(disp, true\);\s*\/\/[^\n]*\n\s*camera_indicator::refreshNow\(\);/);
   // Stripe first: LVGL draws the dirty areas in order, and b28 drew the faded
   // ends only after the ~150 ms of Settings controls.
-  assert.ok(partial.indexOf('BoardHAL::displayFillScreen(0x0000);') < partial.indexOf('camera_indicator::invalidateVisible();') &&
+  assert.ok(partial.indexOf('BoardHAL::displayFillScreen(lv_color_to_u16(lv_color_hex(ui_theme::screen())));') < partial.indexOf('camera_indicator::invalidateVisible();') &&
     partial.indexOf('camera_indicator::invalidateVisible();') < partial.indexOf('lv_obj_invalidate(child);') &&
     partial.indexOf('lv_obj_invalidate(child);') < partial.indexOf('lv_refr_now(disp);'));
   assert.match(ui, /camera_indicator::refreshNow\(\);\s*lv_obj_invalidate\(lv_scr_act\(\)\);/);

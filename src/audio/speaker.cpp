@@ -4,6 +4,7 @@
 
 #include <atomic>
 
+#include "src/audio/assist_contract.h"
 #include "src/audio/speaker_contract.h"
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/network/network_manager.h"
@@ -22,6 +23,8 @@
 #include <freertos/task.h>
 
 #include "mp3dec.h"
+#include "src/audio/assist_request.h"
+#include "src/audio/codecs/es7210/es7210_codec.h"
 #include "src/audio/codecs/es8311/es8311_codec.h"
 #include "src/audio/speaker_request.h"
 #include "src/core/config/batched_nvs_write.h"
@@ -33,6 +36,8 @@ namespace speaker {
 namespace {
 
 using namespace speaker_contract;
+// Assist names stay qualified: both contracts define ErrorCode and friends.
+namespace assist = assist_contract;
 
 #if defined(HOMETILES_SPEAKER)
 constexpr bool kSupported = true;
@@ -48,7 +53,15 @@ std::atomic<bool> g_muted{false};
 // Bumped by every change of the retained status; service() publishes it.
 std::atomic<uint32_t> g_state_generation{0};
 uint32_t g_published_generation = 0;
-bool g_last_capability = false;
+// Bridge capability bits: 1 = audio_output, 2 = audio_input.
+uint8_t g_last_capability = 0;
+
+// Assist microphone capture (assist_contract.h).
+std::atomic<bool> g_mic_ready{false};
+std::atomic<uint8_t> g_assist_state{static_cast<uint8_t>(assist::PublicState::Idle)};
+std::atomic<uint8_t> g_assist_error{static_cast<uint8_t>(assist::ErrorCode::None)};
+std::atomic<uint32_t> g_assist_state_generation{0};
+uint32_t g_assist_published_generation = 0;
 
 #if defined(HOMETILES_SPEAKER)
 
@@ -73,6 +86,7 @@ constexpr UBaseType_t kWorkerPriority = 3;
 constexpr uint32_t kNotifyPlay = 1u << 0;
 constexpr uint32_t kNotifyVolume = 1u << 1;
 constexpr uint32_t kNotifyShutdown = 1u << 2;
+constexpr uint32_t kNotifyAssist = 1u << 3;
 constexpr uint32_t kShutdownWaitMs = 1500;
 
 constexpr uint32_t kHttpTimeoutMs = 5000;
@@ -102,6 +116,23 @@ struct PlayRequest {
   char url[kMaxUrlLength + 1];
 };
 
+// Assist capture: 16 kHz 16-bit stereo (one mic per slot). 6 x 320 frames x
+// 4 bytes = 7.5 KiB internal DMA RAM (the same budget as the closed speaker
+// output), 120 ms of audio to ride out a flash write or a busy core.
+constexpr uint32_t kRxDmaDescriptors = 6;
+constexpr uint32_t kRxDmaFrames = 320;
+// One 20 ms read; five reads fill a 100 ms frame.
+constexpr size_t kCaptureChunkFrames = 320;
+constexpr size_t kCaptureChunkBytes = kCaptureChunkFrames * 2 * sizeof(int16_t);
+constexpr uint32_t kI2sReadTimeoutMs = 200;
+// Samples dropped after the ADC was (re)configured: power-up settling.
+constexpr uint32_t kCaptureWarmupMs = 40;
+
+struct AssistRequest {
+  char id[assist::kMaxRequestIdLength + 1];
+  uint32_t max_ms;
+};
+
 // ---------------------------------------------------------------------------
 // Shared state
 // ---------------------------------------------------------------------------
@@ -119,14 +150,28 @@ std::atomic<uint32_t> g_shutdown_ack{0};
 
 portMUX_TYPE g_id_mux = portMUX_INITIALIZER_UNLOCKED;
 char g_status_id[kMaxRequestIdLength + 1] = {};
+char g_assist_status_id[assist::kMaxRequestIdLength + 1] = {};
+
+// Latest Assist start (newest wins), guarded by g_request_mutex. Only one of
+// g_play_pending and g_assist_pending is set: each command clears the other.
+AssistRequest g_assist_request = {};
+std::atomic<bool> g_assist_pending{false};
+// Bumped by an Assist stop, a newer start, a play command and shutdown; a
+// capture session ends when it changed.
+std::atomic<uint32_t> g_capture_generation{0};
 
 // Loop task only.
 bool g_persist_pending = false;
 uint32_t g_persist_due_ms = 0;
 uint32_t g_command_log_ms = 0;
+uint32_t g_assist_log_ms = 0;
+// Id of the newest accepted start; a stop must name it.
+char g_assist_session_id[assist::kMaxRequestIdLength + 1] = {};
 
 // Worker only.
 es8311::Codec g_codec;
+es7210::Codec g_mic;
+i2s_chan_handle_t g_rx = nullptr;
 i2s_chan_handle_t g_tx = nullptr;
 uint32_t g_tx_rate = 0;
 bool g_amp_on = false;
@@ -155,6 +200,23 @@ void setPublic(PublicState state, ErrorCode error) {
   g_public_state.store(static_cast<uint8_t>(state));
   g_error.store(static_cast<uint8_t>(error));
   g_state_generation.fetch_add(1);
+}
+
+void setAssistStatusId(const char* id) {
+  portENTER_CRITICAL(&g_id_mux);
+  if (id) {
+    strncpy(g_assist_status_id, id, assist::kMaxRequestIdLength);
+    g_assist_status_id[assist::kMaxRequestIdLength] = '\0';
+  } else {
+    g_assist_status_id[0] = '\0';
+  }
+  portEXIT_CRITICAL(&g_id_mux);
+}
+
+void setAssistPublic(assist::PublicState state, assist::ErrorCode error) {
+  g_assist_state.store(static_cast<uint8_t>(state));
+  g_assist_error.store(static_cast<uint8_t>(error));
+  g_assist_state_generation.fetch_add(1);
 }
 
 void notifyWorker(uint32_t bits) {
@@ -195,13 +257,7 @@ void applyVolumeIfChanged() {
   }
 }
 
-void probeCodec() {
-  initAmpPin();
-  i2c_master_bus_handle_t bus = speaker_board::bus();
-  if (!bus) {
-    Serial.printf("%s I2C bus unavailable, speaker disabled\n", kLogPrefix);
-    return;
-  }
+void probeSpeakerCodec(i2c_master_bus_handle_t bus) {
   esp_err_t err = es8311::probe(bus, speaker_board::kCodecAddress, &g_codec);
   if (err == ESP_OK) err = es8311::init(&g_codec, kInitialSampleRate);
   if (err != ESP_OK) {
@@ -214,6 +270,36 @@ void probeCodec() {
   g_codec_ready.store(true);
   g_state_generation.fetch_add(1);
   Serial.printf("%s ES8311 ready at 0x%02X\n", kLogPrefix, speaker_board::kCodecAddress);
+}
+
+// The ES7210 is configured once here to prove it answers, and again at every
+// capture start once MCLK runs.
+void probeMic(i2c_master_bus_handle_t bus) {
+  if (speaker_board::kMicAddress == 0) return;
+  uint16_t chip_id = 0;
+  esp_err_t err = es7210::probe(bus, speaker_board::kMicAddress, &g_mic, &chip_id);
+  if (err == ESP_OK) err = es7210::init(&g_mic, assist::kSampleRate);
+  if (err != ESP_OK) {
+    Serial.printf("%s ES7210 not ready (%s), Assist microphone disabled\n", kLogPrefix,
+                  esp_err_to_name(err));
+    es7210::release(&g_mic);
+    return;
+  }
+  g_mic_ready.store(true);
+  g_assist_state_generation.fetch_add(1);
+  Serial.printf("%s ES7210 ready at 0x%02X (id 0x%04X)\n", kLogPrefix,
+                speaker_board::kMicAddress, static_cast<unsigned>(chip_id));
+}
+
+void probeCodec() {
+  initAmpPin();
+  i2c_master_bus_handle_t bus = speaker_board::bus();
+  if (!bus) {
+    Serial.printf("%s I2C bus unavailable, speaker and microphone disabled\n", kLogPrefix);
+    return;
+  }
+  probeSpeakerCodec(bus);
+  probeMic(bus);
 }
 
 void writeSilence(uint32_t ms) {
@@ -655,6 +741,190 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Worker: Assist microphone capture
+// ---------------------------------------------------------------------------
+void closeInput() {
+  if (!g_rx) return;
+  i2s_channel_disable(g_rx);
+  i2s_del_channel(g_rx);
+  g_rx = nullptr;
+}
+
+// RX-only master channel on the shared I2S lines: the P4 drives MCLK, BCLK
+// and LRCK, the ES7210 sends MIC1/MIC2 as the left/right slot on din.
+assist::ErrorCode openInput() {
+  i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+  chan.dma_desc_num = kRxDmaDescriptors;
+  chan.dma_frame_num = kRxDmaFrames;
+  const esp_err_t created = i2s_new_channel(&chan, nullptr, &g_rx);
+  if (created != ESP_OK) {
+    g_rx = nullptr;
+    Serial.printf("%s Microphone channel unavailable (%s)\n", kLogPrefix,
+                  esp_err_to_name(created));
+    return created == ESP_ERR_NO_MEM ? assist::ErrorCode::OutOfMemory : assist::ErrorCode::Busy;
+  }
+  i2s_std_config_t config = {};
+  config.clk_cfg = clockConfig(assist::kSampleRate);
+  config.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
+                                                     I2S_SLOT_MODE_STEREO);
+  config.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
+  config.gpio_cfg.mclk = speaker_board::kI2sMclk;
+  config.gpio_cfg.bclk = speaker_board::kI2sBclk;
+  config.gpio_cfg.ws = speaker_board::kI2sLrck;
+  config.gpio_cfg.dout = I2S_GPIO_UNUSED;
+  config.gpio_cfg.din = speaker_board::kI2sDin;
+  if (i2s_channel_init_std_mode(g_rx, &config) != ESP_OK) {
+    i2s_del_channel(g_rx);
+    g_rx = nullptr;
+    return assist::ErrorCode::MicUnavailable;
+  }
+  if (i2s_channel_enable(g_rx) != ESP_OK) {
+    i2s_del_channel(g_rx);
+    g_rx = nullptr;
+    return assist::ErrorCode::MicUnavailable;
+  }
+  // Reprogram the ADC now that its clocks run, as the esp-bsp examples do.
+  const esp_err_t configured = es7210::init(&g_mic, assist::kSampleRate);
+  if (configured != ESP_OK) {
+    Serial.printf("%s ES7210 setup failed (%s)\n", kLogPrefix, esp_err_to_name(configured));
+    closeInput();
+    return assist::ErrorCode::MicUnavailable;
+  }
+  return assist::ErrorCode::None;
+}
+
+// Writes the header in front of the PCM already at frame + header length and
+// queues the frame. The MQTT layer copies it, so the buffer is free again.
+bool publishAudioFrame(const char* topic, uint8_t* frame, const char* id, size_t id_length,
+                       uint32_t sequence, size_t pcm_bytes, bool last) {
+  const size_t header_length = assist::frameHeaderLength(id_length);
+  if (assist::buildFrameHeader(frame, header_length, id, id_length, last, sequence) !=
+      header_length) {
+    return false;
+  }
+  return networkManager.mqttEnqueuePublish(topic, frame, header_length + pcm_bytes, false);
+}
+
+void captureSession(const AssistRequest& request, uint32_t generation) {
+  setAssistStatusId(request.id);
+  if (!g_mic_ready.load()) {
+    setAssistPublic(assist::PublicState::Idle, assist::ErrorCode::MicUnavailable);
+    return;
+  }
+  // The capture uses the speaker's I2S lines and clocks.
+  closeOutput();
+  const char* audio_topic = mqttTopics.topic(TopicKey::ASSIST_AUDIO_STAT);
+  // Copied once: the registry may rebuild its strings on the loop task.
+  const String topic = audio_topic ? audio_topic : "";
+  const size_t id_length = strlen(request.id);
+  const size_t header_length = assist::frameHeaderLength(id_length);
+  uint8_t* frame = static_cast<uint8_t*>(heap_caps_malloc(
+      header_length + assist::kFrameBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  int16_t* chunk =
+      static_cast<int16_t*>(heap_caps_malloc(kCaptureChunkBytes, MALLOC_CAP_INTERNAL));
+  assist::ErrorCode result = assist::ErrorCode::None;
+  if (!frame || !chunk) result = assist::ErrorCode::OutOfMemory;
+  if (result == assist::ErrorCode::None && topic.isEmpty()) result = assist::ErrorCode::Invalid;
+  if (result == assist::ErrorCode::None) result = openInput();
+  if (result != assist::ErrorCode::None) {
+    Serial.printf("%s Assist capture %s refused: %s\n", kLogPrefix, request.id,
+                  assist::errorCodeName(result));
+    heap_caps_free(frame);
+    heap_caps_free(chunk);
+    // Still answer the Bridge's stream with an empty last frame.
+    if (!topic.isEmpty() && networkManager.isMqttConnected()) {
+      uint8_t header[assist::kMaxFrameHeaderBytes];
+      publishAudioFrame(topic.c_str(), header, request.id, id_length, 0, 0, true);
+    }
+    setAssistPublic(assist::PublicState::Idle, result);
+    return;
+  }
+
+  // Drop the samples of the ADC's power-up settling.
+  size_t warmup_bytes = static_cast<size_t>(assist::kSampleRate) * kCaptureWarmupMs / 1000 *
+                        2 * sizeof(int16_t);
+  while (warmup_bytes > 0) {
+    size_t bytes_read = 0;
+    const size_t want = warmup_bytes < kCaptureChunkBytes ? warmup_bytes : kCaptureChunkBytes;
+    if (i2s_channel_read(g_rx, chunk, want, &bytes_read, kI2sReadTimeoutMs) != ESP_OK ||
+        bytes_read == 0) {
+      break;
+    }
+    warmup_bytes -= bytes_read < warmup_bytes ? bytes_read : warmup_bytes;
+  }
+
+  setAssistPublic(assist::PublicState::Listening, assist::ErrorCode::None);
+  Serial.printf("%s Assist capture %s started (max %lu ms)\n", kLogPrefix, request.id,
+                static_cast<unsigned long>(request.max_ms));
+  uint8_t* pcm = frame + header_length;
+  size_t pcm_bytes = 0;
+  uint32_t sequence = 0;
+  const char* end_reason = "stopped";
+  const uint32_t started_ms = millis();
+  for (;;) {
+    if (g_shutdown.load()) {
+      end_reason = "shutdown";
+      break;
+    }
+    if (g_capture_generation.load() != generation) break;
+    if (static_cast<uint32_t>(millis() - started_ms) >= request.max_ms) {
+      result = assist::ErrorCode::Timeout;
+      break;
+    }
+    // Frames queued while offline would only pile up; the Bridge ends the
+    // pipeline after 2 s without frames.
+    if (!networkManager.isMqttConnected()) {
+      end_reason = "MQTT offline";
+      break;
+    }
+    size_t bytes_read = 0;
+    const esp_err_t read =
+        i2s_channel_read(g_rx, chunk, kCaptureChunkBytes, &bytes_read, kI2sReadTimeoutMs);
+    if (read != ESP_OK && bytes_read == 0) {
+      Serial.printf("%s Microphone read failed (%s)\n", kLogPrefix, esp_err_to_name(read));
+      result = assist::ErrorCode::MicUnavailable;
+      break;
+    }
+    const int16_t* samples = chunk;
+    size_t frames = bytes_read / (2 * sizeof(int16_t));
+    while (frames > 0) {
+      const size_t room = (assist::kFrameBytes - pcm_bytes) / sizeof(int16_t);
+      const size_t now = frames < room ? frames : room;
+      assist::stereoToMonoLe(samples, now, pcm + pcm_bytes);
+      pcm_bytes += now * sizeof(int16_t);
+      samples += 2 * now;
+      frames -= now;
+      if (pcm_bytes < assist::kFrameBytes) continue;
+      // A full publish queue means MQTT cannot keep up; stop instead of
+      // dropping audio in the middle of a sentence.
+      if (!publishAudioFrame(topic.c_str(), frame, request.id, id_length, sequence, pcm_bytes,
+                             false)) {
+        result = assist::ErrorCode::Busy;
+        break;
+      }
+      ++sequence;
+      pcm_bytes = 0;
+    }
+    if (result != assist::ErrorCode::None) break;
+  }
+  closeInput();
+  // Every session ends with a frame carrying the last flag, also after an
+  // error; it may hold the remaining samples or none.
+  const bool last_sent =
+      publishAudioFrame(topic.c_str(), frame, request.id, id_length, sequence, pcm_bytes, true);
+  heap_caps_free(frame);
+  heap_caps_free(chunk);
+  Serial.printf("%s Assist capture %s ended (%s), %lu frames%s\n", kLogPrefix, request.id,
+                result != assist::ErrorCode::None ? assist::errorCodeName(result) : end_reason,
+                static_cast<unsigned long>(sequence + 1),
+                last_sent ? "" : ", last frame not queued");
+  // A newer start keeps the state "listening" instead of flashing idle.
+  if (!(g_assist_pending.load() && result == assist::ErrorCode::None)) {
+    setAssistPublic(assist::PublicState::Idle, result);
+  }
+}
+
 void workerMain(void*) {
   probeCodec();
   PlayRequest* request = static_cast<PlayRequest*>(
@@ -667,6 +937,7 @@ void workerMain(void*) {
     uint32_t bits = 0;
     xTaskNotifyWait(0, UINT32_MAX, &bits, portMAX_DELAY);
     if ((bits & kNotifyShutdown) || g_shutdown.load()) {
+      closeInput();
       closeOutput();
       g_shutdown_ack.fetch_add(1);
       continue;
@@ -680,6 +951,21 @@ void workerMain(void*) {
         xSemaphoreGive(g_request_mutex);
       }
       if (have) playRequest(*request, stream_memory);
+    }
+    if (bits & kNotifyAssist) {
+      bool have = false;
+      AssistRequest assist_request = {};
+      uint32_t generation = 0;
+      if (xSemaphoreTake(g_request_mutex, portMAX_DELAY) == pdTRUE) {
+        have = g_assist_pending.exchange(false);
+        if (have) {
+          assist_request = g_assist_request;
+          // Read under the mutex: a stop after this point changes it.
+          generation = g_capture_generation.load();
+        }
+        xSemaphoreGive(g_request_mutex);
+      }
+      if (have) captureSession(assist_request, generation);
     }
   }
 }
@@ -722,6 +1008,31 @@ void publishStatus() {
   networkManager.mqttEnqueuePublish(topic, payload, true);
 }
 
+// Only once the microphone answered: a board without one never announces
+// Assist.
+void publishAssistStatus() {
+  if (!kSupported || !g_mic_ready.load() || !networkManager.isMqttConnected()) return;
+  const char* topic = mqttTopics.topic(TopicKey::ASSIST_STAT);
+  if (!topic || !*topic) return;
+  assist::StatusFields fields;
+  fields.state = static_cast<assist::PublicState>(g_assist_state.load());
+  fields.error = static_cast<assist::ErrorCode>(g_assist_error.load());
+  char id[assist::kMaxRequestIdLength + 1] = {};
+#if defined(HOMETILES_SPEAKER)
+  portENTER_CRITICAL(&g_id_mux);
+  memcpy(id, g_assist_status_id, sizeof(id));
+  portEXIT_CRITICAL(&g_id_mux);
+#endif
+  if (id[0]) fields.id = id;
+  char payload[128];
+  if (!assist::buildStatusJson(payload, sizeof(payload), fields)) return;
+  networkManager.mqttEnqueuePublish(topic, payload, true);
+}
+
+uint8_t capabilityBits() {
+  return static_cast<uint8_t>((bridgeCapability() ? 1u : 0u) | (micCapability() ? 2u : 0u));
+}
+
 }  // namespace
 
 bool supported() { return kSupported; }
@@ -759,7 +1070,12 @@ void service() {
     g_published_generation = generation;
     publishStatus();
   }
-  const bool capability = bridgeCapability();
+  const uint32_t assist_generation = g_assist_state_generation.load();
+  if (assist_generation != g_assist_published_generation) {
+    g_assist_published_generation = assist_generation;
+    publishAssistStatus();
+  }
+  const uint8_t capability = capabilityBits();
   if (capability != g_last_capability) {
     g_last_capability = capability;
     // The post-connect path announces the current value after a reconnect.
@@ -769,7 +1085,9 @@ void service() {
   if (g_persist_pending && !g_shutdown.load() &&
       static_cast<int32_t>(millis() - g_persist_due_ms) >= 0 &&
       static_cast<PublicState>(g_public_state.load()) == PublicState::Idle &&
-      !g_play_pending.load()) {
+      !g_play_pending.load() &&
+      static_cast<assist::PublicState>(g_assist_state.load()) == assist::PublicState::Idle &&
+      !g_assist_pending.load()) {
     g_persist_pending = false;
     storeVolume();
   }
@@ -779,8 +1097,10 @@ void service() {
 void onMqttConnected() {
   if (!kSupported) return;
   g_published_generation = g_state_generation.load();
-  g_last_capability = bridgeCapability();
+  g_assist_published_generation = g_assist_state_generation.load();
+  g_last_capability = capabilityBits();
   publishStatus();
+  publishAssistStatus();
 }
 
 const char* commandTopic() {
@@ -794,10 +1114,27 @@ bool isCommandTopic(const char* topic) {
   return command && topic && strcmp(topic, command) == 0;
 }
 
+const char* assistCommandTopic() {
+  if (!kSupported) return nullptr;
+  const char* topic = mqttTopics.topic(TopicKey::ASSIST_CMND);
+  return topic && *topic ? topic : nullptr;
+}
+
+bool isAssistCommandTopic(const char* topic) {
+  const char* command = assistCommandTopic();
+  return command && topic && strcmp(topic, command) == 0;
+}
+
 bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length) {
-  if (!isCommandTopic(topic)) return false;
-  handleCommandPayload(payload, length);
-  return true;
+  if (isCommandTopic(topic)) {
+    handleCommandPayload(payload, length);
+    return true;
+  }
+  if (isAssistCommandTopic(topic)) {
+    handleAssistCommandPayload(payload, length);
+    return true;
+  }
+  return false;
 }
 
 void handleCommandPayload(const uint8_t* payload, size_t length) {
@@ -826,6 +1163,9 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
       memcpy(g_request->id, command.id, sizeof(g_request->id));
       memcpy(g_request->url, g_parse_url, command.url_length + 1);
       g_play_pending.store(true);
+      // Playback ends a capture session or a start that has not begun.
+      g_assist_pending.store(false);
+      g_capture_generation.fetch_add(1);
       xSemaphoreGive(g_request_mutex);
       // Ends the current clip; the worker then takes the new request.
       g_stop_generation.fetch_add(1);
@@ -860,13 +1200,86 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
 #endif
 }
 
+void handleAssistCommandPayload(const uint8_t* payload, size_t length) {
+#if defined(HOMETILES_SPEAKER)
+  if (!g_worker || g_shutdown.load() || !g_request_mutex) return;
+  assist::Command command;
+  assist::parseCommand(reinterpret_cast<const char*>(payload), length, &command);
+  if (command.status != assist::CommandStatus::Ok) {
+    if (logDue(&g_assist_log_ms, 10000)) {
+      Serial.printf("%s Ignored Assist command: %s (%u bytes)\n", kLogPrefix,
+                    assist::commandStatusName(command.status), static_cast<unsigned>(length));
+    }
+    // A refused start still answers, unless another session is listening.
+    if (command.kind == assist::CommandKind::Start && command.id[0] != '\0' &&
+        g_mic_ready.load() &&
+        static_cast<assist::PublicState>(g_assist_state.load()) == assist::PublicState::Idle) {
+      setAssistStatusId(command.id);
+      setAssistPublic(assist::PublicState::Idle, assist::ErrorCode::Invalid);
+    }
+    return;
+  }
+  if (!g_mic_ready.load()) {
+    if (logDue(&g_assist_log_ms, 10000)) {
+      Serial.printf("%s Assist command ignored: no microphone\n", kLogPrefix);
+    }
+    return;
+  }
+  switch (command.kind) {
+    case assist::CommandKind::Start: {
+      if (xSemaphoreTake(g_request_mutex, pdMS_TO_TICKS(50)) != pdTRUE) return;
+      memcpy(g_assist_request.id, command.id, sizeof(g_assist_request.id));
+      g_assist_request.max_ms = command.max_ms;
+      g_assist_pending.store(true);
+      // Ends a running session; the worker then takes the new one.
+      g_capture_generation.fetch_add(1);
+      // A start stops speaker playback first.
+      g_play_pending.store(false);
+      xSemaphoreGive(g_request_mutex);
+      g_stop_generation.fetch_add(1);
+      memcpy(g_assist_session_id, command.id, sizeof(g_assist_session_id));
+      notifyWorker(kNotifyAssist);
+      break;
+    }
+    case assist::CommandKind::Stop: {
+      if (strcmp(command.id, g_assist_session_id) != 0) {
+        if (logDue(&g_assist_log_ms, 10000)) {
+          Serial.printf("%s Assist stop for another session ignored\n", kLogPrefix);
+        }
+        return;
+      }
+      bool withdrawn = false;
+      if (xSemaphoreTake(g_request_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        withdrawn = g_assist_pending.exchange(false);
+        xSemaphoreGive(g_request_mutex);
+      }
+      g_capture_generation.fetch_add(1);
+      // Stopped before the worker began it: report the session as done.
+      if (withdrawn) {
+        setAssistStatusId(command.id);
+        setAssistPublic(assist::PublicState::Idle, assist::ErrorCode::None);
+      }
+      break;
+    }
+    case assist::CommandKind::Invalid:
+      break;
+  }
+#else
+  (void)payload;
+  (void)length;
+#endif
+}
+
 bool bridgeCapability() { return kSupported && g_codec_ready.load(); }
+
+bool micCapability() { return kSupported && g_mic_ready.load(); }
 
 void shutdown(const char* reason) {
 #if defined(HOMETILES_SPEAKER)
   if (!g_worker || g_shutdown.exchange(true)) return;
   const uint32_t ack = g_shutdown_ack.load();
   g_stop_generation.fetch_add(1);
+  g_capture_generation.fetch_add(1);
   notifyWorker(kNotifyShutdown);
   const uint32_t started_ms = millis();
   while (g_shutdown_ack.load() == ack &&

@@ -353,6 +353,9 @@ String HaBridgeConfig::buildJsonPayload(const char* device_id,
   // Speaker playback (media_player entity): codec found on its exact profile.
   json += ",\"audio_output\":";
   json += speaker::bridgeCapability() ? "true" : "false";
+  // Microphone capture for Assist: ES7210 answered on its exact profile.
+  json += ",\"audio_input\":";
+  json += speaker::micCapability() ? "true" : "false";
   json += "}";
   if (data.has_editable_lists) {
     json += ",\"numbers\":";

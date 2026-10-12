@@ -2024,7 +2024,8 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
   // Built-in camera snapshot requests only validate and wake the camera
   // worker here; capture and upload never run on the loop task.
   if (local_camera::handleMqttMessage(topic, payload, length)) return;
-  // Speaker commands only validate and hand a clip to the playback worker.
+  // Speaker and Assist commands only validate and hand a clip or a capture
+  // session to the audio worker.
   if (speaker::handleMqttMessage(topic, payload, length)) return;
   if (editable_handle_ack(topic, reinterpret_cast<const char*>(payload), length)) return;
   const char* apply_topic = networkManager.getBridgeApplyTopic();
@@ -2237,6 +2238,12 @@ void mqttSubscribeTopics() {
   if (const char* audio_topic = speaker::commandTopic()) {
     if (networkManager.mqttEnqueueSubscribe(audio_topic)) {
       Serial.printf("MQTT: subscribe queued %s\n", audio_topic);
+    }
+  }
+  // And {base}/cmnd/assist (microphone capture for Home Assistant Assist).
+  if (const char* assist_topic = speaker::assistCommandTopic()) {
+    if (networkManager.mqttEnqueueSubscribe(assist_topic)) {
+      Serial.printf("MQTT: subscribe queued %s\n", assist_topic);
     }
   }
 
@@ -3067,7 +3074,8 @@ void mqttServicePostConnect() {
   local_camera::onMqttConnected();
   // Bridge pairing: secure topic subscription, status and session request.
   command_channel::onMqttConnected();
-  // Retained {base}/stat/audio on speaker profiles; no-op elsewhere.
+  // Retained {base}/stat/audio (and {base}/stat/assist once the microphone
+  // answered) on speaker profiles; no-op elsewhere.
   speaker::onMqttConnected();
   // Announce the exact MAC-based Bridge topic after every connection. Without
   // this retained message the HA integration cannot discover a new device or

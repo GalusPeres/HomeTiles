@@ -417,7 +417,8 @@ static bool streamLogDue(uint32_t now_ms) {
 static bool dropRetainedLocalCameraCommand(BridgeTransportClient& client,
                                            const char* topic) {
   if (!client.lastPublishRetained() ||
-      !(local_camera::isCommandTopic(topic) || speaker::isCommandTopic(topic))) {
+      !(local_camera::isCommandTopic(topic) || speaker::isCommandTopic(topic) ||
+        speaker::isAssistCommandTopic(topic))) {
     return false;
   }
   static uint32_t dropped = 0;

@@ -36,6 +36,9 @@ const MqttTopicRegistry::TopicDescriptor MqttTopicRegistry::kDescriptors[] = {
   {TopicKey::ALARM_STAT, TopicDomain::State, "alarm"},
   {TopicKey::AUDIO_CMND, TopicDomain::Command, "audio"},
   {TopicKey::AUDIO_STAT, TopicDomain::State, "audio"},
+  {TopicKey::ASSIST_CMND, TopicDomain::Command, "assist"},
+  {TopicKey::ASSIST_STAT, TopicDomain::State, "assist"},
+  {TopicKey::ASSIST_AUDIO_STAT, TopicDomain::State, "assist_audio"},
 };
 
 void MqttTopicRegistry::begin(const TopicSettings& settings) {

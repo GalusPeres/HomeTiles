@@ -49,6 +49,8 @@ enum class TopicKey : uint8_t {
   ASSIST_CMND,
   ASSIST_STAT,
   ASSIST_AUDIO_STAT,
+  // On-panel wake word detections (wake word profiles only publish).
+  ASSIST_WAKE_STAT,
   COUNT
 };
 

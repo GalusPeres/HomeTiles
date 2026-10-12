@@ -9,7 +9,10 @@
 
 namespace assist_contract {
 
-enum class CommandKind : uint8_t { Invalid, Start, Stop };
+enum class CommandKind : uint8_t { Invalid, Start, Stop, WakeWords };
+
+// More entries than any real list; a longer "active" array is refused.
+constexpr size_t kMaxWakeWordEntries = 16;
 
 enum class CommandStatus : uint8_t {
   Ok,
@@ -41,6 +44,8 @@ struct Command {
   // was refused, so the status can name the request.
   char id[kMaxRequestIdLength + 1] = {};
   uint32_t max_ms = kDefaultMaxMs;
+  // WakeWords: catalog mask of the known ids in "active".
+  uint32_t wake_words = 0;
 };
 
 inline void parseCommand(const char* payload, size_t length, Command* out) {
@@ -67,6 +72,21 @@ inline void parseCommand(const char* payload, size_t length, Command* out) {
     out->kind = CommandKind::Start;
   } else if (op_name && strcmp(op_name, "stop") == 0) {
     out->kind = CommandKind::Stop;
+  } else if (op_name && strcmp(op_name, "wake_words") == 0) {
+    out->kind = CommandKind::WakeWords;
+    JsonVariantConst active = doc["active"];
+    if (!active.is<JsonArrayConst>() || active.size() > kMaxWakeWordEntries) {
+      out->status = CommandStatus::InvalidValue;
+      return;
+    }
+    // Unknown, malformed and non-string entries are ignored.
+    for (JsonVariantConst entry : active.as<JsonArrayConst>()) {
+      const char* word = entry.is<const char*>() ? entry.as<const char*>() : nullptr;
+      const int index = word ? wakeWordIndex(word, strlen(word)) : -1;
+      if (index >= 0) out->wake_words |= 1u << index;
+    }
+    out->status = CommandStatus::Ok;
+    return;
   } else {
     out->status = CommandStatus::UnsupportedOp;
     return;

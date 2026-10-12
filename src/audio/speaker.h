@@ -8,6 +8,9 @@
 // The same worker also captures the board microphone for Home Assistant
 // Assist (assist_contract.h), so one task owns I2S and both codecs: a capture
 // session closes the speaker output first, and a play command ends capture.
+// On wake word profiles (HOMETILES_WAKE_WORD) the worker also listens for the
+// active wake words while nothing else uses I2S, runs the detection itself
+// and hands the audio after a detection to the next Assist session.
 //
 // Threading:
 //   - begin(), service(), onMqttConnected(), handleMqttMessage(),
@@ -15,8 +18,9 @@
 //     on the Arduino loop task.
 //   - isCommandTopic() and isAssistCommandTopic() may be called from the MQTT
 //     worker.
-//   - Codec access, the streaming download, decoding, the I2S output and the
-//     microphone capture run on a dedicated worker task created by begin().
+//   - Codec access, the streaming download, decoding, the I2S output, the
+//     microphone capture and the wake word inference run on a dedicated
+//     worker task created by begin().
 
 #include <Arduino.h>
 
@@ -35,7 +39,7 @@ void begin();
 void service();
 
 // Post-connect hook: the retained {base}/stat/audio and, once the mic
-// answered, {base}/stat/assist status.
+// answered, {base}/stat/assist status (with the wake word fields).
 void onMqttConnected();
 
 // Command topic for the explicit subscription list; nullptr when unsupported.

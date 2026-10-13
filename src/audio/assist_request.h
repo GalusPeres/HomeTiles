@@ -9,7 +9,7 @@
 
 namespace assist_contract {
 
-enum class CommandKind : uint8_t { Invalid, Start, Stop, WakeWords };
+enum class CommandKind : uint8_t { Invalid, Start, Stop, WakeWords, Mic };
 
 // More entries than any real list; a longer "active" array is refused.
 constexpr size_t kMaxWakeWordEntries = 16;
@@ -46,6 +46,8 @@ struct Command {
   uint32_t max_ms = kDefaultMaxMs;
   // WakeWords: catalog mask of the known ids in "active".
   uint32_t wake_words = 0;
+  // Mic: the requested privacy switch state.
+  bool mic_enabled = true;
 };
 
 inline void parseCommand(const char* payload, size_t length, Command* out) {
@@ -72,6 +74,16 @@ inline void parseCommand(const char* payload, size_t length, Command* out) {
     out->kind = CommandKind::Start;
   } else if (op_name && strcmp(op_name, "stop") == 0) {
     out->kind = CommandKind::Stop;
+  } else if (op_name && strcmp(op_name, "mic") == 0) {
+    out->kind = CommandKind::Mic;
+    JsonVariantConst enabled = doc["enabled"];
+    if (!enabled.is<bool>()) {
+      out->status = CommandStatus::InvalidValue;
+      return;
+    }
+    out->mic_enabled = enabled.as<bool>();
+    out->status = CommandStatus::Ok;
+    return;
   } else if (op_name && strcmp(op_name, "wake_words") == 0) {
     out->kind = CommandKind::WakeWords;
     JsonVariantConst active = doc["active"];

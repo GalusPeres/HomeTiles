@@ -537,6 +537,15 @@ int main() {
   // Start and stop are unchanged.
   c = parse("{\"v\":1,\"op\":\"start\",\"id\":\"0123456789abcdef\"}");
   assert(c.kind == CommandKind::Start && c.status == CommandStatus::Ok && c.wake_words == 0u);
+  // Microphone privacy switch: "enabled" must be a boolean.
+  c = parse("{\"v\":1,\"op\":\"mic\",\"enabled\":false}");
+  assert(c.kind == CommandKind::Mic && c.status == CommandStatus::Ok && !c.mic_enabled);
+  c = parse("{\"v\":1,\"op\":\"mic\",\"enabled\":true}");
+  assert(c.kind == CommandKind::Mic && c.status == CommandStatus::Ok && c.mic_enabled);
+  assert(parse("{\"v\":1,\"op\":\"mic\"}").status == CommandStatus::InvalidValue);
+  assert(parse("{\"v\":1,\"op\":\"mic\",\"enabled\":1}").status == CommandStatus::InvalidValue);
+  assert(parse("{\"v\":1,\"op\":\"mic\",\"enabled\":\"false\"}").status ==
+         CommandStatus::InvalidValue);
   puts("wake_words command parser ok");
   return 0;
 }

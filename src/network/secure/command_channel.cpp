@@ -437,7 +437,7 @@ void handleData(const Header& header, const uint8_t* body, size_t length) {
   } else if (strcmp(header.name, "audio") == 0) {
     speaker::handleCommandPayload(body, length);
   } else if (strcmp(header.name, "assist") == 0) {
-    speaker::handleAssistCommandPayload(body, length);
+    speaker::handleAssistCommandPayload(body, length, true);
   }
 }
 

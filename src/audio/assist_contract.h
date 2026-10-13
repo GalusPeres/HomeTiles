@@ -31,6 +31,14 @@
 //       Sets the active wake words (empty list = off), applied at once and
 //       stored in NVS for the next boot. Unknown or malformed words are
 //       ignored; ids are [a-z0-9_]{1,32}.
+//
+// v1 addendum, microphone privacy switch (stored in NVS, default on):
+//   {base}/cmnd/assist {"v":1,"op":"mic","enabled":false}
+//       Turning the microphone off is always accepted; turning it on from
+//       MQTT is accepted only on the encrypted command channel, so the
+//       panel's own switch cannot be undone by an unauthenticated message.
+//       While off, starts are refused with "error":"mic_off" and no wake
+//       word runs. The status adds "mic_enabled":true|false.
 //   {base}/stat/assist_wake   panel -> Bridge, QoS0, not retained:
 //       {"v":1,"word":"okay_nabu","seq":<uint32 per boot>} on a detection.
 //       The panel then buffers up to 3 s of audio and sends it first when a
@@ -95,6 +103,7 @@ enum class ErrorCode : uint8_t {
   OutOfMemory,
   Timeout,
   Invalid,
+  MicOff,
 };
 
 inline const char* publicStateName(PublicState state) {
@@ -178,6 +187,7 @@ inline const char* errorCodeName(ErrorCode code) {
     case ErrorCode::OutOfMemory: return "out_of_memory";
     case ErrorCode::Timeout: return "timeout";
     case ErrorCode::Invalid: return "invalid";
+    case ErrorCode::MicOff: return "mic_off";
   }
   return "unknown";
 }
@@ -240,6 +250,9 @@ struct StatusFields {
   bool wake_words = false;
   uint32_t available_wake_words = 0;
   uint32_t active_wake_words = 0;
+  // Adds "mic_enabled" (the privacy switch) when set.
+  bool mic_state = false;
+  bool mic_enabled = true;
 };
 
 // Appends ,"<key>":[...] for the ids in mask. Returns false when it does not
@@ -279,6 +292,12 @@ inline size_t buildStatusJson(char* out, size_t size, const StatusFields& fields
                              fields.active_wake_words & fields.available_wake_words)) {
       return 0;
     }
+  }
+  if (fields.mic_state) {
+    written = snprintf(out + used, size - used, ",\"mic_enabled\":%s",
+                       fields.mic_enabled ? "true" : "false");
+    if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;
+    used += static_cast<size_t>(written);
   }
   if (used + 2 > size) return 0;
   out[used++] = '}';

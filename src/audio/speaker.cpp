@@ -60,6 +60,8 @@ uint8_t g_last_capability = 0;
 
 // Assist microphone capture (assist_contract.h).
 std::atomic<bool> g_mic_ready{false};
+// Privacy switch (stored): while false nothing reads the microphone.
+std::atomic<bool> g_mic_enabled{true};
 std::atomic<uint8_t> g_assist_state{static_cast<uint8_t>(assist::PublicState::Idle)};
 std::atomic<uint8_t> g_assist_error{static_cast<uint8_t>(assist::ErrorCode::None)};
 std::atomic<uint32_t> g_assist_state_generation{0};
@@ -94,6 +96,7 @@ constexpr const char* kPrefsVolumeKey = "volume";
 constexpr const char* kPrefsMutedKey = "muted";
 // Comma-separated wake word ids (names, not catalog bits).
 constexpr const char* kPrefsWakeWordsKey = "wake_words";
+constexpr const char* kPrefsMicKey = "mic_on";
 // Volume sliders send many steps; store once they settle and nothing plays
 // (flash writes stall both cores and would click in the output).
 constexpr uint32_t kPersistDelayMs = 3000;
@@ -1037,7 +1040,8 @@ uint32_t takeNotifications() {
 uint32_t activeWakeWords() { return g_wake_active.load() & availableWakeWords(); }
 
 bool wakeListenWanted() {
-  return activeWakeWords() != 0 && g_mic_ready.load() && g_ring.capacity() != 0 &&
+  return activeWakeWords() != 0 && g_mic_ready.load() && g_mic_enabled.load() &&
+         g_ring.capacity() != 0 &&
          !g_shutdown.load() && !g_play_pending.load() && !g_assist_pending.load();
 }
 
@@ -1233,6 +1237,7 @@ void storeSettings() {
   char wake_words[assist::kMaxWakeWordListChars];
   assist::formatWakeWordList(g_wake_active.load(), wake_words, sizeof(wake_words));
   prefs.putString(kPrefsWakeWordsKey, wake_words);
+  prefs.putBool(kPrefsMicKey, g_mic_enabled.load());
   if (!BatchedNvsWrite::finish(prefs)) {
     Serial.printf("%s Could not save the speaker settings\n", kLogPrefix);
   }
@@ -1274,6 +1279,8 @@ void publishAssistStatus() {
   fields.wake_words = true;
   fields.available_wake_words = availableWakeWords();
   fields.active_wake_words = g_wake_active.load();
+  fields.mic_state = true;
+  fields.mic_enabled = g_mic_enabled.load();
   char id[assist::kMaxRequestIdLength + 1] = {};
 #if defined(HOMETILES_SPEAKER)
   portENTER_CRITICAL(&g_id_mux);
@@ -1306,6 +1313,7 @@ void begin() {
       g_wake_active.store(
           assist::parseWakeWordList(prefs.getString(kPrefsWakeWordsKey).c_str()));
     }
+    g_mic_enabled.store(prefs.getBool(kPrefsMicKey, true));
     prefs.end();
   }
   g_request_mutex = xSemaphoreCreateMutex();
@@ -1462,7 +1470,7 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
 #endif
 }
 
-void handleAssistCommandPayload(const uint8_t* payload, size_t length) {
+void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool sealed) {
 #if defined(HOMETILES_SPEAKER)
   if (!g_worker || g_shutdown.load() || !g_request_mutex) return;
   assist::Command command;
@@ -1494,9 +1502,29 @@ void handleAssistCommandPayload(const uint8_t* payload, size_t length) {
     Serial.printf("%s Wake words: %s\n", kLogPrefix, list[0] ? list : "off");
     return;
   }
+  if (command.kind == assist::CommandKind::Mic) {
+    // Off always applies; on needs the encrypted channel (see the contract).
+    if (command.mic_enabled && !sealed) {
+      if (logDue(&g_assist_log_ms, 10000)) {
+        Serial.printf("%s Microphone on refused: not on the encrypted channel\n", kLogPrefix);
+      }
+      g_assist_state_generation.fetch_add(1);
+      return;
+    }
+    setMicEnabled(command.mic_enabled, sealed ? "encrypted command" : "command");
+    return;
+  }
   if (!g_mic_ready.load()) {
     if (logDue(&g_assist_log_ms, 10000)) {
       Serial.printf("%s Assist command ignored: no microphone\n", kLogPrefix);
+    }
+    return;
+  }
+  // The privacy switch refuses every session and says why.
+  if (command.kind == assist::CommandKind::Start && !g_mic_enabled.load()) {
+    if (static_cast<assist::PublicState>(g_assist_state.load()) == assist::PublicState::Idle) {
+      setAssistStatusId(command.id);
+      setAssistPublic(assist::PublicState::Idle, assist::ErrorCode::MicOff);
     }
     return;
   }
@@ -1537,12 +1565,45 @@ void handleAssistCommandPayload(const uint8_t* payload, size_t length) {
       break;
     }
     case assist::CommandKind::WakeWords:
+    case assist::CommandKind::Mic:
     case assist::CommandKind::Invalid:
       break;
   }
 #else
   (void)payload;
   (void)length;
+  (void)sealed;
+#endif
+}
+
+bool micEnabled() { return g_mic_enabled.load(); }
+
+void setMicEnabled(bool enabled, const char* source) {
+#if defined(HOMETILES_SPEAKER)
+  if (g_mic_enabled.exchange(enabled) == enabled) {
+    g_assist_state_generation.fetch_add(1);
+    return;
+  }
+  if (!enabled) {
+    // Ends a running session and withdraws one that has not begun.
+    if (g_request_mutex && xSemaphoreTake(g_request_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      g_assist_pending.store(false);
+      xSemaphoreGive(g_request_mutex);
+    } else {
+      g_assist_pending.store(false);
+    }
+    g_capture_generation.fetch_add(1);
+  }
+  g_assist_state_generation.fetch_add(1);
+  g_persist_pending = true;
+  g_persist_due_ms = millis() + kPersistDelayMs;
+  // The worker starts or stops wake word listening.
+  if (g_worker) notifyWorker(kNotifyWake);
+  Serial.printf("%s Microphone %s (%s)\n", kLogPrefix, enabled ? "on" : "off",
+                source ? source : "panel");
+#else
+  (void)enabled;
+  (void)source;
 #endif
 }
 

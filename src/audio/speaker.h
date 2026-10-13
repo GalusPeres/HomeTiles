@@ -56,8 +56,14 @@ bool handleMqttMessage(const char* topic, const uint8_t* payload, size_t length)
 // Processes a command whose origin was already checked: the plain topic or a
 // Bridge message on the encrypted command channel.
 void handleCommandPayload(const uint8_t* payload, size_t length);
-// The same for Assist commands (data name "assist").
-void handleAssistCommandPayload(const uint8_t* payload, size_t length);
+// The same for Assist commands (data name "assist"). sealed is true for a
+// Bridge message on the encrypted command channel.
+void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool sealed = false);
+
+// Microphone privacy switch, stored across restarts (default on). While off,
+// Assist sessions are refused and no wake word runs. Loop task only.
+bool micEnabled();
+void setMicEnabled(bool enabled, const char* source);
 
 // "audio_output" flag in the Bridge capabilities: codec found and ready.
 bool bridgeCapability();

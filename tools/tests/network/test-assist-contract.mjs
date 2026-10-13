@@ -154,6 +154,18 @@ int main() {
   assert(strcmp(errorCodeName(ErrorCode::OutOfMemory), "out_of_memory") == 0);
   assert(strcmp(errorCodeName(ErrorCode::Timeout), "timeout") == 0);
   assert(strcmp(errorCodeName(ErrorCode::Invalid), "invalid") == 0);
+  assert(strcmp(errorCodeName(ErrorCode::MicOff), "mic_off") == 0);
+
+  // Privacy switch in the status, only when announced.
+  StatusFields mic;
+  assert(status(mic) == "{\"v\":1,\"state\":\"idle\"}");
+  mic.mic_state = true;
+  mic.mic_enabled = false;
+  mic.error = ErrorCode::MicOff;
+  assert(status(mic) == "{\"v\":1,\"state\":\"idle\",\"error\":\"mic_off\",\"mic_enabled\":false}");
+  mic.mic_enabled = true;
+  mic.error = ErrorCode::None;
+  assert(status(mic) == "{\"v\":1,\"state\":\"idle\",\"mic_enabled\":true}");
 
   // Topic leaves and the sealed data name.
   assert(strcmp(kCommandLeaf, "/cmnd/assist") == 0);
@@ -175,7 +187,14 @@ assert.match(topics, /\{TopicKey::ASSIST_CMND, TopicDomain::Command, "assist"\}/
 assert.match(topics, /\{TopicKey::ASSIST_STAT, TopicDomain::State, "assist"\}/);
 assert.match(topics, /\{TopicKey::ASSIST_AUDIO_STAT, TopicDomain::State, "assist_audio"\}/);
 const channel = read('src/network/secure/command_channel.cpp');
-assert.match(channel, /strcmp\(header\.name, "assist"\) == 0\)\s*\{\s*speaker::handleAssistCommandPayload/);
+assert.match(channel, /strcmp\(header\.name, "assist"\) == 0\)\s*\{\s*speaker::handleAssistCommandPayload\(body, length, true\)/);
+// The privacy switch: on only from the encrypted channel, starts refused while off.
+const speakerCpp = read('src/audio/speaker.cpp');
+assert.match(speakerCpp, /if \(command\.mic_enabled && !sealed\) \{/);
+assert.match(speakerCpp, /if \(command\.kind == assist::CommandKind::Start && !g_mic_enabled\.load\(\)\) \{/);
+assert.match(speakerCpp, /activeWakeWords\(\) != 0 && g_mic_ready\.load\(\) && g_mic_enabled\.load\(\)/);
+assert.match(speakerCpp, /prefs\.putBool\(kPrefsMicKey, g_mic_enabled\.load\(\)\);/);
+assert.match(speakerCpp, /g_mic_enabled\.store\(prefs\.getBool\(kPrefsMicKey, true\)\);/);
 assert.match(channel, /speaker::isAssistCommandTopic\(topic\)/);
 assert.match(read('src/network/mqtt/mqtt_handlers.cpp'), /speaker::assistCommandTopic\(\)/);
 assert.match(read('src/network/network_manager.cpp'), /speaker::isAssistCommandTopic\(topic\)/);

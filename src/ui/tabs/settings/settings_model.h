@@ -141,6 +141,26 @@ void unpair();
 void allow_password();
 void remove_password();
 
+// ---------- Audio page ----------
+// Panels with a speaker (speaker::supported()) show Audio before System:
+// the speaker volume (the Home Assistant media player's), the microphone's
+// privacy switch and sensitivity where the microphone answered.
+bool audio_available();
+struct AudioValues {
+  int volume;          // percent
+  bool mic_available;  // the microphone answered
+  bool mic_on;         // the privacy switch
+  int mic_gain;        // sensitivity step, 0..mic_gain_max
+  int mic_gain_max;
+};
+AudioValues audio_values();
+// A sensitivity step in tenths of a dB.
+unsigned mic_gain_tenths_db(int step);
+// Touches: `final` once the finger lifts (taken and saved then).
+void volume_changed(int percent, bool final);
+void mic_selected(bool on);
+void mic_gain_changed(int step, bool final);
+
 // ---------- WiFi page ----------
 struct WifiNetwork {
   char ssid[33];

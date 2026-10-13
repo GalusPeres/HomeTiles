@@ -25,6 +25,9 @@
 #include "mp3dec.h"
 #include "src/audio/assist_request.h"
 #include "src/audio/codecs/es7210/es7210_codec.h"
+static_assert(speaker::kMaxMicGainStep == es7210::kMaxGainStep &&
+                  speaker::kDefaultMicGainStep == es7210::kDefaultGainStep,
+              "speaker and ES7210 gain steps match");
 #include "src/audio/codecs/es8311/es8311_codec.h"
 #include "src/audio/speaker_request.h"
 #include "src/audio/wakeword/wake_word_detector.h"
@@ -62,6 +65,8 @@ uint8_t g_last_capability = 0;
 std::atomic<bool> g_mic_ready{false};
 // Privacy switch (stored): while false nothing reads the microphone.
 std::atomic<bool> g_mic_enabled{true};
+// ES7210 mic gain step (stored), applied whenever the input opens.
+std::atomic<uint8_t> g_mic_gain{kDefaultMicGainStep};
 std::atomic<uint8_t> g_assist_state{static_cast<uint8_t>(assist::PublicState::Idle)};
 std::atomic<uint8_t> g_assist_error{static_cast<uint8_t>(assist::ErrorCode::None)};
 std::atomic<uint32_t> g_assist_state_generation{0};
@@ -97,6 +102,7 @@ constexpr const char* kPrefsMutedKey = "muted";
 // Comma-separated wake word ids (names, not catalog bits).
 constexpr const char* kPrefsWakeWordsKey = "wake_words";
 constexpr const char* kPrefsMicKey = "mic_on";
+constexpr const char* kPrefsMicGainKey = "mic_gain";
 // Volume sliders send many steps; store once they settle and nothing plays
 // (flash writes stall both cores and would click in the output).
 constexpr uint32_t kPersistDelayMs = 3000;
@@ -316,7 +322,7 @@ void probeMic(i2c_master_bus_handle_t bus) {
   if (speaker_board::kMicAddress == 0) return;
   uint16_t chip_id = 0;
   esp_err_t err = es7210::probe(bus, speaker_board::kMicAddress, &g_mic, &chip_id);
-  if (err == ESP_OK) err = es7210::init(&g_mic, assist::kSampleRate);
+  if (err == ESP_OK) err = es7210::init(&g_mic, assist::kSampleRate, g_mic_gain.load());
   if (err != ESP_OK) {
     Serial.printf("%s ES7210 not ready (%s), Assist microphone disabled\n", kLogPrefix,
                   esp_err_to_name(err));
@@ -848,7 +854,7 @@ assist::ErrorCode openInput() {
     return assist::ErrorCode::MicUnavailable;
   }
   // Reprogram the ADC now that its clocks run, as the esp-bsp examples do.
-  const esp_err_t configured = es7210::init(&g_mic, assist::kSampleRate);
+  const esp_err_t configured = es7210::init(&g_mic, assist::kSampleRate, g_mic_gain.load());
   if (configured != ESP_OK) {
     Serial.printf("%s ES7210 setup failed (%s)\n", kLogPrefix, esp_err_to_name(configured));
     closeInput();
@@ -1238,6 +1244,7 @@ void storeSettings() {
   assist::formatWakeWordList(g_wake_active.load(), wake_words, sizeof(wake_words));
   prefs.putString(kPrefsWakeWordsKey, wake_words);
   prefs.putBool(kPrefsMicKey, g_mic_enabled.load());
+  prefs.putUChar(kPrefsMicGainKey, g_mic_gain.load());
   if (!BatchedNvsWrite::finish(prefs)) {
     Serial.printf("%s Could not save the speaker settings\n", kLogPrefix);
   }
@@ -1314,6 +1321,8 @@ void begin() {
           assist::parseWakeWordList(prefs.getString(kPrefsWakeWordsKey).c_str()));
     }
     g_mic_enabled.store(prefs.getBool(kPrefsMicKey, true));
+    const uint8_t gain = prefs.getUChar(kPrefsMicGainKey, kDefaultMicGainStep);
+    g_mic_gain.store(gain > kMaxMicGainStep ? kDefaultMicGainStep : gain);
     prefs.end();
   }
   g_request_mutex = xSemaphoreCreateMutex();
@@ -1577,6 +1586,39 @@ void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool seal
 }
 
 bool micEnabled() { return g_mic_enabled.load(); }
+
+float volume() { return g_volume.load(); }
+
+void setVolume(float volume) {
+#if defined(HOMETILES_SPEAKER)
+  const float clamped = clampVolume(volume);
+  if (clamped == g_volume.load()) return;
+  g_volume.store(clamped);
+  // Same path as the Bridge's volume command: retained status, stored later.
+  g_state_generation.fetch_add(1);
+  g_persist_pending = true;
+  g_persist_due_ms = millis() + kPersistDelayMs;
+  if (g_worker) notifyWorker(kNotifyVolume);
+#else
+  (void)volume;
+#endif
+}
+
+uint8_t micGainStep() { return g_mic_gain.load(); }
+
+void setMicGainStep(uint8_t step) {
+#if defined(HOMETILES_SPEAKER)
+  if (step > kMaxMicGainStep) step = kMaxMicGainStep;
+  if (g_mic_gain.exchange(step) == step) return;
+  g_persist_pending = true;
+  g_persist_due_ms = millis() + kPersistDelayMs;
+  // A listening wake word reopens the input with the new gain; a running
+  // Assist session keeps its gain until it ends.
+  if (g_worker) notifyWorker(kNotifyWake);
+#else
+  (void)step;
+#endif
+}
 
 void setMicEnabled(bool enabled, const char* source) {
 #if defined(HOMETILES_SPEAKER)

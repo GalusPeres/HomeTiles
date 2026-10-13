@@ -34,6 +34,7 @@
 #include "src/ui/tabs/settings/settings_screen.h"
 #include "src/ui/shared/ui_theme.h"
 #include "src/ui/shared/theme_schedule.h"
+#include "src/audio/speaker.h"
 
 // The Settings tab: what its pages show and do (settings_model.h, drawn by
 // settings_screen.cpp) on the real configuration, and the sketch's calls into
@@ -315,6 +316,36 @@ void rotation_selected(uint8_t index) {
   apply_display_rotation(Device::supportsQuarterTurnRotation()
                              ? static_cast<uint8_t>((Device::kRotationDefault + index) & 0x03)
                              : (index ? Device::kRotationFlipped : Device::kRotationDefault));
+}
+
+// ---------- Audio page ----------
+
+bool audio_available() { return speaker::supported(); }
+
+AudioValues audio_values() {
+  AudioValues values;
+  values.volume = static_cast<int>(speaker::volume() * 100.0f + 0.5f);
+  values.mic_available = speaker::micCapability();
+  values.mic_on = speaker::micEnabled();
+  values.mic_gain = speaker::micGainStep();
+  values.mic_gain_max = speaker::kMaxMicGainStep;
+  return values;
+}
+
+unsigned mic_gain_tenths_db(int step) {
+  return speaker::micGainTenthsDb(static_cast<uint8_t>(step < 0 ? 0 : step));
+}
+
+// The speaker takes the value on release, so a drag does not publish a
+// status per step.
+void volume_changed(int percent, bool final) {
+  if (final) speaker::setVolume(static_cast<float>(percent) / 100.0f);
+}
+
+void mic_selected(bool on) { speaker::setMicEnabled(on, "panel"); }
+
+void mic_gain_changed(int step, bool final) {
+  if (final) speaker::setMicGainStep(static_cast<uint8_t>(step < 0 ? 0 : step));
 }
 
 }  // namespace settings_model

@@ -828,6 +828,14 @@ struct Strings {
   const char* pages_title;
   // Web Admin: the tooltip on a full folder's greyed-out type list.
   const char* js_folder_type_locked;
+  // Settings > Audio (panels with a speaker): the category, its two groups
+  // and their rows (no colon), the category line while the microphone is off.
+  const char* audio_label;
+  const char* settings_speaker;
+  const char* settings_volume;
+  const char* settings_microphone;
+  const char* settings_mic_sensitivity;
+  const char* settings_mic_off;
 };
 
 // Locale-specific display rules and short runtime strings shared by

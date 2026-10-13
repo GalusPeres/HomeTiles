@@ -54,9 +54,10 @@ constexpr uint8_t kSdpStandardI2s16Bit = 0x00 | 0x60;
 constexpr uint8_t kSdpTdmOff = 0x00;
 // ES7210_MIC_BIAS_2V87.
 constexpr uint8_t kMicBias2V87 = 0x70;
-// ES7210_MIC_GAIN_30DB, written as (gain | 0x10) like es7210_set_mic_gain().
-constexpr uint8_t kMicGain30Db = 10;
-constexpr uint8_t kMicGainRegister = kMicGain30Db | 0x10;
+// es7210_mic_gain_t step, written as (gain | 0x10) like es7210_set_mic_gain().
+uint8_t micGainRegister(uint8_t step) {
+  return static_cast<uint8_t>((step > kMaxGainStep ? kMaxGainStep : step) | 0x10);
+}
 
 constexpr int kI2cTimeoutMs = 100;
 constexpr uint32_t kI2cSpeedHz = 100000;
@@ -140,7 +141,7 @@ esp_err_t probe(i2c_master_bus_handle_t bus, uint8_t address, Codec* codec,
 }
 
 // es7210_config_codec() with the HomeTiles settings.
-esp_err_t init(Codec* codec, uint32_t sample_rate) {
+esp_err_t init(Codec* codec, uint32_t sample_rate, uint8_t gain_step) {
   if (!codec || !codec->dev) return ESP_ERR_INVALID_STATE;
   const CoeffDiv* coeff = findCoeff(sample_rate);
   if (!coeff) return ESP_ERR_NOT_SUPPORTED;
@@ -163,10 +164,7 @@ esp_err_t init(Codec* codec, uint32_t sample_rate) {
   ES7210_TRY(writeReg(codec, kRegAnalog40, 0xC3));
   ES7210_TRY(writeReg(codec, kRegMic12Bias41, kMicBias2V87));
   ES7210_TRY(writeReg(codec, kRegMic34Bias42, kMicBias2V87));
-  ES7210_TRY(writeReg(codec, kRegMic1Gain43, kMicGainRegister));
-  ES7210_TRY(writeReg(codec, kRegMic2Gain44, kMicGainRegister));
-  ES7210_TRY(writeReg(codec, kRegMic3Gain45, kMicGainRegister));
-  ES7210_TRY(writeReg(codec, kRegMic4Gain46, kMicGainRegister));
+  ES7210_TRY(setGain(codec, gain_step));
   // Power on MIC1-4.
   ES7210_TRY(writeReg(codec, kRegMic1Power47, 0x08));
   ES7210_TRY(writeReg(codec, kRegMic2Power48, 0x08));
@@ -181,6 +179,16 @@ esp_err_t init(Codec* codec, uint32_t sample_rate) {
   // Enable the device.
   ES7210_TRY(writeReg(codec, kRegReset00, 0x71));
   return writeReg(codec, kRegReset00, 0x41);
+}
+
+esp_err_t setGain(Codec* codec, uint8_t gain_step) {
+  if (!codec || !codec->dev) return ESP_ERR_INVALID_STATE;
+  const uint8_t reg = micGainRegister(gain_step);
+  ES7210_TRY(writeReg(codec, kRegMic1Gain43, reg));
+  ES7210_TRY(writeReg(codec, kRegMic2Gain44, reg));
+  ES7210_TRY(writeReg(codec, kRegMic3Gain45, reg));
+  ES7210_TRY(writeReg(codec, kRegMic4Gain46, reg));
+  return ESP_OK;
 }
 
 void release(Codec* codec) {

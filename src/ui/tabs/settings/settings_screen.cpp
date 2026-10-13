@@ -31,11 +31,31 @@ namespace {
 using settings_style::Colors;
 using settings_style::Tone;
 
-// The categories in their fixed order (mockup CATS).
-enum class Category : uint8_t { Display = 0, Wifi, Localization, System };
-constexpr uint8_t kCategoryCount = 4;
+// The categories (mockup CATS). The values stay fixed (show_category(3) is
+// System); Audio exists on panels with a speaker only and shows before
+// System (g_order).
+enum class Category : uint8_t { Display = 0, Wifi, Localization, System, Audio };
+constexpr uint8_t kCategoryCount = 5;
 constexpr uint32_t kCategoryColors[kCategoryCount] = {settings_style::kDisplayColor, settings_style::kWifiColor,
-                                                      settings_style::kLocalizationColor, settings_style::kSystemColor};
+                                                      settings_style::kLocalizationColor, settings_style::kSystemColor,
+                                                      settings_style::kAudioColor};
+// The categories this panel shows, in their order.
+uint8_t g_order[kCategoryCount] = {};
+uint8_t g_shown = 0;
+void build_order() {
+  g_shown = 0;
+  for (Category category : {Category::Display, Category::Wifi, Category::Localization, Category::Audio,
+                            Category::System}) {
+    if (category == Category::Audio && !settings_model::audio_available()) continue;
+    g_order[g_shown++] = static_cast<uint8_t>(category);
+  }
+}
+bool category_shown(uint8_t index) {
+  for (uint8_t i = 0; i < g_shown; ++i) {
+    if (g_order[i] == index) return true;
+  }
+  return false;
+}
 
 // By the screen as this boot shows it: an upright layout on a landscape
 // panel takes the upright Settings (grid_layout::screen_w()).
@@ -116,6 +136,8 @@ const char* category_title(Category category) {
       return s.admin_settings_language;
     case Category::System:
       return "System";
+    case Category::Audio:
+      return s.audio_label;
   }
   return "";
 }
@@ -133,6 +155,8 @@ const char* category_icon(Category category) {
       return "translate";
     case Category::System:
       return "chip";
+    case Category::Audio:
+      return settings_model::audio_values().volume > 0 ? "volume-high" : "volume-off";
   }
   return "cog";
 }
@@ -198,6 +222,16 @@ void category_line(Category category, char* buf, size_t len, bool* warn) {
         snprintf(buf, len, "%s", settings_model::firmware_version());
       }
       return;
+    case Category::Audio: {
+      // The volume, and the microphone while its privacy switch is off.
+      const settings_model::AudioValues audio = settings_model::audio_values();
+      if (audio.mic_available && !audio.mic_on) {
+        snprintf(buf, len, "%d %% \xC2\xB7 %s", audio.volume, s.settings_mic_off);
+      } else {
+        snprintf(buf, len, "%d %%", audio.volume);
+      }
+      return;
+    }
   }
   buf[0] = '\0';
 }
@@ -292,7 +326,7 @@ void select_category(Category category);
 // A category tile or tab opens its page in the card.
 void on_category_clicked(lv_event_t* e) {
   const uintptr_t raw = reinterpret_cast<uintptr_t>(lv_event_get_user_data(e));
-  if (raw >= kCategoryCount) return;
+  if (raw >= kCategoryCount || !category_shown(static_cast<uint8_t>(raw))) return;
   select_category(static_cast<Category>(raw));
 }
 
@@ -470,6 +504,107 @@ void build_display_page(lv_obj_t* page) {
                      values.saver_brightness_max, values.saver_brightness, on_saver_brightness,
                      &g_saver_brightness_value);
   set_percent_text(g_saver_brightness_value, values.saver_brightness);
+}
+
+// ---------- Audio page ----------
+// Speaker: Volume; Microphone, where it answered: the privacy switch and the
+// sensitivity. Sliders like the Display page's, in the Audio color; both
+// sliders start at the same x.
+
+lv_obj_t* g_volume_value = nullptr;
+lv_obj_t* g_mic_gain_value = nullptr;
+
+void clear_audio_refs() {
+  g_volume_value = nullptr;
+  g_mic_gain_value = nullptr;
+}
+
+void set_gain_text(lv_obj_t* label, int step) {
+  if (!label) return;
+  const unsigned tenths = settings_model::mic_gain_tenths_db(step);
+  char buf[16];
+  if (tenths % 10) {
+    snprintf(buf, sizeof(buf), "%u.%u dB", tenths / 10, tenths % 10);
+  } else {
+    snprintf(buf, sizeof(buf), "%u dB", tenths / 10);
+  }
+  lv_label_set_text(label, buf);
+}
+
+void on_volume(lv_obj_t*, int32_t value, bool final) {
+  set_percent_text(g_volume_value, value);
+  settings_model::volume_changed(value, final);
+  if (final) refresh_lines();
+}
+
+void on_mic_gain(lv_obj_t*, int32_t value, bool final) {
+  set_gain_text(g_mic_gain_value, value);
+  settings_model::mic_gain_changed(value, final);
+}
+
+void build_page();
+// After the switch's own touch: the page shows the new state.
+void audio_rebuild_async(void*) {
+  if (g_category == Category::Audio && g_page_built) build_page();
+  refresh_lines();
+}
+
+void on_mic_toggle(lv_event_t*) {
+  settings_model::mic_selected(!settings_model::audio_values().mic_on);
+  lv_async_call(audio_rebuild_async, nullptr);
+}
+
+// The Display page's slider length rule for the Audio rows' names.
+int audio_slider_width(int page_width) {
+  const i18n::Strings& s = settings_model::text();
+  int name = 0;
+  for (const char* text : {s.settings_volume, s.settings_mic_sensitivity}) {
+    const int width = settings_parts::text_width(settings_style::row_font(), text);
+    if (width > name) name = width;
+  }
+  name = name * 13 / 10;
+  const int room = page_width - settings_style::kRowPadLeft - settings_style::kRowPadRight -
+                   settings_parts::icon_width() - 3 * settings_style::kRowGap -
+                   settings_style::kValueWidth - name;
+  int width = room < settings_style::kSliderMaxWidth ? room : settings_style::kSliderMaxWidth;
+  if (width < settings_style::kSliderHeight * 3) width = settings_style::kSliderHeight * 3;
+  return width;
+}
+
+lv_obj_t* audio_slider_row(lv_obj_t* group, const char* icon, const char* title, int width, int32_t min,
+                           int32_t max, int32_t value, settings_parts::SliderCallback on_change,
+                           lv_obj_t** value_label) {
+  const Colors palette = colors();
+  const Tone tone = settings_style::tone(palette.card, settings_style::kAudioColor);
+  settings_parts::Row row = settings_parts::row(group, icon, title);
+  lv_obj_t* slider = settings_parts::slider(row.row, width, min, max, value, settings_style::kAudioColor,
+                                            tone.control, palette.card, on_change);
+  *value_label = settings_parts::value_label(row.row, "");
+  return slider;
+}
+
+void build_audio_page(lv_obj_t* page) {
+  const i18n::Strings& s = settings_model::text();
+  const settings_model::AudioValues values = settings_model::audio_values();
+  const Colors palette = colors();
+  const int width = audio_slider_width(g_page_width);
+
+  settings_parts::section(page, s.settings_speaker, true);
+  lv_obj_t* speaker = settings_parts::group(page, palette);
+  audio_slider_row(speaker, values.volume > 0 ? "volume-high" : "volume-off", s.settings_volume, width, 0, 100,
+                   values.volume, on_volume, &g_volume_value);
+  set_percent_text(g_volume_value, values.volume);
+
+  if (!values.mic_available) return;
+  settings_parts::section(page, s.settings_microphone, false);
+  lv_obj_t* mic = settings_parts::group(page, palette);
+  settings_parts::Row on = settings_parts::row(mic, values.mic_on ? "microphone" : "microphone-off",
+                                               s.settings_microphone);
+  settings_parts::toggle(on.row, values.mic_on, settings_style::kAudioColor, palette.group, true, on_mic_toggle,
+                         nullptr);
+  audio_slider_row(mic, "microphone-settings", s.settings_mic_sensitivity, width, 0, values.mic_gain_max,
+                   values.mic_gain, on_mic_gain, &g_mic_gain_value);
+  set_gain_text(g_mic_gain_value, values.mic_gain);
 }
 
 // ---------- Localization page ----------
@@ -1616,6 +1751,7 @@ void stop_page_timer() {
 void build_page() {
   if (!g_page) return;
   clear_display_refs();
+  clear_audio_refs();
   clear_locale_refs();
   clear_system_refs();
   if (g_category != Category::System) close_dialog();
@@ -1624,6 +1760,7 @@ void build_page() {
   if (!polled) stop_page_timer();
   lv_obj_clean(g_page);
   if (g_category == Category::Display) build_display_page(g_page);
+  if (g_category == Category::Audio) build_audio_page(g_page);
   if (g_category == Category::Localization) build_localization_page(g_page);
   if (g_category == Category::System) build_system_page(g_page);
   if (g_category == Category::Wifi) {
@@ -1645,6 +1782,7 @@ void clear_refs() {
   g_page = nullptr;
   g_page_built = false;
   clear_display_refs();
+  clear_audio_refs();
   clear_locale_refs();
   clear_system_refs();
 }
@@ -1679,7 +1817,10 @@ void set_head_title(const char* text) {
 // Portrait: a category as the 1x1 Home tile (the folder tile: the circle
 // centred above, the name centred below, mockup catTile1), the block centred
 // on the tile; `font` is one font for all four names.
-void build_category_square(lv_obj_t* panel, uint8_t index, int x, int y, int w, int h, const lv_font_t* font) {
+// `title_pad`: the title's margin on each side (two insets; one when a
+// fifth category leaves no font that fits there).
+void build_category_square(lv_obj_t* panel, uint8_t index, int x, int y, int w, int h, const lv_font_t* font,
+                           int title_pad) {
   CategoryView& view = g_views[index];
   const Category category = static_cast<Category>(index);
   view.box = settings_parts::plain(panel);
@@ -1700,12 +1841,13 @@ void build_category_square(lv_obj_t* panel, uint8_t index, int x, int y, int w, 
   view.icon = lv_obj_get_child(view.disc, 0);
   view.title = lv_label_create(view.box);
   lv_label_set_text(view.title, category_title(category));
-  lv_label_set_long_mode(view.title, LV_LABEL_LONG_CLIP);
-  lv_obj_set_size(view.title, w - 4 * inset, line);
+  // Dots, not a cut on both sides, when even the narrower margin is short.
+  lv_label_set_long_mode(view.title, title_pad < 2 * inset ? LV_LABEL_LONG_DOT : LV_LABEL_LONG_CLIP);
+  lv_obj_set_size(view.title, w - 2 * title_pad, line);
   lv_obj_set_style_text_align(view.title, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_font(view.title, font, 0);
   lv_obj_set_style_text_color(view.title, lv_color_hex(ui_theme::text()), 0);
-  lv_obj_set_pos(view.title, 2 * inset, top + disc + space);
+  lv_obj_set_pos(view.title, title_pad, top + disc + space);
 }
 
 // Head, categories and the page area, in the colors of the moment (mockup
@@ -1722,6 +1864,8 @@ void build_frame() {
   if (!panel) return;
   clear_refs();
   lv_obj_clean(panel);
+  build_order();
+  if (!category_shown(static_cast<uint8_t>(g_category))) g_category = Category::Display;
   g_built_card = settings_model::card_color() & 0xFFFFFF;
   g_built_glow = ui_surface_style::icon_glow_percent();
   g_built_text = &settings_model::text();
@@ -1770,11 +1914,12 @@ void build_frame() {
     // same place (moving tabs confused, user 2026-10-07); the open page's tab
     // sits in its circle. A fifth of a circle between them.
     const int gap = (d + 2) / 5;
-    const int left = close_left - gap - kCategoryCount * d - (kCategoryCount - 1) * gap;
-    for (uint8_t i = 0; i < kCategoryCount; ++i) {
+    const int left = close_left - gap - g_shown * d - (g_shown - 1) * gap;
+    for (uint8_t slot = 0; slot < g_shown; ++slot) {
+      const uint8_t i = g_order[slot];
       CategoryView& view = g_views[i];
-      view.box = circle(panel, left + i * (d + gap) - px, cy - d / 2 - py, d, category_icon(static_cast<Category>(i)),
-                        0xFFFFFF);
+      view.box = circle(panel, left + slot * (d + gap) - px, cy - d / 2 - py, d,
+                        category_icon(static_cast<Category>(i)), 0xFFFFFF);
       view.icon = lv_obj_get_child(view.box, 0);
       make_round_button(view.box, on_category_clicked, reinterpret_cast<void*>(static_cast<uintptr_t>(i)));
     }
@@ -1799,10 +1944,11 @@ void build_frame() {
   int card_h = body_h;
   if (layout() == Layout::Split) {
     const int column = settings_style::grid_w(0, 2);
-    const float tile_h = (body_h - (kCategoryCount - 1) * GRID_GAP) / static_cast<float>(kCategoryCount);
-    for (uint8_t i = 0; i < kCategoryCount; ++i) {
-      build_category_tile(panel, i, body_x - px, static_cast<int>(lroundf(body_y + i * (tile_h + GRID_GAP))) - py,
-                          column, static_cast<int>(lroundf(tile_h)));
+    const float tile_h = (body_h - (g_shown - 1) * GRID_GAP) / static_cast<float>(g_shown);
+    for (uint8_t slot = 0; slot < g_shown; ++slot) {
+      build_category_tile(panel, g_order[slot], body_x - px,
+                          static_cast<int>(lroundf(body_y + slot * (tile_h + GRID_GAP))) - py, column,
+                          static_cast<int>(lroundf(tile_h)));
     }
     card_x = body_x + column + GRID_GAP;
     card_w = body_w - column - GRID_GAP;
@@ -1811,9 +1957,10 @@ void build_frame() {
     // tiles in one row, not so tall; 2026-10-12: a little taller than three
     // quarters, it looks nicer); the width shared evenly.
     const int tile_h = static_cast<int>(lroundf(0.9f * (settings_style::kGrid.cell_h + GRID_GAP) - GRID_GAP));
-    const float tile_w = (body_w - (kCategoryCount - 1) * GRID_GAP) / static_cast<float>(kCategoryCount);
-    // One font for all four names: the largest that fits every one.
-    const int room = static_cast<int>(tile_w) - 4 * settings_style::tile_inset();
+    const float tile_w = (body_w - (g_shown - 1) * GRID_GAP) / static_cast<float>(g_shown);
+    // One font for all names: the largest that fits every one. Five
+    // categories (Audio) may need the narrower title margin.
+    int title_pad = 2 * settings_style::tile_inset();
     const lv_font_t* const fonts[] = {settings_style::small_font(),
 #if defined(DEVICE_LAYOUT_480X480)
                                       &ui_font_12,
@@ -1821,21 +1968,34 @@ void build_frame() {
                                       &ui_font_16,
 #endif
     };
-    const lv_font_t* font = fonts[sizeof(fonts) / sizeof(fonts[0]) - 1];
-    for (const lv_font_t* candidate : fonts) {
-      bool fits = true;
-      for (uint8_t i = 0; i < kCategoryCount; ++i) {
-        if (settings_parts::text_width(candidate, category_title(static_cast<Category>(i))) > room) fits = false;
+    const lv_font_t* font = nullptr;
+    // Four categories keep the two-inset margin as before.
+    const int narrow = g_shown > 4 ? settings_style::tile_inset() : 2 * settings_style::tile_inset();
+    for (const int pad : {2 * settings_style::tile_inset(), narrow}) {
+      const int room = static_cast<int>(tile_w) - 2 * pad;
+      for (const lv_font_t* candidate : fonts) {
+        bool fits = true;
+        for (uint8_t slot = 0; slot < g_shown; ++slot) {
+          if (settings_parts::text_width(candidate, category_title(static_cast<Category>(g_order[slot]))) > room) {
+            fits = false;
+          }
+        }
+        if (fits) {
+          font = candidate;
+          title_pad = pad;
+          break;
+        }
       }
-      if (fits) {
-        font = candidate;
-        break;
-      }
+      if (font) break;
     }
-    for (uint8_t i = 0; i < kCategoryCount; ++i) {
-      const int x = static_cast<int>(lroundf(body_x + i * (tile_w + GRID_GAP)));
-      const int right = static_cast<int>(lroundf(body_x + i * (tile_w + GRID_GAP) + tile_w));
-      build_category_square(panel, i, x - px, body_y - py, right - x, tile_h, font);
+    if (!font) {
+      font = fonts[sizeof(fonts) / sizeof(fonts[0]) - 1];
+      title_pad = narrow;
+    }
+    for (uint8_t slot = 0; slot < g_shown; ++slot) {
+      const int x = static_cast<int>(lroundf(body_x + slot * (tile_w + GRID_GAP)));
+      const int right = static_cast<int>(lroundf(body_x + slot * (tile_w + GRID_GAP) + tile_w));
+      build_category_square(panel, g_order[slot], x - px, body_y - py, right - x, tile_h, font, title_pad);
     }
     card_y = body_y + tile_h + GRID_GAP;
     card_h = body_h - tile_h - GRID_GAP;
@@ -1928,6 +2088,7 @@ void did_hide() {
   close_entry();
   stop_page_timer();
   clear_display_refs();
+  clear_audio_refs();
   clear_locale_refs();
   clear_system_refs();
   if (g_page) lv_obj_clean(g_page);
@@ -1982,7 +2143,9 @@ void texts_changed() {
 }
 
 void show_category(uint8_t index) {
-  if (index < kCategoryCount && !setup_screen::shown()) select_category(static_cast<Category>(index));
+  if (index < kCategoryCount && category_shown(index) && !setup_screen::shown()) {
+    select_category(static_cast<Category>(index));
+  }
 }
 
 void system_changed() {

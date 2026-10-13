@@ -134,6 +134,9 @@ lock-open
 lock-open-variant
 lock-outline
 magnify
+microphone
+microphone-off
+microphone-settings
 minus
 mirror
 monitor

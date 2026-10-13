@@ -35,9 +35,16 @@ bool supportsSampleRate(uint32_t sample_rate);
 // and codec->dev stays nullptr. id_out (optional) receives 0x3D << 8 | 0x3E.
 esp_err_t probe(i2c_master_bus_handle_t bus, uint8_t address, Codec* codec,
                 uint16_t* id_out);
+// Mic gain steps of the MIC1-4 gain registers (es7210_mic_gain_t): 0..10 =
+// 0..30 dB in 3 dB steps, then 33, 34.5, 36 and 37.5 dB.
+constexpr uint8_t kMaxGainStep = 14;
+constexpr uint8_t kDefaultGainStep = 10;  // 30 dB
+
 // Resets the ADC and configures 16-bit standard I2S slave capture at
-// sample_rate (MCLK = 256 x rate), mic bias 2.87 V and 30 dB mic gain.
-esp_err_t init(Codec* codec, uint32_t sample_rate);
+// sample_rate (MCLK = 256 x rate), mic bias 2.87 V and the mic gain step.
+esp_err_t init(Codec* codec, uint32_t sample_rate, uint8_t gain_step = kDefaultGainStep);
+// Changes the mic gain of a running ADC.
+esp_err_t setGain(Codec* codec, uint8_t gain_step);
 // Removes the device from the bus.
 void release(Codec* codec);
 

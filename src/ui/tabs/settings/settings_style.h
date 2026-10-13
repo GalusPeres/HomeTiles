@@ -193,6 +193,8 @@ constexpr uint32_t kDisplayColor = 0xFFB300;
 constexpr uint32_t kWifiColor = 0x42A5F5;
 constexpr uint32_t kLocalizationColor = 0xAB47BC;
 constexpr uint32_t kSystemColor = 0x26A69A;
+// Audio, on panels with a speaker only.
+constexpr uint32_t kAudioColor = 0xEC407A;
 // The gear's circle: a neutral grey tile.
 constexpr uint32_t kGearColor = 0x9E9E9E;
 // States (mockup GOOD, WARN) and errors as text and icons. The light theme

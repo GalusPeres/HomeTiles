@@ -65,6 +65,25 @@ void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool seal
 bool micEnabled();
 void setMicEnabled(bool enabled, const char* source);
 
+// Speaker volume 0.0..1.0, as the Bridge's media player sets it; changes
+// publish the retained status and are stored. Loop task only.
+float volume();
+void setVolume(float volume);
+
+// ES7210 mic gain step, stored; applies the next time the input opens.
+// Steps 0..10 are 0..30 dB in 3 dB steps, then 33, 34.5, 36 and 37.5 dB
+// (the es7210_mic_gain_t steps). Loop task only.
+constexpr uint8_t kMaxMicGainStep = 14;
+constexpr uint8_t kDefaultMicGainStep = 10;  // 30 dB, the former fixed gain
+// Gain of a step in tenths of a dB (0..375); steps above the maximum clamp.
+inline uint16_t micGainTenthsDb(uint8_t step) {
+  if (step > kMaxMicGainStep) step = kMaxMicGainStep;
+  return step <= 10 ? static_cast<uint16_t>(step * 30)
+                    : static_cast<uint16_t>(330 + (step - 11) * 15);
+}
+uint8_t micGainStep();
+void setMicGainStep(uint8_t step);
+
 // "audio_output" flag in the Bridge capabilities: codec found and ready.
 bool bridgeCapability();
 // "audio_input" flag in the Bridge capabilities: microphone ADC answered.

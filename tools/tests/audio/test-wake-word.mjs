@@ -66,8 +66,9 @@ static std::string status(const StatusFields& fields) {
 
 int main() {
   assert(strcmp(kWakeLeaf, "/stat/assist_wake") == 0);
-  assert(kWakeWordCount == 1 && strcmp(kWakeWordIds[0], "okay_nabu") == 0);
-  assert(kAllWakeWordsMask == 1u);
+  assert(kWakeWordCount == 3 && strcmp(kWakeWordIds[0], "okay_nabu") == 0 &&
+         strcmp(kWakeWordIds[1], "hey_jarvis") == 0 && strcmp(kWakeWordIds[2], "alexa") == 0);
+  assert(kAllWakeWordsMask == 7u);
   assert(kWakeHandoffMs == 3000);
   assert(strcmp(publicStateName(PublicState::Wake), "wake") == 0);
   assert(strcmp(publicStateName(PublicState::Listening), "listening") == 0);
@@ -85,7 +86,9 @@ int main() {
   assert(!isValidWakeWordId("okay nabu", 9));
   assert(!isValidWakeWordId("okay-nabu", 9));
   assert(wakeWordIndex("okay_nabu", 9) == 0);
-  assert(wakeWordIndex("hey_jarvis", 10) == -1);
+  assert(wakeWordIndex("hey_jarvis", 10) == 1);
+  assert(wakeWordIndex("alexa", 5) == 2);
+  assert(wakeWordIndex("hey_mycroft", 11) == -1);
   assert(wakeWordIndex("okay_nab", 8) == -1);
   assert(wakeWordIndex("okay_nabu_", 10) == -1);
 
@@ -93,14 +96,20 @@ int main() {
   assert(parseWakeWordList("okay_nabu") == 1u);
   assert(parseWakeWordList("") == 0u);
   assert(parseWakeWordList(nullptr) == 0u);
-  assert(parseWakeWordList("hey_jarvis,okay_nabu") == 1u);
+  assert(parseWakeWordList("hey_jarvis,okay_nabu") == 3u);
   assert(parseWakeWordList("okay_nabu,,BAD,okay_nabu") == 1u);
-  assert(parseWakeWordList("hey_jarvis") == 0u);
+  assert(parseWakeWordList("hey_jarvis") == 2u);
+  assert(parseWakeWordList("alexa,hey_mycroft") == 4u);
+  assert(parseWakeWordList("hey_mycroft") == 0u);
   char list[kMaxWakeWordListChars];
   assert(formatWakeWordList(1u, list, sizeof(list)) == 9 && strcmp(list, "okay_nabu") == 0);
+  assert(formatWakeWordList(7u, list, sizeof(list)) == 26 &&
+         strcmp(list, "okay_nabu,hey_jarvis,alexa") == 0);
   assert(formatWakeWordList(0u, list, sizeof(list)) == 0 && list[0] == '\0');
   // Bits outside the catalog never appear.
-  assert(formatWakeWordList(0xFFFFFFFEu, list, sizeof(list)) == 0 && list[0] == '\0');
+  assert(formatWakeWordList(0xFFFFFFFAu, list, sizeof(list)) == 10 &&
+         strcmp(list, "hey_jarvis") == 0);
+  assert(formatWakeWordList(0xFFFFFFF8u, list, sizeof(list)) == 0 && list[0] == '\0');
   char quoted[16];
   assert(formatWakeWordList(1u, quoted, sizeof(quoted), ',', '"') == 11);
   assert(strcmp(quoted, "\"okay_nabu\"") == 0);
@@ -115,26 +124,34 @@ int main() {
   assert(status(fields) == "{\"v\":1,\"state\":\"idle\",\"wake_words\":[],\"active_wake_words\":[]}");
   fields.available_wake_words = kAllWakeWordsMask;
   assert(status(fields) ==
-         "{\"v\":1,\"state\":\"idle\",\"wake_words\":[\"okay_nabu\"],\"active_wake_words\":[]}");
+         "{\"v\":1,\"state\":\"idle\",\"wake_words\":[\"okay_nabu\",\"hey_jarvis\",\"alexa\"],\"active_wake_words\":[]}");
   fields.active_wake_words = 1u;
-  assert(status(fields) == "{\"v\":1,\"state\":\"idle\",\"wake_words\":[\"okay_nabu\"],"
+  assert(status(fields) == "{\"v\":1,\"state\":\"idle\",\"wake_words\":[\"okay_nabu\",\"hey_jarvis\",\"alexa\"],"
                            "\"active_wake_words\":[\"okay_nabu\"]}");
   // Active words the firmware cannot detect are not reported as active.
   fields.available_wake_words = 0;
   assert(status(fields) == "{\"v\":1,\"state\":\"idle\",\"wake_words\":[],\"active_wake_words\":[]}");
   fields.available_wake_words = kAllWakeWordsMask;
   fields.state = PublicState::Wake;
-  assert(status(fields) == "{\"v\":1,\"state\":\"wake\",\"wake_words\":[\"okay_nabu\"],"
+  assert(status(fields) == "{\"v\":1,\"state\":\"wake\",\"wake_words\":[\"okay_nabu\",\"hey_jarvis\",\"alexa\"],"
                            "\"active_wake_words\":[\"okay_nabu\"]}");
   fields.state = PublicState::Idle;
   fields.id = "0123456789abcdef0123456789abcdef";
   fields.error = ErrorCode::Timeout;
   assert(status(fields) ==
          "{\"v\":1,\"state\":\"idle\",\"id\":\"0123456789abcdef0123456789abcdef\","
-         "\"error\":\"timeout\",\"wake_words\":[\"okay_nabu\"],\"active_wake_words\":[\"okay_nabu\"]}");
+         "\"error\":\"timeout\",\"wake_words\":[\"okay_nabu\",\"hey_jarvis\",\"alexa\"],\"active_wake_words\":[\"okay_nabu\"]}");
   // The firmware's 256-byte buffer holds the longest status; too small fails.
   char small[100];
   assert(buildStatusJson(small, sizeof(small), fields) == 0);
+  fields.state = PublicState::Listening;
+  fields.error = ErrorCode::MicUnavailable;
+  fields.active_wake_words = kAllWakeWordsMask;
+  char longest[256];
+  assert(buildStatusJson(longest, sizeof(longest), fields) > 0);
+  fields.state = PublicState::Idle;
+  fields.error = ErrorCode::Timeout;
+  fields.active_wake_words = 1u;
 
   // assist_wake payload.
   char wake[96];
@@ -437,17 +454,28 @@ assert.deepEqual(ops, ['AssignVariable', 'CallOnce', 'Concatenation', 'Conv2D', 
                        'FullyConnected', 'Logistic', 'Quantize', 'ReadVariable', 'Reshape',
                        'SplitV', 'StridedSlice', 'VarHandle']);
 assert.match(engine, /constexpr int kOpCount = 13;/);
-const modelHeader = read('src/audio/wakeword/models/okay_nabu_model.h');
-const manifest = JSON.parse(read('src/audio/wakeword/models/okay_nabu.json'));
-assert.match(modelHeader, new RegExp(`kOkayNabuProbabilityCutoff = ${manifest.micro.probability_cutoff}f;`));
-assert.match(modelHeader, new RegExp(`kOkayNabuSlidingWindowSize = ${manifest.micro.sliding_window_size};`));
-assert.match(modelHeader, new RegExp(`kOkayNabuTensorArenaSize = ${manifest.micro.tensor_arena_size};`));
-assert.match(modelHeader, new RegExp(`kOkayNabuFeatureStepMs = ${manifest.micro.feature_step_size};`));
-const modelSource = read('src/audio/wakeword/models/okay_nabu_model.cpp');
-const size = Number(/kOkayNabuModelSize = (\d+);/.exec(modelHeader)[1]);
-assert.equal(modelSource.match(/0x[0-9a-f]{2}/g).length, size);
-assert.match(modelSource, /alignas\(16\) const uint8_t kOkayNabuModel\[\]/);
-assert.match(modelSource, /#if defined\(HOMETILES_WAKE_WORD\)/);
+// Every catalog word has an embedded model generated from its manifest.
+const catalog = /kWakeWordIds\[\] = \{([^}]*)\}/.exec(read('src/audio/assist_contract.h'))[1]
+  .split(',').map((id) => id.trim().replace(/"/g, ''));
+assert.deepEqual(catalog, ['okay_nabu', 'hey_jarvis', 'alexa']);
+for (const id of catalog) {
+  const symbol = id.split('_').map((part) => part[0].toUpperCase() + part.slice(1)).join('');
+  const modelHeader = read(`src/audio/wakeword/models/${id}_model.h`);
+  const manifest = JSON.parse(read(`src/audio/wakeword/models/${id}.json`));
+  assert.equal(manifest.version, 2);
+  assert.equal(manifest.model, `${id}.tflite`);
+  assert.match(modelHeader, new RegExp(`k${symbol}ProbabilityCutoff = ${manifest.micro.probability_cutoff}f;`));
+  assert.match(modelHeader, new RegExp(`k${symbol}SlidingWindowSize = ${manifest.micro.sliding_window_size};`));
+  assert.match(modelHeader, new RegExp(`k${symbol}TensorArenaSize = ${manifest.micro.tensor_arena_size};`));
+  assert.match(modelHeader, new RegExp(`k${symbol}FeatureStepMs = ${manifest.micro.feature_step_size};`));
+  const modelSource = read(`src/audio/wakeword/models/${id}_model.cpp`);
+  const size = Number(new RegExp(`k${symbol}ModelSize = (\\d+);`).exec(modelHeader)[1]);
+  assert.equal(modelSource.match(/0x[0-9a-f]{2}/g).length, size);
+  assert.match(modelSource, new RegExp(`alignas\\(16\\) const uint8_t k${symbol}Model\\[\\]`));
+  assert.match(modelSource, /#if defined\(HOMETILES_WAKE_WORD\)/);
+  assert.match(engine, new RegExp(`\\{"${id}", wake_word_models::k${symbol}Model, `));
+  assert.match(engine, new RegExp(`#include "src/audio/wakeword/models/${id}_model.h"`));
+}
 console.log('wake word wiring ok');
 
 // --- ArduinoJson parser (assist_request.h) ----------------------------------
@@ -483,10 +511,14 @@ int main() {
   c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[]}");
   assert(c.kind == CommandKind::WakeWords && c.status == CommandStatus::Ok && c.wake_words == 0u);
   // Unknown, malformed and non-string entries are ignored.
-  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[\"hey_jarvis\",\"okay_nabu\",\"OKAY\",3,null]}");
+  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[\"hey_mycroft\",\"okay_nabu\",\"OKAY\",3,null]}");
   assert(c.status == CommandStatus::Ok && c.wake_words == 1u);
-  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[\"hey_jarvis\"]}");
+  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[\"hey_mycroft\"]}");
   assert(c.status == CommandStatus::Ok && c.wake_words == 0u);
+  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[\"hey_jarvis\"]}");
+  assert(c.status == CommandStatus::Ok && c.wake_words == 2u);
+  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[\"alexa\",\"hey_jarvis\"]}");
+  assert(c.status == CommandStatus::Ok && c.wake_words == 6u);
   // No id needed; a stray id is ignored.
   c = parse("{\"v\":1,\"op\":\"wake_words\",\"id\":\"x\",\"active\":[\"okay_nabu\"]}");
   assert(c.status == CommandStatus::Ok && c.wake_words == 1u);

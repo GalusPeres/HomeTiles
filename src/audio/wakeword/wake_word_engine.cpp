@@ -14,6 +14,8 @@
 #include "src/audio/assist_contract.h"
 #include "src/audio/wakeword/microfrontend/frontend.h"
 #include "src/audio/wakeword/microfrontend/frontend_util.h"
+#include "src/audio/wakeword/models/alexa_model.h"
+#include "src/audio/wakeword/models/hey_jarvis_model.h"
 #include "src/audio/wakeword/models/okay_nabu_model.h"
 #include "src/audio/wakeword/wake_word_detector.h"
 #include "tensorflow/lite/micro/micro_allocator.h"
@@ -32,17 +34,24 @@ const ModelSpec kModels[] = {
     {"okay_nabu", wake_word_models::kOkayNabuModel, wake_word_models::kOkayNabuModelSize,
      wake_word_models::kOkayNabuProbabilityCutoff, wake_word_models::kOkayNabuSlidingWindowSize,
      wake_word_models::kOkayNabuTensorArenaSize, wake_word_models::kOkayNabuFeatureStepMs},
+    {"hey_jarvis", wake_word_models::kHeyJarvisModel, wake_word_models::kHeyJarvisModelSize,
+     wake_word_models::kHeyJarvisProbabilityCutoff, wake_word_models::kHeyJarvisSlidingWindowSize,
+     wake_word_models::kHeyJarvisTensorArenaSize, wake_word_models::kHeyJarvisFeatureStepMs},
+    {"alexa", wake_word_models::kAlexaModel, wake_word_models::kAlexaModelSize,
+     wake_word_models::kAlexaProbabilityCutoff, wake_word_models::kAlexaSlidingWindowSize,
+     wake_word_models::kAlexaTensorArenaSize, wake_word_models::kAlexaFeatureStepMs},
 };
 
 // Operators of the embedded models, read from the okay_nabu (v2) flatbuffer:
 // CALL_ONCE, VAR_HANDLE, RESHAPE, READ_VARIABLE, CONCATENATION,
 // STRIDED_SLICE, ASSIGN_VARIABLE, CONV_2D, DEPTHWISE_CONV_2D, SPLIT_V,
-// FULLY_CONNECTED, LOGISTIC, QUANTIZE.
+// FULLY_CONNECTED, LOGISTIC, QUANTIZE. hey_jarvis and alexa (v2) use the
+// same operators without SPLIT_V.
 constexpr int kOpCount = 13;
 using OpResolver = tflite::MicroMutableOpResolver<kOpCount>;
 
 // okay_nabu keeps its streaming state in 6 resource variables (3,472 int8
-// values); the variables are allocated from the same arena on the first
+// values; hey_jarvis 2,840, alexa 3,024); the variables are allocated from the same arena on the first
 // invocation, so the arena gets this much on top of the manifest size.
 constexpr int kMaxResourceVariables = 8;
 constexpr size_t kVariableArenaBytes = 8 * 1024;

@@ -77,7 +77,7 @@ enum class PublicState : uint8_t { Idle, Listening, Wake };
 // i and live only in RAM; NVS stores the names, so entries may be appended
 // or removed without remapping stored settings.
 constexpr size_t kMaxWakeWordIdLength = 32;
-constexpr const char* kWakeWordIds[] = {"okay_nabu"};
+constexpr const char* kWakeWordIds[] = {"okay_nabu", "hey_jarvis", "alexa"};
 constexpr size_t kWakeWordCount = sizeof(kWakeWordIds) / sizeof(kWakeWordIds[0]);
 static_assert(kWakeWordCount <= 32, "wake word masks are 32-bit");
 constexpr uint32_t kAllWakeWordsMask =

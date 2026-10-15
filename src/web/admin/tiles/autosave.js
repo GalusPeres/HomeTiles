@@ -33,6 +33,7 @@
   function resetAllTypeFields(tab) {
     const metas = Object.values(TILE_TYPE_REGISTRY || {});
     metas.forEach(meta => callTypeHandler(meta, 'reset', tab));
+    resetScreensaverLookFields(tab);
   }
 
   // A folder that still contains tiles keeps its type: the whole type list

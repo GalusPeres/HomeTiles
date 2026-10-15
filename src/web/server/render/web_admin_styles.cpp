@@ -15,6 +15,7 @@
 #include "src/ui/screensaver/screensaver_tile_shadow.h"
 #include "src/ui/tabs/settings/settings_style.h"
 #include "src/ui/tabs/tiles/home_bar.h"
+#include "src/ui/screensaver/screensaver_clock_fill.h"
 
 namespace {
 
@@ -240,6 +241,9 @@ void appendPreviewScaleVars(String& html, const char* selector = ":root", bool p
   emit_device_px("clock-face-m-compact", tile_layout::scale(clock_face::kCompactMargin));
   emit_device_px("clock-face-gap", tile_layout::scale(clock_face::kCompactGap));
   emit_device_px("clock-face-header", tile_icon_disc::row_height());
+  emit_device_px("screensaver-clock-fill-pad-x", screensaver_clock_fill::pad_x());
+  emit_device_px("screensaver-clock-fill-pad-y", screensaver_clock_fill::pad_y());
+  emit_device_px("screensaver-clock-fill-radius", screensaver_clock_fill::radius());
   // The screensaver tile shadow: LVGL blurs over the shadow width, CSS over
   // twice its blur radius.
   emit_scaled("screensaver-tile-shadow-blur", screensaver_tile_shadow::kWidth / 2.0f);

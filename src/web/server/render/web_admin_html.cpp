@@ -33,6 +33,7 @@
 #include "src/tiles/icons/mdi_icons.h"
 #include "src/tiles/icons/mdi_icon_store.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
+#include "src/ui/screensaver/screensaver_tile_look.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/core/config/swipe_gestures.h"
 #include "src/ui/tabs/settings/settings_model.h"
@@ -599,29 +600,35 @@ static void appendTileTabHTML(
 
     // A tile with an icon takes its color from the icon (tileTypeKeepsOwnColor):
     // it starts on the theme's card like a tile without an own color.
-    if (tile.type != TILE_EMPTY &&
+    // A screensaver tile's own card color (Background Custom,
+    // screensaver_tile_look.h) replaces the theme's card.
+    const bool own_card = screensaver_mode && screensaver_tile_look::has_card_color(tile);
+    const uint32_t card_color = own_card ? screensaver_tile_look::card_rgb(tile) : 0;
+    if (tile.type != TILE_EMPTY && !own_card &&
         (tileBgColorFollowsDefault(tile.bg_color) || !tileTypeKeepsOwnColor(tile.type)) &&
         tile_type_follows_default_tile_color(tile.type)) {
       // Tiles without their own color follow the global default tile color
       // through one CSS variable, so the preview repaints them live.
       if (screensaver_mode) {
         tileStyle = "background:color-mix(in srgb,var(--tile-card) ";
-        tileStyle += String(screensaverConfig.get().tile_opacity * 100.0f / 255.0f, 2);
+        tileStyle += String(screensaver_tile_look::fill_opacity(
+                                screensaverConfig.get().tile_opacity, tile) * 100.0f / 255.0f, 2);
         tileStyle += "%,transparent)";
       } else {
         tileStyle = "background:var(--tile-card)";
       }
     } else if (tile.type != TILE_EMPTY) {
-      uint32_t bg_color = tileBgColorIsSet(tile)
-                              ? tileBgColorRgb(tile)
-                              : (type_desc ? type_desc->default_bg_color : 0);
-      if (bg_color == 0) bg_color = 0x353535;
+      uint32_t bg_color = own_card ? card_color
+                          : tileBgColorIsSet(tile) ? tileBgColorRgb(tile)
+                                                   : (type_desc ? type_desc->default_bg_color : 0);
+      if (bg_color == 0 && !own_card) bg_color = 0x353535;
       char colorHex[10];
       if (screensaver_mode) {
-        // One opacity for every screensaver tile (ScreensaverConfigData).
+        // The global fill opacity scaled by the tile's own Opacity.
         snprintf(colorHex, sizeof(colorHex), "#%06X%02X",
                  (unsigned int)bg_color,
-                 static_cast<unsigned int>(screensaverConfig.get().tile_opacity));
+                 static_cast<unsigned int>(screensaver_tile_look::fill_opacity(
+                     screensaverConfig.get().tile_opacity, tile)));
       } else {
         snprintf(colorHex, sizeof(colorHex), "#%06X", (unsigned int)bg_color);
       }
@@ -644,8 +651,24 @@ static void appendTileTabHTML(
     }
     // A fully transparent screensaver card casts no shadow
     // (apply_slot_tile_shadows).
-    if (screensaver_mode && tile.type != TILE_EMPTY && screensaverConfig.get().tile_opacity == 0) {
+    if (screensaver_mode && tile.type != TILE_EMPTY &&
+        (screensaver_tile_look::fill_opacity(screensaverConfig.get().tile_opacity, tile) == 0 ||
+         !tile.ss_fill)) {
       cssClass += " screensaver-bg-clear";
+    }
+    // Per-tile screensaver look (image_screensaver.cpp apply_slot_look).
+    if (screensaver_mode && tile.type != TILE_EMPTY) {
+      if (!tile.ss_fill) {
+        cssClass += " ss-no-fill tile-border-hidden";
+        tileStyle += "background:transparent;";
+      }
+      if (!tile.ss_show_icon) cssClass += " ss-icon-hidden";
+      if (screensaver_tile_look::has_text_color(tile)) {
+        cssClass += " ss-text-colored";
+        tileStyle += "--ss-text-color:";
+        tileStyle += screensaver_tile_look::format_color(tile.ss_text_color);
+        tileStyle += ";";
+      }
     }
 
     // No place in the active layout (tile_layouts.h): not shown, no room
@@ -1327,6 +1350,17 @@ static void appendTileTabHTML(
     html += tr.screensaver_clock_shadow;
     html += R"html(</label>
 </div>
+<div class="screensaver-clock-fill">
+<div class="screensaver-tile-look-text">
+<label class="inline-checkbox"><input id="screensaverClockFill" type="checkbox"> )html";
+    appendHtmlEscaped(html, tr.screensaver_tile_fill);
+    html += R"html(</label>
+<input type="color" id="screensaverClockFillColor" value="#000000">
+</div>
+<label class="screensaver-tile-look-opacity"><span>)html";
+    appendHtmlEscaped(html, tr.screensaver_tile_look_opacity);
+    html += R"html(</span><input type="range" id="screensaverClockFillOpacity" min="0" max="255" step="1" value="128"><output id="screensaverClockFillOpacityValue">50 %</output></label>
+</div>
 <div class="screensaver-two-fields">
 <label>)html";
     html += tr.time_font_size;
@@ -1466,6 +1500,18 @@ static void appendTileTabHTML(
   html += tab_id;
   html += R"html(_tile_color_slot"></div>
 )html";
+  // Screensaver tiles group their color in Icon, Background and Text; page
+  // tiles keep the one Color section.
+  auto append_look_head = [&](const char* suffix, const char* text) {
+    if (!screensaver_mode) return;
+    html += R"html(<div class="tile-look-head" id=")html";
+    html += tab_id;
+    html += suffix;
+    html += R"html(">)html";
+    appendHtmlEscaped(html, text);
+    html += "</div>\n";
+  };
+  append_look_head("_tile_look_icon_head", tr.tile_group_icon);
   append_tile_icon_color_fixed_html(html, tab_id);
   html += R"html(            <div class="tile-icon-disc-fields" id=")html";
   html += tab_id;
@@ -1484,7 +1530,17 @@ static void appendTileTabHTML(
   }
   html += R"html(            </div>
 
-<div class="tile-color-label-row no-reset"><span>)html";
+)html";
+  if (screensaver_mode) {
+    html += R"html(<label class="inline-checkbox screensaver-tile-look-icon"><input type="checkbox" id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_icon" checked> )html";
+    appendHtmlEscaped(html, tr.screensaver_tile_show_icon);
+    html += R"html(</label>
+)html";
+  }
+  append_look_head("_tile_look_bg_head", tr.tile_look_group_background);
+  html += R"html(<div class="tile-color-label-row no-reset"><span>)html";
   html += tr.admin_color;
   html += R"html(</span></div>
 <div class="icon-color-segmented choice-row tile-color-modes" role="group" id=")html";
@@ -1526,7 +1582,63 @@ static void appendTileTabHTML(
   // Screensaver tiles share one opacity (screensaver footer, tile_opacity).
   html += R"html(            </div>
 )html";
-  append_tile_color_from_icon_html(html, tab_id);
+  if (!screensaver_mode) {
+    append_tile_color_from_icon_html(html, tab_id);
+  } else {
+    // Per-tile screensaver look (screensaver_tile_look.h): Background None |
+    // Theme | Icon | Custom, the opacity fades only the card; then the text
+    // color.
+    append_screensaver_tile_background_html(html, tab_id);
+    html += R"html(            <div class="screensaver-tile-look">
+<input type="checkbox" id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_fill" checked hidden>
+<label class="screensaver-tile-look-opacity" id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_opacity_row"><span>)html";
+    appendHtmlEscaped(html, tr.screensaver_tile_look_opacity);
+    html += R"html(</span><input type="range" id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_opacity" min="0" max="255" step="1" value="255"><output id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_opacity_value">100 %</output></label>
+</div>
+)html";
+    append_look_head("_tile_look_text_head", tr.tile_look_group_text);
+    html += R"html(<div class="screensaver-tile-look">
+<div class="tile-color-label-row"><span>)html";
+    appendHtmlEscaped(html, tr.screensaver_tile_text_color);
+    html += R"html(</span></div>
+<input type="checkbox" id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_text_color_on" hidden>
+<div class="icon-color-segmented choice-row tile-ss-text-modes" role="group" id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_text_modes">)html";
+    const struct {
+      const char* mode;
+      const char* label;
+    } text_modes[] = {{"auto", tr.tile_icon_color_auto}, {"custom", tr.tile_color_mode_custom}};
+    for (const auto& entry : text_modes) {
+      html += R"html(<button type="button" data-ss-text-mode=")html";
+      html += entry.mode;
+      html += R"html(" aria-pressed="false" onclick="setScreensaverTextColorMode(')html";
+      html += tab_id;
+      html += "', '";
+      html += entry.mode;
+      html += R"html(')">)html";
+      appendHtmlEscaped(html, entry.label);
+      html += "</button>";
+    }
+    html += R"html(</div>
+<div class="tile-color-row no-reset hidden" id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_text_color_row"><input type="color" id=")html";
+    html += tab_id;
+    html += R"html(_tile_ss_text_color" value="#FFFFFF"></div>
+</div>
+)html";
+  }
   // Position and size: dragging and resizing in the grid edit them; the
   // values stay in hidden inputs for drafts, undo, copy and saving.
   html += R"html(

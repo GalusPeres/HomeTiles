@@ -272,11 +272,21 @@ inline bool see_through(lv_obj_t* card) {
   return !card || lv_obj_get_style_bg_opa(card, LV_PART_MAIN) < LV_OPA_COVER;
 }
 
+// A tile card (a button) over a see-through parent: a screensaver tile over
+// its picture. Its circle takes the card's own color; walking past it took
+// the overlay's black and drew a dark circle (user 2026-10-10). A see-through
+// card on an opaque grid (Transparent Clock/Text) shows the grid there.
+inline bool over_picture(lv_obj_t* card) {
+  lv_obj_t* parent = lv_obj_get_parent(card);
+  return lv_obj_check_type(card, &lv_button_class) && parent &&
+         lv_obj_get_style_bg_opa(parent, LV_PART_MAIN) < LV_OPA_50;
+}
+
 // The nearest opaque background behind `obj` (the tile card).
 inline lv_obj_t* card_of(lv_obj_t* obj) {
   lv_obj_t* host = obj ? lv_obj_get_parent(obj) : nullptr;
-  for (int depth = 0; host && depth < 3 &&
-       lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < LV_OPA_50; ++depth) {
+  for (int depth = 0; host && depth < 3 && lv_obj_get_style_bg_opa(host, LV_PART_MAIN) < LV_OPA_50 &&
+       !over_picture(host); ++depth) {
     host = lv_obj_get_parent(host);
   }
   return host;
@@ -544,13 +554,17 @@ inline void follow_card_states(lv_obj_t* card) {
 }
 
 // A wrapped icon's disc is its parent; a round disc sits directly behind it.
+// A wrapping (concentric) disc holds its icon, so the object after it is not
+// its icon: a half-height tile without title has its value label right after
+// the corner disc, which made the screensaver treat the value as an icon (no
+// own text color, hidden with the icon).
 inline lv_obj_t* disc_of(lv_obj_t* icon) {
   if (!icon) return nullptr;
   lv_obj_t* parent = lv_obj_get_parent(icon);
   if (is_disc(parent)) return parent;
   const int32_t index = lv_obj_get_index(icon);
   lv_obj_t* below = parent && index > 0 ? lv_obj_get_child(parent, index - 1) : nullptr;
-  return is_disc(below) ? below : nullptr;
+  return is_disc(below) && lv_obj_get_child_count(below) == 0 ? below : nullptr;
 }
 
 // Rules (tile_icon_source.cpp) can force an icon color over the color the

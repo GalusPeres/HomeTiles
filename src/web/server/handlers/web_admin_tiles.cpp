@@ -527,6 +527,8 @@ void WebAdminServer::handleGetTiles() {
     out += String(tile.image_slideshow_sec);
     out += ",\"scene_alias\":\"";
     appendJsonEscaped(out, tile.scene_alias);
+    out += "\",\"scene_image\":\"";
+    appendJsonEscaped(out, tile.type == TILE_SCENE ? tile.image_path : String());
     out += "\",\"key_macro\":\"";
     appendJsonEscaped(out, tile.key_macro);
     out += "\",\"key_code\":";

@@ -1,5 +1,6 @@
 #include "src/web/server/web_admin.h"
 #include "src/web/server/web_admin_utils.h"
+#include "src/types/scene/picture.h"
 #include <esp_heap_caps.h>
 #include <algorithm>
 #include <vector>
@@ -430,6 +431,28 @@ void WebAdminServer::handleGetSdIcons() {
   sendChunkedResponse(server, 200, "application/json", json);
 }
 
+namespace {
+// The last /api/upload_icon request: its stored path and whether every byte
+// was written (the done handler answers with it).
+String g_icon_upload_path;
+bool g_icon_upload_ok = false;
+
+// Upload names stay inside /icons: the client's file name without any
+// directory, only picture extensions, short enough for every storage.
+String iconUploadPath(const String& client_name) {
+  String name = client_name;
+  const int slash = std::max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+  if (slash >= 0) name = name.substring(slash + 1);
+  name.trim();
+  String lower = name;
+  lower.toLowerCase();
+  const bool picture = lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png");
+  if (!name.length() || !picture || name.startsWith(".") || name.indexOf("..") >= 0) return String();
+  const String path = String(scene_picture::kDir) + "/" + name;
+  return path.length() <= scene_picture::kMaxPathLength ? path : String();
+}
+}  // namespace
+
 void WebAdminServer::handleUploadIcon() {
   HTTPUpload& upload = server.upload();
   static File uploadFile;
@@ -451,6 +474,12 @@ void WebAdminServer::handleUploadIcon() {
     int rcvbuf = 8 * 1024;
     server.client().setSocketOption(SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
 
+    g_icon_upload_ok = false;
+    g_icon_upload_path = iconUploadPath(upload.filename);
+    if (!g_icon_upload_path.length()) {
+      Serial.println("[Icons] Upload rejected: invalid file name");
+      return;
+    }
     if (!storageReady()) {
       Serial.println("[Icons] Upload failed: storage unavailable");
       return;
@@ -460,8 +489,7 @@ void WebAdminServer::handleUploadIcon() {
     storage_guard_active = true;
 #endif
     if (!storageFS().exists("/icons")) storageFS().mkdir("/icons");
-    String filename = upload.filename;
-    if (filename.indexOf('/') < 0) filename = "/icons/" + filename;
+    const String& filename = g_icon_upload_path;
     if (storageFS().exists(filename)) storageFS().remove(filename);
     uploadFile = storageFS().open(filename, FILE_WRITE);
     if (!uploadFile) {
@@ -482,7 +510,8 @@ void WebAdminServer::handleUploadIcon() {
   } else if (upload.status == UPLOAD_FILE_END) {
     if (uploadFile) {
       uploadFile.close();
-      Serial.printf("[Icons] Uploaded %s (%u bytes)\n", upload.filename.c_str(), upload.totalSize);
+      g_icon_upload_ok = upload.totalSize > 0;
+      Serial.printf("[Icons] Uploaded %s (%u bytes)\n", g_icon_upload_path.c_str(), upload.totalSize);
     }
     end_storage_guard();
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
@@ -493,12 +522,39 @@ void WebAdminServer::handleUploadIcon() {
 }
 
 void WebAdminServer::handleUploadIconDone() {
-  HTTPUpload& upload = server.upload();
-  String path = "/icons/" + upload.filename;
+  if (!g_icon_upload_ok) {
+    server.send(g_icon_upload_path.length() ? 500 : 400, "application/json",
+                g_icon_upload_path.length() ? "{\"ok\":false,\"error\":\"Upload failed\"}"
+                                            : "{\"ok\":false,\"error\":\"Invalid file name\"}");
+    return;
+  }
   String json = "{\"ok\":true,\"path\":\"";
-  appendJsonEscaped(json, path);
+  appendJsonEscaped(json, g_icon_upload_path);
   json += "\"}";
   sendChunkedResponse(server, 200, "application/json", json);
+}
+
+// GET /api/tile_picture?path=/icons/x.jpg: a Scene tile's picture for the
+// Web Admin previews (scene_picture.h names the accepted files).
+void WebAdminServer::handleGetTilePicture() {
+  const String path = server.arg("path");
+  if (!scene_picture::valid_path(path)) {
+    server.send(400, "text/plain", "Invalid picture");
+    return;
+  }
+  if (!storageReady()) {
+    server.send(503, "text/plain", "Storage unavailable");
+    return;
+  }
+  File file = storageFS().open(path, FILE_READ);
+  if (!file || file.isDirectory()) {
+    if (file) file.close();
+    server.send(404, "text/plain", "Not found");
+    return;
+  }
+  server.sendHeader("Cache-Control", "no-cache");
+  server.streamFile(file, "image/jpeg");
+  file.close();
 }
 
 void WebAdminServer::handleFileManagerList() {

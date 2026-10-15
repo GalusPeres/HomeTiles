@@ -1637,6 +1637,25 @@
       white-space:nowrap;
     }
     .type-fields.show > .folder-pin-status { grid-column:1 / -1; margin:0; }
+    /* Scene picture field (types/scene/web_html.cpp): the upload button and
+       its status under the picture list, like the folder PIN control. */
+    .type-fields.show > .scene-picture-control {
+      grid-column:1 / -1;
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap:8px;
+    }
+    .scene-picture-control .btn {
+      width:auto;
+      margin:0;
+      padding:8px 10px;
+      border-radius:12px;
+      font-size:12px;
+      line-height:normal;
+      white-space:nowrap;
+    }
+    .type-fields.show > .scene-picture-hint { grid-column:1 / -1; margin:0; }
     .gauge-fields, .graph-fields {
       display:grid;
       grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);
@@ -3178,6 +3197,25 @@
 }
 .tile:not(.sensor-compact) > .tile-icon.tile-icon-tinted::after {
   background:var(--icon-disc-bg, color-mix(in srgb, currentColor 25%, transparent));
+}
+/* A Scene picture (types/scene/picture.h, scene/admin.js). Without a title it
+   fills the card edge to edge (cover, the card's own corners); with a title
+   it takes the MDI icon's box and place, without the icon disc. */
+.tile.scene.scene-picture-full > .scene-picture {
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; border-radius:inherit; pointer-events:none; user-select:none;
+}
+.tile.scene.scene-picture-full > .tile-icon { display:none; }
+.tile.scene > .tile-icon.scene-picture-icon {
+  display:block; width:var(--icon-size, 24px); height:var(--icon-size, 24px);
+}
+.tile.scene.sensor-compact > .tile-icon.scene-picture-icon {
+  width:var(--icon-disc-round, 30px); height:var(--icon-disc-round, 30px);
+}
+.tile.scene:not(.empty) > .tile-icon.scene-picture-icon::after { display:none; }
+.tile.scene > .tile-icon.scene-picture-icon > .scene-picture-icon-img {
+  display:block; width:100%; height:100%; object-fit:contain;
+  border-radius:calc(var(--icon-size, 24px) / 6); pointer-events:none; user-select:none;
 }
 /* A Camera tile showing its picture (types/camera/picture.h). The browser has
    no picture: a neutral stand-in fills the card. The head over it like the

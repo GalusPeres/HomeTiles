@@ -7,6 +7,7 @@
 #include "src/devices/device.h"
 #include "src/tiles/config/grid_layout.h"
 #include "src/types/clock/clock_format.h"
+#include "src/ui/screensaver/screensaver_tile_look.h"
 
 namespace {
 
@@ -17,6 +18,9 @@ constexpr char kConfigBackupPath[] = "/_screensaver/config_v2.json.bak";
 constexpr char kLegacyConfigPath[] = "/_screensaver/config_v1.json";
 constexpr char kLegacyConfigTmpPath[] = "/_screensaver/config_v1.json.tmp";
 constexpr char kLegacyConfigBackupPath[] = "/_screensaver/config_v1.json.bak";
+// Per-tile looks (screensaver_tile_look.h) by slot, written with the grid.
+constexpr char kTileLooksPath[] = "/_screensaver/tile_looks.json";
+constexpr char kTileLooksTmpPath[] = "/_screensaver/tile_looks.json.tmp";
 constexpr uint16_t kConfigVersion = 2;
 constexpr uint16_t kLegacyConfigVersion = 1;
 constexpr size_t kMaxConfigBytes = 64U * 1024U;
@@ -135,6 +139,48 @@ bool replace_file_atomically(fs::FS& fs) {
   return false;
 }
 
+// Only tiles with a look of their own are written; no such tile removes the
+// file. The grid's slot index follows the tile through moves because the
+// look lives in the Tile itself.
+bool save_tile_looks(const TileGridConfig& grid) {
+  if (!Device::storageReady()) return false;
+  JsonDocument doc;
+  JsonArray looks = doc["tiles"].to<JsonArray>();
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) {
+    const Tile& tile = grid.tiles[i];
+    if (tile.type == TILE_EMPTY || screensaver_tile_look::is_default(tile)) continue;
+    JsonObject item = looks.add<JsonObject>();
+    item["i"] = static_cast<unsigned>(i);
+    item["opacity"] = tile.ss_opacity;
+    item["fill"] = tile.ss_fill;
+    item["icon"] = tile.ss_show_icon;
+    const String card = screensaver_tile_look::format_color(tile.ss_card_color);
+    if (card.length()) item["card"] = card;
+    const String text = screensaver_tile_look::format_color(tile.ss_text_color);
+    if (text.length()) item["text"] = text;
+  }
+  fs::FS& fs = Device::storageFS();
+  if (looks.size() == 0) {
+    if (fs.exists(kTileLooksPath)) return fs.remove(kTileLooksPath);
+    return true;
+  }
+  if (!fs.exists(kConfigDir) && !fs.mkdir(kConfigDir)) return false;
+  if (fs.exists(kTileLooksTmpPath)) fs.remove(kTileLooksTmpPath);
+  String json;
+  serializeJson(doc, json);
+  fs::File f = fs.open(kTileLooksTmpPath, FILE_WRITE);
+  if (!f) return false;
+  const size_t written = f.print(json);
+  f.flush();
+  f.close();
+  if (written != json.length()) {
+    fs.remove(kTileLooksTmpPath);
+    return false;
+  }
+  if (fs.exists(kTileLooksPath)) fs.remove(kTileLooksPath);
+  return fs.rename(kTileLooksTmpPath, kTileLooksPath);
+}
+
 }  // namespace
 
 ScreensaverConfigStore screensaverConfig;
@@ -216,6 +262,7 @@ void ScreensaverConfigStore::normalizeTileGrid(TileGridConfig& grid) {
     tile.type = normalize_screensaver_type(tile.type);
     if (tile.type == TILE_EMPTY) {
       tile.background_opacity = 0;
+      screensaver_tile_look::reset(tile);
       continue;
     }
     if (tile.type == TILE_SENSOR) {
@@ -269,6 +316,10 @@ bool ScreensaverConfigStore::loadPath(const char* path) {
   loaded.show_date = doc["show_date"] | true;
   loaded.show_weekday = doc["show_weekday"] | false;
   loaded.clock_shadow = doc["clock_shadow"] | true;
+  loaded.clock_fill = doc["clock_fill"] | false;
+  loaded.clock_fill_color =
+      screensaver_tile_look::parse_color(String(doc["clock_fill_color"] | "#000000")) & 0xFFFFFFu;
+  loaded.clock_fill_opacity = static_cast<uint8_t>(constrain(doc["clock_fill_opacity"] | 128, 0, 255));
   loaded.time_format = doc["time_format"] | 0;
   loaded.date_format = doc["date_format"] | 0;
   loaded.time_alignment = doc["time_alignment"] | 1;
@@ -432,6 +483,7 @@ bool ScreensaverConfigStore::load() {
   }
 
   const bool grid_ok = tileConfig.loadScreensaverGrid(gridStorage());
+  applyStoredTileLooks(gridStorage());
   normalizeTileGrid(gridStorage());
 
   bool grid_has_tiles = false;
@@ -492,6 +544,10 @@ String ScreensaverConfigStore::toJson(bool include_device_meta) const {
   doc["show_date"] = data_.show_date;
   doc["show_weekday"] = data_.show_weekday;
   doc["clock_shadow"] = data_.clock_shadow;
+  doc["clock_fill"] = data_.clock_fill;
+  doc["clock_fill_color"] = screensaver_tile_look::format_color(
+      screensaver_tile_look::kColorSet | data_.clock_fill_color);
+  doc["clock_fill_opacity"] = data_.clock_fill_opacity;
   doc["time_format"] = data_.time_format;
   doc["date_format"] = data_.date_format;
   doc["time_alignment"] = data_.time_alignment;
@@ -659,10 +715,45 @@ bool ScreensaverConfigStore::replaceTileGrid(const TileGridConfig& grid) {
   TileGridConfig* candidate = new (std::nothrow) TileGridConfig(grid);
   if (!candidate) return false;
   normalizeTileGrid(*candidate);
-  const bool saved = tileConfig.saveScreensaverGrid(*candidate);
+  bool saved = tileConfig.saveScreensaverGrid(*candidate);
+  if (saved) {
+#if defined(DEVICE_ESP32_S3_RGB_480)
+    Device::ScopedStorageWrite storage_write;
+#endif
+    saved = save_tile_looks(*candidate);
+    if (!saved) Serial.println("[ScreensaverConfig] Tile looks save failed");
+  }
   if (saved) gridStorage() = *candidate;
   delete candidate;
   return saved;
+}
+
+void ScreensaverConfigStore::applyStoredTileLooks(TileGridConfig& grid) const {
+  for (size_t i = 0; i < TILES_PER_GRID; ++i) screensaver_tile_look::reset(grid.tiles[i]);
+  if (!Device::storageReady()) return;
+  fs::File f = Device::storageFS().open(kTileLooksPath, FILE_READ);
+  if (!f) return;
+  if (f.size() == 0 || static_cast<size_t>(f.size()) > kMaxConfigBytes) {
+    f.close();
+    return;
+  }
+  JsonDocument doc;
+  const DeserializationError err = deserializeJson(doc, f);
+  f.close();
+  if (err) {
+    Serial.printf("[ScreensaverConfig] Tile looks unreadable: %s\n", err.c_str());
+    return;
+  }
+  for (JsonObjectConst item : doc["tiles"].as<JsonArrayConst>()) {
+    const int index = item["i"] | -1;
+    if (index < 0 || index >= static_cast<int>(TILES_PER_GRID)) continue;
+    Tile& tile = grid.tiles[index];
+    tile.ss_opacity = static_cast<uint8_t>(constrain(item["opacity"] | 255, 0, 255));
+    tile.ss_fill = item["fill"] | true;
+    tile.ss_show_icon = item["icon"] | true;
+    tile.ss_card_color = screensaver_tile_look::parse_color(String(item["card"] | ""));
+    tile.ss_text_color = screensaver_tile_look::parse_color(String(item["text"] | ""));
+  }
 }
 
 void ScreensaverConfigStore::previewTileGrid(const TileGridConfig& grid) {

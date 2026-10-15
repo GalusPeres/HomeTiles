@@ -175,6 +175,17 @@ struct Tile {
   String weather_temperature_sensor;
   String weather_humidity_sensor;
 
+  // Screensaver-only look (screensaver_tile_look.h), kept in
+  // /_screensaver/tile_looks.json: fill opacity (255 = the global one),
+  // background fill, an own card color, icon visibility and an own text color
+  // (0 = none: the theme's card, the type's colors). Normal grids keep these
+  // defaults.
+  uint8_t ss_opacity = 255;
+  bool ss_fill = true;
+  bool ss_show_icon = true;
+  uint32_t ss_card_color = 0;
+  uint32_t ss_text_color = 0;
+
   Tile()
       : type(TILE_EMPTY),
         bg_color(0),
@@ -226,7 +237,10 @@ static inline bool tileContentEquals(const Tile& a, const Tile& b) {
          a.icon_disc_mode == b.icon_disc_mode && a.icon_glow == b.icon_glow &&
          a.icon_colors == b.icon_colors &&
          a.weather_temperature_sensor == b.weather_temperature_sensor &&
-         a.weather_humidity_sensor == b.weather_humidity_sensor;
+         a.weather_humidity_sensor == b.weather_humidity_sensor &&
+         a.ss_opacity == b.ss_opacity &&
+         a.ss_fill == b.ss_fill && a.ss_show_icon == b.ss_show_icon &&
+         a.ss_card_color == b.ss_card_color && a.ss_text_color == b.ss_text_color;
 }
 
 // A deleted (empty) tile keeps only its slot geometry. Its entity, texts and

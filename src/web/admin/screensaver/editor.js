@@ -37,6 +37,14 @@
   // One background opacity for every screensaver tile (tile_opacity, set in
   // the screensaver footer): the draft once loaded, else the server-rendered
   // slider.
+  // Background opacity of one screensaver tile: its own Opacity is absolute,
+  // the default (255) takes the global fill opacity; text and icon stay
+  // (screensaver_tile_look::fill_opacity).
+  function screensaverTileFillOpacity(tileOpacity) {
+    const own = Math.round(ssClamp(tileOpacity ?? 255, 0, 255));
+    return own === 255 ? screensaverTileOpacity() : own;
+  }
+
   function screensaverTileOpacity() {
     const value = screensaverDraft?.tile_opacity ??
       document.getElementById('screensaverTileOpacity')?.value;
@@ -101,6 +109,15 @@
     return ['left', 'center', 'right'][ssClockAlignment(value)];
   }
 
+  // Card behind the clock (ScreensaverConfigData::clock_fill).
+  function ssClockFillColor(value) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : '#000000';
+  }
+
+  function ssClockFillOpacity(value) {
+    return Math.round(ssClamp(value ?? 128, 0, 255));
+  }
+
   function getScreensaverClockPreviewDate(d) {
     if (!d) return '';
     const weekdayNames = getClockPreviewLanguage().toLowerCase().startsWith('de')
@@ -118,6 +135,9 @@
     data.date_font_size = ssNearestClockFont(data.date_font_size || 28, true);
     data.time_alignment = ssClockAlignment(data.time_alignment);
     data.date_alignment = ssClockAlignment(data.date_alignment);
+    data.clock_fill = !!data.clock_fill;
+    data.clock_fill_color = ssClockFillColor(data.clock_fill_color);
+    data.clock_fill_opacity = ssClockFillOpacity(data.clock_fill_opacity);
     data.tile_border = data.tile_border !== false;
     data.wallpapers = Array.isArray(data.wallpapers) ? data.wallpapers : [];
     data.duration_seconds = Math.round(ssClamp(
@@ -219,6 +239,9 @@
       show_date: !!d.show_date,
       show_weekday: !!d.show_weekday,
       clock_shadow: !!d.clock_shadow,
+      clock_fill: !!d.clock_fill,
+      clock_fill_color: ssClockFillColor(d.clock_fill_color),
+      clock_fill_opacity: ssClockFillOpacity(d.clock_fill_opacity),
       time_format: Number(d.time_format || 0),
       date_format: Number(d.date_format || 0),
       time_alignment: ssClockAlignment(d.time_alignment),
@@ -484,6 +507,20 @@
     clock.hidden = false;
     clock.classList.toggle('clock-disabled', !d.show_time && !d.show_date && !d.show_weekday);
     clock.classList.toggle('clock-shadowed', !!d.clock_shadow);
+    // The panel's card behind the lines (screensaver_clock_fill.h).
+    if (d.clock_fill) {
+      const hex = ssClockFillColor(d.clock_fill_color);
+      const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      clock.style.background = 'rgba(' + rgb.join(',') + ',' +
+        (ssClockFillOpacity(d.clock_fill_opacity) / 255).toFixed(3) + ')';
+      clock.style.padding = (devicePx('--screensaver-clock-fill-pad-y', 8) * scale) + 'px ' +
+        (devicePx('--screensaver-clock-fill-pad-x', 16) * scale) + 'px';
+      clock.style.borderRadius = (devicePx('--screensaver-clock-fill-radius', 16) * scale) + 'px';
+    } else {
+      clock.style.background = '';
+      clock.style.padding = '';
+      clock.style.borderRadius = '';
+    }
     preview.classList.toggle('tiles-shadowed', !!d.tile_shadow);
     preview.classList.toggle('tiles-bordered', d.tile_border !== false);
     document.getElementById('screensaverUseWallpapers').checked = !!d.use_wallpapers;
@@ -499,6 +536,22 @@
     document.getElementById('screensaverShowDate').checked = !!d.show_date;
     document.getElementById('screensaverShowWeekday').checked = !!d.show_weekday;
     document.getElementById('screensaverClockShadow').checked = !!d.clock_shadow;
+    const clockFill = document.getElementById('screensaverClockFill');
+    const clockFillColor = document.getElementById('screensaverClockFillColor');
+    const clockFillOpacity = document.getElementById('screensaverClockFillOpacity');
+    const clockFillOutput = document.getElementById('screensaverClockFillOpacityValue');
+    if (clockFill) clockFill.checked = !!d.clock_fill;
+    if (clockFillColor) {
+      clockFillColor.value = ssClockFillColor(d.clock_fill_color).toLowerCase();
+      clockFillColor.disabled = !d.clock_fill;
+    }
+    if (clockFillOpacity) {
+      clockFillOpacity.value = String(ssClockFillOpacity(d.clock_fill_opacity));
+      clockFillOpacity.disabled = !d.clock_fill;
+    }
+    if (clockFillOutput) {
+      clockFillOutput.textContent = Math.round(ssClockFillOpacity(d.clock_fill_opacity) * 100 / 255) + ' %';
+    }
     document.getElementById('screensaverTimeFont').value = String(d.time_font_size || 48);
     document.getElementById('screensaverDateFont').value = String(d.date_font_size || 28);
     document.getElementById('screensaverTimeAlignment').value = String(ssClockAlignment(d.time_alignment));
@@ -668,6 +721,19 @@
     bind('screensaverShowDate', 'change', el => { screensaverDraft.show_date = el.checked; });
     bind('screensaverShowWeekday', 'change', el => { screensaverDraft.show_weekday = el.checked; });
     bind('screensaverClockShadow', 'change', el => { screensaverDraft.clock_shadow = el.checked; });
+    bind('screensaverClockFill', 'change', el => { screensaverDraft.clock_fill = el.checked; });
+    bind('screensaverClockFillColor', 'input', el => {
+      screensaverDraft.clock_fill_color = ssClockFillColor(el.value);
+    }, false);
+    bind('screensaverClockFillColor', 'change', el => {
+      screensaverDraft.clock_fill_color = ssClockFillColor(el.value);
+    });
+    bind('screensaverClockFillOpacity', 'input', el => {
+      screensaverDraft.clock_fill_opacity = ssClockFillOpacity(el.value);
+    }, false);
+    bind('screensaverClockFillOpacity', 'change', el => {
+      screensaverDraft.clock_fill_opacity = ssClockFillOpacity(el.value);
+    });
     bind('screensaverTimeFont', 'change', el => {
       screensaverDraft.time_font_size = ssNearestClockFont(el.value, false);
     });

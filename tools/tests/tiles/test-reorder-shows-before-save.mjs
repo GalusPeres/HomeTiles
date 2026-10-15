@@ -67,7 +67,7 @@ for (const [name, gridArg, flag] of [['WebAdminServer::handleReorderTiles', 'gri
 assert.match(fn(handlers, 'showScreensaverGridBeforeSave'),
   /if \(!is_image_screensaver_visible\(\)\) return false;\n  screensaverConfig\.previewTileGrid\(grid\);\n  return image_screensaver_show_tiles_now\(\);/);
 assert.match(fn(handlers, 'restoreScreensaverGridAfterFailedSave'),
-  /tileConfig\.loadScreensaverGrid\(\*stored\)\) \{\n    screensaverConfig\.previewTileGrid\(\*stored\);\n  \}\n  delete stored;\n  image_screensaver_tiles_changed\(\);/);
+  /tileConfig\.loadScreensaverGrid\(\*stored\)\) \{\n    screensaverConfig\.applyStoredTileLooks\(\*stored\);\n    screensaverConfig\.previewTileGrid\(\*stored\);\n  \}\n  delete stored;\n  image_screensaver_tiles_changed\(\);/);
 assert.match(fn(read('src/ui/screensaver/screensaver_config.cpp'), 'ScreensaverConfigStore::previewTileGrid'),
   /storage = grid;\n  normalizeTileGrid\(storage\);/, 'preview and save keep the same normalized grid');
 

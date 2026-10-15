@@ -60,7 +60,7 @@ const save = vm.createContext({
   fetch: async (url, options) => { posts.push(JSON.parse(options.body)); return {ok: true, json: async () => ({success: true})}; },
   showNotification: text => notes.push(text), t: key => key,
 });
-vm.runInContext('let screensaverSavedKey = "";\n' + ['ssClamp', 'ssNearestClockFont', 'ssClockAlignment', 'ssNormalizeLoaded',
+vm.runInContext('let screensaverSavedKey = "";\n' + ['ssClamp', 'ssNearestClockFont', 'ssClockAlignment', 'ssClockFillColor', 'ssClockFillOpacity', 'ssNormalizeLoaded',
   'screensaverSaveKey', 'ssPayload', 'ssCurrentWallpaper', 'saveScreensaverNow'].map(extractDeliveredFunction).join('\n') +
   '\nglobalThis.setSavedKey = value => { screensaverSavedKey = value; };', save);
 save.screensaverDraft = save.ssNormalizeLoaded({success: true, sd_ready: true, wallpapers: [], theme: 2, tile_opacity: 200});

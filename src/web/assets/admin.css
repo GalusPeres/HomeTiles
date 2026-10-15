@@ -1156,6 +1156,23 @@
     .screensaver-tile-grid.tiles-shadowed > .tile:not(.empty):not(.screensaver-bg-clear):is(.active, [data-selected="1"]) {
       box-shadow:0 0 12px rgba(38,166,154,0.55), var(--screensaver-card-shadow);
     }
+    /* Per-tile screensaver look (image_screensaver.cpp apply_slot_look): a
+       hidden icon keeps its place like on the panel (text opacity 0), and an
+       own text color wins over the type's colors except the icon's. */
+    .screensaver-tile-grid > .tile.ss-icon-hidden .tile-icon { visibility:hidden; }
+    .screensaver-tile-grid > .tile.ss-text-colored,
+    .screensaver-tile-grid > .tile.ss-text-colored :not(.tile-icon):not(.tile-icon *) {
+      color:var(--ss-text-color) !important;
+    }
+    .screensaver-tile-look { display:grid; gap:6px; margin-top:8px; }
+    .screensaver-clock-fill { display:grid; gap:6px; margin:8px 0; }
+    .screensaver-clock-fill input[type="color"]:disabled,
+    .screensaver-clock-fill input[type="range"]:disabled { opacity:.4; }
+    .screensaver-tile-look-opacity,
+    .screensaver-tile-look-text { display:flex; align-items:center; gap:8px; }
+    .screensaver-tile-look-opacity input[type="range"] { flex:1; min-width:0; }
+    .screensaver-tile-look-opacity.hidden { display:none; }
+    .screensaver-tile-look-text input[type="color"]:disabled { opacity:.4; }
     /* The hairline sits on the outer card edge. A child overlay would be
        visibly indented by the transparent 3px editor border. */
     .tile-grid.tiles-bordered > .tile:not(.empty):not(.tile-border-hidden) {
@@ -3332,6 +3349,11 @@
   font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-3);
 }
 .tile-settings-group.hidden { display:none; }
+/* Screensaver tile color sub-groups: Icon, Background, Text, smaller than a group caption. */
+.tile-look-head { margin:14px 0 2px; font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--text-3); opacity:.8; }
+.tile-look-head.hidden { display:none; }
+.tile-color-row.hidden { display:none; }
+.screensaver-tile-look-icon { margin-top:8px; }
 .tile-icon-color-fixed { margin-top:10px; }
 .tile-icon-color-fixed.hidden { display:none; }
 /* Rules: stacked controls, targets side by side, strength on one line with

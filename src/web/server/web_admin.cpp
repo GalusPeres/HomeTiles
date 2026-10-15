@@ -230,6 +230,8 @@ bool WebAdminServer::start() {
               guarded([this]() { this->handleGetScreensaverWallpaper(); }));
     server.on("/api/sd_images", HTTP_GET,
               guarded([this]() { this->handleGetSdImages(); }));
+    server.on("/api/tile_picture", HTTP_GET,
+              guarded([this]() { this->handleGetTilePicture(); }));
     server.on("/api/sd_icons", HTTP_GET,
               guarded([this]() { this->handleGetSdIcons(); }));
     server.on("/api/screenshot", HTTP_POST,

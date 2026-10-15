@@ -845,6 +845,9 @@
       }
     } else if (safeType === 2) {
       fd.append('scene_alias', tile.scene_alias || '');
+      // The picture file itself stays on the exporting panel; another panel
+      // without it keeps the tile's icon (types/scene/picture.h).
+      fd.append('scene_image', tile.scene_image || '');
     } else if (safeType === 4) {
       const rawTarget = Number(tile.navigate_target);
       let target = 0;

@@ -2119,6 +2119,7 @@ static const LocaleProfile kLocaleDe = {
     {"Unscharf", "Scharf zu Hause", "Scharf abwesend", "Scharf Nacht", "Scharf Urlaub",
      "Scharf benutzerdefiniert", "Ausstehend", "Wird scharf", "Wird unscharf", "Ausgelöst",
      "Nicht verfügbar", "Unbekannt"},
+    {"Bild", "Kein Bild", "Bild hochladen…", "Wird hochgeladen…", "Das Bild konnte nicht hochgeladen werden.", "Ohne Titel füllt das Bild die Kachel, mit Titel steht es an der Stelle des Icons."},
     {"Entität wählen", "Suchen", "Keine Entität passt zu „{query}“",
      "Die Entitäten konnten nicht geladen werden. Die gewählte Entität bleibt erhalten.",
      "Erneut versuchen", "Leeren", "Keine Entität verfügbar",
@@ -2237,6 +2238,7 @@ static const LocaleProfile kLocaleEn = {
     {"Locked", "Unlocked", "Locking", "Unlocking", "Open", "Opening", "Jammed", "Unavailable", "Unknown"},
     {"Disarmed", "Armed home", "Armed away", "Armed night", "Armed vacation", "Armed custom bypass",
      "Pending", "Arming", "Disarming", "Triggered", "Unavailable", "Unknown"},
+    {"Picture", "No picture", "Upload picture…", "Uploading…", "The picture could not be uploaded.", "Without a title the picture fills the tile; with a title it takes the icon’s place."},
     {"Choose an entity", "Search", "No entity matches “{query}”",
      "Could not load the entities. The chosen entity stays as it is.",
      "Try again", "Clear", "No entity available",
@@ -2360,6 +2362,7 @@ static const LocaleProfile kLocaleFr = {
     {"Désarmé", "Armé (domicile)", "Armé (absent)", "Armé (nuit)", "Armé (vacances)",
      "Armé (personnalisé)", "En attente", "Armement", "Désarmement", "Déclenché",
      "Indisponible", "Inconnu"},
+    {"Image", "Aucune image", "Téléverser une image…", "Téléversement…", "L’image n’a pas pu être téléversée.", "Sans titre, l’image remplit la tuile ; avec un titre, elle remplace l’icône."},
     {"Choisir une entité", "Rechercher", "Aucune entité ne correspond à « {query} »",
      "Impossible de charger les entités. L’entité choisie reste inchangée.",
      "Réessayer", "Effacer", "Aucune entité disponible",
@@ -3083,6 +3086,7 @@ static const LocaleProfile kLocalePl = {
     {"Zamek", "Panel alarmowy", "Wentylator", "Encja zamka", "Encja panelu alarmowego", "Encja wentylatora", "Otwórz drzwi", "Na pewno otworzyć?", "Drzwi otwarte", "Odblokuj", "Zablokuj", "Rozbrój", "W domu", "Poza domem", "Noc", "Urlop", "Własny", "Tryb", "Brak", "Oscylacja", "Kierunek", "Do przodu", "Do tyłu", "Prędkość %u", "Wpisz kod", "Nieprawidłowy kod", "Za dużo błędnych kodów · %u s", "Aby używać tutaj, sparuj ten panel z Home Assistant i ustaw hasło Web Admin.", "Aby używać tutaj, sparuj ten panel z Home Assistant.", "Aby używać tutaj, ustaw hasło Web Admin.", "Odblokowywanie z tego panelu jest wyłączone. Zezwól na nie w opcjach HomeTiles Bridge.", "Rozbrajanie z tego panelu jest wyłączone. Zezwól na nie w opcjach HomeTiles Bridge.", "To urządzenie wymaga kodu tekstowego. Użyj Home Assistant.", "To nie jest dozwolone z panelu.", "Inne polecenie jest jeszcze wykonywane. Spróbuj ponownie za chwilę.", "Urządzenie tego nie obsługuje.", "Urządzenie jest niedostępne.", "Polecenie wygasło. Spróbuj ponownie.", "Brak odpowiedzi z Home Assistant.", "Home Assistant nie mógł wykonać polecenia.", "Zegar panelu nie jest jeszcze ustawiony.", "Urządzenie nie odpowiedziało."},
     {"Zablokowany", "Odblokowany", "Blokowanie…", "Odblokowywanie…", "Otwarty", "Otwieranie…", "Zacięty", "Niedostępny", "Nieznany"},
     {"Rozbrojony", "Uzbrojony (w domu)", "Uzbrojony (poza domem)", "Uzbrojony (noc)", "Uzbrojony (urlop)", "Uzbrojony (własny)", "Oczekiwanie", "Uzbrajanie", "Rozbrajanie", "Wyzwolony", "Niedostępny", "Nieznany"},
+    {"Obraz", "Brak obrazu", "Prześlij obraz…", "Przesyłanie…", "Nie udało się przesłać obrazu.", "Bez tytułu obraz wypełnia kafelek, z tytułem zastępuje ikonę."},
     {"Wybierz encję", "Szukaj", "Żadna encja nie pasuje do „{query}”",
      "Nie udało się wczytać encji. Wybrana encja pozostaje bez zmian.",
      "Spróbuj ponownie", "Wyczyść", "Brak dostępnych encji",
@@ -3297,6 +3301,11 @@ const char* weather_today_button_label(const char* language_code) {
 
 const char* weather_tomorrow_label(const char* language_code) {
   return locale(language_code).weather_tomorrow;
+}
+
+const char* scene_picture_label(const char* language_code, uint8_t index) {
+  if (index >= 6) index = 0;
+  return locale(language_code).scene_picture_labels[index];
 }
 
 const char* weather_sensor_label(const char* language_code, uint8_t index) {

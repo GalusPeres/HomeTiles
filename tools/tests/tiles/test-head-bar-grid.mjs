@@ -29,7 +29,7 @@ const panels = [
    bar: {cols: 5, rows: 3, cw: 236, ch: 181, top: 128, pad: 16},
    upright: {cols: 3, rows: 6, half: false, cw: 218, ch: 176}},
   {name: 'Guition 7" / Waveshare 7B', define: 'DEVICE_LAYOUT_1024X600', w: 1024, h: 600, cols: 6, rows: 4, cw: 152, ch: 130, gap: 16, pad: 16,
-   bar: {cols: 5, rows: 3, cw: 185, ch: 149, top: 104, pad: 16},
+   bar: {cols: 6, rows: 3, cw: 152, ch: 149, top: 104, pad: 16},
    upright: {cols: 3, rows: 6, half: false, cw: 178, ch: 137}},
   {name: 'Waveshare 4B', define: '', w: 720, h: 720, cols: 4, rows: 4, cw: 160, ch: 160, gap: 16, pad: 16,
    bar: {cols: 3, rows: 3, cw: 218, ch: 181, top: 128, pad: 16}},

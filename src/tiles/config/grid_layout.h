@@ -72,15 +72,17 @@ struct Size {
 // The grid below the head bar per screen as the layout shows it (user picks
 // 2026-10-07, emulator build/ha-dummy-sim/panel/layouts.mjs BAR_PICKS).
 // Landscape: 1280 x 800 (Guition V2, Waveshare 8" and 10.1") 6 x 4;
-// 1280 x 720 (Tab5, Waveshare 7") and 1024 x 600 (Guition 7", Waveshare 7B)
-// 5 x 3; 800 x 480 (Waveshare 4.3", the JC4880 turned) 4 x 3; square panels
+// 1280 x 720 (Tab5, Waveshare 7") 5 x 3; 1024 x 600 (Guition 7", Waveshare
+// 7B) 6 x 3, nearly square cells like its classic 6 x 4 (5 x 3 drew them
+// 185 x 149); 800 x 480 (Waveshare 4.3", the JC4880 turned) 4 x 3; square panels
 // 3 x 3. Upright: 800 x 1280 4 x 6.5; 720 x 1280 and 600 x 1024 3 x 6;
 // 480 x 800 (JC4880) 3 x 5.5.
 constexpr Size bar_grid(uint16_t width, uint16_t height) {
   if (width == height) return {3, 3, false};
   if (width == 1280 && height == 800) return {6, 4, false};
   if (width == 800 && height == 1280) return {4, 6, true};
-  if ((width == 1280 && height == 720) || (width == 1024 && height == 600)) return {5, 3, false};
+  if (width == 1280 && height == 720) return {5, 3, false};
+  if (width == 1024 && height == 600) return {6, 3, false};
   if ((width == 720 && height == 1280) || (width == 600 && height == 1024)) return {3, 6, false};
   if (width == 800 && height == 480) return {4, 3, false};
   if (width == 480 && height == 800) return {3, 5, true};

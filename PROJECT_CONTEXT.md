@@ -153,7 +153,7 @@ Last reviewed: 2026-10-12
 
 ## Layouts (`feature/layouts`, unreleased, b294)
 
-- Three layouts (`grid_layout.h`): classic (profile grid, places in PackedTileV7), head bar landscape (1280x800 6x4, 1280x720/1024x600 5x3, 800x480 4x3, square 3x3), head bar upright (prepared: 4x6.5, 3x6, 3x5.5). NVS `layout` read at boot (OTA keeps it); a bar layout without places starts classic.
+- Three layouts (`grid_layout.h`): classic (profile grid, places in PackedTileV7), head bar landscape (1280x800 6x4, 1280x720 5x3, 1024x600 6x3, 800x480 4x3, square 3x3), head bar upright (prepared: 4x6.5, 3x6, 3x5.5). NVS `layout` read at boot (OTA keeps it); a bar layout without places starts classic.
 - Places: `/_tile_grids/layouts.json` by folder + view_id (`tile_layouts.cpp`); screensaver = folder 0xFFFE keyed slot+1 (`screensaver_places.*`: the layout's grid, no head, two rows at the bottom, three upright); its clock per layout in the screensaver config (`clock_layouts`, classic on top), edited in the layout window. No place = `layout_hidden` (not drawn, no room).
 - Layout window (`tiles/layout-window.js`): screen top left, storage only right/below; X always deletes after a question; tiles never shrink; red blocks Speichern/Umstellen; screensaver tab without picture, with that layout's clock (saved with its places, b288). Export marks classic storage tiles.
 - Popup header = head bar rule (b284, `popup_layout.h`): X one grid gap in the card corner, circle mirrored, card radius = tile radius + gap. Head time 32/20 px; without gear its right gap = top gap; gear shows the PIN lock; Settings PIN popup always global color.

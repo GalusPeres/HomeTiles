@@ -297,3 +297,53 @@ void append_tile_icon_color_fields_html(String& html, const String& tab_id) {
             </div>
 )html";
 }
+
+// Background of a screensaver tile with an icon, in place of the "Fill" box:
+// None (no card, the hidden _tile_ss_fill), Theme (the theme's card), Icon
+// (Fill: the same hidden "Ausfuellen" box, "fill 20" in the record) or Custom
+// (an own card color, Tile::ss_card_color in /_screensaver/tile_looks.json).
+// Page tiles keep the one color rule and their Fill box.
+void append_screensaver_tile_background_html(String& html, const String& tab_id) {
+  const auto& tr = i18n::strings(configManager.getConfig().language);
+  html += R"html(            <div class="tile-icon-color-fields icon-color-fill hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill_row" data-tab=")html";
+  html += tab_id;
+  html += R"html(">
+              <input type="checkbox" id=")html";
+  html += tab_id;
+  html += R"html(_tile_icon_fill" data-icon-color="fill-target" hidden>
+)html";
+  append_label_row(html, tr.tile_bg_color);
+  html += R"html(              <div class="icon-color-segmented choice-row tile-bg-modes" role="group" id=")html";
+  html += tab_id;
+  html += R"html(_tile_bg_modes">)html";
+  const struct {
+    const char* mode;
+    const char* label;
+  } modes[] = {{"none", tr.tile_bg_none},
+               {"plain", tr.tile_bg_plain},
+               {"icon", tr.tile_bg_icon},
+               {"custom", tr.tile_color_mode_custom}};
+  for (const auto& entry : modes) {
+    html += R"html(<button type="button" data-tile-bg-mode=")html";
+    html += entry.mode;
+    html += R"html(" aria-pressed="false" onclick="setTileBgMode(')html";
+    html += tab_id;
+    html += "', '";
+    html += entry.mode;
+    html += R"html(')">)html";
+    appendHtmlEscaped(html, entry.label);
+    html += "</button>";
+  }
+  html += R"html(</div>
+              <div class="tile-color-row no-reset hidden" id=")html";
+  html += tab_id;
+  html += R"html(_tile_ss_card_color_row">
+                <input type="color" id=")html";
+  html += tab_id;
+  html += R"html(_tile_ss_card_color" value="#3A4A5A" data-set="0">
+              </div>
+            </div>
+)html";
+}

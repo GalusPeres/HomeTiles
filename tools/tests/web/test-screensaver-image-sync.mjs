@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {extractDeliveredFunction, readRepoFile} from '../../lib/admin-source.mjs';
 
-const names = ['ssClamp', 'ssNearestClockFont', 'ssClockAlignment', 'ssNormalizeLoaded',
+const names = ['ssClamp', 'ssNearestClockFont', 'ssClockAlignment', 'ssClockFillColor',
+  'ssClockFillOpacity', 'ssNormalizeLoaded',
   'ssSyncCardImages', 'syncScreensaverImages', 'ssPayload', 'ssCurrentWallpaper'];
 const posts = [];
 let config = null;

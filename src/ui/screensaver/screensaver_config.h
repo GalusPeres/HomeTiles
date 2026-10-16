@@ -39,6 +39,11 @@ struct ScreensaverConfigData {
   bool show_date = true;
   bool show_weekday = false;
   bool clock_shadow = true;
+  // Optional card behind the clock so it stays readable on bright or busy
+  // images: fill color (RGB) and its opacity.
+  bool clock_fill = false;
+  uint32_t clock_fill_color = 0x000000;
+  uint8_t clock_fill_opacity = 128;
   uint8_t time_format = 0;
   uint8_t date_format = 0;
   uint8_t time_alignment = 1;  // 0=left, 1=center, 2=right
@@ -90,6 +95,9 @@ class ScreensaverConfigStore {
   // Sets only the RAM grid, normalized like a save, so an open screensaver
   // shows an edit before its flash write (replaceTileGrid follows).
   void previewTileGrid(const TileGridConfig& grid);
+  // Sets every tile's screensaver look (Tile::ss_*) from tile_looks.json;
+  // tiles without a stored look get the defaults.
+  void applyStoredTileLooks(TileGridConfig& grid) const;
   const Tile* tile(size_t index) const;
 
   // The clock's place and size per layout (user 2026-10-08): the classic

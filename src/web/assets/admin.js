@@ -4221,11 +4221,117 @@ async function saveGestureEdge(select) {
     document.getElementById(tab + '_weather_colored_icons_row')?.classList.toggle('hidden', !weather);
   }
 
+  // Per-tile screensaver look (screensaver_tile_look.h): fill opacity,
+  // background fill, an own card color, icon visibility and an own text
+  // color. Only the screensaver tile editor has these fields.
+  function collectScreensaverLookFields(tab, typeValue) {
+    const fill = document.getElementById(tab + '_tile_ss_fill');
+    if (!fill || String(typeValue ?? '0') === '0') return {};
+    const textOn = document.getElementById(tab + '_tile_ss_text_color_on')?.checked === true;
+    const card = document.getElementById(tab + '_tile_ss_card_color');
+    return {
+      ss_fill: fill.checked ? '1' : '0',
+      ss_icon: document.getElementById(tab + '_tile_ss_icon')?.checked === false ? '0' : '1',
+      ss_opacity: String(clampInt(document.getElementById(tab + '_tile_ss_opacity')?.value, 0, 255, 255)),
+      ss_card_color: card?.dataset.set === '1' ? String(card.value || '#3A4A5A').toUpperCase() : '',
+      ss_text_color: textOn
+        ? String(document.getElementById(tab + '_tile_ss_text_color')?.value || '#FFFFFF').toUpperCase()
+        : '',
+    };
+  }
+  function loadScreensaverLookFields(tab, data) {
+    const fill = document.getElementById(tab + '_tile_ss_fill');
+    if (!fill) return;
+    fill.checked = !['0', 'false'].includes(String(data?.ss_fill));
+    const icon = document.getElementById(tab + '_tile_ss_icon');
+    if (icon) icon.checked = !['0', 'false'].includes(String(data?.ss_icon));
+    const opacity = document.getElementById(tab + '_tile_ss_opacity');
+    if (opacity) opacity.value = String(clampInt(data?.ss_opacity, 0, 255, 255));
+    const cardColor = /^#[0-9a-f]{6}$/i.test(String(data?.ss_card_color || '')) ? String(data.ss_card_color) : '';
+    const card = document.getElementById(tab + '_tile_ss_card_color');
+    if (card) {
+      card.dataset.set = cardColor ? '1' : '0';
+      if (cardColor) card.value = cardColor.toLowerCase();
+    }
+    const text = /^#[0-9a-f]{6}$/i.test(String(data?.ss_text_color || '')) ? String(data.ss_text_color) : '';
+    const textOn = document.getElementById(tab + '_tile_ss_text_color_on');
+    if (textOn) textOn.checked = !!text;
+    const color = document.getElementById(tab + '_tile_ss_text_color');
+    if (color && text) color.value = text.toLowerCase();
+    syncScreensaverLookFields(tab);
+  }
+  function resetScreensaverLookFields(tab) {
+    loadScreensaverLookFields(tab, {});
+    const color = document.getElementById(tab + '_tile_ss_text_color');
+    if (color) color.value = '#ffffff';
+  }
+  function syncScreensaverLookFields(tab) {
+    const opacity = document.getElementById(tab + '_tile_ss_opacity');
+    const output = document.getElementById(tab + '_tile_ss_opacity_value');
+    if (opacity && output) output.textContent = Math.round(Number(opacity.value) * 100 / 255) + ' %';
+    // Text color: Automatic (the type's colors) or Custom (the picker).
+    const custom = document.getElementById(tab + '_tile_ss_text_color_on')?.checked === true;
+    document.getElementById(tab + '_tile_ss_text_color_row')?.classList.toggle('hidden', !custom);
+    document.getElementById(tab + '_tile_ss_text_modes')?.querySelectorAll('[data-ss-text-mode]').forEach(button => {
+      const active = button.dataset.ssTextMode === (custom ? 'custom' : 'auto');
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    // Background None comes from the fill box (syncTileBgMode).
+    if (typeof syncTileColorMode === 'function') syncTileColorMode(tab);
+  }
+  function setScreensaverTextColorMode(tab, mode) {
+    const on = document.getElementById(tab + '_tile_ss_text_color_on');
+    if (!on) return;
+    const before = on.checked;
+    on.checked = mode === 'custom';
+    syncScreensaverLookFields(tab);
+    updateTilePreview(tab);
+    updateDraft(tab);
+    scheduleAutoSave(tab);
+    const color = document.getElementById(tab + '_tile_ss_text_color');
+    if (on.checked && !before && color) {
+      try {
+        color.getBoundingClientRect();
+        if (typeof color.showPicker === 'function') color.showPicker();
+      } catch (_) {}
+    }
+  }
+  // A tile without fill draws its background at opacity 0, like the panel
+  // (apply_slot_look); tints keep that through data-bg-opacity.
+  function screensaverLookFilled(look) {
+    return !['0', 'false'].includes(String(look?.ss_fill));
+  }
+  // The own card color (Background Custom) as "#RRGGBB", '' for the theme's
+  // card; Clock, Text and Pixel animation keep their own color.
+  function screensaverLookCardColor(look, typeValue) {
+    if (tileTypeKeepsOwnColor(typeValue)) return '';
+    return /^#[0-9a-f]{6}$/i.test(String(look?.ss_card_color || '')) ? String(look.ss_card_color) : '';
+  }
+  // The rest of the look as the screensaver tile previews show it (live and
+  // cached grid): no outline without fill, hidden icon, own text color.
+  function applyScreensaverLookPreview(tileElem, look) {
+    if (!tileElem) return;
+    const empty = String(tileElem.dataset.type || '0') === '0';
+    const fill = empty || screensaverLookFilled(look);
+    const icon = empty || !['0', 'false'].includes(String(look?.ss_icon));
+    const text = !empty && /^#[0-9a-f]{6}$/i.test(String(look?.ss_text_color || ''))
+      ? String(look.ss_text_color) : '';
+    tileElem.classList.toggle('ss-no-fill', !fill);
+    if (!fill) tileElem.classList.add('tile-border-hidden');
+    tileElem.classList.toggle('ss-icon-hidden', !icon);
+    // The tile's Opacity fades only the fill (the background code).
+    tileElem.style.opacity = '';
+    tileElem.classList.toggle('ss-text-colored', !!text);
+    if (text) tileElem.style.setProperty('--ss-text-color', text);
+    else tileElem.style.removeProperty('--ss-text-color');
+  }
+
   function collectTypeFieldValues(tab) {
     const prefix = tab;
     const typeValue = document.getElementById(prefix + '_tile_type')?.value || '0';
     const meta = getTileTypeMeta(typeValue);
-    const out = {};
+    const out = collectScreensaverLookFields(prefix, typeValue);
     if (!meta.save) return out;
     const fd = new FormData();
     callTypeHandler(meta, 'save', prefix, fd);
@@ -4289,7 +4395,7 @@ async function saveGestureEdge(select) {
     // data, its entity and options returned with the next tile in the slot.
     const tile = Number(snapshot?.type) === 0 ? {} : Object.assign({}, prev);
     const layout = normalizeSnapshotLayout(snapshot, index, tab);
-    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow'];
+    const numericFields = ['type', 'sensor_decimals', 'sensor_value_font', 'sensor_display_mode', 'sensor_gauge_min', 'sensor_gauge_max', 'switch_style', 'navigate_target', 'popup_open_mode', 'key_code', 'key_modifier', 'background_opacity', 'icon_disc', 'icon_glow', 'ss_opacity', 'ss_fill', 'ss_icon'];
 
     tile.type = clampInt(snapshot?.type, 0, 255, Number(prev.type) || 0);
     tile.title = snapshot?.title || '';
@@ -6986,6 +7092,7 @@ async function saveGestureEdge(select) {
     const meta = getTileTypeMeta(d.type || '0');
     callTypeHandler(meta, 'load', prefix, d);
     syncIconDiscFields(prefix);
+    loadScreensaverLookFields(prefix, d);
     refreshEntityOptionLists(prefix);
     syncGaugeUi(tab);
     updateTilePreview(tab);
@@ -7041,6 +7148,7 @@ async function saveGestureEdge(select) {
     const meta = getTileTypeMeta(typeValue);
     callTypeHandler(meta, 'load', prefix, data);
     syncIconDiscFields(prefix);
+    loadScreensaverLookFields(prefix, data);
     refreshEntityOptionLists(prefix);
     syncGaugeUi(tab);
   }
@@ -7295,6 +7403,20 @@ async function saveGestureEdge(select) {
       updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
     });
     bindLive(iconInput, 'input', 'tileIcon', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // Per-tile screensaver look (screensaver tile editor only).
+    for (const [suffix, event, key] of [['_tile_ss_fill', 'change', 'tileSsFill'],
+                                        ['_tile_ss_icon', 'change', 'tileSsIcon'],
+                                        ['_tile_ss_opacity', 'input', 'tileSsOpacity'],
+                                        ['_tile_ss_text_color_on', 'change', 'tileSsTextColorOn'],
+                                        ['_tile_ss_text_color', 'input', 'tileSsTextColor']]) {
+      bindLive(document.getElementById(prefix + suffix), event, key, () => {
+        syncScreensaverLookFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+    }
+    // Background Custom of a screensaver tile: its own card color.
+    bindLive(document.getElementById(prefix + '_tile_ss_card_color'), 'input', 'tileSsCardColor', () => {
+      updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+    });
     bindLive(colorInput, 'input', 'tileColor', () => { markTileColorInputExplicit(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(colInput, 'input', 'tileCol', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(rowInput, 'input', 'tileRow', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
@@ -7842,6 +7964,7 @@ async function saveGestureEdge(select) {
     if (type === '0') {
       tileElem.classList.add('empty');
       tileElem.style.background = 'transparent';
+      if (isScreensaverTileTab(tab)) applyScreensaverLookPreview(tileElem, {});
       tileElem.innerHTML = '';
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
@@ -7866,13 +7989,17 @@ async function saveGestureEdge(select) {
       isDefaultBg ? defaultBg : (color || defaultBg), null, type);
     tileElem.classList.toggle('tile-transparent', tileBg === 'transparent');
     if (isScreensaverTileTab(tab)) {
-      // One opacity for every screensaver tile (screensaver footer).
-      const opacity = screensaverTileOpacity();
-      tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
-        isDefaultBg ? defaultBg : (color || defaultBg), opacity);
+      // The tile's own Opacity or the global one (screensaver footer), its
+      // own card color (Background Custom); a tile without fill draws none.
+      const look = collectScreensaverLookFields(prefix, type);
+      const opacity = screensaverLookFilled(look) ? screensaverTileFillOpacity(look.ss_opacity) : 0;
+      const card = screensaverLookCardColor(look, type);
+      tileElem.style.background = tileBackgroundCss(meta, isDefaultBg && !card,
+        card || (isDefaultBg ? defaultBg : (color || defaultBg)), opacity);
       tileElem.dataset.bgOpacity = String(opacity);
       // A fully transparent card casts no shadow (apply_slot_tile_shadows).
       tileElem.classList.toggle('screensaver-bg-clear', opacity === 0);
+      applyScreensaverLookPreview(tileElem, look);
     } else {
       tileElem.style.background = tileBg;
     }
@@ -8161,6 +8288,7 @@ async function saveGestureEdge(select) {
         const meta = colorMeta;
         callTypeHandler(meta, 'load', prefix, data);
         syncIconDiscFields(prefix);
+        loadScreensaverLookFields(prefix, data);
         refreshEntityOptionLists(prefix);
         syncGaugeUi(tab);
         const tileElem = document.getElementById(tab + '-tile-' + index);
@@ -8350,6 +8478,7 @@ async function saveGestureEdge(select) {
   function resetAllTypeFields(tab) {
     const metas = Object.values(TILE_TYPE_REGISTRY || {});
     metas.forEach(meta => callTypeHandler(meta, 'reset', tab));
+    resetScreensaverLookFields(tab);
   }
 
   // A folder that still contains tiles keeps its type: the whole type list
@@ -8616,6 +8745,10 @@ async function saveGestureEdge(select) {
       show_date: !!data?.show_date,
       show_weekday: !!data?.show_weekday,
       clock_shadow: !!data?.clock_shadow,
+      clock_fill: !!data?.clock_fill,
+      clock_fill_color: /^#[0-9a-f]{6}$/i.test(String(data?.clock_fill_color || ''))
+        ? String(data.clock_fill_color).toUpperCase() : '#000000',
+      clock_fill_opacity: Math.round(ssClamp(data?.clock_fill_opacity ?? 128, 0, 255)),
       time_format: Number(data?.time_format || 0),
       date_format: Number(data?.date_format || 0),
       time_alignment: Math.round(ssClamp(data?.time_alignment ?? 1, 0, 2)),
@@ -9370,6 +9503,11 @@ async function saveGestureEdge(select) {
     // Per-tile icon colors (Sensor family, Binary sensor, Energy); older
     // exports without the field import without icon colors.
     if (typeof tile.icon_colors === 'string') fd.append('icon_colors', tile.icon_colors);
+    // Per-tile screensaver look; the server reads it on the screensaver grid
+    // only, and older exports without it import the defaults.
+    for (const key of ['ss_opacity', 'ss_fill', 'ss_icon', 'ss_card_color', 'ss_text_color']) {
+      if (tile[key] !== undefined && tile[key] !== null) fd.append(key, tile[key]);
+    }
 
     if ([21, 22, 23].includes(safeType)) fd.append('sensor_value_font', tile.sensor_value_font ?? 2);
     if (safeType === 1) {
@@ -10162,7 +10300,65 @@ async function saveGestureEdge(select) {
     modes?.querySelector('[data-tile-color-mode="transparent"]')?.classList.toggle('hidden', !tileTypeBlackIsTransparent(typeValue));
     document.getElementById(tab + '_tile_color_row')?.classList.toggle('color-hidden', !keepsOwn || mode !== 'custom');
     document.getElementById(tab + '_tile_icon_fill_row')?.classList.toggle('hidden', !iconOffered);
+    // Screensaver tiles only (their Background choice).
+    if (typeof syncTileBgMode === 'function') syncTileBgMode(tab, typeValue, keepsOwn, iconOffered);
     if (typeof fitChoiceRows === 'function') fitChoiceRows(tab);
+  }
+  // Background of a screensaver tile (tile_icon_colors_html.cpp
+  // append_screensaver_tile_background_html): None (no card, the hidden
+  // _tile_ss_fill), Theme, Icon (the hidden "Ausfuellen" box) or Custom (the
+  // own card color, Tile::ss_card_color). Page tiles have none of these
+  // fields and keep their Fill box.
+  function tileBgMode(tab) {
+    const ssFill = document.getElementById(tab + '_tile_ss_fill');
+    if (ssFill && !ssFill.checked) return 'none';
+    if (document.getElementById(tab + '_tile_ss_card_color')?.dataset.set === '1') return 'custom';
+    return document.getElementById(tab + '_tile_icon_fill')?.checked ? 'icon' : 'plain';
+  }
+  function syncTileBgMode(tab, typeValue, keepsOwn, iconOffered) {
+    const modes = document.getElementById(tab + '_tile_bg_modes');
+    if (!modes) return;
+    const card = document.getElementById(tab + '_tile_ss_card_color');
+    if (card && !iconOffered) card.dataset.set = '0';
+    const empty = String(typeValue ?? '0') === '0';
+    const mode = tileBgMode(tab);
+    modes.querySelectorAll('[data-tile-bg-mode]').forEach(button => {
+      const active = button.dataset.tileBgMode === mode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    document.getElementById(tab + '_tile_ss_card_color_row')?.classList.toggle('hidden', !iconOffered || mode !== 'custom');
+    // The opacity fades only the card: none to fade without one.
+    document.getElementById(tab + '_tile_ss_opacity_row')?.classList.toggle('hidden', mode === 'none');
+    // Group captions only above shown controls.
+    document.getElementById(tab + '_tile_look_icon_head')?.classList.toggle('hidden', empty);
+    document.getElementById(tab + '_tile_look_bg_head')?.classList.toggle('hidden', empty || !(keepsOwn || iconOffered));
+    document.getElementById(tab + '_tile_look_text_head')?.classList.toggle('hidden', empty);
+  }
+  function setTileBgMode(tab, mode) {
+    const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
+    if (tileTypeKeepsOwnColor(typeValue)) return;
+    const before = tileBgMode(tab);
+    const ssFill = document.getElementById(tab + '_tile_ss_fill');
+    if (ssFill) ssFill.checked = mode !== 'none';
+    const fill = document.getElementById(tab + '_tile_icon_fill');
+    if (fill) fill.checked = mode === 'icon';
+    const card = document.getElementById(tab + '_tile_ss_card_color');
+    if (card) card.dataset.set = mode === 'custom' ? '1' : '0';
+    if (typeof syncScreensaverLookFields === 'function') syncScreensaverLookFields(tab);
+    if (typeof syncIconColorFields === 'function') syncIconColorFields(tab);
+    else syncTileColorMode(tab);
+    updateTilePreview(tab);
+    updateDraft(tab);
+    scheduleAutoSave(tab);
+    // A first Custom opens the color picker (laid out first, see
+    // setTileColorMode).
+    if (mode === 'custom' && before !== 'custom' && card) {
+      try {
+        card.getBoundingClientRect();
+        if (typeof card.showPicker === 'function') card.showPicker();
+      } catch (_) {}
+    }
   }
   function setTileColorMode(tab, mode) {
     const input = document.getElementById(tab + '_tile_color');
@@ -10408,10 +10604,12 @@ async function saveGestureEdge(select) {
         tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), null, typeValue);
       el.classList.toggle('tile-transparent', bg === 'transparent');
       if (isScreensaverTileTab(tab)) {
-        // One opacity for every screensaver tile (screensaver footer).
-        const opacity = screensaverTileOpacity();
-        el.style.background = tileBackgroundCss(meta, isDefaultBg,
-          tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
+        // The tile's own Opacity or the global one (screensaver footer), its
+        // own card color (Background Custom); a tile without fill draws none.
+        const opacity = screensaverLookFilled(tile) ? screensaverTileFillOpacity(tile.ss_opacity) : 0;
+        const card = screensaverLookCardColor(tile, typeValue);
+        el.style.background = tileBackgroundCss(meta, isDefaultBg && !card,
+          card || tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
         el.dataset.bgOpacity = String(opacity);
         // A fully transparent card casts no shadow (apply_slot_tile_shadows).
         el.classList.toggle('screensaver-bg-clear', opacity === 0);
@@ -10421,6 +10619,7 @@ async function saveGestureEdge(select) {
     }
     if (typeof applyTileSurface === 'function') applyTileSurface(el, surface);
     if (typeValue !== '0') applyFrameLine(el);
+    if (isScreensaverTileTab(tab)) applyScreensaverLookPreview(el, typeValue === '0' ? {} : tile);
     const sensorValueClass = getSensorValueFontClass(tile.sensor_value_font);
     if (typeValue === '0') {
       el.innerHTML = '';
@@ -14148,6 +14347,14 @@ async function saveGestureEdge(select) {
   // One background opacity for every screensaver tile (tile_opacity, set in
   // the screensaver footer): the draft once loaded, else the server-rendered
   // slider.
+  // Background opacity of one screensaver tile: its own Opacity is absolute,
+  // the default (255) takes the global fill opacity; text and icon stay
+  // (screensaver_tile_look::fill_opacity).
+  function screensaverTileFillOpacity(tileOpacity) {
+    const own = Math.round(ssClamp(tileOpacity ?? 255, 0, 255));
+    return own === 255 ? screensaverTileOpacity() : own;
+  }
+
   function screensaverTileOpacity() {
     const value = screensaverDraft?.tile_opacity ??
       document.getElementById('screensaverTileOpacity')?.value;
@@ -14212,6 +14419,15 @@ async function saveGestureEdge(select) {
     return ['left', 'center', 'right'][ssClockAlignment(value)];
   }
 
+  // Card behind the clock (ScreensaverConfigData::clock_fill).
+  function ssClockFillColor(value) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : '#000000';
+  }
+
+  function ssClockFillOpacity(value) {
+    return Math.round(ssClamp(value ?? 128, 0, 255));
+  }
+
   function getScreensaverClockPreviewDate(d) {
     if (!d) return '';
     const weekdayNames = getClockPreviewLanguage().toLowerCase().startsWith('de')
@@ -14229,6 +14445,9 @@ async function saveGestureEdge(select) {
     data.date_font_size = ssNearestClockFont(data.date_font_size || 28, true);
     data.time_alignment = ssClockAlignment(data.time_alignment);
     data.date_alignment = ssClockAlignment(data.date_alignment);
+    data.clock_fill = !!data.clock_fill;
+    data.clock_fill_color = ssClockFillColor(data.clock_fill_color);
+    data.clock_fill_opacity = ssClockFillOpacity(data.clock_fill_opacity);
     data.tile_border = data.tile_border !== false;
     data.wallpapers = Array.isArray(data.wallpapers) ? data.wallpapers : [];
     data.duration_seconds = Math.round(ssClamp(
@@ -14330,6 +14549,9 @@ async function saveGestureEdge(select) {
       show_date: !!d.show_date,
       show_weekday: !!d.show_weekday,
       clock_shadow: !!d.clock_shadow,
+      clock_fill: !!d.clock_fill,
+      clock_fill_color: ssClockFillColor(d.clock_fill_color),
+      clock_fill_opacity: ssClockFillOpacity(d.clock_fill_opacity),
       time_format: Number(d.time_format || 0),
       date_format: Number(d.date_format || 0),
       time_alignment: ssClockAlignment(d.time_alignment),
@@ -14595,6 +14817,20 @@ async function saveGestureEdge(select) {
     clock.hidden = false;
     clock.classList.toggle('clock-disabled', !d.show_time && !d.show_date && !d.show_weekday);
     clock.classList.toggle('clock-shadowed', !!d.clock_shadow);
+    // The panel's card behind the lines (screensaver_clock_fill.h).
+    if (d.clock_fill) {
+      const hex = ssClockFillColor(d.clock_fill_color);
+      const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      clock.style.background = 'rgba(' + rgb.join(',') + ',' +
+        (ssClockFillOpacity(d.clock_fill_opacity) / 255).toFixed(3) + ')';
+      clock.style.padding = (devicePx('--screensaver-clock-fill-pad-y', 8) * scale) + 'px ' +
+        (devicePx('--screensaver-clock-fill-pad-x', 16) * scale) + 'px';
+      clock.style.borderRadius = (devicePx('--screensaver-clock-fill-radius', 16) * scale) + 'px';
+    } else {
+      clock.style.background = '';
+      clock.style.padding = '';
+      clock.style.borderRadius = '';
+    }
     preview.classList.toggle('tiles-shadowed', !!d.tile_shadow);
     preview.classList.toggle('tiles-bordered', d.tile_border !== false);
     document.getElementById('screensaverUseWallpapers').checked = !!d.use_wallpapers;
@@ -14610,6 +14846,22 @@ async function saveGestureEdge(select) {
     document.getElementById('screensaverShowDate').checked = !!d.show_date;
     document.getElementById('screensaverShowWeekday').checked = !!d.show_weekday;
     document.getElementById('screensaverClockShadow').checked = !!d.clock_shadow;
+    const clockFill = document.getElementById('screensaverClockFill');
+    const clockFillColor = document.getElementById('screensaverClockFillColor');
+    const clockFillOpacity = document.getElementById('screensaverClockFillOpacity');
+    const clockFillOutput = document.getElementById('screensaverClockFillOpacityValue');
+    if (clockFill) clockFill.checked = !!d.clock_fill;
+    if (clockFillColor) {
+      clockFillColor.value = ssClockFillColor(d.clock_fill_color).toLowerCase();
+      clockFillColor.disabled = !d.clock_fill;
+    }
+    if (clockFillOpacity) {
+      clockFillOpacity.value = String(ssClockFillOpacity(d.clock_fill_opacity));
+      clockFillOpacity.disabled = !d.clock_fill;
+    }
+    if (clockFillOutput) {
+      clockFillOutput.textContent = Math.round(ssClockFillOpacity(d.clock_fill_opacity) * 100 / 255) + ' %';
+    }
     document.getElementById('screensaverTimeFont').value = String(d.time_font_size || 48);
     document.getElementById('screensaverDateFont').value = String(d.date_font_size || 28);
     document.getElementById('screensaverTimeAlignment').value = String(ssClockAlignment(d.time_alignment));
@@ -14779,6 +15031,19 @@ async function saveGestureEdge(select) {
     bind('screensaverShowDate', 'change', el => { screensaverDraft.show_date = el.checked; });
     bind('screensaverShowWeekday', 'change', el => { screensaverDraft.show_weekday = el.checked; });
     bind('screensaverClockShadow', 'change', el => { screensaverDraft.clock_shadow = el.checked; });
+    bind('screensaverClockFill', 'change', el => { screensaverDraft.clock_fill = el.checked; });
+    bind('screensaverClockFillColor', 'input', el => {
+      screensaverDraft.clock_fill_color = ssClockFillColor(el.value);
+    }, false);
+    bind('screensaverClockFillColor', 'change', el => {
+      screensaverDraft.clock_fill_color = ssClockFillColor(el.value);
+    });
+    bind('screensaverClockFillOpacity', 'input', el => {
+      screensaverDraft.clock_fill_opacity = ssClockFillOpacity(el.value);
+    }, false);
+    bind('screensaverClockFillOpacity', 'change', el => {
+      screensaverDraft.clock_fill_opacity = ssClockFillOpacity(el.value);
+    });
     bind('screensaverTimeFont', 'change', el => {
       screensaverDraft.time_font_size = ssNearestClockFont(el.value, false);
     });

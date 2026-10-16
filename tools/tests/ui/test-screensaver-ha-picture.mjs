@@ -131,7 +131,7 @@ for (const words of [
 
 // Browser editor: the source and entity load, default to the slideshow and
 // reach the saved payload.
-const names = ['ssClamp', 'ssNearestClockFont', 'ssClockAlignment', 'ssNormalizeLoaded', 'ssPayload',
+const names = ['ssClamp', 'ssNearestClockFont', 'ssClockAlignment', 'ssClockFillColor', 'ssClockFillOpacity', 'ssNormalizeLoaded', 'ssPayload',
   'ssCurrentWallpaper'];
 const context = vm.createContext({
   structuredClone, JSON, Math, Number, String, Array, Set, Map,

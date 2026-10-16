@@ -308,6 +308,20 @@ struct Strings {
   const char* tile_group_icon;
   const char* tile_group_advanced;
   const char* screensaver_background_opacity;
+  // Per-tile screensaver look (screensaver_tile_look.h).
+  const char* screensaver_tile_fill;
+  const char* screensaver_tile_show_icon;
+  const char* screensaver_tile_look_opacity;
+  const char* screensaver_tile_text_color;
+  // Screensaver Tile Settings > Color groups (icon, background, text) and
+  // the Background color choice: no card, the theme's card, the icon's color
+  // (Fill) or an own card color (Tile::ss_card_color).
+  const char* tile_look_group_background;
+  const char* tile_look_group_text;
+  const char* tile_bg_color;
+  const char* tile_bg_none;
+  const char* tile_bg_plain;
+  const char* tile_bg_icon;
   const char* screensaver_storage_hint;
   // The slideshow list without a card.
   const char* screensaver_no_sd;

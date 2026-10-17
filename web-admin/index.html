@@ -1,0 +1,1818 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Home Assistant touch dashboards for ESP32-P4 and ESP32-S3 displays. Install HomeTiles, connect the Bridge, and configure your tiles.">
+      
+      
+      
+        <link rel="canonical" href="https://galusperes.github.io/web-admin/">
+      
+      
+        <link rel="prev" href="../bridge/">
+      
+      
+        <link rel="next" href="../device-ui/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../images/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Web Admin Panel - HomeTiles</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css?v=installer-ui-16">
+    
+      <link rel="stylesheet" href="../stylesheets/readability.css?v=20260927-toc1">
+    
+      <link rel="stylesheet" href="../stylesheets/device-status.css?v=2">
+    
+      <link rel="stylesheet" href="../stylesheets/device-logs.css?v=device-logs-2">
+    
+      <link rel="stylesheet" href="../stylesheets/serial-status.css?v=serial-navigation-3">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#web-admin-panel" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="HomeTiles" class="md-header__button md-logo" aria-label="HomeTiles" data-md-component="logo">
+      
+  <img src="../images/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HomeTiles
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Web Admin Panel
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="teal"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a class="ht-header-support" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener" aria-label="Buy Me a Coffee">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="116" height="32">
+</a>
+<a href="https://github.com/GalusPeres/HomeTiles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GalusPeres/HomeTiles
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="HomeTiles" class="md-nav__button md-logo" aria-label="HomeTiles" data-md-component="logo">
+      
+  <img src="../images/logo.svg" alt="logo">
+
+    </a>
+    HomeTiles
+  </label>
+  
+    <div class="md-nav__source">
+      <a class="ht-header-support" href="https://buymeacoffee.com/galusperes" target="_blank" rel="noopener" aria-label="Buy Me a Coffee">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="116" height="32">
+</a>
+<a href="https://github.com/GalusPeres/HomeTiles" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GalusPeres/HomeTiles
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bridge Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Dashboard
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web Admin Panel
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web Admin Panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#creating-a-tile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a Tile
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Creating a Tile">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-specific-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#head-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Head Bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layouts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#colors-and-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Colors and rules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Colors and rules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#icon-color-by-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By value
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#icon-color-by-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By state
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#editing-climate-mini-tiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Climate mini-tiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moving-resizing-copying" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Move, resize, copy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings-tile-and-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings access
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#screensaver-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Screensaver Editor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#device-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Settings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Device Settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#web-admin-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Password
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#built-in-camera" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in Camera
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-hardware-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local Hardware I/O
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import / Export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#screenshot-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firmware-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Firmware Update
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-manager" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Manager
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device-ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On-Device UI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tile Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../screensaver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screensaver
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware-io/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Hardware I/O
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Help
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Help
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../updating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Firmware Updates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../device-logs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Device logs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#creating-a-tile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a Tile
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Creating a Tile">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#type-specific-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Type settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#head-bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Head Bar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layouts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#colors-and-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Colors and rules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Colors and rules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#icon-color-by-value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By value
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#icon-color-by-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By state
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#editing-climate-mini-tiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Climate mini-tiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moving-resizing-copying" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Move, resize, copy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings-tile-and-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings access
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#screensaver-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Screensaver Editor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#device-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Settings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Device Settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#web-admin-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Password
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#built-in-camera" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in Camera
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-hardware-io" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local Hardware I/O
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import / Export
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#screenshot-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#firmware-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Firmware Update
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-manager" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Manager
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="web-admin-panel">Web Admin Panel</h1>
+<p>Open <code>http://&lt;display-ip&gt;/</code> in your computer's browser to edit your dashboard. The display shows the address in the last step of its setup and under <strong>Settings → WiFi</strong>; Home Assistant shows it on the display's device page.</p>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-home.png" alt="Web Admin with the Home preview, the page fields and the tile settings" width="1450" height="1212" loading="lazy">
+<figcaption>Web Admin dashboard editor</figcaption>
+</figure>
+
+<p>Select a tile in the preview to open its settings. Each folder has its own tab, and the preview shows the display's current layout.</p>
+<div class="admonition tip">
+<p class="admonition-title">Changes save automatically</p>
+<p>Tile edits save as you make them and appear on the display.</p>
+</div>
+<h2 id="creating-a-tile">Creating a Tile</h2>
+<div class="ht-illustrated-intro">
+<div>
+<ol>
+<li>Click an empty cell.</li>
+<li>Choose a <strong>Type</strong>.</li>
+<li>Choose the entity where needed and adjust the tile.</li>
+</ol>
+<p>The <strong>entity picker</strong> searches like Home Assistant: type part of a name, an area or a device. <strong>Favorites</strong> puts this display's entities on top (those its tiles use and those selected for it in the Bridge), <strong>Recent</strong> the ones you picked most in this browser, and <strong>All</strong> lists everything that fits the tile. A paired display with a <a href="#web-admin-password">Web Admin password</a> finds every entity in Home Assistant; otherwise the picker offers the entities selected in the <a href="../bridge/#entity-configuration">Bridge options</a>. Picking an entity also takes its name and icon.</p>
+<p>Every tile has these settings:</p>
+<ul>
+<li><strong>Title:</strong> optional label; press <strong>Enter</strong> for a second line. Both lines are centered together, and each line ends in <code>...</code> if it exceeds the available width.</li>
+<li><strong>Icon (MDI):</strong> a <a href="https://pictogrammers.com/library/mdi/">Material Design Icon</a> name. <strong>Show icon list</strong> opens the catalog.</li>
+<li><strong>Color:</strong> the <strong>Icon color</strong>, and <strong>Fill</strong> to fill the tile with it. Without your own color the icon keeps the color of its entity, for example a light's color. Clock, Text and Animation tiles have their own color instead.</li>
+<li><strong>Advanced:</strong> options of the tile type, where it has any.</li>
+<li><strong>Column, Row, Width, Height:</strong> position and size in half steps.</li>
+</ul>
+<p>See <a href="../tiles/">Tile Types</a> to choose the right type.</p>
+</div>
+<figure class="ht-screenshot ht-editor-detail">
+<img src="../images/v09-webadmin-picker.png" alt="The entity picker with search, Recent, Favorites and All" width="473" height="668" loading="lazy">
+<figcaption>The entity picker</figcaption>
+</figure>
+</div>
+<h3 id="type-specific-settings">Type-specific settings</h3>
+<div class="ht-illustrated-intro">
+<div>
+<p>Fields depend on the selected type. A numeric Sensor offers:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Entity</td>
+<td>Sensor to display</td>
+</tr>
+<tr>
+<td>Unit</td>
+<td>Unit label, such as °C or W</td>
+</tr>
+<tr>
+<td>Decimals</td>
+<td>Decimal places</td>
+</tr>
+<tr>
+<td>Value size</td>
+<td>Size of the displayed value</td>
+</tr>
+<tr>
+<td>Display mode</td>
+<td>Text or a gauge with a minimum and maximum</td>
+</tr>
+</tbody>
+</table>
+<p>Number, Select, and Date/Time also offer <strong>Value size</strong> with the same choices as Sensor. In half-height tiles the value uses 20, 24, or 28. Choose the matching entity and whether a tap or long press opens its popup.</p>
+</div>
+<figure class="ht-screenshot ht-editor-detail">
+<img src="../images/v09-webadmin-tile.png" alt="Tile settings for a sensor tile with its icon color" width="473" height="955" loading="lazy">
+<figcaption>Sensor tile settings</figcaption>
+</figure>
+</div>
+<h2 id="global-settings">Global Settings</h2>
+<p>The <strong>Global</strong> tab next to <strong>Tile</strong> applies to the whole display:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Tile borders</strong></td>
+<td>Draws a thin line around the tiles. Clock and Text tiles can switch it off individually.</td>
+</tr>
+<tr>
+<td><strong>Layout</strong></td>
+<td>Shows the active layout and its grid; a click opens the <a href="#layouts">layout window</a>.</td>
+</tr>
+<tr>
+<td><strong>Theme</strong></td>
+<td><strong>Dark</strong>, <strong>Light</strong> or <strong>Automatic</strong> (light by day, dark at night), for the display and the Web Admin.</td>
+</tr>
+<tr>
+<td><strong>Edge swipes</strong></td>
+<td>One action per screen edge: <strong>Settings</strong>, <strong>Home</strong>, <strong>Back</strong>, or the <strong>screensaver</strong>. New displays open Settings from the top and go Home from the bottom.</td>
+</tr>
+</tbody>
+</table>
+<p>Corners, circles and the tile cards follow the theme; there is no separate radius or tile color setting.</p>
+<figure class="ht-screenshot ht-editor-detail">
+<img src="../images/v09-webadmin-global.png" alt="Global tab with tile borders, layout, theme and edge swipes" width="473" height="565" loading="lazy">
+<figcaption>The Global tab</figcaption>
+</figure>
+
+<h2 id="head-bar">Head Bar</h2>
+<p>In the head bar layouts the <strong>Head bar</strong> tab, between <strong>Tile</strong> and <strong>Global</strong>, sets Home's head:</p>
+<ul>
+<li><strong>Home title</strong> and icon: <strong>Auto</strong> shows "Home" in the display's language and the house.</li>
+<li><strong>Gear for Settings</strong>, <strong>Clock</strong>, and <strong>Page overview</strong> on the dots. Without the overview, the dots only show the page.</li>
+</ul>
+<figure class="ht-screenshot ht-editor-detail">
+<img src="../images/v09-webadmin-head.png" alt="Head bar tab with Home title, icon, gear, clock and page overview" width="473" height="355" loading="lazy">
+<figcaption>The Head bar tab</figcaption>
+</figure>
+
+<h2 id="layouts">Layouts</h2>
+<p>Every display keeps its tiles in three layouts: <strong>Classic</strong>, <strong>Head bar landscape</strong> and <strong>Head bar portrait</strong> (portrait only on ESP32-P4 displays that can stand upright). A click on the <strong>Layout</strong> field in the <strong>Global</strong> tab opens the layout window (<strong>Change layout</strong>):</p>
+<ul>
+<li>The screen is at the top left, the <strong>Storage</strong> to the right and below it. Drag tiles between them; a tile in the storage is not shown in that layout but keeps its settings.</li>
+<li>Each folder has room for its storage on top of its grid cells, so tiles in the storage never take the place a new tile on a free cell needs. When a layout's storage holds more tiles than it has room for, <strong>Save</strong> waits until you place or delete some.</li>
+<li>A folder that is completely full still shows the frame on a free cell; a click on it tells you so. Clear out the storage here and save.</li>
+<li>Each layout has its own tab and places. <strong>Copy from …</strong> takes the places of another layout as a start.</li>
+<li>A red tile has no place yet. While a folder or the Settings tile is red, <strong>Save</strong> and <strong>Switch</strong> wait: every folder must stay reachable.</li>
+<li><strong>X</strong> on a tile deletes it from every layout, after a question.</li>
+<li><strong>Switch</strong> restarts the display in the chosen layout. Its places stay saved when you switch back.</li>
+<li>The <strong>Screensaver</strong> tab places the screensaver's tiles and clock for this layout.</li>
+</ul>
+<p>Places are saved with <strong>Save</strong>; nothing changes on the display before that.</p>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-layout.png" alt="Layout window with the landscape head bar layout, its page fields and storage" width="1297" height="1134" loading="lazy">
+<figcaption>The layout window</figcaption>
+</figure>
+
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-layout-upright.png" alt="Layout window with the upright head bar layout" width="1297" height="1134" loading="lazy">
+<figcaption>The same tiles placed for the upright layout</figcaption>
+</figure>
+
+<h2 id="pages">Pages</h2>
+<p>In the head bar layouts, Home has five page fields beside or below its grid. Drag a folder tile from Home into a field: the folder becomes a page and its tile leaves Home. Drag it out again to make it a tile. A new folder can go straight into a free field. Pages have no PIN: a protected folder asks before its PIN is removed.</p>
+<p>On the display, the <a href="../device-ui/#head-bar-and-pages">page dots</a> show the pages in the order of the fields.</p>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-pages.png" alt="Page fields with the folders MISC, PV and Lighting and the Settings field" width="865" height="127" loading="lazy">
+<figcaption>Three folders as pages, and the Settings field</figcaption>
+</figure>
+
+<h2 id="colors-and-rules">Colors and Rules</h2>
+<p>A tile's color comes from its icon. Rules change the icon color while an entity has a matching state. Set <strong>Rules</strong> to <strong>On</strong> in the tile settings; a tile with its own entity starts at <strong>Own entity</strong> and <strong>Own rules</strong>:</p>
+<ul>
+<li><strong>Own entity / Other entity:</strong> follow the tile's own entity or any other entity. Button, Folder, Camera, Clock, and Text tiles have no entity of their own and always use another entity.</li>
+<li><strong>Entity color:</strong> use the color the entity shows itself: a light's color, heating or cooling on a climate entity, and the state colors of switches, covers, and binary sensors.</li>
+<li><strong>Own rules:</strong> choose the colors yourself, by value or by state (see below).</li>
+</ul>
+<p>While a rule matches, it wins. Otherwise the settings above apply. Without a state, for example while Home Assistant is offline, the tile keeps its icon color.</p>
+<h3 id="icon-color-by-value">Icon Color by Value</h3>
+<p>For Sensor, Energy, and Number tiles: a color bar between <strong>Min</strong> and <strong>Max</strong>. <strong>Smooth</strong> blends the colors, <strong>Steps</strong> changes at each marker. Start from <strong>Cold → Warm</strong>, <strong>Traffic light</strong>, <strong>Battery</strong>, <strong>Humidity</strong>, or <strong>Single color</strong>. Drag a marker to move it, click it to choose its color, and double-click the bar to add one (up to six). The tile's <strong>Fill</strong> fills it in the current color.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-rules.png" alt="Rules with a color bar from red over orange to green" width="437" height="710" loading="lazy">
+<figcaption>A battery from red to green</figcaption>
+</figure>
+</div>
+<h3 id="icon-color-by-state">Icon Color by State</h3>
+<p>For Sensor, Binary Sensor, Select, and Date/Time tiles: up to six states, each with a color. A row matches the exact state, or any state containing its text when <strong>contains</strong> is ticked; upper and lower case do not matter, and the first match wins. Binary sensors have one color for On and one for Off. Unavailable states keep the default color.</p>
+<p>Each row has its own <strong>Fill</strong>: the tile is filled only while that row matches, and stays a plain card otherwise. In this example, a waste sensor says when to put the bin out. Its row for "Today" colors the icon orange and fills the tile, so only the bin that goes out today stands out.</p>
+<div class="ht-type-shots">
+<figure class="ht-screenshot">
+<img src="../images/web-admin-rules-state.png" alt="Icon color by state with two contains rules" width="482" height="725" loading="lazy">
+<figcaption>State rules</figcaption>
+</figure>
+<figure class="ht-screenshot">
+<img style="width:150px" src="../images/v09-tile-sensor-rule.png" alt="Waste tile filled orange: paper goes out today" width="194" height="68" loading="lazy">
+<figcaption>"Today": filled</figcaption>
+</figure>
+</div>
+<h2 id="editing-climate-mini-tiles">Editing Climate Mini-Tiles</h2>
+<p>Click a Climate mini-tile in the preview to edit it, or drag it to another slot. The outline shows whether you are selecting the parent tile or a mini-tile.</p>
+<p>Choose temperature, humidity, targets, or mode. <strong>Automatic</strong> chooses values supported by the entity. <strong>Target</strong> is the single target temperature; <strong>Heating target</strong> and <strong>Cooling target</strong> are the two limits of devices that keep a range in Heat/Cool mode.</p>
+<p>Resizing the parent changes the available slots. Mini-tiles that still fit keep their place; only those without room are hidden until the tile grows again.</p>
+<figure class="ht-screenshot">
+<img src="../images/web-admin-climate.png" alt="Editing a Climate tile and its mini-tile content" width="1450" height="1212" loading="lazy">
+<figcaption>Climate tile and mini-tile editor</figcaption>
+</figure>
+
+<h2 id="moving-resizing-copying">Moving, Resizing, Copying</h2>
+<ul>
+<li><strong>Move:</strong> drag a tile to another cell.</li>
+<li><strong>Resize:</strong> drag its edge handles or enter <strong>Width / Height</strong>. Sizes change in half steps; almost every tile can also be half a cell high.</li>
+<li><strong>Copy / Paste:</strong> duplicate a tile, including between folders. Paste onto an empty cell where the copied size fits.</li>
+<li><strong>Delete:</strong> clear a tile back to an empty cell.</li>
+</ul>
+<h2 id="folders">Folders</h2>
+<p>Choose the <strong>Folder</strong> type to create a sub-page. It appears as a Web Admin tab. In the head bar layouts its head has an <strong>X</strong> to go back; the classic layout adds a back tile. A folder that still contains tiles keeps its type until you empty it.</p>
+<p><strong>Delete Folder / Tab</strong> removes the folder and its tiles.</p>
+<p>To protect a folder, select its tile, enable <strong>Protect this folder with a PIN</strong>, enter 4–8 digits, and press <strong>Apply PIN</strong>. The display then asks for the PIN before opening the folder. Folder PINs are stored only on that display and are excluded from exports.</p>
+<p>A folder tile can also show the state of what is inside: with <strong>Rules → On</strong>, the climate entity and <strong>Entity color</strong>, a <strong>Climate</strong> folder turns orange while heating and blue while cooling.</p>
+<p><a id="back-tile"></a></p>
+<p>In the classic layout, select the back tile to change its icon and color. It can be moved like any tile and made half a cell high.</p>
+<h2 id="settings-tile-and-access">Settings Tile and Access</h2>
+<p>Settings opens from the gear in the head, from the Settings tile, or by an <a href="#global-settings">edge swipe</a>. In the <a href="#layouts">layout window</a>, the Settings tile has its own field: a tile parked there is not shown in that layout. Each layout keeps its own choice.</p>
+<p>Select the Settings tile to set:</p>
+<ul>
+<li><strong>PIN protection:</strong> ask for a 4–8 digit PIN before Settings opens.</li>
+<li><strong>Hide tile:</strong> park the tile in the layout the display shows.</li>
+<li><strong>Gear in the head:</strong> the same as <strong>Gear for Settings</strong> in the <a href="#head-bar">Head bar</a> tab.</li>
+</ul>
+<p>The public factory PIN <strong>466384537</strong> unlocks Settings and protected folders. This is a local child lock, not a login; protect the Web Admin itself with a <a href="#web-admin-password">Web Admin password</a>. PINs are excluded from dashboard exports.</p>
+<h2 id="screensaver-editor">Screensaver Editor</h2>
+<p>Open the <strong>Screensaver</strong> tab. Select the background, clock, or a tile to edit it; drag to move and resize.</p>
+<p>See the <a href="../screensaver/">Screensaver guide</a> for images, activation, and available tiles. Its <strong>Tile borders</strong> setting is independent of the global <strong>Tile borders</strong> for the normal dashboard.</p>
+<h2 id="device-settings">Device Settings</h2>
+<p><strong>Settings</strong> lists the same pages as the display:</p>
+<ul>
+<li><strong>WiFi:</strong> WiFi credentials, connection type on Ethernet-capable devices, and an optional static IP shared by WiFi and Ethernet.</li>
+<li><strong>Localization:</strong> language, time zone, and date/time formats.</li>
+<li><strong>System:</strong> firmware update, the connection to Home Assistant, pairing, and the <a href="#web-admin-password">Web Admin password</a>. The <strong>MQTT</strong> settings are folded in here; while the direct link is active they stay saved but unused.</li>
+<li><strong>I/O:</strong> <a href="../hardware-io/">local hardware</a>.</li>
+<li><strong>Built-in camera:</strong> on displays with a camera, see below.</li>
+<li><strong>Files</strong> and <strong>Diagnostics:</strong> see below.</li>
+</ul>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-system.png" alt="Settings, System with firmware update, connection, MQTT, pairing and Web Admin password" width="1450" height="1212" loading="lazy">
+<figcaption>Device settings in the Web Admin</figcaption>
+</figure>
+
+<h3 id="web-admin-password">Web Admin Password</h3>
+<p>The Web Admin is open to everyone on your network by default. A password protects every page and API request, including the settings, restart, firmware upload, the file manager, and screenshots. On a paired display it also lets the entity picker find every Home Assistant entity, and <a href="../tiles/#lock">locks and alarm panels</a> need it.</p>
+<ol>
+<li>On the display, open <strong>Settings → System → Security</strong> and tap <strong>Allow</strong> next to <strong>Web Admin password</strong>.</li>
+<li>Within two minutes, enter the new password twice under <strong>Settings → System</strong> and select <strong>Set password</strong>.</li>
+</ol>
+<p>Only someone at the display can set the first password.</p>
+<ul>
+<li>The password is never sent in plain text: the browser proves it with a one-time challenge, and the display stores only a derived key.</li>
+<li>Wrong passwords lock the sign-in for an increasing time, up to five minutes.</li>
+<li>You stay signed in for 30 days, also after a restart or update of the display. <strong>Sign out</strong> ends the browser session; <strong>Remove password</strong> opens the Web Admin to the network again.</li>
+<li>Forgot the password? On the display, open <strong>Settings → System → Security</strong> and remove it.</li>
+</ul>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-password.png" alt="Web Admin password with Set password, Remove password and Sign out" width="1018" height="452" loading="lazy">
+<figcaption>Web Admin password</figcaption>
+</figure>
+
+<figure class="ht-screenshot">
+<img style="width:300px" src="../images/web-admin-sign-in.png" alt="Web Admin sign-in page" width="500" height="472" loading="lazy">
+<figcaption>Sign-in page</figcaption>
+</figure>
+
+<h3 id="built-in-camera">Built-in Camera</h3>
+<p>Displays with a supported camera show this section. <strong>Allow Home Assistant to use the built-in camera</strong> is off by default. When enabled, the display captures still images or a live stream only while the <a href="../bridge/#built-in-camera">HomeTiles Bridge</a> requests them.</p>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-camera.png" alt="Built-in camera settings" width="1018" height="764" loading="lazy">
+<figcaption>Built-in camera settings</figcaption>
+</figure>
+
+<ul>
+<li><strong>Mode:</strong> resolution, frame rate, and JPEG quality of the live stream. Higher values need more bandwidth.</li>
+<li><strong>Recording indicator:</strong> a red line at the top of the display and a circle in the head (a pill in the classic layout) to end the stream while the camera is in use.</li>
+<li><strong>Advanced:</strong> rotation, mirroring, and a red/blue swap for boards whose colors come out swapped.</li>
+<li><strong>Image:</strong> brightness, contrast, saturation, red and blue balance, and the maximum gain for dark rooms. <strong>Reset</strong> restores the defaults.</li>
+</ul>
+<h2 id="local-hardware-io">Local Hardware I/O</h2>
+<p>Open <strong>I/O</strong> to configure outputs, relays, or DS18B20 sensors. Only pins available for the selected device are offered. See <a href="../hardware-io/">Local Hardware I/O</a> for setup and wiring.</p>
+<h2 id="import-export">Import / Export</h2>
+<p><strong>Export</strong> saves folders, tiles, the places of every layout, the pages and the screensaver in one JSON file. It excludes local I/O assignments and PINs. Older files without layouts or screensaver data leave those unchanged.</p>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-import-export.png" alt="Import and export" width="1018" height="158" loading="lazy">
+<figcaption>Import and export settings</figcaption>
+</figure>
+
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Import replaces the folders, tiles, and screensaver data contained in the file.</p>
+</div>
+<h2 id="screenshot-diagnostics">Screenshot &amp; Diagnostics</h2>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-diagnostics.png" alt="Screenshot and diagnostics buttons" width="1018" height="158" loading="lazy">
+<figcaption>Screenshot and diagnostics</figcaption>
+</figure>
+
+<ul>
+<li><strong>Create &amp; Download Screenshot:</strong> saves and downloads a JPEG of the current screen; requires microSD.</li>
+<li><strong>Download crash log:</strong> downloads reset reasons and crash details.</li>
+<li><strong>Open SD diagnostics:</strong> runs a short write and read test on the microSD card and shows the report.</li>
+<li><strong>Core dump:</strong> download or delete a stored memory snapshot when one is available.</li>
+</ul>
+<p>See <a href="../faq/#the-display-crashed-or-restarted-by-itself">Reporting a crash</a> for the files and details to include.</p>
+<h2 id="firmware-update">Firmware Update</h2>
+<p>Check for releases or upload the matching OTA <code>.bin</code> under <strong>Settings → System</strong>. Follow <a href="../updating/">Firmware Updates</a> for the steps.</p>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-firmware.png" alt="Firmware update under Settings, System" width="1018" height="226" loading="lazy">
+<figcaption>Firmware update</figcaption>
+</figure>
+
+<h2 id="file-manager">File Manager</h2>
+<p>With a FAT32 microSD card inserted, use the file manager to upload, download, rename, or delete files and create folders. A card is optional for normal dashboard use.</p>
+<figure class="ht-screenshot">
+<img src="../images/v09-webadmin-files.png" alt="File manager for the microSD card" width="1018" height="570" loading="lazy">
+<figcaption>microSD file manager</figcaption>
+</figure>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../bridge/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Bridge Integration">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Bridge Integration
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../device-ui/" class="md-footer__link md-footer__link--next" aria-label="Next: On-Device UI">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                On-Device UI
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../assets/javascripts/docs-session.mjs?v=serial-navigation-7" type="module"></script>
+      
+    
+  </body>
+</html>

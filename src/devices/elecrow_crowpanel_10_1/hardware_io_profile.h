@@ -13,8 +13,6 @@ inline constexpr Device::HardwareIoPinOption kHardwareIoPins[] = {
      "GPIO 4"},
     {5, Device::kHardwareIoPinSwitch | Device::kHardwareIoPinTemperature,
      "GPIO 5"},
-    {6, Device::kHardwareIoPinSwitch | Device::kHardwareIoPinTemperature,
-     "GPIO 6"},
     {7, Device::kHardwareIoPinSwitch | Device::kHardwareIoPinTemperature,
      "GPIO 7 (I2C SDA)"},
     {8, Device::kHardwareIoPinSwitch | Device::kHardwareIoPinTemperature,

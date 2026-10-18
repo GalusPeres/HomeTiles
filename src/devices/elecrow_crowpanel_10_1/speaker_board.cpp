@@ -1,9 +1,15 @@
+#include "src/audio/speaker_select.h"
+
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) && defined(HOMETILES_SPEAKER)
+
 #include "src/devices/elecrow_crowpanel_10_1/speaker_board.h"
 
-#if defined(DEVICE_ELECROW_CROWPANEL_10_1)
+#include "src/devices/elecrow_crowpanel_10_1/device_elecrow_crowpanel_10_1.h"
 
-namespace DeviceElecrowCrowPanel10 {
+namespace speaker_board {
 
-}  // namespace DeviceElecrowCrowPanel10
+i2c_master_bus_handle_t bus() { return DeviceElecrowCrowPanel10::sharedI2cBus(); }
 
-#endif
+}  // namespace speaker_board
+
+#endif  // defined(DEVICE_WAVESHARE_TOUCH_LCD_10_1) && defined(HOMETILES_SPEAKER)

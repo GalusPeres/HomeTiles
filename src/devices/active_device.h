@@ -53,6 +53,9 @@ namespace DeviceImpl = DeviceLayoutTest480x480;
 #elif defined(DEVICE_WAVESHARE_4B)
 #include "src/devices/waveshare_4b/device_waveshare_4b.h"
 namespace DeviceImpl = DeviceWaveshare4B;
+#elif defined(DEVICE_ELECROW_CROWPANEL_10_1)
+#include "src/devices/elecrow_crowpanel_10_1/device_elecrow_crowpanel_10_1.h"
+namespace DeviceImpl = DeviceElecrowCrowPanel10;
 #else
 #error "No supported device target selected."
 #endif

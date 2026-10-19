@@ -3,7 +3,9 @@
 // only its final value, release and lost press both end it, the reported
 // state never moves a bar under the finger, closing cancels silently, an
 // unavailable player sends no zero, the time bar follows the SEEK feature and
-// the reported volume waits a moment after a volume drag.
+// after a drag both bars keep the chosen value until the player reports it
+// (b487 on hardware: the old value came back first and the knob jumped back
+// and forth), at most kRemoteHoldMs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -104,6 +106,8 @@ static void lv_obj_set_width(lv_obj_t* obj, int w) { obj->w = w; }
 static void lv_obj_set_x(lv_obj_t* obj, int x) { obj->x = x; }
 static int lv_obj_get_x(lv_obj_t* obj) { return obj->x; }
 static void lv_obj_delete(lv_obj_t*) {}
+static int async_calls = 0;
+static void lv_async_call(void (*)(void*), void*) { ++async_calls; }
 static void lv_label_set_text(lv_obj_t* obj, const char* text) { obj->text = text; }
 static const char* lv_label_get_text(lv_obj_t* obj) { return obj->text.c_str(); }
 static lv_point_t touch{0, 0};
@@ -142,7 +146,9 @@ ${fs.readFileSync(path.join(repoRoot, 'src/ui/shared/ui_theme.h'), 'utf8')}
 int8_t popup_drawn_surface(lv_obj_t*) { return ui_theme::kThemeSurface; }
 ${productionStruct(header, 'MediaPopupInit')}
 ${[...popup.matchAll(/^constexpr uint32_t kFeature\w+ = \d+;$/gm)].map(match => match[0]).join('\n')}
-${productionLine(/^constexpr uint32_t kVolumeHoldMs = \d+;$/m, 'kVolumeHoldMs')}
+${productionLine(/^constexpr uint32_t kRemoteHoldMs = \d+;$/m, 'kRemoteHoldMs')}
+${productionLine(/^constexpr float kSeekConfirmSeconds = [\d.]+f;$/m, 'kSeekConfirmSeconds')}
+${productionLine(/^constexpr int32_t kAnyVolume = \d+;$/m, 'kAnyVolume')}
 ${productionStruct(popup, 'MediaGroupCandidate')}
 ${productionStruct(popup, 'MediaExtras')}
 std::vector<MediaExtras> g_extras;
@@ -158,7 +164,8 @@ ${[
   'slider_touch_fraction', 'volume_icon_bucket_for_percent', 'volume_icon_for_bucket', 'place_volume_bubble',
   'set_volume_widgets', 'update_volume', 'format_media_time', 'current_media_position', 'set_seek_widgets',
   'update_seek', 'media_progress_timer_cb', 'seek_allowed', 'apply_volume_drag', 'on_volume_slider_event',
-  'apply_seek_drag', 'on_seek_slider_event', 'delete_list', 'close_media_popup', 'on_close_click', 'hide_media_popup',
+  'apply_seek_drag', 'on_seek_slider_event', 'delete_dead_lists', 'delete_list', 'close_media_popup', 'on_close_click',
+  'hide_media_popup',
 ].map(productionFunction).join('\n\n')}
 
 struct Fixture {
@@ -220,8 +227,14 @@ int main() {
     CHECK(near(f.context.media_position, 120) && f.context.media_position_received_ms == now_ms);
     now_ms += 1000; media_progress_timer_cb(&f.progress);
     CHECK(near(f.context.seek_slider.value, 0.605f) && f.current.text == "2:01");
+    // The old position reported again is no confirmation: the bar stays.
     f.init.media_position = 30; f.init.media_position_received_ms = now_ms;
     update_seek(&f.context, f.init);
+    CHECK(near(f.context.seek_slider.value, 0.605f) && f.context.seek_hold_until != 0);
+    // A position close to the chosen one confirms it; later reports show.
+    f.init.media_position = 121; update_seek(&f.context, f.init);
+    CHECK(near(f.context.seek_slider.value, 0.605f) && f.context.seek_hold_until == 0);
+    f.init.media_position = 30; update_seek(&f.context, f.init);
     CHECK(near(f.context.seek_slider.value, 0.15f) && near(f.context.media_position, 30));
     CHECK(seeks.size() == 1);
 
@@ -236,9 +249,28 @@ int main() {
     CHECK(!f.bubble_timer.paused && f.bubble_timer.resets == 1);
     update_volume(&f.context, f.init);
     CHECK(near(f.context.volume_slider.value, 0.64f));
-    now_ms += kVolumeHoldMs + 1;
+    now_ms += kRemoteHoldMs + 1;
     update_volume(&f.context, f.init);
     CHECK(near(f.context.volume_slider.value, 0.35f) && f.bubble.text == "35%");
+    // A report of the chosen volume ends the wait at once.
+    f.volume_to(50); dispatch(f.volume_track, LV_EVENT_PRESSED); dispatch(f.volume_track, terminal);
+    f.init.volume_level = 0.5f; update_volume(&f.context, f.init);
+    CHECK(f.context.volume_target_pct == -1);
+    f.init.volume_level = 0.2f; update_volume(&f.context, f.init);
+    CHECK(near(f.context.volume_slider.value, 0.2f));
+    f.init.volume_level = 0.35f;
+  }
+
+  // A seek the player never confirms shows its report after kRemoteHoldMs.
+  {
+    Fixture f;
+    f.seek_to(0.5f); dispatch(f.seek_track, LV_EVENT_PRESSED); dispatch(f.seek_track, LV_EVENT_RELEASED);
+    f.init.media_position = 10; f.init.media_position_received_ms = now_ms;
+    update_seek(&f.context, f.init);
+    CHECK(near(f.context.seek_slider.value, 0.5f));
+    now_ms += kRemoteHoldMs + 1; f.init.media_position_received_ms = now_ms;
+    update_seek(&f.context, f.init);
+    CHECK(near(f.context.seek_slider.value, 0.05f) && f.context.seek_hold_until == 0);
   }
 
   // Hiding from navigation/sleep and closing the card cancel the drag
@@ -253,6 +285,7 @@ int main() {
       on_close_click(&event);
     }
     CHECK(!f.context.seek_dragging && !f.context.volume_dragging && seeks.empty() && volumes.empty());
+    CHECK(f.context.seek_hold_until == 0 && f.context.volume_target_pct == -1);
     CHECK(lv_obj_has_flag(&f.card, LV_OBJ_FLAG_HIDDEN));
     CHECK(!lv_obj_has_flag(&f.overlay, LV_OBJ_FLAG_CLICKABLE));
     CHECK(lv_obj_has_flag(&f.bubble, LV_OBJ_FLAG_HIDDEN));
@@ -348,4 +381,4 @@ const compiled = spawnSync(compiler,
 assert.equal(compiled.status, 0, `${compiled.stdout}${compiled.stderr}`);
 const run = spawnSync(outputPath, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
-console.log('Media popup bars: final-only publishing, interrupted hide, unavailable state, SEEK feature and volume hold: PASS');
+console.log('Media popup bars: final-only publishing, interrupted hide, unavailable state, SEEK feature and the hold until confirmed: PASS');

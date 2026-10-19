@@ -44,7 +44,7 @@ bool mqttPublishMediaSelect(const char* entity_id, bool sound_mode, const char* 
 bool mqttPublishMediaGroup(const char* entity_id, bool join, const char* member);
 // The library (after memooox3's PR #87): one level of the player's media
 // browser (empty id and type = the root), answered on
-// {base}/stat/media/catalog/<page> or {base}/stat/media (error).
+// {base}/stat/media/catalog (each page) or {base}/stat/media (error).
 bool mqttPublishMediaBrowse(const char* entity_id, const char* session, uint32_t request_id,
                             const char* media_content_id, const char* media_content_type);
 // Plays a library entry (media_player.play_media).

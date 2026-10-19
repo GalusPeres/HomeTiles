@@ -10,7 +10,8 @@
 //   Request : {base}/cmnd/media
 //             {"entity_id","command":"browse_media","session","request_id",
 //              "media_content_id","media_content_type"}
-//   Catalog : {base}/stat/media/catalog/{page}   (one message per page)
+//   Catalog : {base}/stat/media/catalog          (one message per page; a
+//             fixed topic, the direct link takes no wildcard subscription)
 //   Error   : {base}/stat/media                  ({"status":"error",...})
 //
 // The Bridge only delivers catalog data. Navigation, pagination and error

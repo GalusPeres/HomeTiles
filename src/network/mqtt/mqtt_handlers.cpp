@@ -2097,7 +2097,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
     return;
   }
 
-  // The Media popup's library: catalog pages on {base}/stat/media/catalog/<n>,
+  // The Media popup's library: catalog pages on {base}/stat/media/catalog,
   // errors on {base}/stat/media, thumbnails on {base}/stat/media/thumb (after
   // memooox3's PR #87). Always through the large buffer.
   {
@@ -2108,7 +2108,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
         strncmp(topic + base_len, kMediaStat, sizeof(kMediaStat) - 1) == 0) {
       const char* rest = topic + base_len + sizeof(kMediaStat) - 1;
       const bool is_status = *rest == '\0';
-      const bool is_catalog = strncmp(rest, "/catalog/", 9) == 0;
+      const bool is_catalog = strcmp(rest, "/catalog") == 0;
       const bool is_thumb = strcmp(rest, "/thumb") == 0;
       if (is_status || is_catalog || is_thumb) {
         char* large_buf = mqttLargeBuffer();
@@ -2256,8 +2256,9 @@ void mqttSubscribeTopics() {
   if (networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + "/stat/value").c_str())) {
     ++queued;
   }
-  // The Media popup's library answers.
-  for (const char* leaf : {"/stat/media/catalog/+", "/stat/media", "/stat/media/thumb"}) {
+  // The Media popup's library answers. Fixed topics: the direct link takes
+  // no wildcard subscription (Bridge link_protocol.valid_topic).
+  for (const char* leaf : {"/stat/media/catalog", "/stat/media", "/stat/media/thumb"}) {
     if (networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + leaf).c_str())) ++queued;
   }
   for (const auto& route : kRoutes) {

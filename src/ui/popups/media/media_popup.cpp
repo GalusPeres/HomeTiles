@@ -12,6 +12,7 @@
 
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -85,9 +86,15 @@ constexpr uint32_t kThumbTimeoutMs = 6000;
 // The library builds its rows in steps while scrolling (a level has up to
 // 256 entries).
 constexpr size_t kLibraryRowsStep = 40;
-// After a volume drag the reported volume waits this long (the old value
-// still arrives once before Home Assistant applied the new one).
-constexpr uint32_t kVolumeHoldMs = 1500;
+// After a drag (and a mute) the bar keeps the chosen value until Home
+// Assistant reports it: the old value still arrives once or twice before the
+// player applied the new one, and the knob jumped back and forth. At most
+// this long.
+constexpr uint32_t kRemoteHoldMs = 5000;
+// A reported position this close to the chosen one confirms a seek.
+constexpr float kSeekConfirmSeconds = 3.0f;
+// A target volume that waits only for the mute state.
+constexpr int32_t kAnyVolume = 101;
 // Long texts: one line moves at a time (pause, across, pause, back).
 constexpr uint32_t kMarqueePauseMs = 2000;
 constexpr int kMarqueePxPerSecond = 18;
@@ -355,7 +362,21 @@ struct MediaPopupContext {
   uint32_t media_position_received_ms = 0;
   bool seek_dragging = false;
   bool volume_dragging = false;
+  uint32_t seek_hold_until = 0;    // 0: the reported position shows
   uint32_t volume_hold_until = 0;
+  int32_t volume_target_pct = -1;  // -1: the reported volume shows
+  bool volume_target_muted = false;
+  // The playing bars move only while Home Assistant reports "playing" (not
+  // on the play button's own immediate switch).
+  bool reported_playing = false;
+  String icon_name;
+  // The open source or speaker list: what it was built from, and a change
+  // that waits for the end of a scroll.
+  uint32_t list_signature = 0;
+  bool list_dirty = false;
+  // Lists taken down from one of their own rows' clicks: hidden at once,
+  // deleted after the event (delete_dead_lists).
+  std::vector<lv_obj_t*> dead_lists;
   bool has_volume = false;
   bool is_muted = false;
   int32_t last_volume_pct = 35;
@@ -583,8 +604,9 @@ static void update_volume(MediaPopupContext* ctx, const MediaPopupInit& init) {
   ctx->has_volume = init.has_volume;
   if (init.has_volume) lv_obj_remove_state(ctx->volume_slider.track, LV_STATE_DISABLED);
   else lv_obj_add_state(ctx->volume_slider.track, LV_STATE_DISABLED);
-  // A drag and the moment after it keep the finger's volume.
-  if (ctx->volume_dragging || static_cast<int32_t>(ctx->volume_hold_until - millis()) > 0) return;
+  // A drag keeps the finger's volume; after it the chosen volume stays until
+  // the player reports it (or kRemoteHoldMs passed).
+  if (ctx->volume_dragging) return;
 
   float volume = init.volume_level;
   if (volume < 0.0f) volume = 0.0f;
@@ -592,6 +614,12 @@ static void update_volume(MediaPopupContext* ctx, const MediaPopupInit& init) {
   int32_t pct = static_cast<int32_t>(volume * 100.0f + 0.5f);
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
+  if (ctx->volume_target_pct >= 0) {
+    const bool confirmed = (ctx->volume_target_pct == kAnyVolume || abs(pct - ctx->volume_target_pct) <= 1) &&
+                           init.is_muted == ctx->volume_target_muted;
+    if (!confirmed && static_cast<int32_t>(ctx->volume_hold_until - millis()) > 0) return;
+    ctx->volume_target_pct = -1;
+  }
   set_volume_widgets(ctx, pct, init.is_muted);
 }
 
@@ -657,17 +685,32 @@ static void set_seek_widgets(MediaPopupContext* ctx, float position, bool update
 static void update_seek(MediaPopupContext* ctx, const MediaPopupInit& init) {
   if (!ctx || !ctx->seek_slider.track) return;
   ctx->is_playing = init.is_playing;
-  ctx->has_media_position = init.has_media_position && init.media_duration > 0.0f;
-  ctx->media_duration = ctx->has_media_position ? init.media_duration : 0.0f;
-  if (!ctx->seek_dragging) {
-    ctx->media_position = ctx->has_media_position ? init.media_position : 0.0f;
-    ctx->media_position_received_ms = ctx->has_media_position
-                                          ? (init.media_position_received_ms != 0
-                                                 ? init.media_position_received_ms
-                                                 : millis())
-                                          : 0;
-    set_seek_widgets(ctx, current_media_position(ctx), true);
+  const bool known = init.has_media_position && init.media_duration > 0.0f;
+  if (ctx->seek_dragging) {
+    // A position that went away ends the drag without a command.
+    ctx->has_media_position = known;
+    ctx->media_duration = known ? init.media_duration : 0.0f;
+    return;
   }
+  if (ctx->seek_hold_until) {
+    // After a seek the chosen position plays on until the player reports
+    // one close to it (or kRemoteHoldMs passed).
+    float reported = known ? init.media_position : 0.0f;
+    if (known && init.is_playing && init.media_position_received_ms) {
+      reported += static_cast<float>(static_cast<uint32_t>(millis() - init.media_position_received_ms)) / 1000.0f;
+    }
+    const bool confirmed = known && fabsf(reported - current_media_position(ctx)) <= kSeekConfirmSeconds;
+    if (!confirmed && static_cast<int32_t>(ctx->seek_hold_until - millis()) > 0) return;
+    ctx->seek_hold_until = 0;
+  }
+  ctx->has_media_position = known;
+  ctx->media_duration = known ? init.media_duration : 0.0f;
+  ctx->media_position = known ? init.media_position : 0.0f;
+  ctx->media_position_received_ms = known
+                                        ? (init.media_position_received_ms != 0 ? init.media_position_received_ms
+                                                                                : millis())
+                                        : 0;
+  set_seek_widgets(ctx, current_media_position(ctx), true);
 }
 
 static void media_progress_timer_cb(lv_timer_t* timer) {
@@ -705,7 +748,7 @@ void bars_draw_cb(lv_event_t* e) {
   dsc.bg_opa = LV_OPA_COVER;
   dsc.radius = ml::kBarWidth / 2;
   const uint32_t now = lv_tick_get();
-  const bool playing = ctx && ctx->is_playing;
+  const bool playing = ctx && ctx->reported_playing;
   for (int i = 0; i < 4; ++i) {
     const int bar = std::max(ml::kBarWidth, static_cast<int>(height * bar_level(now, i, playing) + 0.5f));
     lv_area_t a;
@@ -739,7 +782,7 @@ void marquee_step(MediaPopupContext* ctx, uint32_t now) {
 static void media_motion_timer_cb(lv_timer_t* timer) {
   MediaPopupContext* ctx = timer ? static_cast<MediaPopupContext*>(lv_timer_get_user_data(timer)) : nullptr;
   if (!popup_visible(ctx) || ctx->view != MediaView::Player) return;
-  if (ctx->bars && ctx->is_playing) lv_obj_invalidate(ctx->bars);
+  if (ctx->bars && ctx->reported_playing) lv_obj_invalidate(ctx->bars);
   marquee_step(ctx, lv_tick_get());
 }
 
@@ -950,6 +993,12 @@ void reset_player_parts(MediaPopupContext* ctx) {
 }
 
 static void build_player(MediaPopupContext* ctx, bool centered) {
+  static uint32_t last_log_ms = 0;
+  if (!last_log_ms || millis() - last_log_ms > 5000) {
+    last_log_ms = millis();
+    Serial.printf("[MediaPopup] Player built: %s, colors %08lx\n", centered ? "cover centred" : "cover left",
+                  static_cast<unsigned long>(colors_key(ctx->colors)));
+  }
   const int side_before = ctx->cover_side;
   if (ctx->player) lv_obj_delete(ctx->player);
   reset_player_parts(ctx);
@@ -1143,11 +1192,25 @@ String view_title(MediaPopupContext* ctx) {
   }
 }
 
+// The player's head shows the tile icon's state form like Home Assistant
+// (speaker-play, speaker-pause, speaker-off, television-play ...) where the
+// icon has one (user 2026-10-19, as in the draft); else the tile's icon.
+String head_icon(const MediaPopupContext* ctx, const String& state) {
+  if (!ctx->icon_name.length() || getMdiChar(ctx->icon_name) != ctx->icon_char) return ctx->icon_char;
+  const char* suffix = state.equalsIgnoreCase("playing")  ? "-play"
+                       : state.equalsIgnoreCase("paused") ? "-pause"
+                       : (state.equalsIgnoreCase("off") || state.equalsIgnoreCase("standby")) ? "-off"
+                                                                                               : nullptr;
+  if (!suffix) return ctx->icon_char;
+  const String variant = ctx->icon_name + suffix;
+  return getMdiCodepoint(variant) != mdiUnknownIconCodepoint() ? getMdiChar(variant) : ctx->icon_char;
+}
+
 static void show_head(MediaPopupContext* ctx) {
   const bool player = ctx->view == MediaView::Player;
   hometiles_title::set(ctx->title_label, view_title(ctx).c_str());
   if (player) {
-    lv_label_set_text(ctx->icon_label, ctx->icon_char.c_str());
+    lv_label_set_text(ctx->icon_label, head_icon(ctx, extras_of(ctx->entity_id).state).c_str());
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ctx->icon_color), 0);
     lv_label_set_text(ctx->value_label, media_state_text(extras_of(ctx->entity_id).state));
   } else {
@@ -1347,6 +1410,7 @@ void thumb_tick(MediaPopupContext* ctx) {
 
 // ---- The library ----------------------------------------------------------------
 static void open_view(MediaPopupContext* ctx, MediaView view);
+static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll);
 
 static void on_library_row(lv_event_t* e) {
   MediaPopupContext* ctx = g_media_popup_ctx;
@@ -1419,10 +1483,23 @@ void show_library_status(MediaPopupContext* ctx) {
   set_shown(ctx->library_status, *text != '\0');
 }
 
+static void rebuild_dirty_list(void*) {
+  MediaPopupContext* ctx = g_media_popup_ctx;
+  if (!ctx || !ctx->list_dirty || !ctx->list || !popup_visible(ctx)) return;
+  const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
+  rebuild_list(ctx, true);
+}
+
 static void on_list_scroll_end(lv_event_t* e) {
   MediaPopupContext* ctx = g_media_popup_ctx;
-  if (!ctx || ctx->view != MediaView::Library || !ctx->list) return;
-  if (lv_event_get_code(e) != LV_EVENT_SCROLL_END) return;
+  if (!ctx || !ctx->list || lv_event_get_code(e) != LV_EVENT_SCROLL_END) return;
+  // A change that came while scrolling, after the scroll (outside the
+  // list's own event).
+  if (ctx->list_dirty) {
+    lv_async_call(rebuild_dirty_list, nullptr);
+    return;
+  }
+  if (ctx->view != MediaView::Library) return;
   if (ctx->library_rows >= media_browse_items().size()) return;
   if (lv_obj_get_scroll_bottom(ctx->list) > 3 * ml::kRowHeight) return;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
@@ -1486,7 +1563,6 @@ void build_sources(MediaPopupContext* ctx) {
 }
 
 // ---- Speakers: players of the same integration with GROUPING --------------------
-static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll);
 
 static void on_group_row(lv_event_t* e) {
   MediaPopupContext* ctx = g_media_popup_ctx;
@@ -1536,9 +1612,51 @@ void build_group(MediaPopupContext* ctx) {
 }
 
 // ---- Views -------------------------------------------------------------------------
+// What the source or speaker list shows: a state update rebuilds it only
+// when this changed (every update rebuilt it, also while scrolling).
+uint32_t list_signature(const MediaPopupContext* ctx) {
+  const MediaExtras& x = extras_of(ctx->entity_id);
+  String key = x.state;
+  key += '\x1f';
+  key += String(x.features);
+  key += '\x1f';
+  key += x.source;
+  key += '\x1f';
+  key += x.sound_mode;
+  for (const std::vector<String>* list : {&x.sources, &x.sound_modes, &x.members}) {
+    key += '\x1d';
+    for (const String& item : *list) {
+      key += item;
+      key += '\x1e';
+    }
+  }
+  for (const MediaGroupCandidate& candidate : x.candidates) {
+    key += candidate.entity_id;
+    key += candidate.name;
+    key += candidate.state;
+    key += '\x1e';
+  }
+  key += ctx->title;
+  return text_hash(key.c_str());
+}
+
+void delete_dead_lists(void*) {
+  MediaPopupContext* ctx = g_media_popup_ctx;
+  if (!ctx) return;  // deleted with the popup
+  for (lv_obj_t* list : ctx->dead_lists) lv_obj_delete(list);
+  ctx->dead_lists.clear();
+}
+
 void delete_list(MediaPopupContext* ctx) {
-  if (ctx->list) lv_obj_delete(ctx->list);
+  // The list may go from one of its own rows' click: hidden now, deleted
+  // after the event; a popup deleted first takes it along.
+  if (ctx->list) {
+    lv_obj_add_flag(ctx->list, LV_OBJ_FLAG_HIDDEN);
+    if (ctx->dead_lists.empty()) lv_async_call(delete_dead_lists, nullptr);
+    ctx->dead_lists.push_back(ctx->list);
+  }
   ctx->list = nullptr;
+  ctx->list_dirty = false;
   ctx->library_status = nullptr;
   ctx->library_rows = 0;
   ctx->thumb_rows.clear();
@@ -1563,6 +1681,7 @@ static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
   if (ctx->view == MediaView::Library) build_library(ctx);
   else if (ctx->view == MediaView::Source) build_sources(ctx);
   else if (ctx->view == MediaView::Group) build_group(ctx);
+  ctx->list_signature = list_signature(ctx);
   if (scroll) {
     lv_obj_update_layout(ctx->list);
     lv_obj_scroll_to_y(ctx->list, scroll, LV_ANIM_OFF);
@@ -1642,7 +1761,6 @@ static void on_media_command(lv_event_t* e) {
       ctx->media_position = position;
       ctx->media_position_received_ms = millis();
       set_icon(ctx->play_pause_label, ctx->is_playing ? "pause" : "play");
-      if (ctx->bars) lv_obj_invalidate(ctx->bars);
       mqttPublishMediaCommand(ctx->entity_id.c_str(), "play_pause");
       break;
     }
@@ -1683,7 +1801,9 @@ static void apply_volume_drag(MediaPopupContext* ctx, float fraction, bool relea
     if (ctx->bubble_timer) lv_timer_pause(ctx->bubble_timer);
     return;
   }
-  ctx->volume_hold_until = millis() + kVolumeHoldMs;
+  ctx->volume_target_pct = raw;
+  ctx->volume_target_muted = false;
+  ctx->volume_hold_until = millis() + kRemoteHoldMs;
   mqttPublishMediaVolume(ctx->entity_id.c_str(), static_cast<float>(raw) / 100.0f);
   const MediaExtras& x = extras_of(ctx->entity_id);
   // A muted player plays again at the chosen volume.
@@ -1721,6 +1841,8 @@ static void apply_seek_drag(MediaPopupContext* ctx, float fraction, bool release
   if (released) {
     ctx->media_position = position;
     ctx->media_position_received_ms = millis();
+    ctx->seek_hold_until = millis() + kRemoteHoldMs;
+    if (!ctx->seek_hold_until) ctx->seek_hold_until = 1;
     mqttPublishMediaSeek(ctx->entity_id.c_str(), position);
   }
 }
@@ -1751,7 +1873,9 @@ static void on_volume_mute_click(lv_event_t* e) {
     const bool mute = !ctx->is_muted;
     mqttPublishMediaMute(ctx->entity_id.c_str(), mute);
     set_volume_widgets(ctx, mute ? 0 : ctx->last_volume_pct, mute);
-    ctx->volume_hold_until = millis() + kVolumeHoldMs;
+    ctx->volume_target_pct = kAnyVolume;
+    ctx->volume_target_muted = mute;
+    ctx->volume_hold_until = millis() + kRemoteHoldMs;
     return;
   }
   int32_t current = static_cast<int32_t>(ctx->volume_slider.value * 100.0f + 0.5f);
@@ -1760,6 +1884,9 @@ static void on_volume_mute_click(lv_event_t* e) {
     next = ctx->last_volume_pct > 0 ? ctx->last_volume_pct : 35;
   }
   set_volume_widgets(ctx, next, next == 0);
+  ctx->volume_target_pct = next;
+  ctx->volume_target_muted = false;
+  ctx->volume_hold_until = millis() + kRemoteHoldMs;
   mqttPublishMediaVolume(ctx->entity_id.c_str(), static_cast<float>(next) / 100.0f);
 }
 
@@ -1768,6 +1895,8 @@ static void close_media_popup(MediaPopupContext* ctx) {
   if (!ctx || !ctx->overlay || !ctx->card) return;
   ctx->seek_dragging = false;
   ctx->volume_dragging = false;
+  ctx->seek_hold_until = 0;
+  ctx->volume_target_pct = -1;
   hide_popup_shell(ctx->card);
   cancel_popup_open(ctx->card);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
@@ -1802,6 +1931,7 @@ static void on_overlay_delete(lv_event_t* e) {
   }
   media_browse_set_listener(nullptr);
   media_browse_reset();
+  ctx->dead_lists.clear();  // deleted with the card
   free_cover_dsc(ctx->cover_dsc);
   if (g_media_popup_ctx == ctx) g_media_popup_ctx = nullptr;
   delete ctx;
@@ -1832,6 +1962,7 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
     if (!icon_char.length()) icon_char = getMdiChar("television");
   }
   ctx->icon_char = icon_char;
+  ctx->icon_name = normalizeMdiIconName(init.icon_name);
   if (ctx->card) lv_obj_set_style_bg_color(ctx->card, lv_color_hex(ctx->bg_color), 0);
 
   // The player is built again only for another layout or other colors.
@@ -1843,14 +1974,19 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
   }
   if (ctx->fallback_icon) lv_label_set_text(ctx->fallback_icon, ctx->icon_char.c_str());
 
-  const bool was_playing = ctx->is_playing;
+  const bool was_playing = ctx->reported_playing;
+  ctx->reported_playing = init.is_playing;
   apply_media_text(ctx, init);
   set_icon(ctx->play_pause_label, init.is_playing ? "pause" : "play");
   update_seek(ctx, init);
   update_volume(ctx, init);
   update_cover(ctx, init.cover_dsc, init.cover_hash);
-  if (ctx->bars && was_playing != ctx->is_playing) lv_obj_invalidate(ctx->bars);
-  if (ctx->view == MediaView::Source || ctx->view == MediaView::Group) rebuild_list(ctx, true);
+  if (ctx->bars && was_playing != ctx->reported_playing) lv_obj_invalidate(ctx->bars);
+  if ((ctx->view == MediaView::Source || ctx->view == MediaView::Group) && ctx->list &&
+      list_signature(ctx) != ctx->list_signature) {
+    if (lv_obj_is_scrolling(ctx->list)) ctx->list_dirty = true;
+    else rebuild_list(ctx, true);
+  }
   show_head(ctx);
   apply_availability(ctx);
   if (ctx->motion_timer && popup_visible(ctx)) lv_timer_resume(ctx->motion_timer);
@@ -1912,8 +2048,9 @@ static void prepare_media_popup_open(const MediaPopupInit& init) {
   if (!icon.length()) icon = getMdiChar(init.icon_name);
   if (!icon.length()) icon = getMdiChar("television");
   ctx->icon_char = icon;
+  ctx->icon_name = normalizeMdiIconName(init.icon_name);
   ctx->icon_color = init.icon_color;
-  lv_label_set_text(ctx->icon_label, icon.c_str());
+  lv_label_set_text(ctx->icon_label, head_icon(ctx, extras_of(init.entity_id).state).c_str());
   lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ctx->icon_color), 0);
   lv_obj_set_style_bg_color(ctx->card,
       lv_color_hex(init.bg_color ? init.bg_color : ui_theme::popup_card()), 0);

@@ -33,6 +33,26 @@ void mqttPublishMediaCommand(const char* entity_id, const char* command);
 void mqttPublishMediaSeek(const char* entity_id, float position_seconds);
 void mqttPublishMediaVolume(const char* entity_id, float volume_level);
 void mqttPublishMediaMute(const char* entity_id, bool muted);
+// The Media popup's controls (Bridge v0.9.4b1 and newer checks each against
+// the player's features and lists). True when the command was queued.
+bool mqttPublishMediaShuffle(const char* entity_id, bool shuffle);
+// mode: "off", "all" or "one".
+bool mqttPublishMediaRepeat(const char* entity_id, const char* mode);
+// A source (sound_mode false) or sound mode from the player's own list.
+bool mqttPublishMediaSelect(const char* entity_id, bool sound_mode, const char* value);
+// join: member joins entity_id's group; else member leaves its group.
+bool mqttPublishMediaGroup(const char* entity_id, bool join, const char* member);
+// The library (after memooox3's PR #87): one level of the player's media
+// browser (empty id and type = the root), answered on
+// {base}/stat/media/catalog/<page> or {base}/stat/media (error).
+bool mqttPublishMediaBrowse(const char* entity_id, const char* session, uint32_t request_id,
+                            const char* media_content_id, const char* media_content_type);
+// Plays a library entry (media_player.play_media).
+bool mqttPublishMediaPlay(const char* entity_id, const char* media_content_id, const char* media_content_type);
+// One library thumbnail as a size x size JPEG padded with bg_rgb, answered on
+// {base}/stat/media/thumb.
+bool mqttPublishMediaThumbnail(const char* entity_id, const char* session, uint32_t thumb_id, const char* url,
+                               uint16_t size, uint32_t bg_rgb);
 // fps 0 asks for camera_geometry::kFps.
 void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps = 0);

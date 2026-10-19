@@ -13,6 +13,9 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = data.sensor_entity || data.media_entity || '';
+    const layout = document.getElementById(prefix + '_media_layout');
+    if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromMedia(tab);
     updateMediaValuePreview(tab);
   }
@@ -23,6 +26,7 @@ function maybeFillTitleFromMedia(tab) {
     const entity = document.getElementById(prefix + '_media_entity')?.value || '';
     formData.append('media_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('media_layout', document.getElementById(prefix + '_media_layout')?.value === '1' ? '1' : '0');
   }
 
   function resetMediaFields(tab) {
@@ -30,6 +34,9 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = '';
+    const layout = document.getElementById(prefix + '_media_layout');
+    if (layout) layout.value = '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
   // --- Tile preview -------------------------------------------------------

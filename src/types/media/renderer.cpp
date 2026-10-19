@@ -48,6 +48,7 @@ struct MediaPopupEventData {
   uint32_t bg_color = 0;  // 0: the popup takes its default card
   GridType grid_type = GridType::TAB0;
   uint8_t grid_index = 0;
+  bool cover_centered = false;  // the popup's layout (mediaPopupCoverCentered)
 };
 
 static void free_cover_dsc(MediaCoverRef* ref) {
@@ -173,6 +174,8 @@ static void show_media_popup_event_cb(lv_event_t* e) {
   init.has_volume = widgets.has_media_volume;
   init.volume_level = widgets.media_volume_level;
   init.is_muted = widgets.media_is_muted;
+  init.available = widgets.available;
+  init.cover_centered = data->cover_centered;
   const bool cover_visible = widgets.cover_ref &&
                              widgets.cover_ref->dsc &&
                              widgets.cover_clip &&
@@ -527,7 +530,8 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
         icon_name,
         card_color,
         grid_type,
-        index
+        index,
+        mediaPopupCoverCentered(tile)
       };
       lv_obj_add_event_cb(card, show_media_popup_event_cb, LV_EVENT_SHORT_CLICKED, popup_data);
       lv_obj_add_event_cb(card, media_popup_event_data_delete_cb, LV_EVENT_DELETE, popup_data);

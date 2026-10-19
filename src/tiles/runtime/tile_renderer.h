@@ -134,6 +134,10 @@ void tile_renderer_media_picture_arrived(const char* entity_id);
 void queue_weather_tile_update(GridType grid_type, uint8_t grid_index, const char* payload);
 void process_weather_update_queue(uint8_t max_updates = 0);  // 0 drains the queue
 
+// A JPEG/PNG in Base64 as an owned RGB565 image (the Media library's
+// thumbnails, after memooox3's PR #87); free it with tile_renderer_free_image_dsc.
+lv_image_dsc_t* tile_renderer_decode_image_base64(const String& encoded);
+void tile_renderer_free_image_dsc(lv_image_dsc_t*& dsc);
 // UI-thread lookup for the deferred popup body; the caller copies pixels immediately.
 const lv_image_dsc_t* tile_renderer_find_media_cover(const String& entity_id, uint32_t& hash);
 // The "From cover" color a shown media card of the entity sampled from its

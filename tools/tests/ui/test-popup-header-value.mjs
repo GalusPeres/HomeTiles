@@ -1,7 +1,7 @@
 // Sensor, Number, Select, Date/Time, Binary Sensor and Energy popups show the
 // entity's current value in the shared header: a smaller white title above
 // the white value, both next to the icon disc; the PIN popup shows the state
-// "Locked" there. Every other popup keeps the classic header. The value is copied from a hidden holder label, so live
+// "Locked" there, the Media popup the player's state (user 2026-10-19). Every other popup keeps the classic header. The value is copied from a hidden holder label, so live
 // updates repaint only the header line and an unchanged header never redraws.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -53,7 +53,8 @@ const shellCalls = file => [...code(read(file)).matchAll(/show_popup_shell\(([^;
   }
   return {count, args: match[1].replace(/\s+/g, ' ')};
 });
-for (const file of ['src/ui/popups/sensor/sensor_popup.cpp', 'src/ui/popups/energy/energy_popup.cpp']) {
+for (const file of ['src/ui/popups/sensor/sensor_popup.cpp', 'src/ui/popups/energy/energy_popup.cpp',
+  'src/ui/popups/media/media_popup.cpp']) {
   const calls = shellCalls(file);
   assert.ok(calls.length > 0, file);
   for (const call of calls)
@@ -66,7 +67,7 @@ for (const file of ['src/ui/popups/sensor/sensor_popup.cpp', 'src/ui/popups/ener
   for (const call of calls)
     assert.ok(call.count === 7 && /nullptr, g_ctx->state_label$/.test(call.args), 'PIN popup passes its state holder');
 }
-for (const popup of ['light', 'climate', 'cover', 'media', 'camera', 'weather']) {
+for (const popup of ['light', 'climate', 'cover', 'camera', 'weather']) {
   const file = `src/ui/popups/${popup}/${popup}_popup.cpp`;
   for (const call of shellCalls(file)) assert.ok(call.count <= 6, `${popup} keeps the classic header`);
 }

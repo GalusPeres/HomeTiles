@@ -362,6 +362,8 @@
       syncClimateSlotFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
     });
     bindLive(document.getElementById(prefix + '_cover_value_font'), 'change', 'coverValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // The Media popup's layout (cover left or centred); the tile looks the same.
+    bindLive(document.getElementById(prefix + '_media_layout'), 'change', 'mediaLayout', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(coverSelect, 'change', 'coverEntity', () => {
       maybeFillTitleFromEntity(tab, '_cover_entity');
       updateTilePreview(tab);

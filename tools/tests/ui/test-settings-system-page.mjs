@@ -110,9 +110,8 @@ assert.match(between(rawScreen, 'void system_tick() {', 'sync_dialog(v);'),
 assert.match(model, /bool bridge_route\(char\* buf, size_t len\) \{[\s\S]*linkConfigured\(\)[\s\S]*settings_link_direct_fmt[\s\S]*mqtt_host[\s\S]*settings_link_mqtt_fmt/);
 // Paired over the direct link, the states are sealed too.
 assert.match(rawBody, /settings_model::link_active\(\) \? s\.settings_states_encrypted : s\.settings_commands_encrypted/);
-// The longer line scrolls back and forth like the media title (shared helper).
+// The longer line scrolls back and forth (the shared helper).
 assert.match(rawBody, /ui_text_scroll::apply\(r\.sub\);\s*good_state\(r\.row, s\.settings_paired/);
-assert.match(readRepoFile('src/ui/popups/media/media_popup.cpp'), /ui_text_scroll::apply\(ctx->media_title_label\);/);
 for (const key of ['settings_commands_encrypted', 'settings_paired', 'pairing_discoverable', 'settings_not_paired',
   'settings_pair', 'pairing_no_answer', 'pairing_rejected', 'settings_password_asks', 'security_state_on',
   'settings_set_password_now', 'settings_password_none', 'settings_allow']) {

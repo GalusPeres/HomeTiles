@@ -906,6 +906,7 @@
       }
     } else if (safeType === MEDIA_TILE_TYPE) {
       fd.append('media_entity', tile.sensor_entity || tile.media_entity || '');
+      fd.append('media_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
     } else if (safeType === 17) {
       fd.append('climate_entity', tile.sensor_entity || tile.climate_entity || '');
       fd.append(

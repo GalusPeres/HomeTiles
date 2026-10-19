@@ -32,7 +32,7 @@ function maybeFillTitleFromSwitch(tab) {
   // event, so the existing preview, draft and autosave bindings run.
   // The Climate tile's Layout and the Camera tile's choices use the same
   // segmented choice.
-  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view',
+  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
     'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
     'camera_head', 'camera_tap'];
 

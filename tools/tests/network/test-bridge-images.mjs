@@ -103,9 +103,9 @@ assert.equal((handlers.match(/if \(networkManager\.linkConfigured\(\)\) \{\s*add
   'folder and screensaver Media tiles subscribe the cover only over the link');
 
 const images = readRepoFile('src/network/bridge/bridge_images.cpp');
-assert.match(images, /return static_cast<uint16_t>\(popup_layout::scale\(240\)\);/);
-assert.match(readRepoFile('src/ui/popups/media/media_popup.cpp'), /constexpr int kCoverSize = popup_layout::scale\(240\);/,
-  'the cover picture has the size the Media popup shows');
+assert.match(images, /return static_cast<uint16_t>\(media_popup_layout::kLeftCoverSide\);/);
+assert.match(readRepoFile('src/ui/popups/media/media_popup.cpp'), /int side = ml::kLeftCoverSide;/,
+  'the cover picture has the size the Media popup shows ("Cover links"; the centred cover takes a copy)');
 assert.match(images, /if \(!entityFromTopic\(topic, prefix, entity, sizeof\(entity\), &width, &height, &fit\)\) return false;/);
 assert.match(images, /if \(!parseHeader\(payload, length, header\) \|\| header\.width != width \|\| header\.height != height\) \{/,
   'a picture has exactly the size its topic asked for');

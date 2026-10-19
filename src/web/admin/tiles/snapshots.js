@@ -124,6 +124,10 @@
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'camera_entity')) {
       tile.sensor_entity = snapshot.camera_entity || '';
     }
+    // The Media popup's layout in its stored field (types/media/admin.js).
+    if (Number(tile.type) === 15 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'media_layout')) {
+      tile.sensor_display_mode = String(snapshot.media_layout) === '1' ? 1 : 0;
+    }
     // The Camera tile's picture options in their stored fields (types/camera/admin.js).
     if (Number(tile.type) === 18 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'camera_display')) {
       tile.sensor_display_mode = String(snapshot.camera_display) === '1' ? 1 : 0;

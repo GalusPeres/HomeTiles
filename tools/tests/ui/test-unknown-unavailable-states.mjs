@@ -37,14 +37,22 @@ assert.ok(mediaTile.includes('if (lv_obj_has_state(static_cast<lv_obj_t*>(lv_eve
 // Media popup: buttons disabled and every command handler checks it.
 const popup = read('src/ui/popups/media/media_popup.cpp');
 assert.ok(popup.includes('ctx->available = init.available;') && popup.includes('apply_availability(ctx);'));
-assert.ok(popup.includes('{ctx->previous_label, ctx->play_pause_label, ctx->next_label, ctx->volume_icon_label}'));
+{
+  const start = popup.indexOf('static void apply_availability(MediaPopupContext* ctx) {');
+  const body = popup.slice(start, popup.indexOf('\n}\n', start));
+  for (const label of ['shuffle_label', 'previous_label', 'play_pause_label', 'next_label', 'repeat_label',
+    'volume_icon_label', 'group_label']) assert.ok(body.includes(`ctx->${label}`), `${label} dims while unavailable`);
+  assert.ok(body.includes('set_control_enabled(ctx->source_button, ctx->available);') &&
+    body.includes('set_control_enabled(ctx->library_button, ctx->available);'));
+}
 for (const handler of ['static void on_media_command(', 'static void on_volume_slider_event(',
   'static void on_seek_slider_event(', 'static void on_volume_mute_click(']) {
-  const start = popup.indexOf(handler);
+  // The definition, not the forward declaration.
+  const start = popup.indexOf(`${handler}lv_event_t* e) {`);
   assert.ok(start >= 0, handler);
   assert.ok(popup.slice(start, popup.indexOf('\n}\n', start)).includes('available'), `${handler} checks availability`);
 }
-assert.equal((popup.match(/LV_OPA_30, LV_PART_MAIN \| LV_STATE_DISABLED/g) || []).length, 2,
-  'control buttons and the volume button dim while disabled');
+assert.equal((popup.match(/LV_OPA_30, LV_PART_MAIN \| LV_STATE_DISABLED/g) || []).length, 3,
+  'the round controls, the head buttons and the sliders dim while disabled');
 
 console.log('Unknown is inactive grey; an unavailable player disables its controls');

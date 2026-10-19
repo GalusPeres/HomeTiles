@@ -3174,6 +3174,7 @@ static void update_media_popup_from_widgets(GridType grid_type,
   init.volume_level = widgets.media_volume_level;
   init.is_muted = widgets.media_is_muted;
   init.available = widgets.available;
+  init.cover_centered = mediaPopupCoverCentered(tile);
   const bool cover_visible = widgets.cover_ref &&
                              widgets.cover_ref->dsc &&
                              widgets.cover_clip &&
@@ -3710,6 +3711,12 @@ static lv_image_dsc_t* make_media_cover_dsc_from_base64(const String& encoded) {
                 static_cast<unsigned>(millis() - started_ms));
   return dsc;
 }
+
+lv_image_dsc_t* tile_renderer_decode_image_base64(const String& encoded) {
+  return make_media_cover_dsc_from_base64(encoded);
+}
+
+void tile_renderer_free_image_dsc(lv_image_dsc_t*& dsc) { free_media_cover_dsc(dsc); }
 
 static uint8_t* alloc_media_cover_download_buffer(size_t bytes) {
   return static_cast<uint8_t*>(alloc_media_cover_memory(bytes, true));
@@ -4463,6 +4470,9 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   const uint32_t payload_hash = fnv1a_hash(payload_start);
   if (widgets.last_payload_hash == payload_hash) return;
   widgets.last_payload_hash = payload_hash;
+  // The fields only the Media popup shows (features, shuffle, repeat,
+  // sources, the group, artist and album), also while it is closed.
+  if (*payload_start == '{') media_popup_note_state(media_entity_for_grid_index(grid_type, grid_index), payload_start);
 
   String state;
   String title;

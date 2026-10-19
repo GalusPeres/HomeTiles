@@ -99,6 +99,7 @@ String media_entity_for_grid_index(GridType,uint8_t){return "media_player.test";
 ${fn('tile_renderer_find_media_cover')}
 const lv_image_dsc_t* popup_received=nullptr;
 void update_media_popup_cover(const char*,const lv_image_dsc_t*d,uint32_t){popup_received=d;}
+void media_popup_note_state(const String&,const char*){}
 ${fn('process_media_cover_results')}
 ${['extract_json_string_field_cstr','extract_json_number_field_cstr','extract_json_bool_field_cstr','decode_basic_json_escapes','media_first_non_empty','media_text_same','sanitize_media_display_text','set_label_text_if_changed','set_label_long_mode_if_changed','restart_visible_media_text_scroll','media_icon_for_state'].map(fn).join('\n')}
 String media_empty_title_label(const String&){return "No playback";}String getMdiChar(const String&s){return s;}

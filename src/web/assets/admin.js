@@ -4470,6 +4470,10 @@ async function saveGestureEdge(select) {
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'camera_entity')) {
       tile.sensor_entity = snapshot.camera_entity || '';
     }
+    // The Media popup's layout in its stored field (types/media/admin.js).
+    if (Number(tile.type) === 15 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'media_layout')) {
+      tile.sensor_display_mode = String(snapshot.media_layout) === '1' ? 1 : 0;
+    }
     // The Camera tile's picture options in their stored fields (types/camera/admin.js).
     if (Number(tile.type) === 18 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'camera_display')) {
       tile.sensor_display_mode = String(snapshot.camera_display) === '1' ? 1 : 0;
@@ -7623,6 +7627,8 @@ async function saveGestureEdge(select) {
       syncClimateSlotFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
     });
     bindLive(document.getElementById(prefix + '_cover_value_font'), 'change', 'coverValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // The Media popup's layout (cover left or centred); the tile looks the same.
+    bindLive(document.getElementById(prefix + '_media_layout'), 'change', 'mediaLayout', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(coverSelect, 'change', 'coverEntity', () => {
       maybeFillTitleFromEntity(tab, '_cover_entity');
       updateTilePreview(tab);
@@ -9655,6 +9661,7 @@ async function saveGestureEdge(select) {
       }
     } else if (safeType === MEDIA_TILE_TYPE) {
       fd.append('media_entity', tile.sensor_entity || tile.media_entity || '');
+      fd.append('media_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
     } else if (safeType === 17) {
       fd.append('climate_entity', tile.sensor_entity || tile.climate_entity || '');
       fd.append(
@@ -16718,7 +16725,7 @@ function maybeFillTitleFromSwitch(tab) {
   // event, so the existing preview, draft and autosave bindings run.
   // The Climate tile's Layout and the Camera tile's choices use the same
   // segmented choice.
-  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view',
+  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
     'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
     'camera_head', 'camera_tap'];
 
@@ -17745,6 +17752,9 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = data.sensor_entity || data.media_entity || '';
+    const layout = document.getElementById(prefix + '_media_layout');
+    if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromMedia(tab);
     updateMediaValuePreview(tab);
   }
@@ -17755,6 +17765,7 @@ function maybeFillTitleFromMedia(tab) {
     const entity = document.getElementById(prefix + '_media_entity')?.value || '';
     formData.append('media_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('media_layout', document.getElementById(prefix + '_media_layout')?.value === '1' ? '1' : '0');
   }
 
   function resetMediaFields(tab) {
@@ -17762,6 +17773,9 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = '';
+    const layout = document.getElementById(prefix + '_media_layout');
+    if (layout) layout.value = '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
   // --- Tile preview -------------------------------------------------------

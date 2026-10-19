@@ -62,7 +62,8 @@ ${strip(read('src/types/media/cover_geometry.h'))}
 ${strip(read('src/types/media/content_layout.cpp'))}
 ${renderer.slice(renderer.indexOf('static constexpr lv_coord_t kMediaControlButtonSize'), renderer.indexOf('struct MediaEventData'))}
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=1,GRID_CELL_W=Device::kGridCellW,GRID_CELL_H=Device::kGridCellH,GRID_GAP=Device::kGridGap;
-struct Tile{String title,icon_name,sensor_entity;float col=0,row=0,span_w=2,span_h=2;};
+struct Tile{String title,icon_name,sensor_entity;float col=0,row=0,span_w=2,span_h=2;int type=TILE_MEDIA;uint8_t sensor_display_mode=0;};
+${read('src/tiles/config/tile_config.h').match(/static inline bool mediaPopupCoverCentered\(const Tile& tile\) \{[^}]*\}/)[0]}
 MediaTileWidgets widgets[1];
 MediaTileWidgets* tile_renderer_get_media_widgets(GridType){return widgets;}
 struct Logger{void println(const char*){}}Serial;

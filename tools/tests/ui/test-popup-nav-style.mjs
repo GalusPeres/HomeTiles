@@ -60,16 +60,22 @@ assert.match(fn(iconSource, 'forget_popup_source'), /pass_popup_disc\(obj, false
 assert.match(fn(iconSource, 'popup_background'), /pass_popup_disc\(obj, true\);/);
 assert.match(fn(shell, 'popup_shell_control_fill'),
   /g_next_disc\.from_tile \? g_next_disc : shell\.disc;\s*control_fill\(options,/);
-// Media: previous, next and volume take the fill while pressed, both sliders
-// the pill track and the control color; play keeps its white circle. Every
-// open and state update restyles them with the card and header icon color.
+// Media: every round control, the head buttons and the list rows take the
+// control fill while pressed, both sliders the pill track and the used part
+// in the icon color when tinted (else the text color); play keeps its circle
+// in the icon role. The colors come from the card and the header icon color;
+// other colors build the player again.
 const media = read('src/ui/popups/media/media_popup.cpp');
-const mediaColors = fn(media, 'apply_control_colors');
-assert.match(mediaColors, /lv_obj_t\* const labels\[\] = \{ctx->previous_label, ctx->next_label, ctx->volume_icon_label\};/);
-assert.match(mediaColors, /popup_nav_style::style_press\(lv_obj_get_parent\(label\), popup, icon\);/);
-assert.match(mediaColors, /popup_nav_style::style_slider\(ctx->seek_slider, popup, icon\);\s*popup_nav_style::style_slider\(ctx->volume_slider, popup, icon\);/);
-assert.doesNotMatch(mediaColors, /play_pause/);
-assert.match(fn(media, 'apply_init_to_context'), /update_cover\(ctx, init\.cover_dsc, init\.cover_hash\);\s*apply_control_colors\(ctx\);\s*apply_availability\(ctx\);\s*\}$/);
+assert.match(fn(media, 'compute_colors'), /popup_shell_control_fill\(card, icon, c\.control, c\.control_opa, &c\.tinted\);/);
+for (const name of ['round_button', 'head_button', 'list_row']) {
+  assert.match(fn(media, name), /popup_nav_style::style_press_fill\(\w+, (?:c|ctx->colors)\.control, (?:c|ctx->colors)\.control_opa\);/, name);
+}
+const mediaSlider = fn(media, 'make_slider');
+assert.match(mediaSlider, /lv_obj_set_style_bg_color\(slider\.track, c\.control, 0\);\s*lv_obj_set_style_bg_opa\(slider\.track, c\.control_opa, 0\);/);
+assert.match(mediaSlider, /lv_obj_set_style_bg_color\(slider\.fill, lv_color_hex\(c\.tinted \? c\.icon : c\.text\), 0\);/);
+assert.match(fn(media, 'build_player'), /lv_obj_set_style_bg_color\(play, lv_color_hex\(ui_theme::icon\(\)\), 0\);/);
+assert.match(fn(media, 'apply_init_to_context'),
+  /ctx->colors = compute_colors\(ctx->bg_color, ctx->icon_color\);\s*if \(!ctx->player \|\| ctx->centered != init\.cover_centered \|\| ctx->built_colors != colors_key\(ctx->colors\)\) \{/);
 
 const host = await lvglHost(root);
 if (!host) {

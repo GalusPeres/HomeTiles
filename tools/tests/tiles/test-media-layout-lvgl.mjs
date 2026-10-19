@@ -44,7 +44,8 @@ ${renderer.slice(renderer.indexOf('static constexpr lv_coord_t kMediaControlButt
 enum class GridType{TAB0,SCREENSAVER};constexpr int TILES_PER_GRID=16;
 using TileType=int;constexpr int TILE_MEDIA=7,GRID_COLS=4,GRID_ROWS=4;
 ${read('src/tiles/config/tile_config.h').match(/static constexpr uint8_t MEDIA_TILE_MIN_SPAN[^]*?(?=\/\/ A media tile must)/)[0]}
-struct Tile{String title,icon_name,sensor_entity;int span_w=2,span_h=2;};
+struct Tile{String title,icon_name,sensor_entity;int span_w=2,span_h=2;int type=TILE_MEDIA;uint8_t sensor_display_mode=0;};
+${read('src/tiles/config/tile_config.h').match(/static inline bool mediaPopupCoverCentered\(const Tile& tile\) \{[^}]*\}/)[0]}
 MediaTileWidgets widgets[16];
 MediaTileWidgets* tile_renderer_get_media_widgets(GridType){return widgets;}
 struct Logger{void println(const char*){}}Serial;

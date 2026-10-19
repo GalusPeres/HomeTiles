@@ -211,6 +211,12 @@ struct Tile {
 // entity sidecar like every entity tile), else the Bridge alias of a tile
 // from before the entity picker searched scenes. A stray entity of another
 // type in sensor_entity never counts.
+// The Media popup's layout (types/media/web_handler.cpp): the cover centred
+// like before instead of left beside the title.
+static inline bool mediaPopupCoverCentered(const Tile& tile) {
+  return tile.type == TILE_MEDIA && tile.sensor_display_mode == 1;
+}
+
 static inline const String& sceneTarget(const Tile& tile) {
   return sceneTargetIsEntityId(tile.sensor_entity) ? tile.sensor_entity : tile.scene_alias;
 }

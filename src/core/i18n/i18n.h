@@ -835,6 +835,18 @@ struct Strings {
   const char* pages_title;
   // Web Admin: the tooltip on a full folder's greyed-out type list.
   const char* js_folder_type_locked;
+  // Media tile: the popup's layout (Web Admin) and the popup's sub-views
+  // (source and sound mode, the speakers to group, the library).
+  const char* media_popup_layout;
+  const char* media_layout_cover_left;
+  const char* media_layout_cover_center;
+  const char* media_source;
+  const char* media_sound_mode;
+  const char* media_speakers;
+  const char* media_this_player;
+  const char* media_library;
+  const char* media_library_empty;
+  const char* media_library_failed;
 };
 
 // Locale-specific display rules and short runtime strings shared by

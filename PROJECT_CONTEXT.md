@@ -23,6 +23,11 @@ Last reviewed: 2026-10-17
 
 - Built in: en, de, fr, pl, cs (PR #110, pepe59), es, sk (#104 attachment, vik147); each costs ~22 KB flash, fonts already carry Latin-1 + Latin Extended-A. A language is data only: its Strings and LocaleProfile, including `long_date_year_pattern` ("{d} de {M} de {Y}"), `keyboard_layout` (Auto: 0 QWERTY, 1 QWERTZ, 2 AZERTY) and `keyboard_letters` (lead the accent page and a held letter's forms, `keyboard_letters.h`); no language codes in code. Tests take the languages from `kLanguages`; `test-i18n-panel-glyphs` rejects characters the panel fonts lack (Czech came with U+2212). Language packs (like the icon file) later. Device text fit for cs/es/sk pending.
 
+## Media popup rework (`feature/media-popup` in both repos, FW b487 local, Bridge v0.9.4b1 pre-release 2026-10-19)
+
+- Design: `build/design-mockups/media-player` (user-approved), plan and PR notes `build/analysis/2026-10-19-analyse.md`. Two layouts per tile (`sensor_display_mode` 0 "Cover links", 1 "Cover Mitte", Web Admin "Popup"); geometry `media_popup_layout.h` (every distance = left edge L; cover V2 399 / S3 218 = `coverEdge`). Controls only with their HA feature bit (old Bridge: previous/play/next/volume). Sub-views source/sound mode, speakers (join/unjoin), library (PR #87 `media_browse`, Bridge #11 rewritten). memooox3 co-author.
+- Extra fields per player cached by `media_popup_note_state` (8 players). 14 icons added to the built-in set. HW pending: both layouts V2/S3, dark/light, filled/plain, grouping, library, unavailable, sleep. Next: tiles (step 4).
+
 ## Direct Bridge link (`feature/direct-link` in both repos, unreleased)
 
 - Panel connects to the Bridge over TCP 8140 instead of MQTT; Bridge = broker (same topics/retained), frames sealed with pairing-K keys. Contract `docs-dev/bridge-link.md` (shared vectors).

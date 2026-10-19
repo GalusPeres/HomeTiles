@@ -5,6 +5,7 @@
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/tiles/config/grid_layout.h"
 #include "src/tiles/runtime/tile_renderer.h"
+#include "src/ui/popups/media/media_popup_layout.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/types/camera/picture.h"
 #include "src/ui/screensaver/image_screensaver.h"
@@ -55,9 +56,10 @@ void announce(const char* entity) {
 }  // namespace
 
 uint16_t coverEdge() {
-  // The Media popup's cover (media_popup.cpp kCoverSize); tiles show at
-  // most this much of it.
-  return static_cast<uint16_t>(popup_layout::scale(240));
+  // The Media popup's larger cover ("Cover links", media_popup_layout.h):
+  // it shows as it arrives, the centred cover and the tiles take a smaller
+  // copy of it.
+  return static_cast<uint16_t>(media_popup_layout::kLeftCoverSide);
 }
 
 const char* coverSuffix() {

@@ -678,6 +678,17 @@ static const Strings kStringsDe = {
     "Seiten haben keine PIN.",
     "Seiten",
     "Der Ordner enthält noch Kacheln. Löschen geht über „Löschen“.",
+
+    "Popup",
+    "Cover links",
+    "Cover Mitte",
+    "Quelle",
+    "Klangmodus",
+    "Lautsprecher",
+    "Dieser Player",
+    "Mediathek",
+    "Hier ist nichts",
+    "Die Mediathek ist nicht verfügbar",
 };
 
 static const Strings kStringsEn = {
@@ -1351,6 +1362,17 @@ static const Strings kStringsEn = {
     "Pages have no PIN.",
     "Pages",
     "The folder still contains tiles. Remove it with “Delete”.",
+
+    "Popup",
+    "Cover left",
+    "Cover centered",
+    "Source",
+    "Sound mode",
+    "Speakers",
+    "This player",
+    "Media library",
+    "Nothing here",
+    "The library is not available",
 };
 
 static const Strings kStringsFr = {
@@ -2024,6 +2046,17 @@ static const Strings kStringsFr = {
     "Les pages n'ont pas de code PIN.",
     "Pages",
     "Le dossier contient encore des tuiles. Supprimez-le avec «\u00A0Supprimer\u00A0».",
+
+    "Popup",
+    "Pochette à gauche",
+    "Pochette au centre",
+    "Source",
+    "Mode sonore",
+    "Enceintes",
+    "Ce lecteur",
+    "Médiathèque",
+    "Rien ici",
+    "La médiathèque est indisponible",
 };
 
 static const LocaleProfile kLocaleDe = {
@@ -3072,6 +3105,17 @@ static const Strings kStringsPl = {
     "Strony nie mają kodu PIN.",
     "Strony",
     "Folder nadal zawiera kafelki. Usuń go przyciskiem „Usuń”.",
+
+    "Okno",
+    "Okładka po lewej",
+    "Okładka na środku",
+    "Źródło",
+    "Tryb dźwięku",
+    "Głośniki",
+    "Ten odtwarzacz",
+    "Biblioteka multimediów",
+    "Nic tu nie ma",
+    "Biblioteka jest niedostępna",
 };
 
 static const Strings kStringsCs = {
@@ -3715,6 +3759,17 @@ static const Strings kStringsCs = {
     "Stránky nemají PIN.",
     "Stránky",
     "Složka stále obsahuje dlaždice. Odstraňte ji pomocí „Odstranit“.",
+
+    "Okno",
+    "Obal vlevo",
+    "Obal uprostřed",
+    "Zdroj",
+    "Zvukový režim",
+    "Reproduktory",
+    "Tento přehrávač",
+    "Knihovna médií",
+    "Nic tu není",
+    "Knihovna není dostupná",
 };
 
 static const Strings kStringsEs = {
@@ -4358,6 +4413,17 @@ static const Strings kStringsEs = {
     "Las páginas no tienen PIN.",
     "Páginas",
     "La carpeta aún contiene mosaicos. Quítala con “Eliminar”.",
+
+    "Ventana",
+    "Portada a la izquierda",
+    "Portada en el centro",
+    "Fuente",
+    "Modo de sonido",
+    "Altavoces",
+    "Este reproductor",
+    "Biblioteca multimedia",
+    "Aquí no hay nada",
+    "La biblioteca no está disponible",
 };
 
 static const Strings kStringsSk = {
@@ -5001,6 +5067,17 @@ static const Strings kStringsSk = {
     "Stránky nemajú PIN.",
     "Stránky",
     "Priečinok stále obsahuje dlaždice. Odstráňte ho pomocou „Odstrániť“.",
+
+    "Okno",
+    "Obal vľavo",
+    "Obal v strede",
+    "Zdroj",
+    "Zvukový režim",
+    "Reproduktory",
+    "Tento prehrávač",
+    "Knižnica médií",
+    "Nič tu nie je",
+    "Knižnica nie je dostupná",
 };
 
 static const LocaleProfile kLocalePl = {

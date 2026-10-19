@@ -429,6 +429,9 @@ jobs:
           elf_flags=""
           if [ "${profile}" = "guition_jc8012p4a1" ]; then
             elf_flags="-Wl,--wrap=esp_hosted_get_default_sdio_config"
+          elif [ "${profile}" = "waveshare_7b_rev3" ]; then
+            # Issue #41: SDIO at 20 MHz, no C6 version query (device code).
+            elf_flags="-Wl,--wrap=esp_hosted_get_default_sdio_config -Wl,--wrap=esp_hosted_get_coprocessor_fwversion"
           fi
           # The SDK flag file enables -fexceptions for all C++ code, but
           # HomeTiles never throws or catches; the unwind tables only cost
@@ -484,10 +487,10 @@ jobs:
             fi
 
             firmware_map="build/ci/${{ matrix.key }}/HomeTiles.ino.map"
-            if [ "${profile}" = "guition_jc8012p4a1" ]; then
+            if [ "${profile}" = "guition_jc8012p4a1" ] || [ "${profile}" = "waveshare_7b_rev3" ]; then
               grep -F -q "__wrap_esp_hosted_get_default_sdio_config" "${firmware_map}"
             elif grep -F -q "__wrap_esp_hosted_get_default_sdio_config" "${firmware_map}"; then
-              echo "Unexpected JC8012 SDIO configuration wrapper found in ${{ matrix.label }}" >&2
+              echo "Unexpected SDIO configuration wrapper found in ${{ matrix.label }}" >&2
               exit 1
             fi
 

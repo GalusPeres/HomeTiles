@@ -51,9 +51,12 @@ function validateCatalog(catalog) {
     assert(!identities.has(identity), `ambiguous define/silicon identity ${identity}`);
     identities.add(identity);
     const isGuitionV1 = profile.key === 'guition_jc8012p4a1';
+    // The 7B with P4 v3.x: SDIO at 20 MHz and no C6 version query (issue #41).
+    const is7bRev3 = profile.key === 'waveshare_touch_lcd_7b_rev3';
     assert(profile.rxVariant === (s3 ? 'native-s3' : isGuitionV1 ? 'repo-guition-jc8012-rx-single-block' : 'repo-a8204'),
       `unsafe transport variant for ${profile.key}`);
-    assert(profile.elfFlags === (isGuitionV1 ? '-Wl,--wrap=esp_hosted_get_default_sdio_config' : ''),
+    assert(profile.elfFlags === (isGuitionV1 ? '-Wl,--wrap=esp_hosted_get_default_sdio_config'
+      : is7bRev3 ? '-Wl,--wrap=esp_hosted_get_default_sdio_config -Wl,--wrap=esp_hosted_get_coprocessor_fwversion' : ''),
       `unsafe linker flags for ${profile.key}`);
     if (!profile.publish) {
       assert(!profile.installer && profile.ciOrder === undefined, `non-release profile ${profile.key} cannot be published`);

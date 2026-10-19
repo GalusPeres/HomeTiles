@@ -319,8 +319,11 @@ if (-not $isNativeS3) {
     if ($Profile -eq 'guition_jc8012p4a1' -and -not $hasJc8012SdioWrapper) {
         throw "JC8012 V1 SDIO configuration wrapper missing from $firmwareMap"
     }
-    if ($Profile -ne 'guition_jc8012p4a1' -and $hasJc8012SdioWrapper) {
-        throw "Unexpected JC8012 V1 SDIO configuration wrapper found in $firmwareMap"
+    if ($Profile -eq 'waveshare_7b_rev3' -and -not $hasJc8012SdioWrapper) {
+        throw "Waveshare 7B rev3 SDIO configuration wrapper missing from $firmwareMap"
+    }
+    if ($Profile -ne 'guition_jc8012p4a1' -and $Profile -ne 'waveshare_7b_rev3' -and $hasJc8012SdioWrapper) {
+        throw "Unexpected SDIO configuration wrapper found in $firmwareMap"
     }
 }
 

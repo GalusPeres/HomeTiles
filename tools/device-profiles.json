@@ -361,7 +361,7 @@
       "minimumRevision": 301,
       "maximumRevision": 399,
       "rxVariant": "repo-a8204",
-      "elfFlags": "",
+      "elfFlags": "-Wl,--wrap=esp_hosted_get_default_sdio_config -Wl,--wrap=esp_hosted_get_coprocessor_fwversion",
       "publish": true,
       "ciOrder": 5,
       "ciLabel": "Waveshare 7B / 7B-C (ESP32-P4 v3.1 or newer, experimental)",

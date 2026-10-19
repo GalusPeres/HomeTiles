@@ -30,6 +30,7 @@
 #include "src/devices/waveshare_touch_lcd_7b/vendor/ek79007/esp_lcd_ek79007.h"
 #include "src/devices/waveshare_touch_lcd_7b/vendor/gt911.h"
 #include "src/devices/waveshare_touch_lcd_7b/sdmmc.h"
+#include "src/devices/waveshare_touch_lcd_7b/waveshare_touch_lcd_7b_sdio.h"
 #include "src/devices/waveshare_touch_lcd_7b/vendor/i2c.h"
 
 namespace {
@@ -1008,6 +1009,10 @@ bool draw_turned_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t
 }  // namespace
 
 bool DeviceWaveshareTouchLCD7B::init() {
+#if CONFIG_ESP_REV_MIN_FULL >= 300
+  // Before anything touches the hardware (issue #41).
+  waveshare_7b_reset_system_after_cpu_restart();
+#endif
   Serial.println("[Device/Waveshare Touch LCD 7B] Initialising board...");
 
   if (!init_backlight()) {

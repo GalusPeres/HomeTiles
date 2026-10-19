@@ -9,6 +9,10 @@
 //   they move only while Home Assistant reports "playing";
 // - the head showed the tile's fixed icon; it shows the icon's state form
 //   (speaker-play, speaker-pause, speaker-off) like the draft.
+// b489 (hardware test of b488): the lists are the Settings dropdown's options
+// (text only, no thumbnails or round controls in the rows), the status floats
+// over the list instead of pushing it, covers come in the hardware decoder's
+// size again.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,7 +30,7 @@ const fn = name => {
 
 // Library topics: fixed, also in the routing.
 const handlers = read('src/network/mqtt/mqtt_handlers.cpp');
-assert.match(handlers, /for \(const char\* leaf : \{"\/stat\/media\/catalog", "\/stat\/media", "\/stat\/media\/thumb"\}\)/);
+assert.match(handlers, /for \(const char\* leaf : \{"\/stat\/media\/catalog", "\/stat\/media"\}\)/);
 assert.ok(!/stat\/media\/catalog\/\+/.test(handlers), 'no wildcard media subscription');
 assert.ok(handlers.includes('const bool is_catalog = strcmp(rest, "/catalog") == 0;'));
 
@@ -70,4 +74,19 @@ assert.match(fn('prepare_media_popup_open'),
 for (const name of ['speaker-play', 'speaker-pause', 'speaker-off', 'television-play', 'television-pause', 'television-off']) {
   assert.ok(read('src/tiles/icons/mdi_icons.cpp').includes(`{"${name}", 0x`), `${name} is an MDI icon`);
 }
-console.log('Media popup b488: fixed library topic, list rebuild on change only, bars on "playing", state icon in the head');
+// b489: the Settings dropdown's option rows, nothing else in them.
+const row = fn('list_row');
+assert.match(row, /lv_obj_set_size\(row, LV_PCT\(100\), settings_style::kOptionHeight - kOptionGap\);/);
+assert.match(row, /settings_style::apply_radius\(row, settings_style::kGroupRadius - settings_style::kOptionInset\);/);
+assert.match(row, /add_text\(row, settings_style::row_font\(\), c\.text, text\);/);
+assert.ok(!/lv_image_create|clip_corner|round_button/.test(row), 'no picture or round control in a row');
+assert.ok(!/clip_corner/.test(fn('append_library_rows')) && !/thumbnail/.test(fn('append_library_rows')),
+  'the library asks for no pictures');
+assert.ok(!popup.includes('mqttPublishMediaThumbnail'), 'no thumbnail requests');
+// The status floats over the list, loading only after a moment.
+assert.match(fn('build_library'), /lv_obj_add_flag\(ctx->library_status, LV_OBJ_FLAG_FLOATING\);/);
+assert.match(fn('show_library_status'), /if \(since >= kLoadingDelayMs\) text = tr\.loading;/);
+assert.match(fn('show_library_status'), /if \(empty \|\| since < kErrorShownMs\) text = tr\.media_library_failed;/);
+// "Repeat one": the time starts again at the end without a report.
+assert.match(fn('current_media_position'), /extras_of\(ctx->entity_id\)\.repeat\.equalsIgnoreCase\("one"\)\) \{\s*position = fmodf\(position, ctx->media_duration\);/);
+console.log('Media popup b488/b489: fixed library topic, list rebuild on change only, bars on "playing", state icon in the head, dropdown rows, floating status');

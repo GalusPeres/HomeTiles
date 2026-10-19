@@ -843,7 +843,6 @@ struct Strings {
   const char* media_source;
   const char* media_sound_mode;
   const char* media_speakers;
-  const char* media_this_player;
   const char* media_library;
   const char* media_library_empty;
   const char* media_library_failed;

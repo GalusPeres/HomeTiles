@@ -103,9 +103,15 @@ assert.equal((handlers.match(/if \(networkManager\.linkConfigured\(\)\) \{\s*add
   'folder and screensaver Media tiles subscribe the cover only over the link');
 
 const images = readRepoFile('src/network/bridge/bridge_images.cpp');
-assert.match(images, /return static_cast<uint16_t>\(media_popup_layout::kLeftCoverSide\);/);
-assert.match(readRepoFile('src/ui/popups/media/media_popup.cpp'), /int side = ml::kLeftCoverSide;/,
-  'the cover picture has the size the Media popup shows ("Cover links"; the centred cover takes a copy)');
+// The Media popup's cover size, on the P4 rounded up to the hardware JPEG
+// decoder's steps of 16 (b487's 399 px went to the slow software decoder and
+// was cut to 240; b488 on hardware: the V2 cover was blurred, the S3's sharp).
+assert.match(images, /#if defined\(CONFIG_IDF_TARGET_ESP32P4\)\s*return static_cast<uint16_t>\(\(media_popup_layout::kLeftCoverSide \+ 15\) \/ 16 \* 16\);\s*#else\s*return static_cast<uint16_t>\(media_popup_layout::kLeftCoverSide\);/);
+// Both decoders keep a cover of that size (they cut at 240 before).
+assert.equal((readRepoFile('src/tiles/runtime/tile_renderer.cpp').match(/const uint16_t kMaxCoverSide = std::max<uint16_t>\(240, bridge_images::coverEdge\(\)\);/g) || []).length, 2);
+assert.match(readRepoFile('src/ui/popups/media/media_popup.cpp'),
+  /ctx->cover_dsc = make_media_popup_cover_dsc\(cover_dsc, static_cast<uint16_t>\(ctx->cover_side\)\);/,
+  'the popup scales the cover to its own size');
 assert.match(images, /if \(!entityFromTopic\(topic, prefix, entity, sizeof\(entity\), &width, &height, &fit\)\) return false;/);
 assert.match(images, /if \(!parseHeader\(payload, length, header\) \|\| header\.width != width \|\| header\.height != height\) \{/,
   'a picture has exactly the size its topic asked for');

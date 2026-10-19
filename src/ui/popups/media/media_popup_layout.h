@@ -7,9 +7,9 @@
 // left edge L (the head disc's left): from the bottom, the volume row L above
 // the card's bottom, play L over the volume knob, the time knob L over play;
 // with the cover left also the head disc to the cover, the cover to the title
-// and the cover to the time knob. The cover takes what is left. Shared with
-// the Bridge picture subscription (bridge_images.cpp coverEdge), so the cover
-// arrives in exactly the size the popup shows.
+// and the cover to the time knob. The cover takes what is left. The Bridge
+// sends covers in this size (on the P4 rounded up to the hardware decoder's
+// steps of 16, bridge_images.cpp coverEdge); the popup takes a copy in its size.
 namespace media_popup_layout {
 
 // Card coordinates (the card's own top left, not its padded content box).
@@ -28,10 +28,6 @@ constexpr int kTextGap = popup_layout::scale(8);
 constexpr int kBarsHeight = popup_layout::scale(48);
 constexpr int kBarWidth = popup_layout::scale(10);
 constexpr int kBarGap = popup_layout::scale(7);
-constexpr int kRowHeight = popup_layout::scale(96);
-constexpr int kLead = popup_layout::scale(64);
-constexpr int kSwitchWidth = popup_layout::scale(72);
-constexpr int kSwitchHeight = popup_layout::scale(40);
 constexpr int kHeadStep = popup_layout::scale(86);
 
 constexpr int kVolumeTop = popup_layout::kCardHeight - kEdge - kButton;

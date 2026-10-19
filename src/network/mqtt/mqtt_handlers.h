@@ -49,10 +49,7 @@ bool mqttPublishMediaBrowse(const char* entity_id, const char* session, uint32_t
                             const char* media_content_id, const char* media_content_type);
 // Plays a library entry (media_player.play_media).
 bool mqttPublishMediaPlay(const char* entity_id, const char* media_content_id, const char* media_content_type);
-// One library thumbnail as a size x size JPEG padded with bg_rgb, answered on
-// {base}/stat/media/thumb.
-bool mqttPublishMediaThumbnail(const char* entity_id, const char* session, uint32_t thumb_id, const char* url,
-                               uint16_t size, uint32_t bg_rgb);
+
 // fps 0 asks for camera_geometry::kFps.
 void mqttPublishCameraCommand(const char* entity_id, const char* command,
                               uint8_t fps = 0);

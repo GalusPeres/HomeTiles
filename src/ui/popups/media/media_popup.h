@@ -42,5 +42,3 @@ void hide_media_popup();
 // state payload (tile_renderer.cpp update_media_tile_state), also while the
 // popup is closed. Bounded to a few players.
 void media_popup_note_state(const String& entity_id, const char* payload);
-// A library thumbnail answer on {base}/stat/media/thumb (mqtt_handlers.cpp).
-void media_popup_handle_browse_thumbnail(const char* payload, size_t length);

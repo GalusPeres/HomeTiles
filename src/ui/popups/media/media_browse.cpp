@@ -308,6 +308,9 @@ void media_browse_poll(uint32_t now_ms) {
   if (now_ms - g_state.pending.sent_ms < kAnswerTimeoutMs) return;
   // No answer (an old Bridge, the player went away): stop waiting and keep
   // the previous level.
+  Serial.printf("[MediaLibrary] No complete answer after %lu ms: %d of %d page(s)\n",
+                static_cast<unsigned long>(now_ms - g_state.pending.sent_ms),
+                __builtin_popcount(g_state.pending.pages_received), g_state.pending.pages_expected);
   clear_pending();
   g_state.status = MediaBrowseStatus::Error;
   g_state.error = "timeout";
@@ -385,7 +388,11 @@ void media_browse_handle_catalog_message(const char* topic,
   p.pages_received |= bit;
 
   const uint32_t all = p.pages_expected >= 32 ? 0xFFFFFFFFu : (1u << p.pages_expected) - 1u;
-  if ((p.pages_received & all) == all) commit_pending();
+  if ((p.pages_received & all) == all) {
+    Serial.printf("[MediaLibrary] Level complete: %d page(s) in %lu ms\n", p.pages_expected,
+                  static_cast<unsigned long>(millis() - p.sent_ms));
+    commit_pending();
+  }
 }
 
 void media_browse_handle_status_message(const char* payload, size_t length) {
@@ -407,6 +414,7 @@ void media_browse_handle_status_message(const char* payload, size_t length) {
   if (!answer_matches("Error", entity, session, request_id)) return;
 
   // Keep the previous level and items visible; only report the failure.
+  Serial.printf("[MediaLibrary] Bridge error: %s\n", doc["error"] | "unknown");
   clear_pending();
   g_state.status = MediaBrowseStatus::Error;
   g_state.error = doc["error"] | "unknown";

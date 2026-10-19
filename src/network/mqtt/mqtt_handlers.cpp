@@ -1788,7 +1788,6 @@ static MqttInboundMsg* g_deferred_bridge_apply = nullptr;
 static void processMqttMessage(char* topic, uint8_t* payload, unsigned int length);
 void media_browse_handle_catalog_message(const char* topic, const char* payload, size_t length);
 void media_browse_handle_status_message(const char* payload, size_t length);
-void media_popup_handle_browse_thumbnail(const char* payload, size_t length);
 
 static QueueHandle_t mqttInboundQueue() {
   if (!g_mqtt_inbound_queue) {
@@ -2098,8 +2097,8 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
   }
 
   // The Media popup's library: catalog pages on {base}/stat/media/catalog,
-  // errors on {base}/stat/media, thumbnails on {base}/stat/media/thumb (after
-  // memooox3's PR #87). Always through the large buffer.
+  // errors on {base}/stat/media (after memooox3's PR #87). Always through the
+  // large buffer.
   {
     const String& base = mqttTopics.deviceBase();
     const size_t base_len = base.length();
@@ -2109,8 +2108,7 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
       const char* rest = topic + base_len + sizeof(kMediaStat) - 1;
       const bool is_status = *rest == '\0';
       const bool is_catalog = strcmp(rest, "/catalog") == 0;
-      const bool is_thumb = strcmp(rest, "/thumb") == 0;
-      if (is_status || is_catalog || is_thumb) {
+      if (is_status || is_catalog) {
         char* large_buf = mqttLargeBuffer();
         if (!large_buf) return;
         if (length >= LARGE_BUF) {
@@ -2120,7 +2118,6 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
         memcpy(large_buf, payload, length);
         large_buf[length] = '\0';
         if (is_catalog) media_browse_handle_catalog_message(topic, large_buf, length);
-        else if (is_thumb) media_popup_handle_browse_thumbnail(large_buf, length);
         else media_browse_handle_status_message(large_buf, length);
         return;
       }
@@ -2258,7 +2255,7 @@ void mqttSubscribeTopics() {
   }
   // The Media popup's library answers. Fixed topics: the direct link takes
   // no wildcard subscription (Bridge link_protocol.valid_topic).
-  for (const char* leaf : {"/stat/media/catalog", "/stat/media", "/stat/media/thumb"}) {
+  for (const char* leaf : {"/stat/media/catalog", "/stat/media"}) {
     if (networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + leaf).c_str())) ++queued;
   }
   for (const auto& route : kRoutes) {
@@ -2608,32 +2605,6 @@ bool mqttPublishMediaPlay(const char* entity_id, const char* media_content_id, c
   fields += ",\"media_content_type\":";
   append_json_string(fields, media_content_type);
   return publish_media_json(entity_id, "play_media", fields);
-}
-
-bool mqttPublishMediaThumbnail(const char* entity_id, const char* session, uint32_t thumb_id, const char* url,
-                               uint16_t size, uint32_t bg_rgb) {
-  if (!entity_id || !*entity_id || !url || !*url || !networkManager.isMqttConnected()) return false;
-  const char* topic = mqttTopics.topic(TopicKey::MEDIA_CMND);
-  if (!topic || !*topic) return false;
-  char bg[8];
-  snprintf(bg, sizeof(bg), "%06lX", static_cast<unsigned long>(bg_rgb & 0xFFFFFFu));
-  String payload;
-  payload.reserve(160 + strlen(url));
-  payload += "{\"entity_id\":";
-  append_json_string(payload, entity_id);
-  payload += ",\"command\":\"browse_thumbnail\",\"session\":";
-  append_json_string(payload, session);
-  payload += ",\"thumb_id\":";
-  payload += String(thumb_id);
-  payload += ",\"url\":";
-  append_json_string(payload, url);
-  payload += ",\"size\":";
-  payload += String(size);
-  payload += ",\"bg\":\"";
-  payload += bg;
-  payload += "\"}";
-  // Background work: the normal lane, so taps stay ahead of it.
-  return networkManager.mqttEnqueuePublish(topic, payload.c_str(), false);
 }
 
 void mqttPublishClimateTemperature(const char* entity_id,

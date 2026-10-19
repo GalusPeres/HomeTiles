@@ -50,8 +50,7 @@ assert.match(read('src/ui/popups/media/media_popup.cpp'),
 
 // Every language has the new texts, appended in the Strings order.
 const fields = ['media_popup_layout', 'media_layout_cover_left', 'media_layout_cover_center', 'media_source',
-  'media_sound_mode', 'media_speakers', 'media_this_player', 'media_library', 'media_library_empty',
-  'media_library_failed'];
+  'media_sound_mode', 'media_speakers', 'media_library', 'media_library_empty', 'media_library_failed'];
 const header = read('src/core/i18n/i18n.h');
 const structBody = header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')));
 const declared = [...structBody.matchAll(/const char\* (\w+);/g)].map(match => match[1]);
@@ -68,7 +67,7 @@ for (const lang of ['De', 'En', 'Fr', 'Pl', 'Cs', 'Es', 'Sk']) {
 }
 // The popup shows them through the central table only.
 const popup = read('src/ui/popups/media/media_popup.cpp');
-for (const field of ['media_source', 'media_sound_mode', 'media_speakers', 'media_this_player', 'media_library',
+for (const field of ['media_source', 'media_sound_mode', 'media_speakers', 'media_library',
   'media_library_empty', 'media_library_failed']) {
   assert.ok(popup.includes(`tr.${field}`), `the popup shows ${field}`);
 }

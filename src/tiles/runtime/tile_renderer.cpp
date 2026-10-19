@@ -3411,7 +3411,9 @@ static lv_image_dsc_t* make_media_cover_decoded_jpeg_hw_dsc(const uint8_t* data,
     }
   }
 
-  constexpr uint16_t kMaxCoverSide = 240;
+  // At most the Media popup's cover (bridge_images::coverEdge, V2 400): a
+  // cap of 240 made the V2 popup show a cover stretched from 240 px.
+  const uint16_t kMaxCoverSide = std::max<uint16_t>(240, bridge_images::coverEdge());
   uint16_t dst_w = static_cast<uint16_t>(info.width);
   uint16_t dst_h = static_cast<uint16_t>(info.height);
   if (dst_w > kMaxCoverSide || dst_h > kMaxCoverSide) {
@@ -3524,7 +3526,9 @@ static lv_image_dsc_t* make_media_cover_decoded_jpeg_dsc(const uint8_t* data, si
   // renders the same descriptor at its smaller size. Older firmware keeps its
   // previous 160px limit, so the bridge can publish the larger JPEG without a
   // protocol/version split.
-  constexpr uint16_t kMaxCoverSide = 240;
+  // At most the Media popup's cover (bridge_images::coverEdge, V2 400): a
+  // cap of 240 made the V2 popup show a cover stretched from 240 px.
+  const uint16_t kMaxCoverSide = std::max<uint16_t>(240, bridge_images::coverEdge());
   uint16_t dst_w = ctx.w;
   uint16_t dst_h = ctx.h;
   if (dst_w > kMaxCoverSide || dst_h > kMaxCoverSide) {
@@ -3711,12 +3715,6 @@ static lv_image_dsc_t* make_media_cover_dsc_from_base64(const String& encoded) {
                 static_cast<unsigned>(millis() - started_ms));
   return dsc;
 }
-
-lv_image_dsc_t* tile_renderer_decode_image_base64(const String& encoded) {
-  return make_media_cover_dsc_from_base64(encoded);
-}
-
-void tile_renderer_free_image_dsc(lv_image_dsc_t*& dsc) { free_media_cover_dsc(dsc); }
 
 static uint8_t* alloc_media_cover_download_buffer(size_t bytes) {
   return static_cast<uint8_t*>(alloc_media_cover_memory(bytes, true));

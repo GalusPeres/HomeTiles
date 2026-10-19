@@ -60,16 +60,18 @@ assert.match(fn(iconSource, 'forget_popup_source'), /pass_popup_disc\(obj, false
 assert.match(fn(iconSource, 'popup_background'), /pass_popup_disc\(obj, true\);/);
 assert.match(fn(shell, 'popup_shell_control_fill'),
   /g_next_disc\.from_tile \? g_next_disc : shell\.disc;\s*control_fill\(options,/);
-// Media: every round control, the head buttons and the list rows take the
-// control fill while pressed, both sliders the pill track and the used part
-// in the icon color when tinted (else the text color); play keeps its circle
-// in the icon role. The colors come from the card and the header icon color;
-// other colors build the player again.
+// Media: every round control and the head buttons take the control fill
+// while pressed, the list rows (the Settings dropdown's options) that fill
+// pressed and the active one filled; both sliders the pill track and the
+// used part in the icon color when tinted (else the text color); play keeps
+// its circle in the icon role. The colors come from the card and the header
+// icon color; other colors build the player again.
 const media = read('src/ui/popups/media/media_popup.cpp');
 assert.match(fn(media, 'compute_colors'), /popup_shell_control_fill\(card, icon, c\.control, c\.control_opa, &c\.tinted\);/);
-for (const name of ['round_button', 'head_button', 'list_row']) {
+for (const name of ['round_button', 'head_button']) {
   assert.match(fn(media, name), /popup_nav_style::style_press_fill\(\w+, (?:c|ctx->colors)\.control, (?:c|ctx->colors)\.control_opa\);/, name);
 }
+assert.match(fn(media, 'list_row'), /lv_obj_set_style_bg_opa\(row, active \? c\.raised_opa : c\.control_opa, LV_PART_MAIN \| LV_STATE_PRESSED\);/);
 const mediaSlider = fn(media, 'make_slider');
 assert.match(mediaSlider, /lv_obj_set_style_bg_color\(slider\.track, c\.control, 0\);\s*lv_obj_set_style_bg_opa\(slider\.track, c\.control_opa, 0\);/);
 assert.match(mediaSlider, /lv_obj_set_style_bg_color\(slider\.fill, lv_color_hex\(c\.tinted \? c\.icon : c\.text\), 0\);/);

@@ -47,6 +47,7 @@
 #include "src/ui/popups/sensor/sensor_popup.h"
 #include "src/ui/popups/weather/weather_popup.h"
 #include "src/ui/shared/title_label.h"
+#include "src/ui/tabs/settings/settings_style.h"
 #include "src/ui/shared/ui_surface_style.h"
 
 // lvgl.h no longer exports lv_image_cache_drop() in 9.5; its declaration
@@ -74,15 +75,12 @@ constexpr uint32_t kFeatureRepeat = 262144;
 constexpr uint32_t kFeatureGrouping = 524288;
 
 // Bounds: players with extra fields, list lengths (the Bridge sends at most
-// 24 sources, 12 sound modes, 8 candidates), thumbnails.
+// 24 sources, 12 sound modes, 8 candidates).
 constexpr size_t kMaxExtras = 8;
 constexpr size_t kMaxSources = 24;
 constexpr size_t kMaxSoundModes = 12;
 constexpr size_t kMaxMembers = 9;
 constexpr size_t kMaxCandidates = 8;
-constexpr size_t kThumbCacheMax = 24;
-constexpr size_t kThumbFailedMax = 64;
-constexpr uint32_t kThumbTimeoutMs = 6000;
 // The library builds its rows in steps while scrolling (a level has up to
 // 256 entries).
 constexpr size_t kLibraryRowsStep = 40;
@@ -100,6 +98,10 @@ constexpr uint32_t kMarqueePauseMs = 2000;
 constexpr int kMarqueePxPerSecond = 18;
 constexpr uint32_t kMotionPeriodMs = 40;
 constexpr uint32_t kLibraryTickMs = 150;
+// The library's status pill: loading only after this long, an error this
+// long over a list that is still there.
+constexpr uint32_t kLoadingDelayMs = 400;
+constexpr uint32_t kErrorShownMs = 4000;
 constexpr uint32_t kBubbleHideMs = 600;
 
 // ---- Player fields beyond the tile's (Bridge v0.9.4b1, media_controls.py) --
@@ -288,18 +290,13 @@ struct MediaSlider {
   int width = 0;
   int radius = 0;
   float value = 0.0f;
+  int32_t pressed_x = 0;
+  bool dragging = false;
 };
 
 struct MarqueeLine {
   lv_obj_t* label = nullptr;
   int over = 0;
-};
-
-// A library row's picture waiting for (or showing) its thumbnail.
-struct MediaThumbRow {
-  String url;
-  lv_obj_t* image = nullptr;
-  lv_obj_t* icon = nullptr;
 };
 
 struct MediaPopupContext {
@@ -392,11 +389,8 @@ struct MediaPopupContext {
   lv_timer_t* bubble_timer = nullptr;
   uint32_t library_items_version = 0;
   size_t library_rows = 0;
-  std::vector<MediaThumbRow> thumb_rows;
-  std::vector<String> thumb_queue;
-  uint32_t thumb_inflight_id = 0;
-  String thumb_inflight_url;
-  uint32_t thumb_inflight_ms = 0;
+  MediaBrowseStatus library_status_value = MediaBrowseStatus::Idle;
+  uint32_t library_status_ms = 0;
 };
 
 static MediaPopupContext* g_media_popup_ctx = nullptr;
@@ -506,6 +500,29 @@ void slider_show(MediaSlider& slider, float fraction) {
 void slider_set_shown(MediaSlider& slider, bool shown) {
   set_shown(slider.track, shown);
   set_shown(slider.knob, shown);
+}
+
+// Like lv_slider (lv_slider.c update_knob_pos): a press only notes where it
+// came down, the knob follows once the finger moved LV_INDEV_DEF_SCROLL_LIMIT
+// sideways, and the lift sets the value where it lifted (a tap jumps there).
+// The knob followed every reading of the touch chip, which wanders a pixel
+// or two under a resting finger: it twitched between two steps.
+enum class SliderStep : uint8_t { None, Drag, Release };
+SliderStep slider_step(MediaSlider& slider, lv_event_code_t code) {
+  lv_point_t point;
+  lv_indev_get_point(lv_indev_active(), &point);
+  if (code == LV_EVENT_PRESSED) {
+    slider.pressed_x = point.x;
+    slider.dragging = false;
+    return SliderStep::None;
+  }
+  if (code == LV_EVENT_PRESSING) {
+    if (!slider.dragging && abs(point.x - slider.pressed_x) < LV_INDEV_DEF_SCROLL_LIMIT) return SliderStep::None;
+    slider.dragging = true;
+    return SliderStep::Drag;
+  }
+  slider.dragging = false;
+  return SliderStep::Release;
 }
 
 // The touch point on the bar as 0..1 (the knob's middle under the finger).
@@ -650,6 +667,12 @@ static float current_media_position(const MediaPopupContext* ctx) {
     position += static_cast<float>(static_cast<uint32_t>(millis() - ctx->media_position_received_ms)) / 1000.0f;
   }
   if (position < 0.0f) position = 0.0f;
+  // "Repeat one" starts the song again; Home Assistant does not always report
+  // it (the time bar stopped at the end until the next report).
+  if (ctx->is_playing && ctx->media_duration > 0.0f && position >= ctx->media_duration &&
+      extras_of(ctx->entity_id).repeat.equalsIgnoreCase("one")) {
+    position = fmodf(position, ctx->media_duration);
+  }
   if (position > ctx->media_duration) position = ctx->media_duration;
   return position;
 }
@@ -1224,188 +1247,46 @@ static void show_head(MediaPopupContext* ctx) {
   if (popup_visible(ctx)) sync_popup_shell();
 }
 
-// ---- Sub-views: one list under the head --------------------------------------
-lv_obj_t* list_row(MediaPopupContext* ctx, lv_event_cb_t cb, intptr_t index) {
+// ---- Sub-views: the Settings dropdown's options under the head --------------
+// Every list is the Settings option list (settings_parts.cpp open_options):
+// its height, inset, radius, font and press; the active entry (the source,
+// a joined speaker) is filled like the selected option, a folder has the
+// Settings chevron. Text only (user 2026-10-19: covers, round buttons and
+// switches in every row made the list slow and busy; a picture with rounded
+// corners cost LVGL two extra layers per frame).
+constexpr int kOptionGap = 2;  // settings_parts.cpp kOptionGap
+
+lv_obj_t* list_row(MediaPopupContext* ctx, const char* text, bool active, bool folder, lv_event_cb_t cb,
+                   intptr_t index) {
   const MediaColors& c = ctx->colors;
-  const int pressed = (popup_layout::kCloseButtonSize + popup_layout::kHeaderIconDiscSize) / 2;
-  const int inset = (popup_layout::kCloseButtonSize - pressed) / 2;
   lv_obj_t* row = plain(ctx->list);
   if (cb) lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_size(row, LV_PCT(100), ml::kRowHeight);
+  lv_obj_set_size(row, LV_PCT(100), settings_style::kOptionHeight - kOptionGap);
+  settings_style::apply_radius(row, settings_style::kGroupRadius - settings_style::kOptionInset);
+  lv_obj_set_style_bg_color(row, c.control, 0);
+  lv_obj_set_style_bg_opa(row, active ? c.control_opa : LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_color(row, active ? c.raised : c.control, LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(row, active ? c.raised_opa : c.control_opa, LV_PART_MAIN | LV_STATE_PRESSED);
+  popup_nav_style::no_press_filter(row, LV_PART_MAIN | LV_STATE_PRESSED);
+  disable_pressed_button_animation(row);
+  const int pad = settings_style::kRowPadLeft - settings_style::kOptionInset;
+  lv_obj_set_style_pad_left(row, pad, 0);
+  lv_obj_set_style_pad_right(row, pad / 2, 0);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(row, Device::kGridGap, 0);
-  // The lead, the text and the control on the right sit one gap inside the
-  // pressed shape; the hairline runs from the content's start to its end.
-  lv_obj_set_style_pad_hor(row, Device::kGridGap, 0);
-  lv_obj_t* line = plain(row);
-  lv_obj_add_flag(line, LV_OBJ_FLAG_FLOATING);
-  lv_obj_set_size(line, popup_layout::kCardWidth - 2 * ml::kEdge - 2 * Device::kGridGap, 1);
-  lv_obj_align(line, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_obj_set_style_bg_color(line, lv_color_hex(c.text), 0);
-  lv_obj_set_style_bg_opa(line, LV_OPA_10, 0);
-  // Pressed like the head buttons: the control fill, concentric radius.
-  ui_surface_style::apply_radius(row, tile_radius::kMinimum - inset, 0);
-  popup_nav_style::style_press_fill(row, c.control, c.control_opa);
-  disable_pressed_button_animation(row);
+  lv_obj_t* label = add_text(row, settings_style::row_font(), c.text, text);
+  lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+  lv_obj_set_flex_grow(label, 1);
+  if (folder) add_icon(row, "chevron-right", c.secondary);
   if (cb) lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, reinterpret_cast<void*>(index));
   return row;
 }
 
-void row_texts(MediaPopupContext* ctx, lv_obj_t* row, const char* title, const char* sub) {
-  lv_obj_t* col = plain(row);
-  lv_obj_set_flex_grow(col, 1);
-  lv_obj_set_height(col, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-  lv_obj_t* t = add_text(col, popup_layout::font24(), ctx->colors.text, title);
-  lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
-  lv_obj_set_width(t, LV_PCT(100));
-  if (sub && *sub) {
-    lv_obj_t* s = add_text(col, popup_layout::font20(), ctx->colors.secondary, sub);
-    lv_label_set_long_mode(s, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(s, LV_PCT(100));
-  }
-}
-
-lv_obj_t* lead_box(lv_obj_t* row) {
-  lv_obj_t* lead = plain(row);
-  lv_obj_set_size(lead, ml::kLead, ml::kLead);
-  return lead;
-}
-
 void section(MediaPopupContext* ctx, const char* title) {
-  lv_obj_t* label = add_text(ctx->list, popup_layout::font20(), ctx->colors.secondary, title);
-  lv_obj_set_style_pad_top(label, Device::kGridGap, 0);
-  lv_obj_set_style_pad_bottom(label, Device::kGridGap / 2, 0);
-  lv_obj_set_style_pad_left(label, Device::kGridGap, 0);  // on the rows' content line
-}
-
-// A switch like the Settings switches: the icon color when on.
-void row_switch(MediaPopupContext* ctx, lv_obj_t* row, bool on, bool fixed) {
-  lv_obj_t* sw = plain(row);
-  lv_obj_set_size(sw, ml::kSwitchWidth, ml::kSwitchHeight);
-  lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, 0);
-  if (on) lv_obj_set_style_bg_color(sw, lv_color_hex(ctx->colors.icon), 0);
-  else lv_obj_set_style_bg_color(sw, ctx->colors.raised, 0);
-  lv_obj_set_style_bg_opa(sw, on ? LV_OPA_COVER : ctx->colors.raised_opa, 0);
-  if (fixed) lv_obj_set_style_opa(sw, LV_OPA_40, 0);
-  const int inset = popup_layout::scale(4);
-  const int knob_size = ml::kSwitchHeight - 2 * inset;
-  lv_obj_t* knob = plain(sw);
-  lv_obj_set_size(knob, knob_size, knob_size);
-  lv_obj_set_style_radius(knob, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(knob, lv_color_white(), 0);
-  lv_obj_set_style_bg_opa(knob, LV_OPA_COVER, 0);
-  lv_obj_align(knob, on ? LV_ALIGN_RIGHT_MID : LV_ALIGN_LEFT_MID, on ? -inset : inset, 0);
-}
-
-const char* class_icon(const String& media_class) {
-  if (media_class == "album") return "album";
-  if (media_class == "artist" || media_class == "composer" || media_class == "contributing_artist") return "account-music";
-  if (media_class == "playlist") return "playlist-music";
-  if (media_class == "track" || media_class == "music") return "music-note";
-  if (media_class == "podcast") return "podcast";
-  if (media_class == "channel") return "radio";
-  if (media_class == "movie") return "movie";
-  if (media_class == "tv_show" || media_class == "season" || media_class == "episode") return "television-play";
-  if (media_class == "video") return "video";
-  if (media_class == "image") return "image";
-  return "folder";
-}
-
-// ---- Library thumbnails (after PR #87: one request at a time) --------------------
-struct MediaThumb {
-  String url;
-  uint32_t bg = 0;
-  lv_image_dsc_t* dsc = nullptr;
-};
-std::vector<MediaThumb> g_thumbs;
-std::vector<String> g_thumb_failed;
-uint32_t g_thumb_seq = 0;
-
-lv_image_dsc_t* thumb_cached(const String& url, uint32_t bg) {
-  for (const MediaThumb& thumb : g_thumbs) {
-    if (thumb.bg == bg && thumb.url == url) return thumb.dsc;
-  }
-  return nullptr;
-}
-
-bool thumb_failed(const String& url) {
-  for (const String& failed : g_thumb_failed) {
-    if (failed == url) return true;
-  }
-  return false;
-}
-
-void thumb_mark_failed(const String& url) {
-  if (!url.length() || thumb_failed(url)) return;
-  if (g_thumb_failed.size() >= kThumbFailedMax) g_thumb_failed.erase(g_thumb_failed.begin());
-  g_thumb_failed.push_back(url);
-}
-
-bool thumb_in_use(const MediaPopupContext* ctx, const String& url) {
-  for (const MediaThumbRow& row : ctx->thumb_rows) {
-    if (row.url == url) return true;
-  }
-  return false;
-}
-
-void thumb_apply(MediaPopupContext* ctx, const String& url, const lv_image_dsc_t* dsc) {
-  if (!dsc) return;
-  for (const MediaThumbRow& row : ctx->thumb_rows) {
-    if (row.url != url) continue;
-    lv_image_set_src(row.image, dsc);
-    set_shown(row.image, true);
-    set_shown(row.icon, false);
-  }
-}
-
-bool thumb_store(MediaPopupContext* ctx, const String& url, uint32_t bg, lv_image_dsc_t* dsc) {
-  if (g_thumbs.size() >= kThumbCacheMax) {
-    for (size_t i = 0; i < g_thumbs.size(); ++i) {
-      if (thumb_in_use(ctx, g_thumbs[i].url)) continue;
-      tile_renderer_free_image_dsc(g_thumbs[i].dsc);
-      g_thumbs.erase(g_thumbs.begin() + i);
-      break;
-    }
-  }
-  if (g_thumbs.size() >= kThumbCacheMax) {
-    tile_renderer_free_image_dsc(dsc);
-    return false;
-  }
-  g_thumbs.push_back({url, bg, dsc});
-  return true;
-}
-
-void thumb_tick(MediaPopupContext* ctx) {
-  if (ctx->thumb_inflight_id) {
-    if (millis() - ctx->thumb_inflight_ms < kThumbTimeoutMs) return;
-    Serial.printf("[MediaLibrary] Thumbnail %lu timed out\n", static_cast<unsigned long>(ctx->thumb_inflight_id));
-    thumb_mark_failed(ctx->thumb_inflight_url);
-    ctx->thumb_inflight_id = 0;
-    ctx->thumb_inflight_url = "";
-  }
-  const uint32_t bg = ctx->colors.card & 0xFFFFFF;
-  while (!ctx->thumb_queue.empty()) {
-    const String url = ctx->thumb_queue.front();
-    ctx->thumb_queue.erase(ctx->thumb_queue.begin());
-    if (const lv_image_dsc_t* hit = thumb_cached(url, bg)) {
-      thumb_apply(ctx, url, hit);
-      continue;
-    }
-    if (!thumb_in_use(ctx, url) || thumb_failed(url)) continue;
-    const uint32_t id = ++g_thumb_seq ? g_thumb_seq : ++g_thumb_seq;
-    if (!mqttPublishMediaThumbnail(media_browse_entity().c_str(), media_browse_session().c_str(), id, url.c_str(),
-                                   static_cast<uint16_t>(ml::kLead), bg)) {
-      // Busy or offline: this picture again on the next tick.
-      ctx->thumb_queue.insert(ctx->thumb_queue.begin(), url);
-      return;
-    }
-    ctx->thumb_inflight_id = id;
-    ctx->thumb_inflight_url = url;
-    ctx->thumb_inflight_ms = millis();
-    return;
-  }
+  lv_obj_t* label = add_text(ctx->list, settings_style::small_font(), ctx->colors.secondary, title);
+  lv_obj_set_style_pad_top(label, settings_style::kSectionBottom, 0);
+  lv_obj_set_style_pad_bottom(label, settings_style::kSectionBottom, 0);
+  lv_obj_set_style_pad_left(label, settings_style::kRowPadLeft - settings_style::kOptionInset, 0);
 }
 
 // ---- The library ----------------------------------------------------------------
@@ -1426,60 +1307,40 @@ static void on_library_row(lv_event_t* e) {
   }
 }
 
-static void on_library_play(lv_event_t* e) {
-  // A playlist or album plays as a whole from its round button (PR #87).
-  MediaPopupContext* ctx = g_media_popup_ctx;
-  if (!ctx || lv_event_get_code(e) != LV_EVENT_CLICKED) return;
-  const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
-  const size_t index = static_cast<size_t>(reinterpret_cast<intptr_t>(lv_event_get_user_data(e)));
-  if (media_browse_play(index)) open_view(ctx, MediaView::Player);
-}
-
 void append_library_rows(MediaPopupContext* ctx) {
   const auto& items = media_browse_items();
   const size_t end = std::min(items.size(), ctx->library_rows + kLibraryRowsStep);
-  const uint32_t bg = ctx->colors.card & 0xFFFFFF;
   for (size_t i = ctx->library_rows; i < end; ++i) {
     const MediaBrowseItem& item = items[i];
-    lv_obj_t* row = list_row(ctx, on_library_row, static_cast<intptr_t>(i));
-    lv_obj_t* lead = lead_box(row);
-    lv_obj_t* icon = add_icon(lead, class_icon(item.media_class), ctx->colors.secondary);
-    lv_obj_center(icon);
-    if (item.thumbnail.length()) {
-      ui_surface_style::apply_radius(lead, popup_layout::scale480(12), 0);
-      lv_obj_set_style_clip_corner(lead, true, 0);
-      lv_obj_t* image = lv_image_create(lead);
-      lv_obj_set_size(image, ml::kLead, ml::kLead);
-      lv_obj_center(image);
-      lv_obj_add_flag(image, LV_OBJ_FLAG_HIDDEN);
-      ctx->thumb_rows.push_back({item.thumbnail, image, icon});
-      if (const lv_image_dsc_t* hit = thumb_cached(item.thumbnail, bg)) {
-        thumb_apply(ctx, item.thumbnail, hit);
-      } else if (!thumb_failed(item.thumbnail)) {
-        ctx->thumb_queue.push_back(item.thumbnail);
-      }
-    }
-    row_texts(ctx, row, item.title.c_str(), nullptr);
-    if (item.can_expand && item.can_play) {
-      lv_obj_t* play = round_button(row, ctx->colors, ml::kLead, "play", ctx->colors.text, nullptr);
-      popup_nav_style::set_bg(play, ctx->colors.control, ctx->colors.control_opa, LV_PART_MAIN);
-      popup_nav_style::set_bg(play, ctx->colors.raised, ctx->colors.raised_opa, LV_PART_MAIN | LV_STATE_PRESSED);
-      lv_obj_add_event_cb(play, on_library_play, LV_EVENT_CLICKED, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
-    }
-    if (item.can_expand) add_icon(row, "chevron-right", ctx->colors.secondary);
+    list_row(ctx, item.title.c_str(), false, item.can_expand, on_library_row, static_cast<intptr_t>(i));
   }
   ctx->library_rows = end;
 }
 
+// The library's state over the list, never in it (a line at its top pushed
+// every row down): loading only when an answer takes a moment, an error for
+// a few seconds, "nothing here" while the level is empty.
 void show_library_status(MediaPopupContext* ctx) {
   if (!ctx->library_status) return;
   const auto& tr = texts();
   const MediaBrowseStatus status = media_browse_status();
+  if (status != ctx->library_status_value) {
+    ctx->library_status_value = status;
+    ctx->library_status_ms = millis();
+  }
+  const uint32_t since = millis() - ctx->library_status_ms;
+  const bool empty = media_browse_items().empty();
   const char* text = "";
-  if (status == MediaBrowseStatus::Loading || status == MediaBrowseStatus::Idle) text = tr.loading;
-  else if (status == MediaBrowseStatus::Error) text = tr.media_library_failed;
-  else if (media_browse_items().empty()) text = tr.media_library_empty;
-  lv_label_set_text(ctx->library_status, text);
+  if (status == MediaBrowseStatus::Loading || status == MediaBrowseStatus::Idle) {
+    if (since >= kLoadingDelayMs) text = tr.loading;
+  } else if (status == MediaBrowseStatus::Error) {
+    if (empty || since < kErrorShownMs) text = tr.media_library_failed;
+  } else if (empty) {
+    text = tr.media_library_empty;
+  }
+  if (strcmp(lv_label_get_text(ctx->library_status), text) != 0) lv_label_set_text(ctx->library_status, text);
+  const lv_align_t align = ctx->library_rows ? LV_ALIGN_BOTTOM_MID : LV_ALIGN_CENTER;
+  if (lv_obj_get_style_align(ctx->library_status, LV_PART_MAIN) != align) lv_obj_align(ctx->library_status, align, 0, 0);
   set_shown(ctx->library_status, *text != '\0');
 }
 
@@ -1501,19 +1362,24 @@ static void on_list_scroll_end(lv_event_t* e) {
   }
   if (ctx->view != MediaView::Library) return;
   if (ctx->library_rows >= media_browse_items().size()) return;
-  if (lv_obj_get_scroll_bottom(ctx->list) > 3 * ml::kRowHeight) return;
+  if (lv_obj_get_scroll_bottom(ctx->list) > 3 * settings_style::kOptionHeight) return;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
   append_library_rows(ctx);
 }
 
 void build_library(MediaPopupContext* ctx) {
-  ctx->library_status = add_text(ctx->list, popup_layout::font20(), ctx->colors.secondary, "");
-  lv_obj_set_style_pad_top(ctx->library_status, Device::kGridGap, 0);
-  lv_obj_set_style_pad_bottom(ctx->library_status, Device::kGridGap, 0);
-  lv_obj_set_style_pad_left(ctx->library_status, Device::kGridGap, 0);
   ctx->library_rows = 0;
   ctx->library_items_version = media_browse_items_version();
   append_library_rows(ctx);
+  // The status pill: like the volume percentage over the knob.
+  ctx->library_status = add_text(ctx->list, popup_layout::font20(), ctx->colors.text, "");
+  lv_obj_add_flag(ctx->library_status, LV_OBJ_FLAG_FLOATING);
+  lv_obj_set_style_bg_color(ctx->library_status, ctx->colors.control, 0);
+  lv_obj_set_style_bg_opa(ctx->library_status, ctx->colors.control_opa, 0);
+  lv_obj_set_style_radius(ctx->library_status, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_pad_hor(ctx->library_status, popup_layout::scale(14), 0);
+  lv_obj_set_style_pad_ver(ctx->library_status, popup_layout::scale(6), 0);
+  lv_obj_add_flag(ctx->library_status, LV_OBJ_FLAG_HIDDEN);
   show_library_status(ctx);
 }
 
@@ -1555,15 +1421,12 @@ void build_sources(MediaPopupContext* ctx) {
     if (both) section(ctx, group.title);
     for (size_t i = 0; i < group.list->size(); ++i) {
       const bool current = (*group.list)[i] == *group.current;
-      lv_obj_t* row = list_row(ctx, on_source_row, group.base + static_cast<intptr_t>(i));
-      row_texts(ctx, row, (*group.list)[i].c_str(), nullptr);
-      add_icon(row, current ? "radiobox-marked" : "radiobox-blank", current ? ctx->colors.text : ctx->colors.secondary);
+      list_row(ctx, (*group.list)[i].c_str(), current, false, on_source_row, group.base + static_cast<intptr_t>(i));
     }
   }
 }
 
 // ---- Speakers: players of the same integration with GROUPING --------------------
-
 static void on_group_row(lv_event_t* e) {
   MediaPopupContext* ctx = g_media_popup_ctx;
   if (!ctx || lv_event_get_code(e) != LV_EVENT_CLICKED || !ctx->available) return;
@@ -1573,7 +1436,7 @@ static void on_group_row(lv_event_t* e) {
   if (!x || index >= x->candidates.size()) return;
   const String member = x->candidates[index].entity_id;
   const bool joined = contains(x->members, member);
-  // Join and leave at once on every switch; Home Assistant's next state
+  // Join and leave at once on every tap; Home Assistant's next state
   // confirms the group.
   if (!mqttPublishMediaGroup(ctx->entity_id.c_str(), !joined, member.c_str())) return;
   if (joined) {
@@ -1592,22 +1455,13 @@ static void on_group_row(lv_event_t* e) {
 }
 
 void build_group(MediaPopupContext* ctx) {
-  const auto& tr = texts();
   const MediaExtras& x = extras_of(ctx->entity_id);
-  String sub = tr.media_this_player;
-  const char* state = media_state_text(x.state);
-  if (*state) sub += String(" \xC2\xB7 ") + state;
-  lv_obj_t* self = list_row(ctx, nullptr, 0);
-  lv_obj_center(add_icon(lead_box(self), "speaker", ctx->colors.secondary));
-  row_texts(ctx, self, ctx->title.c_str(), sub.c_str());
-  row_switch(ctx, self, true, true);
+  // This player first, always in its group; a tap on another joins or leaves.
+  list_row(ctx, ctx->title.c_str(), true, false, nullptr, 0);
   for (size_t i = 0; i < x.candidates.size(); ++i) {
     const MediaGroupCandidate& candidate = x.candidates[i];
-    const bool joined = contains(x.members, candidate.entity_id);
-    lv_obj_t* row = list_row(ctx, on_group_row, static_cast<intptr_t>(i));
-    lv_obj_center(add_icon(lead_box(row), "speaker", ctx->colors.secondary));
-    row_texts(ctx, row, candidate.name.c_str(), media_state_text(candidate.state));
-    row_switch(ctx, row, joined, false);
+    list_row(ctx, candidate.name.c_str(), contains(x.members, candidate.entity_id), false, on_group_row,
+             static_cast<intptr_t>(i));
   }
 }
 
@@ -1659,8 +1513,6 @@ void delete_list(MediaPopupContext* ctx) {
   ctx->list_dirty = false;
   ctx->library_status = nullptr;
   ctx->library_rows = 0;
-  ctx->thumb_rows.clear();
-  ctx->thumb_queue.clear();
 }
 
 static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
@@ -1721,7 +1573,7 @@ static void media_library_timer_cb(lv_timer_t* timer) {
   MediaPopupContext* ctx = timer ? static_cast<MediaPopupContext*>(lv_timer_get_user_data(timer)) : nullptr;
   if (!popup_visible(ctx) || ctx->view != MediaView::Library) return;
   media_browse_poll(millis());
-  thumb_tick(ctx);
+  show_library_status(ctx);
 }
 
 static void media_bubble_timer_cb(lv_timer_t* timer) {
@@ -1822,18 +1674,24 @@ static void on_volume_slider_event(lv_event_t* e) {
   if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && !released) return;
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->volume_slider.track) return;
+  (void)released;
   if (!ctx->has_volume || !ctx->available) {
     ctx->volume_dragging = false;
+    ctx->volume_slider.dragging = false;
     return;
   }
+  const SliderStep step = slider_step(ctx->volume_slider, code);
+  if (step == SliderStep::None) return;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
-  apply_volume_drag(ctx, slider_touch_fraction(ctx->volume_slider), released);
+  apply_volume_drag(ctx, slider_touch_fraction(ctx->volume_slider), step == SliderStep::Release);
 }
 
 // One step of a position drag; the final one publishes.
 static void apply_seek_drag(MediaPopupContext* ctx, float fraction, bool released) {
   if (fraction < 0.0f) fraction = 0.0f;
   if (fraction > 1.0f) fraction = 1.0f;
+  // The old popup's steps: 0..1000 of the duration.
+  fraction = floorf(fraction * 1000.0f + 0.5f) / 1000.0f;
   const float position = ctx->media_duration * fraction;
   ctx->seek_dragging = !released;
   slider_show(ctx->seek_slider, fraction);
@@ -1853,13 +1711,17 @@ static void on_seek_slider_event(lv_event_t* e) {
   if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && !released) return;
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
   if (!ctx || !ctx->seek_slider.track) return;
+  (void)released;
   // End the gesture even if playback became unavailable while dragging.
   if (!ctx->has_media_position || !ctx->available || !seek_allowed(ctx)) {
     ctx->seek_dragging = false;
+    ctx->seek_slider.dragging = false;
     return;
   }
+  const SliderStep step = slider_step(ctx->seek_slider, code);
+  if (step == SliderStep::None) return;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
-  apply_seek_drag(ctx, slider_touch_fraction(ctx->seek_slider), released);
+  apply_seek_drag(ctx, slider_touch_fraction(ctx->seek_slider), step == SliderStep::Release);
 }
 
 static void on_volume_mute_click(lv_event_t* e) {
@@ -2213,37 +2075,4 @@ void media_popup_note_state(const String& entity_id, const char* payload) {
     x.candidates.push_back({id, candidate["name"] | id, candidate["state"] | ""});
     if (x.candidates.size() >= kMaxCandidates) break;
   }
-}
-
-void media_popup_handle_browse_thumbnail(const char* payload, size_t length) {
-  MediaPopupContext* ctx = g_media_popup_ctx;
-  if (!payload || !length || !ctx || ctx->thumb_inflight_id == 0) return;
-  JsonDocument doc;
-  if (deserializeJson(doc, payload, length)) {
-    Serial.printf("[MediaLibrary] Thumbnail answer not read (%u bytes)\n", static_cast<unsigned>(length));
-    return;
-  }
-  const uint32_t thumb_id = doc["thumb_id"] | 0u;
-  const char* session = doc["session"] | "";
-  // A late answer after a timeout, or another session.
-  if (thumb_id != ctx->thumb_inflight_id || media_browse_session() != session) return;
-  const String url = ctx->thumb_inflight_url;
-  ctx->thumb_inflight_id = 0;
-  ctx->thumb_inflight_url = "";
-  const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
-  const char* status = doc["status"] | "";
-  const char* data = doc["data"] | "";
-  if (strcmp(status, "ok") != 0 || !*data) {
-    Serial.printf("[MediaLibrary] Thumbnail %lu failed: %s\n", static_cast<unsigned long>(thumb_id),
-                  doc["error"] | "unknown");
-    thumb_mark_failed(url);
-  } else if (lv_image_dsc_t* dsc = tile_renderer_decode_image_base64(String(data))) {
-    const uint32_t bg = ctx->colors.card & 0xFFFFFF;
-    if (thumb_store(ctx, url, bg, dsc)) thumb_apply(ctx, url, thumb_cached(url, bg));
-  } else {
-    Serial.printf("[MediaLibrary] Thumbnail %lu could not be decoded\n", static_cast<unsigned long>(thumb_id));
-    thumb_mark_failed(url);
-  }
-  // The next picture right away instead of on the next tick.
-  if (ctx->library_timer && popup_visible(ctx) && ctx->view == MediaView::Library) lv_timer_ready(ctx->library_timer);
 }

@@ -8,8 +8,11 @@
 // average turns most covers into a muddy brown or grey). Grey, near-black and
 // near-white pixels are ignored; a cover with too few colored pixels (black
 // and white artwork) gives no color, so the tile stays neutral like a white
-// icon. The cover is sampled on a grid of at most 32 x 32 pixels, once per
-// cover change. No Arduino/LVGL dependency, so host tests compile it
+// icon. Samples in the outer quarter of the cover count twice: the edge is
+// mostly the background, the middle the subject (like Apple's album-art
+// backgrounds; user 2026-10-19: the face of "Torn" made the popup rust brown,
+// the sky around it is teal). The cover is sampled on a grid of at most
+// 32 x 32 pixels, once per cover change. No Arduino/LVGL dependency, so host tests compile it
 // unchanged.
 namespace media_cover_color {
 
@@ -70,10 +73,15 @@ inline bool pick(const uint8_t* data, uint16_t width, uint16_t height, uint32_t 
       if (chroma < static_cast<int>(kMinChroma) || brightest < static_cast<int>(kMinBrightest)) continue;
       ++colored;
       const unsigned bucket = hue_bucket(r, g, b, brightest, chroma);
-      weight[bucket] += static_cast<uint32_t>(chroma);
-      sum_r[bucket] += static_cast<uint32_t>(r * chroma);
-      sum_g[bucket] += static_cast<uint32_t>(g * chroma);
-      sum_b[bucket] += static_cast<uint32_t>(b * chroma);
+      // Distance in samples from the nearest side of the cover.
+      const unsigned side_x = i < columns - 1 - i ? i : columns - 1 - i;
+      const unsigned side_y = j < rows - 1 - j ? j : rows - 1 - j;
+      const unsigned ring = side_x < side_y ? side_x : side_y;
+      const uint32_t w = static_cast<uint32_t>(chroma) * (ring < columns / 4 || ring < rows / 4 ? 2u : 1u);
+      weight[bucket] += w;
+      sum_r[bucket] += static_cast<uint32_t>(r) * w;
+      sum_g[bucket] += static_cast<uint32_t>(g) * w;
+      sum_b[bucket] += static_cast<uint32_t>(b) * w;
     }
   }
   if (colored == 0 || colored * 1000u < samples * kMinSharePermille) return false;

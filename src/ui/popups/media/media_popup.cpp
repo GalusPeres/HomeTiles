@@ -200,6 +200,37 @@ void set_icon(lv_obj_t* label, const char* name) {
 
 int line_height(const lv_font_t* font) { return lv_font_get_line_height(font); }
 
+// The text without the characters `font` lacks (emoji in a playlist name
+// showed as boxes, user 2026-10-19): left out, double spaces joined.
+String drop_missing_glyphs(const char* text, const lv_font_t* font) {
+  String out;
+  if (!text) return out;
+  uint32_t i = 0;
+  const uint32_t length = static_cast<uint32_t>(strlen(text));
+  bool space = false;
+  while (i < length) {
+    const uint32_t start = i;
+    const uint32_t letter = lv_text_encoded_next(text, &i);
+    if (i <= start) break;
+    lv_font_glyph_dsc_t glyph;
+    const bool shown = letter < 0x80 || lv_font_get_glyph_dsc(font, &glyph, letter, 0);
+    if (!shown) continue;
+    const bool is_space = letter == ' ';
+    if (is_space && (space || out.length() == 0)) continue;
+    space = is_space;
+    for (uint32_t k = start; k < i; ++k) out += text[k];
+  }
+  out.trim();
+  return out;
+}
+
+// One line, cut with "..." (LV_LABEL_LONG_DOT cuts only at a fixed height;
+// without one a long text wrapped: settings_parts.cpp one_line).
+void one_line_dots(lv_obj_t* label) {
+  lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+  lv_obj_set_height(label, line_height(lv_obj_get_style_text_font(label, LV_PART_MAIN)));
+}
+
 int text_width(const lv_font_t* font, const char* text) {
   lv_point_t size;
   lv_text_get_size(&size, text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
@@ -248,6 +279,12 @@ struct MediaColors {
   uint32_t icon = 0;
   uint32_t text = 0;
   uint32_t secondary = 0;
+  // The media controls, the play circle and the slider knobs: the theme's
+  // icon role (ui_theme.h Roles; the old popup's too). White in the dark
+  // theme and on filled cards, #464646 on the light theme's white card
+  // (user 2026-10-19: white knobs vanished there, controls mixed black and
+  // grey).
+  uint32_t control_icon = 0;
   lv_color_t control = {};
   lv_opa_t control_opa = 0;
   bool tinted = false;
@@ -261,6 +298,7 @@ MediaColors compute_colors(uint32_t card, uint32_t icon) {
   c.icon = icon;
   c.text = ui_theme::text();
   c.secondary = ui_theme::text_secondary();
+  c.control_icon = ui_theme::icon();
   popup_shell_control_fill(card, icon, c.control, c.control_opa, &c.tinted);
   popup_shell_control_raised_fill(card, icon, c.raised, c.raised_opa);
   return c;
@@ -268,7 +306,7 @@ MediaColors compute_colors(uint32_t card, uint32_t icon) {
 
 uint32_t colors_key(const MediaColors& c) {
   uint32_t key = 2166136261u;
-  for (uint32_t part : {c.card, c.icon, c.text, c.secondary, lv_color_to_u32(c.control), static_cast<uint32_t>(c.control_opa),
+  for (uint32_t part : {c.card, c.icon, c.text, c.secondary, c.control_icon, lv_color_to_u32(c.control), static_cast<uint32_t>(c.control_opa),
                         lv_color_to_u32(c.raised), static_cast<uint32_t>(c.raised_opa), static_cast<uint32_t>(c.tinted)}) {
     key = (key ^ part) * 16777619u;
   }
@@ -290,8 +328,8 @@ struct MediaSlider {
   int width = 0;
   int radius = 0;
   float value = 0.0f;
-  int32_t pressed_x = 0;
-  bool dragging = false;
+  lv_obj_t* input = nullptr;  // the old popup's lv_slider, transparent
+  int32_t steps = 100;
 };
 
 struct MarqueeLine {
@@ -310,12 +348,17 @@ struct MediaPopupContext {
   lv_obj_t* root = nullptr;         // the whole card in card coordinates
   lv_obj_t* player = nullptr;       // kept while a sub-view shows
   lv_obj_t* list = nullptr;         // the open sub-view's list
+  lv_obj_t* list_box = nullptr;     // the box around it (the dropdown's)
   lv_obj_t* library_status = nullptr;
-  lv_obj_t* back_button = nullptr;
   lv_obj_t* source_button = nullptr;
   lv_obj_t* library_button = nullptr;
+  lv_obj_t* back_button = nullptr;  // a sub-view's back arrow, left of the close button
   lv_obj_t* cover_clip = nullptr;
   lv_obj_t* cover_image = nullptr;
+  // The popup's cover copy has its rounded corners in its pixels, over this
+  // card color (round_cover_corners); false for a copy LVGL scales.
+  bool cover_baked = false;
+  uint32_t cover_corner_card = 0;
   lv_obj_t* fallback_icon = nullptr;
   lv_obj_t* bars = nullptr;
   lv_obj_t* title_clip = nullptr;
@@ -430,6 +473,66 @@ static void free_cover_dsc(lv_image_dsc_t*& dsc) {
   dsc = nullptr;
 }
 
+// The cover's rounded corners drawn into its own pixels over the card's
+// color, once per picture and card color: with clip_corner LVGL drew the
+// cover through two ARGB8888 layers on every frame (V2 b492: the player's
+// block ~33 ms of a ~100 ms opening, ~9 ms without a cover). The edge pixels
+// are mixed by how much of them lies inside the arc, like LVGL's own radius.
+static uint16_t cover_pixel(const uint8_t* at, bool swapped) {
+  return swapped ? static_cast<uint16_t>((at[0] << 8) | at[1]) : static_cast<uint16_t>(at[0] | (at[1] << 8));
+}
+
+static void set_cover_pixel(uint8_t* at, uint16_t value, bool swapped) {
+  at[swapped ? 1 : 0] = static_cast<uint8_t>(value & 0xFF);
+  at[swapped ? 0 : 1] = static_cast<uint8_t>(value >> 8);
+}
+
+static bool round_cover_corners(lv_image_dsc_t* dsc, int radius, uint32_t card_rgb) {
+  if (!dsc || !dsc->data || radius <= 0) return false;
+  const lv_color_format_t cf = static_cast<lv_color_format_t>(dsc->header.cf);
+  if (cf != LV_COLOR_FORMAT_RGB565 && cf != LV_COLOR_FORMAT_RGB565_SWAPPED) return false;
+  const bool swapped = cf == LV_COLOR_FORMAT_RGB565_SWAPPED;
+  const int w = dsc->header.w;
+  const int h = dsc->header.h;
+  const int stride = dsc->header.stride ? dsc->header.stride : w * 2;
+  if (w <= 0 || h <= 0 || static_cast<uint32_t>(stride) * h > dsc->data_size) return false;
+  radius = std::min(radius, std::min(w, h) / 2);
+  const lv_color_t card = lv_color_hex(card_rgb);
+  uint8_t* data = const_cast<uint8_t*>(dsc->data);
+  for (int y = 0; y < radius; ++y) {
+    for (int x = 0; x < radius; ++x) {
+      const float dx = radius - (x + 0.5f);
+      const float dy = radius - (y + 0.5f);
+      const float inside = radius - sqrtf(dx * dx + dy * dy) + 0.5f;
+      if (inside >= 1.0f) continue;
+      const uint8_t keep = inside <= 0.0f ? 0 : static_cast<uint8_t>(inside * 255.0f);
+      const int xs[2] = {x, w - 1 - x};
+      const int ys[2] = {y, h - 1 - y};
+      for (int yi : ys) {
+        for (int xi : xs) {
+          uint8_t* at = data + yi * stride + xi * 2;
+          const uint16_t v = cover_pixel(at, swapped);
+          const lv_color_t pixel = lv_color_make(static_cast<uint8_t>(((v >> 11) & 0x1F) << 3),
+                                                 static_cast<uint8_t>(((v >> 5) & 0x3F) << 2),
+                                                 static_cast<uint8_t>((v & 0x1F) << 3));
+          set_cover_pixel(at, lv_color_to_u16(lv_color_mix(pixel, card, keep)), swapped);
+        }
+      }
+    }
+  }
+  return true;
+}
+
+// The clip around the cover: a baked cover is a plain picture (no
+// clip_corner, no fill under it); a scaled copy keeps the clip; without a
+// cover the clip shows the fallback icon on the control fill.
+static void style_cover_clip(MediaPopupContext* ctx, bool cover_shown) {
+  if (!ctx->cover_clip) return;
+  const bool baked = cover_shown && ctx->cover_baked;
+  lv_obj_set_style_clip_corner(ctx->cover_clip, cover_shown && !baked, 0);
+  lv_obj_set_style_bg_opa(ctx->cover_clip, baked ? LV_OPA_TRANSP : ctx->colors.control_opa, 0);
+}
+
 static lv_image_dsc_t* clone_cover_dsc(const lv_image_dsc_t* src) {
   if (!src || !src->data || src->data_size == 0) return nullptr;
 
@@ -455,6 +558,7 @@ static void update_cover(MediaPopupContext* ctx, const lv_image_dsc_t* cover_dsc
   if (cover_dsc && ctx->cover_hash == cover_hash && ctx->cover_dsc) {
     lv_obj_clear_flag(ctx->cover_image, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(ctx->fallback_icon, LV_OBJ_FLAG_HIDDEN);
+    style_cover_clip(ctx, true);
     return;
   }
 
@@ -470,8 +574,13 @@ static void update_cover(MediaPopupContext* ctx, const lv_image_dsc_t* cover_dsc
       ctx->cover_dsc = clone_cover_dsc(cover_dsc);
       exact = false;
     }
+    ctx->cover_baked = exact && ctx->cover_dsc &&
+                       round_cover_corners(ctx->cover_dsc, lv_obj_get_style_radius(ctx->cover_clip, LV_PART_MAIN),
+                                           ctx->colors.card);
+    ctx->cover_corner_card = ctx->colors.card;
     if (ctx->cover_dsc) {
       ctx->cover_hash = cover_hash;
+      style_cover_clip(ctx, true);
       lv_image_set_inner_align(ctx->cover_image, exact ? LV_IMAGE_ALIGN_CENTER : LV_IMAGE_ALIGN_COVER);
       lv_image_set_src(ctx->cover_image, ctx->cover_dsc);
       lv_obj_clear_flag(ctx->cover_image, LV_OBJ_FLAG_HIDDEN);
@@ -483,10 +592,16 @@ static void update_cover(MediaPopupContext* ctx, const lv_image_dsc_t* cover_dsc
 
   lv_obj_add_flag(ctx->cover_image, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(ctx->fallback_icon, LV_OBJ_FLAG_HIDDEN);
+  style_cover_clip(ctx, false);
   free_cover_dsc(old);
 }
 
 // ---- Sliders ---------------------------------------------------------------------
+// The look is the bar from edge to edge with the knob travelling inside it;
+// the touch is the old popup's lv_slider over the knob's travel, unchanged:
+// its touch area around the knob, its drag that starts after the scroll
+// limit and its steps (0..100 volume, 0..1000 position). b487-b489 read the
+// finger themselves and the knob twitched under a resting finger.
 void slider_show(MediaSlider& slider, float fraction) {
   if (!slider.track) return;
   if (fraction < 0.0f) fraction = 0.0f;
@@ -495,54 +610,40 @@ void slider_show(MediaSlider& slider, float fraction) {
   const int at = slider.radius + static_cast<int>(fraction * (slider.width - 2 * slider.radius) + 0.5f);
   lv_obj_set_width(slider.fill, at);
   lv_obj_set_x(slider.knob, slider.x + at - slider.radius);
+  // The slider follows a value from outside; while the finger drags it, it
+  // is the source.
+  if (slider.input && !lv_slider_is_dragged(slider.input)) {
+    lv_slider_set_value(slider.input, static_cast<int32_t>(fraction * slider.steps + 0.5f), LV_ANIM_OFF);
+  }
 }
 
 void slider_set_shown(MediaSlider& slider, bool shown) {
   set_shown(slider.track, shown);
   set_shown(slider.knob, shown);
+  set_shown(slider.input, shown);
 }
 
-// Like lv_slider (lv_slider.c update_knob_pos): a press only notes where it
-// came down, the knob follows once the finger moved LV_INDEV_DEF_SCROLL_LIMIT
-// sideways, and the lift sets the value where it lifted (a tap jumps there).
-// The knob followed every reading of the touch chip, which wanders a pixel
-// or two under a resting finger: it twitched between two steps.
-enum class SliderStep : uint8_t { None, Drag, Release };
-SliderStep slider_step(MediaSlider& slider, lv_event_code_t code) {
-  lv_point_t point;
-  lv_indev_get_point(lv_indev_active(), &point);
-  if (code == LV_EVENT_PRESSED) {
-    slider.pressed_x = point.x;
-    slider.dragging = false;
-    return SliderStep::None;
+void slider_set_enabled(MediaSlider& slider, bool enabled) {
+  for (lv_obj_t* obj : {slider.track, slider.input}) {
+    if (!obj || lv_obj_has_state(obj, LV_STATE_DISABLED) == !enabled) continue;
+    if (enabled) lv_obj_remove_state(obj, LV_STATE_DISABLED);
+    else lv_obj_add_state(obj, LV_STATE_DISABLED);
   }
-  if (code == LV_EVENT_PRESSING) {
-    if (!slider.dragging && abs(point.x - slider.pressed_x) < LV_INDEV_DEF_SCROLL_LIMIT) return SliderStep::None;
-    slider.dragging = true;
-    return SliderStep::Drag;
-  }
-  slider.dragging = false;
-  return SliderStep::Release;
 }
 
-// The touch point on the bar as 0..1 (the knob's middle under the finger).
-float slider_touch_fraction(const MediaSlider& slider) {
-  lv_point_t point;
-  lv_indev_get_point(lv_indev_active(), &point);
-  lv_area_t area;
-  lv_obj_get_coords(slider.track, &area);
-  const int span = lv_area_get_width(&area) - 2 * slider.radius;
-  if (span <= 0) return 0.0f;
-  return static_cast<float>(point.x - area.x1 - slider.radius) / static_cast<float>(span);
+// The slider's value as 0..1.
+float slider_input_fraction(const MediaSlider& slider) {
+  if (!slider.input || slider.steps <= 0) return 0.0f;
+  return static_cast<float>(lv_slider_get_value(slider.input)) / static_cast<float>(slider.steps);
 }
 
 void make_slider(MediaSlider& slider, lv_obj_t* parent, const MediaColors& c, int x, int mid_y, int width, int height,
-                 int knob, lv_event_cb_t handler, MediaPopupContext* ctx) {
+                 int knob, int32_t steps, int click_pad, lv_event_cb_t handler, MediaPopupContext* ctx) {
   slider.x = x;
   slider.width = width;
   slider.radius = knob / 2;
+  slider.steps = steps;
   slider.track = plain(parent);
-  lv_obj_add_flag(slider.track, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_pos(slider.track, x, mid_y - height / 2);
   lv_obj_set_size(slider.track, width, height);
   lv_obj_set_style_radius(slider.track, LV_RADIUS_CIRCLE, 0);
@@ -551,21 +652,32 @@ void make_slider(MediaSlider& slider, lv_obj_t* parent, const MediaColors& c, in
   lv_obj_set_style_bg_color(slider.track, c.control, 0);
   lv_obj_set_style_bg_opa(slider.track, c.control_opa, 0);
   lv_obj_set_style_opa(slider.track, LV_OPA_30, LV_PART_MAIN | LV_STATE_DISABLED);
-  lv_obj_set_ext_click_area(slider.track, popup_layout::scale(20));
   slider.fill = plain(slider.track);
   lv_obj_set_size(slider.fill, slider.radius, height);
   lv_obj_set_style_radius(slider.fill, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(slider.fill, lv_color_hex(c.tinted ? c.icon : c.text), 0);
+  lv_obj_set_style_bg_color(slider.fill, lv_color_hex(c.tinted ? c.icon : c.control_icon), 0);
   lv_obj_set_style_bg_opa(slider.fill, LV_OPA_COVER, 0);
   slider.knob = plain(parent);
   lv_obj_set_size(slider.knob, knob, knob);
   lv_obj_set_pos(slider.knob, x, mid_y - knob / 2);
   lv_obj_set_style_radius(slider.knob, LV_RADIUS_CIRCLE, 0);
-  // The knob stays white (popup_nav_style::style_slider).
-  lv_obj_set_style_bg_color(slider.knob, lv_color_white(), 0);
+  // The knob in the icon role (ui_control_style.h): white in the dark theme
+  // and on filled cards, dark on the light theme's white card.
+  lv_obj_set_style_bg_color(slider.knob, lv_color_hex(c.control_icon), 0);
   lv_obj_set_style_bg_opa(slider.knob, LV_OPA_COVER, 0);
-  for (lv_event_code_t code : {LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST}) {
-    lv_obj_add_event_cb(slider.track, handler, code, ctx);
+  // The touch: an lv_slider over the knob's travel (its knob's middle runs
+  // from x + r to x + width - r, like the drawn knob), drawn invisibly.
+  slider.input = lv_slider_create(parent);
+  lv_obj_remove_style_all(slider.input);
+  lv_obj_set_pos(slider.input, x + slider.radius, mid_y - height / 2);
+  lv_obj_set_size(slider.input, width - 2 * slider.radius, height);
+  lv_slider_set_range(slider.input, 0, steps);
+  lv_obj_set_style_width(slider.input, knob, LV_PART_KNOB);
+  lv_obj_set_style_height(slider.input, knob, LV_PART_KNOB);
+  lv_obj_set_ext_click_area(slider.input, click_pad);
+  lv_obj_remove_flag(slider.input, LV_OBJ_FLAG_SCROLLABLE);
+  for (lv_event_code_t code : {LV_EVENT_VALUE_CHANGED, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST}) {
+    lv_obj_add_event_cb(slider.input, handler, code, ctx);
   }
 }
 
@@ -619,8 +731,7 @@ static void set_volume_widgets(MediaPopupContext* ctx, int32_t pct, bool muted, 
 static void update_volume(MediaPopupContext* ctx, const MediaPopupInit& init) {
   if (!ctx || !ctx->volume_slider.track) return;
   ctx->has_volume = init.has_volume;
-  if (init.has_volume) lv_obj_remove_state(ctx->volume_slider.track, LV_STATE_DISABLED);
-  else lv_obj_add_state(ctx->volume_slider.track, LV_STATE_DISABLED);
+  slider_set_enabled(ctx->volume_slider, init.has_volume);
   // A drag keeps the finger's volume; after it the chosen volume stays until
   // the player reports it (or kRemoteHoldMs passed).
   if (ctx->volume_dragging) return;
@@ -681,7 +792,7 @@ static void set_seek_widgets(MediaPopupContext* ctx, float position, bool update
   if (!ctx || !ctx->seek_slider.track) return;
   const bool known = ctx->has_media_position && ctx->media_duration > 0.0f;
   if (!known) {
-    lv_obj_add_state(ctx->seek_slider.track, LV_STATE_DISABLED);
+    slider_set_enabled(ctx->seek_slider, false);
     slider_set_shown(ctx->seek_slider, false);
     set_shown(ctx->seek_current_label, false);
     set_shown(ctx->seek_duration_label, false);
@@ -689,7 +800,7 @@ static void set_seek_widgets(MediaPopupContext* ctx, float position, bool update
     return;
   }
 
-  lv_obj_remove_state(ctx->seek_slider.track, LV_STATE_DISABLED);
+  slider_set_enabled(ctx->seek_slider, true);
   slider_set_shown(ctx->seek_slider, true);
   set_shown(ctx->seek_current_label, true);
   set_shown(ctx->seek_duration_label, true);
@@ -810,8 +921,9 @@ static void media_motion_timer_cb(lv_timer_t* timer) {
 }
 
 // One line in its clip; a longer one joins the moving lines.
-void set_line(MediaPopupContext* ctx, lv_obj_t* clip, lv_obj_t* label, const String& text, int width, bool centred) {
+void set_line(MediaPopupContext* ctx, lv_obj_t* clip, lv_obj_t* label, const String& raw, int width, bool centred) {
   if (!clip || !label) return;
+  const String text = drop_missing_glyphs(raw.c_str(), lv_obj_get_style_text_font(label, LV_PART_MAIN));
   set_shown(clip, text.length() > 0);
   lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
   lv_obj_set_width(label, LV_SIZE_CONTENT);
@@ -869,12 +981,13 @@ static void apply_media_text(MediaPopupContext* ctx, const MediaPopupInit& init)
     // Beside the cover the title wraps to two lines first; a longer title
     // moves on one line.
     const lv_font_t* font = popup_layout::font32();
-    const int wrapped = text_height(font, media_title.c_str(), width);
+    const String clean = drop_missing_glyphs(media_title.c_str(), font);
+    const int wrapped = text_height(font, clean.c_str(), width);
     if (wrapped <= 2 * line_height(font) + 1) {
       lv_label_set_long_mode(ctx->media_title_label, LV_LABEL_LONG_WRAP);
       lv_obj_set_width(ctx->media_title_label, width);
       lv_obj_set_pos(ctx->media_title_label, 0, 0);
-      lv_label_set_text(ctx->media_title_label, media_title.c_str());
+      lv_label_set_text(ctx->media_title_label, clean.c_str());
       lv_obj_set_height(ctx->title_clip, wrapped);
       set_shown(ctx->title_clip, true);
     } else {
@@ -912,7 +1025,7 @@ void style_toggle(lv_obj_t* label, const MediaColors& c, bool on) {
   popup_nav_style::set_bg(btn, c.control, on ? c.control_opa : LV_OPA_TRANSP, LV_PART_MAIN);
   popup_nav_style::set_bg(btn, on ? c.raised : c.control, on ? c.raised_opa : c.control_opa,
                           LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_text_color(label, lv_color_hex(on ? c.text : c.secondary), 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(on ? c.control_icon : c.secondary), 0);
 }
 
 static void set_control_enabled(lv_obj_t* obj, bool enabled) {
@@ -930,8 +1043,10 @@ static void apply_availability(MediaPopupContext* ctx) {
   }
   set_control_enabled(ctx->source_button, ctx->available);
   set_control_enabled(ctx->library_button, ctx->available);
-  if (!ctx->available && ctx->volume_slider.track) lv_obj_add_state(ctx->volume_slider.track, LV_STATE_DISABLED);
-  if (!ctx->available && ctx->seek_slider.track) lv_obj_add_state(ctx->seek_slider.track, LV_STATE_DISABLED);
+  if (!ctx->available) {
+    slider_set_enabled(ctx->volume_slider, false);
+    slider_set_enabled(ctx->seek_slider, false);
+  }
 }
 
 bool seek_allowed(const MediaPopupContext* ctx) {
@@ -942,9 +1057,15 @@ bool seek_allowed(const MediaPopupContext* ctx) {
 void place_head_buttons(MediaPopupContext* ctx, bool source, bool library) {
   const int x_mid = popup_layout::kCardWidth - Device::kGridGap - popup_layout::kCloseButtonSize / 2;
   const int pressed = (popup_layout::kCloseButtonSize + popup_layout::kHeaderIconDiscSize) / 2;
+  // A sub-view's back arrow sits in the first place left of the close
+  // button, where the player shows the library button; the close button
+  // always closes (user 2026-10-19).
+  const bool sub_view = ctx->view != MediaView::Player;
+  set_shown(ctx->back_button, sub_view);
+  if (ctx->back_button && sub_view) lv_obj_set_x(ctx->back_button, x_mid - ml::kHeadStep - pressed / 2);
   int slot = 1;
   for (lv_obj_t* btn : {ctx->library_button, ctx->source_button}) {
-    const bool shown = btn == ctx->library_button ? library : source;
+    const bool shown = !sub_view && (btn == ctx->library_button ? library : source);
     set_shown(btn, shown);
     if (!btn || !shown) continue;
     lv_obj_set_x(btn, x_mid - slot * ml::kHeadStep - pressed / 2);
@@ -992,7 +1113,7 @@ static void on_volume_slider_event(lv_event_t* e);
 static void on_seek_slider_event(lv_event_t* e);
 
 lv_obj_t* control_button(MediaPopupContext* ctx, int x, int y, const char* icon, MediaAction action, lv_obj_t** label) {
-  lv_obj_t* btn = round_button(ctx->player, ctx->colors, ml::kButton, icon, ctx->colors.text, label);
+  lv_obj_t* btn = round_button(ctx->player, ctx->colors, ml::kButton, icon, ctx->colors.control_icon, label);
   lv_obj_set_pos(btn, x, y);
   lv_obj_add_event_cb(btn, on_media_command, LV_EVENT_CLICKED, reinterpret_cast<void*>(static_cast<intptr_t>(action)));
   return btn;
@@ -1046,10 +1167,12 @@ static void build_player(MediaPopupContext* ctx, bool centered) {
     cover_x = (W - side) / 2;
   }
   ctx->cover_side = side;
-  if (side != side_before) {
-    // The other layout's cover size: made again from the next picture.
+  // The other layout's cover size, or corners rounded over another card
+  // color: made again from the next picture.
+  if (side != side_before || (ctx->cover_baked && ctx->cover_corner_card != c.card)) {
     free_cover_dsc(ctx->cover_dsc);
     ctx->cover_hash = 0;
+    ctx->cover_baked = false;
   }
 
   ctx->player = plain(ctx->root);
@@ -1075,6 +1198,7 @@ static void build_player(MediaPopupContext* ctx, bool centered) {
     lv_obj_remove_flag(ctx->cover_image, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(ctx->fallback_icon, LV_OBJ_FLAG_HIDDEN);
   }
+  style_cover_clip(ctx, ctx->cover_dsc != nullptr);
 
   // Text: beside the cover (vertically centred, bars on top) or under it.
   lv_obj_t* info = plain(ctx->player);
@@ -1108,8 +1232,8 @@ static void build_player(MediaPopupContext* ctx, bool centered) {
   if (!centered) clip_line(ctx->album_clip, ctx->album_label, popup_layout::font20(), c.secondary);
 
   // Time bar from edge to edge, the times under it on the edges.
-  make_slider(ctx->seek_slider, ctx->player, c, L, ml::kSeekMid, W - 2 * L, ml::kSeekHeight, ml::kSeekKnob,
-              on_seek_slider_event, ctx);
+  make_slider(ctx->seek_slider, ctx->player, c, L, ml::kSeekMid, W - 2 * L, ml::kSeekHeight, ml::kSeekKnob, 1000,
+              popup_layout::scale(18), on_seek_slider_event, ctx);
   const int time_top = ml::kSeekMid + ml::kSeekHeight / 2 + ml::kTimeGap;
   ctx->seek_current_label = add_text(ctx->player, popup_layout::font20(), c.secondary, "--:--");
   lv_obj_set_pos(ctx->seek_current_label, L, time_top);
@@ -1124,23 +1248,23 @@ static void build_player(MediaPopupContext* ctx, bool centered) {
   control_button(ctx, cx(3), ml::kTransportTop, "skip-next", MediaAction::Next, &ctx->next_label);
   control_button(ctx, cx(4), ml::kTransportTop, "repeat", MediaAction::Repeat, &ctx->repeat_label);
   // Play stays the round button in the icon role with the card's color.
-  lv_obj_set_style_bg_color(play, lv_color_hex(ui_theme::icon()), 0);
+  lv_obj_set_style_bg_color(play, lv_color_hex(c.control_icon), 0);
   lv_obj_set_style_bg_opa(play, LV_OPA_COVER, 0);
   lv_obj_set_style_bg_color(play, lv_color_hex(ui_theme::text_soft()), LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(play, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
   lv_obj_set_style_text_color(ctx->play_pause_label, lv_color_hex(c.card), 0);
 
   // Volume: mute under shuffle, the speakers under repeat, the bar between.
-  lv_obj_t* mute = round_button(ctx->player, c, ml::kButton, "volume-medium", c.text, &ctx->volume_icon_label);
+  lv_obj_t* mute = round_button(ctx->player, c, ml::kButton, "volume-medium", c.control_icon, &ctx->volume_icon_label);
   lv_obj_set_pos(mute, cx(0), ml::kVolumeTop);
   lv_obj_add_event_cb(mute, on_volume_mute_click, LV_EVENT_CLICKED, ctx);
   lv_obj_t* group = control_button(ctx, cx(4), ml::kVolumeTop, "speaker-multiple", MediaAction::Group, &ctx->group_label);
   const int volume_x = cx(0) + ml::kButton + g;
   make_slider(ctx->volume_slider, ctx->player, c, volume_x, ml::kVolumeTop + ml::kButton / 2, cx(4) - g - volume_x,
-              ml::kVolumeHeight, ml::kVolumeKnob, on_volume_slider_event, ctx);
+              ml::kVolumeHeight, ml::kVolumeKnob, 100, popup_layout::scale(20), on_volume_slider_event, ctx);
   const int badge = popup_layout::scale(28);
   ctx->group_badge = add_text(group, popup_layout::font20(), c.card, "");
-  lv_obj_set_style_bg_color(ctx->group_badge, lv_color_hex(c.text), 0);
+  lv_obj_set_style_bg_color(ctx->group_badge, lv_color_hex(c.control_icon), 0);
   lv_obj_set_style_bg_opa(ctx->group_badge, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(ctx->group_badge, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_size(ctx->group_badge, badge, badge);
@@ -1186,17 +1310,7 @@ void build_head(MediaPopupContext* ctx) {
   }
   ctx->source_button = head_button(ctx, "login-variant", MediaAction::Source);
   ctx->library_button = head_button(ctx, "play-box-multiple", MediaAction::Library);
-  // In a sub-view the head disc goes one level up.
-  ctx->back_button = plain(ctx->root);
-  lv_obj_add_flag(ctx->back_button, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_pos(ctx->back_button, ml::kEdge, ml::kHeadTop);
-  lv_obj_set_size(ctx->back_button, ml::kDisc, ml::kDisc);
-  lv_obj_set_style_radius(ctx->back_button, LV_RADIUS_CIRCLE, 0);
-  popup_nav_style::style_press_fill(ctx->back_button, ctx->colors.raised, ctx->colors.raised_opa);
-  disable_pressed_button_animation(ctx->back_button);
-  lv_obj_add_event_cb(ctx->back_button, on_media_command, LV_EVENT_CLICKED,
-                      reinterpret_cast<void*>(static_cast<intptr_t>(MediaAction::Back)));
-  lv_obj_add_flag(ctx->back_button, LV_OBJ_FLAG_HIDDEN);
+  ctx->back_button = head_button(ctx, "arrow-left", MediaAction::Back);
 }
 
 String view_title(MediaPopupContext* ctx) {
@@ -1229,6 +1343,20 @@ String head_icon(const MediaPopupContext* ctx, const String& state) {
   return getMdiCodepoint(variant) != mdiUnknownIconCodepoint() ? getMdiChar(variant) : ctx->icon_char;
 }
 
+// A sub-view's icon in the head disc: the button that opened it.
+const char* view_icon(MediaView view) {
+  switch (view) {
+    case MediaView::Library: return "play-box-multiple";
+    case MediaView::Source: return "login-variant";
+    case MediaView::Group: return "speaker-multiple";
+    default: return nullptr;
+  }
+}
+
+// In a sub-view the head disc shows the sub-view's icon; its back arrow is a
+// head button left of the close button (place_head_buttons).
+static void show_list_scrollbar_color(MediaPopupContext* ctx);
+
 static void show_head(MediaPopupContext* ctx) {
   const bool player = ctx->view == MediaView::Player;
   hometiles_title::set(ctx->title_label, view_title(ctx).c_str());
@@ -1237,14 +1365,14 @@ static void show_head(MediaPopupContext* ctx) {
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ctx->icon_color), 0);
     lv_label_set_text(ctx->value_label, media_state_text(extras_of(ctx->entity_id).state));
   } else {
-    lv_label_set_text(ctx->icon_label, getMdiChar("arrow-left").c_str());
+    lv_label_set_text(ctx->icon_label, getMdiChar(view_icon(ctx->view)).c_str());
     lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ctx->colors.text), 0);
     lv_label_set_text(ctx->value_label, "");
   }
   popup_layout::alignHeader(ctx->card, ctx->title_label, ctx->icon_label);
-  set_shown(ctx->back_button, !player);
   apply_extras(ctx);
   if (popup_visible(ctx)) sync_popup_shell();
+  show_list_scrollbar_color(ctx);
 }
 
 // ---- Sub-views: the Settings dropdown's options under the head --------------
@@ -1256,26 +1384,37 @@ static void show_head(MediaPopupContext* ctx) {
 // corners cost LVGL two extra layers per frame).
 constexpr int kOptionGap = 2;  // settings_parts.cpp kOptionGap
 
+// The rows' height (user 2026-10-19: more room between the entries than the
+// dropdown's 56 px).
+constexpr int kListRowHeight = popup_layout::scale(72);
+
 lv_obj_t* list_row(MediaPopupContext* ctx, const char* text, bool active, bool folder, lv_event_cb_t cb,
-                   intptr_t index) {
+                   intptr_t index, const char* icon = nullptr) {
   const MediaColors& c = ctx->colors;
   lv_obj_t* row = plain(ctx->list);
   if (cb) lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_size(row, LV_PCT(100), settings_style::kOptionHeight - kOptionGap);
+  lv_obj_set_size(row, LV_PCT(100), kListRowHeight - kOptionGap);
   settings_style::apply_radius(row, settings_style::kGroupRadius - settings_style::kOptionInset);
-  lv_obj_set_style_bg_color(row, c.control, 0);
-  lv_obj_set_style_bg_opa(row, active ? c.control_opa : LV_OPA_TRANSP, 0);
-  lv_obj_set_style_bg_color(row, active ? c.raised : c.control, LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_bg_opa(row, active ? c.raised_opa : c.control_opa, LV_PART_MAIN | LV_STATE_PRESSED);
+  // Selected and pressed in the card's own color, a darker row in the box
+  // of the head circle's color (user 2026-10-19: the control fill took the
+  // cover's yellow).
+  lv_obj_set_style_bg_color(row, lv_color_hex(c.card), 0);
+  lv_obj_set_style_bg_opa(row, active ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
   popup_nav_style::no_press_filter(row, LV_PART_MAIN | LV_STATE_PRESSED);
   disable_pressed_button_animation(row);
+  // The chevron as far from the right edge as the kind icon from the left
+  // (user 2026-10-19).
   const int pad = settings_style::kRowPadLeft - settings_style::kOptionInset;
   lv_obj_set_style_pad_left(row, pad, 0);
-  lv_obj_set_style_pad_right(row, pad / 2, 0);
+  lv_obj_set_style_pad_right(row, pad, 0);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_t* label = add_text(row, settings_style::row_font(), c.text, text);
-  lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+  lv_obj_set_style_pad_column(row, Device::kGridGap, 0);
+  if (icon) add_icon(row, icon, c.secondary);
+  lv_obj_t* label = add_text(row, settings_style::row_font(), c.text, "");
+  lv_label_set_text(label, drop_missing_glyphs(text, settings_style::row_font()).c_str());
+  one_line_dots(label);
   lv_obj_set_flex_grow(label, 1);
   if (folder) add_icon(row, "chevron-right", c.secondary);
   if (cb) lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, reinterpret_cast<void*>(index));
@@ -1290,6 +1429,21 @@ void section(MediaPopupContext* ctx, const char* title) {
 }
 
 // ---- The library ----------------------------------------------------------------
+// A library entry's kind as a small icon (Home Assistant's media classes).
+const char* class_icon(const String& media_class, bool folder) {
+  if (media_class == "album") return "album";
+  if (media_class == "artist" || media_class == "composer" || media_class == "contributing_artist") return "account-music";
+  if (media_class == "playlist") return "playlist-music";
+  if (media_class == "podcast") return "podcast";
+  if (media_class == "channel") return "radio";
+  if (media_class == "movie") return "movie";
+  if (media_class == "tv_show" || media_class == "season" || media_class == "episode") return "television-play";
+  if (media_class == "video") return "video";
+  if (media_class == "image") return "image";
+  if (media_class == "track" || media_class == "music") return "music-note";
+  return folder ? "folder" : "music-note";
+}
+
 static void open_view(MediaPopupContext* ctx, MediaView view);
 static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll);
 
@@ -1307,12 +1461,20 @@ static void on_library_row(lv_event_t* e) {
   }
 }
 
+static void on_play_all_row(lv_event_t* e) {
+  MediaPopupContext* ctx = g_media_popup_ctx;
+  if (!ctx || lv_event_get_code(e) != LV_EVENT_CLICKED || !ctx->available) return;
+  const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
+  if (media_browse_play_level()) open_view(ctx, MediaView::Player);
+}
+
 void append_library_rows(MediaPopupContext* ctx) {
   const auto& items = media_browse_items();
   const size_t end = std::min(items.size(), ctx->library_rows + kLibraryRowsStep);
   for (size_t i = ctx->library_rows; i < end; ++i) {
     const MediaBrowseItem& item = items[i];
-    list_row(ctx, item.title.c_str(), false, item.can_expand, on_library_row, static_cast<intptr_t>(i));
+    list_row(ctx, item.title.c_str(), false, item.can_expand, on_library_row, static_cast<intptr_t>(i),
+             class_icon(item.media_class, item.can_expand));
   }
   ctx->library_rows = end;
 }
@@ -1362,7 +1524,7 @@ static void on_list_scroll_end(lv_event_t* e) {
   }
   if (ctx->view != MediaView::Library) return;
   if (ctx->library_rows >= media_browse_items().size()) return;
-  if (lv_obj_get_scroll_bottom(ctx->list) > 3 * settings_style::kOptionHeight) return;
+  if (lv_obj_get_scroll_bottom(ctx->list) > 3 * kListRowHeight) return;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
   append_library_rows(ctx);
 }
@@ -1370,6 +1532,12 @@ static void on_list_scroll_end(lv_event_t* e) {
 void build_library(MediaPopupContext* ctx) {
   ctx->library_rows = 0;
   ctx->library_items_version = media_browse_items_version();
+  // An opened playlist or album that plays as a whole (like Home Assistant's
+  // and Sonos' play button at its top; a track inside plays alone).
+  const MediaBrowseLevel* level = media_browse_current_level();
+  if (level && level->can_play && level->content_id.length() && media_browse_status() == MediaBrowseStatus::Ready) {
+    list_row(ctx, texts().media_play_all, false, false, on_play_all_row, 0, "play");
+  }
   append_library_rows(ctx);
   // The status pill: like the volume percentage over the knob.
   ctx->library_status = add_text(ctx->list, popup_layout::font20(), ctx->colors.text, "");
@@ -1427,6 +1595,9 @@ void build_sources(MediaPopupContext* ctx) {
 }
 
 // ---- Speakers: players of the same integration with GROUPING --------------------
+// As in the approved draft: the speaker, its name, its state below and a
+// switch on the right; this player first, always in its group. Two-line rows
+// like the Settings rows with a sub line (settings_style::kRowHeight).
 static void on_group_row(lv_event_t* e) {
   MediaPopupContext* ctx = g_media_popup_ctx;
   if (!ctx || lv_event_get_code(e) != LV_EVENT_CLICKED || !ctx->available) return;
@@ -1454,14 +1625,71 @@ static void on_group_row(lv_event_t* e) {
   apply_extras(ctx);
 }
 
+void group_row(MediaPopupContext* ctx, const char* icon, const char* name, const String& sub, bool on, bool fixed,
+               intptr_t index) {
+  const MediaColors& c = ctx->colors;
+  lv_obj_t* row = plain(ctx->list);
+  if (!fixed) lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_size(row, LV_PCT(100), settings_style::kRowHeight);
+  settings_style::apply_radius(row, settings_style::kGroupRadius - settings_style::kOptionInset);
+  lv_obj_set_style_bg_color(row, c.control, 0);
+  lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+  // Pressed like a list row: the card's own color (list_row).
+  lv_obj_set_style_bg_color(row, lv_color_hex(c.card), LV_PART_MAIN | LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_PRESSED);
+  popup_nav_style::no_press_filter(row, LV_PART_MAIN | LV_STATE_PRESSED);
+  disable_pressed_button_animation(row);
+  const int pad = settings_style::kRowPadLeft - settings_style::kOptionInset;
+  lv_obj_set_style_pad_left(row, pad, 0);
+  lv_obj_set_style_pad_right(row, pad, 0);
+  lv_obj_set_style_pad_column(row, Device::kGridGap, 0);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  add_icon(row, icon, c.secondary);
+  lv_obj_t* texts_col = plain(row);
+  lv_obj_set_flex_grow(texts_col, 1);
+  lv_obj_set_height(texts_col, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(texts_col, LV_FLEX_FLOW_COLUMN);
+  lv_obj_t* title = add_text(texts_col, settings_style::row_font(), c.text, "");
+  lv_label_set_text(title, drop_missing_glyphs(name, settings_style::row_font()).c_str());
+  one_line_dots(title);
+  lv_obj_set_width(title, LV_PCT(100));
+  if (sub.length()) {
+    lv_obj_t* line = add_text(texts_col, settings_style::small_font(), c.secondary, "");
+    lv_label_set_text(line, drop_missing_glyphs(sub.c_str(), settings_style::small_font()).c_str());
+    one_line_dots(line);
+    lv_obj_set_width(line, LV_PCT(100));
+  }
+  // A check circle like Sonos (user 2026-10-19, instead of a switch): marked
+  // in the group, an empty ring outside, in the text color like the
+  // sub-view's other icons (a switch in the cover's color stood out next to
+  // the white head icon). This player's is marked and dimmed (it cannot
+  // leave its own group here).
+  lv_obj_t* check = add_icon(row, on ? "checkbox-marked-circle" : "checkbox-blank-circle-outline", c.text);
+  if (fixed) lv_obj_set_style_opa(check, LV_OPA_40, 0);
+  if (!fixed) lv_obj_add_event_cb(row, on_group_row, LV_EVENT_CLICKED, reinterpret_cast<void*>(index));
+}
+
 void build_group(MediaPopupContext* ctx) {
+  const auto& tr = texts();
   const MediaExtras& x = extras_of(ctx->entity_id);
-  // This player first, always in its group; a tap on another joins or leaves.
-  list_row(ctx, ctx->title.c_str(), true, false, nullptr, 0);
+  const bool playing = x.state.equalsIgnoreCase("playing");
+  const bool paused = x.state.equalsIgnoreCase("paused");
+  // What the group plays: its state and, playing or paused, the song.
+  String now = media_state_text(x.state);
+  if ((playing || paused) && ctx->shown_title.length()) {
+    now += now.length() ? " \xC2\xB7 " : "";
+    now += ctx->shown_title;
+  }
+  const char* group_icon = playing ? "speaker-play" : paused ? "speaker-pause" : "speaker";
+  String self = tr.media_this_player;
+  if (now.length()) self += String(" \xC2\xB7 ") + now;
+  group_row(ctx, group_icon, ctx->title.c_str(), self, true, true, 0);
   for (size_t i = 0; i < x.candidates.size(); ++i) {
     const MediaGroupCandidate& candidate = x.candidates[i];
-    list_row(ctx, candidate.name.c_str(), contains(x.members, candidate.entity_id), false, on_group_row,
-             static_cast<intptr_t>(i));
+    const bool joined = contains(x.members, candidate.entity_id);
+    group_row(ctx, joined ? group_icon : "speaker", candidate.name.c_str(),
+              joined ? now : String(media_state_text(candidate.state)), joined, false, static_cast<intptr_t>(i));
   }
 }
 
@@ -1491,6 +1719,7 @@ uint32_t list_signature(const MediaPopupContext* ctx) {
     key += '\x1e';
   }
   key += ctx->title;
+  key += ctx->shown_title;
   return text_hash(key.c_str());
 }
 
@@ -1504,15 +1733,37 @@ void delete_dead_lists(void*) {
 void delete_list(MediaPopupContext* ctx) {
   // The list may go from one of its own rows' click: hidden now, deleted
   // after the event; a popup deleted first takes it along.
-  if (ctx->list) {
-    lv_obj_add_flag(ctx->list, LV_OBJ_FLAG_HIDDEN);
+  if (ctx->list_box) {
+    lv_obj_add_flag(ctx->list_box, LV_OBJ_FLAG_HIDDEN);
     if (ctx->dead_lists.empty()) lv_async_call(delete_dead_lists, nullptr);
-    ctx->dead_lists.push_back(ctx->list);
+    ctx->dead_lists.push_back(ctx->list_box);
   }
+  ctx->list_box = nullptr;
   ctx->list = nullptr;
   ctx->list_dirty = false;
   ctx->library_status = nullptr;
   ctx->library_rows = 0;
+}
+
+// The list's box in the head circle's color, a lighter box around the rows
+// (user 2026-10-19: a longer list looked complete without its edge), as the
+// shell shows the circle for the open view (a sub-view's white icon mixes it
+// from white and the card). Mixed onto the card once, so the box is one
+// opaque fill. Its scrollbar is the Sensor popup's (text color, half).
+static void show_list_scrollbar_color(MediaPopupContext* ctx) {
+  if (!ctx->list || !ctx->list_box) return;
+  const lv_color_t card = lv_color_hex(ctx->colors.card);
+  lv_color_t color = card;
+  lv_opa_t opa = LV_OPA_TRANSP;
+  if (popup_visible(ctx) && popup_shell_disc_fill(color, opa)) color = lv_color_mix(color, card, opa);
+  else color = card;
+  lv_obj_set_style_bg_color(ctx->list_box, color, 0);
+  lv_obj_set_style_bg_opa(ctx->list_box, LV_OPA_COVER, 0);
+  // The list too (rebuild_list): it covers its own area while scrolling.
+  lv_obj_set_style_bg_color(ctx->list, color, 0);
+  lv_obj_set_style_bg_opa(ctx->list, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(ctx->list, lv_color_hex(ctx->colors.text), LV_PART_SCROLLBAR);
+  lv_obj_set_style_bg_opa(ctx->list, LV_OPA_50, LV_PART_SCROLLBAR);
 }
 
 static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
@@ -1520,15 +1771,52 @@ static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
   delete_list(ctx);
   if (ctx->view == MediaView::Player) return;
   const int top = ml::kHeadTop + ml::kDisc + ml::kHeadGap;
-  ctx->list = plain(ctx->root);
+  // A box like the Settings dropdown (settings_parts.cpp open_options): six
+  // rows, no line, filled in the head circle's color (show_list_scrollbar_color),
+  // the rows scroll in it. Each scroll frame redraws the list's area: over the
+  // whole card (800 x 626 px on the V2) that area took about 80 % of a
+  // frame's time (simulator, 2026-10-19). It stays above the card's rounded
+  // bottom corners (popup_shell.cpp shell_pieces).
+  const int32_t radius = lv_obj_get_style_radius(ctx->card, LV_PART_MAIN);
+  const int bottom = popup_layout::kCardHeight -
+                     std::max<int>(ml::kEdge, std::min<int32_t>(radius, popup_layout::kCardHeight / 2));
+  // The rows' list paints the box color itself, square and opaque: LVGL then
+  // starts every scroll frame at the list and draws neither the box nor the
+  // card under it (the screensaver's trick, b307: only an object without a
+  // radius covers). Its square corners stay inside the box's rounded ones:
+  // set in by at least r (1 - 1/sqrt 2).
+  const int r = settings_style::kGroupRadius;
+  const int edge = std::max(settings_style::kOptionInset + 1, r - (r * 707) / 1000 + 1);
+  const int box_height = std::min(6 * kListRowHeight + 2 * edge, bottom - top);
+  ctx->list_box = plain(ctx->root);
+  lv_obj_set_pos(ctx->list_box, ml::kEdge, top);
+  lv_obj_set_size(ctx->list_box, popup_layout::kCardWidth - 2 * ml::kEdge, box_height);
+  lv_obj_set_style_pad_all(ctx->list_box, edge, 0);
+  settings_style::apply_radius(ctx->list_box, settings_style::kGroupRadius);
+  ctx->list = plain(ctx->list_box);
   lv_obj_add_flag(ctx->list, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_scroll_dir(ctx->list, LV_DIR_VER);
-  lv_obj_set_scrollbar_mode(ctx->list, LV_SCROLLBAR_MODE_OFF);
-  lv_obj_set_pos(ctx->list, 0, top);
-  lv_obj_set_size(ctx->list, popup_layout::kCardWidth, popup_layout::kCardHeight - top);
-  lv_obj_set_style_pad_hor(ctx->list, ml::kEdge, 0);
-  lv_obj_set_style_pad_bottom(ctx->list, ml::kEdge, 0);
+  lv_obj_set_style_radius(ctx->list, 0, 0);
+  // The Sensor popup's activity list scrollbar (sensor_popup.cpp): thin and
+  // round, shown while the list is longer than the box (user 2026-10-19:
+  // without it a longer list looked complete); its color with the box's
+  // (show_list_scrollbar_color).
+  lv_obj_set_style_width(ctx->list, popup_layout::scale(5), LV_PART_SCROLLBAR);
+  // Inside the box's straight edge: it ends where the rounded corners begin
+  // and keeps the inset from the side (user 2026-10-19: it ran into the radius).
+  const int bar_inset = std::max(0, settings_style::kGroupRadius - edge);
+  lv_obj_set_style_pad_top(ctx->list, bar_inset, LV_PART_SCROLLBAR);
+  lv_obj_set_style_pad_bottom(ctx->list, bar_inset, LV_PART_SCROLLBAR);
+  lv_obj_set_style_pad_right(ctx->list, settings_style::kOptionInset, LV_PART_SCROLLBAR);
+  lv_obj_set_style_radius(ctx->list, LV_RADIUS_CIRCLE, LV_PART_SCROLLBAR);
+  lv_obj_set_scrollbar_mode(ctx->list, LV_SCROLLBAR_MODE_AUTO);
+  show_list_scrollbar_color(ctx);
+  lv_obj_set_size(ctx->list, LV_PCT(100), LV_PCT(100));
   lv_obj_set_flex_flow(ctx->list, LV_FLEX_FLOW_COLUMN);
+  // Scrolling like the Sensor popup's activity list (sensor_popup.cpp).
+  lv_obj_clear_flag(ctx->list, LV_OBJ_FLAG_SCROLL_CHAIN);
+  lv_obj_add_flag(ctx->list, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_ELASTIC |
+                                                        LV_OBJ_FLAG_SCROLL_MOMENTUM));
   lv_obj_add_event_cb(ctx->list, on_list_scroll_end, LV_EVENT_SCROLL_END, nullptr);
   if (ctx->view == MediaView::Library) build_library(ctx);
   else if (ctx->view == MediaView::Source) build_sources(ctx);
@@ -1669,21 +1957,17 @@ static void apply_volume_drag(MediaPopupContext* ctx, float fraction, bool relea
 }
 
 static void on_volume_slider_event(lv_event_t* e) {
-  lv_event_code_t code = lv_event_get_code(e);
+  const lv_event_code_t code = lv_event_get_code(e);
   const bool released = code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST;
-  if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && !released) return;
+  if (code != LV_EVENT_VALUE_CHANGED && !released) return;
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
-  if (!ctx || !ctx->volume_slider.track) return;
-  (void)released;
+  if (!ctx || !ctx->volume_slider.input) return;
   if (!ctx->has_volume || !ctx->available) {
     ctx->volume_dragging = false;
-    ctx->volume_slider.dragging = false;
     return;
   }
-  const SliderStep step = slider_step(ctx->volume_slider, code);
-  if (step == SliderStep::None) return;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
-  apply_volume_drag(ctx, slider_touch_fraction(ctx->volume_slider), step == SliderStep::Release);
+  apply_volume_drag(ctx, slider_input_fraction(ctx->volume_slider), released);
 }
 
 // One step of a position drag; the final one publishes.
@@ -1708,26 +1992,22 @@ static void apply_seek_drag(MediaPopupContext* ctx, float fraction, bool release
 static void on_seek_slider_event(lv_event_t* e) {
   const lv_event_code_t code = lv_event_get_code(e);
   const bool released = code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST;
-  if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && !released) return;
+  if (code != LV_EVENT_VALUE_CHANGED && !released) return;
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
-  if (!ctx || !ctx->seek_slider.track) return;
-  (void)released;
+  if (!ctx || !ctx->seek_slider.input) return;
   // End the gesture even if playback became unavailable while dragging.
   if (!ctx->has_media_position || !ctx->available || !seek_allowed(ctx)) {
     ctx->seek_dragging = false;
-    ctx->seek_slider.dragging = false;
     return;
   }
-  const SliderStep step = slider_step(ctx->seek_slider, code);
-  if (step == SliderStep::None) return;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
-  apply_seek_drag(ctx, slider_touch_fraction(ctx->seek_slider), step == SliderStep::Release);
+  apply_seek_drag(ctx, slider_input_fraction(ctx->seek_slider), released);
 }
 
 static void on_volume_mute_click(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_CLICKED) return;
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
-  if (!ctx || !ctx->entity_id.length() || !ctx->volume_slider.track || !ctx->available) return;
+  if (!ctx || !ctx->entity_id.length() || !ctx->volume_slider.input || !ctx->available) return;
   const ui_theme::SurfaceScope popup_scope = body_scope(ctx);
   const MediaExtras& x = extras_of(ctx->entity_id);
   if (x.has_features && (x.features & kFeatureVolumeMute)) {
@@ -1769,7 +2049,6 @@ static void close_media_popup(MediaPopupContext* ctx) {
     ctx->view = MediaView::Player;
     delete_list(ctx);
     set_shown(ctx->player, true);
-    set_shown(ctx->back_button, false);
   }
   set_shown(ctx->volume_bubble, false);
   if (ctx->library_timer) lv_timer_pause(ctx->library_timer);
@@ -1780,6 +2059,7 @@ static void on_close_click(lv_event_t* e) {
   lv_event_code_t code = lv_event_get_code(e);
   if (code != LV_EVENT_CLICKED && code != LV_EVENT_RELEASED) return;
   MediaPopupContext* ctx = static_cast<MediaPopupContext*>(lv_event_get_user_data(e));
+  // Closes from every view (a sub-view's back arrow is its own head button).
   close_media_popup(ctx);
 }
 

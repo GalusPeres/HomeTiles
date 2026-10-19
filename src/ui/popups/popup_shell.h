@@ -65,6 +65,10 @@ void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& 
 // A control pressed on a control surface (a pressed PIN key, the date arrows
 // on their field): one more control step (tone_color::Fill::raised_color).
 void popup_shell_control_raised_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa);
+// The header disc's fill as shown now (color and opacity), for a popup's own
+// parts in the circle's color (the Media popup's list scrollbar). False
+// without a shown shell.
+bool popup_shell_disc_fill(lv_color_t& color, lv_opa_t& opa);
 
 // Home Assistant pulses the state icon while a command runs or the device
 // needs attention (Lock, Alarm panel): the shared header icon, while the

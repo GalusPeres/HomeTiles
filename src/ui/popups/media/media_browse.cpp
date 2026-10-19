@@ -232,6 +232,7 @@ bool media_browse_open(size_t index) {
   target.content_id = item.content_id;
   target.content_type = item.content_type;
   target.title = item.title;
+  target.can_play = item.can_play;
   return send_request(PendingAction::Open, target);
 }
 
@@ -250,6 +251,17 @@ bool media_browse_play(size_t index) {
   return mqttPublishMediaPlay(g_state.entity_id.c_str(),
                               item.content_id.c_str(),
                               item.content_type.c_str());
+}
+
+bool media_browse_play_level() {
+  if (!g_state.entity_id.length() || g_state.stack.empty()) return false;
+  const MediaBrowseLevel& level = g_state.stack.back();
+  // The Bridge plays only an item with an id (play_media).
+  if (!level.can_play || !level.content_id.length()) return false;
+  Serial.printf("[MediaLibrary] Play all of '%s' on %s\n", level.title.c_str(),
+                g_state.entity_id.c_str());
+  return mqttPublishMediaPlay(g_state.entity_id.c_str(), level.content_id.c_str(),
+                              level.content_type.c_str());
 }
 
 bool media_browse_back() {

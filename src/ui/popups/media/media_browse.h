@@ -43,6 +43,7 @@ struct MediaBrowseLevel {
   String content_id;
   String content_type;
   String title;  // Title of the item that was opened; empty for the root.
+  bool can_play = false;  // The opened item plays as a whole (a playlist, an album).
 };
 
 enum class MediaBrowseStatus : uint8_t {
@@ -60,6 +61,9 @@ bool media_browse_open(size_t index);
 // Plays items()[index] on the session's player (must have can_play).
 // Does not change the browse state. Returns false if not possible.
 bool media_browse_play(size_t index);
+// Plays the opened level as a whole (its can_play): a playlist or an album
+// from its start ("Play all"). Returns false if not possible.
+bool media_browse_play_level();
 // Goes up one level. Returns false at the root.
 bool media_browse_back();
 // Requests the current level again (for example after an error).

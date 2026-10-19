@@ -846,6 +846,10 @@ struct Strings {
   const char* media_library;
   const char* media_library_empty;
   const char* media_library_failed;
+  // Media popup: the first speaker of the group list.
+  const char* media_this_player;
+  // Media library: the row that plays the opened playlist or album.
+  const char* media_play_all;
 };
 
 // Locale-specific display rules and short runtime strings shared by

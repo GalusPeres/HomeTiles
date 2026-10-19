@@ -90,3 +90,14 @@ assert.match(fn('show_library_status'), /if \(empty \|\| since < kErrorShownMs\)
 // "Repeat one": the time starts again at the end without a report.
 assert.match(fn('current_media_position'), /extras_of\(ctx->entity_id\)\.repeat\.equalsIgnoreCase\("one"\)\) \{\s*position = fmodf\(position, ctx->media_duration\);/);
 console.log('Media popup b488/b489: fixed library topic, list rebuild on change only, bars on "playing", state icon in the head, dropdown rows, floating status');
+// b490: the list ends above the card's rounded bottom corners, inside the
+// popup's middle piece (popup_shell.cpp shell_pieces), so a scroll frame is
+// one area (b489 on hardware: the dropdown-like list still jerked; it reached
+// into the corners and every frame was cut into four areas).
+const rebuild = fn('rebuild_list');
+assert.match(rebuild, /const int32_t radius = lv_obj_get_style_radius\(ctx->card, LV_PART_MAIN\);/);
+assert.match(rebuild, /lv_obj_set_size\(ctx->list, popup_layout::kCardWidth, bottom - top\);/);
+assert.ok(!/kCardHeight - top\)/.test(rebuild), 'the list never reaches the card bottom');
+const shell = read('src/ui/popups/popup_shell.cpp');
+assert.match(shell, /out\[0\] = \{frame\.x1, frame\.y1 \+ r, frame\.x2, frame\.y2 - r\};/, 'the middle piece the list stays in');
+console.log('Media popup b490: the list stays in the popup middle piece');

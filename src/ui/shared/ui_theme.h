@@ -161,6 +161,9 @@ inline constexpr float kLightCircleShare = 0.8f;
 // at most 0.68 instead of 0.16 and 0.70), which also helps the white words.
 inline constexpr float kJewelBelowIcon = 0.18f;
 inline constexpr float kJewelCardMaxL = 0.68f;
+// ... and at least this light: a very dark icon color (a dark cover) made the
+// card almost black (user 2026-10-19); the usual cards lie at 0.42-0.60.
+inline constexpr float kJewelCardMinL = 0.42f;
 inline constexpr float kJewelChroma = 0.10f;
 inline constexpr float kJewelCardChromaShare = 0.85f;
 inline constexpr float kJewelCircleStep = 0.05f;

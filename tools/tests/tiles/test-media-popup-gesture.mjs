@@ -1,13 +1,12 @@
-// The Media popup's time and volume bars (user 2026-10-19: edge-to-edge bars
-// whose knob travels inside, media_popup.cpp make_slider): a drag publishes
-// only its final value, release and lost press both end it, the reported
-// state never moves a bar under the finger, closing cancels silently, an
-// unavailable player sends no zero, the time bar follows the SEEK feature and
-// after a drag both bars keep the chosen value until the player reports it
-// (b487 on hardware: the old value came back first and the knob jumped back
-// and forth), at most kRemoteHoldMs. Like lv_slider a press only notes the
-// point and a drag starts after LV_INDEV_DEF_SCROLL_LIMIT (b488 on hardware:
-// the knob twitched under a resting finger).
+// The Media popup's time and volume bars: the look is the bar from edge to
+// edge with the knob inside it, the touch is the old popup's lv_slider over
+// the knob's travel (b487-b489 read the finger themselves and the knob
+// twitched under a resting finger). A drag publishes only its final value,
+// release and lost press both end it, the reported state never moves a bar
+// under the finger, closing cancels silently, an unavailable player sends no
+// zero, the time bar follows the SEEK feature, and after a drag both bars
+// keep the chosen value until the player reports it (the old value came back
+// first and the knob jumped back and forth), at most kRemoteHoldMs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,13 +41,18 @@ function productionLine(pattern, what) {
 const browseStatus = fs.readFileSync(path.join(repoRoot, 'src/ui/popups/media/media_browse.h'), 'utf8')
   .replace(/\r\n/g, '\n').match(/enum class MediaBrowseStatus : uint8_t \{[\s\S]*?\n\};/)[0];
 
-// Both bars listen to the press, the drag and both ends of the gesture.
+// The touch is an lv_slider with the old popup's steps and touch pads; the
+// popup has no finger logic of its own.
 const slider = productionFunction('make_slider');
+assert.match(slider, /slider\.input = lv_slider_create\(parent\);/);
+assert.match(slider, /lv_slider_set_range\(slider\.input, 0, steps\);/);
+assert.match(slider, /lv_obj_set_ext_click_area\(slider\.input, click_pad\);/);
 assert.match(slider,
-  /for \(lv_event_code_t code : \{LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST\}\) \{\s*lv_obj_add_event_cb\(slider\.track, handler, code, ctx\);/);
+  /for \(lv_event_code_t code : \{LV_EVENT_VALUE_CHANGED, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST\}\) \{\s*lv_obj_add_event_cb\(slider\.input, handler, code, ctx\);/);
+assert.ok(!/lv_indev_get_point|LV_INDEV_DEF_SCROLL_LIMIT/.test(popup), 'no own reading of the finger');
 const player = productionFunction('build_player');
-assert.match(player, /make_slider\(ctx->seek_slider, [^;]*on_seek_slider_event, ctx\);/);
-assert.match(player, /make_slider\(ctx->volume_slider, [^;]*on_volume_slider_event, ctx\);/);
+assert.match(player, /make_slider\(ctx->seek_slider, [^;]*, 1000,\s*popup_layout::scale\(18\), on_seek_slider_event, ctx\);/);
+assert.match(player, /make_slider\(ctx->volume_slider, [^;]*, 100, popup_layout::scale\(20\), on_volume_slider_event, ctx\);/);
 
 // Execute the actual state records, update helpers and event handlers. Only
 // LVGL, the clock, the shell and MQTT output are substituted. This models
@@ -57,10 +61,9 @@ const source = `
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <cstdlib>
-#define LV_INDEV_DEF_SCROLL_LIMIT 10
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -75,12 +78,14 @@ struct String : std::string {
     return true;
   }
 };
-enum lv_event_code_t { LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST, LV_EVENT_CLICKED };
+enum lv_event_code_t { LV_EVENT_VALUE_CHANGED, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST, LV_EVENT_CLICKED, LV_EVENT_PRESSED };
 struct lv_event_t { lv_event_code_t code; void* user_data; };
 using lv_event_cb_t = void (*)(lv_event_t*);
 struct Registration { lv_event_cb_t callback; lv_event_code_t code; void* user_data; };
 struct lv_obj_t {
   int x = 0, w = 0;
+  int32_t value = 0;
+  bool dragged = false;
   unsigned flags = 0, states = 0;
   std::string text;
   std::vector<Registration> callbacks;
@@ -91,9 +96,9 @@ struct lv_font_t {};
 struct lv_color_t { uint32_t value; };
 using lv_opa_t = uint8_t;
 struct lv_point_t { int32_t x, y; };
-struct lv_area_t { int32_t x1, y1, x2, y2; };
 constexpr unsigned LV_OBJ_FLAG_HIDDEN = 1, LV_OBJ_FLAG_CLICKABLE = 2;
 constexpr unsigned LV_STATE_DISABLED = 1;
+constexpr int LV_ANIM_OFF = 0;
 constexpr int32_t LV_COORD_MAX = 1 << 29;
 constexpr int LV_TEXT_FLAG_NONE = 0;
 static uint32_t now_ms = 10000;
@@ -108,6 +113,7 @@ static void lv_obj_add_flag(lv_obj_t* obj, unsigned flag) { obj->flags |= flag; 
 static void lv_obj_remove_flag(lv_obj_t* obj, unsigned flag) { obj->flags &= ~flag; }
 static void lv_obj_clear_flag(lv_obj_t* obj, unsigned flag) { obj->flags &= ~flag; }
 static bool lv_obj_has_flag(lv_obj_t* obj, unsigned flag) { return (obj->flags & flag) != 0; }
+static bool lv_obj_has_state(lv_obj_t* obj, unsigned state) { return (obj->states & state) != 0; }
 static void lv_obj_add_state(lv_obj_t* obj, unsigned state) { obj->states |= state; }
 static void lv_obj_remove_state(lv_obj_t* obj, unsigned state) { obj->states &= ~state; }
 static void lv_obj_set_width(lv_obj_t* obj, int w) { obj->w = w; }
@@ -118,11 +124,10 @@ static int async_calls = 0;
 static void lv_async_call(void (*)(void*), void*) { ++async_calls; }
 static void lv_label_set_text(lv_obj_t* obj, const char* text) { obj->text = text; }
 static const char* lv_label_get_text(lv_obj_t* obj) { return obj->text.c_str(); }
-static lv_point_t touch{0, 0};
-static void* lv_indev_active() { return &touch; }
-static void lv_indev_get_point(void*, lv_point_t* point) { *point = touch; }
-static void lv_obj_get_coords(lv_obj_t* obj, lv_area_t* area) { *area = {obj->x, 0, obj->x + obj->w - 1, 0}; }
-static int32_t lv_area_get_width(const lv_area_t* area) { return area->x2 - area->x1 + 1; }
+// lv_slider: a value LVGL keeps within its range; set_value never fires an event.
+static int32_t lv_slider_get_value(const lv_obj_t* obj) { return obj->value; }
+static void lv_slider_set_value(lv_obj_t* obj, int32_t value, int) { obj->value = value; }
+static bool lv_slider_is_dragged(const lv_obj_t* obj) { return obj->dragged; }
 static void lv_text_get_size(lv_point_t* size, const char* text, const lv_font_t*, int, int, int32_t, int) {
   size->x = 10 * static_cast<int32_t>(std::strlen(text)); size->y = 20;
 }
@@ -141,6 +146,11 @@ static void dispatch(lv_obj_t& obj, lv_event_code_t code) {
     registration.callback(&event);
   }
 }
+// The finger moves the slider to value (LVGL's drag), then lifts.
+static void drag(lv_obj_t& input, int32_t value) {
+  input.dragged = true; input.value = value; dispatch(input, LV_EVENT_VALUE_CHANGED);
+}
+static void lift(lv_obj_t& input, lv_event_code_t code) { input.dragged = false; dispatch(input, code); }
 static int shell_hides = 0, opens_cancelled = 0, browse_resets = 0;
 void hide_popup_shell(lv_obj_t*) { ++shell_hides; }
 void cancel_popup_open(lv_obj_t*) { ++opens_cancelled; }
@@ -162,25 +172,25 @@ ${productionStruct(popup, 'MediaExtras')}
 std::vector<MediaExtras> g_extras;
 ${productionStruct(popup, 'MediaColors')}
 ${productionLine(/^enum class MediaView : uint8_t \{[^}]*\};$/m, 'MediaView')}
-${productionLine(/^enum class SliderStep : uint8_t \{[^}]*\};$/m, 'SliderStep')}
 ${productionStruct(popup, 'MediaSlider')}
 ${productionStruct(popup, 'MarqueeLine')}
 ${browseStatus}
 ${productionStruct(popup, 'MediaPopupContext')}
 static MediaPopupContext* g_media_popup_ctx = nullptr;
 ${[
-  'find_extras', 'extras_of', 'set_shown', 'text_width', 'body_scope', 'slider_show', 'slider_set_shown', 'slider_step',
-  'slider_touch_fraction', 'volume_icon_bucket_for_percent', 'volume_icon_for_bucket', 'place_volume_bubble',
-  'set_volume_widgets', 'update_volume', 'format_media_time', 'current_media_position', 'set_seek_widgets',
-  'update_seek', 'media_progress_timer_cb', 'seek_allowed', 'apply_volume_drag', 'on_volume_slider_event',
-  'apply_seek_drag', 'on_seek_slider_event', 'delete_dead_lists', 'delete_list', 'close_media_popup', 'on_close_click',
-  'hide_media_popup',
+  'find_extras', 'extras_of', 'set_shown', 'text_width', 'body_scope', 'slider_show', 'slider_set_shown',
+  'slider_set_enabled', 'slider_input_fraction', 'volume_icon_bucket_for_percent', 'volume_icon_for_bucket',
+  'place_volume_bubble', 'set_volume_widgets', 'update_volume', 'format_media_time', 'current_media_position',
+  'set_seek_widgets', 'update_seek', 'media_progress_timer_cb', 'seek_allowed', 'apply_volume_drag',
+  'on_volume_slider_event', 'apply_seek_drag', 'on_seek_slider_event', 'delete_dead_lists', 'delete_list',
+  'close_media_popup', 'on_close_click', 'hide_media_popup',
 ].map(productionFunction).join('\n\n')}
 
 struct Fixture {
   MediaPopupContext context;
   MediaPopupInit init;
-  lv_obj_t card, overlay, player, seek_track, seek_fill, seek_knob, volume_track, volume_fill, volume_knob;
+  lv_obj_t card, overlay, player, seek_track, seek_fill, seek_knob, seek_input;
+  lv_obj_t volume_track, volume_fill, volume_knob, volume_input;
   lv_obj_t current, duration, bubble, volume_icon;
   lv_timer_t progress{&context}, bubble_timer{&context};
   Fixture() {
@@ -188,10 +198,8 @@ struct Fixture {
     volumes.clear(); seeks.clear(); mutes.clear(); g_extras.clear();
     context.entity_id = "media_player.test";
     context.card = &card; context.overlay = &overlay; context.player = &player;
-    // Time bar: 1026 px with a 26 px knob (1000 px of travel); volume 110/10.
-    context.seek_slider = {&seek_track, &seek_fill, &seek_knob, 0, 1026, 13, 0.0f};
-    context.volume_slider = {&volume_track, &volume_fill, &volume_knob, 0, 110, 5, 0.0f};
-    seek_track.w = 1026; volume_track.w = 110;
+    context.seek_slider = {&seek_track, &seek_fill, &seek_knob, 0, 1026, 13, 0.0f, &seek_input, 1000};
+    context.volume_slider = {&volume_track, &volume_fill, &volume_knob, 0, 110, 5, 0.0f, &volume_input, 100};
     context.seek_current_label = &current; context.seek_duration_label = &duration;
     context.volume_bubble = &bubble; context.volume_icon_label = &volume_icon;
     context.progress_timer = &progress; context.bubble_timer = &bubble_timer;
@@ -202,20 +210,13 @@ struct Fixture {
     init.media_position_received_ms = now_ms;
     init.has_volume = true; init.volume_level = 0.35f;
     update_seek(&context, init); update_volume(&context, init);
-    for (lv_event_code_t code : {LV_EVENT_PRESSED, LV_EVENT_PRESSING, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST}) {
-      lv_obj_add_event_cb(&seek_track, on_seek_slider_event, code, &context);
-      lv_obj_add_event_cb(&volume_track, on_volume_slider_event, code, &context);
+    for (lv_event_code_t code : {LV_EVENT_VALUE_CHANGED, LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST}) {
+      lv_obj_add_event_cb(&seek_input, on_seek_slider_event, code, &context);
+      lv_obj_add_event_cb(&volume_input, on_volume_slider_event, code, &context);
     }
     g_media_popup_ctx = &context;
   }
   ~Fixture() { g_media_popup_ctx = nullptr; }
-  void seek_to(float fraction) { touch.x = 13 + static_cast<int32_t>(fraction * 1000); }
-  void volume_to(int pct) { touch.x = 5 + pct; }
-  // Down at from, then a move past the drag limit to to.
-  static void press_drag(lv_obj_t& track, int32_t from, int32_t to) {
-    touch.x = from; dispatch(track, LV_EVENT_PRESSED);
-    touch.x = to; dispatch(track, LV_EVENT_PRESSING);
-  }
 };
 static int failures = 0;
 #define CHECK(condition) do { if (!(condition)) { \\
@@ -224,27 +225,26 @@ static int failures = 0;
 static bool near(float a, float b) { return std::fabs(a - b) < 0.001f; }
 
 int main() {
-  // Release and lost press both finish a gesture. The drag only previews;
-  // retained state must not move the bar while the finger is on it.
+  // A value from outside sets the slider too (the drawn knob and the touch
+  // agree); release and lost press both finish a gesture; the drag only
+  // previews; retained state must not move the bar while the finger is on it.
   for (const auto terminal : {LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST}) {
     Fixture f;
-    // A press alone and a finger that rests within the drag limit change nothing.
-    f.seek_to(0.5f); dispatch(f.seek_track, LV_EVENT_PRESSED);
-    touch.x += LV_INDEV_DEF_SCROLL_LIMIT - 1; dispatch(f.seek_track, LV_EVENT_PRESSING);
-    CHECK(!f.context.seek_dragging && near(f.context.seek_slider.value, 0.05f));
-    Fixture::press_drag(f.seek_track, 13 + 500, 13 + 600);
+    CHECK(f.seek_input.value == 50 && f.volume_input.value == 35);
+    drag(f.seek_input, 600);
     CHECK(f.context.seek_dragging && f.current.text == "2:00" && seeks.empty());
+    CHECK(near(f.context.seek_slider.value, 0.6f));
     f.init.media_position = 20; update_seek(&f.context, f.init);
     CHECK(near(f.context.seek_slider.value, 0.6f) && near(f.context.media_position, 10));
     now_ms += 1000; media_progress_timer_cb(&f.progress);
-    CHECK(near(f.context.seek_slider.value, 0.6f));
-    dispatch(f.seek_track, terminal);
+    CHECK(near(f.context.seek_slider.value, 0.6f) && f.seek_input.value == 600);
+    lift(f.seek_input, terminal);
     CHECK(!f.context.seek_dragging);
     CHECK(seeks.size() == 1);
     if (seeks.size() == 1) CHECK(seeks[0].entity == "media_player.test" && near(seeks[0].value, 120));
     CHECK(near(f.context.media_position, 120) && f.context.media_position_received_ms == now_ms);
     now_ms += 1000; media_progress_timer_cb(&f.progress);
-    CHECK(near(f.context.seek_slider.value, 0.605f) && f.current.text == "2:01");
+    CHECK(near(f.context.seek_slider.value, 0.605f) && f.current.text == "2:01" && f.seek_input.value == 605);
     // The old position reported again is no confirmation: the bar stays.
     f.init.media_position = 30; f.init.media_position_received_ms = now_ms;
     update_seek(&f.context, f.init);
@@ -258,20 +258,20 @@ int main() {
 
     // Volume: the percentage shows over the knob while dragging, one
     // command at the end, and the echoed old volume does not pull it back.
-    Fixture::press_drag(f.volume_track, 5 + 50, 5 + 64);
+    drag(f.volume_input, 64);
     CHECK(volumes.empty() && f.bubble.text == "64%" && !f.context.is_muted);
     CHECK(!lv_obj_has_flag(&f.bubble, LV_OBJ_FLAG_HIDDEN) && f.bubble_timer.paused);
-    dispatch(f.volume_track, terminal);
+    lift(f.volume_input, terminal);
     CHECK(volumes.size() == 1);
     if (volumes.size() == 1) CHECK(volumes[0].entity == "media_player.test" && near(volumes[0].value, 0.64f));
     CHECK(!f.bubble_timer.paused && f.bubble_timer.resets == 1);
     update_volume(&f.context, f.init);
-    CHECK(near(f.context.volume_slider.value, 0.64f));
+    CHECK(near(f.context.volume_slider.value, 0.64f) && f.volume_input.value == 64);
     now_ms += kRemoteHoldMs + 1;
     update_volume(&f.context, f.init);
-    CHECK(near(f.context.volume_slider.value, 0.35f) && f.bubble.text == "35%");
+    CHECK(near(f.context.volume_slider.value, 0.35f) && f.bubble.text == "35%" && f.volume_input.value == 35);
     // A report of the chosen volume ends the wait at once.
-    f.volume_to(50); dispatch(f.volume_track, LV_EVENT_PRESSED); dispatch(f.volume_track, terminal);
+    drag(f.volume_input, 50); lift(f.volume_input, terminal);
     f.init.volume_level = 0.5f; update_volume(&f.context, f.init);
     CHECK(f.context.volume_target_pct == -1);
     f.init.volume_level = 0.2f; update_volume(&f.context, f.init);
@@ -282,7 +282,7 @@ int main() {
   // A seek the player never confirms shows its report after kRemoteHoldMs.
   {
     Fixture f;
-    f.seek_to(0.5f); dispatch(f.seek_track, LV_EVENT_PRESSED); dispatch(f.seek_track, LV_EVENT_RELEASED);
+    drag(f.seek_input, 500); lift(f.seek_input, LV_EVENT_RELEASED);
     f.init.media_position = 10; f.init.media_position_received_ms = now_ms;
     update_seek(&f.context, f.init);
     CHECK(near(f.context.seek_slider.value, 0.5f));
@@ -295,8 +295,8 @@ int main() {
   // silently. Reusing the context must then accept the next entity's state.
   for (int close_path = 0; close_path < 3; ++close_path) {
     Fixture f;
-    Fixture::press_drag(f.seek_track, 13 + 500, 13 + 800);
-    Fixture::press_drag(f.volume_track, 5 + 30, 5 + 50);
+    drag(f.seek_input, 800);
+    drag(f.volume_input, 50);
     if (close_path == 0) hide_media_popup();
     else {
       lv_event_t event{close_path == 1 ? LV_EVENT_CLICKED : LV_EVENT_RELEASED, &f.context};
@@ -307,13 +307,14 @@ int main() {
     CHECK(lv_obj_has_flag(&f.card, LV_OBJ_FLAG_HIDDEN));
     CHECK(!lv_obj_has_flag(&f.overlay, LV_OBJ_FLAG_CLICKABLE));
     CHECK(lv_obj_has_flag(&f.bubble, LV_OBJ_FLAG_HIDDEN));
+    f.seek_input.dragged = false; f.volume_input.dragged = false;
     const float hidden_value = f.context.seek_slider.value;
     now_ms += 1000; media_progress_timer_cb(&f.progress);
     CHECK(near(f.context.seek_slider.value, hidden_value));
     f.context.entity_id = "media_player.next";
     f.init.media_position = 45; f.init.media_position_received_ms = now_ms;
     update_seek(&f.context, f.init);
-    CHECK(near(f.context.seek_slider.value, 0.225f) && near(f.context.media_position, 45));
+    CHECK(near(f.context.seek_slider.value, 0.225f) && near(f.context.media_position, 45) && f.seek_input.value == 225);
     CHECK(seeks.empty());
   }
 
@@ -321,31 +322,32 @@ int main() {
   // turn an absent position or volume into a zero-valued outgoing command.
   for (const auto terminal : {LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST}) {
     Fixture f;
-    Fixture::press_drag(f.seek_track, 13 + 500, 13 + 800);
-    Fixture::press_drag(f.volume_track, 5 + 50, 5 + 80);
+    drag(f.seek_input, 800);
+    drag(f.volume_input, 80);
     f.init.has_media_position = false; f.init.has_volume = false;
     update_seek(&f.context, f.init); update_volume(&f.context, f.init);
-    touch.x = 0;
-    dispatch(f.seek_track, terminal); dispatch(f.volume_track, terminal);
+    f.seek_input.value = 0; f.volume_input.value = 0;
+    lift(f.seek_input, terminal); lift(f.volume_input, terminal);
     CHECK(!f.context.seek_dragging && !f.context.volume_dragging && seeks.empty() && volumes.empty());
     media_progress_timer_cb(&f.progress);
-    CHECK(lv_obj_has_flag(&f.seek_track, LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(&f.seek_knob, LV_OBJ_FLAG_HIDDEN));
-    CHECK((f.seek_track.states & LV_STATE_DISABLED) != 0 && (f.volume_track.states & LV_STATE_DISABLED) != 0);
+    CHECK(lv_obj_has_flag(&f.seek_track, LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(&f.seek_input, LV_OBJ_FLAG_HIDDEN));
+    CHECK(lv_obj_has_state(&f.seek_input, LV_STATE_DISABLED) && lv_obj_has_state(&f.volume_input, LV_STATE_DISABLED));
     f.init.has_media_position = true; f.init.media_position = 25;
     update_seek(&f.context, f.init);
-    CHECK(!lv_obj_has_flag(&f.seek_track, LV_OBJ_FLAG_HIDDEN) && near(f.context.seek_slider.value, 0.125f));
+    CHECK(!lv_obj_has_flag(&f.seek_input, LV_OBJ_FLAG_HIDDEN) && near(f.context.seek_slider.value, 0.125f));
+    CHECK(!lv_obj_has_state(&f.seek_input, LV_STATE_DISABLED));
   }
 
   // Both terminal paths keep the bounds and publish only the final value.
   for (const auto terminal : {LV_EVENT_RELEASED, LV_EVENT_PRESS_LOST}) {
-    for (const int32_t x : {-100, 1500}) {
+    for (const int32_t raw : {-100, 1500}) {
       Fixture f;
-      touch.x = x; dispatch(f.seek_track, LV_EVENT_PRESSING); dispatch(f.seek_track, terminal);
-      touch.x = x; dispatch(f.volume_track, LV_EVENT_PRESSING); dispatch(f.volume_track, terminal);
+      drag(f.seek_input, raw); lift(f.seek_input, terminal);
+      drag(f.volume_input, raw); lift(f.volume_input, terminal);
       CHECK(seeks.size() == 1 && volumes.size() == 1);
-      if (seeks.size() == 1) CHECK(near(seeks[0].value, x < 0 ? 0 : 200));
-      if (volumes.size() == 1) CHECK(near(volumes[0].value, x < 0 ? 0 : 1));
-      CHECK(f.context.is_muted == (x < 0));
+      if (seeks.size() == 1) CHECK(near(seeks[0].value, raw < 0 ? 0 : 200));
+      if (volumes.size() == 1) CHECK(near(volumes[0].value, raw < 0 ? 0 : 1));
+      CHECK(f.context.is_muted == (raw < 0));
     }
   }
 
@@ -357,22 +359,23 @@ int main() {
     extras.has_features = true;
     extras.features = kFeatureVolumeSet;
     g_extras.push_back(extras);
-    f.seek_to(0.5f); dispatch(f.seek_track, LV_EVENT_PRESSED); dispatch(f.seek_track, LV_EVENT_RELEASED);
+    drag(f.seek_input, 500); lift(f.seek_input, LV_EVENT_RELEASED);
     CHECK(!f.context.seek_dragging && seeks.empty());
     g_extras[0].features |= kFeatureSeek;
-    dispatch(f.seek_track, LV_EVENT_PRESSED); dispatch(f.seek_track, LV_EVENT_RELEASED);
+    drag(f.seek_input, 500); lift(f.seek_input, LV_EVENT_RELEASED);
     CHECK(seeks.size() == 1 && near(seeks[0].value, 100));
   }
 
   // Unrelated events and missing parts never start or publish a drag.
   {
     Fixture f;
-    dispatch(f.seek_track, LV_EVENT_CLICKED); dispatch(f.volume_track, LV_EVENT_CLICKED);
+    dispatch(f.seek_input, LV_EVENT_CLICKED); dispatch(f.volume_input, LV_EVENT_CLICKED);
+    dispatch(f.seek_input, LV_EVENT_PRESSED); dispatch(f.volume_input, LV_EVENT_PRESSED);
     CHECK(!f.context.seek_dragging && seeks.empty() && volumes.empty());
     for (auto callback : {on_seek_slider_event, on_volume_slider_event, on_close_click}) {
       lv_event_t event{LV_EVENT_RELEASED, nullptr}; callback(&event);
     }
-    f.context.seek_slider.track = nullptr; f.context.volume_slider.track = nullptr;
+    f.context.seek_slider.input = nullptr; f.context.volume_slider.input = nullptr;
     for (auto callback : {on_seek_slider_event, on_volume_slider_event}) {
       lv_event_t event{LV_EVENT_RELEASED, &f.context}; callback(&event);
     }
@@ -395,8 +398,9 @@ const sourcePath = path.join(buildDir, 'media-popup-gesture.cpp');
 const outputPath = path.join(buildDir, process.platform === 'win32' ? 'media-popup-gesture.exe' : 'media-popup-gesture');
 fs.writeFileSync(sourcePath, source);
 const compiled = spawnSync(compiler,
-  ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-Wno-unused-function', '-Wno-unused-const-variable', '-Wno-deprecated-declarations', sourcePath, '-o', outputPath], {encoding: 'utf8'});
+  ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-Wno-unused-function', '-Wno-unused-const-variable',
+    '-Wno-deprecated-declarations', sourcePath, '-o', outputPath], {encoding: 'utf8'});
 assert.equal(compiled.status, 0, `${compiled.stdout}${compiled.stderr}`);
 const run = spawnSync(outputPath, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
-console.log('Media popup bars: final-only publishing, interrupted hide, unavailable state, SEEK feature and the hold until confirmed: PASS');
+console.log('Media popup bars: lv_slider touch, final-only publishing, interrupted hide, unavailable state, SEEK feature and the hold until confirmed: PASS');

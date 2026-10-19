@@ -9970,7 +9970,7 @@ async function saveGestureEdge(select) {
   function toneJewelCard(icon, strength) {
     if (toneNoColor(icon)) return toneRgb(jewelVar('neutral', 0.63), 0, 0);
     const seed = toneOklch(icon);
-    const L = Math.min(jewelVar('max', 0.68), seed.L - jewelVar('below', 0.18));
+    const L = Math.max(jewelVar('min', 0.42), Math.min(jewelVar('max', 0.68), seed.L - jewelVar('below', 0.18)));
     const cap = jewelVar('chroma', 0.1) * (strength || 20) / 20;
     return toneRgb(L, Math.min(seed.C * jewelVar('card-share', 0.85), cap), seed.h);
   }

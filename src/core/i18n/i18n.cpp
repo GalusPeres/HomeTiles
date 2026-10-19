@@ -688,6 +688,8 @@ static const Strings kStringsDe = {
     "Mediathek",
     "Hier ist nichts",
     "Die Mediathek ist nicht verfügbar",
+    "Dieser Player",
+    "Alle abspielen",
 };
 
 static const Strings kStringsEn = {
@@ -1371,6 +1373,8 @@ static const Strings kStringsEn = {
     "Media library",
     "Nothing here",
     "The library is not available",
+    "This player",
+    "Play all",
 };
 
 static const Strings kStringsFr = {
@@ -2054,6 +2058,8 @@ static const Strings kStringsFr = {
     "Médiathèque",
     "Rien ici",
     "La médiathèque est indisponible",
+    "Ce lecteur",
+    "Tout lire",
 };
 
 static const LocaleProfile kLocaleDe = {
@@ -3112,6 +3118,8 @@ static const Strings kStringsPl = {
     "Biblioteka multimediów",
     "Nic tu nie ma",
     "Biblioteka jest niedostępna",
+    "Ten odtwarzacz",
+    "Odtwórz wszystko",
 };
 
 static const Strings kStringsCs = {
@@ -3765,6 +3773,8 @@ static const Strings kStringsCs = {
     "Knihovna médií",
     "Nic tu není",
     "Knihovna není dostupná",
+    "Tento přehrávač",
+    "Přehrát vše",
 };
 
 static const Strings kStringsEs = {
@@ -4418,6 +4428,8 @@ static const Strings kStringsEs = {
     "Biblioteca multimedia",
     "Aquí no hay nada",
     "La biblioteca no está disponible",
+    "Este reproductor",
+    "Reproducir todo",
 };
 
 static const Strings kStringsSk = {
@@ -5071,6 +5083,8 @@ static const Strings kStringsSk = {
     "Knižnica médií",
     "Nič tu nie je",
     "Knižnica nie je dostupná",
+    "Tento prehrávač",
+    "Prehrať všetko",
 };
 
 static const LocaleProfile kLocalePl = {

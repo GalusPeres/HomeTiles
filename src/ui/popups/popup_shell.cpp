@@ -738,6 +738,13 @@ void popup_shell_control_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& 
   if (tinted) *tinted = controls_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu).tinted;
 }
 
+bool popup_shell_disc_fill(lv_color_t& color, lv_opa_t& opa) {
+  if (!shell.icon_disc || !shell.active) return false;
+  color = lv_obj_get_style_bg_color(shell.icon_disc, LV_PART_MAIN);
+  opa = lv_obj_get_style_bg_opa(shell.icon_disc, LV_PART_MAIN);
+  return true;
+}
+
 void popup_shell_control_raised_fill(uint32_t card_rgb, uint32_t icon_rgb, lv_color_t& color, lv_opa_t& opa) {
   const HeaderDisc& options = g_next_disc.from_tile ? g_next_disc : shell.disc;
   const tone_color::Fill fill = controls_fill(options, card_rgb & 0xFFFFFFu, icon_rgb & 0xFFFFFFu);

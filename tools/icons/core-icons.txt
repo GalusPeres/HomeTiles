@@ -51,6 +51,7 @@ check-bold
 check-circle
 check-circle-outline
 check-network-outline
+checkbox-blank-circle-outline
 checkbox-marked-circle
 chevron-down
 chevron-left
@@ -222,6 +223,8 @@ sofa
 solar-power
 speaker
 speaker-multiple
+speaker-pause
+speaker-play
 square
 square-outline
 star-outline
@@ -397,8 +400,6 @@ script-text
 script-text-play
 sine-wave
 speaker-off
-speaker-pause
-speaker-play
 speedometer
 speedometer-medium
 speedometer-slow

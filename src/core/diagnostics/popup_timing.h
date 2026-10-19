@@ -143,10 +143,81 @@ inline void input_event(lv_event_t* event) {
   }
 }
 
+// Scrolling (user 2026-10-19: the Media library stuttered on the V2, the
+// Settings dropdown did not): one line per scroll of any object, so both are
+// measured alike. While the touch drags or throws an object (the input's
+// scroll object): the frames that drew, their time and the longest wait
+// between two of them, the flushed pixels and their flush time.
+struct ScrollSample {
+  lv_obj_t* obj = nullptr;
+  int32_t width = 0, height = 0;
+  uint32_t started = 0, frame_started = 0, flush_started = 0, last_frame = 0;
+  uint32_t frames = 0, frame_us = 0, frame_max_us = 0, gap_max_us = 0;
+  uint32_t flush_us = 0, flushes = 0, pixels = 0, frame_flushes = 0;
+  bool in_frame = false;
+};
+inline ScrollSample scroll;
+inline lv_indev_t* scroll_input = nullptr;
+
+inline void report_scroll(uint32_t now) {
+  if (scroll.frames) {
+    Serial.printf(
+        "[ScrollPerf] obj=%ldx%ld ms=%lu frames=%lu frame_avg_us=%lu frame_max_us=%lu gap_max_us=%lu "
+        "flush_avg_us=%lu flushes_avg=%lu px_avg=%lu\n",
+        static_cast<long>(scroll.width), static_cast<long>(scroll.height),
+        static_cast<unsigned long>((now - scroll.started) / 1000), static_cast<unsigned long>(scroll.frames),
+        static_cast<unsigned long>(scroll.frame_us / scroll.frames), static_cast<unsigned long>(scroll.frame_max_us),
+        static_cast<unsigned long>(scroll.gap_max_us), static_cast<unsigned long>(scroll.flush_us / scroll.frames),
+        static_cast<unsigned long>(scroll.flushes / scroll.frames), static_cast<unsigned long>(scroll.pixels / scroll.frames));
+  }
+  scroll = {};
+}
+
+inline void scroll_display_event(lv_event_code_t code, lv_event_t* event, uint32_t now) {
+  if (code == LV_EVENT_REFR_START) {
+    lv_obj_t* obj = scroll_input ? lv_indev_get_scroll_obj(scroll_input) : nullptr;
+    if (obj != scroll.obj) {
+      if (scroll.obj) report_scroll(now);
+      if (obj) {
+        scroll.obj = obj;
+        scroll.width = lv_obj_get_width(obj);
+        scroll.height = lv_obj_get_height(obj);
+        scroll.started = now;
+      }
+    }
+    if (!scroll.obj) return;
+    scroll.in_frame = true;
+    scroll.frame_started = now;
+    scroll.frame_flushes = 0;
+  } else if (!scroll.in_frame) {
+    return;
+  } else if (code == LV_EVENT_FLUSH_START) {
+    scroll.flush_started = now;
+    ++scroll.frame_flushes;
+    const auto* area = static_cast<const lv_area_t*>(lv_event_get_param(event));
+    if (area) scroll.pixels += lv_area_get_size(area);
+  } else if (code == LV_EVENT_FLUSH_FINISH) {
+    scroll.flush_us += now - scroll.flush_started;
+  } else if (code == LV_EVENT_REFR_READY) {
+    scroll.in_frame = false;
+    if (!scroll.frame_flushes) return;  // a timer pass that drew nothing
+    const uint32_t frame_us = now - scroll.frame_started;
+    ++scroll.frames;
+    scroll.frame_us += frame_us;
+    scroll.flushes += scroll.frame_flushes;
+    if (frame_us > scroll.frame_max_us) scroll.frame_max_us = frame_us;
+    if (scroll.last_frame && scroll.frame_started - scroll.last_frame > scroll.gap_max_us) {
+      scroll.gap_max_us = scroll.frame_started - scroll.last_frame;
+    }
+    scroll.last_frame = scroll.frame_started;
+  }
+}
+
 inline void display_event(lv_event_t* event) {
-  if (!sample.active) return;
   const auto code = lv_event_get_code(event);
   const uint32_t now = micros();
+  scroll_display_event(code, event, now);
+  if (!sample.active) return;
   if (code == LV_EVENT_REFR_START) {
     sample.frame_started = now;
     sample.flush_us = sample.flushes = sample.pixels = 0;
@@ -205,6 +276,7 @@ inline void display_event(lv_event_t* event) {
 }
 
 inline void attach(lv_display_t* display, lv_indev_t* input) {
+  scroll_input = input;
   lv_display_add_event_cb(display, display_event, LV_EVENT_ALL, nullptr);
   lv_indev_add_event_cb(input, input_event, LV_EVENT_ALL, nullptr);
 }

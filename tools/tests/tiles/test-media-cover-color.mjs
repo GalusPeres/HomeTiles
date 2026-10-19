@@ -95,6 +95,13 @@ int main() {
   cover("grey", 64, 64, [](int, int, int, int) -> unsigned { return 0x808080; });
   // A tiny colored logo (under 4 % of the cover) on black stays neutral.
   cover("logo", 100, 100, [](int x, int y, int, int) -> unsigned { return x < 15 && y < 15 ? 0x00C853 : 0x000000; });
+  // A portrait like "Torn": a warm face in the middle, a teal sky around it,
+  // dark below. The face is the strongest color, the edge (the background)
+  // counts twice and wins (user 2026-10-19).
+  cover("portrait", 120, 120, [](int x, int y, int w, int h) -> unsigned {
+    if (y > h * 7 / 10) return 0x101010;
+    const double dx = (x - 0.5 * w) / (0.30 * w), dy = (y - 0.45 * h) / (0.40 * h);
+    return dx * dx + dy * dy < 1.0 ? 0xD38461 : 0x3D8582; });
   // A green forest with a small red dot: the large area wins.
   cover("forest", 80, 80, [](int x, int y, int, int) -> unsigned { return x < 12 && y < 12 ? 0xE53935 : 0x2F8A46; });
   return 0;
@@ -119,6 +126,7 @@ if (output !== null) {
   assert.ok(hue(value('sunset')) >= 5 && hue(value('sunset')) <= 30, `sunset is orange-red: ${value('sunset')}`);
   assert.ok(hue(value('ocean')) >= 205 && hue(value('ocean')) <= 225, `ocean is blue: ${value('ocean')}`);
   assert.ok(hue(value('forest')) >= 125 && hue(value('forest')) <= 145, `forest is green: ${value('forest')}`);
+  assert.ok(hue(value('portrait')) >= 160 && hue(value('portrait')) <= 200, `portrait takes its teal edge: ${value('portrait')}`);
   for (const name of ['mono', 'grey', 'logo']) assert.equal(value(name), 'none', `${name} has no cover color`);
 }
 

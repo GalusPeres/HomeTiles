@@ -45,8 +45,12 @@ assert.equal(t3e.installer.status, 'validation-pending');
 assert.match(t3e.installer.hardwareCheck, /ESP32-S3-WROOM-1/);
 assert.match(t3e.installer.hardwareCheck, /PCB revision v2\.3/);
 assert.match(t3e.installer.hardwareCheck, /v1\.23/, 'The check names the unsupported first revision');
-assert.ok(releaseProfiles.every(profile => profile === t3e || profile.ciOrder < t3e.ciOrder),
-  'The T3E builds after every existing release profile');
+// The T3E is not the newest profile any more: the BTT Panda Touch joined the
+// catalog later. The T3E still builds after every profile that predates it.
+const newerThanT3e = releaseProfiles.filter(profile => profile !== t3e && profile.ciOrder > t3e.ciOrder)
+  .map(profile => profile.key);
+assert.deepEqual(newerThanT3e, ['btt_panda_touch'],
+  'The T3E builds after every release profile except the newer BTT Panda Touch');
 for (const field of ['key', 'metadataDeviceKey', 'define', 'buildProfile', 'legacySlug']) {
   assert.notEqual(t3e[field], guition[field], `${field} must differ from the Guition S3`);
 }

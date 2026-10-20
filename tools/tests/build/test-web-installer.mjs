@@ -83,9 +83,9 @@ function firmwareFixture(deviceKey, appOffset = 0, silicon = null) {
   return bytes;
 }
 
-assert.equal(DEVICE_PROFILES.length, 21, "Every explicit firmware choice needs an installer profile.");
-assert.equal(new Set(DEVICE_PROFILES.map((device) => device.key)).size, 21);
-assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-S3").length, 4);
+assert.equal(DEVICE_PROFILES.length, 22, "Every explicit firmware choice needs an installer profile.");
+assert.equal(new Set(DEVICE_PROFILES.map((device) => device.key)).size, 22);
+assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-S3").length, 5);
 assert.equal(DEVICE_PROFILES.filter((device) => device.chipFamily === "ESP32-P4").length, 17);
 for (const device of DEVICE_PROFILES.filter((candidate) => candidate.chipFamily === "ESP32-P4")) {
   const contract = {
@@ -163,7 +163,7 @@ assert.throws(
 
 const sketchProfiles = read("sketch.yaml");
 const releaseTargets = DEVICE_PROFILES;
-assert.equal(releaseTargets.length, 21, "The explicit 5-inch, 7B, 10.1 and JC8012 silicon choices need separate release builds.");
+assert.equal(releaseTargets.length, 22, "The explicit 5-inch, 7B, 10.1 and JC8012 silicon choices need separate release builds.");
 for (const target of releaseTargets) {
   const escapedProfile = target.buildProfile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = sketchProfiles.match(new RegExp(`^  ${escapedProfile}:\\r?\\n    fqbn: ([^\\r\\n]+)$`, "m"));
@@ -212,7 +212,7 @@ assert.match(packageSource, /const otaSlotSize = 0x680000;/);
 
 const releaseIndex = buildReleaseIndex(fixtureRelease());
 assert.equal(releaseIndex.tag, "v0.6.5");
-assert.equal(releaseIndex.devices.length, 21);
+assert.equal(releaseIndex.devices.length, 22);
 for (const device of releaseIndex.devices) {
   const names = releaseAssetNames("v0.6.5", device.key);
   assert.equal(device.update.file, names.update);
@@ -309,7 +309,7 @@ for (const revision of [0, 200, 300, 400]) {
 
 const fullPublication = selectDevicesForPublication(releaseIndex);
 assert.equal(fullPublication.partial, false);
-assert.equal(fullPublication.devices.length, 21);
+assert.equal(fullPublication.devices.length, 22);
 const localPublication = selectDevicesForPublication(releaseIndex, "guition_esp32_4848s040");
 assert.equal(localPublication.partial, true);
 assert.deepEqual(localPublication.devices.map((device) => device.key), ["guition_esp32_4848s040"]);
@@ -333,7 +333,7 @@ legacy7bRelease.assets = legacy7bRelease.assets.filter(
 );
 assert.throws(() => buildReleaseIndex(legacy7bRelease), /waveshare_touch_lcd_7b_rev3/);
 const legacy7bIndex = buildReleaseIndex(legacy7bRelease, { allowMissingProfiles: true });
-assert.equal(legacy7bIndex.devices.length, 19);
+assert.equal(legacy7bIndex.devices.length, 20);
 assert.equal(
   legacy7bIndex.devices.some((device) => device.key === "waveshare_touch_lcd_7b"),
   true,
@@ -371,14 +371,14 @@ assert.throws(
   "The normal release contract must still require every configured profile.",
 );
 const previousReleaseIndex = buildReleaseIndex(previousRelease, { allowMissingProfiles: true });
-assert.equal(previousReleaseIndex.devices.length, 9);
+assert.equal(previousReleaseIndex.devices.length, 10);
 assert.deepEqual(
   previousReleaseIndex.devices.map((device) => device.key).filter((key) => pendingDeviceKeys.has(key)),
   [],
 );
 const previousReleasePublication = selectDevicesForPublication(previousReleaseIndex);
 assert.equal(previousReleasePublication.partial, true);
-assert.equal(previousReleasePublication.devices.length, 9);
+assert.equal(previousReleasePublication.devices.length, 10);
 assert.throws(
   () => selectDevicesForPublication(previousReleaseIndex, "waveshare_touch_lcd_7b"),
   /has no complete firmware pair/,
@@ -393,7 +393,7 @@ beforeLcd4Release.assets = beforeLcd4Release.assets.filter(
 const beforeLcd4Publication = selectDevicesForPublication(
   buildReleaseIndex(beforeLcd4Release, { allowMissingProfiles: true }),
 );
-assert.equal(beforeLcd4Publication.devices.length, 19);
+assert.equal(beforeLcd4Publication.devices.length, 20);
 assert.equal(beforeLcd4Publication.partial, true);
 assert.equal(beforeLcd4Publication.devices.some((device) => device.key === waveshareS3Lcd4.key), false);
 assert.throws(

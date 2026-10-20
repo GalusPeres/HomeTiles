@@ -261,6 +261,12 @@ jobs:
             define: DEVICE_GOLDEN_SECURITY_GS_T3E_V2
             rx_variant: native-s3
             publish: true
+          - label: BTT Panda Touch
+            profile: btt_panda_touch
+            key: btt_panda_touch
+            define: DEVICE_BTT_PANDA_TOUCH
+            rx_variant: native-s3
+            publish: true
         # END GENERATED DEVICE MATRIX
 
     steps:

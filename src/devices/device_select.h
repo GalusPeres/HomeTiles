@@ -24,6 +24,7 @@
 // #define DEVICE_GUITION_JC4880P443_PORTRAIT
 // #define DEVICE_GUITION_ESP32_4848S040
 // #define DEVICE_GOLDEN_SECURITY_GS_T3E_V2
+// #define DEVICE_BTT_PANDA_TOUCH
 #endif
 //
 // If nothing is selected, the project defaults to Waveshare 4B.
@@ -54,7 +55,8 @@
      defined(DEVICE_GUITION_JC1060P470C_V2) + \
      defined(DEVICE_GUITION_JC4880P443_PORTRAIT) + \
      defined(DEVICE_GUITION_ESP32_4848S040) + \
-     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)) > 1
+     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) + \
+     defined(DEVICE_BTT_PANDA_TOUCH)) > 1
 #error "Select only one device target."
 #endif
 
@@ -77,6 +79,7 @@
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
+    !defined(DEVICE_BTT_PANDA_TOUCH) && \
     defined(HOMETILES_CI_TARGET)
 #error "HOMETILES_CI_TARGET requires one DEVICE_* build flag."
 #endif
@@ -100,6 +103,7 @@
     !defined(DEVICE_GUITION_JC4880P443_PORTRAIT) && \
     !defined(DEVICE_GUITION_ESP32_4848S040) && \
     !defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) && \
+    !defined(DEVICE_BTT_PANDA_TOUCH) && \
     !defined(HOMETILES_CI_TARGET)
 #define DEVICE_WAVESHARE_4B
 #endif
@@ -195,7 +199,8 @@
 #if defined(DEVICE_GUITION_ESP32_4848S040) || \
     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || \
-    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
+    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B) || \
+    defined(DEVICE_BTT_PANDA_TOUCH)
 #define DEVICE_ESP32_S3_RGB_480
 #endif
 
@@ -212,8 +217,15 @@
     defined(DEVICE_GUITION_ESP32_4848S040) || \
     defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2) || \
     defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4) || \
-    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B)
+    defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4B) || \
+    defined(DEVICE_BTT_PANDA_TOUCH)
 #define DEVICE_LAYOUT_480X480
+#endif
+
+// The BTT Panda Touch is a 800 x 480 panel: it shares the compact scale of
+// the 480-class layouts (its height is 480) and adds a wide, landscape body.
+#if defined(DEVICE_BTT_PANDA_TOUCH)
+#define DEVICE_LAYOUT_800X480
 #endif
 
 // The 8" and 10.1" panels share the 1280x800 HomeTiles layout.

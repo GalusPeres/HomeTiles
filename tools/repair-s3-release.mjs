@@ -16,7 +16,7 @@ export function replacementNames(version) {
 }
 export function inspectReplacements(directory, version) {
   const names = replacementNames(version);
-  assert.equal(names.length, 8, 'This repair supports exactly four S3 profiles');
+  assert.equal(names.length, 10, 'This repair supports exactly five S3 profiles');
   assert.deepEqual(fs.readdirSync(directory).sort(), names, 'Unexpected or missing repair assets');
   return names.map(name => {
     const data = fs.readFileSync(path.join(directory, name));

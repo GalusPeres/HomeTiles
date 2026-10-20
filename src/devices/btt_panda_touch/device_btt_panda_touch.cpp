@@ -321,6 +321,13 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
 
 void displayWaitDMA() {}
 
+bool displayBeginAtomicFrame(const char* reason) {
+  // One framebuffer, scanned by the LCD: there is no inactive buffer the UI
+  // could be rendered into. The caller blanks the screen for the handover.
+  (void)reason;
+  return false;
+}
+
 void displayFillScreen(uint16_t color) {
   if (!g_display_ready || !g_framebuffer) return;
   for (int32_t row = 0; row < kScreenHeight; ++row) {

@@ -48,6 +48,9 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
 void displayWaitDMA();
 void displayFillScreen(uint16_t color);
 void displaySetRotation(uint8_t rotation);
+// The panel scans a single PSRAM framebuffer directly, so there is no second
+// buffer to render the UI into. The caller blanks the screen instead.
+bool displayBeginAtomicFrame(const char* reason);
 
 void setBrightness(uint8_t value);
 uint8_t getBrightness();

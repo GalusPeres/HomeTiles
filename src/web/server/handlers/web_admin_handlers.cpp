@@ -2,6 +2,8 @@
 #include "src/web/server/auth/web_admin_auth.h"
 #include "src/core/i18n/i18n.h"
 #include "src/core/config/pin_access.h"
+#include "src/core/firmware/firmware_version.h"
+#include "src/devices/device.h"
 #include "src/network/bridge/device_entities.h"
 #include "src/network/network_manager.h"
 #include "src/network/link/link_config.h"
@@ -724,6 +726,44 @@ void WebAdminServer::handleLinkSetup() {
   }
   Serial.printf("[Link] Bridge address %s:%ld received\n", host.c_str(), port);
   command_channel::acceptLinkSetup(settings.host, settings.port);
+}
+
+// GET /api/link: what the panel's mDNS record says (startMdns()), for a
+// Bridge that adds the panel by its IP address where mDNS does not reach
+// Home Assistant (issue #114, Bridge #16): device id, name, model, topics,
+// firmware and whether Pair runs, then POST /api/link as after mDNS. No
+// password: nothing here is secret, the record goes to the whole network.
+void WebAdminServer::handleLinkInfo() {
+  char did[24];
+  buildDeviceId(did, sizeof(did));
+  const DeviceConfig& cfg = configManager.getConfig();
+  const bool pair = command_channel::linkWindowOpen();
+  String json;
+  json.reserve(320);
+  json += "{\"device_id\":\"";
+  appendJsonEscaped(json, did);
+  json += "\",\"name\":\"";
+  appendJsonEscaped(json, Device::displayName());
+  json += "\",\"model\":\"";
+  appendJsonEscaped(json, Device::profile().key);
+  json += "\",\"firmware\":\"";
+  appendJsonEscaped(json, FW_VERSION);
+  json += "\",\"base_topic\":\"";
+  appendJsonEscaped(json, cfg.mqtt_base_topic);
+  json += "\",\"ha_prefix\":\"";
+  appendJsonEscaped(json, cfg.ha_prefix);
+  json += "\",\"link\":1,\"pair\":";
+  json += pair ? "true" : "false";
+  json += '}';
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", json);
+  // Anyone on the network may ask: one line per 10 s at most.
+  static uint32_t last_log_ms = 0;
+  const uint32_t now = millis();
+  if (!last_log_ms || now - last_log_ms >= 10000) {
+    last_log_ms = now ? now : 1;
+    Serial.printf("[Link] Panel info requested (Pair %s)\n", pair ? "open" : "not pressed");
+  }
 }
 
 void WebAdminServer::handleRestart() {

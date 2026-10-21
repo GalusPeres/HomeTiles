@@ -56,6 +56,7 @@ public:
   void handleRestart();
   // POST /api/link: the Bridge's address for the direct link (docs-dev/bridge-link.md).
   void handleLinkSetup();
+  void handleLinkInfo();
   void handleGetTiles();
   void handleSaveTiles();
   void handleReorderTiles();

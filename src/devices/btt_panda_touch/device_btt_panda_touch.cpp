@@ -113,15 +113,24 @@ void backlightInit() {
 // The CPU cache holds the framebuffer writes, but the LCD reads the buffer
 // from memory. Push the dirty lines out. The rows of the framebuffer are not
 // contiguous, so a part of a row has to be synced on its own; a band that
-// covers the full width is one continuous block and needs a single call.
+// covers the full width is one continuous block and needs fewer calls. The
+// write back runs without interrupts, so it is split into parts: a long
+// uninterruptible window starves the panel's interrupt and the picture
+// starts to jitter under load.
 void syncRegion(int32_t x, int32_t y, int32_t w, int32_t h) {
   if (!g_framebuffer || w <= 0 || h <= 0) return;
+  constexpr int32_t kMaxRowsPerSync = 16;
   if (x <= 0 && w >= kScreenWidth) {
-    uint16_t* first = g_framebuffer + static_cast<size_t>(y) * kScreenWidth;
-    esp_cache_msync(first,
-                    static_cast<size_t>(h) * kScreenWidth * sizeof(uint16_t),
-                    ESP_CACHE_MSYNC_FLAG_DIR_C2M |
-                        ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+    for (int32_t row = y; row < y + h; row += kMaxRowsPerSync) {
+      const int32_t rows = (y + h - row) < kMaxRowsPerSync
+                               ? (y + h - row)
+                               : kMaxRowsPerSync;
+      uint16_t* first = g_framebuffer + static_cast<size_t>(row) * kScreenWidth;
+      esp_cache_msync(first,
+                      static_cast<size_t>(rows) * kScreenWidth * sizeof(uint16_t),
+                      ESP_CACHE_MSYNC_FLAG_DIR_C2M |
+                          ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+    }
     return;
   }
   for (int32_t row = y; row < y + h; ++row) {
@@ -218,7 +227,7 @@ bool initDisplay() {
   // load. The driver copies every line into the bounce buffer and
   // invalidates the CPU cache while it does so.
   config.num_fbs = 1;
-  config.bounce_buffer_size_px = kScreenWidth * 20;
+  config.bounce_buffer_size_px = kScreenWidth * 30;
   config.flags.bb_invalidate_cache = true;
   config.flags.double_fb = false;
   config.hsync_gpio_num = GPIO_NUM_NC;

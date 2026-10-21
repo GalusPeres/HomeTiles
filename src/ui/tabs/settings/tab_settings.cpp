@@ -829,24 +829,20 @@ WifiValues wifi_values() {
   return v;
 }
 
-// As the former keyboard chose it (ui_keyboard layout_for_config).
+// The Keyboard setting, or on Auto the language's own layout.
 uint8_t keyboard_layout() {
   const DeviceConfig& cfg = configManager.getConfig();
   if (cfg.keyboard_layout == 1) return 1;
   if (cfg.keyboard_layout == 2) return 0;
   if (cfg.keyboard_layout == 3) return 2;
-  const char* lang = cfg.language;
-  if (lang[0] == 'd' && lang[1] == 'e') return 1;
-  if (lang[0] == 'f' && lang[1] == 'r') return 2;
-  return 0;
+  const uint8_t layout = i18n::locale(cfg.language).keyboard_layout;
+  return layout <= 2 ? layout : 0;
 }
 
 // The accent page follows the language, whatever the letters' layout.
-uint8_t keyboard_accents() {
-  const char* lang = configManager.getConfig().language;
-  if (lang[0] == 'f' && lang[1] == 'r') return 1;
-  if (lang[0] == 'p' && lang[1] == 'l') return 2;
-  return 0;
+const char* keyboard_letters() {
+  const char* letters = i18n::locale(configManager.getConfig().language).keyboard_letters;
+  return letters ? letters : "";
 }
 
 bool ethernet_panel() { return NetworkTransportManager::deviceSupportsEthernet(); }

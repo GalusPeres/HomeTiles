@@ -23,6 +23,9 @@ namespace DeviceImpl = DeviceGuitionJC4880P443Portrait;
 #elif defined(DEVICE_GUITION_ESP32_4848S040)
 #include "src/devices/guition_esp32_4848s040/device_guition_esp32_4848s040.h"
 namespace DeviceImpl = DeviceGuitionESP324848S040;
+#elif defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
+#include "src/devices/golden_security_gs_t3e_v2/device_golden_security_gs_t3e_v2.h"
+namespace DeviceImpl = DeviceGoldenSecurityGST3EV2;
 #elif defined(DEVICE_WAVESHARE_S3_TOUCH_LCD_4)
 #include "src/devices/waveshare_s3_touch_lcd_4/device_waveshare_s3_touch_lcd_4.h"
 namespace DeviceImpl = DeviceWaveshareS3TouchLCD4;
@@ -32,6 +35,9 @@ namespace DeviceImpl = DeviceWaveshareS3TouchLCD4B;
 #elif defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3)
 #include "src/devices/waveshare_touch_lcd_4_3/device_waveshare_touch_lcd_4_3.h"
 namespace DeviceImpl = DeviceWaveshareTouchLCD4_3;
+#elif defined(DEVICE_WAVESHARE_TOUCH_LCD_5)
+#include "src/devices/waveshare_touch_lcd_5/device_waveshare_touch_lcd_5.h"
+namespace DeviceImpl = DeviceWaveshareTouchLCD5;
 #elif defined(DEVICE_WAVESHARE_TOUCH_LCD_7)
 #include "src/devices/waveshare_touch_lcd_7/device_waveshare_touch_lcd_7.h"
 namespace DeviceImpl = DeviceWaveshareTouchLCD7;

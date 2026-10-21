@@ -21,6 +21,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import {
+  fingerprint, headersFromCommit, probeEntry, readRecord, repoConfigHeaders, writeRecord,
+} from './lib/library-config.mjs';
+
 const FALLBACK = 3;
 const SOURCE_EXT = new Set(['.c', '.cpp', '.S']);
 const SYNC_EXT = new Set(['.h', '.hh', '.hpp', '.c', '.cc', '.cpp', '.cxx', '.S', '.tpp', '.ipp']);
@@ -39,6 +43,7 @@ function parseArgs(argv) {
     else if (key === '--jobs') args.jobs = Math.max(1, Number(next()) || 1);
     else if (key === '--link-only') args.linkOnly = true;
     else if (key === '--image-dir') args.imageDir = path.resolve(next());
+    else if (key === '--record-library-config-from') args.recordLibraryConfigFrom = next();
     else throw new Error(`Unknown argument: ${key}`);
   }
   for (const required of ['buildPath', 'repo', 'props']) {
@@ -122,6 +127,50 @@ export function depFiles(depPath) {
 
 export function firstOutOfDate(entries) {
   return entries.find(entry => isOutOfDate(entry));
+}
+
+const normPath = file => path.resolve(file).replace(/\//g, '\\').toLowerCase();
+
+// The cached library and core objects are still valid when every one of them
+// is out of date only through the repository headers and those headers give
+// the recorded fingerprint. Returns the fingerprint, or null.
+export function libraryConfigKept(bp, repo, entries, headers, probe) {
+  const record = readRecord(bp);
+  if (!record || !probe || !headers.length) return null;
+  if (JSON.stringify(record.headers) !== JSON.stringify(headers)) return null;
+  const headerSet = new Set(headers.map(header => normPath(path.join(repo, header))));
+  for (const entry of entries) {
+    if (!isOutOfDate(entry)) continue;
+    const objTime = mtime(entry.obj);
+    if (objTime < 0 || mtime(entry.file) > objTime) return null;
+    const deps = depFiles(entry.obj.replace(/\.o$/, '.d'));
+    if (!deps) return null;
+    for (const dep of deps) {
+      const full = path.isAbsolute(dep) ? dep : path.join(entry.directory, dep);
+      const t = mtime(full);
+      if (t < 0) return null;
+      if (t > objTime && !headerSet.has(normPath(full))) return null;
+    }
+  }
+  const current = fingerprint(probe, headers, repo);
+  return current && current === record.fingerprint ? current : null;
+}
+
+// One-time record for a cache built before the fingerprint existed: the
+// headers of the commit its library objects were compiled with.
+function recordLibraryConfigFrom(bp, repo, commit, headers, probe) {
+  if (!probe || !headers.length) throw new Error('No library object includes lv_conf.h in this build folder');
+  const dir = headersFromCommit(repo, commit, headers);
+  try {
+    const value = fingerprint(probe, headers, dir);
+    if (!value) throw new Error('Preprocessing the library configuration failed');
+    writeRecord(bp, { fingerprint: value, headers, recorded: new Date().toISOString(), from: commit });
+    const current = fingerprint(probe, headers, repo);
+    console.log(`Library configuration of ${commit}: ${value.slice(0, 12)}; today's headers: ${current ? current.slice(0, 12) : 'failed'}` +
+      (current === value ? ' (unchanged: the cache stays warm)' : ' (changed: the next build is a full build)'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function isOutOfDate(entry) {
@@ -326,10 +375,28 @@ async function main() {
   }
   if (!sketchEntries.length) fallback('no sketch compile commands');
   // Only arduino-cli rebuilds library and core objects. They also depend on
-  // repository headers (lv_conf.h), so a changed dependency needs the full
-  // build; relinking the cached objects would mix two configurations.
+  // repository headers (lv_conf.h and what it includes), so a changed
+  // dependency needs the full build; relinking the cached objects would mix
+  // two configurations. A header can change for another device only (a new
+  // board in device_select.h): the recorded fingerprint of what the library
+  // really sees (tools/lib/library-config.mjs) keeps such a cache warm.
+  const configHeaders = repoConfigHeaders(otherEntries, args.repo, depFiles);
+  const configProbe = probeEntry(otherEntries, args.repo, depFiles);
+  if (args.recordLibraryConfigFrom) {
+    recordLibraryConfigFrom(bp, args.repo, args.recordLibraryConfigFrom, configHeaders, configProbe);
+    return;
+  }
   const staleOther = firstOutOfDate(otherEntries);
-  if (staleOther) fallback(`${path.relative(bp, staleOther.obj)} is out of date`);
+  if (staleOther) {
+    const kept = libraryConfigKept(bp, args.repo, otherEntries, configHeaders, configProbe);
+    if (!kept) fallback(`${path.relative(bp, staleOther.obj)} is out of date`);
+    console.log(`Library configuration unchanged (${kept.slice(0, 12)}): keeping the cached library and core objects.`);
+  } else if (configProbe) {
+    // Library and core objects newer than every header: they were compiled
+    // with today's headers, so their fingerprint is today's.
+    const current = fingerprint(configProbe, configHeaders, args.repo);
+    if (current) writeRecord(bp, { fingerprint: current, headers: configHeaders, recorded: new Date().toISOString() });
+  }
   if (args.expectFlags) {
     const sample = sketchEntries.find(e => e.file.endsWith('.cpp')).arguments;
     const expected = new Set(splitCommand(args.expectFlags));

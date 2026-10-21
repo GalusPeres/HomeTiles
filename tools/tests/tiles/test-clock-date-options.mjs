@@ -17,20 +17,46 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\
 
 // The language tables as the panel has them (i18n.cpp), for a small i18n.h
 // stand-in on the host (web_scripts.cpp CLOCK_I18N comes from the same).
-const i18n = read('src/core/i18n/i18n.cpp');
-const table = (lang) => {
-  const name = {de: 'kLocaleDe', en: 'kLocaleEn', fr: 'kLocaleFr', pl: 'kLocalePl'}[lang];
-  const start = i18n.indexOf(`static const LocaleProfile ${name} = {`);
-  const body = i18n.slice(start, i18n.indexOf('static const ', start + 10) > 0 ? i18n.indexOf('static const ', start + 10) : undefined);
-  const list = (re) => re.exec(body)[1].split(/",\s*"/).map(s => s.replace(/^"|"$/g, ''));
-  const weekdays = list(/\{("(?:Sonntag|Sunday|Dimanche|Niedziela)"[^}]*)\}/);
-  const short = list(/\{("(?:So|Sun|Dim|Nd)"[^}]*)\}/);
-  const months = list(/\{("(?:Januar|January|janvier|stycznia)"[^}]*)\}/);
-  const pattern = /\}\,\s*\n?\s*"(\{d\}[^"]*)"\s*,?\s*\n?\}/.exec(body)?.[1];
-  return {months, weekdays, weekdaysShort: short, pattern};
+// Every registered language, its LocaleProfile read field by field (i18n.h
+// declares the order).
+const i18n = read('src/core/i18n/i18n.cpp').replace(/^\s*\/\/[^\n]*$/gm, '');
+const localeFields = [.../struct LocaleProfile \{([\s\S]*?)\n\};/.exec(read('src/core/i18n/i18n.h'))[1]
+  .replace(/\/\/[^\n]*/g, '').matchAll(/^\s*(?:const char\*|uint8_t)\s+(\w+)(?:\[\d+\])?;/gm)].map(m => m[1]);
+// The top-level entries of the initializer that opens at `at` (strings and
+// nested braces kept whole).
+const entries = (text, at) => {
+  const out = [];
+  let depth = 0;
+  let start = at + 1;
+  for (let i = at; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      for (i++; text[i] !== '"'; i++) if (text[i] === '\\') i++;
+      continue;
+    }
+    if (c === '{') depth++;
+    if (c === '}' && --depth === 0) {
+      out.push(text.slice(start, i).trim());
+      break;
+    }
+    if (c === ',' && depth === 1) {
+      out.push(text.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  return out.filter(Boolean);
 };
-const LANGS = ['de', 'en', 'fr', 'pl'];
-const TABLES = Object.fromEntries(LANGS.map(lang => [lang, table(lang)]));
+const strings = entry => [...entry.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => JSON.parse(`"${m[1]}"`));
+const table = (code) => {
+  const start = i18n.indexOf(`static const LocaleProfile kLocale${code} = {`);
+  const values = entries(i18n, i18n.indexOf('{', start));
+  const field = name => values[localeFields.indexOf(name)];
+  return {months: strings(field('month_names_in_date')), weekdays: strings(field('weekday_names')),
+    weekdaysShort: strings(field('weather_weekdays_short')), pattern: strings(field('long_date_pattern'))[0],
+    patternYear: strings(field('long_date_year_pattern'))[0]};
+};
+const LANGS = [...i18n.matchAll(/\{&kStrings\w+, &kLocale(\w+)\}/g)].map(m => m[1].toLowerCase());
+const TABLES = Object.fromEntries(LANGS.map(lang => [lang, table(lang[0].toUpperCase() + lang.slice(1))]));
 const cstr = v => JSON.stringify(v);
 const shim = `#pragma once
 #include <stdint.h>
@@ -41,11 +67,12 @@ struct LocaleProfile {
   const char* weather_weekdays_short[7];
   const char* month_names_in_date[12];
   const char* long_date_pattern;
+  const char* long_date_year_pattern;
   uint8_t default_time_format;
   uint8_t default_date_format;
 };
 inline const LocaleProfile& locale(const char* code) {
-${LANGS.map(lang => `  static const LocaleProfile k_${lang} = {{${TABLES[lang].weekdays.map(cstr).join(', ')}}, {${TABLES[lang].weekdaysShort.map(cstr).join(', ')}}, {${TABLES[lang].months.map(cstr).join(', ')}}, ${cstr(TABLES[lang].pattern)}, 1, 1};`).join('\n')}
+${LANGS.map(lang => `  static const LocaleProfile k_${lang} = {{${TABLES[lang].weekdays.map(cstr).join(', ')}}, {${TABLES[lang].weekdaysShort.map(cstr).join(', ')}}, {${TABLES[lang].months.map(cstr).join(', ')}}, ${cstr(TABLES[lang].pattern)}, ${cstr(TABLES[lang].patternYear)}, 1, 1};`).join('\n')}
 ${LANGS.map(lang => `  if (code && strcmp(code, ${cstr(lang)}) == 0) return k_${lang};`).join('\n')}
   return k_en;
 }
@@ -53,9 +80,9 @@ ${LANGS.map(lang => `  if (code && strcmp(code, ${cstr(lang)}) == 0) return k_${
 `;
 
 // Panel: every case for the 21st of August 2026 (a Friday) and the 10th of
-// October 2026 (a Saturday), in all four languages.
+// October 2026 (a Saturday), in every language.
 const cases = [];
-for (const lang of ['de', 'en', 'fr', 'pl']) {
+for (const lang of LANGS) {
   for (const [wday, day, month] of [[5, 21, 7], [6, 10, 9]]) {
     for (let format = 1; format <= 7; ++format) {
       for (const weekday of [0, 1, 2]) {
@@ -84,7 +111,7 @@ int main() {
                 o.dial, o.hands, static_cast<int>(clock_tile::normalize_date_options(raw)));
   }
   // The month formats' list labels: patterns in the locale's order.
-  for (const char* lang : {"de", "en", "fr", "pl"}) {
+  for (const char* lang : {${LANGS.map(cstr).join(', ')}}) {
     for (int format : {6, 7}) {
       char pattern[32];
       clock_tile::format_date_pattern(pattern, sizeof(pattern), static_cast<uint8_t>(format), lang);
@@ -118,7 +145,13 @@ if (output !== null) {
   const patterns = Object.fromEntries(lines.filter(l => l.startsWith('pattern '))
     .map(l => l.replace(/\|\r?$/, '').match(/^pattern (\w+) (\d) (.*)$/)).map(m => [m[1] + m[2], m[3]]));
   assert.deepEqual(patterns, {de6: 'DD. MMMM', de7: 'DD. MMMM YYYY', en6: 'DD MMMM', en7: 'DD MMMM YYYY',
-    fr6: 'DD MMMM', fr7: 'DD MMMM YYYY', pl6: 'DD MMMM', pl7: 'DD MMMM YYYY'});
+    fr6: 'DD MMMM', fr7: 'DD MMMM YYYY', pl6: 'DD MMMM', pl7: 'DD MMMM YYYY', cs6: 'DD. MMMM', cs7: 'DD. MMMM YYYY',
+    es6: 'DD de MMMM', es7: 'DD de MMMM de YYYY', sk6: 'DD. MMMM', sk7: 'DD. MMMM YYYY'});
+  // The year in the language's own order (user 2026-10-18: Spanish "de").
+  assert.equal(at('es', 21, 7, 0), '21 de agosto de 2026');
+  assert.equal(at('es', 21, 6, 2), 'Viernes, 21 de agosto');
+  assert.equal(at('cs', 21, 7, 0), '21. srpna 2026', 'Czech month in the genitive');
+  assert.equal(at('sk', 21, 7, 0), '21. augusta 2026', 'Slovak month in the genitive');
   assert.deepEqual(packs['3'], [3, 0, 0, 0, 0, 0, 0, 3], 'an old tile: the format alone, centered, digital');
   assert.deepEqual(packs[String(0x106)], [6, 1, 0, 0, 0, 0, 0, 0x106]);
   assert.deepEqual(packs[String(0x405)], [5, 0, 1, 0, 0, 0, 0, 0x405], 'rolling digits');

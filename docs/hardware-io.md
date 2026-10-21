@@ -19,7 +19,7 @@ Open **I/O** in the Web Admin. Assignments belong to the physical panel and are 
 
 For the **86-Panel-ETH-2RO**, select **Relay 1** or **Relay 2** explicitly; the shared Waveshare 4B firmware also serves boards without these relays. **On** closes NO-COM, **Off** closes COM-NC, and their active-high polarity is fixed.
 
-Relay-equipped Guition ESP32-4848S040 variants expose their first onboard relay.
+Relay-equipped Guition ESP32-4848S040 variants expose their first onboard relay. The Golden Security GS-T3E v2 offers the two relays every published variant has, on GPIO45 and GPIO46.
 
 ## DS18B20 Temperature Inputs { data-toc-label="DS18B20 inputs" }
 
@@ -43,6 +43,7 @@ The I/O selector offers only pins assigned for use by that device's firmware pro
     | M5Stack Tab5 | GPIO EXT 0, 1, 49, 50; Port A 53, 54; M5-Bus 2, 3, 4, 16, 17, 45, 47, 48, 51, 52 | Profile-whitelisted; attached Units and M5-Bus modules can still create conflicts |
     | Waveshare 4B | P3 GPIO 2, 3, 4, 5, 21; 86 Panel relays GPIO 32 and 46 | P3 schematic-derived; onboard relays only for the exact 86-Panel-ETH-2RO |
     | Waveshare Touch LCD 4.3 inch | None | The exact board profile reserves its documented display, touch, microSD, USB and ESP-Hosted connections |
+    | Waveshare Touch LCD 5 inch | None | The exact board profile reserves its documented display, touch, audio, microSD, USB and ESP-Hosted connections; community validation pending |
     | Waveshare 7 inch | GPIO 2, 3, 4, 5, 21, 22, 28, 29, 30, 31, 32, 34, 46, 47, 48, 49, 50, 51, 52 | Physical hardware validation needed |
     | Waveshare 8 inch | GPIO 2, 3, 4, 5, 21, 22, 28, 29, 30, 31, 32, 34, 46, 47, 48, 49, 50, 51, 52 | Profile-whitelisted; verify attached hardware |
     | Waveshare 10.1 inch | GPIO 2, 3, 4, 5, 21, 22, 28, 29, 30, 31, 32, 34, 46, 47, 48, 49, 50, 51, 52 | Physical hardware validation needed |
@@ -51,6 +52,7 @@ The I/O selector offers only pins assigned for use by that device's firmware pro
     | Guition JC1060P470C V1 / V2 | Expand GPIO 1, 2, 3, 4, 5, 20, 32, 33, 46, 47 | GPIO45 is reserved for the active-low SD-card power switch; physical validation needed |
     | Guition JC4880P443 | None | The exact board profile reserves its documented display, touch, microSD, USB and ESP-Hosted connections; contributor-tested |
     | Guition ESP32-4848S040 | Onboard Relay 1 on GPIO 40 for relay-equipped variants | Supported; relay-equipped variants only |
+    | Golden Security GS-T3E v2 | Onboard relays on GPIO 45 and 46 | From openHASP and ESPHome configurations; the variant-specific third and fourth relays are not offered; community validation pending |
     | Waveshare 7B / 7B-C | None | No configurable GPIOs in these profiles |
     | Waveshare S3 LCD-4 Rev 4.0 / S3 LCD-4B | None | No configurable GPIOs in these profiles |
 

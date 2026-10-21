@@ -280,17 +280,6 @@ void on_close(lv_event_t*) {
   if (closed) closed();
 }
 
-settings_keyboard::Accents keyboard_accents() {
-  switch (settings_model::keyboard_accents()) {
-    case 1:
-      return settings_keyboard::Accents::French;
-    case 2:
-      return settings_keyboard::Accents::Polish;
-    default:
-      return settings_keyboard::Accents::European;
-  }
-}
-
 settings_keyboard::Layout keyboard_layout() {
   switch (settings_model::keyboard_layout()) {
     case 1:
@@ -433,7 +422,7 @@ void open(const Spec& spec, bool manual, const char* ssid) {
                                             g.key_step,
                                             gap,
                                             settings_style::kKeyRadius};
-  g_entry.keyboard = settings_keyboard::create(g_entry.root, keys, keyboard_layout(), keyboard_accents(), palette,
+  g_entry.keyboard = settings_keyboard::create(g_entry.root, keys, keyboard_layout(), settings_model::keyboard_letters(), palette,
                                                settings_style::kWifiColor,
                                                {on_key_text, on_key_backspace, on_key_ok});
   focus_field(manual ? g_entry.name : g_entry.password);

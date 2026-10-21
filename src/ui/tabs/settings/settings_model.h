@@ -168,9 +168,8 @@ WifiValues wifi_values();
 // The keyboard's letters: 0 QWERTY, 1 QWERTZ, 2 AZERTY (the Keyboard
 // setting, or the language's on Auto).
 uint8_t keyboard_layout();
-// The keyboard's accent page: 0 German and other European, 1 French,
-// 2 Polish (the language's).
-uint8_t keyboard_accents();
+// The language's own keyboard letters (LocaleProfile::keyboard_letters).
+const char* keyboard_letters();
 // For the category: "Network" on panels that can use Ethernet.
 bool ethernet_panel();
 bool ethernet_active();

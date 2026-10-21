@@ -8,7 +8,7 @@ import {releaseAssetNames} from '../../device-catalog.js';
 const tag='v0.6.10';
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hometiles-s3-repair-'));
 const names=replacementNames(tag);
-assert.equal(names.length,6);
+assert.equal(names.length,8);
 for(const invalid of ['../v0.6.10','v0.6.10/../../x','main','']) assert.throws(()=>replacementNames(invalid));
 try {
   const content='v0.6.10 HTTPS host=%s tls=%d (%s) allocator=%s';

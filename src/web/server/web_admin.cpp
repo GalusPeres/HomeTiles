@@ -230,8 +230,6 @@ bool WebAdminServer::start() {
               guarded([this]() { this->handleGetScreensaverWallpaper(); }));
     server.on("/api/sd_images", HTTP_GET,
               guarded([this]() { this->handleGetSdImages(); }));
-    server.on("/api/sd_icons", HTTP_GET,
-              guarded([this]() { this->handleGetSdIcons(); }));
     server.on("/api/screenshot", HTTP_POST,
               guarded([this]() { this->handleCreateScreenshot(); }));
     server.on("/api/screenshot/download", HTTP_GET,
@@ -246,6 +244,13 @@ bool WebAdminServer::start() {
         "/api/ota/upload/raw", HTTP_POST,
         guardedUploadDone([this]() { this->handleOtaUploadDone(); }),
         guardedRaw([this]() { this->handleOtaRawUpdate(); }));
+    // The System page's Icons card: download now, or an uploaded file.
+    server.on("/api/icons/download", HTTP_POST,
+              guarded([this]() { this->handleIconFileDownload(); }));
+    server.on(
+        "/api/icons/upload", HTTP_POST,
+        guardedUploadDone([this]() { this->handleIconFileUploadDone(); }),
+        guardedRaw([this]() { this->handleIconFileUpload(); }));
     server.on("/api/ota/install", HTTP_POST,
               guarded([this]() { this->handleStartOtaInstall(); }));
     server.on("/api/ota/status", HTTP_GET,
@@ -256,10 +261,6 @@ bool WebAdminServer::start() {
               guarded([this]() { this->handleGithubUpdateInstall(); }));
     server.on("/api/ota/github/status", HTTP_GET,
               guarded([this]() { this->handleGetGithubUpdateStatus(); }));
-    server.on(
-        "/api/upload_icon", HTTP_POST,
-        guardedUploadDone([this]() { this->handleUploadIconDone(); }),
-        guardedUpload([this]() { this->handleUploadIcon(); }));
     server.on("/api/files/list", HTTP_GET,
               guarded([this]() { this->handleFileManagerList(); }));
     server.on("/api/files/download", HTTP_GET,

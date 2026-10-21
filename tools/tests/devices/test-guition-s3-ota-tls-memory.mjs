@@ -160,7 +160,8 @@ fs.mkdirSync(out,{recursive:true});
 const cppPath = path.join(out,'test.cpp');fs.writeFileSync(cppPath,cpp);
 const deviceSelect = fs.readFileSync(path.join(root, 'src/devices/device_select.h'), 'utf8');
 const familyGuard = deviceSelect.match(/#if[^#]+#define DEVICE_ESP32_S3_RGB_480/)[0];
-const s3Targets = ['DEVICE_GUITION_ESP32_4848S040', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B'];
+const s3Targets = ['DEVICE_GUITION_ESP32_4848S040', 'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
+  'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B'];
 for (const define of s3Targets) assert.ok(familyGuard.includes(`defined(${define})`));
 for (const target of [...s3Targets,'p4']) {
   const binary = path.join(out,target+(process.platform==='win32'?'.exe':''));

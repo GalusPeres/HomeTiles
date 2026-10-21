@@ -107,9 +107,10 @@ function getClockPreviewLanguage() {
       else if (format === 4) date = dd + '/' + mm + '/' + yyyy;
       else if (format === 5) date = dd + '.' + mm + '.';
       else if (format === 6 || format === 7) {
+        // clock_tile::long_date_pattern: the locale's order with or without the year.
         const month = (texts && texts.months && texts.months[now.getMonth()]) || mm;
-        date = String((texts && texts.pattern) || '{d} {M}').replace('{d}', String(now.getDate())).replace('{M}', month)
-          + (format === 7 ? ' ' + yyyy : '');
+        const pattern = format === 7 ? (texts && texts.patternYear) || '{d} {M} {Y}' : (texts && texts.pattern) || '{d} {M}';
+        date = String(pattern).replace('{d}', String(now.getDate())).replace('{M}', month).replace('{Y}', yyyy);
       } else date = dd + '.' + mm + '.' + yyyy;
     }
     const day = Number(weekday);

@@ -282,7 +282,7 @@ static uint8_t normalize_display_brightness(uint8_t brightness) {
   // Preserve raw 0 for the low-level sleep/restart paths only. Persisted
   // normal brightness must remain at the exact panel's measured visible floor.
   return configured_min;
-#elif defined(DEVICE_GUITION_ESP32_4848S040)
+#elif defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
   // The first S3 brightness test build could persist values below the panel's
   // measured visible threshold. Upgrade those values to the new 1 % floor
   // instead of unexpectedly jumping to the generic default.

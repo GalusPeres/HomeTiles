@@ -43,6 +43,11 @@
 #define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_touch_lcd_4_3/local_camera_board.h"
 #endif
 
+#if defined(DEVICE_WAVESHARE_TOUCH_LCD_5)
+#define HOMETILES_CAMERA_SENSOR_OV5647 1
+#define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_touch_lcd_5/local_camera_board.h"
+#endif
+
 #if defined(DEVICE_WAVESHARE_4B)
 #define HOMETILES_CAMERA_SENSOR_OV5647 1
 #define HOMETILES_LOCAL_CAMERA_BOARD "src/devices/waveshare_4b/local_camera_board.h"

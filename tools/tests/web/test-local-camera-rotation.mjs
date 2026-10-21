@@ -354,6 +354,9 @@ const expected = {
   kStringsDe: ['Erweitert', 'Drehung', 'Rot und Blau tauschen'],
   kStringsFr: ['Avancé', 'Rotation', 'Inverser le rouge et le bleu'],
   kStringsPl: ['Zaawansowane', 'Obrót', 'Zamień czerwony i niebieski'],
+  kStringsCs: ['Pokročilé', 'Otočení', 'Prohodit červenou a modrou'],
+  kStringsEs: ['Avanzado', 'Rotación', 'Intercambiar rojo y azul'],
+  kStringsSk: ['Pokročilé', 'Otočenie', 'Zameniť červenú a modrú'],
 };
 const tables = [...new Set([...i18n.matchAll(/\{&(kStrings\w+), &kLocale\w+\}/g)].map(match => match[1]))];
 assert.deepEqual([...tables].sort(), Object.keys(expected).sort(), 'Every registered language is checked');
@@ -368,9 +371,9 @@ for (const table of tables) {
   assert.deepEqual(tails[table].slice(0, 3), expected[table], `${table} labels`);
   assert.ok(tails[table][3].length > 20, `${table} has the red/blue swap note`);
 }
-assert.notEqual(tails.kStringsDe[3], tails.kStringsEn[3], 'German note must be translated');
-assert.notEqual(tails.kStringsFr[3], tails.kStringsEn[3], 'French note must be translated');
-assert.notEqual(tails.kStringsPl[3], tails.kStringsEn[3], 'Polish note must be translated');
+for (const table of tables.filter(table => table !== 'kStringsEn')) {
+  assert.notEqual(tails[table][3], tails.kStringsEn[3], `${table} note must be translated`);
+}
 
 // --- Delivered browser code ----------------------------------------------------------
 const delivered = readAdminDeliverySource();

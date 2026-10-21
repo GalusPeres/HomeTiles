@@ -1044,13 +1044,11 @@ void DeviceM5StacksTab5::migrateStorageFromSD() {
 
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 
   if (initSDCard()) {
     Serial.println("[Storage] Migrating data from SD to LittleFS...");
     copyDirectory(SD, LittleFS, "/_tile_grids");
     copyDirectory(SD, LittleFS, "/_tile_links");
-    copyDirectory(SD, LittleFS, "/icons");
     Serial.println("[Storage] Migration complete");
   } else {
     Serial.println("[Storage] No SD card, starting fresh");

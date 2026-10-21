@@ -561,7 +561,6 @@ void ensureStorageLayout() {
   if (!g_littlefs_ready) return;
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 }
 
 bool writeTouchRegister(uint16_t reg, uint8_t value) {

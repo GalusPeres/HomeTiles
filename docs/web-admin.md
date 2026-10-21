@@ -226,7 +226,7 @@ See the [Screensaver guide](screensaver.md) for images, activation, and availabl
 
 - **WiFi:** WiFi credentials, connection type on Ethernet-capable devices, and an optional static IP shared by WiFi and Ethernet.
 - **Localization:** language, time zone, and date/time formats.
-- **System:** firmware update, the connection to Home Assistant, pairing, and the [Web Admin password](#web-admin-password). The **MQTT** settings are folded in here; while the direct link is active they stay saved but unused.
+- **System:** firmware update, the [icon file](#icons), the connection to Home Assistant, pairing, and the [Web Admin password](#web-admin-password). The **MQTT** settings are folded in here; while the direct link is active they stay saved but unused.
 - **I/O:** [local hardware](hardware-io.md).
 - **Built-in camera:** on displays with a camera, see below.
 - **Files** and **Diagnostics:** see below.
@@ -235,6 +235,21 @@ See the [Screensaver guide](screensaver.md) for images, activation, and availabl
 <img src="../images/v09-webadmin-system.png" alt="Settings, System with firmware update, connection, MQTT, pairing and Web Admin password" width="1450" height="1212" loading="lazy">
 <figcaption>Device settings in the Web Admin</figcaption>
 </figure>
+
+### Icons
+
+All 7447 Material Design Icons live in an icon file in the display's internal storage; 399 common icons, including Home Assistant's default icons, are built into the firmware. Without a valid icon file the display shows the built-in icons and a placeholder for the others.
+
+A display without the file downloads it from the GitHub release of its own firmware version and restarts. If that fails, it tries again on the next restarts, up to three times per firmware version. Displays flashed with a factory image already have the file.
+
+The **Icons** card below the firmware update shows the file:
+
+- **Present:** the file name, the number of icons and a check mark.
+- **Missing or not usable:** a download link to the right file for this display and firmware version (`hometiles-icons-<size>.bin`), the built-in and total icon count (for example 399 / 7447), and in red why the last download or install failed. **Update** makes the display download the file now, also after three failed attempts.
+
+If the display cannot reach GitHub, for example behind a firewall, download the file with the link on your computer, select it under **Icon file** with **Choose file**, and press **Update**. The display checks the file before it installs it and refuses one that does not match its firmware's icons, such as a file for another icon size.
+
+The screen stays dark while the display downloads the file or installs an uploaded one. It restarts afterwards, also after a failure, and the page reloads when it answers again.
 
 ### Web Admin Password { data-toc-label="Password" }
 

@@ -120,29 +120,22 @@ for (let code = 0x21; code <= 0x7e; ++code) {
   if (/[A-Z]/.test(ch)) continue;  // Shift makes the capitals
   assert.ok(glyphs.has(ch), `the keyboard types ${ch}`);
 }
-for (const ch of 'äöüßąćęłńóśźżàâæçéèêëîïôœùûÿ') assert.ok(glyphs.has(ch), `holding a letter offers ${ch}`);
 assert.match(rawKeyboard, /LV_EVENT_LONG_PRESSED_REPEAT/, 'Backspace repeats while held');
 // The accent key shows the language's accented letters in the letter rows,
 // as the former keyboard's language key did (user 2026-10-06: holding a
 // letter alone was not to be found).
 assert.match(rawKeyboard, /g_kb\.accent_key = special_key\(kAccentKey, colors\.group, colors\.button, 3, 1\.5f, 1\);/);
 assert.match(rawKeyboard, /special_key\(kSpace, colors\.button, colors\.pressed, 3, 2\.5f, 5\);/);
-const accentPages = rawKeyboard.slice(rawKeyboard.indexOf('struct AccentPage {'), rawKeyboard.indexOf('enum Special'));
-const pageGlyphs = name => {
-  const start = accentPages.indexOf(`const char* const ${name}[] = {`);
-  const text = accentPages.slice(start, accentPages.indexOf('};', start));
-  return [...text.matchAll(/"((?:\\.|[^"\\])*)"/g)].map(match => Buffer.from(match[1]
-    .replace(/\\x([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))), 'latin1').toString('utf8'));
-};
-const french = ['kFrenchLower1', 'kFrenchLower2', 'kFrenchLower3'].flatMap(pageGlyphs).join('');
-for (const ch of 'àâæéèêëîïôçœùûüÿ€') assert.ok(french.includes(ch), `the French page has ${ch}`);
-const polish = ['kPolishLower1', 'kPolishLower2', 'kPolishLower3'].flatMap(pageGlyphs).join('');
-for (const ch of 'ąćęłńóśźż') assert.ok(polish.includes(ch), `the Polish page has ${ch}`);
-const european = ['kEuropeanLower1', 'kEuropeanLower2', 'kEuropeanLower3'].flatMap(pageGlyphs).join('');
-for (const ch of 'äöüß') assert.ok(european.includes(ch), `the German page has ${ch}`);
+// The accented letters come from the language's data (LocaleProfile
+// keyboard_layout and keyboard_letters, keyboard_letters.h; checked for every
+// language in test-keyboard-letters.mjs), never from language codes here.
 const rawModel = readRepoFile('src/ui/tabs/settings/tab_settings.cpp');
-assert.match(rawModel, /if \(lang\[0\] == 'f' && lang\[1\] == 'r'\) return 1;\s*if \(lang\[0\] == 'p' && lang\[1\] == 'l'\) return 2;/,
+const keyboardModel = between(rawModel, 'uint8_t keyboard_layout() {', 'bool ethernet_panel()');
+assert.match(keyboardModel, /i18n::locale\(cfg\.language\)\.keyboard_layout/, "Auto takes the language's layout");
+assert.match(keyboardModel, /i18n::locale\(configManager\.getConfig\(\)\.language\)\.keyboard_letters/,
   'the accent page follows the language');
+assert.doesNotMatch(keyboardModel, /lang\[0\]/, 'no language codes in the keyboard choice');
+assert.match(entrySource, /settings_keyboard::create\(g_entry\.root, keys, keyboard_layout\(\), settings_model::keyboard_letters\(\)/);
 // French AZERTY can be chosen in Localization > Keyboard (value 3).
 assert.match(rawModel, /"Fran\\xC3\\xA7" "ais \(AZERTY\)"/);
 assert.match(model, /if \(cfg\.keyboard_layout == 3\) return 2;/);

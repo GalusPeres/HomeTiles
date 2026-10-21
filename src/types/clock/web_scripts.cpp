@@ -45,5 +45,7 @@ void append_clock_scripts(String& html) {
   append_clock_js_list(html, "weekdaysShort", locale.weather_weekdays_short, 7);
   html += "    pattern: ";
   append_clock_js_string(html, locale.long_date_pattern);
+  html += ",\n    patternYear: ";
+  append_clock_js_string(html, locale.long_date_year_pattern);
   html += "\n  });\n  </script>\n";
 }

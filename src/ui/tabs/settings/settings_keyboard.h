@@ -12,12 +12,12 @@
 // accent key shows the language's accented letters in the letter rows (as
 // the former keyboard's language key did, user 2026-10-06), holding a letter
 // offers its accented forms too, and Shift on the ?123 page opens a second
-// page with the remaining symbols.
+// page with the remaining symbols. The letters come from the language's
+// LocaleProfile (keyboard_letters.h), so a language needs no code here.
 namespace settings_keyboard {
 
+// The values of LocaleProfile::keyboard_layout.
 enum class Layout : uint8_t { Qwerty, Qwertz, Azerty };
-// The accent page: German and other European letters, French, Polish.
-enum class Accents : uint8_t { European, French, Polish };
 
 struct Geometry {
   int x;        // left edge of the rows
@@ -35,7 +35,9 @@ struct Handler {
   void (*ok)();
 };
 
-lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, Accents accents,
+// `letters`: the language's own letters (LocaleProfile::keyboard_letters),
+// first on the accent page and among a held letter's forms.
+lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, const char* letters,
                  const settings_style::Colors& colors, uint32_t accent, const Handler& handler);
 // Keys ignore touches while a connection is being made.
 void set_enabled(lv_obj_t* keyboard, bool enabled);

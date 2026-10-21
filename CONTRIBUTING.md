@@ -118,9 +118,9 @@ responsibilities.
    policies in `tile_type_policy.h`. These policies deliberately have
    different memberships: an entity field alone does not imply all features.
 2. Implement the type module and add its descriptor to `types_registry.cpp`.
-   Add DE/EN/FR UI strings centrally and export type-specific translations
-   through its `web_scripts.cpp`. Write source comments and diagnostic logs
-   in English.
+   Add its UI strings centrally for every registered language and export
+   type-specific translations through its `web_scripts.cpp`. Write source
+   comments and diagnostic logs in English.
 3. Put browser field/preview logic beside the type and list it in the bundle
    manifest. Use the registry load/save/reset callbacks and existing shared
    draft/autosave helpers. Check both selected and cached-grid previews.
@@ -138,6 +138,74 @@ responsibilities.
 New type work still involves runtime routing and persistence review; the
 refactoring does not make a rendered tile automatically complete. The full
 contract and hardware-specific lifecycle checks remain in `AGENTS.md`.
+
+## Add a language
+
+A language is data only: one `Strings` table and one `LocaleProfile` table
+in `src/core/i18n/i18n.cpp`. The panel, its keyboard and the Web Admin take
+everything from them; no renderer, keyboard or browser code changes.
+
+1. Start from the English tables `kStringsEn` and `kLocaleEn` and name the
+   copies after the language code, for example `kStringsIt` and `kLocaleIt`
+   for `it`. Both tables are positional: translate every entry in the field
+   order of `struct Strings` and `struct LocaleProfile` in
+   `src/core/i18n/i18n.h`, and leave none out. Put the code in `code` of
+   both tables and in `html_lang`.
+2. Register the pair in `kLanguages`. Its order is the order of the language
+   list on the panel and in the Web Admin; the first entry, English, is the
+   fallback for an unknown code.
+3. Fill in the `LocaleProfile` data the language brings:
+   - `native_name` for the language list and the `decimal_separator`.
+   - Dates: `short_date_pattern` (`{d}` day, `{m}` short month),
+     `long_date_pattern` and `long_date_year_pattern` (`{d}` day, `{M}`
+     month, `{Y}` year, for example `"{d} de {M} de {Y}"`),
+     `month_names_in_date` as the months stand in a date (the genitive in
+     Polish, Czech and Slovak), the short month names
+     `weather_months_short`, and the weekday names `weekday_names` and
+     `weather_weekdays_short`, Sunday first.
+   - `default_time_format` (1 = 24-hour, 2 = 12-hour) and
+     `default_date_format` (1 = day/month/year, 2 = month/day/year,
+     3 = year/month/day) for **Auto**.
+   - The time zone names `timezone_group_labels` and `timezone_labels`, in
+     the order of `i18n::timezone_option()`.
+   - `keyboard_layout` under **Auto** (0 QWERTY, 1 QWERTZ, 2 AZERTY) and
+     `keyboard_letters`, the language's own letters and signs in lower case,
+     for example `"áčďéěíňóřšťúůýž"` for Czech.
+     `src/ui/tabs/settings/keyboard_letters.h` makes the capitals, the
+     accent page and the forms of a held letter from them; English leaves
+     the string empty.
+4. Use only characters the panel fonts carry: Latin-1, Latin Extended-A,
+   general punctuation and the euro sign. Any other character, for example
+   the minus sign U+2212, shows as nothing on the panel.
+5. Keep printf placeholders (`%s`, `%u`, `%d`), named placeholders such as
+   `{n}`, `{name}` or `{query}`, `**bold**` markers and `\n` line breaks
+   exactly as in English.
+6. Name the new language in the language list and the keyboard paragraph of
+   "Localization" in `docs/device-ui.md`.
+
+The i18n tests find every registered language by themselves: complete,
+aligned tables, the same printf placeholders as English, only characters of
+the panel fonts, keyboard letters that lead the accent page and fit its
+rows, and the same clock dates on the panel and in the Web Admin preview.
+A few tests also list known texts per language and need the new language's
+expected texts: `tools/tests/ui/test-settings-display-page.mjs`,
+`tools/tests/ui/test-settings-localization-page.mjs`,
+`tools/tests/web/test-local-camera-rotation.mjs`, and the month format
+patterns in `tools/tests/tiles/test-clock-date-options.mjs`. Install the
+host dependencies once after checkout, then run the language tests and the
+whole suite:
+
+```text
+npm ci --ignore-scripts
+node tools/run-tests.mjs i18n keyboard clock-date
+node tools/run-tests.mjs
+```
+
+Long texts can be cut on the 480 px panels. `node tools/settings-preview.mjs
+s3 --page=system --lang=it --no-mockup` renders a Settings page in that
+language with the panel fonts into `build/settings-preview/` (it needs
+LVGL 9.6 and a host compiler); `--page` also takes `display`, `wifi`,
+`localization` and `setup`.
 
 ## Verification and firmware size
 

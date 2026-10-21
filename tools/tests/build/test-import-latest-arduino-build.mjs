@@ -63,6 +63,10 @@ const releaseTargets = new Map([
     key: 'guition_esp32_4848s040',
     siliconVariant: 'default',
   }],
+  ['DEVICE_GOLDEN_SECURITY_GS_T3E_V2', {
+    key: 'golden_security_gs_t3e_v2',
+    siliconVariant: 'default',
+  }],
 ]);
 
 function selectorSource(...defines) {

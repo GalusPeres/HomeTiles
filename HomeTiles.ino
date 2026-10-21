@@ -431,7 +431,7 @@ static GithubUpdate::CheckResult perform_fw_check() {
 #if defined(DEVICE_ESP32_S3_RGB_480)
   const bool s3_rgb_network_active = networkTransport.isConnected();
 #endif
-#if defined(DEVICE_GUITION_ESP32_4848S040)
+#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
   if (s3_rgb_network_active) {
     // Reduce continuous RGB scanout bandwidth before TLS/WiFi starts using
     // memory bandwidth. The device guard applies the PCLK change at VSYNC.
@@ -439,7 +439,7 @@ static GithubUpdate::CheckResult perform_fw_check() {
   }
 #endif
   GithubUpdate::CheckResult res = GithubUpdate::checkLatest();
-#if defined(DEVICE_GUITION_ESP32_4848S040)
+#if defined(DEVICE_GUITION_ESP32_4848S040) || defined(DEVICE_GOLDEN_SECURITY_GS_T3E_V2)
   if (s3_rgb_network_active) {
     // Restore normal scanout speed and finish with one canonical FB0 restart.
     Device::displayUpdateCheckGuardEnd();
@@ -575,9 +575,11 @@ static void icon_download_progress(size_t, size_t) {
 // own release. Same preparation as a GitHub firmware install: suspended
 // display, paused MQTT, stopped Web Admin. It restarts either way, also to
 // leave ESP-Hosted clean after a failed large HTTPS transfer.
-static void apply_icon_download() {
+// requested: "Update" on the Web Admin's Icons card, which does not use up
+// one of the three automatic attempts.
+static void apply_icon_download(bool requested = false) {
   Serial.printf("[Icons] Fetching %s of %s\n", mdi_icon_store::release_file_name(), FW_VERSION);
-  mdi_icon_store::note_download_attempt();
+  if (!requested) mdi_icon_store::note_download_attempt();
   displayManager.setInputEnabled(false);
   lv_refr_now(displayManager.getDisplay());
   BoardHAL::displayPowerSaveOn();
@@ -606,6 +608,32 @@ static void apply_icon_download() {
     Serial.println("[Icons] Icon file installed - restarting");
   } else {
     Serial.printf("[Icons] Icon download failed: %s - restarting\n", err.c_str());
+    mdi_icon_store::note_failure(String("Download failed: ") + err);
+  }
+  camera_transport::planned_restart();
+  BoardHAL::prepareForRestart();
+  delay(500);
+  BoardHAL::restart();
+}
+
+// An icon file uploaded on the Web Admin's Icons card: written from PSRAM
+// with the same checks as a downloaded one; the panel restarts either way.
+static void apply_icon_upload() {
+  Serial.printf("[Icons] Installing the uploaded %s\n", mdi_icon_store::release_file_name());
+  displayManager.setInputEnabled(false);
+  lv_refr_now(displayManager.getDisplay());
+  BoardHAL::displayPowerSaveOn();
+  if (webAdminServer.isRunning()) webAdminServer.stop();
+  String err;
+  Device::storageWriteBegin();
+  const bool ok = mdi_icon_store::install_upload(err);
+  if (ok) mdi_icon_store::clear_download_attempts();
+  Device::storageWriteEnd();
+  if (ok) {
+    Serial.println("[Icons] Uploaded icon file installed - restarting");
+  } else {
+    Serial.printf("[Icons] Uploaded icon file not installed: %s - restarting\n", err.c_str());
+    mdi_icon_store::note_failure(String("Install failed: ") + err);
   }
   camera_transport::planned_restart();
   BoardHAL::prepareForRestart();
@@ -1217,6 +1245,13 @@ void loop() {
       !fw_install_pending && !setup_screen::shown()) {
     icon_download_checked = true;
     if (mdi_icon_store::download_due()) apply_icon_download();
+  }
+
+  // The Web Admin's Icons card: an uploaded icon file to install, or "Update"
+  // (download now, also after three failed attempts). Both restart.
+  if (!fw_install_pending && !setup_screen::shown()) {
+    if (mdi_icon_store::upload_ready()) apply_icon_upload();
+    if (mdi_icon_store::take_download_request() && networkManager.isNetworkConnected()) apply_icon_download(true);
   }
 
   if (fw_check_pending) {

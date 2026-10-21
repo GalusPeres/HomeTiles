@@ -8,6 +8,7 @@ const otaSlotSize = 0x680000;
 
 const { releaseProfiles, releaseFileVersion } = require('../tools/device-catalog.js');
 const { parseFirmwareMetadata, assertReleaseMetadata } = require('./firmware-metadata.js');
+const { iconPxForDefine, findMklittlefs, addIconFileToFactory } = require('./factory-icon-file.js');
 const devices = new Map(releaseProfiles.map((profile) => [profile.key, profile]));
 
 function readVersion() {
@@ -90,6 +91,9 @@ function main() {
   const deviceKey = args['device-key'] || process.env.DEVICE_KEY;
   const metadataDeviceKey = args['metadata-device-key'] || deviceKey;
   const siliconVariant = args['silicon-variant'] || process.env.SILICON_VARIANT || 'default';
+  // The icon files (tools/generate-icon-files.mjs --files-only): the factory
+  // image gets the device's one in its LittleFS partition.
+  const iconDir = args['icon-dir'] || process.env.ICON_DIR;
 
   if (!buildDirArg) {
     throw new Error('Missing --build-dir');
@@ -138,13 +142,23 @@ function main() {
     );
   }
 
+  let factory = fs.readFileSync(factoryPath);
+  if (iconDir) {
+    const deviceSelect = fs.readFileSync(path.join(repoRoot, 'src/devices/device_select.h'), 'utf8');
+    const px = iconPxForDefine(device.define, deviceSelect);
+    const iconFile = path.join(path.resolve(repoRoot, iconDir), `hometiles-icons-${px}.bin`);
+    const added = addIconFileToFactory(factory, { iconFile, px, mklittlefs: findMklittlefs() });
+    factory = added.factory;
+    console.log(`[release-helper] ${deviceKey}: /${added.name} in the factory LittleFS at 0x${added.partition.offset.toString(16)}`);
+  }
+
   ensureCleanDeviceOutputs(outDir, deviceKey);
 
   const updateDest = path.join(outDir, `hometiles_${version}_${deviceKey}.bin`);
   const factoryDest = path.join(outDir, `hometiles_${version}_${deviceKey}_factory.bin`);
 
   fs.copyFileSync(updatePath, updateDest);
-  fs.copyFileSync(factoryPath, factoryDest);
+  fs.writeFileSync(factoryDest, factory);
 
   console.log(`[release-helper] ${path.relative(repoRoot, updateDest)}`);
   console.log(`[release-helper] ${path.relative(repoRoot, factoryDest)}`);

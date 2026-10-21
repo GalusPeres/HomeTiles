@@ -43,6 +43,12 @@ const boards = [
   {define: 'DEVICE_WAVESHARE_TOUCH_LCD_4_3', dir: 'waveshare_touch_lcd_4_3', sensor: 'ov5647',
    flag: 'profile.h', driver: 'device_waveshare_touch_lcd_4_3.cpp', ldo: literalLdo,
    accessor: 'DeviceWaveshareTouchLCD4_3::sharedI2cBus()', owner: sharedBus('DeviceWaveshareTouchLCD4_3')},
+  // The 5-inch runs the shared Waveshare P4 DSI driver: the display takes
+  // LDO 3 at 2500 mV from its board description (board.h, checked below).
+  {define: 'DEVICE_WAVESHARE_TOUCH_LCD_5', dir: 'waveshare_touch_lcd_5', sensor: 'ov5647',
+   flag: 'profile.h', driver: 'dsi_driver/waveshare_p4_dsi.cpp',
+   ldo: /ldo_cfg\.chan_id = panel_cfg\.mipi_phy_ldo_channel;\s*ldo_cfg\.voltage_mv = panel_cfg\.mipi_phy_ldo_mv;/,
+   accessor: 'DeviceWaveshareTouchLCD5::sharedI2cBus()', owner: sharedBus('waveshare_p4_dsi')},
   {define: 'DEVICE_WAVESHARE_4B', dir: 'waveshare_4b', sensor: 'ov5647',
    flag: 'device_waveshare_4b.h', driver: 'device_waveshare_4b.cpp', ldo: namedLdo,
    accessor: 'DeviceWaveshare4B::sharedI2cBus()',
@@ -146,6 +152,11 @@ for (const board of boards) {
   assert.match(flag, /Device::Capabilities\{(?:(?:true|false), ){6}kBuiltinCamera\}/, `${label}: capability`);
 }
 
+// The 5-inch display's MIPI PHY supply in its board description: the
+// camera's LDO 3 at 2500 mV shares exactly that channel and voltage.
+assert.match(read('src/devices/waveshare_touch_lcd_5/board.h'),
+  /BSP_MIPI_DSI_PHY_PWR_LDO_CHAN 3[^\n]*\n\s*3,\n\s*2500,/, 'LCD-5 display LDO 3 at 2500 mV');
+
 // Waveshare 4B: init_display_power() power-cycles LDO 3 by taking and
 // dropping the only reference. The camera may take its reference only after
 // that, which the bus accessor guarantees: the bus exists after init_touch(),
@@ -165,6 +176,7 @@ for (const board of boards) {
 
 // --- Profiles without a proven camera never get the capture path -----------
 const neverCamera = ['DEVICE_GUITION_JC1060P470C', 'DEVICE_GUITION_ESP32_4848S040',
+  'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
   'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B',
   'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480'];
 for (const define of neverCamera) {
@@ -172,7 +184,7 @@ for (const define of neverCamera) {
   assert.ok(!cameraSelect.includes(`defined(${define})`), `${define} has no camera board`);
 }
 for (const dir of ['guition_jc1060p470c', 'guition_esp32_4848s040', 'waveshare_s3_touch_lcd_4',
-                   'waveshare_s3_touch_lcd_4b']) {
+                   'waveshare_s3_touch_lcd_4b', 'golden_security_gs_t3e_v2']) {
   assert.ok(!exists(`src/devices/${dir}/local_camera_board.h`) && !exists(`src/devices/${dir}/local_camera_board.cpp`),
     `${dir} has no camera board file`);
   for (const file of fs.readdirSync(path.join(root, 'src/devices', dir)).filter(name => name.endsWith('.h'))) {

@@ -41,7 +41,8 @@ const fields = [...struct.replace(/\/\/[^\n]*/g, '').matchAll(/const char\*\s+(\
 const first = fields.indexOf(keys[0]);
 assert.deepEqual(fields.slice(first, first + keys.length), keys, 'the System strings sit together');
 const tables = [...new Set([...i18n.matchAll(/\{&(kStrings\w+), &kLocale\w+\}/g)].map(match => match[1]))];
-assert.deepEqual([...tables].sort(), ['kStringsDe', 'kStringsEn', 'kStringsFr', 'kStringsPl']);
+// Every registered language is checked below; the first four always exist.
+for (const table of ['kStringsDe', 'kStringsEn', 'kStringsFr', 'kStringsPl']) assert.ok(tables.includes(table), table);
 for (const table of tables) {
   const start = i18n.indexOf(`static const Strings ${table} = {`);
   const values = [...i18n.slice(start, i18n.indexOf('};', start)).matchAll(/"((?:\\.|[^"\\])*)"/g)]

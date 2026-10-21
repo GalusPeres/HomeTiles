@@ -629,7 +629,6 @@ void ensureStorageLayout() {
   if (!g_littlefs_ready) return;
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 }
 
 bool writeTouchRegister(uint16_t reg, uint8_t value) {
@@ -1369,7 +1368,6 @@ void DeviceGuitionESP324848S040::migrateStorageFromSD() {
     Serial.println("[Storage] Migrating data from SD to LittleFS...");
     copyDirectory(SD, LittleFS, "/_tile_grids");
     copyDirectory(SD, LittleFS, "/_tile_links");
-    copyDirectory(SD, LittleFS, "/icons");
     Serial.println("[Storage] Migration complete");
   } else {
     Serial.println("[Storage] No SD card, starting fresh");

@@ -14,8 +14,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 
 const header = read('src/core/diagnostics/loop_stall.h');
-assert.match(header, /#if defined\(DEVICE_GUITION_ESP32_4848S040\)\n#define HOMETILES_LOOP_STALL_DIAGNOSTICS 1\n#else\n#define HOMETILES_LOOP_STALL_DIAGNOSTICS 0/,
-  'active only on the exact Guition S3 profile');
+assert.match(header, /#if defined\(DEVICE_GUITION_ESP32_4848S040\) \|\| defined\(DEVICE_GOLDEN_SECURITY_GS_T3E_V2\)\n#define HOMETILES_LOOP_STALL_DIAGNOSTICS 1\n#else\n#define HOMETILES_LOOP_STALL_DIAGNOSTICS 0/,
+  'active only on the Guition S3 and the GS-T3E v2 built like it');
 for (const fn of ['begin()', 'webRequestBegin(const char*, const char*)', 'webRequestEnd()',
   'webUploadBegin(const char*)', 'webIdle()', 'sampleNetwork()']) {
   assert.ok(header.includes(`inline void ${fn} {}`), `other profiles compile ${fn} to nothing`);

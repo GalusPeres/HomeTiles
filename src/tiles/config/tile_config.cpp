@@ -504,12 +504,6 @@ static bool ensureTileGridDir() {
   return storageFS().mkdir(kTileGridDir);
 }
 
-static bool ensureIconDir() {
-  if (!storageReady()) return false;
-  if (storageFS().exists("/icons")) return true;
-  return storageFS().mkdir("/icons");
-}
-
 static String tmpPathFor(const String& filePath) {
   return filePath + ".tmp";
 }

@@ -14,7 +14,10 @@ const table = head => {
 };
 // The longest real words are compounds such as "Home-Assistant-Bridge" (21).
 const kMaxWord = 30;
-for (const code of ['De', 'En', 'Fr', 'Pl']) {
+// Every registered language.
+const codes = [...i18n.matchAll(/\{&kStrings(\w+), &kLocale\w+\}/g)].map(match => match[1]);
+assert.ok(codes.length >= 7, 'every built-in language is registered');
+for (const code of codes) {
   const source = table(`static const Strings kStrings${code} = {`) +
     table(`static const LocaleProfile kLocale${code} = {`);
   const literals = [...source.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);

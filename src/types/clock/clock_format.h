@@ -197,6 +197,37 @@ inline int32_t pack_date_options(const TileDateOptions& options) {
 // A stored or sent value made valid (unknown bits dropped).
 inline int32_t normalize_date_options(int32_t raw) { return pack_date_options(unpack_date_options(raw)); }
 
+// Fills a long date pattern's {d} (day), {M} (month) and {Y} (year).
+inline void fill_date_pattern(char* out, size_t size, const char* pattern, const char* day, const char* month,
+                              const char* year) {
+  size_t used = 0;
+  out[0] = '\0';
+  for (const char* p = pattern; *p && used + 1 < size;) {
+    const char* part = strncmp(p, "{d}", 3) == 0   ? day
+                       : strncmp(p, "{M}", 3) == 0 ? month
+                       : strncmp(p, "{Y}", 3) == 0 ? year
+                                                   : nullptr;
+    if (!part) {
+      out[used++] = *p++;
+      out[used] = '\0';
+      continue;
+    }
+    const int written = snprintf(out + used, size - used, "%s", part);
+    if (written < 0) break;
+    used += static_cast<size_t>(written);
+    if (used >= size) used = size - 1;
+    p += 3;
+  }
+  out[used] = '\0';
+}
+
+// The locale's long date, with the year or without (its own order, Spanish
+// "{d} de {M} de {Y}").
+inline const char* long_date_pattern(const i18n::LocaleProfile& locale, bool with_year) {
+  if (with_year) return locale.long_date_year_pattern ? locale.long_date_year_pattern : "{d} {M} {Y}";
+  return locale.long_date_pattern ? locale.long_date_pattern : "{d} {M}";
+}
+
 // The date in a resolved `format` (not AUTO); `month` 0-11, `year` with the
 // century. The day-month formats take the locale's month name as it stands
 // in a date and its order ("21. August", "21 August", Polish "21 sierpnia").
@@ -220,28 +251,13 @@ inline void format_date(char* out, size_t size, int day, int month, int year, ui
     case DATE_FORMAT_D_MONTH:
     case DATE_FORMAT_D_MONTH_YEAR: {
       const i18n::LocaleProfile& locale = i18n::locale(language_code);
-      const char* pattern = locale.long_date_pattern ? locale.long_date_pattern : "{d} {M}";
       const char* name = month >= 0 && month < 12 && locale.month_names_in_date[month] ? locale.month_names_in_date[month] : "";
-      size_t used = 0;
-      for (const char* p = pattern; *p && used + 1 < size;) {
-        int written = 0;
-        if (strncmp(p, "{d}", 3) == 0) {
-          written = snprintf(out + used, size - used, "%d", day);
-          p += 3;
-        } else if (strncmp(p, "{M}", 3) == 0) {
-          written = snprintf(out + used, size - used, "%s", name);
-          p += 3;
-        } else {
-          out[used++] = *p++;
-          out[used] = '\0';
-          continue;
-        }
-        if (written < 0) break;
-        used += static_cast<size_t>(written);
-        if (used >= size) used = size - 1;
-      }
-      out[used] = '\0';
-      if (format == DATE_FORMAT_D_MONTH_YEAR && used + 1 < size) snprintf(out + used, size - used, " %04d", year);
+      char day_text[12];
+      char year_text[12];
+      snprintf(day_text, sizeof(day_text), "%d", day);
+      snprintf(year_text, sizeof(year_text), "%04d", year);
+      fill_date_pattern(out, size, long_date_pattern(locale, format == DATE_FORMAT_D_MONTH_YEAR), day_text, name,
+                        year_text);
       return;
     }
     default:
@@ -255,25 +271,8 @@ inline void format_date(char* out, size_t size, int day, int month, int year, ui
 // #13's 21 August 2026) read like a value (user 2026-10-14).
 inline void format_date_pattern(char* out, size_t size, uint8_t format, const char* language_code) {
   if (!out || size == 0) return;
-  out[0] = '\0';
-  const i18n::LocaleProfile& locale = i18n::locale(language_code);
-  const char* pattern = locale.long_date_pattern ? locale.long_date_pattern : "{d} {M}";
-  size_t used = 0;
-  for (const char* p = pattern; *p && used + 1 < size;) {
-    const char* part = strncmp(p, "{d}", 3) == 0 ? "DD" : strncmp(p, "{M}", 3) == 0 ? "MMMM" : nullptr;
-    if (!part) {
-      out[used++] = *p++;
-      out[used] = '\0';
-      continue;
-    }
-    const int written = snprintf(out + used, size - used, "%s", part);
-    if (written < 0) break;
-    used += static_cast<size_t>(written);
-    if (used >= size) used = size - 1;
-    p += 3;
-  }
-  out[used] = '\0';
-  if (format == DATE_FORMAT_D_MONTH_YEAR && used + 1 < size) snprintf(out + used, size - used, " YYYY");
+  fill_date_pattern(out, size, long_date_pattern(i18n::locale(language_code), format == DATE_FORMAT_D_MONTH_YEAR),
+                    "DD", "MMMM", "YYYY");
 }
 
 // The clock's date line: "Samstag, 21. August", the weekday or the date

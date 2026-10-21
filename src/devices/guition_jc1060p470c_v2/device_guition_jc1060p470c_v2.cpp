@@ -976,7 +976,6 @@ void ensure_storage_layout() {
   }
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 }
 
 // The turned layout (grid_layout::turned(), user 2026-10-11): the UI shown
@@ -1574,13 +1573,11 @@ void DeviceGuitionJC1060P470CV2::migrateStorageFromSD() {
 
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 
   if (initSDCard()) {
     Serial.println("[Storage] Migrating data from SD to LittleFS...");
     copyDirectory(JC1060SDMMC, LittleFS, "/_tile_grids");
     copyDirectory(JC1060SDMMC, LittleFS, "/_tile_links");
-    copyDirectory(JC1060SDMMC, LittleFS, "/icons");
     Serial.println("[Storage] Migration complete");
   } else {
     Serial.println("[Storage] No SD card, starting fresh");

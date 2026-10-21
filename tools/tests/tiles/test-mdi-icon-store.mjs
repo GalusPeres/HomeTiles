@@ -41,6 +41,9 @@ class String : public std::string {
   String(unsigned long v) : std::string(std::to_string(v)) {}
   String(unsigned long long v) : std::string(std::to_string(v)) {}
   unsigned length() const { return static_cast<unsigned>(size()); }
+  String substring(unsigned from, unsigned to) const {
+    return from >= size() ? String() : String(substr(from, to > size() ? npos : to - from));
+  }
 };
 inline String operator+(const String& a, const String& b) { return String(std::string(a) + std::string(b)); }
 inline String operator+(const String& a, const char* b) { return String(std::string(a) + b); }
@@ -132,6 +135,9 @@ class Preferences {
     return n.count(key) ? static_cast<uint8_t>(std::stoi(n[key])) : fallback;
   }
   size_t putString(const char* key, const char* value) { g_nvs[ns_][key] = value; return 1; }
+  size_t putString(const char* key, const String& value) { g_nvs[ns_][key] = value; return 1; }
+  bool isKey(const char* key) { return g_nvs[ns_].count(key) > 0; }
+  bool remove(const char* key) { return g_nvs[ns_].erase(key) > 0; }
   size_t putUChar(const char* key, uint8_t value) { g_nvs[ns_][key] = std::to_string(value); return 1; }
   bool clear() { g_nvs[ns_].clear(); return true; }
   void end() {}
@@ -239,6 +245,18 @@ int main() {
   mdi_icon_store::clear_download_attempts();
   check(mdi_icon_store::download_due(), "due after clearing");
 
+  // The Icons card's reason: kept until a written file clears it, dropped by
+  // a new firmware version.
+  check(mdi_icon_store::last_failure().empty(), "no reason without a failure");
+  mdi_icon_store::note_failure("Download failed: no network");
+  check(mdi_icon_store::last_failure() == "Download failed: no network", "reason kept");
+  g_nvs["icon_dl"]["ver"] = "v0.0.1";
+  mdi_icon_store::note_download_attempt();
+  check(mdi_icon_store::last_failure().empty(), "a new firmware drops an old reason");
+  mdi_icon_store::note_failure("Install failed: LittleFS write failed");
+  mdi_icon_store::clear_download_attempts();
+  check(mdi_icon_store::last_failure().empty(), "a written file clears the reason");
+
   String error;
   // Wrong length, foreign size, transfer damage, flash damage: nothing stays.
   g_fs.files[path] = {1, 2, 3};
@@ -253,6 +271,40 @@ int main() {
   check(!install(icon_file(32), error) && error == "icon file damaged on flash", "flash damage found");
   g_fs.flip_on_write = -1;
   check(!g_fs.files.count(part) && !g_fs.files.count(path), "damaged files removed");
+
+  // An upload from the Icons card: held in PSRAM, the header checked as soon
+  // as it arrived, the CRC and length at the end, then installed.
+  check(mdi_icon_store::upload_begin(error), "upload starts");
+  auto foreign = icon_file(48);
+  check(!mdi_icon_store::upload_write(foreign.data(), 40, error) && error.find("another size") != std::string::npos,
+        "a foreign header is refused at once");
+  mdi_icon_store::upload_discard();
+  auto upload_all = [&](const std::vector<uint8_t>& f) {
+    if (!mdi_icon_store::upload_begin(error)) return false;
+    const size_t pieces[] = {10, 30, 1000};
+    size_t pos = 0;
+    for (size_t piece : pieces) {
+      const size_t n = std::min(piece, f.size() - pos);
+      if (n && !mdi_icon_store::upload_write(f.data() + pos, n, error)) return false;
+      pos += n;
+    }
+    return mdi_icon_store::upload_finish(error);
+  };
+  auto broken = icon_file(32);
+  broken[120] ^= 1;
+  check(!upload_all(broken) && error == "icon file damaged in transfer", "upload damage found");
+  check(!mdi_icon_store::upload_ready(), "a damaged upload is not installed");
+  auto good_upload = icon_file(32);
+  check(mdi_icon_store::upload_begin(error) && mdi_icon_store::upload_write(good_upload.data(), 100, error) &&
+            !mdi_icon_store::upload_finish(error) && error.find("expected 152") != std::string::npos,
+        "a short upload is refused");
+  check(mdi_icon_store::upload_begin(error) && mdi_icon_store::upload_write(good_upload.data(), 152, error) &&
+            !mdi_icon_store::upload_write(good_upload.data(), 1, error),
+        "a long upload is refused");
+  g_fs.files[path] = {7, 7};
+  check(upload_all(good_upload) && mdi_icon_store::upload_ready(), "a complete upload is ready");
+  check(mdi_icon_store::install_upload(error) && g_fs.files[path] == good_upload, "the upload is installed");
+  check(!mdi_icon_store::upload_ready(), "the installed upload is released");
 
   // A good file replaces the old one and is used after the restart.
   g_fs.files[path] = {9, 9, 9};

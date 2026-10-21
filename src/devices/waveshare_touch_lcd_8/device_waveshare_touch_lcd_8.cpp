@@ -1004,7 +1004,6 @@ void ensure_storage_layout() {
   }
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 }
 
 }  // namespace
@@ -1503,13 +1502,11 @@ void DeviceWaveshareTouchLCD8::migrateStorageFromSD() {
 
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 
   if (initSDCard()) {
     Serial.println("[Storage] Migrating data from SD to LittleFS...");
     copyDirectory(WaveshareSDMMC, LittleFS, "/_tile_grids");
     copyDirectory(WaveshareSDMMC, LittleFS, "/_tile_links");
-    copyDirectory(WaveshareSDMMC, LittleFS, "/icons");
     Serial.println("[Storage] Migration complete");
   } else {
     Serial.println("[Storage] No SD card, starting fresh");

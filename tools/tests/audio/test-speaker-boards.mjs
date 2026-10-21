@@ -28,6 +28,8 @@ const BOARDS = {
   DEVICE_WAVESHARE_TOUCH_LCD_7: {dir: 'waveshare_touch_lcd_7', ...WAVESHARE},
   DEVICE_WAVESHARE_TOUCH_LCD_10_1: {dir: 'waveshare_touch_lcd_10_1', ...WAVESHARE},
   DEVICE_WAVESHARE_TOUCH_LCD_4_3: {dir: 'waveshare_touch_lcd_4_3', ...WAVESHARE},
+  // The LCD-5 (#76): the LCD-X pins, chips and full volume.
+  DEVICE_WAVESHARE_TOUCH_LCD_5: {dir: 'waveshare_touch_lcd_5', ...WAVESHARE},
   DEVICE_WAVESHARE_4B: {dir: 'waveshare_4b', ...WAVESHARE},
   DEVICE_GUITION_JC8012P4A1: {dir: 'guition_jc8012p4a1', ...GUITION_11},
   DEVICE_GUITION_JC8012P4A1_V2: {dir: 'guition_jc8012p4a1_v2', ...GUITION_11},
@@ -40,7 +42,8 @@ const BOARDS = {
 // the original-panel JC1060 (board identity unproven, like its camera).
 const WITHOUT_VOICE = [
   'DEVICE_WAVESHARE_S3_TOUCH_LCD_4', 'DEVICE_WAVESHARE_S3_TOUCH_LCD_4B',
-  'DEVICE_GUITION_ESP32_4848S040', 'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480',
+  'DEVICE_GUITION_ESP32_4848S040', 'DEVICE_GOLDEN_SECURITY_GS_T3E_V2',
+  'DEVICE_LAYOUT_TEST_1024X600', 'DEVICE_LAYOUT_TEST_480X480',
   'DEVICE_GUITION_JC1060P470C',
 ];
 

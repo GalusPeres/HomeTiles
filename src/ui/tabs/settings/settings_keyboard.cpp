@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/ui/tabs/settings/keyboard_letters.h"
 #include "src/ui/tabs/settings/settings_parts.h"
 #include "src/ui/shared/ui_theme.h"
 
@@ -43,91 +44,18 @@ const Page kPages[] = {
     {{kMore1, kMore2, kMore3}, {10, 9, 7}},
 };
 
-// The accent key's pages: the language's accented letters first, then other
-// common ones, lower and upper case (Shift). German and other European
-// languages, French (as the former keyboard's French page), Polish.
-struct AccentPage {
-  const char* label;  // on the accent key
-  const char* const* lower[3];
-  const char* const* upper[3];
-  uint8_t counts[3];
-};
-const char* const kEuropeanLower1[] = {"\xC3\xA4", "\xC3\xB6", "\xC3\xBC", "\xC3\x9F", "\xC3\xA9",
-                                       "\xC3\xA8", "\xC3\xAA", "\xC3\xA0", "\xC3\xA2", "\xC3\xA7"};
-const char* const kEuropeanLower2[] = {"\xC3\xAB", "\xC3\xAE", "\xC3\xAF", "\xC3\xB4", "\xC3\xBB",
-                                       "\xC3\xB9", "\xC3\xB1", "\xC5\x93", "\xC3\xA6"};
-const char* const kEuropeanLower3[] = {"\xC3\xA1", "\xC3\xAD", "\xC3\xB3", "\xC3\xBA", "\xC3\xBF", "\xC3\xB8", "\xC3\xA5"};
-const char* const kEuropeanUpper1[] = {"\xC3\x84", "\xC3\x96", "\xC3\x9C", "\xC3\x9F", "\xC3\x89",
-                                       "\xC3\x88", "\xC3\x8A", "\xC3\x80", "\xC3\x82", "\xC3\x87"};
-const char* const kEuropeanUpper2[] = {"\xC3\x8B", "\xC3\x8E", "\xC3\x8F", "\xC3\x94", "\xC3\x9B",
-                                       "\xC3\x99", "\xC3\x91", "\xC5\x92", "\xC3\x86"};
-const char* const kEuropeanUpper3[] = {"\xC3\x81", "\xC3\x8D", "\xC3\x93", "\xC3\x9A", "\xC5\xB8", "\xC3\x98", "\xC3\x85"};
-const char* const kFrenchLower1[] = {"\xC3\xA0", "\xC3\xA2", "\xC3\xA6", "\xC3\xA9", "\xC3\xA8",
-                                     "\xC3\xAA", "\xC3\xAB", "\xC3\xAE", "\xC3\xAF", "\xC3\xB4"};
-const char* const kFrenchLower2[] = {"\xC3\xA7", "\xC5\x93", "\xC3\xB9", "\xC3\xBB", "\xC3\xBC",
-                                     "\xC3\xBF", "\xC2\xAB", "\xC2\xBB", "\xE2\x80\x99", "\xE2\x82\xAC"};
-const char* const kFrenchLower3[] = {"\xC3\xA4", "\xC3\xB6", "\xC3\x9F", "\xC3\xB1", "\xC3\xA1", "\xC3\xAD", "\xC3\xB3"};
-const char* const kFrenchUpper1[] = {"\xC3\x80", "\xC3\x82", "\xC3\x86", "\xC3\x89", "\xC3\x88",
-                                     "\xC3\x8A", "\xC3\x8B", "\xC3\x8E", "\xC3\x8F", "\xC3\x94"};
-const char* const kFrenchUpper2[] = {"\xC3\x87", "\xC5\x92", "\xC3\x99", "\xC3\x9B", "\xC3\x9C",
-                                     "\xC5\xB8", "\xC2\xAB", "\xC2\xBB", "\xE2\x80\x99", "\xE2\x82\xAC"};
-const char* const kFrenchUpper3[] = {"\xC3\x84", "\xC3\x96", "\xC3\x9F", "\xC3\x91", "\xC3\x81", "\xC3\x8D", "\xC3\x93"};
-const char* const kPolishLower1[] = {"\xC4\x85", "\xC4\x87", "\xC4\x99", "\xC5\x82", "\xC5\x84",
-                                     "\xC3\xB3", "\xC5\x9B", "\xC5\xBA", "\xC5\xBC"};
-const char* const kPolishLower2[] = {"\xC3\xA4", "\xC3\xB6", "\xC3\xBC", "\xC3\x9F", "\xC3\xA9",
-                                     "\xC3\xA8", "\xC3\xA0", "\xC3\xA7", "\xC3\xB1"};
-const char* const kPolishLower3[] = {"\xC3\xAA", "\xC3\xA2", "\xC3\xAE", "\xC3\xB4", "\xC3\xBB", "\xC3\xAB", "\xC3\xAF"};
-const char* const kPolishUpper1[] = {"\xC4\x84", "\xC4\x86", "\xC4\x98", "\xC5\x81", "\xC5\x83",
-                                     "\xC3\x93", "\xC5\x9A", "\xC5\xB9", "\xC5\xBB"};
-const char* const kPolishUpper2[] = {"\xC3\x84", "\xC3\x96", "\xC3\x9C", "\xC3\x9F", "\xC3\x89",
-                                     "\xC3\x88", "\xC3\x80", "\xC3\x87", "\xC3\x91"};
-const char* const kPolishUpper3[] = {"\xC3\x8A", "\xC3\x82", "\xC3\x8E", "\xC3\x94", "\xC3\x9B", "\xC3\x8B", "\xC3\x8F"};
-
-const AccentPage kAccentPages[] = {
-    {"\xC3\xA4\xC3\xB6", {kEuropeanLower1, kEuropeanLower2, kEuropeanLower3},
-     {kEuropeanUpper1, kEuropeanUpper2, kEuropeanUpper3}, {10, 9, 7}},
-    {"\xC3\xA9\xC3\xA0", {kFrenchLower1, kFrenchLower2, kFrenchLower3}, {kFrenchUpper1, kFrenchUpper2, kFrenchUpper3},
-     {10, 10, 7}},
-    {"\xC4\x85\xC4\x99", {kPolishLower1, kPolishLower2, kPolishLower3}, {kPolishUpper1, kPolishUpper2, kPolishUpper3},
-     {9, 9, 7}},
-};
-
-// Accented forms offered when a letter is held: German, Polish and French
-// letters first, all within the panel font's Latin ranges.
-struct Variants {
-  char base;
-  const char* lower[7];
-  const char* upper[7];
-};
-const Variants kVariants[] = {
-    {'a',
-     {"\xC3\xA4", "\xC3\xA0", "\xC3\xA2", "\xC4\x85", "\xC3\xA6", "\xC3\xA1", "\xC3\xA5"},
-     {"\xC3\x84", "\xC3\x80", "\xC3\x82", "\xC4\x84", "\xC3\x86", "\xC3\x81", "\xC3\x85"}},
-    {'c', {"\xC3\xA7", "\xC4\x87"}, {"\xC3\x87", "\xC4\x86"}},
-    {'e',
-     {"\xC3\xA9", "\xC3\xA8", "\xC3\xAA", "\xC3\xAB", "\xC4\x99"},
-     {"\xC3\x89", "\xC3\x88", "\xC3\x8A", "\xC3\x8B", "\xC4\x98"}},
-    {'i', {"\xC3\xAE", "\xC3\xAF", "\xC3\xAD"}, {"\xC3\x8E", "\xC3\x8F", "\xC3\x8D"}},
-    {'l', {"\xC5\x82"}, {"\xC5\x81"}},
-    {'n', {"\xC5\x84", "\xC3\xB1"}, {"\xC5\x83", "\xC3\x91"}},
-    {'o',
-     {"\xC3\xB6", "\xC3\xB3", "\xC3\xB4", "\xC5\x93", "\xC3\xB8"},
-     {"\xC3\x96", "\xC3\x93", "\xC3\x94", "\xC5\x92", "\xC3\x98"}},
-    {'s', {"\xC3\x9F", "\xC5\x9B"}, {"\xC3\x9F", "\xC5\x9A"}},
-    {'u',
-     {"\xC3\xBC", "\xC3\xB9", "\xC3\xBB", "\xC3\xBA"},
-     {"\xC3\x9C", "\xC3\x99", "\xC3\x9B", "\xC3\x9A"}},
-    {'y', {"\xC3\xBF"}, {"\xC5\xB8"}},
-    {'z', {"\xC5\xBC", "\xC5\xBA"}, {"\xC5\xBB", "\xC5\xB9"}},
-};
-
 enum Special : uint8_t { kShift = 40, kBackspace, kSymbols, kAccentKey, kSpace, kDot, kOk };
 
 struct State {
   lv_obj_t* root = nullptr;
   Geometry g = {};
   Layout layout = Layout::Qwerty;
-  Accents accent_set = Accents::European;
+  // The language's own letters (LocaleProfile::keyboard_letters), the
+  // accent page made from them and the accent key's name for it.
+  const char* letters = "";
+  uint32_t page_letters[keyboard_letters::kPageCapacity] = {};
+  uint8_t page_count = 0;
+  char accent_label[12] = "";
   Colors colors = {};
   uint32_t accent = 0;
   Handler handler = {};
@@ -143,7 +71,7 @@ struct State {
   lv_obj_t* accent_key = nullptr;
   // The accented forms of a held letter.
   lv_obj_t* popup = nullptr;
-  const Variants* variants = nullptr;
+  uint32_t variants[keyboard_letters::kVariantCapacity] = {};
   uint8_t variant_count = 0;
   int8_t variant = -1;
 };
@@ -177,24 +105,23 @@ void key_text(const char* text, char* out, size_t len) {
   if (g_kb.shift && !g_kb.symbols && out[0] >= 'a' && out[0] <= 'z' && !out[1]) out[0] = static_cast<char>(out[0] - 32);
 }
 
-const AccentPage& accent_page() { return kAccentPages[static_cast<uint8_t>(g_kb.accent_set) % 3]; }
+// A letter of the accent page or of a held letter's forms, the capital
+// with Shift.
+void letter_text(uint32_t letter, char* out, size_t size) {
+  keyboard_letters::encode(g_kb.shift ? keyboard_letters::upper(letter) : letter, out, size);
+}
 
 void lay_out() {
-  const char* const* rows[3];
+  const Page& p = page();
   uint8_t counts[3];
+  uint8_t first[3] = {0, 0, 0};
   if (g_kb.accents) {
-    // Upper and lower case come from the page itself (Shift).
-    const AccentPage& a = accent_page();
-    for (int row = 0; row < 3; ++row) {
-      rows[row] = g_kb.shift ? a.upper[row] : a.lower[row];
-      counts[row] = a.counts[row];
-    }
+    // The accent page in the letter rows' shape, in order.
+    keyboard_letters::row_counts(g_kb.page_count, counts);
+    first[1] = counts[0];
+    first[2] = static_cast<uint8_t>(counts[0] + counts[1]);
   } else {
-    const Page& p = page();
-    for (int row = 0; row < 3; ++row) {
-      rows[row] = p.rows[row];
-      counts[row] = p.counts[row];
-    }
+    for (int row = 0; row < 3; ++row) counts[row] = p.counts[row];
   }
   for (int row = 0; row < 3; ++row) {
     const int count = counts[row];
@@ -211,9 +138,9 @@ void lay_out() {
       place(key, row, start + i, 1);
       char text[8];
       if (g_kb.accents) {
-        snprintf(text, sizeof(text), "%s", rows[row][i]);
+        letter_text(g_kb.page_letters[first[row] + i], text, sizeof(text));
       } else {
-        key_text(rows[row][i], text, sizeof(text));
+        key_text(p.rows[row][i], text, sizeof(text));
       }
       set_label(key, text);
     }
@@ -240,27 +167,23 @@ void lay_out() {
     }
   }
   if (g_kb.symbols_key) set_label(g_kb.symbols_key, g_kb.symbols ? "ABC" : "?123");
-  if (g_kb.accent_key) set_label(g_kb.accent_key, g_kb.accents ? "ABC" : accent_page().label);
+  if (g_kb.accent_key) set_label(g_kb.accent_key, g_kb.accents ? "ABC" : g_kb.accent_label);
 }
 
-const Variants* variants_for(const char* text) {
-  if (g_kb.symbols || g_kb.accents || !text || !text[0] || text[1]) return nullptr;
-  const char base = static_cast<char>(text[0] | 0x20);
-  for (const Variants& v : kVariants) {
-    if (v.base == base) return &v;
-  }
-  return nullptr;
+// The forms of a held plain letter (letter pages only): the language's own
+// first.
+uint8_t variants_for(const char* text, uint32_t* out) {
+  if (g_kb.symbols || g_kb.accents || !text || !text[0] || text[1]) return 0;
+  const char letter = static_cast<char>(text[0] | 0x20);
+  if (letter < 'a' || letter > 'z') return 0;
+  return keyboard_letters::variants(g_kb.letters, letter, out, keyboard_letters::kVariantCapacity);
 }
 
 void close_popup() {
   if (g_kb.popup) lv_obj_delete(g_kb.popup);
   g_kb.popup = nullptr;
-  g_kb.variants = nullptr;
+  g_kb.variant_count = 0;
   g_kb.variant = -1;
-}
-
-const char* variant_text(uint8_t index) {
-  return g_kb.shift ? g_kb.variants->upper[index] : g_kb.variants->lower[index];
 }
 
 void style_variant(lv_obj_t* cell, bool selected) {
@@ -273,12 +196,11 @@ void style_variant(lv_obj_t* cell, bool selected) {
 
 // The accented forms in a row of keys above the held one; the first one is
 // chosen until the finger moves.
-void open_popup(lv_obj_t* key, const Variants* variants) {
+void open_popup(lv_obj_t* key, const uint32_t* variants, uint8_t count) {
   close_popup();
-  uint8_t count = 0;
-  while (count < 7 && variants->lower[count]) ++count;
   if (!count) return;
-  g_kb.variants = variants;
+  if (count > keyboard_letters::kVariantCapacity) count = keyboard_letters::kVariantCapacity;
+  for (uint8_t i = 0; i < count; ++i) g_kb.variants[i] = variants[i];
   g_kb.variant_count = count;
   g_kb.variant = 0;
   const int cell = lv_obj_get_width(key);
@@ -300,7 +222,9 @@ void open_popup(lv_obj_t* key, const Variants* variants) {
     lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
     settings_style::apply_radius(c, g_kb.g.radius);
     lv_obj_t* label = lv_label_create(c);
-    lv_label_set_text(label, variant_text(i));
+    char text[8];
+    letter_text(g_kb.variants[i], text, sizeof(text));
+    lv_label_set_text(label, text);
     lv_obj_set_style_text_font(label, popup_layout::font28(), 0);
     lv_obj_center(label);
     style_variant(c, i == 0);
@@ -345,14 +269,15 @@ void char_key_cb(lv_event_t* e) {
   if (code == LV_EVENT_SHORT_CLICKED) {
     type(text);
   } else if (code == LV_EVENT_LONG_PRESSED) {
-    const Variants* variants = variants_for(text);
-    if (variants) open_popup(key, variants);
+    uint32_t variants[keyboard_letters::kVariantCapacity];
+    const uint8_t count = variants_for(text, variants);
+    if (count) open_popup(key, variants, count);
   } else if (code == LV_EVENT_PRESSING) {
     track_popup();
   } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
     if (g_kb.popup && g_kb.variant >= 0 && code == LV_EVENT_RELEASED) {
       char chosen[8];
-      snprintf(chosen, sizeof(chosen), "%s", variant_text(static_cast<uint8_t>(g_kb.variant)));
+      letter_text(g_kb.variants[g_kb.variant], chosen, sizeof(chosen));
       close_popup();
       type(chosen);
     }
@@ -456,13 +381,20 @@ lv_obj_t* icon_label(lv_obj_t* key, const char* icon, uint32_t color) {
 
 }  // namespace
 
-lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, Accents accents, const Colors& colors,
+lv_obj_t* create(lv_obj_t* parent, const Geometry& geometry, Layout layout, const char* letters, const Colors& colors,
                  uint32_t accent, const Handler& handler) {
   if (g_kb.root) lv_obj_delete(g_kb.root);
   g_kb = State();
   g_kb.g = geometry;
   g_kb.layout = layout;
-  g_kb.accent_set = accents;
+  g_kb.letters = letters ? letters : "";
+  g_kb.page_count = keyboard_letters::accent_page(g_kb.letters, g_kb.page_letters, keyboard_letters::kPageCapacity);
+  // The accent key names the page by its first two letters.
+  size_t label_used = 0;
+  for (uint8_t i = 0; i < 2 && i < g_kb.page_count; ++i) {
+    label_used += keyboard_letters::encode(g_kb.page_letters[i], g_kb.accent_label + label_used,
+                                           sizeof(g_kb.accent_label) - label_used);
+  }
   g_kb.colors = colors;
   g_kb.accent = accent & 0xFFFFFF;
   g_kb.handler = handler;

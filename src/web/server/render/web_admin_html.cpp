@@ -30,6 +30,7 @@
 #include "src/types/clock/web_html.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/icons/mdi_icon_store.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/core/config/swipe_gestures.h"
@@ -1964,7 +1965,73 @@ data-dhcp-note=")html";
   html += tr.ota_update_note;
   html += R"html(</div>
 </div>
-
+)html";
+  // The Icons card (src/web/admin/firmware/icon-file.js): the icon file is
+  // there (all icons) or missing (the built-in ones, its download link and
+  // "Update" for the panel to fetch it now); below it the file by hand.
+  {
+    const bool icons_ready = mdi_icon_store::state() == mdi_icon_store::State::Ready;
+    const String icon_total(mdi_icon_store::icon_count());
+    html += R"html(
+<div class="settings-section" id="icon_file_section">
+<div class="section-title">)html";
+    html += tr.icons_section;
+    html += R"html(</div>
+<div class="settings-state-row"><i class="mdi mdi-shape-outline settings-state-icon"></i><div class="settings-state-text"><div class="settings-state-title">)html";
+    html += tr.icon_file_label;
+    html += R"html(</div><div class="settings-state-sub">)html";
+    if (icons_ready) {
+      html += mdi_icon_store::release_file_name();
+    } else {
+      html += R"html(<a class="settings-state-link" href=")html";
+      appendHtmlEscaped(html, mdi_icon_store::release_file_url());
+      html += R"html(" rel="noopener"><i class="mdi mdi-download"></i> )html";
+      html += mdi_icon_store::release_file_name();
+      html += "</a>";
+      // Why the last download or install failed (the firmware's own words).
+      const String reason = mdi_icon_store::last_failure();
+      if (reason.length()) {
+        html += R"html(</div><div class="settings-state-error">)html";
+        appendHtmlEscaped(html, reason);
+      }
+    }
+    html += "</div></div>";
+    if (icons_ready) {
+      html += R"html(<div class="settings-state-value is-good">)html";
+      html += icon_total;
+      html += R"html(<i class="mdi mdi-check"></i></div>)html";
+    } else {
+      html += R"html(<div class="settings-state-value is-bad">)html";
+      html += String(mdi_icon_store::builtin_count()) + " / " + icon_total;
+      html += R"html(<i class="mdi mdi-alert-outline"></i></div>
+<button class="btn btn-go settings-row-btn" type="button" id="icon_download_btn" onclick="downloadIconFile()"><i class="mdi mdi-download"></i> )html";
+      html += tr.ota_upload_install;
+      html += "</button>";
+    }
+    html += R"html(</div>
+<div class="settings-fw-file">
+<span class="settings-note">)html";
+    html += tr.icon_file_label;
+    html += R"html(:</span>
+<input type="file" id="icon_file" accept=".bin,application/octet-stream" style="display:none" onchange="updateIconFileName(this)">
+<button class="btn btn-secondary btn-inline" type="button" id="icon_choose_btn" onclick="document.getElementById('icon_file').click()">)html";
+    html += tr.ota_choose_file;
+    html += R"html(</button>
+<button class="btn btn-go btn-inline" type="button" id="icon_upload_btn" onclick="uploadIconFile()">)html";
+    html += tr.ota_upload_install;
+    html += R"html(</button>
+<span id="icon_file_name" class="file-picker-name">)html";
+    html += tr.ota_no_file_selected;
+    html += R"html(</span>
+</div>
+<div id="icon_status" class="settings-note ota-status"></div>
+<div id="icon_progress" class="ota-progress is-hidden" aria-hidden="true">
+<div id="icon_progress_bar" class="ota-progress-bar"></div>
+</div>
+</div>
+)html";
+  }
+  html += R"html(
 <div class="settings-section">
 <div class="section-title">)html";
   html += tr.settings_connection;
@@ -2156,7 +2223,17 @@ autocomplete="new-password" value=")html";
 <div class="settings-grid file-manager">
 <div class="settings-full">
 <div class="file-manager-topbar">
-<span id="file_manager_sd_state" class="file-manager-storage-state">)html";
+)html";
+#if defined(HOMETILES_BETA_BUILD)
+  // Test builds: microSD or the panel's own storage (src/web/admin/files);
+  // technical names only, no translated texts for a test tool.
+  html += R"html(<div class="icon-color-segmented file-manager-storage-switch" role="group">
+<button type="button" class="active" data-fs="sd" onclick="selectFileManagerStorage('sd')">microSD</button>
+<button type="button" data-fs="internal" onclick="selectFileManagerStorage('internal')">LittleFS</button>
+</div>
+)html";
+#endif
+  html += R"html(<span id="file_manager_sd_state" class="file-manager-storage-state">)html";
   html += tr.file_manager_checking;
   html += R"html(</span>
 <div class="file-manager-toolbar-group">

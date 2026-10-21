@@ -13,10 +13,15 @@ Last reviewed: 2026-10-17
 
 ## Firmware baseline
 
-- v0.9.2: tag `8964652b` (2026-10-17), Bridge v0.9.2 `38a35d6`; v0.9.1 2026-10-15. Docs CI browser tests run on pinned Chrome for Testing 154.0.8037.57 (`7379a3ad`): the runner's Chrome 154.0.8037.97 (image 20261012.334) never answered the first Page.navigate; a tag's own docs run uses the tag's workflow, so after a release dispatch docs on `main`. Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases).
+- v0.9.3: 2026-10-18 (cs/es/sk, keyboard and long dates as language data, Icons card, factory images with the icon file, GS-T3E v2 + Waveshare LCD-5 pending), Bridge v0.9.3 `dc19547` (2026-10-18): HA restarts with a connected panel (Bridge #15: the link server waited for open connections since Python 3.12.1; connections close first, servers wait at most 3 s). Pairing by IP without mDNS (Bridge #16, HomeTiles #114, milestone v0.9.4): firmware read-only `GET /api/link` + Bridge step. v0.9.2: tag `8964652b` (2026-10-17); v0.9.1 2026-10-15. Docs CI browser tests run on pinned Chrome for Testing 154.0.8037.57 (`7379a3ad`): the runner's Chrome 154.0.8037.97 (image 20261012.334) never answered the first Page.navigate; a tag's own docs run uses the tag's workflow, so after a release dispatch docs on `main`. Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases).
 - Guition S3 XIP/`-O2` reverted in `5279456` (risk, no measured gain); XIP now needs 5.4 MB of the 8 MB PSRAM (3.6 MB in use) - do not retry.
+- Fast build (`ca676434`): a cache stays warm when only repo headers changed and the recorded LVGL config fingerprint matches (`hometiles-library-config.json` in the cache); run `node tools/fast-build-check.mjs --build-path <cache>` before every build.
 - `feature/perf` (both repos, unreleased, FW `b259-perf3f`): nav preload (S3 max 3 grids, 40/16 KB reserve, pressure release), shadow/circle caches, P4 CPU rotation for small areas, touch hold, 60 s energy/history reuse, S3 PCLK 12 MHz; V2/S3/8-inch HW ok. Bridge v0.9.0b16 beta (`17ca8a3`, feature/direct-link): request limits, empty energy answer, meta push + `"push": 1` (panel refresh 15 min); HA test pending.
 - Rejected: LVGL 2 draw threads (global compressed-font RLE state: glyph artifacts, no gain). S3 GT911 (fw 0x1060, cfg 0xFA, filter 8 = 32 px) steps slow drags and ignores config writes (also esp32-macropad #101) - do not retry. Open: S3 Web Admin pages block the loop 1-6 s. S3 b324: mallocs > 32 B prefer PSRAM (heap_caps_malloc_extmem_enable): internal free in use 42 -> ~89 KB, camera-screensaver low 14 -> 85 KB, no stripes; text-heavy steps slower (routes ~0.6 s once after connect).
+
+## Languages (released in v0.9.3)
+
+- Built in: en, de, fr, pl, cs (PR #110, pepe59), es, sk (#104 attachment, vik147); each costs ~22 KB flash, fonts already carry Latin-1 + Latin Extended-A. A language is data only: its Strings and LocaleProfile, including `long_date_year_pattern` ("{d} de {M} de {Y}"), `keyboard_layout` (Auto: 0 QWERTY, 1 QWERTZ, 2 AZERTY) and `keyboard_letters` (lead the accent page and a held letter's forms, `keyboard_letters.h`); no language codes in code. Tests take the languages from `kLanguages`; `test-i18n-panel-glyphs` rejects characters the panel fonts lack (Czech came with U+2212). Language packs (like the icon file) later. Device text fit for cs/es/sk pending.
 
 ## Direct Bridge link (`feature/direct-link` in both repos, unreleased)
 
@@ -38,6 +43,7 @@ Last reviewed: 2026-10-17
 - JC1060 V2 profile rotation pair 0/2 (b478, #108: `e8457f37` left normal = flipped = 0, so 0/180 did nothing; `test-rotation-profiles` checks every profile).
 - JC4880P443 (PR #46, damianeek): portrait 480x800/4x6, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups.
 - P4 v3 images (post_v3 301-399, v3 DSI clock): WS 10.1 (PR #48, tested v3.2), WS 7B (`_rev3`, replaces exact-v3.1, #41), JC8012 V3 = V2 code (#44); HW pending.
+- New boards in v0.9.3 (HW pending by the reporters): GS-T3E v2 (#93, S3 480x480, own driver derived from the Guition one, relays GPIO45/46) and Waveshare 5-inch (#76, 720x1280 HX8394, own `dsi_driver`, pre-v3 + `_rev3`, voice full volume, OV5647 camera, SD 20 MHz). Rule: a new board never changes another board; shared files only get list entries.
 
 ## Issue #30 (closed by fix b6, shipped v0.6.10)
 
@@ -123,7 +129,7 @@ Last reviewed: 2026-10-17
 
 ## Flash and RAM (PR #62)
 
-- Icon file (released in v0.9.1): all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin` (`tools/generate-icon-files.mjs`, release assets), 399 core icons built in, one fixed PSRAM glyph cache (V2 166 KB, S3 114 KB; holding all broke the screensaver's 2 MB block). A panel without a valid file downloads it once from its release (betas: HomeTiles-staging) and restarts. Tab5 b468 4,830,464 B of 6,815,744 (b454: 6 KB free). V2/S3/Tab5 HW ok 2026-10-15.
+- Icon file (released in v0.9.1): all 7447 MDI icons in LittleFS `/_mdi_icons_<px>.bin` (`tools/generate-icon-files.mjs`, release assets), 399 core icons built in, one fixed PSRAM glyph cache (V2 166 KB, S3 114 KB; holding all broke the screensaver's 2 MB block). A panel without a valid file downloads it once from its release (betas: HomeTiles-staging) and restarts. Tab5 b468 4,830,464 B of 6,815,744 (b454: 6 KB free). V2/S3/Tab5 HW ok 2026-10-15. b482/b483 (released in v0.9.3, #112 firewall): System page Icons card (icon file there: name + all icons; missing: link to its own release, built-in / all, Update = panel downloads now without using up an automatic attempt, red last-failure line from NVS `icon_dl/err`; file row uploads by hand: raw body into PSRAM, header check at once, CRC at the end, loop installs and restarts); factory images carry the icon file (`release-helper/factory-icon-file.js`, mklittlefs into spiffs 0xD10000). HW ok 2026-10-18: V2 both ways, S3 Update, 8-inch factory. Test builds need their icons on HomeTiles-staging (tag = FW_VERSION). Test builds' file manager also shows LittleFS (use, delete).
 - Admin CSS ships without comments/indentation (b454, `formatCssDelivery`). Cleanup list: `build/analysis/2026-10-14-analyse.md`.
 - `-fno-exceptions` (CI and local): -300 KiB per image, Tab5 428 KiB OTA headroom; unused LVGL widgets off: -49 KiB, IRAM -21 KiB.
 - Renderer slot state, Binary Sensor queue and grids in PSRAM (`setup()`): static DRAM V2 137 -> 65 KB, S3 140 -> 80 KB; b75 passed.

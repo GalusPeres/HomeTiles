@@ -18,6 +18,8 @@ const drivers = [
   'src/devices/waveshare_touch_lcd_10_1/device_waveshare_touch_lcd_10_1.cpp',
   'src/devices/waveshare_touch_lcd_4_3/device_waveshare_touch_lcd_4_3.cpp',
   'src/devices/waveshare_touch_lcd_7/device_waveshare_touch_lcd_7.cpp',
+  // The shared Waveshare P4 DSI driver (Waveshare 5-inch).
+  'src/devices/waveshare_touch_lcd_5/dsi_driver/waveshare_p4_dsi.cpp',
 ];
 for (const driverPath of drivers) {
   const driver = fs.readFileSync(path.join(root, driverPath), 'utf8');

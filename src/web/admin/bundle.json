@@ -12,6 +12,7 @@
     "src/web/admin/settings/local-camera.js",
     "src/web/admin/files/manager.js",
     "src/web/admin/firmware/ota.js",
+    "src/web/admin/firmware/icon-file.js",
     "src/web/admin/tiles/state.js",
     "src/web/admin/tiles/text-baseline.js",
     "src/web/admin/tiles/registry.js",

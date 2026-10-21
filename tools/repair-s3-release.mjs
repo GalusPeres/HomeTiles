@@ -16,7 +16,7 @@ export function replacementNames(version) {
 }
 export function inspectReplacements(directory, version) {
   const names = replacementNames(version);
-  assert.equal(names.length, 6, 'This repair supports exactly three S3 profiles');
+  assert.equal(names.length, 8, 'This repair supports exactly four S3 profiles');
   assert.deepEqual(fs.readdirSync(directory).sort(), names, 'Unexpected or missing repair assets');
   return names.map(name => {
     const data = fs.readFileSync(path.join(directory, name));
@@ -65,7 +65,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (!['--preflight', '--validate'].includes(process.argv[2])) {
     const directory = path.resolve(process.argv[2]);
     const replacements = inspectReplacements(directory, tag);
-    // All six files are verified before any existing asset is replaced.
+    // All eight files are verified before any existing asset is replaced.
     gh('release', 'upload', tag, ...replacements.map(a => path.join(directory, a.name)), '--repo', repo, '--clobber');
     const after = JSON.parse(gh('api', `repos/${repo}/releases/${before.id}`));
     assert.equal(after.draft, true, 'Release became public during repair');
@@ -77,7 +77,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     gh('release', 'upload', tag, proofFile, '--repo', repo, '--clobber');
     const notesFile = path.join(directory, 'release-notes.md');
     const notes = (before.body ?? '')
-      .replace('## Highlights', '## Highlights\n\n- **S3 GitHub OTA:** download TLS now prefers PSRAM on all three S3 boards, leaving internal memory available for Wi-Fi; P4 images are unchanged.')
+      .replace('## Highlights', '## Highlights\n\n- **S3 GitHub OTA:** download TLS now prefers PSRAM on all S3 boards, leaving internal memory available for Wi-Fi; P4 images are unchanged.')
       .replace('## Update Notes', `## Update Notes\n\nIf S3 device OTA fails, install the corrected regular BIN through Web Admin once. Devices already on ${tag} also need a manual update to receive this same-version correction; System Update will report that the firmware is current.`)
       .replace('## Hardware Confirmed', '## Hardware Confirmed\n\n- The corrected Guition ESP32-4848S040 downloader completed a full GitHub OTA cycle, including reboot and MQTT reconnection.')
       .replace('## Pending Hardware Validation', '## Pending Hardware Validation\n\nGitHub OTA with the corrected downloader on both Waveshare S3 variants still awaits field confirmation.')

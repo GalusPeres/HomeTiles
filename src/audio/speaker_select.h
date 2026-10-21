@@ -24,6 +24,8 @@
 #define HOMETILES_SPEAKER_BOARD "src/devices/waveshare_touch_lcd_10_1/speaker_board.h"
 #elif defined(DEVICE_WAVESHARE_TOUCH_LCD_4_3)
 #define HOMETILES_SPEAKER_BOARD "src/devices/waveshare_touch_lcd_4_3/speaker_board.h"
+#elif defined(DEVICE_WAVESHARE_TOUCH_LCD_5)
+#define HOMETILES_SPEAKER_BOARD "src/devices/waveshare_touch_lcd_5/speaker_board.h"
 #elif defined(DEVICE_WAVESHARE_4B)
 #define HOMETILES_SPEAKER_BOARD "src/devices/waveshare_4b/speaker_board.h"
 // Guition boards (Guition schematics): one ES8311 for speaker and microphone,

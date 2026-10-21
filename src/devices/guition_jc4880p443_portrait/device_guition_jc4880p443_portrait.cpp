@@ -856,7 +856,6 @@ void ensure_storage_layout() {
   }
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 }
 
 bool draw_portrait_area(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* data) {
@@ -1452,13 +1451,11 @@ void DeviceGuitionJC4880P443Portrait::migrateStorageFromSD() {
 
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 
   if (initSDCard()) {
     Serial.println("[Storage] Migrating data from SD to LittleFS...");
     copyDirectory(GuitionPortraitSDMMC, LittleFS, "/_tile_grids");
     copyDirectory(GuitionPortraitSDMMC, LittleFS, "/_tile_links");
-    copyDirectory(GuitionPortraitSDMMC, LittleFS, "/icons");
     Serial.println("[Storage] Migration complete");
   } else {
     Serial.println("[Storage] No SD card, starting fresh");

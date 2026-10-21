@@ -749,7 +749,6 @@ void ensure_storage_layout() {
   }
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 }
 
 }  // namespace
@@ -1208,13 +1207,11 @@ void DeviceGuitionJC8012P4A1::migrateStorageFromSD() {
 
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 
   if (initSDCard()) {
     Serial.println("[Storage] Migrating data from SD to LittleFS...");
     copy_sd_directory_to_littlefs("/_tile_grids");
     copy_sd_directory_to_littlefs("/_tile_links");
-    copy_sd_directory_to_littlefs("/icons");
     Serial.println("[Storage] Migration complete");
   } else {
     Serial.println("[Storage] No SD card, starting fresh");

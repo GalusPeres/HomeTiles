@@ -29,6 +29,12 @@ const expected = {
     'Non connecté', "Point d'accès actif", 'Mise à jour disponible'],
   kStringsPl: ['Ekran', 'Jasność', 'Uśpienie', 'Obrót', 'Wygaszacz ekranu', 'Start po', 'Uśpienie %s',
     'Brak połączenia', 'Punkt dostępu włączony', 'Dostępna aktualizacja'],
+  kStringsCs: ['Obrazovka', 'Jas', 'Uspání', 'Otočení', 'Spořič obrazovky', 'Spustit po', 'Uspání %s',
+    'Nepřipojeno', 'Přístupový bod zapnut', 'Je dostupná aktualizace'],
+  kStringsEs: ['Pantalla', 'Brillo', 'Reposo', 'Rotación', 'Salvapantallas', 'Empieza tras', 'Reposo %s',
+    'No conectado', 'Punto de acceso activo', 'Actualización disponible'],
+  kStringsSk: ['Obrazovka', 'Jas', 'Spánok', 'Otočenie', 'Šetrič obrazovky', 'Spustí sa po', 'Spánok %s',
+    'Nie je pripojené', 'Prístupový bod zapnutý', 'Dostupná aktualizácia'],
 };
 const struct = header.slice(header.indexOf('struct Strings {'), header.indexOf('\n};', header.indexOf('struct Strings {')));
 const fields = [...struct.replace(/\/\/[^\n]*/g, '').matchAll(/const char\*\s+(\w+);/g)].map(match => match[1]);

@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include "src/core/firmware/firmware_version.h"
+#include "src/core/firmware/github_update.h"
 #include "src/devices/device.h"
 #include "src/tiles/icons/mdi_icon_cache.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -33,6 +34,12 @@ uint32_t g_written = 0;
 uint32_t g_write_crc = 0;
 uint8_t g_write_header[mdi_icon_cache::kHeaderBytes] = {};
 String g_write_error;
+
+// The Icons card: a requested download and an uploaded file in PSRAM.
+bool g_download_requested = false;
+uint8_t* g_upload = nullptr;
+uint32_t g_upload_len = 0;
+bool g_upload_ready = false;
 
 const mdi_icon_font_data_t& font_data() { return *MDI_ICON_LOADER->data; }
 
@@ -113,15 +120,105 @@ const char* release_file_name() { return g_release_name; }
 
 uint32_t file_bytes() { return mdi_icon_cache::kHeaderBytes + font_data().bitmap_bytes; }
 
+uint32_t icon_count() { return font_data().glyph_count - 1; }
+
+uint32_t builtin_count() { return font_data().core_count; }
+
+String release_file_url() {
+  return String(GithubUpdate::kReleaseFilesRepoUrl) + "/releases/download/" + FW_VERSION + "/" + g_release_name;
+}
+
+void request_download() { g_download_requested = true; }
+
+bool take_download_request() {
+  const bool requested = g_download_requested;
+  g_download_requested = false;
+  return requested;
+}
+
+void upload_discard() {
+  if (g_upload) heap_caps_free(g_upload);
+  g_upload = nullptr;
+  g_upload_len = 0;
+  g_upload_ready = false;
+}
+
+bool upload_begin(String& error) {
+  upload_discard();
+  g_upload = static_cast<uint8_t*>(heap_caps_malloc(file_bytes(), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (!g_upload) {
+    error = "not enough PSRAM";
+    return false;
+  }
+  return true;
+}
+
+bool upload_write(const uint8_t* data, size_t len, String& error) {
+  if (!g_upload) {
+    error = "no icon upload started";
+    return false;
+  }
+  if (g_upload_len + len > file_bytes()) {
+    error = String("icon file has more than ") + file_bytes() + " bytes";
+    return false;
+  }
+  const bool had_header = g_upload_len >= mdi_icon_cache::kHeaderBytes;
+  memcpy(g_upload + g_upload_len, data, len);
+  g_upload_len += len;
+  if (!had_header && g_upload_len >= mdi_icon_cache::kHeaderBytes) {
+    const mdi_icon_cache::HeaderCheck check =
+        mdi_icon_cache::check_header(g_upload, mdi_icon_cache::kHeaderBytes, file_bytes(), font_data());
+    if (check != mdi_icon_cache::HeaderCheck::Ok) {
+      error = String("icon file not usable: ") + mdi_icon_cache::header_check_text(check);
+      return false;
+    }
+  }
+  return true;
+}
+
+bool upload_finish(String& error) {
+  if (!g_upload || g_upload_len != file_bytes()) {
+    error = String("icon file has ") + g_upload_len + " bytes, expected " + file_bytes();
+    return false;
+  }
+  const uint32_t crc = mdi_icon_cache::crc32(0, g_upload + mdi_icon_cache::kHeaderBytes,
+                                             g_upload_len - mdi_icon_cache::kHeaderBytes);
+  if (crc != mdi_icon_cache::header_bitmap_crc(g_upload)) {
+    error = "icon file damaged in transfer";
+    return false;
+  }
+  g_upload_ready = true;
+  return true;
+}
+
+bool upload_ready() { return g_upload_ready; }
+
+bool install_upload(String& error) {
+  if (!g_upload_ready) {
+    error = "no icon file uploaded";
+    return false;
+  }
+  // finish_write() reports a failed write() too.
+  const bool begun = begin_write(g_upload_len, error);
+  if (begun) write(g_upload, g_upload_len);
+  const bool ok = begun && finish_write(error);
+  upload_discard();
+  return ok;
+}
+
+void release_file() {
+  // The font shows the built-in icons until the restart.
+  mdi_icon_cache::set_source(MDI_ICON_LOADER, nullptr);
+  if (g_file) g_file.close();
+  g_state = State::Missing;
+}
+
 bool begin_write(uint32_t total, String& error) {
   if (total != file_bytes()) {
     error = String("icon file has ") + total + " bytes, expected " + file_bytes();
     return false;
   }
-  // The font shows the built-in icons until the restart.
-  mdi_icon_cache::set_source(MDI_ICON_LOADER, nullptr);
-  if (g_file) g_file.close();
-  g_state = State::Missing;
+  release_file();
   LittleFS.remove(g_path);
   LittleFS.remove(g_part_path);
   g_part = LittleFS.open(g_part_path, "w");
@@ -211,7 +308,10 @@ void note_download_attempt() {
   Device::ScopedStorageWrite storage_write;
   Preferences prefs;
   if (!prefs.begin(kDownloadNvsNamespace, false)) return;
-  const uint8_t attempts = prefs.getString("ver", "") == FW_VERSION ? prefs.getUChar("att", 0) : 0;
+  const bool same_version = prefs.getString("ver", "") == FW_VERSION;
+  const uint8_t attempts = same_version ? prefs.getUChar("att", 0) : 0;
+  // A reason from an older firmware no longer applies.
+  if (!same_version && prefs.isKey("err")) prefs.remove("err");
   prefs.putString("ver", FW_VERSION);
   prefs.putUChar("att", attempts + 1);
   prefs.end();
@@ -225,6 +325,23 @@ void clear_download_attempts() {
   if (!prefs.begin(kDownloadNvsNamespace, false)) return;
   prefs.clear();
   prefs.end();
+}
+
+void note_failure(const String& reason) {
+  Device::ScopedStorageWrite storage_write;
+  Preferences prefs;
+  if (!prefs.begin(kDownloadNvsNamespace, false)) return;
+  prefs.putString("err", reason.substring(0, 96));
+  prefs.end();
+}
+
+String last_failure() {
+  Preferences prefs;
+  if (!prefs.begin(kDownloadNvsNamespace, true)) return String();
+  // isKey first: a missing key would log an NVS error on every page load.
+  const String reason = prefs.isKey("err") ? prefs.getString("err", "") : String();
+  prefs.end();
+  return reason;
 }
 
 }  // namespace mdi_icon_store

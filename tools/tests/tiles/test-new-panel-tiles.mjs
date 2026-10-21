@@ -156,4 +156,22 @@ for (const words of [['Licht', 'Klima', 'Szenen', String.raw`Hallo!\nZum Blätte
   assert.equal(welcome.split('\n').length, 2, `${words[3]}: two lines`);
   assert.ok(Buffer.byteLength(welcome, 'utf8') <= sceneMax - 1, `${words[3]}: fits the Text tile's ${sceneMax - 1} bytes`);
 }
+// Every registered language, also the ones added later (the Czech, Slovak
+// and Spanish welcome texts first came with 38-45 bytes, 2026-10-18).
+const fields = [.../struct Strings \{([\s\S]*?)\n\};/.exec(read('src/core/i18n/i18n.h'))[1]
+  .replace(/\/\/[^\n]*/g, '').matchAll(/^\s*const char\*\s+(\w+);/gm)].map(m => m[1]);
+const welcomeIndex = fields.indexOf('new_panel_welcome');
+assert.ok(welcomeIndex > 0, 'new_panel_welcome is a Strings field');
+const codes = [...i18n.matchAll(/\{&kStrings(\w+), &kLocale\w+\}/g)].map(m => m[1]);
+assert.ok(codes.length >= 7, 'every built-in language is registered');
+for (const code of codes) {
+  const start = i18n.indexOf(`static const Strings kStrings${code} = {`);
+  const body = i18n.slice(start, i18n.indexOf('\n};', start)).replace(/^\s*\/\/[^\n]*$/gm, '');
+  const texts = [...body.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
+  assert.equal(texts.length, fields.length, `${code}: one text per field`);
+  const welcome = JSON.parse(`"${texts[welcomeIndex]}"`);
+  assert.equal(welcome.split('\n').length, 2, `${code} welcome: two lines`);
+  assert.ok(Buffer.byteLength(welcome, 'utf8') <= sceneMax - 1,
+    `${code} welcome "${welcome}" (${Buffer.byteLength(welcome, 'utf8')} bytes) fits the Text tile's ${sceneMax - 1} bytes`);
+}
 console.log('New panel: head bar layout, parked Settings, analog clock, Scenes, two pages and a welcome text');

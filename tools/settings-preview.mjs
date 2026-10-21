@@ -77,7 +77,8 @@ const state = option('state');
 const dialog = option('dialog');
 const entry = option('entry');
 const step = Number(option('step') || 0);
-// --lang=de|fr|pl renders the firmware in that language (the mockup stays English).
+// --lang=<code> renders the firmware in that language, any registered one
+// (the mockup stays English).
 const language = option('lang') || 'en';
 // --keys=accents shows the keyboard's accent page (with --entry).
 const keys = option('keys');
@@ -132,7 +133,22 @@ const table = name => {
   const start = i18nSource.indexOf(`static const Strings ${name} = {`);
   return i18nSource.slice(start, i18nSource.indexOf('};', start) + 2);
 };
-const enTable = ['kStringsEn', 'kStringsDe', 'kStringsFr', 'kStringsPl'].map(table).join('\n');
+// Every registered language (kLanguages), in its order.
+const codes = [...i18nSource.matchAll(/\{&kStrings(\w+), &kLocale\w+\}/g)].map(match => match[1]);
+const Code = language[0].toUpperCase() + language.slice(1);
+if (!codes.includes(Code)) throw new Error(`unknown language ${language}`);
+const enTable = codes.map(code => table(`kStrings${code}`)).join('\n');
+// A language's name and keyboard from its LocaleProfile: the second entry
+// and the last two (keyboard_layout, keyboard_letters).
+const localeOf = code => {
+  const start = i18nSource.indexOf(`static const LocaleProfile kLocale${code} = {`);
+  const body = i18nSource.slice(start, i18nSource.indexOf('static const ', start + 10));
+  const name = /=\s*\{\s*"[^"]*",\s*("[^"]*")/.exec(body)[1];
+  const tail = /\s(\d+),(?:\s*\/\/[^\n]*)?\s*("(?:[^"\\]|\\.)*")\s*,?\s*\};/.exec(body);
+  return {name, layout: Number(tail[1]), letters: tail[2]};
+};
+const locales = codes.map(localeOf);
+const shown = locales[codes.indexOf(Code)];
 // The English time zone names (LocaleProfile kLocaleEn timezone_labels).
 const enLocale = i18nSource.slice(i18nSource.indexOf('static const LocaleProfile kLocaleEn = {'));
 const zonesStart = enLocale.indexOf('{"UTC+0 - UTC"');
@@ -229,6 +245,7 @@ ${strip(read('src/ui/tabs/settings/settings_screen.h'))}
 ${strip(read('src/ui/startup/hometiles_logo.h'))}
 ${strip(read('src/ui/startup/hometiles_logo.cpp'))}
 ${strip(read('src/ui/tabs/settings/settings_parts.cpp'))}
+${strip(read('src/ui/tabs/settings/keyboard_letters.h'))}
 ${strip(read('src/ui/tabs/settings/settings_keyboard.h'))}
 ${strip(read('src/ui/tabs/settings/settings_keyboard.cpp'))}
 ${strip(read('src/ui/tabs/settings/settings_entry.h'))}
@@ -238,12 +255,11 @@ ${strip(read('src/ui/tabs/settings/settings_screen.cpp'))}
 ${strip(read('src/ui/tabs/settings/setup_screen.cpp'))}
 // The mockup's example state.
 namespace settings_model {
-const i18n::Strings& text() { return i18n::${{de: 'kStringsDe', fr: 'kStringsFr', pl: 'kStringsPl'}[language] || 'kStringsEn'}; }
-uint8_t language_count() { return 4; }
+const i18n::Strings& text() { return i18n::kStrings${Code}; }
+uint8_t language_count() { return ${codes.length}; }
 const i18n::Strings& text_of(uint8_t language) {
-  static const i18n::Strings* const kTables[] = {&i18n::kStringsEn, &i18n::kStringsDe, &i18n::kStringsFr,
-                                                 &i18n::kStringsPl};
-  return *kTables[language < 4 ? language : 0];
+  static const i18n::Strings* const kTables[] = {${codes.map(code => `&i18n::kStrings${code}`).join(', ')}};
+  return *kTables[language < ${codes.length} ? language : 0];
 }
 uint32_t card_color() { return 0x1A1A1A; }
 DisplayValues display_values() { return {80, 1, 100, 4, 3, 20, 1, 100}; }
@@ -272,16 +288,16 @@ void layout_selected(uint8_t) {}
 bool access_point_on() { return false; }
 bool network_connected() { return true; }
 void network_name(char* buf, size_t len) { snprintf(buf, len, "HomeNet"); }
-const char* language_name() { return "English"; }
+const char* language_name() { return ${shown.name}; }
 bool time_text(char* buf, size_t len) { snprintf(buf, len, "%s", "${time}"); return true; }
 bool update_available() { return false; }
 // Localization: English, Berlin, the rest Auto (mockup st.loc).
 uint8_t locale_option_count(LocaleList list) {
-  static const uint8_t kCounts[] = {4, 27, 3, 4, 4};
+  static const uint8_t kCounts[] = {${codes.length}, 27, 3, 4, 4};
   return kCounts[static_cast<int>(list)];
 }
 const char* locale_option(LocaleList list, uint8_t index) {
-  static const char* const kLanguages[] = {"English", "Deutsch", "Fran\xC3\xA7" "ais", "Polski"};
+  static const char* const kLanguages[] = {${locales.map(locale => locale.name).join(', ')}};
   static const char* const kZones[] = ${zones};
   static const char* const kTimes[] = {"Auto (language)", "24-hour", "12-hour"};
   static const char* const kDates[] = {"Auto (language)", "DD.MM.YYYY", "MM/DD/YYYY", "YYYY/MM/DD"};
@@ -342,8 +358,8 @@ WifiValues wifi_values() {
 }
 bool ethernet_panel() { return ${state === 'eth' || state === 'ethwifi' ? 'true' : 'false'}; }
 bool ethernet_active() { return ${state === 'eth' ? 'true' : 'false'}; }
-uint8_t keyboard_layout() { return ${language === 'de' ? 1 : language === 'fr' ? 2 : 0}; }
-uint8_t keyboard_accents() { return ${language === 'fr' ? 1 : language === 'pl' ? 2 : 0}; }
+uint8_t keyboard_layout() { return ${shown.layout}; }
+const char* keyboard_letters() { return ${shown.letters}; }
 // The mockup's networks (st.nets); HomeNet only while it is not the connected one.
 static const WifiNetwork kNetworks[] = {{"HomeNet", 4, true}, {"HomeNet-Guest", 3, true},
                                         {"FRITZ!Box 7590 XY", 2, true}, {"Garden-Cam", 2, false},

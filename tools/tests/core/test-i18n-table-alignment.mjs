@@ -69,7 +69,10 @@ function entries(table) {
   }
   return out;
 }
-const tables = {de: entries('kStringsDe'), en: entries('kStringsEn'), fr: entries('kStringsFr'), pl: entries('kStringsPl')};
+// Every language table, also the ones added later (cs, sk, es, ...).
+const tables = Object.fromEntries([...source.matchAll(/static const Strings kStrings(\w+) = \{/g)]
+  .map(([, name]) => [name.toLowerCase(), entries(`kStrings${name}`)]));
+assert.ok(['de', 'en', 'fr', 'pl'].every(language => tables[language]), 'the first four languages exist');
 for (const [language, table] of Object.entries(tables)) {
   assert.equal(table.length, fields.length, `${language}: one entry per field`);
 }
@@ -77,7 +80,7 @@ for (const [language, table] of Object.entries(tables)) {
 // The same printf placeholders as English, field by field.
 const specs = text => (text.match(/%[-+ #0]*\d*(?:\.\d+)?(?:l|ll|h|z)?[sdufxXc]/g) || []).join(' ');
 fields.forEach((field, index) => {
-  for (const language of ['de', 'fr', 'pl']) {
+  for (const language of Object.keys(tables).filter(language => language !== 'en')) {
     assert.equal(specs(tables[language][index]), specs(tables.en[index]), `${language}.${field} placeholders`);
   }
 });
@@ -108,4 +111,4 @@ for (const [field, values] of Object.entries(expected)) {
     if (values[i] !== null) assert.equal(tables[language][index], values[i], `${language}.${field}`);
   });
 }
-console.log(`i18n tables: ${fields.length} fields aligned in all four languages`);
+console.log(`i18n tables: ${fields.length} fields aligned in ${Object.keys(tables).length} languages (${Object.keys(tables).join(', ')})`);

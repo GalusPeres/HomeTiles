@@ -78,8 +78,9 @@
         badge.textContent = message || fileManagerText('Pr\u00fcfe...', 'Checking...');
       }
     }
+    // The internal storage of a test build only lists, downloads and deletes.
     document.querySelectorAll('.file-manager-requires-sd').forEach(el => {
-      el.disabled = available !== true;
+      el.disabled = available !== true || fileManagerState.fs === 'internal';
     });
     updateFileManagerSelectionBar();
   }
@@ -167,7 +168,9 @@
       primaryBtn.textContent = selected && !selected.dir ? fileManagerText('Download', 'Download') : fileManagerText('\u00d6ffnen', 'Open');
       primaryBtn.title = primaryBtn.textContent;
     }
-    if (renameBtn) renameBtn.disabled = !hasSelection || isParent || !hasStorage;
+    if (renameBtn) {
+      renameBtn.disabled = !hasSelection || isParent || !hasStorage || fileManagerState.fs === 'internal';
+    }
     if (deleteBtn) deleteBtn.disabled = !hasSelection || isParent || !hasStorage;
     updateFileManagerRowSelection();
   }
@@ -334,8 +337,16 @@
     updateFileManagerRowSelection();
   }
 
+  // Test builds: the storage switch, microSD or the panel's own storage.
+  function selectFileManagerStorage(fs) {
+    fileManagerState.fs = fs === 'internal' ? 'internal' : 'sd';
+    document.querySelectorAll('.file-manager-storage-switch button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.fs === fileManagerState.fs);
+    });
+    loadFileManager('/');
+  }
+
   async function loadFileManager(path = null) {
-    fileManagerState.fs = 'sd';
     if (path !== null) fileManagerState.path = normalizeFileManagerClientPath(path);
     if (!fileManagerState.path) fileManagerState.path = '/';
     clearFileManagerSelection();
@@ -353,20 +364,31 @@
         loadError.status = res.status;
         throw loadError;
       }
-      fileManagerState.fs = 'sd';
       fileManagerState.path = data.path || fileManagerState.path;
-      setFileManagerStorageState(true);
+      if (fileManagerState.fs === 'internal') {
+        setFileManagerStorageState(true,
+          formatFileManagerSize({ size: data.used }) + ' / ' + formatFileManagerSize({ size: data.total }));
+      } else {
+        setFileManagerStorageState(true);
+      }
       renderFileManagerEntries(data.entries || []);
       const count = Array.isArray(data.entries) ? data.entries.length : 0;
       setFileManagerStatus(fileManagerText('Bereit. Eintr\u00e4ge: ', 'Ready. Entries: ') + count, true);
       fileManagerLoaded = true;
     } catch (err) {
       const rawMessage = err?.message || fileManagerText('Dateimanager-Fehler.', 'File manager error.');
-      const sdMissing = err?.status === 503 || /microsd/i.test(rawMessage);
+      const sdMissing = fileManagerState.fs === 'sd' &&
+        (err?.status === 503 || /microsd/i.test(rawMessage));
       const message = sdMissing
         ? fileManagerText('Keine microSD erkannt.', 'No microSD detected.')
         : rawMessage;
-      setFileManagerStorageState(sdMissing ? false : true, sdMissing ? null : fileManagerText('microSD erkannt', 'microSD detected'));
+      if (fileManagerState.fs === 'internal') {
+        // The badge names the storage (the switch's own label) in red.
+        const label = document.querySelector('.file-manager-storage-switch [data-fs="internal"]');
+        setFileManagerStorageState(false, label ? label.textContent : null);
+      } else {
+        setFileManagerStorageState(sdMissing ? false : true, sdMissing ? null : fileManagerText('microSD erkannt', 'microSD detected'));
+      }
       renderFileManagerEntries([], message);
       setFileManagerStatus(message, false);
       if (!sdMissing) showNotification(message, false);

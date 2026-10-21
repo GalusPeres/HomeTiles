@@ -3,11 +3,13 @@
 #include <esp_heap_caps.h>
 #include <algorithm>
 #include <vector>
-#include <libs/tjpgd/tjpgd.h>
 #include <cerrno>
 #include <stdlib.h>
 #include <string.h>
 #include <lwip/sockets.h>
+#include <LittleFS.h>
+#include "src/core/firmware/firmware_version.h"
+#include "src/tiles/icons/mdi_icon_store.h"
 #include "src/web/server/handlers/web_admin_handler_utils.h"
 
 using namespace web_admin_handlers;
@@ -125,8 +127,26 @@ bool resolveFileManagerFsByKey(const String& raw_key, fs::FS*& out_fs, String& o
     out_key = "sd";
     return true;
   }
+#if defined(HOMETILES_BETA_BUILD)
+  // Test builds also show the panel's own storage (tile data, icon file) to
+  // look at it and delete files while testing; release builds offer microSD
+  // only.
+  if (key == "internal") {
+    out_fs = &storageFS();
+    out_key = "internal";
+    return true;
+  }
+#endif
   error = "Only microSD is available in the file manager";
   return false;
+}
+
+// The internal storage of a test build only lists, downloads and deletes:
+// no upload, new folder or rename next to the panel's own files.
+bool rejectInternalStorageChange(WebServer& server, const String& fs_key) {
+  if (fs_key != "internal") return false;
+  sendJsonError(server, 403, "The internal storage only allows deleting");
+  return true;
 }
 
 bool resolveFileManagerFsFromRequest(WebServer& server, fs::FS*& out_fs, String& out_key, String& error) {
@@ -303,69 +323,6 @@ void collectImageFiles(const String& dir, std::vector<String>& out, size_t max_e
   }
 }
 
-struct IconFileInfo {
-  String path;
-  uint32_t size = 0;
-  uint16_t width = 0;
-  uint16_t height = 0;
-};
-
-struct JpegInfoCtx {
-  File* file = nullptr;
-};
-
-static size_t jpeg_info_input(JDEC* jd, uint8_t* buff, size_t ndata) {
-  JpegInfoCtx* ctx = static_cast<JpegInfoCtx*>(jd->device);
-  if (!ctx || !ctx->file) return 0;
-  if (buff) return ctx->file->read(buff, ndata);
-  ctx->file->seek(ctx->file->position() + ndata);
-  return ndata;
-}
-
-static bool read_jpeg_dimensions(const String& path, uint16_t& w, uint16_t& h) {
-  w = 0;
-  h = 0;
-  if (!storageReady()) return false;
-  File f = storageFS().open(path, FILE_READ);
-  if (!f) return false;
-  uint8_t* work = static_cast<uint8_t*>(malloc(4096));
-  if (!work) {
-    f.close();
-    return false;
-  }
-  JDEC jd;
-  JpegInfoCtx ctx{};
-  ctx.file = &f;
-  JRESULT rc = jd_prepare(&jd, jpeg_info_input, work, 4096, &ctx);
-  if (rc == JDR_OK) {
-    w = jd.width;
-    h = jd.height;
-  }
-  free(work);
-  f.close();
-  return rc == JDR_OK;
-}
-
-static bool read_png_dimensions(const String& path, uint16_t& w, uint16_t& h) {
-  w = 0;
-  h = 0;
-  if (!storageReady()) return false;
-  File f = storageFS().open(path, FILE_READ);
-  if (!f) return false;
-  uint8_t buf[24] = {0};
-  if (f.read(buf, sizeof(buf)) != sizeof(buf)) {
-    f.close();
-    return false;
-  }
-  f.close();
-  const uint8_t sig[8] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
-  if (memcmp(buf, sig, sizeof(sig)) != 0) return false;
-  if (memcmp(buf + 12, "IHDR", 4) != 0) return false;
-  w = static_cast<uint16_t>((buf[16] << 24) | (buf[17] << 16) | (buf[18] << 8) | buf[19]);
-  h = static_cast<uint16_t>((buf[20] << 24) | (buf[21] << 16) | (buf[22] << 8) | buf[23]);
-  return (w > 0 && h > 0);
-}
-
 }  // namespace
 
 void WebAdminServer::handleGetSdImages() {
@@ -380,124 +337,6 @@ void WebAdminServer::handleGetSdImages() {
     json += "\"";
   }
   json += "]";
-  sendChunkedResponse(server, 200, "application/json", json);
-}
-
-void WebAdminServer::handleGetSdIcons() {
-  if (!storageReady()) {
-    server.send(200, "application/json", "[]");
-    return;
-  }
-  if (!storageFS().exists("/icons")) {
-#if defined(DEVICE_ESP32_S3_RGB_480)
-    Device::ScopedStorageWrite storage_write;
-#endif
-    storageFS().mkdir("/icons");
-  }
-  std::vector<IconFileInfo> files;
-  std::vector<String> paths;
-  collectImageFiles("/icons", paths, 100, 1, false, true, true);
-  for (const auto& path : paths) {
-    IconFileInfo info;
-    info.path = path;
-    File f = storageFS().open(path, FILE_READ);
-    if (f) {
-      info.size = static_cast<uint32_t>(f.size());
-      f.close();
-    }
-    if (endsWithIgnoreCase(path, ".png")) {
-      read_png_dimensions(path, info.width, info.height);
-    } else {
-      read_jpeg_dimensions(path, info.width, info.height);
-    }
-    files.push_back(info);
-  }
-
-  String json = "[";
-  for (size_t i = 0; i < files.size(); ++i) {
-    if (i > 0) json += ",";
-    json += "{\"path\":\"";
-    appendJsonEscaped(json, files[i].path);
-    json += "\",\"size\":";
-    json += String(files[i].size);
-    json += ",\"w\":";
-    json += String(files[i].width);
-    json += ",\"h\":";
-    json += String(files[i].height);
-    json += "}";
-  }
-  json += "]";
-  sendChunkedResponse(server, 200, "application/json", json);
-}
-
-void WebAdminServer::handleUploadIcon() {
-  HTTPUpload& upload = server.upload();
-  static File uploadFile;
-  static bool storage_guard_active = false;
-
-  auto end_storage_guard = [&]() {
-    if (!storage_guard_active) return;
-    storage_guard_active = false;
-#if defined(DEVICE_ESP32_S3_RGB_480)
-    Device::storageWriteEnd();
-#endif
-  };
-
-  if (upload.status == UPLOAD_FILE_START) {
-    if (uploadFile) uploadFile.close();
-    end_storage_guard();
-    // Limit the receive window: file uploads have the same crash cause
-    // (internal DMA heap exhaustion with the default 64 KB TCP window).
-    int rcvbuf = 8 * 1024;
-    server.client().setSocketOption(SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
-
-    if (!storageReady()) {
-      Serial.println("[Icons] Upload failed: storage unavailable");
-      return;
-    }
-#if defined(DEVICE_ESP32_S3_RGB_480)
-    Device::storageWriteBegin();
-    storage_guard_active = true;
-#endif
-    if (!storageFS().exists("/icons")) storageFS().mkdir("/icons");
-    String filename = upload.filename;
-    if (filename.indexOf('/') < 0) filename = "/icons/" + filename;
-    if (storageFS().exists(filename)) storageFS().remove(filename);
-    uploadFile = storageFS().open(filename, FILE_WRITE);
-    if (!uploadFile) {
-      Serial.println("[Icons] Upload open failed");
-      end_storage_guard();
-    }
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (uploadFile) {
-      const size_t written = uploadFile.write(upload.buf, upload.currentSize);
-      if (written != upload.currentSize) {
-        Serial.printf("[Icons] Upload write failed: requested=%u wrote=%u\n",
-                      static_cast<unsigned>(upload.currentSize),
-                      static_cast<unsigned>(written));
-        uploadFile.close();
-        end_storage_guard();
-      }
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
-    if (uploadFile) {
-      uploadFile.close();
-      Serial.printf("[Icons] Uploaded %s (%u bytes)\n", upload.filename.c_str(), upload.totalSize);
-    }
-    end_storage_guard();
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    if (uploadFile) uploadFile.close();
-    Serial.println("[Icons] Upload aborted");
-    end_storage_guard();
-  }
-}
-
-void WebAdminServer::handleUploadIconDone() {
-  HTTPUpload& upload = server.upload();
-  String path = "/icons/" + upload.filename;
-  String json = "{\"ok\":true,\"path\":\"";
-  appendJsonEscaped(json, path);
-  json += "\"}";
   sendChunkedResponse(server, 200, "application/json", json);
 }
 
@@ -557,7 +396,16 @@ void WebAdminServer::handleFileManagerList() {
 
   String json = "{\"success\":true,\"fs\":\"";
   appendJsonEscaped(json, fs_key);
-  json += "\",\"path\":\"";
+  if (fs_key == "internal") {
+    // Every profile mounts LittleFS as its internal storage.
+    json += "\",\"total\":";
+    json += String(static_cast<unsigned long>(LittleFS.totalBytes()));
+    json += ",\"used\":";
+    json += String(static_cast<unsigned long>(LittleFS.usedBytes()));
+    json += ",\"path\":\"";
+  } else {
+    json += "\",\"path\":\"";
+  }
   appendJsonEscaped(json, path);
   json += "\",\"parent\":\"";
   appendJsonEscaped(json, fileManagerParentPath(path));
@@ -641,9 +489,19 @@ void WebAdminServer::handleFileManagerDelete() {
     return;
   }
 
+  const bool internal = fs_key == "internal";
+  // LittleFS writes need the S3 display guard; the open icon file is closed
+  // first, the font then shows the built-in icons until the restart.
+  Device::ScopedStorageWrite storage_write(internal);
+  const bool icon_file = internal && path == mdi_icon_store::file_path();
+  if (icon_file) mdi_icon_store::release_file();
+
   if (!removeFileManagerPathRecursive(*fs, path, error)) {
     sendJsonError(server, 500, error.length() ? error : String("Delete failed"));
     return;
+  }
+  if (icon_file) {
+    Serial.printf("[FileManager] Icon file %s deleted; built-in icons until the restart\n", path.c_str());
   }
   sendJsonOk(server);
 }
@@ -657,6 +515,7 @@ void WebAdminServer::handleFileManagerRename() {
     sendJsonError(server, 503, error);
     return;
   }
+  if (rejectInternalStorageChange(server, fs_key)) return;
   if (!requireFileManagerWriteAccess(server, fs_key)) return;
 
   const String path = normalizeFileManagerPath(server.hasArg("path") ? server.arg("path") : String());
@@ -703,6 +562,7 @@ void WebAdminServer::handleFileManagerMkdir() {
     sendJsonError(server, 503, error);
     return;
   }
+  if (rejectInternalStorageChange(server, fs_key)) return;
   if (!requireFileManagerWriteAccess(server, fs_key)) return;
 
   const String path = normalizeFileManagerPath(server.hasArg("path") ? server.arg("path") : String("/"));
@@ -766,6 +626,10 @@ void WebAdminServer::handleFileManagerUpload() {
     String error;
     if (!resolveFileManagerFsFromRequest(server, fs, fs_key, error)) {
       g_file_manager_upload_error = error;
+      return;
+    }
+    if (fs_key == "internal") {
+      g_file_manager_upload_error = "The internal storage only allows deleting";
       return;
     }
     if (!Device::sdWritable()) {

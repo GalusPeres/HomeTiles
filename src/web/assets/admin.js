@@ -1802,8 +1802,9 @@ async function saveGestureEdge(select) {
         badge.textContent = message || fileManagerText('Pr\u00fcfe...', 'Checking...');
       }
     }
+    // The internal storage of a test build only lists, downloads and deletes.
     document.querySelectorAll('.file-manager-requires-sd').forEach(el => {
-      el.disabled = available !== true;
+      el.disabled = available !== true || fileManagerState.fs === 'internal';
     });
     updateFileManagerSelectionBar();
   }
@@ -1891,7 +1892,9 @@ async function saveGestureEdge(select) {
       primaryBtn.textContent = selected && !selected.dir ? fileManagerText('Download', 'Download') : fileManagerText('\u00d6ffnen', 'Open');
       primaryBtn.title = primaryBtn.textContent;
     }
-    if (renameBtn) renameBtn.disabled = !hasSelection || isParent || !hasStorage;
+    if (renameBtn) {
+      renameBtn.disabled = !hasSelection || isParent || !hasStorage || fileManagerState.fs === 'internal';
+    }
     if (deleteBtn) deleteBtn.disabled = !hasSelection || isParent || !hasStorage;
     updateFileManagerRowSelection();
   }
@@ -2058,8 +2061,16 @@ async function saveGestureEdge(select) {
     updateFileManagerRowSelection();
   }
 
+  // Test builds: the storage switch, microSD or the panel's own storage.
+  function selectFileManagerStorage(fs) {
+    fileManagerState.fs = fs === 'internal' ? 'internal' : 'sd';
+    document.querySelectorAll('.file-manager-storage-switch button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.fs === fileManagerState.fs);
+    });
+    loadFileManager('/');
+  }
+
   async function loadFileManager(path = null) {
-    fileManagerState.fs = 'sd';
     if (path !== null) fileManagerState.path = normalizeFileManagerClientPath(path);
     if (!fileManagerState.path) fileManagerState.path = '/';
     clearFileManagerSelection();
@@ -2077,20 +2088,31 @@ async function saveGestureEdge(select) {
         loadError.status = res.status;
         throw loadError;
       }
-      fileManagerState.fs = 'sd';
       fileManagerState.path = data.path || fileManagerState.path;
-      setFileManagerStorageState(true);
+      if (fileManagerState.fs === 'internal') {
+        setFileManagerStorageState(true,
+          formatFileManagerSize({ size: data.used }) + ' / ' + formatFileManagerSize({ size: data.total }));
+      } else {
+        setFileManagerStorageState(true);
+      }
       renderFileManagerEntries(data.entries || []);
       const count = Array.isArray(data.entries) ? data.entries.length : 0;
       setFileManagerStatus(fileManagerText('Bereit. Eintr\u00e4ge: ', 'Ready. Entries: ') + count, true);
       fileManagerLoaded = true;
     } catch (err) {
       const rawMessage = err?.message || fileManagerText('Dateimanager-Fehler.', 'File manager error.');
-      const sdMissing = err?.status === 503 || /microsd/i.test(rawMessage);
+      const sdMissing = fileManagerState.fs === 'sd' &&
+        (err?.status === 503 || /microsd/i.test(rawMessage));
       const message = sdMissing
         ? fileManagerText('Keine microSD erkannt.', 'No microSD detected.')
         : rawMessage;
-      setFileManagerStorageState(sdMissing ? false : true, sdMissing ? null : fileManagerText('microSD erkannt', 'microSD detected'));
+      if (fileManagerState.fs === 'internal') {
+        // The badge names the storage (the switch's own label) in red.
+        const label = document.querySelector('.file-manager-storage-switch [data-fs="internal"]');
+        setFileManagerStorageState(false, label ? label.textContent : null);
+      } else {
+        setFileManagerStorageState(sdMissing ? false : true, sdMissing ? null : fileManagerText('microSD erkannt', 'microSD detected'));
+      }
       renderFileManagerEntries([], message);
       setFileManagerStatus(message, false);
       if (!sdMissing) showNotification(message, false);
@@ -2556,6 +2578,110 @@ async function saveGestureEdge(select) {
   }
 
   // Tile Editor State
+
+  // The System page's Icons card: "Update" lets the panel download its icon
+  // file now; the file row uploads one chosen by hand. Both restart the panel,
+  // the page reloads once it answers again.
+
+  function updateIconFileName(inputEl) {
+    const nameEl = document.getElementById('icon_file_name');
+    if (!nameEl) return;
+    const file = inputEl && inputEl.files && inputEl.files.length ? inputEl.files[0] : null;
+    nameEl.textContent = file ? file.name : t('otaNoFileSelected');
+  }
+
+  function setIconFileUi(message, phase = 'idle', tone = '', percent = null) {
+    const statusEl = document.getElementById('icon_status');
+    const progressEl = document.getElementById('icon_progress');
+    const progressBarEl = document.getElementById('icon_progress_bar');
+    if (statusEl) {
+      statusEl.textContent = message || '';
+      statusEl.classList.remove('error', 'success');
+      if (tone === 'error' || tone === 'success') statusEl.classList.add(tone);
+    }
+    if (progressEl) {
+      progressEl.classList.toggle('is-hidden', phase === 'idle');
+      progressEl.classList.toggle('active', phase === 'busy' && percent === null);
+    }
+    if (progressBarEl) {
+      progressBarEl.style.width = percent !== null ? Math.max(0, Math.min(100, percent)) + '%'
+        : (phase === 'done' ? '100%' : '0%');
+    }
+  }
+
+  function setIconFileControlsDisabled(disabled) {
+    ['icon_download_btn', 'icon_choose_btn', 'icon_upload_btn', 'icon_file'].forEach(id => {
+      const element = document.getElementById(id);
+      if (element) element.disabled = disabled;
+    });
+  }
+
+  // The panel restarts after either way; reload once it answers again.
+  function waitForIconFileRestart() {
+    const startedAt = Date.now();
+    const tryReload = () => {
+      fetch(window.location.pathname + '?icon_ping=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+        .then(res => {
+          if (!res.ok) throw new Error('offline');
+          window.location.reload();
+        })
+        .catch(() => {
+          if (Date.now() - startedAt < 180000) window.setTimeout(tryReload, 1500);
+        });
+    };
+    window.setTimeout(tryReload, 4000);
+  }
+
+  async function downloadIconFile() {
+    setIconFileControlsDisabled(true);
+    setIconFileUi(t('otaGithubDownloading'), 'busy');
+    try {
+      const res = await fetch('/api/icons/download', { method: 'POST', cache: 'no-store', credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || t('otaFailed'));
+      setIconFileUi(t('otaGithubDownloading') + ' ' + t('otaReconnecting'), 'busy');
+      waitForIconFileRestart();
+    } catch (err) {
+      setIconFileUi(err?.message || t('otaFailed'), 'idle', 'error');
+      setIconFileControlsDisabled(false);
+    }
+  }
+
+  function uploadIconFile() {
+    const input = document.getElementById('icon_file');
+    const file = input && input.files && input.files.length ? input.files[0] : null;
+    if (!file) {
+      setIconFileUi(t('otaNoFileSelected'), 'idle', 'error');
+      return;
+    }
+    setIconFileControlsDisabled(true);
+    setIconFileUi(t('otaUploading') + ' 0%', 'busy', '', 0);
+    const fail = message => {
+      setIconFileUi(message || t('otaFailed'), 'idle', 'error');
+      setIconFileControlsDisabled(false);
+    };
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/icons/upload', true);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.onprogress = event => {
+      if (!event.lengthComputable) return;
+      const percent = Math.max(1, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      setIconFileUi(t('otaUploading') + ' ' + percent + '%', 'busy', '', percent);
+    };
+    xhr.upload.onload = () => setIconFileUi(t('otaInstalling'), 'busy');
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) {}
+      if (xhr.status < 200 || xhr.status >= 300 || !data.success) {
+        fail(data.error);
+        return;
+      }
+      setIconFileUi(t('otaSuccess') + ' ' + t('otaReconnecting'), 'done', 'success', 100);
+      waitForIconFileRestart();
+    };
+    xhr.onerror = () => fail();
+    xhr.send(file);
+  }
   const tileTabs = [];
   const folderByTab = {};
   const tabByFolder = {};
@@ -20765,9 +20891,10 @@ function getClockPreviewLanguage() {
       else if (format === 4) date = dd + '/' + mm + '/' + yyyy;
       else if (format === 5) date = dd + '.' + mm + '.';
       else if (format === 6 || format === 7) {
+        // clock_tile::long_date_pattern: the locale's order with or without the year.
         const month = (texts && texts.months && texts.months[now.getMonth()]) || mm;
-        date = String((texts && texts.pattern) || '{d} {M}').replace('{d}', String(now.getDate())).replace('{M}', month)
-          + (format === 7 ? ' ' + yyyy : '');
+        const pattern = format === 7 ? (texts && texts.patternYear) || '{d} {M} {Y}' : (texts && texts.pattern) || '{d} {M}';
+        date = String(pattern).replace('{d}', String(now.getDate())).replace('{M}', month).replace('{Y}', yyyy);
       } else date = dd + '.' + mm + '.' + yyyy;
     }
     const day = Number(weekday);

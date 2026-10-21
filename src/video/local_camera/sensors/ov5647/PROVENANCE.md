@@ -3,7 +3,8 @@
 Compiled only for boards that select `HOMETILES_CAMERA_SENSOR_OV5647` in
 `src/video/local_camera/camera_select.h`, camera beta builds only (first:
 Waveshare ESP32-P4-WIFI6-Touch-LCD-8; also the 7-inch and 10.1-inch front
-cameras and the OV5647 modules on the CSI connectors of the 7B-C, 4.3-C and 4B).
+cameras and the OV5647 modules on the CSI connectors of the 7B-C, 4.3-C, 5-inch
+and 4B).
 
 ## Source
 
@@ -62,6 +63,10 @@ From `waveshareteam/ESP32-P4-WIFI6-Touch-LCD-X`, example
   and J5, the 8-inch J6). The 4B, 4.3-inch and 7B schematics wire their 15-pin
   CSI connector the same way: SCCB on GPIO 7/8, CSI_IO0 pulled up, no XCLK,
   reset or power-down line, VDD_MIPI_DPHY on LDO channel 3 at 2500 mV.
+- The 5-inch (`waveshareteam/ESP32-P4-WIFI6-Touch-LCD-5`, `09_video_lcd_display`
+  and `06_Camera_Preview`): optional OV5647 on its 2-lane MIPI-CSI connector,
+  SCCB on GPIO 7/8, `reset_pin = -1`, `pwdn_pin = -1`, the same LDO 3 supply as
+  its display.
 
 ## Assumptions that still need hardware confirmation
 

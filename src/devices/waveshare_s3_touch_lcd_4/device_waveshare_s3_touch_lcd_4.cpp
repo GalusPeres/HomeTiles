@@ -554,7 +554,6 @@ void ensureStorageLayout() {
   if (!g_littlefs_ready) return;
   LittleFS.mkdir("/_tile_grids");
   LittleFS.mkdir("/_tile_links");
-  LittleFS.mkdir("/icons");
 }
 
 void recoverI2CBus(int sda, int scl) {

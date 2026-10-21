@@ -31,6 +31,33 @@ bool begin_write(uint32_t total, String& error);
 bool write(const uint8_t* data, size_t len);
 bool finish_write(String& error);
 
+// Closes the icon file before it is deleted (the file manager of a test
+// build): the font shows the built-in icons until the restart.
+void release_file();
+
+// The System page's Icons card: all icons with the file, the built-in ones
+// without it, and the address of this firmware's own icon file (its release;
+// beta builds: the staging repository).
+uint32_t icon_count();
+uint32_t builtin_count();
+String release_file_url();
+
+// "Update" on the Icons card: the panel downloads its icon file now, also
+// after three failed attempts; the loop takes the request.
+void request_download();
+bool take_download_request();
+
+// An icon file uploaded on the Icons card: held in PSRAM, its header checked
+// as soon as it arrived and its bitmaps' CRC at the end. The loop installs a
+// complete upload (install_upload, under the storage write guard) and
+// restarts the panel.
+bool upload_begin(String& error);
+bool upload_write(const uint8_t* data, size_t len, String& error);
+bool upload_finish(String& error);
+void upload_discard();
+bool upload_ready();
+bool install_upload(String& error);
+
 // The automatic download after an update: due while the panel has no valid
 // file and fewer than three attempts were made with this firmware version.
 // note_download_attempt() counts one before the download starts, so a hang
@@ -38,5 +65,10 @@ bool finish_write(String& error);
 bool download_due();
 void note_download_attempt();
 void clear_download_attempts();
+
+// Why the last download or install failed, shown on the Icons card while the
+// file is missing; a written file clears it (clear_download_attempts).
+void note_failure(const String& reason);
+String last_failure();
 
 }  // namespace mdi_icon_store

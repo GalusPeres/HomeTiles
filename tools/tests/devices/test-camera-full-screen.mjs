@@ -54,10 +54,15 @@ assert.match(end, /double_buffer_active_ = false;/, 'a later popup frame copies 
 assert.match(dispatch, /#if defined\(DEVICE_P4_IDF_DSI\) \|\| defined\(DEVICE_M5STACKS_TAB5\) \|\| defined\(DEVICE_WAVESHARE_4B\)\s*bool displayFullFrameInfo[\s\S]*?#else\s*bool displayFullFrameInfo\(uint16_t&, uint16_t&, uint16_t&\) \{ return false; \}/);
 const presenterDevices = ['guition_jc8012p4a1_v2', 'guition_jc8012p4a1', 'guition_jc1060p470c',
   'guition_jc1060p470c_v2', 'guition_jc4880p443_portrait', 'waveshare_touch_lcd_4_3',
-  'waveshare_touch_lcd_7', 'waveshare_touch_lcd_7b', 'waveshare_touch_lcd_8', 'waveshare_touch_lcd_10_1'];
+  'waveshare_touch_lcd_7', 'waveshare_touch_lcd_7b', 'waveshare_touch_lcd_8', 'waveshare_touch_lcd_10_1',
+  'waveshare_touch_lcd_5'];
+// Boards of the shared Waveshare P4 DSI driver have its source and API.
+const sharedDriver = new Set(['waveshare_touch_lcd_5']);
 for (const name of presenterDevices) {
-  const source = read(`src/devices/${name}/device_${name}.cpp`);
-  const header = read(`src/devices/${name}/device_${name}.h`);
+  const source = read(sharedDriver.has(name) ? 'src/devices/waveshare_touch_lcd_5/dsi_driver/waveshare_p4_dsi.cpp'
+    : `src/devices/${name}/device_${name}.cpp`);
+  const header = read(sharedDriver.has(name) ? 'src/devices/waveshare_touch_lcd_5/dsi_driver/waveshare_p4_dsi.h'
+    : `src/devices/${name}/device_${name}.h`);
   // The panels that turn a turned layout the other way round pass the turn
   // they draw the UI with (frame_rotation, test-upright-layout.mjs).
   assert.match(source, /g_camera_presenter\.fullFrameInfo\((?:g_rotation|frame_rotation\(\)), width, height, turn_cw\)/, name);

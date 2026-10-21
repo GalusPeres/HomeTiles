@@ -10,13 +10,16 @@
 //   {base}/cmnd/audio   Bridge -> panel, QoS0, not retained. Sealed on the
 //       encrypted command channel (data name "audio") once pairing is active.
 //       {"v":1,"op":"play","id":"<16-32 lowercase hex>","url":"http://..."}
+//       "url" may also be "tcp://<host>:<port>/<token>": a clip the Bridge
+//       decodes and sends as PCM (audio_stream_contract.h).
 //       {"v":1,"op":"stop"}
 //       {"v":1,"op":"pause"}  {"v":1,"op":"resume"}
 //       {"v":1,"op":"volume","volume":0.5}        0.0 .. 1.0
 //       {"v":1,"op":"mute","muted":true}
 //   {base}/stat/audio   panel -> Bridge, QoS0, retained,
 //       {"v":1,"state":"idle"|"playing"|"paused","volume":0.5,"muted":false,
-//        "formats":["mp3","wav"],"max_bytes":4194304,"pausable":true}
+//        "formats":["mp3","wav"],"max_bytes":4194304,"pausable":true,
+//        "stream":"tcp-ack-v1"}
 //       plus "id":"<id>" of the current or last clip and "error":"<code>"
 //       when that clip failed (cleared by the next play). While a clip
 //       plays or pauses: "position_ms" at the moment of the status, and
@@ -24,15 +27,19 @@
 //       streams). The status is not repeated while a clip plays; the Bridge
 //       moves the position on itself.
 //
-// The panel plays while it downloads, so clips of any length and endless
-// MP3 streams (internet radio) work. Formats: MP3 (MPEG layer III) and
-// 16-bit PCM WAV; AAC, Ogg and FLAC streams are refused.
+// A Bridge that sees "stream" decodes the clip itself (any format) and sends
+// PCM at the pace the panel acknowledges. Otherwise the panel plays an
+// http(s) URL while it downloads, so clips of any length and endless MP3
+// streams (internet radio) work. Formats: MP3 (MPEG layer III) and 16-bit
+// PCM WAV; AAC, Ogg and FLAC streams are refused.
 
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "src/audio/audio_stream_contract.h"
 
 namespace speaker_contract {
 
@@ -139,12 +146,18 @@ inline uint8_t limitedVolumeRegister(float volume, float limit) {
 }
 
 // Absolute http:// or https:// URL with a host, printable ASCII without
-// spaces. A caller may refuse https:// (https_allowed = false).
+// spaces, or the Bridge's tcp:// stream URL. A caller may refuse https://
+// (https_allowed = false).
 inline ErrorCode validateUrl(const char* url, size_t length, bool https_allowed) {
   if (!url || length == 0 || length > kMaxUrlLength) return ErrorCode::InvalidUrl;
   for (size_t i = 0; i < length; ++i) {
     const unsigned char c = static_cast<unsigned char>(url[i]);
     if (c <= 0x20 || c >= 0x7F) return ErrorCode::InvalidUrl;
+  }
+  if (length > 6 && strncmp(url, "tcp://", 6) == 0) {
+    audio_stream::Endpoint endpoint;
+    return audio_stream::parseStreamUrl(url, length, &endpoint) ? ErrorCode::None
+                                                                : ErrorCode::InvalidUrl;
   }
   size_t host = 0;
   if (length > 7 && strncmp(url, "http://", 7) == 0) {
@@ -418,6 +431,8 @@ struct StatusFields {
   // Sent while a clip plays or pauses; duration_ms 0 = not known.
   uint32_t position_ms = 0;
   uint32_t duration_ms = 0;
+  // The panel takes clips the Bridge decodes (audio_stream_contract.h).
+  bool bridge_stream = false;
 };
 
 // Returns the JSON length, or 0 when the buffer is too small.
@@ -432,6 +447,11 @@ inline size_t buildStatusJson(char* out, size_t size, const StatusFields& fields
                          static_cast<unsigned long>(kMaxClipBytes));
   if (written < 0 || static_cast<size_t>(written) >= size) return 0;
   size_t used = static_cast<size_t>(written);
+  if (fields.bridge_stream) {
+    written = snprintf(out + used, size - used, ",\"stream\":\"%s\"", audio_stream::kTransport);
+    if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;
+    used += static_cast<size_t>(written);
+  }
   if (fields.id && isValidRequestId(fields.id, strlen(fields.id))) {
     written = snprintf(out + used, size - used, ",\"id\":\"%s\"", fields.id);
     if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;

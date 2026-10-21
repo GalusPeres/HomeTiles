@@ -21,10 +21,14 @@
 #include <freertos/idf_additions.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <lwip/sockets.h>
 #include <mbedtls/platform.h>
+
+#include <cerrno>
 
 #include "src/audio/helix_mp3/mp3dec.h"
 #include "src/audio/assist_request.h"
+#include "src/audio/audio_stream_contract.h"
 #include "src/audio/audio_board.h"
 #include "src/audio/codecs/audio_chips.h"
 #include "src/audio/mic_level.h"
@@ -34,6 +38,7 @@
 #include "src/core/config/batched_nvs_write.h"
 #include "src/devices/device.h"
 #include "src/video/camera_stream.h"
+#include "src/video/tcp_ack_socket.h"
 #include HOMETILES_SPEAKER_BOARD
 #endif
 
@@ -161,6 +166,11 @@ constexpr size_t kWavChunkFrames = 1024;
 constexpr uint32_t kClipMemorySampleMs = 200;
 // A paused clip checks for resume or stop this often.
 constexpr uint32_t kPausePollMs = 20;
+// A Bridge stream's FFmpeg may take this long to open a remote clip (the
+// Bridge waits 15 s, audio_stream.py) before the format arrives.
+constexpr uint32_t kBridgeFormatWaitMs = 20000;
+// Like the camera stream: the window, not this hint, bounds what waits.
+constexpr int kBridgeReceiveBufferBytes = 4 * 1024;
 
 struct PlayRequest {
   char id[kMaxRequestIdLength + 1];
@@ -500,6 +510,10 @@ class ScopedPsramTls {
 struct Source {
   HTTPClient* http = nullptr;
   NetworkClient* stream = nullptr;
+  // A clip the Bridge decodes (audio_stream_contract.h) instead of a
+  // download: its socket and message reader.
+  int fd = -1;
+  audio_stream::Receiver* receiver = nullptr;
   StreamBuffer buffer;
   // Bytes still expected from a response with Content-Length, -1 otherwise.
   int64_t remaining = -1;
@@ -510,9 +524,100 @@ struct Source {
   uint32_t last_data_ms = 0;
 };
 
+// The Bridge stream's pump: reads what arrived without waiting, audio
+// straight into the PSRAM buffer, and acknowledges each message once it lies
+// there. While the buffer is full nothing is read, so the Bridge holds back
+// with at most two 8 KB blocks in flight.
+void pumpBridge(Source* src) {
+  audio_stream::Receiver& rx = *src->receiver;
+  size_t budget = kPumpBudgetBytes;
+  for (;;) {
+    uint32_t sequence = 0;
+    uint32_t length = 0;
+    if (rx.takeAck(&sequence, &length)) {
+      uint8_t ack[tcp_ack::kAckBytes];
+      tcp_ack::encodeAck(ack, sequence, length);
+      if (!tcp_ack::sendAll(src->fd, ack, sizeof(ack), nullptr, nullptr)) {
+        Serial.printf("%s Bridge stream acknowledgement failed: errno=%d\n", kLogPrefix, errno);
+        src->ended = true;
+        src->failed = true;
+        return;
+      }
+    }
+    const audio_stream::Receiver::Need need = rx.need();
+    if (need == audio_stream::Receiver::Need::Ended) {
+      src->ended = true;
+      return;
+    }
+    if (need == audio_stream::Receiver::Need::Failed) {
+      Serial.printf("%s Bridge stream invalid: %s\n", kLogPrefix, rx.failure());
+      src->ended = true;
+      src->failed = true;
+      return;
+    }
+    uint8_t* destination = nullptr;
+    size_t want = 0;
+    if (need == audio_stream::Receiver::Need::Audio) {
+      want = src->buffer.writable();
+      if (want == 0) {
+        // Full: the output sets the pace, the Bridge is not idle.
+        src->last_data_ms = millis();
+        return;
+      }
+      if (want > rx.audioMissing()) want = rx.audioMissing();
+      if (want > kReadChunkBytes) want = kReadChunkBytes;
+      if (want > budget) want = budget;
+      destination = src->buffer.write();
+    } else {
+      destination = rx.scratch();
+      want = rx.scratchMissing();
+    }
+    if (want == 0) return;
+    const int received = recv(src->fd, destination, want, MSG_DONTWAIT);
+    if (received == 0) {
+      Serial.printf("%s Bridge stream closed before its end\n", kLogPrefix);
+      src->ended = true;
+      src->failed = true;
+      return;
+    }
+    if (received < 0) {
+      if (errno == EINTR) continue;
+      if (errno != EAGAIN && errno != EWOULDBLOCK) {
+        Serial.printf("%s Bridge stream receive error: errno=%d\n", kLogPrefix, errno);
+        src->ended = true;
+        src->failed = true;
+        return;
+      }
+      break;
+    }
+    src->last_data_ms = millis();
+    if (need == audio_stream::Receiver::Need::Audio) {
+      src->buffer.commit(static_cast<size_t>(received));
+      rx.audioReceived(static_cast<size_t>(received));
+      budget -= static_cast<size_t>(received);
+      if (budget == 0) return;
+    } else {
+      rx.scratchReceived(static_cast<size_t>(received));
+    }
+  }
+  // The format arrives within kBridgeFormatWaitMs (playBridgeStream); after
+  // it a Bridge that sends nothing is gone.
+  if (rx.formatReady() &&
+      static_cast<uint32_t>(millis() - src->last_data_ms) > kStreamIdleMs) {
+    Serial.printf("%s No data for %lu ms, stream ended\n", kLogPrefix,
+                  static_cast<unsigned long>(kStreamIdleMs));
+    src->ended = true;
+    src->failed = true;
+  }
+}
+
 void pump(Source* src) {
   sampleClipMemory();
   if (src->ended) return;
+  if (src->receiver) {
+    pumpBridge(src);
+    return;
+  }
   size_t budget = kPumpBudgetBytes;
   while (budget > 0) {
     const int available = src->stream->available();
@@ -793,6 +898,52 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
   return result;
 }
 
+// Plays 16-bit PCM from the buffer: frames_left frames, or until the source
+// ends (UINT64_MAX). A WAV clip and a Bridge stream share it.
+ErrorCode playPcm(Source* src, uint32_t generation, uint32_t rate, uint16_t channels,
+                  uint64_t frames_left) {
+  const size_t frame_bytes = 2u * channels;
+  int16_t* chunk = static_cast<int16_t*>(heap_caps_malloc(
+      kWavChunkFrames * channels * sizeof(int16_t), MALLOC_CAP_INTERNAL));
+  if (!chunk) return ErrorCode::OutOfMemory;
+  ErrorCode result = ErrorCode::None;
+  bool started = false;
+  if (!prebuffer(src, generation)) frames_left = 0;
+  while (frames_left > 0 && !stopRequested(generation)) {
+    if (!holdWhilePaused(src, generation)) break;
+    pump(src);
+    size_t available = src->buffer.buffered() / frame_bytes;
+    if (available == 0) {
+      if (src->ended) break;
+      if (!prebuffer(src, generation)) break;
+      continue;
+    }
+    size_t frames = available < kWavChunkFrames ? available : kWavChunkFrames;
+    if (frames > frames_left) frames = static_cast<size_t>(frames_left);
+    if (!started) {
+      const ErrorCode output = openOutput(rate);
+      if (output != ErrorCode::None) {
+        result = output;
+        break;
+      }
+      started = true;
+    }
+    // The buffer may sit at an odd offset; copy before reading int16.
+    memcpy(chunk, src->buffer.read(), frames * frame_bytes);
+    src->buffer.consume(frames * frame_bytes);
+    if (channels == 2) downmixToMono(chunk, frames);
+    applyVolumeIfChanged();
+    if (!writeFrames(chunk, frames)) {
+      result = ErrorCode::CodecUnavailable;
+      break;
+    }
+    notePlayed(frames);
+    if (frames_left != UINT64_MAX) frames_left -= frames;
+  }
+  heap_caps_free(chunk);
+  return result;
+}
+
 ErrorCode playWav(Source* src, uint32_t generation) {
   WavInfo info;
   for (;;) {
@@ -811,49 +962,91 @@ ErrorCode playWav(Source* src, uint32_t generation) {
     g_duration_ms.store(duration);
     g_state_generation.fetch_add(1);
   }
-  uint64_t frames_left = bounded ? info.data_length / frame_bytes : UINT64_MAX;
-  int16_t* chunk = static_cast<int16_t*>(heap_caps_malloc(
-      kWavChunkFrames * info.channels * sizeof(int16_t), MALLOC_CAP_INTERNAL));
-  if (!chunk) return ErrorCode::OutOfMemory;
-  ErrorCode result = ErrorCode::None;
-  bool started = false;
-  if (!prebuffer(src, generation)) frames_left = 0;
-  while (frames_left > 0 && !stopRequested(generation)) {
-    if (!holdWhilePaused(src, generation)) break;
-    pump(src);
-    size_t available = src->buffer.buffered() / frame_bytes;
-    if (available == 0) {
-      if (src->ended) break;
-      if (!prebuffer(src, generation)) break;
-      continue;
-    }
-    size_t frames = available < kWavChunkFrames ? available : kWavChunkFrames;
-    if (frames > frames_left) frames = static_cast<size_t>(frames_left);
-    if (!started) {
-      const ErrorCode output = openOutput(info.sample_rate);
-      if (output != ErrorCode::None) {
-        result = output;
-        break;
-      }
-      started = true;
-    }
-    // The buffer may sit at an odd offset; copy before reading int16.
-    memcpy(chunk, src->buffer.read(), frames * frame_bytes);
-    src->buffer.consume(frames * frame_bytes);
-    if (info.channels == 2) downmixToMono(chunk, frames);
-    applyVolumeIfChanged();
-    if (!writeFrames(chunk, frames)) {
-      result = ErrorCode::CodecUnavailable;
+  return playPcm(src, generation, info.sample_rate, info.channels,
+                 bounded ? info.data_length / frame_bytes : UINT64_MAX);
+}
+
+bool clipStopRequested(void* context) {
+  return stopRequested(*static_cast<const uint32_t*>(context));
+}
+
+// A clip the Bridge decodes (audio_stream_contract.h): no TLS, no decoder,
+// and at most the Bridge's window of 16 KB waits in internal RAM.
+ErrorCode playBridgeStream(const char* url, uint32_t generation, uint8_t* memory) {
+  audio_stream::Endpoint endpoint;
+  if (!audio_stream::parseStreamUrl(url, strlen(url), &endpoint)) return ErrorCode::InvalidUrl;
+  tcp_ack::ConnectOptions options;
+  options.log_prefix = kLogPrefix;
+  options.receive_buffer_bytes = kBridgeReceiveBufferBytes;
+  options.connect_timeout_ms = kHttpTimeoutMs;
+  options.stop = clipStopRequested;
+  options.stop_context = &generation;
+  const int fd = tcp_ack::connectTo(endpoint.host, endpoint.port, options);
+  if (fd < 0) {
+    if (stopRequested(generation)) return ErrorCode::None;
+    Serial.printf("%s Bridge stream connection failed: errno=%d\n", kLogPrefix, errno);
+    return ErrorCode::DownloadFailed;
+  }
+  char request[sizeof("HTAUD/1 ") + audio_stream::kMaxTokenLength + 2];
+  const int request_bytes =
+      snprintf(request, sizeof(request), "%s%s\n", audio_stream::kRequestPrefix, endpoint.token);
+  uint8_t hello[tcp_ack::kHelloBytes] = {};
+  uint16_t hello_status = 0;
+  uint16_t chunk = 0;
+  if (request_bytes <= 0 || static_cast<size_t>(request_bytes) >= sizeof(request) ||
+      !tcp_ack::sendAll(fd, request, static_cast<size_t>(request_bytes), clipStopRequested,
+                        &generation) ||
+      tcp_ack::receiveExact(fd, hello, sizeof(hello), clipStopRequested, &generation,
+                            millis() + kHttpTimeoutMs) != tcp_ack::SocketReadResult::Ok ||
+      !tcp_ack::decodeHello(hello, &hello_status, &chunk) ||
+      hello_status != tcp_ack::kHelloAccepted) {
+    tcp_ack::closeSocket(fd);
+    if (stopRequested(generation)) return ErrorCode::None;
+    Serial.printf("%s Bridge stream refused (status %u)\n", kLogPrefix,
+                  static_cast<unsigned>(hello_status));
+    return ErrorCode::DownloadFailed;
+  }
+  audio_stream::Receiver receiver;
+  Source src;
+  src.fd = fd;
+  src.receiver = &receiver;
+  src.buffer.reset(memory, kStreamBufferBytes);
+  src.last_data_ms = millis();
+  const uint32_t wait_started_ms = millis();
+  while (!receiver.formatReady() && !src.ended && !stopRequested(generation)) {
+    if (static_cast<uint32_t>(millis() - wait_started_ms) > kBridgeFormatWaitMs) {
+      Serial.printf("%s Bridge stream sent no format within %lu ms\n", kLogPrefix,
+                    static_cast<unsigned long>(kBridgeFormatWaitMs));
+      src.failed = true;
       break;
     }
-    notePlayed(frames);
-    frames_left -= frames;
+    pump(&src);
+    vTaskDelay(pdMS_TO_TICKS(5));
   }
-  heap_caps_free(chunk);
+  ErrorCode result = ErrorCode::None;
+  if (receiver.formatReady() && !src.failed && !stopRequested(generation)) {
+    const audio_stream::Format& format = receiver.format();
+    // The position counts from where the Bridge started the clip (a seek).
+    g_played_us = static_cast<uint64_t>(format.position_ms) * 1000u;
+    g_position_ms.store(format.position_ms);
+    if (format.duration_ms > 0) g_duration_ms.store(format.duration_ms);
+    g_state_generation.fetch_add(1);
+    Serial.printf("%s Bridge stream: %lu Hz from %.1f s, length %.1f s\n", kLogPrefix,
+                  static_cast<unsigned long>(format.rate), format.position_ms / 1000.0,
+                  format.duration_ms / 1000.0);
+    result = playPcm(&src, generation, format.rate, 1, UINT64_MAX);
+  } else if (strcmp(receiver.failure(), "unsupported_format") == 0) {
+    result = ErrorCode::UnsupportedFormat;
+  }
+  if (result == ErrorCode::None && src.failed && !stopRequested(generation)) {
+    result = ErrorCode::DownloadFailed;
+  }
+  tcp_ack::closeSocket(fd);
   return result;
 }
 
 ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
+  if (strncmp(url, "tcp://", 6) == 0) return playBridgeStream(url, generation, memory);
   const bool https = strncmp(url, "https://", 8) == 0;
   // First, so the TLS buffers of the whole download land in PSRAM.
   ScopedPsramTls tls_memory(https);
@@ -944,8 +1137,10 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   Serial.printf("%s Playing %s\n", kLogPrefix, request.id);
   ErrorCode result = playUrl(request.url, generation, stream_memory);
   // A long pause can outlast the server's patience: the connection is gone
-  // when playback resumes, so the clip starts again once.
-  if (result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested(generation)) {
+  // when playback resumes, so the clip starts again once. A Bridge stream's
+  // token works once; the Bridge keeps a paused clip for 10 minutes.
+  if (result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested(generation) &&
+      strncmp(request.url, "tcp://", 6) != 0) {
     Serial.printf("%s Clip %s lost its connection during a pause, starting again\n",
                   kLogPrefix, request.id);
     g_position_ms.store(0);
@@ -1522,6 +1717,7 @@ void publishStatus() {
   fields.error = static_cast<ErrorCode>(g_error.load());
   fields.position_ms = g_position_ms.load();
   fields.duration_ms = g_duration_ms.load();
+  fields.bridge_stream = kSupported;
   char id[kMaxRequestIdLength + 1] = {};
 #if defined(HOMETILES_SPEAKER)
   portENTER_CRITICAL(&g_id_mux);

@@ -28,8 +28,10 @@ assert.match(playUrl, /const bool https = strncmp\(url, "https:\/\/", 8\) == 0;\
   'the scope opens before the HTTP client, so it outlives every TLS allocation');
 assert.match(playUrl, /src\.total_bytes = src\.remaining;/);
 
-// Pause: both decode loops hold before reading on.
-for (const loop of ['playMp3', 'playWav']) {
+// Pause: both playback loops hold before reading on (playPcm plays WAV clips
+// and the Bridge's PCM stream).
+assert.match(fn('playWav'), /return playPcm\(src, generation, info\.sample_rate, info\.channels,/);
+for (const loop of ['playMp3', 'playPcm']) {
   const body = fn(loop);
   assert.match(body, /while \([^)]*!stopRequested\(generation\)\) \{\s*if \(!holdWhilePaused\(src, generation\)\) break;\s*pump\(src\);/, `${loop} pauses`);
   assert.match(body, /if \(!writeFrames\([a-z]+, frames\)\) \{[\s\S]*?\}\s*notePlayed\(frames\);/, `${loop} counts the position`);
@@ -48,7 +50,7 @@ assert.match(handler, /g_play_pending\.store\(true\);\s*g_pause_requested\.store
 const play = fn('playRequest');
 assert.match(play, /g_clip_stats\.internal_before = heap_caps_get_free_size\(MALLOC_CAP_INTERNAL\);/);
 assert.match(play, /"%s Clip %s %s after %\.1f s: internal RAM %u KB before, lowest %u KB\\n"/);
-assert.match(play, /if \(result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested\(generation\)\) \{[\s\S]*?result = playUrl\(request\.url, generation, stream_memory\);/);
+assert.match(play, /if \(result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested\(generation\) &&\s*strncmp\(request\.url, "tcp:\/\/", 6\) != 0\) \{[\s\S]*?result = playUrl\(request\.url, generation, stream_memory\);/);
 assert.match(fn('pump'), /^[\s{]*sampleClipMemory\(\);\s*if \(src->ended\) return;/);
 
 // The status carries position and length.

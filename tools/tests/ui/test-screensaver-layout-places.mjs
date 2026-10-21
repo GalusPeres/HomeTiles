@@ -46,11 +46,13 @@ assert.match(read('src/web/admin/tiles/import-export.js'),
 
 // The screensaver tab: the shown grid, its two rows at the bottom.
 const layout = read('src/web/admin/tiles/layout.js');
-assert.match(layout, /return headBarLayout\(\) && typeof GRID_SHOWN_COLS === 'number' \? GRID_SHOWN_COLS : GRID_COLS;/);
+assert.match(layout, /return !classic && headBarLayout\(\) && typeof GRID_SHOWN_COLS === 'number' \? GRID_SHOWN_COLS : GRID_COLS;/);
 const navigation = read('src/web/admin/folders/navigation.js');
 assert.ok(navigation.includes('const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);') &&
   navigation.includes("return Math.max(0, rows - (key === 'portrait' ? 3 : 2));"),
   'two rows at the bottom, three upright, in the window of that layout');
+// An import writes the classic places: the stored grid's two bottom rows.
+assert.ok(navigation.includes('if (classic) return Math.max(0, GRID_ROWS - 2);'));
 assert.ok(!read('src/web/server/render/web_admin_styles.cpp').includes('.screensaver-tile-grid{--grid-cols:'),
   'no more profile grid for the screensaver tab');
 

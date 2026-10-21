@@ -4,11 +4,13 @@
   // and takes no room; the layout window places it. The screensaver tab
   // shows the same grid, its two rows at the bottom (screensaver_places.h).
   function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
-  function placeCols(tab = currentTileTab) {
-    return headBarLayout() && typeof GRID_SHOWN_COLS === 'number' ? GRID_SHOWN_COLS : GRID_COLS;
+  // `classic`: the stored grid whatever layout is shown, for the classic
+  // places an import writes (the server's setPlaceGrid).
+  function placeCols(tab = currentTileTab, classic = false) {
+    return !classic && headBarLayout() && typeof GRID_SHOWN_COLS === 'number' ? GRID_SHOWN_COLS : GRID_COLS;
   }
-  function placeRows(tab = currentTileTab) {
-    return headBarLayout() && typeof GRID_SHOWN_ROWS === 'number' ? GRID_SHOWN_ROWS : GRID_ROWS;
+  function placeRows(tab = currentTileTab, classic = false) {
+    return !classic && headBarLayout() && typeof GRID_SHOWN_ROWS === 'number' ? GRID_SHOWN_ROWS : GRID_ROWS;
   }
   // A tile that is shown and takes room in the editor's grid.
   function tileTakesRoom(tile) {
@@ -131,9 +133,10 @@
   // tilePlaceCols/tilePlaceRows): an upright layout has more rows than the
   // stored grid (1280 x 800: 4 x 6.5 against 7 x 5), and the stored grid
   // pushed its lower tiles up and halved them (8-inch export, 2026-10-09).
-  function normalizeLayoutForTileType(typeValue, col, row, spanW, spanH) {
-    const cols = placeCols();
-    const rows = placeRows();
+  // An import's classic places keep the stored grid (`classic`).
+  function normalizeLayoutForTileType(typeValue, col, row, spanW, spanH, classic = false) {
+    const cols = placeCols(currentTileTab, classic);
+    const rows = placeRows(currentTileTab, classic);
     let safeCol = clampHalf(col, 0, cols - 0.5, 0);
     let safeRow = clampHalf(row, 0, rows - 0.5, 0);
     let safeW = clampHalf(spanW, 0.5, cols, 1);
@@ -160,27 +163,27 @@
     return { col: safeCol, row: safeRow, span_w: safeW, span_h: safeH };
   }
 
-  function constrainLayoutToTab(layout, tab) {
-    const firstRow = firstAllowedGridRow(tab);
+  function constrainLayoutToTab(layout, tab, classic = false) {
+    const firstRow = firstAllowedGridRow(tab, classic);
     if (layout.row < firstRow) layout.row = firstRow;
-    if (layout.span_h > placeRows(tab) - layout.row) {
-      layout.span_h = placeRows(tab) - layout.row;
+    if (layout.span_h > placeRows(tab, classic) - layout.row) {
+      layout.span_h = placeRows(tab, classic) - layout.row;
     }
     return layout;
   }
 
-  function normalizeTileLayout(tile, index, tab = currentTileTab) {
-    const cols = placeCols(tab);
-    const rows = placeRows(tab);
+  function normalizeTileLayout(tile, index, tab = currentTileTab, classic = false) {
+    const cols = placeCols(tab, classic);
+    const rows = placeRows(tab, classic);
     const fallbackCol = index % cols;
-    const firstRow = firstAllowedGridRow(tab);
+    const firstRow = firstAllowedGridRow(tab, classic);
     const fallbackRow = Math.max(firstRow, Math.floor(index / cols));
     const col = clampHalf(tile?.col, 0, cols - 0.5, fallbackCol);
     const row = clampHalf(tile?.row, firstRow, rows - 0.5, fallbackRow);
     let spanW = clampHalf(tile?.span_w, 0.5, cols, 1);
     let spanH = clampHalf(tile?.span_h, 0.5, rows, 1);
     return constrainLayoutToTab(
-      normalizeLayoutForTileType(tile?.type, col, row, spanW, spanH), tab);
+      normalizeLayoutForTileType(tile?.type, col, row, spanW, spanH, classic), tab, classic);
   }
 
   function setGridItemPosition(el, col, row, spanW, spanH) {

@@ -14,7 +14,7 @@ Last reviewed: 2026-10-21
 
 - FW + Bridge v0.9.3 released 2026-10-18. Every former feature branch (perf, direct-link, voice, layouts, settings-setup, security, icon-file, camera-view) is in it.
 - Milestone v0.9.4: pairing by IP without mDNS (Bridge #16, HomeTiles #114: read-only `GET /api/link` + Bridge step).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); V2 beta define in `firmware_version.h`, last b495.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); V2 beta define in `firmware_version.h`, last b509.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI runs on pinned Chrome for Testing 154.0.8037.57 (the runner's .97 never answered the first Page.navigate); a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
@@ -78,7 +78,7 @@ Last reviewed: 2026-10-21
 - Half-grid: Sensor/Binary/Energy/Switch height 0.5, width >= 1 by 0.5; V7 size unchanged. Open: cross-grid import clamps whole tiles (HTTP 400), value fonts 32/40 clip in half tiles.
 - Titles: two centred/ellipsized lines, 255 UTF-8 bytes in `/_tile_titles`.
 - HW pending (evidence in `build/`): radius reboot, screensaver child-click, Energy compact slots, Clock/Text border.
-- Layouts (`grid_layout.h`): classic, head bar landscape, head bar upright (prepared); NVS `layout`; places `/_tile_grids/layouts.json`; folder storage entries (`grid_slots.h`, max 64), full storage blocks Save (`layoutStorageFull`); b479/b480 HW pending.
+- Layouts (`grid_layout.h`): classic, head bar landscape, head bar upright (prepared); NVS `layout`; places `/_tile_grids/layouts.json`; folder storage entries (`grid_slots.h`, max 64), full storage blocks Save (`layoutStorageFull`); backups hold all three; import checks classic places on the stored grid (b509); b479/b480 HW pending.
 - One look (b300): popup card margin 0, tiles one grid gap from the edge; popup header follows the head bar rule (`popup_layout.h`); card shadow width follows the radius to stay in the LVGL shadow cache (`shadow_width_for`, max 28 px).
 - Upright (b294): P4 panels upright under a landscape profile draw the upright UI directly (`drawUpright`); JC1060/7B upright and JC4880 landscape (b368) compile only, HW pending.
 - Light theme: `ui_theme` roles + `SurfaceScope`; popups take the opener's surface. Remembered LVGL objects clear themselves on delete (LVGL 9.6 `lv_obj_is_valid` reads freed objects).

@@ -5900,11 +5900,13 @@ async function saveGestureEdge(select) {
   function isScreensaverTileTab(tab) {
     return tab === 'screensaver';
   }
-  function firstAllowedGridRow(tab) {
+  function firstAllowedGridRow(tab, classic = false) {
     // The screensaver's two rows at the bottom of the shown grid, three
     // upright (screensaver_places.cpp); in the layout window at the bottom
-    // of that layout's screen.
+    // of that layout's screen; for an import's classic places at the bottom
+    // of the stored grid.
     if (!isScreensaverTileTab(tab)) return 0;
+    if (classic) return Math.max(0, GRID_ROWS - 2);
     const inWindow = typeof layoutWindow !== 'undefined' && layoutWindow;
     const key = inWindow ? layoutWindow.key : typeof ACTIVE_LAYOUT === 'string' ? ACTIVE_LAYOUT : 'classic';
     const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);
@@ -6459,11 +6461,13 @@ async function saveGestureEdge(select) {
   // and takes no room; the layout window places it. The screensaver tab
   // shows the same grid, its two rows at the bottom (screensaver_places.h).
   function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
-  function placeCols(tab = currentTileTab) {
-    return headBarLayout() && typeof GRID_SHOWN_COLS === 'number' ? GRID_SHOWN_COLS : GRID_COLS;
+  // `classic`: the stored grid whatever layout is shown, for the classic
+  // places an import writes (the server's setPlaceGrid).
+  function placeCols(tab = currentTileTab, classic = false) {
+    return !classic && headBarLayout() && typeof GRID_SHOWN_COLS === 'number' ? GRID_SHOWN_COLS : GRID_COLS;
   }
-  function placeRows(tab = currentTileTab) {
-    return headBarLayout() && typeof GRID_SHOWN_ROWS === 'number' ? GRID_SHOWN_ROWS : GRID_ROWS;
+  function placeRows(tab = currentTileTab, classic = false) {
+    return !classic && headBarLayout() && typeof GRID_SHOWN_ROWS === 'number' ? GRID_SHOWN_ROWS : GRID_ROWS;
   }
   // A tile that is shown and takes room in the editor's grid.
   function tileTakesRoom(tile) {
@@ -6586,9 +6590,10 @@ async function saveGestureEdge(select) {
   // tilePlaceCols/tilePlaceRows): an upright layout has more rows than the
   // stored grid (1280 x 800: 4 x 6.5 against 7 x 5), and the stored grid
   // pushed its lower tiles up and halved them (8-inch export, 2026-10-09).
-  function normalizeLayoutForTileType(typeValue, col, row, spanW, spanH) {
-    const cols = placeCols();
-    const rows = placeRows();
+  // An import's classic places keep the stored grid (`classic`).
+  function normalizeLayoutForTileType(typeValue, col, row, spanW, spanH, classic = false) {
+    const cols = placeCols(currentTileTab, classic);
+    const rows = placeRows(currentTileTab, classic);
     let safeCol = clampHalf(col, 0, cols - 0.5, 0);
     let safeRow = clampHalf(row, 0, rows - 0.5, 0);
     let safeW = clampHalf(spanW, 0.5, cols, 1);
@@ -6615,27 +6620,27 @@ async function saveGestureEdge(select) {
     return { col: safeCol, row: safeRow, span_w: safeW, span_h: safeH };
   }
 
-  function constrainLayoutToTab(layout, tab) {
-    const firstRow = firstAllowedGridRow(tab);
+  function constrainLayoutToTab(layout, tab, classic = false) {
+    const firstRow = firstAllowedGridRow(tab, classic);
     if (layout.row < firstRow) layout.row = firstRow;
-    if (layout.span_h > placeRows(tab) - layout.row) {
-      layout.span_h = placeRows(tab) - layout.row;
+    if (layout.span_h > placeRows(tab, classic) - layout.row) {
+      layout.span_h = placeRows(tab, classic) - layout.row;
     }
     return layout;
   }
 
-  function normalizeTileLayout(tile, index, tab = currentTileTab) {
-    const cols = placeCols(tab);
-    const rows = placeRows(tab);
+  function normalizeTileLayout(tile, index, tab = currentTileTab, classic = false) {
+    const cols = placeCols(tab, classic);
+    const rows = placeRows(tab, classic);
     const fallbackCol = index % cols;
-    const firstRow = firstAllowedGridRow(tab);
+    const firstRow = firstAllowedGridRow(tab, classic);
     const fallbackRow = Math.max(firstRow, Math.floor(index / cols));
     const col = clampHalf(tile?.col, 0, cols - 0.5, fallbackCol);
     const row = clampHalf(tile?.row, firstRow, rows - 0.5, fallbackRow);
     let spanW = clampHalf(tile?.span_w, 0.5, cols, 1);
     let spanH = clampHalf(tile?.span_h, 0.5, rows, 1);
     return constrainLayoutToTab(
-      normalizeLayoutForTileType(tile?.type, col, row, spanW, spanH), tab);
+      normalizeLayoutForTileType(tile?.type, col, row, spanW, spanH, classic), tab, classic);
   }
 
   function setGridItemPosition(el, col, row, spanW, spanH) {
@@ -8894,12 +8899,18 @@ async function saveGestureEdge(select) {
         folders: folders,
         grids: grids,
         settings_tile: exportSettingsTileState(),
-        // Only a panel with the same screen takes these places back.
+        // Every layout goes with the tiles (user 2026-10-21): the bar and
+        // upright places with the pages, the screensaver clock and where
+        // Settings is parked per layout. Only a panel with the same screen
+        // takes them back.
         layouts: layoutData?.success ? {
           screen_width: LAYOUTS.classic.screenW,
           screen_height: LAYOUTS.classic.screenH,
           active: layoutData.stored,
-          places: layoutData.places
+          places: layoutData.places,
+          clock: layoutData.clock,
+          settings_parked: layoutData.settings?.parked,
+          parked_settings_view: layoutData.settings?.tile?.view_id
         } : undefined,
         screensaver: {
           version: 2,
@@ -9047,7 +9058,9 @@ async function saveGestureEdge(select) {
   // is, or moves to the nearest free place when an imported tile needs its
   // cell (issue #70). A tile that cannot be placed is returned as the
   // conflict, as the server would refuse it (tile_geometry::supported,
-  // placementOverlaps).
+  // placementOverlaps). The places are the classic layout's, checked on the
+  // stored grid whatever layout the panel shows (a 7 x 5 export against the
+  // head bar's 6 x 4 stopped every import, 2026-10-21).
   function planImportGrid(sourceTiles, systemType, targetSystem, tab) {
     const tileCount = TILES_PER_GRID;
     const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
@@ -9079,7 +9092,7 @@ async function saveGestureEdge(select) {
     (Array.isArray(sourceTiles) ? sourceTiles : []).forEach((tile, index) => {
       const type = importTileType(tile);
       if (!type) return;
-      const entry = { tile, type, layout: normalizeTileLayout({ ...tile, type }, index, tab) };
+      const entry = { tile, type, layout: normalizeTileLayout({ ...tile, type }, index, tab, true) };
       if (type === systemType && !sourceSystem) sourceSystem = entry;
       else entries.push(entry);
     });
@@ -9108,10 +9121,10 @@ async function saveGestureEdge(select) {
       cells(entry.layout, true);
     }
     const tiles = entries.map(entry => ({ ...entry.tile, ...entry.layout }));
-    if (placeSystem) return { tiles, system: { ...sourceSystem.tile, ...sourceSystem.layout } };
+    if (placeSystem) return { tiles, system: { ...sourceSystem.tile, ...sourceSystem.layout }, systemExported: true };
     if (!targetSystem) return { tiles, system: null };
 
-    const current = normalizeTileLayout(targetSystem, 0, tab);
+    const current = normalizeTileLayout(targetSystem, 0, tab, true);
     if (fits(systemType, current)) return { tiles, system: null };
     let best = null;
     for (let row = 0; row + current.span_h <= GRID_ROWS; row += 0.5) {
@@ -9149,12 +9162,15 @@ async function saveGestureEdge(select) {
         await post(i, buildEmptyImportTile(i));
       }
     }
-    if (systemIndex >= 0 && plan.system) await post(systemIndex, plan.system);
     const note = (tile, index) => {
       if (sourceFolderId !== null && Number(tile.view_id) > 0) {
         importedSlots.push({source: sourceFolderId, view: Number(tile.view_id), target: folderId, index});
       }
     };
+    if (systemIndex >= 0 && plan.system) {
+      await post(systemIndex, plan.system);
+      if (plan.systemExported) note(plan.system, systemIndex);
+    }
     const freeIndices = [];
     for (let i = 0; i < tileCount; i++) {
       if (i !== systemIndex) freeIndices.push(i);
@@ -9198,31 +9214,86 @@ async function saveGestureEdge(select) {
     await applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget, sourceFolderId);
   }
 
-  // The bar layouts' places of an export from a panel with the same screen
-  // go to the imported tiles (their new IDs); a layout whose folders would
-  // lose their place stays as it was.
-  async function restoreImportLayouts(layouts) {
-    if (!layouts || typeof layouts !== 'object' || !importedSlots.length) return;
+  // Every layout of an export from a panel with the same screen comes back
+  // with its tiles (user 2026-10-21: all three together). The classic places
+  // came with the tiles; the bar and upright places go to the imported tiles
+  // (their new IDs) and the screensaver's (its slot keys, screensaver_places.h),
+  // with the pages, the screensaver clock and where Settings is parked.
+  // False when the panel refused a layout (its reason in the log).
+  async function restoreImportLayouts(layouts, sourceToTarget, screensaverTiles) {
+    if (!layouts || typeof layouts !== 'object') return true;
     if (Number(layouts.screen_width) !== LAYOUTS.classic.screenW ||
-        Number(layouts.screen_height) !== LAYOUTS.classic.screenH) return;
+        Number(layouts.screen_height) !== LAYOUTS.classic.screenH) return true;
     const tiles = {};
     for (const target of new Set(importedSlots.map(slot => slot.target))) {
       tiles[target] = await fetchTilesForImport(target);
     }
-    for (const key of ['bar', 'portrait']) {
-      const places = layouts.places?.[key];
-      if (!places || !LAYOUTS[key]?.available) continue;
-      const folders = {};
-      for (const slot of importedSlots) {
-        const place = places[String(slot.source)]?.[String(slot.view)];
-        const view = tiles[slot.target]?.[slot.index]?.view_id;
-        if (!Array.isArray(place) || !view) continue;
-        (folders[slot.target] = folders[slot.target] || {})[view] = place;
-      }
-      if (!Object.keys(folders).length) continue;
-      await fetch('/api/layouts', {method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({layout: key, folders})}).catch(() => {});
+    const screensaverKeys = {};
+    for (const entry of screensaverTiles || []) screensaverKeys[entry.sourceIndex + 1] = entry.targetIndex + 1;
+    // A page whose folder did not come along leaves its slot free.
+    const pages = Array.isArray(layouts.places?.pages)
+      ? layouts.places.pages.map(id => (Number(id) > 0 ? sourceToTarget[Number(id)] ?? 0 : 0))
+      : null;
+    const parked = Array.isArray(layouts.settings_parked) ? layouts.settings_parked : [];
+    // The Settings tile parked off Home keeps its places in the other
+    // layouts (handleGetLayouts settings.tile), as the panel's parked tile.
+    const parkedView = Number(layouts.parked_settings_view) || 0;
+    let targetParkedView = 0;
+    if (parkedView) {
+      const res = await fetch('/api/layouts', {cache: 'no-store'}).catch(() => null);
+      const data = res && res.ok ? await res.json().catch(() => null) : null;
+      targetParkedView = Number(data?.settings?.tile?.view_id) || 0;
     }
+    let ok = true;
+    for (const [layoutIndex, key] of ['classic', 'bar', 'portrait'].entries()) {
+      if (!LAYOUTS[key]?.available) continue;
+      const request = {layout: key};
+      if (typeof parked[layoutIndex] === 'boolean') request.settings_parked = parked[layoutIndex];
+      const places = key !== 'classic' ? layouts.places?.[key] : null;
+      if (places && typeof places === 'object') {
+        const folders = {};
+        for (const slot of importedSlots) {
+          const place = places[String(slot.source)]?.[String(slot.view)];
+          const view = tiles[slot.target]?.[slot.index]?.view_id;
+          if (!Array.isArray(place) || !view) continue;
+          (folders[slot.target] = folders[slot.target] || {})[view] = place;
+        }
+        const screensaverPlaces = places[String(SCREENSAVER_FOLDER_ID)];
+        if (screensaverTiles && screensaverPlaces && typeof screensaverPlaces === 'object') {
+          const saver = folders[SCREENSAVER_FOLDER_ID] = {};
+          for (const [sourceKey, place] of Object.entries(screensaverPlaces)) {
+            if (screensaverKeys[sourceKey] && Array.isArray(place)) saver[screensaverKeys[sourceKey]] = place;
+          }
+        }
+        // A cell a shown tile took while Settings was parked stays that
+        // tile's: the parked one's place there yields.
+        const parkedPlace = places['0']?.[String(parkedView)];
+        if (targetParkedView && Array.isArray(parkedPlace) && parkedPlace.length === 4) {
+          const onScreen = p => p[0] >= 0 && p[1] >= 0 && p[0] + p[2] <= LAYOUTS[key].cols && p[1] + p[3] <= LAYOUTS[key].rows;
+          const overlaps = p => p[0] < parkedPlace[0] + parkedPlace[2] && parkedPlace[0] < p[0] + p[2] &&
+            p[1] < parkedPlace[1] + parkedPlace[3] && parkedPlace[1] < p[1] + p[3];
+          const taken = onScreen(parkedPlace) && Object.values(folders[0] || {}).some(p => onScreen(p) && overlaps(p));
+          if (!taken) (folders[0] = folders[0] || {})[targetParkedView] = parkedPlace;
+        }
+        if (Object.keys(folders).length) request.folders = folders;
+      }
+      // The pages belong to both bar layouts: the first one stores them.
+      // Pages have no PIN (an export carries none).
+      if (key === 'bar' && pages) {
+        request.pages = pages;
+        request.unlock = true;
+      }
+      const clock = key !== 'classic' ? layouts.clock?.[key] : null;
+      if (Array.isArray(clock) && clock.length === 4) request.clock = clock;
+      if (Object.keys(request).length === 1) continue;
+      const res = await fetch('/api/layouts', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(request)}).catch(() => null);
+      const data = res ? await res.json().catch(() => ({})) : {};
+      if (res && res.ok && data.success) continue;
+      console.error('Import layout ' + key + ' not restored:', data.error || (res ? 'HTTP ' + res.status : 'no answer'));
+      ok = false;
+    }
+    return ok;
   }
 
   function prepareScreensaverTilesForImport(sourceTiles, sourceLayout) {
@@ -9237,6 +9308,7 @@ async function saveGestureEdge(select) {
     if (sameLayout) {
       return sourceEntries.slice(0, tileCount).map(entry => ({
         targetIndex: entry.sourceIndex,
+        sourceIndex: entry.sourceIndex,
         tile: entry.tile
       }));
     }
@@ -9295,6 +9367,7 @@ async function saveGestureEdge(select) {
       }
       prepared.push({
         targetIndex: prepared.length,
+        sourceIndex: entry.sourceIndex,
         tile: { ...tile, col: best.col, row: best.row, span_w: spanW, span_h: spanH }
       });
     }
@@ -9443,6 +9516,10 @@ async function saveGestureEdge(select) {
         if (!settingsHidden && !targetSettings) {
           await setSettingsTileHiddenForImport(
             false, homePlan.system, { col: homePlan.system.col, row: homePlan.system.row }, folderName(0));
+          const index = (await fetchTilesForImport(0)).findIndex(tile => importTileType(tile) === 7);
+          if (index >= 0 && Number(homePlan.system.view_id) > 0) {
+            importedSlots.push({source: 0, view: Number(homePlan.system.view_id), target: 0, index});
+          }
         }
       }
 
@@ -9477,13 +9554,15 @@ async function saveGestureEdge(select) {
         console.warn('Import skipped unreachable folders:', pendingFolderIds);
       }
 
-      await restoreImportLayouts(payload.layouts);
-
       if (screensaverConfig && typeof screensaverConfig === 'object') {
         await importScreensaverConfig(screensaverConfig);
       }
       if (screensaverTiles) {
         await replaceScreensaverGridForImport(screensaverTiles);
+      }
+      // The other layouts last: they carry the screensaver's places too.
+      if (!await restoreImportLayouts(payload.layouts, sourceToTarget, screensaverTiles)) {
+        throw new Error('Import layouts not restored');
       }
 
       try { localStorage.removeItem('tileDrafts'); } catch (e) {}
@@ -9535,7 +9614,7 @@ async function saveGestureEdge(select) {
     } else {
       fd.append('bg_color_default', '1');
     }
-    const layout = normalizeTileLayout({ ...tile, type: safeType }, index, tabByFolder[folderId] || '');
+    const layout = normalizeTileLayout({ ...tile, type: safeType }, index, tabByFolder[folderId] || '', true);
     fd.append('col', layout.col);
     fd.append('row', layout.row);
     fd.append('span_w', layout.span_w);

@@ -22,7 +22,8 @@ Last reviewed: 2026-10-21
 ## Active work
 
 - Media popup (`feature/media-popup` in both repos, Bridge v0.9.4b4 pre-release): design `build/design-mockups/media-player` (approved), plan `build/analysis/2026-10-19-analyse.md`. Two layouts per tile (`sensor_display_mode` 0 cover left, 1 cover centre), geometry `media_popup_layout.h`; controls only with their HA feature bit; sub-views source/sound mode, speakers (join/unjoin), library (PR #87); memooox3 co-author. Left: small bugs, simulator first. HW pending: both layouts V2/S3, dark/light, grouping, library, unavailable, sleep.
-- Issue #116 (JC4880, camera popup ends after 18-60 min): the Bridge closes after 5 s without a chunk ACK (`camera_stream.py:1183`, debug log only, no END); the panel reconnects only after transport errors. Why the round trip stalls is unproven (Wi-Fi dropout suspected). Bridge Python work is negligible; FFmpeg decoding is ~80 % of the camera load. `build/analysis/2026-10-21-analyse.md`.
+- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without a chunk ACK. Bridge v0.9.4b5 waits 45 s (the link's idle limit) and logs one warning; FW b496 logs data gaps >= 1 s and the Wi-Fi signal at stream end. HW test pending; why the round trip stalls is unproven (Wi-Fi suspected). Bridge Python work is negligible, FFmpeg decoding is ~80 % of the camera load. `build/analysis/2026-10-21-analyse.md`.
+- Issue #119 (Guition V1): a 6 KB audio/mpeg clip decodes no frame and Helix (prebuilt, no source here) overwrites its memory -> restart in MP3FreeDecoder. Test build records the frame headers in the core dump (`5012fdf5`).
 - Voice: mic button + audio settings open (user decides where, mockup first); Zeid's #91 Audio page as a fifth panel Settings category declined 2026-10-17.
 
 ## Do not retry (rejected with evidence)

@@ -153,6 +153,55 @@ int main() {
   fields.error = ErrorCode::Timeout;
   fields.active_wake_words = 1u;
 
+  // The listen switch: the chosen words and "wake_listen" follow the lists.
+  StatusFields choice;
+  choice.wake_words = true;
+  choice.available_wake_words = kAllWakeWordsMask;
+  choice.wake_choice = true;
+  choice.chosen_wake_words = 4u;
+  assert(status(choice) == "{\"v\":1,\"state\":\"idle\",\"wake_words\":[\"okay_nabu\",\"hey_jarvis\",\"alexa\"],"
+                           "\"active_wake_words\":[],\"chosen_wake_words\":[\"alexa\"],\"wake_listen\":false}");
+  // With every field the status outgrew 256 bytes; the firmware uses 384.
+  choice.state = PublicState::Listening;
+  choice.id = "0123456789abcdef0123456789abcdef";
+  choice.error = ErrorCode::MicUnavailable;
+  choice.active_wake_words = kAllWakeWordsMask;
+  choice.chosen_wake_words = kAllWakeWordsMask;
+  choice.wake_listen = true;
+  choice.mic_state = true;
+  assert(buildStatusJson(longest, sizeof(longest), choice) == 0);
+  char longest_choice[384];
+  assert(buildStatusJson(longest_choice, sizeof(longest_choice), choice) > 0);
+
+  // Listening and the chosen word are separate; a new panel does not listen.
+  WakeSetting setting;
+  assert(setting.chosen == kDefaultWakeWordMask && !setting.listen && activeWakeWordMask(setting) == 0u);
+  // The Bridge's switch: listen on/off keeps the word, a word chosen while
+  // off stays quiet.
+  setting = applyWakeWordsCommand(setting, 4u, true, false);
+  assert(setting.chosen == 4u && !setting.listen && activeWakeWordMask(setting) == 0u);
+  setting = applyWakeWordsCommand(setting, 0u, true, true);
+  assert(setting.chosen == 4u && setting.listen && activeWakeWordMask(setting) == 4u);
+  setting = applyWakeWordsCommand(setting, 0u, true, false);
+  assert(setting.chosen == 4u && !setting.listen);
+  // Without "listen" (Home Assistant's own setting, older Bridges): words
+  // listen, an empty list stops and keeps the word.
+  setting = applyWakeWordsCommand(setting, 2u, false, false);
+  assert(setting.chosen == 2u && setting.listen && activeWakeWordMask(setting) == 2u);
+  setting = applyWakeWordsCommand(setting, 0u, false, false);
+  assert(setting.chosen == 2u && !setting.listen);
+  // Stored settings, also from firmware before the switch (active list only).
+  setting = loadWakeSetting(nullptr, false, false);
+  assert(setting.chosen == kDefaultWakeWordMask && !setting.listen);
+  setting = loadWakeSetting("alexa", false, false);
+  assert(setting.chosen == 4u && setting.listen);
+  setting = loadWakeSetting("", false, false);
+  assert(setting.chosen == kDefaultWakeWordMask && !setting.listen);
+  setting = loadWakeSetting("hey_jarvis", true, false);
+  assert(setting.chosen == 2u && !setting.listen);
+  setting = loadWakeSetting("hey_mycroft", true, true);
+  assert(setting.chosen == kDefaultWakeWordMask && setting.listen);
+
   // assist_wake payload.
   char wake[96];
   assert(buildWakeJson(wake, sizeof(wake), "okay_nabu", 0) > 0);
@@ -456,7 +505,13 @@ assert.match(speaker, /TopicKey::ASSIST_WAKE_STAT/);
 assert.match(speaker, /fields\.wake_words = true;/);
 assert.match(speaker, /kPrefsWakeWordsKey = "wake_words"/);
 // The command applies at once, persists and republishes the status.
-assert.match(speaker, /CommandKind::WakeWords\) \{\s*g_wake_active\.store\(command\.wake_words\);\s*g_assist_state_generation\.fetch_add\(1\);\s*g_persist_pending = true;/);
+assert.match(speaker, /CommandKind::WakeWords\) \{\s*const assist::WakeSetting wake = assist::applyWakeWordsCommand\(\s*wakeSetting\(\), command\.wake_words, command\.has_listen, command\.listen\);\s*g_wake_chosen\.store\(wake\.chosen\);\s*g_wake_listen\.store\(wake\.listen\);\s*g_assist_state_generation\.fetch_add\(1\);\s*g_persist_pending = true;/);
+// Listening and the chosen word are stored apart; a new panel does not listen.
+assert.match(speaker, /std::atomic<bool> g_wake_listen\{false\};/);
+assert.match(speaker, /prefs\.putBool\(kPrefsWakeListenKey, g_wake_listen\.load\(\)\);/);
+assert.match(speaker, /assist::loadWakeSetting\(\s*wake_words\.c_str\(\), prefs\.isKey\(kPrefsWakeListenKey\),/);
+assert.match(speaker, /fields\.wake_choice = true;\s*fields\.chosen_wake_words = g_wake_chosen\.load\(\);\s*fields\.wake_listen = g_wake_listen\.load\(\);/);
+assert.match(speaker, /uint32_t activeWakeWords\(\) \{\s*return assist::activeWakeWordMask\(wakeSetting\(\)\) & availableWakeWords\(\);/);
 const engine = read('src/audio/wakeword/wake_word_engine.cpp');
 assert.match(engine, /#if defined\(HOMETILES_WAKE_WORD\)/);
 // Every operator of okay_nabu (v2) is registered, and only those.
@@ -545,6 +600,15 @@ int main() {
   assert(parse(many).status == CommandStatus::InvalidValue);
   assert(parse("{\"v\":2,\"op\":\"wake_words\",\"active\":[]}").status ==
          CommandStatus::UnsupportedVersion);
+  // "listen" (the Bridge's listen switch) is optional and must be a boolean.
+  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[\"alexa\"]}");
+  assert(c.status == CommandStatus::Ok && !c.has_listen);
+  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[],\"listen\":true}");
+  assert(c.status == CommandStatus::Ok && c.has_listen && c.listen && c.wake_words == 0u);
+  c = parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[\"alexa\"],\"listen\":false}");
+  assert(c.status == CommandStatus::Ok && c.has_listen && !c.listen && c.wake_words == 4u);
+  assert(parse("{\"v\":1,\"op\":\"wake_words\",\"active\":[],\"listen\":1}").status ==
+         CommandStatus::InvalidValue);
   // Start and stop are unchanged.
   c = parse("{\"v\":1,\"op\":\"start\",\"id\":\"0123456789abcdef\"}");
   assert(c.kind == CommandKind::Start && c.status == CommandStatus::Ok && c.wake_words == 0u);

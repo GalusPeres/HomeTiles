@@ -62,8 +62,9 @@ uint8_t g_last_capability = 0;
 
 // Assist microphone capture (assist_contract.h).
 std::atomic<bool> g_mic_ready{false};
-// Privacy switch (stored): while false nothing reads the microphone.
-std::atomic<bool> g_mic_enabled{true};
+// Privacy switch (stored, off on a new panel): while false nothing reads the
+// microphone.
+std::atomic<bool> g_mic_enabled{false};
 // ES7210 mic gain step (stored), applied whenever the input opens.
 std::atomic<uint8_t> g_mic_gain{kDefaultMicGainStep};
 std::atomic<uint8_t> g_assist_state{static_cast<uint8_t>(assist::PublicState::Idle)};
@@ -71,9 +72,17 @@ std::atomic<uint8_t> g_assist_error{static_cast<uint8_t>(assist::ErrorCode::None
 std::atomic<uint32_t> g_assist_state_generation{0};
 uint32_t g_assist_published_generation = 0;
 
-// On-panel wake word (assist_contract.h addendum). Catalog mask of the words
-// the Bridge activated; set on the loop task, read by the worker.
-std::atomic<uint32_t> g_wake_active{0};
+// On-panel wake word (assist_contract.h addendum): the chosen words (catalog
+// mask) and the listen switch; set on the loop task, read by the worker.
+std::atomic<uint32_t> g_wake_chosen{assist::kDefaultWakeWordMask};
+std::atomic<bool> g_wake_listen{false};
+
+assist::WakeSetting wakeSetting() {
+  assist::WakeSetting setting;
+  setting.chosen = g_wake_chosen.load();
+  setting.listen = g_wake_listen.load();
+  return setting;
+}
 // The model could not run; the status then offers no wake words.
 std::atomic<bool> g_wake_failed{false};
 
@@ -98,8 +107,10 @@ constexpr const char* kLogPrefix = "[Speaker]";
 constexpr const char* kPrefsNamespace = "speaker";
 constexpr const char* kPrefsVolumeKey = "volume";
 constexpr const char* kPrefsMutedKey = "muted";
-// Comma-separated wake word ids (names, not catalog bits).
+// Comma-separated chosen wake word ids (names, not catalog bits) and the
+// listen switch.
 constexpr const char* kPrefsWakeWordsKey = "wake_words";
+constexpr const char* kPrefsWakeListenKey = "wake_listen";
 constexpr const char* kPrefsMicKey = "mic_on";
 constexpr const char* kPrefsMicGainKey = "mic_gain";
 // Volume sliders send many steps; store once they settle and nothing plays
@@ -1073,7 +1084,9 @@ uint32_t takeNotifications() {
 // ---------------------------------------------------------------------------
 // Worker: on-panel wake word
 // ---------------------------------------------------------------------------
-uint32_t activeWakeWords() { return g_wake_active.load() & availableWakeWords(); }
+uint32_t activeWakeWords() {
+  return assist::activeWakeWordMask(wakeSetting()) & availableWakeWords();
+}
 
 bool wakeListenConfigured() {
   return activeWakeWords() != 0 && g_mic_ready.load() && g_mic_enabled.load() &&
@@ -1336,8 +1349,9 @@ void storeSettings() {
   prefs.putFloat(kPrefsVolumeKey, g_volume.load());
   prefs.putBool(kPrefsMutedKey, g_muted.load());
   char wake_words[assist::kMaxWakeWordListChars];
-  assist::formatWakeWordList(g_wake_active.load(), wake_words, sizeof(wake_words));
+  assist::formatWakeWordList(g_wake_chosen.load(), wake_words, sizeof(wake_words));
   prefs.putString(kPrefsWakeWordsKey, wake_words);
+  prefs.putBool(kPrefsWakeListenKey, g_wake_listen.load());
   prefs.putBool(kPrefsMicKey, g_mic_enabled.load());
   prefs.putUChar(kPrefsMicGainKey, g_mic_gain.load());
   if (!BatchedNvsWrite::finish(prefs)) {
@@ -1380,7 +1394,10 @@ void publishAssistStatus() {
   fields.error = static_cast<assist::ErrorCode>(g_assist_error.load());
   fields.wake_words = true;
   fields.available_wake_words = availableWakeWords();
-  fields.active_wake_words = g_wake_active.load();
+  fields.active_wake_words = assist::activeWakeWordMask(wakeSetting());
+  fields.wake_choice = true;
+  fields.chosen_wake_words = g_wake_chosen.load();
+  fields.wake_listen = g_wake_listen.load();
   fields.mic_state = true;
   fields.mic_enabled = g_mic_enabled.load();
   char id[assist::kMaxRequestIdLength + 1] = {};
@@ -1390,7 +1407,7 @@ void publishAssistStatus() {
   portEXIT_CRITICAL(&g_id_mux);
 #endif
   if (id[0]) fields.id = id;
-  char payload[256];
+  char payload[384];
   if (!assist::buildStatusJson(payload, sizeof(payload), fields)) return;
   networkManager.mqttEnqueuePublish(topic, payload, true);
 }
@@ -1411,11 +1428,14 @@ void begin() {
     g_volume.store(clampVolume(prefs.getFloat(kPrefsVolumeKey, kDefaultVolume)));
     g_muted.store(prefs.getBool(kPrefsMutedKey, false));
     // Unknown names (a word dropped from the catalog) are ignored.
-    if (prefs.isKey(kPrefsWakeWordsKey)) {
-      g_wake_active.store(
-          assist::parseWakeWordList(prefs.getString(kPrefsWakeWordsKey).c_str()));
-    }
-    g_mic_enabled.store(prefs.getBool(kPrefsMicKey, true));
+    const String wake_words =
+        prefs.isKey(kPrefsWakeWordsKey) ? prefs.getString(kPrefsWakeWordsKey) : String();
+    const assist::WakeSetting wake = assist::loadWakeSetting(
+        wake_words.c_str(), prefs.isKey(kPrefsWakeListenKey),
+        prefs.getBool(kPrefsWakeListenKey, false));
+    g_wake_chosen.store(wake.chosen);
+    g_wake_listen.store(wake.listen);
+    g_mic_enabled.store(prefs.getBool(kPrefsMicKey, false));
     const uint8_t gain = prefs.getUChar(kPrefsMicGainKey, kDefaultMicGainStep);
     g_mic_gain.store(gain > kMaxMicGainStep ? kDefaultMicGainStep : gain);
     prefs.end();
@@ -1596,14 +1616,18 @@ void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool seal
   // Wake words apply at once (the worker starts or stops listening), are
   // stored for the next boot and show in the retained status right away.
   if (command.kind == assist::CommandKind::WakeWords) {
-    g_wake_active.store(command.wake_words);
+    const assist::WakeSetting wake = assist::applyWakeWordsCommand(
+        wakeSetting(), command.wake_words, command.has_listen, command.listen);
+    g_wake_chosen.store(wake.chosen);
+    g_wake_listen.store(wake.listen);
     g_assist_state_generation.fetch_add(1);
     g_persist_pending = true;
     g_persist_due_ms = millis() + kPersistDelayMs;
     notifyWorker(kNotifyWake);
     char list[assist::kMaxWakeWordListChars];
-    assist::formatWakeWordList(command.wake_words, list, sizeof(list));
-    Serial.printf("%s Wake words: %s\n", kLogPrefix, list[0] ? list : "off");
+    assist::formatWakeWordList(wake.chosen, list, sizeof(list));
+    Serial.printf("%s Wake word: %s, listening %s\n", kLogPrefix, list,
+                  wake.listen ? "on" : "off");
     return;
   }
   if (command.kind == assist::CommandKind::Mic) {

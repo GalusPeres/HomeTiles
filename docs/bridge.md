@@ -146,11 +146,12 @@ The Bridge adds these entities to the display's Home Assistant device while the 
 | --- | --- |
 | **Speaker** | Media player: plays audio and announcements on the display and sets its volume. |
 | **Assist** | Assist satellite: Home Assistant's voice pipeline listens through the display's microphone, and the answer plays on its speaker. |
-| **Assist** button | Starts a voice request without a wake word. |
-| **Wake word** | Okay Nabu, Hey Jarvis, Alexa or Off. The display listens for it by itself. |
+| **Start Assist** button | Starts a voice request without a wake word. |
+| **Listening** | The display listens for its wake word by itself. Off on a new display. |
+| **Wake word** | Okay Nabu, Hey Jarvis or Alexa. Kept while Listening is off. |
 | **Assistant** | The Assist pipeline the display uses. |
 | **Finished speaking detection** | How quickly a request ends after you stop speaking. |
-| **Microphone** | Turns the microphone off. Turning it on from Home Assistant needs a [paired](#encrypted-commands) display. |
+| **Microphone** | Off on a new display. Turning it on from Home Assistant needs a [paired](#encrypted-commands) display. |
 
 It works on the direct link and over MQTT.
 

@@ -60,8 +60,9 @@ void handleCommandPayload(const uint8_t* payload, size_t length);
 // Bridge message on the encrypted command channel.
 void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool sealed = false);
 
-// Microphone privacy switch, stored across restarts (default on). While off,
-// Assist sessions are refused and no wake word runs. Loop task only.
+// Microphone privacy switch, stored across restarts (off on a new panel).
+// While off, Assist sessions are refused and no wake word runs. Loop task
+// only.
 bool micEnabled();
 void setMicEnabled(bool enabled, const char* source);
 

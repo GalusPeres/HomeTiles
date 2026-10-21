@@ -179,6 +179,39 @@ inline size_t formatWakeWordList(uint32_t mask, char* out, size_t size, char sep
   return used;
 }
 
+// Listening and the chosen word are separate settings, so turning listening
+// off keeps the word. A new panel does not listen and offers the first
+// catalog word.
+constexpr uint32_t kDefaultWakeWordMask = 1u;
+
+struct WakeSetting {
+  uint32_t chosen = kDefaultWakeWordMask;
+  bool listen = false;
+};
+
+inline uint32_t activeWakeWordMask(const WakeSetting& setting) {
+  return setting.listen ? setting.chosen : 0;
+}
+
+// A wake_words command. With "listen" (the Bridge's listen switch) it sets
+// listening and, when the list is not empty, the chosen words. Without it
+// (Home Assistant's own wake word setting, older Bridges) the list is the
+// active set: words are chosen and listened for, an empty list stops
+// listening and keeps the word.
+inline WakeSetting applyWakeWordsCommand(WakeSetting setting, uint32_t words, bool has_listen,
+                                         bool listen) {
+  if (words) setting.chosen = words;
+  setting.listen = has_listen ? listen : words != 0;
+  return setting;
+}
+
+// Stored settings: the chosen list and the listen switch. Firmware before
+// the switch stored only the active list: a word there was listening, an
+// empty list was off.
+inline WakeSetting loadWakeSetting(const char* list, bool has_listen, bool listen) {
+  return applyWakeWordsCommand(WakeSetting{}, parseWakeWordList(list), has_listen, listen);
+}
+
 inline const char* errorCodeName(ErrorCode code) {
   switch (code) {
     case ErrorCode::None: return "";
@@ -257,6 +290,10 @@ struct StatusFields {
   bool wake_words = false;
   uint32_t available_wake_words = 0;
   uint32_t active_wake_words = 0;
+  // Adds "chosen_wake_words" and "wake_listen" (the listen switch) when set.
+  bool wake_choice = false;
+  uint32_t chosen_wake_words = 0;
+  bool wake_listen = false;
   // Adds "mic_enabled" (the privacy switch) when set.
   bool mic_state = false;
   bool mic_enabled = true;
@@ -299,6 +336,16 @@ inline size_t buildStatusJson(char* out, size_t size, const StatusFields& fields
                              fields.active_wake_words & fields.available_wake_words)) {
       return 0;
     }
+  }
+  if (fields.wake_choice) {
+    if (!appendWakeWordArray(out, size, &used, "chosen_wake_words",
+                             fields.chosen_wake_words & fields.available_wake_words)) {
+      return 0;
+    }
+    written = snprintf(out + used, size - used, ",\"wake_listen\":%s",
+                       fields.wake_listen ? "true" : "false");
+    if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;
+    used += static_cast<size_t>(written);
   }
   if (fields.mic_state) {
     written = snprintf(out + used, size - used, ",\"mic_enabled\":%s",

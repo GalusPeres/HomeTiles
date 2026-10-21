@@ -44,8 +44,11 @@ struct Command {
   // was refused, so the status can name the request.
   char id[kMaxRequestIdLength + 1] = {};
   uint32_t max_ms = kDefaultMaxMs;
-  // WakeWords: catalog mask of the known ids in "active".
+  // WakeWords: catalog mask of the known ids in "active", and "listen" when
+  // the command carried it (applyWakeWordsCommand).
   uint32_t wake_words = 0;
+  bool has_listen = false;
+  bool listen = false;
   // Mic: the requested privacy switch state.
   bool mic_enabled = true;
 };
@@ -90,6 +93,15 @@ inline void parseCommand(const char* payload, size_t length, Command* out) {
     if (!active.is<JsonArrayConst>() || active.size() > kMaxWakeWordEntries) {
       out->status = CommandStatus::InvalidValue;
       return;
+    }
+    JsonVariantConst listen = doc["listen"];
+    if (!listen.isNull()) {
+      if (!listen.is<bool>()) {
+        out->status = CommandStatus::InvalidValue;
+        return;
+      }
+      out->has_listen = true;
+      out->listen = listen.as<bool>();
     }
     // Unknown, malformed and non-string entries are ignored.
     for (JsonVariantConst entry : active.as<JsonArrayConst>()) {

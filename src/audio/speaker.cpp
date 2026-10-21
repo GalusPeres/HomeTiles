@@ -505,10 +505,51 @@ bool skipBytes(Source* src, size_t bytes, uint32_t generation) {
 // ---------------------------------------------------------------------------
 // Worker: decoding
 // ---------------------------------------------------------------------------
+// #119: a 6 KB "audio/mpeg" clip from Home Assistant decoded no frame on a
+// Guition V1, and Helix overwrote its own memory on the way, so the panel
+// restarted in MP3FreeDecoder. The file itself may not be shared, so its
+// format is recorded here: on this task's stack, where the core dump of such
+// a crash keeps it, and in one log line when a clip decodes nothing. No audio
+// data is kept, only the frame headers.
+struct Mp3Diagnostics {
+  char marker[8] = {'M', 'P', '3', 'D', 'I', 'A', 'G', '\0'};
+  uint32_t id3_bytes = 0;
+  uint32_t candidates = 0;     // sync words handed to the decoder
+  uint32_t decoded = 0;        // frames that decoded
+  uint32_t errors[16] = {};    // per Helix error code, index = -code
+  uint8_t headers[8][4] = {};  // the first candidates' header bytes
+};
+
+// noinline: the record stays in memory for the core dump when freeing the
+// decoder crashes right after this line.
+__attribute__((noinline)) void logUndecodedMp3(const Mp3Diagnostics& diag) {
+  char headers[8 * 9 + 1] = "";
+  char errors[16 * 8 + 1] = "";
+  size_t used = 0;
+  const uint32_t shown = diag.candidates < 8 ? diag.candidates : 8;
+  for (uint32_t i = 0; i < shown && used < sizeof(headers); ++i) {
+    const uint8_t* h = diag.headers[i];
+    used += snprintf(headers + used, sizeof(headers) - used, "%s%02X%02X%02X%02X",
+                     i ? " " : "", h[0], h[1], h[2], h[3]);
+  }
+  used = 0;
+  for (int code = 1; code < 16 && used < sizeof(errors); ++code) {
+    if (diag.errors[code] == 0) continue;
+    used += snprintf(errors + used, sizeof(errors) - used, "%s-%d:%u", used ? " " : "", code,
+                     static_cast<unsigned>(diag.errors[code]));
+  }
+  Serial.printf("%s MP3 decoded no frame: id3=%u bytes, %u sync words, errors %s, headers %s\n",
+                kLogPrefix, static_cast<unsigned>(diag.id3_bytes),
+                static_cast<unsigned>(diag.candidates), errors[0] ? errors : "none",
+                headers[0] ? headers : "none");
+}
+
 ErrorCode playMp3(Source* src, uint32_t generation) {
   if (!fillTo(src, 10, generation)) return ErrorCode::None;
   const size_t tag = id3v2Length(src->buffer.read(), src->buffer.buffered());
   if (tag > 0 && !skipBytes(src, tag, generation)) return ErrorCode::None;
+  Mp3Diagnostics diag;
+  diag.id3_bytes = static_cast<uint32_t>(tag);
 
   HMP3Decoder decoder = MP3InitDecoder();
   if (!decoder) return ErrorCode::OutOfMemory;
@@ -558,7 +599,16 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
     // is missing, so a frame is committed only once it decoded or failed.
     unsigned char* frame = read;
     int frame_left = left;
+    if (diag.candidates < 8) {
+      memcpy(diag.headers[diag.candidates], read, left < 4 ? static_cast<size_t>(left) : 4);
+    }
+    ++diag.candidates;
     const int err = MP3Decode(decoder, &frame, &frame_left, pcm, 0);
+    if (err == ERR_MP3_NONE) {
+      ++diag.decoded;
+    } else if (err < 0 && err > -16) {
+      ++diag.errors[-err];
+    }
     // No real frame is longer than kMinDecodeBytes; a longer "underflow" is
     // a false header (or free format, which is not supported).
     if (err == ERR_MP3_INDATA_UNDERFLOW && left < static_cast<int>(2 * kMinDecodeBytes)) {
@@ -603,6 +653,7 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
   if (result == ErrorCode::None && !played_any && !stopRequested(generation)) {
     result = synced ? ErrorCode::DecodeFailed : ErrorCode::UnsupportedFormat;
   }
+  if (diag.decoded == 0) logUndecodedMp3(diag);
   heap_caps_free(pcm);
   MP3FreeDecoder(decoder);
   return result;

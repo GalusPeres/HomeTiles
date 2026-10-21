@@ -86,10 +86,16 @@ Commands stay on `{base}/cmnd/audio`, the status on `{base}/stat/audio`
 (`speaker_contract.h`), so the media player and the Assist satellite keep
 their logic.
 
-- **Pause / resume**: the panel stops its output and keeps the buffer; once
-  it is full it reads nothing more. The Bridge marks the session paused and
-  waits up to 10 minutes for the next acknowledgement (a playing panel that
-  is silent for 45 s, the link's idle limit, is gone).
+- **Pause / resume** (b512 + Bridge b15, user 2026-10-21: a pause holds
+  nothing): the Bridge's play command says `"restart": true`, so the panel
+  closes the stream on a pause, frees its buffers (about 25 KB internal RAM)
+  and reports `"released": true` with the position actually heard (the
+  output's 170 ms are taken off). The Bridge's FFmpeg ends with the
+  connection. Play starts the same clip again from that position, like a
+  seek; a pause can last any time. A camera's sound is never released.
+  Older firmware keeps the stream: it stops its output and keeps the buffer,
+  and the Bridge waits up to 10 minutes for the next acknowledgement (a
+  playing panel that is silent for 45 s, the link's idle limit, is gone).
 - **Seek**: the Bridge starts the same clip again from the new position (a
   new session and play command; FFmpeg seeks with `-ss`). The format names
   the position, from which the panel counts `position_ms`. Home Assistant

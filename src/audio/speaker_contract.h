@@ -14,6 +14,9 @@
 //       decodes and sends as PCM (audio_stream_contract.h); "live":true marks
 //       a camera's sound, which the panel keeps short, and "lead_ms" how much
 //       earlier the Bridge sent it than the picture (lip sync).
+//       "restart":true on a Bridge stream: the Bridge plays the clip again
+//       from the paused point to resume, so a pause closes the stream and
+//       frees its buffers and the Bridge's FFmpeg at once.
 //       {"v":1,"op":"stop"}
 //       {"v":1,"op":"pause"}  {"v":1,"op":"resume"}
 //       {"v":1,"op":"volume","volume":0.5}        0.0 .. 1.0
@@ -27,7 +30,8 @@
 //       plays or pauses: "position_ms" at the moment of the status, and
 //       "duration_ms" once the clip's length is known (not for live
 //       streams). The status is not repeated while a clip plays; the Bridge
-//       moves the position on itself.
+//       moves the position on itself. "released":true while paused with the
+//       stream closed: resume by playing the clip again at "position_ms".
 //
 // A Bridge that sees "stream" decodes the clip itself (any format) and sends
 // PCM at the pace the panel acknowledges. Otherwise the panel plays an
@@ -442,6 +446,8 @@ struct StatusFields {
   uint32_t duration_ms = 0;
   // The panel takes clips the Bridge decodes (audio_stream_contract.h).
   bool bridge_stream = false;
+  // Paused with the stream closed (the play command's "restart").
+  bool released = false;
 };
 
 // Returns the JSON length, or 0 when the buffer is too small.
@@ -479,6 +485,11 @@ inline size_t buildStatusJson(char* out, size_t size, const StatusFields& fields
     if (fields.duration_ms > 0) {
       written = snprintf(out + used, size - used, ",\"duration_ms\":%lu",
                          static_cast<unsigned long>(fields.duration_ms));
+      if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;
+      used += static_cast<size_t>(written);
+    }
+    if (fields.state == PublicState::Paused && fields.released) {
+      written = snprintf(out + used, size - used, ",\"released\":true");
       if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;
       used += static_cast<size_t>(written);
     }

@@ -113,6 +113,13 @@ int main() {
   fields.duration_ms = 213000;
   assert(status(fields).find("\"state\":\"paused\"") != std::string::npos);
   assert(status(fields).find(",\"position_ms\":61500,\"duration_ms\":213000}") != std::string::npos);
+  // Paused with the stream closed (b512): the Bridge plays it again to resume.
+  assert(status(fields).find("released") == std::string::npos);
+  fields.released = true;
+  assert(status(fields).find(",\"duration_ms\":213000,\"released\":true}") != std::string::npos);
+  fields.state = PublicState::Playing;
+  assert(status(fields).find("released") == std::string::npos);
+  fields.released = false;
   // The longest status fits the firmware's 320-byte buffer.
   fields.state = PublicState::Playing;
   fields.id = "0123456789abcdef0123456789abcdef";
@@ -121,6 +128,11 @@ int main() {
   fields.duration_ms = 4294967295u;
   char longest[320];
   assert(buildStatusJson(longest, sizeof(longest), fields) > 0);
+  fields.state = PublicState::Paused;
+  fields.released = true;
+  assert(buildStatusJson(longest, sizeof(longest), fields) > 0);
+  fields.state = PublicState::Playing;
+  fields.released = false;
   fields.id = "0123456789abcdef";
   fields.error = ErrorCode::None;
   fields.position_ms = 0;
@@ -392,6 +404,21 @@ int main() {
   c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
             "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":\"yes\"}");
   assert(c.status == CommandStatus::Ok && !c.live);
+  // Resume by playing again (b512): only a Bridge stream that is no camera's
+  // sound, and only when the Bridge says so.
+  assert(!c.restart);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"restart\":true}");
+  assert(c.status == CommandStatus::Ok && c.restart);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true,\"restart\":true}");
+  assert(c.status == CommandStatus::Ok && !c.restart);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"http://ha.local:8123/x.mp3\",\"restart\":true}");
+  assert(c.status == CommandStatus::Ok && !c.restart);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"restart\":\"yes\"}");
+  assert(c.status == CommandStatus::Ok && !c.restart);
 
   c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\",\"url\":\"https://ha/x.mp3\"}");
   assert(c.kind == CommandKind::Play && c.status == CommandStatus::HttpsUnsupported);

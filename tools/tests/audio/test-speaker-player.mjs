@@ -57,4 +57,18 @@ assert.match(fn('pump'), /^[\s{]*sampleClipMemory\(\);\s*if \(src->ended\) retur
 const publish = fn('publishStatus');
 assert.match(publish, /fields\.position_ms = g_position_ms\.load\(\);\s*fields\.duration_ms = g_duration_ms\.load\(\);/);
 assert.match(publish, /char payload\[320\];/);
-console.log('PASS: HTTPS in PSRAM, pause/resume, position and length, one memory line per clip');
+// A pause of a clip its Bridge plays again closes the stream (user
+// 2026-10-21): no buffers or FFmpeg held while paused, the position is what
+// was heard, the status says "released", and a stop or a bare resume ends
+// such a pause (no worker is left to do it).
+assert.match(hold, /if \(g_clip_restart\) \{[\s\S]*?g_played_us = g_played_us > queued_us \? g_played_us - queued_us : 0;[\s\S]*?g_clip_released = true;\s*return false;\s*\}/);
+assert.ok(hold.indexOf('setAmp(false)') < hold.indexOf('if (g_clip_restart)') &&
+          hold.indexOf('if (g_clip_restart)') < hold.indexOf('setPublic(PublicState::Paused'),
+          'quiet first, then released instead of held');
+assert.match(play, /g_clip_restart = bridge_stream && request\.restart;\s*g_clip_released = false;\s*g_released\.store\(false\);/);
+assert.match(play, /if \(g_clip_released && result == ErrorCode::None && !stopRequested\(generation\)\) \{[\s\S]*?g_released\.store\(true\);\s*setStatusId\(request\.id\);\s*setPublic\(PublicState::Paused, ErrorCode::None\);\s*return;/);
+assert.match(handler, /g_request->restart = command\.restart;/);
+assert.match(handler, /case CommandKind::Stop:[\s\S]*?if \(g_released\.exchange\(false\)\) setPublic\(PublicState::Idle, ErrorCode::None\);/);
+assert.match(handler, /if \(g_released\.load\(\)\) \{[\s\S]*?command\.kind == CommandKind::Resume && g_released\.exchange\(false\)[\s\S]*?setPublic\(PublicState::Idle, ErrorCode::None\);[\s\S]*?break;\s*\}/);
+assert.match(publish, /fields\.released = g_released\.load\(\);/);
+console.log('PASS: HTTPS in PSRAM, pause/resume, position and length, one memory line per clip, released pause');

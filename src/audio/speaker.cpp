@@ -69,6 +69,9 @@ std::atomic<uint32_t> g_position_ms{0};
 std::atomic<uint32_t> g_duration_ms{0};
 // Home Assistant's pause: set by the loop task, followed by the worker.
 std::atomic<bool> g_pause_requested{false};
+// Paused with the stream closed ("released" in the status): the Bridge
+// plays the clip again from the paused point to resume.
+std::atomic<bool> g_released{false};
 // Lip sync for a camera's sound (cameraSyncDelayMs): the worker's live sound
 // delay to the loudspeaker (0 while none plays) and the Bridge's lead.
 std::atomic<uint32_t> g_live_latency_ms{0};
@@ -187,6 +190,8 @@ struct PlayRequest {
   // and how much earlier the Bridge sent it than the picture.
   bool live;
   uint16_t lead_ms;
+  // The Bridge plays the clip again to resume: a pause closes the stream.
+  bool restart;
 };
 
 // Assist capture: 16 kHz 16-bit stereo (one mic per slot). 6 x 320 frames x
@@ -460,6 +465,10 @@ bool writeFrames(const int16_t* samples, size_t frames) {
 uint64_t g_played_us = 0;
 // Worker only: the current clip was paused at least once.
 bool g_clip_paused = false;
+// Worker only: the current clip's Bridge plays it again to resume, and a
+// pause ended it that way.
+bool g_clip_restart = false;
+bool g_clip_released = false;
 
 // The status position follows the frames written (the DMA buffer plays
 // them within about 170 ms).
@@ -730,7 +739,19 @@ bool skipBytes(Source* src, size_t bytes, uint32_t generation) {
 bool holdWhilePaused(Source* src, uint32_t generation) {
   if (!g_pause_requested.load()) return true;
   if (g_tx) setAmp(false);
+  // A clip its Bridge plays again closes the stream instead (user
+  // 2026-10-21): a pause holds neither buffers nor the Bridge's FFmpeg. It
+  // comes back from what was heard, not from what the output still held.
+  if (g_clip_restart) {
+    const uint64_t queued_us =
+        g_tx_rate ? static_cast<uint64_t>(kDmaDescriptors) * kDmaFrames * 1000000u / g_tx_rate : 0;
+    g_played_us = g_played_us > queued_us ? g_played_us - queued_us : 0;
+    g_position_ms.store(static_cast<uint32_t>(g_played_us / 1000u));
+    g_clip_released = true;
+    return false;
+  }
   g_clip_paused = true;
+  Serial.printf("%s Paused at %.1f s, stream kept\n", kLogPrefix, g_position_ms.load() / 1000.0);
   setPublic(PublicState::Paused, ErrorCode::None);
   while (g_pause_requested.load() && !stopRequested(generation)) {
     pump(src);
@@ -738,6 +759,7 @@ bool holdWhilePaused(Source* src, uint32_t generation) {
   }
   if (stopRequested(generation)) return false;
   setPublic(PublicState::Playing, ErrorCode::None);
+  Serial.printf("%s Resumed at %.1f s\n", kLogPrefix, g_position_ms.load() / 1000.0);
   if (g_tx) {
     setAmp(true);
     vTaskDelay(pdMS_TO_TICKS(kAmpSettleMs));
@@ -1195,6 +1217,9 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   }
   g_played_us = 0;
   g_clip_paused = false;
+  g_clip_restart = bridge_stream && request.restart;
+  g_clip_released = false;
+  g_released.store(false);
   g_clip_stats = ClipStats{};
   g_clip_stats.started_ms = millis();
   g_clip_stats.internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
@@ -1218,6 +1243,16 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   }
   closeOutput();
   g_pause_requested.store(false);
+  if (g_clip_released && result == ErrorCode::None && !stopRequested(generation)) {
+    Serial.printf("%s Clip %s paused at %.1f s, stream closed: internal RAM %u KB before, lowest %u KB\n",
+                  kLogPrefix, request.id, g_position_ms.load() / 1000.0,
+                  static_cast<unsigned>(g_clip_stats.internal_before / 1024),
+                  static_cast<unsigned>(g_clip_stats.internal_lowest / 1024));
+    g_released.store(true);
+    setStatusId(request.id);
+    setPublic(PublicState::Paused, ErrorCode::None);
+    return;
+  }
   Serial.printf("%s Clip %s %s after %.1f s: internal RAM %u KB before, lowest %u KB\n",
                 kLogPrefix, request.id,
                 result != ErrorCode::None ? errorCodeName(result)
@@ -1786,6 +1821,7 @@ void publishStatus() {
   fields.position_ms = g_position_ms.load();
   fields.duration_ms = g_duration_ms.load();
   fields.bridge_stream = kSupported;
+  fields.released = g_released.load();
   char id[kMaxRequestIdLength + 1] = {};
 #if defined(HOMETILES_SPEAKER)
   portENTER_CRITICAL(&g_id_mux);
@@ -1973,6 +2009,7 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
       memcpy(g_request->url, g_parse_url, command.url_length + 1);
       g_request->live = command.live;
       g_request->lead_ms = command.lead_ms;
+      g_request->restart = command.restart;
       g_play_pending.store(true);
       g_pause_requested.store(false);
       // Playback ends a capture session or a start that has not begun.
@@ -1991,9 +2028,20 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
       }
       g_pause_requested.store(false);
       g_stop_generation.fetch_add(1);
+      // A clip paused with its stream closed has no worker to end it.
+      if (g_released.exchange(false)) setPublic(PublicState::Idle, ErrorCode::None);
       break;
     case CommandKind::Pause:
     case CommandKind::Resume:
+      // A clip paused with its stream closed resumes only by playing it
+      // again (the Bridge does); a bare resume ends it.
+      if (g_released.load()) {
+        if (command.kind == CommandKind::Resume && g_released.exchange(false)) {
+          Serial.printf("%s Resume without a stream: the clip ended\n", kLogPrefix);
+          setPublic(PublicState::Idle, ErrorCode::None);
+        }
+        break;
+      }
       // The worker follows the flag inside the playing clip; idle ignores it.
       if (static_cast<PublicState>(g_public_state.load()) != PublicState::Idle) {
         g_pause_requested.store(command.kind == CommandKind::Pause);

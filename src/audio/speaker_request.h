@@ -48,6 +48,9 @@ struct Command {
   // and how much earlier the Bridge sent it than the camera's picture.
   bool live = false;
   uint16_t lead_ms = 0;
+  // Only for Play of a Bridge stream: the Bridge plays the clip again from
+  // the paused point to resume, so a pause closes the stream.
+  bool restart = false;
   float volume = kDefaultVolume;
   bool muted = false;
 };
@@ -150,6 +153,10 @@ inline void parseCommand(const char* payload, size_t length, bool https_allowed,
     const int value = lead.as<int>();
     out->lead_ms = static_cast<uint16_t>(value < 0 ? 0 : value > 1000 ? 1000 : value);
   }
+  // A camera's sound has no point to come back to.
+  JsonVariantConst restart = doc["restart"];
+  out->restart = !out->live && strncmp(url_text, "tcp://", 6) == 0 && restart.is<bool>() &&
+                 restart.as<bool>();
   out->status = CommandStatus::Ok;
 }
 

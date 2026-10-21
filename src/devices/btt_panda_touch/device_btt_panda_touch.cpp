@@ -63,6 +63,10 @@ constexpr uint32_t kCacheLineSize = 32;
 
 esp_lcd_panel_handle_t g_panel = nullptr;
 uint16_t* g_framebuffer = nullptr;
+uint16_t* g_framebuffers[2] = {nullptr, nullptr};
+// The buffer the panel is scanning right now. The UI is rendered into the
+// other one and the panel switches at the frame boundary.
+uint8_t g_displayedBuffer = 0;
 bool g_display_ready = false;
 bool g_touch_ready = false;
 bool g_littlefs_ready = false;
@@ -106,18 +110,21 @@ void backlightInit() {
 
 // The CPU cache holds the framebuffer writes, but the LCD reads the buffer
 // from memory. Push the dirty lines out. The cache wants a 32-byte aligned
-// start and size.
+// start and size, and the rows of the framebuffer are not contiguous, so
+// every row is synced on its own.
 void syncRegion(int32_t x, int32_t y, int32_t w, int32_t h) {
   if (!g_framebuffer || w <= 0 || h <= 0) return;
-  const uintptr_t first = reinterpret_cast<uintptr_t>(g_framebuffer) +
-                          (static_cast<uintptr_t>(y) * kScreenWidth + x) * 2;
-  const uintptr_t start = first & ~(kCacheLineSize - 1);
-  const uintptr_t end =
-      (first + static_cast<uintptr_t>(w) * h * 2 + kCacheLineSize - 1) &
-      ~(kCacheLineSize - 1);
-  if (end <= start) return;
-  esp_cache_msync(reinterpret_cast<void*>(start), end - start,
-                  ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+  for (int32_t row = y; row < y + h; ++row) {
+    uint16_t* line = g_framebuffer + static_cast<size_t>(row) * kScreenWidth + x;
+    const uintptr_t first = reinterpret_cast<uintptr_t>(line);
+    const uintptr_t start = first & ~(kCacheLineSize - 1);
+    const uintptr_t end =
+        (first + static_cast<uintptr_t>(w) * sizeof(uint16_t) + kCacheLineSize - 1) &
+        ~(kCacheLineSize - 1);
+    if (end <= start) continue;
+    esp_cache_msync(reinterpret_cast<void*>(start), end - start,
+                    ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+  }
 }
 
 bool writeTouchRegister(uint16_t reg, uint8_t value) {
@@ -200,11 +207,15 @@ bool initDisplay() {
   config.timings.flags.pclk_active_neg = true;
   config.data_width = 16;
   config.bits_per_pixel = 16;
-  // One framebuffer in PSRAM, read by the LCD DMA. The bounce buffer stays
-  // empty: the Arduino SDK switches the PSRAM cache off around main-flash
-  // writes, and a cache-fed bounce path cannot survive that.
+  // The panel's DMA reads the picture from a bounce buffer in DRAM: the
+  // ESP32-S3 in this SDK build has no PSRAM XIP and 32-byte cache lines, and
+  // a DMA that reads the PSRAM framebuffer directly loses its sync under
+  // load. The driver copies every line into the bounce buffer and
+  // invalidates the CPU cache while it does so.
   config.num_fbs = 1;
-  config.bounce_buffer_size_px = 0;
+  config.bounce_buffer_size_px = kScreenWidth * 20;
+  config.flags.bb_invalidate_cache = true;
+  config.flags.double_fb = false;
   config.hsync_gpio_num = GPIO_NUM_NC;
   config.vsync_gpio_num = GPIO_NUM_NC;
   config.de_gpio_num = kPanelDe;
@@ -212,7 +223,6 @@ bool initDisplay() {
   config.disp_gpio_num = GPIO_NUM_NC;
   for (int i = 0; i < 16; ++i) config.data_gpio_nums[i] = kPanelData[i];
   config.flags.fb_in_psram = true;
-  config.flags.double_fb = false;
   config.flags.no_fb = false;
 
   esp_err_t err = esp_lcd_new_rgb_panel(&config, &g_panel);
@@ -229,15 +239,21 @@ bool initDisplay() {
                   esp_err_to_name(err));
     return false;
   }
-  void* buffer = nullptr;
-  err = esp_lcd_rgb_panel_get_frame_buffer(g_panel, 1, &buffer, nullptr);
-  if (err != ESP_OK || buffer == nullptr) {
+  // The panel keeps a single framebuffer: the bounce buffer serves the DMA.
+  // Asking for more than the driver allocated writes out of bounds.
+  void* fb0 = nullptr;
+  err = esp_lcd_rgb_panel_get_frame_buffer(g_panel, 1, &fb0, nullptr);
+  if (err != ESP_OK || fb0 == nullptr) {
     Serial.printf("[Device/BTT Panda Touch] No framebuffer: %s\n",
                   esp_err_to_name(err));
     return false;
   }
-  g_framebuffer = static_cast<uint16_t*>(buffer);
-  memset(g_framebuffer, 0,
+  g_framebuffers[0] = static_cast<uint16_t*>(fb0);
+  g_framebuffers[1] = nullptr;
+  g_displayedBuffer = 0;
+  // The panel scans the first buffer, and the UI is drawn into that same one.
+  g_framebuffer = g_framebuffers[0];
+  memset(g_framebuffers[0], 0,
          static_cast<size_t>(kScreenWidth) * kScreenHeight * sizeof(uint16_t));
   syncRegion(0, 0, kScreenWidth, kScreenHeight);
   g_display_ready = true;
@@ -320,6 +336,13 @@ bool displayTryFullFramePreview(int32_t x, int32_t y, int32_t w, int32_t h,
 }
 
 void displayWaitDMA() {}
+
+// The panel scans the framebuffer the UI is drawn into. LVGL only redraws
+// the changed bands, so a second buffer would show the state of two frames
+// ago everywhere the previous frame did not touch. The panel therefore keeps
+// scanning the buffer the UI writes into; a band can tear while it is
+// copied, but the picture is never a mix of two frames.
+void displayWaitDisplay() {}
 
 bool displayBeginAtomicFrame(const char* reason) {
   // One framebuffer, scanned by the LCD: there is no inactive buffer the UI
@@ -441,7 +464,6 @@ void displayPowerSaveOff() {
   displayWake();
 }
 
-void displayWaitDisplay() {}
 
 void prepareForRestart() {
   applyBrightness(0);

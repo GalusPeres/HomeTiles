@@ -179,19 +179,67 @@
     input.click();
   }
 
+  // The import's progress under its buttons, like the firmware update's
+  // (ota.js): a line and a bar that stay until the import ends; the end and
+  // an error stay readable. Every tile written or cleared and every layout
+  // saved is a step; the total is counted before anything is written.
+  let importProgress = null;
+
+  function setImportProgress(message, phase = 'idle', tone = '', percent = null) {
+    const status = document.getElementById('tile_import_status');
+    const progress = document.getElementById('tile_import_progress');
+    const bar = document.getElementById('tile_import_progress_bar');
+    if (status) {
+      status.textContent = message || '';
+      status.classList.remove('error', 'success');
+      if (tone === 'error' || tone === 'success') status.classList.add(tone);
+    }
+    if (progress) {
+      progress.classList.toggle('is-hidden', phase === 'idle');
+      progress.setAttribute('aria-hidden', phase === 'idle' ? 'true' : 'false');
+    }
+    if (bar) bar.style.width = (phase === 'done' ? 100 : Math.max(0, Math.min(100, percent || 0))) + '%';
+    for (const id of ['tile_export_btn', 'tile_import_btn']) {
+      const button = document.getElementById(id);
+      if (button) button.disabled = phase === 'busy';
+    }
+  }
+
+  function showImportStep() {
+    if (!importProgress) return;
+    const {done, total} = importProgress;
+    setImportProgress(t('importProgress').replace('{done}', done).replace('{total}', total), 'busy', '',
+                      total ? (done * 100) / total : 0);
+  }
+
+  // One step done; a step the count did not foresee (a folder the export
+  // shares with the panel) makes the total grow with it instead of passing it.
+  function importStep() {
+    if (!importProgress) return;
+    importProgress.done++;
+    if (importProgress.done > importProgress.total) importProgress.total = importProgress.done;
+    showImportStep();
+  }
+
   function importTilesConfig(tab, files) {
     if (!files || !files.length) return;
     const file = files[0];
     const reader = new FileReader();
     reader.onload = async () => {
+      let payload = null;
       try {
-        const payload = JSON.parse(reader.result);
-        await importTilesPayload(payload);
+        payload = JSON.parse(reader.result);
       } catch (e) {
         showNotification(t('importInvalidJson'), false);
+        setImportProgress(t('importInvalidJson'), 'idle', 'error');
+        return;
       }
+      await importTilesPayload(payload);
     };
-    reader.onerror = () => showNotification(t('importFailed'), false);
+    reader.onerror = () => {
+      showNotification(t('importFailed'), false);
+      setImportProgress(t('importFailed'), 'idle', 'error');
+    };
     reader.readAsText(file);
   }
 
@@ -529,6 +577,7 @@
       const res = await fetch('/api/layouts', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(request)}).catch(() => null);
       const data = res ? await res.json().catch(() => ({})) : {};
+      importStep();
       if (res && res.ok && data.success) continue;
       console.error('Import layout ' + key + ' not restored:', data.error || (res ? 'HTTP ' + res.status : 'no answer'));
       ok = false;
@@ -627,9 +676,8 @@
     return preparedTiles;
   }
 
-  async function replaceScreensaverGridForImport(preparedTiles) {
+  async function replaceScreensaverGridForImport(preparedTiles, currentTiles) {
     const folderId = SCREENSAVER_FOLDER_ID;
-    const currentTiles = await fetchTilesForImport(folderId);
     const tileCount = TILES_PER_GRID;
     const post = async (index, tile) => {
       try {
@@ -668,6 +716,7 @@
     try {
       if (!payload || typeof payload !== 'object') {
         showNotification(t('importInvalidJson'), false);
+        setImportProgress(t('importInvalidJson'), 'idle', 'error');
         return;
       }
       const grids = (payload.grids && typeof payload.grids === 'object') ? payload.grids : {};
@@ -678,6 +727,7 @@
       }
       if (!Object.keys(grids).length) {
         showNotification(t('importInvalidJson'), false);
+        setImportProgress(t('importInvalidJson'), 'idle', 'error');
         return;
       }
 
@@ -733,15 +783,30 @@
         ? planImportGrid(homeSource, 7, settingsHidden ? null : (targetSettings || { type: 7 }), tabByFolder[0] || '')
         : null;
       if (homePlan?.conflict) throw new TileImportError('Import layout conflict', 'conflict', homePlan.conflict, folderName(0));
+      // The steps: Home's old tiles cleared and its new ones written, every
+      // folder's tiles (a new folder has only its Back tile), the screensaver's
+      // old and new tiles, and one per layout restored at the end.
+      let steps = 3;
+      if (homePlan) {
+        steps += homePlan.tiles.length + (homePlan.system ? 1 : 0) +
+          homeTiles.filter(tile => ![0, 7].includes(importTileType(tile))).length;
+      }
       for (const folderId of sourceFolderIds) {
         const plan = planImportGrid(grids[String(folderId)], 8, NEW_FOLDER_BACK_TILE, '');
         if (plan.conflict) throw new TileImportError('Import layout conflict', 'conflict', plan.conflict, folderName(folderId));
+        steps += plan.tiles.length + (plan.system ? 1 : 0);
       }
       const screensaverTiles = Array.isArray(screensaverGrid)
         ? planScreensaverImport(screensaverGrid, screensaverBlock?.source_layout || null)
         : null;
+      const screensaverCurrent = screensaverTiles ? await fetchTilesForImport(SCREENSAVER_FOLDER_ID) : [];
+      if (screensaverTiles) {
+        steps += screensaverTiles.length + screensaverCurrent.filter(tile => Number(tile?.type || 0) !== 0).length;
+      }
 
       showNotification(t('importRunning'));
+      importProgress = {done: 0, total: steps};
+      showImportStep();
       importedSlots = [];
 
       const sourceToTarget = { 0: 0 };
@@ -798,7 +863,7 @@
         await importScreensaverConfig(screensaverConfig);
       }
       if (screensaverTiles) {
-        await replaceScreensaverGridForImport(screensaverTiles);
+        await replaceScreensaverGridForImport(screensaverTiles, screensaverCurrent);
       }
       // The other layouts last: they carry the screensaver's places too.
       if (!await restoreImportLayouts(payload.layouts, sourceToTarget, screensaverTiles)) {
@@ -806,16 +871,20 @@
       }
 
       try { localStorage.removeItem('tileDrafts'); } catch (e) {}
+      importProgress = null;
+      setImportProgress(t('importComplete'), 'done', 'success');
       showNotification(t('importComplete'));
       setTimeout(() => location.reload(), 600);
     } catch (e) {
       console.error('Tile import failed:', e);
+      importProgress = null;
+      let message = t('importFailed');
       if (e instanceof TileImportError) {
-        const message = t(e.kind === 'conflict' ? 'importConflict' : 'importStopped');
-        showNotification(message.replace('{tile}', importTileName(e.tile)).replace('{folder}', e.folderName), false);
-      } else {
-        showNotification(t('importFailed'), false);
+        message = t(e.kind === 'conflict' ? 'importConflict' : 'importStopped')
+          .replace('{tile}', importTileName(e.tile)).replace('{folder}', e.folderName);
       }
+      showNotification(message, false);
+      setImportProgress(message, 'idle', 'error');
     }
   }
 
@@ -1037,5 +1106,6 @@
       // the page names the tile and folder in the user's language.
       throw new Error('Tile save failed: ' + (data.error || ('HTTP ' + res.status)));
     }
+    importStep();
     return data;
   }

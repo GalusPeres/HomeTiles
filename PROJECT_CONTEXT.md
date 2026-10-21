@@ -14,7 +14,7 @@ Last reviewed: 2026-10-21
 
 - FW + Bridge v0.9.3 released 2026-10-18. Every former feature branch (perf, direct-link, voice, layouts, settings-setup, security, icon-file, camera-view) is in it.
 - Milestone v0.9.4: pairing by IP without mDNS (Bridge #16, HomeTiles #114: read-only `GET /api/link` + Bridge step).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); V2 beta define in `firmware_version.h`, last b510.
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); V2 beta define in `firmware_version.h`, last b511.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
 - Docs CI runs on pinned Chrome for Testing 154.0.8037.57 (the runner's .97 never answered the first Page.navigate); a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).

@@ -2201,13 +2201,17 @@ autocomplete="new-password" value=")html";
 <div class="settings-grid">
 <div class="settings-full">
 <div class="settings-actions">
-<button type="button" class="btn" onclick="exportTilesConfig()">)html";
+<button type="button" class="btn" id="tile_export_btn" onclick="exportTilesConfig()">)html";
   html += tr.admin_export;
   html += R"html(</button>
 <input type="file" id="settings_tile_import" accept="application/json" style="display:none" onchange="importTilesConfig('settings', this.files)">
-<button type="button" class="btn" onclick="triggerTilesImport('settings')">)html";
+<button type="button" class="btn" id="tile_import_btn" onclick="triggerTilesImport('settings')">)html";
   html += tr.admin_import;
   html += R"html(</button>
+</div>
+<div id="tile_import_status" class="settings-note ota-status"></div>
+<div id="tile_import_progress" class="ota-progress is-hidden" aria-hidden="true">
+<div id="tile_import_progress_bar" class="ota-progress-bar"></div>
 </div>
 <div class="settings-note">)html";
   html += tr.admin_import_overwrite;

@@ -162,6 +162,8 @@ struct Strings {
   const char* js_import_failed;
   const char* js_import_running;
   const char* js_import_complete;
+  // The import's progress line: {done} and {total} are filled in by the page.
+  const char* js_import_progress;
   // Import checks: {tile} and {folder} are filled in by the page.
   const char* js_import_conflict;
   const char* js_import_stopped;

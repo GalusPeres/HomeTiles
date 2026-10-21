@@ -167,6 +167,9 @@ bool WebAdminServer::start() {
     // two minutes after Pair was pressed on the panel itself.
     server.on("/api/link", HTTP_POST,
               withStorageHold([this]() { this->handleLinkSetup(); }));
+    // No password check either: the panel's mDNS record, for a Bridge that
+    // adds it by its IP address (issue #114).
+    server.on("/api/link", HTTP_GET, [this]() { this->handleLinkInfo(); });
     server.on("/api/status", guarded([this]() { this->handleStatus(); }));
     server.on("/api/language", HTTP_GET,
               guarded([this]() { this->handleLanguage(); }));

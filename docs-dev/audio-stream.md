@@ -117,6 +117,10 @@ the Bridge falls back to the URL.
 - The seek bar vanished or jumped back for a moment: the new stream reported
   "playing" from 0 without a length before its format arrived. b503 reports
   the clip once the format names its position.
+- b503 with Bridge b9: free internal RAM 169 KB before a song, 148 KB while it
+  played; a camera full screen next to a song ran at 30 FPS and 13-15 Mbit/s;
+  the UI no longer slowed down. Home Assistant still moved the seek bar back
+  until the panel reported the new position; Bridge b10 sets it at once.
 
 ## Later on the same channel
 

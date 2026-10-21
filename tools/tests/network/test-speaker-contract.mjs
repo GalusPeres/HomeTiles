@@ -313,8 +313,12 @@ int main() {
     buffer.commit(100);
     assert(buffer.buffered() == 16 && buffer.writable() == 0);
     buffer.consume(1);
-    // Full buffer with read bytes in front: compacts even below half.
-    assert(buffer.writable() == 1 && buffer.read()[0] == 10);
+    // Full buffer read less than half: it waits for the reader instead of
+    // moving the whole tail for every byte read (b502 moved 254 KB per 2 KB).
+    assert(buffer.writable() == 0 && buffer.read()[0] == 10);
+    buffer.consume(7);
+    // Half read: the tail moves to the front once.
+    assert(buffer.writable() == 8 && buffer.start == 0 && buffer.buffered() == 8);
     buffer.consume(1000);
     assert(buffer.buffered() == 0 && buffer.start == 0 && buffer.writable() == 16);
   }

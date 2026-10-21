@@ -379,7 +379,13 @@ inline bool prebufferDone(size_t buffered, uint32_t waited_ms, bool ended) {
 
 // Linear byte buffer between the network and the decoder. The decoder needs
 // whole frames in one piece, so instead of wrapping, the unread tail moves to
-// the front once the read position passed half the buffer.
+// the front once the read position passed half the buffer: at most half the
+// buffer moves, once per half buffer played. b502 also moved it whenever the
+// buffer was full to its end, so a full 256 KB buffer moved about 254 KB in
+// PSRAM for every 2 KB played (43 times a second at 44.1 kHz), on the core
+// of the camera stream and the network worker, evicting the shared cache each
+// time. A V2 playing a song with b502 slowed its UI, and its camera full
+// screen got 7.7 instead of 13 Mbit/s.
 struct StreamBuffer {
   uint8_t* data = nullptr;
   size_t capacity = 0;
@@ -398,9 +404,10 @@ struct StreamBuffer {
     start += bytes < buffered() ? bytes : buffered();
     if (start == end) start = end = 0;
   }
-  // Free space at the end, after compacting when that helps.
+  // Free space at the end, after compacting once half the buffer was read.
+  // A buffer full to its end and read less than half waits for the reader.
   size_t writable() {
-    if (start > 0 && (start >= capacity / 2 || end == capacity)) {
+    if (start > 0 && start >= capacity / 2) {
       memmove(data, data + start, end - start);
       end -= start;
       start = 0;

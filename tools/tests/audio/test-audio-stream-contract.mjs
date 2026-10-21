@@ -31,10 +31,17 @@ assert.match(pumpBridge, /recv\(src->fd, destination, want, MSG_DONTWAIT\)/,
              'the pump never waits on the socket (the I2S output must stay fed)');
 assert.match(pumpBridge, /rx\.takeAck\(&sequence, &length\)[\s\S]*tcp_ack::encodeAck/,
              'every complete message is acknowledged');
-assert.match(speaker, /strncmp\(request\.url, "tcp:\/\/", 6\) != 0/,
+assert.match(speaker, /const bool bridge_stream = strncmp\(request\.url, "tcp:\/\/", 6\) == 0;/);
+assert.match(speaker, /g_clip_paused && !stopRequested\(generation\) &&\s*!bridge_stream\) \{/,
              'a paused Bridge stream is not retried with its used token');
 assert.match(speaker, /fields\.bridge_stream = kSupported;/,
              'the status announces Bridge streams');
+// b502 seek: the new stream reported "playing" from 0 without a length before
+// its format arrived, and Home Assistant's player bar vanished or jumped back.
+assert.match(speaker, /if \(!bridge_stream\) setPublic\(PublicState::Playing, ErrorCode::None\);/,
+             'a Bridge stream does not report "playing" before its format');
+assert.match(speaker, /g_duration_ms\.store\(format\.duration_ms\);\s*setStatusId\(id\);\s*setPublic\(PublicState::Playing, ErrorCode::None\);/,
+             'the format reports the clip with its position and length');
 
 function findCompiler() {
   for (const candidate of [process.env.CXX, 'clang++', 'g++', 'c++'].filter(Boolean)) {
@@ -221,6 +228,29 @@ int main() {
   // An empty clip (FFmpeg wrote nothing) ends cleanly after its format.
   v.clear(); format(v, 1, 44100, 1, 16, 0, 0); header(v, kMessageEnd, 2, 0);
   assert(run(v, 3).need == Receiver::Need::Ended);
+
+  // The PSRAM buffer in steady state (b502): full, the output takes 2 KB, the
+  // network refills what fits. b502 moved the whole unread tail (254 KB) for
+  // every 2 KB played; at most about one byte per byte played may move.
+  {
+    static uint8_t memory[speaker_contract::kStreamBufferBytes];
+    speaker_contract::StreamBuffer buffer;
+    buffer.reset(memory, sizeof(memory));
+    buffer.commit(buffer.writable());
+    uint64_t moved = 0, played = 0;
+    for (int i = 0; i < 2000; ++i) {
+      assert(buffer.buffered() >= 2048);
+      buffer.consume(2048);
+      played += 2048;
+      const size_t start = buffer.start, end = buffer.end;
+      const size_t room = buffer.writable();
+      if (start != 0 && buffer.start == 0) moved += end - start;
+      buffer.commit(room);
+      // The output never runs dry: at least half the buffer stays queued.
+      assert(buffer.buffered() >= sizeof(memory) / 2 - 2048);
+    }
+    assert(moved <= played + played / 10);
+  }
   std::puts("audio stream contract ok");
   return 0;
 }

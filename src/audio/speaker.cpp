@@ -527,7 +527,7 @@ struct Source {
 // The Bridge stream's pump: reads what arrived without waiting, audio
 // straight into the PSRAM buffer, and acknowledges each message once it lies
 // there. While the buffer is full nothing is read, so the Bridge holds back
-// with at most two 8 KB blocks in flight.
+// with at most two blocks in flight.
 void pumpBridge(Source* src) {
   audio_stream::Receiver& rx = *src->receiver;
   size_t budget = kPumpBudgetBytes;
@@ -971,8 +971,10 @@ bool clipStopRequested(void* context) {
 }
 
 // A clip the Bridge decodes (audio_stream_contract.h): no TLS, no decoder,
-// and at most the Bridge's window of 16 KB waits in internal RAM.
-ErrorCode playBridgeStream(const char* url, uint32_t generation, uint8_t* memory) {
+// and at most the Bridge's window of two blocks waits in internal RAM. The
+// clip reports "playing" with its id once the format named its position.
+ErrorCode playBridgeStream(const char* id, const char* url, uint32_t generation,
+                           uint8_t* memory) {
   audio_stream::Endpoint endpoint;
   if (!audio_stream::parseStreamUrl(url, strlen(url), &endpoint)) return ErrorCode::InvalidUrl;
   tcp_ack::ConnectOptions options;
@@ -1029,8 +1031,9 @@ ErrorCode playBridgeStream(const char* url, uint32_t generation, uint8_t* memory
     // The position counts from where the Bridge started the clip (a seek).
     g_played_us = static_cast<uint64_t>(format.position_ms) * 1000u;
     g_position_ms.store(format.position_ms);
-    if (format.duration_ms > 0) g_duration_ms.store(format.duration_ms);
-    g_state_generation.fetch_add(1);
+    g_duration_ms.store(format.duration_ms);
+    setStatusId(id);
+    setPublic(PublicState::Playing, ErrorCode::None);
     Serial.printf("%s Bridge stream: %lu Hz from %.1f s, length %.1f s\n", kLogPrefix,
                   static_cast<unsigned long>(format.rate), format.position_ms / 1000.0,
                   format.duration_ms / 1000.0);
@@ -1045,8 +1048,8 @@ ErrorCode playBridgeStream(const char* url, uint32_t generation, uint8_t* memory
   return result;
 }
 
-ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
-  if (strncmp(url, "tcp://", 6) == 0) return playBridgeStream(url, generation, memory);
+ErrorCode playUrl(const char* id, const char* url, uint32_t generation, uint8_t* memory) {
+  if (strncmp(url, "tcp://", 6) == 0) return playBridgeStream(id, url, generation, memory);
   const bool https = strncmp(url, "https://", 8) == 0;
   // First, so the TLS buffers of the whole download land in PSRAM.
   ScopedPsramTls tls_memory(https);
@@ -1116,38 +1119,47 @@ ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
 
 void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   const uint32_t generation = g_stop_generation.load();
-  setStatusId(request.id);
+  // A Bridge stream reports its clip once the format names the position
+  // (playBridgeStream). A seek starts a new stream; b502 reported "playing"
+  // from 0 without a length in between, and Home Assistant's player bar
+  // vanished or jumped back before it showed the new position.
+  const bool bridge_stream = strncmp(request.url, "tcp://", 6) == 0;
+  if (!bridge_stream) setStatusId(request.id);
   if (!g_codec_ready.load()) {
+    setStatusId(request.id);
     setPublic(PublicState::Idle, ErrorCode::CodecUnavailable);
     return;
   }
   if (!stream_memory) {
+    setStatusId(request.id);
     setPublic(PublicState::Idle, ErrorCode::OutOfMemory);
     return;
   }
-  g_position_ms.store(0);
-  g_duration_ms.store(0);
+  if (!bridge_stream) {
+    g_position_ms.store(0);
+    g_duration_ms.store(0);
+  }
   g_played_us = 0;
   g_clip_paused = false;
   g_clip_stats = ClipStats{};
   g_clip_stats.started_ms = millis();
   g_clip_stats.internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
   g_clip_stats.internal_lowest = g_clip_stats.internal_before;
-  setPublic(PublicState::Playing, ErrorCode::None);
+  if (!bridge_stream) setPublic(PublicState::Playing, ErrorCode::None);
   Serial.printf("%s Playing %s\n", kLogPrefix, request.id);
-  ErrorCode result = playUrl(request.url, generation, stream_memory);
+  ErrorCode result = playUrl(request.id, request.url, generation, stream_memory);
   // A long pause can outlast the server's patience: the connection is gone
   // when playback resumes, so the clip starts again once. A Bridge stream's
   // token works once; the Bridge keeps a paused clip for 10 minutes.
   if (result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested(generation) &&
-      strncmp(request.url, "tcp://", 6) != 0) {
+      !bridge_stream) {
     Serial.printf("%s Clip %s lost its connection during a pause, starting again\n",
                   kLogPrefix, request.id);
     g_position_ms.store(0);
     g_played_us = 0;
     g_clip_paused = false;
     setPublic(PublicState::Playing, ErrorCode::None);
-    result = playUrl(request.url, generation, stream_memory);
+    result = playUrl(request.id, request.url, generation, stream_memory);
   }
   closeOutput();
   g_pause_requested.store(false);
@@ -1160,6 +1172,7 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
                 static_cast<unsigned>(g_clip_stats.internal_lowest / 1024));
   // A newer request keeps the state "playing" instead of flashing idle.
   if (!(g_play_pending.load() && result == ErrorCode::None)) {
+    setStatusId(request.id);
     setPublic(PublicState::Idle, result);
   }
 }

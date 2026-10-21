@@ -56,7 +56,7 @@ the converted clip to the device.
    command with `"url":"tcp://<ha-ip>:<camera-port>/<token>"` (sealed when
    paired).
 3. The panel connects to the camera listener, sends `HTAUD/1 <token>\n` and
-   gets the hello (`HTC1`, status 0, chunk 8192; status 1 = unknown token).
+   gets the hello (`HTC1`, status 0, chunk 4096; status 1 = unknown token).
 4. The Bridge starts FFmpeg (`-protocol_whitelist http,https,tcp,tls,crypto`,
    `-ss` for a seek, mono, the rate, `s16le` to stdout), reads the input
    length from its `Duration:` line and sends the format, then the PCM.
@@ -71,12 +71,12 @@ Frame header `">4sB3xII"`: `"HTF1"`, type, 3 zero bytes, sequence, length.
 | Type | Payload | Meaning |
 | --- | --- | --- |
 | 4 format | 16 bytes `">IHHII"`: rate, channels (1), bits (16), position ms, length ms (0 = unknown) | first message of every stream |
-| 1 audio | PCM, little-endian, even length, 8 KB blocks | |
+| 1 audio | PCM, little-endian, even length, 4 KB blocks | |
 | 3 end | none | play the buffer out and close |
 
 The panel acknowledges format and audio messages with `"HTA1"`, sequence,
 length once they lie in its buffer. The Bridge keeps at most two messages
-unacknowledged: at most 16 KB of the clip wait in the panel's internal
+unacknowledged: at most 8 KB of the clip wait in the panel's internal
 network memory. The panel reads without waiting (`MSG_DONTWAIT`) so the I2S
 output stays fed, and reads audio only while its buffer has room.
 
@@ -103,6 +103,20 @@ Firmware before b502 announces no `stream` and keeps the b501 path (it
 downloads the http(s) URL, own Helix decoder, TLS in PSRAM). A Bridge
 without the stream never sends a `tcp://` URL. Without the camera listener
 the Bridge falls back to the URL.
+
+## Measured on a Guition V2
+
+- b502 with Bridge b8: every song played, including the two that failed with
+  b501. Free internal RAM 168 KB before a song, 137-139 KB while it played
+  (b501: about 80 KB): the I2S buffers (7.5 KB), the packets of two 8 KB
+  blocks in flight and the socket. The UI was still slower and a camera full
+  screen next to a song got 7.7 instead of 13 Mbit/s: the PSRAM buffer moved
+  its whole unread tail (254 KB) for every 2 KB played, 43 times a second on
+  the core of the camera stream and the network worker. b503 moves at most
+  half the buffer once per half buffer played; Bridge b9 sends 4 KB blocks.
+- The seek bar vanished or jumped back for a moment: the new stream reported
+  "playing" from 0 without a length before its format arrived. b503 reports
+  the clip once the format names its position.
 
 ## Later on the same channel
 

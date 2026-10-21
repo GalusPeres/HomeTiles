@@ -15,7 +15,7 @@
 //
 // The panel acknowledges format and audio messages with (sequence, length)
 // once they lie in its PSRAM buffer, so the Bridge never has more than its
-// window (two 8 KB blocks) in flight: the internal network memory a clip
+// window (two 4 KB blocks) in flight: the internal network memory a clip
 // holds is bounded whatever the clip. No sockets, FreeRTOS or Arduino here.
 
 #include <stddef.h>
@@ -33,7 +33,8 @@ constexpr uint8_t kMessageAudio = tcp_ack::kMessageFrame;
 constexpr uint8_t kMessageEnd = tcp_ack::kMessageEnd;
 constexpr uint8_t kMessageFormat = 4;
 constexpr size_t kFormatBytes = 16;
-// The Bridge sends 8 KB blocks; anything above this is not its stream.
+// The Bridge sends 4 KB blocks (8 KB with Bridge b8); anything above this is
+// not its stream.
 constexpr uint32_t kMaxAudioBytes = 64u * 1024u;
 constexpr uint32_t kMinRate = 8000;
 constexpr uint32_t kMaxRate = 48000;

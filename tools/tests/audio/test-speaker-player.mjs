@@ -50,7 +50,7 @@ assert.match(handler, /g_play_pending\.store\(true\);\s*g_pause_requested\.store
 const play = fn('playRequest');
 assert.match(play, /g_clip_stats\.internal_before = heap_caps_get_free_size\(MALLOC_CAP_INTERNAL\);/);
 assert.match(play, /"%s Clip %s %s after %\.1f s: internal RAM %u KB before, lowest %u KB\\n"/);
-assert.match(play, /if \(result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested\(generation\) &&\s*strncmp\(request\.url, "tcp:\/\/", 6\) != 0\) \{[\s\S]*?result = playUrl\(request\.url, generation, stream_memory\);/);
+assert.match(play, /if \(result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested\(generation\) &&\s*!bridge_stream\) \{[\s\S]*?result = playUrl\(request\.id, request\.url, generation, stream_memory\);/);
 assert.match(fn('pump'), /^[\s{]*sampleClipMemory\(\);\s*if \(src->ended\) return;/);
 
 // The status carries position and length.

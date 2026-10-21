@@ -1,0 +1,3 @@
+# The Helix MP3 decoder stays as RealNetworks published it, trailing
+# whitespace included; only its marked HomeTiles changes differ.
+src/audio/helix_mp3/** -whitespace

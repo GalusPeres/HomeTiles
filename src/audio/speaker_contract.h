@@ -11,13 +11,18 @@
 //       encrypted command channel (data name "audio") once pairing is active.
 //       {"v":1,"op":"play","id":"<16-32 lowercase hex>","url":"http://..."}
 //       {"v":1,"op":"stop"}
+//       {"v":1,"op":"pause"}  {"v":1,"op":"resume"}
 //       {"v":1,"op":"volume","volume":0.5}        0.0 .. 1.0
 //       {"v":1,"op":"mute","muted":true}
 //   {base}/stat/audio   panel -> Bridge, QoS0, retained,
-//       {"v":1,"state":"idle"|"playing","volume":0.5,"muted":false,
-//        "formats":["mp3","wav"],"max_bytes":4194304}
+//       {"v":1,"state":"idle"|"playing"|"paused","volume":0.5,"muted":false,
+//        "formats":["mp3","wav"],"max_bytes":4194304,"pausable":true}
 //       plus "id":"<id>" of the current or last clip and "error":"<code>"
-//       when that clip failed (cleared by the next play).
+//       when that clip failed (cleared by the next play). While a clip
+//       plays or pauses: "position_ms" at the moment of the status, and
+//       "duration_ms" once the clip's length is known (not for live
+//       streams). The status is not repeated while a clip plays; the Bridge
+//       moves the position on itself.
 //
 // The panel plays while it downloads, so clips of any length and endless
 // MP3 streams (internet radio) work. Formats: MP3 (MPEG layer III) and
@@ -59,7 +64,7 @@ constexpr float kDefaultVolume = 0.5f;
 constexpr float kVolumeRangeDb = 50.0f;
 constexpr uint8_t kVolumeRegisterZeroDb = 0xBF;
 
-enum class PublicState : uint8_t { Idle, Playing };
+enum class PublicState : uint8_t { Idle, Playing, Paused };
 
 enum class ErrorCode : uint8_t {
   None,
@@ -74,7 +79,12 @@ enum class ErrorCode : uint8_t {
 };
 
 inline const char* publicStateName(PublicState state) {
-  return state == PublicState::Playing ? "playing" : "idle";
+  switch (state) {
+    case PublicState::Playing: return "playing";
+    case PublicState::Paused: return "paused";
+    case PublicState::Idle: break;
+  }
+  return "idle";
 }
 
 inline const char* errorCodeName(ErrorCode code) {
@@ -260,19 +270,79 @@ inline bool isUnsupportedContentType(const char* type) {
   return false;
 }
 
-// A frame header the Helix decoder of the ESP32 core can decode: MPEG-1 or
-// MPEG-2 (its 12-bit sync word), Layer III, a bitrate from the table and a
-// valid sample rate. Needs 4 bytes. Helix takes any 12-bit sync word for a
-// frame: a Layer I/II or free-format header found in tag data put it into
-// free-bitrate mode for good, and the next frames were copied with a length
-// of -1 over its own memory (#119: an MPEG-2.5 clip at 8-12 kHz, whose real
-// frames Helix cannot see, restarted the panel).
+// A frame header the firmware's Helix copy (src/audio/helix_mp3) can decode:
+// MPEG-1, 2 or 2.5 (11-bit sync word, version not reserved), Layer III, a
+// bitrate from the table and a valid sample rate. Needs 4 bytes. Helix takes
+// any sync word for a frame: a Layer I/II or free-format header found in tag
+// data put it into free-bitrate mode for good, and the next frames were
+// copied with a length of -1 over its own memory (#119: an MPEG-2.5 clip at
+// 8-12 kHz restarted the panel with the core's copy, which cannot see those
+// frames at all).
 inline bool isDecodableMp3Header(const uint8_t* header) {
-  if (!header || header[0] != 0xFF || (header[1] & 0xF0) != 0xF0) return false;
+  if (!header || header[0] != 0xFF || (header[1] & 0xE0) != 0xE0) return false;
+  if (((header[1] >> 3) & 0x03) == 0x01) return false;  // reserved MPEG version
   if (((header[1] >> 1) & 0x03) != 0x01) return false;  // Layer III
   const uint8_t bitrate = header[2] >> 4;
   if (bitrate == 0 || bitrate == 15) return false;      // free format, invalid
   return ((header[2] >> 2) & 0x03) != 3;                // reserved sample rate
+}
+
+// Samples per channel in one Layer III frame: 1152 for MPEG-1, 576 for
+// MPEG-2 and 2.5.
+inline uint32_t mp3SamplesPerFrame(const uint8_t* header) {
+  return ((header[1] >> 3) & 0x03) == 0x03 ? 1152u : 576u;
+}
+
+inline uint32_t readBigEndian32(const uint8_t* p) {
+  return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
+         (static_cast<uint32_t>(p[2]) << 8) | p[3];
+}
+
+// Frame count of the clip from the Xing/Info (LAME) or VBRI header in its
+// first frame, 0 when the frame carries none. frame points at the frame
+// header, length is what is available from there.
+inline uint32_t mp3TagFrameCount(const uint8_t* frame, size_t length) {
+  if (!frame || length < 4) return 0;
+  const bool mpeg1 = ((frame[1] >> 3) & 0x03) == 0x03;
+  const bool mono = (frame[3] >> 6) == 0x03;
+  // The tag follows the side information.
+  const size_t xing = 4 + (mpeg1 ? (mono ? 17 : 32) : (mono ? 9 : 17));
+  if (length >= xing + 12 &&
+      (memcmp(frame + xing, "Xing", 4) == 0 || memcmp(frame + xing, "Info", 4) == 0) &&
+      (readBigEndian32(frame + xing + 4) & 0x01)) {
+    return readBigEndian32(frame + xing + 8);
+  }
+  // VBRI (Fraunhofer) sits 32 bytes after the header in every version.
+  const size_t vbri = 4 + 32;
+  if (length >= vbri + 18 && memcmp(frame + vbri, "VBRI", 4) == 0) {
+    return readBigEndian32(frame + vbri + 14);
+  }
+  return 0;
+}
+
+// Length of an MP3 clip in ms: from the tag's frame count when the first
+// frame has one, else from the audio bytes after the ID3 tag and the
+// bitrate (constant bitrate). 0 when unknown: a live stream announces no
+// size (audio_bytes < 0).
+inline uint32_t mp3DurationMs(const uint8_t* first_frame, size_t length, uint32_t sample_rate,
+                              uint32_t bitrate_bps, int64_t audio_bytes) {
+  if (sample_rate == 0) return 0;
+  const uint32_t frames = mp3TagFrameCount(first_frame, length);
+  if (frames > 0) {
+    return static_cast<uint32_t>(static_cast<uint64_t>(frames) *
+                                 mp3SamplesPerFrame(first_frame) * 1000u / sample_rate);
+  }
+  if (audio_bytes <= 0 || bitrate_bps == 0) return 0;
+  return static_cast<uint32_t>(static_cast<uint64_t>(audio_bytes) * 8000u / bitrate_bps);
+}
+
+// Length of a WAV clip in ms, 0 when its data size is open (a stream).
+inline uint32_t wavDurationMs(uint32_t data_length, uint32_t sample_rate, uint32_t frame_bytes) {
+  if (data_length == 0 || data_length == 0xFFFFFFFFu || sample_rate == 0 || frame_bytes == 0) {
+    return 0;
+  }
+  return static_cast<uint32_t>(static_cast<uint64_t>(data_length) * 1000u /
+                               (static_cast<uint64_t>(sample_rate) * frame_bytes));
 }
 
 // Size of an ID3v2 tag at the start of an MP3 (header, body and footer),
@@ -345,6 +415,9 @@ struct StatusFields {
   bool muted = false;
   const char* id = nullptr;
   ErrorCode error = ErrorCode::None;
+  // Sent while a clip plays or pauses; duration_ms 0 = not known.
+  uint32_t position_ms = 0;
+  uint32_t duration_ms = 0;
 };
 
 // Returns the JSON length, or 0 when the buffer is too small.
@@ -353,7 +426,7 @@ inline size_t buildStatusJson(char* out, size_t size, const StatusFields& fields
   const float volume = clampVolume(fields.volume);
   int written = snprintf(out, size,
                          "{\"v\":%d,\"state\":\"%s\",\"volume\":%.2f,\"muted\":%s,"
-                         "\"formats\":[\"mp3\",\"wav\"],\"max_bytes\":%lu",
+                         "\"formats\":[\"mp3\",\"wav\"],\"max_bytes\":%lu,\"pausable\":true",
                          kProtocolVersion, publicStateName(fields.state),
                          static_cast<double>(volume), fields.muted ? "true" : "false",
                          static_cast<unsigned long>(kMaxClipBytes));
@@ -368,6 +441,18 @@ inline size_t buildStatusJson(char* out, size_t size, const StatusFields& fields
     written = snprintf(out + used, size - used, ",\"error\":\"%s\"", errorCodeName(fields.error));
     if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;
     used += static_cast<size_t>(written);
+  }
+  if (fields.state != PublicState::Idle) {
+    written = snprintf(out + used, size - used, ",\"position_ms\":%lu",
+                       static_cast<unsigned long>(fields.position_ms));
+    if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;
+    used += static_cast<size_t>(written);
+    if (fields.duration_ms > 0) {
+      written = snprintf(out + used, size - used, ",\"duration_ms\":%lu",
+                         static_cast<unsigned long>(fields.duration_ms));
+      if (written < 0 || static_cast<size_t>(written) >= size - used) return 0;
+      used += static_cast<size_t>(written);
+    }
   }
   if (used + 2 > size) return 0;
   out[used++] = '}';

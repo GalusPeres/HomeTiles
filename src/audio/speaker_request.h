@@ -9,7 +9,7 @@
 
 namespace speaker_contract {
 
-enum class CommandKind : uint8_t { Invalid, Play, Stop, Volume, Mute };
+enum class CommandKind : uint8_t { Invalid, Play, Stop, Volume, Mute, Pause, Resume };
 
 enum class CommandStatus : uint8_t {
   Ok,
@@ -77,6 +77,11 @@ inline void parseCommand(const char* payload, size_t length, bool https_allowed,
   }
   if (strcmp(op_name, "stop") == 0) {
     out->kind = CommandKind::Stop;
+    out->status = CommandStatus::Ok;
+    return;
+  }
+  if (strcmp(op_name, "pause") == 0 || strcmp(op_name, "resume") == 0) {
+    out->kind = op_name[0] == 'p' ? CommandKind::Pause : CommandKind::Resume;
     out->status = CommandStatus::Ok;
     return;
   }

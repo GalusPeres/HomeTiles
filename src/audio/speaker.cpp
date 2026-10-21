@@ -21,8 +21,9 @@
 #include <freertos/idf_additions.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <mbedtls/platform.h>
 
-#include "mp3dec.h"
+#include "src/audio/helix_mp3/mp3dec.h"
 #include "src/audio/assist_request.h"
 #include "src/audio/audio_board.h"
 #include "src/audio/codecs/audio_chips.h"
@@ -56,6 +57,13 @@ std::atomic<float> g_volume{kDefaultVolume};
 std::atomic<bool> g_muted{false};
 // Bumped by every change of the retained status; service() publishes it.
 std::atomic<uint32_t> g_state_generation{0};
+// The clip's playback position and length (0 = not known) for the status.
+// Set by the worker; published only with a status change, the Bridge moves
+// the position on itself while a clip plays.
+std::atomic<uint32_t> g_position_ms{0};
+std::atomic<uint32_t> g_duration_ms{0};
+// Home Assistant's pause: set by the loop task, followed by the worker.
+std::atomic<bool> g_pause_requested{false};
 uint32_t g_published_generation = 0;
 // Bridge capability bits: 1 = audio_output, 2 = audio_input.
 uint8_t g_last_capability = 0;
@@ -149,6 +157,10 @@ constexpr int kMaxConsecutiveDecodeErrors = 40;
 // Bytes searched for the first MP3 frame header before giving up.
 constexpr size_t kMaxSyncHuntBytes = 64u * 1024u;
 constexpr size_t kWavChunkFrames = 1024;
+// How often a playing clip samples the free internal RAM for its log line.
+constexpr uint32_t kClipMemorySampleMs = 200;
+// A paused clip checks for resume or stop this often.
+constexpr uint32_t kPausePollMs = 20;
 
 struct PlayRequest {
   char id[kMaxRequestIdLength + 1];
@@ -417,6 +429,68 @@ bool writeFrames(const int16_t* samples, size_t frames) {
                            kI2sWriteTimeoutMs) == ESP_OK;
 }
 
+// Worker only: audio of the current clip handed to the output.
+uint64_t g_played_us = 0;
+// Worker only: the current clip was paused at least once.
+bool g_clip_paused = false;
+
+// The status position follows the frames written (the DMA buffer plays
+// them within about 170 ms).
+void notePlayed(size_t frames) {
+  if (g_tx_rate == 0) return;
+  g_played_us += static_cast<uint64_t>(frames) * 1000000u / g_tx_rate;
+  g_position_ms.store(static_cast<uint32_t>(g_played_us / 1000u));
+}
+
+// One log line per clip: how long it ran and how low the free internal RAM
+// went meanwhile.
+struct ClipStats {
+  uint32_t started_ms = 0;
+  uint32_t sampled_ms = 0;
+  size_t internal_before = 0;
+  size_t internal_lowest = 0;
+};
+ClipStats g_clip_stats;  // worker only
+
+void sampleClipMemory() {
+  const uint32_t now_ms = millis();
+  if (static_cast<uint32_t>(now_ms - g_clip_stats.sampled_ms) < kClipMemorySampleMs) return;
+  g_clip_stats.sampled_ms = now_ms;
+  const size_t internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+  if (internal < g_clip_stats.internal_lowest) g_clip_stats.internal_lowest = internal;
+}
+
+// HTTPS downloads keep their TLS buffers in PSRAM, as the P4 update download
+// does (github_update.cpp). In internal RAM a playing clip took the free
+// internal heap from 155 to 44 KB and the DMA heap to 2 KB on a V2: the
+// link waited, the UI slowed and the next clip's TLS setup failed (esp-aes
+// could not allocate). mbedTLS has one allocator for all connections; the
+// internal one (the core's setting) returns when the download ends.
+void* tlsPsramCalloc(size_t count, size_t size) {
+  void* ptr = heap_caps_calloc(count, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  return ptr ? ptr : heap_caps_calloc(count, size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+}
+
+void* tlsInternalCalloc(size_t count, size_t size) {
+  return heap_caps_calloc(count, size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+}
+
+void tlsFree(void* ptr) {
+  heap_caps_free(ptr);
+}
+
+class ScopedPsramTls {
+ public:
+  explicit ScopedPsramTls(bool active)
+      : active_(active && mbedtls_platform_set_calloc_free(tlsPsramCalloc, tlsFree) == 0) {}
+  ~ScopedPsramTls() {
+    if (active_) mbedtls_platform_set_calloc_free(tlsInternalCalloc, tlsFree);
+  }
+
+ private:
+  bool active_;
+};
+
 // ---------------------------------------------------------------------------
 // Worker: streaming download
 // ---------------------------------------------------------------------------
@@ -429,12 +503,15 @@ struct Source {
   StreamBuffer buffer;
   // Bytes still expected from a response with Content-Length, -1 otherwise.
   int64_t remaining = -1;
+  // The announced Content-Length, -1 for a live stream.
+  int64_t total_bytes = -1;
   bool ended = false;
   bool failed = false;
   uint32_t last_data_ms = 0;
 };
 
 void pump(Source* src) {
+  sampleClipMemory();
   if (src->ended) return;
   size_t budget = kPumpBudgetBytes;
   while (budget > 0) {
@@ -514,6 +591,27 @@ bool skipBytes(Source* src, size_t bytes, uint32_t generation) {
   return true;
 }
 
+// Home Assistant's pause: the output goes quiet while the download keeps
+// filling the buffer; once it is full TCP holds the server back. Returns
+// false when a stop or a newer clip ended this one meanwhile.
+bool holdWhilePaused(Source* src, uint32_t generation) {
+  if (!g_pause_requested.load()) return true;
+  if (g_tx) setAmp(false);
+  g_clip_paused = true;
+  setPublic(PublicState::Paused, ErrorCode::None);
+  while (g_pause_requested.load() && !stopRequested(generation)) {
+    pump(src);
+    vTaskDelay(pdMS_TO_TICKS(kPausePollMs));
+  }
+  if (stopRequested(generation)) return false;
+  setPublic(PublicState::Playing, ErrorCode::None);
+  if (g_tx) {
+    setAmp(true);
+    vTaskDelay(pdMS_TO_TICKS(kAmpSettleMs));
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Worker: decoding
 // ---------------------------------------------------------------------------
@@ -556,6 +654,20 @@ __attribute__((noinline)) void logUndecodedMp3(const Mp3Diagnostics& diag) {
                 headers[0] ? headers : "none");
 }
 
+// The clip's length for the status, from its first decoded frame.
+void noteMp3Duration(HMP3Decoder decoder, const uint8_t* frame, int left, const Source* src,
+                     uint32_t id3_bytes) {
+  MP3FrameInfo info;
+  MP3GetLastFrameInfo(decoder, &info);
+  const int64_t audio_bytes = src->total_bytes > 0 ? src->total_bytes - id3_bytes : -1;
+  const uint32_t duration = mp3DurationMs(frame, static_cast<size_t>(left),
+                                          static_cast<uint32_t>(info.samprate),
+                                          static_cast<uint32_t>(info.bitrate), audio_bytes);
+  if (duration == 0) return;
+  g_duration_ms.store(duration);
+  g_state_generation.fetch_add(1);
+}
+
 ErrorCode playMp3(Source* src, uint32_t generation) {
   if (!fillTo(src, 10, generation)) return ErrorCode::None;
   const size_t tag = id3v2Length(src->buffer.read(), src->buffer.buffered());
@@ -579,6 +691,7 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
   ErrorCode result = ErrorCode::None;
   const bool buffered_ok = prebuffer(src, generation);
   while (buffered_ok && !stopRequested(generation)) {
+    if (!holdWhilePaused(src, generation)) break;
     pump(src);
     if (src->buffer.buffered() < kMinDecodeBytes && !src->ended) {
       // The network fell behind: refill before decoding a cut frame.
@@ -625,7 +738,7 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
     }
     const int err = MP3Decode(decoder, &frame, &frame_left, pcm, 0);
     if (err == ERR_MP3_NONE) {
-      ++diag.decoded;
+      if (++diag.decoded == 1) noteMp3Duration(decoder, read, left, src, diag.id3_bytes);
     } else if (err < 0 && err > -16) {
       ++diag.errors[-err];
     }
@@ -668,6 +781,7 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
       result = ErrorCode::CodecUnavailable;
       break;
     }
+    notePlayed(frames);
     played_any = true;
   }
   if (result == ErrorCode::None && !played_any && !stopRequested(generation)) {
@@ -691,6 +805,12 @@ ErrorCode playWav(Source* src, uint32_t generation) {
   src->buffer.consume(info.data_offset);
   const bool bounded = info.data_length != 0 && info.data_length != 0xFFFFFFFFu;
   const size_t frame_bytes = 2u * info.channels;
+  const uint32_t duration = wavDurationMs(info.data_length, info.sample_rate,
+                                          static_cast<uint32_t>(frame_bytes));
+  if (duration > 0) {
+    g_duration_ms.store(duration);
+    g_state_generation.fetch_add(1);
+  }
   uint64_t frames_left = bounded ? info.data_length / frame_bytes : UINT64_MAX;
   int16_t* chunk = static_cast<int16_t*>(heap_caps_malloc(
       kWavChunkFrames * info.channels * sizeof(int16_t), MALLOC_CAP_INTERNAL));
@@ -699,6 +819,7 @@ ErrorCode playWav(Source* src, uint32_t generation) {
   bool started = false;
   if (!prebuffer(src, generation)) frames_left = 0;
   while (frames_left > 0 && !stopRequested(generation)) {
+    if (!holdWhilePaused(src, generation)) break;
     pump(src);
     size_t available = src->buffer.buffered() / frame_bytes;
     if (available == 0) {
@@ -725,6 +846,7 @@ ErrorCode playWav(Source* src, uint32_t generation) {
       result = ErrorCode::CodecUnavailable;
       break;
     }
+    notePlayed(frames);
     frames_left -= frames;
   }
   heap_caps_free(chunk);
@@ -732,6 +854,9 @@ ErrorCode playWav(Source* src, uint32_t generation) {
 }
 
 ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
+  const bool https = strncmp(url, "https://", 8) == 0;
+  // First, so the TLS buffers of the whole download land in PSRAM.
+  ScopedPsramTls tls_memory(https);
   HTTPClient http;
   http.setTimeout(kHttpTimeoutMs);
   http.setConnectTimeout(kHttpTimeoutMs);
@@ -742,7 +867,6 @@ ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   NetworkClient plain_client;
   NetworkClientSecure secure_client;
-  const bool https = strncmp(url, "https://", 8) == 0;
   bool begun = false;
   if (https) {
     secure_client.setInsecure();
@@ -773,6 +897,7 @@ ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
   src.buffer.reset(memory, kStreamBufferBytes);
   const int announced = http.getSize();
   src.remaining = announced > 0 ? announced : -1;
+  src.total_bytes = src.remaining;
   src.last_data_ms = millis();
   ErrorCode result = ErrorCode::None;
   if (!src.stream) {
@@ -807,13 +932,37 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
     setPublic(PublicState::Idle, ErrorCode::OutOfMemory);
     return;
   }
+  g_position_ms.store(0);
+  g_duration_ms.store(0);
+  g_played_us = 0;
+  g_clip_paused = false;
+  g_clip_stats = ClipStats{};
+  g_clip_stats.started_ms = millis();
+  g_clip_stats.internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+  g_clip_stats.internal_lowest = g_clip_stats.internal_before;
   setPublic(PublicState::Playing, ErrorCode::None);
   Serial.printf("%s Playing %s\n", kLogPrefix, request.id);
-  const ErrorCode result = playUrl(request.url, generation, stream_memory);
-  closeOutput();
-  if (result != ErrorCode::None) {
-    Serial.printf("%s Clip %s failed: %s\n", kLogPrefix, request.id, errorCodeName(result));
+  ErrorCode result = playUrl(request.url, generation, stream_memory);
+  // A long pause can outlast the server's patience: the connection is gone
+  // when playback resumes, so the clip starts again once.
+  if (result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested(generation)) {
+    Serial.printf("%s Clip %s lost its connection during a pause, starting again\n",
+                  kLogPrefix, request.id);
+    g_position_ms.store(0);
+    g_played_us = 0;
+    g_clip_paused = false;
+    setPublic(PublicState::Playing, ErrorCode::None);
+    result = playUrl(request.url, generation, stream_memory);
   }
+  closeOutput();
+  g_pause_requested.store(false);
+  Serial.printf("%s Clip %s %s after %.1f s: internal RAM %u KB before, lowest %u KB\n",
+                kLogPrefix, request.id,
+                result != ErrorCode::None ? errorCodeName(result)
+                : stopRequested(generation) ? "stopped" : "done",
+                (millis() - g_clip_stats.started_ms) / 1000.0,
+                static_cast<unsigned>(g_clip_stats.internal_before / 1024),
+                static_cast<unsigned>(g_clip_stats.internal_lowest / 1024));
   // A newer request keeps the state "playing" instead of flashing idle.
   if (!(g_play_pending.load() && result == ErrorCode::None)) {
     setPublic(PublicState::Idle, result);
@@ -1371,6 +1520,8 @@ void publishStatus() {
   fields.volume = g_volume.load();
   fields.muted = g_muted.load();
   fields.error = static_cast<ErrorCode>(g_error.load());
+  fields.position_ms = g_position_ms.load();
+  fields.duration_ms = g_duration_ms.load();
   char id[kMaxRequestIdLength + 1] = {};
 #if defined(HOMETILES_SPEAKER)
   portENTER_CRITICAL(&g_id_mux);
@@ -1378,7 +1529,7 @@ void publishStatus() {
   portEXIT_CRITICAL(&g_id_mux);
 #endif
   if (id[0]) fields.id = id;
-  char payload[224];
+  char payload[320];
   if (!buildStatusJson(payload, sizeof(payload), fields)) return;
   networkManager.mqttEnqueuePublish(topic, payload, true);
 }
@@ -1557,6 +1708,7 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
       memcpy(g_request->id, command.id, sizeof(g_request->id));
       memcpy(g_request->url, g_parse_url, command.url_length + 1);
       g_play_pending.store(true);
+      g_pause_requested.store(false);
       // Playback ends a capture session or a start that has not begun.
       g_assist_pending.store(false);
       g_capture_generation.fetch_add(1);
@@ -1571,7 +1723,15 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
         g_play_pending.store(false);
         xSemaphoreGive(g_request_mutex);
       }
+      g_pause_requested.store(false);
       g_stop_generation.fetch_add(1);
+      break;
+    case CommandKind::Pause:
+    case CommandKind::Resume:
+      // The worker follows the flag inside the playing clip; idle ignores it.
+      if (static_cast<PublicState>(g_public_state.load()) != PublicState::Idle) {
+        g_pause_requested.store(command.kind == CommandKind::Pause);
+      }
       break;
     case CommandKind::Volume:
     case CommandKind::Mute:

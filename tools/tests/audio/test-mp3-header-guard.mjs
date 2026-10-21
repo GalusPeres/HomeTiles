@@ -5,8 +5,10 @@
 // frame, kept free-bitrate mode with -1 slots when the next sync was not
 // found, and copied the next frames with a length of -1 over its own memory
 // (reproduced on the host with AddressSanitizer: 171 of 240 MPEG-2.5 clips).
-// playMp3 now hands Helix only headers it can decode. The headers below come
-// from those reproduction clips.
+// playMp3 now hands Helix only headers it can decode, and the firmware builds
+// its own Helix copy with the 11-bit sync word, so MPEG-2.5 decodes too
+// (test-helix-mpeg25.mjs). The headers below come from those reproduction
+// clips.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -41,6 +43,8 @@ int main() {
   const unsigned char mpeg2_22k_64[] = {0xFF, 0xF3, 0x80, 0xC4};    // MPEG-2 L3 22.05 kHz
   const unsigned char mpeg2_crc[] = {0xFF, 0xF2, 0x50, 0xC0};       // MPEG-2 L3 with CRC
   const unsigned char mpeg25_12k[] = {0xFF, 0xE3, 0x64, 0xC4};      // MPEG-2.5: 11-bit sync
+  const unsigned char mpeg25_8k[] = {0xFF, 0xE3, 0x18, 0xC4};       // MPEG-2.5 8 kHz 8 kbit/s
+  const unsigned char reserved_v[] = {0xFF, 0xEB, 0x90, 0x64};      // version bits 01
   const unsigned char tag_bytes[] = {0xFF, 0xFF, 0x00, 0x00};       // Info tag: MPEG-1 L1 free
   const unsigned char layer2[] = {0xFF, 0xFD, 0x94, 0x00};          // MP2 frame
   const unsigned char free_l3[] = {0xFF, 0xFB, 0x00, 0x64};         // Layer III free format
@@ -51,7 +55,9 @@ int main() {
   expect("mpeg1_48k_320", mpeg1_48k_320, true);
   expect("mpeg2_22k_64", mpeg2_22k_64, true);
   expect("mpeg2_crc", mpeg2_crc, true);
-  expect("mpeg25_12k", mpeg25_12k, false);
+  expect("mpeg25_12k", mpeg25_12k, true);
+  expect("mpeg25_8k", mpeg25_8k, true);
+  expect("reserved_v", reserved_v, false);
   expect("tag_bytes", tag_bytes, false);
   expect("layer2", layer2, false);
   expect("free_l3", free_l3, false);
@@ -66,5 +72,5 @@ int main() {
 });
 if (output !== null) {
   assert.match(output, /^0 failures$/m);
-  console.log('PASS: only MPEG-1/2 Layer III headers with a table bitrate reach the Helix decoder');
+  console.log('PASS: only MPEG-1/2/2.5 Layer III headers with a table bitrate reach the Helix decoder');
 }

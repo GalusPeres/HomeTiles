@@ -166,6 +166,9 @@ uint32_t g_first_shown_ms = 0;
 // Set by the camera task when the stream ended on its own; the UI task then
 // logs the Wi-Fi signal once (the radio query stays off the camera task).
 volatile bool g_log_wifi_at_end = false;
+// A pause asked for by camera_stream_debug_pause(), taken by the camera task
+// before its next frame.
+volatile uint32_t g_debug_pause_ms = 0;
 
 #if CAMERA_STREAM_HW_JPEG
 // Keep the engine alive across popup opens. Creating/deleting JPEG engines
@@ -1479,6 +1482,20 @@ static void run_camera_task() {
       break;
     }
 
+    if (const uint32_t pause_ms = g_debug_pause_ms) {
+      // Test builds only: nothing is read or acknowledged, so the Bridge
+      // waits for this panel exactly as during a Wi-Fi stall.
+      g_debug_pause_ms = 0;
+      Serial.printf("[CameraStream] Debug pause: no reads for %u ms\n",
+                    static_cast<unsigned>(pause_ms));
+      const uint32_t paused_at = millis();
+      while (!g_stop_requested && millis() - paused_at < pause_ms) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+      }
+      Serial.println("[CameraStream] Debug pause over, reading again");
+      if (g_stop_requested) break;
+    }
+
     uint8_t header[kCameraFrameHeaderBytes] = {};
     const SocketReadResult header_result =
         receive_data(header, sizeof(header));
@@ -2077,6 +2094,12 @@ bool camera_stream_take_transport_failure() {
   return true;
 }
 
+bool camera_stream_debug_pause(uint32_t ms) {
+  if (!task_is_active() || ms == 0) return false;
+  g_debug_pause_ms = ms;
+  return true;
+}
+
 #else
 
 bool camera_stream_start(const char*, uint32_t, bool) {
@@ -2092,5 +2115,6 @@ void camera_stream_set_external_status(const char*, bool) {}
 bool camera_stream_is_active() { return false; }
 uint32_t camera_stream_first_frame_ms() { return 0; }
 bool camera_stream_take_transport_failure() { return false; }
+bool camera_stream_debug_pause(uint32_t) { return false; }
 
 #endif

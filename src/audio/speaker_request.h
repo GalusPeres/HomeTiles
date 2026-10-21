@@ -44,6 +44,8 @@ struct Command {
   char id[kMaxRequestIdLength + 1] = {};
   // Only for Play; points into the caller's url buffer.
   size_t url_length = 0;
+  // Only for Play: a camera's sound, kept short (audio_stream_contract.h).
+  bool live = false;
   float volume = kDefaultVolume;
   bool muted = false;
 };
@@ -139,6 +141,8 @@ inline void parseCommand(const char* payload, size_t length, bool https_allowed,
   }
   memcpy(url_out, url_text, url_length + 1);
   out->url_length = url_length;
+  JsonVariantConst live = doc["live"];
+  out->live = live.is<bool>() && live.as<bool>();
   out->status = CommandStatus::Ok;
 }
 

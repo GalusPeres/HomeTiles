@@ -372,6 +372,14 @@ int main() {
   assert(c.kind == CommandKind::Play && c.status == CommandStatus::Ok);
   assert(strcmp(c.id, "0123456789abcdef") == 0);
   assert(url == "http://ha.local:8123/api/tts_proxy/x.mp3" && c.url_length == url.size());
+  assert(!c.live);
+  // A camera's sound from the Bridge (b504): kept short on the panel.
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true}", false, &url);
+  assert(c.status == CommandStatus::Ok && c.live && url == "tcp://192.168.1.2:8124/tok");
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":\"yes\"}");
+  assert(c.status == CommandStatus::Ok && !c.live);
 
   c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\",\"url\":\"https://ha/x.mp3\"}");
   assert(c.kind == CommandKind::Play && c.status == CommandStatus::HttpsUnsupported);

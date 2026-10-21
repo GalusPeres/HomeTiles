@@ -144,7 +144,7 @@ The Bridge adds these entities to the display's Home Assistant device while the 
 
 | Entity | Use |
 | --- | --- |
-| **Speaker** | Media player: plays sounds, music, announcements and spoken answers from Home Assistant, with title, position, pause and seeking, and sets the volume. The Bridge decodes every format and sends the display plain audio at the pace it plays (firmware b502 or newer). While it plays, the display does not listen for its wake word. |
+| **Speaker** | Media player: plays sounds, music, announcements and spoken answers from Home Assistant, with title, position, pause and seeking, and sets the volume. The Bridge decodes every format and sends the display plain audio at the pace it plays (firmware b502 or newer). When a camera's stream has sound, the display plays it while the camera popup or full screen is open (b504 or newer). While it plays, the display does not listen for its wake word. |
 | **Assist** | Assist satellite: Home Assistant's voice pipeline listens through the display's microphone, and the answer plays on its speaker. |
 | **Start Assist** button | Starts a voice request without a wake word. |
 | **Listening** | The display listens for its wake word by itself. Off on a new display. |

@@ -149,10 +149,11 @@ assert.match(transport, /constexpr uint32_t kFastChunkBytes = 32 \* 1024;\s*cons
 assert.match(transport, /if \(prefs\.getBool\(kRunKey, false\)\) \{\s*prefs\.putBool\(kRunKey, false\);\s*prefs\.putString\(kSafeKey, FW_VERSION\);\s*g_safe = true;/,
   'a restart while a fast stream ran: 8 KB for this firmware');
 assert.match(transport, /prefs\.getString\(kSafeKey, ""\) == FW_VERSION/, 'a new firmware tries the fast transport again');
+// The quality and, from b504, the camera sound request follow the window.
 for (const fn of ['void mqttPublishCameraFullScreenOpen(', 'void mqttPublishCameraCommand(']) {
-  assert.match(body(mqtt, fn), /\\"chunk\\":%u,\\"window\\":%u%s,/);
+  assert.match(body(mqtt, fn), /\\"chunk\\":%u,\\"window\\":%u%s%s,/);
   assert.match(body(mqtt, fn), /camera_quality_field\(quality, sizeof\(quality\)\);/);
-  assert.match(body(mqtt, fn), /static_cast<unsigned>\(transport\.chunk_bytes\),\s*static_cast<unsigned>\(transport\.window\), quality\);/);
+  assert.match(body(mqtt, fn), /static_cast<unsigned>\(transport\.chunk_bytes\),\s*static_cast<unsigned>\(transport\.window\), quality, camera_audio_field\(\)\);/);
 }
 // The panel's JPEG quality only where it asks for one (none today: the S3's
 // 5 in b329 looked no different); older Bridges ignore the field.

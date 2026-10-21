@@ -17,6 +17,10 @@
 // once they lie in its PSRAM buffer, so the Bridge never has more than its
 // window (two 4 KB blocks) in flight: the internal network memory a clip
 // holds is bounded whatever the clip. No sockets, FreeRTOS or Arduino here.
+//
+// A camera's sound comes the same way with "live":true in the play command:
+// the panel keeps only a fraction of a second of it (kLiveTargetMs to
+// kLiveMaxMs) so the sound stays close to the picture.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -40,6 +44,23 @@ constexpr uint32_t kMinRate = 8000;
 constexpr uint32_t kMaxRate = 48000;
 constexpr size_t kMaxHostLength = 63;
 constexpr size_t kMaxTokenLength = 64;
+
+// A camera's sound: what the panel holds beyond kLiveMaxMs (a burst after a
+// Wi-Fi stall, FFmpeg's first packets) is dropped down to kLiveTargetMs.
+constexpr uint32_t kLiveTargetMs = 300;
+constexpr uint32_t kLiveMaxMs = 600;
+
+// Mono 16-bit bytes for ms at rate, a whole number of samples.
+inline size_t pcmBytes(uint32_t rate, uint32_t ms) {
+  return static_cast<size_t>(static_cast<uint64_t>(rate) * ms / 1000u) * 2u;
+}
+
+// Bytes to drop from a live buffer holding `buffered` bytes: 0 within the
+// maximum, else down to the target (whole samples).
+inline size_t liveExcessBytes(size_t buffered, uint32_t rate) {
+  if (buffered <= pcmBytes(rate, kLiveMaxMs)) return 0;
+  return (buffered - pcmBytes(rate, kLiveTargetMs)) & ~static_cast<size_t>(1);
+}
 
 struct Endpoint {
   char host[kMaxHostLength + 1] = {};

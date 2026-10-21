@@ -122,11 +122,27 @@ the Bridge falls back to the URL.
   the UI no longer slowed down. Home Assistant still moved the seek bar back
   until the panel reported the new position; Bridge b10 sets it at once.
 
+## Camera sound (b504, Bridge b11)
+
+No button: a panel whose speaker plays Bridge streams adds
+`"audio":"tcp-ack-v1"` to its camera open (popup and full screen). For a
+camera with a stream source the Bridge asks FFmpeg once whether the stream
+has an audio track (`async_has_audio`, cached 10 minutes per source); if so
+it starts a live session (22.05 kHz, RTSP read like the picture: TCP,
+`nobuffer`) and sends a play command with `"live":true`.
+
+- Switching between popup and full screen sends another open; a sound
+  already running for the same stream keeps running.
+- Close ends FFmpeg (`finish_device`); the end message follows and the panel
+  plays out what it holds, so the clip ends as done, not as an error.
+- The panel keeps 300-600 ms of a live stream and drops what arrives beyond
+  that (`liveExcessBytes`), so a burst after a stall does not put the sound
+  further behind the picture. Lip sync is not attempted.
+- The sound takes over the speaker like any clip: a playing song stops.
+  Still-image cameras and the panels' own cameras have no sound.
+
 ## Later on the same channel
 
-- **Camera sound**: the camera's audio track as a second stream next to the
-  picture, started with the camera popup or full screen. Picture and sound
-  timing still needs a design.
 - **Microphone to the Bridge**: an intercom would send PCM the other way
   over tcp-ack, like the built-in camera upload (`local_camera_upload.cpp`).
   Talking while the speaker plays needs echo cancellation on the panel

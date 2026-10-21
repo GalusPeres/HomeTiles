@@ -175,6 +175,8 @@ constexpr int kBridgeReceiveBufferBytes = 4 * 1024;
 struct PlayRequest {
   char id[kMaxRequestIdLength + 1];
   char url[kMaxUrlLength + 1];
+  // A camera's sound (audio_stream_contract.h): kept close to the picture.
+  bool live;
 };
 
 // Assist capture: 16 kHz 16-bit stereo (one mic per slot). 6 x 320 frames x
@@ -899,9 +901,11 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
 }
 
 // Plays 16-bit PCM from the buffer: frames_left frames, or until the source
-// ends (UINT64_MAX). A WAV clip and a Bridge stream share it.
+// ends (UINT64_MAX). A WAV clip and a Bridge stream share it; a live stream
+// (a camera's sound, mono) drops what it holds beyond a fraction of a second.
 ErrorCode playPcm(Source* src, uint32_t generation, uint32_t rate, uint16_t channels,
-                  uint64_t frames_left) {
+                  uint64_t frames_left, bool live = false) {
+  uint64_t live_dropped_bytes = 0;
   const size_t frame_bytes = 2u * channels;
   int16_t* chunk = static_cast<int16_t*>(heap_caps_malloc(
       kWavChunkFrames * channels * sizeof(int16_t), MALLOC_CAP_INTERNAL));
@@ -912,6 +916,13 @@ ErrorCode playPcm(Source* src, uint32_t generation, uint32_t rate, uint16_t chan
   while (frames_left > 0 && !stopRequested(generation)) {
     if (!holdWhilePaused(src, generation)) break;
     pump(src);
+    if (live) {
+      const size_t excess = audio_stream::liveExcessBytes(src->buffer.buffered(), rate);
+      if (excess > 0) {
+        src->buffer.consume(excess);
+        live_dropped_bytes += excess;
+      }
+    }
     size_t available = src->buffer.buffered() / frame_bytes;
     if (available == 0) {
       if (src->ended) break;
@@ -941,6 +952,10 @@ ErrorCode playPcm(Source* src, uint32_t generation, uint32_t rate, uint16_t chan
     if (frames_left != UINT64_MAX) frames_left -= frames;
   }
   heap_caps_free(chunk);
+  if (live_dropped_bytes > 0) {
+    Serial.printf("%s Live sound: dropped %lu ms to stay with the picture\n", kLogPrefix,
+                  static_cast<unsigned long>(live_dropped_bytes * 1000u / (2u * rate)));
+  }
   return result;
 }
 
@@ -973,7 +988,7 @@ bool clipStopRequested(void* context) {
 // A clip the Bridge decodes (audio_stream_contract.h): no TLS, no decoder,
 // and at most the Bridge's window of two blocks waits in internal RAM. The
 // clip reports "playing" with its id once the format named its position.
-ErrorCode playBridgeStream(const char* id, const char* url, uint32_t generation,
+ErrorCode playBridgeStream(const char* id, const char* url, bool live, uint32_t generation,
                            uint8_t* memory) {
   audio_stream::Endpoint endpoint;
   if (!audio_stream::parseStreamUrl(url, strlen(url), &endpoint)) return ErrorCode::InvalidUrl;
@@ -1034,10 +1049,10 @@ ErrorCode playBridgeStream(const char* id, const char* url, uint32_t generation,
     g_duration_ms.store(format.duration_ms);
     setStatusId(id);
     setPublic(PublicState::Playing, ErrorCode::None);
-    Serial.printf("%s Bridge stream: %lu Hz from %.1f s, length %.1f s\n", kLogPrefix,
+    Serial.printf("%s Bridge stream: %lu Hz from %.1f s, length %.1f s%s\n", kLogPrefix,
                   static_cast<unsigned long>(format.rate), format.position_ms / 1000.0,
-                  format.duration_ms / 1000.0);
-    result = playPcm(&src, generation, format.rate, 1, UINT64_MAX);
+                  format.duration_ms / 1000.0, live ? ", live" : "");
+    result = playPcm(&src, generation, format.rate, 1, UINT64_MAX, live);
   } else if (strcmp(receiver.failure(), "unsupported_format") == 0) {
     result = ErrorCode::UnsupportedFormat;
   }
@@ -1048,8 +1063,9 @@ ErrorCode playBridgeStream(const char* id, const char* url, uint32_t generation,
   return result;
 }
 
-ErrorCode playUrl(const char* id, const char* url, uint32_t generation, uint8_t* memory) {
-  if (strncmp(url, "tcp://", 6) == 0) return playBridgeStream(id, url, generation, memory);
+ErrorCode playUrl(const char* id, const char* url, bool live, uint32_t generation,
+                  uint8_t* memory) {
+  if (strncmp(url, "tcp://", 6) == 0) return playBridgeStream(id, url, live, generation, memory);
   const bool https = strncmp(url, "https://", 8) == 0;
   // First, so the TLS buffers of the whole download land in PSRAM.
   ScopedPsramTls tls_memory(https);
@@ -1147,7 +1163,7 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   g_clip_stats.internal_lowest = g_clip_stats.internal_before;
   if (!bridge_stream) setPublic(PublicState::Playing, ErrorCode::None);
   Serial.printf("%s Playing %s\n", kLogPrefix, request.id);
-  ErrorCode result = playUrl(request.id, request.url, generation, stream_memory);
+  ErrorCode result = playUrl(request.id, request.url, request.live, generation, stream_memory);
   // A long pause can outlast the server's patience: the connection is gone
   // when playback resumes, so the clip starts again once. A Bridge stream's
   // token works once; the Bridge keeps a paused clip for 10 minutes.
@@ -1159,7 +1175,7 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
     g_played_us = 0;
     g_clip_paused = false;
     setPublic(PublicState::Playing, ErrorCode::None);
-    result = playUrl(request.id, request.url, generation, stream_memory);
+    result = playUrl(request.id, request.url, request.live, generation, stream_memory);
   }
   closeOutput();
   g_pause_requested.store(false);
@@ -1916,6 +1932,7 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
       if (xSemaphoreTake(g_request_mutex, pdMS_TO_TICKS(50)) != pdTRUE) return;
       memcpy(g_request->id, command.id, sizeof(g_request->id));
       memcpy(g_request->url, g_parse_url, command.url_length + 1);
+      g_request->live = command.live;
       g_play_pending.store(true);
       g_pause_requested.store(false);
       // Playback ends a capture session or a start that has not begun.

@@ -3212,6 +3212,13 @@ void mqttServicePostConnect() {
   networkManager.publishBridgeConfig();
 }
 
+// A panel whose speaker plays Bridge streams asks for the camera's sound;
+// the Bridge plays it when the camera's stream has an audio track
+// (audio_stream_contract.h). The transport name matches the speaker status.
+static const char* camera_audio_field() {
+  return speaker::bridgeCapability() ? ",\"audio\":\"tcp-ack-v1\"" : "";
+}
+
 // The panel's own JPEG quality for the Bridge, or nothing for the Bridge's.
 static void camera_quality_field(char* out, size_t size) {
   out[0] = '\0';
@@ -3239,14 +3246,14 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
            "{\"entity_id\":\"%s\",\"command\":\"open\","
            "\"width\":%u,\"height\":%u,\"fps\":%u,"
            "\"view\":\"full\",\"rotate\":%u,\"fit\":\"%s\","
-           "\"chunk\":%u,\"window\":%u%s,"
+           "\"chunk\":%u,\"window\":%u%s%s,"
            "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
            entity_id, static_cast<unsigned>(width),
            static_cast<unsigned>(height),
            static_cast<unsigned>(fps ? fps : camera_geometry::kFps),
            static_cast<unsigned>(turn_cw), camera_geometry::kFullFit,
            static_cast<unsigned>(transport.chunk_bytes),
-           static_cast<unsigned>(transport.window), quality);
+           static_cast<unsigned>(transport.window), quality, camera_audio_field());
   const bool queued =
       networkManager.mqttEnqueuePublishPriority(topic, payload, false);
   Serial.printf("[Camera] command open full screen %ux%u -> %s (%s)\n",
@@ -3279,14 +3286,14 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command,
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\","
              "\"width\":%u,\"height\":%u,\"fps\":%u,"
-             "\"chunk\":%u,\"window\":%u%s,"
+             "\"chunk\":%u,\"window\":%u%s%s,"
              "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
              entity_id, action,
              camera_geometry::kWidth,
              camera_geometry::kHeight,
              fps ? fps : camera_geometry::kFps,
              static_cast<unsigned>(transport.chunk_bytes),
-             static_cast<unsigned>(transport.window), quality);
+             static_cast<unsigned>(transport.window), quality, camera_audio_field());
   } else {
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\"}",

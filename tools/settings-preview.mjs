@@ -12,7 +12,8 @@
 //        [--entry=manual|join] [--scroll=bottom] [--drag=up] [--no-mockup]
 // --scroll=bottom shows a page taller than its area scrolled to its end;
 // --drag=up drags a finger 200 px up from a row of the page (real LVGL
-// input) and prints the page's scroll ("page scroll N").
+// input) and prints the page's scroll ("page scroll N"); with --page=setup
+// from a row with a switch in the step's list that scrolls in itself.
 // --page=setup shows the first-start setup at --step (mockup wiz=A&step=):
 // step 1 lists the networks (--state=online: connected, ap: the phone
 // setup's hotspot on); steps 2 and 3 are online, step 2 offers Pair
@@ -401,6 +402,22 @@ static void drag_step(lv_display_t* display, int x, int y, bool down) {
   lv_timer_handler();
   (void)display;
 }
+// A finger 200 px up from (x, y0) on real LVGL input; prints how far the
+// target scrolled of its whole range.
+static void drag_up(lv_display_t* display, lv_obj_t* target, int x, int y0) {
+  lv_indev_t* touch = lv_indev_create();
+  lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
+  lv_indev_set_read_cb(touch, [](lv_indev_t*, lv_indev_data_t* data) {
+    data->point = g_drag_point;
+    data->state = g_drag_down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+  });
+  drag_step(display, x, y0, false);
+  for (int i = 0; i <= 20; ++i) drag_step(display, x, y0 - i * 10, true);
+  drag_step(display, x, y0 - 200, false);
+  for (int i = 0; i < 30; ++i) drag_step(display, x, y0 - 200, false);
+  std::printf("page scroll %d of %d\n", static_cast<int>(lv_obj_get_scroll_y(target)),
+              static_cast<int>(lv_obj_get_scroll_y(target) + lv_obj_get_scroll_bottom(target)));
+}
 int main(int argc, char** argv) {
   tone_color::g_from_icon_card = &host_from_icon_card;
   ${upright ? 'grid_layout::g_shown = grid_layout::layout_grid(grid_layout::Layout::kPortrait);' : ''}
@@ -441,6 +458,26 @@ int main(int argc, char** argv) {
   ${entry === undefined ? '' : `setup_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}
   ${keys === 'accents' ? 'settings_keyboard::g_kb.accents = true; settings_keyboard::lay_out();' : ''}
   ${dialog === 'leave' ? 'setup_screen::open_leave_dialog();' : ''}
+  ${option('drag') === 'up' ? `{
+    // The step's list that scrolls in itself (step 0: the language group on
+    // short landscape panels), a finger on the name of its third row, a row
+    // with a switch (issue #41: only the two tap rows above it scrolled).
+    lv_obj_update_layout(screen);
+    lv_obj_t* list = nullptr;
+    for (uint32_t i = 0; !list && i < lv_obj_get_child_count(setup_screen::g_body); ++i) {
+      lv_obj_t* child = lv_obj_get_child(setup_screen::g_body, static_cast<int32_t>(i));
+      if (lv_obj_has_flag(child, LV_OBJ_FLAG_SCROLLABLE)) list = child;
+    }
+    if (!list || lv_obj_get_child_count(list) < 3) {
+      std::printf("no list that scrolls\\n");
+    } else {
+      lv_obj_t* row = lv_obj_get_child(list, 2);
+      lv_area_t icon{}, area{};
+      lv_obj_get_coords(lv_obj_get_child(row, 1), &icon);
+      lv_obj_get_coords(row, &area);
+      drag_up(display, list, icon.x2 + 20, (area.y1 + area.y2) / 2);
+    }
+  }` : ''}
   ` : `
   settings_screen::select_category(static_cast<settings_screen::Category>(${categories[page]}));
   ${open === undefined ? '' : `settings_screen::open_locale_list(${Number(open)});`}
@@ -449,22 +486,10 @@ int main(int argc, char** argv) {
   ${option('scroll') === 'bottom' ? 'lv_obj_update_layout(screen); lv_obj_scroll_by(settings_screen::g_page, 0, -lv_obj_get_scroll_bottom(settings_screen::g_page), LV_ANIM_OFF);' : ''}
   ${option('drag') === 'up' ? `{
     lv_obj_update_layout(screen);
-    lv_indev_t* touch = lv_indev_create();
-    lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
-    lv_indev_set_read_cb(touch, [](lv_indev_t*, lv_indev_data_t* data) {
-      data->point = g_drag_point;
-      data->state = g_drag_down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
-    });
     lv_area_t page{};
     lv_obj_get_coords(settings_screen::g_page, &page);
     // On a row's name (no control under the finger), well inside the page.
-    const int x = page.x1 + 70, y0 = page.y1 + 120;
-    drag_step(display, x, y0, false);
-    for (int i = 0; i <= 20; ++i) drag_step(display, x, y0 - i * 10, true);
-    drag_step(display, x, y0 - 200, false);
-    for (int i = 0; i < 30; ++i) drag_step(display, x, y0 - 200, false);
-    std::printf("page scroll %d of %d\\n", static_cast<int>(lv_obj_get_scroll_y(settings_screen::g_page)),
-                static_cast<int>(lv_obj_get_scroll_y(settings_screen::g_page) + lv_obj_get_scroll_bottom(settings_screen::g_page)));
+    drag_up(display, settings_screen::g_page, page.x1 + 70, page.y1 + 120);
   }` : ''}
   ${args.includes('--press-close') ? 'lv_obj_add_state(settings_screen::g_close, LV_STATE_PRESSED);' : ''}
   ${entry === undefined ? '' : `settings_screen::open_entry(${entry === 'manual'}, "FRITZ!Box 7590 XY");`}

@@ -92,7 +92,7 @@ assert.match(language, /settings_screen::rotation_segment\(rotation\.row, palett
 // a small picture each; the rows scroll on the short landscape panels.
 assert.match(language, /setup_row\(group, [^,]+, s\.theme_label\);[\s\S]*?settings_model::theme_selected\(index\)/);
 assert.match(language, /if \(settings_model::layout_choice\(\)\) \{[\s\S]*?settings_model::layout_selected\(index\);[\s\S]*?layout_picture\(lv_obj_get_child\(choice, i\), i == 1\);/);
-assert.match(language, /if \(lv_obj_get_height\(group\) > body_height\(\)\) \{\s*lv_obj_set_height\(group, body_height\(\)\);\s*lv_obj_add_flag\(group, LV_OBJ_FLAG_SCROLLABLE\);/);
+assert.match(language, /if \(lv_obj_get_height\(group\) > body_height\(\)\) \{\s*lv_obj_set_height\(group, body_height\(\)\);\s*lv_obj_add_flag\(group, static_cast<lv_obj_flag_t>\(LV_OBJ_FLAG_SCROLLABLE \| LV_OBJ_FLAG_CLICKABLE\)\);/);
 assert.match(rawSetup, /kSteps\[kStepCount\] = \{\{"tune-variant", settings_style::kLocalizationColor\}/);
 // By the screen as this boot shows it (user 2026-10-12: upright, the setup
 // stood at the top edge, shifted right and cut): never the profile's fixed

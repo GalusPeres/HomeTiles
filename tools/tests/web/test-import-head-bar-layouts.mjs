@@ -13,19 +13,31 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
+import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 // 1280 x 800: classic 7 x 5, head bar 6 x 4, upright 4 x 6.5 (grid_layout.h).
 const COLS = 7, ROWS = 5, COUNT = 64, SHOWN_COLS = 6, SHOWN_ROWS = 4;
+const SHOWN = {classic: [COLS, ROWS], bar: [SHOWN_COLS, SHOWN_ROWS], portrait: [4, 6.5]};
+// Every layout the firmware knows (grid_layout::key): the import runs on a
+// panel showing each, and restores each. A new layout fails here until it
+// is added to SHOWN and to the import.
+const LAYOUT_KEYS = [...read('src/tiles/config/grid_layout.h')
+  .match(/constexpr const char\* key\(Layout layout\) \{([\s\S]*?)\n\}/)[1].matchAll(/"([a-z_]+)"/g)].map(m => m[1]);
+assert.deepEqual([...LAYOUT_KEYS].sort(), Object.keys(SHOWN).sort(), 'every layout has its shown grid here');
+const importSource = read('src/web/admin/tiles/import-export.js');
+const restoredKeys = JSON.parse(importSource.match(/for \(const \[layoutIndex, key\] of (\[[^\]]*\])\.entries\(\)\)/)[1]
+  .replace(/'/g, '"'));
+assert.deepEqual([...restoredKeys].sort(), [...LAYOUT_KEYS].sort(), 'the import restores every layout');
 const SAVER = 65534;
 const HALF_TYPES = [1, 2, 4, 5, 7, 8, 9, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
 const empty = () => ({type: 0, title: '', icon_name: '', bg_color: 0, col: 0, row: 0, span_w: 1, span_h: 1});
 const tile = (type, title, col, row, w = 1, h = 1, extra = {}) =>
   ({...empty(), type, title, col, row, span_w: w, span_h: h, ...extra});
 
-function makePanel() {
+function makePanel(active = 'bar') {
   const panel = {
     folders: [{id: 0, parent_id: 0, name: 'Home', icon_name: 'home'}],
     grids: {0: Array.from({length: COUNT}, empty), [SAVER]: Array.from({length: COUNT}, empty)},
@@ -71,7 +83,7 @@ function makePanel() {
       return answer(200, {success: true, screen_width: 1280, screen_height: 800, grid_cols: COLS, grid_rows: ROWS});
     }
     if (u.pathname === '/api/layouts' && options.method !== 'POST') {
-      return answer(200, {success: true, active: 'bar', stored: 'bar', places: structuredClone(panel.places),
+      return answer(200, {success: true, active, stored: active, places: structuredClone(panel.places),
                           clock: structuredClone(panel.clock), settings: {parked: [...panel.parked],
                           ...(panel.parkedSettings ? {tile: {type: 7, view_id: panel.parkedSettings}} : {})}});
     }
@@ -151,9 +163,9 @@ function makePanel() {
   return panel;
 }
 
-// The page code of a panel showing the head bar: the layout helpers, the
+// The page code of a panel showing a layout: the layout helpers, the
 // screensaver's first row (navigation.js) and the import/export module.
-function loadPage(panel) {
+function loadPage(panel, active = 'bar') {
   const notifications = [];
   const downloads = [];
   class PageURL extends URL {
@@ -168,10 +180,11 @@ function loadPage(panel) {
     console: {error() {}, warn() {}, log() {}},
     URL: PageURL, FormData, Promise, setTimeout: () => 0, structuredClone,
     Blob: class { constructor(parts) { this.parts = parts; } },
-    HEAD_BAR: true, GRID_SHOWN_COLS: SHOWN_COLS, GRID_SHOWN_ROWS: SHOWN_ROWS, ACTIVE_LAYOUT: 'bar',
+    HEAD_BAR: active !== 'classic', GRID_SHOWN_COLS: SHOWN[active][0], GRID_SHOWN_ROWS: SHOWN[active][1],
+    ACTIVE_LAYOUT: active,
     GRID_COLS: COLS, GRID_ROWS: ROWS, TILES_PER_GRID: COUNT, MEDIA_TILE_TYPE: 15, MEDIA_TILE_MIN_SPAN: 2, MEDIA_TILE_MAX_SPAN: 4,
-    LAYOUTS: {classic: {screenW: 1280, screenH: 800, available: true, cols: COLS, rows: ROWS},
-              bar: {available: true, cols: SHOWN_COLS, rows: SHOWN_ROWS}, portrait: {available: true, cols: 4, rows: 6.5}},
+    LAYOUTS: Object.fromEntries(LAYOUT_KEYS.map(key => [key, {screenW: 1280, screenH: 800, available: true,
+                                                             cols: SHOWN[key][0], rows: SHOWN[key][1]}])),
     SCREENSAVER_FOLDER_ID: SAVER, tabByFolder: {0: 'folder0', [SAVER]: 'screensaver'}, currentTileTab: 'folder0',
     normalizeIconName: value => String(value || '').replace(/^mdi[:-]/, '').toLowerCase(),
     ssClamp: (value, min, max) => Math.max(min, Math.min(max, Number(value))),
@@ -238,6 +251,27 @@ source.clock = {classic: [500, 350, 48, 28], bar: [120, 640, 64, 30], portrait: 
 source.parked = [false, false, true];
 assert.equal(home.filter(entry => entry.type).length, 5);
 
+// 0. Every key GET /api/layouts reports (handleGetLayouts) and every key of
+// the places (tile_layouts::append_json) has its place in the backup; a new
+// one fails here until the backup carries it.
+const handlers = read('src/web/server/handlers/web_admin_tiles.cpp');
+const getLayouts = cppFunctionDefinitions(handlers).find(f => f.name === 'WebAdminServer::handleGetLayouts');
+assert.ok(getLayouts, 'handleGetLayouts exists');
+const reported = new Set([...getLayouts.body.matchAll(/\\"([a-z_]+)\\":/g)].map(m => m[1]));
+const carried = {
+  success: 'not data', error: 'not data', active: 'this start only; the backup keeps the stored choice', stored: 'layouts.active',
+  classic: 'grids and screensaver.grid', places: 'layouts.places', clock: 'layouts.clock',
+  settings: 'layouts.settings_parked', parked: 'layouts.settings_parked', tile: 'layouts.parked_settings_view',
+  view_id: 'layouts.parked_settings_view', type: 'settings_tile', title: 'settings_tile', icon_name: 'settings_tile',
+  bg_color: 'settings_tile', col: 'settings_tile', row: 'settings_tile', span_w: 'settings_tile', span_h: 'settings_tile'
+};
+for (const key of reported) assert.ok(carried[key], `GET /api/layouts reports "${key}": decide how a backup carries it`);
+for (const key of ['stored', 'classic', 'places', 'clock', 'settings', 'tile']) assert.ok(reported.has(key), key);
+const appendJson = cppFunctionDefinitions(read('src/tiles/config/tile_layouts.cpp')).find(f => f.name === 'append_json');
+assert.ok(appendJson && /\\"pages\\"/.test(appendJson.body), 'the places carry the pages');
+const placeKeys = LAYOUT_KEYS.map(key => (key === 'classic' ? 'classic_parked' : key)).concat('pages');
+for (const key of placeKeys) assert.ok(importSource.includes(key === 'bar' || key === 'portrait' ? `'${key}'` : key), `the import reads ${key}`);
+
 // 1. The export carries every layout.
 const exporter = loadPage(source);
 await exporter.context.exportTilesConfig();
@@ -246,55 +280,59 @@ const backup = JSON.parse(exporter.downloads[0]);
 assert.deepEqual(backup.layouts.places, source.places, 'the bar and upright places with the pages');
 assert.deepEqual(backup.layouts.clock, source.clock, 'the screensaver clock per layout');
 assert.deepEqual(backup.layouts.settings_parked, source.parked, 'where Settings is parked per layout');
+assert.deepEqual(Object.keys(backup.layouts.places).sort(), [...placeKeys].sort(), 'every key of the places');
 
-// The 8-inch: the head bar shown, its own tiles, folder and places.
-const target = makePanel();
-target.put(0, 63, tile(7, '', 6, 4, 1, 1, {icon_name: 'cog'}));
-target.put(0, 0, tile(1, 'Old', 0, 0));
-const old = target.put(0, 1, tile(4, 'Old', 1, 0, 1, 1, {navigate_target: target.createFolder(0, 'Old', 'folder')}));
-target.places.pages = [old.navigate_target];
-target.nextView = 500;
+// The 8-inch showing each layout in turn: its own tiles, folder and places.
+for (const active of LAYOUT_KEYS) {
+  const target = makePanel(active);
+  target.put(0, 63, tile(7, '', 6, 4, 1, 1, {icon_name: 'cog'}));
+  target.put(0, 0, tile(1, 'Old', 0, 0));
+  const old = target.put(0, 1, tile(4, 'Old', 1, 0, 1, 1, {navigate_target: target.createFolder(0, 'Old', 'folder')}));
+  target.places.pages = [old.navigate_target];
+  target.nextView = 500;
 
-// 2. The import takes the classic places as exported, on the stored grid.
-const importer = loadPage(target);
-await importer.context.importTilesPayload(JSON.parse(JSON.stringify(backup)));
-assert.deepEqual(importer.notifications.at(-1), {text: 'importComplete', ok: true}, JSON.stringify(importer.notifications));
-assert.ok(target.tilePosts.every(post => post.layout === 'classic'), 'every tile is written with its classic place');
-const find = (folder, title) => target.grids[folder].find(entry => entry.type && entry.title === title);
-const roomsId = find(0, 'Rooms').navigate_target, camsId = find(0, 'Cams').navigate_target;
-const settingsTile = target.grids[0].find(entry => entry.type === 7);
-assert.deepEqual([settingsTile.col, settingsTile.row], [6, 4], 'Settings in the seventh column');
-assert.deepEqual([find(0, 'Test').col, find(0, 'Test').row, find(0, 'Test').span_h], [6, 1, 0.5], 'Test in the seventh column');
-assert.deepEqual([find(roomsId, 'Door').col, find(roomsId, 'Door').row], [6, 0], 'the camera in the seventh column');
-assert.deepEqual([target.grids[SAVER][0].col, target.grids[SAVER][0].row], [6, 4], 'the screensaver keeps its bottom row');
-assert.deepEqual([target.grids[SAVER][3].col, target.grids[SAVER][3].row], [0, 3]);
+  // 2. The import takes the classic places as exported, on the stored grid,
+  // whatever layout the panel shows.
+  const importer = loadPage(target, active);
+  await importer.context.importTilesPayload(JSON.parse(JSON.stringify(backup)));
+  assert.deepEqual(importer.notifications.at(-1), {text: 'importComplete', ok: true}, active + ' ' + JSON.stringify(importer.notifications));
+  assert.ok(target.tilePosts.every(post => post.layout === 'classic'), 'every tile is written with its classic place');
+  const find = (folder, title) => target.grids[folder].find(entry => entry.type && entry.title === title);
+  const roomsId = find(0, 'Rooms').navigate_target, camsId = find(0, 'Cams').navigate_target;
+  const settingsTile = target.grids[0].find(entry => entry.type === 7);
+  assert.deepEqual([settingsTile.col, settingsTile.row], [6, 4], 'Settings in the seventh column');
+  assert.deepEqual([find(0, 'Test').col, find(0, 'Test').row, find(0, 'Test').span_h], [6, 1, 0.5], 'Test in the seventh column');
+  assert.deepEqual([find(roomsId, 'Door').col, find(roomsId, 'Door').row], [6, 0], 'the camera in the seventh column');
+  assert.deepEqual([target.grids[SAVER][0].col, target.grids[SAVER][0].row], [6, 4], 'the screensaver keeps its bottom row');
+  assert.deepEqual([target.grids[SAVER][3].col, target.grids[SAVER][3].row], [0, 3]);
 
-// 3. Every layout came along, on the imported tiles' new IDs.
-const view = (folder, title) => find(folder, title).view_id;
-assert.deepEqual(target.places.pages, [roomsId], 'the page is the imported folder');
-for (const key of ['bar', 'portrait']) {
-  const expected = {
-    0: {[view(0, 'Test')]: source.places[key][0][test.view_id], [view(0, 'Neighbour')]: source.places[key][0][neighbour.view_id],
-        [view(0, 'Cams')]: source.places[key][0][cams.view_id],
-        [settingsTile.view_id]: source.places[key][0][settings.view_id]},
-    [roomsId]: {[view(roomsId, 'Door')]: source.places[key][rooms.navigate_target][camera.view_id]},
-    [camsId]: {[view(camsId, 'Inside')]: source.places[key][cams.navigate_target][inside.view_id]},
-    [SAVER]: source.places[key][SAVER]
-  };
-  for (const [folder, places] of Object.entries(expected)) {
-    assert.deepEqual(target.places[key][folder], places, `${key} places of folder ${folder}`);
+  // 3. Every layout came along, on the imported tiles' new IDs.
+  const view = (folder, title) => find(folder, title).view_id;
+  assert.deepEqual(target.places.pages, [roomsId], 'the page is the imported folder');
+  for (const key of ['bar', 'portrait']) {
+    const expected = {
+      0: {[view(0, 'Test')]: source.places[key][0][test.view_id], [view(0, 'Neighbour')]: source.places[key][0][neighbour.view_id],
+          [view(0, 'Cams')]: source.places[key][0][cams.view_id],
+          [settingsTile.view_id]: source.places[key][0][settings.view_id]},
+      [roomsId]: {[view(roomsId, 'Door')]: source.places[key][rooms.navigate_target][camera.view_id]},
+      [camsId]: {[view(camsId, 'Inside')]: source.places[key][cams.navigate_target][inside.view_id]},
+      [SAVER]: source.places[key][SAVER]
+    };
+    for (const [folder, places] of Object.entries(expected)) {
+      assert.deepEqual(target.places[key][folder], places, `${active}: ${key} places of folder ${folder}`);
+    }
   }
-}
-assert.deepEqual(target.clock, source.clock, 'the screensaver clock in every layout');
-assert.deepEqual(target.parked, source.parked, 'Settings parked as exported');
+  assert.deepEqual(target.clock, source.clock, 'the screensaver clock in every layout');
+  assert.deepEqual(target.parked, source.parked, 'Settings parked as exported');
 
-// 4. A backup of the 8-inch now gives the same layouts back.
-const again = loadPage(target);
-await again.context.exportTilesConfig();
-const second = JSON.parse(again.downloads[0]);
-assert.deepEqual(second.layouts.clock, backup.layouts.clock);
-assert.deepEqual(second.layouts.settings_parked, backup.layouts.settings_parked);
-assert.equal(Object.keys(second.layouts.places.bar).length, Object.keys(backup.layouts.places.bar).length);
+  // 4. A backup of the 8-inch now gives the same layouts back.
+  const again = loadPage(target, active);
+  await again.context.exportTilesConfig();
+  const second = JSON.parse(again.downloads[0]);
+  assert.deepEqual(second.layouts.clock, backup.layouts.clock);
+  assert.deepEqual(second.layouts.settings_parked, backup.layouts.settings_parked);
+  assert.equal(Object.keys(second.layouts.places.bar).length, Object.keys(backup.layouts.places.bar).length);
+}
 
 // 5. Settings parked off Home: its kept places follow the target's parked
 // tile; one a shown tile took meanwhile (upright here) yields.

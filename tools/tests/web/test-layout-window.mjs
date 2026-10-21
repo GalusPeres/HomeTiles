@@ -281,9 +281,9 @@ assert.doesNotMatch(routes, /head-bar/, 'the old switch is gone');
 const config = readRepoFile('src/core/config/config_manager.cpp');
 assert.match(config, /config\.layout = prefs\.getUChar\("layout", 0\);/,
   'the panel starts classic until the window sets up and chooses a layout');
-assert.match(readRepoFile('src/tiles/config/tile_config.cpp'),
-  /!tile_layouts::has_layout\(grid_layout::active\(\)\)\) \{[\s\S]*?grid_layout::apply\(0\);/,
-  'a bar layout without places starts classic');
+// A bar layout without places keeps its start (test-layout-stays-chosen).
+assert.doesNotMatch(readRepoFile('src/tiles/config/tile_config.cpp'), /grid_layout::apply\(/,
+  'a bar layout without places still starts as chosen');
 assert.match(readRepoFile('HomeTiles.ino'), /grid_layout::apply\(configManager\.getConfig\(\)\.layout\);/);
 const tileConfig = readRepoFile('src/tiles/config/tile_config.cpp');
 assert.match(tileConfig, /if \(layout_places && folder_id != kScreensaverGridStorageId\) applyLayoutPlaces\(folder_id, grid\);/);

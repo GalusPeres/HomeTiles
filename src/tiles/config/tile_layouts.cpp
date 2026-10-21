@@ -201,12 +201,6 @@ bool has_folder(Layout layout, uint16_t folder_id) {
                      [&](const Entry& entry) { return entry.layout == key && entry.folder == folder_id; });
 }
 
-bool has_layout(Layout layout) {
-  Guard guard;
-  const uint8_t key = static_cast<uint8_t>(layout);
-  return std::any_of(g_entries.begin(), g_entries.end(), [&](const Entry& entry) { return entry.layout == key; });
-}
-
 bool has_any(uint16_t folder_id) {
   Guard guard;
   return std::any_of(g_entries.begin(), g_entries.end(),

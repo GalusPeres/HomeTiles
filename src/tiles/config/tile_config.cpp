@@ -2894,14 +2894,10 @@ static FolderEntry makeFolderEntry(uint16_t id, uint16_t parent_id, const String
 
 bool TileConfig::load() {
   // The other layouts' places (tile_layouts.h) before any grid is loaded.
-  // A bar layout without places (the file is gone) would show empty pages:
-  // the panel starts with the classic layout then (before the UI is built).
+  // The panel keeps the chosen layout whatever its places (user 2026-10-21:
+  // "Layout bleibt Layout"): an emptied panel switched to the classic one
+  // on its next start. A tile without a place waits in the layout window.
   tile_layouts::begin();
-  if (grid_layout::active() != grid_layout::Layout::kClassic && !tile_layouts::has_layout(grid_layout::active())) {
-    Serial.printf("[Layouts] No places for %s, starting with the classic layout\n",
-                  grid_layout::key(grid_layout::active()));
-    grid_layout::apply(0);
-  }
   folders.clear();
   bool folders_ok = loadFolders();
   bool had_root = folderExists(kRootFolderId);

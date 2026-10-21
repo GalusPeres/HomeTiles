@@ -48,6 +48,12 @@ const playPcm = speaker.slice(speaker.indexOf('ErrorCode playPcm('), speaker.ind
 assert.match(playPcm, /pump\(src\);\s*if \(live\) \{\s*const size_t excess = audio_stream::liveExcessBytes\(src->buffer\.buffered\(\), rate\);/,
              'a live stream drops what it holds beyond the maximum');
 assert.match(speaker, /g_request->live = command\.live;/);
+assert.match(speaker, /chan\.dma_desc_num = live \? kLiveDmaDescriptors : kDmaDescriptors;\s*chan\.dma_frame_num = live \? kLiveDmaFrames : kDmaFrames;/,
+             'a live stream gets a short I2S buffer');
+assert.match(speaker, /constexpr uint32_t kLiveDmaDescriptors = 4;\s*constexpr uint32_t kLiveDmaFrames = 240;/);
+assert.match(playPcm, /live \? prebufferLive\(src, generation, live_start_bytes\) : prebuffer\(src, generation\)/,
+             'a live stream starts after a fraction of a second');
+assert.match(playPcm, /openOutput\(rate, live\)/);
 assert.match(speaker, /playPcm\(&src, generation, format\.rate, 1, UINT64_MAX, live\)/);
 const handlers = fs.readFileSync(path.join(root, 'src/network/mqtt/mqtt_handlers.cpp'), 'utf8');
 assert.match(handlers, /return speaker::bridgeCapability\(\) \? ",\\"audio\\":\\"tcp-ack-v1\\"" : "";/,
@@ -241,11 +247,13 @@ int main() {
   v.clear(); format(v, 1, 44100, 1, 16, 0, 0); header(v, kMessageEnd, 2, 0);
   assert(run(v, 3).need == Receiver::Need::Ended);
 
-  // Live (camera) sound: within 600 ms nothing goes, beyond it back to 300 ms.
-  assert(pcmBytes(22050, 300) == 13230 && pcmBytes(44100, 1000) == 88200);
-  assert(liveExcessBytes(pcmBytes(22050, 600), 22050) == 0);
-  assert(liveExcessBytes(pcmBytes(22050, 600) + 2, 22050) ==
-         pcmBytes(22050, 600) + 2 - pcmBytes(22050, 300));
+  // Live (camera) sound: within 250 ms nothing goes, beyond it back to 120 ms
+  // (b504 kept 300-600 ms and its sound ran behind the picture).
+  assert(kLiveTargetMs == 120 && kLiveMaxMs == 250);
+  assert(pcmBytes(22050, 120) == 5292 && pcmBytes(44100, 1000) == 88200);
+  assert(liveExcessBytes(pcmBytes(22050, 250), 22050) == 0);
+  assert(liveExcessBytes(pcmBytes(22050, 250) + 2, 22050) ==
+         pcmBytes(22050, 250) + 2 - pcmBytes(22050, 120));
   assert(liveExcessBytes(100000, 22050) % 2 == 0);
   assert(liveExcessBytes(100001, 22050) % 2 == 0);
 

@@ -153,6 +153,10 @@ constexpr size_t kPumpBudgetBytes = 16u * 1024u;
 // 22.05 kHz, enough to ride out a Web Admin flash write.
 constexpr uint32_t kDmaDescriptors = 8;
 constexpr uint32_t kDmaFrames = 480;
+// A camera's sound: 4 x 240 frames, 44 ms at 22.05 kHz. A flash write may
+// cut it short (silence, auto_clear); it stays close to the picture.
+constexpr uint32_t kLiveDmaDescriptors = 4;
+constexpr uint32_t kLiveDmaFrames = 240;
 constexpr uint32_t kI2sWriteTimeoutMs = 1000;
 constexpr uint32_t kInitialSampleRate = 44100;
 // Silence around the amplifier switching avoids a pop.
@@ -247,6 +251,8 @@ char g_assist_session_id[assist::kMaxRequestIdLength + 1] = {};
 i2s_chan_handle_t g_rx = nullptr;
 i2s_chan_handle_t g_tx = nullptr;
 uint32_t g_tx_rate = 0;
+// The output was opened with the short buffer of a camera's sound.
+bool g_tx_live = false;
 bool g_amp_on = false;
 uint8_t g_applied_volume_reg = 0xFF;
 int g_applied_mute = -1;
@@ -372,13 +378,15 @@ i2s_std_clk_config_t clockConfig(uint32_t rate) {
   return clk;
 }
 
-// Opens the mono 16-bit output at rate, or switches a running one to it.
-ErrorCode openOutput(uint32_t rate) {
+// Opens the mono 16-bit output at rate, or switches a running one to it. A
+// live stream (a camera's sound) gets a short DMA buffer.
+ErrorCode openOutput(uint32_t rate, bool live = false) {
   if (!audio_board::outputSupportsRate(rate)) {
     Serial.printf("%s Unsupported sample rate %lu Hz\n", kLogPrefix,
                   static_cast<unsigned long>(rate));
     return ErrorCode::UnsupportedFormat;
   }
+  if (g_tx && g_tx_live != live) closeOutput();
   if (g_tx && g_tx_rate == rate) return ErrorCode::None;
   if (audio_board::setOutputRate(rate) != ESP_OK) return ErrorCode::CodecUnavailable;
   if (g_tx) {
@@ -396,14 +404,15 @@ ErrorCode openOutput(uint32_t rate) {
     g_tx_rate = rate;
   } else {
     i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
-    chan.dma_desc_num = kDmaDescriptors;
-    chan.dma_frame_num = kDmaFrames;
+    chan.dma_desc_num = live ? kLiveDmaDescriptors : kDmaDescriptors;
+    chan.dma_frame_num = live ? kLiveDmaFrames : kDmaFrames;
     // An underrun (flash write, busy core) plays silence, not an old buffer.
     chan.auto_clear = true;
     if (i2s_new_channel(&chan, &g_tx, nullptr) != ESP_OK) {
       g_tx = nullptr;
       return ErrorCode::OutOfMemory;
     }
+    g_tx_live = live;
     i2s_std_config_t config = {};
     config.clk_cfg = clockConfig(rate);
     config.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
@@ -686,6 +695,17 @@ bool prebuffer(Source* src, uint32_t generation) {
   }
 }
 
+// A live stream (a camera's sound) starts and resumes after min_bytes, a
+// fraction of a second, instead of the clips' prebuffer.
+bool prebufferLive(Source* src, uint32_t generation, size_t min_bytes) {
+  for (;;) {
+    if (stopRequested(generation)) return false;
+    pump(src);
+    if (src->ended || src->buffer.buffered() >= min_bytes) return true;
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
+}
+
 // Drops bytes as they arrive, for an ID3 tag with embedded cover art.
 bool skipBytes(Source* src, size_t bytes, uint32_t generation) {
   while (bytes > 0) {
@@ -906,13 +926,16 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
 ErrorCode playPcm(Source* src, uint32_t generation, uint32_t rate, uint16_t channels,
                   uint64_t frames_left, bool live = false) {
   uint64_t live_dropped_bytes = 0;
+  const size_t live_start_bytes = audio_stream::pcmBytes(rate, audio_stream::kLiveTargetMs);
   const size_t frame_bytes = 2u * channels;
   int16_t* chunk = static_cast<int16_t*>(heap_caps_malloc(
       kWavChunkFrames * channels * sizeof(int16_t), MALLOC_CAP_INTERNAL));
   if (!chunk) return ErrorCode::OutOfMemory;
   ErrorCode result = ErrorCode::None;
   bool started = false;
-  if (!prebuffer(src, generation)) frames_left = 0;
+  if (!(live ? prebufferLive(src, generation, live_start_bytes) : prebuffer(src, generation))) {
+    frames_left = 0;
+  }
   while (frames_left > 0 && !stopRequested(generation)) {
     if (!holdWhilePaused(src, generation)) break;
     pump(src);
@@ -926,13 +949,15 @@ ErrorCode playPcm(Source* src, uint32_t generation, uint32_t rate, uint16_t chan
     size_t available = src->buffer.buffered() / frame_bytes;
     if (available == 0) {
       if (src->ended) break;
-      if (!prebuffer(src, generation)) break;
+      if (!(live ? prebufferLive(src, generation, live_start_bytes) : prebuffer(src, generation))) {
+        break;
+      }
       continue;
     }
     size_t frames = available < kWavChunkFrames ? available : kWavChunkFrames;
     if (frames > frames_left) frames = static_cast<size_t>(frames_left);
     if (!started) {
-      const ErrorCode output = openOutput(rate);
+      const ErrorCode output = openOutput(rate, live);
       if (output != ErrorCode::None) {
         result = output;
         break;

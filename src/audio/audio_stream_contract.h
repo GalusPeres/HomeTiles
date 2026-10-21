@@ -20,7 +20,8 @@
 //
 // A camera's sound comes the same way with "live":true in the play command:
 // the panel keeps only a fraction of a second of it (kLiveTargetMs to
-// kLiveMaxMs) so the sound stays close to the picture.
+// kLiveMaxMs) and a short I2S buffer, so the sound stays close to the
+// picture.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -46,9 +47,12 @@ constexpr size_t kMaxHostLength = 63;
 constexpr size_t kMaxTokenLength = 64;
 
 // A camera's sound: what the panel holds beyond kLiveMaxMs (a burst after a
-// Wi-Fi stall, FFmpeg's first packets) is dropped down to kLiveTargetMs.
-constexpr uint32_t kLiveTargetMs = 300;
-constexpr uint32_t kLiveMaxMs = 600;
+// Wi-Fi stall, FFmpeg's first packets) is dropped down to kLiveTargetMs, and
+// playback starts or resumes once kLiveTargetMs arrived. b504 kept 300-600
+// ms plus 174 ms of I2S buffer at 22.05 kHz, and on a V2 its sound ran
+// audibly behind the picture.
+constexpr uint32_t kLiveTargetMs = 120;
+constexpr uint32_t kLiveMaxMs = 250;
 
 // Mono 16-bit bytes for ms at rate, a whole number of samples.
 inline size_t pcmBytes(uint32_t rate, uint32_t ms) {

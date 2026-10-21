@@ -135,9 +135,13 @@ it starts a live session (22.05 kHz, RTSP read like the picture: TCP,
   already running for the same stream keeps running.
 - Close ends FFmpeg (`finish_device`); the end message follows and the panel
   plays out what it holds, so the clip ends as done, not as an error.
-- The panel keeps 300-600 ms of a live stream and drops what arrives beyond
+- The panel keeps 120-250 ms of a live stream and drops what arrives beyond
   that (`liveExcessBytes`), so a burst after a stall does not put the sound
-  further behind the picture. Lip sync is not attempted.
+  further behind the picture; its I2S buffer is 4 x 240 frames (44 ms) and
+  the Bridge sends what FFmpeg wrote without waiting for a full block. b504
+  with b11 kept 300-600 ms, 174 ms of I2S buffer and up to 93 ms per block,
+  and its sound ran audibly behind the picture. Lip sync with timestamps is
+  not attempted.
 - The sound takes over the speaker like any clip: a playing song stops.
   Still-image cameras and the panels' own cameras have no sound.
 

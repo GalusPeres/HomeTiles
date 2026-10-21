@@ -32,6 +32,7 @@
 #include "src/audio/wakeword/wake_word_engine.h"
 #include "src/core/config/batched_nvs_write.h"
 #include "src/devices/device.h"
+#include "src/video/camera_stream.h"
 #include HOMETILES_SPEAKER_BOARD
 #endif
 
@@ -1074,10 +1075,46 @@ uint32_t takeNotifications() {
 // ---------------------------------------------------------------------------
 uint32_t activeWakeWords() { return g_wake_active.load() & availableWakeWords(); }
 
-bool wakeListenWanted() {
+bool wakeListenConfigured() {
   return activeWakeWords() != 0 && g_mic_ready.load() && g_mic_enabled.load() &&
          g_ring.capacity() != 0 &&
          !g_shutdown.load() && !g_play_pending.load() && !g_assist_pending.load();
+}
+
+// A camera stream pauses wake word listening. On core 0 the listener
+// (priority 3) delayed the stream task's acknowledgements: the V2 full screen
+// fell from 30 to 21-23 FPS with a wake word on and reached 30 again with it
+// off (2026-10-21). Listening resumes kWakeCameraHoldMs after the last
+// stream, so a switch between the popup and the full screen does not reopen
+// the microphone in between. Worker task only.
+constexpr uint32_t kWakeCameraHoldMs = 2000;
+constexpr uint32_t kWakeCameraPollMs = 250;
+uint32_t g_camera_seen_ms = 0;
+bool g_wake_camera_paused = false;
+
+bool cameraHoldsMicrophone() {
+  const uint32_t now = millis();
+  if (camera_stream_is_active()) {
+    g_camera_seen_ms = now ? now : 1;
+    return true;
+  }
+  return g_camera_seen_ms != 0 &&
+         static_cast<uint32_t>(now - g_camera_seen_ms) < kWakeCameraHoldMs;
+}
+
+bool wakeListenWanted() {
+  if (!wakeListenConfigured()) {
+    g_wake_camera_paused = false;
+    return false;
+  }
+  const bool paused = cameraHoldsMicrophone();
+  if (paused != g_wake_camera_paused) {
+    g_wake_camera_paused = paused;
+    Serial.printf("%s Wake word %s\n", kLogPrefix,
+                  paused ? "paused while a camera stream runs"
+                         : "listening again after the camera stream");
+  }
+  return !paused;
 }
 
 #if defined(HOMETILES_WAKE_WORD)
@@ -1175,8 +1212,9 @@ bool handleWakeDetection(const char* word, const String& topic, uint32_t mask, u
   }
 }
 
-// Listens until a notification, a wake word change or an error. Returns the
-// notifications the main loop still has to handle (0: re-evaluate).
+// Listens until a notification, a wake word change, an error or a camera
+// stream. Returns the notifications the main loop still has to handle (0:
+// re-evaluate).
 uint32_t wakeListen() {
   const uint32_t mask = activeWakeWords();
   size_t index = 0;
@@ -1206,7 +1244,9 @@ uint32_t wakeListen() {
   uint32_t bits = 0;
   for (;;) {
     bits = takeNotifications();
-    if (bits || g_shutdown.load() || activeWakeWords() != mask) break;
+    if (bits || g_shutdown.load() || activeWakeWords() != mask || camera_stream_is_active()) {
+      break;
+    }
     const int frames = readMono();
     if (frames < 0) {
       g_wake_resume_ms = millis() + kWakeRetryMs;
@@ -1247,8 +1287,12 @@ void workerMain(void*) {
       bits = wakeListen();
       if (bits == 0) continue;
     } else {
-      const TickType_t wait =
-          wake_wanted ? pdMS_TO_TICKS(static_cast<uint32_t>(refractory_ms)) + 1 : portMAX_DELAY;
+      TickType_t wait = portMAX_DELAY;
+      if (wake_wanted) {
+        wait = pdMS_TO_TICKS(static_cast<uint32_t>(refractory_ms)) + 1;
+      } else if (g_wake_camera_paused) {
+        wait = pdMS_TO_TICKS(kWakeCameraPollMs);  // until the camera stream ended
+      }
       if (xTaskNotifyWait(0, UINT32_MAX, &bits, wait) != pdTRUE) continue;
     }
     if ((bits & kNotifyShutdown) || g_shutdown.load()) {

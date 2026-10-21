@@ -62,7 +62,8 @@ assert.match(driver, /constexpr int8_t kPanelPclk = 5;/);
 assert.match(driver, /constexpr int8_t kPanelDe = 38;/);
 assert.match(driver, /constexpr int8_t kPanelReset = 46;/);
 assert.match(driver, /constexpr int8_t kBacklightPin = 21;/);
-assert.match(driver, /constexpr uint32_t kPanelPclkHz = 23 \* 1000 \* 1000;/);
+assert.match(driver, /constexpr uint32_t kPanelPclkHz = 16 \* 1000 \* 1000;/,
+  'The pixel clock stays at the lowest rate the panel holds (12 MHz breaks it)');
 assert.match(driver, /config\.timings\.flags\.pclk_active_neg = true;/);
 assert.match(driver, /config\.hsync_gpio_num = GPIO_NUM_NC;/);
 assert.match(driver, /config\.vsync_gpio_num = GPIO_NUM_NC;/);
@@ -71,7 +72,8 @@ assert.match(driver, /kPanelData\[16\] = \{17, 18, 48, 47, 39, 11, 12, 13,\s*14,
 
 // --- Framebuffer: DRAM bounce buffer and a row by row cache write back -------
 assert.match(driver, /config\.num_fbs = 1;/);
-assert.match(driver, /config\.bounce_buffer_size_px = kScreenWidth \* 20;/);
+assert.match(driver, /config\.bounce_buffer_size_px = kScreenWidth \* 30;/,
+  'The bounce buffer in DRAM gives the panel interrupt room under load');
 assert.match(driver, /config\.flags\.bb_invalidate_cache = true;/);
 assert.match(driver, /config\.flags\.double_fb = false;/);
 assert.doesNotMatch(driver, /esp_lcd_rgb_panel_get_frame_buffer\(g_panel, 2/,

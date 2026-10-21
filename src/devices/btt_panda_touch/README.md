@@ -35,9 +35,26 @@ The RGB bus carries B3..B7, G2..G7 and R3..R7 on sixteen lines:
 | G2, G3, G4, G5, G6, G7 | 11, 12, 13, 14, 15, 16 |
 | R3, R4, R5, R6, R7 | 6, 7, 8, 9, 10 |
 
-The timing (23 MHz, horizontal 4/8/8, vertical 4/16/16) was confirmed on the
-hardware with a ruler test pattern: the first line of the framebuffer stays at
-the top edge and the last one at the bottom edge.
+The horizontal timing (4/8/8) and the vertical timing (4/16/16) were confirmed
+on the hardware with a ruler test pattern: the first line of the framebuffer
+stays at the top edge and the last one at the bottom edge.
+
+### Pixel clock
+
+The vendor rate is 23 MHz, but the panel's interrupt has to refill the bounce
+buffer while the display reads it, and a busy CPU (the web admin, the network)
+starves that interrupt: the picture then jitters vertically. A lower pixel
+clock gives the interrupt more time per line.
+
+| Pixel clock | Frame time | Frame rate | Result |
+| --- | --- | --- | --- |
+| 23 MHz | 22.5 ms | 44.4 Hz | stable picture, but it jitters under load |
+| 16 MHz | 26.4 ms | 37.8 Hz | stable picture, no jitter under load |
+| 12 MHz | 34.4 ms | 29.1 Hz | the picture falls apart, the screen shows one colour |
+
+The frame time is `(800 + 16) x (480 + 36) / pclk`, so the panel's own
+synchronisation needs a frame rate above roughly 30 Hz: 12 MHz falls below
+that. 16 MHz is the lowest rate that keeps the picture intact and stable.
 
 ## Framebuffer and cache
 

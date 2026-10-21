@@ -13,10 +13,10 @@ Last reviewed: 2026-10-21
 ## Releases and builds
 
 - FW + Bridge v0.9.3 released 2026-10-18. Every former feature branch (perf, direct-link, voice, layouts, settings-setup, security, icon-file, camera-view) is in it.
-- Milestone v0.9.4: pairing by IP without mDNS (Bridge #16, HomeTiles #114: read-only `GET /api/link` + Bridge step).
-- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); V2 beta define in `firmware_version.h`, last b512.
+- Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step (b513, HA test pending).
+- Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); V2 beta define in `firmware_version.h`, last b513.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
-- Docs CI runs on pinned Chrome for Testing 154.0.8037.57 (the runner's .97 never answered the first Page.navigate); a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
+- Docs CI runs on pinned Chrome for Testing 154.0.8037.57 (.97 hung on the first navigate); a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
 
 ## Active work
@@ -43,7 +43,7 @@ Last reviewed: 2026-10-21
 - LCD-4 Rev 4.0 contributor-tested (display/touch/Wi-Fi/MQTT/OTA); older revisions and SD unsupported.
 - JC4880P443 (PR #46): portrait 480x800, contributor-tested; landscape later. Open: SD DEINIT_ARG, P4 DSI groups.
 - JC1060 V2 rotation pair 0/2 (b478, #108); `test-rotation-profiles` checks every profile.
-- P4 v3 images (post_v3 301-399): WS 10.1 (PR #48, tested v3.2), WS 7B `_rev3` (#41), JC8012 V3 = V2 code (#44); HW pending.
+- P4 v3 images (post_v3 301-399): WS 10.1 (PR #48, tested v3.2), WS 7B `_rev3` (#41; 30 s Wi-Fi join, PR #120), JC8012 V3 = V2 code (#44); HW pending.
 - New in v0.9.3, HW pending by the reporters: GS-T3E v2 (#93, S3, relays GPIO45/46/44 at once), Waveshare 5-inch (#76, HX8394, own `dsi_driver`, pre-v3 + `_rev3`).
 - Voice (b477) HW ok 2026-10-16 on V2, Tab5, 8-inch, 4B; per-board `kVolumeLimit` (Guition 0.6, Tab5 0.9); S3 and the original JC1060 panel have none.
 

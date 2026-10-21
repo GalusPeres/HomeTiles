@@ -3,6 +3,7 @@
 #include "src/network/link/link_config.h"
 #include "src/core/security/ht_crypto.h"
 #include "src/network/transport/network_transport.h"
+#include "src/network/wifi_event_log_limit.h"
 #include "src/core/config/config_manager.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/network/mqtt/mqtt_topics.h"
@@ -113,48 +114,64 @@ static std::atomic<bool> wifi_join_window_open{false};
 static std::atomic<uint32_t> wifi_join_failed_ms{0};  // millis() | 1, 0 = none
 
 // One line per station event, with the disconnect reason: without it a
-// failed join only shows "WiFi: Connecting to ..." every few seconds.
+// failed join only shows "WiFi: Connecting to ..." every few seconds. A join
+// that keeps failing repeats the same events, so each kind of line prints at
+// most once a minute (wifi_event_log_limit.h); the failure itself is always
+// recorded for update().
+static wifi_event_log::Limiter wifi_event_log_limiter;
+
 static void logWifiEvent(arduino_event_id_t event, arduino_event_info_t info) {
   const unsigned long since =
       static_cast<unsigned long>(millis() - wifi_join_started_ms.load());
+  unsigned reason = 0;
+  if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+    reason = info.wifi_sta_disconnected.reason;
+    if (reason != WIFI_REASON_ASSOC_LEAVE && wifi_join_window_open.load()) {
+      wifi_join_failed_ms = millis() | 1u;
+    }
+  }
+  char line[160];
   switch (event) {
     case ARDUINO_EVENT_WIFI_STA_START:
-      Serial.println("[WiFi] Event: station started");
+      snprintf(line, sizeof(line), "station started");
       break;
     case ARDUINO_EVENT_WIFI_STA_STOP:
-      Serial.println("[WiFi] Event: station stopped");
+      snprintf(line, sizeof(line), "station stopped");
       break;
     case ARDUINO_EVENT_WIFI_SCAN_DONE:
-      Serial.printf("[WiFi] Event: scan done, %u networks (+%lu ms)\n",
-                    static_cast<unsigned>(info.wifi_scan_done.number), since);
+      snprintf(line, sizeof(line), "scan done, %u networks (+%lu ms)",
+               static_cast<unsigned>(info.wifi_scan_done.number), since);
       break;
     case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-      Serial.printf("[WiFi] Event: associated, channel %u, auth mode %u (+%lu ms)\n",
-                    static_cast<unsigned>(info.wifi_sta_connected.channel),
-                    static_cast<unsigned>(info.wifi_sta_connected.authmode),
-                    since);
+      snprintf(line, sizeof(line), "associated, channel %u, auth mode %u (+%lu ms)",
+               static_cast<unsigned>(info.wifi_sta_connected.channel),
+               static_cast<unsigned>(info.wifi_sta_connected.authmode), since);
       break;
-    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
-      const unsigned reason = info.wifi_sta_disconnected.reason;
-      Serial.printf("[WiFi] Event: disconnected, reason %u (%s), RSSI %d (+%lu ms)\n",
-                    reason,
-                    WiFi.disconnectReasonName(static_cast<wifi_err_reason_t>(reason)),
-                    static_cast<int>(info.wifi_sta_disconnected.rssi), since);
-      if (reason != WIFI_REASON_ASSOC_LEAVE && wifi_join_window_open.load()) {
-        wifi_join_failed_ms = millis() | 1u;
-      }
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      snprintf(line, sizeof(line), "disconnected, reason %u (%s), RSSI %d (+%lu ms)",
+               reason, WiFi.disconnectReasonName(static_cast<wifi_err_reason_t>(reason)),
+               static_cast<int>(info.wifi_sta_disconnected.rssi), since);
       break;
-    }
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-      Serial.printf("[WiFi] Event: got IP %s (+%lu ms)\n",
-                    IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(),
-                    since);
+      snprintf(line, sizeof(line), "got IP %s (+%lu ms)",
+               IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str(), since);
       break;
     case ARDUINO_EVENT_WIFI_STA_LOST_IP:
-      Serial.println("[WiFi] Event: lost IP");
+      snprintf(line, sizeof(line), "lost IP");
       break;
     default:
-      break;
+      return;
+  }
+  uint32_t skipped = 0;
+  if (!wifi_event_log_limiter.allow(
+          wifi_event_log::key(static_cast<uint32_t>(event), reason), millis(), &skipped)) {
+    return;
+  }
+  if (skipped) {
+    Serial.printf("[WiFi] Event: %s, %lu more like it since the last one\n", line,
+                  static_cast<unsigned long>(skipped));
+  } else {
+    Serial.printf("[WiFi] Event: %s\n", line);
   }
 }
 

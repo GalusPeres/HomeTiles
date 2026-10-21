@@ -12,7 +12,8 @@
 //       {"v":1,"op":"play","id":"<16-32 lowercase hex>","url":"http://..."}
 //       "url" may also be "tcp://<host>:<port>/<token>": a clip the Bridge
 //       decodes and sends as PCM (audio_stream_contract.h); "live":true marks
-//       a camera's sound, which the panel keeps short.
+//       a camera's sound, which the panel keeps short, and "lead_ms" how much
+//       earlier the Bridge sent it than the picture (lip sync).
 //       {"v":1,"op":"stop"}
 //       {"v":1,"op":"pause"}  {"v":1,"op":"resume"}
 //       {"v":1,"op":"volume","volume":0.5}        0.0 .. 1.0

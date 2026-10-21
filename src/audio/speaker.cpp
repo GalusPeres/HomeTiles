@@ -69,6 +69,10 @@ std::atomic<uint32_t> g_position_ms{0};
 std::atomic<uint32_t> g_duration_ms{0};
 // Home Assistant's pause: set by the loop task, followed by the worker.
 std::atomic<bool> g_pause_requested{false};
+// Lip sync for a camera's sound (cameraSyncDelayMs): the worker's live sound
+// delay to the loudspeaker (0 while none plays) and the Bridge's lead.
+std::atomic<uint32_t> g_live_latency_ms{0};
+std::atomic<uint32_t> g_live_lead_ms{0};
 uint32_t g_published_generation = 0;
 // Bridge capability bits: 1 = audio_output, 2 = audio_input.
 uint8_t g_last_capability = 0;
@@ -179,8 +183,10 @@ constexpr int kBridgeReceiveBufferBytes = 4 * 1024;
 struct PlayRequest {
   char id[kMaxRequestIdLength + 1];
   char url[kMaxUrlLength + 1];
-  // A camera's sound (audio_stream_contract.h): kept close to the picture.
+  // A camera's sound (audio_stream_contract.h): kept close to the picture,
+  // and how much earlier the Bridge sent it than the picture.
   bool live;
+  uint16_t lead_ms;
 };
 
 // Assist capture: 16 kHz 16-bit stereo (one mic per slot). 6 x 320 frames x
@@ -975,7 +981,14 @@ ErrorCode playPcm(Source* src, uint32_t generation, uint32_t rate, uint16_t chan
     }
     notePlayed(frames);
     if (frames_left != UINT64_MAX) frames_left -= frames;
+    if (live) {
+      // What waits in the buffer plus the full I2S buffer: when the newest
+      // sample reaches the loudspeaker. The camera picture waits as long.
+      const uint64_t queued = src->buffer.buffered() / 2 + kLiveDmaDescriptors * kLiveDmaFrames;
+      g_live_latency_ms.store(static_cast<uint32_t>(queued * 1000u / rate) + 1);
+    }
   }
+  if (live) g_live_latency_ms.store(0);
   heap_caps_free(chunk);
   if (live_dropped_bytes > 0) {
     Serial.printf("%s Live sound: dropped %lu ms to stay with the picture\n", kLogPrefix,
@@ -1187,6 +1200,7 @@ void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   g_clip_stats.internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
   g_clip_stats.internal_lowest = g_clip_stats.internal_before;
   if (!bridge_stream) setPublic(PublicState::Playing, ErrorCode::None);
+  g_live_lead_ms.store(request.live ? request.lead_ms : 0);
   Serial.printf("%s Playing %s\n", kLogPrefix, request.id);
   ErrorCode result = playUrl(request.id, request.url, request.live, generation, stream_memory);
   // A long pause can outlast the server's patience: the connection is gone
@@ -1958,6 +1972,7 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
       memcpy(g_request->id, command.id, sizeof(g_request->id));
       memcpy(g_request->url, g_parse_url, command.url_length + 1);
       g_request->live = command.live;
+      g_request->lead_ms = command.lead_ms;
       g_play_pending.store(true);
       g_pause_requested.store(false);
       // Playback ends a capture session or a start that has not begun.
@@ -2180,6 +2195,12 @@ void setMicEnabled(bool enabled, const char* source) {
 }
 
 bool bridgeCapability() { return kSupported && g_codec_ready.load(); }
+
+uint32_t cameraSyncDelayMs() {
+  const uint32_t latency = g_live_latency_ms.load();
+  const uint32_t lead = g_live_lead_ms.load();
+  return latency > lead ? latency - lead : 0;
+}
 
 bool micCapability() { return kSupported && g_mic_ready.load(); }
 

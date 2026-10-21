@@ -377,6 +377,18 @@ int main() {
   c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
             "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true}", false, &url);
   assert(c.status == CommandStatus::Ok && c.live && url == "tcp://192.168.1.2:8124/tok");
+  assert(c.lead_ms == 0);
+  // Lip sync (b506): how much earlier the Bridge sent the sound; clamped,
+  // and only for a camera's sound.
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true,\"lead_ms\":151}");
+  assert(c.status == CommandStatus::Ok && c.lead_ms == 151);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true,\"lead_ms\":5000}");
+  assert(c.lead_ms == 1000);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"lead_ms\":151}");
+  assert(c.lead_ms == 0);
   c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
             "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":\"yes\"}");
   assert(c.status == CommandStatus::Ok && !c.live);

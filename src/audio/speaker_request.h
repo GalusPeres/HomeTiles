@@ -44,8 +44,10 @@ struct Command {
   char id[kMaxRequestIdLength + 1] = {};
   // Only for Play; points into the caller's url buffer.
   size_t url_length = 0;
-  // Only for Play: a camera's sound, kept short (audio_stream_contract.h).
+  // Only for Play: a camera's sound, kept short (audio_stream_contract.h),
+  // and how much earlier the Bridge sent it than the camera's picture.
   bool live = false;
+  uint16_t lead_ms = 0;
   float volume = kDefaultVolume;
   bool muted = false;
 };
@@ -143,6 +145,11 @@ inline void parseCommand(const char* payload, size_t length, bool https_allowed,
   out->url_length = url_length;
   JsonVariantConst live = doc["live"];
   out->live = live.is<bool>() && live.as<bool>();
+  JsonVariantConst lead = doc["lead_ms"];
+  if (out->live && lead.is<int>()) {
+    const int value = lead.as<int>();
+    out->lead_ms = static_cast<uint16_t>(value < 0 ? 0 : value > 1000 ? 1000 : value);
+  }
   out->status = CommandStatus::Ok;
 }
 

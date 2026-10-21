@@ -47,9 +47,11 @@
 #if CAMERA_STREAM_HW_JPEG
 #include "src/core/display/dma2d_arbiter.h"
 #endif
+#include "src/audio/speaker.h"
 #include "src/devices/device.h"
 #include "src/network/transport/network_transport.h"
 #include "src/video/camera_geometry.h"
+#include "src/video/frame_delay_line.h"
 #include "src/video/tcp_ack_socket.h"
 
 namespace {
@@ -1027,6 +1029,10 @@ static bool parse_camera_url(const char* url, CameraEndpoint& endpoint) {
 
 static bool camera_stop_requested(void*) { return g_stop_requested; }
 
+static bool present_frame(bool full, const uint8_t* jpeg, size_t jpeg_bytes) {
+  return full ? queue_full_frame(jpeg, jpeg_bytes) : decode_jpeg_frame(jpeg, jpeg_bytes);
+}
+
 static int connect_camera_socket(const CameraEndpoint& endpoint) {
   tcp_ack::ConnectOptions options;
   options.log_prefix = "[CameraStream]";
@@ -1428,6 +1434,13 @@ static void run_camera_task() {
   uint32_t last_data_ms = millis();
   uint32_t gap_logged_ms = 0;
   uint32_t gaps_not_logged = 0;
+  // Lip sync with a camera's sound (frame_delay_line.h): the ring is taken
+  // from PSRAM once the speaker reports a delay and freed with the stream.
+  camera_sync::FrameDelayLine delay_line;
+  uint8_t* delay_memory = nullptr;
+  bool delay_unavailable = false;
+  uint32_t sync_skipped = 0;
+  uint32_t sync_log_ms = 0;
 
   // Receives exactly `bytes`. A wait of kDataGapLogMs or more is logged once
   // the bytes arrived; shorter waits log nothing.
@@ -1605,8 +1618,40 @@ static void run_camera_task() {
     }
 
     const uint32_t frames_before = g_worker_frame_count;
-    if (!(full ? queue_full_frame(input, jpeg_bytes)
-               : decode_jpeg_frame(input, jpeg_bytes))) {
+    const uint32_t picture_delay = camera_sync::pictureDelayMs(speaker::cameraSyncDelayMs());
+    bool presented_ok = true;
+    if (picture_delay == 0 && delay_line.empty()) {
+      presented_ok = present_frame(full, input, jpeg_bytes);
+    } else {
+      if (!delay_memory && !delay_unavailable) {
+        delay_memory = static_cast<uint8_t*>(heap_caps_malloc(
+            camera_sync::kDelayRingBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        delay_unavailable = delay_memory == nullptr;
+        delay_line.reset(delay_memory ? camera_sync::kDelayRingBytes : 0);
+        if (delay_unavailable) {
+          Serial.println("[CameraStream] Lip sync off: no PSRAM for the picture delay");
+        }
+      }
+      size_t offset = 0;
+      bool room = delay_memory && delay_line.reserve(jpeg_bytes, &offset);
+      while (delay_memory && !room && !delay_line.empty()) {
+        delay_line.dropOldest();
+        ++sync_skipped;
+        room = delay_line.reserve(jpeg_bytes, &offset);
+      }
+      if (room) {
+        memcpy(delay_memory + offset, input, jpeg_bytes);
+        delay_line.commit(offset, jpeg_bytes, millis() + picture_delay);
+        camera_sync::DelayedFrame frame;
+        if (delay_line.takeDue(millis(), &frame, &sync_skipped)) {
+          presented_ok = present_frame(full, delay_memory + frame.offset, frame.length);
+        }
+      } else {
+        // No ring (or a frame larger than it): this frame goes out unsynced.
+        presented_ok = present_frame(full, input, jpeg_bytes);
+      }
+    }
+    if (!presented_ok) {
       stream_ok = false;
       break;
     }
@@ -1634,12 +1679,21 @@ static void run_camera_task() {
       g_decode_jpeg_bytes = 0;
       g_decode_timed = 0;
       last_fps_ms = now;
+      if (picture_delay > 0 && now - sync_log_ms >= 10000) {
+        Serial.printf("[CameraStream] Lip sync: picture waits %u ms for the sound "
+                      "(%u frames skipped)\n",
+                      static_cast<unsigned>(picture_delay),
+                      static_cast<unsigned>(sync_skipped));
+        sync_log_ms = now;
+        sync_skipped = 0;
+      }
     }
     // Block for at least one tick. taskYIELD() alone never schedules lower
     // priority tasks and starved MQTT keepalive during a long 24 FPS camera test.
     vTaskDelay(1);
   }
 
+  heap_caps_free(delay_memory);
   Serial.printf("[CameraStream] TCP ACK stream ended: ok=%s, last data %u ms ago\n",
                 stream_ok ? "yes" : "no",
                 static_cast<unsigned>(millis() - last_data_ms));

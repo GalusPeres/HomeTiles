@@ -140,8 +140,18 @@ it starts a live session (22.05 kHz, RTSP read like the picture: TCP,
   further behind the picture; its I2S buffer is 4 x 240 frames (44 ms) and
   the Bridge sends what FFmpeg wrote without waiting for a full block. b504
   with b11 kept 300-600 ms, 174 ms of I2S buffer and up to 93 ms per block,
-  and its sound ran audibly behind the picture. Lip sync with timestamps is
-  not attempted.
+  and its sound ran audibly behind the picture.
+- Lip sync (b506, Bridge b13): the picture waits for the sound. The speaker
+  reports how long its live sound still needs to the loudspeaker (buffer
+  plus the whole I2S buffer), less `lead_ms` from the play command: how much
+  earlier the Bridge's sound leaves FFmpeg than its picture, estimated from
+  the probe (the picture's FFmpeg holds a frame 3 source frames on its 4
+  decode threads plus about 15 ms to scale and encode; the sound one codec
+  packet, 64 ms for AAC at 16 kHz). The camera task keeps each received JPEG
+  in a 1 MB PSRAM ring (`frame_delay_line.h`) until then, less its own 25 ms
+  decode and present time. Without camera sound the delay is 0 and the
+  frames go out at once, as before. Cost while it runs: one PSRAM copy per
+  frame (about 0.3 ms), no internal RAM.
 - The sound takes over the speaker like any clip: a playing song stops.
   Still-image cameras and the panels' own cameras have no sound.
 

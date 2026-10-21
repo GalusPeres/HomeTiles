@@ -260,6 +260,21 @@ inline bool isUnsupportedContentType(const char* type) {
   return false;
 }
 
+// A frame header the Helix decoder of the ESP32 core can decode: MPEG-1 or
+// MPEG-2 (its 12-bit sync word), Layer III, a bitrate from the table and a
+// valid sample rate. Needs 4 bytes. Helix takes any 12-bit sync word for a
+// frame: a Layer I/II or free-format header found in tag data put it into
+// free-bitrate mode for good, and the next frames were copied with a length
+// of -1 over its own memory (#119: an MPEG-2.5 clip at 8-12 kHz, whose real
+// frames Helix cannot see, restarted the panel).
+inline bool isDecodableMp3Header(const uint8_t* header) {
+  if (!header || header[0] != 0xFF || (header[1] & 0xF0) != 0xF0) return false;
+  if (((header[1] >> 1) & 0x03) != 0x01) return false;  // Layer III
+  const uint8_t bitrate = header[2] >> 4;
+  if (bitrate == 0 || bitrate == 15) return false;      // free format, invalid
+  return ((header[2] >> 2) & 0x03) != 3;                // reserved sample rate
+}
+
 // Size of an ID3v2 tag at the start of an MP3 (header, body and footer),
 // 0 when there is none. Needs the first 10 bytes.
 inline size_t id3v2Length(const uint8_t* data, size_t length) {

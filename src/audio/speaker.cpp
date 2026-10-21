@@ -603,6 +603,14 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
       memcpy(diag.headers[diag.candidates], read, left < 4 ? static_cast<size_t>(left) : 4);
     }
     ++diag.candidates;
+    // Only headers Helix can decode reach it (#119, isDecodableMp3Header);
+    // anything else is a false sync word: one byte further.
+    if (left >= 4 && !isDecodableMp3Header(read)) {
+      src->buffer.consume(1);
+      ++unsynced_bytes;
+      if (!synced && unsynced_bytes > kMaxSyncHuntBytes) break;
+      continue;
+    }
     const int err = MP3Decode(decoder, &frame, &frame_left, pcm, 0);
     if (err == ERR_MP3_NONE) {
       ++diag.decoded;

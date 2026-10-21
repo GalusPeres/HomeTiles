@@ -87,7 +87,7 @@ Enable the electricity, gas, or water categories you need. Each requires the cor
 Pairing connects a display to the Bridge over the direct link. Every message between them is encrypted and signed, commands as well as states, and each command runs at most once. Camera stream tokens travel encrypted too.
 
 1. On the display, tap **Pair** under **Settings → System → Security** (or in the first-start setup).
-2. Home Assistant shows **Panel found** under **Settings → Devices & services → Discovered**; a display that is already set up over MQTT shows **Connect the panel**. Select **Add** or **Submit**.
+2. Home Assistant shows **Panel found** under **Settings → Devices & services → Discovered**; a display that is already set up over MQTT shows **Connect the panel**. Select **Add** or **Submit**. Where Home Assistant cannot find displays over mDNS (Docker without host networking, VLANs), open **Add integration → HomeTiles Bridge → Panel by IP address (direct connection)** within the two minutes and enter the display's IP address (shown under **Settings → WiFi**); a fixed IP address for the display in the router helps (Bridge v0.9.4).
 3. The display and Home Assistant show the same six-digit number. Confirm only if both numbers match, in Home Assistant and on the display.
 
 The [Installation](installer.md#set-up-the-display) shows each step. To switch encryption off, unpair on the display or use **Security** in the Bridge options; the other side follows, and the display then counts as a new display.

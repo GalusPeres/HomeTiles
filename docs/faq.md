@@ -8,7 +8,7 @@
 **Display not found after Pair**
 
 1. Tap **Pair** again under **Settings → System → Security**; Home Assistant can find the display for two minutes.
-2. Display and Home Assistant must be in the same network: Home Assistant finds the display by mDNS (zeroconf). VLANs and guest networks often block it.
+2. Display and Home Assistant must be in the same network: Home Assistant finds the display by mDNS (zeroconf). VLANs, guest networks and Docker without host networking often block it. Then add the display by its IP address: tap **Pair**, then **Add integration → HomeTiles Bridge → Panel by IP address (direct connection)** (Bridge v0.9.4).
 3. Check that the HomeTiles Bridge v0.9.0 is installed and Home Assistant was restarted afterwards.
 4. Look under **Settings → Devices & services** for an existing HomeTiles Bridge entry of this display: a display that already has one shows **Connect the panel** instead of **Panel found**.
 

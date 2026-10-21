@@ -38,7 +38,10 @@ constexpr int8_t kPanelData[16] = {17, 18, 48, 47, 39, 11, 12, 13,
 constexpr uint32_t kPanelPclkHz = 23 * 1000 * 1000;
 
 constexpr int8_t kBacklightPin = 21;
-constexpr uint32_t kBacklightFrequency = 5000;
+// The backlight is a plain LEDC PWM line. A fast rate sits in the range the
+// ear hears best and makes the panel whine whenever the backlight is dimmed,
+// so this board uses its own low, silent rate.
+constexpr uint32_t kBacklightFrequency = 200;
 constexpr uint8_t kBacklightResolution = 10;
 constexpr uint32_t kBacklightMaxDuty = (1u << kBacklightResolution) - 1u;
 
@@ -59,7 +62,6 @@ constexpr uint16_t kTouchPointRegister = 0x8150;
 // errors release it after this many consecutive failures.
 constexpr uint8_t kTouchErrorReleaseThreshold = 16;
 
-constexpr uint32_t kCacheLineSize = 32;
 
 esp_lcd_panel_handle_t g_panel = nullptr;
 uint16_t* g_framebuffer = nullptr;
@@ -109,21 +111,24 @@ void backlightInit() {
 }
 
 // The CPU cache holds the framebuffer writes, but the LCD reads the buffer
-// from memory. Push the dirty lines out. The cache wants a 32-byte aligned
-// start and size, and the rows of the framebuffer are not contiguous, so
-// every row is synced on its own.
+// from memory. Push the dirty lines out. The rows of the framebuffer are not
+// contiguous, so a part of a row has to be synced on its own; a band that
+// covers the full width is one continuous block and needs a single call.
 void syncRegion(int32_t x, int32_t y, int32_t w, int32_t h) {
   if (!g_framebuffer || w <= 0 || h <= 0) return;
+  if (x <= 0 && w >= kScreenWidth) {
+    uint16_t* first = g_framebuffer + static_cast<size_t>(y) * kScreenWidth;
+    esp_cache_msync(first,
+                    static_cast<size_t>(h) * kScreenWidth * sizeof(uint16_t),
+                    ESP_CACHE_MSYNC_FLAG_DIR_C2M |
+                        ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+    return;
+  }
   for (int32_t row = y; row < y + h; ++row) {
     uint16_t* line = g_framebuffer + static_cast<size_t>(row) * kScreenWidth + x;
-    const uintptr_t first = reinterpret_cast<uintptr_t>(line);
-    const uintptr_t start = first & ~(kCacheLineSize - 1);
-    const uintptr_t end =
-        (first + static_cast<uintptr_t>(w) * sizeof(uint16_t) + kCacheLineSize - 1) &
-        ~(kCacheLineSize - 1);
-    if (end <= start) continue;
-    esp_cache_msync(reinterpret_cast<void*>(start), end - start,
-                    ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    esp_cache_msync(line, static_cast<size_t>(w) * sizeof(uint16_t),
+                    ESP_CACHE_MSYNC_FLAG_DIR_C2M |
+                        ESP_CACHE_MSYNC_FLAG_UNALIGNED);
   }
 }
 

@@ -26,6 +26,11 @@ constexpr uint8_t kMaxDelayedFrames = 32;
 constexpr uint32_t kPresentMs = 25;
 // Longer waits mean something is off; the picture then goes out unsynced.
 constexpr uint32_t kMaxDelayMs = 600;
+// A frame this late is skipped when a newer one is already due: the panel
+// fell behind (a stall) and catches up. Shorter lateness (two frames that
+// arrived together) shows every frame in order (b507: b506 showed only the
+// newest due frame and dropped 3-5 of 30 frames per second).
+constexpr uint32_t kCatchUpMs = 100;
 
 // The wait for a frame received now: the sound's delay less the picture's
 // own decode and present time, 0 without sound, at most kMaxDelayMs.
@@ -105,22 +110,36 @@ class FrameDelayLine {
     if (--count_ == 0) write_pos_ = 0;
   }
 
-  // The newest frame due at now_ms, taken out of the line; older due frames
-  // go too and count as skipped (shown late, a live picture skips them).
+  // When the oldest frame is due (false when the line is empty).
+  bool nextDue(uint32_t* due_ms) const {
+    if (count_ == 0) return false;
+    *due_ms = frames_[head_].due_ms;
+    return true;
+  }
+
+  // The oldest frame due at now_ms, taken out of the line; the caller asks
+  // again for the next one. A frame more than kCatchUpMs late goes without
+  // being shown when a newer one is due too, and counts as skipped.
   // Its bytes stay valid until the next reserve/commit.
   bool takeDue(uint32_t now_ms, DelayedFrame* out, uint32_t* skipped) {
-    bool found = false;
-    while (count_ > 0 && static_cast<int32_t>(now_ms - frames_[head_].due_ms) >= 0) {
-      if (found && skipped) ++*skipped;
-      *out = frames_[head_];
-      found = true;
+    while (count_ > 1 && lateMs(now_ms, frames_[head_]) > static_cast<int32_t>(kCatchUpMs) &&
+           lateMs(now_ms, frames_[(head_ + 1) % kMaxDelayedFrames]) >= 0) {
+      if (skipped) ++*skipped;
       head_ = (head_ + 1) % kMaxDelayedFrames;
       --count_;
     }
-    return found;
+    if (count_ == 0 || lateMs(now_ms, frames_[head_]) < 0) return false;
+    *out = frames_[head_];
+    head_ = (head_ + 1) % kMaxDelayedFrames;
+    --count_;
+    return true;
   }
 
  private:
+  static int32_t lateMs(uint32_t now_ms, const DelayedFrame& frame) {
+    return static_cast<int32_t>(now_ms - frame.due_ms);
+  }
+
   DelayedFrame frames_[kMaxDelayedFrames];
   size_t capacity_ = 0;
   uint8_t head_ = 0;

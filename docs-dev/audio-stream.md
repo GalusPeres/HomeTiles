@@ -152,6 +152,14 @@ it starts a live session (22.05 kHz, RTSP read like the picture: TCP,
   decode and present time. Without camera sound the delay is 0 and the
   frames go out at once, as before. Cost while it runs: one PSRAM copy per
   frame (about 0.3 ms), no internal RAM.
+- b507: a held frame goes out when it is due; the task waits on the socket
+  (select) only until then and shows due frames in order. b506 looked only
+  when the next frame arrived and then kept just the newest due one: frames
+  that Wi-Fi handed over together cost one each, 3-5 of 30 per second on the
+  V2 (25-27 FPS). A frame is skipped only when it is more than 100 ms late
+  and a newer one is due (after a stall).
+- Test source with sender reports: MediaMTX on a PC fed by OBS over RTMP.
+  The obs-rtspserver plugin sends no RTCP at all, so nothing can sync it.
 - The sound takes over the speaker like any clip: a playing song stops.
   Still-image cameras and the panels' own cameras have no sound.
 

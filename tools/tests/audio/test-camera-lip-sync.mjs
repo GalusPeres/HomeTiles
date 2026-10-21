@@ -8,6 +8,11 @@
 // Checks the delay line (src/video/frame_delay_line.h) on the host, the
 // speaker's delay report and the camera task's use of it: without sound the
 // camera path stays exactly as before.
+//
+// b507: b506 took a held frame out only when the next one arrived and then
+// showed just the newest due frame, so two frames that arrived together cost
+// one (3-5 of 30 per second on the V2, 25-27 FPS). Now the task waits on the
+// socket only until the next frame is due and shows due frames in order.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
@@ -18,14 +23,19 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replaceAll('\r\n', '\n');
 
 const camera = read('src/video/camera_stream.cpp');
-const loop = camera.slice(camera.indexOf('const uint32_t frames_before = g_worker_frame_count;'),
-                          camera.indexOf('frame_count += g_worker_frame_count - frames_before;'));
+const loop = camera.slice(camera.indexOf('const uint32_t picture_delay ='),
+                          camera.indexOf('if (!presented_ok) {'));
 assert.ok(loop.length > 0, 'the camera task presents frames here');
 assert.match(loop, /const uint32_t picture_delay = camera_sync::pictureDelayMs\(speaker::cameraSyncDelayMs\(\)\);/);
 assert.match(loop, /if \(picture_delay == 0 && delay_line\.empty\(\)\) \{\s*presented_ok = present_frame\(full, input, jpeg_bytes\);/,
              'without sound every frame goes out at once, as before');
-assert.match(loop, /delay_line\.commit\(offset, jpeg_bytes, millis\(\) \+ picture_delay\);/);
-assert.match(loop, /if \(delay_line\.takeDue\(millis\(\), &frame, &sync_skipped\)\) \{\s*presented_ok = present_frame\(full, delay_memory \+ frame\.offset, frame\.length\);/);
+assert.match(loop, /delay_line\.commit\(offset, jpeg_bytes, millis\(\) \+ picture_delay\);\s*presented_ok = present_due_frames\(\);/);
+assert.match(camera, /auto present_due_frames = \[&\]\(\) -> bool \{\s*camera_sync::DelayedFrame frame;\s*while \(delay_line\.takeDue\(millis\(\), &frame, &sync_skipped\)\) \{\s*if \(!present_frame\(full, delay_memory \+ frame\.offset, frame\.length\)\) return false;/,
+             'every due frame is shown, oldest first');
+const top = camera.slice(camera.indexOf('Serial.println("[CameraStream] Debug pause over, reading again");'),
+                         camera.indexOf('uint8_t header[kCameraFrameHeaderBytes] = {};'));
+assert.match(top, /if \(!delay_line\.empty\(\)\) \{[\s\S]*stream_ok = present_due_frames\(\);[\s\S]*delay_line\.nextDue\(&due_ms\)[\s\S]*!tcp_ack::waitReadable\(socket_fd, static_cast<uint32_t>\(wait_ms\)\)\) \{\s*continue;/,
+             'a held frame goes out on time even while no new frame arrives');
 assert.match(camera, /heap_caps_malloc\(\s*camera_sync::kDelayRingBytes, MALLOC_CAP_SPIRAM \| MALLOC_CAP_8BIT\)/,
              'the waiting pictures sit in PSRAM, never in internal RAM');
 assert.match(camera, /heap_caps_free\(delay_memory\);\s*Serial\.printf\("\[CameraStream\] TCP ACK stream ended/);
@@ -94,7 +104,34 @@ int main() {
   }
   assert(skipped == 0 && shown >= 590);
 
-  // The sound's delay shrinks (or ends): frames catch up and skip, they never
+  // Wi-Fi hands frames over in pairs (two at once every 66 ms) and the task
+  // wakes every 33 ms: every frame is shown, in order (b506 dropped one of
+  // each pair here).
+  line.reset(kDelayRingBytes);
+  now = 1000; shown = 0; skipped = 0; last_shown = 0;
+  uint32_t next_id = 1;
+  for (uint32_t tick = 0; tick < 600; ++tick, now += 33) {
+    if (tick % 2 == 0) {
+      for (int pair = 0; pair < 2; ++pair, ++next_id) {
+        size_t offset = 0;
+        while (!line.reserve(60000, &offset)) line.dropOldest();
+        memset(ring.data() + offset, static_cast<int>(next_id & 0xFF), 60000);
+        line.commit(offset, 60000, now + 50);
+      }
+    }
+    DelayedFrame frame;
+    while (line.takeDue(now, &frame, &skipped)) {
+      const uint32_t id = ring[frame.offset];
+      assert(id == ((last_shown + 1) & 0xFF));
+      last_shown = id;
+      ++shown;
+    }
+    uint32_t due = 0;
+    assert(!line.nextDue(&due) || static_cast<int32_t>(due - now) > 0);
+  }
+  assert(skipped == 0 && shown >= 590);
+
+  // The sound's delay shrinks (or ends): frames catch up in order, they never
   // overtake an older one.
   line.reset(kDelayRingBytes);
   size_t offset = 0;
@@ -103,10 +140,24 @@ int main() {
   assert(line.reserve(1000, &offset) && offset == 1000);
   line.commit(offset, 1000, 300);  // due earlier: waits for the first
   DelayedFrame frame;
+  uint32_t due = 0;
+  assert(line.nextDue(&due) && due == 500);
   assert(!line.takeDue(400, &frame, &skipped));
   skipped = 0;
-  assert(line.takeDue(500, &frame, &skipped) && frame.offset == 1000 && skipped == 1);
-  assert(line.empty());
+  assert(line.takeDue(500, &frame, &skipped) && frame.offset == 0 && skipped == 0);
+  assert(line.takeDue(500, &frame, &skipped) && frame.offset == 1000 && skipped == 0);
+  assert(line.empty() && !line.nextDue(&due));
+
+  // After a stall the panel catches up: frames more than kCatchUpMs late go
+  // when a newer one is due, the newest due one is shown.
+  line.reset(kDelayRingBytes);
+  for (uint32_t n = 0; n < 4; ++n) {
+    assert(line.reserve(1000, &offset));
+    line.commit(offset, 1000, 100 + n * 33);
+  }
+  skipped = 0;
+  assert(line.takeDue(100 + 3 * 33 + kCatchUpMs, &frame, &skipped));
+  assert(frame.due_ms == 100 + 3 * 33 && skipped == 3 && line.empty());
 
   // A full ring: no room until the oldest goes; a frame larger than the
   // ring never fits (the camera task then shows it unsynced).

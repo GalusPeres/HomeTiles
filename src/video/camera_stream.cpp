@@ -1441,6 +1441,14 @@ static void run_camera_task() {
   bool delay_unavailable = false;
   uint32_t sync_skipped = 0;
   uint32_t sync_log_ms = 0;
+  // Shows every held frame that is due, oldest first.
+  auto present_due_frames = [&]() -> bool {
+    camera_sync::DelayedFrame frame;
+    while (delay_line.takeDue(millis(), &frame, &sync_skipped)) {
+      if (!present_frame(full, delay_memory + frame.offset, frame.length)) return false;
+    }
+    return true;
+  };
 
   // Receives exactly `bytes`. A wait of kDataGapLogMs or more is logged once
   // the bytes arrived; shorter waits log nothing.
@@ -1507,6 +1515,23 @@ static void run_camera_task() {
       }
       Serial.println("[CameraStream] Debug pause over, reading again");
       if (g_stop_requested) break;
+    }
+
+    // Lip sync: a held frame goes out when it is due, not only when the next
+    // one arrives, so the socket is waited on only until then.
+    if (!delay_line.empty()) {
+      const uint32_t frames_before = g_worker_frame_count;
+      stream_ok = present_due_frames();
+      frame_count += g_worker_frame_count - frames_before;
+      if (!stream_ok) break;
+      uint32_t due_ms = 0;
+      if (delay_line.nextDue(&due_ms)) {
+        const int32_t wait_ms = static_cast<int32_t>(due_ms - millis());
+        if (wait_ms > 0 &&
+            !tcp_ack::waitReadable(socket_fd, static_cast<uint32_t>(wait_ms))) {
+          continue;
+        }
+      }
     }
 
     uint8_t header[kCameraFrameHeaderBytes] = {};
@@ -1642,10 +1667,7 @@ static void run_camera_task() {
       if (room) {
         memcpy(delay_memory + offset, input, jpeg_bytes);
         delay_line.commit(offset, jpeg_bytes, millis() + picture_delay);
-        camera_sync::DelayedFrame frame;
-        if (delay_line.takeDue(millis(), &frame, &sync_skipped)) {
-          presented_ok = present_frame(full, delay_memory + frame.offset, frame.length);
-        }
+        presented_ok = present_due_frames();
       } else {
         // No ring (or a frame larger than it): this frame goes out unsynced.
         presented_ok = present_frame(full, input, jpeg_bytes);

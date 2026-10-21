@@ -29,7 +29,14 @@ assert.ok(loop.length > 0, 'the camera task presents frames here');
 assert.match(loop, /const uint32_t picture_delay = camera_sync::pictureDelayMs\(speaker::cameraSyncDelayMs\(\)\);/);
 assert.match(loop, /if \(picture_delay == 0 && delay_line\.empty\(\)\) \{\s*presented_ok = present_frame\(full, input, jpeg_bytes\);/,
              'without sound every frame goes out at once, as before');
-assert.match(loop, /delay_line\.commit\(offset, jpeg_bytes, millis\(\) \+ picture_delay\);\s*presented_ok = present_due_frames\(\);/);
+assert.match(loop, /delay_line\.commit\(offset, jpeg_bytes, millis\(\), picture_delay\);\s*presented_ok = present_due_frames\(\);/);
+// b508: the shortest and longest gap between frames on screen, in both FPS
+// lines, so even spacing can be read from the log.
+assert.match(camera, /static void note_presented_frame\(\) \{\s*\+\+g_presented_frame_count;\s*const uint32_t now = millis\(\);\s*g_present_gaps\.note\(now\);/);
+assert.match(camera, /"\[CameraStream\] Present: %\.1f FPS wait=%\.1fms ppa\+cache\+swap=%\.1fms "\s*"gap=%u-%ums\\n"/);
+assert.match(camera, /g_full_gaps\.note\(millis\(\)\);\s*\+\+g_full_frames;/);
+assert.match(camera, /"\[CameraStream\] Full screen: %\.1f FPS decode=%\.1fms swap_wait=%\.1fms failed=%u "\s*"gap=%u-%ums\\n"/);
+assert.match(camera, /g_present_gaps\.restart\(\);\s*g_full_gaps\.restart\(\);/, 'a new stream starts its gaps afresh');
 assert.match(camera, /auto present_due_frames = \[&\]\(\) -> bool \{\s*camera_sync::DelayedFrame frame;\s*while \(delay_line\.takeDue\(millis\(\), &frame, &sync_skipped\)\) \{\s*if \(!present_frame\(full, delay_memory \+ frame\.offset, frame\.length\)\) return false;/,
              'every due frame is shown, oldest first');
 const top = camera.slice(camera.indexOf('Serial.println("[CameraStream] Debug pause over, reading again");'),
@@ -89,7 +96,7 @@ int main() {
     while (!line.reserve(length, &offset)) line.dropOldest();
     assert(offset + length <= kDelayRingBytes);
     memset(ring.data() + offset, static_cast<int>(n & 0xFF), length);
-    line.commit(offset, length, now + 200);
+    line.commit(offset, length, now, 200);
     DelayedFrame frame;
     if (line.takeDue(now, &frame, &skipped)) {
       // The frame's bytes are intact (no later frame overwrote them).
@@ -116,7 +123,7 @@ int main() {
         size_t offset = 0;
         while (!line.reserve(60000, &offset)) line.dropOldest();
         memset(ring.data() + offset, static_cast<int>(next_id & 0xFF), 60000);
-        line.commit(offset, 60000, now + 50);
+        line.commit(offset, 60000, now, 50);
       }
     }
     DelayedFrame frame;
@@ -136,9 +143,9 @@ int main() {
   line.reset(kDelayRingBytes);
   size_t offset = 0;
   assert(line.reserve(1000, &offset) && offset == 0);
-  line.commit(offset, 1000, 500);
+  line.commit(offset, 1000, 0, 500);
   assert(line.reserve(1000, &offset) && offset == 1000);
-  line.commit(offset, 1000, 300);  // due earlier: waits for the first
+  line.commit(offset, 1000, 0, 300);  // due earlier: waits for the first
   DelayedFrame frame;
   uint32_t due = 0;
   assert(line.nextDue(&due) && due == 500);
@@ -153,17 +160,57 @@ int main() {
   line.reset(kDelayRingBytes);
   for (uint32_t n = 0; n < 4; ++n) {
     assert(line.reserve(1000, &offset));
-    line.commit(offset, 1000, 100 + n * 33);
+    line.commit(offset, 1000, n * 33, 100);
   }
   skipped = 0;
   assert(line.takeDue(100 + 3 * 33 + kCatchUpMs, &frame, &skipped));
   assert(frame.due_ms == 100 + 3 * 33 && skipped == 3 && line.empty());
 
+  // Even spacing (b508): frames arrive in pairs 1 ms apart every 66 ms (the
+  // V2 full screen), the task looks every millisecond. Once the line knows
+  // the 33 ms rhythm, frames go out 30-36 ms apart instead of 1 ms and 65 ms
+  // (b507), each at most one interval after its sound needs it.
+  line.reset(kDelayRingBytes);
+  ShownGaps gaps;
+  uint32_t arrival[256] = {};
+  next_id = 1; skipped = 0; last_shown = 0; shown = 0;
+  for (uint32_t t = 0; t < 20000; ++t) {
+    if (t % 66 == 0 || t % 66 == 1) {
+      assert(line.reserve(1000, &offset));
+      ring[offset] = static_cast<uint8_t>(next_id & 0xFF);
+      arrival[next_id & 0xFF] = t;
+      line.commit(offset, 1000, t, 50);
+      ++next_id;
+    }
+    while (line.takeDue(t, &frame, &skipped)) {
+      const uint32_t id = ring[frame.offset];
+      assert(id == ((last_shown + 1) & 0xFF));
+      last_shown = id;
+      ++shown;
+      assert(t >= arrival[id] + 50 && t <= arrival[id] + 50 + 34);
+      if (t >= 3000) gaps.note(t);
+    }
+  }
+  assert(skipped == 0 && shown >= 600);
+  assert(line.intervalMs() >= 31 && line.intervalMs() <= 34);
+  assert(gaps.count > 200 && gaps.min_ms >= 28 && gaps.max_ms <= 38);
+
+  // The log's gap range: shortest and longest since the line began.
+  ShownGaps range;
+  range.note(0); range.note(33); range.note(70);
+  assert(range.count == 2 && range.min_ms == 33 && range.max_ms == 37);
+  range.startLine();
+  range.note(100);
+  assert(range.count == 1 && range.min_ms == 30 && range.max_ms == 30);
+  range.restart();
+  range.note(500);
+  assert(range.count == 0);
+
   // A full ring: no room until the oldest goes; a frame larger than the
   // ring never fits (the camera task then shows it unsynced).
   line.reset(3000);
-  assert(line.reserve(1500, &offset)); line.commit(offset, 1500, 10);
-  assert(line.reserve(1500, &offset) && offset == 1500); line.commit(offset, 1500, 20);
+  assert(line.reserve(1500, &offset)); line.commit(offset, 1500, 0, 10);
+  assert(line.reserve(1500, &offset) && offset == 1500); line.commit(offset, 1500, 10, 10);
   assert(!line.reserve(1, &offset));
   line.dropOldest();
   assert(line.reserve(1500, &offset) && offset == 0);

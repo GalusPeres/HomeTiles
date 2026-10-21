@@ -158,6 +158,12 @@ it starts a live session (22.05 kHz, RTSP read like the picture: TCP,
   that Wi-Fi handed over together cost one each, 3-5 of 30 per second on the
   V2 (25-27 FPS). A frame is skipped only when it is more than 100 ms late
   and a newer one is due (after a stall).
+- b508: even spacing. Wi-Fi hands full-screen frames (two 32 KB blocks)
+  over in pairs, and b507 passed that on (12 ms, then 54 ms: the full
+  screen stuttered at 30 FPS). A held frame is now due no earlier than
+  15/16 of the average arrival interval after the one before, at most one
+  interval later than its sound needs. The Present and Full screen lines
+  log the shortest and longest gap between frames on screen (`gap=a-b ms`).
 - Test source with sender reports: MediaMTX on a PC fed by OBS over RTMP.
   The obs-rtspserver plugin sends no RTCP at all, so nothing can sync it.
 - The sound takes over the speaker like any clip: a playing song stops.

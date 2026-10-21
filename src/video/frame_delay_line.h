@@ -31,6 +31,14 @@ constexpr uint32_t kMaxDelayMs = 600;
 // arrived together) shows every frame in order (b507: b506 showed only the
 // newest due frame and dropped 3-5 of 30 frames per second).
 constexpr uint32_t kCatchUpMs = 100;
+// Even spacing (b508): Wi-Fi hands frames over in bunches (full-screen
+// frames are two 32 KB blocks), and b507 passed those gaps on, 12 ms then
+// 54 ms on the V2 full screen. A held frame is now due no earlier than
+// 15/16 of the average arrival interval after the one before (a little less
+// than the interval, so the line never grows), and at most one interval
+// later than its sound needs. Gaps longer than kPauseGapMs are pauses, not
+// the stream's rhythm, and leave the average alone.
+constexpr uint32_t kPauseGapMs = 200;
 
 // The wait for a frame received now: the sound's delay less the picture's
 // own decode and present time, 0 without sound, at most kMaxDelayMs.
@@ -54,7 +62,13 @@ class FrameDelayLine {
     head_ = 0;
     count_ = 0;
     write_pos_ = 0;
+    have_arrival_ = false;
+    have_due_ = false;
+    interval_x16_ = 0;
   }
+
+  // The average arrival interval in ms (0 until two frames arrived).
+  uint32_t intervalMs() const { return interval_x16_ / 16; }
 
   bool empty() const { return count_ == 0; }
   uint8_t size() const { return count_; }
@@ -89,13 +103,33 @@ class FrameDelayLine {
     return false;
   }
 
-  // The frame copied to `offset` is due at due_ms. Due times never go back:
-  // when the sound's delay shrinks, frames catch up instead of overtaking.
-  void commit(size_t offset, size_t length, uint32_t due_ms) {
-    if (count_ > 0) {
-      const uint32_t last_due = frames_[(head_ + count_ - 1) % kMaxDelayedFrames].due_ms;
-      if (static_cast<int32_t>(due_ms - last_due) < 0) due_ms = last_due;
+  // The frame copied to `offset` arrived at arrival_ms and its sound needs
+  // delay_ms: due then, spaced evenly after the frame before (see
+  // kPauseGapMs). Due times never go back: when the sound's delay shrinks,
+  // frames catch up instead of overtaking.
+  void commit(size_t offset, size_t length, uint32_t arrival_ms, uint32_t delay_ms) {
+    if (have_arrival_) {
+      const uint32_t gap = arrival_ms - last_arrival_ms_;
+      if (gap <= kPauseGapMs) {
+        // Average over about 16 frames, in 1/16 ms.
+        interval_x16_ = interval_x16_ == 0 ? gap * 16 : interval_x16_ - interval_x16_ / 16 + gap;
+      }
     }
+    have_arrival_ = true;
+    last_arrival_ms_ = arrival_ms;
+
+    uint32_t due_ms = arrival_ms + delay_ms;
+    if (have_due_) {
+      const uint32_t paced = last_due_ms_ + interval_x16_ / 16 * 15 / 16;
+      const uint32_t latest = due_ms + interval_x16_ / 16;
+      if (static_cast<int32_t>(paced - due_ms) > 0) {
+        due_ms = static_cast<int32_t>(paced - latest) > 0 ? latest : paced;
+      }
+      if (static_cast<int32_t>(due_ms - last_due_ms_) < 0) due_ms = last_due_ms_;
+    }
+    have_due_ = true;
+    last_due_ms_ = due_ms;
+
     DelayedFrame& frame = frames_[(head_ + count_) % kMaxDelayedFrames];
     frame.offset = offset;
     frame.length = length;
@@ -145,6 +179,37 @@ class FrameDelayLine {
   uint8_t head_ = 0;
   uint8_t count_ = 0;
   size_t write_pos_ = 0;
+  // Pacing: the last arrival and due time (also after the frame left the
+  // line) and the average arrival interval.
+  bool have_arrival_ = false;
+  bool have_due_ = false;
+  uint32_t last_arrival_ms_ = 0;
+  uint32_t last_due_ms_ = 0;
+  uint32_t interval_x16_ = 0;
+};
+
+// Shortest and longest gap between two frames on screen, for the camera's
+// FPS lines: even spacing shows as a narrow range. Reset with each line.
+struct ShownGaps {
+  bool have_last = false;
+  uint32_t last_ms = 0;
+  uint32_t count = 0;
+  uint32_t min_ms = 0;
+  uint32_t max_ms = 0;
+
+  void note(uint32_t now_ms) {
+    if (have_last) {
+      const uint32_t gap = now_ms - last_ms;
+      if (count == 0 || gap < min_ms) min_ms = gap;
+      if (count == 0 || gap > max_ms) max_ms = gap;
+      ++count;
+    }
+    have_last = true;
+    last_ms = now_ms;
+  }
+  // Keeps the last frame's time, so the next line's first gap still counts.
+  void startLine() { count = min_ms = max_ms = 0; }
+  void restart() { have_last = false; startLine(); }
 };
 
 }  // namespace camera_sync

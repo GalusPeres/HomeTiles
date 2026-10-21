@@ -133,6 +133,7 @@ uint32_t g_worker_frame_count = 0;
 uint32_t g_no_write_buffer_drops = 0;
 uint32_t g_presented_frame_count = 0;
 uint32_t g_presented_fps_ms = 0;
+camera_sync::ShownGaps g_present_gaps;
 uint64_t g_present_wait_total_us = 0;
 uint64_t g_present_copy_total_us = 0;
 uint32_t g_present_timed_frames = 0;
@@ -161,6 +162,7 @@ uint32_t g_full_failed = 0;
 uint64_t g_full_decode_total_us = 0;
 uint64_t g_full_wait_total_us = 0;
 uint32_t g_full_log_ms = 0;
+camera_sync::ShownGaps g_full_gaps;
 // The stream ended on its own in a transport error (camera_transport falls
 // back), and when the first frame of this stream was shown (switch timing).
 volatile bool g_transport_failed = false;
@@ -389,6 +391,7 @@ static void release_write_buffer(int8_t index) {
 static void note_presented_frame() {
   ++g_presented_frame_count;
   const uint32_t now = millis();
+  g_present_gaps.note(now);
   if (now - g_presented_fps_ms < 2000) return;
 
   const float fps =
@@ -399,13 +402,17 @@ static void note_presented_frame() {
   set_status(message);
   if (g_present_timed_frames > 0) {
     Serial.printf(
-        "[CameraStream] Present: %.1f FPS wait=%.1fms ppa+cache+swap=%.1fms\n",
+        "[CameraStream] Present: %.1f FPS wait=%.1fms ppa+cache+swap=%.1fms "
+        "gap=%u-%ums\n",
         fps,
         static_cast<double>(g_present_wait_total_us) /
             static_cast<double>(g_present_timed_frames) / 1000.0,
         static_cast<double>(g_present_copy_total_us) /
-            static_cast<double>(g_present_timed_frames) / 1000.0);
+            static_cast<double>(g_present_timed_frames) / 1000.0,
+        static_cast<unsigned>(g_present_gaps.min_ms),
+        static_cast<unsigned>(g_present_gaps.max_ms));
   }
+  g_present_gaps.startLine();
   g_presented_frame_count = 0;
   g_presented_fps_ms = now;
   g_present_wait_total_us = 0;
@@ -1666,7 +1673,7 @@ static void run_camera_task() {
       }
       if (room) {
         memcpy(delay_memory + offset, input, jpeg_bytes);
-        delay_line.commit(offset, jpeg_bytes, millis() + picture_delay);
+        delay_line.commit(offset, jpeg_bytes, millis(), picture_delay);
         presented_ok = present_due_frames();
       } else {
         // No ring (or a frame larger than it): this frame goes out unsynced.
@@ -1832,6 +1839,8 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb, bool full_screen)
   g_no_write_buffer_drops = 0;
   g_presented_frame_count = 0;
   g_presented_fps_ms = millis();
+  g_present_gaps.restart();
+  g_full_gaps.restart();
   g_present_wait_total_us = 0;
   g_present_copy_total_us = 0;
   g_present_timed_frames = 0;
@@ -1956,6 +1965,7 @@ static void process_full_frame() {
       shown = Device::displaySubmitFullFrame();
       if (shown) {
         if (!g_first_shown_ms) g_first_shown_ms = millis();
+        g_full_gaps.note(millis());
         ++g_full_frames;
         g_full_decode_total_us += decode_us;
         g_full_wait_total_us += acquired_us - wait_started_us;
@@ -1976,11 +1986,15 @@ static void process_full_frame() {
   if (now - g_full_log_ms < 2000) return;
   const double frames = g_full_frames ? static_cast<double>(g_full_frames) : 1.0;
   Serial.printf(
-      "[CameraStream] Full screen: %.1f FPS decode=%.1fms swap_wait=%.1fms failed=%u\n",
+      "[CameraStream] Full screen: %.1f FPS decode=%.1fms swap_wait=%.1fms failed=%u "
+      "gap=%u-%ums\n",
       static_cast<double>(g_full_frames) * 1000.0 / static_cast<double>(now - g_full_log_ms),
       static_cast<double>(g_full_decode_total_us) / frames / 1000.0,
       static_cast<double>(g_full_wait_total_us) / frames / 1000.0,
-      static_cast<unsigned>(g_full_failed));
+      static_cast<unsigned>(g_full_failed),
+      static_cast<unsigned>(g_full_gaps.min_ms),
+      static_cast<unsigned>(g_full_gaps.max_ms));
+  g_full_gaps.startLine();
   g_full_frames = 0;
   g_full_failed = 0;
   g_full_decode_total_us = 0;

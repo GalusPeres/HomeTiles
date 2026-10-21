@@ -120,13 +120,18 @@ for (const file of fs.readdirSync(path.join(root, 'src/devices/guition_esp32_484
   assert.doesNotMatch(read(`src/devices/guition_esp32_4848s040/${file}`), /T3E|GOLDEN_SECURITY|golden_security/i,
     `${file} knows nothing of the T3E`);
 }
-// GPIO45/46 are relays on every published variant (active high in ESPHome);
-// the variant-specific third and fourth relays stay unexposed.
+// The PCB v2.3's relays: GPIO45/46 on every published variant (active high in
+// ESPHome) and GPIO44, confirmed by a board owner (issue #93). One board has
+// them all, so none is tied to a board variant: a save holds one variant
+// (test-hardware-io-onboard-together runs the real check). GPIO43 is the log
+// output and the other variants' GPIO1/2 stay unexposed.
 const io = read('src/devices/golden_security_gs_t3e_v2/hardware_io_profile.h');
 assert.deepEqual([...io.matchAll(/\{(\d+), Device::kHardwareIoPinSwitch \| Device::kHardwareIoPinOnboard,/g)].map(m => Number(m[1])),
-  [45, 46], 'the two relays every variant has');
-assert.equal((io.match(/HardwareIoOutputLogic::ActiveHigh/g) || []).length, 2, 'both relays are active high');
-assert.doesNotMatch(io, /\{(44|43|2|1), Device::/, 'no variant-specific relay GPIO');
+  [45, 46, 44], 'the three relays of the v2.3');
+assert.equal((io.match(/nullptr, Device::HardwareIoOutputLogic::ActiveHigh/g) || []).length, 3,
+  'all three active high, none tied to a board variant');
+assert.doesNotMatch(io, /\{(43|2|1), Device::/, 'no other variant\'s relay GPIO, not the log output');
+assert.match(io, /UART0 RX/, 'GPIO44 is noted as the serial input');
 const readme = read('src/devices/golden_security_gs_t3e_v2/README.md');
 for (const source of ['user_setups/esp32s3/gs-t3e.ini', 'devices.esphome.io/devices/tuya-t3e-esp32-s3',
   'discussions/458', 'not yet validated']) {

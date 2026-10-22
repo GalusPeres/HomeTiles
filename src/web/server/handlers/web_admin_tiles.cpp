@@ -20,6 +20,7 @@
 #include "src/web/server/handlers/web_admin_tile_helpers.h"
 #include "src/web/server/handlers/preview_payload.h"
 #include "src/types/types_registry.h"
+#include "src/types/navigate/web_handler.h"
 #include "src/types/energy/energy_data.h"
 #include "src/types/sensor/gauge_range.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -2145,6 +2146,19 @@ void WebAdminServer::handleSavePages() {
     }
     wanted.push_back(static_cast<uint16_t>(id));
   }
+  // new=<slot>: the "+" of a free slot (#100), which must be free.
+  long new_slot = -1;
+  if (server.hasArg("new")) {
+    new_slot = server.arg("new").toInt();
+    if (new_slot >= 0 && new_slot < static_cast<long>(tile_layouts::kMaxPages) &&
+        wanted.size() <= static_cast<size_t>(new_slot)) {
+      wanted.resize(static_cast<size_t>(new_slot) + 1, 0);
+    }
+    if (new_slot < 0 || new_slot >= static_cast<long>(wanted.size()) || wanted[new_slot]) {
+      sendJsonError(server, 400, "Not a free slot");
+      return;
+    }
+  }
   if (const char* error = checkPageSlots(wanted)) {
     sendJsonError(server, 400, error);
     return;
@@ -2170,6 +2184,50 @@ void WebAdminServer::handleSavePages() {
     }
     return nullptr;
   };
+
+  // The "+" of a free slot (#100, user 2026-10-22): a new Home folder that is
+  // the page there at once. Its tile takes a free entry but no cell (a page's
+  // tile is not shown on Home in the bar layouts; the classic layout gives it
+  // the first free place, else its storage), so a full screen does not stop
+  // it. Named like an unnamed folder in the Web Admin (formatFolderLabel).
+  uint16_t new_folder = 0;
+  int new_index = -1;
+  if (new_slot >= 0) {
+    for (size_t i = 0; i < TILES_PER_GRID && new_index < 0; ++i) {
+      if (home->tiles[i].type == TILE_EMPTY) new_index = static_cast<int>(i);
+    }
+    if (new_index < 0) {
+      sendJsonError(server, 409, "Folder full");
+      return;
+    }
+    const i18n::Strings& tr = i18n::strings(configManager.getConfig().language);
+    Tile& tile = home->tiles[new_index];
+    tile.type = TILE_FOLDER;
+    tile.view_id = 0;
+    tile.title = hometiles_title::normalize(tr.tile_type_folder).c_str();
+    tile.icon_name = "";
+    tile.span_w = 1;
+    tile.span_h = 1;
+    tile.layout_hidden = true;
+    // This request has no navigate_target: the folder tile's own save path
+    // makes its folder (navigate/web_handler.cpp).
+    String error;
+    if (!apply_navigate_fields_from_request(server, tile, TileConfig::rootFolderId(), tileConfig, error)) {
+      sendJsonError(server, 500, error.length() ? error : String("Folder create failed"));
+      return;
+    }
+    new_folder = getNavigateTargetId(tile);
+    tile.title = hometiles_title::normalize((String(tr.folder_prefix) + String(new_folder)).c_str()).c_str();
+    if (!tileConfig.updateFolder(new_folder, tile.title, tile.icon_name) ||
+        !tileConfig.saveFolderGrid(TileConfig::rootFolderId(), *home)) {
+      tileConfig.deleteFolder(new_folder);
+      sendJsonError(server, 500, "Save failed");
+      return;
+    }
+    wanted[new_slot] = new_folder;
+    Serial.printf("[WebAdmin] Page folder %u made in slot %ld (Home entry %d)\n", static_cast<unsigned>(new_folder),
+                  new_slot, new_index);
+  }
   struct Spot {
     uint16_t view;
     tile_layouts::Place place;
@@ -2251,6 +2309,16 @@ void WebAdminServer::handleSavePages() {
                 static_cast<unsigned long>(millis() - save_started_ms));
   String json = "{\"success\":true,\"places\":";
   tile_layouts::append_json(json);
+  // The new folder of a "+": the editor opens its tile.
+  if (new_folder) {
+    json += ",\"folder\":";
+    json += String(new_folder);
+    json += ",\"index\":";
+    json += String(new_index);
+    json += ",\"title\":\"";
+    appendJsonEscaped(json, home->tiles[new_index].title);
+    json += "\"";
+  }
   json += "}";
   server.send(200, "application/json", json);
 }

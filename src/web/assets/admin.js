@@ -12755,6 +12755,15 @@ async function saveGestureEdge(select) {
       const slot = Number(field.dataset.slot);
       setFieldPlace(field, places.pages[slot]);
       field.hidden = !pageSlotsShown() || !!slots[slot];
+      // A free field's "+" makes a new page there (#100); the layout window
+      // keeps its pages until "Speichern", it has none.
+      field.classList.toggle('can-add', !pageFieldsInWindow());
+      if (!field.querySelector(':scope > .page-field-add')) {
+        const plus = document.createElement('i');
+        plus.className = 'mdi mdi-plus page-field-add';
+        field.appendChild(plus);
+        field.addEventListener('click', () => addPageFolder(Number(field.dataset.slot)));
+      }
     });
     const word = grid.querySelector(':scope > .page-fields-label:not(.settings-label)');
     const placeWord = (el, place) => {
@@ -13023,6 +13032,57 @@ async function saveGestureEdge(select) {
       return true;
     } catch (error) {
       return undo(t('networkErrorSave'));
+    }
+  }
+
+  // A free field's "+" (#100, user 2026-10-22): the panel makes a new Home
+  // folder that is the page there at once (/api/pages new=<slot>), also when
+  // Home's screen has no free cell; the editor then shows its tile to name it.
+  function addPageFolder(slot) {
+    if (pageFieldsInWindow()) return pageSlotsQueue;
+    pageSlotsQueue = pageSlotsQueue.then(() => sendNewPage(slot));
+    return pageSlotsQueue;
+  }
+
+  async function sendNewPage(slot) {
+    // A second click before the first was done finds the field taken.
+    const slots = pageSlotList();
+    if (slots[slot]) return false;
+    try {
+      const body = new URLSearchParams({pages: encodePageSlots(slots), new: String(slot)});
+      const response = await fetch('/api/pages', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body.toString()
+      });
+      let data = {};
+      try { data = await response.json(); } catch (_) {}
+      if (!response.ok || !data.success) {
+        const used = (getTilesData('folder0') || []).filter(tile => Number(tile?.type || 0) !== 0).length;
+        showNotification(data.error === 'Folder full' ? tf('folderFull', {n: used, max: TILES_PER_GRID})
+          : t('networkErrorSave'), false);
+        return false;
+      }
+      const folder = Number(data.folder) || 0;
+      const index = Number(data.index);
+      slots[slot] = folder;
+      pageSlotsElement().dataset.pages = encodePageSlots(slots);
+      const fresh = await fetchTileGridData('folder0', true);
+      fresh.forEach((tile, i) => renderTileFromData('folder0', i, tile, sensorMetaCache));
+      layoutTiles('folder0', fresh);
+      syncPageHeads();
+      const ok = await ensureFolderTabUi(folder, String(data.title || ''), '');
+      if (!ok) {
+        persistSelectedTileState();
+        setTimeout(() => location.reload(), 400);
+        return true;
+      }
+      if (index >= 0) selectTile(index, 'folder0');
+      showNotification(t('pagesSaved'));
+      return true;
+    } catch (error) {
+      showNotification(t('networkErrorSave'), false);
+      return false;
     }
   }
 

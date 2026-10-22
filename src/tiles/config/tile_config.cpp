@@ -3162,10 +3162,19 @@ static bool ensureNavigationIds(TileGridConfig& grid, bool& changed) {
 // layouts can be kept (user 2026-10-13: "where is Settings?").
 void TileConfig::giveParkedSettingsTileId() {
   const SettingsTileSnapshot& kept = configManager.getConfig().settings_tile_snapshot;
-  if (!kept.valid || kept.view_id) return;
+  if (kept.valid && kept.view_id) return;
   std::unique_ptr<DeviceConfig> cfg(new (std::nothrow) DeviceConfig(configManager.getConfig()));
   const uint16_t id = cfg ? reserveNavigationId("tile_next", 1) : 0;
   if (!id) return;
+  // Parked without a snapshot at all (b518 dropped it for an upright place,
+  // user 2026-10-22): a new one in the default look, so the layout window
+  // shows the tile in its field again; a restore looks for a free place.
+  if (!kept.valid) {
+    memset(&cfg->settings_tile_snapshot, 0, sizeof(cfg->settings_tile_snapshot));
+    cfg->settings_tile_snapshot.valid = true;
+    cfg->settings_tile_snapshot.span_w = 1;
+    cfg->settings_tile_snapshot.span_h = 1;
+  }
   cfg->settings_tile_snapshot.view_id = id;
   if (configManager.save(*cfg)) {
     Serial.printf("[TileConfig] Parked Settings tile got ID %u\n", static_cast<unsigned>(id));
@@ -3748,6 +3757,21 @@ void TileConfig::snapshotSettingsTile(const Tile& tile, SettingsTileSnapshot& ou
   out.span_w = tile.span_w < 1 ? 1 : tile.span_w;
   out.span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
   out.view_id = tile.view_id;
+}
+
+bool TileConfig::classicSettingsTilePlace(float& col, float& row, float& span_w, float& span_h) {
+  TileGridScratch scratch = makeTileGridScratch();
+  if (!scratch || !loadGrid(kRootFolderId, *scratch, false, false)) return false;
+  for (const Tile& tile : scratch->tiles) {
+    if (tile.type != TILE_SETTINGS) continue;
+    if (!tile_geometry::supported(TILE_SETTINGS, tile.col, tile.row, tile.span_w, tile.span_h)) return false;
+    col = tile.col;
+    row = tile.row;
+    span_w = tile.span_w;
+    span_h = tile.span_h;
+    return true;
+  }
+  return false;
 }
 
 int TileConfig::settingsTileIndex() {

@@ -640,9 +640,20 @@ bool ConfigManager::save(const DeviceConfig& cfg) {
   const std::string normalized_title = hometiles_title::normalize(snapshot.title);
   strncpy(snapshot.title, normalized_title.c_str(), sizeof(snapshot.title));
   snapshot.icon_name[sizeof(snapshot.icon_name) - 1] = '\0';
-  if (!snapshot.valid || !tile_geometry::supported(TILE_SETTINGS,
-      snapshot.col, snapshot.row, snapshot.span_w, snapshot.span_h)) {
+  if (!snapshot.valid) {
     clear_settings_tile_snapshot(normalized);
+  } else if (!tile_geometry::supported(TILE_SETTINGS, snapshot.col, snapshot.row,
+                                       snapshot.span_w, snapshot.span_h)) {
+    // A place outside the classic grid (a bar layout's) loses only the
+    // place; its title, icon and ID stay (user 2026-10-22: an upright place,
+    // row 3.5 on the 7 x 4, dropped the whole snapshot and the layout window
+    // lost the parked tile). A restore then looks for a free place.
+    snapshot.col = 0;
+    snapshot.row = 0;
+    if (!tile_geometry::supported(TILE_SETTINGS, 0, 0, snapshot.span_w, snapshot.span_h)) {
+      snapshot.span_w = 1;
+      snapshot.span_h = 1;
+    }
   }
 #if defined(DEVICE_ESP32_S3_RGB_480)
   normalized.auto_screensaver_seconds =

@@ -924,6 +924,9 @@ public:
   // What a parked Settings tile keeps (title, icon, color, place) to come
   // back as it was.
   static void snapshotSettingsTile(const Tile& tile, SettingsTileSnapshot& out);
+  // The Settings tile's stored classic place (Home's grid file), for its
+  // snapshot when it is parked under a bar layout; false without one.
+  bool classicSettingsTilePlace(float& col, float& row, float& span_w, float& span_h);
   SettingsTileVisibilityResult validateSettingsTileVisible(
       bool visible, float target_col = -1, float target_row = -1);
   SettingsTileVisibilityResult setSettingsTileVisible(

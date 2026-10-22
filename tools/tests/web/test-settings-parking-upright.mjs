@@ -37,6 +37,30 @@ const save = accessJs.slice(accessJs.indexOf('async function saveSettingsAccess(
 assert.doesNotMatch(save, /settings_tile_col'|settings_tile_row'/);
 assert.match(save, /body\.set\('settings_tile_span_w', String\(layout\.span_w\)\);\s*body\.set\('settings_tile_span_h', String\(layout\.span_h\)\);/);
 
+// The parking keeps the snapshot (user 2026-10-22, b518): the panel took the
+// tile's upright place (row 3.5, high 1), the save found it outside the
+// classic 7 x 4 and dropped the whole snapshot with its ID, so the layout
+// window lost the parked tile. Now the snapshot takes the tile's classic
+// place from Home's grid file under a bar layout, a place outside the
+// classic grid loses only the place, and a parked tile without snapshot gets
+// a new one with an ID (the Tab5 heals itself).
+const supported = (col, row, w, h, cols, rows) => col + w <= cols && row + h <= rows;
+assert.equal(supported(2, 3.5, 1, 1, tab5.classic.cols, tab5.classic.rows), false, 'The upright place is no classic one');
+const manager = readRepoFile('src/core/config/config_manager.cpp').replace(/\r\n/g, '\n');
+assert.match(manager, /if \(!snapshot\.valid\) \{\s*clear_settings_tile_snapshot\(normalized\);\s*\} else if \(!tile_geometry::supported\(TILE_SETTINGS, snapshot\.col, snapshot\.row,\s*snapshot\.span_w, snapshot\.span_h\)\) \{[\s\S]*?snapshot\.col = 0;\s*snapshot\.row = 0;/);
+assert.doesNotMatch(manager, /if \(!snapshot\.valid \|\| !tile_geometry::supported/, 'A bad place no longer drops the snapshot');
+const commit = handlers.slice(handlers.indexOf('auto commit_settings = [&]() {'), handlers.indexOf('settings_config_saved = configManager.save(cfg);'));
+assert.match(commit, /if \(settings_visibility_commit_needed && cfg\.settings_tile_hidden && cfg\.settings_tile_snapshot\.valid &&\s*grid_layout::active\(\) != grid_layout::Layout::kClassic\) \{\s*float col = 0, row = 0, span_w = 1, span_h = 1;\s*if \(tileConfig\.classicSettingsTilePlace\(col, row, span_w, span_h\)\) \{/);
+const tileConfigSource = readRepoFile('src/tiles/config/tile_config.cpp').replace(/\r\n/g, '\n');
+const classic = tileConfigSource.slice(tileConfigSource.indexOf('bool TileConfig::classicSettingsTilePlace('),
+  tileConfigSource.indexOf('int TileConfig::settingsTileIndex() {'));
+assert.match(classic, /loadGrid\(kRootFolderId, \*scratch, false, false\)/, 'From the stored classic places');
+assert.match(classic, /if \(!tile_geometry::supported\(TILE_SETTINGS, tile\.col, tile\.row, tile\.span_w, tile\.span_h\)\) return false;/);
+assert.match(tileConfigSource, /if \(kept\.valid && kept\.view_id\) return;[\s\S]*?if \(!kept\.valid\) \{\s*memset\(&cfg->settings_tile_snapshot/, 'A parked tile without snapshot gets one');
+// The layout window gets the parked tile while its snapshot has an ID.
+assert.match(readRepoFile('src/web/server/handlers/web_admin_tiles.cpp'),
+  /if \(kept\.valid && kept\.view_id && tileConfig\.settingsTileIndex\(\) < 0\) \{\s*json \+= ",\\"tile\\":\{\\"type\\":7,\\"view_id\\":"/);
+
 // The panel places it in the shown layout's cells there (a bar layout's
 // target is checked in its own grid), and keeps its own place in each bar
 // layout while it is parked.

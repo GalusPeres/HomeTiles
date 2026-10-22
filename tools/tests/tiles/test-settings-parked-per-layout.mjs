@@ -37,7 +37,9 @@ assert.match(policy, /if \(kept\.valid && tile\.view_id && kept\.view_id == tile
 // Parked before b445 (no ID in its snapshot): it gets one once, else the
 // window had no tile for its field (user 2026-10-13: "where is Settings?").
 assert.match(policy, /if \(!in_grid\) giveParkedSettingsTileId\(\);\s*return removeSettingsTiles\(grid\);/);
-assert.match(tiles, /void TileConfig::giveParkedSettingsTileId\(\) \{\s*const SettingsTileSnapshot& kept = configManager\.getConfig\(\)\.settings_tile_snapshot;\s*if \(!kept\.valid \|\| kept\.view_id\) return;[\s\S]*?const uint16_t id = cfg \? reserveNavigationId\("tile_next", 1\) : 0;\s*if \(!id\) return;\s*cfg->settings_tile_snapshot\.view_id = id;/);
+// Parked without any snapshot (b518 dropped it, user 2026-10-22): a new one
+// in the default look with an ID.
+assert.match(tiles, /void TileConfig::giveParkedSettingsTileId\(\) \{\s*const SettingsTileSnapshot& kept = configManager\.getConfig\(\)\.settings_tile_snapshot;\s*if \(kept\.valid && kept\.view_id\) return;[\s\S]*?const uint16_t id = cfg \? reserveNavigationId\("tile_next", 1\) : 0;\s*if \(!id\) return;[\s\S]*?if \(!kept\.valid\) \{\s*memset\(&cfg->settings_tile_snapshot, 0, sizeof\(cfg->settings_tile_snapshot\)\);\s*cfg->settings_tile_snapshot\.valid = true;\s*cfg->settings_tile_snapshot\.span_w = 1;\s*cfg->settings_tile_snapshot\.span_h = 1;\s*\}\s*cfg->settings_tile_snapshot\.view_id = id;/);
 assert.match(readRepoFile('src/web/admin/tiles/page-fields.js'),
   /free\.hidden = !pageFieldsInWindow\(\) \|\| \(layoutWindowSettingsParked\(\) && layoutSettingsIndex\(\) >= 0\);/,
   'Parked without a tile to show: the free frame, never an empty spot');

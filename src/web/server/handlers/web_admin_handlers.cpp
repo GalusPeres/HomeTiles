@@ -385,6 +385,20 @@ void WebAdminServer::handleSaveMQTT() {
       settings_tile_previewed && tiles_show_active_layout_now();
   const uint32_t save_started_ms = millis();
   auto commit_settings = [&]() {
+    // Parked under a bar layout: the snapshot keeps the tile's classic place
+    // from Home's grid file (still there until the parking's grid write),
+    // not the shown layout's (user 2026-10-22: upright row 3.5 is no place
+    // on the 7 x 4). After the move showed, so the flash read waits nothing.
+    if (settings_visibility_commit_needed && cfg.settings_tile_hidden && cfg.settings_tile_snapshot.valid &&
+        grid_layout::active() != grid_layout::Layout::kClassic) {
+      float col = 0, row = 0, span_w = 1, span_h = 1;
+      if (tileConfig.classicSettingsTilePlace(col, row, span_w, span_h)) {
+        cfg.settings_tile_snapshot.col = col;
+        cfg.settings_tile_snapshot.row = row;
+        cfg.settings_tile_snapshot.span_w = span_w;
+        cfg.settings_tile_snapshot.span_h = span_h;
+      }
+    }
     settings_config_saved = configManager.save(cfg);
     if (!settings_config_saved || !settings_visibility_commit_needed) return;
 

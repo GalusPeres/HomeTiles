@@ -1034,8 +1034,9 @@ async function saveGestureEdge(select) {
       body.set('settings_tile_snapshot_present', '1');
       body.set('settings_tile_title', snapshot.title);
       body.set('settings_tile_icon', snapshot.icon);
-      body.set('settings_tile_col', String(layout.col));
-      body.set('settings_tile_row', String(layout.row));
+      // Its size, not its place: the panel keeps the tile's own place per
+      // layout, and a place of the shown layout is no classic one (user
+      // 2026-10-22: parking from upright row 3.5 on the 7 x 4 was refused).
       body.set('settings_tile_span_w', String(layout.span_w));
       body.set('settings_tile_span_h', String(layout.span_h));
       if (snapshot.bg_color_default === '1') {

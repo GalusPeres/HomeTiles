@@ -25,6 +25,7 @@
 #include "src/web/server/web_admin_utils.h"
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>
 #include "src/web/server/handlers/web_admin_handler_utils.h"
 #include "src/core/power/power_manager.h"
 
@@ -212,10 +213,16 @@ void WebAdminServer::handleSaveMQTT() {
       sendSaveError(400, tr.save_failed);
       return;
     }
+    // The drop spot is a cell of the layout the panel shows, where
+    // ensureSettingsTile places it (user 2026-10-22: upright 3 x 6 on the
+    // Tab5's classic 7 x 4, a drop below row 4 was refused).
+    const bool classic_shown = grid_layout::active() == grid_layout::Layout::kClassic;
+    const float place_cols = classic_shown ? GRID_COLS : grid_layout::shown().cols;
+    const float place_rows = classic_shown ? GRID_ROWS : grid_layout::shown_rows();
     if (has_target_col) {
-      if (!parse_bounded_arg("settings_tile_target_col", 0, GRID_COLS - 1,
+      if (!parse_bounded_arg("settings_tile_target_col", 0, place_cols - 1,
                              settings_tile_target_col) ||
-          !parse_bounded_arg("settings_tile_target_row", 0, GRID_ROWS - 0.5f,
+          !parse_bounded_arg("settings_tile_target_row", 0, place_rows - 0.5f,
                              settings_tile_target_row)) {
         sendSaveError(400, tr.save_failed);
         return;
@@ -278,40 +285,26 @@ void WebAdminServer::handleSaveMQTT() {
         snapshot.bg_color = makeTileBgColor(static_cast<uint32_t>(
             server.arg("settings_tile_bg_color").toInt()));
       }
-      const bool has_snapshot_col = server.hasArg("settings_tile_col");
-      const bool has_snapshot_row = server.hasArg("settings_tile_row");
+      // Its size only (user 2026-10-22: a place of the shown upright
+      // layout, row 3.5 high 1, was checked against the classic 7 x 4 and
+      // the whole parking refused). Its place stays the tile's own: the
+      // snapshot taken from it here and its place in each bar layout.
       const bool has_snapshot_span_w = server.hasArg("settings_tile_span_w");
       const bool has_snapshot_span_h = server.hasArg("settings_tile_span_h");
-      const bool has_any_snapshot_layout =
-          has_snapshot_col || has_snapshot_row || has_snapshot_span_w ||
-          has_snapshot_span_h;
-      const bool has_complete_snapshot_layout =
-          has_snapshot_col && has_snapshot_row && has_snapshot_span_w &&
-          has_snapshot_span_h;
-      if (has_any_snapshot_layout && !has_complete_snapshot_layout) {
+      if (has_snapshot_span_w != has_snapshot_span_h) {
         sendSaveError(400, tr.save_failed);
         return;
       }
-      if (has_complete_snapshot_layout) {
-        float snapshot_col = 0;
-        float snapshot_row = 0;
+      if (has_snapshot_span_w) {
         float snapshot_span_w = 1;
         float snapshot_span_h = 1;
-        if (!parse_bounded_arg("settings_tile_col", 0, GRID_COLS - 1,
-                               snapshot_col) ||
-            !parse_bounded_arg("settings_tile_row", 0, GRID_ROWS - 0.5f,
-                               snapshot_row) ||
-            !parse_bounded_arg("settings_tile_span_w", 1, GRID_COLS,
+        if (!parse_bounded_arg("settings_tile_span_w", 1, std::max<float>(GRID_COLS, place_cols),
                                snapshot_span_w) ||
-            !parse_bounded_arg("settings_tile_span_h", 0.5f, GRID_ROWS,
-                               snapshot_span_h) ||
-            snapshot_col + snapshot_span_w > GRID_COLS ||
-            snapshot_row + snapshot_span_h > GRID_ROWS) {
+            !parse_bounded_arg("settings_tile_span_h", 0.5f, std::max<float>(GRID_ROWS, place_rows),
+                               snapshot_span_h)) {
           sendSaveError(400, tr.save_failed);
           return;
         }
-        snapshot.col = snapshot_col;
-        snapshot.row = snapshot_row;
         snapshot.span_w = snapshot_span_w;
         snapshot.span_h = snapshot_span_h;
       }

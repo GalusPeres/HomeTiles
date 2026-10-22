@@ -102,7 +102,9 @@ ${inlineScriptSafe(readAdminDeliverySource())}
     normalizeHiddenSettingsSnapshot(), readSettingsAccessState(), false);
   check(saved, 'Parked Settings save succeeds');
   const parked = posts.at(-1);
-  check(parked.settings_tile_col === '0.5' && parked.settings_tile_row === '0.5', 'Parked snapshot keeps fractional position');
+  // No place: the panel keeps the tile's own (user 2026-10-22: an upright
+  // place was checked against the classic grid and the parking refused).
+  check(parked.settings_tile_col === undefined && parked.settings_tile_row === undefined, 'Parked snapshot sends no place');
   check(parked.settings_tile_span_w === '1.5' && parked.settings_tile_span_h === '0.5', 'Parked snapshot keeps fractional size');
   check(parked.settings_tile_target_col === '2.5' && parked.settings_tile_target_row === '2.5', 'Restore target keeps fractional position');
   enableSettingsHiddenSlot();

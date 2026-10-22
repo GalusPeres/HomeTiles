@@ -70,6 +70,9 @@ namespace i18n {
 ${definition(read('src/core/i18n/i18n.h'), 'struct Strings')} ;
 ${tables.join('\n')}
 const Strings& strings(const char* language) {return std::strcmp(language,"de")==0?kStringsDe:std::strcmp(language,"fr")==0?kStringsFr:kStringsEn;}
+// The Scene picture field (types/scene/web_html.cpp) reads LocaleProfile
+// labels, which this harness does not build.
+const char* scene_picture_label(const char*,uint8_t index){static const char* labels[]={"Picture","No picture","Upload picture","Uploading","Upload failed","Hint"};return labels[index<6?index:0];}
 }
 struct Config { const char* language="en"; } config;
 struct ConfigManager { const Config& getConfig()const{return config;} } configManager;

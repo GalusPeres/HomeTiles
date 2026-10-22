@@ -1042,6 +1042,7 @@
         ? el.querySelector(':scope > .media-preview-cover:not([hidden])') : null;
       el.innerHTML = html;
       if (keptCover) el.appendChild(keptCover);
+      if (typeValue === '2') applyScenePicturePreview(el, tile.scene_image || '', !!String(tile.title || '').trim());
       if (previewKind === 'weather') {
         applyWeatherPreview(el, applyWeatherSensorOverrides(parseWeatherPreviewPayload(
           tile.sensor_entity ? (sensorMeta?.weatherValues?.[tile.sensor_entity] ?? '') : ''),

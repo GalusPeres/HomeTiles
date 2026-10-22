@@ -1,5 +1,6 @@
 #include "src/web/server/web_admin.h"
 #include "src/web/server/web_admin_utils.h"
+#include "src/types/scene/picture.h"
 #include <esp_heap_caps.h>
 #include <algorithm>
 #include <vector>
@@ -338,6 +339,173 @@ void WebAdminServer::handleGetSdImages() {
   }
   json += "]";
   sendChunkedResponse(server, 200, "application/json", json);
+}
+
+namespace {
+// Button tile pictures (scene_picture.h) live in their own folder on the
+// panel's storage. The folder is made by the first upload.
+bool ensureTilePictureDir() {
+  if (storageFS().exists(scene_picture::kDir)) return true;
+#if defined(DEVICE_ESP32_S3_RGB_480)
+  Device::ScopedStorageWrite storage_write;
+#endif
+  return storageFS().mkdir(scene_picture::kDir);
+}
+
+// The last POST /api/tile_pictures: its stored path and whether every byte
+// was written (the done handler answers with it).
+String g_tile_picture_upload_path;
+bool g_tile_picture_upload_ok = false;
+
+// Upload names stay inside the picture folder: the client's file name without
+// any directory, a JPEG extension, short enough for every storage.
+String tilePictureUploadPath(const String& client_name) {
+  String name = client_name;
+  const int slash = std::max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+  if (slash >= 0) name = name.substring(slash + 1);
+  name.trim();
+  const String path = String(scene_picture::kDir) + "/" + name;
+  return name.length() && scene_picture::valid_path(path) ? path : String();
+}
+}  // namespace
+
+// GET /api/tile_pictures: the pictures a Button tile can show, as
+// [{"path":"/pictures/x.jpg","size":1234}].
+void WebAdminServer::handleListTilePictures() {
+  if (!storageReady() || !storageFS().exists(scene_picture::kDir)) {
+    server.send(200, "application/json", "[]");
+    return;
+  }
+  std::vector<String> paths;
+  collectImageFiles(scene_picture::kDir, paths, 200, 1, false, true, false);
+  std::sort(paths.begin(), paths.end());
+  String json = "[";
+  bool first = true;
+  for (const String& path : paths) {
+    if (!scene_picture::valid_path(path)) continue;
+    uint32_t size = 0;
+    File f = storageFS().open(path, FILE_READ);
+    if (f) {
+      size = static_cast<uint32_t>(f.size());
+      f.close();
+    }
+    if (!first) json += ",";
+    first = false;
+    json += "{\"path\":\"";
+    appendJsonEscaped(json, path);
+    json += "\",\"size\":";
+    json += String(size);
+    json += "}";
+  }
+  json += "]";
+  sendChunkedResponse(server, 200, "application/json", json);
+}
+
+// POST /api/tile_pictures (multipart, one file): stores a picture for a
+// Button tile. The Web Admin re-encodes every upload as a baseline JPEG.
+void WebAdminServer::handleUploadTilePicture() {
+  HTTPUpload& upload = server.upload();
+  static File uploadFile;
+  static bool storage_guard_active = false;
+
+  auto end_storage_guard = [&]() {
+    if (!storage_guard_active) return;
+    storage_guard_active = false;
+#if defined(DEVICE_ESP32_S3_RGB_480)
+    Device::storageWriteEnd();
+#endif
+  };
+
+  webAdminMarkActivity();
+  if (upload.status == UPLOAD_FILE_START) {
+    if (uploadFile) uploadFile.close();
+    end_storage_guard();
+    // Limit the receive window: file uploads have the same crash cause
+    // (internal DMA heap exhaustion with the default 64 KB TCP window).
+    int rcvbuf = 8 * 1024;
+    server.client().setSocketOption(SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+
+    g_tile_picture_upload_ok = false;
+    g_tile_picture_upload_path = tilePictureUploadPath(upload.filename);
+    if (!g_tile_picture_upload_path.length()) {
+      Serial.println("[Pictures] Upload rejected: invalid file name");
+      return;
+    }
+    if (!storageReady() || !ensureTilePictureDir()) {
+      Serial.println("[Pictures] Upload failed: storage unavailable");
+      return;
+    }
+#if defined(DEVICE_ESP32_S3_RGB_480)
+    Device::storageWriteBegin();
+    storage_guard_active = true;
+#endif
+    const String& filename = g_tile_picture_upload_path;
+    if (storageFS().exists(filename)) storageFS().remove(filename);
+    uploadFile = storageFS().open(filename, FILE_WRITE);
+    if (!uploadFile) {
+      Serial.println("[Pictures] Upload open failed");
+      end_storage_guard();
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (uploadFile) {
+      const size_t written = uploadFile.write(upload.buf, upload.currentSize);
+      if (written != upload.currentSize) {
+        Serial.printf("[Pictures] Upload write failed: requested=%u wrote=%u\n",
+                      static_cast<unsigned>(upload.currentSize),
+                      static_cast<unsigned>(written));
+        uploadFile.close();
+        end_storage_guard();
+      }
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (uploadFile) {
+      uploadFile.close();
+      g_tile_picture_upload_ok = upload.totalSize > 0;
+      Serial.printf("[Pictures] Uploaded %s (%u bytes)\n", g_tile_picture_upload_path.c_str(),
+                    static_cast<unsigned>(upload.totalSize));
+    }
+    end_storage_guard();
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    if (uploadFile) uploadFile.close();
+    Serial.println("[Pictures] Upload aborted");
+    end_storage_guard();
+  }
+}
+
+void WebAdminServer::handleUploadTilePictureDone() {
+  if (!g_tile_picture_upload_ok) {
+    server.send(g_tile_picture_upload_path.length() ? 500 : 400, "application/json",
+                g_tile_picture_upload_path.length() ? "{\"ok\":false,\"error\":\"Upload failed\"}"
+                                                    : "{\"ok\":false,\"error\":\"Invalid file name\"}");
+    return;
+  }
+  String json = "{\"ok\":true,\"path\":\"";
+  appendJsonEscaped(json, g_tile_picture_upload_path);
+  json += "\"}";
+  sendChunkedResponse(server, 200, "application/json", json);
+}
+
+// GET /api/tile_picture?path=/pictures/x.jpg: a Button tile's picture for the
+// Web Admin previews (scene_picture.h names the accepted files).
+void WebAdminServer::handleGetTilePicture() {
+  const String path = server.arg("path");
+  if (!scene_picture::valid_path(path)) {
+    server.send(400, "text/plain", "Invalid picture");
+    return;
+  }
+  if (!storageReady()) {
+    server.send(503, "text/plain", "Storage unavailable");
+    return;
+  }
+  File file = storageFS().open(path, FILE_READ);
+  if (!file || file.isDirectory()) {
+    if (file) file.close();
+    server.send(404, "text/plain", "Not found");
+    return;
+  }
+  server.sendHeader("Cache-Control", "no-cache");
+  server.streamFile(file, "image/jpeg");
+  file.close();
 }
 
 void WebAdminServer::handleFileManagerList() {

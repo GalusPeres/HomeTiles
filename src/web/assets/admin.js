@@ -473,6 +473,7 @@ async function saveGestureEdge(select) {
       showSettingsPage('io');
     }
     const sequence = ++tabSwitchSequence;
+    const picks = tileSelectionSeq;
     let target = document.getElementById(tabName);
     if (!target) {
       const folderId = folderIdFromAdminTabName(tabName);
@@ -532,11 +533,17 @@ async function saveGestureEdge(select) {
       }
       if (tileTab === 'screensaver') {
         initScreensaverEditor();
-      } else {
-        const rememberedIndex = getRememberedTileIndex(tileTab);
-        selectTile(rememberedIndex === null ? getTopLeftConfiguredTileIndex(tileTab) : rememberedIndex, tileTab);
+      } else if (tileSelectionSeq === picks || currentTileTab !== tileTab) {
+        // The tab's own pick first (user 2026-10-22: an empty cell or a
+        // page field came back as the top left tile).
+        if (!restoreTabSelection(tileTab)) {
+          const rememberedIndex = getRememberedTileIndex(tileTab);
+          selectTile(rememberedIndex === null ? getTopLeftConfiguredTileIndex(tileTab) : rememberedIndex, tileTab);
+        }
         window.requestAnimationFrame(restoreCurrentTileSelectionUi);
       }
+      // Else something was picked here while its grid loaded (user
+      // 2026-10-22: the pick jumped to the top left tile): it stays.
       // Let the browser paint the selected tab before cached/live values are
       // reconciled. This also keeps a cache hit from extending click latency.
       window.requestAnimationFrame(() => window.setTimeout(() => {
@@ -7269,7 +7276,17 @@ async function saveGestureEdge(select) {
     showNotification(t('tilePasted'));
   }
 
+  // Every pick in the editor (a tile, the parked Settings tile, a free page
+  // field): a tab switch that waited for its grid keeps one made meanwhile.
+  let tileSelectionSeq = 0;
+  // Each tab's pick (user 2026-10-22: an empty cell or a page field jumped
+  // to the top left tile on the way back): {kind: 'tile', index}, an empty
+  // cell {kind: 'empty', index, spot}, {kind: 'page', slot} or
+  // {kind: 'settings'}. The way back and the refreshes show it again.
+  const tileSelectionByTab = {};
+
   function selectTile(index, tab) {
+    ++tileSelectionSeq;
     clearPageFieldMark();
     if (currentTileTab &&
         typeof parkClimateMiniEditor === 'function') {
@@ -7281,6 +7298,7 @@ async function saveGestureEdge(select) {
     newTileSpot = Number(getTilesData(tab)?.[index]?.type || 0) === 0
       ? { tab, index, layout: getTileElementLayout(tab, index) }
       : null;
+    tileSelectionByTab[tab] = newTileSpot ? {kind: 'empty', index, spot: newTileSpot.layout} : {kind: 'tile', index};
     document.getElementById('settingsHiddenTile')?.classList.remove('active');
     persistSelectedTileState();
     document.querySelectorAll(
@@ -7323,6 +7341,8 @@ async function saveGestureEdge(select) {
   function selectHiddenSettingsTile() {
     const hiddenTile = document.getElementById('settingsHiddenTile');
     if (!hiddenTile || hiddenTile.dataset.hidden !== '1') return;
+    ++tileSelectionSeq;
+    tileSelectionByTab.folder0 = {kind: 'settings'};
     clearPageFieldMark();
     if (currentTileTab && typeof parkClimateMiniEditor === 'function') {
       parkClimateMiniEditor(currentTileTab);
@@ -7356,6 +7376,38 @@ async function saveGestureEdge(select) {
     const settingsBody = specific?.querySelector('.tile-settings-body');
     if (settingsBody) settingsBody.scrollTop = 0;
     updateTileSettingsMaxHeight();
+  }
+
+  // The tab's pick again (tileSelectionByTab): the tile, an empty cell at its
+  // spot while that is free (or the tile it became), a free page field, the
+  // parked Settings tile. False when it is gone; the caller picks then.
+  function restoreTabSelection(tab) {
+    const pick = tileSelectionByTab[tab];
+    if (!pick) return false;
+    if (pick.kind === 'page') {
+      if (tab !== 'folder0' || !pageFieldsShown() || !pageSlotsShown() || pageSlotList()[pick.slot]) return false;
+      selectPageField(pick.slot);
+      return pageFieldPicked();
+    }
+    if (pick.kind === 'settings') {
+      selectHiddenSettingsTile();
+      return currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX;
+    }
+    const el = document.getElementById(tab + '-tile-' + pick.index);
+    if (!el) return false;
+    if (Number(getTilesData(tab)?.[pick.index]?.type || 0) !== 0) {
+      if (el.classList.contains('tile-unplaced')) return false;
+      selectTile(pick.index, tab);
+      return true;
+    }
+    if (pick.kind !== 'empty' || !pick.spot) return false;
+    const {col, row, span_w: spanW, span_h: spanH} = pick.spot;
+    if (!slotFits(tab, occupiedFromGrid(tab, getTileGrid(tab), el), col, row, spanW, spanH)) return false;
+    delete el.dataset.freeSlot;
+    setTileGridPosition(el, col, row, spanW, spanH);
+    el.style.display = '';
+    selectTile(pick.index, tab);
+    return true;
   }
 
   function titleFromEntity(entity) {
@@ -8651,6 +8703,34 @@ async function saveGestureEdge(select) {
       });
   }
 
+  // A new folder's title and icon as the panel saved them ("Folder 17" and
+  // the folder icon, user 2026-10-22: its tab showed them, the tile had
+  // none): into the tile, a newer draft and the editor wherever still empty.
+  function fillFolderName(tab, index, data) {
+    const title = String(data.title || '');
+    const icon = String(data.icon_name || '');
+    const stored = getTilesData(tab)?.[index];
+    if (stored) {
+      if (!stored.title) stored.title = title;
+      if (!stored.icon_name) stored.icon_name = icon;
+    }
+    const draft = drafts[tab]?.[index];
+    if (draft) {
+      if (!draft.title) draft.title = title;
+      if (!draft.icon) draft.icon = icon;
+    }
+    if (currentTileTab === tab && currentTileIndex === index) {
+      const titleInput = document.getElementById(tab + '_tile_title');
+      if (titleInput && !titleInput.value) titleInput.value = title;
+      const iconInput = document.getElementById(tab + '_tile_icon');
+      if (iconInput && !iconInput.value) iconInput.value = icon;
+      if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
+      updateTilePreview(tab);
+    } else if (stored) {
+      renderTileFromData(tab, index, stored, sensorMetaCache);
+    }
+  }
+
   function saveTile(tab, silent = false, tileIndexOverride = null) {
     const tileIndex = tileIndexOverride !== null ? tileIndexOverride : currentTileIndex;
     if (tileIndex === -1) return;
@@ -8716,6 +8796,7 @@ async function saveGestureEdge(select) {
               Number(tilesData[tab][tileIndex].type || 0) !== 0) {
             tilesData[tab][tileIndex].view_id = Number(data.view_id) || 0;
           }
+          if (typeValue === '4' && data.title !== undefined) fillFolderName(tab, tileIndex, data);
           const currentDraft = drafts[tab] && drafts[tab][tileIndex];
           if (currentDraft && currentDraft._dirty && Number(currentDraft._rev || 0) !== draftRev) {
             queueSaveAfterFlight(tab, tileIndex, true);
@@ -8742,8 +8823,8 @@ async function saveGestureEdge(select) {
             }
             syncFolderPinControls(tab);
             const navTargetNum = parseInt(resolvedNavTarget, 10);
-            const titleVal = snapshot.title || '';
-            const iconVal = snapshot.icon || '';
+            const titleVal = tilesData[tab]?.[tileIndex]?.title || snapshot.title || '';
+            const iconVal = tilesData[tab]?.[tileIndex]?.icon_name || snapshot.icon || '';
             ensureFolderTabUi(navTargetNum, titleVal, iconVal).then(ok => {
               restoreCurrentTileSelectionUi();
               if (!ok) {
@@ -11054,7 +11135,9 @@ async function saveGestureEdge(select) {
       });
       if (currentTileIndex !== -1 && currentTileTab) {
         restoreCurrentTileSelectionUi();
-      } else if (!isScreensaverTileTab(currentTileTab)) {
+      } else if (!isScreensaverTileTab(currentTileTab) && !pageFieldPicked()) {
+        // A picked free page field is a selection too (user 2026-10-22: every
+        // refresh jumped back to the last tile).
         restoreSelectedTileState();
       }
       return true;
@@ -13075,11 +13158,13 @@ async function saveGestureEdge(select) {
   // icon the new folder gets. Nothing is made yet.
   function selectPageField(slot) {
     if (pageFieldsInWindow() || pageSlotList()[slot] || markedPageSlot === slot) return;
+    ++tileSelectionSeq;
     if (currentTileTab && typeof parkClimateMiniEditor === 'function') parkClimateMiniEditor(currentTileTab);
     clearPageFieldMark();
     currentTileIndex = -1;
     currentTileTab = 'folder0';
     newTileSpot = null;
+    tileSelectionByTab.folder0 = {kind: 'page', slot};
     persistSelectedTileState();
     document.querySelectorAll('.tile-grid > .tile').forEach(tile => {
       tile.classList.remove('active');
@@ -13108,6 +13193,10 @@ async function saveGestureEdge(select) {
     if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons('folder0');
     setupLivePreview('folder0');
     layoutPageFields('folder0');
+  }
+
+  function pageFieldPicked() {
+    return markedPageSlot >= 0;
   }
 
   // The pick ends with any other selection; `hideEditor` when nothing else
@@ -13153,6 +13242,9 @@ async function saveGestureEdge(select) {
     // A second request before the first was done finds the field taken.
     const slots = pageSlotList();
     if (slots[slot]) return false;
+    // While the panel makes it: the field's "+" is busy.
+    const field = getTileGrid('folder0')?.querySelector(':scope > .page-field[data-slot="' + slot + '"]');
+    field?.classList.add('busy');
     try {
       const body = new URLSearchParams({pages: encodePageSlots(slots), new: String(slot)});
       if (title) body.set('title', title);
@@ -13172,24 +13264,34 @@ async function saveGestureEdge(select) {
       }
       const folder = Number(data.folder) || 0;
       const index = Number(data.index);
+      // Only the new tile from the panel, then it is picked at once; its
+      // folder's tab follows (user 2026-10-22: loading the whole grid and
+      // the tab first took ages, a new folder tile shows at once).
+      const tileResponse = await fetch('/api/tiles?folder=0&index=' + encodeURIComponent(index));
+      if (!tileResponse.ok) throw new Error('Tile HTTP ' + tileResponse.status);
+      const tile = await tileResponse.json();
+      const tiles = getTilesData('folder0');
+      tiles[index] = tile;
       slots[slot] = folder;
       pageSlotsElement().dataset.pages = encodePageSlots(slots);
-      const fresh = await fetchTileGridData('folder0', true);
-      fresh.forEach((tile, i) => renderTileFromData('folder0', i, tile, sensorMetaCache));
-      layoutTiles('folder0', fresh);
+      renderTileFromData('folder0', index, tile, sensorMetaCache);
+      layoutTiles('folder0', tiles);
       syncPageHeads();
-      const ok = await ensureFolderTabUi(folder, String(data.title || ''), '');
-      if (!ok) {
-        persistSelectedTileState();
-        setTimeout(() => location.reload(), 400);
-        return true;
-      }
-      if (index >= 0) selectTile(index, 'folder0');
+      selectTile(index, 'folder0');
       showNotification(t('pagesSaved'));
+      ensureFolderTabUi(folder, String(tile.title || ''), String(tile.icon_name || '')).then(ok => {
+        restoreCurrentTileSelectionUi();
+        if (!ok) {
+          persistSelectedTileState();
+          setTimeout(() => location.reload(), 400);
+        }
+      });
       return true;
     } catch (error) {
       showNotification(t('networkErrorSave'), false);
       return false;
+    } finally {
+      field?.classList.remove('busy');
     }
   }
 

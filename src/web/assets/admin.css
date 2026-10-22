@@ -3103,6 +3103,8 @@
   border:0; border-radius:50%; background:transparent; color:#26a69a; cursor:pointer;
   font-size:calc(var(--preview-cell-h) * 0.36); line-height:1; }
 .tile-grid > .page-field.marked > .page-field-add:hover { background:rgba(38,166,154,0.15); }
+/* While the panel makes the page. */
+.tile-grid > .page-field.marked.busy > .page-field-add { opacity:0.35; pointer-events:none; }
 /* The editor of a picked field: Type, title and icon only. */
 .tile-specific-settings.page-field-marked .tile-settings-body { display:none; }
 /* One word over the page fields. */

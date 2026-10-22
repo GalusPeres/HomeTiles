@@ -1167,7 +1167,9 @@
       });
       if (currentTileIndex !== -1 && currentTileTab) {
         restoreCurrentTileSelectionUi();
-      } else if (!isScreensaverTileTab(currentTileTab)) {
+      } else if (!isScreensaverTileTab(currentTileTab) && !pageFieldPicked()) {
+        // A picked free page field is a selection too (user 2026-10-22: every
+        // refresh jumped back to the last tile).
         restoreSelectedTileState();
       }
       return true;

@@ -595,11 +595,13 @@
   // icon the new folder gets. Nothing is made yet.
   function selectPageField(slot) {
     if (pageFieldsInWindow() || pageSlotList()[slot] || markedPageSlot === slot) return;
+    ++tileSelectionSeq;
     if (currentTileTab && typeof parkClimateMiniEditor === 'function') parkClimateMiniEditor(currentTileTab);
     clearPageFieldMark();
     currentTileIndex = -1;
     currentTileTab = 'folder0';
     newTileSpot = null;
+    tileSelectionByTab.folder0 = {kind: 'page', slot};
     persistSelectedTileState();
     document.querySelectorAll('.tile-grid > .tile').forEach(tile => {
       tile.classList.remove('active');
@@ -628,6 +630,10 @@
     if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons('folder0');
     setupLivePreview('folder0');
     layoutPageFields('folder0');
+  }
+
+  function pageFieldPicked() {
+    return markedPageSlot >= 0;
   }
 
   // The pick ends with any other selection; `hideEditor` when nothing else
@@ -673,6 +679,9 @@
     // A second request before the first was done finds the field taken.
     const slots = pageSlotList();
     if (slots[slot]) return false;
+    // While the panel makes it: the field's "+" is busy.
+    const field = getTileGrid('folder0')?.querySelector(':scope > .page-field[data-slot="' + slot + '"]');
+    field?.classList.add('busy');
     try {
       const body = new URLSearchParams({pages: encodePageSlots(slots), new: String(slot)});
       if (title) body.set('title', title);
@@ -692,24 +701,34 @@
       }
       const folder = Number(data.folder) || 0;
       const index = Number(data.index);
+      // Only the new tile from the panel, then it is picked at once; its
+      // folder's tab follows (user 2026-10-22: loading the whole grid and
+      // the tab first took ages, a new folder tile shows at once).
+      const tileResponse = await fetch('/api/tiles?folder=0&index=' + encodeURIComponent(index));
+      if (!tileResponse.ok) throw new Error('Tile HTTP ' + tileResponse.status);
+      const tile = await tileResponse.json();
+      const tiles = getTilesData('folder0');
+      tiles[index] = tile;
       slots[slot] = folder;
       pageSlotsElement().dataset.pages = encodePageSlots(slots);
-      const fresh = await fetchTileGridData('folder0', true);
-      fresh.forEach((tile, i) => renderTileFromData('folder0', i, tile, sensorMetaCache));
-      layoutTiles('folder0', fresh);
+      renderTileFromData('folder0', index, tile, sensorMetaCache);
+      layoutTiles('folder0', tiles);
       syncPageHeads();
-      const ok = await ensureFolderTabUi(folder, String(data.title || ''), '');
-      if (!ok) {
-        persistSelectedTileState();
-        setTimeout(() => location.reload(), 400);
-        return true;
-      }
-      if (index >= 0) selectTile(index, 'folder0');
+      selectTile(index, 'folder0');
       showNotification(t('pagesSaved'));
+      ensureFolderTabUi(folder, String(tile.title || ''), String(tile.icon_name || '')).then(ok => {
+        restoreCurrentTileSelectionUi();
+        if (!ok) {
+          persistSelectedTileState();
+          setTimeout(() => location.reload(), 400);
+        }
+      });
       return true;
     } catch (error) {
       showNotification(t('networkErrorSave'), false);
       return false;
+    } finally {
+      field?.classList.remove('busy');
     }
   }
 

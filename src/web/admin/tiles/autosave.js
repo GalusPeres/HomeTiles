@@ -152,6 +152,34 @@
       });
   }
 
+  // A new folder's title and icon as the panel saved them ("Folder 17" and
+  // the folder icon, user 2026-10-22: its tab showed them, the tile had
+  // none): into the tile, a newer draft and the editor wherever still empty.
+  function fillFolderName(tab, index, data) {
+    const title = String(data.title || '');
+    const icon = String(data.icon_name || '');
+    const stored = getTilesData(tab)?.[index];
+    if (stored) {
+      if (!stored.title) stored.title = title;
+      if (!stored.icon_name) stored.icon_name = icon;
+    }
+    const draft = drafts[tab]?.[index];
+    if (draft) {
+      if (!draft.title) draft.title = title;
+      if (!draft.icon) draft.icon = icon;
+    }
+    if (currentTileTab === tab && currentTileIndex === index) {
+      const titleInput = document.getElementById(tab + '_tile_title');
+      if (titleInput && !titleInput.value) titleInput.value = title;
+      const iconInput = document.getElementById(tab + '_tile_icon');
+      if (iconInput && !iconInput.value) iconInput.value = icon;
+      if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
+      updateTilePreview(tab);
+    } else if (stored) {
+      renderTileFromData(tab, index, stored, sensorMetaCache);
+    }
+  }
+
   function saveTile(tab, silent = false, tileIndexOverride = null) {
     const tileIndex = tileIndexOverride !== null ? tileIndexOverride : currentTileIndex;
     if (tileIndex === -1) return;
@@ -217,6 +245,7 @@
               Number(tilesData[tab][tileIndex].type || 0) !== 0) {
             tilesData[tab][tileIndex].view_id = Number(data.view_id) || 0;
           }
+          if (typeValue === '4' && data.title !== undefined) fillFolderName(tab, tileIndex, data);
           const currentDraft = drafts[tab] && drafts[tab][tileIndex];
           if (currentDraft && currentDraft._dirty && Number(currentDraft._rev || 0) !== draftRev) {
             queueSaveAfterFlight(tab, tileIndex, true);
@@ -243,8 +272,8 @@
             }
             syncFolderPinControls(tab);
             const navTargetNum = parseInt(resolvedNavTarget, 10);
-            const titleVal = snapshot.title || '';
-            const iconVal = snapshot.icon || '';
+            const titleVal = tilesData[tab]?.[tileIndex]?.title || snapshot.title || '';
+            const iconVal = tilesData[tab]?.[tileIndex]?.icon_name || snapshot.icon || '';
             ensureFolderTabUi(navTargetNum, titleVal, iconVal).then(ok => {
               restoreCurrentTileSelectionUi();
               if (!ok) {

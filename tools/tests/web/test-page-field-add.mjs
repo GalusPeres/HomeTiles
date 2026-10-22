@@ -1,12 +1,15 @@
 // A free page field (#100, user 2026-10-22: a click made a folder at once,
-// mistakes guaranteed) with the delivered Web Admin code and a simulated
-// device: a click only picks the field (its teal ring, a "+" in it alone, the
-// editor's Type with Empty and Folder only); its "+" or Folder in Type asks
-// the panel for a new Home folder that is the page there (/api/pages
-// new=<slot>), named by the editor's title. The second click of a double
-// click picks nothing. Deleting the page frees and picks its field, and the
-// panel's word that the folder went reloads the Web Admin without its tab.
-// A full Home says so and changes nothing.
+// mistakes guaranteed) and the editor's picks with the delivered Web Admin
+// code and a simulated device. A click only picks a free field (its teal
+// ring, a "+" in it alone, Type with Empty and Folder only); its "+" or
+// Folder in Type asks the panel for a new Home folder that is the page there
+// (/api/pages new=<slot>), named by the editor's title. Only the new tile is
+// loaded and picked at once, its tab follows. A new folder from the grid
+// gets "Folder N" and the folder icon like its tab. Each tab keeps its pick
+// (a tile, an empty cell, a page field) through the 15 s refresh, the way to
+// another tab and back, and a pick while the grid loads. Deleting the page
+// frees and picks its field, the panel's word reloads without its tab. A
+// full Home says so and changes nothing.
 import assert from 'node:assert/strict';
 import {readAdminDeliverySource, readRepoFile, inlineScriptSafe} from '../../lib/admin-source.mjs';
 import {runDomHarness} from '../../lib/headless-dom.mjs';
@@ -15,28 +18,33 @@ const TILES = 12;
 const head = (folder, button) => `<div class="head-bar-preview" aria-hidden="true"><span class="head-disc"><i class="mdi mdi-home"></i></span>` +
   `<span class="head-title">${folder}</span><span class="head-time">12:00</span>` +
   `<span class="head-button ${button}"><i class="mdi mdi-${button ? 'cog' : 'window-close'}"></i></span></div>`;
+const editor = tab => `<div id="${tab}Settings" class="tile-settings"><div class="tile-specific-settings hidden">
+<div class="tile-settings-head"><div class="tile-head-top"><h3>Tile</h3>
+<select id="${tab}_tile_type"><option value="0">Empty</option><option value="1">Sensor</option><option value="4">Folder</option><option value="7" hidden>Settings</option></select></div>
+<div class="tile-head-row"><textarea id="${tab}_tile_title"></textarea><input type="hidden" id="${tab}_tile_icon"></div></div>
+<div class="tile-settings-body"><input type="color" id="${tab}_tile_color">
+${['col', 'row', 'span_w', 'span_h'].map(name => `<input id="${tab}_tile_${name}" type="number" value="1">`).join('')}</div>
+</div></div>`;
+const tileElements = tab => Array.from({length: TILES}, (_, i) =>
+  `<div class="tile empty" id="${tab}-tile-${i}" data-index="${i}" data-type="0" draggable="true" onclick="selectTile(parseInt(this.dataset.index), '${tab}')"></div>`).join('');
 const html = `<!doctype html><html><head><style>
 ${readRepoFile('src/web/assets/admin.css')}
 :root { --grid-cols:6; --grid-rows:4; --preview-cell-w:100px; --preview-cell-h:80px; --preview-gap:10px; --preview-pad:10px; }
 </style></head><body>
 <div class="wrapper with-page-fields"><div id="tab-tiles-folder0" class="tile-tab tab-content active" data-folder-id="0" data-tab-id="folder0"><div class="tile-editor"><div class="tile-editor-main">
 <div class="tile-grid-scroll"><div class="tile-grid head-bar-grid" id="folder0Grid">${head('Home', 'head-gear')}
-${Array.from({length: TILES}, (_, i) => `<div class="tile empty" id="folder0-tile-${i}" data-index="${i}" data-type="0" draggable="true" onclick="selectTile(parseInt(this.dataset.index), 'folder0')"></div>`).join('')}
+${tileElements('folder0')}
 </div></div>
 <div id="pageSlots" class="page-fields" data-pages=""><div class="page-fields-label">Pages</div>${
   Array.from({length: 5}, (_, i) => `<div class="page-field" data-slot="${i}"></div>`).join('')}<div id="settingsHiddenSlot" class="tile-grid settings-hidden-slot" data-in-grid="1"><div id="settingsHiddenTile" class="tile settings-hidden-tile empty" data-hidden="0"></div></div></div>
-</div></div></div></div>
-<div id="tab-network"></div>
+</div></div>${editor('folder0')}</div>
+<div id="tab-tiles-folder1" class="tile-tab tab-content" data-folder-id="1" data-tab-id="folder1"><div class="tile-grid head-bar-grid" id="folder1Grid">${head('Lights', '')}
+${tileElements('folder1')}</div>${editor('folder1')}</div></div>
+<div id="tab-network" class="tab-content"></div>
 <div class="tab-nav"><div id="folderTabs">
 <button class="tab-btn folder-tab-btn" type="button" data-folder-id="1" data-folder-parent="0" data-tab-id="folder1" data-folder-name="Lights" data-folder-icon="lightbulb"><span class="tab-disc"><i class="mdi mdi-lightbulb"></i></span><span class="tab-label">Lights</span></button>
 </div></div>
-<div id="folder0Settings" class="tile-settings"><div class="tile-specific-settings hidden">
-<div class="tile-settings-head"><div class="tile-head-top"><h3>Tile</h3>
-<select id="folder0_tile_type"><option value="0">Empty</option><option value="1">Sensor</option><option value="4">Folder</option><option value="7" hidden>Settings</option></select></div>
-<div class="tile-head-row"><textarea id="folder0_tile_title"></textarea><input type="hidden" id="folder0_tile_icon"></div></div>
-<div class="tile-settings-body"><input type="color" id="folder0_tile_color">
-${['col','row','span_w','span_h'].map(name => `<input id="folder0_tile_${name}" type="number" value="1">`).join('')}</div>
-</div></div><pre id="result">running</pre><script>
+<pre id="result">running</pre><script>
 const nativeListen = document.addEventListener.bind(document);
 document.addEventListener = (name, ...args) => { if (name !== 'DOMContentLoaded') nativeListen(name, ...args); };
 const APP_I18N = {}, CLIMATE_I18N = {}, BINARY_SENSOR_I18N = {};
@@ -49,14 +57,15 @@ const TILE_TYPE_REGISTRY = {
 const TILE_TABS = [], TAB_BY_FOLDER = {}, FOLDER_BY_TAB = {}, SCREENSAVER_FOLDER_ID = 65535;
 const SCREENSAVER_TILE_DEFAULT_OPACITY = 0, SCREENSAVER_TILE_DEFAULT_COLOR = '#000000';
 const MEDIA_TILE_MIN_SPAN = 2, MEDIA_TILE_MAX_SPAN = 3, MEDIA_TILE_TYPE = 15;
-// The simulated device: Home's screen full (6 x 4 cells taken by one tile
-// each would be too many for the entries, so one big tile covers it), a
-// folder and the Settings tile.
+// The simulated device: Home's screen nearly full (a folder, one big tile,
+// the Settings tile; free cells at (0,1) and (0,2)), a folder in Lights.
 const empty = () => ({type:0});
 const device = Array.from({length: ${TILES}}, empty);
-device[0] = {type:4,title:'Lights',icon_name:'lightbulb',navigate_target:1,col:0,row:0,span_w:1,span_h:1};
-device[1] = {type:2,title:'Wall',icon_name:'lightbulb',col:1,row:0,span_w:5,span_h:4};
-device[2] = {type:7,title:'Settings',icon_name:'cog',col:0,row:3,span_w:1,span_h:1};
+device[0] = {type:4,title:'Lights',icon_name:'lightbulb',navigate_target:1,col:0,row:0,span_w:1,span_h:1,view_id:101};
+device[1] = {type:2,title:'Wall',icon_name:'lightbulb',col:1,row:0,span_w:5,span_h:4,view_id:102};
+device[2] = {type:7,title:'Settings',icon_name:'cog',col:0,row:3,span_w:1,span_h:1,view_id:103};
+const lights = Array.from({length: ${TILES}}, empty);
+lights[0] = {type:4,title:'Lamps',icon_name:'lamp',navigate_target:5,col:0,row:0,span_w:1,span_h:1,view_id:201};
 let pages = [];
 let nextFolder = 20;
 const log = [];
@@ -75,6 +84,15 @@ window.fetch = async (url, options) => {
         pages = pages.map(id => id === before.navigate_target ? 0 : id);
         return {ok:true, status:200, json:async()=>({success:true, folder_deleted: before.navigate_target})};
       }
+      if (body.type === '4' && before?.type !== 4) {
+        // Like navigate/web_handler.cpp: a new folder without title or icon
+        // gets "Folder N" and the folder icon.
+        const folder = nextFolder++;
+        const title = body.title || 'Folder ' + folder, icon = body.icon_name || 'folder';
+        device[index] = {type:4,title,icon_name:icon,navigate_target:folder,col:Number(body.col),row:Number(body.row),span_w:1,span_h:1,view_id:100 + folder};
+        return {ok:true, status:200, json:async()=>({success:true, view_id:100 + folder, navigate_target:folder,
+          folder_pin_enabled:false, folder_pin:'', title, icon_name:icon})};
+      }
       return {ok:true, status:200, json:async()=>({success:true})};
     }
     if (url !== '/api/pages') return {ok:true, status:200, json:async()=>({success:true})};
@@ -86,7 +104,7 @@ window.fetch = async (url, options) => {
     if (index < 0) return {ok:false, status:409, json:async()=>({success:false,error:'Folder full'})};
     const folder = nextFolder++;
     const title = body.title || 'Folder ' + folder;
-    device[index] = {type:4,title,icon_name:body.icon_name || '',navigate_target:folder,col:index % 6,row:0,span_w:1,span_h:1,
+    device[index] = {type:4,title,icon_name:body.icon_name || 'folder',navigate_target:folder,col:index % 6,row:0,span_w:1,span_h:1,
       layout_hidden:true,view_id:100 + folder,folder_empty:true};
     wanted[slot] = folder;
     pages = wanted;
@@ -96,15 +114,22 @@ window.fetch = async (url, options) => {
   if (tabMatch) {
     const id = Number(tabMatch[1]);
     log.push('TAB ' + id);
+    // The panel builds a tab slowly: the new tile must not wait for it.
+    await wait(500);
+    log.push('TAB DONE ' + id);
     return {ok:true, status:200, json:async()=>({success:true, folder_id:id, tab_id:'folder' + id,
       button_html:'<button class="tab-btn folder-tab-btn" type="button" data-folder-id="' + id + '" data-folder-parent="0" data-tab-id="folder' + id +
         '" data-folder-name="Folder ' + id + '" data-folder-icon=""><span class="tab-disc"><i class="mdi mdi-folder"></i></span><span class="tab-label">Folder ' + id + '</span></button>',
       tab_html:'<div id="tab-tiles-folder' + id + '" class="tile-tab tab-content" data-folder-id="' + id + '" data-tab-id="folder' + id +
         '"><div class="tile-grid head-bar-grid" id="folder' + id + 'Grid">' + ${JSON.stringify(head('Folder', ''))} + '</div></div>'})};
   }
-  if (String(url).startsWith('/api/tiles?folder=0')) {
+  const tilesMatch = String(url).match(/^\\/api\\/tiles\\?folder=(\\d+)(?:&index=(\\d+))?$/);
+  if (tilesMatch) {
+    log.push('GET ' + url);
     await wait(10);
-    return {ok:true, status:200, json:async()=>JSON.parse(JSON.stringify(device))};
+    const grid = tilesMatch[1] === '0' ? device : lights;
+    const data = tilesMatch[2] !== undefined ? grid[Number(tilesMatch[2])] : grid;
+    return {ok:true, status:200, json:async()=>JSON.parse(JSON.stringify(data))};
   }
   return {ok:true, status:200, json:async()=>({})};
 };
@@ -124,13 +149,12 @@ showNotification = (message, ok = true) => { notes.push((ok ? 'OK ' : 'NO ') + m
   const plusOf = slot => field(slot).querySelector(':scope > .page-field-add');
   const shown = el => !!el && getComputedStyle(el).display !== 'none';
   const tileOf = folder => document.getElementById('folder0-tile-' + homeFolderTileIndex(folder));
-  // Where a field lies (a taken one is hidden under its tile).
   const metric = name => parseFloat(getComputedStyle(grid).getPropertyValue(name)) || 0;
-  const fieldCorner = slot => {
-    const place = pageFieldPlaces(grid).pages[slot];
-    return {x: box(grid).left + grid.clientLeft + parseFloat(getComputedStyle(grid).paddingLeft) + place.col * (metric('--preview-cell-w') + metric('--preview-gap')),
-      y: box(grid).top + grid.clientTop + parseFloat(getComputedStyle(grid).paddingTop) + place.row * (metric('--preview-cell-h') + metric('--preview-gap'))};
-  };
+  const cellCorner = (col, row) => ({
+    x: box(grid).left + grid.clientLeft + parseFloat(getComputedStyle(grid).paddingLeft) + col * (metric('--preview-cell-w') + metric('--preview-gap')),
+    y: box(grid).top + grid.clientTop + parseFloat(getComputedStyle(grid).paddingTop) + row * (metric('--preview-cell-h') + metric('--preview-gap'))});
+  // Where a field lies (a taken one is hidden under its tile).
+  const fieldCorner = slot => cellCorner(pageFieldPlaces(grid).pages[slot].col, pageFieldPlaces(grid).pages[slot].row);
   const inField = (el, slot) => el && el.classList.contains('page-field-tile') &&
     Math.abs(box(el).left - fieldCorner(slot).x) < 1 && Math.abs(box(el).top - fieldCorner(slot).y) < 1;
   const dots = tab => [...document.querySelectorAll('#tab-tiles-' + tab + ' .head-dots > i')].map(dot => dot.classList.contains('on') ? 'O' : 'o').join('');
@@ -139,6 +163,11 @@ showNotification = (message, ok = true) => { notes.push((ok ? 'OK ' : 'NO ') + m
   const typeSelect = document.getElementById('folder0_tile_type');
   const offered = () => [...typeSelect.options].filter(option => !option.hidden).map(option => option.value).join();
   const click = (el, detail = 1) => el.dispatchEvent(new MouseEvent('click', {bubbles:true, detail}));
+  const clickCell = (col, row) => {
+    const point = {bubbles:true, clientX: cellCorner(col, row).x + 20, clientY: cellCorner(col, row).y + 20};
+    grid.dispatchEvent(new MouseEvent('pointermove', point));
+    grid.dispatchEvent(new MouseEvent('click', point));
+  };
   const settle = () => wait(400);
   // Home's tab is known by its markup, as on the panel's page (a new
   // folder's tab runs initTileTabs again).
@@ -148,6 +177,7 @@ showNotification = (message, ok = true) => { notes.push((ok ? 'OK ' : 'NO ') + m
   tilesData.folder0.forEach((tile, i) => renderTileFromData('folder0', i, tile, {}));
   layoutTiles('folder0', tilesData.folder0);
   enableTileDrag('folder0');
+  enableFreeSlotHover('folder0');
   enableSettingsHiddenSlot();
   enablePageFields();
 
@@ -157,6 +187,47 @@ showNotification = (message, ok = true) => { notes.push((ok ? 'OK ' : 'NO ') + m
           !shown(plusOf(slot)) && !field(slot).classList.contains('marked'), 'Field ' + slot + ' is free without a +');
   }
   check(offered() === '0,1,4', 'The editor offers every type before: ' + offered());
+
+  // Each tab keeps its pick through the 15 s refresh and the way to another
+  // tab and back (user 2026-10-22: it jumped to the top left tile).
+  const away = async () => {
+    await switchTab('tab-tiles-folder1');
+    await settle();
+    check(currentTileTab === 'folder1', 'Lights picks its own tile: ' + currentTileTab);
+    await switchTab('tab-tiles-folder0');
+    await settle();
+  };
+  selectTile(0, 'folder0');
+  await away();
+  check(currentTileTab === 'folder0' && currentTileIndex === 0, 'A tile stays picked: ' + currentTileTab + ' ' + currentTileIndex);
+  clickCell(0, 2);
+  const emptyIndex = currentTileIndex;
+  const emptyAt = () => {
+    const el = document.getElementById('folder0-tile-' + emptyIndex);
+    return el ? el.dataset.col + ',' + el.dataset.row + (el.classList.contains('active') ? ' picked' : '') : '';
+  };
+  check(emptyIndex >= 0 && !Number(getTilesData('folder0')[emptyIndex]?.type) && emptyAt() === '0,2 picked',
+        'An empty cell is picked at its spot: ' + emptyIndex + ' ' + emptyAt());
+  await loadSensorValues(false, false);
+  check(currentTileIndex === emptyIndex && emptyAt() === '0,2 picked', 'The refresh keeps the empty cell: ' + currentTileIndex + ' ' + emptyAt());
+  await away();
+  check(currentTileTab === 'folder0' && currentTileIndex === emptyIndex && emptyAt() === '0,2 picked',
+        'The empty cell stays picked on the way back: ' + currentTileIndex + ' ' + emptyAt());
+  click(field(2));
+  await loadSensorValues(false, false);
+  check(field(2).classList.contains('marked') && currentTileIndex === -1, 'The refresh keeps the picked field: ' + currentTileIndex);
+  await away();
+  check(field(2).classList.contains('marked') && currentTileTab === 'folder0' && currentTileIndex === -1,
+        'The picked field stays on the way back: ' + currentTileTab + ' ' + currentTileIndex);
+  // A pick while the grid loads stays.
+  tileDataLoadedTabs.delete('folder0');
+  const switching = switchTab('tab-tiles-folder0');
+  click(field(4));
+  await switching;
+  await settle();
+  check(field(4).classList.contains('marked') && !field(2).classList.contains('marked') && currentTileIndex === -1,
+        'A pick while the grid loads stays: ' + currentTileIndex);
+  check(!posts().length, 'Picking makes nothing');
 
   // A click picks the field: its ring and "+", the editor with Empty and
   // Folder; nothing is made.
@@ -177,30 +248,52 @@ showNotification = (message, ok = true) => { notes.push((ok ? 'OK ' : 'NO ') + m
   check(!posts().length && field(3).classList.contains('marked') && !field(2).classList.contains('marked'),
         'A double click only picks: ' + posts().join());
 
-  // Its "+" makes the page, named by the editor's title.
+  // Its "+" makes the page, named by the editor's title; only the new tile is
+  // loaded and picked at once, its tab comes after.
   document.getElementById('folder0_tile_title').value = 'Kitchen';
+  const before = log.length;
   click(plusOf(3));
-  await settle();
+  await wait(5);
+  check(field(3).classList.contains('busy'), 'The + is busy while the panel makes the page');
+  await wait(200);
   check(posts().length === 1 && posts()[0] === '/api/pages {"pages":"","new":"3","title":"Kitchen"}', 'One request for slot 3: ' + posts().join());
   check(pages.join() === '0,0,0,20' && inField(tileOf(20), 3) && field(3).hidden, 'The page stands in its field: ' + pages.join());
-  check(dots('folder0') === 'Oo', 'Home shows its dots: ' + dots('folder0'));
+  check(currentTileIndex === homeFolderTileIndex(20) && tileOf(20).classList.contains('active') && !log.includes('TAB DONE 20'),
+        'The new tile is picked before its tab arrived: ' + currentTileIndex);
+  const gets = log.slice(before).filter(line => line.startsWith('GET '));
+  check(gets.length === 1 && gets[0] === 'GET /api/tiles?folder=0&index=' + homeFolderTileIndex(20), 'Only the new tile is loaded: ' + gets.join());
+  await wait(700);
   check(document.querySelector('.folder-tab-btn[data-folder-id="20"]') && document.getElementById('tab-tiles-folder20'), 'Its folder has its tab');
-  check(currentTileIndex === homeFolderTileIndex(20) && tileOf(20).classList.contains('active') &&
-        !specific.classList.contains('page-field-marked') && !document.querySelector('.page-field.marked') && offered() === '0,1,4',
-        'The editor picks its tile, every type again: ' + currentTileIndex + ' ' + offered());
+  check(dots('folder0') === 'Oo', 'Home shows its dots: ' + dots('folder0'));
+  check(!specific.classList.contains('page-field-marked') && !document.querySelector('.page-field.marked') && offered() === '0,1,4' &&
+        currentTileIndex === homeFolderTileIndex(20), 'Every type again, the new tile stays picked: ' + offered());
   check(getTilesData('folder0')[homeFolderTileIndex(20)].title === 'Kitchen', 'Named as typed');
 
   // Folder in Type makes the page of the picked field too.
   click(field(1));
   typeSelect.value = '4';
   typeSelect.dispatchEvent(new Event('change', {bubbles:true}));
-  await settle();
+  await wait(900);
   check(posts().length === 2 && posts()[1] === '/api/pages {"pages":"0,0,0,20","new":"1"}' && pages.join() === '0,21,0,20' &&
         inField(tileOf(21), 1), 'Folder in Type makes the page: ' + posts().join() + ' / ' + pages.join());
+  check(getTilesData('folder0')[homeFolderTileIndex(21)].title === 'Folder 21' &&
+        getTilesData('folder0')[homeFolderTileIndex(21)].icon_name === 'folder', 'Named and shown like its tab');
+
+  // A new folder from the grid gets "Folder N" and the folder icon too,
+  // shown in the editor at once.
+  clickCell(0, 1);
+  const cellIndex = currentTileIndex;
+  typeSelect.value = '4';
+  typeSelect.dispatchEvent(new Event('change', {bubbles:true}));
+  await wait(900);
+  check(log.some(line => line.startsWith('/api/tiles') && line.includes('"type":"4"') && line.includes('"index":"' + cellIndex + '"')),
+        'The grid folder is saved');
+  check(document.getElementById('folder0_tile_title').value === 'Folder 22' && document.getElementById('folder0_tile_icon').value === 'folder' &&
+        getTilesData('folder0')[cellIndex].title === 'Folder 22' && getTilesData('folder0')[cellIndex].icon_name === 'folder',
+        'The grid folder has title and icon: ' + document.getElementById('folder0_tile_title').value);
 
   // Deleting a page frees and picks its field at once; the panel's word
   // reloads without its tab, the kept tab markup goes.
-  await settle();
   check(readFolderTabSessionFragment(20), 'The tab markup of the new folder was kept');
   selectTile(homeFolderTileIndex(20), 'folder0');
   const pageIndex = currentTileIndex;
@@ -217,8 +310,8 @@ showNotification = (message, ok = true) => { notes.push((ok ? 'OK ' : 'NO ') + m
   click(field(4));
   click(plusOf(4));
   await settle();
-  check(posts().length === 3 && !pages.includes(22) && !field(4).hidden && field(4).classList.contains('marked') &&
-        notes.at(-1)?.startsWith('NO '), 'A full Home changes nothing: ' + notes.at(-1));
+  check(posts().length === 3 && !pages.includes(23) && !field(4).hidden && field(4).classList.contains('marked') &&
+        !field(4).classList.contains('busy') && notes.at(-1)?.startsWith('NO '), 'A full Home changes nothing: ' + notes.at(-1));
   check(!log.some(line => line.startsWith('ERR')), 'No script error');
   document.body.dataset.result = 'pass';
 } catch (error) {
@@ -227,45 +320,48 @@ showNotification = (message, ok = true) => { notes.push((ok ? 'OK ' : 'NO ') + m
 </script></body></html>`;
 
 try {
-  runDomHarness({label: 'Page field add', html, tmpPrefix: 'hometiles-page-field-add-', extraArgs: ['--virtual-time-budget=12000']});
+  runDomHarness({label: 'Page field add', html, tmpPrefix: 'hometiles-page-field-add-', extraArgs: ['--virtual-time-budget=20000']});
 } catch (error) {
   throw Error(error.message.match(/<pre id="result">([\s\S]*?)<\/pre>/)?.[1] || error.message.slice(0, 1500));
 }
 
 // The panel: a free slot only, the first free entry of Home (else "Folder
-// full"), the folder by the folder tile's save path, named like an unnamed
-// folder, its tile a hidden page tile before the grid is saved, the folder
-// gone again when that save fails; the answer names folder, entry and title.
+// full"), the folder by the folder tile's save path (which names a new one
+// "Folder N" with the folder icon), its tile a hidden page tile before the
+// grid is saved, the folder gone again when that save fails; the answer
+// names folder, entry and title.
 const tiles = readRepoFile('src/web/server/handlers/web_admin_tiles.cpp').replace(/\r\n/g, '\n');
 const save = tiles.slice(tiles.indexOf('void WebAdminServer::handleSavePages() {'), tiles.indexOf('void WebAdminServer::handleGetFolderTab() {'));
 assert.match(save, /if \(new_slot < 0 \|\| new_slot >= static_cast<long>\(wanted\.size\(\)\) \|\| wanted\[new_slot\]\) \{\s*sendJsonError\(server, 400, "Not a free slot"\);/);
 assert.ok(save.indexOf('"Not a free slot"') < save.indexOf('checkPageSlots(wanted)'), 'The slot is checked with the others');
 assert.match(save, /if \(home->tiles\[i\]\.type == TILE_EMPTY\) new_index = static_cast<int>\(i\);/);
 assert.match(save, /if \(new_index < 0\) \{\s*sendJsonError\(server, 409, "Folder full"\);/);
-assert.match(save, /tile\.type = TILE_FOLDER;\s*tile\.view_id = 0;[\s\S]*?tile\.span_w = 1;\s*tile\.span_h = 1;\s*tile\.layout_hidden = true;/);
+assert.match(save, /tile\.type = TILE_FOLDER;\s*tile\.view_id = 0;\s*tile\.title = hometiles_title::normalize\(server\.arg\("title"\)\.c_str\(\)\)\.c_str\(\);\s*tile\.icon_name = server\.arg\("icon_name"\);\s*tile\.span_w = 1;\s*tile\.span_h = 1;\s*tile\.layout_hidden = true;/);
 assert.match(save, /apply_navigate_fields_from_request\(server, tile, TileConfig::rootFolderId\(\), tileConfig, error\)/);
-assert.match(save, /tile\.title = hometiles_title::normalize\(\(String\(tr\.folder_prefix\) \+ String\(new_folder\)\)\.c_str\(\)\)\.c_str\(\);/);
-assert.match(save, /const std::string asked_title = hometiles_title::normalize\(server\.arg\("title"\)\.c_str\(\)\);/);
-assert.match(save, /tile\.icon_name = server\.arg\("icon_name"\);/);
-assert.match(save, /if \(asked_title\.empty\(\)\) \{\s*tile\.title = hometiles_title::normalize/);
-assert.match(save, /if \(!tileConfig\.updateFolder\(new_folder, tile\.title, tile\.icon_name\) \|\|\s*!tileConfig\.saveFolderGrid\(TileConfig::rootFolderId\(\), \*home\)\) \{\s*tileConfig\.deleteFolder\(new_folder\);/);
+assert.match(save, /new_folder = getNavigateTargetId\(tile\);\s*if \(!tileConfig\.saveFolderGrid\(TileConfig::rootFolderId\(\), \*home\)\) \{\s*tileConfig\.deleteFolder\(new_folder\);/);
+assert.doesNotMatch(save, /folder_prefix/, 'Named by the save path, no second write');
 assert.match(save, /wanted\[new_slot\] = new_folder;/);
-// Before the folders leaving the slots take their cells: the saved grid is
-// Home as it is plus the new tile.
 assert.ok(save.indexOf('wanted[new_slot] = new_folder;') < save.indexOf('std::vector<Spot> spots;'), 'Made before the spots');
 assert.match(save, /if \(new_folder\) \{\s*json \+= ",\\"folder\\":";[\s\S]*?",\\"index\\":";[\s\S]*?appendJsonEscaped\(json, home->tiles\[new_index\]\.title\);/);
-// No navigate_target in the request: the save path makes a folder.
-const navigate = readRepoFile('src/types/navigate/web_handler.cpp');
-assert.match(navigate, /if \(target_id == 0 \|\| !tileConfig\.folderExists\(target_id\)\) \{\s*uint16_t new_id = 0;\s*if \(!tileConfig\.createFolder\(folder_id, tile\.title, tile\.icon_name, new_id\)\)/);
+// A new folder is named like its tab and gets the folder icon; an existing
+// one keeps what it has; the panel never names it "Ordner" in every
+// language.
+const navigate = readRepoFile('src/types/navigate/web_handler.cpp').replace(/\r\n/g, '\n');
+assert.match(navigate, /target_id = new_id;[\s\S]*?if \(!tile\.title\.length\(\)\) \{\s*tile\.title = hometiles_title::normalize\(TileConfig::unnamedFolderName\(target_id\)\.c_str\(\)\)\.c_str\(\);\s*\}\s*if \(!tile\.icon_name\.length\(\)\) tile\.icon_name = "folder";\s*\}\s*tileConfig\.updateFolder\(target_id, tile\.title, tile\.icon_name\);/);
+const config = readRepoFile('src/tiles/config/tile_config.cpp').replace(/\r\n/g, '\n');
+assert.doesNotMatch(config, /safe_name = "Ordner"/);
+assert.match(config, /String TileConfig::unnamedFolderName\(uint16_t folder_id\) \{\s*return String\(i18n::strings\(configManager\.getConfig\(\)\.language\)\.folder_prefix\) \+ String\(folder_id\);/);
+assert.match(readRepoFile('tools/icons/core-icons.txt'), /^folder\r?$/m, 'The folder icon is built in');
+// The tile save answers with the saved title and icon.
+const saveTiles = tiles.slice(tiles.indexOf('void WebAdminServer::handleSaveTiles() {'), tiles.indexOf('void WebAdminServer::handleReorderTiles() {'));
+assert.match(saveTiles, /response \+= ",\\"title\\":\\"";\s*appendJsonEscaped\(response, tile\.title\);\s*response \+= "\\",\\"icon_name\\":\\"";\s*appendJsonEscaped\(response, tile\.icon_name\);/);
 // A page's hidden tile gets no place in the active bar layout; the classic
 // one gives a new tile the first free place, else its storage.
-const config = readRepoFile('src/tiles/config/tile_config.cpp').replace(/\r\n/g, '\n');
 assert.ok(config.includes('if (!tile.layout_hidden && tile.type != TILE_BACK) {\n      tile_layouts::set(active, folder_id, tile.view_id,'));
 assert.match(config, /const bool free = own \|\| findFreeClassicPlace\(occupied, tile, place\);\s*tile_layouts::set_classic_hidden\(folder_id, tile\.view_id, !free\);/);
 // A deleted folder: the panel says so (the Web Admin reloads without its
 // tab) and shows it at once, by the tile's Delete and by "Delete folder":
 // Home when it showed the folder or one inside it, a page's dot gone.
-const saveTiles = tiles.slice(tiles.indexOf('void WebAdminServer::handleSaveTiles() {'), tiles.indexOf('void WebAdminServer::handleReorderTiles() {'));
 assert.match(saveTiles, /deleted_view = deletedFolderView\(target_id\);\s*if \(!tileConfig\.deleteFolder\(target_id\)\)/);
 assert.match(saveTiles, /if \(!shown_before_save && !deleted_view\.shown_inside && tileConfig\.getActiveFolderId\(\) == folder_id &&/);
 assert.match(saveTiles, /if \(deleting_folder\) showFolderDeleted\(deleted_view\);/);
@@ -281,4 +377,4 @@ assert.match(tiles, /static void showFolderDeleted\(const DeletedFolderView& vie
 const autosave = readRepoFile('src/web/admin/tiles/autosave.js').replace(/\r\n/g, '\n');
 assert.doesNotMatch(autosave, /previousType === 4 && typeValue === '0'/);
 assert.match(autosave, /const deletedFolder = Number\(data\.folder_deleted\) \|\| 0;\s*if \(deletedFolder > 0\) \{\s*forgetFolderTabSessionFragment\(deletedFolder\);/);
-console.log('Page field add: a click picks a free field, its + or Folder makes the page; a deleted page frees its field, the tab goes');
+console.log('Page field add: picks stay (tile, empty cell, page field), + makes a page fast, new folders are named, deleting frees the field');

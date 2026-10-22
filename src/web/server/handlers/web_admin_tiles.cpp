@@ -1019,6 +1019,13 @@ void WebAdminServer::handleSaveTiles() {
       }
       folder_pin = "";
       response += "\"";
+      // Its title and icon as saved: a new folder got "Folder 17" and the
+      // folder icon (navigate/web_handler.cpp), the editor shows them.
+      response += ",\"title\":\"";
+      appendJsonEscaped(response, tile.title);
+      response += "\",\"icon_name\":\"";
+      appendJsonEscaped(response, tile.icon_name);
+      response += "\"";
     }
     response += "}";
     sendChunkedResponse(server, 200, "application/json", response);
@@ -2231,8 +2238,8 @@ void WebAdminServer::handleSavePages() {
   // the page there at once. Its tile takes a free entry but no cell (a page's
   // tile is not shown on Home in the bar layouts; the classic layout gives it
   // the first free place, else its storage), so a full screen does not stop
-  // it. Named by the editor's title and icon, else like an unnamed folder in
-  // the Web Admin (formatFolderLabel).
+  // it. Named by the editor's title and icon, else like every new folder
+  // ("Folder 17" and the folder icon, navigate/web_handler.cpp).
   uint16_t new_folder = 0;
   int new_index = -1;
   if (new_slot >= 0) {
@@ -2243,12 +2250,10 @@ void WebAdminServer::handleSavePages() {
       sendJsonError(server, 409, "Folder full");
       return;
     }
-    const i18n::Strings& tr = i18n::strings(configManager.getConfig().language);
-    const std::string asked_title = hometiles_title::normalize(server.arg("title").c_str());
     Tile& tile = home->tiles[new_index];
     tile.type = TILE_FOLDER;
     tile.view_id = 0;
-    tile.title = asked_title.empty() ? hometiles_title::normalize(tr.tile_type_folder).c_str() : asked_title.c_str();
+    tile.title = hometiles_title::normalize(server.arg("title").c_str()).c_str();
     tile.icon_name = server.arg("icon_name");
     tile.span_w = 1;
     tile.span_h = 1;
@@ -2261,11 +2266,7 @@ void WebAdminServer::handleSavePages() {
       return;
     }
     new_folder = getNavigateTargetId(tile);
-    if (asked_title.empty()) {
-      tile.title = hometiles_title::normalize((String(tr.folder_prefix) + String(new_folder)).c_str()).c_str();
-    }
-    if (!tileConfig.updateFolder(new_folder, tile.title, tile.icon_name) ||
-        !tileConfig.saveFolderGrid(TileConfig::rootFolderId(), *home)) {
+    if (!tileConfig.saveFolderGrid(TileConfig::rootFolderId(), *home)) {
       tileConfig.deleteFolder(new_folder);
       sendJsonError(server, 500, "Save failed");
       return;

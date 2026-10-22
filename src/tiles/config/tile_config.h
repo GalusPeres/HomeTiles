@@ -911,6 +911,9 @@ public:
   bool folderExists(uint16_t folder_id) const;
   bool createFolder(uint16_t parent_id, const String& name, const String& icon, uint16_t& out_id);
   bool updateFolder(uint16_t folder_id, const String& name, const String& icon);
+  // An unnamed folder's name, "Folder 17" in the panel's language, as the
+  // Web Admin's tab shows it.
+  static String unnamedFolderName(uint16_t folder_id);
   bool deleteFolder(uint16_t folder_id);
   bool isFolderPinEnabled(uint16_t folder_id) const;
   bool setFolderPin(uint16_t folder_id, const String& pin);

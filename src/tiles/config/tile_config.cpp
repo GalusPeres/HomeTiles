@@ -2878,13 +2878,19 @@ bool TileConfig::saveTabNames() {
 }
 #endif
 
+// The tab, the tile and the panel give it one name (user 2026-10-22: "Ordner"
+// on the panel in every language, "Ordner 17" on the tab, none on the tile).
+String TileConfig::unnamedFolderName(uint16_t folder_id) {
+  return String(i18n::strings(configManager.getConfig().language).folder_prefix) + String(folder_id);
+}
+
 static FolderEntry makeFolderEntry(uint16_t id, uint16_t parent_id, const String& name, const String& icon) {
   FolderEntry entry{};
   entry.id = id;
   entry.parent_id = parent_id;
   String safe_name = name;
   safe_name.trim();
-  if (safe_name.length() == 0) safe_name = "Ordner";
+  if (safe_name.length() == 0) safe_name = TileConfig::unnamedFolderName(id);
   String safe_icon = icon;
   safe_icon.trim();
   copyString(safe_name, entry.name, sizeof(entry.name));
@@ -3632,7 +3638,7 @@ bool TileConfig::updateFolder(uint16_t folder_id, const String& name, const Stri
     if (entry.id != folder_id) continue;
     String safe_name = name;
     safe_name.trim();
-    if (!safe_name.length()) safe_name = "Ordner";
+    if (!safe_name.length()) safe_name = unnamedFolderName(folder_id);
     String safe_icon = icon;
     safe_icon.trim();
     copyString(safe_name, entry.name, sizeof(entry.name));

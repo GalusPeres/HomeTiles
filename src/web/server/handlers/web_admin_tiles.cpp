@@ -380,6 +380,38 @@ static bool folderHasContent(uint16_t folder_id) {
   return false;
 }
 
+// What a deleted folder leaves on the panel (user 2026-10-22: the panel kept
+// a deleted folder until the next folder change), taken before it goes.
+struct DeletedFolderView {
+  // The panel shows it or a folder inside it.
+  bool shown_inside = false;
+  // A page beside Home: a dot in every head.
+  bool page = false;
+};
+
+static DeletedFolderView deletedFolderView(uint16_t folder_id) {
+  DeletedFolderView view;
+  view.page = tile_layouts::page_number(folder_id) > 0;
+  uint16_t shown = tileConfig.getActiveFolderId();
+  for (size_t depth = 0; shown != TileConfig::rootFolderId() && depth < 128; ++depth) {
+    if (shown == folder_id) {
+      view.shown_inside = true;
+      break;
+    }
+    const uint16_t parent = tileConfig.getFolderParent(shown);
+    if (parent == shown) break;
+    shown = parent;
+  }
+  return view;
+}
+
+// After it went: shown inside it the panel goes Home (its built grid must
+// not stay), a page's dot leaves every head.
+static void showFolderDeleted(const DeletedFolderView& view) {
+  if (view.page) tiles_rebuild_heads(!powerManager.isInSleep());
+  if (view.shown_inside) tiles_switch_to_folder(TileConfig::rootFolderId());
+}
+
 // A tile in the classic storage (the layout window's, tile_layouts.h) has no
 // classic place: its stored one is stale and may lie under another tile. The
 // export marks it, and the import's overlap checks leave it out.
@@ -829,9 +861,11 @@ void WebAdminServer::handleSaveTiles() {
   // Only Weather keeps its temperature/humidity sensors.
   normalizeWeatherSensors(tile);
 
+  DeletedFolderView deleted_view;
   if (deleting_folder) {
     const uint16_t target_id = getNavigateTargetId(previous_tile);
     if (target_id != 0) {
+      deleted_view = deletedFolderView(target_id);
       if (!tileConfig.deleteFolder(target_id)) {
         tile = previous_tile;
         server.send(500, "application/json", "{\"success\":false,\"error\":\"Folder delete failed\"}");
@@ -942,7 +976,8 @@ void WebAdminServer::handleSaveTiles() {
         // Only this folder changed; the other prepared folders stay cached.
         tiles_invalidate_folder_only(folder_id);
       }
-      if (!shown_before_save && tileConfig.getActiveFolderId() == folder_id &&
+      // Shown inside a deleted folder the panel goes Home instead.
+      if (!shown_before_save && !deleted_view.shown_inside && tileConfig.getActiveFolderId() == folder_id &&
           !(display_awake && tiles_show_active_layout_now())) {
         tiles_request_reload_if_loaded(GridType::TAB0);
       }
@@ -950,11 +985,18 @@ void WebAdminServer::handleSaveTiles() {
       // every head again at once (user 2026-10-14: the shown PV page kept
       // "PV" after the rename to PV1, the pages' overview had it).
       if (folder_renamed) tiles_rebuild_heads(display_awake);
+      if (deleting_folder) showFolderDeleted(deleted_view);
     } else if (!shown_before_save) {
       image_screensaver_tiles_changed();
     }
 
     String response = "{\"success\":true";
+    // A deleted folder: the Web Admin drops its tab (it reloads). Its editor
+    // showed the tile empty before this save, so it cannot tell by itself.
+    if (deleting_folder && getNavigateTargetId(previous_tile)) {
+      response += ",\"folder_deleted\":";
+      response += String(getNavigateTargetId(previous_tile));
+    }
     // The tile's stable ID, given here to a new tile: the editor's data takes
     // it at once (user 2026-10-13: a new folder showed red in the layout
     // window's storage, its places were looked up without its ID).
@@ -2189,7 +2231,8 @@ void WebAdminServer::handleSavePages() {
   // the page there at once. Its tile takes a free entry but no cell (a page's
   // tile is not shown on Home in the bar layouts; the classic layout gives it
   // the first free place, else its storage), so a full screen does not stop
-  // it. Named like an unnamed folder in the Web Admin (formatFolderLabel).
+  // it. Named by the editor's title and icon, else like an unnamed folder in
+  // the Web Admin (formatFolderLabel).
   uint16_t new_folder = 0;
   int new_index = -1;
   if (new_slot >= 0) {
@@ -2201,11 +2244,12 @@ void WebAdminServer::handleSavePages() {
       return;
     }
     const i18n::Strings& tr = i18n::strings(configManager.getConfig().language);
+    const std::string asked_title = hometiles_title::normalize(server.arg("title").c_str());
     Tile& tile = home->tiles[new_index];
     tile.type = TILE_FOLDER;
     tile.view_id = 0;
-    tile.title = hometiles_title::normalize(tr.tile_type_folder).c_str();
-    tile.icon_name = "";
+    tile.title = asked_title.empty() ? hometiles_title::normalize(tr.tile_type_folder).c_str() : asked_title.c_str();
+    tile.icon_name = server.arg("icon_name");
     tile.span_w = 1;
     tile.span_h = 1;
     tile.layout_hidden = true;
@@ -2217,7 +2261,9 @@ void WebAdminServer::handleSavePages() {
       return;
     }
     new_folder = getNavigateTargetId(tile);
-    tile.title = hometiles_title::normalize((String(tr.folder_prefix) + String(new_folder)).c_str()).c_str();
+    if (asked_title.empty()) {
+      tile.title = hometiles_title::normalize((String(tr.folder_prefix) + String(new_folder)).c_str()).c_str();
+    }
     if (!tileConfig.updateFolder(new_folder, tile.title, tile.icon_name) ||
         !tileConfig.saveFolderGrid(TileConfig::rootFolderId(), *home)) {
       tileConfig.deleteFolder(new_folder);
@@ -2445,6 +2491,7 @@ void WebAdminServer::handleDeleteFolder() {
 
   // Find parent folder and clear the tile that references this folder
   uint16_t parent_id = tileConfig.getFolderParent(folder_id);
+  const DeletedFolderView view = deletedFolderView(folder_id);
   std::unique_ptr<TileGridConfig> parent_storage(new (std::nothrow) TileGridConfig{});
   if (parent_storage && tileConfig.loadFolderGrid(parent_id, *parent_storage)) {
     TileGridConfig& parent_grid = *parent_storage;
@@ -2466,6 +2513,14 @@ void WebAdminServer::handleDeleteFolder() {
     server.send(500, "application/json", "{\"success\":false,\"error\":\"Delete failed\"}");
     return;
   }
+  // The panel shows it at once (user 2026-10-22: the folder's tile stayed
+  // until the next folder change): its parent without the tile, like a tile
+  // edit, or Home when it was shown inside the deleted folder.
+  if (!view.shown_inside && tileConfig.getActiveFolderId() == parent_id &&
+      !(!powerManager.isInSleep() && tiles_show_active_layout_now())) {
+    tiles_request_reload_if_loaded(GridType::TAB0);
+  }
+  showFolderDeleted(view);
 
   mqttRequestDynamicSlotsReload(5000);
   Serial.printf("[WebAdmin] Folder %u deleted\n", static_cast<unsigned>(folder_id));

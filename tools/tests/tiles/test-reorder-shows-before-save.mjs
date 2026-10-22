@@ -31,7 +31,8 @@ assert.ok(preview > 0 && saveTiles.indexOf('tileConfig.saveFolderGrid(folder_id,
 assert.match(saveTiles, /: !deleting_folder && !classic_places && display_awake &&\n                previous_tile\.type == tile\.type &&/,
   'only edits that keep the tile type are shown before saving (new tiles get their view ID first)');
 assert.match(saveTiles, /if \(deleting_folder\) \{\n        tiles_invalidate_folder\(folder_id\);\n      \} else \{\n[^\n]*\n        tiles_invalidate_folder_only\(folder_id\);/);
-assert.match(saveTiles, /if \(!shown_before_save && tileConfig\.getActiveFolderId\(\) == folder_id &&\n          !\(display_awake && tiles_show_active_layout_now\(\)\)\) \{\n        tiles_request_reload_if_loaded\(GridType::TAB0\);/,
+// Shown inside a deleted folder the panel goes Home instead (user 2026-10-22).
+assert.match(saveTiles, /if \(!shown_before_save && !deleted_view\.shown_inside && tileConfig\.getActiveFolderId\(\) == folder_id &&\n          !\(display_awake && tiles_show_active_layout_now\(\)\)\) \{\n        tiles_request_reload_if_loaded\(GridType::TAB0\);/,
   'other edits are shown right after the save, not after a quiet Web Admin');
 assert.match(saveTiles, /if \(shown_before_save && tileConfig\.setActiveFolder\(folder_id\)\) \{\n      \/\/ Back to the stored tile the failed save left\.\n      tiles_request_reload\(GridType::TAB0\);/);
 

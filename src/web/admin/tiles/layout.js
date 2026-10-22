@@ -213,8 +213,8 @@
   // render).
   function resetTileClasses(el, classes) {
     const fractional = el.classList.contains('fractional-tile');
-    // A page's tile stays in its field (page-fields.js).
-    const pageField = el.classList.contains('page-field-tile');
+    // A page's tile stays in its field (page-fields.js); emptied it is none.
+    const pageField = el.classList.contains('page-field-tile') && !classes.includes('empty');
     el.className = classes.join(' ');
     if (fractional) el.classList.add('fractional-tile');
     if (pageField) el.classList.add('page-field-tile');
@@ -283,7 +283,7 @@
     let freeEl = null;
     empties.forEach(({ idx, el }) => {
       delete el.dataset.freeSlot;
-      el.classList.remove('free-slot-hover');
+      el.classList.remove('free-slot-hover', 'page-field-tile');
       const kept = editingNew(idx) && newTileSpot?.tab === tab && newTileSpot.index === idx
         ? newTileSpot.layout : null;
       if (kept && slotFits(tab, occupied, kept.col, kept.row, kept.span_w, kept.span_h)) {

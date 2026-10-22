@@ -287,18 +287,34 @@
     grid.style.setProperty('--fields-box-w', box.w === null ? toEdgeW : 'min(' + box.w + 'px, ' + toEdgeW + ')');
     grid.style.setProperty('--fields-box-h', box.h === null ? toEdgeH : 'min(' + box.h + 'px, ' + toEdgeH + ')');
     const slots = pageSlotList();
+    // A picked field taken meanwhile (a folder dropped in) or out of sight.
+    if (markedPageSlot >= 0 && (slots[markedPageSlot] || pageFieldsInWindow() || !pageSlotsShown())) {
+      clearPageFieldMark(true);
+    }
     grid.querySelectorAll(':scope > .page-field:not(.settings-field)').forEach(field => {
       const slot = Number(field.dataset.slot);
       setFieldPlace(field, places.pages[slot]);
       field.hidden = !pageSlotsShown() || !!slots[slot];
-      // A free field's "+" makes a new page there (#100); the layout window
-      // keeps its pages until "Speichern", it has none.
+      // A free field is picked like a free cell (#100, user 2026-10-22: a
+      // click made a folder at once, mistakes guaranteed); only the picked
+      // one shows its "+", which makes the page. The layout window keeps its
+      // pages until "Speichern": none there.
       field.classList.toggle('can-add', !pageFieldsInWindow());
+      field.classList.toggle('marked', markedPageSlot === slot);
       if (!field.querySelector(':scope > .page-field-add')) {
-        const plus = document.createElement('i');
-        plus.className = 'mdi mdi-plus page-field-add';
+        const plus = document.createElement('button');
+        plus.type = 'button';
+        plus.className = 'page-field-add';
+        plus.setAttribute('aria-label', getTileTypeMeta('4')?.label || '');
+        plus.innerHTML = '<i class="mdi mdi-plus"></i>';
         field.appendChild(plus);
-        field.addEventListener('click', () => addPageFolder(Number(field.dataset.slot)));
+        field.addEventListener('click', () => selectPageField(Number(field.dataset.slot)));
+        plus.addEventListener('click', event => {
+          event.stopPropagation();
+          // The second click of a double click on the field picks nothing.
+          if (event.detail > 1 || markedPageSlot !== Number(field.dataset.slot)) return;
+          addPageFolder(markedPageSlot);
+        });
       }
     });
     const word = grid.querySelector(':scope > .page-fields-label:not(.settings-label)');
@@ -571,21 +587,96 @@
     }
   }
 
-  // A free field's "+" (#100, user 2026-10-22): the panel makes a new Home
-  // folder that is the page there at once (/api/pages new=<slot>), also when
-  // Home's screen has no free cell; the editor then shows its tile to name it.
+  // The free page field picked in the editor (-1: none).
+  let markedPageSlot = -1;
+
+  // A free field picked (#100, user 2026-10-22): its teal ring and "+", and
+  // the editor with Type offering Empty and Folder only, and the title and
+  // icon the new folder gets. Nothing is made yet.
+  function selectPageField(slot) {
+    if (pageFieldsInWindow() || pageSlotList()[slot] || markedPageSlot === slot) return;
+    if (currentTileTab && typeof parkClimateMiniEditor === 'function') parkClimateMiniEditor(currentTileTab);
+    clearPageFieldMark();
+    currentTileIndex = -1;
+    currentTileTab = 'folder0';
+    newTileSpot = null;
+    persistSelectedTileState();
+    document.querySelectorAll('.tile-grid > .tile').forEach(tile => {
+      tile.classList.remove('active');
+      delete tile.dataset.selected;
+    });
+    document.getElementById('settingsHiddenTile')?.classList.remove('active');
+    markedPageSlot = slot;
+    const specific = document.querySelector('#folder0Settings .tile-specific-settings');
+    specific?.classList.remove('hidden');
+    specific?.classList.add('page-field-marked');
+    setSettingsPane('folder0', 'tile');
+    applyFolderTypeLock('folder0', false);
+    const type = document.getElementById('folder0_tile_type');
+    if (type) {
+      for (const option of type.options) {
+        option.dataset.pageHidden = option.hidden ? '1' : '0';
+        option.hidden = option.value !== '0' && option.value !== '4';
+      }
+      type.value = '0';
+    }
+    const title = document.getElementById('folder0_tile_title');
+    if (title) title.value = '';
+    const icon = document.getElementById('folder0_tile_icon');
+    if (icon) icon.value = '';
+    updateTileType('folder0');
+    if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons('folder0');
+    setupLivePreview('folder0');
+    layoutPageFields('folder0');
+  }
+
+  // The pick ends with any other selection; `hideEditor` when nothing else
+  // is picked (its field was taken).
+  function clearPageFieldMark(hideEditor = false) {
+    if (markedPageSlot < 0) return;
+    markedPageSlot = -1;
+    document.querySelectorAll('.tile-grid > .page-field.marked').forEach(field => field.classList.remove('marked'));
+    const specific = document.querySelector('#folder0Settings .tile-specific-settings');
+    specific?.classList.remove('page-field-marked');
+    if (hideEditor && currentTileIndex === -1) specific?.classList.add('hidden');
+    for (const option of document.getElementById('folder0_tile_type')?.options || []) {
+      if (option.dataset.pageHidden === undefined) continue;
+      option.hidden = option.dataset.pageHidden === '1';
+      delete option.dataset.pageHidden;
+    }
+  }
+
+  // Type changed while a free field is picked (editor.js): Folder makes its
+  // page, the menu stays at Empty until the panel made it.
+  function pageFieldTypeChosen(select) {
+    if (markedPageSlot < 0) return false;
+    const folder = select.value === '4';
+    select.value = '0';
+    updateTileType('folder0');
+    if (folder) addPageFolder(markedPageSlot);
+    return true;
+  }
+
+  // The panel makes a new Home folder that is the page there at once
+  // (/api/pages new=<slot>), also when Home's screen has no free cell; the
+  // picked field's title and icon name it, the editor then shows its tile.
   function addPageFolder(slot) {
     if (pageFieldsInWindow()) return pageSlotsQueue;
-    pageSlotsQueue = pageSlotsQueue.then(() => sendNewPage(slot));
+    const named = markedPageSlot === slot;
+    const title = named ? String(document.getElementById('folder0_tile_title')?.value || '').trim() : '';
+    const icon = named ? String(document.getElementById('folder0_tile_icon')?.value || '') : '';
+    pageSlotsQueue = pageSlotsQueue.then(() => sendNewPage(slot, title, icon));
     return pageSlotsQueue;
   }
 
-  async function sendNewPage(slot) {
-    // A second click before the first was done finds the field taken.
+  async function sendNewPage(slot, title, icon) {
+    // A second request before the first was done finds the field taken.
     const slots = pageSlotList();
     if (slots[slot]) return false;
     try {
       const body = new URLSearchParams({pages: encodePageSlots(slots), new: String(slot)});
+      if (title) body.set('title', title);
+      if (icon) body.set('icon_name', icon);
       const response = await fetch('/api/pages', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},

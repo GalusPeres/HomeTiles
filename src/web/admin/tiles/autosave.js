@@ -71,6 +71,9 @@
       if (!confirm(tf('deleteFolderConfirm', { name }))) return;
       confirmedFolderDeletes.add(tab + ':' + currentTileIndex);
     }
+    // A page's tile: its field (page-fields.js).
+    const pageSlot = tab === 'folder0' && Number(stored?.type) === 4
+      ? pageSlotIds().indexOf(Number(stored.navigate_target)) : -1;
     const prefix = tab;
     document.getElementById(prefix + '_tile_type').value = '0';
     document.getElementById(prefix + '_tile_title').value = '';
@@ -82,6 +85,12 @@
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
+    // A deleted page leaves its field free and picked (user 2026-10-22: an
+    // empty selected tile stayed in it). The save keeps its own tile index.
+    if (pageSlot >= 0) {
+      layoutTiles(tab, getTilesData(tab));
+      selectPageField(pageSlot);
+    }
   }
 
   function deleteFolder(tab) {
@@ -102,6 +111,7 @@
       .then(data => {
         if (data.success) {
           showNotification(t('folderDeleted'));
+          forgetFolderTabSessionFragment(folderId);
           setTimeout(() => location.reload(), 500);
         } else {
           showNotification(data.error || t('deleteFailed'), false);
@@ -154,9 +164,6 @@
       queueSaveAfterFlight(tab, tileIndex, silent);
       return;
     }
-    const tiles = getTilesData(tab);
-    const previousTile = Array.isArray(tiles) ? tiles[tileIndex] : null;
-    const previousType = previousTile ? Number(previousTile.type) : NaN;
     const snapshot = getTileSnapshotForSave(tab, tileIndex);
     if (!snapshot) return;
     const formData = new FormData();
@@ -246,7 +253,12 @@
               }
             });
           }
-          if (previousType === 4 && typeValue === '0') {
+          // A deleted folder's tab goes (user 2026-10-22: it stayed). The
+          // editor showed the tile empty before this save, so the panel says
+          // which folder went; its kept tab markup goes too (IDs come back).
+          const deletedFolder = Number(data.folder_deleted) || 0;
+          if (deletedFolder > 0) {
+            forgetFolderTabSessionFragment(deletedFolder);
             persistSelectedTileState();
             setTimeout(() => location.reload(), 400);
           }

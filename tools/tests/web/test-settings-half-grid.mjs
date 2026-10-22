@@ -97,7 +97,8 @@ ${inlineScriptSafe(readAdminDeliverySource())}
   // Parked Settings retains fractions in drafts and access-save payloads.
   $('settings_tile_hidden').checked = true;
   selectHiddenSettingsTile();
-  check($('tile_span_w').value === '1.5' && $('tile_span_h').value === '0.5', 'Parked Settings retains its size');
+  // Parked it is one cell (user 2026-10-22: it came out half high).
+  check($('tile_span_w').value === '1' && $('tile_span_h').value === '1', 'Parked Settings is one cell');
   const saved = await saveSettingsAccess(null, {col:2.5,row:2.5},
     normalizeHiddenSettingsSnapshot(), readSettingsAccessState(), false);
   check(saved, 'Parked Settings save succeeds');
@@ -105,12 +106,12 @@ ${inlineScriptSafe(readAdminDeliverySource())}
   // No place: the panel keeps the tile's own (user 2026-10-22: an upright
   // place was checked against the classic grid and the parking refused).
   check(parked.settings_tile_col === undefined && parked.settings_tile_row === undefined, 'Parked snapshot sends no place');
-  check(parked.settings_tile_span_w === '1.5' && parked.settings_tile_span_h === '0.5', 'Parked snapshot keeps fractional size');
+  check(parked.settings_tile_span_w === undefined && parked.settings_tile_span_h === undefined, 'Parked snapshot sends no size');
   check(parked.settings_tile_target_col === '2.5' && parked.settings_tile_target_row === '2.5', 'Restore target keeps fractional position');
   enableSettingsHiddenSlot();
   const hidden = document.getElementById('settingsHiddenTile');
   hidden.dispatchEvent(new DragEvent('dragstart',{bubbles:true,cancelable:true,dataTransfer:new DataTransfer()}));
-  check(dragSource.layout.span_w === 1.5 && dragSource.layout.span_h === 0.5, 'Parked drag preserves its size');
+  check(dragSource.layout.span_w === 1 && dragSource.layout.span_h === 1, 'Out of its field it is one cell');
   hidden.dispatchEvent(new DragEvent('dragend'));
   document.body.dataset.result = 'pass';
 } catch (error) {

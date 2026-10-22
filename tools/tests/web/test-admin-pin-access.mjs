@@ -198,8 +198,6 @@ for (const marker of [
   'reconcileSettingsTileUi(false, snapshot, true)',
   'function saveHiddenSettingsTile(tab, silent = false)',
   "body.set('settings_tile_snapshot_present', '1')",
-  "body.set('settings_tile_span_w', String(layout.span_w))",
-  "body.set('settings_tile_span_h', String(layout.span_h))",
   'if (settingsBody) settingsBody.scrollTop = 0;',
   'function enableSettingsHiddenSlot()',
   "dragSource.kind !== 'grid-tile'",

@@ -771,13 +771,13 @@
     grid.addEventListener('dragstart', event => {
       const tile = event.target.closest?.('.tile.page-field-tile');
       if (!tile || dragSource?.kind !== 'grid-tile' || dragSource.index !== Number(tile.dataset.index)) return;
-      // The layout window's parked Settings tile: out of its field in its
-      // own size (layoutSettingsOut).
+      // The layout window's parked Settings tile (layoutSettingsOut).
       const settings = tile.dataset.type === '7';
-      const own = settings ? getTilesData('folder0')?.[Number(tile.dataset.index)] : null;
       // The grab point from where it is drawn: its stored place lies elsewhere.
       dragSource = {...dragSource, kind: 'page-slot', folder: Number(tile.dataset.navigateTarget || 0), settings,
-        layout: {col: 0, row: 0, span_w: Number(own?.span_w) || 1, span_h: Number(own?.span_h) || 1},
+        // One cell out of its field, the Settings tile like a page's folder
+        // (user 2026-10-22: it came out half high).
+        layout: {col: 0, row: 0, span_w: 1, span_h: 1},
         grabCellCol: 0, grabCellRow: 0,
         dropOffset: getDragGrabOffset(tile.getBoundingClientRect(), event.clientX, event.clientY),
         baseLayouts: null, pageTarget: null};

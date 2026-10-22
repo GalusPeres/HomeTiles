@@ -2062,8 +2062,9 @@ void WebAdminServer::handleSaveLayouts() {
     if (parked_settings_classic && cfg->settings_tile_snapshot.valid) {
       cfg->settings_tile_snapshot.col = parked_settings_place.col;
       cfg->settings_tile_snapshot.row = parked_settings_place.row;
-      cfg->settings_tile_snapshot.span_w = parked_settings_place.span_w;
-      cfg->settings_tile_snapshot.span_h = parked_settings_place.span_h;
+      // Parked it is one cell (user 2026-10-22).
+      cfg->settings_tile_snapshot.span_w = 1;
+      cfg->settings_tile_snapshot.span_h = 1;
     }
     if (!settings_parked_sent.isNull()) {
       const bool parked = settings_parked_sent.as<bool>();

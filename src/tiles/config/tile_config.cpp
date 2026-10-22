@@ -2116,24 +2116,18 @@ bool TileConfig::ensureSettingsTile(TileGridConfig& grid, float target_col,
 
   const SettingsTileSnapshot& snapshot =
       configManager.getConfig().settings_tile_snapshot;
-  float span_w = snapshot.valid && snapshot.span_w >= 1
-                       ? snapshot.span_w
-                       : 1;
-  float span_h = snapshot.valid && snapshot.span_h >= 0.5f
-                       ? snapshot.span_h
-                       : 1;
-  if (span_w > GRID_COLS) span_w = 1;
-  if (span_h > GRID_ROWS) span_h = 1;
+  // Out of its field it is one cell, like a page's folder (user 2026-10-22:
+  // it came back half high in a half cell's size), and no place is kept:
+  // the drop spot, else the first free cell from the bottom right.
+  const float span_w = 1;
+  const float span_h = 1;
 
   float col = 0;
   float row = 0;
-  // A grid with a bar layout's places has that layout's cells; the
-  // snapshot's place is a classic one. Taken there it stood in for the
-  // tile's own place in the layout and overwrote it at the save (user
+  // A grid with a bar layout's places has that layout's cells (user
   // 2026-10-13: dropped in the bottom row in the layout window, shown a row
   // higher).
   const bool bar_places = shown_places && grid_layout::active() != grid_layout::Layout::kClassic;
-  tile_layouts::Place kept{};
   const bool explicit_target = target_col >= 0 || target_row >= 0;
   if (explicit_target && bar_places) {
     if (target_col < 0 || target_row < 0 ||
@@ -2151,34 +2145,16 @@ bool TileConfig::ensureSettingsTile(TileGridConfig& grid, float target_col,
     col = target_col;
     row = target_row;
   } else if (bar_places) {
-    // Its own place in the shown layout, kept while it was parked (the
-    // layout window may just have set it), else the first free one from the
-    // bottom right.
-    if (snapshot.valid && snapshot.view_id &&
-        tile_layouts::find(grid_layout::active(), kRootFolderId, snapshot.view_id, kept) &&
-        settings_tile_rect_is_free_shown(grid, kept.col, kept.row, kept.span_w, kept.span_h)) {
-      col = kept.col;
-      row = kept.row;
-      span_w = kept.span_w;
-      span_h = kept.span_h;
-    } else {
-      bool found = false;
-      for (float r = grid_layout::shown_rows() - span_h; !found && r >= 0; r -= 0.5f) {
-        for (float c = grid_layout::shown().cols - span_w; !found && c >= 0; c -= 0.5f) {
-          if (!settings_tile_rect_is_free_shown(grid, c, r, span_w, span_h)) continue;
-          col = c;
-          row = r;
-          found = true;
-        }
+    bool found = false;
+    for (float r = grid_layout::shown_rows() - span_h; !found && r >= 0; r -= 0.5f) {
+      for (float c = grid_layout::shown().cols - span_w; !found && c >= 0; c -= 0.5f) {
+        if (!settings_tile_rect_is_free_shown(grid, c, r, span_w, span_h)) continue;
+        col = c;
+        row = r;
+        found = true;
       }
-      if (!found) return false;
     }
-  } else if (snapshot.valid && snapshot.col < GRID_COLS &&
-             snapshot.row < GRID_ROWS &&
-             settings_tile_rect_is_free(grid, snapshot.col, snapshot.row,
-                                        span_w, span_h)) {
-    col = snapshot.col;
-    row = snapshot.row;
+    if (!found) return false;
   } else if (!find_settings_tile_rect_bottom_right(grid, span_w, span_h,
                                                     col, row)) {
     return false;
@@ -3162,19 +3138,10 @@ static bool ensureNavigationIds(TileGridConfig& grid, bool& changed) {
 // layouts can be kept (user 2026-10-13: "where is Settings?").
 void TileConfig::giveParkedSettingsTileId() {
   const SettingsTileSnapshot& kept = configManager.getConfig().settings_tile_snapshot;
-  if (kept.valid && kept.view_id) return;
+  if (!kept.valid || kept.view_id) return;
   std::unique_ptr<DeviceConfig> cfg(new (std::nothrow) DeviceConfig(configManager.getConfig()));
   const uint16_t id = cfg ? reserveNavigationId("tile_next", 1) : 0;
   if (!id) return;
-  // Parked without a snapshot at all (b518 dropped it for an upright place,
-  // user 2026-10-22): a new one in the default look, so the layout window
-  // shows the tile in its field again; a restore looks for a free place.
-  if (!kept.valid) {
-    memset(&cfg->settings_tile_snapshot, 0, sizeof(cfg->settings_tile_snapshot));
-    cfg->settings_tile_snapshot.valid = true;
-    cfg->settings_tile_snapshot.span_w = 1;
-    cfg->settings_tile_snapshot.span_h = 1;
-  }
   cfg->settings_tile_snapshot.view_id = id;
   if (configManager.save(*cfg)) {
     Serial.printf("[TileConfig] Parked Settings tile got ID %u\n", static_cast<unsigned>(id));
@@ -3754,24 +3721,10 @@ void TileConfig::snapshotSettingsTile(const Tile& tile, SettingsTileSnapshot& ou
   out.bg_color = tile.bg_color;
   out.col = tile.col;
   out.row = tile.row;
-  out.span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  out.span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
+  // Parked it is one cell (user 2026-10-22), like a page's folder.
+  out.span_w = 1;
+  out.span_h = 1;
   out.view_id = tile.view_id;
-}
-
-bool TileConfig::classicSettingsTilePlace(float& col, float& row, float& span_w, float& span_h) {
-  TileGridScratch scratch = makeTileGridScratch();
-  if (!scratch || !loadGrid(kRootFolderId, *scratch, false, false)) return false;
-  for (const Tile& tile : scratch->tiles) {
-    if (tile.type != TILE_SETTINGS) continue;
-    if (!tile_geometry::supported(TILE_SETTINGS, tile.col, tile.row, tile.span_w, tile.span_h)) return false;
-    col = tile.col;
-    row = tile.row;
-    span_w = tile.span_w;
-    span_h = tile.span_h;
-    return true;
-  }
-  return false;
 }
 
 int TileConfig::settingsTileIndex() {

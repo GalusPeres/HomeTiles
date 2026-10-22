@@ -837,8 +837,10 @@ async function saveGestureEdge(select) {
       bg_color: isDefault ? 0 : makeTileBgValue(hexToRgb(color)),
       col: String(Math.max(1, editorCoordinates ? rawCol : (rawCol + 1))),
       row: String(Math.max(1, editorCoordinates ? rawRow : (rawRow + 1))),
-      span_w: String(source?.span_w ?? hiddenTile?.dataset.spanW ?? 1),
-      span_h: String(source?.span_h ?? hiddenTile?.dataset.spanH ?? 1)
+      // Parked it is one cell and comes back as one (user 2026-10-22), like
+      // a page's folder.
+      span_w: '1',
+      span_h: '1'
     };
   }
 
@@ -1029,16 +1031,11 @@ async function saveGestureEdge(select) {
     }
     if (tileSnapshot) {
       const snapshot = normalizeHiddenSettingsSnapshot(tileSnapshot);
-      const layout = normalizeSnapshotLayout(
-        snapshot, HIDDEN_SETTINGS_TILE_INDEX, 'folder0');
       body.set('settings_tile_snapshot_present', '1');
       body.set('settings_tile_title', snapshot.title);
       body.set('settings_tile_icon', snapshot.icon);
-      // Its size, not its place: the panel keeps the tile's own place per
-      // layout, and a place of the shown layout is no classic one (user
-      // 2026-10-22: parking from upright row 3.5 on the 7 x 4 was refused).
-      body.set('settings_tile_span_w', String(layout.span_w));
-      body.set('settings_tile_span_h', String(layout.span_h));
+      // Its look only: parked it is one cell with no place kept, the panel
+      // puts it where it is dropped or on a free cell (user 2026-10-22).
       if (snapshot.bg_color_default === '1') {
         body.set('settings_tile_bg_color_default', '1');
       } else {
@@ -12429,8 +12426,10 @@ async function saveGestureEdge(select) {
       if (currentTileTab !== 'folder0' || currentTileIndex !== HIDDEN_SETTINGS_TILE_INDEX) {
         selectHiddenSettingsTile();
       }
-      const spanW = clampHalf(hiddenTile.dataset.spanW, 1, placeCols(), 1);
-      const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, placeRows(), 1);
+      // Out of its field it is one cell, like a page's folder (user
+      // 2026-10-22: it came out half high).
+      const spanW = 1;
+      const spanH = 1;
       // The slot shows one cell: the grabbed half of it anchors the drop like
       // a grid tile, and the drag image stays where the pointer took it.
       const rect = hiddenTile.getBoundingClientRect();
@@ -13340,13 +13339,13 @@ async function saveGestureEdge(select) {
     grid.addEventListener('dragstart', event => {
       const tile = event.target.closest?.('.tile.page-field-tile');
       if (!tile || dragSource?.kind !== 'grid-tile' || dragSource.index !== Number(tile.dataset.index)) return;
-      // The layout window's parked Settings tile: out of its field in its
-      // own size (layoutSettingsOut).
+      // The layout window's parked Settings tile (layoutSettingsOut).
       const settings = tile.dataset.type === '7';
-      const own = settings ? getTilesData('folder0')?.[Number(tile.dataset.index)] : null;
       // The grab point from where it is drawn: its stored place lies elsewhere.
       dragSource = {...dragSource, kind: 'page-slot', folder: Number(tile.dataset.navigateTarget || 0), settings,
-        layout: {col: 0, row: 0, span_w: Number(own?.span_w) || 1, span_h: Number(own?.span_h) || 1},
+        // One cell out of its field, the Settings tile like a page's folder
+        // (user 2026-10-22: it came out half high).
+        layout: {col: 0, row: 0, span_w: 1, span_h: 1},
         grabCellCol: 0, grabCellRow: 0,
         dropOffset: getDragGrabOffset(tile.getBoundingClientRect(), event.clientX, event.clientY),
         baseLayouts: null, pageTarget: null};

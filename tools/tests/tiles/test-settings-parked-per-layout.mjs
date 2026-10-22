@@ -29,7 +29,8 @@ assert.match(readRepoFile('HomeTiles.ino'),
   /grid_layout::apply\(configManager\.getConfig\(\)\.layout\);[\s\S]{0,300}configManager\.applySettingsParking\(static_cast<uint8_t>\(grid_layout::active\(\)\)\);[\s\S]*?tileConfig\.load\(\);/);
 
 const tiles = readRepoFile('src/tiles/config/tile_config.cpp');
-assert.match(tiles, /out\.span_h = tile\.span_h < 0\.5f \? 1 : tile\.span_h;\s*out\.view_id = tile\.view_id;/, 'Parked with its ID');
+// Parked with its ID, one cell (user 2026-10-22).
+assert.match(tiles, /out\.span_w = 1;\s*out\.span_h = 1;\s*out\.view_id = tile\.view_id;/, 'Parked with its ID');
 assert.match(tiles, /tile\.view_id = snapshot\.valid \? snapshot\.view_id : 0;\s*return true;/, 'Back with its ID');
 const policy = tiles.slice(tiles.indexOf('bool TileConfig::applySettingsTilePolicy('), tiles.indexOf('bool TileConfig::ensureBackTile('));
 assert.match(policy, /if \(kept\.valid && tile\.view_id && kept\.view_id == tile\.view_id\) break;[\s\S]*?snapshotSettingsTile\(tile, cfg->settings_tile_snapshot\);[\s\S]*?configManager\.save\(\*cfg\)[\s\S]*?return removeSettingsTiles\(grid\);/,
@@ -37,9 +38,7 @@ assert.match(policy, /if \(kept\.valid && tile\.view_id && kept\.view_id == tile
 // Parked before b445 (no ID in its snapshot): it gets one once, else the
 // window had no tile for its field (user 2026-10-13: "where is Settings?").
 assert.match(policy, /if \(!in_grid\) giveParkedSettingsTileId\(\);\s*return removeSettingsTiles\(grid\);/);
-// Parked without any snapshot (b518 dropped it, user 2026-10-22): a new one
-// in the default look with an ID.
-assert.match(tiles, /void TileConfig::giveParkedSettingsTileId\(\) \{\s*const SettingsTileSnapshot& kept = configManager\.getConfig\(\)\.settings_tile_snapshot;\s*if \(kept\.valid && kept\.view_id\) return;[\s\S]*?const uint16_t id = cfg \? reserveNavigationId\("tile_next", 1\) : 0;\s*if \(!id\) return;[\s\S]*?if \(!kept\.valid\) \{\s*memset\(&cfg->settings_tile_snapshot, 0, sizeof\(cfg->settings_tile_snapshot\)\);\s*cfg->settings_tile_snapshot\.valid = true;\s*cfg->settings_tile_snapshot\.span_w = 1;\s*cfg->settings_tile_snapshot\.span_h = 1;\s*\}\s*cfg->settings_tile_snapshot\.view_id = id;/);
+assert.match(tiles, /void TileConfig::giveParkedSettingsTileId\(\) \{\s*const SettingsTileSnapshot& kept = configManager\.getConfig\(\)\.settings_tile_snapshot;\s*if \(!kept\.valid \|\| kept\.view_id\) return;[\s\S]*?const uint16_t id = cfg \? reserveNavigationId\("tile_next", 1\) : 0;\s*if \(!id\) return;\s*cfg->settings_tile_snapshot\.view_id = id;/);
 assert.match(readRepoFile('src/web/admin/tiles/page-fields.js'),
   /free\.hidden = !pageFieldsInWindow\(\) \|\| \(layoutWindowSettingsParked\(\) && layoutSettingsIndex\(\) >= 0\);/,
   'Parked without a tile to show: the free frame, never an empty spot');

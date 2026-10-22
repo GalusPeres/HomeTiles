@@ -25,7 +25,6 @@
 #include "src/web/server/web_admin_utils.h"
 #include <stdlib.h>
 #include <string.h>
-#include <algorithm>
 #include "src/web/server/handlers/web_admin_handler_utils.h"
 #include "src/core/power/power_manager.h"
 
@@ -285,29 +284,12 @@ void WebAdminServer::handleSaveMQTT() {
         snapshot.bg_color = makeTileBgColor(static_cast<uint32_t>(
             server.arg("settings_tile_bg_color").toInt()));
       }
-      // Its size only (user 2026-10-22: a place of the shown upright
-      // layout, row 3.5 high 1, was checked against the classic 7 x 4 and
-      // the whole parking refused). Its place stays the tile's own: the
-      // snapshot taken from it here and its place in each bar layout.
-      const bool has_snapshot_span_w = server.hasArg("settings_tile_span_w");
-      const bool has_snapshot_span_h = server.hasArg("settings_tile_span_h");
-      if (has_snapshot_span_w != has_snapshot_span_h) {
-        sendSaveError(400, tr.save_failed);
-        return;
-      }
-      if (has_snapshot_span_w) {
-        float snapshot_span_w = 1;
-        float snapshot_span_h = 1;
-        if (!parse_bounded_arg("settings_tile_span_w", 1, std::max<float>(GRID_COLS, place_cols),
-                               snapshot_span_w) ||
-            !parse_bounded_arg("settings_tile_span_h", 0.5f, std::max<float>(GRID_ROWS, place_rows),
-                               snapshot_span_h)) {
-          sendSaveError(400, tr.save_failed);
-          return;
-        }
-        snapshot.span_w = snapshot_span_w;
-        snapshot.span_h = snapshot_span_h;
-      }
+      // No place and no size: parked it is one cell and comes back as one
+      // where it is dropped, else on a free cell (user 2026-10-22: a place
+      // of the upright layout was checked against the classic 7 x 4 and the
+      // parking refused; it came back half high).
+      snapshot.span_w = 1;
+      snapshot.span_h = 1;
     }
     cfg.settings_tile_hidden = hide_tile;
     // Parked in the layout the panel shows (user 2026-10-13: each layout
@@ -385,20 +367,6 @@ void WebAdminServer::handleSaveMQTT() {
       settings_tile_previewed && tiles_show_active_layout_now();
   const uint32_t save_started_ms = millis();
   auto commit_settings = [&]() {
-    // Parked under a bar layout: the snapshot keeps the tile's classic place
-    // from Home's grid file (still there until the parking's grid write),
-    // not the shown layout's (user 2026-10-22: upright row 3.5 is no place
-    // on the 7 x 4). After the move showed, so the flash read waits nothing.
-    if (settings_visibility_commit_needed && cfg.settings_tile_hidden && cfg.settings_tile_snapshot.valid &&
-        grid_layout::active() != grid_layout::Layout::kClassic) {
-      float col = 0, row = 0, span_w = 1, span_h = 1;
-      if (tileConfig.classicSettingsTilePlace(col, row, span_w, span_h)) {
-        cfg.settings_tile_snapshot.col = col;
-        cfg.settings_tile_snapshot.row = row;
-        cfg.settings_tile_snapshot.span_w = span_w;
-        cfg.settings_tile_snapshot.span_h = span_h;
-      }
-    }
     settings_config_saved = configManager.save(cfg);
     if (!settings_config_saved || !settings_visibility_commit_needed) return;
 

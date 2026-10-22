@@ -88,30 +88,30 @@ int main() {
   snapshot.valid=true; snapshot.col=0; snapshot.row=0.5f;
   snapshot.span_w=1; snapshot.span_h=0.5f;
   std::strcpy(snapshot.title,"My settings"); std::strcpy(snapshot.icon_name,"cog");
-  // Parked per layout (user 2026-10-13): back in the grid with its kept ID,
-  // so its places in the layouts stay.
+  // Parked per layout (user 2026-10-13): back in the grid with its kept ID.
   snapshot.view_id=77;
   TileConfig config;
+  // Out of its field it is one cell and no place is kept (user 2026-10-22:
+  // it came back half high at a remembered spot): the first free cell from
+  // the bottom right, whatever the snapshot holds.
   assert(config.ensureSettingsTile(grid,-1,-1));
-  assert(grid.tiles[1].type==TILE_SETTINGS && grid.tiles[1].row==0.5f);
+  assert(grid.tiles[1].type==TILE_SETTINGS && grid.tiles[1].col==3 && grid.tiles[1].row==3);
   assert(grid.tiles[1].view_id==77);
-  assert(grid.tiles[1].span_w==1 && grid.tiles[1].span_h==0.5f);
+  assert(grid.tiles[1].span_w==1 && grid.tiles[1].span_h==1);
   assert(grid.tiles[1].title=="My settings");
   grid.tiles[1]=Tile{};
+  // Dropped: exactly there, one cell.
   assert(config.ensureSettingsTile(grid,1.5f,2.5f));
-  assert(grid.tiles[1].col==1.5f && grid.tiles[1].row==2.5f);
+  assert(grid.tiles[1].col==1.5f && grid.tiles[1].row==2.5f && grid.tiles[1].span_h==1);
   grid.tiles[1]=Tile{};
   assert(!config.ensureSettingsTile(grid,1.25f,2.5f));
   assert(!config.ensureSettingsTile(grid,3.5f,2.5f));
-  // An occupied saved location falls back into the only remaining half-row gap.
-  snapshot.col=0; snapshot.row=0;
+  // Only a half row free: no half-high Settings tile, Home is full.
   grid.tiles[0].span_w=4; grid.tiles[0].span_h=3.5f;
-  assert(config.ensureSettingsTile(grid,-1,-1));
-  assert(grid.tiles[1].col==3 && grid.tiles[1].row==3.5f);
-  assert(grid.tiles[1].span_h==0.5f);
+  assert(!config.ensureSettingsTile(grid,-1,-1));
   // A grid with a bar layout's places (user 2026-10-13: dropped in the
-  // bottom row in the layout window, the panel showed it a row higher): back
-  // at its own place in that layout, never at the snapshot's classic place.
+  // bottom row in the layout window, the panel showed it a row higher): that
+  // layout's cells; a place kept for it there is not used either.
   grid_layout::g_active = grid_layout::Layout::kBar;
   grid_layout::g_shown = {3, 3, false};
   for (auto& tile : grid.tiles) tile = Tile{};
@@ -121,21 +121,16 @@ int main() {
   snapshot.col = 1; snapshot.row = 1; snapshot.span_w = 1; snapshot.span_h = 1; snapshot.view_id = 77;
   tile_layouts::g_has = true; tile_layouts::g_view = 77; tile_layouts::g_place = {0, 2, 1, 1};
   assert(config.ensureSettingsTile(grid, -1, -1, true));
-  assert(grid.tiles[1].type == TILE_SETTINGS && grid.tiles[1].col == 0 && grid.tiles[1].row == 2 && grid.tiles[1].view_id == 77);
-  grid.tiles[1] = Tile{};
-  // Without a place there: the first free one from that layout's bottom right.
-  tile_layouts::g_has = false;
-  assert(config.ensureSettingsTile(grid, -1, -1, true));
-  assert(grid.tiles[1].col == 2 && grid.tiles[1].row == 2);
+  assert(grid.tiles[1].type == TILE_SETTINGS && grid.tiles[1].col == 2 && grid.tiles[1].row == 2 && grid.tiles[1].view_id == 77);
   grid.tiles[1] = Tile{};
   // A target cell of that layout: its cells, its hidden tiles take no room.
   assert(config.ensureSettingsTile(grid, 0, 2, true));
   assert(grid.tiles[1].col == 0 && grid.tiles[1].row == 2);
   grid.tiles[1] = Tile{};
   assert(!config.ensureSettingsTile(grid, 2.5f, 2, true));
-  // The classic grid of the same panel keeps the snapshot's place.
+  // The classic grid of the same panel: no snapshot place either.
   assert(config.ensureSettingsTile(grid, -1, -1));
-  assert(grid.tiles[1].col == 1 && grid.tiles[1].row == 1);
+  assert(grid.tiles[1].col == 3 && grid.tiles[1].row == 3);
 }
 `;
 const directory = path.join(repoRoot, 'build/tests/settings-half-grid-restore');

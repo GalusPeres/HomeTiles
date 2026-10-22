@@ -78,6 +78,7 @@ decimal
 door
 door-closed
 door-open
+dots-horizontal
 download
 earth
 electric-switch

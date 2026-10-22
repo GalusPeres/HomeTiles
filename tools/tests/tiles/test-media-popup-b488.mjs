@@ -46,7 +46,8 @@ for (const part of ['x.state', 'x.features', 'x.source', 'x.sound_mode', '&x.sou
   'candidate.entity_id', 'candidate.name', 'candidate.state']) assert.ok(signature.includes(part), `signature: ${part}`);
 // A list taken down from its own row's click is deleted after the event, and
 // the popup's deletion takes pending ones along.
-assert.match(fn('delete_list'), /lv_obj_add_flag\(ctx->list, LV_OBJ_FLAG_HIDDEN\);\s*if \(ctx->dead_lists\.empty\(\)\) lv_async_call\(delete_dead_lists, nullptr\);/);
+// The menu (box and outside layer) goes after the event that closed it.
+assert.match(fn('delete_list'), /for \(lv_obj_t\* obj : \{ctx->list_box, ctx->list_shield\}\) \{\s*if \(!obj\) continue;\s*lv_obj_add_flag\(obj, LV_OBJ_FLAG_HIDDEN\);\s*if \(ctx->dead_lists\.empty\(\)\) lv_async_call\(delete_dead_lists, nullptr\);/);
 assert.match(fn('on_overlay_delete'), /ctx->dead_lists\.clear\(\);/);
 
 // Bars: the reported state only, not the button's immediate switch.
@@ -74,11 +75,12 @@ assert.match(fn('prepare_media_popup_open'),
 for (const name of ['speaker-play', 'speaker-pause', 'speaker-off', 'television-play', 'television-pause', 'television-off']) {
   assert.ok(read('src/tiles/icons/mdi_icons.cpp').includes(`{"${name}", 0x`), `${name} is an MDI icon`);
 }
-// b489: the Settings dropdown's option rows, nothing else in them.
+// b489: the Settings dropdown's option rows, nothing else in them (72 px
+// high since 2026-10-19: more room between the entries).
 const row = fn('list_row');
-assert.match(row, /lv_obj_set_size\(row, LV_PCT\(100\), settings_style::kOptionHeight - kOptionGap\);/);
+assert.match(row, /lv_obj_set_size\(row, LV_PCT\(100\), kListRowHeight - kOptionGap\);/);
 assert.match(row, /settings_style::apply_radius\(row, settings_style::kGroupRadius - settings_style::kOptionInset\);/);
-assert.match(row, /add_text\(row, settings_style::row_font\(\), c\.text, text\);/);
+assert.match(row, /lv_obj_t\* label = add_text\(row, settings_style::row_font\(\), c\.text, ""\);/);
 assert.ok(!/lv_image_create|clip_corner|round_button/.test(row), 'no picture or round control in a row');
 assert.ok(!/clip_corner/.test(fn('append_library_rows')) && !/thumbnail/.test(fn('append_library_rows')),
   'the library asks for no pictures');
@@ -90,14 +92,13 @@ assert.match(fn('show_library_status'), /if \(empty \|\| since < kErrorShownMs\)
 // "Repeat one": the time starts again at the end without a report.
 assert.match(fn('current_media_position'), /extras_of\(ctx->entity_id\)\.repeat\.equalsIgnoreCase\("one"\)\) \{\s*position = fmodf\(position, ctx->media_duration\);/);
 console.log('Media popup b488/b489: fixed library topic, list rebuild on change only, bars on "playing", state icon in the head, dropdown rows, floating status');
-// b490: the list ends above the card's rounded bottom corners, inside the
-// popup's middle piece (popup_shell.cpp shell_pieces), so a scroll frame is
-// one area (b489 on hardware: the dropdown-like list still jerked; it reached
-// into the corners and every frame was cut into four areas).
+// b490, kept in the menu of 2026-10-22: a scroll frame is one area (b489 on
+// hardware: the list reached into rounded corners and every frame was cut
+// into four areas). The rows' list is square, paints the menu's color itself
+// and sits on the edge L inside the menu box, away from its rounded corners
+// (simulator 2026-10-22: one area of about 258000 px per scroll frame).
 const rebuild = fn('rebuild_list');
-assert.match(rebuild, /const int32_t radius = lv_obj_get_style_radius\(ctx->card, LV_PART_MAIN\);/);
-assert.match(rebuild, /lv_obj_set_size\(ctx->list, popup_layout::kCardWidth, bottom - top\);/);
-assert.ok(!/kCardHeight - top\)/.test(rebuild), 'the list never reaches the card bottom');
-const shell = read('src/ui/popups/popup_shell.cpp');
-assert.match(shell, /out\[0\] = \{frame\.x1, frame\.y1 \+ r, frame\.x2, frame\.y2 - r\};/, 'the middle piece the list stays in');
-console.log('Media popup b490: the list stays in the popup middle piece');
+assert.match(rebuild, /lv_obj_set_pos\(ctx->list, box_pad, box_pad \+ head_height \+ g\);\s*lv_obj_set_size\(ctx->list, content_width, list_height\);\s*lv_obj_set_style_radius\(ctx->list, 0, 0\);/);
+assert.match(fn('show_list_scrollbar_color'), /lv_obj_set_style_bg_color\(ctx->list, lv_color_hex\(ctx->colors\.card\), 0\);\s*lv_obj_set_style_bg_opa\(ctx->list, LV_OPA_COVER, 0\);/);
+assert.match(rebuild, /const int box_offset = L \/ 2;\s*const int box_pad = L - box_offset;/);
+console.log('Media popup b490: a scroll frame redraws only the list');

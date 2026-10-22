@@ -41,9 +41,9 @@ assert.ok(popup.includes('ctx->available = init.available;') && popup.includes('
   const start = popup.indexOf('static void apply_availability(MediaPopupContext* ctx) {');
   const body = popup.slice(start, popup.indexOf('\n}\n', start));
   for (const label of ['shuffle_label', 'previous_label', 'play_pause_label', 'next_label', 'repeat_label',
-    'volume_icon_label', 'group_label']) assert.ok(body.includes(`ctx->${label}`), `${label} dims while unavailable`);
-  assert.ok(body.includes('set_control_enabled(ctx->source_button, ctx->available);') &&
-    body.includes('set_control_enabled(ctx->library_button, ctx->available);'));
+    'volume_icon_label']) assert.ok(body.includes(`ctx->${label}`), `${label} dims while unavailable`);
+  // The menu button (speakers, source and library since 2026-10-22).
+  assert.ok(body.includes('set_control_enabled(ctx->menu_button, ctx->available);'));
 }
 for (const handler of ['static void on_media_command(', 'static void on_volume_slider_event(',
   'static void on_seek_slider_event(', 'static void on_volume_mute_click(']) {
@@ -52,7 +52,7 @@ for (const handler of ['static void on_media_command(', 'static void on_volume_s
   assert.ok(start >= 0, handler);
   assert.ok(popup.slice(start, popup.indexOf('\n}\n', start)).includes('available'), `${handler} checks availability`);
 }
-assert.equal((popup.match(/LV_OPA_30, LV_PART_MAIN \| LV_STATE_DISABLED/g) || []).length, 3,
-  'the round controls, the head buttons and the sliders dim while disabled');
+assert.equal((popup.match(/LV_OPA_30, LV_PART_MAIN \| LV_STATE_DISABLED/g) || []).length, 4,
+  'the round controls (the menu and its buttons included) and the sliders\' track, cap and lv_slider dim while disabled');
 
 console.log('Unknown is inactive grey; an unavailable player disables its controls');

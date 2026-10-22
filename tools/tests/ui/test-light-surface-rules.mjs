@@ -294,7 +294,10 @@ for (const [icon, strength, card, circle, control, raised] of rows('jewel')) {
   const previewFill = js.toneJewelFill(rgb(card), rgb(icon), 25, strength);
   assert.ok(near(circle, hex(previewFill.disc)) && near(control, hex(previewFill.control)), `circle ${what}`);
   const L = c => js.toneOklch(rgb(c)).L;
-  assert.ok(L(card) <= 0.705 && L(card) <= L(icon) - 0.15, `card below its icon ${what}`);
+  // At least L 0.42 (ui_theme kJewelCardMinL, user 2026-10-19: a dark cover
+  // made the card almost black), so a dark icon's card may sit at the floor.
+  assert.ok(L(card) <= 0.705 && (L(card) <= L(icon) - 0.15 || Math.abs(L(card) - 0.42) < 0.01),
+    `card below its icon or at the floor ${what}`);
   assert.ok(L(circle) > L(card) + 0.03 && L(raised) > L(control), `circle above the card ${what}`);
   if (js.toneNoColor(rgb(icon))) {
     const seed = js.toneOklch(rgb(card));

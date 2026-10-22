@@ -68,14 +68,17 @@ assert.match(fn(shell, 'popup_shell_control_fill'),
 // icon color; other colors build the player again.
 const media = read('src/ui/popups/media/media_popup.cpp');
 assert.match(fn(media, 'compute_colors'), /popup_shell_control_fill\(card, icon, c\.control, c\.control_opa, &c\.tinted\);/);
-for (const name of ['round_button', 'head_button']) {
-  assert.match(fn(media, name), /popup_nav_style::style_press_fill\(\w+, (?:c|ctx->colors)\.control, (?:c|ctx->colors)\.control_opa\);/, name);
-}
-assert.match(fn(media, 'list_row'), /lv_obj_set_style_bg_opa\(row, active \? c\.raised_opa : c\.control_opa, LV_PART_MAIN \| LV_STATE_PRESSED\);/);
+// Every round control (transport, mute, the menu button, the menu's switch
+// and back button) is round_button: the control fill only while pressed.
+assert.match(fn(media, 'round_button'), /popup_nav_style::style_press_fill\(btn, c\.control, c\.control_opa\);/);
+assert.ok(!/head_button/.test(media), 'no buttons in the head (2026-10-22)');
+// The menu's rows (the card's color): selected and pressed in the control fill.
+assert.match(fn(media, 'list_row'), /lv_obj_set_style_bg_opa\(row, active \? c\.control_opa : LV_OPA_TRANSP, 0\);\s*lv_obj_set_style_bg_opa\(row, c\.control_opa, LV_PART_MAIN \| LV_STATE_PRESSED\);/);
 const mediaSlider = fn(media, 'make_slider');
 assert.match(mediaSlider, /lv_obj_set_style_bg_color\(slider\.track, c\.control, 0\);\s*lv_obj_set_style_bg_opa\(slider\.track, c\.control_opa, 0\);/);
-assert.match(mediaSlider, /lv_obj_set_style_bg_color\(slider\.fill, lv_color_hex\(c\.tinted \? c\.icon : c\.text\), 0\);/);
-assert.match(fn(media, 'build_player'), /lv_obj_set_style_bg_color\(play, lv_color_hex\(ui_theme::icon\(\)\), 0\);/);
+assert.match(mediaSlider, /const lv_color_t fill = lv_color_hex\(c\.tinted \? c\.icon : c\.control_icon\);/);
+assert.match(mediaSlider, /lv_obj_set_style_bg_color\(slider\.input, fill, LV_PART_INDICATOR\);/);
+assert.match(fn(media, 'build_player'), /lv_obj_set_style_bg_color\(play, lv_color_hex\(c\.control_icon\), 0\);/);
 assert.match(fn(media, 'apply_init_to_context'),
   /ctx->colors = compute_colors\(ctx->bg_color, ctx->icon_color\);\s*if \(!ctx->player \|\| ctx->centered != init\.cover_centered \|\| ctx->built_colors != colors_key\(ctx->colors\)\) \{/);
 

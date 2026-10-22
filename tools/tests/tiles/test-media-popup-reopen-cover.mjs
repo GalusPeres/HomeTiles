@@ -27,8 +27,10 @@ assert.match(prepare, /finish_media_popup_open,\s*same_entity\)\)/, 'the body st
 // The body applies the same text through the same helper, so both paths agree.
 assert.match(fn('apply_init_to_context'), /apply_media_text\(ctx, init\);/);
 const mediaText = fn('apply_media_text');
+// Centred one line; beside the cover two wrapped lines, a longer title on one
+// moving line (b494).
 assert.match(mediaText, /set_line\(ctx, ctx->title_clip, ctx->media_title_label, media_title, width, true\);/);
-assert.match(mediaText, /lv_label_set_text\(ctx->media_title_label, media_title\.c_str\(\)\);/);
+assert.match(mediaText, /lv_label_set_text\(ctx->media_title_label, clean\.c_str\(\)\);/);
 assert.match(mediaText, /media_no_playback/);
 // The cover update keeps an unchanged cover as it is.
 assert.match(fn('update_cover'), /if \(cover_dsc && ctx->cover_hash == cover_hash && ctx->cover_dsc\) \{/);

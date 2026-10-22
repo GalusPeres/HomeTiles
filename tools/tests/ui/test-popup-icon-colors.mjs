@@ -99,8 +99,9 @@ for (const file of ['src/types/media/renderer.cpp', 'src/tiles/runtime/tile_rend
   }
   assert.ok(mediaFn('prepare_media_popup_open').includes(
     'lv_obj_set_style_text_color(ctx->icon_label, lv_color_hex(ctx->icon_color), 0);'), 'Media opening applies it');
+  // The head always shows the player (the menu leaves it free, 2026-10-22).
   assert.match(mediaFn('show_head'),
-    /if \(player\) \{[\s\S]*?lv_obj_set_style_text_color\(ctx->icon_label, lv_color_hex\(ctx->icon_color\), 0\);/,
+    /lv_obj_set_style_text_color\(ctx->icon_label, lv_color_hex\(ctx->icon_color\), 0\);/,
     'Media update applies it to the player head');
 }
 // The shell follows the body icon color every sync, so the disc follows and

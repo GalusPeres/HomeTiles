@@ -70,6 +70,6 @@ for (const lang of ['De', 'En', 'Fr', 'Pl', 'Cs', 'Es', 'Sk']) {
 const popup = read('src/ui/popups/media/media_popup.cpp');
 for (const field of ['media_source', 'media_sound_mode', 'media_speakers', 'media_library', 'media_this_player', 'media_play_all',
   'media_library_empty', 'media_library_failed']) {
-  assert.ok(popup.includes(`tr.${field}`), `the popup shows ${field}`);
+  assert.ok(popup.includes(`tr.${field}`) || popup.includes(`texts().${field}`), `the popup shows ${field}`);
 }
 console.log('Media popup layout: Web Admin choice, editor draft, storage, both openers and the texts in every language');

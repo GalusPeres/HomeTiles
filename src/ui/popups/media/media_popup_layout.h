@@ -29,6 +29,12 @@ constexpr int kBarsHeight = popup_layout::scale(48);
 constexpr int kBarWidth = popup_layout::scale(10);
 constexpr int kBarGap = popup_layout::scale(7);
 constexpr int kHeadStep = popup_layout::scale(86);
+// The volume row's mute icon and number move in by this from the shuffle and
+// repeat columns, so the menu button in the corner has room (user
+// 2026-10-22).
+constexpr int kVolumeInward = popup_layout::scale(28);
+// The menu: five list rows (user 2026-10-22).
+constexpr int kMenuRows = 5;
 
 constexpr int kVolumeTop = popup_layout::kCardHeight - kEdge - kButton;
 constexpr int kVolumeKnobTop = kVolumeTop + kButton / 2 - kVolumeKnob / 2;

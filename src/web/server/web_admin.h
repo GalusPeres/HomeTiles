@@ -99,6 +99,10 @@ public:
   void handleGithubUpdateCheck();
   void handleGithubUpdateInstall();
   void handleGetGithubUpdateStatus();
+  void handleGetTilePicture();
+  void handleListTilePictures();
+  void handleUploadTilePicture();
+  void handleUploadTilePictureDone();
   void handleFileManagerList();
   void handleFileManagerDownload();
   void handleFileManagerDelete();

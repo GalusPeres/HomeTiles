@@ -349,6 +349,11 @@
     // A title or icon moves the clock down (clock/renderer.cpp).
     if (type === '9') tileElem.classList.toggle('clock-has-header', !!(displayTitle || iconName));
     tileElem.innerHTML = html;
+    // A Scene picture (scene/admin.js), drawn like the panel's renderer.
+    if (type === '2') {
+      applyScenePicturePreview(tileElem, document.getElementById(prefix + '_scene_image')?.value || '',
+        !!String(title || '').trim());
+    }
     if (previewKind === 'weather') {
       const iconRecord = typeof collectIconColorRecord === 'function' ? collectIconColorRecord(prefix) : '';
       applyWeatherPreview(tileElem, applyWeatherSensorOverrides(parseWeatherPreviewPayload(

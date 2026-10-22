@@ -528,6 +528,8 @@ void WebAdminServer::handleGetTiles() {
     out += ",\"scene_alias\":\"";
     // A Scene tile shows its target here (alias or entity id, sceneTarget).
     appendJsonEscaped(out, tile.type == TILE_SCENE ? sceneTarget(tile) : tile.scene_alias);
+    out += "\",\"scene_image\":\"";
+    appendJsonEscaped(out, tile.type == TILE_SCENE ? tile.image_path : String());
     out += "\",\"key_macro\":\"";
     appendJsonEscaped(out, tile.key_macro);
     out += "\",\"key_code\":";

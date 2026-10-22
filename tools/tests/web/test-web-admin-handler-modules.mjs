@@ -22,7 +22,7 @@ const owners = {
     'GetEntityOptions', 'GetMdiIcons', 'StartEntitySearch', 'GetEntitySearch', 'GetFolders', 'GetFolderTab', 'SaveFolderAccess', 'DeleteFolder',
     'GetLayouts', 'SaveLayouts', 'SwitchLayout', 'SavePages'],
   'web_admin_screensaver.cpp': ['GetScreensaver', 'SaveScreensaver', 'GetScreensaverWallpaper'],
-  'web_admin_files.cpp': ['GetSdImages',
+  'web_admin_files.cpp': ['GetSdImages', 'GetTilePicture', 'ListTilePictures', 'UploadTilePicture', 'UploadTilePictureDone',
     'FileManagerList', 'FileManagerDownload', 'FileManagerDelete', 'FileManagerRename',
     'FileManagerMkdir', 'FileManagerUpload', 'FileManagerUploadDone'],
   'web_admin_ota.cpp': ['PrepareOtaUpload', 'OtaUpdate', 'OtaRawUpdate', 'OtaUploadDone',

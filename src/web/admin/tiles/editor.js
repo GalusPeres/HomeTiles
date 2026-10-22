@@ -159,6 +159,9 @@
       const energyPopupModeSelect = document.getElementById(prefix + '_energy_popup_open_mode');
       const energyValueYOffsetInput = document.getElementById(prefix + '_energy_value_y_offset');
       const sceneInput = document.getElementById(prefix + '_scene_alias');
+      const scenePictureSelect = document.getElementById(prefix + '_scene_image');
+      const scenePictureUpload = document.getElementById(prefix + '_scene_image_upload');
+      const scenePictureFile = document.getElementById(prefix + '_scene_image_file');
     const textInput = document.getElementById(prefix + '_text_value');
     const textFontInput = document.getElementById(prefix + '_text_value_font');
     const textAlignInput = document.getElementById(prefix + '_text_align');
@@ -323,6 +326,17 @@
     bindLive(valueYOffsetInput, 'input', 'sensorValueYOffset', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(graphHeightInput, 'input', 'sensorGraphHeight', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(sceneInput, 'change', 'sceneAlias', () => { maybeFillTitleFromScene(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // Scene picture: choosing one, or an upload that then chooses itself.
+    bindLive(scenePictureSelect, 'change', 'scenePicture', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    bindLive(scenePictureUpload, 'click', 'scenePictureUpload', () => scenePictureFile?.click());
+    bindLive(scenePictureFile, 'change', 'scenePictureFile', async () => {
+      const file = scenePictureFile.files?.[0];
+      scenePictureFile.value = '';
+      const path = await uploadScenePicture(tab, file);
+      if (!path) return;
+      fillScenePictureOptions(tab, path);
+      scenePictureSelect?.dispatchEvent(new Event('change', {bubbles: true}));
+    });
     bindLive(textInput, 'input', 'textValue', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(textFontInput, 'change', 'textFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(textAlignInput, 'change', 'textAlign', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });

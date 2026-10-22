@@ -287,6 +287,12 @@ Runs a scene, script or button with a tap; there is no popup. Its picker finds e
 
 A never-pressed button remains usable even when HA reports an unknown timestamp. Missing or unavailable actions are ignored. Existing aliases remain stable when you reorder the selection or add entities with the same object name; custom aliases remain supported.
 
+**Picture:** a Button tile can show a picture instead of its icon, for example an album cover for a script that starts a playlist. Choose one of the pictures on the display or **Upload picture…** any image file.
+- The browser stores it on the display (in `/pictures`) as a JPEG of at most 512 px; no microSD card is needed.
+- Without a title, the picture fills the tile. With a title, it takes the icon's place.
+- The tile still runs its action with a tap, and the picture dims while it is pressed.
+- Exported layouts keep the picture's name, but not the file: on another display the tile shows its icon until the same picture is uploaded there.
+
 Use an HA script with defaults when an action needs parameters. Read-only `binary_sensor` and `event` entities cannot be pressed or switched. Locks, alarm panels, and fans have their own tiles; vacuums, valves, and update entities have different actions and are not mapped to these tile types; Cover, Climate, and Media keep their dedicated tiles.
 
 ### Weather

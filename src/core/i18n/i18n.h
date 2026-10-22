@@ -928,6 +928,10 @@ struct LocaleProfile {
   // triggered, unavailable, unknown.
   const char* alarm_states[12];
 
+  // Scene tile picture (scene_picture.h). Order: field label, no picture,
+  // upload, uploading, upload failed, hint.
+  const char* scene_picture_labels[6];
+
   // Shared Web Admin entity picker (tiles/entity-picker.js). Order: choose,
   // search, no match ({query}), load failed, try again, clear, none available,
   // released only (no Web Admin password), and the switch under the search:
@@ -1047,6 +1051,7 @@ const char* weather_today_button_label(const char* language_code);
 const char* weather_tomorrow_label(const char* language_code);
 // 0 temperature sensor, 1 humidity sensor, 2 the empty "use the weather
 // entity's value" option.
+const char* scene_picture_label(const char* language_code, uint8_t index);
 const char* weather_sensor_label(const char* language_code, uint8_t index);
 const char* climate_tile_type_label(const char* language_code);
 const char* climate_entity_label(const char* language_code);

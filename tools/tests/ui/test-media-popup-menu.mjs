@@ -46,15 +46,24 @@ assert.match(geometry, /m\.box_offset = L \/ 2;\s*m\.box_pad = L - m\.box_offset
 assert.match(geometry, /m\.top = ml::kVolumeTop - g - m\.list_height - g - m\.head_height - m\.box_pad;/);
 assert.match(player, /delete_menu\(ctx\);[\s\S]*build_menu\(ctx\);\s*\/\/ The menu button[\s\S]*ctx->menu_button = round_button\(ctx->root,/, 'the menu under its button, built with the player');
 const menu = fn('build_menu');
-assert.match(menu, /lv_obj_set_pos\(ctx->list_box, m\.box_offset, m\.top\);\s*lv_obj_set_size\(ctx->list_box, W - 2 \* m\.box_offset, H - m\.box_offset - m\.top\);/);
-assert.match(menu, /lv_obj_set_style_radius\(ctx->list_box, std::max<int32_t>\(0, card_radius - m\.box_offset\), 0\);/, 'concentric with the card');
+assert.match(menu, /lv_obj_set_pos\(ctx->list_box, m\.box_offset, m\.top\);\s*lv_obj_set_size\(ctx->list_box, box_w, box_h\);/);
+assert.match(menu, /const int32_t box_radius = std::max<int32_t>\(0, card_radius - m\.box_offset\);/, 'concentric with the card');
+assert.match(menu, /lv_obj_set_style_radius\(ctx->list_box, box_radius, 0\);/);
 assert.match(menu, /lv_obj_set_style_bg_color\(ctx->list_box, lv_color_hex\(c\.card\), 0\);/);
-// The big popup's shadow exactly (user 2026-10-22: the menu's was wider),
-// on a layer under the box with the card's radius: LVGL caches one shadow
-// corner (radius and width), and a box shadow at its smaller radius made
-// every 28-line band compute both corners again (V2 b524: opening frames
-// 157-180 ms, closing 67-82 ms).
-assert.match(menu, /ctx->menu_shadow = plain\(ctx->root\);\s*lv_obj_set_pos\(ctx->menu_shadow, m\.box_offset, m\.top\);\s*lv_obj_set_size\(ctx->menu_shadow, W - 2 \* m\.box_offset, H - m\.box_offset - m\.top\);\s*lv_obj_set_style_radius\(ctx->menu_shadow, card_radius, 0\);\s*popup_layout::apply_card_shadow\(ctx->menu_shadow\);/);
+// The big popup's shadow rule at the box's concentric radius (user
+// 2026-10-22), as pictures: LVGL caches one shadow corner (radius and
+// width), and the box's own shadow made every 28-line band compute the
+// card's and the box's corner again (V2 b524: opening frames 157-180 ms);
+// a layer with the card's radius was fast but its corners did not follow
+// the box (b525). LVGL draws the box's shadow once into an alpha snapshot,
+// kept as four corners and four edges drawn in black under the box.
+const parts = fn('menu_shadow_parts');
+assert.match(parts, /if \(s\.part\[0\] && s\.width == w && s\.height == h && s\.radius == radius && s\.blur == blur\) return &s;/, 'made once');
+assert.match(parts, /lv_obj_set_style_radius\(probe, radius, 0\);\s*popup_layout::apply_card_shadow\(probe\);\s*lv_obj_set_style_shadow_width\(probe, blur, 0\);/);
+assert.match(parts, /lv_draw_buf_t\* snap = lv_snapshot_take\(probe, LV_COLOR_FORMAT_A8\);\s*lv_obj_delete\(probe\);/);
+assert.match(parts, /lv_draw_buf_destroy\(snap\);/);
+assert.match(menu, /menu_shadow_parts\(ctx->root, box_w, box_h, box_radius,\s*popup_layout::shadow_width_for\(card_radius\)\)/);
+assert.match(menu, /lv_obj_t\* piece = lv_image_create\(ctx->menu_shadow\);\s*lv_image_set_src\(piece, parts->part\[i\]\);\s*lv_obj_set_pos\(piece, parts->area\[i\]\.x1, parts->area\[i\]\.y1\);\s*lv_obj_set_style_image_recolor\(piece, lv_color_black\(\), 0\);/);
 assert.ok(!/apply_card_shadow\(ctx->list_box\)|shadow_width\(ctx->list_box/.test(popup), 'no shadow of its own on the box');
 assert.ok(menu.indexOf('ctx->menu_shadow = plain') < menu.indexOf('ctx->list_box = plain'), 'the shadow layer under the box');
 assert.match(fn('rebuild_list'), /set_shown\(ctx->menu_shadow, true\);\s*set_shown\(ctx->list_box, true\);/);

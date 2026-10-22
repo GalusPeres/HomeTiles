@@ -546,6 +546,8 @@ static constexpr int kSettingsGestureCaptureWidth = popup_layout::scale(56);
 static constexpr int kSettingsGestureThreshold = touch_rules::kSwipeDistance;
 // An armed swipe inside the screen that turns the page (no edge action).
 static constexpr uint8_t kPageSwipe = 0xFE;
+// An armed swipe over the screensaver that goes back to Home.
+static constexpr uint8_t kScreensaverSwipe = 0xFD;
 
 // The PIN popup before Settings looks the same from the Settings tile, the
 // head's gear and the swipe (user 2026-10-08): the global tile color, the
@@ -755,6 +757,34 @@ void UIManager::processPageSwipeMotion(lv_indev_t* input, bool released) {
   turnPage(dx < 0 ? 1 : -1);
 }
 
+// Over the screensaver a swipe from right to left closes it and shows Home
+// (user 2026-10-22: back the way the Home swipe went in). Every other touch
+// keeps what it did: a tap on the free background closes the screensaver,
+// one on a tile works the tile.
+void UIManager::processScreensaverSwipeMotion(lv_indev_t* input, bool released) {
+  lv_point_t current{};
+  lv_indev_get_point(input, &current);
+  const int32_t dx = current.x - access_gesture_start.x;
+  const int32_t dy = current.y - access_gesture_start.y;
+  const int32_t abs_dy = dy < 0 ? -dy : dy;
+  if (-dx < kSettingsGestureThreshold || -dx <= abs_dy || !is_image_screensaver_visible()) {
+    if (released) {
+      access_gesture_eligible = false;
+      detachSettingsGesturePressedObject();
+    }
+    return;
+  }
+  access_gesture_triggered = true;
+  access_gesture_eligible = false;
+  detachSettingsGesturePressedObject();
+  // No tap on the tile or the background the swipe started on.
+  if (!released) lv_indev_wait_release(input);
+  lv_indev_reset(input, nullptr);
+  Serial.println("[Swipe] screensaver -> Home");
+  hide_image_screensaver();
+  runSwipeAction(swipe_gestures::kHome);
+}
+
 void UIManager::processSettingsGestureMotion(lv_indev_t* input,
                                              bool released) {
   if (!input || !access_gesture_eligible || access_gesture_triggered) {
@@ -767,6 +797,10 @@ void UIManager::processSettingsGestureMotion(lv_indev_t* input,
 
   if (access_gesture_action == kPageSwipe) {
     processPageSwipeMotion(input, released);
+    return;
+  }
+  if (access_gesture_action == kScreensaverSwipe) {
+    processScreensaverSwipeMotion(input, released);
     return;
   }
 
@@ -866,8 +900,17 @@ void UIManager::runSwipeAction(uint8_t action) {
                 static_cast<unsigned>(access_gesture_edge));
 }
 
+// Home is the first page: a swipe towards before it opens the screensaver
+// (user 2026-10-22) as the screensaver's edge swipe does, also when it never
+// starts on its own; the overview closes under it.
 void UIManager::turnPage(int step) {
   const int page = tile_layouts::page_number(tileConfig.getActiveFolderId());
+  if (page == 0 && step < 0) {
+    page_preview::close();
+    Serial.println("[Swipe] Home -> screensaver");
+    show_image_screensaver();
+    return;
+  }
   if (page >= 0) showPage(page + step);
 }
 
@@ -1044,12 +1087,36 @@ void UIManager::settings_gesture_indev_event_cb(lv_event_t* event) {
     self->touch_press_shown = false;
     self->touch_press_late = false;
     end_tap_flash();
+    lv_obj_t* pressed_object =
+        static_cast<lv_obj_t*>(lv_event_get_param(event));
+    // Over the screensaver only its swipe back to Home, on any tab; a
+    // control that drags itself keeps its gesture (level_bar.h).
+    if (lv_obj_t* saver = image_screensaver_overlay()) {
+      bool on_saver = false;
+      bool drags_itself = false;
+      for (lv_obj_t* object = pressed_object; object; object = lv_obj_get_parent(object)) {
+        if (object == saver) {
+          on_saver = true;
+          break;
+        }
+        if (!lv_obj_has_flag(object, LV_OBJ_FLAG_GESTURE_BUBBLE)) drags_itself = true;
+      }
+      if (!on_saver || drags_itself) return;
+      lv_indev_get_point(input, &self->access_gesture_start);
+      self->access_page_swipe = false;
+      self->access_gesture_edge = swipe_gestures::kEdgeOff;
+      self->access_gesture_action = kScreensaverSwipe;
+      self->access_gesture_tab = self->active_tab_index;
+      self->access_gesture_eligible = true;
+      self->access_gesture_pressed_object = pressed_object;
+      lv_obj_add_event_cb(pressed_object, settings_gesture_pressed_object_event_cb, LV_EVENT_PRESSING, self);
+      lv_obj_add_event_cb(pressed_object, settings_gesture_pressed_object_event_cb, LV_EVENT_DELETE, self);
+      return;
+    }
     // The tiles, or Settings without an open list, dialog, entry or setup.
     const uint8_t tab = self->active_tab_index;
     if (tab != 0 && (tab != kSettingsTab || settings_screen::overlay_open())) return;
 
-    lv_obj_t* pressed_object =
-        static_cast<lv_obj_t*>(lv_event_get_param(event));
     bool started_on_home = false;
     for (lv_obj_t* object = pressed_object; object;
          object = lv_obj_get_parent(object)) {

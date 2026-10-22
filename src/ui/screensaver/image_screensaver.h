@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <lvgl.h>
 
 #include "src/tiles/config/tile_config.h"
 
@@ -10,6 +11,9 @@
 void show_image_screensaver();
 void hide_image_screensaver();
 bool is_image_screensaver_visible();
+// The visible screensaver's overlay (its tiles, clock and picture inside),
+// else nullptr: the panel's swipe back to Home starts on it.
+lv_obj_t* image_screensaver_overlay();
 // True from the start of show_image_screensaver() (its overlay exists before
 // the setup finishes) until hide_image_screensaver().
 bool image_screensaver_covers_ui();

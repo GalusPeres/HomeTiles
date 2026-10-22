@@ -346,6 +346,7 @@ struct MediaPopupContext {
   // and hidden: its head (name, the library's back button), the switch.
   lv_obj_t* menu_title = nullptr;
   lv_obj_t* menu_shadow = nullptr;  // under the box: its shadow as pictures
+  lv_draw_buf_t* menu_shadow_parts[8] = {};  // while the popup is open (build_menu_shadow)
   lv_obj_t* menu_back = nullptr;
   lv_obj_t* menu_tabs[3] = {};
   uint32_t menu_rows_key = 0;  // what the rows show (menu_rows_of); 0: none
@@ -1092,6 +1093,7 @@ void reset_player_parts(MediaPopupContext* ctx) {
 
 static void build_menu(MediaPopupContext* ctx);
 void delete_menu(MediaPopupContext* ctx);
+void free_menu_shadow(MediaPopupContext* ctx, bool delete_objects);
 
 static void build_player(MediaPopupContext* ctx, bool centered) {
   static uint32_t last_log_ms = 0;
@@ -1660,10 +1662,10 @@ void delete_list(MediaPopupContext* ctx) {
 // The whole menu (a new player's colors or layout build it again).
 void delete_menu(MediaPopupContext* ctx) {
   delete_list(ctx);
+  free_menu_shadow(ctx, true);
   drop_later(ctx, ctx->list_box);
-  drop_later(ctx, ctx->menu_shadow);
   drop_later(ctx, ctx->list_shield);
-  ctx->list_box = ctx->menu_shadow = ctx->list_shield = ctx->menu_title = ctx->menu_back = nullptr;
+  ctx->list_box = ctx->list_shield = ctx->menu_title = ctx->menu_back = nullptr;
   for (lv_obj_t*& tab : ctx->menu_tabs) tab = nullptr;
 }
 
@@ -1716,29 +1718,42 @@ MenuGeometry menu_geometry() {
   return m;
 }
 
-// The menu box's shadow as pictures. Drawn by LVGL at the box's own radius,
-// it pushed the card's shadow corner out of LVGL's one-entry shadow cache,
-// and every 28-line band of an opening frame computed both corners again
-// (V2 b524: 157-180 ms per frame); a layer with the card's radius was fast,
-// but its corners did not follow the box (b525). So LVGL draws the box's
-// shadow once into an alpha snapshot, and its four corners and four edges
-// stay as alpha pictures drawn in black under the box. Box and card have the
-// same size for every player: made once, kept for the panel's run (~50 KB).
-struct MenuShadowParts {
-  int32_t width = 0, height = 0, radius = 0, blur = 0;
-  int32_t ext = 0;               // the shadow's reach beyond the box
-  lv_draw_buf_t* part[8] = {};   // corners, then top, bottom, left, right
-  lv_area_t area[8] = {};        // in the snapshot (the box at ext, ext)
-};
-MenuShadowParts g_menu_shadow_parts;
+// The menu box's shadow as pictures, made when the menu first opens and
+// freed with the popup (user 2026-10-22: nothing kept for good). Drawn by
+// LVGL at the box's own radius, it pushed the card's shadow corner out of
+// LVGL's one-entry shadow cache, and every 28-line band of an opening frame
+// computed both corners again (V2 b524: 157-180 ms per frame); a layer with
+// the card's radius was fast, but its corners did not follow the box (b525).
+// LVGL draws the same shadow once around a small probe with the box's
+// radius; its four corners and a short piece of each side stay as alpha
+// pictures (the sides tiled along the box), drawn in black under the box.
+constexpr int32_t kShadowSidePiece = 16;  // px along a side, tiled
 
-const MenuShadowParts* menu_shadow_parts(lv_obj_t* parent, int32_t w, int32_t h, int32_t radius, int32_t blur) {
-  MenuShadowParts& s = g_menu_shadow_parts;
-  if (s.part[0] && s.width == w && s.height == h && s.radius == radius && s.blur == blur) return &s;
-  // A probe like the box, shown only to the snapshot (never drawn on screen:
-  // deleted before the next refresh).
-  lv_obj_t* probe = plain(parent);
-  lv_obj_set_size(probe, w, h);
+void free_menu_shadow(MediaPopupContext* ctx, bool delete_objects) {
+  if (ctx->menu_shadow && delete_objects) lv_obj_delete(ctx->menu_shadow);
+  ctx->menu_shadow = nullptr;
+  for (lv_draw_buf_t*& part : ctx->menu_shadow_parts) {
+    if (!part) continue;
+    lv_image_cache_drop(part);
+    lv_draw_buf_destroy(part);
+    part = nullptr;
+  }
+}
+
+static void build_menu_shadow(MediaPopupContext* ctx) {
+  free_menu_shadow(ctx, true);
+  const uint32_t started_ms = millis();
+  const MenuGeometry m = menu_geometry();
+  const int32_t card_radius = lv_obj_get_style_radius(ctx->card, LV_PART_MAIN);
+  const int32_t radius = lv_obj_get_style_radius(ctx->list_box, LV_PART_MAIN);
+  const int32_t blur = popup_layout::shadow_width_for(card_radius);
+  // LVGL's shadow corner piece (lv_draw_sw_box_shadow.c corner_size): the
+  // sides between two corners are the same along their whole length.
+  const int32_t corner = blur + radius;
+  // A probe with the box's radius and shadow, shown only to the snapshot
+  // (deleted before the next refresh).
+  lv_obj_t* probe = plain(ctx->root);
+  lv_obj_set_size(probe, 2 * corner + kShadowSidePiece, 2 * corner + kShadowSidePiece);
   lv_obj_set_style_radius(probe, radius, 0);
   popup_layout::apply_card_shadow(probe);
   lv_obj_set_style_shadow_width(probe, blur, 0);
@@ -1746,38 +1761,55 @@ const MenuShadowParts* menu_shadow_parts(lv_obj_t* parent, int32_t w, int32_t h,
   const int32_t ext = lv_obj_get_ext_draw_size(probe);
   lv_draw_buf_t* snap = lv_snapshot_take(probe, LV_COLOR_FORMAT_A8);
   lv_obj_delete(probe);
-  if (!snap) return nullptr;
-  for (lv_draw_buf_t*& part : s.part) {
-    if (part) lv_draw_buf_destroy(part);
-    part = nullptr;
-  }
+  if (!snap) return;
   const int32_t sw = snap->header.w;
   const int32_t sh = snap->header.h;
-  const int32_t c = std::min(ext + radius, std::min(sw, sh) / 2);
-  const lv_area_t areas[8] = {{0, 0, c - 1, c - 1},           {sw - c, 0, sw - 1, c - 1},
-                              {0, sh - c, c - 1, sh - 1},      {sw - c, sh - c, sw - 1, sh - 1},
-                              {c, 0, sw - c - 1, ext - 1},     {c, sh - ext, sw - c - 1, sh - 1},
-                              {0, c, ext - 1, sh - c - 1},     {sw - ext, c, sw - 1, sh - c - 1}};
+  const int32_t piece = kShadowSidePiece;
+  const lv_area_t from[8] = {{0, 0, corner - 1, corner - 1},
+                             {sw - corner, 0, sw - 1, corner - 1},
+                             {0, sh - corner, corner - 1, sh - 1},
+                             {sw - corner, sh - corner, sw - 1, sh - 1},
+                             {corner, 0, corner + piece - 1, ext - 1},
+                             {corner, sh - ext, corner + piece - 1, sh - 1},
+                             {0, corner, ext - 1, corner + piece - 1},
+                             {sw - ext, corner, sw - 1, corner + piece - 1}};
+  // The pictures around the box (the box at ext, ext).
+  const int32_t w = popup_layout::kCardWidth - 2 * m.box_offset + 2 * ext;
+  const int32_t h = popup_layout::kCardHeight - m.box_offset - m.top + 2 * ext;
+  const lv_area_t to[8] = {{0, 0, corner - 1, corner - 1},
+                           {w - corner, 0, w - 1, corner - 1},
+                           {0, h - corner, corner - 1, h - 1},
+                           {w - corner, h - corner, w - 1, h - 1},
+                           {corner, 0, w - corner - 1, ext - 1},
+                           {corner, h - ext, w - corner - 1, h - 1},
+                           {0, corner, ext - 1, h - corner - 1},
+                           {w - ext, corner, w - 1, h - corner - 1}};
+  ctx->menu_shadow = plain(ctx->root);
+  lv_obj_move_to_index(ctx->menu_shadow, lv_obj_get_index(ctx->list_box));
+  lv_obj_set_pos(ctx->menu_shadow, m.box_offset - ext, m.top - ext);
+  lv_obj_set_size(ctx->menu_shadow, w, h);
+  uint32_t bytes = 0;
   for (int i = 0; i < 8; ++i) {
-    const lv_area_t& a = areas[i];
+    const lv_area_t& a = from[i];
     const int32_t pw = lv_area_get_width(&a);
     const int32_t ph = lv_area_get_height(&a);
-    lv_draw_buf_t* part = pw > 0 && ph > 0 ? lv_draw_buf_create(pw, ph, LV_COLOR_FORMAT_A8, LV_STRIDE_AUTO) : nullptr;
-    if (part) {
-      for (int32_t y = 0; y < ph; ++y) {
-        memcpy(part->data + y * part->header.stride, snap->data + (a.y1 + y) * snap->header.stride + a.x1, pw);
-      }
+    lv_draw_buf_t* part = lv_draw_buf_create(pw, ph, LV_COLOR_FORMAT_A8, LV_STRIDE_AUTO);
+    if (!part) continue;
+    for (int32_t y = 0; y < ph; ++y) {
+      memcpy(part->data + y * part->header.stride, snap->data + (a.y1 + y) * snap->header.stride + a.x1, pw);
     }
-    s.part[i] = part;
-    s.area[i] = a;
+    bytes += part->data_size;
+    ctx->menu_shadow_parts[i] = part;
+    lv_obj_t* image = lv_image_create(ctx->menu_shadow);
+    lv_image_set_src(image, part);
+    lv_obj_set_pos(image, to[i].x1, to[i].y1);
+    lv_obj_set_size(image, lv_area_get_width(&to[i]), lv_area_get_height(&to[i]));
+    if (i >= 4) lv_image_set_inner_align(image, LV_IMAGE_ALIGN_TILE);
+    lv_obj_set_style_image_recolor(image, lv_color_black(), 0);
   }
   lv_draw_buf_destroy(snap);
-  s.width = w;
-  s.height = h;
-  s.radius = radius;
-  s.blur = blur;
-  s.ext = ext;
-  return &s;
+  Serial.printf("[MediaPopup] Menu shadow pictures: %u bytes until the popup closes, %lu ms\n",
+                static_cast<unsigned>(bytes), static_cast<unsigned long>(millis() - started_ms));
 }
 
 // The menu, built once with the player and kept hidden (user 2026-10-22: the
@@ -1798,26 +1830,12 @@ static void build_menu(MediaPopupContext* ctx) {
   lv_obj_set_size(ctx->list_shield, W, H);
   lv_obj_add_event_cb(ctx->list_shield, on_menu_shield, LV_EVENT_CLICKED, nullptr);
 
-  // The big popup's shadow rule at the box's concentric radius, as pictures
-  // (menu_shadow_parts) under the box.
+  // The box's radius concentric with the card's; its shadow comes as
+  // pictures when the menu opens (build_menu_shadow).
   const int32_t card_radius = lv_obj_get_style_radius(ctx->card, LV_PART_MAIN);
   const int32_t box_w = W - 2 * m.box_offset;
   const int32_t box_h = H - m.box_offset - m.top;
   const int32_t box_radius = std::max<int32_t>(0, card_radius - m.box_offset);
-  ctx->menu_shadow = plain(ctx->root);
-  if (const MenuShadowParts* parts = menu_shadow_parts(ctx->root, box_w, box_h, box_radius,
-                                                       popup_layout::shadow_width_for(card_radius))) {
-    lv_obj_set_pos(ctx->menu_shadow, m.box_offset - parts->ext, m.top - parts->ext);
-    lv_obj_set_size(ctx->menu_shadow, box_w + 2 * parts->ext, box_h + 2 * parts->ext);
-    for (int i = 0; i < 8; ++i) {
-      if (!parts->part[i]) continue;
-      lv_obj_t* piece = lv_image_create(ctx->menu_shadow);
-      lv_image_set_src(piece, parts->part[i]);
-      lv_obj_set_pos(piece, parts->area[i].x1, parts->area[i].y1);
-      lv_obj_set_style_image_recolor(piece, lv_color_black(), 0);
-    }
-  }
-  lv_obj_add_flag(ctx->menu_shadow, LV_OBJ_FLAG_HIDDEN);
 
   ctx->list_box = plain(ctx->root);
   lv_obj_add_flag(ctx->list_box, LV_OBJ_FLAG_CLICKABLE);  // a tap inside stays inside
@@ -1911,6 +1929,7 @@ static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
   }
   show_menu_head(ctx);
   lv_obj_add_flag(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE);
+  if (!ctx->menu_shadow) build_menu_shadow(ctx);
   set_shown(ctx->menu_shadow, true);
   set_shown(ctx->list_box, true);
   const uint32_t rows = menu_rows_of(ctx);
@@ -2172,6 +2191,8 @@ static void close_media_popup(MediaPopupContext* ctx) {
     ctx->view = MediaView::Player;
     rebuild_list(ctx, false);
   }
+  // The menu's shadow pictures are kept only while the popup is open.
+  free_menu_shadow(ctx, true);
   if (ctx->library_timer) lv_timer_pause(ctx->library_timer);
   if (ctx->motion_timer) lv_timer_pause(ctx->motion_timer);
 }
@@ -2195,6 +2216,7 @@ static void on_overlay_delete(lv_event_t* e) {
   media_browse_set_listener(nullptr);
   media_browse_reset();
   ctx->dead_lists.clear();  // deleted with the card
+  free_menu_shadow(ctx, false);  // its pictures too
   free_cover_dsc(ctx->cover_dsc);
   if (g_media_popup_ctx == ctx) g_media_popup_ctx = nullptr;
   delete ctx;

@@ -51,21 +51,28 @@ assert.match(menu, /const int32_t box_radius = std::max<int32_t>\(0, card_radius
 assert.match(menu, /lv_obj_set_style_radius\(ctx->list_box, box_radius, 0\);/);
 assert.match(menu, /lv_obj_set_style_bg_color\(ctx->list_box, lv_color_hex\(c\.card\), 0\);/);
 // The big popup's shadow rule at the box's concentric radius (user
-// 2026-10-22), as pictures: LVGL caches one shadow corner (radius and
-// width), and the box's own shadow made every 28-line band compute the
-// card's and the box's corner again (V2 b524: opening frames 157-180 ms);
-// a layer with the card's radius was fast but its corners did not follow
-// the box (b525). LVGL draws the box's shadow once into an alpha snapshot,
-// kept as four corners and four edges drawn in black under the box.
-const parts = fn('menu_shadow_parts');
-assert.match(parts, /if \(s\.part\[0\] && s\.width == w && s\.height == h && s\.radius == radius && s\.blur == blur\) return &s;/, 'made once');
-assert.match(parts, /lv_obj_set_style_radius\(probe, radius, 0\);\s*popup_layout::apply_card_shadow\(probe\);\s*lv_obj_set_style_shadow_width\(probe, blur, 0\);/);
-assert.match(parts, /lv_draw_buf_t\* snap = lv_snapshot_take\(probe, LV_COLOR_FORMAT_A8\);\s*lv_obj_delete\(probe\);/);
-assert.match(parts, /lv_draw_buf_destroy\(snap\);/);
-assert.match(menu, /menu_shadow_parts\(ctx->root, box_w, box_h, box_radius,\s*popup_layout::shadow_width_for\(card_radius\)\)/);
-assert.match(menu, /lv_obj_t\* piece = lv_image_create\(ctx->menu_shadow\);\s*lv_image_set_src\(piece, parts->part\[i\]\);\s*lv_obj_set_pos\(piece, parts->area\[i\]\.x1, parts->area\[i\]\.y1\);\s*lv_obj_set_style_image_recolor\(piece, lv_color_black\(\), 0\);/);
+// 2026-10-22), as pictures that exist only while the popup is open: LVGL
+// caches one shadow corner (radius and width), and the box's own shadow made
+// every 28-line band compute the card's and the box's corner again (V2 b524:
+// opening frames 157-180 ms); a layer with the card's radius was fast but
+// its corners did not follow the box (b525); pictures kept for good cost
+// memory (b526). LVGL draws the shadow once around a small probe with the
+// box's radius when the menu first opens; corners and a piece of each side
+// are kept (sides tiled) and freed when the popup closes.
+const shadow = fn('build_menu_shadow');
+assert.match(shadow, /const int32_t corner = blur \+ radius;/);
+assert.match(shadow, /lv_obj_set_size\(probe, 2 \* corner \+ kShadowSidePiece, 2 \* corner \+ kShadowSidePiece\);\s*lv_obj_set_style_radius\(probe, radius, 0\);\s*popup_layout::apply_card_shadow\(probe\);\s*lv_obj_set_style_shadow_width\(probe, blur, 0\);/, 'a small probe, not the whole box');
+assert.match(shadow, /lv_draw_buf_t\* snap = lv_snapshot_take\(probe, LV_COLOR_FORMAT_A8\);\s*lv_obj_delete\(probe\);/);
+assert.match(shadow, /lv_draw_buf_destroy\(snap\);/);
+assert.match(shadow, /lv_obj_move_to_index\(ctx->menu_shadow, lv_obj_get_index\(ctx->list_box\)\);/, 'under the box');
+assert.match(shadow, /if \(i >= 4\) lv_image_set_inner_align\(image, LV_IMAGE_ALIGN_TILE\);\s*lv_obj_set_style_image_recolor\(image, lv_color_black\(\), 0\);/);
+assert.match(fn('free_menu_shadow'), /lv_image_cache_drop\(part\);\s*lv_draw_buf_destroy\(part\);/);
+assert.ok(!/ctx->menu_shadow/.test(menu), 'no pictures when the menu is built');
+assert.match(fn('rebuild_list'), /if \(!ctx->menu_shadow\) build_menu_shadow\(ctx\);\s*set_shown\(ctx->menu_shadow, true\);/, 'made when the menu opens');
+assert.match(fn('close_media_popup'), /free_menu_shadow\(ctx, true\);/, 'freed when the popup closes');
+assert.match(fn('on_overlay_delete'), /free_menu_shadow\(ctx, false\);/);
+assert.match(fn('delete_menu'), /free_menu_shadow\(ctx, true\);/);
 assert.ok(!/apply_card_shadow\(ctx->list_box\)|shadow_width\(ctx->list_box/.test(popup), 'no shadow of its own on the box');
-assert.ok(menu.indexOf('ctx->menu_shadow = plain') < menu.indexOf('ctx->list_box = plain'), 'the shadow layer under the box');
 assert.match(fn('rebuild_list'), /set_shown\(ctx->menu_shadow, true\);\s*set_shown\(ctx->list_box, true\);/);
 assert.match(fn('rebuild_list'), /set_shown\(ctx->list_box, false\);\s*set_shown\(ctx->menu_shadow, false\);/);
 assert.match(menu, /const int32_t card_radius = lv_obj_get_style_radius\(ctx->card, LV_PART_MAIN\);/);
@@ -98,7 +105,7 @@ assert.match(fn('delete_list'), /drop_later\(ctx, ctx->list\);/);
 // redrew the whole card, 640000 px on V2).
 assert.match(menu, /ctx->list_shield = plain\(ctx->root\);\s*lv_obj_set_size\(ctx->list_shield, W, H\);\s*lv_obj_add_event_cb\(ctx->list_shield, on_menu_shield, LV_EVENT_CLICKED, nullptr\);/);
 assert.ok(!/set_shown\(ctx->list_shield/.test(popup), 'the outside layer is never shown or hidden');
-assert.match(show, /lv_obj_add_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);\s*set_shown\(ctx->menu_shadow, true\);\s*set_shown\(ctx->list_box, true\);/);
+assert.match(show, /lv_obj_add_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);\s*if \(!ctx->menu_shadow\) build_menu_shadow\(ctx\);\s*set_shown\(ctx->menu_shadow, true\);\s*set_shown\(ctx->list_box, true\);/);
 assert.match(fn('on_menu_shield'), /open_view\(ctx, MediaView::Player\);/);
 // The library keeps its level while the popup is open (user 2026-10-22:
 // "Laden" on every opening); closing the popup starts it at its root.

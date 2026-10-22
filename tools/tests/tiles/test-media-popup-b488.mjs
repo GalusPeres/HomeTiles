@@ -50,7 +50,7 @@ for (const part of ['x.state', 'x.features', 'x.source', 'x.sound_mode', '&x.sou
 // the event.
 assert.match(fn('drop_later'), /lv_obj_add_flag\(obj, LV_OBJ_FLAG_HIDDEN\);\s*if \(ctx->dead_lists\.empty\(\)\) lv_async_call\(delete_dead_lists, nullptr\);\s*ctx->dead_lists\.push_back\(obj\);/);
 assert.match(fn('delete_list'), /drop_later\(ctx, ctx->list\);/);
-assert.match(fn('delete_menu'), /delete_list\(ctx\);\s*drop_later\(ctx, ctx->list_box\);\s*drop_later\(ctx, ctx->menu_shadow\);\s*drop_later\(ctx, ctx->list_shield\);/);
+assert.match(fn('delete_menu'), /delete_list\(ctx\);\s*free_menu_shadow\(ctx, true\);\s*drop_later\(ctx, ctx->list_box\);\s*drop_later\(ctx, ctx->list_shield\);/);
 assert.match(fn('on_overlay_delete'), /ctx->dead_lists\.clear\(\);/);
 
 // Bars: the reported state only, not the button's immediate switch.

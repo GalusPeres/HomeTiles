@@ -95,6 +95,7 @@ struct lv_obj_t {
 };
 struct lv_timer_t { void* user_data; bool paused = true; int resets = 0; };
 struct lv_image_dsc_t {};
+struct lv_draw_buf_t {};
 struct lv_font_t {};
 struct lv_color_t { uint32_t value; };
 using lv_opa_t = uint8_t;
@@ -181,6 +182,8 @@ static MediaPopupContext* g_media_popup_ctx = nullptr;
 static void rebuild_list(MediaPopupContext* ctx, bool) {
   if (ctx->view == MediaView::Player && ctx->list_box) lv_obj_add_flag(ctx->list_box, LV_OBJ_FLAG_HIDDEN);
 }
+static int shadows_freed = 0;
+static void free_menu_shadow(MediaPopupContext*, bool) { ++shadows_freed; }
 ${[
   'find_extras', 'extras_of', 'set_shown', 'body_scope', 'slider_show', 'slider_set_shown',
   'slider_set_enabled', 'slider_input_fraction', 'volume_icon_bucket_for_percent', 'volume_icon_for_bucket',

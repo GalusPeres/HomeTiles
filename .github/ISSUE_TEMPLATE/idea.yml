@@ -1,0 +1,16 @@
+name: Feature request
+description: An idea for HomeTiles.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What do you want? How could it look?
+    validations:
+      required: true
+  - type: textarea
+    id: pictures
+    attributes:
+      label: Sketch or example
+      description: A drawing or a screenshot.

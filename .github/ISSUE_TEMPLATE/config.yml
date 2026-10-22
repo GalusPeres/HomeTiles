@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: HomeTiles Bridge (Home Assistant integration)
+    url: https://github.com/GalusPeres/HomeTiles-Bridge/issues
+    about: Problems that only concern the integration in Home Assistant.

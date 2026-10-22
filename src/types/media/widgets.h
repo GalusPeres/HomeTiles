@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <type_traits>
 #include <Arduino.h>
 #include <lvgl.h>
 
@@ -38,10 +39,11 @@ struct MediaTileWidgets {
   float media_duration = 0.0f;
   uint32_t media_position_received_ms = 0;
   // The last report of the position (its value, Home Assistant's
-  // media_position_updated_at and whether it played): a state that repeats
-  // it (a volume change) keeps the running position (media_position.h).
+  // media_position_updated_at in seconds since 1970, -1 without one, and
+  // whether it played): a state that repeats it (a volume change) keeps the
+  // running position (media_position.h).
   float media_position_reported = -1.0f;
-  String media_position_updated_at;
+  double media_position_updated = -1.0;
   bool media_position_playing = false;
   bool has_media_volume = false;
   float media_volume_level = 0.0f;
@@ -51,3 +53,10 @@ struct MediaTileWidgets {
   bool available = true;
   bool dynamic_icon = true;
 };
+
+// The page caches copy these with memcpy and clear them in place
+// (TileWidgetCache): no String or other owning member (b523 put a String
+// here, and clearing an 85 KB cache built a temporary on the 24 KB buildUI
+// stack: a boot loop on V2).
+static_assert(std::is_trivially_copyable<MediaTileWidgets>::value,
+              "MediaTileWidgets is copied with memcpy by the page caches");

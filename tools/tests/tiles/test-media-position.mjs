@@ -81,10 +81,34 @@ if (output !== null) {
 // still paused); only a new report sets it and its receipt time again.
 const renderer = readRepoFile('src/tiles/runtime/tile_renderer.cpp').replace(/\r\n?/g, '\n');
 assert.match(renderer, /extract_json_string_field_cstr\(payload_start, "media_position_updated_at", position_updated_at\);/);
-assert.match(renderer, /const bool same_report = had_position && widgets\.has_media_position &&\s*media_position == widgets\.media_position_reported &&\s*position_updated_at == widgets\.media_position_updated_at &&\s*playing == widgets\.media_position_playing;/);
-assert.match(renderer, /\} else if \(!same_report\) \{[\s\S]*?widgets\.media_position = media_progress::now_position\(\s*media_position, media_duration, playing, now\.tv_sec \+ now\.tv_usec \/ 1e6, has_updated, updated\);\s*widgets\.media_position_received_ms = millis\(\);/);
+assert.match(renderer, /if \(!media_progress::parse_utc\(position_updated_at\.c_str\(\), position_updated\)\) position_updated = -1\.0;/);
+assert.match(renderer, /const bool same_report = had_position && widgets\.has_media_position &&\s*media_position == widgets\.media_position_reported &&\s*position_updated == widgets\.media_position_updated &&\s*playing == widgets\.media_position_playing;/);
+assert.match(renderer, /\} else if \(!same_report\) \{[\s\S]*?widgets\.media_position =\s*media_progress::now_position\(media_position, media_duration, playing, now\.tv_sec \+ now\.tv_usec \/ 1e6,\s*position_updated >= 0\.0, position_updated\);\s*widgets\.media_position_received_ms = millis\(\);/);
 assert.equal((renderer.match(/widgets\.media_position_received_ms = millis\(\);/g) || []).length, 1,
   'only a new report restarts the running position');
+// The page caches copy the tile widgets with memcpy, allocate them with
+// calloc and clear them in place: b523 kept the update time as a String in
+// MediaTileWidgets, and clearing the 85 KB TileWidgetCache built a temporary
+// on the 24 KB buildUI stack (V2 boot loop, "Stack protection fault"). The
+// time is a number, and both structs must stay trivially copyable.
 const widgets = readRepoFile('src/types/media/widgets.h');
-assert.match(widgets, /String media_position_updated_at;/);
+assert.match(widgets, /double media_position_updated = -1\.0;/);
+assert.ok(!/String media_position/.test(widgets), 'no String in the tile widgets');
+assert.match(widgets, /static_assert\(std::is_trivially_copyable<MediaTileWidgets>::value,/);
+assert.match(readRepoFile('src/tiles/runtime/tile_renderer.h'), /static_assert\(std::is_trivially_copyable<TileWidgetCache>::value,/);
+const guard = compileAndRun({
+  label: 'Media tile widgets copyable',
+  harness: String.raw`
+#include <cstdio>
+#include <string>
+#include <type_traits>
+struct lv_obj_t;
+struct lv_image_dsc_t;
+// Arduino's String owns its buffer like std::string.
+class String : public std::string { using std::string::string; };
+${widgets.replace(/\r\n?/g, '\n').replace(/^#(pragma once|include <(Arduino|lvgl)\.h>)$/gm, '')}
+int main() { std::printf("ok\n"); return 0; }
+`,
+});
+if (guard !== null) assert.equal(guard.trim(), 'ok');
 console.log('Media position: Home Assistant\'s updated time, a repeated report keeps the running position');

@@ -4547,25 +4547,26 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   widgets.has_media_position = has_media_position && has_media_duration && media_duration > 0.0f;
   widgets.media_duration = widgets.has_media_position ? media_duration : 0.0f;
   const bool playing = state.equalsIgnoreCase("playing");
+  double position_updated = -1.0;
+  if (!media_progress::parse_utc(position_updated_at.c_str(), position_updated)) position_updated = -1.0;
   const bool same_report = had_position && widgets.has_media_position &&
                            media_position == widgets.media_position_reported &&
-                           position_updated_at == widgets.media_position_updated_at &&
+                           position_updated == widgets.media_position_updated &&
                            playing == widgets.media_position_playing;
   if (!widgets.has_media_position) {
     widgets.media_position = 0.0f;
     widgets.media_position_received_ms = 0;
     widgets.media_position_reported = -1.0f;
-    widgets.media_position_updated_at = "";
+    widgets.media_position_updated = -1.0;
   } else if (!same_report) {
-    double updated = 0.0;
-    const bool has_updated = media_progress::parse_utc(position_updated_at.c_str(), updated);
     struct timeval now {};
     gettimeofday(&now, nullptr);
-    widgets.media_position = media_progress::now_position(
-        media_position, media_duration, playing, now.tv_sec + now.tv_usec / 1e6, has_updated, updated);
+    widgets.media_position =
+        media_progress::now_position(media_position, media_duration, playing, now.tv_sec + now.tv_usec / 1e6,
+                                     position_updated >= 0.0, position_updated);
     widgets.media_position_received_ms = millis();
     widgets.media_position_reported = media_position;
-    widgets.media_position_updated_at = position_updated_at;
+    widgets.media_position_updated = position_updated;
   }
   widgets.media_position_playing = playing;
 

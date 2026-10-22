@@ -2,6 +2,7 @@
 #define TILE_RENDERER_H
 
 #include <lvgl.h>
+#include <type_traits>
 #include "src/tiles/config/tile_config.h"
 #include "src/types/sensor/widgets.h"
 #include "src/types/switch/state.h"
@@ -34,6 +35,9 @@ struct TileWidgetCache {
   WeatherTileWidgets weather[TILES_PER_GRID];
   MediaTileWidgets media[TILES_PER_GRID];
 };
+// Allocated with heap_caps_calloc, copied with memcpy and cleared in place.
+static_assert(std::is_trivially_copyable<TileWidgetCache>::value,
+              "TileWidgetCache is copied with memcpy");
 
 // Allocate the per-slot renderer bookkeeping of every grid (Sensor, Switch,
 // Cover, Climate, Weather, Media and Binary Sensor widgets and states) in

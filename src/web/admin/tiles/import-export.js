@@ -56,19 +56,24 @@
   // Whether the Settings tile is hidden, and the parked tile then: the
   // import restores both (issue #70). The page holds them in the Home tab's
   // parking slot, rendered from the device config.
-  function exportSettingsTileState() {
-    const parked = document.getElementById('settingsHiddenTile');
-    if (!parked) return undefined;
-    if (parked.dataset.hidden !== '1') return { hidden: false };
+  // The Settings tile as the panel stores it (/api/layouts settings), like
+  // every other tile (user 2026-10-22: the export took the Web Admin's own
+  // picture of it, a place of the shown layout beside the panel's stored
+  // ones): hidden or not, and the parked tile's look, size and classic place.
+  function exportSettingsTileState(layoutData) {
+    const settings = layoutData?.success ? layoutData.settings : null;
+    if (!settings || typeof settings.hidden !== 'boolean') return undefined;
+    if (!settings.hidden) return { hidden: false };
+    const tile = settings.tile || {};
     return {
       hidden: true,
-      title: String(parked.dataset.title || ''),
-      icon_name: String(parked.dataset.icon || ''),
-      bg_color: Number(parked.dataset.bgColor || 0),
-      col: Number(parked.dataset.col || 0),
-      row: Number(parked.dataset.row || 0),
-      span_w: Number(parked.dataset.spanW || 1),
-      span_h: Number(parked.dataset.spanH || 1)
+      title: String(tile.title || ''),
+      icon_name: String(tile.icon_name || ''),
+      bg_color: Number(tile.bg_color || 0),
+      col: Number(tile.col || 0),
+      row: Number(tile.row || 0),
+      span_w: Number(tile.span_w || 1),
+      span_h: Number(tile.span_h || 1)
     };
   }
 
@@ -138,7 +143,7 @@
         exported_at: new Date().toISOString(),
         folders: folders,
         grids: grids,
-        settings_tile: exportSettingsTileState(),
+        settings_tile: exportSettingsTileState(layoutData),
         // Every layout goes with the tiles (user 2026-10-21): the bar and
         // upright places with the pages, the screensaver clock and where
         // Settings is parked per layout. Only a panel with the same screen

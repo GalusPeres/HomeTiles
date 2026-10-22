@@ -261,7 +261,8 @@ const reported = new Set([...getLayouts.body.matchAll(/\\"([a-z_]+)\\":/g)].map(
 const carried = {
   success: 'not data', error: 'not data', active: 'this start only; the backup keeps the stored choice', stored: 'layouts.active',
   classic: 'grids and screensaver.grid', places: 'layouts.places', clock: 'layouts.clock',
-  settings: 'layouts.settings_parked', parked: 'layouts.settings_parked', tile: 'layouts.parked_settings_view',
+  settings: 'layouts.settings_parked', parked: 'layouts.settings_parked', hidden: 'settings_tile.hidden',
+  tile: 'layouts.parked_settings_view',
   view_id: 'layouts.parked_settings_view', type: 'settings_tile', title: 'settings_tile', icon_name: 'settings_tile',
   bg_color: 'settings_tile', col: 'settings_tile', row: 'settings_tile', span_w: 'settings_tile', span_h: 'settings_tile'
 };

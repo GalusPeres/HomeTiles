@@ -1657,6 +1657,10 @@ void WebAdminServer::handleGetLayouts() {
     json += (cfg.settings_parked >> i) & 1 ? "true" : "false";
   }
   json += "]";
+  // Hidden in the layout the panel shows: the export takes the Settings
+  // tile from here, as the panel stores it.
+  json += ",\"hidden\":";
+  json += cfg.settings_tile_hidden ? "true" : "false";
   const SettingsTileSnapshot& kept = cfg.settings_tile_snapshot;
   if (kept.valid && kept.view_id && tileConfig.settingsTileIndex() < 0) {
     json += ",\"tile\":{\"type\":7,\"view_id\":" + String(kept.view_id) + ",\"title\":\"";

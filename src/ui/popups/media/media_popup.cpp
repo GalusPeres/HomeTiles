@@ -342,6 +342,12 @@ struct MediaPopupContext {
   lv_obj_t* list_shield = nullptr;  // a tap outside the open menu closes it
   lv_obj_t* library_status = nullptr;
   lv_obj_t* menu_button = nullptr;  // bottom right: opens and closes the menu
+  // The menu's parts, built once with the player (build_menu) and only shown
+  // and hidden: its head (name, the library's back button), the switch.
+  lv_obj_t* menu_title = nullptr;
+  lv_obj_t* menu_back = nullptr;
+  lv_obj_t* menu_tabs[3] = {};
+  uint32_t menu_rows_key = 0;  // what the rows show (menu_rows_of); 0: none
   lv_obj_t* volume_value_label = nullptr;
   MediaView last_menu_view = MediaView::Player;  // the menu opens at its last list
   lv_obj_t* cover_clip = nullptr;
@@ -1083,6 +1089,9 @@ void reset_player_parts(MediaPopupContext* ctx) {
   ctx->shown_volume_icon = 255;
 }
 
+static void build_menu(MediaPopupContext* ctx);
+void delete_menu(MediaPopupContext* ctx);
+
 static void build_player(MediaPopupContext* ctx, bool centered) {
   static uint32_t last_log_ms = 0;
   if (!last_log_ms || millis() - last_log_ms > 5000) {
@@ -1092,7 +1101,8 @@ static void build_player(MediaPopupContext* ctx, bool centered) {
   }
   const int side_before = ctx->cover_side;
   if (ctx->player) lv_obj_delete(ctx->player);
-  // The menu button lives on the card's root (over the open menu).
+  // The menu and its button live on the card's root (over the player).
+  delete_menu(ctx);
   if (ctx->menu_button) lv_obj_delete(ctx->menu_button);
   ctx->menu_button = nullptr;
   reset_player_parts(ctx);
@@ -1221,6 +1231,7 @@ static void build_player(MediaPopupContext* ctx, bool centered) {
   lv_obj_set_style_text_align(ctx->volume_value_label, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_pos(ctx->volume_value_label, value_x,
                  ml::kVolumeTop + ml::kButton / 2 - line_height(popup_layout::font20()) / 2);
+  build_menu(ctx);
   // The menu button in the bottom right corner on the edge L: three dots, a
   // full button, the circle only while pressed. On the card's root, so it
   // stays over the open menu.
@@ -1626,21 +1637,32 @@ void delete_dead_lists(void*) {
   ctx->dead_lists.clear();
 }
 
+// An object that may go from one of its own clicks (a row, a button): hidden
+// now, deleted after the event; a popup deleted first takes it along.
+void drop_later(MediaPopupContext* ctx, lv_obj_t* obj) {
+  if (!obj) return;
+  lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+  if (ctx->dead_lists.empty()) lv_async_call(delete_dead_lists, nullptr);
+  ctx->dead_lists.push_back(obj);
+}
+
+// The menu's rows only; the menu itself stays (build_menu).
 void delete_list(MediaPopupContext* ctx) {
-  // The menu may go from one of its own rows' or buttons' clicks: hidden
-  // now, deleted after the event; a popup deleted first takes it along.
-  for (lv_obj_t* obj : {ctx->list_box, ctx->list_shield}) {
-    if (!obj) continue;
-    lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
-    if (ctx->dead_lists.empty()) lv_async_call(delete_dead_lists, nullptr);
-    ctx->dead_lists.push_back(obj);
-  }
-  ctx->list_box = nullptr;
-  ctx->list_shield = nullptr;
+  drop_later(ctx, ctx->list);
   ctx->list = nullptr;
   ctx->list_dirty = false;
   ctx->library_status = nullptr;
   ctx->library_rows = 0;
+  ctx->menu_rows_key = 0;
+}
+
+// The whole menu (a new player's colors or layout build it again).
+void delete_menu(MediaPopupContext* ctx) {
+  delete_list(ctx);
+  drop_later(ctx, ctx->list_box);
+  drop_later(ctx, ctx->list_shield);
+  ctx->list_box = ctx->list_shield = ctx->menu_title = ctx->menu_back = nullptr;
+  for (lv_obj_t*& tab : ctx->menu_tabs) tab = nullptr;
 }
 
 // The list fills its own area with the menu's color (the card's), square and
@@ -1671,74 +1693,154 @@ static const char* menu_view_icon(MediaView view) {
   }
 }
 
-// The menu (user 2026-10-22, build/design-mockups/media-popup-simple): it
-// opens from the menu button as a box inside the popup in the card's color
-// with the popup's shadow, its edge halfway in the edge L (a pressed button
-// to its edge as far as its edge to the card's), its radius concentric with
-// the card's. Inside, on the edge L: a head row as high as a button (in a
-// library level the back button in its corner, then the list's name over
-// the rows' texts), a hairline, five rows, and in the volume row the switch
-// (speakers, source, library in the previous, play and next columns; the
-// shown one on the control fill like shuffle that is on). Head, cover and
-// the menu button stay where they are; a tap outside the box closes it.
-static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
-  const int32_t scroll = keep_scroll && ctx->list ? lv_obj_get_scroll_y(ctx->list) : 0;
-  delete_list(ctx);
-  if (ctx->view == MediaView::Player) return;
+// The menu's geometry (user 2026-10-22, build/design-mockups/media-popup-simple):
+// a box inside the popup, its edge halfway in the edge L (a pressed button to
+// its edge as far as its edge to the card's); inside on the edge L a head row
+// as high as a button, a hairline a grid gap under it, five rows, the switch
+// in the volume row.
+struct MenuGeometry {
+  int box_offset, box_pad, head_height, list_height, top, content_width;
+};
+MenuGeometry menu_geometry() {
+  const int L = ml::kEdge;
+  const int g = Device::kGridGap;
+  MenuGeometry m{};
+  m.box_offset = L / 2;
+  m.box_pad = L - m.box_offset;
+  m.head_height = ml::kButton;
+  m.list_height = ml::kMenuRows * kListRowHeight;
+  m.top = ml::kVolumeTop - g - m.list_height - g - m.head_height - m.box_pad;
+  m.content_width = popup_layout::kCardWidth - 2 * L;
+  return m;
+}
+
+// The menu, built once with the player and kept hidden (user 2026-10-22: the
+// menu opened slowly; the player popup itself is built once too). It opens
+// from the menu button as a box in the card's color with the big popup's
+// shadow, its radius concentric with the card's. A tap outside it closes it.
+static void build_menu(MediaPopupContext* ctx) {
   const MediaColors& c = ctx->colors;
   const int W = popup_layout::kCardWidth;
   const int H = popup_layout::kCardHeight;
-  const int L = ml::kEdge;
   const int g = Device::kGridGap;
-  const int box_offset = L / 2;
-  const int box_pad = L - box_offset;
-  const int head_height = ml::kButton;
-  const int list_height = ml::kMenuRows * kListRowHeight;
-  const int top = ml::kVolumeTop - g - list_height - g - head_height - box_pad;
-  const int content_width = W - 2 * L;
+  const MenuGeometry m = menu_geometry();
 
+  // The layer outside the box catches taps only while the menu is open; it
+  // stays shown and draws nothing (showing it redrew the whole card on every
+  // opening and closing, 640000 px on V2).
   ctx->list_shield = plain(ctx->root);
   lv_obj_set_size(ctx->list_shield, W, H);
-  lv_obj_add_flag(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(ctx->list_shield, on_menu_shield, LV_EVENT_CLICKED, nullptr);
 
   ctx->list_box = plain(ctx->root);
   lv_obj_add_flag(ctx->list_box, LV_OBJ_FLAG_CLICKABLE);  // a tap inside stays inside
-  lv_obj_set_pos(ctx->list_box, box_offset, top);
-  lv_obj_set_size(ctx->list_box, W - 2 * box_offset, H - box_offset - top);
+  lv_obj_set_pos(ctx->list_box, m.box_offset, m.top);
+  lv_obj_set_size(ctx->list_box, W - 2 * m.box_offset, H - m.box_offset - m.top);
   const int32_t card_radius = lv_obj_get_style_radius(ctx->card, LV_PART_MAIN);
-  lv_obj_set_style_radius(ctx->list_box, std::max<int32_t>(0, card_radius - box_offset), 0);
+  lv_obj_set_style_radius(ctx->list_box, std::max<int32_t>(0, card_radius - m.box_offset), 0);
   lv_obj_set_style_bg_color(ctx->list_box, lv_color_hex(c.card), 0);
   lv_obj_set_style_bg_opa(ctx->list_box, LV_OPA_COVER, 0);
+  // The big popup's shadow exactly: its rule, at the card's radius (user
+  // 2026-10-22: the menu's was wider than the popup's).
   popup_layout::apply_card_shadow(ctx->list_box);
+  lv_obj_set_style_shadow_width(ctx->list_box, popup_layout::shadow_width_for(card_radius), 0);
+  lv_obj_add_flag(ctx->list_box, LV_OBJ_FLAG_HIDDEN);
 
-  // The head row.
-  const int text_inset = settings_style::kRowPadLeft - settings_style::kOptionInset;
-  int title_x = box_pad + text_inset;
-  if (ctx->view == MediaView::Library && media_browse_can_go_back()) {
-    lv_obj_t* back = round_button(ctx->list_box, c, ml::kButton, "arrow-left", c.control_icon, nullptr);
-    lv_obj_set_pos(back, box_pad, box_pad);
-    lv_obj_add_event_cb(back, on_media_command, LV_EVENT_CLICKED,
-                        reinterpret_cast<void*>(static_cast<intptr_t>(MediaAction::Back)));
-    // The name over the rows' texts (their kind icon, then a gap).
-    title_x += lv_font_get_line_height(FONT_MDI_ICONS) + g;
-  }
-  lv_obj_t* title = add_text(ctx->list_box, settings_style::row_font(), c.text, "");
-  lv_label_set_text(title, drop_missing_glyphs(view_title(ctx).c_str(), settings_style::row_font()).c_str());
-  one_line_dots(title);
-  lv_obj_set_width(title, box_pad + content_width - title_x);
-  lv_obj_set_pos(title, title_x, box_pad + head_height / 2 - line_height(settings_style::row_font()) / 2);
+  // The head row: the library's back button in the corner, the name.
+  ctx->menu_back = round_button(ctx->list_box, c, ml::kButton, "arrow-left", c.control_icon, nullptr);
+  lv_obj_set_pos(ctx->menu_back, m.box_pad, m.box_pad);
+  lv_obj_add_event_cb(ctx->menu_back, on_media_command, LV_EVENT_CLICKED,
+                      reinterpret_cast<void*>(static_cast<intptr_t>(MediaAction::Back)));
+  lv_obj_add_flag(ctx->menu_back, LV_OBJ_FLAG_HIDDEN);
+  ctx->menu_title = add_text(ctx->list_box, settings_style::row_font(), c.text, "");
+  one_line_dots(ctx->menu_title);
   // The hairline like the Settings rows' separator, from L to W - L.
   lv_obj_t* rule = plain(ctx->list_box);
-  lv_obj_set_pos(rule, box_pad, box_pad + head_height + g / 2);
-  lv_obj_set_size(rule, content_width, 1);
+  lv_obj_set_pos(rule, m.box_pad, m.box_pad + m.head_height + g / 2);
+  lv_obj_set_size(rule, m.content_width, 1);
   lv_obj_set_style_bg_color(rule, lv_color_hex(c.text), 0);
   lv_obj_set_style_bg_opa(rule, settings_style::kSeparatorOpa, 0);
 
-  // The rows.
+  // The switch in the volume row: speakers, source, library in the previous,
+  // play and next columns.
+  auto cx = [&](int k) { return W / 2 + (k - 2) * ml::kStep - ml::kButton / 2; };
+  for (size_t k = 0; k < sizeof(kMenuViews) / sizeof(kMenuViews[0]); ++k) {
+    const MediaView view = kMenuViews[k];
+    lv_obj_t* tab = round_button(ctx->list_box, c, ml::kButton, menu_view_icon(view), c.control_icon, nullptr);
+    lv_obj_set_pos(tab, cx(static_cast<int>(k) + 1) - m.box_offset, ml::kVolumeTop - m.top);
+    const MediaAction action = view == MediaView::Group    ? MediaAction::Group
+                               : view == MediaView::Source ? MediaAction::Source
+                                                           : MediaAction::Library;
+    lv_obj_add_event_cb(tab, on_media_command, LV_EVENT_CLICKED, reinterpret_cast<void*>(static_cast<intptr_t>(action)));
+    ctx->menu_tabs[k] = tab;
+  }
+}
+
+// The open list's head and switch: its name (in the library the level), the
+// back button in a library level, the offered lists' buttons with the shown
+// one on the control fill like shuffle that is on.
+static void show_menu_head(MediaPopupContext* ctx) {
+  const MediaColors& c = ctx->colors;
+  const MenuGeometry m = menu_geometry();
+  const bool back = ctx->view == MediaView::Library && media_browse_can_go_back();
+  set_shown(ctx->menu_back, back);
+  const int text_inset = settings_style::kRowPadLeft - settings_style::kOptionInset;
+  // The name over the rows' texts (their kind icon, then a gap) after the
+  // back button.
+  const int title_x = m.box_pad + text_inset + (back ? lv_font_get_line_height(FONT_MDI_ICONS) + Device::kGridGap : 0);
+  lv_label_set_text(ctx->menu_title, drop_missing_glyphs(view_title(ctx).c_str(), settings_style::row_font()).c_str());
+  lv_obj_set_width(ctx->menu_title, m.box_pad + m.content_width - title_x);
+  lv_obj_set_pos(ctx->menu_title, title_x, m.box_pad + m.head_height / 2 - line_height(settings_style::row_font()) / 2);
+  for (size_t k = 0; k < sizeof(kMenuViews) / sizeof(kMenuViews[0]); ++k) {
+    lv_obj_t* tab = ctx->menu_tabs[k];
+    if (!tab) continue;
+    set_shown(tab, menu_view_offered(ctx, kMenuViews[k]));
+    const bool on = kMenuViews[k] == ctx->view;
+    popup_nav_style::set_bg(tab, c.control, on ? c.control_opa : LV_OPA_TRANSP, LV_PART_MAIN);
+    popup_nav_style::set_bg(tab, on ? c.raised : c.control, on ? c.raised_opa : c.control_opa,
+                            LV_PART_MAIN | LV_STATE_PRESSED);
+  }
+  if (ctx->menu_button) lv_obj_move_foreground(ctx->menu_button);
+}
+
+// What the open list's rows show: a change builds them again, else they stay
+// as they are (the menu opens at once).
+uint32_t menu_rows_of(const MediaPopupContext* ctx) {
+  uint32_t key = static_cast<uint32_t>(ctx->view) << 28;
+  if (ctx->view == MediaView::Library) {
+    const MediaBrowseLevel* level = media_browse_current_level();
+    key ^= media_browse_items_version() * 2654435761u;
+    if (level) key ^= text_hash(level->content_id.c_str());
+  } else {
+    key ^= list_signature(ctx);
+  }
+  return key ? key : 1;
+}
+
+// Shows the open list (or hides the menu for the player). The rows are built
+// again only when what they show changed.
+static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
+  if (!ctx->list_box) return;
+  if (ctx->view == MediaView::Player) {
+    set_shown(ctx->list_box, false);
+    lv_obj_remove_flag(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE);
+    return;
+  }
+  show_menu_head(ctx);
+  lv_obj_add_flag(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE);
+  set_shown(ctx->list_box, true);
+  const uint32_t rows = menu_rows_of(ctx);
+  if (ctx->list && ctx->menu_rows_key == rows) {
+    show_library_status(ctx);
+    return;
+  }
+  const int32_t scroll = keep_scroll && ctx->list ? lv_obj_get_scroll_y(ctx->list) : 0;
+  delete_list(ctx);
+
+  const MenuGeometry m = menu_geometry();
   ctx->list = plain(ctx->list_box);
-  lv_obj_set_pos(ctx->list, box_pad, box_pad + head_height + g);
-  lv_obj_set_size(ctx->list, content_width, list_height);
+  lv_obj_set_pos(ctx->list, m.box_pad, m.box_pad + m.head_height + Device::kGridGap);
+  lv_obj_set_size(ctx->list, m.content_width, m.list_height);
   lv_obj_set_style_radius(ctx->list, 0, 0);
   // The Sensor popup's activity list scrollbar (sensor_popup.cpp): thin and
   // round, shown while the list is longer than the box (user 2026-10-19);
@@ -1759,28 +1861,11 @@ static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
   lv_obj_set_scroll_dir(ctx->list, LV_DIR_VER);
   lv_obj_add_event_cb(ctx->list, on_list_scroll_end, LV_EVENT_SCROLL_END, nullptr);
 
-  // The switch in the volume row.
-  auto cx = [&](int k) { return W / 2 + (k - 2) * ml::kStep - ml::kButton / 2; };
-  for (size_t k = 0; k < sizeof(kMenuViews) / sizeof(kMenuViews[0]); ++k) {
-    const MediaView view = kMenuViews[k];
-    if (!menu_view_offered(ctx, view)) continue;
-    lv_obj_t* tab = round_button(ctx->list_box, c, ml::kButton, menu_view_icon(view), c.control_icon, nullptr);
-    lv_obj_set_pos(tab, cx(static_cast<int>(k) + 1) - box_offset, ml::kVolumeTop - top);
-    const MediaAction action = view == MediaView::Group    ? MediaAction::Group
-                               : view == MediaView::Source ? MediaAction::Source
-                                                           : MediaAction::Library;
-    lv_obj_add_event_cb(tab, on_media_command, LV_EVENT_CLICKED, reinterpret_cast<void*>(static_cast<intptr_t>(action)));
-    if (view == ctx->view) {
-      popup_nav_style::set_bg(tab, c.control, c.control_opa, LV_PART_MAIN);
-      popup_nav_style::set_bg(tab, c.raised, c.raised_opa, LV_PART_MAIN | LV_STATE_PRESSED);
-    }
-  }
-  if (ctx->menu_button) lv_obj_move_foreground(ctx->menu_button);
-
   if (ctx->view == MediaView::Library) build_library(ctx);
   else if (ctx->view == MediaView::Source) build_sources(ctx);
   else if (ctx->view == MediaView::Group) build_group(ctx);
   ctx->list_signature = list_signature(ctx);
+  ctx->menu_rows_key = rows;
   if (scroll) {
     lv_obj_update_layout(ctx->list);
     lv_obj_scroll_to_y(ctx->list, scroll, LV_ANIM_OFF);
@@ -1790,9 +1875,10 @@ static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
 static void open_view(MediaPopupContext* ctx, MediaView view) {
   const MediaView before = ctx->view;
   ctx->view = view;
-  if (before == MediaView::Library && view != MediaView::Library) media_browse_reset();
-  if (view == MediaView::Library && before != MediaView::Library) {
-    // Every opening starts at the library's root.
+  // The library keeps its level while the popup is open (user 2026-10-22:
+  // "Laden" on every opening); the first opening starts at its root.
+  if (view == MediaView::Library && before != MediaView::Library &&
+      (!media_browse_current_level() || !media_browse_entity().equalsIgnoreCase(ctx->entity_id))) {
     media_browse_start(ctx->entity_id.c_str());
   }
   if (view != MediaView::Player) ctx->last_menu_view = view;
@@ -1993,11 +2079,14 @@ static void close_media_popup(MediaPopupContext* ctx) {
   cancel_popup_open(ctx->card);
   lv_obj_add_flag(ctx->card, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(ctx->overlay, LV_OBJ_FLAG_CLICKABLE);
-  // The next opening starts at the player.
+  // The next opening starts at the player, the library at its root; the
+  // library's rows go with its level (only they have a status line), the
+  // other lists stay for the next opening.
+  media_browse_reset();
+  if (ctx->library_status) delete_list(ctx);
   if (ctx->view != MediaView::Player) {
-    if (ctx->view == MediaView::Library) media_browse_reset();
     ctx->view = MediaView::Player;
-    delete_list(ctx);
+    rebuild_list(ctx, false);
   }
   if (ctx->library_timer) lv_timer_pause(ctx->library_timer);
   if (ctx->motion_timer) lv_timer_pause(ctx->motion_timer);

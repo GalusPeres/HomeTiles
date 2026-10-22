@@ -8,7 +8,9 @@
 // button (the library's back button in its corner, the list's name over the
 // rows' texts), a hairline, five rows, and the switch (speakers, source,
 // library) in the volume row; a tap outside closes it; the scroll frames
-// redraw only the list (one square opaque area).
+// redraw only the list (one square opaque area). Built once with the player
+// and only shown, with the big popup's shadow; the library keeps its level
+// while the popup is open.
 import assert from 'node:assert/strict';
 import {readRepoFile} from '../../lib/admin-source.mjs';
 import {cppFunctionDefinitions} from '../../lib/cpp-source.mjs';
@@ -37,26 +39,59 @@ assert.match(player, /lv_obj_set_width\(ctx->volume_value_label, ml::kButton\);\
 assert.match(player, /ctx->menu_button = round_button\(ctx->root, c, ml::kButton, "dots-horizontal", c\.control_icon, nullptr\);\s*lv_obj_set_pos\(ctx->menu_button, W - L - ml::kButton, ml::kVolumeTop\);/);
 assert.ok(!/speaker-multiple", MediaAction::Group/.test(player), 'grouping moved into the menu');
 
-// The menu.
-const menu = fn('rebuild_list');
-assert.match(menu, /const int box_offset = L \/ 2;\s*const int box_pad = L - box_offset;\s*const int head_height = ml::kButton;\s*const int list_height = ml::kMenuRows \* kListRowHeight;/);
-assert.match(menu, /const int top = ml::kVolumeTop - g - list_height - g - head_height - box_pad;/);
-assert.match(menu, /lv_obj_set_pos\(ctx->list_box, box_offset, top\);\s*lv_obj_set_size\(ctx->list_box, W - 2 \* box_offset, H - box_offset - top\);/);
-assert.match(menu, /lv_obj_set_style_radius\(ctx->list_box, std::max<int32_t>\(0, card_radius - box_offset\), 0\);/, 'concentric with the card');
+// The menu: built once with the player (user 2026-10-22: it opened slowly,
+// the player popup is built once too), then only shown and hidden.
+const geometry = fn('menu_geometry');
+assert.match(geometry, /m\.box_offset = L \/ 2;\s*m\.box_pad = L - m\.box_offset;\s*m\.head_height = ml::kButton;\s*m\.list_height = ml::kMenuRows \* kListRowHeight;/);
+assert.match(geometry, /m\.top = ml::kVolumeTop - g - m\.list_height - g - m\.head_height - m\.box_pad;/);
+assert.match(player, /delete_menu\(ctx\);[\s\S]*build_menu\(ctx\);\s*\/\/ The menu button[\s\S]*ctx->menu_button = round_button\(ctx->root,/, 'the menu under its button, built with the player');
+const menu = fn('build_menu');
+assert.match(menu, /lv_obj_set_pos\(ctx->list_box, m\.box_offset, m\.top\);\s*lv_obj_set_size\(ctx->list_box, W - 2 \* m\.box_offset, H - m\.box_offset - m\.top\);/);
+assert.match(menu, /lv_obj_set_style_radius\(ctx->list_box, std::max<int32_t>\(0, card_radius - m\.box_offset\), 0\);/, 'concentric with the card');
 assert.match(menu, /lv_obj_set_style_bg_color\(ctx->list_box, lv_color_hex\(c\.card\), 0\);/);
-assert.match(menu, /popup_layout::apply_card_shadow\(ctx->list_box\);/, 'the popups\' shadow rule (shadow cache)');
-assert.match(menu, /if \(ctx->view == MediaView::Library && media_browse_can_go_back\(\)\) \{\s*lv_obj_t\* back = round_button\(ctx->list_box, c, ml::kButton, "arrow-left", c\.control_icon, nullptr\);\s*lv_obj_set_pos\(back, box_pad, box_pad\);/);
-assert.match(menu, /lv_obj_t\* title = add_text\(ctx->list_box, settings_style::row_font\(\), c\.text, ""\);/);
-assert.match(menu, /lv_obj_set_pos\(rule, box_pad, box_pad \+ head_height \+ g \/ 2\);\s*lv_obj_set_size\(rule, content_width, 1\);/);
+// The big popup's shadow exactly (user 2026-10-22: the menu's was wider):
+// the popups' rule at the card's radius, not at the box's smaller one.
+assert.match(menu, /popup_layout::apply_card_shadow\(ctx->list_box\);\s*lv_obj_set_style_shadow_width\(ctx->list_box, popup_layout::shadow_width_for\(card_radius\), 0\);/);
+assert.match(menu, /const int32_t card_radius = lv_obj_get_style_radius\(ctx->card, LV_PART_MAIN\);/);
+assert.match(menu, /lv_obj_add_flag\(ctx->list_box, LV_OBJ_FLAG_HIDDEN\);/, 'built hidden');
+assert.match(menu, /ctx->menu_back = round_button\(ctx->list_box, c, ml::kButton, "arrow-left", c\.control_icon, nullptr\);\s*lv_obj_set_pos\(ctx->menu_back, m\.box_pad, m\.box_pad\);/);
+assert.match(menu, /ctx->menu_title = add_text\(ctx->list_box, settings_style::row_font\(\), c\.text, ""\);/);
+assert.match(menu, /lv_obj_set_pos\(rule, m\.box_pad, m\.box_pad \+ m\.head_height \+ g \/ 2\);\s*lv_obj_set_size\(rule, m\.content_width, 1\);/);
 assert.match(menu, /lv_obj_set_style_bg_opa\(rule, settings_style::kSeparatorOpa, 0\);/);
-assert.match(menu, /lv_obj_set_style_pad_right\(ctx->list, bar_width \+ settings_style::kOptionInset, LV_PART_MAIN\);/, 'rows end before the scrollbar');
-assert.match(menu, /lv_obj_set_pos\(tab, cx\(static_cast<int>\(k\) \+ 1\) - box_offset, ml::kVolumeTop - top\);/);
-assert.match(menu, /if \(view == ctx->view\) \{\s*popup_nav_style::set_bg\(tab, c\.control, c\.control_opa, LV_PART_MAIN\);/, 'the shown list like shuffle on');
-assert.match(menu, /if \(ctx->menu_button\) lv_obj_move_foreground\(ctx->menu_button\);/);
+assert.match(menu, /lv_obj_set_pos\(tab, cx\(static_cast<int>\(k\) \+ 1\) - m\.box_offset, ml::kVolumeTop - m\.top\);/);
 assert.match(popup, /constexpr MediaView kMenuViews\[\] = \{MediaView::Group, MediaView::Source, MediaView::Library\};/);
-// A tap outside the box closes it; the box keeps its own taps.
-assert.match(menu, /ctx->list_shield = plain\(ctx->root\);\s*lv_obj_set_size\(ctx->list_shield, W, H\);\s*lv_obj_add_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);/);
+// The open list's head and switch: the back button only in a library
+// level, only the offered lists, the shown one like shuffle on.
+const head2 = fn('show_menu_head');
+assert.match(head2, /const bool back = ctx->view == MediaView::Library && media_browse_can_go_back\(\);\s*set_shown\(ctx->menu_back, back\);/);
+assert.match(head2, /set_shown\(tab, menu_view_offered\(ctx, kMenuViews\[k\]\)\);/);
+assert.match(head2, /popup_nav_style::set_bg\(tab, c\.control, on \? c\.control_opa : LV_OPA_TRANSP, LV_PART_MAIN\);/);
+assert.match(head2, /if \(ctx->menu_button\) lv_obj_move_foreground\(ctx->menu_button\);/);
+// Opening shows the menu; the rows are built again only when what they
+// show changed.
+const show = fn('rebuild_list');
+assert.match(show, /if \(ctx->view == MediaView::Player\) \{\s*set_shown\(ctx->list_box, false\);\s*lv_obj_remove_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);\s*return;/);
+assert.match(show, /const uint32_t rows = menu_rows_of\(ctx\);\s*if \(ctx->list && ctx->menu_rows_key == rows\) \{\s*show_library_status\(ctx\);\s*return;/);
+assert.match(show, /lv_obj_set_style_pad_right\(ctx->list, bar_width \+ settings_style::kOptionInset, LV_PART_MAIN\);/, 'rows end before the scrollbar');
+assert.match(show, /ctx->menu_rows_key = rows;/);
+assert.match(fn('menu_rows_of'), /key \^= media_browse_items_version\(\) \* 2654435761u;[\s\S]*key \^= list_signature\(ctx\);/);
+// A row's own click can build the rows again: they go after the event.
+assert.match(fn('delete_list'), /drop_later\(ctx, ctx->list\);/);
+// A tap outside the box closes it; the box keeps its own taps. The layer
+// stays shown and only takes taps while the menu is open (showing it
+// redrew the whole card, 640000 px on V2).
+assert.match(menu, /ctx->list_shield = plain\(ctx->root\);\s*lv_obj_set_size\(ctx->list_shield, W, H\);\s*lv_obj_add_event_cb\(ctx->list_shield, on_menu_shield, LV_EVENT_CLICKED, nullptr\);/);
+assert.ok(!/set_shown\(ctx->list_shield/.test(popup), 'the outside layer is never shown or hidden');
+assert.match(show, /lv_obj_add_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);\s*set_shown\(ctx->list_box, true\);/);
 assert.match(fn('on_menu_shield'), /open_view\(ctx, MediaView::Player\);/);
+// The library keeps its level while the popup is open (user 2026-10-22:
+// "Laden" on every opening); closing the popup starts it at its root.
+const open = fn('open_view');
+assert.ok(!/media_browse_reset/.test(open), 'switching lists keeps the library');
+assert.match(open, /if \(view == MediaView::Library && before != MediaView::Library &&\s*\(!media_browse_current_level\(\) \|\| !media_browse_entity\(\)\.equalsIgnoreCase\(ctx->entity_id\)\)\) \{\s*media_browse_start\(ctx->entity_id\.c_str\(\)\);/);
+const close = fn('close_media_popup');
+assert.match(close, /media_browse_reset\(\);\s*if \(ctx->library_status\) delete_list\(ctx\);/);
+assert.match(close, /ctx->view = MediaView::Player;\s*rebuild_list\(ctx, false\);/);
 // The menu button toggles, opening at the last list the player offers.
 const toggle = fn('toggle_menu');
 assert.match(toggle, /if \(ctx->view != MediaView::Player\) \{\s*open_view\(ctx, MediaView::Player\);/);
@@ -64,4 +99,4 @@ assert.match(toggle, /menu_view_offered\(ctx, ctx->last_menu_view\) \? ctx->last
 assert.match(fn('on_media_command'), /if \(action == MediaAction::Menu\) \{\s*toggle_menu\(ctx\);/);
 // The player stays under the open menu (not hidden).
 assert.ok(!/set_shown\(ctx->player/.test(popup), 'the player is never hidden');
-console.log('Media popup menu: free head, symmetric volume row, menu button, menu box, switch, outside tap');
+console.log("Media popup menu: free head, symmetric volume row, menu button, menu built once, the big popup's shadow, library level kept");

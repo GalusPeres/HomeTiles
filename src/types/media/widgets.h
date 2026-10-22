@@ -37,6 +37,12 @@ struct MediaTileWidgets {
   float media_position = 0.0f;
   float media_duration = 0.0f;
   uint32_t media_position_received_ms = 0;
+  // The last report of the position (its value, Home Assistant's
+  // media_position_updated_at and whether it played): a state that repeats
+  // it (a volume change) keeps the running position (media_position.h).
+  float media_position_reported = -1.0f;
+  String media_position_updated_at;
+  bool media_position_playing = false;
   bool has_media_volume = false;
   float media_volume_level = 0.0f;
   bool media_is_muted = false;

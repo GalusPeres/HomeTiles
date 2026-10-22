@@ -177,12 +177,16 @@ ${productionStruct(popup, 'MarqueeLine')}
 ${browseStatus}
 ${productionStruct(popup, 'MediaPopupContext')}
 static MediaPopupContext* g_media_popup_ctx = nullptr;
+// The menu (test-media-popup-menu.mjs): closing hides it.
+static void rebuild_list(MediaPopupContext* ctx, bool) {
+  if (ctx->view == MediaView::Player && ctx->list_box) lv_obj_add_flag(ctx->list_box, LV_OBJ_FLAG_HIDDEN);
+}
 ${[
   'find_extras', 'extras_of', 'set_shown', 'body_scope', 'slider_show', 'slider_set_shown',
   'slider_set_enabled', 'slider_input_fraction', 'volume_icon_bucket_for_percent', 'volume_icon_for_bucket',
   'set_volume_widgets', 'update_volume', 'format_media_time', 'current_media_position',
   'set_seek_widgets', 'update_seek', 'media_progress_timer_cb', 'seek_allowed', 'apply_volume_drag',
-  'on_volume_slider_event', 'apply_seek_drag', 'on_seek_slider_event', 'delete_dead_lists', 'delete_list',
+  'on_volume_slider_event', 'apply_seek_drag', 'on_seek_slider_event', 'delete_dead_lists', 'drop_later', 'delete_list',
   'close_media_popup', 'on_close_click', 'hide_media_popup',
 ].map(productionFunction).join('\n\n')}
 

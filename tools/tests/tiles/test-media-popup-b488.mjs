@@ -46,8 +46,11 @@ for (const part of ['x.state', 'x.features', 'x.source', 'x.sound_mode', '&x.sou
   'candidate.entity_id', 'candidate.name', 'candidate.state']) assert.ok(signature.includes(part), `signature: ${part}`);
 // A list taken down from its own row's click is deleted after the event, and
 // the popup's deletion takes pending ones along.
-// The menu (box and outside layer) goes after the event that closed it.
-assert.match(fn('delete_list'), /for \(lv_obj_t\* obj : \{ctx->list_box, ctx->list_shield\}\) \{\s*if \(!obj\) continue;\s*lv_obj_add_flag\(obj, LV_OBJ_FLAG_HIDDEN\);\s*if \(ctx->dead_lists\.empty\(\)\) lv_async_call\(delete_dead_lists, nullptr\);/);
+// The rows, and the whole menu when the player is built again, go after
+// the event.
+assert.match(fn('drop_later'), /lv_obj_add_flag\(obj, LV_OBJ_FLAG_HIDDEN\);\s*if \(ctx->dead_lists\.empty\(\)\) lv_async_call\(delete_dead_lists, nullptr\);\s*ctx->dead_lists\.push_back\(obj\);/);
+assert.match(fn('delete_list'), /drop_later\(ctx, ctx->list\);/);
+assert.match(fn('delete_menu'), /delete_list\(ctx\);\s*drop_later\(ctx, ctx->list_box\);\s*drop_later\(ctx, ctx->list_shield\);/);
 assert.match(fn('on_overlay_delete'), /ctx->dead_lists\.clear\(\);/);
 
 // Bars: the reported state only, not the button's immediate switch.
@@ -98,7 +101,7 @@ console.log('Media popup b488/b489: fixed library topic, list rebuild on change 
 // and sits on the edge L inside the menu box, away from its rounded corners
 // (simulator 2026-10-22: one area of about 258000 px per scroll frame).
 const rebuild = fn('rebuild_list');
-assert.match(rebuild, /lv_obj_set_pos\(ctx->list, box_pad, box_pad \+ head_height \+ g\);\s*lv_obj_set_size\(ctx->list, content_width, list_height\);\s*lv_obj_set_style_radius\(ctx->list, 0, 0\);/);
+assert.match(rebuild, /lv_obj_set_pos\(ctx->list, m\.box_pad, m\.box_pad \+ m\.head_height \+ Device::kGridGap\);\s*lv_obj_set_size\(ctx->list, m\.content_width, m\.list_height\);\s*lv_obj_set_style_radius\(ctx->list, 0, 0\);/);
 assert.match(fn('show_list_scrollbar_color'), /lv_obj_set_style_bg_color\(ctx->list, lv_color_hex\(ctx->colors\.card\), 0\);\s*lv_obj_set_style_bg_opa\(ctx->list, LV_OPA_COVER, 0\);/);
-assert.match(rebuild, /const int box_offset = L \/ 2;\s*const int box_pad = L - box_offset;/);
+assert.match(fn('menu_geometry'), /m\.box_offset = L \/ 2;\s*m\.box_pad = L - m\.box_offset;/);
 console.log('Media popup b490: a scroll frame redraws only the list');

@@ -4,6 +4,7 @@
 #include "src/types/media/content_layout.h"
 #include "src/types/media/update_schedule.h"
 #include "src/types/media/update_service.h"
+#include "src/types/media/media_position.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/json_scan.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -60,6 +61,7 @@
 #include <math.h>
 #include <new>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <time.h>
 #include <vector>
 
@@ -4485,6 +4487,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   float media_duration = 0.0f;
   bool has_media_position = false;
   bool has_media_duration = false;
+  String position_updated_at;
   bool is_muted = false;
   bool has_muted = false;
 
@@ -4503,6 +4506,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     }
     has_media_position = extract_json_number_field_cstr(payload_start, "media_position", media_position);
     has_media_duration = extract_json_number_field_cstr(payload_start, "media_duration", media_duration);
+    extract_json_string_field_cstr(payload_start, "media_position_updated_at", position_updated_at);
     has_muted = extract_json_bool_field_cstr(payload_start, "is_volume_muted", is_muted);
     if (!has_muted) {
       has_muted = extract_json_bool_field_cstr(payload_start, "muted", is_muted);
@@ -4536,10 +4540,34 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   widgets.has_media_volume = has_volume_level;
   widgets.media_volume_level = has_volume_level ? volume_level : 0.0f;
   if (has_muted) widgets.media_is_muted = is_muted;
+  // The position is Home Assistant's at media_position_updated_at: a state
+  // that repeats the last report (a volume change) keeps the running
+  // position; a new one counts the time since it was taken (media_position.h).
+  const bool had_position = widgets.has_media_position;
   widgets.has_media_position = has_media_position && has_media_duration && media_duration > 0.0f;
-  widgets.media_position = widgets.has_media_position ? media_position : 0.0f;
   widgets.media_duration = widgets.has_media_position ? media_duration : 0.0f;
-  widgets.media_position_received_ms = widgets.has_media_position ? millis() : 0;
+  const bool playing = state.equalsIgnoreCase("playing");
+  const bool same_report = had_position && widgets.has_media_position &&
+                           media_position == widgets.media_position_reported &&
+                           position_updated_at == widgets.media_position_updated_at &&
+                           playing == widgets.media_position_playing;
+  if (!widgets.has_media_position) {
+    widgets.media_position = 0.0f;
+    widgets.media_position_received_ms = 0;
+    widgets.media_position_reported = -1.0f;
+    widgets.media_position_updated_at = "";
+  } else if (!same_report) {
+    double updated = 0.0;
+    const bool has_updated = media_progress::parse_utc(position_updated_at.c_str(), updated);
+    struct timeval now {};
+    gettimeofday(&now, nullptr);
+    widgets.media_position = media_progress::now_position(
+        media_position, media_duration, playing, now.tv_sec + now.tv_usec / 1e6, has_updated, updated);
+    widgets.media_position_received_ms = millis();
+    widgets.media_position_reported = media_position;
+    widgets.media_position_updated_at = position_updated_at;
+  }
+  widgets.media_position_playing = playing;
 
   String main_text = media_first_non_empty(title, channel);
   const bool has_real_media_title = main_text.length() > 0;

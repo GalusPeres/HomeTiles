@@ -47,6 +47,13 @@ class String : public std::string {public:
 };
 ${read('src/types/media/widgets.h').replace(/^#.*$/gm,'')}
 ${read('src/types/media/artwork_payload.h').replace(/^#.*$/gm,'')}
+${read('src/types/media/media_position.h').replace(/^#.*$/gm,'')}
+// The position's clock: not set yet, like a panel before its first time
+// sync, so a state's position counts as reported (test-media-position.mjs).
+struct media_test_timeval { long tv_sec; long tv_usec; };
+static int media_test_gettimeofday(media_test_timeval* tv, void*) { tv->tv_sec = 0; tv->tv_usec = 0; return 0; }
+#define timeval media_test_timeval
+#define gettimeofday media_test_gettimeofday
 uint32_t ticks=100;uint32_t millis(){return ticks;}
 struct Logger{void println(const char*){}template<class...T>void printf(const char*,T...){}}Serial;
 std::map<void*,size_t> allocations;bool fail_pixels=false,fail_descriptor=false;size_t pixel_peak=0;

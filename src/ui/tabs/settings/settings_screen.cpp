@@ -75,6 +75,7 @@ lv_timer_t* g_lines_timer = nullptr;
 
 // Display page.
 lv_obj_t* g_brightness_value = nullptr;
+lv_obj_t* g_volume_value = nullptr;
 lv_obj_t* g_sleep_value = nullptr;
 lv_obj_t* g_saver_value = nullptr;
 lv_obj_t* g_saver_brightness_value = nullptr;
@@ -108,7 +109,8 @@ const char* category_title(Category category) {
   const i18n::Strings& s = settings_model::text();
   switch (category) {
     case Category::Display:
-      return s.display_label;
+      // With the Sound group (#123) the page holds the speaker too.
+      return settings_model::sound_values().speaker ? s.settings_display_sound : s.display_label;
     case Category::Wifi:
       // Panels that can use Ethernet name the whole network.
       return settings_model::ethernet_panel() ? s.settings_network : s.wifi_label;
@@ -123,7 +125,7 @@ const char* category_title(Category category) {
 const char* category_icon(Category category) {
   switch (category) {
     case Category::Display:
-      return "monitor";
+      return settings_model::sound_values().speaker ? "monitor-speaker" : "monitor";
     case Category::Wifi:
       return settings_model::ethernet_active()     ? "ethernet"
              : settings_model::access_point_on()   ? "access-point"
@@ -340,11 +342,13 @@ void build_category_tile(lv_obj_t* panel, uint8_t index, int x, int y, int w, in
 }
 
 // ---------- Display page ----------
-// Screen: Brightness, Sleep, Rotation, Design; Screensaver: Starts after,
-// Brightness (mockup pageDisplay). All sliders start at the same x; the
+// Screen: Brightness, Sleep, Rotation, Design; Sound (boards with a speaker,
+// #123): Volume, Microphone; Screensaver: Starts after, Brightness (mockup
+// pageDisplay). All sliders start at the same x; the
 // rotation offers the quarter turns where the panel supports them.
 
 void clear_display_refs() {
+  g_volume_value = nullptr;
   g_brightness_value = nullptr;
   g_sleep_value = nullptr;
   g_saver_value = nullptr;
@@ -388,6 +392,29 @@ void on_saver_brightness(lv_obj_t*, int32_t value, bool final) {
   settings_model::saver_brightness_changed(value, final);
 }
 
+void on_volume(lv_obj_t*, int32_t value, bool final) {
+  set_percent_text(g_volume_value, value);
+  settings_model::volume_changed(value, final);
+}
+
+void build_page();
+
+// The switch shows its new state after a rebuild of the page, which keeps its
+// scroll position.
+void rebuild_display_async(void*) {
+  if (!g_page || g_category != Category::Display) return;
+  const int32_t scroll = lv_obj_get_scroll_y(g_page);
+  build_page();
+  lv_obj_update_layout(g_page);
+  lv_obj_scroll_to_y(g_page, scroll, LV_ANIM_OFF);
+}
+
+void on_microphone(lv_event_t*) {
+  settings_model::microphone_selected(!settings_model::sound_values().mic_on);
+  // The page is rebuilt, the touched switch with it: after the event.
+  lv_async_call(rebuild_display_async, nullptr);
+}
+
 }  // namespace
 
 lv_obj_t* rotation_segment(lv_obj_t* row, uint32_t track) {
@@ -409,7 +436,7 @@ namespace {
 int display_slider_width(int page_width) {
   const i18n::Strings& s = settings_model::text();
   int name = 0;
-  for (const char* text : {s.settings_brightness, s.settings_sleep, s.settings_starts_after}) {
+  for (const char* text : {s.settings_brightness, s.settings_volume, s.settings_sleep, s.settings_starts_after}) {
     const int width = settings_parts::text_width(settings_style::row_font(), text);
     if (width > name) name = width;
   }
@@ -460,6 +487,22 @@ void build_display_page(lv_obj_t* page) {
   const char* const themes[] = {s.theme_dark, s.theme_light, s.theme_auto};
   settings_parts::segment(design.row, themes, 3, settings_model::theme_choice(), palette.group,
                           [](lv_obj_t*, uint8_t index) { settings_model::theme_selected(index); });
+
+  // Sound (#123), on the boards with a speaker: the volume with the usual
+  // slider, the microphone with the hotspot's switch.
+  const settings_model::SoundValues sound = settings_model::sound_values();
+  if (sound.speaker) {
+    settings_parts::section(page, s.settings_sound, false);
+    lv_obj_t* audio = settings_parts::group(page, palette);
+    display_slider_row(audio, "volume-high", s.settings_volume, width, 0, 100, sound.volume, on_volume,
+                       &g_volume_value);
+    set_percent_text(g_volume_value, sound.volume);
+    if (sound.microphone) {
+      settings_parts::Row mic = settings_parts::row(audio, "microphone", s.settings_microphone);
+      settings_parts::toggle(mic.row, sound.mic_on, settings_style::kDisplayColor, palette.group, true, on_microphone,
+                             nullptr);
+    }
+  }
 
   settings_parts::section(page, s.settings_screensaver, false);
   lv_obj_t* saver = settings_parts::group(page, palette);

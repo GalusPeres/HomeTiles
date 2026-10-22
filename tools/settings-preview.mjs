@@ -120,7 +120,7 @@ const icons = ['cog', 'window-close', 'monitor', 'wifi', 'wifi-off', 'access-poi
   'pencil-outline', 'eye', 'eye-off', 'lock-outline', 'apple-keyboard-shift', 'apple-keyboard-caps',
   'backspace-outline', 'check-bold', 'shield-check', 'loading', 'cellphone-wireless', 'book-open-variant', 'qrcode',
   'view-grid-plus-outline', 'chevron-left', 'wifi-lock', 'wifi-strength-4-lock', 'wifi-strength-outline',
-  'theme-light-dark', 'page-layout-header', 'tune-variant'];
+  'theme-light-dark', 'page-layout-header', 'tune-variant', 'volume-high', 'microphone', 'monitor-speaker'];
 const iconTable = icons.map(name => {
   const match = mdi.match(new RegExp(`\\{"${name}", (0x[0-9A-Fa-f]+)\\}`));
   if (!match) throw new Error(`MDI icon ${name} missing`);
@@ -278,6 +278,14 @@ void sleep_changed(int, bool) {}
 void saver_changed(int, bool) {}
 void saver_brightness_changed(int, bool) {}
 void rotation_selected(uint8_t) {}
+// The Sound group (#123): the P4 panels have a speaker and a microphone, the
+// 480x480 S3 has neither.
+SoundValues sound_values() {
+  const bool p4 = ${p.W === 480 && p.H === 480 ? 'false' : 'true'};
+  return SoundValues{p4, p4, 45, true};
+}
+void volume_changed(int, bool) {}
+void microphone_selected(bool) {}
 uint8_t theme_index() { return 0; }
 uint8_t theme_choice() { return 0; }
 void theme_selected(uint8_t) {}

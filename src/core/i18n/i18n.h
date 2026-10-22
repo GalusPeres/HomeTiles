@@ -625,6 +625,13 @@ struct Strings {
   const char* settings_rotation;
   const char* settings_screensaver;
   const char* settings_starts_after;
+  // Settings Display page, Sound group (#123, P4 boards with a speaker):
+  // its heading, the volume slider and the microphone switch.
+  const char* settings_sound;
+  const char* settings_volume;
+  const char* settings_microphone;
+  // The Display category's name on the boards with the Sound group.
+  const char* settings_display_sound;
   // Display category line: %s = sleep time ("5 min", "never").
   const char* settings_sleep_summary_fmt;
   // WiFi category line.

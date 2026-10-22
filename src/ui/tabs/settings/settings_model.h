@@ -48,6 +48,18 @@ void sleep_changed(int index, bool final);
 void saver_changed(int index, bool final);
 void saver_brightness_changed(int percent, bool final);
 void rotation_selected(uint8_t index);
+// The Sound group (#123): the speaker volume and the microphone switch, the
+// same values Home Assistant sets. Shown only where the board has a speaker;
+// the switch only where it has a microphone too.
+struct SoundValues {
+  bool speaker;
+  bool microphone;
+  int volume;  // percent
+  bool mic_on;
+};
+SoundValues sound_values();
+void volume_changed(int percent, bool final);
+void microphone_selected(bool on);
 // The setup's first step (user 2026-10-12): the look, dark or light (the
 // automatic theme, a Web Admin choice, shows as the one it gives now), and
 // in a new panel's first setup only (not when opened from Settings) the head

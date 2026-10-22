@@ -13,10 +13,10 @@ Last reviewed: 2026-10-21
 ## Releases and builds
 
 - FW + Bridge v0.9.3 released 2026-10-18. Every former feature branch (perf, direct-link, voice, layouts, settings-setup, security, icon-file, camera-view) is in it.
-- Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step (b513, HA test pending).
+- Pairing by IP without mDNS (#114, Bridge #16): read-only `GET /api/link` + Bridge menu step; HA ok on Tab5 (b513, b16).
 - Test builds stay `v0.6.12bNNN` on purpose (System Update compares numbers only and offers releases); V2 beta define in `firmware_version.h`, last b513.
 - Run `node tools/fast-build-check.mjs --build-path <cache>` before every build; a cache stays warm when only repo headers changed and the LVGL config fingerprint matches.
-- Docs CI runs on pinned Chrome for Testing 154.0.8037.57 (.97 hung on the first navigate); a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
+- Docs CI runs on pinned Chrome for Testing 154.0.8037.57; a tag's docs run uses the tag's workflow, so after a release dispatch docs on `main`.
 - Factory images carry the icon file (`release-helper/factory-icon-file.js`); test builds need their icons on HomeTiles-staging (tag = FW_VERSION).
 
 ## Active work
@@ -82,7 +82,7 @@ Last reviewed: 2026-10-21
 - One look (b300): popup card margin 0, tiles one grid gap from the edge; popup header follows the head bar rule (`popup_layout.h`); card shadow width follows the radius to stay in the LVGL shadow cache (`shadow_width_for`, max 28 px).
 - Upright (b294): P4 panels upright under a landscape profile draw the upright UI directly (`drawUpright`); JC1060/7B upright and JC4880 landscape (b368) compile only, HW pending.
 - Light theme: `ui_theme` roles + `SurfaceScope`; popups take the opener's surface. Remembered LVGL objects clear themselves on delete (LVGL 9.6 `lv_obj_is_valid` reads freed objects).
-- Settings: four pages after `build/design-mockups/settings`; first-start setup in the popup card (S3 HW pending).
+- Settings: 4 pages (`build/design-mockups/settings`), Display with a Sound group on speaker boards (#123); setup in the popup card.
 
 ## Tiles and Bridge contracts
 

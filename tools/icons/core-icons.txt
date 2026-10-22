@@ -138,9 +138,11 @@ lock-open-variant
 lock-outline
 login-variant
 magnify
+microphone
 minus
 mirror
 monitor
+monitor-speaker
 moon-waning-crescent
 more
 motion

@@ -49,9 +49,16 @@ const menu = fn('build_menu');
 assert.match(menu, /lv_obj_set_pos\(ctx->list_box, m\.box_offset, m\.top\);\s*lv_obj_set_size\(ctx->list_box, W - 2 \* m\.box_offset, H - m\.box_offset - m\.top\);/);
 assert.match(menu, /lv_obj_set_style_radius\(ctx->list_box, std::max<int32_t>\(0, card_radius - m\.box_offset\), 0\);/, 'concentric with the card');
 assert.match(menu, /lv_obj_set_style_bg_color\(ctx->list_box, lv_color_hex\(c\.card\), 0\);/);
-// The big popup's shadow exactly (user 2026-10-22: the menu's was wider):
-// the popups' rule at the card's radius, not at the box's smaller one.
-assert.match(menu, /popup_layout::apply_card_shadow\(ctx->list_box\);\s*lv_obj_set_style_shadow_width\(ctx->list_box, popup_layout::shadow_width_for\(card_radius\), 0\);/);
+// The big popup's shadow exactly (user 2026-10-22: the menu's was wider),
+// on a layer under the box with the card's radius: LVGL caches one shadow
+// corner (radius and width), and a box shadow at its smaller radius made
+// every 28-line band compute both corners again (V2 b524: opening frames
+// 157-180 ms, closing 67-82 ms).
+assert.match(menu, /ctx->menu_shadow = plain\(ctx->root\);\s*lv_obj_set_pos\(ctx->menu_shadow, m\.box_offset, m\.top\);\s*lv_obj_set_size\(ctx->menu_shadow, W - 2 \* m\.box_offset, H - m\.box_offset - m\.top\);\s*lv_obj_set_style_radius\(ctx->menu_shadow, card_radius, 0\);\s*popup_layout::apply_card_shadow\(ctx->menu_shadow\);/);
+assert.ok(!/apply_card_shadow\(ctx->list_box\)|shadow_width\(ctx->list_box/.test(popup), 'no shadow of its own on the box');
+assert.ok(menu.indexOf('ctx->menu_shadow = plain') < menu.indexOf('ctx->list_box = plain'), 'the shadow layer under the box');
+assert.match(fn('rebuild_list'), /set_shown\(ctx->menu_shadow, true\);\s*set_shown\(ctx->list_box, true\);/);
+assert.match(fn('rebuild_list'), /set_shown\(ctx->list_box, false\);\s*set_shown\(ctx->menu_shadow, false\);/);
 assert.match(menu, /const int32_t card_radius = lv_obj_get_style_radius\(ctx->card, LV_PART_MAIN\);/);
 assert.match(menu, /lv_obj_add_flag\(ctx->list_box, LV_OBJ_FLAG_HIDDEN\);/, 'built hidden');
 assert.match(menu, /ctx->menu_back = round_button\(ctx->list_box, c, ml::kButton, "arrow-left", c\.control_icon, nullptr\);\s*lv_obj_set_pos\(ctx->menu_back, m\.box_pad, m\.box_pad\);/);
@@ -70,7 +77,7 @@ assert.match(head2, /if \(ctx->menu_button\) lv_obj_move_foreground\(ctx->menu_b
 // Opening shows the menu; the rows are built again only when what they
 // show changed.
 const show = fn('rebuild_list');
-assert.match(show, /if \(ctx->view == MediaView::Player\) \{\s*set_shown\(ctx->list_box, false\);\s*lv_obj_remove_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);\s*return;/);
+assert.match(show, /if \(ctx->view == MediaView::Player\) \{\s*set_shown\(ctx->list_box, false\);\s*set_shown\(ctx->menu_shadow, false\);\s*lv_obj_remove_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);\s*return;/);
 assert.match(show, /const uint32_t rows = menu_rows_of\(ctx\);\s*if \(ctx->list && ctx->menu_rows_key == rows\) \{\s*show_library_status\(ctx\);\s*return;/);
 assert.match(show, /lv_obj_set_style_pad_right\(ctx->list, bar_width \+ settings_style::kOptionInset, LV_PART_MAIN\);/, 'rows end before the scrollbar');
 assert.match(show, /ctx->menu_rows_key = rows;/);
@@ -82,7 +89,7 @@ assert.match(fn('delete_list'), /drop_later\(ctx, ctx->list\);/);
 // redrew the whole card, 640000 px on V2).
 assert.match(menu, /ctx->list_shield = plain\(ctx->root\);\s*lv_obj_set_size\(ctx->list_shield, W, H\);\s*lv_obj_add_event_cb\(ctx->list_shield, on_menu_shield, LV_EVENT_CLICKED, nullptr\);/);
 assert.ok(!/set_shown\(ctx->list_shield/.test(popup), 'the outside layer is never shown or hidden');
-assert.match(show, /lv_obj_add_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);\s*set_shown\(ctx->list_box, true\);/);
+assert.match(show, /lv_obj_add_flag\(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE\);\s*set_shown\(ctx->menu_shadow, true\);\s*set_shown\(ctx->list_box, true\);/);
 assert.match(fn('on_menu_shield'), /open_view\(ctx, MediaView::Player\);/);
 // The library keeps its level while the popup is open (user 2026-10-22:
 // "Laden" on every opening); closing the popup starts it at its root.

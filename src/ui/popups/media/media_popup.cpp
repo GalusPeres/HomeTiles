@@ -345,6 +345,7 @@ struct MediaPopupContext {
   // The menu's parts, built once with the player (build_menu) and only shown
   // and hidden: its head (name, the library's back button), the switch.
   lv_obj_t* menu_title = nullptr;
+  lv_obj_t* menu_shadow = nullptr;  // under the box: the big popup's shadow
   lv_obj_t* menu_back = nullptr;
   lv_obj_t* menu_tabs[3] = {};
   uint32_t menu_rows_key = 0;  // what the rows show (menu_rows_of); 0: none
@@ -1660,8 +1661,9 @@ void delete_list(MediaPopupContext* ctx) {
 void delete_menu(MediaPopupContext* ctx) {
   delete_list(ctx);
   drop_later(ctx, ctx->list_box);
+  drop_later(ctx, ctx->menu_shadow);
   drop_later(ctx, ctx->list_shield);
-  ctx->list_box = ctx->list_shield = ctx->menu_title = ctx->menu_back = nullptr;
+  ctx->list_box = ctx->menu_shadow = ctx->list_shield = ctx->menu_title = ctx->menu_back = nullptr;
   for (lv_obj_t*& tab : ctx->menu_tabs) tab = nullptr;
 }
 
@@ -1732,18 +1734,27 @@ static void build_menu(MediaPopupContext* ctx) {
   lv_obj_set_size(ctx->list_shield, W, H);
   lv_obj_add_event_cb(ctx->list_shield, on_menu_shield, LV_EVENT_CLICKED, nullptr);
 
+  // The big popup's shadow exactly, on a layer under the box with the card's
+  // radius (the box keeps its concentric one). LVGL keeps one shadow corner
+  // in its cache, keyed by radius and width: the box's own shadow at its
+  // smaller radius pushed the card's out, and every 28-line band of a frame
+  // computed both corners again (V2 b524: opening frames 157-180 ms, closing
+  // 67-82 ms, the popup's opening 77 ms).
+  const int32_t card_radius = lv_obj_get_style_radius(ctx->card, LV_PART_MAIN);
+  ctx->menu_shadow = plain(ctx->root);
+  lv_obj_set_pos(ctx->menu_shadow, m.box_offset, m.top);
+  lv_obj_set_size(ctx->menu_shadow, W - 2 * m.box_offset, H - m.box_offset - m.top);
+  lv_obj_set_style_radius(ctx->menu_shadow, card_radius, 0);
+  popup_layout::apply_card_shadow(ctx->menu_shadow);
+  lv_obj_add_flag(ctx->menu_shadow, LV_OBJ_FLAG_HIDDEN);
+
   ctx->list_box = plain(ctx->root);
   lv_obj_add_flag(ctx->list_box, LV_OBJ_FLAG_CLICKABLE);  // a tap inside stays inside
   lv_obj_set_pos(ctx->list_box, m.box_offset, m.top);
   lv_obj_set_size(ctx->list_box, W - 2 * m.box_offset, H - m.box_offset - m.top);
-  const int32_t card_radius = lv_obj_get_style_radius(ctx->card, LV_PART_MAIN);
   lv_obj_set_style_radius(ctx->list_box, std::max<int32_t>(0, card_radius - m.box_offset), 0);
   lv_obj_set_style_bg_color(ctx->list_box, lv_color_hex(c.card), 0);
   lv_obj_set_style_bg_opa(ctx->list_box, LV_OPA_COVER, 0);
-  // The big popup's shadow exactly: its rule, at the card's radius (user
-  // 2026-10-22: the menu's was wider than the popup's).
-  popup_layout::apply_card_shadow(ctx->list_box);
-  lv_obj_set_style_shadow_width(ctx->list_box, popup_layout::shadow_width_for(card_radius), 0);
   lv_obj_add_flag(ctx->list_box, LV_OBJ_FLAG_HIDDEN);
 
   // The head row: the library's back button in the corner, the name.
@@ -1823,11 +1834,13 @@ static void rebuild_list(MediaPopupContext* ctx, bool keep_scroll) {
   if (!ctx->list_box) return;
   if (ctx->view == MediaView::Player) {
     set_shown(ctx->list_box, false);
+    set_shown(ctx->menu_shadow, false);
     lv_obj_remove_flag(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE);
     return;
   }
   show_menu_head(ctx);
   lv_obj_add_flag(ctx->list_shield, LV_OBJ_FLAG_CLICKABLE);
+  set_shown(ctx->menu_shadow, true);
   set_shown(ctx->list_box, true);
   const uint32_t rows = menu_rows_of(ctx);
   if (ctx->list && ctx->menu_rows_key == rows) {

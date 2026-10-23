@@ -46,7 +46,7 @@ Last reviewed: 2026-10-23
 - P4 v3 images (post_v3 301-399): WS 10.1 (PR #48, tested v3.2), WS 7B `_rev3` (#41; 30 s Wi-Fi join, PR #120), JC8012 V3 = V2 code (#44); HW pending.
 - New in v0.9.3, HW pending by the reporters: GS-T3E v2 (#93, S3, relays GPIO45/46/44 at once), Waveshare 5-inch (#76, HX8394, own `dsi_driver`, pre-v3 + `_rev3`).
 - Voice (b477) HW ok 2026-10-16 on V2, Tab5, 8-inch, 4B; per-board `kVolumeLimit` (Guition 0.6, Tab5 0.9); S3 and the original JC1060 panel have none.
-- BIGTREETECH Panda Touch (community profile, `src/devices/btt_panda_touch`): 4.3" 800x480 ESP32-S3 printer panel, RGB DE mode (23 MHz vendor, pclk 16 MHz stable, active low, no init sequence, reset GPIO 46), GT900 touch on I2C0 (0x5D, SDA 2 / SCL 1, INT 40 / RST 41; status 0x814E, point 0x8150 with X first, screen coordinates), LEDC backlight GPIO 21 at 200 Hz, CH340K on USB-C (log on UART0), no SD. HW ok 2026-10-21 for the picture, the touch and the UI. DRAM bounce buffer required (no PSRAM XIP, 32-byte cache line); cache write back row by row with `DIR_C2M | UNALIGNED`. No tear-free redraw yet and the popup card stays square - see the board README.
+- Panda Touch (800x480 S3): HW ok, see board README.
 
 ## P4 network, issues #37/#38
 

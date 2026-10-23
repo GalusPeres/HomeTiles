@@ -110,6 +110,10 @@ assert.match(click, /const Tile\* tile = tile_renderer_get_tile_config\(data->gr
 assert.ok(!/data->icon_name/.test(renderer), 'no icon name kept from the build');
 assert.ok(!/struct MediaPopupEventData \{[^}]*icon_name/.test(renderer), 'the click data holds no icon name');
 assert.match(fn(renderer, 'render_media_tile'), /const String icon_name = media_tile_icon_name\(tile\);/);
+// renderer.h declares it for every file: its definition stays outside the
+// file's anonymous namespace (b528's first build: an ambiguous call).
+assert.ok(renderer.indexOf('\nString media_tile_icon_name(const Tile& tile) {') > renderer.indexOf('\n}  // namespace'),
+  'media_tile_icon_name is defined after the anonymous namespace');
 assert.match(fn(renderer, 'render_media_tile'), /target\[index\]\.icon_form = 0;  \/\/ media_state_icon::Form::Plain/);
 
 // The tile's icon follows the state; the popup's update reads the same name.

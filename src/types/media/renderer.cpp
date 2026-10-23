@@ -138,15 +138,6 @@ static String media_label_text(lv_obj_t* label) {
   return text ? String(text) : String();
 }
 
-String media_tile_icon_name(const Tile& tile) {
-  String icon_name = normalizeMdiIconName(tile.icon_name);
-  if (!icon_name.length() && tile.sensor_entity.length()) {
-    icon_name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(tile.sensor_entity));
-  }
-  if (!icon_name.length()) icon_name = "television";
-  return icon_name;
-}
-
 static bool media_widget_is_playing(const MediaTileWidgets& widgets) {
   if (!widgets.play_pause_label) return false;
   const char* current = lv_label_get_text(widgets.play_pause_label);
@@ -309,6 +300,15 @@ static String media_friendly_name_from_entity(const String& entity_id) {
 }
 
 }  // namespace
+
+String media_tile_icon_name(const Tile& tile) {
+  String icon_name = normalizeMdiIconName(tile.icon_name);
+  if (!icon_name.length() && tile.sensor_entity.length()) {
+    icon_name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(tile.sensor_entity));
+  }
+  if (!icon_name.length()) icon_name = "television";
+  return icon_name;
+}
 
 lv_obj_t* render_media_tile(lv_obj_t* parent,
                             int col,

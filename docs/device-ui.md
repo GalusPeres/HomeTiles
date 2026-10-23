@@ -15,7 +15,7 @@ The head shows Home's icon and title on the left, the page dots in the middle, a
 
 Up to five folders can be **pages** beside Home; choose them in the [Web Admin](web-admin.md#pages). The dots show which page is open:
 
-- **Swipe** sideways anywhere on a page to turn it. Sliders and bars keep their own touch.
+- **Swipe** sideways anywhere on a page to turn it. Sliders and bars keep their own touch. On Home, a swipe from left to right opens the screensaver; over the screensaver, a swipe from right to left goes back to Home.
 - **Tap beside the dots** to turn one page to that side.
 - **Tap the dots** to open the overview with a picture of every page, then tap a picture. Or hold the dots, slide onto a picture and let go. The overview closes after 10 seconds.
 
@@ -114,7 +114,9 @@ Settings has four pages; the **X** closes it.
 
 ### Display
 
-Brightness, sleep timeout, rotation by 180°, and the theme; for the screensaver its start time and brightness. **Never** switches the corresponding timeout off. Tap a **Clock** tile to open the [screensaver](screensaver.md) at once.
+Brightness, sleep timeout, rotation, and the theme; for the screensaver its start time and brightness. **Never** switches the corresponding timeout off. Rotation offers 0°, 90°, 180° and 270° on displays that turn in quarter turns, 0° and 180° on the others. Tap a **Clock** tile to open the [screensaver](screensaver.md) at once.
+
+On displays with a speaker the page is called **Display & Sound** and adds a **Sound** group: the speaker volume and, where there is a microphone, its switch. Home Assistant sets the same values.
 
 <figure class="ht-screenshot">
 <img src="../images/v09-settings-0.png" alt="Display settings with brightness, sleep, rotation, theme and screensaver" width="1280" height="800" loading="lazy">

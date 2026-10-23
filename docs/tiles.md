@@ -321,7 +321,7 @@ Shows current conditions and the next days from a `weather` entity. The number o
 
 ### Media
 
-Shows cover art, title, and playback controls for a `media_player` entity. Media tiles need at least 2×2 cells. With **From cover**, the icon and the tile take the color of the cover art.
+Shows cover art, title, and playback controls for a `media_player` entity. Media tiles need at least 2×2 cells. With **From cover**, the icon and the tile take the color of the cover art. The icon shows whether the player plays, pauses or is off (for example `speaker-play`), and while a song plays or pauses, bars stand over its title and move while it plays.
 
 <div class="ht-type-shots ht-type-pair" markdown>
 <div class="ht-type-stack" markdown>
@@ -336,7 +336,15 @@ Shows cover art, title, and playback controls for a `media_player` entity. Media
 </figure>
 </div>
 
-**Popup:** title and cover art with progress, playback controls and volume.
+**Popup:** cover art with title, artist and album, the time bar, playback controls and volume. **Popup** in the Web Admin chooses **Cover left** or **Cover centered**. The popup shows only the controls the player offers in Home Assistant; shuffle and repeat take the icon's color and a dot when they are on. The time follows the position Home Assistant reports.
+
+The **⋯** button in the bottom right corner opens a menu with up to three lists, each where the player offers it:
+
+- **Speakers:** play on several speakers together. The button shows how many play together.
+- **Source:** the player's sources and sound modes.
+- **Library:** browse Home Assistant's media for the player and start a title, album or playlist. The library keeps its place until the popup closes.
+
+The menu and the library need HomeTiles Bridge v0.9.4 or newer.
 
 ### Climate
 

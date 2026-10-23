@@ -51,6 +51,17 @@ Older display configurations, entity selections, aliases, and MQTT topic names r
 
 Bridge v0.9.0 remains compatible with older firmware and existing configurations. New features require the corresponding firmware; no reset or re-pairing is needed for a normal update.
 
+## Display Settings { data-toc-label="Display settings" }
+
+The display's Home Assistant device has its settings under **Configuration**: **Display Brightness**, **Screensaver Brightness**, **Display Standby** and **Display Standby After**, and with HomeTiles and Bridge v0.9.4:
+
+| Entity | Use |
+| --- | --- |
+| **Theme** | **Dark**, **Light** or **Automatic** (light by day, dark at night), the same choice as under **Settings → Display** on the display. |
+| **Display Rotation** | The steps the display offers: 0°, 90°, 180° and 270° on displays that turn in quarter turns, 0° and 180° on the others. |
+
+With older firmware the display keeps the former **Display Rotation** switch for 180° and has no Theme select.
+
 ## Control the Displayed View
 
 Each compatible display exposes a **View** Select entity (**Ansicht** in German) on its existing Home Assistant device, next to the display controls. It offers **Home**, configured folders including nested folders, and configured tiles with supported popups.
@@ -144,7 +155,7 @@ The Bridge adds these entities to the display's Home Assistant device while the 
 
 | Entity | Use |
 | --- | --- |
-| **Speaker** | Media player: plays sounds, music, announcements and spoken answers from Home Assistant, with title, position, pause and seeking, and sets the volume. The Bridge decodes every format and sends the display plain audio at the pace it plays (firmware b502 or newer). When a camera's stream has sound, the display plays it while the camera popup or full screen is open (b504 or newer). While it plays, the display does not listen for its wake word. |
+| **Speaker** | Media player: plays sounds, music, announcements and spoken answers from Home Assistant, with title, position, pause and seeking, and sets the volume. The Bridge decodes every format and sends the display plain audio at the pace it plays (HomeTiles and Bridge v0.9.4 or newer). When a camera's stream has sound, the display plays it in step with the picture while the camera popup or full screen is open. While it plays, the display does not listen for its wake word. |
 | **Assist** | Assist satellite: Home Assistant's voice pipeline listens through the display's microphone, and the answer plays on its speaker. |
 | **Start Assist** button | Starts a voice request without a wake word. |
 | **Listening** | The display listens for its wake word by itself. Off on a new display. |
@@ -190,5 +201,9 @@ Entity states use `<HA prefix>/<entity>/...`. The Bridge publishes them itself; 
     | `<base>/stat/display_brightness` | Display → HA | Current display brightness |
     | `<base>/cmnd/screensaver_brightness` | HA → Display | Screensaver brightness (1–100%) |
     | `<base>/stat/screensaver_brightness` | Display → HA | Current screensaver brightness |
+    | `<base>/cmnd/display_theme` | HA → Display | Theme (`dark`, `light`, `auto`) |
+    | `<base>/stat/display_theme` | Display → HA | Current theme setting |
+    | `<base>/cmnd/display_rotation` | HA → Display | Rotation in degrees (one of the display's steps) |
+    | `<base>/stat/display_rotation` | Display → HA | Rotation and steps, `{"degrees":90,"options":[0,90,180,270]}` |
     | `<base>/cmnd/io/{channel_id}` | HA → Display | Local Switch command (`ON` / `OFF`) |
     | `<base>/stat/io/{channel_id}` | Display → HA | Local Switch or temperature state |

@@ -346,6 +346,17 @@ The **⋯** button in the bottom right corner opens a menu with up to three list
 
 The menu and the library need HomeTiles Bridge v0.9.4 or newer.
 
+<div class="ht-type-shots ht-type-pair" markdown>
+<figure class="ht-screenshot ht-popup">
+<img style="width:420px" src="../images/v094-popup-media-speakers.png" alt="Media popup menu with the speakers to play together, two of them joined" width="800" height="800" loading="lazy">
+<figcaption>Speakers</figcaption>
+</figure>
+<figure class="ht-screenshot ht-popup">
+<img style="width:420px" src="../images/v094-popup-media-library.png" alt="Media popup menu with the media library's folders" width="800" height="800" loading="lazy">
+<figcaption>Library</figcaption>
+</figure>
+</div>
+
 ### Climate
 
 Controls a `climate` entity. The icon and accent indicate active heating, cooling, drying, or fan operation.

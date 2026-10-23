@@ -29,7 +29,8 @@ assert.match(readRepoFile('HomeTiles.ino'),
   /grid_layout::apply\(configManager\.getConfig\(\)\.layout\);[\s\S]{0,300}configManager\.applySettingsParking\(static_cast<uint8_t>\(grid_layout::active\(\)\)\);[\s\S]*?tileConfig\.load\(\);/);
 
 const tiles = readRepoFile('src/tiles/config/tile_config.cpp');
-assert.match(tiles, /out\.span_h = tile\.span_h < 0\.5f \? 1 : tile\.span_h;\s*out\.view_id = tile\.view_id;/, 'Parked with its ID');
+// Parked with its ID, one cell (user 2026-10-22).
+assert.match(tiles, /out\.span_w = 1;\s*out\.span_h = 1;\s*out\.view_id = tile\.view_id;/, 'Parked with its ID');
 assert.match(tiles, /tile\.view_id = snapshot\.valid \? snapshot\.view_id : 0;\s*return true;/, 'Back with its ID');
 const policy = tiles.slice(tiles.indexOf('bool TileConfig::applySettingsTilePolicy('), tiles.indexOf('bool TileConfig::ensureBackTile('));
 assert.match(policy, /if \(kept\.valid && tile\.view_id && kept\.view_id == tile\.view_id\) break;[\s\S]*?snapshotSettingsTile\(tile, cfg->settings_tile_snapshot\);[\s\S]*?configManager\.save\(\*cfg\)[\s\S]*?return removeSettingsTiles\(grid\);/,

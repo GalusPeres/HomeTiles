@@ -211,6 +211,12 @@ struct Tile {
 // entity sidecar like every entity tile), else the Bridge alias of a tile
 // from before the entity picker searched scenes. A stray entity of another
 // type in sensor_entity never counts.
+// The Media popup's layout (types/media/web_handler.cpp): the cover centred
+// like before instead of left beside the title.
+static inline bool mediaPopupCoverCentered(const Tile& tile) {
+  return tile.type == TILE_MEDIA && tile.sensor_display_mode == 1;
+}
+
 static inline const String& sceneTarget(const Tile& tile) {
   return sceneTargetIsEntityId(tile.sensor_entity) ? tile.sensor_entity : tile.scene_alias;
 }
@@ -905,6 +911,9 @@ public:
   bool folderExists(uint16_t folder_id) const;
   bool createFolder(uint16_t parent_id, const String& name, const String& icon, uint16_t& out_id);
   bool updateFolder(uint16_t folder_id, const String& name, const String& icon);
+  // An unnamed folder's name, "Folder 17" in the panel's language, as the
+  // Web Admin's tab shows it.
+  static String unnamedFolderName(uint16_t folder_id);
   bool deleteFolder(uint16_t folder_id);
   bool isFolderPinEnabled(uint16_t folder_id) const;
   bool setFolderPin(uint16_t folder_id, const String& pin);

@@ -167,10 +167,9 @@ assert.match(save, /if \(pages_changed && grid_layout::active\(\) != grid_layout
 const pagesHandler = server.slice(server.indexOf('void WebAdminServer::handleSavePages() {'));
 assert.match(pagesHandler, /if \(const char\* error = checkPageSlots\(wanted\)\) \{/, 'one check for both ways');
 assert.match(pagesHandler, /const tile_layouts::Place dropped\{server\.arg\("col"\)\.toFloat\(\), server\.arg\("row"\)\.toFloat\(\), 1, 1\};[\s\S]*?if \(!placed\) placed = findFreeShownPlace\(\*home, \*tile, 1, 1, place\);/);
-// A page out of its field is one cell; the window's parked Settings tile
-// keeps its own size.
-assert.match(pageSlots, /const own = settings \? getTilesData\('folder0'\)\?\.\[Number\(tile\.dataset\.index\)\] : null;/);
-assert.match(pageSlots, /kind: 'page-slot', folder: Number\(tile\.dataset\.navigateTarget \|\| 0\), settings,\s*layout: \{col: 0, row: 0, span_w: Number\(own\?\.span_w\) \|\| 1, span_h: Number\(own\?\.span_h\) \|\| 1\}/);
+// A page out of its field is one cell, the window's parked Settings tile
+// too (user 2026-10-22: it came out half high).
+assert.match(pageSlots, /kind: 'page-slot', folder: Number\(tile\.dataset\.navigateTarget \|\| 0\), settings,\s*(?:\/\/[^\n]*\n\s*)*layout: \{col: 0, row: 0, span_w: 1, span_h: 1\}/);
 assert.match(pageSlots, /const place = \{col: candidate\.col, row: candidate\.row, span_w: 1, span_h: 1\};/);
 // A new folder goes into a page slot at once: the save tells its tile the
 // folder (user 2026-10-12: only after a few clicks; an autosave draws

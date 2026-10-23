@@ -32,6 +32,7 @@
 #include <misc/cache/instance/lv_image_cache.h>
 #include <misc/cache/instance/lv_image_header_cache.h>
 #endif
+#include <WiFi.h>
 #include <fcntl.h>
 #include <lwip/netdb.h>
 #include <lwip/sockets.h>
@@ -46,8 +47,11 @@
 #if CAMERA_STREAM_HW_JPEG
 #include "src/core/display/dma2d_arbiter.h"
 #endif
+#include "src/audio/speaker.h"
 #include "src/devices/device.h"
+#include "src/network/transport/network_transport.h"
 #include "src/video/camera_geometry.h"
+#include "src/video/frame_delay_line.h"
 #include "src/video/tcp_ack_socket.h"
 
 namespace {
@@ -85,6 +89,11 @@ constexpr size_t kCameraChunkBytes = tcp_ack::kChunkBytes;
 constexpr size_t kCameraMaxChunkBytes = 32 * 1024;
 constexpr uint32_t kCameraConnectTimeoutMs = 4000;
 constexpr uint32_t kSocketPollTimeoutMs = 250;
+// A wait this long for the Bridge's next bytes is logged when it ends, at most
+// once per interval (#116: the picture stalled for seconds before the stream
+// ended; the line tells such a stall from a slow panel).
+constexpr uint32_t kDataGapLogMs = 1000;
+constexpr uint32_t kDataGapLogIntervalMs = 10000;
 constexpr size_t kMinCameraDmaHeadroomBytes = tcp_ack::kMinCameraDmaHeadroomBytes;
 constexpr uint32_t kDmaHeadroomGraceMs = tcp_ack::kDmaHeadroomGraceMs;
 constexpr char kCameraScheme[] = "tcp://";
@@ -124,6 +133,7 @@ uint32_t g_worker_frame_count = 0;
 uint32_t g_no_write_buffer_drops = 0;
 uint32_t g_presented_frame_count = 0;
 uint32_t g_presented_fps_ms = 0;
+camera_sync::ShownGaps g_present_gaps;
 uint64_t g_present_wait_total_us = 0;
 uint64_t g_present_copy_total_us = 0;
 uint32_t g_present_timed_frames = 0;
@@ -152,10 +162,17 @@ uint32_t g_full_failed = 0;
 uint64_t g_full_decode_total_us = 0;
 uint64_t g_full_wait_total_us = 0;
 uint32_t g_full_log_ms = 0;
+camera_sync::ShownGaps g_full_gaps;
 // The stream ended on its own in a transport error (camera_transport falls
 // back), and when the first frame of this stream was shown (switch timing).
 volatile bool g_transport_failed = false;
 uint32_t g_first_shown_ms = 0;
+// Set by the camera task when the stream ended on its own; the UI task then
+// logs the Wi-Fi signal once (the radio query stays off the camera task).
+volatile bool g_log_wifi_at_end = false;
+// A pause asked for by camera_stream_debug_pause(), taken by the camera task
+// before its next frame.
+volatile uint32_t g_debug_pause_ms = 0;
 
 #if CAMERA_STREAM_HW_JPEG
 // Keep the engine alive across popup opens. Creating/deleting JPEG engines
@@ -374,6 +391,7 @@ static void release_write_buffer(int8_t index) {
 static void note_presented_frame() {
   ++g_presented_frame_count;
   const uint32_t now = millis();
+  g_present_gaps.note(now);
   if (now - g_presented_fps_ms < 2000) return;
 
   const float fps =
@@ -384,13 +402,17 @@ static void note_presented_frame() {
   set_status(message);
   if (g_present_timed_frames > 0) {
     Serial.printf(
-        "[CameraStream] Present: %.1f FPS wait=%.1fms ppa+cache+swap=%.1fms\n",
+        "[CameraStream] Present: %.1f FPS wait=%.1fms ppa+cache+swap=%.1fms "
+        "gap=%u-%ums\n",
         fps,
         static_cast<double>(g_present_wait_total_us) /
             static_cast<double>(g_present_timed_frames) / 1000.0,
         static_cast<double>(g_present_copy_total_us) /
-            static_cast<double>(g_present_timed_frames) / 1000.0);
+            static_cast<double>(g_present_timed_frames) / 1000.0,
+        static_cast<unsigned>(g_present_gaps.min_ms),
+        static_cast<unsigned>(g_present_gaps.max_ms));
   }
+  g_present_gaps.startLine();
   g_presented_frame_count = 0;
   g_presented_fps_ms = now;
   g_present_wait_total_us = 0;
@@ -1014,6 +1036,10 @@ static bool parse_camera_url(const char* url, CameraEndpoint& endpoint) {
 
 static bool camera_stop_requested(void*) { return g_stop_requested; }
 
+static bool present_frame(bool full, const uint8_t* jpeg, size_t jpeg_bytes) {
+  return full ? queue_full_frame(jpeg, jpeg_bytes) : decode_jpeg_frame(jpeg, jpeg_bytes);
+}
+
 static int connect_camera_socket(const CameraEndpoint& endpoint) {
   tcp_ack::ConnectOptions options;
   options.log_prefix = "[CameraStream]";
@@ -1412,6 +1438,48 @@ static void run_camera_task() {
   uint32_t last_fps_ms = millis();
   tcp_ack::DmaHeadroomGuard dma_guard(kMinCameraDmaHeadroomBytes,
                                       kDmaHeadroomGraceMs);
+  uint32_t last_data_ms = millis();
+  uint32_t gap_logged_ms = 0;
+  uint32_t gaps_not_logged = 0;
+  // Lip sync with a camera's sound (frame_delay_line.h): the ring is taken
+  // from PSRAM once the speaker reports a delay and freed with the stream.
+  camera_sync::FrameDelayLine delay_line;
+  uint8_t* delay_memory = nullptr;
+  bool delay_unavailable = false;
+  uint32_t sync_skipped = 0;
+  uint32_t sync_log_ms = 0;
+  // Shows every held frame that is due, oldest first.
+  auto present_due_frames = [&]() -> bool {
+    camera_sync::DelayedFrame frame;
+    while (delay_line.takeDue(millis(), &frame, &sync_skipped)) {
+      if (!present_frame(full, delay_memory + frame.offset, frame.length)) return false;
+    }
+    return true;
+  };
+
+  // Receives exactly `bytes`. A wait of kDataGapLogMs or more is logged once
+  // the bytes arrived; shorter waits log nothing.
+  auto receive_data = [&](void* destination, size_t bytes) {
+    const uint32_t started_ms = millis();
+    const SocketReadResult result =
+        socket_receive_exact(socket_fd, destination, bytes);
+    if (result != SocketReadResult::Ok) return result;
+    const uint32_t now = millis();
+    const uint32_t waited_ms = now - started_ms;
+    last_data_ms = now;
+    if (waited_ms < kDataGapLogMs) return result;
+    if (gap_logged_ms != 0 && now - gap_logged_ms < kDataGapLogIntervalMs) {
+      ++gaps_not_logged;
+      return result;
+    }
+    Serial.printf(
+        "[CameraStream] No data for %u ms (%u more gaps since the last line)\n",
+        static_cast<unsigned>(waited_ms),
+        static_cast<unsigned>(gaps_not_logged));
+    gap_logged_ms = now;
+    gaps_not_logged = 0;
+    return result;
+  };
 
   auto dma_headroom_available = [&]() -> bool {
     const size_t dma_free = heap_caps_get_free_size(
@@ -1442,9 +1510,40 @@ static void run_camera_task() {
       break;
     }
 
+    if (const uint32_t pause_ms = g_debug_pause_ms) {
+      // Test builds only: nothing is read or acknowledged, so the Bridge
+      // waits for this panel exactly as during a Wi-Fi stall.
+      g_debug_pause_ms = 0;
+      Serial.printf("[CameraStream] Debug pause: no reads for %u ms\n",
+                    static_cast<unsigned>(pause_ms));
+      const uint32_t paused_at = millis();
+      while (!g_stop_requested && millis() - paused_at < pause_ms) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+      }
+      Serial.println("[CameraStream] Debug pause over, reading again");
+      if (g_stop_requested) break;
+    }
+
+    // Lip sync: a held frame goes out when it is due, not only when the next
+    // one arrives, so the socket is waited on only until then.
+    if (!delay_line.empty()) {
+      const uint32_t frames_before = g_worker_frame_count;
+      stream_ok = present_due_frames();
+      frame_count += g_worker_frame_count - frames_before;
+      if (!stream_ok) break;
+      uint32_t due_ms = 0;
+      if (delay_line.nextDue(&due_ms)) {
+        const int32_t wait_ms = static_cast<int32_t>(due_ms - millis());
+        if (wait_ms > 0 &&
+            !tcp_ack::waitReadable(socket_fd, static_cast<uint32_t>(wait_ms))) {
+          continue;
+        }
+      }
+    }
+
     uint8_t header[kCameraFrameHeaderBytes] = {};
     const SocketReadResult header_result =
-        socket_receive_exact(socket_fd, header, sizeof(header));
+        receive_data(header, sizeof(header));
     if (header_result != SocketReadResult::Ok) {
       if (header_result == SocketReadResult::Error) {
         g_transport_failed = !g_stop_requested;
@@ -1502,8 +1601,8 @@ static void run_camera_task() {
       const size_t receive_now = std::min(
           static_cast<size_t>(chunk_bytes),
           static_cast<size_t>(jpeg_bytes) - received_bytes);
-      const SocketReadResult chunk_result = socket_receive_exact(
-          socket_fd, input + received_bytes, receive_now);
+      const SocketReadResult chunk_result =
+          receive_data(input + received_bytes, receive_now);
       if (chunk_result != SocketReadResult::Ok) {
         if (chunk_result == SocketReadResult::Error) {
           g_transport_failed = !g_stop_requested;
@@ -1551,8 +1650,37 @@ static void run_camera_task() {
     }
 
     const uint32_t frames_before = g_worker_frame_count;
-    if (!(full ? queue_full_frame(input, jpeg_bytes)
-               : decode_jpeg_frame(input, jpeg_bytes))) {
+    const uint32_t picture_delay = camera_sync::pictureDelayMs(speaker::cameraSyncDelayMs());
+    bool presented_ok = true;
+    if (picture_delay == 0 && delay_line.empty()) {
+      presented_ok = present_frame(full, input, jpeg_bytes);
+    } else {
+      if (!delay_memory && !delay_unavailable) {
+        delay_memory = static_cast<uint8_t*>(heap_caps_malloc(
+            camera_sync::kDelayRingBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        delay_unavailable = delay_memory == nullptr;
+        delay_line.reset(delay_memory ? camera_sync::kDelayRingBytes : 0);
+        if (delay_unavailable) {
+          Serial.println("[CameraStream] Lip sync off: no PSRAM for the picture delay");
+        }
+      }
+      size_t offset = 0;
+      bool room = delay_memory && delay_line.reserve(jpeg_bytes, &offset);
+      while (delay_memory && !room && !delay_line.empty()) {
+        delay_line.dropOldest();
+        ++sync_skipped;
+        room = delay_line.reserve(jpeg_bytes, &offset);
+      }
+      if (room) {
+        memcpy(delay_memory + offset, input, jpeg_bytes);
+        delay_line.commit(offset, jpeg_bytes, millis(), picture_delay);
+        presented_ok = present_due_frames();
+      } else {
+        // No ring (or a frame larger than it): this frame goes out unsynced.
+        presented_ok = present_frame(full, input, jpeg_bytes);
+      }
+    }
+    if (!presented_ok) {
       stream_ok = false;
       break;
     }
@@ -1580,17 +1708,28 @@ static void run_camera_task() {
       g_decode_jpeg_bytes = 0;
       g_decode_timed = 0;
       last_fps_ms = now;
+      if (picture_delay > 0 && now - sync_log_ms >= 10000) {
+        Serial.printf("[CameraStream] Lip sync: picture waits %u ms for the sound "
+                      "(%u frames skipped)\n",
+                      static_cast<unsigned>(picture_delay),
+                      static_cast<unsigned>(sync_skipped));
+        sync_log_ms = now;
+        sync_skipped = 0;
+      }
     }
     // Block for at least one tick. taskYIELD() alone never schedules lower
     // priority tasks and starved MQTT keepalive during a long 24 FPS camera test.
     vTaskDelay(1);
   }
 
-  Serial.printf("[CameraStream] TCP ACK stream ended: ok=%s\n",
-                stream_ok ? "yes" : "no");
+  heap_caps_free(delay_memory);
+  Serial.printf("[CameraStream] TCP ACK stream ended: ok=%s, last data %u ms ago\n",
+                stream_ok ? "yes" : "no",
+                static_cast<unsigned>(millis() - last_data_ms));
   if (g_stop_requested) {
     set_status(camera_text().camera_stream_stopped);
   } else {
+    g_log_wifi_at_end = true;
     bool had_error = false;
     portENTER_CRITICAL(&g_state_mux);
     had_error = g_status_error;
@@ -1700,6 +1839,8 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb, bool full_screen)
   g_no_write_buffer_drops = 0;
   g_presented_frame_count = 0;
   g_presented_fps_ms = millis();
+  g_present_gaps.restart();
+  g_full_gaps.restart();
   g_present_wait_total_us = 0;
   g_present_copy_total_us = 0;
   g_present_timed_frames = 0;
@@ -1719,6 +1860,7 @@ bool camera_stream_start(const char* url, uint32_t corner_rgb, bool full_screen)
   g_full_shown = CAMERA_STREAM_HW_JPEG && full_screen;
   g_transport_failed = false;
   g_first_shown_ms = 0;
+  g_log_wifi_at_end = false;
   const BaseType_t task_core = (ARDUINO_RUNNING_CORE == 0) ? 1 : 0;
   // Never outrank the MQTT worker on this core. Both tasks run at idle
   // priority; explicit yields within each frame share CPU time without
@@ -1823,6 +1965,7 @@ static void process_full_frame() {
       shown = Device::displaySubmitFullFrame();
       if (shown) {
         if (!g_first_shown_ms) g_first_shown_ms = millis();
+        g_full_gaps.note(millis());
         ++g_full_frames;
         g_full_decode_total_us += decode_us;
         g_full_wait_total_us += acquired_us - wait_started_us;
@@ -1843,11 +1986,15 @@ static void process_full_frame() {
   if (now - g_full_log_ms < 2000) return;
   const double frames = g_full_frames ? static_cast<double>(g_full_frames) : 1.0;
   Serial.printf(
-      "[CameraStream] Full screen: %.1f FPS decode=%.1fms swap_wait=%.1fms failed=%u\n",
+      "[CameraStream] Full screen: %.1f FPS decode=%.1fms swap_wait=%.1fms failed=%u "
+      "gap=%u-%ums\n",
       static_cast<double>(g_full_frames) * 1000.0 / static_cast<double>(now - g_full_log_ms),
       static_cast<double>(g_full_decode_total_us) / frames / 1000.0,
       static_cast<double>(g_full_wait_total_us) / frames / 1000.0,
-      static_cast<unsigned>(g_full_failed));
+      static_cast<unsigned>(g_full_failed),
+      static_cast<unsigned>(g_full_gaps.min_ms),
+      static_cast<unsigned>(g_full_gaps.max_ms));
+  g_full_gaps.startLine();
   g_full_frames = 0;
   g_full_failed = 0;
   g_full_decode_total_us = 0;
@@ -1856,9 +2003,24 @@ static void process_full_frame() {
 }
 #endif
 
+// Once after a stream ended on its own: the Wi-Fi signal at that moment, to
+// tell a weak or interrupted radio from other causes (#116).
+static void log_wifi_at_stream_end() {
+  if (!g_log_wifi_at_end) return;
+  g_log_wifi_at_end = false;
+  if (networkTransport.activeKind() != NetworkTransportKind::Wifi) return;
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[CameraStream] Wi-Fi at stream end: not connected");
+    return;
+  }
+  Serial.printf("[CameraStream] Wi-Fi at stream end: RSSI %d dBm\n",
+                static_cast<int>(WiFi.RSSI()));
+}
+
 void camera_stream_process_ui(lv_obj_t* image,
                               lv_obj_t* placeholder,
                               lv_obj_t* status_label) {
+  log_wifi_at_stream_end();
   if (g_full_shown) {
     process_full_frame();
     return;
@@ -2022,6 +2184,12 @@ bool camera_stream_take_transport_failure() {
   return true;
 }
 
+bool camera_stream_debug_pause(uint32_t ms) {
+  if (!task_is_active() || ms == 0) return false;
+  g_debug_pause_ms = ms;
+  return true;
+}
+
 #else
 
 bool camera_stream_start(const char*, uint32_t, bool) {
@@ -2037,5 +2205,6 @@ void camera_stream_set_external_status(const char*, bool) {}
 bool camera_stream_is_active() { return false; }
 uint32_t camera_stream_first_frame_ms() { return 0; }
 bool camera_stream_take_transport_failure() { return false; }
+bool camera_stream_debug_pause(uint32_t) { return false; }
 
 #endif

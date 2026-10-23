@@ -2,7 +2,10 @@
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/media/renderer.h"
 #include "src/types/media/content_layout.h"
+#include "src/types/media/playing_bars.h"
 #include "src/types/media/tile_layout.h"
+#include "src/core/power/power_manager.h"
+#include "src/ui/popups/popup_shell.h"
 
 #include <Arduino.h>
 
@@ -44,10 +47,10 @@ struct MediaEventData {
 struct MediaPopupEventData {
   String entity_id;
   String title;
-  String icon_name;
   uint32_t bg_color = 0;  // 0: the popup takes its default card
   GridType grid_type = GridType::TAB0;
   uint8_t grid_index = 0;
+  bool cover_centered = false;  // the popup's layout (mediaPopupCoverCentered)
 };
 
 static void free_cover_dsc(MediaCoverRef* ref) {
@@ -157,7 +160,12 @@ static void show_media_popup_event_cb(lv_event_t* e) {
   MediaPopupInit init;
   init.entity_id = data->entity_id;
   init.title = data->title;
-  init.icon_name = data->icon_name;
+  // The icon's name now, not when the tile was built: a name kept from
+  // before the Bridge's icons arrived ("television") no longer matched the
+  // tile's icon, and the popup's head lost its state form until the next
+  // report (user 2026-10-23: plain icon after reopening a paused player).
+  const Tile* tile = tile_renderer_get_tile_config(data->grid_type, data->grid_index);
+  if (tile && tile->type == TILE_MEDIA) init.icon_name = media_tile_icon_name(*tile);
   init.icon_char = media_label_text(widgets.icon_label);
   init.bg_color = tile_icon_source::popup_background(widgets.icon_label, data->bg_color);
   if (widgets.icon_label) {
@@ -173,6 +181,8 @@ static void show_media_popup_event_cb(lv_event_t* e) {
   init.has_volume = widgets.has_media_volume;
   init.volume_level = widgets.media_volume_level;
   init.is_muted = widgets.media_is_muted;
+  init.available = widgets.available;
+  init.cover_centered = data->cover_centered;
   const bool cover_visible = widgets.cover_ref &&
                              widgets.cover_ref->dsc &&
                              widgets.cover_clip &&
@@ -292,7 +302,60 @@ static String media_friendly_name_from_entity(const String& entity_id) {
   return name;
 }
 
+// The playing bars over the title (playing_bars.h) in the tile icon's color.
+void media_bars_draw_cb(lv_event_t* e) {
+  lv_obj_t* bars = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  lv_layer_t* layer = lv_event_get_layer(e);
+  if (!bars || !layer) return;
+  lv_obj_t* icon = static_cast<lv_obj_t*>(lv_event_get_user_data(e));
+  lv_area_t area;
+  lv_obj_get_coords(bars, &area);
+  media_bars::draw(layer, area, media_tile::kBarWidth, media_tile::kBarGap,
+                   icon ? lv_obj_get_style_text_color(icon, LV_PART_MAIN) : lv_color_white(),
+                   lv_obj_has_state(bars, LV_STATE_CHECKED));
+}
+
+// One frame while the player plays. lv_obj_invalidate skips hidden pages and
+// other screens itself; a popup over the tiles or a sleeping display would
+// redraw for nothing.
+void media_bars_timer_cb(lv_timer_t* timer) {
+  lv_obj_t* bars = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
+  if (!bars || !lv_obj_has_state(bars, LV_STATE_CHECKED) || lv_obj_has_flag(bars, LV_OBJ_FLAG_HIDDEN)) return;
+  if (popup_shell_active() || powerManager.isInSleep()) return;
+  lv_obj_invalidate(bars);
+}
+
+void media_bars_delete_cb(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_DELETE) return;
+  lv_timer_t* timer = static_cast<lv_timer_t*>(lv_event_get_user_data(e));
+  if (timer) lv_timer_delete(timer);
+}
+
+// The bars and their timer, which goes with them (like the Pixel animation
+// tile's); update_media_tile_state shows them and marks the playing.
+lv_obj_t* create_media_bars(lv_obj_t* card, lv_obj_t* icon_label) {
+  lv_obj_t* bars = lv_obj_create(card);
+  lv_obj_remove_style_all(bars);
+  lv_obj_remove_flag(bars, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_remove_flag(bars, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_size(bars, 4 * media_tile::kBarWidth + 3 * media_tile::kBarGap, media_tile::kBarsHeight);
+  lv_obj_add_flag(bars, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_event_cb(bars, media_bars_draw_cb, LV_EVENT_DRAW_MAIN, icon_label);
+  lv_timer_t* timer = lv_timer_create(media_bars_timer_cb, media_tile::kBarsPeriodMs, bars);
+  lv_obj_add_event_cb(bars, media_bars_delete_cb, LV_EVENT_DELETE, timer);
+  return bars;
+}
+
 }  // namespace
+
+String media_tile_icon_name(const Tile& tile) {
+  String icon_name = normalizeMdiIconName(tile.icon_name);
+  if (!icon_name.length() && tile.sensor_entity.length()) {
+    icon_name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(tile.sensor_entity));
+  }
+  if (!icon_name.length()) icon_name = "television";
+  return icon_name;
+}
 
 lv_obj_t* render_media_tile(lv_obj_t* parent,
                             int col,
@@ -374,11 +437,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
   lv_obj_t* play_pause_label = nullptr;
   lv_obj_t* next_label = nullptr;
 
-  String icon_name = normalizeMdiIconName(tile.icon_name);
-  if (!icon_name.length() && tile.sensor_entity.length()) {
-    icon_name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(tile.sensor_entity));
-  }
-  if (!icon_name.length()) icon_name = "television";
+  const String icon_name = media_tile_icon_name(tile);
 
   lv_obj_t* icon_label = lv_label_create(card);
   if (icon_label) {
@@ -455,6 +514,8 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     enable_event_bubble(subtitle);
   }
 
+  lv_obj_t* bars = create_media_bars(card, icon_label);
+
   lv_obj_t* state_label = lv_label_create(card);
   if (state_label) {
     set_label_style(state_label, lv_color_hex(0xB7C1D6), FONT_SMALL);
@@ -507,8 +568,10 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     target[index].media_title_label = media_title;
     target[index].media_subtitle_label = subtitle;
     target[index].state_label = state_label;
+    target[index].bars = bars;
     target[index].last_payload_hash = 0;
     target[index].dynamic_icon = false;
+    target[index].icon_form = 0;  // media_state_icon::Form::Plain
     target[index].has_media_volume = false;
     target[index].media_volume_level = 0.0f;
     target[index].media_is_muted = false;
@@ -524,10 +587,10 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
       MediaPopupEventData* popup_data = new MediaPopupEventData{
         tile.sensor_entity,
         title_text,
-        icon_name,
         card_color,
         grid_type,
-        index
+        index,
+        mediaPopupCoverCentered(tile)
       };
       lv_obj_add_event_cb(card, show_media_popup_event_cb, LV_EVENT_SHORT_CLICKED, popup_data);
       lv_obj_add_event_cb(card, media_popup_event_data_delete_cb, LV_EVENT_DELETE, popup_data);

@@ -473,8 +473,17 @@ bool HardwareIoManager::parseDocument(
     out_board_variant = default_hardware_variant();
   }
   if (!valid_hardware_variant(out_board_variant)) {
-    error = "Unknown hardware variant";
-    return false;
+    if (!allow_missing_names) {
+      error = "Unknown hardware variant";
+      return false;
+    }
+    // A stored file (the lenient load) may name a variant this firmware no
+    // longer has: the GS-T3E tied each relay to its own variant until issue
+    // #93. Its channels are checked against the default variant below, so
+    // only pins that are still offered come back.
+    Serial.printf("[HardwareIO] Stored variant '%s' no longer exists, using '%s'\n",
+                  out_board_variant.c_str(), default_hardware_variant());
+    out_board_variant = default_hardware_variant();
   }
   JsonArrayConst input = doc["channels"].as<JsonArrayConst>();
   if (input.size() > kHardwareIoMaxChannels) {

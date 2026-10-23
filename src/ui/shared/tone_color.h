@@ -381,6 +381,7 @@ inline uint32_t jewel_card(uint32_t icon, uint8_t strength) {
   const Oklch seed = from_rgb(icon & 0xFFFFFF);
   float L = seed.L - ui_theme::kJewelBelowIcon;
   if (L > ui_theme::kJewelCardMaxL) L = ui_theme::kJewelCardMaxL;
+  if (L < ui_theme::kJewelCardMinL) L = ui_theme::kJewelCardMinL;
   const float cap = ui_theme::kJewelChroma * (strength ? strength : 20) / 20.0f;
   const float C = seed.C * ui_theme::kJewelCardChromaShare;
   return to_rgb(L, C < cap ? C : cap, seed.h);

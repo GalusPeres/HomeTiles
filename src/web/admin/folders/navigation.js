@@ -47,11 +47,13 @@
   function isScreensaverTileTab(tab) {
     return tab === 'screensaver';
   }
-  function firstAllowedGridRow(tab) {
+  function firstAllowedGridRow(tab, classic = false) {
     // The screensaver's two rows at the bottom of the shown grid, three
     // upright (screensaver_places.cpp); in the layout window at the bottom
-    // of that layout's screen.
+    // of that layout's screen; for an import's classic places at the bottom
+    // of the stored grid.
     if (!isScreensaverTileTab(tab)) return 0;
+    if (classic) return Math.max(0, GRID_ROWS - 2);
     const inWindow = typeof layoutWindow !== 'undefined' && layoutWindow;
     const key = inWindow ? layoutWindow.key : typeof ACTIVE_LAYOUT === 'string' ? ACTIVE_LAYOUT : 'classic';
     const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);

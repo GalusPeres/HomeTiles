@@ -473,6 +473,7 @@ async function saveGestureEdge(select) {
       showSettingsPage('io');
     }
     const sequence = ++tabSwitchSequence;
+    const picks = tileSelectionSeq;
     let target = document.getElementById(tabName);
     if (!target) {
       const folderId = folderIdFromAdminTabName(tabName);
@@ -532,11 +533,17 @@ async function saveGestureEdge(select) {
       }
       if (tileTab === 'screensaver') {
         initScreensaverEditor();
-      } else {
-        const rememberedIndex = getRememberedTileIndex(tileTab);
-        selectTile(rememberedIndex === null ? getTopLeftConfiguredTileIndex(tileTab) : rememberedIndex, tileTab);
+      } else if (tileSelectionSeq === picks || currentTileTab !== tileTab) {
+        // The tab's own pick first (user 2026-10-22: an empty cell or a
+        // page field came back as the top left tile).
+        if (!restoreTabSelection(tileTab)) {
+          const rememberedIndex = getRememberedTileIndex(tileTab);
+          selectTile(rememberedIndex === null ? getTopLeftConfiguredTileIndex(tileTab) : rememberedIndex, tileTab);
+        }
         window.requestAnimationFrame(restoreCurrentTileSelectionUi);
       }
+      // Else something was picked here while its grid loaded (user
+      // 2026-10-22: the pick jumped to the top left tile): it stays.
       // Let the browser paint the selected tab before cached/live values are
       // reconciled. This also keeps a cache hit from extending click latency.
       window.requestAnimationFrame(() => window.setTimeout(() => {
@@ -830,8 +837,10 @@ async function saveGestureEdge(select) {
       bg_color: isDefault ? 0 : makeTileBgValue(hexToRgb(color)),
       col: String(Math.max(1, editorCoordinates ? rawCol : (rawCol + 1))),
       row: String(Math.max(1, editorCoordinates ? rawRow : (rawRow + 1))),
-      span_w: String(source?.span_w ?? hiddenTile?.dataset.spanW ?? 1),
-      span_h: String(source?.span_h ?? hiddenTile?.dataset.spanH ?? 1)
+      // Parked it is one cell and comes back as one (user 2026-10-22), like
+      // a page's folder.
+      span_w: '1',
+      span_h: '1'
     };
   }
 
@@ -1022,15 +1031,11 @@ async function saveGestureEdge(select) {
     }
     if (tileSnapshot) {
       const snapshot = normalizeHiddenSettingsSnapshot(tileSnapshot);
-      const layout = normalizeSnapshotLayout(
-        snapshot, HIDDEN_SETTINGS_TILE_INDEX, 'folder0');
       body.set('settings_tile_snapshot_present', '1');
       body.set('settings_tile_title', snapshot.title);
       body.set('settings_tile_icon', snapshot.icon);
-      body.set('settings_tile_col', String(layout.col));
-      body.set('settings_tile_row', String(layout.row));
-      body.set('settings_tile_span_w', String(layout.span_w));
-      body.set('settings_tile_span_h', String(layout.span_h));
+      // Its look only: parked it is one cell with no place kept, the panel
+      // puts it where it is dropped or on a free cell (user 2026-10-22).
       if (snapshot.bg_color_default === '1') {
         body.set('settings_tile_bg_color_default', '1');
       } else {
@@ -4470,6 +4475,10 @@ async function saveGestureEdge(select) {
     if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'camera_entity')) {
       tile.sensor_entity = snapshot.camera_entity || '';
     }
+    // The Media popup's layout in its stored field (types/media/admin.js).
+    if (Number(tile.type) === 15 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'media_layout')) {
+      tile.sensor_display_mode = String(snapshot.media_layout) === '1' ? 1 : 0;
+    }
     // The Camera tile's picture options in their stored fields (types/camera/admin.js).
     if (Number(tile.type) === 18 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'camera_display')) {
       tile.sensor_display_mode = String(snapshot.camera_display) === '1' ? 1 : 0;
@@ -5896,11 +5905,13 @@ async function saveGestureEdge(select) {
   function isScreensaverTileTab(tab) {
     return tab === 'screensaver';
   }
-  function firstAllowedGridRow(tab) {
+  function firstAllowedGridRow(tab, classic = false) {
     // The screensaver's two rows at the bottom of the shown grid, three
     // upright (screensaver_places.cpp); in the layout window at the bottom
-    // of that layout's screen.
+    // of that layout's screen; for an import's classic places at the bottom
+    // of the stored grid.
     if (!isScreensaverTileTab(tab)) return 0;
+    if (classic) return Math.max(0, GRID_ROWS - 2);
     const inWindow = typeof layoutWindow !== 'undefined' && layoutWindow;
     const key = inWindow ? layoutWindow.key : typeof ACTIVE_LAYOUT === 'string' ? ACTIVE_LAYOUT : 'classic';
     const rows = inWindow ? LAYOUTS[key].rows : placeRows(tab);
@@ -6455,11 +6466,13 @@ async function saveGestureEdge(select) {
   // and takes no room; the layout window places it. The screensaver tab
   // shows the same grid, its two rows at the bottom (screensaver_places.h).
   function headBarLayout() { return typeof HEAD_BAR === 'boolean' && HEAD_BAR; }
-  function placeCols(tab = currentTileTab) {
-    return headBarLayout() && typeof GRID_SHOWN_COLS === 'number' ? GRID_SHOWN_COLS : GRID_COLS;
+  // `classic`: the stored grid whatever layout is shown, for the classic
+  // places an import writes (the server's setPlaceGrid).
+  function placeCols(tab = currentTileTab, classic = false) {
+    return !classic && headBarLayout() && typeof GRID_SHOWN_COLS === 'number' ? GRID_SHOWN_COLS : GRID_COLS;
   }
-  function placeRows(tab = currentTileTab) {
-    return headBarLayout() && typeof GRID_SHOWN_ROWS === 'number' ? GRID_SHOWN_ROWS : GRID_ROWS;
+  function placeRows(tab = currentTileTab, classic = false) {
+    return !classic && headBarLayout() && typeof GRID_SHOWN_ROWS === 'number' ? GRID_SHOWN_ROWS : GRID_ROWS;
   }
   // A tile that is shown and takes room in the editor's grid.
   function tileTakesRoom(tile) {
@@ -6582,9 +6595,10 @@ async function saveGestureEdge(select) {
   // tilePlaceCols/tilePlaceRows): an upright layout has more rows than the
   // stored grid (1280 x 800: 4 x 6.5 against 7 x 5), and the stored grid
   // pushed its lower tiles up and halved them (8-inch export, 2026-10-09).
-  function normalizeLayoutForTileType(typeValue, col, row, spanW, spanH) {
-    const cols = placeCols();
-    const rows = placeRows();
+  // An import's classic places keep the stored grid (`classic`).
+  function normalizeLayoutForTileType(typeValue, col, row, spanW, spanH, classic = false) {
+    const cols = placeCols(currentTileTab, classic);
+    const rows = placeRows(currentTileTab, classic);
     let safeCol = clampHalf(col, 0, cols - 0.5, 0);
     let safeRow = clampHalf(row, 0, rows - 0.5, 0);
     let safeW = clampHalf(spanW, 0.5, cols, 1);
@@ -6611,27 +6625,27 @@ async function saveGestureEdge(select) {
     return { col: safeCol, row: safeRow, span_w: safeW, span_h: safeH };
   }
 
-  function constrainLayoutToTab(layout, tab) {
-    const firstRow = firstAllowedGridRow(tab);
+  function constrainLayoutToTab(layout, tab, classic = false) {
+    const firstRow = firstAllowedGridRow(tab, classic);
     if (layout.row < firstRow) layout.row = firstRow;
-    if (layout.span_h > placeRows(tab) - layout.row) {
-      layout.span_h = placeRows(tab) - layout.row;
+    if (layout.span_h > placeRows(tab, classic) - layout.row) {
+      layout.span_h = placeRows(tab, classic) - layout.row;
     }
     return layout;
   }
 
-  function normalizeTileLayout(tile, index, tab = currentTileTab) {
-    const cols = placeCols(tab);
-    const rows = placeRows(tab);
+  function normalizeTileLayout(tile, index, tab = currentTileTab, classic = false) {
+    const cols = placeCols(tab, classic);
+    const rows = placeRows(tab, classic);
     const fallbackCol = index % cols;
-    const firstRow = firstAllowedGridRow(tab);
+    const firstRow = firstAllowedGridRow(tab, classic);
     const fallbackRow = Math.max(firstRow, Math.floor(index / cols));
     const col = clampHalf(tile?.col, 0, cols - 0.5, fallbackCol);
     const row = clampHalf(tile?.row, firstRow, rows - 0.5, fallbackRow);
     let spanW = clampHalf(tile?.span_w, 0.5, cols, 1);
     let spanH = clampHalf(tile?.span_h, 0.5, rows, 1);
     return constrainLayoutToTab(
-      normalizeLayoutForTileType(tile?.type, col, row, spanW, spanH), tab);
+      normalizeLayoutForTileType(tile?.type, col, row, spanW, spanH, classic), tab, classic);
   }
 
   function setGridItemPosition(el, col, row, spanW, spanH) {
@@ -6661,8 +6675,8 @@ async function saveGestureEdge(select) {
   // render).
   function resetTileClasses(el, classes) {
     const fractional = el.classList.contains('fractional-tile');
-    // A page's tile stays in its field (page-fields.js).
-    const pageField = el.classList.contains('page-field-tile');
+    // A page's tile stays in its field (page-fields.js); emptied it is none.
+    const pageField = el.classList.contains('page-field-tile') && !classes.includes('empty');
     el.className = classes.join(' ');
     if (fractional) el.classList.add('fractional-tile');
     if (pageField) el.classList.add('page-field-tile');
@@ -6731,7 +6745,7 @@ async function saveGestureEdge(select) {
     let freeEl = null;
     empties.forEach(({ idx, el }) => {
       delete el.dataset.freeSlot;
-      el.classList.remove('free-slot-hover');
+      el.classList.remove('free-slot-hover', 'page-field-tile');
       const kept = editingNew(idx) && newTileSpot?.tab === tab && newTileSpot.index === idx
         ? newTileSpot.layout : null;
       if (kept && slotFits(tab, occupied, kept.col, kept.row, kept.span_w, kept.span_h)) {
@@ -7260,7 +7274,18 @@ async function saveGestureEdge(select) {
     showNotification(t('tilePasted'));
   }
 
+  // Every pick in the editor (a tile, the parked Settings tile, a free page
+  // field): a tab switch that waited for its grid keeps one made meanwhile.
+  let tileSelectionSeq = 0;
+  // Each tab's pick (user 2026-10-22: an empty cell or a page field jumped
+  // to the top left tile on the way back): {kind: 'tile', index}, an empty
+  // cell {kind: 'empty', index, spot}, {kind: 'page', slot} or
+  // {kind: 'settings'}. The way back and the refreshes show it again.
+  const tileSelectionByTab = {};
+
   function selectTile(index, tab) {
+    ++tileSelectionSeq;
+    clearPageFieldMark();
     if (currentTileTab &&
         typeof parkClimateMiniEditor === 'function') {
       parkClimateMiniEditor(currentTileTab);
@@ -7271,6 +7296,7 @@ async function saveGestureEdge(select) {
     newTileSpot = Number(getTilesData(tab)?.[index]?.type || 0) === 0
       ? { tab, index, layout: getTileElementLayout(tab, index) }
       : null;
+    tileSelectionByTab[tab] = newTileSpot ? {kind: 'empty', index, spot: newTileSpot.layout} : {kind: 'tile', index};
     document.getElementById('settingsHiddenTile')?.classList.remove('active');
     persistSelectedTileState();
     document.querySelectorAll(
@@ -7313,6 +7339,9 @@ async function saveGestureEdge(select) {
   function selectHiddenSettingsTile() {
     const hiddenTile = document.getElementById('settingsHiddenTile');
     if (!hiddenTile || hiddenTile.dataset.hidden !== '1') return;
+    ++tileSelectionSeq;
+    tileSelectionByTab.folder0 = {kind: 'settings'};
+    clearPageFieldMark();
     if (currentTileTab && typeof parkClimateMiniEditor === 'function') {
       parkClimateMiniEditor(currentTileTab);
     }
@@ -7345,6 +7374,38 @@ async function saveGestureEdge(select) {
     const settingsBody = specific?.querySelector('.tile-settings-body');
     if (settingsBody) settingsBody.scrollTop = 0;
     updateTileSettingsMaxHeight();
+  }
+
+  // The tab's pick again (tileSelectionByTab): the tile, an empty cell at its
+  // spot while that is free (or the tile it became), a free page field, the
+  // parked Settings tile. False when it is gone; the caller picks then.
+  function restoreTabSelection(tab) {
+    const pick = tileSelectionByTab[tab];
+    if (!pick) return false;
+    if (pick.kind === 'page') {
+      if (tab !== 'folder0' || !pageFieldsShown() || !pageSlotsShown() || pageSlotList()[pick.slot]) return false;
+      selectPageField(pick.slot);
+      return pageFieldPicked();
+    }
+    if (pick.kind === 'settings') {
+      selectHiddenSettingsTile();
+      return currentTileIndex === HIDDEN_SETTINGS_TILE_INDEX;
+    }
+    const el = document.getElementById(tab + '-tile-' + pick.index);
+    if (!el) return false;
+    if (Number(getTilesData(tab)?.[pick.index]?.type || 0) !== 0) {
+      if (el.classList.contains('tile-unplaced')) return false;
+      selectTile(pick.index, tab);
+      return true;
+    }
+    if (pick.kind !== 'empty' || !pick.spot) return false;
+    const {col, row, span_w: spanW, span_h: spanH} = pick.spot;
+    if (!slotFits(tab, occupiedFromGrid(tab, getTileGrid(tab), el), col, row, spanW, spanH)) return false;
+    delete el.dataset.freeSlot;
+    setTileGridPosition(el, col, row, spanW, spanH);
+    el.style.display = '';
+    selectTile(pick.index, tab);
+    return true;
   }
 
   function titleFromEntity(entity) {
@@ -7468,6 +7529,8 @@ async function saveGestureEdge(select) {
     bindLive(spanWInput, 'input', 'tileSpanW', () => { syncClimateSlotFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(spanHInput, 'input', 'tileSpanH', () => { syncClimateSlotFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(typeSelect, 'change', 'tileType', () => {
+      // A picked free page field: Folder makes its page (page-fields.js).
+      if (tab === 'folder0' && pageFieldTypeChosen(typeSelect)) return;
       const tileEl = document.getElementById(tab + '-tile-' + currentTileIndex);
       const previousType = Number(tileEl?.dataset.type ?? 0);
       const nextType = Number(typeSelect.value);
@@ -7623,6 +7686,8 @@ async function saveGestureEdge(select) {
       syncClimateSlotFields(tab); updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
     });
     bindLive(document.getElementById(prefix + '_cover_value_font'), 'change', 'coverValueFont', () => { updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab); });
+    // The Media popup's layout (cover left or centred); the tile looks the same.
+    bindLive(document.getElementById(prefix + '_media_layout'), 'change', 'mediaLayout', () => { updateDraft(tab); scheduleAutoSave(tab); });
     bindLive(coverSelect, 'change', 'coverEntity', () => {
       maybeFillTitleFromEntity(tab, '_cover_entity');
       updateTilePreview(tab);
@@ -7992,6 +8057,10 @@ async function saveGestureEdge(select) {
       iconName = resolveBinarySensorPreviewIcon(
         rawIcon, binarySensorEntity, binarySensorPreviewState,
         sensorMetaCache.icons);
+    }
+    if (previewKind === 'media') {
+      iconName = mediaPreviewIcon(parseMediaPreviewPayload(
+        mediaEntity ? (sensorMetaCache.mediaValues?.[mediaEntity] ?? '') : ''), iconName);
     }
 
     resetTileClasses(tileElem, meta.css ? ['tile', meta.css] : ['tile']);
@@ -8555,6 +8624,9 @@ async function saveGestureEdge(select) {
       if (!confirm(tf('deleteFolderConfirm', { name }))) return;
       confirmedFolderDeletes.add(tab + ':' + currentTileIndex);
     }
+    // A page's tile: its field (page-fields.js).
+    const pageSlot = tab === 'folder0' && Number(stored?.type) === 4
+      ? pageSlotIds().indexOf(Number(stored.navigate_target)) : -1;
     const prefix = tab;
     document.getElementById(prefix + '_tile_type').value = '0';
     document.getElementById(prefix + '_tile_title').value = '';
@@ -8566,6 +8638,12 @@ async function saveGestureEdge(select) {
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
+    // A deleted page leaves its field free and picked (user 2026-10-22: an
+    // empty selected tile stayed in it). The save keeps its own tile index.
+    if (pageSlot >= 0) {
+      layoutTiles(tab, getTilesData(tab));
+      selectPageField(pageSlot);
+    }
   }
 
   function deleteFolder(tab) {
@@ -8586,6 +8664,7 @@ async function saveGestureEdge(select) {
       .then(data => {
         if (data.success) {
           showNotification(t('folderDeleted'));
+          forgetFolderTabSessionFragment(folderId);
           setTimeout(() => location.reload(), 500);
         } else {
           showNotification(data.error || t('deleteFailed'), false);
@@ -8626,6 +8705,34 @@ async function saveGestureEdge(select) {
       });
   }
 
+  // A new folder's title and icon as the panel saved them ("Folder 17" and
+  // the folder icon, user 2026-10-22: its tab showed them, the tile had
+  // none): into the tile, a newer draft and the editor wherever still empty.
+  function fillFolderName(tab, index, data) {
+    const title = String(data.title || '');
+    const icon = String(data.icon_name || '');
+    const stored = getTilesData(tab)?.[index];
+    if (stored) {
+      if (!stored.title) stored.title = title;
+      if (!stored.icon_name) stored.icon_name = icon;
+    }
+    const draft = drafts[tab]?.[index];
+    if (draft) {
+      if (!draft.title) draft.title = title;
+      if (!draft.icon) draft.icon = icon;
+    }
+    if (currentTileTab === tab && currentTileIndex === index) {
+      const titleInput = document.getElementById(tab + '_tile_title');
+      if (titleInput && !titleInput.value) titleInput.value = title;
+      const iconInput = document.getElementById(tab + '_tile_icon');
+      if (iconInput && !iconInput.value) iconInput.value = icon;
+      if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
+      updateTilePreview(tab);
+    } else if (stored) {
+      renderTileFromData(tab, index, stored, sensorMetaCache);
+    }
+  }
+
   function saveTile(tab, silent = false, tileIndexOverride = null) {
     const tileIndex = tileIndexOverride !== null ? tileIndexOverride : currentTileIndex;
     if (tileIndex === -1) return;
@@ -8638,9 +8745,6 @@ async function saveGestureEdge(select) {
       queueSaveAfterFlight(tab, tileIndex, silent);
       return;
     }
-    const tiles = getTilesData(tab);
-    const previousTile = Array.isArray(tiles) ? tiles[tileIndex] : null;
-    const previousType = previousTile ? Number(previousTile.type) : NaN;
     const snapshot = getTileSnapshotForSave(tab, tileIndex);
     if (!snapshot) return;
     const formData = new FormData();
@@ -8694,6 +8798,7 @@ async function saveGestureEdge(select) {
               Number(tilesData[tab][tileIndex].type || 0) !== 0) {
             tilesData[tab][tileIndex].view_id = Number(data.view_id) || 0;
           }
+          if (typeValue === '4' && data.title !== undefined) fillFolderName(tab, tileIndex, data);
           const currentDraft = drafts[tab] && drafts[tab][tileIndex];
           if (currentDraft && currentDraft._dirty && Number(currentDraft._rev || 0) !== draftRev) {
             queueSaveAfterFlight(tab, tileIndex, true);
@@ -8720,8 +8825,8 @@ async function saveGestureEdge(select) {
             }
             syncFolderPinControls(tab);
             const navTargetNum = parseInt(resolvedNavTarget, 10);
-            const titleVal = snapshot.title || '';
-            const iconVal = snapshot.icon || '';
+            const titleVal = tilesData[tab]?.[tileIndex]?.title || snapshot.title || '';
+            const iconVal = tilesData[tab]?.[tileIndex]?.icon_name || snapshot.icon || '';
             ensureFolderTabUi(navTargetNum, titleVal, iconVal).then(ok => {
               restoreCurrentTileSelectionUi();
               if (!ok) {
@@ -8730,7 +8835,12 @@ async function saveGestureEdge(select) {
               }
             });
           }
-          if (previousType === 4 && typeValue === '0') {
+          // A deleted folder's tab goes (user 2026-10-22: it stayed). The
+          // editor showed the tile empty before this save, so the panel says
+          // which folder went; its kept tab markup goes too (IDs come back).
+          const deletedFolder = Number(data.folder_deleted) || 0;
+          if (deletedFolder > 0) {
+            forgetFolderTabSessionFragment(deletedFolder);
             persistSelectedTileState();
             setTimeout(() => location.reload(), 400);
           }
@@ -8805,19 +8915,24 @@ async function saveGestureEdge(select) {
   // Whether the Settings tile is hidden, and the parked tile then: the
   // import restores both (issue #70). The page holds them in the Home tab's
   // parking slot, rendered from the device config.
-  function exportSettingsTileState() {
-    const parked = document.getElementById('settingsHiddenTile');
-    if (!parked) return undefined;
-    if (parked.dataset.hidden !== '1') return { hidden: false };
+  // The Settings tile as the panel stores it (/api/layouts settings), like
+  // every other tile (user 2026-10-22: the export took the Web Admin's own
+  // picture of it, a place of the shown layout beside the panel's stored
+  // ones): hidden or not, and the parked tile's look, size and classic place.
+  function exportSettingsTileState(layoutData) {
+    const settings = layoutData?.success ? layoutData.settings : null;
+    if (!settings || typeof settings.hidden !== 'boolean') return undefined;
+    if (!settings.hidden) return { hidden: false };
+    const tile = settings.tile || {};
     return {
       hidden: true,
-      title: String(parked.dataset.title || ''),
-      icon_name: String(parked.dataset.icon || ''),
-      bg_color: Number(parked.dataset.bgColor || 0),
-      col: Number(parked.dataset.col || 0),
-      row: Number(parked.dataset.row || 0),
-      span_w: Number(parked.dataset.spanW || 1),
-      span_h: Number(parked.dataset.spanH || 1)
+      title: String(tile.title || ''),
+      icon_name: String(tile.icon_name || ''),
+      bg_color: Number(tile.bg_color || 0),
+      col: Number(tile.col || 0),
+      row: Number(tile.row || 0),
+      span_w: Number(tile.span_w || 1),
+      span_h: Number(tile.span_h || 1)
     };
   }
 
@@ -8887,13 +9002,19 @@ async function saveGestureEdge(select) {
         exported_at: new Date().toISOString(),
         folders: folders,
         grids: grids,
-        settings_tile: exportSettingsTileState(),
-        // Only a panel with the same screen takes these places back.
+        settings_tile: exportSettingsTileState(layoutData),
+        // Every layout goes with the tiles (user 2026-10-21): the bar and
+        // upright places with the pages, the screensaver clock and where
+        // Settings is parked per layout. Only a panel with the same screen
+        // takes them back.
         layouts: layoutData?.success ? {
           screen_width: LAYOUTS.classic.screenW,
           screen_height: LAYOUTS.classic.screenH,
           active: layoutData.stored,
-          places: layoutData.places
+          places: layoutData.places,
+          clock: layoutData.clock,
+          settings_parked: layoutData.settings?.parked,
+          parked_settings_view: layoutData.settings?.tile?.view_id
         } : undefined,
         screensaver: {
           version: 2,
@@ -8922,19 +9043,67 @@ async function saveGestureEdge(select) {
     input.click();
   }
 
+  // The import's progress under its buttons, like the firmware update's
+  // (ota.js): a line and a bar that stay until the import ends; the end and
+  // an error stay readable. Every tile written or cleared and every layout
+  // saved is a step; the total is counted before anything is written.
+  let importProgress = null;
+
+  function setImportProgress(message, phase = 'idle', tone = '', percent = null) {
+    const status = document.getElementById('tile_import_status');
+    const progress = document.getElementById('tile_import_progress');
+    const bar = document.getElementById('tile_import_progress_bar');
+    if (status) {
+      status.textContent = message || '';
+      status.classList.remove('error', 'success');
+      if (tone === 'error' || tone === 'success') status.classList.add(tone);
+    }
+    if (progress) {
+      progress.classList.toggle('is-hidden', phase === 'idle');
+      progress.setAttribute('aria-hidden', phase === 'idle' ? 'true' : 'false');
+    }
+    if (bar) bar.style.width = (phase === 'done' ? 100 : Math.max(0, Math.min(100, percent || 0))) + '%';
+    for (const id of ['tile_export_btn', 'tile_import_btn']) {
+      const button = document.getElementById(id);
+      if (button) button.disabled = phase === 'busy';
+    }
+  }
+
+  function showImportStep() {
+    if (!importProgress) return;
+    const {done, total} = importProgress;
+    setImportProgress(t('importProgress').replace('{done}', done).replace('{total}', total), 'busy', '',
+                      total ? (done * 100) / total : 0);
+  }
+
+  // One step done; a step the count did not foresee (a folder the export
+  // shares with the panel) makes the total grow with it instead of passing it.
+  function importStep() {
+    if (!importProgress) return;
+    importProgress.done++;
+    if (importProgress.done > importProgress.total) importProgress.total = importProgress.done;
+    showImportStep();
+  }
+
   function importTilesConfig(tab, files) {
     if (!files || !files.length) return;
     const file = files[0];
     const reader = new FileReader();
     reader.onload = async () => {
+      let payload = null;
       try {
-        const payload = JSON.parse(reader.result);
-        await importTilesPayload(payload);
+        payload = JSON.parse(reader.result);
       } catch (e) {
         showNotification(t('importInvalidJson'), false);
+        setImportProgress(t('importInvalidJson'), 'idle', 'error');
+        return;
       }
+      await importTilesPayload(payload);
     };
-    reader.onerror = () => showNotification(t('importFailed'), false);
+    reader.onerror = () => {
+      showNotification(t('importFailed'), false);
+      setImportProgress(t('importFailed'), 'idle', 'error');
+    };
     reader.readAsText(file);
   }
 
@@ -9041,7 +9210,9 @@ async function saveGestureEdge(select) {
   // is, or moves to the nearest free place when an imported tile needs its
   // cell (issue #70). A tile that cannot be placed is returned as the
   // conflict, as the server would refuse it (tile_geometry::supported,
-  // placementOverlaps).
+  // placementOverlaps). The places are the classic layout's, checked on the
+  // stored grid whatever layout the panel shows (a 7 x 5 export against the
+  // head bar's 6 x 4 stopped every import, 2026-10-21).
   function planImportGrid(sourceTiles, systemType, targetSystem, tab) {
     const tileCount = TILES_PER_GRID;
     const occupied = Array.from({ length: GRID_ROWS * 2 }, () => Array(GRID_COLS * 2).fill(false));
@@ -9073,7 +9244,7 @@ async function saveGestureEdge(select) {
     (Array.isArray(sourceTiles) ? sourceTiles : []).forEach((tile, index) => {
       const type = importTileType(tile);
       if (!type) return;
-      const entry = { tile, type, layout: normalizeTileLayout({ ...tile, type }, index, tab) };
+      const entry = { tile, type, layout: normalizeTileLayout({ ...tile, type }, index, tab, true) };
       if (type === systemType && !sourceSystem) sourceSystem = entry;
       else entries.push(entry);
     });
@@ -9102,10 +9273,10 @@ async function saveGestureEdge(select) {
       cells(entry.layout, true);
     }
     const tiles = entries.map(entry => ({ ...entry.tile, ...entry.layout }));
-    if (placeSystem) return { tiles, system: { ...sourceSystem.tile, ...sourceSystem.layout } };
+    if (placeSystem) return { tiles, system: { ...sourceSystem.tile, ...sourceSystem.layout }, systemExported: true };
     if (!targetSystem) return { tiles, system: null };
 
-    const current = normalizeTileLayout(targetSystem, 0, tab);
+    const current = normalizeTileLayout(targetSystem, 0, tab, true);
     if (fits(systemType, current)) return { tiles, system: null };
     let best = null;
     for (let row = 0; row + current.span_h <= GRID_ROWS; row += 0.5) {
@@ -9143,12 +9314,15 @@ async function saveGestureEdge(select) {
         await post(i, buildEmptyImportTile(i));
       }
     }
-    if (systemIndex >= 0 && plan.system) await post(systemIndex, plan.system);
     const note = (tile, index) => {
       if (sourceFolderId !== null && Number(tile.view_id) > 0) {
         importedSlots.push({source: sourceFolderId, view: Number(tile.view_id), target: folderId, index});
       }
     };
+    if (systemIndex >= 0 && plan.system) {
+      await post(systemIndex, plan.system);
+      if (plan.systemExported) note(plan.system, systemIndex);
+    }
     const freeIndices = [];
     for (let i = 0; i < tileCount; i++) {
       if (i !== systemIndex) freeIndices.push(i);
@@ -9192,31 +9366,87 @@ async function saveGestureEdge(select) {
     await applyImportGrid(folderId, currentTiles, plan, systemType, folderName, sourceToTarget, sourceFolderId);
   }
 
-  // The bar layouts' places of an export from a panel with the same screen
-  // go to the imported tiles (their new IDs); a layout whose folders would
-  // lose their place stays as it was.
-  async function restoreImportLayouts(layouts) {
-    if (!layouts || typeof layouts !== 'object' || !importedSlots.length) return;
+  // Every layout of an export from a panel with the same screen comes back
+  // with its tiles (user 2026-10-21: all three together). The classic places
+  // came with the tiles; the bar and upright places go to the imported tiles
+  // (their new IDs) and the screensaver's (its slot keys, screensaver_places.h),
+  // with the pages, the screensaver clock and where Settings is parked.
+  // False when the panel refused a layout (its reason in the log).
+  async function restoreImportLayouts(layouts, sourceToTarget, screensaverTiles) {
+    if (!layouts || typeof layouts !== 'object') return true;
     if (Number(layouts.screen_width) !== LAYOUTS.classic.screenW ||
-        Number(layouts.screen_height) !== LAYOUTS.classic.screenH) return;
+        Number(layouts.screen_height) !== LAYOUTS.classic.screenH) return true;
     const tiles = {};
     for (const target of new Set(importedSlots.map(slot => slot.target))) {
       tiles[target] = await fetchTilesForImport(target);
     }
-    for (const key of ['bar', 'portrait']) {
-      const places = layouts.places?.[key];
-      if (!places || !LAYOUTS[key]?.available) continue;
-      const folders = {};
-      for (const slot of importedSlots) {
-        const place = places[String(slot.source)]?.[String(slot.view)];
-        const view = tiles[slot.target]?.[slot.index]?.view_id;
-        if (!Array.isArray(place) || !view) continue;
-        (folders[slot.target] = folders[slot.target] || {})[view] = place;
-      }
-      if (!Object.keys(folders).length) continue;
-      await fetch('/api/layouts', {method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({layout: key, folders})}).catch(() => {});
+    const screensaverKeys = {};
+    for (const entry of screensaverTiles || []) screensaverKeys[entry.sourceIndex + 1] = entry.targetIndex + 1;
+    // A page whose folder did not come along leaves its slot free.
+    const pages = Array.isArray(layouts.places?.pages)
+      ? layouts.places.pages.map(id => (Number(id) > 0 ? sourceToTarget[Number(id)] ?? 0 : 0))
+      : null;
+    const parked = Array.isArray(layouts.settings_parked) ? layouts.settings_parked : [];
+    // The Settings tile parked off Home keeps its places in the other
+    // layouts (handleGetLayouts settings.tile), as the panel's parked tile.
+    const parkedView = Number(layouts.parked_settings_view) || 0;
+    let targetParkedView = 0;
+    if (parkedView) {
+      const res = await fetch('/api/layouts', {cache: 'no-store'}).catch(() => null);
+      const data = res && res.ok ? await res.json().catch(() => null) : null;
+      targetParkedView = Number(data?.settings?.tile?.view_id) || 0;
     }
+    let ok = true;
+    for (const [layoutIndex, key] of ['classic', 'bar', 'portrait'].entries()) {
+      if (!LAYOUTS[key]?.available) continue;
+      const request = {layout: key};
+      if (typeof parked[layoutIndex] === 'boolean') request.settings_parked = parked[layoutIndex];
+      const places = key !== 'classic' ? layouts.places?.[key] : null;
+      if (places && typeof places === 'object') {
+        const folders = {};
+        for (const slot of importedSlots) {
+          const place = places[String(slot.source)]?.[String(slot.view)];
+          const view = tiles[slot.target]?.[slot.index]?.view_id;
+          if (!Array.isArray(place) || !view) continue;
+          (folders[slot.target] = folders[slot.target] || {})[view] = place;
+        }
+        const screensaverPlaces = places[String(SCREENSAVER_FOLDER_ID)];
+        if (screensaverTiles && screensaverPlaces && typeof screensaverPlaces === 'object') {
+          const saver = folders[SCREENSAVER_FOLDER_ID] = {};
+          for (const [sourceKey, place] of Object.entries(screensaverPlaces)) {
+            if (screensaverKeys[sourceKey] && Array.isArray(place)) saver[screensaverKeys[sourceKey]] = place;
+          }
+        }
+        // A cell a shown tile took while Settings was parked stays that
+        // tile's: the parked one's place there yields.
+        const parkedPlace = places['0']?.[String(parkedView)];
+        if (targetParkedView && Array.isArray(parkedPlace) && parkedPlace.length === 4) {
+          const onScreen = p => p[0] >= 0 && p[1] >= 0 && p[0] + p[2] <= LAYOUTS[key].cols && p[1] + p[3] <= LAYOUTS[key].rows;
+          const overlaps = p => p[0] < parkedPlace[0] + parkedPlace[2] && parkedPlace[0] < p[0] + p[2] &&
+            p[1] < parkedPlace[1] + parkedPlace[3] && parkedPlace[1] < p[1] + p[3];
+          const taken = onScreen(parkedPlace) && Object.values(folders[0] || {}).some(p => onScreen(p) && overlaps(p));
+          if (!taken) (folders[0] = folders[0] || {})[targetParkedView] = parkedPlace;
+        }
+        if (Object.keys(folders).length) request.folders = folders;
+      }
+      // The pages belong to both bar layouts: the first one stores them.
+      // Pages have no PIN (an export carries none).
+      if (key === 'bar' && pages) {
+        request.pages = pages;
+        request.unlock = true;
+      }
+      const clock = key !== 'classic' ? layouts.clock?.[key] : null;
+      if (Array.isArray(clock) && clock.length === 4) request.clock = clock;
+      if (Object.keys(request).length === 1) continue;
+      const res = await fetch('/api/layouts', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(request)}).catch(() => null);
+      const data = res ? await res.json().catch(() => ({})) : {};
+      importStep();
+      if (res && res.ok && data.success) continue;
+      console.error('Import layout ' + key + ' not restored:', data.error || (res ? 'HTTP ' + res.status : 'no answer'));
+      ok = false;
+    }
+    return ok;
   }
 
   function prepareScreensaverTilesForImport(sourceTiles, sourceLayout) {
@@ -9231,6 +9461,7 @@ async function saveGestureEdge(select) {
     if (sameLayout) {
       return sourceEntries.slice(0, tileCount).map(entry => ({
         targetIndex: entry.sourceIndex,
+        sourceIndex: entry.sourceIndex,
         tile: entry.tile
       }));
     }
@@ -9289,6 +9520,7 @@ async function saveGestureEdge(select) {
       }
       prepared.push({
         targetIndex: prepared.length,
+        sourceIndex: entry.sourceIndex,
         tile: { ...tile, col: best.col, row: best.row, span_w: spanW, span_h: spanH }
       });
     }
@@ -9308,9 +9540,8 @@ async function saveGestureEdge(select) {
     return preparedTiles;
   }
 
-  async function replaceScreensaverGridForImport(preparedTiles) {
+  async function replaceScreensaverGridForImport(preparedTiles, currentTiles) {
     const folderId = SCREENSAVER_FOLDER_ID;
-    const currentTiles = await fetchTilesForImport(folderId);
     const tileCount = TILES_PER_GRID;
     const post = async (index, tile) => {
       try {
@@ -9349,6 +9580,7 @@ async function saveGestureEdge(select) {
     try {
       if (!payload || typeof payload !== 'object') {
         showNotification(t('importInvalidJson'), false);
+        setImportProgress(t('importInvalidJson'), 'idle', 'error');
         return;
       }
       const grids = (payload.grids && typeof payload.grids === 'object') ? payload.grids : {};
@@ -9359,6 +9591,7 @@ async function saveGestureEdge(select) {
       }
       if (!Object.keys(grids).length) {
         showNotification(t('importInvalidJson'), false);
+        setImportProgress(t('importInvalidJson'), 'idle', 'error');
         return;
       }
 
@@ -9414,15 +9647,30 @@ async function saveGestureEdge(select) {
         ? planImportGrid(homeSource, 7, settingsHidden ? null : (targetSettings || { type: 7 }), tabByFolder[0] || '')
         : null;
       if (homePlan?.conflict) throw new TileImportError('Import layout conflict', 'conflict', homePlan.conflict, folderName(0));
+      // The steps: Home's old tiles cleared and its new ones written, every
+      // folder's tiles (a new folder has only its Back tile), the screensaver's
+      // old and new tiles, and one per layout restored at the end.
+      let steps = 3;
+      if (homePlan) {
+        steps += homePlan.tiles.length + (homePlan.system ? 1 : 0) +
+          homeTiles.filter(tile => ![0, 7].includes(importTileType(tile))).length;
+      }
       for (const folderId of sourceFolderIds) {
         const plan = planImportGrid(grids[String(folderId)], 8, NEW_FOLDER_BACK_TILE, '');
         if (plan.conflict) throw new TileImportError('Import layout conflict', 'conflict', plan.conflict, folderName(folderId));
+        steps += plan.tiles.length + (plan.system ? 1 : 0);
       }
       const screensaverTiles = Array.isArray(screensaverGrid)
         ? planScreensaverImport(screensaverGrid, screensaverBlock?.source_layout || null)
         : null;
+      const screensaverCurrent = screensaverTiles ? await fetchTilesForImport(SCREENSAVER_FOLDER_ID) : [];
+      if (screensaverTiles) {
+        steps += screensaverTiles.length + screensaverCurrent.filter(tile => Number(tile?.type || 0) !== 0).length;
+      }
 
       showNotification(t('importRunning'));
+      importProgress = {done: 0, total: steps};
+      showImportStep();
       importedSlots = [];
 
       const sourceToTarget = { 0: 0 };
@@ -9437,6 +9685,10 @@ async function saveGestureEdge(select) {
         if (!settingsHidden && !targetSettings) {
           await setSettingsTileHiddenForImport(
             false, homePlan.system, { col: homePlan.system.col, row: homePlan.system.row }, folderName(0));
+          const index = (await fetchTilesForImport(0)).findIndex(tile => importTileType(tile) === 7);
+          if (index >= 0 && Number(homePlan.system.view_id) > 0) {
+            importedSlots.push({source: 0, view: Number(homePlan.system.view_id), target: 0, index});
+          }
         }
       }
 
@@ -9471,26 +9723,32 @@ async function saveGestureEdge(select) {
         console.warn('Import skipped unreachable folders:', pendingFolderIds);
       }
 
-      await restoreImportLayouts(payload.layouts);
-
       if (screensaverConfig && typeof screensaverConfig === 'object') {
         await importScreensaverConfig(screensaverConfig);
       }
       if (screensaverTiles) {
-        await replaceScreensaverGridForImport(screensaverTiles);
+        await replaceScreensaverGridForImport(screensaverTiles, screensaverCurrent);
+      }
+      // The other layouts last: they carry the screensaver's places too.
+      if (!await restoreImportLayouts(payload.layouts, sourceToTarget, screensaverTiles)) {
+        throw new Error('Import layouts not restored');
       }
 
       try { localStorage.removeItem('tileDrafts'); } catch (e) {}
+      importProgress = null;
+      setImportProgress(t('importComplete'), 'done', 'success');
       showNotification(t('importComplete'));
       setTimeout(() => location.reload(), 600);
     } catch (e) {
       console.error('Tile import failed:', e);
+      importProgress = null;
+      let message = t('importFailed');
       if (e instanceof TileImportError) {
-        const message = t(e.kind === 'conflict' ? 'importConflict' : 'importStopped');
-        showNotification(message.replace('{tile}', importTileName(e.tile)).replace('{folder}', e.folderName), false);
-      } else {
-        showNotification(t('importFailed'), false);
+        message = t(e.kind === 'conflict' ? 'importConflict' : 'importStopped')
+          .replace('{tile}', importTileName(e.tile)).replace('{folder}', e.folderName);
       }
+      showNotification(message, false);
+      setImportProgress(message, 'idle', 'error');
     }
   }
 
@@ -9529,7 +9787,7 @@ async function saveGestureEdge(select) {
     } else {
       fd.append('bg_color_default', '1');
     }
-    const layout = normalizeTileLayout({ ...tile, type: safeType }, index, tabByFolder[folderId] || '');
+    const layout = normalizeTileLayout({ ...tile, type: safeType }, index, tabByFolder[folderId] || '', true);
     fd.append('col', layout.col);
     fd.append('row', layout.row);
     fd.append('span_w', layout.span_w);
@@ -9655,6 +9913,7 @@ async function saveGestureEdge(select) {
       }
     } else if (safeType === MEDIA_TILE_TYPE) {
       fd.append('media_entity', tile.sensor_entity || tile.media_entity || '');
+      fd.append('media_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');
     } else if (safeType === 17) {
       fd.append('climate_entity', tile.sensor_entity || tile.climate_entity || '');
       fd.append(
@@ -9711,6 +9970,7 @@ async function saveGestureEdge(select) {
       // the page names the tile and folder in the user's language.
       throw new Error('Tile save failed: ' + (data.error || ('HTTP ' + res.status)));
     }
+    importStep();
     return data;
   }
 
@@ -9963,7 +10223,7 @@ async function saveGestureEdge(select) {
   function toneJewelCard(icon, strength) {
     if (toneNoColor(icon)) return toneRgb(jewelVar('neutral', 0.63), 0, 0);
     const seed = toneOklch(icon);
-    const L = Math.min(jewelVar('max', 0.68), seed.L - jewelVar('below', 0.18));
+    const L = Math.max(jewelVar('min', 0.42), Math.min(jewelVar('max', 0.68), seed.L - jewelVar('below', 0.18)));
     const cap = jewelVar('chroma', 0.1) * (strength || 20) / 20;
     return toneRgb(L, Math.min(seed.C * jewelVar('card-share', 0.85), cap), seed.h);
   }
@@ -10649,6 +10909,10 @@ async function saveGestureEdge(select) {
           rawIcon, tile.sensor_entity || '', binarySensorPreviewState,
           metaIcons);
       }
+      if (previewKind === 'media') {
+        iconName = mediaPreviewIcon(parseMediaPreviewPayload(
+          tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''), iconName);
+      }
 
       let html = '';
       const locked = typeof previewTileLocked === 'function' && previewTileLocked(typeValue, el);
@@ -10882,7 +11146,9 @@ async function saveGestureEdge(select) {
       });
       if (currentTileIndex !== -1 && currentTileTab) {
         restoreCurrentTileSelectionUi();
-      } else if (!isScreensaverTileTab(currentTileTab)) {
+      } else if (!isScreensaverTileTab(currentTileTab) && !pageFieldPicked()) {
+        // A picked free page field is a selection too (user 2026-10-22: every
+        // refresh jumped back to the last tile).
         restoreSelectedTileState();
       }
       return true;
@@ -12168,8 +12434,10 @@ async function saveGestureEdge(select) {
       if (currentTileTab !== 'folder0' || currentTileIndex !== HIDDEN_SETTINGS_TILE_INDEX) {
         selectHiddenSettingsTile();
       }
-      const spanW = clampHalf(hiddenTile.dataset.spanW, 1, placeCols(), 1);
-      const spanH = clampHalf(hiddenTile.dataset.spanH, 0.5, placeRows(), 1);
+      // Out of its field it is one cell, like a page's folder (user
+      // 2026-10-22: it came out half high).
+      const spanW = 1;
+      const spanH = 1;
       // The slot shows one cell: the grabbed half of it anchors the drop like
       // a grid tile, and the drag image stays where the pointer took it.
       const rect = hiddenTile.getBoundingClientRect();
@@ -12595,10 +12863,35 @@ async function saveGestureEdge(select) {
     grid.style.setProperty('--fields-box-w', box.w === null ? toEdgeW : 'min(' + box.w + 'px, ' + toEdgeW + ')');
     grid.style.setProperty('--fields-box-h', box.h === null ? toEdgeH : 'min(' + box.h + 'px, ' + toEdgeH + ')');
     const slots = pageSlotList();
+    // A picked field taken meanwhile (a folder dropped in) or out of sight.
+    if (markedPageSlot >= 0 && (slots[markedPageSlot] || pageFieldsInWindow() || !pageSlotsShown())) {
+      clearPageFieldMark(true);
+    }
     grid.querySelectorAll(':scope > .page-field:not(.settings-field)').forEach(field => {
       const slot = Number(field.dataset.slot);
       setFieldPlace(field, places.pages[slot]);
       field.hidden = !pageSlotsShown() || !!slots[slot];
+      // A free field is picked like a free cell (#100, user 2026-10-22: a
+      // click made a folder at once, mistakes guaranteed); only the picked
+      // one shows its "+", which makes the page. The layout window keeps its
+      // pages until "Speichern": none there.
+      field.classList.toggle('can-add', !pageFieldsInWindow());
+      field.classList.toggle('marked', markedPageSlot === slot);
+      if (!field.querySelector(':scope > .page-field-add')) {
+        const plus = document.createElement('button');
+        plus.type = 'button';
+        plus.className = 'page-field-add';
+        plus.setAttribute('aria-label', getTileTypeMeta('4')?.label || '');
+        plus.innerHTML = '<i class="mdi mdi-plus"></i>';
+        field.appendChild(plus);
+        field.addEventListener('click', () => selectPageField(Number(field.dataset.slot)));
+        plus.addEventListener('click', event => {
+          event.stopPropagation();
+          // The second click of a double click on the field picks nothing.
+          if (event.detail > 1 || markedPageSlot !== Number(field.dataset.slot)) return;
+          addPageFolder(markedPageSlot);
+        });
+      }
     });
     const word = grid.querySelector(':scope > .page-fields-label:not(.settings-label)');
     const placeWord = (el, place) => {
@@ -12870,6 +13163,151 @@ async function saveGestureEdge(select) {
     }
   }
 
+  // The free page field picked in the editor (-1: none).
+  let markedPageSlot = -1;
+
+  // A free field picked (#100, user 2026-10-22): its teal ring and "+", and
+  // the editor with Type offering Empty and Folder only, and the title and
+  // icon the new folder gets. Nothing is made yet.
+  function selectPageField(slot) {
+    if (pageFieldsInWindow() || pageSlotList()[slot] || markedPageSlot === slot) return;
+    ++tileSelectionSeq;
+    if (currentTileTab && typeof parkClimateMiniEditor === 'function') parkClimateMiniEditor(currentTileTab);
+    clearPageFieldMark();
+    currentTileIndex = -1;
+    currentTileTab = 'folder0';
+    newTileSpot = null;
+    tileSelectionByTab.folder0 = {kind: 'page', slot};
+    persistSelectedTileState();
+    document.querySelectorAll('.tile-grid > .tile').forEach(tile => {
+      tile.classList.remove('active');
+      delete tile.dataset.selected;
+    });
+    document.getElementById('settingsHiddenTile')?.classList.remove('active');
+    markedPageSlot = slot;
+    const specific = document.querySelector('#folder0Settings .tile-specific-settings');
+    specific?.classList.remove('hidden');
+    specific?.classList.add('page-field-marked');
+    setSettingsPane('folder0', 'tile');
+    applyFolderTypeLock('folder0', false);
+    const type = document.getElementById('folder0_tile_type');
+    if (type) {
+      for (const option of type.options) {
+        option.dataset.pageHidden = option.hidden ? '1' : '0';
+        option.hidden = option.value !== '0' && option.value !== '4';
+      }
+      type.value = '0';
+    }
+    const title = document.getElementById('folder0_tile_title');
+    if (title) title.value = '';
+    const icon = document.getElementById('folder0_tile_icon');
+    if (icon) icon.value = '';
+    updateTileType('folder0');
+    if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons('folder0');
+    setupLivePreview('folder0');
+    layoutPageFields('folder0');
+  }
+
+  function pageFieldPicked() {
+    return markedPageSlot >= 0;
+  }
+
+  // The pick ends with any other selection; `hideEditor` when nothing else
+  // is picked (its field was taken).
+  function clearPageFieldMark(hideEditor = false) {
+    if (markedPageSlot < 0) return;
+    markedPageSlot = -1;
+    document.querySelectorAll('.tile-grid > .page-field.marked').forEach(field => field.classList.remove('marked'));
+    const specific = document.querySelector('#folder0Settings .tile-specific-settings');
+    specific?.classList.remove('page-field-marked');
+    if (hideEditor && currentTileIndex === -1) specific?.classList.add('hidden');
+    for (const option of document.getElementById('folder0_tile_type')?.options || []) {
+      if (option.dataset.pageHidden === undefined) continue;
+      option.hidden = option.dataset.pageHidden === '1';
+      delete option.dataset.pageHidden;
+    }
+  }
+
+  // Type changed while a free field is picked (editor.js): Folder makes its
+  // page, the menu stays at Empty until the panel made it.
+  function pageFieldTypeChosen(select) {
+    if (markedPageSlot < 0) return false;
+    const folder = select.value === '4';
+    select.value = '0';
+    updateTileType('folder0');
+    if (folder) addPageFolder(markedPageSlot);
+    return true;
+  }
+
+  // The panel makes a new Home folder that is the page there at once
+  // (/api/pages new=<slot>), also when Home's screen has no free cell; the
+  // picked field's title and icon name it, the editor then shows its tile.
+  function addPageFolder(slot) {
+    if (pageFieldsInWindow()) return pageSlotsQueue;
+    const named = markedPageSlot === slot;
+    const title = named ? String(document.getElementById('folder0_tile_title')?.value || '').trim() : '';
+    const icon = named ? String(document.getElementById('folder0_tile_icon')?.value || '') : '';
+    pageSlotsQueue = pageSlotsQueue.then(() => sendNewPage(slot, title, icon));
+    return pageSlotsQueue;
+  }
+
+  async function sendNewPage(slot, title, icon) {
+    // A second request before the first was done finds the field taken.
+    const slots = pageSlotList();
+    if (slots[slot]) return false;
+    // While the panel makes it: the field's "+" is busy.
+    const field = getTileGrid('folder0')?.querySelector(':scope > .page-field[data-slot="' + slot + '"]');
+    field?.classList.add('busy');
+    try {
+      const body = new URLSearchParams({pages: encodePageSlots(slots), new: String(slot)});
+      if (title) body.set('title', title);
+      if (icon) body.set('icon_name', icon);
+      const response = await fetch('/api/pages', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body.toString()
+      });
+      let data = {};
+      try { data = await response.json(); } catch (_) {}
+      if (!response.ok || !data.success) {
+        const used = (getTilesData('folder0') || []).filter(tile => Number(tile?.type || 0) !== 0).length;
+        showNotification(data.error === 'Folder full' ? tf('folderFull', {n: used, max: TILES_PER_GRID})
+          : t('networkErrorSave'), false);
+        return false;
+      }
+      const folder = Number(data.folder) || 0;
+      const index = Number(data.index);
+      // Only the new tile from the panel, then it is picked at once; its
+      // folder's tab follows (user 2026-10-22: loading the whole grid and
+      // the tab first took ages, a new folder tile shows at once).
+      const tileResponse = await fetch('/api/tiles?folder=0&index=' + encodeURIComponent(index));
+      if (!tileResponse.ok) throw new Error('Tile HTTP ' + tileResponse.status);
+      const tile = await tileResponse.json();
+      const tiles = getTilesData('folder0');
+      tiles[index] = tile;
+      slots[slot] = folder;
+      pageSlotsElement().dataset.pages = encodePageSlots(slots);
+      renderTileFromData('folder0', index, tile, sensorMetaCache);
+      layoutTiles('folder0', tiles);
+      syncPageHeads();
+      selectTile(index, 'folder0');
+      showNotification(t('pagesSaved'));
+      ensureFolderTabUi(folder, String(tile.title || ''), String(tile.icon_name || '')).then(ok => {
+        restoreCurrentTileSelectionUi();
+        if (!ok) {
+          persistSelectedTileState();
+          setTimeout(() => location.reload(), 400);
+        }
+      });
+      return true;
+    } catch (error) {
+      showNotification(t('networkErrorSave'), false);
+      return false;
+    } finally {
+      field?.classList.remove('busy');
+    }
+  }
+
   // A page leaving the fields onto Home's screen (drag-resize.js
   // handleGridDrop).
   function canPlacePageTile(candidate) {
@@ -12909,13 +13347,13 @@ async function saveGestureEdge(select) {
     grid.addEventListener('dragstart', event => {
       const tile = event.target.closest?.('.tile.page-field-tile');
       if (!tile || dragSource?.kind !== 'grid-tile' || dragSource.index !== Number(tile.dataset.index)) return;
-      // The layout window's parked Settings tile: out of its field in its
-      // own size (layoutSettingsOut).
+      // The layout window's parked Settings tile (layoutSettingsOut).
       const settings = tile.dataset.type === '7';
-      const own = settings ? getTilesData('folder0')?.[Number(tile.dataset.index)] : null;
       // The grab point from where it is drawn: its stored place lies elsewhere.
       dragSource = {...dragSource, kind: 'page-slot', folder: Number(tile.dataset.navigateTarget || 0), settings,
-        layout: {col: 0, row: 0, span_w: Number(own?.span_w) || 1, span_h: Number(own?.span_h) || 1},
+        // One cell out of its field, the Settings tile like a page's folder
+        // (user 2026-10-22: it came out half high).
+        layout: {col: 0, row: 0, span_w: 1, span_h: 1},
         grabCellCol: 0, grabCellRow: 0,
         dropOffset: getDragGrabOffset(tile.getBoundingClientRect(), event.clientX, event.clientY),
         baseLayouts: null, pageTarget: null};
@@ -16718,7 +17156,7 @@ function maybeFillTitleFromSwitch(tab) {
   // event, so the existing preview, draft and autosave bindings run.
   // The Climate tile's Layout and the Camera tile's choices use the same
   // segmented choice.
-  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view',
+  const SWITCH_CHOICE_FIELDS = ['switch_style', 'switch_value_font', 'switch_popup_open_mode', 'climate_view', 'media_layout',
     'cover_value_font', 'lock_value_font', 'alarm_value_font', 'fan_value_font', 'camera_display', 'camera_fit',
     'camera_head', 'camera_tap'];
 
@@ -17745,6 +18183,9 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = data.sensor_entity || data.media_entity || '';
+    const layout = document.getElementById(prefix + '_media_layout');
+    if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromMedia(tab);
     updateMediaValuePreview(tab);
   }
@@ -17755,6 +18196,7 @@ function maybeFillTitleFromMedia(tab) {
     const entity = document.getElementById(prefix + '_media_entity')?.value || '';
     formData.append('media_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('media_layout', document.getElementById(prefix + '_media_layout')?.value === '1' ? '1' : '0');
   }
 
   function resetMediaFields(tab) {
@@ -17762,6 +18204,9 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = '';
+    const layout = document.getElementById(prefix + '_media_layout');
+    if (layout) layout.value = '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
   // --- Tile preview -------------------------------------------------------
@@ -17792,6 +18237,28 @@ function maybeFillTitleFromMedia(tab) {
     };
   }
 
+  // media/state_icon.h: the player's icon in its state form (speaker-play,
+  // speaker-pause, speaker-off ...) where MDI has one, like the device's
+  // tile; the page's MDI font tells which forms exist (found ones are kept;
+  // a function property, so a preview drawn before this file ran works).
+  function mediaPreviewIcon(state, iconName) {
+    const suffix = {playing: '-play', paused: '-pause', off: '-off', standby: '-off'}[
+      String(state?.state || '').trim().toLowerCase()];
+    if (!iconName || !suffix) return iconName;
+    const mediaKnownIcons = mediaPreviewIcon.known || (mediaPreviewIcon.known = new Set());
+    const variant = iconName + suffix;
+    if (!mediaKnownIcons.has(variant)) {
+      const probe = document.createElement('i');
+      probe.className = 'mdi mdi-' + variant;
+      probe.style.cssText = 'position:absolute;visibility:hidden';
+      document.body.appendChild(probe);
+      const glyph = getComputedStyle(probe, '::before').content;
+      probe.remove();
+      if (glyph && glyph !== 'none' && glyph !== 'normal' && glyph !== '""') mediaKnownIcons.add(variant);
+    }
+    return mediaKnownIcons.has(variant) ? variant : iconName;
+  }
+
   // media_empty_title_label(): like Home Assistant, "Unavailable" and
   // "Unknown", else the player state or "No playback".
   function mediaPreviewEmptyTitle(state) {
@@ -17802,17 +18269,20 @@ function maybeFillTitleFromMedia(tab) {
   }
 
   // Positions the title and subtitle like set_media_cover_text_layout().
-  function mediaPreviewTextLayout(L, width, height, large, coverVisible, hasSubtitle) {
+  // The playing bars stand over the title in the same centred block.
+  function mediaPreviewTextLayout(L, width, height, large, coverVisible, hasSubtitle, hasBars = false) {
     const top = large ? L.coverTop : L.coverTopSmall;
     const footer = L.button - L.buttonBottom + L.footerGap;
     const side = Math.max(1, Math.min(L.maxCover, Math.trunc(width * 42 / 100), height - top - footer));
     const textX = coverVisible ? side + L.textAfterCover : L.textLeft;
     const titleHeight = (large ? L.title : L.titleSmall).line;
     const gap = hasSubtitle ? L.subtitleGap : 0;
-    const block = titleHeight + gap + (hasSubtitle ? L.subtitle.line : 0);
+    const barsHeight = hasBars ? L.barsHeight + L.barsGap : 0;
+    const block = barsHeight + titleHeight + gap + (hasSubtitle ? L.subtitle.line : 0);
     const center = coverVisible ? top + Math.trunc(side / 2) : Math.trunc((top + height - footer) / 2);
-    const titleY = Math.max(top, Math.min(center - Math.trunc(block / 2), height - footer - block));
-    return {side, top, textX, textWidth: Math.max(1, width - textX - L.textRight), titleY,
+    const barsY = Math.max(top, Math.min(center - Math.trunc(block / 2), height - footer - block));
+    const titleY = barsY + barsHeight;
+    return {side, top, textX, textWidth: Math.max(1, width - textX - L.textRight), barsY, titleY,
             subtitleY: titleY + titleHeight + gap};
   }
 
@@ -17822,6 +18292,7 @@ function maybeFillTitleFromMedia(tab) {
   // then follows the icon (applyIconDiscTint), the cover never tints the
   // tile itself (user 2026-10-11).
   function applyMediaCoverTint(el, record, coverColor) {
+    mediaPreviewBarsColor(el);
     if (!el || !coverColor || typeof parseIconColorRecord !== 'function') return;
     const parsed = parseIconColorRecord(record || '');
     const cover = parsed.cover || {icon: false, tile: 0};
@@ -17831,6 +18302,14 @@ function maybeFillTitleFromMedia(tab) {
       const icon = el.querySelector(':scope > .tile-icon');
       if (icon) icon.style.color = coverColor;
     }
+    mediaPreviewBarsColor(el);
+  }
+
+  // The playing bars take the tile icon's color like on the panel (its
+  // label's color): set after the preview is filled and after every tint.
+  function mediaPreviewBarsColor(el) {
+    const icon = el?.querySelector(':scope > .tile-icon');
+    if (icon) el.style.setProperty('--media-bars', getComputedStyle(icon).color);
   }
 
   // An artwork loaded: the texts move beside it like on the device.
@@ -17859,7 +18338,8 @@ function maybeFillTitleFromMedia(tab) {
     // Header: the television icon and the entity's name stand in like on
     // the device.
     if (!iconName && !el.querySelector(':scope > .tile-icon')) {
-      el.insertAdjacentHTML('afterbegin', '<i class="mdi mdi-television tile-icon"></i>');
+      el.insertAdjacentHTML('afterbegin',
+        '<i class="mdi mdi-' + mediaPreviewIcon(state, 'television') + ' tile-icon"></i>');
     }
     if (!el.querySelector(':scope > .tile-title')) {
       const name = displayName || (entity && typeof titleFromEntity === 'function' ? titleFromEntity(entity) : '') ||
@@ -17904,8 +18384,11 @@ function maybeFillTitleFromMedia(tab) {
     if (subtitle && subtitle.toLowerCase() === mainText.trim().toLowerCase()) subtitle = '';
     const titleFont = font(large ? L.title : L.titleSmall);
     const subtitleFont = font(L.subtitle);
-    const plain = mediaPreviewTextLayout(L, width, height, large, false, !!subtitle);
-    const covered = mediaPreviewTextLayout(L, width, height, large, true, !!subtitle);
+    // The playing bars while a song plays or pauses (update_media_tile_state).
+    const playerState = String(state?.state || '').trim().toLowerCase();
+    const hasBars = playerState === 'playing' || playerState === 'paused';
+    const plain = mediaPreviewTextLayout(L, width, height, large, false, !!subtitle, hasBars);
+    const covered = mediaPreviewTextLayout(L, width, height, large, true, !!subtitle, hasBars);
     const textStyle = (layout, y, f) => at(layout.textX, y) + 'width:' + (layout.textWidth * scale).toFixed(2) + 'px;' +
       fontCss(f) + 'margin-top:' + f.shift.toFixed(2) + 'px;';
 
@@ -17934,6 +18417,18 @@ function maybeFillTitleFromMedia(tab) {
         '" data-cover-style="' + escapeHtml(textStyle(covered, covered.subtitleY, subtitleFont)) + '">' +
         escapeHtml(subtitle) + '</div>';
     }
+    // The bars stand like a paused player's (playing_bars.h kStill); the
+    // panel moves them while it plays.
+    if (hasBars) {
+      const barsStyle = layout => at(layout.textX, layout.barsY) + 'width:' +
+        ((4 * L.barWidth + 3 * L.barGap) * scale).toFixed(2) + 'px;height:' + (L.barsHeight * scale).toFixed(2) +
+        'px;gap:' + (L.barGap * scale).toFixed(2) + 'px;';
+      html += '<div class="media-preview-bars" style="' + barsStyle(titleLayout) + '" data-cover-style="' +
+        escapeHtml(barsStyle(covered)) + '">' + [35, 70, 50, 85].map(level => '<i style="width:' +
+          (L.barWidth * scale).toFixed(2) + 'px;height:' +
+          (Math.max(L.barWidth, Math.trunc(L.barsHeight * level / 100 + 0.5)) * scale).toFixed(2) +
+          'px;border-radius:' + (L.barWidth / 2 * scale).toFixed(2) + 'px"></i>').join('') + '</div>';
+    }
 
     // Previous, play/pause and next at the bottom middle; an unavailable
     // player dims them. Play is a white circle with the icon in the tile color.
@@ -17953,11 +18448,12 @@ function maybeFillTitleFromMedia(tab) {
       }
     }
     el.querySelectorAll(':scope > :is(.media-preview-cover, .media-preview-title, .media-preview-subtitle, ' +
-      '.media-preview-control)').forEach(node => { if (node !== shownCover) node.remove(); });
+      '.media-preview-bars, .media-preview-control)').forEach(node => { if (node !== shownCover) node.remove(); });
     if (shownCover) shownCover.setAttribute('style', coverStyle);
     const handles = el.querySelector(':scope > .tile-resize-handle');
     if (handles) handles.insertAdjacentHTML('beforebegin', html);
     else el.insertAdjacentHTML('beforeend', html);
+    mediaPreviewBarsColor(el);
   }
 
   const CLIMATE_TILE_CONTENT = Object.freeze({

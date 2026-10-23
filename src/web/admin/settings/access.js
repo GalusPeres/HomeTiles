@@ -125,8 +125,10 @@
       bg_color: isDefault ? 0 : makeTileBgValue(hexToRgb(color)),
       col: String(Math.max(1, editorCoordinates ? rawCol : (rawCol + 1))),
       row: String(Math.max(1, editorCoordinates ? rawRow : (rawRow + 1))),
-      span_w: String(source?.span_w ?? hiddenTile?.dataset.spanW ?? 1),
-      span_h: String(source?.span_h ?? hiddenTile?.dataset.spanH ?? 1)
+      // Parked it is one cell and comes back as one (user 2026-10-22), like
+      // a page's folder.
+      span_w: '1',
+      span_h: '1'
     };
   }
 
@@ -317,15 +319,11 @@
     }
     if (tileSnapshot) {
       const snapshot = normalizeHiddenSettingsSnapshot(tileSnapshot);
-      const layout = normalizeSnapshotLayout(
-        snapshot, HIDDEN_SETTINGS_TILE_INDEX, 'folder0');
       body.set('settings_tile_snapshot_present', '1');
       body.set('settings_tile_title', snapshot.title);
       body.set('settings_tile_icon', snapshot.icon);
-      body.set('settings_tile_col', String(layout.col));
-      body.set('settings_tile_row', String(layout.row));
-      body.set('settings_tile_span_w', String(layout.span_w));
-      body.set('settings_tile_span_h', String(layout.span_h));
+      // Its look only: parked it is one cell with no place kept, the panel
+      // puts it where it is dropped or on a free cell (user 2026-10-22).
       if (snapshot.bg_color_default === '1') {
         body.set('settings_tile_bg_color_default', '1');
       } else {

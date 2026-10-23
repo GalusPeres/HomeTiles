@@ -4,6 +4,9 @@
 #include "src/types/media/content_layout.h"
 #include "src/types/media/update_schedule.h"
 #include "src/types/media/update_service.h"
+#include "src/types/media/media_position.h"
+#include "src/types/media/renderer.h"
+#include "src/types/media/state_icon.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/json_scan.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -60,6 +63,7 @@
 #include <math.h>
 #include <new>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <time.h>
 #include <vector>
 
@@ -3086,15 +3090,6 @@ static String media_popup_title_for_tile(const Tile& tile) {
   return title;
 }
 
-static String media_popup_icon_for_tile(const Tile& tile) {
-  String icon_name = normalizeMdiIconName(tile.icon_name);
-  if (!icon_name.length() && tile.sensor_entity.length()) {
-    icon_name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(tile.sensor_entity));
-  }
-  if (!icon_name.length()) icon_name = "television";
-  return icon_name;
-}
-
 static String media_entity_for_grid_index(GridType grid_type, uint8_t grid_index) {
   if (grid_index >= TILES_PER_GRID) return "";
   const Tile* tile = tile_renderer_get_tile_config(grid_type, grid_index);
@@ -3155,7 +3150,7 @@ static void update_media_popup_from_widgets(GridType grid_type,
   MediaPopupInit init;
   init.entity_id = tile.sensor_entity;
   init.title = media_popup_title_for_tile(tile);
-  init.icon_name = media_popup_icon_for_tile(tile);
+  init.icon_name = media_tile_icon_name(tile);
   init.icon_char = media_label_text(widgets.icon_label);
   init.bg_color = tile_icon_source::popup_background(widgets.icon_label,
                                                      tileBgColorOrDefault(tile, tileDefaultBgColor()));
@@ -3174,6 +3169,7 @@ static void update_media_popup_from_widgets(GridType grid_type,
   init.volume_level = widgets.media_volume_level;
   init.is_muted = widgets.media_is_muted;
   init.available = widgets.available;
+  init.cover_centered = mediaPopupCoverCentered(tile);
   const bool cover_visible = widgets.cover_ref &&
                              widgets.cover_ref->dsc &&
                              widgets.cover_clip &&
@@ -3410,7 +3406,9 @@ static lv_image_dsc_t* make_media_cover_decoded_jpeg_hw_dsc(const uint8_t* data,
     }
   }
 
-  constexpr uint16_t kMaxCoverSide = 240;
+  // At most the Media popup's cover (bridge_images::coverEdge, V2 400): a
+  // cap of 240 made the V2 popup show a cover stretched from 240 px.
+  const uint16_t kMaxCoverSide = std::max<uint16_t>(240, bridge_images::coverEdge());
   uint16_t dst_w = static_cast<uint16_t>(info.width);
   uint16_t dst_h = static_cast<uint16_t>(info.height);
   if (dst_w > kMaxCoverSide || dst_h > kMaxCoverSide) {
@@ -3523,7 +3521,9 @@ static lv_image_dsc_t* make_media_cover_decoded_jpeg_dsc(const uint8_t* data, si
   // renders the same descriptor at its smaller size. Older firmware keeps its
   // previous 160px limit, so the bridge can publish the larger JPEG without a
   // protocol/version split.
-  constexpr uint16_t kMaxCoverSide = 240;
+  // At most the Media popup's cover (bridge_images::coverEdge, V2 400): a
+  // cap of 240 made the V2 popup show a cover stretched from 240 px.
+  const uint16_t kMaxCoverSide = std::max<uint16_t>(240, bridge_images::coverEdge());
   uint16_t dst_w = ctx.w;
   uint16_t dst_h = ctx.h;
   if (dst_w > kMaxCoverSide || dst_h > kMaxCoverSide) {
@@ -4463,6 +4463,9 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   const uint32_t payload_hash = fnv1a_hash(payload_start);
   if (widgets.last_payload_hash == payload_hash) return;
   widgets.last_payload_hash = payload_hash;
+  // The fields only the Media popup shows (features, shuffle, repeat,
+  // sources, the group, artist and album), also while it is closed.
+  if (*payload_start == '{') media_popup_note_state(media_entity_for_grid_index(grid_type, grid_index), payload_start);
 
   String state;
   String title;
@@ -4477,6 +4480,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   float media_duration = 0.0f;
   bool has_media_position = false;
   bool has_media_duration = false;
+  String position_updated_at;
   bool is_muted = false;
   bool has_muted = false;
 
@@ -4495,6 +4499,7 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     }
     has_media_position = extract_json_number_field_cstr(payload_start, "media_position", media_position);
     has_media_duration = extract_json_number_field_cstr(payload_start, "media_duration", media_duration);
+    extract_json_string_field_cstr(payload_start, "media_position_updated_at", position_updated_at);
     has_muted = extract_json_bool_field_cstr(payload_start, "is_volume_muted", is_muted);
     if (!has_muted) {
       has_muted = extract_json_bool_field_cstr(payload_start, "muted", is_muted);
@@ -4528,10 +4533,35 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   widgets.has_media_volume = has_volume_level;
   widgets.media_volume_level = has_volume_level ? volume_level : 0.0f;
   if (has_muted) widgets.media_is_muted = is_muted;
+  // The position is Home Assistant's at media_position_updated_at: a state
+  // that repeats the last report (a volume change) keeps the running
+  // position; a new one counts the time since it was taken (media_position.h).
+  const bool had_position = widgets.has_media_position;
   widgets.has_media_position = has_media_position && has_media_duration && media_duration > 0.0f;
-  widgets.media_position = widgets.has_media_position ? media_position : 0.0f;
   widgets.media_duration = widgets.has_media_position ? media_duration : 0.0f;
-  widgets.media_position_received_ms = widgets.has_media_position ? millis() : 0;
+  const bool playing = state.equalsIgnoreCase("playing");
+  double position_updated = -1.0;
+  if (!media_progress::parse_utc(position_updated_at.c_str(), position_updated)) position_updated = -1.0;
+  const bool same_report = had_position && widgets.has_media_position &&
+                           media_position == widgets.media_position_reported &&
+                           position_updated == widgets.media_position_updated &&
+                           playing == widgets.media_position_playing;
+  if (!widgets.has_media_position) {
+    widgets.media_position = 0.0f;
+    widgets.media_position_received_ms = 0;
+    widgets.media_position_reported = -1.0f;
+    widgets.media_position_updated = -1.0;
+  } else if (!same_report) {
+    struct timeval now {};
+    gettimeofday(&now, nullptr);
+    widgets.media_position =
+        media_progress::now_position(media_position, media_duration, playing, now.tv_sec + now.tv_usec / 1e6,
+                                     position_updated >= 0.0, position_updated);
+    widgets.media_position_received_ms = millis();
+    widgets.media_position_reported = media_position;
+    widgets.media_position_updated = position_updated;
+  }
+  widgets.media_position_playing = playing;
 
   String main_text = media_first_non_empty(title, channel);
   const bool has_real_media_title = main_text.length() > 0;
@@ -4566,8 +4596,34 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
       lv_obj_clear_flag(widgets.play_pause_label, LV_OBJ_FLAG_HIDDEN);
     }
   }
+  // The tile's icon in the player's state form, the same as the popup's
+  // head (state_icon.h); a hidden icon stays hidden.
+  const media_state_icon::Form icon_form = media_state_icon::form_of(state);
+  widgets.icon_form = static_cast<uint8_t>(icon_form);
+  if (widgets.icon_label && !lv_obj_has_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN)) {
+    const Tile* tile = tile_renderer_get_tile_config(grid_type, grid_index);
+    if (tile && tile->type == TILE_MEDIA) {
+      const String icon = getMdiChar(media_state_icon::name(media_tile_icon_name(*tile), icon_form));
+      if (icon.length()) set_label_text_if_changed(widgets.icon_label, icon);
+    }
+  }
 
   bool text_layout_dirty = false;
+  // The playing bars over the title (playing_bars.h): shown while a song
+  // plays or pauses, moving while it plays (their timer, renderer.cpp).
+  if (widgets.bars) {
+    const bool bars_shown = playing || state.equalsIgnoreCase("paused");
+    if (lv_obj_has_flag(widgets.bars, LV_OBJ_FLAG_HIDDEN) == bars_shown) {
+      if (bars_shown) lv_obj_remove_flag(widgets.bars, LV_OBJ_FLAG_HIDDEN);
+      else lv_obj_add_flag(widgets.bars, LV_OBJ_FLAG_HIDDEN);
+      text_layout_dirty = true;
+    }
+    if (lv_obj_has_state(widgets.bars, LV_STATE_CHECKED) != playing) {
+      if (playing) lv_obj_add_state(widgets.bars, LV_STATE_CHECKED);
+      else lv_obj_remove_state(widgets.bars, LV_STATE_CHECKED);
+      lv_obj_invalidate(widgets.bars);
+    }
+  }
   bool title_text_changed = false;
   bool subtitle_text_changed = false;
   if (widgets.media_title_label) {

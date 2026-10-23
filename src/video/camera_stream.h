@@ -18,3 +18,7 @@ uint32_t camera_stream_first_frame_ms();
 // True once after the stream task ended on its own in a transport error
 // (DMA safety stop, receive or acknowledgement failure).
 bool camera_stream_take_transport_failure();
+// Test builds (/api/debug/camera-pause): the stream task reads and
+// acknowledges nothing for `ms`, a Wi-Fi stall as the Bridge sees it (#116).
+// False when no stream runs.
+bool camera_stream_debug_pause(uint32_t ms);

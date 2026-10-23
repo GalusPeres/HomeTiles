@@ -9,7 +9,7 @@
 
 namespace speaker_contract {
 
-enum class CommandKind : uint8_t { Invalid, Play, Stop, Volume, Mute };
+enum class CommandKind : uint8_t { Invalid, Play, Stop, Volume, Mute, Pause, Resume };
 
 enum class CommandStatus : uint8_t {
   Ok,
@@ -44,6 +44,13 @@ struct Command {
   char id[kMaxRequestIdLength + 1] = {};
   // Only for Play; points into the caller's url buffer.
   size_t url_length = 0;
+  // Only for Play: a camera's sound, kept short (audio_stream_contract.h),
+  // and how much earlier the Bridge sent it than the camera's picture.
+  bool live = false;
+  uint16_t lead_ms = 0;
+  // Only for Play of a Bridge stream: the Bridge plays the clip again from
+  // the paused point to resume, so a pause closes the stream.
+  bool restart = false;
   float volume = kDefaultVolume;
   bool muted = false;
 };
@@ -77,6 +84,11 @@ inline void parseCommand(const char* payload, size_t length, bool https_allowed,
   }
   if (strcmp(op_name, "stop") == 0) {
     out->kind = CommandKind::Stop;
+    out->status = CommandStatus::Ok;
+    return;
+  }
+  if (strcmp(op_name, "pause") == 0 || strcmp(op_name, "resume") == 0) {
+    out->kind = op_name[0] == 'p' ? CommandKind::Pause : CommandKind::Resume;
     out->status = CommandStatus::Ok;
     return;
   }
@@ -134,6 +146,17 @@ inline void parseCommand(const char* payload, size_t length, bool https_allowed,
   }
   memcpy(url_out, url_text, url_length + 1);
   out->url_length = url_length;
+  JsonVariantConst live = doc["live"];
+  out->live = live.is<bool>() && live.as<bool>();
+  JsonVariantConst lead = doc["lead_ms"];
+  if (out->live && lead.is<int>()) {
+    const int value = lead.as<int>();
+    out->lead_ms = static_cast<uint16_t>(value < 0 ? 0 : value > 1000 ? 1000 : value);
+  }
+  // A camera's sound has no point to come back to.
+  JsonVariantConst restart = doc["restart"];
+  out->restart = !out->live && strncmp(url_text, "tcp://", 6) == 0 && restart.is<bool>() &&
+                 restart.as<bool>();
   out->status = CommandStatus::Ok;
 }
 

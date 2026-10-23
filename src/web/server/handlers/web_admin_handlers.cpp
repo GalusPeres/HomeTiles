@@ -2,6 +2,8 @@
 #include "src/web/server/auth/web_admin_auth.h"
 #include "src/core/i18n/i18n.h"
 #include "src/core/config/pin_access.h"
+#include "src/core/firmware/firmware_version.h"
+#include "src/devices/device.h"
 #include "src/network/bridge/device_entities.h"
 #include "src/network/network_manager.h"
 #include "src/network/link/link_config.h"
@@ -210,10 +212,16 @@ void WebAdminServer::handleSaveMQTT() {
       sendSaveError(400, tr.save_failed);
       return;
     }
+    // The drop spot is a cell of the layout the panel shows, where
+    // ensureSettingsTile places it (user 2026-10-22: upright 3 x 6 on the
+    // Tab5's classic 7 x 4, a drop below row 4 was refused).
+    const bool classic_shown = grid_layout::active() == grid_layout::Layout::kClassic;
+    const float place_cols = classic_shown ? GRID_COLS : grid_layout::shown().cols;
+    const float place_rows = classic_shown ? GRID_ROWS : grid_layout::shown_rows();
     if (has_target_col) {
-      if (!parse_bounded_arg("settings_tile_target_col", 0, GRID_COLS - 1,
+      if (!parse_bounded_arg("settings_tile_target_col", 0, place_cols - 1,
                              settings_tile_target_col) ||
-          !parse_bounded_arg("settings_tile_target_row", 0, GRID_ROWS - 0.5f,
+          !parse_bounded_arg("settings_tile_target_row", 0, place_rows - 0.5f,
                              settings_tile_target_row)) {
         sendSaveError(400, tr.save_failed);
         return;
@@ -276,43 +284,12 @@ void WebAdminServer::handleSaveMQTT() {
         snapshot.bg_color = makeTileBgColor(static_cast<uint32_t>(
             server.arg("settings_tile_bg_color").toInt()));
       }
-      const bool has_snapshot_col = server.hasArg("settings_tile_col");
-      const bool has_snapshot_row = server.hasArg("settings_tile_row");
-      const bool has_snapshot_span_w = server.hasArg("settings_tile_span_w");
-      const bool has_snapshot_span_h = server.hasArg("settings_tile_span_h");
-      const bool has_any_snapshot_layout =
-          has_snapshot_col || has_snapshot_row || has_snapshot_span_w ||
-          has_snapshot_span_h;
-      const bool has_complete_snapshot_layout =
-          has_snapshot_col && has_snapshot_row && has_snapshot_span_w &&
-          has_snapshot_span_h;
-      if (has_any_snapshot_layout && !has_complete_snapshot_layout) {
-        sendSaveError(400, tr.save_failed);
-        return;
-      }
-      if (has_complete_snapshot_layout) {
-        float snapshot_col = 0;
-        float snapshot_row = 0;
-        float snapshot_span_w = 1;
-        float snapshot_span_h = 1;
-        if (!parse_bounded_arg("settings_tile_col", 0, GRID_COLS - 1,
-                               snapshot_col) ||
-            !parse_bounded_arg("settings_tile_row", 0, GRID_ROWS - 0.5f,
-                               snapshot_row) ||
-            !parse_bounded_arg("settings_tile_span_w", 1, GRID_COLS,
-                               snapshot_span_w) ||
-            !parse_bounded_arg("settings_tile_span_h", 0.5f, GRID_ROWS,
-                               snapshot_span_h) ||
-            snapshot_col + snapshot_span_w > GRID_COLS ||
-            snapshot_row + snapshot_span_h > GRID_ROWS) {
-          sendSaveError(400, tr.save_failed);
-          return;
-        }
-        snapshot.col = snapshot_col;
-        snapshot.row = snapshot_row;
-        snapshot.span_w = snapshot_span_w;
-        snapshot.span_h = snapshot_span_h;
-      }
+      // No place and no size: parked it is one cell and comes back as one
+      // where it is dropped, else on a free cell (user 2026-10-22: a place
+      // of the upright layout was checked against the classic 7 x 4 and the
+      // parking refused; it came back half high).
+      snapshot.span_w = 1;
+      snapshot.span_h = 1;
     }
     cfg.settings_tile_hidden = hide_tile;
     // Parked in the layout the panel shows (user 2026-10-13: each layout
@@ -726,6 +703,44 @@ void WebAdminServer::handleLinkSetup() {
   command_channel::acceptLinkSetup(settings.host, settings.port);
 }
 
+// GET /api/link: what the panel's mDNS record says (startMdns()), for a
+// Bridge that adds the panel by its IP address where mDNS does not reach
+// Home Assistant (issue #114, Bridge #16): device id, name, model, topics,
+// firmware and whether Pair runs, then POST /api/link as after mDNS. No
+// password: nothing here is secret, the record goes to the whole network.
+void WebAdminServer::handleLinkInfo() {
+  char did[24];
+  buildDeviceId(did, sizeof(did));
+  const DeviceConfig& cfg = configManager.getConfig();
+  const bool pair = command_channel::linkWindowOpen();
+  String json;
+  json.reserve(320);
+  json += "{\"device_id\":\"";
+  appendJsonEscaped(json, did);
+  json += "\",\"name\":\"";
+  appendJsonEscaped(json, Device::displayName());
+  json += "\",\"model\":\"";
+  appendJsonEscaped(json, Device::profile().key);
+  json += "\",\"firmware\":\"";
+  appendJsonEscaped(json, FW_VERSION);
+  json += "\",\"base_topic\":\"";
+  appendJsonEscaped(json, cfg.mqtt_base_topic);
+  json += "\",\"ha_prefix\":\"";
+  appendJsonEscaped(json, cfg.ha_prefix);
+  json += "\",\"link\":1,\"pair\":";
+  json += pair ? "true" : "false";
+  json += '}';
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", json);
+  // Anyone on the network may ask: one line per 10 s at most.
+  static uint32_t last_log_ms = 0;
+  const uint32_t now = millis();
+  if (!last_log_ms || now - last_log_ms >= 10000) {
+    last_log_ms = now ? now : 1;
+    Serial.printf("[Link] Panel info requested (Pair %s)\n", pair ? "open" : "not pressed");
+  }
+}
+
 void WebAdminServer::handleRestart() {
   server.sendHeader("Location", "/");
   server.send(303, "text/plain", "");
@@ -847,14 +862,11 @@ void WebAdminServer::handleSaveTheme() {
     return;
   }
   const uint8_t stored = static_cast<uint8_t>(value.toInt());
-  if (!configManager.saveTheme(stored)) {
+  if (!theme_schedule::store(stored)) {
     sendJsonError(server, 500, "Could not save the theme");
     return;
   }
   const uint8_t shown = theme_schedule::effective(stored);
-  // The next boot before the clock runs starts with this theme.
-  if (stored == theme_schedule::kAutomatic) configManager.saveThemeAutoLast(shown);
-  uiManager.requestThemeChange();
   server.send(200, "application/json",
               String("{\"success\":true,\"theme\":") + static_cast<int>(stored) +
                   ",\"effective\":" + static_cast<int>(shown) + "}");

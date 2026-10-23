@@ -71,6 +71,9 @@
       if (!confirm(tf('deleteFolderConfirm', { name }))) return;
       confirmedFolderDeletes.add(tab + ':' + currentTileIndex);
     }
+    // A page's tile: its field (page-fields.js).
+    const pageSlot = tab === 'folder0' && Number(stored?.type) === 4
+      ? pageSlotIds().indexOf(Number(stored.navigate_target)) : -1;
     const prefix = tab;
     document.getElementById(prefix + '_tile_type').value = '0';
     document.getElementById(prefix + '_tile_title').value = '';
@@ -82,6 +85,12 @@
     updateTilePreview(tab);
     updateDraft(tab);
     scheduleAutoSave(tab);
+    // A deleted page leaves its field free and picked (user 2026-10-22: an
+    // empty selected tile stayed in it). The save keeps its own tile index.
+    if (pageSlot >= 0) {
+      layoutTiles(tab, getTilesData(tab));
+      selectPageField(pageSlot);
+    }
   }
 
   function deleteFolder(tab) {
@@ -102,6 +111,7 @@
       .then(data => {
         if (data.success) {
           showNotification(t('folderDeleted'));
+          forgetFolderTabSessionFragment(folderId);
           setTimeout(() => location.reload(), 500);
         } else {
           showNotification(data.error || t('deleteFailed'), false);
@@ -142,6 +152,34 @@
       });
   }
 
+  // A new folder's title and icon as the panel saved them ("Folder 17" and
+  // the folder icon, user 2026-10-22: its tab showed them, the tile had
+  // none): into the tile, a newer draft and the editor wherever still empty.
+  function fillFolderName(tab, index, data) {
+    const title = String(data.title || '');
+    const icon = String(data.icon_name || '');
+    const stored = getTilesData(tab)?.[index];
+    if (stored) {
+      if (!stored.title) stored.title = title;
+      if (!stored.icon_name) stored.icon_name = icon;
+    }
+    const draft = drafts[tab]?.[index];
+    if (draft) {
+      if (!draft.title) draft.title = title;
+      if (!draft.icon) draft.icon = icon;
+    }
+    if (currentTileTab === tab && currentTileIndex === index) {
+      const titleInput = document.getElementById(tab + '_tile_title');
+      if (titleInput && !titleInput.value) titleInput.value = title;
+      const iconInput = document.getElementById(tab + '_tile_icon');
+      if (iconInput && !iconInput.value) iconInput.value = icon;
+      if (typeof refreshTileIconButtons === 'function') refreshTileIconButtons(tab);
+      updateTilePreview(tab);
+    } else if (stored) {
+      renderTileFromData(tab, index, stored, sensorMetaCache);
+    }
+  }
+
   function saveTile(tab, silent = false, tileIndexOverride = null) {
     const tileIndex = tileIndexOverride !== null ? tileIndexOverride : currentTileIndex;
     if (tileIndex === -1) return;
@@ -154,9 +192,6 @@
       queueSaveAfterFlight(tab, tileIndex, silent);
       return;
     }
-    const tiles = getTilesData(tab);
-    const previousTile = Array.isArray(tiles) ? tiles[tileIndex] : null;
-    const previousType = previousTile ? Number(previousTile.type) : NaN;
     const snapshot = getTileSnapshotForSave(tab, tileIndex);
     if (!snapshot) return;
     const formData = new FormData();
@@ -210,6 +245,7 @@
               Number(tilesData[tab][tileIndex].type || 0) !== 0) {
             tilesData[tab][tileIndex].view_id = Number(data.view_id) || 0;
           }
+          if (typeValue === '4' && data.title !== undefined) fillFolderName(tab, tileIndex, data);
           const currentDraft = drafts[tab] && drafts[tab][tileIndex];
           if (currentDraft && currentDraft._dirty && Number(currentDraft._rev || 0) !== draftRev) {
             queueSaveAfterFlight(tab, tileIndex, true);
@@ -236,8 +272,8 @@
             }
             syncFolderPinControls(tab);
             const navTargetNum = parseInt(resolvedNavTarget, 10);
-            const titleVal = snapshot.title || '';
-            const iconVal = snapshot.icon || '';
+            const titleVal = tilesData[tab]?.[tileIndex]?.title || snapshot.title || '';
+            const iconVal = tilesData[tab]?.[tileIndex]?.icon_name || snapshot.icon || '';
             ensureFolderTabUi(navTargetNum, titleVal, iconVal).then(ok => {
               restoreCurrentTileSelectionUi();
               if (!ok) {
@@ -246,7 +282,12 @@
               }
             });
           }
-          if (previousType === 4 && typeValue === '0') {
+          // A deleted folder's tab goes (user 2026-10-22: it stayed). The
+          // editor showed the tile empty before this save, so the panel says
+          // which folder went; its kept tab markup goes too (IDs come back).
+          const deletedFolder = Number(data.folder_deleted) || 0;
+          if (deletedFolder > 0) {
+            forgetFolderTabSessionFragment(deletedFolder);
             persistSelectedTileState();
             setTimeout(() => location.reload(), 400);
           }

@@ -43,6 +43,10 @@ bool sendAll(int fd, const void* source, size_t bytes, StopFn stop, void* contex
 SocketReadResult receiveExact(int fd, void* destination, size_t bytes, StopFn stop,
                               void* context, uint32_t deadline_ms = 0);
 
+// Waits at most timeout_ms for data on fd. False only on timeout: data, a
+// closed connection and an error all return true, the next recv() tells.
+bool waitReadable(int fd, uint32_t timeout_ms);
+
 // shutdown() and close(); ignores a negative descriptor.
 void closeSocket(int fd);
 

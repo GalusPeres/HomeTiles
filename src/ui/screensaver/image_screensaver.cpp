@@ -2142,6 +2142,10 @@ bool is_image_screensaver_visible() {
   return g_state != nullptr;
 }
 
+lv_obj_t* image_screensaver_overlay() {
+  return g_state ? g_state->overlay : nullptr;
+}
+
 bool image_screensaver_covers_ui() {
   return g_opening || g_state != nullptr;
 }

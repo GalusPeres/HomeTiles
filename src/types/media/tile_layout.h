@@ -41,6 +41,14 @@ constexpr lv_coord_t kTextAfterCover = tile_layout::scale(16);
 constexpr lv_coord_t kTextRight = tile_layout::scale(8);
 constexpr lv_coord_t kSubtitleGap = tile_layout::scale(6);
 constexpr lv_coord_t kFooterGap = tile_layout::scale(12);
+// The playing bars over the title (playing_bars.h): the popup's scaled to
+// the tile's title (mockup media-popup-simple/tile-bars.html), their gap to
+// the title, and their frame period while the player plays.
+constexpr lv_coord_t kBarsHeight = tile_layout::scale(36);
+constexpr lv_coord_t kBarWidth = tile_layout::scale(8);
+constexpr lv_coord_t kBarGap = tile_layout::scale(5);
+constexpr lv_coord_t kBarsGap = tile_layout::scale(10);
+constexpr uint32_t kBarsPeriodMs = 40;  // the popup's kMotionPeriodMs
 
 inline const lv_font_t* title_font(bool large) {
 #if defined(DEVICE_WAVESHARE_4B)

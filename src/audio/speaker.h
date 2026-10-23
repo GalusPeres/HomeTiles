@@ -60,8 +60,9 @@ void handleCommandPayload(const uint8_t* payload, size_t length);
 // Bridge message on the encrypted command channel.
 void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool sealed = false);
 
-// Microphone privacy switch, stored across restarts (default on). While off,
-// Assist sessions are refused and no wake word runs. Loop task only.
+// Microphone privacy switch, stored across restarts (off on a new panel).
+// While off, Assist sessions are refused and no wake word runs. Loop task
+// only.
 bool micEnabled();
 void setMicEnabled(bool enabled, const char* source);
 
@@ -86,6 +87,12 @@ void setMicGainStep(uint8_t step);
 
 // "audio_output" flag in the Bridge capabilities: codec found and ready.
 bool bridgeCapability();
+
+// Lip sync for a camera's sound (src/video/frame_delay_line.h): how long the
+// panel's live sound still needs to reach the loudspeaker, less how much
+// earlier the Bridge sent it than the camera's picture ("lead_ms" in its play
+// command); 0 while no camera sound plays. Any task.
+uint32_t cameraSyncDelayMs();
 // "audio_input" flag in the Bridge capabilities: microphone ADC answered.
 bool micCapability();
 

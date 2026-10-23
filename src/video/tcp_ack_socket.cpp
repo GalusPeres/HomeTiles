@@ -172,6 +172,14 @@ SocketReadResult receiveExact(int fd, void* destination, size_t bytes, StopFn st
   return SocketReadResult::Ok;
 }
 
+bool waitReadable(int fd, uint32_t timeout_ms) {
+  fd_set readable;
+  FD_ZERO(&readable);
+  FD_SET(fd, &readable);
+  timeval timeout = toTimeval(timeout_ms);
+  return select(fd + 1, &readable, nullptr, nullptr, &timeout) != 0;
+}
+
 void closeSocket(int fd) {
   if (fd < 0) return;
   shutdown(fd, SHUT_RDWR);

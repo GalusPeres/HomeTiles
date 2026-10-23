@@ -476,10 +476,14 @@ void build_language(const Colors& palette) {
   g_rotation = settings_screen::rotation_segment(rotation.row, palette.card);
   // Short landscape panels (800 x 480, 1024 x 600) have no room for every
   // row: the group scrolls in itself, its cut last row shows there is more.
+  // LVGL scrolls what a touch lands on or its parents, and the rows with a
+  // switch are no input themselves: without its own input the group only
+  // followed a finger on the two tap rows (issue #41, Waveshare 7B), like the
+  // Settings page before (settings_screen.cpp g_page).
   lv_obj_update_layout(g_body);
   if (lv_obj_get_height(group) > body_height()) {
     lv_obj_set_height(group, body_height());
-    lv_obj_add_flag(group, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(group, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE));
     lv_obj_set_scroll_dir(group, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(group, LV_SCROLLBAR_MODE_OFF);
   }
@@ -575,13 +579,14 @@ void build_wifi(const Colors& palette) {
   if (more) phone_row(more, v, palette);
 
   // The list keeps what the body leaves under the heading (and above the
-  // second group), and scrolls in itself.
+  // second group), and scrolls in itself, with its own input like the
+  // language step's group.
   lv_obj_update_layout(g_body);
   const int below = more ? lv_obj_get_height(more) + settings_style::kSetupGroupGap : 0;
   const int room = body_height() - lv_obj_get_y(list) - below;
   if (lv_obj_get_height(list) > room && room > settings_style::kSetupRowHeight) {
     lv_obj_set_height(list, room);
-    lv_obj_add_flag(list, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(list, static_cast<lv_obj_flag_t>(LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE));
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
   }

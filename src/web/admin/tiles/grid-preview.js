@@ -248,7 +248,7 @@
   function toneJewelCard(icon, strength) {
     if (toneNoColor(icon)) return toneRgb(jewelVar('neutral', 0.63), 0, 0);
     const seed = toneOklch(icon);
-    const L = Math.min(jewelVar('max', 0.68), seed.L - jewelVar('below', 0.18));
+    const L = Math.max(jewelVar('min', 0.42), Math.min(jewelVar('max', 0.68), seed.L - jewelVar('below', 0.18)));
     const cap = jewelVar('chroma', 0.1) * (strength || 20) / 20;
     return toneRgb(L, Math.min(seed.C * jewelVar('card-share', 0.85), cap), seed.h);
   }
@@ -934,6 +934,10 @@
           rawIcon, tile.sensor_entity || '', binarySensorPreviewState,
           metaIcons);
       }
+      if (previewKind === 'media') {
+        iconName = mediaPreviewIcon(parseMediaPreviewPayload(
+          tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''), iconName);
+      }
 
       let html = '';
       const locked = typeof previewTileLocked === 'function' && previewTileLocked(typeValue, el);
@@ -1167,7 +1171,9 @@
       });
       if (currentTileIndex !== -1 && currentTileTab) {
         restoreCurrentTileSelectionUi();
-      } else if (!isScreensaverTileTab(currentTileTab)) {
+      } else if (!isScreensaverTileTab(currentTileTab) && !pageFieldPicked()) {
+        // A picked free page field is a selection too (user 2026-10-22: every
+        // refresh jumped back to the last tile).
         restoreSelectedTileState();
       }
       return true;

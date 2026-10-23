@@ -5,6 +5,7 @@
 #include "src/network/mqtt/mqtt_topics.h"
 #include "src/tiles/config/grid_layout.h"
 #include "src/tiles/runtime/tile_renderer.h"
+#include "src/ui/popups/media/media_popup_layout.h"
 #include "src/ui/popups/popup_layout.h"
 #include "src/types/camera/picture.h"
 #include "src/ui/screensaver/image_screensaver.h"
@@ -55,9 +56,16 @@ void announce(const char* entity) {
 }  // namespace
 
 uint16_t coverEdge() {
-  // The Media popup's cover (media_popup.cpp kCoverSize); tiles show at
-  // most this much of it.
-  return static_cast<uint16_t>(popup_layout::scale(240));
+  // The Media popup's larger cover ("Cover links", media_popup_layout.h; V2
+  // 399, S3 218), so it is sharp. The P4's hardware JPEG decoder takes sides
+  // in steps of 16 only (tile_renderer.cpp make_media_cover_decoded_jpeg_hw_dsc;
+  // 399 went to the slow software decoder in the UI loop): rounded up there,
+  // the popup takes an averaged copy in its size.
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+  return static_cast<uint16_t>((media_popup_layout::kLeftCoverSide + 15) / 16 * 16);
+#else
+  return static_cast<uint16_t>(media_popup_layout::kLeftCoverSide);
+#endif
 }
 
 const char* coverSuffix() {

@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <cstring>
 #include "src/core/config/batched_nvs_write.h"
+#include "src/audio/speaker.h"
 #include "src/ui/tabs/settings/tab_settings.h"
 #include "src/core/config/config_manager.h"
 #include "src/core/hardware/board_hal.h"
@@ -223,6 +224,11 @@ static void apply_display_rotation(uint8_t rotation) {
   }
 }
 
+void settings_select_display_rotation(uint8_t index) {
+  settings_model::rotation_selected(index);
+  settings_screen::sync_rotation();
+}
+
 void settings_sync_display_rotation(bool rotated) {
   sync_display_rotation_state(rotated ? Device::kRotationFlipped : Device::kRotationDefault);
   displayManager.setRotation(display_rotation_quarters);
@@ -316,6 +322,28 @@ void rotation_selected(uint8_t index) {
                              ? static_cast<uint8_t>((Device::kRotationDefault + index) & 0x03)
                              : (index ? Device::kRotationFlipped : Device::kRotationDefault));
 }
+
+SoundValues sound_values() {
+  SoundValues values;
+  values.speaker = speaker::supported();
+  values.microphone = speaker::micCapability();
+  values.volume = static_cast<int>(lroundf(speaker::volume() * 100.0f));
+  values.mic_on = speaker::micEnabled();
+  return values;
+}
+
+void volume_changed(int percent, bool final) {
+  // The speaker follows the finger at most four times a second: every change
+  // publishes the retained audio status to Home Assistant. The release always
+  // applies; the speaker module stores it.
+  static uint32_t last_ms = 0;
+  const uint32_t now = millis();
+  if (!final && now - last_ms < 250) return;
+  last_ms = now;
+  speaker::setVolume(static_cast<float>(percent) / 100.0f);
+}
+
+void microphone_selected(bool on) { speaker::setMicEnabled(on, "panel settings"); }
 
 }  // namespace settings_model
 
@@ -1060,13 +1088,9 @@ uint8_t theme_choice() {
 }
 
 void theme_selected(uint8_t index) {
-  // The stored theme: 0 dark, 1 light, 2 automatic (ui_theme.h).
-  const uint8_t theme = index > theme_schedule::kAutomatic ? 0 : index;
-  if (!configManager.saveTheme(theme)) return;
-  // A boot before the clock is set starts with what Automatic shows now
-  // (like the Web Admin's Design).
-  if (theme == theme_schedule::kAutomatic) configManager.saveThemeAutoLast(theme_schedule::effective(theme));
-  uiManager.requestThemeChange();
+  // The stored theme: 0 dark, 1 light, 2 automatic (ui_theme.h), stored like
+  // the Web Admin's Design and Home Assistant's select.
+  theme_schedule::store(index > theme_schedule::kAutomatic ? 0 : index);
 }
 
 // The head bar layouts of this panel's two orientations.

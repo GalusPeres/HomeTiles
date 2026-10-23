@@ -40,8 +40,6 @@ void remove(Layout layout, uint16_t folder_id, uint16_t view_id);
 bool has_folder(Layout layout, uint16_t folder_id);
 // True when any layout notes something for this folder.
 bool has_any(uint16_t folder_id);
-// True when a bar layout has any places (it was set up).
-bool has_layout(Layout layout);
 
 // Tiles without a place in the classic layout.
 bool classic_hidden(uint16_t folder_id, uint16_t view_id);

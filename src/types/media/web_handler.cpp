@@ -8,7 +8,8 @@ void apply_media_fields_from_request(WebServer& server, Tile& tile) {
   tile.image_path = "";
   tile.sensor_decimals = 0xFF;
   tile.sensor_value_font = 0;
-  tile.sensor_display_mode = 0;
+  // The popup's layout (mediaPopupCoverCentered): 0 cover left, 1 centred.
+  tile.sensor_display_mode = server.hasArg("media_layout") && server.arg("media_layout").toInt() == 1 ? 1 : 0;
   tile.sensor_gauge_min = 0;
   tile.sensor_gauge_max = 100;
   tile.sensor_gauge_arc = 100;

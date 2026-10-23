@@ -13,6 +13,9 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = data.sensor_entity || data.media_entity || '';
+    const layout = document.getElementById(prefix + '_media_layout');
+    if (layout) layout.value = Number(data.sensor_display_mode) === 1 ? '1' : '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
     maybeFillTitleFromMedia(tab);
     updateMediaValuePreview(tab);
   }
@@ -23,6 +26,7 @@ function maybeFillTitleFromMedia(tab) {
     const entity = document.getElementById(prefix + '_media_entity')?.value || '';
     formData.append('media_entity', entity);
     formData.append('sensor_entity', entity);
+    formData.append('media_layout', document.getElementById(prefix + '_media_layout')?.value === '1' ? '1' : '0');
   }
 
   function resetMediaFields(tab) {
@@ -30,6 +34,9 @@ function maybeFillTitleFromMedia(tab) {
     const prefix = tab;
     const el = document.getElementById(prefix + '_media_entity');
     if (el) el.value = '';
+    const layout = document.getElementById(prefix + '_media_layout');
+    if (layout) layout.value = '0';
+    if (typeof syncSwitchChoices === 'function') syncSwitchChoices(tab);
   }
 
   // --- Tile preview -------------------------------------------------------
@@ -60,6 +67,28 @@ function maybeFillTitleFromMedia(tab) {
     };
   }
 
+  // media/state_icon.h: the player's icon in its state form (speaker-play,
+  // speaker-pause, speaker-off ...) where MDI has one, like the device's
+  // tile; the page's MDI font tells which forms exist (found ones are kept;
+  // a function property, so a preview drawn before this file ran works).
+  function mediaPreviewIcon(state, iconName) {
+    const suffix = {playing: '-play', paused: '-pause', off: '-off', standby: '-off'}[
+      String(state?.state || '').trim().toLowerCase()];
+    if (!iconName || !suffix) return iconName;
+    const mediaKnownIcons = mediaPreviewIcon.known || (mediaPreviewIcon.known = new Set());
+    const variant = iconName + suffix;
+    if (!mediaKnownIcons.has(variant)) {
+      const probe = document.createElement('i');
+      probe.className = 'mdi mdi-' + variant;
+      probe.style.cssText = 'position:absolute;visibility:hidden';
+      document.body.appendChild(probe);
+      const glyph = getComputedStyle(probe, '::before').content;
+      probe.remove();
+      if (glyph && glyph !== 'none' && glyph !== 'normal' && glyph !== '""') mediaKnownIcons.add(variant);
+    }
+    return mediaKnownIcons.has(variant) ? variant : iconName;
+  }
+
   // media_empty_title_label(): like Home Assistant, "Unavailable" and
   // "Unknown", else the player state or "No playback".
   function mediaPreviewEmptyTitle(state) {
@@ -70,17 +99,20 @@ function maybeFillTitleFromMedia(tab) {
   }
 
   // Positions the title and subtitle like set_media_cover_text_layout().
-  function mediaPreviewTextLayout(L, width, height, large, coverVisible, hasSubtitle) {
+  // The playing bars stand over the title in the same centred block.
+  function mediaPreviewTextLayout(L, width, height, large, coverVisible, hasSubtitle, hasBars = false) {
     const top = large ? L.coverTop : L.coverTopSmall;
     const footer = L.button - L.buttonBottom + L.footerGap;
     const side = Math.max(1, Math.min(L.maxCover, Math.trunc(width * 42 / 100), height - top - footer));
     const textX = coverVisible ? side + L.textAfterCover : L.textLeft;
     const titleHeight = (large ? L.title : L.titleSmall).line;
     const gap = hasSubtitle ? L.subtitleGap : 0;
-    const block = titleHeight + gap + (hasSubtitle ? L.subtitle.line : 0);
+    const barsHeight = hasBars ? L.barsHeight + L.barsGap : 0;
+    const block = barsHeight + titleHeight + gap + (hasSubtitle ? L.subtitle.line : 0);
     const center = coverVisible ? top + Math.trunc(side / 2) : Math.trunc((top + height - footer) / 2);
-    const titleY = Math.max(top, Math.min(center - Math.trunc(block / 2), height - footer - block));
-    return {side, top, textX, textWidth: Math.max(1, width - textX - L.textRight), titleY,
+    const barsY = Math.max(top, Math.min(center - Math.trunc(block / 2), height - footer - block));
+    const titleY = barsY + barsHeight;
+    return {side, top, textX, textWidth: Math.max(1, width - textX - L.textRight), barsY, titleY,
             subtitleY: titleY + titleHeight + gap};
   }
 
@@ -90,6 +122,7 @@ function maybeFillTitleFromMedia(tab) {
   // then follows the icon (applyIconDiscTint), the cover never tints the
   // tile itself (user 2026-10-11).
   function applyMediaCoverTint(el, record, coverColor) {
+    mediaPreviewBarsColor(el);
     if (!el || !coverColor || typeof parseIconColorRecord !== 'function') return;
     const parsed = parseIconColorRecord(record || '');
     const cover = parsed.cover || {icon: false, tile: 0};
@@ -99,6 +132,14 @@ function maybeFillTitleFromMedia(tab) {
       const icon = el.querySelector(':scope > .tile-icon');
       if (icon) icon.style.color = coverColor;
     }
+    mediaPreviewBarsColor(el);
+  }
+
+  // The playing bars take the tile icon's color like on the panel (its
+  // label's color): set after the preview is filled and after every tint.
+  function mediaPreviewBarsColor(el) {
+    const icon = el?.querySelector(':scope > .tile-icon');
+    if (icon) el.style.setProperty('--media-bars', getComputedStyle(icon).color);
   }
 
   // An artwork loaded: the texts move beside it like on the device.
@@ -127,7 +168,8 @@ function maybeFillTitleFromMedia(tab) {
     // Header: the television icon and the entity's name stand in like on
     // the device.
     if (!iconName && !el.querySelector(':scope > .tile-icon')) {
-      el.insertAdjacentHTML('afterbegin', '<i class="mdi mdi-television tile-icon"></i>');
+      el.insertAdjacentHTML('afterbegin',
+        '<i class="mdi mdi-' + mediaPreviewIcon(state, 'television') + ' tile-icon"></i>');
     }
     if (!el.querySelector(':scope > .tile-title')) {
       const name = displayName || (entity && typeof titleFromEntity === 'function' ? titleFromEntity(entity) : '') ||
@@ -172,8 +214,11 @@ function maybeFillTitleFromMedia(tab) {
     if (subtitle && subtitle.toLowerCase() === mainText.trim().toLowerCase()) subtitle = '';
     const titleFont = font(large ? L.title : L.titleSmall);
     const subtitleFont = font(L.subtitle);
-    const plain = mediaPreviewTextLayout(L, width, height, large, false, !!subtitle);
-    const covered = mediaPreviewTextLayout(L, width, height, large, true, !!subtitle);
+    // The playing bars while a song plays or pauses (update_media_tile_state).
+    const playerState = String(state?.state || '').trim().toLowerCase();
+    const hasBars = playerState === 'playing' || playerState === 'paused';
+    const plain = mediaPreviewTextLayout(L, width, height, large, false, !!subtitle, hasBars);
+    const covered = mediaPreviewTextLayout(L, width, height, large, true, !!subtitle, hasBars);
     const textStyle = (layout, y, f) => at(layout.textX, y) + 'width:' + (layout.textWidth * scale).toFixed(2) + 'px;' +
       fontCss(f) + 'margin-top:' + f.shift.toFixed(2) + 'px;';
 
@@ -202,6 +247,18 @@ function maybeFillTitleFromMedia(tab) {
         '" data-cover-style="' + escapeHtml(textStyle(covered, covered.subtitleY, subtitleFont)) + '">' +
         escapeHtml(subtitle) + '</div>';
     }
+    // The bars stand like a paused player's (playing_bars.h kStill); the
+    // panel moves them while it plays.
+    if (hasBars) {
+      const barsStyle = layout => at(layout.textX, layout.barsY) + 'width:' +
+        ((4 * L.barWidth + 3 * L.barGap) * scale).toFixed(2) + 'px;height:' + (L.barsHeight * scale).toFixed(2) +
+        'px;gap:' + (L.barGap * scale).toFixed(2) + 'px;';
+      html += '<div class="media-preview-bars" style="' + barsStyle(titleLayout) + '" data-cover-style="' +
+        escapeHtml(barsStyle(covered)) + '">' + [35, 70, 50, 85].map(level => '<i style="width:' +
+          (L.barWidth * scale).toFixed(2) + 'px;height:' +
+          (Math.max(L.barWidth, Math.trunc(L.barsHeight * level / 100 + 0.5)) * scale).toFixed(2) +
+          'px;border-radius:' + (L.barWidth / 2 * scale).toFixed(2) + 'px"></i>').join('') + '</div>';
+    }
 
     // Previous, play/pause and next at the bottom middle; an unavailable
     // player dims them. Play is a white circle with the icon in the tile color.
@@ -221,9 +278,10 @@ function maybeFillTitleFromMedia(tab) {
       }
     }
     el.querySelectorAll(':scope > :is(.media-preview-cover, .media-preview-title, .media-preview-subtitle, ' +
-      '.media-preview-control)').forEach(node => { if (node !== shownCover) node.remove(); });
+      '.media-preview-bars, .media-preview-control)').forEach(node => { if (node !== shownCover) node.remove(); });
     if (shownCover) shownCover.setAttribute('style', coverStyle);
     const handles = el.querySelector(':scope > .tile-resize-handle');
     if (handles) handles.insertAdjacentHTML('beforebegin', html);
     else el.insertAdjacentHTML('beforeend', html);
+    mediaPreviewBarsColor(el);
   }

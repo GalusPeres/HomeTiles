@@ -16,6 +16,7 @@
 #include "src/video/camera_geometry.h"
 #include "src/video/camera_transport.h"
 #include "src/ui/tabs/settings/tab_settings.h"
+#include "src/ui/shared/theme_schedule.h"
 #include "src/types/energy/energy_data.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
@@ -1179,6 +1180,47 @@ static void handleDisplayRotateCommand(const char* payload, size_t) {
   mqttPublishDeviceSettings();
 }
 
+// Home Assistant's theme select (Bridge capability display_theme): the
+// stored setting as a stable id, "dark", "light" or "auto".
+static const char* display_theme_id(uint8_t theme) {
+  return theme == theme_schedule::kAutomatic ? "auto" : theme == 1 ? "light" : "dark";
+}
+
+static void handleDisplayThemeCommand(const char* payload, size_t) {
+  if (!payload) return;
+  String value(payload);
+  value.trim();
+  value.toLowerCase();
+  for (uint8_t theme = 0; theme <= theme_schedule::kAutomatic; ++theme) {
+    if (value == display_theme_id(theme)) {
+      theme_schedule::store(theme);
+      return;
+    }
+  }
+}
+
+// Home Assistant's rotation select (capability display_rotation): the steps
+// of the panel's Settings row (tab_settings.cpp rotation_index) in degrees
+// from the profile's own turn, 0/90/180/270 where the panel turns in quarter
+// turns, else 0/180 (user 2026-10-23: the old switch knew only 180).
+static int display_rotation_degrees(const DeviceConfig& cfg) {
+  const uint8_t quarters = Device::normalizeRotationQuarterTurns(cfg.display_rotation_quarters);
+  if (Device::supportsQuarterTurnRotation()) {
+    return static_cast<int>((quarters - Device::kRotationDefault) & 0x03) * 90;
+  }
+  return quarters == Device::kRotationFlipped ? 180 : 0;
+}
+
+static void handleDisplayRotationCommand(const char* payload, size_t) {
+  if (!payload) return;
+  char* end = nullptr;
+  const long degrees = strtol(payload, &end, 10);
+  if (end == payload || degrees < 0 || degrees % 90 != 0) return;
+  const bool quarter_turns = Device::supportsQuarterTurnRotation();
+  if (degrees > 270 || (!quarter_turns && degrees % 180 != 0)) return;
+  settings_select_display_rotation(static_cast<uint8_t>(degrees / (quarter_turns ? 90 : 180)));
+}
+
 static void handleDisplaySleepCommand(const char* payload, size_t) {
   bool sleep = false;
   if (!parseBoolPayload(payload, &sleep)) return;
@@ -1360,6 +1402,8 @@ static const TopicRoute kRoutes[] = {
   {TopicKey::DISPLAY_BRIGHTNESS_CMND, handleDisplayBrightnessCommand, false},
   {TopicKey::SCREENSAVER_BRIGHTNESS_CMND, handleScreensaverBrightnessCommand, false},
   {TopicKey::DISPLAY_ROTATE_CMND, handleDisplayRotateCommand, false},
+  {TopicKey::DISPLAY_ROTATION_CMND, handleDisplayRotationCommand, false},
+  {TopicKey::DISPLAY_THEME_CMND, handleDisplayThemeCommand, false},
   {TopicKey::DISPLAY_SLEEP_CMND, handleDisplaySleepCommand, false},
   {TopicKey::SLEEP_MAINS_CMND, handleSleepMainsCommand, false},
   {TopicKey::SLEEP_BAT_CMND, handleSleepBatteryCommand, false},
@@ -1786,6 +1830,8 @@ static QueueHandle_t g_mqtt_inbound_queue = nullptr;
 static MqttInboundMsg* g_deferred_bridge_apply = nullptr;
 
 static void processMqttMessage(char* topic, uint8_t* payload, unsigned int length);
+void media_browse_handle_catalog_message(const char* topic, const char* payload, size_t length);
+void media_browse_handle_status_message(const char* payload, size_t length);
 
 static QueueHandle_t mqttInboundQueue() {
   if (!g_mqtt_inbound_queue) {
@@ -2094,6 +2140,34 @@ static void processMqttMessage(char* topic, uint8_t* payload, unsigned int lengt
     return;
   }
 
+  // The Media popup's library: catalog pages on {base}/stat/media/catalog,
+  // errors on {base}/stat/media (after memooox3's PR #87). Always through the
+  // large buffer.
+  {
+    const String& base = mqttTopics.deviceBase();
+    const size_t base_len = base.length();
+    static const char kMediaStat[] = "/stat/media";
+    if (base_len && strncmp(topic, base.c_str(), base_len) == 0 &&
+        strncmp(topic + base_len, kMediaStat, sizeof(kMediaStat) - 1) == 0) {
+      const char* rest = topic + base_len + sizeof(kMediaStat) - 1;
+      const bool is_status = *rest == '\0';
+      const bool is_catalog = strcmp(rest, "/catalog") == 0;
+      if (is_status || is_catalog) {
+        char* large_buf = mqttLargeBuffer();
+        if (!large_buf) return;
+        if (length >= LARGE_BUF) {
+          Serial.printf("[MediaLibrary] Answer too large (%u bytes), dropped\n", static_cast<unsigned>(length));
+          return;
+        }
+        memcpy(large_buf, payload, length);
+        large_buf[length] = '\0';
+        if (is_catalog) media_browse_handle_catalog_message(topic, large_buf, length);
+        else media_browse_handle_status_message(large_buf, length);
+        return;
+      }
+    }
+  }
+
   bool processed_static = false;
   for (const auto& route : kRoutes) {
     const char* expected = mqttTopics.topic(route.key);
@@ -2223,6 +2297,11 @@ void mqttSubscribeTopics() {
   if (networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + "/stat/value").c_str())) {
     ++queued;
   }
+  // The Media popup's library answers. Fixed topics: the direct link takes
+  // no wildcard subscription (Bridge link_protocol.valid_topic).
+  for (const char* leaf : {"/stat/media/catalog", "/stat/media"}) {
+    if (networkManager.mqttEnqueueSubscribe((mqttTopics.deviceBase() + leaf).c_str())) ++queued;
+  }
   for (const auto& route : kRoutes) {
     const char* tpc = mqttTopics.topic(route.key);
     if (!tpc || !*tpc) continue;
@@ -2299,6 +2378,12 @@ void mqttPublishDeviceSettings() {
            static_cast<unsigned>(cfg.screensaver_brightness_pct));
   publish_state(TopicKey::SCREENSAVER_BRIGHTNESS_STAT, buf);
   publish_state(TopicKey::DISPLAY_ROTATE_STAT, cfg.display_rotated_180 ? "ON" : "OFF");
+  // The rotation select's value and the steps this panel offers.
+  char rotation[64];
+  snprintf(rotation, sizeof(rotation), "{\"degrees\":%d,\"options\":%s}", display_rotation_degrees(cfg),
+           Device::supportsQuarterTurnRotation() ? "[0,90,180,270]" : "[0,180]");
+  publish_state(TopicKey::DISPLAY_ROTATION_STAT, rotation);
+  publish_state(TopicKey::DISPLAY_THEME_STAT, display_theme_id(cfg.theme));
   publish_state(TopicKey::DISPLAY_SLEEP_STAT, powerManager.isInSleep() ? "ON" : "OFF");
 
   publish_state(TopicKey::SLEEP_MAINS_STAT,
@@ -2470,6 +2555,106 @@ void mqttPublishMediaMute(const char* entity_id, bool muted) {
   Serial.printf("Media mute -> '%s' %s (%s, priority)\n",
                 topic, muted ? "on" : "off",
                 queued ? "queued" : "queue-full");
+}
+
+// Appends value as a JSON string literal (quotes included): sources, sound
+// modes and media content ids are free text from Home Assistant.
+static void append_json_string(String& out, const char* value) {
+  out += '"';
+  for (const char* p = value ? value : ""; *p; ++p) {
+    const unsigned char c = static_cast<unsigned char>(*p);
+    switch (c) {
+      case '"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (c < 0x20) {
+          char esc[8];
+          snprintf(esc, sizeof(esc), "\\u%04x", c);
+          out += esc;
+        } else {
+          out += static_cast<char>(c);
+        }
+    }
+  }
+  out += '"';
+}
+
+// One media command with its fields (already JSON, starting with a comma or
+// empty) on the priority lane: a tap the user waits for.
+static bool publish_media_json(const char* entity_id, const char* command, const String& fields,
+                               bool large_answer = false) {
+  if (!entity_id || !*entity_id || !networkManager.isMqttConnected()) return false;
+  const char* topic = mqttTopics.topic(TopicKey::MEDIA_CMND);
+  if (!topic || !*topic) return false;
+  String payload;
+  payload.reserve(96 + fields.length());
+  payload += "{\"entity_id\":";
+  append_json_string(payload, entity_id);
+  payload += ",\"command\":";
+  append_json_string(payload, command);
+  payload += fields;
+  payload += '}';
+  // A library page can exceed the normal receive buffer: hold the large one
+  // while its answer is expected (like the history requests).
+  const bool queued = large_answer
+                          ? networkManager.mqttEnqueuePublishWithLargeBuffer(topic, payload.c_str(), false, 15000, true)
+                          : networkManager.mqttEnqueuePublishPriority(topic, payload.c_str(), false);
+  Serial.printf("Media %s -> '%s' (%s)\n", command, entity_id, queued ? "queued" : "queue-full");
+  return queued;
+}
+
+bool mqttPublishMediaShuffle(const char* entity_id, bool shuffle) {
+  return publish_media_json(entity_id, "shuffle_set", shuffle ? ",\"shuffle\":true" : ",\"shuffle\":false");
+}
+
+bool mqttPublishMediaRepeat(const char* entity_id, const char* mode) {
+  String fields = ",\"repeat\":";
+  append_json_string(fields, mode);
+  return publish_media_json(entity_id, "repeat_set", fields);
+}
+
+bool mqttPublishMediaSelect(const char* entity_id, bool sound_mode, const char* value) {
+  String fields = sound_mode ? ",\"sound_mode\":" : ",\"source\":";
+  append_json_string(fields, value);
+  return publish_media_json(entity_id, sound_mode ? "select_sound_mode" : "select_source", fields);
+}
+
+bool mqttPublishMediaGroup(const char* entity_id, bool join, const char* member) {
+  String fields;
+  if (join) {
+    fields = ",\"group_members\":[";
+    append_json_string(fields, member);
+    fields += ']';
+  } else {
+    fields = ",\"member\":";
+    append_json_string(fields, member);
+  }
+  return publish_media_json(entity_id, join ? "join" : "unjoin", fields);
+}
+
+bool mqttPublishMediaBrowse(const char* entity_id, const char* session, uint32_t request_id,
+                            const char* media_content_id, const char* media_content_type) {
+  String fields = ",\"session\":";
+  append_json_string(fields, session);
+  fields += ",\"request_id\":";
+  fields += String(request_id);
+  fields += ",\"media_content_id\":";
+  append_json_string(fields, media_content_id);
+  fields += ",\"media_content_type\":";
+  append_json_string(fields, media_content_type);
+  return publish_media_json(entity_id, "browse_media", fields, true);
+}
+
+bool mqttPublishMediaPlay(const char* entity_id, const char* media_content_id, const char* media_content_type) {
+  if (!media_content_id || !*media_content_id || !media_content_type || !*media_content_type) return false;
+  String fields = ",\"media_content_id\":";
+  append_json_string(fields, media_content_id);
+  fields += ",\"media_content_type\":";
+  append_json_string(fields, media_content_type);
+  return publish_media_json(entity_id, "play_media", fields);
 }
 
 void mqttPublishClimateTemperature(const char* entity_id,
@@ -3077,6 +3262,13 @@ void mqttServicePostConnect() {
   networkManager.publishBridgeConfig();
 }
 
+// A panel whose speaker plays Bridge streams asks for the camera's sound;
+// the Bridge plays it when the camera's stream has an audio track
+// (audio_stream_contract.h). The transport name matches the speaker status.
+static const char* camera_audio_field() {
+  return speaker::bridgeCapability() ? ",\"audio\":\"tcp-ack-v1\"" : "";
+}
+
 // The panel's own JPEG quality for the Bridge, or nothing for the Bridge's.
 static void camera_quality_field(char* out, size_t size) {
   out[0] = '\0';
@@ -3104,14 +3296,14 @@ void mqttPublishCameraFullScreenOpen(const char* entity_id, uint8_t fps,
            "{\"entity_id\":\"%s\",\"command\":\"open\","
            "\"width\":%u,\"height\":%u,\"fps\":%u,"
            "\"view\":\"full\",\"rotate\":%u,\"fit\":\"%s\","
-           "\"chunk\":%u,\"window\":%u%s,"
+           "\"chunk\":%u,\"window\":%u%s%s,"
            "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
            entity_id, static_cast<unsigned>(width),
            static_cast<unsigned>(height),
            static_cast<unsigned>(fps ? fps : camera_geometry::kFps),
            static_cast<unsigned>(turn_cw), camera_geometry::kFullFit,
            static_cast<unsigned>(transport.chunk_bytes),
-           static_cast<unsigned>(transport.window), quality);
+           static_cast<unsigned>(transport.window), quality, camera_audio_field());
   const bool queued =
       networkManager.mqttEnqueuePublishPriority(topic, payload, false);
   Serial.printf("[Camera] command open full screen %ux%u -> %s (%s)\n",
@@ -3144,14 +3336,14 @@ void mqttPublishCameraCommand(const char* entity_id, const char* command,
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\","
              "\"width\":%u,\"height\":%u,\"fps\":%u,"
-             "\"chunk\":%u,\"window\":%u%s,"
+             "\"chunk\":%u,\"window\":%u%s%s,"
              "\"transport\":\"tcp-ack-v1\",\"protocol_version\":1}",
              entity_id, action,
              camera_geometry::kWidth,
              camera_geometry::kHeight,
              fps ? fps : camera_geometry::kFps,
              static_cast<unsigned>(transport.chunk_bytes),
-             static_cast<unsigned>(transport.window), quality);
+             static_cast<unsigned>(transport.window), quality, camera_audio_field());
   } else {
     snprintf(payload, sizeof(payload),
              "{\"entity_id\":\"%s\",\"command\":\"%s\"}",

@@ -21,9 +21,14 @@
 #include <freertos/idf_additions.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <lwip/sockets.h>
+#include <mbedtls/platform.h>
 
-#include "mp3dec.h"
+#include <cerrno>
+
+#include "src/audio/helix_mp3/mp3dec.h"
 #include "src/audio/assist_request.h"
+#include "src/audio/audio_stream_contract.h"
 #include "src/audio/audio_board.h"
 #include "src/audio/codecs/audio_chips.h"
 #include "src/audio/mic_level.h"
@@ -32,6 +37,8 @@
 #include "src/audio/wakeword/wake_word_engine.h"
 #include "src/core/config/batched_nvs_write.h"
 #include "src/devices/device.h"
+#include "src/video/camera_stream.h"
+#include "src/video/tcp_ack_socket.h"
 #include HOMETILES_SPEAKER_BOARD
 #endif
 
@@ -55,14 +62,29 @@ std::atomic<float> g_volume{kDefaultVolume};
 std::atomic<bool> g_muted{false};
 // Bumped by every change of the retained status; service() publishes it.
 std::atomic<uint32_t> g_state_generation{0};
+// The clip's playback position and length (0 = not known) for the status.
+// Set by the worker; published only with a status change, the Bridge moves
+// the position on itself while a clip plays.
+std::atomic<uint32_t> g_position_ms{0};
+std::atomic<uint32_t> g_duration_ms{0};
+// Home Assistant's pause: set by the loop task, followed by the worker.
+std::atomic<bool> g_pause_requested{false};
+// Paused with the stream closed ("released" in the status): the Bridge
+// plays the clip again from the paused point to resume.
+std::atomic<bool> g_released{false};
+// Lip sync for a camera's sound (cameraSyncDelayMs): the worker's live sound
+// delay to the loudspeaker (0 while none plays) and the Bridge's lead.
+std::atomic<uint32_t> g_live_latency_ms{0};
+std::atomic<uint32_t> g_live_lead_ms{0};
 uint32_t g_published_generation = 0;
 // Bridge capability bits: 1 = audio_output, 2 = audio_input.
 uint8_t g_last_capability = 0;
 
 // Assist microphone capture (assist_contract.h).
 std::atomic<bool> g_mic_ready{false};
-// Privacy switch (stored): while false nothing reads the microphone.
-std::atomic<bool> g_mic_enabled{true};
+// Privacy switch (stored, off on a new panel): while false nothing reads the
+// microphone.
+std::atomic<bool> g_mic_enabled{false};
 // ES7210 mic gain step (stored), applied whenever the input opens.
 std::atomic<uint8_t> g_mic_gain{kDefaultMicGainStep};
 std::atomic<uint8_t> g_assist_state{static_cast<uint8_t>(assist::PublicState::Idle)};
@@ -70,9 +92,17 @@ std::atomic<uint8_t> g_assist_error{static_cast<uint8_t>(assist::ErrorCode::None
 std::atomic<uint32_t> g_assist_state_generation{0};
 uint32_t g_assist_published_generation = 0;
 
-// On-panel wake word (assist_contract.h addendum). Catalog mask of the words
-// the Bridge activated; set on the loop task, read by the worker.
-std::atomic<uint32_t> g_wake_active{0};
+// On-panel wake word (assist_contract.h addendum): the chosen words (catalog
+// mask) and the listen switch; set on the loop task, read by the worker.
+std::atomic<uint32_t> g_wake_chosen{assist::kDefaultWakeWordMask};
+std::atomic<bool> g_wake_listen{false};
+
+assist::WakeSetting wakeSetting() {
+  assist::WakeSetting setting;
+  setting.chosen = g_wake_chosen.load();
+  setting.listen = g_wake_listen.load();
+  return setting;
+}
 // The model could not run; the status then offers no wake words.
 std::atomic<bool> g_wake_failed{false};
 
@@ -97,8 +127,10 @@ constexpr const char* kLogPrefix = "[Speaker]";
 constexpr const char* kPrefsNamespace = "speaker";
 constexpr const char* kPrefsVolumeKey = "volume";
 constexpr const char* kPrefsMutedKey = "muted";
-// Comma-separated wake word ids (names, not catalog bits).
+// Comma-separated chosen wake word ids (names, not catalog bits) and the
+// listen switch.
 constexpr const char* kPrefsWakeWordsKey = "wake_words";
+constexpr const char* kPrefsWakeListenKey = "wake_listen";
 constexpr const char* kPrefsMicKey = "mic_on";
 constexpr const char* kPrefsMicGainKey = "mic_gain";
 // Volume sliders send many steps; store once they settle and nothing plays
@@ -128,6 +160,10 @@ constexpr size_t kPumpBudgetBytes = 16u * 1024u;
 // 22.05 kHz, enough to ride out a Web Admin flash write.
 constexpr uint32_t kDmaDescriptors = 8;
 constexpr uint32_t kDmaFrames = 480;
+// A camera's sound: 4 x 240 frames, 44 ms at 22.05 kHz. A flash write may
+// cut it short (silence, auto_clear); it stays close to the picture.
+constexpr uint32_t kLiveDmaDescriptors = 4;
+constexpr uint32_t kLiveDmaFrames = 240;
 constexpr uint32_t kI2sWriteTimeoutMs = 1000;
 constexpr uint32_t kInitialSampleRate = 44100;
 // Silence around the amplifier switching avoids a pop.
@@ -137,10 +173,25 @@ constexpr int kMaxConsecutiveDecodeErrors = 40;
 // Bytes searched for the first MP3 frame header before giving up.
 constexpr size_t kMaxSyncHuntBytes = 64u * 1024u;
 constexpr size_t kWavChunkFrames = 1024;
+// How often a playing clip samples the free internal RAM for its log line.
+constexpr uint32_t kClipMemorySampleMs = 200;
+// A paused clip checks for resume or stop this often.
+constexpr uint32_t kPausePollMs = 20;
+// A Bridge stream's FFmpeg may take this long to open a remote clip (the
+// Bridge waits 15 s, audio_stream.py) before the format arrives.
+constexpr uint32_t kBridgeFormatWaitMs = 20000;
+// Like the camera stream: the window, not this hint, bounds what waits.
+constexpr int kBridgeReceiveBufferBytes = 4 * 1024;
 
 struct PlayRequest {
   char id[kMaxRequestIdLength + 1];
   char url[kMaxUrlLength + 1];
+  // A camera's sound (audio_stream_contract.h): kept close to the picture,
+  // and how much earlier the Bridge sent it than the picture.
+  bool live;
+  uint16_t lead_ms;
+  // The Bridge plays the clip again to resume: a pause closes the stream.
+  bool restart;
 };
 
 // Assist capture: 16 kHz 16-bit stereo (one mic per slot). 6 x 320 frames x
@@ -211,6 +262,8 @@ char g_assist_session_id[assist::kMaxRequestIdLength + 1] = {};
 i2s_chan_handle_t g_rx = nullptr;
 i2s_chan_handle_t g_tx = nullptr;
 uint32_t g_tx_rate = 0;
+// The output was opened with the short buffer of a camera's sound.
+bool g_tx_live = false;
 bool g_amp_on = false;
 uint8_t g_applied_volume_reg = 0xFF;
 int g_applied_mute = -1;
@@ -336,13 +389,15 @@ i2s_std_clk_config_t clockConfig(uint32_t rate) {
   return clk;
 }
 
-// Opens the mono 16-bit output at rate, or switches a running one to it.
-ErrorCode openOutput(uint32_t rate) {
+// Opens the mono 16-bit output at rate, or switches a running one to it. A
+// live stream (a camera's sound) gets a short DMA buffer.
+ErrorCode openOutput(uint32_t rate, bool live = false) {
   if (!audio_board::outputSupportsRate(rate)) {
     Serial.printf("%s Unsupported sample rate %lu Hz\n", kLogPrefix,
                   static_cast<unsigned long>(rate));
     return ErrorCode::UnsupportedFormat;
   }
+  if (g_tx && g_tx_live != live) closeOutput();
   if (g_tx && g_tx_rate == rate) return ErrorCode::None;
   if (audio_board::setOutputRate(rate) != ESP_OK) return ErrorCode::CodecUnavailable;
   if (g_tx) {
@@ -360,14 +415,15 @@ ErrorCode openOutput(uint32_t rate) {
     g_tx_rate = rate;
   } else {
     i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
-    chan.dma_desc_num = kDmaDescriptors;
-    chan.dma_frame_num = kDmaFrames;
+    chan.dma_desc_num = live ? kLiveDmaDescriptors : kDmaDescriptors;
+    chan.dma_frame_num = live ? kLiveDmaFrames : kDmaFrames;
     // An underrun (flash write, busy core) plays silence, not an old buffer.
     chan.auto_clear = true;
     if (i2s_new_channel(&chan, &g_tx, nullptr) != ESP_OK) {
       g_tx = nullptr;
       return ErrorCode::OutOfMemory;
     }
+    g_tx_live = live;
     i2s_std_config_t config = {};
     config.clk_cfg = clockConfig(rate);
     config.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
@@ -405,6 +461,72 @@ bool writeFrames(const int16_t* samples, size_t frames) {
                            kI2sWriteTimeoutMs) == ESP_OK;
 }
 
+// Worker only: audio of the current clip handed to the output.
+uint64_t g_played_us = 0;
+// Worker only: the current clip was paused at least once.
+bool g_clip_paused = false;
+// Worker only: the current clip's Bridge plays it again to resume, and a
+// pause ended it that way.
+bool g_clip_restart = false;
+bool g_clip_released = false;
+
+// The status position follows the frames written (the DMA buffer plays
+// them within about 170 ms).
+void notePlayed(size_t frames) {
+  if (g_tx_rate == 0) return;
+  g_played_us += static_cast<uint64_t>(frames) * 1000000u / g_tx_rate;
+  g_position_ms.store(static_cast<uint32_t>(g_played_us / 1000u));
+}
+
+// One log line per clip: how long it ran and how low the free internal RAM
+// went meanwhile.
+struct ClipStats {
+  uint32_t started_ms = 0;
+  uint32_t sampled_ms = 0;
+  size_t internal_before = 0;
+  size_t internal_lowest = 0;
+};
+ClipStats g_clip_stats;  // worker only
+
+void sampleClipMemory() {
+  const uint32_t now_ms = millis();
+  if (static_cast<uint32_t>(now_ms - g_clip_stats.sampled_ms) < kClipMemorySampleMs) return;
+  g_clip_stats.sampled_ms = now_ms;
+  const size_t internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+  if (internal < g_clip_stats.internal_lowest) g_clip_stats.internal_lowest = internal;
+}
+
+// HTTPS downloads keep their TLS buffers in PSRAM, as the P4 update download
+// does (github_update.cpp). In internal RAM a playing clip took the free
+// internal heap from 155 to 44 KB and the DMA heap to 2 KB on a V2: the
+// link waited, the UI slowed and the next clip's TLS setup failed (esp-aes
+// could not allocate). mbedTLS has one allocator for all connections; the
+// internal one (the core's setting) returns when the download ends.
+void* tlsPsramCalloc(size_t count, size_t size) {
+  void* ptr = heap_caps_calloc(count, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  return ptr ? ptr : heap_caps_calloc(count, size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+}
+
+void* tlsInternalCalloc(size_t count, size_t size) {
+  return heap_caps_calloc(count, size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+}
+
+void tlsFree(void* ptr) {
+  heap_caps_free(ptr);
+}
+
+class ScopedPsramTls {
+ public:
+  explicit ScopedPsramTls(bool active)
+      : active_(active && mbedtls_platform_set_calloc_free(tlsPsramCalloc, tlsFree) == 0) {}
+  ~ScopedPsramTls() {
+    if (active_) mbedtls_platform_set_calloc_free(tlsInternalCalloc, tlsFree);
+  }
+
+ private:
+  bool active_;
+};
+
 // ---------------------------------------------------------------------------
 // Worker: streaming download
 // ---------------------------------------------------------------------------
@@ -414,16 +536,114 @@ bool writeFrames(const int16_t* samples, size_t frames) {
 struct Source {
   HTTPClient* http = nullptr;
   NetworkClient* stream = nullptr;
+  // A clip the Bridge decodes (audio_stream_contract.h) instead of a
+  // download: its socket and message reader.
+  int fd = -1;
+  audio_stream::Receiver* receiver = nullptr;
   StreamBuffer buffer;
   // Bytes still expected from a response with Content-Length, -1 otherwise.
   int64_t remaining = -1;
+  // The announced Content-Length, -1 for a live stream.
+  int64_t total_bytes = -1;
   bool ended = false;
   bool failed = false;
   uint32_t last_data_ms = 0;
 };
 
+// The Bridge stream's pump: reads what arrived without waiting, audio
+// straight into the PSRAM buffer, and acknowledges each message once it lies
+// there. While the buffer is full nothing is read, so the Bridge holds back
+// with at most two blocks in flight.
+void pumpBridge(Source* src) {
+  audio_stream::Receiver& rx = *src->receiver;
+  size_t budget = kPumpBudgetBytes;
+  for (;;) {
+    uint32_t sequence = 0;
+    uint32_t length = 0;
+    if (rx.takeAck(&sequence, &length)) {
+      uint8_t ack[tcp_ack::kAckBytes];
+      tcp_ack::encodeAck(ack, sequence, length);
+      if (!tcp_ack::sendAll(src->fd, ack, sizeof(ack), nullptr, nullptr)) {
+        Serial.printf("%s Bridge stream acknowledgement failed: errno=%d\n", kLogPrefix, errno);
+        src->ended = true;
+        src->failed = true;
+        return;
+      }
+    }
+    const audio_stream::Receiver::Need need = rx.need();
+    if (need == audio_stream::Receiver::Need::Ended) {
+      src->ended = true;
+      return;
+    }
+    if (need == audio_stream::Receiver::Need::Failed) {
+      Serial.printf("%s Bridge stream invalid: %s\n", kLogPrefix, rx.failure());
+      src->ended = true;
+      src->failed = true;
+      return;
+    }
+    uint8_t* destination = nullptr;
+    size_t want = 0;
+    if (need == audio_stream::Receiver::Need::Audio) {
+      want = src->buffer.writable();
+      if (want == 0) {
+        // Full: the output sets the pace, the Bridge is not idle.
+        src->last_data_ms = millis();
+        return;
+      }
+      if (want > rx.audioMissing()) want = rx.audioMissing();
+      if (want > kReadChunkBytes) want = kReadChunkBytes;
+      if (want > budget) want = budget;
+      destination = src->buffer.write();
+    } else {
+      destination = rx.scratch();
+      want = rx.scratchMissing();
+    }
+    if (want == 0) return;
+    const int received = recv(src->fd, destination, want, MSG_DONTWAIT);
+    if (received == 0) {
+      Serial.printf("%s Bridge stream closed before its end\n", kLogPrefix);
+      src->ended = true;
+      src->failed = true;
+      return;
+    }
+    if (received < 0) {
+      if (errno == EINTR) continue;
+      if (errno != EAGAIN && errno != EWOULDBLOCK) {
+        Serial.printf("%s Bridge stream receive error: errno=%d\n", kLogPrefix, errno);
+        src->ended = true;
+        src->failed = true;
+        return;
+      }
+      break;
+    }
+    src->last_data_ms = millis();
+    if (need == audio_stream::Receiver::Need::Audio) {
+      src->buffer.commit(static_cast<size_t>(received));
+      rx.audioReceived(static_cast<size_t>(received));
+      budget -= static_cast<size_t>(received);
+      if (budget == 0) return;
+    } else {
+      rx.scratchReceived(static_cast<size_t>(received));
+    }
+  }
+  // The format arrives within kBridgeFormatWaitMs (playBridgeStream); after
+  // it a Bridge that sends nothing is gone.
+  if (rx.formatReady() &&
+      static_cast<uint32_t>(millis() - src->last_data_ms) > kStreamIdleMs) {
+    Serial.printf("%s No data for %lu ms, stream ended\n", kLogPrefix,
+                  static_cast<unsigned long>(kStreamIdleMs));
+    src->ended = true;
+    src->failed = true;
+  }
+}
+
 void pump(Source* src) {
+  sampleClipMemory();
   if (src->ended) return;
+  if (src->receiver) {
+    pumpBridge(src);
+    return;
+  }
   size_t budget = kPumpBudgetBytes;
   while (budget > 0) {
     const int available = src->stream->available();
@@ -490,6 +710,17 @@ bool prebuffer(Source* src, uint32_t generation) {
   }
 }
 
+// A live stream (a camera's sound) starts and resumes after min_bytes, a
+// fraction of a second, instead of the clips' prebuffer.
+bool prebufferLive(Source* src, uint32_t generation, size_t min_bytes) {
+  for (;;) {
+    if (stopRequested(generation)) return false;
+    pump(src);
+    if (src->ended || src->buffer.buffered() >= min_bytes) return true;
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
+}
+
 // Drops bytes as they arrive, for an ID3 tag with embedded cover art.
 bool skipBytes(Source* src, size_t bytes, uint32_t generation) {
   while (bytes > 0) {
@@ -502,13 +733,102 @@ bool skipBytes(Source* src, size_t bytes, uint32_t generation) {
   return true;
 }
 
+// Home Assistant's pause: the output goes quiet while the download keeps
+// filling the buffer; once it is full TCP holds the server back. Returns
+// false when a stop or a newer clip ended this one meanwhile.
+bool holdWhilePaused(Source* src, uint32_t generation) {
+  if (!g_pause_requested.load()) return true;
+  if (g_tx) setAmp(false);
+  // A clip its Bridge plays again closes the stream instead (user
+  // 2026-10-21): a pause holds neither buffers nor the Bridge's FFmpeg. It
+  // comes back from what was heard, not from what the output still held.
+  if (g_clip_restart) {
+    const uint64_t queued_us =
+        g_tx_rate ? static_cast<uint64_t>(kDmaDescriptors) * kDmaFrames * 1000000u / g_tx_rate : 0;
+    g_played_us = g_played_us > queued_us ? g_played_us - queued_us : 0;
+    g_position_ms.store(static_cast<uint32_t>(g_played_us / 1000u));
+    g_clip_released = true;
+    return false;
+  }
+  g_clip_paused = true;
+  Serial.printf("%s Paused at %.1f s, stream kept\n", kLogPrefix, g_position_ms.load() / 1000.0);
+  setPublic(PublicState::Paused, ErrorCode::None);
+  while (g_pause_requested.load() && !stopRequested(generation)) {
+    pump(src);
+    vTaskDelay(pdMS_TO_TICKS(kPausePollMs));
+  }
+  if (stopRequested(generation)) return false;
+  setPublic(PublicState::Playing, ErrorCode::None);
+  Serial.printf("%s Resumed at %.1f s\n", kLogPrefix, g_position_ms.load() / 1000.0);
+  if (g_tx) {
+    setAmp(true);
+    vTaskDelay(pdMS_TO_TICKS(kAmpSettleMs));
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Worker: decoding
 // ---------------------------------------------------------------------------
+// #119: a 6 KB "audio/mpeg" clip from Home Assistant decoded no frame on a
+// Guition V1, and Helix overwrote its own memory on the way, so the panel
+// restarted in MP3FreeDecoder. The file itself may not be shared, so its
+// format is recorded here: on this task's stack, where the core dump of such
+// a crash keeps it, and in one log line when a clip decodes nothing. No audio
+// data is kept, only the frame headers.
+struct Mp3Diagnostics {
+  char marker[8] = {'M', 'P', '3', 'D', 'I', 'A', 'G', '\0'};
+  uint32_t id3_bytes = 0;
+  uint32_t candidates = 0;     // sync words handed to the decoder
+  uint32_t decoded = 0;        // frames that decoded
+  uint32_t errors[16] = {};    // per Helix error code, index = -code
+  uint8_t headers[8][4] = {};  // the first candidates' header bytes
+};
+
+// noinline: the record stays in memory for the core dump when freeing the
+// decoder crashes right after this line.
+__attribute__((noinline)) void logUndecodedMp3(const Mp3Diagnostics& diag) {
+  char headers[8 * 9 + 1] = "";
+  char errors[16 * 8 + 1] = "";
+  size_t used = 0;
+  const uint32_t shown = diag.candidates < 8 ? diag.candidates : 8;
+  for (uint32_t i = 0; i < shown && used < sizeof(headers); ++i) {
+    const uint8_t* h = diag.headers[i];
+    used += snprintf(headers + used, sizeof(headers) - used, "%s%02X%02X%02X%02X",
+                     i ? " " : "", h[0], h[1], h[2], h[3]);
+  }
+  used = 0;
+  for (int code = 1; code < 16 && used < sizeof(errors); ++code) {
+    if (diag.errors[code] == 0) continue;
+    used += snprintf(errors + used, sizeof(errors) - used, "%s-%d:%u", used ? " " : "", code,
+                     static_cast<unsigned>(diag.errors[code]));
+  }
+  Serial.printf("%s MP3 decoded no frame: id3=%u bytes, %u sync words, errors %s, headers %s\n",
+                kLogPrefix, static_cast<unsigned>(diag.id3_bytes),
+                static_cast<unsigned>(diag.candidates), errors[0] ? errors : "none",
+                headers[0] ? headers : "none");
+}
+
+// The clip's length for the status, from its first decoded frame.
+void noteMp3Duration(HMP3Decoder decoder, const uint8_t* frame, int left, const Source* src,
+                     uint32_t id3_bytes) {
+  MP3FrameInfo info;
+  MP3GetLastFrameInfo(decoder, &info);
+  const int64_t audio_bytes = src->total_bytes > 0 ? src->total_bytes - id3_bytes : -1;
+  const uint32_t duration = mp3DurationMs(frame, static_cast<size_t>(left),
+                                          static_cast<uint32_t>(info.samprate),
+                                          static_cast<uint32_t>(info.bitrate), audio_bytes);
+  if (duration == 0) return;
+  g_duration_ms.store(duration);
+  g_state_generation.fetch_add(1);
+}
+
 ErrorCode playMp3(Source* src, uint32_t generation) {
   if (!fillTo(src, 10, generation)) return ErrorCode::None;
   const size_t tag = id3v2Length(src->buffer.read(), src->buffer.buffered());
   if (tag > 0 && !skipBytes(src, tag, generation)) return ErrorCode::None;
+  Mp3Diagnostics diag;
+  diag.id3_bytes = static_cast<uint32_t>(tag);
 
   HMP3Decoder decoder = MP3InitDecoder();
   if (!decoder) return ErrorCode::OutOfMemory;
@@ -526,6 +846,7 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
   ErrorCode result = ErrorCode::None;
   const bool buffered_ok = prebuffer(src, generation);
   while (buffered_ok && !stopRequested(generation)) {
+    if (!holdWhilePaused(src, generation)) break;
     pump(src);
     if (src->buffer.buffered() < kMinDecodeBytes && !src->ended) {
       // The network fell behind: refill before decoding a cut frame.
@@ -558,7 +879,24 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
     // is missing, so a frame is committed only once it decoded or failed.
     unsigned char* frame = read;
     int frame_left = left;
+    if (diag.candidates < 8) {
+      memcpy(diag.headers[diag.candidates], read, left < 4 ? static_cast<size_t>(left) : 4);
+    }
+    ++diag.candidates;
+    // Only headers Helix can decode reach it (#119, isDecodableMp3Header);
+    // anything else is a false sync word: one byte further.
+    if (left >= 4 && !isDecodableMp3Header(read)) {
+      src->buffer.consume(1);
+      ++unsynced_bytes;
+      if (!synced && unsynced_bytes > kMaxSyncHuntBytes) break;
+      continue;
+    }
     const int err = MP3Decode(decoder, &frame, &frame_left, pcm, 0);
+    if (err == ERR_MP3_NONE) {
+      if (++diag.decoded == 1) noteMp3Duration(decoder, read, left, src, diag.id3_bytes);
+    } else if (err < 0 && err > -16) {
+      ++diag.errors[-err];
+    }
     // No real frame is longer than kMinDecodeBytes; a longer "underflow" is
     // a false header (or free format, which is not supported).
     if (err == ERR_MP3_INDATA_UNDERFLOW && left < static_cast<int>(2 * kMinDecodeBytes)) {
@@ -598,13 +936,86 @@ ErrorCode playMp3(Source* src, uint32_t generation) {
       result = ErrorCode::CodecUnavailable;
       break;
     }
+    notePlayed(frames);
     played_any = true;
   }
   if (result == ErrorCode::None && !played_any && !stopRequested(generation)) {
     result = synced ? ErrorCode::DecodeFailed : ErrorCode::UnsupportedFormat;
   }
+  if (diag.decoded == 0) logUndecodedMp3(diag);
   heap_caps_free(pcm);
   MP3FreeDecoder(decoder);
+  return result;
+}
+
+// Plays 16-bit PCM from the buffer: frames_left frames, or until the source
+// ends (UINT64_MAX). A WAV clip and a Bridge stream share it; a live stream
+// (a camera's sound, mono) drops what it holds beyond a fraction of a second.
+ErrorCode playPcm(Source* src, uint32_t generation, uint32_t rate, uint16_t channels,
+                  uint64_t frames_left, bool live = false) {
+  uint64_t live_dropped_bytes = 0;
+  const size_t live_start_bytes = audio_stream::pcmBytes(rate, audio_stream::kLiveTargetMs);
+  const size_t frame_bytes = 2u * channels;
+  int16_t* chunk = static_cast<int16_t*>(heap_caps_malloc(
+      kWavChunkFrames * channels * sizeof(int16_t), MALLOC_CAP_INTERNAL));
+  if (!chunk) return ErrorCode::OutOfMemory;
+  ErrorCode result = ErrorCode::None;
+  bool started = false;
+  if (!(live ? prebufferLive(src, generation, live_start_bytes) : prebuffer(src, generation))) {
+    frames_left = 0;
+  }
+  while (frames_left > 0 && !stopRequested(generation)) {
+    if (!holdWhilePaused(src, generation)) break;
+    pump(src);
+    if (live) {
+      const size_t excess = audio_stream::liveExcessBytes(src->buffer.buffered(), rate);
+      if (excess > 0) {
+        src->buffer.consume(excess);
+        live_dropped_bytes += excess;
+      }
+    }
+    size_t available = src->buffer.buffered() / frame_bytes;
+    if (available == 0) {
+      if (src->ended) break;
+      if (!(live ? prebufferLive(src, generation, live_start_bytes) : prebuffer(src, generation))) {
+        break;
+      }
+      continue;
+    }
+    size_t frames = available < kWavChunkFrames ? available : kWavChunkFrames;
+    if (frames > frames_left) frames = static_cast<size_t>(frames_left);
+    if (!started) {
+      const ErrorCode output = openOutput(rate, live);
+      if (output != ErrorCode::None) {
+        result = output;
+        break;
+      }
+      started = true;
+    }
+    // The buffer may sit at an odd offset; copy before reading int16.
+    memcpy(chunk, src->buffer.read(), frames * frame_bytes);
+    src->buffer.consume(frames * frame_bytes);
+    if (channels == 2) downmixToMono(chunk, frames);
+    applyVolumeIfChanged();
+    if (!writeFrames(chunk, frames)) {
+      result = ErrorCode::CodecUnavailable;
+      break;
+    }
+    notePlayed(frames);
+    if (frames_left != UINT64_MAX) frames_left -= frames;
+    if (live) {
+      // What waits in the buffer plus the full I2S buffer: when the newest
+      // sample reaches the loudspeaker. The camera picture waits as long.
+      const uint64_t queued = src->buffer.buffered() / 2 + kLiveDmaDescriptors * kLiveDmaFrames;
+      g_live_latency_ms.store(static_cast<uint32_t>(queued * 1000u / rate) + 1);
+    }
+  }
+  if (live) g_live_latency_ms.store(0);
+  heap_caps_free(chunk);
+  if (live_dropped_bytes > 0) {
+    Serial.printf("%s Live sound: dropped %lu ms to stay with the picture\n", kLogPrefix,
+                  static_cast<unsigned long>(live_dropped_bytes * 1000u / (2u * rate)));
+  }
   return result;
 }
 
@@ -620,47 +1031,104 @@ ErrorCode playWav(Source* src, uint32_t generation) {
   src->buffer.consume(info.data_offset);
   const bool bounded = info.data_length != 0 && info.data_length != 0xFFFFFFFFu;
   const size_t frame_bytes = 2u * info.channels;
-  uint64_t frames_left = bounded ? info.data_length / frame_bytes : UINT64_MAX;
-  int16_t* chunk = static_cast<int16_t*>(heap_caps_malloc(
-      kWavChunkFrames * info.channels * sizeof(int16_t), MALLOC_CAP_INTERNAL));
-  if (!chunk) return ErrorCode::OutOfMemory;
-  ErrorCode result = ErrorCode::None;
-  bool started = false;
-  if (!prebuffer(src, generation)) frames_left = 0;
-  while (frames_left > 0 && !stopRequested(generation)) {
-    pump(src);
-    size_t available = src->buffer.buffered() / frame_bytes;
-    if (available == 0) {
-      if (src->ended) break;
-      if (!prebuffer(src, generation)) break;
-      continue;
-    }
-    size_t frames = available < kWavChunkFrames ? available : kWavChunkFrames;
-    if (frames > frames_left) frames = static_cast<size_t>(frames_left);
-    if (!started) {
-      const ErrorCode output = openOutput(info.sample_rate);
-      if (output != ErrorCode::None) {
-        result = output;
-        break;
-      }
-      started = true;
-    }
-    // The buffer may sit at an odd offset; copy before reading int16.
-    memcpy(chunk, src->buffer.read(), frames * frame_bytes);
-    src->buffer.consume(frames * frame_bytes);
-    if (info.channels == 2) downmixToMono(chunk, frames);
-    applyVolumeIfChanged();
-    if (!writeFrames(chunk, frames)) {
-      result = ErrorCode::CodecUnavailable;
+  const uint32_t duration = wavDurationMs(info.data_length, info.sample_rate,
+                                          static_cast<uint32_t>(frame_bytes));
+  if (duration > 0) {
+    g_duration_ms.store(duration);
+    g_state_generation.fetch_add(1);
+  }
+  return playPcm(src, generation, info.sample_rate, info.channels,
+                 bounded ? info.data_length / frame_bytes : UINT64_MAX);
+}
+
+bool clipStopRequested(void* context) {
+  return stopRequested(*static_cast<const uint32_t*>(context));
+}
+
+// A clip the Bridge decodes (audio_stream_contract.h): no TLS, no decoder,
+// and at most the Bridge's window of two blocks waits in internal RAM. The
+// clip reports "playing" with its id once the format named its position.
+ErrorCode playBridgeStream(const char* id, const char* url, bool live, uint32_t generation,
+                           uint8_t* memory) {
+  audio_stream::Endpoint endpoint;
+  if (!audio_stream::parseStreamUrl(url, strlen(url), &endpoint)) return ErrorCode::InvalidUrl;
+  tcp_ack::ConnectOptions options;
+  options.log_prefix = kLogPrefix;
+  options.receive_buffer_bytes = kBridgeReceiveBufferBytes;
+  options.connect_timeout_ms = kHttpTimeoutMs;
+  options.stop = clipStopRequested;
+  options.stop_context = &generation;
+  const int fd = tcp_ack::connectTo(endpoint.host, endpoint.port, options);
+  if (fd < 0) {
+    if (stopRequested(generation)) return ErrorCode::None;
+    Serial.printf("%s Bridge stream connection failed: errno=%d\n", kLogPrefix, errno);
+    return ErrorCode::DownloadFailed;
+  }
+  char request[sizeof("HTAUD/1 ") + audio_stream::kMaxTokenLength + 2];
+  const int request_bytes =
+      snprintf(request, sizeof(request), "%s%s\n", audio_stream::kRequestPrefix, endpoint.token);
+  uint8_t hello[tcp_ack::kHelloBytes] = {};
+  uint16_t hello_status = 0;
+  uint16_t chunk = 0;
+  if (request_bytes <= 0 || static_cast<size_t>(request_bytes) >= sizeof(request) ||
+      !tcp_ack::sendAll(fd, request, static_cast<size_t>(request_bytes), clipStopRequested,
+                        &generation) ||
+      tcp_ack::receiveExact(fd, hello, sizeof(hello), clipStopRequested, &generation,
+                            millis() + kHttpTimeoutMs) != tcp_ack::SocketReadResult::Ok ||
+      !tcp_ack::decodeHello(hello, &hello_status, &chunk) ||
+      hello_status != tcp_ack::kHelloAccepted) {
+    tcp_ack::closeSocket(fd);
+    if (stopRequested(generation)) return ErrorCode::None;
+    Serial.printf("%s Bridge stream refused (status %u)\n", kLogPrefix,
+                  static_cast<unsigned>(hello_status));
+    return ErrorCode::DownloadFailed;
+  }
+  audio_stream::Receiver receiver;
+  Source src;
+  src.fd = fd;
+  src.receiver = &receiver;
+  src.buffer.reset(memory, kStreamBufferBytes);
+  src.last_data_ms = millis();
+  const uint32_t wait_started_ms = millis();
+  while (!receiver.formatReady() && !src.ended && !stopRequested(generation)) {
+    if (static_cast<uint32_t>(millis() - wait_started_ms) > kBridgeFormatWaitMs) {
+      Serial.printf("%s Bridge stream sent no format within %lu ms\n", kLogPrefix,
+                    static_cast<unsigned long>(kBridgeFormatWaitMs));
+      src.failed = true;
       break;
     }
-    frames_left -= frames;
+    pump(&src);
+    vTaskDelay(pdMS_TO_TICKS(5));
   }
-  heap_caps_free(chunk);
+  ErrorCode result = ErrorCode::None;
+  if (receiver.formatReady() && !src.failed && !stopRequested(generation)) {
+    const audio_stream::Format& format = receiver.format();
+    // The position counts from where the Bridge started the clip (a seek).
+    g_played_us = static_cast<uint64_t>(format.position_ms) * 1000u;
+    g_position_ms.store(format.position_ms);
+    g_duration_ms.store(format.duration_ms);
+    setStatusId(id);
+    setPublic(PublicState::Playing, ErrorCode::None);
+    Serial.printf("%s Bridge stream: %lu Hz from %.1f s, length %.1f s%s\n", kLogPrefix,
+                  static_cast<unsigned long>(format.rate), format.position_ms / 1000.0,
+                  format.duration_ms / 1000.0, live ? ", live" : "");
+    result = playPcm(&src, generation, format.rate, 1, UINT64_MAX, live);
+  } else if (strcmp(receiver.failure(), "unsupported_format") == 0) {
+    result = ErrorCode::UnsupportedFormat;
+  }
+  if (result == ErrorCode::None && src.failed && !stopRequested(generation)) {
+    result = ErrorCode::DownloadFailed;
+  }
+  tcp_ack::closeSocket(fd);
   return result;
 }
 
-ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
+ErrorCode playUrl(const char* id, const char* url, bool live, uint32_t generation,
+                  uint8_t* memory) {
+  if (strncmp(url, "tcp://", 6) == 0) return playBridgeStream(id, url, live, generation, memory);
+  const bool https = strncmp(url, "https://", 8) == 0;
+  // First, so the TLS buffers of the whole download land in PSRAM.
+  ScopedPsramTls tls_memory(https);
   HTTPClient http;
   http.setTimeout(kHttpTimeoutMs);
   http.setConnectTimeout(kHttpTimeoutMs);
@@ -671,7 +1139,6 @@ ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   NetworkClient plain_client;
   NetworkClientSecure secure_client;
-  const bool https = strncmp(url, "https://", 8) == 0;
   bool begun = false;
   if (https) {
     secure_client.setInsecure();
@@ -702,6 +1169,7 @@ ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
   src.buffer.reset(memory, kStreamBufferBytes);
   const int announced = http.getSize();
   src.remaining = announced > 0 ? announced : -1;
+  src.total_bytes = src.remaining;
   src.last_data_ms = millis();
   ErrorCode result = ErrorCode::None;
   if (!src.stream) {
@@ -727,24 +1195,74 @@ ErrorCode playUrl(const char* url, uint32_t generation, uint8_t* memory) {
 
 void playRequest(const PlayRequest& request, uint8_t* stream_memory) {
   const uint32_t generation = g_stop_generation.load();
-  setStatusId(request.id);
+  // A Bridge stream reports its clip once the format names the position
+  // (playBridgeStream). A seek starts a new stream; b502 reported "playing"
+  // from 0 without a length in between, and Home Assistant's player bar
+  // vanished or jumped back before it showed the new position.
+  const bool bridge_stream = strncmp(request.url, "tcp://", 6) == 0;
+  if (!bridge_stream) setStatusId(request.id);
   if (!g_codec_ready.load()) {
+    setStatusId(request.id);
     setPublic(PublicState::Idle, ErrorCode::CodecUnavailable);
     return;
   }
   if (!stream_memory) {
+    setStatusId(request.id);
     setPublic(PublicState::Idle, ErrorCode::OutOfMemory);
     return;
   }
-  setPublic(PublicState::Playing, ErrorCode::None);
-  Serial.printf("%s Playing %s\n", kLogPrefix, request.id);
-  const ErrorCode result = playUrl(request.url, generation, stream_memory);
-  closeOutput();
-  if (result != ErrorCode::None) {
-    Serial.printf("%s Clip %s failed: %s\n", kLogPrefix, request.id, errorCodeName(result));
+  if (!bridge_stream) {
+    g_position_ms.store(0);
+    g_duration_ms.store(0);
   }
+  g_played_us = 0;
+  g_clip_paused = false;
+  g_clip_restart = bridge_stream && request.restart;
+  g_clip_released = false;
+  g_released.store(false);
+  g_clip_stats = ClipStats{};
+  g_clip_stats.started_ms = millis();
+  g_clip_stats.internal_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+  g_clip_stats.internal_lowest = g_clip_stats.internal_before;
+  if (!bridge_stream) setPublic(PublicState::Playing, ErrorCode::None);
+  g_live_lead_ms.store(request.live ? request.lead_ms : 0);
+  Serial.printf("%s Playing %s\n", kLogPrefix, request.id);
+  ErrorCode result = playUrl(request.id, request.url, request.live, generation, stream_memory);
+  // A long pause can outlast the server's patience: the connection is gone
+  // when playback resumes, so the clip starts again once. A Bridge stream's
+  // token works once; the Bridge keeps a paused clip for 10 minutes.
+  if (result == ErrorCode::DownloadFailed && g_clip_paused && !stopRequested(generation) &&
+      !bridge_stream) {
+    Serial.printf("%s Clip %s lost its connection during a pause, starting again\n",
+                  kLogPrefix, request.id);
+    g_position_ms.store(0);
+    g_played_us = 0;
+    g_clip_paused = false;
+    setPublic(PublicState::Playing, ErrorCode::None);
+    result = playUrl(request.id, request.url, request.live, generation, stream_memory);
+  }
+  closeOutput();
+  g_pause_requested.store(false);
+  if (g_clip_released && result == ErrorCode::None && !stopRequested(generation)) {
+    Serial.printf("%s Clip %s paused at %.1f s, stream closed: internal RAM %u KB before, lowest %u KB\n",
+                  kLogPrefix, request.id, g_position_ms.load() / 1000.0,
+                  static_cast<unsigned>(g_clip_stats.internal_before / 1024),
+                  static_cast<unsigned>(g_clip_stats.internal_lowest / 1024));
+    g_released.store(true);
+    setStatusId(request.id);
+    setPublic(PublicState::Paused, ErrorCode::None);
+    return;
+  }
+  Serial.printf("%s Clip %s %s after %.1f s: internal RAM %u KB before, lowest %u KB\n",
+                kLogPrefix, request.id,
+                result != ErrorCode::None ? errorCodeName(result)
+                : stopRequested(generation) ? "stopped" : "done",
+                (millis() - g_clip_stats.started_ms) / 1000.0,
+                static_cast<unsigned>(g_clip_stats.internal_before / 1024),
+                static_cast<unsigned>(g_clip_stats.internal_lowest / 1024));
   // A newer request keeps the state "playing" instead of flashing idle.
   if (!(g_play_pending.load() && result == ErrorCode::None)) {
+    setStatusId(request.id);
     setPublic(PublicState::Idle, result);
   }
 }
@@ -1013,12 +1531,50 @@ uint32_t takeNotifications() {
 // ---------------------------------------------------------------------------
 // Worker: on-panel wake word
 // ---------------------------------------------------------------------------
-uint32_t activeWakeWords() { return g_wake_active.load() & availableWakeWords(); }
+uint32_t activeWakeWords() {
+  return assist::activeWakeWordMask(wakeSetting()) & availableWakeWords();
+}
 
-bool wakeListenWanted() {
+bool wakeListenConfigured() {
   return activeWakeWords() != 0 && g_mic_ready.load() && g_mic_enabled.load() &&
          g_ring.capacity() != 0 &&
          !g_shutdown.load() && !g_play_pending.load() && !g_assist_pending.load();
+}
+
+// A camera stream pauses wake word listening. On core 0 the listener
+// (priority 3) delayed the stream task's acknowledgements: the V2 full screen
+// fell from 30 to 21-23 FPS with a wake word on and reached 30 again with it
+// off (2026-10-21). Listening resumes kWakeCameraHoldMs after the last
+// stream, so a switch between the popup and the full screen does not reopen
+// the microphone in between. Worker task only.
+constexpr uint32_t kWakeCameraHoldMs = 2000;
+constexpr uint32_t kWakeCameraPollMs = 250;
+uint32_t g_camera_seen_ms = 0;
+bool g_wake_camera_paused = false;
+
+bool cameraHoldsMicrophone() {
+  const uint32_t now = millis();
+  if (camera_stream_is_active()) {
+    g_camera_seen_ms = now ? now : 1;
+    return true;
+  }
+  return g_camera_seen_ms != 0 &&
+         static_cast<uint32_t>(now - g_camera_seen_ms) < kWakeCameraHoldMs;
+}
+
+bool wakeListenWanted() {
+  if (!wakeListenConfigured()) {
+    g_wake_camera_paused = false;
+    return false;
+  }
+  const bool paused = cameraHoldsMicrophone();
+  if (paused != g_wake_camera_paused) {
+    g_wake_camera_paused = paused;
+    Serial.printf("%s Wake word %s\n", kLogPrefix,
+                  paused ? "paused while a camera stream runs"
+                         : "listening again after the camera stream");
+  }
+  return !paused;
 }
 
 #if defined(HOMETILES_WAKE_WORD)
@@ -1116,8 +1672,9 @@ bool handleWakeDetection(const char* word, const String& topic, uint32_t mask, u
   }
 }
 
-// Listens until a notification, a wake word change or an error. Returns the
-// notifications the main loop still has to handle (0: re-evaluate).
+// Listens until a notification, a wake word change, an error or a camera
+// stream. Returns the notifications the main loop still has to handle (0:
+// re-evaluate).
 uint32_t wakeListen() {
   const uint32_t mask = activeWakeWords();
   size_t index = 0;
@@ -1147,7 +1704,9 @@ uint32_t wakeListen() {
   uint32_t bits = 0;
   for (;;) {
     bits = takeNotifications();
-    if (bits || g_shutdown.load() || activeWakeWords() != mask) break;
+    if (bits || g_shutdown.load() || activeWakeWords() != mask || camera_stream_is_active()) {
+      break;
+    }
     const int frames = readMono();
     if (frames < 0) {
       g_wake_resume_ms = millis() + kWakeRetryMs;
@@ -1188,8 +1747,12 @@ void workerMain(void*) {
       bits = wakeListen();
       if (bits == 0) continue;
     } else {
-      const TickType_t wait =
-          wake_wanted ? pdMS_TO_TICKS(static_cast<uint32_t>(refractory_ms)) + 1 : portMAX_DELAY;
+      TickType_t wait = portMAX_DELAY;
+      if (wake_wanted) {
+        wait = pdMS_TO_TICKS(static_cast<uint32_t>(refractory_ms)) + 1;
+      } else if (g_wake_camera_paused) {
+        wait = pdMS_TO_TICKS(kWakeCameraPollMs);  // until the camera stream ended
+      }
       if (xTaskNotifyWait(0, UINT32_MAX, &bits, wait) != pdTRUE) continue;
     }
     if ((bits & kNotifyShutdown) || g_shutdown.load()) {
@@ -1233,8 +1796,9 @@ void storeSettings() {
   prefs.putFloat(kPrefsVolumeKey, g_volume.load());
   prefs.putBool(kPrefsMutedKey, g_muted.load());
   char wake_words[assist::kMaxWakeWordListChars];
-  assist::formatWakeWordList(g_wake_active.load(), wake_words, sizeof(wake_words));
+  assist::formatWakeWordList(g_wake_chosen.load(), wake_words, sizeof(wake_words));
   prefs.putString(kPrefsWakeWordsKey, wake_words);
+  prefs.putBool(kPrefsWakeListenKey, g_wake_listen.load());
   prefs.putBool(kPrefsMicKey, g_mic_enabled.load());
   prefs.putUChar(kPrefsMicGainKey, g_mic_gain.load());
   if (!BatchedNvsWrite::finish(prefs)) {
@@ -1254,6 +1818,10 @@ void publishStatus() {
   fields.volume = g_volume.load();
   fields.muted = g_muted.load();
   fields.error = static_cast<ErrorCode>(g_error.load());
+  fields.position_ms = g_position_ms.load();
+  fields.duration_ms = g_duration_ms.load();
+  fields.bridge_stream = kSupported;
+  fields.released = g_released.load();
   char id[kMaxRequestIdLength + 1] = {};
 #if defined(HOMETILES_SPEAKER)
   portENTER_CRITICAL(&g_id_mux);
@@ -1261,7 +1829,7 @@ void publishStatus() {
   portEXIT_CRITICAL(&g_id_mux);
 #endif
   if (id[0]) fields.id = id;
-  char payload[224];
+  char payload[320];
   if (!buildStatusJson(payload, sizeof(payload), fields)) return;
   networkManager.mqttEnqueuePublish(topic, payload, true);
 }
@@ -1277,7 +1845,10 @@ void publishAssistStatus() {
   fields.error = static_cast<assist::ErrorCode>(g_assist_error.load());
   fields.wake_words = true;
   fields.available_wake_words = availableWakeWords();
-  fields.active_wake_words = g_wake_active.load();
+  fields.active_wake_words = assist::activeWakeWordMask(wakeSetting());
+  fields.wake_choice = true;
+  fields.chosen_wake_words = g_wake_chosen.load();
+  fields.wake_listen = g_wake_listen.load();
   fields.mic_state = true;
   fields.mic_enabled = g_mic_enabled.load();
   char id[assist::kMaxRequestIdLength + 1] = {};
@@ -1287,7 +1858,7 @@ void publishAssistStatus() {
   portEXIT_CRITICAL(&g_id_mux);
 #endif
   if (id[0]) fields.id = id;
-  char payload[256];
+  char payload[384];
   if (!assist::buildStatusJson(payload, sizeof(payload), fields)) return;
   networkManager.mqttEnqueuePublish(topic, payload, true);
 }
@@ -1308,11 +1879,14 @@ void begin() {
     g_volume.store(clampVolume(prefs.getFloat(kPrefsVolumeKey, kDefaultVolume)));
     g_muted.store(prefs.getBool(kPrefsMutedKey, false));
     // Unknown names (a word dropped from the catalog) are ignored.
-    if (prefs.isKey(kPrefsWakeWordsKey)) {
-      g_wake_active.store(
-          assist::parseWakeWordList(prefs.getString(kPrefsWakeWordsKey).c_str()));
-    }
-    g_mic_enabled.store(prefs.getBool(kPrefsMicKey, true));
+    const String wake_words =
+        prefs.isKey(kPrefsWakeWordsKey) ? prefs.getString(kPrefsWakeWordsKey) : String();
+    const assist::WakeSetting wake = assist::loadWakeSetting(
+        wake_words.c_str(), prefs.isKey(kPrefsWakeListenKey),
+        prefs.getBool(kPrefsWakeListenKey, false));
+    g_wake_chosen.store(wake.chosen);
+    g_wake_listen.store(wake.listen);
+    g_mic_enabled.store(prefs.getBool(kPrefsMicKey, false));
     const uint8_t gain = prefs.getUChar(kPrefsMicGainKey, kDefaultMicGainStep);
     g_mic_gain.store(gain > kMaxMicGainStep ? kDefaultMicGainStep : gain);
     prefs.end();
@@ -1433,7 +2007,11 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
       if (xSemaphoreTake(g_request_mutex, pdMS_TO_TICKS(50)) != pdTRUE) return;
       memcpy(g_request->id, command.id, sizeof(g_request->id));
       memcpy(g_request->url, g_parse_url, command.url_length + 1);
+      g_request->live = command.live;
+      g_request->lead_ms = command.lead_ms;
+      g_request->restart = command.restart;
       g_play_pending.store(true);
+      g_pause_requested.store(false);
       // Playback ends a capture session or a start that has not begun.
       g_assist_pending.store(false);
       g_capture_generation.fetch_add(1);
@@ -1448,7 +2026,26 @@ void handleCommandPayload(const uint8_t* payload, size_t length) {
         g_play_pending.store(false);
         xSemaphoreGive(g_request_mutex);
       }
+      g_pause_requested.store(false);
       g_stop_generation.fetch_add(1);
+      // A clip paused with its stream closed has no worker to end it.
+      if (g_released.exchange(false)) setPublic(PublicState::Idle, ErrorCode::None);
+      break;
+    case CommandKind::Pause:
+    case CommandKind::Resume:
+      // A clip paused with its stream closed resumes only by playing it
+      // again (the Bridge does); a bare resume ends it.
+      if (g_released.load()) {
+        if (command.kind == CommandKind::Resume && g_released.exchange(false)) {
+          Serial.printf("%s Resume without a stream: the clip ended\n", kLogPrefix);
+          setPublic(PublicState::Idle, ErrorCode::None);
+        }
+        break;
+      }
+      // The worker follows the flag inside the playing clip; idle ignores it.
+      if (static_cast<PublicState>(g_public_state.load()) != PublicState::Idle) {
+        g_pause_requested.store(command.kind == CommandKind::Pause);
+      }
       break;
     case CommandKind::Volume:
     case CommandKind::Mute:
@@ -1493,14 +2090,18 @@ void handleAssistCommandPayload(const uint8_t* payload, size_t length, bool seal
   // Wake words apply at once (the worker starts or stops listening), are
   // stored for the next boot and show in the retained status right away.
   if (command.kind == assist::CommandKind::WakeWords) {
-    g_wake_active.store(command.wake_words);
+    const assist::WakeSetting wake = assist::applyWakeWordsCommand(
+        wakeSetting(), command.wake_words, command.has_listen, command.listen);
+    g_wake_chosen.store(wake.chosen);
+    g_wake_listen.store(wake.listen);
     g_assist_state_generation.fetch_add(1);
     g_persist_pending = true;
     g_persist_due_ms = millis() + kPersistDelayMs;
     notifyWorker(kNotifyWake);
     char list[assist::kMaxWakeWordListChars];
-    assist::formatWakeWordList(command.wake_words, list, sizeof(list));
-    Serial.printf("%s Wake words: %s\n", kLogPrefix, list[0] ? list : "off");
+    assist::formatWakeWordList(wake.chosen, list, sizeof(list));
+    Serial.printf("%s Wake word: %s, listening %s\n", kLogPrefix, list,
+                  wake.listen ? "on" : "off");
     return;
   }
   if (command.kind == assist::CommandKind::Mic) {
@@ -1642,6 +2243,12 @@ void setMicEnabled(bool enabled, const char* source) {
 }
 
 bool bridgeCapability() { return kSupported && g_codec_ready.load(); }
+
+uint32_t cameraSyncDelayMs() {
+  const uint32_t latency = g_live_latency_ms.load();
+  const uint32_t lead = g_live_lead_ms.load();
+  return latency > lead ? latency - lead : 0;
+}
 
 bool micCapability() { return kSupported && g_mic_ready.load(); }
 

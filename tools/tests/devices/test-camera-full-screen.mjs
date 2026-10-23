@@ -111,7 +111,8 @@ assert.match(body(tab5, 'bool DeviceM5StacksTab5::displayFullFrameInfo('),
 
 // The worker keeps the newest JPEG; the UI loop decodes it in the
 // framebuffer's own byte order and checks the size first.
-assert.match(stream, /full \? queue_full_frame\(input, jpeg_bytes\)\s*: decode_jpeg_frame\(input, jpeg_bytes\)/);
+assert.match(stream, /return full \? queue_full_frame\(jpeg, jpeg_bytes\) : decode_jpeg_frame\(jpeg, jpeg_bytes\);/);
+assert.match(stream, /presented_ok = present_frame\(full, input, jpeg_bytes\);/);
 const process = body(stream, 'static void process_full_frame(');
 assert.match(process, /Device::displayAcquireFullFrame\(frame_bytes\)/);
 assert.match(process, /info\.width != g_full_width \|\| info\.height != g_full_height/);
@@ -149,10 +150,11 @@ assert.match(transport, /constexpr uint32_t kFastChunkBytes = 32 \* 1024;\s*cons
 assert.match(transport, /if \(prefs\.getBool\(kRunKey, false\)\) \{\s*prefs\.putBool\(kRunKey, false\);\s*prefs\.putString\(kSafeKey, FW_VERSION\);\s*g_safe = true;/,
   'a restart while a fast stream ran: 8 KB for this firmware');
 assert.match(transport, /prefs\.getString\(kSafeKey, ""\) == FW_VERSION/, 'a new firmware tries the fast transport again');
+// The quality and, from b504, the camera sound request follow the window.
 for (const fn of ['void mqttPublishCameraFullScreenOpen(', 'void mqttPublishCameraCommand(']) {
-  assert.match(body(mqtt, fn), /\\"chunk\\":%u,\\"window\\":%u%s,/);
+  assert.match(body(mqtt, fn), /\\"chunk\\":%u,\\"window\\":%u%s%s,/);
   assert.match(body(mqtt, fn), /camera_quality_field\(quality, sizeof\(quality\)\);/);
-  assert.match(body(mqtt, fn), /static_cast<unsigned>\(transport\.chunk_bytes\),\s*static_cast<unsigned>\(transport\.window\), quality\);/);
+  assert.match(body(mqtt, fn), /static_cast<unsigned>\(transport\.chunk_bytes\),\s*static_cast<unsigned>\(transport\.window\), quality, camera_audio_field\(\)\);/);
 }
 // The panel's JPEG quality only where it asks for one (none today: the S3's
 // 5 in b329 looked no different); older Bridges ignore the field.

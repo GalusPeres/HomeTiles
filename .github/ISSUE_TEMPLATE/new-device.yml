@@ -1,0 +1,39 @@
+name: New device support
+description: A device that HomeTiles does not support yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Only complete devices (display and board in one).**
+
+        **ESP32-S3: only with a 480x480 px screen.**
+  - type: input
+    id: model
+    attributes:
+      label: Exact model
+      description: From the label on the back.
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Product page
+      description: Link to the maker's page.
+    validations:
+      required: true
+  - type: input
+    id: chip
+    attributes:
+      label: Chip revision
+      description: "If you know it: `esptool chip-id`"
+  - type: dropdown
+    id: test
+    attributes:
+      label: Can you test a build on it?
+      description: It can only be supported after a test.
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true

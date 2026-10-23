@@ -126,6 +126,7 @@ private:
   void detachSettingsGesturePressedObject();
   void processSettingsGestureMotion(lv_indev_t *input, bool released);
   void processPageSwipeMotion(lv_indev_t *input, bool released);
+  void processScreensaverSwipeMotion(lv_indev_t *input, bool released);
   void noteTouchMotion(lv_indev_t *input);
   void updateTouchPress(lv_indev_t *input);
   void runSwipeAction(uint8_t action);

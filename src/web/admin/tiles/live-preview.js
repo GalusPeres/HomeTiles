@@ -145,6 +145,10 @@
         rawIcon, binarySensorEntity, binarySensorPreviewState,
         sensorMetaCache.icons);
     }
+    if (previewKind === 'media') {
+      iconName = mediaPreviewIcon(parseMediaPreviewPayload(
+        mediaEntity ? (sensorMetaCache.mediaValues?.[mediaEntity] ?? '') : ''), iconName);
+    }
 
     resetTileClasses(tileElem, meta.css ? ['tile', meta.css] : ['tile']);
     if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);

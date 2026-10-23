@@ -182,13 +182,21 @@ const exportedVisible = grid => visible(grid.map(tile => ({...empty(), ...tile})
   assert.equal(panel.posts.length, clears.length + imported + movedBack, 'one write per imported tile');
 }
 
-// 2. A new export carries the hidden flag and the parked tile; the import
-// parks that tile.
+// 2. A new export carries the hidden flag and the parked tile as the panel
+// stores them (/api/layouts settings), not the Web Admin's own picture of
+// it (user 2026-10-22: the export showed an upright place beside the
+// panel's); the import parks that tile.
 {
-  const parked = {dataset: {hidden: '1', title: 'Setup', icon: 'tools', bgColor: '0', col: '2', row: '3', spanW: '1', spanH: '0.5'}};
+  const parked = {dataset: {hidden: '1', title: 'Shown', icon: 'cog', bgColor: '0', col: '2', row: '3.5', spanW: '1', spanH: '1'}};
   const source = loadImport(makePanel(), parked);
-  const state = source.context.exportSettingsTileState();
-  assert.deepEqual({...state}, {hidden: true, title: 'Setup', icon_name: 'tools', bg_color: 0, col: 2, row: 3, span_w: 1, span_h: 0.5});
+  const layouts = {success: true, settings: {parked: [true, true, true], hidden: true,
+    tile: {type: 7, view_id: 84, title: 'Setup', icon_name: 'tools', bg_color: 0, col: 2, row: 3, span_w: 1, span_h: 0.5}}};
+  const state = source.context.exportSettingsTileState(layouts);
+  assert.deepEqual({...state}, {hidden: true, title: 'Setup', icon_name: 'tools', bg_color: 0, col: 2, row: 3, span_w: 1, span_h: 0.5},
+    'the panel\'s parked tile, not the Web Admin\'s picture');
+  assert.deepEqual({...source.context.exportSettingsTileState({success: true, settings: {parked: [false, false, false], hidden: false}})},
+    {hidden: false}, 'shown on the panel: shown in the export');
+  assert.equal(source.context.exportSettingsTileState(null), undefined, 'without the panel\'s answer nothing is claimed');
   const panel = makePanel();
   const {context, notifications} = loadImport(panel);
   await context.importTilesPayload({...structuredClone(exported), settings_tile: state});

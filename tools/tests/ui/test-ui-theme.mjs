@@ -92,8 +92,14 @@ const handlers = read('src/web/server/handlers/web_admin_handlers.cpp');
 const saveTheme = handlers.slice(handlers.indexOf('void WebAdminServer::handleSaveTheme() {'),
   handlers.indexOf('void WebAdminServer::handleSaveTileBorders() {'));
 assert.ok(saveTheme.includes('if (value != "0" && value != "1" && value != "2") {') &&
-  saveTheme.indexOf('configManager.saveTheme(') < saveTheme.indexOf('uiManager.requestThemeChange();'),
-  'The theme is validated, stored, then requested');
+  saveTheme.includes('if (!theme_schedule::store(stored)) {'),
+  'The theme is validated, then stored');
+// One place stores it for the panel's Settings, the Web Admin and Home
+// Assistant's select (user 2026-10-23): saved, Automatic's last theme,
+// requested, and Home Assistant hears it.
+const store = read('src/ui/shared/theme_schedule.cpp');
+const storeBody = store.slice(store.indexOf('bool store(uint8_t theme) {'));
+assert.match(storeBody, /if \(theme > kAutomatic \|\| !configManager\.saveTheme\(theme\)\) return false;\s*if \(theme == kAutomatic\) configManager\.saveThemeAutoLast\(effective\(theme\)\);\s*uiManager\.requestThemeChange\(\);\s*mqttPublishDeviceSettings\(\);/);
 assert.ok(read('src/web/server/web_admin.cpp').includes('server.on("/api/display/theme", HTTP_POST,'));
 const html = read('src/web/server/render/web_admin_html.cpp');
 assert.ok(html.includes('<div class=\\"icon-color-segmented choice-row global-theme\\" id=\\"" + theme_id +') &&

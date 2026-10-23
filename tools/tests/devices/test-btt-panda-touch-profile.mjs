@@ -2,10 +2,11 @@
 // contract checks the device profile (catalog, build profile, firmware
 // identity, installer entry), the panel wiring and timing measured on the
 // hardware, the GT900 register map (status 0x814E, point block 0x8150 with X
-// first), the framebuffer handling that the stock SDK forces (a bounce buffer
-// in DRAM instead of a DMA that reads PSRAM, and a row by row cache write
-// back instead of one range over the whole area), and that the other S3
-// drivers keep their own values.
+// first), the framebuffer handling (two PSRAM buffers with the panel reading
+// one while the UI draws into the other, a bounce buffer in DRAM instead of
+// a DMA that reads PSRAM, and a row by row cache write back instead of one
+// range over the whole area), and that the other S3 drivers keep their own
+// values.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -70,14 +71,17 @@ assert.match(driver, /config\.vsync_gpio_num = GPIO_NUM_NC;/);
 assert.match(driver, /kPanelData\[16\] = \{17, 18, 48, 47, 39, 11, 12, 13,\s*14, 15, 16, 6,  7,  8,  9,  10\};/,
   'The RGB bus carries B3..B7, G2..G7 and R3..R7');
 
-// --- Framebuffer: DRAM bounce buffer and a row by row cache write back -------
-assert.match(driver, /config\.num_fbs = 1;/);
+// --- Framebuffer: two PSRAM buffers plus a DRAM bounce buffer ---------------
+assert.match(driver, /config\.num_fbs = 2;/,
+  'The UI is drawn into the buffer the panel does not scan');
 assert.match(driver, /config\.bounce_buffer_size_px = kScreenWidth \* 30;/,
   'The bounce buffer in DRAM gives the panel interrupt room under load');
 assert.match(driver, /config\.flags\.bb_invalidate_cache = true;/);
-assert.match(driver, /config\.flags\.double_fb = false;/);
-assert.doesNotMatch(driver, /esp_lcd_rgb_panel_get_frame_buffer\(g_panel, 2/,
-  'Asking for a second framebuffer writes out of bounds in the driver');
+assert.match(driver, /config\.flags\.double_fb = true;/);
+assert.match(driver, /err = esp_lcd_rgb_panel_get_frame_buffer\(g_panel, 2, &fb0, &fb1\);/,
+  'Both framebuffers come from the driver, never out of bounds');
+assert.match(driver, /Only switch the panel on a frame that drew something|g_damageX1 < g_damageX0/,
+  'A frame that drew nothing must not switch the panel');
 assert.match(driver, /for \(int32_t row = y; row < y \+ h; \+\+row\)/,
   'The cache write back walks the rows, the framebuffer rows are not contiguous');
 assert.match(driver, /ESP_CACHE_MSYNC_FLAG_UNALIGNED/,

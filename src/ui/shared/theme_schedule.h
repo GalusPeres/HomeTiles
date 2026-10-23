@@ -40,6 +40,12 @@ void note_time_zone();
 // From the loop: Automatic switches at sunrise and sunset.
 void poll();
 
+// Stores the theme setting (0 dark, 1 light, 2 Automatic) from the panel's
+// Settings, the Web Admin or Home Assistant: Automatic remembers what it
+// shows now (a boot before the clock runs starts with it), the loop applies
+// it and Home Assistant's select hears it. False when it was not saved.
+bool store(uint8_t theme);
+
 }  // namespace theme_schedule
 
 #endif  // HOMETILES_THEME_SCHEDULE_H

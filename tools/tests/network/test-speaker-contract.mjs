@@ -52,7 +52,7 @@ const contractProgram = String.raw`
 using namespace speaker_contract;
 
 static std::string status(const StatusFields& fields) {
-  char buffer[256];
+  char buffer[320];
   const size_t length = buildStatusJson(buffer, sizeof(buffer), fields);
   assert(length == strlen(buffer));
   return buffer;
@@ -98,17 +98,80 @@ int main() {
   StatusFields fields;
   assert(status(fields) ==
          "{\"v\":1,\"state\":\"idle\",\"volume\":0.50,\"muted\":false,"
-         "\"formats\":[\"mp3\",\"wav\"],\"max_bytes\":4194304}");
+         "\"formats\":[\"mp3\",\"wav\"],\"max_bytes\":4194304,\"pausable\":true}");
   fields.state = PublicState::Playing;
   fields.volume = 0.8f;
   fields.muted = true;
   fields.id = "0123456789abcdef";
   assert(status(fields) ==
          "{\"v\":1,\"state\":\"playing\",\"volume\":0.80,\"muted\":true,"
-         "\"formats\":[\"mp3\",\"wav\"],\"max_bytes\":4194304,\"id\":\"0123456789abcdef\"}");
+         "\"formats\":[\"mp3\",\"wav\"],\"max_bytes\":4194304,\"pausable\":true,"
+         "\"id\":\"0123456789abcdef\",\"position_ms\":0}");
+  // Position while a clip plays or pauses, the length once it is known.
+  fields.state = PublicState::Paused;
+  fields.position_ms = 61500;
+  fields.duration_ms = 213000;
+  assert(status(fields).find("\"state\":\"paused\"") != std::string::npos);
+  assert(status(fields).find(",\"position_ms\":61500,\"duration_ms\":213000}") != std::string::npos);
+  // Paused with the stream closed (b512): the Bridge plays it again to resume.
+  assert(status(fields).find("released") == std::string::npos);
+  fields.released = true;
+  assert(status(fields).find(",\"duration_ms\":213000,\"released\":true}") != std::string::npos);
+  fields.state = PublicState::Playing;
+  assert(status(fields).find("released") == std::string::npos);
+  fields.released = false;
+  // The longest status fits the firmware's 320-byte buffer.
+  fields.state = PublicState::Playing;
+  fields.id = "0123456789abcdef0123456789abcdef";
+  fields.error = ErrorCode::UnsupportedFormat;
+  fields.position_ms = 4294967295u;
+  fields.duration_ms = 4294967295u;
+  char longest[320];
+  assert(buildStatusJson(longest, sizeof(longest), fields) > 0);
+  fields.state = PublicState::Paused;
+  fields.released = true;
+  assert(buildStatusJson(longest, sizeof(longest), fields) > 0);
+  fields.state = PublicState::Playing;
+  fields.released = false;
+  fields.id = "0123456789abcdef";
+  fields.error = ErrorCode::None;
+  fields.position_ms = 0;
+  fields.duration_ms = 0;
   fields.state = PublicState::Idle;
   fields.error = ErrorCode::HttpsUnsupported;
   assert(status(fields).find(",\"error\":\"https_unsupported\"}") != std::string::npos);
+  // Idle sends no position.
+  assert(status(fields).find("position_ms") == std::string::npos);
+
+  // Clip length: Xing/Info or VBRI frame count, else size and bitrate.
+  {
+    uint8_t frame[256] = {0xFF, 0xFB, 0x90, 0x44};  // MPEG-1 L3 44.1 kHz joint stereo
+    memcpy(frame + 36, "Info", 4);
+    frame[36 + 7] = 0x01;                       // frames field present
+    frame[36 + 8] = 0x00; frame[36 + 9] = 0x00; frame[36 + 10] = 0x01; frame[36 + 11] = 0x00;
+    assert(mp3TagFrameCount(frame, sizeof(frame)) == 256);
+    assert(mp3DurationMs(frame, sizeof(frame), 44100, 128000, 1000000) == 256u * 1152u * 1000u / 44100u);
+    uint8_t mono25[64] = {0xFF, 0xE3, 0x18, 0xC4};  // MPEG-2.5 8 kHz mono
+    memcpy(mono25 + 13, "Xing", 4);
+    mono25[13 + 7] = 0x01;
+    mono25[13 + 11] = 11;
+    assert(mp3TagFrameCount(mono25, sizeof(mono25)) == 11);
+    assert(mp3DurationMs(mono25, sizeof(mono25), 8000, 8000, 792) == 11u * 576u * 1000u / 8000u);
+    uint8_t vbri[64] = {0xFF, 0xFB, 0x90, 0x44};
+    memcpy(vbri + 36, "VBRI", 4);
+    vbri[36 + 17] = 100;
+    assert(mp3TagFrameCount(vbri, sizeof(vbri)) == 100);
+    // No tag: constant bitrate from the size; a live stream stays unknown.
+    uint8_t plain[64] = {0xFF, 0xFB, 0x90, 0x44};
+    assert(mp3TagFrameCount(plain, sizeof(plain)) == 0);
+    assert(mp3DurationMs(plain, sizeof(plain), 44100, 128000, 3200000) == 200000);
+    assert(mp3DurationMs(plain, sizeof(plain), 44100, 128000, -1) == 0);
+    assert(mp3DurationMs(plain, sizeof(plain), 0, 128000, 3200000) == 0);
+    assert(mp3TagFrameCount(frame, 20) == 0);  // too short for the tag
+    assert(wavDurationMs(176400, 44100, 4) == 1000);
+    assert(wavDurationMs(0xFFFFFFFFu, 44100, 4) == 0);
+    assert(wavDurationMs(0, 44100, 4) == 0);
+  }
   // Invalid ids never reach the payload.
   fields.id = "not-an-id";
   assert(status(fields).find("\"id\"") == std::string::npos);
@@ -262,8 +325,12 @@ int main() {
     buffer.commit(100);
     assert(buffer.buffered() == 16 && buffer.writable() == 0);
     buffer.consume(1);
-    // Full buffer with read bytes in front: compacts even below half.
-    assert(buffer.writable() == 1 && buffer.read()[0] == 10);
+    // Full buffer read less than half: it waits for the reader instead of
+    // moving the whole tail for every byte read (b502 moved 254 KB per 2 KB).
+    assert(buffer.writable() == 0 && buffer.read()[0] == 10);
+    buffer.consume(7);
+    // Half read: the tail moves to the front once.
+    assert(buffer.writable() == 8 && buffer.start == 0 && buffer.buffered() == 8);
     buffer.consume(1000);
     assert(buffer.buffered() == 0 && buffer.start == 0 && buffer.writable() == 16);
   }
@@ -317,6 +384,41 @@ int main() {
   assert(c.kind == CommandKind::Play && c.status == CommandStatus::Ok);
   assert(strcmp(c.id, "0123456789abcdef") == 0);
   assert(url == "http://ha.local:8123/api/tts_proxy/x.mp3" && c.url_length == url.size());
+  assert(!c.live);
+  // A camera's sound from the Bridge (b504): kept short on the panel.
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true}", false, &url);
+  assert(c.status == CommandStatus::Ok && c.live && url == "tcp://192.168.1.2:8124/tok");
+  assert(c.lead_ms == 0);
+  // Lip sync (b506): how much earlier the Bridge sent the sound; clamped,
+  // and only for a camera's sound.
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true,\"lead_ms\":151}");
+  assert(c.status == CommandStatus::Ok && c.lead_ms == 151);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true,\"lead_ms\":5000}");
+  assert(c.lead_ms == 1000);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"lead_ms\":151}");
+  assert(c.lead_ms == 0);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":\"yes\"}");
+  assert(c.status == CommandStatus::Ok && !c.live);
+  // Resume by playing again (b512): only a Bridge stream that is no camera's
+  // sound, and only when the Bridge says so.
+  assert(!c.restart);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"restart\":true}");
+  assert(c.status == CommandStatus::Ok && c.restart);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"live\":true,\"restart\":true}");
+  assert(c.status == CommandStatus::Ok && !c.restart);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"http://ha.local:8123/x.mp3\",\"restart\":true}");
+  assert(c.status == CommandStatus::Ok && !c.restart);
+  c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\","
+            "\"url\":\"tcp://192.168.1.2:8124/tok\",\"restart\":\"yes\"}");
+  assert(c.status == CommandStatus::Ok && !c.restart);
 
   c = parse("{\"v\":1,\"op\":\"play\",\"id\":\"0123456789abcdef\",\"url\":\"https://ha/x.mp3\"}");
   assert(c.kind == CommandKind::Play && c.status == CommandStatus::HttpsUnsupported);
@@ -330,6 +432,10 @@ int main() {
   assert(c.status == CommandStatus::InvalidId);
 
   assert(parse("{\"v\":1,\"op\":\"stop\"}").kind == CommandKind::Stop);
+  c = parse("{\"v\":1,\"op\":\"pause\"}");
+  assert(c.kind == CommandKind::Pause && c.status == CommandStatus::Ok);
+  c = parse("{\"v\":1,\"op\":\"resume\"}");
+  assert(c.kind == CommandKind::Resume && c.status == CommandStatus::Ok);
   c = parse("{\"v\":1,\"op\":\"volume\",\"volume\":0.25}");
   assert(c.kind == CommandKind::Volume && c.status == CommandStatus::Ok && c.volume == 0.25f);
   c = parse("{\"v\":1,\"op\":\"volume\",\"volume\":1}");

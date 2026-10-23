@@ -50,6 +50,9 @@ void settings_update_wifi_status_ap(const char* ssid, const char* password);
 void settings_update_ap_mode(bool running);
 void settings_refresh_language();
 void settings_sync_display_rotation(bool rotated);
+// Home Assistant's rotation select: a step of the Settings rotation row
+// (0..3 quarter turns, or 0/1 normal and flipped), applied like a tap on it.
+void settings_select_display_rotation(uint8_t index);
 
 // Update power status from the main loop.
 void settings_update_power_status();

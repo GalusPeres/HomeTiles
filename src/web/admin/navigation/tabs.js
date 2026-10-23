@@ -30,6 +30,7 @@
       showSettingsPage('io');
     }
     const sequence = ++tabSwitchSequence;
+    const picks = tileSelectionSeq;
     let target = document.getElementById(tabName);
     if (!target) {
       const folderId = folderIdFromAdminTabName(tabName);
@@ -89,11 +90,17 @@
       }
       if (tileTab === 'screensaver') {
         initScreensaverEditor();
-      } else {
-        const rememberedIndex = getRememberedTileIndex(tileTab);
-        selectTile(rememberedIndex === null ? getTopLeftConfiguredTileIndex(tileTab) : rememberedIndex, tileTab);
+      } else if (tileSelectionSeq === picks || currentTileTab !== tileTab) {
+        // The tab's own pick first (user 2026-10-22: an empty cell or a
+        // page field came back as the top left tile).
+        if (!restoreTabSelection(tileTab)) {
+          const rememberedIndex = getRememberedTileIndex(tileTab);
+          selectTile(rememberedIndex === null ? getTopLeftConfiguredTileIndex(tileTab) : rememberedIndex, tileTab);
+        }
         window.requestAnimationFrame(restoreCurrentTileSelectionUi);
       }
+      // Else something was picked here while its grid loaded (user
+      // 2026-10-22: the pick jumped to the top left tile): it stays.
       // Let the browser paint the selected tab before cached/live values are
       // reconciled. This also keeps a cache hit from extending click latency.
       window.requestAnimationFrame(() => window.setTimeout(() => {

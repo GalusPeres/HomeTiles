@@ -194,7 +194,9 @@ assert.match(speakerCpp, /if \(command\.mic_enabled && !sealed\) \{/);
 assert.match(speakerCpp, /if \(command\.kind == assist::CommandKind::Start && !g_mic_enabled\.load\(\)\) \{/);
 assert.match(speakerCpp, /activeWakeWords\(\) != 0 && g_mic_ready\.load\(\) && g_mic_enabled\.load\(\)/);
 assert.match(speakerCpp, /prefs\.putBool\(kPrefsMicKey, g_mic_enabled\.load\(\)\);/);
-assert.match(speakerCpp, /g_mic_enabled\.store\(prefs\.getBool\(kPrefsMicKey, true\)\);/);
+// A new panel keeps the microphone off until someone switches it on.
+assert.match(speakerCpp, /std::atomic<bool> g_mic_enabled\{false\};/);
+assert.match(speakerCpp, /g_mic_enabled\.store\(prefs\.getBool\(kPrefsMicKey, false\)\);/);
 assert.match(channel, /speaker::isAssistCommandTopic\(topic\)/);
 assert.match(read('src/network/mqtt/mqtt_handlers.cpp'), /speaker::assistCommandTopic\(\)/);
 assert.match(read('src/network/network_manager.cpp'), /speaker::isAssistCommandTopic\(topic\)/);

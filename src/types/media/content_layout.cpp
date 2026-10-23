@@ -37,10 +37,15 @@ void set_media_cover_text_layout(MediaTileWidgets& widgets, bool cover_visible) 
         lv_obj_get_style_text_font(widgets.media_subtitle_label, LV_PART_MAIN));
   }
   const int gap = has_subtitle ? media_tile::kSubtitleGap : 0;
-  const int block_height = title_height + gap + subtitle_height;
+  // The playing bars stand over the title, in the same centred block.
+  const bool has_bars = widgets.bars && !lv_obj_has_flag(widgets.bars, LV_OBJ_FLAG_HIDDEN);
+  const int bars_height = has_bars ? media_tile::kBarsHeight + media_tile::kBarsGap : 0;
+  const int block_height = bars_height + title_height + gap + subtitle_height;
   const int center = cover_visible ? top + side / 2 : (top + height - footer) / 2;
-  const int title_y = std::max(top, std::min(center - block_height / 2,
+  const int block_y = std::max(top, std::min(center - block_height / 2,
                                           height - footer - block_height));
+  if (has_bars) lv_obj_align(widgets.bars, LV_ALIGN_TOP_LEFT, text_x, block_y);
+  const int title_y = block_y + bars_height;
   if (widgets.media_title_label) {
     lv_obj_align(widgets.media_title_label, LV_ALIGN_TOP_LEFT, text_x, title_y);
   }

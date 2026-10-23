@@ -77,6 +77,7 @@ void appendAdminScripts(String& html) {
   appendJsEntry("importFailed", tr.js_import_failed);
   appendJsEntry("importRunning", tr.js_import_running);
   appendJsEntry("importComplete", tr.js_import_complete);
+  appendJsEntry("importProgress", tr.js_import_progress);
   appendJsEntry("importConflict", tr.js_import_conflict);
   appendJsEntry("importStopped", tr.js_import_stopped);
   appendJsEntry("importScreensaver", tr.js_import_screensaver);

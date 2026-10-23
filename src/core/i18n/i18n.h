@@ -162,6 +162,8 @@ struct Strings {
   const char* js_import_failed;
   const char* js_import_running;
   const char* js_import_complete;
+  // The import's progress line: {done} and {total} are filled in by the page.
+  const char* js_import_progress;
   // Import checks: {tile} and {folder} are filled in by the page.
   const char* js_import_conflict;
   const char* js_import_stopped;
@@ -623,6 +625,13 @@ struct Strings {
   const char* settings_rotation;
   const char* settings_screensaver;
   const char* settings_starts_after;
+  // Settings Display page, Sound group (#123, P4 boards with a speaker):
+  // its heading, the volume slider and the microphone switch.
+  const char* settings_sound;
+  const char* settings_volume;
+  const char* settings_microphone;
+  // The Display category's name on the boards with the Sound group.
+  const char* settings_display_sound;
   // Display category line: %s = sleep time ("5 min", "never").
   const char* settings_sleep_summary_fmt;
   // WiFi category line.
@@ -835,6 +844,21 @@ struct Strings {
   const char* pages_title;
   // Web Admin: the tooltip on a full folder's greyed-out type list.
   const char* js_folder_type_locked;
+  // Media tile: the popup's layout (Web Admin) and the popup's sub-views
+  // (source and sound mode, the speakers to group, the library).
+  const char* media_popup_layout;
+  const char* media_layout_cover_left;
+  const char* media_layout_cover_center;
+  const char* media_source;
+  const char* media_sound_mode;
+  const char* media_speakers;
+  const char* media_library;
+  const char* media_library_empty;
+  const char* media_library_failed;
+  // Media popup: the first speaker of the group list.
+  const char* media_this_player;
+  // Media library: the row that plays the opened playlist or album.
+  const char* media_play_all;
 };
 
 // Locale-specific display rules and short runtime strings shared by

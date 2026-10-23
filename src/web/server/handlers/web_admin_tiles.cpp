@@ -20,6 +20,7 @@
 #include "src/web/server/handlers/web_admin_tile_helpers.h"
 #include "src/web/server/handlers/preview_payload.h"
 #include "src/types/types_registry.h"
+#include "src/types/navigate/web_handler.h"
 #include "src/types/energy/energy_data.h"
 #include "src/types/sensor/gauge_range.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -377,6 +378,38 @@ static bool folderHasContent(uint16_t folder_id) {
     if (t != TILE_EMPTY && t != TILE_BACK) return true;
   }
   return false;
+}
+
+// What a deleted folder leaves on the panel (user 2026-10-22: the panel kept
+// a deleted folder until the next folder change), taken before it goes.
+struct DeletedFolderView {
+  // The panel shows it or a folder inside it.
+  bool shown_inside = false;
+  // A page beside Home: a dot in every head.
+  bool page = false;
+};
+
+static DeletedFolderView deletedFolderView(uint16_t folder_id) {
+  DeletedFolderView view;
+  view.page = tile_layouts::page_number(folder_id) > 0;
+  uint16_t shown = tileConfig.getActiveFolderId();
+  for (size_t depth = 0; shown != TileConfig::rootFolderId() && depth < 128; ++depth) {
+    if (shown == folder_id) {
+      view.shown_inside = true;
+      break;
+    }
+    const uint16_t parent = tileConfig.getFolderParent(shown);
+    if (parent == shown) break;
+    shown = parent;
+  }
+  return view;
+}
+
+// After it went: shown inside it the panel goes Home (its built grid must
+// not stay), a page's dot leaves every head.
+static void showFolderDeleted(const DeletedFolderView& view) {
+  if (view.page) tiles_rebuild_heads(!powerManager.isInSleep());
+  if (view.shown_inside) tiles_switch_to_folder(TileConfig::rootFolderId());
 }
 
 // A tile in the classic storage (the layout window's, tile_layouts.h) has no
@@ -828,9 +861,11 @@ void WebAdminServer::handleSaveTiles() {
   // Only Weather keeps its temperature/humidity sensors.
   normalizeWeatherSensors(tile);
 
+  DeletedFolderView deleted_view;
   if (deleting_folder) {
     const uint16_t target_id = getNavigateTargetId(previous_tile);
     if (target_id != 0) {
+      deleted_view = deletedFolderView(target_id);
       if (!tileConfig.deleteFolder(target_id)) {
         tile = previous_tile;
         server.send(500, "application/json", "{\"success\":false,\"error\":\"Folder delete failed\"}");
@@ -941,7 +976,8 @@ void WebAdminServer::handleSaveTiles() {
         // Only this folder changed; the other prepared folders stay cached.
         tiles_invalidate_folder_only(folder_id);
       }
-      if (!shown_before_save && tileConfig.getActiveFolderId() == folder_id &&
+      // Shown inside a deleted folder the panel goes Home instead.
+      if (!shown_before_save && !deleted_view.shown_inside && tileConfig.getActiveFolderId() == folder_id &&
           !(display_awake && tiles_show_active_layout_now())) {
         tiles_request_reload_if_loaded(GridType::TAB0);
       }
@@ -949,11 +985,18 @@ void WebAdminServer::handleSaveTiles() {
       // every head again at once (user 2026-10-14: the shown PV page kept
       // "PV" after the rename to PV1, the pages' overview had it).
       if (folder_renamed) tiles_rebuild_heads(display_awake);
+      if (deleting_folder) showFolderDeleted(deleted_view);
     } else if (!shown_before_save) {
       image_screensaver_tiles_changed();
     }
 
     String response = "{\"success\":true";
+    // A deleted folder: the Web Admin drops its tab (it reloads). Its editor
+    // showed the tile empty before this save, so it cannot tell by itself.
+    if (deleting_folder && getNavigateTargetId(previous_tile)) {
+      response += ",\"folder_deleted\":";
+      response += String(getNavigateTargetId(previous_tile));
+    }
     // The tile's stable ID, given here to a new tile: the editor's data takes
     // it at once (user 2026-10-13: a new folder showed red in the layout
     // window's storage, its places were looked up without its ID).
@@ -975,6 +1018,13 @@ void WebAdminServer::handleSaveTiles() {
         appendJsonEscaped(response, folder_pin);
       }
       folder_pin = "";
+      response += "\"";
+      // Its title and icon as saved: a new folder got "Folder 17" and the
+      // folder icon (navigate/web_handler.cpp), the editor shows them.
+      response += ",\"title\":\"";
+      appendJsonEscaped(response, tile.title);
+      response += "\",\"icon_name\":\"";
+      appendJsonEscaped(response, tile.icon_name);
       response += "\"";
     }
     response += "}";
@@ -1607,6 +1657,10 @@ void WebAdminServer::handleGetLayouts() {
     json += (cfg.settings_parked >> i) & 1 ? "true" : "false";
   }
   json += "]";
+  // Hidden in the layout the panel shows: the export takes the Settings
+  // tile from here, as the panel stores it.
+  json += ",\"hidden\":";
+  json += cfg.settings_tile_hidden ? "true" : "false";
   const SettingsTileSnapshot& kept = cfg.settings_tile_snapshot;
   if (kept.valid && kept.view_id && tileConfig.settingsTileIndex() < 0) {
     json += ",\"tile\":{\"type\":7,\"view_id\":" + String(kept.view_id) + ",\"title\":\"";
@@ -2008,8 +2062,9 @@ void WebAdminServer::handleSaveLayouts() {
     if (parked_settings_classic && cfg->settings_tile_snapshot.valid) {
       cfg->settings_tile_snapshot.col = parked_settings_place.col;
       cfg->settings_tile_snapshot.row = parked_settings_place.row;
-      cfg->settings_tile_snapshot.span_w = parked_settings_place.span_w;
-      cfg->settings_tile_snapshot.span_h = parked_settings_place.span_h;
+      // Parked it is one cell (user 2026-10-22).
+      cfg->settings_tile_snapshot.span_w = 1;
+      cfg->settings_tile_snapshot.span_h = 1;
     }
     if (!settings_parked_sent.isNull()) {
       const bool parked = settings_parked_sent.as<bool>();
@@ -2145,6 +2200,19 @@ void WebAdminServer::handleSavePages() {
     }
     wanted.push_back(static_cast<uint16_t>(id));
   }
+  // new=<slot>: the "+" of a free slot (#100), which must be free.
+  long new_slot = -1;
+  if (server.hasArg("new")) {
+    new_slot = server.arg("new").toInt();
+    if (new_slot >= 0 && new_slot < static_cast<long>(tile_layouts::kMaxPages) &&
+        wanted.size() <= static_cast<size_t>(new_slot)) {
+      wanted.resize(static_cast<size_t>(new_slot) + 1, 0);
+    }
+    if (new_slot < 0 || new_slot >= static_cast<long>(wanted.size()) || wanted[new_slot]) {
+      sendJsonError(server, 400, "Not a free slot");
+      return;
+    }
+  }
   if (const char* error = checkPageSlots(wanted)) {
     sendJsonError(server, 400, error);
     return;
@@ -2170,6 +2238,48 @@ void WebAdminServer::handleSavePages() {
     }
     return nullptr;
   };
+
+  // The "+" of a free slot (#100, user 2026-10-22): a new Home folder that is
+  // the page there at once. Its tile takes a free entry but no cell (a page's
+  // tile is not shown on Home in the bar layouts; the classic layout gives it
+  // the first free place, else its storage), so a full screen does not stop
+  // it. Named by the editor's title and icon, else like every new folder
+  // ("Folder 17" and the folder icon, navigate/web_handler.cpp).
+  uint16_t new_folder = 0;
+  int new_index = -1;
+  if (new_slot >= 0) {
+    for (size_t i = 0; i < TILES_PER_GRID && new_index < 0; ++i) {
+      if (home->tiles[i].type == TILE_EMPTY) new_index = static_cast<int>(i);
+    }
+    if (new_index < 0) {
+      sendJsonError(server, 409, "Folder full");
+      return;
+    }
+    Tile& tile = home->tiles[new_index];
+    tile.type = TILE_FOLDER;
+    tile.view_id = 0;
+    tile.title = hometiles_title::normalize(server.arg("title").c_str()).c_str();
+    tile.icon_name = server.arg("icon_name");
+    tile.span_w = 1;
+    tile.span_h = 1;
+    tile.layout_hidden = true;
+    // This request has no navigate_target: the folder tile's own save path
+    // makes its folder (navigate/web_handler.cpp).
+    String error;
+    if (!apply_navigate_fields_from_request(server, tile, TileConfig::rootFolderId(), tileConfig, error)) {
+      sendJsonError(server, 500, error.length() ? error : String("Folder create failed"));
+      return;
+    }
+    new_folder = getNavigateTargetId(tile);
+    if (!tileConfig.saveFolderGrid(TileConfig::rootFolderId(), *home)) {
+      tileConfig.deleteFolder(new_folder);
+      sendJsonError(server, 500, "Save failed");
+      return;
+    }
+    wanted[new_slot] = new_folder;
+    Serial.printf("[WebAdmin] Page folder %u made in slot %ld (Home entry %d)\n", static_cast<unsigned>(new_folder),
+                  new_slot, new_index);
+  }
   struct Spot {
     uint16_t view;
     tile_layouts::Place place;
@@ -2251,6 +2361,16 @@ void WebAdminServer::handleSavePages() {
                 static_cast<unsigned long>(millis() - save_started_ms));
   String json = "{\"success\":true,\"places\":";
   tile_layouts::append_json(json);
+  // The new folder of a "+": the editor opens its tile.
+  if (new_folder) {
+    json += ",\"folder\":";
+    json += String(new_folder);
+    json += ",\"index\":";
+    json += String(new_index);
+    json += ",\"title\":\"";
+    appendJsonEscaped(json, home->tiles[new_index].title);
+    json += "\"";
+  }
   json += "}";
   server.send(200, "application/json", json);
 }
@@ -2377,6 +2497,7 @@ void WebAdminServer::handleDeleteFolder() {
 
   // Find parent folder and clear the tile that references this folder
   uint16_t parent_id = tileConfig.getFolderParent(folder_id);
+  const DeletedFolderView view = deletedFolderView(folder_id);
   std::unique_ptr<TileGridConfig> parent_storage(new (std::nothrow) TileGridConfig{});
   if (parent_storage && tileConfig.loadFolderGrid(parent_id, *parent_storage)) {
     TileGridConfig& parent_grid = *parent_storage;
@@ -2398,6 +2519,14 @@ void WebAdminServer::handleDeleteFolder() {
     server.send(500, "application/json", "{\"success\":false,\"error\":\"Delete failed\"}");
     return;
   }
+  // The panel shows it at once (user 2026-10-22: the folder's tile stayed
+  // until the next folder change): its parent without the tile, like a tile
+  // edit, or Home when it was shown inside the deleted folder.
+  if (!view.shown_inside && tileConfig.getActiveFolderId() == parent_id &&
+      !(!powerManager.isInSleep() && tiles_show_active_layout_now())) {
+    tiles_request_reload_if_loaded(GridType::TAB0);
+  }
+  showFolderDeleted(view);
 
   mqttRequestDynamicSlotsReload(5000);
   Serial.printf("[WebAdmin] Folder %u deleted\n", static_cast<unsigned>(folder_id));

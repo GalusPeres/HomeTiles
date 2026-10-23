@@ -121,7 +121,7 @@ Places are saved with **Save**; nothing changes on the display before that.
 
 ## Pages
 
-In the head bar layouts, Home has five page fields beside or below its grid. Drag a folder tile from Home into a field: the folder becomes a page and its tile leaves Home. Drag it out again to make it a tile. A new folder can go straight into a free field. Pages have no PIN: a protected folder asks before its PIN is removed.
+In the head bar layouts, Home has five page fields beside or below its grid. Drag a folder tile from Home into a field: the folder becomes a page and its tile leaves Home. Drag it out again to make it a tile. A new folder can go straight into a free field: select the field's **+** to create a page there. Pages have no PIN: a protected folder asks before its PIN is removed.
 
 On the display, the [page dots](device-ui.md#head-bar-and-pages) show the pages in the order of the fields.
 

@@ -19,6 +19,7 @@
 #include "src/network/bridge/ha_bridge_config.h"
 #include "src/network/mqtt/mqtt_handlers.h"
 #include "src/types/cover/renderer.h"
+#include "src/types/media/state_icon.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/energy/energy_data.h"
 #include "src/types/media/artwork_payload.h"
@@ -2785,6 +2786,12 @@ static void tiles_refresh_icons_for_grid(GridType grid_type) {
 
     if (tile.type == TILE_COVER) {
       refresh_cover_popup_for_tile(grid_type, i);
+    }
+    // A media tile keeps its player's state form (media/state_icon.h); a
+    // paused player sends no report that would bring it back.
+    if (tile.type == TILE_MEDIA && !icon_disabled && icon_name.length()) {
+      MediaTileWidgets* widgets = tile_renderer_get_media_widgets(grid_type);
+      if (widgets) icon_name = media_state_icon::name(icon_name, static_cast<media_state_icon::Form>(widgets[i].icon_form));
     }
 
     String iconChar;

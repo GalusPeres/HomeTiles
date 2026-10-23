@@ -2116,24 +2116,18 @@ bool TileConfig::ensureSettingsTile(TileGridConfig& grid, float target_col,
 
   const SettingsTileSnapshot& snapshot =
       configManager.getConfig().settings_tile_snapshot;
-  float span_w = snapshot.valid && snapshot.span_w >= 1
-                       ? snapshot.span_w
-                       : 1;
-  float span_h = snapshot.valid && snapshot.span_h >= 0.5f
-                       ? snapshot.span_h
-                       : 1;
-  if (span_w > GRID_COLS) span_w = 1;
-  if (span_h > GRID_ROWS) span_h = 1;
+  // Out of its field it is one cell, like a page's folder (user 2026-10-22:
+  // it came back half high in a half cell's size), and no place is kept:
+  // the drop spot, else the first free cell from the bottom right.
+  const float span_w = 1;
+  const float span_h = 1;
 
   float col = 0;
   float row = 0;
-  // A grid with a bar layout's places has that layout's cells; the
-  // snapshot's place is a classic one. Taken there it stood in for the
-  // tile's own place in the layout and overwrote it at the save (user
+  // A grid with a bar layout's places has that layout's cells (user
   // 2026-10-13: dropped in the bottom row in the layout window, shown a row
   // higher).
   const bool bar_places = shown_places && grid_layout::active() != grid_layout::Layout::kClassic;
-  tile_layouts::Place kept{};
   const bool explicit_target = target_col >= 0 || target_row >= 0;
   if (explicit_target && bar_places) {
     if (target_col < 0 || target_row < 0 ||
@@ -2151,34 +2145,16 @@ bool TileConfig::ensureSettingsTile(TileGridConfig& grid, float target_col,
     col = target_col;
     row = target_row;
   } else if (bar_places) {
-    // Its own place in the shown layout, kept while it was parked (the
-    // layout window may just have set it), else the first free one from the
-    // bottom right.
-    if (snapshot.valid && snapshot.view_id &&
-        tile_layouts::find(grid_layout::active(), kRootFolderId, snapshot.view_id, kept) &&
-        settings_tile_rect_is_free_shown(grid, kept.col, kept.row, kept.span_w, kept.span_h)) {
-      col = kept.col;
-      row = kept.row;
-      span_w = kept.span_w;
-      span_h = kept.span_h;
-    } else {
-      bool found = false;
-      for (float r = grid_layout::shown_rows() - span_h; !found && r >= 0; r -= 0.5f) {
-        for (float c = grid_layout::shown().cols - span_w; !found && c >= 0; c -= 0.5f) {
-          if (!settings_tile_rect_is_free_shown(grid, c, r, span_w, span_h)) continue;
-          col = c;
-          row = r;
-          found = true;
-        }
+    bool found = false;
+    for (float r = grid_layout::shown_rows() - span_h; !found && r >= 0; r -= 0.5f) {
+      for (float c = grid_layout::shown().cols - span_w; !found && c >= 0; c -= 0.5f) {
+        if (!settings_tile_rect_is_free_shown(grid, c, r, span_w, span_h)) continue;
+        col = c;
+        row = r;
+        found = true;
       }
-      if (!found) return false;
     }
-  } else if (snapshot.valid && snapshot.col < GRID_COLS &&
-             snapshot.row < GRID_ROWS &&
-             settings_tile_rect_is_free(grid, snapshot.col, snapshot.row,
-                                        span_w, span_h)) {
-    col = snapshot.col;
-    row = snapshot.row;
+    if (!found) return false;
   } else if (!find_settings_tile_rect_bottom_right(grid, span_w, span_h,
                                                     col, row)) {
     return false;
@@ -2878,13 +2854,19 @@ bool TileConfig::saveTabNames() {
 }
 #endif
 
+// The tab, the tile and the panel give it one name (user 2026-10-22: "Ordner"
+// on the panel in every language, "Ordner 17" on the tab, none on the tile).
+String TileConfig::unnamedFolderName(uint16_t folder_id) {
+  return String(i18n::strings(configManager.getConfig().language).folder_prefix) + String(folder_id);
+}
+
 static FolderEntry makeFolderEntry(uint16_t id, uint16_t parent_id, const String& name, const String& icon) {
   FolderEntry entry{};
   entry.id = id;
   entry.parent_id = parent_id;
   String safe_name = name;
   safe_name.trim();
-  if (safe_name.length() == 0) safe_name = "Ordner";
+  if (safe_name.length() == 0) safe_name = TileConfig::unnamedFolderName(id);
   String safe_icon = icon;
   safe_icon.trim();
   copyString(safe_name, entry.name, sizeof(entry.name));
@@ -2894,14 +2876,10 @@ static FolderEntry makeFolderEntry(uint16_t id, uint16_t parent_id, const String
 
 bool TileConfig::load() {
   // The other layouts' places (tile_layouts.h) before any grid is loaded.
-  // A bar layout without places (the file is gone) would show empty pages:
-  // the panel starts with the classic layout then (before the UI is built).
+  // The panel keeps the chosen layout whatever its places (user 2026-10-21:
+  // "Layout bleibt Layout"): an emptied panel switched to the classic one
+  // on its next start. A tile without a place waits in the layout window.
   tile_layouts::begin();
-  if (grid_layout::active() != grid_layout::Layout::kClassic && !tile_layouts::has_layout(grid_layout::active())) {
-    Serial.printf("[Layouts] No places for %s, starting with the classic layout\n",
-                  grid_layout::key(grid_layout::active()));
-    grid_layout::apply(0);
-  }
   folders.clear();
   bool folders_ok = loadFolders();
   bool had_root = folderExists(kRootFolderId);
@@ -3636,7 +3614,7 @@ bool TileConfig::updateFolder(uint16_t folder_id, const String& name, const Stri
     if (entry.id != folder_id) continue;
     String safe_name = name;
     safe_name.trim();
-    if (!safe_name.length()) safe_name = "Ordner";
+    if (!safe_name.length()) safe_name = unnamedFolderName(folder_id);
     String safe_icon = icon;
     safe_icon.trim();
     copyString(safe_name, entry.name, sizeof(entry.name));
@@ -3743,8 +3721,9 @@ void TileConfig::snapshotSettingsTile(const Tile& tile, SettingsTileSnapshot& ou
   out.bg_color = tile.bg_color;
   out.col = tile.col;
   out.row = tile.row;
-  out.span_w = tile.span_w < 1 ? 1 : tile.span_w;
-  out.span_h = tile.span_h < 0.5f ? 1 : tile.span_h;
+  // Parked it is one cell (user 2026-10-22), like a page's folder.
+  out.span_w = 1;
+  out.span_h = 1;
   out.view_id = tile.view_id;
 }
 

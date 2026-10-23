@@ -6,6 +6,8 @@
 #include "src/core/diagnostics/loop_stall.h"
 #include "src/network/transport/network_transport.h"
 #include "src/video/local_camera/local_camera.h"
+#include "src/core/firmware/firmware_version.h"
+#include "src/video/camera_stream.h"
 
 WebAdminServer webAdminServer;
 
@@ -165,6 +167,9 @@ bool WebAdminServer::start() {
     // two minutes after Pair was pressed on the panel itself.
     server.on("/api/link", HTTP_POST,
               withStorageHold([this]() { this->handleLinkSetup(); }));
+    // No password check either: the panel's mDNS record, for a Bridge that
+    // adds it by its IP address (issue #114).
+    server.on("/api/link", HTTP_GET, [this]() { this->handleLinkInfo(); });
     server.on("/api/status", guarded([this]() { this->handleStatus(); }));
     server.on("/api/language", HTTP_GET,
               guarded([this]() { this->handleLanguage(); }));
@@ -226,6 +231,19 @@ bool WebAdminServer::start() {
               guarded([this]() { this->handleLocalCamera(); }));
     server.on("/api/local-camera", HTTP_POST,
               guarded([this]() { this->handleLocalCamera(); }));
+#if defined(HOMETILES_BETA_BUILD)
+    // Test builds: the running camera stream reads nothing for ?seconds=
+    // (default 20, 1-60), a Wi-Fi stall as the Bridge sees it (#116).
+    server.on("/api/debug/camera-pause", HTTP_GET, guarded([this]() {
+      long seconds = this->server.hasArg("seconds") ? this->server.arg("seconds").toInt() : 20;
+      if (seconds < 1) seconds = 1;
+      if (seconds > 60) seconds = 60;
+      const bool active = camera_stream_debug_pause(static_cast<uint32_t>(seconds) * 1000U);
+      this->server.send(200, "application/json",
+                        String("{\"active\":") + (active ? "true" : "false") +
+                            ",\"seconds\":" + String(seconds) + "}");
+    }));
+#endif
     server.on("/api/screensaver/wallpaper", HTTP_GET,
               guarded([this]() { this->handleGetScreensaverWallpaper(); }));
     server.on("/api/sd_images", HTTP_GET,

@@ -5,8 +5,10 @@
 # Named in the firmware sources
 access-point
 account-arrow-right
+account-music
 airplane
 alarm
+album
 alert-circle
 alert-circle-outline
 animation
@@ -49,6 +51,7 @@ check-bold
 check-circle
 check-circle-outline
 check-network-outline
+checkbox-blank-circle-outline
 checkbox-marked-circle
 chevron-down
 chevron-left
@@ -75,6 +78,7 @@ decimal
 door
 door-closed
 door-open
+dots-horizontal
 download
 earth
 electric-switch
@@ -133,16 +137,21 @@ lock-clock
 lock-open
 lock-open-variant
 lock-outline
+login-variant
 magnify
+microphone
 minus
 mirror
 monitor
+monitor-speaker
 moon-waning-crescent
 more
 motion
 motion-sensor
 motion-sensor-off
 mouse
+movie
+music
 music-note
 music-note-off
 network
@@ -160,7 +169,10 @@ percent
 pill
 pin
 play
+play-box-multiple
+playlist-music
 plus
+podcast
 post
 power
 power-on
@@ -168,10 +180,14 @@ power-plug
 power-plug-off
 power-sleep
 qrcode
+radio
 radiobox-blank
+radiobox-marked
 refresh
 remote
 rename
+repeat
+repeat-once
 resize
 restart
 rocket-launch
@@ -195,6 +211,7 @@ shield-moon
 shield-off
 shield-outline
 shuffle
+shuffle-variant
 skip-next
 skip-previous
 sleep
@@ -207,6 +224,10 @@ snowflake
 snowflake-melt
 sofa
 solar-power
+speaker
+speaker-multiple
+speaker-pause
+speaker-play
 square
 square-outline
 star-outline
@@ -220,6 +241,7 @@ tab
 tag
 target
 television
+television-play
 temperature-kelvin
 text
 theme-light-dark
@@ -292,7 +314,6 @@ flash
 gauge
 phone-rotate-portrait
 shield-off-outline
-speaker
 toggle-switch
 view-dashboard
 
@@ -382,8 +403,6 @@ script-text
 script-text-play
 sine-wave
 speaker-off
-speaker-pause
-speaker-play
 speedometer
 speedometer-medium
 speedometer-slow
@@ -394,7 +413,6 @@ storage-tank
 sun-wireless
 television-off
 television-pause
-television-play
 texture-box
 thermometer-lines
 toggle-switch-variant-off

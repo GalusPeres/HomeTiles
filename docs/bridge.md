@@ -11,7 +11,7 @@ The [HomeTiles Bridge](https://github.com/GalusPeres/HomeTiles-Bridge) connects 
 
 ## Installation
 
-You need Home Assistant 2025.11 or newer and HomeTiles Bridge v0.9.2 for all documented features with firmware v0.9.3. The direct link needs no MQTT broker. Follow the [Installation](installer.md#install-the-bridge) to install the Bridge and pair your first display.
+You need Home Assistant 2025.11 or newer and HomeTiles Bridge v0.9.4 for all documented features with firmware v0.9.4. The direct link needs no MQTT broker. Follow the [Installation](installer.md#install-the-bridge) to install the Bridge and pair your first display.
 
 <a id="via-hacs-recommended"></a>
 <a id="manual"></a>
@@ -51,6 +51,17 @@ Older display configurations, entity selections, aliases, and MQTT topic names r
 
 Bridge v0.9.0 remains compatible with older firmware and existing configurations. New features require the corresponding firmware; no reset or re-pairing is needed for a normal update.
 
+## Display Settings { data-toc-label="Display settings" }
+
+The display's Home Assistant device has its settings under **Configuration**: **Display Brightness**, **Screensaver Brightness**, **Display Standby** and **Display Standby After**, and with HomeTiles and Bridge v0.9.4:
+
+| Entity | Use |
+| --- | --- |
+| **Theme** | **Dark**, **Light** or **Automatic** (light by day, dark at night), the same choice as under **Settings → Display** on the display. |
+| **Display Rotation** | The steps the display offers: 0°, 90°, 180° and 270° on displays that turn in quarter turns, 0° and 180° on the others. |
+
+With older firmware the display keeps the former **Display Rotation** switch for 180° and has no Theme select.
+
 ## Control the Displayed View
 
 Each compatible display exposes a **View** Select entity (**Ansicht** in German) on its existing Home Assistant device, next to the display controls. It offers **Home**, configured folders including nested folders, and configured tiles with supported popups.
@@ -87,7 +98,7 @@ Enable the electricity, gas, or water categories you need. Each requires the cor
 Pairing connects a display to the Bridge over the direct link. Every message between them is encrypted and signed, commands as well as states, and each command runs at most once. Camera stream tokens travel encrypted too.
 
 1. On the display, tap **Pair** under **Settings → System → Security** (or in the first-start setup).
-2. Home Assistant shows **Panel found** under **Settings → Devices & services → Discovered**; a display that is already set up over MQTT shows **Connect the panel**. Select **Add** or **Submit**.
+2. Home Assistant shows **Panel found** under **Settings → Devices & services → Discovered**; a display that is already set up over MQTT shows **Connect the panel**. Select **Add** or **Submit**. Where Home Assistant cannot find displays over mDNS (Docker without host networking, VLANs), open **Add integration → HomeTiles Bridge → Panel by IP address (direct connection)** within the two minutes and enter the display's IP address (shown under **Settings → WiFi**); a fixed IP address for the display in the router helps (Bridge v0.9.4).
 3. The display and Home Assistant show the same six-digit number. Confirm only if both numbers match, in Home Assistant and on the display.
 
 The [Installation](installer.md#set-up-the-display) shows each step. To switch encryption off, unpair on the display or use **Security** in the Bridge options; the other side follows, and the display then counts as a new display.
@@ -144,13 +155,14 @@ The Bridge adds these entities to the display's Home Assistant device while the 
 
 | Entity | Use |
 | --- | --- |
-| **Speaker** | Media player: plays audio and announcements on the display and sets its volume. |
+| **Speaker** | Media player: plays sounds, music, announcements and spoken answers from Home Assistant, with title, position, pause and seeking, and sets the volume. The Bridge decodes every format and sends the display plain audio at the pace it plays (HomeTiles and Bridge v0.9.4 or newer). When a camera's stream has sound, the display plays it in step with the picture while the camera popup or full screen is open. While it plays, the display does not listen for its wake word. |
 | **Assist** | Assist satellite: Home Assistant's voice pipeline listens through the display's microphone, and the answer plays on its speaker. |
-| **Assist** button | Starts a voice request without a wake word. |
-| **Wake word** | Okay Nabu, Hey Jarvis, Alexa or Off. The display listens for it by itself. |
+| **Start Assist** button | Starts a voice request without a wake word. |
+| **Listening** | The display listens for its wake word by itself. Off on a new display. |
+| **Wake word** | Okay Nabu, Hey Jarvis or Alexa. Kept while Listening is off. |
 | **Assistant** | The Assist pipeline the display uses. |
 | **Finished speaking detection** | How quickly a request ends after you stop speaking. |
-| **Microphone** | Turns the microphone off. Turning it on from Home Assistant needs a [paired](#encrypted-commands) display. |
+| **Microphone** | Off on a new display. Turning it on from Home Assistant needs a [paired](#encrypted-commands) display. |
 
 It works on the direct link and over MQTT.
 
@@ -189,5 +201,9 @@ Entity states use `<HA prefix>/<entity>/...`. The Bridge publishes them itself; 
     | `<base>/stat/display_brightness` | Display → HA | Current display brightness |
     | `<base>/cmnd/screensaver_brightness` | HA → Display | Screensaver brightness (1–100%) |
     | `<base>/stat/screensaver_brightness` | Display → HA | Current screensaver brightness |
+    | `<base>/cmnd/display_theme` | HA → Display | Theme (`dark`, `light`, `auto`) |
+    | `<base>/stat/display_theme` | Display → HA | Current theme setting |
+    | `<base>/cmnd/display_rotation` | HA → Display | Rotation in degrees (one of the display's steps) |
+    | `<base>/stat/display_rotation` | Display → HA | Rotation and steps, `{"degrees":90,"options":[0,90,180,270]}` |
     | `<base>/cmnd/io/{channel_id}` | HA → Display | Local Switch command (`ON` / `OFF`) |
     | `<base>/stat/io/{channel_id}` | Display → HA | Local Switch or temperature state |

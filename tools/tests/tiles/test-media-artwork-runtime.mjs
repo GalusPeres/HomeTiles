@@ -47,6 +47,13 @@ class String : public std::string {public:
 };
 ${read('src/types/media/widgets.h').replace(/^#.*$/gm,'')}
 ${read('src/types/media/artwork_payload.h').replace(/^#.*$/gm,'')}
+${read('src/types/media/media_position.h').replace(/^#.*$/gm,'')}
+// The position's clock: not set yet, like a panel before its first time
+// sync, so a state's position counts as reported (test-media-position.mjs).
+struct media_test_timeval { long tv_sec; long tv_usec; };
+static int media_test_gettimeofday(media_test_timeval* tv, void*) { tv->tv_sec = 0; tv->tv_usec = 0; return 0; }
+#define timeval media_test_timeval
+#define gettimeofday media_test_gettimeofday
 uint32_t ticks=100;uint32_t millis(){return ticks;}
 struct Logger{void println(const char*){}template<class...T>void printf(const char*,T...){}}Serial;
 std::map<void*,size_t> allocations;bool fail_pixels=false,fail_descriptor=false;size_t pixel_peak=0;
@@ -99,6 +106,7 @@ String media_entity_for_grid_index(GridType,uint8_t){return "media_player.test";
 ${fn('tile_renderer_find_media_cover')}
 const lv_image_dsc_t* popup_received=nullptr;
 void update_media_popup_cover(const char*,const lv_image_dsc_t*d,uint32_t){popup_received=d;}
+void media_popup_note_state(const String&,const char*){}
 ${fn('process_media_cover_results')}
 ${['extract_json_string_field_cstr','extract_json_number_field_cstr','extract_json_bool_field_cstr','decode_basic_json_escapes','media_first_non_empty','media_text_same','sanitize_media_display_text','set_label_text_if_changed','set_label_long_mode_if_changed','restart_visible_media_text_scroll','media_icon_for_state'].map(fn).join('\n')}
 String media_empty_title_label(const String&){return "No playback";}String getMdiChar(const String&s){return s;}
@@ -113,6 +121,12 @@ namespace ui_theme{struct SurfaceScope{explicit SurfaceScope(int){}};}
 namespace tile_surface{inline ui_theme::SurfaceScope scope(lv_obj_t*){return ui_theme::SurfaceScope(-1);}}
 // The dark design while playing (light theme) has its own tests.
 static void media_follow_playback(GridType,uint8_t,MediaTileWidgets&,bool){}
+// The tile's icon in its state form (state_icon.h, test-media-state-icon.mjs):
+// no MDI table here, so every icon keeps its plain form.
+uint32_t mdiUnknownIconCodepoint(){return 0;}uint32_t getMdiCodepoint(const String&){return 0;}
+${read('src/types/media/state_icon.h').replace(/^#.*$/gm,'')}
+using TileType=int;constexpr int TILE_MEDIA=7;struct Tile{TileType type=TILE_MEDIA;};Tile test_tile;
+const Tile* tile_renderer_get_tile_config(GridType,uint8_t){return &test_tile;}String media_tile_icon_name(const Tile&){return "speaker";}
 ${fn('update_media_tile_state')}
 ${runtime.match(/struct MediaUpdate \{[\s\S]*?\n};/)[0]}
 constexpr int MEDIA_QUEUE_SIZE=24;MediaUpdate g_media_queue[24];uint8_t g_media_head=0,g_media_tail=0;

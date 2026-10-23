@@ -55,6 +55,19 @@ changes.
    (`transport: link`, new key; area, names and entities stay), and the panel
    reconnects in session mode.
 
+**Without mDNS** (Home Assistant in Docker without host networking, VLANs,
+mDNS filtered; issue #114, Bridge #16): **Add device** in Home Assistant
+offers *Panel by IP address (direct connection)* next to *Manually over
+MQTT* (the old form). The user presses Pair on the panel first and types its
+IP address. The Bridge sends `GET /api/link`, which answers what the mDNS
+record says, without a password and without anything secret:
+`{"device_id", "name", "model", "firmware", "base_topic", "ha_prefix",
+"link": 1, "pair"}`. `pair` is the check that gates `POST /api/link`;
+without it the dialog asks to press Pair first, and an answer without
+`device_id` and `link` (older firmware, another device) says to update the
+panel. Otherwise the setup goes on at step 2 ("Panel found", or the switch
+of an existing entry). The dialog advises a fixed IP address for the panel.
+
 Removing the pairing (on the display, or in Home Assistant, which sends an
 unpair) also forgets the Bridge address: without its key the link cannot
 connect. The panel leaves the link without a restart and is a new panel

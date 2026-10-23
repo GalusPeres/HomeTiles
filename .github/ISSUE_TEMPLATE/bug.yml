@@ -1,0 +1,71 @@
+name: Bug report
+description: Something does not work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "**Please add logs. They help to fix the problem faster.**"
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      description: As chosen in the installer.
+      options:
+        - Choose your device
+        - M5Stack Tab5
+        - Waveshare 4B / 86 Panel
+        - Waveshare Touch LCD 4.3 inch
+        - Waveshare Touch LCD 5 inch (ESP32-P4 before v3.0)
+        - Waveshare Touch LCD 5 inch (ESP32-P4 v3.1 or newer, experimental)
+        - Waveshare Touch LCD 7 inch
+        - Waveshare Touch LCD 7B / 7B-C (ESP32-P4 before v3.0)
+        - Waveshare Touch LCD 7B / 7B-C (ESP32-P4 v3.1 or newer, experimental)
+        - Waveshare Touch LCD 8 inch
+        - Waveshare Touch LCD 10.1 inch
+        - Waveshare Touch LCD 10.1 inch (ESP32-P4 v3.1 or newer, experimental)
+        - Waveshare ESP32-S3 Touch LCD 4 (Rev 4.0)
+        - Waveshare ESP32-S3 Touch LCD 4B
+        - Guition JC8012P4A1 V1
+        - Guition JC8012P4A1 V2
+        - Guition JC8012P4A1 V3 (experimental)
+        - Guition JC1060P470C_I_W_Y
+        - Guition JC1060P470C V2 (New Panel)
+        - Guition JC4880P443C_I_W
+        - Guition ESP32-4848S040C_I
+        - Golden Security GS-T3E v2 (PCB v2.3)
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: HomeTiles version
+      description: "Device: Settings > System. Web Admin: at the top."
+    validations:
+      required: true
+  - type: input
+    id: bridge
+    attributes:
+      label: HomeTiles Bridge version
+      description: In HACS > HomeTiles Bridge.
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What goes wrong? What did you do before?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        - Crash: Web Admin > Settings > Screenshot & Diagnostics. Add the crash log, and the core dump if shown (as .zip).
+        - Live log: [Device logs](https://galusperes.github.io/device-logs/) (USB)
+        - Home Assistant: Settings > System > Logs, search `tab5_lvgl`
+  - type: textarea
+    id: pictures
+    attributes:
+      label: Photos or screenshots
+      description: A photo of the screen helps.

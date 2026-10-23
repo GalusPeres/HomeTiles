@@ -65,13 +65,10 @@ assert.match(read('src/tiles/runtime/tile_renderer.cpp'),
   'is_playing is the reported "playing"');
 
 // Head icon: the state form of the tile's icon where it exists.
+// The forms themselves: media/state_icon.h (test-media-state-icon.mjs).
 const headIcon = fn('head_icon');
-assert.match(headIcon, /state\.equalsIgnoreCase\("playing"\)\s*\? "-play"/);
-assert.match(headIcon, /state\.equalsIgnoreCase\("paused"\) \? "-pause"/);
-assert.match(headIcon, /\(state\.equalsIgnoreCase\("off"\) \|\| state\.equalsIgnoreCase\("standby"\)\) \? "-off"/);
-assert.match(headIcon, /getMdiCodepoint\(variant\) != mdiUnknownIconCodepoint\(\) \? getMdiChar\(variant\) : ctx->icon_char;/);
-assert.match(headIcon, /if \(!ctx->icon_name\.length\(\) \|\| getMdiChar\(ctx->icon_name\) != ctx->icon_char\) return ctx->icon_char;/,
-  'an icon the tile changed (a rule) stays as it is');
+assert.match(headIcon, /media_state_icon::name\(ctx->icon_name, media_state_icon::form_of\(state\)\)/);
+assert.match(headIcon, /if \(!ctx->icon_name\.length\(\)\) return ctx->icon_char;/);
 assert.match(fn('show_head'), /lv_label_set_text\(ctx->icon_label, head_icon\(ctx, extras_of\(ctx->entity_id\)\.state\)\.c_str\(\)\);/);
 assert.match(fn('prepare_media_popup_open'),
   /lv_label_set_text\(ctx->icon_label, head_icon\(ctx, extras_of\(init\.entity_id\)\.state\)\.c_str\(\)\);/);

@@ -5,6 +5,8 @@
 #include "src/types/media/update_schedule.h"
 #include "src/types/media/update_service.h"
 #include "src/types/media/media_position.h"
+#include "src/types/media/renderer.h"
+#include "src/types/media/state_icon.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/core/json_scan.h"
 #include "src/network/bridge/ha_bridge_config.h"
@@ -3088,15 +3090,6 @@ static String media_popup_title_for_tile(const Tile& tile) {
   return title;
 }
 
-static String media_popup_icon_for_tile(const Tile& tile) {
-  String icon_name = normalizeMdiIconName(tile.icon_name);
-  if (!icon_name.length() && tile.sensor_entity.length()) {
-    icon_name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(tile.sensor_entity));
-  }
-  if (!icon_name.length()) icon_name = "television";
-  return icon_name;
-}
-
 static String media_entity_for_grid_index(GridType grid_type, uint8_t grid_index) {
   if (grid_index >= TILES_PER_GRID) return "";
   const Tile* tile = tile_renderer_get_tile_config(grid_type, grid_index);
@@ -3157,7 +3150,7 @@ static void update_media_popup_from_widgets(GridType grid_type,
   MediaPopupInit init;
   init.entity_id = tile.sensor_entity;
   init.title = media_popup_title_for_tile(tile);
-  init.icon_name = media_popup_icon_for_tile(tile);
+  init.icon_name = media_tile_icon_name(tile);
   init.icon_char = media_label_text(widgets.icon_label);
   init.bg_color = tile_icon_source::popup_background(widgets.icon_label,
                                                      tileBgColorOrDefault(tile, tileDefaultBgColor()));
@@ -4601,6 +4594,17 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
     if (icon.length()) {
       set_label_text_if_changed(widgets.play_pause_label, icon);
       lv_obj_clear_flag(widgets.play_pause_label, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+  // The tile's icon in the player's state form, the same as the popup's
+  // head (state_icon.h); a hidden icon stays hidden.
+  const media_state_icon::Form icon_form = media_state_icon::form_of(state);
+  widgets.icon_form = static_cast<uint8_t>(icon_form);
+  if (widgets.icon_label && !lv_obj_has_flag(widgets.icon_label, LV_OBJ_FLAG_HIDDEN)) {
+    const Tile* tile = tile_renderer_get_tile_config(grid_type, grid_index);
+    if (tile && tile->type == TILE_MEDIA) {
+      const String icon = getMdiChar(media_state_icon::name(media_tile_icon_name(*tile), icon_form));
+      if (icon.length()) set_label_text_if_changed(widgets.icon_label, icon);
     }
   }
 

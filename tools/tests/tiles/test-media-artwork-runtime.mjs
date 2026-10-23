@@ -121,6 +121,12 @@ namespace ui_theme{struct SurfaceScope{explicit SurfaceScope(int){}};}
 namespace tile_surface{inline ui_theme::SurfaceScope scope(lv_obj_t*){return ui_theme::SurfaceScope(-1);}}
 // The dark design while playing (light theme) has its own tests.
 static void media_follow_playback(GridType,uint8_t,MediaTileWidgets&,bool){}
+// The tile's icon in its state form (state_icon.h, test-media-state-icon.mjs):
+// no MDI table here, so every icon keeps its plain form.
+uint32_t mdiUnknownIconCodepoint(){return 0;}uint32_t getMdiCodepoint(const String&){return 0;}
+${read('src/types/media/state_icon.h').replace(/^#.*$/gm,'')}
+using TileType=int;constexpr int TILE_MEDIA=7;struct Tile{TileType type=TILE_MEDIA;};Tile test_tile;
+const Tile* tile_renderer_get_tile_config(GridType,uint8_t){return &test_tile;}String media_tile_icon_name(const Tile&){return "speaker";}
 ${fn('update_media_tile_state')}
 ${runtime.match(/struct MediaUpdate \{[\s\S]*?\n};/)[0]}
 constexpr int MEDIA_QUEUE_SIZE=24;MediaUpdate g_media_queue[24];uint8_t g_media_head=0,g_media_tail=0;

@@ -78,6 +78,7 @@ void update_media_tile_state(GridType,uint8_t,const char*){}
 // Previous and next are marked for the popup control press fill; play keeps its white circle.
 int refreshed_controls=0;namespace tile_icon_source{void refresh_controls(lv_obj_t*card){++refreshed_controls;int marked=0;for(uint32_t i=0;i<lv_obj_get_child_count(card);++i)marked+=tile_icon_disc::is_control(lv_obj_get_child(card,i));assert(marked==2);}}
 ${control.slice(0,control.indexOf('  MediaEventData* data'))}return label;}
+${fn(renderer,'media_tile_icon_name')}
 ${fn(renderer,'render_media_tile')}
 void snapshot(const char*file,const std::vector<uint32_t>&pixels){std::ofstream out(file,std::ios::binary);auto u16=[&](uint16_t v){out.write(reinterpret_cast<char*>(&v),2);};auto u32=[&](uint32_t v){out.write(reinterpret_cast<char*>(&v),4);};out.write("BM",2);u32(54+pixels.size()*4);u32(0);u32(54);u32(40);u32(SCREEN_WIDTH);u32(-SCREEN_HEIGHT);u16(1);u16(32);u32(0);u32(pixels.size()*4);u32(0);u32(0);u32(0);u32(0);out.write(reinterpret_cast<const char*>(pixels.data()),pixels.size()*4);}
 int main(int argc,char**argv){lv_init();auto*display=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t>pixels(SCREEN_WIDTH*SCREEN_HEIGHT);lv_display_set_color_format(display,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(display,pixels.data(),nullptr,pixels.size()*4,LV_DISPLAY_RENDER_MODE_FULL);lv_display_set_flush_cb(display,[](lv_display_t*d,const lv_area_t*,uint8_t*){lv_display_flush_ready(d);});lv_theme_default_init(display,lv_color_hex(0x26A69A),lv_color_hex(0xC14444),false,&ui_font_20);

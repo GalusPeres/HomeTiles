@@ -18,6 +18,10 @@ constexpr int kDisc = popup_layout::kHeaderIconDiscSize;
 constexpr int kHeadTop = popup_layout::kHeaderCenterY - kDisc / 2;
 constexpr int kButton = popup_layout::scale(78);
 constexpr int kStep = popup_layout::scale(116);
+// The dot under an active shuffle or repeat icon, its centre below the
+// button's centre (mockup media-popup-simple/toggles.html).
+constexpr int kToggleDot = popup_layout::scale(6);
+constexpr int kToggleDotY = popup_layout::scale(28);
 constexpr int kSeekHeight = popup_layout::scale(10);
 constexpr int kSeekKnob = popup_layout::scale(26);
 constexpr int kVolumeHeight = popup_layout::scale(16);

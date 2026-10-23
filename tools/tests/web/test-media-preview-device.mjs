@@ -93,6 +93,7 @@ void media_popup_event_data_delete_cb(lv_event_t*e){delete static_cast<MediaPopu
 void update_media_tile_state(GridType,uint8_t,const char*){}
 namespace tile_icon_source{void refresh_controls(lv_obj_t*){}}
 ${control.slice(0, control.indexOf('  MediaEventData* data'))}return label;}
+${fn(renderer, 'media_tile_icon_name')}
 ${fn(renderer, 'render_media_tile')}
 ${strip(read('src/types/media/web_scripts.cpp'))}
 static void box(std::ostream&o,const char*name,lv_obj_t*obj,lv_obj_t*card,bool&first){

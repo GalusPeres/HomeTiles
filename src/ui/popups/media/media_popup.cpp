@@ -29,6 +29,7 @@
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/media/artwork_scale.h"
+#include "src/types/media/state_icon.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
@@ -349,6 +350,7 @@ struct MediaPopupContext {
   lv_draw_buf_t* menu_shadow_parts[8] = {};  // while the popup is open (build_menu_shadow)
   lv_obj_t* menu_back = nullptr;
   lv_obj_t* menu_tabs[3] = {};
+  lv_obj_t* group_badge = nullptr;  // the speakers tab's number of joined players
   uint32_t menu_rows_key = 0;  // what the rows show (menu_rows_of); 0: none
   lv_obj_t* volume_value_label = nullptr;
   MediaView last_menu_view = MediaView::Player;  // the menu opens at its last list
@@ -983,15 +985,26 @@ lv_obj_t* round_button(lv_obj_t* parent, const MediaColors& c, int size, const c
   return btn;
 }
 
-// Shuffle and repeat: on with the control fill (a press one step more), off
-// only their icon in the secondary color.
+// Shuffle and repeat like Spotify (user 2026-10-23, mockup
+// media-popup-simple/toggles.html): on in the icon's color with a dot under
+// it, off only their icon in the secondary color; no circle at rest, a press
+// shows the control fill like every button (round_button).
 void style_toggle(lv_obj_t* label, const MediaColors& c, bool on) {
   if (!label) return;
-  lv_obj_t* btn = lv_obj_get_parent(label);
-  popup_nav_style::set_bg(btn, c.control, on ? c.control_opa : LV_OPA_TRANSP, LV_PART_MAIN);
-  popup_nav_style::set_bg(btn, on ? c.raised : c.control, on ? c.raised_opa : c.control_opa,
-                          LV_PART_MAIN | LV_STATE_PRESSED);
-  lv_obj_set_style_text_color(label, lv_color_hex(on ? c.control_icon : c.secondary), 0);
+  lv_obj_set_style_text_color(label, lv_color_hex(on ? c.icon : c.secondary), 0);
+  lv_obj_t* dot = lv_obj_get_child(lv_obj_get_parent(label), 1);
+  if (dot) set_shown(dot, on);
+}
+
+// The dot of a toggle (style_toggle), the button's second child.
+static void add_toggle_dot(lv_obj_t* btn, const MediaColors& c) {
+  lv_obj_t* dot = plain(btn);
+  lv_obj_set_size(dot, ml::kToggleDot, ml::kToggleDot);
+  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(dot, lv_color_hex(c.icon), 0);
+  lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+  lv_obj_align(dot, LV_ALIGN_CENTER, 0, ml::kToggleDotY);
+  lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void set_control_enabled(lv_obj_t* obj, bool enabled) {
@@ -1205,11 +1218,12 @@ static void build_player(MediaPopupContext* ctx, bool centered) {
 
   // Transport at today's spacing; shuffle and repeat outside.
   auto cx = [&](int k) { return W / 2 + (k - 2) * ml::kStep - ml::kButton / 2; };
-  control_button(ctx, cx(0), ml::kTransportTop, "shuffle-variant", MediaAction::Shuffle, &ctx->shuffle_label);
+  add_toggle_dot(control_button(ctx, cx(0), ml::kTransportTop, "shuffle-variant", MediaAction::Shuffle,
+                                &ctx->shuffle_label), c);
   control_button(ctx, cx(1), ml::kTransportTop, "skip-previous", MediaAction::Previous, &ctx->previous_label);
   lv_obj_t* play = control_button(ctx, cx(2), ml::kTransportTop, "play", MediaAction::PlayPause, &ctx->play_pause_label);
   control_button(ctx, cx(3), ml::kTransportTop, "skip-next", MediaAction::Next, &ctx->next_label);
-  control_button(ctx, cx(4), ml::kTransportTop, "repeat", MediaAction::Repeat, &ctx->repeat_label);
+  add_toggle_dot(control_button(ctx, cx(4), ml::kTransportTop, "repeat", MediaAction::Repeat, &ctx->repeat_label), c);
   // Play stays the round button in the icon role with the card's color.
   lv_obj_set_style_bg_color(play, lv_color_hex(c.control_icon), 0);
   lv_obj_set_style_bg_opa(play, LV_OPA_COVER, 0);
@@ -1263,16 +1277,12 @@ String view_title(MediaPopupContext* ctx) {
 
 // The player's head shows the tile icon's state form like Home Assistant
 // (speaker-play, speaker-pause, speaker-off, television-play ...) where the
-// icon has one (user 2026-10-19, as in the draft); else the tile's icon.
+// icon has one (user 2026-10-19, as in the draft), the same as the tile
+// (media/state_icon.h); without a name the tile's icon.
 String head_icon(const MediaPopupContext* ctx, const String& state) {
-  if (!ctx->icon_name.length() || getMdiChar(ctx->icon_name) != ctx->icon_char) return ctx->icon_char;
-  const char* suffix = state.equalsIgnoreCase("playing")  ? "-play"
-                       : state.equalsIgnoreCase("paused") ? "-pause"
-                       : (state.equalsIgnoreCase("off") || state.equalsIgnoreCase("standby")) ? "-off"
-                                                                                               : nullptr;
-  if (!suffix) return ctx->icon_char;
-  const String variant = ctx->icon_name + suffix;
-  return getMdiCodepoint(variant) != mdiUnknownIconCodepoint() ? getMdiChar(variant) : ctx->icon_char;
+  if (!ctx->icon_name.length()) return ctx->icon_char;
+  const String icon = getMdiChar(media_state_icon::name(ctx->icon_name, media_state_icon::form_of(state)));
+  return icon.length() ? icon : ctx->icon_char;
 }
 
 // The head always shows the player (user 2026-10-22: no buttons there, the
@@ -1665,7 +1675,7 @@ void delete_menu(MediaPopupContext* ctx) {
   free_menu_shadow(ctx, true);
   drop_later(ctx, ctx->list_box);
   drop_later(ctx, ctx->list_shield);
-  ctx->list_box = ctx->list_shield = ctx->menu_title = ctx->menu_back = nullptr;
+  ctx->list_box = ctx->list_shield = ctx->menu_title = ctx->menu_back = ctx->group_badge = nullptr;
   for (lv_obj_t*& tab : ctx->menu_tabs) tab = nullptr;
 }
 
@@ -1873,12 +1883,36 @@ static void build_menu(MediaPopupContext* ctx) {
                                                            : MediaAction::Library;
     lv_obj_add_event_cb(tab, on_media_command, LV_EVENT_CLICKED, reinterpret_cast<void*>(static_cast<intptr_t>(action)));
     ctx->menu_tabs[k] = tab;
+    if (view != MediaView::Group) continue;
+    // The number of joined players on the speakers tab, as the group button
+    // had it before the menu (b494; user 2026-10-23: lost in the menu).
+    const int badge = popup_layout::scale(28);
+    ctx->group_badge = add_text(tab, popup_layout::font20(), c.card, "");
+    lv_obj_set_style_bg_color(ctx->group_badge, lv_color_hex(c.control_icon), 0);
+    lv_obj_set_style_bg_opa(ctx->group_badge, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(ctx->group_badge, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_size(ctx->group_badge, badge, badge);
+    lv_obj_set_style_text_align(ctx->group_badge, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_pad_top(ctx->group_badge, (badge - line_height(popup_layout::font20())) / 2, 0);
+    lv_obj_align(ctx->group_badge, LV_ALIGN_TOP_RIGHT, 0, 0);
+    lv_obj_add_flag(ctx->group_badge, LV_OBJ_FLAG_HIDDEN);
   }
+}
+
+// The speakers tab's number while two or more players play together; a
+// report while the menu is open changes it too (apply_init_to_context).
+static void show_group_badge(MediaPopupContext* ctx) {
+  if (!ctx->group_badge) return;
+  const size_t members = extras_of(ctx->entity_id).members.size();
+  set_shown(ctx->group_badge, members >= 2);
+  char count[8];
+  snprintf(count, sizeof(count), "%u", static_cast<unsigned>(members));
+  if (strcmp(lv_label_get_text(ctx->group_badge), count) != 0) lv_label_set_text(ctx->group_badge, count);
 }
 
 // The open list's head and switch: its name (in the library the level), the
 // back button in a library level, the offered lists' buttons with the shown
-// one on the control fill like shuffle that is on.
+// one on the control fill.
 static void show_menu_head(MediaPopupContext* ctx) {
   const MediaColors& c = ctx->colors;
   const MenuGeometry m = menu_geometry();
@@ -1900,6 +1934,7 @@ static void show_menu_head(MediaPopupContext* ctx) {
     popup_nav_style::set_bg(tab, on ? c.raised : c.control, on ? c.raised_opa : c.control_opa,
                             LV_PART_MAIN | LV_STATE_PRESSED);
   }
+  show_group_badge(ctx);
   if (ctx->menu_button) lv_obj_move_foreground(ctx->menu_button);
 }
 
@@ -2271,6 +2306,7 @@ static void apply_init_to_context(MediaPopupContext* ctx, const MediaPopupInit& 
     if (lv_obj_is_scrolling(ctx->list)) ctx->list_dirty = true;
     else rebuild_list(ctx, true);
   }
+  if (ctx->view != MediaView::Player) show_group_badge(ctx);
   show_head(ctx);
   apply_availability(ctx);
   if (ctx->motion_timer && popup_visible(ctx)) lv_timer_resume(ctx->motion_timer);

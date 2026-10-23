@@ -934,6 +934,10 @@
           rawIcon, tile.sensor_entity || '', binarySensorPreviewState,
           metaIcons);
       }
+      if (previewKind === 'media') {
+        iconName = mediaPreviewIcon(parseMediaPreviewPayload(
+          tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''), iconName);
+      }
 
       let html = '';
       const locked = typeof previewTileLocked === 'function' && previewTileLocked(typeValue, el);

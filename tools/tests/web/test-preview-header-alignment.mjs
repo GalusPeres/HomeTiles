@@ -17,7 +17,7 @@ const helpers = [
   'resolveUnitValue', 'isScreensaverTileTab', 'getTileResizeHandlesHtml',
   'applyCompactSensorPreview', 'compactValueSize', 'syncCompactValueFontOptions', 'isCompactSensorType', 'isEditableValueType', 'editableCompactValueFont',
   'syncEditableValueFontOptions', 'renderTileFromData', 'updateTilePreview', 'resetTileClasses',
-  'parseWeatherPreviewPayload', 'temperatureUnitOf', 'convertTemperature', 'applyWeatherSensorOverrides', 'applyWeatherPreview', 'parseMediaPreviewPayload', 'applyMediaPreview', 'applyMediaCoverTint'
+  'parseWeatherPreviewPayload', 'temperatureUnitOf', 'convertTemperature', 'applyWeatherSensorOverrides', 'applyWeatherPreview', 'parseMediaPreviewPayload', 'mediaPreviewIcon', 'applyMediaPreview', 'applyMediaCoverTint'
 ].map(extractDeliveredFunction).join('\n') + '\n' +
   // The preview's color constants, taken from the real source.
   [...readRepoFile('src/web/admin/tiles/grid-preview.js')

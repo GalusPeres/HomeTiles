@@ -52,6 +52,10 @@ struct MediaTileWidgets {
   // on the tile and in the popup are disabled, like in Home Assistant.
   bool available = true;
   bool dynamic_icon = true;
+  // The state form the tile's icon shows (media_state_icon::Form in
+  // state_icon.h, kept as a number so this header stays light); zero is
+  // Plain, so a cleared cache entry is valid.
+  uint8_t icon_form = 0;
 };
 
 // The page caches copy these with memcpy and clear them in place

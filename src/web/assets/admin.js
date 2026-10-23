@@ -8058,6 +8058,10 @@ async function saveGestureEdge(select) {
         rawIcon, binarySensorEntity, binarySensorPreviewState,
         sensorMetaCache.icons);
     }
+    if (previewKind === 'media') {
+      iconName = mediaPreviewIcon(parseMediaPreviewPayload(
+        mediaEntity ? (sensorMetaCache.mediaValues?.[mediaEntity] ?? '') : ''), iconName);
+    }
 
     resetTileClasses(tileElem, meta.css ? ['tile', meta.css] : ['tile']);
     if (type === '5') applySwitchPreviewLayout(tileElem, switchStyle, halfHeight);
@@ -10904,6 +10908,10 @@ async function saveGestureEdge(select) {
         iconName = resolveBinarySensorPreviewIcon(
           rawIcon, tile.sensor_entity || '', binarySensorPreviewState,
           metaIcons);
+      }
+      if (previewKind === 'media') {
+        iconName = mediaPreviewIcon(parseMediaPreviewPayload(
+          tile.sensor_entity ? (sensorMeta?.mediaValues?.[tile.sensor_entity] ?? '') : ''), iconName);
       }
 
       let html = '';
@@ -18229,6 +18237,28 @@ function maybeFillTitleFromMedia(tab) {
     };
   }
 
+  // media/state_icon.h: the player's icon in its state form (speaker-play,
+  // speaker-pause, speaker-off ...) where MDI has one, like the device's
+  // tile; the page's MDI font tells which forms exist (found ones are kept;
+  // a function property, so a preview drawn before this file ran works).
+  function mediaPreviewIcon(state, iconName) {
+    const suffix = {playing: '-play', paused: '-pause', off: '-off', standby: '-off'}[
+      String(state?.state || '').trim().toLowerCase()];
+    if (!iconName || !suffix) return iconName;
+    const mediaKnownIcons = mediaPreviewIcon.known || (mediaPreviewIcon.known = new Set());
+    const variant = iconName + suffix;
+    if (!mediaKnownIcons.has(variant)) {
+      const probe = document.createElement('i');
+      probe.className = 'mdi mdi-' + variant;
+      probe.style.cssText = 'position:absolute;visibility:hidden';
+      document.body.appendChild(probe);
+      const glyph = getComputedStyle(probe, '::before').content;
+      probe.remove();
+      if (glyph && glyph !== 'none' && glyph !== 'normal' && glyph !== '""') mediaKnownIcons.add(variant);
+    }
+    return mediaKnownIcons.has(variant) ? variant : iconName;
+  }
+
   // media_empty_title_label(): like Home Assistant, "Unavailable" and
   // "Unknown", else the player state or "No playback".
   function mediaPreviewEmptyTitle(state) {
@@ -18296,7 +18326,8 @@ function maybeFillTitleFromMedia(tab) {
     // Header: the television icon and the entity's name stand in like on
     // the device.
     if (!iconName && !el.querySelector(':scope > .tile-icon')) {
-      el.insertAdjacentHTML('afterbegin', '<i class="mdi mdi-television tile-icon"></i>');
+      el.insertAdjacentHTML('afterbegin',
+        '<i class="mdi mdi-' + mediaPreviewIcon(state, 'television') + ' tile-icon"></i>');
     }
     if (!el.querySelector(':scope > .tile-title')) {
       const name = displayName || (entity && typeof titleFromEntity === 'function' ? titleFromEntity(entity) : '') ||

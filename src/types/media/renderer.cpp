@@ -44,7 +44,6 @@ struct MediaEventData {
 struct MediaPopupEventData {
   String entity_id;
   String title;
-  String icon_name;
   uint32_t bg_color = 0;  // 0: the popup takes its default card
   GridType grid_type = GridType::TAB0;
   uint8_t grid_index = 0;
@@ -139,6 +138,15 @@ static String media_label_text(lv_obj_t* label) {
   return text ? String(text) : String();
 }
 
+String media_tile_icon_name(const Tile& tile) {
+  String icon_name = normalizeMdiIconName(tile.icon_name);
+  if (!icon_name.length() && tile.sensor_entity.length()) {
+    icon_name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(tile.sensor_entity));
+  }
+  if (!icon_name.length()) icon_name = "television";
+  return icon_name;
+}
+
 static bool media_widget_is_playing(const MediaTileWidgets& widgets) {
   if (!widgets.play_pause_label) return false;
   const char* current = lv_label_get_text(widgets.play_pause_label);
@@ -158,7 +166,12 @@ static void show_media_popup_event_cb(lv_event_t* e) {
   MediaPopupInit init;
   init.entity_id = data->entity_id;
   init.title = data->title;
-  init.icon_name = data->icon_name;
+  // The icon's name now, not when the tile was built: a name kept from
+  // before the Bridge's icons arrived ("television") no longer matched the
+  // tile's icon, and the popup's head lost its state form until the next
+  // report (user 2026-10-23: plain icon after reopening a paused player).
+  const Tile* tile = tile_renderer_get_tile_config(data->grid_type, data->grid_index);
+  if (tile && tile->type == TILE_MEDIA) init.icon_name = media_tile_icon_name(*tile);
   init.icon_char = media_label_text(widgets.icon_label);
   init.bg_color = tile_icon_source::popup_background(widgets.icon_label, data->bg_color);
   if (widgets.icon_label) {
@@ -377,11 +390,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
   lv_obj_t* play_pause_label = nullptr;
   lv_obj_t* next_label = nullptr;
 
-  String icon_name = normalizeMdiIconName(tile.icon_name);
-  if (!icon_name.length() && tile.sensor_entity.length()) {
-    icon_name = normalizeMdiIconName(haBridgeConfig.findEntityIcon(tile.sensor_entity));
-  }
-  if (!icon_name.length()) icon_name = "television";
+  const String icon_name = media_tile_icon_name(tile);
 
   lv_obj_t* icon_label = lv_label_create(card);
   if (icon_label) {
@@ -512,6 +521,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     target[index].state_label = state_label;
     target[index].last_payload_hash = 0;
     target[index].dynamic_icon = false;
+    target[index].icon_form = 0;  // media_state_icon::Form::Plain
     target[index].has_media_volume = false;
     target[index].media_volume_level = 0.0f;
     target[index].media_is_muted = false;
@@ -527,7 +537,6 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
       MediaPopupEventData* popup_data = new MediaPopupEventData{
         tile.sensor_entity,
         title_text,
-        icon_name,
         card_color,
         grid_type,
         index,

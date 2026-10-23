@@ -42,6 +42,7 @@
 #include "src/types/energy/energy_data.h"
 #include "src/ui/screensaver/screensaver_config.h"
 #include "src/ui/screensaver/screensaver_places.h"
+#include "src/ui/screensaver/screensaver_pixel_shift.h"
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_icon_source.h"
@@ -104,6 +105,8 @@ struct ScreensaverState {
   TileGridConfig* shown_grid = nullptr;
   // The global tile opacity the cards were built with.
   uint8_t built_opacity = 0;
+  // When the clock and tiles last moved (screensaver_pixel_shift.h).
+  uint32_t last_shift_ms = 0;
   ~ScreensaverState() { delete shown_grid; }
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
   // Prepare a complete LVGL frame for smooth slide transitions: wallpaper,
@@ -118,6 +121,12 @@ struct ScreensaverState {
 };
 
 ScreensaverState* g_state = nullptr;
+
+// Pixel shift (screensaver_pixel_shift.h): the orbit position survives
+// closing, so every opening continues where the last one stopped instead of
+// starting from the same place.
+uint32_t g_shift_step = 0;
+screensaver_pixel_shift::Offset g_shift;
 // show_image_screensaver() is building the overlay (image_screensaver_covers_ui).
 bool g_opening = false;
 // Web Admin saves run in loopTask, but LVGL changes wait until the next
@@ -1252,8 +1261,25 @@ void position_global_clock(ScreensaverState* st) {
   const ScreensaverConfigData& config = screensaverConfig.get();
   const int x = (static_cast<int>(config.clock_x) * grid_layout::screen_w()) / 1000;
   const int y = (static_cast<int>(config.clock_y) * grid_layout::screen_h()) / 1000;
-  lv_obj_set_pos(st->clock_box, x - lv_obj_get_width(st->clock_box) / 2,
-                 y - lv_obj_get_height(st->clock_box) / 2);
+  lv_obj_set_pos(st->clock_box, x - lv_obj_get_width(st->clock_box) / 2 + g_shift.dx,
+                 y - lv_obj_get_height(st->clock_box) / 2 + g_shift.dy);
+}
+
+// Moves the clock and tiles to the next orbit position. Only positions
+// change: LVGL redraws the old and new areas, or the caller presents the
+// next composited frame with them.
+void advance_pixel_shift(ScreensaverState* st) {
+  if (!st) return;
+  const int16_t radius = screensaver_pixel_shift::radius_for_gap(GRID_GAP);
+  g_shift_step = (g_shift_step + 1U) % screensaver_pixel_shift::steps_per_orbit(radius);
+  g_shift = screensaver_pixel_shift::offset_at(g_shift_step, radius);
+  st->last_shift_ms = millis();
+  if (st->slot_grid) lv_obj_set_pos(st->slot_grid, g_shift.dx, g_shift.dy);
+  position_global_clock(st);
+}
+
+bool pixel_shift_due(const ScreensaverState* st, uint32_t interval_ms) {
+  return st && static_cast<uint32_t>(millis() - st->last_shift_ms) >= interval_ms;
 }
 
 void on_global_clock_size_changed(lv_event_t* e) {
@@ -1314,6 +1340,11 @@ void present_picture(ScreensaverState* st, lv_image_dsc_t* dsc, const String& na
   // frame off-screen; only that frame is then passed to PPA.
   set_image_src_without_invalidation(st->image, dsc);
   lv_obj_remove_flag(st->image, LV_OBJ_FLAG_HIDDEN);
+  // A new picture redraws the whole screen anyway: the clock and tiles take
+  // their next pixel shift step in the same frame.
+  if (pixel_shift_due(st, screensaver_pixel_shift::kMinIntervalMs)) {
+    advance_pixel_shift(st);
+  }
 
   // On rotated P4 devices, PPA must not initially write just the wallpaper
   // to the visible buffer: the clock and tiles would disappear until their
@@ -1637,7 +1668,7 @@ void rebuild_slot_grid(ScreensaverState* st) {
   if (!st->slot_grid) {
     st->slot_grid = lv_obj_create(st->overlay);
     lv_obj_set_size(st->slot_grid, grid_layout::screen_w(), grid_layout::screen_h());
-    lv_obj_set_pos(st->slot_grid, 0, 0);
+    lv_obj_set_pos(st->slot_grid, g_shift.dx, g_shift.dy);
     lv_obj_set_style_bg_opa(st->slot_grid, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(st->slot_grid, 0, 0);
     // Same margins as the tile grid, so screensaver tiles sit where tiles do.
@@ -1651,6 +1682,10 @@ void rebuild_slot_grid(ScreensaverState* st) {
     lv_obj_set_grid_dsc_array(st->slot_grid, col_dsc, row_dsc);
     lv_obj_remove_flag(st->slot_grid, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(st->slot_grid, LV_OBJ_FLAG_CLICKABLE);
+    // Shifted by the pixel shift, the grid's edge lies a few pixels inside
+    // the screen: card shadows reach past it and are clipped by the overlay
+    // (the screen edge) as before, not by the grid.
+    lv_obj_add_flag(st->slot_grid, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
   }
 
   // The active layout's places (screensaver_places.h): a bar layout's own,
@@ -1872,6 +1907,27 @@ void global_screensaver_timer_cb(lv_timer_t* timer) {
       }
     }
   }
+  // Without a new picture for a while (black background, a long slide
+  // duration, a picture that does not change) the clock and tiles still move
+  // on, once the screen is left alone.
+  // A slide due in this tick takes the step itself (present_picture).
+  const bool slide_due = config.use_wallpapers && st->active_wallpaper >= 0 &&
+                         static_cast<int32_t>(now - st->next_wallpaper_ms) >= 0;
+  if (!slide_due && pixel_shift_due(st, screensaver_pixel_shift::kMaxIntervalMs) &&
+      static_cast<uint32_t>(now - displayManager.getLastActivityTime()) >=
+          kInteractionSettleBeforeSlideMs) {
+    // Moving the full-screen tile grid invalidates the whole screen: present
+    // it as one frame like a slide change, never as visible bands.
+#if defined(DEVICE_ESP32_S3_RGB_480)
+    const bool atomic_redraw = DeviceImpl::displayBeginAtomicFrame("screensaver-shift");
+#endif
+    advance_pixel_shift(st);
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+    present_composited_screensaver_frame(st);
+#elif defined(DEVICE_ESP32_S3_RGB_480)
+    if (atomic_redraw) lv_obj_invalidate(lv_screen_active());
+#endif
+  }
   if (config.use_wallpapers && st->active_wallpaper >= 0 &&
       static_cast<int32_t>(now - st->next_wallpaper_ms) >= 0) {
     const uint32_t since_activity =
@@ -2060,6 +2116,9 @@ void show_image_screensaver() {
 
   st->image = lv_image_create(st->overlay);
   lv_obj_set_pos(st->image, 0, 0);
+  // Every opening starts one orbit step further (before the clock and tiles
+  // are built, so nothing is drawn twice).
+  advance_pixel_shift(st);
   lv_obj_remove_flag(st->image, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_flag(st->image, LV_OBJ_FLAG_HIDDEN);
 

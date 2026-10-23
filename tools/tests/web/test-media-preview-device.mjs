@@ -93,6 +93,10 @@ void media_popup_event_data_delete_cb(lv_event_t*e){delete static_cast<MediaPopu
 void update_media_tile_state(GridType,uint8_t,const char*){}
 namespace tile_icon_source{void refresh_controls(lv_obj_t*){}}
 ${control.slice(0, control.indexOf('  MediaEventData* data'))}return label;}
+// The playing bars (playing_bars.h) and their timer's guards.
+#include "src/types/media/playing_bars.h"
+bool popup_shell_active(){return false;}struct{bool isInSleep()const{return false;}}powerManager;
+${['media_bars_draw_cb','media_bars_timer_cb','media_bars_delete_cb','create_media_bars'].map(name => fn(renderer, name)).join(String.fromCharCode(10))}
 ${fn(renderer, 'media_tile_icon_name')}
 ${fn(renderer, 'render_media_tile')}
 ${strip(read('src/types/media/web_scripts.cpp'))}
@@ -114,18 +118,19 @@ int main(){
  for(char&c:js)if(c=='\n')c=' ';
  std::cout<<"SCRIPT "<<js<<"\n";
  std::cout<<"GRID "<<static_cast<int>(Device::kGridCols)<<" "<<static_cast<int>(Device::kGridRows)<<"\n";
- for(float span_w:{2.f,2.5f,3.f})for(float span_h:{2.f,3.f})for(bool subtitle:{false,true})for(bool cover:{false,true}){
+ for(float span_w:{2.f,2.5f,3.f})for(float span_h:{2.f,3.f})for(bool subtitle:{false,true})for(bool cover:{false,true})for(bool bars:{false,true}){
   if(span_w>Device::kGridCols||span_h>Device::kGridRows)continue;
   Tile t;t.span_w=span_w;t.span_h=span_h;t.title="Player";t.sensor_entity="media_player.test";
   auto*card=render_media_tile(lv_screen_active(),0,0,t,0,GridType::TAB0);auto&m=widgets[0];
   lv_label_set_text(m.media_title_label,"${TITLE}");lv_label_set_text(m.media_subtitle_label,"${SUBTITLE}");
   if(subtitle)lv_obj_remove_flag(m.media_subtitle_label,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(m.media_subtitle_label,LV_OBJ_FLAG_HIDDEN);
   if(cover)lv_obj_remove_flag(m.cover_clip,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(m.cover_clip,LV_OBJ_FLAG_HIDDEN);
+  if(bars)lv_obj_remove_flag(m.bars,LV_OBJ_FLAG_HIDDEN);else lv_obj_add_flag(m.bars,LV_OBJ_FLAG_HIDDEN);
   set_media_cover_text_layout(m,cover);lv_obj_update_layout(card);
   std::ostringstream o;bool first=true;
-  o<<"{\"spanW\":"<<span_w<<",\"spanH\":"<<span_h<<",\"subtitle\":"<<subtitle<<",\"cover\":"<<cover
+  o<<"{\"spanW\":"<<span_w<<",\"spanH\":"<<span_h<<",\"subtitle\":"<<subtitle<<",\"cover\":"<<cover<<",\"bars\":"<<bars
    <<",\"cardW\":"<<lv_obj_get_width(card)<<",\"cardH\":"<<lv_obj_get_height(card)<<",\"boxes\":{";
-  box(o,"title",m.media_title_label,card,first);box(o,"subtitle",m.media_subtitle_label,card,first);box(o,"cover",m.cover_clip,card,first);
+  box(o,"title",m.media_title_label,card,first);box(o,"subtitle",m.media_subtitle_label,card,first);box(o,"cover",m.cover_clip,card,first);box(o,"bars",m.bars,card,first);
   const char* names[3]={"previous","play","next"};lv_obj_t* labels[3]={m.previous_label,m.play_pause_label,m.next_label};
   for(int i=0;i<3;++i){box(o,names[i],lv_obj_get_parent(labels[i]),card,first);box(o,(std::string(names[i])+"Icon").c_str(),labels[i],card,first);}
   o<<"}}";std::cout<<"TILE "<<o.str()<<"\n";
@@ -196,7 +201,7 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
     el.style.background = '#1A1A1A';
     el.innerHTML = '<i class="mdi mdi-speaker tile-icon"></i><div class="tile-title">Player</div>';
     document.getElementById('host').replaceChildren(el);
-    const state = {state: 'paused', title: ${JSON.stringify(TITLE)}, artist: device.subtitle ? ${JSON.stringify(SUBTITLE)} : '',
+    const state = {state: device.bars ? 'paused' : 'idle', title: ${JSON.stringify(TITLE)}, artist: device.subtitle ? ${JSON.stringify(SUBTITLE)} : '',
                    album: '', app: '', source: '', channel: '', cover: device.cover ? ${JSON.stringify(pixel)} : ''};
     applyMediaPreview(el, state, {sensor_entity: 'media_player.test', span_w: device.spanW, span_h: device.spanH},
                       'speaker', 'Player');
@@ -223,6 +228,7 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
     rect('title', el.querySelector('.media-preview-title'));
     rect('subtitle', el.querySelector('.media-preview-subtitle'));
     rect('cover', el.querySelector('.media-preview-cover'));
+    rect('bars', el.querySelector('.media-preview-bars'));
     el.querySelectorAll('.media-preview-control').forEach((node, i) => {
       const name = ['previous', 'play', 'next'][i];
       rect(name, node);
@@ -258,7 +264,7 @@ document.fonts.load('400 20px "HomeTiles Inter"').then(() => {
   const report = [];
   tiles.forEach((device, index) => {
     const shownTile = results[index];
-    const label = `${profile} ${device.spanW}x${device.spanH}${device.subtitle ? ' subtitle' : ''}${device.cover ? ' cover' : ''}`;
+    const label = `${profile} ${device.spanW}x${device.spanH}${device.subtitle ? ' subtitle' : ''}${device.cover ? ' cover' : ''}${device.bars ? ' bars' : ''}`;
     assert.deepEqual(Object.keys(shownTile).sort(), Object.keys(device.boxes).sort(), `${label} parts`);
     for (const [name, deviceBox] of Object.entries(device.boxes)) {
       const shown = shownTile[name];

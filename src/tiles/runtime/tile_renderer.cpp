@@ -4609,6 +4609,21 @@ void update_media_tile_state(GridType grid_type, uint8_t grid_index, const char*
   }
 
   bool text_layout_dirty = false;
+  // The playing bars over the title (playing_bars.h): shown while a song
+  // plays or pauses, moving while it plays (their timer, renderer.cpp).
+  if (widgets.bars) {
+    const bool bars_shown = playing || state.equalsIgnoreCase("paused");
+    if (lv_obj_has_flag(widgets.bars, LV_OBJ_FLAG_HIDDEN) == bars_shown) {
+      if (bars_shown) lv_obj_remove_flag(widgets.bars, LV_OBJ_FLAG_HIDDEN);
+      else lv_obj_add_flag(widgets.bars, LV_OBJ_FLAG_HIDDEN);
+      text_layout_dirty = true;
+    }
+    if (lv_obj_has_state(widgets.bars, LV_STATE_CHECKED) != playing) {
+      if (playing) lv_obj_add_state(widgets.bars, LV_STATE_CHECKED);
+      else lv_obj_remove_state(widgets.bars, LV_STATE_CHECKED);
+      lv_obj_invalidate(widgets.bars);
+    }
+  }
   bool title_text_changed = false;
   bool subtitle_text_changed = false;
   if (widgets.media_title_label) {

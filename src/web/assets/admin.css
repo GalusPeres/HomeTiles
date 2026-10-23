@@ -1935,9 +1935,14 @@
     /* Media tile preview (applyMediaPreview): title, subtitle, artwork and
        controls at the device positions. The title scrolls on the device; the
        preview shows its start. */
-    .tile.media > :is(.media-preview-title, .media-preview-subtitle, .media-preview-control, .media-preview-cover) {
+    .tile.media > :is(.media-preview-title, .media-preview-subtitle, .media-preview-control, .media-preview-cover,
+                      .media-preview-bars) {
       position:absolute; pointer-events:none;
     }
+    /* The playing bars over the title in the tile icon's color (--media-bars,
+       set by mediaPreviewBarsColor). */
+    .tile.media > .media-preview-bars { display:flex; align-items:flex-end; }
+    .tile.media > .media-preview-bars > i { display:block; flex:none; background:var(--media-bars, var(--pv-icon, #fff)); }
     .tile.media > :is(.media-preview-title, .media-preview-subtitle) { white-space:nowrap; overflow:hidden; text-overflow:clip; }
     .tile.media > .media-preview-title { color:var(--pv-text, #fff); }
     .tile.media > .media-preview-title.media-preview-state { text-overflow:ellipsis; }

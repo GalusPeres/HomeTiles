@@ -78,6 +78,10 @@ void update_media_tile_state(GridType,uint8_t,const char*){}
 // Previous and next are marked for the popup control press fill; play keeps its white circle.
 int refreshed_controls=0;namespace tile_icon_source{void refresh_controls(lv_obj_t*card){++refreshed_controls;int marked=0;for(uint32_t i=0;i<lv_obj_get_child_count(card);++i)marked+=tile_icon_disc::is_control(lv_obj_get_child(card,i));assert(marked==2);}}
 ${control.slice(0,control.indexOf('  MediaEventData* data'))}return label;}
+// The playing bars (playing_bars.h) and their timer's guards.
+#include "src/types/media/playing_bars.h"
+bool popup_shell_active(){return false;}struct{bool isInSleep()const{return false;}}powerManager;
+${['media_bars_draw_cb','media_bars_timer_cb','media_bars_delete_cb','create_media_bars'].map(name => fn(renderer,name)).join(String.fromCharCode(10))}
 ${fn(renderer,'media_tile_icon_name')}
 ${fn(renderer,'render_media_tile')}
 void snapshot(const char*file,const std::vector<uint32_t>&pixels){std::ofstream out(file,std::ios::binary);auto u16=[&](uint16_t v){out.write(reinterpret_cast<char*>(&v),2);};auto u32=[&](uint32_t v){out.write(reinterpret_cast<char*>(&v),4);};out.write("BM",2);u32(54+pixels.size()*4);u32(0);u32(54);u32(40);u32(SCREEN_WIDTH);u32(-SCREEN_HEIGHT);u16(1);u16(32);u32(0);u32(pixels.size()*4);u32(0);u32(0);u32(0);u32(0);out.write(reinterpret_cast<const char*>(pixels.data()),pixels.size()*4);}
@@ -94,6 +98,14 @@ int main(int argc,char**argv){lv_init();auto*display=lv_display_create(SCREEN_WI
    assert(art.x2-art.x1==art.y2-art.y1&&lv_obj_get_width(m.cover_clip)<=240);assert(art.y1>header.y2&&art.y2<buttons.y1);assert(title.y1>=art.y1&&title.y2<buttons.y1);assert(title.x2<=content.x2);if(cover)assert(title.x1>art.x2);if(subtitle)assert(sub.y1>title.y2&&sub.y2<buttons.y1&&sub.x1==title.x1);
    if(cover&&subtitle&&w==h){const int side=lv_obj_get_width(m.cover_clip);assert(side>previous);previous=side;std::cout<<w<<"x"<<h<<": cover="<<side<<", title width="<<lv_obj_get_width(m.media_title_label)<<"\n";lv_obj_set_style_bg_color(m.cover_clip,lv_color_hex(0x447D7A),0);lv_obj_set_style_bg_opa(m.cover_clip,LV_OPA_COVER,0);lv_refr_now(display);if(argc>1)snapshot((String(argv[1])+"-"+std::to_string(w)+".bmp").c_str(),pixels);}
   }
+  // The playing bars (2026-10-23) stand over the title in the centred block; with the
+  // artwork and a subtitle the block still fits between the header and the controls.
+  lv_obj_remove_flag(m.cover_clip,LV_OBJ_FLAG_HIDDEN);lv_obj_remove_flag(m.media_subtitle_label,LV_OBJ_FLAG_HIDDEN);
+  lv_obj_remove_flag(m.bars,LV_OBJ_FLAG_HIDDEN);set_media_cover_text_layout(m,true);lv_obj_update_layout(card);
+  {lv_area_t b,ti,su,btn,hd;lv_obj_get_coords(m.bars,&b);lv_obj_get_coords(m.media_title_label,&ti);lv_obj_get_coords(m.media_subtitle_label,&su);
+   lv_obj_get_coords(lv_obj_get_parent(m.play_pause_label),&btn);lv_obj_get_coords(m.title_label,&hd);
+   assert(b.x1==ti.x1&&"the bars start at the title's left edge");assert(b.y2<ti.y1&&"the bars stand over the title");
+   assert(b.y1>hd.y2&&su.y2<btn.y1&&"bars, title and subtitle between the header and the controls");}
   lv_obj_delete(card);widgets[0]={};
  }
  lv_deinit();std::cout<<"Real Media renderer: supported 2..3 by 2..3 geometry, defensive 4-cell layout, 1x1 normalization, long titles, missing values and growing artwork passed\n";

@@ -99,6 +99,10 @@ void append_media_scripts(String& html) {
            static_cast<int>(media_tile::kTextRight), static_cast<int>(media_tile::kSubtitleGap),
            static_cast<int>(media_tile::kFooterGap));
   html += text;
+  snprintf(text, sizeof(text), "    barsHeight: %d, barWidth: %d, barGap: %d, barsGap: %d,\n",
+           static_cast<int>(media_tile::kBarsHeight), static_cast<int>(media_tile::kBarWidth),
+           static_cast<int>(media_tile::kBarGap), static_cast<int>(media_tile::kBarsGap));
+  html += text;
   append_media_font(html, "title", media_tile::title_font(true));
   append_media_font(html, "titleSmall", media_tile::title_font(false));
   append_media_font(html, "subtitle", media_tile::subtitle_font());

@@ -2,7 +2,10 @@
 #include "src/tiles/runtime/tile_icon_source.h"
 #include "src/types/media/renderer.h"
 #include "src/types/media/content_layout.h"
+#include "src/types/media/playing_bars.h"
 #include "src/types/media/tile_layout.h"
+#include "src/core/power/power_manager.h"
+#include "src/ui/popups/popup_shell.h"
 
 #include <Arduino.h>
 
@@ -299,6 +302,50 @@ static String media_friendly_name_from_entity(const String& entity_id) {
   return name;
 }
 
+// The playing bars over the title (playing_bars.h) in the tile icon's color.
+void media_bars_draw_cb(lv_event_t* e) {
+  lv_obj_t* bars = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  lv_layer_t* layer = lv_event_get_layer(e);
+  if (!bars || !layer) return;
+  lv_obj_t* icon = static_cast<lv_obj_t*>(lv_event_get_user_data(e));
+  lv_area_t area;
+  lv_obj_get_coords(bars, &area);
+  media_bars::draw(layer, area, media_tile::kBarWidth, media_tile::kBarGap,
+                   icon ? lv_obj_get_style_text_color(icon, LV_PART_MAIN) : lv_color_white(),
+                   lv_obj_has_state(bars, LV_STATE_CHECKED));
+}
+
+// One frame while the player plays. lv_obj_invalidate skips hidden pages and
+// other screens itself; a popup over the tiles or a sleeping display would
+// redraw for nothing.
+void media_bars_timer_cb(lv_timer_t* timer) {
+  lv_obj_t* bars = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
+  if (!bars || !lv_obj_has_state(bars, LV_STATE_CHECKED) || lv_obj_has_flag(bars, LV_OBJ_FLAG_HIDDEN)) return;
+  if (popup_shell_active() || powerManager.isInSleep()) return;
+  lv_obj_invalidate(bars);
+}
+
+void media_bars_delete_cb(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_DELETE) return;
+  lv_timer_t* timer = static_cast<lv_timer_t*>(lv_event_get_user_data(e));
+  if (timer) lv_timer_delete(timer);
+}
+
+// The bars and their timer, which goes with them (like the Pixel animation
+// tile's); update_media_tile_state shows them and marks the playing.
+lv_obj_t* create_media_bars(lv_obj_t* card, lv_obj_t* icon_label) {
+  lv_obj_t* bars = lv_obj_create(card);
+  lv_obj_remove_style_all(bars);
+  lv_obj_remove_flag(bars, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_remove_flag(bars, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_size(bars, 4 * media_tile::kBarWidth + 3 * media_tile::kBarGap, media_tile::kBarsHeight);
+  lv_obj_add_flag(bars, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_event_cb(bars, media_bars_draw_cb, LV_EVENT_DRAW_MAIN, icon_label);
+  lv_timer_t* timer = lv_timer_create(media_bars_timer_cb, media_tile::kBarsPeriodMs, bars);
+  lv_obj_add_event_cb(bars, media_bars_delete_cb, LV_EVENT_DELETE, timer);
+  return bars;
+}
+
 }  // namespace
 
 String media_tile_icon_name(const Tile& tile) {
@@ -467,6 +514,8 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     enable_event_bubble(subtitle);
   }
 
+  lv_obj_t* bars = create_media_bars(card, icon_label);
+
   lv_obj_t* state_label = lv_label_create(card);
   if (state_label) {
     set_label_style(state_label, lv_color_hex(0xB7C1D6), FONT_SMALL);
@@ -519,6 +568,7 @@ lv_obj_t* render_media_tile(lv_obj_t* parent,
     target[index].media_title_label = media_title;
     target[index].media_subtitle_label = subtitle;
     target[index].state_label = state_label;
+    target[index].bars = bars;
     target[index].last_payload_hash = 0;
     target[index].dynamic_icon = false;
     target[index].icon_form = 0;  // media_state_icon::Form::Plain

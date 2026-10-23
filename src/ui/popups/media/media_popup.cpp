@@ -29,6 +29,7 @@
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/tiles/runtime/tile_renderer_shared.h"
 #include "src/types/media/artwork_scale.h"
+#include "src/types/media/playing_bars.h"
 #include "src/types/media/state_icon.h"
 #include "src/ui/navigation/view_navigation.h"
 #include "src/ui/popups/camera/camera_popup.h"
@@ -822,20 +823,7 @@ static void media_progress_timer_cb(lv_timer_t* timer) {
   set_seek_widgets(ctx, current_media_position(ctx), true);
 }
 
-// ---- Playing bars: their height moves, the round ends keep their radius ----------
-// One object draws all four bars, so a frame redraws one small area.
-float bar_level(uint32_t now, int index, bool playing) {
-  static const uint16_t kPeriods[4] = {900, 600, 1100, 750};
-  static const uint16_t kOffsets[4] = {0, 300, 700, 150};
-  static const uint8_t kStill[4] = {35, 70, 50, 85};
-  if (!playing) return kStill[index] / 100.0f;
-  const uint32_t period = kPeriods[index];
-  const uint32_t t = (now + kOffsets[index]) % (2 * period);
-  float x = t < period ? static_cast<float>(t) / period : 2.0f - static_cast<float>(t) / period;
-  x = x * x * (3.0f - 2.0f * x);
-  return 0.25f + 0.75f * x;
-}
-
+// ---- Playing bars (media/playing_bars.h, the same on the tile) -------------------
 void bars_draw_cb(lv_event_t* e) {
   lv_obj_t* obj = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
   lv_layer_t* layer = lv_event_get_layer(e);
@@ -843,23 +831,8 @@ void bars_draw_cb(lv_event_t* e) {
   if (!obj || !layer) return;
   lv_area_t area;
   lv_obj_get_coords(obj, &area);
-  const int height = lv_area_get_height(&area);
-  lv_draw_rect_dsc_t dsc;
-  lv_draw_rect_dsc_init(&dsc);
-  dsc.bg_color = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
-  dsc.bg_opa = LV_OPA_COVER;
-  dsc.radius = ml::kBarWidth / 2;
-  const uint32_t now = lv_tick_get();
   const bool playing = ctx && ctx->reported_playing;
-  for (int i = 0; i < 4; ++i) {
-    const int bar = std::max(ml::kBarWidth, static_cast<int>(height * bar_level(now, i, playing) + 0.5f));
-    lv_area_t a;
-    a.x1 = area.x1 + i * (ml::kBarWidth + ml::kBarGap);
-    a.x2 = a.x1 + ml::kBarWidth - 1;
-    a.y2 = area.y2;
-    a.y1 = area.y2 - bar + 1;
-    lv_draw_rect(layer, &dsc, &a);
-  }
+  media_bars::draw(layer, area, ml::kBarWidth, ml::kBarGap, lv_obj_get_style_bg_color(obj, LV_PART_MAIN), playing);
 }
 
 // ---- Long texts ------------------------------------------------------------------

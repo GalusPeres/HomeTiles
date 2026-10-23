@@ -32,6 +32,9 @@ struct MediaTileWidgets {
   lv_obj_t* media_title_label = nullptr;
   lv_obj_t* media_subtitle_label = nullptr;
   lv_obj_t* state_label = nullptr;
+  // The playing bars over the title (playing_bars.h): shown while a song
+  // plays or pauses, LV_STATE_CHECKED while it plays.
+  lv_obj_t* bars = nullptr;
   uint32_t last_payload_hash = 0;
   uint32_t last_media_text_hash = 0;
   bool has_media_position = false;

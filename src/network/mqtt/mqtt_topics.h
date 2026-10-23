@@ -51,6 +51,12 @@ enum class TopicKey : uint8_t {
   ASSIST_AUDIO_STAT,
   // On-panel wake word detections (wake word profiles only publish).
   ASSIST_WAKE_STAT,
+  // Home Assistant's theme and rotation selects (capabilities
+  // display_theme, display_rotation).
+  DISPLAY_THEME_CMND,
+  DISPLAY_THEME_STAT,
+  DISPLAY_ROTATION_CMND,
+  DISPLAY_ROTATION_STAT,
   COUNT
 };
 

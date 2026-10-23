@@ -224,6 +224,11 @@ static void apply_display_rotation(uint8_t rotation) {
   }
 }
 
+void settings_select_display_rotation(uint8_t index) {
+  settings_model::rotation_selected(index);
+  settings_screen::sync_rotation();
+}
+
 void settings_sync_display_rotation(bool rotated) {
   sync_display_rotation_state(rotated ? Device::kRotationFlipped : Device::kRotationDefault);
   displayManager.setRotation(display_rotation_quarters);
@@ -1083,13 +1088,9 @@ uint8_t theme_choice() {
 }
 
 void theme_selected(uint8_t index) {
-  // The stored theme: 0 dark, 1 light, 2 automatic (ui_theme.h).
-  const uint8_t theme = index > theme_schedule::kAutomatic ? 0 : index;
-  if (!configManager.saveTheme(theme)) return;
-  // A boot before the clock is set starts with what Automatic shows now
-  // (like the Web Admin's Design).
-  if (theme == theme_schedule::kAutomatic) configManager.saveThemeAutoLast(theme_schedule::effective(theme));
-  uiManager.requestThemeChange();
+  // The stored theme: 0 dark, 1 light, 2 automatic (ui_theme.h), stored like
+  // the Web Admin's Design and Home Assistant's select.
+  theme_schedule::store(index > theme_schedule::kAutomatic ? 0 : index);
 }
 
 // The head bar layouts of this panel's two orientations.

@@ -359,6 +359,9 @@ String HaBridgeConfig::buildJsonPayload(const char* device_id,
   // Microphone capture for Assist: ES7210 answered on its exact profile.
   json += ",\"audio_input\":";
   json += speaker::micCapability() ? "true" : "false";
+  // Home Assistant's theme select and rotation select (the rotation's steps
+  // come with its retained state, mqttPublishDeviceSettings).
+  json += ",\"display_theme\":true,\"display_rotation\":true";
   json += "}";
   if (data.has_editable_lists) {
     json += ",\"numbers\":";

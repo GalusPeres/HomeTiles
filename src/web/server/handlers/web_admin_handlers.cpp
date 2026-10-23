@@ -862,14 +862,11 @@ void WebAdminServer::handleSaveTheme() {
     return;
   }
   const uint8_t stored = static_cast<uint8_t>(value.toInt());
-  if (!configManager.saveTheme(stored)) {
+  if (!theme_schedule::store(stored)) {
     sendJsonError(server, 500, "Could not save the theme");
     return;
   }
   const uint8_t shown = theme_schedule::effective(stored);
-  // The next boot before the clock runs starts with this theme.
-  if (stored == theme_schedule::kAutomatic) configManager.saveThemeAutoLast(shown);
-  uiManager.requestThemeChange();
   server.send(200, "application/json",
               String("{\"success\":true,\"theme\":") + static_cast<int>(stored) +
                   ",\"effective\":" + static_cast<int>(shown) + "}");

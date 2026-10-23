@@ -109,7 +109,9 @@ const settingsModel = readRepoFile('src/ui/tabs/settings/tab_settings.cpp');
 assert.match(settingsModel, /bool layout_choice\(\) \{\s*return setup_first\(\) && grid_layout::available\(grid_layout::Layout::kPortrait\) &&/);
 assert.match(settingsModel, /void layout_selected\(uint8_t index\) \{[\s\S]*?configManager\.saveLayout\(static_cast<uint8_t>\(layout\)\)[\s\S]*?restart\(\);/);
 assert.match(settingsModel, /if \(step < 0\) \{\s*prefs\.remove\(kSetupKey\);\s*prefs\.remove\(kSetupFirstKey\);/, 'the end of the setup forgets the first setup');
-assert.match(settingsModel, /void theme_selected\(uint8_t index\) \{[\s\S]*?const uint8_t theme = index > theme_schedule::kAutomatic \? 0 : index;\s*if \(!configManager\.saveTheme\(theme\)\) return;[\s\S]*?if \(theme == theme_schedule::kAutomatic\) configManager\.saveThemeAutoLast\(theme_schedule::effective\(theme\)\);\s*uiManager\.requestThemeChange\(\);/);
+// Stored like the Web Admin's Design and Home Assistant's select
+// (theme_schedule::store, test-ui-theme.mjs).
+assert.match(settingsModel, /void theme_selected\(uint8_t index\) \{[\s\S]*?theme_schedule::store\(index > theme_schedule::kAutomatic \? 0 : index\);/);
 assert.match(setup, /LocaleList locale_list\(uint8_t index\) \{ return index == 0 \? LocaleList::Language : LocaleList::TimeZone; \}/,
   'language and time zone (a new panel starts on Berlin)');
 const wifi = between(setup, 'void build_wifi(const Colors& palette) {', 'lv_obj_t* column_text(');

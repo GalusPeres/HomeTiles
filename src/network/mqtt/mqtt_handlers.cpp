@@ -16,6 +16,7 @@
 #include "src/video/camera_geometry.h"
 #include "src/video/camera_transport.h"
 #include "src/ui/tabs/settings/tab_settings.h"
+#include "src/ui/shared/theme_schedule.h"
 #include "src/types/energy/energy_data.h"
 #include "src/tiles/config/tile_config.h"
 #include "src/tiles/runtime/tile_renderer.h"
@@ -1179,6 +1180,47 @@ static void handleDisplayRotateCommand(const char* payload, size_t) {
   mqttPublishDeviceSettings();
 }
 
+// Home Assistant's theme select (Bridge capability display_theme): the
+// stored setting as a stable id, "dark", "light" or "auto".
+static const char* display_theme_id(uint8_t theme) {
+  return theme == theme_schedule::kAutomatic ? "auto" : theme == 1 ? "light" : "dark";
+}
+
+static void handleDisplayThemeCommand(const char* payload, size_t) {
+  if (!payload) return;
+  String value(payload);
+  value.trim();
+  value.toLowerCase();
+  for (uint8_t theme = 0; theme <= theme_schedule::kAutomatic; ++theme) {
+    if (value == display_theme_id(theme)) {
+      theme_schedule::store(theme);
+      return;
+    }
+  }
+}
+
+// Home Assistant's rotation select (capability display_rotation): the steps
+// of the panel's Settings row (tab_settings.cpp rotation_index) in degrees
+// from the profile's own turn, 0/90/180/270 where the panel turns in quarter
+// turns, else 0/180 (user 2026-10-23: the old switch knew only 180).
+static int display_rotation_degrees(const DeviceConfig& cfg) {
+  const uint8_t quarters = Device::normalizeRotationQuarterTurns(cfg.display_rotation_quarters);
+  if (Device::supportsQuarterTurnRotation()) {
+    return static_cast<int>((quarters - Device::kRotationDefault) & 0x03) * 90;
+  }
+  return quarters == Device::kRotationFlipped ? 180 : 0;
+}
+
+static void handleDisplayRotationCommand(const char* payload, size_t) {
+  if (!payload) return;
+  char* end = nullptr;
+  const long degrees = strtol(payload, &end, 10);
+  if (end == payload || degrees < 0 || degrees % 90 != 0) return;
+  const bool quarter_turns = Device::supportsQuarterTurnRotation();
+  if (degrees > 270 || (!quarter_turns && degrees % 180 != 0)) return;
+  settings_select_display_rotation(static_cast<uint8_t>(degrees / (quarter_turns ? 90 : 180)));
+}
+
 static void handleDisplaySleepCommand(const char* payload, size_t) {
   bool sleep = false;
   if (!parseBoolPayload(payload, &sleep)) return;
@@ -1360,6 +1402,8 @@ static const TopicRoute kRoutes[] = {
   {TopicKey::DISPLAY_BRIGHTNESS_CMND, handleDisplayBrightnessCommand, false},
   {TopicKey::SCREENSAVER_BRIGHTNESS_CMND, handleScreensaverBrightnessCommand, false},
   {TopicKey::DISPLAY_ROTATE_CMND, handleDisplayRotateCommand, false},
+  {TopicKey::DISPLAY_ROTATION_CMND, handleDisplayRotationCommand, false},
+  {TopicKey::DISPLAY_THEME_CMND, handleDisplayThemeCommand, false},
   {TopicKey::DISPLAY_SLEEP_CMND, handleDisplaySleepCommand, false},
   {TopicKey::SLEEP_MAINS_CMND, handleSleepMainsCommand, false},
   {TopicKey::SLEEP_BAT_CMND, handleSleepBatteryCommand, false},
@@ -2334,6 +2378,12 @@ void mqttPublishDeviceSettings() {
            static_cast<unsigned>(cfg.screensaver_brightness_pct));
   publish_state(TopicKey::SCREENSAVER_BRIGHTNESS_STAT, buf);
   publish_state(TopicKey::DISPLAY_ROTATE_STAT, cfg.display_rotated_180 ? "ON" : "OFF");
+  // The rotation select's value and the steps this panel offers.
+  char rotation[64];
+  snprintf(rotation, sizeof(rotation), "{\"degrees\":%d,\"options\":%s}", display_rotation_degrees(cfg),
+           Device::supportsQuarterTurnRotation() ? "[0,90,180,270]" : "[0,180]");
+  publish_state(TopicKey::DISPLAY_ROTATION_STAT, rotation);
+  publish_state(TopicKey::DISPLAY_THEME_STAT, display_theme_id(cfg.theme));
   publish_state(TopicKey::DISPLAY_SLEEP_STAT, powerManager.isInSleep() ? "ON" : "OFF");
 
   publish_state(TopicKey::SLEEP_MAINS_STAT,

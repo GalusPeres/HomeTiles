@@ -25,13 +25,22 @@ const config = read('src/core/config/config_manager.cpp');
 assert.ok(config.includes('  if (config.theme > 2) config.theme = 0;\n  config.theme_auto_last = prefs.getUChar("theme_al", 0) == 1 ? 1 : 0;'));
 assert.match(fn('src/core/config/config_manager.cpp', 'ConfigManager::saveThemeAutoLast'), /prefs\.putUChar\("theme_al", theme\)/);
 const schedule = read('src/ui/shared/theme_schedule.cpp');
-assert.match(fn('src/ui/shared/theme_schedule.cpp', 'effective'),
-  /if \(!g_time_zone \|\| !getLocalTime\(&now, 0\) \|\| now\.tm_year < 2020 - 1900\) \{\s*return configManager\.getConfig\(\)\.theme_auto_last;/);
+assert.match(fn('src/ui/shared/theme_schedule.cpp', 'decide'),
+  /if \(!g_time_zone \|\| !getLocalTime\(&now, 0\) \|\| now\.tm_year < 2020 - 1900\) \{\s*\*why = [^;]*;\s*return configManager\.getConfig\(\)\.theme_auto_last;/);
+assert.match(fn('src/ui/shared/theme_schedule.cpp', 'effective'), /return decide\(&why\);/);
 assert.ok(read('HomeTiles.ino').includes('ui_theme::set(theme_schedule::at_boot(configManager.getConfig().theme));'));
 const ino = read('HomeTiles.ino');
 assert.ok(ino.indexOf('theme_schedule::poll();') >= 0 && ino.indexOf('theme_schedule::poll();') < ino.lastIndexOf('uiManager.processThemeChange();'),
   'the loop asks before it applies');
-assert.match(schedule, /if \(\(effective\(stored\) == 1\) != ui_theme::theme_light\(\)\) uiManager\.requestThemeChange\(\);/);
+const poll = fn('src/ui/shared/theme_schedule.cpp', 'poll');
+assert.match(poll, /if \(\(theme == 1\) != ui_theme::theme_light\(\)\) uiManager\.requestThemeChange\(\);/);
+// One log line whenever the decision or its source changes (user
+// 2026-10-23: the S3 stayed dark after sunrise until a restart).
+assert.match(poll, /if \(logged_theme != theme \|\| logged_why != why\) \{[\s\S]*Serial\.printf\("\[Theme\] Automatic: %s \(%s\)\\n"/);
+for (const why of ['time zone not set, last shown', 'clock not set, last shown', 'sun times',
+  '07:00-19:00, no sun times for today']) {
+  assert.ok(schedule.includes('"' + why + '"'), why);
+}
 const ui = read('src/ui/ui_manager.cpp');
 assert.ok(ui.includes('  const uint8_t theme = theme_schedule::effective(stored);\n  if ((theme == 1) == ui_theme::theme_light()) return;') &&
   ui.includes('if (stored == theme_schedule::kAutomatic) configManager.saveThemeAutoLast(theme);') &&
@@ -74,6 +83,7 @@ ${fn('src/types/weather/weather_icons.cpp', 'is_night')}
 namespace theme_schedule {
 inline constexpr int kFallbackDayStart = 7 * 60;
 inline constexpr int kFallbackDayEnd = 19 * 60;
+${fn('src/ui/shared/theme_schedule.cpp', 'has_sun_for')}
 ${fn('src/ui/shared/theme_schedule.cpp', 'day_at')}
 }
 static int day(const weather_icons::SunTimes& sun, const char* date, int h, int m) {

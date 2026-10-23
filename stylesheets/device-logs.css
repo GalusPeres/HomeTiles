@@ -1,0 +1,52 @@
+/* Keep the standard note styling and use Material's lock icon for privacy. */
+.md-typeset .admonition.ht-device-logs-privacy {
+  --md-admonition-icon--note: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%2017a2%202%200%200%200%202-2%202%202%200%200%200-2-2%202%202%200%200%200-2%202%202%202%200%200%200%202%202m6-9a2%202%200%200%201%202%202v10a2%202%200%200%201-2%202H6a2%202%200%200%201-2-2V10a2%202%200%200%201%202-2h1V6a5%205%200%200%201%205-5%205%205%200%200%201%205%205v2zm-6-5a3%203%200%200%200-3%203v2h6V6a3%203%200%200%200-3-3%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Reuse the installer's log surface, buttons and status colors. */
+.ht-device-logs-connection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.9rem;
+}
+
+.ht-device-logs .ht-installer-log-panel pre {
+  min-height: 12rem;
+  max-height: 24rem;
+}
+
+.ht-device-logs-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.62rem;
+}
+
+.ht-device-logs-follow input {
+  margin: 0;
+  accent-color: var(--md-accent-fg-color);
+}
+
+.ht-device-logs-action,
+.ht-device-logs-limit {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.62rem;
+}
+
+.ht-device-logs .ht-installer-log-header button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #343b46;
+  color: var(--md-default-fg-color--light);
+}
+
+.ht-device-logs button:focus-visible,
+.ht-device-logs pre:focus-visible,
+.ht-device-logs input:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 3px;
+}

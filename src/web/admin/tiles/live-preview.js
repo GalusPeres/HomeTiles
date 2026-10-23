@@ -165,6 +165,7 @@
     if (type === '0') {
       tileElem.classList.add('empty');
       tileElem.style.background = 'transparent';
+      if (isScreensaverTileTab(tab)) applyScreensaverLookPreview(tileElem, {});
       tileElem.innerHTML = '';
       applyTileAriaLabel(tileElem, '', type);
       if (wasActive) tileElem.classList.add('active');
@@ -189,13 +190,17 @@
       isDefaultBg ? defaultBg : (color || defaultBg), null, type);
     tileElem.classList.toggle('tile-transparent', tileBg === 'transparent');
     if (isScreensaverTileTab(tab)) {
-      // One opacity for every screensaver tile (screensaver footer).
-      const opacity = screensaverTileOpacity();
-      tileElem.style.background = tileBackgroundCss(meta, isDefaultBg,
-        isDefaultBg ? defaultBg : (color || defaultBg), opacity);
+      // The tile's own Opacity or the global one (screensaver footer), its
+      // own card color (Background Custom); a tile without fill draws none.
+      const look = collectScreensaverLookFields(prefix, type);
+      const opacity = screensaverLookFilled(look) ? screensaverTileFillOpacity(look.ss_opacity) : 0;
+      const card = screensaverLookCardColor(look, type);
+      tileElem.style.background = tileBackgroundCss(meta, isDefaultBg && !card,
+        card || (isDefaultBg ? defaultBg : (color || defaultBg)), opacity);
       tileElem.dataset.bgOpacity = String(opacity);
       // A fully transparent card casts no shadow (apply_slot_tile_shadows).
       tileElem.classList.toggle('screensaver-bg-clear', opacity === 0);
+      applyScreensaverLookPreview(tileElem, look);
     } else {
       tileElem.style.background = tileBg;
     }

@@ -617,7 +617,65 @@
     modes?.querySelector('[data-tile-color-mode="transparent"]')?.classList.toggle('hidden', !tileTypeBlackIsTransparent(typeValue));
     document.getElementById(tab + '_tile_color_row')?.classList.toggle('color-hidden', !keepsOwn || mode !== 'custom');
     document.getElementById(tab + '_tile_icon_fill_row')?.classList.toggle('hidden', !iconOffered);
+    // Screensaver tiles only (their Background choice).
+    if (typeof syncTileBgMode === 'function') syncTileBgMode(tab, typeValue, keepsOwn, iconOffered);
     if (typeof fitChoiceRows === 'function') fitChoiceRows(tab);
+  }
+  // Background of a screensaver tile (tile_icon_colors_html.cpp
+  // append_screensaver_tile_background_html): None (no card, the hidden
+  // _tile_ss_fill), Theme, Icon (the hidden "Ausfuellen" box) or Custom (the
+  // own card color, Tile::ss_card_color). Page tiles have none of these
+  // fields and keep their Fill box.
+  function tileBgMode(tab) {
+    const ssFill = document.getElementById(tab + '_tile_ss_fill');
+    if (ssFill && !ssFill.checked) return 'none';
+    if (document.getElementById(tab + '_tile_ss_card_color')?.dataset.set === '1') return 'custom';
+    return document.getElementById(tab + '_tile_icon_fill')?.checked ? 'icon' : 'plain';
+  }
+  function syncTileBgMode(tab, typeValue, keepsOwn, iconOffered) {
+    const modes = document.getElementById(tab + '_tile_bg_modes');
+    if (!modes) return;
+    const card = document.getElementById(tab + '_tile_ss_card_color');
+    if (card && !iconOffered) card.dataset.set = '0';
+    const empty = String(typeValue ?? '0') === '0';
+    const mode = tileBgMode(tab);
+    modes.querySelectorAll('[data-tile-bg-mode]').forEach(button => {
+      const active = button.dataset.tileBgMode === mode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    document.getElementById(tab + '_tile_ss_card_color_row')?.classList.toggle('hidden', !iconOffered || mode !== 'custom');
+    // The opacity fades only the card: none to fade without one.
+    document.getElementById(tab + '_tile_ss_opacity_row')?.classList.toggle('hidden', mode === 'none');
+    // Group captions only above shown controls.
+    document.getElementById(tab + '_tile_look_icon_head')?.classList.toggle('hidden', empty);
+    document.getElementById(tab + '_tile_look_bg_head')?.classList.toggle('hidden', empty || !(keepsOwn || iconOffered));
+    document.getElementById(tab + '_tile_look_text_head')?.classList.toggle('hidden', empty);
+  }
+  function setTileBgMode(tab, mode) {
+    const typeValue = document.getElementById(tab + '_tile_type')?.value || '0';
+    if (tileTypeKeepsOwnColor(typeValue)) return;
+    const before = tileBgMode(tab);
+    const ssFill = document.getElementById(tab + '_tile_ss_fill');
+    if (ssFill) ssFill.checked = mode !== 'none';
+    const fill = document.getElementById(tab + '_tile_icon_fill');
+    if (fill) fill.checked = mode === 'icon';
+    const card = document.getElementById(tab + '_tile_ss_card_color');
+    if (card) card.dataset.set = mode === 'custom' ? '1' : '0';
+    if (typeof syncScreensaverLookFields === 'function') syncScreensaverLookFields(tab);
+    if (typeof syncIconColorFields === 'function') syncIconColorFields(tab);
+    else syncTileColorMode(tab);
+    updateTilePreview(tab);
+    updateDraft(tab);
+    scheduleAutoSave(tab);
+    // A first Custom opens the color picker (laid out first, see
+    // setTileColorMode).
+    if (mode === 'custom' && before !== 'custom' && card) {
+      try {
+        card.getBoundingClientRect();
+        if (typeof card.showPicker === 'function') card.showPicker();
+      } catch (_) {}
+    }
   }
   function setTileColorMode(tab, mode) {
     const input = document.getElementById(tab + '_tile_color');
@@ -863,10 +921,12 @@
         tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), null, typeValue);
       el.classList.toggle('tile-transparent', bg === 'transparent');
       if (isScreensaverTileTab(tab)) {
-        // One opacity for every screensaver tile (screensaver footer).
-        const opacity = screensaverTileOpacity();
-        el.style.background = tileBackgroundCss(meta, isDefaultBg,
-          tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
+        // The tile's own Opacity or the global one (screensaver footer), its
+        // own card color (Background Custom); a tile without fill draws none.
+        const opacity = screensaverLookFilled(tile) ? screensaverTileFillOpacity(tile.ss_opacity) : 0;
+        const card = screensaverLookCardColor(tile, typeValue);
+        el.style.background = tileBackgroundCss(meta, isDefaultBg && !card,
+          card || tileBgToHex(tile.bg_color, meta.defaultBg || '#353535'), opacity);
         el.dataset.bgOpacity = String(opacity);
         // A fully transparent card casts no shadow (apply_slot_tile_shadows).
         el.classList.toggle('screensaver-bg-clear', opacity === 0);
@@ -876,6 +936,7 @@
     }
     if (typeof applyTileSurface === 'function') applyTileSurface(el, surface);
     if (typeValue !== '0') applyFrameLine(el);
+    if (isScreensaverTileTab(tab)) applyScreensaverLookPreview(el, typeValue === '0' ? {} : tile);
     const sensorValueClass = getSensorValueFontClass(tile.sensor_value_font);
     if (typeValue === '0') {
       el.innerHTML = '';

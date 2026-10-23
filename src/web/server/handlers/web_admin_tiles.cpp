@@ -16,6 +16,7 @@
 #include "src/ui/tabs/tiles/tab_tiles_unified.h"
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/ui/screensaver/image_screensaver.h"
+#include "src/ui/screensaver/screensaver_tile_look.h"
 #include "src/web/server/web_admin_utils.h"
 #include "src/web/server/handlers/web_admin_tile_helpers.h"
 #include "src/web/server/handlers/preview_payload.h"
@@ -360,6 +361,7 @@ static bool showScreensaverGridBeforeSave(const TileGridConfig& grid) {
 static void restoreScreensaverGridAfterFailedSave() {
   TileGridConfig* stored = new (std::nothrow) TileGridConfig();
   if (stored && tileConfig.loadScreensaverGrid(*stored)) {
+    screensaverConfig.applyStoredTileLooks(*stored);
     screensaverConfig.previewTileGrid(*stored);
   }
   delete stored;
@@ -513,6 +515,20 @@ void WebAdminServer::handleGetTiles() {
     out += String(tile.bg_color);
     out += ",\"background_opacity\":";
     out += String(tile.background_opacity);
+    if (screensaver_grid) {
+      // Screensaver look (screensaver_tile_look.h).
+      out += ",\"ss_opacity\":";
+      out += String(tile.ss_opacity);
+      out += ",\"ss_fill\":";
+      out += tile.ss_fill ? "1" : "0";
+      out += ",\"ss_icon\":";
+      out += tile.ss_show_icon ? "1" : "0";
+      out += ",\"ss_card_color\":\"";
+      out += screensaver_tile_look::format_color(tile.ss_card_color);
+      out += "\",\"ss_text_color\":\"";
+      out += screensaver_tile_look::format_color(tile.ss_text_color);
+      out += "\"";
+    }
     out += ",\"col\":";
     out += String(tile.col);
     out += ",\"row\":";
@@ -781,6 +797,20 @@ void WebAdminServer::handleSaveTiles() {
   } else if (screensaver_grid && previous_tile.type == TILE_EMPTY &&
              type != TILE_EMPTY) {
     tile.background_opacity = kScreensaverDefaultTileOpacity;
+  }
+  if (screensaver_grid) {
+    // Screensaver look: partial requests keep the stored values.
+    if (server.hasArg("ss_opacity")) {
+      tile.ss_opacity = static_cast<uint8_t>(constrain(server.arg("ss_opacity").toInt(), 0, 255));
+    }
+    if (server.hasArg("ss_fill")) tile.ss_fill = server.arg("ss_fill").toInt() != 0;
+    if (server.hasArg("ss_icon")) tile.ss_show_icon = server.arg("ss_icon").toInt() != 0;
+    if (server.hasArg("ss_card_color")) {
+      tile.ss_card_color = screensaver_tile_look::parse_color(server.arg("ss_card_color"));
+    }
+    if (server.hasArg("ss_text_color")) {
+      tile.ss_text_color = screensaver_tile_look::parse_color(server.arg("ss_text_color"));
+    }
   }
 
   // A page's folder tile has no place on a bar layout's Home: its page sits

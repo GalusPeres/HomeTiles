@@ -11,7 +11,7 @@ The [HomeTiles Bridge](https://github.com/GalusPeres/HomeTiles-Bridge) connects 
 
 ## Installation
 
-You need Home Assistant 2025.11 or newer and HomeTiles Bridge v0.9.2 for all documented features with firmware v0.9.3. The direct link needs no MQTT broker. Follow the [Installation](installer.md#install-the-bridge) to install the Bridge and pair your first display.
+You need Home Assistant 2025.11 or newer and HomeTiles Bridge v0.9.4 for all documented features with firmware v0.9.4. The direct link needs no MQTT broker. Follow the [Installation](installer.md#install-the-bridge) to install the Bridge and pair your first display.
 
 <a id="via-hacs-recommended"></a>
 <a id="manual"></a>

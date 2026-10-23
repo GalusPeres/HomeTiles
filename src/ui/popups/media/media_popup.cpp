@@ -1124,9 +1124,11 @@ static void build_player(MediaPopupContext* ctx, bool centered) {
     ctx->cover_baked = false;
   }
 
+  // Always shown: the menu box lies over it. Built while the menu was open
+  // (a new song's card color), it stayed hidden after the menu closed, an
+  // empty card until the next rebuild (user 2026-10-23, v0.9.4).
   ctx->player = plain(ctx->root);
   lv_obj_set_size(ctx->player, W, H);
-  if (ctx->view != MediaView::Player) lv_obj_add_flag(ctx->player, LV_OBJ_FLAG_HIDDEN);
 
   // Cover: the picture in a clip with the popup's cover radius.
   ctx->cover_clip = plain(ctx->player);

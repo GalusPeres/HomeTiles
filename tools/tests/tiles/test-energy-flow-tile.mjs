@@ -70,7 +70,7 @@ for (const marker of [
   'if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));',
   // Never behind a popup, asleep or off screen; only the dot's area, and
   // only the line pieces that touch it.
-  'if (popup_shell_active() || powerManager.isInSleep()) return 0;',
+  'if (popup_shell_active() || powerManager.isInSleep() || image_screensaver_covers_ui()) return 0;',
   'if (!st || !any_live(*st) || !shown_on_screen(st->card)) continue;',
   'lv_obj_invalidate_area(st.canvas, &area);',
   'if (last <= first || !piece_on_clip(layer, canvas, path, first, last, dsc.width)) return;',
@@ -80,7 +80,8 @@ for (const marker of [
   // State changes only mark; unchanged texts are not set again.
   'st->dirty = true;',
   'if (shown && text == shown) return;',
-  'if (redraw) lv_obj_invalidate(st.canvas);',
+  // A line that switches redraws only itself (b539: the whole card, 42-49 ms).
+  'if (changed && st.line_shown[line]) invalidate_line(st, line);',
   // The lines skip areas they do not touch.
   'if (!lv_area_is_on(&box, &layer->_clip_area)) continue;',
   // A node tap opens that sensor's normal popup; the battery charge its own.
@@ -90,7 +91,7 @@ for (const marker of [
   'lv_obj_add_event_cb(card, card_delete_cb, LV_EVENT_DELETE, st);',
   'st->~FlowTileState();',
   // Only MDI icons; the battery shows the charge Home Assistant's icon gives.
-  'set_icon(st.node[kNodeBattery].icon, haBridgeConfig.findEntityIcon(battery_icon_entity), "battery");',
+  'charging ? charging_icon(has_charge, charge) : haBridgeConfig.findEntityIcon(battery_icon_entity),',
   // Without a card the rings take the global frame line.
   'if (frame_lines) ui_surface_style::apply_global_tile_border(w.ring);',
   // The bends are true circle arcs (b532's short lines looked wavy).
@@ -165,7 +166,7 @@ assert.ok(/<path d="M220 80 [^"]*" fill="none" stroke="#3C3C3C"/.test(drawn), 's
 assert.ok(drawn.includes('<path d="M220 240 A62 62 0 0 1 282 178 L320 178" fill="none" stroke="#F06292"'),
   'battery -> home in the battery color, its bend a circle arc');
 assert.ok(drawn.includes('mdi-battery-70'), 'the battery shows Home Assistant\'s level icon');
-assert.ok(drawn.includes('color:#F06292"></i>') && /mdi-home" style="[^"]*color:#F06292/.test(drawn), 'home takes the main source color');
+assert.ok(drawn.includes('color:#F06292"></i>') && /mdi-home-lightning-bolt" style="[^"]*color:#F06292/.test(drawn), 'home takes the main source color');
 for (const value of ['0 W', '200 W', '700 W', '500 W', '78 %']) assert.ok(drawn.includes('>' + value + '</div>'), value);
 assert.ok(!drawn.includes('Energie'), 'no header by default');
 const headed = nodeOf();
@@ -174,4 +175,32 @@ context.applyEnergyFlowPreview(headed, {flow_entities: 'sensor.pv', key_code: 1,
 assert.ok(headed.html.includes('&lt;b&gt;Energie&lt;/b&gt;'), 'the header title is escaped');
 assert.ok(headed.html.includes('mdi-lightning-bolt'), 'the header icon');
 assert.ok(!headed.html.includes('mdi-transmission-tower'), 'a node without its entity is left out');
+// The battery keeps Home Assistant's sign (user 2026-10-24), also with its
+// direction inverted; the grid shows its amount.
+// While it charges its node shows Home Assistant's charging icon for its
+// level; the grid's icon shows import and export; solar is solar-power.
+assert.ok(drawn.includes('mdi-solar-power"') && drawn.includes('mdi-transmission-tower-import"'),
+          'solar-power, the grid importing');
+for (const key_code of [0, 8]) {
+  const signed = nodeOf();
+  context.applyEnergyFlowPreview(signed, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code,
+    span_w: 2, span_h: 2}, {values: {'sensor.pv': '0', 'sensor.grid': '-200', 'sensor.bat': '-0.3', 'sensor.soc': '76'},
+    units: {'sensor.bat': 'kW'}, icons: {'sensor.soc': 'mdi:battery-70'}});
+  assert.ok(signed.html.includes('>-300 W</div>'), 'a negative battery shows its minus');
+  assert.ok(signed.html.includes('>200 W</div>') && !signed.html.includes('>-200 W</div>'), 'the grid shows its amount');
+  assert.ok(signed.html.includes('mdi-transmission-tower-export"'), 'the grid exporting');
+  // Inverted, the same value is a discharge: Home Assistant's own icon.
+  assert.ok(signed.html.includes(key_code ? 'mdi-battery-70"' : 'mdi-battery-charging-80"'), 'charging icon ' + key_code);
+}
+assert.match(renderer, /String charging_icon\(bool has_level, float level\) \{\s*if \(!has_level\) return "battery-charging";\s*if \(level < 10\.0f\) return "battery-charging-outline";\s*const long tens = LV_MIN\(10L, lroundf\(level \/ 10\.0f\)\) \* 10L;/,
+             'the panel picks the charging icon like the preview');
+assert.match(renderer, /const bool charging = in\.has_battery && -in\.battery >= kIdleWatts;/);
+assert.ok(renderer.includes('set_icon(st.node[kNodeGrid].icon, "", grid_icon(in));'));
+// The charging icons are built at runtime: they are built in, like the grid's.
+const coreIcons = read('tools/icons/core-icons.txt').split('\n');
+for (const name of ['battery-charging-outline', 'battery-charging-10', 'battery-charging-100', 'transmission-tower-export',
+  'transmission-tower-import', 'solar-power']) assert.ok(coreIcons.includes(name), 'core icon ' + name);
+assert.match(renderer, /const float battery_shown = in\.battery;[\s\S]*signed_power_text\(battery_shown\)/,
+             'the panel shows the battery as Home Assistant gives it, before the invert option');
+assert.match(renderer, /String signed_power_text\(float watts\) \{\s*return watts <= -0\.5f \? String\("-"\) \+ power_text\(watts\) : power_text\(watts\);/);
 console.log('Energy flow tile: registry, Web Admin fields and editor, runtime marks and timer, popups, translations and the real preview');

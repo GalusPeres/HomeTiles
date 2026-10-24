@@ -224,6 +224,19 @@
     return formatLocalizedNumber(a, 0) + ' W';
   }
 
+  // While the battery charges: Home Assistant's charging icon for its level,
+  // as on the panel (renderer.cpp charging_icon).
+  function energyFlowChargingIcon(level) {
+    if (level === null) return 'battery-charging';
+    if (level < 10) return 'battery-charging-outline';
+    return 'battery-charging-' + Math.min(10, Math.round(level / 10)) * 10;
+  }
+
+  // The battery's power keeps Home Assistant's sign, as on the panel.
+  function energyFlowSignedPowerText(watts) {
+    return (watts <= -0.5 ? '-' : '') + energyFlowPowerText(watts);
+  }
+
   // ----- Preview --------------------------------------------------------------
   const ENERGY_FLOW_COLORS = Object.freeze({ pv: '#FF9800', grid: '#488FC2', battery: '#F06292', header: '#F29C06' });
 
@@ -353,10 +366,17 @@
     };
     const iconOf = id => String(icons[id] || '').replace(/^mdi:/, '');
     const homeColor = ENERGY_FLOW_COLORS[flows.homeSource || 'grid'];
-    if (shown.pv) node(l.node.pv[0], l.node.pv[1], ENERGY_FLOW_COLORS.pv, 'solar-power-variant');
-    if (shown.grid) node(l.node.grid[0], l.node.grid[1], ENERGY_FLOW_COLORS.grid, 'transmission-tower');
-    node(l.node.home[0], l.node.home[1], homeColor, 'home');
-    if (shown.battery) node(l.node.battery[0], l.node.battery[1], ENERGY_FLOW_COLORS.battery, iconOf(entity.charge || entity.bat) || 'battery');
+    if (shown.pv) node(l.node.pv[0], l.node.pv[1], ENERGY_FLOW_COLORS.pv, 'solar-power');
+    // The grid's direction past the idle threshold, as on the panel.
+    const gridIcon = !input.hasGrid ? 'transmission-tower'
+      : input.grid >= ENERGY_FLOW_IDLE_WATTS ? 'transmission-tower-import'
+        : -input.grid >= ENERGY_FLOW_IDLE_WATTS ? 'transmission-tower-export' : 'transmission-tower';
+    if (shown.grid) node(l.node.grid[0], l.node.grid[1], ENERGY_FLOW_COLORS.grid, gridIcon);
+    node(l.node.home[0], l.node.home[1], homeColor, 'home-lightning-bolt');
+    const level = entity.charge ? energyFlowNumber(values[entity.charge]) : null;
+    const charging = input.hasBattery && -input.battery >= ENERGY_FLOW_IDLE_WATTS;
+    if (shown.battery) node(l.node.battery[0], l.node.battery[1], ENERGY_FLOW_COLORS.battery,
+      charging ? energyFlowChargingIcon(level) : iconOf(entity.charge || entity.bat) || 'battery');
 
     const gap = r(l.ring) + L.valueGap;
     const below = gap + L.valueBelow - (L.valueLine - L.valueBase) + L.valueLine / 2;
@@ -370,7 +390,7 @@
       homeKnown ? energyFlowPowerText(flows.home) : '--', 'center');
     if (shown.battery) {
       label(r(l.node.battery[0]) + gap, width - L.edge - r(l.node.battery[0]) - gap, l.node.battery[1],
-        input.hasBattery ? energyFlowPowerText(bat) : '--', 'left');
+        input.hasBattery ? energyFlowSignedPowerText(bat) : '--', 'left');
       const charge = energyFlowNumber(values[entity.charge]);
       label(L.edge, r(l.node.battery[0]) - gap - L.edge, l.node.battery[1],
         entity.charge && charge !== null ? formatLocalizedNumber(charge, 0) + ' %' : '--', 'right');

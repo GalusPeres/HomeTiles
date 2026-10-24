@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <esp_heap_caps.h>
 #include <lvgl_private.h>
+// lvgl.h no longer exports lv_image_cache_drop() (tile_renderer.cpp).
+#include <misc/cache/instance/lv_image_cache.h>
 #include <math.h>
 #include <new>
 #include <stdlib.h>
@@ -22,6 +24,7 @@
 #include "src/types/energy_flow/flow_metrics.h"
 #include "src/ui/popups/popup_shell.h"
 #include "src/ui/popups/sensor/sensor_popup.h"
+#include "src/ui/screensaver/image_screensaver.h"
 #include "src/ui/shared/tone_color.h"
 #include "src/ui/shared/ui_surface_style.h"
 #include "src/ui/shared/ui_theme.h"
@@ -90,6 +93,12 @@ struct FlowTileState {
   uint8_t step[kLineCount] = {};  // px per motion step
   float phase[kLineCount] = {};  // distance along the line
   lv_point_t dot[kLineCount] = {};
+  // The bends as pictures, drawn once per color (render_bend): LVGL builds
+  // a bend's circle masks again in every frame a dot passes it (b540 log:
+  // ~0.25 ms per bend drawn). Areas relative to the canvas.
+  lv_draw_buf_t* bend_picture[kLineCount] = {};
+  uint32_t bend_color[kLineCount] = {};
+  lv_area_t bend_area[kLineCount] = {};
   bool dirty = false;
 };
 
@@ -181,6 +190,30 @@ String power_text(float watts) {
   if (magnitude >= 999950.0f) return i18n::format_number(language, magnitude / 1000000.0f, 1) + " MW";
   if (magnitude >= 999.5f) return i18n::format_number(language, magnitude / 1000.0f, 1) + " kW";
   return i18n::format_number(language, magnitude, 0) + " W";
+}
+
+// The battery's power keeps the sign Home Assistant gives it (user
+// 2026-10-24); the other values show their amount.
+String signed_power_text(float watts) {
+  return watts <= -0.5f ? String("-") + power_text(watts) : power_text(watts);
+}
+
+// While the battery charges, its node shows Home Assistant's charging icon
+// for its level (the frontend's batteryIcon: the level rounded to tens,
+// below 10 % the outline; user 2026-10-24).
+String charging_icon(bool has_level, float level) {
+  if (!has_level) return "battery-charging";
+  if (level < 10.0f) return "battery-charging-outline";
+  const long tens = LV_MIN(10L, lroundf(level / 10.0f)) * 10L;
+  return String("battery-charging-") + String(tens);
+}
+
+// The grid's icon shows its direction past the idle threshold (user
+// 2026-10-24): importing, exporting, or the plain tower.
+const char* grid_icon(const Inputs& in) {
+  if (in.has_grid && in.grid >= kIdleWatts) return "transmission-tower-import";
+  if (in.has_grid && -in.grid >= kIdleWatts) return "transmission-tower-export";
+  return "transmission-tower";
 }
 
 void set_text(lv_obj_t* label, const String& text) {
@@ -285,7 +318,10 @@ bool any_live(const FlowTileState& st) {
 // a dot is shown that did not change its pixel this frame.
 uint32_t step_dots(bool& waiting) {
   waiting = false;
-  if (popup_shell_active() || powerManager.isInSleep()) return 0;
+  // Nothing moves where nobody sees it: behind a popup, asleep, or under the
+  // screensaver (b539 log: there the dots ran on at ~47 frames a second and
+  // redrew the screensaver above them in every area).
+  if (popup_shell_active() || powerManager.isInSleep() || image_screensaver_covers_ui()) return 0;
   uint32_t moved = 0;
   for (FlowTileState* st : g_tiles) {
     if (!st || !any_live(*st) || !shown_on_screen(st->card)) continue;
@@ -584,6 +620,75 @@ void draw_straight(lv_layer_t* layer, lv_draw_line_dsc_t& dsc, const lv_area_t& 
   count_piece(0, started_us);
 }
 
+// A line's bend: one true circle arc, the stroke centred on its radius,
+// round ends; `cx`/`cy` its centre where it is drawn.
+void bend_arc(const FlowTileState& st, const Polyline& path, int32_t cx, int32_t cy, uint32_t color,
+              lv_draw_arc_dsc_t& dsc) {
+  lv_draw_arc_dsc_init(&dsc);
+  dsc.width = st.line_width;
+  dsc.rounded = 1;
+  dsc.color = lv_color_hex(color);
+  dsc.center = {cx, cy};
+  dsc.radius = static_cast<uint16_t>(path.bend.radius + st.line_width / 2);
+  dsc.start_angle = path.bend.start_angle;
+  dsc.end_angle = path.bend.end_angle;
+}
+
+// The box a bend's stroke covers, its round ends included (relative to the
+// canvas): its quarter of the circle, a stroke width around.
+lv_area_t bend_box(const FlowTileState& st, const Polyline& path) {
+  const int32_t outer = path.bend.radius + st.line_width / 2;
+  const int32_t cx = path.bend.cx, cy = path.bend.cy;
+  const int quarter = path.bend.start_angle % 360;  // 0 right-down, 90 left-down, 180 left-up, 270 right-up
+  const bool left = quarter == 90 || quarter == 180;
+  const bool up = quarter >= 180;
+  lv_area_t box = {left ? cx - outer : cx, up ? cy - outer : cy, left ? cx : cx + outer, up ? cy : cy + outer};
+  const int32_t pad = st.line_width + 2;
+  lv_area_increase(&box, pad, pad);
+  return box;
+}
+
+// Off screen, never shown: draws the bend pictures.
+lv_obj_t* g_bend_canvas = nullptr;
+
+void bend_canvas_deleted(lv_event_t*) { g_bend_canvas = nullptr; }
+
+// Draws a line's bend once into its picture in `color` (outside LVGL's
+// rendering, from refresh); false without memory, the line then draws its
+// arc in every frame as before.
+bool render_bend(FlowTileState& st, uint8_t line, uint32_t color) {
+  const Polyline& path = st.layout.line[line];
+  if (!path.bend.present) return false;
+  if (st.bend_picture[line] && st.bend_color[line] == color) return true;
+  if (!g_bend_canvas) {
+    g_bend_canvas = lv_canvas_create(nullptr);
+    if (!g_bend_canvas) return false;
+    lv_obj_add_event_cb(g_bend_canvas, bend_canvas_deleted, LV_EVENT_DELETE, nullptr);
+  }
+  const lv_area_t box = bend_box(st, path);
+  lv_draw_buf_t*& picture = st.bend_picture[line];
+  if (!picture) {
+    picture = lv_draw_buf_create(lv_area_get_width(&box), lv_area_get_height(&box), LV_COLOR_FORMAT_ARGB8888,
+                                 LV_STRIDE_AUTO);
+    if (!picture) return false;
+  }
+  lv_image_cache_drop(picture);
+  lv_draw_buf_clear(picture, nullptr);
+  lv_canvas_set_draw_buf(g_bend_canvas, picture);
+  lv_layer_t layer;
+  lv_canvas_init_layer(g_bend_canvas, &layer);
+  lv_draw_arc_dsc_t dsc;
+  bend_arc(st, path, path.bend.cx - box.x1, path.bend.cy - box.y1, color, dsc);
+  lv_draw_arc(&layer, &dsc);
+  lv_canvas_finish_layer(g_bend_canvas, &layer);
+  // The canvas keeps no reference to a picture that goes with its tile.
+  lv_image_set_src(g_bend_canvas, nullptr);
+  lv_image_cache_drop(picture);
+  st.bend_area[line] = box;
+  st.bend_color[line] = color;
+  return true;
+}
+
 void canvas_draw_cb(lv_event_t* e) {
   FlowTileState* st = static_cast<FlowTileState*>(lv_event_get_user_data(e));
   lv_layer_t* layer = lv_event_get_layer(e);
@@ -596,10 +701,6 @@ void canvas_draw_cb(lv_event_t* e) {
   line_dsc.width = st->line_width;
   line_dsc.round_start = 1;
   line_dsc.round_end = 1;
-  lv_draw_arc_dsc_t arc_dsc;
-  lv_draw_arc_dsc_init(&arc_dsc);
-  arc_dsc.width = st->line_width;
-  arc_dsc.rounded = 1;
   // The idle lines first, the flows over them, then their dots.
   for (int pass = 0; pass < 2; ++pass) {
     for (uint8_t line = 0; line < kLineCount; ++line) {
@@ -618,13 +719,21 @@ void canvas_draw_cb(lv_event_t* e) {
       // straight.
       draw_straight(layer, line_dsc, canvas, path, 0, path.bend_first);
       if (piece_on_clip(layer, canvas, path, path.bend_first, path.bend_last, st->line_width)) {
-        arc_dsc.color = color;
-        arc_dsc.center = {canvas.x1 + path.bend.cx, canvas.y1 + path.bend.cy};
-        arc_dsc.radius = static_cast<uint16_t>(path.bend.radius + st->line_width / 2);
-        arc_dsc.start_angle = path.bend.start_angle;
-        arc_dsc.end_angle = path.bend.end_angle;
         const uint32_t arc_started_us = micros();
-        lv_draw_arc(layer, &arc_dsc);
+        const lv_draw_buf_t* picture = st->bend_picture[line];
+        if (picture && st->bend_color[line] == st->line_color[line]) {
+          // Its picture, only the part being drawn.
+          lv_draw_image_dsc_t image_dsc;
+          lv_draw_image_dsc_init(&image_dsc);
+          image_dsc.src = picture;
+          lv_area_t area = st->bend_area[line];
+          lv_area_move(&area, canvas.x1, canvas.y1);
+          lv_draw_image(layer, &image_dsc, &area);
+        } else {
+          lv_draw_arc_dsc_t arc_dsc;
+          bend_arc(*st, path, canvas.x1 + path.bend.cx, canvas.y1 + path.bend.cy, st->line_color[line], arc_dsc);
+          lv_draw_arc(layer, &arc_dsc);
+        }
         count_piece(1, arc_started_us);
       }
       draw_straight(layer, line_dsc, canvas, path, path.bend_last, path.count - 1);
@@ -649,6 +758,37 @@ void canvas_draw_cb(lv_event_t* e) {
   if (g_motion_stats.frame_areas) g_motion_stats.frame_lines_us += micros() - started_us;
 }
 
+// Redraws one line where it runs, its straight pieces and its bend, with its
+// dot: a line switching on or off (the grid around its idle threshold) or
+// changing its color redrew the whole card, 42-49 ms frames on the V2
+// (b539 log).
+void invalidate_line(const FlowTileState& st, uint8_t line) {
+  const Polyline& path = st.layout.line[line];
+  if (path.count < 2) return;
+  lv_area_t canvas;
+  lv_obj_get_coords(st.canvas, &canvas);
+  const int margin = st.line_width + st.dot_radius + 1;
+  auto invalidate = [&](uint8_t first, uint8_t last) {
+    lv_area_t box = {LV_COORD_MAX, LV_COORD_MAX, LV_COORD_MIN, LV_COORD_MIN};
+    for (uint8_t i = first; i <= last; ++i) {
+      box.x1 = LV_MIN(box.x1, round_px(path.p[i].x));
+      box.y1 = LV_MIN(box.y1, round_px(path.p[i].y));
+      box.x2 = LV_MAX(box.x2, round_px(path.p[i].x));
+      box.y2 = LV_MAX(box.y2, round_px(path.p[i].y));
+    }
+    lv_area_increase(&box, margin, margin);
+    lv_area_move(&box, canvas.x1, canvas.y1);
+    lv_obj_invalidate_area(st.canvas, &box);
+  };
+  if (!path.bend.present) {
+    for (uint8_t i = 0; i + 1 < path.count; ++i) invalidate(i, i + 1);
+    return;
+  }
+  for (uint8_t i = 0; i < path.bend_first; ++i) invalidate(i, i + 1);
+  invalidate(path.bend_first, path.bend_last);
+  for (uint8_t i = path.bend_last; i + 1 < path.count; ++i) invalidate(i, i + 1);
+}
+
 // Reads every node from the entity cache and shows it.
 void refresh(FlowTileState& st) {
   st.dirty = false;
@@ -657,6 +797,7 @@ void refresh(FlowTileState& st) {
   in.has_pv = cached_watts(st.entities[kRolePv], in.pv);
   in.has_grid = cached_watts(st.entities[kRoleGrid], in.grid);
   in.has_battery = cached_watts(st.entities[kRoleBattery], in.battery);
+  const float battery_shown = in.battery;  // as Home Assistant gives it
   in.has_home = cached_watts(st.entities[kRoleHome], in.home);
   if (st.grid_invert) in.grid = -in.grid;
   if (st.battery_invert) in.battery = -in.battery;
@@ -664,40 +805,44 @@ void refresh(FlowTileState& st) {
 
   set_text(st.node[kNodePv].value, in.has_pv ? power_text(in.pv) : String("--"));
   set_text(st.node[kNodeGrid].value, in.has_grid ? power_text(in.grid) : String("--"));
-  set_text(st.node[kNodeBattery].value, in.has_battery ? power_text(in.battery) : String("--"));
+  set_text(st.node[kNodeBattery].value, in.has_battery ? signed_power_text(battery_shown) : String("--"));
   const bool home_known = st.entities[kRoleHome].length() ? in.has_home : flows.home_known;
   set_text(st.node[kNodeHome].value, home_known ? power_text(flows.home) : String("--"));
   float charge = 0.0f;
+  const bool has_charge = cached_number(st.entities[kRoleBatteryCharge], charge);
   if (st.charge) {
-    set_text(st.charge, cached_number(st.entities[kRoleBatteryCharge], charge)
-                            ? i18n::format_number(configManager.getConfig().language, charge, 0) + " %"
-                            : String("--"));
+    set_text(st.charge, has_charge ? i18n::format_number(configManager.getConfig().language, charge, 0) + " %"
+                                   : String("--"));
   }
-  // The battery shows its charge in the icon Home Assistant gives it.
+  set_icon(st.node[kNodeGrid].icon, "", grid_icon(in));
+  // The battery shows its charge in the icon Home Assistant gives it; while
+  // it charges (the tile's direction, past the idle threshold) the charging
+  // icon for its level.
+  const bool charging = in.has_battery && -in.battery >= kIdleWatts;
   const String& battery_icon_entity =
       st.entities[kRoleBatteryCharge].length() ? st.entities[kRoleBatteryCharge] : st.entities[kRoleBattery];
-  set_icon(st.node[kNodeBattery].icon, haBridgeConfig.findEntityIcon(battery_icon_entity), "battery");
+  set_icon(st.node[kNodeBattery].icon,
+           charging ? charging_icon(has_charge, charge) : haBridgeConfig.findEntityIcon(battery_icon_entity),
+           charging ? "battery-charging" : "battery");
   // Home in the color of the source that delivers most.
   color_node(st, st.node[kNodeHome],
              node_color(flows.home_source == kNodeCount ? kNodeGrid : flows.home_source));
 
-  bool redraw = false;
   for (uint8_t line = 0; line < kLineCount; ++line) {
     const bool live = st.line_shown[line] && flows.watts[line] > 0.0f;
     const uint32_t color = live ? node_color(line_source(static_cast<Line>(line), flows)) : st.idle_color;
     const bool reverse = line == kLineBatteryGrid && flows.grid_to_battery;
-    if (live != st.line_live[line] || color != st.line_color[line] || reverse != st.reverse[line]) {
-      redraw = true;
-      if (live && (!st.line_live[line] || reverse != st.reverse[line])) st.phase[line] = 0.0f;
-    }
+    const bool changed = live != st.line_live[line] || color != st.line_color[line] || reverse != st.reverse[line];
+    if (changed && live && (!st.line_live[line] || reverse != st.reverse[line])) st.phase[line] = 0.0f;
     st.line_live[line] = live;
     st.line_color[line] = color;
     st.reverse[line] = reverse;
     const float watts = flows.watts[line];
     st.step[line] = watts >= kStep2Watts ? 2 : 1;
     if (live) st.dot[line] = dot_point(st, line);
+    if (changed && st.line_shown[line]) invalidate_line(st, line);
+    if (st.line_shown[line]) render_bend(st, line, color);
   }
-  if (redraw) lv_obj_invalidate(st.canvas);
   if (any_live(st)) wake_motion(st.card);
 }
 
@@ -709,8 +854,8 @@ void open_node_popup(lv_event_t* e, FlowTileState& st, uint8_t role, uint8_t nod
   init.title = haBridgeConfig.findSensorName(entity);
   if (!init.title.length()) init.title = entity;
   String icon = normalizeMdiIconName(haBridgeConfig.findEntityIcon(entity));
-  if (!icon.length()) icon = node == kNodePv ? "solar-power-variant" : node == kNodeGrid ? "transmission-tower"
-                             : node == kNodeHome ? "home" : "battery";
+  if (!icon.length()) icon = node == kNodePv ? "solar-power" : node == kNodeGrid ? "transmission-tower"
+                             : node == kNodeHome ? "home-lightning-bolt" : "battery";
   init.icon_name = icon;
   init.unit = haBridgeConfig.findSensorUnit(entity);
   init.bg_color = st.card_color;
@@ -745,6 +890,12 @@ void card_delete_cb(lv_event_t* e) {
   if (!st) return;
   for (FlowTileState*& slot : g_tiles) {
     if (slot == st) slot = nullptr;
+  }
+  for (lv_draw_buf_t*& picture : st->bend_picture) {
+    if (!picture) continue;
+    lv_image_cache_drop(picture);
+    lv_draw_buf_destroy(picture);
+    picture = nullptr;
   }
   st->~FlowTileState();
   free(st);
@@ -970,9 +1121,9 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
     }
   }
 
-  set_icon(st->node[kNodePv].icon, "", "solar-power-variant");
+  set_icon(st->node[kNodePv].icon, "", "solar-power");
   set_icon(st->node[kNodeGrid].icon, "", "transmission-tower");
-  set_icon(st->node[kNodeHome].icon, "", "home");
+  set_icon(st->node[kNodeHome].icon, "", "home-lightning-bolt");
   color_node(*st, st->node[kNodePv], kSolarColor);
   color_node(*st, st->node[kNodeGrid], kGridColor);
   color_node(*st, st->node[kNodeBattery], kBatteryColor);

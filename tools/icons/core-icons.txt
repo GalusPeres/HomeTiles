@@ -30,6 +30,17 @@ backspace
 backspace-outline
 battery
 battery-charging
+battery-charging-10
+battery-charging-100
+battery-charging-20
+battery-charging-30
+battery-charging-40
+battery-charging-50
+battery-charging-60
+battery-charging-70
+battery-charging-80
+battery-charging-90
+battery-charging-outline
 battery-outline
 bell-ring
 blinds-horizontal
@@ -112,6 +123,7 @@ hexagon
 history
 home
 home-analytics
+home-lightning-bolt
 home-outline
 icon-name
 image
@@ -253,6 +265,8 @@ timer-outline
 toggle-switch-variant
 translate
 transmission-tower
+transmission-tower-export
+transmission-tower-import
 tray-arrow-down
 tune-variant
 update

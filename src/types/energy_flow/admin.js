@@ -81,10 +81,10 @@
   }
 
   // ----- Geometry: flow_geometry.h line for line --------------------------
-  const ENERGY_FLOW_BEND_SEGMENTS = 10;
+  const ENERGY_FLOW_BEND_SEGMENTS = 16;
 
   function energyFlowPolyline() {
-    return { p: [], along: [] };
+    return { p: [], along: [], bend: null, bendFirst: 0, bendLast: 0 };
   }
 
   function energyFlowAdd(line, x, y) {
@@ -98,25 +98,37 @@
     return q > 0 ? Math.sqrt(q) : 0;
   }
 
+  // C's lroundf: halves away from zero.
+  function energyFlowRound(value) {
+    return value < 0 ? -Math.round(-value) : Math.round(value);
+  }
+
+  // Down (or up) from the source's disc, a quarter circle on whole pixels,
+  // along the lane to the target's disc.
   function energyFlowLeg(l, from, dir, to, laneY, spacing) {
     const line = energyFlowPolyline();
     const down = from === 'pv';
-    const x = l.node.pv[0] + dir * spacing;
-    const y0 = l.node[from][1] + (down ? 1 : -1) * energyFlowCircleOffset(l.disc, spacing);
-    const endX = l.node[to][0] - dir * energyFlowCircleOffset(l.disc, laneY - l.node[to][1]);
-    const radius = Math.min(Math.abs(laneY - y0), Math.abs(endX - x));
-    const sign = laneY >= y0 ? 1 : -1;
-    const bendY = laneY - sign * radius;
-    const k = 0.552;
+    const x = energyFlowRound(l.node.pv[0] + dir * spacing);
+    const lane = energyFlowRound(laneY);
+    const y0 = l.node[from][1] + (down ? 1 : -1) * energyFlowCircleOffset(l.disc, x - l.node[from][0]);
+    const endX = l.node[to][0] - dir * energyFlowCircleOffset(l.disc, lane - l.node[to][1]);
+    const sign = lane >= y0 ? 1 : -1;
+    const radius = energyFlowRound(Math.min(Math.abs(lane - y0), Math.abs(endX - x)));
+    const fromAngle = dir > 0 ? 180 : 0;
+    const toAngle = sign > 0 ? 90 : (dir > 0 ? 270 : -90);
+    const bend = { cx: x + dir * radius, cy: lane - sign * radius, radius, fromAngle, toAngle };
     energyFlowAdd(line, x, y0);
-    if (Math.abs(bendY - y0) > 0.5) energyFlowAdd(line, x, bendY);
-    const c = [[x, bendY], [x, bendY + sign * k * radius], [x + dir * (1 - k) * radius, laneY], [x + dir * radius, laneY]];
-    for (let i = 1; i <= ENERGY_FLOW_BEND_SEGMENTS; ++i) {
-      const t = i / ENERGY_FLOW_BEND_SEGMENTS, u = 1 - t;
-      const w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
-      energyFlowAdd(line, w.reduce((s, v, j) => s + v * c[j][0], 0), w.reduce((s, v, j) => s + v * c[j][1], 0));
+    if (Math.abs(bend.cy - y0) > 0.5) energyFlowAdd(line, x, bend.cy);
+    line.bendFirst = line.p.length - 1;
+    if (radius > 0) {
+      line.bend = bend;
+      for (let i = 1; i <= ENERGY_FLOW_BEND_SEGMENTS; ++i) {
+        const angle = (fromAngle + (toAngle - fromAngle) * i / ENERGY_FLOW_BEND_SEGMENTS) * Math.PI / 180;
+        energyFlowAdd(line, bend.cx + radius * Math.cos(angle), bend.cy + radius * Math.sin(angle));
+      }
     }
-    if (Math.abs(endX - c[3][0]) > 0.5) energyFlowAdd(line, endX, laneY);
+    line.bendLast = line.p.length - 1;
+    if (Math.abs(endX - bend.cx) > 0.5) energyFlowAdd(line, endX, lane);
     return line;
   }
 
@@ -282,7 +294,20 @@
       batGrid: flows.gridToBattery ? 'grid' : 'battery' };
     const r = n => Math.round(n);
     let svg = '';
-    const path = line => line.p.map((p, i) => (i ? 'L' : 'M') + r(p[0]) + ' ' + r(p[1])).join(' ');
+    // Straight pieces and the bend as a true circle arc, like the panel.
+    const path = line => {
+      const points = line.bend ? [...line.p.slice(0, line.bendFirst + 1), ...line.p.slice(line.bendLast)] : line.p;
+      let d = '';
+      points.forEach((p, i) => {
+        if (line.bend && i === line.bendFirst + 1) {
+          const b = line.bend;
+          d += ' A' + b.radius + ' ' + b.radius + ' 0 0 ' + (b.toAngle > b.fromAngle ? 1 : 0) + ' ' + r(p[0]) + ' ' + r(p[1]);
+          return;
+        }
+        d += (i ? ' L' : 'M') + r(p[0]) + ' ' + r(p[1]);
+      });
+      return d;
+    };
     const live = name => lineShown[name] && flows.watts[name] > 0;
     for (const pass of [false, true]) {
       for (const name of Object.keys(l.lines)) {

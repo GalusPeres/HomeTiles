@@ -17,6 +17,10 @@
 // the middle. Other tile sizes keep the insets and spacings; a bend that
 // would run into its target node gets a smaller radius after a straight
 // piece, so the V2 2x2 tile stays exactly the mockup.
+//
+// The mockup's bend (a cubic with k 0.552) is a quarter circle; the panel
+// draws it as one: a circle arc on whole pixels between straight pieces
+// (b532 drew ten short lines on whole pixels: the user saw them wavy).
 namespace energy_flow {
 
 struct Point {
@@ -24,15 +28,31 @@ struct Point {
   float y;
 };
 
-// A bend is drawn as this many straight pieces.
-constexpr int kBendSegments = 10;
+// The dots follow a bend through this many points.
+constexpr int kBendSegments = 16;
 constexpr int kMaxLinePoints = kBendSegments + 4;
+
+// A quarter circle on whole pixels: its centre, its radius and its angles
+// in LVGL's degrees (0 at three o'clock, clockwise), start below end.
+struct Bend {
+  bool present = false;
+  int cx = 0;
+  int cy = 0;
+  int radius = 0;
+  int start_angle = 0;
+  int end_angle = 0;
+};
 
 struct Polyline {
   uint8_t count = 0;
   Point p[kMaxLinePoints] = {};
   // Distance along the line to each point; the last one is its length.
   float along[kMaxLinePoints] = {};
+  // A line with a bend: p[bend_first] to p[bend_last] lie on it; the
+  // points before and after are straight pieces.
+  Bend bend;
+  uint8_t bend_first = 0;
+  uint8_t bend_last = 0;
 };
 
 struct Layout {
@@ -82,30 +102,42 @@ inline float circle_offset(float radius, float d) {
 }
 
 // A leg from solar (`down`) or the battery, `dir` +1 to the home on the
-// right or -1 to the grid on the left, into the lane at `lane_y`.
+// right or -1 to the grid on the left, into the lane at `lane_y`: down (or
+// up) from the source's disc, a quarter circle, along the lane to the
+// target's disc.
 inline void build_leg(Polyline& line, const Layout& l, uint8_t from, int dir, uint8_t to, float lane_y,
                       float spacing) {
   const bool down = from == kNodePv;
-  const float x = l.node[kNodePv].x + dir * spacing;
-  const float y0 = l.node[from].y + (down ? 1.0f : -1.0f) * circle_offset(l.disc, spacing);
-  const float end_x = l.node[to].x - dir * circle_offset(l.disc, lane_y - l.node[to].y);
-  const float vertical = fabsf(lane_y - y0);
-  const float room = fabsf(end_x - x);
-  const float radius = fminf(vertical, room);
-  const float sign = lane_y >= y0 ? 1.0f : -1.0f;
-  const float bend_y = lane_y - sign * radius;
-  constexpr float k = 0.552f;  // a cubic close to a quarter circle
+  const int x = static_cast<int>(lroundf(l.node[kNodePv].x + dir * spacing));
+  const int lane = static_cast<int>(lroundf(lane_y));
+  const float y0 = l.node[from].y + (down ? 1.0f : -1.0f) * circle_offset(l.disc, x - l.node[from].x);
+  const float end_x = l.node[to].x - dir * circle_offset(l.disc, lane - l.node[to].y);
+  const int sign = lane >= y0 ? 1 : -1;
+  const int radius = static_cast<int>(lroundf(fminf(fabsf(lane - y0), fabsf(end_x - x))));
+  Bend& bend = line.bend;
+  bend.present = radius > 0;
+  bend.cx = x + dir * radius;
+  bend.cy = lane - sign * radius;
+  bend.radius = radius;
+  // Where the bend starts (left or right of its centre) and ends (below or
+  // above it), in the order the line runs.
+  const float from_angle = dir > 0 ? 180.0f : 0.0f;
+  const float to_angle = sign > 0 ? 90.0f : (dir > 0 ? 270.0f : -90.0f);
+  const int low = static_cast<int>(fminf(from_angle, to_angle));
+  bend.start_angle = low < 0 ? low + 360 : low;
+  bend.end_angle = bend.start_angle + 90;
 
-  polyline_add(line, x, y0);
-  if (fabsf(bend_y - y0) > 0.5f) polyline_add(line, x, bend_y);
-  const Point c0 = {x, bend_y}, c1 = {x, bend_y + sign * k * radius},
-              c2 = {x + dir * (1.0f - k) * radius, lane_y}, c3 = {x + dir * radius, lane_y};
-  for (int i = 1; i <= kBendSegments; ++i) {
-    const float t = static_cast<float>(i) / kBendSegments, u = 1.0f - t;
-    const float a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
-    polyline_add(line, a * c0.x + b * c1.x + c * c2.x + d * c3.x, a * c0.y + b * c1.y + c * c2.y + d * c3.y);
+  polyline_add(line, static_cast<float>(x), y0);
+  if (fabsf(bend.cy - y0) > 0.5f) polyline_add(line, static_cast<float>(x), static_cast<float>(bend.cy));
+  line.bend_first = line.count - 1;
+  if (bend.present) {
+    for (int i = 1; i <= kBendSegments; ++i) {
+      const float angle = (from_angle + (to_angle - from_angle) * i / kBendSegments) * 3.14159265f / 180.0f;
+      polyline_add(line, bend.cx + radius * cosf(angle), bend.cy + radius * sinf(angle));
+    }
   }
-  if (fabsf(end_x - c3.x) > 0.5f) polyline_add(line, end_x, lane_y);
+  line.bend_last = line.count - 1;
+  if (fabsf(end_x - bend.cx) > 0.5f) polyline_add(line, end_x, static_cast<float>(lane));
 }
 
 inline Layout layout(float width, float height, const Metrics& m) {

@@ -3,9 +3,7 @@
 #include <lvgl.h>
 
 #include "src/tiles/runtime/tile_renderer_fonts.h"
-#include "src/types/climate/layout.h"
 #include "src/types/energy_flow/flow_geometry.h"
-#include "src/ui/shared/ui_surface_style.h"
 
 // The Energy flow tile's sizes on this device layout, shared by the renderer
 // and the Web Admin preview (web_scripts.cpp). The design values are the
@@ -14,10 +12,11 @@ namespace energy_flow {
 
 inline Metrics device_metrics() {
   Metrics m;
-  // A node is the corner of a tile: its ring the tile radius, its disc the
-  // corner disc inside it.
-  m.ring = static_cast<float>(ui_surface_style::radius(tile_layout::scale_480(22)));
-  m.disc = m.ring - climate_layout::kOuterInset;
+  // The decided node: a 56 px disc in a 6 px ring, 68 px in all (user
+  // 2026-10-24); the device's tile radius is smaller on some layouts and
+  // gave smaller circles (b532).
+  m.ring = tile_layout::scale(34);
+  m.disc = tile_layout::scale(28);
   m.inset_x = tile_layout::scale(24);
   m.inset_y = tile_layout::scale(20);
   m.spacing = tile_layout::scale(18);

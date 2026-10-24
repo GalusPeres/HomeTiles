@@ -237,6 +237,20 @@ void wake_motion(FlowTileState& st) {
   lv_timer_resume(g_motion_timer);
 }
 
+// Points first..last of a line as straight pieces (two or more points).
+void draw_straight(lv_layer_t* layer, lv_draw_line_dsc_t& dsc, const lv_area_t& canvas, const Polyline& path,
+                   uint8_t first, uint8_t last) {
+  if (last <= first) return;
+  lv_point_precise_t points[kMaxLinePoints];
+  for (uint8_t i = first; i <= last; ++i) {
+    points[i - first].x = canvas.x1 + round_px(path.p[i].x);
+    points[i - first].y = canvas.y1 + round_px(path.p[i].y);
+  }
+  dsc.points = points;
+  dsc.point_cnt = last - first + 1;
+  lv_draw_line(layer, &dsc);
+}
+
 void canvas_draw_cb(lv_event_t* e) {
   FlowTileState* st = static_cast<FlowTileState*>(lv_event_get_user_data(e));
   lv_layer_t* layer = lv_event_get_layer(e);
@@ -248,7 +262,10 @@ void canvas_draw_cb(lv_event_t* e) {
   line_dsc.width = st->line_width;
   line_dsc.round_start = 1;
   line_dsc.round_end = 1;
-  lv_point_precise_t points[kMaxLinePoints];
+  lv_draw_arc_dsc_t arc_dsc;
+  lv_draw_arc_dsc_init(&arc_dsc);
+  arc_dsc.width = st->line_width;
+  arc_dsc.rounded = 1;
   // The idle lines first, the flows over them, then their dots.
   for (int pass = 0; pass < 2; ++pass) {
     for (uint8_t line = 0; line < kLineCount; ++line) {
@@ -257,14 +274,22 @@ void canvas_draw_cb(lv_event_t* e) {
       lv_area_move(&box, canvas.x1, canvas.y1);
       if (!lv_area_is_on(&box, &layer->_clip_area)) continue;
       const Polyline& path = st->layout.line[line];
-      for (uint8_t i = 0; i < path.count; ++i) {
-        points[i].x = canvas.x1 + round_px(path.p[i].x);
-        points[i].y = canvas.y1 + round_px(path.p[i].y);
+      const lv_color_t color = lv_color_hex(st->line_color[line]);
+      line_dsc.color = color;
+      if (!path.bend.present) {
+        draw_straight(layer, line_dsc, canvas, path, 0, path.count - 1);
+        continue;
       }
-      line_dsc.color = lv_color_hex(st->line_color[line]);
-      line_dsc.points = points;
-      line_dsc.point_cnt = path.count;
-      lv_draw_line(layer, &line_dsc);
+      // Straight, one true circle arc (the stroke centred on its radius),
+      // straight.
+      draw_straight(layer, line_dsc, canvas, path, 0, path.bend_first);
+      arc_dsc.color = color;
+      arc_dsc.center = {canvas.x1 + path.bend.cx, canvas.y1 + path.bend.cy};
+      arc_dsc.radius = static_cast<uint16_t>(path.bend.radius + st->line_width / 2);
+      arc_dsc.start_angle = path.bend.start_angle;
+      arc_dsc.end_angle = path.bend.end_angle;
+      lv_draw_arc(layer, &arc_dsc);
+      draw_straight(layer, line_dsc, canvas, path, path.bend_last, path.count - 1);
     }
   }
   lv_draw_rect_dsc_t dot_dsc;

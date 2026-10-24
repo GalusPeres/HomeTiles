@@ -85,7 +85,13 @@ for (const marker of [
   'set_icon(st.node[kNodeBattery].icon, haBridgeConfig.findEntityIcon(battery_icon_entity), "battery");',
   // Without a card the rings take the global frame line.
   'if (frame_lines) ui_surface_style::apply_global_tile_border(w.ring);',
+  // The bends are true circle arcs (b532's short lines looked wavy).
+  'lv_draw_arc(layer, &arc_dsc);',
 ]) assert.ok(renderer.includes(marker), `renderer: ${marker}`);
+// The decided node size on every layout: a 56 px disc in a 6 px ring
+// (b532 took the device's smaller tile radius).
+const metrics = read('src/types/energy_flow/flow_metrics.h');
+assert.ok(metrics.includes('m.ring = tile_layout::scale(34);') && metrics.includes('m.disc = tile_layout::scale(28);'));
 assert.doesNotMatch(renderer.slice(renderer.indexOf('void motion_timer_cb'), renderer.indexOf('void wake_motion')),
   /Serial\.|String |new |malloc/, 'no logs or allocations per frame');
 
@@ -138,7 +144,8 @@ assert.ok(drawn.includes('width="404.00" height="320.00"'), 'the V2 2x2 tile in 
 assert.ok(drawn.includes('transform:scale(0.5)'), 'scaled like every preview');
 assert.ok(drawn.includes('<path d="M86 160 L318 160" fill="none" stroke="#488FC2"'), 'grid -> home in the grid color');
 assert.ok(/<path d="M220 75 [^"]*" fill="none" stroke="#3C3C3C"/.test(drawn), 'solar -> home idle grey');
-assert.ok(/<path d="M220 245 [^"]*L325 178" fill="none" stroke="#F06292"/.test(drawn), 'battery -> home in the battery color');
+assert.ok(drawn.includes('<path d="M220 245 A67 67 0 0 1 287 178 L325 178" fill="none" stroke="#F06292"'),
+  'battery -> home in the battery color, its bend a circle arc');
 assert.ok(drawn.includes('mdi-battery-70'), 'the battery shows Home Assistant\'s level icon');
 assert.ok(drawn.includes('color:#F06292"></i>') && /mdi-home" style="[^"]*color:#F06292/.test(drawn), 'home takes the main source color');
 for (const value of ['0 W', '200 W', '700 W', '500 W', '78 %']) assert.ok(drawn.includes('>' + value + '</div>'), value);

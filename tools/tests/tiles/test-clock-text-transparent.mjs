@@ -15,7 +15,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 
 assert.match(read('src/tiles/config/tile_config.h'),
-  /static inline bool tileTransparent\(const Tile& tile\) \{\s*return \(tile\.type == TILE_CLOCK \|\| tile\.type == TILE_TEXT\) && tileHasOwnColor\(tile\) && tileBgColorRgb\(tile\) == 0;/);
+  /static inline bool tileTransparent\(const Tile& tile\) \{\s*return \(\(tile\.type == TILE_CLOCK \|\| tile\.type == TILE_TEXT\) && tileHasOwnColor\(tile\) && tileBgColorRgb\(tile\) == 0\) \|\|\s*energyFlowOption\(tile, kFlowNoCardBit\);/);
 const renderer = read('src/tiles/runtime/tile_renderer.cpp');
 assert.match(renderer, /if \(tile_obj && tileTransparent\(tile\)\) \{\s*lv_obj_set_style_bg_opa\(tile_obj, LV_OPA_TRANSP, LV_PART_MAIN \| LV_STATE_DEFAULT\);/);
 assert.match(renderer, /lv_obj_set_style_bg_opa\(tile_obj, LV_OPA_COVER, LV_PART_MAIN \| LV_STATE_PRESSED\);\s*ui_surface_style::disable_tile_border\(tile_obj\);/,

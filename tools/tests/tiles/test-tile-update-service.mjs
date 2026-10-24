@@ -55,6 +55,10 @@ const source = `
 // Icon-and-title recolors run last and are bounded by the pending mask.
 static unsigned icon_source_calls = 0;
 void process_icon_source_updates() { ++icon_source_calls; }
+// Energy flow tiles redraw each marked tile once per pass, in every budget.
+static unsigned energy_flow_calls = 0;
+void process_energy_flow_updates() { ++energy_flow_calls; }
+bool energy_flow_entity_changed(const char*) { return false; }
 
 struct Call { std::size_t queue; uint8_t budget; };
 static std::array<unsigned, 9> pending{};

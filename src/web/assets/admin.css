@@ -3848,3 +3848,7 @@ select.setup-from:hover { background-color:#333333; }
 .setup-foot .btn { padding:8px 12px; font-size:13px; }
 .setup-apply:disabled, .setup-save:disabled { opacity:0.45; cursor:not-allowed; }
 .setup-save:disabled { background:var(--accent); }
+
+/* Energy flow (types/energy_flow/admin.js): without a card the nodes sit on
+   the screen like a Transparent clock. */
+.tile.energy-flow-no-card { background:transparent !important; outline-color:transparent !important; }

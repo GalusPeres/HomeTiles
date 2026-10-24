@@ -440,6 +440,13 @@
         scheduleAutoSave(tab);
       });
     }
+    // Energy flow: the node sensors and the options (types/energy_flow).
+    for (const field of ['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',
+                         'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert']) {
+      bindLive(document.getElementById(prefix + '_' + field), 'change', field, () => {
+        updateTilePreview(tab); updateDraft(tab); scheduleAutoSave(tab);
+      });
+    }
     bindLive(cameraSelect, 'change', 'cameraEntity', () => {
       maybeFillTitleFromEntity(tab, '_camera_entity');
       syncCameraFields(tab);

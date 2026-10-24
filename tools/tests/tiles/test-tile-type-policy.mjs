@@ -15,7 +15,7 @@ const persistedIds = [
   'EMPTY', 'SENSOR', 'SCENE', 'KEY', 'FOLDER', 'SWITCH', 'IMAGE', 'SETTINGS',
   'BACK', 'CLOCK', 'TEXT', 'COUNTER', 'WEATHER', 'RADAR', 'ENERGY', 'MEDIA',
   'PIXELANIM', 'CLIMATE', 'CAMERA', 'COVER', 'BINARY_SENSOR', 'NUMBER', 'SELECT', 'DATETIME',
-  'LOCK', 'ALARM', 'FAN',
+  'LOCK', 'ALARM', 'FAN', 'ENERGY_FLOW',
 ];
 // These expected sets characterize the pre-refactor consumers independently.
 const policies = [

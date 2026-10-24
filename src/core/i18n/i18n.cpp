@@ -2185,6 +2185,7 @@ static const LocaleProfile kLocaleDe = {
     {"Unscharf", "Scharf zu Hause", "Scharf abwesend", "Scharf Nacht", "Scharf Urlaub",
      "Scharf benutzerdefiniert", "Ausstehend", "Wird scharf", "Wird unscharf", "Ausgelöst",
      "Nicht verfügbar", "Unbekannt"},
+    {"Energiefluss", "Solarleistung", "Netzleistung", "Batterieleistung", "Batterieladung", "Hausverbrauch", "Kopf anzeigen", "Karte anzeigen", "Netz: Einspeisung positiv", "Batterie: Laden positiv"},
     {"Entität wählen", "Suchen", "Keine Entität passt zu „{query}“",
      "Die Entitäten konnten nicht geladen werden. Die gewählte Entität bleibt erhalten.",
      "Erneut versuchen", "Leeren", "Keine Entität verfügbar",
@@ -2306,6 +2307,7 @@ static const LocaleProfile kLocaleEn = {
     {"Locked", "Unlocked", "Locking", "Unlocking", "Open", "Opening", "Jammed", "Unavailable", "Unknown"},
     {"Disarmed", "Armed home", "Armed away", "Armed night", "Armed vacation", "Armed custom bypass",
      "Pending", "Arming", "Disarming", "Triggered", "Unavailable", "Unknown"},
+    {"Energy flow", "Solar power", "Grid power", "Battery power", "Battery charge", "Home power", "Show header", "Show card", "Grid: export is positive", "Battery: charging is positive"},
     {"Choose an entity", "Search", "No entity matches “{query}”",
      "Could not load the entities. The chosen entity stays as it is.",
      "Try again", "Clear", "No entity available",
@@ -2432,6 +2434,7 @@ static const LocaleProfile kLocaleFr = {
     {"Désarmé", "Armé (domicile)", "Armé (absent)", "Armé (nuit)", "Armé (vacances)",
      "Armé (personnalisé)", "En attente", "Armement", "Désarmement", "Déclenché",
      "Indisponible", "Inconnu"},
+    {"Flux d’énergie", "Puissance solaire", "Puissance réseau", "Puissance batterie", "Charge batterie", "Consommation maison", "Afficher l’en-tête", "Afficher la carte", "Réseau : injection positive", "Batterie : charge positive"},
     {"Choisir une entité", "Rechercher", "Aucune entité ne correspond à « {query} »",
      "Impossible de charger les entités. L’entité choisie reste inchangée.",
      "Réessayer", "Effacer", "Aucune entité disponible",
@@ -5160,6 +5163,7 @@ static const LocaleProfile kLocalePl = {
     {"Zamek", "Panel alarmowy", "Wentylator", "Encja zamka", "Encja panelu alarmowego", "Encja wentylatora", "Otwórz drzwi", "Na pewno otworzyć?", "Drzwi otwarte", "Odblokuj", "Zablokuj", "Rozbrój", "W domu", "Poza domem", "Noc", "Urlop", "Własny", "Tryb", "Brak", "Oscylacja", "Kierunek", "Do przodu", "Do tyłu", "Prędkość %u", "Wpisz kod", "Nieprawidłowy kod", "Za dużo błędnych kodów · %u s", "Aby używać tutaj, sparuj ten panel z Home Assistant i ustaw hasło Web Admin.", "Aby używać tutaj, sparuj ten panel z Home Assistant.", "Aby używać tutaj, ustaw hasło Web Admin.", "Odblokowywanie z tego panelu jest wyłączone. Zezwól na nie w opcjach HomeTiles Bridge.", "Rozbrajanie z tego panelu jest wyłączone. Zezwól na nie w opcjach HomeTiles Bridge.", "To urządzenie wymaga kodu tekstowego. Użyj Home Assistant.", "To nie jest dozwolone z panelu.", "Inne polecenie jest jeszcze wykonywane. Spróbuj ponownie za chwilę.", "Urządzenie tego nie obsługuje.", "Urządzenie jest niedostępne.", "Polecenie wygasło. Spróbuj ponownie.", "Brak odpowiedzi z Home Assistant.", "Home Assistant nie mógł wykonać polecenia.", "Zegar panelu nie jest jeszcze ustawiony.", "Urządzenie nie odpowiedziało."},
     {"Zablokowany", "Odblokowany", "Blokowanie…", "Odblokowywanie…", "Otwarty", "Otwieranie…", "Zacięty", "Niedostępny", "Nieznany"},
     {"Rozbrojony", "Uzbrojony (w domu)", "Uzbrojony (poza domem)", "Uzbrojony (noc)", "Uzbrojony (urlop)", "Uzbrojony (własny)", "Oczekiwanie", "Uzbrajanie", "Rozbrajanie", "Wyzwolony", "Niedostępny", "Nieznany"},
+    {"Przepływ energii", "Moc solarna", "Moc sieci", "Moc baterii", "Naładowanie baterii", "Zużycie domu", "Pokaż nagłówek", "Pokaż kartę", "Sieć: oddawanie dodatnie", "Bateria: ładowanie dodatnie"},
     {"Wybierz encję", "Szukaj", "Żadna encja nie pasuje do „{query}”",
      "Nie udało się wczytać encji. Wybrana encja pozostaje bez zmian.",
      "Spróbuj ponownie", "Wyczyść", "Brak dostępnych encji",
@@ -5215,6 +5219,7 @@ static const LocaleProfile kLocaleCs = {
     {"Zámek", "Alarmový panel", "Ventilátor", "Entita zámku", "Entita alarmového panelu", "Entita ventilátoru", "Otevřít dveře", "Opravdu otevřít?", "Dveře otevřené", "Odemknout", "Zamknout", "Odbezpečit", "Doma", "Mimo domov", "Noc", "Dovolená", "Vlastní", "Předvolba", "Žádné", "Oscilace", "Směr", "Vpřed", "Vzad", "Rychlost %u", "Zadejte kód", "Nesprávný kód", "Příliš mnoho chybných kódů · %u s", "Chcete-li tuto funkci použít, spárujte panel s Home Assistant a nastavte heslo webové administrace.", "Chcete-li tuto funkci použít, spárujte panel s Home Assistant.", "Chcete-li tuto funkci použít, nastavte heslo webové administrace.", "Odemknutí z tohoto panelu je vypnuté. Povolte ho v možnostech HomeTiles Bridge.", "Odbezpečení z tohoto panelu je vypnuté. Povolte ho v možnostech HomeTiles Bridge.", "Toto zařízení vyžaduje textový kód. Použijte Home Assistant.", "Tato akce není z panelu povolena.", "Stále se provádí jiný příkaz. Zkuste to za chvíli.", "Zařízení tuto funkci nepodporuje.", "Zařízení není dostupné.", "Platnost příkazu vypršela. Zkuste to znovu.", "Home Assistant neodpovídá.", "Home Assistant nemohl příkaz provést.", "Hodiny panelu zatím nejsou nastavené.", "Zařízení neodpovědělo."},
     {"Zamčeno", "Odemčeno", "Zamyká se…", "Odemyká se…", "Otevřeno", "Otevírá se…", "Zaseknuto", "Nedostupné", "Neznámé"},
     {"Nezabezpečeno", "Zabezpečeno (doma)", "Zabezpečeno (mimo domov)", "Zabezpečeno (noc)", "Zabezpečeno (dovolená)", "Zabezpečeno (vlastní režim)", "Čeká se", "Zabezpečuje se", "Odbezpečuje se", "Spuštěno", "Nedostupné", "Neznámé"},
+    {"Tok energie", "Solární výkon", "Výkon sítě", "Výkon baterie", "Nabití baterie", "Spotřeba domu", "Zobrazit záhlaví", "Zobrazit kartu", "Síť: dodávka kladná", "Baterie: nabíjení kladné"},
     {"Vybrat entitu", "Hledat", "Žádná entita neodpovídá „{query}“",
      "Entity se nepodařilo načíst. Vybraná entita zůstane beze změny.",
      "Zkusit znovu", "Vymazat", "Žádné dostupné entity",
@@ -5336,6 +5341,7 @@ static const LocaleProfile kLocaleEs = {
     {"Bloqueada", "Desbloqueada", "Bloqueando", "Desbloqueando", "Abierta", "Abriendo", "Atascada", "No disponible", "Desconocido"},
     {"Desarmada", "Armada (en casa)", "Armada (ausente)", "Armada (noche)", "Armada (vacaciones)", "Armada (personalizada)",
      "Pendiente", "Armando", "Desarmando", "Disparada", "No disponible", "Desconocido"},
+    {"Flujo de energía", "Potencia solar", "Potencia de red", "Potencia de batería", "Carga de batería", "Consumo de la casa", "Mostrar encabezado", "Mostrar tarjeta", "Red: exportación positiva", "Batería: carga positiva"},
     {"Elige una entidad", "Buscar", "Ninguna entidad coincide con “{query}”",
      "No se pudieron cargar las entidades. La entidad elegida no cambia.",
      "Reintentar", "Borrar", "No hay entidades disponibles",
@@ -5467,6 +5473,7 @@ static const LocaleProfile kLocaleSk = {
     {"Zamknuté", "Odomknuté", "Zamyká sa", "Odomyká sa", "Otvorené", "Otvára sa", "Zaseknuté", "Nedostupné", "Neznáme"},
     {"Deaktivovaný", "Aktivovaný (doma)", "Aktivovaný (preč)", "Aktivovaný (noc)", "Aktivovaný (dovolenka)", "Aktivovaný (vlastný)",
      "Čaká sa", "Aktivuje sa", "Deaktivuje sa", "Spustený", "Nedostupné", "Neznáme"},
+    {"Tok energie", "Solárny výkon", "Výkon siete", "Výkon batérie", "Nabitie batérie", "Spotreba domu", "Zobraziť hlavičku", "Zobraziť kartu", "Sieť: dodávka kladná", "Batéria: nabíjanie kladné"},
     {"Vyberte entitu", "Hľadať", "Žiadna entita sa nezhoduje s „{query}“",
      "Nepodarilo sa načítať entity. Zvolená entita zostáva nezmenená.",
      "Skúsiť znova", "Vymazať", "Žiadna entita nie je k dispozícii",
@@ -5681,6 +5688,11 @@ const char* weather_tomorrow_label(const char* language_code) {
 const char* weather_sensor_label(const char* language_code, uint8_t index) {
   if (index >= 3) index = 2;
   return locale(language_code).weather_sensor_labels[index];
+}
+
+const char* energy_flow_label(const char* language_code, EnergyFlowLabel label) {
+  const uint8_t index = static_cast<uint8_t>(label);
+  return locale(language_code).energy_flow_labels[index < static_cast<uint8_t>(EnergyFlowLabel::Count) ? index : 0];
 }
 
 const char* climate_tile_type_label(const char* language_code) {

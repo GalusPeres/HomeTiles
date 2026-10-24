@@ -224,6 +224,7 @@ snowflake
 snowflake-melt
 sofa
 solar-power
+solar-power-variant
 speaker
 speaker-multiple
 speaker-pause

@@ -1052,6 +1052,10 @@
       if (tile.sensor_value_y_offset !== undefined && tile.sensor_value_y_offset !== null && String(tile.sensor_value_y_offset).length > 0) {
         fd.append('sensor_value_y_offset', tile.sensor_value_y_offset);
       }
+    } else if (safeType === 27) {
+      fd.append('flow_entities', tile.flow_entities || '');
+      const bits = Number(tile.key_code) || 0;
+      for (const [name, bit] of ENERGY_FLOW_OPTIONS) fd.append(name, (bits & bit) ? '1' : '0');
     } else if (safeType === MEDIA_TILE_TYPE) {
       fd.append('media_entity', tile.sensor_entity || tile.media_entity || '');
       fd.append('media_layout', Number(tile.sensor_display_mode) === 1 ? '1' : '0');

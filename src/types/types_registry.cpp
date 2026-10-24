@@ -17,6 +17,7 @@
 #include "src/types/switch/renderer.h"
 #include "src/types/text/renderer.h"
 #include "src/types/energy/renderer.h"
+#include "src/types/energy_flow/renderer.h"
 #include "src/types/weather/renderer.h"
 #include "src/types/media/renderer.h"
 #include "src/types/climate/renderer.h"
@@ -35,6 +36,7 @@
 #include "src/types/switch/web_handler.h"
 #include "src/types/text/web_handler.h"
 #include "src/types/energy/web_handler.h"
+#include "src/types/energy_flow/web_handler.h"
 #include "src/types/weather/web_handler.h"
 #include "src/types/media/web_handler.h"
 #include "src/types/climate/web_handler.h"
@@ -53,6 +55,7 @@
 #include "src/types/switch/web_html.h"
 #include "src/types/text/web_html.h"
 #include "src/types/energy/web_html.h"
+#include "src/types/energy_flow/web_html.h"
 #include "src/types/weather/web_html.h"
 #include "src/types/media/web_html.h"
 #include "src/types/climate/web_html.h"
@@ -72,6 +75,7 @@
 #include "src/types/switch/web_scripts.h"
 #include "src/types/text/web_scripts.h"
 #include "src/types/energy/web_scripts.h"
+#include "src/types/energy_flow/web_scripts.h"
 #include "src/types/weather/web_scripts.h"
 #include "src/types/media/web_scripts.h"
 #include "src/types/climate/web_scripts.h"
@@ -92,6 +96,7 @@
 #include "src/types/switch/web_styles.h"
 #include "src/types/text/web_styles.h"
 #include "src/types/energy/web_styles.h"
+#include "src/types/energy_flow/web_styles.h"
 #include "src/types/weather/web_styles.h"
 #include "src/types/media/web_styles.h"
 #include "src/types/climate/web_styles.h"
@@ -241,6 +246,16 @@ lv_obj_t* render_energy_wrapper(lv_obj_t* parent,
   return render_energy_tile(parent, col, row, tile, index, grid_type);
 }
 
+lv_obj_t* render_energy_flow_wrapper(lv_obj_t* parent,
+                                     int col,
+                                     int row,
+                                     const Tile& tile,
+                                     uint8_t index,
+                                     GridType grid_type,
+                                     scene_publish_cb_t) {
+  return render_energy_flow_tile(parent, col, row, tile, index, grid_type);
+}
+
 lv_obj_t* render_media_wrapper(lv_obj_t* parent,
                                int col,
                                int row,
@@ -369,6 +384,11 @@ bool apply_energy_wrapper(WebServer& server, Tile& tile, const TileTypeApplyCont
   return true;
 }
 
+bool apply_energy_flow_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
+  apply_energy_flow_fields_from_request(server, tile);
+  return true;
+}
+
 bool apply_media_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
   apply_media_fields_from_request(server, tile);
   return true;
@@ -465,6 +485,10 @@ void append_weather_fields_wrapper(String& html, const TileTypeWebContext& ctx) 
 
 void append_energy_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
   append_energy_fields_html(html, safeString(ctx.tab_id));
+}
+
+void append_energy_flow_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_energy_flow_fields_html(html, safeString(ctx.tab_id));
 }
 
 void append_media_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
@@ -582,6 +606,24 @@ const TileTypeDescriptor kTileTypes[] = {
     append_energy_fields_wrapper,
     append_energy_styles,
     append_energy_scripts
+  },
+  {
+    TILE_ENERGY_FLOW,
+    "Energiefluss",
+    "energy-flow",
+    "energy_flow",
+    "energy_flow",
+    nullptr,
+    "loadEnergyFlowFields",
+    "saveEnergyFlowFields",
+    "resetEnergyFlowFields",
+    0x2A2A2A,
+    false,
+    render_energy_flow_wrapper,
+    apply_energy_flow_wrapper,
+    append_energy_flow_fields_wrapper,
+    append_energy_flow_styles,
+    append_energy_flow_scripts
   },
   {
     TILE_WEATHER,
@@ -960,6 +1002,7 @@ static const char* localized_tile_type_label(const TileTypeDescriptor& entry) {
     case TILE_DATETIME: return i18n::locale(language).editable_labels[2];
     case TILE_BINARY_SENSOR: return i18n::binary_sensor_label(language, 0);
     case TILE_ENERGY: return tr.tile_type_energy;
+    case TILE_ENERGY_FLOW: return i18n::energy_flow_label(language, i18n::EnergyFlowLabel::Type);
     case TILE_WEATHER: return tr.tile_type_weather;
     case TILE_SCENE: return tr.tile_type_scene;
     case TILE_FOLDER: return tr.tile_type_folder;

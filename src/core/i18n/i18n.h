@@ -952,6 +952,9 @@ struct LocaleProfile {
   // triggered, unavailable, unknown.
   const char* alarm_states[12];
 
+  // The Energy flow tile (types/energy_flow), EnergyFlowLabel order.
+  const char* energy_flow_labels[10];
+
   // Shared Web Admin entity picker (tiles/entity-picker.js). Order: choose,
   // search, no match ({query}), load failed, try again, clear, none available,
   // released only (no Web Admin password), and the switch under the search:
@@ -986,6 +989,21 @@ struct LocaleProfile {
   // capitals). Only characters of the panel fonts.
   uint8_t keyboard_layout;
   const char* keyboard_letters;
+};
+
+// Index into LocaleProfile::energy_flow_labels.
+enum class EnergyFlowLabel : uint8_t {
+  Type,
+  SolarPower,
+  GridPower,
+  BatteryPower,
+  BatteryCharge,
+  HomePower,
+  ShowHeader,
+  ShowCard,
+  GridExportPositive,
+  BatteryChargePositive,
+  Count,
 };
 
 // Index into LocaleProfile::device_labels.
@@ -1072,6 +1090,7 @@ const char* weather_tomorrow_label(const char* language_code);
 // 0 temperature sensor, 1 humidity sensor, 2 the empty "use the weather
 // entity's value" option.
 const char* weather_sensor_label(const char* language_code, uint8_t index);
+const char* energy_flow_label(const char* language_code, EnergyFlowLabel label);
 const char* climate_tile_type_label(const char* language_code);
 const char* climate_entity_label(const char* language_code);
 const char* climate_target_temperature_label(const char* language_code);

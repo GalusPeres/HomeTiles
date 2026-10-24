@@ -3,6 +3,7 @@
 #include "src/tiles/runtime/tile_renderer.h"
 #include "src/types/value/value_control.h"
 #include "src/types/device/device_updates.h"
+#include "src/types/energy_flow/flow_updates.h"
 
 // tab_tiles_unified.cpp: recolors icon-and-title tiles from their source entity.
 void process_icon_source_updates();
@@ -28,5 +29,7 @@ inline void process_tile_update_queues() {
   process_device_updates(drain_all ? 0 : 4);
   process_weather_update_queue(drain_all ? 0 : 4);
   process_media_update_queue(drain_all ? 0 : 2);
+  // Energy flow tiles marked by a node state, each redrawn once.
+  process_energy_flow_updates();
   process_icon_source_updates();
 }

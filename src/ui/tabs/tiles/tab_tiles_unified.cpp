@@ -22,6 +22,7 @@
 #include "src/types/media/state_icon.h"
 #include "src/types/binary_sensor/renderer.h"
 #include "src/types/energy/energy_data.h"
+#include "src/types/energy_flow/flow_updates.h"
 #include "src/types/media/artwork_payload.h"
 #include "src/web/server/web_admin.h"
 #include "src/tiles/icons/mdi_icons.h"
@@ -2844,6 +2845,12 @@ void tiles_update_sensor_by_entity(GridType grid_type, const char* entity_id, co
   // setting must reach the label), but only a new payload is logged; the
   // renderers skip identical texts and colors.
   const bool changed = cache_entity_payload(entity_id, value);
+  // Energy flow tiles read every node from the cache; they redraw in the
+  // loop (types/energy_flow), and a node's open Sensor popup follows.
+  if (grid_type == GridType::TAB0 && energy_flow_entity_changed(entity_id)) {
+    const String unit = haBridgeConfig.findSensorUnit(entity_id);
+    queue_sensor_popup_value(entity_id, value, unit.length() ? unit.c_str() : nullptr);
+  }
   // Previously, returning immediately during sleep cached only the latest
   // state and left UI queues empty. Waking then required a special
   // catch-up in tiles_refresh_visible_from_cache(), which could omit tile

@@ -62,7 +62,11 @@ const renderer = read('src/types/energy_flow/renderer.cpp');
 for (const marker of [
   // One shared timer at the Media bars' pace, created once, resting
   // without a flow.
-  'constexpr uint32_t kMotionPeriodMs = 40;',
+  // Every second display refresh (b533 stuttered at 40 ms), whole-pixel
+  // steps counted, not elapsed time.
+  'constexpr uint32_t kMotionPeriodMs = 2 * LV_DEF_REFR_PERIOD;',
+  'st.step[line] = watts >= kStep3Watts ? 3 : watts >= kStep2Watts ? 2 : 1;',
+  'st->phase[line] = fmodf(st->phase[line] + st->step[line], length);',
   'g_motion_timer = lv_timer_create(motion_timer_cb, kMotionPeriodMs, nullptr);',
   'if (!running) lv_timer_pause(timer);',
   // Never behind a popup, asleep or off screen; only the dot's area.
@@ -91,7 +95,15 @@ for (const marker of [
 // The decided node size on every layout: a 56 px disc in a 6 px ring
 // (b532 took the device's smaller tile radius).
 const metrics = read('src/types/energy_flow/flow_metrics.h');
-assert.ok(metrics.includes('m.ring = tile_layout::scale(34);') && metrics.includes('m.disc = tile_layout::scale(28);'));
+assert.ok(metrics.includes('return tile_icon_disc::header_diameter(icon) - 2 * tile_icon_disc::corner_shrink();'),
+  'the disc of a 1x1 tile as drawn (b532 took the tile radius, b533 the mockup 56 px)');
+assert.ok(metrics.includes('m.ring = m.disc + tile_icon_disc::inset() + tile_icon_disc::corner_shrink();'),
+  'the ring as wide as the tile disc gap to the card edge');
+// Their shapes are the tiles': the card corner and its corner disc, not
+// full circles on the V2.
+assert.ok(renderer.includes('ui_surface_style::apply_radius(ring, tile_layout::scale_480(22), 0);'));
+assert.ok(renderer.includes('ui_surface_style::apply_radius(disc, tile_icon_disc::radius_baseline() - tile_icon_disc::corner_shrink(), 0);'));
+assert.doesNotMatch(renderer, /set_style_radius\([^;]*(ring|disc)[^;]*LV_RADIUS_CIRCLE/);
 assert.doesNotMatch(renderer.slice(renderer.indexOf('void motion_timer_cb'), renderer.indexOf('void wake_motion')),
   /Serial\.|String |new |malloc/, 'no logs or allocations per frame');
 
@@ -121,7 +133,7 @@ const vars = {'--radius-preview-scale': '0.5', '--preview-cell-w': '97', '--prev
   '--tile-card': '#1A1A1A', '--icon-glow-pct': '25'};
 const context = vm.createContext({
   Math, Number, String, Object, Array, JSON, parseFloat, parseInt,
-  ENERGY_FLOW_LAYOUT: {ring: 34, disc: 28, insetX: 24, insetY: 20, spacing: 18, lineWidth: 4, dotRadius: 5, iconPx: 48,
+  ENERGY_FLOW_LAYOUT: {ring: 36, disc: 30, ringCorner: 30, discCorner: 24, insetX: 24, insetY: 20, spacing: 18, lineWidth: 4, dotRadius: 5, iconPx: 48,
     valuePx: 20, valueLine: 24, valueBase: 5, valueGap: 12, valueBelow: 15, edge: 6, titleRight: 17, titleTop: 25},
   document: {documentElement: {}},
   getComputedStyle: () => ({getPropertyValue: name => vars[name] || ''}),
@@ -142,9 +154,9 @@ context.applyEnergyFlowPreview(el, {flow_entities: 'sensor.pv\nsensor.grid\nsens
 const drawn = el.html;
 assert.ok(drawn.includes('width="404.00" height="320.00"'), 'the V2 2x2 tile in display pixels');
 assert.ok(drawn.includes('transform:scale(0.5)'), 'scaled like every preview');
-assert.ok(drawn.includes('<path d="M86 160 L318 160" fill="none" stroke="#488FC2"'), 'grid -> home in the grid color');
-assert.ok(/<path d="M220 75 [^"]*" fill="none" stroke="#3C3C3C"/.test(drawn), 'solar -> home idle grey');
-assert.ok(drawn.includes('<path d="M220 245 A67 67 0 0 1 287 178 L325 178" fill="none" stroke="#F06292"'),
+assert.ok(drawn.includes('<path d="M90 160 L314 160" fill="none" stroke="#488FC2"'), 'grid -> home in the grid color');
+assert.ok(/<path d="M220 80 [^"]*" fill="none" stroke="#3C3C3C"/.test(drawn), 'solar -> home idle grey');
+assert.ok(drawn.includes('<path d="M220 240 A62 62 0 0 1 282 178 L320 178" fill="none" stroke="#F06292"'),
   'battery -> home in the battery color, its bend a circle arc');
 assert.ok(drawn.includes('mdi-battery-70'), 'the battery shows Home Assistant\'s level icon');
 assert.ok(drawn.includes('color:#F06292"></i>') && /mdi-home" style="[^"]*color:#F06292/.test(drawn), 'home takes the main source color');

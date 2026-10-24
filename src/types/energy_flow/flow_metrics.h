@@ -2,6 +2,8 @@
 
 #include <lvgl.h>
 
+#include "src/tiles/icons/mdi_icons.h"
+#include "src/tiles/runtime/tile_icon_disc.h"
 #include "src/tiles/runtime/tile_renderer_fonts.h"
 #include "src/types/energy_flow/flow_geometry.h"
 
@@ -10,13 +12,22 @@
 // V2's (scale 1); the other layouts scale them like every tile.
 namespace energy_flow {
 
+// The disc of a 1x1 tile on this layout, as drawn: its corner disc around
+// the icon (tile_icon_disc::corner_header), shrunk to keep the bar pill's
+// gap to the card edge (shrink_corner_disc).
+inline int tile_disc_diameter() {
+  const int icon = static_cast<int>(lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0));
+  return tile_icon_disc::header_diameter(icon) - 2 * tile_icon_disc::corner_shrink();
+}
+
 inline Metrics device_metrics() {
   Metrics m;
-  // The decided node: a 56 px disc in a 6 px ring, 68 px in all (user
-  // 2026-10-24); the device's tile radius is smaller on some layouts and
-  // gave smaller circles (b532).
-  m.ring = tile_layout::scale(34);
-  m.disc = tile_layout::scale(28);
+  // A node is the disc of a 1x1 tile in a ring as wide as that disc's gap
+  // to the card edge (user 2026-10-24: "gleiche Größe wie die ab 1x1
+  // Kachel"; b532 took the tile radius, b533 the mockup's 56 px, both
+  // smaller than the V2's 60 px tile disc).
+  m.disc = tile_disc_diameter() / 2.0f;
+  m.ring = m.disc + tile_icon_disc::inset() + tile_icon_disc::corner_shrink();
   m.inset_x = tile_layout::scale(24);
   m.inset_y = tile_layout::scale(20);
   m.spacing = tile_layout::scale(18);

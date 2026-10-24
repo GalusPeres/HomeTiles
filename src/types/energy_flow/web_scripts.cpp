@@ -34,12 +34,19 @@ void append_energy_flow_scripts(String& html) {
   const int icon_px =
       static_cast<int>(lv_font_get_glyph_width(FONT_MDI_ICONS, tile_icon_disc::kMdiReferenceGlyph, 0));
   const int line = static_cast<int>(lv_font_get_line_height(font));
-  char text[420];
+  // The node shapes: the card corner and the tile's corner disc
+  // (renderer.cpp apply_ring_shape, apply_disc_shape).
+  const int ring_corner = ui_surface_style::radius(tile_layout::scale_480(22));
+  const int disc_corner =
+      ui_surface_style::radius(tile_icon_disc::radius_baseline() - tile_icon_disc::corner_shrink());
+  char text[480];
   snprintf(text, sizeof(text),
-           "  <script>\n  const ENERGY_FLOW_LAYOUT = Object.freeze({ring: %d, disc: %d, insetX: %d, insetY: %d, "
+           "  <script>\n  const ENERGY_FLOW_LAYOUT = Object.freeze({ring: %.1f, disc: %.1f, ringCorner: %d, "
+           "discCorner: %d, insetX: %d, insetY: %d, "
            "spacing: %d, lineWidth: %d, dotRadius: %d, iconPx: %d, valuePx: %d, valueLine: %d, valueBase: %d, "
            "valueGap: %d, valueBelow: %d, edge: %d, titleRight: %d, titleTop: %d});\n  </script>\n",
-           static_cast<int>(m.ring), static_cast<int>(m.disc), static_cast<int>(m.inset_x),
+           static_cast<double>(m.ring), static_cast<double>(m.disc), ring_corner, disc_corner,
+           static_cast<int>(m.inset_x),
            static_cast<int>(m.inset_y), static_cast<int>(m.spacing), energy_flow::line_width(),
            energy_flow::dot_radius(), icon_px, font_px(font), line, static_cast<int>(font->base_line),
            energy_flow::value_gap(), energy_flow::value_below(), energy_flow::value_edge(),

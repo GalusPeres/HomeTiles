@@ -329,10 +329,19 @@
     const frame = !onCard && !!el.closest?.('.tile-grid')?.classList.contains('tiles-bordered');
     const frameColor = light ? '#DDDDDD' : '#292929';
     let html = '';
+    // A node is the corner of a 1x1 tile (renderer.cpp create_node): the
+    // tile's corner disc in a ring shaped like the card corner.
+    const square = (cx, cy, half, corner, attributes) => {
+      const side = 2 * half;
+      return '<rect x="' + (r(cx) - half) + '" y="' + (r(cy) - half) + '" width="' + side + '" height="' + side +
+        '" rx="' + Math.min(corner, half) + '" ' + attributes + '/>';
+    };
     const node = (cx, cy, hex, icon) => {
-      svg += '<circle cx="' + r(cx) + '" cy="' + r(cy) + '" r="' + L.ring + '" fill="' + toneHex(cardRgb) + '"' +
-        (frame ? ' stroke="' + frameColor + '" stroke-width="1"' : '') + '/>';
-      svg += '<circle cx="' + r(cx) + '" cy="' + r(cy) + '" r="' + L.disc + '" fill="' + energyFlowDisc(cardRgb, hex) + '"/>';
+      svg += square(cx, cy, L.ring, L.ringCorner, 'fill="' + toneHex(cardRgb) + '"');
+      if (frame) {
+        svg += square(cx, cy, L.ring - 0.5, L.ringCorner - 0.5, 'fill="none" stroke="' + frameColor + '" stroke-width="1"');
+      }
+      svg += square(cx, cy, L.disc, L.discCorner, 'fill="' + energyFlowDisc(cardRgb, hex) + '"');
       html += '<i class="mdi mdi-' + escapeHtml(icon) + '" style="position:absolute;left:' + r(cx - L.iconPx / 2) +
         'px;top:' + r(cy - L.iconPx / 2) + 'px;width:' + L.iconPx + 'px;height:' + L.iconPx + 'px;font-size:' + L.iconPx +
         'px;line-height:' + L.iconPx + 'px;text-align:center;color:' + hex + '"></i>';

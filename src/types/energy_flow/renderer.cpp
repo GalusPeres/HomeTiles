@@ -50,12 +50,14 @@ constexpr uint32_t kHeaderIconColor = 0xF29C06;
 constexpr uint32_t kIdleDark = 0x3C3C3C;
 constexpr uint32_t kIdleLightCard = 0xDCDEE2;
 constexpr uint32_t kIdleLightScreen = 0xCDD0D5;
-// One step of the dots, the pace of the Media tile's playing bars.
-constexpr uint32_t kMotionPeriodMs = 40;
-// The dots' speed: calm at a few watts, faster towards this power.
-constexpr float kFastWatts = 5000.0f;
-constexpr float kSlowPxPerSecond = 40.0f;
-constexpr float kFastPxPerSecond = 120.0f;
+// One step of the dots on every second display refresh, so every step
+// shows for the same time: b533's 40 ms steps showed for 34 or 51 ms (the
+// display refreshes every 17 ms) and the dots stuttered (user 2026-10-24).
+constexpr uint32_t kMotionPeriodMs = 2 * LV_DEF_REFR_PERIOD;
+// Whole pixels per step by power, the same step every time (fractional
+// steps drew 1 and 2 px in turn): calm at a few hundred watts, faster above.
+constexpr float kStep2Watts = 500.0f;
+constexpr float kStep3Watts = 2500.0f;
 constexpr size_t kMaxFlowTiles = 32;
 
 struct NodeWidgets {
@@ -78,7 +80,6 @@ struct FlowTileState {
   uint32_t idle_color = 0;
   int line_width = 4;
   int dot_radius = 5;
-  float speed_scale = 1.0f;
   Layout layout;
   lv_area_t line_box[kLineCount] = {};
   NodeWidgets node[kNodeCount];
@@ -86,10 +87,9 @@ struct FlowTileState {
   bool line_live[kLineCount] = {};
   bool reverse[kLineCount] = {};
   uint32_t line_color[kLineCount] = {};
-  float speed[kLineCount] = {};  // px per ms
+  uint8_t step[kLineCount] = {};  // px per motion step
   float phase[kLineCount] = {};  // distance along the line
   lv_point_t dot[kLineCount] = {};
-  uint32_t last_tick = 0;
   bool dirty = false;
 };
 
@@ -202,23 +202,21 @@ bool any_live(const FlowTileState& st) {
 }
 
 void motion_timer_cb(lv_timer_t* timer) {
-  const uint32_t now = lv_tick_get();
   const bool still = popup_shell_active() || powerManager.isInSleep();
   bool running = false;
   for (FlowTileState* st : g_tiles) {
     if (!st || !any_live(*st)) continue;
     running = true;
-    uint32_t elapsed = now - st->last_tick;
-    st->last_tick = now;
+    // Steps, not elapsed time: a busy loop slows the dots for a moment
+    // instead of making them jump.
     if (still || !shown_on_screen(st->card)) continue;
-    if (elapsed > 4 * kMotionPeriodMs) elapsed = kMotionPeriodMs;
     lv_area_t canvas;
     lv_obj_get_coords(st->canvas, &canvas);
     for (uint8_t line = 0; line < kLineCount; ++line) {
       if (!st->line_live[line]) continue;
       const float length = polyline_length(st->layout.line[line]);
       if (length <= 0.0f) continue;
-      st->phase[line] = fmodf(st->phase[line] + st->speed[line] * elapsed, length);
+      st->phase[line] = fmodf(st->phase[line] + st->step[line], length);
       const lv_point_t next = dot_point(*st, line);
       if (next.x == st->dot[line].x && next.y == st->dot[line].y) continue;
       invalidate_dot(*st, canvas, st->dot[line], next);
@@ -228,8 +226,7 @@ void motion_timer_cb(lv_timer_t* timer) {
   if (!running) lv_timer_pause(timer);
 }
 
-void wake_motion(FlowTileState& st) {
-  st.last_tick = lv_tick_get();
+void wake_motion() {
   if (!g_motion_timer) {
     g_motion_timer = lv_timer_create(motion_timer_cb, kMotionPeriodMs, nullptr);
     return;
@@ -351,12 +348,12 @@ void refresh(FlowTileState& st) {
     st.line_live[line] = live;
     st.line_color[line] = color;
     st.reverse[line] = reverse;
-    const float share = fminf(flows.watts[line] / kFastWatts, 1.0f);
-    st.speed[line] = (kSlowPxPerSecond + (kFastPxPerSecond - kSlowPxPerSecond) * sqrtf(share)) * st.speed_scale / 1000.0f;
+    const float watts = flows.watts[line];
+    st.step[line] = watts >= kStep3Watts ? 3 : watts >= kStep2Watts ? 2 : 1;
     if (live) st.dot[line] = dot_point(st, line);
   }
   if (redraw) lv_obj_invalidate(st.canvas);
-  if (any_live(st)) wake_motion(st);
+  if (any_live(st)) wake_motion();
 }
 
 void open_node_popup(lv_event_t* e, FlowTileState& st, uint8_t role, uint8_t node) {
@@ -429,6 +426,16 @@ bool register_state(FlowTileState* st) {
   return false;
 }
 
+// A node is the corner of a 1x1 tile: its disc is the tile's corner disc
+// (on the V2 a square with round corners, concentric with the card corner),
+// the ring around it the card corner itself (user 2026-10-24: "auf dem V2
+// sind das nicht komplette Kreise"). Both take the tiles' shared radius
+// styles, so they follow the tiles.
+void apply_ring_shape(lv_obj_t* ring) { ui_surface_style::apply_radius(ring, tile_layout::scale_480(22), 0); }
+void apply_disc_shape(lv_obj_t* disc) {
+  ui_surface_style::apply_radius(disc, tile_icon_disc::radius_baseline() - tile_icon_disc::corner_shrink(), 0);
+}
+
 // A node: the plain tile disc with its icon inside a ring in the card's
 // color (the corner of a tile, user 2026-10-24). The ring is what a tap hits.
 void create_node(FlowTileState& st, uint8_t node, uint8_t role, int pad_left, int pad_top, bool frame_lines) {
@@ -441,7 +448,7 @@ void create_node(FlowTileState& st, uint8_t node, uint8_t role, int pad_left, in
   lv_obj_remove_flag(w.ring, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(w.ring, ring, ring);
   lv_obj_set_pos(w.ring, round_px(centre.x) - ring / 2 - pad_left, round_px(centre.y) - ring / 2 - pad_top);
-  lv_obj_set_style_radius(w.ring, LV_RADIUS_CIRCLE, 0);
+  apply_ring_shape(w.ring);
   lv_obj_set_style_bg_opa(w.ring, LV_OPA_COVER, 0);
   lv_obj_set_style_bg_color(w.ring, lv_color_hex(st.card_color), 0);
   lv_obj_set_style_bg_color(w.ring, lv_color_hex(tone_color::pressed_card(st.card_color)), LV_STATE_PRESSED);
@@ -463,7 +470,7 @@ void create_node(FlowTileState& st, uint8_t node, uint8_t role, int pad_left, in
   lv_obj_remove_flag(w.disc, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(w.disc, disc, disc);
   lv_obj_center(w.disc);
-  lv_obj_set_style_radius(w.disc, LV_RADIUS_CIRCLE, 0);
+  apply_disc_shape(w.disc);
   lv_obj_set_style_bg_opa(w.disc, LV_OPA_COVER, 0);
 
   w.icon = lv_label_create(w.ring);
@@ -530,7 +537,6 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
   st->idle_color = !ui_theme::light() ? kIdleDark : on_card ? kIdleLightCard : kIdleLightScreen;
   st->line_width = line_width();
   st->dot_radius = dot_radius();
-  st->speed_scale = tile_layout::scale(1000) / 1000.0f;
   lv_obj_add_event_cb(card, card_delete_cb, LV_EVENT_DELETE, st);
 
   // The tile's size as the grid places it (whole and half cells alike).
@@ -638,7 +644,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
     lv_obj_remove_flag(header.ring, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(header.ring, ring, ring);
     lv_obj_set_pos(header.ring, round_px(corner) - ring / 2 - pad_left, round_px(corner) - ring / 2 - pad_top);
-    lv_obj_set_style_radius(header.ring, LV_RADIUS_CIRCLE, 0);
+    apply_ring_shape(header.ring);
     lv_obj_set_style_bg_opa(header.ring, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(header.ring, lv_color_hex(card_color), 0);
     if (frame_lines) ui_surface_style::apply_global_tile_border(header.ring);
@@ -647,7 +653,7 @@ lv_obj_t* render_energy_flow_tile(lv_obj_t* parent, int col, int row, const Tile
     lv_obj_remove_flag(header.disc, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_size(header.disc, disc, disc);
     lv_obj_center(header.disc);
-    lv_obj_set_style_radius(header.disc, LV_RADIUS_CIRCLE, 0);
+    apply_disc_shape(header.disc);
     lv_obj_set_style_bg_opa(header.disc, LV_OPA_COVER, 0);
     header.icon = lv_label_create(header.ring);
     set_label_style(header.icon, lv_color_hex(ui_theme::icon()), FONT_MDI_ICONS);

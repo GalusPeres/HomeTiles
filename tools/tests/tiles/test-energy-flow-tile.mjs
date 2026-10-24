@@ -60,19 +60,22 @@ assert.match(tiles, /const bool changed = cache_entity_payload\(entity_id, value
 assert.match(read('src/tiles/runtime/tile_update_service.h'), /process_media_update_queue\(drain_all \? 0 : 2\);\s*\/\/[^\n]*\n\s*process_energy_flow_updates\(\);/);
 const renderer = read('src/types/energy_flow/renderer.cpp');
 for (const marker of [
-  // One shared timer at the Media bars' pace, created once, resting
-  // without a flow.
-  // Every second display refresh (b533 stuttered at 40 ms), whole-pixel
-  // steps counted, not elapsed time.
-  'constexpr uint32_t kMotionPeriodMs = 2 * LV_DEF_REFR_PERIOD;',
-  'st.step[line] = watts >= kStep3Watts ? 3 : watts >= kStep2Watts ? 2 : 1;',
+  // One step per display frame (60 fps, user 2026-10-24): the display's
+  // refresh moves the dots, whole pixels counted, not elapsed time (b533's
+  // 40 ms timer stuttered); without a shown dot LVGL's refresh rests.
+  'lv_display_add_event_cb(g_motion_display, motion_display_cb, LV_EVENT_REFR_START, nullptr);',
+  'st.step[line] = watts >= kStep2Watts ? 2 : 1;',
   'st->phase[line] = fmodf(st->phase[line] + st->step[line], length);',
-  'g_motion_timer = lv_timer_create(motion_timer_cb, kMotionPeriodMs, nullptr);',
-  'if (!running) lv_timer_pause(timer);',
-  // Never behind a popup, asleep or off screen; only the dot's area.
-  'const bool still = popup_shell_active() || powerManager.isInSleep();',
-  'if (still || !shown_on_screen(st->card)) continue;',
+  'if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));',
+  // Never behind a popup, asleep or off screen; only the dot's area, and
+  // only the line pieces that touch it.
+  'if (popup_shell_active() || powerManager.isInSleep()) return 0;',
+  'if (!st || !any_live(*st) || !shown_on_screen(st->card)) continue;',
   'lv_obj_invalidate_area(st.canvas, &area);',
+  'if (last <= first || !piece_on_clip(layer, canvas, path, first, last, dsc.width)) return;',
+  // What the dots cost, one log line per 10 s while they move.
+  'constexpr uint32_t kMotionLogMs = 10000;',
+  'Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu',
   // State changes only mark; unchanged texts are not set again.
   'st->dirty = true;',
   'if (shown && text == shown) return;',
@@ -104,8 +107,10 @@ assert.ok(metrics.includes('m.ring = m.disc + tile_icon_disc::inset() + tile_ico
 assert.ok(renderer.includes('ui_surface_style::apply_radius(ring, tile_layout::scale_480(22), 0);'));
 assert.ok(renderer.includes('ui_surface_style::apply_radius(disc, tile_icon_disc::radius_baseline() - tile_icon_disc::corner_shrink(), 0);'));
 assert.doesNotMatch(renderer, /set_style_radius\([^;]*(ring|disc)[^;]*LV_RADIUS_CIRCLE/);
-assert.doesNotMatch(renderer.slice(renderer.indexOf('void motion_timer_cb'), renderer.indexOf('void wake_motion')),
-  /Serial\.|String |new |malloc/, 'no logs or allocations per frame');
+assert.doesNotMatch(renderer.slice(renderer.indexOf('uint32_t step_dots('), renderer.indexOf('void log_motion(')),
+  /Serial\.|String |new |malloc/, 'no logs or allocations per step');
+assert.doesNotMatch(renderer.slice(renderer.indexOf('void motion_display_cb('), renderer.indexOf('void wake_motion(')),
+  /Serial\.|String |new |malloc/, 'no logs or allocations per frame outside the rate-limited line');
 
 // Every language has the ten labels, none empty; the Web Admin shows them
 // through energy_flow_label only.

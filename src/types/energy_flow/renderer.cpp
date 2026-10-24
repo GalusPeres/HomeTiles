@@ -33,9 +33,9 @@
 //
 // Cost: the lines and dots are drawn by one object (DRAW_MAIN), the nodes
 // are plain objects above it. A state change only marks the tile; the loop
-// redraws it once. The dots move on one shared timer while a flow runs, on
-// a shown page, without a popup and while the display is awake: each step
-// redraws the dot's small area only, never the tile.
+// redraws it once. The dots move with the display's own refresh while a
+// flow runs, on a shown page, without a popup and while the display is
+// awake: each step redraws the dot's small area only, never the tile.
 namespace {
 
 using namespace energy_flow;
@@ -50,14 +50,14 @@ constexpr uint32_t kHeaderIconColor = 0xF29C06;
 constexpr uint32_t kIdleDark = 0x3C3C3C;
 constexpr uint32_t kIdleLightCard = 0xDCDEE2;
 constexpr uint32_t kIdleLightScreen = 0xCDD0D5;
-// One step of the dots on every second display refresh, so every step
-// shows for the same time: b533's 40 ms steps showed for 34 or 51 ms (the
-// display refreshes every 17 ms) and the dots stuttered (user 2026-10-24).
-constexpr uint32_t kMotionPeriodMs = 2 * LV_DEF_REFR_PERIOD;
-// Whole pixels per step by power, the same step every time (fractional
-// steps drew 1 and 2 px in turn): calm at a few hundred watts, faster above.
-constexpr float kStep2Watts = 500.0f;
-constexpr float kStep3Watts = 2500.0f;
+// One step of the dots per display frame (60 fps on the 17 ms refresh,
+// user 2026-10-24): the display's refresh moves them (LV_EVENT_REFR_START),
+// so every frame shows one step and no timer beats against the refresh
+// (b533's 40 ms timer showed its steps for 34 or 51 ms). Whole pixels per
+// step, the same every frame: 1 px, 2 px from this power.
+constexpr float kStep2Watts = 1500.0f;
+// The dots' cost in the log: one line per this many ms while they move.
+constexpr uint32_t kMotionLogMs = 10000;
 constexpr size_t kMaxFlowTiles = 32;
 
 struct NodeWidgets {
@@ -94,7 +94,32 @@ struct FlowTileState {
 };
 
 FlowTileState* g_tiles[kMaxFlowTiles] = {};
-lv_timer_t* g_motion_timer = nullptr;
+lv_display_t* g_motion_display = nullptr;
+
+// What the dots cost (one log line per kMotionLogMs while they move): the
+// frames that moved one, their dirty areas and render time, the steps' own
+// time and the longest gap between two frames (the loop elsewhere).
+struct MotionStats {
+  uint32_t window_ms = 0;
+  uint32_t frames = 0;
+  uint32_t step_us = 0;
+  uint32_t step_max_us = 0;
+  uint32_t render_us = 0;
+  uint32_t render_max_us = 0;
+  uint32_t areas = 0;
+  uint32_t areas_max = 0;
+  uint32_t gap_max_us = 0;
+  uint32_t dots_max = 0;
+  // The tiles' line drawing (canvas DRAW_MAIN) inside those frames.
+  uint32_t lines_us = 0;
+  uint32_t lines_max_us = 0;
+  uint32_t frame_lines_us = 0;
+  // The frame under way.
+  uint32_t frame_start_us = 0;
+  uint32_t frame_areas = 0;
+  uint32_t last_ready_us = 0;
+};
+MotionStats g_motion_stats;
 bool g_any_dirty = false;
 
 int round_px(float value) { return static_cast<int>(lroundf(value)); }
@@ -201,15 +226,14 @@ bool any_live(const FlowTileState& st) {
   return false;
 }
 
-void motion_timer_cb(lv_timer_t* timer) {
-  const bool still = popup_shell_active() || powerManager.isInSleep();
-  bool running = false;
+// One step of every shown dot; the number of dots that moved. `waiting`:
+// a dot is shown that did not change its pixel this frame.
+uint32_t step_dots(bool& waiting) {
+  waiting = false;
+  if (popup_shell_active() || powerManager.isInSleep()) return 0;
+  uint32_t moved = 0;
   for (FlowTileState* st : g_tiles) {
-    if (!st || !any_live(*st)) continue;
-    running = true;
-    // Steps, not elapsed time: a busy loop slows the dots for a moment
-    // instead of making them jump.
-    if (still || !shown_on_screen(st->card)) continue;
+    if (!st || !any_live(*st) || !shown_on_screen(st->card)) continue;
     lv_area_t canvas;
     lv_obj_get_coords(st->canvas, &canvas);
     for (uint8_t line = 0; line < kLineCount; ++line) {
@@ -218,26 +242,112 @@ void motion_timer_cb(lv_timer_t* timer) {
       if (length <= 0.0f) continue;
       st->phase[line] = fmodf(st->phase[line] + st->step[line], length);
       const lv_point_t next = dot_point(*st, line);
-      if (next.x == st->dot[line].x && next.y == st->dot[line].y) continue;
+      if (next.x == st->dot[line].x && next.y == st->dot[line].y) {
+        waiting = true;
+        continue;
+      }
       invalidate_dot(*st, canvas, st->dot[line], next);
       st->dot[line] = next;
+      ++moved;
     }
   }
-  if (!running) lv_timer_pause(timer);
+  return moved;
 }
 
-void wake_motion() {
-  if (!g_motion_timer) {
-    g_motion_timer = lv_timer_create(motion_timer_cb, kMotionPeriodMs, nullptr);
-    return;
+void log_motion(uint32_t now_ms) {
+  MotionStats& m = g_motion_stats;
+  if (!m.window_ms) m.window_ms = now_ms;
+  if (now_ms - m.window_ms < kMotionLogMs) return;
+  if (m.frames) {
+    const uint32_t frames = m.frames;
+    const uint32_t window = now_ms - m.window_ms;
+    Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu "
+                  "render avg=%.2f max=%.2f ms lines avg=%lu max=%lu us step avg=%lu max=%lu us gap max=%.1f ms\n",
+                  static_cast<unsigned long>(window / 1000), static_cast<unsigned long>(frames),
+                  frames * 1000.0f / window, static_cast<unsigned long>(m.dots_max),
+                  static_cast<float>(m.areas) / frames, static_cast<unsigned long>(m.areas_max),
+                  m.render_us / 1000.0f / frames, m.render_max_us / 1000.0f,
+                  static_cast<unsigned long>(m.lines_us / frames), static_cast<unsigned long>(m.lines_max_us),
+                  static_cast<unsigned long>(m.step_us / frames), static_cast<unsigned long>(m.step_max_us),
+                  m.gap_max_us / 1000.0f);
   }
-  lv_timer_resume(g_motion_timer);
+  m = MotionStats{};
+  m.window_ms = now_ms;
+}
+
+// The display's refresh: one step at its start (its areas are drawn in this
+// same refresh), the next frame asked for while a dot is shown; nothing
+// shown, nothing asked: LVGL rests its refresh until the UI changes again.
+void motion_display_cb(lv_event_t* e) {
+  MotionStats& m = g_motion_stats;
+  const lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_REFR_START) {
+    m.frame_areas = 0;
+    const uint32_t started = micros();
+    bool waiting = false;
+    const uint32_t moved = step_dots(waiting);
+    if (!moved) {
+      if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
+      return;
+    }
+    const uint32_t now = micros();
+    const uint32_t step = now - started;
+    ++m.frames;
+    m.step_us += step;
+    if (step > m.step_max_us) m.step_max_us = step;
+    if (moved > m.dots_max) m.dots_max = moved;
+    if (m.last_ready_us && now - m.last_ready_us > m.gap_max_us) m.gap_max_us = now - m.last_ready_us;
+    m.frame_start_us = now;
+    m.frame_lines_us = 0;
+    m.frame_areas = g_motion_display->inv_p;
+  } else if (code == LV_EVENT_REFR_READY && m.frame_areas) {
+    const uint32_t now = micros();
+    const uint32_t render = now - m.frame_start_us;
+    m.render_us += render;
+    if (render > m.render_max_us) m.render_max_us = render;
+    m.areas += m.frame_areas;
+    if (m.frame_areas > m.areas_max) m.areas_max = m.frame_areas;
+    m.lines_us += m.frame_lines_us;
+    if (m.frame_lines_us > m.lines_max_us) m.lines_max_us = m.frame_lines_us;
+    m.frame_areas = 0;
+    m.last_ready_us = now;
+    log_motion(millis());
+  }
+}
+
+// A flow runs: the refresh moves the dots from now on (the callbacks stay
+// and return at once without a shown dot), the next frame starts them.
+void wake_motion(lv_obj_t* card) {
+  if (!g_motion_display) {
+    g_motion_display = lv_obj_get_display(card);
+    if (!g_motion_display) return;
+    lv_display_add_event_cb(g_motion_display, motion_display_cb, LV_EVENT_REFR_START, nullptr);
+    lv_display_add_event_cb(g_motion_display, motion_display_cb, LV_EVENT_REFR_READY, nullptr);
+  }
+  lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
+}
+
+// Whether points first..last of a line, `width` around them, touch the area
+// being drawn: a dot's step redraws a few pixels, and a piece outside them
+// is not handed to LVGL at all.
+bool piece_on_clip(const lv_layer_t* layer, const lv_area_t& canvas, const Polyline& path, uint8_t first,
+                   uint8_t last, int width) {
+  lv_area_t box = {LV_COORD_MAX, LV_COORD_MAX, LV_COORD_MIN, LV_COORD_MIN};
+  for (uint8_t i = first; i <= last; ++i) {
+    box.x1 = LV_MIN(box.x1, round_px(path.p[i].x));
+    box.y1 = LV_MIN(box.y1, round_px(path.p[i].y));
+    box.x2 = LV_MAX(box.x2, round_px(path.p[i].x));
+    box.y2 = LV_MAX(box.y2, round_px(path.p[i].y));
+  }
+  lv_area_increase(&box, width, width);
+  lv_area_move(&box, canvas.x1, canvas.y1);
+  return lv_area_is_on(&box, &layer->_clip_area);
 }
 
 // Points first..last of a line as straight pieces (two or more points).
 void draw_straight(lv_layer_t* layer, lv_draw_line_dsc_t& dsc, const lv_area_t& canvas, const Polyline& path,
                    uint8_t first, uint8_t last) {
-  if (last <= first) return;
+  if (last <= first || !piece_on_clip(layer, canvas, path, first, last, dsc.width)) return;
   lv_point_precise_t points[kMaxLinePoints];
   for (uint8_t i = first; i <= last; ++i) {
     points[i - first].x = canvas.x1 + round_px(path.p[i].x);
@@ -252,6 +362,7 @@ void canvas_draw_cb(lv_event_t* e) {
   FlowTileState* st = static_cast<FlowTileState*>(lv_event_get_user_data(e));
   lv_layer_t* layer = lv_event_get_layer(e);
   if (!st || !layer) return;
+  const uint32_t started_us = micros();
   lv_area_t canvas;
   lv_obj_get_coords(st->canvas, &canvas);
   lv_draw_line_dsc_t line_dsc;
@@ -280,12 +391,14 @@ void canvas_draw_cb(lv_event_t* e) {
       // Straight, one true circle arc (the stroke centred on its radius),
       // straight.
       draw_straight(layer, line_dsc, canvas, path, 0, path.bend_first);
-      arc_dsc.color = color;
-      arc_dsc.center = {canvas.x1 + path.bend.cx, canvas.y1 + path.bend.cy};
-      arc_dsc.radius = static_cast<uint16_t>(path.bend.radius + st->line_width / 2);
-      arc_dsc.start_angle = path.bend.start_angle;
-      arc_dsc.end_angle = path.bend.end_angle;
-      lv_draw_arc(layer, &arc_dsc);
+      if (piece_on_clip(layer, canvas, path, path.bend_first, path.bend_last, st->line_width)) {
+        arc_dsc.color = color;
+        arc_dsc.center = {canvas.x1 + path.bend.cx, canvas.y1 + path.bend.cy};
+        arc_dsc.radius = static_cast<uint16_t>(path.bend.radius + st->line_width / 2);
+        arc_dsc.start_angle = path.bend.start_angle;
+        arc_dsc.end_angle = path.bend.end_angle;
+        lv_draw_arc(layer, &arc_dsc);
+      }
       draw_straight(layer, line_dsc, canvas, path, path.bend_last, path.count - 1);
     }
   }
@@ -302,6 +415,8 @@ void canvas_draw_cb(lv_event_t* e) {
     dot_dsc.bg_color = lv_color_hex(st->line_color[line]);
     lv_draw_rect(layer, &dot_dsc, &area);
   }
+  // Counted while a dot step's frame is drawn (the dots' log line).
+  if (g_motion_stats.frame_areas) g_motion_stats.frame_lines_us += micros() - started_us;
 }
 
 // Reads every node from the entity cache and shows it.
@@ -349,11 +464,11 @@ void refresh(FlowTileState& st) {
     st.line_color[line] = color;
     st.reverse[line] = reverse;
     const float watts = flows.watts[line];
-    st.step[line] = watts >= kStep3Watts ? 3 : watts >= kStep2Watts ? 2 : 1;
+    st.step[line] = watts >= kStep2Watts ? 2 : 1;
     if (live) st.dot[line] = dot_point(st, line);
   }
   if (redraw) lv_obj_invalidate(st.canvas);
-  if (any_live(st)) wake_motion();
+  if (any_live(st)) wake_motion(st.card);
 }
 
 void open_node_popup(lv_event_t* e, FlowTileState& st, uint8_t role, uint8_t node) {

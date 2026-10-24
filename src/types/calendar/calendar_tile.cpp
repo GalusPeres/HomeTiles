@@ -649,7 +649,7 @@ lv_obj_t* render_calendar_tile(lv_obj_t* parent, int col, int row, const Tile& t
       const int block = lv_font_get_line_height(what_font) + lv_font_get_line_height(when_font);
       const int top = view->content_y + std::max(0, (view->content_h - block) / 2);
       view->bar = plain_box(card);
-      lv_obj_set_size(view->bar, bar_w, std::max(8, block - tile_layout::scale_480(4)));
+      lv_obj_set_size(view->bar, bar_w, std::max(8, block - static_cast<int>(tile_layout::scale_480(4))));
       lv_obj_set_pos(view->bar, 0, top + tile_layout::scale_480(2));
       lv_obj_set_style_radius(view->bar, bar_w / 2, 0);
       lv_obj_set_style_bg_opa(view->bar, LV_OPA_COVER, 0);

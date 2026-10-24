@@ -953,7 +953,7 @@ struct LocaleProfile {
   const char* alarm_states[12];
 
   // Calendar tile and popup (types/calendar), indexed by i18n::CalendarLabel.
-  const char* calendar_labels[23];
+  const char* calendar_labels[25];
   // Month names standing alone, for headings such as "October 2026"
   // (month_names_in_date holds them as they stand in a date), January first.
   const char* month_names[12];
@@ -1023,9 +1023,11 @@ enum class CalendarLabel : uint8_t {
   OneEvent,
   ViewList,
   NoData,
+  ViewToday,
+  Next,
   Count
 };
-static_assert(static_cast<int>(CalendarLabel::Count) == 23, "LocaleProfile::calendar_labels size");
+static_assert(static_cast<int>(CalendarLabel::Count) == 25, "LocaleProfile::calendar_labels size");
 
 // Index into LocaleProfile::device_labels.
 enum class DeviceLabel : uint8_t {

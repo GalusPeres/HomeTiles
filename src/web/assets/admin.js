@@ -10990,7 +10990,7 @@ async function saveGestureEdge(select) {
         displayTitle = metaNames[tile.sensor_entity] ||
           titleFromEntity(tile.sensor_entity);
       }
-      if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle);
+      if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle, sensorMeta);
       if (displayTitle.length) {
         html += '<div class="tile-title" id="' + tab + '-tile-' + index + '-title">' +
           tileTitleHtml(displayTitle) + '</div>';
@@ -18228,7 +18228,7 @@ function maybeFillTitleFromSwitch(tab) {
   const CALENDAR_LABEL = {
     type: 0, entity: 1, calendarN: 2, view: 3, agenda: 4, week: 5, month: 6, weekStart: 7, automatic: 8,
     allDay: 9, noEvents: 10, nothingPlanned: 11, inDays: 12, inHours: 13, inHoursMinutes: 14, inMinutes: 15,
-    now: 16, until: 17, upNext: 18, eventCount: 19, oneEvent: 20, list: 21, noData: 22
+    now: 16, until: 17, upNext: 18, eventCount: 19, oneEvent: 20, list: 21, noData: 22, today: 23, next: 24
   };
   const CALENDAR_AGENDA_DAYS = 31;
 
@@ -18382,6 +18382,50 @@ function maybeFillTitleFromSwitch(tab) {
     if (days < 7) return (calendarI18n().weekdaysShort?.[calendarWeekday(next.day)] || '') + (time ? dot + time : '');
     return brief ? calendarDayLabel(next.day, now) : calendarDayLabel(next.day, now) + dot + calendarLabel('inDays', days);
   }
+  // calendar_text::event_count().
+  function calendarEventCount(count) {
+    if (!count) return calendarLabel('noEvents');
+    return count === 1 ? calendarLabel('oneEvent') : calendarLabel('eventCount', count);
+  }
+  // calendar_model::remaining_today().
+  function calendarRemainingToday(sources, now) {
+    return calendarItemsOn(sources, now.today).filter(item => !(item.event.startMin >= 0 &&
+      item.event.endDay === now.today && item.event.endMin <= now.minute)).length;
+  }
+  function calendarMinutesUntil(next, now) {
+    const start = next.event.startMin < 0 ? 0 : next.event.startMin;
+    return Math.max(0, (next.day - now.today) * 1440 + start - now.minute);
+  }
+  // calendar_text::chip_lines(): the half-height tile's two lines.
+  function calendarChipLines(next, now, wide) {
+    const e = next.event;
+    const dot = ' · ';
+    const title = e.title || '--';
+    if (next.ongoing || !wide) {
+      return {top: calendarLabel(next.ongoing ? 'now' : 'next') + dot + calendarWhenLine(next, now, true), value: title};
+    }
+    const days = next.day - now.today;
+    let when;
+    if (days === 0) when = calendarCountdown(calendarMinutesUntil(next, now));
+    else if (days === 1) when = calendarDayLabel(next.day, now);
+    else if (days < 7) when = calendarI18n().weekdaysShort?.[calendarWeekday(next.day)] || '';
+    else when = calendarDayLabel(next.day, now) + dot + calendarLabel('inDays', days);
+    return {top: calendarLabel('next') + dot + when, value: e.startMin < 0 ? title : title + dot + calendarClock(e.startMin)};
+  }
+  // calendar_text::countdown_lines(): the 1x1 tile's large day and countdown.
+  function calendarCountdownLines(next, now) {
+    const e = next.event;
+    const days = next.day - now.today;
+    if (next.ongoing) {
+      return {top: e.startMin < 0 ? calendarDayLabel(now.today, now) : calendarLabel('now'), value: calendarWhenLine(next, now, true)};
+    }
+    if (days === 0) return {top: calendarDayLabel(now.today, now), value: calendarCountdown(calendarMinutesUntil(next, now))};
+    if (days === 1) return {top: calendarDayLabel(next.day, now), value: e.startMin < 0 ? calendarLabel('allDay') : calendarClock(e.startMin)};
+    return {
+      top: days < 7 ? (calendarI18n().weekdays?.[calendarWeekday(next.day)] || '') : calendarDayLabel(next.day, now),
+      value: calendarLabel('inDays', days)
+    };
+  }
   function calendarWeekStart(stored) {
     const value = Number(stored);
     if ([0, 1, 6].includes(value)) return value;
@@ -18392,16 +18436,23 @@ function maybeFillTitleFromSwitch(tab) {
   // calendar_tile.cpp layout_of().
   function calendarPreviewLayout(tile) {
     const w = Number(tile.span_w) || 1, h = Number(tile.span_h) || 1;
-    if (h === 0.5) return 'compact';
     const view = Number(tile.sensor_display_mode) || 0;
+    if (h === 0.5) return view === 3 ? 'count' : 'compact';
     if (view === 2 && calendarI18n().monthView && w >= 2 && h >= 2) return 'month';
     if (view === 1 && w >= 1.5) return 'week';
-    return h >= 2 ? 'agenda' : 'next';
+    if (h >= 2) return 'agenda';
+    return w >= 2 ? 'next' : 'countdown';
   }
-  // The title the tile shows: the month's on the month view, none at half height.
-  function calendarPreviewTitle(tile, title) {
+  // The title the tile shows: the month's on the month view, the next event's
+  // on the countdown, none at half height.
+  function calendarPreviewTitle(tile, title, meta = sensorMetaCache) {
     const layout = calendarPreviewLayout(tile);
-    if (layout === 'compact') return '';
+    if (layout === 'compact' || layout === 'count') return '';
+    if (layout === 'countdown') {
+      const sources = calendarPreviewSources(calendarEntitiesOf(tile.sensor_entity), meta);
+      const next = sources.some(source => source.valid) ? calendarNextEvent(sources, calendarNow()) : null;
+      return next ? (next.event.title || '--') : title;
+    }
     if (layout === 'month') {
       const c = calendarCivil(calendarNow().today);
       return (calendarI18n().months?.[c.m - 1] || '') + ' ' + c.y;
@@ -18424,11 +18475,13 @@ function maybeFillTitleFromSwitch(tab) {
       const c = calendarCivil(day);
       const cls = ['calendar-preview-day'];
       if (day === now.today) cls.push('today');
+      if (day === now.today && !month) cls.push('strip-today');
       else if (month && c.m !== shownMonth) cls.push('outside');
       else if (day < now.today) cls.push('past');
       const dots = month && c.m !== shownMonth ? [] : [...new Set(calendarItemsOn(sources, day).map(item => item.calendar))]
         .sort().map(index => '<i style="background:' + calendarColor(index) + '"></i>').join('');
-      html += '<span class="' + cls.join(' ') + '">' +
+      const tint = day === now.today && !month && sources.length ? ' style="--calendar-tint:' + calendarColor(0) + '"' : '';
+      html += '<span class="' + cls.join(' ') + '"' + tint + '>' +
         (month ? '' : '<small>' + escapeHtml(t.weekdaysShort?.[calendarWeekday(day)] || '') + '</small>') +
         '<b>' + c.d + '</b><span class="calendar-preview-dots">' + dots + '</span></span>';
     }
@@ -18443,13 +18496,32 @@ function maybeFillTitleFromSwitch(tab) {
     const now = calendarNow();
     const hasData = sources.some(source => source.valid);
     const message = !entities.length ? '--' : (!hasData ? calendarLabel('noData') : '');
-    if (layout === 'compact' || layout === 'next') {
+    if (layout === 'count') {
+      const what = !entities.length ? '--' : (!hasData ? calendarLabel('noData') : calendarEventCount(calendarRemainingToday(sources, now)));
+      return '<div class="tile-title calendar-preview-when">' + escapeHtml(calendarI18n().today || 'Today') + '</div>' +
+        '<div class="tile-value calendar-preview-what">' + escapeHtml(what) + '</div>';
+    }
+    if (layout === 'compact' || layout === 'next' || layout === 'countdown') {
       const next = message ? null : calendarNextEvent(sources, now);
-      const what = message || (next ? next.event.title : calendarLabel('nothingPlanned'));
-      const when = next ? calendarWhenLine(next, now, layout === 'compact') : '';
+      let what = message || (next ? next.event.title : calendarLabel('nothingPlanned'));
+      let when = next ? calendarWhenLine(next, now, false) : '';
+      if (next && layout === 'compact') {
+        const lines = calendarChipLines(next, now, Number(tile.span_w) >= 2);
+        when = lines.top;
+        what = lines.value;
+      } else if (next && layout === 'countdown') {
+        const lines = calendarCountdownLines(next, now);
+        what = lines.top;
+        when = lines.value;
+      }
       if (layout === 'compact') {
         return '<div class="tile-title calendar-preview-when">' + escapeHtml(when) + '</div>' +
           '<div class="tile-value calendar-preview-what">' + escapeHtml(what) + '</div>';
+      }
+      if (layout === 'countdown') {
+        return '<div class="calendar-preview-body countdown">' +
+          '<div class="calendar-preview-what">' + escapeHtml(what) + '</div>' +
+          '<div class="calendar-preview-when">' + escapeHtml(when) + '</div></div>';
       }
       return '<div class="calendar-preview-body next' + (Number(tile.span_w) >= 2 ? ' wide' : '') + '">' +
         (next ? '<span class="calendar-preview-bar" style="background:' + calendarColor(next.calendar) + '"></span>' : '') +
@@ -18465,6 +18537,9 @@ function maybeFillTitleFromSwitch(tab) {
         first = day1 - (calendarWeekday(day1) - weekStart + 7) % 7;
         const last = calendarDay(c.y, c.m, new Date(Date.UTC(c.y, c.m, 0)).getUTCDate());
         rows = Math.floor((last - first) / 7) + 1;
+      } else if ((Number(tile.span_h) || 1) < 2) {
+        // calendar_model::strip_first_day(): a one-row strip starts today.
+        first = now.today;
       } else {
         first = now.today - (calendarWeekday(now.today) - weekStart + 7) % 7;
       }

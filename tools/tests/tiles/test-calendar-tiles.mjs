@@ -49,6 +49,27 @@ assert.match(read('src/tiles/runtime/tile_update_service.h'), /process_device_up
 // The month view only where it is readable; the Web Admin offers it there only.
 assert.match(read('src/types/calendar/calendar_tile.cpp'), /#if defined\(DEVICE_LAYOUT_480X480\)\s*constexpr bool kMonthAvailable = false;/);
 assert.match(read('src/types/calendar/web.cpp'), /#if !defined\(DEVICE_LAYOUT_480X480\)\s*append_option\(html, "2", text\(i18n::CalendarLabel::ViewMonth\)\);\s*#endif/);
+// Today (view 3) on every panel; the full weekday names reach the preview.
+assert.match(read('src/types/calendar/web.cpp'), /append_option\(html, "3", text\(i18n::CalendarLabel::ViewToday\)\);/);
+assert.match(read('src/types/calendar/web.cpp'), /doc\["weekdays"\]\.to<JsonArray>\(\);\s*for \(int d = 0; d < 7; \+\+d\) weekday_names\.add\(loc\.weekday_names\[d\]\);/);
+
+// ---- Tile layouts (calendar_tile.cpp layout_of) ----
+const tileSource = read('src/types/calendar/calendar_tile.cpp');
+assert.match(tileSource, /return view == calendar_model::kViewToday \? Layout::Count : Layout::Compact;/);
+assert.match(tileSource, /return tile\.span_w >= 2 \? Layout::Next : Layout::Countdown;/);
+assert.match(tileSource, /view->rolling = tile\.span_h < 2;/);
+assert.match(tileSource, /calendar_model::strip_first_day\(now\.today, week_start, view->rolling\)/);
+assert.match(tileSource, /calendar_text::chip_lines\(next, now, view->wide\)/);
+assert.match(tileSource, /calendar_text::countdown_lines\(next, now\)/);
+assert.match(tileSource, /calendar_text::event_count\(calendar_model::remaining_today\(sources, now\.today, now\.minute\)\)/);
+// The chip and countdown words come from the central translations.
+const textSource = read('src/types/calendar/calendar_text.h');
+assert.match(textSource, /label\(next\.ongoing \? CalendarLabel::Now : CalendarLabel::Next\)/);
+assert.match(textSource, /i18n::locale\(language\(\)\)\.weekday_names\[calendar_events::weekday\(next\.day\)\]/);
+// Popup legend: one drawn object, shown with two or more calendars.
+assert.match(calendarPopup, /return calendars >= 2 \? lv_font_get_line_height\(popup_layout::font20\(\)\) \+ popup_layout::scale\(10\) : 0;/);
+assert.match(calendarPopup, /lv_obj_add_event_cb\(pop\.legend, legend_draw_cb, LV_EVENT_DRAW_MAIN, nullptr\);/);
+assert.match(calendarPopup, /layout_body\(legend_height\(pop\.entity_count\)\);/);
 
 // ---- Bridge configuration, topics and Web Admin endpoints ----
 const bridge = read('src/network/bridge/ha_bridge_config.cpp');
@@ -116,7 +137,7 @@ assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\
 // The preview code itself, against the same data as the firmware test
 // (test-calendar-model.mjs): a fixed "now" on Saturday 2026-10-24, 08:30.
 const elements = {};
-const element = id => (elements[id] ||= {value: '', options: [{value: '0'}, {value: '1'}, {value: '2'}]});
+const element = id => (elements[id] ||= {value: '', options: [{value: '0'}, {value: '1'}, {value: '2'}, {value: '3'}]});
 const sandbox = {
   console,
   escapeHtml: text => String(text).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]),
@@ -126,11 +147,12 @@ const sandbox = {
   CALENDAR_I18N: {
     labels: ['Calendar', 'Calendar entity', 'Calendar %u', 'View', 'Agenda', 'Week', 'Month', 'First day of the week',
       'Automatic', 'All day', 'No events', 'Nothing planned', 'in %u days', 'in %u h', 'in %u h %u min', 'in %u min',
-      'Now', 'until %s', 'Up next', '%u events', '1 event', 'List', 'No calendar data'],
+      'Now', 'until %s', 'Up next', '%u events', '1 event', 'List', 'No calendar data', 'Today', 'Next'],
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
       'November', 'December'],
     monthsShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     weekdaysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     today: 'Today', tomorrow: 'Tomorrow', shortDate: '{d} {m}', firstWeekday: 1, monthView: true
   },
   sensorMetaCache: {calendarValues: {
@@ -161,6 +183,10 @@ const tile = (w, h, view = 0, list = 'calendar.family,calendar.waste') =>
   `({sensor_entity: '${list}', span_w: ${w}, span_h: ${h}, sensor_display_mode: ${view}, sensor_decimals: 255})`;
 assert.equal(run(`calendarPreviewLayout(${tile(1, 0.5)})`), 'compact');
 assert.equal(run(`calendarPreviewLayout(${tile(2, 1)})`), 'next');
+assert.equal(run(`calendarPreviewLayout(${tile(1, 1)})`), 'countdown');
+assert.equal(run(`calendarPreviewLayout(${tile(1, 1, 3)})`), 'countdown', 'Today on a larger tile is the agenda family');
+assert.equal(run(`calendarPreviewLayout(${tile(2, 0.5, 3)})`), 'count');
+assert.equal(run(`calendarPreviewLayout(${tile(1.5, 1, 1)})`), 'week');
 assert.equal(run(`calendarPreviewLayout(${tile(2, 2)})`), 'agenda');
 assert.equal(run(`calendarPreviewLayout(${tile(2, 1, 1)})`), 'week');
 assert.equal(run(`calendarPreviewLayout(${tile(2, 2, 2)})`), 'month');
@@ -170,7 +196,31 @@ assert.equal(run(`calendarPreviewTitle(${tile(1, 0.5)}, 'Family')`), '', 'half h
 
 // Today's all-day waste event runs now; the compact chip shows it.
 const compact = run(`calendarPreviewExtraHtml(${tile(1, 0.5)})`);
-assert.match(compact, /calendar-preview-when">All day<\/div><div class="tile-value calendar-preview-what">Bio waste</);
+assert.match(compact, /calendar-preview-when">Now · All day<\/div><div class="tile-value calendar-preview-what">Bio waste</);
+// The chip counts down to a later event: the time on a narrow chip, the
+// countdown on a wide one with the time after the title.
+assert.match(run(`calendarPreviewExtraHtml(${tile(1, 0.5, 0, 'calendar.family')})`),
+  /calendar-preview-when">Next · 19:00<\/div><div class="tile-value calendar-preview-what">Dinner &lt;at&gt; Anna's</);
+assert.match(run(`calendarPreviewExtraHtml(${tile(2, 0.5, 0, 'calendar.family')})`),
+  /calendar-preview-when">Next · in 10 h 30 min<\/div><div class="tile-value calendar-preview-what">Dinner &lt;at&gt; Anna's · 19:00</);
+const later = `({event: {startDay: calendarDay(2026, 10, 27), startMin: 480, title: 'Dentist'}, day: calendarDay(2026, 10, 27), ongoing: false})`;
+assert.deepEqual(JSON.parse(run(`JSON.stringify(calendarChipLines(${later}, calendarNow(), true))`)),
+  {top: 'Next · Tue', value: 'Dentist · 08:00'});
+// Today view: "Today" over the events left today (all-day waste + dinner).
+assert.match(run(`calendarPreviewExtraHtml(${tile(1, 0.5, 3)})`),
+  /calendar-preview-when">Today<\/div><div class="tile-value calendar-preview-what">2 events</);
+assert.match(run(`calendarPreviewExtraHtml(${tile(1, 0.5, 3, 'calendar.unknown')})`), /No calendar data/);
+assert.equal(run(`calendarEventCount(0)`), 'No events');
+assert.equal(run(`calendarEventCount(1)`), '1 event');
+// 1x1 countdown: the event's title in the header, the large day, the countdown.
+assert.equal(run(`calendarPreviewTitle(${tile(1, 1, 0, 'calendar.family')}, 'Family')`), "Dinner <at> Anna's");
+assert.match(run(`calendarPreviewExtraHtml(${tile(1, 1, 0, 'calendar.family')})`),
+  /calendar-preview-body countdown"><div class="calendar-preview-what">Today<\/div><div class="calendar-preview-when">in 10 h 30 min</);
+assert.match(run(`calendarPreviewExtraHtml(${tile(1, 1, 0, 'calendar.waste')})`),
+  /calendar-preview-what">Today<\/div><div class="calendar-preview-when">All day</);
+assert.deepEqual(JSON.parse(run(`JSON.stringify(calendarCountdownLines(${later}, calendarNow()))`)),
+  {top: 'Tuesday', value: 'in 3 days'});
+assert.equal(run(`calendarPreviewTitle(${tile(1, 1, 0, 'calendar.unknown')}, 'Family')`), 'Family');
 // Agenda: today, tomorrow-less Monday, escaped titles, calendar colors.
 const agenda = run(`calendarPreviewExtraHtml(${tile(2, 3)})`);
 assert.match(agenda, /calendar-preview-daylabel">Today</);
@@ -188,8 +238,10 @@ const month = run(`calendarPreviewExtraHtml(${tile(2, 2, 2)})`);
 assert.match(month, /--calendar-rows:5/);
 assert.equal((month.match(/class="calendar-preview-day[^"]*"/g) || []).length, 35);
 assert.match(month, /calendar-preview-day today"><b>24<\/b><span class="calendar-preview-dots"><i style="background:#5B9BF0"><\/i><i style="background:#4DB6AC"><\/i>/);
-// Week strip on Sunday-first weeks starts Sunday the 18th.
-assert.match(run(`calendarPreviewExtraHtml({...${tile(2, 1, 1)}, sensor_decimals: 0})`), /^<div class="calendar-preview-body"><div class="calendar-preview-grid week"[^>]*><span class="calendar-preview-day past"><small>Sun<\/small><b>18<\/b>/);
+// A two-row week on Sunday-first weeks starts Sunday the 18th.
+assert.match(run(`calendarPreviewExtraHtml({...${tile(2, 2, 1)}, sensor_decimals: 0})`), /^<div class="calendar-preview-body"><div class="calendar-preview-grid week"[^>]*><span class="calendar-preview-day past"><small>Sun<\/small><b>18<\/b>/);
+// A one-row strip starts today, its column tinted in the first calendar's color.
+assert.match(run(`calendarPreviewExtraHtml({...${tile(2, 1, 1)}, sensor_decimals: 0})`), /^<div class="calendar-preview-body"><div class="calendar-preview-grid week"[^>]*><span class="calendar-preview-day today strip-today" style="--calendar-tint:#5B9BF0"><small>Sat<\/small><b>24<\/b>/);
 
 // Fields: save, load and reset keep the calendars, view and first weekday.
 for (const [field, value] of [['calendar_entity', 'calendar.family'], ['calendar_entity_2', 'calendar.family'],

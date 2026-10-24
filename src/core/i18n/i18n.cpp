@@ -2188,7 +2188,7 @@ static const LocaleProfile kLocaleDe = {
     {"Kalender", "Kalender-Entität", "Kalender %u", "Ansicht", "Termine", "Woche", "Monat",
      "Erster Wochentag", "Automatisch", "Ganztägig", "Keine Termine", "Nichts geplant", "in %u Tagen",
      "in %u Std.", "in %u Std. %u Min.", "in %u Min.", "Jetzt", "bis %s", "Als Nächstes", "%u Termine",
-     "1 Termin", "Liste", "Keine Kalenderdaten"},
+     "1 Termin", "Liste", "Keine Kalenderdaten", "Heute", "Nächster"},
     {"Januar", "Februar", "März", "April", "Mai", "Juni",
      "Juli", "August", "September", "Oktober", "November", "Dezember"},
     1,  // Monday
@@ -2316,7 +2316,7 @@ static const LocaleProfile kLocaleEn = {
     {"Calendar", "Calendar entity", "Calendar %u", "View", "Agenda", "Week", "Month",
      "First day of the week", "Automatic", "All day", "No events", "Nothing planned", "in %u days",
      "in %u h", "in %u h %u min", "in %u min", "Now", "until %s", "Up next", "%u events", "1 event", "List",
-     "No calendar data"},
+     "No calendar data", "Today", "Next"},
     {"January", "February", "March", "April", "May", "June",
      "July", "August", "September", "October", "November", "December"},
     0,  // Sunday
@@ -2449,7 +2449,7 @@ static const LocaleProfile kLocaleFr = {
     {"Calendrier", "Entité calendrier", "Calendrier %u", "Vue", "Agenda", "Semaine", "Mois",
      "Premier jour de la semaine", "Automatique", "Toute la journée", "Aucun événement", "Rien de prévu",
      "dans %u jours", "dans %u h", "dans %u h %u min", "dans %u min", "Maintenant", "jusqu’à %s", "À venir",
-     "%u événements", "1 événement", "Liste", "Aucune donnée de calendrier"},
+     "%u événements", "1 événement", "Liste", "Aucune donnée de calendrier", "Aujourd'hui", "Suivant"},
     {"Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"},
     1,  // Monday
@@ -5184,7 +5184,7 @@ static const LocaleProfile kLocalePl = {
     {"Kalendarz", "Encja kalendarza", "Kalendarz %u", "Widok", "Terminy", "Tydzień", "Miesiąc",
      "Pierwszy dzień tygodnia", "Automatycznie", "Cały dzień", "Brak wydarzeń", "Nic nie zaplanowano",
      "za %u dni", "za %u godz.", "za %u godz. %u min", "za %u min", "Teraz", "do %s", "Następne",
-     "Wydarzenia: %u", "1 wydarzenie", "Lista", "Brak danych kalendarza"},
+     "Wydarzenia: %u", "1 wydarzenie", "Lista", "Brak danych kalendarza", "Dzisiaj", "Następne"},
     {"Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
      "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"},
     1,  // Monday
@@ -5246,7 +5246,7 @@ static const LocaleProfile kLocaleCs = {
     {"Kalendář", "Entita kalendáře", "Kalendář %u", "Zobrazení", "Program", "Týden", "Měsíc",
      "První den týdne", "Automaticky", "Celý den", "Žádné události", "Nic naplánováno", "za %u dní",
      "za %u h", "za %u h %u min", "za %u min", "Nyní", "do %s", "Následuje", "Události: %u", "1 událost",
-     "Seznam", "Žádná data kalendáře"},
+     "Seznam", "Žádná data kalendáře", "Dnes", "Další"},
     {"Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
      "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"},
     1,  // Monday
@@ -5374,7 +5374,7 @@ static const LocaleProfile kLocaleEs = {
     {"Calendario", "Entidad de calendario", "Calendario %u", "Vista", "Agenda", "Semana", "Mes",
      "Primer día de la semana", "Automático", "Todo el día", "Sin eventos", "Nada previsto", "en %u días",
      "en %u h", "en %u h %u min", "en %u min", "Ahora", "hasta las %s", "A continuación", "%u eventos",
-     "1 evento", "Lista", "Sin datos del calendario"},
+     "1 evento", "Lista", "Sin datos del calendario", "Hoy", "Siguiente"},
     {"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"},
     1,  // Monday
@@ -5512,7 +5512,7 @@ static const LocaleProfile kLocaleSk = {
     {"Kalendár", "Entita kalendára", "Kalendár %u", "Zobrazenie", "Program", "Týždeň", "Mesiac",
      "Prvý deň týždňa", "Automaticky", "Celý deň", "Žiadne udalosti", "Nič naplánované", "o %u dní",
      "o %u h", "o %u h %u min", "o %u min", "Teraz", "do %s", "Nasleduje", "Udalosti: %u", "1 udalosť",
-     "Zoznam", "Žiadne údaje kalendára"},
+     "Zoznam", "Žiadne údaje kalendára", "Dnes", "Ďalšie"},
     {"Január", "Február", "Marec", "Apríl", "Máj", "Jún",
      "Júl", "August", "September", "Október", "November", "December"},
     1,  // Monday

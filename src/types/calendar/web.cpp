@@ -68,6 +68,8 @@ void append_calendar_fields_html(String& html, const String& tab_id) {
 #if !defined(DEVICE_LAYOUT_480X480)
   append_option(html, "2", text(i18n::CalendarLabel::ViewMonth));
 #endif
+  // Today: the count of today's events on a half-height tile.
+  append_option(html, "3", text(i18n::CalendarLabel::ViewToday));
   html += "</select>";
   html += "<label for=\"";
   html += tab_id;
@@ -171,6 +173,8 @@ void append_calendar_scripts(String& html) {
   for (int m = 1; m <= 12; ++m) months_short.add(i18n::weather_month_short(lang, m));
   JsonArray weekdays = doc["weekdaysShort"].to<JsonArray>();
   for (int d = 0; d < 7; ++d) weekdays.add(loc.weather_weekdays_short[d]);
+  JsonArray weekday_names = doc["weekdays"].to<JsonArray>();
+  for (int d = 0; d < 7; ++d) weekday_names.add(loc.weekday_names[d]);
   doc["today"] = i18n::weather_today_label(lang);
   doc["tomorrow"] = i18n::weather_tomorrow_label(lang);
   doc["shortDate"] = loc.short_date_pattern;

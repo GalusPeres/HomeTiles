@@ -515,15 +515,17 @@ Shows up to four `calendar` entities, each in its own color (blue, teal, purple,
 
 What the tile shows depends on its size and **View**:
 
-- **Half height:** the next event, with its day or time.
-- **One row:** **Up next**: the event running now or the next one, with its time and a countdown.
+- **Half height:** the next event: "Next · 10:00" above its title ("Now" while it runs). Two cells wide, the top line counts down ("Next · in 1 h 30 min") and the start time follows the title.
+- **Half height, View Today:** "Today" above the number of events left today ("3 events", "No events").
+- **1×1:** a countdown: the next event's title at the top, its day large in the middle ("Today", "Tomorrow", "Monday") and how far away it is below ("in 1 h 30 min", "in 2 days").
+- **Two cells wide, one row:** **Up next**: the event running now or the next one, with its time and a countdown.
 - **Two rows or more:** the agenda: the coming days with their events; all-day events first.
-- **Week:** seven days from the first day of the week, today marked, a dot per calendar with events.
+- **Week:** a dot per calendar with events and today's column tinted. One row high, the strip shows the seven days from today; taller, the week from its first day.
 - **Month:** the month grid with today and a dot per calendar. Only on displays larger than 480×480 and on tiles of at least 2×2; elsewhere the tile shows the agenda.
 
 **Week starts on:** **Automatic** follows the display language (Sunday in English, Monday otherwise), or choose Monday, Sunday, or Saturday. The tile and its popup use it.
 
-**Popup:** the month with a dot per calendar; tap a day to see its events below. **List** shows the coming four weeks instead. The arrows move by month (or week in the list) as far as the Bridge sent events, and **Today** jumps back.
+**Popup:** with two or more calendars, their names and colors on top; then the month with a dot per calendar; tap a day to see its events below. **List** shows the coming four weeks instead. The arrows move by month (or week in the list) as far as the Bridge sent events, and **Today** jumps back.
 
 The display shows the events in Home Assistant's time zone. Events edited in Home Assistant appear within 15 minutes; an event that starts or ends updates the tile at once.
 

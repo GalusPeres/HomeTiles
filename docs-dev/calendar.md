@@ -8,9 +8,25 @@ Tile type 27 (`TILE_CALENDAR`, `src/types/calendar/`), popup in
 | Field | Use |
 | --- | --- |
 | `sensor_entity` | Up to four `calendar.*` ids, comma separated, in color order (long lists use the entity sidecar) |
-| `sensor_display_mode` | View: 0 agenda (adapts to the size), 1 week, 2 month |
+| `sensor_display_mode` | View: 0 agenda (adapts to the size), 1 week, 2 month, 3 today (event count at half height, the agenda otherwise) |
 | `sensor_decimals` | First day of the week: `0xFF` automatic (`LocaleProfile::first_weekday`), 0 Sunday, 1 Monday, 6 Saturday |
 | popup open mode | Short or long press, like the other popup tiles |
+
+Layouts (`layout_of`, mirrored by the Web Admin's `calendarPreviewLayout`):
+
+| Size | Layout |
+| --- | --- |
+| half height | next event, "Next · 10:00" / title (`chip_lines`); 2+ wide "Next · in 1 h 30 min" / "title · 10:00"; view 3: "Today" / event count (`remaining_today`) |
+| below 2 wide, 1 row | countdown: event title as header, large day, countdown (`countdown_lines`) |
+| 2+ wide, 1 row | Up next |
+| 2+ rows | agenda |
+| view 1, 1.5+ wide | week strip, today's column tinted; one row starts today, taller the first weekday (`strip_first_day`) |
+| view 2, 2x2+ | month |
+
+The popup shows a legend (dot and name per calendar, one drawn object) on top
+of the body when the tile has two or more calendars. The mockup puts it under
+the title, but the popup header is the shared shell (`popup_shell.cpp`), which
+copies plain text labels only.
 
 The month view needs a panel larger than 480x480 (`DEVICE_LAYOUT_480X480`
 hides it in the Web Admin and the tile falls back to the agenda) and a tile of
@@ -76,6 +92,11 @@ Done and on the branch: tile, popup, Web Admin, i18n, docs, host tests
 (firmware `calendar-tile`, Bridge `calendar-events`, both pushed to the
 ph15ch forks; draft PRs against GalusPeres `main`). Host syntax checks of
 the calendar sources pass for the JC8012P4A1 and ESP32-4848S040 profiles.
+
+2026-10-24: the mockup's remaining views (half-height "Next" line and
+Today count, 1x1 countdown, rolling week strip with today tinted, popup
+legend) are built; the user tested the agenda and week on
+ESP32-4848S040C_I and does no further hardware tests.
 
 Open, in this order:
 

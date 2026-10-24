@@ -971,7 +971,7 @@
         displayTitle = metaNames[tile.sensor_entity] ||
           titleFromEntity(tile.sensor_entity);
       }
-      if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle);
+      if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle, sensorMeta);
       if (displayTitle.length) {
         html += '<div class="tile-title" id="' + tab + '-tile-' + index + '-title">' +
           tileTitleHtml(displayTitle) + '</div>';

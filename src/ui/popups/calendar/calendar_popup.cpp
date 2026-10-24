@@ -70,6 +70,7 @@ struct Popup {
   lv_obj_t* icon = nullptr;
   lv_obj_t* close = nullptr;
   lv_obj_t* body = nullptr;
+  lv_obj_t* legend = nullptr;
   lv_obj_t* grid = nullptr;
   lv_obj_t* divider = nullptr;
   lv_obj_t* day_title = nullptr;
@@ -83,6 +84,9 @@ struct Popup {
   lv_obj_t* next_btn = nullptr;
   CalendarPopupTarget target;
   String entities[calendar_model::kMaxCalendars];
+  // The legend's names (drawn by legend_draw_cb) and its height (0: hidden).
+  String names[calendar_model::kMaxCalendars];
+  int legend_h = -1;
   uint8_t entity_count = 0;
   uint32_t card_rgb = popup_surface::default_card();
   bool open = false;
@@ -111,8 +115,11 @@ int body_top() {
 }
 int body_bottom() { return kContentHeight + kFooterOffsetY - kFooterButtonHeight - popup_layout::scale(14); }
 int body_height() { return std::max(1, body_bottom() - body_top()); }
-// The month grid takes about three fifths of the body, the chosen day the rest.
-int grid_height() { return body_height() * 3 / 5; }
+// A tile with two or more calendars shows their names and colors on top of
+// the body (the mockup's legend under the title).
+int legend_height(uint8_t calendars) {
+  return calendars >= 2 ? lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(10) : 0;
+}
 
 Sources sources() {
   Sources out;
@@ -192,6 +199,63 @@ void draw_circle(lv_layer_t* layer, int32_t cx, int32_t cy, int32_t diameter, lv
 }
 
 int32_t header_height() { return lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(6); }
+
+// The legend: a dot in each calendar's color and its name, in one pass.
+void legend_draw_cb(lv_event_t* e) {
+  if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) return;
+  lv_layer_t* layer = lv_event_get_layer(e);
+  if (!layer || !pop.legend) return;
+  const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
+  lv_area_t area;
+  lv_obj_get_coords(pop.legend, &area);
+  const lv_font_t* font = popup_layout::font20();
+  const int32_t line = lv_font_get_line_height(font);
+  const int32_t dot = popup_layout::scale(10);
+  const int32_t top = area.y1 + (lv_area_get_height(&area) - line) / 2;
+  int32_t x = area.x1;
+  for (uint8_t c = 0; c < pop.entity_count && x < area.x2; ++c) {
+    draw_circle(layer, x + dot / 2, top + line / 2, dot, lv_color_hex(color_of(c)), LV_OPA_COVER);
+    x += dot + popup_layout::scale(8);
+    lv_point_t size;
+    lv_text_get_size(&size, pop.names[c].c_str(), font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    lv_draw_label_dsc_t dsc;
+    lv_draw_label_dsc_init(&dsc);
+    dsc.base.layer = layer;
+    dsc.font = font;
+    dsc.color = lv_color_hex(ui_theme::text_secondary());
+    dsc.text = pop.names[c].c_str();
+    dsc.flag = LV_TEXT_FLAG_NONE;
+    const lv_area_t box = {x, top, std::min<int32_t>(area.x2, x + size.x), top + line - 1};
+    lv_draw_label(layer, &dsc, &box);
+    x += size.x + popup_layout::scale(22);
+  }
+}
+
+// Places the month grid, the chosen day and the list below the legend.
+void layout_body(int legend_h) {
+  if (legend_h == pop.legend_h) return;
+  pop.legend_h = legend_h;
+  lv_obj_set_size(pop.legend, kContentWidth, std::max(1, legend_h));
+  if (legend_h) {
+    lv_obj_remove_flag(pop.legend, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(pop.legend, LV_OBJ_FLAG_HIDDEN);
+  }
+  const int height = std::max(1, body_height() - legend_h);
+  // The month grid takes about three fifths of the body, the chosen day the rest.
+  const int grid_h = height * 3 / 5;
+  lv_obj_set_size(pop.grid, kContentWidth, grid_h);
+  lv_obj_set_pos(pop.grid, 0, legend_h);
+  const int divider_y = legend_h + grid_h + popup_layout::scale(6);
+  lv_obj_set_pos(pop.divider, 0, divider_y);
+  const int day_title_y = divider_y + popup_layout::scale(10);
+  lv_obj_set_pos(pop.day_title, 0, day_title_y);
+  const int list_y = day_title_y + lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(4);
+  lv_obj_set_pos(pop.day_list, 0, list_y);
+  lv_obj_set_size(pop.day_list, kContentWidth, std::max(1, body_height() - list_y));
+  lv_obj_set_pos(pop.list, 0, legend_h);
+  lv_obj_set_size(pop.list, kContentWidth, height);
+}
 
 void grid_draw_cb(lv_event_t* e) {
   if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN) return;
@@ -607,28 +671,28 @@ void ensure_popup() {
   lv_obj_set_size(pop.body, kContentWidth, body_height());
   lv_obj_set_pos(pop.body, 0, body_top());
 
+  // The legend on top (two or more calendars).
+  pop.legend = make_box(pop.body);
+  lv_obj_set_pos(pop.legend, 0, 0);
+  lv_obj_add_event_cb(pop.legend, legend_draw_cb, LV_EVENT_DRAW_MAIN, nullptr);
+
   // Month: the grid, a hairline, the chosen day and its events.
   pop.grid = make_box(pop.body);
-  lv_obj_set_size(pop.grid, kContentWidth, grid_height());
-  lv_obj_set_pos(pop.grid, 0, 0);
   lv_obj_add_flag(pop.grid, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(pop.grid, grid_draw_cb, LV_EVENT_DRAW_MAIN, nullptr);
   lv_obj_add_event_cb(pop.grid, on_grid_click, LV_EVENT_CLICKED, nullptr);
-  const int divider_y = grid_height() + popup_layout::scale(6);
   pop.divider = make_box(pop.body);
   lv_obj_set_size(pop.divider, kContentWidth, 1);
-  lv_obj_set_pos(pop.divider, 0, divider_y);
   lv_obj_set_style_bg_opa(pop.divider, LV_OPA_COVER, 0);
-  const int day_title_y = divider_y + popup_layout::scale(10);
   pop.day_title = make_label(pop.body, popup_layout::font20(), ui_theme::text_secondary());
   lv_obj_set_width(pop.day_title, kContentWidth);
-  lv_obj_set_pos(pop.day_title, 0, day_title_y);
-  const int list_y = day_title_y + lv_font_get_line_height(popup_layout::font20()) + popup_layout::scale(4);
-  pop.day_list = make_scroller(pop.body, list_y, std::max(1, body_height() - list_y));
+  pop.day_list = make_scroller(pop.body, 0, 1);
 
   // List: the coming days.
-  pop.list = make_scroller(pop.body, 0, body_height());
+  pop.list = make_scroller(pop.body, 0, 1);
   lv_obj_add_flag(pop.list, LV_OBJ_FLAG_HIDDEN);
+  pop.legend_h = -1;
+  layout_body(0);
 
   // Footer: range pill, view, Today, arrows.
   pop.pill = lv_obj_create(pop.card);
@@ -674,6 +738,18 @@ void refresh(bool show) {
       pop.target.title.length() ? pop.target.title : String(calendar_text::label(CalendarLabel::TypeCalendar));
   hometiles_title::set(pop.title, title.c_str());
   popup_layout::alignHeader(pop.card, pop.title, pop.icon);
+
+  // Legend names; redrawn when one changes.
+  bool names_changed = false;
+  for (uint8_t i = 0; i < calendar_model::kMaxCalendars; ++i) {
+    const String name = i < pop.entity_count ? calendar_name(i) : String();
+    if (name != pop.names[i]) {
+      pop.names[i] = name;
+      names_changed = true;
+    }
+  }
+  layout_body(legend_height(pop.entity_count));
+  if (names_changed && pop.legend_h) lv_obj_invalidate(pop.legend);
 
   // Grid data.
   const uint8_t week_start = calendar_text::week_start(pop.target.week_start);

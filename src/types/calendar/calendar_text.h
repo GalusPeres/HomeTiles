@@ -146,4 +146,80 @@ inline String when_line(const calendar_model::Next& next, const Now& now, bool b
   return brief ? day_label(next.day, now) : day_label(next.day, now) + dot + countdown(0, days);
 }
 
+// "No events", "1 event", "3 events" (the half-height Today tile).
+inline String event_count(size_t count) {
+  if (!count) return String(label(CalendarLabel::NoEvents));
+  if (count == 1) return String(label(CalendarLabel::OneEvent));
+  return printf_label(CalendarLabel::EventCount, static_cast<unsigned>(count));
+}
+
+struct Lines {
+  String top;
+  String value;
+};
+
+// The two lines of a half-height tile with the next event:
+//   narrow   "Next · 10:00"          / "Long ride"
+//   wide     "Next · in 1 h 30 min"  / "Long ride · 10:00"
+//            "Next · Mon"            / "Swim · 18:30"
+// A running event says "Now" ("Now · until 11:30" / "Long ride").
+inline Lines chip_lines(const calendar_model::Next& next, const Now& now, bool wide) {
+  Lines out;
+  if (!next.found) return out;
+  const Event& e = *next.item.event;
+  const String dot = " \xC2\xB7 ";
+  const String title = e.title[0] ? String(e.title) : String("--");
+  if (next.ongoing || !wide) {
+    out.top = String(label(next.ongoing ? CalendarLabel::Now : CalendarLabel::Next)) + dot +
+              when_line(next, now, true);
+    out.value = title;
+    return out;
+  }
+  const int32_t days = next.day - now.today;
+  String when;
+  if (days == 0) {
+    when = countdown(calendar_model::minutes_until(next, now.today, now.minute), 0);
+  } else if (days == 1) {
+    when = day_label(next.day, now);
+  } else if (days < 7) {
+    when = weekday_short(next.day);
+  } else {
+    when = day_label(next.day, now) + dot + countdown(0, days);
+  }
+  out.top = String(label(CalendarLabel::Next)) + dot + when;
+  out.value = e.all_day() ? title : title + dot + clock(e.start_min);
+  return out;
+}
+
+// The 1x1 countdown: a large day and how far away it is.
+//   later today       "Today"     / "in 1 h 30 min"
+//   running timed     "Now"       / "until 11:30"
+//   running all-day   "Today"     / "All day" (multi-day "until Sun 1 Nov")
+//   tomorrow          "Tomorrow"  / "10:00" or "All day"
+//   within a week     "Monday"    / "in 2 days"
+//   later             "Mon 2 Nov" / "in 9 days"
+inline Lines countdown_lines(const calendar_model::Next& next, const Now& now) {
+  Lines out;
+  if (!next.found) return out;
+  const Event& e = *next.item.event;
+  const int32_t days = next.day - now.today;
+  if (next.ongoing) {
+    out.top = e.all_day() ? day_label(now.today, now) : String(label(CalendarLabel::Now));
+    out.value = when_line(next, now, true);
+    return out;
+  }
+  if (days == 0) {
+    out.top = day_label(now.today, now);
+    out.value = countdown(calendar_model::minutes_until(next, now.today, now.minute), 0);
+  } else if (days == 1) {
+    out.top = day_label(next.day, now);
+    out.value = e.all_day() ? String(label(CalendarLabel::AllDay)) : clock(e.start_min);
+  } else {
+    out.top = days < 7 ? String(i18n::locale(language()).weekday_names[calendar_events::weekday(next.day)])
+                       : day_label(next.day, now);
+    out.value = countdown(0, days);
+  }
+  return out;
+}
+
 }  // namespace calendar_text

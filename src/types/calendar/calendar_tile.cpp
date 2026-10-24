@@ -29,7 +29,9 @@ using calendar_model::Sources;
 using calendar_text::Now;
 using i18n::CalendarLabel;
 
-enum class Layout : uint8_t { Compact, Next, Agenda, Week, Month };
+// Compact: half height, next event; Count: half height, today's events;
+// Countdown: 1x1, the next event's day; Next: 2x1 "Up next".
+enum class Layout : uint8_t { Compact, Count, Countdown, Next, Agenda, Week, Month };
 
 // The month view needs a panel with room for a readable grid.
 #if defined(DEVICE_LAYOUT_480X480)
@@ -56,10 +58,15 @@ struct View {
   bool icon_visible = true;
   uint8_t week_start = calendar_model::kWeekStartAuto;
   Layout layout = Layout::Next;
+  // Half height at least two cells wide: the countdown on the top line.
+  bool wide = false;
+  // A one-row week strip starts today instead of on the first weekday.
+  bool rolling = false;
   lv_obj_t* card = nullptr;
   lv_obj_t* icon = nullptr;
   lv_obj_t* title_label = nullptr;
-  // Compact and Up next: the when line and the event's title.
+  // Compact, Count, Countdown and Up next: the when line and the event's
+  // title (Countdown: the countdown and the large day).
   lv_obj_t* when = nullptr;
   lv_obj_t* what = nullptr;
   lv_obj_t* bar = nullptr;
@@ -250,6 +257,17 @@ void grid_draw_cb(lv_event_t* e) {
         draw_text(layer, name, calendar_text::weekday_short(day), small, past);
         const int32_t cy = top + small_h + 4 + circle / 2;
         if (today) {
+          // Today's column in a soft box of the icon's color (the mockup's
+          // strip), behind the number's circle.
+          lv_draw_rect_dsc_t box;
+          lv_draw_rect_dsc_init(&box);
+          box.base.layer = layer;
+          box.bg_color = view->entity_count ? lv_color_hex(color_of(0)) : text;
+          box.bg_opa = static_cast<lv_opa_t>(38);
+          box.radius = tile_layout::scale_480(14);
+          const int32_t inset = std::max<int32_t>(1, tile_layout::scale_480(2));
+          const lv_area_t column = {x1 + inset, y1 + inset, x1 + cell_w - 1 - inset, y1 + cell_h - 1 - inset};
+          lv_draw_rect(layer, &box, &column);
           draw_circle(layer, cx, cy, circle, text, LV_OPA_COVER);
           number = card;
         }
@@ -277,6 +295,7 @@ String header_text(const View* view, const Now& now) {
 void show_next(View* view, const Sources& sources, const Now& now) {
   String when;
   String what;
+  String header;
   uint32_t bar = 0;
   bool has_bar = false;
   if (!view->entity_count) {
@@ -291,8 +310,19 @@ void show_next(View* view, const Sources& sources, const Now& now) {
     const calendar_model::Next next =
         calendar_model::next_event(sources, now.today, now.minute, std::min(to, now.today + kAgendaDays));
     if (next.found) {
-      what = next.item.event->title;
-      when = calendar_text::when_line(next, now, view->layout == Layout::Compact);
+      if (view->layout == Layout::Compact) {
+        const calendar_text::Lines lines = calendar_text::chip_lines(next, now, view->wide);
+        when = lines.top;
+        what = lines.value;
+      } else if (view->layout == Layout::Countdown) {
+        const calendar_text::Lines lines = calendar_text::countdown_lines(next, now);
+        what = lines.top;
+        when = lines.value;
+        header = next.item.event->title[0] ? next.item.event->title : "--";
+      } else {
+        what = next.item.event->title;
+        when = calendar_text::when_line(next, now, false);
+      }
       bar = color_of(next.item.calendar);
       has_bar = true;
     } else {
@@ -301,6 +331,12 @@ void show_next(View* view, const Sources& sources, const Now& now) {
   }
   set_text(view->when, when.c_str());
   set_text(view->what, what.c_str());
+  if (view->layout == Layout::Countdown && view->title_label) {
+    // The event's title in the header; the tile's own title without one.
+    if (!header.length()) header = view->title;
+    const char* shown = hometiles_title::text(view->title_label);
+    if (!shown || std::strcmp(shown, header.c_str()) != 0) hometiles_title::set(view->title_label, header.c_str(), true);
+  }
   if (view->bar) {
     if (has_bar) {
       lv_obj_set_style_bg_color(view->bar, lv_color_hex(bar), 0);
@@ -310,6 +346,21 @@ void show_next(View* view, const Sources& sources, const Now& now) {
     }
   }
   if (view->icon && has_bar) tile_icon_disc::set_icon_color(view->icon, lv_color_hex(bar));
+}
+
+// Half height, Today view: "Today" over the count of today's events left.
+void show_count(View* view, const Sources& sources, const Now& now) {
+  String what;
+  if (!view->entity_count || !now.valid) {
+    what = "--";
+  } else if (!sources.any_valid()) {
+    what = calendar_text::label(CalendarLabel::NoData);
+  } else {
+    what = calendar_text::event_count(calendar_model::remaining_today(sources, now.today, now.minute));
+  }
+  set_text(view->when, i18n::weather_today_label(calendar_text::language()));
+  set_text(view->what, what.c_str());
+  if (view->icon && view->entity_count) tile_icon_disc::set_icon_color(view->icon, lv_color_hex(color_of(0)));
 }
 
 // One agenda row: time, color bar, title.
@@ -447,7 +498,7 @@ void show_grid(View* view, const Sources& sources, const Now& now) {
     view->rows = static_cast<uint8_t>(calendar_model::month_rows(y, m, week_start));
     view->month = static_cast<uint8_t>(m);
   } else {
-    view->first_day = calendar_model::week_start_day(now.today, week_start);
+    view->first_day = calendar_model::strip_first_day(now.today, week_start, view->rolling);
     view->rows = 1;
   }
   uint32_t signature = 2166136261u ^ static_cast<uint32_t>(view->first_day) ^ (now.valid ? now.today << 3 : 7);
@@ -469,14 +520,16 @@ void show(View* view) {
   const ui_theme::SurfaceScope surface = tile_surface::scope(view->card);
   const Now now = calendar_text::now();
   const Sources sources = sources_of(view);
-  if (view->title_label) {
+  if (view->title_label && view->layout != Layout::Countdown) {
     const String header = header_text(view, now);
     const char* shown = hometiles_title::text(view->title_label);
     if (!shown || std::strcmp(shown, header.c_str()) != 0) hometiles_title::set(view->title_label, header.c_str(), true);
   }
   switch (view->layout) {
     case Layout::Compact:
+    case Layout::Countdown:
     case Layout::Next: show_next(view, sources, now); break;
+    case Layout::Count: show_count(view, sources, now); break;
     case Layout::Agenda: show_agenda(view, sources, now); break;
     case Layout::Week:
     case Layout::Month: show_grid(view, sources, now); break;
@@ -538,14 +591,16 @@ void on_card_event(lv_event_t* e) {
 }
 
 Layout layout_of(const Tile& tile) {
-  if (tile_geometry::compact_calendar(tile.type, tile.span_w, tile.span_h)) return Layout::Compact;
   const uint8_t view = calendar_model::normalize_view(tile.sensor_display_mode);
+  if (tile_geometry::compact_calendar(tile.type, tile.span_w, tile.span_h)) {
+    return view == calendar_model::kViewToday ? Layout::Count : Layout::Compact;
+  }
   if (view == calendar_model::kViewMonth && kMonthAvailable && tile.span_w >= 2 && tile.span_h >= 2) {
     return Layout::Month;
   }
   if (view == calendar_model::kViewWeek && tile.span_w >= 1.5f) return Layout::Week;
   if (tile.span_h >= 2) return Layout::Agenda;
-  return Layout::Next;
+  return tile.span_w >= 2 ? Layout::Next : Layout::Countdown;
 }
 
 }  // namespace
@@ -605,6 +660,8 @@ lv_obj_t* render_calendar_tile(lv_obj_t* parent, int col, int row, const Tile& t
   view->icon_name = view->icon_visible ? normalizeMdiIconName(tile.icon_name) : String();
   view->week_start = calendar_model::normalize_week_start(tile.sensor_decimals);
   view->layout = layout_of(tile);
+  view->wide = tile.span_w >= 2;
+  view->rolling = tile.span_h < 2;
   const ui_theme::SurfaceScope surface = tile_surface::scope(card);
 
   if (view->icon_visible && FONT_MDI_ICONS) {
@@ -618,14 +675,14 @@ lv_obj_t* render_calendar_tile(lv_obj_t* parent, int col, int row, const Tile& t
   const int card_w = tile_geometry::extent(tile.col, std::max(1.0f, tile.span_w), GRID_CELL_W, GRID_GAP);
   const int card_h = tile_geometry::extent(tile.row, std::max(0.5f, tile.span_h), GRID_CELL_H, GRID_GAP);
 
-  if (view->layout == Layout::Compact) {
+  if (view->layout == Layout::Compact || view->layout == Layout::Count) {
     view->when = plain_label(card, compact_sensor_layout::title_font(), ui_theme::text_secondary());
     view->what = plain_label(card, compact_sensor_layout::value_font(tile.sensor_value_font), ui_theme::text());
     compact_sensor_layout::apply(card, view->icon, view->when, view->what, tile);
   } else {
     if (view->icon) tile_icon_disc::add_round(card, view->icon);
     // The Sensor tile's tall header: the title top right.
-    if (tile.title.length() || view->layout == Layout::Month) {
+    if (tile.title.length() || view->layout == Layout::Month || view->layout == Layout::Countdown) {
       view->title_label = lv_label_create(card);
       set_label_style(view->title_label, lv_color_hex(ui_theme::text()), tile_layout::header_title_font());
       lv_label_set_long_mode(view->title_label, LV_LABEL_LONG_DOT);
@@ -660,6 +717,21 @@ lv_obj_t* render_calendar_tile(lv_obj_t* parent, int col, int row, const Tile& t
       view->when = plain_label(card, when_font, ui_theme::text_secondary());
       lv_obj_set_width(view->when, std::max(1, view->content_w - text_x));
       lv_obj_set_pos(view->when, text_x, top + lv_font_get_line_height(what_font));
+    } else if (view->layout == Layout::Countdown) {
+      // The large day and the countdown, centred in the content box.
+      const lv_font_t* when_font = tile_layout::content_font_20();
+      const lv_font_t* what_font =
+          font_for(std::max(1, view->content_h - static_cast<int>(lv_font_get_line_height(when_font))));
+      const int block = lv_font_get_line_height(what_font) + lv_font_get_line_height(when_font);
+      const int top = view->content_y + std::max(0, (view->content_h - block) / 2);
+      view->what = plain_label(card, what_font, ui_theme::text());
+      lv_obj_set_width(view->what, view->content_w);
+      lv_obj_set_style_text_align(view->what, LV_TEXT_ALIGN_CENTER, 0);
+      lv_obj_set_pos(view->what, 0, top);
+      view->when = plain_label(card, when_font, ui_theme::text_secondary());
+      lv_obj_set_width(view->when, view->content_w);
+      lv_obj_set_style_text_align(view->when, LV_TEXT_ALIGN_CENTER, 0);
+      lv_obj_set_pos(view->when, 0, top + lv_font_get_line_height(what_font));
     } else if (view->layout == Layout::Agenda) {
       view->list = plain_box(card);
       lv_obj_set_size(view->list, view->content_w, view->content_h);

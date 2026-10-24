@@ -153,7 +153,19 @@ int main() {
   add_months(y, m, -13);
   assert(y == 2025 && m == 12);
 
+  // Today's events left: all-day and running ones count, finished ones not.
+  assert(remaining_today(s, today, 8 * 60) == 2);
+  assert(remaining_today(s, today, 21 * 60) == 2);
+  assert(remaining_today(s, today, 22 * 60) == 1);
+  assert(remaining_today(s, D(2026, 10, 23), 0) == 0 && remaining_today(none, today, 0) == 0);
+  // A night shift from yesterday still running counts until it ends.
+  assert(remaining_today(only_family, D(2026, 10, 29), 60) == 1 && remaining_today(only_family, D(2026, 10, 29), 120) == 0);
+  // Week strips: one row starts today, taller ones on the first weekday.
+  assert(strip_first_day(today, 1, true) == today && strip_first_day(today, 1, false) == D(2026, 10, 19));
+  assert(strip_first_day(today, 0, false) == D(2026, 10, 18));
+
   // Tile options.
+  assert(normalize_view(3) == kViewToday && normalize_view(4) == kViewAgenda);
   assert(normalize_view(2) == kViewMonth && normalize_view(9) == kViewAgenda);
   assert(normalize_week_start(0xFF) == kWeekStartAuto && normalize_week_start(3) == kWeekStartAuto);
   assert(resolve_week_start(kWeekStartAuto, 1) == 1 && resolve_week_start(0, 1) == 0);
@@ -170,4 +182,4 @@ const compile = spawnSync(compiler, ['-std=c++17', '-Wall', '-Wextra', '-I', roo
 assert.equal(compile.status, 0, `calendar model did not compile:\n${compile.stdout}${compile.stderr}`);
 const run = spawnSync(binary, [], {encoding: 'utf8'});
 assert.equal(run.status, 0, `calendar model contract failed:\n${run.stdout}${run.stderr}`);
-console.log('Calendar: events payload, merged days, next event, month grid and options');
+console.log('Calendar: events payload, merged days, next event, today count, strips, month grid and options');

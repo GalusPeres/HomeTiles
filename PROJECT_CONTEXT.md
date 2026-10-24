@@ -88,7 +88,7 @@ Last reviewed: 2026-10-23
 
 - Editable tiles 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups (`PackedTileV7` unchanged); drafts coalesce 600 ms, sliders publish on release. Open: S3 froze adding Number to an active screensaver.
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
-- Calendar (27, `docs-dev/calendar.md`): Bridge `events` (`entity_search` 5); HW pending.
+- Calendar (27, `docs-dev/calendar.md`): Bridge `events` (`entity_search` 5); views done, no HW tests.
 - Switch tile layouts (`sensor_decimals` 0-3) and `command_pacer.h` slider pacing: reporter test pending (#11).
 - Scene tile is "Button": picker searches scenes/scripts/buttons (`entity_search` 4), entity in `sensor_entity`.
 - Direct link: TCP 8140, Bridge = broker, frames sealed with pairing keys (`docs-dev/bridge-link.md`). The panel declares every entity it uses; without a password only released entities and the Energy Dashboard categories reach it. Picker lists Recent/Favorites/All (b369): V2 HW pending.

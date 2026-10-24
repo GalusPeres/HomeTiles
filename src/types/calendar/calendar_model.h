@@ -20,9 +20,11 @@ using calendar_events::Event;
 constexpr uint8_t kMaxCalendars = 4;
 
 // The tile's view (Tile::sensor_display_mode): the agenda adapts to the
-// tile's size (next event, list); the week strip and the month need room.
-enum View : uint8_t { kViewAgenda = 0, kViewWeek = 1, kViewMonth = 2 };
-constexpr uint8_t kViewCount = 3;
+// tile's size (next event, countdown, list); the week strip and the month
+// need room. Today counts today's events on a half-height tile and is the
+// agenda on larger ones.
+enum View : uint8_t { kViewAgenda = 0, kViewWeek = 1, kViewMonth = 2, kViewToday = 3 };
+constexpr uint8_t kViewCount = 4;
 
 // The first day of the week (Tile::sensor_decimals): a tm_wday (0 Sunday ..
 // 6 Saturday), or kWeekStartAuto for the language's (LocaleProfile).
@@ -207,6 +209,29 @@ inline int32_t minutes_until(const Next& next, int32_t today, int now_min) {
   const int32_t start_min = next.item.event->all_day() ? 0 : next.item.event->start_min;
   const int32_t delta = (next.day - today) * 24 * 60 + start_min - now_min;
   return delta > 0 ? delta : 0;
+}
+
+// Today's events that are not over yet: all-day ones, running and later
+// timed ones (the half-height Today tile).
+inline size_t remaining_today(const Sources& sources, int32_t today, int now_min) {
+  size_t count = 0;
+  for (uint8_t c = 0; c < sources.count; ++c) {
+    const Calendar* calendar = sources.calendars[c];
+    if (!calendar || !calendar->valid) continue;
+    for (const Event& e : calendar->events) {
+      if (e.start_day > today) break;
+      if (!covers(e, today)) continue;
+      if (!e.all_day() && e.end_day == today && e.end_min <= now_min) continue;
+      ++count;
+    }
+  }
+  return count;
+}
+
+// The first day of a week strip: a one-row tile shows the seven days from
+// today, a taller one the calendar week holding today.
+inline int32_t strip_first_day(int32_t today, uint8_t week_start, bool rolling) {
+  return rolling ? today : today - (calendar_events::weekday(today) - week_start + 7) % 7;
 }
 
 // The month grid: six weeks from the week holding the 1st, starting on

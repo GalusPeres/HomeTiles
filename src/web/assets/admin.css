@@ -3874,6 +3874,9 @@ select.setup-from:hover { background-color:#333333; }
 .tile.calendar .calendar-preview-message { color:var(--pv-text-secondary, #D8DEE9); }
 .calendar-preview-body.next > .calendar-preview-when { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .calendar-preview-body.agenda { display:flex; flex-direction:column; }
+.calendar-preview-body.countdown { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+.calendar-preview-body.countdown > .calendar-preview-what { font-size:var(--fs28, 14px); max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.calendar-preview-body.countdown > .calendar-preview-when { color:var(--pv-text-secondary, #D8DEE9); max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tile.calendar .calendar-preview-daylabel { font-size:var(--fs16, 8px); margin-top:.3em; }
 .tile.calendar .calendar-preview-row { display:flex; align-items:center; gap:.45em; min-height:1.55em; white-space:nowrap; }
 .tile.calendar .calendar-preview-time { flex:0 0 auto; min-width:3.6em; }
@@ -3887,6 +3890,7 @@ select.setup-from:hover { background-color:#333333; }
 .calendar-preview-day > small { font-size:var(--fs16, 8px); color:var(--pv-text-secondary, #D8DEE9); }
 .calendar-preview-day > b { font-weight:normal; min-width:1.7em; line-height:1.7em; border-radius:50%; }
 .calendar-preview-grid.month .calendar-preview-day > b { font-size:var(--fs16, 8px); }
+.calendar-preview-day.strip-today { border-radius:.8em; background:color-mix(in srgb, var(--calendar-tint, #fff) 15%, transparent); }
 .calendar-preview-day.today > b { background:var(--pv-text, #fff); color:var(--tile-card, #1A1A1A); }
 .calendar-preview-day.past > b { color:var(--pv-text-secondary, #D8DEE9); }
 .calendar-preview-day.outside > b { opacity:.4; }

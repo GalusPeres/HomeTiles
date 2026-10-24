@@ -16759,7 +16759,7 @@ function maybeFillTitleFromEnergy(tab) {
       return '<rect x="' + (r(cx) - half) + '" y="' + (r(cy) - half) + '" width="' + side + '" height="' + side +
         '" rx="' + Math.min(corner, half) + '" ' + attributes + '/>';
     };
-    const node = (cx, cy, hex, icon) => {
+    const node = (cx, cy, hex, icon, mirrored = false) => {
       svg += square(cx, cy, L.ring, L.ringCorner, 'fill="' + toneHex(cardRgb) + '"');
       if (frame) {
         svg += square(cx, cy, L.ring - 0.5, L.ringCorner - 0.5, 'fill="none" stroke="' + frameColor + '" stroke-width="1"');
@@ -16767,7 +16767,8 @@ function maybeFillTitleFromEnergy(tab) {
       svg += square(cx, cy, L.disc, L.discCorner, 'fill="' + energyFlowDisc(cardRgb, hex) + '"');
       html += '<i class="mdi mdi-' + escapeHtml(icon) + '" style="position:absolute;left:' + r(cx - L.iconPx / 2) +
         'px;top:' + r(cy - L.iconPx / 2) + 'px;width:' + L.iconPx + 'px;height:' + L.iconPx + 'px;font-size:' + L.iconPx +
-        'px;line-height:' + L.iconPx + 'px;text-align:center;color:' + hex + '"></i>';
+        'px;line-height:' + L.iconPx + 'px;text-align:center;color:' + hex + (mirrored ? ';transform:scaleX(-1)' : '') +
+        '"></i>';
     };
     const label = (x, w, cy, value, align) => {
       html += '<div style="position:absolute;left:' + r(x) + 'px;top:' + r(cy - L.valueLine / 2) + 'px;width:' + r(w) +
@@ -16777,11 +16778,13 @@ function maybeFillTitleFromEnergy(tab) {
     const iconOf = id => String(icons[id] || '').replace(/^mdi:/, '');
     const homeColor = ENERGY_FLOW_COLORS[flows.homeSource || 'grid'];
     if (shown.pv) node(l.node.pv[0], l.node.pv[1], ENERGY_FLOW_COLORS.pv, 'solar-power');
-    // The grid's direction past the idle threshold, as on the panel.
-    const gridIcon = !input.hasGrid ? 'transmission-tower'
-      : input.grid >= ENERGY_FLOW_IDLE_WATTS ? 'transmission-tower-import'
-        : -input.grid >= ENERGY_FLOW_IDLE_WATTS ? 'transmission-tower-export' : 'transmission-tower';
-    if (shown.grid) node(l.node.grid[0], l.node.grid[1], ENERGY_FLOW_COLORS.grid, gridIcon);
+    // The grid's direction past the idle threshold, as on the panel: while
+    // it supplies "export" (the arrow leaves the mast towards the lines),
+    // while feeding in "import" mirrored (the arrow comes from the lines).
+    const supplying = input.hasGrid && input.grid >= ENERGY_FLOW_IDLE_WATTS;
+    const feeding = input.hasGrid && -input.grid >= ENERGY_FLOW_IDLE_WATTS;
+    const gridIcon = supplying ? 'transmission-tower-export' : feeding ? 'transmission-tower-import' : 'transmission-tower';
+    if (shown.grid) node(l.node.grid[0], l.node.grid[1], ENERGY_FLOW_COLORS.grid, gridIcon, feeding);
     node(l.node.home[0], l.node.home[1], homeColor, 'home-lightning-bolt');
     const level = entity.charge ? energyFlowNumber(values[entity.charge]) : null;
     const charging = input.hasBattery && -input.battery >= ENERGY_FLOW_IDLE_WATTS;

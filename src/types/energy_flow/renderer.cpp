@@ -76,6 +76,10 @@ struct FlowTileState {
   lv_obj_t* card = nullptr;
   lv_obj_t* canvas = nullptr;
   lv_obj_t* charge = nullptr;
+  // The grid's feed-in icon: "transmission-tower-import" mirrored, drawn
+  // once (grid_feed_picture), shown instead of the icon label.
+  lv_obj_t* grid_feed = nullptr;
+  lv_draw_buf_t* grid_feed_buf = nullptr;
   String entities[kRoleCount];
   bool grid_invert = false;
   bool battery_invert = false;
@@ -206,14 +210,6 @@ String charging_icon(bool has_level, float level) {
   if (level < 10.0f) return "battery-charging-outline";
   const long tens = LV_MIN(10L, lroundf(level / 10.0f)) * 10L;
   return String("battery-charging-") + String(tens);
-}
-
-// The grid's icon shows its direction past the idle threshold (user
-// 2026-10-24): importing, exporting, or the plain tower.
-const char* grid_icon(const Inputs& in) {
-  if (in.has_grid && in.grid >= kIdleWatts) return "transmission-tower-import";
-  if (in.has_grid && -in.grid >= kIdleWatts) return "transmission-tower-export";
-  return "transmission-tower";
 }
 
 void set_text(lv_obj_t* label, const String& text) {
@@ -648,10 +644,18 @@ lv_area_t bend_box(const FlowTileState& st, const Polyline& path) {
   return box;
 }
 
-// Off screen, never shown: draws the bend pictures.
-lv_obj_t* g_bend_canvas = nullptr;
+// Off screen, never shown: draws the bend pictures and the mirrored icon.
+lv_obj_t* g_picture_canvas = nullptr;
 
-void bend_canvas_deleted(lv_event_t*) { g_bend_canvas = nullptr; }
+void picture_canvas_deleted(lv_event_t*) { g_picture_canvas = nullptr; }
+
+lv_obj_t* picture_canvas() {
+  if (!g_picture_canvas) {
+    g_picture_canvas = lv_canvas_create(nullptr);
+    if (g_picture_canvas) lv_obj_add_event_cb(g_picture_canvas, picture_canvas_deleted, LV_EVENT_DELETE, nullptr);
+  }
+  return g_picture_canvas;
+}
 
 // Draws a line's bend once into its picture in `color` (outside LVGL's
 // rendering, from refresh); false without memory, the line then draws its
@@ -660,11 +664,8 @@ bool render_bend(FlowTileState& st, uint8_t line, uint32_t color) {
   const Polyline& path = st.layout.line[line];
   if (!path.bend.present) return false;
   if (st.bend_picture[line] && st.bend_color[line] == color) return true;
-  if (!g_bend_canvas) {
-    g_bend_canvas = lv_canvas_create(nullptr);
-    if (!g_bend_canvas) return false;
-    lv_obj_add_event_cb(g_bend_canvas, bend_canvas_deleted, LV_EVENT_DELETE, nullptr);
-  }
+  lv_obj_t* canvas = picture_canvas();
+  if (!canvas) return false;
   const lv_area_t box = bend_box(st, path);
   lv_draw_buf_t*& picture = st.bend_picture[line];
   if (!picture) {
@@ -674,19 +675,90 @@ bool render_bend(FlowTileState& st, uint8_t line, uint32_t color) {
   }
   lv_image_cache_drop(picture);
   lv_draw_buf_clear(picture, nullptr);
-  lv_canvas_set_draw_buf(g_bend_canvas, picture);
+  lv_canvas_set_draw_buf(canvas, picture);
   lv_layer_t layer;
-  lv_canvas_init_layer(g_bend_canvas, &layer);
+  lv_canvas_init_layer(canvas, &layer);
   lv_draw_arc_dsc_t dsc;
   bend_arc(st, path, path.bend.cx - box.x1, path.bend.cy - box.y1, color, dsc);
   lv_draw_arc(&layer, &dsc);
-  lv_canvas_finish_layer(g_bend_canvas, &layer);
+  lv_canvas_finish_layer(canvas, &layer);
   // The canvas keeps no reference to a picture that goes with its tile.
-  lv_image_set_src(g_bend_canvas, nullptr);
+  lv_image_set_src(canvas, nullptr);
   lv_image_cache_drop(picture);
   st.bend_area[line] = box;
   st.bend_color[line] = color;
   return true;
+}
+
+// Hides or shows `obj` only when that changes (a flag set again would
+// redraw it).
+void set_hidden(lv_obj_t* obj, bool hidden) {
+  if (!obj || lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN) == hidden) return;
+  if (hidden) lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+// "transmission-tower-import" mirrored, its arrow coming in from the lines
+// on the right (user 2026-10-24): drawn once like the icon label, its rows
+// turned around, then shown as a picture centred where the label is (LVGL
+// draws no mirrored text). False without memory.
+bool grid_feed_picture(FlowTileState& st) {
+  if (st.grid_feed) return true;
+  NodeWidgets& w = st.node[kNodeGrid];
+  lv_obj_t* canvas = picture_canvas();
+  const String glyph = getMdiChar("transmission-tower-import");
+  const lv_font_t* font = w.icon ? lv_obj_get_style_text_font(w.icon, LV_PART_MAIN) : nullptr;
+  if (!canvas || !w.ring || !font || !glyph.length()) return false;
+  lv_point_t size;
+  lv_text_get_size(&size, glyph.c_str(), font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  if (size.x <= 0 || size.y <= 0) return false;
+  lv_draw_buf_t* picture = lv_draw_buf_create(size.x, size.y, LV_COLOR_FORMAT_ARGB8888, LV_STRIDE_AUTO);
+  if (!picture) return false;
+  lv_draw_buf_clear(picture, nullptr);
+  lv_canvas_set_draw_buf(canvas, picture);
+  lv_layer_t layer;
+  lv_canvas_init_layer(canvas, &layer);
+  lv_draw_label_dsc_t dsc;
+  lv_draw_label_dsc_init(&dsc);
+  dsc.font = font;
+  dsc.color = lv_obj_get_style_text_color(w.icon, LV_PART_MAIN);
+  dsc.text = glyph.c_str();
+  const lv_area_t area = {0, 0, size.x - 1, size.y - 1};
+  lv_draw_label(&layer, &dsc, &area);
+  lv_canvas_finish_layer(canvas, &layer);
+  lv_image_set_src(canvas, nullptr);
+  for (int32_t y = 0; y < size.y; ++y) {
+    uint32_t* row = reinterpret_cast<uint32_t*>(picture->data + y * picture->header.stride);
+    for (int32_t a = 0, b = size.x - 1; a < b; ++a, --b) {
+      const uint32_t left = row[a];
+      row[a] = row[b];
+      row[b] = left;
+    }
+  }
+  lv_image_cache_drop(picture);
+  st.grid_feed_buf = picture;
+  st.grid_feed = lv_image_create(w.ring);
+  lv_obj_add_flag(st.grid_feed, LV_OBJ_FLAG_HIDDEN);
+  lv_image_set_src(st.grid_feed, picture);
+  lv_obj_center(st.grid_feed);
+  return true;
+}
+
+// The grid's icon past the idle threshold (user 2026-10-24): while the grid
+// supplies "transmission-tower-export" as MDI draws it (the arrow leaves the
+// mast towards the lines), while feeding in "transmission-tower-import"
+// mirrored (the arrow comes from the lines into the mast), else the plain
+// mast. Without memory for the picture, the import icon as it is.
+void show_grid_icon(FlowTileState& st, const Inputs& in) {
+  NodeWidgets& w = st.node[kNodeGrid];
+  if (!w.icon) return;
+  const bool supplying = in.has_grid && in.grid >= kIdleWatts;
+  const bool feeding = in.has_grid && -in.grid >= kIdleWatts;
+  const bool mirrored = feeding && grid_feed_picture(st);
+  set_hidden(st.grid_feed, !mirrored);
+  set_hidden(w.icon, mirrored);
+  if (mirrored) return;
+  set_icon(w.icon, "", supplying ? "transmission-tower-export" : feeding ? "transmission-tower-import" : "transmission-tower");
 }
 
 void canvas_draw_cb(lv_event_t* e) {
@@ -814,7 +886,7 @@ void refresh(FlowTileState& st) {
     set_text(st.charge, has_charge ? i18n::format_number(configManager.getConfig().language, charge, 0) + " %"
                                    : String("--"));
   }
-  set_icon(st.node[kNodeGrid].icon, "", grid_icon(in));
+  show_grid_icon(st, in);
   // The battery shows its charge in the icon Home Assistant gives it; while
   // it charges (the tile's direction, past the idle threshold) the charging
   // icon for its level.
@@ -896,6 +968,14 @@ void card_delete_cb(lv_event_t* e) {
     lv_image_cache_drop(picture);
     lv_draw_buf_destroy(picture);
     picture = nullptr;
+  }
+  // The card goes first, its children after: the feed-in picture lets go
+  // of its pixels before they are freed.
+  if (st->grid_feed_buf) {
+    if (st->grid_feed) lv_image_set_src(st->grid_feed, nullptr);
+    lv_image_cache_drop(st->grid_feed_buf);
+    lv_draw_buf_destroy(st->grid_feed_buf);
+    st->grid_feed_buf = nullptr;
   }
   st->~FlowTileState();
   free(st);

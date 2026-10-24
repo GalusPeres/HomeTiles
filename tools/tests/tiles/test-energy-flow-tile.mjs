@@ -179,8 +179,10 @@ assert.ok(!headed.html.includes('mdi-transmission-tower'), 'a node without its e
 // direction inverted; the grid shows its amount.
 // While it charges its node shows Home Assistant's charging icon for its
 // level; the grid's icon shows import and export; solar is solar-power.
-assert.ok(drawn.includes('mdi-solar-power"') && drawn.includes('mdi-transmission-tower-import"'),
-          'solar-power, the grid importing');
+// The grid's arrow follows the energy (user 2026-10-24): out of the mast
+// while importing, into it while feeding in.
+assert.ok(drawn.includes('mdi-solar-power"') && drawn.includes('mdi-transmission-tower-export"'),
+          'solar-power, the grid importing: the arrow leaves the mast');
 for (const key_code of [0, 8]) {
   const signed = nodeOf();
   context.applyEnergyFlowPreview(signed, {flow_entities: 'sensor.pv\nsensor.grid\nsensor.bat\nsensor.soc', key_code,
@@ -188,14 +190,20 @@ for (const key_code of [0, 8]) {
     units: {'sensor.bat': 'kW'}, icons: {'sensor.soc': 'mdi:battery-70'}});
   assert.ok(signed.html.includes('>-300 W</div>'), 'a negative battery shows its minus');
   assert.ok(signed.html.includes('>200 W</div>') && !signed.html.includes('>-200 W</div>'), 'the grid shows its amount');
-  assert.ok(signed.html.includes('mdi-transmission-tower-export"'), 'the grid exporting');
+  assert.ok(/mdi-transmission-tower-import" style="[^"]*transform:scaleX\(-1\)"/.test(signed.html),
+            'the grid feeding in: import mirrored, the arrow from the lines into the mast');
   // Inverted, the same value is a discharge: Home Assistant's own icon.
   assert.ok(signed.html.includes(key_code ? 'mdi-battery-70"' : 'mdi-battery-charging-80"'), 'charging icon ' + key_code);
 }
 assert.match(renderer, /String charging_icon\(bool has_level, float level\) \{\s*if \(!has_level\) return "battery-charging";\s*if \(level < 10\.0f\) return "battery-charging-outline";\s*const long tens = LV_MIN\(10L, lroundf\(level \/ 10\.0f\)\) \* 10L;/,
              'the panel picks the charging icon like the preview');
 assert.match(renderer, /const bool charging = in\.has_battery && -in\.battery >= kIdleWatts;/);
-assert.ok(renderer.includes('set_icon(st.node[kNodeGrid].icon, "", grid_icon(in));'));
+assert.ok(renderer.includes('show_grid_icon(st, in);'));
+assert.match(renderer, /const bool mirrored = feeding && grid_feed_picture\(st\);[\s\S]*?supplying \? "transmission-tower-export" : feeding \? "transmission-tower-import" : "transmission-tower"/,
+             'the panel: export while importing, import mirrored while feeding in');
+assert.match(renderer, /const String glyph = getMdiChar\("transmission-tower-import"\);[\s\S]*?row\[a\] = row\[b\];/,
+             'the feed-in picture is the import icon with its rows turned around');
+assert.match(renderer, /if \(st->grid_feed\) lv_image_set_src\(st->grid_feed, nullptr\);\s*lv_image_cache_drop\(st->grid_feed_buf\);\s*lv_draw_buf_destroy\(st->grid_feed_buf\);/);
 // The charging icons are built at runtime: they are built in, like the grid's.
 const coreIcons = read('tools/icons/core-icons.txt').split('\n');
 for (const name of ['battery-charging-outline', 'battery-charging-10', 'battery-charging-100', 'transmission-tower-export',

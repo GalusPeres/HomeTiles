@@ -63,7 +63,8 @@ for (const marker of [
   // One step per display frame (60 fps, user 2026-10-24): the display's
   // refresh moves the dots, whole pixels counted, not elapsed time (b533's
   // 40 ms timer stuttered); without a shown dot LVGL's refresh rests.
-  'lv_display_add_event_cb(g_motion_display, motion_display_cb, LV_EVENT_REFR_START, nullptr);',
+  'for (const lv_event_code_t code : {LV_EVENT_REFR_START, LV_EVENT_RENDER_START, LV_EVENT_FLUSH_START,',
+  'lv_display_add_event_cb(g_motion_display, motion_display_cb, code, nullptr);',
   'st.step[line] = watts >= kStep2Watts ? 2 : 1;',
   'st->phase[line] = fmodf(st->phase[line] + st->step[line], length);',
   'if (waiting) lv_timer_resume(lv_display_get_refr_timer(g_motion_display));',

@@ -114,9 +114,17 @@ struct MotionStats {
   uint32_t lines_us = 0;
   uint32_t lines_max_us = 0;
   uint32_t frame_lines_us = 0;
+  // Where a frame's time goes: LVGL's layout pass before rendering, the
+  // flushes to the panel (count and time) and the dirty pixels, so the log
+  // shows whether the cost follows the number of areas or their size.
+  uint32_t layout_us = 0;
+  uint32_t flush_us = 0;
+  uint32_t flushes = 0;
+  uint32_t pixels = 0;
   // The frame under way.
   uint32_t frame_start_us = 0;
   uint32_t frame_areas = 0;
+  uint32_t flush_start_us = 0;
   uint32_t last_ready_us = 0;
 };
 MotionStats g_motion_stats;
@@ -261,12 +269,16 @@ void log_motion(uint32_t now_ms) {
   if (m.frames) {
     const uint32_t frames = m.frames;
     const uint32_t window = now_ms - m.window_ms;
-    Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu "
-                  "render avg=%.2f max=%.2f ms lines avg=%lu max=%lu us step avg=%lu max=%lu us gap max=%.1f ms\n",
+    Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu px avg=%lu "
+                  "render avg=%.2f max=%.2f ms layout avg=%lu us flush avg=%lu us n=%.1f lines avg=%lu max=%lu us "
+                  "step avg=%lu max=%lu us gap max=%.1f ms\n",
                   static_cast<unsigned long>(window / 1000), static_cast<unsigned long>(frames),
                   frames * 1000.0f / window, static_cast<unsigned long>(m.dots_max),
                   static_cast<float>(m.areas) / frames, static_cast<unsigned long>(m.areas_max),
+                  static_cast<unsigned long>(m.pixels / frames),
                   m.render_us / 1000.0f / frames, m.render_max_us / 1000.0f,
+                  static_cast<unsigned long>(m.layout_us / frames), static_cast<unsigned long>(m.flush_us / frames),
+                  static_cast<float>(m.flushes) / frames,
                   static_cast<unsigned long>(m.lines_us / frames), static_cast<unsigned long>(m.lines_max_us),
                   static_cast<unsigned long>(m.step_us / frames), static_cast<unsigned long>(m.step_max_us),
                   m.gap_max_us / 1000.0f);
@@ -300,7 +312,17 @@ void motion_display_cb(lv_event_t* e) {
     m.frame_start_us = now;
     m.frame_lines_us = 0;
     m.frame_areas = g_motion_display->inv_p;
-  } else if (code == LV_EVENT_REFR_READY && m.frame_areas) {
+    for (uint32_t i = 0; i < m.frame_areas; ++i) m.pixels += lv_area_get_size(&g_motion_display->inv_areas[i]);
+  } else if (!m.frame_areas) {
+    return;
+  } else if (code == LV_EVENT_RENDER_START) {
+    m.layout_us += micros() - m.frame_start_us;
+  } else if (code == LV_EVENT_FLUSH_START) {
+    m.flush_start_us = micros();
+  } else if (code == LV_EVENT_FLUSH_FINISH) {
+    m.flush_us += micros() - m.flush_start_us;
+    ++m.flushes;
+  } else if (code == LV_EVENT_REFR_READY) {
     const uint32_t now = micros();
     const uint32_t render = now - m.frame_start_us;
     m.render_us += render;
@@ -321,8 +343,10 @@ void wake_motion(lv_obj_t* card) {
   if (!g_motion_display) {
     g_motion_display = lv_obj_get_display(card);
     if (!g_motion_display) return;
-    lv_display_add_event_cb(g_motion_display, motion_display_cb, LV_EVENT_REFR_START, nullptr);
-    lv_display_add_event_cb(g_motion_display, motion_display_cb, LV_EVENT_REFR_READY, nullptr);
+    for (const lv_event_code_t code : {LV_EVENT_REFR_START, LV_EVENT_RENDER_START, LV_EVENT_FLUSH_START,
+                                       LV_EVENT_FLUSH_FINISH, LV_EVENT_REFR_READY}) {
+      lv_display_add_event_cb(g_motion_display, motion_display_cb, code, nullptr);
+    }
   }
   lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
 }

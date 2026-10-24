@@ -267,21 +267,27 @@ uint32_t step_dots(bool& waiting) {
   return moved;
 }
 
-// Which object trees the dot frames draw (one log line per kMotionLogMs,
-// with the dots' line): the tile's card and grid, and the siblings LVGL
-// draws after them on the way up to the screen, with the top and system
-// layers. Each probe keeps its object's size and child count from when it
-// was added, so the log never reads an object that is gone.
+// Which objects the dot frames draw (one log line per kMotionLogMs, with
+// the dots' line): the card and its children, every tile of the grid, the
+// grid, the siblings LVGL draws after each level on the way up to the screen,
+// and the top and system layers with their children. Each probe keeps its
+// object's place, size and child count from when it was added, so the log
+// never reads an object that is gone. Tags: k card child, c card, t tile,
+// g grid, a level above (with its number), s sibling of a level, L layer,
+// l layer child.
 struct DrawProbe {
   lv_obj_t* obj = nullptr;
+  int32_t x = 0;
+  int32_t y = 0;
   int32_t width = 0;
   int32_t height = 0;
   uint32_t children = 0;
-  uint8_t depth = 0;  // 0 the card, 1 the grid, 2... the levels above
+  char tag = '?';
+  uint8_t level = 0;
   uint32_t start_us = 0;
   uint32_t sum_us = 0;
 };
-constexpr size_t kMaxProbes = 32;
+constexpr size_t kMaxProbes = 96;
 DrawProbe g_probes[kMaxProbes];
 size_t g_probe_count = 0;
 
@@ -301,47 +307,57 @@ void probe_cb(lv_event_t* e) {
   }
 }
 
-void add_probe(lv_obj_t* obj, uint8_t depth) {
+void add_probe(lv_obj_t* obj, char tag, uint8_t level) {
   if (!obj || g_probe_count >= kMaxProbes) return;
   for (size_t i = 0; i < g_probe_count; ++i) {
     if (g_probes[i].obj == obj) return;
   }
   DrawProbe& probe = g_probes[g_probe_count++];
+  lv_area_t coords;
+  lv_obj_get_coords(obj, &coords);
   probe.obj = obj;
-  probe.width = lv_obj_get_width(obj);
-  probe.height = lv_obj_get_height(obj);
+  probe.x = coords.x1;
+  probe.y = coords.y1;
+  probe.width = lv_area_get_width(&coords);
+  probe.height = lv_area_get_height(&coords);
   probe.children = lv_obj_get_child_count(obj);
-  probe.depth = depth;
+  probe.tag = tag;
+  probe.level = level;
   for (const lv_event_code_t code : {LV_EVENT_DRAW_MAIN_BEGIN, LV_EVENT_DRAW_POST_END, LV_EVENT_DELETE}) {
     lv_obj_add_event_cb(obj, probe_cb, code, &probe);
   }
 }
 
+void add_children(lv_obj_t* parent, char tag, uint8_t level) {
+  const uint32_t count = parent ? lv_obj_get_child_count(parent) : 0;
+  for (uint32_t i = 0; i < count; ++i) add_probe(lv_obj_get_child(parent, static_cast<int32_t>(i)), tag, level);
+}
+
 void add_probes(lv_obj_t* card) {
-  add_probe(card, 0);
-  uint8_t depth = 1;
-  for (lv_obj_t* level = lv_obj_get_parent(card); level && g_probe_count < kMaxProbes; level = lv_obj_get_parent(level), ++depth) {
-    add_probe(level, depth);
-    // The siblings of every level above the grid (the grid's own tiles are
-    // too many and are covered by the grid's time).
-    lv_obj_t* parent = lv_obj_get_parent(level);
-    if (!parent || depth < 2) continue;
-    const uint32_t count = lv_obj_get_child_count(parent);
-    for (uint32_t i = 0; i < count; ++i) add_probe(lv_obj_get_child(parent, static_cast<int32_t>(i)), depth);
+  add_probe(card, 'c', 0);
+  add_children(card, 'k', 0);
+  lv_obj_t* grid = lv_obj_get_parent(card);
+  if (!grid) return;
+  add_probe(grid, 'g', 1);
+  add_children(grid, 't', 1);
+  uint8_t level = 1;
+  for (lv_obj_t* parent = lv_obj_get_parent(grid); parent; parent = lv_obj_get_parent(parent)) {
+    add_probe(parent, 'a', ++level);
+    add_children(parent, 's', level - 1);
   }
   for (lv_obj_t* layer : {lv_display_get_layer_top(g_motion_display), lv_display_get_layer_sys(g_motion_display)}) {
-    add_probe(layer, 99);
-    const uint32_t count = layer ? lv_obj_get_child_count(layer) : 0;
-    for (uint32_t i = 0; i < count; ++i) add_probe(lv_obj_get_child(layer, static_cast<int32_t>(i)), 99);
+    add_probe(layer, 'L', 0);
+    add_children(layer, 'l', 0);
   }
 }
 
 void log_probes(uint32_t frames) {
-  // The six most expensive trees, per dot frame.
+  // The twelve most expensive objects (their trees), per dot frame.
   bool shown[kMaxProbes] = {};
-  char line[400];
-  int used = snprintf(line, sizeof(line), "[EnergyFlow] Dots draw per frame:");
-  for (int rank = 0; rank < 6; ++rank) {
+  char line[900];
+  int used = snprintf(line, sizeof(line), "[EnergyFlow] Dots draw per frame (%u probes):",
+                      static_cast<unsigned>(g_probe_count));
+  for (int rank = 0; rank < 12; ++rank) {
     int best = -1;
     for (size_t i = 0; i < g_probe_count; ++i) {
       if (shown[i] || !g_probes[i].sum_us) continue;
@@ -350,8 +366,9 @@ void log_probes(uint32_t frames) {
     if (best < 0) break;
     shown[best] = true;
     const DrawProbe& probe = g_probes[best];
-    used += snprintf(line + used, sizeof(line) - used, " d%u %ldx%ld c=%lu %lu us%s", static_cast<unsigned>(probe.depth),
-                     static_cast<long>(probe.width), static_cast<long>(probe.height),
+    used += snprintf(line + used, sizeof(line) - used, " %c%u %ldx%ld@%ld,%ld n=%lu %luus%s", probe.tag,
+                     static_cast<unsigned>(probe.level), static_cast<long>(probe.width),
+                     static_cast<long>(probe.height), static_cast<long>(probe.x), static_cast<long>(probe.y),
                      static_cast<unsigned long>(probe.children), static_cast<unsigned long>(probe.sum_us / frames),
                      probe.obj ? "" : " (gone)");
     if (used >= static_cast<int>(sizeof(line)) - 1) break;

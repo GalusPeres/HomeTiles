@@ -114,6 +114,13 @@ struct MotionStats {
   uint32_t lines_us = 0;
   uint32_t lines_max_us = 0;
   uint32_t frame_lines_us = 0;
+  // Within it: straight pieces, bends and dots (count and time).
+  uint32_t piece_n[3] = {};
+  uint32_t piece_us[3] = {};
+  // LVGL's search for the topmost covering object of each area (from the
+  // screen's cover check to the first object drawn).
+  uint32_t search_us = 0;
+  uint32_t search_start_us = 0;
   // Where a frame's time goes: LVGL's layout pass before rendering, the
   // flushes to the panel (count and time) and the dirty pixels, so the log
   // shows whether the cost follows the number of areas or their size.
@@ -216,20 +223,55 @@ lv_point_t dot_point(const FlowTileState& st, uint8_t line) {
   return {round_px(p.x), round_px(p.y)};
 }
 
-void invalidate_dot(const FlowTileState& st, const lv_area_t& canvas, lv_point_t a, lv_point_t b) {
+// A node ring lies opaque over the ends of its lines; the dots run out from
+// under it. Where it covers a dot's area completely (its box without the
+// corners its radius rounds), nothing changes on screen, so that part is
+// not redrawn. Redrawn, every dot step near a node drew its ring, disc and
+// icon again (b539: ~0.45 ms of each frame on the V2). False when nothing
+// is left.
+bool clip_to_rings(const FlowTileState& st, lv_area_t& area) {
+  for (const NodeWidgets& node : st.node) {
+    if (!node.shown || !node.ring || lv_obj_has_flag(node.ring, LV_OBJ_FLAG_HIDDEN)) continue;
+    lv_area_t box;
+    lv_obj_get_coords(node.ring, &box);
+    if (!lv_area_is_on(&area, &box)) continue;
+    const int32_t corner = LV_MIN(lv_obj_get_style_radius(node.ring, LV_PART_MAIN),
+                                  LV_MIN(lv_area_get_width(&box), lv_area_get_height(&box)) / 2);
+    if (area.x1 >= box.x1 + corner && area.x2 <= box.x2 - corner) {
+      // Across the ring's top or bottom side.
+      if (area.y1 >= box.y1 && area.y2 <= box.y2) return false;
+      if (area.y1 < box.y1 && area.y2 <= box.y2) area.y2 = box.y1 - 1;
+      else if (area.y2 > box.y2 && area.y1 >= box.y1) area.y1 = box.y2 + 1;
+    } else if (area.y1 >= box.y1 + corner && area.y2 <= box.y2 - corner) {
+      // Across its left or right side.
+      if (area.x1 >= box.x1 && area.x2 <= box.x2) return false;
+      if (area.x1 < box.x1 && area.x2 <= box.x2) area.x2 = box.x1 - 1;
+      else if (area.x2 > box.x2 && area.x1 >= box.x1) area.x1 = box.x2 + 1;
+    }
+  }
+  return true;
+}
+
+// Redraws a dot's old and new place; false when the rings cover both.
+bool invalidate_dot(const FlowTileState& st, const lv_area_t& canvas, lv_point_t a, lv_point_t b) {
   const int r = st.dot_radius + 1;
+  bool any = false;
+  auto invalidate = [&](lv_area_t area) {
+    if (!clip_to_rings(st, area)) return;
+    lv_obj_invalidate_area(st.canvas, &area);
+    any = true;
+  };
   // Neighbouring steps share one small area; a dot that starts over
   // redraws both ends.
   if (abs(a.x - b.x) <= 2 * r && abs(a.y - b.y) <= 2 * r) {
-    lv_area_t area = {canvas.x1 + LV_MIN(a.x, b.x) - r, canvas.y1 + LV_MIN(a.y, b.y) - r,
-                      canvas.x1 + LV_MAX(a.x, b.x) + r, canvas.y1 + LV_MAX(a.y, b.y) + r};
-    lv_obj_invalidate_area(st.canvas, &area);
-    return;
+    invalidate({canvas.x1 + LV_MIN(a.x, b.x) - r, canvas.y1 + LV_MIN(a.y, b.y) - r,
+                canvas.x1 + LV_MAX(a.x, b.x) + r, canvas.y1 + LV_MAX(a.y, b.y) + r});
+    return any;
   }
   for (const lv_point_t& p : {a, b}) {
-    lv_area_t area = {canvas.x1 + p.x - r, canvas.y1 + p.y - r, canvas.x1 + p.x + r, canvas.y1 + p.y + r};
-    lv_obj_invalidate_area(st.canvas, &area);
+    invalidate({canvas.x1 + p.x - r, canvas.y1 + p.y - r, canvas.x1 + p.x + r, canvas.y1 + p.y + r});
   }
+  return any;
 }
 
 bool any_live(const FlowTileState& st) {
@@ -259,8 +301,13 @@ uint32_t step_dots(bool& waiting) {
         waiting = true;
         continue;
       }
-      invalidate_dot(*st, canvas, st->dot[line], next);
+      const bool redrawn = invalidate_dot(*st, canvas, st->dot[line], next);
       st->dot[line] = next;
+      // Under a ring: the next frame still comes.
+      if (!redrawn) {
+        waiting = true;
+        continue;
+      }
       ++moved;
     }
   }
@@ -298,9 +345,17 @@ void probe_cb(lv_event_t* e) {
     probe->obj = nullptr;
     return;
   }
-  if (!g_motion_stats.frame_areas) return;
+  MotionStats& m = g_motion_stats;
+  if (!m.frame_areas) return;
   if (code == LV_EVENT_DRAW_MAIN_BEGIN) {
     probe->start_us = micros();
+    if (m.search_start_us) {
+      m.search_us += probe->start_us - m.search_start_us;
+      m.search_start_us = 0;
+    }
+  } else if (code == LV_EVENT_DRAW_POST_BEGIN) {
+    // A level above the top object only gets its post-draw events.
+    if (!probe->start_us) probe->start_us = micros();
   } else if (code == LV_EVENT_DRAW_POST_END && probe->start_us) {
     probe->sum_us += micros() - probe->start_us;
     probe->start_us = 0;
@@ -323,7 +378,8 @@ void add_probe(lv_obj_t* obj, char tag, uint8_t level) {
   probe.children = lv_obj_get_child_count(obj);
   probe.tag = tag;
   probe.level = level;
-  for (const lv_event_code_t code : {LV_EVENT_DRAW_MAIN_BEGIN, LV_EVENT_DRAW_POST_END, LV_EVENT_DELETE}) {
+  for (const lv_event_code_t code :
+       {LV_EVENT_DRAW_MAIN_BEGIN, LV_EVENT_DRAW_POST_BEGIN, LV_EVENT_DRAW_POST_END, LV_EVENT_DELETE}) {
     lv_obj_add_event_cb(obj, probe_cb, code, &probe);
   }
 }
@@ -333,7 +389,14 @@ void add_children(lv_obj_t* parent, char tag, uint8_t level) {
   for (uint32_t i = 0; i < count; ++i) add_probe(lv_obj_get_child(parent, static_cast<int32_t>(i)), tag, level);
 }
 
+// Each area's top object search starts with the screen's cover check.
+void search_cb(lv_event_t*) {
+  MotionStats& m = g_motion_stats;
+  if (m.frame_areas && !m.search_start_us) m.search_start_us = micros();
+}
+
 void add_probes(lv_obj_t* card) {
+  lv_obj_add_event_cb(lv_obj_get_screen(card), search_cb, LV_EVENT_COVER_CHECK, nullptr);
   add_probe(card, 'c', 0);
   add_children(card, 'k', 0);
   lv_obj_t* grid = lv_obj_get_parent(card);
@@ -386,7 +449,8 @@ void log_motion(uint32_t now_ms) {
     const uint32_t window = now_ms - m.window_ms;
     Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu px avg=%lu "
                   "render avg=%.2f max=%.2f ms layout avg=%lu us draw avg=%lu us flush avg=%lu us n=%.1f "
-                  "tail avg=%lu us lines avg=%lu max=%lu us step avg=%lu max=%lu us gap max=%.1f ms\n",
+                  "tail avg=%lu us lines avg=%lu max=%lu us (line %.1f %lu us arc %.1f %lu us dot %.1f %lu us) "
+                  "search avg=%lu us step avg=%lu max=%lu us gap max=%.1f ms\n",
                   static_cast<unsigned long>(window / 1000), static_cast<unsigned long>(frames),
                   frames * 1000.0f / window, static_cast<unsigned long>(m.dots_max),
                   static_cast<float>(m.areas) / frames, static_cast<unsigned long>(m.areas_max),
@@ -396,7 +460,10 @@ void log_motion(uint32_t now_ms) {
                   static_cast<unsigned long>(m.flush_us / frames), static_cast<float>(m.flushes) / frames,
                   static_cast<unsigned long>(m.tail_us / frames),
                   static_cast<unsigned long>(m.lines_us / frames), static_cast<unsigned long>(m.lines_max_us),
-                  static_cast<unsigned long>(m.step_us / frames), static_cast<unsigned long>(m.step_max_us),
+                  static_cast<float>(m.piece_n[0]) / frames, static_cast<unsigned long>(m.piece_us[0] / frames),
+                  static_cast<float>(m.piece_n[1]) / frames, static_cast<unsigned long>(m.piece_us[1] / frames),
+                  static_cast<float>(m.piece_n[2]) / frames, static_cast<unsigned long>(m.piece_us[2] / frames),
+                  static_cast<unsigned long>(m.search_us / frames), static_cast<unsigned long>(m.step_us / frames), static_cast<unsigned long>(m.step_max_us),
                   m.gap_max_us / 1000.0f);
   }
   if (m.frames) log_probes(m.frames);
@@ -436,6 +503,7 @@ void motion_display_cb(lv_event_t* e) {
     m.segment_start_us = micros();
     m.layout_us += m.segment_start_us - m.frame_start_us;
   } else if (code == LV_EVENT_FLUSH_START) {
+    m.search_start_us = 0;
     m.flush_start_us = micros();
     if (m.segment_start_us) m.draw_us += m.flush_start_us - m.segment_start_us;
   } else if (code == LV_EVENT_FLUSH_FINISH) {
@@ -491,10 +559,20 @@ bool piece_on_clip(const lv_layer_t* layer, const lv_area_t& canvas, const Polyl
   return lv_area_is_on(&box, &layer->_clip_area);
 }
 
+// Counts one drawing of a kind (0 straight, 1 bend, 2 dot) started at
+// `started_us` while a dot step's frame is drawn.
+void count_piece(int kind, uint32_t started_us) {
+  MotionStats& m = g_motion_stats;
+  if (!m.frame_areas) return;
+  ++m.piece_n[kind];
+  m.piece_us[kind] += micros() - started_us;
+}
+
 // Points first..last of a line as straight pieces (two or more points).
 void draw_straight(lv_layer_t* layer, lv_draw_line_dsc_t& dsc, const lv_area_t& canvas, const Polyline& path,
                    uint8_t first, uint8_t last) {
   if (last <= first || !piece_on_clip(layer, canvas, path, first, last, dsc.width)) return;
+  const uint32_t started_us = micros();
   lv_point_precise_t points[kMaxLinePoints];
   for (uint8_t i = first; i <= last; ++i) {
     points[i - first].x = canvas.x1 + round_px(path.p[i].x);
@@ -503,6 +581,7 @@ void draw_straight(lv_layer_t* layer, lv_draw_line_dsc_t& dsc, const lv_area_t& 
   dsc.points = points;
   dsc.point_cnt = last - first + 1;
   lv_draw_line(layer, &dsc);
+  count_piece(0, started_us);
 }
 
 void canvas_draw_cb(lv_event_t* e) {
@@ -544,7 +623,9 @@ void canvas_draw_cb(lv_event_t* e) {
         arc_dsc.radius = static_cast<uint16_t>(path.bend.radius + st->line_width / 2);
         arc_dsc.start_angle = path.bend.start_angle;
         arc_dsc.end_angle = path.bend.end_angle;
+        const uint32_t arc_started_us = micros();
         lv_draw_arc(layer, &arc_dsc);
+        count_piece(1, arc_started_us);
       }
       draw_straight(layer, line_dsc, canvas, path, path.bend_last, path.count - 1);
     }
@@ -560,7 +641,9 @@ void canvas_draw_cb(lv_event_t* e) {
                             canvas.x1 + p.x + st->dot_radius - 1, canvas.y1 + p.y + st->dot_radius - 1};
     if (!lv_area_is_on(&area, &layer->_clip_area)) continue;
     dot_dsc.bg_color = lv_color_hex(st->line_color[line]);
+    const uint32_t dot_started_us = micros();
     lv_draw_rect(layer, &dot_dsc, &area);
+    count_piece(2, dot_started_us);
   }
   // Counted while a dot step's frame is drawn (the dots' log line).
   if (g_motion_stats.frame_areas) g_motion_stats.frame_lines_us += micros() - started_us;

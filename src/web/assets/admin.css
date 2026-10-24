@@ -3889,6 +3889,9 @@ select.setup-from:hover { background-color:#333333; }
 .calendar-preview-day { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; min-height:0; }
 .calendar-preview-day > small { font-size:var(--fs16, 8px); color:var(--pv-text-secondary, #D8DEE9); }
 .calendar-preview-day > b { font-weight:normal; min-width:1.7em; line-height:1.7em; border-radius:50%; }
+/* A one-row week strip: number and dots stay inside the tile (calendar_tile.cpp fits them the same way). */
+.calendar-preview-grid.week .calendar-preview-day { gap:1px; }
+.calendar-preview-grid.week .calendar-preview-day > b { line-height:1.5em; min-width:1.5em; }
 .calendar-preview-grid.month .calendar-preview-day > b { font-size:var(--fs16, 8px); }
 .calendar-preview-day.strip-today { border-radius:.8em; background:color-mix(in srgb, var(--calendar-tint, #fff) 15%, transparent); }
 .calendar-preview-day.today > b { background:var(--pv-text, #fff); color:var(--tile-card, #1A1A1A); }

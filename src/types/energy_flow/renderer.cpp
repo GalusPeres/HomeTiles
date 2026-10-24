@@ -121,6 +121,11 @@ struct MotionStats {
   uint32_t flush_us = 0;
   uint32_t flushes = 0;
   uint32_t pixels = 0;
+  // Drawing the areas (between the flushes) and the end of the refresh
+  // after the last flush.
+  uint32_t draw_us = 0;
+  uint32_t tail_us = 0;
+  uint32_t segment_start_us = 0;
   // The frame under way.
   uint32_t frame_start_us = 0;
   uint32_t frame_areas = 0;
@@ -270,15 +275,16 @@ void log_motion(uint32_t now_ms) {
     const uint32_t frames = m.frames;
     const uint32_t window = now_ms - m.window_ms;
     Serial.printf("[EnergyFlow] Dots %lu s: frames=%lu (%.1f/s) dots<=%lu areas avg=%.1f max=%lu px avg=%lu "
-                  "render avg=%.2f max=%.2f ms layout avg=%lu us flush avg=%lu us n=%.1f lines avg=%lu max=%lu us "
-                  "step avg=%lu max=%lu us gap max=%.1f ms\n",
+                  "render avg=%.2f max=%.2f ms layout avg=%lu us draw avg=%lu us flush avg=%lu us n=%.1f "
+                  "tail avg=%lu us lines avg=%lu max=%lu us step avg=%lu max=%lu us gap max=%.1f ms\n",
                   static_cast<unsigned long>(window / 1000), static_cast<unsigned long>(frames),
                   frames * 1000.0f / window, static_cast<unsigned long>(m.dots_max),
                   static_cast<float>(m.areas) / frames, static_cast<unsigned long>(m.areas_max),
                   static_cast<unsigned long>(m.pixels / frames),
                   m.render_us / 1000.0f / frames, m.render_max_us / 1000.0f,
-                  static_cast<unsigned long>(m.layout_us / frames), static_cast<unsigned long>(m.flush_us / frames),
-                  static_cast<float>(m.flushes) / frames,
+                  static_cast<unsigned long>(m.layout_us / frames), static_cast<unsigned long>(m.draw_us / frames),
+                  static_cast<unsigned long>(m.flush_us / frames), static_cast<float>(m.flushes) / frames,
+                  static_cast<unsigned long>(m.tail_us / frames),
                   static_cast<unsigned long>(m.lines_us / frames), static_cast<unsigned long>(m.lines_max_us),
                   static_cast<unsigned long>(m.step_us / frames), static_cast<unsigned long>(m.step_max_us),
                   m.gap_max_us / 1000.0f);
@@ -316,14 +322,19 @@ void motion_display_cb(lv_event_t* e) {
   } else if (!m.frame_areas) {
     return;
   } else if (code == LV_EVENT_RENDER_START) {
-    m.layout_us += micros() - m.frame_start_us;
+    m.segment_start_us = micros();
+    m.layout_us += m.segment_start_us - m.frame_start_us;
   } else if (code == LV_EVENT_FLUSH_START) {
     m.flush_start_us = micros();
+    if (m.segment_start_us) m.draw_us += m.flush_start_us - m.segment_start_us;
   } else if (code == LV_EVENT_FLUSH_FINISH) {
-    m.flush_us += micros() - m.flush_start_us;
+    m.segment_start_us = micros();
+    m.flush_us += m.segment_start_us - m.flush_start_us;
     ++m.flushes;
   } else if (code == LV_EVENT_REFR_READY) {
     const uint32_t now = micros();
+    if (m.segment_start_us) m.tail_us += now - m.segment_start_us;
+    m.segment_start_us = 0;
     const uint32_t render = now - m.frame_start_us;
     m.render_us += render;
     if (render > m.render_max_us) m.render_max_us = render;

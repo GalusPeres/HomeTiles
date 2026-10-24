@@ -926,6 +926,9 @@
           iconName = devicePreviewIcon(deviceKind, devicePreviewState);
         }
       }
+      if (previewKind === 'calendar' && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) {
+        iconName = 'calendar';
+      }
       let binarySensorPreviewState = null;
       if (previewKind === 'binary_sensor') {
         binarySensorPreviewState = parseBinarySensorPreviewPayload(
@@ -956,7 +959,7 @@
                 ? devicePreviewColor(deviceKind, devicePreviewState)
                 : (previewKind === 'binary_sensor'
                   ? binarySensorPreviewColor(binarySensorPreviewState)
-                  : ''))), ruleFill);
+                  : (previewKind === 'calendar' ? calendarPreviewIconColor(tile) : '')))), ruleFill);
         if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(el, ruleFill);
         const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
         html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
@@ -968,6 +971,7 @@
         displayTitle = metaNames[tile.sensor_entity] ||
           titleFromEntity(tile.sensor_entity);
       }
+      if (previewKind === 'calendar') displayTitle = calendarPreviewTitle(tile, displayTitle, sensorMeta);
       if (displayTitle.length) {
         html += '<div class="tile-title" id="' + tab + '-tile-' + index + '-title">' +
           tileTitleHtml(displayTitle) + '</div>';
@@ -1007,6 +1011,7 @@
       }
       if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, Number(tile.span_h) === 0.5);
       if (deviceKind) html += devicePreviewExtraHtml(deviceKind, devicePreviewState, Number(tile.span_h) === 0.5);
+      if (previewKind === 'calendar') html += calendarPreviewExtraHtml(tile, sensorMeta);
       if (previewKind === 'binary_sensor') {
         html += '<div class="tile-value tile-binary-sensor-value ' + (Number(tile.sensor_value_font) ? sensorValueClass : '') + '" id="' +
           tab + '-tile-' + index + '-value">' +

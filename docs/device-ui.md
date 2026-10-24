@@ -99,6 +99,7 @@ History popups have **7D** and **24H** views (Energy: **7D** and **Today**); the
 | [Weather](tiles.md#weather), [Media](tiles.md#media), [Climate](tiles.md#climate) | Forecast, playback, temperature and modes |
 | [Fan](tiles.md#fan), [Lock](tiles.md#lock), [Alarm Panel](tiles.md#alarm-panel) | Speed and presets, lock and open, arming modes |
 | [Camera](tiles.md#camera) | Live video, also full screen |
+| [Calendar](tiles.md#calendar) | Month with the day's events, or the coming weeks as a list |
 
 Home Assistant can also open a folder or popup using the display's [View Select entity](bridge.md#control-the-displayed-view).
 

@@ -15,6 +15,7 @@
 #include "src/types/device/device_tile.h"
 #include "src/types/device/device_visual.h"
 #include "src/ui/navigation/view_navigation.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
@@ -1355,6 +1356,7 @@ void show_device_popup(const DevicePopupTarget& target) {
   hide_energy_popup();
   hide_media_popup();
   hide_camera_popup();
+  hide_calendar_popup();
   if (pop.target.entity != target.entity) pop.notice_until = 0;
   open_for(target);
 }

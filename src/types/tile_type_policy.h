@@ -12,6 +12,11 @@ static constexpr bool tileTypeIsDeviceControl(int type) {
   return type == TILE_LOCK || type == TILE_ALARM || type == TILE_FAN;
 }
 
+// Calendar keeps up to four calendar entities in sensor_entity, separated by
+// commas (types/calendar/calendar_tile.h), and reads the Bridge's additive
+// `events` topic of every calendar the Bridge offers instead of a state.
+static constexpr bool tileTypeIsCalendar(int type) { return type == TILE_CALENDAR; }
+
 // Persistence, runtime state, and editor policies are deliberately separate.
 // For example, Camera stores an entity but does not consume cached tile state,
 // and a Scene tile stores the scene, script or button it runs (sceneTarget).
@@ -20,7 +25,7 @@ static constexpr bool entityTileStoresSensorEntity(TileType type) {
          type == TILE_ENERGY || type == TILE_MEDIA || type == TILE_CLIMATE ||
          type == TILE_CAMERA || type == TILE_COVER || type == TILE_SCENE ||
          tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
-         tileTypeIsDeviceControl(type);
+         tileTypeIsDeviceControl(type) || tileTypeIsCalendar(type);
 }
 
 static constexpr bool tileTypeUsesCachedEntityState(TileType type) {
@@ -33,7 +38,7 @@ static constexpr bool tileTypeStoresPopupMode(TileType type) {
   return type == TILE_SENSOR || type == TILE_WEATHER || type == TILE_ENERGY ||
          type == TILE_SWITCH || type == TILE_CLIMATE || type == TILE_COVER ||
          tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
-         tileTypeIsDeviceControl(type);
+         tileTypeIsDeviceControl(type) || tileTypeIsCalendar(type);
 }
 
 // Switch preserves its legacy popup choice in key_code instead.
@@ -41,7 +46,7 @@ static constexpr bool tileTypeStoresPopupModeDirectly(TileType type) {
   return type == TILE_SENSOR || type == TILE_WEATHER || type == TILE_ENERGY ||
          type == TILE_CLIMATE || type == TILE_COVER ||
          tileTypeIsEditableValue(type) || type == TILE_BINARY_SENSOR ||
-         tileTypeIsDeviceControl(type);
+         tileTypeIsDeviceControl(type) || tileTypeIsCalendar(type);
 }
 
 // Preserve the existing edit-triggered reload policy, including its Energy

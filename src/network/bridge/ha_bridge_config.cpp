@@ -88,6 +88,7 @@ bool HaBridgeConfig::load() {
   data.locks_text = "";
   data.alarm_panels_text = "";
   data.fans_text = "";
+  data.calendars_text = "";
   data.cameras_text = "";
   data.images_text = "";
   data.scene_alias_text = "";
@@ -248,6 +249,7 @@ bool HaBridgeConfig::hasData() const {
          data.locks_text.length() > 0 ||
          data.alarm_panels_text.length() > 0 ||
          data.fans_text.length() > 0 ||
+         data.calendars_text.length() > 0 ||
          data.cameras_text.length() > 0 ||
          data.images_text.length() > 0 ||
          data.scene_alias_text.length() > 0;
@@ -692,6 +694,7 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
   for (auto section : {std::make_pair("\"locks\"", &merged.locks_text),
                        std::make_pair("\"alarm_panels\"", &merged.alarm_panels_text),
                        std::make_pair("\"fans\"", &merged.fans_text),
+                       std::make_pair("\"calendars\"", &merged.calendars_text),
                        std::make_pair("\"images\"", &merged.images_text)}) {
     const int index = json.indexOf(section.first);
     if (index >= 0) parseArraySection(json.substring(index), *section.second);
@@ -729,6 +732,7 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
   parseEntityNameSection(json, "lock_meta", merged.sensor_names_map);
   parseEntityNameSection(json, "alarm_panel_meta", merged.sensor_names_map);
   parseEntityNameSection(json, "fan_meta", merged.sensor_names_map);
+  parseEntityNameSection(json, "calendar_meta", merged.sensor_names_map);
   parseEntityNameSection(json, "camera_meta", merged.sensor_names_map);
   parseEntityNameSection(json, "editable_meta", merged.sensor_names_map);
   parseIconMetaSections(json, merged.entity_icons_map);
@@ -776,7 +780,7 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
     if (ok) {
       Serial.printf("[Bridge] Configuration received from Home Assistant: "
                     "sensors=%d binary=%d energy=%d weather=%d lights=%d switches=%d "
-                    "media=%d climate=%d covers=%d locks=%d alarms=%d fans=%d cameras=%d scenes=%d\n",
+                    "media=%d climate=%d covers=%d locks=%d alarms=%d fans=%d calendars=%d cameras=%d scenes=%d\n",
                     countListEntries(data.sensors_text),
                     countListEntries(data.binary_sensors_text),
                     countListEntries(data.energy_text),
@@ -789,6 +793,7 @@ bool HaBridgeConfig::applyJson(const char* json_payload, bool* out_reload, bool*
                     countListEntries(data.locks_text),
                     countListEntries(data.alarm_panels_text),
                     countListEntries(data.fans_text),
+                    countListEntries(data.calendars_text),
                     countListEntries(data.cameras_text),
                     countMapEntries(data.scene_alias_text));
       if (out_reload) {
@@ -1028,6 +1033,7 @@ static bool bridgeConfigEquals(const HaBridgeConfigData& a, const HaBridgeConfig
   if (!listEqualsIgnoringOrder(a.locks_text, b.locks_text)) return false;
   if (!listEqualsIgnoringOrder(a.alarm_panels_text, b.alarm_panels_text)) return false;
   if (!listEqualsIgnoringOrder(a.fans_text, b.fans_text)) return false;
+  if (!listEqualsIgnoringOrder(a.calendars_text, b.calendars_text)) return false;
   if (!listEqualsIgnoringOrder(a.cameras_text, b.cameras_text)) return false;
   if (!listEqualsIgnoringOrder(a.images_text, b.images_text)) return false;
   if (!mapEqualsIgnoringOrder(a.scene_alias_text, b.scene_alias_text)) return false;
@@ -1473,6 +1479,7 @@ static void parseIconMetaSections(const String& body, String& icons) {
   parseEntityIconSection(body, "lock_meta", icons);
   parseEntityIconSection(body, "alarm_panel_meta", icons);
   parseEntityIconSection(body, "fan_meta", icons);
+  parseEntityIconSection(body, "calendar_meta", icons);
   parseEntityIconSection(body, "camera_meta", icons);
 }
 

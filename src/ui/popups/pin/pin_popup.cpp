@@ -14,6 +14,7 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_popup.h"
@@ -412,6 +413,7 @@ void apply_header(PinPopupContext* ctx, const PinPopupInit& init) {
 void show_pin_popup(const PinPopupInit& init) {
   const ui_theme::SurfaceScope popup_scope = popup_surface::scope();
   hide_device_popup();
+  hide_calendar_popup();
   hide_light_popup();
   hide_climate_popup();
   hide_cover_popup();

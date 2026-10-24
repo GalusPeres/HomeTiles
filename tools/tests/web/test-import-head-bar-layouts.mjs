@@ -32,7 +32,7 @@ const restoredKeys = JSON.parse(importSource.match(/for \(const \[layoutIndex, k
   .replace(/'/g, '"'));
 assert.deepEqual([...restoredKeys].sort(), [...LAYOUT_KEYS].sort(), 'the import restores every layout');
 const SAVER = 65534;
-const HALF_TYPES = [1, 2, 4, 5, 7, 8, 9, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
+const HALF_TYPES = [1, 2, 4, 5, 7, 8, 9, 14, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27];
 const empty = () => ({type: 0, title: '', icon_name: '', bg_color: 0, col: 0, row: 0, span_w: 1, span_h: 1});
 const tile = (type, title, col, row, w = 1, h = 1, extra = {}) =>
   ({...empty(), type, title, col, row, span_w: w, span_h: h, ...extra});

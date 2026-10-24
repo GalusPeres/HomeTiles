@@ -22,7 +22,7 @@ Last reviewed: 2026-10-23
 ## Active work
 
 - Media popup (v0.9.4): layouts `sensor_display_mode` 0 cover left, 1 centre (`media_popup_layout.h`); controls only with their HA feature bit; menu box (built once, shadow only while open): speakers (group count), source, library; time from HA `media_position_updated_at`; shuffle/repeat on = icon color + dot; tile/head icon state form (`state_icon.h`), tile playing bars (`playing_bars.h`).
-- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without a chunk ACK. Bridge v0.9.4b5 waits 45 s (the link's idle limit) and logs one warning; FW logs data gaps >= 1 s and the Wi-Fi signal at stream end; test builds hold the stream with /api/debug/camera-pause (V2 b499: a 20 s stall passes). Reporter confirmation pending; why his round trip stalls is unproven (Wi-Fi suspected). A camera stream pauses the wake word (on core 0 it cut the V2 full screen to 21-23 FPS; b499 HW ok). FFmpeg decoding is ~80 % of the camera load. `build/analysis/2026-10-21-analyse.md`.
+- Issue #116 (JC4880, camera popup ended after 18-60 min): the Bridge closed after 5 s without a chunk ACK. Bridge v0.9.4b5 waits 45 s (the link's idle limit) and logs one warning; FW logs data gaps >= 1 s and the Wi-Fi signal at stream end; test builds hold the stream with /api/debug/camera-pause (V2 b499: 20 s stall ok). Reporter confirmation pending; the stall cause is unproven (Wi-Fi?). A camera stream pauses the wake word (on core 0 it cut V2 full screen to 21-23 FPS; b499 HW ok). FFmpeg is ~80 % of camera load. `build/analysis/2026-10-21-analyse.md`.
 - Issue #119 (Guition V1): the core's Helix (12-bit sync) cannot see MPEG-2.5 frames; tag bytes made it overwrite its memory. Fixed in `53b03f32`; b501 (`4f0ba6b1`): own Helix `src/audio/helix_mp3`, TLS in PSRAM, position/length/pause, Bridge player bar. Speaker audio now comes from the Bridge (b502/b503, Bridge b8-b10, `docs-dev/audio-stream.md`): FFmpeg -> mono PCM (44.1 kHz music / 22.05 kHz speech) over the camera tcp-ack listener (`HTAUD/1`, two 4 KB blocks in flight); panels announce `"stream":"tcp-ack-v1"`, older ones download. b503 + b9 HW ok: 169 -> 148 KB while playing, camera full screen 30 FPS next to a song. Seek restarts at `-ss`. Camera sound (b504-b506, Bridge b11-b13): live track of cameras with sound, picture waits for the sound (lip sync; b507 30 FPS HW ok, b508 even gaps HW pending). Small player, no queue; a pause frees the stream (b512/b15); the wake word is deaf while a clip plays.
 - Voice: microphone and wake word listening off on a new panel (b500, `2054a82a`); listening is its own setting, the chosen word stays (`applyWakeWordsCommand`). Bridge v0.9.4b6: Listening switch, word-only Wake word select, panel settings under Configuration, battery auto-sleep removed (no board has a battery sleep profile). HW/HA test pending. Mic button + audio settings open (user decides where, mockup first); Zeid's #91 Audio page as a fifth panel Settings category declined 2026-10-17.
 
@@ -73,7 +73,7 @@ Last reviewed: 2026-10-23
 
 ## UI decisions (do not reopen)
 
-- One color rule (b378): color always from the icon; per tile only "Ausfuellen" (`tileFills`); own color only Clock/Text/Pixelanim; Light/Climate/Cover popups never filled. Light theme: filled tile kJewel, frame line per `frame_line`.
+- One color rule (b378): color always from the icon; per tile only "Ausfuellen" (`tileFills`); own color only Clock/Text/Pixelanim; Light/Climate/Cover popups never filled; light theme: filled tile kJewel, frame line per `frame_line`.
 - Radius fixed (b378): `tile_radius::kDefault`, circle 25 %, card per theme (dark `#1A1A1A`). Colors from `tone_color.h` (OKLCH); presses without theme recolor.
 - Half-grid: Sensor/Binary/Energy/Switch height 0.5, width >= 1 by 0.5; V7 size unchanged. Open: cross-grid import clamps whole tiles (HTTP 400), value fonts 32/40 clip in half tiles.
 - Titles: two centred/ellipsized lines, 255 UTF-8 bytes in `/_tile_titles`.
@@ -88,6 +88,7 @@ Last reviewed: 2026-10-23
 
 - Editable tiles 21 Number, 22 Select, 23 Date/Time reuse Sensor persistence/popups (`PackedTileV7` unchanged); drafts coalesce 600 ms, sliders publish on release. Open: S3 froze adding Number to an active screensaver.
 - Lock/Alarm/Fan (24-26, `src/types/device/`): sealed commands need pairing + Web Admin password; HW ok 2026-10-02.
+- Calendar (27, `docs-dev/calendar.md`): Bridge `events` (`entity_search` 5); views done, no HW tests.
 - Switch tile layouts (`sensor_decimals` 0-3) and `command_pacer.h` slider pacing: reporter test pending (#11).
 - Scene tile is "Button": picker searches scenes/scripts/buttons (`entity_search` 4), entity in `sensor_entity`.
 - Direct link: TCP 8140, Bridge = broker, frames sealed with pairing keys (`docs-dev/bridge-link.md`). The panel declares every entity it uses; without a password only released entities and the Energy Dashboard categories reach it. Picker lists Recent/Favorites/All (b369): V2 HW pending.

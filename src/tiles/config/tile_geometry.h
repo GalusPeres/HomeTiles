@@ -17,10 +17,12 @@ inline bool icon_title(int type) {
 inline bool editable(int type) { return type == TILE_NUMBER || type == TILE_SELECT || type == TILE_DATETIME; }
 // Lock, Alarm panel and Fan: the Switch tile's header with their control bar.
 inline bool device_control(int type) { return type == TILE_LOCK || type == TILE_ALARM || type == TILE_FAN; }
+// Calendar: half height shows the next event like a Sensor chip.
+inline bool calendar(int type) { return type == TILE_CALENDAR; }
 // Types that may use half-cell sizes (mirrors supportsHalfSize in layout.js).
 inline bool half_size(int type) {
   return sensor(type) || type == TILE_CLOCK || type == TILE_TEXT || icon_title(type) || type == TILE_SWITCH ||
-         type == TILE_COVER || type == TILE_CLIMATE || editable(type) || device_control(type);
+         type == TILE_COVER || type == TILE_CLIMATE || editable(type) || device_control(type) || calendar(type);
 }
 inline bool fractional(float value) { return value != std::floor(value); }
 // Every type resizes in half steps from 1x1; only half-size types may be half
@@ -57,6 +59,9 @@ inline bool compact_climate(int type, float w, float h) {
 inline bool compact_device_control(int type, float w, float h) {
   return device_control(type) && w >= 1 && h == 0.5f;
 }
+// A half-height Calendar tile: the Sensor compact layout (icon, the next
+// event's time and title).
+inline bool compact_calendar(int type, float w, float h) { return calendar(type) && w >= 1 && h == 0.5f; }
 // A half-height Number, Select or Date/Time tile: the Sensor compact layout
 // (icon, title, value).
 inline bool compact_editable(int type, float w, float h) {

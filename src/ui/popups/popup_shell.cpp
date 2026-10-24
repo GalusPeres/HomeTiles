@@ -602,6 +602,11 @@ PopupShellParts create_popup_body(lv_event_cb_t close_handler, void* context,
   lv_obj_set_style_border_width(parts.overlay, 0, 0);
   lv_obj_remove_flag(parts.overlay, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(parts.overlay, LV_OBJ_FLAG_CLICKABLE);
+  // Only the body's holder: show_popup_shell presents the body in the shared
+  // shell and hides the holder. A resident popup never shown left it visible
+  // on the top layer, and LVGL walked it in every redrawn area (b538: each
+  // Energy flow dot step on the V2).
+  lv_obj_add_flag(parts.overlay, LV_OBJ_FLAG_HIDDEN);
   for (lv_obj_t*& slot : g_popup_overlays) {
     if (slot) continue;
     slot = parts.overlay;

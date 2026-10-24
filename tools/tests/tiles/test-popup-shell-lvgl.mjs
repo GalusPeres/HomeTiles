@@ -96,6 +96,11 @@ void save_frame(const std::string&path,const std::vector<uint32_t>&pixels){std::
 int main(int argc,char**argv){lv_init();auto*d=lv_display_create(SCREEN_WIDTH,SCREEN_HEIGHT);std::vector<uint32_t>pixels(SCREEN_WIDTH*SCREEN_HEIGHT),band(SCREEN_WIDTH*16);lv_display_set_color_format(d,LV_COLOR_FORMAT_XRGB8888);lv_display_set_buffers(d,band.data(),nullptr,band.size()*4,LV_DISPLAY_RENDER_MODE_PARTIAL);lv_display_set_user_data(d,&pixels);lv_display_set_flush_cb(d,[](lv_display_t*d,const lv_area_t*area,uint8_t*data){++flushed;if(first_flush_y==-1)first_flush_y=area->y1;auto&pixels=*static_cast<std::vector<uint32_t>*>(lv_display_get_user_data(d));auto*source=reinterpret_cast<uint32_t*>(data);for(int y=area->y1;y<=area->y2;++y)for(int x=area->x1;x<=area->x2;++x)pixels[y*SCREEN_WIDTH+x]=*source++;lv_display_flush_ready(d);});
  int outside_draws=0;auto*outside=lv_obj_create(lv_screen_active());lv_obj_set_size(outside,100,100);lv_obj_set_pos(outside,30,30);lv_obj_add_event_cb(outside,[](lv_event_t*e){++*static_cast<int*>(lv_event_get_user_data(e));},LV_EVENT_DRAW_MAIN,&outside_draws);
  auto a=make(),b=make();wire(a);wire(b);
+ // Resident popups wait on the top layer, which LVGL draws in every redrawn
+ // area. A holder never shown stays out of that (b538: visible holders cost
+ // every Energy flow dot step on the V2).
+ int holder_draws=0;for(lv_obj_t*owner:{a.owner,b.owner})lv_obj_add_event_cb(owner,[](lv_event_t*e){++*static_cast<int*>(lv_event_get_user_data(e));},LV_EVENT_DRAW_MAIN_BEGIN,&holder_draws);
+ lv_refr_now(d);holder_draws=0;lv_obj_invalidate(outside);lv_refr_now(d);assert(holder_draws==0&&"A resident popup's holder is not drawn");
  show(a,"Number\nLiving room");auto*frame=shell.frame;auto*header=shell.header;auto*button=shell.close;
  assert(lv_obj_get_parent(a.body)==shell.overlay);assert(PopupFirstFrame::any_pending());process_popup_open();assert(applied==0);assert(lv_obj_has_flag(a.content,LV_OBJ_FLAG_HIDDEN));
  lv_refr_now(d);if(argc>1)save_frame(std::string(argv[1])+"-shell.ppm",pixels);assert(!PopupFirstFrame::any_pending());assert(applied==0);process_popup_open();assert(applied==1);lv_refr_now(d);if(argc>1)save_frame(std::string(argv[1])+"-body.ppm",pixels);

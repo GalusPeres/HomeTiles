@@ -19,6 +19,7 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/popup_shell.h"
@@ -328,6 +329,7 @@ void follow_open_popup(lv_obj_t* card) {
   light_popup_follow_tile_color(color);
   cover_popup_follow_tile_color(color);
   device_popup_follow_tile_color(color);
+  calendar_popup_follow_tile_color(color);
   sensor_popup_follow_tile_color(color);
   energy_popup_follow_tile_color(color);
   weather_popup_follow_tile_color(color);

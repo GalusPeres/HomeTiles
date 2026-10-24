@@ -139,6 +139,14 @@
     for (const kind of ['lock', 'alarm', 'fan']) {
       if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, kind + '_entity')) tile.sensor_entity = snapshot[kind + '_entity'] || '';
     }
+    // Calendar: the view and the first day of the week (types/calendar/web.h).
+    if (Number(tile.type) === 27 && snapshot) {
+      if (Object.prototype.hasOwnProperty.call(snapshot, 'calendar_view')) tile.sensor_display_mode = Number(snapshot.calendar_view) || 0;
+      if (Object.prototype.hasOwnProperty.call(snapshot, 'calendar_week_start')) {
+        const value = Number(snapshot.calendar_week_start);
+        tile.sensor_decimals = [0, 1, 6].includes(value) ? value : 255;
+      }
+    }
     if (snapshot && (Object.prototype.hasOwnProperty.call(snapshot, 'clock_show_time') || Object.prototype.hasOwnProperty.call(snapshot, 'clock_show_date'))) {
       let flags = 0;
       if (String(snapshot.clock_show_time || '0') === '1') flags |= 1;

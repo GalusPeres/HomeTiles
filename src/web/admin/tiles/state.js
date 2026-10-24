@@ -38,6 +38,7 @@
     }
     const hasMeta = Object.prototype.hasOwnProperty.call(payload, 'editable_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'device_values') ||
+                    Object.prototype.hasOwnProperty.call(payload, 'calendar_values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'values') ||
                     Object.prototype.hasOwnProperty.call(payload, 'units') ||
                     Object.prototype.hasOwnProperty.call(payload, 'icons') ||
@@ -62,6 +63,8 @@
       editableValues: payload.editable_values || payload.editableValues || {},
       // Lock, Alarm panel and Fan detail states (types/device).
       deviceValues: payload.device_values || payload.deviceValues || {},
+      // Calendar events (types/calendar).
+      calendarValues: payload.calendar_values || payload.calendarValues || {},
       // Weather and media tile states, the payloads their tiles draw.
       weatherValues: payload.weather_values || payload.weatherValues || {},
       mediaValues: payload.media_values || payload.mediaValues || {},

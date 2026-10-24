@@ -98,6 +98,7 @@
                 : (previewKind === 'camera' ? cameraEntity : '')))))));
     if (isEditablePreview(previewKind)) iconEntity = document.getElementById(prefix + '_' + previewKind + '_entity')?.value || '';
     if (deviceKind) iconEntity = document.getElementById(prefix + '_' + deviceKind + '_entity')?.value || '';
+    const calendarTile = previewKind === 'calendar' ? calendarTileFromInputs(tab, tileSpan('span_w'), tileSpan('span_h')) : null;
     if (type === '2') {
       const alias = document.getElementById(prefix + '_scene_alias')?.value || '';
       iconEntity = sceneEntityOf(alias);
@@ -136,6 +137,7 @@
         iconName = devicePreviewIcon(deviceKind, devicePreviewState);
       }
     }
+    if (calendarTile && !normalizeMdiIconName(rawIcon) && !isExplicitlyDisabledValue(rawIcon)) iconName = 'calendar';
     let binarySensorPreviewState = null;
     if (previewKind === 'binary_sensor') {
       binarySensorPreviewState = parseBinarySensorPreviewPayload(
@@ -244,7 +246,7 @@
               ? devicePreviewColor(deviceKind, devicePreviewState)
               : (previewKind === 'binary_sensor'
                 ? binarySensorPreviewColor(binarySensorPreviewState)
-                : ''))), ruleFill);
+                : (calendarTile ? calendarPreviewIconColor(calendarTile) : '')))), ruleFill);
       if (typeof setPreviewRuleFill === 'function') setPreviewRuleFill(tileElem, ruleFill);
       const iconStyle = iconColor ? ' style="color:' + escapeHtml(iconColor) + '"' : '';
       html += '<i class="mdi mdi-' + escapeHtml(iconName) + ' tile-icon"' + iconStyle + '>' +
@@ -256,6 +258,7 @@
       displayTitle = sensorMetaCache.names[cameraEntity] ||
         titleFromEntity(cameraEntity);
     }
+    if (calendarTile) displayTitle = calendarPreviewTitle(calendarTile, displayTitle);
     if (displayTitle) {
       html += '<div class="tile-title" id="' + tileId + '-title">' +
         tileTitleHtml(displayTitle) + '</div>';
@@ -285,6 +288,7 @@
     }
     if (previewKind === 'cover') html += coverPreviewExtraHtml(coverPreviewState, halfHeight);
     if (deviceKind) html += devicePreviewExtraHtml(deviceKind, devicePreviewState, halfHeight);
+    if (calendarTile) html += calendarPreviewExtraHtml(calendarTile);
     if (previewKind === 'binary_sensor') {
       html += '<div class="tile-value tile-binary-sensor-value ' + (Number(sensorValueFont) ? sensorValueClass : '') + '" id="' +
         tileId + '-value">' +

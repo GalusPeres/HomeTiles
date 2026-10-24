@@ -36,6 +36,7 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/energy/energy_popup.h"
 #include "src/ui/popups/light/light_popup.h"
 #include "src/ui/popups/media/media_browse.h"
@@ -2374,6 +2375,7 @@ void show_media_popup(const MediaPopupInit& init) {
   hide_pin_popup();
   hide_camera_popup();
   hide_device_popup();
+  hide_calendar_popup();
   hide_climate_popup();
   hide_cover_popup();
   if (!init.entity_id.length()) return;

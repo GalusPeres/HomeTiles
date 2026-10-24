@@ -509,6 +509,24 @@ Shows a `camera` or `image` entity. The camera can also be the [built-in camera]
 
 ESP32-P4 displays play the video at up to 30 frames per second, in the popup and full screen; ESP32-S3 displays at about 4. Allow local TCP access to the Home Assistant host on ports `8124`–`8131`. See [Camera connection](bridge.md#experimental-camera-transport) for requirements and performance notes. A doorbell automation can open a camera full screen with the display's [View entity](bridge.md#control-the-displayed-view).
 
+### Calendar
+
+Shows up to four `calendar` entities, each in its own color (blue, teal, purple, orange, in the order of the calendar fields). Requires a Bridge with calendar support; select the calendars under **Calendars** in the [Bridge options](bridge.md#entity-configuration).
+
+What the tile shows depends on its size and **View**:
+
+- **Half height:** the next event, with its day or time.
+- **One row:** **Up next**: the event running now or the next one, with its time and a countdown.
+- **Two rows or more:** the agenda: the coming days with their events; all-day events first.
+- **Week:** seven days from the first day of the week, today marked, a dot per calendar with events.
+- **Month:** the month grid with today and a dot per calendar. Only on displays larger than 480×480 and on tiles of at least 2×2; elsewhere the tile shows the agenda.
+
+**Week starts on:** **Automatic** follows the display language (Sunday in English, Monday otherwise), or choose Monday, Sunday, or Saturday. The tile and its popup use it.
+
+**Popup:** the month with a dot per calendar; tap a day to see its events below. **List** shows the coming four weeks instead. The arrows move by month (or week in the list) as far as the Bridge sent events, and **Today** jumps back.
+
+The display shows the events in Home Assistant's time zone. Events edited in Home Assistant appear within 15 minutes; an event that starts or ends updates the tile at once.
+
 ## Local Tiles
 
 These types work without Home Assistant.

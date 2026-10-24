@@ -79,16 +79,16 @@ the calendar sources pass for the JC8012P4A1 and ESP32-4848S040 profiles.
 
 Open, in this order:
 
-1. Target compile: first `firmware.yml` run on the fork started 2026-10-24
-   (ph15ch/HomeTiles, workflow_dispatch on `calendar-tile`, run
-   40076134720). Check its result, fix what the real toolchain reports and
-   run it again; its artifacts are the images for the hardware test.
-2. Hardware: JC8012P4A1 V3 (tile sizes, Week, Month, popup month and list,
-   light theme) and ESP32-4848S040C_I (agenda and week only, popup on
+1. Hardware (target compile done: `firmware.yml` run 40096721461 on
+   ph15ch/HomeTiles `calendar-tile` at `d0f507e5` built all 21 profiles;
+   its `firmware-<key>` artifacts, e.g. `firmware-guition_jc8012p4a1_v3`
+   and `firmware-guition_esp32_4848s040`, are the test images):
+   JC8012P4A1 V3 (tile sizes, Week, Month, popup month and list, light
+   theme) and ESP32-4848S040C_I (agenda and week only, popup on
    480x480). Watch heap after a calendar with many events
    (`calendar_store` keeps the parsed events per calendar).
-3. Live Home Assistant: a local and a Google/CalDAV calendar, all-day and
+2. Live Home Assistant: a local and a Google/CalDAV calendar, all-day and
    multi-day events, an event over midnight, a renamed or removed calendar
    (retained topic stays; the panel drops calendars it is no longer offered).
-4. Web Admin preview screenshots for `docs/tiles.md` (the section has no
+3. Web Admin preview screenshots for `docs/tiles.md` (the section has no
    images yet).

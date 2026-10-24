@@ -47,6 +47,9 @@ constexpr uint32_t kPanelLaneCount = 2;
 constexpr uint32_t kPanelFrameBufferCount = 2;
 constexpr size_t kFillChunkRows = 40;
 constexpr uintptr_t kCacheLineSize = 64;
+// The largest span flush_framebuffer_rect writes back in one call (about 40
+// framebuffer rows).
+constexpr size_t kSingleWritebackMaxBytes = 64 * 1024;
 constexpr uint32_t kPpaPreviewTimeoutMs = 200;
 constexpr uint32_t kPpaPreviewGraceMs = 800;
 constexpr uint8_t kTouchReleaseDebounceReads = 0;
@@ -304,9 +307,19 @@ void flush_framebuffer_rect(const uint16_t* fb, int32_t x, int32_t y, int32_t w,
 
   const size_t stride = display_cfg.width;
   const size_t row_bytes = static_cast<size_t>(w) * sizeof(uint16_t);
+  const uint16_t* first = fb + (static_cast<size_t>(y) * stride) + static_cast<size_t>(x);
+  // A short region (a small UI area turned by the CPU) takes one write-back
+  // over its rows' whole span: every esp_cache_msync call costs about 20 us,
+  // the clean lines between the rows almost nothing. One call per row cost
+  // ~0.3 ms per moving Energy flow dot (b536 log: 2.3 flushes, 0.73 ms per
+  // frame). Wide regions keep one call per row.
+  const size_t span_bytes = ((static_cast<size_t>(h) - 1) * stride + static_cast<size_t>(w)) * sizeof(uint16_t);
+  if (h > 1 && span_bytes <= kSingleWritebackMaxBytes) {
+    flush_cache_for_dma(first, span_bytes);
+    return;
+  }
   for (int32_t row = 0; row < h; ++row) {
-    flush_cache_for_dma(fb + (static_cast<size_t>(y + row) * stride) + static_cast<size_t>(x),
-                        row_bytes);
+    flush_cache_for_dma(first + static_cast<size_t>(row) * stride, row_bytes);
   }
 }
 

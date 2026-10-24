@@ -267,6 +267,99 @@ uint32_t step_dots(bool& waiting) {
   return moved;
 }
 
+// Which object trees the dot frames draw (one log line per kMotionLogMs,
+// with the dots' line): the tile's card and grid, and the siblings LVGL
+// draws after them on the way up to the screen, with the top and system
+// layers. Each probe keeps its object's size and child count from when it
+// was added, so the log never reads an object that is gone.
+struct DrawProbe {
+  lv_obj_t* obj = nullptr;
+  int32_t width = 0;
+  int32_t height = 0;
+  uint32_t children = 0;
+  uint8_t depth = 0;  // 0 the card, 1 the grid, 2... the levels above
+  uint32_t start_us = 0;
+  uint32_t sum_us = 0;
+};
+constexpr size_t kMaxProbes = 32;
+DrawProbe g_probes[kMaxProbes];
+size_t g_probe_count = 0;
+
+void probe_cb(lv_event_t* e) {
+  DrawProbe* probe = static_cast<DrawProbe*>(lv_event_get_user_data(e));
+  const lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_DELETE) {
+    probe->obj = nullptr;
+    return;
+  }
+  if (!g_motion_stats.frame_areas) return;
+  if (code == LV_EVENT_DRAW_MAIN_BEGIN) {
+    probe->start_us = micros();
+  } else if (code == LV_EVENT_DRAW_POST_END && probe->start_us) {
+    probe->sum_us += micros() - probe->start_us;
+    probe->start_us = 0;
+  }
+}
+
+void add_probe(lv_obj_t* obj, uint8_t depth) {
+  if (!obj || g_probe_count >= kMaxProbes) return;
+  for (size_t i = 0; i < g_probe_count; ++i) {
+    if (g_probes[i].obj == obj) return;
+  }
+  DrawProbe& probe = g_probes[g_probe_count++];
+  probe.obj = obj;
+  probe.width = lv_obj_get_width(obj);
+  probe.height = lv_obj_get_height(obj);
+  probe.children = lv_obj_get_child_count(obj);
+  probe.depth = depth;
+  for (const lv_event_code_t code : {LV_EVENT_DRAW_MAIN_BEGIN, LV_EVENT_DRAW_POST_END, LV_EVENT_DELETE}) {
+    lv_obj_add_event_cb(obj, probe_cb, code, &probe);
+  }
+}
+
+void add_probes(lv_obj_t* card) {
+  add_probe(card, 0);
+  uint8_t depth = 1;
+  for (lv_obj_t* level = lv_obj_get_parent(card); level && g_probe_count < kMaxProbes; level = lv_obj_get_parent(level), ++depth) {
+    add_probe(level, depth);
+    // The siblings of every level above the grid (the grid's own tiles are
+    // too many and are covered by the grid's time).
+    lv_obj_t* parent = lv_obj_get_parent(level);
+    if (!parent || depth < 2) continue;
+    const uint32_t count = lv_obj_get_child_count(parent);
+    for (uint32_t i = 0; i < count; ++i) add_probe(lv_obj_get_child(parent, static_cast<int32_t>(i)), depth);
+  }
+  for (lv_obj_t* layer : {lv_display_get_layer_top(g_motion_display), lv_display_get_layer_sys(g_motion_display)}) {
+    add_probe(layer, 99);
+    const uint32_t count = layer ? lv_obj_get_child_count(layer) : 0;
+    for (uint32_t i = 0; i < count; ++i) add_probe(lv_obj_get_child(layer, static_cast<int32_t>(i)), 99);
+  }
+}
+
+void log_probes(uint32_t frames) {
+  // The six most expensive trees, per dot frame.
+  bool shown[kMaxProbes] = {};
+  char line[400];
+  int used = snprintf(line, sizeof(line), "[EnergyFlow] Dots draw per frame:");
+  for (int rank = 0; rank < 6; ++rank) {
+    int best = -1;
+    for (size_t i = 0; i < g_probe_count; ++i) {
+      if (shown[i] || !g_probes[i].sum_us) continue;
+      if (best < 0 || g_probes[i].sum_us > g_probes[best].sum_us) best = static_cast<int>(i);
+    }
+    if (best < 0) break;
+    shown[best] = true;
+    const DrawProbe& probe = g_probes[best];
+    used += snprintf(line + used, sizeof(line) - used, " d%u %ldx%ld c=%lu %lu us%s", static_cast<unsigned>(probe.depth),
+                     static_cast<long>(probe.width), static_cast<long>(probe.height),
+                     static_cast<unsigned long>(probe.children), static_cast<unsigned long>(probe.sum_us / frames),
+                     probe.obj ? "" : " (gone)");
+    if (used >= static_cast<int>(sizeof(line)) - 1) break;
+  }
+  Serial.println(line);
+  for (size_t i = 0; i < g_probe_count; ++i) g_probes[i].sum_us = 0;
+}
+
 void log_motion(uint32_t now_ms) {
   MotionStats& m = g_motion_stats;
   if (!m.window_ms) m.window_ms = now_ms;
@@ -289,6 +382,7 @@ void log_motion(uint32_t now_ms) {
                   static_cast<unsigned long>(m.step_us / frames), static_cast<unsigned long>(m.step_max_us),
                   m.gap_max_us / 1000.0f);
   }
+  if (m.frames) log_probes(m.frames);
   m = MotionStats{};
   m.window_ms = now_ms;
 }
@@ -358,6 +452,7 @@ void wake_motion(lv_obj_t* card) {
                                        LV_EVENT_FLUSH_FINISH, LV_EVENT_REFR_READY}) {
       lv_display_add_event_cb(g_motion_display, motion_display_cb, code, nullptr);
     }
+    add_probes(card);
   }
   lv_timer_resume(lv_display_get_refr_timer(g_motion_display));
 }

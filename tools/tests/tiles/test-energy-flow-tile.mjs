@@ -108,7 +108,7 @@ assert.ok(metrics.includes('m.ring = m.disc + tile_icon_disc::inset() + tile_ico
 assert.ok(renderer.includes('ui_surface_style::apply_radius(ring, tile_layout::scale_480(22), 0);'));
 assert.ok(renderer.includes('ui_surface_style::apply_radius(disc, tile_icon_disc::radius_baseline() - tile_icon_disc::corner_shrink(), 0);'));
 assert.doesNotMatch(renderer, /set_style_radius\([^;]*(ring|disc)[^;]*LV_RADIUS_CIRCLE/);
-assert.doesNotMatch(renderer.slice(renderer.indexOf('uint32_t step_dots('), renderer.indexOf('void log_motion(')),
+assert.doesNotMatch(renderer.slice(renderer.indexOf('uint32_t step_dots('), renderer.indexOf('struct DrawProbe {')),
   /Serial\.|String |new |malloc/, 'no logs or allocations per step');
 assert.doesNotMatch(renderer.slice(renderer.indexOf('void motion_display_cb('), renderer.indexOf('void wake_motion(')),
   /Serial\.|String |new |malloc/, 'no logs or allocations per frame outside the rate-limited line');

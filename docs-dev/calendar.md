@@ -73,13 +73,16 @@ Retained payload (Bridge `calendar_events.py`, panel `calendar_events.h`):
 ## Status (2026-10-24)
 
 Done and on the branch: tile, popup, Web Admin, i18n, docs, host tests
-(firmware `calendar-tile`, Bridge `calendar-events`). Host syntax checks of
+(firmware `calendar-tile`, Bridge `calendar-events`, both pushed to the
+ph15ch forks; draft PRs against GalusPeres `main`). Host syntax checks of
 the calendar sources pass for the JC8012P4A1 and ESP32-4848S040 profiles.
 
 Open, in this order:
 
-1. Target compile (`firmware.yml` via workflow_dispatch, or
-   `tools/build-firmware-local.ps1`). Fix whatever the real toolchain reports.
+1. Target compile: first `firmware.yml` run on the fork started 2026-10-24
+   (ph15ch/HomeTiles, workflow_dispatch on `calendar-tile`, run
+   40076134720). Check its result, fix what the real toolchain reports and
+   run it again; its artifacts are the images for the hardware test.
 2. Hardware: JC8012P4A1 V3 (tile sizes, Week, Month, popup month and list,
    light theme) and ESP32-4848S040C_I (agenda and week only, popup on
    480x480). Watch heap after a calendar with many events

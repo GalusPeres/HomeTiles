@@ -133,6 +133,13 @@ assert.match(read('src/web/admin/tiles/entity-picker.js'), /\['remote'\], \['cal
 assert.match(read('src/web/admin/tiles/entity-picker.js'), /'energy', 'scenes', 'calendars'\]\);/);
 assert.match(read('src/web/admin/tiles/import-export.js'), /\} else if \(safeType === 27\) \{/);
 assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\) === 27 && snapshot\) \{/);
+// The preview's styles (lost once in a merge): the shared Sensor header and the
+// preview body.
+const adminCss = read('src/web/assets/admin.css');
+assert.equal((adminCss.match(/\.switch-bar, \.calendar\)/g) || []).length, 4, 'the Calendar shares the Sensor header styles');
+for (const rule of ['.tile.calendar > .calendar-preview-body {', '.calendar-preview-grid.month {', '.calendar-preview-dots > i {']) {
+  assert.ok(adminCss.includes(rule), rule);
+}
 
 // The preview code itself, against the same data as the firmware test
 // (test-calendar-model.mjs): a fixed "now" on Saturday 2026-10-24, 08:30.

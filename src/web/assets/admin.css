@@ -1866,7 +1866,7 @@
     /* These renderers share the Sensor header on the device. Scale its
        coordinates once and compensate the preview's 3 px selection border. */
     .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-             .cover, .device, .energy, .weather, .media, .climate, .switch-bar) > .tile-title {
+             .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar) > .tile-title {
       position:absolute;
       top:calc(var(--tile-header-title-top, 14px) - 3px);
       right:calc(var(--tile-header-title-right, 8px) - 3px);
@@ -1875,7 +1875,7 @@
       text-align:right;
     }
     .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-             .cover, .device, .energy, .weather, .media, .climate, .switch-bar) > .tile-icon {
+             .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar) > .tile-icon {
       position:absolute;
       top:calc(var(--tile-header-icon-top, 8px) - 3px);
       left:calc(var(--tile-header-icon-left, 6px) - 3px);
@@ -3195,7 +3195,7 @@
    Centered icons above a title (Folder, Scene, Camera, Switch) use the same
    size (tile_icon_disc::header_diameter). */
 .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-         .cover, .device, .energy, .weather, .media, .climate, .switch-bar):not(.empty):not(.sensor-compact) > .tile-icon::after,
+         .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar):not(.empty):not(.sensor-compact) > .tile-icon::after,
 .tile:is(.scene, .navigate, .camera, .switch:not(.switch-bar)):not(.empty):not(.sensor-compact) > .tile-icon::after {
   width:var(--icon-disc-corner, var(--icon-disc-round, 30px));
   height:var(--icon-disc-corner, var(--icon-disc-round, 30px));
@@ -3204,7 +3204,7 @@
    tile_icon_disc::add_round places it, not centered on the icon box, whose
    position and size are rounded to pixels. */
 .tile:is(.sensor, .binary_sensor, .number, .select, .datetime,
-         .cover, .device, .energy, .weather, .media, .climate, .switch-bar):not(.empty):not(.sensor-compact) > .tile-icon::after {
+         .cover, .device, .energy, .weather, .media, .climate, .switch-bar, .calendar):not(.empty):not(.sensor-compact) > .tile-icon::after {
   left:calc(var(--compact-inset, 2px) + var(--corner-disc-shrink, 0px) - var(--tile-header-icon-left, 6px));
   top:calc(var(--compact-inset, 2px) + var(--corner-disc-shrink, 0px) - var(--tile-header-icon-top, 8px));
   width:calc(var(--icon-disc-corner, var(--icon-disc-round, 30px)) - 2 * var(--corner-disc-shrink, 0px));
@@ -3852,3 +3852,54 @@ select.setup-from:hover { background-color:#333333; }
 /* Energy flow (types/energy_flow/admin.js): without a card the nodes sit on
    the screen like a Transparent clock. */
 .tile.energy-flow-no-card { background:transparent !important; outline-color:transparent !important; }
+
+/* Calendar (types/calendar/calendar_tile.cpp): the Sensor header above the
+   content the tile's size allows; the content box starts below the disc row
+   like content_y there. Day and event colors come from the inline styles
+   (calendar_model::calendar_color). */
+.tile.calendar:not(.sensor-compact) { display:block; }
+.tile.calendar > .calendar-preview-body {
+  position:absolute;
+  left:calc(var(--tile-pad-h, 10px) - 3px); right:calc(var(--tile-pad-h, 10px) - 3px);
+  top:calc(var(--compact-inset, 3px) * 2 + var(--icon-disc-corner, 30px) - 3px);
+  bottom:calc(var(--tile-pad-v, 12px) - 3px);
+  overflow:hidden; color:var(--pv-text, #fff); font-size:var(--fs20, 10px); line-height:1.25;
+}
+.calendar-preview-body.next { display:flex; flex-direction:column; justify-content:center; padding-left:calc(var(--fs20, 10px) * .9); }
+.calendar-preview-body.next > .calendar-preview-bar {
+  position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:max(2px, calc(var(--fs20, 10px) * .3)); height:calc(var(--fs24, 12px) * 2.3); border-radius:4px;
+}
+.calendar-preview-body.next > .calendar-preview-what { font-size:var(--fs24, 12px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.calendar-preview-body.next.wide > .calendar-preview-what { font-size:var(--fs28, 14px); }
+.calendar-preview-body.next > .calendar-preview-when,
+.tile.calendar .calendar-preview-time,
+.tile.calendar .calendar-preview-daylabel,
+.tile.calendar .calendar-preview-message { color:var(--pv-text-secondary, #D8DEE9); }
+.calendar-preview-body.next > .calendar-preview-when { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.calendar-preview-body.agenda { display:flex; flex-direction:column; }
+.calendar-preview-body.countdown { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+.calendar-preview-body.countdown > .calendar-preview-what { font-size:var(--fs28, 14px); max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.calendar-preview-body.countdown > .calendar-preview-when { color:var(--pv-text-secondary, #D8DEE9); max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tile.calendar .calendar-preview-daylabel { font-size:var(--fs16, 8px); margin-top:.3em; }
+.tile.calendar .calendar-preview-row { display:flex; align-items:center; gap:.45em; min-height:1.55em; white-space:nowrap; }
+.tile.calendar .calendar-preview-time { flex:0 0 auto; min-width:3.6em; }
+.tile.calendar .calendar-preview-row > .calendar-preview-bar { flex:0 0 auto; width:max(2px, .22em); height:1.1em; border-radius:3px; }
+.tile.calendar .calendar-preview-title { overflow:hidden; text-overflow:ellipsis; }
+.tile.calendar .calendar-preview-message { margin:auto; text-align:center; }
+.calendar-preview-grid { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); height:100%; text-align:center; }
+.calendar-preview-grid.month { grid-template-rows:auto repeat(var(--calendar-rows, 6), minmax(0, 1fr)); }
+.calendar-preview-grid > .calendar-preview-dow { font-size:var(--fs16, 8px); color:var(--pv-text-secondary, #D8DEE9); }
+.calendar-preview-day { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; min-height:0; }
+.calendar-preview-day > small { font-size:var(--fs16, 8px); color:var(--pv-text-secondary, #D8DEE9); }
+.calendar-preview-day > b { font-weight:normal; min-width:1.7em; line-height:1.7em; border-radius:50%; }
+/* A one-row week strip: number and dots stay inside the tile (calendar_tile.cpp fits them the same way). */
+.calendar-preview-grid.week .calendar-preview-day { gap:1px; }
+.calendar-preview-grid.week .calendar-preview-day > b { line-height:1.5em; min-width:1.5em; }
+.calendar-preview-grid.month .calendar-preview-day > b { font-size:var(--fs16, 8px); }
+.calendar-preview-day.strip-today { border-radius:.8em; background:color-mix(in srgb, var(--calendar-tint, #fff) 15%, transparent); }
+.calendar-preview-day.today > b { background:var(--pv-text, #fff); color:var(--tile-card, #1A1A1A); }
+.calendar-preview-day.past > b { color:var(--pv-text-secondary, #D8DEE9); }
+.calendar-preview-day.outside > b { opacity:.4; }
+.calendar-preview-dots { display:flex; gap:2px; height:4px; }
+.calendar-preview-dots > i { width:4px; height:4px; border-radius:50%; }

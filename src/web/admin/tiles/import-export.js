@@ -1080,6 +1080,15 @@
       if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
         fd.append('popup_open_mode', tile.popup_open_mode);
       }
+    } else if (safeType === 27) {
+      // The calendars, view and first day of the week (types/calendar/web.cpp).
+      const calendars = calendarEntitiesOf(tile.sensor_entity || tile.calendar_entities || '');
+      CALENDAR_FIELDS.forEach((field, i) => fd.append(field, calendars[i] || ''));
+      fd.append('calendar_view', String(Number(tile.sensor_display_mode) || 0));
+      fd.append('calendar_week_start', String(tile.sensor_decimals ?? 255));
+      if (tile.popup_open_mode !== undefined && tile.popup_open_mode !== null) {
+        fd.append('popup_open_mode', tile.popup_open_mode);
+      }
     } else if (safeType === 24 || safeType === 25 || safeType === 26) {
       const kind = devicePreviewKind(safeType);
       fd.append(kind + '_entity', tile.sensor_entity || tile[kind + '_entity'] || '');

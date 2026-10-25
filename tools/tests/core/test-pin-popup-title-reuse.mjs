@@ -101,7 +101,7 @@ ${definition('src/core/config/pin_access.cpp', 'secureClear')}
 ${definition('src/tiles/runtime/tile_renderer_shared.h', 'disable_pressed_button_animation')}
 void hide_light_popup() {} void hide_climate_popup() {} void hide_cover_popup() {}
 void hide_sensor_popup() {} void hide_weather_popup() {} void hide_energy_popup() {}
-void hide_media_popup() {} void hide_camera_popup() {} void hide_device_popup() {}
+void hide_media_popup() {} void hide_camera_popup() {} void hide_device_popup() {} void hide_calendar_popup() {}
 namespace pin_test {
 ${stripIncludes(read('src/ui/popups/pin/pin_keypad_geometry.h'))}
 ${stripIncludes(read('src/ui/popups/pin/pin_popup.h'))}

@@ -15,8 +15,7 @@ const persistedIds = [
   'EMPTY', 'SENSOR', 'SCENE', 'KEY', 'FOLDER', 'SWITCH', 'IMAGE', 'SETTINGS',
   'BACK', 'CLOCK', 'TEXT', 'COUNTER', 'WEATHER', 'RADAR', 'ENERGY', 'MEDIA',
   'PIXELANIM', 'CLIMATE', 'CAMERA', 'COVER', 'BINARY_SENSOR', 'NUMBER', 'SELECT', 'DATETIME',
-  // 27 stays free for the Calendar tile (PR #127).
-  'LOCK', 'ALARM', 'FAN', null, 'ENERGY_FLOW',
+  'LOCK', 'ALARM', 'FAN', 'CALENDAR', 'ENERGY_FLOW',
 ];
 // These expected sets characterize the pre-refactor consumers independently.
 const policies = [
@@ -24,10 +23,10 @@ const policies = [
   // Lock, Alarm panel and Fan (24-26) store their entity and popup gesture
   // like the Cover and read their own detail state (not the cached payload).
   // The Scene tile (2) stores the scene, script or button id it runs.
-  ['entityTileStoresSensorEntity', [1, 2, 5, 12, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]],
+  ['entityTileStoresSensorEntity', [1, 2, 5, 12, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]],
   ['tileTypeUsesCachedEntityState', [1, 5, 12, 14, 15, 17, 19, 20, 21, 22, 23]],
-  ['tileTypeStoresPopupMode', [1, 5, 12, 14, 17, 19, 20, 21, 22, 23, 24, 25, 26]],
-  ['tileTypeStoresPopupModeDirectly', [1, 12, 14, 17, 19, 20, 21, 22, 23, 24, 25, 26]],
+  ['tileTypeStoresPopupMode', [1, 5, 12, 14, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27]],
+  ['tileTypeStoresPopupModeDirectly', [1, 12, 14, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27]],
   ['tileTypeHasDynamicMqttRoute', [1, 5, 12, 15, 17, 19, 20, 21, 22, 23, 24, 25, 26]],
   ['tileTypeSubscribesDynamicState', [1, 5, 14, 15, 17, 19, 20, 21, 22, 23, 24, 25, 26]],
   ['tileTypeSubscribesScreensaverState', [1, 5, 14, 15, 19, 20, 21, 22, 23]],
@@ -81,8 +80,8 @@ const source = `
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-${persistedIds.map((name, value) => name &&
-  `static_assert(TILE_${name} == ${value}, "Persisted ${name} ID changed");`).filter(Boolean).join('\n')}
+${persistedIds.map((name, value) =>
+  `static_assert(TILE_${name} == ${value}, "Persisted ${name} ID changed");`).join('\n')}
 static_assert(sizeof(TileType) == 1, "Persisted TileType width changed");
 ${packedStringSizes}
 ${packedStruct}

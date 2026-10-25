@@ -2185,6 +2185,13 @@ static const LocaleProfile kLocaleDe = {
     {"Unscharf", "Scharf zu Hause", "Scharf abwesend", "Scharf Nacht", "Scharf Urlaub",
      "Scharf benutzerdefiniert", "Ausstehend", "Wird scharf", "Wird unscharf", "Ausgelöst",
      "Nicht verfügbar", "Unbekannt"},
+    {"Kalender", "Kalender-Entität", "Kalender %u", "Ansicht", "Termine", "Woche", "Monat",
+     "Erster Wochentag", "Automatisch", "Ganztägig", "Keine Termine", "Nichts geplant", "in %u Tagen",
+     "in %u Std.", "in %u Std. %u Min.", "in %u Min.", "Jetzt", "bis %s", "Als Nächstes", "%u Termine",
+     "1 Termin", "Liste", "Keine Kalenderdaten", "Heute", "Nächster"},
+    {"Januar", "Februar", "März", "April", "Mai", "Juni",
+     "Juli", "August", "September", "Oktober", "November", "Dezember"},
+    1,  // Monday
     {"Energiefluss", "Solarleistung", "Netzleistung", "Batterieleistung", "Batterieladung", "Hausverbrauch", "Kopf anzeigen", "Karte anzeigen", "Netz: Einspeisung positiv", "Batterie: Laden positiv"},
     {"Entität wählen", "Suchen", "Keine Entität passt zu „{query}“",
      "Die Entitäten konnten nicht geladen werden. Die gewählte Entität bleibt erhalten.",
@@ -2194,7 +2201,7 @@ static const LocaleProfile kLocaleDe = {
     {"Sensor", "Binärsensor", "Licht", "Schalter", "Ventilator", "Cover", "Klima",
      "Mediaplayer", "Wetter", "Kamera", "Schloss", "Alarmanlage", "Zahl", "Auswahl",
      "Datum/Uhrzeit", "Szene", "Skript", "Taste", "Automation", "Luftbefeuchter",
-     "Sirene", "Fernbedienung"},
+     "Sirene", "Fernbedienung", "Kalender"},
     {"Automatisch", "Icon der Entität", "Kein Icon", "Nur Titel und Wert", "Kein Icon passt zu „{query}“"},
     {"Januar", "Februar", "März", "April", "Mai", "Juni",
      "Juli", "August", "September", "Oktober", "November", "Dezember"},
@@ -2307,6 +2314,13 @@ static const LocaleProfile kLocaleEn = {
     {"Locked", "Unlocked", "Locking", "Unlocking", "Open", "Opening", "Jammed", "Unavailable", "Unknown"},
     {"Disarmed", "Armed home", "Armed away", "Armed night", "Armed vacation", "Armed custom bypass",
      "Pending", "Arming", "Disarming", "Triggered", "Unavailable", "Unknown"},
+    {"Calendar", "Calendar entity", "Calendar %u", "View", "Agenda", "Week", "Month",
+     "First day of the week", "Automatic", "All day", "No events", "Nothing planned", "in %u days",
+     "in %u h", "in %u h %u min", "in %u min", "Now", "until %s", "Up next", "%u events", "1 event", "List",
+     "No calendar data", "Today", "Next"},
+    {"January", "February", "March", "April", "May", "June",
+     "July", "August", "September", "October", "November", "December"},
+    0,  // Sunday
     {"Energy flow", "Solar power", "Grid power", "Battery power", "Battery charge", "Home power", "Show header", "Show card", "Grid: export is positive", "Battery: charging is positive"},
     {"Choose an entity", "Search", "No entity matches “{query}”",
      "Could not load the entities. The chosen entity stays as it is.",
@@ -2316,7 +2330,7 @@ static const LocaleProfile kLocaleEn = {
     {"Sensor", "Binary sensor", "Light", "Switch", "Fan", "Cover", "Climate",
      "Media player", "Weather", "Camera", "Lock", "Alarm panel", "Number", "Select",
      "Date/time", "Scene", "Script", "Button", "Automation", "Humidifier", "Siren",
-     "Remote"},
+     "Remote", "Calendar"},
     {"Automatic", "The entity's icon", "No icon", "Title and value only", "No icon matches “{query}”"},
     {"January", "February", "March", "April", "May", "June",
      "July", "August", "September", "October", "November", "December"},
@@ -2434,6 +2448,13 @@ static const LocaleProfile kLocaleFr = {
     {"Désarmé", "Armé (domicile)", "Armé (absent)", "Armé (nuit)", "Armé (vacances)",
      "Armé (personnalisé)", "En attente", "Armement", "Désarmement", "Déclenché",
      "Indisponible", "Inconnu"},
+    {"Calendrier", "Entité calendrier", "Calendrier %u", "Vue", "Agenda", "Semaine", "Mois",
+     "Premier jour de la semaine", "Automatique", "Toute la journée", "Aucun événement", "Rien de prévu",
+     "dans %u jours", "dans %u h", "dans %u h %u min", "dans %u min", "Maintenant", "jusqu’à %s", "À venir",
+     "%u événements", "1 événement", "Liste", "Aucune donnée de calendrier", "Aujourd'hui", "Suivant"},
+    {"Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+     "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"},
+    1,  // Monday
     {"Flux d’énergie", "Puissance solaire", "Puissance réseau", "Puissance batterie", "Charge batterie", "Consommation maison", "Afficher l’en-tête", "Afficher la carte", "Réseau : injection positive", "Batterie : charge positive"},
     {"Choisir une entité", "Rechercher", "Aucune entité ne correspond à « {query} »",
      "Impossible de charger les entités. L’entité choisie reste inchangée.",
@@ -2443,7 +2464,7 @@ static const LocaleProfile kLocaleFr = {
     {"Capteur", "Capteur binaire", "Lumière", "Interrupteur", "Ventilateur", "Volet",
      "Climat", "Lecteur multimédia", "Météo", "Caméra", "Serrure", "Alarme", "Nombre",
      "Sélection", "Date/heure", "Scène", "Script", "Bouton", "Automatisation",
-     "Humidificateur", "Sirène", "Télécommande"},
+     "Humidificateur", "Sirène", "Télécommande", "Calendrier"},
     {"Automatique", "Icône de l’entité", "Aucune icône", "Titre et valeur seulement",
      "Aucune icône ne correspond à « {query} »"},
     {"janvier", "février", "mars", "avril", "mai", "juin",
@@ -5163,6 +5184,13 @@ static const LocaleProfile kLocalePl = {
     {"Zamek", "Panel alarmowy", "Wentylator", "Encja zamka", "Encja panelu alarmowego", "Encja wentylatora", "Otwórz drzwi", "Na pewno otworzyć?", "Drzwi otwarte", "Odblokuj", "Zablokuj", "Rozbrój", "W domu", "Poza domem", "Noc", "Urlop", "Własny", "Tryb", "Brak", "Oscylacja", "Kierunek", "Do przodu", "Do tyłu", "Prędkość %u", "Wpisz kod", "Nieprawidłowy kod", "Za dużo błędnych kodów · %u s", "Aby używać tutaj, sparuj ten panel z Home Assistant i ustaw hasło Web Admin.", "Aby używać tutaj, sparuj ten panel z Home Assistant.", "Aby używać tutaj, ustaw hasło Web Admin.", "Odblokowywanie z tego panelu jest wyłączone. Zezwól na nie w opcjach HomeTiles Bridge.", "Rozbrajanie z tego panelu jest wyłączone. Zezwól na nie w opcjach HomeTiles Bridge.", "To urządzenie wymaga kodu tekstowego. Użyj Home Assistant.", "To nie jest dozwolone z panelu.", "Inne polecenie jest jeszcze wykonywane. Spróbuj ponownie za chwilę.", "Urządzenie tego nie obsługuje.", "Urządzenie jest niedostępne.", "Polecenie wygasło. Spróbuj ponownie.", "Brak odpowiedzi z Home Assistant.", "Home Assistant nie mógł wykonać polecenia.", "Zegar panelu nie jest jeszcze ustawiony.", "Urządzenie nie odpowiedziało."},
     {"Zablokowany", "Odblokowany", "Blokowanie…", "Odblokowywanie…", "Otwarty", "Otwieranie…", "Zacięty", "Niedostępny", "Nieznany"},
     {"Rozbrojony", "Uzbrojony (w domu)", "Uzbrojony (poza domem)", "Uzbrojony (noc)", "Uzbrojony (urlop)", "Uzbrojony (własny)", "Oczekiwanie", "Uzbrajanie", "Rozbrajanie", "Wyzwolony", "Niedostępny", "Nieznany"},
+    {"Kalendarz", "Encja kalendarza", "Kalendarz %u", "Widok", "Terminy", "Tydzień", "Miesiąc",
+     "Pierwszy dzień tygodnia", "Automatycznie", "Cały dzień", "Brak wydarzeń", "Nic nie zaplanowano",
+     "za %u dni", "za %u godz.", "za %u godz. %u min", "za %u min", "Teraz", "do %s", "Następne",
+     "Wydarzenia: %u", "1 wydarzenie", "Lista", "Brak danych kalendarza", "Dzisiaj", "Następne"},
+    {"Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
+     "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"},
+    1,  // Monday
     {"Przepływ energii", "Moc solarna", "Moc sieci", "Moc baterii", "Naładowanie baterii", "Zużycie domu", "Pokaż nagłówek", "Pokaż kartę", "Sieć: oddawanie dodatnie", "Bateria: ładowanie dodatnie"},
     {"Wybierz encję", "Szukaj", "Żadna encja nie pasuje do „{query}”",
      "Nie udało się wczytać encji. Wybrana encja pozostaje bez zmian.",
@@ -5172,7 +5200,7 @@ static const LocaleProfile kLocalePl = {
     {"Czujnik", "Czujnik binarny", "Światło", "Przełącznik", "Wentylator", "Roleta",
      "Klimat", "Odtwarzacz multimediów", "Pogoda", "Kamera", "Zamek", "Panel alarmowy",
      "Liczba", "Wybór", "Data/czas", "Scena", "Skrypt", "Przycisk", "Automatyzacja",
-     "Nawilżacz", "Syrena", "Pilot"},
+     "Nawilżacz", "Syrena", "Pilot", "Kalendarz"},
     {"Automatyczna", "Ikona encji", "Brak ikony", "Tylko tytuł i wartość", "Żadna ikona nie pasuje do „{query}”"},
     {"stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
      "lipca", "sierpnia", "września", "października", "listopada", "grudnia"},
@@ -5219,6 +5247,13 @@ static const LocaleProfile kLocaleCs = {
     {"Zámek", "Alarmový panel", "Ventilátor", "Entita zámku", "Entita alarmového panelu", "Entita ventilátoru", "Otevřít dveře", "Opravdu otevřít?", "Dveře otevřené", "Odemknout", "Zamknout", "Odbezpečit", "Doma", "Mimo domov", "Noc", "Dovolená", "Vlastní", "Předvolba", "Žádné", "Oscilace", "Směr", "Vpřed", "Vzad", "Rychlost %u", "Zadejte kód", "Nesprávný kód", "Příliš mnoho chybných kódů · %u s", "Chcete-li tuto funkci použít, spárujte panel s Home Assistant a nastavte heslo webové administrace.", "Chcete-li tuto funkci použít, spárujte panel s Home Assistant.", "Chcete-li tuto funkci použít, nastavte heslo webové administrace.", "Odemknutí z tohoto panelu je vypnuté. Povolte ho v možnostech HomeTiles Bridge.", "Odbezpečení z tohoto panelu je vypnuté. Povolte ho v možnostech HomeTiles Bridge.", "Toto zařízení vyžaduje textový kód. Použijte Home Assistant.", "Tato akce není z panelu povolena.", "Stále se provádí jiný příkaz. Zkuste to za chvíli.", "Zařízení tuto funkci nepodporuje.", "Zařízení není dostupné.", "Platnost příkazu vypršela. Zkuste to znovu.", "Home Assistant neodpovídá.", "Home Assistant nemohl příkaz provést.", "Hodiny panelu zatím nejsou nastavené.", "Zařízení neodpovědělo."},
     {"Zamčeno", "Odemčeno", "Zamyká se…", "Odemyká se…", "Otevřeno", "Otevírá se…", "Zaseknuto", "Nedostupné", "Neznámé"},
     {"Nezabezpečeno", "Zabezpečeno (doma)", "Zabezpečeno (mimo domov)", "Zabezpečeno (noc)", "Zabezpečeno (dovolená)", "Zabezpečeno (vlastní režim)", "Čeká se", "Zabezpečuje se", "Odbezpečuje se", "Spuštěno", "Nedostupné", "Neznámé"},
+    {"Kalendář", "Entita kalendáře", "Kalendář %u", "Zobrazení", "Program", "Týden", "Měsíc",
+     "První den týdne", "Automaticky", "Celý den", "Žádné události", "Nic naplánováno", "za %u dní",
+     "za %u h", "za %u h %u min", "za %u min", "Nyní", "do %s", "Následuje", "Události: %u", "1 událost",
+     "Seznam", "Žádná data kalendáře", "Dnes", "Další"},
+    {"Leden", "Únor", "Březen", "Duben", "Květen", "Červen",
+     "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"},
+    1,  // Monday
     {"Tok energie", "Solární výkon", "Výkon sítě", "Výkon baterie", "Nabití baterie", "Spotřeba domu", "Zobrazit záhlaví", "Zobrazit kartu", "Síť: dodávka kladná", "Baterie: nabíjení kladné"},
     {"Vybrat entitu", "Hledat", "Žádná entita neodpovídá „{query}“",
      "Entity se nepodařilo načíst. Vybraná entita zůstane beze změny.",
@@ -5228,7 +5263,7 @@ static const LocaleProfile kLocaleCs = {
     {"Senzor", "Binární senzor", "Světlo", "Vypínač", "Ventilátor", "Roleta",
      "Klima", "Přehrávač médií", "Počasí", "Kamera", "Zámek", "Alarmový panel",
      "Číslo", "Výběr", "Datum/čas", "Scéna", "Skript", "Tlačítko", "Automatizace",
-     "Zvlhčovač", "Siréna", "Dálkový ovladač"},
+     "Zvlhčovač", "Siréna", "Dálkový ovladač", "Kalendář"},
     {"Automaticky", "Ikona entity", "Bez ikony", "Pouze název a hodnota", "Žádná ikona neodpovídá „{query}“"},
     {"ledna", "února", "března", "dubna", "května", "června",
      "července", "srpna", "září", "října", "listopadu", "prosince"},
@@ -5341,6 +5376,13 @@ static const LocaleProfile kLocaleEs = {
     {"Bloqueada", "Desbloqueada", "Bloqueando", "Desbloqueando", "Abierta", "Abriendo", "Atascada", "No disponible", "Desconocido"},
     {"Desarmada", "Armada (en casa)", "Armada (ausente)", "Armada (noche)", "Armada (vacaciones)", "Armada (personalizada)",
      "Pendiente", "Armando", "Desarmando", "Disparada", "No disponible", "Desconocido"},
+    {"Calendario", "Entidad de calendario", "Calendario %u", "Vista", "Agenda", "Semana", "Mes",
+     "Primer día de la semana", "Automático", "Todo el día", "Sin eventos", "Nada previsto", "en %u días",
+     "en %u h", "en %u h %u min", "en %u min", "Ahora", "hasta las %s", "A continuación", "%u eventos",
+     "1 evento", "Lista", "Sin datos del calendario", "Hoy", "Siguiente"},
+    {"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"},
+    1,  // Monday
     {"Flujo de energía", "Potencia solar", "Potencia de red", "Potencia de batería", "Carga de batería", "Consumo de la casa", "Mostrar encabezado", "Mostrar tarjeta", "Red: exportación positiva", "Batería: carga positiva"},
     {"Elige una entidad", "Buscar", "Ninguna entidad coincide con “{query}”",
      "No se pudieron cargar las entidades. La entidad elegida no cambia.",
@@ -5350,7 +5392,7 @@ static const LocaleProfile kLocaleEs = {
     {"Sensor", "Sensor binario", "Luz", "Interruptor", "Ventilador", "Persiana", "Clima",
      "Reproductor", "Tiempo", "Cámara", "Cerradura", "Alarma", "Número", "Selección",
      "Fecha/hora", "Escena", "Script", "Botón", "Automatización", "Humidificador", "Sirena",
-     "Mando"},
+     "Mando", "Calendario"},
     {"Automático", "Icono de la entidad", "Sin icono", "Solo título y valor", "Ningún icono coincide con “{query}”"},
     {"enero", "febrero", "marzo", "abril", "mayo", "junio",
      "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"},
@@ -5473,6 +5515,13 @@ static const LocaleProfile kLocaleSk = {
     {"Zamknuté", "Odomknuté", "Zamyká sa", "Odomyká sa", "Otvorené", "Otvára sa", "Zaseknuté", "Nedostupné", "Neznáme"},
     {"Deaktivovaný", "Aktivovaný (doma)", "Aktivovaný (preč)", "Aktivovaný (noc)", "Aktivovaný (dovolenka)", "Aktivovaný (vlastný)",
      "Čaká sa", "Aktivuje sa", "Deaktivuje sa", "Spustený", "Nedostupné", "Neznáme"},
+    {"Kalendár", "Entita kalendára", "Kalendár %u", "Zobrazenie", "Program", "Týždeň", "Mesiac",
+     "Prvý deň týždňa", "Automaticky", "Celý deň", "Žiadne udalosti", "Nič naplánované", "o %u dní",
+     "o %u h", "o %u h %u min", "o %u min", "Teraz", "do %s", "Nasleduje", "Udalosti: %u", "1 udalosť",
+     "Zoznam", "Žiadne údaje kalendára", "Dnes", "Ďalšie"},
+    {"Január", "Február", "Marec", "Apríl", "Máj", "Jún",
+     "Júl", "August", "September", "Október", "November", "December"},
+    1,  // Monday
     {"Tok energie", "Solárny výkon", "Výkon siete", "Výkon batérie", "Nabitie batérie", "Spotreba domu", "Zobraziť hlavičku", "Zobraziť kartu", "Sieť: dodávka kladná", "Batéria: nabíjanie kladné"},
     {"Vyberte entitu", "Hľadať", "Žiadna entita sa nezhoduje s „{query}“",
      "Nepodarilo sa načítať entity. Zvolená entita zostáva nezmenená.",
@@ -5482,7 +5531,7 @@ static const LocaleProfile kLocaleSk = {
     {"Senzor", "Binárny senzor", "Svetlo", "Prepínač", "Ventilátor", "Roleta", "Klíma",
      "Prehrávač médií", "Počasie", "Kamera", "Zámok", "Panel alarmu", "Číslo", "Výber",
      "Dátum/čas", "Scéna", "Skript", "Tlačidlo", "Automatizácia", "Zvlhčovač", "Siréna",
-     "Ovládač"},
+     "Ovládač", "Kalendár"},
     {"Automaticky", "Ikona entity", "Bez ikony", "Iba názov a hodnota", "Žiadna ikona sa nezhoduje s „{query}“"},
     {"januára", "februára", "marca", "apríla", "mája", "júna",
      "júla", "augusta", "septembra", "októbra", "novembra", "decembra"},
@@ -5838,6 +5887,17 @@ const char* device_label(const char* language_code, DeviceLabel label) {
   const auto index = static_cast<size_t>(label);
   if (index >= static_cast<size_t>(DeviceLabel::Count)) return "";
   return locale(language_code).device_labels[index];
+}
+
+const char* calendar_label(const char* language_code, CalendarLabel label) {
+  const auto index = static_cast<size_t>(label);
+  if (index >= static_cast<size_t>(CalendarLabel::Count)) return "";
+  return locale(language_code).calendar_labels[index];
+}
+
+const char* month_name(const char* language_code, int month) {
+  if (month < 1 || month > 12) return "";
+  return locale(language_code).month_names[month - 1];
 }
 
 const char* lock_state_label(const char* language_code, const char* state) {

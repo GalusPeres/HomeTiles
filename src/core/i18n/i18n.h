@@ -952,6 +952,14 @@ struct LocaleProfile {
   // triggered, unavailable, unknown.
   const char* alarm_states[12];
 
+  // Calendar tile and popup (types/calendar), indexed by i18n::CalendarLabel.
+  const char* calendar_labels[25];
+  // Month names standing alone, for headings such as "October 2026"
+  // (month_names_in_date holds them as they stand in a date), January first.
+  const char* month_names[12];
+  // The first day of the week the Calendar tile uses unless the tile sets
+  // one (tm_wday: 0 Sunday, 1 Monday).
+  uint8_t first_weekday;
   // The Energy flow tile (types/energy_flow), EnergyFlowLabel order.
   const char* energy_flow_labels[10];
 
@@ -965,8 +973,8 @@ struct LocaleProfile {
   // cover, climate, media_player, weather, camera, lock,
   // alarm_control_panel, number/input_number, select/input_select,
   // datetime/date/time/input_datetime, scene, script, button/input_button,
-  // automation, humidifier, siren, remote.
-  const char* entity_kind_labels[22];
+  // automation, humidifier, siren, remote, calendar.
+  const char* entity_kind_labels[23];
   // Icon picker of the tile head (tiles/tile-head.js). Order: automatic,
   // automatic hint, no icon, no icon hint, no match ({query}).
   const char* icon_picker_labels[5];
@@ -989,6 +997,7 @@ struct LocaleProfile {
   // capitals). Only characters of the panel fonts.
   uint8_t keyboard_layout;
   const char* keyboard_letters;
+
 };
 
 // Index into LocaleProfile::energy_flow_labels.
@@ -1005,6 +1014,36 @@ enum class EnergyFlowLabel : uint8_t {
   BatteryChargePositive,
   Count,
 };
+// Index into LocaleProfile::calendar_labels.
+enum class CalendarLabel : uint8_t {
+  TypeCalendar,
+  EntityCalendar,
+  CalendarN,  // printf pattern with one %u (the field number)
+  View,
+  ViewAgenda,
+  ViewWeek,
+  ViewMonth,
+  WeekStart,
+  Automatic,
+  AllDay,
+  NoEvents,
+  NothingPlanned,
+  InDays,          // printf pattern with one %u
+  InHours,         // printf pattern with one %u
+  InHoursMinutes,  // printf pattern with two %u (hours, minutes)
+  InMinutes,       // printf pattern with one %u
+  Now,
+  Until,  // printf pattern with one %s (a time)
+  UpNext,
+  EventCount,  // printf pattern with one %u (two or more)
+  OneEvent,
+  ViewList,
+  NoData,
+  ViewToday,
+  Next,
+  Count
+};
+static_assert(static_cast<int>(CalendarLabel::Count) == 25, "LocaleProfile::calendar_labels size");
 
 // Index into LocaleProfile::device_labels.
 enum class DeviceLabel : uint8_t {
@@ -1126,6 +1165,10 @@ const char* binary_sensor_state_label(const char* language_code,
 const char* device_label(const char* language_code, DeviceLabel label);
 const char* lock_state_label(const char* language_code, const char* state);
 const char* alarm_state_label(const char* language_code, const char* state);
+// Calendar tile and popup texts (CalendarLabel).
+const char* calendar_label(const char* language_code, CalendarLabel label);
+// A month standing alone (1 = January), for headings; "" outside 1..12.
+const char* month_name(const char* language_code, int month);
 
 }  // namespace i18n
 

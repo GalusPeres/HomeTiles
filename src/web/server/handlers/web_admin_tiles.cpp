@@ -1,3 +1,4 @@
+#include "src/types/calendar/calendar_store.h"
 #include "src/web/server/web_admin.h"
 #include "src/web/server/auth/web_admin_auth.h"
 #include "src/core/text/title_text.h"
@@ -1234,6 +1235,19 @@ void WebAdminServer::handleGetSensorValues() {
   }
   json += "}";
 
+  // Calendar previews read the retained events (types/calendar).
+  json += ",\"calendar_values\":{";
+  bool first_calendar_value = true;
+  for (const auto& id : parseSensorList(ha.calendars_text)) {
+    const String payload = calendar_store::payload(id);
+    if (!payload.length()) continue;
+    if (!first_calendar_value) json += ',';
+    first_calendar_value = false;
+    json += '\"'; appendJsonEscaped(json, id); json += "\":\"";
+    appendJsonEscaped(json, payload); json += '\"';
+  }
+  json += "}";
+
   // Climate states include HVAC mode, action and unit alongside temperature.
   // Keep the complete JSON payload from the central entity cache because the
   // Web editor also uses it to derive the dynamic icon.
@@ -1455,6 +1469,7 @@ void WebAdminServer::handleGetEntityOptions() {
   appendList("locks", parseSensorList(ha.locks_text));
   appendList("alarm_panels", parseSensorList(ha.alarm_panels_text));
   appendList("fans", parseSensorList(ha.fans_text));
+  appendList("calendars", parseSensorList(ha.calendars_text));
   appendList("cameras", parseSensorList(ha.cameras_text));
   // The screensaver picture: released images, then cameras.
   std::vector<String> picture_ids = parseSensorList(ha.images_text);

@@ -72,14 +72,14 @@ assert.match(read('src/web/admin/tiles/editor.js'), /bindLive\(sceneInput, 'chan
 // ---- Translations: every language, the documented order ----
 const header = read('src/core/i18n/i18n.h');
 assert.match(header, /const char\* entity_picker_labels\[11\];/);
-assert.match(header, /const char\* entity_kind_labels\[22\];/);
+assert.match(header, /const char\* entity_kind_labels\[23\];/);
 const picker = read('src/web/admin/tiles/entity-picker.js');
 assert.match(picker, /slot\.append\(\.\.\.parts\(input\)\);\s*entityPickerWarm\(input\);/,
   'a selected tile asks the Bridge for its list ahead of the opening');
 assert.match(picker, /function entityRemoteInBackground\(job\) \{\s*entityRemoteQueue = entityRemoteQueue\.then\(job\)/,
   'requests ahead of an opening run one after another (the panel keeps only its newest search)');
 const domains = picker.slice(picker.indexOf('const ENTITY_KIND_DOMAINS = ['), picker.indexOf('];', picker.indexOf('const ENTITY_KIND_DOMAINS')));
-assert.equal((domains.match(/\[/g) || []).length - 1, 22, 'One domain group per entity_kind_labels entry');
+assert.equal((domains.match(/\[/g) || []).length - 1, 23, 'One domain group per entity_kind_labels entry');
 const scripts = read('src/web/server/render/web_admin_scripts.cpp');
 for (const key of ['entityPickerChoose', 'entityPickerSearch', 'entityPickerNoMatch', 'entityPickerLoadFailed',
   'entityPickerRetry', 'entityPickerClear', 'entityPickerNone', 'entityPickerReleased',
@@ -118,7 +118,7 @@ for (const match of i18n.matchAll(/static const LocaleProfile kLocale(\w+) = \{/
   const [labels, kinds, icons] = lastArrays(match.index + match[0].length - 1);
   assert.equal(icons.length, 5, `${match[1]} icon picker labels`);
   assert.equal(labels.length, 11, `${match[1]} picker labels`);
-  assert.equal(kinds.length, 22, `${match[1]} entity kinds`);
+  assert.equal(kinds.length, 23, `${match[1]} entity kinds`);
   for (const text of [...labels, ...kinds]) assert.ok(text.trim().length, `${match[1]} has no empty label`);
   assert.ok(labels[2].includes('{query}'), `${match[1]} no-match text names the search`);
   locales[match[1]] = {labels, kinds, icons};

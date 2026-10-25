@@ -43,6 +43,8 @@
 #include "src/types/cover/web_handler.h"
 #include "src/types/camera/web_handler.h"
 #include "src/types/pixelanim/web_handler.h"
+#include "src/types/calendar/calendar_tile.h"
+#include "src/types/calendar/web.h"
 
 #include "src/types/clock/web_html.h"
 #include "src/types/navigate/web_html.h"
@@ -305,6 +307,18 @@ void append_fan_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
 }
 // DEVICE_I18N once for the three types.
 void append_no_scripts(String&) {}
+
+// Calendar (types/calendar).
+lv_obj_t* render_calendar_wrapper(lv_obj_t* parent, int col, int row, const Tile& tile, uint8_t index,
+                                  GridType grid_type, scene_publish_cb_t) {
+  return render_calendar_tile(parent, col, row, tile, index, grid_type);
+}
+bool apply_calendar_wrapper(WebServer& server, Tile& tile, const TileTypeApplyContext&) {
+  return apply_calendar_fields_from_request(server, tile);
+}
+void append_calendar_fields_wrapper(String& html, const TileTypeWebContext& ctx) {
+  append_calendar_fields_html(html, safeString(ctx.tab_id));
+}
 
 lv_obj_t* render_camera_wrapper(lv_obj_t* parent,
                                 int col,
@@ -805,6 +819,24 @@ const TileTypeDescriptor kTileTypes[] = {
     append_no_scripts,
     append_no_scripts
   },
+  {
+    TILE_CALENDAR,
+    "Kalender",
+    "calendar",
+    "calendar",
+    "calendar",
+    nullptr,
+    "loadCalendarFields",
+    "saveCalendarFields",
+    "resetCalendarFields",
+    0x2A2A2A,
+    false,
+    render_calendar_wrapper,
+    apply_calendar_wrapper,
+    append_calendar_fields_wrapper,
+    append_calendar_styles,
+    append_calendar_scripts
+  },
   // The ESP32-S3 shows the camera too, decoded in software at a few frames
   // per second (camera_stream.cpp, user 2026-10-09).
   {
@@ -1012,6 +1044,7 @@ static const char* localized_tile_type_label(const TileTypeDescriptor& entry) {
     case TILE_LOCK: return i18n::device_label(language, i18n::DeviceLabel::TypeLock);
     case TILE_ALARM: return i18n::device_label(language, i18n::DeviceLabel::TypeAlarm);
     case TILE_FAN: return i18n::device_label(language, i18n::DeviceLabel::TypeFan);
+    case TILE_CALENDAR: return i18n::calendar_label(language, i18n::CalendarLabel::TypeCalendar);
     case TILE_CAMERA: return tr.camera_tile_type;
     case TILE_CLIMATE: return i18n::climate_tile_type_label(language);
     case TILE_CLOCK: return tr.tile_type_clock;

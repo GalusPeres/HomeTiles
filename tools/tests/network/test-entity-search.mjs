@@ -43,8 +43,10 @@ assert.match(search, /g_answer\.received = 0;\s*g_answer\.full = false;\s*g_answ
 // declarations; nothing it serves can change the next declaration (the loop
 // of b232-b235: a reported entity came back released, was dropped from the
 // next report, removed by the Bridge and reported again).
-assert.equal((search.match(/haBridgeConfig\./g) || []).length, 5,
-  'only the four capability checks and the own sensor slots read the Bridge configuration');
+assert.equal((search.match(/haBridgeConfig\./g) || []).length, 6,
+  'only the five capability checks and the own sensor slots read the Bridge configuration');
+assert.match(search, /if \(list == "calendars"\) return haBridgeConfig\.supportsCalendars\(\);/,
+  'calendars only from a Bridge that serves them (level 5)');
 assert.match(search, /if \(list == "scenes"\) return haBridgeConfig\.supportsSceneSearch\(\);/,
   'scenes, scripts and buttons only from a Bridge that searches them (level 4)');
 assert.match(search, /if \(list == "energy"\) return haBridgeConfig\.supportsEnergySearch\(\);/,
@@ -55,7 +57,12 @@ assert.match(search, /bool declares\(\) \{\s*return command_channel::state\(\) =
 assert.doesNotMatch(search, /released|g_reported|g_last_report|parseSensorList/, 'no released lists, no sticky report state');
 const collect = search.slice(search.indexOf('entity_declaration::Declaration collectDeclaration()'),
   search.indexOf('}  // namespace\n\nbool available()'));
-assert.match(collect, /declaration\.add\(listOfTile\(slots\[i\]\.type, slots\[i\]\.entity\), slots\[i\]\.entity\);/, 'every folder tile');
+assert.match(collect, /addTileEntities\(declaration, slots\[i\]\.type, slots\[i\]\.entity\);/, 'every folder tile');
+// A Calendar tile names up to four calendars separated by commas; every
+// other tile its one entity in the list of its type.
+const tileEntities = search.slice(search.indexOf('void addTileEntities('), search.indexOf('entity_declaration::Declaration collectDeclaration()'));
+assert.match(tileEntities, /if \(type != TILE_CALENDAR\) \{\s*declaration\.add\(listOfTile\(type, entity\), entity\);\s*return;\s*\}/);
+assert.match(tileEntities, /declaration\.add\("calendars", id\.c_str\(\)\);/);
 // A Camera tile showing an image entity's picture (types/camera/picture.h):
 // the Bridge's cameras list holds cameras only.
 // A Scene tile declares its scene, script or button id, never an alias.

@@ -13,6 +13,7 @@
 #include "src/ui/popups/climate/climate_popup.h"
 #include "src/ui/popups/cover/cover_popup.h"
 #include "src/ui/popups/device/device_popup.h"
+#include "src/ui/popups/calendar/calendar_popup.h"
 #include "src/ui/popups/pin/pin_popup.h"
 #include "src/ui/popups/camera/camera_popup.h"
 #include "src/core/display/display_manager.h"
@@ -176,6 +177,7 @@ void UIManager::preloadPopups() {
   preload_climate_popup();
   preload_cover_popup();
   preload_device_popup();
+  preload_calendar_popup();
   preload_pin_popup();
   preload_camera_popup();
 }

@@ -31,7 +31,7 @@ enum TileType : uint8_t {
   TILE_LOCK = 24,
   TILE_ALARM = 25,
   TILE_FAN = 26,
-  // 27 is the Calendar tile (PR #127).
+  TILE_CALENDAR = 27,
   TILE_ENERGY_FLOW = 28
 };
 

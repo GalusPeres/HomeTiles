@@ -54,6 +54,7 @@
     "src/types/switch/admin.js",
     "src/types/cover/admin.js",
     "src/types/device/admin.js",
+    "src/types/calendar/admin.js",
     "src/types/media/admin.js",
     "src/types/climate/admin-geometry.js",
     "src/types/climate/admin-selection.js",

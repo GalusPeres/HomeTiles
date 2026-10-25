@@ -257,7 +257,7 @@ bool energy_find_entry(const String& id,const char* period,EnergyEntryData& out)
 bool energy_request_period(const char*,bool){++period_requests;return true;}
 void set_label_style(lv_obj_t*obj,lv_color_t color,const lv_font_t*font){lv_obj_set_style_text_color(obj,color,0);lv_obj_set_style_text_font(obj,font,0);}
 ${fn(read('src/tiles/runtime/tile_renderer_shared.h'), 'disable_pressed_button_animation')}
-void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_sensor_popup(){}void hide_weather_popup(){}void hide_media_popup(){}void hide_device_popup(){}
+void hide_pin_popup(){}void hide_camera_popup(){}void hide_climate_popup(){}void hide_cover_popup(){}void hide_light_popup(){}void hide_sensor_popup(){}void hide_weather_popup(){}void hide_media_popup(){}void hide_device_popup(){}void hide_calendar_popup(){}
 void viewNavigationPopupShown(lv_obj_t*,const char*){}
 ${radiusPolicyHost(root)}
 namespace Device { constexpr int kGridGap = SCREEN_WIDTH == 480 ? 10 : 16; }  // the profile's grid gap (popup header rule)

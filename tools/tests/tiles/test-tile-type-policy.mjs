@@ -15,7 +15,8 @@ const persistedIds = [
   'EMPTY', 'SENSOR', 'SCENE', 'KEY', 'FOLDER', 'SWITCH', 'IMAGE', 'SETTINGS',
   'BACK', 'CLOCK', 'TEXT', 'COUNTER', 'WEATHER', 'RADAR', 'ENERGY', 'MEDIA',
   'PIXELANIM', 'CLIMATE', 'CAMERA', 'COVER', 'BINARY_SENSOR', 'NUMBER', 'SELECT', 'DATETIME',
-  'LOCK', 'ALARM', 'FAN', 'ENERGY_FLOW',
+  // 27 stays free for the Calendar tile (PR #127).
+  'LOCK', 'ALARM', 'FAN', null, 'ENERGY_FLOW',
 ];
 // These expected sets characterize the pre-refactor consumers independently.
 const policies = [
@@ -80,8 +81,8 @@ const source = `
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-${persistedIds.map((name, value) =>
-  `static_assert(TILE_${name} == ${value}, "Persisted ${name} ID changed");`).join('\n')}
+${persistedIds.map((name, value) => name &&
+  `static_assert(TILE_${name} == ${value}, "Persisted ${name} ID changed");`).filter(Boolean).join('\n')}
 static_assert(sizeof(TileType) == 1, "Persisted TileType width changed");
 ${packedStringSizes}
 ${packedStruct}

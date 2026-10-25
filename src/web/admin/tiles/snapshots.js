@@ -172,7 +172,7 @@
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
     }
     // The Energy flow options in their stored field (types/energy_flow/admin.js).
-    if (Number(tile.type) === 27 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'flow_header')) {
+    if (Number(tile.type) === 28 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'flow_header')) {
       tile.key_code = energyFlowOptionBits(snapshot);
     }
     if (Number(tile.type) === 12 && snapshot?.weather_colored_icons !== undefined) {

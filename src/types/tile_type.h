@@ -31,7 +31,8 @@ enum TileType : uint8_t {
   TILE_LOCK = 24,
   TILE_ALARM = 25,
   TILE_FAN = 26,
-  TILE_ENERGY_FLOW = 27
+  // 27 is the Calendar tile (PR #127).
+  TILE_ENERGY_FLOW = 28
 };
 
 static constexpr bool isRetiredTileType(TileType type) {

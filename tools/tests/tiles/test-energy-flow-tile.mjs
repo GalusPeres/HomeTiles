@@ -1,4 +1,4 @@
-// Energy flow tile (27, types/energy_flow, decided design picture 65, user
+// Energy flow tile (28, types/energy_flow, decided design picture 65, user
 // 2026-10-24): wired into every list a tile type needs, its five node
 // sensors and options travel through the Web Admin (fields, live binding,
 // draft snapshot, copy/paste, import), the device redraws only from marked
@@ -17,7 +17,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n?/g, '\n');
 
 // Stable ID, registry and its type module.
-assert.match(read('src/types/tile_type.h'), /TILE_FAN = 26,\n\s*TILE_ENERGY_FLOW = 27\n\};/);
+assert.match(read('src/types/tile_type.h'), /TILE_ENERGY_FLOW = 28\n\};/);
 const registry = read('src/types/types_registry.cpp');
 assert.match(registry, /TILE_ENERGY_FLOW,\s*"Energiefluss",\s*"energy-flow",\s*"energy_flow",\s*"energy_flow",\s*nullptr,\s*"loadEnergyFlowFields",\s*"saveEnergyFlowFields",\s*"resetEnergyFlowFields",\s*0x2A2A2A,\s*false,\s*render_energy_flow_wrapper,\s*apply_energy_flow_wrapper,\s*append_energy_flow_fields_wrapper,\s*append_energy_flow_styles,\s*append_energy_flow_scripts/);
 assert.ok(registry.includes('case TILE_ENERGY_FLOW: return i18n::energy_flow_label(language, i18n::EnergyFlowLabel::Type);'));
@@ -47,9 +47,9 @@ for (const marker of ['if (server.hasArg("flow_entities")) tile.flow_entities = 
 // Browser editor: live binding, draft snapshot, copy/paste and import keep
 // the record and the options; a new tile grows to 2x2.
 assert.match(read('src/web/admin/tiles/editor.js'), /for \(const field of \['flow_pv_entity', 'flow_grid_entity', 'flow_battery_entity', 'flow_battery_charge_entity',\s*'flow_home_entity', 'flow_header', 'flow_card', 'flow_grid_invert', 'flow_battery_invert'\]\) \{\s*bindLive\(document\.getElementById\(prefix \+ '_' \+ field\), 'change', field, \(\) => \{\s*updateTilePreview\(tab\); updateDraft\(tab\); scheduleAutoSave\(tab\);/);
-assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\) === 27 && snapshot && Object\.prototype\.hasOwnProperty\.call\(snapshot, 'flow_header'\)\) \{\s*tile\.key_code = energyFlowOptionBits\(snapshot\);/);
-assert.match(read('src/web/admin/tiles/import-export.js'), /\} else if \(safeType === 27\) \{\s*fd\.append\('flow_entities', tile\.flow_entities \|\| ''\);/);
-assert.ok(read('src/web/admin/tiles/layout.js').includes("if (Number(type) === 27) return [Math.min(2, placeCols()), Math.min(2, placeRows())];"));
+assert.match(read('src/web/admin/tiles/snapshots.js'), /if \(Number\(tile\.type\) === 28 && snapshot && Object\.prototype\.hasOwnProperty\.call\(snapshot, 'flow_header'\)\) \{\s*tile\.key_code = energyFlowOptionBits\(snapshot\);/);
+assert.match(read('src/web/admin/tiles/import-export.js'), /\} else if \(safeType === 28\) \{\s*fd\.append\('flow_entities', tile\.flow_entities \|\| ''\);/);
+assert.ok(read('src/web/admin/tiles/layout.js').includes("if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];"));
 assert.ok(read('src/web/admin/tiles/live-preview.js').includes("if (previewKind === 'energy_flow' && typeof applyEnergyFlowPreview === 'function') {"));
 assert.ok(read('src/web/admin/tiles/grid-preview.js').includes('applyEnergyFlowPreview(el, tile, sensorMeta);'));
 

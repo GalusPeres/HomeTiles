@@ -338,7 +338,7 @@
   function minimumTileSize(type) {
     if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, placeCols()), Math.min(MEDIA_TILE_MIN_SPAN, placeRows())];
     // The Energy flow needs room for its four nodes (types/energy_flow).
-    if (Number(type) === 27) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
+    if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 

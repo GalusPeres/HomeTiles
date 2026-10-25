@@ -4523,7 +4523,7 @@ async function saveGestureEdge(select) {
       tile.sensor_display_mode = ['0','false'].includes(String(snapshot.tile_border)) ? 1 : 0;
     }
     // The Energy flow options in their stored field (types/energy_flow/admin.js).
-    if (Number(tile.type) === 27 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'flow_header')) {
+    if (Number(tile.type) === 28 && snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'flow_header')) {
       tile.key_code = energyFlowOptionBits(snapshot);
     }
     if (Number(tile.type) === 12 && snapshot?.weather_colored_icons !== undefined) {
@@ -6804,7 +6804,7 @@ async function saveGestureEdge(select) {
   function minimumTileSize(type) {
     if (Number(type) === MEDIA_TILE_TYPE) return [Math.min(MEDIA_TILE_MIN_SPAN, placeCols()), Math.min(MEDIA_TILE_MIN_SPAN, placeRows())];
     // The Energy flow needs room for its four nodes (types/energy_flow).
-    if (Number(type) === 27) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
+    if (Number(type) === 28) return [Math.min(2, placeCols()), Math.min(2, placeRows())];
     return [1, supportsHalfSize(type) ? 0.5 : 1];
   }
 
@@ -9936,7 +9936,7 @@ async function saveGestureEdge(select) {
       if (tile.sensor_value_y_offset !== undefined && tile.sensor_value_y_offset !== null && String(tile.sensor_value_y_offset).length > 0) {
         fd.append('sensor_value_y_offset', tile.sensor_value_y_offset);
       }
-    } else if (safeType === 27) {
+    } else if (safeType === 28) {
       fd.append('flow_entities', tile.flow_entities || '');
       const bits = Number(tile.key_code) || 0;
       for (const [name, bit] of ENERGY_FLOW_OPTIONS) fd.append(name, (bits & bit) ? '1' : '0');
